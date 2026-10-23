@@ -6,9 +6,11 @@
  * @module storage-provider-s3
  */
 
+import type { S3ClientConfig } from '@aws-sdk/client-s3'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageProvider } from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
+import type { StorageProvider } from './storage-provider-types.js'
 import { Buffer } from 'node:buffer'
 import { Readable } from 'node:stream'
 import {
@@ -25,6 +27,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { core, err, ok } from '@h-ai/core'
 
+import { PresignOptionsSchema, PresignUploadOptionsSchema } from '../storage-config.js'
+import { toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
 import { toByteStream } from '../storage-stream.js'
 import {
@@ -37,6 +41,10 @@ import { logStorageOperation } from './storage-operation-log.js'
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
 const TRAILING_SLASHES_REGEX = /\/+$/
 const LEADING_SLASHES_REGEX = /^\/+/
+/** S3 单次 DeleteObjects 最多接受 1000 项；不并发放大删除请求。 */
+const DELETE_BATCH_SIZE = 1000
+/** 只重试服务明确报告的瞬时逐项错误，最多三次，不重发已成功或权限失败项。 */
+const RETRYABLE_DELETE_CODES = new Set(['InternalError', 'ServiceUnavailable', 'SlowDown', 'RequestTimeout'])
 
 // ─── 辅助函数 ───
 
@@ -148,26 +156,63 @@ function withoutPrefix(key: string, prefix: string): string {
  * - presign 使用 @aws-sdk/s3-request-presigner 签名
  *
  * @returns S3 Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createS3Provider()
+ * await provider.close() // 客户端由 connect 分配；close 释放本地 SDK 资源。
+ * ```
  */
 export function createS3Provider(): StorageProvider {
   let client: S3Client | null = null
+  let deleteClient: S3Client | null = null
   let config: S3Config | null = null
+  let ready = false
+  let closing: Promise<void> | null = null
+
+  /** 两个客户端独立释放；失败的客户端保留供重试，成功的客户端不重复释放。 */
+  function closeClients(): Promise<void> {
+    ready = false
+    config = null
+    if (closing)
+      return closing
+    closing = Promise.resolve().then(() => {
+      const failures: unknown[] = []
+      for (const kind of ['normal', 'delete'] as const) {
+        const owned = kind === 'normal' ? client : deleteClient
+        if (!owned)
+          continue
+        try {
+          owned.destroy()
+          if (kind === 'normal')
+            client = null
+          else deleteClient = null
+        }
+        catch (error) {
+          failures.push(error)
+        }
+      }
+      if (failures.length > 0)
+        throw new AggregateError(failures, 'S3 client cleanup failed')
+    }).finally(() => { closing = null })
+    return closing
+  }
 
   // -------------------------------------------------------------------------
   // 内部辅助
   // -------------------------------------------------------------------------
 
-  /** 获取当前 S3Client，未初始化时抛异常 */
-  function getClient(): S3Client {
-    if (!client) {
+  /** 获取当前 S3Client；批量删除使用禁用 SDK 请求重试的独立客户端。 */
+  function getClient(operation?: 'deleteMany'): S3Client {
+    const selected = operation === 'deleteMany' ? deleteClient : client
+    if (!ready || !selected) {
       throw new Error(storageM('storage_s3ClientNotInitialized'))
     }
-    return client
+    return selected
   }
 
   /** 获取当前 S3 配置，未初始化时抛异常 */
   function getConfig(): S3Config {
-    if (!config) {
+    if (!ready || !config) {
       throw new Error(storageM('storage_s3ConfigNotInitialized'))
     }
     return config
@@ -361,25 +406,70 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async deleteMany(keys): Promise<HaiResult<void>> {
+    async deleteMany(keys): Promise<StorageDeleteResult> {
       try {
-        const s3Client = getClient()
+        const s3Client = getClient('deleteMany')
         const s3Config = getConfig()
-
-        if (keys.length === 0) {
-          return ok(undefined)
-        }
-
         logOperation('write', 'file.deleteMany', { count: keys.length, keys })
-
-        await s3Client.send(new DeleteObjectsCommand({
-          Bucket: s3Config.bucket,
-          Delete: {
-            Objects: keys.map(key => ({ Key: fullKey(key) })),
-          },
-        }))
-
-        return ok(undefined)
+        const uniqueKeys = [...new Set(keys)]
+        const summary: StorageDeleteSummary = { deletedKeys: [], failures: [] }
+        for (let offset = 0; offset < uniqueKeys.length; offset += DELETE_BATCH_SIZE) {
+          let pending = uniqueKeys.slice(offset, offset + DELETE_BATCH_SIZE)
+          for (let attempt = 0; pending.length > 0 && attempt < 3; attempt++) {
+            let response
+            try {
+              response = await s3Client.send(new DeleteObjectsCommand({
+                Bucket: s3Config.bucket,
+                Delete: { Objects: [...new Set(pending.map(fullKey))].map(Key => ({ Key })), Quiet: false },
+              }))
+            }
+            catch (cause) {
+              // 已发送请求的结果可能未知，尚未发送的后续批次不能被标记为已删除。
+              const failure = (cause && typeof cause === 'object' ? cause : {}) as { name?: string, $metadata?: { httpStatusCode?: number } }
+              const status = failure.$metadata?.httpStatusCode
+              const code = failure.name && /^[\w.-]{1,80}$/.test(failure.name) ? failure.name : 'RequestFailed'
+              const retryable = status === undefined || status === 408 || status === 429 || status >= 500
+              const outcome: StorageDeleteFailure['outcome'] = status !== undefined && status >= 400 && status < 500 && status !== 408 ? 'failed' : 'unknown'
+              summary.failures.push(...pending.map(key => ({ key, code, retryable, outcome })))
+              summary.failures.push(...uniqueKeys.slice(offset + DELETE_BATCH_SIZE).map(key => ({ key, code, retryable, outcome: 'notAttempted' as const })))
+              return toStorageDeleteResult(summary)
+            }
+            const outcomes = new Map<string, string | null>()
+            const requested = new Set(pending.map(fullKey))
+            let malformed = false
+            // 非 quiet 响应中每个请求键必须恰好出现一次；遗漏、重复和越界都不能宣称成功。
+            const items = [
+              ...(response.Deleted ?? []).map(item => ({ key: item.Key, code: null })),
+              ...(response.Errors ?? []).map(item => ({ key: item.Key, code: item.Code && /^[\w.-]{1,80}$/.test(item.Code) ? item.Code : 'UnknownError' })),
+            ]
+            for (const item of items) {
+              if (!item.key || !requested.has(item.key) || outcomes.has(item.key)) {
+                malformed = true
+                break
+              }
+              outcomes.set(item.key, item.code)
+            }
+            if (malformed || outcomes.size !== requested.size) {
+              summary.failures.push(...pending.map(key => ({ key, code: 'InvalidDeleteResponse', retryable: false, outcome: 'unknown' as const })))
+              summary.failures.push(...uniqueKeys.slice(offset + DELETE_BATCH_SIZE).map(key => ({ key, code: 'InvalidDeleteResponse', retryable: false, outcome: 'notAttempted' as const })))
+              return toStorageDeleteResult(summary)
+            }
+            const retry: string[] = []
+            for (const key of pending) {
+              const code = outcomes.get(fullKey(key))
+              if (code === null)
+                summary.deletedKeys.push(key)
+              else if (code && RETRYABLE_DELETE_CODES.has(code) && attempt < 2)
+                retry.push(key)
+              else
+                summary.failures.push({ key, code: code ?? 'UnknownError', retryable: !!code && RETRYABLE_DELETE_CODES.has(code), outcome: 'failed' })
+            }
+            pending = retry
+            if (pending.length > 0)
+              await new Promise(resolve => setTimeout(resolve, 100 * 2 ** attempt))
+          }
+        }
+        return toStorageDeleteResult(summary)
       }
       catch (error) {
         return err(toStorageError(error))
@@ -503,6 +593,7 @@ export function createS3Provider(): StorageProvider {
   const presign: PresignOperations = {
     async getUrl(key, options?): Promise<HaiResult<string>> {
       try {
+        const parsed = PresignOptionsSchema.parse(options ?? {})
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
@@ -511,12 +602,12 @@ export function createS3Provider(): StorageProvider {
         const command = new GetObjectCommand({
           Bucket: s3Config.bucket,
           Key: fullPath,
-          ResponseContentType: options?.responseContentType,
-          ResponseContentDisposition: options?.responseContentDisposition,
+          ResponseContentType: parsed.responseContentType,
+          ResponseContentDisposition: parsed.responseContentDisposition,
         })
 
         const url = await getSignedUrl(s3Client, command, {
-          expiresIn: options?.expiresIn || 3600,
+          expiresIn: parsed.expiresIn,
         })
 
         return ok(url)
@@ -532,6 +623,7 @@ export function createS3Provider(): StorageProvider {
 
     async putUrl(key, options?): Promise<HaiResult<string>> {
       try {
+        const parsed = PresignUploadOptionsSchema.parse(options ?? {})
         const s3Client = getClient()
         const s3Config = getConfig()
         const fullPath = fullKey(key)
@@ -540,11 +632,11 @@ export function createS3Provider(): StorageProvider {
         const command = new PutObjectCommand({
           Bucket: s3Config.bucket,
           Key: fullPath,
-          ContentType: options?.contentType || 'application/octet-stream',
+          ContentType: parsed.contentType,
         })
 
         const url = await getSignedUrl(s3Client, command, {
-          expiresIn: options?.expiresIn || 3600,
+          expiresIn: parsed.expiresIn,
         })
 
         return ok(url)
@@ -589,6 +681,8 @@ export function createS3Provider(): StorageProvider {
       }
 
       try {
+        await closeClients()
+
         config = cfg
         logger.info('Connecting S3 provider', {
           bucket: cfg.bucket,
@@ -596,7 +690,7 @@ export function createS3Provider(): StorageProvider {
           endpoint: cfg.endpoint ? core.sanitize.sanitizeUrl(cfg.endpoint) : undefined,
         })
 
-        client = new S3Client({
+        const clientConfig: S3ClientConfig = {
           region: cfg.region,
           endpoint: cfg.endpoint,
           forcePathStyle: cfg.forcePathStyle,
@@ -607,7 +701,10 @@ export function createS3Provider(): StorageProvider {
             accessKeyId: cfg.accessKeyId,
             secretAccessKey: cfg.secretAccessKey,
           },
-        })
+        }
+        client = new S3Client(clientConfig)
+        // 回执丢失时重放可能删除并发新版本；只允许上层对明确的逐项瞬时错误重试。
+        deleteClient = new S3Client({ ...clientConfig, maxAttempts: 1 })
 
         // 测试连接：尝试列出一个对象
         await client.send(new ListObjectsV2Command({
@@ -615,28 +712,28 @@ export function createS3Provider(): StorageProvider {
           MaxKeys: 1,
         }))
 
+        config = cfg
+        ready = true
         logger.info('S3 provider connected', { bucket: cfg.bucket })
         return ok(undefined)
       }
       catch (error) {
         logger.error('S3 provider connect failed', { error })
-        config = null
-        client = null
-        return err(toStorageError(error))
+        const original = toStorageError(error)
+        try {
+          await closeClients()
+          return err(original)
+        }
+        catch (cleanupError) {
+          return err({ ...original, ext: { ...original.ext, cleanupPending: true, cleanupError } })
+        }
       }
     },
 
-    async close(): Promise<void> {
-      if (client) {
-        client.destroy()
-        client = null
-        config = null
-        logger.info('S3 provider disconnected')
-      }
-    },
+    close: closeClients,
 
     isConnected(): boolean {
-      return client !== null && config !== null
+      return ready && client !== null && deleteClient !== null && config !== null
     },
   }
 }

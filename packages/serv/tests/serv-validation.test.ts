@@ -32,6 +32,14 @@ describe('serv-validation', () => {
     ])
   })
 
+  it('没有业务消息的 refine 使用请求 locale，不保留 Zod 默认英文', () => {
+    const result = z.object({ key: z.string().refine(() => false) }).safeParse({ key: '../private' })
+    if (result.success)
+      throw new Error('Expected default refinement failure')
+    expect(localizeZodError(result.error, 'zh-CN')).toEqual([{ field: 'key', message: '输入格式无效' }])
+    expect(localizeZodError(result.error, 'en-US')).toEqual([{ field: 'key', message: 'Invalid input format' }])
+  })
+
   it('validateInputOrFail 应该保留 schema 自定义错误消息', () => {
     const result = validateInputOrFail(
       z.object({ name: z.string().min(3, '名字太短') }),

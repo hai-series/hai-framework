@@ -50,9 +50,13 @@ beforeEach(async () => {
   vi.mocked(Preferences.remove).mockClear()
 
   const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
-  vi.mocked(SecureStorage.getItem).mockClear()
-  vi.mocked(SecureStorage.setItem).mockClear()
-  vi.mocked(SecureStorage.removeItem).mockClear()
+  vi.mocked(SecureStorage.getItem).mockReset().mockImplementation(async key => secureStore.get(key) ?? null)
+  vi.mocked(SecureStorage.setItem).mockReset().mockImplementation(async (key, value) => {
+    secureStore.set(key, value)
+  })
+  vi.mocked(SecureStorage.removeItem).mockReset().mockImplementation(async (key) => {
+    secureStore.delete(key)
+  })
 })
 
 describe('createCapacitorTokenStorage', () => {
@@ -107,41 +111,135 @@ describe('createCapacitorTokenStorage', () => {
     const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
     const storage = createCapacitorTokenStorage()
 
-    await storage.setAccessToken('web-access')
-    const token = await storage.getAccessToken()
+    await expect(storage.setAccessToken('web-access')).rejects.toThrow()
+    await expect(storage.getAccessToken()).rejects.toThrow()
+    await expect(storage.setRefreshToken('web-refresh')).rejects.toThrow()
+    await expect(storage.getRefreshToken()).rejects.toThrow()
+    await expect(storage.clear()).rejects.toThrow()
 
-    expect(token).toBeNull()
     expect(vi.mocked(SecureStorage.setItem)).not.toHaveBeenCalled()
     expect(vi.mocked(Preferences.set)).not.toHaveBeenCalled()
     expect(vi.mocked(Preferences.get)).not.toHaveBeenCalled()
   })
 
-  it('secure storage 异常时 get 返回 null 不崩溃', async () => {
+  it('secure storage 读取异常向调用方传播，不能伪装成没有凭据', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
     const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
     const storage = createCapacitorTokenStorage()
 
     vi.mocked(SecureStorage.getItem).mockRejectedValueOnce(new Error('native error'))
-    const token = await storage.getAccessToken()
-    expect(token).toBeNull()
+    await expect(storage.getAccessToken()).rejects.toThrow('native error')
   })
 
-  it('secure storage 异常时 set 不抛出', async () => {
+  it('secure storage 写入异常向调用方传播', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
     const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
     const storage = createCapacitorTokenStorage()
 
     vi.mocked(SecureStorage.setItem).mockRejectedValueOnce(new Error('native error'))
-    await expect(storage.setAccessToken('x')).resolves.toBeUndefined()
+    await expect(storage.setAccessToken('x')).rejects.toThrow('native error')
   })
 
-  it('secure storage 异常时 clear 不抛出', async () => {
+  it('真实 TokenManager 部分写入失败后屏蔽整对凭据，删除失败仍不恢复访问', async () => {
+    const { apiClient } = await import('@h-ai/api-client')
+    const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
+    const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
+    const storage = createCapacitorTokenStorage()
+    const client = apiClient.create({})
+    const initialized = await client.init({ baseUrl: 'https://api.test.invalid', auth: { storage } })
+    expect(initialized.success).toBe(true)
+
+    try {
+      vi.mocked(SecureStorage.setItem).mockImplementation(async (key, value) => {
+        if (key === 'hai_refresh_token')
+          throw new Error('refresh write failed')
+        secureStore.set(key, value)
+      })
+      await expect(client.auth.setTokens({ accessToken: 'partial-access', refreshToken: 'new-refresh', expiresIn: 3600, tokenType: 'Bearer' })).rejects.toThrow('refresh write failed')
+      expect(secureStore.get('hai_access_token')).toBe('partial-access')
+      expect(await storage.getAccessToken()).toBeNull()
+      expect(await storage.getRefreshToken()).toBeNull()
+
+      vi.mocked(SecureStorage.removeItem).mockRejectedValue(new Error('native remove failed'))
+      await expect(client.auth.clear()).rejects.toThrow()
+      expect(secureStore.get('hai_access_token')).toBe('partial-access')
+      expect(await storage.getAccessToken()).toBeNull()
+      expect(await storage.getRefreshToken()).toBeNull()
+    }
+    finally {
+      await client.close()
+    }
+  })
+
+  it('clear 删除失败时传播错误并屏蔽当前实例的旧凭据', async () => {
     const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
     const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
     const storage = createCapacitorTokenStorage()
 
-    vi.mocked(SecureStorage.removeItem).mockRejectedValueOnce(new Error('native error'))
-    await expect(storage.clear()).resolves.toBeUndefined()
+    await storage.setAccessToken('old-access')
+    await storage.setRefreshToken('old-refresh')
+    vi.mocked(SecureStorage.removeItem).mockRejectedValue(new Error('native error'))
+    await expect(storage.clear()).rejects.toThrow()
+    expect(secureStore.size).toBe(2)
+    expect(await storage.getAccessToken()).toBeNull()
+    expect(await storage.getRefreshToken()).toBeNull()
+
+    // 成功写入只重新开放相应 key，不能顺带恢复旧账号另一类凭据。
+    await storage.setAccessToken('new-access')
+    expect(await storage.getAccessToken()).toBe('new-access')
+    expect(await storage.getRefreshToken()).toBeNull()
+    await storage.setRefreshToken('new-refresh')
+    expect(await storage.getRefreshToken()).toBe('new-refresh')
+  })
+
+  it('clear 等待全部原生删除结束后才返回失败', async () => {
+    const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
+    const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
+    let completeRemove: () => void = () => {}
+    const delayedRemove = new Promise<void>((resolve) => {
+      completeRemove = resolve
+    })
+    vi.mocked(SecureStorage.removeItem).mockImplementation(key => key === 'hai_access_token'
+      ? Promise.reject(new Error('native error'))
+      : delayedRemove)
+    let settled = false
+    const pending = createCapacitorTokenStorage().clear().catch((error: unknown) => {
+      settled = true
+      return error
+    })
+    await vi.waitFor(() => expect(SecureStorage.removeItem).toHaveBeenCalledTimes(2))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(settled).toBe(false)
+    completeRemove()
+    expect(await pending).toBeInstanceOf(Error)
+  })
+
+  it('平台插件首次失败后同一实例可重试恢复', async () => {
+    const { Capacitor } = await import('@capacitor/core')
+    const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
+    const storage = createCapacitorTokenStorage()
+    vi.mocked(Capacitor.isNativePlatform).mockImplementationOnce(() => {
+      throw new Error('bridge unavailable')
+    })
+    await expect(storage.setAccessToken('first')).rejects.toThrow('bridge unavailable')
+    await storage.setAccessToken('retry')
+    expect(await storage.getAccessToken()).toBe('retry')
+  })
+
+  it('clear 开始后屏蔽已经在途的旧凭据读取', async () => {
+    const { SecureStorage } = await import('@aparajita/capacitor-secure-storage')
+    const { createCapacitorTokenStorage } = await import('../src/capacitor-token-storage.js')
+    const storage = createCapacitorTokenStorage()
+    let finishRead: (value: string) => void = () => {}
+    const delayedRead = new Promise<string>((resolve) => {
+      finishRead = resolve
+    })
+    vi.mocked(SecureStorage.getItem).mockReturnValueOnce(delayedRead)
+    const pending = storage.getAccessToken()
+    await vi.waitFor(() => expect(SecureStorage.getItem).toHaveBeenCalledOnce())
+    await storage.clear()
+    finishRead('old-access')
+    expect(await pending).toBeNull()
   })
 })
 

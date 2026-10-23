@@ -1,4 +1,5 @@
 <!--
+  @component FormField
   =============================================================================
   @h-ai/ui - FormField 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { FormField } from '@h-ai/ui'
+  const props: ComponentProps<typeof FormField> = { label: '邮箱', name: 'email', required: true, children: createRawSnippet(() => ({ render: () => "<input name=\"email\" type=\"email\" />" })) }
+  const component = mount(FormField, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, FormFieldProps } from '../../types.js'

@@ -11,6 +11,13 @@ import { kitM } from '../kit-i18n.js'
 
 /**
  * 认证守卫配置
+ * @example
+ * ```ts
+ * import type { AuthGuardConfig } from '@h-ai/kit'
+ *
+ * const value: AuthGuardConfig = { apiMode: true }
+ * void value
+ * ```
  */
 export interface AuthGuardConfig {
   /** 未登录时重定向 URL（默认 `'/login'`） */
@@ -21,6 +28,13 @@ export interface AuthGuardConfig {
 
 /**
  * 会话守卫配置
+ * @example
+ * ```ts
+ * import type { SessionGuardConfig } from '@h-ai/kit'
+ *
+ * const value: SessionGuardConfig = { validateSession: async () => null }
+ * void value
+ * ```
  */
 export interface SessionGuardConfig {
   /** 会话校验函数（通常由应用注入 iam.auth.verifyToken 封装） */
@@ -40,14 +54,10 @@ export interface SessionGuardConfig {
  *
  * @param config - 守卫配置
  * @returns RouteGuard 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // Hook 配置
- * guards: [
- *   { guard: kit.guard.auth({ apiMode: true }), paths: ['/api/*'] },
- *   { guard: kit.guard.auth(), paths: ['/dashboard/*'] },
- * ]
+ * const guard = authGuard({ apiMode: true })
+ * void guard
  * ```
  */
 export function authGuard(config: AuthGuardConfig = {}): RouteGuard {
@@ -84,6 +94,13 @@ export function authGuard(config: AuthGuardConfig = {}): RouteGuard {
  * 2. 否则从 request/cookies 解析 token（Bearer 优先）
  * 3. 调用 validateSession 恢复并写入 event.locals.session
  * 4. 失败则按页面/API模式返回重定向或 401
+ * @param config - 会话令牌验证回调和拒绝响应策略。
+ * @returns 按验证结果返回 GuardResult 的路由守卫。
+ * @example 模块内部上下文
+ * ```ts
+ * const guard = sessionGuard({ validateSession: async () => null })
+ * void guard
+ * ```
  */
 export function sessionGuard(config: SessionGuardConfig): RouteGuard {
   const { validateSession, loginUrl = '/login', apiMode = false } = config

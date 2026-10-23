@@ -10,6 +10,16 @@ import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
+/**
+ * Serv 本地化消息的真实 key 联合。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const key: ServMessageKey = 'serv_errorForbidden'
+ * const message = servM(key, { locale: 'en-US' })
+ * ```
+ */
 type ServMessageKey = keyof typeof messagesZhCN
 
 const SUPPORTED_SERV_LOCALES = ['zh-CN', 'en-US'] as const
@@ -24,6 +34,13 @@ const DEFAULT_SERV_LOCALE = 'zh-CN'
  * - `Accept-Language` 风格值：`en-US,en;q=0.9`
  *
  * 未识别时回退到默认 `zh-CN`。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const english = normalizeServLocale('en-US,en;q=0.9')
+ * const fallback = normalizeServLocale(undefined)
+ * ```
  */
 export function normalizeServLocale(locale: string | undefined): string {
   const candidate = locale?.split(',')[0]?.trim()
@@ -52,11 +69,10 @@ export function normalizeServLocale(locale: string | undefined): string {
  *
  * @example
  * ```ts
- * // 使用全局 locale
- * servM('serv_validationRequired')
+ * import { serv } from '@h-ai/serv'
  *
- * // 使用请求自身的 locale
- * servM('serv_validationStringMin', { locale: 'en-US', params: { min: 3 } })
+ * const message = serv.m('serv_validationStringMin', { locale: 'en-US', params: { min: 3 } })
+ * // 单次 locale 不修改并发请求的全局语言。
  * ```
  */
 export const servM

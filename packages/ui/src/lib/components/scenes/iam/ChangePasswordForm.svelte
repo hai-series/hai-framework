@@ -1,6 +1,16 @@
 <!--
   @component ChangePasswordForm
   修改密码表单组件。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ChangePasswordForm } from '@h-ai/ui'
+  const props: ComponentProps<typeof ChangePasswordForm> = { requireOldPassword: true, minPasswordLength: 12 }
+  const component = mount(ChangePasswordForm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

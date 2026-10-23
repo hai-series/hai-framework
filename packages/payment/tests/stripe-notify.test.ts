@@ -2,15 +2,16 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { HaiPaymentError } from '../src/payment-types'
-import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
+import { createStripeProvider } from '../src/providers/stripe/payment-provider-stripe'
 
-const config = { secretKey: 'test-only-api-key', webhookSecret: 'test-only-webhook-key' }
+const config = { successUrl: 'https://example.invalid/payment/success', secretKey: 'test-only-api-key', webhookSecret: 'test-only-webhook-key', webhookToleranceSeconds: 300 }
 
 /** 构造与 Stripe Checkout Session 快照一致的通知。 */
 function createEvent(type = 'checkout.session.completed', paymentStatus = 'paid') {
   return {
     id: 'evt_checkout_001',
     created: 1_700_000_000,
+    livemode: false,
     type,
     data: {
       object: {

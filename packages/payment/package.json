@@ -39,10 +39,12 @@
   "dependencies": {
     "@h-ai/audit": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "jsdom": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

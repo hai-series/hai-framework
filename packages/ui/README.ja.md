@@ -317,7 +317,7 @@ components/
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `AuthPanel`          | 設定による認証画面 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | 認証ページ配置（中央カード / 左右分割） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
-| `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
+| `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showForgotPassword`, `onsubmit`                                                      |
 | `RegisterForm`       | 登録フォーム                            | `loading`, `errors`, `fields`, `onsubmit`                                                              |
 | `ForgotPasswordForm` | パスワード忘れ                          | `mode`, `loading`, `errors`, `onsubmit`                                                                |
 | `ResetPasswordForm`  | パスワードリセット                      | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
@@ -776,6 +776,8 @@ import {
 
 ### 設定による認証画面
 
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
+
 YAML の `|` で `agreements.userAgreementMarkdown` と `privacyPolicyMarkdown` を設定できます。Modal は本文を安全に描画し、同じ規約の URL より本文を優先します。URL のみの場合は隔離 iframe を使用します。
 
 ```yaml
@@ -890,6 +892,13 @@ import { toast } from '@h-ai/ui'
 </AuthPanel>
 ```
 
+
+### リクエスト言語の分離
+
+Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleRequest())` で囲みます。SvelteKit は `kit.i18n.runWithLocale(locale, () => resolve(event))` を使えます。serv はリクエストヘッダーから自動設定します。非同期の子処理も言語を継承し、明示的な `MessageOptions.locale`、リクエスト言語、起動時の既定値の順で優先します。コンテキスト内の `setGlobalLocale` はそのリクエストだけを変更します。コンテキスト外の設定は起動時に限定し、リクエスト hook から呼びません。
+
+ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
+
 ## 開発とテスト
 
 ```sh
@@ -898,6 +907,14 @@ pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
+
+コンポーネントのサブパスは package.exports に明記した barrel（例: `@h-ai/ui/components/primitives/index`）に限定します。内部実装やストレージ補助関数は非公開で、ホストのクリップボード登録は引き続き公開します。
+
+`@h-ai/ui/i18n` の createLocaleStore は、解決できる保存値、navigator.languages 全体（その後 navigator.language）、defaultLocale、対応一覧の先頭の順で選択します。未対応の最初の候補で既定値に戻しません。大小文字、言語略称、地域・スクリプトの段階的フォールバックを照合し、設定済みのコードを返します。同じ言語の複数候補は supportedLocales 順です。実際の一致がなければ detectBrowserLocale は null、空の対応一覧では最終的に呼出側の既定値を返します。SSR はブラウザー候補を読まず全体の言語を変更しません。Paraglide アプリは独自の setLocale 同期が必要で、対応一覧の追加だけでは UI 内蔵辞書は増えません。
+
+## 入力制約と HTTP 機能
+
+キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
 
 ## ライセンス
 

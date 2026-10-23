@@ -1,4 +1,5 @@
 <!--
+  @component ForgotPasswordForm
   =============================================================================
   @h-ai/ui - ForgotPasswordForm 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives/compounds 组件：Input, Button, Alert
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ForgotPasswordForm } from '@h-ai/ui'
+  const props: ComponentProps<typeof ForgotPasswordForm> = { mode: 'email' }
+  const component = mount(ForgotPasswordForm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

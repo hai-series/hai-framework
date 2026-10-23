@@ -12,6 +12,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ChromaClient, ChromaClientArgs, Collection, EmbeddingFunction, Metadata, Where } from 'chromadb'
 import type { ChildProcess } from 'node:child_process'
 import type { ChromaConfig, DistanceMetric } from '../vecdb-config.js'
 import type {
@@ -32,42 +33,16 @@ const DIMENSION_METADATA_KEY = 'hai_dimension'
 const SPACE_METADATA_KEY = 'hnsw:space'
 const HEARTBEAT_POLL_INTERVAL = 300
 
-/** Chroma Collection 的最小接口定义（避免强依赖可选包） */
-interface ChromaCollection {
-  metadata?: Record<string, unknown> | null
-  add: (params: ChromaWriteParams) => Promise<unknown>
-  upsert: (params: ChromaWriteParams) => Promise<unknown>
-  delete: (params: { ids: string[] }) => Promise<unknown>
-  query: (params: { queryEmbeddings: number[][], nResults?: number, where?: Record<string, unknown> }) => Promise<ChromaQueryResult>
-  count: () => Promise<number>
-}
-
-interface ChromaWriteParams {
-  ids: string[]
-  embeddings: number[][]
-  documents?: (string | null)[]
-  metadatas?: (Record<string, unknown> | null)[]
-}
-
-interface ChromaQueryResult {
-  ids: string[][]
-  distances?: (number[] | null)[] | null
-  documents?: ((string | null)[] | null)[] | null
-  metadatas?: ((Record<string, unknown> | null)[] | null)[] | null
-}
-
-interface ChromaClient {
-  heartbeat: () => Promise<number>
-  getOrCreateCollection: (params: { name: string, metadata?: Record<string, unknown>, embeddingFunction?: unknown }) => Promise<ChromaCollection>
-  getCollection: (params: { name: string, embeddingFunction?: unknown }) => Promise<ChromaCollection>
-  deleteCollection: (params: { name: string }) => Promise<unknown>
-  listCollections: () => Promise<Array<{ name: string } | string>>
-}
-
-/** Chroma 模块的最小接口 */
-interface ChromaModule {
-  ChromaClient: new (params: Record<string, unknown>) => ChromaClient
-}
+/**
+ * 可选 SDK 的真实模块类型；type import 不会提前加载运行时驱动。
+ * @example 模块内部上下文
+ * ```ts
+ * function client(module: ChromaModule) {
+ *   return new module.ChromaClient({ host: 'localhost', port: 8000, ssl: false })
+ * }
+ * ```
+ */
+type ChromaModule = typeof import('chromadb')
 
 function isChromaModule(value: unknown): value is ChromaModule {
   return typeof value === 'object' && value !== null && typeof (value as { ChromaClient?: unknown }).ChromaClient === 'function'
@@ -82,7 +57,7 @@ const NOOP_EMBEDDING_FUNCTION = {
   async generate(): Promise<number[][]> {
     throw new Error('Chroma embedding function should not be called: vectors are provided explicitly')
   },
-}
+} satisfies EmbeddingFunction
 
 /** DistanceMetric → Chroma hnsw:space */
 function toChromaSpace(metric: DistanceMetric): string {
@@ -110,24 +85,36 @@ function distanceToScore(distance: number, metric: DistanceMetric): number {
 }
 
 /** 构建 Chroma where 过滤条件（单键直接匹配，多键用 $and） */
-function buildWhere(filter?: Record<string, unknown>): Record<string, unknown> | undefined {
+function buildWhere(filter?: Record<string, unknown>): Where | undefined {
   if (!filter)
     return undefined
   const entries = Object.entries(filter)
   if (entries.length === 0)
     return undefined
-  if (entries.length === 1)
-    return { [entries[0][0]]: entries[0][1] }
-  return { $and: entries.map(([key, value]) => ({ [key]: value })) }
+  const where = entries.length === 1
+    ? { [entries[0][0]]: entries[0][1] }
+    : { $and: entries.map(([key, value]) => ({ [key]: value })) }
+  // 公共 filter 保留各后端的原生能力；query 会先调用 SDK validateWhere 校验，不复制上游规则。
+  return where as Where
 }
 
 /**
  * 创建 Chroma Provider
+ * @returns 尚未连接的 Provider；connect 成功后可用，close 失败时保留资源供重试。
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createChromaProvider()
+ * // 连接由模块 init 发布；独立内部调用者必须检查 connect 并回收 close。
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createChromaProvider(): VecdbProvider {
   let client: ChromaClient | null = null
   let config: ChromaConfig | null = null
   let serverProcess: ChildProcess | null = null
+  let spawnFailed = false
+  let closing: Promise<HaiResult<void>> | null = null
 
   function isMissingModuleError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
@@ -155,27 +142,97 @@ export function createChromaProvider(): VecdbProvider {
   }
 
   /** 拉起本地 Chroma 服务（嵌入式模式） */
-  function startEmbeddedServer(chromaConfig: ChromaConfig): void {
+  async function startEmbeddedServer(chromaConfig: ChromaConfig): Promise<void> {
     const args = ['run', '--path', chromaConfig.path ?? './data/chroma', '--host', chromaConfig.host, '--port', String(chromaConfig.port)]
     logger.info('Starting embedded Chroma server', { command: chromaConfig.serverCommand, host: chromaConfig.host, port: chromaConfig.port })
+    spawnFailed = false
     const proc = spawn(chromaConfig.serverCommand, args, { stdio: 'ignore' })
     proc.on('error', (error: Error) => {
+      spawnFailed = proc.pid === undefined
       logger.error('Chroma server process error', { error: error.message })
     })
     serverProcess = proc
+    await new Promise<void>((resolve, reject) => {
+      proc.once('spawn', resolve)
+      proc.once('error', reject)
+    })
   }
 
-  /** 停止本地 Chroma 服务 */
-  function stopEmbeddedServer(): void {
-    if (!serverProcess)
+  /** 终止本模块直接启动的服务器并等待 exit；失败保留句柄，不能用 killed 充当退出证明。 */
+  async function stopEmbeddedServer(): Promise<void> {
+    const owned = serverProcess
+    if (!owned)
       return
-    try {
-      serverProcess.kill()
+    const hasExited = () => owned.exitCode !== null || owned.signalCode !== null || (spawnFailed && owned.pid === undefined)
+    if (!hasExited()) {
+      const child: ChildProcess = owned
+      await new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let settled = false
+        function cleanup(): void {
+          clearTimeout(timer)
+          child.removeListener('exit', exited)
+          child.removeListener('error', failed)
+        }
+        function exited(): void {
+          if (settled)
+            return
+          settled = true
+          cleanup()
+          resolve()
+        }
+        function failed(cause: Error): void {
+          if (settled)
+            return
+          if (hasExited()) {
+            exited()
+            return
+          }
+          settled = true
+          cleanup()
+          reject(cause)
+        }
+        function signal(name: 'SIGTERM' | 'SIGKILL'): void {
+          try {
+            if (!child.kill(name))
+              failed(new Error('Chroma child termination signal was rejected'))
+          }
+          catch (cause) {
+            failed(cause instanceof Error ? cause : new Error(String(cause)))
+          }
+        }
+        child.once('exit', exited)
+        child.once('error', failed)
+        timer = setTimeout(() => {
+          timer = setTimeout(() => failed(new Error('Chroma child exit was not confirmed')), 1500)
+          signal('SIGKILL')
+        }, 1500)
+        if (hasExited())
+          exited()
+        else signal('SIGTERM')
+      })
     }
-    catch (error) {
-      logger.warn('Failed to stop Chroma server', { error: error instanceof Error ? error.message : String(error) })
+    if (serverProcess === owned)
+      serverProcess = null
+  }
+
+  /** 关闭立即停止业务发布；退出确认失败时仅保留清理所有权，允许同一实例重试。 */
+  async function closeResources(): Promise<HaiResult<void>> {
+    if (!closing) {
+      client = null
+      config = null
+      closing = (async () => {
+        try {
+          await stopEmbeddedServer()
+          logger.info('Chroma connection closed')
+          return ok(undefined)
+        }
+        catch (cause) {
+          return err({ ...HaiVecdbError.CONNECTION_FAILED, message: vecdbM('vecdb_closeFailed', { params: { error: cause instanceof Error ? cause.message : String(cause) } }), cause, ext: { cleanupPending: true } })
+        }
+      })().finally(() => { closing = null })
     }
-    serverProcess = null
+    return await closing
   }
 
   /** 轮询心跳直至就绪或超时 */
@@ -196,12 +253,12 @@ export function createChromaProvider(): VecdbProvider {
   }
 
   /** 获取集合（含维度校验所需的 metadata） */
-  async function getCollection(name: string): Promise<ChromaCollection> {
+  async function getCollection(name: string): Promise<Collection> {
     return client!.getCollection({ name, embeddingFunction: NOOP_EMBEDDING_FUNCTION })
   }
 
   /** 读取集合存储的维度 */
-  function readDimension(collection: ChromaCollection): number {
+  function readDimension(collection: Collection): number {
     const value = collection.metadata?.[DIMENSION_METADATA_KEY]
     return typeof value === 'number' ? value : 0
   }
@@ -224,7 +281,7 @@ export function createChromaProvider(): VecdbProvider {
       logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
       const existing = await client!.listCollections()
-      const exists = existing.some(item => (typeof item === 'string' ? item : item.name) === name)
+      const exists = existing.some(item => item.name === name)
       if (exists)
         return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
 
@@ -242,7 +299,7 @@ export function createChromaProvider(): VecdbProvider {
     async drop(name) {
       logger.debug('Dropping collection', { name })
       const existing = await client!.listCollections()
-      const exists = existing.some(item => (typeof item === 'string' ? item : item.name) === name)
+      const exists = existing.some(item => item.name === name)
       if (!exists)
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
 
@@ -254,13 +311,13 @@ export function createChromaProvider(): VecdbProvider {
     async exists(name) {
       logger.debug('Checking collection exists', { name })
       const existing = await client!.listCollections()
-      return ok(existing.some(item => (typeof item === 'string' ? item : item.name) === name))
+      return ok(existing.some(item => item.name === name))
     },
 
     async info(name) {
       logger.debug('Getting collection info', { name })
       const existing = await client!.listCollections()
-      if (!existing.some(item => (typeof item === 'string' ? item : item.name) === name))
+      if (!existing.some(item => item.name === name))
         return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
 
       const collection = await getCollection(name)
@@ -276,18 +333,20 @@ export function createChromaProvider(): VecdbProvider {
     async list() {
       logger.debug('Listing collections')
       const existing = await client!.listCollections()
-      return ok(existing.map(item => (typeof item === 'string' ? item : item.name)))
+      return ok(existing.map(item => item.name))
     },
   }
 
   // ─── 向量操作适配器 ───
 
-  function toWriteParams(documents: { id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }[]): ChromaWriteParams {
+  function toWriteParams(documents: { id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }[]): Parameters<Collection['add']>[0] {
     return {
       ids: documents.map(doc => doc.id),
       embeddings: documents.map(doc => doc.vector),
-      documents: documents.map(doc => doc.content ?? null),
-      metadatas: documents.map(doc => ({ ...doc.metadata, _content: doc.content ?? '' })),
+      documents: documents.map(doc => doc.content ?? ''),
+      // 统一 API 的 metadata 更宽；SDK 在 add/upsert 中先执行 validateMetadata，再发送请求。
+      // 使用上游 Metadata 类型跨越此边界，避免复制其标量、数组及稀疏向量规则；原生拒绝会由 base 转为 HaiResult。
+      metadatas: documents.map(doc => ({ ...doc.metadata, _content: doc.content ?? '' })) as Metadata[],
     }
   }
 
@@ -379,45 +438,63 @@ export function createChromaProvider(): VecdbProvider {
       if (cfg.type !== 'chroma')
         return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
 
-      const chromaConfig = cfg as ChromaConfig
+      if (serverProcess || client || closing) {
+        const cleaned = await closeResources()
+        if (!cleaned.success)
+          return cleaned
+      }
+      const chromaConfig = cfg
       const embedded = !!chromaConfig.path && !chromaConfig.url
 
       const loadResult = await loadChromaModule()
       if (!loadResult.success)
         return loadResult
 
+      const startupAbort = new AbortController()
+      const startupTimeout = embedded ? chromaConfig.startupTimeout : 5000
+      const startupTimer = setTimeout(() => startupAbort.abort(), startupTimeout)
       try {
         if (embedded)
-          startEmbeddedServer(chromaConfig)
+          await startEmbeddedServer(chromaConfig)
 
-        const clientParams: Record<string, unknown> = chromaConfig.url
-          ? { path: chromaConfig.url }
-          : { host: chromaConfig.host, port: chromaConfig.port }
+        const endpoint = chromaConfig.url ? new URL(chromaConfig.url) : undefined
+        const clientParams: ChromaClientArgs = endpoint
+          ? { host: endpoint.hostname, port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)), ssl: endpoint.protocol === 'https:' }
+          : { host: chromaConfig.host, port: chromaConfig.port, ssl: false }
         if (chromaConfig.apiKey)
-          clientParams.auth = { provider: 'token', credentials: chromaConfig.apiKey, tokenHeaderType: 'AUTHORIZATION' }
+          clientParams.headers = { Authorization: `Bearer ${chromaConfig.apiKey}` }
+        // SDK 的所有候选连接请求共享初始化截止；成功后清除 timer，不使后续业务请求自动失效。
+        clientParams.fetchOptions = { signal: startupAbort.signal }
 
-        // chromadb 为 optionalDependencies，动态 import 后类型与本地最小接口不兼容，需强转
-        const chromaClient = new loadResult.data.ChromaClient(clientParams) as unknown as ChromaClient
-        await waitForHeartbeat(chromaClient, embedded ? chromaConfig.startupTimeout : 5000)
+        const chromaClient = new loadResult.data.ChromaClient(clientParams)
+        await waitForHeartbeat(chromaClient, startupTimeout)
+        // 心跳可能公开；发布连接前必须确认默认 tenant/database 的数据端点也允许当前凭据访问。
+        await chromaClient.countCollections()
 
+        startupAbort.signal.throwIfAborted()
+        if (embedded && (spawnFailed || !serverProcess || serverProcess.exitCode !== null || serverProcess.signalCode !== null))
+          throw new Error('Chroma child exited before readiness was confirmed')
         client = chromaClient
         config = chromaConfig
-        logger.info('Chroma connected', { embedded, host: chromaConfig.host, port: chromaConfig.port })
+        logger.info('Chroma connected', { embedded, host: clientParams.host, port: clientParams.port, ssl: clientParams.ssl })
         return ok(undefined)
       }
       catch (error) {
-        stopEmbeddedServer()
+        startupAbort.abort()
+        const cleanup = await closeResources()
         logger.error('Failed to connect to Chroma', { error: error instanceof Error ? error.message : String(error) })
-        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+        const failure = err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
+        return !failure.success && !cleanup.success
+          ? err({ ...failure.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
+          : failure
+      }
+      finally {
+        clearTimeout(startupTimer)
       }
     },
 
     async close(): Promise<HaiResult<void>> {
-      stopEmbeddedServer()
-      client = null
-      config = null
-      logger.info('Chroma connection closed')
-      return ok(undefined)
+      return await closeResources()
     },
 
     isConnected(): boolean {

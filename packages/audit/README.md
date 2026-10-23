@@ -97,6 +97,8 @@ await audit.init({
 - `audit.helper.login/logout/register/...` - 便捷记录器
 - `audit.close()` - 关闭模块
 
+常见事件通过 `audit.helper` 记录，对应的 `AuditHelper` 类型保持公开；便捷记录器的内部装配工厂不属于包 API。
+
 #### 输入约束
 
 - `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
@@ -122,11 +124,15 @@ await audit.init({
 
 > 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 会记录原始邮箱，默认不会额外掩码。
 
+`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
+
 ## 开发测试
 
 ```bash
 pnpm --filter @h-ai/audit test
 ```
+
+审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
 
 ## 许可证
 

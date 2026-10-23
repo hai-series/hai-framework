@@ -31,6 +31,17 @@ const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
  *
  * @param config - 校验后的 AI 配置（apiKey / baseUrl 来自 llm 配置，dimensions / batchSize 来自 embedding 配置）
  * @returns EmbeddingOperations 实例（`embed` / `embedText` / `embedBatch`）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function embed(config: AIConfig) {
+ *   const embedding = createEmbeddingOperations(config)
+ *   const result = await embedding.embedText('语义检索')
+ *   if (!result.success) return result
+ *   return result.data.length
+ * }
+ * ```
  */
 export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations {
   const embeddingConfig: EmbeddingConfig = config.embedding ?? { batchSize: 100 }

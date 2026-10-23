@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import ts from 'typescript'
+import { environmentReferenceSource } from './env-reference-source.mjs'
 
 const root = process.cwd()
 const modules = [
@@ -51,7 +52,7 @@ function fieldDescription(module, segments) {
       return `${scope}：${detail}`
   }
   if (module === 'payment') {
-    const detail = { alipayPublicKey: '支付宝平台公钥，用于验签', appId: '商户应用 ID', privateKey: '商户签名私钥（PEM）', sandbox: '是否使用沙箱网关', signType: '请求签名算法', secretKey: 'Stripe 服务端密钥', webhookSecret: 'Stripe Webhook 验签密钥', webhookToleranceSeconds: 'Webhook 时间戳允许偏差，单位秒', apiV3Key: '微信支付 API v3 密钥', mchId: '微信支付商户号', platformCert: '微信支付平台证书（PEM），用于验签', serialNo: '商户 API 证书序列号' }[key]
+    const detail = { alipayPublicKey: '支付宝平台公钥，用于验签', appId: '商户应用 ID', sellerId: '支付宝卖家 ID，通知 seller_id 必须与之匹配', privateKey: '商户签名私钥（PEM）', sandbox: '是否使用沙箱网关', signType: '请求和通知允许的签名算法', secretKey: 'Stripe 服务端密钥', webhookSecret: 'Stripe Webhook 验签密钥', webhookToleranceSeconds: 'Webhook 时间戳允许偏差，单位秒', apiV3Key: '微信支付 API v3 密钥', mchId: '微信支付商户号', platformKeys: '按 Wechatpay-Serial 映射的受信平台证书或公钥 PEM，轮换时保留新旧项', serialNo: '商户 API 证书序列号' }[key]
     if (detail)
       return `${segments[0]}：${detail}`
   }
@@ -76,9 +77,6 @@ function fieldDescription(module, segments) {
     prefix: 'RPC 端点的路径前缀',
     runtime: '本地或远程容器运行时，auto 按部署模块顺序探测',
     transport: '传输加密开关或密钥协商配置',
-    encryptResponse: '是否加密服务端业务响应',
-    requireEncryption: '是否要求业务请求使用传输加密',
-    maxClients: '服务端最多保留的客户端传输密钥会话数',
     keyExchangePath: '客户端与服务端约定的密钥交换端点',
     excludePaths: '不进入传输加密管道的路径',
     path: '当前 HTTP 功能的端点路径',
@@ -132,6 +130,10 @@ function schemaDocumentation(sources, exported) {
     }
     else if (ts.isObjectLiteralExpression(node)) {
       for (const property of node.properties) {
+        if (ts.isSpreadAssignment(property)) {
+          visit(property.expression, segments, seen)
+          continue
+        }
         if (!ts.isPropertyAssignment(property))
           continue
         const key = property.name.getText().replace(/^['"]|['"]$/g, '')
@@ -148,7 +150,7 @@ function schemaDocumentation(sources, exported) {
     }
     else if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const method = node.expression.name.text
-      if (method === 'object') {
+      if (['object', 'strictObject', 'looseObject'].includes(method)) {
         visit(node.arguments[0], segments, seen)
       }
       else if (method === 'array') {
@@ -173,16 +175,18 @@ function schemaDocumentation(sources, exported) {
 }
 
 /** 遍历 Schema 的对象/数组/联合类型；数组 0 表示可重复的任意索引。 */
-function walkSchema(node, segments, context, ancestors = new Set()) {
+function walkSchema(node, segments, context, ancestors = new Set(), inheritedDefault) {
   if (!node || typeof node !== 'object')
     return
   if (node.$ref) {
     if (ancestors.has(node.$ref))
       return
     const target = node.$ref.split('/').slice(1).reduce((value, key) => value?.[key.replaceAll('~1', '/').replaceAll('~0', '~')], context.schema)
-    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]))
+    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]), inheritedDefault === undefined ? node.default : inheritedDefault)
     return
   }
+  // 父对象的显式默认值优先于复用 schema 的字段默认值，例如 AI Knowledge 的 overlap=200。
+  const effectiveDefault = inheritedDefault === undefined ? node.default : inheritedDefault
   const name = ['HAI', context.name, ...segments].map(segment => segment.replace(/[^a-z0-9]+/gi, '_').toUpperCase()).join('_')
   const constraints = []
   const enums = node.enum ?? ('const' in node ? [node.const] : [])
@@ -192,9 +196,17 @@ function walkSchema(node, segments, context, ancestors = new Set()) {
     if (key in node)
       constraints.push(`${label} ${node[key]}`)
   }
-  if (!constraints.length && !enums.length && 'default' in node) {
-    const type = typeof node.default
-    constraints.push(type === 'string' ? '字符串' : type === 'boolean' ? 'true | false' : type === 'number' ? '数字' : Array.isArray(node.default) ? 'JSON 数组' : 'JSON 对象')
+  // 同名字段在两个 Provider 的合法范围不同，不能把分支边界合并成同时成立的条件。
+  if (context.name === 'db' && segments.join('.') === 'pool.acquireTimeout') {
+    constraints.splice(0, constraints.length, '整数；PostgreSQL >=0（0禁用）；MySQL 1–2147483647')
+  }
+  // apiKey 的 Chroma Bearer 限制只作用于该 Provider，不能将其正则并入 Qdrant 的约束。
+  if (context.name === 'vecdb' && segments.join('.') === 'apiKey') {
+    constraints.splice(0, constraints.length, '字符串；Qdrant API key；Chroma 为空串或无空白的可打印 ASCII Bearer token')
+  }
+  if (!constraints.length && !enums.length && effectiveDefault !== undefined) {
+    const type = typeof effectiveDefault
+    constraints.push(type === 'string' ? '字符串' : type === 'boolean' ? 'true | false' : type === 'number' ? '数字' : Array.isArray(effectiveDefault) ? 'JSON 数组' : 'JSON 对象')
   }
   if (!constraints.length && !enums.length && !Object.keys(node).length && segments.length)
     constraints.push('JSON/YAML 值；格式及范围由对应模块 Schema 校验')
@@ -210,14 +222,18 @@ function walkSchema(node, segments, context, ancestors = new Set()) {
   }
   if (constraints.length || enums.length) {
     const parentDoc = segments.at(-1) === '0' ? context.docs.get(segments.slice(0, -1).join('.')) : undefined
-    const description = node.description || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments) || `${context.name}.${segments.join('.')} 配置${segments.length ? '项' : '对象'}`
-    const value = node.default === undefined ? '' : typeof node.default === 'object' ? JSON.stringify(node.default) : String(node.default)
+    const providerDescription = context.name === 'vecdb' && ({
+      apiKey: 'Qdrant：API key；Chroma：Authorization Bearer token，用于同协议的自托管服务/网关，不提供 Chroma Cloud 契约',
+      url: 'pgvector：连接串；Qdrant：HTTP(S) 服务地址；Chroma：HTTP(S) 根端点，优先于 host/port，不允许凭据、路径前缀、query 或 fragment',
+    })[segments.join('.')]
+    const description = providerDescription || node.description || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments) || `${context.name}.${segments.join('.')} 配置${segments.length ? '项' : '对象'}`
+    const value = effectiveDefault === undefined ? '' : typeof effectiveDefault === 'object' ? JSON.stringify(effectiveDefault) : String(effectiveDefault)
     add(name, { module: context.name, path: [context.name, ...segments].join('.'), description, constraints, enums, value })
   }
   for (const branch of [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])])
-    walkSchema(branch, segments, context, ancestors)
+    walkSchema(branch, segments, context, ancestors, effectiveDefault)
   for (const [key, property] of Object.entries(node.properties ?? {}))
-    walkSchema(property, [...segments, key], context, ancestors)
+    walkSchema(property, [...segments, key], context, ancestors, effectiveDefault && typeof effectiveDefault === 'object' && !Array.isArray(effectiveDefault) ? effectiveDefault[key] : undefined)
   if (node.items)
     walkSchema(node.items, [...segments, '0'], context, ancestors)
 }
@@ -255,7 +271,7 @@ async function scan(directory) {
     }
     if (!/\.(?:ts|js|mjs|py|svelte|ya?ml|hbs|example)$/.test(item.name) || item.name.endsWith('.d.ts'))
       continue
-    const content = await readFile(file, 'utf8')
+    const content = environmentReferenceSource(await readFile(file, 'utf8'), file)
     const location = path.relative(root, file).replaceAll('\\', '/')
     if (/\/config\/[^/]+\.ya?ml(?:\.hbs)?$/.test(location)) {
       const configName = item.name.replace(/^_/, '').replace(/\.ya?ml(?:\.hbs)?$/, '')
@@ -304,6 +320,7 @@ const extraDescriptions = {
   PUBLIC_API_TRANSPORT: ['客户端传输加密开关，须与服务端一致', 'on | off'],
   PUBLIC_API_KEY_EXCHANGE_PATH: ['公开密钥交换端点，须与服务端一致', '以 / 开头的路径'],
   HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH: ['桌面示例公开密钥交换端点，构建期插值', '以 / 开头的路径'],
+  HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ['服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入', 'JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志'],
   HAI_CRYPTO_TRANSPORT: ['桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验', 'false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true'],
   VITE_ADAPTER: ['SvelteKit 构建适配器', 'node | static；未识别的值回退 node'],
   HAI_ADMIN_DEFAULT_PASSWORD: ['首次创建管理员的密码', '满足 IAM 密码策略；敏感值仅在本地或目标进程注入'],
@@ -353,6 +370,7 @@ const extraDescriptions = {
   IAM_NOTIFICATION_URL: ['确定性通知测试服务地址', '有效 HTTP(S) URL'],
   LANG: ['子进程默认语言与字符集', '操作系统支持的 locale，例如 en_US.UTF-8'],
   LC_ALL: ['子进程所有 locale 分类的覆盖值', '操作系统支持的 locale，例如 en_US.UTF-8'],
+  LC_MESSAGES: ['CLI 消息语言；HAI_CORE_DEFAULTLOCALE、LC_ALL 优先，LANG 后备', '操作系统支持的 locale，例如 en_US.UTF-8'],
   PUBLIC_API_BASE_BASE64: ['容器生成前端运行时配置时使用的 API 地址编码', 'PUBLIC_API_BASE 的 Base64 编码，不含凭据'],
   PYTHONIOENCODING: ['本地 Python 模型进程标准输入输出编码', 'Python 支持的编码名，通常 utf-8'],
   SERVICE_BASE_URL: ['Fullstack 开发代理访问服务端的地址', '有效 HTTP(S) URL'],
@@ -373,7 +391,6 @@ for (const [name, entry] of explicit) {
     ?? (providerKey ? [`${name.replace(/^HAI_AI_(?:AUDIO|IMAGE)_/, '').replace(/_APIKEY$|_(?:API_KEY|ACCESS_KEY|APP_KEY)$/, '')} 厂商凭据回退；优先在模型项配置 apiKey`, '敏感字符串，启用对应厂商时注入'] : undefined)
     ?? (name.endsWith('_BASE_URL') ? ['厂商 SDK 服务基础地址回退', '有效 HTTP(S) URL'] : undefined)
     ?? (name === 'DASHSCOPE_WORKSPACE_ID' ? ['DashScope 厂商工作空间标识', '字符串，由厂商控制台提供'] : undefined)
-    ?? (name.startsWith('HAI_CORE_FEATURES_') ? [`示例应用功能开关：${name.slice(18).toLowerCase()}`, 'true | false'] : undefined)
   const inferred = entry.value === 'true' || entry.value === 'false'
     ? 'true | false'
     : /^\d+$/.test(entry.value)
@@ -382,7 +399,8 @@ for (const [name, entry] of explicit) {
         ? '有效 URL；不得包含凭据'
         : '字符串；按使用位置的校验规则填写'
   add(name, {
-    module: name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
+    // 该 Secret 只属于服务端实际读取入口，不能随桌面端公开 crypto 配置自动推荐。
+    module: name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
     path: name,
     description: meta?.[0] ?? `${sensitive ? '凭据输入' : '环境入口'}；使用位置 ${entry.source}`,
     constraints: [meta?.[1] ?? (sensitive ? '敏感字符串；启用相应功能时必填，不得提交真实值' : inferred)],
@@ -404,12 +422,13 @@ for (const [name, entry] of variables) {
 const catalog = [...variables.values()].sort((a, b) => a.module.localeCompare(b.module) || a.name.localeCompare(b.name))
 const catalogText = `${JSON.stringify(catalog.map(({ constraints, enums, ...entry }) => ({
   ...entry,
-  constraint: [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
+  constraint: entry.name === 'HAI_DB_SSL' ? 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象' : [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
 })), null, 2)}\n`
 const catalogFile = path.join(root, 'packages/cli/src/commands/cli-config-catalog.json')
 const envText = [
   '# hai-framework 环境变量总表（由 scripts/generate-env-catalog.mjs 生成）',
   '# 所有变量默认注释；按应用 .env.example 选择启用，公共值放已跟踪的 .env / .env.dev / .env.test / .env.prod，私有值仅放 .env.local 或进程环境。',
+  '# 赋值为合法示例或建议值，不代表所有字段的 Schema 默认值；实际默认、单位和消费位置见 docs/configuration-map.md。',
   '# 规则、加载优先级与环境命令：README.md 的配置与环境变量章节。',
   '# HAI_<配置名>_<路径>；camelCase 不拆词；数组的 0 可替换为任意有效索引。',
   '# 对象/数组变量整体替换节点并优先于叶子；叶子覆盖要求 YAML 已声明路径。',

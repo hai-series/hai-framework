@@ -38,7 +38,6 @@ export type {
 } from '@a2a-js/sdk'
 
 export type {
-  TaskStore as A2ATaskStore,
   AgentExecutor,
   ExecutionEventBus,
   RequestContext,
@@ -47,7 +46,17 @@ export type {
 
 // ─── A2A 消息记录（持久化用） ───
 
-/** A2A 调用方身份信息 */
+/**
+ * A2A 调用方身份信息
+ *
+ * @example
+ * ```ts
+ * import type { A2ACallerIdentity } from '@h-ai/ai'
+ * function principal(identity: A2ACallerIdentity) {
+ *   return identity.agentId // 只接受可信认证器返回的身份，不接受 JSON-RPC 参数自报。
+ * }
+ * ```
+ */
 export interface A2ACallerIdentity {
   /** 调用方 Agent ID（如 AgentCard.name 或自定义标识） */
   agentId: string
@@ -57,7 +66,17 @@ export interface A2ACallerIdentity {
   url?: string
 }
 
-/** A2A 消息记录（存储每条 A2A 交互） */
+/**
+ * A2A 消息记录（存储每条 A2A 交互）
+ *
+ * @example
+ * ```ts
+ * import type { A2AMessageRecord } from '@h-ai/ai'
+ * function text(record: A2AMessageRecord) {
+ *   return { taskId: record.taskId, role: record.role, parts: record.parts }
+ * }
+ * ```
+ */
 export interface A2AMessageRecord {
   /** 记录 ID（自动生成） */
   id: string
@@ -75,7 +94,17 @@ export interface A2AMessageRecord {
   createdAt: number
 }
 
-/** A2A 上下文信息（对话/会话级别） */
+/**
+ * A2A 上下文信息（对话/会话级别）
+ *
+ * @example
+ * ```ts
+ * import type { A2AContextInfo } from '@h-ai/ai'
+ * function lastActivity(context: A2AContextInfo) {
+ *   return new Date(context.updatedAt).toISOString()
+ * }
+ * ```
+ */
 export interface A2AContextInfo {
   /** 上下文 ID（对应 SDK 的 contextId） */
   id: string
@@ -96,6 +125,15 @@ export interface A2AContextInfo {
  *
  * 纯接口设计，由应用层实现，Kit 模块做胶水集成。
  * 用于验证入站 A2A 请求的身份。
+ *
+ * @example
+ * ```ts
+ * import type { A2AAuthenticator, A2ACallerIdentity } from '@h-ai/ai'
+ * import type { HaiResult } from '@h-ai/core'
+ * function authenticator(verify: (headers: Record<string, string | undefined>) => Promise<HaiResult<A2ACallerIdentity>>): A2AAuthenticator {
+ *   return { authenticate: headers => verify(headers) }
+ * }
+ * ```
  */
 export interface A2AAuthenticator {
   /**
@@ -109,7 +147,20 @@ export interface A2AAuthenticator {
 
 // ─── A2A 任务过滤器 ───
 
-/** A2A 任务查询过滤器 */
+/**
+ * A2A 任务查询过滤器
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { A2ATaskFilter } from '@h-ai/ai'
+ * const filter: A2ATaskFilter = { callerId: 'agent-1', contextId: 'context-1', status: 'user', limit: 20 }
+ * const result = await ai.a2a.listMessages(filter)
+ * if (result.success) {
+ *   const messages = result.data.items
+ * }
+ * ```
+ */
 export interface A2ATaskFilter {
   /** 按消息角色过滤（user / agent），不是任务生命周期状态 */
   status?: string | string[]
@@ -131,6 +182,19 @@ export interface A2ATaskFilter {
  * A2A 操作接口
  *
  * 提供 Agent-to-Agent 协议能力：Agent Card 管理、请求处理、客户端调用。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { AgentExecutor } from '@h-ai/ai'
+ * function register(executor: AgentExecutor) {
+ *   const registered = ai.a2a.registerExecutor(executor)
+ *   if (!registered.success) return registered
+ *   const card = ai.a2a.getAgentCard()
+ *   if (!card.success) return card
+ *   return card.data
+ * }
+ * ```
  */
 export interface A2AOperations {
   /**
@@ -168,7 +232,8 @@ export interface A2AOperations {
    * 查询 A2A 消息列表（服务端管理接口，不自动推断调用方权限）
    *
    * @param filter - 查询过滤器
-   * @returns 分页的消息记录列表
+   * @returns 分页消息；存储失败返回 A2A_LIST_MESSAGES_FAILED，不暴露原始连接错误。
+   * 日志不是交付回执，业务结果须结合 Task 的 requiresEffectReconciliation 判断。
    */
   listMessages: (filter: A2ATaskFilter) => Promise<HaiResult<StorePage<A2AMessageRecord>>>
 
@@ -187,7 +252,16 @@ export interface A2AOperations {
 
 // ─── 辅助类型 ───
 
-/** A2A API Key 安全配置 */
+/**
+ * A2A API Key 安全配置
+ *
+ * @example
+ * ```ts
+ * import type { A2AApiKeySecurity } from '@h-ai/ai'
+ * const security: A2AApiKeySecurity = { in: 'header', name: 'X-Agent-Key' }
+ * const headerName = security.name // 描述传递方式；实际验证仍由应用实现。
+ * ```
+ */
 export interface A2AApiKeySecurity {
   /** API Key 的传递位置 */
   in: 'header' | 'query'
@@ -195,13 +269,31 @@ export interface A2AApiKeySecurity {
   name: string
 }
 
-/** A2A 安全认证配置 */
+/**
+ * A2A 安全认证配置
+ *
+ * @example
+ * ```ts
+ * import type { A2AAgentCardConfig, A2ASecurityConfig } from '@h-ai/ai'
+ * const security: A2ASecurityConfig = { apiKey: { in: 'header', name: 'X-Agent-Key' } }
+ * const card: A2AAgentCardConfig = { name: 'guide', url: 'https://example.com/a2a', security }
+ * ```
+ */
 export interface A2ASecurityConfig {
   /** API Key 认证配置 */
   apiKey?: A2AApiKeySecurity
 }
 
-/** Agent Card 配置（应用层提供） */
+/**
+ * Agent Card 配置（应用层提供）
+ *
+ * @example
+ * ```ts
+ * import type { A2AAgentCardConfig } from '@h-ai/ai'
+ * const config: A2AAgentCardConfig = { name: 'guide', url: 'https://example.com/a2a', version: '1.0.0', skills: [{ id: 'help', name: '帮助', tags: ['docs'] }] }
+ * const skillNames = config.skills?.map(skill => skill.name) ?? []
+ * ```
+ */
 export interface A2AAgentCardConfig {
   /** Agent 名称 */
   name: string
@@ -222,7 +314,22 @@ export interface A2AAgentCardConfig {
   security?: A2ASecurityConfig
 }
 
-/** 处理结果（单条或流式） */
+/**
+ * 处理结果（单条或流式）
+ *
+ * @example
+ * ```ts
+ * import type { A2AHandleResult } from '@h-ai/ai'
+ * async function consume(result: A2AHandleResult) {
+ *   if (result.streaming && result.stream) {
+ *     const events: unknown[] = []
+ *     for await (const event of result.stream) events.push(event)
+ *     return events
+ *   }
+ *   return result.body
+ * }
+ * ```
+ */
 export interface A2AHandleResult {
   /** 是否为流式响应 */
   streaming: boolean
@@ -232,7 +339,20 @@ export interface A2AHandleResult {
   stream?: AsyncGenerator<unknown, void, undefined>
 }
 
-/** 远端调用选项 */
+/**
+ * 远端调用选项
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import type { A2ACallOptions } from '@h-ai/ai'
+ * const options: A2ACallOptions = { timeout: 30_000 }
+ * const result = await ai.a2a.callRemoteAgent('https://trusted-agent.example.com/a2a', '项目介绍', options)
+ * if (result.success) {
+ *   const answer = result.data.responseText
+ * }
+ * ```
+ */
 export interface A2ACallOptions {
   /** 超时时间（毫秒），默认 60 秒。 */
   timeout?: number
@@ -240,7 +360,17 @@ export interface A2ACallOptions {
   headers?: Record<string, string>
 }
 
-/** 远端调用结果 */
+/**
+ * 远端调用结果
+ *
+ * @example
+ * ```ts
+ * import type { A2ACallResult } from '@h-ai/ai'
+ * function answer(result: A2ACallResult) {
+ *   return { taskId: result.taskId, state: result.taskState, text: result.responseText ?? '' }
+ * }
+ * ```
+ */
 export interface A2ACallResult {
   /** 远端任务 ID */
   taskId?: string

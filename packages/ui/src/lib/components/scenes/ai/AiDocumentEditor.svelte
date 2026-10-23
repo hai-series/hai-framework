@@ -1,4 +1,5 @@
 <!--
+  @component AiDocumentEditor
   =============================================================================
   @h-ai/ui - AiDocumentEditor 组件
   =============================================================================
@@ -9,6 +10,16 @@
   适用于 AI 输出显示、文档预览、代码说明面板等场景。
   使用 Svelte 5 Runes ($props, $state, $derived, $effect)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { AiDocumentEditor } from '@h-ai/ui'
+  const props: ComponentProps<typeof AiDocumentEditor> = { content: '# 报告\n正文', title: '报告', sourceKind: 'document', allowHtmlTags: false, allowUnsafeCodePreview: false }
+  const component = mount(AiDocumentEditor, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
@@ -45,6 +56,14 @@
   } from './mermaid-host-sync.js'
   import { renderMermaidDiagram, stripMermaidSvgStyleElements } from './mermaid-render.js'
 
+  /**
+   * 选区工具条在编辑器视口中的坐标和对齐方向。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SelectionToolbarPosition = { top: 24, left: 120, placement: 'bottom', alignment: 'left' }
+   * ```
+   */
   interface SelectionToolbarPosition {
     /** 选区工具条相对滚动容器的 top 坐标。 */
     top: number
@@ -56,6 +75,14 @@
     alignment: 'left' | 'center' | 'right'
   }
 
+  /**
+   * 单个代码块的运行进度及结果；错误状态只保留可展示消息。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: CodePreviewState = { status: 'ready', result: { kind: 'text', content: '2' } }
+   * ```
+   */
   interface CodePreviewState {
     /** 当前代码块预览所处的生命周期阶段。 */
     status: 'running' | 'ready' | 'error'
@@ -65,6 +92,14 @@
     error?: string
   }
 
+  /**
+   * 按块源码签名缓存 Mermaid 渲染状态，避免流式更新重复渲染。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: MermaidRenderCacheEntry = { signature: JSON.stringify(['diagram-1', 'graph TD; A-->B']), status: 'ready', html: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' }
+   * ```
+   */
   interface MermaidRenderCacheEntry {
     /** 当前 Mermaid 源码签名。 */
     signature: string
@@ -76,6 +111,14 @@
     error?: string
   }
 
+  /**
+   * 当前选区的块级与行内格式快照；不持久化 DOM 节点。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SelectionFormatState = { blockFormat: 'paragraph', alignment: 'left', bold: false, strike: false, italic: false, underline: false, highlight: false, code: false, linkHref: '', textColor: null, backgroundColor: null }
+   * ```
+   */
   interface SelectionFormatState {
     /** 当前选区所在段落样式，用于标题/正文下拉默认值。 */
     blockFormat: MarkdownBlockStyleKind
@@ -101,6 +144,18 @@
     backgroundColor: string | null
   }
 
+  /**
+   * 预览 DOM 中选区与范围的临时快照，编辑结束后重新读取。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const selection = window.getSelection()
+   * if (selection && selection.rangeCount > 0) {
+   *   const snapshot: PreviewSelectionState = { selection, range: selection.getRangeAt(0).cloneRange(), text: selection.toString() }
+   *   const selectedText = snapshot.text
+   * }
+   * ```
+   */
   interface PreviewSelectionState {
     /** 浏览器当前仍然有效的正文选区。 */
     selection: Selection
@@ -110,6 +165,14 @@
     text: string
   }
 
+  /**
+   * 背景色面板中的清除颜色选项。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: ColorSwatchOption = { value: null, titleKey: 'markdown_background_none' }
+   * ```
+   */
   interface ColorSwatchOption {
     /** 颜色值；为空表示恢复默认或清除当前维度。 */
     value: string | null
@@ -117,6 +180,14 @@
     titleKey: 'markdown_background_none'
   }
 
+  /**
+   * 悬停链接的受控地址及提示层位置；原始地址不能绕过链接消毒。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: HoveredLinkState = { element: document.createElement('a'), href: 'https://example.com', rawHref: 'https://example.com', top: 24, left: 120, placement: 'bottom' }
+   * ```
+   */
   interface HoveredLinkState {
     /** 当前悬停的链接元素。 */
     element: HTMLAnchorElement
@@ -132,6 +203,14 @@
     placement: 'top' | 'bottom'
   }
 
+  /**
+   * 选区菜单的互斥操作域。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SelectionMenuKind = 'rewrite'
+   * ```
+   */
   type SelectionMenuKind = 'rewrite' | 'block' | 'align' | 'link' | 'color'
 
   const BLOCK_FORMAT_OPTIONS: Array<{

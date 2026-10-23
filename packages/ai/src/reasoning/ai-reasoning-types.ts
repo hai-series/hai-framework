@@ -18,6 +18,13 @@ import type { ChatMessage, ToolRegistryOperations } from '../llm/ai-llm-types.js
  * - `react` — ReAct（Reasoning + Acting）：交替 思考→行动→观察 循环
  * - `cot` — Chain-of-Thought：将问题分解为思维链逐步推理
  * - `plan-execute` — Plan-and-Execute：先生成计划再逐步执行
+ *
+ * @example
+ * ```ts
+ * import type { ReasoningStrategy } from '@h-ai/ai'
+ * const value: ReasoningStrategy = 'cot'
+ * const options = { strategy: value, maxRounds: 3 }
+ * ```
  */
 export type ReasoningStrategy = 'react' | 'cot' | 'plan-execute'
 
@@ -25,6 +32,17 @@ export type ReasoningStrategy = 'react' | 'cot' | 'plan-execute'
 
 /**
  * 推理执行选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type ReasoningOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: ReasoningOptions) {
+ *   const result = await ai.reasoning.run('解释这项设计的权衡', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface ReasoningOptions {
   /** 交互主体 ID */
@@ -76,11 +94,25 @@ export interface ReasoningOptions {
 
 /**
  * 推理步骤类型
+ *
+ * @example
+ * ```ts
+ * import type { ReasoningStepType } from '@h-ai/ai'
+ * const value: ReasoningStepType = 'answer'
+ * const isFinal = value === 'answer'
+ * ```
  */
 export type ReasoningStepType = 'thought' | 'action' | 'observation' | 'plan' | 'answer'
 
 /**
  * 单个推理步骤
+ *
+ * @example
+ * ```ts
+ * import type { ReasoningStep } from '@h-ai/ai'
+ * const value: ReasoningStep = { type: 'answer', content: '选择共享数据库。', index: 0 }
+ * const display = value.content
+ * ```
  */
 export interface ReasoningStep {
   /** 步骤类型 */
@@ -101,6 +133,13 @@ export interface ReasoningStep {
 
 /**
  * 推理执行结果
+ *
+ * @example
+ * ```ts
+ * import type { ReasoningResult } from '@h-ai/ai'
+ * const value: ReasoningResult = { answer: '选择共享数据库。', steps: [{ type: 'answer', content: '选择共享数据库。', index: 0 }], strategy: 'cot', rounds: 1, messages: [] }
+ * const answer = value.answer
+ * ```
  */
 export interface ReasoningResult {
   /** 最终答案 */
@@ -124,6 +163,14 @@ export interface ReasoningResult {
  * - `step` — 推理步骤完成（思考/行动/观察/计划）
  * - `delta` — LLM 增量文本（最终答案的流式输出）
  * - `done` — 推理完成，携带完整结果
+ *
+ * @example
+ * ```ts
+ * import type { ReasoningStreamEvent } from '@h-ai/ai'
+ * function render(event: ReasoningStreamEvent): string {
+ *   return event.type === 'delta' ? event.text : event.type === 'done' ? event.result.answer : event.step.content
+ * }
+ * ```
  */
 export type ReasoningStreamEvent
   = | { type: 'step', step: ReasoningStep }
@@ -139,21 +186,12 @@ export type ReasoningStreamEvent
  *
  * @example
  * ```ts
- * // ReAct 推理（带工具）
- * const result = await ai.reasoning.run(
- *   '分析这份数据...',
- *   {
- *     strategy: 'react',
- *     tools: registry,
- *     maxRounds: 5,
- *   },
- * )
- *
- * // CoT 推理
- * const result = await ai.reasoning.run(
- *   '解释量子纠缠',
- *   { strategy: 'cot' },
- * )
+ * import { ai, type ReasoningOperations } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * const operations: ReasoningOperations = ai.reasoning
+ * const result = await operations.run('解释为何需要共享状态', { strategy: 'cot', maxRounds: 3 })
+ * if (!result.success) throw new Error(result.error.message)
+ * const answer = result.data.answer
  * ```
  */
 export interface ReasoningOperations {

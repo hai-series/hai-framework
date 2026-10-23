@@ -4,7 +4,22 @@ import { err, ok } from '@h-ai/core'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 
-/** 启用 LDAP 时加载可选 SDK；自定义 ldapClientFactory 不经过此入口。 */
+/**
+ * 启用 LDAP 时加载可选 SDK；自定义 ldapClientFactory 不经过此入口。
+ * @returns 使用 ldapts 创建独立连接的工厂；缺少可选 SDK 或导入失败会拒绝 Promise。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 应用已安装 ldapts；默认工厂每次创建独立连接。
+ * const factory = await loadLdapClientFactory()
+ * async function connect(config: Parameters<LdapClientFactory>[0]) {
+ *   const opened = await factory(config)
+ *   if (!opened.success)
+ *     return opened
+ *   return opened.data.unbind()
+ * }
+ * ```
+ */
 export async function loadLdapClientFactory(): Promise<LdapClientFactory> {
   const { Client } = await import('ldapts')
   return async (config) => {

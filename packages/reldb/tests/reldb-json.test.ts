@@ -12,8 +12,15 @@
  * =============================================================================
  */
 
+import type { HaiResult } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createJsonOps, parseJsonPath, reldb } from '../src/index.js'
+
+function checkedData<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data
+}
 
 // =============================================================================
 // parseJsonPath 单元测试
@@ -223,10 +230,12 @@ describe('createJsonOps(postgresql)', () => {
   })
 
   describe('merge', () => {
-    it('生成 || ::jsonb 表达式', () => {
+    it('参数化对象补丁，不使用不符合递归/删除契约的浅拼接', () => {
       const { sql, params } = json.merge('profile', { bio: 'new', avatar: null })
-      expect(sql).toBe('profile || ?::jsonb')
-      expect(params).toEqual(['{"bio":"new","avatar":null}'])
+      expect(sql).toContain('WITH RECURSIVE')
+      expect(sql).not.toContain('bio')
+      expect(sql).not.toContain('avatar')
+      expect(params).toHaveLength(1)
     })
   })
 })
@@ -326,7 +335,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       params,
     )
     expect(result.success).toBe(true)
-    expect(result.data?.[0]?.v).toBe('active')
+    expect(checkedData(result)?.[0]?.v).toBe('active')
   })
 
   it('set：设置 JSON 字段路径（字符串值）', async () => {
@@ -340,7 +349,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(result.data?.[0]?.v).toBe('inactive')
+    expect(checkedData(result)?.[0]?.v).toBe('inactive')
   })
 
   it('set：设置 JSON 字段路径（数值）', async () => {
@@ -351,7 +360,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(result.data?.[0]?.v).toBe(99)
+    expect(checkedData(result)?.[0]?.v).toBe(99)
   })
 
   it('set：设置 JSON 字段路径（对象值）', async () => {
@@ -362,7 +371,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(result.data?.[0]?.v).toBe(2)
+    expect(checkedData(result)?.[0]?.v).toBe(2)
   })
 
   it('insert：仅当路径不存在时插入', async () => {
@@ -375,7 +384,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(after.data?.[0]?.v).toBe('created')
+    expect(checkedData(after)?.[0]?.v).toBe('created')
 
     // 路径已存在：不应覆盖
     const { sql: insSql2, params: insParams2 } = reldb.json.insert('data', '$.newField', 'overwrite')
@@ -385,7 +394,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(afterAgain.data?.[0]?.v).toBe('created')
+    expect(checkedData(afterAgain)?.[0]?.v).toBe('created')
   })
 
   it('remove：删除 JSON 字段路径', async () => {
@@ -397,7 +406,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(result.data?.[0]?.v).toBeNull()
+    expect(checkedData(result)?.[0]?.v).toBeNull()
   })
 
   it('merge：合并 JSON 对象（覆盖已有键）', async () => {
@@ -414,8 +423,8 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql2} as v FROM items WHERE id = 1`,
       exParams2,
     )
-    expect(s.data?.[0]?.v).toBe('merged')
-    expect(e.data?.[0]?.v).toBe('added')
+    expect(checkedData(s)?.[0]?.v).toBe('merged')
+    expect(checkedData(e)?.[0]?.v).toBe('added')
   })
 
   it('merge：通过 null 值删除键（RFC 7396）', async () => {
@@ -427,7 +436,7 @@ describe('reldb.json 集成测试（SQLite）', () => {
       `SELECT ${exSql} as v FROM items WHERE id = 1`,
       exParams,
     )
-    expect(result.data?.[0]?.v).toBeNull()
+    expect(checkedData(result)?.[0]?.v).toBeNull()
   })
 })
 

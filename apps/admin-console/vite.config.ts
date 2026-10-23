@@ -15,7 +15,7 @@ import { defineConfig } from 'vite'
 import appPackage from './package.json' with { type: 'json' }
 
 export default defineConfig(({ mode, command }) => {
-  if (command !== 'build') {
+  if (command !== 'build' && process.env.HAI_E2E !== '1') {
     const env = core.config.loadEnvFiles({ mode })
     if (!env.success)
       throw new Error(env.error.message)

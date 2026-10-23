@@ -2,18 +2,17 @@
  * @h-ai/storage — 公共类型定义
  *
  * 包含：
- * - 错误类型（StorageError）
+ * - 错误定义（HaiStorageError）
  * - 文件元数据（FileMetadata）
  * - 列表结果（ListResult）
  * - 文件操作接口（FileOperations）
  * - 目录操作接口（DirOperations）
  * - 签名 URL 操作接口（PresignOperations）
  * - 函数接口（StorageFunctions）
- * - Provider 接口（StorageProvider）
  * @module storage-types
  */
 
-import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { ErrorInfo, HaiError, HaiResult } from '@h-ai/core'
 import type { Buffer } from 'node:buffer'
 import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageConfigInput } from './storage-config.js'
 import { core } from '@h-ai/core'
@@ -38,9 +37,76 @@ const StorageErrorInfo = {
   DOWNLOAD_FAILED: '015:500',
   CHECKSUM_FAILED: '016:500',
   INVALID_CHECKSUM: '017:400',
+  UNSUPPORTED_OPERATION: '018:400',
+  INVALID_LIST_OPTIONS: '019:400',
 } as const satisfies ErrorInfo
 
+/**
+ * HaiStorageError 的数据约束与操作契约。
+ * @example
+ * ```ts
+ * import { HaiStorageError } from '@h-ai/storage'
+ * import { err } from '@h-ai/core'
+ *
+ * const result = err(HaiStorageError.NOT_FOUND, 'File missing')
+ * if (!result.success) void result.error.code
+ * ```
+ */
 export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageErrorInfo)
+
+/**
+ * 批量删除中未确认完成的一项；key 始终使用调用方视角，不含 Provider prefix。
+ * @example
+ * ```ts
+ * import type { StorageDeleteFailure } from '@h-ai/storage'
+ *
+ * const value: StorageDeleteFailure = { key: 'private.txt', code: 'AccessDenied', retryable: false, outcome: 'failed' }
+ * void value
+ * ```
+ */
+export interface StorageDeleteFailure {
+  /** 调用方提交的文件键。 */
+  key: string
+  /** 渠道/框架错误标识，不包含渠道原始 Message。 */
+  code: string
+  /** 是否属于可重试的瞬时故障；未知结果重试前仍需考虑并发上传/版本语义。 */
+  retryable: boolean
+  /** failed 为已知失败，unknown 为已发送但结果未知，notAttempted 为尚未发送。 */
+  outcome: 'failed' | 'unknown' | 'notAttempted'
+}
+
+/**
+ * 批量删除进度；任一失败不能宣称全部删除完成。
+ * @example
+ * ```ts
+ * import type { StorageDeleteSummary } from '@h-ai/storage'
+ *
+ * const value: StorageDeleteSummary = { deletedKeys: ['a.txt'], failures: [] }
+ * void value
+ * ```
+ */
+export interface StorageDeleteSummary {
+  /** 已确认删除或本来就不存在的唯一文件键。 */
+  deletedKeys: string[]
+  /** 失败、未知及尚未尝试的唯一文件键。 */
+  failures: StorageDeleteFailure[]
+}
+
+/**
+ * 批量删除结果；失败仍遵守 HaiResult，部分进度置于 error.ext.deleteMany。
+ * @example
+ * ```ts
+ * import { storage, type StorageDeleteResult } from '@h-ai/storage'
+ *
+ * async function remove() {
+ *   const result: StorageDeleteResult = await storage.file.deleteMany(['a.txt', 'b.txt'])
+ *   return result.success ? result.data : result.error.ext?.deleteMany
+ * }
+ * ```
+ */
+export type StorageDeleteResult
+  = | { success: true, data: StorageDeleteSummary }
+    | { success: false, error: HaiError & { ext?: Record<string, unknown> & { deleteMany?: StorageDeleteSummary } } }
 
 // ─── 文件元数据 ───
 
@@ -48,6 +114,13 @@ export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageEr
  * 文件元数据接口
  *
  * 表示存储中单个文件的元信息，由 put/head/copy/list 等操作返回。
+ * @example
+ * ```ts
+ * import type { FileMetadata } from '@h-ai/storage'
+ *
+ * const value: FileMetadata = { key: 'a.txt', size: 5, contentType: 'text/plain', lastModified: new Date() }
+ * void value
+ * ```
  */
 export interface FileMetadata {
   /** 文件键/路径（不含配置 prefix，对用户透明） */
@@ -68,6 +141,13 @@ export interface FileMetadata {
  * 列表选项
  *
  * 用于控制 `storage.dir.list()` 的过滤、分页和目录模拟行为。
+ * @example
+ * ```ts
+ * import type { ListOptions } from '@h-ai/storage'
+ *
+ * const value: ListOptions = { prefix: 'reports/', delimiter: '/', maxKeys: 100 }
+ * void value
+ * ```
  */
 export interface ListOptions {
   /** 前缀过滤（只返回以此前缀开头的文件） */
@@ -75,12 +155,12 @@ export interface ListOptions {
   /**
    * 分页标记（从上次 ListResult.nextContinuationToken 获取）
    *
-   * 注意：本地存储目前不支持此字段，仅 S3 Provider 有效。
+   * Local 游标绑定根目录、prefix 和 delimiter，可跨实例使用；不得跨查询或 provider 混用。
    */
   continuationToken?: string
-  /** 每页最大数量（默认 1000） */
+  /** 每页逻辑条目上限（1–1000，默认 1000）；files 和 commonPrefixes 合计计数。 */
   maxKeys?: number
-  /** 分隔符（用于模拟目录结构，通常为 '/';传入后子目录作为 commonPrefixes 返回） */
+  /** 分隔符，通常为 '/'；从 prefix 之后首次出现的位置折叠 commonPrefixes，空字符串表示不折叠。 */
   delimiter?: string
 }
 
@@ -88,11 +168,18 @@ export interface ListOptions {
  * 列表结果
  *
  * 包含当前页的文件列表、目录前缀、分页信息。
+ * @example
+ * ```ts
+ * import type { ListResult } from '@h-ai/storage'
+ *
+ * const value: ListResult = { files: [], commonPrefixes: ['reports/'], isTruncated: false }
+ * void value
+ * ```
  */
 export interface ListResult {
   /** 当前页文件元数据列表 */
   files: FileMetadata[]
-  /** 公共前缀（使用 delimiter 时由子目录路径组成） */
+  /** 公共前缀：由实际匹配文件按 delimiter 折叠，不包含 Local 空物理目录。 */
   commonPrefixes: string[]
   /** 下一页标记；无后续页时为 undefined */
   nextContinuationToken?: string
@@ -106,6 +193,13 @@ export interface ListResult {
  * 上传选项
  *
  * 用于控制 `storage.file.put()` 的元数据与缓存行为。
+ * @example
+ * ```ts
+ * import type { UploadOptions } from '@h-ai/storage'
+ *
+ * const value: UploadOptions = { ifNoneMatch: '*', contentType: 'text/plain', signal: new AbortController().signal }
+ * void value
+ * ```
  */
 export interface UploadOptions {
   /** 仅当 key 不存在时原子写入；S3 使用标准 If-None-Match，后端不支持时返回错误。 */
@@ -127,6 +221,13 @@ export interface UploadOptions {
  *
  * 用于控制 `storage.file.get()` 的范围读取。
  * 两个字段均为字节偏移（含），与 HTTP Range 语义一致。
+ * @example
+ * ```ts
+ * import type { DownloadOptions } from '@h-ai/storage'
+ *
+ * const value: DownloadOptions = { rangeStart: 0, rangeEnd: 99 }
+ * void value
+ * ```
  */
 export interface DownloadOptions {
   /** 取消读取。 */
@@ -142,6 +243,13 @@ export interface DownloadOptions {
  *
  * 用于控制 `storage.file.copy()` 的目标文件元数据。
  * 提供任意字段时，S3 Provider 会使用 MetadataDirective='REPLACE' 覆盖源文件元数据。
+ * @example
+ * ```ts
+ * import type { CopyOptions } from '@h-ai/storage'
+ *
+ * const value: CopyOptions = { contentType: 'text/plain', metadata: { category: 'reports' } }
+ * void value
+ * ```
  */
 export interface CopyOptions {
   /** 目标文件的内容类型（不指定时继承源文件） */
@@ -152,20 +260,59 @@ export interface CopyOptions {
 
 // ─── 操作接口 ───
 
-/** 文件内容；异步字节流支持 Node Readable 等，不将整个文件载入内存。 */
+/**
+ * 文件内容；异步字节流支持 Node Readable 等，不将整个文件载入内存。
+ * @example
+ * ```ts
+ * import type { StorageData } from '@h-ai/storage'
+ *
+ * const value: StorageData = new TextEncoder().encode('hello')
+ * void value
+ * ```
+ */
 export type StorageData = Buffer | Uint8Array | string | AsyncIterable<Uint8Array>
 
-/** 常见 checksum 算法；MD5/SHA-1 仅用于兼容性完整性校验，不用于安全认证。 */
+/**
+ * 常见 checksum 算法；MD5/SHA-1 仅用于兼容性完整性校验，不用于安全认证。
+ * @example
+ * ```ts
+ * import type { ChecksumAlgorithm } from '@h-ai/storage'
+ *
+ * const value: ChecksumAlgorithm = 'sha256'
+ * void value
+ * ```
+ */
 export type ChecksumAlgorithm = 'sha256' | 'sha384' | 'sha512' | 'sha1' | 'md5'
 
-/** checksum 计算选项；默认 SHA-256、小写 hex。 */
+/**
+ * checksum 计算选项；默认 SHA-256、小写 hex。
+ * @example
+ * ```ts
+ * import type { ChecksumOptions } from '@h-ai/storage'
+ *
+ * const value: ChecksumOptions = { algorithm: 'sha256', encoding: 'hex' }
+ * void value
+ * ```
+ */
 export interface ChecksumOptions {
   algorithm?: ChecksumAlgorithm
   encoding?: 'hex' | 'base64'
   signal?: AbortSignal
 }
 
-/** Node 端无状态 checksum 工具，不依赖 storage.init；流输入仅消费一次。 */
+/**
+ * Node 端无状态 checksum 工具，不依赖 storage.init；流输入仅消费一次。
+ * @example
+ * ```ts
+ * import type { ChecksumOperations } from '@h-ai/storage'
+ *
+ * async function inspect(operations: ChecksumOperations) {
+ *   const result = await operations.generate('hello')
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
+ * ```
+ */
 export interface ChecksumOperations {
   generate: (data: StorageData, options?: ChecksumOptions) => Promise<HaiResult<string>>
   verify: (data: StorageData, expected: string, options?: ChecksumOptions) => Promise<HaiResult<boolean>>
@@ -175,6 +322,16 @@ export interface ChecksumOperations {
  * 文件操作接口
  *
  * 提供文件的读写操作。
+ * @example
+ * ```ts
+ * import type { FileOperations } from '@h-ai/storage'
+ *
+ * async function inspect(operations: FileOperations) {
+ *   const result = await operations.getStream('reports/a.txt')
+ *   if (!result.success) return result.error.message
+ *   for await (const chunk of result.data) void chunk.byteLength
+ * }
+ * ```
  */
 export interface FileOperations {
   /**
@@ -205,6 +362,7 @@ export interface FileOperations {
    * const result = await storage.file.get('uploads/a.txt')
    * if (result.success) {
    *   const buffer = result.data
+   *   void buffer
    * }
    * ```
    */
@@ -213,6 +371,19 @@ export interface FileOperations {
   /**
    * 读取字节流，支持 Range 与取消；消费方负责及时迭代或关闭流。
    * @throws 迭代期间的 I/O/取消错误；初始请求失败通过 HaiResult 返回。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const result = await storage.file.getStream('reports/a.txt')
+   * if (!result.success) throw new Error(result.error.message)
+   * try {
+   *   for await (const chunk of result.data) void chunk.byteLength
+   * } catch (error) {
+   *   // 初始请求成功后，迭代仍可能因 I/O/取消失败。
+   *   throw error
+   * }
+   * ```
    */
   getStream: (key: string, options?: DownloadOptions) => Promise<HaiResult<AsyncIterable<Uint8Array>>>
 
@@ -253,7 +424,10 @@ export interface FileOperations {
    * @returns 删除结果
    * @example
    * ```ts
-   * await storage.file.delete('uploads/a.txt')
+   * import { storage } from '@h-ai/storage'
+   *
+   * const result = await storage.file.delete('uploads/a.txt')
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   delete: (key: string) => Promise<HaiResult<void>>
@@ -262,13 +436,15 @@ export interface FileOperations {
    * 批量删除文件
    *
    * @param keys - 文件键/路径列表
-   * @returns 删除结果
+   * @returns 全部成功时返回进度；任一失败时 success=false，进度在 error.ext.deleteMany
    * @example
    * ```ts
-   * await storage.file.deleteMany(['a.txt', 'b.txt'])
+   * const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
+   * const progress = result.success ? result.data : result.error.ext?.deleteMany
+   * void progress
    * ```
    */
-  deleteMany: (keys: string[]) => Promise<HaiResult<void>>
+  deleteMany: (keys: string[]) => Promise<StorageDeleteResult>
 
   /**
    * 复制文件
@@ -279,7 +455,11 @@ export interface FileOperations {
    * @returns 目标文件元数据
    * @example
    * ```ts
-   * await storage.file.copy('a.txt', 'b.txt')
+   * import { storage } from '@h-ai/storage'
+   *
+   * const result = await storage.file.copy('a.txt', 'b.txt')
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data.key
    * ```
    */
   copy: (sourceKey: string, destKey: string, options?: CopyOptions) => Promise<HaiResult<FileMetadata>>
@@ -289,6 +469,16 @@ export interface FileOperations {
  * 目录操作接口
  *
  * 提供目录（前缀）的列表操作。
+ * @example
+ * ```ts
+ * import type { DirOperations } from '@h-ai/storage'
+ *
+ * async function inspect(operations: DirOperations) {
+ *   const page = await operations.list({ prefix: 'reports/', maxKeys: 100 })
+ *   if (!page.success) return page.error.message
+ *   return page.data.files
+ * }
+ * ```
  */
 export interface DirOperations {
   /**
@@ -313,7 +503,10 @@ export interface DirOperations {
    * @returns 删除结果
    * @example
    * ```ts
-   * await storage.dir.delete('uploads/tmp/')
+   * import { storage } from '@h-ai/storage'
+   *
+   * const result = await storage.dir.delete('uploads/tmp/')
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   delete: (prefix: string) => Promise<HaiResult<void>>
@@ -322,7 +515,18 @@ export interface DirOperations {
 /**
  * 签名 URL 操作接口
  *
- * 提供生成临时授权 URL 的功能，支持前端直接上传下载。
+ * S3 provider 提供临时授权 URL，支持前端直接上传下载。
+ * local 的 getUrl/putUrl 返回 UNSUPPORTED_OPERATION，publicUrl 返回 null。
+ * @example
+ * ```ts
+ * import type { PresignOperations } from '@h-ai/storage'
+ *
+ * async function inspect(operations: PresignOperations) {
+ *   const signed = await operations.putUrl('reports/a.txt', { contentType: 'text/plain', expiresIn: 300 })
+ *   if (!signed.success) return signed.error.message
+ *   return signed.data
+ * }
+ * ```
  */
 export interface PresignOperations {
   /**
@@ -330,10 +534,13 @@ export interface PresignOperations {
    *
    * @param key - 文件键/路径
    * @param options - 签名选项
-   * @returns 签名 URL
+   * @returns 成功时为可访问的 S3 签名 URL；local 返回 UNSUPPORTED_OPERATION。
    * @example
    * ```ts
    * const result = await storage.presign.getUrl('a.txt', { expiresIn: 60 })
+   * if (!result.success) throw new Error(result.error.message)
+   * const downloadUrl = result.data
+   * void downloadUrl
    * ```
    */
   getUrl: (key: string, options?: PresignOptions) => Promise<HaiResult<string>>
@@ -343,10 +550,13 @@ export interface PresignOperations {
    *
    * @param key - 文件键/路径
    * @param options - 上传签名选项
-   * @returns 签名 URL
+   * @returns 成功时为可访问的 S3 签名 URL；local 返回 UNSUPPORTED_OPERATION。
    * @example
    * ```ts
    * const result = await storage.presign.putUrl('a.txt', { contentType: 'text/plain' })
+   * if (!result.success) throw new Error(result.error.message)
+   * const uploadUrl = result.data
+   * void uploadUrl
    * ```
    */
   putUrl: (key: string, options?: PresignUploadOptions) => Promise<HaiResult<string>>
@@ -355,10 +565,11 @@ export interface PresignOperations {
    * 获取公开访问 URL（如果配置了 publicUrl）
    *
    * @param key - 文件键/路径
-   * @returns 公开 URL，如果未配置 publicUrl 则返回 null
+   * @returns 公开 URL；S3 未配置 publicUrl 或 local provider 均返回 null。
    * @example
    * ```ts
    * const url = storage.presign.publicUrl('a.txt')
+   * void url
    * ```
    */
   publicUrl: (key: string) => string | null
@@ -377,6 +588,23 @@ export interface PresignOperations {
  * - `storage.presign` — 签名 URL 操作
  * - `storage.config` — 当前脱敏配置快照（未初始化时为 null）
  * - `storage.isInitialized` — 初始化状态
+ * @example
+ * ```ts
+ * import { storage } from '@h-ai/storage'
+ *
+ * const initialized = await storage.init({ type: 'local', root: './data/uploads' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const uploaded = await storage.file.put('reports/a.txt', 'hello', { ifNoneMatch: '*' })
+ *   if (!uploaded.success) throw new Error(uploaded.error.message)
+ *   const downloaded = await storage.file.get('reports/a.txt')
+ *   if (!downloaded.success) throw new Error(downloaded.error.message)
+ *   void downloaded.data
+ * } finally {
+ *   const closed = await storage.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
  */
 export interface StorageFunctions {
   /** 无状态 checksum 生成与校验，Node 专用，无需初始化。 */
@@ -387,14 +615,31 @@ export interface StorageFunctions {
    * 已有连接时会先 close 再重新初始化。
    *
    * @param config - 存储配置（支持省略带默认值的字段）
-   * @returns 成功 ok(undefined)；失败返回 err（含 StorageError）
+   * @returns 成功 ok(undefined)；失败返回 err（含 HaiStorageError 定义的错误信息）
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const initialized = await storage.init({ type: 'local', root: './data/uploads' })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const closed = await storage.close()
+   * if (!closed.success) throw new Error(closed.error.message)
+   * ```
    */
   init: (config: StorageConfigInput) => Promise<HaiResult<void>>
 
   /**
    * 关闭存储连接并释放资源
    *
-   * 重复调用不会报错。
+   * 等待初始化并合并并发关闭；失败时操作不可用，资源保留供 close/init 重试。
+   * @returns 所有资源释放成功才返回成功；未初始化时同样成功。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const closed = await storage.close()
+   * if (!closed.success) throw new Error(closed.error.message)
+   * ```
    */
   close: () => Promise<HaiResult<void>>
 
@@ -411,40 +656,5 @@ export interface StorageFunctions {
   readonly dir: DirOperations
 
   /** 签名 URL 操作接口（getUrl / putUrl / publicUrl） */
-  readonly presign: PresignOperations
-}
-
-// ─── Provider 接口 ───
-
-/**
- * 存储 Provider 接口
- *
- * 由各具体存储实现（S3、Local）实现此接口。
- */
-export interface StorageProvider {
-  /** Provider 名称标识（如 's3'、'local'） */
-  readonly name: string
-
-  /**
-   * 建立与存储服务的连接
-   *
-   * @param config - 经 Schema 校验后的完整配置
-   * @returns 连接结果
-   */
-  connect: (config: StorageConfig) => Promise<HaiResult<void>>
-
-  /** 关闭连接并释放资源 */
-  close: () => Promise<void>
-
-  /** 检查是否已连接 */
-  isConnected: () => boolean
-
-  /** 文件操作接口 */
-  readonly file: FileOperations
-
-  /** 目录操作接口 */
-  readonly dir: DirOperations
-
-  /** 签名 URL 操作接口 */
   readonly presign: PresignOperations
 }

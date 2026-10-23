@@ -9,12 +9,13 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
+import type { IamConfigInput } from '../iam-types.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { User } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
 import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
-import type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
@@ -41,6 +42,14 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
 
 /**
  * 认证子功能依赖
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(config: IamConfig, sessionFunctions: SessionOperations, authzFunctions: AuthzOperations) {
+ *   const deps: AuthnOperationsDeps = { config, sessionFunctions, authzFunctions }
+ *   return createAuthnOperations(deps)
+ * }
+ * ```
  */
 export interface AuthnOperationsDeps {
   config: IamConfig
@@ -49,15 +58,25 @@ export interface AuthnOperationsDeps {
   ldapClientFactory?: LdapClientFactory
   ldapSyncUser?: boolean
   /** OTP 邮件发送回调（由业务层注入） */
-  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+  onOtpSendEmail?: IamConfigInput['onOtpSendEmail']
   /** OTP 短信发送回调（由业务层注入） */
-  onOtpSendSms?: (phone: string, code: string) => Promise<void>
+  onOtpSendSms?: IamConfigInput['onOtpSendSms']
 }
 
 /**
  * 认证子功能工厂返回值
  *
  * 将公共 API 与内部依赖分离，避免将密码策略暴露在公共接口上。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function verify(operations: AuthnOperationsResult, token: string) {
+ *   const result = await operations.authn.verifyToken(token)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.userId
+ * }
+ * ```
  */
 export interface AuthnOperationsResult {
   /** 对外暴露的认证操作（不含 registerAndLogin，由 iam-main 组合注入） */
@@ -74,6 +93,18 @@ export interface AuthnOperationsResult {
  * 创建认证子功能
  *
  * 内部创建密码/OTP/LDAP 策略，组装成统一的认证操作接口。
+ * @param deps - 由 IAM 生命周期按依赖顺序创建的内部组件。
+ * @returns 成功返回数据，失败返回业务或基础设施错误；调用方必须先判断 success。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(deps: AuthnOperationsDeps) {
+ *   const result = await createAuthnOperations(deps)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.authn.verifyToken('token-from-authorization-header')
+ * }
+ * ```
  */
 export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<HaiResult<AuthnOperationsResult>> {
   try {
@@ -186,6 +217,16 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 
 // ─── 内部实现 ───
 
+/**
+ * 认证操作内部装配依赖；策略只产出可信身份快照，会话发布由统一流程执行。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function passwordLogin(deps: BuildAuthnDeps, credentials: PasswordCredentials) {
+ *   return deps.passwordStrategy.authenticate({ type: 'password', ...credentials })
+ * }
+ * ```
+ */
 interface BuildAuthnDeps {
   userRepository: UserRepository
   passwordStrategy: AuthStrategy
@@ -277,7 +318,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @param user - 已认证的用户信息
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
-  async function buildAuthResult(user: User, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
+  async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     const authorization = await authzFunctions.getUserAuthorization(user.id)
@@ -287,6 +328,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     const effective = apiKey ? applyApiKeyScopes(access, apiKey.scopes) : access
     const sessionResult = await sessionFunctions.create({
       userId: user.id,
+      expectedCredentialVersion: user.credentialVersion,
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
@@ -307,8 +349,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
     }
 
+    const { credentialVersion, ...publicUser } = user
+    void credentialVersion
     return ok({
-      user,
+      user: publicUser,
       tokens: tokenPair,
       ...effective,
       agreements: buildAgreementDisplay(agreementConfig, agreementConfig.showOnLogin),
@@ -355,7 +399,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return result
   }
 
-  return { loginRegisteredUser: buildAuthResult, authn: {
+  return { loginRegisteredUser: async (user) => {
+    const stored = await userRepository.findById(user.id)
+    if (!stored.success)
+      return stored
+    if (!stored.data?.enabled)
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' })
+  }, authn: {
     async login(credentials: PasswordCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('password', credentials, passwordStrategy)
     },
@@ -381,18 +432,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     },
 
     async logout(accessToken: string): Promise<HaiResult<void>> {
-      const sessionResult = await sessionFunctions.get(accessToken)
-      if (sessionResult.success && sessionResult.data) {
-        // 吊销 refreshToken，防止登出后被重用
-        const tokenPair = sessionResult.data.data?._tokenPair
-        if (tokenPair?.refreshToken) {
-          await sessionFunctions.revokeRefresh(tokenPair.refreshToken)
-        }
-        await sessionFunctions.delete(sessionResult.data.accessToken)
-        logger.info('User logged out', { userId: sessionResult.data.userId })
-      }
-
-      return ok(undefined)
+      // 不先读取/滑动 access；过期 access 对应的 refresh 也必须在同一次 CAS 中撤销。
+      return sessionFunctions.delete(accessToken)
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
@@ -407,6 +448,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
         return user
       if (!user.data?.enabled)
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       if (!authorization.success)
         return authorization
       const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }

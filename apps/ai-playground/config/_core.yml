@@ -2,7 +2,6 @@
 name: ${HAI_CORE_NAME:hai ai playground}
 version: ${HAI_CORE_VERSION:0.1.0}
 env: ${HAI_CORE_ENV:development}
-debug: ${HAI_CORE_DEBUG:true}
 
 logging:
   level: ${HAI_CORE_LOGGING_LEVEL:debug}

@@ -122,7 +122,6 @@ describe('resolveServHttpConfig', () => {
     expect(config.transport).toEqual({
       keyExchangePath: '/_hai/key-exchange',
       excludePaths: [],
-      maxClients: 10000,
     })
   })
 })

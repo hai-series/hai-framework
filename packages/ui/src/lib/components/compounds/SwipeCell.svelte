@@ -1,4 +1,5 @@
 <!--
+  @component SwipeCell
   @h-ai/ui — SwipeCell（滑动操作 — 列表项左滑删除等）
 
   用法：
@@ -10,6 +11,16 @@
   >
     <div class="p-4">列表项内容</div>
   </SwipeCell>
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { SwipeCell } from '@h-ai/ui'
+  const props: ComponentProps<typeof SwipeCell> = { actions: [{ id: 'remove', label: '删除', variant: 'error' }], children: createRawSnippet(() => ({ render: () => "<p>向左滑动显示操作。</p>" })) }
+  const component = mount(SwipeCell, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
@@ -20,6 +31,19 @@
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { SwipeCellAction }
 
+  /**
+   * SwipeCell 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount, createRawSnippet } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { SwipeCell } from '@h-ai/ui'
+   * const props: ComponentProps<typeof SwipeCell> = { actions: [{ id: 'remove', label: '删除', variant: 'error' }], children: createRawSnippet(() => ({ render: () => "<p>向左滑动显示操作。</p>" })) }
+   * const component = mount(SwipeCell, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 右侧操作列表 */
     actions: SwipeCellAction[]

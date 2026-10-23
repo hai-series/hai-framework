@@ -15,23 +15,15 @@
   @prop {string} class - 自定义类名
   @prop {function} onchange - 值变更回调
 
-  @example 单选
-  <Combobox
-    options={[
-      { value: 'svelte', label: 'Svelte' },
-      { value: 'react', label: 'React' },
-    ]}
-    bind:value={framework}
-    placeholder="搜索框架..."
-  />
-
-  @example 多选
-  <Combobox
-    options={skills}
-    bind:value={selectedSkills}
-    multiple
-    placeholder="搜索技能..."
-  />
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Combobox } from '@h-ai/ui'
+  const props: ComponentProps<typeof Combobox> = { options: [{ value: 'svelte', label: 'Svelte' }], value: 'svelte' }
+  const component = mount(Combobox, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, FormText, Size } from '../../types.js'
@@ -43,7 +35,19 @@
   import { getFormControlSizeClasses } from '../control-size.js'
   import BareButton from '../primitives/BareButton.svelte'
 
-  /** 选项定义 */
+  /**
+   * 选项定义
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Combobox } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Combobox> = { options: [{ value: 'svelte', label: 'Svelte' }], value: 'svelte' }
+   * const component = mount(Combobox, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Option {
     /** 选项值 */
     value: string
@@ -55,6 +59,19 @@
     description?: string
   }
 
+  /**
+   * Combobox 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Combobox } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Combobox> = { options: [{ value: 'svelte', label: 'Svelte' }], value: 'svelte' }
+   * const component = mount(Combobox, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 选项列表 */
     options: Option[]

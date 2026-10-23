@@ -8,8 +8,8 @@
 import type { HaiResult } from '@h-ai/core'
 import type { LdapConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
-import type { StoredUser, User } from '../../user/iam-user-types.js'
-import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
+import type { StoredUser } from '../../user/iam-user-types.js'
+import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
 
 import { iamM } from '../../iam-i18n.js'
@@ -27,6 +27,12 @@ const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
  *
  * @param value - 用户输入值
  * @returns 转义后的安全字符串
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const escaped = escapeLdapFilterValue('alice*)(uid=*)')
+ * const filter = `(uid=${escaped})` // 用户输入只作为值，不能扩展过滤表达式。
+ * ```
  */
 export function escapeLdapFilterValue(value: string): string {
   return value.replace(/[\\*()/\0]/g, (ch) => {
@@ -37,6 +43,16 @@ export function escapeLdapFilterValue(value: string): string {
 
 /**
  * LDAP 客户端接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function lookup(client: LdapClient) {
+ *   const found = await client.search('ou=users,dc=example,dc=com', '(uid=alice)', ['uid', 'mail'])
+ *   if (!found.success)
+ *     return found
+ *   return found.data.map(entry => entry.dn)
+ * }
+ * ```
  */
 export interface LdapClient {
   /**
@@ -57,6 +73,12 @@ export interface LdapClient {
 
 /**
  * LDAP 搜索结果条目
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const entry: LdapSearchEntry = { dn: 'uid=alice,ou=users,dc=example,dc=com', attributes: { uid: 'alice', mail: ['alice@example.com'] } }
+ * const username = entry.attributes.uid
+ * ```
  */
 export interface LdapSearchEntry {
   /** DN */
@@ -67,11 +89,33 @@ export interface LdapSearchEntry {
 
 /**
  * LDAP 客户端工厂
+ * @example
+ * ```ts
+ * import type { LdapClientFactory, LdapConfig } from '@h-ai/iam'
+ * async function check(factory: LdapClientFactory, config: LdapConfig) {
+ *   const opened = await factory(config)
+ *   if (!opened.success)
+ *     return opened
+ *   const result = await opened.data.bind(config.bindDn, config.bindPassword)
+ *   const closed = await opened.data.unbind()
+ *   if (!closed.success)
+ *     return closed
+ *   return result
+ * }
+ * ```
  */
 export type LdapClientFactory = (config: LdapConfig) => Promise<HaiResult<LdapClient>>
 
 /**
  * LDAP 认证策略配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function configure(ldapConfig: LdapConfig, userRepository: UserRepository, ldapClientFactory: LdapClientFactory) {
+ *   const config: LdapStrategyConfig = { ldapConfig, userRepository, ldapClientFactory, syncUser: true }
+ *   return createLdapStrategy(config)
+ * }
+ * ```
  */
 export interface LdapStrategyConfig {
   /** LDAP 配置 */
@@ -106,6 +150,13 @@ export interface LdapStrategyConfig {
  *
  * @param config - LDAP 策略配置（LDAP 配置、用户存储、客户端工厂等）
  * @returns 认证策略实例
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function authenticate(config: LdapStrategyConfig, credentials: Credentials) {
+ *   return createLdapStrategy(config).authenticate(credentials)
+ * }
+ * ```
  */
 export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   const {
@@ -134,43 +185,15 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
     return value
   }
 
-  /**
-   * 构建 LDAP 用户信息对象
-   *
-   * 用于未开启用户同步时，直接返回 LDAP 目录中的用户信息。
-   *
-   * @param entry - LDAP 搜索结果条目
-   * @param ldapUsername - 用户名
-   * @param ldapEmail - 邮箱（可选）
-   * @param ldapDisplayName - 显示名称（可选）
-   * @returns User 对象（ID 为 LDAP DN）
-   */
-  function buildLdapUser(entry: LdapSearchEntry, ldapUsername: string, ldapEmail?: string, ldapDisplayName?: string): User {
-    const now = new Date()
-    return {
-      id: entry.dn,
-      username: ldapUsername,
-      email: ldapEmail,
-      displayName: ldapDisplayName,
-      enabled: true,
-      createdAt: now,
-      updatedAt: now,
-      metadata: {
-        ldapDn: entry.dn,
-        authSource: 'ldap',
-      },
-    }
-  }
-
   return {
     type: 'ldap',
     name: 'ldap-strategy',
 
-    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<AuthenticatedUser>> {
       // 类型检查
       const credentialResult = ensureCredentialType(credentials, 'ldap')
       if (!credentialResult.success) {
-        return credentialResult as HaiResult<User>
+        return credentialResult as HaiResult<AuthenticatedUser>
       }
 
       const { username, password } = credentialResult.data
@@ -234,7 +257,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         // 查找本地用户（用于状态判断与失败计数）
         const localUserResult = await userRepository.findByUsername(ldapUsername)
         if (!localUserResult.success) {
-          return localUserResult as HaiResult<User>
+          return localUserResult as HaiResult<AuthenticatedUser>
         }
 
         let storedUser = localUserResult.data as StoredUser | null
@@ -293,7 +316,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
           const createdResult = await userRepository.findByUsername(ldapUsername)
           if (!createdResult.success) {
-            return createdResult as HaiResult<User>
+            return createdResult as HaiResult<AuthenticatedUser>
           }
           storedUser = createdResult.data
 
@@ -330,18 +353,15 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           }
         }
 
-        if (!storedUser) {
-          // 如果不同步用户，直接返回 LDAP 用户信息
-          const ldapUser = buildLdapUser(entry, ldapUsername, ldapEmail, ldapDisplayName)
-          return ok(ldapUser)
-        }
+        if (!storedUser)
+          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
 
         const resetResult = await resetLoginFailures(userRepository, storedUser)
         if (!resetResult.success)
           return resetResult
         logger.info('LDAP authentication succeeded', { userId: storedUser.id })
 
-        return ok(toUser(storedUser))
+        return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
       }
       finally {
         // 确保解除绑定

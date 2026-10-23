@@ -21,13 +21,11 @@ import { kitM } from '../../kit-i18n.js'
  *
  * @param config - 签名验证配置
  * @returns 签名是否合法
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const valid = await verifyWebhookSignature({
- *   crypto, event, secretKey: 'wh_secret', signatureHeader: 'X-Signature',
- * })
- * if (!valid) return new Response('Invalid signature', { status: 401 })
+ * async function authorized(config: WebhookVerifyConfig) {
+ *   return verifyWebhookSignature(config) // 使用原始 body；读取后不可再次消费同一流。
+ * }
  * ```
  */
 export async function verifyWebhookSignature(config: WebhookVerifyConfig): Promise<boolean> {
@@ -64,6 +62,12 @@ export async function verifyWebhookSignature(config: WebhookVerifyConfig): Promi
  * @param algorithm - 哈希算法（默认 `'sha256'`）
  * @returns 签名字符串
  * @throws 签名失败时抛出 Error
+ * @example 模块内部上下文
+ * ```ts
+ * async function sign(crypto: CryptoServiceLike, secretKey: string) {
+ *   return signRequest(crypto, JSON.stringify({ id: 'article_1' }), secretKey)
+ * }
+ * ```
  */
 export async function signRequest(
   crypto: CryptoServiceLike,
@@ -86,14 +90,12 @@ export async function signRequest(
  *
  * @param config - CSRF 配置（crypto 实例、Cookie 名、Header 名等）
  * @returns `{ generate, verify, createHandle }`
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const csrf = createCsrfManager({ crypto })
- * // 在 load 中生成
- * const token = await csrf.generate(cookies)
- * // 在 action 中验证
- * const ok = await csrf.verify(event)
+ * function csrf(config: CryptoCsrfConfig) {
+ *   const manager = createCsrfManager(config)
+ *   return manager
+ * }
  * ```
  */
 export function createCsrfManager(config: CryptoCsrfConfig) {
@@ -192,12 +194,11 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
  *
  * @param config - 加密 Cookie 配置（含加密密钥）
  * @returns `{ set, get, delete }`
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const enc = createEncryptedCookie({ crypto, encryptionKey: 'my-32byte-key' })
- * await enc.set(cookies, 'prefs', { theme: 'dark' })
- * const prefs = await enc.get(cookies, 'prefs')
+ * function cookies(config: EncryptedCookieConfig) {
+ *   return createEncryptedCookie(config)
+ * }
  * ```
  */
 export function createEncryptedCookie(config: EncryptedCookieConfig) {

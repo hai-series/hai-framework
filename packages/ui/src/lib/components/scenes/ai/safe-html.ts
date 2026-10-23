@@ -1,9 +1,9 @@
 /**
- * @h-ai/ui — Safe HTML helpers for Markdown rendering.
+ * @h-ai/ui — Markdown 渲染的安全 HTML 工具。
  *
- * The Markdown pipeline keeps raw HTML escaped by default.
- * When callers opt in, only a controlled allowlist of safe tags and
- * attributes is reconstructed; unsupported or dangerous markup remains escaped.
+ * Markdown 默认将原始 HTML 当作纯文本转义。
+ * 显式允许 HTML 后，也只重建白名单中的安全标签与
+ * 属性；不支持或危险的标记仍按文字转义。
  */
 
 const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
@@ -67,6 +67,14 @@ const ALIGNABLE_HTML_TAGS = new Set([
   'th',
 ])
 
+/**
+ * 从 Markdown HTML 标签中读取的候选属性，输出前仍需对应消毒函数。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: ParsedHtmlAttributes = { href: 'https://example.com/help', title: '帮助' }
+ * ```
+ */
 interface ParsedHtmlAttributes {
   href?: string
   src?: string
@@ -77,6 +85,16 @@ interface ParsedHtmlAttributes {
   rowspan?: string
 }
 
+/**
+ * 将候选文本中的 HTML 特殊字符转义为可安全展示的纯文本。
+ * @param text - 待处理文本。
+ * @returns HTML 特殊字符被转义的字符串。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const escaped = escapeHtml('<b>文本</b>')
+ * ```
+ */
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -86,15 +104,46 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/**
+ * 拒绝脚本等危险协议，只输出允许的链接地址。
+ * @param href - 待验证的链接候选地址。
+ * @returns 允许的链接地址，不安全或空输入返回空字符串。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const safe = sanitizeLinkHref('javascript:alert(1)')
+ * // 不安全协议变为空字符串，不能直接渲染原始 href。
+ * ```
+ */
 export function sanitizeLinkHref(href: string | null | undefined): string {
   const normalized = href?.trim() ?? ''
   return SAFE_LINK_HREF_REGEX.test(normalized) ? normalized : ''
 }
 
+/**
+ * 识别外部链接，供渲染器添加相应的 rel/target 安全属性。
+ * @param href - 待验证的链接候选地址。
+ * @returns 地址是否为需要外链安全属性的外部链接。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const external = isExternalLinkHref('https://example.com/help')
+ * ```
+ */
 export function isExternalLinkHref(href: string): boolean {
   return /^https?:\/\//i.test(href)
 }
 
+/**
+ * 拒绝危险图片来源，保留允许的远程、相对或受控数据地址。
+ * @param src - 待验证的图片候选地址。
+ * @returns 允许的图片地址，不安全或空输入返回空字符串。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const safe = sanitizeImageSrc('https://example.com/image.png')
+ * ```
+ */
 export function sanitizeImageSrc(src: string | null | undefined): string {
   const normalized = src?.trim() ?? ''
   return SAFE_IMAGE_SRC_REGEX.test(normalized) ? normalized : ''
@@ -333,8 +382,15 @@ function sanitizeHtmlTag(rawTag: string): string {
 }
 
 /**
- * Sanitize raw HTML fragments embedded inside Markdown.
- * Safe allowlisted tags are reconstructed, everything else remains escaped.
+ * 消毒 Markdown 中嵌入的原始 HTML 片段。
+ * 只重建白名单标签，其余内容保持转义。
+ * @param fragment - 待消毒的 HTML 片段。
+ * @returns 仅保留白名单标签和安全属性的 HTML。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const safe = sanitizeMarkdownHtml('<p onclick="alert(1)">正文</p>')
+ * ```
  */
 export function sanitizeMarkdownHtml(fragment: string): string {
   if (!fragment) {

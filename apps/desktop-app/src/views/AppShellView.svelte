@@ -5,7 +5,7 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { AppBar, Button, ThemeToggle } from '@h-ai/ui'
+  import { AppBar, Button, ThemeToggle, toast } from '@h-ai/ui'
   import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
 
@@ -29,7 +29,9 @@
   })
 
   async function handleLogout(): Promise<void> {
-    await logout()
+    const error = await logout()
+    if (error)
+      toast.error(error)
     navigate('/login')
   }
 </script>

@@ -72,12 +72,20 @@ pnpm --filter h5-app preview
 - `config/_cache.yml`：缓存类型及连接参数（memory / Redis）
 - `config/_iam.yml`：认证策略、密码策略、JWT
 - `config/_storage.yml`：存储类型及参数（local / S3）
+- `config/_vecdb.yml`：向量存储（开发 LanceDB，生产共享 Qdrant；URL/API Key 仅服务端）
 - `config/_ai.yml`：AI 模型配置（多模态识别）
 
 每个 YAML 叶子项都可由 `HAI_<配置名>_<YAML 路径>` 环境变量覆盖，
 且环境变量优先于 YAML 值；camelCase key 不拆词。
 
 #### 环境变量
+
+配置 `HAI_AI_LLM_APIKEY`（或模型条目的 API Key）才启用 AI；未配置时跳过 AI 与向量连接。启用后顺序为关系库 → 向量库 → AI，向量配置/连接或 AI 初始化失败会中止启动并逆序释放本次创建的资源，保留调用方已有实例；清理失败在下次启动前继续重试。生产 AI 要求共享 PostgreSQL/MySQL 与 Qdrant/pgvector/远端 Chroma，不能使用 SQLite/本地 LanceDB 或临时内存 Store。默认 `.env.prod` 使用 PostgreSQL、Redis 和 Qdrant；启动前配置服务端连接及私有 Key。
+
+- `HAI_VECDB_TYPE`：开发默认 `lancedb`，生产默认 `qdrant`。
+- `HAI_VECDB_PATH`：开发 LanceDB 目录，默认 `./data/vecdb`。
+- `HAI_VECDB_URL`：共享向量服务地址（Qdrant 示例 `http://qdrant:6333`）。
+- `HAI_VECDB_APIKEY`：向量服务私有凭据，不能使用 PUBLIC_/VITE_ 前缀。
 
 | 变量名               | 说明                          | 默认值                      |
 | -------------------- | ----------------------------- | --------------------------- |
@@ -146,9 +154,11 @@ pnpm --filter h5-app paraglide:compile # 编译 i18n 翻译文件
 - `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
 - `@h-ai/ui`：UI 组件库（场景组件、自动导入）
 
-LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
 ## 开发测试
+
+浏览器验证通过 `pnpm --filter h5-app test:e2e` 分配本轮绝对数据目录。服务子进程显式选择隔离的 SQLite/Memory/Local，清除继承的模块变量并跳过用户 `.env.local`；普通开发和生产的 dotenv 与共享后端要求不变。
 
 ```sh
 pnpm --filter h5-app typecheck

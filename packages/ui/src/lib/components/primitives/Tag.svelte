@@ -1,4 +1,5 @@
 <!--
+  @component Tag
   =============================================================================
   @h-ai/ui - Tag 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Tag } from '@h-ai/ui'
+  const props: ComponentProps<typeof Tag> = { text: '已启用', variant: 'success', closable: true }
+  const component = mount(Tag, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, TagProps } from '../../types.js'

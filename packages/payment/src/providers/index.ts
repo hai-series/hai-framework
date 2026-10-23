@@ -4,6 +4,6 @@
  * @module providers
  */
 
-export { createAlipayProvider } from './alipay/alipay-provider.js'
-export { createStripeProvider } from './stripe/stripe-provider.js'
-export { createWechatPayProvider } from './wechat/wechat-pay-provider.js'
+export { createAlipayProvider } from './alipay/payment-provider-alipay.js'
+export { createStripeProvider } from './stripe/payment-provider-stripe.js'
+export { createWechatPayProvider } from './wechat/payment-provider-wechat.js'

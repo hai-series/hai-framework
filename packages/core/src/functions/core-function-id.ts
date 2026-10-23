@@ -6,6 +6,7 @@
  */
 
 import { nanoid } from 'nanoid'
+import { i18n } from '../i18n/core-i18n-utils.js'
 
 // ─── 常量 ───
 
@@ -26,11 +27,11 @@ const NANOID_REGEX_CACHE = new Map<number, RegExp>()
 /**
  * 生成 UUID v4。
  *
- * 注意:`crypto.randomUUID` 仅在安全上下文（HTTPS/localhost）下可用，生产 http 环境会抛
- * "crypto.randomUUID is not a function"。本函数已做 `randomUUID → getRandomValues → Math.random`
- * 三级兜底，Node.js 与浏览器通用。业务代码生成 UUID 一律走 `id.uuid()`，不要裸调 `crypto.randomUUID`。
+ * 依次使用 randomUUID 或密码学安全的 getRandomValues；两者均不可用时明确抛错。
+ * 不回退 Math.random；HTTP 页面也不能因此生成可预测的业务标识。
  *
  * @returns UUID v4 字符串
+ * @throws 运行环境缺少密码学随机源。
  *
  * @example
  * ```ts
@@ -39,21 +40,17 @@ const NANOID_REGEX_CACHE = new Map<number, RegExp>()
  */
 function generateUUID(): string {
   // 优先使用 Web Crypto API
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
 
   // 回退到手动生成
   const bytes = new Uint8Array(16)
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     crypto.getRandomValues(bytes)
   }
   else {
-    // 注意：Math.random() 不是密码学安全的随机源，仅作为极端环境的兜底方案
-    // 现代 Node.js 和浏览器均支持 crypto API，此分支几乎不会执行
-    for (let i = 0; i < 16; i++) {
-      bytes[i] = Math.floor(Math.random() * 256)
-    }
+    throw new Error(i18n.coreM('core_cryptoRandomUnavailable'))
   }
 
   // 设置版本 (v4) 和变体
@@ -69,11 +66,11 @@ function generateUUID(): string {
 
 /**
  * ID 生成工具对象。
- *
  * @example
  * ```ts
- * const id1 = id.generate()
- * const id2 = id.short()
+ * import { core } from '@h-ai/core'
+ * const tools = core.id
+ * tools.withPrefix('order_')
  * ```
  */
 export const id = {
@@ -188,5 +185,12 @@ export const id = {
   },
 }
 
-/** id 子工具类型 */
+/**
+ * id 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: IdFn = id
+ * tools.withPrefix('order_')
+ * ```
+ */
 export type IdFn = typeof id

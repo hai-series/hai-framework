@@ -1,5 +1,6 @@
 import type { IamLoginInput, IamRegisterInput, IamUpdateCurrentUserInput } from '@h-ai/api-contract'
 import { mobileApiClient } from '../api.js'
+import * as m from '../paraglide/messages.js'
 
 type LoginSuccessResult = Extract<
   Awaited<ReturnType<typeof mobileApiClient.iam.auth.login>>,
@@ -103,55 +104,84 @@ export function hasPermission(permission: string): boolean {
   return permissions.some(granted => matchesPermission(permission, granted))
 }
 
+/** 保存失败后清理可能已经写入的半对凭据；清理失败单独提示，不能伪装成持久删除成功。 */
+async function clearFailedAuthentication(): Promise<string> {
+  user = null
+  clearAccessScope()
+  try {
+    await mobileApiClient.auth.clear()
+    return m.auth_storage_failed()
+  }
+  catch {
+    return m.auth_storage_cleanup_failed()
+  }
+}
+
 export async function login(input: IamLoginInput): Promise<string | null> {
   loading = true
-  const result = await mobileApiClient.iam.auth.login(input)
-  const failure = resolveHaiResultFailure(result, 'Unexpected login response from server')
-  if (!failure.success) {
-    loading = false
-    return failure.message
-  }
+  try {
+    const result = await mobileApiClient.iam.auth.login(input)
+    const failure = resolveHaiResultFailure(result, m.common_unknown_error())
+    if (!failure.success)
+      return failure.message
+    if (!isSuccessResult<LoginSuccessResult['data']>(result))
+      return m.common_unknown_error()
 
-  if (!isSuccessResult<LoginSuccessResult['data']>(result)) {
-    loading = false
-    return 'Unexpected login response from server'
+    await mobileApiClient.auth.setTokens(result.data.tokens)
+    user = result.data.user
+    setAccessScope(result.data.roles, result.data.permissions)
+    return null
   }
-
-  await mobileApiClient.auth.setTokens(result.data.tokens)
-  user = result.data.user
-  setAccessScope(result.data.roles, result.data.permissions)
-  loading = false
-  return null
+  catch {
+    return await clearFailedAuthentication()
+  }
+  finally {
+    loading = false
+  }
 }
 
 export async function register(input: IamRegisterInput): Promise<string | null> {
   loading = true
-  const result = await mobileApiClient.iam.auth.register(input)
-  const failure = resolveHaiResultFailure(result, 'Unexpected register response from server')
-  if (!failure.success) {
-    loading = false
-    return failure.message
-  }
+  try {
+    const result = await mobileApiClient.iam.auth.register(input)
+    const failure = resolveHaiResultFailure(result, m.common_unknown_error())
+    if (!failure.success)
+      return failure.message
+    if (!isSuccessResult<RegisterSuccessResult['data']>(result))
+      return m.common_unknown_error()
 
-  if (!isSuccessResult<RegisterSuccessResult['data']>(result)) {
-    loading = false
-    return 'Unexpected register response from server'
+    await mobileApiClient.auth.setTokens(result.data.tokens)
+    user = result.data.user
+    setAccessScope(result.data.roles, result.data.permissions)
+    return null
   }
-
-  await mobileApiClient.auth.setTokens(result.data.tokens)
-  user = result.data.user
-  setAccessScope(result.data.roles, result.data.permissions)
-  loading = false
-  return null
+  catch {
+    return await clearFailedAuthentication()
+  }
+  finally {
+    loading = false
+  }
 }
 
 export async function logout(): Promise<void> {
   loading = true
-  await mobileApiClient.iam.auth.logout({})
-  await mobileApiClient.auth.clear()
-  user = null
-  clearAccessScope()
-  loading = false
+  try {
+    const result = await mobileApiClient.iam.auth.logout({})
+    const failure = resolveHaiResultFailure(result, m.common_unknown_error())
+    if (!failure.success)
+      throw new Error(failure.message)
+  }
+  finally {
+    // 服务端退出失败时仍屏蔽并清理本地凭据；删除失败交由界面明确提示。
+    try {
+      await mobileApiClient.auth.clear()
+    }
+    finally {
+      user = null
+      clearAccessScope()
+      loading = false
+    }
+  }
 }
 
 export async function updateProfile(input: IamUpdateCurrentUserInput): Promise<string | null> {

@@ -9,41 +9,122 @@ import type { HaiResult } from '@h-ai/core'
 import type OpenAI from 'openai'
 import type { ZodType } from 'zod'
 
-import type { AIConfig, ApiType } from '../ai-config.js'
+import type { ApiType } from '../ai-config.js'
 
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 
 // ─── 消息类型 ───
 
-/** 消息角色枚举：`'system'` | `'developer'` | `'user'` | `'assistant'` | `'tool'` */
+/**
+ * 消息角色枚举：`'system'` | `'developer'` | `'user'` | `'assistant'` | `'tool'`
+ *
+ * @example
+ * ```ts
+ * import type { MessageRole } from '@h-ai/ai'
+ *
+ * const value: MessageRole = 'developer'
+ * ```
+ */
 export type MessageRole = 'system' | 'developer' | 'user' | 'assistant' | 'tool'
 
-/** 文本内容块（多模态消息中的纯文本部分） */
+/**
+ * 文本内容块（多模态消息中的纯文本部分）
+ *
+ * @example
+ * ```ts
+ * import type { TextContent } from '@h-ai/ai'
+ *
+ * const value: TextContent = { type: 'text', text: '请说明这张图的主要内容。' }
+ * ```
+ */
 export type TextContent = OpenAI.Chat.Completions.ChatCompletionContentPartText
 
-/** 图片内容块（多模态消息中的图片部分） */
+/**
+ * 图片内容块（多模态消息中的图片部分）
+ *
+ * @example
+ * ```ts
+ * import type { ImageContent } from '@h-ai/ai'
+ *
+ * const value: ImageContent = { type: 'image_url', image_url: { url: 'https://images.example.com/diagram.png', detail: 'low' } }
+ * ```
+ */
 export type ImageContent = OpenAI.Chat.Completions.ChatCompletionContentPartImage
 
-/** 消息内容（纯文本字符串，或由内容块组成的多模态数组） */
+/**
+ * 消息内容（纯文本字符串，或由内容块组成的多模态数组）
+ *
+ * @example
+ * ```ts
+ * import type { MessageContent } from '@h-ai/ai'
+ *
+ * const value: MessageContent = [{ type: 'text', text: '提取图中的标题' }, { type: 'image_url', image_url: { url: 'https://images.example.com/title.png' } }]
+ * ```
+ */
 export type MessageContent = string | OpenAI.Chat.Completions.ChatCompletionContentPart[]
 
-/** 系统消息，用于设定对话的行为规则 */
+/**
+ * 系统消息，用于设定对话的行为规则
+ *
+ * @example
+ * ```ts
+ * import type { SystemMessage } from '@h-ai/ai'
+ *
+ * const value: SystemMessage = { role: 'system', content: '仅依据提供的订单数据回答。' }
+ * ```
+ */
 export type SystemMessage = OpenAI.Chat.Completions.ChatCompletionSystemMessageParam
 
-/** 开发者消息（高优先级运行时约束） */
+/**
+ * 开发者消息（高优先级运行时约束）
+ *
+ * @example
+ * ```ts
+ * import type { DeveloperMessage } from '@h-ai/ai'
+ *
+ * const value: DeveloperMessage = { role: 'developer', content: '调用工具前先验证订单访问权限。' }
+ * ```
+ */
 export interface DeveloperMessage {
   role: 'developer'
   content: string | TextContent[]
   name?: string
 }
 
-/** 用户消息 */
+/**
+ * 用户消息
+ *
+ * @example
+ * ```ts
+ * import type { UserMessage } from '@h-ai/ai'
+ *
+ * const value: UserMessage = { role: 'user', content: '订单 o-1 的状态是什么？' }
+ * ```
+ */
 export type UserMessage = OpenAI.Chat.Completions.ChatCompletionUserMessageParam
 
-/** 工具调用描述，由助手消息中的 `tool_calls` 字段携带 */
+/**
+ * 工具调用描述，由助手消息中的 `tool_calls` 字段携带
+ *
+ * @example
+ * ```ts
+ * import type { ToolCall } from '@h-ai/ai'
+ *
+ * const value: ToolCall = { id: 'call-order-1', type: 'function', function: { name: 'order_status', arguments: JSON.stringify({ orderId: 'o-1' }) } }
+ * ```
+ */
 export type ToolCall = OpenAI.Chat.Completions.ChatCompletionMessageToolCall
 
-/** 助手消息（模型生成的回复，或传入对话上下文的助手轮次） */
+/**
+ * 助手消息（模型生成的回复，或传入对话上下文的助手轮次）
+ *
+ * @example
+ * ```ts
+ * import type { AssistantMessage } from '@h-ai/ai'
+ *
+ * const value: AssistantMessage = { role: 'assistant', content: null, tool_calls: [{ id: 'call-order-1', type: 'function', function: { name: 'order_status', arguments: JSON.stringify({ orderId: 'o-1' }) } }] }
+ * ```
+ */
 export type AssistantMessage = OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam & {
   /**
    * 推理模型额外返回的思维链内容。
@@ -53,15 +134,42 @@ export type AssistantMessage = OpenAI.Chat.Completions.ChatCompletionAssistantMe
   reasoning_content?: string | null
 }
 
-/** 工具消息（工具执行结果，用于回传给模型） */
+/**
+ * 工具消息（工具执行结果，用于回传给模型）
+ *
+ * @example
+ * ```ts
+ * import type { ToolMessage } from '@h-ai/ai'
+ *
+ * const value: ToolMessage = { role: 'tool', tool_call_id: 'call-order-1', content: JSON.stringify({ status: 'shipped' }) }
+ * ```
+ */
 export type ToolMessage = OpenAI.Chat.Completions.ChatCompletionToolMessageParam
 
-/** 聊天消息联合类型，涵盖对话中所有角色的消息 */
+/**
+ * 聊天消息联合类型，涵盖对话中所有角色的消息
+ *
+ * @example
+ * ```ts
+ * import type { ChatMessage } from '@h-ai/ai'
+ *
+ * const value: ChatMessage = { role: 'user', content: '请总结本周进展。' }
+ * ```
+ */
 export type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam | DeveloperMessage
 
 // ─── 请求与响应 ───
 
-/** OpenAI function calling 工具定义格式 */
+/**
+ * OpenAI function calling 工具定义格式
+ *
+ * @example
+ * ```ts
+ * import type { ToolDefinition } from '@h-ai/ai'
+ *
+ * const value: ToolDefinition = { type: 'function', function: { name: 'sum', description: '计算两个数之和', parameters: { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } }, required: ['a', 'b'] } } }
+ * ```
+ */
 export type ToolDefinition = OpenAI.Chat.Completions.ChatCompletionTool
 
 /**
@@ -74,6 +182,13 @@ export type ToolDefinition = OpenAI.Chat.Completions.ChatCompletionTool
  *
  * 未指定的字段回退到全局 LLM 配置：`apiKey` / `baseUrl` 回退全局值或环境变量，
  * `maxTokens` / `temperature` / `timeout` 回退全局默认值。
+ *
+ * @example
+ * ```ts
+ * import type { TempModelConfig } from '@h-ai/ai'
+ *
+ * const value: TempModelConfig = { model: 'gpt-4o-mini', api: 'chat', timeout: 15_000 }
+ * ```
  */
 export interface TempModelConfig {
   /** 模型名称（传给 API 的实际模型名） */
@@ -98,6 +213,13 @@ export interface TempModelConfig {
  * 继承 OpenAI SDK 全部标准请求字段，并扩展框架专属字段（`objectId`、`sessionId`）。
  * `model` 改为可选（未指定时使用配置中的默认模型）。
  * `stream` 字段由框架内部控制，不对外暴露。
+ *
+ * @example
+ * ```ts
+ * import type { ChatCompletionRequest } from '@h-ai/ai'
+ *
+ * const value: ChatCompletionRequest = { messages: [{ role: 'user', content: '给出三个待办事项。' }], objectId: 'user-42', sessionId: 'weekly', temperature: 0.2, signal: new AbortController().signal }
+ * ```
  */
 export type ChatCompletionRequest
   = Omit<OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, 'model' | 'stream' | 'messages'> & {
@@ -122,24 +244,84 @@ export type ChatCompletionRequest
     signal?: AbortSignal
   }
 
-/** Token 使用统计 */
+/**
+ * Token 使用统计
+ *
+ * @example
+ * ```ts
+ * import type { TokenUsage } from '@h-ai/ai'
+ *
+ * const value: TokenUsage = { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 }
+ * ```
+ */
 export type TokenUsage = OpenAI.CompletionUsage
 
-/** 聊天完成响应中的单个选择 */
+/**
+ * 聊天完成响应中的单个选择
+ *
+ * @example
+ * ```ts
+ * import type { ChatCompletionChoice } from '@h-ai/ai'
+ *
+ * function responseText(choice: ChatCompletionChoice): string {
+ *   return choice.message.content ?? ''
+ * }
+ * ```
+ */
 export type ChatCompletionChoice = OpenAI.Chat.ChatCompletion.Choice
 
-/** 聊天完成响应（非流式） */
+/**
+ * 聊天完成响应（非流式）
+ *
+ * @example
+ * ```ts
+ * import type { ChatCompletionResponse } from '@h-ai/ai'
+ *
+ * function responseText(response: ChatCompletionResponse): string {
+ *   return response.choices[0]?.message.content ?? ''
+ * }
+ * ```
+ */
 export type ChatCompletionResponse = OpenAI.Chat.ChatCompletion
 
-/** 流式增量内容（每个 chunk 中的变化部分） */
+/**
+ * 流式增量内容（每个 chunk 中的变化部分）
+ *
+ * @example
+ * ```ts
+ * import type { ChatCompletionDelta } from '@h-ai/ai'
+ *
+ * const value: ChatCompletionDelta = { content: '已发货' }
+ * ```
+ */
 export type ChatCompletionDelta = OpenAI.Chat.ChatCompletionChunk.Choice.Delta
 
-/** 流式响应块（SSE 传输的单个数据帧） */
+/**
+ * 流式响应块（SSE 传输的单个数据帧）
+ *
+ * @example
+ * ```ts
+ * import type { ChatCompletionChunk } from '@h-ai/ai'
+ *
+ * const value: ChatCompletionChunk = { id: 'chatcmpl-example', object: 'chat.completion.chunk', created: 0, model: 'gpt-4o-mini', choices: [{ index: 0, delta: { content: '你好' }, finish_reason: null }] }
+ * ```
+ */
 export type ChatCompletionChunk = OpenAI.Chat.ChatCompletionChunk
 
 // ─── 流处理 ───
 
-/** 流处理结果（完整消费流后的累积数据） */
+/**
+ * 流处理结果（完整消费流后的累积数据）
+ *
+ * @example
+ * ```ts
+ * import type { StreamResult } from '@h-ai/ai'
+ *
+ * function completedMessage(result: StreamResult): string {
+ *   return result.finishReason === 'stop' ? result.content : '输出尚未完整结束'
+ * }
+ * ```
+ */
 export interface StreamResult {
   /** 累积的完整文本内容 */
   content: string
@@ -155,6 +337,15 @@ export interface StreamResult {
  * 流处理器接口
  *
  * 逐 chunk 喂入，内部累积文本和工具调用，支持 reset 复用。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ *
+ * const processor = ai.stream.createProcessor()
+ * processor.process({ id: 'chatcmpl-example', object: 'chat.completion.chunk', created: 0, model: 'gpt-4o-mini', choices: [{ index: 0, delta: { content: '你好' }, finish_reason: 'stop' }] })
+ * const message = processor.toAssistantMessage()
+ * ```
  */
 export interface StreamProcessor {
   /** 处理单个 chunk，返回增量 delta；空 choices 时返回 `null` */
@@ -167,13 +358,22 @@ export interface StreamProcessor {
   reset: () => void
 }
 
-/** SSE（Server-Sent Events）事件结构 */
+/**
+ * SSE（Server-Sent Events）事件结构
+ *
+ * @example
+ * ```ts
+ * import type { SSEEvent } from '@h-ai/ai'
+ *
+ * const value: SSEEvent = { id: 'event-1', event: 'delta', data: JSON.stringify({ text: '你好' }), retry: 1000 }
+ * ```
+ */
 export interface SSEEvent {
   /** 事件类型（`event:` 字段） */
   event?: string
-  /** 事件 ID（`id:` 字段） */
+  /** 事件 ID（`id:` 字段）；解码继承最近有效值，空字符串显式清空，NUL 字段忽略。 */
   id?: string
-  /** 重连间隔（毫秒，`retry:` 字段） */
+  /** 重连间隔（毫秒，非负安全整数）；解码保留最近有效值，但不会自动执行重连。 */
   retry?: number
   /** 数据载荷（`data:` 字段，多行数据以 `\n` 合并） */
   data?: string
@@ -182,16 +382,39 @@ export interface SSEEvent {
 /**
  * SSE 解码器接口
  *
- * 内部维护缓冲区，支持跨 chunk 的不完整数据拼接。
+ * 内部维护行与事件缓冲区，支持跨 chunk 的 LF/CRLF/CR 和多行 data。
+ * 仅移除冒号后的一个 ASCII 空格；只派发有 data 字段且已收到空行的事件。
+ * EOF 不补空行；新连接或放弃未完成输入时调用 reset，清除旧 id/retry 与剩余数据。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ *
+ * const decoder = ai.stream.createSSEDecoder()
+ * const first = [...decoder.decode('data: hel')]
+ * const second = [...decoder.decode('lo\n\n')]
+ * // first 为空，second 的首个事件 data 为 hello。
+ * ```
  */
 export interface SSEDecoder {
-  /** 追加文本并解码出完整事件；未完成的部分留在缓冲区 */
+  /** 追加 UTF-8 解码后的文本并解码完整事件；未完成的部分留在缓冲区。 */
   decode: (text: string) => Iterable<SSEEvent>
-  /** 清空缓冲区 */
+  /** 清空所有缓冲区及连接级元数据；不会派发残余的不完整事件。 */
   reset: () => void
 }
 
-/** 流处理操作接口（通过 `ai.stream` 访问，纯函数，无需初始化） */
+/**
+ * 流处理操作接口（通过 `ai.stream` 访问，纯函数，无需初始化）
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ *
+ * // 纯协议处理无需初始化 ai。
+ * const wire = ai.stream.encodeSSE({ event: 'delta', data: '你好' })
+ * const events = [...ai.stream.createSSEDecoder().decode(wire)]
+ * ```
+ */
 export interface StreamOperations {
   /** 创建新的流处理器实例 */
   createProcessor: () => StreamProcessor
@@ -205,7 +428,16 @@ export interface StreamOperations {
 
 // ─── 工具操作 ───
 
-/** 工具错误类型枚举 */
+/**
+ * 工具错误类型枚举
+ *
+ * @example
+ * ```ts
+ * import type { ToolErrorType } from '@h-ai/ai'
+ *
+ * const value: ToolErrorType = 'FORBIDDEN'
+ * ```
+ */
 export type ToolErrorType
   = | 'TOOL_NOT_FOUND'
     | 'TOOL_ALREADY_REGISTERED'
@@ -223,6 +455,16 @@ export type ToolErrorType
  * - 获知当前交互主体 / 会话，做数据隔离或审计。
  *
  * `signal` 始终存在：即便调用方未传入信号，框架也会依据默认超时构造一个。
+ *
+ * @example
+ * ```ts
+ * import type { ToolExecutionContext } from '@h-ai/ai'
+ *
+ * function remainingMs(context: ToolExecutionContext): number | undefined {
+ *   context.signal.throwIfAborted()
+ *   return context.deadline === undefined ? undefined : Math.max(0, context.deadline - Date.now())
+ * }
+ * ```
  */
 export interface ToolExecutionContext {
   /** 取消信号（始终存在；结合调用方信号与超时截止） */
@@ -239,6 +481,13 @@ export interface ToolExecutionContext {
  * 工具授权请求
  *
  * `input` 已通过工具的 Zod schema 校验；授权函数在 handler 执行前调用。
+ *
+ * @example
+ * ```ts
+ * import type { ToolAuthorizationRequest } from '@h-ai/ai'
+ *
+ * const value: ToolAuthorizationRequest = { toolName: 'sum', input: { a: 1, b: 2 }, context: { objectId: 'user-42', signal: new AbortController().signal } }
+ * ```
  */
 export interface ToolAuthorizationRequest<TInput = unknown> {
   /** 工具名称 */
@@ -249,7 +498,18 @@ export interface ToolAuthorizationRequest<TInput = unknown> {
   context: ToolExecutionContext
 }
 
-/** 工具授权函数；返回 `false` 或抛出异常时均拒绝执行（fail-closed） */
+/**
+ * 工具授权函数；返回 `false` 或抛出异常时均拒绝执行（fail-closed）
+ *
+ * @example
+ * ```ts
+ * import type { ToolAuthorizer } from '@h-ai/ai'
+ *
+ * // objectId 由可信服务端会话绑定；授权函数拒绝未绑定身份。
+ * const authorize: ToolAuthorizer = ({ toolName, context }) =>
+ *   toolName === 'sum' && context.objectId === 'user-42'
+ * ```
+ */
 export type ToolAuthorizer = (request: ToolAuthorizationRequest) => Promise<boolean> | boolean
 
 /**
@@ -257,6 +517,13 @@ export type ToolAuthorizer = (request: ToolAuthorizationRequest) => Promise<bool
  *
  * 所有字段可选。框架据此解析出传给 handler 的 {@link ToolExecutionContext}：
  * 组合调用方 `signal` 与超时信号，超时优先级 `deadline` > `timeoutMs` > 工具默认 > 全局默认。
+ *
+ * @example
+ * ```ts
+ * import type { ToolExecutionOptions } from '@h-ai/ai'
+ *
+ * const value: ToolExecutionOptions = { objectId: 'user-42', sessionId: 'weekly', timeoutMs: 5000, signal: new AbortController().signal }
+ * ```
  */
 export interface ToolExecutionOptions {
   /** 调用方取消信号（与超时信号组合） */
@@ -283,6 +550,22 @@ export interface ToolExecutionOptions {
  *
  * @typeParam TInput - 参数类型（由 Zod schema 推断）
  * @typeParam TOutput - 返回值类型
+ *
+ * @example
+ * ```ts
+ * import type { DefineToolOptions } from '@h-ai/ai'
+ * import { z } from 'zod'
+ *
+ * const options: DefineToolOptions<{ a: number, b: number }, number> = {
+ *   name: 'sum',
+ *   description: '计算两个数之和',
+ *   parameters: z.object({ a: z.number(), b: z.number() }),
+ *   handler: ({ a, b }, context) => {
+ *     context.signal.throwIfAborted()
+ *     return a + b
+ *   },
+ * }
+ * ```
  */
 export interface DefineToolOptions<TInput, TOutput> {
   /** 工具名称（需唯一，用于 function calling name 字段） */
@@ -307,6 +590,18 @@ export interface DefineToolOptions<TInput, TOutput> {
  *
  * @typeParam TInput - 参数类型
  * @typeParam TOutput - 返回值类型
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import { z } from 'zod'
+ *
+ * const sum = ai.tools.define({ name: 'sum', description: '计算两个数之和', parameters: z.object({ a: z.number(), b: z.number() }), handler: ({ a, b }) => a + b })
+ * const result = await sum.execute({ a: 1, b: 2 })
+ * if (result.success) {
+ *   const total = result.data
+ * }
+ * ```
  */
 export interface Tool<TInput = unknown, TOutput = unknown> {
   /** 工具名称 */
@@ -326,6 +621,23 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
  *
  * 管理一组工具的注册、查询与批量执行。注册方法返回 `HaiResult<void>`，
  * 调用方应显式处理重名等配置错误。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import { z } from 'zod'
+ *
+ * async function sumValues() {
+ *   const registry = ai.tools.createRegistry()
+ *   const registered = registry.register(ai.tools.define({ name: 'sum', description: '计算两个数之和', parameters: z.object({ a: z.number(), b: z.number() }), handler: ({ a, b }) => a + b }))
+ *   if (!registered.success)
+ *     return registered
+ *   const result = await registry.execute({ id: 'call-sum-1', type: 'function', function: { name: 'sum', arguments: '{"a":1,"b":2}' } })
+ *   if (!result.success)
+ *     return result
+ *   return result.data
+ * }
+ * ```
  */
 export interface ToolRegistryOperations {
   /** 注册工具；同名工具已存在时返回 `TOOL_ALREADY_REGISTERED` */
@@ -354,7 +666,16 @@ export interface ToolRegistryOperations {
   readonly size: number
 }
 
-/** 工具注册表创建选项 */
+/**
+ * 工具注册表创建选项
+ *
+ * @example
+ * ```ts
+ * import type { ToolRegistryOptions } from '@h-ai/ai'
+ *
+ * const value: ToolRegistryOptions = { authorize: ({ context }) => context.objectId === 'user-42' }
+ * ```
+ */
 export interface ToolRegistryOptions {
   /**
    * Registry 级授权函数
@@ -365,7 +686,19 @@ export interface ToolRegistryOptions {
   authorize?: ToolAuthorizer
 }
 
-/** 工具操作接口（通过 `ai.tools` 访问，纯函数，无需初始化） */
+/**
+ * 工具操作接口（通过 `ai.tools` 访问，纯函数，无需初始化）
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ * import { z } from 'zod'
+ *
+ * // 工具定义与注册表无需初始化 ai。
+ * const tool = ai.tools.define({ name: 'echo', description: '返回输入文本', parameters: z.object({ text: z.string() }), handler: ({ text }) => text })
+ * const definition = tool.toDefinition()
+ * ```
+ */
 export interface ToolsOperations {
   /** 定义工具（Zod schema 类型推断 + 自动参数校验） */
   define: <TInput, TOutput>(options: DefineToolOptions<TInput, TOutput>) => Tool<TInput, TOutput>
@@ -373,11 +706,18 @@ export interface ToolsOperations {
   createRegistry: (options?: ToolRegistryOptions) => ToolRegistryOperations
 }
 
-// ─── LLM Provider 接口 ───
-
 // ─── 对话记录 ───
 
-/** 对话记录查询选项 */
+/**
+ * 对话记录查询选项
+ *
+ * @example
+ * ```ts
+ * import type { ChatHistoryOptions } from '@h-ai/ai'
+ *
+ * const value: ChatHistoryOptions = { limit: 20, order: 'desc' }
+ * ```
+ */
 export interface ChatHistoryOptions {
   /** 返回数量限制 */
   limit?: number
@@ -387,6 +727,13 @@ export interface ChatHistoryOptions {
 
 /**
  * ask/askStream 便捷方法选项
+ *
+ * @example
+ * ```ts
+ * import type { AskOptions } from '@h-ai/ai'
+ *
+ * const value: AskOptions = { systemPrompt: '回答保持简洁。', objectId: 'user-42', sessionId: 'weekly', temperature: 0.2 }
+ * ```
  */
 export interface AskOptions {
   /** 系统提示词 */
@@ -411,6 +758,15 @@ export interface AskOptions {
  * 对话记录
  *
  * 每次 `llm.chat()` 调用在传入 `objectId` 时自动保存的请求+响应快照。
+ *
+ * @example
+ * ```ts
+ * import type { ChatRecord } from '@h-ai/ai'
+ *
+ * function elapsedLabel(record: ChatRecord): string {
+ *   return `${record.sessionId}: ${record.duration}ms, ${record.response.usage.total_tokens} tokens`
+ * }
+ * ```
  */
 export interface ChatRecord {
   /** 记录唯一 ID */
@@ -437,22 +793,6 @@ export interface ChatRecord {
   duration: number
 }
 
-// ─── LLM Provider 接口 ───
-
-/**
- * LLM Provider 接口
- *
- * 底层 API 适配层，当前内置 OpenAI 兼容实现。
- */
-export interface LLMProvider {
-  /** 发送聊天请求并获取完整响应 */
-  chat: (request: ChatCompletionRequest) => Promise<HaiResult<ChatCompletionResponse>>
-  /** 发送聊天请求并获取流式响应（逐 chunk 产出） */
-  chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
-  /** 获取可用模型列表 */
-  listModels: () => Promise<HaiResult<string[]>>
-}
-
 // ─── LLM 操作接口 ───
 
 /**
@@ -460,6 +800,18 @@ export interface LLMProvider {
  *
  * 给定 Zod schema，让模型返回严格符合结构的 JSON（内部使用 `json_schema` response_format），
  * 解析失败时自动带错误修复重试，避免调用方手写 `JSON.parse` 的不稳定性。
+ *
+ * @example
+ * ```ts
+ * import type { GenerateObjectRequest } from '@h-ai/ai'
+ * import { z } from 'zod'
+ *
+ * const request: GenerateObjectRequest<{ title: string }> = {
+ *   schema: z.object({ title: z.string() }),
+ *   messages: [{ role: 'user', content: '为本次会议生成标题。' }],
+ *   maxRepairs: 1,
+ * }
+ * ```
  */
 export interface GenerateObjectRequest<T> {
   /** 输出结构的 Zod schema */
@@ -486,6 +838,19 @@ export interface GenerateObjectRequest<T> {
  * LLM 操作接口（通过 `ai.llm` 访问）
  *
  * 需要先调用 `ai.init()` 初始化，否则返回 `NOT_INITIALIZED` 错误。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@h-ai/ai'
+ *
+ * // 应用启动已成功初始化 ai；scope 由可信会话绑定。
+ * async function summarizeWeek() {
+ *   const result = await ai.llm.chat({ messages: [{ role: 'user', content: '总结本周待办。' }], objectId: 'user-42', sessionId: 'weekly' })
+ *   if (!result.success)
+ *     return result
+ *   return result.data.choices[0]?.message.content ?? ''
+ * }
+ * ```
  */
 export interface LLMOperations {
   /** 发送聊天请求，返回 `HaiResult<ChatCompletionResponse>` */
@@ -528,12 +893,4 @@ export interface LLMOperations {
    * @returns 符合 schema 的对象；多次重试仍无法解析时返回 `INVALID_REQUEST`
    */
   generateObject: <T>(request: GenerateObjectRequest<T>) => Promise<HaiResult<T>>
-}
-
-// ─── LLM 工厂依赖 ───
-
-/** LLM 子功能工厂依赖（内部使用） */
-export interface AILLMFunctionsDeps {
-  /** 校验后的 AI 配置 */
-  config: AIConfig
 }

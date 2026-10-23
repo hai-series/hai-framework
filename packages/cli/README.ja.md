@@ -50,6 +50,8 @@ pnpm dev
 
 `--template minimal|default|full|custom` で構成を選び、`--features iam,db,...` で業務モジュールを指定します。Fullstack は管理 UI に必要な IAM・DB・cache・crypto・storage・audit を保持します。AI/ONNX/CUDA は既定で入りません。
 
+独立した `mobile-app` で IAM または crypto を選択すると、フロント用 crypto を導入し、typed client の暗号化 transport を既定で有効にします。crypto を選択しない明示的な平文 API も利用できます。`PUBLIC_API_TRANSPORT=off` は対応する平文サービスにのみ使用し、`PUBLIC_API_KEY_EXCHANGE_PATH` は公開された鍵交換パスだけを変更します。鍵交換失敗時に平文へ切り替えず、サーバー秘密鍵をクライアントへ渡しません。終了時は client transport の後に自身が初期化した crypto を解放します。
+
 ### Fullstack mini 管理画面
 
 ユーザー、ロール、監査ログ、アバター、個人設定、テーマ、言語、操作ガイドとヘルプを提供します。初回は `admin` と、ルート `.env.local` のランダムな `HAI_ADMIN_DEFAULT_PASSWORD` でログインします。既存ユーザーのパスワードは変更しません。例の業務ルールは変更できますが、認可はサーバーで行います。
@@ -60,9 +62,12 @@ pnpm dev
 
 ### 既存工程とコード生成
 
+AI の作成・追加は reldb と vecdb も導入し、生成コードは DB → ベクトル保存先 → AI の順に起動します。失敗時は逆順に解放し、解放失敗も返します。本番設定は有効な機能に応じて PostgreSQL（選択済み MySQL は保持）・Redis・S3・Qdrant を選び、Compose の `db/cache/storage/vecdb` を使います。パスワード・S3 認証情報・モデルキー・保護された Qdrant キーは秘密環境から注入し、Compose 外では接続先を上書きしてください。本番 Reach は空 Provider 配列で起動を拒否し、実際の `HAI_REACH_PROVIDERS` JSON の注入が必要です。`hai add` は既存本番値を保持して不足項目を追加します。既存の起動処理への接続はアプリ側で行います。
+
 ```sh
 hai add storage
 hai init
+hai generate
 hai generate page dashboard
 hai generate component UserCard
 hai generate api orders
@@ -72,9 +77,15 @@ hai generate migration add-orders
 
 `hai add` は依存を解決して設定を追加します。`hai init` は不足する設定と AI ファイルを補い、独自内容は保持します。`--force` はモジュール設定を再生成するため、差分を確認して使用してください。
 
-page/api 生成は SvelteKit 向けです。Fullstack/API は既存の contract/procedure 構造を拡張します。名前にパスは指定できず、`--force` なしでは上書きしません。マイグレーションは up/down 関数を生成するだけなので、実行前にデータへの影響を確認してください。
+page は SvelteKit のファイルルートに対応し、api は対象アプリに応じて SvelteKit または serv の共有 contract/procedure を生成します。API/fullstack のルートでは一意なバックエンドを自動選択します。複数候補は `--workspace <パッケージ名または相対パス>` で指定するか、対象 workspace に移動してください。通常の Vite への page/api 生成は拒否します。serv は `--output` を受け付けず、SvelteKit の出力は `src/routes` 内に限定し、独自の `kit.files` は推測せず拒否します。SvelteKit API には `@h-ai/kit` と `zod` が必要です。serv は `@hai-generator` マーカーのある既存の集約入口だけを更新し、未知の構成には手動統合を要求します。名前にパスは指定できません。既存ファイルは `--force` が必要ですが、登録済み業務領域は置換しません。一括検査後に書き込み、失敗時は今回の変更を戻します。マイグレーションは up/down 関数のみ生成するため、実行前にデータへの影響を確認してください。
+
+CLI メッセージは中国語と英語に対応します。`HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` の最初の空でない値を使い、`en`/`zh` の地域別表記は既存辞書に対応付けます。`C`/`POSIX` は英語です。未知の言語は現在の core 言語（既定は中国語）を保持します。PowerShell では `$env:HAI_CORE_DEFAULTLOCALE='en-US'` の後に `hai generate` を実行してください。CLI 内部のコマンドも `core.i18n.setGlobalLocale('en-US')` による同一プロセス内の言語切替を反映します。種類や名前を省略すると対話入力になり、取消時はファイルを書きません。生成コードの中国語コメントとユーザー指定名は変更しません。
+
+`create`、`add`、`init`、`generate` のプロンプト、検証、モジュール/テンプレート名、説明と完了メッセージは現在の CLI 言語を使用します。選択肢は参照時に翻訳するため、同一プロセス内の locale 変更も反映します。CLI 言語と生成アプリの `core.defaultLocale` は独立しています。生成される中国語 README、設定/コードのコメント、ユーザー入力と外部ツールの元の診断は変更しません。
 
 ### ビルドとデプロイ
+
+DB 接続は保存前に選択したバックエンドの公開 Schema で検証します。MySQL の `ssl` は `false` または厳密な TLS オブジェクトのみで、`{}` は証明書チェーンと DNS ID を検証します。PostgreSQL のモードは維持します。CLI は純粋な Schema と Zod を内包するため、検証対象アプリに DB パッケージやドライバーは不要です。アプリの実行には依存関係が必要で、デプロイ機能には解決可能な `@h-ai/deploy`（生成プロジェクトの開発依存）が必要です。
 
 `pnpm build` はソースのコンパイルです。イメージごとの Dockerfile を `images/` に置き、`hai.build.json` で指定します。`--images` はビルド対象、`--services` は更新サービスを選びます。自動選択は接続可能な Podman、次に Docker です。依存の取得・インストール・本番依存の収集で、パッケージと SQLite ドライバーのキャッシュを共有し、再ダウンロードを避けます。
 
@@ -88,6 +99,8 @@ pnpm run deploy --env prod --build --bundle-only
 ```
 
 完全配布にはアプリと自前ミドルウェアのイメージが入ります。デプロイキャッシュ、tar と操作ディレクトリは既定でプロジェクトルートの `.hai/deploy/<環境>/` に置きます。`--output` でコマンドの作業ディレクトリを基準とする tar 出力先を指定できます。梱包のみでは SSH を質問せず、tar、項目ごとの説明を含む `deploy-target.json`、Windows `deploy.ps1`、Linux/macOS `deploy.sh` を生成します。実行前に `deploy-target.json` を変更・確認し、両方のアップロードスクリプトはこのファイルを読みます。隔離 Linux サーバーでは展開して `sh apply.sh` を実行します。初回は完全配布が必要で、部分更新は他サービスとボリュームを維持します。各手順の結果を表示し、失敗は非ゼロで終了して復元を試みます。前提・キャッシュ・版管理・復元は[デプロイ説明](../deploy/README.ja.md)を参照してください。
+
+失敗時はローカルの管理対象プロセス終了確認と、遠隔の不明/スクリプト完了状態、結果ファイルのパスを別々に表示します。ローカル SSH 終了だけでは遠隔停止を断定しません。不明状態をサーバーで確認し、CLI は配置や復元を自動再実行しません。Windows は内嵌のシステム PowerShell/.NET Job と Add-Type を使い、失敗時は管理外でコマンドを起動しません。
 
 デスクトップ配布は `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64` を対象 OS とツールチェーンで実行します。コンテナの Web 表示とは別にネイティブ配布を検証してください。
 
@@ -111,10 +124,17 @@ pnpm --filter @h-ai/cli lint
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
+pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作を実行します。デプロイ検証はオフライン tar、SSH/手動配布、部分更新を扱います。テスト所有の資源は終了時に削除し、必要な証拠だけ指定先へ保存します。ネイティブと実クラウドは別途検証してください。
+生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作を実行します。デプロイ検証は実リソースの所有権と動的ホストポートの分離に加え、オフライン tar、SSH/手動配布、増分更新とロールバックを扱います。当該実行が記録したコンテナー ID と専用イメージ tag だけを回収します。安全なメタデータは ignored の `tmp/validation/module-review/VERIFY-05/` に残し、一時プロジェクト、SSH 鍵とプロジェクトデータは引き続き削除します。生成したブラウザー画像、trace とレポートは既定で ignored の `tmp/validation/module-review/scaffold-browser/` または `deploy-browser/` に保持します。明示した証拠・HTML・出力先も尊重し、一時プロジェクト、鍵、データとプロセスは回収します。ネイティブと実クラウドは別途検証してください。
+
+`--generate` は対象を絞ったルート検証です。インストール済み依存を再利用し、SvelteKit・serv API・fullstack バックエンドを実際に生成・ビルドして新ルートへアクセスします（transport を含む）。完全なインストールとブラウザー検証の代わりにはなりません。
+
+`test:e2e` は各サービスに隔離されたテスト用バックエンドと絶対データパスを明示します。サービス子プロセスは外部の `HAI_*` / `PUBLIC_*` / `VITE_*` 設定やユーザーの `.env.local` を読み込みません。テスト専用の `HAI_E2E=1` は通常開発・本番の dotenv と共有バックエンド要件を変更せず、transport は毎回生成する信頼済み SM2 ring と実際の registry を使います。生成プロジェクトのブラウザー検証では独立 TCP 計数プロセスで外部 DB への接続がないことも確認します。完全な fullstack デプロイ検証では実 Redis/S3、増分更新とロールバックを維持します。
+
+`--i18n` は CLI をビルドし、独立プロセスで言語の優先順位・help・生成成功・失敗を検証し、中国語/英語の入力・検証・取消も確認します。
 
 ## ライセンス
 

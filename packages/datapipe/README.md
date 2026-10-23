@@ -35,6 +35,8 @@ if (!cleaned.success)
 
 // 按 Markdown 标题分块
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
 
 // 管线模式（链式组合多步操作）
 const result = await datapipe.pipeline()
@@ -43,6 +45,8 @@ const result = await datapipe.pipeline()
   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
   .run(rawText)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 ### 分块模式
@@ -53,7 +57,7 @@ const result = await datapipe.pipeline()
 | paragraph | 按段落分块                       |
 | markdown  | 按 Markdown 标题分块             |
 | page      | 按分页符分块                     |
-| word      | 按字数分块                       |
+| word      | 按非空白词数分块                 |
 | character | 按字符数分块                     |
 | custom    | 自定义分隔符（需提供 separator） |
 
@@ -83,6 +87,10 @@ if (!result.success) {
 ```bash
 pnpm --filter @h-ai/datapipe test
 ```
+
+分块 `maxSize` 默认 1500，`overlap` 默认 0 且必须满足 `0 <= overlap < maxSize`。word 模式两者均按非空白词计量（连续中文可视为一个长词），其余模式均按 Unicode code point 计量，不是 UTF-16 length、字节或模型 token。上限包含重叠与分隔符；自然句/段/页/自定义边界只影响优先切点，超长段统一按 `maxSize-overlap` 滑窗。保留原始空白、标点、分页符及自定义分隔符，移除重叠后可还原全文；不再 split/join 或 trim 分块。Markdown section 之间不重叠，section 内使用相同硬上限，代码围栏内的标题保留为正文；仅 `markdownKeepTitle=false` 明确移除标题行。空/全空白的整体输入返回空数组。自定义正则须由可信配置提供，非法表达式返回 CHUNK_FAILED。
+
+源码示例区分无需生命周期的纯函数、同步 HaiResult 与异步管线；类型检查方法见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
 
 ## 许可证
 

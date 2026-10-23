@@ -408,6 +408,17 @@ async function parseImageWithOcr(
  * @param config - 校验后的 AI 配置
  * @param llmOps - LLM 操作接口（用于 OCR）
  * @returns FileOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function parse(config: AIConfig, llm: LLMOperations) {
+ *   const file = createFileOperations(config, llm)
+ *   const result = await file.parse({ content: Buffer.from('项目说明'), filename: 'README.txt' })
+ *   if (!result.success) return result
+ *   return result.data.text
+ * }
+ * ```
  */
 export function createFileOperations(config: AIConfig, llmOps: LLMOperations): FileOperations {
   /**

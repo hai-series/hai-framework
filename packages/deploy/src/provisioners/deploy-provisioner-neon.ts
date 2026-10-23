@@ -24,20 +24,51 @@ const DEFAULT_NEON_DATABASE_NAME = 'neondb'
 /** Neon 新建项目默认生成的角色名。 */
 const DEFAULT_NEON_ROLE_NAME = 'neondb_owner'
 
+/**
+ * Neon 列表中用于按名称核对现有资源的字段。
+ * @example 模块内部上下文
+ * ```ts
+ * const project: NeonProjectSummary = { id: 'project-shop', name: 'shop' }
+ * ```
+ */
 interface NeonProjectSummary {
   id: string
   name: string
 }
 
+/**
+ * 列表字段可缺失；调用方不能将请求失败解释为资源不存在。
+ * @example 模块内部上下文
+ * ```ts
+ * const response: NeonProjectsResponse = { projects: [{ id: 'project-shop', name: 'shop' }] }
+ * const existing = response.projects?.find(project => project.name === 'shop')
+ * ```
+ */
 interface NeonProjectsResponse {
   projects?: NeonProjectSummary[]
 }
 
+/**
+ * 创建回执的可选形状；连接 URI 可能包含口令，不得输出。
+ * @example 模块内部上下文
+ * ```ts
+ * const response: NeonCreateProjectResponse = { project: { id: 'project-shop' } }
+ * const id = response.project?.id // 无连接 URI 时再按已确认 ID 读取，不能重新创建。
+ * ```
+ */
 interface NeonCreateProjectResponse {
   connection_uris?: Array<{ connection_uri?: string }>
   project?: { id?: string }
 }
 
+/**
+ * 连接读取回执；真实 URI 可能含密码，必须作为私有配置处理。
+ * @example 模块内部上下文
+ * ```ts
+ * const response: NeonConnectionUriResponse = { uri: 'postgresql://app@db.example.org/shop' }
+ * const present = Boolean(response.uri)
+ * ```
+ */
 interface NeonConnectionUriResponse {
   uri?: string
 }
@@ -112,14 +143,18 @@ function buildNeonProvisionResult(projectId: string, connectionUri: string, reso
 
 /**
  * 创建 Neon PostgreSQL Provisioner
- *
+ * 工厂返回内部接口；认证与开通调用必须逐次检查 HaiResult，返回的连接凭据不能直接记录。
  * @returns ServiceProvisioner 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const neon = createNeonProvisioner()
- * await neon.authenticate({ apiKey: 'neon_xxx' })
- * const result = await neon.provision('my-app')
+ * const apiKey = process.env.HAI_DEPLOY_SERVICES_DB_APIKEY
+ * if (!apiKey) throw new Error('Provide HAI_DEPLOY_SERVICES_DB_APIKEY privately')
+ * const provisioner = createNeonProvisioner()
+ * const authenticated = await provisioner.authenticate({ apiKey })
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * const result = await provisioner.provision('shop')
+ * if (!result.success) throw new Error(result.error.message)
+ * const status = result.data.resourceStatus
  * ```
  */
 export function createNeonProvisioner(): ServiceProvisioner {

@@ -32,6 +32,13 @@ import { page } from '$app/state'
  * - `navigate` 使用 `$app/navigation` 的 `goto`，并自动 `invalidateAll`，
  *   触发 `+page.server.ts` 的 `load` 重新执行。
  * - `refresh` 调用 `invalidateAll()`，常用于写操作后刷新列表数据。
+ * @returns 读取当前 pathname 并调用 SvelteKit navigate/refresh 的适配器。
+ * @example 模块内部上下文
+ * ```ts
+ * const nav = createSvelteKitNavAdapter()
+ * // 仅客户端交互中调用导航；URL 由应用路由提供。
+ * await nav.navigate('/articles')
+ * ```
  */
 export function createSvelteKitNavAdapter(): {
   readonly pathname: string

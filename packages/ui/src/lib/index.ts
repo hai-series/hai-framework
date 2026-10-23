@@ -15,9 +15,10 @@ export * from './guide.svelte.js'
 
 export * from './i18n.svelte.js'
 
-// ─── 浏览器能力安全辅助（剪贴板、localStorage 等降级方案） ───
+// ─── 浏览器剪贴板辅助（宿主注册与安全写入） ───
 
-export * from './internal/browser-safety.js'
+export type { ClipboardHostWriter } from './internal/browser-safety.js'
+export { registerClipboardHostWriter, writeTextToClipboard } from './internal/browser-safety.js'
 
 // ─── Message 轻量消息提示（类似 ElementUI Message） ───
 

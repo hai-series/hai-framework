@@ -16,19 +16,15 @@
   @prop {'normal' | 'compact'} density - 显示密度，compact 为紧凑布局
 
   @example
-  <DataTable
-    data={users}
-    columns={[
-      { key: 'name', label: '姓名' },
-      { key: 'email', label: '邮箱' },
-      { key: 'createdAt', label: '创建时间', render: (item) => formatDate(item.createdAt) }
-    ]}
-    keyField="id"
-  >
-    {#snippet actions(item)}
-      <Button size="xs" onclick={() => edit(item)}>编辑</Button>
-    {/snippet}
-  </DataTable>
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { DataTable } from '@h-ai/ui'
+  const Table = DataTable<{ id: string, name: string }>
+  const props: ComponentProps<typeof Table> = { data: [{ id: 'u1', name: 'Ada' }], keyField: 'id', columns: [{ key: 'name', label: '姓名', sortable: true }] }
+  const component = mount(Table, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts' generics='T'>
   import type { Snippet } from 'svelte'
@@ -78,7 +74,20 @@
 
   /** 透传到根节点的 data-* 属性。 */
   const dataAttributes = $derived(getDataAttributes(restProps))
-  /** DataTable 内部使用的列定义。 */
+  /**
+   * DataTable 内部使用的列定义。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { DataTable } from '@h-ai/ui'
+   * const Table = DataTable<{ id: string, name: string }>
+   * const props: ComponentProps<typeof Table> = { data: [{ id: 'u1', name: 'Ada' }], keyField: 'id', columns: [{ key: 'name', label: '姓名', sortable: true }] }
+   * const component = mount(Table, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   type Column = {
     /** 列对应的数据字段。 */
     key: keyof T | string

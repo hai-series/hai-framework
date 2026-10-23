@@ -5,7 +5,7 @@
  */
 
 import { reldb } from '@h-ai/reldb'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HaiReachError, reach } from '../src/index.js'
 import { resetTemplateRepoSingleton } from '../src/repositories/reach-repository-template.js'
 
@@ -213,8 +213,18 @@ describe.sequential('reach.send (template from config)', () => {
 })
 
 describe.sequential('reach.send (DND)', () => {
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-01-01T12:00:00'))
+    const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+    if (!initialized.success)
+      throw new Error(initialized.error.message)
+  })
+
   afterEach(async () => {
     await reach.close()
+    await reldb.close()
+    vi.useRealTimers()
   })
 
   it('dnd 禁用时消息应正常发送', async () => {

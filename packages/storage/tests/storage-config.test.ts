@@ -41,6 +41,7 @@ describe('haiStorageError', () => {
     expect(HaiStorageError.PRESIGN_FAILED.code).toBe('hai:storage:013')
     expect(HaiStorageError.UPLOAD_FAILED.code).toBe('hai:storage:014')
     expect(HaiStorageError.DOWNLOAD_FAILED.code).toBe('hai:storage:015')
+    expect(HaiStorageError.UNSUPPORTED_OPERATION.code).toBe('hai:storage:018')
   })
 })
 

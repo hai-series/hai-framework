@@ -8,52 +8,93 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type {
-  EncryptedPayload,
   TransportCreateServerOptions,
   TransportCryptoServiceLike,
   TransportEncryptionManager,
   TransportKeyPair,
 } from './crypto-transport-types.js'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
-import { createInMemoryKeyStore } from './store-provider/crypto-transport-store-memory.js'
+import { isValidSM2PublicKey } from '../crypto-public-key.js'
+import { HaiCryptoError } from '../crypto-types.js'
+import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
+import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
+import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /**
- * 创建传输加密管理器。
+ * 内部服务端工厂；创建时校验并捕获受管密钥环快照，不随机回退生成服务端密钥。
+ * 生产要求共享registry；先认证实际HTTP绑定/签名/MAC/nonce，再交给业务，响应关联原上下文与实际状态。
+ * @param cryptoService - 已初始化SM2/SM3/SM4能力。
+ * @param options - 必填受管密钥环和客户端registry。
+ * @returns 管理器或脱敏HaiResult失败；应用持有底层cache/reldb并负责关闭。
  *
- * 启动时生成服务端非对称密钥对，所有客户端公钥由 `keyStore` 管理。
- *
- * @param cryptoService - 注入的非对称 + 对称加密实现（通常直接传入 `crypto` 实例）。
- * @param options - 可选配置。
- * @returns 成功返回管理器；密钥对生成失败返回 `HaiCommonError.INTERNAL_ERROR`。
- *
- * @remarks
- * 内部流程：
- *
- * 1. 创建时先生成一对服务端非对称密钥，并准备 `keyStore`。
- * 2. 上层在密钥协商端点中调用 `registerClientKey()` 保存客户端公钥，再把 `getServerPublicKey()` 返回给客户端。
- * 3. 普通业务请求到达时，上层先根据 `clientId` 确认客户端已注册，再调用 `decryptRequest()` 拿到明文请求体。
- * 4. 业务逻辑完成后，上层调用 `encryptResponse(clientId, data)` 为该客户端生成密文响应。
- * 5. `close()` 负责清理 `keyStore` 等底层资源。
- *
- * 若使用 `@h-ai/serv` / `@h-ai/kit`，上述 HTTP 协商与请求包装流程通常已由上层封装完成。
+ * @example
+ * ```ts
+ * import { crypto, createRedisTransportKeyStore, parseTransportServerKeyRing } from '@h-ai/crypto'
+ * import { cache } from '@h-ai/cache'
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const connected = await cache.init({ type: 'redis', host: 'cache', port: 6379, password: process.env.HAI_CACHE_PASSWORD })
+ *   if (!connected.success) throw new Error(connected.error.message)
+ *   try {
+ *     const registry = createRedisTransportKeyStore({ cache, ttlSeconds: 3600 })
+ *     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+ *     if (!ring.success) throw new Error(ring.error.message)
+ *     const created = crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: registry })
+ *     if (!created.success) throw new Error(created.error.message)
+ *     const manager = created.data
+ *     try {
+ *       const activeKeyId = manager.getServerKeyId()
+ *     }
+ *     finally { await manager.close() }
+ *   }
+ *   finally { await cache.close() }
+ * }
+ * finally { await crypto.close() }
+ * ```
  */
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
-  options: TransportCreateServerOptions = {},
+  options: TransportCreateServerOptions,
 ): HaiResult<TransportEncryptionManager> {
-  const keyPairResult = cryptoService.asymmetric.generateKeyPair()
-  if (!keyPairResult.success)
-    return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportServerKeyGenerateFailed'), keyPairResult.error)
-  const serverKeyPair: TransportKeyPair = keyPairResult.data
-  const keyStore = options.keyStore ?? createInMemoryKeyStore(options.maxClients)
+  const ring = parseTransportServerKeyRing(options?.serverKeyRing)
+  if (!ring.success)
+    return ring
+  if (!options.keyStore || typeof options.keyStore.register !== 'function' || typeof options.keyStore.get !== 'function'
+    || typeof options.keyStore.claimRequest !== 'function') {
+    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
+  }
+  // eslint-disable-next-line node/prefer-global/process -- 此文件也随客户端打包，避免静态引入Node内建模块。
+  if (core.module.requiresSharedState(globalThis.process?.env ?? {}) && options.keyStore.stateScope !== 'shared')
+    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportKeyStoreRequired'))
+  const serverKeys = new Map<string, TransportKeyPair>()
+  for (const [id, key] of Object.entries(ring.data.keys)) {
+    // 同时验证密钥格式和公私钥配对；只返回无敏感上下文的配置错误。
+    const probe = cryptoService.asymmetric.encrypt('hai-transport-key-check', key.publicKey)
+    if (!probe.success)
+      return err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
+    const checked = cryptoService.asymmetric.decrypt(probe.data, key.privateKey)
+    if (!checked.success || checked.data !== 'hai-transport-key-check')
+      return err(HaiCryptoError.INVALID_KEY, cryptoM('crypto_transportServerKeyRingInvalid'))
+    serverKeys.set(id, { publicKey: key.publicKey, privateKey: key.privateKey })
+  }
+  // 捕获不可变快照；调用方修改原对象不能悄悄轮换或更换同一 ID 对应的私钥。
+  const activeKeyId = ring.data.activeKeyId
+  const serverKeyPair = serverKeys.get(activeKeyId)!
+  const keyStore = options.keyStore
 
   const manager: TransportEncryptionManager = {
+    getServerKeyId() {
+      return activeKeyId
+    },
     getServerPublicKey() {
       return serverKeyPair.publicKey
     },
 
     async registerClientKey(clientPublicKey) {
+      if (!isValidSM2PublicKey(clientPublicKey))
+        throw new TypeError(cryptoM('crypto_sm2PublicKeyInvalid'))
       return keyStore.register(clientPublicKey)
     },
 
@@ -61,37 +102,57 @@ export function createTransportEncryption(
       return keyStore.get(clientId)
     },
 
-    async encryptResponse(clientId, data) {
-      const clientPublicKey = await keyStore.get(clientId)
-      if (!clientPublicKey)
-        return err(HaiCommonError.NOT_FOUND, cryptoM('crypto_transportClientNotRegistered'))
-
-      // 1. 生成随机会话密钥；2. 用会话密钥加密内容；3. 用客户端公钥加密会话密钥。
-      const symmetricKey = cryptoService.symmetric.generateKey()
-      const encResult = cryptoService.symmetric.encryptWithIV(data, symmetricKey)
-      if (!encResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'), encResult.error)
-      const keyEncResult = cryptoService.asymmetric.encrypt(symmetricKey, clientPublicKey)
-      if (!keyEncResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyEncryptFailed'), keyEncResult.error)
-
-      const payload: EncryptedPayload = {
-        encryptedKey: keyEncResult.data,
-        ciphertext: encResult.data.ciphertext,
-        iv: encResult.data.iv,
+    async encryptResponse(request, data, status) {
+      try {
+        const context = { ...request }
+        const clientPublicKey = await keyStore.get(context.clientId)
+        if (!clientPublicKey)
+          return err(HaiCommonError.NOT_FOUND, cryptoM('crypto_transportClientNotRegistered'))
+        const key = serverKeys.get(context.serverKeyId)
+        if (!key)
+          return transportAuthenticationFailure()
+        return sealTransportPayload(cryptoService, data, context, 'response', status, clientPublicKey, key.privateKey)
       }
-      return ok(payload)
+      catch {
+        // registry/注入实现故障仍按 HaiResult 返回，不携带可能包含连接凭据的原始异常。
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportResponseEncryptFailed'))
+      }
     },
 
-    decryptRequest(payload) {
-      // 1. 用服务端私钥解出会话密钥；2. 用会话密钥解出明文。
-      const keyDecResult = cryptoService.asymmetric.decrypt(payload.encryptedKey, serverKeyPair.privateKey)
-      if (!keyDecResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportSessionKeyDecryptFailed'), keyDecResult.error)
-      const decResult = cryptoService.symmetric.decryptWithIV(payload.ciphertext, keyDecResult.data, payload.iv)
-      if (!decResult.success)
-        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportRequestDecryptFailed'), decResult.error)
-      return ok(decResult.data)
+    async decryptRequest(payload, expected) {
+      try {
+        if (!isValidEncryptedPayload(payload) || payload.direction !== 'request' || payload.status !== 0)
+          return transportAuthenticationFailure()
+        // 在任何异步 registry 调用前捕获快照，避免调用方修改同一对象造成认证/消费上下文错位。
+        const authenticated = { ...payload, context: { ...payload.context } }
+        const c = authenticated.context
+        const now = Date.now()
+        const pathHash = hashTransportPath(cryptoService, expected.path)
+        if (!pathHash.success || c.clientId !== expected.clientId || c.method !== expected.method || c.pathHash !== pathHash.data
+          || c.issuedAt > now + TRANSPORT_PROTOCOL.CLOCK_SKEW_MS
+          || now >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS) {
+          return transportAuthenticationFailure()
+        }
+        const key = serverKeys.get(c.serverKeyId)
+        const clientPublicKey = await keyStore.get(c.clientId)
+        if (!key || !clientPublicKey)
+          return transportAuthenticationFailure()
+        const plaintext = openTransportPayload(cryptoService, authenticated, key.privateKey, clientPublicKey)
+        if (!plaintext.success)
+          return plaintext
+        if (Date.now() >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
+          return transportAuthenticationFailure()
+        // 只有完整认证成功后才占用 nonce；原子 claim 失败或存储故障均不向业务返回明文。
+        if (!await keyStore.claimRequest(c.clientId, c.requestId, c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS + 2 * TRANSPORT_PROTOCOL.CLOCK_SKEW_MS)) {
+          return transportAuthenticationFailure()
+        }
+        if (Date.now() >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
+          return transportAuthenticationFailure()
+        return plaintext
+      }
+      catch {
+        return transportAuthenticationFailure()
+      }
     },
 
     async close() {
@@ -100,21 +161,4 @@ export function createTransportEncryption(
   }
 
   return ok(manager)
-}
-
-/**
- * 判断对象是否为合法 {@link EncryptedPayload}。
- *
- * 字段必须为非空字符串。用于服务端在调用 `decryptRequest` 前做形状校验，
- * 把畸形请求拦截在加密层之外。
- */
-export function isValidEncryptedPayload(payload: unknown): payload is EncryptedPayload {
-  if (!payload || typeof payload !== 'object')
-    return false
-  const p = payload as Record<string, unknown>
-  return (
-    typeof p.encryptedKey === 'string' && p.encryptedKey.length > 0
-    && typeof p.ciphertext === 'string' && p.ciphertext.length > 0
-    && typeof p.iv === 'string' && p.iv.length > 0
-  )
 }

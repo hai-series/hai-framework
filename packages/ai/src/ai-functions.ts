@@ -11,12 +11,13 @@ import type { A2ADeps } from './a2a/ai-a2a-functions.js'
 import type { AIConfig } from './ai-config.js'
 import type { AudioOperations } from './audio/ai-audio-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
+import type { PersistedContextState } from './context/ai-context-state.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
 import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
-import type { ChatMessage, ChatRecord, LLMOperations } from './llm/ai-llm-types.js'
+import type { ChatRecord, LLMOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
 import type { PersonaOperations, PersonaProfile } from './persona/ai-persona-types.js'
@@ -25,7 +26,7 @@ import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations, RetrievalSource } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider, SessionInfo } from './store/ai-store-types.js'
-import type { SummaryOperations, SummaryResult } from './summary/ai-summary-types.js'
+import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
 import { core } from '@h-ai/core'
@@ -54,13 +55,35 @@ import { createTokenOperations } from './token/ai-token-functions.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'functions' })
 
-/** 子功能组装依赖 */
+/**
+ * 子功能组装依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function dependencies(storeProvider: AIStoreProvider, datapipe: DatapipeFunctions): AISubsystemDeps {
+ *   return { storeProvider, datapipe }
+ * }
+ * ```
+ */
 export interface AISubsystemDeps {
   storeProvider: AIStoreProvider
   datapipe: DatapipeFunctions
 }
 
-/** 子功能组装结果 */
+/**
+ * 子功能组装结果
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function openContext(subsystems: AISubsystems) {
+ *   const result = subsystems.context.createManager({ scope: { objectId: 'user-1', sessionId: 'session-1' } })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
+ */
 export interface AISubsystems {
   /** 在统一初始化之前创建的 A2A 存储 */
   a2aStores: A2ADeps | null
@@ -88,6 +111,18 @@ export interface AISubsystems {
  *
  * 根据 parsed config 和外部依赖创建所有子功能操作接口。
  * 与 main.ts 解耦——main 仅负责生命周期，本函数负责创建逻辑。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function assemble(config: AIConfig, dependencies: AISubsystemDeps) {
+ *   // 生命周期与失败清理由 ai.init/close 管理，此工厂复用注入的真实依赖。
+ *   const subsystems = await createAISubsystems(config, dependencies)
+ *   const result = subsystems.context.createManager({ scope: { objectId: 'user-1', sessionId: 'session-1' } })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return subsystems
+ * }
+ * ```
  */
 export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): Promise<AISubsystems> {
   const { storeProvider, datapipe: datapipeDep } = deps
@@ -101,7 +136,7 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   const sessionStore = storeProvider.createRelStore<SessionInfo>('hai_ai_sessions', { hasObjectId: true })
   const sourceStore = storeProvider.createRelStore<RetrievalSource>('hai_ai_retrieval_sources')
   const memoryStore = useMem0Oss ? null : storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true, hasScopeIndex: true })
-  const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
+  const contextStore = storeProvider.createRelStore<PersistedContextState>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
   const personaStore = storeProvider.createRelStore<PersonaProfile>('hai_ai_persona', { hasObjectId: true })
   const a2aStores = config.a2a ? createA2AStores(storeProvider) : null
 

@@ -17,9 +17,25 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
+import type { CreateSessionOptions } from '../src/session/iam-session-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
+import { createDbUserRepository } from '../src/user/iam-user-repository-user.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+
+/** 使用真实持久用户创建会话，避免凭空构造不存在的账号。 */
+async function createSession(target: IamFunctions, options: CreateSessionOptions) {
+  const users = await createDbUserRepository()
+  const existing = await users.findById(options.userId)
+  if (!existing.success)
+    throw new Error(existing.error.message)
+  if (!existing.data) {
+    const inserted = await users.create({ id: options.userId, username: options.userId, enabled: true })
+    if (!inserted.success)
+      throw new Error(inserted.error.message)
+  }
+  return target.session.create(options)
+}
 
 describe('iam.session', () => {
   const defineCommon = (getIam: () => IamFunctions) => {
@@ -29,7 +45,7 @@ describe('iam.session', () => {
 
     describe('create + get', () => {
       it('应创建会话并返回 Session 对象', async () => {
-        const result = await getIam().session.create({
+        const result = await createSession(getIam(), {
           userId: 'session-user-1',
           username: 'testuser',
           roles: ['role_a'],
@@ -47,7 +63,7 @@ describe('iam.session', () => {
       })
 
       it('get 应返回已创建的会话', async () => {
-        const createResult = await getIam().session.create({
+        const createResult = await createSession(getIam(), {
           userId: 'session-user-2',
         })
         expect(createResult.success).toBe(true)
@@ -76,7 +92,7 @@ describe('iam.session', () => {
 
     describe('verifyToken', () => {
       it('有效令牌应返回 Session', async () => {
-        const createResult = await getIam().session.create({
+        const createResult = await createSession(getIam(), {
           userId: 'session-verify-user',
           roles: ['admin'],
         })
@@ -113,7 +129,7 @@ describe('iam.session', () => {
 
     describe('update', () => {
       it('应能更新会话数据', async () => {
-        const createResult = await getIam().session.create({
+        const createResult = await createSession(getIam(), {
           userId: 'session-update-user',
         })
         if (!createResult.success)
@@ -122,6 +138,7 @@ describe('iam.session', () => {
         const updateResult = await getIam().session.update(
           createResult.data.accessToken,
           { data: { theme: 'dark' } },
+          createResult.data.version,
         )
         expect(updateResult.success).toBe(true)
 
@@ -136,6 +153,7 @@ describe('iam.session', () => {
         const result = await getIam().session.update(
           'non-existent-token-for-update',
           { data: { foo: 'bar' } },
+          'missing-version',
         )
         expect(result.success).toBe(false)
         if (!result.success) {
@@ -150,7 +168,7 @@ describe('iam.session', () => {
 
     describe('delete', () => {
       it('删除会话后应无法获取', async () => {
-        const createResult = await getIam().session.create({
+        const createResult = await createSession(getIam(), {
           userId: 'session-del-user',
         })
         if (!createResult.success)
@@ -180,8 +198,8 @@ describe('iam.session', () => {
       it('应删除指定用户的所有会话', async () => {
         const userId = 'session-del-all-user'
 
-        const s1 = await getIam().session.create({ userId })
-        const s2 = await getIam().session.create({ userId })
+        const s1 = await createSession(getIam(), { userId })
+        const s2 = await createSession(getIam(), { userId })
         expect(s1.success && s2.success).toBe(true)
         if (!s1.success || !s2.success)
           return
@@ -214,7 +232,7 @@ describe('iam.session', () => {
 
     describe('create 额外选项', () => {
       it('创建会话时可传入 source 和 data', async () => {
-        const result = await getIam().session.create({
+        const result = await createSession(getIam(), {
           userId: 'session-opts-user',
           roles: ['r1'],
           source: 'android',
@@ -228,7 +246,7 @@ describe('iam.session', () => {
       })
 
       it('创建会话时可自定义 maxAge', async () => {
-        const result = await getIam().session.create({
+        const result = await createSession(getIam(), {
           userId: 'session-custom-maxage',
           maxAge: 60,
         })
@@ -241,7 +259,7 @@ describe('iam.session', () => {
       })
 
       it('创建会话时 roles 为空数组应成功', async () => {
-        const result = await getIam().session.create({
+        const result = await createSession(getIam(), {
           userId: 'session-empty-roles',
         })
         expect(result.success).toBe(true)
@@ -269,7 +287,7 @@ describe('iam.session', () => {
       })
 
       it('get 操作应更新 lastActiveAt', async () => {
-        const createResult = await slidingIam.session.create({
+        const createResult = await createSession(slidingIam, {
           userId: 'sliding-user',
         })
         if (!createResult.success)
@@ -293,7 +311,7 @@ describe('iam.session', () => {
 
     describe('会话过期（短 maxAge）', () => {
       it('超过 maxAge 后会话应过期（get 返回 null）', async () => {
-        const createResult = await getIam().session.create({
+        const createResult = await createSession(getIam(), {
           userId: 'expired-session-user',
           maxAge: 1,
         })
@@ -311,7 +329,7 @@ describe('iam.session', () => {
       })
 
       it('超过 maxAge 后 verifyToken 应返回 SESSION_INVALID', async () => {
-        const createResult = await getIam().session.create({
+        const createResult = await createSession(getIam(), {
           userId: 'expired-verify-user',
           maxAge: 1,
         })

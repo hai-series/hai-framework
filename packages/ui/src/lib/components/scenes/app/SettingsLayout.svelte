@@ -8,15 +8,14 @@
   使用 Svelte 5 Runes ($props, $derived)
 
   @example
-  <SettingsLayout
-    title="设置"
-    description="管理你的账户与偏好"
-    sections={[{ id: 'appearance', label: '外观', icon: 'icon-[tabler--palette]' }]}
-    active={active}
-    onselect={(id) => active = id}
-  >
-    {#if active === 'appearance'}<AppearanceSection />{/if}
-  </SettingsLayout>
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { SettingsLayout } from '@h-ai/ui'
+  const props: ComponentProps<typeof SettingsLayout> = { title: '设置', sections: [{ id: 'profile', label: '资料', href: '/settings/profile' }], active: 'profile', children: createRawSnippet(() => ({ render: () => "<p>个人资料设置</p>" })) }
+  const component = mount(SettingsLayout, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
@@ -24,6 +23,19 @@
   import { cn, getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
+  /**
+   * 设置页分区导航项；href 直接渲染链接，否则由宿主处理选中事件。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount, createRawSnippet } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { SettingsLayout } from '@h-ai/ui'
+   * const props: ComponentProps<typeof SettingsLayout> = { title: '设置', sections: [{ id: 'profile', label: '资料', href: '/settings/profile' }], active: 'profile', children: createRawSnippet(() => ({ render: () => "<p>个人资料设置</p>" })) }
+   * const component = mount(SettingsLayout, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   type SettingsSection = {
     id: string
     label: string

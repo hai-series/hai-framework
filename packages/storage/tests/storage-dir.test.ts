@@ -127,11 +127,8 @@ describe('storage.dir', () => {
       expect(page1.data.files.length).toBe(2)
       expect(page1.data.isTruncated).toBe(true)
 
-      // local provider 不支持 continuationToken，仅验证 maxKeys 限制
-      if (label === 'local')
-        return
-
-      // S3: 用 continuationToken 翻页
+      // 两种 provider 都必须提供可继续的游标。
+      expect(page1.data.nextContinuationToken).toBeTypeOf('string')
       const page2 = await storage.dir.list({
         prefix: 'page-ns/',
         maxKeys: 2,

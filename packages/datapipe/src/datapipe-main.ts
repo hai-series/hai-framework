@@ -18,24 +18,16 @@ import { createPipelineBuilder } from './datapipe-pipeline.js'
  * 数据处理管线服务对象
  *
  * 纯函数模块，无需初始化即可使用。
- *
  * @example
  * ```ts
  * import { datapipe } from '@h-ai/datapipe'
- *
- * // 直接清洗
- * const cleaned = datapipe.clean('<p>Hello</p>')
- *
- * // 按 Markdown 标题分块
- * const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
- *
- * // 管线模式
  * const result = await datapipe.pipeline()
- *   .clean({ removeHtml: true, removeUrls: true })
+ *   .clean({ removeHtml: true })
  *   .transform(text => text.toLowerCase())
- *   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
- *   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
- *   .run(rawHtml)
+ *   .chunk({ mode: 'character', maxSize: 500, overlap: 50 })
+ *   .run('<p>One. Two. Three.</p>')
+ * if (result.success) result.data.chunks.map(chunk => chunk.content)
+ * else result.error.message
  * ```
  */
 export const datapipe: DatapipeFunctions = {

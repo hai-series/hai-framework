@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { scheduler } from '../src/index.js'
+import './helpers/sqlite-lifecycle.js'
 
 describe('scheduler JS hard timeout', () => {
   afterEach(async () => {
@@ -11,12 +12,13 @@ describe('scheduler JS hard timeout', () => {
     '(() => { while (true) {} })()',
     '() => new Promise(() => {})',
   ])('terminates stalled code without blocking the host: %s', async (code) => {
-    expect((await scheduler.init({ enableDb: false })).success).toBe(true)
+    expect((await scheduler.init({ enableDb: true })).success).toBe(true)
     expect((await scheduler.register({
       id: 'stalled',
       name: 'stalled',
       cron: '* * * * *',
       handler: { kind: 'js', code, timeout: 200 },
+      idempotent: true,
       retry: { maxAttempts: 2 },
     })).success).toBe(true)
     let heartbeat = false

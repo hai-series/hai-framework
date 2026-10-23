@@ -7,7 +7,18 @@
 
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 
-/** serv CORS 配置。 */
+/**
+ * serv CORS 配置。
+ *
+ * @example
+ * ```ts
+ * import type { ServCorsConfig } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const config: ServCorsConfig = { origin: 'https://app.example.com', credentials: true, exposedHeaders: ['X-Request-Id'] }
+ * const middleware = serv.cors(config)
+ * ```
+ */
 export interface ServCorsConfig {
   /** 允许的 origin：`'*'`、单个字符串、数组或自定义匹配函数。默认 `'*'`。 */
   readonly origin?: '*' | string | readonly string[] | ((origin: string) => boolean)
@@ -27,7 +38,17 @@ const DEFAULT_CORS_METHODS = ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', '
 const DEFAULT_CORS_ALLOWED_HEADERS = ['Authorization', 'Content-Type', 'X-Requested-With']
 const DEFAULT_CORS_MAX_AGE = 86_400
 
-/** 创建可复用的 CORS middleware。 */
+/**
+ * 创建可复用的 CORS middleware。
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ *
+ * const middleware = serv.cors({ origin: ['https://app.example.com'], credentials: true })
+ * // 生产策略由 createRuntimeSecurityPolicy 先收敛 Origin，避免误用通配符。
+ * ```
+ */
 export function cors(config: ServCorsConfig = {}): ServMiddleware {
   const methods = [...(config.methods ?? DEFAULT_CORS_METHODS)]
   const allowedHeaders = [...(config.allowedHeaders ?? DEFAULT_CORS_ALLOWED_HEADERS)]

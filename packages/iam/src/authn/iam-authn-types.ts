@@ -14,18 +14,26 @@ import type { RegisterOptions, User } from '../user/iam-user-types.js'
 
 /**
  * 用户凭证（用于密码登录）
+ * @example
+ * ```ts
+ * import type { PasswordCredentials } from '@h-ai/iam'
+ * const value: PasswordCredentials = { identifier: 'alice', password: 'ExampleOnly123!' }
+ * ```
  */
 export interface PasswordCredentials {
   /** 用户名/邮箱/手机号 */
   identifier: string
   /** 密码 */
   password: string
-  /** 记住我 */
-  rememberMe?: boolean
 }
 
 /**
  * OTP 凭证（用于验证码登录）
+ * @example
+ * ```ts
+ * import type { OtpCredentials } from '@h-ai/iam'
+ * const value: OtpCredentials = { identifier: 'alice@example.com', code: '123456' }
+ * ```
  */
 export interface OtpCredentials {
   /** 邮箱/手机号 */
@@ -36,6 +44,11 @@ export interface OtpCredentials {
 
 /**
  * LDAP 凭证
+ * @example
+ * ```ts
+ * import type { LdapCredentials } from '@h-ai/iam'
+ * const value: LdapCredentials = { username: 'alice', password: 'ExampleOnly123!' }
+ * ```
  */
 export interface LdapCredentials {
   /** 用户名 */
@@ -46,6 +59,17 @@ export interface LdapCredentials {
 
 /**
  * API Key 凭证（用于 API Key 认证）
+ * @example
+ * ```ts
+ * import { iam, type ApiKeyCredentials } from '@h-ai/iam'
+ * const created = await iam.apiKey.createApiKey('user-1', { name: 'report-reader', scopes: ['report:read'] })
+ * if (created.success) {
+ *   const credentials: ApiKeyCredentials = { key: created.data.rawKey }
+ *   const authenticated = await iam.auth.loginWithApiKey(credentials)
+ *   if (!authenticated.success)
+ *     authenticated.error.code
+ * }
+ * ```
  */
 export interface ApiKeyCredentials {
   /** 明文 API Key */
@@ -54,6 +78,11 @@ export interface ApiKeyCredentials {
 
 /**
  * 统一凭证类型
+ * @example
+ * ```ts
+ * import type { Credentials } from '@h-ai/iam'
+ * const value: Credentials = { type: 'otp', identifier: 'alice@example.com', code: '123456' }
+ * ```
  */
 export type Credentials
   = | { type: 'password' } & PasswordCredentials
@@ -61,12 +90,37 @@ export type Credentials
     | { type: 'ldap' } & LdapCredentials
     | { type: 'apikey' } & ApiKeyCredentials
 
+/**
+ * 策略内部可信认证快照；凭据代来自实际验证的用户行，不能用会话创建时的新快照替换。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function credentialSnapshot(user: AuthenticatedUser) {
+ *   return { userId: user.id, expectedCredentialVersion: user.credentialVersion }
+ * }
+ * ```
+ */
+export interface AuthenticatedUser extends User {
+  /** 密码最终提交时更换；仅在服务端策略和会话构造间传递。 */
+  credentialVersion: string
+}
+
 // ─── 认证策略接口 ───
 
 /**
  * 认证策略接口
  *
  * 所有认证方式（密码/OTP/LDAP）都实现此接口
+ * @example
+ * ```ts
+ * import type { AuthStrategy, Credentials } from '@h-ai/iam'
+ * async function authenticate(strategy: AuthStrategy, credentials: Credentials) {
+ *   const result = await strategy.authenticate(credentials)
+ *   if (!result.success)
+ *     return result
+ *   return { userId: result.data.id, credentialVersion: result.data.credentialVersion }
+ * }
+ * ```
  */
 export interface AuthStrategy {
   /** 策略类型 */
@@ -80,13 +134,26 @@ export interface AuthStrategy {
    * @param credentials - 统一凭证（包含 type 字段标识认证方式）
    * @returns 认证成功返回用户信息；失败返回对应错误码（INVALID_CREDENTIALS / USER_LOCKED 等）
    */
-  authenticate: (credentials: Credentials) => Promise<HaiResult<User>>
+  authenticate: (credentials: Credentials) => Promise<HaiResult<AuthenticatedUser>>
 }
 
 // ─── 认证操作接口 ───
 
 /**
  * 认证子功能接口
+ * @example
+ * ```ts
+ * import { iam, type AuthnOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
+ * const operations: AuthnOperations = iam.auth
+ * const result = await operations.verifyToken('token-from-authorization-header')
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface AuthnOperations {
   /**
@@ -129,10 +196,11 @@ export interface AuthnOperations {
   /**
    * 登出
    *
-   * 删除会话数据和用户令牌映射。令牌无效时静默成功。
+   * 按完整访问令牌原子删除会话及关联 refresh，access 已到期也撤销待刷新记录。
+   * 无效或不存在的令牌幂等成功；缓存读取/提交失败必须返回错误，不能宣称服务端已退出。
    *
    * @param accessToken - 访问令牌
-   * @returns 始终返回 ok
+   * @returns 撤销完成或令牌不存在返回 ok；共享存储失败返回错误，恢复后可用同一令牌重试
    */
   logout: (accessToken: string) => Promise<HaiResult<void>>
 

@@ -13,6 +13,16 @@ import type { DataAttributes, FormLayoutOptions, FormText, InputProps, Size } fr
 
 /**
  * 密码输入框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { PasswordInput } from '@h-ai/ui'
+ *   import type { PasswordInputProps } from '@h-ai/ui'
+ *   const props: PasswordInputProps = { value: '', autocomplete: 'new-password', showStrength: true, minLength: 12 }
+ * </script>
+ * <PasswordInput {...props} />
+ * ```
  */
 export interface PasswordInputProps extends DataAttributes {
   /** 元素 ID */
@@ -49,6 +59,12 @@ export interface PasswordInputProps extends DataAttributes {
 
 /**
  * 协议展示配置
+ *
+ * @example
+ * ```ts
+ * import type { AgreementDisplay } from '@h-ai/ui'
+ * const example: AgreementDisplay = { userAgreementUrl: '/terms', privacyPolicyUrl: '/privacy' }
+ * ```
  */
 export interface AgreementDisplay {
   /** 用户协议 Markdown 正文；配置时优先于 URL。 */
@@ -63,6 +79,12 @@ export interface AgreementDisplay {
 
 /**
  * 登录表单数据
+ *
+ * @example
+ * ```ts
+ * import type { LoginFormData } from '@h-ai/ui'
+ * const example: LoginFormData = { username: 'ada', password: 'Example-pass-42!', method: 'password' }
+ * ```
  */
 export interface LoginFormData {
   /** 当前登录方式；省略时使用密码。 */
@@ -71,11 +93,20 @@ export interface LoginFormData {
   code?: string
   username: string
   password: string
-  rememberMe: boolean
 }
 
 /**
  * 登录表单属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { LoginForm } from '@h-ai/ui'
+ *   import type { LoginFormProps } from '@h-ai/ui'
+ *   const props: LoginFormProps = { methods: ['password'] }
+ * </script>
+ * <LoginForm {...props} />
+ * ```
  */
 export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
   /** 实际可用的方式；空数组表示无可用登录方式。 */
@@ -92,8 +123,6 @@ export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
   disabled?: boolean
   /** 是否显示标题 */
   showTitle?: boolean
-  /** 是否显示记住我 */
-  showRememberMe?: boolean
   /** 是否显示忘记密码 */
   showForgotPassword?: boolean
   /** 忘记密码链接 */
@@ -124,11 +153,23 @@ export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
 
 /**
  * 注册表单字段
+ *
+ * @example
+ * ```ts
+ * import type { RegisterField } from '@h-ai/ui'
+ * const example: RegisterField = 'email'
+ * ```
  */
 export type RegisterField = 'username' | 'email' | 'phone' | 'password' | 'confirmPassword' | 'nickname'
 
 /**
  * 注册表单数据
+ *
+ * @example
+ * ```ts
+ * import type { RegisterFormData } from '@h-ai/ui'
+ * const example: RegisterFormData = { username: 'ada', email: 'ada@example.com', password: 'Example-pass-42!', confirmPassword: 'Example-pass-42!' }
+ * ```
  */
 export interface RegisterFormData {
   username?: string
@@ -141,6 +182,16 @@ export interface RegisterFormData {
 
 /**
  * 注册表单属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { RegisterForm } from '@h-ai/ui'
+ *   import type { RegisterFormProps } from '@h-ai/ui'
+ *   const props: RegisterFormProps = { fields: ['username', 'password'], requireConfirmPassword: true }
+ * </script>
+ * <RegisterForm {...props} />
+ * ```
  */
 export interface RegisterFormProps extends FormLayoutOptions, DataAttributes {
   passwordPolicy?: PasswordPolicy
@@ -182,6 +233,12 @@ export interface RegisterFormProps extends FormLayoutOptions, DataAttributes {
 
 /**
  * 修改密码表单数据
+ *
+ * @example
+ * ```ts
+ * import type { ChangePasswordFormData } from '@h-ai/ui'
+ * const example: ChangePasswordFormData = { oldPassword: 'Old-example-42!', newPassword: 'New-example-42!', confirmPassword: 'New-example-42!' }
+ * ```
  */
 export interface ChangePasswordFormData {
   oldPassword?: string
@@ -191,6 +248,16 @@ export interface ChangePasswordFormData {
 
 /**
  * 修改密码表单属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { ChangePasswordForm } from '@h-ai/ui'
+ *   import type { ChangePasswordFormProps } from '@h-ai/ui'
+ *   const props: ChangePasswordFormProps = { requireOldPassword: true, minPasswordLength: 12 }
+ * </script>
+ * <ChangePasswordForm {...props} />
+ * ```
  */
 export interface ChangePasswordFormProps extends FormLayoutOptions, DataAttributes {
   passwordPolicy?: PasswordPolicy
@@ -216,6 +283,12 @@ export interface ChangePasswordFormProps extends FormLayoutOptions, DataAttribut
 
 /**
  * 找回密码表单数据
+ *
+ * @example
+ * ```ts
+ * import type { ForgotPasswordFormData } from '@h-ai/ui'
+ * const example: ForgotPasswordFormData = { email: 'ada@example.com' }
+ * ```
  */
 export interface ForgotPasswordFormData {
   email?: string
@@ -224,6 +297,16 @@ export interface ForgotPasswordFormData {
 
 /**
  * 找回密码表单属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { ForgotPasswordForm } from '@h-ai/ui'
+ *   import type { ForgotPasswordFormProps } from '@h-ai/ui'
+ *   const props: ForgotPasswordFormProps = { mode: 'email' }
+ * </script>
+ * <ForgotPasswordForm {...props} />
+ * ```
  */
 export interface ForgotPasswordFormProps extends FormLayoutOptions, DataAttributes {
   /** 加载状态 */
@@ -256,6 +339,12 @@ export interface ForgotPasswordFormProps extends FormLayoutOptions, DataAttribut
 
 /**
  * 重置密码表单数据
+ *
+ * @example
+ * ```ts
+ * import type { ResetPasswordFormData } from '@h-ai/ui'
+ * const example: ResetPasswordFormData = { code: '123456', newPassword: 'New-example-42!', confirmPassword: 'New-example-42!' }
+ * ```
  */
 export interface ResetPasswordFormData {
   code?: string
@@ -265,6 +354,16 @@ export interface ResetPasswordFormData {
 
 /**
  * 重置密码表单属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { ResetPasswordForm } from '@h-ai/ui'
+ *   import type { ResetPasswordFormProps } from '@h-ai/ui'
+ *   const props: ResetPasswordFormProps = { showCode: true, minPasswordLength: 12 }
+ * </script>
+ * <ResetPasswordForm {...props} />
+ * ```
  */
 export interface ResetPasswordFormProps extends FormLayoutOptions, DataAttributes {
   passwordPolicy?: PasswordPolicy
@@ -296,9 +395,25 @@ export interface ResetPasswordFormProps extends FormLayoutOptions, DataAttribute
   onsubmit?: (data: ResetPasswordFormData) => void | Promise<void>
 }
 
-/** 认证页面直接消费 IAM 白名单配置，无需依赖服务端 IAM 包。 */
+/**
+ * 认证页面直接消费 IAM 白名单配置，无需依赖服务端 IAM 包。
+ *
+ * @example
+ * ```ts
+ * import type { AuthLoginMethod } from '@h-ai/ui'
+ * const example: AuthLoginMethod = 'password'
+ * ```
+ */
 export type AuthLoginMethod = 'password' | 'ldap' | 'email' | 'sms'
-/** 与 IAM 公开密码策略一致；前端提示不能代替服务端校验。 */
+/**
+ * 与 IAM 公开密码策略一致；前端提示不能代替服务端校验。
+ *
+ * @example
+ * ```ts
+ * import type { PasswordPolicy } from '@h-ai/ui'
+ * const example: PasswordPolicy = { minLength: 12, maxLength: 128, requireUppercase: true, requireLowercase: true, requireNumber: true, requireSpecialChar: true }
+ * ```
+ */
 export interface PasswordPolicy {
   minLength: number
   maxLength: number
@@ -307,7 +422,27 @@ export interface PasswordPolicy {
   requireNumber: boolean
   requireSpecialChar: boolean
 }
-/** 仅消费安全公开配置，不能将 iam.config 或连接密钥传入浏览器。 */
+/**
+ * 仅消费安全公开配置，不能将 iam.config 或连接密钥传入浏览器。
+ *
+ * @example
+ * ```ts
+ * import { apiClient } from '@h-ai/api-client'
+ * import type { AuthPanelConfig } from '@h-ai/ui'
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await apiClient.iam.auth.publicConfig()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   if (!result.data) throw new Error('Public auth configuration unavailable')
+ *   const actions = apiClient.createAuthActions(apiClient)
+ *   const example: AuthPanelConfig = result.data
+ * }
+ * finally {
+ *   await apiClient.close()
+ * }
+ * ```
+ */
 export interface AuthPanelConfig {
   /** 只有已启用且具备运行时依赖的方式才应为 true。 */
   login: { password: boolean, ldap: boolean, email: boolean, sms: boolean }
@@ -320,7 +455,27 @@ export interface AuthPanelConfig {
   agreements: AgreementDisplay & { showOnLogin: boolean, showOnRegister: boolean }
   ui: { variant: 'card' | 'split', title?: string, subtitle?: string, brandTitle?: string, brandText?: string, logoUrl?: string, illustrationUrl?: string }
 }
-/** 认证动作可由框架工厂直接创建，也可包装以处理应用自己的扩展数据。 */
+/**
+ * 认证动作可由框架工厂直接创建，也可包装以处理应用自己的扩展数据。
+ *
+ * @example
+ * ```ts
+ * import { apiClient } from '@h-ai/api-client'
+ * import type { AuthPanelActions } from '@h-ai/ui'
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await apiClient.iam.auth.publicConfig()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   if (!result.data) throw new Error('Public auth configuration unavailable')
+ *   const actions = apiClient.createAuthActions(apiClient)
+ *   const example: AuthPanelActions = actions
+ * }
+ * finally {
+ *   await apiClient.close()
+ * }
+ * ```
+ */
 export interface AuthPanelActions {
   /** password/ldap 使用 password，email/sms 使用 code；成功后由工厂保存凭证。 */
   login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string }) => Promise<HaiResult<unknown>>
@@ -331,10 +486,38 @@ export interface AuthPanelActions {
   confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<unknown>>
 }
 
-/** AuthPanel 的初始页面；未传独立路由时由组件内部导航。 */
+/**
+ * AuthPanel 的初始页面；未传独立路由时由组件内部导航。
+ *
+ * @example
+ * ```ts
+ * import type { AuthPanelMode } from '@h-ai/ui'
+ * const example: AuthPanelMode = 'login'
+ * ```
+ */
 export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset'
 
-/** 配置驱动认证场景；网络、通知和令牌存储由应用注入 actions。 */
+/**
+ * 配置驱动认证场景；网络、通知和令牌存储由应用注入 actions。
+ *
+ * @example
+ * ```ts
+ * import { apiClient } from '@h-ai/api-client'
+ * import type { AuthPanelProps } from '@h-ai/ui'
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await apiClient.iam.auth.publicConfig()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   if (!result.data) throw new Error('Public auth configuration unavailable')
+ *   const actions = apiClient.createAuthActions(apiClient)
+ *   const example: AuthPanelProps = { config: result.data, actions, initialMode: 'login' }
+ * }
+ * finally {
+ *   await apiClient.close()
+ * }
+ * ```
+ */
 export interface AuthPanelProps extends FormLayoutOptions, DataAttributes {
   /** 未取得配置时显示加载状态，只消费 IAM 的公开配置。 */
   config: AuthPanelConfig | null
@@ -363,11 +546,23 @@ export interface AuthPanelProps extends FormLayoutOptions, DataAttributes {
 
 /**
  * 用户个人信息字段
+ *
+ * @example
+ * ```ts
+ * import type { UserProfileField } from '@h-ai/ui'
+ * const example: UserProfileField = 'email'
+ * ```
  */
 export type UserProfileField = 'avatar' | 'username' | 'email' | 'displayName' | 'nickname' | 'phone' | 'bio'
 
 /**
  * 用户信息
+ *
+ * @example
+ * ```ts
+ * import type { UserProfileData } from '@h-ai/ui'
+ * const example: UserProfileData = { id: 'u1', username: 'ada', email: 'ada@example.com' }
+ * ```
  */
 export interface UserProfileData {
   id?: string
@@ -381,6 +576,15 @@ export interface UserProfileData {
   bio?: string
 }
 
+/**
+ * 个人资料表单的标准提交值；验证和保存由宿主负责。
+ *
+ * @example
+ * ```ts
+ * import type { UserProfileSubmitData } from '@h-ai/ui'
+ * const example: UserProfileSubmitData = { username: 'ada', email: 'ada@example.com', displayName: 'Ada', phone: '', bio: 'Developer' }
+ * ```
+ */
 export interface UserProfileSubmitData {
   username: string
   email: string
@@ -391,6 +595,16 @@ export interface UserProfileSubmitData {
 
 /**
  * 用户个人信息属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { UserProfile } from '@h-ai/ui'
+ *   import type { UserProfileProps } from '@h-ai/ui'
+ *   const props: UserProfileProps = { user: { id: 'u1', username: 'ada', email: 'ada@example.com' }, fields: ['username', 'email'], editable: true }
+ * </script>
+ * <UserProfile {...props} />
+ * ```
  */
 export interface UserProfileProps extends FormLayoutOptions, DataAttributes {
   /** 用户信息 */
@@ -424,11 +638,23 @@ export interface UserProfileProps extends FormLayoutOptions, DataAttributes {
 
 /**
  * 上传状态
+ *
+ * @example
+ * ```ts
+ * import type { UploadState } from '@h-ai/ui'
+ * const example: UploadState = 'uploading'
+ * ```
  */
 export type UploadState = 'pending' | 'uploading' | 'success' | 'error'
 
 /**
  * 上传文件信息
+ *
+ * @example
+ * ```ts
+ * import type { UploadFile } from '@h-ai/ui'
+ * const example: UploadFile = { id: 'upload-1', file: new File(['report'], 'report.txt', { type: 'text/plain' }), name: 'report.txt', size: 6, type: 'text/plain', state: 'pending', progress: 0 }
+ * ```
  */
 export interface UploadFile {
   /** 唯一 ID */
@@ -451,7 +677,15 @@ export interface UploadFile {
   response?: unknown
 }
 
-/** 上传处理器上下文 */
+/**
+ * 上传处理器上下文
+ *
+ * @example
+ * ```ts
+ * import type { UploadHandlerContext } from '@h-ai/ui'
+ * const example: UploadHandlerContext = { signal: new AbortController().signal, onProgress: progress => document.body.setAttribute('data-upload-progress', String(progress)) }
+ * ```
+ */
 export interface UploadHandlerContext {
   /** 组件销毁、文件移除或重试时触发的取消信号 */
   signal: AbortSignal
@@ -459,7 +693,15 @@ export interface UploadHandlerContext {
   onProgress: (progress: number) => void
 }
 
-/** 上传处理结果 */
+/**
+ * 上传处理结果
+ *
+ * @example
+ * ```ts
+ * import type { UploadHandlerResult } from '@h-ai/ui'
+ * const example: UploadHandlerResult = { url: '/files/report.pdf', response: { key: 'reports/report.pdf' } }
+ * ```
+ */
 export interface UploadHandlerResult {
   /** 可展示的最终文件 URL（图片/头像上传必须返回） */
   url?: string
@@ -471,11 +713,34 @@ export interface UploadHandlerResult {
  * 应用层上传处理器。
  *
  * UI 组件只管理选择、校验、进度和预览；签名 URL、认证头与上传协议由应用服务层实现。
+ *
+ * @example
+ * ```ts
+ * import type { UploadHandler } from '@h-ai/ui'
+ * const upload: UploadHandler = async (file, { signal, onProgress }) => {
+ *   const response = await fetch('/api/uploads', { method: 'POST', body: file, signal })
+ *   if (!response.ok) throw new Error('Upload failed')
+ *   const result: unknown = await response.json()
+ *   if (!result || typeof result !== 'object' || !('url' in result) || typeof result.url !== 'string') throw new Error('Upload response invalid')
+ *   onProgress(100)
+ *   return { url: result.url }
+ * }
+ * ```
  */
 export type UploadHandler = (file: File, context: UploadHandlerContext) => Promise<UploadHandlerResult>
 
 /**
  * 文件上传属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { FileUpload } from '@h-ai/ui'
+ *   import type { FileUploadProps } from '@h-ai/ui'
+ *   const props: FileUploadProps = { accept: '.pdf', maxFiles: 3, autoUpload: false }
+ * </script>
+ * <FileUpload {...props} />
+ * ```
  */
 export interface FileUploadProps extends DataAttributes {
   /** 接受的文件类型 */
@@ -510,6 +775,12 @@ export interface FileUploadProps extends DataAttributes {
 
 /**
  * 文件项
+ *
+ * @example
+ * ```ts
+ * import type { FileItem } from '@h-ai/ui'
+ * const example: FileItem = { id: 'file-1', name: 'report.pdf', size: 1024, type: 'application/pdf', url: '/files/report.pdf' }
+ * ```
  */
 export interface FileItem {
   /** 唯一 ID */
@@ -530,6 +801,16 @@ export interface FileItem {
 
 /**
  * 文件列表属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { FileList } from '@h-ai/ui'
+ *   import type { FileListProps } from '@h-ai/ui'
+ *   const props: FileListProps = { files: [{ id: 'f1', name: 'report.pdf', size: 1024, type: 'application/pdf' }], showSize: true }
+ * </script>
+ * <FileList {...props} />
+ * ```
  */
 export interface FileListProps extends DataAttributes {
   /** 文件列表 */
@@ -560,6 +841,16 @@ export interface FileListProps extends DataAttributes {
 
 /**
  * 图片上传属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { ImageUpload } from '@h-ai/ui'
+ *   import type { ImageUploadProps } from '@h-ai/ui'
+ *   const props: ImageUploadProps = { accept: 'image/png,image/jpeg', maxSize: 5 * 1024 * 1024 }
+ * </script>
+ * <ImageUpload {...props} />
+ * ```
  */
 export interface ImageUploadProps extends DataAttributes {
   /** 图片 URL */
@@ -590,6 +881,16 @@ export interface ImageUploadProps extends DataAttributes {
 
 /**
  * 头像上传属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { AvatarUpload } from '@h-ai/ui'
+ *   import type { AvatarUploadProps } from '@h-ai/ui'
+ *   const props: AvatarUploadProps = { fallback: 'A', size: 'lg' }
+ * </script>
+ * <AvatarUpload {...props} />
+ * ```
  */
 export interface AvatarUploadProps extends DataAttributes {
   /** 头像 URL */
@@ -618,6 +919,16 @@ export interface AvatarUploadProps extends DataAttributes {
 
 /**
  * 加密输入框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { EncryptedInput } from '@h-ai/ui'
+ *   import type { EncryptedInputProps } from '@h-ai/ui'
+ *   const props: EncryptedInputProps = { value: '', algorithm: 'SM2', showEncrypted: false }
+ * </script>
+ * <EncryptedInput {...props} />
+ * ```
  */
 export interface EncryptedInputProps extends DataAttributes {
   /** 原始值 */
@@ -648,6 +959,16 @@ export interface EncryptedInputProps extends DataAttributes {
 
 /**
  * 哈希展示属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { HashDisplay } from '@h-ai/ui'
+ *   import type { HashDisplayProps } from '@h-ai/ui'
+ *   const props: HashDisplayProps = { value: 'example-digest', algorithm: 'SM3', copyable: true }
+ * </script>
+ * <HashDisplay {...props} />
+ * ```
  */
 export interface HashDisplayProps extends DataAttributes {
   /** 哈希值 */
@@ -674,6 +995,16 @@ export interface HashDisplayProps extends DataAttributes {
 
 /**
  * Markdown 渲染器属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { MarkdownRenderer } from '@h-ai/ui'
+ *   import type { MarkdownRendererProps } from '@h-ai/ui'
+ *   const props: MarkdownRendererProps = { content: '# 标题\n正文', allowHtmlTags: false }
+ * </script>
+ * <MarkdownRenderer {...props} />
+ * ```
  */
 export interface MarkdownRendererProps extends DataAttributes {
   /** Markdown 源文本 */
@@ -693,6 +1024,16 @@ export interface MarkdownRendererProps extends DataAttributes {
 }
 /**
  * 签名展示属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { SignatureDisplay } from '@h-ai/ui'
+ *   import type { SignatureDisplayProps } from '@h-ai/ui'
+ *   const props: SignatureDisplayProps = { signature: 'example-signature', verified: false, showPublicKey: false }
+ * </script>
+ * <SignatureDisplay {...props} />
+ * ```
  */
 export interface SignatureDisplayProps extends DataAttributes {
   /** 签名值 */

@@ -51,7 +51,7 @@ const config = {
   kit: {
     adapter: adapter(),
     // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: createAdapter(),
+    // adapter: await createAdapter(),
   },
 }
 
@@ -80,23 +80,27 @@ When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application productio
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
+import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
-      return token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
     },
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100 },
+  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
   logging: true,
 })
 
 export const handle: Handle = haiHandle
 ```
+
+Rate limits use fixed windows beginning at the first successful commit; later requests preserve the TTL. A store is required. Initialize shared Redis and check its result before serving; all nodes use the same namespace/windowMs/maxRequests. Cache read/commit failure or exhausted contention returns 503, while exceeding the limit returns 429, without get+set or local fallback. createMemoryRateLimitStore is for development or explicit HAI_E2E/HAI_E2E_MOCK tests; it has no timer and can be garbage collected when released; each request scans at most 64 entries, capacity is 10000 windows, new keys receive 503 at capacity without evicting active counts, and external stores remain owned by their creators. Never enable test flags in production. Reset headers estimate node time; Redis TTL controls the actual window, so synchronize clocks. The default key uses the trusted adapter getClientAddress, normalizes equivalent IPv6/mapped IPv4 addresses and ignores raw forwarded headers; configure proxy trust in the deployment adapter.
 
 #### API endpoints
 
@@ -141,16 +145,20 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 #### Same-origin transport encryption
 
-kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer()`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Applications only configure the top-level `crypto` handle.
+kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer({ serverKeyRing, keyStore })`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Servers must also inject a managed key ring and shared registry.
 
 **src/hooks.server.ts**：
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
@@ -162,7 +170,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: {
-      requireEncryption: true,
+      serverKeyRing,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -197,11 +205,15 @@ export const { apiFetch } = kit.client.create()
 
 The default key exchange path is `/api/_hai/key-exchange`. If the server customizes `transport.keyExchangePath`, update the client's `transport.keyExchangeUrl` accordingly.
 
-For shared client public keys across nodes, inject `createRedisTransportKeyStore()` or `createReldbTransportKeyStore()` through `kit.createHandle({ crypto: { transport: { keyStore } } })` at runtime. These object dependencies **must not** go in `_kit.yml`; configuration files contain only public paths and switches.
+Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
 
 Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__data.json` page data, and key exchange itself. Page documents and static assets remain plaintext and do not require `X-Client-Id`. `multipart/form-data` requests such as uploads are sent unchanged; explicitly allow their paths through server `excludePaths`.
 
-Security defaults to fail-closed: with `requireEncryption: true`, protected paths without `X-Client-Id` return 400. An unavailable transport manager, unencryptable response, or encryption size limit returns an error rather than forwarding plaintext business data. `requireEncryption: false` is for staged migration only and is not recommended in production.
+Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
+
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+
+Fixed budgets share `@h-ai/crypto`'s `TRANSPORT_BODY_LIMITS` with serv and the client: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 32 KiB encrypted JSON, counting actual UTF-8 bytes. Incremental reads consume the original stream; exceeding limits or cancellation stops/cancels it and releases its reader without cloning and fully buffering it. Oversized requests return 413, oversized responses return 500, and invalid public keys return 400. Rebuilt requests preserve signals; rebuilt requests/responses remove stale Content-Length/Content-Encoding. These budgets are not `_kit.yml` or environment settings.
 
 #### Shared transport configuration with `_kit.yml`
 
@@ -215,13 +227,10 @@ server:
 
 transport:
   keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
   excludePaths:
     - /api/storage
     - /api/public
     - /api/auth/profile/avatar
-  maxClients: 10000
 ```
 
 ```ts
@@ -255,14 +264,17 @@ With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HA
 
 ### Export paths
 
+Use runtime methods through the `kit` namespace or explicit subpaths; types are exported separately. Browser declarations do not expose server factories. Vite configuration uses `@sveltejs/kit/vite`; there is no `@h-ai/kit/vite` plugin.
+
 - `@h-ai/kit`: main entry, with the `kit` namespace and types.
 - `@h-ai/kit/client`: browser client.
 - `@h-ai/kit/adapter`: dual build adapter (`createAdapter()`).
-- `@h-ai/kit/vite`: Vite plugin.
 - `@h-ai/kit/a2a`: A2A integration.
 - `@h-ai/kit/crypto`: crypto integration.
 
 ### Configuration driven authentication
+
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -288,11 +300,23 @@ Declarative CRUD fields support `colSpan: 'auto' | 1 | 2` for UI form widths. `v
 
 > Shared cross-platform HTTP contracts belong in `@h-ai/api-contract`, are mounted by `@h-ai/serv`, and are called through the `@h-ai/api-client` typed client. `@h-ai/kit` does not define or host business API contracts.
 
+### Request locale isolation
+
+Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleRequest())`. SvelteKit can use `kit.i18n.runWithLocale(locale, () => resolve(event))`; serv creates the scope automatically from request headers. Async descendants inherit it. Explicit `MessageOptions.locale` takes precedence over the request locale and the startup default. Within a scope, `setGlobalLocale` only changes that request; outside a scope it configures the startup default and must not be called by request hooks.
+
+Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
+
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/kit test
 ```
+
+Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
+
+Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.
+
+`kit.auth.logout(cookies, accessToken)` returns `Promise<HaiResult<void>>`. Without a token it only clears cookies and succeeds; with a token but no configured auth operations it fails. Local cookies are cleared for every server outcome. Callers must preserve failed results in their HTTP response or UI; local clearing does not confirm server revocation. Underlying control-flow exceptions still propagate.
 
 ## License
 

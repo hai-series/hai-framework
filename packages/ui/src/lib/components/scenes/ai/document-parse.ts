@@ -1,7 +1,7 @@
 /**
- * @h-ai/ui — Markdown document parsing helpers
+ * @h-ai/ui — Markdown 文档解析工具
  *
- * Extracts HTML, outline, and code block metadata for document-mode rendering.
+ * 为文档模式提取安全 HTML、目录和代码块元信息。
  */
 
 import type { RendererObject, Token, Tokens } from 'marked'
@@ -21,40 +21,78 @@ import {
   sanitizeMarkdownHtml,
 } from './safe-html.js'
 
+/**
+ * 安全 Markdown 文档解析选项；运行按钮不等于允许执行代码。
+ *
+ * @example
+ * ```ts
+ * import type { MarkdownDocumentParseOptions } from '@h-ai/ui'
+ * const example: MarkdownDocumentParseOptions = { enableHighlight: true, allowHtmlTags: false, showRunButton: false, breaks: true }
+ * ```
+ */
 export interface MarkdownDocumentParseOptions {
-  /** Whether to enable syntax highlighting for code blocks. */
+  /** 是否启用代码块语法高亮。 */
   enableHighlight?: boolean
-  /** Whether to render the copy button in code blocks. */
+  /** 是否渲染代码块复制按钮。 */
   showCopyButton?: boolean
-  /** Whether to render the run button and preview slot. */
+  /** 是否渲染运行按钮和预览槽；实际运行由宿主授权。 */
   showRunButton?: boolean
-  /** Whether to render code/preview tabs in code-block headers. */
+  /** 是否渲染代码块头部的代码/预览切换。 */
   showCodePreviewToggle?: boolean
-  /** Label used for the "code" tab when preview toggle is enabled. */
+  /** 启用预览切换时的代码页签文案。 */
   codeViewCodeLabel?: string
-  /** Label used for the "preview" tab when preview toggle is enabled. */
+  /** 启用预览切换时的预览页签文案。 */
   codeViewPreviewLabel?: string
-  /** Optional helper text displayed beside language in code headers. */
+  /** 代码块头部语言标签旁的提示文案。 */
   codePreviewHint?: string
-  /** Whether soft line breaks are converted to <br>. */
+  /** 是否将普通换行转换成 br。 */
   breaks?: boolean
-  /** Whether raw HTML tags are parsed through a safe allowlist. */
+  /** 是否按安全白名单解析原始 HTML 标签。 */
   allowHtmlTags?: boolean
 }
 
+/**
+ * 一次文档解析生成的安全渲染块、目录和原始代码块信息。
+ *
+ * @example
+ * ```ts
+ * import { renderMarkdownDocument } from '@h-ai/ui'
+ * import type { MarkdownRenderResult } from '@h-ai/ui'
+ * const result: MarkdownRenderResult = renderMarkdownDocument('# 简介\n正文')
+ * const headings = result.outline
+ * ```
+ */
 export interface MarkdownRenderResult {
-  /** Extracted outline items for navigation. */
+  /** 供目录导航使用的标题条目。 */
   outline: MarkdownOutlineItem[]
-  /** Extracted code blocks for run/copy features. */
+  /** 供运行/复制功能使用的代码块元信息。 */
   codeBlocks: MarkdownCodeBlockItem[]
   /** 阅读态使用的稳定块列表，避免流式更新销毁重型块 DOM。 */
   blocks: MarkdownDocumentBlock[]
 }
 
+/**
+ * 文档渲染块的可辨识联合；HTML 块和 Mermaid 源码块分开更新。
+ *
+ * @example
+ * ```ts
+ * import type { MarkdownDocumentBlock } from '@h-ai/ui'
+ * const example: MarkdownDocumentBlock = { kind: 'html', id: 'paragraph-1', html: '<p>正文</p>' }
+ * ```
+ */
 export type MarkdownDocumentBlock
   = | MarkdownDocumentHtmlBlock
     | MarkdownDocumentMermaidBlock
 
+/**
+ * 已经过安全策略处理的 Markdown HTML 块；不要填入未消毒输入。
+ *
+ * @example
+ * ```ts
+ * import type { MarkdownDocumentHtmlBlock } from '@h-ai/ui'
+ * const example: MarkdownDocumentHtmlBlock = { kind: 'html', id: 'paragraph-1', html: '<p>正文</p>' }
+ * ```
+ */
 export interface MarkdownDocumentHtmlBlock {
   /** 普通 Markdown HTML 块。 */
   kind: 'html'
@@ -64,6 +102,15 @@ export interface MarkdownDocumentHtmlBlock {
   html: string
 }
 
+/**
+ * 完整 Mermaid 块的源码与签名，等待异步严格模式渲染。
+ *
+ * @example
+ * ```ts
+ * import type { MarkdownDocumentMermaidBlock } from '@h-ai/ui'
+ * const example: MarkdownDocumentMermaidBlock = { kind: 'mermaid', id: 'diagram-1', codeBlockId: 'code-1', code: 'graph TD; A-->B', language: 'mermaid', signature: JSON.stringify(['diagram-1', 'graph TD; A-->B']) }
+ * ```
+ */
 export interface MarkdownDocumentMermaidBlock {
   /** 已闭合 Mermaid fence 块。 */
   kind: 'mermaid'
@@ -79,15 +126,31 @@ export interface MarkdownDocumentMermaidBlock {
   signature: string
 }
 
+/**
+ * 一次文档解析的临时累计状态；标题计数用于稳定去重。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: MarkdownRenderState = { outline: [], codeBlocks: [], headingIds: new Map([['intro', 1]]) }
+ * ```
+ */
 interface MarkdownRenderState {
-  /** Raw outline data before numbering is applied. */
+  /** 添加目录编号前的标题数据。 */
   outline: Array<Omit<MarkdownOutlineItem, 'numberedTitle'>>
-  /** Code blocks collected during rendering. */
+  /** 渲染过程收集的代码块。 */
   codeBlocks: MarkdownCodeBlockItem[]
-  /** Heading id counter map for stable de-duplication. */
+  /** 标题 ID 计数表，用于稳定去重。 */
   headingIds: Map<string, number>
 }
 
+/**
+ * 单个已消毒 HTML 块和其中可复制的代码元信息。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: MarkdownHtmlChunkRenderResult = { html: '<p>正文</p>', codeBlocks: [] }
+ * ```
+ */
 interface MarkdownHtmlChunkRenderResult {
   /** 已按现有安全策略渲染后的 HTML。 */
   html: string
@@ -95,7 +158,7 @@ interface MarkdownHtmlChunkRenderResult {
   codeBlocks: MarkdownCodeBlockItem[]
 }
 
-/** Default parsing options for document mode. */
+/** 文档模式的默认解析选项。 */
 const DEFAULT_OPTIONS: Required<MarkdownDocumentParseOptions> = {
   enableHighlight: true,
   showCopyButton: true,
@@ -163,7 +226,7 @@ function isClosedFencedCodeBlock(token: Tokens.Code): boolean {
 }
 
 /**
- * Create a URL-safe heading slug while keeping letters and digits.
+ * 生成保留字母和数字的 URL 安全标题 slug。
  */
 function slugifyHeading(text: string): string {
   // normalized slug used as the base key for headings.
@@ -179,7 +242,7 @@ function slugifyHeading(text: string): string {
 }
 
 /**
- * Generate a stable heading id, de-duplicating repeated titles.
+ * 为标题生成稳定 ID，并对重复标题去重。
  */
 function createHeadingId(state: MarkdownRenderState, text: string): string {
   // base slug before de-duplication.
@@ -191,7 +254,7 @@ function createHeadingId(state: MarkdownRenderState, text: string): string {
 }
 
 /**
- * Add numeric prefixes (1, 1.1, 1.1.1) to outline items.
+ * 为目录条目添加 1、1.1 等层级编号。
  */
 function createNumberedOutline(
   outline: Array<Omit<MarkdownOutlineItem, 'numberedTitle'>>,
@@ -221,7 +284,7 @@ function createNumberedOutline(
 }
 
 /**
- * Build the marked renderer with outline extraction and code metadata.
+ * 构建同时提取目录与代码元信息的 Marked renderer。
  */
 function createRendererObject(
   options: Required<MarkdownDocumentParseOptions>,
@@ -400,7 +463,7 @@ function createRendererObject(
 }
 
 /**
- * Create a marked instance tied to a specific render state.
+ * 创建绑定本次临时解析状态的 Marked 实例。
  */
 function createMarkedInstance(
   options: Required<MarkdownDocumentParseOptions>,
@@ -534,7 +597,17 @@ function renderMarkdownDocumentBlocks(
 }
 
 /**
- * Render markdown into HTML and extract outline + code block metadata.
+ * 安全渲染 Markdown，同时提取目录和代码块元信息。
+ * @param content - Markdown 或文档正文。
+ * @param options - 本次操作的行为与显示选项。
+ * @returns 已消毒渲染块、目录和代码元信息。
+ *
+ * @example
+ * ```ts
+ * import { renderMarkdownDocument } from '@h-ai/ui'
+ * const result = renderMarkdownDocument('# 简介\n正文', { allowHtmlTags: false, enableHighlight: true })
+ * const firstHeading = result.outline[0]?.text
+ * ```
  */
 export function renderMarkdownDocument(
   content: string,

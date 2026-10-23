@@ -76,6 +76,18 @@ afterEach(() => {
 })
 
 describe('deployCommand', () => {
+  it.each(['en-US', 'zh-CN'])('未知或已结束的远端状态与本地终止结论分别展示 (%s)', async (locale) => {
+    core.i18n.setGlobalLocale(locale)
+    for (const remoteExecution of ['unknown', 'finished']) {
+      mocks.deployApp.mockResolvedValue({ success: false, error: { message: 'command interrupted', ext: { commandExecution: { reason: 'timeout', localTermination: 'confirmed', remoteExecution, deploymentId: 'deployment-1', resultFile: '/srv/app/result-deployment-1.json' } } } })
+      await expect(deployCommand({ env: 'prod', yes: true, appDir: createDeployApp(), cwd: tmpRoot, verbose: false })).rejects.toThrow('command interrupted')
+    }
+    const text = mocks.writeMessage.mock.calls.map(([message]) => String(message)).join('\n')
+    expect(text).toContain('/srv/app/result-deployment-1.json')
+    expect(text).toContain(locale === 'en-US' ? 'Local command tree: confirmed exited' : '本地命令进程树：已确认全部退出')
+    expect(text).toContain(locale === 'en-US' ? 'Remote deployment execution: unknown' : '远端部署执行状态：未知')
+    expect(text).toContain(locale === 'en-US' ? 'script and recovery finished' : '脚本与恢复已结束')
+  })
   it.each([
     ['en-US', 'Deploy failed: network unavailable'],
     ['zh-CN', '部署失败：network unavailable'],

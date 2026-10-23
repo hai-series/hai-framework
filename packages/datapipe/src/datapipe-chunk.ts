@@ -1,367 +1,189 @@
 /**
- * @h-ai/datapipe — 文本分块功能
- *
- * 提供多种分块模式：句子、段落、Markdown 标题、分页、字数、字符、自定义分隔符。
- * 支持重叠分块以保持上下文衔接。
+ * @h-ai/datapipe — 保留源文本的有界分块。
+ * word 按非空白词计数，其他模式按 Unicode code point 计数，均先计入 overlap。
  * @module datapipe-chunk
  */
-
 import type { HaiResult } from '@h-ai/core'
 import type { ChunkMode, ChunkOptionsInput } from './datapipe-config.js'
 import type { DataChunk } from './datapipe-types.js'
-
 import { err, ok } from '@h-ai/core'
-
 import { ChunkOptionsSchema } from './datapipe-config.js'
 import { datapipeM } from './datapipe-i18n.js'
 import { HaiDatapipeError } from './datapipe-types.js'
 
-const SENTENCE_SPLIT_REGEX = /(?<=[。！？.!?])\s*/
-const PARAGRAPH_SPLIT_REGEX = /\n\s*\n/
-const PAGE_SPLIT_REGEX = /\f/
-const WORD_SPLIT_REGEX = /\s+/
-
-// ─── 分割函数 ───
-
 /**
- * 按句子分割文本
- *
- * 支持中英文句号、问号、感叹号作为分隔符。
+ * Markdown 源区间；标题移除仅影响显式 keepTitle=false 的内容起点。
+ * @example 模块内部上下文
+ * ```ts
+ * const section: MarkdownSection = { start: 0, bodyStart: 8, end: 12, title: 'Title', level: 1 }
+ * const bodyLength = section.end - section.bodyStart
+ * ```
  */
-function splitBySentence(text: string): string[] {
-  // 匹配中文和英文的句末标点
-  const segments = text.split(SENTENCE_SPLIT_REGEX)
-  return segments.filter(s => s.trim().length > 0)
+interface MarkdownSection {
+  start: number
+  bodyStart: number
+  end: number
+  title: string
+  level: number
+}
+
+/** 找出自然边界对应的 code point 下标；保留分隔符，不通过 split/join 改写正文。 */
+function findBoundaries(text: string, expression?: RegExp): number[] {
+  if (!expression)
+    return []
+  const boundaries: number[] = []
+  let previousOffset = 0
+  let points = 0
+  for (const match of text.matchAll(expression)) {
+    const offset = match.index + match[0].length
+    if (offset <= previousOffset)
+      continue
+    points += Array.from(text.slice(previousOffset, offset)).length
+    boundaries.push(points)
+    previousOffset = offset
+  }
+  return boundaries
+}
+
+/** 取不超过预算的最后自然边界；边界至少越过 overlap，保证下轮起点严格前进。 */
+function boundedEnd(boundaries: number[], start: number, limit: number, overlap: number): number {
+  let lower = 0
+  let upper = boundaries.length
+  while (lower < upper) {
+    const middle = Math.floor((lower + upper) / 2)
+    if (boundaries[middle]! <= limit)
+      lower = middle + 1
+    else
+      upper = middle
+  }
+  const candidate = boundaries[lower - 1]
+  return candidate !== undefined && candidate > start + overlap ? candidate : limit
 }
 
 /**
- * 按段落分割文本
- *
- * 以双换行符作为段落分隔符。
+ * 所有字符模式共用滑窗；原文切片已包含空白、标点和分隔符，不追加隐式换行。
+ * @example splitCharacters('甲😀乙丙丁', 3, 1) // ['甲😀乙', '乙丙丁']
  */
-function splitByParagraph(text: string): string[] {
-  const segments = text.split(PARAGRAPH_SPLIT_REGEX)
-  return segments.filter(s => s.trim().length > 0)
-}
-
-/**
- * 按 Markdown 标题分割文本
- *
- * 根据最低标题级别（默认 ##），按标题分割为独立的内容块。
- * 每个分块包含标题和其下属内容。
- *
- * @param text - Markdown 文本
- * @param minLevel - 最低标题级别（1-6）
- * @param keepTitle - 是否在分块中保留标题
- * @returns 分块列表（包含元数据：title, level）
- */
-function splitByMarkdown(text: string, minLevel: number, keepTitle: boolean): { content: string, title: string, level: number }[] {
-  // 构造匹配 minLevel 及以上级别标题的正则
-  const headerPattern = new RegExp(`^(#{1,${minLevel}})\\s+(.+)$`, 'gm')
-
-  const sections: { content: string, title: string, level: number }[] = []
-  let lastIndex = 0
-  let lastTitle = ''
-  let lastLevel = 0
-  let match: RegExpExecArray | null = null
-
-  // 处理标题前的前置内容
-  match = headerPattern.exec(text)
-  if (match && match.index > 0) {
-    const preContent = text.slice(0, match.index).trim()
-    if (preContent.length > 0) {
-      sections.push({ content: preContent, title: '', level: 0 })
-    }
-  }
-
-  // 重置正则
-  headerPattern.lastIndex = 0
-
-  // eslint-disable-next-line no-cond-assign
-  while ((match = headerPattern.exec(text)) !== null) {
-    // 保存上一个分块
-    if (lastIndex > 0 || lastTitle) {
-      const content = text.slice(lastIndex, match.index).trim()
-      if (content.length > 0 || lastTitle) {
-        const finalContent = keepTitle && lastTitle
-          ? `${'#'.repeat(lastLevel)} ${lastTitle}\n${content}`
-          : content
-        sections.push({
-          content: finalContent.trim(),
-          title: lastTitle,
-          level: lastLevel,
-        })
-      }
-    }
-
-    lastTitle = match[2].trim()
-    lastLevel = match[1].length
-    lastIndex = match.index + match[0].length
-  }
-
-  // 处理最后一个分块
-  if (lastTitle || lastIndex > 0) {
-    const content = text.slice(lastIndex).trim()
-    const finalContent = keepTitle && lastTitle
-      ? `${'#'.repeat(lastLevel)} ${lastTitle}\n${content}`
-      : content
-    sections.push({
-      content: finalContent.trim(),
-      title: lastTitle,
-      level: lastLevel,
-    })
-  }
-
-  // 如果没有匹配到任何标题，返回整个文本
-  if (sections.length === 0) {
-    sections.push({ content: text.trim(), title: '', level: 0 })
-  }
-
-  return sections.filter(s => s.content.length > 0)
-}
-
-/**
- * 按分页符分割文本
- */
-function splitByPage(text: string): string[] {
-  const segments = text.split(PAGE_SPLIT_REGEX)
-  return segments.filter(s => s.trim().length > 0)
-}
-
-/**
- * 按空格分词分割文本
- *
- * 以空白字符为分隔符进行分词，每个分块包含不超过 maxSize 个词。
- * 注意：中文等无空格语言的连续文本会被视为单个词。
- */
-function splitByWord(text: string, maxSize: number): string[] {
-  const words = text.split(WORD_SPLIT_REGEX)
+function splitCharacters(text: string, maxSize: number, overlap: number, expression?: RegExp): string[] {
+  const points = Array.from(text)
+  const boundaries = findBoundaries(text, expression)
   const chunks: string[] = []
-  let current: string[] = []
-  let currentSize = 0
-
-  for (const word of words) {
-    if (currentSize + 1 > maxSize && current.length > 0) {
-      chunks.push(current.join(' '))
-      current = []
-      currentSize = 0
-    }
-    current.push(word)
-    currentSize++
-  }
-
-  if (current.length > 0) {
-    chunks.push(current.join(' '))
-  }
-
-  return chunks
-}
-
-/**
- * 按字符数分割文本
- */
-function splitByCharacter(text: string, maxSize: number): string[] {
-  const chunks: string[] = []
-  for (let i = 0; i < text.length; i += maxSize) {
-    chunks.push(text.slice(i, i + maxSize))
+  for (let start = 0; start < points.length;) {
+    const limit = Math.min(start + maxSize, points.length)
+    const end = limit === points.length ? limit : boundedEnd(boundaries, start, limit, overlap)
+    chunks.push(points.slice(start, end).join(''))
+    if (end === points.length)
+      break
+    start = end - overlap
   }
   return chunks
 }
 
-/**
- * 按自定义分隔符分割文本
- *
- * @throws 当 separator 不是合法正则表达式时抛出异常，由外层 catch 转为 HaiResult
- */
-function splitByCustom(text: string, separator: string): string[] {
-  const regex = new RegExp(separator)
-  const segments = text.split(regex)
-  return segments.filter(s => s.trim().length > 0)
-}
-
-// ─── 分割模式分发 ───
-
-/**
- * 按指定模式分割文本为字符串片段（非 Markdown 模式）
- */
-function splitTextByMode(
-  text: string,
-  mode: ChunkMode,
-  maxSize: number,
-  separator?: string,
-): string[] {
-  switch (mode) {
-    case 'sentence':
-      return splitBySentence(text)
-    case 'paragraph':
-      return splitByParagraph(text)
-    case 'page':
-      return splitByPage(text)
-    case 'word':
-      return splitByWord(text, maxSize)
-    case 'character':
-      return splitByCharacter(text, maxSize)
-    case 'custom':
-      return splitByCustom(text, separator ?? '\n')
-    default:
-      return [text]
+/** 按非空白词滑窗，切片仍使用原始字符串的 offset，保留词间全部空白。 */
+function splitWords(text: string, maxSize: number, overlap: number): string[] {
+  const words = [...text.matchAll(/\S+/gu)]
+  const chunks: string[] = []
+  for (let start = 0; start < words.length;) {
+    const end = Math.min(start + maxSize, words.length)
+    const from = start === 0 ? 0 : words[start]!.index
+    const to = end === words.length ? text.length : words[end]!.index
+    chunks.push(text.slice(from, to))
+    if (end === words.length)
+      break
+    start = end - overlap
   }
+  return chunks
 }
 
-// ─── 合并分段至分块 ───
-
-/**
- * 将分段合并为不超过 maxSize 的分块，支持重叠
- */
-function buildChunks(
-  segments: string[],
-  maxSize: number,
-  overlap: number,
-): DataChunk[] {
-  const chunks: DataChunk[] = []
-  let currentContent = ''
-  let chunkIndex = 0
-
-  for (const segment of segments) {
-    // 如果当前内容加上新分段超过限制，先保存当前分块
-    if (currentContent.length > 0 && currentContent.length + segment.length + 1 > maxSize) {
-      chunks.push({
-        index: chunkIndex++,
-        content: currentContent.trim(),
-      })
-
-      // 处理重叠：保留尾部内容
-      if (overlap > 0 && currentContent.length > overlap) {
-        currentContent = currentContent.slice(-overlap)
-      }
-      else {
-        currentContent = ''
-      }
-    }
-
-    // 如果单个分段已超过 maxSize，按字符截断
-    if (segment.length > maxSize) {
-      if (currentContent.length > 0) {
-        chunks.push({
-          index: chunkIndex++,
-          content: currentContent.trim(),
-        })
-        currentContent = ''
-      }
-
-      for (let i = 0; i < segment.length; i += maxSize) {
-        const part = segment.slice(i, i + maxSize)
-        chunks.push({
-          index: chunkIndex++,
-          content: part.trim(),
-        })
-      }
+/** 匹配 # 至配置级别的标题；fenced code 内的 # 是正文，不创建虚假 section。 */
+function markdownSections(text: string, minLevel: number): MarkdownSection[] {
+  const headings: Array<Omit<MarkdownSection, 'end'>> = []
+  let fence: { character: string, length: number } | undefined
+  for (const line of text.matchAll(/[^\n]*(?:\n|$)/g)) {
+    const content = line[0].replace(/\r?\n$/, '')
+    if (fence) {
+      if (new RegExp(`^ {0,3}${fence.character}{${fence.length},}[ \\t]*$`).test(content))
+        fence = undefined
       continue
     }
-
-    currentContent += (currentContent.length > 0 ? '\n' : '') + segment
-  }
-
-  // 保存最后一个分块
-  if (currentContent.trim().length > 0) {
-    chunks.push({
-      index: chunkIndex,
-      content: currentContent.trim(),
-    })
-  }
-
-  return chunks
-}
-
-// ─── Markdown 分块构建 ───
-
-/**
- * 将 Markdown 分割结果构建为带元数据的分块列表
- *
- * Markdown 模式下 overlap 仅用于单 section 超限时的子分块，section 间不做 overlap。
- */
-function buildMarkdownChunks(
-  text: string,
-  maxSize: number,
-  overlap: number,
-  markdownMinLevel: number,
-  markdownKeepTitle: boolean,
-): DataChunk[] {
-  const mdSegments = splitByMarkdown(text, markdownMinLevel, markdownKeepTitle)
-  const chunks: DataChunk[] = []
-
-  for (const segment of mdSegments) {
-    if (segment.content.length > maxSize) {
-      const subChunks = buildChunks([segment.content], maxSize, overlap)
-      for (const sub of subChunks) {
-        chunks.push({
-          index: chunks.length,
-          content: sub.content,
-          metadata: { title: segment.title, level: segment.level, subChunk: true },
-        })
-      }
+    const opening = /^ {0,3}(`{3,}|~{3,})/.exec(content)
+    if (opening) {
+      fence = { character: opening[1]![0]!, length: opening[1]!.length }
+      continue
     }
-    else {
-      chunks.push({
-        index: chunks.length,
-        content: segment.content,
-        metadata: { title: segment.title, level: segment.level },
-      })
+    const heading = /^ {0,3}(#{1,6})[ \t]/.exec(content)
+    if (heading && heading[1]!.length <= minLevel) {
+      let title = content.slice(heading[0].length).trim()
+      let end = title.length
+      while (title[end - 1] === '#')
+        end--
+      // 只移除空白分隔的尾部 #，按线性扫描处理，避免可交换量词造成正则回溯。
+      if (end < title.length && (title[end - 1] === ' ' || title[end - 1] === '\t'))
+        title = title.slice(0, end).trimEnd()
+      headings.push({ start: line.index, bodyStart: line.index + line[0].length, title, level: heading[1]!.length })
     }
   }
-
-  return chunks
+  if (headings.length === 0)
+    return [{ start: 0, bodyStart: 0, end: text.length, title: '', level: 0 }]
+  const sections: MarkdownSection[] = []
+  if (headings[0]!.start > 0)
+    sections.push({ start: 0, bodyStart: 0, end: headings[0]!.start, title: '', level: 0 })
+  headings.forEach((heading, index) => sections.push({ ...heading, end: headings[index + 1]?.start ?? text.length }))
+  return sections
 }
 
-// ─── 公共 API ───
+/** 自然边界只决定优先切点，不删除分隔符或改变预算单位。 */
+function modeExpression(mode: ChunkMode, separator?: string): RegExp | undefined {
+  switch (mode) {
+    case 'sentence': return /[。！？.!?]+\s*/gu
+    case 'paragraph': return /\r?\n(?:[ \t]*\r?\n)+/gu
+    case 'page': return /\f/gu
+    case 'custom': return new RegExp(separator!, 'gu')
+    default: return undefined
+  }
+}
 
 /**
- * 对文本进行分块
- *
- * @param text - 输入文本
- * @param options - 分块选项
- * @returns 分块列表
- *
+ * 对文本分块；word 使用词数，其他模式使用 Unicode code point，非字节/token/UTF-16 长度。
+ * maxSize 包含 overlap 和分隔符，0 <= overlap < maxSize；默认不重叠。
+ * 原始空白与分隔符保留，Markdown 仅在显式 keepTitle=false 时移除标题行。
+ * @param text - 源文本；空或全空白输入返回空数组。
+ * @param options - 模式与预算；Markdown section 之间不重叠，section 内使用相同边界算法。
+ * @returns 有界且顺序连续编号的分块；配置错误或非法正则返回错误结果。
  * @example
  * ```ts
- * // 按 Markdown 标题分块
- * const result = chunkText(markdownText, { mode: 'markdown', maxSize: 2000 })
- *
- * // 按句子分块
- * const result = chunkText(text, { mode: 'sentence', maxSize: 500, overlap: 50 })
+ * import { datapipe } from '@h-ai/datapipe'
+ * const result = datapipe.chunk('One. Two. Three.', { mode: 'sentence', maxSize: 12, overlap: 2 })
+ * if (result.success) result.data.map(chunk => chunk.content)
+ * else result.error.message
  * ```
  */
 export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]> {
-  const parseResult = ChunkOptionsSchema.safeParse(options)
-  if (!parseResult.success) {
-    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: parseResult.error.message } }), parseResult.error)
-  }
-
-  const opts = parseResult.data
-
-  // 校验 custom 模式需要 separator
-  if (opts.mode === 'custom' && !opts.separator) {
+  const parsed = ChunkOptionsSchema.safeParse(options)
+  if (!parsed.success)
+    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: parsed.error.message } }), parsed.error)
+  const opts = parsed.data
+  if (opts.mode === 'custom' && !opts.separator)
     return err(HaiDatapipeError.MISSING_SEPARATOR, datapipeM('datapipe_missingSeparator'))
-  }
-
-  if (!text || text.trim().length === 0) {
+  if (!text || text.trim().length === 0)
     return ok([])
-  }
-
   try {
-    // Markdown 模式：独立处理，带有 title 和 level 元数据
     if (opts.mode === 'markdown') {
-      const chunks = buildMarkdownChunks(text, opts.maxSize, opts.overlap, opts.markdownMinLevel, opts.markdownKeepTitle)
+      const chunks: DataChunk[] = []
+      for (const section of markdownSections(text, opts.markdownMinLevel)) {
+        const content = text.slice(opts.markdownKeepTitle ? section.start : section.bodyStart, section.end)
+        const parts = splitCharacters(content, opts.maxSize, opts.overlap, modeExpression('paragraph'))
+        for (const part of parts)
+          chunks.push({ index: chunks.length, content: part, metadata: { title: section.title, level: section.level, ...(parts.length > 1 ? { subChunk: true } : {}) } })
+      }
       return ok(chunks)
     }
-
-    // 其他模式：字符串形式的分段
-    const segments = splitTextByMode(text, opts.mode, opts.maxSize, opts.separator)
-    const chunks = buildChunks(segments, opts.maxSize, opts.overlap)
-
-    return ok(chunks)
+    const parts = opts.mode === 'word'
+      ? splitWords(text, opts.maxSize, opts.overlap)
+      : splitCharacters(text, opts.maxSize, opts.overlap, modeExpression(opts.mode, opts.separator))
+    return ok(parts.map((content, index) => ({ index, content })))
   }
-  catch (error) {
-    return err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', { params: { error: String(error) } }), error)
+  catch (cause) {
+    return err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', { params: { error: String(cause) } }), cause)
   }
 }

@@ -2,7 +2,7 @@
  * @h-ai/deploy — docker-ssh 部署 Provider
  *
  * 基于 OCI 镜像 + Docker Compose + SSH 的通用主机部署：消费已有镜像 → tar 打包 → SSH 传输 →
- * 远程 load → compose up → HTTP 健康检查。远程仅需 SSH + docker/podman + compose。
+ * 远程 load → compose up → HTTP 健康检查。远程需 SSH、Linux flock/基础工具及 docker/podman + compose。
  * @module deploy-provider-docker-ssh
  */
 
@@ -18,6 +18,7 @@ import { randomBytes } from 'node:crypto'
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
+import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
 import {
@@ -31,6 +32,7 @@ import { createSshExecutor } from '../container/deploy-ssh.js'
 import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { resolveProjectDirectory } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
+import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provider-docker-ssh' })
@@ -40,6 +42,14 @@ const HEALTH_POLL_INTERVAL = 3000
 
 /** 健康检查最大轮询次数 */
 const HEALTH_MAX_ATTEMPTS = 40
+
+/** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
+const ServerResultSchema = z.object({
+  deploymentId: z.string(),
+  stage: z.enum(['preflight', 'images', 'dependencies', 'start', 'health', 'complete']),
+  exitCode: z.number().int().min(0).max(255),
+  durationSeconds: z.number().int().nonnegative(),
+})
 
 /** 生成不可变部署 ID：`YYYYMMDD-HHmmss-<random>`。 */
 function makeDeploymentId(): string {
@@ -57,10 +67,14 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * 创建 docker-ssh 部署 Provider。
- *
  * @param config - docker-ssh Provider 配置
  * @param container - Compose 中间件参数
  * @returns 容器部署 Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createDockerSshProvider({ type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } })
+ * const name = provider.name // 创建本身不连接 SSH；在线发布仍需有效 SSH 配置。
+ * ```
  */
 export function createDockerSshProvider(
   config: DockerSshProviderConfig,
@@ -227,18 +241,46 @@ export function createDockerSshProvider(
     const started = await ssh.exec(
       `mkdir -p ${shellArgument(`${remoteTar}.contents`)} && chmod 600 ${shellArgument(remoteTar)} && tar -xf ${shellArgument(remoteTar)} -C ${shellArgument(`${remoteTar}.contents`)} && sh ${shellArgument(`${remoteTar}.contents/${bundle.startName}`)} ${shellArgument(remoteDir)}`,
       { timeoutMs: 600_000, secrets: sidecar.secrets, onOutput: (output) => {
-        pendingOutput += output
-        const lines = pendingOutput.split('\n')
-        pendingOutput = lines.pop() ?? ''
-        for (const line of lines) {
+        const parts = output.split('\n')
+        for (let index = 0; index < parts.length; index++) {
+          // 进度仅解析行首标签，不保留无限长的构建日志行。
+          pendingOutput += parts[index]!.slice(0, 512 - pendingOutput.length)
+          if (index === parts.length - 1)
+            break
+          const line = pendingOutput
+          pendingOutput = ''
           const stage = /^\[(preflight|images|dependencies|start|health|complete)\]/.exec(line)?.[1]
           if (stage)
             options?.onProgress?.(stage as 'preflight' | 'images' | 'dependencies' | 'start' | 'health' | 'complete')
         }
       } },
     )
-    if (!started.success)
-      return started
+    if (!started.success) {
+      const resultFile = `${remoteDir}/result-${deploymentId}.json`
+      const state = getDeployCommandState(started.error)
+      // 独立连接只读核对，绝不因超时自动再运行 apply 或无条件恢复容器。
+      const checked = await ssh.exec(`if [ -f ${shellArgument(resultFile)} ]; then cat -- ${shellArgument(resultFile)}; fi`, { timeoutMs: 20_000, maxCaptureChars: 8192 })
+      let terminal: z.infer<typeof ServerResultSchema> | undefined
+      if (checked.success && !checked.data.stdoutTruncated) {
+        try {
+          const parsed = ServerResultSchema.safeParse(JSON.parse(checked.data.stdout))
+          if (parsed.success && parsed.data.deploymentId === deploymentId)
+            terminal = parsed.data
+        }
+        catch {
+          // 缺失、损坏、超限或不匹配的记录都不能证明远端已停止。
+        }
+      }
+      return err({ ...started.error, message: `${started.error.message}\n${terminal ? deployM('deploy_remoteFinished', { params: { stage: terminal.stage, code: String(terminal.exitCode) } }) : deployM('deploy_remoteUnknown')}`, suggestion: terminal ? deployM('deploy_remoteFinished', { params: { stage: terminal.stage, code: String(terminal.exitCode) } }) : deployM('deploy_remoteUnknown'), ext: { ...started.error.ext, commandExecution: {
+        ...state,
+        reason: state?.reason ?? 'exit',
+        localTermination: state?.localTermination ?? 'unknown',
+        remoteExecution: terminal ? 'finished' : 'unknown',
+        deploymentId,
+        resultFile,
+        ...(terminal ? { remoteExitCode: terminal.exitCode, remoteStage: terminal.stage } : {}),
+      } } })
+    }
 
     // 在线部署完成后检查实际公开入口。
     logger.info('Running health check', { url })
@@ -269,9 +311,16 @@ export function createDockerSshProvider(
       return await deploy(context)
     }
     catch (error) {
-      logger.error('Deployment bundle failed', { error })
       const reason = error instanceof Error ? error.message : String(error)
-      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', { params: { reason: maskSecrets(reason, Object.values(context.appEnv ?? {}).filter(value => value.length > 6)) } }), error)
+      let safeReason = 'Deployment bundle failed'
+      try {
+        safeReason = maskSecrets(reason, Object.values(context.appEnv ?? {}).filter(Boolean))
+      }
+      catch {
+        // 脱敏配置无效时保留固定诊断，不重新暴露原异常。
+      }
+      logger.error('Deployment bundle failed', { reason: safeReason })
+      return err(HaiDeployError.DEPLOY_FAILED, deployM('deploy_bundleFailed', { params: { reason: safeReason } }))
     }
   }
   return { name: 'docker-ssh', deploy: deploySafely }

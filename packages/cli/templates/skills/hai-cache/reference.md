@@ -42,8 +42,22 @@ import { cache } from '@h-ai/cache'
 
 await cache.init(core.config.get('cache'))
 // 使用后关闭
-await cache.close()
+const closed = await cache.close()
+if (!closed.success) throw new Error(closed.error.message)
 ```
+
+
+初始化只在健康检查成功后发布连接；失败时释放候选资源。若清理仍失败，初始化错误的 `error.ext.cleanupPending` 为 `true`。`cache.close()` 返回 `Promise<HaiResult<void>>`，等待正在进行的初始化，并合并并发关闭。开始清理后 `isInitialized` 为 `false`，配置与业务操作不再可用；清理失败仍保留资源，后续 `close()` 或 `init()` 先重试释放，成功前不会创建替代连接。调用方必须检查关闭结果。
+
+```ts
+const closed = await cache.close()
+if (!closed.success) {
+  // 处理清理故障后有限重试；再次失败应向应用报告。
+  const retried = await cache.close()
+  if (!retried.success) throw new Error(retried.error.message)
+}
+```
+
 
 `cache.config` 返回的是脱敏后的配置快照；Redis `password` / `url` 等敏感值不会原样暴露给日志或调试输出。
 
@@ -69,6 +83,19 @@ if (result.success && result.data) {
 await cache.kv.del('user:123')
 ```
 
+### Cluster 多键与扫描
+
+`mget/del/exists` 跨 slot 时有界并发且无整体原子性/快照；mget 保留输入顺序，DEL 失败可能已部分删除，重试幂等。`mset`、集合交/并/差和多键 blocking pop 须同 slot，否则返回 `CROSS_SLOT`；使用共同的 `{hash-tag}`，MSET 不做部分写入回退。
+
+scan 首次传字符串 `'0'`，后续原样传回不透明游标，返回 `'0'` 表示完成。Cluster 覆盖所有 master；同配置和拓扑的另一应用节点可接续。拓扑、match 或 keyPrefix 改变时返回 `SCAN_TOPOLOGY_CHANGED`，从 `'0'` 重启；无效游标或 count 返回 `INVALID_SCAN`。返回去除 keyPrefix 的逻辑 key，前缀 glob 字符按字面量解释；keys 同样扫描并去重。SCAN 无快照，可能重复，count 仅为正整数提示值。
+
+```ts
+const first = await cache.kv.scan('0', { match: 'users:*', count: 100 })
+if (first.success && first.data[0] !== '0') {
+  const next = await cache.kv.scan(first.data[0], { match: 'users:*', count: 100 })
+}
+```
+
 ### Hash/List/Set/ZSet（`cache.hash/list/set_/zset`）
 
 - `cache.hash`：对象字段读写（如用户 profile 局部更新）
@@ -87,16 +114,16 @@ await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 
 | 方法       | 说明                                       |
 | ---------- | ------------------------------------------ |
-| `acquire`  | 尝试获锁（SET NX EX），返回 true/false     |
-| `release`  | 释放锁（支持 owner 验证，防止误释放）      |
+| `acquire`  | 尝试获锁（SET NX EX），返回唯一 owner 或 null |
+| `release`  | 释放锁（必须携带本次 owner，防止误释放） |
 | `isLocked` | 检查锁是否被持有                           |
-| `extend`   | 续期锁 TTL（支持 owner 验证）              |
+| `extend`   | 续期锁 TTL（必须携带本次 owner） |
 
 ```typescript
-// 每次尝试生成唯一 owner，后续释放/续期复用同一个值
-const owner = core.id.generate()
-const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner })
+// acquire 返回本次唯一 owner，后续释放/续期必须复用该凭据
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
 if (acquired.success && acquired.data) {
+  const owner = acquired.data
   try {
     // 长任务仅在仍持有锁时续期；失败或 data=false 时停止依赖锁的后续操作
     const extended = await cache.lock.extend('my-lock', 60, owner)
@@ -118,7 +145,7 @@ const locked = await cache.lock.isLocked('my-lock')
 
 **最佳实践：**
 
-- `owner` 每次获锁尝试唯一，释放/续期复用该值；仅用 nodeId 会使同节点旧任务误释放过期后重新获得的锁
+- `owner` 必须取自成功的 acquire.data；缓存内部每次生成唯一凭据，不能使用 nodeId 替代。释放/续期复用该凭据。
 - 释放锁时传入 `owner` 防止误释放他人锁
 - Memory 后端适合开发/测试；Redis 后端用 Lua 脚本保证 release/extend 原子性
 
@@ -135,6 +162,9 @@ const locked = await cache.lock.isLocked('my-lock')
 | `HaiCacheError.NOT_INITIALIZED` | `hai:cache:010` | 未初始化 |
 | `HaiCacheError.UNSUPPORTED_TYPE` | `hai:cache:011` | 不支持的缓存类型 |
 | `HaiCacheError.CONFIG_ERROR` | `hai:cache:012` | 配置错误 |
+| `HaiCacheError.INVALID_SCAN` | `hai:cache:013` | 游标或 count 无效 |
+| `HaiCacheError.SCAN_TOPOLOGY_CHANGED` | `hai:cache:014` | 拓扑或条件变化，重新遍历 |
+| `HaiCacheError.CROSS_SLOT` | `hai:cache:015` | 多键操作不在同一 slot |
 
 ## 常见模式
 
@@ -159,11 +189,11 @@ async function getUserCached(userId: string) {
 
 ```typescript
 const lockKey = 'batch:import'
-const owner = core.id.generate()
-const acquired = await cache.lock.acquire(lockKey, { ttl: 60, owner })
+const acquired = await cache.lock.acquire(lockKey, { ttl: 60 })
 if (acquired.success && acquired.data) {
+  const owner = acquired.data
   try {
-    await runBatchImport()
+    await runBatchImportWithConditionalCommit()
   }
   finally {
     await cache.lock.release(lockKey, owner)
@@ -185,3 +215,15 @@ else {
 - `hai-scheduler`：定时任务分布式锁（底层使用 cache.lock）
 - `hai-reach`：消息发送互斥锁（底层使用 cache.lock）
 - `hai-kit`：SvelteKit 集成层
+
+Cluster 与 Sentinel 数据节点认证使用 `password`，Cluster 发现的新节点继承同一鉴权配置。`url` 模式只使用 URL 内凭据，单独 password 不覆盖 URL。
+
+单键 compareAndSwap(key, expected, value, {px?,keepTtl?}) 比较 JSON 序列化快照并原子替换，必须检查 success 与 boolean data。expected=undefined 表示不存在，value=undefined 表示删除，null 是值；px 正整数且与 keepTtl 互斥。比较失败不修改 TTL；跨节点版本状态优先使用 CAS 而不是租约后无条件 SET。
+
+owner 只校验租约续期/释放，不是资源 fencing token。暂停或过期后旧任务仍可能执行，最终持久化写入必须使用资源自己的 CAS/代际条件/事务约束。批量导入等应用函数须在每次提交时校验条件，不能只靠锁包裹 Promise。
+
+## 生产共享状态
+
+生产仅使用 Redis（含 Cluster）；memory 只用于开发/明确测试。Redis 故障返回失败，不回退本机缓存。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化成功前检查，只有 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试豁免。不要将租约当作最终写入条件，外部未知效果须按稳定业务键核对。
+
+`kv.set` 返回 `HaiResult<boolean>`：`data=true` 表示实际写入，NX/XX 未命中返回 `success=true,data=false` 且不改变原值或 TTL。签发票据、会话或登记公钥前必须检查这两个字段。`ex/px/exat/pxat` 分别使用秒、毫秒、Unix 秒、Unix 毫秒，须为正安全整数且只能指定一种，与 `keepTtl=true` 互斥；`nx/xx` 也互斥。零、负数、小数、非有限值或溢出返回 `INVALID_SET_OPTIONS`（`cache:016`），不会写成永久键。过去的正绝对时间表示立即过期。省略期限会移除原 TTL；`keepTtl` 保留已有 TTL，新键仍永久保存。memory 和 Redis 都保存 JSON 快照。

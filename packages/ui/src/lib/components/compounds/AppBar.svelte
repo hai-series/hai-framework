@@ -1,4 +1,5 @@
 <!--
+  @component AppBar
   @h-ai/ui — AppBar（顶部应用栏，支持安全区域）
 
   用法：
@@ -6,12 +7,35 @@
     {#snippet leading()}<BackButton />{/snippet}
     {#snippet trailing()}<Avatar />{/snippet}
   </AppBar>
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { AppBar } from '@h-ai/ui'
+  const props: ComponentProps<typeof AppBar> = { title: '设置', safeArea: true }
+  const component = mount(AppBar, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../types.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
+  /**
+   * AppBar 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { AppBar } from '@h-ai/ui'
+   * const props: ComponentProps<typeof AppBar> = { title: '设置', safeArea: true }
+   * const component = mount(AppBar, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 标题文本 */
     title?: string

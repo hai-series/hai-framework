@@ -76,11 +76,15 @@
   },
   "devDependencies": {
     "@h-ai/ai": "workspace:*",
+    "@h-ai/api-client": "workspace:*",
+    "@h-ai/cache": "workspace:*",
     "@h-ai/iam": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

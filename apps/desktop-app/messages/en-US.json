@@ -1,0 +1,4 @@
+{
+  "logoutUnconfirmed": "Server sign-out was not confirmed. The session may still be active; please retry later.",
+  "logoutLocalClearFailed": "Local credentials could not be cleared. Close the app and check secure storage."
+}

@@ -7,9 +7,14 @@
  * ```ts
  * import { apiClient } from '@h-ai/api-client'
  *
- * await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
- * const me = await apiClient.iam.auth.currentUser()
- * await apiClient.close()
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const me = await apiClient.iam.auth.currentUser()
+ *   if (!me.success) throw new Error(me.error.message)
+ *   const permissions = me.data.permissions
+ * }
+ * finally { await apiClient.close() }
  * ```
  *
  * @example 自定义 contract
@@ -19,10 +24,12 @@
  *
  * const contract = apiContract.create({ iam: apiContract.iam })
  * const client = apiClient.create(contract)
- * await client.init({
+ * const initialized = await client.init({
  *   baseUrl: 'https://api.example.com/api/v1',
  *   auth: { storage: apiClient.tokenStorage.memory() },
  * })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * await client.close()
  * ```
  *
  * @module api-client

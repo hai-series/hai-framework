@@ -1,6 +1,16 @@
 <!--
   @component RegisterForm
   用户注册表单组件，搭配 primitives/compounds 使用。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { RegisterForm } from '@h-ai/ui'
+  const props: ComponentProps<typeof RegisterForm> = { fields: ['username', 'password'], requireConfirmPassword: true }
+  const component = mount(RegisterForm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, InputProps } from '../../../types.js'

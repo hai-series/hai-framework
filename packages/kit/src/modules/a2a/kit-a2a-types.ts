@@ -7,7 +7,16 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 
-/** A2A 路由处理器配置 */
+/**
+ * A2A 路由处理器配置
+ * @example
+ * ```ts
+ * import type { KitA2AHandlerConfig } from '@h-ai/kit'
+ *
+ * const value: KitA2AHandlerConfig = { authenticate: async () => null }
+ * void value
+ * ```
+ */
 export interface KitA2AHandlerConfig {
   /**
    * 可选的认证回调

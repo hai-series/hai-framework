@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 
-import type { A2ADeps } from './a2a/ai-a2a-functions.js'
+import type { A2ADeps, A2AImplementation } from './a2a/ai-a2a-functions.js'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIFunctions, AIInitOptions } from './ai-types.js'
@@ -30,6 +30,7 @@ import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 import { datapipe } from '@h-ai/datapipe'
 
@@ -88,7 +89,7 @@ let currentImage: ImageOperations | null = null
 /** A2A 配置（从 config.a2a 存储，供延迟初始化使用） */
 let currentA2AConfig: AIConfig['a2a']
 /** A2A 内部实现（registerExecutor 成功后才有值） */
-let currentA2AImpl: A2AOperations | null = null
+let currentA2AImpl: A2AImplementation | null = null
 /** 初始化阶段准备完成的任务与消息存储 */
 let currentA2AStores: A2ADeps | null = null
 /** 当前存储 Provider（用于模块关闭时统一释放资源） */
@@ -232,6 +233,7 @@ const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
 /** 重置所有子功能引用并释放 StoreProvider（用于 close 和 init 失败清理） */
 async function resetAllState(): Promise<void> {
   const storeProvider = currentStoreProvider
+  await currentA2AImpl?.close()
 
   currentLLM = null
   currentMCP = null
@@ -288,17 +290,18 @@ const streamOperations: StreamOperations = {
  * @example
  * ```ts
  * import { ai } from '@h-ai/ai'
- *
- * // 初始化
- * await ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY } })
- *
- * // LLM 调用
- * const result = await ai.llm.chat({
- *   messages: [{ role: 'user', content: '你好' }],
- * })
- *
- * // 关闭
- * await ai.close()
+ * import type { AIConfigInput, AIInitOptions } from '@h-ai/ai'
+ * async function run(config: AIConfigInput, options: AIInitOptions) {
+ *   // 默认 Store 所需 reldb/vecdb 已由应用初始化；显式测试 Store 通过 options 注入。
+ *   const initialized = await ai.init(config, options)
+ *   if (!initialized.success) return initialized
+ *   try {
+ *     const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
+ *     if (!result.success) return result
+ *     return result.data.choices[0]?.message.content
+ *   }
+ *   finally { await ai.close() }
+ * }
  * ```
  */
 export const ai: AIFunctions = {
@@ -343,6 +346,8 @@ export const ai: AIFunctions = {
         storeProvider = createMemoryStoreProvider()
         logger.warn('AI is using the ephemeral in-memory store; initialize reldb and vecdb before ai.init() for persistent data')
       }
+      if (core.module.requiresSharedState(process.env) && storeProvider.stateScope !== 'shared')
+        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_sharedBackendRequired'))
       currentStoreProvider = storeProvider
 
       // 委托 ai-functions 组装所有子功能（含建表）

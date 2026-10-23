@@ -27,9 +27,6 @@ function serializeError(error) {
 function openDatabase() {
   const Database = require('better-sqlite3')
   const database = new Database(workerData.database, { readonly: workerData.readonly ?? false })
-  if (workerData.walMode !== false) {
-    database.pragma('journal_mode = WAL')
-  }
   return database
 }
 
@@ -37,6 +34,9 @@ let db = null
 
 try {
   db = openDatabase()
+  // 先保存连接，再执行可能失败的 pragma；初始化失败仍能由 close/线程终止释放。
+  if (workerData.walMode !== false)
+    db.pragma('journal_mode = WAL')
   parentPort.postMessage({ type: 'ready' })
 }
 catch (error) {

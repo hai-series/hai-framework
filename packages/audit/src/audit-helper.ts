@@ -36,6 +36,13 @@ function toVoid(result: HaiResult<AuditLog>): HaiResult<void> {
  *
  * @param logFn - 底层日志记录函数（通常为 currentRepo.log）
  * @returns 便捷记录器接口
+ * @example 模块内部上下文
+ * ```ts
+ * function buildHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>): AuditHelper {
+ *   return createHelper(logFn)
+ * }
+ * // logFn 由实际仓储/模块提供；helper 将失败原样传递，不接管数据库生命周期。
+ * ```
  */
 export function createHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>): AuditHelper {
   return {

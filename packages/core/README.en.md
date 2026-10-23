@@ -158,6 +158,8 @@ After `core.init()` loads `_core.yml.logging`, or after `configure` / `setLevel`
 
 Browser logs still use the DevTools console: `pretty` prints readable messages with context, while `json` prints a JSON string containing `level` / `msg`. Default credential masking and configured path redaction both apply, including nested dot/bracket paths and `*`. Callers remain responsible for redacting message text.
 
+Native `Error` values in log context are copied into diagnostics containing `name`, `message`, `stack`, `cause`, `AggregateError.errors`, and enumerable own context before default field/URL masking and configured `redact` paths run. Both backends use the same rules and leave the original error unchanged. Error-subgraph cycles become `[Circular]` and the 32-level limit becomes `[MaxDepth]`; custom replacements in these subgraphs follow the same normalization, while ordinary-object replacement behavior is unchanged. Ordinary-object cycles without an Error retain their original structure and are not guaranteed to be directly JSON-serializable. `name/message/stack` are free text: secrets embedded in them are not automatically parsed. Clean them before logging or mask whole paths such as `error.message` / `error.stack`.
+
 `core.logger` redacts log context by default: credentials such as `password`, `token`, `secret`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask embedded usernames/passwords, sensitive query parameters, and OAuth key/value fragments; malformed URLs return a fixed placeholder. Email addresses and phone numbers are not masked by default.
 
 ##### Log level conventions
@@ -280,13 +282,15 @@ if (!result.success) {
 
 > Browsers have no filesystem access. `core.config` offers placeholder APIs only: file-related methods return `SERVICE_UNAVAILABLE` and do not load YAML.
 
+Node automatically loads and watches runtime `.yml` / `.yaml` files, excluding exactly `_deploy.yml` and `_deploy.yaml`. The deployment CLI parses those reserved files after loading its target environment and credentials. Business `deploy.yml` and explicit `core.config.load` remain supported. A failed per-file load result is logged and loading continues; applications must validate required configuration and check `success`. Directory scanning, logger setup and other exceptions may still propagate.
+
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -308,8 +312,8 @@ const validResult = core.config.validate('app', AppSchema)
 
 // 查询和获取
 if (core.config.has('app')) {
-  const cfg = core.config.get<typeof AppSchema>('app') // undefined 或配置
-  const cfg2 = core.config.getOrThrow<typeof AppSchema>('app') // 未加载时抛异常
+  const cfg = core.config.get<z.infer<typeof AppSchema>>('app') // undefined 或配置
+  const cfg2 = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // 未加载时抛异常
 }
 core.config.keys() // ['core', 'app', 'db', ...]
 
@@ -438,7 +442,7 @@ core.string.isBlank('') // true
 core.string.isNotBlank('x') // true
 core.string.padStart('5', 3, '0') // '005'
 core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // 防时序攻击比较
+core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
 
 // 数组操作
 core.array.unique([1, 1, 2]) // [1, 2]
@@ -555,11 +559,27 @@ HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
 HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
+### Request locale isolation
+
+Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleRequest())`. SvelteKit can use `kit.i18n.runWithLocale(locale, () => resolve(event))`; serv creates the scope automatically from request headers. Async descendants inherit it. Explicit `MessageOptions.locale` takes precedence over the request locale and the startup default. Within a scope, `setGlobalLocale` only changes that request; outside a scope it configures the startup default and must not be called by request hooks.
+
+Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
+
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
+
+## Configuration consumption
+
+`_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../docs/configuration-map.md).
+
+See the [module JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
+
+The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
+
+UUID generation requires cryptographic randomUUID/getRandomValues and throws if neither is available; it never falls back to Math.random.
 
 ## License
 

@@ -188,10 +188,11 @@ function endOfDay(date: Date): Date {
 
 /**
  * 时间操作工具对象。
- *
  * @example
  * ```ts
- * time.formatDate(new Date())
+ * import { core } from '@h-ai/core'
+ * const tools = core.time
+ * tools.addDays(new Date('2026-01-01T00:00:00Z'), 1)
  * ```
  */
 export const time = {
@@ -207,5 +208,12 @@ export const time = {
   endOfDay,
 }
 
-/** time 子工具类型 */
+/**
+ * time 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: TimeFn = time
+ * tools.addDays(new Date('2026-01-01T00:00:00Z'), 1)
+ * ```
+ */
 export type TimeFn = typeof time

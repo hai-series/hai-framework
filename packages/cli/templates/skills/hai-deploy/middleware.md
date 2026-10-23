@@ -8,18 +8,20 @@
 
 ## 识别与逐项选择
 
+数据库连接保存前复用所选后端的公开配置 Schema；MySQL `ssl` 仅 `false` 或严格对象，`{}` 默认验证证书链和 DNS 身份，`ca/cert/key` 为 PEM 内容且 `cert/key` 必须成对；私钥仅进入私有环境。PostgreSQL 保留其布尔值/字符串模式/对象契约。CLI 内联 `@h-ai/reldb/schemas` 与 Zod，无需为配置校验给目标应用额外安装数据库包或驱动；部署本身仍需已安装的 `@h-ai/deploy`，实际运行应用仍需其数据库依赖。
+
 先用 `deploy.scan(appDir, { environment, envDir })` 核对实际依赖、配置与环境值。扫描从目标 workspace 的 `pnpm-lock.yaml` importer 出发，沿 dependencies/optionalDependencies 遍历，排除 devDependencies、peerDependencies 和其他应用未被引用的依赖；workspace link 只沿运行依赖继续。pnpm 12 的工具链 YAML 文档不能混入应用图。lockfile、目标 importer 或依赖节点缺失时先执行 `pnpm install` 修复；依赖图不读取 package.json、pnpm-workspace.yaml 或项目目录布局。配置文件决定已识别模块的后端，保留的旧配置不能自行启用未依赖的模块。
 
 `ScanResult.haiModules` 列出所有实际运行依赖中的 Hai 模块；`ScanResult.middlewares` 提供服务、后端、来源、配置路径和变量前缀；连接配置可能含凭据，不能整体记入日志。`DEPLOY_MIDDLEWARE` 是后端和连接字段的公共目录，字段名称、类型与约束须与模块 Schema 同步。
 
-| 来源 | 后端选项 | 默认 Compose 行为 | 云自动开通 |
-| --- | --- | --- | --- |
-| reldb；IAM/audit；启用 DB 日志的 scheduler | SQLite / MySQL / PostgreSQL | SQLite 数据卷；mysql / postgres 服务 | PostgreSQL → Neon |
-| cache；IAM；scheduler 可选分布式锁 | memory / Redis | memory 无服务；redis 服务 | Redis → Upstash |
-| storage | local / S3 | 本地数据卷；RustFS（默认）/MinIO + bucket 初始化 | S3 → Cloudflare R2 |
-| vecdb | LanceDB / pgvector / Qdrant / Chroma | 本地卷或对应容器 | 自定义已有服务 |
-| IAM 可选目录认证 | disabled / LDAP | 禁用无服务；OpenLDAP | 自定义已有目录 |
-| Reach Provider 数组 | console / SMTP / HTTP API；阿里云 SMS | console 无服务；SMTP 用 Mailpit 捕获测试邮件；HTTP/SMS 自定义 | SMTP → Resend；SMS → 阿里云凭据接入 |
+| 来源                                       | 后端选项                              | 默认 Compose 行为                                             | 云自动开通                          |
+| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------------- | ----------------------------------- |
+| reldb；IAM/audit；启用 DB 日志的 scheduler | SQLite / MySQL / PostgreSQL           | SQLite 数据卷；mysql / postgres 服务                          | PostgreSQL → Neon                   |
+| cache；IAM；scheduler 可选分布式锁         | memory / Redis                        | memory 无服务；redis 服务                                     | Redis → Upstash                     |
+| storage                                    | local / S3                            | 本地数据卷；RustFS（默认）/MinIO + bucket 初始化              | S3 → Cloudflare R2                  |
+| vecdb                                      | LanceDB / pgvector / Qdrant / Chroma  | 本地卷或对应容器                                              | 自定义已有服务                      |
+| IAM 可选目录认证                           | disabled / LDAP                       | 禁用无服务；OpenLDAP                                          | 自定义已有目录                      |
+| Reach Provider 数组                        | console / SMTP / HTTP API；阿里云 SMS | console 无服务；SMTP 用 Mailpit 捕获测试邮件；HTTP/SMS 自定义 | SMTP → Resend；SMS → 阿里云凭据接入 |
 
 `serv` 声明 AI peer 不代表应用启用了 AI，不应因此安装 AI/ONNX/CUDA 或开通向量服务。LDAP 需要在应用安装 IAM 的可选 peer `ldapts`，并显式设置 `login.ldap=true`；安装 IAM 不代表启用了 LDAP。Reach 每个 Provider 保留独立数组索引及名称；通用 Console/HTTP API 按应用模板约定将 `name: sms` 归为短信，其他名称归为邮件服务，SMTP 和 aliyun-sms 按实际 type 分类，不能把 HTTP 回调当作 SMTP。email/sms 的 Console 均只输出日志，不实际投递。默认目录没有业务账号；Mailpit 不会对外投递生产邮件。生产应配置企业 LDAP/SMTP，或使用对应云服务。
 
@@ -39,35 +41,37 @@
 
 识别依据是运行图中的所有节点，不按应用直接依赖硬编码消费者名单。下面按当前公开依赖和功能说明；新增模块/后端时同步此表、连接目录与真实运行测试。
 
-| 模块 | 中间件来源或外部能力 |
-| --- | --- |
-| reldb / cache / storage / vecdb | 分别拥有关系库、缓存、对象存储、向量库连接契约 |
-| iam / kit | IAM 运行依赖 audit/reldb/cache/crypto；kit 经 IAM 继承。LDAP 按 login.ldap 开关启用，Reach peer 只有另行实际依赖时进入运行图 |
-| audit / payment | audit 经 reldb 持久化；payment 经 audit 继承数据库。微信、支付宝、Stripe 是已有商户 API，沿 payment 配置接入，不生成假云服务或容器 |
-| scheduler / reach | 两者实际依赖 reldb/cache；Reach 另按启用的 SMTP/HTTP/短信渠道配置 |
-| ai | 实际依赖 reldb/vecdb/datapipe。LLM、图像、音频端点及模型来自 AI 配置，不能仅凭包名选择模型镜像或 CUDA；不自动创建付费厂商账号 |
-| crypto / serv | crypto 的可选运行依赖按 lockfile 解析，serv 经 crypto 继承；serv 的 IAM/storage/AI peer 不作为启用证据 |
-| core / datapipe / api-contract / api-client / ui / capacitor / cli / deploy | 本身没有额外专用中间件；仍沿实际运行依赖继续遍历，例如 api-client/capacitor 的 crypto 分支。UI/设备能力、部署目标/Provisioner 凭据按各自配置处理 |
+| 模块                                                                        | 中间件来源或外部能力                                                                                                                                                                |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| reldb / cache / storage / vecdb                                             | 分别拥有关系库、缓存、对象存储、向量库连接契约                                                                                                                                      |
+| iam / kit                                                                   | IAM 运行依赖 audit/reldb/cache/crypto；kit 经 IAM 继承。LDAP 按 login.ldap 开关启用，Reach peer 只有另行实际依赖时进入运行图                                                        |
+| audit / payment                                                             | audit 经 reldb 持久化；Stripe payment 直接依赖先初始化的共享 reldb 保存渠道映射和幂等结果，审计可选。微信、支付宝、Stripe 是已有商户 API，沿 payment 配置接入，不生成假云服务或容器 |
+| scheduler / reach                                                           | 两者实际依赖 reldb/cache；Reach 另按启用的 SMTP/HTTP/短信渠道配置                                                                                                                   |
+| ai                                                                          | 实际依赖 reldb/vecdb/datapipe。LLM、图像、音频端点及模型来自 AI 配置，不能仅凭包名选择模型镜像或 CUDA；不自动创建付费厂商账号                                                       |
+| crypto / serv                                                               | crypto 的可选运行依赖按 lockfile 解析，serv 经 crypto 继承；serv 的 IAM/storage/AI peer 不作为启用证据                                                                              |
+| core / datapipe / api-contract / api-client / ui / capacitor / cli / deploy | 本身没有额外专用中间件；仍沿实际运行依赖继续遍历，例如 api-client/capacitor 的 crypto 分支。UI/设备能力、部署目标/Provisioner 凭据按各自配置处理                                    |
 
 S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，保存到 HAI_DEPLOY_CONTAINER_S3ENGINE（rustfs | minio，默认 rustfs），应用始终写 HAI_STORAGE_TYPE=s3 或 HAI_STORAGE。自定义 AWS S3、OSS、R2 等端点不生成 sidecar。镜像使用与 storage 集成测试一致的 RustFS 官方版本和 MinIO 社区版本；存储桶初始化复用应用镜像里的 S3 SDK，无需额外 mc 镜像，必须幂等且不能吞掉失败。
+
+AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初始化；仅明确重复索引且重查真实结构一致时继续，错误同名索引、权限和其他 DDL 故障必须阻止应用启动。DDL 不回滚，失败后检查初始化结果、逆序清理连接，再修复结构/权限重试，不能删库或吞错视为成功。
 
 ## 连接字段
 
 以下是自定义向导的连接字段；完整可用项、枚举与范围仍以项目 `.env.example` 和公开 Schema 为准。变量前缀为 `HAI_DB`、`HAI_CACHE`、`HAI_STORAGE`、`HAI_VECDB`、`HAI_IAM_LDAP`；Reach 使用实际索引 `HAI_REACH_PROVIDERS_<index>`。camelCase 不拆词，例如 `bindPassword` → `BINDPASSWORD`。
 
-| 后端 | 连接字段 |
-| --- | --- |
-| SQLite | database（文件路径或 `:memory:`） |
-| MySQL / PostgreSQL | url（优先）、host、port（1–65535）、database、user、password、ssl |
-| Redis | url（优先）、host、port、password、db、tls、keyPrefix、connectTimeout、commandTimeout |
-| local / LanceDB | root / path |
-| S3 | endpoint、bucket、region、accessKeyId、secretAccessKey、forcePathStyle |
-| Qdrant / Chroma | url；Qdrant 可选 apiKey |
-| pgvector | url（优先）或 host/port/user/password，以及 database |
-| LDAP | url、bindDn、bindPassword、searchBase、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
-| SMTP | host、port、secure、user、pass、from |
-| HTTP API | url、method（POST / PUT）、headers（JSON）、timeout |
-| 阿里云 SMS | accessKeyId、accessKeySecret、signName、endpoint |
+| 后端               | 连接字段                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| SQLite             | database（文件路径或 `:memory:`）                                                                                                    |
+| MySQL / PostgreSQL | url（优先）、host、port（1–65535）、database、user、password、ssl                                                                    |
+| Redis              | url（优先）、host、port、password、db、tls、keyPrefix、connectTimeout、commandTimeout                                                |
+| local / LanceDB    | root / path                                                                                                                          |
+| S3                 | endpoint、bucket、region、accessKeyId、secretAccessKey、forcePathStyle                                                               |
+| Qdrant / Chroma    | url；Qdrant 可选 apiKey；Chroma apiKey 用于 Bearer 自托管网关，URL 仅支持 HTTP(S) 根端点，不提供 Cloud 契约                          |
+| pgvector           | url（优先）或 host/port/user/password，以及 database                                                                                 |
+| LDAP               | url、bindDn、bindPassword、searchBase、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
+| SMTP               | host、port、secure、user、pass、from                                                                                                 |
+| HTTP API           | url、method（POST / PUT）、headers（JSON）、timeout                                                                                  |
+| 阿里云 SMS         | accessKeyId、accessKeySecret、signName、endpoint                                                                                     |
 
 ## 离线准备与验收
 
@@ -77,6 +81,16 @@ S3 是协议，不是某个容器产品。默认配置时另选 RustFS/MinIO，�
 
 部分更新通过 --services 指定，使用服务器成功基线保留未选服务和中间件凭据。首次安装不能使用部分包。storage-init 复用应用镜像及 S3 SDK 检查/创建桶，不清空数据；只有涉及存储初始化时执行，并检查退出码。仅更新 storage 仍需含 app 镜像的制品；最近为 web-only 时，用 --artifact-dir 选择原完整制品，或先 pnpm build --target docker --images app。app 镜像仅用于初始化，不会更新 app 服务。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
 
-服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、持久化磁盘和容器/目录权限。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
+服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock、支持 flock 的持久化文件系统和容器/目录权限。部署和恢复使用固定 `.deploy.lock` 内核锁，不可删除/替换或按时间抢锁；活跃子命令继承 FD，全部持有进程退出或重启后自动释放。强杀/断电后的执行状态需核对结果文件、current 和容器，不能将锁释放当作恢复成功。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
+
+生成的 `web.conf` 在 API location 设 `client_max_body_size 2129920`（2 MiB + 32 KiB），用 large_client_header_buffers 4 32k / proxy_buffer_size 32k 容纳 X-Hai-Transport 认证头，并关闭请求/响应 proxy buffering；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
 
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
+
+## 命令输出
+
+内部 `runCommand` / `SshExecutor.exec` 先 UTF-8 解码，再对每条逻辑流跨块精确脱敏；成功 stdout/stderr、错误、onOutput 均为安全结果。`secrets` 不推断全部进程环境，调用方列出秘密及可能输出的编码/转换值；总长不超过 1 Mi UTF-16 单元，脱敏异常失败关闭且不暴露原 cause。`maxCaptureChars` 默认 1048576、最大 16777216，捕获尾部并返回 stdoutTruncated/stderrTruncated，结构化解析先拒绝截断。onOutput 支持 Promise，顺序等待并保持 pipe 背压；异常回调使执行失败。异常终止不释放未完成的秘密尾部。部署进度仅解析每行前 512 字符。超时不能证明远端工作已终止。
+
+deadline 包括 helper 启动和输出处理。异常后 `terminationTimeoutMs` 另等待本地终止核验，默认 10000、上限 60000 毫秒。POSIX 用独立继承进程组；Windows 用隐藏且不加载 profile 的 PowerShell/.NET Job，挂起创建 → 分配成功 → 恢复，禁止 breakaway，helper/编译/分配失败拒绝执行。已脱离组的系统 daemon、现有容器和远端服务不在本地确认范围。只有受管理 Job/组无活动成员才是 confirmed；未证明为 unknown，启动前为 not-started。输入、回调和流异常同样经过此路径，已经进入的回调不能撤销，但不再交付新块。
+
+公开 `getDeployCommandState(result.error)` 在失败分支读取原因、本地状态、远端状态、deploymentId 和 resultFile。SSH 中断默认为远端 unknown；docker-ssh 新连接只读解析原子 `result-<ID>.json`，完整/未截断/ID 匹配才为 finished，并返回实际阶段、退出码。finished 指脚本及恢复结束，容器可以继续运行；即使终态为 0，原连接/输出失败仍保留。缺失、旧记录、损坏或重连失败保持 unknown，不自动重试写入。按 ID 核对步骤、current 和服务，再恢复。

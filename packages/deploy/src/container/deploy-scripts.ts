@@ -1,12 +1,38 @@
-/** 在线发布与手工交付共用的服务器执行脚本。远程仅依赖标准 Linux 工具及 Compose。 */
+/** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
 import { createTargetReader } from './deploy-target.js'
 
-/** 将可信配置编码为一个 shell 参数。 */
+/**
+ * 将可信配置编码为一个 shell 参数。
+ * @param value - 受信值，编码为一个远端 shell 参数。
+ * @returns 可作为一个远端 shell 参数的编码文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const encoded = shellArgument("Shop's app") // 整体作为一个远端 shell 参数。
+ * ```
+ */
 export function shellArgument(value: string): string {
   return `'${value.replaceAll('\'', '\'"\'"\'')}'`
 }
 
-/** 生成分步执行、增量合并和失败恢复脚本；密钥始终从环境文件读取。 */
+/**
+ * 生成分步执行、增量合并和失败恢复脚本；密钥始终从环境文件读取。
+ * 仅生成 Linux 脚本；固定 inode 的 FD9 flock 由仍持有描述符的整棵进程树维持。未知旧锁目录不删除，结果仅由取得锁的 owner 发布。
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @param options.deploymentId - 本次不可变部署标识，用于结果匹配和发布目录。
+ * @param options.projectName - 已归一化的项目名称。
+ * @param options.environment - 部署环境标识，通常为 prod。
+ * @param options.directory - 包含已准备制品或部署文件的目录；具体见函数用途。
+ * @param options.runtime - 容器引擎策略；auto 探测可用引擎并优先 Podman。
+ * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
+ * @param options.selected - 本次选择更新的 Compose 服务。
+ * @param options.hostPort - 宿主公开端口。
+ * @param options.healthPaths - 允许执行的应用健康检查路径。
+ * @returns 待在 Linux 远端运行的 apply 脚本文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const script = createApplyScript({ deploymentId: 'shop-prod-001', projectName: 'shop-prod', environment: 'prod', directory: '/opt/hai/apps/shop-prod', runtime: 'auto', partial: false, selected: ['app'], hostPort: 8080, healthPaths: ['/health'] })
+ * ```
+ */
 export function createApplyScript(options: {
   deploymentId: string
   projectName: string
@@ -132,15 +158,16 @@ finish() {
     outcome=passed
     if [ "$code" -ne 0 ]; then outcome=failed; fi
     printf '{"stage":"%s","status":"%s","durationSeconds":%s}\n' "$stage" "$outcome" "$(( $(date +%s) - step_started ))" >> "$root/steps-$id.jsonl"
-    printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json"
-    rmdir "$root/.deploy-lock" || true
+    # 先完整写入再同目录原子发布，SSH 重连核对不能读取到半份终态结果。
+    printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json.next"
+    mv "$root/result-$id.json.next" "$root/result-$id.json"
   fi
   exit "$code"
 }
 trap finish EXIT
 trap 'exit 130' HUP INT TERM
 step preflight 'Checking deployment tools and package'
-for tool in sha256sum tar awk curl; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
+for tool in sha256sum tar awk curl flock; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
 if [ "$runtime" = auto ]; then
   if command -v podman >/dev/null 2>&1 && podman version >/dev/null 2>&1; then runtime=podman; else runtime=docker; fi
 fi
@@ -148,7 +175,20 @@ case "$runtime" in docker|podman) ;; *) printf 'Runtime must be docker or podman
 "$runtime" version >/dev/null
 "$runtime" compose version >/dev/null
 "$runtime" compose up --help | grep -q never || { printf 'Compose is too old. Install Docker Compose v2 or podman-compose 1.6.0 or newer (supports --pull never).\n' >&2; exit 1; }
-mkdir "$root/.deploy-lock" 2>/dev/null || { printf 'Another deployment is running. Check %s/.deploy-lock before retrying.\n' "$root" >&2; exit 1; }
+# 内核锁绑定同一文件描述符；绝不删除/替换锁文件，避免新 inode 绕过活跃部署。
+# 子命令继承 FD 9：即使父 shell 被强杀，仍执行的命令继续持锁；全部退出或重启后自动释放。
+exec 9>"$root/.deploy.lock"
+if flock -n 9; then
+  :
+else
+  lock_code=$?
+  if [ "$lock_code" -eq 1 ]; then
+    printf 'Another deployment is running. Wait for its commands to finish; do not remove %s/.deploy.lock.\n' "$root" >&2
+  else
+    printf 'Cannot acquire deployment lock (exit %s). Check filesystem flock support and permissions.\n' "$lock_code" >&2
+  fi
+  exit "$lock_code"
+fi
 locked=true
 cd "$source_dir"
 sha256sum -c SHA256SUMS
@@ -244,6 +284,14 @@ printf '[PASS] %s\n' "$id"
 /**
  * 生成无 Node/pnpm 依赖的上传脚本；换电脑时可覆盖 SSH 私钥路径。
  * Windows PowerShell 5 会丢弃原生参数内部引号，须直接按 Win32 规则构造命令行。
+ * 两个入口执行时读取旁边的 deploy-target.json；apply 阶段 SSH 失败仍须核对远端状态。
+ * @returns Linux shell、Windows PowerShell 上传入口及 POSIX awk 配置读取器文本。
+ * @example 模块内部上下文
+ * ```ts
+ * const scripts = createUploadScripts()
+ * const files = { 'deploy.sh': scripts.sh, 'deploy.ps1': scripts.ps1, 'read-target.awk': scripts.reader }
+ * // 将三个文件与 deploy-target.json 放在操作目录；生成文本不代表已部署。
+ * ```
  */
 export function createUploadScripts(): { sh: string, ps1: string, reader: string } {
   const sh = String.raw`#!/bin/sh
@@ -296,7 +344,13 @@ scp_host=$host
 case "$host" in *:*) scp_host="[$host]";; esac
 scp "$@" -P "$port" "./$bundle" "$user@$scp_host:$remote/incoming/$bundle"
 printf '[3/3] Applying package and checking HTTP access\n'
-ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"
+if ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"; then
+  :
+else
+  code=$?
+  printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.\n' "$remote" >&2
+  exit "$code"
+fi
 `
   const ps1 = String.raw`param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
 $ErrorActionPreference = 'Stop'
@@ -348,12 +402,18 @@ function Invoke-Step([string]$Name, [string]$Command, [string[]]$Arguments) {
   $global:LASTEXITCODE = $code
   if ($code -ne 0) { throw "$Name failed (exit $code)." }
 }
+$applying = $false
 try {
   foreach ($tool in @('ssh', 'scp')) { Get-Command $tool -ErrorAction Stop | Out-Null }
   Invoke-Step '1/3 Connect' 'ssh' ($options + @('-p', [string]$port, $destination, "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"))
   Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$port, "./$bundle", "$($scpDestination):$remote/incoming/$bundle"))
+  $applying = $true
   Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
-} catch { Write-Error $_; exit 1 }
+} catch {
+  if ($applying) { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.") }
+  Write-Error $_
+  exit 1
+}
 `
   return { sh, ps1, reader: createTargetReader() }
 }

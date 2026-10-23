@@ -6,9 +6,11 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { StorageProvider } from './providers/storage-provider-types.js'
 import type { StorageConfig, StorageConfigInput } from './storage-config.js'
-import type { DirOperations, FileOperations, PresignOperations, StorageFunctions, StorageProvider } from './storage-types.js'
+import type { DirOperations, FileOperations, PresignOperations, StorageFunctions } from './storage-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { createLocalProvider } from './providers/storage-provider-local.js'
@@ -34,6 +36,49 @@ let currentConfig: StorageConfig | null = null
 
 /** 并发初始化防护标志；防止多次 init() 同时执行导致资源泄漏 */
 let initInProgress = false
+
+/** 尚未释放的候选/旧 Provider；绝不用于业务操作，清理成功后才能替换。 */
+let pendingProvider: StorageProvider | null = null
+/** 初始化完成屏障，供 close 等待候选资源归属确定。 */
+let initCompletion: Promise<void> | null = null
+/** 合并并发关闭，避免同一连接重复释放。 */
+let closingPromise: Promise<HaiResult<void>> | null = null
+
+/** 停止发布资源并重试清理；失败时保留唯一所有权供下一次 close/init 重试。 */
+async function closeOwnedProvider(): Promise<HaiResult<void>> {
+  if (currentProvider) {
+    pendingProvider = currentProvider
+    currentProvider = null
+  }
+  currentConfig = null
+  if (!pendingProvider)
+    return ok(undefined)
+  try {
+    await pendingProvider.close()
+    pendingProvider = null
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Provider cleanup failed; retaining resource for retry', { error })
+    return err({ ...HaiStorageError.CONNECTION_FAILED, message: storageM('storage_operationFailed', {
+      params: { error: error instanceof Error ? error.message : String(error) },
+    }), cause: error, ext: { cleanupPending: true } })
+  }
+}
+
+/** 初始化失败后释放候选；保留原始错误，并明确指出清理尚未完成。 */
+async function failInitialization(result: HaiResult<void>): Promise<HaiResult<void>> {
+  const cleanup = await closeOwnedProvider()
+  if (result.success)
+    return result
+  if (cleanup.success) {
+    const ext = { ...result.error.ext }
+    delete ext.cleanupPending
+    delete ext.cleanupError
+    return err({ ...result.error, ext: Object.keys(ext).length > 0 ? ext : undefined })
+  }
+  return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error } })
+}
 
 // ─── Provider 工厂 ───
 
@@ -90,21 +135,24 @@ const notInitializedPresign = new Proxy(
 /**
  * 存储服务单例
  *
- * 使用前必须先调用 `storage.init()` 初始化，传入 S3 或本地存储配置。
+ * 文件、目录及签名操作前须调用 `storage.init()`；checksum 为无状态工具，无需初始化。
  * 初始化后通过 `storage.file`、`storage.dir`、`storage.presign` 访问各操作接口。
- *
  * @example
  * ```ts
  * import { storage } from '@h-ai/storage'
  *
- * // 初始化
- * await storage.init({ type: 'local', root: '/data/uploads' })
- *
- * // 上传文件
- * await storage.file.put('hello.txt', 'Hello World')
- *
- * // 关闭连接
- * await storage.close()
+ * const initialized = await storage.init({ type: 'local', root: './data/uploads' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const uploaded = await storage.file.put('reports/a.txt', 'hello', { ifNoneMatch: '*' })
+ *   if (!uploaded.success) throw new Error(uploaded.error.message)
+ *   const downloaded = await storage.file.get('reports/a.txt')
+ *   if (!downloaded.success) throw new Error(downloaded.error.message)
+ *   void downloaded.data
+ * } finally {
+ *   const closed = await storage.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export const storage: StorageFunctions = {
@@ -113,14 +161,23 @@ export const storage: StorageFunctions = {
    * 初始化存储连接。
    *
    * 如果当前已有活跃连接，会先自动 close 再重新初始化。
-   * 配置会通过 Zod Schema 校验；校验失败或连接异常会返回 `CONNECTION_FAILED`。
+   * 配置通过 Zod Schema 校验；校验、连接或清理失败均返回 HaiResult，不发布失败候选。
    *
    * @param config 存储配置（S3 或本地），支持省略带默认值的字段。
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const initialized = await storage.init({ type: 'local', root: './data/uploads' })
+   * if (!initialized.success) throw new Error(initialized.error.message)
+   * const closed = await storage.close()
+   * if (!closed.success) throw new Error(closed.error.message)
+   * ```
    */
   async init(config: StorageConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
-    if (initInProgress) {
+    if (initInProgress || closingPromise) {
       logger.warn('Storage init already in progress, skipping concurrent call')
       return err(
         HaiStorageError.OPERATION_FAILED,
@@ -128,15 +185,15 @@ export const storage: StorageFunctions = {
       )
     }
     initInProgress = true
+    let resolveInit!: () => void
+    initCompletion = new Promise<void>((resolve) => {
+      resolveInit = resolve
+    })
 
     try {
-      if (currentProvider) {
-        logger.warn('Storage module is already initialized, reinitializing')
-        const closeResult = await storage.close()
-        if (!closeResult.success) {
-          return closeResult
-        }
-      }
+      const cleanup = await closeOwnedProvider()
+      if (!cleanup.success)
+        return cleanup
 
       logger.info('Initializing storage module')
 
@@ -150,16 +207,20 @@ export const storage: StorageFunctions = {
         )
       }
       const parsed = parseResult.data
+      if (core.module.requiresSharedState(process.env) && (parsed.type === 'local'))
+        return err(HaiStorageError.CONFIG_ERROR, storageM('storage_sharedBackendRequired'))
 
       const provider = createProvider(parsed)
+      pendingProvider = provider
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {
         logger.error('Storage module initialization failed', {
           code: connectResult.error.code,
           message: connectResult.error.message,
         })
-        return connectResult
+        return await failInitialization(connectResult)
       }
+      pendingProvider = null
       currentProvider = provider
       currentConfig = parsed
       logger.info('Storage module initialized')
@@ -167,16 +228,18 @@ export const storage: StorageFunctions = {
     }
     catch (error) {
       logger.error('Storage module initialization failed', { error })
-      return err(
+      return await failInitialization(err(
         HaiStorageError.CONNECTION_FAILED,
         storageM('storage_operationFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
         error,
-      )
+      ))
     }
     finally {
       initInProgress = false
+      initCompletion = null
+      resolveInit()
     }
   },
 
@@ -195,41 +258,30 @@ export const storage: StorageFunctions = {
   },
 
   /** 是否已完成初始化 */
-  get isInitialized() { return currentProvider !== null },
+  get isInitialized() { return currentProvider !== null && currentProvider.isConnected() },
 
   /**
    * 关闭存储连接并释放资源
    *
    * 关闭后 file/dir/presign 操作将返回 NOT_INITIALIZED 错误。
-   * 重复调用不会报错。
+   * 等待初始化并合并并发关闭；失败时保留资源供 close/init 重试。
+   * @returns 所有客户端释放成功才返回成功。
+   * @example
+   * ```ts
+   * import { storage } from '@h-ai/storage'
+   *
+   * const closed = await storage.close()
+   * if (!closed.success) throw new Error(closed.error.message)
+   * ```
    */
   async close(): Promise<HaiResult<void>> {
-    if (!currentProvider) {
-      currentConfig = null
-      logger.info('Storage module already closed, skipping')
-      return ok(undefined)
+    if (!closingPromise) {
+      closingPromise = (async () => {
+        if (initCompletion)
+          await initCompletion
+        return await closeOwnedProvider()
+      })().finally(() => { closingPromise = null })
     }
-
-    logger.info('Closing storage module')
-
-    try {
-      await currentProvider.close()
-      logger.info('Storage module closed')
-      return ok(undefined)
-    }
-    catch (error) {
-      logger.error('Storage module close failed', { error })
-      return err(
-        HaiStorageError.CONNECTION_FAILED,
-        storageM('storage_operationFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        error,
-      )
-    }
-    finally {
-      currentProvider = null
-      currentConfig = null
-    }
+    return await closingPromise
   },
 }

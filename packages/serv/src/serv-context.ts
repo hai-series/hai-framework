@@ -20,7 +20,20 @@ import { core } from '@h-ai/core'
 import { normalizeClientIp } from './serv-client-ip.js'
 import { resolveRequestLocale } from './serv-validation.js'
 
-/** 当前请求解析出的会话摘要。 */
+/**
+ * 当前请求解析出的会话摘要。
+ *
+ * @example
+ * ```ts
+ * import type { ServSession } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function canRead(session: ServSession): boolean {
+ *   return session.permissions.includes('reports.read')
+ * }
+ * // 会话来自可信 verifyToken，不能将客户端 userId/roles 直接提升为会话。
+ * ```
+ */
 export interface ServSession {
   readonly userId: string
   readonly username?: string
@@ -37,6 +50,17 @@ export interface ServSession {
  * - refresh token 轮换（仅当启用 `refreshCookie` 时使用）
  *
  * 模块消费者**无需**知道 IAM 内部 Session 类型与 ServSession 的差异：结构类型确保兼容。
+ *
+ * @example
+ * ```ts
+ * import type { ServIam } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * import { iam } from '@h-ai/iam'
+ *
+ * const auth: ServIam = iam
+ * const factory = serv.buildAuthContextFactory(token => auth.auth.verifyToken(token))
+ * ```
  */
 export interface ServIam {
   readonly auth: {
@@ -44,12 +68,24 @@ export interface ServIam {
     verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>
   }
   readonly session: {
-    /** 使用 refresh token 换发新的 token 对。仅 `refreshCookie` 启用时被调用。 */
+    /** 使用 refresh token 换发新令牌对；refreshCookie 启用时调用，不要求旧 access 有效。 */
     refresh: (refreshToken: string) => Promise<HaiResult<RefreshTokenPair>>
   }
 }
 
-/** `@h-ai/serv` 在 procedures 中传递的统一上下文。 */
+/**
+ * `@h-ai/serv` 在 procedures 中传递的统一上下文。
+ *
+ * @example
+ * ```ts
+ * import type { ServContext } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const context: ServContext = serv.parseRequestContext({ request: new Request('https://example.com/health'), remoteAddress: '192.0.2.10' })
+ * const locale = context.locale
+ * // parseRequestContext 只读元数据，不产生已认证 session。
+ * ```
+ */
 export interface ServContext {
   readonly requestId: string
   readonly locale: string
@@ -61,19 +97,52 @@ export interface ServContext {
   readonly logger: Logger
 }
 
-/** 运行时提供的连接元数据；必须来自 socket/平台，不能从请求头复制。 */
+/**
+ * 运行时提供的连接元数据；必须来自 socket/平台，不能从请求头复制。
+ *
+ * @example
+ * ```ts
+ * import type { ServRequestMetadata } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const metadata: ServRequestMetadata = { remoteAddress: '192.0.2.10' }
+ * // 由运行时 socket 提供；转发头必须另经过 trustedProxies 策略。
+ * ```
+ */
 export interface ServRequestMetadata {
   readonly remoteAddress?: string
 }
 
-/** 创建上下文所需的输入。 */
+/**
+ * 创建上下文所需的输入。
+ *
+ * @example
+ * ```ts
+ * import type { CreateServContextInput } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const input: CreateServContextInput = { request: new Request('https://example.com/health'), remoteAddress: '192.0.2.10' }
+ * const context = serv.parseRequestContext(input)
+ * ```
+ */
 export interface CreateServContextInput extends ServRequestMetadata {
   readonly request: Request
   /** createApp 已按 trustedProxies 解析的客户端地址，供自定义上下文复用。 */
   readonly ip?: string
 }
 
-/** 应用可传入的上下文工厂。 */
+/**
+ * 应用可传入的上下文工厂。
+ *
+ * @example
+ * ```ts
+ * import type { CreateServContext } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const factory: CreateServContext = input => serv.parseRequestContext(input)
+ * const context = await factory({ request: new Request('https://example.com/health') })
+ * ```
+ */
 export type CreateServContext = (input: CreateServContextInput) => ServContext | Promise<ServContext>
 
 const HEADER_REQUEST_ID = 'x-request-id'
@@ -90,6 +159,14 @@ const HEADER_USER_AGENT = 'user-agent'
  *
  * @param value - Authorization header 原始值
  * @returns token 或 undefined
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const token = extractBearerToken('Bearer opaque-access-token')
+ * const missing = extractBearerToken(null)
+ * // 这里只解析持有值，不确认会话有效性。
+ * ```
  */
 export function extractBearerToken(value: string | null): string | undefined {
   if (!value)
@@ -112,6 +189,15 @@ export function extractBearerToken(value: string | null): string | undefined {
  *
  * @param input - 上下文输入
  * @returns 仅含元数据的 ServContext
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ *
+ * const request = new Request('https://example.com/health', { headers: { 'x-hai-locale': 'en-US' } })
+ * const context = serv.parseRequestContext({ request, remoteAddress: '192.0.2.10' })
+ * const locale = context.locale
+ * ```
  */
 export function parseRequestContext(input: CreateServContextInput): ServContext {
   const headers = input.request.headers
@@ -151,6 +237,17 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  *
  * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.auth.verifyToken(token)` 或自定义函数）
  * @returns 异步上下文工厂
+ *
+ * @example
+ * ```ts
+ * import { iam } from '@h-ai/iam'
+ * import { serv } from '@h-ai/serv'
+ *
+ * // IAM 已初始化；每个请求重新验证 token 与当前持久凭据/权限状态。
+ * const factory = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+ * const context = await factory({ request: new Request('https://example.com/profile') })
+ * // 未携带/验证失败时 session 为空，由 route guard 决定是否拒绝。
+ * ```
  */
 export function buildAuthContextFactory(
   verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>,

@@ -19,14 +19,20 @@ import { HaiCapacitorError } from './capacitor-types.js'
  *
  * @param config - 状态栏配置
  * @returns HaiResult
- *
  * @example
  * ```ts
- * await capacitor.statusBar.configure({
- *   style: 'dark',
- *   overlay: true,
- *   backgroundColor: '#ffffff',
- * })
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.statusBar.configure({ style: 'dark', overlay: false })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export async function configureStatusBar(config: StatusBarConfig): Promise<HaiResult<void>> {
@@ -68,10 +74,20 @@ export async function configureStatusBar(config: StatusBarConfig): Promise<HaiRe
  * 显示状态栏
  *
  * @returns HaiResult
- *
  * @example
  * ```ts
- * await capacitor.statusBar.show()
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.statusBar.show()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export async function showStatusBar(): Promise<HaiResult<void>> {
@@ -93,10 +109,20 @@ export async function showStatusBar(): Promise<HaiResult<void>> {
  * 隐藏状态栏
  *
  * @returns HaiResult
- *
  * @example
  * ```ts
- * await capacitor.statusBar.hide()
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.statusBar.hide()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export async function hideStatusBar(): Promise<HaiResult<void>> {

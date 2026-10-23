@@ -23,7 +23,7 @@ Template sends need only `template`, `to` and `vars`; the provider comes from th
 
 ### Dependencies
 
-- `@h-ai/reldb`: optional persistence for delivery logs and templates; enabled automatically when initialized.
+- `@h-ai/reldb`: persistence for delivery logs and templates. With `dnd.enabled: true` and `strategy: delay`, initialize it first and ensure the queue table is available; otherwise `reach.init()` returns `CONFIG_ERROR`. Optional for other sends.
 - `@h-ai/cache`: optional distributed locks for DND delay; enabled automatically when initialized.
 
 ### Quick start
@@ -99,14 +99,15 @@ const config = { name: 'dev', type: 'console' }
 
 #### API callbacks
 
-| Field     | Type                     | Required | Default | Description             |
-| --------- | ------------------------ | -------- | ------- | ----------------------- |
-| `name`    | `string`                 | ✅       | —       | Provider name           |
-| `type`    | `string`                 | ✅       | —       | Fixed `'api'`           |
-| `url`     | `string`                 | ✅       | —       | HTTP(S) callback URL    |
-| `method`  | `'POST' \| 'PUT'`        | —        | `POST`  | HTTP method             |
-| `headers` | `Record<string, string>` | —        | —       | Custom request headers  |
-| `timeout` | `number`                 | —        | `10000` | Timeout in milliseconds |
+| Field        | Type                     | Required | Default | Description                                                                          |
+| ------------ | ------------------------ | -------- | ------- | ------------------------------------------------------------------------------------ |
+| `name`       | `string`                 | ✅       | —       | Provider name                                                                        |
+| `type`       | `string`                 | ✅       | —       | Fixed `'api'`                                                                        |
+| `url`        | `string`                 | ✅       | —       | HTTP(S) callback URL                                                                 |
+| `method`     | `'POST' \| 'PUT'`        | —        | `POST`  | HTTP method                                                                          |
+| `headers`    | `Record<string, string>` | —        | —       | Custom request headers                                                               |
+| `timeout`    | `number`                 | —        | `10000` | Timeout in milliseconds                                                              |
+| `idempotent` | `boolean`                | —        | `false` | Enable only when the receiver atomically persists deduplication with its side effect |
 
 API callback addresses are trusted server configuration. Logs contain only the callback origin, not URL credentials, query parameters, recipients, or third-party failure bodies. For tenant/user-supplied addresses, applications must enforce a domain allowlist; enterprise deployments should also block internal metadata access through egress proxies or network policies.
 
@@ -118,6 +119,32 @@ API callback addresses are trusted server configuration. Logs contain only the c
 | `strategy` | `'discard' \| 'delay'` | —        | `discard` | discard: drop / delay: send after DND |
 | `start`    | `string`               | —        | `00:00`   | Start time (HH:mm)                    |
 | `end`      | `string`               | —        | `00:00`   | End time (HH:mm)                      |
+
+`delay` returns a successful `HaiResult` containing `{ success: true, deferred: true, queueId }` only after the database confirms the insert. This means queued, awaiting delivery. The receipt UUID is stored in `hai_reach_send_log.queue_id`; its row tracks `status` (`pending` / `processing` / `sending` / `unknown` / `sent` / `discarded` / `dead`). Missing storage, disconnection, or insertion failure never produces deferred success; enqueue failures return `SEND_FAILED`. After restart, another node connected to the same database with the same Provider name can resume delivery outside DND. Optional log failures after an immediate send do not report an already delivered message as failed.
+
+```ts
+const result = await reach.send(message)
+if (!result.success)
+  throw new Error(result.error.message)
+if (result.data.deferred) {
+  // Save the receipt for tracking; delivery is still pending.
+  await savePendingReceipt(result.data.queueId)
+}
+```
+
+Queue columns `created_at`, `updated_at`, `locked_until`, and `next_attempt_at` store Unix milliseconds as `BIGINT` (64-bit `INTEGER` on SQLite). The Reach repository normalizes integer strings returned by drivers such as PostgreSQL into safe integer `number` values. Negative, fractional, or unsafe stored integers return `SEND_FAILED` instead of being silently rounded. Template creation/update `TIMESTAMP` fields map to `Date`. Update the complete table schema during deployment, including attempt counters, backoff policy, and failure classification; the framework does not migrate old tables automatically.
+
+#### Durable retry policy
+
+The `queue` policy is persisted with each queued message. A restart or another node's changed configuration cannot reset an existing message's budget.
+
+| Setting                 | Default   | Bounds                                             |
+| ----------------------- | --------- | -------------------------------------------------- |
+| `queue.maxAttempts`     | `5`       | 1–100, including initial claims and crash recovery |
+| `queue.retryDelayMs`    | `60000`   | Initial backoff, 1000–86400000 milliseconds        |
+| `queue.maxRetryDelayMs` | `3600000` | Same bounds, at least retryDelayMs                 |
+
+Every claim atomically increments the stored `attemptCount`. Transient failures become eligible at `now + min(maxRetryDelayMs, retryDelayMs × 2^(attemptCount−1))`; the minute-based scan outside DND can deliver later. A round handles at most 100 messages using a fixed eligibility cutoff, so failed messages cannot reenter that round. Missing/disconnected providers, network errors, and HTTP 408/425/429/5xx allow bounded retry. Invalid stored JSON and other HTTP 4xx from an idempotent API go directly to `dead`. Exhaustion, including a crash after the last claim, also produces dead. In-flight non-idempotent requests still become `unknown` regardless of remaining attempts.
 
 ### Error handling
 
@@ -131,10 +158,10 @@ All operations return `HaiResult<T>`. Error codes are defined in `HaiReachError`
 | `HaiReachError.INVALID_RECIPIENT`      | `hai:reach:004` | Invalid recipient         |
 | `HaiReachError.PROVIDER_NOT_FOUND`     | `hai:reach:005` | Provider not registered   |
 | `HaiReachError.DND_BLOCKED`            | `hai:reach:006` | Dropped by DND            |
-| `HaiReachError.DND_DEFERRED`           | `hai:reach:007` | Queued for DND delay      |
 | `HaiReachError.NOT_INITIALIZED`        | `hai:reach:010` | Not initialized           |
 | `HaiReachError.UNSUPPORTED_TYPE`       | `hai:reach:011` | Unsupported type          |
 | `HaiReachError.CONFIG_ERROR`           | `hai:reach:012` | Invalid configuration     |
+| `HaiReachError.DELIVERY_REJECTED`      | `hai:reach:020` | Permanent API rejection   |
 
 ```ts
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })
@@ -145,18 +172,52 @@ if (!result.success) {
 
 ### Distributed locks
 
-Across nodes, flushing pending DND-delay messages is protected by `@h-ai/cache` distributed locks, allowing only one node to flush at a time.
+The optional cache lock reduces duplicate scans; nodes can scan concurrently after its 300-second TTL. Database delivery states provide correctness. A round claims at most 100 messages, one immediately before each delivery. An atomic owner/lease check persists `sending` before the external call; in-flight leases renew every third of their duration. Expired owners cannot revive leases, start another delivery, or commit results. Recovery continues every minute outside DND.
 
-- Uses `cache.lock.acquire('reach:flush-pending')` with a 300-second TTL.
-- Claims pending records in batches. In-progress records expire, allowing another node to take over after failure and reducing duplicate delivery risk.
-- Without initialized `@h-ai/cache`, distributed locking is disabled automatically; single-node operation continues.
-- A stable process-level owner identifier prevents releasing another owner's lock.
+- States follow `pending → processing → sending → sent`. Expired processing records can be claimed safely.
+- Only API providers configured with `idempotent: true` can automatically retry in-flight requests. This declares receiver capability. Every attempt uses the persistent queueId as both the `Idempotency-Key` header and `idempotencyKey` payload field. The receiver must atomically commit deduplication and side effects. Retention must cover late requests from resumed old workers; if lateness is unbounded, deduplication records must not expire. The same Provider name across nodes must use the same target and deduplication store.
+- SMTP, Aliyun SMS, and default API providers have no external idempotency guarantee. Failure, exceptions, or lease loss after sending begins produce an unknown outcome. Expired non-idempotent sends become `unknown` and are never automatically resent. Disconnected providers use persisted backoff; invalid stored JSON goes directly to dead before any external call. Console produces development metadata only.
+- Lease renewal, owner checks, and cancellation cannot undo an email, SMS, or HTTP side effect. The module provides no general exactly-once guarantee.
+
+### Reviewing unknown outcomes
+
+Trusted server administration can call `reach.queue.get(queueId)` to inspect `pending / processing / sending / unknown / sent / discarded / dead` without recipient or body data. For unknown outcomes, stop or isolate the old worker and verify Provider delivery records first. Then resolve to sent or discarded. UUID/status validation and a conditional update allow only one concurrent resolution; this never sends again. Discarding cannot cancel requests already started. Create a replacement only after confirming the old request can no longer take effect.
+
+```ts
+const state = await reach.queue.get(queueId)
+const resolved = await reach.queue.resolveUnknown(queueId, { status: 'sent', messageId: verifiedMessageId })
+if (!resolved.success)
+  throw new Error(resolved.error.message)
+```
+
+### Inspecting and restoring dead messages
+
+Trusted server administration can call `reach.queue.list({ status: 'dead', limit: 50, offset: 0 })`, or list `unknown`. Pages contain at most 100 records and offset is bounded by 1000000. Get/list return status, attemptCount, maxAttempts, nextAttemptAt, lastFailure, and updatedAt without recipients, bodies, or owner credentials. Fix the root cause, read the latest dead version, and conditionally restore it:
+
+```ts
+const state = await reach.queue.get(queueId)
+if (!state.success)
+  throw new Error(state.error.message)
+if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
+  const restored = await reach.queue.requeueDead(queueId, { expectedUpdatedAt: state.data.updatedAt })
+  if (!restored.success)
+    throw new Error(restored.error.message)
+}
+```
+
+Only the matching dead version is restored; concurrent/stale requests fail, and unknown cannot be requeued. Restoration resets attempts while retaining queueId, the original policy, and receiver idempotency requirements. Dead means automatic processing stopped, not that no external effect occurred: late requests from an earlier idempotent API worker may still arrive. Confirm durable receiver deduplication before restoring. Leave irreparable payloads in dead for investigation; restoration does not repair their content.
 
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/reach test
 ```
+
+`tests/reach-repository-send-log-databases.test.ts` starts isolated PostgreSQL 16.15 / MySQL 8.4.11 containers through Testcontainers and removes them afterward. A reachable Docker API is required. For Podman, point `DOCKER_HOST` at its compatible socket; rootless environments can set `TESTCONTAINERS_RYUK_DISABLED=true` as required by Testcontainers.
+
+## Production shared state
+
+Production rejects console providers and requires SMTP, SMS or an actual API service. A log write is not a delivery receipt. Reconcile unknown outcomes from non-idempotent providers rather than claiming exactly-once delivery. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
 
 ## License
 

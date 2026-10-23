@@ -10,6 +10,11 @@
   "vecdb_connectionFailed": "Failed to connect to vector database: {error}",
   "vecdb_collectionNotFound": "Collection not found: {name}",
   "vecdb_collectionAlreadyExists": "Collection already exists: {name}",
+  "vecdb_invalidCollectionSchema": "Collection has no valid persisted vector dimension or distance metric: {name}",
+  "vecdb_atomicUpsertUnavailable": "LanceDB collection or driver lacks safe atomic merge primary-key support; no writes were performed. Rebuild the collection or use a supported driver",
+  "vecdb_duplicateDocumentIds": "Vector document IDs must be unique within a batch; no writes were performed",
+  "vecdb_jsonMetadataRequired": "LanceDB collection requires native JSON metadata; rebuild legacy string metadata collections before writing or filtering",
+  "vecdb_invalidMetadataFilter": "LanceDB metadata filter must be a plain object of top-level string, finite number, boolean or null values; nested objects, arrays and undefined are unsupported",
   "vecdb_dimensionMismatch": "Vector dimension mismatch: expected {expected}, actual {actual}",
   "vecdb_insertFailed": "Failed to insert vectors: {error}",
   "vecdb_deleteFailed": "Failed to delete vectors: {error}",
@@ -19,5 +24,8 @@
   "vecdb_serializationFailed": "Serialization/deserialization failed: {error}",
   "vecdb_invalidDimension": "Invalid vector dimension: {dimension}, must be a positive integer",
   "vecdb_configPathRequired": "Database storage path is required",
-  "vecdb_configDatabaseRequired": "Database name is required"
+  "vecdb_configDatabaseRequired": "Database name is required",
+  "vecdb_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests.",
+  "vecdb_chromaEndpointInvalid": "Chroma requires an HTTP(S) root endpoint without credentials, path prefix, query or fragment",
+  "vecdb_chromaTokenInvalid": "Chroma Bearer token must contain only printable ASCII characters without whitespace"
 }

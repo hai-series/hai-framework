@@ -5,6 +5,15 @@
 
 import type { Snippet } from 'svelte'
 
+/**
+ * 移动端底部导航条目；icon 和 iconClass 任选一种图标来源。
+ *
+ * @example
+ * ```ts
+ * import type { BottomNavItem } from '@h-ai/ui'
+ * const example: BottomNavItem = { id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' }
+ * ```
+ */
 export interface BottomNavItem {
   /** 导航项 ID */
   id: string

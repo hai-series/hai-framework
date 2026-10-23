@@ -7,17 +7,27 @@
  * - 说话人参考必需校验、模型能力声明、无原生流式时的按段降级
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { RequestInit } from 'undici'
+import { fetch as fetchAudio, FormData, Response } from 'undici'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ai, HaiAIError } from '../src/index.js'
+
+vi.mock('undici', async (importOriginal) => {
+  const original = await importOriginal<typeof import('undici')>()
+  return { ...original, fetch: vi.fn() }
+})
+
+beforeEach(() => {
+  vi.mocked(fetchAudio).mockReset()
+})
 
 const INDEXTTS_BASE = 'http://127.0.0.1:8102/v1'
 
-function indexttsModels(extra: Record<string, unknown> = {}): Array<Record<string, unknown>> {
-  return [{ id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: INDEXTTS_BASE, ...extra }]
-}
-
-async function initIndexTts(models: Array<Record<string, unknown>> = indexttsModels()): Promise<void> {
-  const result = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' }, audio: { models, synthesizeModel: 'indextts' } })
+async function initIndexTts(): Promise<void> {
+  const result = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' }, audio: {
+    models: [{ id: 'indextts', provider: 'indextts', model: 'indextts-2.5', operations: ['synthesize'], baseUrl: INDEXTTS_BASE }],
+    synthesizeModel: 'indextts',
+  } })
   expect(result.success).toBe(true)
 }
 
@@ -36,14 +46,14 @@ describe('ai.audio IndexTTS Provider', () => {
   })
 
   it('synthesize 透传说话人 / 风格参考、语速与目标时长', async () => {
-    const fetchMock = vi.fn(async () => audioResponse(new Uint8Array([1, 2, 3, 4]), {
+    const fetchMock = vi.fn<typeof fetchAudio>(async () => audioResponse(new Uint8Array([1, 2, 3, 4]), {
       'x-hai-audio-duration-ms': '3280',
       'x-hai-duration-matched': 'true',
       'x-hai-applied-speed': '1',
       'x-hai-audio-sample-rate': '24000',
       'x-hai-audio-channels': '1',
     }))
-    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
     const r = await ai.audio.synthesize({
@@ -81,8 +91,8 @@ describe('ai.audio IndexTTS Provider', () => {
   })
 
   it('speed 字段透传，未提供时长容差时不标记匹配', async () => {
-    const fetchMock = vi.fn(async () => audioResponse(new Uint8Array([5]), { 'x-hai-applied-speed': '1.2' }))
-    vi.stubGlobal('fetch', fetchMock)
+    const fetchMock = vi.fn<typeof fetchAudio>(async () => audioResponse(new Uint8Array([5]), { 'x-hai-applied-speed': '1.2' }))
+    vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
     const r = await ai.audio.synthesize({ text: '快一点', speakerReference: { audio: wav() }, speed: 1.2 })
@@ -97,8 +107,8 @@ describe('ai.audio IndexTTS Provider', () => {
   })
 
   it('缺少说话人参考返回 AUDIO_INVALID_REQUEST', async () => {
-    const fetchMock = vi.fn(async () => audioResponse(new Uint8Array([0])))
-    vi.stubGlobal('fetch', fetchMock)
+    const fetchMock = vi.fn<typeof fetchAudio>(async () => audioResponse(new Uint8Array([0])))
+    vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
     const r = await ai.audio.synthesize({ text: '你好' })
@@ -125,8 +135,8 @@ describe('ai.audio IndexTTS Provider', () => {
   })
 
   it('strictCapabilities 请求不支持的 instruction 前置失败', async () => {
-    const fetchMock = vi.fn(async () => audioResponse(new Uint8Array([0])))
-    vi.stubGlobal('fetch', fetchMock)
+    const fetchMock = vi.fn<typeof fetchAudio>(async () => audioResponse(new Uint8Array([0])))
+    vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
     const r = await ai.audio.synthesize({ text: '你好', speakerReference: { audio: wav() }, instruction: '开心地说', strictCapabilities: true })
@@ -137,8 +147,8 @@ describe('ai.audio IndexTTS Provider', () => {
   })
 
   it('无原生流式：按段完整合成降级为结构化事件', async () => {
-    const fetchMock = vi.fn(async () => audioResponse(new Uint8Array([7, 7])))
-    vi.stubGlobal('fetch', fetchMock)
+    const fetchMock = vi.fn<typeof fetchAudio>(async () => audioResponse(new Uint8Array([7, 7])))
+    vi.mocked(fetchAudio).mockImplementation(fetchMock)
     await initIndexTts()
 
     const events = []

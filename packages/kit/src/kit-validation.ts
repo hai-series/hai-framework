@@ -66,11 +66,12 @@ function unwrapValidationResultOrThrow<T>(result: FormValidationResult<T>): T {
  * @param request - SvelteKit 请求对象
  * @param schema - Zod Schema
  * @returns 验证结果；成功时 `valid: true` 且 `data` 类型安全
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const { valid, data, errors } = await kit.validate.form(event.request, CreateUserSchema)
- * if (!valid) return kit.response.validationError(errors)
+ * const schema = zod.object({ title: zod.string().min(1) })
+ * const result = await validateForm(new Request('https://app.example.com/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Example' }) }), schema)
+ * if (result.valid && result.data) void result.data.title
+ * else void result.errors
  * ```
  */
 export async function validateForm<T extends z.ZodType>(
@@ -115,10 +116,12 @@ export async function validateForm<T extends z.ZodType>(
  * @param url - 请求 URL 对象
  * @param schema - Zod Schema
  * @returns 验证结果
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const { valid, data } = kit.validate.query(event.url, PaginationSchema)
+ * const schema = zod.object({ title: zod.string().min(1) })
+ * const result = validateQuery(new URL('https://app.example.com/articles?title=Example'), schema)
+ * if (result.valid && result.data) void result.data.title
+ * else void result.errors
  * ```
  */
 export function validateQuery<T extends z.ZodType>(
@@ -137,10 +140,12 @@ export function validateQuery<T extends z.ZodType>(
  * @param params - SvelteKit 路由参数（`event.params`）
  * @param schema - Zod Schema
  * @returns 验证结果
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const { valid, data } = kit.validate.params(event.params, z.object({ id: z.string().uuid() }))
+ * const schema = zod.object({ title: zod.string().min(1) })
+ * const result = validateParams({ title: 'Example' }, schema)
+ * if (result.valid && result.data) void result.data.title
+ * else void result.errors
  * ```
  */
 export function validateParams<T extends z.ZodType>(
@@ -162,13 +167,12 @@ export function validateParams<T extends z.ZodType>(
  * @param schema - Zod Schema
  * @returns 校验通过的数据（类型安全）
  * @throws Response - 400 BadRequest（含首条错误消息）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * export const POST = kit.handler(async ({ request }) => {
- *   const data = await kit.validate.body(request, CreateUserSchema)
- *   // data 类型安全，校验已通过
- * })
+ * const schema = zod.object({ title: zod.string().min(1) })
+ * const result = await validateFormOrFail(new Request('https://app.example.com/api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Example' }) }), schema)
+ * // 校验失败抛出 Response，由框架错误边界透传。
+ * void result.title
  * ```
  */
 export async function validateFormOrFail<T extends z.ZodType>(
@@ -185,10 +189,12 @@ export async function validateFormOrFail<T extends z.ZodType>(
  * @param schema - Zod Schema
  * @returns 校验通过的数据
  * @throws Response - 400 BadRequest
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const query = kit.validate.query(event.url, PaginationSchema)
+ * const schema = zod.object({ title: zod.string().min(1) })
+ * const result = validateQueryOrFail(new URL('https://app.example.com/articles?title=Example'), schema)
+ * // 校验失败抛出 Response，由框架错误边界透传。
+ * void result.title
  * ```
  */
 export function validateQueryOrFail<T extends z.ZodType>(
@@ -205,10 +211,12 @@ export function validateQueryOrFail<T extends z.ZodType>(
  * @param schema - Zod Schema
  * @returns 校验通过的数据
  * @throws Response - 400 BadRequest
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const { id } = kit.validate.params(event.params, IdParamSchema)
+ * const schema = zod.object({ title: zod.string().min(1) })
+ * const result = validateParamsOrFail({ title: 'Example' }, schema)
+ * // 校验失败抛出 Response，由框架错误边界透传。
+ * void result.title
  * ```
  */
 export function validateParamsOrFail<T extends z.ZodType>(
@@ -224,10 +232,12 @@ export function validateParamsOrFail<T extends z.ZodType>(
  * 路径参数 id 校验 Schema
  *
  * 验证 `event.params.id` 为非空字符串。
- *
  * @example
  * ```ts
- * const { id } = kit.validate.params(event.params, IdParamSchema)
+ * import { IdParamSchema } from '@h-ai/kit'
+ *
+ * const value = IdParamSchema.parse({ id: 'article_1' })
+ * void value
  * ```
  */
 export const IdParamSchema = zod.object({
@@ -242,16 +252,12 @@ const MAX_PAGE_SIZE = 100
  *
  * 包含 page（默认 1）、pageSize（默认 20，上限 100）、search（可选）。
  * 可通过 `.extend()` 扩展业务字段。
- *
  * @example
  * ```ts
- * // 直接使用
- * const { page, pageSize, search } = kit.validate.query(url, PaginationQuerySchema)
+ * import { PaginationQuerySchema } from '@h-ai/kit'
  *
- * // 扩展业务字段
- * const ListUsersSchema = PaginationQuerySchema.extend({
- *   enabled: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
- * })
+ * const value = PaginationQuerySchema.parse({ page: '1', pageSize: '20' })
+ * void value
  * ```
  */
 export const PaginationQuerySchema = zod.object({

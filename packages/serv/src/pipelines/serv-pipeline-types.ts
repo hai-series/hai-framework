@@ -16,7 +16,20 @@ import type {
 import type { MiddlewareHandler } from 'hono'
 import type { ServContext } from '../serv-context.js'
 
-/** Serv 层 Hono middleware。 */
+/**
+ * Serv 层 Hono middleware。
+ *
+ * @example
+ * ```ts
+ * import type { ServMiddleware } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const middleware: ServMiddleware = async (context, next) => {
+ *   context.header('X-App-Version', '1')
+ *   await next()
+ * }
+ * ```
+ */
 export type ServMiddleware = MiddlewareHandler
 
 /**
@@ -24,6 +37,18 @@ export type ServMiddleware = MiddlewareHandler
  *
  * - 无配置 middleware：`ServMiddlewareFactory<void>`
  * - 带配置 middleware：`ServMiddlewareFactory<MyConfig>`
+ *
+ * @example
+ * ```ts
+ * import type { ServMiddlewareFactory } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const createTrace: ServMiddlewareFactory<{ header: string }> = config => async (context, next) => {
+ *   context.header(config.header, 'enabled')
+ *   await next()
+ * }
+ * const middleware = createTrace({ header: 'X-Trace-Enabled' })
+ * ```
  */
 export type ServMiddlewareFactory<TConfig = void> = [TConfig] extends [void]
   ? () => ServMiddleware
@@ -33,6 +58,16 @@ export type ServMiddlewareFactory<TConfig = void> = [TConfig] extends [void]
  * 使用 oRPC 公开 `ProcedureHandler` 定义的 HaiResult procedure handler。
  *
  * handler options 完整保留 oRPC 的路径、procedure、signal 与错误构造器信息。
+ *
+ * @example
+ * ```ts
+ * import type { ServProcedureOptions } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function requestId(options: ServProcedureOptions<{ id: string }>) {
+ *   return { id: options.input.id, requestId: options.context.requestId }
+ * }
+ * ```
  */
 export type ServProcedureOptions<
   TInput = unknown,
@@ -44,6 +79,17 @@ export type ServProcedureOptions<
   Meta
 >
 
+/**
+ * 基于 oRPC 真实 options 的 HaiResult handler；领域失败返回错误分支，异常由 route 包装收口。
+ *
+ * @example
+ * ```ts
+ * import type { ServProcedureHandler } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const handler: ServProcedureHandler<{ id: string }, { id: string }> = async ({ input }) => ({ success: true, data: { id: input.id } })
+ * ```
+ */
 export type ServProcedureHandler<
   TInput,
   TOutput,

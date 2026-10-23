@@ -10,37 +10,16 @@
 import type { HaiResult } from '@h-ai/core'
 
 import type { CompressOptions } from '../compress/ai-compress-types.js'
-import type { ChatMessage, LLMOperations, ToolRegistryOperations } from '../llm/ai-llm-types.js'
-import type { MemoryEntry, MemoryOperations, MemoryType } from '../memory/ai-memory-types.js'
-import type { RagOperations, RagOptions } from '../rag/ai-rag-types.js'
-import type { ReasoningOperations, ReasoningOptions } from '../reasoning/ai-reasoning-types.js'
+import type { ChatMessage, ToolRegistryOperations } from '../llm/ai-llm-types.js'
+import type { MemoryEntry, MemoryType } from '../memory/ai-memory-types.js'
+import type { RagOptions } from '../rag/ai-rag-types.js'
+import type { ReasoningOptions } from '../reasoning/ai-reasoning-types.js'
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
-import type { SummaryOperations, SummaryResult } from '../summary/ai-summary-types.js'
+import type { SummaryResult } from '../summary/ai-summary-types.js'
 
 // 从子模块 re-export，便于 context 消费者一站式引入
 export type { CompressionStrategy } from '../compress/ai-compress-types.js'
 export { CompressionStrategySchema } from '../compress/ai-compress-types.js'
-
-// ─── Context 子功能可选依赖 ───
-
-/**
- * Context 子功能可选依赖
- *
- * 传入后 ContextManager 可提供 chat/chatStream 等高层编排能力。
- * 各依赖按需传入，未传入的能力不可用。
- */
-export interface ContextDeps {
-  /** LLM 操作（chat/chatStream 必需） */
-  llm?: LLMOperations
-  /** Memory 操作（记忆注入/提取需要） */
-  memory?: MemoryOperations
-  /** RAG 操作（检索增强生成需要） */
-  rag?: RagOperations
-  /** Reasoning 操作（推理引擎需要） */
-  reasoning?: ReasoningOperations
-  /** Summary 操作（会话固化 consolidate 需要） */
-  summary?: SummaryOperations
-}
 
 // ─── Memory 生命周期（会话固化） ───
 
@@ -49,6 +28,16 @@ export interface ContextDeps {
  *
  * 把「短期会话记忆 + 摘要」固化为「长期记忆」，形成
  * `Session Memory → Summary → Long-term Memory` 的生命周期闭环。
+ *
+ * @example
+ * ```ts
+ * import type { ContextManager, ConsolidateOptions } from '@h-ai/ai'
+ * async function finish(manager: ContextManager, options: ConsolidateOptions) {
+ *   const result = await manager.consolidate(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data.memories
+ * }
+ * ```
  */
 export interface ConsolidateOptions {
   /**
@@ -68,6 +57,13 @@ export interface ConsolidateOptions {
 
 /**
  * 会话固化结果
+ *
+ * @example
+ * ```ts
+ * import type { ConsolidateResult } from '@h-ai/ai'
+ * const value: ConsolidateResult = { summary: '用户偏好中文', memories: [] }
+ * const summary = value.summary.trim()
+ * ```
  */
 export interface ConsolidateResult {
   /** 本次会话的整合摘要 */
@@ -86,6 +82,14 @@ export interface ConsolidateResult {
  * - `speaking` — 已进入下游表达（如 TTS 合成 / 播放）
  * - `completed` — 已提交，完整生成文本即为真实文本
  * - `interrupted` — 被打断，仅实际表达出去的部分（committed）进入对话
+ *
+ * @example
+ * ```ts
+ * import type { ConversationTurnStatus } from '@h-ai/ai'
+ * function mayCommit(status: ConversationTurnStatus): boolean {
+ *   return status === 'generating' || status === 'speaking'
+ * }
+ * ```
  */
 export type ConversationTurnStatus = 'generating' | 'speaking' | 'completed' | 'interrupted'
 
@@ -94,6 +98,13 @@ export type ConversationTurnStatus = 'generating' | 'speaking' | 'completed' | '
  *
  * 区分「模型生成的文本」与「真实进入对话的文本」，解决多智能体 / 语音访谈等场景中
  * 「AI 说到一半被打断，下一轮所有参与者应看到真实发生了什么」的问题。
+ *
+ * @example
+ * ```ts
+ * import type { ConversationTurn } from '@h-ai/ai'
+ * const value: ConversationTurn = { id: 'turn-1', speaker: 'assistant', generated: '完整回复', committed: '完整', status: 'interrupted', createdAt: Date.now(), committedAt: Date.now() }
+ * const displayedText = value.committed
+ * ```
  */
 export interface ConversationTurn {
   /** 轮次唯一标识 */
@@ -114,6 +125,16 @@ export interface ConversationTurn {
 
 /**
  * 提交 / 打断轮次的输入
+ *
+ * @example
+ * ```ts
+ * import type { ContextManager, CommitTurnInput } from '@h-ai/ai'
+ * async function recordPlayback(manager: ContextManager, turnId: string) {
+ *   const input: CommitTurnInput = { text: '实际已经播放的片段' }
+ *   const result = await manager.interruptTurn(turnId, input)
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * ```
  */
 export interface CommitTurnInput {
   /**
@@ -131,10 +152,19 @@ export interface CommitTurnInput {
  * 有状态上下文管理器配置
  *
  * 通过嵌套子对象直接引用各子模块的配置类型，避免字段重复声明。
+ *
+ * @example
+ * ```ts
+ * import { ai, type ContextManagerOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai；身份来自可信认证会话。
+ * const options: ContextManagerOptions = { scope: { objectId: 'user-1', sessionId: 'session-1' }, turnCommit: 'manual', concurrency: 'reject' }
+ * const result = ai.context.createManager(options)
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
  */
 export interface ContextManagerOptions {
-  /** 交互作用域（objectId + sessionId） */
-  scope?: InteractionScope
+  /** 必填交互作用域（objectId + sessionId）；所有节点共享同一生成与提交屏障。 */
+  scope: InteractionScope
 
   /** 系统提示词（创建时作为首条 system 消息追加） */
   systemPrompt?: string
@@ -160,12 +190,12 @@ export interface ContextManagerOptions {
   /**
    * 并发生成策略（默认 `reject`）
    *
-   * ContextManager 默认实行**单活动生成**：同一管理器同一时刻只允许一个未完成的
+   * ContextManager 默认实行**单活动生成**：同一 scope 的所有管理器/节点同一时刻只允许一个未完成的
    * `chat` / `chatStream` 轮次，避免「上一轮 AI 尚未退出，下一轮 user 消息先写入」
    * 导致的消息乱序（user1 → user2 → assistant1）。
    *
    * - `reject`：已有活动生成时，新的 `chat` / `chatStream` 立即返回 `CONTEXT_BUSY` 错误。
-   * - `queue`：新请求排队，等待前一轮次进入终态（`completed` / `interrupted`）后再开始。
+   * - `queue`：新请求可取消地轮询（不承诺 FIFO），等待前一轮次进入终态（`completed` / `interrupted`）后再开始。
    *
    * `manual` 提交模式下，屏障持续到 `commitTurn` / `interruptTurn` 提交真实文本为止，
    * 因此「打断当前轮次 → 立即发起下一轮」也能保证顺序正确。
@@ -248,6 +278,17 @@ export interface ContextManagerOptions {
 
 /**
  * 重置管理器选项（`ContextManager.reset` 使用）
+ *
+ * @example
+ * ```ts
+ * import type { ContextManager, ContextResetOptions } from '@h-ai/ai'
+ * async function run(manager: ContextManager) {
+ *   const options: ContextResetOptions = { preserveSystemPrompt: true, waitForMemoryTasks: true }
+ *   const result = await manager.reset(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface ContextResetOptions {
   /**
@@ -267,14 +308,25 @@ export interface ContextResetOptions {
   /**
    * 是否等待后台记忆提取任务完成后再清空（默认 `false`）
    *
-   * 为 `true` 时先 `flush()` 等待正在运行的记忆提取写入完成；否则不等待
-   * （已在途的提取任务仍会自行写入记忆后端，但其结果不再影响本管理器状态）。
+   * 为 `true` 时先 `flush()`，失败即返回且不清空上下文；否则不等待。
+   * 已在途提取仍可能写入外部记忆，异常/失败仍由之后的 flush 报告，不自动重放。
    */
   waitForMemoryTasks?: boolean
 }
 
 /**
  * 单次 chat/chatStream 请求的覆盖选项
+ *
+ * @example
+ * ```ts
+ * import type { ContextManager, ContextChatOptions } from '@h-ai/ai'
+ * async function run(manager: ContextManager) {
+ *   const options: ContextChatOptions = { signal: new AbortController().signal }
+ *   const result = await manager.chat('你好', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface ContextChatOptions {
   /** LLM 模型名覆盖 */
@@ -294,6 +346,13 @@ export interface ContextChatOptions {
 
 /**
  * chat() 返回的结果
+ *
+ * @example
+ * ```ts
+ * import type { ContextChatResult } from '@h-ai/ai'
+ * const value: ContextChatResult = { reply: '你好', model: 'configured-model', turnId: 'turn-1' }
+ * const pendingTurnId = value.turnId
+ * ```
  */
 export interface ContextChatResult {
   /** LLM 回复内容 */
@@ -321,6 +380,16 @@ export interface ContextChatResult {
  * 事件序列：`turn_started` → `delta`* → `done`；中途取消（AbortSignal）时为
  * `turn_started` → `delta`* → `cancelled`。`cancelled` 保留 turnId 与已生成文本，
  * 调用方可用真实内容调用 `commitTurn` / `interruptTurn` 提交。
+ *
+ * @example
+ * ```ts
+ * import type { ContextStreamEvent } from '@h-ai/ai'
+ * function render(event: ContextStreamEvent): string {
+ *   if (event.type === 'delta') return event.text
+ *   if (event.type === 'cancelled') return event.generated
+ *   return ''
+ * }
+ * ```
  */
 export type ContextStreamEvent
   = | { type: 'turn_started', turnId: string }
@@ -338,37 +407,28 @@ export type ContextStreamEvent
  *
  * @example
  * ```ts
- * // 创建管理器并直接对话
- * const managerResult = ai.context.createManager({
- *   scope: { objectId: 'user-001', sessionId: 'sess-001' },
- *   systemPrompt: '你是一个友好的助手。',
- *   compress: { maxTokens: 8000, strategy: 'hybrid' },
- *   memory: { enable: true, enableExtract: true },
- * })
- * const manager = managerResult.data
- *
- * const result = await manager.chat('你好')
- * if (result.success) {
- *   const reply = result.data.reply
- *   // 将 reply 渲染到对话界面
- * }
- *
- * for await (const event of manager.chatStream('讲个故事')) {
- *   if (event.type === 'delta') process.stdout.write(event.text)
- * }
- *
- * await manager.save()
+ * import { ai } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai；手动提交只记录实际表达的文本。
+ * const created = ai.context.createManager({ scope: { objectId: 'user-1', sessionId: 'session-1' }, turnCommit: 'manual' })
+ * if (!created.success) throw new Error(created.error.message)
+ * const generated = await created.data.chat('你好')
+ * if (!generated.success) throw new Error(generated.error.message)
+ * const committed = await created.data.commitTurn(generated.data.turnId, { text: generated.data.reply })
+ * if (!committed.success) throw new Error(committed.error.message)
+ * const flushed = await created.data.flush()
+ * if (!flushed.success) throw new Error(flushed.error.message)
  * ```
  */
 export interface ContextManager {
-  /** 当前作用域（如已配置） */
-  readonly scope?: InteractionScope
+  /** 当前必填作用域的独立副本。 */
+  readonly scope: InteractionScope
 
   /**
    * 追加消息
    *
    * 自动在超限时触发压缩（如果启用了 compress.auto）。
    *
+   * 活动生成或 pending 期间拒绝追加；先提交真实轮次或 reset。
    * @param message - 要追加的消息
    * @returns 成功返回 ok(undefined)
    */
@@ -380,6 +440,11 @@ export interface ContextManager {
    * @returns 当前消息列表
    */
   getMessages: () => HaiResult<ChatMessage[]>
+
+  /**
+   * 重新读取共享快照。同步 getters 仅返回本管理器最近一次成功读写的副本。
+   */
+  reload: () => Promise<HaiResult<void>>
 
   /**
    * 获取当前 token 使用量
@@ -396,9 +461,9 @@ export interface ContextManager {
   getSummaries: () => HaiResult<SummaryResult[]>
 
   /**
-   * 持久化当前状态（需要 scope + 存储可用）
+   * 刷新共享快照并同步会话目录；所有消息与轮次变更已经即时 CAS 持久化。
    *
-   * 内部会先 `flush()` 等待所有后台记忆提取完成，确保持久化时记忆已写入。
+   * 内部会先 `flush()` 等待本节点后台记忆任务；不承诺外部记忆与消息跨系统原子提交。
    */
   save: () => Promise<HaiResult<void>>
 
@@ -408,14 +473,18 @@ export interface ContextManager {
    * chat/chatStream 的自动记忆提取是「即发即忘」的后台任务；在开始下一轮召回、
    * 生成总结或关闭前调用 `flush()`，可避免「上一轮记忆尚未写完」的时序问题（issue #14）。
    *
-   * @returns 全部任务完成返回 ok(undefined)
+   * 同轮并发调用共享结果；异常或失败 HaiResult 均返回 MEMORY_EXTRACT_FAILED（含失败数量）。
+   * 返回即确认本批报告，后续 flush 只观察新任务；不会自动重放可能已部分执行的副作用。
+   * 只等待当前管理器所在节点的任务，不是分布式队列或跨系统事务。
+   *
+   * @returns 本批全部成功返回 ok(undefined)；失败须由调用方核对实际记忆状态。
    */
   flush: () => Promise<HaiResult<void>>
 
   /**
    * 当前挂起的后台记忆提取任务数量
    *
-   * 供应用侧观测；为 0 表示无待写入的记忆任务。
+   * 供应用侧观测；为 0 只表示没有在途任务，历史失败仍需通过 flush() 观察。
    */
   readonly pendingMemoryTasks: number
 
@@ -448,17 +517,17 @@ export interface ContextManager {
    * @param turnId - 轮次 ID
    * @returns 成功返回 ok(undefined)；轮次不存在返回 CONTEXT_TURN_NOT_FOUND
    */
-  markTurnSpeaking: (turnId: string) => HaiResult<void>
+  markTurnSpeaking: (turnId: string) => Promise<HaiResult<void>>
 
   /**
    * 提交轮次（`turnCommit: 'manual'` 场景）
    *
    * 把真实文本写入上下文并触发记忆提取；`text` 缺省时使用模型生成的完整文本。
-   * 提交后该轮 `status` 变为 `completed`。
+   * 提交后该轮 `status` 变为 `completed`，可由任意节点按同一 turnId 提交。
    *
    * @param turnId - 轮次 ID
    * @param input - 提交内容（可覆盖为真实表达文本）
-   * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
+   * @returns 相同终态与文本重复提交仍成功；不存在、过期或内容冲突返回错误
    */
   commitTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
 
@@ -470,7 +539,7 @@ export interface ContextManager {
    *
    * @param turnId - 轮次 ID
    * @param input - 实际表达出去的文本
-   * @returns 成功返回 ok(undefined)；轮次不存在或已提交返回对应错误
+   * @returns 相同终态与文本重复提交仍成功；不存在、过期或内容冲突返回错误
    */
   interruptTurn: (turnId: string, input?: CommitTurnInput) => Promise<HaiResult<void>>
 
@@ -520,20 +589,14 @@ export interface ContextManager {
  *
  * @example
  * ```ts
- * // 创建管理器并对话
- * const managerResult = ai.context.createManager({
- *   scope: { objectId: 'user-001', sessionId: 'sess-001' },
- *   compress: { maxTokens: 8000 },
- *   memory: { enable: true },
- * })
- * const manager = managerResult.data
- * const result = await manager.chat('你好')
- *
- * // 从持久化恢复管理器
- * const restored = await ai.context.restoreManager(
- *   { objectId: 'user-001', sessionId: 'sess-001' },
- *   { memory: { enable: true } },
- * )
+ * import { ai, type ContextOperations } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai；跨节点读取使用 restore/reload。
+ * const operations: ContextOperations = ai.context
+ * const restored = await operations.restoreManager({ objectId: 'user-1', sessionId: 'session-1' })
+ * if (!restored.success) throw new Error(restored.error.message)
+ * const messages = restored.data.getMessages()
+ * if (!messages.success) throw new Error(messages.error.message)
+ * const count = messages.data.length
  * ```
  */
 export interface ContextOperations {
@@ -543,7 +606,7 @@ export interface ContextOperations {
    * @param options - 管理器配置
    * @returns 管理器实例
    */
-  createManager: (options?: ContextManagerOptions) => HaiResult<ContextManager>
+  createManager: (options: ContextManagerOptions) => HaiResult<ContextManager>
 
   /**
    * 从持久化恢复上下文管理器
@@ -572,7 +635,7 @@ export interface ContextOperations {
   renameSession: (scope: InteractionScope, title: string) => Promise<HaiResult<void>>
 
   /**
-   * 删除会话（删除会话元数据和对应的上下文数据）
+   * 删除正文并保留永久墓碑；同一 scope 不再复用，迟到节点不能重建。
    *
    * @param scope - 交互作用域（objectId + sessionId，用于多租户隔离）
    * @returns 成功返回 ok(undefined)

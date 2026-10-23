@@ -14,9 +14,11 @@ import type {
   PaymentFunctions,
   PaymentNotifyResult,
   PaymentOrder,
+  PaymentProvider,
   RefundResult,
 } from './payment-types.js'
 import { core, err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 import { PaymentConfigSchema } from './payment-config.js'
 import {
   clearProviders,
@@ -30,9 +32,10 @@ import {
 } from './payment-functions.js'
 import { paymentM } from './payment-i18n.js'
 import { HaiPaymentError } from './payment-types.js'
-import { createAlipayProvider } from './providers/alipay/alipay-provider.js'
-import { createStripeProvider } from './providers/stripe/stripe-provider.js'
-import { createWechatPayProvider } from './providers/wechat/wechat-pay-provider.js'
+import { createAlipayProvider } from './providers/alipay/payment-provider-alipay.js'
+import { createStripeProvider } from './providers/stripe/payment-provider-stripe.js'
+import { StripeOperationRepository } from './providers/stripe/payment-stripe-repository-operation.js'
+import { createWechatPayProvider } from './providers/wechat/payment-provider-wechat.js'
 
 const logger = core.logger.child({ module: 'payment', scope: 'main' })
 
@@ -51,25 +54,23 @@ const notInitialized = core.module.createNotInitializedKit(
 // ─── 服务对象 ───
 
 /**
- * 支付模块服务对象
- *
+ * 支付生命周期与统一渠道操作入口；初始化失败必须停止依赖该模块的业务。
  * @example
  * ```ts
- * import { payment } from '@h-ai/payment'
- *
- * await payment.init({
- *   wechat: { mchId: '...', apiV3Key: '...', ... },
- *   alipay: { appId: '...', privateKey: '...' , ... },
- * })
- *
- * const result = await payment.createOrder('wechat', {
- *   orderNo: 'ORD001',
- *   amount: 100,
- *   description: '测试商品',
- *   tradeType: 'jsapi',
- *   userId: 'openid-xxx',
- *   notifyUrl: 'https://api.example.com/payment/notify/wechat',
- * })
+ * import { payment, type PaymentConfigInput } from '@h-ai/payment'
+ * async function run(config: PaymentConfigInput) {
+ *   // 使用 Stripe 时，宿主已先初始化同一共享 reldb；payment.close 不关闭它。
+ *   const initialized = await payment.init(config)
+ *   if (!initialized.success) throw new Error(initialized.error.message)
+ *   try {
+ *     const order = await payment.queryOrder('stripe', 'ORDER_1')
+ *     if (!order.success) throw new Error(order.error.message)
+ *     return order.data
+ *   }
+ *   finally {
+ *     await payment.close()
+ *   }
+ * }
  * ```
  */
 export const payment: PaymentFunctions = {
@@ -77,6 +78,7 @@ export const payment: PaymentFunctions = {
    * 初始化支付模块
    *
    * 根据提供的配置自动注册对应的 Provider。
+   * Stripe 要求共享 reldb 已初始化；仓库就绪后才发布 Provider，关闭时不代替宿主关闭 reldb。
    *
    * @param config - 支付配置
    */
@@ -109,6 +111,18 @@ export const payment: PaymentFunctions = {
       }
       const parsed = parseResult.data
 
+      // Stripe 的渠道映射和幂等记录必须持久化；建表成功后才能发布 Provider。
+      let stripeProvider: PaymentProvider | undefined
+      if (parsed.stripe) {
+        if (!reldb.isInitialized)
+          return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeDatabaseRequired'))
+        const repository = new StripeOperationRepository(reldb)
+        const ready = await repository.initialize()
+        if (!ready.success)
+          return err(HaiPaymentError.CONFIG_ERROR, paymentM('payment_stripeStoreInitFailed'), ready.error)
+        stripeProvider = createStripeProvider(parsed.stripe, repository)
+      }
+
       // 清除旧注册
       clearProviders()
 
@@ -119,9 +133,8 @@ export const payment: PaymentFunctions = {
       if (parsed.alipay) {
         registerProvider(createAlipayProvider(parsed.alipay))
       }
-      if (parsed.stripe) {
-        registerProvider(createStripeProvider(parsed.stripe))
-      }
+      if (stripeProvider)
+        registerProvider(stripeProvider)
 
       currentConfig = parsed
       logger.info('Payment module initialized', {

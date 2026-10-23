@@ -10,7 +10,14 @@
   "reach_providerNotFound": "Provider not found: {provider}",
   "reach_providerRequired": "No provider specified, set provider field in message or template",
   "reach_dndBlocked": "Message discarded by Do Not Disturb period",
-  "reach_dndDeferred": "Message deferred by Do Not Disturb period, will be sent after DND ends",
+  "reach_dndPersistenceRequired": "DND delay requires an initialized database and a ready queue table",
+  "reach_dndEnqueueFailed": "The message could not be reliably queued; try again later",
+  "reach_sendRecordSaveFailed": "Failed to persist the reach send record",
+  "reach_invalidStoredInteger": "Send record {field} is not a safe non-negative integer",
+  "reach_claimLost": "The valid delivery lease was lost",
+  "reach_unknownResolutionFailed": "Unknown delivery was not found or has already been resolved",
+  "reach_queueInputInvalid": "Invalid queue receipt or manual resolution parameters",
+  "reach_deliveryUnknown": "The external delivery outcome is unknown; manual review is required and automatic redelivery has stopped",
   "reach_smsSendFailed": "SMS send failed: {error}",
   "reach_emailSendFailed": "Email send failed: {error}",
   "reach_apiSendFailed": "API callback send failed: {error}",
@@ -29,5 +36,8 @@
   "reach_config_providersRequired": "At least one provider is required",
   "reach_templateDbInitFailed": "Template database initialization failed: {error}",
   "reach_templateSaveFailed": "Template save failed: {error}",
-  "reach_templateDeleteFailed": "Template delete failed: {error}"
+  "reach_templateDeleteFailed": "Template delete failed: {error}",
+  "reach_queueRetryInvalid": "maxRetryDelayMs must be at least retryDelayMs",
+  "reach_deadRequeueFailed": "Dead message changed or does not exist; reload its state before restoring",
+  "reach_productionProviderRequired": "Production requires a delivery provider; console is available only in development or explicit test mode"
 }

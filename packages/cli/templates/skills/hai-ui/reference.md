@@ -52,7 +52,6 @@
 - **primitives**：单个交互单元，例如 `Button`、`Input`、`Select`、`Badge`。
 - **compounds**：通用业务骨架，例如 `Form`、`Modal`、`Drawer`、`DataTable`、`Pagination`。
 - **scenes**：完整业务流，例如 `LoginForm`、`FileUpload`、`CrudPage`、`AiDocumentEditor`。
-
 经验法则：
 
 - 只是做一个输入控件或按钮行 → 先看 primitives。
@@ -361,7 +360,7 @@ const p = usePlatform()
 | 组件           | Props 要点                                      | 说明     |
 | -------------- | ----------------------------------------------- | -------- |
 | `AuthShell`    | `variant`('card'/'split'), `title`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` | 认证页布局（包裹登录/注册表单） |
-| `LoginForm`    | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
+| `LoginForm`    | `showForgotPassword`, `showRegisterLink`, `errors`  | 登录表单 |
 | `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
 | `UserProfile`  | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint` | 用户资料，选择器和提示对齐业务校验；最终验证和上传仍由回调负责 |
 
@@ -582,6 +581,8 @@ typescript, javascript, python, java, go, rust, c, cpp, csharp, ruby, php, swift
 
 ## 配置驱动认证页面
 
+密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
+
 协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
 
 ```yaml
@@ -651,7 +652,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 | `@h-ai/ui/theme`           | 轻量主题元数据与工具，不经过组件根入口 |
 | `@h-ai/ui/i18n`            | 轻量语言工具，供状态层使用，不加载组件或引导 CSS |
 | `@h-ai/ui/auto-import`     | Svelte 预处理器：组件自动导入          |
-| `@h-ai/ui/components/*`    | 公开组件目录的 JS 入口，按实际 exports/产物选择 |
+| `@h-ai/ui/components/primitives/index` 等明确 barrel | 仅 package.exports 列出的组件目录；组件默认导出经 barrel 转发 |
 | `@h-ai/ui/components/primitives/index` | 公开原子组件目录入口，如 Button/Input |
 | `@h-ai/ui/styles/global.css`       | 全局基础样式（重置/滚动条/焦点）       |
 | `@h-ai/ui/styles/theme.css`        | Tailwind v4 `@theme` Token            |
@@ -686,3 +687,7 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
   <Button type="submit">{m.save()}</Button>
 </Form>
 ```
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
+
+`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。

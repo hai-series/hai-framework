@@ -1,0 +1,61 @@
+# 配置、环境变量与消费点对应表
+
+本表覆盖 21 个框架包。每个可通过 YAML 配置的字段，其单位、枚举及数值限制以[环境变量总表](../.env.example)和[CLI 配置目录](../packages/cli/src/commands/cli-config-catalog.json)为准；两者由实际公开 Schema 生成；赋值是供选择的示例建议值，必填枚举的首项不表示 Schema 有默认值。真实解析默认值以对应 Schema 的 default 及消费者父对象默认值为准，不另维护一份手写默认值。复杂的跨字段、Provider 和生产限制须同时阅读下面列出的实际消费点与模块说明。
+
+纯配置消费者可从 `@h-ai/reldb/schemas` 导入同一组数据库 Schema/类型；该入口只依赖 Zod，不创建实例或加载驱动。CLI 部署向导内联它，并在保存连接前按实际后端校验 TLS。
+
+## 配置经过哪些步骤
+
+1. `core.config.loadEnvFiles` 读取公共基础、环境及本机私有文件，返回合并结果；调用方决定是否注入进程。已有进程环境优先，空字符串也是显式覆盖。不要在环境总表中填入真实凭据。
+2. `core.init({ configDir })` 扫描运行时 YAML，精确排除 `_deploy.yml` / `_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们，业务 `deploy.yml` 与手动 `core.config.load` 不受影响。只有 `_core.yml` 自动用 Core Schema 校验，其它运行时 YAML 先进入配置缓存；单项加载返回失败时记日志并继续，目录扫描等异常仍可能传播。应用必须 validate 必需配置并检查 success，再交给对应模块 `init` 或工厂/适配器，不能把“文件已加载”等同于“模块已初始化”。
+3. 约定变量为 `HAI_<配置名>_<路径>`，camelCase 不拆词；数据库配置名是 `db`，所以是 `HAI_DB_*`。父对象/数组整体覆盖优先于叶子覆盖；叶子覆盖要求 YAML 存在该路径，缺少路径时使用父节点的完整 JSON/YAML 值。数组索引不是单个固定 Provider。
+4. 初始化 Schema 填充默认值并检查字段；后端连接/资源就绪成功后才发布实例。关闭按依赖反序执行并检查结果。纯函数、客户端工厂、serv 和 kit 按自身公开契约使用，不能套用服务端生命周期。
+5. `pnpm generate:env` 在依赖包 fresh build 后更新总表与应用示例，`pnpm check:env` 检查生成一致性；`check:skills` 检查 skill 契约。它们不证明字段已传入 SDK、共享状态正确或真实投递成功，行为证据见各修正任务。
+
+入口扫描按 TypeScript AST 边界排除 JS/TS 与 Svelte script 中的真实 JSDoc，不删除字符串、正则或插值模板正文；Schema 字段说明仍从原始注释读取，YAML/生成模板的可选字段引用继续收集。
+
+## 有 YAML Schema 的模块
+
+| 包 / 配置名 | Schema / 默认值来源 | 初始化及实际消费点 | 环境变量、CLI 与文档 |
+| --- | --- | --- | --- |
+| core / `core` | [CoreConfigSchema、LoggingConfigSchema](../packages/core/src/core-config.ts) | [Node 配置加载及日志应用](../packages/core/src/core-main.node.ts)、[YAML/环境覆盖](../packages/core/src/functions/core-function-config.node.ts)、[Logger](../packages/core/src/functions/core-function-logger.node.ts)；name/version/env/defaultLocale 作为应用元数据由应用读取，logging 驱动 Logger | `HAI_CORE_*`；[CLI core 生成器](../packages/cli/src/commands/cli-config-templates.ts)、[core README](../packages/core/README.md) |
+| reldb / `db` | [ReldbConfigSchema](../packages/reldb/src/reldb-config.ts) | [init 与 Provider 选择](../packages/reldb/src/reldb-main.ts)、[PostgreSQL](../packages/reldb/src/providers/reldb-provider-postgres.ts)、[MySQL](../packages/reldb/src/providers/reldb-provider-mysql.ts)、[SQLite](../packages/reldb/src/providers/reldb-provider-sqlite.ts)；SQL 操作日志使用数量摘要 | `HAI_DB_*`；[CLI db 生成器](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/reldb/README.md)、[开发 skill](../.agents/skills/hai-usage-reldb/reference.md)、[应用 skill](../packages/cli/templates/skills/hai-reldb/reference.md) |
+| cache / `cache` | [CacheConfigSchema](../packages/cache/src/cache-config.ts) | [init](../packages/cache/src/cache-main.ts)、[Redis 连接选项/Cluster/Sentinel](../packages/cache/src/providers/cache-provider-redis.ts)、[Memory](../packages/cache/src/providers/cache-provider-memory.ts)；密码、超时、重试、keyPrefix 在实际连接处消费 | `HAI_CACHE_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/cache/README.md)、[应用 skill](../packages/cli/templates/skills/hai-cache/reference.md) |
+| storage / `storage` | [StorageConfigSchema](../packages/storage/src/storage-config.ts) | [init](../packages/storage/src/storage-main.ts)、[S3](../packages/storage/src/providers/storage-provider-s3.ts)、[Local](../packages/storage/src/providers/storage-provider-local.ts)；连接配置、文件权限和操作日志由具体 Provider 消费 | `HAI_STORAGE_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/storage/README.md)、[skill](../packages/cli/templates/skills/hai-storage/reference.md)、[HTTP 能力矩阵](storage-api-capabilities.md) |
+| iam / `iam` | [IamConfigSchema 及密码/OTP/重置/LDAP/会话/UI 子 Schema](../packages/iam/src/iam-config.ts) | [init 与公开配置](../packages/iam/src/iam-main.ts)、[用户及重置](../packages/iam/src/user/iam-user-functions.ts)、[OTP](../packages/iam/src/authn/otp/iam-authn-otp-strategy.ts)、[共享会话](../packages/iam/src/session/iam-session-functions.ts)；UI 子配置经过公开字段白名单后才交给组件 | `HAI_IAM_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/iam/README.md)、[开发 skill](../.agents/skills/hai-usage-iam/reference.md)、[应用 skill](../packages/cli/templates/skills/hai-iam/reference.md) |
+| ai / `ai` | [AIConfigSchema 与模型/Knowledge/Memory/Context 子配置](../packages/ai/src/ai-config.ts) | [init](../packages/ai/src/ai-main.ts)、[子系统依赖装配](../packages/ai/src/ai-functions.ts)、[模型解析](../packages/ai/src/ai-config.ts)、[持久 Store](../packages/ai/src/store/providers/ai-store-provider-db.ts)；具体 LLM/音频/图像 Provider 消费解析后的模型参数 | `HAI_AI_*` 及有明确读取入口的厂商回退变量；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/ai/README.md)、[REFERENCE](../packages/ai/REFERENCE.md)、[开发 skill](../.agents/skills/hai-usage-ai/reference.md)、[应用 skill](../packages/cli/templates/skills/hai-ai/reference.md) |
+| vecdb / `vecdb` | [VecdbConfigSchema](../packages/vecdb/src/vecdb-config.ts) | [init](../packages/vecdb/src/vecdb-main.ts)、[Qdrant](../packages/vecdb/src/providers/vecdb-provider-qdrant.ts)、[pgvector](../packages/vecdb/src/providers/vecdb-provider-pgvector.ts)、[Chroma](../packages/vecdb/src/providers/vecdb-provider-chroma.ts)、[LanceDB](../packages/vecdb/src/providers/vecdb-provider-lancedb.ts) | `HAI_VECDB_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/vecdb/README.md)、[skill](../packages/cli/templates/skills/hai-vecdb/reference.md) |
+| reach / `reach` | [ReachConfigSchema / Provider / 队列 / 模板](../packages/reach/src/reach-config.ts) | [init 与 Provider 装配](../packages/reach/src/reach-main.ts)、[模板渲染](../packages/reach/src/reach-template.ts)、[SMTP](../packages/reach/src/providers/reach-provider-smtp.ts)、[API](../packages/reach/src/providers/reach-provider-api.ts)、[短信](../packages/reach/src/providers/reach-provider-aliyun-sms.ts) | `HAI_REACH_PROVIDERS_<index>_*` 等；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/reach/README.md)、[skill](../packages/cli/templates/skills/hai-reach/reference.md) |
+| payment / `payment` | [PaymentConfigSchema](../packages/payment/src/payment-config.ts) | [init](../packages/payment/src/payment-main.ts)、渠道签名、请求、通知验签及共享商户订单状态；tradeType 是每次订单输入，不能由配置表推断终端均可发起 | `HAI_PAYMENT_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/payment/README.md)、[skill](../packages/cli/templates/skills/hai-payment/reference.md) |
+| audit / `audit` | [AuditInitConfigSchema](../packages/audit/src/audit-config.ts) | [init、用户表字段映射与查询](../packages/audit/src/audit-main.ts)；可配置标识符仍须通过数据库标识符规则，不作为任意 SQL 片段 | `HAI_AUDIT_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/audit/README.md)、[skill](../packages/cli/templates/skills/hai-audit/reference.md) |
+| scheduler / `scheduler` | [SchedulerConfigSchema](../packages/scheduler/src/scheduler-config.ts) | [init](../packages/scheduler/src/scheduler-main.ts)、[runner 最终租约条件与日志投影](../packages/scheduler/src/scheduler-runner.ts)、[executor](../packages/scheduler/src/scheduler-executor.ts)；任务 JS 是可信应用代码，幂等声明不替代接收端持久去重 | `HAI_SCHEDULER_*`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/scheduler/README.md)、[skill](../packages/cli/templates/skills/hai-scheduler/reference.md) |
+| deploy / `deploy` | [DeployConfigSchema](../packages/deploy/src/deploy-config.ts) | [init / 服务凭据分派](../packages/deploy/src/deploy-main.ts)、[中间件字段与连接生成](../packages/deploy/src/deploy-middleware.ts)、[制品执行脚本](../packages/deploy/src/container/deploy-scripts.ts)；provisioner 凭据按白名单传给对应服务，不是应用公开运行时配置 | `HAI_DEPLOY_*`；[CLI 创建部署说明](../packages/cli/src/commands/cli-create.ts)、[README](../packages/deploy/README.md)、[skill](../packages/cli/templates/skills/hai-deploy/middleware.md) |
+| serv / `serv` | [ServConfigSchema 与解析函数](../packages/serv/src/serv-config.ts) | [createApp](../packages/serv/src/serv-app.ts)、[监听](../packages/serv/src/adapters/serv-adapter-node.ts)、[传输加密](../packages/serv/src/serv-transport.ts)；解析后的 server/http/cors/transport 分别驱动监听、路由、中间件，serv 没有 init/close 单例 | `HAI_SERV_*`、`HOST`/`PORT`；[CLI](../packages/cli/src/commands/cli-config-templates.ts)、[README](../packages/serv/README.md)、[skill](../packages/cli/templates/skills/hai-serv/reference.md) |
+| kit / `kit` | [KitConfigSchema 与解析函数](../packages/kit/src/kit-config.ts) | [kit API](../packages/kit/src/kit-main.ts)、[transport 中间件](../packages/kit/src/modules/crypto/kit-transport-middleware.ts)；server 由 SvelteKit/Vite 构建适配入口消费，不会因加载 YAML 自动启动监听 | `HAI_KIT_*`、`HOST`/`PORT`；[README](../packages/kit/README.md)、[skill](../packages/cli/templates/skills/hai-kit/reference.md) |
+
+## 通过调用参数配置的模块
+
+这些包没有统一的 `HAI_<包名>_*` 初始化约定。只有下面列出的显式入口才会读取环境变量，不能把任意函数选项添加到 `.env` 后声称已生效。
+
+| 包 | 配置和消费边界 | 文档 |
+| --- | --- | --- |
+| api-client | [ApiClientConfig](../packages/api-client/src/api-client-types.ts) 由 [create/init](../packages/api-client/src/api-client-main.ts) 消费；baseUrl、headers、fetch、超时、认证存储与加密适配器通过参数注入。PUBLIC_API_BASE 等属于应用读取入口。浏览器默认 httpOnly Cookie，不持久化敏感 Token 到 Web Storage | [README](../packages/api-client/README.md)、[skill](../packages/cli/templates/skills/hai-api-client/reference.md) |
+| api-contract | 只有领域输入/输出 Schema 和 contract 工厂，没有连接配置或生命周期；其验证不代表鉴权、资源所有权或 Provider 已执行 | [README](../packages/api-contract/README.md)、[存储限制](storage-api-capabilities.md) |
+| capacitor | [公开类型](../packages/capacitor/src/capacitor-types.ts) 与 [init](../packages/capacitor/src/capacitor-main.ts) 驱动原生能力；Push 的取消/超时/清理和安全 TokenStorage 按实际插件契约使用。CAPACITOR_SERVER_URL 是示例原生构建入口，不是服务端框架配置 | [README](../packages/capacitor/README.md)、[skill](../packages/cli/templates/skills/hai-capacitor/reference.md) |
+| cli | [ModuleConfigs / FeatureId](../packages/cli/src/cli-types.ts) 由命令及 [配置生成器](../packages/cli/src/commands/cli-config-templates.ts) 消费；语言优先级 HAI_CORE_DEFAULTLOCALE → LC_ALL → LC_MESSAGES → LANG。命令与服务端配置不是同一生命周期 | [README](../packages/cli/README.md)、[应用创建 skill](../packages/cli/templates/skills/hai-app-create/development.md) |
+| crypto | 纯运算、transport 工厂和共享 key registry 通过 [公开类型](../packages/crypto/src/crypto-types.ts) 与 [transport 类型](../packages/crypto/src/transport/crypto-transport-types.ts) 接收参数；没有 `_crypto.yml` 统一初始化 Schema。服务端 keyring 由适配层显式读取 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，绝不能下发给浏览器 | [README](../packages/crypto/README.md)、[skill](../packages/cli/templates/skills/hai-crypto/reference.md) |
+| datapipe | [CleanOptionsSchema / ChunkOptionsSchema](../packages/datapipe/src/datapipe-config.ts) 在每次 clean/chunk 调用解析；独立 chunk 默认 overlap=0，AI Knowledge 父配置默认 overlap=200，不能把复用子 Schema 的默认值错写为消费者默认值 | [README](../packages/datapipe/README.md)、[skill](../packages/cli/templates/skills/hai-datapipe/reference.md) |
+| ui | Svelte props、store 工厂和主题/语言 API 通过调用参数配置；supportedLocales 属于 locale store 或应用翻译工程，不能写进 Core YAML 期待自动注册翻译。上传组件只负责交互，服务端校验不由 props 替代 | [README](../packages/ui/README.md)、[开发 skill](../.agents/skills/hai-ui/SKILL.md)、[应用 skill](../packages/cli/templates/skills/hai-ui/reference.md) |
+
+## 本轮修正后的语义边界
+
+- 删除没有运行时消费的 Core `debug`、`id` 以及示例 `_core.yml` 中的 `features` / `supportedLocales`。日志使用真实 `logging.level`，ID 前缀与长度使用每次 `core.id` 调用参数，业务开关放应用自己的 Schema；Core Schema 对未知字段明确失败。
+- Logger 导入不修改 `LANG` / `LC_ALL` / `PYTHONIOENCODING`。Windows TTY 编码处理不能覆盖用户选择的消息语言或子进程协议。
+- MySQL 与 PostgreSQL 的 pool 字段和范围分别定义；URL 优先级、获取连接期限及不支持的字段以实际驱动消费为准。不能用同名通用 pool 对象推断两个驱动都支持 `min` 或 `idleTimeout`。
+- Redis Cluster 的主节点密码与配置拓扑分别处理；缓存 SET 的应用/未应用结果、互斥期限和单位不再用成功的 void 混淆。cache 期限以所用选项的秒/毫秒为准，不能跨选项套单位。
+- 存储签名只支持 S3；公开 HTTP 入参不包含尚未消费的 `contentLength`。Node 流/checksum 选项不是上传签名能力；具体映射见[存储矩阵](storage-api-capabilities.md)。
+- RelDB 操作日志不记录 SQL 原文、参数值、DDL 默认值或驱动原始错误。`maxLength` 限制安全数量摘要，0 表示省略摘要，不能描述为“截断后记录原 SQL/参数”。
+- kit 限流内存限制同时识别 NODE_ENV 与 HAI_CORE_ENV 的 production。kit/serv 认证 Cookie 默认 Secure 同样识别两者，但不受 HAI_E2E/HAI_E2E_MOCK 放宽；serv 的显式 secure 参数仍优先。
+- 生产共享后端、未知外部效果、租约/CAS 的最终提交与重试边界见[共享状态能力表](distributed-state.md)。获得数据库连接、写入缓存或拿到锁都不能替代这些保证。
+
+三语 README 对应相同公开 API；本表集中记录源码消费链，不复制每个模块的完整用法。公开配置修改时必须同时更新实现、应用/CLI 模板、生成目录与环境示例、README、开发 skill、应用 skill 和 LLMS；静态生成检查与真实行为验证分别报告。

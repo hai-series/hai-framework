@@ -5,12 +5,21 @@
  * 用途绑定、grant 透传。使用 SQLite 内存 + 内存缓存，无需外部依赖。
  */
 
-import { describe, expect, it } from 'vitest'
-import { iam } from '../src/index.js'
+import { cache } from '@h-ai/cache'
+import { ok } from '@h-ai/core'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { HaiIamError, iam } from '../src/index.js'
 import { defineIamTestEnv } from './helpers/iam-test-env.js'
 
 describe('iam ticket', () => {
   defineIamTestEnv('ticket')
+  afterEach(() => vi.restoreAllMocks())
+
+  it('nX 未实际写入时不签发票据', async () => {
+    const write = vi.spyOn(cache.kv, 'set').mockResolvedValueOnce(ok(false))
+    expect(await iam.ticket.issue({ subjectId: 'collision-user', purpose: 'test' })).toMatchObject({ success: false, error: { code: HaiIamError.TICKET_ISSUE_FAILED.code } })
+    expect(write).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ subjectId: 'collision-user' }), expect.objectContaining({ nx: true }))
+  })
 
   it('签发后可原子消费一次，返回主体、用途与 grant', async () => {
     const issued = await iam.ticket.issue({

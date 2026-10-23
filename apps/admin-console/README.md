@@ -59,6 +59,8 @@
 
 #### 安装与启动
 
+默认 transport 必须从服务端私有环境或 `apps/admin-console/.env.local` 注入 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`；运行时不隐式生成。客户端公钥 registry 复用 reldb，多节点使用相同受管 ring 和共享数据库，不需要粘性路由。私钥不放公开 `_kit.yml`、PUBLIC_/VITE_、日志或浏览器配置。密钥由 Secret Manager/受管配置提供，轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。
+
 ```bash
 # 在 hai-framework monorepo 根目录
 pnpm install
@@ -128,7 +130,7 @@ SSR 只向浏览器传递公开的路径与开关，不包含 server 字段；�
 
 [完整配置与安全约束](../../packages/iam/README.md)
 
-LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
 ### 🌍 国际化 (i18n)
 
@@ -236,6 +238,8 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 Apache License 2.0
 
 ## 开发测试
+
+浏览器验证使用 `pnpm --filter admin-console test:e2e` 托管入口分配绝对数据目录，服务子进程显式选择隔离的 SQLite/Memory/Local，不继承外部模块变量或读取用户 `.env.local`。原有 transport 开启/关闭两组保持独立，开启组使用本轮可信 SM2 ring 与实际 registry；普通开发和生产配置规则不变。
 
 ```sh
 pnpm --filter admin-console typecheck

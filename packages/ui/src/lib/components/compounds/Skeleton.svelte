@@ -1,6 +1,16 @@
 <!--
   @component Skeleton
   骨架屏占位组件，用于加载状态展示。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Skeleton } from '@h-ai/ui'
+  const props: ComponentProps<typeof Skeleton> = { variant: 'text', count: 3 }
+  const component = mount(Skeleton, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, SkeletonProps } from '../../types.js'

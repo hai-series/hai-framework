@@ -54,8 +54,7 @@ const notInitializedSymmetric = notInitialized.proxy<SymmetricOperations>('sync'
 const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
 
 // ─── 传输加密 ───
-// 直接复用顶层 `crypto`：未初始化时 asymmetric/symmetric 会自动返回
-// NOT_INITIALIZED 错误，无需额外 proxy。
+// 直接复用顶层 crypto；服务端工厂先检查初始化，不为传输另建单例。
 
 // 通过函数声明（hoisted）延迟引用 `crypto`，避免 use-before-define 报错；
 // 实际调用发生在 init 之后，闭包持有的引用是安全的。
@@ -64,7 +63,7 @@ function getCrypto(): CryptoFunctions {
   return crypto
 }
 const transportOperations: TransportOperations = {
-  createServer: options => createTransportEncryption(getCrypto(), options),
+  createServer: options => getCrypto().isInitialized ? createTransportEncryption(getCrypto(), options) : notInitialized.result(),
   createClient: options => createTransportClient({ crypto: getCrypto(), ...options }),
   protocol: TRANSPORT_PROTOCOL,
 }
@@ -72,19 +71,23 @@ const transportOperations: TransportOperations = {
 // ─── 服务对象 ───
 
 /**
- * 加密模块服务对象（统一入口）
- *
- * 使用前必须调用 `crypto.init()` 进行初始化。
- * 未初始化时访问 asymmetric/hash/symmetric/password 的任何方法均返回 NOT_INITIALIZED 错误。
+ * 加密模块公开服务对象；先检查 init 的 HaiResult，再使用各操作域，最后 close。
+ * SM2/SM3/SM4 原语不等于认证传输；HTTP 使用 transport 的签名、MAC、上下文和共享 nonce 校验。
  *
  * @example
  * ```ts
  * import { crypto } from '@h-ai/crypto'
- *
- * await crypto.init()
- * const hash = crypto.hash.hash('hello')
- * const keyPair = crypto.asymmetric.generateKeyPair()
- * await crypto.close()
+ * const initialized = await crypto.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const generated = crypto.asymmetric.generateKeyPair()
+ *   if (!generated.success) throw new Error(generated.error.message)
+ *   const pair = generated.data
+ *   const digest = crypto.hash.hash('hello')
+ *   if (!digest.success) throw new Error(digest.error.message)
+ *   const publicKeyValid = crypto.asymmetric.isValidPublicKey(pair.publicKey)
+ * }
+ * finally { await crypto.close() }
  * ```
  */
 export const crypto: CryptoFunctions = {
@@ -158,8 +161,7 @@ export const crypto: CryptoFunctions = {
   /**
    * 传输加密操作（端到端混合加密）
    *
-   * createServer 内部直接复用 asymmetric/symmetric，因此未初始化时
-   * 自动通过 asymmetric proxy 返回 NOT_INITIALIZED 错误。
+   * createServer 检查初始化后复用 asymmetric/symmetric；未初始化返回 NOT_INITIALIZED。
    */
   transport: transportOperations,
   /** 是否已初始化 */

@@ -5,13 +5,12 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { executeApiTask, executeJsTask, executeTask, interruptTask, saveInterruptedTaskLog, setLogRepository } from '../src/scheduler-executor.js'
+import { createInterruptedTaskLog, executeApiTask, executeJsTask, executeTask, interruptTask } from '../src/scheduler-executor.js'
 import { clearJsTaskHandlerCache, compileJsTaskHandler } from '../src/scheduler-js-compiler.js'
 
 describe('scheduler-executor', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-    setLogRepository(null)
   })
 
   it('应成功执行 JS 字符串任务', async () => {
@@ -114,7 +113,7 @@ describe('scheduler-executor', () => {
       cron: '* * * * *',
     }
 
-    const log = await saveInterruptedTaskLog(
+    const log = await createInterruptedTaskLog(
       task,
       { type: 'manual', source: 'admin-console' },
       'manual interruption',

@@ -33,12 +33,19 @@ const RESULT_TYPE_MAP = {
  *
  * @param options - 照片选项
  * @returns 照片结果
- *
  * @example
  * ```ts
- * const result = await capacitor.camera.takePhoto({ source: 'camera', quality: 80 })
- * if (result.success) {
- *   imageUrl = result.data.data
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.camera.takePhoto({ source: 'photos', width: 1200 })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
  * ```
  */

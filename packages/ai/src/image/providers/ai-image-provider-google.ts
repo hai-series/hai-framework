@@ -4,6 +4,16 @@ import type { ImageSize } from '../ai-image-types.js'
 import type { ImageProvider } from './ai-image-provider.js'
 import { imageFromBase64, imageProtocolError, imageProviderFailure, readJson, referenceImageBase64 } from './ai-image-provider.js'
 
+/**
+ * Gemini 返回的候选图片片段，只描述本适配器消费的字段。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: GoogleImageResponse = { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } }] } }] }
+ * const parts = response.candidates?.flatMap(candidate => candidate.content?.parts ?? []) ?? []
+ * ```
+ */
 interface GoogleImageResponse {
   candidates?: Array<{
     content?: {
@@ -32,7 +42,20 @@ function googleImageFormat(size: ImageSize): { aspectRatio: string, imageSize: s
   }
 }
 
-/** 创建 Google Gemini Image Provider */
+/**
+ * 创建 Google Gemini Image Provider
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(request: Parameters<ImageProvider['generate']>[0]) {
+ *   const provider = createGoogleImageProvider()
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export function createGoogleImageProvider(): ImageProvider {
   return {
     async generate(request) {
@@ -64,17 +87,20 @@ export function createGoogleImageProvider(): ImageProvider {
             generationConfig,
           }),
           signal: request.signal,
+          redirect: 'error',
         })
-        const parsed = await readJson(response)
+        const parsed = await readJson(response, request)
         if (!parsed.success)
           return parsed
         const body = parsed.data as GoogleImageResponse
         const parts = body.candidates?.flatMap(candidate => candidate.content?.parts ?? []) ?? []
+        if (parts.filter(part => part.inlineData?.data || part.inline_data?.data).length > request.maxImages)
+          throw new RangeError('Image count exceeds limit')
         const images = parts.flatMap((part) => {
           if (part.inlineData?.data)
-            return [imageFromBase64(part.inlineData.data, part.inlineData.mimeType ?? 'image/png', request.size)]
+            return [imageFromBase64(part.inlineData.data, part.inlineData.mimeType ?? 'image/png', request)]
           if (part.inline_data?.data)
-            return [imageFromBase64(part.inline_data.data, part.inline_data.mime_type ?? 'image/png', request.size)]
+            return [imageFromBase64(part.inline_data.data, part.inline_data.mime_type ?? 'image/png', request)]
           return []
         })
         return images.length ? { success: true, data: images } : imageProtocolError()

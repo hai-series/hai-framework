@@ -365,7 +365,7 @@
   "modules_storage_op_download": "Download",
   "modules_storage_op_download_desc": "Download file",
   "modules_storage_op_presign": "Presign URL",
-  "modules_storage_op_presign_desc": "Generate presigned access URL",
+  "modules_storage_op_presign_desc": "Generate S3 presigned URLs; local storage returns unsupported",
   "modules_storage_op_list": "List Files",
   "modules_storage_op_list_desc": "List all files in directory",
   "modules_ai_feat_chat_name": "Text Generation",

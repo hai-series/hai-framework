@@ -13,15 +13,40 @@ import { twMerge } from 'tailwind-merge'
  *
  * @param classes - 类名列表
  * @returns 合并后的类名字符串
+ *
+ * @example
+ * ```ts
+ * import { cn } from '@h-ai/ui'
+ * const classes = cn('px-2', 'px-4', false, 'font-medium')
+ * // classes 为冲突合并后的类名，可直接用于元素 class。
+ * ```
  */
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return twMerge(classes.filter(Boolean).join(' '))
 }
 
+/**
+ * 实际可转发的 data-* 原子值映射，不包含 null 或 undefined。
+ *
+ * @example
+ * ```ts
+ * import type { ForwardedDataAttributes } from '@h-ai/ui'
+ * const example: ForwardedDataAttributes = { 'data-testid': 'profile-save' }
+ * ```
+ */
 export type ForwardedDataAttributes = Record<`data-${string}`, string | number | boolean>
 
 /**
  * 从组件未声明 props 中提取 data-* 属性，避免把普通未知属性透传到 DOM。
+ * @param props - 组件的属性对象。
+ * @returns 只包含安全原子值的 data-* 属性对象。
+ *
+ * @example
+ * ```ts
+ * import { getDataAttributes } from '@h-ai/ui'
+ * const attributes = getDataAttributes({ 'data-testid': 'save', 'data-loading': false, onclick: 'ignored' })
+ * // 仅保留安全类型的 data-* 字段。
+ * ```
  */
 export function getDataAttributes(props: DataAttributes | Record<string, unknown>): ForwardedDataAttributes {
   const dataAttributes: ForwardedDataAttributes = {}
@@ -111,6 +136,15 @@ const SIZE_MAPS: Record<string, Record<Size, string>> = {
 
 /**
  * 获取变体类名
+ * @param variant - 语义变体。
+ * @param prefix - 类名前缀或界面 ID 前缀。
+ * @returns 对应前缀和变体的 DaisyUI 类名；未知前缀按约定拼接。
+ *
+ * @example
+ * ```ts
+ * import { getVariantClass } from '@h-ai/ui'
+ * const classes = getVariantClass('primary', 'btn')
+ * ```
  */
 export function getVariantClass(variant: Variant, prefix = 'btn'): string {
   const map = VARIANT_MAPS[prefix]
@@ -122,6 +156,15 @@ export function getVariantClass(variant: Variant, prefix = 'btn'): string {
 
 /**
  * 获取尺寸类名
+ * @param size - 组件尺寸预设。
+ * @param prefix - 类名前缀或界面 ID 前缀。
+ * @returns 对应尺寸的类名，中号尺寸使用空字符串。
+ *
+ * @example
+ * ```ts
+ * import { getSizeClass } from '@h-ai/ui'
+ * const classes = getSizeClass('lg', 'btn')
+ * ```
  */
 export function getSizeClass(size: Size, prefix = 'btn'): string {
   if (size === 'md')
@@ -134,6 +177,14 @@ export function getSizeClass(size: Size, prefix = 'btn'): string {
 
 /**
  * 输入框尺寸类名
+ * @param size - 组件尺寸预设。
+ * @returns 输入框尺寸类名；大于 xl 的预设统一使用 input-xl。
+ *
+ * @example
+ * ```ts
+ * import { getInputSizeClass } from '@h-ai/ui'
+ * const classes = getInputSizeClass('sm')
+ * ```
  */
 export function getInputSizeClass(size: Size): string {
   const map: Record<Size, string> = {
@@ -151,6 +202,14 @@ export function getInputSizeClass(size: Size): string {
 
 /**
  * 徽章变体类名
+ * @param variant - 语义变体。
+ * @returns 徽章语义变体类名。
+ *
+ * @example
+ * ```ts
+ * import { getBadgeVariantClass } from '@h-ai/ui'
+ * const classes = getBadgeVariantClass('success')
+ * ```
  */
 export function getBadgeVariantClass(variant: Variant): string {
   return getVariantClass(variant, 'badge')
@@ -158,6 +217,14 @@ export function getBadgeVariantClass(variant: Variant): string {
 
 /**
  * 徽章尺寸类名
+ * @param size - 组件尺寸预设。
+ * @returns 徽章尺寸类名。
+ *
+ * @example
+ * ```ts
+ * import { getBadgeSizeClass } from '@h-ai/ui'
+ * const classes = getBadgeSizeClass('sm')
+ * ```
  */
 export function getBadgeSizeClass(size: Size): string {
   return getSizeClass(size, 'badge')
@@ -165,6 +232,14 @@ export function getBadgeSizeClass(size: Size): string {
 
 /**
  * 警告框变体类名
+ * @param variant - 语义变体。
+ * @returns 警告框语义变体类名。
+ *
+ * @example
+ * ```ts
+ * import { getAlertVariantClass } from '@h-ai/ui'
+ * const classes = getAlertVariantClass('warning')
+ * ```
  */
 export function getAlertVariantClass(variant: Variant): string {
   const map: Record<Variant, string> = {
@@ -184,6 +259,14 @@ export function getAlertVariantClass(variant: Variant): string {
 
 /**
  * 进度条变体类名
+ * @param variant - 语义变体。
+ * @returns 进度条语义变体类名。
+ *
+ * @example
+ * ```ts
+ * import { getProgressVariantClass } from '@h-ai/ui'
+ * const classes = getProgressVariantClass('success')
+ * ```
  */
 export function getProgressVariantClass(variant: Variant): string {
   return getVariantClass(variant, 'progress')
@@ -191,6 +274,15 @@ export function getProgressVariantClass(variant: Variant): string {
 
 /**
  * 生成唯一 ID
+ * @param prefix - 类名前缀或界面 ID 前缀。
+ * @returns 用于界面节点关联的随机 ID，不具备安全令牌或分布式主键保证。
+ *
+ * @example
+ * ```ts
+ * import { generateId } from '@h-ai/ui'
+ * const inputId = generateId('profile-email')
+ * // 仅用于界面节点关联，不用作安全令牌或分布式业务主键。
+ * ```
  */
 export function generateId(prefix = 'hai'): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`
@@ -204,6 +296,16 @@ export function generateId(prefix = 'hai'): string {
  *
  * @param node - 要移动的节点
  * @param target - 目标容器或选择器；默认 body
+ * @returns 包含 update 和 destroy 的 Svelte action 句柄。
+ *
+ * @example
+ * ```ts
+ * import { portal } from '@h-ai/ui'
+ * const popup = document.createElement('div')
+ * const action = portal(popup, document.body)
+ * action.update(document.body)
+ * action.destroy()
+ * ```
  */
 export function portal(node: HTMLElement, target: HTMLElement | string = 'body') {
   function mount(to: HTMLElement | string) {

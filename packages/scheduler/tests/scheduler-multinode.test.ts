@@ -1,16 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
-import type { RedisContainerLease } from '../../cache/tests/helpers/redis-container.js'
 import { fork } from 'node:child_process'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'tsup'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { acquireRedisContainer } from '../../cache/tests/helpers/redis-container.js'
 
 describe('scheduler across real processes', () => {
   let directory: string
-  let redis: RedisContainerLease | undefined
   const children: ChildProcess[] = []
   let sequence = 0
   let nodeA: ChildProcess
@@ -50,21 +47,18 @@ describe('scheduler across real processes', () => {
       target: 'node22',
       dts: false,
       silent: true,
-      external: ['@h-ai/core', '@h-ai/cache', '@h-ai/reldb', 'croner', 'zod'],
+      external: ['@h-ai/core', '@h-ai/reldb', 'croner', 'zod'],
     })
-    redis = await acquireRedisContainer()
     const initialize = async () => {
       const child = fork(fileURLToPath(new URL('./fixtures/scheduler-node.mjs', import.meta.url)), [], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'], execArgv: [] })
       children.push(child)
       expect(await call(child, 'init', {
         entry: pathToFileURL(path.join(directory, 'index.js')).href,
         database: path.join(directory, 'shared.db'),
-        host: redis!.host,
-        port: redis!.port,
       })).toMatchObject({ success: true })
       return child
     }
-    // 顺序建表；之后两个进程共享真实数据库与 Redis。
+    // 顺序建表；之后两个进程只依赖同一数据库，不依赖 cache 锁。
     nodeA = await initialize()
     nodeB = await initialize()
   }, 120000)
@@ -81,7 +75,6 @@ describe('scheduler across real processes', () => {
         await exited
       }
     }))
-    await redis?.release()
     if (directory)
       await rm(directory, { recursive: true, force: true })
   })

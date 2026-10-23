@@ -57,7 +57,7 @@ const config = {
   kit: {
     adapter: adapter(),
     // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
-    // adapter: createAdapter(),
+    // adapter: await createAdapter(),
   },
 }
 
@@ -86,23 +86,27 @@ Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypt
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
+import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
-      return token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
     },
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/api/auth/*', '/api/public/*'],
   },
-  rateLimit: { windowMs: 60_000, maxRequests: 100 },
+  rateLimit: { windowMs: 60_000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
   logging: true,
 })
 
 export const handle: Handle = haiHandle
 ```
+
+最初の確定時点から固定ウィンドウを開始し、後続リクエストはTTLを延長しません。storeは必須です。共有Redisの初期化成功を確認し、全ノードのnamespace/windowMs/maxRequestsを一致させます。キャッシュ障害や競合上限は503、超過は429で、get+setやローカル計数へフォールバックしません。createMemoryRateLimitStoreは開発または明示HAI_E2E/HAI_E2E_MOCKテスト用で、常駐タイマーを使わず参照解放で回収されます。1リクエスト最大64項目を遅延走査し、上限10000ウィンドウです。満杯時は有効な計数を追い出さず新キーを503にし、外部storeのライフサイクルは作成者が管理します。本番でテスト変数を設定しません。ヘッダー時刻は推定、実際の期間はRedis TTLで制御するため時計を同期します。キーは信頼済みadapterのgetClientAddressのみ使い、等価IPv6/IPv4表記を正規化します。生の転送ヘッダーを信頼せず、代理信頼はadapterで設定します。
 
 #### API endpoint
 
@@ -147,16 +151,20 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 #### 同一オリジンの通信暗号化
 
-kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer()` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。アプリ側はトップレベルの `crypto` のみを設定します。
+kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer({ serverKeyRing, keyStore })` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。サーバーには管理済み鍵環と共有 registry も渡します。
 
 **src/hooks.server.ts**：
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 export const handle = kit.createHandle({
@@ -168,7 +176,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: {
-      requireEncryption: true,
+      serverKeyRing,
       keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
     },
   },
@@ -203,11 +211,15 @@ export const { apiFetch } = kit.client.create()
 
 既定の鍵交換パスは `/api/_hai/key-exchange` です。サーバーで `transport.keyExchangePath` を変更した場合、クライアントの `transport.keyExchangeUrl` も合わせて設定してください。
 
-ノード間でクライアント公開鍵を共有するには、実行時に `kit.createHandle({ crypto: { transport: { keyStore } } })` へ `createRedisTransportKeyStore()` または `createReldbTransportKeyStore()` を渡します。このようなオブジェクト依存を `_kit.yml` に**書いてはいけません**。設定ファイルは公開パスとスイッチのみを保持します。
+サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
 
 transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.json`、鍵交換 endpoint に適用します。ページ文書・静的ファイルは平文で `X-Client-Id` は不要です。アップロードなどの `multipart/form-data` はそのまま送信し、サーバーの `excludePaths` で明示的に許可してください。
 
-既定の安全方針は fail-closed です。`requireEncryption: true` で保護パスに `X-Client-Id` がなければ 400 を返します。管理器の利用不可、応答の暗号化失敗、暗号化サイズ上限超過はエラーになり、平文の業務応答は渡しません。`requireEncryption: false` は段階的移行用で、本番では推奨しません。
+認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
+
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+
+固定上限は serv・クライアントと `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 32 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone による全量読み取りは行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築した Request は signal を維持し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限は `_kit.yml`・環境変数の設定ではありません。
 
 #### `_kit.yml` による共通 transport 設定
 
@@ -221,13 +233,10 @@ server:
 
 transport:
   keyExchangePath: /api/_hai/key-exchange
-  requireEncryption: true
-  encryptResponse: true
   excludePaths:
     - /api/storage
     - /api/public
     - /api/auth/profile/avatar
-  maxClients: 10000
 ```
 
 ```ts
@@ -261,14 +270,17 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 ### エクスポートパス
 
+実行時メソッドは `kit` 名前空間または明示したサブパスを使用し、型は個別に公開します。browser 宣言はサーバーファクトリを公開しません。Vite 設定には `@sveltejs/kit/vite` を使い、`@h-ai/kit/vite` プラグインはありません。
+
 - `@h-ai/kit`：主入口。`kit` 名前空間と型を提供。
 - `@h-ai/kit/client`：ブラウザークライアント。
 - `@h-ai/kit/adapter`：2 モードのビルド adapter（`createAdapter()`）。
-- `@h-ai/kit/vite`：Vite プラグイン。
 - `@h-ai/kit/a2a`：A2A 統合。
 - `@h-ai/kit/crypto`：暗号モジュール統合。
 
 ### 設定による認証画面
+
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
 
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
@@ -286,11 +298,23 @@ kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し�
 
 宣言型 CRUD 項目は UI フォームの幅を指定する `colSpan: 'auto' | 1 | 2` に対応します。`validation.message` は文字列または `() => string` を受け取り、現在の言語で表示できます。レイアウトは `CrudPage.form` で設定し、サーバーでも検証してください。
 
+### リクエスト言語の分離
+
+Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleRequest())` で囲みます。SvelteKit は `kit.i18n.runWithLocale(locale, () => resolve(event))` を使えます。serv はリクエストヘッダーから自動設定します。非同期の子処理も言語を継承し、明示的な `MessageOptions.locale`、リクエスト言語、起動時の既定値の順で優先します。コンテキスト内の `setGlobalLocale` はそのリクエストだけを変更します。コンテキスト外の設定は起動時に限定し、リクエスト hook から呼びません。
+
+ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
+
 ## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/kit test
 ```
+
+認証 Cookie は `NODE_ENV` または `HAI_CORE_ENV` が `production` の場合に `Secure` を既定で有効にします。`HAI_E2E` / `HAI_E2E_MOCK` は Cookie の安全要件を緩和しません。本番のレート制限も両方の環境変数を認識し、明示的なテストフラグだけがメモリカウンターを許可します。
+
+Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
+
+`kit.auth.logout(cookies, accessToken)` は `Promise<HaiResult<void>>` を返します。Token がなければ Cookie のみ消去して成功し、Token があるのに認証操作が未設定なら失敗します。サーバー結果にかかわらず Cookie は消去しますが、呼出側は失敗を HTTP 応答や UI に伝えます。ローカル消去はサーバー失効の確認ではありません。制御フロー例外は引き続き伝播します。
 
 ## ライセンス
 

@@ -10,6 +10,10 @@ import { kit } from '@h-ai/kit'
 export const POST = kit.handler(async ({ getClientAddress, request, cookies, locals }) => {
   const token = locals.accessToken
 
+  const result = await kit.auth.logout(cookies, token)
+  if (!result.success)
+    return kit.response.fromError(result.error, locals.requestId)
+
   if (token) {
     // 记录审计日志（session 已由 guard 注入）
     if (locals.session) {
@@ -18,8 +22,6 @@ export const POST = kit.handler(async ({ getClientAddress, request, cookies, loc
       await audit.helper.logout(locals.session.userId, ip, ua)
     }
   }
-
-  await kit.auth.logout(cookies, token)
 
   return kit.response.ok(null)
 })

@@ -317,7 +317,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `AuthPanel`          | Configuration driven authentication | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | Auth page layout (centered card / split columns) | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
-| `LoginForm`          | Login form                                       | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
+| `LoginForm`          | Login form                                       | `loading`, `errors`, `showForgotPassword`, `onsubmit`                                                      |
 | `RegisterForm`       | Registration form                                | `loading`, `errors`, `fields`, `onsubmit`                                                              |
 | `ForgotPasswordForm` | Forgot password                                  | `mode`, `loading`, `errors`, `onsubmit`                                                                |
 | `ResetPasswordForm`  | Reset password                                   | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
@@ -776,6 +776,8 @@ import {
 
 ### Configuration driven authentication
 
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
+
 Agreement content can be configured as `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` using YAML `|`. The modal safely renders configured Markdown and prefers it over the URL of the same agreement. URL-only content stays in a sandboxed iframe.
 
 ```yaml
@@ -890,6 +892,13 @@ Agreements open in a Modal and preserve form input. Pages must allow iframe embe
 </AuthPanel>
 ```
 
+
+### Request locale isolation
+
+Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleRequest())`. SvelteKit can use `kit.i18n.runWithLocale(locale, () => resolve(event))`; serv creates the scope automatically from request headers. Async descendants inherit it. Explicit `MessageOptions.locale` takes precedence over the request locale and the startup default. Within a scope, `setGlobalLocale` only changes that request; outside a scope it configures the startup default and must not be called by request hooks.
+
+Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
+
 ## Development and testing
 
 ```sh
@@ -898,6 +907,14 @@ pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
+
+Component subpaths expose only explicit barrels in package.exports, such as `@h-ai/ui/components/primitives/index`. Component internals and storage helpers stay private; host clipboard registration remains public.
+
+`createLocaleStore` from `@h-ai/ui/i18n` selects a resolvable saved locale, then the complete navigator.languages list (followed by navigator.language), then defaultLocale and the first supported entry. An unsupported candidate never triggers an early default. Matching handles case, language shorthand and progressively less specific region/script tags, returning the configured code. Same-language variants follow supportedLocales order. detectBrowserLocale returns null without an actual match; an empty supported list ultimately keeps the caller default. SSR neither reads browser candidates nor changes global locale. Paraglide applications must still synchronize their own setLocale; custom store entries do not add built-in UI dictionaries.
+
+## Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
 
 ## License
 

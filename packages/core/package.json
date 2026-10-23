@@ -6,8 +6,11 @@
   "license": "Apache-2.0",
   "exports": {
     ".": {
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
       "types": "./dist/node.d.ts",
-      "browser": "./dist/browser.js",
       "import": "./dist/node.js",
       "default": "./dist/node.js"
     }

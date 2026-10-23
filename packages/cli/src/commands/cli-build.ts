@@ -11,7 +11,11 @@ import { writeCliMessage } from '../cli-utils.js'
 
 /**
  * 构建参数，不接受部署环境。
- * @example `await buildCommand({ target: 'docker', runtime: 'auto' })`
+ * 对应 hai build --target docker --images app,web --runtime podman --no-http-proxy；镜像参数仅用于 docker，platform/arch 仅用于 desktop。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'docker', images: 'app,web', runtime: 'podman', httpProxy: false }
+ * ```
  */
 export interface BuildCommandOptions extends GlobalOptions {
   /** compile 编译源码，docker 导出镜像，desktop 调用 Tauri。 */
@@ -34,7 +38,11 @@ export interface BuildCommandOptions extends GlobalOptions {
 
 /**
  * 项目构建描述；app/web 共用 buildId。
- * @example `{ images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }], desktop: ['apps/desktop'] }`
+ * 从 hai.build.json 读取；镜像名称为 app/web，构建命令还会校验唯一性与路径边界。
+ * @example 模块内部上下文
+ * ```ts
+ * const config: BuildConfig = { images: [{ name: 'app', context: '.', dockerfile: 'images/app.Dockerfile', containerPort: 3000 }], desktop: ['apps/shop-desktop'] }
+ * ```
  */
 interface BuildConfig {
   images?: Array<{ name: 'app' | 'web', context?: string, dockerfile: string, containerPort?: number }>
@@ -80,7 +88,16 @@ async function pnpm(args: string[], cwd: string): Promise<void> {
 
 /**
  * 构建已有项目；镜像清单仅在全部镜像导出成功后发布。
- * @example `await buildCommand({ cwd: '/workspace/demo', target: 'docker', runtime: 'auto' })`
+ * compile 调用项目 compile 脚本；docker 发布完整产物清单后才更新 latest；desktop 仅允许当前主机对应平台。
+ * @throws Error - 参数、构建配置、运行时探测或子进程执行失败。
+ * @param options - 命令参数；对应命令的工作目录、非交互与可选功能。
+ * @returns 所选目标构建完成；失败时抛出异常。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前项目已有 compile 脚本及已安装依赖。
+ * await buildCommand({ cwd: process.cwd(), target: 'compile' })
+ * // 等价命令：hai build --target compile；失败抛出异常。
+ * ```
  */
 export async function buildCommand(options: BuildCommandOptions): Promise<void> {
   const cwd = resolve(options.cwd ?? process.cwd())

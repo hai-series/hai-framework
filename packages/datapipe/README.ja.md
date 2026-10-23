@@ -35,6 +35,8 @@ if (!cleaned.success)
 
 // 按 Markdown 标题分块
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
 
 // 管线模式（链式组合多步操作）
 const result = await datapipe.pipeline()
@@ -43,6 +45,8 @@ const result = await datapipe.pipeline()
   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
   .run(rawText)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 ### 分割モード
@@ -83,6 +87,10 @@ if (!result.success) {
 ```bash
 pnpm --filter @h-ai/datapipe test
 ```
+
+分割の `maxSize` は既定1500、`overlap` は既定0で `0 <= overlap < maxSize` が必要です。word モードは非空白の語数（連続する中国語は1語になる場合があります）、その他は Unicode code point を単位とし、UTF-16 length・バイト・モデル token ではありません。重複と区切り文字も上限に含みます。自然な文・段落・ページ・独自境界は切点の優先度だけを決め、長い部分は `maxSize-overlap` で進みます。元の空白、句読点、改ページ、独自区切りを維持し、重複を除けば原文を復元できます。trim や改行の追加はしません。Markdown の重複は section 内だけで同じ上限を使い、コードフェンス内の見出しを本文として扱います。`markdownKeepTitle=false` の場合だけ見出し行を除きます。空または全空白の入力は空配列です。独自正規表現は信頼済み設定に限定し、不正な式は CHUNK_FAILED を返します。
+
+ソース例は純関数・同期 HaiResult・非同期パイプラインを区別します。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。
 
 ## ライセンス
 

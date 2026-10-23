@@ -31,6 +31,17 @@ import { HaiVecdbError } from '../vecdb-types.js'
  * 向量数据库 Provider 接口
  *
  * 各后端实现需遵循此接口，提供统一的集合管理和向量操作能力。
+ * @example 模块内部上下文
+ * ```ts
+ * async function list(provider: VecdbProvider, config: VecdbConfig) {
+ *   const connected = await provider.connect(config)
+ *   if (!connected.success) return connected
+ *   try { return await provider.collection.list() } finally {
+ *     const closed = await provider.close()
+ *     if (!closed.success) throw new Error(closed.error.message)
+ *   }
+ * }
+ * ```
  */
 export interface VecdbProvider {
   /** Provider 名称标识 */
@@ -49,7 +60,15 @@ export interface VecdbProvider {
 
 // ─── 上下文与适配器接口 ───
 
-/** 操作上下文：由 Provider 在创建 ops 时传入 */
+/**
+ * 操作上下文：由 Provider 在创建 ops 时传入
+ * @example 模块内部上下文
+ * ```ts
+ * function collections(ctx: VecdbOpsContext, driver: CollectionDriver) {
+ *   return createBaseCollectionOps(ctx, driver)
+ * }
+ * ```
+ */
 export interface VecdbOpsContext {
   /** 连接状态检查 */
   isConnected: () => boolean
@@ -70,6 +89,13 @@ export interface VecdbOpsContext {
  * Provider 将引擎特定的集合管理逻辑适配为此接口。
  * 实现方返回 HaiResult 以表达业务错误（如集合已存在）；
  * 未预期的运行时异常直接 throw，由 wrapOp 统一捕获。
+ * @example 模块内部上下文
+ * ```ts
+ * function collections(ctx: VecdbOpsContext, driver: CollectionDriver) {
+ *   const operations = createBaseCollectionOps(ctx, driver)
+ *   return operations.list() // 公共包装负责连接守卫与异常转换。
+ * }
+ * ```
  */
 export interface CollectionDriver {
   create: (name: string, options: CollectionCreateOptions) => Promise<HaiResult<void>>
@@ -85,6 +111,12 @@ export interface CollectionDriver {
  * Provider 将引擎特定的向量管理逻辑适配为此接口。
  * 实现方返回 HaiResult 以表达业务错误（如集合不存在）；
  * 未预期的运行时异常直接 throw，由 wrapOp 统一捕获。
+ * @example 模块内部上下文
+ * ```ts
+ * function search(ctx: VecdbOpsContext, driver: VectorDriver) {
+ *   return createBaseVectorOps(ctx, driver).search('docs', [0.1, 0.2, 0.3], { topK: 5 })
+ * }
+ * ```
  */
 export interface VectorDriver {
   insert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
@@ -100,6 +132,16 @@ export interface VectorDriver {
 
 // ─── 内部帮助 ───
 
+/**
+ * 决定操作日志是否按 read/write 开关输出的内部分类。
+ * @example 模块内部上下文
+ * ```ts
+ * function logRead(ctx: VecdbOpsContext) {
+ *   const category: VecdbOperationCategory = 'read'
+ *   logVecdbOperation(ctx, category, 'collection.list', {})
+ * }
+ * ```
+ */
 type VecdbOperationCategory = 'read' | 'write'
 
 function stringifyOperationPayload(payload: unknown, maxLength: number): string {
@@ -125,6 +167,19 @@ function stringifyOperationPayload(payload: unknown, maxLength: number): string 
   }
 }
 
+/**
+ * 按当前 Provider 配置输出可选操作日志；长度上限控制载荷，不接管连接生命周期。
+ * @param ctx - 当前 Provider 的连接状态、日志与操作日志配置。
+ * @param category - read 或 write，用于选择配置开关。
+ * @param operation - 稳定的操作名称，用于诊断。
+ * @param payload - 待截断序列化的诊断数据；不传入原始连接凭据。
+ * @example 模块内部上下文
+ * ```ts
+ * function logRead(ctx: VecdbOpsContext) {
+ *   logVecdbOperation(ctx, 'read', 'vector.count', { collection: 'docs' })
+ * }
+ * ```
+ */
 export function logVecdbOperation(
   ctx: VecdbOpsContext,
   category: VecdbOperationCategory,
@@ -189,6 +244,15 @@ async function wrapOp<T>(
  * 创建标准集合操作
  *
  * 各 Provider 只需提供 CollectionDriver，base 层统一处理连接守卫与运行时异常。
+ * @param ctx - 当前 Provider 的连接状态、日志与操作日志配置。
+ * @param driver - 由引擎适配的原始集合或向量操作。
+ * @returns 带连接守卫和 HaiResult 错误边界的公共操作。
+ * @example 模块内部上下文
+ * ```ts
+ * function list(ctx: VecdbOpsContext, driver: CollectionDriver) {
+ *   return createBaseCollectionOps(ctx, driver).list()
+ * }
+ * ```
  */
 export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: CollectionDriver): CollectionOperations {
   return {
@@ -256,6 +320,15 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
  * 创建标准向量操作
  *
  * 各 Provider 只需提供 VectorDriver，base 层统一处理连接守卫与运行时异常。
+ * @param ctx - 当前 Provider 的连接状态、日志与操作日志配置。
+ * @param driver - 由引擎适配的原始集合或向量操作。
+ * @returns 带连接守卫和 HaiResult 错误边界的公共操作。
+ * @example 模块内部上下文
+ * ```ts
+ * function search(ctx: VecdbOpsContext, driver: VectorDriver) {
+ *   return createBaseVectorOps(ctx, driver).search('docs', [0.1, 0.2, 0.3], { topK: 5 })
+ * }
+ * ```
  */
 export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver): VectorOperations {
   return {

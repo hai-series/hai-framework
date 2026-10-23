@@ -7,7 +7,16 @@
 
 // ─── 字段类型 ───
 
-/** 支持的字段类型 */
+/**
+ * 支持的字段类型
+ * @example
+ * ```ts
+ * import type { CrudFieldType } from '@h-ai/kit'
+ *
+ * const value: CrudFieldType = 'date-range'
+ * void value
+ * ```
+ */
 export type CrudFieldType
   = | 'string'
     | 'number'
@@ -28,7 +37,16 @@ export type CrudFieldType
 
 // ─── 校验规则 ───
 
-/** 字段校验规则 */
+/**
+ * 字段校验规则
+ * @example
+ * ```ts
+ * import type { CrudFieldValidation } from '@h-ai/kit'
+ *
+ * const value: CrudFieldValidation = { required: true, max: 120 }
+ * void value
+ * ```
+ */
 export interface CrudFieldValidation {
   /** 是否必填 */
   required?: boolean
@@ -44,21 +62,57 @@ export interface CrudFieldValidation {
 
 // ─── 选项 ───
 
-/** 选项项（用于 select/radio 等） */
+/**
+ * 选项项（用于 select/radio 等）
+ * @example
+ * ```ts
+ * import type { CrudFieldOption } from '@h-ai/kit'
+ *
+ * const value: CrudFieldOption = { label: 'Published', value: 'published' }
+ * void value
+ * ```
+ */
 export interface CrudFieldOption {
   label: string
   value: string | number | boolean
 }
 
-/** 选项来源：静态数组或动态工厂函数 */
+/**
+ * 选项来源：静态数组或动态工厂函数
+ * @example
+ * ```ts
+ * import type { CrudFieldOptions } from '@h-ai/kit'
+ *
+ * const value: CrudFieldOptions = [{ label: 'Published', value: 'published' }]
+ * void value
+ * ```
+ */
 export type CrudFieldOptions = CrudFieldOption[] | (() => CrudFieldOption[])
 
 // ─── 字段定义 ───
 
-/** 可解析为字符串的文本值（支持 i18n） */
+/**
+ * 可解析为字符串的文本值（支持 i18n）
+ * @example
+ * ```ts
+ * import type { CrudText } from '@h-ai/kit'
+ *
+ * const value: CrudText = () => 'Articles'
+ * void value
+ * ```
+ */
 export type CrudText = string | (() => string)
 
-/** 字段定义 */
+/**
+ * 字段定义
+ * @example
+ * ```ts
+ * import type { CrudFieldDef } from '@h-ai/kit'
+ *
+ * const value: CrudFieldDef = { id: 'title', label: 'Title', type: 'string', validation: { required: true } }
+ * void value
+ * ```
+ */
 export interface CrudFieldDef {
   /** 字段 ID（对应数据对象的 key） */
   id: string
@@ -104,19 +158,46 @@ export interface CrudFieldDef {
 
 // ─── 分页与过滤 ───
 
-/** 分页参数 */
+/**
+ * 分页参数
+ * @example
+ * ```ts
+ * import type { CrudPaginationParams } from '@h-ai/kit'
+ *
+ * const value: CrudPaginationParams = { page: 1, pageSize: 20 }
+ * void value
+ * ```
+ */
 export interface CrudPaginationParams {
   page: number
   pageSize: number
 }
 
-/** 过滤参数（搜索 + 自定义过滤字段） */
+/**
+ * 过滤参数（搜索 + 自定义过滤字段）
+ * @example
+ * ```ts
+ * import type { CrudFilterParams } from '@h-ai/kit'
+ *
+ * const value: CrudFilterParams = { search: 'example', status: 'published' }
+ * void value
+ * ```
+ */
 export interface CrudFilterParams {
   search?: string
   [key: string]: unknown
 }
 
-/** 分页结果 */
+/**
+ * 分页结果
+ * @example
+ * ```ts
+ * import type { CrudPaginatedResult } from '@h-ai/kit'
+ *
+ * const value: CrudPaginatedResult<{ id: string }> = { items: [], total: 0, page: 1, pageSize: 20 }
+ * void value
+ * ```
+ */
 export interface CrudPaginatedResult<T> {
   items: T[]
   total: number
@@ -126,7 +207,16 @@ export interface CrudPaginatedResult<T> {
 
 // ─── API 定义 ───
 
-/** CRUD API 接口定义 */
+/**
+ * CRUD API 接口定义
+ * @example
+ * ```ts
+ * import type { CrudApiDef } from '@h-ai/kit'
+ *
+ * // 应用适配层把持久化查询结果转为此结构，失败应拒绝 Promise。
+ * function listAdapter(list: CrudApiDef<{ id: string }>['list']): CrudApiDef<{ id: string }> { return { list } }
+ * ```
+ */
 export interface CrudApiDef<T = Record<string, unknown>> {
   /** 获取分页列表 */
   list: (params: CrudPaginationParams & CrudFilterParams) => Promise<CrudPaginatedResult<T>>
@@ -142,7 +232,17 @@ export interface CrudApiDef<T = Record<string, unknown>> {
 
 // ─── 资源定义 ───
 
-/** CRUD 资源定义 */
+/**
+ * CRUD 资源定义
+ * @example
+ * ```ts
+ * import type { CrudApiDef, CrudResourceDef } from '@h-ai/kit'
+ *
+ * function articles(api: CrudApiDef<{ id: string, title: string }>): CrudResourceDef<{ id: string, title: string }> {
+ *   return { name: 'article', label: 'Articles', fields: [{ id: 'title', label: 'Title', type: 'string' }], api }
+ * }
+ * ```
+ */
 export interface CrudResourceDef<T = Record<string, unknown>> {
   /** 资源名称（如 'user', 'role'），用于 URL 路由 */
   name: string
@@ -164,7 +264,16 @@ export interface CrudResourceDef<T = Record<string, unknown>> {
 
 // ─── 操作对象 ───
 
-/** DataTable 列配置（适配 @h-ai/ui DataTable） */
+/**
+ * DataTable 列配置（适配 @h-ai/ui DataTable）
+ * @example
+ * ```ts
+ * import type { CrudTableColumn } from '@h-ai/kit'
+ *
+ * const value: CrudTableColumn = { key: 'title', label: 'Title' }
+ * void value
+ * ```
+ */
 export interface CrudTableColumn {
   key: string
   label: string
@@ -173,7 +282,15 @@ export interface CrudTableColumn {
   render?: (item: Record<string, unknown>) => string
 }
 
-/** CRUD 操作对象（由 defineCrud 返回） */
+/**
+ * CRUD 操作对象（由 defineCrud 返回）
+ * @example
+ * ```ts
+ * import type { CrudOperations } from '@h-ai/kit'
+ *
+ * function columns(resource: CrudOperations<{ id: string }>) { return resource.toTableColumns() }
+ * ```
+ */
 export interface CrudOperations<T = Record<string, unknown>> {
   /** 资源元信息 */
   resource: CrudResourceDef<T>

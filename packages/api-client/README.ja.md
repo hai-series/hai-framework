@@ -53,7 +53,9 @@ await apiClient.close()
 
 #### 通信暗号化の有効化
 
-サーバーで先に `serv.createApp({ transport: { crypto } })` を有効にします。クライアントには同じ `@h-ai/crypto` サービスのインスタンスを渡すだけで、鍵交換コードの実装は不要です。
+サーバーで先に `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` を有効にします。クライアントには同じ `@h-ai/crypto` サービスのインスタンスを渡すだけで、鍵交換コードの実装は不要です。
+
+サーバーには管理済み serverKeyRing と共有 registry を渡します。クライアントは serverKeyId と公開鍵だけを受け取り、暗号文リクエストに鍵の版を付けます。秘密鍵・鍵環をクライアント設定に含めません。版の失効後は transport セッションを破棄して再交渉し、非冪等処理を自動再送しません。
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -71,7 +73,13 @@ await apiClient.close()
 await crypto.close()
 ```
 
+認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
+
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+
 ### API 契約
+
+既定の `apiClient.ai.chats.createCompletion({ messages, tools, tool_choice })` は非ストリーミング JSON 契約で、function のネストした JSON Schema と `strict` を保持します。`success` を確認してから `data.choices[].message.tool_calls` を読み、アプリで認可・実行した後、助手の呼び出しと対応する `tool_call_id` 付きツール結果を次の `messages` に含めます。`stream` は未対応で、TypeScript を回避してもサーバーが拒否します。ストリーミングにはアプリ独自の対応契約を利用します。
 
 独自のアプリケーションでは、専用の oRPC contract を指定できます：
 
@@ -112,6 +120,8 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 ### 設定による認証画面
 
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
+
 規約は設定の userAgreementMarkdown/privacyPolicyMarkdown または URL を使用できます。同じ規約は Markdown 本文を優先して安全な Modal で描画します。
 
 標準 IAM contract のクライアントには apiClient.createAuthActions(client) を使用します。複数方式、登録、OTP、復旧を統一し、認証成功時に設定済み TokenStorage に保存します。アプリ側は認証後の状態更新と遷移だけを担当します。
@@ -142,6 +152,10 @@ else {
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
+
+## 入力制約と HTTP 機能
+
+キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
 
 ## ライセンス
 

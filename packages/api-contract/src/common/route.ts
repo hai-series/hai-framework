@@ -8,7 +8,18 @@
 import type { AnyContractProcedure } from '@orpc/contract'
 import { oc } from '@orpc/contract'
 
-/** 创建 oRPC contract 路由节点。 */
+/**
+ * 创建 oRPC contract 路由节点。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { z } from 'zod'
+ *
+ * const health = apiContract.route({ method: 'GET', path: '/health' })
+ *   .output(z.object({ healthy: z.boolean() }))
+ * void health
+ * ```
+ */
 export const route: typeof oc.route = (...args) => oc.route(...args)
 
 /**
@@ -19,6 +30,13 @@ export const route: typeof oc.route = (...args) => oc.route(...args)
  *
  * @param procedure - 已声明 HTTP route 的 oRPC contract procedure
  * @returns contract 中的绝对业务路径
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const path = apiContract.pathOf(apiContract.iam.auth.login)
+ * void path
+ * ```
  */
 export function pathOf(procedure: AnyContractProcedure): `/${string}` {
   const path = procedure['~orpc'].route.path

@@ -5,8 +5,9 @@
  * @module image/ai-image-functions
  */
 
+import type { HaiResult } from '@h-ai/core'
 import type { AIConfig, ImageConfig, ImageProviderName } from '../ai-config.js'
-import type { ImageOperations } from './ai-image-types.js'
+import type { GeneratedImage, ImageOperations } from './ai-image-types.js'
 import type { ImageProvider } from './providers/ai-image-provider.js'
 import { core, err } from '@h-ai/core'
 import { ImageConfigSchema, resolveImageModel } from '../ai-config.js'
@@ -17,10 +18,24 @@ import { createOpenAIImageProvider } from './providers/ai-image-provider-openai.
 import { createPollinationsImageProvider } from './providers/ai-image-provider-pollinations.js'
 import { createQwenImageProvider } from './providers/ai-image-provider-qwen.js'
 import { createSeedreamImageProvider } from './providers/ai-image-provider-seedream.js'
+import { imageProviderFailure, validateImageOutput } from './providers/ai-image-provider.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'image' })
 
-/** 创建文生图操作接口 */
+/**
+ * 创建文生图操作接口
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(config: AIConfig) {
+ *   const image = createImageOperations(config)
+ *   const result = await image.generate({ prompt: '一座山', size: { width: 1024, height: 1024 } })
+ *   if (!result.success) return result
+ *   return result.data.images
+ * }
+ * ```
+ */
 export function createImageOperations(config: AIConfig): ImageOperations {
   const imageConfig: ImageConfig = ImageConfigSchema.parse(config.image ?? {})
   const providers = new Map<ImageProviderName, ImageProvider>()
@@ -42,6 +57,8 @@ export function createImageOperations(config: AIConfig): ImageOperations {
         return err(HaiAIError.IMAGE_INVALID_REQUEST, aiM('ai_imageInvalidSize'))
       if (request.referenceImages?.some(image => image.data.byteLength === 0 || !image.mimeType.toLowerCase().startsWith('image/')))
         return err(HaiAIError.IMAGE_INVALID_REQUEST, aiM('ai_imageInvalidReferenceImage'))
+      if ((request.referenceImages?.length ?? 0) > imageConfig.maxImages || request.referenceImages?.some(image => image.data.byteLength > imageConfig.maxImageBytes))
+        return err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
       if (request.signal?.aborted)
         return err(HaiAIError.IMAGE_CANCELLED, aiM('ai_imageCancelled'))
 
@@ -63,13 +80,31 @@ export function createImageOperations(config: AIConfig): ImageOperations {
         height: request.size?.height,
       }
       logger.debug('Image generation started', logContext)
-      const generated = await provider(resolved.data.provider).generate({
-        model: resolved.data,
-        prompt: request.prompt.trim(),
-        size: request.size,
-        referenceImages: request.referenceImages ?? [],
-        signal: request.signal,
-      })
+      const deadline = new AbortController()
+      const timer = setTimeout(() => deadline.abort(new DOMException('Image deadline exceeded', 'TimeoutError')), resolved.data.timeout)
+      timer.unref()
+      let generated: HaiResult<GeneratedImage[]>
+      try {
+        generated = await provider(resolved.data.provider).generate({
+          model: resolved.data,
+          prompt: request.prompt.trim(),
+          size: request.size,
+          referenceImages: request.referenceImages ?? [],
+          signal: request.signal ? AbortSignal.any([request.signal, deadline.signal]) : deadline.signal,
+          maxImageBytes: imageConfig.maxImageBytes,
+          maxImages: imageConfig.maxImages,
+        })
+      }
+      catch (error) {
+        generated = imageProviderFailure(error)
+      }
+      finally {
+        clearTimeout(timer)
+      }
+      if (request.signal?.aborted)
+        return err(HaiAIError.IMAGE_CANCELLED, aiM('ai_imageCancelled'))
+      if (deadline.signal.aborted)
+        return err(HaiAIError.IMAGE_TIMEOUT, aiM('ai_imageTimeout'))
       if (!generated.success) {
         logger.warn('Image generation failed', {
           ...logContext,
@@ -80,13 +115,22 @@ export function createImageOperations(config: AIConfig): ImageOperations {
         })
         return generated
       }
+      if (generated.data.length > imageConfig.maxImages)
+        return err(HaiAIError.IMAGE_TOO_LARGE, aiM('ai_imageTooLarge'))
+      const images: GeneratedImage[] = []
+      for (const image of generated.data) {
+        const validated = validateImageOutput(image, imageConfig.maxImageBytes)
+        if (!validated.success)
+          return validated
+        images.push(validated.data)
+      }
       logger.info('Image generation completed', {
         ...logContext,
         durationMs: Date.now() - startedAt,
         imageCount: generated.data.length,
-        mimeTypes: [...new Set(generated.data.map(image => image.mimeType))],
+        mimeTypes: [...new Set(images.map(image => image.mimeType))],
       })
-      return { success: true, data: { images: generated.data } }
+      return { success: true, data: { images } }
     },
   }
 }

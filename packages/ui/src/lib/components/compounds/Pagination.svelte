@@ -1,4 +1,5 @@
 <!--
+  @component Pagination
   =============================================================================
   @h-ai/ui - Pagination 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Pagination } from '@h-ai/ui'
+  const props: ComponentProps<typeof Pagination> = { page: 1, total: 42, pageSize: 10 }
+  const component = mount(Pagination, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, PaginationProps } from '../../types.js'

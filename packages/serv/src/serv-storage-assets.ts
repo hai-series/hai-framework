@@ -9,12 +9,33 @@
 import type { StorageFunctions } from '@h-ai/storage'
 import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 
-/** 可由只读资源 middleware 使用的最小 Storage 能力。 */
+/**
+ * 可由只读资源 middleware 使用的最小 Storage 能力。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function withStorage(source: StorageAssetSource): ServStorageAssetsConfig {
+ *   return { storage: source, pathPrefix: '/assets/', keyPattern: new RegExp('^public/[a-z0-9-]+[.]webp$'), allowedContentTypes: ['image/webp'] }
+ * }
+ * ```
+ */
 interface StorageAssetSource {
   readonly file: Pick<StorageFunctions['file'], 'get' | 'head'>
 }
 
-/** Storage 只读资源 middleware 配置。 */
+/**
+ * Storage 只读资源 middleware 配置。
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ * import { storage } from '@h-ai/storage'
+ *
+ * // 仅发布明确公共资源；私有业务资源另执行可信资源授权。
+ * const middleware = serv.storageAssets({ storage, pathPrefix: '/assets/', keyPattern: new RegExp('^public/[a-z0-9-]+[.]webp$'), allowedContentTypes: ['image/webp'], cacheControl: 'public, max-age=3600' })
+ * ```
+ */
 export interface ServStorageAssetsConfig {
   /** 已初始化的 Storage 模块或等价文件读取能力。 */
   readonly storage: StorageAssetSource
@@ -41,15 +62,14 @@ export interface ServStorageAssetsConfig {
  *
  * @param config - Storage、路径、key、MIME 与缓存策略。
  * @returns 可挂载到 `serv.createApp({ middlewares })` 的 middleware。
+ *
  * @example
  * ```ts
- * const middleware = serv.storageAssets({
- *   storage,
- *   pathPrefix: '/api/v1/avatar-assets/',
- *   keyPattern: /^avatars\/[\w-]+\/[\w-]+\.webp$/,
- *   allowedContentTypes: ['image/webp'],
- *   cacheControl: 'public, max-age=31536000, immutable',
- * })
+ * import { serv } from '@h-ai/serv'
+ * import { storage } from '@h-ai/storage'
+ *
+ * // 仅发布明确公共资源；私有业务资源另执行可信资源授权。
+ * const middleware = serv.storageAssets({ storage, pathPrefix: '/assets/', keyPattern: new RegExp('^public/[a-z0-9-]+[.]webp$'), allowedContentTypes: ['image/webp'], cacheControl: 'public, max-age=3600' })
  * ```
  */
 export function storageAssets(config: ServStorageAssetsConfig): ServMiddleware {

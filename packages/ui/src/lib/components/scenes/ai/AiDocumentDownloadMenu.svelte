@@ -1,3 +1,17 @@
+<!--
+  @component AiDocumentDownloadMenu
+  AiDocumentDownloadMenu 组件的公开使用示例。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { AiDocumentDownloadMenu } from '@h-ai/ui'
+  const props: ComponentProps<typeof AiDocumentDownloadMenu> = { content: '# 报告', title: '报告', actions: [{ id: 'markdown', label: 'Markdown' }] }
+  const component = mount(AiDocumentDownloadMenu, { target: document.body, props })
+  await unmount(component)
+  ```
+-->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
   import type {
@@ -11,6 +25,19 @@
     resolveDocumentDownloadActions,
   } from './document-download.js'
 
+  /**
+   * AiDocumentDownloadMenu 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { AiDocumentDownloadMenu } from '@h-ai/ui'
+   * const props: ComponentProps<typeof AiDocumentDownloadMenu> = { content: '# 报告', title: '报告', actions: [{ id: 'markdown', label: 'Markdown' }] }
+   * const component = mount(AiDocumentDownloadMenu, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface AiDocumentDownloadMenuProps {
     /** 触发下载时导出的原始内容。 */
     content?: string

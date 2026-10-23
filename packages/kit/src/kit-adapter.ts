@@ -11,7 +11,7 @@
  *
  * export default {
  *   kit: {
- *     adapter: createAdapter(),
+ *     adapter: await createAdapter(),
  *   },
  * }
  * ```
@@ -21,7 +21,15 @@
 
 import process from 'node:process'
 
-/** 双构建适配器配置 */
+/**
+ * 双构建适配器配置
+ * @example 模块内部上下文
+ * ```ts
+ * const options: AdapterOptions = {}
+ * const adapter = await createAdapter(options)
+ * void adapter
+ * ```
+ */
 export interface AdapterOptions {
   /** adapter-node 输出目录，默认 `'build'` */
   nodeBuildDir?: string
@@ -40,6 +48,13 @@ export interface AdapterOptions {
  *
  * **注意**：adapter-node / adapter-static 仍然需要在应用的 devDependencies 中声明。
  * 本函数只做动态 import + 统一配置。
+ * @param options - Node/static 输出目录和 SPA fallback；应用仍需安装对应适配器。
+ * @returns 按 VITE_ADAPTER 选择的 SvelteKit adapter；缺失依赖时拒绝 Promise。
+ * @example 模块内部上下文
+ * ```ts
+ * const adapter = await createAdapter({})
+ * void adapter
+ * ```
  */
 export async function createAdapter(options?: AdapterOptions) {
   const {

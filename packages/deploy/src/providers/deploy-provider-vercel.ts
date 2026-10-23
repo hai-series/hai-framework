@@ -100,14 +100,14 @@ function collectFiles(dir: string, baseDir: string): string[] {
 
 /**
  * 创建 Vercel 部署 Provider
- *
  * @returns DeployProvider 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
  * const provider = createVercelProvider()
- * await provider.authenticate('vel_xxx')
- * const projectId = await provider.createProject('my-app')
+ * const token = process.env.HAI_DEPLOY_PROVIDER_TOKEN
+ * if (!token) throw new Error('Provide HAI_DEPLOY_PROVIDER_TOKEN privately')
+ * const result = await provider.authenticate(token)
+ * if (!result.success) throw new Error(result.error.message)
  * ```
  */
 export function createVercelProvider(): DeployProvider {

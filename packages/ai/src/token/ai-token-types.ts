@@ -17,8 +17,11 @@ import type { ChatMessage } from '../llm/ai-llm-types.js'
  *
  * @example
  * ```ts
- * const tokens = tokenOps.estimateText('Hello 世界')
- * const total = tokenOps.estimateMessages(messages)
+ * import { ai } from '@h-ai/ai'
+ *
+ * // 应用已成功初始化 ai；消息估算包含协议字段与角色开销。
+ * const textTokens = ai.token.estimateText('Hello 世界')
+ * const messageTokens = ai.token.estimateMessages([{ role: 'user', content: 'Hello 世界' }])
  * ```
  */
 export interface TokenOperations {

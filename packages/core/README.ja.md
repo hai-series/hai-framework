@@ -158,6 +158,8 @@ const level = core.logger.getLevel() // 'debug'
 
 ブラウザーでは引き続き DevTools console に出力します。`pretty` は読みやすいメッセージと context、`json` は `level` / `msg` を含む JSON 文字列です。既定の認証情報マスキングと設定したパスのマスキングを併用し、ネストしたドット・括弧パスと `*` に対応します。メッセージ本文の機密情報は呼び出し側で除去してください。
 
+ログ文脈のネイティブ `Error` は、`name`、`message`、`stack`、`cause`、`AggregateError.errors` と列挙可能な自身の文脈を持つコピーに変換してから、既定のフィールド/URL マスクと設定済み `redact` を適用します。両環境で同じ規則を使い、元の例外は変更しません。例外サブグラフの循環は `[Circular]`、32 階層の上限は `[MaxDepth]` になり、この範囲の独自置換値にも同じ正規化を適用します。通常オブジェクトの置換動作は変えません。Error を含まない通常オブジェクトの循環は元の構造を保持し、直接 JSON 化できる保証はありません。`name/message/stack` は自由文で、含まれる秘密を自動解析しません。記録前に除去するか、`error.message` / `error.stack` などのパス全体を隠してください。
+
 `core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワード、機密クエリ値、OAuth 形式の fragment をマスクします。不正な URL は固定値を返します。メールアドレス・電話番号は既定では隠しません。
 
 ##### ログレベルの規約
@@ -280,13 +282,15 @@ if (!result.success) {
 
 > ブラウザーにはファイルシステムがないため、`core.config` は代替 API の形状のみを提供します。ファイル関連メソッドは `SERVICE_UNAVAILABLE` を返し、YAML を読み込みません。
 
+Node は実行時の `.yml` / `.yaml` を自動読み込み・監視しますが、予約名 `_deploy.yml` と `_deploy.yaml` は除外します。これらはデプロイ CLI が対象環境と認証情報の読み込み後に個別解析します。業務用 `deploy.yml` と明示的な `core.config.load` は引き続き利用できます。単一ファイルの失敗結果はログに記録して続行するため、アプリは必須設定を validate して `success` を確認してください。ディレクトリー走査や Logger 設定などの例外は伝播する場合があります。
+
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -308,8 +312,8 @@ const validResult = core.config.validate('app', AppSchema)
 
 // 查询和获取
 if (core.config.has('app')) {
-  const cfg = core.config.get<typeof AppSchema>('app') // undefined 或配置
-  const cfg2 = core.config.getOrThrow<typeof AppSchema>('app') // 未加载时抛异常
+  const cfg = core.config.get<z.infer<typeof AppSchema>>('app') // undefined 或配置
+  const cfg2 = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // 未加载时抛异常
 }
 core.config.keys() // ['core', 'app', 'db', ...]
 
@@ -438,7 +442,7 @@ core.string.isBlank('') // true
 core.string.isNotBlank('x') // true
 core.string.padStart('5', 3, '0') // '005'
 core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // 防时序攻击比较
+core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
 
 // 数组操作
 core.array.unique([1, 1, 2]) // [1, 2]
@@ -555,11 +559,27 @@ HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
 HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
+### リクエスト言語の分離
+
+Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleRequest())` で囲みます。SvelteKit は `kit.i18n.runWithLocale(locale, () => resolve(event))` を使えます。serv はリクエストヘッダーから自動設定します。非同期の子処理も言語を継承し、明示的な `MessageOptions.locale`、リクエスト言語、起動時の既定値の順で優先します。コンテキスト内の `setGlobalLocale` はそのリクエストだけを変更します。コンテキスト外の設定は起動時に限定し、リクエスト hook から呼びません。
+
+ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
+
 ## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
+
+## 設定の消費範囲
+
+`_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../docs/configuration-map.md)を参照してください。
+
+宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。Node core.init は同期的に void を返します。単一ファイルの config.load 失敗結果は記録して続行するため、必須設定は validate して success を確認してください。ディレクトリー走査などの例外は伝播する場合があります。業務 HaiResult API は success を先に確認します。
+
+Node 入口は元の UTF-16 コード単位を UTF-16LE に変換し、同じバイト長を node:crypto.timingSafeEqual で比較します。長さが違えば false となり、長さ自体は隠しません。ブラウザー実装には JavaScript エンジンの定時間保証がなく、サーバーの認証境界には使用しません。周辺の分岐・変換・リクエスト処理まで定時間になるわけではありません。
+
+UUID は暗号学的乱数の randomUUID/getRandomValues のみを使用し、どちらも利用できない場合は例外を送出します。Math.random にはフォールバックしません。
 
 ## ライセンス
 

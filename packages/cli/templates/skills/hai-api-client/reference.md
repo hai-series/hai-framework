@@ -2,6 +2,11 @@
 
 > `@h-ai/api-client` 是跨端 typed API client。公共 HTTP API 由 `@h-ai/api-contract` 定义，服务端由 `@h-ai/serv` 挂载，客户端直接调用 `apiClient.<domain>.<group>.<operation>()`。
 
+
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
 ## 使用步骤
 
 ### 1. 初始化
@@ -73,6 +78,8 @@ if (me.success) {
 const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 const answer = await apiClient.ai.chats.sendMessage({ message: 'hello' })
 ```
+
+默认 `ai.chats.createCompletion({ messages, tools, tool_choice })` 只返回非流式 HaiResult JSON；不接受 stream 字段。完整 function 参数 JSON Schema、strict 与工具选择直接到模型。先检查 success，再读取助手 tool_calls；业务方授权执行工具后，以对应 tool_call_id 回传工具消息。流式接口须绑定应用自定义流契约。
 
 ### 3. 自定义 contract
 
@@ -151,8 +158,10 @@ if (login.success) {
 | `transport.crypto` | 已初始化的 `@h-ai/crypto` 实例 |
 | `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange` |
 
-服务端必须对应启用 `serv.createApp({ transport: { crypto } })`。
+服务端必须对应启用 `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`。serverKeyRing 与 keyStore 仅服务端注入，生产各节点共用受管版本化 ring 和共享 registry；客户端只接收 serverKeyId/公钥并在请求密文带回版本，不得接收私钥。旧版本撤销后需销毁客户端会话并重协商，不自动重放非幂等请求。
 自动刷新会沿用 `transport.encryptedFetch`，并在 httpOnly cookie 模式下发送空请求体 + `credentials: 'include'`，由服务端从 cookie 读取 refresh token。
+
+CLI 独立 mobile 模板在选择 IAM/crypto 时安装前端 crypto 并默认启用该 transport，未选择 crypto 时保留明文 API 模式。`PUBLIC_API_TRANSPORT=off` 仅用于明确匹配的明文服务；`PUBLIC_API_KEY_EXCHANGE_PATH` 可调整公开协商子路径。配置先于 client 初始化，握手失败不会回退明文。关闭顺序为 client → 本客户端初始化的 crypto，不能关闭其他调用方已有的 crypto。
 
 ## 常见模式
 

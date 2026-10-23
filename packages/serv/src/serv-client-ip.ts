@@ -4,14 +4,32 @@
  */
 import { BlockList, isIP } from 'node:net'
 
-/** Hono runtime bindings 是 unknown，先收敛可信元数据的形状。 */
+/**
+ * Hono runtime bindings 是 unknown，先收敛可信元数据的形状。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const peer = readRemoteAddress({ remoteAddress: '192.0.2.10' })
+ * const untrusted = readRemoteAddress({ 'x-forwarded-for': '192.0.2.20' })
+ * ```
+ */
 export function readRemoteAddress(metadata: unknown): string | undefined {
   if (!metadata || typeof metadata !== 'object' || !('remoteAddress' in metadata) || typeof metadata.remoteAddress !== 'string')
     return undefined
   return normalizeClientIp(metadata.remoteAddress)
 }
 
-/** 校验并规范化 IP；拒绝主机名、端口和其它非地址值。 */
+/**
+ * 校验并规范化 IP；拒绝主机名、端口和其它非地址值。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const mapped = normalizeClientIp('::ffff:192.0.2.10')
+ * const invalid = normalizeClientIp('example.com:443')
+ * ```
+ */
 export function normalizeClientIp(value?: string): string | undefined {
   if (!value)
     return undefined
@@ -38,7 +56,16 @@ function addProxy(blockList: BlockList, entry: string): void {
   blockList.addSubnet(address!, bits, type)
 }
 
-/** 配置 Schema 使用相同规则，启动时拒绝无效 IP/CIDR。 */
+/**
+ * 配置 Schema 使用相同规则，启动时拒绝无效 IP/CIDR。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const cidr = isTrustedProxyEntry('192.0.2.0/24')
+ * const invalid = isTrustedProxyEntry('192.0.2.0/99')
+ * ```
+ */
 export function isTrustedProxyEntry(entry: string): boolean {
   try {
     addProxy(new BlockList(), entry)
@@ -49,7 +76,18 @@ export function isTrustedProxyEntry(entry: string): boolean {
   }
 }
 
-/** 每个 app 编译一次代理规则；请求只执行地址检查，不重建规则。 */
+/**
+ * 每个 app 编译一次代理规则；请求只执行地址检查，不重建规则。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const resolveIp = createClientIpResolver(['192.0.2.0/24'])
+ * const request = new Request('https://example.com', { headers: { 'x-forwarded-for': '198.51.100.12' } })
+ * const ip = resolveIp(request, '192.0.2.10')
+ * // 第二参必须来自 socket/平台，不能从请求头复制。
+ * ```
+ */
 export function createClientIpResolver(trustedProxies: readonly string[]): (request: Request, remoteAddress?: string) => string | undefined {
   const proxies = new BlockList()
   for (const entry of trustedProxies)

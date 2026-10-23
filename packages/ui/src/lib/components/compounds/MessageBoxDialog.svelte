@@ -1,9 +1,23 @@
 <!--
+  @component MessageBoxDialog
   单个 MessageBox 弹框，由 MessageBoxContainer 渲染。
   内部使用原生 <dialog>.showModal() 进入浏览器 top layer。
   行为对标 ElementUI MessageBox：
     - 始终显示标题（默认"提示"）和右上角关闭按钮；
     - 遮罩层点击可通过 closeOnClickModal 配置。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import { MessageBoxDialog, messageBox } from '@h-ai/ui'
+  const response = messageBox.confirm({ title: '确认', message: '提交资料？' })
+  const item = messageBox.items[0]
+  if (!item) throw new Error('Dialog state unavailable')
+  const dialog = mount(MessageBoxDialog, { target: document.body, props: { item } })
+  messageBox.handleCancel(item)
+  const accepted = await response
+  await unmount(dialog)
+  ```
 -->
 <script lang='ts'>
   import type { MessageBoxItem } from '../../messagebox.svelte.js'

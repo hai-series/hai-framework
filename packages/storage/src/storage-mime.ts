@@ -10,6 +10,11 @@
  *
  * 键为小写扩展名（不含点号），值为标准 MIME 类型字符串。
  * 未匹配项统一回退到 `application/octet-stream`。
+ * @example 模块内部上下文
+ * ```ts
+ * const mime = MIME_TYPES['pdf'] ?? MIME_TYPE_DEFAULT
+ * void mime
+ * ```
  */
 export const MIME_TYPES: Record<string, string> = {
   // 图片
@@ -63,5 +68,9 @@ export const MIME_TYPES: Record<string, string> = {
 
 /**
  * MIME 类型默认值（未知扩展名回退）
+ * @example 模块内部上下文
+ * ```ts
+ * void MIME_TYPE_DEFAULT // application/octet-stream
+ * ```
  */
 export const MIME_TYPE_DEFAULT = 'application/octet-stream'

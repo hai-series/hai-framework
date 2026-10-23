@@ -1,4 +1,5 @@
 <!--
+  @component Confirm
   =============================================================================
   @h-ai/ui - Confirm 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state)
   使用 primitives 组件：Button
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Confirm } from '@h-ai/ui'
+  const props: ComponentProps<typeof Confirm> = { open: true, title: '删除记录', message: '确定删除这条记录？', variant: 'warning' }
+  const component = mount(Confirm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { ConfirmProps, DataAttributes } from '../../types.js'

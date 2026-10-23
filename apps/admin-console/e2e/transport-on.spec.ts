@@ -100,6 +100,9 @@ test.describe('Transport enabled E2E', () => {
       && 'encryptedKey' in loginPayload
       && 'ciphertext' in loginPayload
       && 'iv' in loginPayload
+      && 'context' in loginPayload
+      && 'tag' in loginPayload
+      && 'signature' in loginPayload
 
     if (loginRequestWasObservedAsEncrypted) {
       expect(loginRequestHeaders['x-client-id']).toBeTruthy()
@@ -134,6 +137,9 @@ test.describe('Transport enabled E2E', () => {
       && 'encryptedKey' in apiPayload
       && 'ciphertext' in apiPayload
       && 'iv' in apiPayload
+      && 'context' in apiPayload
+      && 'tag' in apiPayload
+      && 'signature' in apiPayload
 
     // 登录成功本身已证明 transport-required 的 /api/auth/login 被浏览器端 transport
     // 正常接管；后续 /api/auth/me 与 __data.json 再补充验证“浏览器态请求仍能正常工作”。
@@ -173,6 +179,9 @@ test.describe('Transport enabled E2E', () => {
       && 'encryptedKey' in dataPayload
       && 'ciphertext' in dataPayload
       && 'iv' in dataPayload
+      && 'context' in dataPayload
+      && 'tag' in dataPayload
+      && 'signature' in dataPayload
 
     expect(dataResponse.status()).toBe(200)
 
@@ -181,7 +190,8 @@ test.describe('Transport enabled E2E', () => {
     // 已经接管了该请求。这里重点验证：请求必须带 X-Client-Id，页面导航正常。
     if (dataRequestWasObservedAsTransported) {
       expect(dataRequestHeaders['x-client-id']).toBeTruthy()
-      expect(dataRequestHeaders['x-encrypted']).toBeUndefined()
+      expect(dataRequestHeaders['x-encrypted']).toBe('true')
+      expect(dataRequestHeaders['x-hai-transport']).toBeTruthy()
     }
 
     if (dataResponseHeaders['x-encrypted']) {

@@ -14,6 +14,7 @@
 
 - 读取当前 `AGENTS.md`、README、`package.json`、lockfile、初始化入口和已有相似功能；用 `rg` 查实现、引用、测试。保留已有改动，沿用项目分层、命名、ESLint、i18n 与测试入口。
 - 确认架构：SvelteKit 使用 `kit` 和文件路由；API workspace 使用 contract/service；fullstack 使用 contract/serv/shared 与所选前端；Vite SPA/原生端通过 typed API 客户端调用服务。不要把服务端目录、DB、密钥或 Node 初始化复制到浏览器。
+- 独立 mobile 模板选择 IAM/crypto 时包含前端 crypto，默认启用 typed client 加密 transport；无 crypto 的客户端保留明确的明文 API 模式。只有匹配的明文服务才设置 `PUBLIC_API_TRANSPORT=off`；`PUBLIC_API_KEY_EXCHANGE_PATH` 只覆盖公开协商子路径。握手失败不降级，关闭时先销毁 client transport，再关闭自身初始化的 crypto；服务端 ring 私钥不进入客户端。
 - 从所属 workspace 的依赖与 lockfile 确认 `@h-ai/*` 实际解析版本和 npm/local 模式。模板 skill 提供导航，**当前安装包的 `package.json.exports`、公开 `.d.ts` 与随包文档决定可用 API**；本地框架源码只在版本匹配或显式联调时作实现证据。
 - 若 skill 与安装版本不符，以公开类型和实际行为核验。先使用已支持能力；任务要求升级时按 [hai-framework-sync](../hai-framework-sync/SKILL.md) 发现目标、比较差异并完成迁移验证。不能直接复制未发布源码的 API，也不能为绕过差异添加虚构兼容层。
 
@@ -36,6 +37,8 @@
 
 YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时的本地默认值。应用仍通过 `core.config.validate(name, ModuleConfigSchema)` 和模块初始化校验类型、枚举、范围和必填项；插值本身不能代替校验。只开启实际使用的模块，未启用模块的整份 YAML 保留注释。
 
+生产禁止使用进程内或节点本地状态。CLI 的 `.env.prod` 按已启用模块选择 PostgreSQL（保留明确选择的 MySQL）、Redis、S3、Qdrant，默认 Compose DNS 为 `db/cache/storage/vecdb`，容器外运行用私有环境覆盖连接地址。必须私有注入密码、S3/模型凭据及受保护 Qdrant 的 API Key。AI 硬依赖 reldb+vecdb，按数据库→向量库→AI 初始化，失败逆序释放并检查关闭结果，清理失败保留重试义务。生产 Reach 必须私有注入真实 `HAI_REACH_PROVIDERS` JSON；公共空数组有意拒绝启动，不能沿用 console。`hai add ai` 补包与配置，但现有业务入口仍须接入相同生命周期。
+
 #### 命名和类型
 
 - `HAI_<配置名>_<字段路径>`：`_db.yml` 的 `type` 对应 `HAI_DB_TYPE`；`_ai.yml` 的 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase 不拆词，数组使用从零开始的索引，如 `HAI_AI_AUDIO_MODELS_0_BASEURL`。
@@ -53,6 +56,8 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 
 所有入口优先级一致：**进程环境 > `.env.local` > `.env.<dev|test|prod>` > `.env`**。Vite 配置在 Node 阶段通过 `core.config.loadEnvFiles({ mode, envDir })` 读取，检查 `success` 后注入进程；`development`/`production` 分别映射到 `dev`/`prod`。Node 服务按 `.env`、环境文件、`.env.local` 的顺序传入 `--env-file`，后者覆盖前者，已有进程环境最高。`core.init` 只读取已注入的变量，不自行读取 dotenv。
 
+托管 `test:e2e` 是明确的隔离测试入口：服务子进程使用本轮绝对数据目录和完整模块配置，不继承 ambient 模块变量，也不读取用户 `.env.local`。Svelte 仅在 `HAI_E2E=1` 的测试分支跳过 dotenv；API 测试直接执行已构建产物。普通开发与生产的上述优先级和共享后端守卫保持不变，transport 使用测试独立可信 ring 与实际 registry。
+
 `prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js`。文件路径相对进程工作目录，公共文件随项目提交；容器通过部署平台或 `--env-file` 注入目标环境值。浏览器只接收公开白名单，构建产物和镜像不包含 `.env.local`。
 
 Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-service/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
@@ -68,13 +73,12 @@ Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加�
 | 变量                                                              | 说明与取值约束                                                                         |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `HAI_CORE_ENV`                                                    | `development \| test \| production \| staging`                                         |
-| `HAI_CORE_DEBUG`                                                  | `true \| false`                                                                        |
 | `HAI_CORE_LOGGING_LEVEL`                                          | `trace \| debug \| info \| warn \| error \| fatal`                                     |
 | `HAI_CORE_LOGGING_FORMAT`                                         | `json \| pretty`                                                                       |
 | `HAI_DB_TYPE`                                                     | `sqlite \| postgresql \| mysql`                                                        |
 | `HAI_DB_DATABASE`                                                 | SQLite 文件路径或 `:memory:`；网络数据库为数据库名                                     |
 | `HAI_DB_HOST` / `HAI_DB_PORT` / `HAI_DB_USER` / `HAI_DB_PASSWORD` | 主机、整数端口 1–65535、用户名、敏感密码；PostgreSQL 常用 5432，MySQL 常用 3306        |
-| `HAI_DB_URL` / `HAI_DB_SSL`                                       | 非空连接 URL 优先于拆分字段；TLS 为布尔值、require/prefer/allow/disable 或 TLS 对象    |
+| `HAI_DB_URL` / `HAI_DB_SSL`                                       | 非空连接 URL 优先于拆分字段；MySQL TLS 仅 false 或严格对象（{} 默认验证证书链和 DNS 身份）；PostgreSQL 接受其布尔/字符串模式或对象    |
 | `HAI_CACHE_TYPE` / `HAI_CACHE_DB`                                 | `memory \| redis`；DB 为整数 0–15；memory 仅单进程使用                                 |
 | `HAI_STORAGE_TYPE`                                                | `local \| s3`；local 要求 root，s3 要求 bucket、region、accessKeyId、secretAccessKey   |
 | `HAI_SERV_SERVER_HOST` / `HAI_SERV_SERVER_PORT`                   | HTTP 主机和整数端口 1–65535；部署平台 HOST/PORT 可覆盖                                 |
@@ -106,7 +110,7 @@ HAI_DB_USER=my_app
 HAI_DB_SSL=require
 ```
 
-切换到 MySQL 时相应设置 `HAI_DB_TYPE=mysql`、端口和凭据。确保项目已安装所选 Provider 的驱动；数据库数据迁移另行执行，切换配置不会搬迁数据。缓存切到 Redis、存储切到 S3 时同样填写对应连接字段。
+切换到 MySQL 时相应设置 `HAI_DB_TYPE=mysql`、端口和凭据，并把 `HAI_DB_SSL=require` 改为严格 TLS 对象，例如 `HAI_DB_SSL='{}'`（默认校验证书链和 DNS 身份）；自签 CA 使用 `ca` PEM，mTLS 的 `cert` / `key` PEM 必须成对。私钥仅放被忽略的 `.env.local` 或目标进程环境。确保项目已安装所选 Provider 的驱动；数据库数据迁移另行执行，切换配置不会搬迁数据。缓存切到 Redis、存储切到 S3 时同样填写对应连接字段。
 
 ## CLI 安装与命令
 
@@ -122,6 +126,12 @@ hai create my-app
 ```
 
 已有项目先进入项目根目录，再按需要执行 `hai add <module>`、`hai init` 或 `hai generate <type> <name>`。已安装 CLI 时，相同安装命令可更新到当前发布版本；需要指定版本时使用 `@h-ai/cli@<version>`。命令和模板以实际安装的 CLI 为准，不能把未发布的框架源码能力当作已安装包能力。
+
+`hai generate page` 只写 SvelteKit 文件路由；`api` 按目标应用生成 SvelteKit 端点或 serv 的共享 contract/procedure 并接入已有聚合入口。API/fullstack 根自动选择唯一后端，多个候选用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 不生成虚假文件路由；serv 不接受 `--output`，SvelteKit 输出限定 `src/routes` 内，定制 `kit.files` 时拒绝猜测；SvelteKit API 目标须已安装 `@h-ai/kit` 与 `zod`。不要删除模板 `@hai-generator` 聚合标记；自定义入口没有标记时手动沿现有架构接入。生成前统一校验路径和覆盖冲突，失败回滚本次修改；`--force` 不能覆盖已有业务领域注册。
+
+CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，`en`/`zh` 地区变体映射到现有语言，`C`/`POSIX` 为英文；未知语言保留 core 当前语言（默认中文）。CLI 内部命令响应 `core.i18n.setGlobalLocale('en-US')` 的同进程切换；包入口仍为命令行入口，不提供库调用 API。`hai generate` 省略类型/名称会交互，取消不写文件；生成源码的中文注释与用户名称不翻译。
+
+`create` / `add` / `init` 的校验、选择项、模块/模板名称与描述、错误前缀及完成提示也使用当前 CLI locale；目录标签延迟求值。CLI 语言不修改生成应用的 `core.defaultLocale`。生成的中文 README、YAML/源码注释与外部工具原始错误保留原样；不要把这些正文机械替换成终端翻译。
 
 ## 将需求映射到现有能力
 
@@ -215,3 +225,9 @@ export function pageOffset(query: PageQuery): number {
 - 从当前 `package.json` 选择实际脚本，优先 workspace filter，PowerShell 使用 `pnpm.cmd`。多项门禁按 [分轮验证与集中修复](../hai-app-tests/validation.md) 先脚本化收集结果和日志，再集中修复、复测失败及受影响项；普通失败不立即从头重跑。不能调用框架仓库私有命令替代应用检查。
 - typecheck/lint 只覆盖部分质量规则；权限、事务、降级、真实 provider、浏览器、容器和原生交付各自需要适用行为证据。缺环境或密钥时报告未验证，不能用 mock 冒充真实集成。
 - 完成说明：实际复用能力与自定义缺口、修改路径、已执行命令/行为结果、同步的 contract/调用方/配置/i18n/文档、未验证项及原因。无需无关模块的“覆盖率”清单。
+
+`_core.yml` 只接受 name/version/env/defaultLocale 元数据与 logging；不提供 debug、全局ID设置、features或supportedLocales。业务开关放app.yml并用业务Schema校验；语言列表按实际翻译工程维护，日志用logging.level。core默认语言字段不会自动注册翻译。Logger导入保留LANG/LC_ALL/PYTHONIOENCODING，终端语言优先级不能被编码初始化覆盖。
+
+框架环境目录从真实入口生成；JS/TS（含 Svelte script）中的 JSDoc 示例不构成新运行变量。Schema 字段注释仍生成用途说明，YAML/模板可选注释和字符串内生成代码引用继续保留；不能只在示例里写变量就声称已被实现消费。
+
+公开导入以安装版本的 package.json.exports 为准：只使用已声明且有真实产物的根/子路径，不导入 src/dist 或内部 Provider/Deps。条件入口可以只提供配置和类型；IAM 浏览器入口不含服务端 iam 对象。Svelte 默认组件和明确的 selective/type-only 导出均合法，不能为形式统一扩大公共 API。

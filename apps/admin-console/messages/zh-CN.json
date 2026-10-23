@@ -365,7 +365,7 @@
   "modules_storage_op_download": "下载文件",
   "modules_storage_op_download_desc": "下载文件",
   "modules_storage_op_presign": "签名URL",
-  "modules_storage_op_presign_desc": "生成预签名访问 URL",
+  "modules_storage_op_presign_desc": "S3 生成预签名访问 URL；本地存储明确返回不支持",
   "modules_storage_op_list": "列出文件",
   "modules_storage_op_list_desc": "列出目录下所有文件",
   "modules_ai_feat_chat_name": "文本生成",

@@ -15,9 +15,9 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
-  ReldbProvider,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
+import type { ReldbProvider } from './reldb-provider-types.js'
 
 import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'
@@ -41,14 +41,32 @@ const PG_DOLLAR_TAG_REGEX = /^\$([A-Z_]\w*)?\$/i
 
 // ─── pg 类型定义（避免强依赖） ───
 
-/** PostgreSQL 连接池接口 */
+/**
+ * PostgreSQL 连接池接口
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(pool: PgPool) {
+ *   const client = await pool.connect()
+ *   try { return await client.query('SELECT 1') } finally { client.release() }
+ * }
+ * ```
+ */
 interface PgPool {
   query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
   connect: () => Promise<PgClient>
   end: () => Promise<void>
+  on: (event: 'error', listener: (error: unknown) => void) => void
 }
 
-/** PostgreSQL 客户端接口 */
+/**
+ * PostgreSQL 客户端接口
+ * @example 模块内部上下文
+ * ```ts
+ * async function ready(client: PgClient) {
+ *   try { return await client.query('SELECT 1') } finally { client.release() }
+ * }
+ * ```
+ */
 interface PgClient {
   query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
   release: () => void
@@ -60,16 +78,63 @@ interface PgClient {
  * 创建 PostgreSQL Provider 实例
  *
  * @returns PostgreSQL Provider
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createPostgresProvider()
+ * const closed = await provider.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
  */
 export function createPostgresProvider(): ReldbProvider {
   /** 连接池实例 */
   let pool: PgPool | null = null
+  /** 只有健康检查完成的连接才可供业务使用；清理失败仍保留底层资源。 */
+  let ready = false
+  let closing: Promise<HaiResult<void>> | null = null
+  let activeTransactions = 0
+  let transactionsDrained: Promise<void> = Promise.resolve()
+  let resolveTransactions: (() => void) | null = null
+
+  /** 在获取连接前登记事务，关闭时等待其提交/回滚并归还连接。 */
+  function retainTransaction(): () => void {
+    if (activeTransactions++ === 0)
+      transactionsDrained = new Promise<void>((resolve) => { resolveTransactions = resolve })
+    return () => {
+      if (--activeTransactions === 0) {
+        resolveTransactions?.()
+        resolveTransactions = null
+      }
+    }
+  }
   let currentConfig: ReldbConfig | null = null
+
+  /** 保留所有权直到释放成功；合并并发关闭且立即阻止新操作。 */
+  function closeResource(): Promise<HaiResult<void>> {
+    ready = false
+    currentConfig = null
+    if (closing)
+      return closing
+    const owned = pool
+    if (!owned)
+      return Promise.resolve(ok(undefined))
+    closing = (async (): Promise<HaiResult<void>> => {
+      try {
+        await transactionsDrained
+        await owned.end()
+        pool = null
+        return ok(undefined)
+      }
+      catch (error) {
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
+      }
+    })().finally(() => { closing = null })
+    return closing
+  }
 
   // ─── 操作上下文 ───
 
   const ctx: ReldbOpsContext = {
-    isConnected: () => pool !== null,
+    isConnected: () => ready && pool !== null,
     logger,
     operationLog: () => currentConfig?.operationLog,
   }
@@ -256,7 +321,18 @@ export function createPostgresProvider(): ReldbProvider {
     async createTable(name, columns, ifNotExists = true) {
       const quotedTable = quoteIdentifier(name)
       const sql = buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists)
-      await pool!.query(sql)
+      try {
+        await pool!.query(sql)
+      }
+      catch (error) {
+        // PostgreSQL并发首次创建同表可能在IF NOT EXISTS生效前竞争pg_type唯一索引。
+        // 仅该已确认的系统目录竞态重执行原DDL；其它约束/权限/定义错误仍原样失败。
+        if (!ifNotExists || typeof error !== 'object' || error === null || !('code' in error) || error.code !== '23505'
+          || !('constraint' in error) || error.constraint !== 'pg_type_typname_nsp_index') {
+          throw error
+        }
+        await pool!.query(sql)
+      }
       return ok(undefined)
     },
     async dropTable(name, ifExists) {
@@ -383,23 +459,33 @@ export function createPostgresProvider(): ReldbProvider {
   async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
     let client: PgClient | null = null
 
+    const releaseOwnership = retainTransaction()
     try {
       client = await pool!.connect()
       await client.query('BEGIN')
     }
     catch (error) {
-      if (client) {
-        client.release()
+      try {
+        client?.release()
       }
+      finally { releaseOwnership() }
       return err(HaiReldbError.TRANSACTION_FAILED, pgTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createPgTxDmlOps(client)
-    const guardedTxDmlOps = createBaseDmlOps(ctx, txDmlOps)
+    const guardedTxDmlOps = createBaseDmlOps({ ...ctx, isConnected: () => client !== null }, txDmlOps)
     return ok(createTxHandle(guardedTxDmlOps, {
       commit: async () => { await client!.query('COMMIT') },
       rollback: async () => { await client!.query('ROLLBACK') },
-      release: () => client!.release(),
+      release: () => {
+        try {
+          client!.release()
+        }
+        finally {
+          client = null
+          releaseOwnership()
+        }
+      },
       errorMessage: pgTxErrorMessage,
     }))
   }
@@ -413,6 +499,9 @@ export function createPostgresProvider(): ReldbProvider {
       if (config.type !== 'postgresql') {
         return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_postgresOnlyPostgresql'))
       }
+      const previousCleanup = await closeResource()
+      if (!previousCleanup.success)
+        return previousCleanup
       try {
         // Node ESM 按需加载驱动，避免构建器生成无法执行的动态 require。
         const { Pool } = createRequire(import.meta.url)('pg')
@@ -431,36 +520,35 @@ export function createPostgresProvider(): ReldbProvider {
           connectionTimeoutMillis: config.pool?.acquireTimeout,
         }) as PgPool
 
+        // pg-pool 会移除损坏的空闲连接；必须监听 error，避免 EventEmitter 使进程退出。
+        // 不记录 error/message/client，驱动错误可能携带 SQL、连接串或服务端敏感细节。
+        pool.on('error', (error) => {
+          const code = error && typeof error === 'object' && 'code' in error
+            && typeof error.code === 'string' && /^[A-Z0-9_]{1,32}$/.test(error.code)
+            ? error.code
+            : undefined
+          logger.warn('PostgreSQL idle connection error; pool will replace connection', {
+            code,
+            name: error instanceof Error ? 'Error' : 'UnknownError',
+          })
+        })
+
         // 验证连接可用性
         await pool.query('SELECT 1')
 
+        ready = true
         currentConfig = config
         logger.info('Connected to PostgreSQL', { host: config.host, port: config.port, database: config.database })
         return ok(undefined)
       }
       catch (error) {
-        currentConfig = null
-        pool = null
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
+        const cleanup = await closeResource()
+        const result = err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
+        return cleanup.success || result.success ? result : err({ ...result.error, ext: { cleanupPending: true, cleanupError: cleanup.error } })
       }
     },
 
-    async close(): Promise<HaiResult<void>> {
-      if (pool) {
-        try {
-          await pool.end()
-        }
-        catch (error) {
-          currentConfig = null
-          pool = null
-          return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
-        }
-        currentConfig = null
-        pool = null
-        logger.info('Disconnected from PostgreSQL')
-      }
-      return ok(undefined)
-    },
+    close: closeResource,
 
     isConnected: () => ctx.isConnected(),
     ddl: createBaseDdlOps(ctx, rawDdl),

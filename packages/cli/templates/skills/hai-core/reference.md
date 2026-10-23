@@ -34,12 +34,14 @@
 ```typescript
 import { core } from '@h-ai/core'
 
-// 自动加载 config/ 目录下的所有 _*.yml 和 *.yml
+// 自动加载运行时 .yml / .yaml，跳过 _deploy.yml / _deploy.yaml
 core.init({ configDir: './config' })
 
 // 也可指定日志级别和配置监听
 core.init({ configDir: './config', watchConfig: true })
 ```
+
+`_deploy.yml` / `_deploy.yaml` 由部署 CLI 在加载目标环境与凭据后独立解析，不参加 Core 的自动加载和监听；业务 `deploy.yml`、手动 `core.config.load` 不受影响。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
 
 ### 2. 使用功能
 
@@ -60,7 +62,7 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 
 | 方法        | 签名                              | 说明                                      |
 | ----------- | --------------------------------- | ----------------------------------------- |
-| `core.init` | `(options?: CoreOptions) => void` | 初始化（同步，加载配置目录中的所有 YAML） |
+| `core.init` | `(options?: CoreOptions) => void` | 同步加载运行时 YAML，排除两个 `_deploy` 保留文件 |
 
 > `CoreOptions`：`{ logging?: Partial<LoggingConfig>, configDir?: string, watchConfig?: boolean }`
 >
@@ -150,6 +152,8 @@ core.logger.error('Failed to connect', { error })
 core.logger.debug('Processing item', { id, step: 'validation' })
 ```
 
+原生 `Error` 的 `name/message/stack/cause`、`AggregateError.errors` 与可枚举自有上下文先转成副本，再走字段/URL 脱敏与附加 `redact`；两端原异常均不变。Error 子图循环用 `[Circular]`，达到 32 层用 `[MaxDepth]`，自定义替换值也经过同一规范化；普通对象的循环与替换语义不变。自由文本不会自动解析秘密，可配置 `redact: ['error.message', 'error.stack']` 遮蔽整条诊断路径。
+
 **管理方法**：
 
 | 方法        | 签名                                   | 说明                     |
@@ -195,7 +199,8 @@ const level = core.logger.getLevel() // 'debug'
 | 方法                  | 签名                                                                  | 说明           |
 | --------------------- | --------------------------------------------------------------------- | -------------- |
 | `getGlobalLocale`     | `() => string`                                                        | 获取当前语言   |
-| `setGlobalLocale`     | `(locale: string) => void`                                            | 设置全局语言   |
+| `setGlobalLocale`     | `(locale: string) => void`                                            | 浏览器语言/启动默认值；请求内只改当前上下文 |
+| `runWithLocale`       | `<T>(locale: string, callback: () => T) => T`                           | Node 请求/SSR 异步语言隔离 |
 | `createMessageGetter` | `(messages: Record<string, Record<string, string>>) => MessageGetter` | 创建消息获取器 |
 
 创建模块 i18n：
@@ -301,7 +306,7 @@ core.id.isValidNanoId('abc123', 6)     // true/false
 
 - 生成 UUID **一律用 `core.id.uuid()`**，禁止裸调 `crypto.randomUUID()`。
 - 原因：`crypto.randomUUID` 仅在**安全上下文（HTTPS / localhost）**下可用，生产 http 环境会抛
-  `crypto.randomUUID is not a function`；`core.id.uuid()` 已做 `randomUUID → getRandomValues → Math.random` 三级兜底，Node.js 与浏览器通用。
+  `crypto.randomUUID is not a function`；`core.id.uuid()` 仅使用 randomUUID 或密码学安全的 getRandomValues；两者不可用时明确抛错，绝不降级到 Math.random。
 - 需要不带横线的 compact 形式：`core.id.uuid().replaceAll('-', '')`。
 - 代码评审与新建代码时以此为准，发现裸调 `crypto.randomUUID()` 一律改走 `core.id.uuid()`。
 
@@ -328,7 +333,7 @@ core.object.omit(obj, ['c', 'd'])
 ```typescript
 core.string.capitalize('hello')      // 'Hello'
 core.string.kebabCase('helloWorld')  // 'hello-world'
-core.string.constantTimeEqual(a, b)  // 防时序攻击比较
+core.string.constantTimeEqual(a, b)  // Node 使用原生等长比较；浏览器不保证恒时
 ```
 
 #### 数组操作 — `core.array`
@@ -542,3 +547,7 @@ logger.debug('Data fetched', { count: items.length })
 const safeUrl = core.sanitize.sanitizeUrl("https://example.com/a?token=value&limit=10")
 // https://example.com/a?token=[REDACTED]&limit=10
 ```
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
+
+Node 入口的 core.string.constantTimeEqual 将原始 UTF-16 单元编码后使用 node:crypto.timingSafeEqual 比较等长字节，长度不相同时直接 false，长度本身不受保护。浏览器实现仅避免按内容提前返回，不提供 JavaScript 引擎级恒时保证，不用于服务端凭证校验。外围分支、编码和请求处理不因此自动成为恒时。

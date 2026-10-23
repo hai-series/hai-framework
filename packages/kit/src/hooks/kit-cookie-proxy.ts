@@ -11,6 +11,15 @@ import { core } from '@h-ai/core'
 
 /**
  * Cookie 加密代理配置
+ * @example
+ * ```ts
+ * import type { CookieProxyConfig } from '@h-ai/kit'
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function config(encryptionKey: string): CookieProxyConfig {
+ *   return { names: new Set(['session']), symmetric: crypto.symmetric, encryptionKey }
+ * }
+ * ```
  */
 export interface CookieProxyConfig {
   /** 需要加密的 Cookie 名称集合 */
@@ -41,6 +50,13 @@ const ENCRYPTED_PREFIX = 'enc:'
  * @param cookies - SvelteKit 原始 Cookies 对象
  * @param config - 加密配置
  * @returns 代理后的 Cookies 对象（类型不变）
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(cookies: Cookies, config: CookieProxyConfig) {
+ *   const protectedCookies = createEncryptedCookieProxy(cookies, config)
+ *   return protectedCookies.get('session')
+ * }
+ * ```
  */
 export function createEncryptedCookieProxy(
   cookies: Cookies,

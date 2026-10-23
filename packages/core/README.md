@@ -158,6 +158,8 @@ const level = core.logger.getLevel() // 'debug'
 
 浏览器仍输出到 DevTools console：`pretty` 使用可读消息与上下文，`json` 输出包含 `level` / `msg` 的 JSON 字符串。默认凭据脱敏与配置的字段路径脱敏同时生效，支持嵌套点/括号路径和 `*`；消息文本本身需调用方脱敏。
 
+日志上下文中的原生 `Error` 会先转为包含 `name`、`message`、`stack`、`cause`、`AggregateError.errors` 与可枚举自有上下文的副本，再执行默认字段/URL 脱敏与配置的 `redact`；两端规则一致，原异常不变。异常子图循环返回 `[Circular]`，32 层上限返回 `[MaxDepth]`；其中的自定义替换值也经同一规范化处理，普通对象的替换语义不变。无 Error 的普通对象循环仍保留原结构，不保证可直接 JSON 序列化。`name/message/stack` 是自由文本，不自动解析其中的秘密；调用方应先清理，或用 `error.message` / `error.stack` 等路径整体遮蔽。
+
 `core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段会掩码 URL 中的用户名、密码和敏感查询参数（含 OAuth 键值 fragment）；非法 URL 返回固定占位符；邮箱、手机号默认不会被遮盖。
 
 ##### 日志级别规范
@@ -280,13 +282,15 @@ if (!result.success) {
 
 > 浏览器端没有文件系统，`core.config` 仅提供占位 API：文件相关方法返回 `SERVICE_UNAVAILABLE`，不会加载 YAML。
 
+Node 自动加载和监听运行时 `.yml` / `.yaml`，精确跳过保留文件 `_deploy.yml`、`_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们。业务 `deploy.yml` 仍自动加载，手动 `core.config.load` 不受影响。单项加载返回失败时记录错误并继续，必需配置由应用调用 `core.config.validate` 并检查 `success`；目录扫描、日志设置等异常仍可能传播。
+
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -308,8 +312,8 @@ const validResult = core.config.validate('app', AppSchema)
 
 // 查询和获取
 if (core.config.has('app')) {
-  const cfg = core.config.get<typeof AppSchema>('app') // undefined 或配置
-  const cfg2 = core.config.getOrThrow<typeof AppSchema>('app') // 未加载时抛异常
+  const cfg = core.config.get<z.infer<typeof AppSchema>>('app') // undefined 或配置
+  const cfg2 = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // 未加载时抛异常
 }
 core.config.keys() // ['core', 'app', 'db', ...]
 
@@ -438,7 +442,7 @@ core.string.isBlank('') // true
 core.string.isNotBlank('x') // true
 core.string.padStart('5', 3, '0') // '005'
 core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // 防时序攻击比较
+core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
 
 // 数组操作
 core.array.unique([1, 1, 2]) // [1, 2]
@@ -555,11 +559,27 @@ HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
 HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
+### 请求语言隔离
+
+Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+
+浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+
 ## 开发测试
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
+
+## 配置的实际消费边界
+
+`_core.yml` 仅接受 name/version/env/defaultLocale 元数据与 logging；未知字段加载失败。Core 不提供全局 debug、ID 长度/前缀、业务 features 或语言注册列表；日志级别用 logging.level，ID 选项在每次 core.id 调用传入，业务配置放 app.yml 并由应用 Schema 校验。defaultLocale 是可读取的元数据，不会替应用注册翻译或切换 Paraglide。导入 Logger 不改写 LANG、LC_ALL、PYTHONIOENCODING，包括 Windows TTY。全部模块的配置与环境消费链见[配置对应表](../../docs/configuration-map.md)。
+
+公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。Node core.init 同步返回 void；单项 config.load 返回失败时记录错误并继续，必需配置须 validate 并检查 success。目录扫描等异常仍可能抛出；模块业务 HaiResult 则先检查 success。
+
+Node 入口的 core.string.constantTimeEqual 将原始 UTF-16 单元编码后使用 node:crypto.timingSafeEqual 比较等长字节，长度不相同时直接 false，长度本身不受保护。浏览器实现仅避免按内容提前返回，不提供 JavaScript 引擎级恒时保证，不用于服务端凭证校验。外围分支、编码和请求处理不因此自动成为恒时。
+
+UUID 只使用密码学安全的 randomUUID/getRandomValues；均不可用时明确抛错，不生成 Math.random 标识。
 
 ## 许可证
 

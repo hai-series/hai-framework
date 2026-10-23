@@ -20,8 +20,21 @@ const RESEND_API = 'https://api.resend.com'
 
 /**
  * 创建 Resend Email Provisioner
- *
+ * 工厂返回内部接口；认证与开通调用必须逐次检查 HaiResult，返回的连接凭据不能直接记录。
  * @returns ServiceProvisioner 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const apiKey = process.env.HAI_DEPLOY_SERVICES_EMAIL_APIKEY
+ * if (!apiKey) throw new Error('Provide HAI_DEPLOY_SERVICES_EMAIL_APIKEY privately')
+ * const from = process.env.HAI_DEPLOY_SERVICES_EMAIL_FROM
+ * if (!from) throw new Error('Provide HAI_DEPLOY_SERVICES_EMAIL_FROM privately')
+ * const provisioner = createResendProvisioner()
+ * const authenticated = await provisioner.authenticate({ apiKey, from })
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * const result = await provisioner.provision('shop')
+ * if (!result.success) throw new Error(result.error.message)
+ * const status = result.data.resourceStatus
+ * ```
  */
 export function createResendProvisioner(): ServiceProvisioner {
   let token: string | null = null

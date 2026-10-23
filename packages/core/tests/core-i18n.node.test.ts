@@ -8,6 +8,38 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
 
 describe('core.i18n (node)', () => {
+  it('隔离交错异步请求，显式语言优先，完成后不污染默认值', async () => {
+    const enStarted = Promise.withResolvers<void>()
+    const zhStarted = Promise.withResolvers<void>()
+    const en = core.i18n.runWithLocale('en', async () => {
+      enStarted.resolve()
+      await zhStarted.promise
+      expect(core.i18n.coreM('core_errorTimeout', { locale: 'zh-CN' })).toBe('请求超时')
+      return core.i18n.coreM('core_errorTimeout')
+    })
+    const zh = core.i18n.runWithLocale('zh', async () => {
+      await enStarted.promise
+      zhStarted.resolve()
+      await Promise.resolve()
+      return core.i18n.coreM('core_errorTimeout')
+    })
+    expect(await Promise.all([en, zh])).toEqual(['Request timeout', '请求超时'])
+    expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
+  })
+
+  it('嵌套请求和失败恢复原上下文，setGlobalLocale 仅改变当前请求', async () => {
+    await core.i18n.runWithLocale('en-US', async () => {
+      await expect(core.i18n.runWithLocale('zh-CN', async () => {
+        core.i18n.setGlobalLocale('zh')
+        throw new Error('request failed')
+      })).rejects.toThrow('request failed')
+      expect(core.i18n.getGlobalLocale()).toBe('en-US')
+      core.i18n.setGlobalLocale('zh-CN')
+      expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
+    })
+    expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
+  })
+
   afterEach(() => {
     core.i18n.setGlobalLocale('zh-CN')
   })

@@ -33,6 +33,17 @@ const logger = core.logger.child({ module: 'ai', scope: 'retrieval' })
  * @param storeProvider - 存储 Provider（用于按 collection 创建向量存储实例）
  * @param sourceStore - 检索源持久化存储（支持分布式一致）
  * @returns RetrievalOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function retrieve(embedding: EmbeddingOperations, provider: AIStoreProvider, sources: AIRelStore<RetrievalSource>) {
+ *   const retrieval = createRetrievalOperations(embedding, provider, sources)
+ *   const registered = await retrieval.addSource({ id: 'docs', collection: 'documents', name: '项目文档' })
+ *   if (!registered.success) return registered
+ *   return await retrieval.retrieve({ query: '项目介绍', sources: ['docs'], topK: 5 })
+ * }
+ * ```
  */
 export function createRetrievalOperations(
   embeddingOps: EmbeddingOperations,

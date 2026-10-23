@@ -8,18 +8,35 @@
 import type { HaiResult } from '@h-ai/core'
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis'
 import type { CacheConfig } from '../cache-config.js'
-import type { CacheProvider, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
+import type { CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
+import type { CacheProvider } from './cache-provider-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import Redis from 'ioredis'
 import { cacheM } from '../cache-i18n.js'
-import {
-
-  HaiCacheError,
-
-} from '../cache-types.js'
+import { HaiCacheError } from '../cache-types.js'
+import { RedisScanError, scanRedisKeys } from './cache-redis-scan.js'
+import { validateSetOptions } from './cache-set-options.js'
 
 const logger = core.logger.child({ module: 'cache', scope: 'redis' })
+
+/** 单键 CAS；比较、删除/替换和 TTL 在同一脚本内提交，不受租约过期影响。 */
+const COMPARE_AND_SWAP_SCRIPT = `
+  local current = redis.call('get', KEYS[1])
+  if ARGV[1] == 'missing' then
+    if current then return 0 end
+  elseif current ~= ARGV[2] then return 0 end
+  if ARGV[3] == 'delete' then
+    redis.call('del', KEYS[1])
+  elseif ARGV[5] == 'keep' then
+    redis.call('set', KEYS[1], ARGV[4], 'KEEPTTL')
+  elseif ARGV[5] == 'px' then
+    redis.call('set', KEYS[1], ARGV[4], 'PX', ARGV[6])
+  else
+    redis.call('set', KEYS[1], ARGV[4])
+  end
+  return 1
+`
 
 // ─── Lua 脚本常量（分布式锁） ───
 
@@ -51,10 +68,44 @@ const EXTEND_LOCK_SCRIPT = `
  * 值序列化规则：string 直接存储，其它类型经 JSON.stringify。
  *
  * @returns CacheProvider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createRedisProvider()
+ * async function connect(config: CacheConfig) {
+ *   const connected = await provider.connect(config)
+ *   if (!connected.success) return connected
+ *   try { return await provider.ping() } finally { await provider.close() }
+ * }
+ * ```
  */
 export function createRedisProvider(): CacheProvider {
   /** ioredis 客户端实例；connect 后赋值，close 后置 null */
   let client: Redis | Cluster | null = null
+  let ready = false
+  let closing: Promise<void> | null = null
+
+  /** 停止接收业务操作；QUIT 失败时强制断开，只有实际释放成功才丢弃引用。 */
+  function closeClient(): Promise<void> {
+    const graceful = ready && client?.status === 'ready'
+    ready = false
+    if (closing)
+      return closing
+    const owned = client
+    if (!owned)
+      return Promise.resolve()
+    closing = (async () => {
+      try {
+        if (graceful)
+          await owned.quit()
+      }
+      catch (error) {
+        logger.warn('Redis graceful shutdown failed; disconnecting client', { error })
+      }
+      owned.disconnect()
+      client = null
+    })().finally(() => { closing = null })
+    return closing
+  }
 
   // ─── 辅助函数 ───
 
@@ -101,7 +152,7 @@ export function createRedisProvider(): CacheProvider {
    * @returns HaiResult 包装的操作结果
    */
   async function wrapOperation<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
-    if (!client) {
+    if (!ready || !client) {
       return err(
         HaiCacheError.NOT_INITIALIZED,
         cacheM('cache_notInitialized'),
@@ -112,6 +163,13 @@ export function createRedisProvider(): CacheProvider {
       return ok(result)
     }
     catch (error) {
+      if (error instanceof RedisScanError) {
+        return error.reason === 'topology'
+          ? err(HaiCacheError.SCAN_TOPOLOGY_CHANGED, cacheM('cache_scanTopologyChanged'), error)
+          : err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'), error)
+      }
+      if (error instanceof Error && error.message.startsWith('CROSSSLOT'))
+        return err(HaiCacheError.CROSS_SLOT, cacheM('cache_crossSlot'), error)
       return err(
         HaiCacheError.OPERATION_FAILED,
         cacheM('cache_operationFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
@@ -124,9 +182,24 @@ export function createRedisProvider(): CacheProvider {
     return result === 1 || result === '1'
   }
 
+  /** Cluster 独立 key 操作有界并发；返回顺序与输入一致，不承诺跨 slot 快照/原子性。 */
+  async function mapIndependentKeys<T>(keys: string[], operation: (key: string) => Promise<T>): Promise<T[]> {
+    const values: T[] = []
+    for (let offset = 0; offset < keys.length; offset += 64)
+      values.push(...await Promise.all(keys.slice(offset, offset + 64).map(operation)))
+    return values
+  }
+
   // ─── KV 操作 ───
 
   const kv: KvOperations = {
+    async compareAndSwap(key, expected, value, options) {
+      return wrapOperation(async () => {
+        if ((options?.px !== undefined && (!Number.isSafeInteger(options.px) || options.px <= 0)) || (options?.px !== undefined && options.keepTtl))
+          throw new TypeError('Invalid compare-and-swap expiry')
+        return isRedisOne(await client!.eval(COMPARE_AND_SWAP_SCRIPT, 1, key, expected === undefined ? 'missing' : 'value', expected === undefined ? '' : serialize(expected), value === undefined ? 'delete' : 'value', value === undefined ? '' : serialize(value), options?.keepTtl ? 'keep' : options?.px !== undefined ? 'px' : 'none', options?.px ?? 0))
+      })
+    },
     async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
       return wrapOperation(async () => {
         const value = await client!.get(key)
@@ -134,34 +207,46 @@ export function createRedisProvider(): CacheProvider {
       })
     },
 
-    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<void>> {
+    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<boolean>> {
+      const validated = validateSetOptions(options)
+      if (!validated.success)
+        return validated
       return wrapOperation(async () => {
+        const policy = validated.data
         const args: (string | number)[] = [key, serialize(value)]
-        if (options?.ex)
-          args.push('EX', options.ex)
-        else if (options?.px)
-          args.push('PX', options.px)
-        else if (options?.exat)
-          args.push('EXAT', options.exat)
-        else if (options?.pxat)
-          args.push('PXAT', options.pxat)
-        if (options?.nx)
+        if (policy.expiry)
+          args.push(...policy.expiry)
+        if (policy.nx)
           args.push('NX')
-        else if (options?.xx)
+        else if (policy.xx)
           args.push('XX')
-        if (options?.keepTtl)
+        if (policy.keepTtl)
           args.push('KEEPTTL')
-        // ioredis SET 的 TypeScript 重载签名不支持动态参数拼装（EX/PX/NX/XX/KEEPTTL），需绕过类型检查
-        await (client as unknown as { set: (...args: Array<string | number>) => Promise<unknown> }).set(...args)
+        const result = await client!.call('SET', ...args)
+        if (result !== 'OK' && result !== null)
+          throw new Error(cacheM('cache_setUnexpectedReply'))
+        return result === 'OK'
       })
     },
 
     async del(...keys: string[]): Promise<HaiResult<number>> {
-      return wrapOperation(() => client!.del(...keys))
+      return wrapOperation(async () => {
+        if (keys.length === 0)
+          return 0
+        if (client instanceof Redis.Cluster)
+          return (await mapIndependentKeys(keys, key => client!.del(key))).reduce((sum, value) => sum + value, 0)
+        return client!.del(...keys)
+      })
     },
 
     async exists(...keys: string[]): Promise<HaiResult<number>> {
-      return wrapOperation(() => client!.exists(...keys))
+      return wrapOperation(async () => {
+        if (keys.length === 0)
+          return 0
+        if (client instanceof Redis.Cluster)
+          return (await mapIndependentKeys(keys, key => client!.exists(key))).reduce((sum, value) => sum + value, 0)
+        return client!.exists(...keys)
+      })
     },
 
     async expire(key: string, seconds: number): Promise<HaiResult<boolean>> {
@@ -207,13 +292,19 @@ export function createRedisProvider(): CacheProvider {
 
     async mget<T = CacheValue>(...keys: string[]): Promise<HaiResult<(T | null)[]>> {
       return wrapOperation(async () => {
-        const values = await client!.mget(...keys)
+        const values = keys.length === 0
+          ? []
+          : client instanceof Redis.Cluster
+            ? await mapIndependentKeys(keys, key => client!.get(key))
+            : await client!.mget(...keys)
         return values.map(v => deserialize<T>(v))
       })
     },
 
     async mset(entries: Array<[string, CacheValue]>): Promise<HaiResult<void>> {
       return wrapOperation(async () => {
+        if (entries.length === 0)
+          return
         const args: string[] = []
         for (const [key, value] of entries) {
           args.push(key, serialize(value))
@@ -222,28 +313,21 @@ export function createRedisProvider(): CacheProvider {
       })
     },
 
-    async scan(cursor: number, options?: ScanOptions): Promise<HaiResult<[number, string[]]>> {
-      return wrapOperation(async () => {
-        let result: [string, string[]]
-        if (options?.match && options?.count) {
-          result = await client!.scan(cursor, 'MATCH', options.match, 'COUNT', options.count)
-        }
-        else if (options?.match) {
-          result = await client!.scan(cursor, 'MATCH', options.match)
-        }
-        else if (options?.count) {
-          result = await client!.scan(cursor, 'COUNT', options.count)
-        }
-        else {
-          result = await client!.scan(cursor)
-        }
-        const [nextCursor, keys] = result
-        return [Number.parseInt(nextCursor, 10), keys]
-      })
+    async scan(cursor: string, options?: ScanOptions): Promise<HaiResult<[string, string[]]>> {
+      return wrapOperation(() => scanRedisKeys(client!, cursor, options))
     },
 
     async keys(pattern: string): Promise<HaiResult<string[]>> {
-      return wrapOperation(() => client!.keys(pattern))
+      return wrapOperation(async () => {
+        let cursor = '0'
+        const keys = new Set<string>()
+        do {
+          const page = await scanRedisKeys(client!, cursor, { match: pattern, count: 100 })
+          cursor = page[0]
+          for (const key of page[1]) keys.add(key)
+        } while (cursor !== '0')
+        return [...keys]
+      })
     },
 
     async type(key: string): Promise<HaiResult<string>> {
@@ -594,26 +678,24 @@ export function createRedisProvider(): CacheProvider {
   const LOCK_PREFIX = '__lock:'
 
   const lock: LockOperations = {
-    async acquire(key: string, options?: LockOptions): Promise<HaiResult<boolean>> {
+    async acquire(key: string, options?: LockOptions): Promise<HaiResult<string | null>> {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         const ttl = options?.ttl ?? 30
-        const owner = options?.owner ?? 'default'
+        const owner = core.id.uuid()
         // SET key value NX EX ttl — 原子获锁
         const result = await client!.set(lockKey, owner, 'EX', ttl, 'NX')
-        return result === 'OK'
+        return result === 'OK' ? owner : null
       })
     },
 
-    async release(key: string, owner?: string): Promise<HaiResult<boolean>> {
+    async release(key: string, owner: string): Promise<HaiResult<boolean>> {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
-        if (owner !== undefined) {
-          const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner)
-          return isRedisOne(result)
-        }
-        const deleted = await client!.del(lockKey)
-        return deleted === 1
+        if (!owner)
+          return false
+        const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner)
+        return isRedisOne(result)
       })
     },
 
@@ -625,15 +707,13 @@ export function createRedisProvider(): CacheProvider {
       })
     },
 
-    async extend(key: string, ttl: number, owner?: string): Promise<HaiResult<boolean>> {
+    async extend(key: string, ttl: number, owner: string): Promise<HaiResult<boolean>> {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
-        if (owner !== undefined) {
-          const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl)
-          return isRedisOne(result)
-        }
-        const result = await client!.expire(lockKey, ttl)
-        return result === 1
+        if (!owner)
+          return false
+        const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl)
+        return isRedisOne(result)
       })
     },
   }
@@ -664,7 +744,9 @@ export function createRedisProvider(): CacheProvider {
       }
 
       try {
+        await closeClient()
         const redisOptions: RedisOptions = {
+          ...(!config.url && config.password !== undefined ? { password: config.password } : {}),
           connectTimeout: config.connectTimeout,
           commandTimeout: config.commandTimeout,
           keyPrefix: config.keyPrefix,
@@ -687,6 +769,8 @@ export function createRedisProvider(): CacheProvider {
         }
         else if (config.cluster && config.cluster.length > 0) {
           const clusterOptions: ClusterOptions = {
+            // Cluster 自身也必须延迟连接，避免构造时与下方显式 connect 竞争。
+            lazyConnect: true,
             redisOptions,
             clusterRetryStrategy: (times) => {
               if (times > config.maxRetries)
@@ -701,7 +785,6 @@ export function createRedisProvider(): CacheProvider {
             ...redisOptions,
             sentinels: config.sentinel.sentinels,
             name: config.sentinel.name,
-            password: config.password,
             db: config.db,
           })
         }
@@ -710,38 +793,45 @@ export function createRedisProvider(): CacheProvider {
             ...redisOptions,
             host: config.host,
             port: config.port,
-            password: config.password,
             db: config.db,
           })
         }
 
+        client.on('error', () => logger.warn('Redis client connection error'))
         await client.connect()
         await client.ping()
 
+        ready = true
         const address = config.url ? core.sanitize.sanitizeUrl(config.url) : `${config.host}:${config.port}`
         logger.info('Redis connected', { address })
 
         return ok(undefined)
       }
       catch (error) {
-        return err(
+        ready = false
+        let cleanupError: unknown
+        try {
+          // 连接/健康检查失败时不能向离线队列发送 QUIT；直接停止重连并释放套接字。
+          client?.disconnect()
+          client = null
+        }
+        catch (failure) {
+          cleanupError = failure
+        }
+        const result = err(
           HaiCacheError.CONNECTION_FAILED,
           cacheM('cache_redisConnectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           error,
         )
+        if (cleanupError !== undefined && !result.success)
+          return err({ ...result.error, ext: { cleanupPending: true, cleanupError } })
+        return result
       }
     },
 
-    async close(): Promise<void> {
-      if (client) {
-        logger.info('Disconnecting Redis')
-        await client.quit()
-        client = null
-        logger.info('Redis disconnected')
-      }
-    },
+    close: closeClient,
 
-    isConnected: () => client !== null,
+    isConnected: () => ready && client !== null && client.status === 'ready',
 
     kv,
     hash,

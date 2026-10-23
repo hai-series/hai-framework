@@ -31,7 +31,7 @@ pnpm add @h-ai/iam
 ### 依存関係
 
 - `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
-- `@h-ai/cache`：セッション・OTP・リセット Token・一度限りのチケット・共有ロック。**iam.init() より先に初期化**。
+- `@h-ai/cache`：セッション・OTP・一度限りのチケット。**iam.init() より先に初期化**。
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
 - `@h-ai/audit`：主要な RBAC 操作の監査記録。
 
@@ -62,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` は TLS、`ldap://` と `useTls: true` は StartTLS を使用します。Active Directory では `searchFilter: "(sAMAccountName={{username}})"` と `usernameAttribute: sAMAccountName` を指定できます。検索前に入力をエスケープします。初回ログインはローカルユーザーを同期して既定ロールを割り当て、無効化とロックも適用します。`ldapSyncUser: false` または `bind/search/unbind` を HaiResult で返す `ldapClientFactory` を注入できます。独自ファクトリでは ldapts は不要です。
+`ldaps://` は TLS、`ldap://` と `useTls: true` は StartTLS を使用します。Active Directory では `searchFilter: "(sAMAccountName={{username}})"` と `usernameAttribute: sAMAccountName` を指定できます。検索前に入力をエスケープします。初回ログインはローカルユーザーを同期して既定ロールを割り当て、無効化とロックも適用します。`ldapSyncUser: false` は DB 資格情報世代を持つ有効なローカルユーザーを必要とし、仮想 DN ユーザーは作りません。 `bind/search/unbind` を HaiResult で返す `ldapClientFactory` を注入できます。独自ファクトリでは ldapts は不要です。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -149,19 +149,19 @@ import { mailService, smsService } from './notifications.js'
 // 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
 const initialized = await iam.init({
   otp: { email: true, sms: true },
-  onOtpSendEmail: async (email, code) => {
-    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  onOtpSendEmail: async (email, code, context) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code, idempotencyKey: context.idempotencyKey })
   },
-  onOtpSendSms: async (phone, code) => {
-    await smsService.send({ to: phone, code })
+  onOtpSendSms: async (phone, code, context) => {
+    await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
   },
   passwordReset: { mode: 'email' },
-  onPasswordResetRequest: async (user, token, expiresAt) => {
+  onPasswordResetRequest: async (user, token, context) => {
     if (!user.email)
       throw new Error('Reset recipient unavailable')
     const url = new URL('https://app.example.com/auth/reset-password')
     url.searchParams.set('token', token)
-    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt: context.expiresAt, idempotencyKey: context.idempotencyKey })
   },
 })
 if (!initialized.success)
@@ -234,14 +234,14 @@ iam.init()
 
 #### データの保存先
 
-| データ種別                                        | 保存先                                  | 説明                                                                                                                          |
-| ------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| ユーザー、ロール、権限、関連付け、API Key         | DB（基本 5、任意の API Key 1 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| セッション（accessToken → Session）               | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
-| Token 対応（refreshToken → userId + accessToken） | キャッシュ                              | 独立 key、更新後に旧 Token を即時無効化                                                                                       |
-| OTP コード                                        | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
-| パスワードリセット Token                          | キャッシュ                              | TTL + 最大検証回数                                                                                                            |
-| API Key                                           | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
+| データ種別                                | 保存先                                  | 説明                                                                                                                          |
+| ----------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ユーザー、ロール、権限、関連付け、API Key | DB（基本 5、任意の API Key 1 テーブル） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| セッション（accessToken → Session）       | キャッシュ                              | TTL 付き、任意の自動延長                                                                                                      |
+| Refresh 消費状態                          | Redis ユーザー分区                      | セッション・索引と単一キー CAS で更新                                                                                         |
+| OTP コード                                | キャッシュ                              | TTL + 試行回数制限                                                                                                            |
+| パスワードリセット Token                  | ユーザー DB 行                          | SM3 hash・DB 期限・試行回数・条件付き改密                                                                                     |
+| API Key                                   | DB                                      | `hai_iam_api_keys`。平文は保存せず hash のみ。接頭辞で候補検索                                                                |
 
 ---
 
@@ -278,9 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → キャッシュ検索
+  → 永続ユーザーの有効状態とセッションに紐付く credentialVersion を検証
   → 自動延長モードなら TTL を延長
-  → 現在のユーザー状態・ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
-  → 無効ユーザー・DB 読取失敗は拒否し、API Key scope を再適用
+  → 現在のユーザーを再読込し、有効状態と credentialVersion を再確認して、ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
+  → 永続データの読取失敗、ユーザー不在・無効、資格情報の世代不一致は拒否し、API Key scope を再適用
   → 現在の Session を返す（userId、roles、permissions）
 ```
 
@@ -339,21 +340,19 @@ async function registerWithSession(username: string, password: string) {
 
 ```
 refresh(refreshToken)
-  → キャッシュから refreshToken → { userId, accessToken } を取得
-  → accessToken で旧 session を取得
-  → 旧 refreshToken を削除（即時無効化で再使用防止）
-  → 旧 accessToken の session を削除
-  → 旧ユーザー context で新 session を作成
-  → 新 TokenPair を返す
+  → ユーザー分区と会話バージョンを読み、認可を検証
+  → 未公開の新 Token 候補を生成
+  → 単一キー CAS で version/refresh を再検証し、旧会話と原子的に置換
+  → コミット後のみ唯一の後続 TokenPair を返す
 ```
 
 **単一端末のログイン：**
 
 ```
 create(options) [singleDevice=true]
-  → user→tokens の対応から既存の全 Token を削除
-  → 新 accessToken + refreshToken を生成
-  → session をキャッシュへ保存
+  → 新 accessToken + refreshToken の候補を生成
+  → 単一キー CAS で既存会話と索引を同時に置換
+  → コミット失敗時は旧会話を維持
 ```
 
 ##### 使用方法
@@ -395,7 +394,7 @@ async function forceSignOut(userId: string) {
 
 - **キャッシュのみの保存**：Memory は再起動時に消失します。共有 Redis のセッションは IAM サービス再起動後も TTL または失効まで保持します。
 - **自動延長**：`sliding: true` なら各 `get()` で TTL を延長。
-- **Refresh Rotation**：旧 refreshToken は一度の使用で無効化。再使用は漏洩の兆候。
+- **Refresh Rotation**：refresh は一度だけ消費します。重複は正常な並行処理や応答喪失でも発生し、それだけで漏洩と判断しません。
 - **Token 強度**：256-bit の暗号学的乱数（`crypto.getRandomValues(new Uint8Array(32))`）、base64url 形式。
 
 ---
@@ -487,7 +486,7 @@ async function currentAuthorization(userId: string) {
 - **ワイルドカード**：`admin:*` は `admin:read`、`admin:write:detail` などに一致。1 つの `*` がコロン以降全体に一致します。
 - **最高管理者**：`rbac.superAdminRole`（既定 `super_admin`）はすべての権限を持ちます。
 - **トランザクション**：`deleteRole` / `deletePermission` は DB トランザクションで関連を削除してから本体を削除。
-- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` で現在の状態・権限を読み、読取失敗を拒否します。`iam.session.verifyToken` はスナップショット検証のみです。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
+- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` でセッションに紐付く永続資格情報の世代を検証し、現在のユーザー状態・資格情報の世代を再確認して最新の認可を読みます。いずれかの読取に失敗すれば拒否します。`iam.session.get/verifyToken` も永続ユーザーの有効状態と `credentialVersion` を検証しますが、ロール・権限はセッションのスナップショットであり、現在の認可を代替しません。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
 - **初期データ**：`seedDefaultData: true` で admin/user/guest と基本権限を冪等に作成。
 
 ---
@@ -807,6 +806,8 @@ async function consumeAudioTicket(ticket: string) {
 
 ### 設定による認証画面
 
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
+
 `iam.publicConfig` とクライアントの HTTP `client.iam.auth.publicConfig()` は秘密情報を含まない設定だけを公開し、実際に利用可能な認証方式を表示します。`login.password/otp/ldap`、`otp.email/sms`、`register.enabled/defaultEnabled`、`passwordReset.enabled/mode/resetUrl` と規約表示を個別に設定できます。`ui` はカード/分割レイアウト、タイトル、説明、ブランド、Logo、画像を指定します。LDAP は任意で既定は無効です。既定クライアントを選択する時だけ ldapts を追加するか、独自ファクトリを注入します。
 
 任意の Reach を選択した場合、reldb/cache/Reach の初期化後、`iam.init({ ...settings, reach })` を呼び出します。`otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` テンプレートを対応する送信 Provider に接続します。明示的なコールバックは既定動作を上書きします。Console はメタデータだけを記録するため、実際の配送には SMTP、SMS または HTTP サービスが必要です。送信失敗はエラーになります。
@@ -815,7 +816,7 @@ SvelteKit は `kit.auth.createApi(iam)` と匿名用の `kit.auth.publicPaths` �
 
 規約は入力を保持したまま Modal で開きます。URL のページは iframe 埋め込みを許可する必要があり、スクリプトを無効にし別ウィンドウ表示も用意します。LoginForm/RegisterForm は `header/extraFields/footer`、AuthPanel は `loginHeader/loginFields/loginFooter` と `registerHeader/registerFields/registerFooter` を提供します。追加フィールドはアプリの状態と actions で処理します。[UI の使い方](../ui/README.ja.md) を参照してください。
 
-複数ノードは同じ DB と Redis を共有する必要があります。Memory は単一プロセス専用です。ログイン失敗は DB の原子的更新で累積し、OTP の試行回数、再送間隔、単回使用は共有状態で管理します。コードの使用や試行上限によって再送制限を回避できません。リセットは共有 TTL とユーザー別ロックを使用し、ポリシー違反も試行に含め、最新 Token の成功使用は一回だけです。リセット後は旧セッションとログインロックを解除します。無効なユーザーは認証できません。
+全ノードで同じ DB と Redis を共有します。Memory は単一プロセスのテスト用です。OTP のコード・試行回数・再送間隔は単一キーの CAS で公開・消費し、旧世代の競合を拒否します。消費後も再送制限を保持します。リセットの hash・期限・試行回数・resetVersion はユーザーの DB 行に保存し、ポリシー違反も計数します。最終 SQL が条件を検証してパスワード変更・Token 消費・credentialVersion 更新を同時に行い、新 Token・後続試行・無効化・期限切れ後の遅延書込を拒否します。リセット要求は resetVersion のみ進め、改密成功時に credentialVersion を進めます。認証で取得した資格情報世代を保持し、セッション作成・認証・更新で DB の現世代を照合するため、キャッシュ削除失敗でも旧会話を許可しません。通知は公開成功後に実行し、第3引数 { expiresAt, idempotencyKey } の安定キーをアプリと Reach Provider が永続的に重複排除します。例外・タイムアウトは送達済みの可能性があるため結果不明とし、自動再送や公開済み資格情報の巻き戻しはしません。外部副作用の厳密な一回実行には受信側の冪等性が必要です。
 
 標準 HTTP 入口は `GET /auth/config`、`POST /auth/login/ldap`、`POST /auth/password-reset/request`、`POST /auth/password-reset/confirm` です。セキュリティエラーは `SECURITY_BUSY (hai:iam:023)` と `PASSWORD_RESET_DISABLED (hai:iam:024)` です。`ldap` などの任意項目は YAML に宣言してから環境変数で上書きするか、`HAI_IAM` の JSON 値でモジュール設定全体を置き換えます。既存項目には `HAI_IAM_LOGIN_OTP` などを使用できます。
 
@@ -859,11 +860,35 @@ if (!result.success) {
 }
 ```
 
+会話と refresh 消費状態を `hai:iam:sessions:{SHA256(userId)}` のバージョン付き文書にまとめ、独立した対応キーと索引を廃止します。Bearer Token は認証には使えない分区ヒントと256ビットの乱数を含み、クライアントは不透明な文字列として扱います。更新時は Session.version を再検証します。Memory は単一プロセスのテスト用で、本番は全ノードが Redis（Cluster 対応）を共有します。競合は最新状態から再試行し、上限で CONFLICT を返します。応答喪失で結果が不明なら認証を拒否し再ログインします。すべての会話は同じユーザー索引で管理されます。
+
+`iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
+
 ## 開発とテスト
 
+公開例は `@h-ai/iam` を使用し、既定値を省略できる `IamConfigInput` と解析済み `IamConfig` を区別します。依存を先に初期化し、`HaiResult.success` を確認し、会話更新には読取時の `version`、通知には永続的な冪等キーを使います。「模块内部上下文」の戦略・倉庫例はアプリ向け深い import の契約ではありません。チェッカーは型だけを確認し、Redis/DB・LDAP・配送の動作には対応する統合テストが必要です。[JSDoc 規約](../../docs/module-jsdoc.md)も参照してください。
+
 ```bash
-pnpm test
+pnpm --filter @h-ai/iam typecheck
+pnpm --filter @h-ai/iam lint
+pnpm --filter @h-ai/iam build
+pnpm --filter @h-ai/iam test
+node scripts/check-module-jsdoc.mjs --package iam
 ```
+
+`create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
+
+access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
+
+セッションの読取・確定障害は失敗 HaiResult として返し、不存在や期限切れと解釈せず補償削除もしません。索引と会話は同じ文書で保持し、個別 get/ttl や二重索引を廃止します。確定した期限だけで整理し、復旧後の再読取・全ログアウトは元の全記録を対象にします。破損状態は保持して認証を拒否し、空文書で上書きせず運用者が修復します。
+
+キャッシュ削除が失敗を返しても、確定した新パスワードと資格情報世代は巻き戻しません。旧資格情報で自動再試行せず、再ログインしてください。
+
+Session.credentialVersion は作成時の DB 資格情報世代に結び付けます。CreateSessionOptions.expectedCredentialVersion は検証済みの信頼する戦略だけが指定し、旧世代は拒否します。省略した低レベル create でも実在する有効なローカルユーザーを DB から読み、現世代に結び付けるため、DB 記録のない認証済み ID は作れません。
+
+browser 条件の入口は設定 Schema、型、HaiIamError のみを公開し、サーバーの `iam` インスタンスは含みません。認証には HTTP/typed client を使用します。
+
+`iam.auth.logout(accessToken)` は完全な不透明 Token を使い、ユーザー文書の一回の CAS で access と refresh を同時に取り消します。access 期限後も実行します。不正・不存在 Token は冪等成功ですが、キャッシュの読取・確定障害は失敗で返し、復旧後に同じ Token で再試行できます。HTTP 入口は保持している Token だけを取り消し、userId を対象にせず、有効な access 認証を前提にしません。呼出側は `success` を確認し、Cookie・安全ストレージのローカル消去だけでサーバー失効を成功と扱わず、失敗を表示します。
 
 ## ライセンス
 

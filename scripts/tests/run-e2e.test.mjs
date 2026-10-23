@@ -16,12 +16,20 @@ beforeEach(() => {
   // 用真实子进程模拟 Playwright 在退出前写入报告，验证清理时机和退出码。
   writeFileSync(join(module, 'cli.cjs'), `
 const fs = require('node:fs')
-fs.mkdirSync('test-results', {recursive:true})
-fs.mkdirSync('playwright-report', {recursive:true})
-fs.writeFileSync('test-results/screenshot.png', 'test')
-fs.writeFileSync('playwright-report/index.html', 'test')
+const path = require('node:path')
+const args = process.argv.slice(2)
+const option = args.find(value => value.startsWith('--output='))
+const output = option ? option.slice('--output='.length) : args[args.indexOf('--output') + 1] && args.includes('--output') ? args[args.indexOf('--output') + 1] : 'test-results'
+const html = process.env.PLAYWRIGHT_HTML_OUTPUT_DIR || process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report'
+const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.join(output, 'evidence')
+for (const directory of [output, html, evidence]) fs.mkdirSync(directory, {recursive:true})
+fs.writeFileSync(path.join(output, 'screenshot.png'), 'test')
+fs.writeFileSync(path.join(html, 'index.html'), 'test')
+fs.writeFileSync(path.join(evidence, 'auth.png'), 'test')
 fs.writeFileSync(process.env.HAI_E2E_DATA_ROOT + '/test.db', 'test data')
 fs.writeFileSync('data-root.txt', process.env.HAI_E2E_DATA_ROOT)
+fs.writeFileSync('child-pid.txt', String(process.pid))
+fs.appendFileSync('observations.jsonl', JSON.stringify({ output, html, evidence }) + '\\n')
 fs.appendFileSync('runs.txt', JSON.stringify(process.argv.slice(2)) + '\\n')
 if (process.argv.includes('--wait')) {
   process.stdout.write('ready\\n')
@@ -34,25 +42,31 @@ else {
 })
 afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
-it.each([0, 7])('测试退出 %s 后清理截图和报告，并保留退出码', (code) => {
+it.each([0, 7])('测试退出 %s 后保留证据、回收数据且保留退出码', (code) => {
   const result = spawnSync(process.execPath, [resolve('scripts/run-e2e.mjs'), ...(code ? ['--fail'] : [])], { cwd: directory })
   expect(result.status).toBe(code)
-  expect(existsSync(join(directory, 'test-results'))).toBe(false)
-  expect(existsSync(join(directory, 'playwright-report'))).toBe(false)
+  const [observed] = observations()
+  expect(existsSync(resolve(directory, observed.output, 'screenshot.png'))).toBe(true)
+  expect(existsSync(resolve(directory, observed.html, 'index.html'))).toBe(true)
+  expect(existsSync(resolve(directory, observed.evidence, 'auth.png'))).toBe(true)
   expect(existsSync(join(directory, 'package.json'))).toBe(true)
   expect(existsSync(readFileSync(join(directory, 'data-root.txt'), 'utf8'))).toBe(false)
 })
-it('顺序运行多个配置，失败后不再执行后续组并清理产物', () => {
+it('多配置各自保留证据，失败后不再执行后续组且回收数据', () => {
   const result = spawnSync(process.execPath, [resolve('scripts/run-e2e.mjs'), '--config', 'first.ts', '--next', '--fail', '--next', '--config', 'last.ts'], { cwd: directory })
   expect(result.status).toBe(7)
   const runs = readFileSync(join(directory, 'runs.txt'), 'utf8')
   expect(runs).toContain('first.ts')
   expect(runs).not.toContain('last.ts')
-  expect(existsSync(join(directory, 'test-results'))).toBe(false)
+  const groups = observations()
+  expect(groups).toHaveLength(2)
+  expect(new Set(groups.map(group => group.output)).size).toBe(2)
+  for (const group of groups)
+    expect(existsSync(resolve(directory, group.output, 'screenshot.png'))).toBe(true)
   expect(existsSync(readFileSync(join(directory, 'data-root.txt'), 'utf8'))).toBe(false)
 })
 
-it('取消时结束测试进程并清理已写入的报告', async () => {
+it('取消时结束测试进程、回收数据并保留已写入的报告', async () => {
   // 通过真实进程触发同一 SIGTERM 处理器，兼容 Windows 无法发送 POSIX 信号的差异。
   const entry = pathToFileURL(resolve('scripts/run-e2e.mjs')).href
   const script = `process.stdin.once('data', () => process.emit('SIGTERM')); await import(${JSON.stringify(entry)}); process.stdin.destroy()`
@@ -74,8 +88,11 @@ it('取消时结束测试进程并清理已写入的报告', async () => {
       })
     })
     expect(code).toBe(1)
-    expect(existsSync(join(directory, 'test-results'))).toBe(false)
-    expect(existsSync(join(directory, 'playwright-report'))).toBe(false)
+    const childPid = Number(readFileSync(join(directory, 'child-pid.txt'), 'utf8'))
+    expect(() => process.kill(childPid, 0)).toThrowError(expect.objectContaining({ code: 'ESRCH' }))
+    const [observed] = observations()
+    expect(existsSync(resolve(directory, observed.output, 'screenshot.png'))).toBe(true)
+    expect(existsSync(resolve(directory, observed.html, 'index.html'))).toBe(true)
     expect(existsSync(readFileSync(join(directory, 'data-root.txt'), 'utf8'))).toBe(false)
   }
   finally {
@@ -87,3 +104,44 @@ it('取消时结束测试进程并清理已写入的报告', async () => {
     }
   }
 }, 15_000)
+
+function observations() {
+  return readFileSync(join(directory, 'observations.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line))
+}
+
+it('尊重显式证据和报告目录，保留既存报告及输出参数', () => {
+  for (const name of ['test-results', 'playwright-report']) {
+    mkdirSync(join(directory, name), { recursive: true })
+    writeFileSync(join(directory, name, 'old-report.txt'), 'old report')
+  }
+  const evidence = join(directory, 'selected-evidence')
+  const html = join(directory, 'selected-html')
+  const output = join(directory, 'selected-output')
+  const result = spawnSync(process.execPath, [resolve('scripts/run-e2e.mjs'), `--output=${output}`], {
+    cwd: directory,
+    env: { ...process.env, HAI_AUTH_EVIDENCE_DIR: evidence, PLAYWRIGHT_HTML_OUTPUT_DIR: html },
+  })
+  expect(result.status).toBe(0)
+  expect(observations()).toEqual([{ output, html, evidence }])
+  for (const name of ['test-results', 'playwright-report'])
+    expect(readFileSync(join(directory, name, 'old-report.txt'), 'utf8')).toBe('old report')
+})
+
+it('数据回收失败不覆盖原始非零退出码', () => {
+  const entry = pathToFileURL(resolve('scripts/run-e2e.mjs')).href
+  const script = `import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module'; const original = fs.rmSync; fs.rmSync = (path, options) => { if (String(path).includes('hai-browser-e2e-')) throw new Error('Injected data cleanup failure'); return original(path, options) }; syncBuiltinESMExports(); await import(${JSON.stringify(entry)})`
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script, '--', 'cleanup-test', '--fail'], { cwd: directory })
+  const dataRoot = readFileSync(join(directory, 'data-root.txt'), 'utf8')
+  try {
+    expect(result.status).toBe(7)
+    expect(String(result.stderr)).toContain('E2E data cleanup failed')
+  }
+  finally {
+    expect(dataRoot).toContain('hai-browser-e2e-')
+    rmSync(dataRoot, { recursive: true, force: true })
+  }
+})
+
+it('生成应用与仓库使用同一浏览器执行器行为', () => {
+  expect(readFileSync(resolve('packages/cli/templates/shared/run-e2e.mjs'), 'utf8')).toBe(readFileSync(resolve('scripts/run-e2e.mjs'), 'utf8'))
+})

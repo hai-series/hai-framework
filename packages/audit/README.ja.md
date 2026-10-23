@@ -97,6 +97,8 @@ await audit.init({
 - `audit.helper.login/logout/register/...`：記録用ヘルパー。
 - `audit.close()`：モジュールを終了。
 
+一般的なイベントは `audit.helper` で記録し、対応する `AuditHelper` 型は公開を維持します。内部の組み立て用ファクトリーはパッケージ API に含めません。
+
 #### 入力制約
 
 - `audit.log(input)`：`action` / `resource` は空でない文字列で、長さは 256 文字以内。
@@ -122,11 +124,15 @@ await audit.init({
 
 > 注：`audit.close()` も `HaiResult<void>` を返します。`audit.helper.passwordResetRequest()` は既定でメールアドレスを追加マスクせず、そのまま記録します。
 
+`audit.init()` は自動建表とリポジトリーの準備完了を待って成功します。DDL 失敗時は `isInitialized=false` のままで、DB を修正後に再試行できます。独自 JOIN・統計・削除も同じ準備完了を待ちます。初期化中の close は遅れた公開を無効化します。init の HaiResult を確認後に記録・検索し、共有 DB の接続は所有しないため audit の終了後に DB を終了します。
+
 ## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/audit test
 ```
+
+ソース例は RelDB を先に初期化し、監査結果と依存関係の逆順による終了結果を確認します。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。
 
 ## ライセンス
 

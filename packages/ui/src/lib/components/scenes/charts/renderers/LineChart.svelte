@@ -17,6 +17,14 @@
   } from '../chart-types.js'
   import { LineChart as LayerLineChart } from 'layerchart'
 
+  /**
+   * 分段折线图单个数据点，保留展示标签与数值。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SegmentedLinePoint = { label: 'Jan', value: 42 }
+   * ```
+   */
   interface SegmentedLinePoint {
     /** 横轴展示标签，来源于 Chart 的 x accessor。 */
     label: string
@@ -24,6 +32,14 @@
     value: number
   }
 
+  /**
+   * 分段折线图归一化后的系列与样式。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SegmentedLineSeries = { key: 'sales', label: '销量', color: '#2563eb', points: [{ label: 'Jan', value: 42 }], dashed: false }
+   * ```
+   */
   interface SegmentedLineSeries {
     /** 系列稳定标识，优先来自 ChartSeries.key。 */
     key: string
@@ -37,6 +53,14 @@
     dashed: boolean
   }
 
+  /**
+   * 分段折线图中按比例映射到 SVG 视口的数据点。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SegmentedLineCoordinate = { label: 'Jan', value: 42, x: 120, y: 80 }
+   * ```
+   */
   interface SegmentedLineCoordinate extends SegmentedLinePoint {
     /** SVG viewBox 中的横向坐标。 */
     x: number
@@ -44,6 +68,14 @@
     y: number
   }
 
+  /**
+   * 折线图 tooltip 内的一条系列数据。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SegmentedLineTooltipItem = { label: '销量', value: 42, color: '#2563eb' }
+   * ```
+   */
   interface SegmentedLineTooltipItem {
     /** tooltip 中展示的系列名称。 */
     label: string
@@ -53,6 +85,14 @@
     color: string
   }
 
+  /**
+   * 当前吸附数据点的 tooltip 位置与多系列内容。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: SegmentedLineTooltip = { x: 120, leftPercent: 25, topPercent: 50, label: 'Jan', items: [{ label: '销量', value: 42, color: '#2563eb' }] }
+   * ```
+   */
   interface SegmentedLineTooltip {
     /** 当前吸附数据点在 SVG 坐标系内的横向位置。 */
     x: number
@@ -66,6 +106,19 @@
     items: SegmentedLineTooltipItem[]
   }
 
+  /**
+   * LineChart 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Chart } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Chart> = { type: 'line', data: [{ month: 'Jan', sales: 42 }], x: 'month', y: 'sales', lineVariant: 'segmented-point', tooltipMode: 'nearest' }
+   * const component = mount(Chart, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props extends LineChartProps<ChartDataItem> {
     /** 折线图渲染变体；default 保持 LayerChart 原生渲染。 */
     lineVariant?: ChartLineVariant

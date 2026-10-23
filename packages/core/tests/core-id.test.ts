@@ -4,10 +4,32 @@
  * =============================================================================
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { core } from '../src/index.js'
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
 describe('core.id', () => {
+  it('uuid 缺少密码学随机源时明确失败，绝不使用 Math.random', () => {
+    vi.stubGlobal('crypto', undefined)
+    const insecure = vi.spyOn(Math, 'random')
+    expect(() => core.id.uuid()).toThrow()
+    expect(insecure).not.toHaveBeenCalled()
+  })
+
+  it('uuid 没有 randomUUID 时使用真实 getRandomValues 接口并设置版本和变体', () => {
+    const getRandomValues = vi.fn((bytes: Uint8Array) => {
+      bytes.set(Array.from({ length: 16 }, (_, index) => index))
+      return bytes
+    })
+    vi.stubGlobal('crypto', { getRandomValues })
+    expect(core.id.uuid()).toBe('00010203-0405-4607-8809-0a0b0c0d0e0f')
+    expect(getRandomValues).toHaveBeenCalledOnce()
+  })
+
   it('generate 默认应该生成 21 位 nanoid', () => {
     const id = core.id.generate()
     expect(id).toHaveLength(21)

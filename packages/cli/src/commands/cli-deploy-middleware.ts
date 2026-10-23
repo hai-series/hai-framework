@@ -2,12 +2,21 @@
 import type { DeploymentEnvironment, MiddlewareBackend, MiddlewareField, MiddlewareMode, MiddlewareRequirement, ScanResult } from '@h-ai/deploy'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
 import prompts from 'prompts'
 import { isMap, isScalar, parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { moduleEnvironmentVariables } from './cli-config-environment.js'
 
+/**
+ * 部署包的真实运行时命名空间类型，仅供向导依赖注入，不重新仿造部署 API。
+ * @example 模块内部上下文
+ * ```ts
+ * const module: DeployModule = await import('@h-ai/deploy')
+ * const backends = module.DEPLOY_MIDDLEWARE.db
+ * ```
+ */
 type DeployModule = typeof import('@h-ai/deploy')
 
 /** 凭据输入字段，名称与 deploy 公开配置 Schema 相同。 */
@@ -39,7 +48,20 @@ function targetConfig(requirement: MiddlewareRequirement, environment: Deploymen
 /**
  * 只有目标文件显式声明了当前后端及必要连接项，才允许保持不变。
  * 凭据仍可来自 .env.local/进程；其他环境的配置不能让此选项出现。
- * @example `canKeepMiddleware(requirement, backend, prodEnvironment)`
+ * @param requirement - 扫描出的实际中间件需求。
+ * @param backend - 部署目录中选定的后端。
+ * @param environment - 已合并变量与目标文件显式值的环境快照。
+ * @returns 仅当目标文件明确声明后端与必要连接项时为 true。
+ * @example 模块内部上下文
+ * ```ts
+ * const module = await import('@h-ai/deploy')
+ * const requirement: MiddlewareRequirement = { service: 'db', backend: 'postgresql', source: '@h-ai/reldb', configName: 'db', configPath: [], envPrefix: 'HAI_DB', config: { host: 'db', port: 5432, database: 'shop' } }
+ * const environment: DeploymentEnvironment = { environment: 'prod', envDir: '/workspace/shop', values: {}, targetValues: { HAI_DB_TYPE: 'postgresql', HAI_DB_HOST: 'db', HAI_DB_PORT: '5432', HAI_DB_DATABASE: 'shop' } }
+ * const backend = module.DEPLOY_MIDDLEWARE.db.find(item => item.backend === 'postgresql')
+ * if (backend) {
+ *   const keep = canKeepMiddleware(requirement, backend, environment)
+ * }
+ * ```
  */
 export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: MiddlewareBackend, environment: DeploymentEnvironment): boolean {
   const target = targetConfig(requirement, environment)
@@ -67,8 +89,8 @@ async function ask(question: prompts.PromptObject): Promise<unknown> {
   return answer.value
 }
 
-/** 校验连接字段；与模块 Schema 的基础取值约束一致。 */
-function validateField(value: string, field: MiddlewareField): boolean | string {
+/** 校验连接字段；数据库 TLS 复用所选后端的真实公开 Schema。 */
+function validateField(value: string, field: MiddlewareField, backend: string): boolean | string {
   if (value === '')
     return field.required ? cliM('cli_deploy_required') : true
   if (field.kind === 'port')
@@ -85,8 +107,8 @@ function validateField(value: string, field: MiddlewareField): boolean | string 
   }
   if (field.name === 'ssl') {
     const parsed = parseDocument(value)
-    const ssl: unknown = parsed.errors.length ? undefined : parsed.toJS()
-    return (typeof ssl === 'boolean' || ['require', 'prefer', 'allow', 'disable'].includes(String(ssl)) || (ssl !== null && typeof ssl === 'object' && !Array.isArray(ssl))) || cliM('cli_deploy_invalid_value')
+    const schema = backend === 'mysql' ? MysqlSslConfigSchema : SslConfigSchema
+    return (parsed.errors.length === 0 && schema.safeParse(parsed.toJS()).success) || cliM('cli_deploy_invalid_value')
   }
   if (field.name === 'headers') {
     try {
@@ -134,7 +156,23 @@ function connectionEnv(requirement: MiddlewareRequirement, backend: string, conf
 
 /**
  * 逐项收集处理方式、后端和连接参数；返回值用于过滤云开通器和 Compose 服务。
- * @example `await configureDeployMiddleware(module, scan, environment, config, false)`
+ * 会持久化公共连接信息与私有凭据；yes 仅跳过已可确定的选择，缺少必要输入仍抛错。
+ * @throws Error - 用户取消、必要非交互输入缺失、字段校验或配置持久化失败。
+ * @param module - 实际加载的 @h-ai/deploy 运行时命名空间。
+ * @param scan - 扫描得到的应用和中间件需求。
+ * @param environment - 已合并变量与目标文件显式值的环境快照。
+ * @param config - 正在补齐的部署配置对象。
+ * @param yes - 非交互模式；不能绕过必需输入缺失。
+ * @returns 每项中间件的最终处理模式。
+ * @example 模块内部上下文
+ * ```ts
+ * const module: DeployModule = await import('@h-ai/deploy')
+ * const result = await module.deploy.scan(process.cwd(), { environment: 'prod' })
+ * if (!result.success) throw new Error(result.error.message)
+ * const environment = module.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (!environment.success) throw new Error(environment.error.message)
+ * const modes = await configureDeployMiddleware(module, result.data, environment.data, {}, true)
+ * ```
  */
 export async function configureDeployMiddleware(module: DeployModule, scan: ScanResult, environment: DeploymentEnvironment, config: Record<string, unknown>, yes = false): Promise<Partial<Record<string, MiddlewareMode>>> {
   const modes: Partial<Record<string, MiddlewareMode>> = {}
@@ -224,7 +262,10 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)
         const variable = `${requirement.envPrefix}_${field.name.toUpperCase()}`
         const info = moduleEnvironmentVariables(requirement.configName).find(item => item.name === variable)
-        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field) })) : initial
+        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field, backendName) })) : initial
+        // TLS 交互返回值与非交互值保存前再次校验，不依赖 prompts UI 曾调用 validate。
+        if (field.name === 'ssl' && validateField(value, field, backendName) !== true)
+          throw new Error(cliM('cli_deploy_invalid_value'))
         // 默认的服务端凭据由 sidecar/云开通器生成，不要求用户填写。
         if (value !== '') {
           connection[field.name] = field.kind === 'number' || field.kind === 'port' ? Number(value) : field.kind === 'boolean' ? value === 'true' : field.name === 'headers' || field.name === 'ssl' ? parseDocument(value).toJS() : value
@@ -232,6 +273,11 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         else {
           delete connection[field.name]
         }
+      }
+      if (requirement.service === 'db') {
+        const validated = ReldbConfigSchema.safeParse({ ...connection, type: backendName })
+        if (!validated.success)
+          throw new Error(cliM('cli_deploy_config_invalid', { params: { path: join(scan.appDir ?? '.', 'config', '_db.yml'), fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
       }
       Object.assign(updates, connectionEnv(requirement, backendName, connection))
     }

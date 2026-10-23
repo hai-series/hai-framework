@@ -7,7 +7,7 @@ import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
-import { deploy, DeploymentArtifactSchema, HaiDeployError } from '../src/index.js'
+import { deploy, DeploymentArtifactSchema, getDeployCommandState, HaiDeployError } from '../src/index.js'
 
 const ssh = vi.hoisted(() => ({ ping: vi.fn(), exec: vi.fn(), upload: vi.fn() }))
 vi.mock('../src/container/deploy-ssh.js', () => ({ createSshExecutor: () => ssh }))
@@ -18,7 +18,7 @@ vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
       return original.runCommand(command, args)
     if (args[0] === 'save')
       writeFileSync(args[args.indexOf('-o') + 1]!, 'middleware archive')
-    return { success: true, data: { code: 0, stdout: '', stderr: '' } }
+    return { success: true, data: { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false } }
   } }
 })
 let root: string
@@ -35,7 +35,7 @@ beforeEach(() => {
   writeArtifact()
   ssh.ping.mockResolvedValue({ success: true, data: undefined })
   ssh.upload.mockResolvedValue({ success: true, data: undefined })
-  ssh.exec.mockResolvedValue({ success: true, data: { code: 0, stdout: '', stderr: '' } })
+  ssh.exec.mockResolvedValue({ success: true, data: { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false } })
   vi.stubGlobal('fetch', vi.fn(async () => new Response('ok')))
 })
 afterEach(async () => {
@@ -92,7 +92,7 @@ it('部署只上传一个完整 tar，API/Web 使用已有构建且私有配置�
   expect(ssh.exec.mock.calls.some(([command]) => /build|pnpm/.test(String(command)))).toBe(false)
   writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  apiPrefix: /custom-api/v2\ncors:\n  origin: https://app.example.test\n')
   expect(await deploy.deployApp(root, { environment: 'test', skipMiddleware: true })).toMatchObject({ success: true })
-  expect(JSON.parse(parseEnv(readFileSync(join(directory, '.env.runtime'), 'utf8')).HAI_SERV)).toMatchObject({ cors: { origin: 'https://app.example.test' } })
+  expect(JSON.parse(parseEnv(readFileSync(join(directory, '.env.runtime'), 'utf8')).HAI_SERV!)).toMatchObject({ cors: { origin: 'https://app.example.test' } })
 })
 
 it('仅打包不需要 SSH 或本地容器引擎，tar 可搬运且暂存目录自动清理', async () => {
@@ -229,7 +229,8 @@ it('跳过中间件配置时，完整包仍携带已保存的自建 Redis', asyn
   expect(existsSync(join(extracted, 'images/middleware-2.tar'))).toBe(true)
 })
 
-it('实际执行交付脚本：拒绝首次增量，支持同版本更新，健康失败不推进成功状态', async () => {
+// Git Bash 不提供 Linux flock；Windows 在 deploy-lock.e2e.test.ts 的真实 Linux 容器门禁执行此流程。
+it.skipIf(process.platform === 'win32')('实际执行交付脚本：拒绝首次增量，支持同版本更新，健康失败不推进成功状态', async () => {
   writeArtifact(false)
   await initialize(false)
   const destination = join(root, 'server').replaceAll('\\', '/')
@@ -308,6 +309,34 @@ it('完整 tar 上传失败不启动半份部署', async () => {
   ssh.upload.mockResolvedValue({ success: false, error: { ...HaiDeployError.IMAGE_TRANSFER_FAILED, message: 'transfer failed' } })
   expect(await deploy.deployApp(root, { environment: 'test' })).toMatchObject({ success: false, error: { code: HaiDeployError.IMAGE_TRANSFER_FAILED.code } })
   expect(ssh.exec.mock.calls.some(([command]) => String(command).includes('start-test.sh'))).toBe(false)
+})
+
+it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-success'])('ssh 失败只读核对匹配终态结果，保留准确执行状态且不重跑 (%s)', async (mode) => {
+  await initialize()
+  let applyCalls = 0
+  ssh.exec.mockImplementation(async (command: string) => {
+    const data = { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false }
+    if (command.includes('apply.sh')) {
+      applyCalls++
+      return { success: false, error: { ...HaiDeployError.REMOTE_COMMAND_FAILED, message: 'SSH disconnected', ext: { commandExecution: { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'unknown' } } } }
+    }
+    if (command.includes('result-')) {
+      const id = /result-([a-z0-9-]+)\.json/.exec(command)?.[1]
+      data.stdout = mode === 'missing' ? '' : JSON.stringify({ deploymentId: mode === 'mismatch' ? 'older-deployment' : id, stage: 'health', exitCode: mode === 'finished-success' ? 0 : 1, durationSeconds: 1 })
+      data.stdoutTruncated = mode === 'truncated'
+    }
+    return { success: true, data }
+  })
+  const result = await deploy.deployApp(root, { environment: 'test', skipMiddleware: true })
+  expect(result.success).toBe(false)
+  if (result.success)
+    throw new Error('Connection failure must remain visible')
+  const state = getDeployCommandState(result.error)
+  expect(state).toMatchObject({ reason: 'timeout', localTermination: 'confirmed', remoteExecution: mode.startsWith('finished') ? 'finished' : 'unknown' })
+  expect(state?.resultFile).toContain(`result-${state?.deploymentId}.json`)
+  if (mode.startsWith('finished'))
+    expect(state?.remoteExitCode).toBe(mode === 'finished-success' ? 0 : 1)
+  expect(applyCalls).toBe(1)
 })
 it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
   await initialize()

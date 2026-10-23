@@ -25,7 +25,7 @@
 | 管理版本、AI 按文档实施 | Git；能读取项目文件并执行命令的 AI 编程助手 |
 | 构建容器镜像 | 已安装且运行中的 Podman 或 Docker；Windows 上使用 Linux 容器环境 |
 | 生成桌面安装包 | 对应系统上的 Rust、目标架构工具链、Tauri 所需系统 SDK 和打包工具 |
-| 自动部署到 Linux | 本机 `tar`、`ssh`、`scp`；服务器容器引擎、Compose、`sh`、`tar`、`sha256sum`、`awk`、`curl` 和目录权限 |
+| 自动部署到 Linux | 本机 `tar`、`ssh`、`scp`；服务器容器引擎、Compose、`sh`、`tar`、`sha256sum`、`awk`、`curl`、util-linux `flock`、支持 flock 的文件系统和目录权限 |
 | 只生成部署包 | 本机 `tar`、已安装的项目依赖和构建产物；导出中间件镜像需本机容器引擎，不要求 SSH |
 
 本文用 `pnpm` 表示命令，Windows PowerShell 中替换为 `pnpm.cmd`。自动选择 Podman/Docker 只会探测可用引擎，不会安装或启动引擎。
@@ -234,9 +234,13 @@ pnpm run deploy --env prod --build --bundle-only
 #### 完全离线前再核对一次
 
 - 完整 tar 已含自建中间件归档，镜像架构与服务器一致；服务器启动不访问 registry。
-- Linux 已安装 Docker/Podman、可执行的 Compose、sh、tar、sha256sum、awk、curl；用户有目录与容器权限。
+- Linux 已安装 Docker/Podman、可执行的 Compose、sh、tar、sha256sum、awk、curl、util-linux flock，部署文件系统支持 flock；用户有目录与容器权限。
 - 包含私有配置，安全搬运，不提交 Git；持久化卷身份跨版本稳定。
 - 实际断外网验证启动、登录、页面刷新、重启与数据持久化。生产 HTTPS、证书、DNS 和外部服务需另行准备。
+
+部署与失败恢复全程使用固定 `.deploy.lock` 内核锁；禁止删除或替换文件、按时间抢锁。父进程强杀后活跃子命令可继续持锁，全部持有进程退出或重启后自动释放。强杀不执行恢复 trap，须核对结果、`current` 和实际容器状态后用新包恢复；详细说明见[部署锁与恢复](../../packages/deploy/README.md)。
+
+失败输出区分本地受管理进程已确认退出/未确认和远端未知/脚本已完成；SDK 可用 `getDeployCommandState(error)` 读取部署 ID 与结果路径。仅新连接读到完整且 ID 匹配的原子结果才确认远端脚本及恢复结束，不能把本地 SSH 退出当作远端停止。未知状态不自动重跑发布或回滚。
 
 ### 6. 更新框架，保留自己的应用
 

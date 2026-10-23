@@ -1,6 +1,8 @@
+import type { HaiResult } from '@h-ai/core'
 import { createHash, timingSafeEqual } from 'node:crypto'
+import * as m from '$lib/paraglide/messages.js'
 import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { z } from 'zod'
@@ -206,7 +208,10 @@ export async function listPartnerLeads(options: z.infer<typeof PartnerLeadQueryS
     pageSize: options.pageSize,
   }
 
-  await cache.kv.set(cacheKey, JSON.stringify(payload), { ex: 30 })
+  // 查询缓存仅用于加速；失败时仍返回已经取得的数据库结果。
+  const cachedWrite = await cache.kv.set(cacheKey, JSON.stringify(payload), { ex: 30 })
+  if (!cachedWrite.success || !cachedWrite.data)
+    core.logger.warn('Partner lead cache write failed')
 
   return {
     success: true as const,
@@ -219,7 +224,15 @@ export function verifyPartnerAdminCredential(username: string, password: string)
   return safeCompareString(config.username, username) && safeCompareString(config.password, password)
 }
 
-export async function createPartnerAdminSession(username: string) {
+/**
+ * 仅在会话已经写入缓存后签发管理员 token，缓存失败时不创建浏览器身份。
+ * @param username - 已通过凭据校验的管理员名称。
+ * @returns 持久化成功的 token，或调用方应转换为 503 的错误结果。
+ * @example
+ * const session = await createPartnerAdminSession('partner-admin')
+ * if (session.success) await getPartnerAdminSessionByToken(session.data)
+ */
+export async function createPartnerAdminSession(username: string): Promise<HaiResult<string>> {
   const config = getPartnerAdminConfig()
   const token = core.id.generate()
   const payload: PartnerAdminSession = {
@@ -229,11 +242,13 @@ export async function createPartnerAdminSession(username: string) {
     issuedAt: new Date().toISOString(),
   }
 
-  await cache.kv.set(`${SESSION_CACHE_PREFIX}:${token}`, JSON.stringify(payload), {
+  const saved = await cache.kv.set(`${SESSION_CACHE_PREFIX}:${token}`, JSON.stringify(payload), {
     ex: config.sessionTtlSeconds,
   })
 
-  return token
+  if (!saved.success || !saved.data)
+    return err(HaiCommonError.INTERNAL_ERROR, m.admin_login_failed())
+  return ok(token)
 }
 
 export async function getPartnerAdminSessionByToken(token: string) {

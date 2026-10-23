@@ -28,17 +28,23 @@ import { z } from 'zod'
  * @example
  * ```ts
  * import { MemoryTypeSchema } from '@h-ai/ai'
- *
- * // 校验字符串是否为合法记忆类型
- * const result = MemoryTypeSchema.safeParse('preference') // { success: true }
- *
- * // 用于配置或过滤
- * await ai.memory.recall('编程语言', { types: ['preference', 'fact'] })
+ * const parsed = MemoryTypeSchema.safeParse('preference')
+ * if (!parsed.success) throw parsed.error
+ * const selected = parsed.data
  * ```
  */
 export const MemoryTypeSchema = z.enum(['fact', 'preference', 'event', 'entity', 'instruction'])
 
-/** 记忆类型 */
+/**
+ * 记忆类型
+ *
+ * @example
+ * ```ts
+ * import type { MemoryType } from '@h-ai/ai'
+ * const value: MemoryType = 'preference'
+ * const filter = { types: [value] }
+ * ```
+ */
 export type MemoryType = z.infer<typeof MemoryTypeSchema>
 
 // ─── 记忆条目 ───
@@ -48,11 +54,12 @@ export type MemoryType = z.infer<typeof MemoryTypeSchema>
  *
  * @example
  * ```ts
- * const input: MemoryEntryInput = {
- *   content: '用户偏好使用中文回复',
- *   type: 'preference',
- *   importance: 0.8,
- *   objectId: 'user-001',
+ * import { ai, type MemoryEntryInput } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryEntryInput) {
+ *   const result = await ai.memory.add(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
  * }
  * ```
  */
@@ -73,6 +80,13 @@ export interface MemoryEntryInput {
 
 /**
  * 完整的记忆条目
+ *
+ * @example
+ * ```ts
+ * import type { MemoryEntry } from '@h-ai/ai'
+ * const value: MemoryEntry = { id: 'memory-1', objectId: 'user-1', type: 'preference', content: '偏好中文', importance: 0.8, createdAt: Date.now(), lastAccessedAt: Date.now(), accessCount: 0 }
+ * const preview = value.content.slice(0, 20)
+ * ```
  */
 export interface MemoryEntry {
   /** 记忆唯一标识 */
@@ -103,6 +117,17 @@ export interface MemoryEntry {
 
 /**
  * 记忆提取选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryExtractOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryExtractOptions) {
+ *   const result = await ai.memory.extract([{ role: 'user', content: '以后请用中文' }], options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryExtractOptions {
   /** 只提取指定类型 */
@@ -132,6 +157,17 @@ export interface MemoryExtractOptions {
 
 /**
  * 记忆检索选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryRecallOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryRecallOptions) {
+ *   const result = await ai.memory.recall('语言偏好', options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryRecallOptions {
   /** 返回数量（默认使用配置的 defaultTopK） */
@@ -161,6 +197,17 @@ export interface MemoryRecallOptions {
  * 记忆注入选项（`injectMemories` 使用）
  *
  * 控制记忆注入行为：检索数量、Token 预算、注入位置等。
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryInjectionOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryInjectionOptions) {
+ *   const result = await ai.memory.injectMemories([{ role: 'user', content: '你好' }], options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryInjectionOptions {
   /** 注入的记忆数量（默认 5） */
@@ -189,6 +236,17 @@ export interface MemoryInjectionOptions {
 
 /**
  * 记忆列表选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryListOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryListOptions) {
+ *   const result = await ai.memory.list(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryListOptions {
   /** 过滤类型 */
@@ -203,6 +261,17 @@ export interface MemoryListOptions {
 
 /**
  * 记忆分页选项
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryListPageOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryListPageOptions) {
+ *   const result = await ai.memory.listPage(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryListPageOptions {
   /** 过滤类型 */
@@ -220,8 +289,19 @@ export interface MemoryListPageOptions {
 /**
  * 记忆清空选项
  *
- * 安全语义：未传任何过滤条件时清空全部；传入 objectId / types / scope 时
+ * 安全语义：公共 clear 拒绝空过滤，全局清空仅限显式管理接口；传入 objectId / types / scope 时
  * 仅删除同时匹配所有给定条件的记忆，避免误删其他主体或类型的记忆。
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryClearOptions } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai。
+ * async function run(options: MemoryClearOptions) {
+ *   const result = await ai.memory.clear(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryClearOptions {
   /** 仅清空指定类型 */
@@ -236,6 +316,17 @@ export interface MemoryClearOptions {
  * 记忆条目更新输入
  *
  * 所有字段均为可选，仅传入需要更新的字段。
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryUpdateInput } from '@h-ai/ai'
+ * async function updateOwnedMemory(memoryId: string, userId: string) {
+ *   const input: MemoryUpdateInput = { importance: 0.9, metadata: { source: 'confirmed' } }
+ *   const result = await ai.memory.update(memoryId, input, { objectId: userId })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryUpdateInput {
   /** 更新记忆内容（同时重新计算向量） */
@@ -251,37 +342,22 @@ export interface MemoryUpdateInput {
 // ─── Memory 操作接口 ───
 
 /**
- * Memory 操作接口（通过 `ai.memory` 访问）
- *
- * 管理对话中产生的关键事实、用户偏好、长期知识的提取、存储与检索。
- * 需要先调用 `ai.init()` 初始化后使用。
- *
- * @example
- * ```ts
- * // 从对话中自动提取记忆
- * const extracted = await ai.memory.extract(messages, {
- *   objectId: 'user-001',
- *   systemPrompt: 'Only extract durable user preferences and explicit long-term instructions.',
- * })
- *
- * // 手动添加记忆
- * await ai.memory.add({ content: '用户偏好中文', type: 'preference', objectId: 'user-001' })
- *
- * // 检索相关记忆
- * const memories = await ai.memory.recall('用户的语言偏好', { objectId: 'user-001' })
- *
- * // 将记忆注入消息列表
- * const enriched = await ai.memory.injectMemories(newMessages, { objectId: 'user-001' })
- * const response = await ai.llm.chat({ messages: enriched.value })
- * ```
- */
-
-/**
  * 按 ID 访问单条记忆（get / update / remove）时的归属校验作用域。
  *
  * 传入后，Provider 先读取记忆再校验：`entry.objectId` 必须等于 `objectId`，且 `entry.scope`
  * 包含 `scope` 的全部 key-value；不匹配时统一返回 `MEMORY_NOT_FOUND`（避免通过错误差异
- * 枚举其他主体的记忆）。不传时不做归属校验（向后兼容）；处理不可信输入的 memoryId 时必须传入。
+ * 枚举其他主体的记忆）。不传时仅供受信内部操作；处理不可信输入的 memoryId 时必须传入。
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryAccessScope } from '@h-ai/ai'
+ * async function readOwnedMemory(memoryId: string, trustedUserId: string) {
+ *   const scope: MemoryAccessScope = { objectId: trustedUserId, scope: { topicId: 'profile' } }
+ *   const result = await ai.memory.get(memoryId, scope)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface MemoryAccessScope {
   /** 归属主体 ID（必须与记忆 entry.objectId 一致） */
@@ -295,6 +371,15 @@ export interface MemoryAccessScope {
  *
  * 绑定后，所有操作自动携带 `objectId` 与 `scope`，无需每次手动传入，
  * 从根本上避免「忘记传 objectId 导致跨租户越权」的安全隐患。
+ *
+ * @example
+ * ```ts
+ * import { ai, type ScopedMemoryBinding } from '@h-ai/ai'
+ * const binding: ScopedMemoryBinding = { objectId: 'user-1', scope: { topicId: 'profile' } }
+ * const memory = ai.memory.scoped(binding)
+ * const result = await memory.list({ limit: 10 })
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
  */
 export interface ScopedMemoryBinding {
   /** 归属主体 ID（所有操作自动绑定） */
@@ -308,6 +393,17 @@ export interface ScopedMemoryBinding {
  *
  * 危险操作：清空整个记忆后端的全部数据。必须显式传入 `confirm: true`，
  * 防止误调用；普通 `clear()` 不再支持通过省略参数隐式清空全局。
+ *
+ * @example
+ * ```ts
+ * import type { MemoryAdminOperations, MemoryClearAllOptions } from '@h-ai/ai'
+ * // 仅由已经通过管理权限校验的维护入口调用。
+ * async function clearConfirmed(admin: MemoryAdminOperations) {
+ *   const options: MemoryClearAllOptions = { confirm: true }
+ *   const result = await admin.clearAll(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * ```
  */
 export interface MemoryClearAllOptions {
   /** 必须显式为 `true`，否则拒绝执行 */
@@ -318,6 +414,16 @@ export interface MemoryClearAllOptions {
  * 记忆管理接口（`ai.memory.admin`）
  *
  * 承载危险的全局操作，与业务作用域操作明确分离。
+ *
+ * @example
+ * ```ts
+ * import type { MemoryAdminOperations } from '@h-ai/ai'
+ * // 管理接口不直接交给普通业务请求。
+ * async function clearAfterAuthorization(admin: MemoryAdminOperations) {
+ *   const result = await admin.clearAll({ confirm: true })
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * ```
  */
 export interface MemoryAdminOperations {
   /**
@@ -334,6 +440,16 @@ export interface MemoryAdminOperations {
  *
  * 各 Provider（native / mem0）实现这一组操作。公共入口 `ai.memory` 在其基础上
  * 叠加作用域绑定（`scoped`）与管理接口（`admin`），并对 `clear` 施加空过滤保护。
+ *
+ * @example
+ * ```ts
+ * import type { MemoryCoreOperations } from '@h-ai/ai'
+ * async function addWithProvider(core: MemoryCoreOperations, trustedUserId: string) {
+ *   const result = await core.add({ objectId: trustedUserId, type: 'fact', content: '已验证的业务事实' })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data.id
+ * }
+ * ```
  */
 export interface MemoryCoreOperations {
   /**
@@ -449,6 +565,14 @@ export interface MemoryCoreOperations {
  * 所有操作自动携带绑定的 `objectId` 与 `scope`，无需重复传入；`get` / `update` / `remove`
  * 自动施加归属校验（跨租户访问返回 `MEMORY_NOT_FOUND`）；`clear` 仅清空绑定作用域内的记忆，
  * 永远不会误清全局。
+ *
+ * @example
+ * ```ts
+ * import { ai, type ScopedMemoryOperations } from '@h-ai/ai'
+ * const memory: ScopedMemoryOperations = ai.memory.scoped({ objectId: 'user-1', scope: { topicId: 'profile' } })
+ * const result = await memory.add({ content: '偏好中文', type: 'preference' })
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
  */
 export interface ScopedMemoryOperations {
   /** 从对话中提取记忆（自动绑定 objectId / scope） */
@@ -480,6 +604,15 @@ export interface ScopedMemoryOperations {
  * - `scoped(binding)`：返回自动绑定 objectId / scope 的安全实例（多租户推荐入口）；
  * - `admin`：承载危险的全局操作（如 `clearAll`）；
  * - `clear`：拒绝空过滤调用（无 objectId / types / scope 时返回错误），防止误清全局。
+ *
+ * @example
+ * ```ts
+ * import { ai, type MemoryOperations } from '@h-ai/ai'
+ * const operations: MemoryOperations = ai.memory
+ * const result = await operations.scoped({ objectId: 'user-1' }).recall('语言偏好', { topK: 3 })
+ * if (!result.success) throw new Error(result.error.message)
+ * const texts = result.data.map(memory => memory.content)
+ * ```
  */
 export interface MemoryOperations extends MemoryCoreOperations {
   /**

@@ -6,8 +6,11 @@
   "license": "Apache-2.0",
   "exports": {
     ".": {
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
       "types": "./dist/index.d.ts",
-      "browser": "./dist/browser.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
@@ -43,6 +46,14 @@
     "model:build": "node models/build.mjs build",
     "model:run": "node models/build.mjs run",
     "build:clean": "rimraf dist"
+  },
+  "peerDependencies": {
+    "@qdrant/js-client-rest": "1.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@qdrant/js-client-rest": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@a2a-js/sdk": "catalog:",

@@ -36,6 +36,14 @@ const VecdbErrorInfo = {
 
 /**
  * Vecdb 模块标准错误定义对象。
+ * @example
+ * ```ts
+ * import { HaiVecdbError } from '@h-ai/vecdb'
+ * import { err } from '@h-ai/core'
+ *
+ * const result = err(HaiVecdbError.COLLECTION_NOT_FOUND, 'Collection missing')
+ * if (!result.success) void result.error.code
+ * ```
  */
 export const HaiVecdbError = core.error.buildHaiErrorsDef('vecdb', VecdbErrorInfo)
 
@@ -45,15 +53,12 @@ export const HaiVecdbError = core.error.buildHaiErrorsDef('vecdb', VecdbErrorInf
  * 向量文档接口
  *
  * 表示一条存入向量数据库的记录，包含向量、文本内容和元数据。
- *
  * @example
  * ```ts
- * const doc: VectorDocument = {
- *   id: 'doc-001',
- *   vector: [0.1, 0.2, 0.3, ...],
- *   content: '这是文档内容',
- *   metadata: { source: 'wiki', page: 1 },
- * }
+ * import type { VectorDocument } from '@h-ai/vecdb'
+ *
+ * const value: VectorDocument = { id: 'doc_1', vector: [0.1, 0.2, 0.3], content: 'Example text', metadata: { tenant: 'shop' } }
+ * void value
  * ```
  */
 export interface VectorDocument {
@@ -69,20 +74,24 @@ export interface VectorDocument {
 
 /**
  * 向量搜索选项
- *
  * @example
  * ```ts
- * const options: VectorSearchOptions = {
- *   topK: 10,
- *   filter: { source: 'wiki' },
- *   minScore: 0.7,
- * }
+ * import type { VectorSearchOptions } from '@h-ai/vecdb'
+ *
+ * const value: VectorSearchOptions = { topK: 5, filter: { tenant: 'shop' }, minScore: 0.7 }
+ * void value
  * ```
  */
 export interface VectorSearchOptions {
   /** 返回的最大结果数（默认 10） */
   topK?: number
-  /** 元数据过滤条件（键值对，精确匹配） */
+  /**
+   * 元数据过滤，具体能力以 Provider 为准。
+   * LanceDB：顶层字面量键的 AND 精确匹配，仅支持 string、有限 number、boolean、null；
+   * 类型严格区分，null 不匹配缺失字段；空对象不筛选，不支持对象/数组/undefined。
+   * 条件在 topK 前执行，不支持的值返回 CONFIG_ERROR。其它后端不保证相同 null/复杂值语义。
+   * @example { tenant: 'acme', active: true, page: 1, removedAt: null }
+   */
   filter?: Record<string, unknown>
   /** 最低相似度阈值（0-1，低于此值的结果将被过滤） */
   minScore?: number
@@ -92,15 +101,12 @@ export interface VectorSearchOptions {
  * 向量搜索结果
  *
  * 包含匹配的文档和相似度得分。
- *
  * @example
  * ```ts
- * const result: VectorSearchResult = {
- *   id: 'doc-001',
- *   score: 0.95,
- *   content: '匹配的文档内容',
- *   metadata: { source: 'wiki' },
- * }
+ * import type { VectorSearchResult } from '@h-ai/vecdb'
+ *
+ * const value: VectorSearchResult = { id: 'doc_1', score: 0.95, content: 'Example text', metadata: { tenant: 'shop' } }
+ * void value
  * ```
  */
 export interface VectorSearchResult {
@@ -122,15 +128,12 @@ export interface VectorSearchResult {
  * 集合信息接口
  *
  * 描述一个向量集合的元信息。
- *
  * @example
  * ```ts
- * const info: CollectionInfo = {
- *   name: 'docs',
- *   dimension: 1536,
- *   metric: 'cosine',
- *   count: 42,
- * }
+ * import type { CollectionInfo } from '@h-ai/vecdb'
+ *
+ * const value: CollectionInfo = { name: 'docs', dimension: 3, metric: 'cosine', count: 1 }
+ * void value
  * ```
  */
 export interface CollectionInfo {
@@ -150,14 +153,15 @@ export interface CollectionInfo {
  * 集合管理操作接口
  *
  * 通过 `vecdb.collection` 访问，管理向量集合的创建、删除和查询。
- *
  * @example
  * ```ts
- * // 创建集合
- * await vecdb.collection.create('my-docs', { dimension: 1536 })
+ * import type { CollectionOperations } from '@h-ai/vecdb'
  *
- * // 列出集合
- * const result = await vecdb.collection.list()
+ * async function read(operations: CollectionOperations) {
+ *   const result = await operations.list()
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export interface CollectionOperations {
@@ -204,13 +208,12 @@ export interface CollectionOperations {
 
 /**
  * 集合创建选项
- *
  * @example
  * ```ts
- * const options: CollectionCreateOptions = {
- *   dimension: 1536,
- *   metric: 'cosine',
- * }
+ * import type { CollectionCreateOptions } from '@h-ai/vecdb'
+ *
+ * const value: CollectionCreateOptions = { dimension: 3, metric: 'cosine' }
+ * void value
  * ```
  */
 export interface CollectionCreateOptions {
@@ -224,17 +227,15 @@ export interface CollectionCreateOptions {
  * 向量操作接口
  *
  * 通过 `vecdb.vector` 访问，管理向量文档的增删改查和搜索。
- *
  * @example
  * ```ts
- * // 插入向量
- * await vecdb.vector.insert('my-docs', [
- *   { id: 'doc-1', vector: [...], content: '文档1' },
- *   { id: 'doc-2', vector: [...], content: '文档2' },
- * ])
+ * import type { VectorOperations } from '@h-ai/vecdb'
  *
- * // 搜索向量
- * const result = await vecdb.vector.search('my-docs', queryVector, { topK: 5 })
+ * async function read(operations: VectorOperations) {
+ *   const result = await operations.search('docs', [0.1, 0.2, 0.3], { topK: 5 })
+ *   if (!result.success) return result.error.message
+ *   return result.data
+ * }
  * ```
  */
 export interface VectorOperations {
@@ -243,16 +244,20 @@ export interface VectorOperations {
    *
    * @param collection - 集合名称
    * @param documents - 文档列表
-   * @returns 成功返回 ok(undefined)
+   * @returns 成功返回 ok(undefined)；LanceDB 已有 ID 保留不覆盖，同批重复 ID 返回 CONFIG_ERROR。
+   * Qdrant 成功前等待服务端应用写入。
+   * @example await vecdb.vector.insert('docs', [{ id: 'doc-1', vector: [1, 0] }])
    */
   insert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
 
   /**
-   * 更新向量文档（按 id 匹配，整体替换）
+   * 插入或更新向量文档（按 id 匹配，整体替换）
    *
    * @param collection - 集合名称
-   * @param documents - 待更新的文档（id 必须已存在）
-   * @returns 成功返回 ok(undefined)
+   * @param documents - 待写入文档；已有 ID 更新，不存在的 ID 插入
+   * @returns 成功返回 ok(undefined)；LanceDB 缺少原子主键能力或同批重复 ID 返回 CONFIG_ERROR。
+   * Qdrant 成功前等待服务端应用写入。
+   * @example await vecdb.vector.upsert('docs', [{ id: 'doc-1', vector: [1, 0], content: 'updated' }])
    */
   upsert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
 
@@ -262,6 +267,7 @@ export interface VectorOperations {
    * @param collection - 集合名称
    * @param ids - 文档 ID 列表
    * @returns 成功返回 ok(undefined)
+   * Qdrant 成功前等待服务端应用删除。
    */
   delete: (collection: string, ids: string[]) => Promise<HaiResult<void>>
 
@@ -272,6 +278,7 @@ export interface VectorOperations {
    * @param vector - 查询向量
    * @param options - 搜索选项
    * @returns 搜索结果列表（按相似度降序排列）
+   * @example await vecdb.vector.search('docs', [1, 0], { topK: 5, filter: { tenant: 'acme', active: true } })
    */
   search: (
     collection: string,
@@ -284,6 +291,7 @@ export interface VectorOperations {
    *
    * @param collection - 集合名称
    * @returns 文档数量
+   * Qdrant 使用精确 count，不依赖集合信息的近似统计。
    */
   count: (collection: string) => Promise<HaiResult<number>>
 }
@@ -292,25 +300,20 @@ export interface VectorOperations {
 
 /**
  * 向量数据库服务接口（通过 `vecdb` 对象访问）
- *
  * @example
  * ```ts
  * import { vecdb } from '@h-ai/vecdb'
  *
- * // 初始化（LanceDB）
- * await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
- *
- * // 创建集合
- * await vecdb.collection.create('docs', { dimension: 1536 })
- *
- * // 插入向量
- * await vecdb.vector.insert('docs', [{ id: '1', vector: [...], content: '...' }])
- *
- * // 搜索
- * const result = await vecdb.vector.search('docs', queryVector, { topK: 5 })
- *
- * // 关闭
- * await vecdb.close()
+ * const initialized = await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333' })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await vecdb.collection.list()
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await vecdb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export interface VecdbFunctions {
@@ -339,17 +342,24 @@ export interface VecdbFunctions {
  * 向量库原始连接信息
  *
  * 由 `vecdb.rawConnection` 暴露，字段按后端类型填充。包含凭证，仅供同进程内集成使用。
+ * @example
+ * ```ts
+ * import type { VecdbConnection } from '@h-ai/vecdb'
+ *
+ * const value: VecdbConnection = { type: 'qdrant', url: 'http://localhost:6333' }
+ * void value
+ * ```
  */
 export interface VecdbConnection {
   /** 后端类型 */
   type: VecdbConfig['type']
-  /** 服务 URL（qdrant） */
+  /** 服务 URL（qdrant、chroma；Chroma 内嵌模式含实际本地端口） */
   url?: string
-  /** API Key（qdrant） */
+  /** API Key / Bearer token（qdrant、chroma） */
   apiKey?: string
-  /** 主机（pgvector） */
+  /** 主机（pgvector、chroma） */
   host?: string
-  /** 端口（pgvector） */
+  /** 端口（pgvector、chroma） */
   port?: number
   /** 数据库名（pgvector） */
   database?: string
@@ -359,6 +369,6 @@ export interface VecdbConnection {
   password?: string
   /** 连接串（pgvector） */
   connectionString?: string
-  /** 本地路径（lancedb） */
+  /** 本地持久化路径（lancedb 或内嵌 chroma） */
   path?: string
 }

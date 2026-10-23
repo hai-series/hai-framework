@@ -4,12 +4,9 @@
  * 补充现有测试未覆盖的边界分支，确保实际使用中不会出现意外行为。
  */
 
-import type { AIApiAdapter } from '../src/client/ai-client.js'
 import type { ChatCompletionChunk } from '../src/index.js'
-import { err, ok } from '@h-ai/core'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { collectStreamContent, createAIClient } from '../src/client/ai-client.js'
 import { ai, HaiAIError } from '../src/index.js'
 
 // =============================================================================
@@ -233,93 +230,6 @@ describe('ai.stream.createProcessor — 工具调用边界', () => {
     expect(result.toolCalls[1].function.arguments).toBe('{"x":1}')
     expect(result.toolCalls[2].function.name).toBe('c')
     expect(result.toolCalls[2].function.arguments).toBe('{"z":3}')
-  })
-})
-
-// =============================================================================
-// createAIClient — 认证边界（认证相关功能现已委托给 api-client）
-// =============================================================================
-
-describe('createAIClient — 错误处理边界', () => {
-  /** 创建 mock api adapter */
-  function createMockApi(postResult: unknown): AIApiAdapter {
-    return {
-      post: vi.fn().mockResolvedValue(postResult),
-      stream: vi.fn(),
-    }
-  }
-
-  function makeChatResponse(content: string) {
-    return {
-      id: 'resp-1',
-      object: 'chat.completion',
-      created: Date.now(),
-      model: 'test',
-      choices: [{
-        index: 0,
-        message: { role: 'assistant', content },
-        finish_reason: 'stop',
-      }],
-      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-    }
-  }
-
-  it('api.post 返回错误时抛出包含错误消息的异常', async () => {
-    const api = createMockApi(err({ message: 'Token expired' }))
-    const client = createAIClient({ api })
-
-    await expect(
-      client.chat({ messages: [{ role: 'user', content: 'hi' }] }),
-    ).rejects.toThrow('AI chat request failed: Token expired')
-  })
-
-  it('api.post 返回成功时正常返回', async () => {
-    const api = createMockApi(ok(makeChatResponse('ok')))
-    const client = createAIClient({ api })
-
-    const result = await client.chat({ messages: [{ role: 'user', content: 'hi' }] })
-    expect(result.choices[0].message.content).toBe('ok')
-  })
-})
-
-// =============================================================================
-// collectStreamContent — delta 无 content
-// =============================================================================
-
-describe('collectStreamContent — 边界', () => {
-  async function* toAsyncIterable<T>(items: T[]): AsyncIterable<T> {
-    for (const item of items) {
-      yield item
-    }
-  }
-
-  it('混合有 content 和无 content 的 chunk', async () => {
-    const chunks: ChatCompletionChunk[] = [
-      {
-        id: 'c1',
-        object: 'chat.completion.chunk',
-        created: Date.now(),
-        model: 'test',
-        choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }],
-      },
-      {
-        id: 'c2',
-        object: 'chat.completion.chunk',
-        created: Date.now(),
-        model: 'test',
-        choices: [{ index: 0, delta: { content: 'Hello' }, finish_reason: null }],
-      },
-      {
-        id: 'c3',
-        object: 'chat.completion.chunk',
-        created: Date.now(),
-        model: 'test',
-        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
-      },
-    ]
-
-    const content = await collectStreamContent(toAsyncIterable(chunks))
-    expect(content).toBe('Hello')
   })
 })
 

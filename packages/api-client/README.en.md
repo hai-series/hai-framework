@@ -53,7 +53,9 @@ await apiClient.close()
 
 #### Enable transport encryption
 
-First enable `serv.createApp({ transport: { crypto } })` on the server. The client only needs the same `@h-ai/crypto` service instance; no manual key exchange code is required.
+First enable `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` on the server. The client only needs the same `@h-ai/crypto` service instance; no manual key exchange code is required.
+
+The server injects a managed serverKeyRing and shared registry. Clients receive only serverKeyId/public keys and include the negotiated version in encrypted requests; private keys never enter client configuration. After retirement of a key version, destroy the transport session and negotiate again; do not automatically replay non-idempotent operations.
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -71,7 +73,13 @@ await apiClient.close()
 await crypto.close()
 ```
 
+Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
+
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+
 ### API contracts
+
+The default `apiClient.ai.chats.createCompletion({ messages, tools, tool_choice })` uses a non-streaming JSON contract and retains complete nested function JSON Schema and `strict`. Check `success` before reading `data.choices[].message.tool_calls`. After authorization and execution, include the assistant tool calls and tool results with matching `tool_call_id` in the next `messages`. The input does not support `stream`; the server rejects it even if TypeScript is bypassed. Bind an application's own stream contract for streaming.
 
 Custom applications can bind their own oRPC contract:
 
@@ -112,6 +120,8 @@ Calling `init()` on an initialized client returns `CONFIG_ERROR` and leaves the 
 
 ### Configuration driven authentication
 
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
+
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
 apiClient.createAuthActions(client) supplies publicConfig, login, register, sendOtp and password-reset actions for a client containing the standard IAM contract. Login uses identifier/password/method/code; successful authentication saves tokens through the existing configured storage. Applications only refresh their own state or navigate after authentication.
@@ -142,6 +152,10 @@ Automatic refresh handles an actual HTTP 401 (`Response.status`) or a valid fail
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
+
+## Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
 
 ## License
 

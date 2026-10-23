@@ -20,3 +20,7 @@ secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}
 # secretAccessKey: ''
 # endpoint: ''
 # forcePathStyle: false
+
+# S3 兼容端点；生产默认连接 Compose storage 服务。
+endpoint: ${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
+forcePathStyle: ${HAI_STORAGE_FORCEPATHSTYLE:false}

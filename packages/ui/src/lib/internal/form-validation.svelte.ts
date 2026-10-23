@@ -5,13 +5,39 @@ import { untrack } from 'svelte'
 import { getUILocale, uiM } from '../messages.js'
 import { getFormVisibilityContext } from './form-context.js'
 
+/**
+ * 可重新翻译的原生约束错误，不缓存某个语言的最终文案。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: FormValidationIssue = { key: 'form_min_length', params: { min: 12 } }
+ * ```
+ */
 export interface FormValidationIssue {
   key: UIMessageKey
   params?: Record<string, string | number>
 }
 
+/**
+ * 参与原生约束校验的表单控件集合。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: FormControl = document.createElement('input')
+ * ```
+ */
 type FormControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 
+/**
+ * 在显示时求值表单提示，语言切换后读取最新业务翻译。
+ * @param text - 待处理文本。
+ * @returns 当前语言的表单提示，空输入为空字符串。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const message = resolveFormText(() => '邮箱不能为空')
+ * ```
+ */
 export function resolveFormText(text?: FormText): string {
   if (typeof text !== 'function')
     return text ?? ''
@@ -48,6 +74,22 @@ function readIssue(control: FormControl): FormValidationIssue | undefined {
   return undefined
 }
 
+/**
+ * 在组件初始化阶段创建原生约束校验状态；宿主关闭或表单 reset 时清除过期错误。
+ * @param getOverride - 读取自定义校验提示的函数。
+ * @param getValue - 读取当前控件值以跟踪程序回填的函数。
+ * @returns 带响应式 message 和 validate/input/reset 方法的校验状态。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const validation = createControlValidation(() => '邮箱不能为空')
+ * const input = document.createElement('input')
+ * input.required = true
+ * validation.validate(input)
+ * const message = validation.message
+ * validation.reset()
+ * ```
+ */
 export function createControlValidation(getOverride: () => FormText | undefined = () => undefined, getValue?: () => unknown) {
   const visibility = getFormVisibilityContext()
   let issue = $state<FormValidationIssue>()

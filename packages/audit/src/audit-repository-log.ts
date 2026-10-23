@@ -16,14 +16,17 @@ const logger = core.logger.child({ module: 'audit', scope: 'repository' })
 
 // ─── 仓库配置 ───
 
-/**
- * 审计日志仓库配置（内部使用）
- *
- * 由 audit-main.ts 在 init() 时构造并传入。
- */
 /** 审计日志表名（固定值） */
 const AUDIT_TABLE = 'hai_audit_logs'
 
+/**
+ * 审计仓储内部的用户表关联映射；由已校验的初始化配置构造。
+ * @example 模块内部上下文
+ * ```ts
+ * const config: AuditRepositoryConfig = { userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username' }
+ * const userTable = config.userTable
+ * ```
+ */
 interface AuditRepositoryConfig {
   /** 用户表名 */
   userTable: string
@@ -42,6 +45,16 @@ interface AuditRepositoryConfig {
  * 仅在需要 JOIN / 聚合时使用自定义 SQL。
  *
  * @remarks 此类仅供 audit-main.ts 内部使用，不通过 index.ts 对外导出。
+ * @example 模块内部上下文
+ * ```ts
+ * // 共享 reldb 已初始化，连接生命周期由创建者管理。
+ * const repository = new AuditLogRepository({ userTable: 'app_users', userIdColumn: 'id', userNameColumn: 'username' })
+ * const ready = await repository.ready()
+ * if (ready.success) {
+ *   const stats = await repository.getStats(7)
+ *   if (stats.success) stats.data.map(item => item.count)
+ * }
+ * ```
  */
 export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   private readonly repoConfig: AuditRepositoryConfig
@@ -69,6 +82,15 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     })
     this.repoConfig = config
     this.isSqlite = this.db.config?.type === 'sqlite'
+  }
+
+  /**
+   * 等待基类完成建表及字段校验；init和自定义SQL共享此屏障，失败不发布仓库。
+   * @returns 建表结果，失败由调用方映射到对应审计错误
+   * @example const ready = await repository.ready(); if (!ready.success) return ready
+   */
+  ready(): Promise<HaiResult<void>> {
+    return this.ensureReady()
   }
 
   /**
@@ -164,6 +186,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回 PaginatedResult（items/total/page/pageSize）；失败时返回 QUERY_FAILED
    */
   async listWithUser(options: ListAuditLogsOptions = {}): Promise<HaiResult<PaginatedResult<AuditLogWithUser>>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
     logger.debug('Querying audit logs', { userId: options.userId, action: options.action, resource: options.resource })
 
     const conditions: string[] = []
@@ -272,6 +297,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回删除的记录数；失败时返回 CLEANUP_FAILED
    */
   async cleanupOld(olderThanDays = 90): Promise<HaiResult<number>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
     logger.debug('Cleaning up old audit logs', { olderThanDays })
 
     const cutoff = new Date()
@@ -313,6 +341,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回 AuditStatItem 数组（按 count 倒序）；失败时返回 STATS_FAILED
    */
   async getStats(days = 7): Promise<HaiResult<AuditStatItem[]>> {
+    const ready = await this.ready()
+    if (!ready.success)
+      return ready
     logger.debug('Getting audit statistics', { days })
 
     const cutoff = new Date()

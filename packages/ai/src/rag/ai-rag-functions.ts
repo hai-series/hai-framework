@@ -52,6 +52,17 @@ function defaultFormatContext(items: RagContextItem[]): string {
  * @param llm - LLM 操作（用于生成回答）
  * @param retrieval - Retrieval 操作（用于检索上下文）
  * @returns RagOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function query(llm: LLMOperations, retrieval: RetrievalOperations) {
+ *   const rag = createRagOperations(llm, retrieval)
+ *   const result = await rag.query('项目使用什么语言？', { topK: 5 })
+ *   if (!result.success) return result
+ *   return { answer: result.data.answer, citations: result.data.citations }
+ * }
+ * ```
  */
 export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOperations): RagOperations {
   return {

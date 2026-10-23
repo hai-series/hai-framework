@@ -15,12 +15,13 @@ import type { ServMessageKey } from '../serv-i18n.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
+import { getStorageKeyIssue, STORAGE_KEY_MAX_BYTES, StorageDeleteKeysSchema } from '@h-ai/storage/schemas'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
+import { validateInputOrFail } from '../serv-validation.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
 const storageContract = apiContract.storage
-const STORAGE_KEY_MAX_LENGTH = 1024
 
 function buildStorageKeyValidationFailure(
   field: string,
@@ -39,25 +40,28 @@ function buildStorageKeyValidationFailure(
 /**
  * 对业务层再次校验存储 key 是否安全。
  *
- * 这里不额外构造 Zod schema，而是直接按业务规则返回统一的
- * `HaiResult + ValidationFormError[]` 形态，避免把简单路径安全规则包装得过重。
+ * 与公开 Schema 共用规则，保留业务入口防线；后续仍必须执行授权和 Provider 防逃逸。
  */
 function validateStorageKeyOrFail(key: string, locale: string, field: string = 'key'): HaiResult<string> {
-  if (key.trim() === '')
+  const issue = getStorageKeyIssue(key)
+  if (issue === 'empty')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyRequired')
-  if (key.length > STORAGE_KEY_MAX_LENGTH) {
+  if (issue === 'tooLong') {
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyTooLong', {
-      max: STORAGE_KEY_MAX_LENGTH,
+      max: STORAGE_KEY_MAX_BYTES,
     })
   }
-  if (key.startsWith('/') || key.includes('\\') || key.includes('\0'))
+  if (issue === 'characters')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyIllegalChars')
-  if (key.split('/').some(seg => seg === '.' || seg === '..'))
+  if (issue === 'segments')
     return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyDotSegments')
   return ok(key)
 }
 
 function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<string[]> {
+  const parsed = validateInputOrFail(StorageDeleteKeysSchema, keys, locale)
+  if (!parsed.success)
+    return parsed
   for (const [index, key] of keys.entries()) {
     const keyResult = validateStorageKeyOrFail(key, locale, `keys.${index}`)
     if (!keyResult.success)
@@ -71,10 +75,15 @@ function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<st
  *
  * @example
  * ```ts
- * const authorize = ({ context, keys }: StorageAccessRequest) => {
+ * import { storage } from '@h-ai/storage'
+ * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ *
+ * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
  *   const root = `users/${encodeURIComponent(context.session.userId)}/`
- *   return keys.every(key => key.startsWith(root))
- * }
+ *   return keys.length > 0 && keys.every(key => key.startsWith(root))
+ * } })
+ * // 空列表前缀与相邻用户名前缀均不能匹配此根目录。
  * ```
  */
 export interface StorageAccessRequest {
@@ -91,11 +100,15 @@ export interface StorageAccessRequest {
  *
  * @example
  * ```ts
- * createStorageProcedures({
- *   storage,
- *   authorize: ({ context, keys }) => keys.every(key =>
- *     key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
- * })
+ * import { storage } from '@h-ai/storage'
+ * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ *
+ * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ *   const root = `users/${encodeURIComponent(context.session.userId)}/`
+ *   return keys.length > 0 && keys.every(key => key.startsWith(root))
+ * } })
+ * // 空列表前缀与相邻用户名前缀均不能匹配此根目录。
  * ```
  */
 export interface StorageProcedureDeps {
@@ -104,6 +117,18 @@ export interface StorageProcedureDeps {
   readonly authorize: (request: StorageAccessRequest) => boolean | Promise<boolean>
 }
 
+/**
+ * 内部预签名结果投影，包含短期访问 URL 和可选失效时间。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function safeUrl(value: PresignedResponse) {
+ *   return { url: value.url, key: value.key, expiresAt: value.expiresAt }
+ * }
+ * // URL 是授权后的短期凭据；只返回给已授权调用方，不记录到日志。
+ * ```
+ */
 interface PresignedResponse {
   readonly url: string
   readonly key: string
@@ -115,10 +140,18 @@ interface PresignedResponse {
  *
  * @param deps - 存储服务及必需的资源授权策略。
  * @returns 可挂载至 serv.createApp 的存储 router；拒绝访问返回 FORBIDDEN。
+ *
  * @example
  * ```ts
- * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) =>
- *   keys.every(key => key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)) })
+ * import { storage } from '@h-ai/storage'
+ * import { createStorageProcedures } from '@h-ai/serv/features/storage'
+ *
+ * // 宿主已初始化 Storage；用户根目录来自可信 session，含尾斜杠形成边界。
+ * const procedures = createStorageProcedures({ storage, authorize: ({ context, keys }) => {
+ *   const root = `users/${encodeURIComponent(context.session.userId)}/`
+ *   return keys.length > 0 && keys.every(key => key.startsWith(root))
+ * } })
+ * // 空列表前缀与相邻用户名前缀均不能匹配此根目录。
  * ```
  */
 export function createStorageProcedures(deps: StorageProcedureDeps) {

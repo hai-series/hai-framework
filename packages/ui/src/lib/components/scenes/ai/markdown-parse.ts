@@ -20,6 +20,12 @@ import {
 
 /**
  * Markdown 解析配置
+ *
+ * @example
+ * ```ts
+ * import type { MarkdownParseOptions } from '@h-ai/ui'
+ * const example: MarkdownParseOptions = { enableHighlight: true, allowHtmlTags: false, showCopyButton: true }
+ * ```
  */
 export interface MarkdownParseOptions {
   /** 是否启用代码语法高亮（默认 true） */
@@ -195,8 +201,8 @@ function getOptionsKey(options: Required<MarkdownParseOptions>): string {
  *
  * @example
  * ```ts
- * const html = parseMarkdown('# Hello\n\nWorld')
- * // => '<h1>Hello</h1>\n<p>World</p>\n'
+ * import { parseMarkdown } from '@h-ai/ui'
+ * const html = parseMarkdown('# 简介\n**重点**', { allowHtmlTags: false })
  * ```
  */
 export function parseMarkdown(content: string, options?: MarkdownParseOptions): string {

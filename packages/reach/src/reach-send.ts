@@ -6,13 +6,16 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { DndConfig } from './reach-config.js'
-import type { ReachMessage, ReachProvider, ReachTemplateRegistry, SendResult } from './reach-types.js'
+import type { ReachProvider } from './providers/reach-provider-types.js'
+import type { DndConfig, ReachQueueConfig } from './reach-config.js'
+import type { ReachMessage, ReachTemplateRegistry, SendResult } from './reach-types.js'
 
 import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
+import { ReachQueueConfigSchema } from './reach-config.js'
+import { deliverClaimedMessage } from './reach-delivery.js'
 import { reachM } from './reach-i18n.js'
 import {
   HaiReachError,
@@ -31,10 +34,14 @@ const reachNodeId = `reach:${crypto.randomUUID()}`
 // ─── DND（免打扰）检查 ───
 
 /**
- * 解析 HH:mm 时间为当天的分钟数（0~1439）
+ * 把已由DND Schema校验的HH:mm转换为当日分钟，不能直接用于未校验输入。
+ * @param time - 已校验的24小时制文本。
+ * @returns 0–1439分钟。
  *
- * @param time - HH:mm 格式的时间字符串
- * @returns 分钟数
+ * @example 模块内部上下文
+ * ```ts
+ * const minutes = parseTimeToMinutes('22:30')
+ * ```
  */
 function parseTimeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number)
@@ -42,13 +49,15 @@ function parseTimeToMinutes(time: string): number {
 }
 
 /**
- * 检查当前时间是否处于免打扰时段
+ * 内部按节点本地时区判断半开区间DND，支持跨午夜；start=end不拦截，集群须统一时区/时钟。
+ * @param dnd - 已校验免打扰配置。
+ * @param now - 当前时间，测试可注入。
+ * @returns 是否需要执行DND策略，不意味着已入队。
  *
- * 支持跨午夜时段（如 22:00 → 08:00）。
- *
- * @param dnd - DND 配置
- * @param now - 当前时间（默认 new Date()）
- * @returns 是否被 DND 拦截
+ * @example 模块内部上下文
+ * ```ts
+ * const blocked = isDndBlocked({ enabled: true, strategy: 'delay', start: '22:00', end: '08:00' }, new Date(2026, 9, 23, 23, 0))
+ * ```
  */
 export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date()): boolean {
   if (!dnd?.enabled) {
@@ -71,11 +80,15 @@ export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date())
 }
 
 /**
- * 计算距离 DND 结束还有多少毫秒
+ * 内部计算到下一次DND结束的毫秒数，按本地时区、秒精度调度；不是跨节点数据库时钟。
+ * @param dnd - 已校验配置。
+ * @param now - 当前本地时间。
+ * @returns 下一结束点的延迟毫秒数。
  *
- * @param dnd - DND 配置
- * @param now - 当前时间
- * @returns 毫秒数
+ * @example 模块内部上下文
+ * ```ts
+ * const delay = msUntilDndEnd({ enabled: true, strategy: 'delay', start: '22:00', end: '08:00' }, new Date(2026, 9, 23, 23, 0))
+ * ```
  */
 export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
   const endMin = parseTimeToMinutes(dnd.end)
@@ -92,8 +105,19 @@ export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
 // ─── 消息预处理 ───
 
 /**
- * 预处理消息：如果指定了模板，渲染模板并填充 subject/body，
- * 同时从模板中推导 Provider 名称。
+ * 内部渲染模板并补全路由/主题/正文；消息显式字段优先，渲染失败原样返回。
+ * @param message - 原消息，不原地修改。
+ * @param templateRegistry - 真实数据库模板注册表。
+ * @returns 补全消息或模板失败。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * async function prepare(message: ReachMessage, registry: ReachTemplateRegistry) {
+ *   const result = await preprocessMessage(message, registry)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export async function preprocessMessage(
   message: ReachMessage,
@@ -122,20 +146,38 @@ export async function preprocessMessage(
 // ─── 发送记录持久化（通过 Repository） ───
 
 /**
- * 保存发送记录到数据库
+ * 等待持久写入并检查实际changes=1，可靠入队不能由内存状态或未等待的Promise代替。
+ * @param repo - 真实数据库仓库。
+ * @param message - 已完成模板预处理的消息。
+ * @param status - pending可靠队列或sent观察日志。
+ * @param provider - Provider配置名称。
+ * @param messageId - 可选外部消息编号。
+ * @param queueId - 延迟入队时预生成的持久UUID回执。
+ * @param queueConfig - 随消息保存的重试预算与退避策略。
+ * @returns 持久写入HaiResult；调用方按即时/入队语义分别处理失败。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * async function enqueue(repository: SendLogRepository, message: ReachMessage, providerName: string) {
+ *   const queueId = crypto.randomUUID()
+ *   const saved = await saveSendRecord(repository, message, 'pending', providerName, undefined, queueId)
+ *   if (!saved.success) throw new Error(saved.error.message)
+ *   return queueId
+ * }
+ * ```
  */
 async function saveSendRecord(
-  repo: SendLogRepository | null,
+  repo: SendLogRepository,
   message: ReachMessage,
   status: 'sent' | 'pending',
   provider: string,
   messageId?: string,
-): Promise<void> {
-  if (!repo) {
-    return
-  }
+  queueId?: string,
+  queueConfig?: ReachQueueConfig,
+): Promise<HaiResult<void>> {
   try {
-    await repo.create({
+    const inserted = await repo.create({
+      queueId: queueId ?? null,
       provider,
       toAddr: message.to,
       subject: message.subject ?? null,
@@ -144,12 +186,18 @@ async function saveSendRecord(
       varsJson: message.vars ? JSON.stringify(message.vars) : null,
       extraJson: message.extra ? JSON.stringify(message.extra) : null,
       status,
+      ...queueConfig,
       messageId: messageId ?? null,
       createdAt: Date.now(),
     })
+    if (!inserted.success)
+      return inserted
+    if (inserted.data.changes !== 1)
+      return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'))
+    return ok(undefined)
   }
-  catch {
-    logger.debug('Send record not saved (db module unavailable)')
+  catch (cause) {
+    return err(HaiReachError.SEND_FAILED, reachM('reach_sendRecordSaveFailed'), cause)
   }
 }
 
@@ -162,10 +210,19 @@ let dndTimer: ReturnType<typeof setTimeout> | null = null
 let schedulerContext: { dndConfig: DndConfig, providers: Map<string, ReachProvider>, repo: SendLogRepository | null } | null = null
 
 /**
- * 启动 DND 恢复定时器
+ * 内部启动本机扫描计时器；业务队列状态由共享数据库持有，本机计时器不决定投递所有权。
+ * DND外立即扫描遗留消息，之后按分钟有界恢复；仅delay策略启用。
+ * @param dndConfig - 已校验DND配置。
+ * @param providers - 当前已连接Provider路由表。
+ * @param repo - 真实持久队列；null不产生可靠入队能力。
  *
- * 在 DND 结束时自动分批 claim pending 状态记录并逐条发送，
- * 并在 flush 完成后重新调度下一个 DND 周期。
+ * @example 模块内部上下文
+ * ```ts
+ * function start(config: DndConfig, providers: Map<string, ReachProvider>, repository: SendLogRepository) {
+ *   startDndScheduler(config, providers, repository)
+ *   // 生命周期结束调用resetSendState，不把停止计时器当作撤销外部投递。
+ * }
+ * ```
  */
 export function startDndScheduler(
   dndConfig: DndConfig,
@@ -179,14 +236,17 @@ export function startDndScheduler(
   }
 
   schedulerContext = { dndConfig, providers, repo }
+  const context = schedulerContext
 
   // 如果当前不在 DND 时段，不需要启动定时器
   if (!isDndBlocked(dndConfig)) {
     // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
     flushPendingMessages(providers, repo).catch((error) => {
       logger.warn('Failed to flush pending messages on init', { error })
+    }).finally(() => {
+      if (schedulerContext === context)
+        scheduleDndCheck()
     })
-    scheduleDndCheck()
     return
   }
 
@@ -199,12 +259,15 @@ export function startDndScheduler(
 function scheduleFlushAtDndEnd(): void {
   if (!schedulerContext)
     return
-  const { dndConfig, providers, repo } = schedulerContext
+  const context = schedulerContext
+  const { dndConfig, providers, repo } = context
 
   const delayMs = msUntilDndEnd(dndConfig)
   logger.info('DND scheduler started', { delayMs, dndEnd: dndConfig.end })
 
   dndTimer = setTimeout(() => {
+    if (schedulerContext !== context)
+      return
     logger.info('DND period ended, flushing pending messages')
     flushPendingMessages(providers, repo)
       .catch((error) => {
@@ -212,7 +275,8 @@ function scheduleFlushAtDndEnd(): void {
       })
       .finally(() => {
         // 重新调度：等待下一个 DND 周期
-        scheduleDndCheck()
+        if (schedulerContext === context)
+          scheduleDndCheck()
       })
   }, delayMs)
 }
@@ -223,24 +287,37 @@ function scheduleFlushAtDndEnd(): void {
 function scheduleDndCheck(): void {
   if (!schedulerContext)
     return
-  const { dndConfig } = schedulerContext
+  const context = schedulerContext
+  const { dndConfig, providers, repo } = context
 
   // 每分钟检查一次是否进入 DND
   const CHECK_INTERVAL = 60 * 1000
   dndTimer = setTimeout(() => {
-    if (!schedulerContext)
+    if (schedulerContext !== context)
       return
     if (isDndBlocked(dndConfig)) {
       scheduleFlushAtDndEnd()
     }
     else {
-      scheduleDndCheck()
+      // DND 时段外持续恢复遗留任务，避免节点启动时租约未过期就要等到下一天。
+      flushPendingMessages(providers, repo)
+        .catch(error => logger.warn('Failed to recover pending messages', { error }))
+        .finally(() => {
+          if (schedulerContext === context)
+            scheduleDndCheck()
+        })
     }
   }, CHECK_INTERVAL)
 }
 
 /**
- * 停止 DND 恢复定时器
+ * 内部清除当前本机计时器；不清数据库、不停止已开始的外部Provider调用。
+ * 完整生命周期关闭通过resetSendState同时废弃调度上下文。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * stopDndScheduler()
+ * ```
  */
 export function stopDndScheduler(): void {
   if (dndTimer !== null) {
@@ -250,7 +327,12 @@ export function stopDndScheduler(): void {
 }
 
 /**
- * 重置内部状态（close 时调用）
+ * 内部关闭时清除计时器并废弃旧调度上下文，迟到finally不会再排下一轮；不撤销在途外部请求。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * resetSendState()
+ * ```
  */
 export function resetSendState(): void {
   stopDndScheduler()
@@ -258,10 +340,18 @@ export function resetSendState(): void {
 }
 
 /**
- * 从数据库分批 claim pending 记录并逐条发送
+ * 一轮最多100次逐条领取，固定eligibleBefore让退避消息留给下轮，坏消息不在满批循环自旋。
+ * 缓存锁只减少扫描；资格由数据库owner/租约/sending门闩决定，外部效果依赖幂等或unknown隔离。
+ * @param providers - 当前已连接路由表。
+ * @param repo - 持久队列；缺省无可靠待发送队列。
  *
- * 多节点部署时通过分布式锁确保同一时刻只有一个节点执行 flush。
- * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
+ * @example 模块内部上下文
+ * ```ts
+ * async function flush(providers: Map<string, ReachProvider>, repository: SendLogRepository) {
+ *   await flushPendingMessages(providers, repository)
+ *   // 生命周期调度负责下一轮；不在此函数外无界while重试。
+ * }
+ * ```
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
@@ -273,12 +363,12 @@ async function flushPendingMessages(
 
   // 分布式锁：防止多节点同时 flush
   // 注意：这里的锁主要用于减少惊群和重复扫描；真正的行级正确性由 repo.claimPendingBatch 的 claim 事务保证。
-  let lockAcquired = false
+  let lockOwner: string | null = null
   // flushOwner 是本轮 flush 的短期 lease owner。
   // 同一进程后续再次 flush 会生成新的 owner，避免旧批次在 lease 失效后误释放/误提交新批次的记录。
-  const flushOwner = `${reachNodeId}:${Date.now()}`
+  const flushOwner = `${reachNodeId}:${crypto.randomUUID()}`
   if (cache.isInitialized) {
-    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: reachNodeId })
+    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL })
     if (!lockResult.success) {
       logger.warn('Failed to acquire flush lock, continuing with row claims only', { error: lockResult.error.message })
     }
@@ -287,19 +377,19 @@ async function flushPendingMessages(
       return
     }
     else {
-      lockAcquired = true
+      lockOwner = lockResult.data
     }
   }
 
   try {
-    while (true) {
-      // 每轮只 claim 一小批：
-      // 1) 控制单次 flush 持有的数据量
-      // 2) 让其它节点能尽快接手未处理的记录
-      // 3) 避免一次性拉全表 pending 造成长事务和大扫描
+    // 固定本轮资格截止点，耗时发送期间到期的重试留到下一轮，避免毒消息重复占用预算。
+    const eligibleBefore = Date.now()
+    for (let processed = 0; processed < FLUSH_BATCH_SIZE; processed += 1) {
+      // 按实际执行逐条领取，避免后排消息排队等待时耗尽租约；单轮处理数量有界。
       const claimResult = await repo.claimPendingBatch(flushOwner, {
-        limit: FLUSH_BATCH_SIZE,
+        limit: 1,
         lockMs: FLUSH_CLAIM_LOCK_MS,
+        eligibleBefore,
       })
       if (!claimResult.success) {
         logger.warn('Failed to claim pending messages', { error: claimResult.error.message })
@@ -313,76 +403,27 @@ async function flushPendingMessages(
       logger.debug('Flushing pending messages', { count: claimResult.data.length })
 
       for (const row of claimResult.data) {
-        // Provider 缺失属于可恢复问题：释放 claim，让后续配置修复后还能继续重试。
+        // 缺少 Provider 可由配置修复，但也必须消耗重试预算并退避，不能原地自旋。
         const provider = providers.get(row.provider)
         if (!provider) {
           logger.warn('Provider not found for pending message, releasing claim', { provider: row.provider, id: row.id })
-          const releaseResult = await repo.releaseClaim(row.id, flushOwner)
+          const releaseResult = await repo.failClaim(row, flushOwner, 'provider_unavailable')
           if (!releaseResult.success) {
             logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
           }
           continue
         }
 
-        let vars: Record<string, string> | undefined
-        let extra: Record<string, unknown> | undefined
-        try {
-          // JSON 解析失败时同样不吞掉记录，而是把它重新放回 pending，交给后续人工修复/补偿。
-          vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
-          extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
-        }
-        catch {
-          logger.warn('Failed to parse pending message JSON, releasing claim', { id: row.id })
-          const releaseResult = await repo.releaseClaim(row.id, flushOwner)
-          if (!releaseResult.success) {
-            logger.warn('Failed to release pending message claim', { id: row.id, error: releaseResult.error.message })
-          }
-          continue
-        }
-
-        const message: ReachMessage = {
-          provider: row.provider,
-          to: row.toAddr,
-          subject: row.subject ?? undefined,
-          body: row.body ?? undefined,
-          template: row.template ?? undefined,
-          vars,
-          extra,
-        }
-
-        // 外部 provider.send 不能放进数据库事务里：
-        // - 否则会把行锁/事务持有到网络调用结束，影响吞吐和故障恢复
-        // - 因此这里使用“先 claim lease，再按 owner 提交结果”的模式
-        // - 若 lease 已失效，markSent/releaseClaim 会因 owner 不匹配而失败，避免旧节点覆盖新节点状态
-        const sendResult = await provider.send(message)
-        if (sendResult.success) {
-          // markSent 带 owner 条件：只有当前 lease owner 才能把记录提交为 sent。
-          const markResult = await repo.markSent(row.id, sendResult.data.messageId, undefined, flushOwner)
-          if (!markResult.success) {
-            logger.warn('Failed to mark pending message as sent', { id: row.id, error: markResult.error.message })
-            continue
-          }
-          logger.debug('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
-          continue
-        }
-
-        // 发送失败时只释放当前 owner 的 claim；如果 lease 已被别的节点接管，这里会显式失败并打日志。
-        const releaseResult = await repo.releaseClaim(row.id, flushOwner)
-        if (!releaseResult.success) {
-          logger.warn('Failed to release pending message claim after send failure', { id: row.id, error: releaseResult.error.message })
-        }
-        logger.warn('Pending message send failed', { id: row.id, to: row.toAddr, error: sendResult.error.code })
-      }
-
-      if (claimResult.data.length < FLUSH_BATCH_SIZE) {
-        return
+        const sent = await deliverClaimedMessage(row, flushOwner, provider, repo, FLUSH_CLAIM_LOCK_MS)
+        if (!sent.success)
+          logger.warn('Pending message delivery did not commit', { id: row.id, code: sent.error.code })
       }
     }
   }
   finally {
     // 释放锁
-    if (lockAcquired) {
-      await cache.lock.release(FLUSH_LOCK_KEY, reachNodeId).catch((error: unknown) => {
+    if (lockOwner) {
+      await cache.lock.release(FLUSH_LOCK_KEY, lockOwner).catch((error: unknown) => {
         logger.warn('Failed to release flush lock', { error })
       })
     }
@@ -392,17 +433,24 @@ async function flushPendingMessages(
 // ─── 发送入口 ───
 
 /**
- * 执行消息发送
+ * 内部发送编排：模板/路由、DND、即时投递或持久pending入队。
+ * delay仅在数据库写入确认为1条后返回deferred+queueId；即时外部成功不因可选日志故障返回失败，避免重发。
+ * @param message - 原始消息。
+ * @param providers - 已连接Provider路由。
+ * @param templateRegistry - 真实模板注册表。
+ * @param dndConfig - 可选DND策略。
+ * @param repo - 可选日志仓库；delay必须存在。
+ * @param queueConfig - 入队时保存的有界重试策略。
+ * @returns 发送/可靠入队结果；不声称接收端业务恰好执行一次。
  *
- * 包含完整的发送流程：
- * 1. 校验接收方
- * 2. 预处理消息（模板渲染）
- * 3. 检查 DND 免打扰：
- *    - discard 策略：返回 DND_BLOCKED 错误
- *    - delay 策略：暂存到 DB（pending），返回 deferred 结果
- * 4. 路由到目标 Provider
- * 5. 发送消息
- * 6. 保存发送记录（sent 状态）
+ * @example 模块内部上下文
+ * ```ts
+ * async function sendDirect(message: ReachMessage, providers: Map<string, ReachProvider>, registry: ReachTemplateRegistry, repository: SendLogRepository) {
+ *   const result = await executeSend(message, providers, registry, undefined, repository)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export async function executeSend(
   message: ReachMessage,
@@ -410,6 +458,7 @@ export async function executeSend(
   templateRegistry: ReachTemplateRegistry,
   dndConfig?: DndConfig,
   repo?: SendLogRepository | null,
+  queueConfig: ReachQueueConfig = ReachQueueConfigSchema.parse({}),
 ): Promise<HaiResult<SendResult>> {
   if (!message.to) {
     return err(
@@ -444,20 +493,22 @@ export async function executeSend(
     const strategy = dndConfig?.strategy ?? 'discard'
 
     if (strategy === 'delay') {
-      // delay 策略：暂存消息到 DB
-      logger.info('Message deferred by DND (delay strategy)', { provider: providerName, to: message.to })
-      try {
-        await saveSendRecord(repo ?? null, preprocessed.data, 'pending', providerName)
-      }
-      catch (error) {
-        logger.warn('Failed to save deferred message to DB', { provider: providerName, to: message.to, error })
+      if (!repo)
+        return err(HaiReachError.SEND_FAILED, reachM('reach_dndPersistenceRequired'))
+
+      // 预先生成并随消息落盘，避免依赖不同数据库的自增 ID 返回约定。
+      const queueId = crypto.randomUUID()
+      const saved = await saveSendRecord(repo, preprocessed.data, 'pending', providerName, undefined, queueId, queueConfig)
+      if (!saved.success) {
+        logger.warn('Failed to persist deferred message', { provider: providerName, code: saved.error.code })
         return err(
           HaiReachError.SEND_FAILED,
-          reachM('reach_dndDeferred'),
-          error,
+          reachM('reach_dndEnqueueFailed'),
+          saved.error,
         )
       }
-      return ok({ success: true, deferred: true })
+      logger.info('Message persisted for DND delivery', { provider: providerName, queueId })
+      return ok({ success: true, deferred: true, queueId })
     }
 
     // discard 策略：直接拒绝
@@ -486,10 +537,13 @@ export async function executeSend(
     return result
   }
 
-  // 异步保存发送记录（sent 状态）
-  saveSendRecord(repo ?? null, preprocessed.data, 'sent', providerName, result.data.messageId).catch((error) => {
-    logger.warn('Failed to save send record', { provider: providerName, to: message.to, error })
-  })
+  // 已完成的外部发送不因可选日志失败而返回失败，避免调用方重发；仍记录持久化失败。
+  if (repo) {
+    void saveSendRecord(repo, preprocessed.data, 'sent', providerName, result.data.messageId).then((saved) => {
+      if (!saved.success)
+        logger.warn('Failed to persist sent message log', { provider: providerName, code: saved.error.code })
+    })
+  }
 
   return result
 }

@@ -14,6 +14,11 @@ import type { HaiResult } from '@h-ai/core'
  *
  * 消费时原样返回，供服务端确认本次操作、模型、会话等参数与签发时一致。
  * 除固定字段外允许应用自定义键值。
+ * @example
+ * ```ts
+ * import type { TicketGrant } from '@h-ai/iam'
+ * const value: TicketGrant = { operation: 'transcribe', model: 'speech-model', sessionId: 'conversation-1' }
+ * ```
  */
 export interface TicketGrant {
   /** 操作类型（如 `'transcribe'` | `'synthesize'` 或应用自定义） */
@@ -28,6 +33,11 @@ export interface TicketGrant {
 
 /**
  * 签发一次性票据的选项
+ * @example
+ * ```ts
+ * import type { IssueTicketOptions } from '@h-ai/iam'
+ * const value: IssueTicketOptions = { subjectId: 'user-1', purpose: 'ai-audio', ttlMs: 30000, grant: { operation: 'transcribe' } }
+ * ```
  */
 export interface IssueTicketOptions {
   /** 主体 ID（票据绑定的用户 / 主体，消费时原样返回） */
@@ -42,6 +52,15 @@ export interface IssueTicketOptions {
 
 /**
  * 签发结果
+ * @example
+ * ```ts
+ * import { iam, type IssuedTicket } from '@h-ai/iam'
+ * const issued = await iam.ticket.issue({ subjectId: 'user-1', purpose: 'ai-audio' })
+ * if (issued.success) {
+ *   const value: IssuedTicket = issued.data
+ *   value.expiresAt // 不能延长服务端签发期限；票据只能消费一次。
+ * }
+ * ```
  */
 export interface IssuedTicket {
   /** 一次性票据值（密码学安全随机，base64url） */
@@ -52,6 +71,11 @@ export interface IssuedTicket {
 
 /**
  * 消费票据的选项
+ * @example
+ * ```ts
+ * import type { ConsumeTicketOptions } from '@h-ai/iam'
+ * const value: ConsumeTicketOptions = { purpose: 'ai-audio' }
+ * ```
  */
 export interface ConsumeTicketOptions {
   /** 期望用途；与签发用途不一致时返回 `TICKET_INVALID`（防止跨用途重放） */
@@ -60,6 +84,15 @@ export interface ConsumeTicketOptions {
 
 /**
  * 消费结果（校验通过并原子消费后返回）
+ * @example
+ * ```ts
+ * import { iam, type ConsumedTicket } from '@h-ai/iam'
+ * const consumed = await iam.ticket.consume('ticket-from-upgrade-request', { purpose: 'ai-audio' })
+ * if (consumed.success) {
+ *   const authorization: ConsumedTicket = consumed.data
+ *   authorization.grant.operation // 校验与本次请求操作相同。
+ * }
+ * ```
  */
 export interface ConsumedTicket {
   /** 票据绑定的主体 ID */
@@ -74,6 +107,19 @@ export interface ConsumedTicket {
  * 一次性票据操作接口（通过 `iam.ticket` 访问）
  *
  * 提供密码学安全、带 TTL、原子单次消费的能力票据签发与消费。
+ * @example
+ * ```ts
+ * import { iam, type TicketOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
+ * const operations: TicketOperations = iam.ticket
+ * const result = await operations.issue({ subjectId: 'user-1', purpose: 'ai-audio', ttlMs: 30000 })
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface TicketOperations {
   /**

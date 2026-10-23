@@ -6,6 +6,8 @@
 
 统计排除 Paraglide 生成文件，原始扫描包括内部导出。执行 STYLE-01 后先删除无用 export，再补保留 API 注释。Svelte script 中的结构体另列；组件 props、事件、slots/snippets 与函数方法需按下列补充规则人工核验。
 
+下列 J/E 标记、声明名称、行号和数量保留原审查基线，不能据此推断当前源码仍缺注释或旧 API 仍存在；复选状态已按主清单的实际实施与定向验证同步。被删除位置明确标记历史边界并转到当前实现，完整回归状态仍以主清单为准。
+
 ## 通用关闭标准
 
 1. 所有保留的 export 函数、type/interface 和关键逻辑具备规范 JSDoc、有效示例。结构字段说明单位、默认值、可选性和约束；非公开类型也不能遗漏。
@@ -16,11 +18,11 @@
 
 ## JSDOC-01 · @h-ai/ai
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 422，缺 JSDoc 0，缺示例 372。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 422，缺 JSDoc 0，缺示例 372。
 
 ### 顶层导出定位
 
-- [packages/ai/src/a2a/ai-a2a-functions.ts](../packages/ai/src/a2a/ai-a2a-functions.ts)：`ReldbA2ATaskStore`（L166，E）；`A2ADeps`（L254，E）；`createA2AStores`（L262，E）；`A2ACreateOptions`（L270，E）；`createA2AOperations`（L282，E）；`A2ALazyProxyDeps`（L360，E）；`createA2ALazyProxy`（L384，E）。
+- [packages/ai/src/a2a/ai-a2a-functions.ts](../packages/ai/src/a2a/ai-a2a-functions.ts)：`A2ADeps`（L254，E）；`createA2AStores`（L262，E）；`A2ACreateOptions`（L270，E）；`createA2AOperations`（L282，E）；`A2ALazyProxyDeps`（L360，E）；`createA2ALazyProxy`（L384，E）。
 - [packages/ai/src/a2a/ai-a2a-types.ts](../packages/ai/src/a2a/ai-a2a-types.ts)：`A2ACallerIdentity`（L51，E）；`A2AMessageRecord`（L61，E）；`A2AContextInfo`（L79，E）；`A2AAuthenticator`（L100，E）；`A2ATaskFilter`（L113，E）；`A2AOperations`（L135，E）；`A2AApiKeySecurity`（L191，E）；`A2ASecurityConfig`（L199，E）；`A2AAgentCardConfig`（L205，E）；`A2AHandleResult`（L226，E）；`A2ACallOptions`（L236，E）；`A2ACallResult`（L244，E）。
 - [packages/ai/src/ai-config.ts](../packages/ai/src/ai-config.ts)：`OptionalSecretSchema`（L24，E）；`ModelScenarioSchema`（L49，E）；`ModelScenario`（L52，E）；`ApiTypeSchema`（L63，E）；`ApiType`（L66，E）；`ModelEntry`（L103，E）；`LLMConfig`（L160，E）；`ResolvedModelConfig`（L167，E）；`ResolveRequiredModelEntryOptions`（L187，E）；`resolveModelEntry`（L204，E）；`resolveModelApi`（L258，E）；`MCPServerCapabilitiesSchema`（L270，E）；`MCPServerCapabilities`（L280，E）；`MCPServerConfigSchema`（L283，E）；`MCPServerConfig`（L293，E）；`MCPConfig`（L317，E）；`EmbeddingConfig`（L344，E）；`KnowledgeConfig`（L401，E）；`MemoryConfig`（L476，E）；`TokenConfig`（L497，E）；`SummaryConfig`（L517，E）；`CompressConfig`（L543，E）；`FileConfigSchema`（L553，E）；`FileConfig`（L559，E）；`RetrievalSourceSchema`（L568，E）；`RetrievalSourceConfig`（L586，E）；`RetrievalConfig`（L612，E）；`A2ASkillConfigSchema`（L617，E）；`A2AConfig`（L675，E）；`AudioProviderSchema`（L693，E）；`AudioProviderName`（L696，E）；`AudioOperationSchema`（L699，E）；`AudioOperation`（L702，E）；`AudioOperationsSchema`（L709，E）；`AudioModelEntry`（L752，E）；`AudioConfig`（L789，E）；`ResolvedAudioModel`（L797，E）；`resolveAudioModel`（L870，E）；`ensureAudioCredential`（L925，E）；`ImageProviderSchema`（L945，E）；`ImageProviderName`（L948，E）；`ImageModelEntrySchema`（L951，E）；`ImageModelEntry`（L969，E）；`ImageConfigSchema`（L972，E）；`ImageConfig`（L980，E）；`ResolvedImageModel`（L983，E）；`resolveImageModel`（L1023，E）；`AIConfig`（L1124，E）；`AIConfigInput`（L1127，E）。
 - [packages/ai/src/ai-functions.ts](../packages/ai/src/ai-functions.ts)：`AISubsystemDeps`（L58，E）；`AISubsystems`（L64，E）；`createAISubsystems`（L92，E）。
@@ -37,9 +39,7 @@
 - [packages/ai/src/audio/providers/ai-audio-provider-qwen.ts](../packages/ai/src/audio/providers/ai-audio-provider-qwen.ts)：`createQwenAudioProvider`（L60，E）。
 - [packages/ai/src/audio/providers/ai-audio-provider-whisper.ts](../packages/ai/src/audio/providers/ai-audio-provider-whisper.ts)：`createWhisperAudioProvider`（L70，E）。
 - [packages/ai/src/audio/providers/ai-audio-provider.ts](../packages/ai/src/audio/providers/ai-audio-provider.ts)：`ProviderTranscriptionRequest`（L35，E）；`ProviderTranscriptionStreamRequest`（L53，E）；`ProviderSynthesisRequest`（L71，E）；`ProviderSynthesisStreamRequest`（L103，E）；`SynthesisOutputMeta`（L137，E）；`AudioTranscriptionProvider`（L152，E）；`AudioSynthesisProvider`（L165，E）；`AudioProvider`（L185，E）；`streamSentences`（L207，E）；`toBase64`（L229，E）；`fromBase64`（L234，E）；`concatChunks`（L239，E）；`AudioUploadPart`（L252，E）；`toAudioUploadPart`（L269，E）；`toAudioBlob`（L284，E）；`wrapPcm16ToWav`（L293，E）；`errorMessage`（L317，E）；`audioError`（L326，E）；`audioAbortError`（L338，E）；`mapStreamError`（L354，E）；`toAudioErrorResult`（L368，E）；`combineSignal`（L375，E）；`describeHttpError`（L381，E）；`AudioWsMessage`（L389，E）；`AudioWsConnection`（L399，E）；`openAudioWebSocket`（L418，E）。
-- [packages/ai/src/client/ai-a2a-client.ts](../packages/ai/src/client/ai-a2a-client.ts)：`A2AClientOperations`（L23，E）；`createA2AClient`（L48，E）。
-- [packages/ai/src/client/ai-audio-client.ts](../packages/ai/src/client/ai-audio-client.ts)：`AudioTicketRequest`（L44，E）；`AudioClientConfig`（L52，E）；`AudioClientOperations`（L69，E）；`createAudioClient`（L215，E）；`createUnconfiguredAudioClient`（L391，E）。
-- [packages/ai/src/client/ai-client.ts](../packages/ai/src/client/ai-client.ts)：`AIApiAdapter`（L35，E）；`StreamProgress`（L74，E）；`StreamOptions`（L84，E）；`AIClient`（L96，E）。
+- [packages/ai/src/client/ai-audio-client.ts](../packages/ai/src/client/ai-audio-client.ts)：`AudioTicketRequest`（L44，E）；`AudioClientConfig`（L52，E）；`AudioClientOperations`（L69，E）；`createAudioClient`（L215，E）。
 - [packages/ai/src/compress/ai-compress-functions.ts](../packages/ai/src/compress/ai-compress-functions.ts)：`createCompressOperations`（L166，E）。
 - [packages/ai/src/compress/ai-compress-types.ts](../packages/ai/src/compress/ai-compress-types.ts)：`CompressionStrategySchema`（L18，E）；`CompressionStrategy`（L21，E）；`CompressOptions`（L28，E）；`CompressResult`（L44，E）。
 - [packages/ai/src/context/ai-context-functions.ts](../packages/ai/src/context/ai-context-functions.ts)：`createContextOperations`（L67，E）。
@@ -122,7 +122,7 @@
 
 ## JSDOC-02 · @h-ai/api-client
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 20，缺 JSDoc 0，缺示例 14。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 20，缺 JSDoc 0，缺示例 14。
 
 ### 顶层导出定位
 
@@ -141,7 +141,7 @@
 
 ## JSDOC-03 · @h-ai/api-contract
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 145，缺 JSDoc 49，缺示例 141。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 145，缺 JSDoc 49，缺示例 141。
 
 ### 顶层导出定位
 
@@ -168,7 +168,7 @@
 
 ## JSDOC-04 · @h-ai/audit
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 16，缺 JSDoc 1，缺示例 11。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 16，缺 JSDoc 1，缺示例 11。
 
 ### 顶层导出定位
 
@@ -186,7 +186,7 @@
 
 ## JSDOC-05 · @h-ai/cache
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 28，缺 JSDoc 1，缺示例 20。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 28，缺 JSDoc 1，缺示例 20。
 
 ### 顶层导出定位
 
@@ -205,7 +205,7 @@
 
 ## JSDOC-06 · @h-ai/capacitor
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 31，缺 JSDoc 1，缺示例 18。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 31，缺 JSDoc 1，缺示例 18。
 
 ### 顶层导出定位
 
@@ -221,7 +221,7 @@
 
 ## JSDOC-07 · @h-ai/cli
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 75，缺 JSDoc 7，缺示例 63。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 75，缺 JSDoc 7，缺示例 63。
 
 ### 顶层导出定位
 
@@ -248,7 +248,7 @@
 
 ## JSDOC-08 · @h-ai/core
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 85，缺 JSDoc 21，缺示例 47。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 85，缺 JSDoc 21，缺示例 47。
 
 ### 顶层导出定位
 
@@ -279,7 +279,7 @@
 
 ## JSDOC-09 · @h-ai/crypto
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 48，缺 JSDoc 1，缺示例 44。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 48，缺 JSDoc 1，缺示例 44。
 
 ### 顶层导出定位
 
@@ -306,7 +306,7 @@
 
 ## JSDOC-10 · @h-ai/datapipe
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 23，缺 JSDoc 0，缺示例 14。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 23，缺 JSDoc 0，缺示例 14。
 
 ### 顶层导出定位
 
@@ -322,7 +322,7 @@
 
 ## JSDOC-11 · @h-ai/deploy
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 75，缺 JSDoc 1，缺示例 55。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 75，缺 JSDoc 1，缺示例 55。
 
 ### 顶层导出定位
 
@@ -358,7 +358,7 @@
 
 ## JSDOC-12 · @h-ai/iam
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 151，缺 JSDoc 9，缺示例 150。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 151，缺 JSDoc 9，缺示例 150。
 
 ### 顶层导出定位
 
@@ -385,7 +385,7 @@
 - [packages/iam/src/iam-main.ts](../packages/iam/src/iam-main.ts)：`iam`（L87，J/E）。
 - [packages/iam/src/iam-notifications.ts](../packages/iam/src/iam-notifications.ts)：`resolveIamNotifications`（L6，E）。
 - [packages/iam/src/iam-public-config.ts](../packages/iam/src/iam-public-config.ts)：`IamPublicConfig`（L6，J/E）；`buildIamPublicConfig`（L21，E）。
-- [packages/iam/src/iam-security.ts](../packages/iam/src/iam-security.ts)：`withIamLock`（L10，E）。
+- 原基线 `packages/iam/src/iam-security.ts`：`withIamLock`（L10，E）。此位置及租约包装已由 IAM-06 删除，保留原扫描证据；当前 OTP 发布/计次/消费使用[共享单键 CAS 仓储](../packages/iam/src/authn/otp/iam-authn-otp-repository-otp.ts)，密码最终提交使用[用户行代际条件](../packages/iam/src/user/iam-user-repository-user.ts)，不再导出或调用 `withIamLock`。
 - [packages/iam/src/iam-seed.ts](../packages/iam/src/iam-seed.ts)：`seedIamData`（L89，E）。
 - [packages/iam/src/iam-types.ts](../packages/iam/src/iam-types.ts)：`HaiIamError`（L87，J/E）；`IamConfigInput`（L97，E）；`IamFunctions`（L154，E）。
 - [packages/iam/src/session/iam-session-functions.ts](../packages/iam/src/session/iam-session-functions.ts)：`SessionOperationsDeps`（L44，E）；`createSessionOperations`（L53，E）。
@@ -395,7 +395,7 @@
 - [packages/iam/src/ticket/iam-ticket-functions.ts](../packages/iam/src/ticket/iam-ticket-functions.ts)：`createTicketOperations`（L50，E）。
 - [packages/iam/src/ticket/iam-ticket-types.ts](../packages/iam/src/ticket/iam-ticket-types.ts)：`TicketGrant`（L18，E）；`IssueTicketOptions`（L32，E）；`IssuedTicket`（L46，E）；`ConsumeTicketOptions`（L56，E）；`ConsumedTicket`（L64，E）；`TicketOperations`（L78，E）。
 - [packages/iam/src/user/iam-user-functions.ts](../packages/iam/src/user/iam-user-functions.ts)：`UserOperationsDeps`（L63，E）；`createUserOperations`（L77，E）。
-- [packages/iam/src/user/iam-user-repository-reset-token.ts](../packages/iam/src/user/iam-user-repository-reset-token.ts)：`hashResetToken`（L30，E）；`ResetTokenRepository`（L45，E）；`resetResetTokenRepoSingleton`（L120，E）；`createCacheResetTokenRepository`（L131，E）。
+- 原基线 `packages/iam/src/user/iam-user-repository-reset-token.ts`：`hashResetToken`（L30，E）；`ResetTokenRepository`（L45，E）；`resetResetTokenRepoSingleton`（L120，E）；`createCacheResetTokenRepository`（L131，E）。此独立缓存仓储已由 IAM-06 删除，保留原扫描证据；当前[密码重置流程](../packages/iam/src/user/iam-user-functions.ts)调用[用户数据库仓储](../packages/iam/src/user/iam-user-repository-user.ts)的 `publishPasswordReset` / `claimPasswordReset` / `commitPasswordReset`，令牌消费与密码代际最终写入按同一用户行条件提交；这些旧工厂不是现存 API。
 - [packages/iam/src/user/iam-user-repository-user.ts](../packages/iam/src/user/iam-user-repository-user.ts)：`UserRepository`（L21，E）；`resetUserRepoSingleton`（L216，E）；`createDbUserRepository`（L229，E）。
 - [packages/iam/src/user/iam-user-types.ts](../packages/iam/src/user/iam-user-types.ts)：`UserSortField`（L14，E）；`UserSortDirection`（L17，E）；`ListUsersOptions`（L22，E）；`User`（L42，E）；`AgreementDisplay`（L76，E）；`StoredUser`（L94，E）；`RegisterOptions`（L112，E）；`RegisterResult`（L130，E）；`UpdateCurrentUserInput`（L144，E）；`UserOperations`（L164，E）。
 - [packages/iam/src/user/iam-user-utils.ts](../packages/iam/src/user/iam-user-utils.ts)：`toUser`（L19，E）。
@@ -413,7 +413,7 @@
 
 ## JSDOC-13 · @h-ai/kit
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 151，缺 JSDoc 3，缺示例 91。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 151，缺 JSDoc 3，缺示例 91。
 
 ### 顶层导出定位
 
@@ -456,7 +456,7 @@
 
 ## JSDOC-14 · @h-ai/payment
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 50，缺 JSDoc 8，缺示例 47。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 50，缺 JSDoc 8，缺示例 47。
 
 ### 顶层导出定位
 
@@ -465,13 +465,13 @@
 - [packages/payment/src/payment-functions.ts](../packages/payment/src/payment-functions.ts)：`registerProvider`（L71，E）；`getProvider`（L81，E）；`createOrder`（L105，E）；`handleNotify`（L135，E）；`queryOrder`（L160，E）；`refund`（L176，E）；`closeOrder`（L206，E）；`clearProviders`（L228，E）。
 - [packages/payment/src/payment-i18n.ts](../packages/payment/src/payment-i18n.ts)：`paymentM`（L20，E）。
 - [packages/payment/src/payment-types.ts](../packages/payment/src/payment-types.ts)：`HaiPaymentError`（L30，J/E）；`TradeType`（L35，E）；`OrderStatusValue`（L38，E）；`CreateOrderInput`（L43，E）；`PaymentOrder`（L63，E）；`PaymentNotifyRequest`（L77，E）；`PaymentNotifyResult`（L85，E）；`OrderStatus`（L103，E）；`RefundInput`（L119，E）；`RefundResult`（L133，E）；`PaymentProvider`（L150，E）；`PaymentFunctions`（L173，E）。
-- [packages/payment/src/providers/alipay/alipay-provider.ts](../packages/payment/src/providers/alipay/alipay-provider.ts)：`createAlipayProvider`（L54，E）。
-- [packages/payment/src/providers/alipay/alipay-sign.ts](../packages/payment/src/providers/alipay/alipay-sign.ts)：`signAlipayParams`（L18，E）；`verifyAlipayNotify`（L43，E）。
-- [packages/payment/src/providers/alipay/alipay-types.ts](../packages/payment/src/providers/alipay/alipay-types.ts)：`AlipayNotifyParamsSchema`（L11，E）；`AlipayNotifyParams`（L19，J/E）。
+- [packages/payment/src/providers/alipay/payment-provider-alipay.ts](../packages/payment/src/providers/alipay/payment-provider-alipay.ts)：`createAlipayProvider`（L54，E）。
+- [packages/payment/src/providers/alipay/payment-alipay-sign.ts](../packages/payment/src/providers/alipay/payment-alipay-sign.ts)：`signAlipayParams`（L18，E）；`verifyAlipayNotify`（L43，E）。
+- [packages/payment/src/providers/alipay/payment-alipay-types.ts](../packages/payment/src/providers/alipay/payment-alipay-types.ts)：`AlipayNotifyParamsSchema`（L11，E）；`AlipayNotifyParams`（L19，J/E）。
 - [packages/payment/src/providers/payment-provider-http.ts](../packages/payment/src/providers/payment-provider-http.ts)：`fetchWithTimeout`（L10，J/E）。
-- [packages/payment/src/providers/stripe/stripe-provider.ts](../packages/payment/src/providers/stripe/stripe-provider.ts)：`createStripeProvider`（L27，E）。
-- [packages/payment/src/providers/wechat/wechat-pay-sign.ts](../packages/payment/src/providers/wechat/wechat-pay-sign.ts)：`generateNonce`（L16，E）；`getTimestamp`（L23，E）；`signRequest`（L38，E）；`signJsapi`（L62，E）；`verifyNotifySignature`（L85，E）；`decryptResource`（L107，E）。
-- [packages/payment/src/providers/wechat/wechat-pay-types.ts](../packages/payment/src/providers/wechat/wechat-pay-types.ts)：`WechatOrderRequest`（L9，E）；`WechatNotifyResource`（L32，E）。
+- [packages/payment/src/providers/stripe/payment-provider-stripe.ts](../packages/payment/src/providers/stripe/payment-provider-stripe.ts)：`createStripeProvider`（L27，E）。
+- [packages/payment/src/providers/wechat/payment-wechat-sign.ts](../packages/payment/src/providers/wechat/payment-wechat-sign.ts)：`generateNonce`（L16，E）；`getTimestamp`（L23，E）；`signRequest`（L38，E）；`signJsapi`（L62，E）；`verifyNotifySignature`（L85，E）；`decryptResource`（L107，E）。
+- [packages/payment/src/providers/wechat/payment-wechat-types.ts](../packages/payment/src/providers/wechat/payment-wechat-types.ts)：`WechatOrderRequest`（L9，E）；`WechatNotifyResource`（L32，E）。
 
 ### 内部结构体补充定位
 
@@ -481,7 +481,7 @@
 
 ## JSDOC-15 · @h-ai/reach
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 51，缺 JSDoc 1，缺示例 42。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 51，缺 JSDoc 1，缺示例 42。
 
 ### 顶层导出定位
 
@@ -505,7 +505,7 @@
 
 ## JSDOC-16 · @h-ai/reldb
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 84，缺 JSDoc 4，缺示例 57。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 84，缺 JSDoc 4，缺示例 57。
 
 ### 顶层导出定位
 
@@ -533,12 +533,12 @@
 
 ## JSDOC-17 · @h-ai/scheduler
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 71，缺 JSDoc 38，缺示例 67。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 71，缺 JSDoc 38，缺示例 67。
 
 ### 顶层导出定位
 
-- [packages/scheduler/src/repositories/scheduler-log-repository.ts](../packages/scheduler/src/repositories/scheduler-log-repository.ts)：`SchedulerLogRepository`（L37，J/E）。
-- [packages/scheduler/src/repositories/scheduler-task-repository.ts](../packages/scheduler/src/repositories/scheduler-task-repository.ts)：`SchedulerTaskRepository`（L59，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-log.ts](../packages/scheduler/src/repositories/scheduler-repository-log.ts)：`SchedulerLogRepository`（L37，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-task.ts](../packages/scheduler/src/repositories/scheduler-repository-task.ts)：`SchedulerTaskRepository`（L59，J/E）。
 - [packages/scheduler/src/scheduler-cancellation.ts](../packages/scheduler/src/scheduler-cancellation.ts)：`waitWithSignal`（L2，E）。
 - [packages/scheduler/src/scheduler-config.ts](../packages/scheduler/src/scheduler-config.ts)：`SchedulerConfig`（L41，E）；`SchedulerConfigInput`（L44，E）。
 - [packages/scheduler/src/scheduler-cron.ts](../packages/scheduler/src/scheduler-cron.ts)：`matchesCron`（L56，E）。
@@ -551,15 +551,15 @@
 
 ### 内部结构体补充定位
 
-- [packages/scheduler/src/repositories/scheduler-log-repository.ts](../packages/scheduler/src/repositories/scheduler-log-repository.ts)：`LogRow`（L22，J/E）。
-- [packages/scheduler/src/repositories/scheduler-task-repository.ts](../packages/scheduler/src/repositories/scheduler-task-repository.ts)：`TaskRow`（L43，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-log.ts](../packages/scheduler/src/repositories/scheduler-repository-log.ts)：`LogRow`（L22，J/E）。
+- [packages/scheduler/src/repositories/scheduler-repository-task.ts](../packages/scheduler/src/repositories/scheduler-repository-task.ts)：`TaskRow`（L43，J/E）。
 - [packages/scheduler/src/scheduler-i18n.ts](../packages/scheduler/src/scheduler-i18n.ts)：`SchedulerMessageKey`（L17，E）。
 
 补充扫描定位 3 个内部结构声明。关键逻辑与示例验收须结合主清单该模块任务执行。
 
 ## JSDOC-18 · @h-ai/serv
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 106，缺 JSDoc 3，缺示例 98。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 106，缺 JSDoc 3，缺示例 98。
 
 ### 顶层导出定位
 
@@ -604,7 +604,7 @@
 
 ## JSDOC-19 · @h-ai/storage
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 49，缺 JSDoc 5，缺示例 38。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 49，缺 JSDoc 5，缺示例 38。
 
 ### 顶层导出定位
 
@@ -627,7 +627,7 @@
 
 ## JSDOC-20 · @h-ai/ui
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 297，缺 JSDoc 63，缺示例 284。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 297，缺 JSDoc 63，缺示例 284。
 
 ### 顶层导出定位
 
@@ -731,7 +731,7 @@
 
 ## JSDOC-21 · @h-ai/vecdb
 
-- [ ] 完成主清单通用关闭标准；基线顶层导出 35，缺 JSDoc 3，缺示例 26。
+- [x] 已完成主清单通用关闭标准（实施与定向验证见主清单同编号任务）；基线顶层导出 35，缺 JSDoc 3，缺示例 26。
 
 ### 顶层导出定位
 

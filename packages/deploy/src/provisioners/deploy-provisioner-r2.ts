@@ -19,8 +19,25 @@ const CF_API = 'https://api.cloudflare.com/client/v4'
 
 /**
  * 创建 Cloudflare R2 Provisioner
- *
+ * 工厂返回内部接口；认证与开通调用必须逐次检查 HaiResult，返回的连接凭据不能直接记录。
  * @returns ServiceProvisioner 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const accountId = process.env.HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID
+ * if (!accountId) throw new Error('Provide HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID privately')
+ * const apiToken = process.env.HAI_DEPLOY_SERVICES_STORAGE_APITOKEN
+ * if (!apiToken) throw new Error('Provide HAI_DEPLOY_SERVICES_STORAGE_APITOKEN privately')
+ * const accessKeyId = process.env.HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID
+ * if (!accessKeyId) throw new Error('Provide HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID privately')
+ * const secretAccessKey = process.env.HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY
+ * if (!secretAccessKey) throw new Error('Provide HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY privately')
+ * const provisioner = createR2Provisioner()
+ * const authenticated = await provisioner.authenticate({ accountId, apiToken, accessKeyId, secretAccessKey })
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * const result = await provisioner.provision('shop')
+ * if (!result.success) throw new Error(result.error.message)
+ * const status = result.data.resourceStatus
+ * ```
  */
 export function createR2Provisioner(): ServiceProvisioner {
   let token: string | null = null

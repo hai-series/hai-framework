@@ -29,6 +29,8 @@ audio:
   synthesizeModel: ${HAI_AI_AUDIO_SYNTHESIZEMODEL:tts}
 
 image:
+  maxImageBytes: ${HAI_AI_IMAGE_MAXIMAGEBYTES:20971520}
+  maxImages: ${HAI_AI_IMAGE_MAXIMAGES:4}
   models:
     # 默认示例使用 Pollinations。402 表示账户余额或该 Key 的预算耗尽；
     # 可在 https://enter.pollinations.ai/ 创建/调整 Key 与预算。

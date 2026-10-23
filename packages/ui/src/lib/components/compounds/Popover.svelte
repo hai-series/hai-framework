@@ -1,4 +1,5 @@
 <!--
+  @component Popover
   =============================================================================
   @h-ai/ui - Popover 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $state, $effect)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Popover } from '@h-ai/ui'
+  const props: ComponentProps<typeof Popover> = { position: 'bottom', portal: true, children: createRawSnippet(() => ({ render: () => "<span>提示内容</span>" })) }
+  const component = mount(Popover, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, PopoverProps } from '../../types.js'

@@ -152,7 +152,16 @@ function encodeTtsEvent(event: number, payload: object, sessionId?: string): Uin
   return new Uint8Array(Buffer.concat(parts))
 }
 
-/** 解析后的服务端帧 */
+/**
+ * 解析后的服务端帧
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const frame: DecodedFrame = { messageType: MSG_AUDIO_ONLY_SERVER, audio: new Uint8Array([0, 0]) }
+ * const audio = frame.messageType === MSG_AUDIO_ONLY_SERVER ? frame.audio : undefined
+ * ```
+ */
 interface DecodedFrame {
   messageType: number
   /** 事件号（TTS 协议有效） */
@@ -235,6 +244,18 @@ function decodeFrame(data: Uint8Array): DecodedFrame {
  * 创建豆包 / 火山引擎 Audio Provider
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function invoke(request: ProviderTranscriptionRequest) {
+ *   const provider = createDoubaoAudioProvider()
+ *   if (!provider.transcription) throw new Error('Audio operation is unavailable')
+ *   const result = await provider.transcription.transcribe(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createDoubaoAudioProvider(): AudioProvider {
   function buildAuthHeaders(model: ResolvedAudioModel, isTts: boolean): Record<string, string> {

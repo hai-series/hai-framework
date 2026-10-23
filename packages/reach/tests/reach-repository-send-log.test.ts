@@ -25,6 +25,13 @@ describe('reach-repository-send-log: types', () => {
   it('storedSendLog 接口应包含所有必要字段', () => {
     const record: StoredSendLog = {
       id: 1,
+      queueId: null,
+      attemptCount: 0,
+      maxAttempts: 5,
+      retryDelayMs: 60_000,
+      maxRetryDelayMs: 3_600_000,
+      nextAttemptAt: 0,
+      lastFailure: null,
       provider: 'email',
       toAddr: 'user@example.com',
       subject: '测试',
@@ -46,6 +53,13 @@ describe('reach-repository-send-log: types', () => {
   it('storedSendLog 可空字段应接受 null', () => {
     const record: StoredSendLog = {
       id: 2,
+      queueId: null,
+      attemptCount: 0,
+      maxAttempts: 5,
+      retryDelayMs: 60_000,
+      maxRetryDelayMs: 3_600_000,
+      nextAttemptAt: 0,
+      lastFailure: null,
       provider: 'sms',
       toAddr: '13800138000',
       subject: null,
@@ -228,14 +242,16 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
 
   // ─── markSent ───
 
-  it('markSent 应将 pending 记录标记为 sent', async () => {
+  it('markSent 应将有效 sending 记录标记为 sent', async () => {
     const createResult = await repo.create({ provider: 'a', toAddr: 'x', subject: null, body: null, template: null, varsJson: null, extraJson: null, status: 'pending', messageId: null, createdAt: Date.now() })
     expect(createResult.success).toBe(true)
     if (!createResult.success)
       return
     const id = Number(createResult.data.lastInsertRowid)
 
-    const markResult = await repo.markSent(id, 'msg-123')
+    expect((await repo.claimPendingBatch('worker')).success).toBe(true)
+    expect((await repo.beginDelivery(id, 'worker', true)).success).toBe(true)
+    const markResult = await repo.markSent(id, 'worker', 'msg-123')
     expect(markResult.success).toBe(true)
 
     const findResult = await repo.findById(id)
@@ -254,7 +270,9 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
 
     const id = Number(createResult.data.lastInsertRowid)
 
-    const markResult = await repo.markSent(id)
+    expect((await repo.claimPendingBatch('worker')).success).toBe(true)
+    expect((await repo.beginDelivery(id, 'worker', true)).success).toBe(true)
+    const markResult = await repo.markSent(id, 'worker')
     expect(markResult.success).toBe(true)
 
     const findResult = await repo.findById(id)
@@ -271,7 +289,10 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
     if (!createResult.success)
       return
 
-    await repo.markSent(Number(createResult.data.lastInsertRowid), 'done')
+    const id = Number(createResult.data.lastInsertRowid)
+    expect((await repo.claimPendingBatch('worker')).success).toBe(true)
+    expect((await repo.beginDelivery(id, 'worker', true)).success).toBe(true)
+    expect((await repo.markSent(id, 'worker', 'done')).success).toBe(true)
 
     const pending = await repo.findPending()
     expect(pending.success).toBe(true)
@@ -379,7 +400,8 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
     const claimResult = await repo.claimPendingBatch('worker-1')
     expect(claimResult.success).toBe(true)
 
-    const markResult = await repo.markSent(id, 'msg-123', undefined, 'worker-1')
+    expect((await repo.beginDelivery(id, 'worker-1', true)).success).toBe(true)
+    const markResult = await repo.markSent(id, 'worker-1', 'msg-123')
     expect(markResult.success).toBe(true)
 
     const findResult = await repo.findById(id)
@@ -402,7 +424,7 @@ describe.sequential('reach-repository-send-log: sqlite', () => {
     const claimResult = await repo.claimPendingBatch('worker-1')
     expect(claimResult.success).toBe(true)
 
-    const markResult = await repo.markSent(id, 'msg-123', undefined, 'worker-2')
+    const markResult = await repo.markSent(id, 'worker-2', 'msg-123')
     expect(markResult.success).toBe(false)
     if (markResult.success)
       return

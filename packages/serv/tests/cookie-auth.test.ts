@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountRefreshCookieRoutes } from '../src/serv-cookie-auth.js'
 
 const API_PREFIX = '/api/v1'
@@ -7,6 +7,8 @@ const COOKIE_NAME = 'hai_refresh_token'
 const REFRESH_PATH = `${API_PREFIX}/auth/refresh`
 // OTP 登录的实际路径（与 apiContract.iam 对齐）
 const LOGIN_WITH_OTP_PATH = `${API_PREFIX}/auth/login/otp`
+
+afterEach(() => vi.unstubAllEnvs())
 
 const MOCK_TOKENS = {
   accessToken: 'new-access-token',
@@ -312,6 +314,19 @@ describe('mountRefreshCookieRoutes', () => {
   })
 
   describe('cookie 属性', () => {
+    it.each(['NODE_ENV', 'HAI_CORE_ENV'])('%s 为 production 时默认 Secure，测试开关不降低 Cookie 安全', async (productionFlag) => {
+      vi.stubEnv('NODE_ENV', 'development')
+      vi.stubEnv('HAI_CORE_ENV', 'development')
+      vi.stubEnv(productionFlag, 'production')
+      vi.stubEnv('HAI_E2E', '1')
+      const app = new Hono()
+      mountRefreshCookieRoutes(app, API_PREFIX, {}, { session: { refresh: vi.fn() } })
+      app.post(`${API_PREFIX}/auth/login`, c => c.json({ success: true, data: MOCK_AUTH_RESULT }))
+      const response = await app.request(`${API_PREFIX}/auth/login`, { method: 'POST' })
+      const refreshCookie = response.headers.getSetCookie().find(cookie => cookie.startsWith(COOKIE_NAME))
+      expect(refreshCookie).toContain('; Secure')
+    })
+
     it('secure: false 时，cookie 不含 Secure 属性', async () => {
       const { app } = createTestApp()
 

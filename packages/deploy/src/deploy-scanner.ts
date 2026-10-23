@@ -80,7 +80,16 @@ function runtimeDependencies(appDir: string): { runtime: Set<string>, build: Set
 /**
  * 扫描依赖和实际环境下的后端，不把 memory/local/console 强制改为外部服务。
  * 沿目标 importer 的运行依赖识别模块；LDAP 等可选能力再按实际配置识别。
- * @example `await scanApp('/workspace/packages/my-serv', { environment: 'prod' })`
+ * 以真实运行依赖图和显式配置识别模块；缺少或不一致锁文件不能静默降级为猜测。
+ * @param inputDir - 待扫描的真实应用包目录。
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @returns 实际应用、依赖与中间件需求，或失败 HaiResult。
+ * @example 模块内部上下文
+ * ```ts
+ * const result = await scanApp(process.cwd(), { environment: 'prod' })
+ * if (!result.success) throw new Error(result.error.message)
+ * const enabled = result.data.haiModules
+ * ```
  */
 export async function scanApp(inputDir: string, options?: DeployScanOptions): Promise<HaiResult<ScanResult>> {
   try {

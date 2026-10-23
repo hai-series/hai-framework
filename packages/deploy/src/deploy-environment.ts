@@ -9,7 +9,15 @@ import { LineCounter, parse, parseDocument } from 'yaml'
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
 
-/** 部署环境快照；例如 prod 的 targetValues 只来自 `.env.prod`，不包含基础/私有覆盖。 */
+/**
+ * 部署环境快照；例如 prod 的 targetValues 只来自 `.env.prod`，不包含基础/私有覆盖。
+ * @example
+ * ```ts
+ * import type { DeploymentEnvironment } from '@h-ai/deploy'
+ * const environment: DeploymentEnvironment = { environment: 'prod', envDir: '/workspace/shop', values: { HAI_DB_TYPE: 'postgresql' }, targetValues: { HAI_DB_TYPE: 'postgresql' } }
+ * // values 可能还含私有凭据，不能整体写入日志。
+ * ```
+ */
 export interface DeploymentEnvironment {
   /** 文件模式（dev/test/prod 或其他合法模式名）。 */
   environment: string
@@ -52,7 +60,15 @@ function resolveConfig(value: unknown, prefix: string, env: Record<string, strin
  * @param path - YAML 文件绝对路径
  * @param values - 已加载的目标环境变量
  * @returns 配置对象；解析错误已脱敏
- * @example `loadDeploymentConfig('deploy', '/app/config/_deploy.yml', environment.values)`
+ * @example
+ * ```ts
+ * import { loadDeploymentConfig, loadDeploymentEnvironment } from '@h-ai/deploy'
+ * const environment = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (!environment.success) throw new Error(environment.error.message)
+ * const config = loadDeploymentConfig('deploy', `${process.cwd()}/config/_deploy.yml`, environment.data.values)
+ * if (!config.success) throw new Error(config.error.message)
+ * // 返回对象仍需经 DeployConfigSchema 或 deploy.init 验证。
+ * ```
  */
 export function loadDeploymentConfig(name: string, path: string, values: Record<string, string | undefined>): HaiResult<Record<string, unknown>> {
   try {
@@ -72,12 +88,19 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
 
 /**
  * 加载部署环境；指定环境文件缺失时返回错误并要求用户创建。
+ * 进程环境优先于 .env.local、目标环境文件、基础文件；targetValues 只记录目标文件显式项，不包含其它覆盖。
  * @param options - 模式、环境目录与是否强制存在目标文件
  * @param options.environment - dev/test/prod 或自定义模式
  * @param options.envDir - 环境文件所在目录
  * @param options.requireFile - 默认 true；扫描无显式环境时可只读取已有基础文件
  * @returns 环境快照，可能包含私有值，不得直接输出
- * @example `loadDeploymentEnvironment({ environment: 'prod', envDir: '.' })`
+ * @example
+ * ```ts
+ * import { loadDeploymentEnvironment } from '@h-ai/deploy'
+ * const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (!loaded.success) throw new Error(loaded.error.message)
+ * const explicitlyConfigured = loaded.data.targetValues.HAI_DB_TYPE
+ * ```
  */
 export function loadDeploymentEnvironment(options: { environment: string, envDir: string, requireFile?: boolean }): HaiResult<DeploymentEnvironment> {
   const environment = options.environment === 'production' ? 'prod' : options.environment === 'development' ? 'dev' : options.environment
@@ -199,8 +222,15 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
  * @param options - private 为 true 时所有值只保存在本机；适用于 SSH 地址、端口及密钥路径
  * @param options.private - 是否将全部值仅保存到 .env.local
  * @returns 已保存的变量名或脱敏错误
- * @example `saveDeploymentEnvironment(snapshot, { HAI_DB_TYPE: 'postgresql' })`
- * @example `saveDeploymentEnvironment(snapshot, { HAI_DEPLOY_PROVIDER: JSON.stringify(provider) }, { private: true })`
+ * @example
+ * ```ts
+ * import { loadDeploymentEnvironment, saveDeploymentEnvironment } from '@h-ai/deploy'
+ * const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (!loaded.success) throw new Error(loaded.error.message)
+ * const saved = saveDeploymentEnvironment(loaded.data, { HAI_DB_HOST: 'db' })
+ * if (!saved.success) throw new Error(saved.error.message)
+ * // 密钥应以 { private: true } 写入被忽略的 .env.local，不能放公共环境文件。
+ * ```
  */
 export function saveDeploymentEnvironment(environment: DeploymentEnvironment, values: Record<string, string>, options: { private?: boolean } = {}): HaiResult<string[]> {
   try {

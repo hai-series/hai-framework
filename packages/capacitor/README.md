@@ -47,7 +47,11 @@ await apiClient.init({
 })
 ```
 
-`createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。纯 Web 环境下不会退化到 `localStorage`；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op。
+`createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。适配器的方法直接返回 Promise：Web 调用、插件不可用、读写或删除失败都会拒绝 Promise，不能当作空凭据或保存/退出成功。Web 入口应选择 api-client 的 Cookie/内存存储。
+
+`clear()` 一开始就屏蔽本实例两类旧凭据，并等待所有原生删除结束后才报告结果；失败时保持屏蔽，相应 key 成功写入后才重新开放。通过 `apiClient.auth` 更新凭据以串行提交写入，并处理 `setTokens()` / `clear()` 的拒绝；界面仍须释放 loading、清理退出身份并提示失败。屏蔽只作用于当前适配器实例，不代表持久数据已删除，跨重启撤销依赖服务端退出/撤销会话。插件恢复后可以用同一实例重试，无需重建模块。
+
+任一凭据写入失败都会屏蔽整对凭据，因此 access 已保存而 refresh 保存失败时也不会留下可读的半完成会话。登录/注册保存失败后应尝试 `auth.clear()` 清理部分持久数据；清理再次失败须明确提示，不得声称设备凭据已删除。
 
 #### 设备信息与推送
 
@@ -111,7 +115,7 @@ export const ssr = false
 
 ### 错误处理
 
-所有异步 API 返回 `HaiResult<T>`，不会直接 throw：
+`capacitor.*` 业务操作与 `safe*Preference` 返回 `HaiResult<T>`；TokenStorage 适配器方法以 Promise 拒绝报告平台与存储错误：
 
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
@@ -149,6 +153,10 @@ pnpm --filter @h-ai/capacitor test
 ```
 
 > 由于原生插件依赖，测试中需 mock `@capacitor/*` 模块。
+
+推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。
+
+公开操作、内部资源作用域与类型均提供可类型检查的示例；见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。推送示例的类型检查不证明设备权限或 FCM/APNs 实际可用。
 
 ## 许可证
 

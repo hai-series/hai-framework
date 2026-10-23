@@ -12,7 +12,7 @@ import { defineConfig } from 'vitest/config'
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir })
+  const envResult = command === 'build' || process.env.HAI_E2E === '1' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data

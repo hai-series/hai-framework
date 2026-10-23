@@ -1,4 +1,5 @@
 <!--
+  @component BareButton
   =============================================================================
   @h-ai/ui - BareButton 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { BareButton } from '@h-ai/ui'
+  const props: ComponentProps<typeof BareButton> = { type: 'button', ariaLabel: '关闭', children: createRawSnippet(() => ({ render: () => "<span>关闭</span>" })) }
+  const component = mount(BareButton, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { BareButtonProps, DataAttributes } from '../../types.js'

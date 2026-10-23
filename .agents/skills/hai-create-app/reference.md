@@ -78,6 +78,7 @@ apps/{app-name}/
 import type { Handle } from '@sveltejs/kit'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
+import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -99,15 +100,13 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event)
+    return kit.i18n.runWithLocale(locale, () => resolve(event))
   }
   return paraglideMiddleware(event.request, async ({ locale }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event, {
+    return kit.i18n.runWithLocale(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+    }))
   })
 }
 
@@ -125,7 +124,7 @@ const haiHandle = kit.createHandle({
     publicPaths: ['/api/auth/*', '/api/public/*'],
     operations: () => iam.auth,
   },
-  rateLimit: { windowMs: 60000, maxRequests: 100 },
+  rateLimit: { windowMs: 60000, maxRequests: 100, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'app' }) },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)
@@ -473,6 +472,7 @@ export const { apiFetch } = client
 - 配置文件：`playwright.config.ts`
 - 覆盖关键用户流程（登录 → 操作 → 登出）
 - 包含关键页面和 API 端点的测试
+- 经 `test:e2e` 托管入口运行，服务子进程显式选择本轮 SQLite/Memory/Local 等测试后端与绝对数据目录，隔离 ambient 模块变量和用户 `.env.local`；普通生产配置与共享状态守卫保持生效。启用 transport 时传入本轮可信 ring，并保留真实客户端握手。
 
 ## §12 创建检查清单
 
@@ -502,3 +502,7 @@ export const { apiFetch } = client
 - [ ] 响应用 `kit.response.*`
 - [ ] HaiResult 错误用 `kit.response.fromError` 转换
 - [ ] 无依赖数据用 `Promise.all` 并行加载
+
+生产限流必须先初始化共享 Redis，并显式传入原子 store；createCacheRateLimitStore 以单键 CAS 和首次提交 TTL 实现固定窗口（非滑动窗口），不支持非原子 get+set 回退。缓存故障/冲突耗尽返回503，超限429。内存仅开发/显式端到端测试可选；代理须由可信 SvelteKit adapter 配置 getClientAddress，不在应用中直接信任 X-Forwarded-For。未选择 cache 的 CLI 应用默认不启用限流，启用前应新增共享后端。
+
+认证 Cookie 在 NODE_ENV 或 HAI_CORE_ENV 为 production 时默认启用 Secure，HAI_E2E/HAI_E2E_MOCK 不降低 Cookie 安全；限流生产判断也识别这两个环境标志，测试开关仅放宽共享状态要求。

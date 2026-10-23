@@ -121,3 +121,12 @@ describe('core.module', () => {
     }
   })
 })
+
+it('生产共享状态判定读取实际环境，只有显式E2E值1可使用测试替身', () => {
+  expect(core.module.requiresSharedState({ NODE_ENV: 'production' })).toBe(true)
+  expect(core.module.requiresSharedState({ HAI_CORE_ENV: 'production', NODE_ENV: 'test' })).toBe(true)
+  expect(core.module.requiresSharedState({ NODE_ENV: 'development' })).toBe(false)
+  expect(core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' })).toBe(false)
+  expect(core.module.requiresSharedState({ HAI_CORE_ENV: 'production', HAI_E2E_MOCK: '1' })).toBe(false)
+  expect(core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: 'true' })).toBe(true)
+})

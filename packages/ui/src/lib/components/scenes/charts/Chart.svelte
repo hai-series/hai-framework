@@ -1,4 +1,5 @@
 <!--
+  @component Chart
   =============================================================================
   @h-ai/ui - Chart 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Chart } from '@h-ai/ui'
+  const props: ComponentProps<typeof Chart> = { type: 'line', data: [{ month: 'Jan', sales: 42 }], x: 'month', y: 'sales', lineVariant: 'segmented-point', tooltipMode: 'nearest' }
+  const component = mount(Chart, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { ChartProps, ChartSeries, ChartType } from './chart-types.js'

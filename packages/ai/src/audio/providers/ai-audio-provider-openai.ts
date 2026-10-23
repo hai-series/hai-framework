@@ -47,6 +47,18 @@ const OPENAI_SPEECH_FORMAT: Record<AudioFormat, 'pcm' | 'wav' | 'mp3' | 'opus'> 
  * 创建 OpenAI Audio Provider
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function invoke(request: ProviderSynthesisRequest) {
+ *   const provider = createOpenAIAudioProvider()
+ *   if (!provider.synthesis) throw new Error('Audio operation is unavailable')
+ *   const result = await provider.synthesis.synthesize(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createOpenAIAudioProvider(): AudioProvider {
   function createClient(apiKey: string, baseUrl: string, timeout: number): OpenAI {

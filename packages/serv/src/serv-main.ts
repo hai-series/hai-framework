@@ -6,16 +6,6 @@
  *
  * @module serv-main
  *
- * @example
- * ```ts
- * import { serv } from '@h-ai/serv'
- *
- * const procedures = serv
- *   .implement(contract)
- *   .context<ServContext>()
- *   .route('health', handler)
- *   .build()
- * ```
  */
 
 import { toFetch } from './adapters/serv-adapter-fetch.js'
@@ -47,7 +37,23 @@ export type {
   ServRouterBuilder,
 } from './serv-router.js'
 
-/** hai-framework API service runtime 统一入口（扁平 API）。 */
+/**
+ * hai-framework API service runtime 统一入口（扁平 API）。
+ *
+ * @example
+ * ```ts
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const contract = apiContract.create({})
+ * const procedures = serv.implement(contract).context<ServContext>().build()
+ * const app = serv.createApp({ contract, procedures })
+ *
+ * const response = await app.request('/health')
+ * if (!response.ok) throw new Error('Health request failed')
+ * ```
+ */
 export const serv = {
   // 应用与上下文
   createApp,

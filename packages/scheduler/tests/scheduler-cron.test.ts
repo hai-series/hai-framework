@@ -86,8 +86,8 @@ describe('matchesCron', () => {
     const result = parseCronExpression('* * * * *')
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 0, 0))).toBe(true)
-      expect(matchesCron(result.data, new Date(2025, 5, 15, 12, 30))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 0, 0)))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 5, 15, 12, 30)))).toBe(true)
     }
   })
 
@@ -96,11 +96,11 @@ describe('matchesCron', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       // 14:30 应匹配
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 14, 30))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 14, 30)))).toBe(true)
       // 14:31 不应匹配
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 14, 31))).toBe(false)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 14, 31)))).toBe(false)
       // 15:30 不应匹配
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 15, 30))).toBe(false)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 15, 30)))).toBe(false)
     }
   })
 
@@ -109,9 +109,9 @@ describe('matchesCron', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       // 2025-01-06 是周一
-      expect(matchesCron(result.data, new Date(2025, 0, 6, 9, 0))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 6, 9, 0)))).toBe(true)
       // 2025-01-05 是周日
-      expect(matchesCron(result.data, new Date(2025, 0, 5, 9, 0))).toBe(false)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 5, 9, 0)))).toBe(false)
     }
   })
 
@@ -119,9 +119,9 @@ describe('matchesCron', () => {
     const result = parseCronExpression('*/5 * * * *')
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 12, 0))).toBe(true)
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 12, 5))).toBe(true)
-      expect(matchesCron(result.data, new Date(2025, 0, 1, 12, 3))).toBe(false)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 12, 0)))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 12, 5)))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2025, 0, 1, 12, 3)))).toBe(false)
     }
   })
 })

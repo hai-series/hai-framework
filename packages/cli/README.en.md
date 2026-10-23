@@ -50,6 +50,8 @@ Omit options for interactive choices, or use `--yes` for defaults. Installation 
 
 Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage and audit for its default management UI. It does not install AI/ONNX/CUDA by default.
 
+A standalone `mobile-app` with IAM or crypto installs frontend crypto and enables encrypted typed-client transport by default. Without crypto, a deliberate plaintext API remains supported. Use `PUBLIC_API_TRANSPORT=off` only with a matching plaintext service; `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. A failed handshake never falls back to plaintext, and server private keys never enter the client. Cleanup closes client transport before crypto initialized by that client.
+
 ### Fullstack mini administration
 
 Includes user management, roles, audit logs, avatars, personal settings, themes, languages, onboarding and help. Sign in as `admin` using the random `HAI_ADMIN_DEFAULT_PASSWORD` in root `.env.local`. Existing users are not reset. Adapt the sample business rules as needed; authorization remains on the server.
@@ -60,9 +62,12 @@ See `.env.example` for settings. Commit shared `.env` and `.env.dev/.env.test/.e
 
 ### Existing projects and code generation
 
+Creating or adding AI also installs reldb and vecdb. Generated startup initializes database → vector store → AI and checks reverse cleanup failures. Production profiles select PostgreSQL (or the chosen MySQL), Redis, S3 and Qdrant for enabled modules, using Compose DNS names `db/cache/storage/vecdb`. Inject database/cache passwords, S3 credentials, model keys and protected Qdrant keys privately. Override internal addresses when running outside Compose. Production Reach intentionally rejects an empty provider array until a real `HAI_REACH_PROVIDERS` JSON secret is supplied. `hai add` preserves configured production values, adds missing fields, and requires integration into the existing application entry point.
+
 ```sh
 hai add storage
 hai init
+hai generate
 hai generate page dashboard
 hai generate component UserCard
 hai generate api orders
@@ -72,9 +77,15 @@ hai generate migration add-orders
 
 `hai add` resolves module dependencies and fills configuration. `hai init` fills missing configuration and AI files while preserving custom content. `--force` regenerates module configuration; review the diff before using it.
 
-The page/api generators target SvelteKit. Extend fullstack/API projects through their contract/procedure structure. Names cannot contain paths; existing files are protected unless `--force` is explicit. Migrations generate up/down functions only; inspect data effects before running them.
+Pages use SvelteKit file routes. APIs use either SvelteKit routes or the target serv application's shared contract/procedure structure. API/fullstack roots select a unique backend automatically; use `--workspace <package-name-or-relative-path>` when multiple applications apply, or enter the target workspace. Plain Vite page/API combinations are rejected. Serv does not accept `--output`; SvelteKit route output must stay inside `src/routes`; custom `kit.files` layouts are rejected rather than guessed. SvelteKit API targets must already install `@h-ai/kit` and `zod`. Serv updates only existing aggregation points with `@hai-generator` markers; unknown structures require manual integration. Names cannot contain paths. Existing files require `--force`, which never replaces registered business domains. Files are checked as one batch and rolled back on write failure. Migrations only generate up/down functions; inspect data effects before running them.
+
+CLI messages support Chinese and English. The first nonempty value from `HAI_CORE_DEFAULTLOCALE`, `LC_ALL`, `LC_MESSAGES` and `LANG` selects the initial language. Regional `en`/`zh` variants use the existing dictionaries; `C`/`POSIX` use English. Unknown languages preserve the current core locale, which defaults to Chinese. In PowerShell, run `$env:HAI_CORE_DEFAULTLOCALE='en-US'` before `hai generate`. Internal commands also honor in-process locale changes via `core.i18n.setGlobalLocale('en-US')`. Omitting a type or name opens a prompt; cancellation writes no files. Generated Chinese code comments and user-supplied names remain unchanged.
+
+Prompts, validation, module/template names, descriptions and completion messages in `create`, `add`, `init` and `generate` use the current CLI locale. Catalog labels are translated when read, including after an in-process locale change. The CLI locale is separate from the generated application’s `core.defaultLocale`; generated Chinese README text, configuration/code comments, user input and original external-tool diagnostics remain unchanged.
 
 ### Build and deploy
+
+Database connections are validated against the selected backend’s public schema before saving. MySQL `ssl` accepts only `false` or a strict TLS object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL keeps its modes. CLI bundles the pure schemas and Zod, so validation needs no database package or driver in the target application; running that application still requires its dependencies. Deployment still requires an installed, resolvable `@h-ai/deploy` (a development dependency in generated projects).
 
 `pnpm build` compiles sources. Each image has its own Dockerfile in `images/`, selected through `hai.build.json`. `--images` selects build outputs; `--services` selects deployed services. Automatic engine detection prefers reachable Podman, then Docker. Downloads, installation and production dependency packaging share package and SQLite driver caches to avoid downloading them again.
 
@@ -88,6 +99,8 @@ pnpm run deploy --env prod --build --bundle-only
 ```
 
 Complete bundles include application and self-hosted middleware images. Deployment caches, archives and operation directories default to `.hai/deploy/<environment>/` at the project root; `--output` can explicitly override the archive path relative to the command's working directory. Bundle-only mode skips SSH questions and creates a tar, `deploy-target.json` with per-field descriptions, Windows `deploy.ps1` and Linux/macOS `deploy.sh`. Edit and check `deploy-target.json` before running either upload script; both scripts read this file. On an isolated Linux server, extract and run `sh apply.sh`. First installations require a complete bundle; partial updates preserve other services and volumes. Each step reports its result; failure exits nonzero and attempts recovery. See [deployment](../deploy/README.en.md) for prerequisites, caching, versions and recovery.
+
+Failures display local managed-process termination separately from remote unknown/finished-script state and the server result path. Local SSH exit does not prove remote termination. Inspect unknown server state first; CLI never reruns deployment or rollback automatically. Windows command execution uses an embedded system PowerShell/.NET Job and requires Add-Type; failure never starts an unmanaged command.
 
 Build desktop installers with `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64`, using the target system and toolchain. Test native installers separately from container-hosted web pages.
 
@@ -111,10 +124,17 @@ pnpm --filter @h-ai/cli lint
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
+pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows. Deployment gates cover offline bundles, SSH/manual deployment and partial updates. Tests clean up their resources; save requested evidence in a designated directory. Native shells and real cloud providers need separate acceptance.
+Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows. Deployment gates cover actual resource ownership and dynamic host port isolation, as well as offline bundles, SSH/manual deployment, incremental updates and rollback. Cleanup uses only container IDs and private image tags recorded by the current run. Safe metadata remains in ignored `tmp/validation/module-review/VERIFY-05/`; temporary projects, SSH keys and project data are still removed. Produced browser screenshots, traces and reports remain under ignored `tmp/validation/module-review/scaffold-browser/` or `deploy-browser/` by default. Explicit evidence, HTML report and output paths are respected; temporary projects, keys, data and processes are still cleaned up. Native shells and real cloud providers need separate acceptance.
+
+`--generate` runs focused route gates: it reuses installed workspace dependencies, generates and builds real SvelteKit, serv API and fullstack backend projects, then accesses their new routes, including transport. It does not replace the full installation and browser matrix.
+
+`test:e2e` gives each server explicit isolated backends and an absolute data directory. Server children do not inherit external `HAI_*` / `PUBLIC_*` / `VITE_*` settings or read the user's `.env.local`. Test-only `HAI_E2E=1` preserves ordinary development/production dotenv behavior and shared-backend requirements; transport cases use a fresh trusted SM2 ring and the actual registry. Scaffold browser runs also use an independent TCP counter to verify that external database settings are never contacted. Complete deployment acceptance retains real Redis/S3, incremental updates and rollback for fullstack.
+
+`--i18n` builds the CLI and checks language precedence, help, successful generation and errors in separate processes, alongside Chinese/English prompt, validation and cancellation cases.
 
 ## License
 

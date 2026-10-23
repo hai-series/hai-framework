@@ -12,7 +12,7 @@ import { i18n } from './i18n/core-i18n-utils.js'
 import { zodValidation } from './i18n/core-zod-mapper.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
 import { async as asyncUtils } from './utils/core-util-async.js'
-import { createNotInitializedKit } from './utils/core-util-module.js'
+import { createNotInitializedKit, requiresSharedState } from './utils/core-util-module.js'
 import { object as objectUtils } from './utils/core-util-object.js'
 import { sanitize as sanitizeUtils } from './utils/core-util-sanitize.js'
 
@@ -26,21 +26,13 @@ import { typeUtils } from './utils/core-util-type.js'
  * 创建 Core 对象（通用内核）。
  * @param loggerFns - 平台特定的 Logger 函数集合
  * @returns core 对象（不含平台扩展）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * import { createCore } from '@h-ai/core'
- * import { logger } from '@h-ai/core'
- *
- * const core = createCore({
- *   createLogger: logger.createLogger,
- *   getLogger: logger.getLogger,
- *   configureLogger: logger.configureLogger,
- *   setLogLevel: logger.setLogLevel,
- *   getLogLevel: logger.getLogLevel,
- * })
- *
- * core.logger.info('Hello')
+ * function createPlatformCore(platform: LoggerFunctions): CoreFunctions {
+ *   const tools = createCore(platform)
+ *   tools.logger.info('Core ready')
+ *   return tools
+ * }
  * ```
  */
 export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
@@ -91,10 +83,12 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      *
      * @example
      * ```ts
-     * // 设置全局 locale（所有模块读取全局 locale）
+     * // 配置浏览器语言或服务端启动默认值
      * core.i18n.setGlobalLocale('en-US')
      *
-     * // 获取当前全局 locale
+     * // Node 请求应包裹实际异步处理过程
+     * await core.i18n.runWithLocale('zh-CN', () => handleRequest())
+     * // 获取当前请求语言或应用默认语言
      * core.i18n.getGlobalLocale()
      *
      * // 创建消息获取器（读取全局 locale）
@@ -244,6 +238,7 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      */
     module: {
       createNotInitializedKit,
+      requiresSharedState,
     },
   }
 }

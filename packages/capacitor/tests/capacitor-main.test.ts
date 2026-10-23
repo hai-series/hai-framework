@@ -41,7 +41,7 @@ describe('capacitor main', () => {
 
   it('close 可重复调用不报错', async () => {
     await capacitor.close()
-    await expect(capacitor.close()).resolves.toBeUndefined()
+    await expect(capacitor.close()).resolves.toEqual({ success: true, data: undefined })
   })
 
   it('getPlatform 在未初始化时返回 web', () => {

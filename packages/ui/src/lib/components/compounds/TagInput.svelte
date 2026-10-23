@@ -1,4 +1,5 @@
 <!--
+  @component TagInput
   =============================================================================
   @h-ai/ui - TagInput 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $state, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { TagInput } from '@h-ai/ui'
+  const props: ComponentProps<typeof TagInput> = { tags: ['Svelte'], maxTags: 5 }
+  const component = mount(TagInput, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, TagInputProps } from '../../types.js'

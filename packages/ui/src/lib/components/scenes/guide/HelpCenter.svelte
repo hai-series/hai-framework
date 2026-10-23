@@ -1,3 +1,17 @@
+<!--
+  @component HelpCenter
+  HelpCenter 组件的公开使用示例。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { HelpCenter } from '@h-ai/ui'
+  const props: ComponentProps<typeof HelpCenter> = { articles: [{ id: 'start', title: '开始使用', content: '# 操作说明' }] }
+  const component = mount(HelpCenter, { target: document.body, props })
+  await unmount(component)
+  ```
+-->
 <script lang='ts'>
   import type { GuideArticle, GuideTour } from '../../../guide-types.js'
   import type { DataAttributes } from '../../../types.js'
@@ -8,6 +22,19 @@
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
 
+  /**
+   * HelpCenter 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { HelpCenter } from '@h-ai/ui'
+   * const props: ComponentProps<typeof HelpCenter> = { articles: [{ id: 'start', title: '开始使用', content: '# 操作说明' }] }
+   * const component = mount(HelpCenter, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     articles: readonly GuideArticle[]
     tours?: readonly GuideTour[]

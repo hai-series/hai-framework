@@ -57,6 +57,15 @@ const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as cons
  * - `path` 省略时默认挂到 `'*'`
  * - 按数组顺序注册
  * - 注册位置固定在内置 `securityHeaders` 之后、`transport` / 业务路由之前
+ *
+ * @example
+ * ```ts
+ * import type { ServMiddlewareMount } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const mount: ServMiddlewareMount = { path: '/api/v1/*', middleware: serv.cors({ origin: 'https://app.example.com' }) }
+ * // middleware 在 transport 之前运行；短路响应不会经过传输加密。
+ * ```
  */
 export interface ServMiddlewareMount {
   readonly path?: string
@@ -69,6 +78,17 @@ export interface ServMiddlewareMount {
  * Hono 是当前内部实现细节，应用代码只应依赖此最小接口：
  * - `fetch`：部署到 Fetch-first 运行时或交给 `serv.listen()`。
  * - `request`：测试 / 本地直连时发起 in-process 请求，避免消费方 import Hono。
+ *
+ * @example
+ * ```ts
+ * import type { ServHttpApp } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * async function health(app: ServHttpApp): Promise<boolean> {
+ *   const response = await app.request('/health')
+ *   return response.ok
+ * }
+ * ```
  */
 export interface ServHttpApp {
   readonly fetch: (request: Request, metadata?: ServRequestMetadata) => Response | Promise<Response>
@@ -87,10 +107,20 @@ export interface ServHttpApp {
  * - **`refreshCookie`**（可选）：浏览器默认用 httpOnly cookie；受信原生客户端可配置 body 通道。与 `iam` 正交：
  *   `iam` 决定 *谁* 验证 token，`refreshCookie` 决定 refresh token *怎么* 传输。
  *
- * - **`verifyToken`**（高级）：不使用 IAM 模块的逆脱口。优先于 `iam.auth.verifyToken`。
+ * - **`verifyToken`**（高级）：不使用 IAM 模块的覆盖入口。优先于 `iam.auth.verifyToken`。
  *
  * - **`createContext`**（高级）：完全接管上下文构造，设置后 serv **不再**自动填充 session，
  *   由调用方负责。
+ *
+ * @example
+ * ```ts
+ * import type { CreateServAppOptions } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function mount<TContract extends Parameters<typeof serv.createApp>[0]['contract'], TProcedures extends Parameters<typeof serv.createApp>[0]['procedures']>(options: CreateServAppOptions<TContract, TProcedures>) {
+ *   return serv.createApp(options)
+ * }
+ * ```
  */
 export interface CreateServAppOptions<
   TContract extends AnyContractRouter,
@@ -132,14 +162,10 @@ export interface CreateServAppOptions<
   readonly createContext?: CreateServContext
   /**
    * 启用传输加密（opt-in）。提供后 serv 自动：
-   * 1. 调用 `crypto.transport.createServer()` 创建管理器
+   * 1. 使用显式 serverKeyRing / keyStore 创建受管传输管理器
    * 2. 在 oRPC 路由之前挂载中间件，自动解密请求 / 加密响应
    * 3. 在 `${apiPrefix}${keyExchangePath}` 暴露 POST 密钥协商端点
    *
-   * @example
-   * ```ts
-   * serv.createApp({ contract, procedures, transport: { crypto } })
-   * ```
    */
   readonly transport?: ServTransportConfig
   /**
@@ -150,15 +176,26 @@ export interface CreateServAppOptions<
    *
    * 需配合 `serv.listen()`（Node 适配器会自动完成 WebSocket 升级注入）。
    *
-   * @example
-   * ```ts
-   * serv.createApp({ contract, procedures, iam, audio: { ai, verifyTicket, authorize } })
-   * ```
    */
   readonly audio?: ServAudioConfig
 }
 
-/** `serv.createApp()` 的语音 WebSocket 接入配置。 */
+/**
+ * `serv.createApp()` 的语音 WebSocket 接入配置。
+ *
+ * @example
+ * ```ts
+ * import type { ServAudioConfig } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * import { ai } from '@h-ai/ai'
+ *
+ * function configureAudio(verifyTicket: ServAudioConfig['verifyTicket']): ServAudioConfig {
+ *   return { ai, verifyTicket, preAuthTimeoutMs: 3000, maxSessionMs: 60000 }
+ * }
+ * // 应用实现 verifyTicket：原子消费共享票据并返回可信 session/grant。
+ * ```
+ */
 export interface ServAudioConfig {
   /** AI 服务对象（提供 `ai.audio` 领域能力）。 */
   readonly ai: AudioWsDeps['ai']
@@ -198,7 +235,18 @@ export interface ServAudioConfig {
   readonly maxSendBufferBytes?: number
 }
 
-/** Audio ticket 绑定的能力授权（消费时原样返回，供服务端交叉校验 start 帧）。 */
+/**
+ * Audio ticket 绑定的能力授权（消费时原样返回，供服务端交叉校验 start 帧）。
+ *
+ * @example
+ * ```ts
+ * import type { AudioTicketGrant } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const grant: AudioTicketGrant = { operation: 'synthesize', model: 'speech-model', sessionId: 'session-1' }
+ * // 签发时绑定；start 帧不能覆盖服务端核准的模型与操作。
+ * ```
+ */
 export interface AudioTicketGrant {
   /** 允许的操作 */
   readonly operation?: 'transcribe' | 'synthesize'
@@ -210,7 +258,20 @@ export interface AudioTicketGrant {
   readonly [key: string]: unknown
 }
 
-/** Audio ticket 验证结果：IAM 会话 + 可选能力授权。 */
+/**
+ * Audio ticket 验证结果：IAM 会话 + 可选能力授权。
+ *
+ * @example
+ * ```ts
+ * import type { AudioTicketVerification } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function verified(session: AudioTicketVerification['session']): AudioTicketVerification {
+ *   return { session, grant: { operation: 'transcribe' } }
+ * }
+ * // session 必须来自成功消费的可信票据，不能从客户端 JSON 直接构造。
+ * ```
+ */
 export interface AudioTicketVerification {
   /** IAM 会话摘要 */
   readonly session: ServSession
@@ -218,7 +279,18 @@ export interface AudioTicketVerification {
   readonly grant?: AudioTicketGrant
 }
 
-/** Audio WebSocket 经应用授权后允许生效的服务端参数。 */
+/**
+ * Audio WebSocket 经应用授权后允许生效的服务端参数。
+ *
+ * @example
+ * ```ts
+ * import type { AuthorizedAudioRequest } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const request: AuthorizedAudioRequest = { operation: 'synthesize', format: 'mp3' }
+ * // model/voice/instruction 只有经应用 authorize 确认后才生效。
+ * ```
+ */
 export interface AuthorizedAudioRequest {
   readonly operation: 'transcribe' | 'synthesize'
   /** 服务端允许的模型 ID；不传时使用 `ai.audio` 对应操作的默认模型。 */
@@ -234,27 +306,37 @@ export interface AuthorizedAudioRequest {
  *
  * `createApp` 启用 audio 时创建服务器，`serv.listen()` 交给 Node adapter 的原生升级支持，
  * 不向 `ServHttpApp` 公共类型泄露 Hono / WebSocket 细节。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function hasAudioServer(app: ServHttpApp): boolean {
+ *   return audioWsServers.has(app)
+ * }
+ * // WeakMap 只绑定本地网络资源，不作为跨节点认证或业务状态。
+ * ```
  */
 export const audioWsServers = new WeakMap<ServHttpApp, WebSocketServer>()
 
 /**
- * 创建并装配 HTTP API app。
+ * 创建并装配 HTTP app；同步校验配置和依赖，返回可交给 Node 或标准 fetch 适配器的应用。
  *
- * @param options - contract/procedures/http 三段式配置
- * @returns 可被 `serv.listen()` / `serv.toFetch()` 使用的 ServHttpApp
+ * @param options - contract、procedures、HTTP、安全和可选能力依赖
+ * @returns 不拥有业务模块生命周期的 ServHttpApp
+ * @throws 配置或必需依赖缺失时在装配阶段抛错，宿主须停止启动并清理已初始化资源。
  *
  * @example
  * ```ts
- * const app = serv.createApp({
- *   contract,
- *   procedures,
- *   http: {
- *     apiPrefix: '/api/v1',
- *     openapi: { path: '/openapi.json' },
- *     docs: { path: '/docs' },
- *   },
- * })
- * serv.listen(app, { port: 3000, host: '0.0.0.0' })
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const contract = apiContract.create({})
+ * const procedures = serv.implement(contract).context<ServContext>().build()
+ * const app = serv.createApp({ contract, procedures })
+ *
+ * const response = await app.request('/health')
+ * const healthy = response.ok
  * ```
  */
 export function createApp<
@@ -265,6 +347,8 @@ export function createApp<
   const http = resolveServHttpConfig(options.http)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
+  // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
+  app.use('*', (c, next) => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), next))
   // 缺失路由也返回标准 JSON，保持 404 并允许统一传输加密。
   app.notFound(c => c.json(buildHaiErrorBody(
     HaiCommonError.NOT_FOUND,
@@ -312,8 +396,8 @@ export function createApp<
   // - 在下游响应返回后加密
   if (options.transport) {
     const mgr = options.transport.crypto.transport.createServer({
+      serverKeyRing: options.transport.serverKeyRing,
       keyStore: options.transport.keyStore,
-      maxClients: options.transport.maxClients,
     })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到
@@ -511,6 +595,16 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
   })
 }
 
+/**
+ * 内部 oRPC 输入校验错误形状；运行时检查后才转为安全的本地化字段错误。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const payload: OrpcValidationErrorPayload = { defined: false, code: 'BAD_REQUEST', status: 400, message: 'Validation failed', data: { issues: [] } }
+ * const recognized = isOrpcValidationErrorPayload(payload)
+ * ```
+ */
 interface OrpcValidationErrorPayload {
   readonly defined: boolean
   readonly code: string

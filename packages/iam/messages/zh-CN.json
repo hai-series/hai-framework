@@ -182,5 +182,9 @@
   "iam_apikeyUpdateFailed": "更新 API Key 失败：{message}",
   "iam_apikeyDeleteFailed": "删除 API Key 失败：{message}",
   "iam_apikeyQueryFailed": "查询 API Key 失败：{message}",
-  "iam_apikeyStrategyRequired": "API Key 认证需要 API Key 策略配置"
+  "iam_apikeyStrategyRequired": "API Key 认证需要 API Key 策略配置",
+  "iam_sessionStateFailed": "会话共享状态操作失败",
+  "iam_sessionStateConflict": "会话状态已变化，请重试",
+  "iam_sessionMaxAgeInvalid": "会话有效期或时间字段无效",
+  "iam_notificationDeliveryUnknown": "通知可能已送达，结果未知；请勿自动重发。"
 }

@@ -17,6 +17,16 @@ import { HaiIamError } from '../iam-types.js'
 
 /**
  * 角色存储接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // RelDB 已初始化；后续仓储读取仍可能失败，必须检查 HaiResult。
+ * const repository = await createDbRoleRepository()
+ * const found = await repository.findByCode('user')
+ * if (!found.success)
+ *   return found
+ * return found.data?.id ?? null
+ * ```
  */
 export interface RoleRepository extends ReldbCrudRepository<Role> {
   /** 权限单独更新时锁定角色行并推进更新时间，避免并发替换交错 */
@@ -101,6 +111,13 @@ let roleRepoSqlOps: unknown = null
  * 重置角色存储单例
  *
  * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ * 仅重置本地引用，不删除共享存储数据。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 所有使用该仓储的 IAM 子功能均已关闭后，才清理工厂缓存。
+ * resetRoleRepoSingleton()
+ * ```
  */
 export function resetRoleRepoSingleton(): void {
   roleRepoInstance = null
@@ -114,6 +131,16 @@ export function resetRoleRepoSingleton(): void {
  * db 重新初始化后自动创建新实例。
  *
  * @returns 角色存储接口实现
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // RelDB 已初始化；后续仓储读取仍可能失败，必须检查 HaiResult。
+ * const repository = await createDbRoleRepository()
+ * const found = await repository.findByCode('user')
+ * if (!found.success)
+ *   return found
+ * return found.data?.id ?? null
+ * ```
  */
 export async function createDbRoleRepository(): Promise<RoleRepository> {
   if (roleRepoInstance && roleRepoSqlOps === reldb.sql)

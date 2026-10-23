@@ -59,6 +59,9 @@
   {{#if isSvelteOnlyApp}}
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
     "@h-ai/capacitor": "{{haiPackageSpecifier}}",
+{{#if features.crypto}}
+    "@h-ai/crypto": "{{haiPackageSpecifier}}",
+{{/if}}
     "@h-ai/ui": "{{haiPackageSpecifier}}"
   {{else}}
     "@h-ai/core": "{{haiPackageSpecifier}}",

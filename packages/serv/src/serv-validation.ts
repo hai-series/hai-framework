@@ -23,6 +23,17 @@ const DEFAULT_LOCALE = 'zh-CN'
  * 复用 `HaiResult` 失败分支结构。字段错误同时在两处出现：
  * - `error.cause`：与 `validateInputOrFail` 输出对齐，HaiResult 标准位置
  * - 顶层 `errors`：保留以兼容已有客户端
+ *
+ * @example
+ * ```ts
+ * import type { ServValidationFailureBody } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * function fields(body: ServValidationFailureBody) {
+ *   return body.error.cause ?? body.errors
+ * }
+ * // 业务调用先判断 success，字段错误仅包含安全的本地化文案。
+ * ```
  */
 export interface ServValidationFailureBody {
   readonly success: false
@@ -45,6 +56,14 @@ export interface ServValidationFailureBody {
  *
  * @param headers - 请求头（`Headers` 或与之等价的对象）
  * @returns 解析得到的 locale
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ *
+ * const locale = serv.resolveRequestLocale(new Headers({ 'x-hai-locale': 'en-US' }))
+ * const fallback = serv.resolveRequestLocale(new Headers())
+ * ```
  */
 export function resolveRequestLocale(headers: Headers | Record<string, string | undefined>): string {
   const get = (name: string): string | undefined => {
@@ -65,6 +84,15 @@ export function resolveRequestLocale(headers: Headers | Record<string, string | 
  *
  * @param zodError - Zod `SafeParseError` 或 `ZodError`
  * @param locale - 期望 locale
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const { z } = await import('zod')
+ * const parsed = z.object({ name: z.string().min(1) }).safeParse({ name: '' })
+ * if (parsed.success) return []
+ * return localizeZodError(parsed.error, 'en-US')
+ * ```
  */
 export function localizeZodError(zodError: unknown, locale: string): ValidationFormError[] {
   const resolvedLocale = normalizeServLocale(locale)
@@ -104,6 +132,19 @@ export function localizeZodError(zodError: unknown, locale: string): ValidationF
  * @param schema - Zod schema
  * @param input - 待校验数据
  * @param locale - 期望 locale（通常来自请求上下文）
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ * import { z } from 'zod'
+ *
+ * const result = serv.validateInputOrFail(z.object({ name: z.string().min(1) }), { name: '' }, 'en-US')
+ * if (!result.success) {
+ *   const fields = result.error.cause
+ * } else {
+ *   const name = result.data.name
+ * }
+ * ```
  */
 export function validateInputOrFail<TOutput>(
   schema: ZodType<TOutput>,

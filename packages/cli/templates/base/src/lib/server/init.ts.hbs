@@ -33,7 +33,7 @@ import type { AIConfigInput } from '@h-ai/ai'
 {{#if features.audit}}
 import type { AuditInitConfigInput } from '@h-ai/audit'
 {{/if}}
-import type { CoreConfig } from '@h-ai/core'
+import type { CoreConfig, HaiResult } from '@h-ai/core'
 {{#if features.iam}}
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 {{/if}}
@@ -44,7 +44,7 @@ import type { ReachConfigInput } from '@h-ai/reach'
 import type { StorageConfigInput } from '@h-ai/storage'
 {{/if}}
 {{#if features.ai}}
-import { ai } from '@h-ai/ai'
+import { ai, AIConfigSchema } from '@h-ai/ai'
 {{/if}}
 {{#if features.audit}}
 import { audit, AuditInitConfigSchema } from '@h-ai/audit'
@@ -68,6 +68,9 @@ import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 {{#if features.storage}}
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{/if}}
+{{#if features.vecdb}}
+import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+{{/if}}
 
 {{#if features.db}}
 type DbConfigInput = Parameters<typeof reldb.init>[0]
@@ -77,14 +80,46 @@ type CacheConfigInput = Parameters<typeof cache.init>[0]
 {{/if}}
 
 let initialized = false
+let initializing: Promise<void> | undefined
+let closing: Promise<void> | undefined
+let cleanupPending = false
 
 /**
  * 初始化应用
  */
 export async function initApp(): Promise<void> {
+  if (closing)
+    await closing
   if (initialized)
     return
+  if (!initializing) {
+    initializing = (async () => {
+      if (cleanupPending)
+        await cleanupModules()
+      cleanupPending = true
+      try {
+        await doInit()
+        initialized = true
+        cleanupPending = false
+      }
+      catch (error) {
+        try {
+          await cleanupModules()
+        }
+        catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], 'Application startup and cleanup failed')
+        }
+        throw error
+      }
+    })().finally(() => {
+      initializing = undefined
+    })
+  }
+  return initializing
+}
 
+/** 实际启动只有一个调用者执行，失败由外层检查清理结果后再抛出。 */
+async function doInit(): Promise<void> {
   // 1. 加载配置
   core.init({
     configDir: './config',
@@ -115,6 +150,16 @@ export async function initApp(): Promise<void> {
   if (!auditValidation.success)
     throw new Error(`Audit config invalid: ${auditValidation.error.message}`)
 {{/if}}
+{{#if features.vecdb}}
+  const vectorValidation = core.config.validate('vecdb', VecdbConfigSchema)
+  if (!vectorValidation.success)
+    throw new Error(`VecDB config invalid: ${vectorValidation.error.message}`)
+{{/if}}
+{{#if features.ai}}
+  const aiValidation = core.config.validate('ai', AIConfigSchema)
+  if (!aiValidation.success)
+    throw new Error(`AI config invalid: ${aiValidation.error.message}`)
+{{/if}}
 
 {{#if features.db}}
   // ─── 获取配置 ───
@@ -130,13 +175,16 @@ export async function initApp(): Promise<void> {
   const auditConfig = core.config.getOrThrow<AuditInitConfigInput>('audit')
 {{/if}}
 {{#if features.storage}}
-  const storageConfig = core.config.get<StorageConfigInput>('storage')
+  const storageConfig = core.config.getOrThrow<StorageConfigInput>('storage')
 {{/if}}
 {{#if features.ai}}
-  const aiConfig = core.config.get<AIConfigInput>('ai')
+  const aiConfig = core.config.getOrThrow<AIConfigInput>('ai')
+{{/if}}
+{{#if features.vecdb}}
+  const vectorConfig = core.config.getOrThrow<Parameters<typeof vecdb.init>[0]>('vecdb')
 {{/if}}
 {{#if features.reach}}
-  const reachConfig = core.config.get<ReachConfigInput>('reach')
+  const reachConfig = core.config.getOrThrow<ReachConfigInput>('reach')
 {{/if}}
 
 {{#if features.db}}
@@ -166,26 +214,25 @@ export async function initApp(): Promise<void> {
 {{/if}}
 
 {{#if features.storage}}
-  // ─── 初始化存储（可选） ───
-  if (storageConfig) {
-    const storageValidation = core.config.validate('storage', StorageConfigSchema)
-    if (storageValidation.success) {
-      const storageResult = await storage.init(storageConfig)
-      if (!storageResult.success) {
-        core.logger.warn('Storage initialization failed', { error: storageResult.error.message })
-      }
-    }
-  }
+  const storageValidation = core.config.validate('storage', StorageConfigSchema)
+  if (!storageValidation.success)
+    throw new Error(`Storage config invalid: ${storageValidation.error.message}`)
+  const storageResult = await storage.init(storageConfig)
+  if (!storageResult.success)
+    throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
+{{/if}}
+
+{{#if features.vecdb}}
+  // 共享向量存储必须在 AI 选择默认 Store 之前就绪。
+  const vectorResult = await vecdb.init(vectorConfig)
+  if (!vectorResult.success)
+    throw new Error(`VecDB initialization failed: ${vectorResult.error.message}`)
 {{/if}}
 
 {{#if features.reach}}
-  // ─── 初始化触达服务（可选） ───
-  if (reachConfig) {
-    const reachResult = await reach.init(reachConfig)
-    if (!reachResult.success) {
-      core.logger.warn('Reach initialization failed', { error: reachResult.error.message })
-    }
-  }
+  const reachResult = await reach.init(reachConfig)
+  if (!reachResult.success)
+    throw new Error(`Reach initialization failed: ${reachResult.error.message}`)
 {{/if}}
 
 {{#if features.iam}}
@@ -205,15 +252,77 @@ export async function initApp(): Promise<void> {
 {{/if}}
 
 {{#if features.ai}}
-  // ─── 初始化 AI（可选） ───
-  if (aiConfig?.llm?.apiKey) {
-    const aiResult = await ai.init(aiConfig)
-    if (!aiResult.success) {
-      core.logger.warn('AI initialization failed', { error: aiResult.error.message })
-    }
-  }
+  // 显式启用的 AI 不得在持久 Store 不可用时降级为启动成功。
+  const aiResult = await ai.init(aiConfig)
+  if (!aiResult.success)
+    throw new Error(`AI initialization failed: ${aiResult.error.message}`)
 {{/if}}
 
-  initialized = true
   core.logger.info('Application initialized', { app: core.config.getOrThrow<CoreConfig>('core').name })
+}
+
+/** 逆序关闭所有应用拥有的模块；保留失败义务以便下一次重试。 */
+async function cleanupModules(): Promise<void> {
+  const failures: unknown[] = []
+  const closers: Array<() => Promise<HaiResult<void> | void>> = [
+{{#if features.ai}}
+    () => ai.close(),
+{{/if}}
+{{#if features.audit}}
+    () => audit.close(),
+{{/if}}
+{{#if features.iam}}
+    () => iam.close(),
+{{/if}}
+{{#if features.reach}}
+    () => reach.close(),
+{{/if}}
+{{#if features.vecdb}}
+    () => vecdb.close(),
+{{/if}}
+{{#if features.storage}}
+    () => storage.close(),
+{{/if}}
+{{#if features.cache}}
+    () => cache.close(),
+{{/if}}
+{{#if features.db}}
+    () => reldb.close(),
+{{/if}}
+{{#if features.crypto}}
+    () => crypto.close(),
+{{/if}}
+  ]
+  for (const close of closers) {
+    try {
+      const result = await close()
+      if (result && !result.success)
+        failures.push(result.error)
+    }
+    catch (error) {
+      failures.push(error)
+    }
+  }
+  initialized = false
+  cleanupPending = failures.length > 0
+  if (cleanupPending)
+    throw new AggregateError(failures, 'Application cleanup failed; retry closeApp()')
+}
+
+/**
+ * 关闭应用模块并与并发启动/关闭合并；清理失败抛错并允许重试。
+ * @example `await closeApp()`
+ */
+export async function closeApp(): Promise<void> {
+  if (!closing) {
+    const pending = initializing
+    closing = (async () => {
+      if (pending)
+        await pending.catch(() => undefined)
+      await cleanupModules()
+    })().finally(() => {
+      closing = undefined
+    })
+  }
+  return closing
 }

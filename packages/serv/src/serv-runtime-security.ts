@@ -6,14 +6,36 @@
  * @module serv-runtime-security
  */
 
-/** 运行时安全策略输入；通常来自 `_core.yml.env` 与 `_serv.yml.cors`。 */
+/**
+ * 运行时安全策略输入；通常来自 `_core.yml.env` 与 `_serv.yml.cors`。
+ *
+ * @example
+ * ```ts
+ * import type { ServRuntimeSecurityPolicyInput } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const input: ServRuntimeSecurityPolicyInput = { environment: 'production', corsOrigin: 'https://app.example.com' }
+ * const policy = serv.createRuntimeSecurityPolicy(input)
+ * ```
+ */
 export interface ServRuntimeSecurityPolicyInput {
   readonly environment?: string
   readonly corsOrigin?: string
   readonly nativeOrigins?: string
 }
 
-/** 可直接装配到 CORS、refresh cookie 与 HTTP 文档配置的安全策略。 */
+/**
+ * 可直接装配到 CORS、refresh cookie 与 HTTP 文档配置的安全策略。
+ *
+ * @example
+ * ```ts
+ * import type { ServRuntimeSecurityPolicy } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const policy: ServRuntimeSecurityPolicy = serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })
+ * const allowed = policy.allowOrigin('https://app.example.com')
+ * ```
+ */
 export interface ServRuntimeSecurityPolicy {
   readonly allowOrigin: (origin: string) => boolean
   readonly isNativeOrigin: (origin: string) => boolean
@@ -22,9 +44,19 @@ export interface ServRuntimeSecurityPolicy {
 }
 
 /**
- * 创建部署环境安全策略。
+ * 校验部署 Origin 并生成 Cookie、文档与跨端 CORS 安全策略。
  *
- * 生产环境必须显式配置 HTTP(S) Origin，禁止缺省或 `*`；开发环境保留通配符便利性。
+ * @param input - 部署环境与显式允许的 Web/原生 Origin
+ * @returns 可用于 HTTP 装配的策略
+ * @throws Origin 非法，或 production 缺少明确 Web Origin/使用通配符时抛配置错误。
+ *
+ * @example
+ * ```ts
+ * import { serv } from '@h-ai/serv'
+ *
+ * const policy = serv.createRuntimeSecurityPolicy({ environment: 'production', corsOrigin: 'https://app.example.com' })
+ * const middleware = serv.cors({ origin: policy.allowOrigin, credentials: true })
+ * ```
  */
 export function createRuntimeSecurityPolicy(
   input: ServRuntimeSecurityPolicyInput,

@@ -3,13 +3,36 @@
 import type { ImageProvider } from './ai-image-provider.js'
 import { appendReferenceImages, imageFromBase64, imageProtocolError, imageProviderFailure, readJson } from './ai-image-provider.js'
 
+/**
+ * OpenAI 图片接口的 Base64 响应与实际输出格式。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: OpenAIImageResponse = { data: [{ b64_json: 'iVBORw0KGgo=' }], output_format: 'png' }
+ * const count = response.data?.length ?? 0
+ * ```
+ */
 interface OpenAIImageResponse {
   data?: Array<{ b64_json?: string }>
   output_format?: string
   size?: string
 }
 
-/** 创建 OpenAI GPT Image Provider */
+/**
+ * 创建 OpenAI GPT Image Provider
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function generate(request: Parameters<ImageProvider['generate']>[0]) {
+ *   const provider = createOpenAIImageProvider()
+ *   const result = await provider.generate(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
+ */
 export function createOpenAIImageProvider(): ImageProvider {
   return {
     async generate(request) {
@@ -44,16 +67,19 @@ export function createOpenAIImageProvider(): ImageProvider {
                 output_format: 'png',
               }),
           signal: request.signal,
+          redirect: 'error',
         })
-        const parsed = await readJson(response)
+        const parsed = await readJson(response, request)
         if (!parsed.success)
           return parsed
         const body = parsed.data as OpenAIImageResponse
+        if ((body.data?.length ?? 0) > request.maxImages)
+          throw new RangeError('Image count exceeds limit')
         const format = body.output_format ?? 'png'
         const mimeType = format === 'jpg' ? 'image/jpeg' : `image/${format}`
         const images = body.data
           ?.filter(item => typeof item.b64_json === 'string')
-          .map(item => imageFromBase64(item.b64_json!, mimeType, request.size))
+          .map(item => imageFromBase64(item.b64_json!, mimeType, request))
           .filter(image => image.data.byteLength > 0)
         return images?.length ? { success: true, data: images } : imageProtocolError()
       }

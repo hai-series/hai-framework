@@ -5,11 +5,20 @@
  * @module kit-crypto-types
  */
 
-import type { CryptoFunctions, TransportKeyStore } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { RequestEvent } from '@sveltejs/kit'
 
 /**
- * Crypto 服务接口（简化版，与 @h-ai/crypto 兼容）
+ * 辅助函数所需的异步加密依赖结构；实际服务需由应用适配，不等同于 @h-ai/crypto 的公开接口。
+ * @example
+ * ```ts
+ * import type { CryptoServiceLike } from '@h-ai/kit'
+ *
+ * async function verify(crypto: CryptoServiceLike, body: string, secret: string, signature: string) {
+ *   const result = await crypto.hmac.verify(body, secret, signature, 'sha256')
+ *   return result.success && result.data === true
+ * }
+ * ```
  */
 export interface CryptoServiceLike {
   hmac: {
@@ -83,6 +92,12 @@ export interface CryptoServiceLike {
 
 /**
  * Webhook 验证配置
+ * @example
+ * ```ts
+ * import type { WebhookVerifyConfig } from '@h-ai/kit'
+ *
+ * function signatureHeader(config: WebhookVerifyConfig) { return config.event.request.headers.get(config.signatureHeader ?? 'X-Signature') }
+ * ```
  */
 export interface WebhookVerifyConfig {
   /** Crypto 服务实例 */
@@ -101,6 +116,12 @@ export interface WebhookVerifyConfig {
 
 /**
  * CSRF 配置
+ * @example
+ * ```ts
+ * import type { CryptoCsrfConfig } from '@h-ai/kit'
+ *
+ * function tokenSize(config: CryptoCsrfConfig) { return config.tokenLength ?? 32 }
+ * ```
  */
 export interface CryptoCsrfConfig {
   /** Crypto 服务实例 */
@@ -125,6 +146,14 @@ export interface CryptoCsrfConfig {
 
 /**
  * 加密 Cookie 配置
+ * @example
+ * ```ts
+ * import type { EncryptedCookieConfig } from '@h-ai/kit'
+ *
+ * function assertKey(config: EncryptedCookieConfig) {
+ *   if (!config.encryptionKey) throw new Error('Encryption key required')
+ * }
+ * ```
  */
 export interface EncryptedCookieConfig {
   /** Crypto 服务实例 */
@@ -154,8 +183,16 @@ export type {
  *
  * kit 不再维护本地加解密实现；服务端管理器由 `crypto.transport.createServer()` 创建，
  * 协议常量与载荷类型统一来自 `@h-ai/crypto`。
+ * @example
+ * ```ts
+ * import type { TransportEncryptionConfig } from '@h-ai/kit'
+ *
+ * function publicPaths(config: TransportEncryptionConfig) { return config.excludePaths ?? [] }
+ * ```
  */
 export interface TransportEncryptionConfig {
+  /** 受管服务端密钥环，仅从服务端 Secret 注入，不放公开 kit 配置。 */
+  serverKeyRing: TransportServerKeyRing
   /** 是否启用传输加密（默认 false） */
   enabled: boolean
   /** @h-ai/crypto 服务实例 */
@@ -164,17 +201,6 @@ export interface TransportEncryptionConfig {
   keyExchangePath?: string
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
   excludePaths?: string[]
-  /** 是否加密响应（默认 true） */
-  encryptResponse?: boolean
-  /** 服务端可缓存的客户端公钥数量上限（默认 10000） */
-  maxClients?: number
-  /** 共享客户端公钥存储（如 Redis / reldb）；未传时默认使用进程内内存实现。 */
-  keyStore?: TransportKeyStore
-  /**
-   * 是否强制要求传输加密（默认 true）
-   *
-   * - `true`：非排除路径上缺少 X-Client-Id 请求头时返回 400，防止绕过加密。
-   * - `false`：缺少 X-Client-Id 时透传明文，仅适用于渐进式迁移场景，不建议生产启用。
-   */
-  requireEncryption?: boolean
+  /** 显式客户端公钥存储；生产使用共享 Redis/reldb，内存仅供开发/测试。 */
+  keyStore: TransportKeyStore
 }

@@ -70,8 +70,11 @@ function assertAllowedCredentialEntries(entries: Record<string, string>): void {
 
 /**
  * 获取凭证文件路径
- *
  * @returns `~/.hai/credentials.yml` 的绝对路径
+ * @example 模块内部上下文
+ * ```ts
+ * const path = getCredentialsPath() // 当前用户 ~/.hai/credentials.yml，不含凭据内容。
+ * ```
  */
 export function getCredentialsPath(): string {
   return join(homedir(), '.hai', 'credentials.yml')
@@ -128,15 +131,12 @@ function writeCredentialsFile(data: Record<string, string>): void {
  * 读取 `~/.hai/credentials.yml` 中的所有键值对，
  * 将每个 key-value 设置到 `process.env` 中，
  * 使后续 core 配置加载时自动解析 `${HAI_DEPLOY_*}` 变量。
- *
  * @returns 成功返回加载的凭证键名列表
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const result = loadCredentials()
- * if (result.success) {
- *   console.log(`Loaded ${result.data.length} credentials`)
- * }
+ * const loaded = loadCredentials()
+ * if (!loaded.success) throw new Error(loaded.error.message)
+ * const injectedNames = loaded.data // 仅键名；已有 process.env 值优先。
  * ```
  */
 export function loadCredentials(): HaiResult<string[]> {
@@ -165,13 +165,16 @@ export function loadCredentials(): HaiResult<string[]> {
  * 保存单个凭证到全局凭证文件
  *
  * 读取已有凭证 → 合并新凭证 → 写回文件。已有同名 key 会被覆盖。
- *
+ * 会写入当前用户的全局凭证文件；仅允许 HAI_DEPLOY_ 前缀。
  * @param key - 环境变量名（如 HAI_DEPLOY_PROVIDER_TOKEN）
  * @param value - 凭证值
- *
- * @example
+ * @returns 已保存时成功；键名、文件或权限处理失败时为错误结果。
+ * @example 模块内部上下文
  * ```ts
- * saveCredential('HAI_DEPLOY_PROVIDER_TOKEN', 'vel_xxx')
+ * const token = process.env.HAI_DEPLOY_PROVIDER_TOKEN
+ * if (!token) throw new Error('Provide HAI_DEPLOY_PROVIDER_TOKEN privately')
+ * const saved = saveCredential('HAI_DEPLOY_PROVIDER_TOKEN', token)
+ * if (!saved.success) throw new Error(saved.error.message)
  * ```
  */
 export function saveCredential(key: string, value: string): HaiResult<void> {
@@ -198,15 +201,14 @@ export function saveCredential(key: string, value: string): HaiResult<void> {
 
 /**
  * 批量保存凭证到全局凭证文件
- *
  * @param entries - 凭证键值对
- *
- * @example
+ * @returns 已保存时成功；校验失败不会注入任意键名。
+ * @example 模块内部上下文
  * ```ts
- * saveCredentials({
- *   HAI_DEPLOY_PROVIDER_TOKEN: 'vel_xxx',
- *   HAI_DEPLOY_SERVICES_DB_APIKEY: 'neon_xxx',
- * })
+ * const token = process.env.HAI_DEPLOY_PROVIDER_TOKEN
+ * if (!token) throw new Error('Provide HAI_DEPLOY_PROVIDER_TOKEN privately')
+ * const saved = saveCredentials({ HAI_DEPLOY_PROVIDER_TOKEN: token })
+ * if (!saved.success) throw new Error(saved.error.message)
  * ```
  */
 export function saveCredentials(entries: Record<string, string>): HaiResult<void> {

@@ -5,9 +5,24 @@ import type { DataAttributes } from '../../../../types.js'
  * - `text`: 普通文本输入
  * - `number`: 数值输入（前端仍按字符串回传，避免输入中间态被强转）
  * - `tag`: 标签样式输入，用于优先级、状态等枚举文本
+ *
+ * @example
+ * ```ts
+ * import type { AiTableColumnType } from '@h-ai/ui'
+ * const example: AiTableColumnType = 'number'
+ * ```
  */
 export type AiTableColumnType = 'text' | 'number' | 'tag'
 
+/**
+ * AI 表格列的稳定字段名、标题和编辑类型。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableColumn } from '@h-ai/ui'
+ * const example: AiTableColumn = { key: 'sales', label: '销量', type: 'number' }
+ * ```
+ */
 export interface AiTableColumn {
   /** 列唯一键，必须和每行对象中的字段名一一对应。 */
   key: string
@@ -17,6 +32,15 @@ export interface AiTableColumn {
   type: AiTableColumnType
 }
 
+/**
+ * 带稳定 row_id 的表格行；其余字段按列 key 访问。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableRow } from '@h-ai/ui'
+ * const example: AiTableRow = { row_id: 'r1', sales: 42 }
+ * ```
+ */
 export interface AiTableRow {
   /** 行唯一标识；编辑、删除和流式合并都依赖它做稳定匹配。 */
   row_id: string
@@ -30,6 +54,15 @@ export interface AiTableRow {
   [key: string]: unknown
 }
 
+/**
+ * AI 表格的完整列定义和行快照，交给编辑器进行受控展示与编辑。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableData } from '@h-ai/ui'
+ * const example: AiTableData = { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] }
+ * ```
+ */
 export interface AiTableData {
   /** 列定义，按数组顺序渲染表头和单元格。 */
   table_columns: AiTableColumn[]
@@ -39,6 +72,12 @@ export interface AiTableData {
 
 /**
  * 表格变更来源，用于上层做埋点或按动作类型分流保存策略。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableEditorChangeAction } from '@h-ai/ui'
+ * const example: AiTableEditorChangeAction = 'cell-update'
+ * ```
  */
 export type AiTableEditorChangeAction
   = | 'replace'
@@ -47,6 +86,15 @@ export type AiTableEditorChangeAction
     | 'row-delete'
     | 'row-reorder'
 
+/**
+ * 表格修改后的完整快照及动作定位信息；宿主据此保存，而不是依赖内部草稿。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableEditorChangePayload } from '@h-ai/ui'
+ * const example: AiTableEditorChangePayload = { action: 'cell-update', rowId: 'r1', columnKey: 'sales', value: '43', nextData: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 43 }] } }
+ * ```
+ */
 export interface AiTableEditorChangePayload {
   /** 本次变更动作类型。 */
   action: AiTableEditorChangeAction
@@ -66,6 +114,15 @@ export interface AiTableEditorChangePayload {
   toIndex?: number
 }
 
+/**
+ * 表格复制回调，包含当前数据和可交给剪贴板的纯文本。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableCopyPayload } from '@h-ai/ui'
+ * const example: AiTableCopyPayload = { data: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] }, text: '销量\n42' }
+ * ```
+ */
 export interface AiTableCopyPayload {
   /** 当前复制时的结构化表格数据。 */
   data: AiTableData
@@ -73,6 +130,15 @@ export interface AiTableCopyPayload {
   text: string
 }
 
+/**
+ * 表格下载回调，包含当前数据、CSV 正文和建议文件名。
+ *
+ * @example
+ * ```ts
+ * import type { AiTableDownloadPayload } from '@h-ai/ui'
+ * const example: AiTableDownloadPayload = { data: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] }, csv: '销量\n42', filename: 'sales.csv' }
+ * ```
+ */
 export interface AiTableDownloadPayload {
   /** 当前下载时的结构化表格数据。 */
   data: AiTableData
@@ -82,6 +148,19 @@ export interface AiTableDownloadPayload {
   filename: string
 }
 
+/**
+ * AI 表格编辑器的输入快照、展示状态和宿主保存/复制/下载回调。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { AiTableEditor } from '@h-ai/ui'
+ *   import type { AiTableEditorProps } from '@h-ai/ui'
+ *   const props: AiTableEditorProps = { title: '销量', tableData: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] } }
+ * </script>
+ * <AiTableEditor {...props} />
+ * ```
+ */
 export interface AiTableEditorProps extends DataAttributes {
   /** 原始表格内容字符串，通常是 JSON 文本，支持流式残缺片段。 */
   content?: string

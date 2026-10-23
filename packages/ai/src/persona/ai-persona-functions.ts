@@ -2,7 +2,7 @@
  * @h-ai/ai — Persona 子功能实现
  *
  * 基于 AIRelStore 持久化 AI 角色档案，并提供系统提示词组合。
- * 角色是全局共享的（不按 objectId 隔离），因此存储仅按 id 主键。
+ * 角色按 [objectId, id] 复合键隔离；省略 objectId 时访问平台 system 主体。
  * @module ai-persona-functions
  */
 
@@ -43,6 +43,17 @@ function composeSystemPrompt(profile: PersonaProfile): string {
  *
  * @param store - 角色档案持久化存储（按 [objectId, id] 复合键隔离多租户）
  * @returns PersonaOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function save(store: AIRelStore<PersonaProfile>) {
+ *   const personas = createPersonaOperations(store)
+ *   const result = await personas.save({ id: 'guide', objectId: 'tenant-1', name: '向导', systemPrompt: '用简短中文回答' })
+ *   if (!result.success) return result
+ *   return result.data.id
+ * }
+ * ```
  */
 export function createPersonaOperations(store: AIRelStore<PersonaProfile>): PersonaOperations {
   return {

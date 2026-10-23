@@ -16,7 +16,7 @@ defineCacheSuite('memory boundaries', memoryEnv, () => {
     expect((await cache.kv.set('exact', 'value', { pxat: 1000 })).success).toBe(true)
     expect(await cache.kv.get('exact')).toMatchObject({ success: true, data: null })
     expect(await cache.kv.ttl('exact')).toMatchObject({ success: true, data: -2 })
-    await cache.kv.set('epoch', 'value', { pxat: 0 })
+    expect(await cache.kv.set('epoch', 'value', { pxat: 0 })).toMatchObject({ success: false, error: { code: HaiCacheError.INVALID_SET_OPTIONS.code } })
     expect(await cache.kv.get('epoch')).toMatchObject({ success: true, data: null })
   })
 
@@ -238,7 +238,7 @@ describe('cache kv advanced operations', () => {
       }
 
       const allKeys: string[] = []
-      let cursor = 0
+      let cursor = '0'
       // 最多循环 10 次防止死循环
       for (let round = 0; round < 10; round++) {
         const result = await cache.kv.scan(cursor, { match: 'scan:*', count: 2 })
@@ -247,7 +247,7 @@ describe('cache kv advanced operations', () => {
           const [nextCursor, keys] = result.data
           allKeys.push(...keys)
           cursor = nextCursor
-          if (cursor === 0)
+          if (cursor === '0')
             break
         }
       }

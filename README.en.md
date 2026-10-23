@@ -4,6 +4,8 @@
 
 > Currently in the `0.1.0-alpha` stage: public contracts are still evolving. Pin versions and validate security and capacity for your own use cases before production adoption.
 
+For production deployments with multiple instances, review the [21-package shared-state and recovery matrix (Chinese)](docs/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
+
 <p align="center">
   <strong>AI Runtime · Enterprise full-stack modules · Agent Skills · End-to-end type safety</strong>
 </p>
@@ -628,6 +630,8 @@ Track `.env.example` (complete descriptions and constraints), `.env` (shared pub
 
 After changing a public Schema, YAML configuration or an environment-variable reader, build the affected modules and run `pnpm generate:env` to update the root catalog, CLI metadata and example applications. Run `pnpm check:env` to detect stale output. The generator reads public source and examples, never `.env.local`, and preserves project values in base and mode files. Document each field’s purpose, type, enums, units, bounds and activation conditions; validate indexed/dynamic keys and parent-object overrides through the module Schema and runtime tests.
 
+Entry scanning excludes genuine JSDoc in JS/TS, including Svelte scripts; Schema field comments still supply documentation. Optional template/YAML comments and generated-code references inside strings remain included. Documentation examples do not create runtime settings.
+
 Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` / `start:prod` for built Node services. Vite checks `core.config.loadEnvFiles({ mode, envDir })` before injecting values; Node loads base, mode and local files in that order with `--env-file`. `core.init` does not read dotenv. File modes map `development` / `production` to `dev` / `prod`. Provider switching and migration steps are included in the application skill’s [environment configuration](packages/cli/templates/skills/hai-app-create/development.md#环境配置).
 
 - **Naming**: `HAI_<CONFIG_NAME>_<YAML_PATH>`, levels separated by `_`, camelCase kept intact (such as `llm.apiKey` → `HAI_AI_LLM_APIKEY`).
@@ -635,19 +639,19 @@ Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` 
 - **AI compatibility**: `OPENAI_*` is only a fallback for `@h-ai/ai`.
 - **Secrets**: never hardcode, log, or expose secrets through client `PUBLIC_*` / `VITE_*` variables.
 
-| Group          | Example variables                 | Description                                                            |
-| -------------- | --------------------------------- | ---------------------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_DEBUG`  | Runtime environment, debugging, and logging                            |
-| Database       | `HAI_DB_*`                        | SQLite / PostgreSQL / MySQL in `_db.yml`                               |
-| Cache          | `HAI_CACHE_*`                     | Memory / Redis / Upstash for `@h-ai/cache`                             |
-| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | Authentication/security for `@h-ai/iam` and `@h-ai/kit`                |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE` | Listen/frontend addresses for `apps/api-service` / `@h-ai/serv`        |
-| Storage        | `HAI_STORAGE_*`                   | Local / S3 for `@h-ai/storage`                                         |
-| AI             | `HAI_AI_LLM_*`                    | LLM API keys, base URLs, and models for `@h-ai/ai`                     |
-| VecDB          | `HAI_VECDB_*`                     | LanceDB / pgvector / Qdrant / Chroma for `@h-ai/vecdb`                 |
-| Reach          | `HAI_REACH_*`                     | SMTP, SMS, webhooks for `@h-ai/reach`                                  |
-| Payment        | `HAI_PAYMENT_*`                   | WeChat Pay / Alipay / Stripe merchant settings for `@h-ai/payment`     |
-| Deploy         | `HAI_DEPLOY_*`                    | Deployment/infrastructure credentials for `@h-ai/deploy` / `@h-ai/cli` |
+| Group          | Example variables                        | Description                                                            |
+| -------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` | Runtime environment and logging level                                  |
+| Database       | `HAI_DB_*`                               | SQLite / PostgreSQL / MySQL in `_db.yml`                               |
+| Cache          | `HAI_CACHE_*`                            | Memory / Redis / Upstash for `@h-ai/cache`                             |
+| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | Authentication/security for `@h-ai/iam` and `@h-ai/kit`                |
+| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`        | Listen/frontend addresses for `apps/api-service` / `@h-ai/serv`        |
+| Storage        | `HAI_STORAGE_*`                          | Local / S3 for `@h-ai/storage`                                         |
+| AI             | `HAI_AI_LLM_*`                           | LLM API keys, base URLs, and models for `@h-ai/ai`                     |
+| VecDB          | `HAI_VECDB_*`                            | LanceDB / pgvector / Qdrant / Chroma for `@h-ai/vecdb`                 |
+| Reach          | `HAI_REACH_*`                            | SMTP, SMS, webhooks for `@h-ai/reach`                                  |
+| Payment        | `HAI_PAYMENT_*`                          | WeChat Pay / Alipay / Stripe merchant settings for `@h-ai/payment`     |
+| Deploy         | `HAI_DEPLOY_*`                           | Deployment/infrastructure credentials for `@h-ai/deploy` / `@h-ai/cli` |
 
 The root `.env.example` defines complete fields and defaults. When working on an example app, consult its `README.md` and `.env.example` for additional settings.
 
@@ -679,3 +683,5 @@ The entry points are `.husky/pre-commit`, `.husky/commit-msg`, `.husky/pre-push`
 ## License
 
 [Apache-2.0](./LICENSE)
+
+See the [21-package configuration and consumer map (Chinese)](docs/configuration-map.md) for schema defaults, runtime consumers, environment names and generated apps.

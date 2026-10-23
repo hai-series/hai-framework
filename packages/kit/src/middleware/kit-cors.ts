@@ -38,12 +38,10 @@ const defaultConfig: Required<CorsConfig> = {
  *
  * @param config - CORS 配置（省略则允许所有 origin）
  * @returns Middleware 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * middleware: [
- *   kit.middleware.cors({ origin: ['https://example.com'], credentials: true }),
- * ]
+ * const middleware = corsMiddleware({ origin: ['https://app.example.com'], credentials: true })
+ * void middleware
  * ```
  */
 export function corsMiddleware(config: CorsConfig = {}): Middleware {

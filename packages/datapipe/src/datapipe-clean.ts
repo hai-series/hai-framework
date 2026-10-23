@@ -47,11 +47,12 @@ const MULTI_SPACE_REGEX = /[ \t]{2,}/g
  * @param text - 原始文本
  * @param options - 清洗选项（可选）
  * @returns 清洗后的文本
- *
  * @example
  * ```ts
- * const result = cleanText('<p>Hello World</p>', { removeHtml: true })
- * // result.data === 'Hello World'
+ * import { datapipe } from '@h-ai/datapipe'
+ * const result = datapipe.clean('<p>Hello</p>', { removeHtml: true })
+ * if (result.success) result.data.toUpperCase()
+ * else result.error.message
  * ```
  */
 export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<string> {

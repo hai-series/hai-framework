@@ -1,5 +1,6 @@
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
+import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from './scripts/e2e-env.js'
 
 const defaultBaseURL = '{{#if fullstack.e2eFrontend}}http://127.0.0.1:{{fullstack.e2eFrontend.port}}{{else}}http://127.0.0.1:3000{{/if}}'
 const defaultServiceBaseURL = 'http://127.0.0.1:3000'
@@ -64,17 +65,23 @@ export default defineConfig({
   webServer: [
     {
       name: '{{fullstack.servPackageName}}',
-      command: 'pnpm --filter {{fullstack.servPackageName}} start',
-      env: {
+      command: 'pnpm --filter {{fullstack.servPackageName}} exec node dist/index.js',
+      env: createE2eServerEnv({
+        ...createE2eNotificationEnv(),
+        HAI_DB: JSON.stringify({ type: 'sqlite', database: `${process.env.HAI_E2E_DATA_ROOT}/fullstack.db` }),
+        HAI_CACHE: JSON.stringify({ type: 'memory' }),
+        HAI_STORAGE: JSON.stringify({ type: 'local', root: `${process.env.HAI_E2E_DATA_ROOT}/uploads` }),
+        HAI_VECDB: JSON.stringify({ type: 'lancedb', path: `${process.env.HAI_E2E_DATA_ROOT}/vecdb` }),
+        HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
         HOST: serviceHost,
         PORT: servicePort,
         // 仅供脚手架验收：生产启动必须由部署环境提供初始管理员密码。
         HAI_ADMIN_DEFAULT_PASSWORD: process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!',
         HAI_CORE_NAME: process.env.HAI_CORE_NAME || 'Configured scaffold',
         HAI_CORE_VERSION: process.env.HAI_CORE_VERSION || '9.8.7',
-        HAI_CORE_ENV: process.env.HAI_CORE_ENV || 'test',
+        HAI_CORE_ENV: 'test',
         HAI_CORE_LOGGING_LEVEL: 'warn',
-      },
+      }),
       url: `${serviceBaseURL}/health`,
       reuseExistingServer: false,
       timeout: 120_000,
@@ -84,6 +91,7 @@ export default defineConfig({
       return {
         name: frontend.name,
         command: `pnpm --filter ${frontend.name} exec vite preview --host ${resolveHostFromBaseUrl(url, '127.0.0.1')} --port ${resolvePortFromBaseUrl(url, '3000')} --strictPort`,
+        env: createE2eServerEnv({ PUBLIC_API_BASE: serviceBaseURL }),
         url,
         reuseExistingServer: false,
         timeout: 120_000,

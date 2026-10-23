@@ -42,11 +42,12 @@ cors:
     - X-HAI-Token-Transport
     - X-Client-Id
     - X-Encrypted
+    - X-Hai-Transport
   exposedHeaders:
     - X-Request-Id
     - X-Encrypted
+    - X-Hai-Transport
 
 transport:
   keyExchangePath: /_hai/key-exchange
-  maxClients: 10000
   # excludePaths: [/health, /ready]

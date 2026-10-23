@@ -27,6 +27,10 @@ pnpm --filter {{api.servicePackageName}} test
 
 ### 关键目录
 
+{{#if features.crypto}}启用 transport 时，`serverKeyRing` 与客户端 `keyStore` 都必须显式提供。CLI 在本服务被忽略的 `.env.local` 中一次性生成独立开发 ring，变量为 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`；运行时不生成密钥。部署使用 Secret Manager 向所有节点分发相同受管 ring，配合共享数据库 registry。公钥/版本参与协商，私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发新旧版本再切 activeKeyId，过渡期后撤销旧 ID；无需会话粘性。
+{{#unless features.db}}本模板未选择 db，registry 仅在 development/test 显式使用内存；production/staging 会拒绝启动 transport。选择 db 并配置共享数据库后再部署，或显式关闭 transport。
+{{/unless}}{{/if}}
+
 - `config/`：service 配置
 - `src/app.ts`：HTTP App 装配
 - `src/lib/server/init.ts`：模块初始化与关闭
@@ -37,7 +41,7 @@ pnpm --filter {{api.servicePackageName}} test
 
 服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。客户端可通过安全公开配置和框架认证动作接入 `AuthPanel`。单实例可使用 Memory；多实例需共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
 
-LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
+LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 

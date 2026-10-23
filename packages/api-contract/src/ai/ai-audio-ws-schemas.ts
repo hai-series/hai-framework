@@ -6,10 +6,29 @@
  */
 import { z } from 'zod'
 
-/** 统一语音入口的默认路径（相对 API 前缀）。 */
+/**
+ * 统一语音入口的默认路径（相对 API 前缀）。
+ * @example
+ * ```ts
+ * import { AUDIO_WS_PATH } from '@h-ai/api-contract'
+ *
+ * const endpoint = new URL(AUDIO_WS_PATH, 'https://api.example.com')
+ * endpoint.protocol = 'wss:'
+ * void endpoint
+ * ```
+ */
 export const AUDIO_WS_PATH = '/ai/audio'
 
-/** 合法音频格式。 */
+/**
+ * 合法音频格式。
+ * @example
+ * ```ts
+ * import { AudioFormatSchema } from '@h-ai/api-contract'
+ *
+ * const value = AudioFormatSchema.parse('pcm16')
+ * void value
+ * ```
+ */
 export const AudioFormatSchema = z.enum(['pcm16', 'wav', 'mp3', 'opus'])
 
 const MAX_CONTROL_FIELD_LEN = 512
@@ -19,7 +38,19 @@ const MAX_SEGMENT_ID_LEN = 128
 const MIN_SAMPLE_RATE = 8000
 const MAX_SAMPLE_RATE = 192000
 
-/** 会话起始帧 Schema。 */
+/**
+ * 会话起始帧 Schema。
+ * @example
+ * ```ts
+ * import { AudioWsStartMessageSchema } from '@h-ai/api-contract'
+ *
+ * const value = AudioWsStartMessageSchema.parse({
+ *   type: 'start',
+ *   operation: 'transcribe'
+ * })
+ * void value
+ * ```
+ */
 export const AudioWsStartMessageSchema = z.object({
   type: z.literal('start'),
   operation: z.enum(['transcribe', 'synthesize']),
@@ -34,19 +65,55 @@ export const AudioWsStartMessageSchema = z.object({
   channels: z.union([z.literal(1), z.literal(2)]).optional(),
 })
 
-/** 文本输入帧 Schema。 */
+/**
+ * 文本输入帧 Schema。
+ * @example
+ * ```ts
+ * import { AudioWsTextMessageSchema } from '@h-ai/api-contract'
+ *
+ * const value = AudioWsTextMessageSchema.parse({
+ *   type: 'text',
+ *   segmentId: 'example',
+ *   text: 'Hello'
+ * })
+ * void value
+ * ```
+ */
 export const AudioWsTextMessageSchema = z.object({
   type: z.literal('text'),
   segmentId: z.string().min(1).max(MAX_SEGMENT_ID_LEN),
   text: z.string(),
 })
 
-/** 输入结束帧 Schema。 */
+/**
+ * 输入结束帧 Schema。
+ * @example
+ * ```ts
+ * import { AudioWsDoneMessageSchema } from '@h-ai/api-contract'
+ *
+ * const value = AudioWsDoneMessageSchema.parse({
+ *   type: 'done'
+ * })
+ * void value
+ * ```
+ */
 export const AudioWsDoneMessageSchema = z.object({
   type: z.literal('done'),
 })
 
-/** 客户端 JSON 控制消息 Schema。 */
+/**
+ * 客户端 JSON 控制消息 Schema。
+ * @example
+ * ```ts
+ * import { AudioWsClientMessageSchema } from '@h-ai/api-contract'
+ *
+ * const value = AudioWsClientMessageSchema.parse({
+ *   type: 'start',
+ *   operation: 'transcribe'
+ * })
+ * void value
+ * ```
+ */
 export const AudioWsClientMessageSchema = z.discriminatedUnion('type', [
   AudioWsStartMessageSchema,
   AudioWsTextMessageSchema,

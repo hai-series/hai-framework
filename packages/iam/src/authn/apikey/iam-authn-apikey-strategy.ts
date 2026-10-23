@@ -8,8 +8,7 @@
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ApiKeyConfig } from '../../iam-config.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
-import type { User } from '../../user/iam-user-types.js'
-import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
+import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { ApiKeyRepository } from './iam-authn-apikey-repository.js'
 import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './iam-authn-apikey-types.js'
 import { randomBytes } from 'node:crypto'
@@ -26,6 +25,14 @@ const logger = core.logger.child({ module: 'iam', scope: 'apikey-strategy' })
 
 /**
  * API Key 策略配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function configure(userRepository: UserRepository, apiKeyRepository: ApiKeyRepository) {
+ *   const config: ApiKeyStrategyConfig = { userRepository, apiKeyRepository }
+ *   return createApiKeyStrategy(config)
+ * }
+ * ```
  */
 export interface ApiKeyStrategyConfig {
   /** API Key 配置 */
@@ -38,11 +45,21 @@ export interface ApiKeyStrategyConfig {
 
 /**
  * API Key 策略工厂返回值
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function checkedIdentity(result: ApiKeyStrategyResult, credentials: Credentials) {
+ *   const verified = await result.strategy.authenticate(credentials)
+ *   if (!verified.success)
+ *     return verified
+ *   return { userId: verified.data.user.id, apiKeyId: verified.data.apiKey.id, scopes: verified.data.apiKey.scopes }
+ * }
+ * ```
  */
 export interface ApiKeyStrategyResult {
   /** 认证策略保留已验证的 key 身份，避免二次验证或丢失 scopes。 */
   strategy: Omit<AuthStrategy, 'authenticate'> & {
-    authenticate: (credentials: Credentials) => Promise<HaiResult<{ user: User, apiKey: ApiKey }>>
+    authenticate: (credentials: Credentials) => Promise<HaiResult<{ user: AuthenticatedUser, apiKey: ApiKey }>>
   }
   /** API Key 管理操作（用于 CRUD） */
   apiKeyFunctions: ApiKeyOperations
@@ -91,6 +108,16 @@ function toApiKey(stored: { id: string, userId: string, name: string, keyPrefix:
 
 /**
  * 创建 API Key 认证策略及管理操作
+ * @param config - 已校验的配置及可信运行时依赖。
+ * @returns 基于共享用户/API Key 仓储的认证策略和管理操作；创建工厂本身不签发密钥。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function createManagement(config: ApiKeyStrategyConfig) {
+ *   const result = createApiKeyStrategy(config)
+ *   return result.apiKeyFunctions.listApiKeys('user-1', { page: 1, pageSize: 20 })
+ * }
+ * ```
  */
 export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrategyResult {
   const apikeyConfig = config.apikeyConfig
@@ -176,7 +203,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
 
       logger.info('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
-      return ok({ user: toUser(userResult.data), apiKey })
+      return ok({ user: { ...toUser(userResult.data), credentialVersion: userResult.data.credentialVersion ?? '' }, apiKey })
     },
   }
 

@@ -27,7 +27,14 @@ function unsupportedError(): HaiError {
   throw new Error(i18n.coreM('core_configUnsupportedInBrowser'))
 }
 
-/** 浏览器端 config 占位对象，API 与 Node.js config 保持一致。 */
+/**
+ * 浏览器端 config 占位对象，API 与 Node.js config 保持一致。
+ * @example 模块内部上下文
+ * ```ts
+ * const result = config.load('app', '/srv/app/config/app.yml')
+ * if (!result.success) result.error.message
+ * ```
+ */
 export const config: ConfigFn = {
   loadEnvFiles(_options: { mode: string, envDir?: string }): HaiResult<Record<string, string>> {
     return unsupported<Record<string, string>>()
@@ -78,5 +85,12 @@ export const config: ConfigFn = {
   },
 }
 
-/** config 子工具类型 */
+/**
+ * config 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const result = config.load('app', '/srv/app/config/app.yml')
+ * if (!result.success) result.error.message
+ * ```
+ */
 export type BrowserConfigFn = typeof config

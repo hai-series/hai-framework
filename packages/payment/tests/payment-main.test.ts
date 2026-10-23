@@ -5,8 +5,9 @@
  */
 
 import type { PaymentProvider } from '../src/payment-types'
-import { ok } from '@h-ai/core'
-import { afterEach, describe, expect, it } from 'vitest'
+import { err, HaiCommonError, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { payment } from '../src/payment-main'
 import { HaiPaymentError } from '../src/payment-types'
 
@@ -22,6 +23,8 @@ function createMockProvider(name: string): PaymentProvider {
     handleNotify: async () => ok({
       orderNo: 'ORD001',
       transactionId: 'TXN001',
+      eventId: 'evt_mock_001',
+      currency: 'CNY',
       amount: 100,
       status: 'paid' as const,
     }),
@@ -39,8 +42,16 @@ function createMockProvider(name: string): PaymentProvider {
   }
 }
 
+beforeEach(async () => {
+  const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+})
+
 afterEach(async () => {
+  vi.restoreAllMocks()
   await payment.close()
+  await reldb.close()
 })
 
 describe('payment.init', () => {
@@ -76,6 +87,7 @@ describe('payment.init', () => {
         mchId: 'test-mch',
         apiV3Key: 'test-key-32chars-0123456789abcde',
         serialNo: 'test-serial',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'test-private-key',
         appId: 'test-app-id',
       },
@@ -91,7 +103,9 @@ describe('payment.init', () => {
       alipay: {
         appId: 'test-alipay-app',
         privateKey: 'test-private-key',
+        sellerId: '2088_test',
         alipayPublicKey: 'test-public-key',
+        returnUrl: 'https://example.invalid/payment/return',
       },
     })
 
@@ -103,6 +117,7 @@ describe('payment.init', () => {
   it('配置 stripe 时注册 stripe Provider', async () => {
     await payment.init({
       stripe: {
+        successUrl: 'https://example.invalid/payment/success',
         secretKey: 'sk_test_xxx',
         webhookSecret: 'whsec_test_xxx',
       },
@@ -113,22 +128,42 @@ describe('payment.init', () => {
     expect(provider!.name).toBe('stripe')
   })
 
+  it('stripe 未初始化数据库时拒绝初始化，且不发布任何 Provider', async () => {
+    await reldb.close()
+    const result = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
+    expect(result.success).toBe(false)
+    expect(payment.isInitialized).toBe(false)
+    expect(payment.getProvider('stripe')).toBeUndefined()
+  })
+
+  it('stripe 建表失败时拒绝初始化', async () => {
+    vi.spyOn(reldb.ddl, 'createTable').mockResolvedValueOnce(err(HaiCommonError.INTERNAL_ERROR, 'test DDL failure'))
+    const result = await payment.init({ stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'whsec_key' } })
+    expect(result.success).toBe(false)
+    expect(payment.isInitialized).toBe(false)
+    expect(payment.getProvider('stripe')).toBeUndefined()
+  })
+
   it('同时配置多个 Provider 都能注册', async () => {
     await payment.init({
       wechat: {
         mchId: 'mch',
         apiV3Key: 'key-32-chars-padded-000000000000',
         serialNo: 'sn',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',
         appId: 'app',
       },
       alipay: {
         appId: 'ali-app',
         privateKey: 'pk',
+        sellerId: '2088_test',
         alipayPublicKey: 'pub',
+        returnUrl: 'https://example.invalid/payment/return',
       },
       stripe: {
-        secretKey: 'sk_test',
+        successUrl: 'https://example.invalid/payment/success',
+        secretKey: 'sk_test_key',
         webhookSecret: 'whsec_test',
       },
     })
@@ -144,20 +179,23 @@ describe('payment.init', () => {
         mchId: 'mch',
         apiV3Key: 'key-32-chars-padded-000000000000',
         serialNo: 'sn',
+        platformKeys: { PUB_KEY_ID_TEST: 'platform-pem' },
         privateKey: 'pk',
         appId: 'app',
       },
       alipay: {
         appId: 'ali-app',
         privateKey: 'pk',
+        sellerId: '2088_test',
         alipayPublicKey: 'pub',
+        returnUrl: 'https://example.invalid/payment/return',
       },
     })
     expect(payment.getProvider('wechat')).toBeDefined()
     expect(payment.getProvider('alipay')).toBeDefined()
 
     await payment.init({
-      stripe: { secretKey: 'sk', webhookSecret: 'ws' },
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'ws' },
     })
 
     expect(payment.getProvider('wechat')).toBeUndefined()
@@ -169,7 +207,7 @@ describe('payment.init', () => {
 describe('payment.close', () => {
   it('close 后所有 Provider 被清除', async () => {
     await payment.init({
-      stripe: { secretKey: 'sk', webhookSecret: 'ws' },
+      stripe: { successUrl: 'https://example.invalid/payment/success', secretKey: 'sk_test_key', webhookSecret: 'ws' },
     })
     expect(payment.getProvider('stripe')).toBeDefined()
 

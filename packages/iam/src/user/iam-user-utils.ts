@@ -15,6 +15,13 @@ import type { StoredUser, User } from './iam-user-types.js'
  *
  * @param storedUser - 包含敏感信息的内部用户数据
  * @returns 去敏后的用户信息
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function response(stored: StoredUser): User {
+ *   return toUser(stored) // 投影白名单，不将密码哈希与凭据代际返回给调用端。
+ * }
+ * ```
  */
 export function toUser(storedUser: StoredUser): User {
   return {

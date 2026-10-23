@@ -19,10 +19,10 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 - `build()` は通常の router を同期的に返すため、標準 feature のネストした procedures を直接選択できます。接続する contract と procedures を一致させ、未選択の入口は公開しません。
 - 存在しないルートは翻訳された HaiResult JSON と HTTP 404 を返します。通信暗号化でも 404 を保ち、非 JSON 応答による 500 にしません。
 - 安全な応答ヘッダー・ヘルスチェックを内蔵し、OpenAPI JSON・Scalar 文書・内部 RPC endpoint は任意。
-- 任意の通信暗号化：`serv.createApp({ transport: { crypto } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
+- 任意の通信暗号化：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
 - 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
 
-> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。
+> ライフサイクル：`@h-ai/serv` は状態を持たない HTTP App の構成機能で、`init()` / `close()` は不要です。app 作成前に `iam` / `storage` / `ai` / `crypto` などを初期化し、`serv.listen(..., { onClose })` で逆順に解放します。`serv.createApp()` は transport 管理器の生成失敗など起動設定のエラーを即座に throw します。 onClose は SIGINT/SIGTERM 用の終了コールバックです。返された handle.close の直接呼出しは HTTP だけを閉じ、業務モジュールはホストが別途逆順に解放します。
 
 ## 使い始める
 
@@ -74,6 +74,12 @@ serv.listen(app, {
 
 Storage procedures には `authorize({ context, operation, keys })` が必須で、未設定の場合はアクセスを拒否します。認証済み session から所有者・テナントを判定し、ダウンロード、アップロード、一覧、メタデータ、削除に適用します。上記の例は `users/<エンコードした userId>/` 配下だけを許可し、一覧にもその prefix が必要です。一括処理はすべての key が許可された後に実行し、管理者アクセスはアプリ側で明示的に許可します。
 
+`storage.files.deleteMany` の成功データは `{ deletedKeys, failures: [] }` です。失敗進捗は `error.ext.deleteMany`（`failed / unknown / notAttempted`）にあり、HTTP 200 だけで完了と判断しません。[Storage の一括削除](../storage/README.ja.md#api-一覧)を参照してください。
+
+AI procedures は省略された `objectId` を信頼できる `context.session.userId` に結び付けます。会話・メッセージの保存、履歴、会話一覧、記憶 recall/list は認可された主体で処理し、会話は `objectId + sessionId` で分離します。書き込み時の sessionId の既定値は `default` です。他の objectId へのアクセスは既定で拒否し、管理者も信頼できる権限とテナント関係を検証する明示的な `authorizeObject` ポリシーが必要です。
+
+`chats.createCompletion`（`POST /ai/chats/completions`）は非ストリーミングの `HaiResult<AiChatCompletionData>` を一度返します。function `tools` のネストした JSON Schema と `strict`、`tool_choice`（`auto` / `none` / `required` / 提供した関数名）をモデルへ渡し、役割、`name`、ユーザー画像、ツール呼び出しを保持します。ツール結果には `role: 'tool'` と空でない `tool_call_id` が必須で、指定名は今回のツール定義に含まれる必要があります。procedure はツールを実行しません。アプリ側で認可・実行後、助手の `tool_calls` と対応する結果を送信します。入力に `stream` はなく、`true` / `false` とも Provider 呼び出し前に HTTP 400 で拒否します。ストリーミングには `ai.llm.chatStream()` と対応する出力型を使う専用 endpoint を定義します。
+
 #### host / port 設定
 
 host/port は `config/_serv.yml` の `server` で指定し、`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000` の順です。既定の `127.0.0.1` はローカル専用で、コンテナー外に公開する場合は `0.0.0.0` にします：
@@ -87,7 +93,9 @@ server:
 
 解決済みの `server` を `serv.listen` に渡します。`host` / `port` の明示的な指定で上書きすることもできます。
 
-#### Fetch Runtime（Workers / Bun / Deno）
+#### 標準 fetch シグネチャのアダプター
+
+toFetch は Node 互換ホストやテスト注入用の標準 fetch シグネチャです。パッケージルートは Node API に依存しており、それらを持たない Workers・Deno・エッジへの対応を保証しません。
 
 ```ts
 const handler = serv.toFetch(app)
@@ -120,7 +128,7 @@ const app = serv.createApp({
 - 各フレームを Zod と厳密な状態機械で検証します。認識は音声、合成はテキストのみ、`start`/`done` は各 1 回、`segmentId` はセッション内で一意です。入力・滞留メッセージ・送信バッファを制限し、超過・キャンセル時はドメインエラーで閉じて上流も中止します。
 - 調整項目：`preAuthTimeoutMs`（既定 5000）、`maxPendingMessages`（256）、`maxSendBufferBytes`（8 MiB）、`maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`。
 - `onSessionEnd` は成功・失敗・切断後に最大 1 回呼び、同時実行枠の解放に使用。
-- ブラウザーの `createAIClient({ audio: { url, getTicket } })` は単回 `ticket` のみを URL に付けます。`getTicket(request)` は `operation` / `model` の概要から今回の操作専用 ticket を発行できます。通常の IAM access token は渡さないでください。
+- ブラウザーの `createAudioClient({ url, getTicket })` は単回 `ticket` のみを URL に付けます。`getTicket(request)` は `operation` / `model` の概要から今回の操作専用 ticket を発行できます。通常の IAM access token は渡さないでください。
 
 #### 通信暗号化（`@h-ai/crypto` と共通）
 
@@ -128,10 +136,14 @@ serv 独自の暗号化ファクトリーはなく、`crypto.transport` から�
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const app = serv.createApp({
@@ -140,9 +152,9 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
+    serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
     // excludePaths: ['/health'],
-    // maxClients: 10000,
     keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
@@ -175,7 +187,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 ```ts
@@ -197,22 +208,23 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
 
-> **複数ノード**：通信セッション鍵は既定で**サーバープロセス内**に保存します。複数レプリカでは次のいずれかが必要です：
->
-> - ロードバランサーで **sticky session** を有効化し、同じクライアントを同じノードへ接続。
-> - 各クライアントが各ノードへの初回接続時に個別に鍵交換。
-> - `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()` などの共有 `keyStore` を注入。
->
-> `keyStore` は実行時オブジェクトの依存で、`config/_serv.yml` に保存しません。設定にはパス・許可リスト・容量などの静的項目のみを記載します。
+> サーバーには同じ管理済み `serverKeyRing` と共有 `keyStore`（Redis または共有 DB）を明示的に渡します。クライアント公開鍵の共有だけではノード間で復号できません。暗黙のプロセス鍵・メモリー registry はなく、開発・テストでは `createInMemoryKeyStore(capacity)` を明示します。再起動後は同じ鍵環を読み込み、sticky session は不要です。
 
 > **安全方針**：`transport` 有効時は `excludePaths` と鍵交換以外で有効な `X-Client-Id` が必要です。不足・未知の clientId は 400、暗号化不能・非 JSON 応答・上限超過はエラーになり、平文の業務データは渡しません。
+
+認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
+
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+
+固定上限は `@h-ai/crypto` の `TRANSPORT_BODY_LIMITS` を共有し、鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 32 KiB です。実際の UTF-8 バイトを元のストリームから逐次読み取り、超過・キャンセル時は停止・キャンセルして reader を解放します。clone して全量を読み取る処理は行いません。リクエスト超過は 413、応答超過は 500、不正な公開鍵は 400 です。再構築したリクエストは signal を維持して Hono の本文キャッシュを消去し、リクエスト・応答の古い Content-Length/Content-Encoding を削除します。上限はプロトコル定数であり、YAML・環境変数では設定しません。
 
 #### Token 認証（`iam` / `refreshCookie`）
 
@@ -440,7 +452,7 @@ const app = serv.createApp({
   refreshCookie: {
     // cookieName: 'hai_refresh_token', // 默认
     // maxAge: 30 * 24 * 3600,          // 默认 30 天
-    // secure: true,                    // 默认在 NODE_ENV=production 时开启
+    // secure: true,                    // NODE_ENV 或 HAI_CORE_ENV 为 production 时默认开启
     // onRefresh: customFn,             // 可覆盖 iam.session.refresh。
     nativeTokenTransport: {
       // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
@@ -516,9 +528,10 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
@@ -561,7 +574,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 `server`（host/port）：`HOST` / `PORT` 環境変数 > 設定ファイル > `127.0.0.1:3000`。アプリが `servConfig.server` を `serv.listen` に渡します。
@@ -666,6 +678,12 @@ const procedures = serv
 
 > `iam.user.xxx()` など下流が直接 `HaiResult` を返す場合、serv は `error.message` をそのまま渡します。`HaiError` は最終 `message` のみで `messageKey/params` を持たないため、**serv の境界で任意の下流エラーを汎用的に再翻訳することはできません**。リクエストごとの i18n はエラーを生成するモジュールで locale を受け取る必要があります。
 
+### リクエスト言語の分離
+
+Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleRequest())` で囲みます。SvelteKit は `kit.i18n.runWithLocale(locale, () => resolve(event))` を使えます。serv はリクエストヘッダーから自動設定します。非同期の子処理も言語を継承し、明示的な `MessageOptions.locale`、リクエスト言語、起動時の既定値の順で優先します。コンテキスト内の `setGlobalLocale` はそのリクエストだけを変更します。コンテキスト外の設定は起動時に限定し、リクエスト hook から呼びません。
+
+ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
+
 ## 開発とテスト
 
 ```bash
@@ -673,6 +691,16 @@ pnpm --filter @h-ai/serv test
 pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
+
+## 入力制約と HTTP 機能
+
+キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
+
+標準 `auth.logout` は input.accessToken または Authorization Bearer の完全な Token を取り消し、有効な access 認証を前提にしません。userId による権限や取消対象は受け付けません。Token 不足は失敗、不存在 Token は冪等成功です。共有ストア障害は失敗 HaiResult を保ち、Cookie middleware は成功時だけ refresh Cookie を消去します。通常 procedure の HTTP 200 / HaiResult 契約は同じなので、クライアントは HTTP status だけでなく success を確認します。
+
+宣言の JSDoc 例は実在する `@h-ai/serv` または公開 features サブパスから import します。内部 Hono・guard・router・transport は「模块内部上下文」と明記し、ルート API として扱いません。起動設定の例外、業務 HaiResult、HTTP middleware の status、listener の Promise<void> 終了を区別し、既定の AI completion は非ストリーミング JSON のままです。保守時は `node scripts/check-module-jsdoc.mjs --package serv` で実際の宣言と内部スコープに対して例をコンパイルします。実 HTTP、認可、共有リプレイ防止の検証を代替しません。
+
+toFetch は Request・URL・文字列を標準 Request(input, init) で構築し、入力フィールドを変更せず method・headers・body・signal などを上書きします。消費済み・ロック中の本文や不正な本文指定は返却 Promise を reject します。派発前の取消しは handler を呼ばず、実行中の取消しは呼出側の待機を終了し、有効な signal をアプリへ伝えます。終了・失敗・取消しで listener を外し、取消し後に遅れて返る本文も cancel します。開始済みの外部効果は巻き戻せず、Response 返却後のストリーム終了はアプリが request.signal を消費して管理します。
 
 ## ライセンス
 

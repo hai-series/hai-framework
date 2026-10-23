@@ -109,6 +109,7 @@ cli
 // 代码生成命令
 cli
   .command('generate [type] [name]', cliM('cli_help_generate'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .alias('g')
   .option('-o, --output <path>', cliM('cli_help_output'))
   .option('-f, --force', cliM('cli_help_force'))
@@ -118,6 +119,7 @@ cli
         type: type as GeneratorType,
         name: name ?? '',
         output: options.output as string,
+        ...(options.workspace ? { workspace: String(options.workspace) } : {}),
         force: options.force as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
@@ -196,26 +198,30 @@ cli
 // 快捷生成命令
 cli
   .command('g:page <name>', cliM('cli_help_generatePage'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'page', name, cwd: options.cwd as string })
+    await generate({ type: 'page', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 cli
   .command('g:component <name>', cliM('cli_help_generateComponent'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'component', name, cwd: options.cwd as string })
+    await generate({ type: 'component', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 cli
   .command('g:api <name>', cliM('cli_help_generateApi'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'api', name, cwd: options.cwd as string })
+    await generate({ type: 'api', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 cli
   .command('g:model <name>', cliM('cli_help_generateModel'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'model', name, cwd: options.cwd as string })
+    await generate({ type: 'model', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 // 版本和帮助

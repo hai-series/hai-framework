@@ -44,6 +44,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

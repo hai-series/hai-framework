@@ -7,7 +7,18 @@
 
 import { z } from 'zod'
 
-/** 通用 ID 路径参数 Schema。用于 `GET /resource/{id}` 等 RESTful 路由的输入校验。 */
+/**
+ * 通用 ID 路径参数 Schema。用于 `GET /resource/{id}` 等 RESTful 路由的输入校验。
+ * @example
+ * ```ts
+ * import { IdParamSchema } from '@h-ai/api-contract'
+ *
+ * const value = IdParamSchema.parse({
+ *   id: 'example-1'
+ * })
+ * void value
+ * ```
+ */
 export const IdParamSchema = z.object({
   id: z.string().min(1),
 })

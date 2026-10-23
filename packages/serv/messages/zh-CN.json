@@ -5,7 +5,7 @@
   "serv_validationInvalid": "输入格式无效",
   "serv_validationInvalidType": "字段类型不正确",
   "serv_validationStringMin": "至少输入 {min} 个字符",
-  "serv_validationStringMax": "最多输入 {max} 个字符",
+  "serv_validationStringMax": "最多输入 {max} 个 UTF-8 字节",
   "serv_validationNumberMin": "数值不能小于 {min}",
   "serv_validationNumberMax": "数值不能大于 {max}",
   "serv_validationArrayMin": "至少选择 {min} 项",

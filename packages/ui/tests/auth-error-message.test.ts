@@ -1,4 +1,5 @@
-/** 认证错误跟随当前 UI 语言，并保留应用自定义消息。 */
+// @vitest-environment jsdom
+/** 认证错误跟随当前浏览器 UI 语言，并保留应用自定义消息。 */
 import { afterEach, describe, expect, it } from 'vitest'
 import { authErrorMessage } from '../src/lib/components/scenes/iam/auth-error-message.js'
 import { setUILocale } from '../src/lib/messages.js'

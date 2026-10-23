@@ -1,8 +1,10 @@
-import type { ServConfig } from '@h-ai/serv'
+import type { ServConfig, ServTransportConfig } from '@h-ai/serv'
+import process from 'node:process'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { core } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
 import { serv } from '@h-ai/serv'
 import pkg from '../package.json' with { type: 'json' }
 import { createApiServiceProcedures } from './server/procedures/index.js'
@@ -38,14 +40,19 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
   })
   const transportMode = options.transport ?? 'config'
   const refreshCookieMode = options.refreshCookie ?? 'enabled'
-  const transport = transportMode === 'disabled' || servConfig.transport === false
-    ? undefined
-    : {
-        crypto,
-        keyExchangePath: servConfig.transport.keyExchangePath,
-        excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
-      }
+  let transport: ServTransportConfig | undefined
+  if (transportMode !== 'disabled' && servConfig.transport !== false) {
+    const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    transport = {
+      crypto,
+      serverKeyRing: ring.data,
+      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+      keyExchangePath: servConfig.transport.keyExchangePath,
+      excludePaths: [...servConfig.transport.excludePaths],
+    }
+  }
 
   return serv.createApp({
     contract: apiServiceContract,
@@ -76,7 +83,7 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
       },
     ],
     refreshCookie: refreshCookieMode === 'disabled' ? undefined : { secure: security.secureRefreshCookie },
-    // transport 配置统一来自 config/_serv.yml，避免 key-exchange / 白名单路径散落在代码里。
+    // 公开路径来自 _serv.yml；服务端密钥环仅从私有 Secret 注入，registry 复用 reldb。
     transport,
   })
 }

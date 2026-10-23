@@ -13,6 +13,12 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 /**
  * 向量数据库模块文案 Key 类型
+ * @example 模块内部上下文
+ * ```ts
+ * const key: VecdbMessageKey = 'vecdb_notInitialized'
+ * const text = vecdbM(key)
+ * void text
+ * ```
  */
 type VecdbMessageKey = keyof typeof messagesZhCN
 
@@ -21,6 +27,11 @@ type VecdbMessageKey = keyof typeof messagesZhCN
  * @param key - 文案 Key
  * @param options - 插值参数与格式化选项
  * @returns 本地化后的文案字符串
+ * @example 模块内部上下文
+ * ```ts
+ * const text = vecdbM('vecdb_notInitialized', { locale: 'en-US' })
+ * void text
+ * ```
  */
 export const vecdbM = core.i18n.createMessageGetter<VecdbMessageKey>({
   'zh-CN': messagesZhCN,

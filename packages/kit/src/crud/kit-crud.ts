@@ -45,18 +45,15 @@ function resolveOptions(options: CrudFieldOptions | undefined): Array<{ label: s
  *
  * @param resource - 资源定义
  * @returns CRUD 操作对象
- *
  * @example
  * ```ts
- * const userCrud = defineCrud({
- *   name: 'user',
- *   label: () => m.users_title(),
- *   fields: [
- *     { id: 'username', label: '用户名', type: 'string', validation: { required: true } },
- *     { id: 'email', label: '邮箱', type: 'email' },
- *   ],
- *   api: { list, get, create, update, remove },
- * })
+ * import { kit } from '@h-ai/kit'
+ *
+ * import type { CrudApiDef } from '@h-ai/kit'
+ *
+ * function articleResource(api: CrudApiDef<{ id: string, title: string }>) {
+ *   return kit.crud.define({ name: 'article', label: 'Articles', fields: [{ id: 'title', label: 'Title', type: 'string' }], api })
+ * }
  * ```
  */
 export function defineCrud<T = Record<string, unknown>>(

@@ -1,4 +1,5 @@
 <!--
+  @component FileUpload
   =============================================================================
   @h-ai/ui - FileUpload 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives 组件：Progress, IconButton
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { FileUpload } from '@h-ai/ui'
+  const props: ComponentProps<typeof FileUpload> = { accept: '.pdf', maxFiles: 3, autoUpload: false }
+  const component = mount(FileUpload, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
@@ -287,12 +298,36 @@
     e.currentTarget.value = ''
   }
 
-  /** 手动触发上传 */
+  /**
+   * 手动触发上传
+   * @returns 当前待上传文件的上传 Promise；组件通过错误回调报告上传失败。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { FileUpload } from '@h-ai/ui'
+   * const uploader = mount(FileUpload, { target: document.body, props: { autoUpload: false } })
+   * await uploader.upload()
+   * await unmount(uploader)
+   * ```
+   */
   export async function upload() {
     await uploadPendingFiles(files.filter(f => f.state === 'pending'))
   }
 
-  /** 清空文件列表 */
+  /**
+   * 清空文件列表
+   * @returns 无返回值；取消本组件请求并清空文件列表。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { FileUpload } from '@h-ai/ui'
+   * const uploader = mount(FileUpload, { target: document.body, props: { autoUpload: false } })
+   * uploader.clear()
+   * await unmount(uploader)
+   * ```
+   */
   export function clear() {
     abortAllActiveRequests()
     files = []

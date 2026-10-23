@@ -1,4 +1,28 @@
-<!-- 配置驱动认证场景；网络、通知及 Token 存储由 actions 注入。 -->
+<!--
+  @component AuthPanel 配置驱动认证场景；网络、通知及 Token 存储由 actions 注入。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import { AuthPanel } from '@h-ai/ui'
+  import { apiClient } from '@h-ai/api-client'
+  import type { AuthPanelProps } from '@h-ai/ui'
+  const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+  if (!initialized.success) throw new Error(initialized.error.message)
+  try {
+    const result = await apiClient.iam.auth.publicConfig()
+    if (!result.success) throw new Error(result.error.message)
+    if (!result.data) throw new Error('Public auth configuration unavailable')
+    const actions = apiClient.createAuthActions(apiClient)
+    const props: AuthPanelProps = { config: result.data, actions, initialMode: 'login' }
+    const panel = mount(AuthPanel, { target: document.body, props })
+    await unmount(panel)
+  }
+  finally {
+    await apiClient.close()
+  }
+  ```
+-->
 <script lang='ts'>
   import type { HaiError, HaiResult } from '@h-ai/core'
   import type { UIMessageKey } from '../../../messages.js'
@@ -104,7 +128,7 @@
       {:else}
         {#if notice}<Alert variant='success' class='mb-4'>{uiM(notice)}</Alert>{/if}
         {#if mode === 'login'}
-          <LoginForm {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showRememberMe={false} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
+          <LoginForm {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
                      onforgotpassword={forgotPasswordUrl ? undefined : () => switchMode('forgot')}
                      otpLength={config.otp.length} resendInterval={config.otp.resendInterval} onsendotp={actions.sendOtp}
                      agreements={config.agreements.showOnLogin ? config.agreements : undefined}

@@ -3,11 +3,11 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { storage } from '../src/index.js'
+import { HaiStorageError, storage } from '../src/index.js'
 import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
 describe('storage.presign', () => {
-  const defineCommon = (label: 'local' | 's3') => {
+  const defineCommon = (label: 's3') => {
     // =========================================================================
     // getUrl
     // =========================================================================
@@ -80,6 +80,20 @@ describe('storage.presign', () => {
       }
     })
 
+    it.each([0, -1, 0.5, 604801])(`${label}: 无效有效期 %s 在签名前失败`, async (expiresIn) => {
+      for (const operation of ['getUrl', 'putUrl'] as const) {
+        const result = await storage.presign[operation]('a.txt', { expiresIn })
+        expect(result).toMatchObject({ success: false, error: { code: HaiStorageError.PRESIGN_FAILED.code } })
+      }
+    })
+
+    it(`${label}: 输入选项允许省略带默认值的有效期`, async () => {
+      const result = await storage.presign.putUrl('default-type.txt', { contentType: 'text/plain' })
+      expect(result.success).toBe(true)
+      if (result.success)
+        expect(new URL(result.data).searchParams.get('X-Amz-Expires')).toBe('3600')
+    })
+
     // =========================================================================
     // publicUrl
     // =========================================================================
@@ -90,22 +104,19 @@ describe('storage.presign', () => {
     })
   }
 
-  defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
+  defineStorageSuite('local', localStorageEnv, () => {
+    it.each(['getUrl', 'putUrl'] as const)('local: %s 明确不支持且不返回虚拟 URL', async (operation) => {
+      const result = await storage.presign[operation]('uploads/report.txt')
+      expect(result.success).toBe(false)
+      expect(result).not.toHaveProperty('data')
+      if (!result.success)
+        expect(result.error.code).toBe(HaiStorageError.UNSUPPORTED_OPERATION.code)
+    })
 
-  defineS3StorageSuites(() => defineCommon('s3'))
-
-  // ===========================================================================
-  // S3 专属：publicUrl 与 prefix 行为
-  // ===========================================================================
-
-  describe('storage.presign (s3 publicUrl)', () => {
-    it('配置了 publicUrl 时应返回拼接后的 URL', async () => {
-      await storage.close()
-      // 使用不可达的 S3 配置测试 publicUrl 生成（不依赖真实连接）
-      // 因为 publicUrl 是同步方法且不需要真实连接来生成
-      // 我们通过标准初始化流程测试 —— publicUrl 在未配置时返回 null（上面已覆盖）
-      // 这里验证当 presign.publicUrl 在已初始化场景下的行为
-      expect(storage.presign.publicUrl('test.txt')).toBeNull()
+    it('local: publicUrl 保持 null，不把本地路径发布为 URL', () => {
+      expect(storage.presign.publicUrl('uploads/report.txt')).toBeNull()
     })
   })
+
+  defineS3StorageSuites(() => defineCommon('s3'))
 })

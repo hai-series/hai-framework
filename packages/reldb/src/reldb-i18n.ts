@@ -13,6 +13,11 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 /**
  * 数据库模块文案 Key 类型
+ * @example 模块内部上下文
+ * ```ts
+ * const key: ReldbMessageKey = 'reldb_notInitialized'
+ * void reldbM(key)
+ * ```
  */
 type ReldbMessageKey = keyof typeof messagesZhCN
 
@@ -22,12 +27,9 @@ type ReldbMessageKey = keyof typeof messagesZhCN
  * @param options - 插值参数与格式化选项
  * @returns 本地化后的文案字符串
  * @remarks 具体参数结构与 core.i18n.createMessageGetter 保持一致。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * import { reldbM } from '@h-ai/reldb'
- *
- * const text = reldbM('reldb_someMessageKey')
+ * void reldbM('reldb_notInitialized', { locale: 'en-US' })
  * ```
  */
 export const reldbM = core.i18n.createMessageGetter<ReldbMessageKey>({

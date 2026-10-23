@@ -9,9 +9,24 @@ import type { Snippet } from 'svelte'
 
 /**
  * 可转发到组件根节点或主交互节点的 data-* 属性。
+ *
+ * @example
+ * ```ts
+ * import type { DataAttributeValue } from '@h-ai/ui'
+ * const example: DataAttributeValue = 'profile-save'
+ * ```
  */
 export type DataAttributeValue = string | number | boolean | null | undefined
 
+/**
+ * 可转发到 DOM 的 data-* 字段集合；null/undefined 在转发时被忽略。
+ *
+ * @example
+ * ```ts
+ * import type { DataAttributes } from '@h-ai/ui'
+ * const example: DataAttributes = { 'data-testid': 'profile-save', 'data-loading': false }
+ * ```
+ */
 export interface DataAttributes {
   [key: `data-${string}`]: DataAttributeValue
 }
@@ -20,26 +35,60 @@ export type { ChartDataItem, ChartProps, ChartSeries, ChartSize, ChartType } fro
 
 /**
  * 基础变体类型
+ *
+ * @example
+ * ```ts
+ * import type { Variant } from '@h-ai/ui'
+ * const example: Variant = 'primary'
+ * ```
  */
 export type Variant = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'ghost' | 'link' | 'outline'
 
 /**
  * 尺寸类型
+ *
+ * @example
+ * ```ts
+ * import type { Size } from '@h-ai/ui'
+ * const example: Size = 'lg'
+ * ```
  */
 export type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl'
 
 /**
  * 位置类型
+ *
+ * @example
+ * ```ts
+ * import type { Position } from '@h-ai/ui'
+ * const example: Position = 'right'
+ * ```
  */
 export type Position = 'top' | 'right' | 'bottom' | 'left'
 
 /**
  * 对齐类型
+ *
+ * @example
+ * ```ts
+ * import type { Alignment } from '@h-ai/ui'
+ * const example: Alignment = 'end'
+ * ```
  */
 export type Alignment = 'start' | 'center' | 'end'
 
 /**
  * 按钮属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Button } from '@h-ai/ui'
+ *   import type { ButtonProps } from '@h-ai/ui'
+ *   const props: ButtonProps = { variant: 'primary', type: 'submit' }
+ * </script>
+ * <Button {...props}>保存</Button>
+ * ```
  */
 export interface ButtonProps extends DataAttributes {
   /** 变体 */
@@ -70,6 +119,16 @@ export interface ButtonProps extends DataAttributes {
 
 /**
  * 无样式按钮属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { BareButton } from '@h-ai/ui'
+ *   import type { BareButtonProps } from '@h-ai/ui'
+ *   const props: BareButtonProps = { type: 'button', ariaLabel: '关闭' }
+ * </script>
+ * <BareButton {...props}>关闭</BareButton>
+ * ```
  */
 export interface BareButtonProps extends DataAttributes {
   /** 按钮类型 */
@@ -96,6 +155,16 @@ export interface BareButtonProps extends DataAttributes {
 
 /**
  * 输入框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Input } from '@h-ai/ui'
+ *   import type { InputProps } from '@h-ai/ui'
+ *   const props: InputProps = { name: 'email', type: 'email', required: true }
+ * </script>
+ * <Input {...props} />
+ * ```
  */
 export interface InputProps extends DataAttributes {
   /** 值 */
@@ -158,6 +227,16 @@ export interface InputProps extends DataAttributes {
 
 /**
  * 无样式输入框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { BareInput } from '@h-ai/ui'
+ *   import type { BareInputProps } from '@h-ai/ui'
+ *   const props: BareInputProps = { name: 'query', type: 'search' }
+ * </script>
+ * <BareInput {...props} />
+ * ```
  */
 export interface BareInputProps extends DataAttributes {
   /** 文本值；file 类型通过事件读取 files，不绑定文件路径。 */
@@ -230,6 +309,16 @@ export interface BareInputProps extends DataAttributes {
 
 /**
  * 文本域属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Textarea } from '@h-ai/ui'
+ *   import type { TextareaProps } from '@h-ai/ui'
+ *   const props: TextareaProps = { name: 'description', rows: 4, maxlength: 500 }
+ * </script>
+ * <Textarea {...props} />
+ * ```
  */
 export interface TextareaProps extends DataAttributes {
   /** 值 */
@@ -271,6 +360,13 @@ export interface TextareaProps extends DataAttributes {
 
 /**
  * 选择框选项
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```ts
+ * import type { SelectOption } from '@h-ai/ui'
+ * const example: SelectOption = { value: 'active', label: '启用' }
+ * ```
  */
 export interface SelectOption<T = string> {
   /** 值 */
@@ -283,6 +379,17 @@ export interface SelectOption<T = string> {
 
 /**
  * 选择框属性
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Select } from '@h-ai/ui'
+ *   import type { SelectProps } from '@h-ai/ui'
+ *   const props: SelectProps = { options: [{ value: 'active', label: '启用' }], value: 'active' }
+ * </script>
+ * <Select {...props} />
+ * ```
  */
 export interface SelectProps<T = string> extends DataAttributes {
   /** 值 */
@@ -317,6 +424,16 @@ export interface SelectProps<T = string> extends DataAttributes {
 
 /**
  * 复选框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Checkbox } from '@h-ai/ui'
+ *   import type { CheckboxProps } from '@h-ai/ui'
+ *   const props: CheckboxProps = { label: '同意条款', checked: true }
+ * </script>
+ * <Checkbox {...props} />
+ * ```
  */
 export interface CheckboxProps extends DataAttributes {
   /** 元素 ID；用于 FormField 标签关联。 */
@@ -341,6 +458,16 @@ export interface CheckboxProps extends DataAttributes {
 
 /**
  * 开关属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Switch } from '@h-ai/ui'
+ *   import type { SwitchProps } from '@h-ai/ui'
+ *   const props: SwitchProps = { label: '开启通知', checked: true }
+ * </script>
+ * <Switch {...props} />
+ * ```
  */
 export interface SwitchProps extends DataAttributes {
   /** 是否开启 */
@@ -359,6 +486,16 @@ export interface SwitchProps extends DataAttributes {
 
 /**
  * 原生开关输入（用于折叠/抽屉等结构要求 input 直系子元素的场景）
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { ToggleCheckbox } from '@h-ai/ui'
+ *   import type { ToggleCheckboxProps } from '@h-ai/ui'
+ *   const props: ToggleCheckboxProps = { name: 'expanded', checked: true }
+ * </script>
+ * <ToggleCheckbox {...props} />
+ * ```
  */
 export interface ToggleCheckboxProps extends DataAttributes {
   /** 是否选中 */
@@ -375,6 +512,19 @@ export interface ToggleCheckboxProps extends DataAttributes {
   onchange?: (checked: boolean) => void
 }
 
+/**
+ * 用于手风琴等结构的原生单选控件属性；同一 name 的选项互斥。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { ToggleRadio } from '@h-ai/ui'
+ *   import type { ToggleRadioProps } from '@h-ai/ui'
+ *   const props: ToggleRadioProps = { name: 'section', checked: true }
+ * </script>
+ * <ToggleRadio {...props} />
+ * ```
+ */
 export interface ToggleRadioProps extends DataAttributes {
   /** 是否选中 */
   checked?: boolean
@@ -392,6 +542,17 @@ export interface ToggleRadioProps extends DataAttributes {
 
 /**
  * 单选框属性
+ * @typeParam T - 字段值或资源条目的数据类型。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Radio } from '@h-ai/ui'
+ *   import type { RadioProps } from '@h-ai/ui'
+ *   const props: RadioProps = { options: [{ value: 'email', label: '邮件' }], value: 'email' }
+ * </script>
+ * <Radio {...props} />
+ * ```
  */
 export interface RadioProps<T = string> extends DataAttributes {
   /** 值 */
@@ -414,6 +575,16 @@ export interface RadioProps<T = string> extends DataAttributes {
 
 /**
  * 徽章属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Badge } from '@h-ai/ui'
+ *   import type { BadgeProps } from '@h-ai/ui'
+ *   const props: BadgeProps = { variant: 'success' }
+ * </script>
+ * <Badge {...props}>已启用</Badge>
+ * ```
  */
 export interface BadgeProps extends DataAttributes {
   /** 变体 */
@@ -430,6 +601,16 @@ export interface BadgeProps extends DataAttributes {
 
 /**
  * 卡片属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Card } from '@h-ai/ui'
+ *   import type { CardProps } from '@h-ai/ui'
+ *   const props: CardProps = { title: '个人资料', bordered: true }
+ * </script>
+ * <Card {...props}>资料内容</Card>
+ * ```
  */
 export interface CardProps extends DataAttributes {
   /** 标题 */
@@ -452,6 +633,16 @@ export interface CardProps extends DataAttributes {
 
 /**
  * 模态框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Modal } from '@h-ai/ui'
+ *   import type { ModalProps } from '@h-ai/ui'
+ *   const props: ModalProps = { open: true, title: '编辑资料', closeOnBackdrop: false }
+ * </script>
+ * <Modal {...props}>表单内容</Modal>
+ * ```
  */
 export interface ModalProps extends DataAttributes {
   /** 是否打开 */
@@ -490,6 +681,16 @@ export interface ModalProps extends DataAttributes {
 
 /**
  * 抽屉属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Drawer } from '@h-ai/ui'
+ *   import type { DrawerProps } from '@h-ai/ui'
+ *   const props: DrawerProps = { open: true, title: '详情', position: 'right', width: '28rem' }
+ * </script>
+ * <Drawer {...props}>详情内容</Drawer>
+ * ```
  */
 export interface DrawerProps extends DataAttributes {
   /** 是否打开 */
@@ -520,6 +721,16 @@ export interface DrawerProps extends DataAttributes {
 
 /**
  * 提示框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Tooltip } from '@h-ai/ui'
+ *   import type { TooltipProps } from '@h-ai/ui'
+ *   const props: TooltipProps = { content: '复制链接', position: 'top' }
+ * </script>
+ * <Tooltip {...props}><span>复制</span></Tooltip>
+ * ```
  */
 export interface TooltipProps extends DataAttributes {
   /** 提示内容 */
@@ -541,6 +752,16 @@ export interface TooltipProps extends DataAttributes {
 
 /**
  * 加载属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Spinner } from '@h-ai/ui'
+ *   import type { SpinnerProps } from '@h-ai/ui'
+ *   const props: SpinnerProps = { size: 'sm', variant: 'primary' }
+ * </script>
+ * <Spinner {...props} />
+ * ```
  */
 export interface SpinnerProps extends DataAttributes {
   /** 尺寸 */
@@ -553,9 +774,19 @@ export interface SpinnerProps extends DataAttributes {
 
 /**
  * 进度条属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Progress } from '@h-ai/ui'
+ *   import type { ProgressProps } from '@h-ai/ui'
+ *   const props: ProgressProps = { value: 65, max: 100, showLabel: true }
+ * </script>
+ * <Progress {...props} />
+ * ```
  */
 export interface ProgressProps extends DataAttributes {
-  /** 值 (0-100) */
+  /** 当前进度值，按 max 解释；max 默认 100。 */
   value: number
   /** 最大值 */
   max?: number
@@ -577,6 +808,16 @@ export interface ProgressProps extends DataAttributes {
 
 /**
  * 警告框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Alert } from '@h-ai/ui'
+ *   import type { AlertProps } from '@h-ai/ui'
+ *   const props: AlertProps = { title: '保存成功', variant: 'success' }
+ * </script>
+ * <Alert {...props}>操作已经完成。</Alert>
+ * ```
  */
 export interface AlertProps extends DataAttributes {
   /** 变体 */
@@ -595,6 +836,15 @@ export interface AlertProps extends DataAttributes {
 
 /**
  * Toast 属性
+ *
+ * @example
+ * ```ts
+ * import { toast } from '@h-ai/ui'
+ * import type { ToastProps } from '@h-ai/ui'
+ * const options: ToastProps = { message: '保存完成', variant: 'success', duration: 3000 }
+ * const id = toast.add(options)
+ * toast.remove(id)
+ * ```
  */
 export interface ToastProps extends DataAttributes {
   /** 消息 */
@@ -613,6 +863,16 @@ export interface ToastProps extends DataAttributes {
 
 /**
  * 分页属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Pagination } from '@h-ai/ui'
+ *   import type { PaginationProps } from '@h-ai/ui'
+ *   const props: PaginationProps = { page: 1, total: 42, pageSize: 10 }
+ * </script>
+ * <Pagination {...props} />
+ * ```
  */
 export interface PaginationProps extends DataAttributes {
   /** 当前页 */
@@ -660,6 +920,12 @@ export interface PaginationProps extends DataAttributes {
 
 /**
  * 面包屑项
+ *
+ * @example
+ * ```ts
+ * import type { BreadcrumbItem } from '@h-ai/ui'
+ * const example: BreadcrumbItem = { label: '设置', href: '/settings' }
+ * ```
  */
 export interface BreadcrumbItem {
   /** 显示文本 */
@@ -672,6 +938,16 @@ export interface BreadcrumbItem {
 
 /**
  * 面包屑属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Breadcrumb } from '@h-ai/ui'
+ *   import type { BreadcrumbProps } from '@h-ai/ui'
+ *   const props: BreadcrumbProps = { items: [{ label: '首页', href: '/' }, { label: '设置' }] }
+ * </script>
+ * <Breadcrumb {...props} />
+ * ```
  */
 export interface BreadcrumbProps extends DataAttributes {
   /** 项目 */
@@ -684,6 +960,12 @@ export interface BreadcrumbProps extends DataAttributes {
 
 /**
  * 标签页项
+ *
+ * @example
+ * ```ts
+ * import type { TabItem } from '@h-ai/ui'
+ * const example: TabItem = { key: 'security', label: '安全' }
+ * ```
  */
 export interface TabItem {
   /** 唯一标识 */
@@ -701,6 +983,12 @@ export interface TabItem {
  *
  * 传给 `Tabs` 的 `children` 插槽，支持惰性挂载：只渲染已激活过的页签内容，
  * 不预加载不可见页签。
+ *
+ * @example
+ * ```ts
+ * import type { TabsContentContext } from '@h-ai/ui'
+ * const example: TabsContentContext = { active: 'profile', isActivated: key => key === 'profile' }
+ * ```
  */
 export interface TabsContentContext {
   /** 当前激活的标签 key */
@@ -711,6 +999,16 @@ export interface TabsContentContext {
 
 /**
  * 标签页属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Tabs } from '@h-ai/ui'
+ *   import type { TabsProps } from '@h-ai/ui'
+ *   const props: TabsProps = { items: [{ key: 'profile', label: '资料' }, { key: 'security', label: '安全' }], active: 'profile', lazy: true }
+ * </script>
+ * <Tabs {...props} />
+ * ```
  */
 export interface TabsProps extends DataAttributes {
   /** 标签项 */
@@ -735,6 +1033,16 @@ export interface TabsProps extends DataAttributes {
 
 /**
  * 头像属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Avatar } from '@h-ai/ui'
+ *   import type { AvatarProps } from '@h-ai/ui'
+ *   const props: AvatarProps = { name: 'Ada', alt: '用户头像', size: 'md' }
+ * </script>
+ * <Avatar {...props} />
+ * ```
  */
 export interface AvatarProps extends DataAttributes {
   /** 图片地址 */
@@ -757,6 +1065,12 @@ export interface AvatarProps extends DataAttributes {
 
 /**
  * 下拉菜单项
+ *
+ * @example
+ * ```ts
+ * import type { DropdownItem } from '@h-ai/ui'
+ * const example: DropdownItem = { key: 'edit', label: '编辑' }
+ * ```
  */
 export interface DropdownItem {
   /** 唯一标识 */
@@ -773,6 +1087,16 @@ export interface DropdownItem {
 
 /**
  * 下拉菜单属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Dropdown } from '@h-ai/ui'
+ *   import type { DropdownProps } from '@h-ai/ui'
+ *   const props: DropdownProps = { items: [{ key: 'edit', label: '编辑' }], position: 'bottom' }
+ * </script>
+ * <Dropdown {...props} />
+ * ```
  */
 export interface DropdownProps extends DataAttributes {
   /** 菜单项 */
@@ -798,16 +1122,48 @@ export interface DropdownProps extends DataAttributes {
 /**
  * 表单属性
  */
-/** 表单标签位置：独立成行或与控件同行。 */
+/**
+ * 表单标签位置：独立成行或与控件同行。
+ *
+ * @example
+ * ```ts
+ * import type { FormLabelPosition } from '@h-ai/ui'
+ * const example: FormLabelPosition = 'top'
+ * ```
+ */
 export type FormLabelPosition = 'top' | 'left'
 
-/** 双列表单字段占用列数；auto 根据控件类型判断。 */
+/**
+ * 双列表单字段占用列数；auto 根据控件类型判断。
+ *
+ * @example
+ * ```ts
+ * import type { FormColSpan } from '@h-ai/ui'
+ * const example: FormColSpan = 2
+ * ```
+ */
 export type FormColSpan = 'auto' | 1 | 2
 
-/** 支持延迟求值的表单文案，切换语言时重新解析。 */
+/**
+ * 支持延迟求值的表单文案，切换语言时重新解析。
+ *
+ * @example
+ * ```ts
+ * import type { FormText } from '@h-ai/ui'
+ * const example: FormText = () => '邮箱不能为空'
+ * ```
+ */
 export type FormText = string | (() => string)
 
-/** 表单布局配置；窄容器自动收为单列。 */
+/**
+ * 表单布局配置；窄容器自动收为单列。
+ *
+ * @example
+ * ```ts
+ * import type { FormLayoutOptions } from '@h-ai/ui'
+ * const example: FormLayoutOptions = { columns: 2, labelPosition: 'top', labelWidth: '8rem' }
+ * ```
+ */
 export interface FormLayoutOptions {
   /** 字段列数，默认 1。 */
   columns?: 1 | 2
@@ -817,12 +1173,37 @@ export interface FormLayoutOptions {
   labelWidth?: string
 }
 
-/** 可嵌入原生 form 的布局容器。 */
+/**
+ * 可嵌入原生 form 的布局容器。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { FormLayout } from '@h-ai/ui'
+ *   import type { FormLayoutProps } from '@h-ai/ui'
+ *   const props: FormLayoutProps = { columns: 2, labelPosition: 'top' }
+ * </script>
+ * <FormLayout {...props}><span>表单字段</span></FormLayout>
+ * ```
+ */
 export interface FormLayoutProps extends FormLayoutOptions, DataAttributes {
   class?: string
   children?: Snippet
 }
 
+/**
+ * 表单容器属性；接管提交和重置，并向后代提供布局与禁用状态。
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Form } from '@h-ai/ui'
+ *   import type { FormProps } from '@h-ai/ui'
+ *   const props: FormProps = { id: 'profile-form', columns: 2 }
+ * </script>
+ * <Form {...props}><input name="email" type="email" value="ada@example.com" /></Form>
+ * ```
+ */
 export interface FormProps extends FormLayoutOptions, DataAttributes {
   /** 表单 ID */
   id?: string
@@ -844,6 +1225,16 @@ export interface FormProps extends FormLayoutOptions, DataAttributes {
 
 /**
  * 表单字段属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { FormField } from '@h-ai/ui'
+ *   import type { FormFieldProps } from '@h-ai/ui'
+ *   const props: FormFieldProps = { label: '邮箱', name: 'email', required: true }
+ * </script>
+ * <FormField {...props}><input name="email" type="email" /></FormField>
+ * ```
  */
 export interface FormFieldProps extends DataAttributes {
   /** 标签 */
@@ -872,6 +1263,16 @@ export interface FormFieldProps extends DataAttributes {
 
 /**
  * 骨架屏属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Skeleton } from '@h-ai/ui'
+ *   import type { SkeletonProps } from '@h-ai/ui'
+ *   const props: SkeletonProps = { variant: 'text', count: 3 }
+ * </script>
+ * <Skeleton {...props} />
+ * ```
  */
 export interface SkeletonProps extends DataAttributes {
   /** 变体 */
@@ -892,6 +1293,16 @@ export interface SkeletonProps extends DataAttributes {
 
 /**
  * 空状态属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Empty } from '@h-ai/ui'
+ *   import type { EmptyProps } from '@h-ai/ui'
+ *   const props: EmptyProps = { title: '暂无记录', icon: 'inbox' }
+ * </script>
+ * <Empty {...props} />
+ * ```
  */
 export interface EmptyProps extends DataAttributes {
   /** 标题 */
@@ -912,6 +1323,16 @@ export interface EmptyProps extends DataAttributes {
 
 /**
  * 结果页属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Result } from '@h-ai/ui'
+ *   import type { ResultProps } from '@h-ai/ui'
+ *   const props: ResultProps = { status: 'success', title: '提交完成' }
+ * </script>
+ * <Result {...props} />
+ * ```
  */
 export interface ResultProps extends DataAttributes {
   /** 状态 */
@@ -932,6 +1353,16 @@ export interface ResultProps extends DataAttributes {
 
 /**
  * 确认对话框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Confirm } from '@h-ai/ui'
+ *   import type { ConfirmProps } from '@h-ai/ui'
+ *   const props: ConfirmProps = { open: true, title: '删除记录', message: '确定删除这条记录？', variant: 'warning' }
+ * </script>
+ * <Confirm {...props} />
+ * ```
  */
 export interface ConfirmProps extends DataAttributes {
   /** 是否打开 */
@@ -958,6 +1389,16 @@ export interface ConfirmProps extends DataAttributes {
 
 /**
  * 标签属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Tag } from '@h-ai/ui'
+ *   import type { TagProps } from '@h-ai/ui'
+ *   const props: TagProps = { text: '已启用', variant: 'success', closable: true }
+ * </script>
+ * <Tag {...props} />
+ * ```
  */
 export interface TagProps extends DataAttributes {
   /** 文本 */
@@ -982,6 +1423,16 @@ export interface TagProps extends DataAttributes {
 
 /**
  * 标签输入框属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { TagInput } from '@h-ai/ui'
+ *   import type { TagInputProps } from '@h-ai/ui'
+ *   const props: TagInputProps = { tags: ['Svelte'], maxTags: 5 }
+ * </script>
+ * <TagInput {...props} />
+ * ```
  */
 export interface TagInputProps extends DataAttributes {
   /** 标签列表 */
@@ -1004,6 +1455,12 @@ export interface TagInputProps extends DataAttributes {
 
 /**
  * 步骤项
+ *
+ * @example
+ * ```ts
+ * import type { StepItem } from '@h-ai/ui'
+ * const example: StepItem = { title: '确认资料', description: '核对后提交' }
+ * ```
  */
 export interface StepItem {
   /** 标题 */
@@ -1016,6 +1473,16 @@ export interface StepItem {
 
 /**
  * 步骤条属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Steps } from '@h-ai/ui'
+ *   import type { StepsProps } from '@h-ai/ui'
+ *   const props: StepsProps = { items: [{ title: '填写资料' }, { title: '确认' }], current: 0 }
+ * </script>
+ * <Steps {...props} />
+ * ```
  */
 export interface StepsProps extends DataAttributes {
   /** 步骤列表 */
@@ -1036,6 +1503,16 @@ export interface StepsProps extends DataAttributes {
 
 /**
  * 图标按钮属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { IconButton } from '@h-ai/ui'
+ *   import type { IconButtonProps } from '@h-ai/ui'
+ *   const props: IconButtonProps = { label: '关闭', tooltip: '关闭面板' }
+ * </script>
+ * <IconButton {...props}>×</IconButton>
+ * ```
  */
 export interface IconButtonProps extends DataAttributes {
   /** 图标（受信任的内联 SVG 字符串或 Snippet） */
@@ -1064,6 +1541,16 @@ export interface IconButtonProps extends DataAttributes {
 
 /**
  * 弹出层属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { Popover } from '@h-ai/ui'
+ *   import type { PopoverProps } from '@h-ai/ui'
+ *   const props: PopoverProps = { position: 'bottom', portal: true }
+ * </script>
+ * <Popover {...props}>提示内容</Popover>
+ * ```
  */
 export interface PopoverProps extends DataAttributes {
   /** 是否打开 */
@@ -1095,21 +1582,39 @@ export interface PopoverProps extends DataAttributes {
  * - confirm: 双按钮（确认 / 取消）
  * - alert: 单按钮（仅确认）
  * - prompt: 带输入框的确认（预留）
+ *
+ * @example
+ * ```ts
+ * import type { MessageBoxAction } from '@h-ai/ui'
+ * const example: MessageBoxAction = 'confirm'
+ * ```
  */
 export type MessageBoxAction = 'confirm' | 'cancel' | 'close'
 
 /**
  * MessageBox 图标类型
+ *
+ * @example
+ * ```ts
+ * import type { MessageBoxIconType } from '@h-ai/ui'
+ * const example: MessageBoxIconType = 'warning'
+ * ```
  */
 export type MessageBoxIconType = 'info' | 'success' | 'warning' | 'error'
 
 /**
  * MessageBox 配置项
+ *
+ * @example
+ * ```ts
+ * import type { MessageBoxOptions } from '@h-ai/ui'
+ * const example: MessageBoxOptions = { title: '删除记录', message: '确认删除？', showCancel: true, closeOnClickModal: false }
+ * ```
  */
 export interface MessageBoxOptions {
   /** 标题 */
   title?: string
-  /** 消息内容（纯文本或 HTML 字符串） */
+  /** 消息纯文本；HTML 标签按文字展示，不作为 HTML 执行。 */
   message: string
   /** 类型：confirm 双按钮 / alert 单按钮 */
   type?: 'confirm' | 'alert'
@@ -1123,9 +1628,9 @@ export interface MessageBoxOptions {
   confirmVariant?: 'default' | 'primary' | 'warning' | 'error'
   /** 是否显示取消按钮（alert 模式下默认 false） */
   showCancel?: boolean
-  /** 点击遮罩是否关闭（默认 false，需要显式操作） */
+  /** 点击遮罩是否关闭，默认 true；需要明确确认时显式设置 false。 */
   closeOnClickModal?: boolean
-  /** 是否显示右上角关闭按钮（默认 false） */
+  /** 是否显示右上角关闭按钮，默认 true。 */
   showClose?: boolean
   /** 确认前回调（返回 false 可阻止关闭） */
   beforeClose?: (action: MessageBoxAction, instance: MessageBoxInstance) => boolean | Promise<boolean>
@@ -1133,6 +1638,12 @@ export interface MessageBoxOptions {
 
 /**
  * MessageBox 实例（供 beforeClose 回调使用）
+ *
+ * @example
+ * ```ts
+ * import type { MessageBoxInstance } from '@h-ai/ui'
+ * const example: MessageBoxInstance = { setLoading: loading => document.body.toggleAttribute('aria-busy', loading) }
+ * ```
  */
 export interface MessageBoxInstance {
   /** 设置加载态 */
@@ -1141,6 +1652,12 @@ export interface MessageBoxInstance {
 
 /**
  * Message 消息提示配置项
+ *
+ * @example
+ * ```ts
+ * import type { MessageOptions } from '@h-ai/ui'
+ * const example: MessageOptions = { message: '保存完成', type: 'success', duration: 3000 }
+ * ```
  */
 export interface MessageOptions {
   /** 消息文本 */

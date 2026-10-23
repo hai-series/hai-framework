@@ -2,7 +2,7 @@
  * ai.stream — 流处理器、SSE 编解码 测试
  */
 
-import type { ChatCompletionChunk, SSEEvent } from '../src/index.js'
+import type { ChatCompletionChunk, SSEEvent, ToolCall } from '../src/index.js'
 import { describe, expect, it } from 'vitest'
 import { ai } from '../src/index.js'
 
@@ -11,6 +11,13 @@ import { ai } from '../src/index.js'
 // =============================================================================
 
 type FinishReason = 'stop' | 'length' | 'tool_calls' | 'content_filter'
+
+/** 用真实 SDK 判别字段收窄工具类型，避免测试将 custom 工具误当 function。 */
+function functionCall(call: ToolCall) {
+  if (call.type !== 'function')
+    throw new Error('Expected a function tool call')
+  return call.function
+}
 
 /** 构造一个带文本内容的 chunk */
 function textChunk(content: string, finishReason?: FinishReason): ChatCompletionChunk {
@@ -134,8 +141,8 @@ describe('ai.stream.createProcessor', () => {
     const result = processor.getResult()
     expect(result.toolCalls).toHaveLength(1)
     expect(result.toolCalls[0].id).toBe('call-1')
-    expect(result.toolCalls[0].function.name).toBe('search')
-    expect(result.toolCalls[0].function.arguments).toBe('{"query":"test"}')
+    expect(functionCall(result.toolCalls[0]).name).toBe('search')
+    expect(functionCall(result.toolCalls[0]).arguments).toBe('{"query":"test"}')
     expect(result.finishReason).toBe('tool_calls')
   })
 
@@ -147,8 +154,8 @@ describe('ai.stream.createProcessor', () => {
 
     const result = processor.getResult()
     expect(result.toolCalls).toHaveLength(2)
-    expect(result.toolCalls[0].function.name).toBe('add')
-    expect(result.toolCalls[1].function.name).toBe('mul')
+    expect(functionCall(result.toolCalls[0]).name).toBe('add')
+    expect(functionCall(result.toolCalls[1]).name).toBe('mul')
   })
 
   it('process 返回 delta', () => {
@@ -220,7 +227,7 @@ describe('ai.stream.createProcessor', () => {
     const result = processor.getResult()
     expect(result.content).toBe('思考中...')
     expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0].function.name).toBe('search')
+    expect(functionCall(result.toolCalls[0]).name).toBe('search')
     expect(result.finishReason).toBe('tool_calls')
   })
 
@@ -280,7 +287,7 @@ describe('ai.stream.collect', () => {
     const result = await ai.stream.collect(toAsyncIterable(chunks))
     expect(result.content).toBe('')
     expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0].function.name).toBe('search')
+    expect(functionCall(result.toolCalls[0]).name).toBe('search')
     expect(result.finishReason).toBe('tool_calls')
   })
 })

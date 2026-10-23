@@ -35,6 +35,8 @@ if (!cleaned.success)
 
 // 按 Markdown 标题分块
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
 
 // 管线模式（链式组合多步操作）
 const result = await datapipe.pipeline()
@@ -43,6 +45,8 @@ const result = await datapipe.pipeline()
   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
   .run(rawText)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
 ### Chunking modes
@@ -83,6 +87,10 @@ if (!result.success) {
 ```bash
 pnpm --filter @h-ai/datapipe test
 ```
+
+Chunk `maxSize` defaults to 1500; `overlap` defaults to 0 and must satisfy `0 <= overlap < maxSize`. Both use non-whitespace words in word mode (continuous Chinese can be one long word), and Unicode code points in every other mode, rather than UTF-16 length, bytes or model tokens. The limit includes overlap and separators. Natural sentence/paragraph/page/custom boundaries only guide split positions; oversized segments use a `maxSize-overlap` sliding window. Original whitespace, punctuation, page markers and custom separators are preserved, so removing overlap reconstructs the source. Chunks are not trimmed or joined with added newlines. Markdown overlaps only within each section, uses the same hard limit and ignores headings inside fenced code. Only `markdownKeepTitle=false` explicitly removes heading lines. Empty or entirely whitespace input returns no chunks. Custom regular expressions must come from trusted configuration; invalid expressions return CHUNK_FAILED.
+
+Source examples distinguish pure functions, synchronous HaiResult and asynchronous pipelines; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
 
 ## License
 

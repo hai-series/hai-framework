@@ -19,6 +19,8 @@
 
 ### 快速开始
 
+默认启用 transport，启动前必须通过服务端私有环境或 `apps/api-service/.env.local` 提供 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。密钥环由 Secret Manager/受管配置提供，运行时不随机生成；客户端公钥 registry 复用 reldb。多节点使用相同 ring 和共享数据库，无需会话粘性；私钥不放普通 YAML、PUBLIC_/VITE_ 或日志。解析、轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。CLI 新建项目会单独生成一次本机开发 ring，本仓库示例应自行注入私有值。
+
 ```bash
 pnpm install
 pnpm --filter api-service dev
@@ -30,6 +32,8 @@ pnpm --filter api-service dev
 pnpm --filter api-service build
 pnpm --filter api-service preview
 ```
+
+`.env.prod` 使用共享 PostgreSQL、Redis、S3、Qdrant，默认服务地址对应 Compose 的 `db/cache/storage/vecdb`。容器外运行需私有覆盖地址，并注入数据库/缓存密码、S3/模型凭据、受保护向量库的 API Key 和真实 `HAI_REACH_PROVIDERS` JSON。公开空 Provider 数组会拒绝生产启动。数据库、向量库先于 AI 初始化；初始化或后续 transport/app 构造失败均等待逆序清理，关闭失败保留具体错误并允许重试，不能视为资源已释放。
 
 ### API 契约
 
@@ -208,6 +212,8 @@ await apiClient.init({
 
 Storage procedures 使用显式 `authorize` 策略限制到已认证用户的 `users/<encodeURIComponent(userId)>/` 前缀。上传、下载、元数据、删除均传完整 key，列表也必须提供该前缀；空前缀、其它用户 key 和包含未授权 key 的批量请求都会被拒绝。需要管理员跨用户访问时，应在服务端策略中显式检查可信权限。
 
+AI procedures 默认将 objectId 绑定为认证用户 ID，客户端无需传入。消息与聊天按 objectId/sessionId 保存和查询（写入 sessionId 默认为 `default`）；同名会话在不同用户间隔离。记忆 recall/list 不会跨主体查询。指定其它 objectId 时默认拒绝，管理操作必须在服务端显式配置 authorizeObject 并验证可信权限。
+
 ### 调用示例
 
 > 完整交互式文档见 `http://localhost:3000/docs`。以下示例假设服务已启动在 `localhost:3000`。
@@ -246,13 +252,17 @@ const login = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Admin123!',
 })
-if (login.success)
-  await apiClient.auth.setTokens(login.data.tokens)
+if (!login.success) throw new Error(login.error.message)
+await apiClient.auth.setTokens(login.data.tokens)
 
 const storage = await apiClient.storage.presignedUrls.createUpload({
-  key: 'uploads/demo.png',
+  key: `users/${encodeURIComponent(login.data.user.id)}/demo.png`,
   contentType: 'image/png',
 })
+if (!storage.success) {
+  // local provider 不支持预签名；S3 成功结果才包含可上传的 URL。
+  throw new Error(storage.error.message)
+}
 
 void register
 void login
@@ -263,6 +273,8 @@ await crypto.close()
 ```
 
 如果修改了 `_serv.yml.transport.keyExchangePath`，记得同步客户端的 `transport.keyExchangePath`。
+
+默认 local 存储不支持预签名，接口返回 `hai:storage:018`，不会生成可上传的 URL；S3 才支持直传。本应用未内置本地二进制上传/下载 HTTP 接口，如有需要由业务实现并鉴权，或切换到 S3。
 
 ### 配置
 
@@ -321,7 +333,7 @@ pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 
 ### 可选集成
 
-LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
 
 ## 开发测试
 

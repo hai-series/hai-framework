@@ -37,6 +37,10 @@ pnpm build --target desktop --platform windows --arch x64
 
 Each image has its own Dockerfile. Web runtime assets live in images/web/. Dockerfiles retain internal build/runtime stages; configuration does not select stages. Omit absent images and add desktop directories only for native projects.
 
+Generated `web.conf` sets `client_max_body_size 2129920` (2 MiB + 32 KiB) for the API location and disables `proxy_request_buffering` / `proxy_buffering`. This admits encrypted JSON produced from the transport's 1 MiB plaintext budget; the application still checks its smaller 16 KiB handshake, 4 KiB public key and 1 MiB plaintext budgets incrementally. Custom proxies must admit that ciphertext budget and propagate cancellation. Raising a proxy limit does not replace serv/kit's bounded reads; large uploads need an explicit separate route and size policy.
+
+Bodyless authenticated envelopes use X-Hai-Transport. Generated proxies set large_client_header_buffers 4 32k and proxy_buffer_size 32k to admit these headers; custom proxies must preserve and admit them.
+
 Dependency inputs are prepared under images/dependencies/ from package manifests, local archives and patches. Combine pnpm store caching with stable dependency layers. Source changes should reuse downloaded packages. Empty caches still permit online builds. Windows node_modules cannot supply Linux native dependencies. Offline builds additionally require base images, tools and matching ABI/architecture/libc binaries.
 
 The root package.json.version identifies the application. `.hai/build/docker/<buildId>/` contains manifest format 3, selected image archives and SHA-256. partial marks incremental builds and hasWeb records topology. appContainerPort and webContainerPort retain explicitly configured app/web listening ports, including the image left out of a partial build. Omitted ports keep the deployment defaults. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
@@ -90,9 +94,11 @@ Deployment caches, archives and adjacent -deploy/ directories default to `.hai/d
 
 On isolated Linux servers, extract into a separate package directory and run `sh apply.sh`, optionally passing the deployment root. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
 
+The server holds a nonblocking kernel lock with util-linux `flock` on `.deploy.lock` in the deployment root, throughout deployment and recovery. Keep this file permanently: never delete, replace or steal it based on elapsed time, and use a filesystem that supports `flock`. If the parent shell is killed, active child commands that inherited its descriptor retain the lock. The kernel releases it after every holder exits or the server restarts. The old `.deploy-lock` directory is ignored and left untouched; stop old deployment processes before upgrading and avoid mixing old bundles. Forced termination or power loss skips recovery traps. Without a result file, execution is unknown: inspect containers, images and the successful `current` baseline before recovering with a new bundle. An unlocked file does not prove success or rolled-back effects.
+
 #### Before going fully offline
 
-Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
+Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl, util-linux flock and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
 
 ### SDK
 
@@ -121,6 +127,14 @@ finally {
 
 `selectedServices: ['web']` selects a partial update. `onProgress` receives actual packaging/server stages. `deploy.scan` and `deploy.credentials.*` are available before init. Check HaiResult.success before using data. Vercel uploads existing .vercel/output through the prebuilt API and requires internet; it does not provide offline or Compose partial deployment.
 
+Command execution redacts correctly decoded UTF-8 logical streams, including known secrets split across stdout/stderr chunks. Successful captures, errors and output callbacks use the same boundary. Internal command callers must enumerate sensitive literals in `secrets`, including separately encoded or transformed forms. Each stream captures only its last 1 Mi characters by default; `maxCaptureChars` accepts 1 through 16 Mi characters. Check `stdoutTruncated` / `stderrTruncated` before parsing structured output. Async `onOutput` callbacks receive all safe stdout in order with pipe backpressure; deployment progress parses only the first 512 characters of each line. Total secret length is limited to 1 Mi UTF-16 units; invalid redaction fails closed. A timeout reports failure; remote process termination still requires confirmation.
+
+Command deadlines include helper startup and output handling. Timeouts, input/output errors and callback failures terminate managed processes. POSIX uses a separate process group. Windows uses an embedded PowerShell/.NET Job Object: create suspended, assign successfully, then resume, with no breakaway. Helper, compilation or assignment failure never falls back to an unmanaged process. System PowerShell and Add-Type are required on Windows; execution is hidden without user profiles, preserving arguments, environment and UTF-8 pipes. POSIX commands must keep descendants in the inherited group; detached system daemons and remote services are outside local termination confirmation.
+
+`terminationTimeoutMs` separately bounds failure cleanup verification, default 10000 and maximum 60000 milliseconds. Sending kill is not confirmation. `localTermination` is `confirmed` only after the managed Job/group has no active members, `unknown` if verification fails or expires, and `not-started` before launch. In the `if (!result.success)` branch, call public `getDeployCommandState(result.error)` for the reason and state, without raw exceptions or command arguments. An output callback already entered cannot be undone; failures stop further output delivery.
+
+SSH interruptions initially report `remoteExecution: 'unknown'`. The docker-ssh SDK reconnects read-only to inspect `result-<deploymentId>.json`. Only a complete, untruncated terminal record with the matching ID confirms `finished`, with the actual stage and exit code. Finished scripts do not imply stopped containers. Even exit code 0 preserves the original SSH/output failure. CLI shows local and remote states separately with the result path. Missing, stale, damaged or unreadable records remain unknown; deployment and rollback are never retried automatically. Manual upload scripts conservatively report unknown on SSH failure with the inspection directory; find the deployment ID in the bundle manifest. Inspect steps, `current`, actual services and data before recovery.
+
 ## Development and testing
 
 ```sh
@@ -133,6 +147,10 @@ pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
 Run actual generated projects and SSH/manual deployment, including an isolated registry environment, incremental updates, damaged archives, same-version releases and failed health checks. Clean only test-owned projects, images, containers, logs and processes in finally/teardown.
+
+Focused lock gates use reachable Podman (preferred) or Docker to run the public API's generated `apply.sh` in real Linux containers: concurrent execution, child-held locks after killing the parent, full termination and restart recovery. Compose/HTTP use deterministic fixtures; this does not replace real service deployment acceptance. Run `HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts`; in PowerShell, set `$env:HAI_DEPLOY_E2E='1'` first, then run the same pnpm command.
+
+Process gates run with `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts`. With the same `HAI_DEPLOY_E2E=1`, build deploy first and run `tests/deploy-command-runtime.e2e.test.ts` for real Linux/OpenSSH, published dist, remote continuation/completion and local process groups. The fixture needs network access to install sshd; Compose/HTTP are deterministic fixtures. It scales deployment deadlines to 2500 milliseconds and pauses output consumption to inject lost acknowledgments.
 
 ## License
 

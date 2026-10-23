@@ -47,7 +47,11 @@ await apiClient.init({
 })
 ```
 
-`createCapacitorTokenStorage()` は Android/iOS のネイティブ環境でのみ Token を永続化し、`@aparajita/capacitor-secure-storage` が必要です。Web では `localStorage` に切り替わらず、`get*()` は `null` を返し、`set*()` / `clear()` は何もしません。
+`createCapacitorTokenStorage()` は Android/iOS のネイティブ環境でのみ Token を永続化し、`@aparajita/capacitor-secure-storage` が必要です。メソッドは Promise を直接返し、Web 呼び出し、プラグインの利用不可、読み書き・削除の失敗は reject されます。空の認証情報や操作成功として扱わないでください。Web では api-client の Cookie またはメモリーストレージを選びます。
+
+`clear()` は開始時にこのインスタンスの古い認証情報を読み取り不可にし、すべてのネイティブ削除が完了してから結果を返します。失敗時は読み取りを禁止したままにし、各キーへの書き込み成功時のみそのキーを再開します。書き込みを直列化する `apiClient.auth` を使い、`setTokens()` / `clear()` の失敗を処理してください。UI は loading を解除し、ログアウトしたユーザー情報を消去して失敗を表示します。この制限はインスタンス内のみで、永続データの削除を保証しません。再起動後の失効にはサーバーでのセッション撤回が必要です。プラグイン復旧後は同じインスタンスで再試行できます。
+
+認証情報の一方の書き込みが失敗すると両方を読み取り不可にするため、access token 保存後に refresh token の保存が失敗しても不完全な認証状態は公開しません。ログイン・登録時の保存失敗後は `auth.clear()` で部分保存データの削除を試み、削除も失敗した場合は端末の認証情報を削除できたと表示しないでください。
 
 #### 端末情報とプッシュ通知
 
@@ -111,7 +115,7 @@ export const ssr = false
 
 ### エラー処理
 
-すべての非同期 API は直接 throw せず、`HaiResult<T>` を返します：
+`capacitor.*` と `safe*Preference` は `HaiResult<T>` を返します。TokenStorage のメソッドはプラットフォームや保存エラーで Promise を reject します。
 
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
@@ -149,6 +153,10 @@ pnpm --filter @h-ai/capacitor test
 ```
 
 > ネイティブプラグインへの依存があるため、テストでは `@capacitor/*` モジュールを mock する必要があります。
+
+Push は実際のネイティブ環境が必要です。`push.register({ signal? })` と `push.listen(callbacks, { signal? })` の設定段階は権限要求とリスナー登録を含め30秒で終了します。失敗、タイムアウト、中止、`capacitor.close()` はコールバックを停止し、所有するハンドルを除去します。遅延したハンドルも到着時に除去し、removeAllListeners で他の利用者を巻き込みません。listen 成功後も signal と cleanup が有効です。cleanup と close は `HaiResult<void>` を返し、ネイティブ除去失敗は `PUSH_CLEANUP_FAILED`（`capacitor:032`）です。失敗したハンドルを保持して再試行し、成功済みの除去は繰り返しません。終了直後にモジュールを無効化し、再初期化前に残存ハンドルを処理します。制御したプラグイン試験は Android/iOS 実機の権限、FCM/APNs、反復登録試験を代替しません。
+
+公開操作、内部リソースと型には型検査できる例があります。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。型検査は端末権限や FCM/APNs の実配信を保証しません。
 
 ## ライセンス
 

@@ -15,10 +15,29 @@ import { handler } from './kit-handler.js'
 import { fromError, ok } from './kit-response.js'
 import { validateFormOrFail } from './kit-validation.js'
 
-/** 标准匿名认证端点；不会放开 /me、改密等账户端点。 */
+/**
+ * 标准匿名认证端点；不会放开 /me、改密等账户端点。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * const publicPaths = kit.auth.publicPaths
+ * void publicPaths
+ * ```
+ */
 export const authApiPublicPaths = ['/api/auth/config', '/api/auth/login', '/api/auth/login/ldap', '/api/auth/login/otp', '/api/auth/register', '/api/auth/otp/send', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm']
 
-/** 应用路由直接导出对应 handler；认证 ops 仍由 createHandle 注入。 */
+/**
+ * 应用路由直接导出对应 handler；认证 ops 仍由 createHandle 注入。
+ * @param iam - 已由应用初始化的 IAM 服务对象。
+ * @returns 标准认证端点的 RequestHandler 集合。
+ * @example 模块内部上下文
+ * ```ts
+ * function build(iam: IamFunctions) {
+ *   return createAuthApi(iam) // 调用方负责初始化 IAM；工厂只装配 handler。
+ * }
+ * ```
+ */
 export function createAuthApi(iam: IamFunctions) {
   function response<T>(result: HaiResult<T>) {
     return result.success ? ok(result.data) : fromError(result.error)

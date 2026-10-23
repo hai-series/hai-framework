@@ -18,6 +18,17 @@ import { HaiIamError } from '../iam-types.js'
 
 /**
  * 角色-权限关联存储接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const repository = await createDbRolePermissionRepository()
+ * if (!repository.success)
+ *   return repository
+ * const result = await repository.data.getPermissionCodesForRoles(['role-1', 'role-2'])
+ * if (!result.success)
+ *   return result
+ * return result.data
+ * ```
  */
 export interface RolePermissionRepository {
   /**
@@ -79,6 +90,19 @@ export interface RolePermissionRepository {
 
 /**
  * 用户-角色关联存储接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function currentRoles(roleRepository: RoleRepository) {
+ *   const repository = await createDbUserRoleRepository(roleRepository)
+ *   if (!repository.success)
+ *     return repository
+ *   const roles = await repository.data.getRoles('user-1')
+ *   if (!roles.success)
+ *     return roles
+ *   return roles.data.map(role => role.code)
+ * }
+ * ```
  */
 export interface UserRoleRepository {
   /** 单次 JOIN 获取授权读取需要的角色 ID/code，避免完整角色模型的额外查询。 */
@@ -148,6 +172,17 @@ const ROLE_PERMISSION_SCHEMA = {
  * 自动创建关联表和索引，提供分配/移除/查询权限能力。
  *
  * @returns 角色-权限关联存储接口实现（失败返回 IamError）
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const repository = await createDbRolePermissionRepository()
+ * if (!repository.success)
+ *   return repository
+ * const result = await repository.data.getPermissionCodesForRoles(['role-1', 'role-2'])
+ * if (!result.success)
+ *   return result
+ * return result.data
+ * ```
  */
 export async function createDbRolePermissionRepository(): Promise<HaiResult<RolePermissionRepository>> {
   // 确保表存在
@@ -417,6 +452,19 @@ const USER_ROLE_SCHEMA = {
  *
  * @param roleRepository - 角色存储（用于查询角色详情）
  * @returns 用户-角色关联存储接口实现（失败返回 IamError）
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function currentRoles(roleRepository: RoleRepository) {
+ *   const repository = await createDbUserRoleRepository(roleRepository)
+ *   if (!repository.success)
+ *     return repository
+ *   const roles = await repository.data.getRoles('user-1')
+ *   if (!roles.success)
+ *     return roles
+ *   return roles.data.map(role => role.code)
+ * }
+ * ```
  */
 export async function createDbUserRoleRepository(
   roleRepository: RoleRepository,
