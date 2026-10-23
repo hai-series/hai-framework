@@ -3,8 +3,8 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createConnection, createServer } from 'node:net'
 import process from 'node:process'
 
-const [mode, stateFile, ownedPid] = process.argv.slice(2)
-if (!stateFile || !['serve', 'ready', 'probe', 'closed', 'exited'].includes(mode))
+const [mode, stateFile] = process.argv.slice(2)
+if (!stateFile || !['serve', 'ready', 'probe', 'closed'].includes(mode))
   throw new Error('Expected sentinel operation and owned state file')
 
 /**
@@ -24,7 +24,7 @@ function state() {
  * 有界等待独立计数进程状态；不使用门禁父线程的事件循环计数。
  * @param {function(object | undefined): boolean} predicate - 本操作必须满足的状态条件。
  * @returns {Promise<object>} 已满足条件的状态快照。
- * @throws 就绪、正控或真实进程退出未在期限内确认时抛错。
+ * @throws 就绪、正控或 TCP 服务关闭未在期限内确认时抛错。
  * @example
  * ```js
  * await waitFor(current => current?.port > 0 && !current.closed)
@@ -97,20 +97,7 @@ else if (mode === 'probe') {
   await waitFor(current => current?.connections > before.connections)
 }
 else {
-  await waitFor((current) => {
-    if (mode === 'closed' && !current?.closed)
-      return false
-    const pid = Number(ownedPid)
-    if (!Number.isSafeInteger(pid) || pid <= 0)
-      throw new Error('Expected owned sentinel process ID')
-    try {
-      process.kill(pid, 0)
-      return false
-    }
-    catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH')
-        return true
-      throw error
-    }
-  })
+  // 这里只确认 TCP 服务已关闭；真实退出由父进程异步等待其持有的 ChildProcess。
+  // Linux 子进程在父线程被 spawnSync 阻塞时可能成为僵尸，kill(pid, 0) 仍会成功。
+  await waitFor(current => current?.closed === true)
 }

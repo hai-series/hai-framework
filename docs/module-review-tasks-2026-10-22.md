@@ -1013,6 +1013,7 @@
 ### E2E-01 · P2 · 应用与生成工程显式装配隔离测试后端
 
 - [ ] 已实施并通过定向验证；第三轮真实部署验收失败，待修正和复验（2026-10-23）。
+- **Linux CI 回归修正（2026-10-23）**：GitHub Actions `39917712028` 的三个隔离计数失败源于同步父线程阻塞 Linux 子进程回收；哨兵已关闭 TCP 但 PID 仍可被探测，不能靠轮询 PID 等待父线程完成回收。计数快照关闭与持有句柄的异步 `close` 分开确认，所有样板调用方同步 `await`，异常路径仍停止本轮进程并保留原错误。相同 Node 24.18.0 的 Linux 夹具先复现旧失败，修复后正常隔离、实际意外连接、异步门禁错误三场景均通过且 PID 确认消失；Linux 原始两个 Vitest 文件 10/10、Windows 受影响三个文件 315/315 通过。证据留主目录 `tmp/stash-reconcile-20261023/`；这不代表真实 SSH/容器部署已通过，也不替代尚未执行的远端 E2E。
 - **实施与验证**：Playwright 服务子进程显式装配完整 SQLite/memory/local/LanceDB 测试配置并删除继承的模块/公开环境，托管入口提供绝对独有数据目录；实际 Vite/desktop 委托入口在 E2E 下跳过开发 dotenv，普通开发/生产契约保留。API 测试直接运行 dist，可信 SM2 ring/registry 替代 transport=false 绕过；部署本地主机 fixture 显式 E2E profile、Redis/S3 与增量/回滚断言保留；调用方、README、双skill、LLMS同步。严格类型与配置内 lint零警告、skills37/330、helper8/8、desktop配置3/3；fresh CLI及21真实tarballs后原3API质量/浏览器门禁通过（2+3+3），三独立DB计数器正控1/额外0/closed及PID退出，owned工程清理。H5真实注册/OTP/重置、官网原route.fulfill投递UI、AI明确mock各1/1真实Chrome通过，端口/观察到的本轮PID/托管数据回收；原无匹配selector失败单列。证据 tmp/module-repair-20261022/E2E-01/handoff.json 与 tmp/validation/module-review/E2E-01/apps-targeted-handoff.json。旧计数器两次超时根因无法还原，当前受测范围通过并保留安全诊断；额外强制扫描原排除skill的既有lint与Python启动器意外更新记录单列；应用未消费部署配置的启动ERROR另列CORE-05修正，不以UI通过认定其无问题；全量回归按用户要求在全部任务实施后执行。
 - **本轮追加修正**：部署夹具将嵌套应用监听端口设为引擎分配的宿主端口，并在已登记容器内以真实 TCP 转发连接固定入口，避免部署器误查宿主固定端口。生产内外健康检查、全部 7 个原业务场景及端口隔离保留。实际最终函数经 Python 基础容器验证：无上游时两入口均失败，两个真实 HTTP 服务的宿主/远端响应一致，容器和临时目录已回收；函数/实际 helper 严格类型与两文件零警告 lint 通过。独立探针不替代完整部署验收，原任务待主目录全量门禁；无生产 API、配置或依赖变更。
 - **位置**：应用/CLI 模板 Playwright 启动、测试运行入口和 CLI 部署夹具环境。

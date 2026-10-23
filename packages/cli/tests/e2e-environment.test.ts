@@ -108,10 +108,10 @@ describe('independent database connection counter', () => {
     return { root, evidence, local }
   }
 
-  it('has a real positive connection, then confirms no connection and a real process exit for isolated children', () => {
+  it('has a real positive connection, then confirms no connection and a real process exit for isolated children', async () => {
     const { root, evidence, local } = fixture()
     const env = { ...process.env }
-    withDatabaseIsolation(root, evidence, env, () => {
+    await withDatabaseIsolation(root, evidence, env, () => {
       expect(readFileSync(local, 'utf8')).toContain('HAI_DB=')
       const serverEnv = createE2eServerEnv({ HAI_E2E_DATA_ROOT: root, HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(root, 'owned.db') }) })
       const result = spawnSync(process.execPath, ['-e', 'if (JSON.parse(process.env.HAI_DB).type !== "sqlite") process.exit(2)'], { env: { ...env, ...serverEnv } })
@@ -121,22 +121,23 @@ describe('independent database connection counter', () => {
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
   })
 
-  it('detects actual consumption of the ambient database and still restores files and stops its process', () => {
+  it('detects actual consumption of the ambient database and still restores files and stops its process', async () => {
     const { root, evidence, local } = fixture()
     const env = { ...process.env }
-    expect(() => withDatabaseIsolation(root, evidence, env, () => {
+    await expect(withDatabaseIsolation(root, evidence, env, () => {
       const result = spawnSync(process.execPath, ['-e', 'const n=require("node:net"); const c=JSON.parse(process.env.HAI_DB); const s=n.createConnection({host:c.host,port:c.port}); s.on("error",()=>process.exit(1)); s.on("connect",()=>s.end())'], { env })
       expect(result.status).toBe(0)
-    })).toThrow('unexpected connections')
+    })).rejects.toThrow('unexpected connections')
     expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 2, closed: true })
   })
 
-  it('keeps the original gate failure while restoring files and stopping its counter', () => {
+  it('keeps the original gate failure while restoring files and stopping its counter', async () => {
     const { root, evidence, local } = fixture()
-    expect(() => withDatabaseIsolation(root, evidence, { ...process.env }, () => {
+    await expect(withDatabaseIsolation(root, evidence, { ...process.env }, async () => {
+      await Promise.resolve()
       throw new Error('Original gate failure')
-    })).toThrow('Original gate failure')
+    })).rejects.toThrow('Original gate failure')
     expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
   })

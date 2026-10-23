@@ -210,12 +210,12 @@ it('generated migration executes up and down with HaiResult', async () => {
         envOptions.publicApiBase = `${envOptions.serviceBaseUrl}/api/v1`
         const closeService = await startNativeApiService(root, envOptions.serviceBaseUrl)
         try {
-          runQualityGates(projectPath, envOptions)
+          await runQualityGates(projectPath, envOptions)
         }
         finally { await closeService() }
       }
       else {
-        runQualityGates(projectPath, envOptions)
+        await runQualityGates(projectPath, envOptions)
       }
 
       if (scenario.title === 'fullstack' && process.env.HAI_CLI_NATIVE_BUILD === '1') {
@@ -225,7 +225,7 @@ it('generated migration executes up and down with HaiResult', async () => {
         const applicationManifest = path.join(projectPath, 'package.json')
         const metadata = JSON.parse(await readFile(applicationManifest, 'utf8'))
         await writeFile(applicationManifest, `${JSON.stringify({ ...metadata, version: '2.4.6' }, null, 2)}\n`)
-        runPnpm(projectPath, ['build', '--target', 'desktop', '--platform', 'windows', '--arch', 'x64'])
+        await runPnpm(projectPath, ['build', '--target', 'desktop', '--platform', 'windows', '--arch', 'x64'])
         const installers = await readdir(path.join(projectPath, 'apps/sample-fullstack-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'))
         expect(installers.some(file => file.includes('_2.4.6_') && file.endsWith('-setup.exe'))).toBe(true)
       }
@@ -233,10 +233,16 @@ it('generated migration executes up and down with HaiResult', async () => {
       for (const relativePath of scenario.expectedFiles) {
         expect(await fileExists(path.join(projectPath, relativePath))).toBe(true)
       }
-      for (const resource of ['SKILL.md', 'workflow.md', 'templates.md', 'changes.md']) {
+      for (const resource of ['SKILL.md', 'workflow.md', 'templates.md', 'changes.md', 'handoff.md', 'evaluation.md']) {
         // 从实际 CLI 构建生成，工作流入口及其按需范本必须完整且未被模板渲染改写。
         expect(await readFile(path.join(projectPath, '.agents/skills/hai-spec-implement', resource), 'utf8'))
           .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-spec-implement', resource), 'utf8'))
+      }
+      if (scenario.title === 'fullstack') {
+        for (const [skill, resource] of [['hai-ui-design', 'patterns.md'], ['hai-ui-review', 'checklist.md']]) {
+          expect(await readFile(path.join(projectPath, '.agents/skills', skill, resource), 'utf8'))
+            .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', skill, resource), 'utf8'))
+        }
       }
       if (scenario.title === 'api-iam-basic') {
         // 生成项目实际安装和运行基础认证，且没有强制添加可选通知模块或 LDAP SDK。
@@ -270,7 +276,7 @@ async function removeTempRoot(root: string): Promise<void> {
 /** 独立移动模板通过真实 API 示例服务验证；进程和数据只属于本次样板门禁。 */
 async function startNativeApiService(root: string, baseUrl: string): Promise<() => Promise<void>> {
   const repo = path.resolve(process.cwd(), '../..')
-  runPnpm(repo, ['--filter', 'api-service', 'build'])
+  await runPnpm(repo, ['--filter', 'api-service', 'build'])
   const service = spawn(process.execPath, ['dist/index.js'], {
     cwd: path.join(repo, 'apps/api-service'),
     windowsHide: true,
@@ -352,17 +358,17 @@ async function getFreePort(): Promise<number> {
   })
 }
 
-function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): void {
-  runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
-  runPnpm(projectPath, ['typecheck'], envOptions)
+async function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): Promise<void> {
+  await runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
+  await runPnpm(projectPath, ['typecheck'], envOptions)
   if (existsSync(path.join(projectPath, 'tsconfig.capabilities.json')))
-    runPnpm(projectPath, ['exec', 'tsc', '--noEmit', '-p', 'tsconfig.capabilities.json'], envOptions)
-  runPnpm(projectPath, ['lint'], envOptions)
+    await runPnpm(projectPath, ['exec', 'tsc', '--noEmit', '-p', 'tsconfig.capabilities.json'], envOptions)
+  await runPnpm(projectPath, ['lint'], envOptions)
   // 注入仅属于构建机器的公开值，确认 Vite 和 Kit 都不会将 .env.local 固化进交付包。
   const sentinel = 'hai-build-must-ignore-local-1792584600'
   if (existsSync(path.join(projectPath, 'svelte.config.js')))
     appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\n`)
-  runPnpm(projectPath, ['build'], envOptions)
+  await runPnpm(projectPath, ['build'], envOptions)
   for (const output of ['build', 'dist', '.svelte-kit/output']) {
     const directory = path.join(projectPath, output)
     if (!existsSync(directory))
@@ -372,8 +378,8 @@ function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): 
         expect(readFileSync(path.join(directory, String(file)), 'utf8'), `Build leaked .env.local into ${output}/${String(file)}`).not.toContain(sentinel)
     }
   }
-  runPnpm(projectPath, ['test'], envOptions)
-  runPnpm(projectPath, ['test:e2e'], envOptions)
+  await runPnpm(projectPath, ['test'], envOptions)
+  await runPnpm(projectPath, ['test:e2e'], envOptions)
 }
 
 function runNode(args: string[]): void {
@@ -385,14 +391,14 @@ function runNode(args: string[]): void {
  * @param cwd - 本轮生成工程的绝对路径。
  * @param args - pnpm 子命令及独立参数。
  * @param envOptions - 本轮 loopback 服务与前端地址。
- * @returns {void} 命令成功后返回。
+ * @returns 命令和隔离计数进程均完成后返回。
  * @throws 子命令执行或证据目录创建失败时抛错。
  * @example
  * ```ts
- * runPnpm(projectPath, ['test:e2e'])
+ * await runPnpm(projectPath, ['test:e2e'])
  * ```
  */
-function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): void {
+async function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): Promise<void> {
   const nodeEnv = args[0] === 'build' || args[0] === 'test:e2e' ? 'production' : 'test'
   const env = buildChildEnv(envOptions, nodeEnv)
   if (args[0] === 'test:e2e') {
@@ -406,7 +412,7 @@ function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): 
     })
     if (!owner)
       throw new Error('Database isolation requires an owned scaffold project')
-    withDatabaseIsolation(cwd, env.HAI_AUTH_EVIDENCE_DIR, env, () => runGate(pnpmBin, args, cwd, env, true))
+    await withDatabaseIsolation(cwd, env.HAI_AUTH_EVIDENCE_DIR, env, () => runGate(pnpmBin, args, cwd, env, true))
     return
   }
   runGate(pnpmBin, args, cwd, env, true)
