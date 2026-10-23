@@ -46,7 +46,11 @@ const contract = apiContract.create({
 
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
 }
 
 const app = serv.createApp({
@@ -295,7 +299,7 @@ serv
 
 - 所有入口默认至少声明 `.auth()`
 - 对 key 做二次安全校验，拒绝 `..`、绝对路径、反斜杠、NUL 字节
-- **默认并不自动做租户隔离**，生产环境应在应用层再按 `context.session.userId` 收紧 key 前缀
+- 必须传入 `authorize({ context, operation, keys })`，从可信 session 检查用户/租户资源范围；缺失策略默认拒绝。列表也授权 prefix，批量操作须全部通过后才执行。示例使用 `users/<编码后的 userId>/`，空 prefix 和其它用户前缀均被拒绝。
 
 ### AI feature
 
@@ -307,7 +311,9 @@ serv
 - 记忆 recall / list
 - 会话列表
 
-主要作用是把 `@h-ai/ai` 的返回结构转换成 `@h-ai/api-contract` 对外协议需要的响应结构。
+所有读取/写入默认绑定可信 `context.session.userId`；客户端可省略 objectId，指定其它主体必须通过显式 `authorizeObject` 策略。历史查询始终同时传入 objectId 与 sessionId，两个用户的同名 sessionId 不共享内容。聊天和消息写入也携带该复合作用域，sessionId 省略时为 `default`；记忆 recall/list 的 objectId 在授权后由服务端确定。管理员跨主体访问同样必须由策略按可信权限/租户关系批准。
+
+返回结构转换为 `@h-ai/api-contract` 的公开协议；业务身份不从消息内容或客户端前缀推断。
 
 ## 传输加解密处理逻辑
 
@@ -319,13 +325,13 @@ serv
 const app = serv.createApp({
   contract,
   procedures,
-  transport: { crypto },
+  transport: { crypto, serverKeyRing, keyStore },
 })
 ```
 
 启用后，serv 会在内部：
 
-1. 调 `crypto.transport.createServer()` 创建服务端管理器。
+1. 调 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建服务端管理器。
 2. 挂载密钥协商端点。
 3. 在业务请求进入前尝试解密。
 4. 在业务响应返回后尝试加密。
@@ -336,10 +342,10 @@ const app = serv.createApp({
 
 服务端处理逻辑在 `src/serv-transport.ts#handleKeyExchange()`：
 
-1. 读取请求体 JSON。
-2. 要求携带 `clientPublicKey`。
-3. 调 `manager.registerClientKey(clientPublicKey)`。
-4. 生成并返回 `clientId` 和 `serverPublicKey`。
+1. 通过共享 `readTransportBody` 逐块读取原始请求流，握手 JSON 最多 16 KiB（UTF-8 字节）；超限立即取消并返回 413。
+2. 要求携带非空 `clientPublicKey`，公钥最多 4 KiB，否则返回 400；不接受 null 等错误 JSON 结构。
+3. 确认服务端公钥不超过同一预算后，调 `manager.registerClientKey(clientPublicKey)`。
+4. 返回 `clientId`、`serverPublicKey` 与 `serverKeyId`；客户端请求密文携带此版本，任意节点仅按 ID 选择私钥。客户端在 30 秒握手超时内按相同预算有界读取响应。
 
 后续客户端要用这个 `clientId` 放到请求头里。
 
@@ -355,33 +361,31 @@ const app = serv.createApp({
    - 缺少 `clientId` 时返回 400。
    - 找不到已注册公钥时也返回 400。
 
-3. **解密请求体**
-   - 仅对 `POST`、`PUT`、`PATCH`、`DELETE` 这类有 body 的请求处理。
-   - 检查加密标记头是否存在。
-   - 读取 JSON payload。
-   - 校验 payload 是否符合 `EncryptedPayload` 结构。
-   - 调 `manager.decryptRequest(payload)` 解密。
+3. **认证并解密每个请求**
+   - 所有受保护请求（含空 POST、GET/HEAD）都必须提供 v2 认证封装；GET/HEAD 使用 X-Hai-Transport 头。
+   - await authenticateTransportRequest(manager, c.req.raw) 从实际 Request 提取 method、pathname + search、clientId。
+   - 有界读取原始 JSON 流，密文预算 2 MiB + 32 KiB；头封装最多 16 KiB，超限取消流并返回 413。
+   - 固定位置数组认证 version/direction/keyId/clientId/requestId/issuedAt/method/pathHash/status/encryptedKey/ciphertext/iv；pathHash 为实际 pathname + 原始 search 的 SM3 摘要。先验证 SM2 发送方签名，再验证独立 HMAC-SM3，最后解密 SM4-CBC。
+   - 过去 5 分钟/未来 30 秒之外拒绝；共享 registry 原子消费 (clientId, requestId)，nonce 至少保存至 issuedAt + 6 分钟，故障拒绝。
+   - 解密后明文最多 1 MiB UTF-8 字节；认证、时效或 claim 失败均不进入业务处理。
 
-4. **把明文 request 塞回 Hono 上下文**
-   - `decryptRequestInPlace()` 会重建一个新的 `Request`。
-   - 它会把明文 JSON body 与修正后的 headers 写回 `c.req.raw`。
-   - 这样下游 handler 不需要知道“上游其实传来的是密文”。
+4. **恢复业务 Request**
+   - 非 GET/HEAD 用 replaceRequestBody 重建 Request，保留 signal、清空 c.req.bodyCache，并删除旧长度/编码头。
+   - 保存已认证 context，用于响应关联。
 
 ### 响应加密流程
 
-下游业务逻辑执行完后，middleware 会继续尝试加密响应：
-
-1. 只允许 `application/json` 响应进入加密流程；非 JSON 业务响应会返回加密失败错误。
-2. 若 `Content-Length` 明确大于 `1 MiB`，直接返回加密失败错误。
-3. 若没有 `Content-Length`，会克隆响应并读取 body，再做一次体积判断。
-4. 调 `manager.encryptResponse(clientId, bodyText)` 加密。
-5. 写回新的 `Response`，并设置加密标记 header。
+1. 非空响应仍仅允许 application/json；有界读取原流，明文最多 1 MiB UTF-8 字节，超限/取消释放 reader 并返回错误。
+2. 空响应、204/304 和 HEAD 也要认证；用空明文生成封装，在 X-Hai-Transport 响应头承载。
+3. await manager.encryptResponse(context, bodyText, response.status) 使用所选服务端版本签名并绑定原请求与实际 HTTP 状态。
+4. 设置 X-Encrypted: true，删除旧 Content-Length/Content-Encoding；客户端必须验证原请求上下文、status、签名与 MAC，缺少标记也拒绝。
+5. 自定义 CORS 须允许并暴露 X-Hai-Transport；握手公钥的真实性依赖 TLS，业务授权仍由 IAM/guard 负责。
 
 ### 为什么超过 `1 MiB` 会 fail-closed
 
 这是有意的保护策略，原因很朴素：
 
-- 响应加密需要先把 JSON body 读到内存里
+- 响应加密需要在固定字节预算内把 JSON body 读到内存里
 - 大 body 会带来额外内存放大
 - 因此超过上限时返回加密失败错误，既保证服务稳定性，也避免明文业务数据泄露
 
@@ -391,19 +395,16 @@ const app = serv.createApp({
 
 - key exchange 路由
 - `excludePaths` 命中的路径
-- 空响应体
 
-非 JSON 业务响应、响应体超过 1 MiB 或 `encryptResponse()` 失败都会返回错误。
+非 JSON 业务响应、响应体超过 1 MiB UTF-8 字节或 `encryptResponse()` 失败都会返回错误。预算统一来自 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`，不是 YAML 或环境变量配置。
 
 ### 多节点部署注意事项
 
-服务端会把协商得到的客户端密钥信息保存在**进程内**的传输管理器中，因此多副本部署时需要额外保证：
+服务端必须同时注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库），两项均无隐式默认值。只共享客户端公钥无法跨节点解密；正确装配不需要 sticky session，重启重新加载同一密钥环与 registry 即可。
 
-- 使用 sticky session
-- 每个节点都各自做一轮密钥协商
-- 后续引入分布式密钥存储
+密钥环 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }` 仅从 Secret Manager 或服务端私有环境装配，不放公开 `_serv.yml`。示例应用读取 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，用根入口 `parseTransportServerKeyRing()` 安全解析；错误不含原始 JSON/私钥片段。工厂校验公私钥配对并捕获快照。
 
-否则客户端在 A 节点协商成功、下一次请求打到 B 节点时，B 节点可能找不到该 `clientId` 对应的密钥。
+轮换先把含新旧版本的 ring 分发到所有节点，再切换 activeKeyId 并滚动重建 manager；过渡期保留旧版本，删除旧 ID 并更新所有节点即撤销。未知/撤销 ID 不尝试其它密钥。旧客户端需要 destroy 后重协商，非幂等业务不得自动重放。开发/测试内存 registry 必须显式 `createInMemoryKeyStore(capacity)`，原 YAML maxClients 已移除。
 
 ## Refresh Cookie 逻辑（补充）
 
@@ -437,7 +438,7 @@ const app = serv.createApp({
 当前仓库里，下面这些测试最能说明 `serv` 的行为边界：
 
 - `tests/serv-app.test.ts`：健康检查、安全头、受保护 docs 页面、Scalar 脚本挂载
-- `tests/serv-transport.test.ts`：密钥协商、端到端加密 roundtrip、大响应体跳过加密
+- `tests/serv-transport.test.ts`：密钥协商、端到端加密 roundtrip、超限流提前取消、UTF-8 边界、空正文及明文拒绝回归
 - `tests/pipeline-orpc.test.ts`：内部异常映射 helper 行为
 - `tests/serv-router.test.ts`：route 推导、完整性约束、认证授权与异常映射
 

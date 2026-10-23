@@ -5,11 +5,12 @@
  * 以及嵌入式模式的本地服务拉起/关闭，不连接真实 Chroma 服务。
  */
 
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createChromaProvider } from '../src/providers/vecdb-provider-chroma.js'
 
-const spawnMock = vi.hoisted(() => vi.fn(() => ({ on: vi.fn(), kill: vi.fn() })))
+const spawnMock = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 interface FakeRecord {
@@ -65,6 +66,10 @@ vi.mock('chromadb', () => {
     }
 
     heartbeat = chroma.heartbeatMock
+    async countCollections() {
+      return chroma.store.size
+    }
+
     async getOrCreateCollection({ name, metadata }: { name: string, metadata?: Record<string, unknown> }) {
       if (!chroma.store.has(name))
         chroma.store.set(name, { metadata: metadata ?? {}, records: new Map() })
@@ -98,6 +103,15 @@ async function connectDirect() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  spawnMock.mockImplementation(() => {
+    const child = Object.assign(new EventEmitter(), { pid: 123, exitCode: null as number | null, signalCode: null as NodeJS.Signals | null, kill: vi.fn(() => {
+      child.signalCode = 'SIGTERM'
+      queueMicrotask(() => child.emit('exit', null, 'SIGTERM'))
+      return true
+    }) })
+    queueMicrotask(() => child.emit('spawn'))
+    return child
+  })
   chroma.store.clear()
   chroma.heartbeatMock.mockResolvedValue(1)
 })
@@ -107,7 +121,7 @@ describe('createChromaProvider', () => {
     const provider = await connectDirect()
     expect(provider.isConnected()).toBe(true)
     expect(spawnMock).not.toHaveBeenCalled()
-    expect(chroma.ctorMock).toHaveBeenCalledWith(expect.objectContaining({ path: 'http://localhost:8000' }))
+    expect(chroma.ctorMock).toHaveBeenCalledWith({ host: 'localhost', port: 8000, ssl: false, fetchOptions: { signal: expect.any(AbortSignal) } })
   })
 
   it('嵌入式模式（有 path 无 url）拉起本地服务', async () => {
@@ -116,6 +130,22 @@ describe('createChromaProvider', () => {
     expect(result.success).toBe(true)
     expect(spawnMock).toHaveBeenCalledWith('chroma', expect.arrayContaining(['run', '--path', './data/chroma']), expect.any(Object))
     await provider.close()
+  })
+
+  it.each([
+    ['https://chroma.example.test', 'chroma.example.test', 443, true],
+    ['http://chroma.example.test', 'chroma.example.test', 80, false],
+    ['https://chroma.example.test:8443/', 'chroma.example.test', 8443, true],
+  ] as const)('uRL %s 完整传入实际 SDK 参数并优先于分字段', async (url, host, port, ssl) => {
+    const provider = createChromaProvider()
+    try {
+      const result = await provider.connect({ type: 'chroma', url, host: 'ignored.invalid', port: 9999, apiKey: 'fixture-token', serverCommand: 'chroma', startupTimeout: 30_000 })
+      expect(result.success).toBe(true)
+      expect(chroma.ctorMock).toHaveBeenCalledWith({ host, port, ssl, headers: { Authorization: 'Bearer fixture-token' }, fetchOptions: { signal: expect.any(AbortSignal) } })
+    }
+    finally {
+      await provider.close()
+    }
   })
 
   it('心跳超时时返回连接失败', async () => {

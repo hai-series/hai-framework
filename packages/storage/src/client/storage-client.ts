@@ -14,6 +14,13 @@ import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
  * 上传进度回调数据
  *
  * 由 `uploadWithPresignedUrl` 在上传过程中通过 `onProgress` 回调返回。
+ * @example
+ * ```ts
+ * import type { UploadProgress } from '@h-ai/storage'
+ *
+ * const value: UploadProgress = { loaded: 50, total: 100, percent: 50 }
+ * void value
+ * ```
  */
 export interface UploadProgress {
   /** 已上传字节数 */
@@ -28,13 +35,20 @@ export interface UploadProgress {
  * 前端上传选项
  *
  * 控制 `uploadWithPresignedUrl` 的行为，包括内容类型、进度监听和取消。
+ * @example
+ * ```ts
+ * import type { ClientUploadOptions } from '@h-ai/storage'
+ *
+ * const value: ClientUploadOptions = { contentType: 'text/plain', onProgress: progress => { document.title = `${progress.percent}%` } }
+ * void value
+ * ```
  */
 export interface ClientUploadOptions {
   /** 内容类型（设置后会加到请求 Content-Type 头） */
   contentType?: string
   /** 进度回调（设置后会使用 XMLHttpRequest；仅 lengthComputable=true 时回调） */
   onProgress?: (progress: UploadProgress) => void
-  /** AbortController 用于取消上传（abort 后返回 {success: false}） */
+  /** 取消上传；预取消不发送请求，进行中取消返回失败，完成后移除本次监听。取消不能撤销远端已写入对象。 */
   abortController?: AbortController
 }
 
@@ -42,6 +56,13 @@ export interface ClientUploadOptions {
  * 前端下载选项
  *
  * 控制 `downloadWithPresignedUrl` / `downloadAndSave` 的行为。
+ * @example
+ * ```ts
+ * import type { ClientDownloadOptions } from '@h-ai/storage'
+ *
+ * const value: ClientDownloadOptions = { filename: 'report.pdf', abortController: new AbortController() }
+ * void value
+ * ```
  */
 export interface ClientDownloadOptions {
   /** 保存的文件名（仅 downloadAndSave 使用，默认为 'download'） */
@@ -55,31 +76,19 @@ export interface ClientDownloadOptions {
 /**
  * 使用签名 URL 上传文件
  *
- * @param url - 后端生成的上传签名 URL
+ * @param url - 已成功获取的 S3 HTTP(S) 上传签名 URL；本地存储须使用应用的鉴权文件接口。
  * @param data - 要上传的数据（File、Blob、ArrayBuffer 或字符串）
  * @param options - 上传选项
- * @returns 上传结果
- *
+ * @returns 上传结果；预取消不发送，进行中取消/网络失败/初始化异常结算为失败，终态移除本次监听。
+ * 取消不代表远端对象已回滚；上传完成后的撤销由应用另行授权删除。
  * @example
  * ```ts
- * // 获取签名 URL（通常从后端 API 获取）
- * const response = await fetch('/api/storage/presign', {
- *     method: 'POST',
- *     body: JSON.stringify({ key: 'uploads/image.png', contentType: 'image/png' })
- * })
- * const { uploadUrl } = await response.json()
+ * import { uploadWithPresignedUrl } from '@h-ai/storage/client'
  *
- * // 使用签名 URL 上传
- * const file = document.getElementById('fileInput').files[0]
- * const result = await uploadWithPresignedUrl(uploadUrl, file, {
- *     contentType: 'image/png',
- *     onProgress: (p) => {
- *         // 在此更新进度条：p.percent
- *     }
- * })
- *
- * if (result.success) {
- *     // 上传成功
+ * // url 由应用鉴权接口返回，且 S3 签名包含相同 Content-Type。
+ * async function upload(url: string, file: File) {
+ *   const result = await uploadWithPresignedUrl(url, file, { contentType: file.type })
+ *   if (!result.success) throw new Error(result.error)
  * }
  * ```
  */
@@ -89,57 +98,107 @@ export async function uploadWithPresignedUrl(
   options: ClientUploadOptions = {},
 ): Promise<{ success: boolean, error?: string }> {
   try {
+    const signal = options.abortController?.signal
+    if (signal?.aborted)
+      return { success: false, error: storageM('storage_uploadCanceled') }
+
     // 准备请求体
     const body: BodyInit = data
 
     // 使用 XMLHttpRequest 以支持上传进度
     if (options.onProgress) {
+      const xhr = new XMLHttpRequest()
       return new Promise((resolve) => {
-        const xhr = new XMLHttpRequest()
+        let settled = false
 
-        // 设置取消控制
-        if (options.abortController) {
-          options.abortController.signal.addEventListener('abort', () => {
+        /**
+         * 所有终态共用一次结算，先移除XHR/上传/signal监听，迟到事件不能改变结果。
+         * 后续调用跳过，完成后取消不会再触碰旧XHR。
+         * @param result - 本次最终结果，不推断远端是否已写对象。
+         * @param result.success - 是否已成功完成本地请求。
+         * @param result.error - 可选失败说明。
+         * @example 模块内部上下文
+         * ```ts
+         * finish({ success: false, error: storageM('storage_networkError') })
+         * ```
+         */
+        function finish(result: { success: boolean, error?: string }): void {
+          if (settled)
+            return
+          settled = true
+          signal?.removeEventListener('abort', onCancel)
+          xhr.upload.removeEventListener('progress', onProgress)
+          xhr.removeEventListener('load', onLoad)
+          xhr.removeEventListener('error', onError)
+          xhr.removeEventListener('abort', onAbort)
+          xhr.removeEventListener('timeout', onError)
+          resolve(result)
+        }
+
+        function onAbort(): void {
+          finish({ success: false, error: storageM('storage_uploadCanceled') })
+        }
+
+        /**
+         * signal取消先主动结算再终止XHR，覆盖未send时abort不发事件的原生行为。
+         * 调用方在准备流程中检查settled后停止发送。
+         * @example 模块内部上下文
+         * ```ts
+         * onCancel()
+         * // 后续准备阶段读取settled，不再执行xhr.send。
+         * ```
+         */
+        function onCancel(): void {
+          // 未 send 的 XHR.abort 不一定发 abort 事件，取消方必须主动结算。
+          onAbort()
+          xhr.abort()
+        }
+
+        function onError(): void {
+          finish({ success: false, error: storageM('storage_networkError') })
+        }
+
+        function onLoad(): void {
+          finish(xhr.status >= 200 && xhr.status < 300
+            ? { success: true }
+            : { success: false, error: storageM('storage_uploadFailedStatus', { params: { status: xhr.status, statusText: xhr.statusText } }) })
+        }
+
+        function onProgress(event: ProgressEvent): void {
+          if (settled || !event.lengthComputable)
+            return
+          try {
+            options.onProgress?.({ loaded: event.loaded, total: event.total, percent: Math.round((event.loaded / event.total) * 100) })
+          }
+          catch (error) {
+            finish({ success: false, error: error instanceof Error ? error.message : storageM('storage_unknownError') })
             xhr.abort()
-            resolve({ success: false, error: storageM('storage_uploadCanceled') })
-          })
+          }
         }
 
-        // 监听进度
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable && options.onProgress) {
-            options.onProgress({
-              loaded: event.loaded,
-              total: event.total,
-              percent: Math.round((event.loaded / event.total) * 100),
-            })
+        try {
+          xhr.upload.addEventListener('progress', onProgress)
+          xhr.addEventListener('load', onLoad)
+          xhr.addEventListener('error', onError)
+          xhr.addEventListener('abort', onAbort)
+          xhr.addEventListener('timeout', onError)
+          signal?.addEventListener('abort', onCancel, { once: true })
+          xhr.open('PUT', url)
+          if (settled)
+            return
+          if (options.contentType)
+            xhr.setRequestHeader('Content-Type', options.contentType)
+          // 覆盖从预检查到监听安装/请求准备之间发生的取消，不再进入 send。
+          if (signal?.aborted) {
+            onCancel()
+            return
           }
-        })
-
-        // 监听完成
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve({ success: true })
-          }
-          else {
-            resolve({
-              success: false,
-              error: storageM('storage_uploadFailedStatus', { params: { status: xhr.status, statusText: xhr.statusText } }),
-            })
-          }
-        })
-
-        // 监听错误
-        xhr.addEventListener('error', () => {
-          resolve({ success: false, error: storageM('storage_networkError') })
-        })
-
-        // 发送请求
-        xhr.open('PUT', url)
-        if (options.contentType) {
-          xhr.setRequestHeader('Content-Type', options.contentType)
+          xhr.send(body)
         }
-        xhr.send(body)
+        catch (error) {
+          finish({ success: false, error: error instanceof Error ? error.message : storageM('storage_unknownError') })
+          xhr.abort()
+        }
       })
     }
 
@@ -150,7 +209,7 @@ export async function uploadWithPresignedUrl(
       headers: options.contentType
         ? { 'Content-Type': options.contentType }
         : undefined,
-      signal: options.abortController?.signal,
+      signal,
     })
 
     if (!response.ok) {
@@ -181,18 +240,15 @@ export async function uploadWithPresignedUrl(
  * @param url - 后端生成的下载签名 URL
  * @param options - 下载选项
  * @returns 下载结果（成功时 data 为 Blob）
- *
  * @example
  * ```ts
- * // 下载为 Blob
- * const result = await downloadWithPresignedUrl(downloadUrl)
- * if (result.success) {
- *     const blob = result.data
- *     // 处理 blob...
- * }
+ * import { downloadWithPresignedUrl } from '@h-ai/storage/client'
  *
- * // 下载并保存为文件（浏览器环境）
- * await downloadAndSave(downloadUrl, { filename: 'document.pdf' })
+ * async function download(url: string) {
+ *   const result = await downloadWithPresignedUrl(url)
+ *   if (!result.success || !result.data) throw new Error(result.error ?? 'Empty download')
+ *   return result.data
+ * }
  * ```
  */
 export async function downloadWithPresignedUrl(
@@ -231,12 +287,15 @@ export async function downloadWithPresignedUrl(
  *
  * @param url - 下载 URL
  * @param options - 下载选项
- *
+ * @returns 声明返回类型对应的操作结果。
  * @example
  * ```ts
- * await downloadAndSave(presignedUrl, {
- *     filename: 'report.pdf'
- * })
+ * import { downloadAndSave } from '@h-ai/storage/client'
+ *
+ * async function save(url: string) {
+ *   const result = await downloadAndSave(url, { filename: 'report.pdf' })
+ *   if (!result.success) throw new Error(result.error)
+ * }
  * ```
  */
 export async function downloadAndSave(
@@ -280,16 +339,16 @@ export async function downloadAndSave(
  * 从 File 对象获取文件扩展名
  *
  * 取文件名中最后一个 '.' 之后的部分，转为小写。
- * 若文件名无点号或以点号开头且无其他点号，返回空字符串。
+ * 没有点号或以点号结尾时返回空字符串；仅前导点号的文件名按其后文本返回扩展名。
  *
  * @param file - 浏览器 File 对象
  * @returns 扩展名（不含点），如 'png'、'tar.gz' 返回 'gz'
- *
  * @example
  * ```ts
- * getFileExtension(new File([], 'photo.PNG'))  // 'png'
- * getFileExtension(new File([], '.gitignore')) // 'gitignore'
- * getFileExtension(new File([], 'noext'))      // ''
+ * import { getFileExtension } from '@h-ai/storage/client'
+ *
+ * const extension = getFileExtension(new File(['hello'], 'report.txt'))
+ * void extension
  * ```
  */
 export function getFileExtension(file: File): string {
@@ -306,11 +365,12 @@ export function getFileExtension(file: File): string {
  *
  * @param extension - 文件扩展名（不含点，大小写不敏感）
  * @returns MIME 类型字符串
- *
  * @example
  * ```ts
- * getMimeType('png')  // 'image/png'
- * getMimeType('xyz')  // 'application/octet-stream'
+ * import { getMimeType } from '@h-ai/storage/client'
+ *
+ * const mime = getMimeType('pdf')
+ * void mime
  * ```
  */
 export function getMimeType(extension: string): string {
@@ -321,16 +381,15 @@ export function getMimeType(extension: string): string {
  * 格式化文件大小为人类可读字符串
  *
  * 使用 1024 进制，输出单位为 B/KB/MB/GB/TB。
- * 大于 1 B 时保留 2 位小数。
+ * 非零值使用对应单位并保留 2 位小数。
  *
  * @param bytes - 字节数（非负整数）
  * @returns 格式化后的字符串，如 '0 B'、'1.50 KB'、'2.30 MB'
- *
  * @example
  * ```ts
- * formatFileSize(0)         // '0 B'
- * formatFileSize(1536)      // '1.50 KB'
- * formatFileSize(1048576)   // '1.00 MB'
+ * import { formatFileSize } from '@h-ai/storage/client'
+ *
+ * void formatFileSize(1536)
  * ```
  */
 export function formatFileSize(bytes: number): string {

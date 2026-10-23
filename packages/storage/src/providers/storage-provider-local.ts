@@ -7,7 +7,8 @@
 
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { LocalConfig, StorageConfig } from '../storage-config.js'
-import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageProvider } from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
+import type { StorageProvider } from './storage-provider-types.js'
 import { Buffer } from 'node:buffer'
 import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
@@ -18,6 +19,7 @@ import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { core, err, ok } from '@h-ai/core'
 
+import { toStorageDeleteResult } from '../storage-delete.js'
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
 import { toByteStream } from '../storage-stream.js'
@@ -199,11 +201,16 @@ function safePath(root: string, key: string): string {
  * connect 时会自动创建根目录；文件操作会自动创建中间目录。
  *
  * 已知限制：
- * - list 不支持 continuationToken 分页（仅支持 maxKeys 截断）
- * - presign 返回虚拟 `local://` URL，应用层需自行处理
+ * - list 使用绑定查询范围的无状态游标；按 UTF-8 key 排序，每次仍需扫描并排序匹配目录
+ * - presign.getUrl/putUrl 明确不支持，publicUrl 返回 null；HTTP 访问由应用鉴权接口提供
  * - publicUrl 始终返回 null
  *
  * @returns Local Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createLocalProvider()
+ * await provider.close() // 工厂尚未连接；connect 的失败结果由调用方处理。
+ * ```
  */
 export function createLocalProvider(): StorageProvider {
   let config: LocalConfig | null = null
@@ -439,27 +446,25 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async deleteMany(keys): Promise<HaiResult<void>> {
+    async deleteMany(keys): Promise<StorageDeleteResult> {
       logOperation('write', 'file.deleteMany', { count: keys.length, keys })
-      // 并行删除，避免 await-in-loop（N+1）
-      const results = await Promise.allSettled(keys.map(key => file.delete(key)))
-
-      const errors: HaiError[] = []
-      for (const result of results) {
-        if (result.status === 'fulfilled' && !result.value.success) {
-          errors.push(result.value.error)
+      const summary: StorageDeleteSummary = { deletedKeys: [], failures: [] }
+      const uniqueKeys = [...new Set(keys)]
+      // 有界并行；reject 也必须形成失败项，不能被 Promise.allSettled 静默丢弃。
+      for (let offset = 0; offset < uniqueKeys.length; offset += 32) {
+        const batch = uniqueKeys.slice(offset, offset + 32)
+        const results = await Promise.allSettled(batch.map(key => file.delete(key)))
+        for (const [index, result] of results.entries()) {
+          const key = batch[index]
+          if (result.status === 'rejected')
+            summary.failures.push({ key, code: 'UnexpectedDeleteFailure', retryable: false, outcome: 'failed' })
+          else if (!result.value.success)
+            summary.failures.push({ key, code: String(result.value.error.code), retryable: false, outcome: 'failed' })
+          else
+            summary.deletedKeys.push(key)
         }
       }
-
-      if (errors.length > 0) {
-        return err(
-          HaiStorageError.OPERATION_FAILED,
-          storageM('storage_deleteManyFailed', { params: { count: errors.length } }),
-          errors,
-        )
-      }
-
-      return ok(undefined)
+      return toStorageDeleteResult(summary)
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
@@ -519,64 +524,96 @@ export function createLocalProvider(): StorageProvider {
     async list(options = {}): Promise<HaiResult<ListResult>> {
       try {
         const cfg = getConfig()
-        const prefix = options.prefix || ''
-        const delimiter = options.delimiter || ''
-        const maxKeys = options.maxKeys || 1000
+        const prefix = options.prefix === undefined ? '' : options.prefix
+        const delimiter = options.delimiter === undefined ? '' : options.delimiter
+        const maxKeys = options.maxKeys === undefined ? 1000 : options.maxKeys
+        if (typeof prefix !== 'string' || typeof delimiter !== 'string' || !Number.isInteger(maxKeys) || maxKeys < 1 || maxKeys > 1000
+          || Buffer.from(prefix).toString('utf8') !== prefix || Buffer.from(delimiter).toString('utf8') !== delimiter) {
+          return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listOptionsInvalid'))
+        }
         logOperation('read', 'dir.list', { options })
 
-        const basePath = safePath(cfg.root, prefix)
-        const files: FileMetadata[] = []
-        const commonPrefixes = new Set<string>()
-
-        // 递归读取目录
-        async function readDir(dirPath: string): Promise<void> {
-          let entries: fs.Dirent[]
+        // 前缀只是 key 字符串，不能当作目录打开；从规范根目录遍历，子目录符号链接不会被跟随。
+        safePath(cfg.root, prefix)
+        const root = await fsp.realpath(cfg.root)
+        const scope = crypto.createHash('sha256').update(JSON.stringify([root, prefix, delimiter])).digest('hex')
+        let after = ''
+        if (options.continuationToken !== undefined) {
+          const token = options.continuationToken
           try {
-            entries = await fsp.readdir(dirPath, { withFileTypes: true })
+            if (typeof token !== 'string' || token.length === 0 || token.length > 262_144)
+              throw new Error('Invalid cursor encoding')
+            const bytes = Buffer.from(token, 'base64url')
+            if (bytes.toString('base64url') !== token)
+              throw new Error('Invalid cursor encoding')
+            const decoded: unknown = JSON.parse(bytes.toString('utf8'))
+            if (!Array.isArray(decoded) || decoded.length !== 3 || decoded[0] !== 1 || decoded[1] !== scope
+              || typeof decoded[2] !== 'string' || decoded[2].length === 0 || !decoded[2].startsWith(prefix)) {
+              throw new Error('Invalid cursor scope')
+            }
+            after = decoded[2]
           }
           catch {
-            return // 目录不存在，返回空
+            return err(HaiStorageError.INVALID_LIST_OPTIONS, storageM('storage_listCursorInvalid'))
           }
+        }
+        const files: FileMetadata[] = []
+        const commonPrefixes: string[] = []
+        const compare = (left: string, right: string) => Buffer.compare(Buffer.from(left), Buffer.from(right))
 
+        // 按 name + '/' 排序目录，再深度遍历，可保持完整文件 key 的字节序（a.txt 在 a/x 之前）。
+        async function* readDir(dirPath: string, directoryKey: string): AsyncGenerator<{ key: string, filePath: string }> {
+          const entries = await fsp.readdir(dirPath, { withFileTypes: true })
+          entries.sort((left, right) => compare(left.name + (left.isDirectory() ? '/' : ''), right.name + (right.isDirectory() ? '/' : '')))
           for (const entry of entries) {
-            if (files.length >= maxKeys)
-              return
-
-            const fullEntryPath = path.join(dirPath, entry.name)
-            const key = path.relative(cfg.root, fullEntryPath).replace(/\\/g, '/')
-
-            // 跳过元数据文件
             if (isMetaFile(entry.name))
               continue
-
+            const key = directoryKey + entry.name
+            const filePath = path.join(dirPath, entry.name)
             if (entry.isDirectory()) {
-              if (delimiter) {
-                // 有分隔符时，目录作为公共前缀
-                commonPrefixes.add(`${key}/`)
-              }
-              else {
-                // 无分隔符时，递归遍历
-                await readDir(fullEntryPath)
+              const childPrefix = `${key}/`
+              if (prefix.startsWith(childPrefix) || childPrefix.startsWith(prefix)) {
+                yield* readDir(filePath, childPrefix)
               }
             }
-            else if (entry.isFile()) {
-              const stat = await fsp.stat(fullEntryPath)
-              files.push({
-                key,
-                size: stat.size,
-                contentType: getMimeType(key),
-                lastModified: stat.mtime,
-              })
+            else if (entry.isFile() && key.startsWith(prefix)) {
+              yield { key, filePath }
             }
           }
         }
 
-        await readDir(basePath)
-
+        let previous = ''
+        let last = ''
+        let count = 0
+        let isTruncated = false
+        for await (const entry of readDir(root, '')) {
+          const index = delimiter ? entry.key.indexOf(delimiter, prefix.length) : -1
+          const logicalKey = index < 0 ? entry.key : entry.key.slice(0, index + delimiter.length)
+          if (logicalKey === previous)
+            continue
+          previous = logicalKey
+          if (compare(logicalKey, after) <= 0)
+            continue
+          // 多读取一个逻辑条目证明存在下一页；恰好一页时不伪造 continuation。
+          if (count === maxKeys) {
+            isTruncated = true
+            break
+          }
+          if (index >= 0) {
+            commonPrefixes.push(logicalKey)
+          }
+          else {
+            const stat = await fsp.stat(entry.filePath)
+            files.push({ key: entry.key, size: stat.size, contentType: getMimeType(entry.key), lastModified: stat.mtime })
+          }
+          count++
+          last = logicalKey
+        }
         return ok({
           files,
-          commonPrefixes: Array.from(commonPrefixes),
-          isTruncated: files.length >= maxKeys,
+          commonPrefixes,
+          isTruncated,
+          ...(isTruncated ? { nextContinuationToken: Buffer.from(JSON.stringify([1, scope, last])).toString('base64url') } : {}),
         })
       }
       catch (error) {
@@ -611,31 +648,12 @@ export function createLocalProvider(): StorageProvider {
   const presign: PresignOperations = {
     async getUrl(key, options?): Promise<HaiResult<string>> {
       logOperation('read', 'presign.getUrl', { key, options })
-      // 本地存储不支持真正的签名 URL
-      // 返回一个带签名参数的虚拟 URL，应用层需要自行处理
-      const expiresIn = options?.expiresIn || 3600
-      const expires = Math.floor(Date.now() / 1000) + expiresIn
-      const signature = crypto
-        .createHash('sha256')
-        .update(`${key}:${expires}`)
-        .digest('hex')
-        .slice(0, 16)
-
-      return ok(`local://${key}?expires=${expires}&signature=${signature}`)
+      return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
     async putUrl(key, options?): Promise<HaiResult<string>> {
-      // 同上，返回虚拟 URL
       logOperation('write', 'presign.putUrl', { key, options })
-      const expiresIn = options?.expiresIn || 3600
-      const expires = Math.floor(Date.now() / 1000) + expiresIn
-      const signature = crypto
-        .createHash('sha256')
-        .update(`put:${key}:${expires}`)
-        .digest('hex')
-        .slice(0, 16)
-
-      return ok(`local://${key}?action=put&expires=${expires}&signature=${signature}`)
+      return err(HaiStorageError.UNSUPPORTED_OPERATION, storageM('storage_localPresignUnsupported'))
     },
 
     publicUrl(key): string | null {

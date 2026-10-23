@@ -142,6 +142,11 @@ function extractCodeInnerHtml(html: string): string {
  *
  * @param lang - 语言标识符（支持别名如 js、ts、py）
  * @returns 是否支持该语言
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const supported = isLanguageSupported('typescript')
+ * ```
  */
 export function isLanguageSupported(lang: string): boolean {
   return resolveLang(lang) !== null
@@ -156,6 +161,12 @@ export function isLanguageSupported(lang: string): boolean {
  * @param text - 代码文本
  * @param lang - 语言标识符
  * @returns 高亮后的 HTML 片段
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const html = highlightCode('const count = 42', 'typescript')
+ * // 返回已转义/高亮后的代码 HTML，未知语言回退安全纯文本。
+ * ```
  */
 export function highlightCode(text: string, lang: string): string {
   const resolved = resolveLang(lang)

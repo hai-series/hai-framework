@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/api-client](../api-client/README.md) · [@h-ai/core](../core/README.md)
 
+## 简介
+
 Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 Token 存储、设备信息、推送通知、相机与状态栏等能力的统一封装。
 
-## 支持的能力
+## 核心功能清单
 
 - **Token 存储**：`@aparajita/capacitor-secure-storage`（原生必需）。Android 使用 KeyStore + 加密 SharedPreferences，iOS 使用 Keychain；Web 不回退。
 - **Preferences**：`@capacitor/preferences`（必需）。通用偏好数据存储，适合非敏感配置，不用于认证 Token。
@@ -16,7 +18,9 @@ Capacitor 原生桥接模块，为 hai Framework 移动应用提供原生安全 
 - **相机/相册**：`@capacitor/camera`（可选）。拍照、选取相册图片。
 - **状态栏**：`@capacitor/status-bar`（可选）。沉浸式、背景色、样式配置。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -28,7 +32,7 @@ if (!result.success) {
 }
 ```
 
-### 与 api-client 配合的 Token 安全存储
+#### 与 api-client 配合的 Token 安全存储
 
 ```ts
 import { apiClient } from '@h-ai/api-client'
@@ -43,9 +47,13 @@ await apiClient.init({
 })
 ```
 
-`createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。纯 Web 环境下不会退化到 `localStorage`；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op。
+`createCapacitorTokenStorage()` 仅在 Android/iOS 原生环境中持久化 token，并要求已安装 `@aparajita/capacitor-secure-storage`。适配器的方法直接返回 Promise：Web 调用、插件不可用、读写或删除失败都会拒绝 Promise，不能当作空凭据或保存/退出成功。Web 入口应选择 api-client 的 Cookie/内存存储。
 
-### 设备信息与推送
+`clear()` 一开始就屏蔽本实例两类旧凭据，并等待所有原生删除结束后才报告结果；失败时保持屏蔽，相应 key 成功写入后才重新开放。通过 `apiClient.auth` 更新凭据以串行提交写入，并处理 `setTokens()` / `clear()` 的拒绝；界面仍须释放 loading、清理退出身份并提示失败。屏蔽只作用于当前适配器实例，不代表持久数据已删除，跨重启撤销依赖服务端退出/撤销会话。插件恢复后可以用同一实例重试，无需重建模块。
+
+任一凭据写入失败都会屏蔽整对凭据，因此 access 已保存而 refresh 保存失败时也不会留下可读的半完成会话。登录/注册保存失败后应尝试 `auth.clear()` 清理部分持久数据；清理再次失败须明确提示，不得声称设备凭据已删除。
+
+#### 设备信息与推送
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -61,7 +69,7 @@ if (reg.success) {
 }
 ```
 
-### 状态栏
+#### 状态栏
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'
@@ -73,7 +81,7 @@ await capacitor.statusBar.configure({
 })
 ```
 
-### 相机
+#### 相机
 
 ```ts
 const photo = await capacitor.camera.takePhoto({
@@ -83,7 +91,7 @@ const photo = await capacitor.camera.takePhoto({
 })
 ```
 
-### Preferences
+#### Preferences
 
 ```ts
 await capacitor.preferences.set('my_key', 'value')
@@ -93,7 +101,7 @@ await capacitor.preferences.remove('my_key')
 
 `capacitor.preferences` 适合保存语言、主题、草稿等普通偏好数据；认证 Token 请使用 `createCapacitorTokenStorage()`。
 
-## 配置
+### 配置
 
 本模块无配置文件。`capacitor.init()` 仅检测 Capacitor 运行环境是否可用。
 
@@ -105,9 +113,9 @@ export const prerender = true
 export const ssr = false
 ```
 
-## 错误处理
+### 错误处理
 
-所有异步 API 返回 `HaiResult<T>`，不会直接 throw：
+`capacitor.*` 业务操作与 `safe*Preference` 返回 `HaiResult<T>`；TokenStorage 适配器方法以 Promise 拒绝报告平台与存储错误：
 
 ```ts
 import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
@@ -138,7 +146,7 @@ if (!result.success) {
 | `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | 相机操作失败         |
 | `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | 状态栏操作失败       |
 
-## 测试
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/capacitor test
@@ -146,6 +154,10 @@ pnpm --filter @h-ai/capacitor test
 
 > 由于原生插件依赖，测试中需 mock `@capacitor/*` 模块。
 
-## License
+推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。
+
+公开操作、内部资源作用域与类型均提供可类型检查的示例；见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。推送示例的类型检查不证明设备权限或 FCM/APNs 实际可用。
+
+## 许可证
 
 Apache-2.0

@@ -58,58 +58,66 @@ const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
 // 以下版本号与生成项目的 pnpm-workspace.yaml catalog 保持一致；
 // 单包脚手架直接写具体版本，pnpm fullstack workspace 会通过 catalog: 引用这些版本。
 const VERSIONS = {
-  antfuEslintConfig: '^9.5.1',
-  capacitorSecureStorage: '^8.0.1',
+  antfuEslintConfig: '9.5.1',
+  capacitorSecureStorage: '8.0.1',
   // UI / Icon
-  bitsUi: '^2.19.5',
-  iconifyJsonTabler: '^1.2.42',
-  iconifyTailwind: '^1.2.3',
+  bitsUi: '2.19.5',
+  iconifyJsonTabler: '1.2.42',
+  iconifyTailwind: '1.2.3',
   // Capacitor
-  capacitorAndroid: '^8.5.3',
-  capacitorApp: '^8.1.2',
-  capacitorCamera: '^8.2.5',
-  capacitorCli: '^8.5.3',
-  capacitorCore: '^8.5.3',
-  capacitorDevice: '^8.0.3',
-  capacitorIos: '^8.5.3',
-  capacitorPreferences: '^8.0.1',
-  capacitorPushNotifications: '^8.1.3',
-  capacitorStatusBar: '^8.0.4',
+  capacitorAndroid: '8.5.3',
+  capacitorApp: '8.1.2',
+  capacitorCamera: '8.2.5',
+  capacitorCli: '8.5.3',
+  capacitorCore: '8.5.3',
+  capacitorDevice: '8.0.3',
+  capacitorIos: '8.5.3',
+  capacitorPreferences: '8.0.1',
+  capacitorPushNotifications: '8.1.3',
+  capacitorStatusBar: '8.0.4',
   // Tailwind / DaisyUI
-  daisyui: '^5.7.47',
-  tailwindcss: '^4.3.3',
-  tailwindcssVite: '^4.3.3',
+  daisyui: '5.7.47',
+  tailwindcss: '4.3.3',
+  tailwindcssVite: '4.3.3',
   // i18n
-  inlangParaglide: '^2.27.0',
-  inlangMessageFormat: '^4.5.0',
+  inlangParaglide: '2.27.0',
+  inlangMessageFormat: '4.5.0',
   // Svelte / Vite
-  svelte: '^5.57.2',
-  svelteKit: '^2.70.3',
-  svelteAdapterNode: '^5.5.7',
-  svelteCheck: '^4.7.6',
-  sveltePlugin: '^7.3.1',
+  svelte: '5.57.2',
+  svelteKit: '2.70.3',
+  svelteAdapterNode: '5.5.7',
+  svelteCheck: '4.7.6',
+  sveltePlugin: '7.3.1',
   // Build / Test
-  vite: '^8.3.4',
-  vitest: '^4.1.11',
-  tsup: '^8.5.1',
-  rimraf: '^6.1.3',
+  vite: '8.3.4',
+  vitest: '4.1.11',
+  tsup: '8.5.1',
+  rimraf: '6.1.3',
   // ESLint
-  eslint: '^10.12.0',
-  eslintPluginFormat: '^2.0.1',
-  eslintPluginSvelte: '^3.23.1',
-  svelteEslintParser: '^1.9.0',
+  eslint: '10.12.0',
+  eslintPluginFormat: '2.0.1',
+  eslintPluginSvelte: '3.23.1',
+  svelteEslintParser: '1.9.0',
   // Node / TS
-  nodeTypes: '^26.6.5',
+  nodeTypes: '26.6.5',
   // Svelte / ESLint / tsup 继续使用稳定的 JavaScript 编译 API。
-  typescript: '^6.0.3',
+  typescript: '6.0.3',
   // E2E
-  playwright: '^1.64.0',
+  playwright: '1.64.0',
   // Validation
-  zod: '^4.6.5',
+  zod: '4.6.5',
   // Tauri
-  tauriCli: '^2.12.1',
+  tauriCli: '2.12.1',
 } as const
 
+/**
+ * 有真实可构建入口的前端目标；miniapp 只生成占位，不进入可启动应用列表。
+ * @example 模块内部上下文
+ * ```ts
+ * const target: ImplementedFrontendTarget = 'web'
+ * const port = FRONTEND_PORTS_DEFAULT[target]
+ * ```
+ */
 type ImplementedFrontendTarget = Exclude<FrontendTarget, 'miniapp'>
 
 const FRONTEND_PORTS_DEFAULT: Record<ImplementedFrontendTarget, number> = {
@@ -132,7 +140,22 @@ const DEFAULT_THEME_NAME = 'light'
 // 框架与模板同步发布；范围版本会把旧命名 alpha9 视为比 alpha.58 更新。
 const HAI_PACKAGE_VERSION = getCliVersion()
 const HAI_PACKAGE_SPECIFIER_CATALOG = 'catalog:'
+/**
+ * 模板版本表各键对应的依赖说明符；pnpm 使用 catalog:，其他包管理器使用受测版本。
+ * @example 模块内部上下文
+ * ```ts
+ * const specifiers: FullstackPackageSpecifiers = buildFullstackPackageSpecifiers(true)
+ * const version = specifiers.svelte // catalog:
+ * ```
+ */
 type FullstackPackageSpecifiers = { [Key in keyof typeof VERSIONS]: string }
+/**
+ * 写入 pnpm workspace catalog 的包名与具体版本；不把 catalog: 再嵌套为版本值。
+ * @example 模块内部上下文
+ * ```ts
+ * const catalog: CatalogPackageVersions = { '@h-ai/core': getCliVersion(), svelte: VERSIONS.svelte }
+ * ```
+ */
 type CatalogPackageVersions = Readonly<Record<string, string>>
 
 const HAI_CATALOG_PACKAGE_NAMES = [
@@ -388,6 +411,8 @@ function buildAppHaiCatalogPackages(options: {
 
   if (options.isSvelteOnlyApp) {
     packageNames.push('@h-ai/api-client', '@h-ai/api-contract', '@h-ai/capacitor', '@h-ai/ui')
+    if (options.featureMap.crypto)
+      packageNames.push('@h-ai/crypto')
     return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
   }
 
@@ -432,7 +457,7 @@ function buildAppHaiCatalogPackages(options: {
   return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
 }
 
-function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], deploy = false): Record<string, string> {
+function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], deploy = false, features: Record<string, boolean> = {}): Record<string, string> {
   const packageNames: string[] = [
     ...FULLSTACK_ROOT_CATALOG_PACKAGE_NAMES,
     '@h-ai/cli',
@@ -449,6 +474,10 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], dep
     packageNames.push(...FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES)
   if (deploy)
     packageNames.push('@h-ai/deploy')
+  if (features.ai)
+    packageNames.push('@h-ai/ai')
+  if (features.vecdb)
+    packageNames.push('@h-ai/vecdb')
 
   return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
 }
@@ -459,6 +488,11 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], dep
 
 /**
  * 模板渲染上下文
+ * @example 模块内部上下文
+ * ```ts
+ * const context: TemplateContext = buildTemplateContext({ name: 'shop', appType: 'fullstack', features: ['ai'], frontends: ['web'], packageManager: 'pnpm' })
+ * const dbEnabled = context.features.db // AI 补齐 db/vecdb。
+ * ```
  */
 export interface TemplateContext {
   /** 所有应用模板共用的第三方依赖版本，避免单包与 workspace 版本表漂移。 */
@@ -499,6 +533,17 @@ export interface TemplateContext {
   fullstack?: FullstackTemplateContext
 }
 
+/**
+ * API workspace 的 contract/service 包命名及真实工厂标识，用于让生成入口与消费者一致。
+ * @example 模块内部上下文
+ * ```ts
+ * const context = buildTemplateContext({ name: 'shop', appType: 'api', features: [], packageManager: 'pnpm' })
+ * if (context.api) {
+ *   const api: ApiWorkspaceTemplateContext = context.api
+ *   const contractPackage = api.contractPackageName
+ * }
+ * ```
+ */
 export interface ApiWorkspaceTemplateContext {
   /** 依赖版本集合 */
   versions: typeof VERSIONS
@@ -516,6 +561,13 @@ export interface ApiWorkspaceTemplateContext {
   serviceProceduresFactoryName: string
 }
 
+/**
+ * 已实现目标对应的应用信息；miniapp 不会被列为可启动前端。
+ * @example 模块内部上下文
+ * ```ts
+ * const app: FullstackFrontendApp = { target: 'web', packageName: 'shop-web', label: 'Web', port: 4173 }
+ * ```
+ */
 export interface FullstackFrontendApp {
   /** 前端目标 */
   target: ImplementedFrontendTarget
@@ -529,6 +581,11 @@ export interface FullstackFrontendApp {
 
 /**
  * 国际化配置（已解析后的最终值）
+ * @example 模块内部上下文
+ * ```ts
+ * const i18n: FullstackI18nContext = { baseLocale: 'zh-CN', locales: ['zh-CN', 'en-US'] }
+ * const includesBase = i18n.locales.includes(i18n.baseLocale)
+ * ```
  */
 export interface FullstackI18nContext {
   baseLocale: string
@@ -537,12 +594,28 @@ export interface FullstackI18nContext {
 
 /**
  * 主题配置（已解析后的最终值）
+ * @example 模块内部上下文
+ * ```ts
+ * const theme: FullstackThemeContext = { defaultTheme: 'light', themes: ['light', 'dark'] }
+ * const includesDefault = theme.themes.includes(theme.defaultTheme)
+ * ```
  */
 export interface FullstackThemeContext {
   defaultTheme: string
   themes: readonly string[]
 }
 
+/**
+ * 前后端分离工程最终模板数据；前端列表、共享主题/语言与端口按默认值和选项统一解析；语言及主题缺省项会补齐。
+ * @example 模块内部上下文
+ * ```ts
+ * const context = buildTemplateContext({ name: 'shop', appType: 'fullstack', features: ['ai'], frontends: ['web'], packageManager: 'pnpm' })
+ * if (context.fullstack) {
+ *   const fullstack: FullstackTemplateContext = context.fullstack
+ *   const appNames = fullstack.frontendApps.map(app => app.packageName)
+ * }
+ * ```
+ */
 export interface FullstackTemplateContext {
   /** 显示名称来自 core 配置。 */
   appName: string
@@ -737,6 +810,22 @@ async function findRenderedStaticPathFiles(dir: string): Promise<string[]> {
 
 /**
  * 根据用户选项构建模板渲染上下文
+ * 纯上下文构建，不创建文件、不安装依赖；始终补齐应用骨架及功能的硬依赖。
+ * 不执行创建命令的交互输入校验；直接调用者仍须验证用户输入。
+ * @param options - 工程类型、启用功能、包管理器与模块默认值。
+ * @param options.name - 新工程名称。
+ * @param options.appType - 应用骨架类型。
+ * @param options.features - 启用的功能，函数补齐硬依赖。
+ * @param options.frontends - fullstack 前端目标；省略使用默认目标。
+ * @param options.moduleConfigs - 用户指定模块、语言、主题和端口。
+ * @param options.packageManager - pnpm 使用 catalog，其他管理器使用具体版本。
+ * @param options.deploy - 默认 true；false 明确关闭部署开发依赖。
+ * @returns 已补硬依赖与默认值的模板上下文。
+ * @example 模块内部上下文
+ * ```ts
+ * const context = buildTemplateContext({ name: 'shop', appType: 'fullstack', features: ['ai'], frontends: ['web'], packageManager: 'pnpm' })
+ * const usesSharedAi = context.features.db && context.features.vecdb
+ * ```
  */
 export function buildTemplateContext(options: {
   name: string
@@ -745,11 +834,13 @@ export function buildTemplateContext(options: {
   frontends?: readonly FrontendTarget[]
   moduleConfigs?: ModuleConfigs
   packageManager: string
+  deploy?: boolean
 }): TemplateContext {
   const featureMap: Record<string, boolean> = {}
   for (const f of options.features) {
     featureMap[f] = true
   }
+  featureMap.deploy = options.deploy !== false
 
   // fullstack 默认交付完整 mini 管理功能，不能移除其必需模块。
   if (options.appType === 'fullstack') {
@@ -764,8 +855,13 @@ export function buildTemplateContext(options: {
     featureMap.crypto = true
   }
   // audit / scheduler / payment 依赖 reldb
-  if (featureMap.audit || featureMap.scheduler || featureMap.payment) {
+  if (featureMap.audit || featureMap.scheduler || featureMap.payment || featureMap.crypto) {
     featureMap.db = true
+  }
+  // AI 的共享会话、记忆和知识依赖持久关系库与向量库。
+  if (featureMap.ai) {
+    featureMap.db = true
+    featureMap.vecdb = true
   }
 
   const isApi = options.appType === 'api'
@@ -777,7 +873,7 @@ export function buildTemplateContext(options: {
   const selectedFrontends = options.frontends ?? DEFAULT_FULLSTACK_FRONTENDS
   let haiCatalogPackages: TemplateContext['haiCatalogPackages']
   if (isFullstack) {
-    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends, featureMap.deploy)
+    haiCatalogPackages = buildFullstackCatalogPackages(selectedFrontends, featureMap.deploy, featureMap)
   }
   else if (isApi) {
     haiCatalogPackages = buildApiWorkspaceCatalogPackages(featureMap)
@@ -891,6 +987,16 @@ function buildFullstackTemplateContext(
   }
 }
 
+/**
+ * 按用户配置、core 默认语言与框架回退语言解析列表；去重并补入基础语言，不执行 locale 名称合法性校验。
+ * @param moduleConfigs - 创建选项中的模块配置。
+ * @returns 至少包含基础语言的最终 i18n 数据。
+ * @example 模块内部上下文
+ * ```ts
+ * const i18n = resolveI18nContext({ fullstack: { i18n: { baseLocale: 'en-US', locales: ['zh-CN'] } } })
+ * const base = i18n.locales[0] // en-US 会补在首位。
+ * ```
+ */
 function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext {
   const coreLocale = moduleConfigs?.core?.defaultLocale ?? 'zh-CN'
   const baseLocale = moduleConfigs?.fullstack?.i18n?.baseLocale ?? coreLocale
@@ -904,6 +1010,16 @@ function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext
   return { baseLocale, locales }
 }
 
+/**
+ * 去重主题列表并确保默认主题可选；未配置时使用 light/dark，不验证主题名是否已安装。
+ * @param moduleConfigs - 创建选项中的模块配置。
+ * @returns 包含默认主题的最终主题数据。
+ * @example 模块内部上下文
+ * ```ts
+ * const theme = resolveThemeContext({ fullstack: { theme: { defaultTheme: 'dark', themes: ['light'] } } })
+ * const first = theme.themes[0] // dark
+ * ```
+ */
 function resolveThemeContext(moduleConfigs?: ModuleConfigs): FullstackThemeContext {
   const defaultTheme = moduleConfigs?.fullstack?.theme?.defaultTheme ?? DEFAULT_THEME_NAME
   const requested = moduleConfigs?.fullstack?.theme?.themes
@@ -956,8 +1072,17 @@ function toPascalIdentifier(value: string): string {
  * 3. 叠加选中 feature 的路由
  * 4. 渲染所有 .hbs 动态模板
  *
+ * 将模板骨架、功能路由与共享脚本写入指定目录；不会安装依赖或初始化 Git。
  * @param projectPath - 项目目标目录
  * @param context - 模板渲染上下文
+ * @throws Error - 模板读取、渲染、路径校验或文件写入失败。
+ * @returns 模板文件与共享脚本写入完成。
+ * @example 模块内部上下文
+ * ```ts
+ * const context = buildTemplateContext({ name: 'shop', appType: 'api', features: ['ai'], packageManager: 'pnpm' })
+ * // 目标为新工程目录；调用方先检查目录与选项。
+ * await generateFromTemplates(path.resolve('shop'), context)
+ * ```
  */
 export async function generateFromTemplates(
   projectPath: string,
@@ -1033,10 +1158,13 @@ export async function generateFromTemplates(
 
   // 多包模板不继承 base；所有应用统一复制同一份 E2E 清理入口。
   await fse.copy(path.join(root, 'shared', 'run-e2e.mjs'), path.join(projectPath, 'scripts', 'run-e2e.mjs'))
+  await fse.copy(path.join(root, 'shared', 'e2e-env.ts'), path.join(projectPath, 'scripts', 'e2e-env.ts'))
+  await fse.ensureDir(path.join(projectPath, 'images', 'dependencies'))
+  await fse.writeFile(path.join(projectPath, 'images', 'dependencies', '.gitkeep'), '')
   await fse.copy(path.join(root, 'shared', '.gitattributes'), path.join(projectPath, '.gitattributes'))
   if (context.isSvelteOnlyApp) {
     await fse.copy(path.join(root, 'shared', 'vite-runtime-config.ts'), path.join(projectPath, 'scripts', 'vite-runtime-config.ts'))
-    await fse.copy(path.join(root, 'shared', 'container-runtime-config.sh'), path.join(projectPath, 'docker', '19-runtime-config.sh'))
+    await fse.copy(path.join(root, 'shared', 'container-runtime-config.sh'), path.join(projectPath, 'images', 'web', '19-runtime-config.sh'))
   }
 
   if (context.isSvelteOnlyApp || context.appType === 'fullstack') {
@@ -1231,6 +1359,16 @@ function renderOutputPath(pathTemplate: string, context: TemplateContext): strin
   return Handlebars.compile(normalizedTemplate, { noEscape: true })(context)
 }
 
+/**
+ * 渲染后的输出路径只允许根内相对路径，拒绝绝对路径与任意 .. 段；不能替代已有目录的 realpath 检查。
+ * @param relativePath - 模板渲染后的相对输出路径。
+ * @returns 路径符合模板输出边界时为 true。
+ * @example 模块内部上下文
+ * ```ts
+ * const valid = isSafeRelativePath('src/server/orders.ts')
+ * const escaped = isSafeRelativePath('../outside.ts') // false
+ * ```
+ */
 function isSafeRelativePath(relativePath: string): boolean {
   const normalized = path.normalize(relativePath)
   return !path.isAbsolute(normalized) && normalized !== '..' && !normalized.startsWith(`..${path.sep}`)

@@ -6,6 +6,8 @@
 
 > 当前处于 `0.1.0-alpha` 阶段：公共契约仍在演进。生产采用前请锁定版本，并针对自身场景完成安全与容量验证。
 
+生产多实例部署请先核对[21 包共享状态与恢复能力表](docs/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
+
 <p align="center">
   <strong>AI Runtime · 企业级全栈模块 · Agent Skills · 端到端类型安全</strong>
 </p>
@@ -16,8 +18,8 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.7%2B-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%E2%89%A522.12-339933.svg">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -36,19 +38,29 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 - **数据能力** —— 关系数据库、缓存、对象存储、数据管线
 - **运营能力** —— 支付、用户触达、定时任务、自动化部署
 
+## 从这里开始
+
+| 你想做什么             | 建议入口                                       |
+| ---------------------- | ---------------------------------------------- |
+| 创建完整应用           | [创建、开发和交付指南](docs/usage/README.md)   |
+| 在现有工程使用某个能力 | [模块清单](#功能清单)，再读对应包的使用入门    |
+| 让 AI 按需求实现功能   | [AI 使用索引](LLMS.txt)和生成工程的 AGENTS.md  |
+| 构建镜像或离线部署     | [构建与部署](packages/deploy/README.md)        |
+| 参与框架开发           | [开发与测试](#二次开发)和[工作规范](AGENTS.md) |
+
 ## 核心特色
 
-| 特色                  | 说明                                                                       |
-| --------------------- | -------------------------------------------------------------------------- |
-| **AI-First 设计**     | 每一处 API 设计都优先保证 AI 编程助手能够正确使用；AI 用得对，人也用得顺。 |
-| **统一生命周期**      | 有状态模块遵循 `init() → use → close()`，一种模式贯穿全部模块。            |
-| **显式失败语义**      | 领域操作统一返回 `HaiResult<T>`，成功与失败在类型层面强制区分。            |
-| **配置即校验**        | Zod Schema 在 `init()` 阶段完成校验，配置错误在启动时暴露，而非运行时。    |
-| **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。           |
-| **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。   |
-| **多端 UI**           | 92 个 Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。        |
-| **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。         |
-| **Agent Skills 内置** | 每个模块随附标准化 Skill 文件，AI 助手可直接获取正确用法。                 |
+| 特色                  | 说明                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| **AI-First 设计**     | 每一处 API 设计都优先保证 AI 编程助手能够正确使用；AI 用得对，人也用得顺。                |
+| **统一生命周期**      | 有状态模块遵循 `init() → use → close()`，有状态模块共享使用习惯；工厂和纯函数按各自契约。 |
+| **显式失败语义**      | 领域操作统一返回 `HaiResult<T>`，成功与失败在类型层面强制区分。                           |
+| **配置即校验**        | Zod Schema 在 `init()` 阶段完成校验，配置错误在启动时暴露，而非运行时。                   |
+| **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。                          |
+| **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。                  |
+| **多端 UI**           | Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。                             |
+| **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。                        |
+| **Agent Skills 内置** | 每个模块随附标准化 Skill 文件，AI 助手可直接获取正确用法。                                |
 
 ## 设计理念
 
@@ -105,7 +117,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 pnpm add -g @h-ai/cli
 
 # 创建带部署能力的 Web + API；省略选项可交互选择
-hai create my-app --type fullstack --frontends web --features deploy --yes
+hai create my-app --type fullstack --frontends web --yes
 
 # 默认已安装依赖，进入工程启动
 cd my-app
@@ -133,9 +145,12 @@ hai g:component UserCard
 pnpm build --target docker
 # 配置 .env.prod 与部署目标后，发布已有 API/Web 镜像
 pnpm run deploy --env prod
+pnpm run deploy --env prod --build --services web
 # 两机不通时只生成包，按包内 README 手工搬运启动
-pnpm run deploy --env prod --bundle-only --output release-prod.tar
+pnpm run deploy --env prod --build --bundle-only
 ```
+
+部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，`hai.build.json` 指定对应文件。完整离线包包含自建中间件镜像，并附 Windows/Linux/macOS 上传部署脚本；隔离服务器可直接执行包内 apply.sh。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。
 
 ### 在现有项目中集成
 
@@ -199,7 +214,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 | 包名           | 职责                                                                                                       |                           Provider 支持                            |                                             npm 最新版                                              |
 | -------------- | ---------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | UI 组件库：92 个 Svelte 5 Runes 组件（20 原子 + 36 组合 + 36 场景），15 精选主题                           |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/ui`     | UI 组件库：Svelte 5 Runes 组件（20 原子 + 36 组合 + 36 场景），15 精选主题                                 |                                 —                                  |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
 | `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                                                         |                                 —                                  |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
 | `@h-ai/deploy` | 自动化部署：Vercel（SaaS，自动开通云资源）与 docker-ssh（容器化经 SSH 部署到自有主机，按功能生成 sidecar） | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / 阿里云短信 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 
@@ -620,23 +635,25 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 - **AI 兼容回退**：`OPENAI_*` 仅用于 `@h-ai/ai` 的兼容 fallback
 - **密钥安全**：密钥不写死、不进入日志，也不放入 `PUBLIC_*` / `VITE_*` 客户端变量
 
-| 分组           | 代表变量                          | 说明                                                       |
-| -------------- | --------------------------------- | ---------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_DEBUG`  | 运行环境、调试与日志开关                                   |
-| Database       | `HAI_DB_*`                        | `_db.yml` 的 SQLite / PostgreSQL / MySQL 配置              |
-| Cache          | `HAI_CACHE_*`                     | `@h-ai/cache` 的 memory / Redis / Upstash 配置             |
-| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`、`@h-ai/kit` 的认证与安全配置                  |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE` | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址   |
-| Storage        | `HAI_STORAGE_*`                   | `@h-ai/storage` 的 local / S3 配置                         |
-| AI             | `HAI_AI_LLM_*`                    | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置              |
-| VecDB          | `HAI_VECDB_*`                     | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant / Chroma 配置 |
-| Reach          | `HAI_REACH_*`                     | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                  |
-| Payment        | `HAI_PAYMENT_*`                   | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置            |
-| Deploy         | `HAI_DEPLOY_*`                    | `@h-ai/deploy` / `@h-ai/cli` 的部署与基础设施凭据          |
+| 分组           | 代表变量                                 | 说明                                                       |
+| -------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` | 运行环境与实际日志级别                                     |
+| Database       | `HAI_DB_*`                               | `_db.yml` 的 SQLite / PostgreSQL / MySQL 配置              |
+| Cache          | `HAI_CACHE_*`                            | `@h-ai/cache` 的 memory / Redis / Upstash 配置             |
+| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | `@h-ai/iam`、`@h-ai/kit` 的认证与安全配置                  |
+| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`        | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址   |
+| Storage        | `HAI_STORAGE_*`                          | `@h-ai/storage` 的 local / S3 配置                         |
+| AI             | `HAI_AI_LLM_*`                           | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置              |
+| VecDB          | `HAI_VECDB_*`                            | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant / Chroma 配置 |
+| Reach          | `HAI_REACH_*`                            | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                  |
+| Payment        | `HAI_PAYMENT_*`                          | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置            |
+| Deploy         | `HAI_DEPLOY_*`                           | `@h-ai/deploy` / `@h-ai/cli` 的部署与基础设施凭据          |
 
 完整字段与默认值以根目录 `.env.example` 为准；在某个示例应用中工作时，再对照该应用自己的 `README.md` 与 `.env.example` 查看增量配置。
 
 修改模块公开 Schema、YAML 或直接读取的环境变量后，先构建相关模块，再执行 `pnpm generate:env`，同步根 `.env.example`、CLI 配置元数据和各示例应用 `.env.example`；执行 `pnpm check:env` 检查是否过期。生成器只读取公开源码和示例，不读取 `.env.local`，不覆盖公共基础和环境文件中的项目取值。新增变量应说明用途、类型、枚举、单位、范围和启用条件；数组索引、动态键及父级对象覆盖仍须经过模块 Schema 和运行测试。
+
+入口扫描排除 JS/TS（含 Svelte script）的真实 JSDoc；Schema 字段注释仍用于生成说明。模板/YAML 可选注释与字符串中的生成代码引用照常保留，示例注释不能新增运行变量。
 
 `pnpm dev` / `dev:test` / `dev:prod` 选择开发、测试和生产配置，Node 服务构建后使用 `start:test` / `start:prod`。Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles({ mode, envDir })` 结果后注入，Node 按基础、环境、本机的顺序传入 `--env-file`；`core.init` 不读取 dotenv。`development` / `production` 文件模式映射为 `dev` / `prod`。Provider 切换和旧变量迁移步骤见应用 skill 的[环境配置](packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 
@@ -668,3 +685,5 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 ## 许可证
 
 [Apache-2.0](./LICENSE)
+
+配置字段、实际消费点、环境命名及生成应用之间的对应关系见[21 包配置对应表](docs/configuration-map.md)。

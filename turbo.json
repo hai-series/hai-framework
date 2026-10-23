@@ -68,7 +68,9 @@
     },
     "test:e2e": {
       "passThroughEnv": [
-        "HAI_AUTH_EVIDENCE_DIR"
+        "HAI_AUTH_EVIDENCE_DIR",
+        "PLAYWRIGHT_HTML_OUTPUT_DIR",
+        "PLAYWRIGHT_HTML_REPORT"
       ],
       "dependsOn": [
         "^build"

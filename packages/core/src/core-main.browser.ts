@@ -1,7 +1,7 @@
 /**
  * @h-ai/core — Core 服务聚合（浏览器）
  *
- * 提供浏览器环境的 core 对象，聚合常用功能。 所有功能统一通过 core 对象访问（不含 config 能力）。
+ * 提供浏览器环境的 core 对象，聚合常用功能。 所有功能统一通过 core 对象访问；文件配置方法保留明确失败的占位接口。
  * @module core-main.browser
  */
 
@@ -42,11 +42,11 @@ function createBrowserCore() {
 
 /**
  * Core 服务对象 - 聚合常用功能（浏览器）。
- *
  * @example
  * ```ts
  * import { core } from '@h-ai/core'
- * core.logger.info('browser ready')
+ * core.init({ logging: { level: 'info' } })
+ * core.logger.info('Browser ready')
  * ```
  */
 export const core = createBrowserCore()

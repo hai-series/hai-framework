@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import type { AuthPanelConfig } from '../src/lib/components/scenes/types.js'
+import type { AuthPanelConfig, LoginFormData, LoginFormProps } from '../src/lib/components/scenes/types.js'
 import { err, ok } from '@h-ai/core'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { AuthPanel, LoginForm, RegisterForm } from '../src/lib/components/scenes/iam/index.js'
 import { setUILocale } from '../src/lib/messages.js'
 
@@ -21,6 +21,38 @@ function snippet(text: string) {
 }
 
 describe('authentication form extensions and agreements', () => {
+  it.each(['password', 'email', 'sms'] as const)('登录仅提交实际认证字段且不展示未实现的持久会话选择：%s', async (method) => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const onsubmit = vi.fn()
+    const component = mount(LoginForm, { target, props: { methods: [method], onsubmit } })
+    try {
+      flushSync()
+      expect(target.querySelector('input[type="checkbox"]')).toBeNull()
+      expectTypeOf<Extract<'rememberMe', keyof LoginFormData>>().toEqualTypeOf<never>()
+      expectTypeOf<Extract<'showRememberMe', keyof LoginFormProps>>().toEqualTypeOf<never>()
+      const username = target.querySelector<HTMLInputElement>('input[name="username"]')!
+      username.value = method === 'email' ? 'alice@example.com' : method === 'sms' ? '13900000000' : 'alice'
+      username.dispatchEvent(new Event('input', { bubbles: true }))
+      const credential = target.querySelector<HTMLInputElement>(method === 'password' ? 'input[type="password"]' : 'input[name="code"]')!
+      credential.value = method === 'password' ? 'ExamplePassword123' : '123456'
+      credential.dispatchEvent(new Event('input', { bubbles: true }))
+      flushSync()
+      target.querySelector('form')!.requestSubmit()
+      expect(onsubmit).toHaveBeenCalledOnce()
+      expect(onsubmit.mock.calls[0]?.[0]).toEqual({
+        username: username.value,
+        password: method === 'password' ? 'ExamplePassword123' : '',
+        method,
+        code: method === 'password' ? undefined : '123456',
+      })
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
   it('找回密码通知保留表单与重置入口，并随语言更新', async () => {
     setUILocale('zh-CN')
     const target = document.createElement('div')

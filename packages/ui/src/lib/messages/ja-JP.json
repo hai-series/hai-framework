@@ -11,7 +11,6 @@
   "login_username_placeholder": "ユーザー名またはメールアドレスを入力",
   "login_password": "パスワード",
   "login_password_placeholder": "パスワードを入力",
-  "login_remember_me": "ログイン状態を保持",
   "login_forgot_password": "パスワードをお忘れですか？",
   "login_submit": "ログイン",
   "login_title": "ログイン",

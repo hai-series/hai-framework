@@ -38,6 +38,40 @@ afterEach(() => {
 })
 
 describe('browser-safety helpers', () => {
+  it('读取受限浏览器的 localStorage getter 时应捕获 SecurityError', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Storage is blocked', 'SecurityError')
+      },
+    })
+
+    expect(readStoredValue('hai-theme')).toBeNull()
+  })
+
+  it('写入受限浏览器的 localStorage getter 时应捕获 SecurityError', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Storage is blocked', 'SecurityError')
+      },
+    })
+
+    expect(writeStoredValue('hai-theme', 'dark')).toBe(false)
+  })
+
+  it('公开主题入口在 storage getter 受限时仍可选择应用的回退主题', async () => {
+    const { getSavedTheme } = await import('@h-ai/ui/theme')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Storage is blocked', 'SecurityError')
+      },
+    })
+
+    expect(getSavedTheme('dark')).toBe('dark')
+  })
+
   it('读取 localStorage 时若能力缺失应回退为 null', () => {
     Reflect.deleteProperty(globalThis, 'localStorage')
     expect(readStoredValue('hai-theme')).toBeNull()

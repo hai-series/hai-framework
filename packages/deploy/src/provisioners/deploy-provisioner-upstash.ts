@@ -20,6 +20,14 @@ const logger = core.logger.child({ module: 'deploy', scope: 'provisioner-upstash
 /** Upstash API 基址 */
 const UPSTASH_API = 'https://api.upstash.com'
 
+/**
+ * 供应商 API 的部分字段形状；缺少连接凭据时不能声称已有连接可用。
+ * @example 模块内部上下文
+ * ```ts
+ * const database: UpstashDatabase = { database_id: 'redis-shop', database_name: 'shop', endpoint: 'redis.example.org', port: 6379 }
+ * const id = database.database_id
+ * ```
+ */
 interface UpstashDatabase {
   database_id?: string
   database_name?: string
@@ -97,8 +105,21 @@ function buildUpstashProvisionResult(database: UpstashDatabase, resourceStatus: 
 
 /**
  * 创建 Upstash Redis Provisioner
- *
+ * 工厂返回内部接口；认证与开通调用必须逐次检查 HaiResult，返回的连接凭据不能直接记录。
  * @returns ServiceProvisioner 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const email = process.env.HAI_DEPLOY_SERVICES_CACHE_EMAIL
+ * if (!email) throw new Error('Provide HAI_DEPLOY_SERVICES_CACHE_EMAIL privately')
+ * const apiKey = process.env.HAI_DEPLOY_SERVICES_CACHE_APIKEY
+ * if (!apiKey) throw new Error('Provide HAI_DEPLOY_SERVICES_CACHE_APIKEY privately')
+ * const provisioner = createUpstashProvisioner()
+ * const authenticated = await provisioner.authenticate({ email, apiKey })
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * const result = await provisioner.provision('shop')
+ * if (!result.success) throw new Error(result.error.message)
+ * const status = result.data.resourceStatus
+ * ```
  */
 export function createUpstashProvisioner(): ServiceProvisioner {
   let apiKey: string | null = null

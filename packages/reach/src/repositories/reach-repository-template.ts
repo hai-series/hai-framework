@@ -19,7 +19,27 @@ import { HaiReachError } from '../reach-types.js'
 // ─── 模板存储实体类型 ───
 
 /**
- * 数据库模板存储实体
+ * 内部数据库模板行；createdAt/updatedAt由TIMESTAMP字段映射为Date，与发送队列BIGINT毫秒不同。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { reldb } = await import('@h-ai/reldb')
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const created = await createTemplateRepository(reldb)
+ *   if (!created.success) throw new Error(created.error.message)
+ *   const repository = created.data
+ *   const found = await repository.findByName('welcome')
+ *   if (!found.success) throw new Error(found.error.message)
+ *   const row: StoredTemplate | undefined = found.data
+ *   if (row) { const updatedAt = row.updatedAt }
+ * }
+ * finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
  */
 export interface StoredTemplate {
   /** 自增主键 */
@@ -32,35 +52,100 @@ export interface StoredTemplate {
   subject: string | null
   /** 正文模板 */
   body: string
-  /** 创建时间 */
-  createdAt: number
-  /** 更新时间 */
-  updatedAt: number
+  /** 创建时间（TIMESTAMP 经仓库映射为 Date）。 */
+  createdAt: Date
+  /** 更新时间（TIMESTAMP 经仓库映射为 Date）。 */
+  updatedAt: Date
 }
 
 // ─── 模板存储接口 ───
 
 /**
- * 模板存储接口
+ * 内部模板数据库契约，唯一name支持upsert；表配置/数据库持有内容，进程缓存只持有仓库对象。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const { reldb } = await import('@h-ai/reldb')
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const created = await createTemplateRepository(reldb)
+ *   if (!created.success) throw new Error(created.error.message)
+ *   const repository = created.data
+ *   const saved = await repository.upsert({ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' })
+ *   if (!saved.success) throw new Error(saved.error.message)
+ *   const found = await repository.findByName('welcome')
+ *   if (!found.success) throw new Error(found.error.message)
+ * }
+ * finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
  */
 export interface TemplateRepository extends ReldbCrudRepository<StoredTemplate> {
   /**
    * 按名称查找模板
+   * @param name - 实际操作输入，按本方法约束校验。
+   * @param tx - 可选受控数据库事务。
+   * @returns HaiResult；先检查success，条件提交失败不能伪装成功。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * async function find(repository: TemplateRepository, name: string) {
+   *   const found = await repository.findByName(name)
+   *   if (!found.success) throw new Error(found.error.message)
+   *   return found.data
+   * }
+   * ```
    */
   findByName: (name: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredTemplate | undefined>>
 
   /**
    * 保存模板（存在则更新，不存在则插入）
+   * @param template - 实际操作输入，按本方法约束校验。
+   * @param tx - 可选受控数据库事务。
+   * @returns HaiResult；先检查success，条件提交失败不能伪装成功。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * async function save(repository: TemplateRepository, template: ReachTemplate) {
+   *   const saved = await repository.upsert(template)
+   *   if (!saved.success) throw new Error(saved.error.message)
+   * }
+   * ```
    */
   upsert: (template: ReachTemplate, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 按名称删除模板
+   * @param name - 实际操作输入，按本方法约束校验。
+   * @param tx - 可选受控数据库事务。
+   * @returns HaiResult；先检查success，条件提交失败不能伪装成功。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * async function remove(repository: TemplateRepository, name: string) {
+   *   const removed = await repository.deleteByName(name)
+   *   if (!removed.success) throw new Error(removed.error.message)
+   * }
+   * ```
    */
   deleteByName: (name: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 获取所有模板（转换为 ReachTemplate 格式）
+   * @param tx - 可选受控数据库事务。
+   * @returns HaiResult；先检查success，条件提交失败不能伪装成功。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * async function list(repository: TemplateRepository) {
+   *   const listed = await repository.listTemplates()
+   *   if (!listed.success) throw new Error(listed.error.message)
+   *   return listed.data
+   * }
+   * ```
    */
   listTemplates: (tx?: DmlWithTxOperations) => Promise<HaiResult<ReachTemplate[]>>
 }
@@ -135,9 +220,12 @@ let templateRepoInstance: TemplateRepository | null = null
 let templateRepoSqlOps: unknown = null
 
 /**
- * 重置模板存储单例
+ * 内部关闭时释放旧db.sql对应的仓库引用，不删除持久模板或重置其它节点。
  *
- * 在 reach.close() 时调用，释放对旧 db 实例的引用。
+ * @example 模块内部上下文
+ * ```ts
+ * resetTemplateRepoSingleton()
+ * ```
  */
 export function resetTemplateRepoSingleton(): void {
   templateRepoInstance = null
@@ -145,13 +233,28 @@ export function resetTemplateRepoSingleton(): void {
 }
 
 /**
- * 创建基于数据库的模板存储实例
+ * 内部创建/复用当前数据库生命周期的模板仓库，并实际确认表可访问；连接故障返回失败。
+ * @param db - 已初始化共享数据库。
+ * @returns 模板仓库HaiResult；不使用进程模板内容缓存。
  *
- * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
- * db 重新初始化后自动创建新实例。
- *
- * @param db - 数据库服务实例
- * @returns 成功返回模板存储接口实现；失败返回含错误信息的 HaiResult
+ * @example 模块内部上下文
+ * ```ts
+ * const { reldb } = await import('@h-ai/reldb')
+ * const connected = await reldb.init({ type: 'postgresql', host: 'db', port: 5432, database: 'hai', user: 'postgres', password: process.env.HAI_DB_PASSWORD })
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try {
+ *   const created = await createTemplateRepository(reldb)
+ *   if (!created.success) throw new Error(created.error.message)
+ *   const repository = created.data
+ *   const listed = await repository.listTemplates()
+ *   if (!listed.success) throw new Error(listed.error.message)
+ *   const count = listed.data.length
+ * }
+ * finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
  */
 export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiResult<TemplateRepository>> {
   if (templateRepoInstance && templateRepoSqlOps === db.sql)

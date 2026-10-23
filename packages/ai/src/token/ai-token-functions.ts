@@ -19,6 +19,13 @@ import type { TokenOperations } from './ai-token-types.js'
  * @param text - 文本内容
  * @param tokenRatio - 每字符对应的 token 数（默认 0.25）
  * @returns 估算 token 数
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const tokens = estimateTextTokens('Hello 世界', 0.25)
+ * // CJK 逐字估算，非 CJK 按 tokenRatio 估算。
+ * ```
  */
 export function estimateTextTokens(text: string, tokenRatio = 0.25): number {
   if (!text)
@@ -55,6 +62,12 @@ export function estimateTextTokens(text: string, tokenRatio = 0.25): number {
  * @param messages - 消息列表
  * @param tokenRatio - 每字符对应的 token 数
  * @returns 估算 token 总数
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const tokens = estimateMessagesTokens([{ role: 'user', content: '总结会议决策' }], 0.25)
+ * ```
  */
 export function estimateMessagesTokens(messages: ChatMessage[], tokenRatio = 0.25): number {
   let total = 0
@@ -79,6 +92,13 @@ export function estimateMessagesTokens(messages: ChatMessage[], tokenRatio = 0.2
  *
  * @param config - Token 配置
  * @returns TokenOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const token = createTokenOperations({ tokenRatio: 0.25 })
+ * const budget = token.estimateMessages([{ role: 'user', content: 'Hello' }])
+ * ```
  */
 export function createTokenOperations(config: TokenConfig): TokenOperations {
   const { tokenRatio } = config

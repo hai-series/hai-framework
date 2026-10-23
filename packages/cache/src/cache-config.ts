@@ -9,7 +9,14 @@ import { z } from 'zod'
 
 // ─── 配置 Schema ───
 
-/** Redis 集群节点配置 */
+/**
+ * Redis 集群节点配置
+ * @example
+ * ```ts
+ * import { RedisClusterNodeSchema } from '@h-ai/cache'
+ * const config = RedisClusterNodeSchema.parse({ host: 'redis.internal', port: 6379 })
+ * ```
+ */
 export const RedisClusterNodeSchema = z.object({
   /** 节点主机地址 */
   host: z.string(),
@@ -17,10 +24,24 @@ export const RedisClusterNodeSchema = z.object({
   port: z.number().int().min(1).max(65535),
 })
 
-/** Redis 集群节点类型 */
+/**
+ * Redis 集群节点类型
+ * @example
+ * ```ts
+ * import type { RedisClusterNode } from '@h-ai/cache'
+ * const options: RedisClusterNode = { host: 'redis.internal', port: 6379 }
+ * ```
+ */
 export type RedisClusterNode = z.infer<typeof RedisClusterNodeSchema>
 
-/** Redis 哨兵模式配置 */
+/**
+ * Redis 哨兵模式配置
+ * @example
+ * ```ts
+ * import { RedisSentinelConfigSchema } from '@h-ai/cache'
+ * const config = RedisSentinelConfigSchema.parse({ name: 'primary', sentinels: [{ host: 'sentinel.internal', port: 26379 }] })
+ * ```
+ */
 export const RedisSentinelConfigSchema = z.object({
   /** 哨兵节点列表（至少 1 个） */
   sentinels: z.array(RedisClusterNodeSchema).min(1),
@@ -28,10 +49,24 @@ export const RedisSentinelConfigSchema = z.object({
   name: z.string(),
 })
 
-/** Redis 哨兵模式配置类型 */
+/**
+ * Redis 哨兵模式配置类型
+ * @example
+ * ```ts
+ * import type { RedisSentinelConfig } from '@h-ai/cache'
+ * const options: RedisSentinelConfig = { name: 'primary', sentinels: [{ host: 'sentinel.internal', port: 26379 }] }
+ * ```
+ */
 export type RedisSentinelConfig = z.infer<typeof RedisSentinelConfigSchema>
 
-/** 内存缓存配置（仅用于开发/测试，不支持跨进程共享） */
+/**
+ * 内存缓存配置（仅用于开发/测试，不支持跨进程共享）
+ * @example
+ * ```ts
+ * import { MemoryConfigSchema } from '@h-ai/cache'
+ * const config = MemoryConfigSchema.parse({ type: 'memory' })
+ * ```
+ */
 export const MemoryConfigSchema = z.object({
   type: z.literal('memory'),
 })
@@ -40,6 +75,11 @@ export const MemoryConfigSchema = z.object({
  * Redis 缓存配置
  *
  * 连接优先级：url > cluster > sentinel > host
+ * @example
+ * ```ts
+ * import { RedisConfigSchema } from '@h-ai/cache'
+ * const config = RedisConfigSchema.parse({ type: 'redis', host: 'redis.internal' })
+ * ```
  */
 export const RedisConfigSchema = z.object({
   type: z.literal('redis'),
@@ -51,7 +91,7 @@ export const RedisConfigSchema = z.object({
   host: z.string().default('localhost'),
   /** 端口号；默认 6379 */
   port: z.number().int().min(1).max(65535).default(6379),
-  /** 认证密码 */
+  /** 单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。 */
   password: z.string().optional(),
   /** 数据库编号（0~15）；默认 0 */
   db: z.number().int().min(0).max(15).default(0),
@@ -77,14 +117,35 @@ export const RedisConfigSchema = z.object({
   readOnly: z.boolean().default(false),
 })
 
-/** 缓存配置 Schema；通过 type 字段区分 memory / redis */
+/**
+ * 缓存配置 Schema；通过 type 字段区分 memory / redis
+ * @example
+ * ```ts
+ * import { CacheConfigSchema } from '@h-ai/cache'
+ * const config = CacheConfigSchema.parse({ type: 'redis', host: 'redis.internal' })
+ * ```
+ */
 export const CacheConfigSchema = z.discriminatedUnion('type', [
   MemoryConfigSchema,
   RedisConfigSchema,
 ])
 
-/** 缓存配置类型（Zod parse 后的完整类型，所有默认值已填充） */
+/**
+ * 缓存配置类型（Zod parse 后的完整类型，所有默认值已填充）
+ * @example
+ * ```ts
+ * import { CacheConfigSchema, type CacheConfig } from '@h-ai/cache'
+ * const config: CacheConfig = CacheConfigSchema.parse({ type: 'redis', host: 'redis.internal' })
+ * ```
+ */
 export type CacheConfig = z.infer<typeof CacheConfigSchema>
 
-/** 缓存配置输入类型（Zod parse 前，允许省略带默认值的字段） */
+/**
+ * 缓存配置输入类型（Zod parse 前，允许省略带默认值的字段）
+ * @example
+ * ```ts
+ * import type { CacheConfigInput } from '@h-ai/cache'
+ * const options: CacheConfigInput = { type: 'redis', host: 'redis.internal', keyPrefix: 'orders:' }
+ * ```
+ */
 export type CacheConfigInput = z.input<typeof CacheConfigSchema>

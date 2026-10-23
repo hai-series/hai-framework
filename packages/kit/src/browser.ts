@@ -8,12 +8,19 @@
 import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
-import { clearBrowserToken, createTokenStore, setBrowserToken } from './kit-auth.js'
+import { clearBrowserToken, setBrowserToken } from './kit-auth.js'
 import { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-config.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 
 /**
  * 浏览器端 kit 对象（仅暴露 client-safe 能力）
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * const client = kit.client.create({ auth: true })
+ * client.destroy()
+ * ```
  */
 export const kit = {
   client: {
@@ -28,7 +35,6 @@ export const kit = {
   auth: {
     setBrowserToken,
     clearBrowserToken,
-    createTokenStore,
   },
   i18n: {
     setLocale: setAllModulesLocale,
@@ -37,5 +43,37 @@ export const kit = {
 
 export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
 
-export type * from './client/index.js'
-export type * from './kit-types.js'
+export type {
+  ClientTransportConfig,
+  KitClient,
+  KitClientConfig,
+} from './client/index.js'
+export type {
+  ApiResponse,
+  AuthOperations,
+  AuthOperationsProvider,
+  CorsConfig,
+  FormError,
+  FormValidationResult,
+  GuardConfig,
+  GuardResult,
+  HaiRequestEvent,
+  HandleA2AConfig,
+  HandleA2AOperations,
+  HandleAuthConfig,
+  HandleConfig,
+  HookCryptoConfig,
+  KitConfig,
+  KitConfigInput,
+  KitServerConfig,
+  KitServerConfigInput,
+  KitTransportConfig,
+  KitTransportConfigInput,
+  Middleware,
+  MiddlewareContext,
+  RateLimitConfig,
+  RouteGuard,
+  SessionData,
+  SessionLike,
+  TransportEncryptionOptions,
+} from './kit-types.js'

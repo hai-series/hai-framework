@@ -18,24 +18,21 @@ import { HaiSchedulerError } from './scheduler-types.js'
  * 解析 cron 表达式并返回 Cron 实例
  *
  * @param expression - cron 表达式
- * @param timezone - IANA 时区；传入后按该时区解释 cron 墙上时间
+ * @param timezone - IANA 时区；省略时使用 UTC，不读取节点本地 TZ。
  * @returns 解析结果，成功时返回 Cron 实例
  *
  * @example
  * ```ts
- * // 每天凌晨 2 点
- * parseCronExpression('0 2 * * *')
- *
- * // 每 5 分钟
- * parseCronExpression('&#42;/5 * * * *')
- *
- * // 工作日 9 点到 17 点每小时
- * parseCronExpression('0 9-17 * * 1-5')
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const parsed = parseCronExpression('0 2 * * *')
+ * if (!parsed.success) return parsed
+ * const due = matchesCron(parsed.data, new Date('2026-10-23T02:00:00Z'))
+ * return due
  * ```
  */
 export function parseCronExpression(expression: string, timezone?: string): HaiResult<Cron> {
   try {
-    const cron = new Cron(expression, { legacyMode: false, ...(timezone ? { timezone } : {}) })
+    const cron = new Cron(expression, { legacyMode: false, timezone: timezone ?? 'UTC' })
     return ok(cron)
   }
   catch {
@@ -52,6 +49,15 @@ export function parseCronExpression(expression: string, timezone?: string): HaiR
  * @param cron - croner Cron 实例
  * @param date - 要检查的时间
  * @returns 是否匹配
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const parsed = parseCronExpression('0 10 * * *', 'Asia/Shanghai')
+ * if (!parsed.success) return parsed
+ * const due = matchesCron(parsed.data, new Date('2026-10-23T02:00:00Z'))
+ * return due
+ * ```
  */
 export function matchesCron(cron: Cron, date: Date): boolean {
   return cron.match(date)

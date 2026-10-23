@@ -106,6 +106,7 @@ const AIErrorInfo = {
   MEMORY_NOT_FOUND: '903:404',
   MEMORY_ENRICH_FAILED: '904:500',
   MEMORY_PROMOTE_FAILED: '905:500',
+  MEMORY_LIST_INCOMPLETE: '906:422',
 
   // Persona (910-919)
   PERSONA_NOT_FOUND: '910:404',
@@ -136,6 +137,9 @@ const AIErrorInfo = {
   IMAGE_UPSTREAM_ERROR: '063:502',
   IMAGE_PROTOCOL_ERROR: '064:502',
   IMAGE_CANCELLED: '065:499',
+  IMAGE_DOWNLOAD_BLOCKED: '066:502',
+  IMAGE_TOO_LARGE: '067:413',
+  IMAGE_TIMEOUT: '068:504',
 
   // Context (950-999)
   CONTEXT_COMPRESS_FAILED: '950:500',
@@ -163,12 +167,17 @@ const AIErrorInfo = {
 } as const satisfies ErrorInfo
 
 /**
- * AI 模块标准错误定义对象。
+ * AI 模块标准错误定义。通过错误码比较分支，用户文案由业务边界本地化。
  *
- * 通过 `HaiAIError.ERROR_CODE_NAME` 访问具体错误定义，如：
+ * @example
  * ```ts
- * const def = HaiAIError.NOT_INITIALIZED
- * // => { code: 'hai:ai:010', httpStatus: 500, system: 'hai', module: 'ai' }
+ * import { HaiAIError } from '@h-ai/ai'
+ * import { err } from '@h-ai/core'
+ * const result = err(HaiAIError.NOT_INITIALIZED, 'AI is not initialized')
+ * if (!result.success) {
+ *   const status = result.error.httpStatus
+ *   const code = result.error.code
+ * }
  * ```
  */
 export const HaiAIError = core.error.buildHaiErrorsDef('ai', AIErrorInfo)
@@ -180,6 +189,16 @@ export const HaiAIError = core.error.buildHaiErrorsDef('ai', AIErrorInfo)
  *
  * 用于传入运行时对象（如自定义 StoreProvider），
  * 这些对象无法通过 Zod 配置 Schema 传递。
+ *
+ * @example
+ * ```ts
+ * import { ai, type AIConfigInput, type AIInitOptions, type AIStoreProvider } from '@h-ai/ai'
+ * async function start(config: AIConfigInput, storeProvider: AIStoreProvider) {
+ *   const options: AIInitOptions = { storeProvider }
+ *   const result = await ai.init(config, options)
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * ```
  */
 export interface AIInitOptions {
   /**
@@ -201,11 +220,20 @@ export interface AIInitOptions {
  *
  * @example
  * ```ts
- * import { ai } from '@h-ai/ai'
- *
- * await ai.init({ llm: { model: 'gpt-4o-mini' } })
- * const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
- * await ai.close()
+ * import { ai, type AIConfigInput, type AIInitOptions } from '@h-ai/ai'
+ * // 一次性脚本示例；服务应用在启动阶段 init，在停止接入请求后 close。
+ * async function run(config: AIConfigInput, options: AIInitOptions) {
+ *   const ready = await ai.init(config, options)
+ *   if (!ready.success) throw new Error(ready.error.message)
+ *   try {
+ *     const answer = await ai.llm.ask('你好', { objectId: 'user-1' })
+ *     if (!answer.success) throw new Error(answer.error.message)
+ *     return answer.data
+ *   }
+ *   finally {
+ *     await ai.close()
+ *   }
+ * }
  * ```
  */
 export interface AIFunctions {

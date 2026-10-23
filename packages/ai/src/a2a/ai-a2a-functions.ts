@@ -1,18 +1,19 @@
 /**
  * @h-ai/ai — A2A 子功能组装
  *
- * 实现 A2A 操作接口：RelDB 持久化 TaskStore、消息日志、远端调用。
+ * 实现 A2A 操作接口：共享 journal 任务状态、消息日志、远端调用。
  * 包含延迟初始化代理工厂（`createA2ALazyProxy`）和完整操作实例工厂（`createA2AOperations`）。
  * @module ai-a2a-functions
  */
 
 import type { Message, Task } from '@a2a-js/sdk'
-import type { AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
+import type { AgentExecutor } from '@a2a-js/sdk/server'
 import type { HaiResult } from '@h-ai/core'
 
 import type { A2AConfig } from '../ai-config.js'
-
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
+
+import type { A2AJournal, A2ARuntimeOptions } from './ai-a2a-runtime.js'
 import type {
   A2AAgentCardConfig,
   A2ACallOptions,
@@ -24,16 +25,28 @@ import type {
 } from './ai-a2a-types.js'
 
 import { A2AClient } from '@a2a-js/sdk/client'
-import { DefaultExecutionEventBusManager, DefaultRequestHandler, JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
+import { JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
 import { core, err, ok } from '@h-ai/core'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
-import { buildAgentCard } from './ai-a2a-server.js'
+import { buildAgentCard } from './ai-a2a-card.js'
+import { SharedA2ARequestHandler } from './ai-a2a-runtime.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
 const DEFAULT_A2A_CALL_TIMEOUT_MS = 60_000
 
+/**
+ * 校验通过的真实远端地址与去除查询和片段后的诊断标签。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const validated = validateRemoteUrl('https://trusted-agent.example.com/a2a?route=docs')
+ * const request: ValidatedRemoteUrl = validated
+ * const safeLabel = request.safeLabel // 日志不记录 query/hash。
+ * ```
+ */
 interface ValidatedRemoteUrl {
   requestUrl: string
   safeLabel: string
@@ -61,11 +74,6 @@ function validateRemoteUrl(remoteUrl: string): ValidatedRemoteUrl {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined
-}
-
-function isAgentMessageEvent(event: unknown): event is { role: 'agent', parts?: unknown[] } {
-  const record = asRecord(event)
-  return record?.role === 'agent' && (record.parts === undefined || Array.isArray(record.parts))
 }
 
 function isTaskResult(value: unknown): value is Task {
@@ -155,146 +163,118 @@ async function executeRemoteAgentCall(
   }
 }
 
-// ─── RelDB 持久化 TaskStore ───
-
-/**
- * 基于 ReldbAIStore 的 A2A TaskStore 实现
- *
- * 将 SDK 的 Task 对象桥接到 RelDB 存储，利用 status 和 refId 索引列
- * 实现按状态和上下文查询。
- */
-export class ReldbA2ATaskStore implements TaskStore {
-  constructor(private readonly store: AIRelStore<Task>) {}
-
-  async save(task: Task, context?: ServerCallContext): Promise<void> {
-    await this.store.save(task.id, task, {
-      objectId: context?.user?.isAuthenticated ? `user:${context.user.userName}` : 'anonymous',
-      status: task.status?.state,
-      refId: task.contextId,
-    })
-  }
-
-  async load(taskId: string, context?: ServerCallContext): Promise<Task | undefined> {
-    // 在存储查询阶段约束归属，tasks/get、cancel、继续消息与 referenceTask 均共享此边界。
-    const tasks = await this.store.query({
-      objectId: context?.user?.isAuthenticated ? `user:${context.user.userName}` : 'anonymous',
-      where: { id: taskId },
-      limit: 1,
-    })
-    return tasks[0]
-  }
-}
-
-// ─── A2A 消息日志拦截器 ───
-
-/**
- * 创建带消息日志的 AgentExecutor 包装器
- *
- * 在真实 AgentExecutor.execute 前后记录入站消息和出站响应到 messageStore。
- */
-function wrapExecutorWithLogging(
-  executor: AgentExecutor,
-  messageStore: AIRelStore<A2AMessageRecord>,
-): AgentExecutor {
-  return {
-    async execute(requestContext, eventBus) {
-      // 记录入站消息
-      const inboundRecord: A2AMessageRecord = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        taskId: requestContext.taskId,
-        contextId: requestContext.contextId,
-        role: 'user',
-        parts: requestContext.userMessage.parts ?? [],
-        createdAt: Date.now(),
-      }
-      const callerId = requestContext.context?.user?.isAuthenticated ? requestContext.context.user.userName : undefined
-      if (callerId)
-        inboundRecord.caller = { agentId: callerId }
-      messageStore.save(inboundRecord.id, inboundRecord, { objectId: callerId, status: 'user' })
-        .catch(e => logger.warn('Failed to save inbound A2A message', { error: e }))
-
-      // 监听出站事件并记录
-      const originalPublish = eventBus.publish.bind(eventBus)
-      // SDK event bus 继承原生 EventTarget，不能用 Object.create 伪造 receiver。
-      const wrappedBus: ExecutionEventBus = {
-        on: eventBus.on.bind(eventBus),
-        off: eventBus.off.bind(eventBus),
-        once: eventBus.once.bind(eventBus),
-        removeAllListeners: eventBus.removeAllListeners.bind(eventBus),
-        finished: eventBus.finished.bind(eventBus),
-        publish(event) {
-        // SDK 未提供 ExecutionEvent 的类型守卫；先做最小运行时判别，再记录 agent 消息。
-          if (isAgentMessageEvent(event)) {
-            const outboundRecord: A2AMessageRecord = {
-              id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-              taskId: requestContext.taskId,
-              contextId: requestContext.contextId,
-              role: 'agent',
-              parts: event.parts ?? [],
-              createdAt: Date.now(),
-            }
-            messageStore.save(outboundRecord.id, outboundRecord, { objectId: callerId, status: 'agent' })
-              .catch(e => logger.warn('Failed to save outbound A2A message', { error: e }))
-          }
-          originalPublish(event)
-        },
-      }
-
-      await executor.execute(requestContext, wrappedBus)
-    },
-    async cancelTask(taskId, eventBus) {
-      await executor.cancelTask(taskId, eventBus)
-    },
-  }
-}
-
 // ─── 工厂函数 ───
 
-/** A2A 子功能组装依赖 */
+/**
+ * A2A 子功能组装依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(provider: AIStoreProvider): A2ADeps {
+ *   // 必须在 provider.initialize() 前登记表，延迟注册 executor 不再创建遗漏的表。
+ *   return createA2AStores(provider)
+ * }
+ * ```
+ */
 export interface A2ADeps {
-  /** 初始化阶段已创建的任务存储 */
-  taskStore: AIRelStore<Task>
+  /** Task和事件同文档CAS权威状态。 */
+  journalStore: AIRelStore<A2AJournal>
+  /** context身份归属持久CAS登记。 */
+  contextStore: AIRelStore<{ owner: string }>
   /** 初始化阶段已创建的消息存储 */
   messageStore: AIRelStore<A2AMessageRecord>
 }
 
-/** 在 StoreProvider.initialize 前创建 A2A 表，避免延迟注册 executor 时漏建表。 */
+/**
+ * 在 StoreProvider.initialize 前创建 A2A 表，避免延迟注册 executor 时漏建表。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(provider: AIStoreProvider) {
+ *   const stores = createA2AStores(provider)
+ *   await provider.initialize()
+ *   return stores
+ * }
+ * ```
+ */
 export function createA2AStores(storeProvider: AIStoreProvider): A2ADeps {
   return {
-    taskStore: storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', { hasObjectId: true, hasStatus: true, hasRefId: true }),
+    journalStore: storeProvider.createRelStore<A2AJournal>('hai_ai_a2a_journal', { hasObjectId: true, hasRefId: true }),
+    contextStore: storeProvider.createRelStore<{ owner: string }>('hai_ai_a2a_contexts'),
     messageStore: storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', { hasObjectId: true, hasStatus: true }),
   }
 }
 
-/** A2A 子功能配置 */
+/**
+ * A2A 子功能配置
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function options(executor: AgentExecutor): A2ACreateOptions {
+ *   return { executor, agentCard: { name: 'guide', url: 'https://example.com/a2a' }, runtime: { leaseMs: 30_000, pollIntervalMs: 250, maxExecutionMs: 300_000 } }
+ * }
+ * ```
+ */
 export interface A2ACreateOptions {
   /** Agent Card 配置 */
   agentCard: A2AAgentCardConfig
   /** Agent 执行器（由应用层实现） */
   executor: AgentExecutor
+  /** 内部可注入的执行预算；公开默认30秒租约、250毫秒轮询、5分钟执行期限。 */
+  runtime?: Partial<A2ARuntimeOptions>
+}
+
+/**
+ * AI生命周期内部持有的实现；关闭先停止A2A执行再关闭共享Store。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function stop(implementation: A2AImplementation) {
+ *   await implementation.close() // 等待本地执行停止后，应用才能关闭借用的共享 Store。
+ * }
+ * ```
+ */
+export interface A2AImplementation extends A2AOperations {
+  close: () => Promise<void>
 }
 
 /**
  * 创建 A2A 操作接口实例
  *
- * 组装 TaskStore、RequestHandler、消息日志、远端调用等能力。
+ * 组装共享 journal 的 RequestHandler、消息日志、远端调用等能力。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function run(options: A2ACreateOptions, deps: A2ADeps) {
+ *   const operations = createA2AOperations(options, deps)
+ *   try {
+ *     const result = await operations.listMessages({ callerId: 'agent-1', limit: 20 })
+ *     if (!result.success) return result
+ *     return result.data
+ *   }
+ *   finally { await operations.close() }
+ * }
+ * ```
  */
 export function createA2AOperations(
   options: A2ACreateOptions,
   deps: A2ADeps,
-): A2AOperations {
-  const { taskStore, messageStore } = deps
+): A2AImplementation {
+  const { messageStore, journalStore, contextStore } = deps
   const agentCardConfig = options.agentCard
 
   // 构建 SDK 层
   const agentCard = buildAgentCard(agentCardConfig)
-  const a2aTaskStore = new ReldbA2ATaskStore(taskStore)
-  const wrappedExecutor = wrapExecutorWithLogging(options.executor, messageStore)
-  const eventBusManager = new DefaultExecutionEventBusManager()
-  const requestHandler = new DefaultRequestHandler(agentCard, a2aTaskStore, wrappedExecutor, eventBusManager)
+  const requestHandler = new SharedA2ARequestHandler(agentCard, options.executor, journalStore, contextStore, messageStore, { leaseMs: 30000, pollIntervalMs: 250, maxExecutionMs: 300000, ...options.runtime })
   const transportHandler = new JsonRpcTransportHandler(requestHandler)
 
   return {
+    close: () => requestHandler.close(),
     registerExecutor() {
       logger.warn('A2A executor already registered, ignoring duplicate registerExecutor call')
       return ok(undefined)
@@ -343,8 +323,8 @@ export function createA2AOperations(
         )
         return ok(page)
       }
-      catch (error) {
-        return err(HaiAIError.STORE_FAILED, aiM('ai_a2aListMessagesFailed', { params: { error: String(error) } }), error)
+      catch {
+        return err(HaiAIError.A2A_LIST_MESSAGES_FAILED, aiM('ai_a2aListMessagesFailed'))
       }
     },
 
@@ -356,16 +336,26 @@ export function createA2AOperations(
 
 // ─── 延迟初始化代理 ───
 
-/** 延迟代理的外部依赖（由 ai-main 注入状态访问器） */
+/**
+ * 延迟代理的外部依赖（由 ai-main 注入状态访问器）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function initialized(deps: A2ALazyProxyDeps) {
+ *   return deps.isInitialized() && deps.getA2AConfig() !== null && deps.getStores() !== null
+ * }
+ * ```
+ */
 export interface A2ALazyProxyDeps {
   /** 是否已初始化（即 currentConfig !== null） */
   isInitialized: () => boolean
   /** 获取 A2A 配置（config.a2a） */
   getA2AConfig: () => A2AConfig | null
   /** 获取当前 A2A 实现（registerExecutor 后才有值） */
-  getA2AImpl: () => A2AOperations | null
+  getA2AImpl: () => A2AImplementation | null
   /** 保存 A2A 实现引用 */
-  setA2AImpl: (impl: A2AOperations) => void
+  setA2AImpl: (impl: A2AImplementation) => void
   /** 获取初始化阶段已建表的 A2A 存储 */
   getStores: () => A2ADeps | null
   /** 未初始化错误工厂 */
@@ -380,6 +370,17 @@ export interface A2ALazyProxyDeps {
  *
  * @param deps - 由 ai-main 注入的状态访问器
  * @returns A2AOperations 代理对象
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function card(deps: A2ALazyProxyDeps) {
+ *   const operations = createA2ALazyProxy(deps)
+ *   const result = operations.getAgentCard()
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
   return {
@@ -392,7 +393,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
       }
       if (deps.getA2AImpl()) {
-        logger.warn('A2A executor already registered, re-registering')
+        return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_a2aExecutorAlreadyRegistered'))
       }
       const stores = deps.getStores()
       if (!stores) {
@@ -400,7 +401,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       }
       const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
-        { agentCard: agentCardWithSecurity, executor },
+        { agentCard: agentCardWithSecurity, executor, runtime: a2aConfig.execution },
         stores,
       )
       deps.setA2AImpl(impl)

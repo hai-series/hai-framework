@@ -49,5 +49,6 @@
   "core_configParseFailed": "設定ファイルの解析に失敗しました: {filePath}",
   "core_configValidationFailed": "設定の検証に失敗しました",
   "core_configNotLoaded": "設定「{name}」が読み込まれていません",
-  "core_configUnsupportedInBrowser": "ブラウザーはファイルベースの設定に対応していません。サーバー側でcore.configを使用するか、core.init({ logging })でブラウザー用のオプションを渡してください"
+  "core_configUnsupportedInBrowser": "ブラウザーはファイルベースの設定に対応していません。サーバー側でcore.configを使用するか、core.init({ logging })でブラウザー用のオプションを渡してください",
+  "core_cryptoRandomUnavailable": "暗号学的乱数の生成元を利用できません"
 }

@@ -9,16 +9,19 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
-import type { AIRelStore, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
+import type { AIRelStore, AIRelStoreCompareAndSwap, AIRelStoreOptions, AIStoreProvider, AIVectorBackend, AIVectorStore, AIVersionedRecord, KnowledgeStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from '../ai-store-types.js'
 
+import type { KnowledgeCollectionManifest, KnowledgeDocumentManifest } from './ai-store-knowledge-db.js'
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { vecdb } from '@h-ai/vecdb'
+import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
+import { aiM } from '../../ai-i18n.js'
+import { createDbKnowledgeStore } from './ai-store-knowledge-db.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'store-provider-db' })
 
 /** 内部 Store 以异常通知上层失败，不能把 SQL HaiResult 错误当空数据或写入成功。 */
-function requireSqlSuccess<T>(result: HaiResult<T>): HaiResult<T> {
+function requireSqlSuccess<T>(result: HaiResult<T>): Extract<HaiResult<T>, { success: true }> {
   if (!result.success)
     throw new Error(result.error.message, { cause: result.error })
   return result
@@ -34,6 +37,43 @@ function dataTimestamp<T>(data: T, field: 'createdAt' | 'updatedAt', fallback: n
 
   const value = (data as Record<string, unknown>)[field]
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+/**
+ * MySQL 单个索引列的真实结构；完整列、顺序、可见性和非唯一 BTREE 都必须匹配。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const column: MysqlIndexColumn = { column_name: 'object_id', seq_in_index: 1, non_unique: 1, sub_part: null, index_type: 'BTREE', collation: 'A', is_visible: 'YES', expression: null }
+ * const usable = column.index_type === 'BTREE' && column.sub_part === null && column.is_visible === 'YES'
+ * ```
+ */
+interface MysqlIndexColumn {
+  column_name: string | null
+  seq_in_index: number | string
+  non_unique: number | string
+  sub_part: number | null
+  index_type: string
+  collation: string | null
+  is_visible: string
+  expression: string | null
+}
+
+/**
+ * 只识别驱动明确的重复索引错误；沿 HaiResult/Error cause 查找，不根据错误文案猜测。
+ */
+function isMysqlDuplicateIndex(error: unknown): boolean {
+  const seen = new Set<object>()
+  let current = error
+  while (current !== null && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current)
+    const details = current as Record<string, unknown>
+    if (details.code === 'ER_DUP_KEYNAME' && details.errno === 1061)
+      return true
+    current = details.cause
+  }
+  return false
 }
 
 // ─── ReldbAIRelStore 实现 ───
@@ -89,7 +129,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       cols.push(`status ${scopeType}`)
     if (this.hasRefId)
       cols.push(`ref_id ${scopeType}`)
-    cols.push(`data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
+    cols.push('version VARCHAR(36) NOT NULL', `data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
 
     await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
 
@@ -108,85 +148,121 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_data_gin ON ${t} USING GIN (data jsonb_path_ops)`)
   }
 
-  /** MySQL 不支持 CREATE INDEX IF NOT EXISTS，先在当前数据库确认索引是否存在。 */
+  /**
+   * MySQL 并发首次创建只接受明确的重复名称错误，并重读结构，权限/DDL/不匹配仍失败。
+   */
   private async createIndex(name: string, columns: string): Promise<void> {
     if (this.dbType === 'mysql') {
-      const existing = await this.sql.get(
-        'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+      const read = async () => requireSqlSuccess(await this.sql.query<MysqlIndexColumn>(
+        'SELECT COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index, NON_UNIQUE AS non_unique, SUB_PART AS sub_part, INDEX_TYPE AS index_type, COLLATION AS collation, IS_VISIBLE AS is_visible, EXPRESSION AS expression FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX',
         [this.table, name],
-      )
-      if (existing.success && existing.data)
+      )).data
+      const expected = columns.split(',').map(column => column.trim())
+      const matches = (definition: MysqlIndexColumn[]) => definition.length === expected.length
+        && definition.every((column, index) => column.column_name === expected[index]
+          && Number(column.seq_in_index) === index + 1 && Number(column.non_unique) === 1
+          && column.sub_part === null && column.index_type === 'BTREE' && column.collation === 'A'
+          && column.is_visible === 'YES' && column.expression === null)
+      const existing = await read()
+      if (existing.length > 0) {
+        if (!matches(existing))
+          throw new Error(aiM('ai_storeIndexMismatch'))
         return
-      await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
+      }
+      try {
+        await this.sql.execute(`CREATE INDEX ${name} ON ${this.table}(${columns})`)
+      }
+      catch (error) {
+        if (!isMysqlDuplicateIndex(error))
+          throw error
+        // 两个节点都读到缺失时，败者只能在实际结构与预期一致后继续；不能吞掉其它失败。
+        if (!matches(await read()))
+          throw new Error(aiM('ai_storeIndexMismatch'), { cause: error })
+      }
       return
     }
     await this.sql.execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${this.table}(${columns})`)
   }
 
+  /** 普通写入也更换版本，使并发条件写入识别所有较新修改。 */
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
+    await this.saveManyBatch([{ id, data, scope }], this.buildSaveColumnNames())
+  }
+
+  /** SQLite TEXT 需要解码；PostgreSQL JSONB/MySQL JSON 已由驱动解码，包含标量字符串。 */
+  private decodeData(value: unknown): T {
+    if (this.dbType !== 'sqlite')
+      return structuredClone(value) as T
+    if (typeof value !== 'string')
+      throw new TypeError('Invalid SQLite JSON record')
+    return JSON.parse(value) as T
+  }
+
+  /** 数据和版本由同一次 SELECT 返回，禁止拆成两次不一致的读取。 */
+  async readVersioned(id: string): Promise<AIVersionedRecord<T> | undefined> {
+    const found = requireSqlSuccess(await this.sql.get<{ version: string, data: unknown }>(`SELECT version, data FROM ${this.table} WHERE id = ?`, [id]))
+    if (!found.data)
+      return undefined
+    return { version: found.data.version, data: this.decodeData(found.data.data) }
+  }
+
+  /** 所有节点从持久化端读取租约时钟；不使用进程 Date.now() 判断共享 owner 是否过期。 */
+  async currentTime(): Promise<number> {
+    const found = requireSqlSuccess(await this.sql.get<{ now: number | string }>(`SELECT ${this.databaseClock()} AS now`))
+    if (!found.data || !Number.isFinite(Number(found.data.now)))
+      throw new Error('Store clock unavailable')
+    return Math.floor(Number(found.data.now))
+  }
+
+  /** 仅由当前已验证的数据库类型选择时钟表达式。 */
+  private databaseClock(): string {
+    if (this.dbType === 'postgresql')
+      return '(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)'
+    if (this.dbType === 'mysql')
+      // NOW/CURRENT_TIMESTAMP 固定在语句开始时；SYSDATE 在行锁等待结束后仍取实际时钟。
+      return '(UNIX_TIMESTAMP(SYSDATE(3)) * 1000)'
+    return 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+  }
+
+  /** 原子检查版本和可选存储端期限；lease 续租或本地布尔值不能替代最终条件。 */
+  async compareAndSwap(id: string, input: AIRelStoreCompareAndSwap<T>): Promise<string | undefined> {
+    if (input.notAfter !== undefined && !Number.isSafeInteger(input.notAfter))
+      throw new RangeError('Invalid Store write deadline')
+    const version = crypto.randomUUID()
     const now = Date.now()
-    const json = JSON.stringify(data)
-    const createdAt = dataTimestamp(data, 'createdAt', now)
-    const updatedAt = dataTimestamp(data, 'updatedAt', now)
-
-    const colNames = ['id']
-    const values: unknown[] = [id]
-    const placeholders: string[] = ['?']
-
-    if (this.hasObjectId) {
-      colNames.push('object_id')
-      values.push(scope?.objectId ?? null)
-      placeholders.push('?')
+    const columns = this.buildSaveColumnNames()
+    const values = this.buildSaveValues(id, input.data, input.scope, now)
+    values[columns.indexOf('version')] = version
+    const deadline = input.notAfter === undefined ? '1 = 1' : `${this.databaseClock()} < ?`
+    const deadlineParams = input.notAfter === undefined ? [] : [input.notAfter]
+    if (input.expectedVersion !== undefined) {
+      const updated = columns.filter(column => column !== 'id' && column !== 'created_at'
+        && (input.scope !== undefined || ['version', 'data', 'updated_at'].includes(column)))
+      const result = requireSqlSuccess(await this.sql.execute(
+        `UPDATE ${this.table} SET ${updated.map(column => `${column} = ?`).join(', ')} WHERE id = ? AND version = ? AND ${deadline}`,
+        [...updated.map(column => values[columns.indexOf(column)]), id, input.expectedVersion, ...deadlineParams],
+      ))
+      return result.data.changes === 1 ? version : undefined
     }
-    if (this.hasSessionId) {
-      colNames.push('session_id')
-      values.push(scope?.sessionId ?? null)
-      placeholders.push('?')
+    try {
+      // MySQL 不用 INSERT IGNORE：除唯一主键冲突外，任何故障都必须向上抛出。
+      const conflict = this.dbType === 'mysql' ? '' : ' ON CONFLICT(id) DO NOTHING'
+      const result = requireSqlSuccess(await this.sql.execute(
+        `INSERT INTO ${this.table} (${columns.join(', ')}) SELECT ${values.map(() => '?').join(', ')} WHERE ${deadline}${conflict}`,
+        [...values, ...deadlineParams],
+      ))
+      return result.data.changes === 1 ? version : undefined
     }
-    if (this.hasStatus) {
-      colNames.push('status')
-      values.push(scope?.status ?? null)
-      placeholders.push('?')
-    }
-    if (this.hasRefId) {
-      colNames.push('ref_id')
-      values.push(scope?.refId ?? null)
-      placeholders.push('?')
-    }
-
-    colNames.push('data', 'created_at', 'updated_at')
-    values.push(json, createdAt, updatedAt)
-    placeholders.push('?', '?', '?')
-
-    if (this.dbType === 'mysql') {
-      const updateParts: string[] = ['data = VALUES(data)', 'updated_at = VALUES(updated_at)']
-      if (this.hasObjectId)
-        updateParts.push('object_id = VALUES(object_id)')
-      if (this.hasSessionId)
-        updateParts.push('session_id = VALUES(session_id)')
-      if (this.hasStatus)
-        updateParts.push('status = VALUES(status)')
-      if (this.hasRefId)
-        updateParts.push('ref_id = VALUES(ref_id)')
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
-        values,
-      )
-    }
-    else {
-      const updateParts: string[] = ['data = excluded.data', 'updated_at = excluded.updated_at']
-      if (this.hasObjectId)
-        updateParts.push('object_id = excluded.object_id')
-      if (this.hasSessionId)
-        updateParts.push('session_id = excluded.session_id')
-      if (this.hasStatus)
-        updateParts.push('status = excluded.status')
-      if (this.hasRefId)
-        updateParts.push('ref_id = excluded.ref_id')
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
-        values,
-      )
+    catch (error) {
+      if (this.dbType === 'mysql') {
+        let cause: unknown = error
+        for (let depth = 0; depth < 8 && cause && typeof cause === 'object'; depth++) {
+          if (('code' in cause && cause.code === 'ER_DUP_ENTRY') || ('errno' in cause && cause.errno === 1062))
+            return undefined
+          cause = 'cause' in cause ? cause.cause : undefined
+        }
+      }
+      throw error
     }
   }
 
@@ -205,18 +281,18 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   async get(id: string): Promise<T | undefined> {
-    const result = await this.sql.get<{ data: string }>(`SELECT data FROM ${this.table} WHERE id = ?`, [id])
+    const result = await this.sql.get<{ data: unknown }>(`SELECT data FROM ${this.table} WHERE id = ?`, [id])
     if (!result.success || !result.data)
       return undefined
-    return JSON.parse(result.data.data) as T
+    return this.decodeData(result.data.data)
   }
 
   async query(filter: StoreFilter<T>): Promise<T[]> {
     const { sql, params } = this.buildQuery(filter)
-    const result = await this.sql.query<{ data: string }>(sql, params)
+    const result = await this.sql.query<{ data: unknown }>(sql, params)
     if (!result.success)
       return []
-    return result.data.map(row => JSON.parse(row.data) as T)
+    return result.data.map(row => this.decodeData(row.data))
   }
 
   async queryPage(filter: StoreFilter<T>, page: { offset: number, limit: number }): Promise<StorePage<T>> {
@@ -230,8 +306,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
-    const result = await this.sql.query<{ data: string }>(pagedSql, [...params, page.limit, page.offset])
-    const items = result.success ? result.data.map(row => JSON.parse(row.data) as T) : []
+    const result = await this.sql.query<{ data: unknown }>(pagedSql, [...params, page.limit, page.offset])
+    const items = result.success ? result.data.map(row => this.decodeData(row.data)) : []
 
     return { items, total }
   }
@@ -294,7 +370,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       colNames.push('status')
     if (this.hasRefId)
       colNames.push('ref_id')
-    colNames.push('data', 'created_at', 'updated_at')
+    colNames.push('version', 'data', 'created_at', 'updated_at')
     return colNames
   }
 
@@ -310,6 +386,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (this.hasRefId)
       values.push(scope?.refId ?? null)
     values.push(
+      crypto.randomUUID(),
       JSON.stringify(data),
       dataTimestamp(data, 'createdAt', now),
       dataTimestamp(data, 'updatedAt', now),
@@ -320,7 +397,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   /** 构造跨数据库 upsert 更新片段；列名来自内部白名单，不接受外部输入。 */
   private buildSaveUpdateParts(): string[] {
     const valueRef = (column: string) => this.dbType === 'mysql' ? `VALUES(${column})` : `excluded.${column}`
-    const updateParts: string[] = [`data = ${valueRef('data')}`, `updated_at = ${valueRef('updated_at')}`]
+    const updateParts: string[] = [`version = ${valueRef('version')}`, `data = ${valueRef('data')}`, `updated_at = ${valueRef('updated_at')}`]
     if (this.hasObjectId)
       updateParts.push(`object_id = ${valueRef('object_id')}`)
     if (this.hasSessionId)
@@ -479,6 +556,23 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
 // ─── VecdbAIVectorStore 实现 ───
 
+/** 内部 Store 使用显式异常通知调用方，向量写入失败不能继续登记为成功。 */
+function requireVecdbSuccess<T>(result: HaiResult<T>): T {
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+  return result.data
+}
+
+/** 以共享后端为准懒建集合；并发创建的 already-exists 可继续，其它错误必须传播。 */
+async function ensureVecdbCollection(database: VecdbFunctions, name: string, dimension: number): Promise<void> {
+  const exists = requireVecdbSuccess(await database.collection.exists(name))
+  if (exists)
+    return
+  const created = await database.collection.create(name, { dimension })
+  if (!created.success && created.error.code !== HaiVecdbError.COLLECTION_ALREADY_EXISTS.code)
+    requireVecdbSuccess(created)
+}
+
 /**
  * 基于 vecdb 的持久化向量存储实现
  *
@@ -488,30 +582,20 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 class VecdbAIVectorStore implements AIVectorStore {
   private readonly vecdb: VecdbFunctions
   private readonly collection: string
-  private collectionDimension: number | null = null
 
   constructor(vecdb: VecdbFunctions, collection: string) {
     this.vecdb = vecdb
     this.collection = collection
   }
 
-  private async ensureCollection(dimension: number): Promise<void> {
-    if (this.collectionDimension === dimension)
-      return
-    const exists = await this.vecdb.collection.exists(this.collection)
-    if (exists.success && !exists.data)
-      await this.vecdb.collection.create(this.collection, { dimension })
-    this.collectionDimension = dimension
-  }
-
   async upsert(id: string, vector: number[], metadata?: Record<string, unknown>): Promise<void> {
-    await this.ensureCollection(vector.length)
-    await this.vecdb.vector.upsert(this.collection, [{ id, vector, metadata }])
+    await ensureVecdbCollection(this.vecdb, this.collection, vector.length)
+    requireVecdbSuccess(await this.vecdb.vector.upsert(this.collection, [{ id, vector, metadata }]))
   }
 
   async search(vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
-    const result = await this.vecdb.vector.search(this.collection, vector, options)
-    return result.success ? result.data : []
+    // 过滤校验/执行失败必须向上层传播，不能伪装成空的合法检索结果。
+    return requireVecdbSuccess(await this.vecdb.vector.search(this.collection, vector, options))
   }
 
   async remove(id: string): Promise<void> {
@@ -522,375 +606,23 @@ class VecdbAIVectorStore implements AIVectorStore {
     const exists = await this.vecdb.collection.exists(this.collection)
     if (exists.success && exists.data) {
       await this.vecdb.collection.drop(this.collection)
-      this.collectionDimension = null
     }
-  }
-}
-
-// ─── DB KnowledgeStore 实现 ───
-
-/** 根据数据库类型生成 DDL 语句 */
-function buildKnowledgeSchemaStatements(dbType: DbType): string[] {
-  const pk = dbType === 'mysql' ? 'VARCHAR(512)' : 'TEXT'
-  const textCol = dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'
-  const longText = 'TEXT'
-
-  return [
-    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_entity (
-  id          ${pk} PRIMARY KEY,
-  name        ${textCol} NOT NULL,
-  type        ${textCol} NOT NULL,
-  collection  ${textCol} NOT NULL,
-  aliases     ${longText},
-  description ${longText},
-  created_at  BIGINT DEFAULT 0,
-  updated_at  BIGINT DEFAULT 0
-)`,
-    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_name ON hai_ai_knowledge_entity(name)`,
-    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_type ON hai_ai_knowledge_entity(type)`,
-    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_collection ON hai_ai_knowledge_entity(collection)`,
-    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_entity_document (
-  entity_id   ${pk} NOT NULL,
-  document_id ${pk} NOT NULL,
-  chunk_id    ${pk} DEFAULT '',
-  collection  ${textCol} NOT NULL,
-  relevance   REAL DEFAULT 1.0,
-  context     ${longText},
-  created_at  BIGINT DEFAULT 0,
-  PRIMARY KEY (entity_id, document_id, chunk_id)
-)`,
-    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_ed_document ON hai_ai_knowledge_entity_document(document_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_ed_collection ON hai_ai_knowledge_entity_document(collection)`,
-    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_document (
-  document_id ${pk} NOT NULL,
-  collection  ${textCol} NOT NULL,
-  title       ${longText},
-  url         ${longText},
-  chunk_count INTEGER DEFAULT 0,
-  created_at  BIGINT DEFAULT 0,
-  PRIMARY KEY (document_id, collection)
-)`,
-    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_collections (
-  collection  ${textCol} PRIMARY KEY,
-  dimension   INTEGER NOT NULL,
-  created_at  BIGINT NOT NULL
-)`,
-  ]
-}
-
-/**
- * 基于 reldb + vecdb 的 KnowledgeStore 实现
- *
- * reldb 用于实体/文档/关联的归一化存储，vecdb 用于向量存储。
- * 表结构由 buildKnowledgeSchemaStatements() 生成。
- */
-class DbKnowledgeStore implements KnowledgeStore {
-  private readonly sql: DmlOperations
-  private readonly dbType: DbType
-  private readonly vecdb: VecdbFunctions
-
-  constructor(sql: DmlOperations, dbType: DbType, vecdb: VecdbFunctions) {
-    this.sql = sql
-    this.dbType = dbType
-    this.vecdb = vecdb
-  }
-
-  async initialize(collection: string, dimension: number): Promise<void> {
-    // 创建 vecdb 集合
-    const exists = await this.vecdb.collection.exists(collection)
-    if (exists.success && !exists.data)
-      await this.vecdb.collection.create(collection, { dimension })
-
-    // 创建 reldb 表
-    const statements = buildKnowledgeSchemaStatements(this.dbType)
-    for (const stmt of statements) {
-      const result = await this.sql.execute(stmt)
-      if (!result.success) {
-        logger.error('Knowledge schema creation failed', { sql: stmt.trim().slice(0, 60), error: result.error })
-        throw new Error(`Knowledge schema creation failed: ${String(result.error)}`)
-      }
-    }
-  }
-
-  async upsertEntity(entity: { id: string, name: string, type: string, collection: string, aliases?: string[], description?: string }): Promise<void> {
-    const now = Date.now()
-    const params = [entity.id, entity.name, entity.type, entity.collection, entity.aliases ? JSON.stringify(entity.aliases) : null, entity.description ?? null, now, now]
-    const stmt = this.dbType === 'mysql'
-      ? `INSERT INTO hai_ai_knowledge_entity (id, name, type, collection, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), collection = VALUES(collection), aliases = VALUES(aliases), description = VALUES(description), updated_at = VALUES(updated_at)`
-      : `INSERT INTO hai_ai_knowledge_entity (id, name, type, collection, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, collection = excluded.collection, aliases = excluded.aliases, description = excluded.description, updated_at = excluded.updated_at`
-    const result = await this.sql.execute(stmt, params)
-    if (!result.success)
-      throw new Error(`upsertEntity failed: ${String(result.error)}`)
-  }
-
-  async findEntitiesByName(keyword: string, collection?: string): Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>> {
-    const pattern = `%${keyword}%`
-    let stmt = `SELECT id, name, type, aliases FROM hai_ai_knowledge_entity WHERE (name LIKE ? OR aliases LIKE ?)`
-    const params: unknown[] = [pattern, pattern]
-    if (collection) {
-      stmt += ' AND collection = ?'
-      params.push(collection)
-    }
-    const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success)
-      return []
-    return result.data.map(row => ({
-      id: row.id as string,
-      name: row.name as string,
-      type: row.type as string,
-      aliases: row.aliases ? JSON.parse(row.aliases as string) as string[] : [],
-    }))
-  }
-
-  async listEntities(options?: { collection?: string, type?: string, keyword?: string, limit?: number }): Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>> {
-    let stmt = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM hai_ai_knowledge_entity WHERE 1=1'
-    const params: unknown[] = []
-    if (options?.collection) {
-      stmt += ' AND collection = ?'
-      params.push(options.collection)
-    }
-    if (options?.type) {
-      stmt += ' AND type = ?'
-      params.push(options.type)
-    }
-    if (options?.keyword) {
-      stmt += ' AND (name LIKE ? OR aliases LIKE ?)'
-      const p = `%${options.keyword}%`
-      params.push(p, p)
-    }
-    stmt += ' ORDER BY name'
-    if (options?.limit) {
-      stmt += ' LIMIT ?'
-      params.push(options.limit)
-    }
-    const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success)
-      return []
-    return result.data.map(row => ({
-      id: row.id as string,
-      name: row.name as string,
-      type: row.type as string,
-      aliases: row.aliases ? JSON.parse(row.aliases as string) as string[] : [],
-      description: row.description as string | null,
-      createdAt: row.created_at as string | null,
-      updatedAt: row.updated_at as string | null,
-    }))
-  }
-
-  async deleteEntities(entityIds: string[]): Promise<void> {
-    if (entityIds.length === 0)
-      return
-    const placeholders = entityIds.map(() => '?').join(', ')
-    await this.sql.execute(
-      `DELETE FROM hai_ai_knowledge_entity WHERE id IN (${placeholders})`,
-      entityIds,
-    )
-  }
-
-  async insertEntityDocument(relation: { entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }): Promise<void> {
-    const now = Date.now()
-    const params = [relation.entityId, relation.documentId, relation.chunkId ?? '', relation.collection, relation.relevance ?? 1.0, relation.context ?? null, now]
-    const stmt = this.dbType === 'mysql'
-      ? `INSERT INTO hai_ai_knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE relevance = VALUES(relevance), context = VALUES(context)`
-      : `INSERT INTO hai_ai_knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(entity_id, document_id, chunk_id) DO UPDATE SET relevance = excluded.relevance, context = excluded.context`
-    const result = await this.sql.execute(stmt, params)
-    if (!result.success)
-      throw new Error(`insertEntityDocument failed: ${String(result.error)}`)
-  }
-
-  async findDocumentsByEntityIds(entityIds: string[], collection?: string): Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>> {
-    if (entityIds.length === 0)
-      return []
-    const placeholders = entityIds.map(() => '?').join(', ')
-    let stmt = `SELECT entity_id, document_id, chunk_id, collection, relevance, context FROM hai_ai_knowledge_entity_document WHERE entity_id IN (${placeholders})`
-    const params: unknown[] = [...entityIds]
-    if (collection) {
-      stmt += ' AND collection = ?'
-      params.push(collection)
-    }
-    const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success)
-      return []
-    return result.data.map(row => ({
-      entityId: row.entity_id as string,
-      documentId: row.document_id as string,
-      chunkId: row.chunk_id as string,
-      collection: row.collection as string,
-      relevance: row.relevance as number,
-      context: row.context as string | null,
-    }))
-  }
-
-  async findByEntityName(entityName: string, options?: { collection?: string, type?: string }): Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>> {
-    const entities = await this.findEntitiesByName(entityName, options?.collection)
-    let filtered = entities
-    if (options?.type)
-      filtered = filtered.filter(e => e.type === options.type)
-    if (filtered.length === 0)
-      return []
-
-    const entityIds = filtered.map(e => e.id)
-    const docs = await this.findDocumentsByEntityIds(entityIds, options?.collection)
-
-    const docsByEntity = new Map<string, Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>>()
-    for (const doc of docs) {
-      const list = docsByEntity.get(doc.entityId) ?? []
-      const { entityId: _entityId, ...rest } = doc
-      list.push(rest)
-      docsByEntity.set(doc.entityId, list)
-    }
-
-    return filtered.map(entity => ({
-      entity: { ...entity, description: null as string | null },
-      documents: docsByEntity.get(entity.id) ?? [],
-    }))
-  }
-
-  async deleteDocumentEntities(documentId: string, collection: string): Promise<void> {
-    // 必须在 removeDocumentEntityRelations 之前调用，子查询依赖关联行尚未删除
-    await this.sql.execute(
-      'DELETE FROM hai_ai_knowledge_entity WHERE collection = ? AND id IN (SELECT DISTINCT entity_id FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?)',
-      [collection, documentId, collection],
-    )
-  }
-
-  async removeDocumentEntityRelations(documentId: string, collection: string): Promise<void> {
-    await this.sql.execute(
-      'DELETE FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?',
-      [documentId, collection],
-    )
-  }
-
-  async upsertDocument(doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }): Promise<void> {
-    const params = [doc.documentId, doc.collection, doc.title ?? null, doc.url ?? null, doc.chunkCount, doc.createdAt]
-    const stmt = this.dbType === 'mysql'
-      ? `INSERT INTO hai_ai_knowledge_document (document_id, collection, title, url, chunk_count, created_at) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE title = VALUES(title), url = VALUES(url), chunk_count = VALUES(chunk_count)`
-      : `INSERT INTO hai_ai_knowledge_document (document_id, collection, title, url, chunk_count, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(document_id, collection) DO UPDATE SET title = excluded.title, url = excluded.url, chunk_count = excluded.chunk_count`
-    await this.sql.execute(stmt, params)
-  }
-
-  async getDocument(documentId: string, collection: string): Promise<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined> {
-    const result = await this.sql.query<Record<string, unknown>>(
-      'SELECT document_id, collection, title, url, chunk_count, created_at FROM hai_ai_knowledge_document WHERE document_id = ? AND collection = ?',
-      [documentId, collection],
-    )
-    if (!result.success || result.data.length === 0)
-      return undefined
-    const row = result.data[0]
-    return {
-      documentId: row.document_id as string,
-      collection: row.collection as string,
-      title: row.title as string | null,
-      url: row.url as string | null,
-      chunkCount: row.chunk_count as number,
-      createdAt: row.created_at as number,
-    }
-  }
-
-  async listDocuments(collection: string, options?: { offset?: number, limit?: number }): Promise<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>> {
-    let stmt = 'SELECT document_id, collection, title, url, chunk_count, created_at FROM hai_ai_knowledge_document WHERE collection = ?'
-    const params: unknown[] = [collection]
-    stmt += ' ORDER BY created_at DESC'
-    if (options?.limit) {
-      stmt += ' LIMIT ?'
-      params.push(options.limit)
-    }
-    if (options?.offset) {
-      stmt += ' OFFSET ?'
-      params.push(options.offset)
-    }
-    const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success)
-      return []
-    return result.data.map(row => ({
-      documentId: row.document_id as string,
-      collection: row.collection as string,
-      title: row.title as string | null,
-      url: row.url as string | null,
-      chunkCount: row.chunk_count as number,
-      createdAt: row.created_at as number,
-    }))
-  }
-
-  async listDocumentEntityCounts(documentIds: string[], collection: string): Promise<Map<string, number>> {
-    if (documentIds.length === 0)
-      return new Map()
-    const placeholders = documentIds.map(() => '?').join(', ')
-    const result = await this.sql.query<Record<string, unknown>>(
-      `SELECT document_id, COUNT(DISTINCT entity_id) as cnt FROM hai_ai_knowledge_entity_document WHERE document_id IN (${placeholders}) AND collection = ? GROUP BY document_id`,
-      [...documentIds, collection],
-    )
-    const map = new Map<string, number>()
-    if (result.success) {
-      for (const row of result.data) map.set(row.document_id as string, row.cnt as number)
-    }
-    return map
-  }
-
-  async removeDocument(documentId: string, collection: string): Promise<void> {
-    await this.sql.execute('DELETE FROM hai_ai_knowledge_document WHERE document_id = ? AND collection = ?', [documentId, collection])
-  }
-
-  async upsertVectors(collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>): Promise<void> {
-    // 确保集合存在
-    if (vectors.length > 0) {
-      const exists = await this.vecdb.collection.exists(collection)
-      if (exists.success && !exists.data)
-        await this.vecdb.collection.create(collection, { dimension: vectors[0].vector.length })
-    }
-    await this.vecdb.vector.upsert(collection, vectors)
-  }
-
-  async searchVectors(collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>> {
-    const result = await this.vecdb.vector.search(collection, vector, options)
-    return result.success ? result.data : []
-  }
-
-  async removeVectors(collection: string, ids: string[]): Promise<void> {
-    await this.vecdb.vector.delete(collection, ids)
-  }
-
-  async ensureCollection(collection: string, dimension: number): Promise<void> {
-    const exists = await this.vecdb.collection.exists(collection)
-    if (exists.success && !exists.data)
-      await this.vecdb.collection.create(collection, { dimension })
-  }
-
-  async registerCollection(collection: string, dimension: number): Promise<void> {
-    const now = Date.now()
-    const stmt = this.dbType === 'mysql'
-      ? `INSERT INTO hai_ai_knowledge_collections (collection, dimension, created_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE dimension = VALUES(dimension)`
-      : `INSERT INTO hai_ai_knowledge_collections (collection, dimension, created_at) VALUES (?, ?, ?) ON CONFLICT(collection) DO UPDATE SET dimension = excluded.dimension`
-    const result = await this.sql.execute(stmt, [collection, dimension, now])
-    if (!result.success)
-      throw new Error(`registerCollection failed: ${String(result.error)}`)
-  }
-
-  async collectionExists(collection: string): Promise<boolean> {
-    const result = await this.sql.get<{ cnt: number }>(
-      `SELECT 1 as cnt FROM hai_ai_knowledge_collections WHERE collection = ?`,
-      [collection],
-    )
-    return result.success && result.data != null
-  }
-
-  async deleteCollection(collection: string): Promise<void> {
-    // ① 删除 vecdb 集合（向量数据）
-    const exists = await this.vecdb.collection.exists(collection)
-    if (exists.success && exists.data)
-      await this.vecdb.collection.drop(collection)
-
-    // ② 删除 reldb 中所有与该 collection 相关的数据（顺序：关联表先、主表后）
-    await this.sql.execute('DELETE FROM hai_ai_knowledge_entity_document WHERE collection = ?', [collection])
-    await this.sql.execute('DELETE FROM hai_ai_knowledge_document WHERE collection = ?', [collection])
-    await this.sql.execute('DELETE FROM hai_ai_knowledge_entity WHERE collection = ?', [collection])
-    await this.sql.execute('DELETE FROM hai_ai_knowledge_collections WHERE collection = ?', [collection])
   }
 }
 
 // ─── Provider 工厂 ───
 
-/** DB Provider 依赖 */
+/**
+ * DB Provider 依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(sql: DmlOperations, jsonOps: ReldbJsonOps, vector: VecdbFunctions): DbStoreProviderDeps {
+ *   return { sql, jsonOps, dbType: 'postgresql', vecdb: vector }
+ * }
+ * ```
+ */
 export interface DbStoreProviderDeps {
   sql: DmlOperations
   jsonOps: ReldbJsonOps
@@ -903,6 +635,20 @@ export interface DbStoreProviderDeps {
  *
  * 基于 reldb + vecdb 的 AIStoreProvider 实现。
  * reldb 用于关系数据存储，vecdb 用于向量存储。
+ * MySQL 首次建索引只在明确的 1061 重复名称后重查并接受匹配结构；其它 DDL 失败向上传播。
+ * initialize 等待全部已启动 DDL 结束，失败不回滚 MySQL 已创建结构，也不关闭调用方的依赖。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(deps: DbStoreProviderDeps) {
+ *   const provider = createDbStoreProvider(deps)
+ *   const store = provider.createRelStore<{ title: string }>('hai_ai_example', { hasObjectId: true })
+ *   await provider.initialize()
+ *   await store.save('doc-1', { title: '指南' }, { objectId: 'user-1' })
+ *   await provider.close?.() // 只释放本 Provider 状态；借用的 reldb/vecdb 由调用方关闭。
+ * }
+ * ```
  */
 export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvider {
   const { sql, jsonOps, vecdb: vecdbDep } = deps
@@ -913,6 +659,11 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
 
   return {
     name: 'db',
+    get stateScope(): 'local' | 'shared' {
+      const vector = vecdbDep.config
+      const sharedVector = vector?.type === 'qdrant' || vector?.type === 'pgvector' || (vector?.type === 'chroma' && (!vector.path || Boolean(vector.url)))
+      return dbType !== 'sqlite' && sharedVector ? 'shared' : 'local'
+    },
 
     createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T> {
       const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options)
@@ -930,12 +681,27 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
     },
 
     createKnowledgeStore(): KnowledgeStore {
-      return new DbKnowledgeStore(sql, dbType, vecdbDep)
+      const documents = new ReldbAIRelStore<KnowledgeDocumentManifest>(sql, 'hai_ai_knowledge_documents', jsonOps, dbType, { hasObjectId: true, hasSessionId: true })
+      const collections = new ReldbAIRelStore<KnowledgeCollectionManifest>(sql, 'hai_ai_knowledge_collections', jsonOps, dbType)
+      return createDbKnowledgeStore({
+        documents,
+        collections,
+        vecdb: vecdbDep,
+        prepare: async () => {
+          await documents.createTable()
+          await collections.createTable()
+        },
+      })
     },
 
     async initialize(): Promise<void> {
       if (relStores.length > 0) {
-        await Promise.all(relStores.map(s => s.createTable()))
+        // 等待所有已启动的 DDL 结束，避免首个失败触发关闭后仍有建表操作在途。
+        const results = await Promise.allSettled(relStores.map(s => s.createTable()))
+        for (const result of results) {
+          if (result.status === 'rejected')
+            throw result.reason
+        }
         logger.debug('DB store provider initialized', { tableCount: relStores.length })
       }
     },
@@ -952,6 +718,15 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
  * 检查 reldb + vecdb 是否已初始化
  *
  * 由 ai-main.ts 在创建默认 DB Provider 前调用。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * if (!isDbStoreAvailable()) {
+ *   const missing = getUnavailableDbDeps()
+ *   throw new Error('Missing AI dependencies: ' + missing.join(', '))
+ * }
+ * ```
  */
 export function isDbStoreAvailable(): boolean {
   return reldb.isInitialized && vecdb.isInitialized
@@ -959,6 +734,13 @@ export function isDbStoreAvailable(): boolean {
 
 /**
  * 获取未初始化的依赖名称列表
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const missing = getUnavailableDbDeps()
+ * if (missing.length > 0) throw new Error('Initialize first: ' + missing.join(', '))
+ * ```
  */
 export function getUnavailableDbDeps(): string[] {
   const missing: string[] = []
@@ -970,9 +752,19 @@ export function getUnavailableDbDeps(): string[] {
 }
 
 /**
- * 从已初始化的 reldb/vecdb 单例创建 DB Provider
+ * 从已初始化的 reldb/vecdb 单例创建默认 DB Provider。
  *
- * 用于默认 `store.type: 'db'` 场景。调用前应先用 `isDbStoreAvailable()` 检查。
+ * 调用方先检查依赖就绪；生产共享能力由实际数据库和向量后端决定，不由配置标签推断。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * if (!isDbStoreAvailable()) throw new Error('Initialize reldb and vecdb first')
+ * const provider = createDbStoreProviderFromModules()
+ * provider.createRelStore<{ content: string }>('hai_ai_notes')
+ * await provider.initialize()
+ * await provider.close?.()
+ * ```
  */
 export function createDbStoreProviderFromModules(): AIStoreProvider {
   return createDbStoreProvider({

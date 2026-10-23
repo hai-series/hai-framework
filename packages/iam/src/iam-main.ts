@@ -35,8 +35,7 @@ import {
 import { createSessionOperations } from './session/iam-session-functions.js'
 import { createTicketOperations } from './ticket/iam-ticket-functions.js'
 import { createUserOperations } from './user/iam-user-functions.js'
-import { resetResetTokenRepoSingleton } from './user/iam-user-repository-reset-token.js'
-import { resetUserRepoSingleton } from './user/iam-user-repository-user.js'
+import { createDbUserRepository, resetUserRepoSingleton } from './user/iam-user-repository-user.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
@@ -84,6 +83,21 @@ const notInitializedUser: UserOperations = new Proxy({} as UserOperations, {
 
 // ─── 服务对象 ───
 
+/**
+ * IAM 服务单例；应用先初始化共享 RelDB/Cache，再 init → use → close，子功能返回 HaiResult。
+ * @example
+ * ```ts
+ * import { iam } from '@h-ai/iam'
+ * // Cache、RelDB、Crypto 已由应用按顺序初始化。
+ * const initialized = await iam.init({ seedDefaultData: false })
+ * if (initialized.success) {
+ *   const result = await iam.user.getUser('user-1')
+ *   if (result.success && result.data)
+ *     result.data.username
+ *   await iam.close()
+ * }
+ * ```
+ */
 export const iam: IamFunctions = {
   async init(config: IamConfigInput): Promise<HaiResult<void>> {
     // 并发防护：防止多次同时调用导致子功能/连接泄漏
@@ -148,7 +162,16 @@ export const iam: IamFunctions = {
       logger.info('IAM notification channels resolved', { email: Boolean(onOtpSendEmail), sms: Boolean(onOtpSendSms), passwordReset: Boolean(onPasswordResetRequest) })
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
-      const sessionResult = await createSessionOperations({ config: parsed })
+      const credentialUsers = await createDbUserRepository()
+      const sessionResult = await createSessionOperations({
+        config: parsed,
+        readCredential: async (userId) => {
+          const found = await credentialUsers.findById(userId)
+          if (!found.success)
+            return found
+          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: found.data.enabled } : null)
+        },
+      })
       if (!sessionResult.success) {
         return sessionResult
       }
@@ -260,7 +283,6 @@ export const iam: IamFunctions = {
     resetApiKeyRepoSingleton()
     resetOtpRepoSingleton()
     resetUserRepoSingleton()
-    resetResetTokenRepoSingleton()
     resetRoleRepoSingleton()
     resetPermissionRepoSingleton()
 

@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/reldb",
   "type": "module",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.67",
   "description": "Hai Framework relational database module for SQLite, PostgreSQL, and MySQL.",
   "license": "Apache-2.0",
   "exports": {
@@ -9,6 +9,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "import": "./dist/schemas.js",
+      "default": "./dist/schemas.js"
     }
   },
   "main": "./dist/index.js",

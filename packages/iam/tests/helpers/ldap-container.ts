@@ -10,6 +10,7 @@
 import type { StartedTestContainer } from 'testcontainers'
 import type { LdapConfig } from '../../src/iam-config.js'
 import { GenericContainer, Wait } from 'testcontainers'
+import { LdapConfigSchema } from '../../src/iam-config.js'
 
 let containerPromise: Promise<StartedTestContainer> | null = null
 let refCount = 0
@@ -53,7 +54,7 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('osixia/openldap:latest')
+    containerPromise = new GenericContainer('docker.io/osixia/openldap:1.5.0')
       .withExposedPorts(389)
       .withEnvironment({
         LDAP_ORGANISATION: 'Example Inc',
@@ -72,7 +73,7 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
   // 通过 heredoc + ldapadd 创建测试 OU 和用户
   await seedTestData(container)
 
-  const ldapConfig: LdapConfig = {
+  const ldapConfig: LdapConfig = LdapConfigSchema.parse({
     url,
     bindDn: LDAP_ADMIN_DN,
     bindPassword: LDAP_ADMIN_PASSWORD,
@@ -81,7 +82,7 @@ export async function acquireLdapContainer(): Promise<LdapContainerLease> {
     usernameAttribute: 'uid',
     emailAttribute: 'mail',
     displayNameAttribute: 'cn',
-  }
+  })
 
   return {
     host,

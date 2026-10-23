@@ -4,35 +4,73 @@ import { createReadStream, existsSync, lstatSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 
-/** 镜像制品清单，例如 `{ version: 2, appVersion: '1.2.3', buildId: '1.2.3-build1', images: [{ name: 'app', file: 'app-1.2.3.tar', imageRef: 'localhost/demo:1.2.3-build1', sha256: '...' }] }`。 */
+/**
+ * 镜像制品清单，例如 `{ version: 3, appVersion: '1.2.3', buildId: '1.2.3-build1', partial: false, hasWeb: false, images: [...] }`。
+ * 清单格式版本为 3；完整产物必须包含 app，声明 hasWeb 时还须包含 web。结构验证不能代替真实归档校验。
+ * @example
+ * ```ts
+ * import { readFile } from 'node:fs/promises'
+ * import { DeploymentArtifactSchema } from '@h-ai/deploy'
+ * const content = await readFile('.hai/build/docker/build-id/manifest.json', 'utf8')
+ * const parsed = DeploymentArtifactSchema.safeParse(JSON.parse(content))
+ * if (!parsed.success) throw new Error('Invalid artifact manifest')
+ * // Schema 只验证结构；文件路径与 SHA-256 核验使用 readDeploymentArtifact。
+ * ```
+ */
 export const DeploymentArtifactSchema = z.object({
   /** 清单格式版本，与应用版本和部署环境无关。 */
-  version: z.literal(2),
+  version: z.literal(3),
   /** 应用根 package.json 的版本，用于归档、Compose 与桌面交付；最长 80 字符。 */
   appVersion: z.string().max(80).regex(/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i),
-  /** 一次完整构建的标识，app/web 必须来自同一份清单。 */
+  /** 本次构建标识；同一应用版本允许重复构建。 */
   buildId: z.string().regex(/^[a-z0-9][\w.+-]*$/i),
-  /** API/独立应用和可选 Web 的镜像归档，至少包含一个 app。 */
+  /** 只包含所选镜像的构建不能用于首次安装。 */
+  partial: z.boolean().default(false),
+  /** API 单独构建时仍保留工程的 Web 拓扑。 */
+  hasWeb: z.boolean().default(false),
+  /** 工程显式配置的应用端口，部分构建未包含 app 镜像时仍保留；缺省由部署配置决定。 */
+  appContainerPort: z.number().int().min(1).max(65535).optional(),
+  /** 工程显式配置的 Web 端口，部分构建未包含 web 镜像时仍保留；缺省使用部署默认值。 */
+  webContainerPort: z.number().int().min(1).max(65535).optional(),
+  /** 本次构建选择的镜像归档。 */
   images: z.array(z.object({
     /** app 为服务或独立应用，web 为同源 API 代理的静态前端。 */
     name: z.enum(['app', 'web']),
     /** 相对于清单目录的 tar 文件名。 */
     file: z.string().regex(/^[\w.+-]+\.tar$/),
     /** 归档导入后可直接使用的不可变镜像引用。 */
-    imageRef: z.string().regex(/^[a-z0-9][a-z0-9./:_-]+$/),
+    imageRef: z.string().regex(/^[a-z0-9][a-z0-9./:_-]*:[a-z0-9_][a-z0-9_.-]*$/).refine(value => !value.endsWith(':latest')),
     /** tar 内容的 SHA-256，用于部署前校验。 */
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
     /** 容器内部监听端口；服务器公开端口由部署选择。 */
     containerPort: z.number().int().min(1).max(65535).optional(),
-  })).min(1).max(2).refine(images => images.filter(image => image.name === 'app').length === 1 && new Set(images.map(image => image.name)).size === images.length),
-}).refine(artifact => artifact.images.every(image => image.file === `${image.name}-${artifact.appVersion}.tar`))
+  })).min(1).max(2).refine(images => new Set(images.map(image => image.name)).size === images.length),
+}).refine(artifact => artifact.images.every(image => image.file === `${image.name}-${artifact.appVersion}.tar`)).refine(artifact => artifact.partial || artifact.images.some(image => image.name === 'app')).refine(artifact => artifact.partial || !artifact.hasWeb || artifact.images.some(image => image.name === 'web'))
 
-/** 构建器与部署器共享的镜像交付结构；参见 DeploymentArtifactSchema 示例。 */
+/**
+ * 构建器与部署器共享的镜像交付结构；参见 DeploymentArtifactSchema 示例。
+ * @example
+ * ```ts
+ * import type { DeploymentArtifact } from '@h-ai/deploy'
+ * import { readDeploymentArtifact } from '@h-ai/deploy'
+ * const directory = '.hai/build/docker/build-id'
+ * const artifact = await readDeploymentArtifact(directory)
+ * const verified: DeploymentArtifact = artifact
+ * const references = verified.images.map(image => image.imageRef)
+ * ```
+ */
 export type DeploymentArtifact = z.infer<typeof DeploymentArtifactSchema>
 
 /**
  * 流式计算制品校验和，避免将大镜像一次性读入内存。
- * @example `const checksum = await artifactChecksum("/release/app-1.2.3.tar")`
+ * @throws Error - 文件读取失败；返回真实 tar 内容的 SHA-256，不校验清单其它字段。
+ * @param file - 真实镜像归档文件路径。
+ * @returns 文件内容的 SHA-256 十六进制摘要。
+ * @example
+ * ```ts
+ * import { artifactChecksum } from '@h-ai/deploy'
+ * const digest = await artifactChecksum('.hai/build/docker/build-id/app-1.0.0.tar')
+ * ```
  */
 export async function artifactChecksum(file: string): Promise<string> {
   const hash = createHash('sha256')
@@ -43,7 +81,16 @@ export async function artifactChecksum(file: string): Promise<string> {
 
 /**
  * 校验完整构建产物；缺失、损坏或非法清单均抛错，由部署边界转换为 HaiResult。
- * @example `const artifact = await readDeploymentArtifact("/release/build-1")`
+ * @throws Error - 清单、路径、镜像 tar 或摘要校验失败；不能用未验证的清单绕过本函数。
+ * @param directory - 包含已准备制品或部署文件的目录；具体见函数用途。
+ * @returns 已经验证的构建制品清单。
+ * @example
+ * ```ts
+ * import { readDeploymentArtifact } from '@h-ai/deploy'
+ * const directory = '.hai/build/docker/build-id'
+ * const artifact = await readDeploymentArtifact(directory)
+ * const images = artifact.images.map(image => ({ name: image.name, imageRef: image.imageRef }))
+ * ```
  */
 export async function readDeploymentArtifact(directory: string): Promise<DeploymentArtifact> {
   const artifact = DeploymentArtifactSchema.parse(JSON.parse(readFileSync(resolve(directory, 'manifest.json'), 'utf8')))

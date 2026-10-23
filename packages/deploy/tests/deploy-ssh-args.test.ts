@@ -48,7 +48,12 @@ describe('buildSshExecArgs', () => {
 
   it('提供 knownHostsFile 时加入 UserKnownHostsFile', () => {
     const args = buildSshExecArgs(makeSshConfig({ knownHostsFile: '/tmp/known' }), 'true')
-    expect(args).toContain('UserKnownHostsFile=/tmp/known')
+    expect(args).toContain('UserKnownHostsFile="/tmp/known"')
+  })
+
+  it('known_hosts 的空格、反斜杠和引号按 OpenSSH 配置语法转义', () => {
+    const args = buildSshExecArgs(makeSshConfig({ knownHostsFile: 'C:\\Users\\Test User\\known"hosts' }), 'true')
+    expect(args).toContain('UserKnownHostsFile="C:\\\\Users\\\\Test User\\\\known\\"hosts"')
   })
 
   it('远程命令作为单一末尾参数传入（防注入）', () => {
@@ -61,6 +66,9 @@ describe('buildSshExecArgs', () => {
 })
 
 describe('buildScpUploadArgs', () => {
+  it('ipv6 上传地址使用方括号区分主机与远程路径', () => {
+    expect(buildScpUploadArgs(makeSshConfig({ host: '2001:db8::1' }), '/local/image.tar', '/opt/image.tar')).toContain('deploy@[2001:db8::1]:/opt/image.tar')
+  })
   it('使用大写 -P 指定端口并拼接远程目标', () => {
     const args = buildScpUploadArgs(makeSshConfig({ port: 2222 }), '/local/image.tar', '/opt/hai/apps/demo/image.tar')
     expect(args).toContain('-P')

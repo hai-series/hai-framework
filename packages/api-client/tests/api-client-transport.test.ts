@@ -1,5 +1,6 @@
+import type { TransportMessageContext } from '@h-ai/crypto'
 import { apiContract } from '@h-ai/api-contract'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { apiClient } from '../src/index.js'
@@ -22,7 +23,10 @@ const protectedContract = {
  * 直接用 crypto.transport.createServer 复用真实加解密路径。
  */
 function makeServerFetch(): typeof fetch {
-  const mgrResult = crypto.transport.createServer()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const mgrResult = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } })
   if (!mgrResult.success)
     throw new Error('createServer failed')
   const mgr = mgrResult.data
@@ -34,7 +38,7 @@ function makeServerFetch(): typeof fetch {
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), serverKeyId: mgr.getServerKeyId(), clientId }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -43,13 +47,12 @@ function makeServerFetch(): typeof fetch {
     // 解密 → 业务回显 → 加密
     const clientId = req.headers.get('X-Client-Id')
     expect(clientId).toBeTruthy()
-    const payload = await req.json() as { encryptedKey: string, ciphertext: string, iv: string }
-    const dec = mgr.decryptRequest(payload)
-    if (!dec.success)
-      throw new Error(dec.error.message)
-    const input2 = JSON.parse(dec.data) as { msg: string }
+    const verified = await authenticateTransportRequest(mgr, req)
+    if (!verified.success)
+      throw new Error(verified.error.message)
+    const input2 = JSON.parse(verified.data.plaintext) as { msg: string }
     const respPlain = JSON.stringify({ success: true, data: { echoed: input2 } })
-    const enc = await mgr.encryptResponse(clientId!, respPlain)
+    const enc = await mgr.encryptResponse(verified.data.context, respPlain, 200)
     if (!enc.success)
       throw new Error(enc.error.message)
     return new Response(JSON.stringify(enc.data), {
@@ -60,18 +63,21 @@ function makeServerFetch(): typeof fetch {
 }
 
 function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fetch, calls: string[] } {
-  const mgrResult = crypto.transport.createServer()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const mgrResult = crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } })
   if (!mgrResult.success)
     throw new Error('createServer failed')
   const mgr = mgrResult.data
   const calls: string[] = []
 
-  async function encryptedJson(clientId: string, body: unknown): Promise<Response> {
-    const enc = await mgr.encryptResponse(clientId, JSON.stringify(body))
+  async function encryptedJson(context: TransportMessageContext, body: unknown, status = 200): Promise<Response> {
+    const enc = await mgr.encryptResponse(context, JSON.stringify(body), status)
     if (!enc.success)
       throw new Error(enc.error.message)
     return new Response(JSON.stringify(enc.data), {
-      status: 200,
+      status,
       headers: {
         'Content-Type': 'application/json',
         [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
@@ -87,7 +93,7 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
     if (url.pathname === '/api/v1/_hai/key-exchange') {
       const body = await req.json() as { clientPublicKey: string }
       const clientId = await mgr.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: mgr.getServerPublicKey(), serverKeyId: mgr.getServerKeyId(), clientId }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -97,10 +103,13 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
     if (!clientId)
       return new Response(JSON.stringify({ error: 'missing transport client' }), { status: 400 })
 
+    const verified = await authenticateTransportRequest(mgr, req)
+    if (!verified.success)
+      throw new Error(verified.error.message)
     if (url.pathname === '/api/v1/auth/refresh') {
-      expect(req.body).toBeNull()
+      expect(verified.data.plaintext).toBe('')
       expect(req.credentials).toBe('include')
-      return encryptedJson(clientId, {
+      return encryptedJson(verified.data.context, {
         success: true,
         data: {
           tokens: {
@@ -116,14 +125,11 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
       const authorization = req.headers.get('authorization')
       if (authorization === 'Bearer old-access') {
         if (domainUnauthorized)
-          return encryptedJson(clientId, { success: false, error: { code: 'hai:serv:401', message: 'Expired', httpStatus: 401 } })
-        return new Response(JSON.stringify({ success: false, error: { message: 'expired' } }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        })
+          return encryptedJson(verified.data.context, { success: false, error: { code: 'hai:serv:401', message: 'Expired', httpStatus: 401 } })
+        return encryptedJson(verified.data.context, { success: false, error: { message: 'expired' } }, 401)
       }
       expect(authorization).toBe('Bearer new-access')
-      return encryptedJson(clientId, { success: true, data: { ok: true } })
+      return encryptedJson(verified.data.context, { success: true, data: { ok: true } })
     }
 
     return new Response(null, { status: 404 })

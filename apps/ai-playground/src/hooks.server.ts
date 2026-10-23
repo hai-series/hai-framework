@@ -9,17 +9,42 @@ import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { ensureAIInitialized } from '$lib/server/init.js'
+import { cache, CacheConfigSchema } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
 // 初始化 AI（E2E mock 模式跳过）、设置 locale 与 API 安全响应头
+let rateLimitInit: Promise<void> | undefined
+
+/** 准备共享限流；生产配置memory时由限流store失败关闭。 */
+async function ensureRateLimit(): Promise<void> {
+  if (!rateLimitInit) {
+    rateLimitInit = (async () => {
+      if (!core.config.has('cache'))
+        core.init({ configDir: './config' })
+      const config = core.config.validate('cache', CacheConfigSchema)
+      if (!config.success)
+        throw new Error('Rate limit cache configuration is invalid')
+      const initialized = await cache.init(config.data)
+      if (!initialized.success)
+        throw new Error('Rate limit cache initialization failed')
+    })().catch((cause: unknown) => {
+      rateLimitInit = undefined
+      throw cause
+    })
+  }
+  await rateLimitInit
+}
+
+// 初始化 AI（E2E mock 模式跳过）与限流，设置 locale 和安全响应头。
 const securityHandle: Handle = async ({ event, resolve }) => {
   if (process.env.HAI_E2E_MOCK !== '1')
     await ensureAIInitialized()
+  await ensureRateLimit()
 
   if (event.url.pathname.startsWith('/api/')) {
     event.locals.locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
-    kit.i18n.setLocale(event.locals.locale)
-    const response = await resolve(event)
+    const response = await kit.i18n.runWithLocale(event.locals.locale, () => resolve(event))
     response.headers.set('X-Content-Type-Options', 'nosniff')
     response.headers.set('Cache-Control', 'no-store')
     return response
@@ -27,15 +52,14 @@ const securityHandle: Handle = async ({ event, resolve }) => {
 
   return paraglideMiddleware(event.request, async ({ locale }: { locale: string }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event, {
+    return kit.i18n.runWithLocale(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+    }))
   })
 }
 
 const haiHandle = kit.createHandle({
-  rateLimit: { windowMs: 60000, maxRequests: 120 },
+  rateLimit: { windowMs: 60000, maxRequests: 120, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'ai-playground', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
 })
 
 export const handle: Handle = kit.sequence(securityHandle, haiHandle)

@@ -28,7 +28,17 @@ import { iamContract } from './iam/iam-contract.js'
 import { paymentContract } from './payment/payment-contract.js'
 import { storageContract } from './storage/storage-contract.js'
 
-/** hai-framework API contract 统一入口（扁平命名空间）。 */
+/**
+ * hai-framework API contract 统一入口（扁平命名空间）。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.create({ iam: apiContract.iam, payment: false })
+ * const loginPath = apiContract.pathOf(contract.iam.auth.login)
+ * void loginPath
+ * ```
+ */
 export const apiContract = {
   /** 组合任意领域 contract，过滤掉 `false` / `undefined`，输出可被 serv 挂载的 router。 */
   create: createApiContract,

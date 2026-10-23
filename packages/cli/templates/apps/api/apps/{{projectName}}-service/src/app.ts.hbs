@@ -1,9 +1,12 @@
 import type { CoreConfig } from '@h-ai/core'
-import type { ServConfig } from '@h-ai/serv'
+import type { ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
+{{#if features.crypto}}import process from 'node:process'
+{{/if}}
 import { core } from '@h-ai/core'
-{{#if features.crypto}}import { crypto } from '@h-ai/crypto'
+{{#if features.crypto}}import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 {{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
-{{/if}}import { serv } from '@h-ai/serv'
+{{/if}}{{#if features.crypto}}{{#if features.db}}import { reldb } from '@h-ai/reldb'
+{{/if}}{{/if}}import { serv } from '@h-ai/serv'
 import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
 import { {{api.serviceProceduresFactoryName}} } from './server/procedures/index.js'
 
@@ -24,14 +27,24 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     nativeOrigins: servConfig.cors.nativeOrigins,
   })
 {{#if features.crypto}}  const transportMode = _options.transport ?? 'config'
-  const transport = transportMode === 'disabled' || servConfig.transport === false
-    ? undefined
-    : {
-        crypto,
-        keyExchangePath: servConfig.transport.keyExchangePath,
-        excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
-      }
+  let transport: ServTransportConfig | undefined
+  if (transportMode !== 'disabled' && servConfig.transport !== false) {
+{{#unless features.db}}    if (coreConfig.env !== 'development' && coreConfig.env !== 'test')
+      throw new Error('Production transport requires a shared registry; enable the db feature and configure a shared database')
+{{/unless}}
+    const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    transport = {
+      crypto,
+      serverKeyRing: ring.data,
+{{#if features.db}}      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+{{else}}      keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
+{{/if}}
+      keyExchangePath: servConfig.transport.keyExchangePath,
+      excludePaths: [...servConfig.transport.excludePaths],
+    }
+  }
 {{else}}  const transport = undefined
 {{/if}}
 {{#if features.iam}}

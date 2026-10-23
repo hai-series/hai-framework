@@ -13,6 +13,13 @@ import type { ChatMessage } from '../llm/ai-llm-types.js'
 
 /**
  * 摘要生成选项
+ *
+ * @example
+ * ```ts
+ * import type { SummaryOptions } from '@h-ai/ai'
+ *
+ * const value: SummaryOptions = { previousSummary: '用户选择按周发布。', systemPrompt: '保留决策与未完成事项。', temperature: 0.2 }
+ * ```
  */
 export interface SummaryOptions {
   /** 摘要用的模型 */
@@ -27,6 +34,15 @@ export interface SummaryOptions {
 
 /**
  * 摘要生成结果
+ *
+ * @example
+ * ```ts
+ * import type { SummaryResult } from '@h-ai/ai'
+ *
+ * function describeCoverage(summary: SummaryResult): string {
+ *   return `${summary.coveredMessages} 条消息，约 ${summary.tokenCount} tokens：${summary.summary}`
+ * }
+ * ```
  */
 export interface SummaryResult {
   /** 摘要文本 */
@@ -46,18 +62,15 @@ export interface SummaryResult {
  *
  * @example
  * ```ts
- * // 生成摘要（含元数据）
- * const result = await summaryOps.summarize(messages)
- * // result.data: { summary, tokenCount, coveredMessages }
+ * import { ai } from '@h-ai/ai'
  *
- * // 仅获取摘要文本
- * const text = await summaryOps.generate(messages)
- *
- * // 增量摘要
- * const updated = await summaryOps.summarize(newMessages, {
- *   systemPrompt: 'Focus on product decisions and pending action items.',
- *   previousSummary: oldSummary,
- * })
+ * // 应用启动已成功初始化 ai；这里是业务服务函数。
+ * async function run() {
+ *   const result = await ai.summary.summarize([{ role: 'user', content: '每周一发布周报。' }])
+ *   if (!result.success)
+ *     return result
+ *   return result.data.summary
+ * }
  * ```
  */
 export interface SummaryOperations {

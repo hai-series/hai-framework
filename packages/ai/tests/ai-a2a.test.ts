@@ -1,17 +1,14 @@
 /**
  * AI A2A 子模块单元测试
  *
- * 覆盖 buildAgentCard、ReldbA2ATaskStore、createA2AOperations 工厂。
+ * 覆盖 buildAgentCard、共享 journal 与 createA2AOperations 工厂。
  */
 
 import type { Task } from '@a2a-js/sdk'
-import type { ServerCallContext } from '@a2a-js/sdk/server'
-import type { AIRelStore, StorePage } from '../src/store/ai-store-types.js'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ReldbA2ATaskStore } from '../src/a2a/ai-a2a-functions.js'
-import { buildAgentCard } from '../src/a2a/ai-a2a-server.js'
+import { buildAgentCard } from '../src/a2a/ai-a2a-card.js'
 import { AIConfigSchema } from '../src/ai-config.js'
 import { ai } from '../src/ai-main.js'
 import { HaiAIError } from '../src/ai-types.js'
@@ -96,88 +93,6 @@ describe('buildAgentCard', () => {
 
     expect(card.securitySchemes).toBeUndefined()
     expect(card.security).toBeUndefined()
-  })
-})
-
-// ─── ReldbA2ATaskStore ───
-
-describe('reldbA2ATaskStore', () => {
-  function createMockStore(): AIRelStore<Task> {
-    return {
-      save: vi.fn(async () => {}),
-      saveMany: vi.fn(async () => {}),
-      get: vi.fn(async () => undefined),
-      query: vi.fn(async () => []),
-      queryPage: vi.fn(async (): Promise<StorePage<Task>> => ({ items: [], total: 0 })),
-      remove: vi.fn(async () => true),
-      removeBy: vi.fn(async () => 0),
-      count: vi.fn(async () => 0),
-      clear: vi.fn(async () => {}),
-    }
-  }
-
-  const sampleTask: Task = {
-    id: 'task-1',
-    contextId: 'ctx-1',
-    kind: 'task',
-    status: { state: 'submitted' },
-  }
-
-  it('save 委托到 store.save 并传递正确的 scope', async () => {
-    const mockStore = createMockStore()
-    const taskStore = new ReldbA2ATaskStore(mockStore)
-
-    await taskStore.save(sampleTask)
-
-    expect(mockStore.save).toHaveBeenCalledWith('task-1', sampleTask, {
-      objectId: 'anonymous',
-      status: 'submitted',
-      refId: 'ctx-1',
-    })
-  })
-
-  it('save 传递 context 参数不影响调用', async () => {
-    const mockStore = createMockStore()
-    const taskStore = new ReldbA2ATaskStore(mockStore)
-    const mockContext = {} as ServerCallContext
-
-    await taskStore.save(sampleTask, mockContext)
-
-    expect(mockStore.save).toHaveBeenCalledTimes(1)
-  })
-
-  it('save 处理无 status 的 Task', async () => {
-    const mockStore = createMockStore()
-    const taskStore = new ReldbA2ATaskStore(mockStore)
-    const noStatusTask: Task = { id: 'task-2', kind: 'task' }
-
-    await taskStore.save(noStatusTask)
-
-    expect(mockStore.save).toHaveBeenCalledWith('task-2', noStatusTask, {
-      objectId: 'anonymous',
-      status: undefined,
-      refId: undefined,
-    })
-  })
-
-  it('load 按任务 ID 和主体同时过滤', async () => {
-    const mockStore = createMockStore()
-    vi.mocked(mockStore.query).mockResolvedValue([sampleTask])
-    const taskStore = new ReldbA2ATaskStore(mockStore)
-
-    const result = await taskStore.load('task-1')
-
-    expect(mockStore.query).toHaveBeenCalledWith({ objectId: 'anonymous', where: { id: 'task-1' }, limit: 1 })
-    expect(result).toEqual(sampleTask)
-  })
-
-  it('load 不存在的任务返回 undefined', async () => {
-    const mockStore = createMockStore()
-    const taskStore = new ReldbA2ATaskStore(mockStore)
-
-    const result = await taskStore.load('nonexistent')
-
-    expect(result).toBeUndefined()
   })
 })
 

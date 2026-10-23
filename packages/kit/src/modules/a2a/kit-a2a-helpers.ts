@@ -18,18 +18,10 @@ import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
  *
  * @param getAgentCard - 获取 Agent Card 的回调（通常调用 `ai.a2a.getAgentCard()`）
  * @returns SvelteKit GET 处理器
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // src/routes/.well-known/agent-card.json/+server.ts
- * import { ai } from '@h-ai/ai'
- * import { createAgentCardHandler } from '@h-ai/kit/a2a'
- *
- * export const GET = createAgentCardHandler(() => {
- *   const result = ai.a2a.getAgentCard()
- *   if (!result.success) throw new Error(result.error.message)
- *   return result.data
- * })
+ * const handler = createAgentCardHandler(() => ({ name: 'Example agent', url: 'https://agent.example.com/a2a' }))
+ * void handler
  * ```
  */
 export function createAgentCardHandler(
@@ -52,16 +44,11 @@ export function createAgentCardHandler(
  * @param handleRequest - JSON-RPC 请求处理回调（通常调用 `ai.a2a.handleRequest()`）
  * @param config - 可选配置（认证等）
  * @returns SvelteKit POST 处理器
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // src/routes/a2a/+server.ts
- * import { ai } from '@h-ai/ai'
- * import { createA2AHandler } from '@h-ai/kit/a2a'
- *
- * export const POST = createA2AHandler(
- *   (body, context) => ai.a2a.handleRequest(body, context),
- * )
+ * function build(operations: Parameters<typeof createA2AHandler>[0]) {
+ *   return createA2AHandler(operations, { authenticate: async () => null })
+ * }
  * ```
  */
 export function createA2AHandler(

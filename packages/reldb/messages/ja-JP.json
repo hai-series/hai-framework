@@ -17,10 +17,16 @@
   "reldb_mysqlOnlyMysql": "MySQLプロバイダーはmysql型のみに対応しています",
   "reldb_mysqlConnectionFailed": "MySQLへの接続に失敗しました: {error}",
   "reldb_mysqlTxFailed": "トランザクションに失敗しました: {error}",
+  "reldb_mysqlPoolQueueFull": "MySQL 接続取得キューが満杯です",
+  "reldb_mysqlPoolAcquireTimeout": "MySQL 接続取得の待機期限を超過しました",
+  "reldb_mysqlPoolReleaseFailed": "MySQL 接続の解放に失敗しました。再試行する前にデータベースを終了してください",
+  "reldb_mysqlTlsDnsRequired": "MySQL のホスト名検証には証明書と一致する DNS ホスト名が必要です。現在のドライバーでは IP アドレスの識別情報を検証できません",
   "reldb_crudEmptyPayload": "CRUDペイロードが空です。データを指定してください",
   "reldb_crudNoValidColumns": "CRUDペイロードに有効な列がありません",
   "reldb_crudRecordNotFound": "レコードが見つかりません: {id}",
   "reldb_invalidIdentifier": "SQL識別子が無効です: {name}（英数字とアンダースコアのみ使用できます）",
   "reldb_configError": "データベース設定の検証に失敗しました: {error}",
-  "reldb_txFailed": "トランザクションに失敗しました: {error}"
+  "reldb_txFailed": "トランザクションに失敗しました: {error}",
+  "reldb_sharedBackendRequired": "本番環境には共有バックエンドが必要です。ローカルファイルとメモリーバックエンドは開発環境または明示的な E2E テストでのみ使用できます。",
+  "reldb_jsonPatchObjectRequired": "JSON マージパッチはオブジェクトで指定してください"
 }

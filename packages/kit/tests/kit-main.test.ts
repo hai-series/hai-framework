@@ -90,7 +90,6 @@ describe('kit 统一出口', () => {
       expect(typeof kit.auth.logout).toBe('function')
       expect(typeof kit.auth.setBrowserToken).toBe('function')
       expect(typeof kit.auth.clearBrowserToken).toBe('function')
-      expect(typeof kit.auth.createTokenStore).toBe('function')
     })
 
     it('不暴露内部实现方法', () => {

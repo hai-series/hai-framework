@@ -6,7 +6,7 @@
 >
 > 所有代码块均为示例占位（`xx` = 模块名，`yy`/`zz` = 子功能名，`aaa` = Provider 实现名），生成实际代码时必须替换。
 
-## R1 配置 Schema 范本（对应 SKILL §4）
+## R1 配置 Schema 范本
 
 ```ts
 // xx-config.ts ——示例
@@ -33,7 +33,7 @@ export type XxConfig = z.infer<typeof XxConfigSchema>
 export type XxConfigInput = z.input<typeof XxConfigSchema>
 ```
 
-## R2 类型定义范本（对应 SKILL §3、§4）
+## R2 类型定义范本
 
 ```ts
 // xx-types.ts ——示例
@@ -65,7 +65,13 @@ export interface XxFunctions {
   readonly zz: ZzOperations
 }
 
-// 仅无子功能 + 需多后端时
+
+```
+
+内置 Provider 另放在实现边界：
+
+```ts
+// providers/xx-provider-types.ts —— 内置后端契约，不由公共 index 转发
 export interface XxProvider {
   readonly name: string
   connect: (config: XxConfig) => Promise<HaiResult<void>>
@@ -74,6 +80,8 @@ export interface XxProvider {
   readonly zz: ZzOperations
 }
 ```
+
+若公共 API 支持调用方注册实现（如 PaymentProvider）或注入 Store（如 AIStoreProvider），其接口是扩展契约，仍从真实公开入口导出。入口可选择性转发；禁止为满足形式统一而暴露全部内部函数。构建后使用 generate:api/check:api/test:api 核对 package.exports 与声明产物。
 
 ## R3 生命周期与 Provider 范本
 
@@ -104,7 +112,7 @@ export interface XxProvider {
 - 所有关闭/失败路径清空状态，getter 切回顶层创建的未初始化 Proxy；不得在 getter 中重复创建 Proxy。
 - 纯函数、无资源模块不为套用范本添加 init/close；配置含凭据时公开 config 使用脱敏快照。
 
-## R4 业务实现范本（对应 SKILL §3）
+## R4 业务实现范本
 
 ### R4.1 工厂函数
 
@@ -290,11 +298,18 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 ```jsonc
 {
   "exports": {
-    ".": { "types": "...", "browser": "...", "import": "...", "default": "..." },
+    ".": {
+      "browser": { "types": "./dist/browser.d.ts", "default": "./dist/browser.js" },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
     "./client": { "types": "...", "import": "..." }
   }
 }
 ```
+
+browser 分支必须在 Node types 之前，TypeScript customConditions=browser 才会选择对应声明。构建后的 d.ts 必须与实际 JS 同时消费验证；若声明打包器丢弃 type-only 星号转发语义，改为明确的类型列表，不把服务器实例/函数/构造器写成浏览器可调用能力。
 
 ### `tsconfig.json`
 
@@ -333,18 +348,22 @@ export default defineConfig({ ...baseVitestConfig })
 
 ```text
 # @h-ai/xx
-一句话描述 + 核心价值。
+语言切换与相关模块导航
 
-## 支持的 xxx                  ← 能力概览
-## 快速开始                    ← init → 核心操作 → close
-  ### Node.js 服务端           ← 条件
-  ### 浏览器客户端             ← 条件
-## API 契约                    ← 条件：有 api 子模块
-## API 概览                    ← 条件：子操作较多
-## 配置
-## 错误处理
-## 测试
-## License
+## 简介
+用途、目标使用者与运行环境，避免宣传口号和内部术语堆叠。
+## 核心功能清单
+能解决的实际问题与必要边界。
+## 使用入门
+安装、最小可用示例、配置、常用 API 与错误处理。
+仅有生命周期的模块展示 init → use → close，并检查失败结果。
+长签名与完整类型放参考资料，用公开入口链接。
+## 开发测试
+当前 package.json 中真实存在的构建、检查与测试命令。
+## 许可证
+仓库实际许可证；全文最后一节，不在后面追加新能力说明。
 ```
 
-禁止：贴完整类型 / 列完整 API 表 / 写内部实现原理 / 示例中出现 `console.log`。
+中文、英文、日文保持功能、示例和章节对应。根 README 可按框架介绍和选型导航组织；专用操作指南可保留顺序步骤。修改内容融入对应章节，删除过期或重复段落，检查跨文档锚点。
+
+模块注释与示例按 [JSDoc 验证约定](../../../docs/module-jsdoc.md) 检查；使用真实公共入口和数据，内部类型示例标明词法上下文。受影响包构建后执行 `node scripts/check-module-jsdoc.mjs --package <模块>`；该仓库命令不复制到应用模板。

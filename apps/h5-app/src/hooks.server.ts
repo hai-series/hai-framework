@@ -5,8 +5,10 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
+import process from 'node:process'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
+import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -32,16 +34,14 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event)
+    return kit.i18n.runWithLocale(locale, () => resolve(event))
   }
 
   return paraglideMiddleware(event.request, async ({ locale }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event, {
+    return kit.i18n.runWithLocale(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+    }))
   })
 }
 
@@ -77,7 +77,7 @@ const haiHandle = kit.createHandle({
     publicPaths: kit.auth.publicPaths,
     operations: () => iam.auth,
   },
-  rateLimit: { windowMs: 60000, maxRequests: 200 },
+  rateLimit: { windowMs: 60000, maxRequests: 200, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'h5-app', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

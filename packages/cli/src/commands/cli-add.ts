@@ -7,17 +7,23 @@
 
 import type { FeatureId, GlobalOptions } from '../cli-types.js'
 import path from 'node:path'
-import { core } from '@h-ai/core'
+import { parseEnv } from 'node:util'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
-import { detectPackageManager, fileExists, getCliVersion, writeFile } from '../cli-utils.js'
-import { generateConfigFile } from './cli-config-templates.js'
+import { cliM } from '../cli-i18n.js'
+import { detectPackageManager, fileExists, getCliVersion, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
+import { generateConfigFile, generateProductionEnvironment } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
 
 /**
  * add 命令选项
+ * 省略 module 时交互选择；install=false 只写项目依赖/配置与支持文件，不安装依赖。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: AddModuleOptions = { cwd: '/workspace/shop', module: 'ai', install: false }
+ * ```
  */
 export interface AddModuleOptions extends GlobalOptions {
   /** 要添加的模块 */
@@ -29,29 +35,38 @@ export interface AddModuleOptions extends GlobalOptions {
 // 可添加的模块与对应包
 const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
   // iam 依赖 crypto（password hash）/ db（user 存储）/ cache（session 缓存）
-  'iam': { packages: ['@h-ai/iam'], deps: ['crypto', 'db', 'cache'], configKey: 'iam', description: '身份与访问管理' },
+  'iam': { packages: ['@h-ai/iam'], deps: ['crypto', 'db', 'cache'], configKey: 'iam', get description() { return cliM('cli_featureIamName') } },
   // 'db' 和 'reldb' 都映射到 @h-ai/reldb，兼容用户习惯（hai add db 和 hai add reldb 均可）
-  'db': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
-  'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
-  'cache': { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
-  'ai': { packages: ['@h-ai/ai'], configKey: 'ai', description: 'AI 集成' },
-  'storage': { packages: ['@h-ai/storage'], configKey: 'storage', description: '文件存储' },
-  'crypto': { packages: ['@h-ai/crypto'], description: '加密模块' },
-  'kit': { packages: ['@h-ai/kit'], description: 'SvelteKit 集成工具' },
-  'ui': { packages: ['@h-ai/ui'], description: 'UI 组件库' },
-  'deploy': { packages: ['@h-ai/deploy'], configKey: 'deploy', description: '自动化部署' },
-  'vecdb': { packages: ['@h-ai/vecdb'], configKey: 'vecdb', description: '向量数据库' },
-  'datapipe': { packages: ['@h-ai/datapipe'], description: '数据处理管道' },
-  'reach': { packages: ['@h-ai/reach'], configKey: 'reach', description: '消息推送' },
-  'scheduler': { packages: ['@h-ai/scheduler'], deps: ['db'], configKey: 'scheduler', description: '任务调度' },
-  'audit': { packages: ['@h-ai/audit'], deps: ['db'], configKey: 'audit', description: '审计日志' },
-  'payment': { packages: ['@h-ai/payment'], configKey: 'payment', description: '支付' },
-  'capacitor': { packages: ['@h-ai/capacitor'], description: '移动端能力' },
-  'api-client': { packages: ['@h-ai/api-client'], description: 'HTTP 客户端' },
+  'db': { packages: ['@h-ai/reldb'], configKey: 'db', get description() { return cliM('cli_featureDbName') } },
+  'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', get description() { return cliM('cli_featureDbName') } },
+  'cache': { packages: ['@h-ai/cache'], configKey: 'cache', get description() { return cliM('cli_featureCacheName') } },
+  'ai': { packages: ['@h-ai/ai'], deps: ['db', 'vecdb'], configKey: 'ai', get description() { return cliM('cli_featureAiName') } },
+  'storage': { packages: ['@h-ai/storage'], configKey: 'storage', get description() { return cliM('cli_featureStorageName') } },
+  'crypto': { packages: ['@h-ai/crypto'], deps: ['db'], get description() { return cliM('cli_featureCryptoName') } },
+  'kit': { packages: ['@h-ai/kit'], get description() { return cliM('cli_featureKitName') } },
+  'ui': { packages: ['@h-ai/ui'], get description() { return cliM('cli_featureUiName') } },
+  'deploy': { packages: ['@h-ai/deploy'], configKey: 'deploy', get description() { return cliM('cli_featureDeployName') } },
+  'vecdb': { packages: ['@h-ai/vecdb'], configKey: 'vecdb', get description() { return cliM('cli_featureVecdbName') } },
+  'datapipe': { packages: ['@h-ai/datapipe'], get description() { return cliM('cli_featureDatapipeName') } },
+  'reach': { packages: ['@h-ai/reach'], configKey: 'reach', get description() { return cliM('cli_featureReachName') } },
+  'scheduler': { packages: ['@h-ai/scheduler'], deps: ['db'], configKey: 'scheduler', get description() { return cliM('cli_featureSchedulerName') } },
+  'audit': { packages: ['@h-ai/audit'], deps: ['db'], configKey: 'audit', get description() { return cliM('cli_featureAuditName') } },
+  'payment': { packages: ['@h-ai/payment'], configKey: 'payment', get description() { return cliM('cli_featurePaymentName') } },
+  'capacitor': { packages: ['@h-ai/capacitor'], get description() { return cliM('cli_featureCapacitorName') } },
+  'api-client': { packages: ['@h-ai/api-client'], get description() { return cliM('cli_featureApiClientName') } },
 }
 
 /**
  * 增量添加模块到现有项目
+ * 写入失败与安装失败会抛出异常；未检测到项目、未知或已安装模块等分支打印诊断后返回。
+ * @param options - 命令参数；对应命令的工作目录、非交互与可选功能。
+ * @returns 依赖/配置与支持文件处理结束；部分诊断分支打印提示后直接返回。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前目录是要修改的现有 hai 项目。
+ * await addModule({ cwd: process.cwd(), module: 'ai', install: false })
+ * // 然后自行安装依赖，并在应用启动链路初始化新增模块；此命令不修改业务启动代码。
+ * ```
  */
 export async function addModule(options: AddModuleOptions): Promise<void> {
   const spinner = ora()
@@ -61,7 +76,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     // 检测项目
     const project = await detectProject(cwd)
     if (!project) {
-      core.logger.error(chalk.red('未检测到项目（找不到 package.json）'))
+      writeCliError(chalk.red(cliM('cli_projectNotFound')))
       return
     }
 
@@ -78,14 +93,15 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         }))
 
       if (choices.length === 0) {
-        core.logger.info(chalk.green('所有模块已安装！'))
+        writeCliMessage(chalk.green(cliM('cli_addAllInstalled')))
         return
       }
 
       const { selected } = await prompts({
         type: 'select',
+        hint: cliM('cli_selectHint'),
         name: 'selected',
-        message: '选择要添加的模块:',
+        message: cliM('cli_addModulePrompt'),
         choices,
       })
 
@@ -96,8 +112,8 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
 
     const moduleDef = MODULE_MAP[moduleName]
     if (!moduleDef) {
-      core.logger.error(chalk.red(`未知模块: ${moduleName}`))
-      core.logger.info(`可用模块: ${Object.keys(MODULE_MAP).join(', ')}`)
+      writeCliError(chalk.red(cliM('cli_addUnknownModule', { params: { module: moduleName } })))
+      writeCliMessage(cliM('cli_addAvailableModules', { params: { modules: Object.keys(MODULE_MAP).join(', ') } }))
       return
     }
 
@@ -114,13 +130,13 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         },
       )
       if (generatedFiles.length > 0) {
-        core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装，已补全 AI 支持文件`))
+        writeCliMessage(chalk.yellow(cliM('cli_addSupportCompleted', { params: { module: moduleName } })))
         for (const generatedFile of generatedFiles) {
-          core.logger.info(chalk.gray(`  + ${generatedFile} (AI support)`))
+          writeCliMessage(chalk.gray(cliM('cli_addSupportFile', { params: { file: generatedFile } })))
         }
       }
       else {
-        core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装`))
+        writeCliMessage(chalk.yellow(cliM('cli_addAlreadyInstalled', { params: { module: moduleName } })))
       }
       return
     }
@@ -139,7 +155,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     }
 
     // 更新 package.json
-    spinner.start('更新 package.json...')
+    spinner.start(cliM('cli_addUpdateManifest'))
     const pkgPath = path.join(cwd, 'package.json')
     const pkg = await fse.readJson(pkgPath)
     if (!pkg.dependencies)
@@ -152,7 +168,11 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     const depVersion = existingHaiSpecifier === 'catalog:' ? 'catalog:' : getCliVersion()
 
     for (const pkgName of allPackages) {
-      if (!pkg.dependencies[pkgName]) {
+      if (pkgName === '@h-ai/deploy') {
+        pkg.devDependencies ??= {}
+        pkg.devDependencies[pkgName] ??= depVersion
+      }
+      else if (!pkg.dependencies[pkgName]) {
         pkg.dependencies[pkgName] = depVersion
       }
     }
@@ -164,13 +184,13 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       const configDir = path.join(cwd, 'config')
       const configPath = path.join(configDir, `_${moduleDef.configKey}.yml`)
       if (!(await fileExists(configPath))) {
-        spinner.start(`生成配置文件 config/_${moduleDef.configKey}.yml...`)
+        spinner.start(cliM('cli_addConfig', { params: { config: moduleDef.configKey } }))
         const content = generateConfigFile(moduleDef.configKey)
         await writeFile(configPath, content)
         spinner.succeed()
       }
       else {
-        core.logger.info(chalk.gray(`配置文件已存在: config/_${moduleDef.configKey}.yml`))
+        writeCliMessage(chalk.gray(cliM('cli_addConfigExists', { params: { config: moduleDef.configKey } })))
       }
     }
 
@@ -183,7 +203,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
           if (!(await fileExists(depConfigPath))) {
             const content = generateConfigFile(depDef.configKey)
             await writeFile(depConfigPath, content)
-            core.logger.info(chalk.gray(`  + config/_${depDef.configKey}.yml (依赖)`))
+            writeCliMessage(chalk.gray(cliM('cli_addDependencyConfig', { params: { config: depDef.configKey } })))
           }
         }
       }
@@ -200,32 +220,41 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     )
     if (generatedFiles.length > 0) {
       for (const generatedFile of generatedFiles) {
-        core.logger.info(chalk.gray(`  + ${generatedFile} (AI support)`))
+        writeCliMessage(chalk.gray(cliM('cli_addSupportFile', { params: { file: generatedFile } })))
       }
     }
 
     // 安装依赖
+    const productionPath = path.join(cwd, '.env.prod')
+    const previousProduction = await fileExists(productionPath) ? await fse.readFile(productionPath, 'utf8') : ''
+    const configured = new Set([...previousProduction.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1]))
+    const previousValues = parseEnv(previousProduction)
+    const production = generateProductionEnvironment([moduleName, ...(moduleDef.deps ?? [])] as FeatureId[], previousValues.HAI_DB_TYPE === 'mysql' ? { db: { type: 'mysql', database: previousValues.HAI_DB_DATABASE } } : undefined)
+      .split('\n')
+      .filter(line => !/^[A-Z][A-Z0-9_]*=/.test(line) || !configured.has(line.split('=')[0]))
+    await writeFile(productionPath, `${previousProduction.trimEnd()}\n\n${production.join('\n')}`)
+
     const doInstall = options.install !== false
     if (doInstall) {
-      spinner.start('安装依赖...')
+      spinner.start(cliM('cli_addInstall'))
       const { execSync } = await import('node:child_process')
       const pm = await detectPackageManager(cwd)
       execSync(`${pm} install`, { cwd, stdio: 'ignore' })
       spinner.succeed()
     }
 
-    core.logger.info('')
-    core.logger.info(chalk.green(`✔ 模块 ${moduleName} 添加成功！`))
-    core.logger.info('')
-    core.logger.info('已添加的包:')
+    writeCliMessage('')
+    writeCliMessage(chalk.green(cliM('cli_addSuccess', { params: { module: moduleName } })))
+    writeCliMessage('')
+    writeCliMessage(cliM('cli_addPackages'))
     for (const pkg of allPackages) {
-      core.logger.info(chalk.cyan(`  ${pkg}`))
+      writeCliMessage(chalk.cyan(`  ${pkg}`))
     }
-    core.logger.info('')
+    writeCliMessage('')
   }
   catch (error) {
     spinner.fail()
-    core.logger.error(chalk.red('添加模块失败:'), { error })
+    writeCliError(chalk.red(cliM('cli_addFailed')), { error })
     throw error
   }
 }

@@ -64,6 +64,12 @@ for (const platform of ['mobile', 'desktop'] as const) {
     await page.locator('#login-code').fill(sent?.code ?? '')
     await page.locator('button[type="submit"]').click()
     await expect(page).not.toHaveURL(/login/)
+    for (const width of [390, 1440, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: 960 })
+      const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop' ? 280 : 2))
+    }
     await page.reload()
     await page.goto(url)
     await expect(page.locator('#login-username')).toBeVisible()
@@ -93,5 +99,11 @@ for (const platform of ['mobile', 'desktop'] as const) {
     ])
     expect(loginResponse.status()).toBe(200)
     await expect(page).not.toHaveURL(/login/)
+    for (const width of [390, 1440, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: 960 })
+      const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop' ? 280 : 2))
+    }
   })
 }

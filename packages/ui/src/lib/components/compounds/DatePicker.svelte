@@ -13,12 +13,13 @@
   @prop {function} onchange - 日期变更回调
 
   @example
-  ```svelte
-  <script>
-    import { CalendarDate } from '@internationalized/date'
-    let date = $state(new CalendarDate(2024, 6, 15))
-  </script>
-  <DatePicker bind:value={date} />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { DatePicker } from '@h-ai/ui'
+  const props: ComponentProps<typeof DatePicker> = { weekStartsOn: 1, size: 'md' }
+  const component = mount(DatePicker, { target: document.body, props })
+  await unmount(component)
   ```
 -->
 <script lang='ts'>
@@ -30,6 +31,19 @@
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
+  /**
+   * DatePicker 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { DatePicker } from '@h-ai/ui'
+   * const props: ComponentProps<typeof DatePicker> = { weekStartsOn: 1, size: 'md' }
+   * const component = mount(DatePicker, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 选中日期（双向绑定） */
     value?: DateValue

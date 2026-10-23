@@ -161,10 +161,11 @@ function fromEntries<K extends string, V>(entries: [K, V][]): Record<K, V> {
 
 /**
  * 对象操作工具对象。
- *
  * @example
  * ```ts
- * object.deepMerge({ a: 1 }, { b: 2 })
+ * import { core } from '@h-ai/core'
+ * const tools = core.object
+ * tools.pick({ id: 'order-1', password: 'example-only' }, ['id'])
  * ```
  */
 export const object = {
@@ -178,5 +179,12 @@ export const object = {
   fromEntries,
 }
 
-/** object 子工具类型 */
+/**
+ * object 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: ObjectFn = object
+ * tools.pick({ id: 'order-1', password: 'example-only' }, ['id'])
+ * ```
+ */
 export type ObjectFn = typeof object

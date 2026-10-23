@@ -7,11 +7,16 @@
   "payment_notifyParseFailed": "Failed to parse payment notification",
   "payment_signFailed": "Payment signature generation failed",
   "payment_providerNotFound": "Payment provider not found",
+  "payment_invalidCreateOrderInput": "Invalid payment order input",
   "payment_invalidAmount": "Invalid payment amount",
   "payment_notInitialized": "Payment module not initialized, call payment.init() first",
+  "payment_wechatBridgeUnavailable": "Wait for the WeChat payment bridge to become available",
   "payment_invokeWebFailed": "Failed to invoke web payment",
-  "payment_invokeAppFailed": "Failed to invoke app payment",
   "payment_configError": "Payment config validation failed: {error}",
   "payment_initFailed": "Payment module initialization failed: {error}",
-  "payment_configFieldRequired": "This config field is required"
+  "payment_configFieldRequired": "This config field is required",
+  "payment_stripeDatabaseRequired": "Stripe payments require an initialized shared reldb database",
+  "payment_stripeStoreInitFailed": "Failed to initialize Stripe payment persistence",
+  "payment_stripeKeyInvalid": "Stripe requires a server API key prefixed with sk_test_, sk_live_, rk_test_, or rk_live_",
+  "payment_unsupportedTradeType": "This payment provider does not support the requested trade type"
 }

@@ -128,6 +128,38 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_AI_A2A_EXECUTION",
+    "module": "ai",
+    "path": "ai.a2a.execution",
+    "description": "共享执行预算；最终提交同时受数据库租约与绝对执行期限约束。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_A2A_EXECUTION_LEASEMS",
+    "module": "ai",
+    "path": "ai.a2a.execution.leaseMs",
+    "description": "活跃执行租约毫秒数，默认30秒，范围1秒至1天。",
+    "value": "30000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_A2A_EXECUTION_MAXEXECUTIONMS",
+    "module": "ai",
+    "path": "ai.a2a.execution.maxExecutionMs",
+    "description": "单次执行绝对上限毫秒数，默认5分钟；超时标中断，不自动重放。",
+    "value": "300000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
+    "name": "HAI_AI_A2A_EXECUTION_POLLINTERVALMS",
+    "module": "ai",
+    "path": "ai.a2a.execution.pollIntervalMs",
+    "description": "共享事件/状态订阅轮询间隔毫秒数，默认250。",
+    "value": "250",
+    "constraint": "整数；>= 10；<= 5000"
+  },
+  {
     "name": "HAI_AI_A2A_SECURITY",
     "module": "ai",
     "path": "ai.a2a.security",
@@ -496,6 +528,22 @@
     "constraint": "敏感字符串，启用对应厂商时注入"
   },
   {
+    "name": "HAI_AI_IMAGE_MAXIMAGEBYTES",
+    "module": "ai",
+    "path": "ai.image.maxImageBytes",
+    "description": "单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。",
+    "value": "20971520",
+    "constraint": "整数；<= 104857600；> 0"
+  },
+  {
+    "name": "HAI_AI_IMAGE_MAXIMAGES",
+    "module": "ai",
+    "path": "ai.image.maxImages",
+    "description": "单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。",
+    "value": "4",
+    "constraint": "整数；<= 16；> 0"
+  },
+  {
     "name": "HAI_AI_IMAGE_MODELS",
     "module": "ai",
     "path": "ai.image.models",
@@ -555,9 +603,9 @@
     "name": "HAI_AI_IMAGE_MODELS_0_TIMEOUT",
     "module": "ai",
     "path": "ai.image.models.0.timeout",
-    "description": "请求超时（毫秒，默认 120000）",
+    "description": "整次图片生成与下载超时（毫秒，1–2147483647，默认 120000）",
     "value": "120000",
-    "constraint": "整数；<= 9007199254740991；> 0"
+    "constraint": "整数；<= 2147483647；> 0"
   },
   {
     "name": "HAI_AI_IMAGE_MODELS_0_WORKSPACEID",
@@ -635,7 +683,7 @@
     "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_MAXSIZE",
     "module": "ai",
     "path": "ai.knowledge.chunkOptions.maxSize",
-    "description": "每个分块的最大大小（字符数 / 字数，取决于 mode，默认 1000）",
+    "description": "每块上限包含 overlap/分隔符；word 按非空白词，其他按 Unicode code point，默认 1500。",
     "value": "1500",
     "constraint": "整数；<= 9007199254740991；> 0"
   },
@@ -644,14 +692,14 @@
     "module": "ai",
     "path": "ai.knowledge.chunkOptions.mode",
     "description": "分块模式",
-    "value": "sentence",
+    "value": "markdown",
     "constraint": "字符串；取值：sentence | paragraph | markdown | page | word | character | custom"
   },
   {
     "name": "HAI_AI_KNOWLEDGE_CHUNKOPTIONS_OVERLAP",
     "module": "ai",
     "path": "ai.knowledge.chunkOptions.overlap",
-    "description": "重叠大小（字符数 / 字数，用于上下文衔接，默认 200）",
+    "description": "重叠使用与 maxSize 相同的单位，必须严格小于 maxSize。",
     "value": "200",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -1123,7 +1171,7 @@
     "name": "HAI_AI_MEMORY_ALLOWEPHEMERALFALLBACK",
     "module": "ai",
     "path": "ai.memory.allowEphemeralFallback",
-    "description": "是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false） 仅影响 `provider='mem0'`：mem0 TS 仅支持 qdrant / pgvector。当底层 vecdb 是 lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失； 仅当显式设为 true 时才退回 mem0 自带 in-memory 存储（数据不持久）。",
+    "description": "是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false） 仅影响 `provider='mem0'`：当前框架适配仅映射 qdrant；pgvector 的 SDK 连接无法公开关闭，所有环境拒绝。底层 vecdb 是 lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失； 仅当显式设为 true 时才在开发或明确 E2E 环境退回内存存储（数据不持久）。 生产始终要求实际持久化连接，不能通过此开关绕过共享状态要求。",
     "value": "false",
     "constraint": "true | false"
   },
@@ -1171,7 +1219,7 @@
     "name": "HAI_AI_MEMORY_PROVIDER",
     "module": "ai",
     "path": "ai.memory.provider",
-    "description": "记忆后端：native = 逐条写回；mem0 = 批量 ADD/UPDATE/DELETE 合并（均为嵌入式，复用 HAI 组件）",
+    "description": "记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端",
     "value": "native",
     "constraint": "字符串；取值：native | mem0"
   },
@@ -1443,7 +1491,7 @@
     "name": "HAI_CACHE_PASSWORD",
     "module": "cache",
     "path": "cache.password",
-    "description": "认证密码",
+    "description": "单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。",
     "value": "",
     "constraint": "字符串"
   },
@@ -1568,14 +1616,6 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
-    "name": "HAI_CORE_DEBUG",
-    "module": "core",
-    "path": "core.debug",
-    "description": "是否调试模式（默认 false）",
-    "value": "false",
-    "constraint": "true | false"
-  },
-  {
     "name": "HAI_CORE_DEFAULTLOCALE",
     "module": "core",
     "path": "core.defaultLocale",
@@ -1590,86 +1630,6 @@
     "description": "运行环境（默认 'development'）",
     "value": "development",
     "constraint": "字符串；取值：development | production | test | staging"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_AIASSISTANT",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_AIASSISTANT",
-    "description": "示例应用功能开关：aiassistant",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_AIENABLED",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_AIENABLED",
-    "description": "示例应用功能开关：aienabled",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_APIACCESS",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_APIACCESS",
-    "description": "示例应用功能开关：apiaccess",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_CONTACTFORM",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_CONTACTFORM",
-    "description": "示例应用功能开关：contactform",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_FILEUPLOAD",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_FILEUPLOAD",
-    "description": "示例应用功能开关：fileupload",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_MCPENABLED",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_MCPENABLED",
-    "description": "示例应用功能开关：mcpenabled",
-    "value": "false",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_FEATURES_REGISTRATION",
-    "module": "core",
-    "path": "HAI_CORE_FEATURES_REGISTRATION",
-    "description": "示例应用功能开关：registration",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
-    "name": "HAI_CORE_ID",
-    "module": "core",
-    "path": "core.id",
-    "description": "ID 生成器配置（可选）",
-    "value": "",
-    "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_CORE_ID_LENGTH",
-    "module": "core",
-    "path": "core.id.length",
-    "description": "ID 长度（范围 6-64，默认 21）",
-    "value": "21",
-    "constraint": "整数；>= 6；<= 64"
-  },
-  {
-    "name": "HAI_CORE_ID_PREFIX",
-    "module": "core",
-    "path": "core.id.prefix",
-    "description": "ID 前缀（可选，生成时自动拼接）",
-    "value": "",
-    "constraint": "字符串"
   },
   {
     "name": "HAI_CORE_LOGGING",
@@ -1771,9 +1731,9 @@
     "name": "HAI_DB_DATABASE",
     "module": "db",
     "path": "db.database",
-    "description": "数据库名称",
+    "description": "数据库：SQLite文件路径或:memory:；PostgreSQL必填名称；MySQL无URL时必填，URL模式从URL读取",
     "value": "./data/admin.db",
-    "constraint": "字符串"
+    "constraint": "字符串；最小字符数 1"
   },
   {
     "name": "HAI_DB_HOST",
@@ -1800,14 +1760,6 @@
     "constraint": "字符串"
   },
   {
-    "name": "HAI_DB_MYSQL_TIMEZONE",
-    "module": "db",
-    "path": "db.mysql.timezone",
-    "description": "时区设置，如 '+08:00'",
-    "value": "",
-    "constraint": "字符串"
-  },
-  {
     "name": "HAI_DB_OPERATIONLOG",
     "module": "db",
     "path": "db.operationLog",
@@ -1827,7 +1779,7 @@
     "name": "HAI_DB_OPERATIONLOG_MAXLENGTH",
     "module": "db",
     "path": "db.operationLog.maxLength",
-    "description": "操作日志字段的最大字符数，0 表示不截断",
+    "description": "安全数量摘要的最大字符数；0 表示省略摘要，永不记录 SQL 原文或参数值。",
     "value": "1000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -1859,7 +1811,7 @@
     "name": "HAI_DB_POOL",
     "module": "db",
     "path": "db.pool",
-    "description": "连接池配置",
+    "description": "连接池配置：PostgreSQL支持min/idleTimeout；MySQL仅max/acquireTimeout/queueLimit，拒绝其他字段",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
@@ -1867,15 +1819,15 @@
     "name": "HAI_DB_POOL_ACQUIRETIMEOUT",
     "module": "db",
     "path": "db.pool.acquireTimeout",
-    "description": "获取连接超时时间，单位毫秒（默认 10000）",
+    "description": "获取连接超时，毫秒（默认10000）；PostgreSQL >=0，0禁用；MySQL排队+建连总期限为1–2147483647",
     "value": "10000",
-    "constraint": "整数；>= 0；<= 9007199254740991"
+    "constraint": "整数；PostgreSQL >=0（0禁用）；MySQL 1–2147483647"
   },
   {
     "name": "HAI_DB_POOL_IDLETIMEOUT",
     "module": "db",
     "path": "db.pool.idleTimeout",
-    "description": "空闲连接超时时间，单位毫秒（默认 30000）",
+    "description": "PostgreSQL 空闲连接超时，毫秒（默认 30000；0 禁用）",
     "value": "30000",
     "constraint": "整数；>= 0；<= 9007199254740991"
   },
@@ -1891,9 +1843,17 @@
     "name": "HAI_DB_POOL_MIN",
     "module": "db",
     "path": "db.pool.min",
-    "description": "最小连接数（默认 1）",
+    "description": "PostgreSQL 已建立连接的最小保留数（默认 1，不主动预建）",
     "value": "1",
     "constraint": "整数；>= 0；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_DB_POOL_QUEUELIMIT",
+    "module": "db",
+    "path": "db.pool.queueLimit",
+    "description": "MySQL 等待队列最大请求数（默认 1000；正整数，不支持无限队列）",
+    "value": "1000",
+    "constraint": "整数；>= 1；<= 9007199254740991"
   },
   {
     "name": "HAI_DB_PORT",
@@ -1947,9 +1907,49 @@
     "name": "HAI_DB_SSL",
     "module": "db",
     "path": "db.ssl",
-    "description": "SSL/TLS 连接配置",
+    "description": "TLS：PostgreSQL使用其模式；MySQL仅false或严格对象，空对象默认校验证书链和DNS身份",
     "value": "false",
-    "constraint": "true | false；字符串；JSON 对象；整体覆盖时替换该节点；取值：require | prefer | allow | disable"
+    "constraint": "MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象"
+  },
+  {
+    "name": "HAI_DB_SSL_CA",
+    "module": "db",
+    "path": "db.ssl.ca",
+    "description": "MySQL 信任的 CA，PEM 内容；省略时使用 Node 信任库",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DB_SSL_CERT",
+    "module": "db",
+    "path": "db.ssl.cert",
+    "description": "MySQL 客户端证书，PEM 内容；必须同时提供 key",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DB_SSL_KEY",
+    "module": "db",
+    "path": "db.ssl.key",
+    "description": "MySQL 客户端私钥，PEM 内容；必须同时提供 cert",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DB_SSL_REJECTUNAUTHORIZED",
+    "module": "db",
+    "path": "db.ssl.rejectUnauthorized",
+    "description": "MySQL 是否校验证书链（默认 true）；false 明确放弃服务端认证",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DB_SSL_VERIFYIDENTITY",
+    "module": "db",
+    "path": "db.ssl.verifyIdentity",
+    "description": "MySQL 是否验证 DNS 主机身份（默认 true）；仅证书链验证开启时有效",
+    "value": "true",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_DB_TYPE",
@@ -1963,9 +1963,9 @@
     "name": "HAI_DB_URL",
     "module": "db",
     "path": "db.url",
-    "description": "连接字符串（可选） 如果提供 url，将优先使用，忽略 host/port 等字段",
+    "description": "网络数据库URL；MySQL空串表示使用分字段，非空仅mysql://且拒绝query/fragment，优先于host/port/database/user/password",
     "value": "",
-    "constraint": "字符串"
+    "constraint": "字符串；格式 uri；取值："
   },
   {
     "name": "HAI_DB_USER",
@@ -2061,7 +2061,7 @@
     "path": "deploy.provider.remote.baseDir",
     "description": "远程应用根目录",
     "value": "/opt/hai/apps",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^\\/[\\w/. -]+$"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME",
@@ -2093,7 +2093,7 @@
     "path": "deploy.provider.ssh.host",
     "description": "远程主机地址或 ~/.ssh/config 中的 Host 别名",
     "value": "",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^[a-z0-9][a-z0-9.:-]*$"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE",
@@ -2133,7 +2133,7 @@
     "path": "deploy.provider.ssh.username",
     "description": "SSH 用户名",
     "value": "deploy",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^[a-z_][\\w-]*$"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_TOKEN",
@@ -2891,7 +2891,7 @@
     "name": "HAI_IAM_SESSION_MAXAGE",
     "module": "iam",
     "path": "iam.session.maxAge",
-    "description": "会话超时时间（秒，默认 86400 = 24小时）",
+    "description": "新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。",
     "value": "86400",
     "constraint": "整数；>= 60；<= 9007199254740991"
   },
@@ -2899,7 +2899,7 @@
     "name": "HAI_IAM_SESSION_REFRESHTOKENMAXAGE",
     "module": "iam",
     "path": "iam.session.refreshTokenMaxAge",
-    "description": "refreshToken 过期时间（秒，默认 604800 = 7天）",
+    "description": "refreshToken 独立有效期（秒，默认 604800 = 7天）；从签发时刻起算，access 到期仍可刷新。",
     "value": "604800",
     "constraint": "整数；>= 3600；<= 9007199254740991"
   },
@@ -3032,14 +3032,6 @@
     "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
-    "name": "HAI_KIT_TRANSPORT_ENCRYPTRESPONSE",
-    "module": "kit",
-    "path": "kit.transport.encryptResponse",
-    "description": "是否加密服务端业务响应",
-    "value": "true",
-    "constraint": "true | false"
-  },
-  {
     "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS",
     "module": "kit",
     "path": "kit.transport.excludePaths",
@@ -3078,22 +3070,6 @@
     "description": "客户端与服务端约定的密钥交换端点",
     "value": "/api/_hai/key-exchange",
     "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_KIT_TRANSPORT_MAXCLIENTS",
-    "module": "kit",
-    "path": "kit.transport.maxClients",
-    "description": "服务端最多保留的客户端传输密钥会话数",
-    "value": "10000",
-    "constraint": "整数；<= 9007199254740991；> 0"
-  },
-  {
-    "name": "HAI_KIT_TRANSPORT_REQUIREENCRYPTION",
-    "module": "kit",
-    "path": "kit.transport.requireEncryption",
-    "description": "是否要求业务请求使用传输加密",
-    "value": "true",
-    "constraint": "true | false"
   },
   {
     "name": "HAI_MODEL_API_KEY",
@@ -3216,6 +3192,14 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
+    "name": "HAI_PAYMENT_ALIPAY_RETURNURL",
+    "module": "payment",
+    "path": "payment.alipay.returnUrl",
+    "description": "手机网站支付完成后返回的可信 HTTPS 地址；仅用于页面导航，不能证明付款。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
     "name": "HAI_PAYMENT_ALIPAY_SANDBOX",
     "module": "payment",
     "path": "payment.alipay.sandbox",
@@ -3224,10 +3208,18 @@
     "constraint": "true | false"
   },
   {
+    "name": "HAI_PAYMENT_ALIPAY_SELLERID",
+    "module": "payment",
+    "path": "payment.alipay.sellerId",
+    "description": "alipay：支付宝卖家 ID，通知 seller_id 必须与之匹配",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
     "name": "HAI_PAYMENT_ALIPAY_SIGNTYPE",
     "module": "payment",
     "path": "payment.alipay.signType",
-    "description": "alipay：请求签名算法",
+    "description": "alipay：请求和通知允许的签名算法",
     "value": "RSA2",
     "constraint": "字符串；取值：RSA2 | RSA"
   },
@@ -3240,12 +3232,28 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_PAYMENT_STRIPE_CANCELURL",
+    "module": "payment",
+    "path": "payment.stripe.cancelUrl",
+    "description": "托管 Checkout 取消按钮的可信跳转地址；省略时不显示返回按钮。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
     "name": "HAI_PAYMENT_STRIPE_SECRETKEY",
     "module": "payment",
     "path": "payment.stripe.secretKey",
     "description": "stripe：Stripe 服务端密钥",
     "value": "",
-    "constraint": "字符串；最小字符数 1"
+    "constraint": "字符串；正则 ^(?:sk|rk)_(?:test|live)_\\S+$"
+  },
+  {
+    "name": "HAI_PAYMENT_STRIPE_SUCCESSURL",
+    "module": "payment",
+    "path": "payment.stripe.successUrl",
+    "description": "托管 Checkout 完成后的可信跳转地址，可含 {CHECKOUT_SESSION_ID}。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
   },
   {
     "name": "HAI_PAYMENT_STRIPE_WEBHOOKSECRET",
@@ -3296,12 +3304,12 @@
     "constraint": "字符串；最小字符数 1"
   },
   {
-    "name": "HAI_PAYMENT_WECHAT_PLATFORMCERT",
+    "name": "HAI_PAYMENT_WECHAT_PLATFORMKEYS",
     "module": "payment",
-    "path": "payment.wechat.platformCert",
-    "description": "wechat：微信支付平台证书（PEM），用于验签",
+    "path": "payment.wechat.platformKeys",
+    "description": "精确按 Wechatpay-Serial 选择平台证书/公钥，轮换期间同时配置新旧标识。",
     "value": "",
-    "constraint": "字符串"
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_PAYMENT_WECHAT_PRIVATEKEY",
@@ -3363,7 +3371,7 @@
     "name": "HAI_REACH_DND_STRATEGY",
     "module": "reach",
     "path": "reach.dnd.strategy",
-    "description": "免打扰策略：discard 丢弃 / delay 延时发送（默认 discard）",
+    "description": "discard 丢弃；delay 要求数据库队列就绪并确认入队（默认 discard）。",
     "value": "discard",
     "constraint": "字符串；取值：discard | delay"
   },
@@ -3438,6 +3446,14 @@
     "description": "SMTP 服务器地址",
     "value": "smtp.example.com",
     "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_0_IDEMPOTENT",
+    "module": "reach",
+    "path": "reach.providers.0.idempotent",
+    "description": "接收端按 Idempotency-Key 原子持久去重，且覆盖所有重试与旧节点迟到请求时才启用；默认 false。",
+    "value": "false",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_REACH_PROVIDERS_0_METHOD",
@@ -3526,6 +3542,38 @@
     "description": "后端或功能类型，按枚举选择",
     "value": "console",
     "constraint": "字符串；取值：console | smtp | aliyun-sms | api"
+  },
+  {
+    "name": "HAI_REACH_QUEUE",
+    "module": "reach",
+    "path": "reach.queue",
+    "description": "可靠队列重试策略；每条消息入队时持久保存。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_REACH_QUEUE_MAXATTEMPTS",
+    "module": "reach",
+    "path": "reach.queue.maxAttempts",
+    "description": "自动领取次数上限（含首次及崩溃恢复，默认 5，范围 1–100）。",
+    "value": "5",
+    "constraint": "整数；>= 1；<= 100"
+  },
+  {
+    "name": "HAI_REACH_QUEUE_MAXRETRYDELAYMS",
+    "module": "reach",
+    "path": "reach.queue.maxRetryDelayMs",
+    "description": "指数退避上限毫秒数，不得小于 retryDelayMs（默认 3600000）。",
+    "value": "3600000",
+    "constraint": "整数；>= 1000；<= 86400000"
+  },
+  {
+    "name": "HAI_REACH_QUEUE_RETRYDELAYMS",
+    "module": "reach",
+    "path": "reach.queue.retryDelayMs",
+    "description": "首次失败后的退避毫秒数（默认 60000，范围 1000–86400000）。",
+    "value": "60000",
+    "constraint": "整数；>= 1000；<= 86400000"
   },
   {
     "name": "HAI_REACH_TEMPLATES",
@@ -3720,6 +3768,14 @@
     "constraint": "敏感字符串；权限由目标仓库与工作流决定"
   },
   {
+    "name": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
+    "module": "runtime",
+    "path": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
+    "description": "服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入",
+    "value": "",
+    "constraint": "JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志"
+  },
+  {
     "name": "HF_ENDPOINT",
     "module": "runtime",
     "path": "HF_ENDPOINT",
@@ -3784,6 +3840,14 @@
     "constraint": "操作系统支持的 locale，例如 en_US.UTF-8"
   },
   {
+    "name": "LC_MESSAGES",
+    "module": "runtime",
+    "path": "LC_MESSAGES",
+    "description": "CLI 消息语言；HAI_CORE_DEFAULTLOCALE、LC_ALL 优先，LANG 后备",
+    "value": "",
+    "constraint": "操作系统支持的 locale，例如 en_US.UTF-8"
+  },
+  {
     "name": "LEAK_WORDS",
     "module": "runtime",
     "path": "LEAK_WORDS",
@@ -3840,6 +3904,22 @@
     "constraint": "保留系统原值；由操作系统路径分隔符连接，不要在 .env 中置空或作为应用配置覆盖"
   },
   {
+    "name": "PLAYWRIGHT_HTML_OUTPUT_DIR",
+    "module": "runtime",
+    "path": "PLAYWRIGHT_HTML_OUTPUT_DIR",
+    "description": "环境入口；使用位置 packages/cli/templates/shared/run-e2e.mjs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "PLAYWRIGHT_HTML_REPORT",
+    "module": "runtime",
+    "path": "PLAYWRIGHT_HTML_REPORT",
+    "description": "环境入口；使用位置 packages/cli/templates/shared/run-e2e.mjs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "POLLINATIONS_API_KEY",
     "module": "runtime",
     "path": "POLLINATIONS_API_KEY",
@@ -3886,14 +3966,6 @@
     "description": "客户端传输加密开关，须与服务端一致",
     "value": "",
     "constraint": "on | off"
-  },
-  {
-    "name": "PYTHONIOENCODING",
-    "module": "runtime",
-    "path": "PYTHONIOENCODING",
-    "description": "本地 Python 模型进程标准输入输出编码",
-    "value": "",
-    "constraint": "Python 支持的编码名，通常 utf-8"
   },
   {
     "name": "SERVED_MODEL_NAME",
@@ -3987,17 +4059,17 @@
     "name": "HAI_SCHEDULER_ENABLEDB",
     "module": "scheduler",
     "path": "scheduler.enableDb",
-    "description": "是否启用数据库记录（默认 true，需要",
+    "description": "必须使用共享数据库保存执行状态；false 不再允许，需要先初始化",
     "value": "true",
-    "constraint": "true | false"
+    "constraint": "true | false；取值：true"
   },
   {
-    "name": "HAI_SCHEDULER_LOCKEXPIREMS",
+    "name": "HAI_SCHEDULER_LEASEMS",
     "module": "scheduler",
-    "path": "scheduler.lockExpireMs",
-    "description": "分布式锁过期时间，单位毫秒（默认 300000，即 5 分钟）",
+    "path": "scheduler.leaseMs",
+    "description": "执行租约毫秒数（默认 300000，范围 1000–86400000），在途每三分之一周期续期。",
     "value": "300000",
-    "constraint": "整数；>= 10000；<= 9007199254740991"
+    "constraint": "整数；>= 1000；<= 86400000"
   },
   {
     "name": "HAI_SCHEDULER_MAXLOGS",
@@ -4112,6 +4184,14 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Hai-Transport",
+    "constraint": "字符串"
+  },
+  {
     "name": "HAI_SERV_CORS_CREDENTIALS",
     "module": "serv",
     "path": "serv.cors.credentials",
@@ -4141,6 +4221,14 @@
     "path": "HAI_SERV_CORS_EXPOSEDHEADERS_1",
     "description": "CORS 允许客户端读取的响应头",
     "value": "X-Request-Id",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_EXPOSEDHEADERS_2",
+    "description": "CORS 允许客户端读取的响应头",
+    "value": "X-Hai-Transport",
     "constraint": "字符串"
   },
   {
@@ -4384,14 +4472,6 @@
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
-    "name": "HAI_SERV_TRANSPORT_MAXCLIENTS",
-    "module": "serv",
-    "path": "serv.transport.maxClients",
-    "description": "服务端最多保留的客户端传输密钥会话数",
-    "value": "10000",
-    "constraint": "整数；<= 9007199254740991；> 0"
-  },
-  {
     "name": "HAI_STORAGE",
     "module": "storage",
     "path": "storage",
@@ -4428,7 +4508,7 @@
     "module": "storage",
     "path": "storage.endpoint",
     "description": "自定义端点（用于 MinIO、RustFS、阿里云 OSS 等）",
-    "value": "",
+    "value": "https://s3.amazonaws.com",
     "constraint": "字符串；格式 uri"
   },
   {
@@ -4547,9 +4627,9 @@
     "name": "HAI_VECDB_APIKEY",
     "module": "vecdb",
     "path": "vecdb.apiKey",
-    "description": "API Key（可选，连接受保护的 Chroma 服务时使用）",
+    "description": "Qdrant：API key；Chroma：Authorization Bearer token，用于同协议的自托管服务/网关，不提供 Chroma Cloud 契约",
     "value": "",
-    "constraint": "字符串"
+    "constraint": "字符串；Qdrant API key；Chroma 为空串或无空白的可打印 ASCII Bearer token"
   },
   {
     "name": "HAI_VECDB_DATABASE",
@@ -4683,8 +4763,8 @@
     "name": "HAI_VECDB_URL",
     "module": "vecdb",
     "path": "vecdb.url",
-    "description": "已有 Chroma 服务 URL（提供时直连，不自动拉起进程）",
-    "value": "",
+    "description": "pgvector：连接串；Qdrant：HTTP(S) 服务地址；Chroma：HTTP(S) 根端点，优先于 host/port，不允许凭据、路径前缀、query 或 fragment",
+    "value": "http://localhost:6333",
     "constraint": "字符串；格式 uri"
   },
   {

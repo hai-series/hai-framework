@@ -17,6 +17,16 @@ import { HaiIamError } from '../../iam-types.js'
 
 /**
  * API Key 存储接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // RelDB 已初始化；后续仓储读取仍可能失败，必须检查 HaiResult。
+ * const repository = await createDbApiKeyRepository()
+ * const found = await repository.findOneById('key-1')
+ * if (!found.success)
+ *   return found
+ * return found.data?.keyPrefix ?? null
+ * ```
  */
 export interface ApiKeyRepository {
   /** 插入 API Key */
@@ -137,6 +147,13 @@ let apiKeyRepoSqlOps: unknown = null
 
 /**
  * 重置 API Key 存储单例
+ * 仅重置本地引用，不删除共享存储数据。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 所有使用该仓储的 IAM 子功能均已关闭后，才清理工厂缓存。
+ * resetApiKeyRepoSingleton()
+ * ```
  */
 export function resetApiKeyRepoSingleton(): void {
   apiKeyRepoInstance = null
@@ -147,6 +164,16 @@ export function resetApiKeyRepoSingleton(): void {
  * 创建基于数据库的 API Key 存储实例
  *
  * @returns API Key 存储接口实现
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // RelDB 已初始化；后续仓储读取仍可能失败，必须检查 HaiResult。
+ * const repository = await createDbApiKeyRepository()
+ * const found = await repository.findOneById('key-1')
+ * if (!found.success)
+ *   return found
+ * return found.data?.keyPrefix ?? null
+ * ```
  */
 export async function createDbApiKeyRepository(): Promise<ApiKeyRepository> {
   if (apiKeyRepoInstance && apiKeyRepoSqlOps === reldb.sql)

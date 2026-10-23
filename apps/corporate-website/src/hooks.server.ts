@@ -5,9 +5,11 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
+import process from 'node:process'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
+import { cache } from '@h-ai/cache'
 import { kit } from '@h-ai/kit'
 
 let appInitPromise: Promise<void> | null = null
@@ -32,17 +34,15 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event)
+    return kit.i18n.runWithLocale(locale, () => resolve(event))
   }
 
   return paraglideMiddleware(event.request, async ({ locale }: { locale: string }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-
-    return resolve(event, {
+    return kit.i18n.runWithLocale(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+
+    }))
   })
 }
 
@@ -76,7 +76,7 @@ const haiHandle = kit.createHandle({
     protectedPaths: ['/partners/admin', '/partners/admin/*', '/api/partners/admin/*'],
     publicPaths: ['/partners/admin/login', '/api/partners/admin/login'],
   },
-  rateLimit: { windowMs: 60000, maxRequests: 120 },
+  rateLimit: { windowMs: 60000, maxRequests: 120, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'corporate-website', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

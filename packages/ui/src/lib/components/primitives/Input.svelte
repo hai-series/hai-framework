@@ -1,6 +1,16 @@
 <!--
   @component Input
   文本输入框组件，支持自定义验证消息
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Input } from '@h-ai/ui'
+  const props: ComponentProps<typeof Input> = { name: 'email', type: 'email', required: true }
+  const component = mount(Input, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, InputProps } from '../../types.js'

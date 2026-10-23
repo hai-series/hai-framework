@@ -2,40 +2,31 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
-[框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
+[框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
+
+## 简介
 
 定时任务调度模块，支持统一任务模型、cron 调度、JS 函数字符串 / HTTP API 执行、任务持久化、执行日志查询，以及全局任务生命周期回调。
 
-启用数据库时，运行中的节点每个 `tickInterval`（默认 1000 毫秒）刷新持久化定义；`tasks` 是最近一次成功刷新的快照。注册、修改、删除、手工触发和获得调度锁后的每次尝试均重新读取定义，删除/禁用/已改调度时间的旧任务不会继续执行，读取失败则中断本次尝试。已经开始的业务副作用不因远端定义变化自动回滚。`init({ tasks })` 仍是节点本地配置，跨节点动态任务请用持久化的 `register()` 管理；跨节点防重需要共享 Redis，内存缓存仅限单进程。
+## 核心功能清单
 
-可调用 `await scheduler.refreshTasks()` 主动刷新而不执行任务；同一快照的并发刷新共用一次读取。注册、更新与删除成功持久化后才更新内存投影，整份更新验证失败不改变 cron。清除重试或内置处理器时分别传 `retry: null`、`handler: null`。
+- 按 cron 定时执行，也可从业务代码手动触发。
+- 支持 HTTP、受信任的 JavaScript 和应用 Hook，提供重试与取消。
+- 共享数据库持久化任务、执行状态与可续期租约，支持未知结果隔离。
 
-Hook 抛出的业务失败记录为 `failed` 并应用 `retry`；缺少处理器、取消或宿主抛出的 `SchedulerTaskSkippedError` 记录为 `interrupted`。`event.context.occurrenceId` 标识一次发生：同一调度分钟跨节点一致，手工触发每次独立，重试共享原标识。宿主可据此持久化业务幂等回执；跨周期的长任务互斥仍需宿主持续租约。`deleteAfterRun` 仅在成功后删除，失败任务保留；重试前与成功清理前核对当前定义，数据库清理在同一条 DELETE 内原子匹配执行定义，保留期间提交的并发更新。
+## 使用入门
 
-多节点回归测试会构建当前源码、启动两个真实 Node 进程共享 SQLite 和 Testcontainers Redis，验证定义收敛及同分钟锁竞争；运行 `pnpm --filter @h-ai/scheduler test` 前须有可用的 Docker/Podman 服务。
+### 依赖
 
-`await scheduler.close()` 先停止接收任务，取消 HTTP、JS Worker 与重试等待，再等待执行链退出后清理状态。重新初始化等待关闭完成。所有生命周期事件提供 `signal`；Hook 必须监听取消并停止自己的外部副作用（框架无法强制终止同一线程中的业务代码），不要在 Hook 中阻塞事件循环。取消后的旧执行不再重试、不自动删除任务，也不会调用新实例的 Hook。关闭期间保持数据库和缓存可用，待 scheduler 关闭后再关闭依赖。
+- `@h-ai/reldb` — 必须先初始化共享数据库，保存任务、执行 journal 与自动续租；`enableDb` 只能为 true。
 
-JS 字符串在每次调用的独立 Worker 中执行，`timeout` 默认 30000 毫秒（含启动）。到期后终止并等待线程退出，再记录失败或重试；同步死循环也不会阻塞主事件循环。上下文及返回值必须支持结构化克隆。Worker 中的 `vm` 仍不是安全沙箱，代码必须来自受信任的服务端来源。
-
-API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体读取。`ApiTaskConfig.maxResponseBytes` 指定响应体实际接收字节上限（正安全整数，默认 1048576 即 1 MiB）；例如 `maxResponseBytes: 10 * 1024 * 1024` 允许最大 10 MiB，非法值在请求前失败；超时、超限或非成功 HTTP 状态均记录失败并应用任务重试策略。
-
-`init()` 必须完整加载全部任务才返回成功。配置中的空 ID、重复 ID（含与持久化任务重复）、无效 cron，以及数据库读取或持久化任务解析失败，均返回失败并清空初始化状态；修正配置或数据后重新初始化。不要同时在 `tasks` 中重复声明已有的数据库任务。
-
-## 依赖
-
-- `@h-ai/reldb` — 任务定义与执行日志持久化，`enableDb: true` 时需先初始化
-- `@h-ai/cache` — 分布式锁，可选；初始化后自动参与定时触发抢锁
-
-## 快速开始
+### 快速开始
 
 ```ts
-import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
-await cache.init({ type: 'memory' }) // 可选
 
 await scheduler.init({
   enableDb: true,
@@ -54,7 +45,6 @@ await scheduler.register({
   description: '每 5 分钟执行一次系统健康检查',
   cron: '*/5 * * * *',
   params: { channel: 'ops' },
-  retry: { maxAttempts: 3, backoffMs: [1000, 5000] },
   handler: {
     kind: 'api',
     url: 'https://api.example.com/health',
@@ -89,7 +79,7 @@ scheduler.stop()
 await scheduler.close()
 ```
 
-## 统一任务模型
+### 统一任务模型
 
 ```ts
 interface TaskDefinition {
@@ -97,9 +87,10 @@ interface TaskDefinition {
   name: string
   description?: string
   cron: string
-  timezone?: string // IANA 时区，例如 Asia/Shanghai；按该时区解释 cron 墙上时间
+  timezone?: string // IANA 时区，例如 Asia/Shanghai；省略时为 UTC，不读取节点 TZ
   enabled?: boolean
   deleteAfterRun?: boolean
+  idempotent?: boolean
   retry?: {
     maxAttempts: number
     backoffMs?: number[]
@@ -114,6 +105,7 @@ interface ApiTaskConfig {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   headers?: Record<string, string>
   body?: unknown
+  maxResponseBytes?: number
   timeout?: number
 }
 
@@ -132,13 +124,13 @@ interface JsTaskConfig {
 
 > ⚠️ **安全警示**：`kind: 'js'` 仅适用于受信任的服务端代码。当前实现基于 Node.js `vm` 做便捷执行，**不是安全沙箱**；禁止直接接收用户、租户或后台任意输入的 JS 字符串。可配置任务优先使用 `kind: 'api'` 或 `hooks.onTaskExecute`。
 
-## 任务生命周期回调
+### 任务生命周期回调
 
 初始化时传入或运行时通过 `setHooks()` 设置：
 
 ```ts
 await scheduler.init({
-  enableDb: false,
+  enableDb: true,
   hooks: {
     onTaskStart(event) {
       void event
@@ -156,7 +148,7 @@ await scheduler.init({
 })
 ```
 
-## 执行日志
+### 执行日志
 
 查询日志时可按触发来源过滤：
 
@@ -176,7 +168,7 @@ const logs = await scheduler.getLogs({
 - `maxLogs`：最多保留 N 条日志
 - `retentionDays`：最多保留最近 N 天日志
 
-## API 概览
+### API 概览
 
 - `init(config?)`
 - `register(task)`
@@ -184,44 +176,92 @@ const logs = await scheduler.getLogs({
 - `updateTask(taskId, updates)`
 - `refreshTasks()`
 - `start()` / `stop()`
-- `trigger(taskId, { source? })`
+- `trigger(taskId, { source?, idempotencyKey? })`
 - `getLogs(options?)`
+- `execution.listLogFailures(options?)` / `execution.repairLog(occurrenceId)`
+- `execution.get(occurrenceId)` / `execution.listUnknown(options?)` / `execution.resolveUnknown(occurrenceId, input)`
 - `setHooks(hooks)` / `clearHooks()`
 - `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
 - `close()`
 
-## 错误处理
+### 错误处理
 
 所有公共 API（除 `close()`）返回 `HaiResult<T>`。
 
 常用错误码：
 
-| 错误码                                    | code                | 说明            |
-| ----------------------------------------- | ------------------- | --------------- |
-| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | 未初始化        |
-| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | 初始化失败      |
-| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | 配置错误        |
-| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | 任务不存在      |
-| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | 任务已存在      |
-| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Cron 表达式无效 |
-| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | 执行失败        |
-| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS 执行失败     |
-| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API 执行失败    |
-| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | DB 保存失败     |
-| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | 已在运行        |
-| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 未在运行        |
-| `HaiSchedulerError.LOCK_ACQUIRE_FAILED`   | `hai:scheduler:029` | 锁获取失败      |
-| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS 编译失败     |
-| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败   |
+| 错误码                                    | code                | 说明             |
+| ----------------------------------------- | ------------------- | ---------------- |
+| `HaiSchedulerError.NOT_INITIALIZED`       | `hai:scheduler:010` | 未初始化         |
+| `HaiSchedulerError.INIT_FAILED`           | `hai:scheduler:011` | 初始化失败       |
+| `HaiSchedulerError.CONFIG_ERROR`          | `hai:scheduler:012` | 配置错误         |
+| `HaiSchedulerError.TASK_NOT_FOUND`        | `hai:scheduler:020` | 任务不存在       |
+| `HaiSchedulerError.TASK_ALREADY_EXISTS`   | `hai:scheduler:021` | 任务已存在       |
+| `HaiSchedulerError.INVALID_CRON`          | `hai:scheduler:022` | Cron 表达式无效  |
+| `HaiSchedulerError.EXECUTION_FAILED`      | `hai:scheduler:023` | 执行失败         |
+| `HaiSchedulerError.JS_EXECUTION_FAILED`   | `hai:scheduler:024` | JS 执行失败      |
+| `HaiSchedulerError.API_EXECUTION_FAILED`  | `hai:scheduler:025` | API 执行失败     |
+| `HaiSchedulerError.DB_SAVE_FAILED`        | `hai:scheduler:026` | DB 保存失败      |
+| `HaiSchedulerError.ALREADY_RUNNING`       | `hai:scheduler:027` | 已在运行         |
+| `HaiSchedulerError.NOT_RUNNING`           | `hai:scheduler:028` | 未在运行         |
+| `HaiSchedulerError.JS_COMPILE_FAILED`     | `hai:scheduler:030` | JS 编译失败      |
+| `HaiSchedulerError.HOOK_EXECUTION_FAILED` | `hai:scheduler:031` | Hook 执行失败    |
+| `HaiSchedulerError.LOG_PERSIST_FAILED`    | `hai:scheduler:032` | 日志持久化未确认 |
 
-## 测试
+### 运行行为与边界
+
+所有节点必须先初始化同一共享 RelDB（跨主机生产使用 PostgreSQL/MySQL；SQLite 文件只适合可正确共享同一文件的本机进程）。数据库保存任务、执行 journal、全局任务占位和租约，`enableDb` 只能为 true；不再依赖缓存。`leaseMs` 默认 300000，范围 1000～86400000 毫秒，执行中自动续期。cron、手动和跨周期执行均争用同一任务槽，过期 owner 不能续活或提交。节点每个 `tickInterval` 刷新定义，`tasks` 只是最近成功快照；定义读取失败、删除、禁用、改期均中断旧尝试，已发生副作用不会回滚。
+
+`context.occurrenceId` 是持久发生标识；同一 cron 分钟跨节点一致，手动可传 1～128 字符 `idempotencyKey` 重用原记录，省略时每次独立。`executionToken` 每次领取变化，`sequence` / `attempt` 提供执行代信息。API 会覆盖 `Idempotency-Key`、`X-Scheduler-Sequence`、`X-Scheduler-Attempt`、`X-Scheduler-Task`（任务 ID 使用 percent-encoding）。Hook 及生命周期回调已领取时的 `event.context` 使用同一发生标识；观测回调若产生副作用也须去重。
+
+`idempotent` 默认为 false；只有接收端已将幂等账本和全部副作用原子持久提交，才声明 true。租约过期的已执行任务仅在 true 时以同 occurrenceId 接管；非幂等或耗尽本 occurrence 保存的 retry.maxAttempts（默认 1，范围 1–100，包含首次执行及恢复）时进入 `unknown` 并继续占住任务槽。租约无法强制撤销暂停进程已发出的外部操作，单有 HTTP 头不构成去重实现。重试同样受幂等声明约束。
+
+`scheduler.execution.get(occurrenceId)` 查询权威状态；`listUnknown({ limit, offset })` 分页获取未知结果，limit 为 1～100，offset 为 0～1000000。可信人工先核实外部效果、确认旧 runner 已终止，再按 `expectedUpdatedAt` CAS 调用 `resolveUnknown(id, { status: 'success' | 'discarded', expectedUpdatedAt })` 释放占位；不能直接把 unknown 重排。`log.occurrenceId` 可作查询回执；`getLogs` 仅为尝试观测日志，日志保留策略不删除 journal/幂等历史。
+
+日志的 `id` 是每次尝试固定的 UUID，`persistence.status` 与业务 `status` 独立：`persisted` 表示日志及确认回执已持久化；`pending` 表示业务终态已提交但日志待补写；`unconfirmed` 表示没有已确认的业务终态，不能据此补写成功。只有 owner 与有效租约条件提交的终态会发布完整尝试列表，随后才投影日志；失租节点不能投影成功。日志失败不会把业务成功改成失败，也不会因此重跑业务。
+
+补写会缩小 pending 列表；批量补写应反复读取 offset=0，避免一边补写一边增加 offset 跳过记录。
+
+可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
+
+领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；新 schema 不自动迁移旧日志/执行表。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+
+```ts
+const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
+if (!result.success)
+  return result
+if (result.data.persistence.status === 'pending' && result.data.occurrenceId) {
+  const repaired = await scheduler.execution.repairLog(result.data.occurrenceId)
+  if (!repaired.success)
+    return repaired
+}
+// 不用日志补写失败重新 trigger 业务；定期按页扫描 listLogFailures。
+```
+
+`await scheduler.close()` 停止接收并取消 HTTP、JS Worker 与重试等待，再等待执行链退出后清理状态。重新初始化等待关闭完成。所有生命周期事件提供 `signal`；Hook 必须监听取消并停止自己的外部副作用（框架无法强制终止同一线程中的业务代码），不要在 Hook 中阻塞事件循环。取消后的旧执行不再重试、不自动删除任务，也不会调用新实例的 Hook。关闭期间保持数据库可用，待 scheduler 关闭后再关闭依赖。
+
+JS 字符串在每次调用的独立 Worker 中执行，`timeout` 默认 30000 毫秒（含启动）。到期后终止并等待线程退出，再记录失败或重试；同步死循环也不会阻塞主事件循环。上下文及返回值必须支持结构化克隆。Worker 中的 `vm` 仍不是安全沙箱，代码必须来自受信任的服务端来源。
+
+API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体读取。`ApiTaskConfig.maxResponseBytes` 指定响应体实际接收字节上限（正安全整数，默认 1048576 即 1 MiB）；例如 `maxResponseBytes: 10 * 1024 * 1024` 允许最大 10 MiB，非法值在请求前失败；超时、超限或非成功 HTTP 状态在默认非幂等模式进入 unknown；仅声明幂等能力后才按有限重试策略处理。
+
+`init()` 必须完整加载全部任务才返回成功。配置中的空 ID、重复 ID（含与持久化任务重复）、无效 cron，以及数据库读取或持久化任务解析失败，均返回失败并清空初始化状态；修正配置或数据后重新初始化。不要同时在 `tasks` 中重复声明已有的数据库任务。
+
+### 可选集成
+
+调度任务触发 Reach 通知时，调度锁或任务完成不等于外部消息只投递一次。按 [Reach 队列语义](../reach/README.md) 使用持久 queueId；HTTP 接收端须原子持久去重，SMTP/短信等在途未知结果须人工核对，不能由调度重试直接重发。
+
+调度循环按分钟匹配 cron，并从同一分钟生成持久 occurrenceId；延迟 tick 仍检查当前分钟，运行中每分钟只检查一次。
+
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/scheduler test
 ```
 
-## License
+共享租约的首次领取、开始、续租、完成、过期扫描和隔离，均在同一条数据库 SQL 内计算或核验存储端时间。PostgreSQL 使用 clock_timestamp、MySQL 使用 SYSDATE(3)、SQLite 使用存储端 now；先查时间再写入不能替代最终 deadline 条件。cron 也读取 DB 时间选定分钟 occurrence 并匹配表达式，省略 timezone 时固定 UTC；显式 IANA 时区仅改变 cron 的墙上时间解释，节点 TZ 不改变身份或匹配。节点 Date.now 仅用于耗时诊断，不授权 owner；两个节点相差数小时也不会提前接管或延长过期凭据。行锁等待结束后仍须通过期限条件，失租结果不能投影成功日志。数据库服务自身的时间须由运维保持可信；未知外部副作用仍须核对，不能自动重放。
+
+声明旁的 JSDoc 示例从真实公开入口导入，内部仓库、runner、编译器和 cron 工具则明确标注“模块内部上下文”，不代表可从包根导入。示例区分 HaiResult、显式取消异常和 close 的 Promise<void>，并检查业务 status 与日志 persistence；补写日志不会重做业务。维护时运行 `node scripts/check-module-jsdoc.mjs --package scheduler`，同时校验声明覆盖与真实类型；示例编译不代替共享数据库/独立进程验收。
+
+## 许可证
 
 Apache-2.0
-
-调度循环按分钟时间点匹配 cron，并用同一分钟生成分布式锁键；启动或 tick 延迟至非零秒仍检查当前分钟，同一轮运行不会每个 tick 重复调度。

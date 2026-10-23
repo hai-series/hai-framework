@@ -1,0 +1,5 @@
+# 本地开发使用 LanceDB；生产由 .env.prod 选择共享 Qdrant。
+type: ${HAI_VECDB_TYPE:lancedb}
+path: ${HAI_VECDB_PATH:./data/vecdb}
+url: ${HAI_VECDB_URL:http://localhost:6333}
+apiKey: ${HAI_VECDB_APIKEY:}

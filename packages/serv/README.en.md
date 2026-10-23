@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/ai](../ai/README.en.md) · [@h-ai/api-contract](../api-contract/README.en.md) · [@h-ai/core](../core/README.en.md) · [@h-ai/crypto](../crypto/README.en.md) · [@h-ai/iam](../iam/README.en.md) · [@h-ai/storage](../storage/README.en.md)
 
-> hai-framework's API service runtime: a stable public HTTP App abstraction that mounts `@h-ai/api-contract` contracts as cross-platform HTTP APIs. Hono is an internal implementation detail.
+## Introduction
 
-## Capabilities
+hai-framework's API service runtime: a stable public HTTP App abstraction that mounts `@h-ai/api-contract` contracts as cross-platform HTTP APIs. Hono is an internal implementation detail.
+
+## Core features
 
 - Start with `serv.createApp(...)` → `serv.listen(app, { port })`; applications need not import Hono.
 - Flat API: `serv.createApp / serv.implement / serv.listen / serv.toFetch / serv.generateSpec / ...`.
@@ -17,12 +19,14 @@
 - `build()` synchronously returns a plain router, so nested default feature procedures can be selected directly. Match the mounted contract to the selected procedures; unselected routes stay unavailable.
 - Missing routes return localized HaiResult JSON with HTTP 404. Transport encryption preserves that status instead of producing a 500 for a non-JSON response.
 - Built-in security headers and health checks; optional OpenAPI JSON, Scalar docs, and internal RPC endpoints.
-- Optional transport encryption: `serv.createApp({ transport: { crypto } })` mounts key exchange and request/response encryption automatically.
+- Optional transport encryption: `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` mounts key exchange and request/response encryption automatically.
 - Optional audio: `serv.createApp({ audio: { ai, verifyTicket, authorize } })` mounts a unified audio WebSocket. Connections authenticate immediately with one-time tickets (`{ session, grant? }`, separate pre-auth timeout). Every frame uses runtime Zod validation and a strict state machine, with input/queue/send-buffer backpressure and cascading cancellation. Authorization verifies operations, models, voices, quotas, and concurrency on the server.
 
-> Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure.
+> Lifecycle: `@h-ai/serv` is a stateless HTTP App assembler and needs no `init()` / `close()`. Initialize `iam` / `storage` / `ai` / `crypto` before app creation, then release them in reverse order through `serv.listen(..., { onClose })`. `serv.createApp()` throws immediately on startup configuration errors such as transport manager creation failure. onClose is the SIGINT/SIGTERM shutdown callback. Calling the returned handle.close directly closes HTTP only; the host separately releases business modules in reverse order.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -37,7 +41,11 @@ const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract
 // 2) 组装 procedures（注入 iam / storage / ai 已初始化的 functions）
 const procedures = {
   iam: createIamProcedures({ iam }),
-  storage: createStorageProcedures({ storage }),
+  storage: createStorageProcedures({
+    storage,
+    authorize: ({ context, keys }) => keys.every(key =>
+      key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+  }),
   ai: createAiProcedures({ ai }),
 }
 
@@ -64,7 +72,15 @@ serv.listen(app, {
 // 5) 优雅关闭由 serv 托管，无需手动注册 process.once('SIGINT', ...)
 ```
 
-### host / port configuration
+Storage procedures require `authorize({ context, operation, keys })` and deny access if the policy is missing. Derive resource ownership from the authenticated session for downloads, uploads, listing, metadata and deletion. The example only permits keys under `users/<encoded userId>/`; list requests must include that prefix. A batch is executed only after every key is authorized. Grant administrative access explicitly in the application policy.
+
+Batch deletion via `storage.files.deleteMany` returns `{ deletedKeys, failures: [] }` on success. Failures preserve progress in `error.ext.deleteMany` (`failed / unknown / notAttempted`); HTTP 200 alone does not mean completion. See [Storage batch deletion](../storage/README.en.md#api-overview).
+
+AI procedures bind `objectId` to the trusted `context.session.userId` when the client omits it. Chat/message writes, history, session lists and memory recall/list all use the authorized owner. Sessions are scoped by `objectId + sessionId`; writes default to session `default`. A different objectId is forbidden unless an explicit `authorizeObject` policy grants access using trusted permissions and tenant ownership, including for administrators.
+
+`chats.createCompletion` (`POST /ai/chats/completions`) returns one non-streaming `HaiResult<AiChatCompletionData>`. Function `tools` retain their complete nested JSON Schema and `strict`, and `tool_choice` supports `auto`, `none`, `required`, or a provided function name. Messages preserve roles, `name`, user images, and tool calls. Tool results require `role: 'tool'` and a nonempty `tool_call_id`; named choices must reference a supplied tool. The procedure does not execute tools: the application authorizes and executes them, then sends the assistant's `tool_calls` with their tool results. The input has no `stream` field; either boolean value is rejected with HTTP 400 before the provider runs. For streaming, define a separate endpoint with a matching stream output using `ai.llm.chatStream()`.
+
+#### host / port configuration
 
 Host/port come from `server` in `config/_serv.yml`: `HOST` / `PORT` environment variables > configuration > `127.0.0.1:3000`. The default `127.0.0.1` is local-only; use `0.0.0.0` to expose a container:
 
@@ -77,7 +93,9 @@ server:
 
 Pass the resolved `server` to `serv.listen`; explicit `host` / `port` arguments can also override it.
 
-### Fetch Runtime（Workers / Bun / Deno）
+#### Standard fetch signature adapter
+
+toFetch provides the standard fetch signature for Node-compatible hosts and test injection. The package root still depends on Node APIs; this does not establish support for Workers, Deno or edge deployment without those APIs.
 
 ```ts
 const handler = serv.toFetch(app)
@@ -86,7 +104,7 @@ export default { fetch: handler }
 
 Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`. Internal RPC checks the connection peer.
 
-### Audio WebSocket: tickets and server authorization
+#### Audio WebSocket: tickets and server authorization
 
 Audio connections require short-lived, one-time tickets. Issue them through an authenticated HTTP endpoint (recommended: `iam.ticket.issue`) and consume atomically in `verifyTicket` (recommended: `iam.ticket.consume`). Authentication runs at connection time with a separate timeout; no business frames are processed beforehand. The framework stores the returned `ServSession` and optional `grant`, then calls `authorize` to approve paid parameters:
 
@@ -110,18 +128,22 @@ const app = serv.createApp({
 - Each frame is validated with Zod and a strict state machine: transcription accepts audio, synthesis accepts text, `start`/`done` occur once, and `segmentId` is unique per session. Input, pending-message, and send buffers are bounded; limits or cancellation close with domain errors and abort upstream work.
 - Tunables: `preAuthTimeoutMs` (5000), `maxPendingMessages` (256), `maxSendBufferBytes` (8 MiB), and `maxMessageBytes` / `maxBufferedBytes` / `maxTextBytes` / `maxSessionMs`.
 - `onSessionEnd` runs at most once after success, failure, or disconnection to release concurrency slots.
-- Browser `createAIClient({ audio: { url, getTicket } })` puts only one-time `ticket` in the WebSocket URL. `getTicket(request)` receives the operation summary (`operation` / `model`) for a tightly bound ticket. Never pass ordinary IAM access tokens.
+- Browser `createAudioClient({ url, getTicket })` puts only one-time `ticket` in the WebSocket URL. `getTicket(request)` receives the operation summary (`operation` / `model`) for a tightly bound ticket. Never pass ordinary IAM access tokens.
 
-### Transport encryption (shared with `@h-ai/crypto`)
+#### Transport encryption (shared with `@h-ai/crypto`)
 
 serv does not expose its own encryption factory; the server manager comes from `crypto.transport`. Applications only pass the top-level `crypto` handle:
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { createRedisTransportKeyStore, crypto } from '@h-ai/crypto'
+import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { serv } from '@h-ai/serv'
 
 await crypto.init()
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const app = serv.createApp({
@@ -130,9 +152,9 @@ const app = serv.createApp({
   http: { apiPrefix: '/api/v1' },
   transport: {
     crypto,
+    serverKeyRing,
     // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
     // excludePaths: ['/health'],
-    // maxClients: 10000,
     keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
   },
 })
@@ -165,7 +187,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 ```ts
@@ -187,24 +208,25 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
 
-> **Multi-node deployments**: transport session keys are stored **in the server process** by default. Replicas require one of these:
->
-> - Enable **sticky sessions** in the load balancer so each client reaches the same node.
-> - Perform a separate initial key exchange for each client on each node.
-> - Inject a shared `keyStore`, such as `createRedisTransportKeyStore()` / `createReldbTransportKeyStore()`.
->
-> `keyStore` is a runtime object dependency and must not go in `config/_serv.yml`; configuration contains only static paths, allowlists, and capacities.
+> Servers must explicitly inject the same managed `serverKeyRing` and a shared `keyStore` (Redis or a shared database). Sharing client public keys alone cannot enable cross-node decryption. There is no implicit process key or memory-registry fallback; development/tests may explicitly use `createInMemoryKeyStore(capacity)`. Reload the same ring after restart; sticky sessions are unnecessary.
 
 > **Security**: with `transport` enabled, business requests need valid `X-Client-Id` except `excludePaths` and key exchange. Missing/unknown clientId returns 400. Unencryptable bodies, non-JSON responses, or encryption size limits return errors rather than forwarding plaintext business data.
 
-### Token authentication (`iam` / `refreshCookie`)
+Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
+
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+
+Fixed protocol budgets come from `@h-ai/crypto`'s `TRANSPORT_BODY_LIMITS`: 16 KiB key exchange JSON, 4 KiB per public key, 1 MiB plaintext, and 2 MiB + 32 KiB encrypted JSON, measured in UTF-8 bytes. The original stream is read incrementally; limits or cancellation stop/cancel it and release the reader without cloning and fully buffering it. Oversized requests return 413, oversized responses return 500, and invalid public keys return 400. Rebuilt requests preserve signals and clear Hono's body cache; rebuilt requests/responses remove stale Content-Length/Content-Encoding. These budgets are protocol constants, not YAML or environment settings.
+
+#### Token authentication (`iam` / `refreshCookie`)
 
 Pass the top-level `iam` handle to `serv.createApp` to derive:
 
@@ -246,7 +268,7 @@ const app = serv.createApp({
 })
 ```
 
-### Custom procedures (authentication + permissions)
+#### Custom procedures (authentication + permissions)
 
 ```ts
 const procedures = serv
@@ -260,7 +282,7 @@ const procedures = serv
   .build()
 ```
 
-### Advanced pipelines (HTTP middleware + context + route guards)
+#### Advanced pipelines (HTTP middleware + context + route guards)
 
 `@h-ai/serv` pipelines have three layers and extension points:
 
@@ -268,7 +290,7 @@ const procedures = serv
 2. **Context**: customize through `verifyToken` / `createContext` / `serv.buildAuthContextFactory()`.
 3. **Route guards**: declare authentication/authorization with `.auth()` / `.permission()` / `.role()`.
 
-#### 1) Custom HTTP middleware
+##### 1) Custom HTTP middleware
 
 Use `middlewares` for **HTTP cross-cutting logic** such as logging, tracing, rate limits, CORS, and tenant headers, or WebSocket/file/binary endpoints unsuited to JSON/oRPC contracts. Reuse `serv.cors(...)` for common CORS needs:
 
@@ -336,7 +358,7 @@ Notes:
 - Expose custom response headers such as `X-Encrypted` explicitly through `serv.cors({ exposedHeaders: [...] })` for browsers.
 - This layer works with HTTP middleware context and returns **HTTP Response**, not `HaiResult`.
 
-#### 2) Custom context pipelines
+##### 2) Custom context pipelines
 
 To reuse `Bearer token -> session` and add tenant, workspace, or source-system fields,
 prefer `serv.buildAuthContextFactory()` to assemble a custom `createContext`:
@@ -363,7 +385,7 @@ Choose the appropriate extension:
 - Add fields to default authentication context: use `buildAuthContextFactory(...) + createContext`.
 - Replace context construction entirely: use `createContext` directly.
 
-#### 3) Route guard
+##### 3) Route guard
 
 Public procedures use `.route(path, handler)`. For guarded routes, use
 `.route(path).auth/permission/role().handle(handler)`：
@@ -396,7 +418,7 @@ Public API boundaries:
 - The stable application-facing entry remains `@h-ai/serv`.
 - Internal helpers such as `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` are not documented as separate subpath exports.
 
-### httpOnly cookie authentication (recommended for production)
+#### httpOnly cookie authentication (recommended for production)
 
 httpOnly cookie mode stores refresh tokens in server-managed cookies unreadable to browser JavaScript, reducing XSS exposure.
 
@@ -430,7 +452,7 @@ const app = serv.createApp({
   refreshCookie: {
     // cookieName: 'hai_refresh_token', // 默认
     // maxAge: 30 * 24 * 3600,          // 默认 30 天
-    // secure: true,                    // 默认在 NODE_ENV=production 时开启
+    // secure: true,                    // NODE_ENV 或 HAI_CORE_ENV 为 production 时默认开启
     // onRefresh: customFn,             // 可覆盖 iam.session.refresh。
     nativeTokenTransport: {
       // 必须 fail-closed：同时校验平台标识与允许的原生 Origin。
@@ -455,7 +477,7 @@ await apiClient.init({
 
 > **Cookie attributes**: `HttpOnly; SameSite=Strict; Secure` in production; `Path` is limited to `{apiPrefix}/auth/refresh`.
 
-## API overview
+### API overview
 
 - `serv.createApp(options)`: create the HTTP App with custom middleware, health checks, OpenAPI, optional docs, and RPC.
 - `serv.parseRequestContext({ request })`: extract Bearer token + requestId without populating session.
@@ -482,7 +504,7 @@ Additional root types / named exports:
 
 > Transport encryption is a `createApp` option delegated internally to `crypto.transport`, not a flat `serv.xxx` API.
 
-## Configuration
+### Configuration
 
 `@h-ai/serv` does not scan YAML itself. Load `config/_serv.yml` through `@h-ai/core` and pass the result to `serv.createApp()`.
 
@@ -506,9 +528,10 @@ const app = serv.createApp({
     ? undefined
     : {
         crypto,
+        serverKeyRing,
+        keyStore,
         keyExchangePath: servConfig.transport.keyExchangePath,
         excludePaths: [...servConfig.transport.excludePaths],
-        maxClients: servConfig.transport.maxClients,
       },
 })
 ```
@@ -551,7 +574,6 @@ transport:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 ```
 
 `server` (host/port): `HOST` / `PORT` environment variables > configuration > `127.0.0.1:3000`. Applications pass `servConfig.server` to `serv.listen`.
@@ -597,7 +619,7 @@ const app = serv.createApp({
 
 In production, empty or `*` `_serv.yml` `cors.origin` fails startup. Web and Capacitor/Tauri origins use exact normalized full-Origin matching to prevent suffix spoofing. Production also enforces Secure refresh cookies and disables OpenAPI/docs; configuration controls nonproduction endpoints.
 
-## Configuration driven authentication
+### Configuration driven authentication
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -605,7 +627,7 @@ createIamProcedures({ iam }) implements public config, password/LDAP/OTP login, 
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Error handling
+### Error handling
 
 Ordinary procedures return authentication, authorization, business failures and caught handler exceptions as HaiResult over HTTP 200 by default. `error.httpStatus` is domain-error metadata and does not change the response status. Clients must check `success` and `error.code`: an unauthenticated failure has `error.httpStatus=401`, while database query failures or INTERNAL_ERROR have 500.
 
@@ -656,13 +678,29 @@ const procedures = serv
 
 > When downstream modules (such as `iam.user.xxx()`) return `HaiResult` directly, serv forwards `error.message` unchanged. `HaiError` holds only the final `message`, not `messageKey/params`, so **serv cannot generically retranslate arbitrary downstream errors**. Request-level localization must receive locale at the module that creates the error message.
 
-## Tests
+### Request locale isolation
+
+Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleRequest())`. SvelteKit can use `kit.i18n.runWithLocale(locale, () => resolve(event))`; serv creates the scope automatically from request headers. Async descendants inherit it. Explicit `MessageOptions.locale` takes precedence over the request locale and the startup default. Within a scope, `setGlobalLocale` only changes that request; outside a scope it configures the startup default and must not be called by request hooks.
+
+Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
+
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/serv test
 pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
+
+## Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
+
+The default `auth.logout` endpoint takes the complete token from input.accessToken or Authorization Bearer without requiring live access authentication. It grants no userId-based authority and accepts no userId revocation target. Missing tokens fail; unknown tokens succeed idempotently. Shared-store failures remain failed HaiResult values, and cookie middleware clears refresh cookies only after success. Ordinary procedures retain the existing HTTP 200 / HaiResult envelope: clients must inspect success, not only the HTTP status.
+
+Declaration JSDoc examples import actual `@h-ai/serv` entries or published feature subpaths. Internal Hono, guard, router and transport examples are marked as internal module context and are not root APIs. Examples distinguish startup configuration exceptions, domain HaiResult, HTTP middleware statuses, and listener shutdown returning Promise<void>; default AI completion still returns non-streaming JSON only. Maintainers can run `node scripts/check-module-jsdoc.mjs --package serv` against actual declarations and internal lexical bindings. Compilation does not replace real HTTP, authorization or distributed replay-protection validation.
+
+toFetch constructs Request(input, init) for Request, URL and string inputs, applying RequestInit overrides including method, headers, body and signal without mutating input fields. Consumed or locked bodies and invalid body combinations reject the returned Promise. Cancellation before dispatch skips the handler; in-flight cancellation ends the caller wait and reaches the app through the effective signal. Listeners are released on completion, failure or cancellation, and a discarded late response body is cancelled. Cancellation cannot roll back external effects already started; after Response delivery the app owns streaming cleanup through request.signal.
 
 ## License
 

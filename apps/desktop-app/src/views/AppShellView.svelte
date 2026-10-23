@@ -5,7 +5,7 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { AppBar, Button, LanguageSwitch, ThemeToggle } from '@h-ai/ui'
+  import { AppBar, Button, LanguageSwitch, ThemeToggle, toast } from '@h-ai/ui'
   import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
   import { localeStore, desktopM as m } from '../lib/messages.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
@@ -30,7 +30,9 @@
   })
 
   async function handleLogout(): Promise<void> {
-    await logout()
+    const error = await logout()
+    if (error)
+      toast.error(error)
     navigate('/login')
   }
 </script>
@@ -50,7 +52,7 @@
   </AppBar>
 
   <div class='flex flex-1 overflow-hidden'>
-    <aside class='bg-base-200 border-base-300 flex w-56 flex-col gap-1 border-r p-3'>
+    <aside class='bg-base-200 border-base-300 flex w-56 shrink-0 flex-col gap-1 border-r p-3'>
       {#each navItems as item (item.path)}
         <Button
           variant={currentPathname() === item.path ? 'primary' : 'ghost'}
@@ -63,7 +65,7 @@
       {/each}
     </aside>
 
-    <main class='flex-1 overflow-auto p-6'>
+    <main class='min-w-0 flex-1 overflow-auto p-4 sm:p-6'>
       {@render children()}
     </main>
   </div>

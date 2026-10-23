@@ -4,33 +4,39 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
+## 简介
+
 加密模块，提供非对称加密、哈希、对称加密与密码哈希能力。
 
-## 支持的能力
+## 核心功能清单
 
 - 非对称加密（密钥生成、加解密、签名验签）
 - 哈希（哈希、HMAC、验证）
 - 对称加密（ECB/CBC 模式）
 - 密码哈希（加盐迭代哈希）
 - 传输加密（`crypto.transport`：服务端管理器 + 客户端 `encryptedFetch`）
-- 前后端通用（Node.js / 浏览器）
+- SM2/SM3/SM4 与传输支持 Node.js / 浏览器；密码哈希仅服务端
 
-## 安全声明
+## 使用入门
+
+### 安全声明
 
 - **SM4 默认加密返回结构化密文**：`crypto.symmetric.encrypt(data, key)` 默认使用 CBC + 随机 IV，返回 `{ mode, ciphertext, iv, encoding }`；解密时把该对象传给 `crypto.symmetric.decrypt(payload, key)`。
-- **SM4 `deriveKey(password, salt)` 不是 KDF**：仅为单次 SM3 哈希，不具备密码爆破抗性，**禁止用于密码存储**。如需密码哈希，使用 `crypto.password.hash(password)`；如需从密码派生密钥，请采用 PBKDF2 / scrypt / Argon2。
+- **SM4 使用随机密钥**：通过 `crypto.symmetric.generateKey()` 生成密钥；本模块不提供从密码派生加密密钥的 KDF。密码存储使用服务端 `crypto.password.hash(password)`，不要将密码或密码哈希直接用作 SM4 密钥。
 - **IV 必须唯一**：相同密钥下禁止复用 IV；推荐使用默认 CBC 或 `encryptWithIV()` 每次自动生成。密文与 IV 需一同传输与存储（IV 可公开，不必保密）。
 
-## 快速开始
+### 快速开始
 
 ```ts
 import { crypto } from '@h-ai/crypto'
 
 // 初始化（使用前必须调用）
-await crypto.init()
+const initialized = await crypto.init()
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 ```
 
-### 非对称加密（加解密 / 签名验签）
+#### 非对称加密（加解密 / 签名验签）
 
 ```ts
 // 生成密钥对
@@ -61,7 +67,7 @@ crypto.asymmetric.isValidPublicKey(publicKey) // true
 crypto.asymmetric.isValidPrivateKey(privateKey) // true
 ```
 
-### 哈希（Hash / HMAC / 验证）
+#### 哈希（Hash / HMAC / 验证）
 
 ```ts
 // 字符串哈希
@@ -85,7 +91,7 @@ if (hash.success) {
 }
 ```
 
-### 对称加密（CBC 默认 / 结构化密文）
+#### 对称加密（CBC 默认 / 结构化密文）
 
 ```ts
 // 生成随机密钥和 IV
@@ -121,16 +127,12 @@ if (ecbEnc.success) {
 // 输出 base64 格式（ciphertext 字段为 base64，encoding 字段会标明）
 const b64Enc = crypto.symmetric.encrypt('data', key, { outputFormat: 'base64' })
 
-// ⚠️ 已弃用：从密码派生密钥（仅为单次 SM3 哈希，不是 KDF，禁止用于密码存储场景）
-// 密码散列请用 crypto.password.hash()；如需从密码派生密钥，请在应用层自行实现 PBKDF2 / scrypt / Argon2
-const derivedKey = crypto.symmetric.deriveKey('my-password', 'random-salt')
-
 // 校验密钥/IV 格式
 crypto.symmetric.isValidKey(key) // true
 crypto.symmetric.isValidIV(iv) // true
 ```
 
-### 密码哈希（加盐迭代）
+#### 密码哈希（加盐迭代）
 
 ```ts
 // 哈希密码（输出格式: $hai$<iterations>$<salt>$<hash>）
@@ -152,39 +154,53 @@ if (hashed.success) {
 }
 ```
 
-### 传输加密（crypto.transport）
+#### 传输加密（crypto.transport）
+
+规范编码、验证顺序与 nonce 持久化要求见 [Transport v2 协议](TRANSPORT-PROTOCOL.md)。
 
 传输加密统一通过 `crypto.transport` 命名空间提供，供 `@h-ai/serv`、`@h-ai/kit` 与 `@h-ai/api-client` 复用同一套协议常量和载荷格式。
 
 常规应用优先让上层封装代接：
 
-- 服务端：`serv.createApp({ transport: { crypto } })` 或 `kit.createHandle({ crypto: { crypto, transport: true } })`
+- 服务端：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 或 `kit.createHandle({ crypto: { crypto, transport: { serverKeyRing, keyStore } } })`
 - 客户端：`apiClient.init({ transport: { crypto } })` 或 `kit.client.create({ transport: { crypto } })`
 
-只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer()` / `createClient()`。
+只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer({ serverKeyRing, keyStore })` / `createClient()`。
 
-#### 使用流程
+##### 使用流程
 
 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` 与 `crypto.symmetric` 已初始化。
-2. 服务端调用 `crypto.transport.createServer()` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
-3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
+2. 服务端调用 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。多节点部署时可注入共享 `keyStore`。
+3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverKeyId: manager.getServerKeyId(), serverPublicKey: manager.getServerPublicKey(), clientId }`。
 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成这次协商。
-5. 协商完成后，客户端请求会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并带上 `X-Encrypted: true`。无 body 的请求只附带 `X-Client-Id`，不会额外生成密文 body。
-6. 服务端根据 `clientId` 找到客户端公钥，先 `manager.decryptRequest()` 解密请求体，再执行业务逻辑。
-7. 服务端返回 JSON 响应前，用 `manager.encryptResponse(clientId, data)` 重新加密，并设置 `X-Encrypted: true`；客户端收到后会自动解密。
+5. 每次请求都发送认证封装 `{ context, direction, status, encryptedKey, ciphertext, iv, tag, signature }`；空 POST 和 GET/HEAD 也必须认证。
+6. 自定义适配器先 `await authenticateTransportRequest(manager, request)`，成功后才将 `data.plaintext` 交给业务并保存 `data.context`。
+7. 响应用 `await manager.encryptResponse(context, data, response.status)` 关联原请求；客户端校验上下文、状态和完整性后才返回明文。
 8. 客户端调用 `client.destroy()` 可清空当前会话；服务端调用 `manager.close()`，或在模块级调用 `await crypto.close()`，用于释放资源。
 
-> 默认 `keyStore` 是进程内 FIFO 内存实现，超过 `maxClients` 会淘汰最早注册的客户端。多节点部署时，需要会话粘性（sticky session），或改用共享的 `TransportKeyStore` 实现来保存客户端公钥。
+> 服务端必须显式注入相同的受管 `serverKeyRing` 和共享 `keyStore`（Redis 或共享数据库）。仅共享客户端公钥不足以跨节点解密。没有隐式进程私钥或内存 registry 回退；开发/测试显式用 `createInMemoryKeyStore(capacity)`。服务端重启后重新加载同一密钥环即可，无需 sticky session。
 
 共享存储可直接复用 `@h-ai/crypto` 根入口导出的 provider 工厂：
 
 - `createInMemoryKeyStore(maxClients)`：显式创建默认内存实现，常用于测试或自定义容量
 - `createRedisTransportKeyStore({ cache, ttlSeconds? })`：复用 `@h-ai/cache`，通常配合 Redis provider 获取跨节点共享
-- `createReldbTransportKeyStore({ reldb, ttlSeconds? })`：复用 `@h-ai/reldb`，自动建表 `hai_crypto_transport_client_keys`
+- `createReldbTransportKeyStore({ reldb, ttlSeconds?, maxClients? })`：复用已初始化的 `@h-ai/reldb`，自动创建公钥、nonce 与容量表；返回带 `pruneExpired()` 的 `ReldbTransportKeyStore`
+
+公钥注册先验证编码和 SM2 曲线点；仅接受 128 字符 hex 或 `04` + 128 字符 hex，不接受压缩点、无穷远点和曲线外点。纯函数 `isValidSM2PublicKey(value)` 无需初始化，可用于自定义握手入口；serv/kit 在写 registry 前返回 400。
+
+Redis/DB 的 `ttlSeconds` 省略表示不过期；显式值须为 1–2147483647 的整数秒，建议设置有限 TTL。Redis 使用原生逐键 TTL，不提供 DB 的 `maxClients` 容量限制，部署需设置内存预算且禁止驱逐有效 nonce。DB `maxClients` 为正安全整数，默认 10000，所有节点必须与持久容量记录一致；事务锁定共享容量行后计数和插入，容量满时拒绝注册，不驱逐有效公钥或 nonce。删除客户端不删除尚有效的 nonce。
+
+DB 使用数据库时钟生成、判断 epoch 毫秒过期时间；数据库与节点均须满足协议的时钟同步要求。首次建表失败可重试。每次注册自动清理一批；`await registry.pruneExpired()` 每次最多删除 100 条过期公钥和 100 条过期 nonce，可由应用定期调度。没有隐式后台计时器，低流量部署仍需主动调度维护；registry 不关闭应用注入的 reldb。旧公钥表的 timestamp 字段需停机迁移为 `created_at_ms` / `expires_at_ms` BIGINT，容量在 `hai_crypto_transport_capacity` 保存；容量调整须协调所有节点及持久记录，不能清空有效 nonce 来重建 registry。
 
 ```ts
-// 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
-const server = crypto.transport.createServer({ maxClients: 10000 })
+const registry = createReldbTransportKeyStore({ reldb, ttlSeconds: 3600, maxClients: 10000 })
+// 接入应用自己的定期维护调度；每批有界，失败后由调度器重试。
+const removed = await registry.pruneExpired()
+```
+
+```ts
+// 服务端：通常由 serv.createApp({ transport: { crypto, serverKeyRing, keyStore } }) 或 kit.createHandle({ crypto }) 内部调用
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 if (!server.success)
   throw new Error(server.error.message)
 
@@ -207,6 +223,7 @@ await crypto.init()
 await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
 
 const server = crypto.transport.createServer({
+  serverKeyRing,
   keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
 })
 if (!server.success)
@@ -217,14 +234,46 @@ if (!server.success)
 
 协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
 
-### 关闭模块
+服务端 `createServer({ serverKeyRing, keyStore })` 两项均必填。密钥环为 `{ activeKeyId, keys: { [id]: { publicKey, privateKey } } }`；ID 为 1–64 个字母、数字、下划线或连字符。创建时验证公私钥配对并捕获快照，缺失/无效配置返回脱敏的 HaiResult 错误。以下示例的 `keyStore` 为已连接的 Redis/共享数据库 registry；内存仅显式用于开发或测试。
+
+```ts
+import { parseTransportServerKeyRing } from '@h-ai/crypto'
+
+const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+if (!ring.success)
+  throw new Error(ring.error.message)
+const serverKeyRing = ring.data
+const server = crypto.transport.createServer({ serverKeyRing, keyStore })
+```
+
+握手返回 `{ serverKeyId, serverPublicKey, clientId }`；请求密文的 `context` 携带 `serverKeyId`，服务端按 ID 选择私钥，未知或撤销 ID 直接拒绝，不尝试其它密钥。响应仍用客户端公钥加密。轮换先向所有节点分发包含新旧版本的 ring，再切换 `activeKeyId` 并滚动重建 manager；过渡期保留旧版本，结束后删除旧 ID 并更新所有节点。旧客户端此后须 `destroy()` 后重新协商；不要自动重试非幂等业务。部署通过 Secret Manager 或服务端私有环境分发同一 ring，禁止写入普通 YAML、PUBLIC_/VITE_、日志或公开响应。CLI 只在创建服务端项目时向被忽略的 `.env.local` 生成一次独立开发密钥环，运行时不生成，部署应使用目标环境自己的受管密钥。
+
+认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
+
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+
+serv、kit 与客户端共享 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 32 KiB，均按实际 UTF-8 字节计算。客户端握手最多等待 30 秒；超限、无效 UTF-8 或取消会终止读取并释放 reader，不克隆/tee 原始正文。发送时保留调用方 signal；单个请求取消不会取消其它请求共享的握手。带加密标记的异常响应会 reject，不返回原始密文。
+
+自定义 HTTP 适配器可从根入口使用纯工具 `readTransportBody(stream, { maxBytes, signal? })`，无需 `crypto.init()`。必须传入原始流；读取成功后重建 Request/Response，并清理旧 Content-Length/Content-Encoding。此工具对超限抛 RangeError，对无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason；流取消清理失败不覆盖原异常。
+
+```ts
+import { readTransportBody, TRANSPORT_BODY_LIMITS } from '@h-ai/crypto'
+
+const text = await readTransportBody(request.body, {
+  maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+  signal: request.signal,
+})
+const payload: unknown = JSON.parse(text)
+```
+
+#### 关闭模块
 
 ```ts
 // 使用完毕后关闭，释放内部状态
 await crypto.close()
 ```
 
-## 错误处理
+### 错误处理
 
 所有操作返回 `HaiResult<T>`：
 
@@ -235,14 +284,20 @@ if (!result.success) {
 }
 ```
 
-## 测试
+### 可选集成
+
+管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
+
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/crypto test
 ```
 
-## License
+## 生产共享状态
+
+生产传输 registry 必须声明 stateScope=shared 并实际使用 Redis 或 PostgreSQL/MySQL。memory、包装 memory 的 Redis 工厂、包装 SQLite 的 RelDB 工厂会被拒绝；各节点加载相同受管版本化密钥环。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+
+## 许可证
 
 Apache-2.0
-
-管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。

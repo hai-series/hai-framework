@@ -14,7 +14,7 @@ import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, Front
 import type { ConfigEnvironmentVariable } from './cli-config-environment.js'
 import { Buffer } from 'node:buffer'
 import { execFileSync, execSync } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { createECDH, randomBytes } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import chalk from 'chalk'
@@ -35,46 +35,54 @@ const RE_HTTPS_URL = /^https:\/\/.+/
 const RE_GIT_SSH_URL = /^git@.+:.+/
 
 /**
- * 应用类型定义
+ * 应用类型定义；展示字段延迟读取当前 locale，避免模块首次导入时固定语言。
  */
 const APP_TYPES: Record<AppType, { name: string, description: string, defaultFeatures: FeatureId[] }> = {
   'admin': {
-    name: '管理后台',
-    description: '企业级管理系统，含 IAM、数据库、完整 UI',
+    get name() { return cliM('cli_appAdminName') },
+    get description() { return cliM('cli_appAdminDescription') },
     defaultFeatures: ['iam', 'db', 'cache', 'crypto'],
   },
   'website': {
-    name: '企业官网',
-    description: 'SSR/SSG 企业官网，SEO 友好、响应式布局',
+    get name() { return cliM('cli_appWebsiteName') },
+    get description() { return cliM('cli_appWebsiteDescription') },
     defaultFeatures: ['db', 'cache'],
   },
   'h5': {
-    name: 'H5 应用',
-    description: '移动端 H5 应用，触摸优化、PWA 支持',
+    get name() { return cliM('cli_appH5Name') },
+    get description() { return cliM('cli_appH5Description') },
     defaultFeatures: ['db', 'cache'],
   },
   'api': {
-    name: 'API 服务',
-    description: 'typed API workspace，含 contract + service 双工程、无 UI',
+    get name() { return cliM('cli_appApiName') },
+    get description() { return cliM('cli_appApiDescription') },
     defaultFeatures: ['db', 'cache'],
   },
   'mobile-app': {
-    name: '移动应用',
-    description: '移动端应用（Capacitor + Svelte 5 + Vite），可打包为 Android/iOS',
+    get name() { return cliM('cli_appMobileName') },
+    get description() { return cliM('cli_appMobileDescription') },
     defaultFeatures: ['api-client', 'capacitor'],
   },
   'fullstack': {
-    name: '前后端分离工程',
-    description: '多端 mini 管理系统，包含用户、角色、审计、个人设置与双向传输加密',
+    get name() { return cliM('cli_appFullstackName') },
+    get description() { return cliM('cli_appFullstackDescription') },
     defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'storage', 'audit'],
   },
 }
 
 const FRONTEND_TARGETS: Record<FrontendTarget, { name: string, description: string, implemented: boolean }> = {
-  web: { name: 'Web', description: '浏览器 Web 应用', implemented: true },
-  app: { name: 'App', description: '移动端 Capacitor App / H5 前端', implemented: true },
-  miniapp: { name: '小程序', description: '预留目标，当前只生成说明占位', implemented: false },
-  desktop: { name: '桌面端', description: 'Tauri 桌面端前端工程', implemented: true },
+  web: { name: 'Web', get description() { return cliM('cli_frontendWebDescription') }, implemented: true },
+  app: { name: 'App', get description() { return cliM('cli_frontendAppDescription') }, implemented: true },
+  miniapp: {
+    get name() { return cliM('cli_frontendMiniappName') },
+    get description() { return cliM('cli_frontendMiniappDescription') },
+    implemented: false,
+  },
+  desktop: {
+    get name() { return cliM('cli_frontendDesktopName') },
+    get description() { return cliM('cli_frontendDesktopDescription') },
+    implemented: true,
+  },
 }
 
 const DEFAULT_FULLSTACK_FRONTENDS: FrontendTarget[] = ['web', 'app', 'desktop']
@@ -89,96 +97,98 @@ const DEFAULT_FULLSTACK_FRONTENDS: FrontendTarget[] = ['web', 'app', 'desktop']
 const FEATURES: Record<string, FeatureDefinition> = {
   'iam': {
     id: 'iam',
-    name: '身份与访问管理',
-    description: 'Session/JWT 会话管理、RBAC 权限控制',
+    get name() { return cliM('cli_featureIamName') },
+    get description() { return cliM('cli_featureIamDescription') },
     packages: ['@h-ai/iam'],
     dependencies: ['crypto', 'db', 'cache'],
   },
   'db': {
     id: 'db',
-    name: '数据库',
-    description: '多数据库支持 (SQLite/PostgreSQL/MySQL)',
+    get name() { return cliM('cli_featureDbName') },
+    get description() { return cliM('cli_featureDbDescription') },
     packages: ['@h-ai/reldb'],
   },
   'cache': {
     id: 'cache',
-    name: '缓存',
-    description: 'Redis / 内存缓存',
+    get name() { return cliM('cli_featureCacheName') },
+    get description() { return cliM('cli_featureCacheDescription') },
     packages: ['@h-ai/cache'],
   },
   'ai': {
     id: 'ai',
-    name: 'AI 集成',
-    description: 'LLM 适配器、MCP 协议、技能系统、流式响应',
+    get name() { return cliM('cli_featureAiName') },
+    get description() { return cliM('cli_featureAiDescription') },
     packages: ['@h-ai/ai'],
+    dependencies: ['db', 'vecdb'],
   },
   'storage': {
     id: 'storage',
-    name: '文件存储',
-    description: '本地存储、S3/OSS/COS 云存储',
+    get name() { return cliM('cli_featureStorageName') },
+    get description() { return cliM('cli_featureStorageDescription') },
     packages: ['@h-ai/storage'],
   },
   'crypto': {
     id: 'crypto',
-    name: '加密模块',
-    description: '国密 SM2/SM3/SM4、Argon2 密码哈希',
+    get name() { return cliM('cli_featureCryptoName') },
+    get description() { return cliM('cli_featureCryptoDescription') },
     packages: ['@h-ai/crypto'],
+    dependencies: ['db'],
   },
   'audit': {
     id: 'audit',
-    name: '审计日志',
-    description: '操作审计、安全追踪',
+    get name() { return cliM('cli_featureAuditName') },
+    get description() { return cliM('cli_featureAuditDescription') },
     packages: ['@h-ai/audit'],
     dependencies: ['db'],
   },
   'reach': {
     id: 'reach',
-    name: '触达服务',
-    description: '邮件、短信、微信等消息触达',
+    get name() { return cliM('cli_featureReachName') },
+    get description() { return cliM('cli_featureReachDescription') },
     packages: ['@h-ai/reach'],
   },
   'payment': {
     id: 'payment',
-    name: '统一支付',
-    description: '微信支付、支付宝、Stripe 统一接入',
+    get name() { return cliM('cli_featurePaymentName') },
+    get description() { return cliM('cli_featurePaymentDescription') },
     packages: ['@h-ai/payment'],
     dependencies: ['db'],
   },
   'vecdb': {
     id: 'vecdb',
-    name: '向量数据库',
-    description: '向量检索与相似度搜索（LanceDB / pgvector / Qdrant）',
+    get name() { return cliM('cli_featureVecdbName') },
+    get description() { return cliM('cli_featureVecdbDescription') },
     packages: ['@h-ai/vecdb'],
   },
   'datapipe': {
     id: 'datapipe',
-    name: '数据处理管道',
-    description: '文本清洗、分块与可组合处理流水线',
+    get name() { return cliM('cli_featureDatapipeName') },
+    get description() { return cliM('cli_featureDatapipeDescription') },
     packages: ['@h-ai/datapipe'],
   },
   'scheduler': {
     id: 'scheduler',
-    name: '任务调度',
-    description: 'Cron 任务注册、执行与日志追踪',
+    get name() { return cliM('cli_featureSchedulerName') },
+    get description() { return cliM('cli_featureSchedulerDescription') },
     packages: ['@h-ai/scheduler'],
     dependencies: ['db'],
   },
   'deploy': {
     id: 'deploy',
-    name: '自动化部署',
-    description: '统一部署编排与多平台发布支持',
+    get name() { return cliM('cli_featureDeployName') },
+    get description() { return cliM('cli_featureDeployDescription') },
     packages: ['@h-ai/deploy'],
   },
   'api-client': {
     id: 'api-client',
-    name: 'HTTP 客户端',
-    description: '统一 API 调用、错误处理与流式请求支持',
+    get name() { return cliM('cli_featureApiClientName') },
+    get description() { return cliM('cli_featureApiClientDescription') },
     packages: ['@h-ai/api-client'],
   },
   'capacitor': {
     id: 'capacitor',
-    name: '移动端能力',
-    description: 'Capacitor 原生桥接能力（偏移动应用）',
+    get name() { return cliM('cli_featureCapacitorName') },
+    get description() { return cliM('cli_featureCapacitorDescription') },
     packages: ['@h-ai/capacitor'],
   },
 }
@@ -199,7 +209,6 @@ const SELECTABLE_FEATURES: FeatureId[] = [
   'vecdb',
   'datapipe',
   'scheduler',
-  'deploy',
   'api-client',
   'capacitor',
 ]
@@ -213,17 +222,17 @@ const PROJECT_NAME_REGEX = /^[a-z0-9-]+$/
 const PROJECT_TEMPLATES = {
   minimal: {
     name: 'minimal',
-    description: '最小模板 — 仅核心功能',
+    get description() { return cliM('cli_templateMinimalDescription') },
     features: [] as FeatureId[],
   },
   default: {
     name: 'default',
-    description: '标准模板 — IAM + 数据库 + 缓存',
+    get description() { return cliM('cli_templateDefaultDescription') },
     features: ['iam', 'db', 'cache', 'crypto'] as FeatureId[],
   },
   full: {
     name: 'full',
-    description: '完整模板 — 所有功能',
+    get description() { return cliM('cli_templateFullDescription') },
     features: [
       'iam',
       'db',
@@ -244,7 +253,7 @@ const PROJECT_TEMPLATES = {
   },
   custom: {
     name: 'custom',
-    description: '自定义 — 选择需要的功能',
+    get description() { return cliM('cli_templateCustomDescription') },
     features: [] as FeatureId[],
   },
 }
@@ -255,6 +264,16 @@ const PROJECT_TEMPLATES = {
 
 /**
  * 创建项目
+ * 按应用类型生成工程并补齐功能硬依赖；--no-install 不安装依赖，--no-git 不初始化仓库。
+ * @throws Error - 选项、目标目录、模板生成、依赖安装或 Git 初始化失败。
+ * @param options - 命令参数；对应命令的工作目录、非交互与可选功能。
+ * @returns 生成及所选安装/Git 步骤完成。
+ * @example 模块内部上下文
+ * ```ts
+ * // 在当前目录创建新的 shop 子目录；目标必须不存在或为空。
+ * await createProject({ cwd: process.cwd(), name: 'shop', appType: 'api', features: ['ai'], packageManager: 'pnpm', yes: true, install: false, git: false, deploy: false })
+ * // 对应 hai create shop --type api --features ai -y --no-install --no-git --no-deploy。
+ * ```
  */
 export async function createProject(options: CreateProjectOptions): Promise<void> {
   const spinner = ora()
@@ -265,7 +284,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     // 安全校验：项目名必须仅含小写字母、数字和连字符，防止路径遍历
     if (!PROJECT_NAME_REGEX.test(resolvedOptions.name)) {
-      writeCliError(chalk.red(`项目名称不合法: "${resolvedOptions.name}"，只能包含小写字母、数字和连字符`))
+      writeCliError(chalk.red(cliM('cli_createInvalidName', { params: { name: resolvedOptions.name } })))
       return
     }
 
@@ -275,30 +294,33 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     if (await fileExists(projectPath)) {
       const { overwrite } = await prompts({
         type: 'confirm',
+        active: cliM('cli_yes'),
+        inactive: cliM('cli_no'),
         name: 'overwrite',
-        message: `目录 ${resolvedOptions.name} 已存在，是否覆盖？`,
+        message: cliM('cli_createOverwrite', { params: { name: resolvedOptions.name } }),
         initial: false,
       })
 
       if (!overwrite) {
-        writeCliMessage(chalk.yellow('已取消'))
+        writeCliMessage(chalk.yellow(cliM('cli_cancelled')))
         return
       }
 
       await fse.remove(projectPath)
     }
 
-    spinner.start('创建项目目录...')
+    spinner.start(cliM('cli_createDirectory'))
     await fse.ensureDir(projectPath)
     spinner.succeed()
 
     // ─── 基于模板生成项目文件 ───
-    spinner.start('生成项目文件...')
+    spinner.start(cliM('cli_createFiles'))
 
     const context = buildTemplateContext({
       name: resolvedOptions.name,
       appType: resolvedOptions.appType,
       features: resolvedOptions.features,
+      deploy: resolvedOptions.deploy,
       frontends: resolvedOptions.frontends,
       moduleConfigs: resolvedOptions.moduleConfigs,
       packageManager: resolvedOptions.packageManager!,
@@ -309,7 +331,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     {
       // 生成配置文件（config/*.yml）
-      const { generateConfigFile, generateEnvExample } = await import('./cli-config-templates.js')
+      const { generateConfigFile, generateEnvExample, generateProductionEnvironment } = await import('./cli-config-templates.js')
       const configs = resolvedOptions.moduleConfigs
       const isApiWorkspace = resolvedOptions.appType === 'api'
       const isFullstack = resolvedOptions.appType === 'fullstack'
@@ -346,7 +368,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         if (/^_.*\.yml$/.test(file))
           configContents[file.slice(1, -4)] = await fse.readFile(path.join(configDir, file), 'utf8')
       }
-      const envFeatures: FeatureId[] = resolvedOptions.features
+      const envFeatures: FeatureId[] = isFullstack ? [...new Set<FeatureId>([...resolvedOptions.features, 'reach'])] : resolvedOptions.features
       const envContents = generateEnvExample(envFeatures, configs, isFullstack, configContents)
       let envExample = isApiWorkspace
         ? envContents
@@ -373,16 +395,26 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const sharedVariables = envExample.split('\n').filter(line => /^[A-Z][A-Z0-9_]*=/.test(line))
       await writeFile(path.join(envDirectory, '.env'), `# 公共基础配置（可提交）；完整字段说明见 .env.example。\n${sharedVariables.join('\n')}\n`)
       for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
-        await writeFile(path.join(envDirectory, `.env.${mode}`), `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_DEBUG=false\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : mode === 'dev' ? 'debug' : 'info'}\n`)
+        const values = mode === 'prod'
+          ? generateProductionEnvironment(envFeatures, configs)
+          : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
+        await writeFile(path.join(envDirectory, `.env.${mode}`), values)
       }
+      const privateEntries: string[] = []
       if (isFullstack) {
         // 每个项目使用独立随机密码，保证四类字符；真实凭据只写入被忽略的本地文件。
         const password = `Aa1!${randomBytes(24).toString('base64url')}`
-        await fse.writeFile(path.join(projectPath, '.env.local'), `# 本机私有配置，不提交 Git。\nHAI_ADMIN_DEFAULT_PASSWORD=${password}\n`, { mode: 0o600 })
+        privateEntries.push(`HAI_ADMIN_DEFAULT_PASSWORD=${password}`)
       }
-      else {
-        await writeFile(path.join(envDirectory, '.env.local'), '# 本机私有配置，不提交 Git；覆盖公共基础和环境配置。\n')
+      if (isFullstack || (isApiWorkspace && resolvedOptions.features.includes('crypto'))) {
+        // 仅在项目创建时生成一次本机开发 Secret；运行时禁止隐式生成，部署时由 Secret Manager 分发。
+        const key = createECDH('SM2')
+        key.generateKeys()
+        const id = `bootstrap-${randomBytes(6).toString('hex')}`
+        const ring = { activeKeyId: id, keys: { [id]: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } }
+        privateEntries.push(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'`)
       }
+      await fse.writeFile(path.join(envDirectory, '.env.local'), `# 本机私有配置，不提交 Git；部署凭据由目标环境单独提供。\n${privateEntries.join('\n')}\n`, { mode: 0o600 })
     }
 
     // 生成 Skill 文件
@@ -395,7 +427,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     )
 
     // 生成 README
-    const appTypeLabel = APP_TYPES[resolvedOptions.appType].name
+    const appTypeLabel = cliM(`cli_app${({ 'admin': 'Admin', 'website': 'Website', 'h5': 'H5', 'api': 'Api', 'mobile-app': 'Mobile', 'fullstack': 'Fullstack' } as const)[resolvedOptions.appType]}Name`, { locale: 'zh-CN' })
     const readmeContent = resolvedOptions.appType === 'fullstack'
       ? generateFullstackReadme(resolvedOptions.name, resolvedOptions.packageManager!, resolvedOptions.frontends)
       : resolvedOptions.appType === 'api'
@@ -403,14 +435,16 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         : generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!, resolvedOptions.appType)
     await writeFile(
       path.join(projectPath, 'README.md'),
-      readmeContent,
+      resolvedOptions.deploy === false
+        ? readmeContent.replace(/### 构建与部署[\s\S]*?(?=\n#{2,3} |$)/, '### 构建\n\npnpm build\npnpm build --target docker\n\n本项目创建时关闭了部署工具。\n')
+        : readmeContent,
     )
 
     spinner.succeed()
 
     // 初始化 Git
     if (resolvedOptions.git) {
-      spinner.start('初始化 Git 仓库...')
+      spinner.start(cliM('cli_createGit'))
       execSync('git init', { cwd: projectPath, stdio: 'ignore' })
       if (resolvedOptions.gitRemote) {
         // 使用 execFileSync + 数组参数，避免 shell 注入
@@ -418,7 +452,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         const gitRemote = resolvedOptions.gitRemote
         if (!RE_HTTPS_URL.test(gitRemote) && !RE_GIT_SSH_URL.test(gitRemote)) {
           spinner.fail()
-          throw new Error(`Invalid gitRemote URL: ${gitRemote}`)
+          throw new Error(cliM('cli_createRemoteFailure', { params: { remote: gitRemote } }))
         }
         execFileSync('git', ['remote', 'add', 'origin', gitRemote], { cwd: projectPath, stdio: 'ignore' })
       }
@@ -427,7 +461,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     // 安装依赖
     if (resolvedOptions.install) {
-      spinner.start(`安装依赖 (${resolvedOptions.packageManager})...`)
+      spinner.start(cliM('cli_createInstall', { params: { manager: resolvedOptions.packageManager } }))
       installDependencies(projectPath, resolvedOptions.packageManager!)
       spinner.succeed()
     }
@@ -454,11 +488,11 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
 
   writeCliMessage('')
   writeCliMessage(chalk.bold.cyan('  🚀 hai Agent Framework'))
-  writeCliMessage(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
+  writeCliMessage(chalk.gray(cliM('cli_createTagline')))
   writeCliMessage('')
 
   const onCancel = () => {
-    writeCliMessage(chalk.red('\n已取消'))
+    writeCliMessage(chalk.red(cliM('cli_cancelledLine')))
     process.exit(1)
   }
 
@@ -471,13 +505,13 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     const { name } = await prompts({
       type: 'text',
       name: 'name',
-      message: '项目名称:',
+      message: cliM('cli_createNamePrompt'),
       initial: 'my-app',
       validate: (value: string) => {
         if (!value.trim())
-          return '项目名称不能为空'
+          return cliM('cli_createNameRequired')
         if (!PROJECT_NAME_REGEX.test(value))
-          return '项目名称只能包含小写字母、数字和连字符'
+          return cliM('cli_createNamePattern')
         return true
       },
     }, { onCancel })
@@ -493,7 +527,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     const { appType } = await prompts({
       type: 'select',
       name: 'appType',
-      message: '应用类型:',
+      message: cliM('cli_createTypePrompt'),
       hint: cliM('cli_selectHint'),
       choices: Object.entries(APP_TYPES).map(([key, t]) => ({
         title: t.name,
@@ -524,7 +558,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       const { template } = await prompts({
         type: 'select',
         name: 'template',
-        message: '选择模板:',
+        message: cliM('cli_createTemplatePrompt'),
         hint: cliM('cli_selectHint'),
         choices: Object.values(PROJECT_TEMPLATES).map(t => ({
           title: t.name,
@@ -542,8 +576,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
 
   if (selectedAppType === 'fullstack') {
-    // fullstack 业务模块由模板确定；部署工具可通过显式 --features deploy 启用。
-    selectedFeatures = resolveFeatureDependencies([...appTypeDefaults, ...(options.features?.includes('deploy') ? ['deploy' as const] : [])])
+    selectedFeatures = resolveFeatureDependencies([...appTypeDefaults, ...(options.features ?? [])])
+  }
+  else if (options.features) {
+    selectedFeatures = resolveFeatureDependencies(options.features)
   }
   else if (selectedTemplate === 'custom' && !options.features && useDefaults) {
     selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
@@ -568,14 +604,15 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     selectedFeatures = features || []
     selectedFeatures = resolveFeatureDependencies(selectedFeatures)
   }
-  else if (selectedTemplate === 'custom' && options.features) {
-    selectedFeatures = resolveFeatureDependencies(options.features)
-  }
   else {
     const templateFeatures = PROJECT_TEMPLATES[selectedTemplate as keyof typeof PROJECT_TEMPLATES]?.features || []
     const merged = new Set([...templateFeatures, ...appTypeDefaults])
     selectedFeatures = resolveFeatureDependencies(Array.from(merged))
   }
+
+  selectedFeatures = selectedFeatures.filter(feature => feature !== 'deploy')
+  if (options.deploy !== false)
+    selectedFeatures.push('deploy')
 
   // 模块配置
   const moduleConfigs = selectedAppType === 'fullstack'
@@ -592,8 +629,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   else if (addExamples === undefined) {
     const { examples } = await prompts({
       type: 'confirm',
+      active: cliM('cli_yes'),
+      inactive: cliM('cli_no'),
       name: 'examples',
-      message: '是否添加示例代码?',
+      message: cliM('cli_createExamplesPrompt'),
       initial: true,
     }, { onCancel })
     addExamples = examples
@@ -610,10 +649,11 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   if (!packageManager) {
     const { pm } = await prompts({
       type: 'select',
+      hint: cliM('cli_selectHint'),
       name: 'pm',
-      message: '包管理器:',
+      message: cliM('cli_createManagerPrompt'),
       choices: [
-        { title: 'pnpm (推荐)', value: 'pnpm' },
+        { title: cliM('cli_createPnpmRecommended'), value: 'pnpm' },
         { title: 'npm', value: 'npm' },
         { title: 'yarn', value: 'yarn' },
       ],
@@ -630,8 +670,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   else if (install === undefined) {
     const { doInstall } = await prompts({
       type: 'confirm',
+      active: cliM('cli_yes'),
+      inactive: cliM('cli_no'),
       name: 'doInstall',
-      message: '是否安装依赖?',
+      message: cliM('cli_createInstallPrompt'),
       initial: true,
     }, { onCancel })
     install = doInstall
@@ -645,8 +687,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   else if (git === undefined) {
     const { initGit } = await prompts({
       type: 'confirm',
+      active: cliM('cli_yes'),
+      inactive: cliM('cli_no'),
       name: 'initGit',
-      message: '是否初始化 Git?',
+      message: cliM('cli_createGitPrompt'),
       initial: true,
     }, { onCancel })
     git = initGit
@@ -661,14 +705,14 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     const { remote } = await prompts({
       type: 'text',
       name: 'remote',
-      message: 'Git 仓库地址 (可选，回车跳过):',
+      message: cliM('cli_createRemotePrompt'),
       initial: '',
       validate: (value: string) => {
         if (!value.trim())
           return true
         if (RE_HTTPS_URL.test(value) || RE_GIT_SSH_URL.test(value))
           return true
-        return '请输入合法的 Git 仓库地址 (https://... 或 git@...:...)'
+        return cliM('cli_createRemoteInvalid')
       },
     }, { onCancel })
     gitRemote = remote?.trim() || ''
@@ -680,6 +724,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     frontends: selectedFrontends,
     template: (selectedTemplate ?? 'default') as 'default' | 'minimal' | 'full' | 'custom',
     features: selectedFeatures,
+    deploy: options.deploy !== false,
     moduleConfigs,
     examples: addExamples ?? true,
     install: install ?? true,
@@ -756,7 +801,14 @@ function normalizeFrontendTargets(frontends: FrontendTarget[]): FrontendTarget[]
 // =============================================================================
 
 /**
- * 解析功能依赖（自动补全传递依赖，循环直至收敛）
+ * 迭代展开功能硬依赖直到集合稳定，避免仅处理一层依赖导致初始化缺项；保留输入顺序并去重。
+ * @param features - 调用方选择的功能。
+ * @returns 包含传递硬依赖的功能列表。
+ * @example 模块内部上下文
+ * ```ts
+ * const features = resolveFeatureDependencies(['iam', 'ai'])
+ * const complete = ['db', 'cache', 'crypto', 'vecdb'].every(feature => features.some(selected => selected === feature))
+ * ```
  */
 function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   const result = new Set(features)
@@ -790,13 +842,13 @@ function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
 async function promptModuleConfigs(features: FeatureId[], projectName: string): Promise<ModuleConfigs> {
   const configs: ModuleConfigs = {}
   const onCancel = () => {
-    writeCliMessage(chalk.red('\n已取消'))
+    writeCliMessage(chalk.red(cliM('cli_cancelledLine')))
     process.exit(1)
   }
 
   writeCliMessage('')
-  writeCliMessage(chalk.bold('  ⚙ 模块配置'))
-  writeCliMessage(chalk.gray('     设置关键配置项（回车使用默认值）'))
+  writeCliMessage(chalk.bold(cliM('cli_createModuleConfig')))
+  writeCliMessage(chalk.gray(cliM('cli_createModuleConfigHint')))
   writeCliMessage('')
 
   // core 配置（始终收集）
@@ -825,15 +877,16 @@ async function promptModuleConfigs(features: FeatureId[], projectName: string): 
  * 收集 core 模块配置
  */
 async function promptCoreConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['core']> {
-  writeCliMessage(chalk.cyan('  [core] 应用基础配置'))
+  writeCliMessage(chalk.cyan(cliM('cli_createCoreConfig')))
   const { defaultLocale } = await prompts({
     type: 'select',
+    hint: cliM('cli_selectHint'),
     name: 'defaultLocale',
-    message: '默认语言:',
+    message: cliM('cli_createLocalePrompt'),
     choices: [
-      { title: '中文 (zh-CN)', value: 'zh-CN' },
-      { title: 'English (en-US)', value: 'en-US' },
-      { title: '日本語 (ja-JP)', value: 'ja-JP' },
+      { title: cliM('cli_createChineseLocale'), value: 'zh-CN' },
+      { title: cliM('cli_createEnglishLocale'), value: 'en-US' },
+      { title: cliM('cli_createJapaneseLocale'), value: 'ja-JP' },
     ],
     initial: 0,
   }, { onCancel })
@@ -844,13 +897,14 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
  * 收集 db 模块配置
  */
 async function promptDbConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['db']> {
-  writeCliMessage(chalk.cyan('  [db] 数据库配置'))
+  writeCliMessage(chalk.cyan(cliM('cli_createDbConfig')))
   const { type } = await prompts({
     type: 'select',
+    hint: cliM('cli_selectHint'),
     name: 'type',
-    message: '数据库类型:',
+    message: cliM('cli_createDbTypePrompt'),
     choices: [
-      { title: 'SQLite (零配置，适合开发)', value: 'sqlite' },
+      { title: cliM('cli_createSqliteOption'), value: 'sqlite' },
       { title: 'PostgreSQL', value: 'postgresql' },
       { title: 'MySQL', value: 'mysql' },
     ],
@@ -861,16 +915,16 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
     const { database } = await prompts({
       type: 'text',
       name: 'database',
-      message: 'SQLite 数据库路径:',
+      message: cliM('cli_createSqlitePathPrompt'),
       initial: './data/app.db',
     }, { onCancel })
     return { type, database }
   }
 
   const answers = await prompts([
-    { type: 'text', name: 'host', message: `${type === 'postgresql' ? 'PostgreSQL' : 'MySQL'} 主机:`, initial: 'localhost' },
-    { type: 'number', name: 'port', message: '端口:', initial: type === 'postgresql' ? 5432 : 3306 },
-    { type: 'text', name: 'database', message: '数据库名称:', initial: projectName },
+    { type: 'text', name: 'host', message: cliM('cli_createDbHostPrompt', { params: { backend: type === 'postgresql' ? 'PostgreSQL' : 'MySQL' } }), initial: 'localhost' },
+    { type: 'number', name: 'port', message: cliM('cli_createPortPrompt'), initial: type === 'postgresql' ? 5432 : 3306 },
+    { type: 'text', name: 'database', message: cliM('cli_createDatabasePrompt'), initial: projectName },
   ], { onCancel })
 
   return { type, host: answers.host, port: answers.port, database: answers.database }
@@ -880,13 +934,14 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
  * 收集 cache 模块配置
  */
 async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['cache']> {
-  writeCliMessage(chalk.cyan('  [cache] 缓存配置'))
+  writeCliMessage(chalk.cyan(cliM('cli_createCacheConfig')))
   const { type } = await prompts({
     type: 'select',
+    hint: cliM('cli_selectHint'),
     name: 'type',
-    message: '缓存类型:',
+    message: cliM('cli_createCacheTypePrompt'),
     choices: [
-      { title: '内存缓存 (零配置，适合开发)', value: 'memory' },
+      { title: cliM('cli_createMemoryOption'), value: 'memory' },
       { title: 'Redis', value: 'redis' },
     ],
     initial: 0,
@@ -896,8 +951,8 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
     return { type }
 
   const answers = await prompts([
-    { type: 'text', name: 'host', message: 'Redis 主机:', initial: 'localhost' },
-    { type: 'number', name: 'port', message: 'Redis 端口:', initial: 6379 },
+    { type: 'text', name: 'host', message: cliM('cli_createRedisHostPrompt'), initial: 'localhost' },
+    { type: 'number', name: 'port', message: cliM('cli_createRedisPortPrompt'), initial: 6379 },
   ], { onCancel })
 
   return { type, host: answers.host, port: answers.port }
@@ -907,10 +962,10 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
  * 收集 iam 模块配置
  */
 async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam']> {
-  writeCliMessage(chalk.cyan('  [iam] 认证授权配置'))
+  writeCliMessage(chalk.cyan(cliM('cli_createIamConfig')))
   const answers = await prompts([
-    { type: 'confirm', name: 'loginPassword', message: '启用密码登录?', initial: true },
-    { type: 'confirm', name: 'loginOtp', message: '启用 OTP 验证码登录?', initial: false },
+    { type: 'confirm', active: cliM('cli_yes'), inactive: cliM('cli_no'), name: 'loginPassword', message: cliM('cli_createPasswordPrompt'), initial: true },
+    { type: 'confirm', active: cliM('cli_yes'), inactive: cliM('cli_no'), name: 'loginOtp', message: cliM('cli_createOtpPrompt'), initial: false },
   ], { onCancel })
   return { loginPassword: answers.loginPassword, loginOtp: answers.loginOtp }
 }
@@ -919,13 +974,14 @@ async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam
  * 收集 storage 模块配置
  */
 async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs['storage']> {
-  writeCliMessage(chalk.cyan('  [storage] 文件存储配置'))
+  writeCliMessage(chalk.cyan(cliM('cli_createStorageConfig')))
   const { type } = await prompts({
     type: 'select',
+    hint: cliM('cli_selectHint'),
     name: 'type',
-    message: '存储类型:',
+    message: cliM('cli_createStorageTypePrompt'),
     choices: [
-      { title: '本地存储 (零配置，适合开发)', value: 'local' },
+      { title: cliM('cli_createLocalStorageOption'), value: 'local' },
       { title: 'S3 / MinIO / OSS', value: 's3' },
     ],
     initial: 0,
@@ -935,7 +991,7 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
     const { localPath } = await prompts({
       type: 'text',
       name: 'localPath',
-      message: '存储路径:',
+      message: cliM('cli_createStoragePathPrompt'),
       initial: './data/uploads',
     }, { onCancel })
     return { type, localPath }
@@ -948,15 +1004,16 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
  * 收集 ai 模块配置
  */
 async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']> {
-  writeCliMessage(chalk.cyan('  [ai] AI 集成配置'))
+  writeCliMessage(chalk.cyan(cliM('cli_createAiConfig')))
   const { defaultProvider } = await prompts({
     type: 'select',
+    hint: cliM('cli_selectHint'),
     name: 'defaultProvider',
-    message: 'AI Provider:',
+    message: cliM('cli_createProviderPrompt'),
     choices: [
       { title: 'OpenAI', value: 'openai' },
       { title: 'Anthropic (Claude)', value: 'anthropic' },
-      { title: '其他 (OpenAI 兼容)', value: 'custom' },
+      { title: cliM('cli_createCompatibleAiOption'), value: 'custom' },
     ],
     initial: 0,
   }, { onCancel })
@@ -970,7 +1027,7 @@ async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']
   const { model } = await prompts({
     type: 'text',
     name: 'model',
-    message: '默认模型:',
+    message: cliM('cli_createModelPrompt'),
     initial: defaultModel,
   }, { onCancel })
 
@@ -1037,6 +1094,14 @@ function installDependencies(projectPath: string, pm: 'pnpm' | 'npm' | 'yarn'): 
   }
 }
 
+/**
+ * 同步子命令异常中可读取的诊断字段；输出可能为 Buffer 或字符串，因此先以 unknown 接收并规范化。
+ * @example 模块内部上下文
+ * ```ts
+ * const failure: CommandFailureLike = { status: 1, signal: null, stderr: Buffer.from('Install failed'), stdout: '' }
+ * const details = formatCommandFailure('pnpm install', failure)
+ * ```
+ */
 interface CommandFailureLike {
   stdout?: unknown
   stderr?: unknown
@@ -1075,33 +1140,28 @@ function normalizeChildOutput(output: unknown): string {
   return ''
 }
 
-/**
- * 生成 README
- */
 /** 生成各类项目共用的 AI 开发入口说明。 */
 function generateAiDevelopmentReadme(): string {
-  return `## AI 辅助开发
+  return `### AI 辅助开发
 
 从本项目根目录打开所用编码工具，先读取 [AGENTS.md](./AGENTS.md)。Claude Code 通过 [CLAUDE.md](./CLAUDE.md) 加载项目规则；GitHub Copilot 使用 [.github/copilot-instructions.md](./.github/copilot-instructions.md)，OpenCode 使用 AGENTS.md 和 [opencode.json](./opencode.json)。
 
-业务以用户当前明确要求及其指定的需求/设计文档为准。模板 AGENTS、README、skills、生成代码与测试中的角色/权限、流程、限额和架构是可调整的初始方案；审查将差异列为模板适配项，实施按授权同步冲突代码、测试与过期规则，不要求把需求改回模板。框架 API 以当前安装版本公开契约为准，服务端授权、资源隔离、输入校验和凭据保护仍需落实。
+生成的页面和业务规则是起点，可以按需求调整。把功能、权限和验收条件告诉 AI，再让它读取对应技能与当前安装版本的 API。
 
-Codex、Cursor、Copilot、OpenCode 从 .agents/skills/ 发现共享技能；Claude Code 通过 CLAUDE.md 引用 AGENTS.md，并按项目指引读取 .agents/skills/ 的同一份正文。需求或设计文档在生成前使用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 严格检查完备性、歧义、技术正确性和命名一致性，问题解决后再生成。普通新增、修改、修复任务使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md) 和 [开发规范与框架能力路由](./.agents/skills/hai-app-create/development.md)；具体模块再按需读取，不能把 Skill 已交付当成依赖已安装或配置已启用。
+普通功能开发使用 [应用开发 Skill](./.agents/skills/hai-app-create/SKILL.md)。需求文档较多时，先用 [文档审查 Skill](./.agents/skills/hai-spec-review/SKILL.md) 找出缺失和矛盾，再用 [文档实施 Skill](./.agents/skills/hai-spec-implement/SKILL.md) 维护 docs/task-list.md 与 docs/tasks/，逐项实现、测试和交付。
 
-根据文档规划、实施、返修或按已提交文档差异同步实现时，使用 [文档实施 Skill](./.agents/skills/hai-spec-implement/SKILL.md)：维护 docs/task-list.md 与 docs/tasks/，记录已验收文档和实现的 Git SHA，比较固定目标版本后更新原任务或新建任务，每项独立分支 TDD、验证并本地合并；全部差异与整体验收通过后才推进基线。返修沿用原任务与分支。仅规划不开始实现，指定任务先核验依赖。
-
-优先复用适用的 hai-framework 公开 API 与已有业务实现。完成时说明复用的能力、相关能力未采用的原因，以及安全边界和类型、配置、文案、调用方的同步情况。质量验证按当前 package.json 执行 typecheck → lint → build → test；UI、路由与端到端流程另运行 test:e2e，未运行项说明原因。安全与质量规则既要按规范审查，也要运行门禁验证。
-
-已有 hai 项目可运行 hai init 补齐缺失的 AI 支持文件与参考资源；已有 AGENTS.md、Skill 和自定义规则会保留，升级时需将上述需求优先规则、普通开发入口与规范显式合并到旧指引，并修正已被需求替代的模板约束。
+已有项目可运行 hai init 补齐缺失的 AI 入口；它保留已有自定义内容。升级框架使用 [框架升级 Skill](./.agents/skills/hai-framework-sync/SKILL.md)，同时核对依赖、配置、代码和技能。
 
 `
 }
 
 /** 生成各类工程共用的配置与命令说明，放在开发/部署章节之间。 */
 function generateEnvironmentReadme(): string {
-  return `## 分环境配置
+  return `### 分环境配置
 
 运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
+
+生产 .env.prod 按已启用模块选择共享 PostgreSQL（明确选择 MySQL 时保留）、Redis、S3、Qdrant，默认使用 Compose 内部服务名 db/cache/storage/vecdb。密码、S3 凭据、模型 Key 与受保护 Qdrant 的 Key 只由私有环境注入；容器外运行覆盖内部连接地址。生产 Reach 必须注入真实 HAI_REACH_PROVIDERS JSON，公共空数组会拒绝启动。AI 自动补全 db+vecdb 依赖，并在二者就绪后初始化，失败逆序清理。
 
 | 用途 | 命令 |
 | --- | --- |
@@ -1115,17 +1175,60 @@ function generateEnvironmentReadme(): string {
 Vite 客户端使用 \`preview\` 预览静态产物，Node 服务使用 \`start\`；纯 contract/shared 库只提供适用的构建和质量命令。API workspace 的环境文件位于 \`apps/<name>-service\`，fullstack 位于工程根。`
 }
 
+/** 生成与项目脚本一致的构建、离线交付和增量更新说明。 */
+function generateBuildDeploymentReadme(pm: string, appDir: string): string {
+  return `### 构建与部署
+
+创建时默认包含部署工具；不需要时使用 hai create --no-deploy。
+每个镜像对应 images/ 中一个 Dockerfile，hai.build.json 用 dockerfile 指定文件。
+下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
+默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
+
+\`\`\`sh
+${pm} build
+${pm} build --target docker
+# 构建和部署一次完成
+${pm} exec hai deploy ${appDir} --env test --build
+# 复用已有镜像；只生成完整离线包及跨平台部署脚本
+${pm} exec hai deploy ${appDir} --env prod --bundle-only
+# 只更新前端（工程存在 web 镜像时）
+${pm} build --target docker --images web
+${pm} exec hai deploy ${appDir} --env prod --services web
+\`\`\`
+
+构建不读取部署环境；产物位于 .hai/build/docker/<buildId>，用 --artifact-dir 精确选择。
+应用根 package.json.version 驱动版本，同版本允许重新构建和发布；清单记录独立构建编号与校验和。
+完整离线包自动携带自建中间件镜像；准备中间件镜像需要构建机有可用 Podman/Docker，缺镜像时在打包阶段拉取。
+服务器需要 Linux、Docker/Podman、Docker Compose v2 或 podman-compose 1.6.0 及以上、sh、tar、sha256sum、awk、curl、util-linux flock 和支持 flock 的文件系统，启动阶段不联网拉取。
+固定 .deploy.lock 内核锁覆盖部署及恢复；禁止删除或替换，所有持有进程退出或重启后自动释放。强杀后须核对结果文件、current 和容器状态，再用新包恢复。
+tar 旁的部署目录提供 deploy.ps1（Windows）和 deploy.sh（Linux/macOS），按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
+完全隔离时手工搬运 tar，独立目录解包后执行 sh apply.sh，或传入部署目录覆盖默认位置。
+部分更新要求已有成功的完整部署，保留未选服务及数据卷；失败返回非零退出码，已有部署尝试恢复选中服务。
+中间件连接齐全时使用 --skip-middleware 跳过配置向导。包中包含私有配置，不提交 Git。
+`
+}
+
 function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
   return `# ${name}
 
+## 简介
+
 基于 hai Agent Framework 构建的${appTypeLabel}应用。
 
-## 页面布局与路由
+## 核心功能清单
 
-页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}
+- 开发服务器、源码编译与浏览器测试。
+- 按所选模块提供页面和服务配置。
+- 独立 Dockerfile 与镜像归档，便于交付。
 
-## 开发
+## 使用入门
+
+### 页面布局与路由
+
+页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}${appType === 'mobile-app' ? '\n\n选择 IAM 或 crypto 的移动客户端默认启用加密 transport，先初始化 crypto，再初始化 typed API client；结束时按相反顺序关闭。仅明确连接匹配的明文 API 时设置 PUBLIC_API_TRANSPORT=off；PUBLIC_API_KEY_EXCHANGE_PATH 仅覆盖公开协商子路径。握手失败不会退回明文，服务端私钥不进入客户端。未选择 crypto 的客户端保留明文 API 模式。' : ''}
+
+### 开发
 
 \`\`\`bash
 ${install}
@@ -1134,47 +1237,58 @@ ${getRunCommand(pm, 'dev')}
 
 ${generateEnvironmentReadme()}
 
-## 构建
+### 构建
 
 \`\`\`bash
 ${getRunCommand(pm, 'build')}
-${getRunCommand(pm, 'i18n:compile')}
+${getRunCommand(pm, 'paraglide:compile')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
 
-## 构建与部署
+${generateBuildDeploymentReadme(pm, `.`)}
 
-\`\`\`bash
-# 默认只编译源码；不选择部署环境
-${pm} build
-# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
-${pm} build --target docker
-# 选择环境、中间件并上传一个 Compose tar；不会重新构建
-${pm} exec hai deploy . --env test
-# 无法连接服务器时只生成包，按输出说明手工搬运和启动
-${pm} exec hai deploy . --env prod --bundle-only
-\`\`\`
-
-镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
-
-${generateAiDevelopmentReadme()}## 文档
+${generateAiDevelopmentReadme()}### 文档
 
 - [hai Agent Framework](https://github.com/hai-series/hai-framework)
 - [Svelte 5](https://svelte.dev/)
+
+## 开发测试
+
+\`\`\`sh
+${getRunCommand(pm, 'typecheck')}
+${getRunCommand(pm, 'lint')}
+${getRunCommand(pm, 'build')}
+${getRunCommand(pm, 'test')}
+${getRunCommand(pm, 'test:e2e')}
+\`\`\`
+
+## 许可证
+
+Apache-2.0
 `
 }
 
 function generateApiWorkspaceReadme(name: string, pm: 'pnpm' | 'npm' | 'yarn'): string {
   return `# ${name}
 
-基于 hai Agent Framework 构建的 typed API workspace。
+## 简介
 
-## 工程结构
+后端 API 工程，接口定义与服务实现分包维护，客户端可复用同一份接口类型。
+
+## 核心功能清单
+
+- 共享 contract、输入输出校验与服务 procedures。
+- 模块配置、健康检查和 HTTP 服务。
+- 独立镜像构建与离线交付。
+
+## 使用入门
+
+### 工程结构
 
 - \`apps/${name}-contract\`：共享 API contract、Zod schema 与类型
 - \`apps/${name}-service\`：后端 API service，基于 \`@h-ai/serv\` 暴露 HTTP 应用
 
-## 开发
+### 开发
 
 \`\`\`bash
 ${pm} install
@@ -1183,7 +1297,23 @@ ${pm} dev
 
 ${generateEnvironmentReadme()}
 
-## 质量门禁
+
+${generateBuildDeploymentReadme(pm, `apps/${name}-service`)}
+
+### 扩展建议
+
+- 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
+- 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
+- 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
+
+${generateAiDevelopmentReadme()}### 文档
+
+- [hai Agent Framework](https://github.com/hai-series/hai-framework)
+- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
+- [@h-ai/api-contract](./.agents/skills/hai-api-contract/SKILL.md)
+- [@h-ai/api-client](./.agents/skills/hai-api-client/SKILL.md)
+
+## 开发测试
 
 \`\`\`bash
 ${pm} typecheck
@@ -1193,33 +1323,9 @@ ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-## 构建与部署
+## 许可证
 
-\`\`\`bash
-# 默认只编译源码；不选择部署环境
-${pm} build
-# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
-${pm} build --target docker
-# 选择环境、中间件并上传一个 Compose tar；不会重新构建
-${pm} exec hai deploy apps/${name}-service --env test
-# 无法连接服务器时只生成包，按输出说明手工搬运和启动
-${pm} exec hai deploy apps/${name}-service --env prod --bundle-only
-\`\`\`
-
-镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
-
-## 扩展建议
-
-- 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
-- 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
-- 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
-
-${generateAiDevelopmentReadme()}## 文档
-
-- [hai Agent Framework](https://github.com/hai-series/hai-framework)
-- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
-- [@h-ai/api-contract](./.agents/skills/hai-api-contract/SKILL.md)
-- [@h-ai/api-client](./.agents/skills/hai-api-client/SKILL.md)
+Apache-2.0
 `
 }
 
@@ -1227,9 +1333,20 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
   const enabledFrontends = frontends.map(target => FRONTEND_TARGETS[target].name).join(' / ')
   return `# ${name}
 
-基于 hai Agent Framework 构建的前后端分离多包工程。
+## 简介
 
-## 工程结构
+前后端分离工程，API 与 Web、移动端、桌面端共享接口类型和管理界面，可按实际业务调整。
+
+## 核心功能清单
+
+- API 服务、共享界面与按需生成的客户端。
+- 用户管理、角色、审计和个人设置示例。
+- 登录、主题、语言、新手引导和帮助中心。
+- API/Web 独立 Dockerfile 与镜像归档。
+
+## 使用入门
+
+### 工程结构
 
 - \`packages/${name}-contract\`：前后端共享 API 契约、Zod Schema 与类型
 - \`packages/${name}-serv\`：后端 API Service（通过 \`@h-ai/serv\` 暴露最小 HTTP App 抽象，不直接暴露 Hono）
@@ -1241,11 +1358,11 @@ function generateFullstackReadme(name: string, pm: string, frontends: FrontendTa
 
 已启用前端：${enabledFrontends || 'Web / App / Desktop'}
 
-## 页面布局与路由
+### 页面布局与路由
 
 Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/lib/pages/**/*.svelte，由 HashRouter 自动发现并按需加载；菜单只维护入口。地址使用 #/页面路径，支持刷新、查询串与浏览器前进后退；API 权限仍由服务端校验。
 
-## 默认管理功能
+### 默认管理功能
 
 以下描述可运行示例的初始业务，可按实际需求调整或移除，并同步代码、数据、鉴权、界面、测试和文档。
 
@@ -1255,11 +1372,13 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
+服务端版本化传输密钥环在创建时一次性写入被忽略的 \`.env.local\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`；运行时不生成密钥。部署由 Secret Manager 向所有节点分发同一受管 ring，配合共享 registry。私钥不进入公开配置、PUBLIC_/VITE_ 或日志。
+
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 
-应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。默认 SQLite、本地存储与内存缓存适合单实例，管理写入仅支持单写实例；多实例读取可使用共享数据库、Redis cache 和 S3 存储，但管理写请求须统一路由到同一写实例。另需会话粘性路由使请求命中同一进程内传输私钥，服务重启后客户端重新协商。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
+应用显示名称、版本、环境、默认语言和日志设置来自后端 \`config/_core.yml\`，前端通过 \`app.info\` 获取安全元信息。开发默认 SQLite、本地存储与内存缓存；生产启动拒绝这些本地 Provider，必须将所有节点连接到同一共享数据库、Redis 与 S3。传输必须在所有节点注入相同受管版本化密钥环与共享 registry，无需会话粘性；重启读取原 ring，轮换先分发新旧版本再切 activeKeyId。生产需显式配置允许的 CORS Origin。业务提交后的审计写入采用最大努力，失败记录结构化错误日志，保留已完成业务的原始结果。
 
-## 配置扩展
+### 配置扩展
 
 服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
 
@@ -1271,7 +1390,7 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 ${generateEnvironmentReadme()}
 
-## 开发与构建
+### 开发与构建
 
 \`\`\`bash
 ${pm} install
@@ -1285,22 +1404,9 @@ ${frontends.includes('desktop') ? `${pm} build --target desktop --platform windo
 
 Tauri 需要目标系统的 Rust target、SDK 和打包工具。测试产生的临时工程、截图、报告、容器、镜像与进程应在 finally/teardown 中自动清理，失败也执行。
 
-## 构建与部署
+${generateBuildDeploymentReadme(pm, `packages/${name}-serv`)}
 
-\`\`\`bash
-# 默认只编译源码；不选择部署环境
-${pm} build
-# 构建并导出 API/Web 镜像，auto 优先 Podman、其次 Docker
-${pm} build --target docker
-# 选择环境、中间件并上传一个 Compose tar；不会重新构建
-${pm} exec hai deploy packages/${name}-serv --env test
-# 无法连接服务器时只生成包，按输出说明手工搬运和启动
-${pm} exec hai deploy packages/${name}-serv --env prod --bundle-only
-\`\`\`
-
-镜像构建配置见 \`hai.build.json\`。构建产物保存在 \`.hai/build/docker/<buildId>\`，可用 \`--artifact-dir\` 选择同一份产物部署到 test/prod。部署包含私有配置，不能提交 Git。环境已配置完备可加 \`--skip-middleware\`。服务运行数据由 volume 持久化，镜像不打包本机 data。API/Web 联合部署公开 Web 入口并代理同源 API；没有 Web 产物时只部署服务。
-
-## i18n 与 shared 协同
+### i18n 与 shared 协同
 
 - shared：\`packages/${name}-shared/project.inlang\` + \`messages/\`，只放跨端共享组件文案。
 - web/app/desktop：每个应用都有自己的 \`project.inlang\` + \`messages/\`，用于本端页面与产品文案。
@@ -1308,13 +1414,20 @@ ${pm} exec hai deploy packages/${name}-serv --env prod --bundle-only
 - 新增 locale 时，shared 与所有启用前端的 \`locales\` 必须同步；语言切换器会同时更新 shared runtime 与宿主应用 runtime。
 - \`${pm} i18n:compile\` 会统一编译 shared 与每个启用前端的 Paraglide 输出；各前端也可单独运行 \`${pm} --filter ${name}-web paraglide:compile\` 等命令。
 
-## 自定义建议
+### 自定义建议
 
 - 改全局 Shell/主题/语言切换：编辑 \`packages/${name}-shared\`。
-- 改某个前端页面和文案：编辑对应 \`apps/${name}-*/src/routes\` 与 \`apps/${name}-*/messages\`。
+- 改某个前端页面和文案：编辑共享 \`packages/${name}-shared/src/lib/pages\`、本端入口与 \`apps/${name}-*/messages\`。
 - 改主题列表：调整脚手架配置中的 \`fullstack.theme.themes\`，或直接编辑各端 \`src/app.css\` 的 daisyUI \`themes\`。
 
-## 质量门禁
+
+${generateAiDevelopmentReadme()}### 文档
+
+- [hai Agent Framework](https://github.com/hai-series/hai-framework)
+- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
+- [@h-ai/ui](./.agents/skills/hai-ui/SKILL.md)
+
+## 开发测试
 
 \`\`\`bash
 ${pm} typecheck
@@ -1324,11 +1437,9 @@ ${pm} test
 ${pm} test:e2e
 \`\`\`
 
-${generateAiDevelopmentReadme()}## 文档
+## 许可证
 
-- [hai Agent Framework](https://github.com/hai-series/hai-framework)
-- [@h-ai/serv](./.agents/skills/hai-serv/SKILL.md)
-- [@h-ai/ui](./.agents/skills/hai-ui/SKILL.md)
+Apache-2.0
 `
 }
 
@@ -1337,12 +1448,12 @@ ${generateAiDevelopmentReadme()}## 文档
  */
 function printCompletionMessage(options: Required<CreateProjectOptions>): void {
   writeCliMessage('')
-  writeCliMessage(chalk.green('✔ 项目创建成功！'))
+  writeCliMessage(chalk.green(cliM('cli_createSuccess')))
   writeCliMessage('')
 
   // 功能摘要
   if (options.features.length > 0) {
-    writeCliMessage(chalk.bold('已启用功能:'))
+    writeCliMessage(chalk.bold(cliM('cli_createFeatures')))
     for (const featureId of options.features) {
       const feature = FEATURES[featureId]
       if (feature) {
@@ -1352,7 +1463,7 @@ function printCompletionMessage(options: Required<CreateProjectOptions>): void {
     writeCliMessage('')
   }
 
-  writeCliMessage('下一步：')
+  writeCliMessage(cliM('cli_nextSteps'))
   writeCliMessage(chalk.cyan(`  cd ${options.name}`))
   if (options.appType === 'fullstack')
     writeCliMessage(chalk.cyan(cliM('cli_adminPasswordSaved')))
@@ -1377,6 +1488,14 @@ function printCompletionMessage(options: Required<CreateProjectOptions>): void {
 
 /**
  * 检测项目信息
+ * 缺少或无法解析 package.json 时返回 null；isHaiProject 仅表示依赖中含 @h-ai/*，不是业务配置验证。
+ * @param cwd - 项目所在目录。
+ * @returns 解析后的项目信息，文件缺失或解析失败时为 null。
+ * @example 模块内部上下文
+ * ```ts
+ * const project = await detectProject(process.cwd())
+ * if (project && project.isHaiProject) writeCliMessage(project.haiPackages.join(', '))
+ * ```
  */
 export async function detectProject(cwd: string): Promise<ProjectInfo | null> {
   const pkgPath = path.join(cwd, 'package.json')

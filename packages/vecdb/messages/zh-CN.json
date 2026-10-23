@@ -10,6 +10,11 @@
   "vecdb_connectionFailed": "连接向量数据库失败: {error}",
   "vecdb_collectionNotFound": "集合不存在: {name}",
   "vecdb_collectionAlreadyExists": "集合已存在: {name}",
+  "vecdb_invalidCollectionSchema": "集合缺少有效的持久化向量维度或距离度量定义: {name}",
+  "vecdb_atomicUpsertUnavailable": "LanceDB 集合或驱动缺少安全的原子 merge 主键能力，未执行写入，请重建集合或使用受支持的驱动",
+  "vecdb_duplicateDocumentIds": "同一批向量文档的 ID 不得重复，未执行写入",
+  "vecdb_jsonMetadataRequired": "LanceDB 集合须使用原生 JSON 元数据，旧字符串元数据集合需重建后才能写入或过滤",
+  "vecdb_invalidMetadataFilter": "LanceDB 元数据过滤须为普通对象，值仅支持顶层字符串、有限数值、布尔或 null；不支持嵌套对象、数组和 undefined",
   "vecdb_dimensionMismatch": "向量维度不匹配: 期望 {expected}，实际 {actual}",
   "vecdb_insertFailed": "插入向量失败: {error}",
   "vecdb_deleteFailed": "删除向量失败: {error}",
@@ -19,5 +24,8 @@
   "vecdb_serializationFailed": "序列化/反序列化失败: {error}",
   "vecdb_invalidDimension": "无效的向量维度: {dimension}，必须为正整数",
   "vecdb_configPathRequired": "数据库存储路径不能为空",
-  "vecdb_configDatabaseRequired": "数据库名称不能为空"
+  "vecdb_configDatabaseRequired": "数据库名称不能为空",
+  "vecdb_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。",
+  "vecdb_chromaEndpointInvalid": "Chroma 仅支持 HTTP(S) 根端点，不得包含凭据、路径前缀、query 或 fragment",
+  "vecdb_chromaTokenInvalid": "Chroma Bearer token 仅支持无空白的可打印 ASCII 字符"
 }

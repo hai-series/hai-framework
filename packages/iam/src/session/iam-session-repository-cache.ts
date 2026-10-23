@@ -1,460 +1,321 @@
 /**
- * @h-ai/iam — 会话缓存存储实现
- *
- * 基于 @h-ai/cache 的会话存储，统一管理三组缓存键：
- * - `hai:iam:token:{accessToken}` → Session（含 _tokenPair）
- * - `hai:iam:user:{userId}:tokens` → Set\<accessToken\>
- * - `hai:iam:refresh:{refreshToken}` → { userId, accessToken }
- *
+ * @h-ai/iam — 用户分区会话仓库。
+ * 同一用户的会话、refresh 消费状态与索引放入一个版本化文档，单键 CAS 原子提交。
+ * Cluster 只访问一个 slot，不使用进程锁、租约或跨 key 补偿发布认证状态。
  * @module iam-session-repository-cache
  */
-
 import type { HaiResult } from '@h-ai/core'
 import type { Session, TokenPair } from './iam-session-types.js'
 import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
-
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
-import { applySessionPatch, getSessionTtl } from './iam-session-utils.js'
-
-// ─── 缓存键前缀 ───
-
-const TOKEN_KEY_PREFIX = 'hai:iam:token:'
-const USER_TOKENS_KEY_PREFIX = 'hai:iam:user:'
-const REFRESH_TOKEN_PREFIX = 'hai:iam:refresh:'
+import { applySessionPatch, getTokenSessionScope, getUserSessionScope } from './iam-session-utils.js'
 
 /**
- * 构建令牌对应的缓存 key
- *
- * @param token - 访问令牌
- * @returns 格式：`hai:iam:token:{token}`
+ * 文档内单个会话及 refresh 凭据，不建立可能失配的第二份索引。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function accessExpired(record: StoredSession, now: Date): boolean {
+ *   return record.session.expiresAt <= now
+ * }
+ * ```
  */
-export function buildTokenKey(token: string): string {
-  return `${TOKEN_KEY_PREFIX}${token}`
+interface StoredSession {
+  session: Session
+  refreshToken?: string
+  refreshExpiresAt: number
+}
+
+/** 单条记录的保留期限；刷新凭据不延长 access 的认证期限。 */
+function retainedUntil(entry: StoredSession): number {
+  return Math.max(new Date(entry.session.expiresAt).getTime(), entry.refreshToken ? entry.refreshExpiresAt : 0)
 }
 
 /**
- * 构建用户令牌集合的缓存 key
- *
- * @param userId - 用户 ID
- * @returns 格式：`hai:iam:user:{userId}:tokens`
+ * 用户状态快照；revision 防止删除/重建或同值写入产生 ABA。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const state: SessionState = { revision: crypto.randomUUID(), sessions: {} }
+ * const recordCount = Object.keys(state.sessions).length
+ * ```
  */
-export function buildUserTokensKey(userId: string): string {
-  return `${USER_TOKENS_KEY_PREFIX}${userId}:tokens`
+interface SessionState {
+  revision: string
+  sessions: Record<string, StoredSession>
 }
 
-function buildRefreshKey(refreshToken: string): string {
-  return `${REFRESH_TOKEN_PREFIX}${refreshToken}`
-}
-
-/**
- * 修复从缓存反序列化后的日期字段
- */
-function restoreSessionDates(session: Session): Session {
-  return {
-    ...session,
-    createdAt: session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt),
-    lastActiveAt: session.lastActiveAt instanceof Date ? session.lastActiveAt : new Date(session.lastActiveAt),
-    expiresAt: session.expiresAt instanceof Date ? session.expiresAt : new Date(session.expiresAt),
+/** 恢复私有 JSON 日期，拒绝损坏的授权数据；错误不包含认证快照。 */
+function restoreSession(session: Session): Session {
+  const result = { ...session, createdAt: new Date(session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
+  if (typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
+    || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
+    || ![result.createdAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
+    throw new TypeError('Invalid session state')
   }
+  return result
 }
 
-function buildRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string, cause?: unknown): HaiResult<never> {
-  return err(
-    HaiIamError.REPOSITORY_ERROR,
-    iamM(messageKey, { params: { message } }),
-    cause,
-  )
+/** 分区仅由经过格式约束的 SHA-256 提示构成，不接受任意 key/hash tag。 */
+function stateKey(scope: string): string {
+  return `hai:iam:sessions:{${scope}}`
 }
 
-// ─── 会话存储接口 ───
+/** 保存基础设施原因，面向调用方的错误不包含认证快照。 */
+function repositoryFailure(cause: unknown): HaiResult<never> {
+  return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionStateFailed'), cause)
+}
 
 /**
- * 会话存储接口
- *
- * 统一管理 accessToken、userTokens、refreshToken 三组缓存键，
- * 对上层提供面向会话的操作语义。
+ * 会话共享仓库；保存与轮换具有原子发布语义。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const repository = createCacheSessionRepository(604800)
+ * const found = await repository.getByAccessToken('token-from-authorization-header')
+ * if (!found.success)
+ *   return found
+ * return found.data?.userId ?? null
+ * ```
  */
 export interface SessionRepository {
-  /**
-   * 保存会话
-   *
-   * 同时创建三个缓存条目：
-   * - accessToken → session（含 _tokenPair）
-   * - userId → Set\<accessToken\>
-   * - refreshToken → { userId, accessToken }
-   *
-   * @param session - 会话数据（data 中应已包含 _tokenPair）
-   * @param tokenPair - 令牌对（用于存储 refreshToken 映射）
-   */
-  save: (session: Session, tokenPair: TokenPair) => Promise<HaiResult<void>>
-
-  /**
-   * 根据 accessToken 获取会话
-   */
-  getByAccessToken: (accessToken: string) => Promise<HaiResult<Session | null>>
-
-  /**
-   * 根据 accessToken 更新会话
-   *
-   * 合并 patch 到现有会话后写回缓存，同时保留剩余 TTL。
-   *
-   * @param accessToken - 访问令牌
-   * @param data - 要更新的字段
-   */
-  updateByAccessToken: (accessToken: string, data: Partial<Session>) => Promise<HaiResult<void>>
-
-  /**
-   * 根据 accessToken 删除会话
-   *
-   * 同时清理三个缓存条目（accessToken 映射、用户令牌集合成员、refreshToken 映射）。
-   */
-  removeByAccessToken: (accessToken: string) => Promise<HaiResult<void>>
-
-  /**
-   * 删除用户的所有会话
-   *
-   * 并行删除关联的三组缓存条目（accessToken 映射、用户令牌集合成员、refreshToken 映射），
-   * 最后删除集合本身。
-   *
-   * @returns 实际删除的会话数量
-   */
+  /** 原子保存；singleDevice 同一次提交替换该用户全部旧会话。 */
+  save: (session: Session, tokens: TokenPair, singleDevice?: boolean) => Promise<HaiResult<void>>
+  /** 比较旧版本与 refresh 凭据，原子撤销旧会话并发布唯一后继。 */
+  rotate: (previous: Session, refreshToken: string, session: Session, tokens: TokenPair) => Promise<HaiResult<void>>
+  /** 查询未过期 access；基础设施故障失败关闭。 */
+  getByAccessToken: (token: string) => Promise<HaiResult<Session | null>>
+  /** 查询待轮换会话，rotate 提交时必须再次核验。 */
+  getByRefreshToken: (token: string) => Promise<HaiResult<Session | null>>
+  /** 从最新状态合并更新，不重新创建已撤销 token。 */
+  updateByAccessToken: (token: string, patch: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>
+  /** 从最新快照按会话固有 maxAge 单调滑动，返回已提交的真实时间字段。 */
+  touchByAccessToken: (token: string, expectedVersion: string, now: Date) => Promise<HaiResult<Session>>
+  /** 原子撤销 access 与 refresh，重复操作成功。 */
+  removeByAccessToken: (token: string) => Promise<HaiResult<void>>
+  /** 原子撤销用户全部会话，返回记录数。 */
   removeByUserId: (userId: string) => Promise<HaiResult<number>>
-
-  /**
-   * 根据 refreshToken 获取关联的会话
-   *
-   * 先查 refreshToken 映射获取 accessToken，再查 accessToken 获取会话。
-   * 若 refreshToken 有效但 session 已过期（TTL 到期），返回 null。
-   */
-  getByRefreshToken: (refreshToken: string) => Promise<HaiResult<Session | null>>
-
-  /**
-   * 仅删除 refreshToken 映射（不影响 accessToken 会话）
-   */
-  removeRefreshToken: (refreshToken: string) => Promise<HaiResult<void>>
-
-  /**
-   * 批量更新用户所有活跃会话的指定字段
-   *
-   * 遍历用户令牌集合，合并 updates 到每个会话后写回缓存，
-   * 同时清理已失效的令牌。
-   *
-   * @param userId - 用户 ID
-   * @param updates - 要合并到会话的字段（如 { roles, permissions }）
-   */
-  patchUserSessions: (userId: string, updates: Record<string, unknown>) => Promise<HaiResult<void>>
+  /** 原子移除 refresh 凭据，保留 access。 */
+  removeRefreshToken: (token: string) => Promise<HaiResult<void>>
+  /** 在同一最新文档更新会话，缓存故障返回失败并保留整个分区；损坏数据同样失败关闭，不当作不存在。 */
+  patchUserSessions: (userId: string, patch: Record<string, unknown>) => Promise<HaiResult<void>>
 }
 
 /**
- * 创建基于缓存的会话存储
- *
- * @param sessionMaxAge - 会话最大有效期（秒），用于设置用户令牌集合的 TTL
- * @param refreshTokenMaxAge - refreshToken 最大有效期（秒）
- * @returns 会话存储接口实现
+ * 创建单键 CAS 会话仓库，支持共享 Redis 和显式测试 Memory provider。
+ * @param refreshTokenMaxAge - 新 refresh 的有效期，单位秒
+ * @returns 不保存进程会话状态的仓库
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const repository = createCacheSessionRepository(604800)
+ * const found = await repository.getByAccessToken('token-from-authorization-header')
+ * if (!found.success)
+ *   return found
+ * return found.data?.userId ?? null
+ * ```
  */
-export function createCacheSessionRepository(
-  sessionMaxAge: number,
-  refreshTokenMaxAge: number,
-): SessionRepository {
-  const repo: SessionRepository = {
-    async save(session, tokenPair): Promise<HaiResult<void>> {
-      const accessToken = session.accessToken
-      const userId = session.userId
-      const ttl = getSessionTtl(session)
-
-      // 1. accessToken → session（带 TTL）
-      const setResult = await cache.kv.set(buildTokenKey(accessToken), session, { ex: ttl })
-      if (!setResult.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
-          setResult.error,
-        )
-      }
-
-      // 2. userId → Set<accessToken>
-      const saddResult = await cache.set_.sadd(buildUserTokensKey(userId), accessToken)
-      if (!saddResult.success) {
-        // 补偿：清理已写入的 session，避免孤儿键
-        await cache.kv.del(buildTokenKey(accessToken))
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveUserSessionCacheFailed', { params: { message: saddResult.error.message } }),
-          saddResult.error,
-        )
-      }
-      // 刷新集合 TTL（2 倍会话最大有效期，防止僵尸键）
-      await cache.kv.expire(buildUserTokensKey(userId), sessionMaxAge * 2)
-
-      // 3. refreshToken → { userId, accessToken }
-      const refreshResult = await cache.kv.set(
-        buildRefreshKey(tokenPair.refreshToken),
-        { userId, accessToken },
-        { ex: refreshTokenMaxAge },
-      )
-      if (!refreshResult.success) {
-        // 补偿：清理已写入的 session 与集合成员，避免孤儿状态
-        await cache.kv.del(buildTokenKey(accessToken))
-        await cache.set_.srem(buildUserTokensKey(userId), accessToken)
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveSessionMappingCacheFailed', { params: { message: refreshResult.error.message } }),
-          refreshResult.error,
-        )
-      }
-
-      return ok(undefined)
-    },
-
-    async getByAccessToken(accessToken): Promise<HaiResult<Session | null>> {
-      const result = await cache.kv.get<Session>(buildTokenKey(accessToken))
-      if (!result.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_querySessionMappingCacheFailed', { params: { message: result.error.message } }),
-          result.error,
-        )
-      }
-      if (!result.data) {
-        return ok(null)
-      }
-      return ok(restoreSessionDates(result.data))
-    },
-
-    async updateByAccessToken(accessToken, data): Promise<HaiResult<void>> {
-      const sessionResult = await repo.getByAccessToken(accessToken)
-      if (!sessionResult.success) {
-        return sessionResult as HaiResult<void>
-      }
-      if (!sessionResult.data) {
-        return err(
-          HaiIamError.SESSION_NOT_FOUND,
-          iamM('iam_sessionNotExist'),
-        )
-      }
-
-      const nextSession = applySessionPatch(sessionResult.data, data)
-      const ttl = getSessionTtl(nextSession)
-
-      const setResult = await cache.kv.set(buildTokenKey(accessToken), nextSession, { ex: ttl })
-      if (!setResult.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
-          setResult.error,
-        )
-      }
-      return ok(undefined)
-    },
-
-    async removeByAccessToken(accessToken): Promise<HaiResult<void>> {
-      const tokenKey = buildTokenKey(accessToken)
-
-      // 读取 session 以获取 userId 和 _tokenPair.refreshToken
-      const sessionResult = await cache.kv.get<Session>(tokenKey)
-      if (!sessionResult.success) {
-        return buildRepositoryError(
-          'iam_querySessionMappingCacheFailed',
-          sessionResult.error.message,
-          sessionResult.error,
-        ) as HaiResult<void>
-      }
-
-      if (sessionResult.data) {
-        const session = sessionResult.data as Session & { data?: { _tokenPair?: TokenPair } }
-
-        // 从用户令牌集合中移除
-        const removeUserTokenResult = await cache.set_.srem(buildUserTokensKey(session.userId), accessToken)
-        if (!removeUserTokenResult.success) {
-          return buildRepositoryError(
-            'iam_deleteUserSessionCacheFailed',
-            removeUserTokenResult.error.message,
-            removeUserTokenResult.error,
-          ) as HaiResult<void>
-        }
-
-        // 删除 refreshToken 映射
-        const tokenPair = session.data?._tokenPair
-        if (tokenPair?.refreshToken) {
-          const removeRefreshTokenResult = await cache.kv.del(buildRefreshKey(tokenPair.refreshToken))
-          if (!removeRefreshTokenResult.success) {
-            return buildRepositoryError(
-              'iam_deleteSessionMappingCacheFailed',
-              removeRefreshTokenResult.error.message,
-              removeRefreshTokenResult.error,
-            ) as HaiResult<void>
-          }
+export function createCacheSessionRepository(refreshTokenMaxAge: number): SessionRepository {
+  /** 校验缓存快照的路由、主体和日期；损坏数据不能转为认证成功。 */
+  async function read(scope: string): Promise<HaiResult<SessionState | undefined>> {
+    try {
+      const result = await cache.kv.get<SessionState>(stateKey(scope))
+      if (!result.success)
+        return repositoryFailure(result.error)
+      if (result.data === null)
+        return ok(undefined)
+      const state = result.data
+      if (typeof state.revision !== 'string' || !state.revision || !state.sessions || typeof state.sessions !== 'object' || Array.isArray(state.sessions))
+        throw new TypeError('Invalid session state')
+      for (const [token, entry] of Object.entries(state.sessions)) {
+        const session = restoreSession(entry.session)
+        if (getTokenSessionScope(token) !== scope || token !== session.accessToken || getUserSessionScope(session.userId) !== scope
+          || !Number.isSafeInteger(entry.refreshExpiresAt) || (entry.refreshToken !== undefined && getTokenSessionScope(entry.refreshToken) !== scope)) {
+          throw new TypeError('Invalid session state')
         }
       }
-
-      // 删除 session 本身
-      const removeSessionResult = await cache.kv.del(tokenKey)
-      if (!removeSessionResult.success) {
-        return buildRepositoryError(
-          'iam_deleteSessionMappingCacheFailed',
-          removeSessionResult.error.message,
-          removeSessionResult.error,
-        ) as HaiResult<void>
-      }
-
-      return ok(undefined)
-    },
-
-    async removeByUserId(userId): Promise<HaiResult<number>> {
-      const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
-      if (!tokensResult.success) {
-        return buildRepositoryError(
-          'iam_queryUserSessionCacheFailed',
-          tokensResult.error.message,
-          tokensResult.error,
-        ) as HaiResult<number>
-      }
-
-      let removed = 0
-      if (tokensResult.data.length > 0) {
-        // 并行删除所有 accessToken 关联的缓存条目，避免 N+1
-        const results = await Promise.allSettled(
-          tokensResult.data.map(token => repo.removeByAccessToken(token)),
-        )
-        for (const r of results) {
-          if (r.status === 'rejected') {
-            return buildRepositoryError(
-              'iam_deleteSessionFailed',
-              String(r.reason),
-              r.reason,
-            ) as HaiResult<number>
-          }
-
-          if (!r.value.success)
-            return r.value as HaiResult<number>
-
-          removed += 1
-        }
-      }
-
-      // 清理用户令牌集合本身
-      const removeUserTokensKeyResult = await cache.kv.del(buildUserTokensKey(userId))
-      if (!removeUserTokensKeyResult.success) {
-        return buildRepositoryError(
-          'iam_deleteUserSessionCacheFailed',
-          removeUserTokensKeyResult.error.message,
-          removeUserTokensKeyResult.error,
-        ) as HaiResult<number>
-      }
-
-      return ok(removed)
-    },
-
-    async getByRefreshToken(refreshToken): Promise<HaiResult<Session | null>> {
-      const mappingResult = await cache.kv.get<{ userId: string, accessToken: string }>(buildRefreshKey(refreshToken))
-      if (!mappingResult.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_querySessionMappingCacheFailed', { params: { message: mappingResult.error.message } }),
-          mappingResult.error,
-        )
-      }
-      if (!mappingResult.data) {
-        return ok(null)
-      }
-
-      return repo.getByAccessToken(mappingResult.data.accessToken)
-    },
-
-    async removeRefreshToken(refreshToken): Promise<HaiResult<void>> {
-      const result = await cache.kv.del(buildRefreshKey(refreshToken))
-      if (!result.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deleteSessionMappingCacheFailed', { params: { message: result.error.message } }),
-          result.error,
-        )
-      }
-      return ok(undefined)
-    },
-
-    async patchUserSessions(userId, updates): Promise<HaiResult<void>> {
-      const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
-      if (!tokensResult.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_queryUserSessionCacheFailed', { params: { message: tokensResult.error.message } }),
-          tokensResult.error,
-        )
-      }
-
-      // 并行读取所有 session 及其 TTL，避免逐个串行 cache 调用
-      const tokens = tokensResult.data
-      const readResults = await Promise.allSettled(
-        tokens.map(async (token) => {
-          const sessionKey = buildTokenKey(token)
-          const [sessionResult, ttlResult] = await Promise.all([
-            cache.kv.get<Record<string, unknown>>(sessionKey),
-            cache.kv.ttl(sessionKey),
-          ])
-          return { token, sessionKey, sessionResult, ttlResult }
-        }),
-      )
-
-      const staleTokens: string[] = []
-      const writeOps: Array<Promise<HaiResult<void>>> = []
-
-      for (const entry of readResults) {
-        if (entry.status === 'rejected') {
-          return buildRepositoryError(
-            'iam_queryUserSessionCacheFailed',
-            String(entry.reason),
-            entry.reason,
-          ) as HaiResult<void>
-        }
-        const { token, sessionKey, sessionResult, ttlResult } = entry.value
-
-        if (!sessionResult.success || !sessionResult.data || !ttlResult.success || ttlResult.data <= 0) {
-          staleTokens.push(token)
-          continue
-        }
-
-        const updated = { ...sessionResult.data, ...updates }
-        writeOps.push(cache.kv.set(sessionKey, updated, { ex: ttlResult.data }))
-      }
-
-      // 并行写入所有更新
-      const writeResults = await Promise.allSettled(writeOps)
-      for (const writeResult of writeResults) {
-        if (writeResult.status === 'rejected') {
-          return buildRepositoryError(
-            'iam_saveUserSessionCacheFailed',
-            String(writeResult.reason),
-            writeResult.reason,
-          ) as HaiResult<void>
-        }
-
-        if (!writeResult.value.success) {
-          return buildRepositoryError(
-            'iam_saveUserSessionCacheFailed',
-            writeResult.value.error.message,
-            writeResult.value.error,
-          ) as HaiResult<void>
-        }
-      }
-
-      // 清理已失效的令牌
-      if (staleTokens.length > 0) {
-        const staleCleanupResult = await cache.set_.srem(buildUserTokensKey(userId), ...staleTokens)
-        if (!staleCleanupResult.success) {
-          return buildRepositoryError(
-            'iam_deleteUserSessionCacheFailed',
-            staleCleanupResult.error.message,
-            staleCleanupResult.error,
-          ) as HaiResult<void>
-        }
-      }
-
-      return ok(undefined)
-    },
+      return ok(state)
+    }
+    catch (cause) { return repositoryFailure(cause) }
   }
 
-  return repo
+  /**
+   * 读取共享快照后进行单 key CAS；冲突只重新执行无外部副作用的同步状态变换。
+   * 缓存读取或提交失败立即传播，不把损坏/未知状态覆盖为空；同值重建由 revision 防止 ABA。
+   * @param scope - 已约束为 SHA-256 十六进制的用户分区提示。
+   * @param operation - 仅修改私有候选状态的同步函数；不得发送通知、执行业务 SQL 或写入外部系统。
+   * @returns CAS 已确认时返回 operation 结果；基础设施失败或冲突耗尽时保留失败结果。
+   * @example 模块内部上下文
+   * ```ts
+   * const revoked = await mutate(getUserSessionScope('user-1'), (state) => {
+   *   const count = Object.keys(state.sessions).length
+   *   state.sessions = {}
+   *   return ok(count)
+   * })
+   * if (!revoked.success)
+   *   return revoked
+   * return revoked.data
+   * ```
+   */
+  async function mutate<T>(scope: string, operation: (state: SessionState) => HaiResult<T>): Promise<HaiResult<T>> {
+    try {
+      for (let attempt = 0; attempt < 16; attempt++) {
+        const current = await read(scope)
+        if (!current.success)
+          return current
+        // 私有快照由本仓库生成并经 read 校验；复制后修改，避免 Memory 引用别名。
+        const next: SessionState = current.data ? JSON.parse(JSON.stringify(current.data)) : { revision: '', sessions: {} }
+        for (const [token, entry] of Object.entries(next.sessions)) {
+          if (retainedUntil(entry) <= Date.now())
+            delete next.sessions[token]
+        }
+        const outcome = operation(next)
+        if (!outcome.success)
+          return outcome
+        next.revision = crypto.randomUUID()
+        const entries = Object.values(next.sessions)
+        const px = entries.reduce((ttl, entry) => Math.max(ttl, retainedUntil(entry) - Date.now()), 1)
+        const written = await cache.kv.compareAndSwap(stateKey(scope), current.data, entries.length ? next : undefined, { px })
+        if (!written.success)
+          return repositoryFailure(written.error)
+        if (written.data)
+          return outcome
+      }
+      return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+    }
+    catch (cause) { return repositoryFailure(cause) }
+  }
+
+  /** 完整随机 token 必须属于当前用户；分区提示本身不构成认证。 */
+  function storeSession(state: SessionState, session: Session, tokens: TokenPair): HaiResult<void> {
+    const scope = getUserSessionScope(session.userId)
+    if (getTokenSessionScope(session.accessToken) !== scope || tokens.accessToken !== session.accessToken || getTokenSessionScope(tokens.refreshToken) !== scope)
+      return err(HaiIamError.TOKEN_INVALID, iamM('iam_sessionStateFailed'))
+    state.sessions[session.accessToken] = { session, refreshToken: tokens.refreshToken, refreshExpiresAt: session.createdAt.getTime() + refreshTokenMaxAge * 1000 }
+    return ok(undefined)
+  }
+
+  return {
+    save: (session, tokens, singleDevice = false) => mutate(getUserSessionScope(session.userId), (state) => {
+      if (singleDevice)
+        state.sessions = {}
+      return storeSession(state, session, tokens)
+    }),
+    rotate: (previous, refreshToken, session, tokens) => mutate(getUserSessionScope(previous.userId), (state) => {
+      const old = state.sessions[previous.accessToken]
+      if (!old || old.refreshToken !== refreshToken || old.refreshExpiresAt <= Date.now())
+        return err(HaiIamError.TOKEN_EXPIRED, iamM('iam_refreshTokenExpired'))
+      if (old.session.version !== previous.version || session.userId !== previous.userId)
+        return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+      delete state.sessions[previous.accessToken]
+      return storeSession(state, session, tokens)
+    }),
+    async getByAccessToken(token) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return ok(null)
+      const result = await read(scope)
+      if (!result.success)
+        return result
+      const record = result.data?.sessions[token]
+      if (!record)
+        return ok(null)
+      const session = restoreSession(record.session)
+      return ok(session.expiresAt.getTime() <= Date.now() ? null : session)
+    },
+    async getByRefreshToken(token) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return ok(null)
+      const result = await read(scope)
+      if (!result.success)
+        return result
+      const record = Object.values(result.data?.sessions ?? {}).find(entry => entry.refreshToken === token && entry.refreshExpiresAt > Date.now())
+      if (!record)
+        return ok(null)
+      return ok(restoreSession(record.session))
+    },
+    async updateByAccessToken(token, patch, expectedVersion) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+      return mutate(scope, (state) => {
+        const entry = state.sessions[token]
+        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now())
+          return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+        if (!expectedVersion || entry.session.version !== expectedVersion)
+          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+        const updated = applySessionPatch(restoreSession(entry.session), patch)
+        if (![updated.expiresAt, updated.lastActiveAt].every(date => Number.isFinite(date.getTime())))
+          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sessionMaxAgeInvalid'))
+        entry.session = { ...updated, version: crypto.randomUUID() }
+        return ok(undefined)
+      })
+    },
+    async touchByAccessToken(token, expectedVersion, now) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+      return mutate(scope, (state) => {
+        const entry = state.sessions[token]
+        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now())
+          return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
+        if (entry.session.version !== expectedVersion)
+          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+        const current = restoreSession(entry.session)
+        // 迟到节点只允许延长时间，不能覆盖较晚请求已提交的活动/过期点。
+        const next = {
+          ...current,
+          lastActiveAt: new Date(Math.max(current.lastActiveAt.getTime(), now.getTime())),
+          expiresAt: new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
+        }
+        entry.session = next
+        return ok(next)
+      })
+    },
+    async removeByAccessToken(token) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return ok(undefined)
+      return mutate(scope, (state) => {
+        delete state.sessions[token]
+        return ok(undefined)
+      })
+    },
+    removeByUserId: userId => mutate(getUserSessionScope(userId), (state) => {
+      const count = Object.keys(state.sessions).length
+      state.sessions = {}
+      return ok(count)
+    }),
+    async removeRefreshToken(token) {
+      const scope = getTokenSessionScope(token)
+      if (!scope)
+        return ok(undefined)
+      return mutate(scope, (state) => {
+        for (const entry of Object.values(state.sessions)) {
+          if (entry.refreshToken === token)
+            delete entry.refreshToken
+        }
+        return ok(undefined)
+      })
+    },
+    patchUserSessions(userId, patch) {
+      // 重试绑定最初读取的会话代际；不能把迟到授权覆盖到后续登录或新内容版本。
+      let targets: Map<string, string> | undefined
+      return mutate(getUserSessionScope(userId), (state) => {
+        targets ??= new Map(Object.entries(state.sessions).map(([token, entry]) => [token, entry.session.version]))
+        for (const [token, version] of targets) {
+          const entry = state.sessions[token]
+          if (!entry)
+            continue
+          if (entry.session.version !== version)
+            return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+          entry.session = { ...applySessionPatch(restoreSession(entry.session), patch), version: crypto.randomUUID() }
+        }
+        return ok(undefined)
+      })
+    },
+  }
 }

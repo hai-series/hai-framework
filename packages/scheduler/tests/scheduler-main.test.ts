@@ -1,19 +1,23 @@
+import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
 /**
  * =============================================================================
  * @h-ai/scheduler - 调度器主模块测试
  * =============================================================================
  */
 
-import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
+import { err } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SchedulerExecutionRepository } from '../src/repositories/scheduler-repository-execution.js'
 import { scheduler } from '../src/scheduler-main.js'
 import { HaiSchedulerError } from '../src/scheduler-types.js'
+import './helpers/sqlite-lifecycle.js'
 
 describe('scheduler', () => {
   afterEach(async () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
     await scheduler.close()
     await reldb.close()
   })
@@ -22,7 +26,7 @@ describe('scheduler', () => {
     it('应成功初始化并挂载全局 hooks', async () => {
       const onTaskStart = vi.fn()
       const result = await scheduler.init({
-        enableDb: false,
+        enableDb: true,
         hooks: { onTaskStart },
       })
 
@@ -33,8 +37,8 @@ describe('scheduler', () => {
 
     it('并发调用 init 应拒绝后续调用', async () => {
       const [r1, r2] = await Promise.all([
-        scheduler.init({ enableDb: false }),
-        scheduler.init({ enableDb: false }),
+        scheduler.init({ enableDb: true }),
+        scheduler.init({ enableDb: true }),
       ])
 
       const results = [r1, r2]
@@ -49,12 +53,30 @@ describe('scheduler', () => {
   })
 
   describe('register / trigger', () => {
+    it('共享时间读取失败时不回退本机分钟，恢复后仍能在同一分钟调度', async () => {
+      vi.useFakeTimers()
+      const clock = vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime')
+        .mockResolvedValue(err(HaiSchedulerError.DB_SAVE_FAILED, 'Clock unavailable'))
+      const onTaskExecute = vi.fn(() => 'done')
+      expect((await scheduler.init({ tickInterval: 100, hooks: { onTaskExecute } })).success).toBe(true)
+      expect((await scheduler.register({ id: 'clock-read-failure', name: '共享时间恢复', cron: '* * * * *' })).success).toBe(true)
+      expect(scheduler.start().success).toBe(true)
+      await vi.advanceTimersByTimeAsync(200)
+      expect(onTaskExecute).not.toHaveBeenCalled()
+      clock.mockResolvedValue({ success: true, data: Date.UTC(2026, 4, 25, 4, 5, 39) })
+      await vi.advanceTimersByTimeAsync(200)
+      expect(onTaskExecute).toHaveBeenCalledTimes(1)
+      scheduler.stop()
+    })
+
     it.each([0, 39])('应按任务 timezone 匹配定时触发，启动秒数为 %i', async (second) => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date(Date.UTC(2026, 4, 25, 4, 5, second)))
+      // 此单测只验证任务时区匹配；租约与 DB 时钟由真实双进程用例验证。
+      vi.spyOn(SchedulerExecutionRepository.prototype, 'currentTime').mockResolvedValue({ success: true, data: Date.UTC(2026, 4, 25, 4, 5, second) })
       const onTaskExecute = vi.fn((event: SchedulerTaskExecuteEvent) => ({ taskId: event.task.id }))
 
-      await scheduler.init({ enableDb: false, tickInterval: 100, hooks: { onTaskExecute } })
+      await scheduler.init({ enableDb: true, tickInterval: 100, hooks: { onTaskExecute } })
 
       const registerResult = await scheduler.register({
         id: 'timezone-task',
@@ -90,7 +112,7 @@ describe('scheduler', () => {
     })
 
     it('应成功注册并手动触发 JS 字符串任务，记录触发来源', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const registerResult = await scheduler.register({
         id: 'manual-js',
@@ -121,7 +143,7 @@ describe('scheduler', () => {
       const mockFetch = vi.fn().mockResolvedValue(new Response('{"status":"ok"}'))
       vi.stubGlobal('fetch', mockFetch)
 
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
       const registerResult = await scheduler.register({
         id: 'api-task',
         name: 'API 任务',
@@ -151,7 +173,7 @@ describe('scheduler', () => {
       }))
 
       await scheduler.init({
-        enableDb: false,
+        enableDb: true,
         hooks: { onTaskExecute },
       })
 
@@ -175,7 +197,7 @@ describe('scheduler', () => {
     it('handler 为空且无 execute hook 时应记录为 interrupted', async () => {
       const onTaskInterrupted = vi.fn()
       await scheduler.init({
-        enableDb: false,
+        enableDb: true,
         hooks: { onTaskInterrupted },
       })
 
@@ -195,7 +217,7 @@ describe('scheduler', () => {
     })
 
     it('deleteAfterRun=true 时任务执行后应自动删除', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const registerResult = await scheduler.register({
         id: 'one-time-task',
@@ -224,12 +246,13 @@ describe('scheduler', () => {
         .mockResolvedValueOnce(new Response('{"ok":true}'))
       vi.stubGlobal('fetch', mockFetch)
 
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const registerResult = await scheduler.register({
         id: 'retry-task',
         name: '重试任务',
         cron: '* * * * *',
+        idempotent: true,
         retry: { maxAttempts: 3, backoffMs: [1, 1] },
         handler: {
           kind: 'api',
@@ -381,7 +404,7 @@ describe('scheduler', () => {
 
   describe('update / hooks / close', () => {
     it('updateTask 应支持更新 params 与 handler', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
       await scheduler.register({
         id: 'update-task',
         name: '更新任务',
@@ -408,7 +431,7 @@ describe('scheduler', () => {
     })
 
     it('setHooks / clearHooks 应生效', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
 
       const onTaskExecute = vi.fn(() => 'from-set-hooks')
       const setResult = scheduler.setHooks({ onTaskExecute })
@@ -427,7 +450,7 @@ describe('scheduler', () => {
     })
 
     it('close 后应恢复到未初始化状态', async () => {
-      await scheduler.init({ enableDb: false })
+      await scheduler.init({ enableDb: true })
       await scheduler.register({
         id: 'temp-task',
         name: '临时任务',
@@ -450,6 +473,7 @@ describe('scheduler', () => {
 
   describe('db fallback / rollback behavior', () => {
     it('enableDb=true 但 reldb 未初始化时 init 应失败（不静默降级）', async () => {
+      await reldb.close()
       // reldb 未初始化（afterEach 已关闭），直接 init
       const result = await scheduler.init({ enableDb: true })
       expect(result.success).toBe(false)

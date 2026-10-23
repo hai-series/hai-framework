@@ -114,7 +114,7 @@
 
 <!-- 核心优势 -->
 <section class='py-20 px-4 lg:px-8'>
-  <div class='max-w-7xl mx-auto'>
+  <div class='w-full max-w-[120rem] mx-auto'>
     <div class='text-center mb-12'>
       <h2 class='text-3xl font-bold tracking-tight text-base-content'>{m.home_why_title()}</h2>
       <p class='text-base-content/50 mt-2 max-w-2xl mx-auto'>{m.home_why_subtitle()}</p>
@@ -137,7 +137,7 @@
 
 <!-- 数据统计 -->
 <section class='py-16 px-4 bg-primary text-primary-content'>
-  <div class='max-w-7xl mx-auto'>
+  <div class='w-full max-w-[120rem] mx-auto'>
     <div class='grid grid-cols-2 lg:grid-cols-4 gap-6'>
       <div class='text-center'>
         <div class='text-4xl font-bold tabular-nums'>500+</div>

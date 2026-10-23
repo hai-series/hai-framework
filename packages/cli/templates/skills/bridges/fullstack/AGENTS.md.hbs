@@ -74,7 +74,7 @@ Fullstack 多包工程入口。先读 README、根 workspace 脚本与相关 pac
 
 ## 质量门禁
 
-按影响范围执行，跨包契约从根工作区验证：
+按 [分轮验证与集中修复](.agents/skills/hai-app-tests/validation.md) 收集一轮适用门禁及日志，汇总后集中修复、复测失败及受影响项；普通失败不中断独立检查，真实前置阻塞才暂停依赖项。跨包契约从根工作区验证：
 
 ```bash
 pnpm typecheck

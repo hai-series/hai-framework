@@ -14,6 +14,13 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 /**
  * 定时任务模块文案 Key 类型
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const key: SchedulerMessageKey = 'scheduler_taskNotFound'
+ * const message = schedulerM(key, { params: { taskId: 'daily-report' } })
+ * ```
  */
 type SchedulerMessageKey = keyof typeof messagesZhCN
 
@@ -26,7 +33,8 @@ type SchedulerMessageKey = keyof typeof messagesZhCN
  *
  * @example
  * ```ts
- * schedulerM('scheduler_taskNotFound', { params: { taskId: 'my-task' } })
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const message = schedulerM('scheduler_taskNotFound', { params: { taskId: 'daily-report' } })
  * ```
  */
 export const schedulerM = core.i18n.createMessageGetter<SchedulerMessageKey>({

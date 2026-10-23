@@ -14,6 +14,12 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 /**
  * IAM 模块文案 Key 类型
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const key: IamMessageKey = 'iam_notInitialized'
+ * const message = iamM(key)
+ * ```
  */
 type IamMessageKey = keyof typeof messagesZhCN
 
@@ -25,6 +31,10 @@ type IamMessageKey = keyof typeof messagesZhCN
  * @remarks 具体参数结构与 core.i18n.createMessageGetter 保持一致。
  * 模块内部使用，不对外导出。
  * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const message = iamM('iam_notInitialized')
+ * ```
  */
 export const iamM = core.i18n.createMessageGetter<IamMessageKey>({
   'zh-CN': messagesZhCN,

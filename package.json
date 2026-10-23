@@ -1,7 +1,7 @@
 {
   "name": "hai-framework",
   "type": "module",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.68",
   "private": true,
   "packageManager": "pnpm@12.11.2",
   "description": "hai Agent Framework - AI-Native, Configuration-Driven, Security-First",
@@ -32,7 +32,11 @@
     "format": "eslint --fix .",
     "prepare": "husky || true",
     "generate:env": "node scripts/generate-env-catalog.mjs && node scripts/generate-app-env.mjs",
-    "check:env": "node scripts/generate-env-catalog.mjs --check && node scripts/generate-app-env.mjs --check"
+    "check:env": "node scripts/generate-env-catalog.mjs --check && node scripts/generate-app-env.mjs --check",
+    "generate:api": "node scripts/module-api-inventory.mjs",
+    "check:api": "node scripts/module-api-inventory.mjs --check",
+    "test:api": "node scripts/module-api-smoke.mjs",
+    "check:jsdoc": "node scripts/check-module-jsdoc.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

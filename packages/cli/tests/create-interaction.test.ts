@@ -52,7 +52,8 @@ describe('create 用户输出', () => {
     expect(stdout.mock.calls.map(([message]) => String(message)).join('')).not.toContain('"level":')
   })
 
-  it.each([60, 80, 120])('中文 select/multiselect 在 %i 列终端重绘与确认时清除全部行', async (columns) => {
+  it.each([60, 80, 120].flatMap(columns => ['zh-CN', 'ja-JP'].map(locale => ({ columns, locale }))))('$locale select/multiselect 在 $columns 列终端重绘与确认时清除全部行', async ({ columns, locale }) => {
+    core.i18n.setGlobalLocale(locale)
     Object.defineProperty(process.stdout, 'columns', { value: columns, configurable: true })
     const root = await mkdtemp(path.join(tmpdir(), 'hai-create-prompt-'))
     temporaryRoots.push(root)

@@ -16,13 +16,9 @@ import type { HaiResult } from '@h-ai/core'
  *
  * @example
  * ```ts
- * const citation: Citation = {
- *   documentId: 'doc-001',
- *   title: '项目文档',
- *   url: 'https://docs.example.com/project',
- *   position: 'section:2',
- *   chunkId: 'chunk-003',
- * }
+ * import type { Citation } from '@h-ai/ai'
+ * const value: Citation = { documentId: 'guide', title: '部署指南', url: 'https://docs.example.com/guide', position: 'section:2', chunkId: 'guide-2' }
+ * const output = value.title ?? value.documentId
  * ```
  */
 export interface Citation {
@@ -44,6 +40,17 @@ export interface Citation {
 
 /**
  * 检索源——描述一个可查询的知识来源
+ *
+ * @example
+ * ```ts
+ * import { ai, type RetrievalSource } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: RetrievalSource) {
+ *   const result = await ai.retrieval.addSource(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface RetrievalSource {
   /** 来源唯一标识 */
@@ -64,6 +71,17 @@ export interface RetrievalSource {
 
 /**
  * 检索请求参数
+ *
+ * @example
+ * ```ts
+ * import { ai, type RetrievalRequest } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，且目标知识集合已 setup。
+ * async function run(options: RetrievalRequest) {
+ *   const result = await ai.retrieval.retrieve(options)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface RetrievalRequest {
   /** 查询文本 */
@@ -82,6 +100,13 @@ export interface RetrievalRequest {
 
 /**
  * 单条检索结果
+ *
+ * @example
+ * ```ts
+ * import type { RetrievalResultItem } from '@h-ai/ai'
+ * const value: RetrievalResultItem = { id: 'chunk-1', content: '共享数据库', score: 0.9, sourceId: 'docs' }
+ * const output = `${value.sourceId}: ${value.content}`
+ * ```
  */
 export interface RetrievalResultItem {
   /** 文档 ID */
@@ -100,6 +125,13 @@ export interface RetrievalResultItem {
 
 /**
  * 检索结果
+ *
+ * @example
+ * ```ts
+ * import type { RetrievalResult } from '@h-ai/ai'
+ * const value: RetrievalResult = { items: [{ id: 'chunk-1', content: '共享数据库', score: 0.9, sourceId: 'docs' }], query: '如何部署', duration: 12 }
+ * const output = value.items.map(item => item.content)
+ * ```
  */
 export interface RetrievalResult {
   /** 检索结果列表（按分数降序） */
@@ -114,6 +146,16 @@ export interface RetrievalResult {
 
 /**
  * 检索操作接口
+ *
+ * @example
+ * ```ts
+ * import { ai, type RetrievalOperations } from '@h-ai/ai'
+ * // 应用启动已成功初始化 ai，docs 为已注册检索源。
+ * const operations: RetrievalOperations = ai.retrieval
+ * const result = await operations.retrieve({ query: '部署要求', sources: ['docs'], topK: 3 })
+ * if (!result.success) throw new Error(result.error.message)
+ * const citations = result.data.items.map(item => item.citation)
+ * ```
  */
 export interface RetrievalOperations {
   /**

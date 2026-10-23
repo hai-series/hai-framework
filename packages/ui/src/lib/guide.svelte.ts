@@ -9,7 +9,17 @@ import { getUILocale, uiM } from './messages.js'
 /** 同一浏览器页面只允许一个导览拥有遮罩和键盘监听。 */
 let stopActiveGuide: (() => void) | undefined
 
-/** 解析业务文案；既支持普通字符串，也支持应用 i18n 函数。 */
+/**
+ * 解析业务文案；既支持普通字符串，也支持应用 i18n 函数。
+ * @param text - 待处理文本。
+ * @returns 业务字符串或延迟翻译函数的当前文本；空输入为空字符串。
+ *
+ * @example
+ * ```ts
+ * import { resolveGuideText } from '@h-ai/ui'
+ * const title = resolveGuideText(() => '操作说明')
+ * ```
+ */
 export function resolveGuideText(text?: GuideText): string {
   return typeof text === 'function' ? text() : text ?? ''
 }
@@ -79,6 +89,17 @@ function waitForTarget(step: GuideStep, signal: AbortSignal, timeout: number, re
 /**
  * 创建应用独享的新手引导控制器。SSR 可创建，DOM 操作只在客户端启动时发生。
  * 配置和控制器应在布局组件内创建，避免在 SSR 模块级共享用户状态。
+ * @param options - 本次操作的行为与显示选项。
+ * @returns 导览与帮助中心控制器；交互失败使用 false/error 表达。
+ *
+ * @example
+ * ```ts
+ * import { createGuide } from '@h-ai/ui'
+ * const guide = createGuide({ tours: [{ id: 'intro', title: '入门', steps: [{ target: 'save', title: '保存', description: '提交当前资料' }] }], persistence: 'memory' })
+ * const offered = guide.startIfNeeded('intro')
+ * if (offered) guide.openHelp()
+ * guide.stop()
+ * ```
  */
 export function createGuide(options: GuideOptions): GuideController {
   const storage = createGuideStorage(options)

@@ -8,7 +8,15 @@
   使用 compounds 组件：Card, DataTable, PageHeader, Pagination, Drawer, Modal
 
   @example
-  <CrudPage crud={userCrud} data={data} permissions={{ create: true, update: true, delete: true }} />
+  ```svelte
+  <script lang="ts">
+    import { CrudPage, defineCrud } from '@h-ai/ui'
+    import type { CrudPageProps } from '@h-ai/ui'
+    const crud = defineCrud({ name: 'users', label: '用户', fields: [{ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }], api: { list: async () => ({ items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }) } })
+    const props: CrudPageProps = { crud, data: { items: [{ id: 'u1', email: 'ada@example.com' }], total: 1, page: 1, pageSize: 20 }, permissions: { create: true, update: true, delete: false } }
+  </script>
+  <CrudPage {...props} />
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
@@ -34,11 +42,27 @@
 
   // ─── 类型定义 ───
 
+  /**
+   * 详情/列表对字段定义的局部视图，不是独立的公开资源模型。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FieldDef = { id: 'email', label: '邮箱', type: 'email', inDetail: true }
+   * ```
+   */
   type FieldDef = CrudFieldDef
 
   // 使用 method shorthand 语法（双向协变）以兼容来自 @h-ai/kit 的 CrudOperations 类型
   // 详见：https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-6.html#strict-function-types
-  /** CrudPage 使用的异步资源操作集合。 */
+  /**
+   * CrudPage 使用的异步资源操作集合。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const api: CrudApi = { list: async () => ({ items: [{ id: 'u1' }], total: 1, page: 1, pageSize: 20 }) }
+   * const page = await api.list({ page: 1 })
+   * ```
+   */
   type CrudApi = {
     /** 获取当前分页、筛选和排序结果。 */
     list(params: Record<string, unknown>): Promise<{ items: Record<string, unknown>[], total: number, page: number, pageSize: number }>
@@ -52,7 +76,15 @@
     remove?(id: string): Promise<void>
   }
 
-  /** 声明式 CRUD 资源及字段转换能力。 */
+  /**
+   * 声明式 CRUD 资源及字段转换能力。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const definition: CrudDef = crud
+   * const fields = definition.getListFields()
+   * ```
+   */
   type CrudDef = {
     /** 资源元信息与后端 API。 */
     resource: {

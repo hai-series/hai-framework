@@ -13,13 +13,41 @@ import process from 'node:process'
 import { serve } from '@hono/node-server'
 import { audioWsServers } from '../serv-app.js'
 
-/** `serv.listen` 默认监听地址。仅本机可达，避免误暴露到公网。 */
+/**
+ * `serv.listen` 默认监听地址。仅本机可达，避免误暴露到公网。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const options: ServListenOptions = { host: DEFAULT_SERV_HOST, port: DEFAULT_SERV_PORT }
+ * // 默认只绑定回环；对外监听须显式选择宿主地址。
+ * ```
+ */
 export const DEFAULT_SERV_HOST = '127.0.0.1'
 
-/** `serv.listen` 默认监听端口。 */
+/**
+ * `serv.listen` 默认监听端口。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const options: ServListenOptions = { host: DEFAULT_SERV_HOST, port: DEFAULT_SERV_PORT }
+ * ```
+ */
 export const DEFAULT_SERV_PORT = 3000
 
-/** Node 服务器启动配置。 */
+/**
+ * Node 服务器启动配置。
+ *
+ * @example
+ * ```ts
+ * import type { ServListenOptions } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const options: ServListenOptions = { host: '127.0.0.1', port: 3000 }
+ * // HOST/PORT 与配置文件的解析由应用显式完成后传入。
+ * ```
+ */
 export interface ServListenOptions {
   /**
    * 监听端口。
@@ -50,7 +78,20 @@ export interface ServListenOptions {
   readonly onClose?: () => Promise<void>
 }
 
-/** Node 服务运行句柄。 */
+/**
+ * Node 服务运行句柄。
+ *
+ * @example
+ * ```ts
+ * import type { ServNodeServer } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * async function stop(handle: ServNodeServer) {
+ *   await handle.close()
+ * }
+ * // close 只关闭监听句柄；业务资源由宿主生命周期关闭。
+ * ```
+ */
 export interface ServNodeServer {
   /** 底层 Node.js HTTP Server 实例。 */
   readonly server: ServerType
@@ -64,7 +105,7 @@ export interface ServNodeServer {
  * 在 Node.js 中启动 ServHttpApp。
  *
  * 默认监听 `127.0.0.1:3000`；host/port 建议由应用从 `serv` 配置的 `server`
- *（支持 `HOST` / `PORT` 环境变量覆盖，环境变量高于配置文件）解析后显式传入。
+ * （支持 `HOST` / `PORT` 环境变量覆盖，环境变量高于配置文件）解析后显式传入。
  * 传入 `onClose` 后自动注册 SIGINT/SIGTERM 优雅关闭，应用层无需手动处理信号。
  *
  * @param app - `serv.createApp()` 返回的 HTTP app
@@ -73,14 +114,16 @@ export interface ServNodeServer {
  *
  * @example
  * ```ts
- * // host/port 来自已解析的 serv 配置（env > 配置文件 > 默认）
- * const { server } = core.config.getOrThrow<ServConfig>('serv')
- * serv.listen(app, {
- *   host: server.host,
- *   port: server.port,
- *   onListening: info => logger.info('listening', { port: info.port }),
- *   onClose: closeApp,
- * })
+ * import type { ServContext } from '@h-ai/serv'
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { serv } from '@h-ai/serv'
+ *
+ * const contract = apiContract.create({})
+ * const procedures = serv.implement(contract).context<ServContext>().build()
+ * const app = serv.createApp({ contract, procedures })
+ *
+ * const server = serv.listen(app, { host: '127.0.0.1', port: 3000 })
+ * await server.close()
  * ```
  */
 export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServNodeServer {

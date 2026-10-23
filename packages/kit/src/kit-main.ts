@@ -5,6 +5,7 @@
  * @module kit-main
  */
 
+import { core } from '@h-ai/core'
 import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
@@ -13,7 +14,6 @@ import { createHandle, sequence } from './hooks/kit-handle.js'
 import { authApiPublicPaths, createAuthApi } from './kit-auth-api.js'
 import {
   clearBrowserToken,
-  createTokenStore,
   login,
   loginWithApiKey,
   loginWithLdap,
@@ -27,6 +27,7 @@ import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
+import { createCacheRateLimitStore, createMemoryRateLimitStore, rateLimitMiddleware } from './middleware/kit-ratelimit.js'
 
 export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
 
@@ -34,9 +35,23 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * Kit 模块统一出口。
  *
  * 作为纯工具模块，kit 不需要 init/close 生命周期，
- * 所有功能均为无状态工厂函数或工具函数。
+ * 依赖服务、请求上下文和创建后句柄的状态由调用方按各自契约管理。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * const handle = kit.createHandle({ logging: true })
+ * void handle
+ * ```
  */
 export const kit = {
+  /** 原子限流工厂；共享store生命周期由应用管理。 */
+  middleware: {
+    rateLimit: rateLimitMiddleware,
+    createCacheRateLimitStore,
+    createMemoryRateLimitStore,
+  },
+
   // ─── Handle Hook ───
 
   /** 创建 SvelteKit Handle Hook（含 auth / logging / rateLimit 内置配置） */
@@ -143,7 +158,6 @@ export const kit = {
     /** 清除浏览器端 Access Token（客户端 logout 用） */
     clearBrowserToken,
     /** 创建浏览器端 Token 存储器（自定义 key 时使用） */
-    createTokenStore,
   },
 
   // ─── CRUD ───
@@ -158,5 +172,7 @@ export const kit = {
   i18n: {
     /** 统一设置所有 hai 模块的默认语言 */
     setLocale: setAllModulesLocale,
+    /** 请求/SSR 语言隔离；异步处理使用同一请求上下文。 */
+    runWithLocale: core.i18n.runWithLocale,
   },
 }

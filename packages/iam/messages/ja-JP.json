@@ -182,5 +182,9 @@
   "iam_apikeyUpdateFailed": "APIキーの更新に失敗しました: {message}",
   "iam_apikeyDeleteFailed": "APIキーの削除に失敗しました: {message}",
   "iam_apikeyQueryFailed": "APIキーの取得に失敗しました: {message}",
-  "iam_apikeyStrategyRequired": "APIキー認証にはAPIキー戦略の設定が必要です"
+  "iam_apikeyStrategyRequired": "APIキー認証にはAPIキー戦略の設定が必要です",
+  "iam_sessionStateFailed": "共有セッション状態の操作に失敗しました",
+  "iam_sessionStateConflict": "セッション状態が変更されました。操作を再試行してください",
+  "iam_sessionMaxAgeInvalid": "セッションの有効期間またはタイムスタンプが無効です",
+  "iam_notificationDeliveryUnknown": "通知の配信結果は不明で、成功した可能性があります。自動で再送しないでください。"
 }

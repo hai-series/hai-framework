@@ -122,8 +122,8 @@ def create_app(config: Config) -> "App":
 echo "开始部署..."
 pnpm install --frozen-lockfile
 pnpm build
-docker build -t myapp:latest .
-docker push myapp:latest
+docker build -t myapp:1.0.0 .
+docker push myapp:1.0.0
 echo "部署完成 ✅"
 \`\`\`
 
@@ -387,7 +387,6 @@ server.listen(3000, () => {
 
   const codeLoginForm = `<LoginForm
   showTitle
-  showRememberMe
   showForgotPassword
   showRegisterLink
   onsubmit={async (data) => { /* 登录逻辑 */ }}
@@ -629,7 +628,6 @@ server.listen(3000, () => {
         <div class='w-full max-w-sm'>
           <LoginForm
             showTitle
-            showRememberMe
             showForgotPassword
             showRegisterLink
             onsubmit={async (data) => { toast.success(`登录: ${data.username}`) }}

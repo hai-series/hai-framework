@@ -13,6 +13,16 @@ import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/c
  * API Key 实体（对外展示）
  *
  * 不含密钥哈希等敏感信息。
+ * @example
+ * ```ts
+ * import { iam, type ApiKey } from '@h-ai/iam'
+ * // 已初始化依赖和 IAM，并启用 login.apikey。
+ * const result = await iam.apiKey.getApiKey('key-1')
+ * if (result.success && result.data) {
+ *   const key: ApiKey = result.data
+ *   key.keyPrefix // 展示前缀，不包含 rawKey 或哈希。
+ * }
+ * ```
  */
 export interface ApiKey {
   /** API Key ID */
@@ -37,6 +47,14 @@ export interface ApiKey {
 
 /**
  * 数据库中存储的 API Key（含哈希）
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function publicKey(row: StoredApiKey): ApiKey {
+ *   const { keyHash, ...key } = row
+ *   return key
+ * }
+ * ```
  */
 export interface StoredApiKey extends ApiKey {
   /** 密钥哈希值 */
@@ -49,6 +67,16 @@ export interface StoredApiKey extends ApiKey {
  * 创建 API Key 的返回结果
  *
  * 仅在创建时返回明文密钥，之后无法再获取。
+ * @example
+ * ```ts
+ * import { iam, type CreateApiKeyResult } from '@h-ai/iam'
+ * // 已初始化依赖和 IAM、启用 login.apikey；user-1 为已存在的用户。
+ * const created = await iam.apiKey.createApiKey('user-1', { name: 'report-reader', scopes: ['report:read'] })
+ * if (created.success) {
+ *   const value: CreateApiKeyResult = created.data
+ *   const oneTimeSecret = value.rawKey // 仅本次交给调用者安全保存，不能写日志。
+ * }
+ * ```
  */
 export interface CreateApiKeyResult {
   /** API Key 元数据 */
@@ -61,6 +89,11 @@ export interface CreateApiKeyResult {
 
 /**
  * 创建 API Key 选项
+ * @example
+ * ```ts
+ * import type { CreateApiKeyOptions } from '@h-ai/iam'
+ * const value: CreateApiKeyOptions = { name: 'report-reader', expirationDays: 30, scopes: ['report:read'] }
+ * ```
  */
 export interface CreateApiKeyOptions {
   /** API Key 名称 */
@@ -73,14 +106,33 @@ export interface CreateApiKeyOptions {
 
 // ─── API Key 查询选项 ───
 
-/** API Key 列表允许的服务端排序字段。 */
+/**
+ * API Key 列表允许的服务端排序字段。
+ * @example
+ * ```ts
+ * import type { ApiKeySortField } from '@h-ai/iam'
+ * const value: ApiKeySortField = 'createdAt'
+ * ```
+ */
 export type ApiKeySortField = 'name' | 'createdAt' | 'lastUsedAt' | 'expiresAt'
 
-/** API Key 列表排序方向。 */
+/**
+ * API Key 列表排序方向。
+ * @example
+ * ```ts
+ * import type { ApiKeySortDirection } from '@h-ai/iam'
+ * const value: ApiKeySortDirection = 'desc'
+ * ```
+ */
 export type ApiKeySortDirection = 'asc' | 'desc'
 
 /**
  * API Key 列表查询选项
+ * @example
+ * ```ts
+ * import type { ListApiKeysOptions } from '@h-ai/iam'
+ * const value: ListApiKeysOptions = { page: 1, pageSize: 20, enabled: true, sortBy: 'createdAt', sortDirection: 'desc' }
+ * ```
  */
 export interface ListApiKeysOptions extends PaginationOptionsInput {
   /** 搜索关键字（模糊匹配名称与密钥前缀） */
@@ -97,6 +149,19 @@ export interface ListApiKeysOptions extends PaginationOptionsInput {
 
 /**
  * API Key 管理操作接口
+ * @example
+ * ```ts
+ * import { iam, type ApiKeyOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化，并启用 login.apikey。
+ * const operations: ApiKeyOperations = iam.apiKey
+ * const result = await operations.listApiKeys('user-1', { page: 1, pageSize: 20 })
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface ApiKeyOperations {
   /**

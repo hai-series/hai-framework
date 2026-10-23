@@ -2,6 +2,18 @@
 import type { FormValidationIssue } from '../../../internal/form-validation.svelte.js'
 import type { CrudFieldDef } from './crud-controller.svelte.js'
 
+/**
+ * 按字段类型和声明约束生成可翻译错误，不承担服务端验证。
+ * @param field - 需要校验的 CRUD 字段定义。
+ * @param value - 待处理或校验的值。
+ * @returns 可翻译的约束错误；合法输入返回 undefined。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const issue = getCrudValidationIssue({ id: 'email', label: '邮箱', type: 'email', validation: { required: true } }, '')
+ * const key = issue?.key
+ * ```
+ */
 export function getCrudValidationIssue(field: CrudFieldDef, value: unknown): FormValidationIssue | undefined {
   const rules = field.validation
   const empty = value === undefined || value === null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && value.length === 0)

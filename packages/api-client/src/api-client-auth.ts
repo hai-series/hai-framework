@@ -1,17 +1,19 @@
 /**
  * @h-ai/api-client — Token 存储与刷新管理
  *
- * 提供两个内置 Token 存储适配器（localStorage / 内存）和一个 Token 管理器
+ * 提供两个内置 Token 存储适配器（httpOnly Cookie / 内存）和一个 Token 管理器
  * （封装存储读写、自动刷新、并发去重、回调通知）。
  *
  * @example 浏览器 SPA
  * ```ts
  * import { apiClient } from '@h-ai/api-client'
  *
- * await apiClient.init({
+ * const initialized = await apiClient.init({
  *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: apiClient.tokenStorage.localStorage() },
+ *   auth: { storage: apiClient.tokenStorage.httpOnlyCookie() },
  * })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * await apiClient.close()
  * ```
  *
  * @example Node.js 测试
@@ -19,7 +21,8 @@
  * import { apiClient } from '@h-ai/api-client'
  *
  * const storage = apiClient.tokenStorage.memory()
- * await storage.setAccessToken('abc')
+ * await storage.setAccessToken('test-access')
+ * await storage.clear()
  * ```
  *
  * @module api-client-auth
@@ -39,62 +42,22 @@ const logger = core.logger.child({ module: 'api-client', scope: 'auth' })
  */
 const HTTPONLY_COOKIE_SENTINEL = '__httponly_cookie__'
 
-// ─── localStorage 存储 ────────────────────────────────────────────────────────
-
-const LS_ACCESS_KEY = 'hai_access_token'
-const LS_REFRESH_KEY = 'hai_refresh_token'
-
-/**
- * 创建基于 `localStorage` 的 Token 存储（浏览器 SPA / PWA）。
- *
- * ⚠️ 安全提示（XSS 风险）：
- * - `localStorage` 对同源脚本可读，任意 XSS 漏洞都可以偷取 Token。
- * - 生产环境应优先使用 httpOnly cookie + SameSite 或 BFF 主机代理。
- * - 本适配器仅适用于内部工具、Demo、或者已接受 XSS 风险的浏览器场景，
- *   并且在调用方明确选择使用。`apiClient.create` 默认不会使用本适配器，
- *   需调用方显式传入 `auth.storage = apiClient.tokenStorage.localStorage()`。
- *
- * @example
- * ```ts
- * await apiClient.init({
- *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: apiClient.tokenStorage.localStorage() },
- * })
- * ```
- */
-export function createLocalStorageTokenStorage(): TokenStorage {
-  // 首次实例化时警告一次，提示调用方可能需要重新评估安全模型。
-  logger.warn('apiClient.tokenStorage.localStorage: storing tokens in localStorage exposes them to XSS. Prefer httpOnly cookies for production.')
-  return {
-    async getAccessToken() {
-      return globalThis.localStorage?.getItem(LS_ACCESS_KEY) ?? null
-    },
-    async setAccessToken(token) {
-      globalThis.localStorage?.setItem(LS_ACCESS_KEY, token)
-    },
-    async getRefreshToken() {
-      return globalThis.localStorage?.getItem(LS_REFRESH_KEY) ?? null
-    },
-    async setRefreshToken(token) {
-      globalThis.localStorage?.setItem(LS_REFRESH_KEY, token)
-    },
-    async clear() {
-      globalThis.localStorage?.removeItem(LS_ACCESS_KEY)
-      globalThis.localStorage?.removeItem(LS_REFRESH_KEY)
-    },
-  }
-}
-
 // ─── 内存存储 ─────────────────────────────────────────────────────────────────
 
 /**
- * 创建内存 Token 存储（Node.js 测试 / SSR / 短生命周期场景）。
- * 页面刷新后丢失。
+ * 创建仅属于本适配器实例的内存凭据存储，页面刷新或进程结束后丢失。
+ * SSR 应为每个请求创建客户端和存储实例，避免不同用户共享默认单例。
+ * 通过 client.auth 更新已绑定的存储，才能撤销旧代际刷新；直接存储写入不提供这种保证。
+ * @returns 两个初始为空的 Token 槽位及清理操作。
  *
  * @example
  * ```ts
+ * import { apiClient } from '@h-ai/api-client'
  * const storage = apiClient.tokenStorage.memory()
- * await storage.setAccessToken('abc')
+ * await storage.setAccessToken('test-access')
+ * const saved = await storage.getAccessToken()
+ * await storage.clear()
+ * // saved 为本实例的测试值；不把 Token 写入 Web Storage。
  * ```
  */
 export function createMemoryTokenStorage(): TokenStorage {
@@ -115,41 +78,23 @@ export function createMemoryTokenStorage(): TokenStorage {
 // ─── httpOnly Cookie 存储 ────────────────────────────────────────────────────
 
 /**
- * 创建基于 httpOnly cookie 的 Token 存储（生产环境推荐方案）。
- *
- * **安全模型：**
- * - `accessToken` 保存在**内存**中：JS 可读写，用于注入 `Authorization: Bearer`；
- *   页面刷新后丢失，由 refresh 流程自动补充。
- * - `refreshToken` 保存在服务端设置的 **httpOnly cookie** 中：
- *   - JS 不可读写，XSS 脚本无法直接盗取。
- *   - 结合 `SameSite=Strict` 可阻止 CSRF 攻击。
- *   - 浏览器在每次请求时自动携带，无需客户端显式传递。
- *
- * **服务端配套要求：**
- * 1. 登录端点在响应中设置：
- *    ```
- *    Set-Cookie: refresh_token=<token>; HttpOnly; SameSite=Strict; Secure;
- *               Path=/api/v1/auth/refresh; Max-Age=<seconds>
- *    ```
- *    `Path` 限定为 refresh 端点，减少 Cookie 暴露面。
- * 2. Refresh 端点从 Cookie 读取 refresh token（忽略请求体中的 `refreshToken` 字段）。
- * 3. Logout 端点清除 Cookie：
- *    ```
- *    Set-Cookie: refresh_token=; HttpOnly; SameSite=Strict; Secure;
- *               Path=/api/v1/auth/refresh; Max-Age=0
- *    ```
- *
- * **跨域注意事项：**
- * 若 API 与前端不同源，服务端还需设置：
- * `Access-Control-Allow-Origin: <前端域名>` 和 `Access-Control-Allow-Credentials: true`。
- * 调用方不需要做额外配置，`apiClient.create` 会自动识别并设置 `credentials: 'include'`。
+ * 创建浏览器使用的内存 access token 与服务端 httpOnly refresh Cookie 适配器。
+ * refresh getter 返回内部哨兵，setter 不修改 Cookie；clear 只清除内存 access token。
+ * 刷新请求使用 credentials: include；服务端须实际设置/撤销 Cookie，配置适当的 Secure、SameSite、Path 与跨域凭据策略。
+ * HttpOnly 限制脚本直接读取 Cookie，不能阻止已执行的恶意脚本代用户发请求；服务端仍须授权和防护 CSRF。
+ * @returns 独立内存 access token 与 Cookie 模式标记；不接触 localStorage。
  *
  * @example
  * ```ts
- * await apiClient.init({
- *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: apiClient.tokenStorage.httpOnlyCookie() },
- * })
+ * import { apiClient } from '@h-ai/api-client'
+ * const initialized = await apiClient.init({ baseUrl: 'https://api.example.com/api/v1', auth: { storage: apiClient.tokenStorage.httpOnlyCookie() } })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const me = await apiClient.iam.auth.currentUser()
+ *   if (!me.success) throw new Error(me.error.message)
+ *   const userId = me.data.id
+ * }
+ * finally { await apiClient.close() }
  * ```
  */
 export function createHttpOnlyCookieTokenStorage(): TokenStorage {
@@ -181,38 +126,42 @@ const RefreshTokenPayloadSchema = z.object({
   tokenType: z.string().optional(),
 })
 
+/**
+ * 当前代际刷新成功后的同步通知；参数包含敏感凭据，不应记录 Token。
+ * 回调在持久写入成功后调用，应自行处理业务异常，不能把抛错当成刷新重试机制。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const observed: number[] = []
+ * const callback: RefreshCallback = tokens => { observed.push(tokens.expiresIn) }
+ * callback({ accessToken: 'test-access', expiresIn: 3600, tokenType: 'Bearer' })
+ * ```
+ */
 type RefreshCallback = (tokens: TokenPair) => void
 
 /**
- * 创建 Token 管理器：封装存储读写、自动刷新、并发去重与回调通知。
+ * 创建模块内部 Token 管理器；包用户通过 apiClient.auth 使用，包入口不导出此工厂。
+ * 同一代际的并发刷新共享请求；clear/setTokens 同步撤销旧代际，所有存储变更串行提交。
+ * 迟到响应不能覆盖新账号、恢复退出凭据或触发旧回调；已开始的存储写入须完成后才能执行后续身份变更。
+ * 4xx、无效响应和非 Cookie 模式缺少 refreshToken 会尝试清理凭据；5xx、网络/超时保留凭据并返回 null。
+ * 无刷新凭据时通知失败并返回 null；存储读取失败可拒绝 Promise，setTokens/clear 的存储失败向调用方传播。
+ * @param storage - 独占的安全存储适配器。
+ * @param refreshEndpointUrl - baseUrl 与 refreshPath 组合后的完整 URL。
+ * @param fetchFn - 实际 fetch；Cookie 模式发送凭据，普通模式发送 JSON refreshToken。
+ * @param onRefreshFailed - 当前代际明确失效后的同步通知。
+ * @param refreshTimeoutMs - fetch 中断超时毫秒数；依赖 fetch 实现响应 signal。
+ * @returns 内部管理器；不要绕过它直接更新已绑定的 storage。
  *
- * 主要供 `apiClient.create` 内部使用，同时作为 named export 暴露给测试与高级用户。
- *
- * 行为约定：
- * - 并发多次 `refresh()` 共享同一个请求。
- * - refresh 接口失败、响应字段缺失或 401，都视为刷新失败：清空存储并触发 `onRefreshFailed`。
- * - 兼容两种响应格式：`{ data: tokens }` 与 `{ data: { tokens } }`（HaiResult 包装）。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const manager = createTokenManager(
- *   apiClient.tokenStorage.memory(),
- *   'https://api.example.com/api/v1/auth/refresh',
- *   fetch,
- *   () => notifyLoginRequired(),
- * )
- *
- * const off = manager.onTokenRefreshed(tokens => syncTokens(tokens))
- * const tokens = await manager.refresh()
- * off()
+ * const storage = createMemoryTokenStorage()
+ * const fetchTokens: typeof fetch = async () => Response.json({ data: { accessToken: 'test-access-next', refreshToken: 'test-refresh-next', expiresIn: 3600 } })
+ * const manager = createTokenManager(storage, 'https://api.example.com/api/v1/auth/refresh', fetchTokens)
+ * await manager.setTokens({ accessToken: 'test-access', refreshToken: 'test-refresh', expiresIn: 3600, tokenType: 'Bearer' })
+ * const off = manager.onTokenRefreshed(tokens => { const lifetime = tokens.expiresIn })
+ * try { const refreshed = await manager.refresh() }
+ * finally { off(); await manager.clear() }
  * ```
- *
- * @param storage - Token 存储适配器
- * @param refreshEndpointUrl - refresh 接口完整 URL（`baseUrl + refreshPath`）
- * @param fetchFn - fetch 实现（允许注入 mock）
- * @param onRefreshFailed - 刷新失败回调
- * @param refreshTimeoutMs - 刷新请求超时（ms），默认 10_000
- * @returns Token 管理器实例
  */
 export function createTokenManager(
   storage: TokenStorage,
@@ -223,22 +172,120 @@ export function createTokenManager(
 ) {
   const callbacks: RefreshCallback[] = []
   let refreshPromise: Promise<TokenPair | null> | null = null
+  let refreshController: AbortController | null = null
+  let generation = 0
+  let storageMutation: Promise<void> = Promise.resolve()
 
+  /**
+   * 按调用顺序提交异步存储写入；单次失败只拒绝该调用，后续清理/登录仍可运行。
+   * @param operation - 本次需要排序的写入操作。
+   * @returns 本次操作结果，不吞掉当前写入故障。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const order: string[] = []
+   * await mutateStorage(async () => { order.push('login') })
+   * await mutateStorage(async () => { order.push('logout') })
+   * ```
+   */
+  function mutateStorage<T>(operation: () => Promise<T>): Promise<T> {
+    const pending = storageMutation.then(operation)
+    storageMutation = pending.then(() => {}, () => {})
+    return pending
+  }
+
+  /**
+   * 同步推进身份代际并移除旧刷新去重状态；返回旧控制器供调用方排好新写入后中断。
+   * @returns 旧刷新控制器或 null；即使底层忽略 abort，代际检查仍拒绝旧结果提交。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const old = invalidateRefresh()
+   * // 生产调用先排入新身份存储变更，再触发可能重入的 abort 监听器。
+   * old?.abort()
+   * ```
+   */
+  function invalidateRefresh(): AbortController | null {
+    const previousController = refreshController
+    generation++
+    refreshController = null
+    refreshPromise = null
+    return previousController
+  }
+
+  /**
+   * 仅当前刷新代际可尝试清理存储并通知失效；旧账号迟到 401 不影响新身份。
+   * @param refreshGeneration - 发起刷新时记录的身份代际。
+   * @returns 清理完成；存储失败拒绝，由 doRefresh 的异常分支处理。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * await failRefresh(generation)
+   * // 传入旧 generation 会在串行写入队列中再次校验并跳过。
+   * ```
+   */
+  async function failRefresh(refreshGeneration: number): Promise<void> {
+    await mutateStorage(async () => {
+      if (refreshGeneration !== generation)
+        return
+      await storage.clear()
+      if (refreshGeneration === generation)
+        onRefreshFailed?.()
+    })
+  }
+
+  /**
+   * 同一代际只发起一个刷新请求；旧请求 finally 不能清除新身份的在途状态。
+   * @returns 成功且仍有效的 Token，或 null；读取适配器失败可能拒绝。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const [first, second] = await Promise.all([refresh(), refresh()])
+   * // 两个调用共享在途 fetch；结果仍以各自读取到的当前代际为准。
+   * ```
+   */
   async function refresh(): Promise<TokenPair | null> {
     // 并发去重：同一时刻只发一次 refresh，其它调用复用同一个 Promise
     if (refreshPromise)
       return refreshPromise
-    refreshPromise = doRefresh()
+    const controller = new AbortController()
+    const pending = doRefresh(generation, controller)
+    refreshController = controller
+    refreshPromise = pending
     try {
-      return await refreshPromise
+      return await pending
     }
     finally {
-      refreshPromise = null
+      // 旧请求结束不能移除换账号后新一轮刷新的去重状态。
+      if (refreshPromise === pending) {
+        refreshPromise = null
+        refreshController = null
+      }
     }
   }
 
-  async function doRefresh(): Promise<TokenPair | null> {
+  /**
+   * 等待身份写入完成后读取刷新凭据，执行超时请求并在每个异步边界校验代际。
+   * 4xx/无效数据尝试清理；5xx/网络故障保留凭据。只有当前代际成功写入后才通知订阅者。
+   * @param refreshGeneration - 请求开始时的代际。
+   * @param controller - 本次请求中断控制器；底层 fetch 应响应 signal。
+   * @returns 当前刷新 Token 或 null；清理/回调等请求段异常记录为失败，不声称持久清理成功。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const controller = new AbortController()
+   * const tokens = await doRefresh(generation, controller)
+   * if (tokens) { const lifetime = tokens.expiresIn }
+   * ```
+   */
+  async function doRefresh(refreshGeneration: number, controller: AbortController): Promise<TokenPair | null> {
+    // 登录/退出可能正在异步落盘，刷新只能读取其完成后的凭据。
+    await storageMutation
+    if (refreshGeneration !== generation)
+      return null
     const refreshToken = await storage.getRefreshToken()
+    if (refreshGeneration !== generation)
+      return null
     if (!refreshToken) {
       logger.warn('Token refresh skipped, no refresh token available')
       onRefreshFailed?.()
@@ -247,7 +294,6 @@ export function createTokenManager(
 
     logger.debug('Refreshing token')
     // 超时保护：避免 refresh 接口挂死时 dedup Promise 永不 resolve，连带所有等待者 hang。
-    const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), refreshTimeoutMs)
     try {
       // httpOnly cookie 模式：浏览器自动发送 Cookie，请求体无需携带 refreshToken；
@@ -263,13 +309,14 @@ export function createTokenManager(
         requestInit.headers = { 'Content-Type': 'application/json' }
       }
       const response = await fetchFn(refreshEndpointUrl, requestInit)
+      if (refreshGeneration !== generation)
+        return null
 
       if (!response.ok) {
         // 仅在服务端明确返回 401/4xx 时才清除 Token（refresh token 已失效）；
         // 5xx 作为服务端临时故障，保留 Token 让下一次请求重试。
         if (response.status >= 400 && response.status < 500) {
-          await storage.clear()
-          onRefreshFailed?.()
+          await failRefresh(refreshGeneration)
         }
         else {
           logger.warn('Token refresh transient failure, keeping tokens', { status: response.status })
@@ -278,17 +325,17 @@ export function createTokenManager(
       }
 
       const body = await response.json() as { data?: unknown }
+      if (refreshGeneration !== generation)
+        return null
       const parsed = RefreshTokenPayloadSchema.safeParse(readTokenPayload(body.data))
       if (!parsed.success) {
         logger.warn('Token refresh returned invalid data', { issues: parsed.error.issues })
-        await storage.clear()
-        onRefreshFailed?.()
+        await failRefresh(refreshGeneration)
         return null
       }
       if (!useHttpOnlyCookie && !parsed.data.refreshToken) {
         logger.warn('Token refresh returned invalid data', { issues: [{ path: ['refreshToken'], message: 'Required' }] })
-        await storage.clear()
-        onRefreshFailed?.()
+        await failRefresh(refreshGeneration)
         return null
       }
 
@@ -300,13 +347,28 @@ export function createTokenManager(
         expiresIn: parsed.data.expiresIn ?? 3600,
         tokenType: 'Bearer',
       }
-      await storage.setAccessToken(tokens.accessToken)
-      await storage.setRefreshToken(refreshTokenForStorage)
+      const committed = await mutateStorage(async () => {
+        if (refreshGeneration !== generation)
+          return false
+        await storage.setAccessToken(tokens.accessToken)
+        if (refreshGeneration !== generation)
+          return false
+        await storage.setRefreshToken(refreshTokenForStorage)
+        return refreshGeneration === generation
+      })
+      if (!committed || refreshGeneration !== generation)
+        return null
       logger.info('Token refreshed successfully')
-      for (const cb of callbacks) cb(tokens)
-      return tokens
+      for (const cb of callbacks) {
+        if (refreshGeneration !== generation)
+          return null
+        cb(tokens)
+      }
+      return refreshGeneration === generation ? tokens : null
     }
     catch (error) {
+      if (refreshGeneration !== generation)
+        return null
       // 网络或 fetch 本身抛异常（超时、断网、CORS）视为可重试的暂时性错误，
       // 不清除 Token，仅记录日志。调用方可在下次请求时重试。
       logger.error('Token refresh failed (transient)', { error })
@@ -321,12 +383,28 @@ export function createTokenManager(
     storage,
     refresh,
     async setTokens(tokens: TokenPair) {
-      await storage.setAccessToken(tokens.accessToken)
-      if (tokens.refreshToken)
-        await storage.setRefreshToken(tokens.refreshToken)
+      const previousController = invalidateRefresh()
+      const mutationGeneration = generation
+      const pending = mutateStorage(async () => {
+        if (mutationGeneration !== generation)
+          return
+        // 替换完整凭据：新账号未提供 refresh token 时不能继续使用旧账号的值。
+        await storage.clear()
+        if (mutationGeneration !== generation)
+          return
+        await storage.setAccessToken(tokens.accessToken)
+        if (tokens.refreshToken && mutationGeneration === generation)
+          await storage.setRefreshToken(tokens.refreshToken)
+      })
+      // 先排好新身份写入，再触发 abort 事件；可重入的监听器只能读取新操作后的存储。
+      previousController?.abort()
+      await pending
     },
     async clear() {
-      await storage.clear()
+      const previousController = invalidateRefresh()
+      const pending = mutateStorage(() => storage.clear())
+      previousController?.abort()
+      await pending
     },
     onTokenRefreshed(callback: RefreshCallback): () => void {
       callbacks.push(callback)
@@ -339,10 +417,30 @@ export function createTokenManager(
   }
 }
 
-/** Token 管理器类型（`createTokenManager` 返回值）。 */
+/**
+ * Token 管理器内部契约，从真实工厂返回值推导；不属于包公开类型。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const manager: TokenManager = createTokenManager(createMemoryTokenStorage(), 'https://api.example.com/api/v1/auth/refresh', fetch)
+ * await manager.clear()
+ * // clear 先废弃旧代际，再等待已有写入及本次清理完成。
+ * ```
+ */
 export type TokenManager = ReturnType<typeof createTokenManager>
 
-/** 兼容 `{ data: tokens }` 与 `{ data: { tokens } }` 两种 refresh 响应体。 */
+/**
+ * 从直接 tokens 或带 tokens 字段的 data 提取待校验内容；本函数不证明字段合法。
+ * @param data - 已解析 JSON 包络的 data。
+ * @returns 交给 RefreshTokenPayloadSchema 校验的未知值。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const candidate = readTokenPayload({ tokens: { accessToken: 'test-access', expiresIn: 3600 } })
+ * const parsed = RefreshTokenPayloadSchema.safeParse(candidate)
+ * if (parsed.success) { const accessToken = parsed.data.accessToken }
+ * ```
+ */
 function readTokenPayload(data: unknown): unknown {
   if (typeof data === 'object' && data !== null && 'tokens' in data) {
     return (data as { tokens: unknown }).tokens

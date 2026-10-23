@@ -13,6 +13,7 @@ import { err, ok } from '@h-ai/core'
 import smCrypto from 'sm-crypto'
 
 import { cryptoM } from './crypto-i18n.js'
+import { isValidSM2PublicKey } from './crypto-public-key.js'
 import {
 
   HaiCryptoError,
@@ -21,19 +22,25 @@ import {
 import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
 
 const { sm2 } = smCrypto
-const SM2_PUBLIC_KEY_REGEX = /^[0-9a-f]{128}$/i
 const SM2_PRIVATE_KEY_REGEX = /^[0-9a-f]{64}$/i
 
 // ─── SM2 算法实现 ───
 
 /**
- * 创建 SM2 算法操作实例
+ * 创建模块内部 SM2 原语；支持匹配的密文模式与 hex/base64 编码，公钥验证实际曲线点。
+ * 包用户通过初始化后的 crypto.asymmetric 访问。
+ * @returns 非对称操作；加密与签名使用不同方法，不能用加密代替发送方认证。
  *
- * 基于 sm-crypto 库实现 SM2 非对称加密、签名与验签。
- * 公钥支持带/不带 04 前缀两种格式（内部统一补齐）。
- * 密文支持 hex/base64 两种格式（解密时自动检测）。
- *
- * @returns AsymmetricOperations 接口实现
+ * @example 模块内部上下文
+ * ```ts
+ * const asymmetric = createSM2()
+ * const generated = asymmetric.generateKeyPair()
+ * if (!generated.success) throw new Error(generated.error.message)
+ * const encrypted = asymmetric.encrypt('hello', generated.data.publicKey)
+ * if (!encrypted.success) throw new Error(encrypted.error.message)
+ * const decrypted = asymmetric.decrypt(encrypted.data, generated.data.privateKey)
+ * if (!decrypted.success) throw new Error(decrypted.error.message)
+ * ```
  */
 export function createSM2(): AsymmetricOperations {
   return {
@@ -85,7 +92,7 @@ export function createSM2(): AsymmetricOperations {
 
       try {
         // 确保公钥带 04 前缀
-        const key = publicKey.startsWith('04') ? publicKey : `04${publicKey}`
+        const key = publicKey.length === 130 ? publicKey : `04${publicKey}`
         const encrypted = sm2.doEncrypt(data, key, cipherMode)
 
         if (!encrypted) {
@@ -234,7 +241,7 @@ export function createSM2(): AsymmetricOperations {
 
       try {
         // 确保公钥带 04 前缀
-        const key = publicKey.startsWith('04') ? publicKey : `04${publicKey}`
+        const key = publicKey.length === 130 ? publicKey : `04${publicKey}`
         const isValid = sm2.doVerifySignature(data, signature, key, { hash, userId })
         return ok(!!isValid)
       }
@@ -248,19 +255,16 @@ export function createSM2(): AsymmetricOperations {
     },
 
     /**
-     * 校验公钥格式是否合法
+     * 校验公钥编码及曲线点是否合法
      *
      * 合法格式：128 字符十六进制（无前缀）或 130 字符（含 04 前缀）。
      *
      * @param key - 待校验公钥
-     * @returns 格式合法返回 true
+     * @returns 编码有效且为 SM2 曲线上的非无穷远点时返回 true
+     * @example `crypto.asymmetric.isValidPublicKey(clientPublicKey)`
      */
     isValidPublicKey(key: string): boolean {
-      if (!key || typeof key !== 'string')
-        return false
-      // 公钥长度：无前缀 128 字符，带 04 前缀 130 字符
-      const cleanKey = key.startsWith('04') ? key.slice(2) : key
-      return SM2_PUBLIC_KEY_REGEX.test(cleanKey)
+      return isValidSM2PublicKey(key)
     },
 
     /**

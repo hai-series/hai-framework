@@ -16,8 +16,23 @@ const logger = core.logger.child({ module: 'deploy', scope: 'provisioner-aliyun'
 
 /**
  * 创建 Aliyun SMS Provisioner
- *
+ * 工厂返回内部接口；认证与开通调用必须逐次检查 HaiResult，返回的连接凭据不能直接记录。
  * @returns ServiceProvisioner 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const accessKeyId = process.env.HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID
+ * if (!accessKeyId) throw new Error('Provide HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID privately')
+ * const accessKeySecret = process.env.HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET
+ * if (!accessKeySecret) throw new Error('Provide HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET privately')
+ * const signName = process.env.HAI_DEPLOY_SERVICES_SMS_SIGNNAME
+ * if (!signName) throw new Error('Provide HAI_DEPLOY_SERVICES_SMS_SIGNNAME privately')
+ * const provisioner = createAliyunProvisioner()
+ * const authenticated = await provisioner.authenticate({ accessKeyId, accessKeySecret, signName })
+ * if (!authenticated.success) throw new Error(authenticated.error.message)
+ * const result = await provisioner.provision('shop')
+ * if (!result.success) throw new Error(result.error.message)
+ * const status = result.data.resourceStatus
+ * ```
  */
 export function createAliyunProvisioner(): ServiceProvisioner {
   let accessKey: string | null = null

@@ -10,6 +10,13 @@ import { kitM } from '../kit-i18n.js'
 
 /**
  * 权限守卫配置
+ * @example
+ * ```ts
+ * import type { PermissionGuardConfig } from '@h-ai/kit'
+ *
+ * const value: PermissionGuardConfig = { permissions: ['article:read'] }
+ * void value
+ * ```
  */
 export interface PermissionGuardConfig {
   /** 需要的权限列表（默认 OR 逻辑，满足任一即通过） */
@@ -31,12 +38,10 @@ export interface PermissionGuardConfig {
  *
  * @param config - 权限守卫配置
  * @returns RouteGuard 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * guards: [
- *   { guard: kit.guard.permission({ permissions: ['user:read', 'user:write'], requireAll: true }), paths: ['/api/users/*'] },
- * ]
+ * const guard = permissionGuard({ permissions: ['article:read'] })
+ * void guard
  * ```
  */
 export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
@@ -87,6 +92,13 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
  * @param required - 需要的权限码
  * @param userPermissions - 用户已有的权限列表
  * @returns 是否匹配
+ * @example
+ * ```ts
+ * import { matchPermission } from '@h-ai/kit'
+ *
+ * const allowed = matchPermission('article:read', ['article:*'])
+ * void allowed
+ * ```
  */
 export function matchPermission(required: string, userPermissions: string[]): boolean {
   for (const userPerm of userPermissions) {
@@ -120,12 +132,12 @@ export function matchPermission(required: string, userPermissions: string[]): bo
  * @param session - 当前会话数据，null/undefined 视为无权限
  * @param permission - 需要的权限码，如 `user:read`
  * @returns 是否拥有权限
- *
  * @example
  * ```ts
- * if (kit.guard.check(locals.session, 'user:read')) {
- *   // 有权限
- * }
+ * import { kit } from '@h-ai/kit'
+ *
+ * const allowed = kit.guard.check({ userId: 'user_1', roles: ['editor'], permissions: ['article:read'] }, 'article:read')
+ * void allowed
  * ```
  */
 export function hasPermission(
@@ -146,14 +158,10 @@ export function hasPermission(
  * @param session - 当前会话数据，null/undefined 视为未认证
  * @param permission - 需要的权限码，如 `user:create`
  * @returns 权限不足时返回 Response；有权限时返回 undefined
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * export const POST: RequestHandler = async ({ locals }) => {
- *   const denied = kit.guard.assertPermission(locals.session, 'user:create')
- *   if (denied) return denied
- *   // ... 正常逻辑
- * }
+ * const blocked = assertPermission({ userId: 'user_1', roles: ['editor'], permissions: ['article:read'] }, 'article:write')
+ * if (blocked) void blocked.status
  * ```
  */
 export function assertPermission(
@@ -186,14 +194,11 @@ export function assertPermission(
  * @param session - 当前会话数据，null/undefined 视为未认证
  * @param permission - 需要的权限码，如 `user:create`
  * @throws Response - 未认证 401 / 无权限 403
- *
  * @example
  * ```ts
- * export const GET = kit.handler(async ({ locals }) => {
- *   kit.guard.require(locals.session, 'user:read')
- *   // 执行到这里说明权限已通过
- *   return kit.response.ok(data)
- * })
+ * import { kit } from '@h-ai/kit'
+ *
+ * kit.guard.require({ userId: 'user_1', roles: ['editor'], permissions: ['article:read'] }, 'article:read') // 拒绝时抛出 Response，由框架传递。
  * ```
  */
 export function requirePermission(
@@ -217,20 +222,10 @@ export function requirePermission(
  * @param permission - 需要的权限码，如 `'user:read'`
  * @param handler - 原始处理函数
  * @returns 包装后的处理函数（签名不变）
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * // +page.server.ts
- * export const load = kit.guard.withPermission('user:read', async ({ locals }) => {
- *   const result = await iam.user.listUsers()
- *   return { users: result.success ? result.data.items : [] }
- * })
- *
- * // +server.ts (API handler)
- * export const GET = kit.handler(kit.guard.withPermission('user:list', async ({ locals }) => {
- *   const result = await iam.user.listUsers()
- *   return kit.response.ok(result.data)
- * }))
+ * const handler = withPermission('article:read', async (event: { locals: Record<string, unknown> }) => new Response('ready'))
+ * void handler
  * ```
  */
 export function withPermission<TEvent extends { locals: Record<string, unknown> }, TReturn>(

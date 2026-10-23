@@ -19,7 +19,7 @@ test.beforeAll(async () => {
     auth: { storage: apiClient.tokenStorage.memory() },
 {{/if}}
 {{#if features.crypto}}
-    transport: process.env.HAI_SERV_TRANSPORT === 'false' ? undefined : { crypto },
+    transport: { crypto },
 {{/if}}
   })
   expect(result.success).toBe(true)
@@ -46,7 +46,7 @@ test('service app.info endpoint returns HaiResult', async () => {
     return
   expect(body.data.name).toBe(process.env.HAI_CORE_NAME ?? '{{projectName}} API Service')
   expect(body.data.version).toBe(process.env.HAI_CORE_VERSION ?? '0.1.0')
-  expect(body.data.env).toBe(process.env.HAI_CORE_ENV ?? 'development')
+  expect(body.data.env).toBe('test')
   expect(typeof body.data.transportEnabled).toBe('boolean')
 })
 {{#if features.iam}}

@@ -10,6 +10,12 @@ import type { MessageOptions } from './types.js'
 
 /**
  * 内部消息条目
+ *
+ * @example
+ * ```ts
+ * import type { MessageItem } from '@h-ai/ui'
+ * const example: MessageItem = { id: 'message-1', message: '保存完成', type: 'success', duration: 3000, closable: true }
+ * ```
  */
 export interface MessageItem {
   id: string
@@ -28,6 +34,15 @@ class MessageState {
 
   /**
    * 添加消息
+   * @param options - 本次操作的行为与显示选项。
+   * @returns 新条目的 ID，可用于提前移除。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * const id = message.add({ message: '保存完成', type: 'success', duration: 3000 })
+   * message.remove(id)
+   * ```
    */
   add(options: MessageOptions | string): string {
     const opts = typeof options === 'string' ? { message: options } : options
@@ -55,6 +70,15 @@ class MessageState {
 
   /**
    * 移除消息
+   * @param id - 待移除的条目 ID。
+   * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * const id = message.info('同步中', 0)
+   * message.remove(id)
+   * ```
    */
   remove(id: string): void {
     const timer = this.timers.get(id)
@@ -67,6 +91,14 @@ class MessageState {
 
   /**
    * 清空所有消息
+   * @returns {void} 无返回值；同时清理对应的自动关闭定时器。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * message.info('同步中', 0)
+   * message.clear()
+   * ```
    */
   clear(): void {
     for (const timer of this.timers.values()) {
@@ -78,19 +110,68 @@ class MessageState {
 
   /**
    * 快捷方法
+   * @param message - 已经本地化的用户提示。
+   * @param duration - 提示持续时间，单位毫秒。
+   * @returns 新条目的 ID，可用于提前移除。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * const id = message.info('操作结果', 3000)
+   * message.remove(id)
+   * ```
    */
   info(message: string, duration?: number): string {
     return this.add({ message, type: 'info', duration })
   }
 
+  /**
+   * 处理 success 操作。
+   * @param message - 已经本地化的用户提示。
+   * @param duration - 提示持续时间，单位毫秒。
+   * @returns 新条目的 ID，可用于提前移除。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * const id = message.success('操作结果', 3000)
+   * message.remove(id)
+   * ```
+   */
   success(message: string, duration?: number): string {
     return this.add({ message, type: 'success', duration })
   }
 
+  /**
+   * 处理 warning 操作。
+   * @param message - 已经本地化的用户提示。
+   * @param duration - 提示持续时间，单位毫秒。
+   * @returns 新条目的 ID，可用于提前移除。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * const id = message.warning('操作结果', 3000)
+   * message.remove(id)
+   * ```
+   */
   warning(message: string, duration?: number): string {
     return this.add({ message, type: 'warning', duration })
   }
 
+  /**
+   * 处理 error 操作。
+   * @param message - 已经本地化的用户提示。
+   * @param duration - 提示持续时间，单位毫秒。
+   * @returns 新条目的 ID，可用于提前移除。
+   * @example
+   * ```ts
+   * import { message } from '@h-ai/ui'
+   * // 布局中需挂载 MessageContainer。
+   * const id = message.error('操作结果', 3000)
+   * message.remove(id)
+   * ```
+   */
   error(message: string, duration?: number): string {
     return this.add({ message, type: 'error', duration })
   }
@@ -98,5 +179,14 @@ class MessageState {
 
 /**
  * Message 单例
+ *
+ * @example
+ * ```ts
+ * import { message } from '@h-ai/ui'
+ * // 页面布局需挂载 MessageContainer。
+ * const id = message.success('保存完成', 3000)
+ * message.remove(id)
+ * message.clear()
+ * ```
  */
 export const message = new MessageState()

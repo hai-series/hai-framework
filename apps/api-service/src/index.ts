@@ -20,7 +20,14 @@ async function main(): Promise<void> {
   })
 }
 
-main().catch((error: unknown) => {
+main().catch(async (error: unknown) => {
   logger.error('API service failed to start', { error })
   process.exitCode = 1
+  try {
+    // 包括初始化后的 app/transport 创建失败，均须释放已建立的连接。
+    await closeApp()
+  }
+  catch (cleanupError) {
+    core.logger.error('API service startup cleanup failed', { error: cleanupError })
+  }
 })

@@ -8,6 +8,30 @@ const contract = apiContract.create({})
 const procedures = serv.implement(contract).context<ServContext>().build()
 
 describe('@h-ai/serv', () => {
+  it('isolates module messages across interleaved async HTTP requests', async () => {
+    const gate = Promise.withResolvers<void>()
+    const app = serv.createApp({
+      contract,
+      procedures,
+      middlewares: [{
+        path: '/locale',
+        middleware: async (c) => {
+          if (c.req.header('x-hai-locale') === 'en-US')
+            await gate.promise
+          else gate.resolve()
+          await Promise.resolve()
+          return c.text(core.i18n.coreM('core_errorTimeout'))
+        },
+      }],
+    })
+    const responses = await Promise.all([
+      app.request('/locale', { headers: { 'x-hai-locale': 'en-US' } }),
+      app.request('/locale', { headers: { 'x-hai-locale': 'zh-CN' } }),
+    ])
+    expect(await Promise.all(responses.map(response => response.text()))).toEqual(['Request timeout', '请求超时'])
+    expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
+  })
+
   it('keeps root API focused on runtime-level helpers', () => {
     expect(typeof serv.toFetch).toBe('function')
     expect(typeof serv.cors).toBe('function')

@@ -1,10 +1,7 @@
 /**
- * @h-ai/ai/client — 前端 AI 客户端入口
+ * @h-ai/ai/client — 浏览器语音客户端入口。
  *
- * 通过 `@h-ai/ai/client` 导入，提供 `createAIClient`、`parseSSE`、`collectStreamContent` 等浏览器端 API。
+ * createAudioClient 连接统一 Audio WebSocket；HTTP 领域能力由 @h-ai/api-client 的 typed contract 提供。
  * @module index
  */
-
-export * from './ai-a2a-client.js'
 export * from './ai-audio-client.js'
-export * from './ai-client.js'

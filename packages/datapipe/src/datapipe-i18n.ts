@@ -14,6 +14,11 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 /**
  * 数据处理模块文案 Key 类型
+ * @example 模块内部上下文
+ * ```ts
+ * const key: DatapipeMessageKey = 'datapipe_cleanFailed'
+ * const message = datapipeM(key)
+ * ```
  */
 type DatapipeMessageKey = keyof typeof messagesZhCN
 
@@ -22,6 +27,10 @@ type DatapipeMessageKey = keyof typeof messagesZhCN
  * @param key - 文案 Key
  * @param options - 插值参数与格式化选项
  * @returns 本地化后的文案字符串
+ * @example 模块内部上下文
+ * ```ts
+ * const message = datapipeM('datapipe_cleanFailed', { params: { error: 'invalid input' }, locale: 'en-US' })
+ * ```
  */
 export const datapipeM = core.i18n.createMessageGetter<DatapipeMessageKey>({
   'zh-CN': messagesZhCN,

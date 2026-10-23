@@ -1,4 +1,5 @@
 <!--
+  @component AvatarUpload
   =============================================================================
   @h-ai/ui - AvatarUpload 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $state, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { AvatarUpload } from '@h-ai/ui'
+  const props: ComponentProps<typeof AvatarUpload> = { fallback: 'A', size: 'lg' }
+  const component = mount(AvatarUpload, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

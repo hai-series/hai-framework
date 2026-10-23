@@ -2,51 +2,22 @@
 import type { DeploymentEnvironment, MiddlewareBackend, MiddlewareField, MiddlewareMode, MiddlewareRequirement, ScanResult } from '@h-ai/deploy'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { core } from '@h-ai/core'
+import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
 import prompts from 'prompts'
-import { parseDocument } from 'yaml'
+import { isMap, isScalar, parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
+import { writeCliMessage } from '../cli-utils.js'
 import { moduleEnvironmentVariables } from './cli-config-environment.js'
 
-type DeployModule = typeof import('@h-ai/deploy')
-
 /**
- * 展示连接配置时保留可核对的后端/地址，隐藏密码、令牌和 URL 认证部分。
- * @example `displayDeployValue('HAI_DB', '{"type":"mysql","password":"secret"}')`
+ * 部署包的真实运行时命名空间类型，仅供向导依赖注入，不重新仿造部署 API。
+ * @example 模块内部上下文
+ * ```ts
+ * const module: DeployModule = await import('@h-ai/deploy')
+ * const backends = module.DEPLOY_MIDDLEWARE.db
+ * ```
  */
-export function displayDeployValue(name: string, value: string): string {
-  if (/PASSWORD|SECRET|TOKEN|APIKEY|PRIVATEKEY|ACCESSKEY|AUTHORIZATION/i.test(name.replace(/[^a-z0-9]/gi, '')) || /(?:^|_)PASS$/i.test(name) || value.includes('PRIVATE KEY'))
-    return cliM('cli_deploy_secret')
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (parsed && typeof parsed === 'object') {
-      const sanitize = (object: unknown): unknown => {
-        if (Array.isArray(object))
-          return object.map(sanitize)
-        if (object && typeof object === 'object')
-          return Object.fromEntries(Object.entries(object).map(([key, item]) => [key, /PASSWORD|SECRET|TOKEN|APIKEY|PRIVATEKEY|ACCESSKEY|AUTHORIZATION/i.test(key.replace(/[^a-z0-9]/gi, '')) || /(?:^|_)PASS$/i.test(key) ? cliM('cli_deploy_secret') : typeof item === 'string' ? displayDeployValue(key, item) : sanitize(item)]))
-        return object
-      }
-      return JSON.stringify(sanitize(parsed))
-    }
-  }
-  catch { /* 普通连接字符串无需 JSON 处理。 */ }
-  try {
-    const url = new URL(value)
-    if (url.username || url.password) {
-      url.username = '***'
-      url.password = '***'
-    }
-    for (const key of url.searchParams.keys()) {
-      if (/password|secret|token|key|authorization/i.test(key))
-        url.searchParams.set(key, '***')
-    }
-    return url.toString()
-  }
-  catch {
-    return value
-  }
-}
+type DeployModule = typeof import('@h-ai/deploy')
 
 /** 凭据输入字段，名称与 deploy 公开配置 Schema 相同。 */
 const CLOUD_FIELDS: Record<string, string[]> = {
@@ -77,7 +48,20 @@ function targetConfig(requirement: MiddlewareRequirement, environment: Deploymen
 /**
  * 只有目标文件显式声明了当前后端及必要连接项，才允许保持不变。
  * 凭据仍可来自 .env.local/进程；其他环境的配置不能让此选项出现。
- * @example `canKeepMiddleware(requirement, backend, prodEnvironment)`
+ * @param requirement - 扫描出的实际中间件需求。
+ * @param backend - 部署目录中选定的后端。
+ * @param environment - 已合并变量与目标文件显式值的环境快照。
+ * @returns 仅当目标文件明确声明后端与必要连接项时为 true。
+ * @example 模块内部上下文
+ * ```ts
+ * const module = await import('@h-ai/deploy')
+ * const requirement: MiddlewareRequirement = { service: 'db', backend: 'postgresql', source: '@h-ai/reldb', configName: 'db', configPath: [], envPrefix: 'HAI_DB', config: { host: 'db', port: 5432, database: 'shop' } }
+ * const environment: DeploymentEnvironment = { environment: 'prod', envDir: '/workspace/shop', values: {}, targetValues: { HAI_DB_TYPE: 'postgresql', HAI_DB_HOST: 'db', HAI_DB_PORT: '5432', HAI_DB_DATABASE: 'shop' } }
+ * const backend = module.DEPLOY_MIDDLEWARE.db.find(item => item.backend === 'postgresql')
+ * if (backend) {
+ *   const keep = canKeepMiddleware(requirement, backend, environment)
+ * }
+ * ```
  */
 export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: MiddlewareBackend, environment: DeploymentEnvironment): boolean {
   const target = targetConfig(requirement, environment)
@@ -105,8 +89,8 @@ async function ask(question: prompts.PromptObject): Promise<unknown> {
   return answer.value
 }
 
-/** 校验连接字段；与模块 Schema 的基础取值约束一致。 */
-function validateField(value: string, field: MiddlewareField): boolean | string {
+/** 校验连接字段；数据库 TLS 复用所选后端的真实公开 Schema。 */
+function validateField(value: string, field: MiddlewareField, backend: string): boolean | string {
   if (value === '')
     return field.required ? cliM('cli_deploy_required') : true
   if (field.kind === 'port')
@@ -123,8 +107,8 @@ function validateField(value: string, field: MiddlewareField): boolean | string 
   }
   if (field.name === 'ssl') {
     const parsed = parseDocument(value)
-    const ssl: unknown = parsed.errors.length ? undefined : parsed.toJS()
-    return (typeof ssl === 'boolean' || ['require', 'prefer', 'allow', 'disable'].includes(String(ssl)) || (ssl !== null && typeof ssl === 'object' && !Array.isArray(ssl))) || cliM('cli_deploy_invalid_value')
+    const schema = backend === 'mysql' ? MysqlSslConfigSchema : SslConfigSchema
+    return (parsed.errors.length === 0 && schema.safeParse(parsed.toJS()).success) || cliM('cli_deploy_invalid_value')
   }
   if (field.name === 'headers') {
     try {
@@ -151,10 +135,10 @@ function ensureConfigNode(appDir: string, requirement: MiddlewareRequirement, ba
   if (document.errors.length)
     throw new Error(cliM('cli_deploy_invalid_value'))
   if (requirement.configPath.length && !document.hasIn(requirement.configPath))
-    document.setIn(requirement.configPath, requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service, type: backend } : {})
+    document.setIn(requirement.configPath, document.createNode(requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service, type: backend } : {}))
   if (requirement.service === 'ldap') {
     if (!document.hasIn(['login']))
-      document.setIn(['login'], {})
+      document.set('login', document.createNode({}))
     if (!document.hasIn(['login', 'ldap']))
       document.setIn(['login', 'ldap'], `\${HAI_IAM_LOGIN_LDAP:false}`)
   }
@@ -172,7 +156,23 @@ function connectionEnv(requirement: MiddlewareRequirement, backend: string, conf
 
 /**
  * 逐项收集处理方式、后端和连接参数；返回值用于过滤云开通器和 Compose 服务。
- * @example `await configureDeployMiddleware(module, scan, environment, config, false)`
+ * 会持久化公共连接信息与私有凭据；yes 仅跳过已可确定的选择，缺少必要输入仍抛错。
+ * @throws Error - 用户取消、必要非交互输入缺失、字段校验或配置持久化失败。
+ * @param module - 实际加载的 @h-ai/deploy 运行时命名空间。
+ * @param scan - 扫描得到的应用和中间件需求。
+ * @param environment - 已合并变量与目标文件显式值的环境快照。
+ * @param config - 正在补齐的部署配置对象。
+ * @param yes - 非交互模式；不能绕过必需输入缺失。
+ * @returns 每项中间件的最终处理模式。
+ * @example 模块内部上下文
+ * ```ts
+ * const module: DeployModule = await import('@h-ai/deploy')
+ * const result = await module.deploy.scan(process.cwd(), { environment: 'prod' })
+ * if (!result.success) throw new Error(result.error.message)
+ * const environment = module.loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (!environment.success) throw new Error(environment.error.message)
+ * const modes = await configureDeployMiddleware(module, result.data, environment.data, {}, true)
+ * ```
  */
 export async function configureDeployMiddleware(module: DeployModule, scan: ScanResult, environment: DeploymentEnvironment, config: Record<string, unknown>, yes = false): Promise<Partial<Record<string, MiddlewareMode>>> {
   const modes: Partial<Record<string, MiddlewareMode>> = {}
@@ -184,7 +184,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     const current = choices.find(item => item.backend === requirement.backend)
     if (!current)
       throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: requirement.backend } }))
-    core.logger.info(cliM('cli_deploy_middleware', { params: { service: requirement.service, backend: current.label, purpose: module.describeMiddlewareBackend(current), source: requirement.source } }))
+    writeCliMessage(cliM('cli_deploy_middleware', { params: { service: requirement.service, backend: current.label, purpose: module.describeMiddlewareBackend(current), source: requirement.source } }))
     const canKeep = canKeepMiddleware(requirement, current, environment)
     const mode = yes
       ? canKeep ? 'keep' : 'default'
@@ -226,8 +226,11 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       if (deployment.errors.length)
         throw new Error(cliM('cli_deploy_invalid_value'))
       if (!deployment.hasIn(['container', 's3Engine'])) {
-        if (!deployment.hasIn(['container']))
-          deployment.setIn(['container'], {})
+        const node = deployment.get('container', true)
+        if (node === undefined || (isScalar(node) && node.value === null))
+          deployment.set('container', deployment.createNode({}))
+        else if (!isMap(node))
+          throw new Error(cliM('cli_deploy_yaml_node', { params: { path: deploymentFile, field: 'container' } }))
         deployment.setIn(['container', 's3Engine'], `\${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}`)
         writeFileSync(deploymentFile, deployment.toString())
       }
@@ -241,16 +244,17 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       for (const name of CLOUD_FIELDS[backend.provisioner]) {
         const key = `HAI_DEPLOY_SERVICES_${requirement.service.toUpperCase()}_${name.toUpperCase()}`
         const initial = String(priorConfig[name] ?? environment.values[key] ?? '')
-        const value = yes ? initial : String(await ask({ type: /key|token|secret/i.test(name) ? 'password' : 'text', name: 'value', message: key, initial, validate: input => Boolean(input) || cliM('cli_deploy_required') }))
+        const label = `${backend.label} — ${cliM(`cli_deploy_cloud_input_${name}` as Parameters<typeof cliM>[0])}`
+        const value = yes ? initial : String(await ask({ type: /key|token|secret/i.test(name) ? 'password' : 'text', name: 'value', message: label, initial, validate: input => Boolean(input) || cliM('cli_deploy_required') }))
         if (!value)
-          throw new Error(`${key}: ${cliM('cli_deploy_required')}`)
+          throw new Error(`${label}: ${cliM('cli_deploy_required')}`)
         cloud[name] = value
         updates[key] = value
       }
       services[requirement.service] = cloud
     }
     else {
-      if (mode === 'default' && (requirement.service === 'sms' || backendName === 'api'))
+      if (mode === 'default' && ['aliyun-sms', 'api'].includes(backendName))
         throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: backend.label } }))
       const connection: Record<string, unknown> = mode === 'custom' && backendName === current.backend ? { ...requirement.config } : requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service } : {}
       for (const field of backend.fields) {
@@ -258,7 +262,10 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)
         const variable = `${requirement.envPrefix}_${field.name.toUpperCase()}`
         const info = moduleEnvironmentVariables(requirement.configName).find(item => item.name === variable)
-        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { name: variable, description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field) })) : initial
+        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field, backendName) })) : initial
+        // TLS 交互返回值与非交互值保存前再次校验，不依赖 prompts UI 曾调用 validate。
+        if (field.name === 'ssl' && validateField(value, field, backendName) !== true)
+          throw new Error(cliM('cli_deploy_invalid_value'))
         // 默认的服务端凭据由 sidecar/云开通器生成，不要求用户填写。
         if (value !== '') {
           connection[field.name] = field.kind === 'number' || field.kind === 'port' ? Number(value) : field.kind === 'boolean' ? value === 'true' : field.name === 'headers' || field.name === 'ssl' ? parseDocument(value).toJS() : value
@@ -267,15 +274,18 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
           delete connection[field.name]
         }
       }
+      if (requirement.service === 'db') {
+        const validated = ReldbConfigSchema.safeParse({ ...connection, type: backendName })
+        if (!validated.success)
+          throw new Error(cliM('cli_deploy_config_invalid', { params: { path: join(scan.appDir ?? '.', 'config', '_db.yml'), fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
+      }
       Object.assign(updates, connectionEnv(requirement, backendName, connection))
     }
     ensureConfigNode(scan.appDir ?? '.', requirement, backendName)
     const saved = module.saveDeploymentEnvironment(environment, updates)
     if (!saved.success)
       throw new Error(saved.error.message)
-    for (const [name, value] of Object.entries(updates)) {
-      core.logger.info(cliM('cli_deploy_saved', { params: { name, value: displayDeployValue(name, value) } }))
-    }
+    writeCliMessage(cliM('cli_deploy_saved', { params: { service: requirement.service } }))
   }
   // 仅默认选项对应的云服务参与初始化/开通；custom/keep 不认证、不创建。
   config.services = Object.keys(services).length ? services : undefined

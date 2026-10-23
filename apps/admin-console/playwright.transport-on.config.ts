@@ -1,13 +1,22 @@
+import { createECDH } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 
 import { defineConfig } from '@playwright/test'
+import { createE2eServerEnv } from '../../scripts/e2e-env.js'
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173'
 const previewUrl = new URL(baseURL)
 const previewHost = previewUrl.hostname || '127.0.0.1'
 const previewPort = Number.parseInt(previewUrl.port || '4173', 10)
 const testDataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-transport-on-${Date.now()}`)
+// 每轮测试显式创建独立 ring，通过服务端子进程环境注入，不依赖开发者的私密文件。
+const transportKey = createECDH('SM2')
+transportKey.generateKeys()
+const transportRing = JSON.stringify({
+  activeKeyId: 'e2e-v1',
+  keys: { 'e2e-v1': { publicKey: transportKey.getPublicKey('hex'), privateKey: transportKey.getPrivateKey('hex').padStart(64, '0') } },
+})
 
 export default defineConfig({
   testDir: './e2e',
@@ -37,15 +46,23 @@ export default defineConfig({
     timeout: 90_000,
   }, {
     command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
-    env: {
+    env: createE2eServerEnv({
+      HAI_DB: JSON.stringify({ type: 'sqlite', database: `${testDataDir}/admin.db` }),
+      HAI_CACHE: JSON.stringify({ type: 'memory' }),
+      HAI_STORAGE: JSON.stringify({ type: 'local', root: `${testDataDir}/uploads` }),
       HAI_E2E: '1',
+      // 测试数据目录使用独立本地后端，不继承生产 Compose 服务地址。
+      HAI_DB_TYPE: 'sqlite',
+      HAI_CACHE_TYPE: 'memory',
+      HAI_STORAGE_TYPE: 'local',
       HAI_CORE_ENV: 'development',
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
+      HAI_CRYPTO_TRANSPORT_SERVERKEYRING: transportRing,
       NODE_ENV: 'test',
-      HAI_KIT_TRANSPORT: JSON.stringify({ keyExchangePath: '/api/_hai/key-exchange', requireEncryption: true, encryptResponse: true, excludePaths: ['/api/storage', '/api/public', '/api/auth/profile/avatar'] }),
-    },
+      HAI_KIT_TRANSPORT: JSON.stringify({ keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/storage', '/api/public', '/api/auth/profile/avatar'] }),
+    }),
     url: baseURL,
     reuseExistingServer: false,
     timeout: 180_000,

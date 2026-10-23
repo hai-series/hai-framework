@@ -1,6 +1,16 @@
 <!--
   @component Avatar
   头像组件，支持图片、名字首字母 fallback
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Avatar } from '@h-ai/ui'
+  const props: ComponentProps<typeof Avatar> = { name: 'Ada', alt: '用户头像', size: 'md' }
+  const component = mount(Avatar, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { AvatarProps, DataAttributes } from '../../types.js'

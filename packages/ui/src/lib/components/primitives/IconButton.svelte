@@ -1,4 +1,5 @@
 <!--
+  @component IconButton
   =============================================================================
   @h-ai/ui - IconButton 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { IconButton } from '@h-ai/ui'
+  const props: ComponentProps<typeof IconButton> = { label: '关闭', tooltip: '关闭面板', children: createRawSnippet(() => ({ render: () => "<span>×</span>" })) }
+  const component = mount(IconButton, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, IconButtonProps } from '../../types.js'

@@ -1,8 +1,10 @@
 # hai API Service
 
-> 基于 oRPC + `@h-ai/serv` 的 API Service 组合根，负责初始化模块并装配 iam/storage/ai 领域的 procedures（底层运行时由 serv 内部实现）。
+## 简介
 
-## 能力概览
+基于 oRPC + `@h-ai/serv` 的 API Service 组合根，负责初始化模块并装配 iam/storage/ai 领域的 procedures（底层运行时由 serv 内部实现）。
+
+## 核心功能清单
 
 - 公共 API 由 `@h-ai/api-contract` 定义，运行时由 `@h-ai/serv` 挂载。
 - 默认启用 IAM / Storage / AI HTTP API。
@@ -13,7 +15,11 @@
 - `/health`、`/ready`、`/openapi.json`、`/docs` 保持明文可访问，便于探针与联调。
 - Node 部署入口为 `src/index.ts`，HTTP App 工厂为 `src/app.ts`。
 
-## 快速开始
+## 使用入门
+
+### 快速开始
+
+默认启用 transport，启动前必须通过服务端私有环境或 `apps/api-service/.env.local` 提供 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。密钥环由 Secret Manager/受管配置提供，运行时不随机生成；客户端公钥 registry 复用 reldb。多节点使用相同 ring 和共享数据库，无需会话粘性；私钥不放普通 YAML、PUBLIC_/VITE_ 或日志。解析、轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。CLI 新建项目会单独生成一次本机开发 ring，本仓库示例应自行注入私有值。
 
 ```bash
 pnpm install
@@ -27,7 +33,9 @@ pnpm --filter api-service build
 pnpm --filter api-service preview
 ```
 
-## API 契约
+`.env.prod` 使用共享 PostgreSQL、Redis、S3、Qdrant，默认服务地址对应 Compose 的 `db/cache/storage/vecdb`。容器外运行需私有覆盖地址，并注入数据库/缓存密码、S3/模型凭据、受保护向量库的 API Key 和真实 `HAI_REACH_PROVIDERS` JSON。公开空 Provider 数组会拒绝生产启动。数据库、向量库先于 AI 初始化；初始化或后续 transport/app 构造失败均等待逆序清理，关闭失败保留具体错误并允许重试，不能视为资源已释放。
+
+### API 契约
 
 本服务与桌面端共用的应用级 contract 已独立为 `@h-ai/api-service-contract`，禁止从 `apps/api-service/src` 跨应用导入。
 该包组合了框架通用领域契约（iam/storage/ai）与服务自有契约（`app.info` / `app.echo`）：
@@ -98,7 +106,10 @@ await client.init({
 const info = await client.app.info()
 
 // 鉴权端点：需先登录
-await client.iam.auth.register({ username: 'alice', password: 'Secret123!' })
+const registration = await client.iam.auth.register({ username: 'alice', password: 'Secret123!' })
+if (!registration.success)
+  throw new Error(registration.error.message)
+await client.auth.setTokens(registration.data.tokens)
 const echoed = await client.app.echo({ message: 'hi' })
 
 void info
@@ -108,7 +119,7 @@ await client.close()
 await crypto.close()
 ```
 
-### 传输加密说明
+#### 传输加密说明
 
 - 业务接口（默认 `/api/v1/*`）需要使用 `@h-ai/api-client`、`@h-ai/crypto` transport client 或等价的 transport-aware 客户端完成密钥协商。
 - API 前缀、基础设施路径、明文排除路径和跨端 Header 统一由 `config/_serv.yml` 定义。
@@ -165,7 +176,7 @@ await apiClient.init({
 })
 ```
 
-## API 概览
+### API 概览
 
 服务默认监听 `http://localhost:3000`。
 
@@ -199,18 +210,22 @@ await apiClient.init({
 | `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）                                         |
 | `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）                              |
 
-## 调用示例
+Storage procedures 使用显式 `authorize` 策略限制到已认证用户的 `users/<encodeURIComponent(userId)>/` 前缀。上传、下载、元数据、删除均传完整 key，列表也必须提供该前缀；空前缀、其它用户 key 和包含未授权 key 的批量请求都会被拒绝。需要管理员跨用户访问时，应在服务端策略中显式检查可信权限。
+
+AI procedures 默认将 objectId 绑定为认证用户 ID，客户端无需传入。消息与聊天按 objectId/sessionId 保存和查询（写入 sessionId 默认为 `default`）；同名会话在不同用户间隔离。记忆 recall/list 不会跨主体查询。指定其它 objectId 时默认拒绝，管理操作必须在服务端显式配置 authorizeObject 并验证可信权限。
+
+### 调用示例
 
 > 完整交互式文档见 `http://localhost:3000/docs`。以下示例假设服务已启动在 `localhost:3000`。
 
-### 健康检查
+#### 健康检查
 
 ```bash
 curl http://localhost:3000/health
 curl http://localhost:3000/ready
 ```
 
-### 业务 API（默认需要传输加密）
+#### 业务 API（默认需要传输加密）
 
 业务 `/api/v1/*` 端点默认要求先完成 `/_hai/key-exchange` 密钥协商，因此不再建议用明文 `curl` 直接 POST 登录/注册。
 推荐统一使用 `@h-ai/api-client` + `@h-ai/crypto`：
@@ -237,13 +252,17 @@ const login = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Admin123!',
 })
-if (login.success)
-  await apiClient.auth.setTokens(login.data.tokens)
+if (!login.success) throw new Error(login.error.message)
+await apiClient.auth.setTokens(login.data.tokens)
 
-const storage = await apiClient.storage.file.getUploadUrl({
-  key: 'uploads/demo.png',
+const storage = await apiClient.storage.presignedUrls.createUpload({
+  key: `users/${encodeURIComponent(login.data.user.id)}/demo.png`,
   contentType: 'image/png',
 })
+if (!storage.success) {
+  // local provider 不支持预签名；S3 成功结果才包含可上传的 URL。
+  throw new Error(storage.error.message)
+}
 
 void register
 void login
@@ -255,7 +274,9 @@ await crypto.close()
 
 如果修改了 `_serv.yml.transport.keyExchangePath`，记得同步客户端的 `transport.keyExchangePath`。
 
-## 配置
+默认 local 存储不支持预签名，接口返回 `hai:storage:018`，不会生成可上传的 URL；S3 才支持直传。本应用未内置本地二进制上传/下载 HTTP 接口，如有需要由业务实现并鉴权，或切换到 S3。
+
+### 配置
 
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
 
@@ -282,7 +303,7 @@ await crypto.close()
 camelCase key 不拆词，例如 `cors.nativeOrigins` 对应
 `HAI_SERV_CORS_NATIVEORIGINS`。
 
-### 认证页面
+#### 认证页面
 
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
@@ -290,11 +311,31 @@ camelCase key 不拆词，例如 `cors.nativeOrigins` 对应
 
 [完整配置与安全约束](../../packages/iam/README.md)
 
-## 错误处理
+### 错误处理
 
 业务错误通过 `HaiResult<T>` 返回，客户端统一判断 `result.success`。API 文档和 OpenAPI JSON 可用于生成跨端 SDK 或联调。
 
-## 测试
+### 镜像构建与部署
+
+在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.build.json` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
+
+```sh
+pnpm build:images                         # 只构建镜像并导出 tar
+pnpm run deploy --env prod --build        # 构建、打包、上传、启动并检查访问
+pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
+```
+
+先准备 `.env.prod` 与 `config/_deploy.yml`；首次向导以说明文字收集服务器连接信息并保存到 `.env.local`。完整离线包包含应用和自建中间件镜像，目标 Linux 需预装容器引擎、Compose 与脚本要求的工具。把 tar 和同名 `-deploy/` 目录一起搬到操作机，Windows 执行 `deploy.ps1`，Linux/macOS 执行 `deploy.sh`；完全隔离的服务器解包后执行 `sh apply.sh`。
+
+已有成功安装时，可用 `--services app` 只更新本应用；多个镜像的工程按服务名选择。局部发布保留其他容器和持久化卷，不执行整个项目 `down`，失败保留诊断并尝试恢复旧容器。相同版本允许重建，每次以独立构建 ID 区分内容。`images/dependencies/` 为忽略 Git 的依赖输入，配合引擎缓存和分层减少重复下载。
+
+完整参数、缓存、版本与恢复说明见[使用指南](../../docs/usage/README.md#4-编译源码与打包产物)。移动端和桌面端的原生安装包仍需在对应系统另行构建；容器部署交付的是 Web 页面。
+
+### 可选集成
+
+LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。
+
+## 开发测试
 
 ```bash
 pnpm --filter api-service check
@@ -302,8 +343,6 @@ pnpm --filter api-service lint
 pnpm --filter api-service test
 ```
 
-## License
+## 许可证
 
 Apache-2.0
-
-LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 的服务端 workspace 安装 ldapts，设置 `login.ldap: true` 与 LDAP 连接配置；也可注入自定义工厂。邮件/短信可以选择 Reach 标准模板，或直接注入 `onOtpSendEmail/onOtpSendSms/onPasswordResetRequest` 回调，投递失败须拒绝 Promise。协议在弹窗内展示；LoginForm/RegisterForm 的 `header/extraFields/footer` 和 AuthPanel 的 `login*/register*` snippet 可用于应用扩展。完整配置与自定义发送示例见 [IAM 用法](../../packages/iam/README.md#可选-ldap-与通知接入)。

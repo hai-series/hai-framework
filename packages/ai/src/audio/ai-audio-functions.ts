@@ -47,6 +47,17 @@ const logger = core.logger.child({ module: 'ai', scope: 'audio' })
  *
  * @param config - 校验后的 AI 配置
  * @returns Audio 操作接口
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function speak(config: AIConfig) {
+ *   const audio = createAudioOperations(config)
+ *   const result = await audio.synthesize({ text: '欢迎使用', format: 'mp3' })
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createAudioOperations(config: AIConfig): AudioOperations {
   const audioConfig: AudioConfig = AudioConfigSchema.parse(config.audio ?? {})

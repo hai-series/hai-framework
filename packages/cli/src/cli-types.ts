@@ -5,6 +5,10 @@
 
 /**
  * 可选功能
+ * @example 模块内部上下文
+ * ```ts
+ * const features: FeatureId[] = ['ai', 'db', 'vecdb']
+ * ```
  */
 export type FeatureId
   = | 'iam' // 身份与访问管理
@@ -27,6 +31,10 @@ export type FeatureId
 
 /**
  * 功能定义
+ * @example 模块内部上下文
+ * ```ts
+ * const feature: FeatureDefinition = { id: 'ai', name: 'AI', description: '共享会话与知识检索', dependencies: ['db', 'vecdb'], packages: ['@h-ai/ai'] }
+ * ```
  */
 export interface FeatureDefinition {
   /** 功能 ID */
@@ -43,6 +51,10 @@ export interface FeatureDefinition {
 
 /**
  * CLI 全局选项
+ * @example 模块内部上下文
+ * ```ts
+ * const options: GlobalOptions = { cwd: '/workspace/shop', verbose: true }
+ * ```
  */
 export interface GlobalOptions {
   /** 是否显示详细输出 */
@@ -53,16 +65,28 @@ export interface GlobalOptions {
 
 /**
  * 应用类型
+ * @example 模块内部上下文
+ * ```ts
+ * const appType: AppType = 'fullstack'
+ * ```
  */
 export type AppType = 'admin' | 'website' | 'h5' | 'api' | 'mobile-app' | 'fullstack'
 
 /**
  * 前后端分离工程的前端目标
+ * @example 模块内部上下文
+ * ```ts
+ * const frontend: FrontendTarget = 'web' // miniapp 仅为占位目标，不是可启动的小程序。
+ * ```
  */
 export type FrontendTarget = 'web' | 'app' | 'miniapp' | 'desktop'
 
 /**
  * 模块配置值
+ * @example 模块内部上下文
+ * ```ts
+ * const configs: ModuleConfigs = { core: { name: 'Shop', defaultLocale: 'en-US' }, db: { type: 'postgresql', host: 'db', database: 'shop' } }
+ * ```
  */
 export interface ModuleConfigs {
   /** core 模块配置 */
@@ -83,6 +107,10 @@ export interface ModuleConfigs {
 
 /**
  * fullstack 工程级配置（i18n / theme / 端口）
+ * @example 模块内部上下文
+ * ```ts
+ * const config: FullstackModuleConfig = { i18n: { baseLocale: 'zh-CN', locales: ['zh-CN', 'en-US'] }, theme: { defaultTheme: 'light', themes: ['light', 'dark'] }, ports: { web: 4173 } }
+ * ```
  */
 export interface FullstackModuleConfig {
   /** i18n 配置 */
@@ -109,6 +137,10 @@ export interface FullstackModuleConfig {
 
 /**
  * core 模块配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config: CoreModuleConfig = { name: 'Shop', defaultLocale: 'en-US' }
+ * ```
  */
 export interface CoreModuleConfig {
   /** 应用名称 */
@@ -119,6 +151,10 @@ export interface CoreModuleConfig {
 
 /**
  * db 模块配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config: DbModuleConfig = { type: 'postgresql', host: 'db', port: 5432, database: 'shop' } // 密码通过私有环境注入。
+ * ```
  */
 export interface DbModuleConfig {
   /** 数据库类型 */
@@ -133,6 +169,10 @@ export interface DbModuleConfig {
 
 /**
  * cache 模块配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config: CacheModuleConfig = { type: 'redis', host: 'cache', port: 6379 }
+ * ```
  */
 export interface CacheModuleConfig {
   /** 缓存类型 */
@@ -145,6 +185,10 @@ export interface CacheModuleConfig {
 
 /**
  * iam 模块配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config: IamModuleConfig = { loginPassword: true, loginOtp: false }
+ * ```
  */
 export interface IamModuleConfig {
   /** 启用密码登录 */
@@ -155,6 +199,10 @@ export interface IamModuleConfig {
 
 /**
  * storage 模块配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config: StorageModuleConfig = { type: 's3' } // 生产连接与凭据由环境配置注入。
+ * ```
  */
 export interface StorageModuleConfig {
   /** 存储类型 */
@@ -165,6 +213,10 @@ export interface StorageModuleConfig {
 
 /**
  * ai 模块配置
+ * @example 模块内部上下文
+ * ```ts
+ * const config: AiModuleConfig = { defaultProvider: 'openai', model: 'gpt-4o-mini' }
+ * ```
  */
 export interface AiModuleConfig {
   /** 默认 Provider */
@@ -175,8 +227,14 @@ export interface AiModuleConfig {
 
 /**
  * 项目创建选项
+ * @example 模块内部上下文
+ * ```ts
+ * const options: CreateProjectOptions = { name: 'shop', appType: 'api', features: ['ai'], packageManager: 'pnpm', yes: true, install: false, git: false, deploy: false } // AI 自动补 db/vecdb。
+ * ```
  */
 export interface CreateProjectOptions extends GlobalOptions {
+  /** 默认包含部署工具；false 明确关闭。 */
+  deploy?: boolean
   /** 项目名称 */
   name: string
   /** 应用类型 */
@@ -205,20 +263,30 @@ export interface CreateProjectOptions extends GlobalOptions {
 
 /**
  * 代码生成选项
+ * @example 模块内部上下文
+ * ```ts
+ * const options: GenerateOptions = { cwd: '/workspace/shop', workspace: 'shop-serv', type: 'api', name: 'orders' } // 对应 hai g api orders --workspace shop-serv。
+ * ```
  */
 export interface GenerateOptions extends GlobalOptions {
-  /** 生成类型 */
-  type: GeneratorType
-  /** 名称 */
-  name: string
+  /** 生成类型；省略时交互选择。 */
+  type?: GeneratorType
+  /** 名称；省略时交互输入。 */
+  name?: string
   /** 输出路径 */
   output?: string
   /** 是否覆盖现有文件 */
   force?: boolean
+  /** 目标 workspace 的包名或相对路径；歧义时必须指定。 */
+  workspace?: string
 }
 
 /**
  * 生成器类型
+ * @example 模块内部上下文
+ * ```ts
+ * const generator: GeneratorType = 'api' // serv workspace 会同步 contract 与 procedure 聚合入口。
+ * ```
  */
 export type GeneratorType
   = | 'page'
@@ -229,6 +297,10 @@ export type GeneratorType
 
 /**
  * 模板上下文
+ * @example 模块内部上下文
+ * ```ts
+ * const context: TemplateContext = { projectName: 'shop', camelCase: 'orderItem', pascalCase: 'OrderItem', kebabCase: 'order-item', snakeCase: 'order_item' }
+ * ```
  */
 export interface TemplateContext {
   /** 项目名称 */
@@ -247,6 +319,10 @@ export interface TemplateContext {
 
 /**
  * 生成器定义
+ * @example 模块内部上下文
+ * ```ts
+ * const generator: GeneratorDefinition = { name: 'model', description: '订单模型', templates: [{ template: 'model.hbs', output: 'src/lib/models/{{kebabCase}}.ts' }] }
+ * ```
  */
 export interface GeneratorDefinition {
   /** 生成器名称 */
@@ -261,6 +337,10 @@ export interface GeneratorDefinition {
 
 /**
  * 模板文件定义
+ * @example 模块内部上下文
+ * ```ts
+ * const template: TemplateFile = { template: 'model.hbs', output: 'src/lib/models/{{kebabCase}}.ts' }
+ * ```
  */
 export interface TemplateFile {
   /** 模板路径（相对于 templates 目录） */
@@ -271,6 +351,10 @@ export interface TemplateFile {
 
 /**
  * 提示问题定义
+ * @example 模块内部上下文
+ * ```ts
+ * const prompt: PromptDefinition = { name: 'kind', type: 'select', message: '选择类型', choices: [{ title: '页面', value: 'page' }], initial: 'page' }
+ * ```
  */
 export interface PromptDefinition {
   /** 字段名 */
@@ -287,6 +371,10 @@ export interface PromptDefinition {
 
 /**
  * 项目信息
+ * @example 模块内部上下文
+ * ```ts
+ * const project: ProjectInfo = { name: 'shop', version: '1.0.0', isHaiProject: true, haiPackages: ['@h-ai/core', '@h-ai/serv'] }
+ * ```
  */
 export interface ProjectInfo {
   /** 项目名称 */

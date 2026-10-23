@@ -1,3 +1,17 @@
+<!--
+  @component GuideHost
+  GuideHost 组件的公开使用示例。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import { GuideHost, createGuide } from '@h-ai/ui'
+  const guide = createGuide({ tours: [], persistence: 'memory' })
+  const host = mount(GuideHost, { target: document.body, props: { guide, locale: 'zh-CN', scope: 'demo' } })
+  await unmount(host)
+  guide.stop()
+  ```
+-->
 <script lang='ts'>
   import type { GuideController } from '../../../guide-types.js'
   import type { DataAttributes } from '../../../types.js'
@@ -12,6 +26,19 @@
   import 'driver.js/dist/driver.css'
   import '../../../styles/guide.css'
 
+  /**
+   * 导览宿主属性；绑定应用语言、非敏感身份范围和控制器。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { GuideHost, createGuide } from '@h-ai/ui'
+   * const guide = createGuide({ tours: [], persistence: 'memory' })
+   * const host = mount(GuideHost, { target: document.body, props: { guide, locale: 'zh-CN', scope: 'demo' } })
+   * await unmount(host)
+   * guide.stop()
+   * ```
+   */
   interface Props {
     guide: GuideController
     locale?: string

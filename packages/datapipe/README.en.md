@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`), and composable pipelines (`pipeline`). Pure functions; no initialization required.
 
-## Features
+## Core features
 
 | Feature              | Description                                                                                           |
 | -------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -16,16 +18,25 @@ A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`
 
 > Security: `customReplacements` and `separator` in `mode: 'custom'` are used as regular expressions. Only provide trusted, reviewed patterns; do not interpolate user input directly into regexes, to avoid ReDoS or unintended broad replacements.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
+const rawText = '<p>Hello framework.</p>'
+const text = '# Getting started\n\nHello framework.'
+
 // 直接清洗
-const cleaned = datapipe.clean('<p>Hello</p>', { removeHtml: true })
+const cleaned = datapipe.clean(rawText, { removeHtml: true })
+if (!cleaned.success)
+  throw new Error(cleaned.error.message)
 
 // 按 Markdown 标题分块
 const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000 })
+if (!chunks.success)
+  throw new Error(chunks.error.message)
 
 // 管线模式（链式组合多步操作）
 const result = await datapipe.pipeline()
@@ -34,9 +45,11 @@ const result = await datapipe.pipeline()
   .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
   .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
   .run(rawText)
+if (!result.success)
+  throw new Error(result.error.message)
 ```
 
-## Chunking modes
+### Chunking modes
 
 | Mode      | Description                           |
 | --------- | ------------------------------------- |
@@ -48,7 +61,7 @@ const result = await datapipe.pipeline()
 | character | Split by character count              |
 | custom    | Custom separator (requires separator) |
 
-## Error handling
+### Error handling
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure. Error codes use the string format `hai:datapipe:NNN`.
 
@@ -62,18 +75,22 @@ if (!result.success) {
     case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
       break
-    case HaiDatapipeError.PROCESSING_ERROR.code:
+    case HaiDatapipeError.CHUNK_FAILED.code:
       // 输入或自定义正则导致处理失败；记录错误并回退到安全默认策略
       break
   }
 }
 ```
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/datapipe test
 ```
+
+Chunk `maxSize` defaults to 1500; `overlap` defaults to 0 and must satisfy `0 <= overlap < maxSize`. Both use non-whitespace words in word mode (continuous Chinese can be one long word), and Unicode code points in every other mode, rather than UTF-16 length, bytes or model tokens. The limit includes overlap and separators. Natural sentence/paragraph/page/custom boundaries only guide split positions; oversized segments use a `maxSize-overlap` sliding window. Original whitespace, punctuation, page markers and custom separators are preserved, so removing overlap reconstructs the source. Chunks are not trimmed or joined with added newlines. Markdown overlaps only within each section, uses the same hard limit and ignores headings inside fenced code. Only `markdownKeepTitle=false` explicitly removes heading lines. Empty or entirely whitespace input returns no chunks. Custom regular expressions must come from trusted configuration; invalid expressions return CHUNK_FAILED.
+
+Source examples distinguish pure functions, synchronous HaiResult and asynchronous pipelines; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
 
 ## License
 

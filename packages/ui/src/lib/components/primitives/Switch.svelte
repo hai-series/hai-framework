@@ -1,4 +1,5 @@
 <!--
+  @component Switch
   =============================================================================
   @h-ai/ui - Switch 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Switch } from '@h-ai/ui'
+  const props: ComponentProps<typeof Switch> = { label: '开启通知', checked: true }
+  const component = mount(Switch, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, SwitchProps } from '../../types.js'

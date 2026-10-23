@@ -1,0 +1,6 @@
+provider:
+  type: docker-ssh
+  expose:
+    hostPort: 18080
+container:
+  s3Engine: ${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}

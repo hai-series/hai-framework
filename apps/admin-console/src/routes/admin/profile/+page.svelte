@@ -272,7 +272,7 @@
   <title>{m.nav_profile()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class='mx-auto w-full max-w-5xl space-y-6'>
+<div class='w-full min-w-0 space-y-6'>
   <div class='flex items-end justify-between gap-4'>
     <div>
       <h1 class='text-xl font-semibold tracking-tight text-base-content'>{m.nav_profile()}</h1>

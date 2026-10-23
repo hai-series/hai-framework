@@ -1,5 +1,14 @@
 import type { Size } from '../types.js'
 
+/**
+ * 控件高度、间距与 DaisyUI 尺寸类的内部统一映射。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const classes: FormControlSizeClasses = getFormControlSizeClasses('lg')
+ * const inputClasses = classes.control
+ * ```
+ */
 interface FormControlSizeClasses {
   /** 固定高度，适用于单行控件 */
   height: string
@@ -26,6 +35,14 @@ const FORM_CONTROL_SIZE_CLASSES: Record<Size, FormControlSizeClasses> = {
  * 获取输入类控件的统一尺寸类名。
  *
  * 仅供组件内部复用，确保 Input、Select 与复合输入控件使用同一盒模型。
+ * @param size - 组件尺寸预设。
+ * @returns 统一的高度、最小高度、间距与控件尺寸类。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const classes = getFormControlSizeClasses('lg')
+ * const controlClass = classes.control
+ * ```
  */
 export function getFormControlSizeClasses(size: Size): FormControlSizeClasses {
   return FORM_CONTROL_SIZE_CLASSES[size]

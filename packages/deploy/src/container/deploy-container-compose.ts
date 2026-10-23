@@ -11,27 +11,43 @@ import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { parse, stringify } from 'yaml'
+import { stringify } from 'yaml'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
+import { deployM } from '../deploy-i18n.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
 const IMAGES = {
-  postgres: 'postgres:16-alpine',
-  mysql: 'mysql:8.4',
-  redis: 'redis:7-alpine',
+  postgres: 'docker.io/library/postgres:16.15-alpine',
+  mysql: 'docker.io/library/mysql:8.4.11',
+  redis: 'docker.io/library/redis:7.4.11-alpine',
   rustfs: 'ghcr.io/rustfs/rustfs:1.0.1',
   minio: 'ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z',
-  qdrant: 'qdrant/qdrant:v1.12.4',
-  pgvector: 'pgvector/pgvector:pg17',
-  chroma: 'chromadb/chroma:1.5.5',
+  qdrant: 'docker.io/qdrant/qdrant:v1.19.2',
+  pgvector: 'docker.io/pgvector/pgvector:0.8.0-pg17',
+  chroma: 'docker.io/chromadb/chroma:1.5.5',
   ldap: 'docker.io/osixia/openldap:1.5.0',
-  smtp: 'axllent/mailpit:v1.27.4',
+  smtp: 'docker.io/axllent/mailpit:v1.27.4',
 } as const
 
-/** compose 服务定义（结构化对象，交由 yaml 序列化）。 */
+/**
+ * compose 服务定义（结构化对象，交由 yaml 序列化）。
+ * 内部 Compose 文档对象，不是公开部署配置 Schema。
+ * @example 模块内部上下文
+ * ```ts
+ * const service: ComposeService = { image: 'registry.example.org/shop:1.0.0', ports: ['8080:3000'] }
+ * ```
+ */
 type ComposeService = Record<string, unknown>
 
-/** sidecar 规划结果。 */
+/**
+ * sidecar 规划结果。
+ * 无中间件应用的空计划是合法输入；有连接时 env/secrets 可能含私密值，不能整体展示。
+ * @example 模块内部上下文
+ * ```ts
+ * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, dependsOn: [], secrets: [] }
+ * const yaml = generateComposeFile({ projectName: 'shop', appVersion: '1.0.0', imageRef: 'shop:1.0.0-build1', hostPort: 8080, containerPort: 3000, sidecar })
+ * ```
+ */
 export interface SidecarPlan {
   /** 实际启用的自建服务 */
   services: ServiceType[]
@@ -49,7 +65,14 @@ export interface SidecarPlan {
   secrets: string[]
 }
 
-/** 运行期环境构建结果。 */
+/**
+ * 运行期环境构建结果。
+ * @example 模块内部上下文
+ * ```ts
+ * const plan: RuntimeEnvPlan = { env: { NODE_ENV: 'production' }, sidecar: { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, dependsOn: [], secrets: [] } }
+ * const content = serializeEnvFile(plan.env)
+ * ```
+ */
 export interface RuntimeEnvPlan {
   /** 完整运行期环境（写入 .env.runtime） */
   env: Record<string, string>
@@ -76,10 +99,13 @@ function resolveSidecarSecrets(appDir: string, projectName: string): Record<stri
   const secretFile = join(appDir, '.hai', 'deploy', 'runtime', `${projectName}.secrets.json`)
   if (existsSync(secretFile)) {
     try {
-      return JSON.parse(readFileSync(secretFile, 'utf-8')) as Record<string, string>
+      const saved = JSON.parse(readFileSync(secretFile, 'utf-8')) as Record<string, string>
+      if (!saved || !['dbPassword', 'storagePassword', 'ldapPassword'].every(key => typeof saved[key] === 'string' && saved[key].length > 0))
+        throw new Error('Invalid credentials')
+      return saved
     }
     catch {
-      // 损坏则重建
+      throw new Error(deployM('deploy_secretsInvalid', { params: { path: secretFile } }))
     }
   }
   const secrets = {
@@ -270,12 +296,21 @@ function planChromaVecdb(plan: SidecarPlan, projectName: string, net: string[]):
  *
  * 仅为 scan.requiredServices 中、且 Provisioner 未提供对应 HAI_* 变量的服务追加 sidecar；
  * db 与 vecdb 按扫描到的后端类型（postgresql/mysql/sqlite、qdrant/pgvector/chroma/lancedb）生成匹配实现。
- *
+ * keep 不创建 sidecar；云开通结果和现有连接分别处理，不能把任何依赖都当成需要新建服务。
  * @param appDir - 应用根目录
  * @param projectName - 项目名
  * @param scan - 扫描结果
  * @param provisionEnv - Provisioner 输出的环境变量
  * @returns sidecar 规划
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @param s3Engine - 自建 S3 服务实现；协议仍为 s3，默认 rustfs。
+ * @example 模块内部上下文
+ * ```ts
+ * const { scanApp } = await import('../deploy-scanner.js')
+ * const scanned = await scanApp(process.cwd())
+ * if (!scanned.success) throw new Error(scanned.error.message)
+ * const plan = planSidecars(process.cwd(), 'shop', scanned.data, {}, { serviceModes: { db: 'keep' } })
+ * ```
  */
 export function planSidecars(
   appDir: string,
@@ -285,6 +320,30 @@ export function planSidecars(
   options?: DeployAppOptions,
   s3Engine: 'rustfs' | 'minio' = 'rustfs',
 ): SidecarPlan {
+  // 保持配置不变仍需交付自建服务镜像；已保存的容器服务地址可明确区分外部连接。
+  const serviceModes = { ...options?.serviceModes }
+  for (const requirement of scan.middlewares ?? []) {
+    if (options?.selectedServices && !options.selectedServices.includes(requirement.service))
+      continue
+    const mode = serviceModes[requirement.envPrefix] ?? serviceModes[requirement.service]
+    if (mode !== 'keep')
+      continue
+    const endpoint = requirement.config.url ?? requirement.config.endpoint
+    let host = requirement.config.host
+    if (typeof endpoint === 'string') {
+      try {
+        host = new URL(endpoint).hostname
+      }
+      catch {
+        continue
+      }
+    }
+    if (host === requirement.service || ['sqlite', 'local', 'memory', 'lancedb'].includes(requirement.backend)) {
+      serviceModes[requirement.envPrefix] = 'default'
+      serviceModes[requirement.service] = 'default'
+    }
+  }
+  options = { ...options, serviceModes }
   const plan: SidecarPlan = {
     services: [],
     composeServices: {},
@@ -366,13 +425,23 @@ export function planSidecars(
  * 构建运行期环境变量并规划 sidecar。
  *
  * 合并顺序（后者覆盖前者）：框架默认 < sidecar 自建 < Provisioner 输出。
- *
  * @param appDir - 应用根目录
  * @param projectName - 项目名
  * @param scan - 扫描结果
  * @param provisionEnv - Provisioner 输出环境变量
  * @param containerPort - 容器内监听端口
  * @returns 运行期环境与 sidecar 规划
+ * @param options - 本次操作选项；字段含义见各子项。
+ * @param appEnv - 已加载的应用变量，和云开通结果分别传入。
+ * @param s3Engine - 自建 S3 服务实现；协议仍为 s3，默认 rustfs。
+ * @example 模块内部上下文
+ * ```ts
+ * const { scanApp } = await import('../deploy-scanner.js')
+ * const scanned = await scanApp(process.cwd())
+ * if (!scanned.success) throw new Error(scanned.error.message)
+ * const plan = buildRuntimeEnv(process.cwd(), 'shop', scanned.data, {}, 3000, { environment: 'prod' }, { NODE_ENV: 'production' })
+ * const text = serializeEnvFile(plan.env)
+ * ```
  */
 export function buildRuntimeEnv(
   appDir: string,
@@ -400,7 +469,6 @@ export function buildRuntimeEnv(
 
 /**
  * 生成 compose 文件内容。
- *
  * @param options - 生成参数
  * @param options.projectName - 项目名
  * @param options.imageRef - 应用镜像引用
@@ -408,12 +476,15 @@ export function buildRuntimeEnv(
  * @param options.hostPort - 宿主机映射端口
  * @param options.containerPort - 容器内端口
  * @param options.sidecar - sidecar 规划
- * @param options.previousCompose - 需要保留服务时读取的上次编排
- * @param options.serviceModes - 各中间件的处理选择
  * @param options.web - 同一编排中的 Web 镜像与监听端口，独立于私有应用环境
  * @param options.web.imageRef - Web 镜像引用
  * @param options.web.containerPort - Web 容器监听端口
  * @returns compose YAML 字符串
+ * @example 模块内部上下文
+ * ```ts
+ * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, dependsOn: [], secrets: [] }
+ * const yaml = generateComposeFile({ projectName: 'shop', appVersion: '1.0.0', imageRef: 'shop:1.0.0-build1', hostPort: 8080, containerPort: 3000, sidecar })
+ * ```
  */
 export function generateComposeFile(options: {
   projectName: string
@@ -422,10 +493,6 @@ export function generateComposeFile(options: {
   hostPort: number
   containerPort: number
   sidecar: SidecarPlan
-  /** 上次编排；保持不变的服务继续保留其定义与持久化卷。 */
-  previousCompose?: string
-  /** 各中间件的处理选择。 */
-  serviceModes?: DeployAppOptions['serviceModes']
   /** Web 公开入口；私有运行环境仅属于 API 服务。 */
   web?: { imageRef: string, containerPort: number }
 }): string {
@@ -476,25 +543,6 @@ export function generateComposeFile(options: {
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
 
-  if (options.previousCompose && options.serviceModes) {
-    const previous = parse(options.previousCompose) as { services?: Record<string, ComposeService>, volumes?: Record<string, unknown> }
-    for (const [service, mode] of Object.entries(options.serviceModes)) {
-      if (mode !== 'keep')
-        continue
-      for (const name of [service, `${service}-init`]) {
-        if (previous.services?.[name]) {
-          services[name] = previous.services[name]
-          app.depends_on = [...new Set([...(app.depends_on as string[] | undefined ?? []), service])]
-        }
-      }
-    }
-    const previousMounts = previous.services?.app?.volumes
-    if (Array.isArray(previousMounts) && Object.values(options.serviceModes).includes('keep'))
-      app.volumes = [...new Set([...(app.volumes as string[] | undefined ?? []), ...previousMounts])]
-    // 保留已有卷定义不会创建/删除容器或清空卷，避免 keep 路径丢失挂载。
-    compose.volumes = { ...previous.volumes, ...sidecar.volumes }
-  }
-
   // S3 服务启动不等于桶已创建；初始化失败必须阻止应用启动，不能只依靠 HTTP 健康检查。
   if (services['storage-init']) {
     app.depends_on = {
@@ -510,11 +558,16 @@ export function generateComposeFile(options: {
 
 /**
  * 生成同源 Web/API 的 Nginx 配置，保留运行时配置及 SPA 页面刷新。
+ * API 上限与 @h-ai/crypto 的 TRANSPORT_BODY_LIMITS.encryptedPayloadBytes（2 MiB + 32 KiB）一致；
+ * 关闭请求缓冲，让应用在读取过程中执行握手、公钥和正文的更细预算。
  * @param port - API 容器监听端口
  * @param apiPrefix - 应用实际 API 前缀，不允许向 Nginx 配置注入指令
  * @param webPort - Web 容器监听端口
  * @returns 仅含公开路由的 Nginx 配置
- * @example `generateWebProxyConfig(3000, '/api/v1')`
+ * @example 模块内部上下文
+ * ```ts
+ * const nginx = generateWebProxyConfig(3000, '/api', 8080) // Web 将同源 /api 转发至 app 服务。
+ * ```
  */
 export function generateWebProxyConfig(port: number, apiPrefix: string, webPort = 8080): string {
   if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535))
@@ -523,6 +576,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
   listen ${webPort};
   server_name _;
   root /usr/share/nginx/html;
+  large_client_header_buffers 4 32k;
   location / {
     try_files $uri $uri/ /index.html;
   }
@@ -540,17 +594,29 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
     proxy_set_header Host $http_host;
   }
   location ${apiPrefix.replace(/\/$/, '')}/ {
+    client_max_body_size 2129920;
     proxy_pass http://app:${port};
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_request_buffering off;
     proxy_buffering off;
+    proxy_buffer_size 32k;
   }
 }
 `
 }
 
-/** 将环境变量对象序列化为 .env.runtime 内容（每行 KEY=VALUE）。 */
+/**
+ * 将环境变量对象序列化为 .env.runtime 内容（每行 KEY=VALUE）。
+ * 编码 dotenv 值，不进行脱敏；含密钥时只能写入受保护的运行环境文件。
+ * @param env - 要序列化的运行变量，可能包含秘密。
+ * @returns 保留字面量值且正确转义的 dotenv 文本，不进行脱敏。
+ * @example 模块内部上下文
+ * ```ts
+ * const content = serializeEnvFile({ NODE_ENV: 'production', HAI_CORE_NAME: 'Shop app' })
+ * ```
+ */
 export function serializeEnvFile(env: Record<string, string>): string {
   return `${Object.entries(env)
     .map(([key, value]) => {

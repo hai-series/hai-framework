@@ -198,10 +198,11 @@ function throttle<T extends (...args: unknown[]) => unknown>(
 
 /**
  * 异步操作工具对象。
- *
  * @example
  * ```ts
- * await async.delay(100)
+ * import { core } from '@h-ai/core'
+ * const tools = core.async
+ * await tools.retry(async () => 'ready', { maxRetries: 2 })
  * ```
  */
 export const async = {
@@ -214,5 +215,12 @@ export const async = {
   throttle,
 }
 
-/** async 子工具类型 */
+/**
+ * async 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: AsyncFn = async
+ * await tools.retry(async () => 'ready', { maxRetries: 2 })
+ * ```
+ */
 export type AsyncFn = typeof async

@@ -1,13 +1,10 @@
 /**
- * @h-ai/capacitor — 推送通知
- *
- * 封装 `@capacitor/push-notifications` 插件，提供推送注册与消息监听。
- *
+ * @h-ai/capacitor — 推送通知及其受管监听生命周期。
  * @module capacitor-push
  */
-
+import type { PluginListenerHandle } from '@capacitor/core'
 import type { HaiResult } from '@h-ai/core'
-import type { PushNotificationCallbacks, PushRegistration } from './capacitor-types.js'
+import type { PushCleanup, PushNotificationCallbacks, PushOptions, PushRegistration } from './capacitor-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { capacitorM } from './capacitor-i18n.js'
 import { HaiCapacitorError } from './capacitor-types.js'
@@ -15,164 +12,276 @@ import { HaiCapacitorError } from './capacitor-types.js'
 const logger = core.logger.child({ module: 'capacitor', scope: 'push' })
 
 /**
- * 注册推送通知
- *
- * 请求推送权限并注册设备 Token。需要安装 `@capacitor/push-notifications`。
- * 注册超过 30 秒未响应时自动超时。
- *
- * @returns 设备推送 Token
- *
- * @example
+ * 两类推送流程共用的资源所有权；关闭立即停止回调，迟到 handle 仍必须回收。
+ * @example 模块内部上下文
  * ```ts
- * const result = await capacitor.push.register()
- * if (result.success) {
- *   await api.post('/push/register', { token: result.data.token })
+ * const scope: PushScope = createPushScope({ signal: new AbortController().signal })
+ * try {
+ *   const state = await scope.wait(async () => 'ready')
+ *   scope.assertOpen()
+ *   void state
+ * } finally {
+ *   await scope.dispose()
  * }
  * ```
  */
-export async function registerPush(): Promise<HaiResult<PushRegistration>> {
-  try {
-    const { PushNotifications } = await import('@capacitor/push-notifications')
+interface PushScope {
+  readonly signal: AbortSignal
+  assertOpen: () => void
+  attach: (add: () => Promise<PluginListenerHandle>) => Promise<void>
+  wait: <T>(operation: () => Promise<T>) => Promise<T>
+  finishSetup: () => void
+  dispose: () => Promise<void>
+}
 
-    // 请求权限
-    const permResult = await PushNotifications.requestPermissions()
-    if (permResult.receive !== 'granted') {
-      return err(
-        HaiCapacitorError.PUSH_REGISTER_FAILED,
-        capacitorM('capacitor_pushRegisterFailed'),
-      )
-    }
+const activeScopes = new Set<PushScope>()
 
-    // 注册并等待 Token（带超时防护）
-    const REGISTER_TIMEOUT_MS = 30_000
-    const token = await new Promise<string>((resolve, reject) => {
-      let settled = false
-      let listeners: Array<{ remove: () => Promise<void> }> = []
-      let timer: ReturnType<typeof setTimeout> | undefined
+/** 为一次注册/监听建立所有权，不使用 removeAllListeners 影响其他消费者。 */
+function createPushScope(options?: PushOptions): PushScope {
+  let scope: PushScope
+  const controller = new AbortController()
+  const handles = new Set<PluginListenerHandle>()
+  const removals = new Map<PluginListenerHandle, Promise<void>>()
+  let pending = 0
+  let closing: Promise<void> | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const cancelled = () => new Error(capacitorM('capacitor_pushCancelled'))
 
-      async function cleanup(): Promise<void> {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        const removeResults = await Promise.allSettled(listeners.map(listener => listener.remove()))
-        const rejectedCount = removeResults.filter(result => result.status === 'rejected').length
-        if (rejectedCount > 0) {
-          logger.warn('Failed to remove push registration listeners', { rejectedCount })
-        }
-      }
+  function releaseIfComplete(): void {
+    if (controller.signal.aborted && pending === 0 && handles.size === 0)
+      activeScopes.delete(scope)
+  }
 
-      function settleWith(handler: (value: string | Error) => void, value: string | Error): void {
-        if (settled)
-          return
-
-        settled = true
-        void cleanup().finally(() => {
-          handler(value)
-        })
-      }
-
-      timer = setTimeout(() => {
-        settleWith(reject as (value: string | Error) => void, new Error('Push registration timed out'))
-      }, REGISTER_TIMEOUT_MS)
-
-      void Promise.all([
-        PushNotifications.addListener('registration', (t) => {
-          settleWith(resolve as (value: string | Error) => void, t.value)
-        }),
-        PushNotifications.addListener('registrationError', (error) => {
-          settleWith(reject as (value: string | Error) => void, error instanceof Error ? error : new Error(String(error)))
-        }),
-      ])
-        .then(async (attachedListeners) => {
-          listeners = attachedListeners
-          if (settled)
-            return
-
-          await PushNotifications.register()
-        })
-        .catch((error) => {
-          settleWith(reject as (value: string | Error) => void, error instanceof Error ? error : new Error(String(error)))
-        })
+  function remove(handle: PluginListenerHandle): Promise<void> {
+    const current = removals.get(handle)
+    if (current)
+      return current
+    const removal = Promise.resolve().then(() => handle.remove()).then(() => {
+      handles.delete(handle)
+    }).finally(() => {
+      removals.delete(handle)
+      releaseIfComplete()
     })
+    removals.set(handle, removal)
+    return removal
+  }
 
+  function finishSetup(): void {
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      timer = undefined
+    }
+  }
+
+  function dispose(): Promise<void> {
+    controller.abort()
+    finishSetup()
+    options?.signal?.removeEventListener('abort', onAbort)
+    if (closing)
+      return closing
+    closing = Promise.allSettled([...handles].map(remove)).then((results) => {
+      releaseIfComplete()
+      if (results.some(result => result.status === 'rejected'))
+        throw new Error(capacitorM('capacitor_pushCleanupFailed'))
+    }).finally(() => { closing = undefined })
+    return closing
+  }
+
+  function onAbort(): void {
+    void dispose().catch(() => logger.warn('Push listener cleanup failed; retry cleanup or capacitor.close'))
+  }
+
+  scope = {
+    signal: controller.signal,
+    assertOpen() {
+      if (controller.signal.aborted)
+        throw cancelled()
+    },
+    async attach(add) {
+      scope.assertOpen()
+      pending++
+      try {
+        const handle = await add()
+        handles.add(handle)
+        if (controller.signal.aborted) {
+          await remove(handle)
+          throw cancelled()
+        }
+      }
+      finally {
+        pending--
+        releaseIfComplete()
+      }
+    },
+    async wait(operation) {
+      scope.assertOpen()
+      let interrupt: (() => void) | undefined
+      const aborted = new Promise<never>((_, reject) => {
+        interrupt = () => reject(cancelled())
+        controller.signal.addEventListener('abort', interrupt, { once: true })
+      })
+      try {
+        return await Promise.race([Promise.resolve().then(operation), aborted])
+      }
+      finally {
+        if (interrupt)
+          controller.signal.removeEventListener('abort', interrupt)
+      }
+    },
+    finishSetup,
+    dispose,
+  }
+  activeScopes.add(scope)
+  timer = setTimeout(onAbort, 30_000)
+  options?.signal?.addEventListener('abort', onAbort, { once: true })
+  if (options?.signal?.aborted)
+    onAbort()
+  return scope
+}
+
+/** 原生能力必须实际存在；Web 插件不可作为 FCM/APNs 注册证明。 */
+async function loadPushPlugin() {
+  const { Capacitor } = await import('@capacitor/core')
+  if (!Capacitor.isNativePlatform())
+    throw new Error(capacitorM('capacitor_notAvailable'))
+  return (await import('@capacitor/push-notifications')).PushNotifications
+}
+
+/**
+ * 关闭模块所拥有的全部推送监听器；失败句柄保留以便再次 close 重试。
+ * @returns 全部移除成功，或 PUSH_CLEANUP_FAILED；迟到句柄到达时立即移除。
+ * @example
+ * ```ts
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * // 关闭由本模块拥有的监听器，失败句柄可再次 close 重试。
+ * const closed = await capacitor.close()
+ * if (!closed.success) throw new Error(closed.error.message)
+ * ```
+ */
+export async function closePushListeners(): Promise<HaiResult<void>> {
+  const results = await Promise.allSettled([...activeScopes].map(scope => scope.dispose()))
+  return results.some(result => result.status === 'rejected')
+    ? err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'))
+    : ok(undefined)
+}
+
+/**
+ * 注册原生推送 Token；30 秒包含权限、挂载监听器与原生注册等待。
+ * 部分失败、超时、AbortSignal 和模块关闭都会回收已知及迟到句柄。
+ * @param options - 可选取消信号；取消返回失败结果，不注册后续原生操作。
+ * @returns 真实原生插件返回的 token 或 PUSH_REGISTER_FAILED。
+ * @example
+ * ```ts
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const result = await capacitor.push.register({ signal: new AbortController().signal })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
+ * ```
+ */
+export async function registerPush(options?: PushOptions): Promise<HaiResult<PushRegistration>> {
+  const scope = createPushScope(options)
+  try {
+    const token = await scope.wait(async () => {
+      const push = await loadPushPlugin()
+      scope.assertOpen()
+      const permission = await push.requestPermissions()
+      scope.assertOpen()
+      if (permission.receive !== 'granted')
+        throw new Error(capacitorM('capacitor_pushRegisterFailed'))
+      let resolveToken!: (value: string) => void
+      let rejectToken!: (reason: Error) => void
+      const tokenResult = new Promise<string>((resolve, reject) => {
+        resolveToken = resolve
+        rejectToken = reject
+      })
+      // 在触发 register 之前就订阅结果，避免同步插件回调丢失或未处理拒绝。
+      const setup = async () => {
+        await scope.attach(() => push.addListener('registration', (result) => {
+          if (!scope.signal.aborted)
+            resolveToken(result.value)
+        }))
+        await scope.attach(() => push.addListener('registrationError', () => {
+          if (!scope.signal.aborted)
+            rejectToken(new Error(capacitorM('capacitor_pushRegisterFailed')))
+        }))
+        scope.assertOpen()
+        await push.register()
+      }
+      return (await Promise.all([setup(), tokenResult]))[1]
+    })
+    await scope.dispose()
     return ok({ token })
   }
   catch (cause) {
-    return err(
-      HaiCapacitorError.PUSH_REGISTER_FAILED,
-      capacitorM('capacitor_pushRegisterFailed'),
-      cause,
-    )
+    await scope.dispose().catch(() => logger.warn('Push registration cleanup failed; retry capacitor.close'))
+    return err(HaiCapacitorError.PUSH_REGISTER_FAILED, capacitorM('capacitor_pushRegisterFailed'), cause)
   }
 }
 
 /**
- * 监听推送通知事件
- *
- * @param callbacks - 回调配置（收到推送、点击推送）
- * @returns 包含清理函数的 HaiResult
- *
+ * 监听原生推送事件；设置阶段限时 30 秒，之后由 cleanup、信号或模块关闭结束。
+ * @param callbacks - 收到消息与点击消息的回调。
+ * @param options - 可选取消信号，监听建立后仍有效。
+ * @returns 幂等清理函数；清理失败可见且可重试，关闭后立即停止业务回调。
  * @example
  * ```ts
- * const result = await capacitor.push.listen({
- *   onReceived: (n) => handlePushReceived(n),
- *   onActionPerformed: (n) => router.goto('/notifications'),
- * })
- * if (result.success) {
- *   // 停止监听
- *   await result.data()
+ * import { capacitor } from '@h-ai/capacitor'
+ *
+ * const initialized = await capacitor.init()
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const listening = await capacitor.push.listen({ onReceived: notice => { document.title = notice.title ?? 'Notice' } })
+ *   if (!listening.success) throw new Error(listening.error.message)
+ *   const closed = await listening.data()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * } finally {
+ *   const closed = await capacitor.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
  * ```
  */
-export async function listenPush(callbacks: PushNotificationCallbacks): Promise<HaiResult<() => Promise<void>>> {
+export async function listenPush(callbacks: PushNotificationCallbacks, options?: PushOptions): Promise<HaiResult<PushCleanup>> {
+  const scope = createPushScope(options)
   try {
-    const { PushNotifications } = await import('@capacitor/push-notifications')
-    const listeners: Array<{ remove: () => Promise<void> }> = []
-
-    if (callbacks.onReceived) {
-      const listener = await PushNotifications.addListener(
-        'pushNotificationReceived',
-        (notification) => {
-          callbacks.onReceived?.({
-            id: notification.id,
-            title: notification.title,
-            body: notification.body,
-            data: notification.data as Record<string, unknown>,
-          })
-        },
-      )
-      listeners.push(listener)
-    }
-
-    if (callbacks.onActionPerformed) {
-      const listener = await PushNotifications.addListener(
-        'pushNotificationActionPerformed',
-        (action) => {
-          callbacks.onActionPerformed?.({
-            id: action.notification.id,
-            title: action.notification.title,
-            body: action.notification.body,
-            data: action.notification.data as Record<string, unknown>,
-          })
-        },
-      )
-      listeners.push(listener)
-    }
-
-    const cleanup = async () => {
-      const removeResults = await Promise.allSettled(listeners.map(listener => listener.remove()))
-      const rejectedCount = removeResults.filter(result => result.status === 'rejected').length
-      if (rejectedCount > 0) {
-        logger.warn('Failed to remove push listeners', { rejectedCount })
+    await scope.wait(async () => {
+      const push = await loadPushPlugin()
+      scope.assertOpen()
+      if (callbacks.onReceived) {
+        await scope.attach(() => push.addListener('pushNotificationReceived', (notification) => {
+          if (!scope.signal.aborted)
+            callbacks.onReceived?.({ id: notification.id, title: notification.title, body: notification.body, data: notification.data as Record<string, unknown> })
+        }))
       }
-    }
-    return ok(cleanup)
+      if (callbacks.onActionPerformed) {
+        await scope.attach(() => push.addListener('pushNotificationActionPerformed', (action) => {
+          if (!scope.signal.aborted)
+            callbacks.onActionPerformed?.({ id: action.notification.id, title: action.notification.title, body: action.notification.body, data: action.notification.data as Record<string, unknown> })
+        }))
+      }
+    })
+    scope.assertOpen()
+    scope.finishSetup()
+    return ok(async () => {
+      try {
+        await scope.dispose()
+        return ok(undefined)
+      }
+      catch (cause) {
+        return err(HaiCapacitorError.PUSH_CLEANUP_FAILED, capacitorM('capacitor_pushCleanupFailed'), cause)
+      }
+    })
   }
   catch (cause) {
-    return err(
-      HaiCapacitorError.PUSH_LISTEN_FAILED,
-      capacitorM('capacitor_pushListenFailed'),
-      cause,
-    )
+    await scope.dispose().catch(() => logger.warn('Push setup cleanup failed; retry capacitor.close'))
+    return err(HaiCapacitorError.PUSH_LISTEN_FAILED, capacitorM('capacitor_pushListenFailed'), cause)
   }
 }

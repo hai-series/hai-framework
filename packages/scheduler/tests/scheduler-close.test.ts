@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/index.js'
+import './helpers/sqlite-lifecycle.js'
 
 describe('scheduler close during execution', () => {
   afterEach(async () => {
@@ -16,7 +17,7 @@ describe('scheduler close during execution', () => {
     let oldSignal: AbortSignal | undefined
     const finished = vi.fn()
     expect((await scheduler.init({
-      enableDb: false,
+      enableDb: true,
       hooks: {
         onTaskExecute: event => new Promise<string>((resolve) => {
           oldSignal = event.signal
@@ -34,9 +35,9 @@ describe('scheduler close during execution', () => {
     const oldResult = await oldRun
     expect(oldResult.success).toBe(true)
     if (oldResult.success)
-      expect(oldResult.data.status).toBe('interrupted')
-    expect((await scheduler.init({ enableDb: false })).success).toBe(true)
-    expect((await scheduler.register({ id: 'same', name: 'new', cron: '* * * * *' })).success).toBe(true)
+      expect(oldResult.data.status).toBe('unknown')
+    expect((await scheduler.init({ enableDb: true })).success).toBe(true)
+    expect((await scheduler.updateTask('same', { name: 'new' })).success).toBe(true)
     resolveOld('late result')
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(scheduler.tasks.get('same')?.name).toBe('new')
@@ -44,7 +45,7 @@ describe('scheduler close during execution', () => {
   })
 
   it('terminates a long-running worker on close', async () => {
-    expect((await scheduler.init({ enableDb: false })).success).toBe(true)
+    expect((await scheduler.init({ enableDb: true })).success).toBe(true)
     expect((await scheduler.register({
       id: 'worker',
       name: 'worker',
@@ -59,18 +60,19 @@ describe('scheduler close during execution', () => {
     const result = await running
     expect(result.success).toBe(true)
     if (result.success)
-      expect(result.data.status).toBe('interrupted')
+      expect(result.data.status).toBe('unknown')
   })
 
   it('cancels retry backoff without executing another attempt', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => new Response('failed', { status: 503 }))
     vi.stubGlobal('fetch', fetchMock)
-    expect((await scheduler.init({ enableDb: false })).success).toBe(true)
+    expect((await scheduler.init({ enableDb: true })).success).toBe(true)
     expect((await scheduler.register({
       id: 'retry',
       name: 'retry',
       cron: '* * * * *',
       handler: { kind: 'api', url: 'http://localhost/test' },
+      idempotent: true,
       retry: { maxAttempts: 3, backoffMs: [60000] },
     })).success).toBe(true)
     const running = scheduler.trigger('retry')
@@ -79,7 +81,7 @@ describe('scheduler close during execution', () => {
     const result = await running
     expect(result.success).toBe(true)
     if (result.success)
-      expect(result.data.status).toBe('interrupted')
+      expect(result.data.status).toBe('unknown')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

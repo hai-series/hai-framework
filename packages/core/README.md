@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md)
 
-> hai Agent Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
+## 简介
 
-## 支持的能力
+hai Agent Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
+
+## 核心功能清单
 
 - **HaiResult 类型** — 函数式错误处理（`ok` / `err`），所有模块统一返回值
 - **统一日志** — Node.js 基于 pino，浏览器基于 loglevel，API 一致
@@ -18,9 +20,11 @@
 - **模块工具** — NotInitializedKit 代理模式，各模块共用的生命周期基础设施
 - **工具函数库** — 类型检查、对象 / 字符串 / 数组 / 异步 / 时间操作
 
-## 快速开始
+## 使用入门
 
-### Node.js 环境
+### 快速开始
+
+#### Node.js 环境
 
 ```typescript
 import { core } from '@h-ai/core'
@@ -72,7 +76,7 @@ core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
 core.typeUtils.isDefined(value)
 ```
 
-### 浏览器环境
+#### 浏览器环境
 
 ```typescript
 import { core } from '@h-ai/core'
@@ -95,13 +99,13 @@ core.array.unique([1, 1, 2])
 - `watch()` 会立即用同一错误调用回调，并返回安全的 no-op 取消函数
 - 需要配置时请由服务端读取后通过接口下发，或只在浏览器端用 `core.init({ logging })` 配置日志
 
-## 详细 API
+### 详细 API
 
-### 日志（Logger）
+#### 日志（Logger）
 
 `core.logger` 既是默认 Logger 实例，也是日志管理的统一入口。
 
-#### 日志记录
+##### 日志记录
 
 6 个级别：`trace` / `debug` / `info` / `warn` / `error` / `fatal`
 
@@ -111,7 +115,7 @@ core.logger.error('Failed to connect', { error })
 core.logger.debug('Processing item', { id, step: 'validation' })
 ```
 
-#### 创建模块级 logger
+##### 创建模块级 logger
 
 ```typescript
 // 独立名称空间，适合模块内全局使用
@@ -119,7 +123,7 @@ const logger = core.logger.create({ name: 'payment' })
 logger.info('Payment processed')
 ```
 
-#### 子 logger（child）
+##### 子 logger（child）
 
 ```typescript
 // 携带固定上下文，每条日志自动附带这些字段
@@ -135,7 +139,7 @@ opLogger.error('Login failed', { reason: 'invalid_password' })
 
 > **典型用法**：在请求入口创建 `reqLogger`，传入 service 层，service 层再 `child` 添加操作上下文，最终日志自动串联完整链路。
 
-#### 日志管理
+##### 日志管理
 
 ```typescript
 // 配置输出格式和级别（Node.js / Browser）
@@ -154,9 +158,11 @@ const level = core.logger.getLevel() // 'debug'
 
 浏览器仍输出到 DevTools console：`pretty` 使用可读消息与上下文，`json` 输出包含 `level` / `msg` 的 JSON 字符串。默认凭据脱敏与配置的字段路径脱敏同时生效，支持嵌套点/括号路径和 `*`；消息文本本身需调用方脱敏。
 
-`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段只会掩码 URL 中内嵌的用户名和密码；邮箱、手机号默认不会被遮盖。
+日志上下文中的原生 `Error` 会先转为包含 `name`、`message`、`stack`、`cause`、`AggregateError.errors` 与可枚举自有上下文的副本，再执行默认字段/URL 脱敏与配置的 `redact`；两端规则一致，原异常不变。异常子图循环返回 `[Circular]`，32 层上限返回 `[MaxDepth]`；其中的自定义替换值也经同一规范化处理，普通对象的替换语义不变。无 Error 的普通对象循环仍保留原结构，不保证可直接 JSON 序列化。`name/message/stack` 是自由文本，不自动解析其中的秘密；调用方应先清理，或用 `error.message` / `error.stack` 等路径整体遮蔽。
 
-#### 日志级别规范
+`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段会掩码 URL 中的用户名、密码和敏感查询参数（含 OAuth 键值 fragment）；非法 URL 返回固定占位符；邮箱、手机号默认不会被遮盖。
+
+##### 日志级别规范
 
 | 级别    | 适用场景                           |
 | ------- | ---------------------------------- |
@@ -167,7 +173,7 @@ const level = core.logger.getLevel() // 'debug'
 | `error` | 操作失败（需人工排查）             |
 | `fatal` | 致命错误（服务无法继续）           |
 
-### 国际化（i18n）
+#### 国际化（i18n）
 
 内置语言为 `zh-CN`、`en-US`、`ja-JP`；`ja` 简写会规范化为 `ja-JP`，所有模块共用此语言设置。
 
@@ -193,9 +199,9 @@ core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ```
 
-### 脱敏工具
+#### 脱敏工具
 
-`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证。模块也可自定义 matcher。
+`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证、敏感查询参数和 OAuth 键值 fragment。`core.sanitize.sanitizeUrl(url, options)` 可单独处理 URL，非法 URL 返回 `(invalid url)`；自定义 matcher 同样适用于参数名。
 
 ```typescript
 core.sanitize.sanitizeSensitiveFields({
@@ -213,7 +219,7 @@ core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
 // => { email: '***' }
 ```
 
-### Zod 校验错误 i18n 映射
+#### Zod 校验错误 i18n 映射
 
 `core.zodValidation` 用于把 Zod `SafeParseError` / `ZodError` 转为扁平表单错误，并将 Zod
 默认英文消息映射为调用方自己的 i18n 文案。
@@ -274,17 +280,19 @@ if (!result.success) {
 }
 ```
 
-### 配置管理（Node.js 专用）
+#### 配置管理（Node.js 专用）
 
 > 浏览器端没有文件系统，`core.config` 仅提供占位 API：文件相关方法返回 `SERVICE_UNAVAILABLE`，不会加载 YAML。
+
+Node 自动加载和监听运行时 `.yml` / `.yaml`，精确跳过保留文件 `_deploy.yml`、`_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们。业务 `deploy.yml` 仍自动加载，手动 `core.config.load` 不受影响。单项加载返回失败时记录错误并继续，必需配置由应用调用 `core.config.validate` 并检查 `success`；目录扫描、日志设置等异常仍可能传播。
 
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -306,8 +314,8 @@ const validResult = core.config.validate('app', AppSchema)
 
 // 查询和获取
 if (core.config.has('app')) {
-  const cfg = core.config.get<typeof AppSchema>('app') // undefined 或配置
-  const cfg2 = core.config.getOrThrow<typeof AppSchema>('app') // 未加载时抛异常
+  const cfg = core.config.get<z.infer<typeof AppSchema>>('app') // undefined 或配置
+  const cfg2 = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // 未加载时抛异常
 }
 core.config.keys() // ['core', 'app', 'db', ...]
 
@@ -329,7 +337,7 @@ core.config.clear('app') // 清除单个
 core.config.clear() // 清除全部
 ```
 
-#### dotenv 文件与环境切换
+##### dotenv 文件与环境切换
 
 Node 专用的 `core.config.loadEnvFiles({ mode, envDir })` 返回 HaiResult，读取 `.env` → `.env.<mode>` → `.env.local`，已有进程环境最高；development/production 映射为 dev/prod，文件不存在时跳过。该函数不修改进程，调用方检查 success 后注入。除 `.env.local` 外的公共环境文件及完整说明 `.env.example` 提交 Git。`core.init` 不自动读取 dotenv，浏览器调用返回 SERVICE_UNAVAILABLE。
 
@@ -341,7 +349,7 @@ Object.assign(process.env, env.data)
 core.init({ configDir: './config' })
 ```
 
-#### 环境变量映射与插值
+##### 环境变量映射与插值
 
 `core.config.load(name, ...)` 会为每个 YAML 叶子配置项自动映射
 `HAI_<配置名>_<YAML 路径>` 环境变量。配置名和每层 key 转成大写，层级以 `_`
@@ -384,7 +392,7 @@ database: ${DB_CONNECTION} # → 环境变量缺失时报错
 url: http://${HOST}:${PORT} # → string（混合文本）
 ```
 
-### ID 生成
+#### ID 生成
 
 ```typescript
 const id = core.id.generate() // nanoid 21 字符
@@ -400,7 +408,7 @@ core.id.isValidUUID('f47ac10b-...') // true/false
 core.id.isValidNanoId('abc123', 6) // true/false
 ```
 
-### 工具函数
+#### 工具函数
 
 ```typescript
 // 类型检查
@@ -436,7 +444,7 @@ core.string.isBlank('') // true
 core.string.isNotBlank('x') // true
 core.string.padStart('5', 3, '0') // '005'
 core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // 防时序攻击比较
+core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
 
 // 数组操作
 core.array.unique([1, 1, 2]) // [1, 2]
@@ -472,7 +480,7 @@ core.time.startOfDay(date)
 core.time.endOfDay(date)
 ```
 
-### 模块基础工具（module）
+#### 模块基础工具（module）
 
 提供各模块共用的初始化错误处理：
 
@@ -490,9 +498,9 @@ const currentDdl: DdlOperations = notInitialized.proxy<DdlOperations>()
 const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
 ```
 
-## 错误处理
+### 错误处理
 
-### HaiResult 类型
+#### HaiResult 类型
 
 所有可能失败的操作返回 `HaiResult<T>`：
 
@@ -515,7 +523,7 @@ else {
 }
 ```
 
-### 自定义错误码（模块级）
+#### 自定义错误码（模块级）
 
 ```typescript
 import type { ErrorInfo } from '@h-ai/core'
@@ -541,7 +549,7 @@ const errorInst = core.error.buildHaiErrorInst(
 )
 ```
 
-### 配置错误码
+#### 配置错误码
 
 ```typescript
 import { HaiConfigError } from '@h-ai/core'
@@ -553,12 +561,28 @@ HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
 HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
-## 测试
+### 请求语言隔离
+
+Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
+
+浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
 
-## License
+## 配置的实际消费边界
+
+`_core.yml` 仅接受 name/version/env/defaultLocale 元数据与 logging；未知字段加载失败。Core 不提供全局 debug、ID 长度/前缀、业务 features 或语言注册列表；日志级别用 logging.level，ID 选项在每次 core.id 调用传入，业务配置放 app.yml 并由应用 Schema 校验。defaultLocale 是可读取的元数据，不会替应用注册翻译或切换 Paraglide。导入 Logger 不改写 LANG、LC_ALL、PYTHONIOENCODING，包括 Windows TTY。全部模块的配置与环境消费链见[配置对应表](../../docs/configuration-map.md)。
+
+公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。Node core.init 同步返回 void；单项 config.load 返回失败时记录错误并继续，必需配置须 validate 并检查 success。目录扫描等异常仍可能抛出；模块业务 HaiResult 则先检查 success。
+
+Node 入口的 core.string.constantTimeEqual 将原始 UTF-16 单元编码后使用 node:crypto.timingSafeEqual 比较等长字节，长度不相同时直接 false，长度本身不受保护。浏览器实现仅避免按内容提前返回，不提供 JavaScript 引擎级恒时保证，不用于服务端凭证校验。外围分支、编码和请求处理不因此自动成为恒时。
+
+UUID 只使用密码学安全的 randomUUID/getRandomValues；均不可用时明确抛错，不生成 Math.random 标识。
+
+## 许可证
 
 Apache-2.0

@@ -3,6 +3,15 @@
  * @module action-sheet-types
  */
 
+/**
+ * 底部操作菜单条目；危险动作可用 destructive 强调，禁用项不会触发选择。
+ *
+ * @example
+ * ```ts
+ * import type { ActionSheetItem } from '@h-ai/ui'
+ * const example: ActionSheetItem = { id: 'remove', label: '删除', destructive: true }
+ * ```
+ */
 export interface ActionSheetItem {
   /** 操作 ID */
   id: string

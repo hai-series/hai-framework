@@ -7,5 +7,5 @@ export default defineConfig({
     'index': 'src/index.ts',
     'client/index': 'src/client/index.ts',
   },
-  external: ['@h-ai/audit', '@h-ai/core', 'zod'],
+  external: ['@h-ai/audit', '@h-ai/core', '@h-ai/reldb', 'zod'],
 })

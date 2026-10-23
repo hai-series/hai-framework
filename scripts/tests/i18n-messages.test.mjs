@@ -15,7 +15,7 @@ function messageFiles(directory) {
 }
 
 function readMessages(filename) {
-  const text = readFileSync(filename, 'utf8')
+  const text = readFileSync(filename, 'utf8').replaceAll('\r\n', '\n')
   // Handlebars 条件块在 JSON 对象外，文案对象仍须为有效 JSON。
   return JSON.parse(text.slice(text.indexOf('{\n'), text.lastIndexOf('\n}') + 2))
 }

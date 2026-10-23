@@ -1,4 +1,5 @@
 <!--
+  @component ActionSheet
   @h-ai/ui — ActionSheet（底部操作菜单）
 
   用法：
@@ -11,6 +12,16 @@
     onselect={(id) => handleAction(id)}
     onclose={() => showActions = false}
   />
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ActionSheet } from '@h-ai/ui'
+  const props: ComponentProps<typeof ActionSheet> = { open: true, items: [{ id: 'remove', label: '删除', destructive: true }] }
+  const component = mount(ActionSheet, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'
@@ -20,6 +31,19 @@
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { ActionSheetItem }
 
+  /**
+   * ActionSheet 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { ActionSheet } from '@h-ai/ui'
+   * const props: ComponentProps<typeof ActionSheet> = { open: true, items: [{ id: 'remove', label: '删除', destructive: true }] }
+   * const component = mount(ActionSheet, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 是否显示 */
     open?: boolean

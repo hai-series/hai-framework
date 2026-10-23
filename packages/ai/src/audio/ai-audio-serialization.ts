@@ -12,6 +12,15 @@ import { HaiAIError } from '../ai-types.js'
  *
  * `synthesize` 只负责统一供应商输出的字节与格式；裸 PCM 没有容器头，
  * 因此这里负责补齐 WAV 头。MP3/WAV 则只进行 Base64 编码，不重新封装。
+ *
+ * @example
+ * ```ts
+ * import { serializePlayableAudio } from '@h-ai/ai'
+ * const result = serializePlayableAudio({ data: new Uint8Array(320), format: 'pcm16', sampleRate: 16000, channels: 1 })
+ * if (result.success) {
+ *   const source = 'data:' + result.data.mimeType + ';base64,' + result.data.audioBase64
+ * }
+ * ```
  */
 export function serializePlayableAudio(audio: AudioContent): HaiResult<PlayableAudio> {
   if (audio.format === 'wav')

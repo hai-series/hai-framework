@@ -11,7 +11,7 @@
  * 5. 获取文件元数据
  * 6. 服务端下载文件并验证内容
  * 7. 复制文件
- * 8. 生成签名 URL（用于前端直传）
+ * 8. S3 生成签名 URL；Local 明确拒绝不支持的预签名操作
  * 9. [S3] 客户端通过签名 URL 上传文件
  * 10. [S3] 客户端通过签名 URL 下载文件
  * 11. 清理：删除文件、删除目录
@@ -135,24 +135,30 @@ describe('storage workflow', () => {
       }
 
       // -----------------------------------------------------------------------
-      // 7. 生成签名 URL（验证格式合法）
+      // 7. 根据 provider 能力生成或明确拒绝签名 URL
       // -----------------------------------------------------------------------
       const getUrlResult = await storage.presign.getUrl('workflow/docs/readme.txt', { expiresIn: 600 })
-      expect(getUrlResult.success).toBe(true)
+      expect(getUrlResult.success).toBe(label === 's3')
       if (getUrlResult.success) {
         expect(typeof getUrlResult.data).toBe('string')
         expect(getUrlResult.data.length).toBeGreaterThan(0)
         expect(getUrlResult.data).toContain('readme.txt')
+      }
+      else {
+        expect(getUrlResult.error.code).toBe(HaiStorageError.UNSUPPORTED_OPERATION.code)
       }
 
       const putUrlResult = await storage.presign.putUrl('workflow/uploads/new-file.txt', {
         contentType: 'text/plain',
         expiresIn: 600,
       })
-      expect(putUrlResult.success).toBe(true)
+      expect(putUrlResult.success).toBe(label === 's3')
       if (putUrlResult.success) {
         expect(typeof putUrlResult.data).toBe('string')
         expect(putUrlResult.data.length).toBeGreaterThan(0)
+      }
+      else {
+        expect(putUrlResult.error.code).toBe(HaiStorageError.UNSUPPORTED_OPERATION.code)
       }
 
       // -----------------------------------------------------------------------

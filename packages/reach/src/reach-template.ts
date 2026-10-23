@@ -18,11 +18,15 @@ import { HaiReachError } from './reach-types.js'
 // ─── 变量渲染 ───
 
 /**
- * 将模板字符串中的 `{key}` 占位符替换为实际值
+ * 用自身属性替换{word}占位符，未知变量保留原文；不读取原型链，不做HTML转义。
+ * @param template - 模板文本。
+ * @param vars - 字符串变量。
+ * @returns 渲染文本，最终HTML安全上下文另行处理。
  *
- * @param template - 包含 `{key}` 占位符的模板字符串
- * @param vars - 变量键值对
- * @returns 替换后的字符串
+ * @example 模块内部上下文
+ * ```ts
+ * const text = renderString('Hello {name}, {missing}', { name: 'Alice' })
+ * ```
  */
 function renderString(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => {
@@ -31,7 +35,16 @@ function renderString(template: string, vars: Record<string, string>): string {
 }
 
 /**
- * 渲染模板实体
+ * 将持久模板转换为主题/正文，渲染异常返回TEMPLATE_RENDER_FAILED，不改写原模板。
+ * @param template - 已解析模板。
+ * @param vars - 变量字典。
+ * @returns 渲染HaiResult，结果不代表内容已消毒或消息已发送。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const result = renderTemplate({ name: 'welcome', provider: 'webhook', body: 'Hello {name}' }, { name: 'Alice' })
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
  */
 function renderTemplate(template: ReachTemplate, vars: Record<string, string>): HaiResult<RenderedTemplate> {
   try {
@@ -64,23 +77,16 @@ function noDbError(msgKey: 'reach_templateSaveFailed' | 'reach_templateDeleteFai
 // ─── 模板注册表工厂 ───
 
 /**
- * 创建模板注册表
+ * 内部数据库模板注册表工厂；无repo时明确不保存到内存，写入返回失败、解析找不到模板、列表为空。
+ * @param repo - 已初始化的模板数据库仓库。
+ * @returns 注册表；批量保存逐条upsert，不承诺事务全有全无。
  *
- * @param repo - 可选的数据库模板存储。所有模板操作均通过数据库完成。
- * @returns 模板注册表实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const registry = createTemplateRegistry(templateRepo)
- *
- * await registry.save({
- *   name: 'welcome',
- *   provider: 'email',
- *   subject: '欢迎加入 {appName}',
- *   body: '亲爱的 {userName}，欢迎使用 {appName}！',
- * })
- *
- * const result = await registry.render('welcome', { appName: 'Hai', userName: '张三' })
+ * const registry = createTemplateRegistry()
+ * const result = await registry.save({ name: 'welcome', provider: 'webhook', subject: 'Welcome {userName}', body: 'Hello {userName}' })
+ * if (!result.success) { const code = result.error.code }
+ * // 无数据库明确失败；应用通过reach.template使用持久注册表。
  * ```
  */
 export function createTemplateRegistry(repo?: TemplateRepository | null): ReachTemplateRegistry {

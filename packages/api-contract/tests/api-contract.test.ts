@@ -99,6 +99,7 @@ describe('@h-ai/api-contract', () => {
   it('payment 创建订单输入 Schema 可校验', () => {
     expect(PaymentCreateOrderInputSchema.safeParse({
       provider: 'wechat',
+      userId: 'trusted-openid',
       amount: 100,
       description: '测试商品',
       tradeType: 'jsapi',
@@ -106,6 +107,7 @@ describe('@h-ai/api-contract', () => {
 
     expect(PaymentCreateOrderInputSchema.safeParse({
       provider: 'wechat',
+      userId: 'trusted-openid',
       amount: 0,
       description: '测试商品',
       tradeType: 'jsapi',

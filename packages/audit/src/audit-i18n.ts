@@ -14,6 +14,11 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 /**
  * 审计模块文案 Key 类型
+ * @example 模块内部上下文
+ * ```ts
+ * const key: AuditMessageKey = 'audit_notInitialized'
+ * const message = auditM(key)
+ * ```
  */
 type AuditMessageKey = keyof typeof messagesZhCN
 
@@ -24,11 +29,9 @@ type AuditMessageKey = keyof typeof messagesZhCN
  * @param options - 插值参数与格式化选项
  * @returns 本地化后的文案字符串
  * @remarks 具体参数结构与 core.i18n.createMessageGetter 保持一致。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * const text = auditM('audit_notInitialized')
- * const withError = auditM('audit_logFailed', { params: { error: 'DB connection lost' } })
+ * const message = auditM('audit_logFailed', { locale: 'en-US', params: { error: 'database unavailable' } })
  * ```
  */
 export const auditM = core.i18n.createMessageGetter<AuditMessageKey>({

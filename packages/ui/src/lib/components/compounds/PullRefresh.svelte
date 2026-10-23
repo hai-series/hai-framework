@@ -1,16 +1,40 @@
 <!--
+  @component PullRefresh
   @h-ai/ui — PullRefresh（下拉刷新）
 
   用法：
   <PullRefresh onrefresh={async () => await loadData()} >
     <div>列表内容</div>
   </PullRefresh>
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { PullRefresh } from '@h-ai/ui'
+  const props: ComponentProps<typeof PullRefresh> = { threshold: 80, children: createRawSnippet(() => ({ render: () => "<p>可下拉更新的内容。</p>" })) }
+  const component = mount(PullRefresh, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../types.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
+  /**
+   * PullRefresh 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount, createRawSnippet } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { PullRefresh } from '@h-ai/ui'
+   * const props: ComponentProps<typeof PullRefresh> = { threshold: 80, children: createRawSnippet(() => ({ render: () => "<p>可下拉更新的内容。</p>" })) }
+   * const component = mount(PullRefresh, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 刷新回调（需返回 Promise） */
     onrefresh?: () => Promise<void>

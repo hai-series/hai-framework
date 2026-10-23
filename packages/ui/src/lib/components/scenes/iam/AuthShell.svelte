@@ -8,9 +8,14 @@
   使用 Svelte 5 Runes ($props, $derived)
 
   @example
-  <AuthShell variant="card" title="登录" subtitle="欢迎回来">
-    <LoginForm onsubmit={handleLogin} />
-  </AuthShell>
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { AuthShell } from '@h-ai/ui'
+  const props: ComponentProps<typeof AuthShell> = { variant: 'card', title: '登录', subtitle: '欢迎回来', children: createRawSnippet(() => ({ render: () => "<p>在此放置登录或注册表单。</p>" })) }
+  const component = mount(AuthShell, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'

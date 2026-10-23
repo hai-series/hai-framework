@@ -4,9 +4,11 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
-> Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the single source of truth.
+## Introduction
 
-## Capabilities
+Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the single source of truth.
+
+## Core features
 
 - `apiContract.iam`, `apiContract.storage`, `apiContract.ai`, `apiContract.payment`: domain contracts.
 - `apiContract.create()`: compose enabled domain contracts for an application.
@@ -17,7 +19,11 @@
 - IAM token DTOs support httpOnly cookies: `refreshToken` may be absent from the response body and managed by the server through `Set-Cookie`.
 - IAM `auth.currentUser` returns the user profile and the current server session's `roles` / `permissions`; clients need not persist a permission snapshot to restore a session.
 
-## Quick start
+Payment creation inputs and outputs accept WeChat `jsapi`, Alipay `h5`, and Stripe `h5` only; WeChat requires `userId` (openid). App, Native, mini-program, and other combinations fail validation. Alipay returns `{ gateway, fields }` page parameters; creation success does not establish payment. See [Payment](../payment/README.en.md) for client handling.
+
+## Getting started
+
+### Quick start
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -42,7 +48,7 @@ export const appContract = {
 }
 ```
 
-## API contracts
+### API contracts
 
 ```ts
 import { apiContract } from '@h-ai/api-contract'
@@ -53,6 +59,8 @@ myContract.iam.auth.login
 myContract.storage.presignedUrls.createUpload
 myContract.ai.chats.createCompletion
 ```
+
+`ai.chats.createCompletion` is `POST /ai/chats/completions` and returns a non-streaming `HaiResult<AiChatCompletionData>`. Its strict input rejects undeclared fields, including `stream`. Function tools preserve their complete nested JSON Schema and `strict`; choices support `auto`, `none`, `required`, or a supplied function name. Role-specific messages accept text for system/assistant/tool and images for user; tool results require a nonempty `tool_call_id`, and assistants require content or `tool_calls`. Applications authorize and execute tools and define a separate contract for streaming.
 
 Clients call nested methods directly through `@h-ai/api-client`:
 
@@ -79,7 +87,7 @@ const app = serv.createApp({
 })
 ```
 
-## API overview
+### API overview
 
 - `apiContract.create(options)`: omit domains set to `false` / `undefined` and compose the application contract.
 - `apiContract.route(routeConfig)`: define method/path/operationId/tags and other route metadata for a custom endpoint.
@@ -87,13 +95,17 @@ const app = serv.createApp({
 - `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`: shared DTO schema factories.
 - `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`: inputs and data structures reused across APIs and layers.
 
+Batch deletion via `storage.files.deleteMany` returns `{ deletedKeys, failures: [] }` on success. Failures preserve progress in `error.ext.deleteMany` (`failed / unknown / notAttempted`); HTTP 200 alone does not mean completion. See [Storage batch deletion](../storage/README.en.md#api-overview).
+
 Write each business path directly in its `*-contract.ts` file. Inline output schemas used only once in `.output(...)`; schemas reused within the same contract file may be private constants, but must not be exported from schemas.
 
-## Configuration
+### Configuration
 
 This package has no runtime configuration and does not read environment variables.
 
-## Configuration driven authentication
+### Configuration driven authentication
+
+Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
 
 Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkdown and URLs. Markdown takes priority for the same agreement and is safely rendered in a modal.
 
@@ -101,16 +113,22 @@ IAM adds GET /auth/config and POST /auth/login/ldap, /auth/password-reset/reques
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
-## Error handling
+### Error handling
 
 Contracts describe input and output structures only. Procedures express business errors with `HaiResult<T>`, so clients need not catch business exceptions.
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/api-contract test
 pnpm --filter @h-ai/api-contract typecheck
 ```
+
+## Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
+
+Schemas, inferred types and composition helpers include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md). Schema samples use validated local data and do not prove provider execution.
 
 ## License
 

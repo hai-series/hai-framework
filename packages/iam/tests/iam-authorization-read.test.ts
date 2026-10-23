@@ -32,7 +32,15 @@ function defineAuthorizationTests() {
     const get = vi.spyOn(reldb.sql, 'get')
     const current = await iam.auth.verifyToken(login.data.tokens.accessToken)
     expect(query.mock.calls.length).toBe(2)
-    expect(get.mock.calls.length).toBe(1)
+    // 两次读取同一持久用户：低层会话先核验凭据代，认证层再核对当前用户并装配授权。
+    expect(get.mock.calls).toEqual([
+      [expect.stringContaining('hai_iam_users'), [user.data.user.id]],
+      [expect.stringContaining('hai_iam_users'), [user.data.user.id]],
+    ])
+    for (const [sql] of get.mock.calls) {
+      expect(sql).toContain('credential_version')
+      expect(sql).toContain('enabled')
+    }
     expect(current.success).toBe(true)
     if (current.success) {
       expect(current.data.permissions).not.toContain('fresh:read')
@@ -41,6 +49,32 @@ function defineAuthorizationTests() {
     vi.spyOn(iam.session, 'deleteByUserId').mockResolvedValue(err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
     expect((await iam.user.updateUser(user.data.user.id, { enabled: false })).success).toBe(true)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
+  })
+
+  it.each([1, 2])('持久用户第 %s 层读取失败时拒绝，不使用缓存授权且不破坏会话', async (failedRead) => {
+    const username = `read-fail-${failedRead}`
+    const user = await iam.user.createUser({ username, password: TEST_PASSWORD })
+    expect(user.success).toBe(true)
+    if (!user.success)
+      return
+    const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })
+    expect(login.success).toBe(true)
+    if (!login.success)
+      return
+    const actualGet = reldb.sql.get.bind(reldb.sql)
+    const get = vi.spyOn(reldb.sql, 'get')
+    // 第二层故障时让第一层真实读取成功，不能通过同时击穿所有读取冒充两层覆盖。
+    if (failedRead === 2)
+      get.mockImplementationOnce(actualGet)
+    get.mockResolvedValueOnce(err(HaiIamError.REPOSITORY_ERROR, 'persistent user unavailable'))
+    const current = await iam.auth.verifyToken(login.data.tokens.accessToken)
+    expect(current.success).toBe(false)
+    if (!current.success)
+      expect(current.error.code).toBe(HaiIamError.REPOSITORY_ERROR.code)
+    expect(get).toHaveBeenCalledTimes(failedRead)
+    get.mockRestore()
+    // 暂时的持久读取故障不能删除仍有效的会话；恢复后同一令牌仍可验证。
+    expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
   })
 
   it('数据库失败不回退会话缓存授权', async () => {

@@ -17,12 +17,9 @@ import type { HaiResult } from '@h-ai/core'
  *
  * @example
  * ```ts
- * const input: PersonaProfileInput = {
- *   id: 'xiaop',
- *   name: '小P',
- *   systemPrompt: '你是一位社会学家，善于从群体行为视角分析问题。',
- *   traits: ['谨慎', '喜欢引用真实案例'],
- * }
+ * import type { PersonaProfileInput } from '@h-ai/ai'
+ *
+ * const value: PersonaProfileInput = { id: 'support', objectId: 'tenant-1', name: '客服助手', systemPrompt: '根据已验证的订单信息回答。', traits: ['简洁', '先核对证据'] }
  * ```
  */
 export interface PersonaProfileInput {
@@ -46,6 +43,15 @@ export interface PersonaProfileInput {
 
 /**
  * 完整的 Persona 档案
+ *
+ * @example
+ * ```ts
+ * import type { PersonaProfile } from '@h-ai/ai'
+ *
+ * function label(profile: PersonaProfile): string {
+ *   return `${profile.objectId}/${profile.id}: ${profile.name ?? profile.id}`
+ * }
+ * ```
  */
 export interface PersonaProfile {
   /** 角色唯一标识 */
@@ -70,6 +76,13 @@ export interface PersonaProfile {
  * Persona 档案更新输入
  *
  * 所有字段可选，仅更新传入的字段。
+ *
+ * @example
+ * ```ts
+ * import type { PersonaProfileUpdate } from '@h-ai/ai'
+ *
+ * const value: PersonaProfileUpdate = { traits: ['简洁', '引用来源'] }
+ * ```
  */
 export interface PersonaProfileUpdate {
   /** 更新显示名 */
@@ -91,21 +104,18 @@ export interface PersonaProfileUpdate {
  *
  * @example
  * ```ts
- * // 定义一个 AI 角色
- * await ai.persona.save({
- *   id: 'xiaoq',
- *   name: '小Q',
- *   systemPrompt: '你是一位经济学家。',
- *   traits: ['数据驱动', '偏好长期视角'],
- * })
+ * import { ai } from '@h-ai/ai'
  *
- * // 组合出可直接喂给 ContextManager 的系统提示词
- * const composed = await ai.persona.compose('xiaoq')
- * const manager = ai.context.createManager({
- *   systemPrompt: composed.data,
- *   // 该角色的长期记忆用 scope 关联
- *   memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
- * })
+ * // 应用启动已成功初始化 ai；这里是业务服务函数。
+ * async function run() {
+ *   const result = await ai.persona.save({ id: 'support', objectId: 'tenant-1', systemPrompt: '先核对订单状态再回答。' })
+ *   if (!result.success)
+ *     return result
+ *   const composed = await ai.persona.compose(result.data.id, { objectId: result.data.objectId })
+ *   if (!composed.success)
+ *     return composed
+ *   return composed.data
+ * }
  * ```
  */
 export interface PersonaOperations {
@@ -156,7 +166,7 @@ export interface PersonaOperations {
    * 组合角色的完整系统提示词
    *
    * 将 `systemPrompt` 与 `traits` 拼装为一段可直接作为 system 消息的文本，
-   * 供 `ai.context.createManager({ systemPrompt })` 使用。
+   * 供 `ai.context.createManager({ scope, systemPrompt })` 使用。
    *
    * @param id - 角色 ID
    * @param options - 主体作用域（默认 `system`）
@@ -165,7 +175,16 @@ export interface PersonaOperations {
   compose: (id: string, options?: PersonaScopeOptions) => Promise<HaiResult<string>>
 }
 
-/** Persona 操作的主体作用域选项 */
+/**
+ * Persona 操作的主体作用域选项
+ *
+ * @example
+ * ```ts
+ * import type { PersonaScopeOptions } from '@h-ai/ai'
+ *
+ * const value: PersonaScopeOptions = { objectId: 'tenant-1' }
+ * ```
+ */
 export interface PersonaScopeOptions {
   /** 所属主体 ID（不传时归为平台内置角色 `system`） */
   objectId?: string

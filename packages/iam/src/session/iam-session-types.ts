@@ -15,6 +15,15 @@ import type { AgreementDisplay, User } from '../user/iam-user-types.js'
  *
  * 所有端（Web SSR / H5 SPA / Capacitor App / 未来小程序）
  * 使用完全相同的 Bearer Token 认证流程。
+ * @example
+ * ```ts
+ * import { iam, type TokenPair } from '@h-ai/iam'
+ * const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
+ * if (login.success) {
+ *   const tokens: TokenPair = login.data.tokens
+ *   const authorization = `${tokens.tokenType} ${tokens.accessToken}` // 仅用于受保护请求。
+ * }
+ * ```
  */
 export interface TokenPair {
   /** 访问令牌（短期，用于 API 认证） */
@@ -35,6 +44,15 @@ export interface TokenPair {
  * 登录/注册成功后返回，包含用户信息、令牌、角色权限等。
  * `roles` / `permissions` 来源于会话创建时写入的 RBAC 数据，
  * 调用方无需再通过 `verifyToken` 获取。
+ * @example
+ * ```ts
+ * import { iam, type AuthResult } from '@h-ai/iam'
+ * const login = await iam.auth.login({ identifier: 'alice', password: 'ExampleOnly123!' })
+ * if (login.success) {
+ *   const authenticated: AuthResult = login.data
+ *   authenticated.user.displayName
+ * }
+ * ```
  */
 export interface AuthResult {
   /** 用户信息 */
@@ -53,8 +71,21 @@ export interface AuthResult {
 
 /**
  * 会话数据
+ * @example
+ * ```ts
+ * import { iam, type Session } from '@h-ai/iam'
+ * const verified = await iam.auth.verifyToken('token-from-authorization-header')
+ * if (verified.success) {
+ *   const session: Session = verified.data
+ *   session.permissions.includes('report:read')
+ * }
+ * ```
  */
 export interface Session {
+  /** 会话内容版本；显式更新产生新版本，内部滑动续期保留版本。 */
+  version: string
+  /** 认证快照绑定的持久凭据代；改密后的旧会话即使缓存清理失败也拒绝。 */
+  credentialVersion: string
   /** API Key 派生会话绑定的 key ID；普通用户登录时省略。 */
   apiKeyId?: string
   /** 当前 key scopes；get/verify/refresh 每次重新验证持久化 key 并收敛权限。 */
@@ -81,6 +112,8 @@ export interface Session {
   lastActiveAt: Date
   /** 过期时间 */
   expiresAt: Date
+  /** 本会话 access 的签发/滑动有效期，单位秒；创建时固化，刷新沿用该值。 */
+  maxAge: number
   /** 扩展数据（内部保留 _tokenPair 供 logout 时吊销 refreshToken） */
   data?: SessionData
 }
@@ -89,6 +122,11 @@ export interface Session {
  * 会话扩展数据
  *
  * 支持开放的 Record 扩展，同时约束内部保留字段 _tokenPair。
+ * @example
+ * ```ts
+ * import type { SessionData } from '@h-ai/iam'
+ * const value: SessionData = { theme: 'dark', locale: 'zh-CN' }
+ * ```
  */
 export type SessionData = Record<string, unknown> & {
   /** 令牌对（内部保留字段，由 session.create 写入，logout 时读取） */
@@ -97,8 +135,15 @@ export type SessionData = Record<string, unknown> & {
 
 /**
  * 创建会话选项
+ * @example
+ * ```ts
+ * import type { CreateSessionOptions } from '@h-ai/iam'
+ * const value: CreateSessionOptions = { userId: 'user-1', source: 'server', maxAge: 3600 }
+ * ```
  */
 export interface CreateSessionOptions {
+  /** 策略已验证的凭据代；创建前须与当前数据库核对，省略时仅供可信服务端按当前用户签发。 */
+  expectedCredentialVersion?: string
   /** 服务端已验证的 API Key 绑定；不得来自未验证客户端输入。 */
   apiKeyId?: string
   apiKeyScopes?: string[]
@@ -126,12 +171,25 @@ export interface CreateSessionOptions {
 
 /**
  * 会话子功能接口
+ * @example
+ * ```ts
+ * import { iam, type SessionOperations } from '@h-ai/iam'
+ * // 应用已完成 RelDB、Cache、Crypto 和 IAM 初始化。
+ * const operations: SessionOperations = iam.session
+ * const result = await operations.get('token-from-authorization-header')
+ * if (!result.success) {
+ *   result.error.code // 调用方将失败交给统一错误边界。
+ * }
+ * else {
+ *   result.data
+ * }
+ * ```
  */
 export interface SessionOperations {
   /**
    * 创建会话
    *
-   * 单设备模式下会先清除用户已有的所有会话。
+   * 单设备模式在同一次原子提交内替换用户已有会话；提交失败保留旧会话。
    *
    * @param options - 会话创建选项（用户 ID、角色、来源等）
    * @returns 成功返回完整的 Session 对象（含生成的访问令牌和过期时间）
@@ -142,7 +200,7 @@ export interface SessionOperations {
    * 获取会话
    *
    * 查询缓存中的会话数据。API Key 会话先重新校验持久化 key 与 scopes；滑动窗口模式下自动续期。
-   * 已过期的会话会自动删除并返回 null。
+   * access 到期返回 null；记录保留到 refresh 到期或撤销，允许独立刷新。
    *
    * @param accessToken - 访问令牌
    * @returns 成功返回会话对象或 null（会话不存在/已过期）
@@ -162,13 +220,27 @@ export interface SessionOperations {
   /**
    * 更新会话
    *
-   * 合并 patch 到现有会话（data 字段浅合并）并更新 lastActiveAt。
+   * 合并允许的资料/授权/时间字段（data 浅合并）；未传 lastActiveAt 时使用提交时刻。
+   * expiresAt/lastActiveAt 必须是有效日期；不允许修改主体、令牌、固有 maxAge 和版本。
    *
    * @param accessToken - 访问令牌
    * @param data - 要更新的字段（roles、username、source、data 等）
-   * @returns 成功返回 ok；会话不存在返回 SESSION_NOT_FOUND
+   * @param expectedVersion - 读取到的 Session.version；过期版本失败，不能覆盖较新的修改
+   * @returns 成功返回 ok；不存在返回 SESSION_NOT_FOUND，版本变化返回 CONFLICT
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * // 已完成身份与更新权限校验的服务端上下文。
+   * const token = 'token-from-authorization-header'
+   * const found = await iam.session.get(token)
+   * if (found.success && found.data) {
+   *   const updated = await iam.session.update(token, { data: { theme: 'dark' } }, found.data.version)
+   *   if (!updated.success)
+   *     updated.error.code // 版本冲突后重新读取，不能无条件覆盖。
+   * }
+   * ```
    */
-  update: (accessToken: string, data: Partial<Session>) => Promise<HaiResult<void>>
+  update: (accessToken: string, data: Partial<Session>, expectedVersion: string) => Promise<HaiResult<void>>
 
   /**
    * 删除会话
@@ -176,14 +248,14 @@ export interface SessionOperations {
    * 同时清除用户令牌映射关系。
    *
    * @param accessToken - 访问令牌
-   * @returns 始终返回 ok（令牌不存在时静默成功）
+   * @returns 已撤销或令牌不存在时返回 ok；共享存储读取或提交失败时返回错误
    */
   delete: (accessToken: string) => Promise<HaiResult<void>>
 
   /**
    * 删除用户所有会话
    *
-   * 遍历用户的所有令牌并逐一删除。
+   * 原子删除用户分区内所有会话与 refresh 凭据。
    *
    * @param userId - 用户 ID
    * @returns 成功返回实际删除的会话数量
@@ -194,7 +266,7 @@ export interface SessionOperations {
    * 通过 refreshToken 换取新的 TokenPair
    *
    * 验证 refreshToken 有效性，签发新的 accessToken + refreshToken，
-   * 旧 refreshToken 自动失效（Rotation 策略）。
+   * 旧 refreshToken 自动失效（Rotation 策略）；access 过期不阻止仍有效的 refresh。
    *
    * @param refreshToken - 刷新令牌
    * @returns 成功返回新的 TokenPair；失败返回 TOKEN_REFRESH_FAILED / TOKEN_EXPIRED
@@ -226,6 +298,11 @@ export interface SessionOperations {
  * 会话字段更新（仅限 roles / permissions）
  *
  * 用于角色/权限变更后的会话同步。
+ * @example
+ * ```ts
+ * import type { SessionFieldUpdates } from '@h-ai/iam'
+ * const value: SessionFieldUpdates = { roles: ['user'], permissions: ['report:read'] }
+ * ```
  */
 export interface SessionFieldUpdates {
   /** 角色 code 列表 */

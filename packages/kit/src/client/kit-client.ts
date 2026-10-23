@@ -19,6 +19,13 @@ const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_
 
 /**
  * 传输加密客户端配置
+ * @example
+ * ```ts
+ * import type { ClientTransportConfig } from '@h-ai/kit'
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function configAfterInit(): ClientTransportConfig { return { crypto, excludePaths: ['/api/health'] } }
+ * ```
  */
 export interface ClientTransportConfig {
   /** @h-ai/crypto 服务实例 */
@@ -31,6 +38,13 @@ export interface ClientTransportConfig {
 
 /**
  * Kit 客户端配置
+ * @example
+ * ```ts
+ * import type { KitClientConfig } from '@h-ai/kit'
+ *
+ * const value: KitClientConfig = { auth: true }
+ * void value
+ * ```
  */
 export interface KitClientConfig {
   /**
@@ -54,6 +68,16 @@ export interface KitClientConfig {
 
 /**
  * Kit 客户端实例
+ * @example
+ * ```ts
+ * import type { KitClient } from '@h-ai/kit'
+ *
+ * async function read(client: KitClient) {
+ *   const response = await client.apiFetch('/api/health')
+ *   if (!response.ok) throw new Error('Request failed')
+ *   return response.json()
+ * }
+ * ```
  */
 export interface KitClient {
   /** 统一 API fetch（写请求自动附加 CSRF，启用 transport 时自动加解密） */
@@ -139,6 +163,15 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
   return new Request(input, init)
 }
 
+/**
+ * 浏览器全局 fetch 包装的幂等安装状态；属于当前浏览器页面。
+ * @example 模块内部上下文
+ * ```ts
+ * const state: BrowserTransportFetchState = globalThis
+ * const installed = state.__haiKitTransportFetchInstalled ?? false
+ * void installed
+ * ```
+ */
 type BrowserTransportFetchState = typeof globalThis & {
   __haiKitOriginalFetch?: typeof fetch
   __haiKitTransportFetchInstalled?: boolean
@@ -151,6 +184,14 @@ type BrowserTransportFetchState = typeof globalThis & {
  * 静态资源以及 multipart/form-data 等上传请求保持原样。应用只需安装一次，
  * 后续 `fetch` / SvelteKit 内部 data fetch / `kit.client.create()` 明文发送路径
  * 都会共用这层传输加密能力。
+ * @param transportConfig - 已初始化 crypto、同源密钥交换路径及排除路径；省略时不安装包装。
+ * @example
+ * ```ts
+ * import { kit } from '@h-ai/kit'
+ *
+ * // 不传配置时不安装全局包装；启用时应传已初始化 crypto 与同源端点。
+ * kit.client.installBrowserTransportFetch()
+ * ```
  */
 export function installBrowserTransportFetch(transportConfig?: ClientTransportConfig): void {
   if (typeof window === 'undefined' || !transportConfig)
@@ -211,16 +252,14 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * @param config 已解析的 kit 顶层配置
  * @param deps  外部依赖
  * @param deps.crypto `@h-ai/crypto` 模块实例
- *
  * @example
  * ```ts
- * import { browser } from '$app/environment'
- * import { crypto } from '@h-ai/crypto'
  * import { kit } from '@h-ai/kit'
- * import { adminConsoleKitConfig } from '$lib/config/kit-config.js'
  *
- * if (browser) {
- *   kit.client.installBrowserTransport(adminConsoleKitConfig, { crypto })
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function installAfterCryptoInit() {
+ *   kit.client.installBrowserTransport({ server: { host: '127.0.0.1', port: 3000 }, transport: { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] } }, { crypto })
  * }
  * ```
  */
@@ -255,11 +294,18 @@ export function installBrowserTransport(
  *
  * @param config - 客户端配置
  * @returns KitClient 实例
- *
  * @example
  * ```ts
- * const client = createKitClient({ transport: { crypto } })
- * const res = await client.apiFetch('/api/users', { method: 'POST', body: '{}' })
+ * import { kit } from '@h-ai/kit'
+ *
+ * const client = kit.client.create({ auth: true })
+ * try {
+ *   await client.init() // Client API 使用 Promise 拒绝；不是 HaiResult。
+ *   const response = await client.apiFetch('/api/health')
+ *   if (!response.ok) throw new Error('Request failed')
+ * } finally {
+ *   client.destroy()
+ * }
  * ```
  */
 export function createKitClient(config: KitClientConfig = {}): KitClient {

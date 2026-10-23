@@ -13,7 +13,7 @@ const apiPrefix = '/api/v1'
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
 const configuredName = process.env.HAI_CORE_NAME || 'Configured scaffold'
 const configuredVersion = process.env.HAI_CORE_VERSION || '9.8.7'
-const configuredEnv = process.env.HAI_CORE_ENV || 'test'
+const configuredEnv = 'test'
 
 // 测试专用的一像素 PNG；上传仍使用完整前后端加密链路。
 const avatar = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
@@ -61,7 +61,7 @@ test('service rejects plaintext business requests', async ({ request }) => {
 })
 
 {{#if fullstack.e2eFrontend}}
-test('hash routing restores direct links, refresh and browser history', async ({ page }) => {
+test('hash routing and responsive workspace preserve usable content width', async ({ page }, testInfo) => {
   await page.goto('/#/roles?source=direct')
   await login(page, 'admin', adminPassword)
   await expect(page.getByTestId('roles-page')).toBeVisible()
@@ -70,6 +70,16 @@ test('hash routing restores direct links, refresh and browser history', async ({
   await expect(page.getByTestId('roles-page')).toBeVisible()
   await expect(page.locator('header')).toBeVisible()
   await expect(page.locator('footer')).toBeVisible()
+  for (const width of [1440, 1920, 2560, 3840, 390]) {
+    await page.setViewportSize({ width, height: 960 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const main = await page.locator('main').boundingBox()
+    const content = await page.getByTestId('roles-page').boundingBox()
+    expect(content!.width).toBeGreaterThan(main!.width - 80)
+    if (width === 1920)
+      await capture(page, '{{projectName}}-wide.png', testInfo.outputPath('wide-1920.png'))
+  }
+  await page.setViewportSize({ width: 1440, height: 960 })
   await page.getByTestId('nav-settings').click()
   await expect(page).toHaveURL(/#\/settings$/)
   await page.goBack()

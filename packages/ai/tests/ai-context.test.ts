@@ -6,74 +6,44 @@
  */
 
 import type { CompressConfig, SummaryConfig, TokenConfig } from '../src/ai-config.js'
+import type { PersistedContextState } from '../src/context/ai-context-state.js'
+import type { ContextManagerOptions } from '../src/context/ai-context-types.js'
 import type { ChatCompletionChunk, LLMOperations, ToolCall } from '../src/llm/ai-llm-types.js'
+
 import type { MemoryOperations } from '../src/memory/ai-memory-types.js'
 import type { AIRelStore, SessionInfo } from '../src/store/ai-store-types.js'
-
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { LLMConfigSchema } from '../src/ai-config.js'
 import { HaiAIError } from '../src/ai-types.js'
 import { createCompressOperations } from '../src/compress/ai-compress-functions.js'
-import { createContextOperations } from '../src/context/ai-context-functions.js'
+import { createContextOperations as createRawContextOperations } from '../src/context/ai-context-functions.js'
 import { ai } from '../src/index.js'
+import { createMemoryStoreProvider } from '../src/store/providers/ai-store-provider-memory.js'
 import { createSummaryOperations } from '../src/summary/ai-summary-functions.js'
 import { createTokenOperations } from '../src/token/ai-token-functions.js'
 
 // ─── Mock 工厂 ───
 
-/**
- * 创建 Map 支撑的 AIStore mock（测试用）
- */
+/** 使用真实 Memory Store 的 CAS，内存后端只在测试显式选择。 */
 function createMockStore<T>(): AIRelStore<T> {
-  const data = new Map<string, T>()
-  return {
-    save: vi.fn(async (id: string, value: T) => {
-      data.set(id, { ...value as object } as T)
-    }),
-    saveMany: vi.fn(async (items: Array<{ id: string, data: T }>) => {
-      for (const item of items) {
-        data.set(item.id, { ...item.data as object } as T)
-      }
-    }),
-    get: vi.fn(async (id: string) => {
-      const v = data.get(id)
-      return v ? { ...v as object } as T : undefined
-    }),
-    query: vi.fn(async (filter) => {
-      let items = Array.from(data.values())
-      if (filter.where) {
-        items = items.filter((item) => {
-          for (const [key, condition] of Object.entries(filter.where!)) {
-            if ((item as Record<string, unknown>)[key] !== condition)
-              return false
-          }
-          return true
-        })
-      }
-      if (filter.orderBy) {
-        const { field, direction } = filter.orderBy
-        items.sort((a, b) => {
-          const va = (a as Record<string, unknown>)[field as string]
-          const vb = (b as Record<string, unknown>)[field as string]
-          if (va === vb)
-            return 0
-          const cmp = va! < vb! ? -1 : 1
-          return direction === 'desc' ? -cmp : cmp
-        })
-      }
-      if (filter.limit !== undefined)
-        items = items.slice(0, filter.limit)
-      return items
-    }),
-    queryPage: vi.fn(async (_filter, page) => {
-      const items = Array.from(data.values())
-      return { items: items.slice(page.offset, page.offset + page.limit), total: items.length }
-    }),
-    remove: vi.fn(async (id: string) => data.delete(id)),
-    removeBy: vi.fn(async () => 0),
-    count: vi.fn(async () => data.size),
-    clear: vi.fn(async () => { data.clear() }),
-  }
+  return createMemoryStoreProvider().createRelStore<T>('context_test', { hasObjectId: true, hasSessionId: true })
+}
+
+/** 旧场景显式装配隔离的内存 Store 和 scope；共享行为由独立回归覆盖。 */
+function createContextOperations(
+  config: Parameters<typeof createRawContextOperations>[0],
+  token: Parameters<typeof createRawContextOperations>[1],
+  compress: Parameters<typeof createRawContextOperations>[2],
+  store = createMockStore<PersistedContextState>(),
+  sessions?: AIRelStore<SessionInfo>,
+  deps?: Parameters<typeof createRawContextOperations>[5],
+) {
+  const ops = createRawContextOperations(config, token, compress, store, sessions, deps)
+  return { ...ops, createManager: (options?: Partial<ContextManagerOptions>) => ops.createManager({
+    scope: { objectId: 'test-user', sessionId: crypto.randomUUID() },
+    ...options,
+  }) }
 }
 
 // ─── Mock 工厂 ───
@@ -105,14 +75,14 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
   } as unknown as LLMOperations
 }
 
-const defaultLLMConfig = {
+const defaultLLMConfig = LLMConfigSchema.parse({
   baseUrl: 'https://api.openai.com/v1',
   model: 'gpt-4o-mini',
   apiKey: 'test-key',
   maxTokens: 4096,
   temperature: 0.7,
   timeout: 60000,
-}
+})
 
 const defaultTokenConfig: TokenConfig = { tokenRatio: 0.25 }
 const defaultSummaryConfig: SummaryConfig = {}
@@ -213,7 +183,7 @@ describe('context createManager', () => {
     }
   })
 
-  it('受保护消息自身超预算时向调用方返回预算错误并保留原始消息', async () => {
+  it('受保护消息自身超预算时返回预算错误且不发布失败的候选状态', async () => {
     const llm = createMockLLM([])
     const ops = createOps(defaultCompressConfig, llm, 8000)
     const managerResult = ops.createManager({
@@ -237,7 +207,7 @@ describe('context createManager', () => {
     }
     expect(managerResult.data.getMessages()).toEqual(expect.objectContaining({
       success: true,
-      data: [message],
+      data: [],
     }))
   })
 
@@ -328,9 +298,9 @@ describe('context session management', () => {
       summaryOps,
       modelMaxTokens,
     )
-    const contextStore = createMockStore<Record<string, unknown>>()
+    const contextStore = createMockStore<PersistedContextState>()
     const sessionStore = createMockStore<SessionInfo>()
-    const ops = createContextOperations(compressConfig, tokenOps, compressOps, contextStore as unknown as Parameters<typeof createContextOperations>[3], sessionStore)
+    const ops = createContextOperations(compressConfig, tokenOps, compressOps, contextStore, sessionStore)
     return { ops, contextStore, sessionStore }
   }
 
@@ -382,7 +352,10 @@ describe('context session management', () => {
     })
     await contextStore.save(key, {
       messages: [{ role: 'user', content: 'test' }],
+      scope,
       summaries: [],
+      turns: [],
+      epoch: crypto.randomUUID(),
       updatedAt: now,
     })
 
@@ -391,9 +364,9 @@ describe('context session management', () => {
 
     // 验证会话和上下文都被删除（复合键匹配）
     const session = await sessionStore.get(key)
-    expect(session).toBeUndefined()
+    expect(session?.deleted).toBe(true)
     const context = await contextStore.get(key)
-    expect(context).toBeUndefined()
+    expect(context?.deleted).toBe(true)
   })
 
   it('removeSession 多租户隔离：删除一个用户不影响另一个用户相同 sessionId', async () => {
@@ -404,14 +377,14 @@ describe('context session management', () => {
     const keyB = JSON.stringify(['user-B', 'shared'])
     await sessionStore.save(keyA, { sessionId: 'shared', objectId: 'user-A', createdAt: now, updatedAt: now })
     await sessionStore.save(keyB, { sessionId: 'shared', objectId: 'user-B', createdAt: now, updatedAt: now })
-    await contextStore.save(keyA, { messages: [{ role: 'user', content: 'A' }], summaries: [], updatedAt: now })
-    await contextStore.save(keyB, { messages: [{ role: 'user', content: 'B' }], summaries: [], updatedAt: now })
+    await contextStore.save(keyA, { scope: { objectId: 'user-A', sessionId: 'shared' }, messages: [{ role: 'user', content: 'A' }], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: now })
+    await contextStore.save(keyB, { scope: { objectId: 'user-B', sessionId: 'shared' }, messages: [{ role: 'user', content: 'B' }], summaries: [], turns: [], epoch: crypto.randomUUID(), updatedAt: now })
 
     await ops.removeSession({ objectId: 'user-A', sessionId: 'shared' })
 
     // user-A 被删除
-    expect(await sessionStore.get(keyA)).toBeUndefined()
-    expect(await contextStore.get(keyA)).toBeUndefined()
+    expect((await sessionStore.get(keyA))?.deleted).toBe(true)
+    expect((await contextStore.get(keyA))?.deleted).toBe(true)
     // user-B 的会话与上下文不受影响
     expect(await sessionStore.get(keyB)).toBeDefined()
     expect(await contextStore.get(keyB)).toBeDefined()
@@ -436,14 +409,14 @@ describe('context session management', () => {
       title: '会话1',
       createdAt: now,
       updatedAt: now,
-    })
+    }, { objectId: 'user-1' })
     await sessionStore.save('s2', {
       sessionId: 's2',
       objectId: 'user-1',
       title: '会话2',
       createdAt: now,
       updatedAt: now + 1000,
-    })
+    }, { objectId: 'user-1' })
 
     const result = await ops.listSessions('user-1')
     expect(result.success).toBe(true)
@@ -751,7 +724,7 @@ describe('context conversation commit layer', () => {
       expect(commit.error.code).toBe(HaiAIError.CONTEXT_TURN_NOT_FOUND.code)
   })
 
-  it('重复提交返回 CONTEXT_TURN_INVALID_STATE', async () => {
+  it('同一轮次重复提交幂等且不同内容拒绝', async () => {
     const llm = createMockLLM([{ content: 'x' }])
     const ops = createOpsWithDeps(llm)
     const managerResult = ops.createManager({ compress: { maxTokens: 8000 }, turnCommit: 'manual' })
@@ -765,9 +738,11 @@ describe('context conversation commit layer', () => {
 
     await manager.commitTurn(result.data.turnId)
     const second = await manager.commitTurn(result.data.turnId)
-    expect(second.success).toBe(false)
-    if (!second.success)
-      expect(second.error.code).toBe(HaiAIError.CONTEXT_TURN_INVALID_STATE.code)
+    expect(second.success).toBe(true)
+    const different = await manager.commitTurn(result.data.turnId, { text: 'changed' })
+    expect(different.success).toBe(false)
+    if (!different.success)
+      expect(different.error.code).toBe(HaiAIError.CONTEXT_TURN_INVALID_STATE.code)
   })
 
   it('markTurnSpeaking 将 generating 轮次标记为 speaking', async () => {
@@ -782,7 +757,7 @@ describe('context conversation commit layer', () => {
     if (!result.success)
       return
 
-    const mark = manager.markTurnSpeaking(result.data.turnId)
+    const mark = await manager.markTurnSpeaking(result.data.turnId)
     expect(mark.success).toBe(true)
     const turns = manager.getTurns()
     expect(turns.success && turns.data[0].status).toBe('speaking')

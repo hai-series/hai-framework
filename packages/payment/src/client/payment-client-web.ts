@@ -1,7 +1,7 @@
 /**
- * @h-ai/payment/client — Web/H5 支付调起
+ * @h-ai/payment/client — 浏览器支付调起
  *
- * 在浏览器或 H5 环境中调起微信/支付宝支付。
+ * 微信 JSAPI、支付宝 WAP 表单与 Stripe 托管页面使用各自完整的客户端协议。
  * @module payment-client-web
  */
 
@@ -13,135 +13,138 @@ import { paymentM } from '../payment-i18n.js'
 import { HaiPaymentError } from '../payment-types.js'
 
 /**
- * Web/H5 环境调起微信支付（JSAPI）
- *
- * 需要在微信内置浏览器中使用，依赖 WeixinJSBridge。
+ * 微信内置浏览器注入的公众号支付桥接对象。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * function submit(bridge: WechatPaymentBridge, params: Record<string, unknown>) {
+ *   bridge.invoke('getBrandWCPayRequest', params, response => {
+ *     const clientMessage = response.err_msg // 仅用于客户端反馈，不能触发发货。
+ *   })
+ * }
+ * ```
  */
+interface WechatPaymentBridge {
+  invoke: (api: string, params: Record<string, unknown>, callback: (response: { err_msg: string }) => void) => void
+}
+
+/** 验证必填的字符串字段，拒绝空参数被浏览器当作已成功调起。 */
+function requireStrings(params: Record<string, unknown>, fields: readonly string[]): void {
+  if (fields.some(field => typeof params[field] !== 'string' || !params[field].trim()))
+    throw new Error('Invalid payment client parameters')
+}
+
+/** 微信 JSAPI 只在桥接对象已就绪时调起；回调仅表示客户端响应，不能证明已付款。 */
 function invokeWechatJsapi(clientParams: Record<string, unknown>): Promise<InvokePaymentResult> {
+  requireStrings(clientParams, ['appId', 'timeStamp', 'nonceStr', 'package', 'signType', 'paySign'])
+  if (clientParams.signType !== 'RSA' || !/^prepay_id=.+$/.test(String(clientParams.package))
+    || !/^\d+$/.test(String(clientParams.timeStamp))) {
+    throw new Error('Invalid Wechat JSAPI parameters')
+  }
+  const bridge = (window as Window & { WeixinJSBridge?: WechatPaymentBridge }).WeixinJSBridge
+  if (typeof bridge?.invoke !== 'function')
+    return Promise.resolve({ invoked: false, message: paymentM('payment_wechatBridgeUnavailable') })
   return new Promise((resolve) => {
-    const WeixinJSBridge = (window as unknown as Record<string, unknown>).WeixinJSBridge as {
-      invoke: (api: string, params: unknown, callback: (res: { err_msg: string }) => void) => void
-    } | undefined
-
-    if (!WeixinJSBridge) {
-      resolve({ invoked: false, message: 'WeixinJSBridge not available' })
-      return
-    }
-
-    WeixinJSBridge.invoke('getBrandWCPayRequest', clientParams, (res) => {
-      resolve({
-        invoked: true,
-        message: res.err_msg,
-      })
+    bridge.invoke('getBrandWCPayRequest', clientParams, (response) => {
+      resolve({ invoked: true, message: response.err_msg })
     })
   })
 }
 
-/**
- * Web/H5 环境调起微信 H5 支付
- *
- * 通过跳转 URL 唤起微信客户端支付。
- */
-function invokeWechatH5(clientParams: Record<string, unknown>): InvokePaymentResult {
-  const h5Url = clientParams.h5Url as string | undefined
-  if (h5Url) {
-    window.location.href = h5Url
-    return { invoked: true }
-  }
-  return { invoked: false, message: 'Missing h5Url' }
-}
-
-/**
- * Web 环境调起支付宝（H5 跳转）
- */
+/** 支付宝 WAP 仅向固定网关 POST 签名字段；不解析 HTML，也不将业务数据放进 URL。 */
 function invokeAlipayH5(clientParams: Record<string, unknown>): InvokePaymentResult {
-  const formHtml = clientParams.form as string | undefined
-  const payUrl = clientParams.pay_url as string | undefined
-
-  if (formHtml) {
-    // 支付宝返回的 HTML form，使用 DOMParser 安全解析后提交
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(formHtml, 'text/html')
-    const form = doc.querySelector('form')
-    if (form) {
-      document.body.appendChild(document.adoptNode(form))
-      form.submit()
-      return { invoked: true }
-    }
-    return { invoked: false, message: 'No form element found in response' }
+  const { gateway, fields } = clientParams
+  if ((gateway !== 'https://openapi.alipay.com/gateway.do'
+    && gateway !== 'https://openapi-sandbox.dl.alipaydev.com/gateway.do')
+  || Object.keys(clientParams).some(key => key !== 'gateway' && key !== 'fields')
+  || typeof fields !== 'object' || fields === null || Array.isArray(fields)) {
+    throw new Error('Invalid Alipay page parameters')
   }
-
-  if (payUrl) {
-    window.location.href = payUrl
+  const required = ['app_id', 'method', 'format', 'charset', 'sign_type', 'timestamp', 'version', 'notify_url', 'return_url', 'biz_content', 'sign']
+  const entries: Array<[string, string]> = []
+  for (const [key, value] of Object.entries(fields) as Array<[string, unknown]>) {
+    if (!required.includes(key) || typeof value !== 'string' || !value.trim())
+      throw new Error('Invalid Alipay form fields')
+    entries.push([key, value])
+  }
+  if (entries.length !== required.length)
+    throw new Error('Invalid Alipay form fields')
+  const params = Object.fromEntries(entries)
+  if (params.method !== 'alipay.trade.wap.pay' || params.format !== 'JSON' || params.charset !== 'utf-8' || params.version !== '1.0'
+    || (params.sign_type !== 'RSA2' && params.sign_type !== 'RSA')) {
+    throw new Error('Invalid Alipay form method')
+  }
+  // 逐个构造 input，字段值中的引号、尖括号和脚本始终只是文本。
+  const form = document.createElement('form')
+  form.action = gateway
+  form.method = 'POST'
+  form.acceptCharset = 'utf-8'
+  for (const [key, value] of entries) {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = key
+    input.value = value
+    form.appendChild(input)
+  }
+  document.body.appendChild(form)
+  try {
+    form.submit()
     return { invoked: true }
   }
-
-  return { invoked: false, message: 'Missing alipay form or pay_url' }
+  finally {
+    form.remove()
+  }
 }
 
-/**
- * Web 环境调起 Stripe Checkout
- */
+/** Stripe 托管页使用 HTTPS 跳转，禁止 javascript/file 等可执行或本地协议。 */
 function invokeStripeCheckout(clientParams: Record<string, unknown>): InvokePaymentResult {
-  const checkoutUrl = clientParams.checkoutUrl as string | undefined
-  if (checkoutUrl) {
-    window.location.href = checkoutUrl
-    return { invoked: true }
-  }
-  return { invoked: false, message: 'Missing checkoutUrl' }
+  requireStrings(clientParams, ['checkoutUrl'])
+  const checkoutUrl = new URL(String(clientParams.checkoutUrl))
+  if (checkoutUrl.protocol !== 'https:' || checkoutUrl.username || checkoutUrl.password)
+    throw new Error('Invalid Stripe Checkout URL')
+  window.location.href = checkoutUrl.href
+  return { invoked: true }
 }
 
 /**
- * 调起支付（Web / H5 通用入口）
+ * 按服务端返回的渠道与场景调起支付；不支持的组合直接返回错误。
  *
- * 根据 PaymentOrder 中的 provider 和 tradeType 自动选择调起方式。
+ * 调用前等待微信 WeixinJSBridgeReady；invoked 只表示已提交调起，付款状态由服务端确认。
  *
- * @param order - 后端返回的支付订单
- * @returns 调起结果
- *
+ * @param order - 服务端创建的支付订单
+ * @returns 调起结果；失败时应向用户提示并允许重试。
  * @example
  * ```ts
  * import { invokePayment } from '@h-ai/payment/client'
- *
- * const orderResult = await api.payment.orders.create({ ... })
- * if (orderResult.success) {
- *   const result = await invokePayment(orderResult.data)
+ * import type { PaymentOrder } from '@h-ai/payment'
+ * async function pay(orderFromServer: PaymentOrder) {
+ *   // 浏览器环境；微信先等待 WeixinJSBridgeReady。参数来自受信服务端创建订单接口。
+ *   const result = await invokePayment(orderFromServer)
+ *   if (!result.success) throw new Error(result.error.message)
+ *   if (!result.data.invoked) throw new Error(result.data.message)
+ *   // 继续等待服务端查询/通知确认，不能依据 invoked、页面跳转或用户返回就发货。
  * }
  * ```
  */
 export async function invokePayment(order: PaymentOrder): Promise<HaiResult<InvokePaymentResult>> {
   try {
-    let result: InvokePaymentResult
-
     switch (order.provider) {
       case 'wechat':
-        if (order.tradeType === 'jsapi') {
-          result = await invokeWechatJsapi(order.clientParams)
-        }
-        else {
-          result = invokeWechatH5(order.clientParams)
-        }
+        if (order.tradeType === 'jsapi')
+          return ok(await invokeWechatJsapi(order.clientParams))
         break
       case 'alipay':
-        result = invokeAlipayH5(order.clientParams)
+        if (order.tradeType === 'h5')
+          return ok(invokeAlipayH5(order.clientParams))
         break
       case 'stripe':
-        result = invokeStripeCheckout(order.clientParams)
+        if (order.tradeType === 'h5')
+          return ok(invokeStripeCheckout(order.clientParams))
         break
-      default:
-        return err(
-          HaiPaymentError.INVOKE_WEB_FAILED,
-          paymentM('payment_invokeWebFailed'),
-        )
     }
-
-    return ok(result)
+    return err(HaiPaymentError.UNSUPPORTED_TRADE_TYPE, paymentM('payment_unsupportedTradeType'))
   }
   catch (cause) {
-    return err(
-      HaiPaymentError.INVOKE_WEB_FAILED,
-      paymentM('payment_invokeWebFailed'),
-      cause,
-    )
+    return err(HaiPaymentError.INVOKE_WEB_FAILED, paymentM('payment_invokeWebFailed'), cause)
   }
 }

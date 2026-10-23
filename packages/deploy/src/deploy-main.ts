@@ -180,14 +180,29 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
 
 /**
  * Deploy 模块单例
- *
+ * 每次 init 检查 HaiResult；只打包不会连接 SSH，成功打包也不代表服务器已部署。远端 unknown 必须先核对匹配部署 ID 的结果，不能盲目重试。
  * @example
  * ```ts
- * import { deploy } from '@h-ai/deploy'
- *
- * await deploy.init({ provider: { type: 'vercel', token: 'xxx' } })
- * const result = await deploy.deployApp('./apps/my-app')
- * await deploy.close()
+ * import { deploy, getDeployCommandState } from '@h-ai/deploy'
+ * const initialized = await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   // 当前项目已有镜像产物与部署环境；只打包，不连接服务器。
+ *   const result = await deploy.deployApp(process.cwd(), { environment: 'prod', bundleOnly: true })
+ *   if (!result.success) {
+ *     const state = getDeployCommandState(result.error)
+ *     if (state?.remoteExecution === 'unknown') {
+ *       process.stderr.write('Inspect the matching server result before retrying\n')
+ *     }
+ *     throw new Error(result.error.message)
+ *   }
+ *   if (result.data.status === 'packaged') {
+ *     const bundle = result.data.bundlePath
+ *   }
+ * }
+ * finally {
+ *   await deploy.close()
+ * }
  * ```
  */
 export const deploy: DeployFunctions = {
@@ -390,6 +405,12 @@ export const deploy: DeployFunctions = {
       ...(scanOptions.environment ? { environment: environment.data.environment } : {}),
       ...(options?.skipMiddleware ? { serviceModes: Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])) } : {}),
     }
+    if (options.selectedServices) {
+      options.serviceModes = {
+        ...options.serviceModes,
+        ...Object.fromEntries(scan.requiredServices.filter(service => !options.selectedServices!.includes(service)).map(service => [service, 'keep' as const])),
+      }
+    }
 
     // 容器 Provider（docker-ssh）：走独立的容器部署编排
     if (currentContainerProvider) {
@@ -398,6 +419,8 @@ export const deploy: DeployFunctions = {
 
     if (options?.bundleOnly)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleOnlyContainer'))
+    if (options.selectedServices)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectedContainerOnly'))
 
     // 到此必为平台 Provider（vercel）
     if (!currentProvider) {
@@ -508,6 +531,17 @@ async function deployContainerApp(
   }
   catch {
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
+  }
+  if (artifact.partial && !options?.selectedServices) {
+    const selectedServices = artifact.images.map(image => image.name)
+    options = {
+      ...options,
+      selectedServices,
+      serviceModes: {
+        ...options?.serviceModes,
+        ...Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const])),
+      },
+    }
   }
   if (!options?.bundleOnly && currentConfig?.provider.type === 'docker-ssh' && !currentConfig.provider.ssh)
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))

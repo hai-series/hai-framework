@@ -6,18 +6,23 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { CacheConfig, CacheProvider, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
-import { err, ok } from '@h-ai/core'
+import type { CacheConfig, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
+import type { CacheProvider } from './cache-provider-types.js'
+import { core, err, ok } from '@h-ai/core'
 import { cacheM } from '../cache-i18n.js'
-import {
-
-  HaiCacheError,
-
-} from '../cache-types.js'
+import { HaiCacheError } from '../cache-types.js'
+import { validateSetOptions } from './cache-set-options.js'
 
 // ─── 内部类型 ───
 
-/** KV 存储项（包含值和可选的过期时间戳） */
+/**
+ * KV 存储项（包含值和可选的过期时间戳）
+ * @example 模块内部上下文
+ * ```ts
+ * const entry: CacheEntry = { value: { id: 'order-1' }, expiresAt: Date.now() + 1000 }
+ * const expired = entry.expiresAt !== undefined && entry.expiresAt <= Date.now()
+ * ```
+ */
 interface CacheEntry {
   /** 缓存值 */
   value: CacheValue
@@ -74,6 +79,15 @@ function globToRegex(pattern: string): RegExp {
  * close() 后所有数据清空。
  *
  * @returns CacheProvider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createMemoryProvider()
+ * const connected = await provider.connect({ type: 'memory' })
+ * if (connected.success) {
+ *   try { const health = await provider.ping(); if (!health.success) health.error.code }
+ *   finally { await provider.close() }
+ * }
+ * ```
  */
 export function createMemoryProvider(): CacheProvider {
   /** KV 存储（带过期时间） */
@@ -130,48 +144,67 @@ export function createMemoryProvider(): CacheProvider {
     return entry
   }
 
-  /**
-   * 根据 SetOptions 计算过期时间戳
-   *
-   * 优先级：ex > px > exat > pxat，均未指定时返回 undefined（永不过期）
-   *
-   * @param options - 设置选项
-   * @returns 过期时间戳（毫秒），或 undefined
-   */
-  function calculateExpiry(options?: SetOptions): number | undefined {
-    if (!options)
-      return undefined
-    const now = Date.now()
-    if (options.ex)
-      return now + options.ex * 1000
-    if (options.px)
-      return now + options.px
-    if (options.exat != null)
-      return options.exat * 1000
-    if (options.pxat != null)
-      return options.pxat
-    return undefined
-  }
-
   // ─── KV 操作 ───
 
   const kv: KvOperations = {
+    async compareAndSwap(key, expected, value, options) {
+      try {
+        if ((options?.px !== undefined && (!Number.isSafeInteger(options.px) || options.px <= 0)) || (options?.px !== undefined && options.keepTtl))
+          throw new TypeError('Invalid compare-and-swap expiry')
+        const entry = getValidEntry(key)
+        const actual = entry ? serializeValue(entry.value) : undefined
+        if (actual !== (expected === undefined ? undefined : serializeValue(expected)))
+          return ok(false)
+        if (value === undefined) {
+          store.delete(key)
+        }
+        else {
+          const expiresAt = options?.px !== undefined ? Date.now() + options.px : options?.keepTtl ? entry?.expiresAt : undefined
+          // 与 Redis 相同使用 JSON 快照，调用方修改对象不能绕过条件写入。
+          store.set(key, { value: deserializeValue(serializeValue(value)), expiresAt })
+        }
+        return ok(true)
+      }
+      catch (error) {
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'Compare-and-swap failed' } }), error)
+      }
+    },
     async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
-      const entry = getValidEntry(key)
-      return ok(entry ? (entry.value as T) : null)
+      try {
+        const entry = getValidEntry(key)
+        return ok(entry ? (deserializeValue(serializeValue(entry.value)) as T) : null)
+      }
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'JSON snapshot failed' } }), error)
+      }
     },
 
-    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<void>> {
-      const existing = getValidEntry(key) !== null
-      if (options?.nx && existing)
-        return ok(undefined)
-      if (options?.xx && !existing)
-        return ok(undefined)
-
+    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<boolean>> {
+      const validated = validateSetOptions(options)
+      if (!validated.success)
+        return validated
+      const policy = validated.data
       const currentEntry = getValidEntry(key)
-      const expiresAt = options?.keepTtl && currentEntry ? currentEntry.expiresAt : calculateExpiry(options)
-      store.set(key, { value, expiresAt })
-      return ok(undefined)
+      const existing = currentEntry !== null || Boolean(hashStore.get(key)?.size || listStore.get(key)?.length || setStore.get(key)?.size || zsetStore.get(key)?.size)
+      if ((policy.nx && existing) || (policy.xx && !existing))
+        return ok(false)
+      try {
+        // 先得到与 Redis 一致的 JSON 快照；序列化失败不能破坏原值或 TTL。
+        const snapshot = deserializeValue(serializeValue(value))
+        const expiresAt = policy.keepTtl ? currentEntry?.expiresAt : policy.expiresAt
+        hashStore.delete(key)
+        listStore.delete(key)
+        setStore.delete(key)
+        zsetStore.delete(key)
+        if (expiresAt !== undefined && expiresAt <= Date.now())
+          store.delete(key)
+        else
+          store.set(key, { value: snapshot, expiresAt })
+        return ok(true)
+      }
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_serializationFailed'), error)
+      }
     },
 
     async del(...keys: string[]): Promise<HaiResult<number>> {
@@ -255,12 +288,17 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async mget<T = CacheValue>(...keys: string[]): Promise<HaiResult<(T | null)[]>> {
-      const results: (T | null)[] = []
-      for (const key of keys) {
-        const entry = getValidEntry(key)
-        results.push(entry ? (entry.value as T) : null)
+      try {
+        const results: (T | null)[] = []
+        for (const key of keys) {
+          const entry = getValidEntry(key)
+          results.push(entry ? (deserializeValue(serializeValue(entry.value)) as T) : null)
+        }
+        return ok(results)
       }
-      return ok(results)
+      catch (error) {
+        return err(HaiCacheError.SERIALIZATION_FAILED, cacheM('cache_operationFailed', { params: { error: 'JSON snapshot failed' } }), error)
+      }
     },
 
     async mset(entries: Array<[string, CacheValue]>): Promise<HaiResult<void>> {
@@ -270,7 +308,9 @@ export function createMemoryProvider(): CacheProvider {
       return ok(undefined)
     },
 
-    async scan(cursor: number, options?: ScanOptions): Promise<HaiResult<[number, string[]]>> {
+    async scan(cursor: string, options?: ScanOptions): Promise<HaiResult<[string, string[]]>> {
+      if (typeof cursor !== 'string' || !/^\d{1,20}$/.test(cursor) || BigInt(cursor) > 18_446_744_073_709_551_615n || !Number.isSafeInteger(options?.count ?? 10) || (options?.count ?? 10) <= 0)
+        return err(HaiCacheError.INVALID_SCAN, cacheM('cache_invalidScan'))
       const allKeys = Array.from(store.keys()).filter((key) => {
         const entry = store.get(key)
         return entry && !isExpired(entry)
@@ -278,10 +318,10 @@ export function createMemoryProvider(): CacheProvider {
       const regex = options?.match ? globToRegex(options.match) : null
       const filtered = regex ? allKeys.filter(k => regex.test(k)) : allKeys
       const count = options?.count || 10
-      const start = cursor
+      const start = Number(cursor)
       const end = Math.min(start + count, filtered.length)
       const keys = filtered.slice(start, end)
-      const nextCursor = end >= filtered.length ? 0 : end
+      const nextCursor = end >= filtered.length ? '0' : String(end)
       return ok([nextCursor, keys])
     },
 
@@ -831,29 +871,29 @@ export function createMemoryProvider(): CacheProvider {
   const LOCK_PREFIX = '__lock:'
 
   const lock: LockOperations = {
-    async acquire(key: string, options?: LockOptions): Promise<HaiResult<boolean>> {
+    async acquire(key: string, options?: LockOptions): Promise<HaiResult<string | null>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const ttl = options?.ttl ?? 30
-      const owner = options?.owner ?? 'default'
+      const owner = core.id.uuid()
       const existing = getValidEntry(lockKey)
       if (existing) {
         // 锁已被持有
-        return ok(false)
+        return ok(null)
       }
       store.set(lockKey, {
         value: owner,
         expiresAt: Date.now() + ttl * 1000,
       })
-      return ok(true)
+      return ok(owner)
     },
 
-    async release(key: string, owner?: string): Promise<HaiResult<boolean>> {
+    async release(key: string, owner: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       if (!entry) {
         return ok(false)
       }
-      if (owner !== undefined && entry.value !== owner) {
+      if (!owner || entry.value !== owner) {
         return ok(false)
       }
       store.delete(lockKey)
@@ -866,13 +906,13 @@ export function createMemoryProvider(): CacheProvider {
       return ok(entry !== null)
     },
 
-    async extend(key: string, ttl: number, owner?: string): Promise<HaiResult<boolean>> {
+    async extend(key: string, ttl: number, owner: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       if (!entry) {
         return ok(false)
       }
-      if (owner !== undefined && entry.value !== owner) {
+      if (!owner || entry.value !== owner) {
         return ok(false)
       }
       entry.expiresAt = Date.now() + ttl * 1000

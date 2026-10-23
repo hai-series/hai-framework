@@ -34,6 +34,17 @@ const ReldbErrorInfo = {
   DDL_FAILED: '020:500',
 } satisfies ErrorInfo
 
+/**
+ * HaiReldbError 的数据约束与操作契约。
+ * @example
+ * ```ts
+ * import { HaiReldbError } from '@h-ai/reldb'
+ * import { err } from '@h-ai/core'
+ *
+ * const result = err(HaiReldbError.QUERY_FAILED, 'Query failed')
+ * if (!result.success) void result.error.code
+ * ```
+ */
 export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInfo)
 
 // ─── 列定义 ───
@@ -46,7 +57,7 @@ export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInf
  * | 类型        | SQLite  | PostgreSQL       | MySQL        |
  * |------------|---------|------------------|--------------|
  * | TEXT       | TEXT    | TEXT             | VARCHAR(255) |
- * | INTEGER    | INTEGER | INTEGER/SERIAL   | INT/BIGINT   |
+ * | INTEGER    | INTEGER | INTEGER/BIGSERIAL | INT/BIGINT   |
  * | BIGINT     | INTEGER | BIGINT           | BIGINT       |
  * | REAL       | REAL    | DOUBLE PRECISION | DOUBLE       |
  * | BLOB       | BLOB    | BYTEA            | BLOB         |
@@ -55,7 +66,16 @@ export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInf
  * | JSON       | TEXT    | JSONB            | JSON         |
  *
  * 注：MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。
- * INTEGER 在 MySQL autoIncrement 时映射为 BIGINT，否则映射为 INT。
+ * INTEGER 在 MySQL autoIncrement 时映射为 BIGINT，在 PostgreSQL 映射为 BIGSERIAL，否则为 32 位 INT/INTEGER。
+ * Unix 毫秒应声明为 BIGINT；原始 SQL/CRUD 的 BIGINT 返回形态取决于驱动，可能为 number/string/bigint。
+ * 使用 number 的业务仓库须校验 Number.isSafeInteger，超出范围不能直接强转而丢失精度。
+ * @example
+ * ```ts
+ * import type { ColumnType } from '@h-ai/reldb'
+ *
+ * const value: ColumnType = 'TEXT'
+ * void value
+ * ```
  */
 export type ColumnType
   = | 'TEXT'
@@ -71,26 +91,12 @@ export type ColumnType
  * 列定义接口
  *
  * 用于定义表的列结构。
- *
  * @example
  * ```ts
- * // 主键列
- * const idColumn: ReldbColumnDef = {
- *     type: 'INTEGER',
- *     primaryKey: true,
- *     autoIncrement: true
- * }
+ * import type { ReldbColumnDef } from '@h-ai/reldb'
  *
- * // 带外键的列
- * const userIdColumn: ReldbColumnDef = {
- *     type: 'INTEGER',
- *     notNull: true,
- *     references: {
- *         table: 'users',
- *         column: 'id',
- *         onDelete: 'CASCADE'
- *     }
- * }
+ * const value: ReldbColumnDef = { type: 'INTEGER', primaryKey: true, autoIncrement: true }
+ * void value
  * ```
  */
 export interface ReldbColumnDef {
@@ -121,15 +127,12 @@ export interface ReldbColumnDef {
 
 /**
  * 表定义（列名到列定义的映射）
- *
  * @example
  * ```ts
- * const userTable: ReldbTableDef = {
- *     id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
- *     name: { type: 'TEXT', notNull: true },
- *     email: { type: 'TEXT', unique: true },
- *     created_at: { type: 'TIMESTAMP', defaultValue: 'NOW()' }
- * }
+ * import type { ReldbTableDef } from '@h-ai/reldb'
+ *
+ * const value: ReldbTableDef = { id: { type: 'TEXT', primaryKey: true }, name: { type: 'TEXT', notNull: true } }
+ * void value
  * ```
  */
 export interface ReldbTableDef {
@@ -138,23 +141,12 @@ export interface ReldbTableDef {
 
 /**
  * 索引定义
- *
  * @example
  * ```ts
- * // 普通索引
- * const emailIndex: ReldbIndexDef = { columns: ['email'] }
+ * import type { ReldbIndexDef } from '@h-ai/reldb'
  *
- * // 唯一复合索引
- * const compositeIndex: ReldbIndexDef = {
- *     columns: ['user_id', 'created_at'],
- *     unique: true
- * }
- *
- * // 部分索引（带条件）
- * const partialIndex: ReldbIndexDef = {
- *     columns: ['status'],
- *     where: "status = 'active'"
- * }
+ * const value: ReldbIndexDef = { columns: ['email'], unique: true }
+ * void value
  * ```
  */
 export interface ReldbIndexDef {
@@ -167,6 +159,13 @@ export interface ReldbIndexDef {
    *
    * **⚠️ 安全警告：** `where` 为原始 SQL 片段，不会经过参数化处理，
    * **禁止**将用户输入直接拼接。仅用于开发者编写的静态条件。
+   * @example
+   * ```ts
+   * import type { CrudQueryOptions } from '@h-ai/reldb'
+   *
+   * const options: CrudQueryOptions = { where: 'name = ?', params: ['Alice'] }
+   * void options // 值走绑定参数；SQL 结构由开发者静态编写。
+   * ```
    */
   where?: string
 }
@@ -177,18 +176,15 @@ export interface ReldbIndexDef {
  * DDL（数据定义语言）操作接口
  *
  * 提供表结构管理功能，包括创建/删除表、添加/删除列、创建索引等。
- * 所有操作返回 `HaiResult<void>` 类型。
- *
+ * 结构修改返回 `HaiResult<void>`；hasTable 返回 `HaiResult<boolean>`，以实际签名为准。
  * @example
  * ```ts
- * // 创建表
- * const result = await reldb.ddl.createTable('users', {
- *     id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
- *     name: { type: 'TEXT', notNull: true }
- * })
+ * import type { DdlOperations } from '@h-ai/reldb'
  *
- * if (!result.success) {
- *     // 处理错误：创建表失败（可根据 result.error.code / message 做兜底）
+ * async function use(operations: DdlOperations) {
+ *   const result = await operations.createTable('users', { id: { type: 'TEXT', primaryKey: true } })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   void result.data
  * }
  * ```
  */
@@ -200,13 +196,11 @@ export interface DdlOperations {
    * @param ifNotExists - 是否使用 IF NOT EXISTS（默认 true）
    * @example
    * ```ts
-   * const result = await reldb.ddl.createTable('users', {
-   *     id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-   *     name: { type: 'TEXT', notNull: true }
-   * })
-   * if (!result.success) {
-   *     // 创建失败：根据 result.error.code / message 处理
-   * }
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.createTable('users', { id: { type: 'TEXT', primaryKey: true }, name: { type: 'TEXT' } })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   createTable: (tableName: string, columns: ReldbTableDef, ifNotExists?: boolean) => Promise<HaiResult<void>>
@@ -217,8 +211,11 @@ export interface DdlOperations {
    * @param ifExists - 是否使用 IF EXISTS（默认 true）
    * @example
    * ```ts
-   * await reldb.ddl.dropTable('users')
-   * await reldb.ddl.dropTable('users_backup', false)
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.dropTable('users_backup')
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   dropTable: (tableName: string, ifExists?: boolean) => Promise<HaiResult<void>>
@@ -230,8 +227,11 @@ export interface DdlOperations {
    * @param columnDef - 列定义
    * @example
    * ```ts
-   * await reldb.ddl.addColumn('users', 'age', { type: 'INTEGER' })
-   * await reldb.ddl.addColumn('users', 'email', { type: 'TEXT', unique: true })
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.addColumn('users', 'age', { type: 'INTEGER' })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   addColumn: (tableName: string, columnName: string, columnDef: ReldbColumnDef) => Promise<HaiResult<void>>
@@ -242,7 +242,11 @@ export interface DdlOperations {
    * @param columnName - 列名
    * @example
    * ```ts
-   * await reldb.ddl.dropColumn('users', 'legacy_field')
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.dropColumn('users', 'legacy_field')
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   dropColumn: (tableName: string, columnName: string) => Promise<HaiResult<void>>
@@ -253,7 +257,11 @@ export interface DdlOperations {
    * @param newName - 新表名
    * @example
    * ```ts
-   * await reldb.ddl.renameTable('users_temp', 'users')
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.renameTable('users_old', 'users')
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   renameTable: (oldName: string, newName: string) => Promise<HaiResult<void>>
@@ -265,10 +273,11 @@ export interface DdlOperations {
    * @param indexDef - 索引定义
    * @example
    * ```ts
-   * await reldb.ddl.createIndex('users', 'idx_users_email', {
-   *     columns: ['email'],
-   *     unique: true,
-   * })
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.createIndex('users', 'users_name_idx', { columns: ['name'] })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   createIndex: (tableName: string, indexName: string, indexDef: ReldbIndexDef) => Promise<HaiResult<void>>
@@ -279,7 +288,11 @@ export interface DdlOperations {
    * @param ifExists - 是否使用 IF EXISTS（默认 true）
    * @example
    * ```ts
-   * await reldb.ddl.dropIndex('idx_users_email')
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.ddl.dropIndex('users_name_idx')
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   dropIndex: (indexName: string, ifExists?: boolean) => Promise<HaiResult<void>>
@@ -294,11 +307,11 @@ export interface DdlOperations {
    * @param sql - DDL SQL 语句（必须为开发者静态构造，禁止包含用户输入）
    * @example
    * ```ts
-   * // ✅ 安全：静态 SQL
-   * await reldb.ddl.raw('ALTER TABLE users ADD COLUMN status TEXT')
+   * import { reldb } from '@h-ai/reldb'
    *
-   * // ❌ 危险：拼接用户输入
-   * await reldb.ddl.raw(`ALTER TABLE ${userInput} ADD COLUMN status TEXT`)
+   * const result = await reldb.ddl.raw('ALTER TABLE users ADD COLUMN status TEXT')
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
    * ```
    */
   raw: (sql: string) => Promise<HaiResult<void>>
@@ -310,6 +323,13 @@ export interface DdlOperations {
  * 查询结果行类型
  *
  * 约定为键值对象，字段名与 SQL 返回列一致。
+ * @example
+ * ```ts
+ * import type { QueryRow } from '@h-ai/reldb'
+ *
+ * const value: QueryRow = { id: 'u1', name: 'Alice' }
+ * void value
+ * ```
  */
 export type QueryRow = Record<string, unknown>
 
@@ -317,6 +337,13 @@ export type QueryRow = Record<string, unknown>
  * 执行结果
  *
  * INSERT/UPDATE/DELETE 操作返回的结果。
+ * @example
+ * ```ts
+ * import type { ExecuteResult } from '@h-ai/reldb'
+ *
+ * const value: ExecuteResult = { changes: 1 }
+ * void value
+ * ```
  */
 export interface ExecuteResult {
   /** 影响的行数 */
@@ -329,6 +356,13 @@ export interface ExecuteResult {
 
 /**
  * 规范化后的分页参数
+ * @example
+ * ```ts
+ * import type { NormalizedPagination } from '@h-ai/reldb'
+ *
+ * const value: NormalizedPagination = { page: 2, pageSize: 10, offset: 10, limit: 10 }
+ * void value
+ * ```
  */
 export interface NormalizedPagination extends PaginationOptions {
   /** SQL offset */
@@ -339,6 +373,13 @@ export interface NormalizedPagination extends PaginationOptions {
 
 /**
  * 分页参数覆盖
+ * @example
+ * ```ts
+ * import type { PaginationOverrides } from '@h-ai/reldb'
+ *
+ * const value: PaginationOverrides = { defaultPageSize: 20, maxPageSize: 100 }
+ * void value
+ * ```
  */
 export interface PaginationOverrides {
   /** 默认页码 */
@@ -351,6 +392,13 @@ export interface PaginationOverrides {
 
 /**
  * 分页查询参数
+ * @example
+ * ```ts
+ * import type { PaginationQueryOptions } from '@h-ai/reldb'
+ *
+ * const value: PaginationQueryOptions = { sql: 'SELECT id, name FROM users WHERE active = ?', params: [true], pagination: { page: 2, pageSize: 10 } }
+ * void value
+ * ```
  */
 export interface PaginationQueryOptions {
   /** 数据查询 SQL（不含 LIMIT/OFFSET） */
@@ -365,37 +413,104 @@ export interface PaginationQueryOptions {
 
 /**
  * 数据读写操作接口（SQL / 事务共享）
+ * @example
+ * ```ts
+ * import type { DmlOperations } from '@h-ai/reldb'
+ *
+ * async function use(operations: DmlOperations) {
+ *   const result = await operations.query<{ id: string }>('SELECT id FROM users WHERE name = ?', ['Alice'])
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface DmlOperations {
-  /** 查询多行 */
+  /**
+   * 查询多行
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.sql.query<{ id: string }>('SELECT id FROM users WHERE name = ?', ['Alice'])
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
+   */
   query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<HaiResult<T[]>>
-  /** 查询单行 */
+  /**
+   * 查询单行
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.sql.get<{ id: string }>('SELECT id FROM users WHERE name = ?', ['Alice'])
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
+   */
   get: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<HaiResult<T | null>>
-  /** 执行修改语句（INSERT/UPDATE/DELETE） */
+  /**
+   * 执行修改语句（INSERT/UPDATE/DELETE）
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.sql.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1'])
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
+   */
   execute: (sql: string, params?: unknown[]) => Promise<HaiResult<ExecuteResult>>
-  /** 批量执行多条语句（在同一事务上下文中） */
+  /**
+   * 批量执行多条语句（在同一事务上下文中）
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.sql.batch([{ sql: 'UPDATE users SET name = ? WHERE id = ?', params: ['Alice', 'u1'] }])
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
+   */
   batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<HaiResult<void>>
-  /** 分页查询 */
+  /**
+   * 分页查询
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.sql.queryPage<{ id: string }>({ sql: 'SELECT id FROM users', pagination: { page: 1, pageSize: 10 } })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
+   */
   queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<HaiResult<PaginatedResult<T>>>
 }
 
 // ─── CRUD 抽象类型 ───
 
-/** CRUD 查询条件 */
+/**
+ * CRUD 查询条件
+ * @example
+ * ```ts
+ * import type { CrudQueryOptions } from '@h-ai/reldb'
+ *
+ * const value: CrudQueryOptions = { where: 'name = ?', params: ['Alice'], orderBy: 'id ASC', limit: 10 }
+ * void value
+ * ```
+ */
 export interface CrudQueryOptions {
   /**
    * WHERE 子句（不包含 WHERE 关键字）
    *
    * **⚠️ 安全警告：** `where` 为原始 SQL 片段，**禁止**将用户输入直接拼接。
    * 动态值必须通过 `params` 占位符（`?`）传入。
-   *
    * @example
    * ```ts
-   * // ✅ 安全：占位符 + params
-   * crud.findAll({ where: 'status = ? AND age > ?', params: ['active', 18] })
+   * import type { CrudQueryOptions } from '@h-ai/reldb'
    *
-   * // ❌ 危险：拼接用户输入
-   * crud.findAll({ where: `name = '${userInput}'` })
+   * const options: CrudQueryOptions = { where: 'name = ?', params: ['Alice'] }
+   * void options // 值走绑定参数；SQL 结构由开发者静态编写。
    * ```
    */
   where?: string
@@ -409,13 +524,29 @@ export interface CrudQueryOptions {
   offset?: number
 }
 
-/** CRUD 分页查询条件 */
+/**
+ * CRUD 分页查询条件
+ * @example
+ * ```ts
+ * import type { CrudPageOptions } from '@h-ai/reldb'
+ *
+ * const value: CrudPageOptions = { where: 'active = ?', params: [true], pagination: { page: 1, pageSize: 20 } }
+ * void value
+ * ```
+ */
 export interface CrudPageOptions {
   /**
    * WHERE 子句（不包含 WHERE 关键字）
    *
    * **⚠️ 安全警告：** `where` 为原始 SQL 片段，**禁止**将用户输入直接拼接。
    * 动态值必须通过 `params` 占位符（`?`）传入。
+   * @example
+   * ```ts
+   * import type { CrudQueryOptions } from '@h-ai/reldb'
+   *
+   * const options: CrudQueryOptions = { where: 'name = ?', params: ['Alice'] }
+   * void options // 值走绑定参数；SQL 结构由开发者静态编写。
+   * ```
    */
   where?: string
   /** 参数列表 */
@@ -428,20 +559,45 @@ export interface CrudPageOptions {
   overrides?: PaginationOverrides
 }
 
-/** CRUD 统计条件 */
+/**
+ * CRUD 统计条件
+ * @example
+ * ```ts
+ * import type { ReldbCrudCountOptions } from '@h-ai/reldb'
+ *
+ * const value: ReldbCrudCountOptions = { where: 'active = ?', params: [true] }
+ * void value
+ * ```
+ */
 export interface ReldbCrudCountOptions {
   /**
    * WHERE 子句（不包含 WHERE 关键字）
    *
    * **⚠️ 安全警告：** `where` 为原始 SQL 片段，**禁止**将用户输入直接拼接。
    * 动态值必须通过 `params` 占位符（`?`）传入。
+   * @example
+   * ```ts
+   * import type { CrudQueryOptions } from '@h-ai/reldb'
+   *
+   * const options: CrudQueryOptions = { where: 'name = ?', params: ['Alice'] }
+   * void options // 值走绑定参数；SQL 结构由开发者静态编写。
+   * ```
    */
   where?: string
   /** 参数列表 */
   params?: unknown[]
 }
 
-/** CRUD 配置 */
+/**
+ * CRUD 配置
+ * @example
+ * ```ts
+ * import type { CrudConfig } from '@h-ai/reldb'
+ *
+ * const config: CrudConfig<{ id: string }> = { table: 'users', dbType: 'postgresql', select: ['id'], createColumns: ['id'], updateColumns: [] }
+ * void config
+ * ```
+ */
 export interface CrudConfig<TItem> {
   /** 表名 */
   table: string
@@ -459,7 +615,16 @@ export interface CrudConfig<TItem> {
   dbType: DbType
 }
 
-/** CRUD 字段定义 */
+/**
+ * CRUD 字段定义
+ * @example
+ * ```ts
+ * import type { ReldbCrudFieldDefinition } from '@h-ai/reldb'
+ *
+ * const value: ReldbCrudFieldDefinition = { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true }
+ * void value
+ * ```
+ */
 export interface ReldbCrudFieldDefinition {
   /** 对象字段名 */
   fieldName: string
@@ -475,7 +640,20 @@ export interface ReldbCrudFieldDefinition {
   update: boolean
 }
 
-/** BaseReldbCrudRepository 配置 */
+/**
+ * BaseReldbCrudRepository 配置
+ * @example
+ * ```ts
+ * import type { BaseReldbCrudRepositoryConfig } from '@h-ai/reldb'
+ *
+ * const config: BaseReldbCrudRepositoryConfig<{ id: string }> = {
+ *   table: 'users', idField: 'id', fields: [
+ *     { fieldName: 'id', columnName: 'id', def: { type: 'TEXT', primaryKey: true }, select: true, create: true, update: false },
+ *   ],
+ * }
+ * void config
+ * ```
+ */
 export interface BaseReldbCrudRepositoryConfig<TItem> {
   /** 表名 */
   table: string
@@ -493,7 +671,19 @@ export interface BaseReldbCrudRepositoryConfig<TItem> {
   nowProvider?: () => number
 }
 
-/** CRUD 仓库接口 */
+/**
+ * CRUD 仓库接口
+ * @example
+ * ```ts
+ * import type { ReldbCrudRepository } from '@h-ai/reldb'
+ *
+ * async function use(operations: ReldbCrudRepository<{ id: string }>) {
+ *   const result = await operations.findById('u1')
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
+ */
 export interface ReldbCrudRepository<TItem> {
   create: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
   createMany: (items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
@@ -509,7 +699,19 @@ export interface ReldbCrudRepository<TItem> {
   existsById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<boolean>>
 }
 
-/** CRUD 管理器（统一入口） */
+/**
+ * CRUD 管理器（统一入口）
+ * @example
+ * ```ts
+ * import type { CrudManager } from '@h-ai/reldb'
+ *
+ * async function use(operations: CrudManager) {
+ *   const result = await operations.table<{ id: string }>({ table: 'users', dbType: 'postgresql' }).findById('u1')
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
+ */
 export interface CrudManager {
   /** 获取单表 CRUD 仓库 */
   table: <TItem>(config: CrudConfig<TItem>) => ReldbCrudRepository<TItem>
@@ -519,6 +721,18 @@ export interface CrudManager {
 
 /**
  * 事务句柄接口（分步事务）
+ * @example
+ * ```ts
+ * import type { DmlWithTxOperations } from '@h-ai/reldb'
+ *
+ * async function use(operations: DmlWithTxOperations) {
+ *   const result = await operations.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1'])
+ *   if (!result.success) throw new Error(result.error.message)
+ *   const committed = await operations.commit()
+ *   if (!committed.success) throw new Error(committed.error.message)
+ *   return result.data.changes
+ * }
+ * ```
  */
 export interface DmlWithTxOperations extends DmlOperations {
   /** CRUD 管理器 */
@@ -533,19 +747,37 @@ export interface DmlWithTxOperations extends DmlOperations {
  * 事务回调函数类型
  *
  * @param tx - 事务内操作对象
- * @returns 业务返回值（将被包装为 HaiResult）
+ * @returns 业务返回值（将被包装为 HaiResult）；callback 抛错才回滚，返回失败 HaiResult 不会被自动展开。
  * @example
  * ```ts
- * const result = await reldb.tx.wrap(async (tx) => {
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户A'])
- *     return await tx.get('SELECT * FROM users WHERE name = ?', ['用户A'])
- * })
+ * import type { TxWrapCallback } from '@h-ai/reldb'
+ *
+ * const insert: TxWrapCallback<number> = async (tx) => {
+ *   const result = await tx.execute('INSERT INTO users (id, name) VALUES (?, ?)', ['u1', 'Alice'])
+ *   if (!result.success) throw new Error(result.error.message) // 显式抛错触发 wrap 回滚。
+ *   return result.data.changes
+ * }
+ * void insert
  * ```
  */
 export type TxWrapCallback<T> = (tx: DmlWithTxOperations) => Promise<T>
 
 /**
  * 事务管理器
+ * @example
+ * ```ts
+ * import type { TxManager } from '@h-ai/reldb'
+ *
+ * async function use(operations: TxManager) {
+ *   const result = await operations.wrap(async (tx) => {
+ *     const changed = await tx.execute('UPDATE users SET name = ? WHERE id = ?', ['Alice', 'u1'])
+ *     if (!changed.success) throw new Error(changed.error.message)
+ *     return changed.data.changes
+ *   })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export interface TxManager {
   /** 开启事务（分步事务） */
@@ -560,30 +792,21 @@ export interface TxManager {
  * 数据库函数接口
  *
  * 统一的数据库访问入口，通过 `reldb` 对象提供所有数据库操作。
- *
  * @example
  * ```ts
  * import { reldb } from '@h-ai/reldb'
  *
- * // 初始化
- * await reldb.init({ type: 'sqlite', database: ':memory:' })
- *
- * // 检查状态
- * if (reldb.isInitialized) {
- *     // 可读取当前数据库类型：reldb.config?.type
+ * const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' }) // 仅示例/测试。
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const created = await reldb.ddl.createTable('users', { id: { type: 'TEXT', primaryKey: true }, name: { type: 'TEXT' } })
+ *   if (!created.success) throw new Error(created.error.message)
+ *   const inserted = await reldb.sql.execute('INSERT INTO users (id, name) VALUES (?, ?)', ['u1', 'Alice'])
+ *   if (!inserted.success) throw new Error(inserted.error.message)
+ * } finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
  * }
- *
- * // 使用 DDL
- * await reldb.ddl.createTable('users', { ... })
- *
- * // 使用 SQL
- * await reldb.sql.query('SELECT * FROM users')
- *
- * // 使用事务
- * await reldb.tx.wrap(async (tx) => { ... })
- *
- * // 关闭连接
- * await reldb.close()
  * ```
  */
 export interface ReldbFunctions {
@@ -592,6 +815,14 @@ export interface ReldbFunctions {
    *
    * @param config - 数据库配置
    * @returns 初始化结果
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
    */
   init: (config: ReldbConfigInput) => Promise<HaiResult<void>>
 
@@ -628,51 +859,28 @@ export interface ReldbFunctions {
    * 返回的 SQL 片段可嵌入 `reldb.sql.query` / `reldb.sql.execute` 等调用。
    *
    * 未初始化时默认返回 SQLite 格式的构建器；初始化后自动匹配当前数据库类型。
-   *
    * @example
    * ```ts
-   * // 提取 JSON 字段值（用于 WHERE 条件）
-   * const { sql, params } = reldb.json.extract('settings', '$.theme')
-   * const rows = await reldb.sql.query(
-   *   `SELECT * FROM users WHERE ${sql} = ?`,
-   *   [...params, '"dark"'],
-   * )
+   * import { reldb } from '@h-ai/reldb'
    *
-   * // 设置 JSON 字段路径
-   * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
-   * await reldb.sql.execute(
-   *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
-   *   [...params, userId],
-   * )
+   * const expression = reldb.json.set('settings', '$.theme', 'dark')
+   * const result = await reldb.sql.execute(`UPDATE users SET settings = ${expression.sql} WHERE id = ?`, [...expression.params, 'u1'])
+   * if (!result.success) throw new Error(result.error.message)
    * ```
    */
   readonly json: ReldbJsonOps
 
-  /** 关闭数据库连接 */
+  /**
+   * 等待初始化/在途事务并关闭连接；清理失败后操作不可用，资源保留供重试。
+   * @returns 资源全部释放时成功；未初始化时同样成功。
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.close()
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
+   */
   close: () => Promise<HaiResult<void>>
-}
-
-// ─── Provider 接口 ───
-
-/**
- * 数据库 Provider 接口
- *
- * 内部使用，定义各数据库驱动需要实现的接口。
- * 每个数据库类型（SQLite、PostgreSQL、MySQL）都有对应的 Provider 实现。
- */
-export interface ReldbProvider {
-  /** DDL 操作（表结构管理） */
-  readonly ddl: DdlOperations
-  /** SQL 操作（数据查询和修改） */
-  readonly sql: DmlOperations
-  /** CRUD 管理器 */
-  readonly crud: CrudManager
-  /** 事务管理器 */
-  readonly tx: TxManager
-  /** 连接数据库 */
-  connect: (config: ReldbConfig) => Promise<HaiResult<void>>
-  /** 关闭连接 */
-  close: () => Promise<HaiResult<void>>
-  /** 是否已连接 */
-  isConnected: () => boolean
 }

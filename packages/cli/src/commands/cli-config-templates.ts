@@ -15,6 +15,11 @@ import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeCon
  * @param moduleKey - 拥有配置 Schema 的模块标识
  * @param configs - 用户自定义配置值
  * @returns YAML 格式的配置内容
+ * @example 模块内部上下文
+ * ```ts
+ * const yaml = generateConfigFile('db', { db: { type: 'postgresql', host: 'db', database: 'shop' } })
+ * // 输出显式 HAI_DB_* 引用；连接密码仍由私有环境注入。
+ * ```
  */
 export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
   return parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs))
@@ -64,7 +69,6 @@ function generateCoreConfig(cfg?: CoreModuleConfig): string {
 ${stringify({ name }).trim()}
 version: 0.1.0
 env: development
-debug: false
 
 logging:
   level: info
@@ -77,10 +81,6 @@ logging:
     - secret
 
 defaultLocale: ${locale}
-# 短 ID 生成选项；语言列表在前端 project.inlang/settings.json 中维护。
-# id:
-#   prefix: app_
-#   length: 21
 `
 }
 
@@ -124,7 +124,6 @@ transport: false
 # transport:
 #   keyExchangePath: /_hai/key-exchange
 #   excludePaths: [/health, /ready]
-#   maxClients: 10000
 `
 }
 
@@ -137,7 +136,9 @@ function generateDbConfig(cfg?: DbModuleConfig): string {
   const user = dbType === 'mysql' ? 'root' : 'postgres'
   const connection = stringify({ host, port, user, password: '' }).trim()
   const networkOptions = `# url: \${HAI_DB_URL} # 可用连接串替代 host/port/user/password
-# ssl: false # false | true | require | prefer | allow | disable，或 TLS 对象
+# PostgreSQL ssl：布尔值、require/prefer/allow/disable 或 TLS 对象。
+# MySQL ssl：false 或严格对象；{} 默认校验证书链和 DNS 身份，不能用 true 或 PostgreSQL 字符串模式。
+# MySQL 自定义 CA / mTLS 使用 ca/cert/key 的 PEM 内容；cert/key 必须成对，私钥仅注入私有环境。
 # pool:
 #   min: 1
 #   max: 10
@@ -323,8 +324,8 @@ function generateStorageConfig(cfg?: StorageModuleConfig): string {
 region: us-east-1
 accessKeyId: ''
 secretAccessKey: ''
-# endpoint: https://s3.amazonaws.com
-# forcePathStyle: false
+endpoint: \${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
+forcePathStyle: false
 # prefix: ''
 # publicUrl: https://cdn.example.com`
   return `# 存储配置；HAI_STORAGE 可整体替换连接配置。
@@ -333,7 +334,7 @@ ${local}
 ${s3}
 
 # type 选择 Provider；未选分支字段由模块 Schema 忽略。
-# endpoint / publicUrl 为可选 URL，启用时取消对应字段注释并通过环境变量提供。
+# S3 兼容服务由环境注入 endpoint / forcePathStyle；默认端点用于 us-east-1。
 
 # operationLog:
 #   read: false
@@ -396,7 +397,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   #   fast: fast
   # embedding / rerank / vision 须在 models 中声明对应厂商模型，不能只填写场景 ID。
 
-# 可选子模块：只取消需要的块的注释，模型、向量库与数据库依赖按使用场景初始化。
+# 可选子模块只取消需要的块；生产环境先初始化共享数据库与网络向量库，再初始化 AI。
 # mcp:
 #   server:
 #     name: my-app
@@ -477,6 +478,10 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
 #     apiKey:
 #       in: header # header | query
 #       name: x-api-key
+#   execution:
+#     leaseMs: 30000
+#     pollIntervalMs: 250
+#     maxExecutionMs: 300000
 # audio:
 #   inheritLlmApiKey: false
 #   transcribeModel: asr
@@ -500,6 +505,8 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
 #       model: tts-1
 #       operations: [synthesize]
 # image:
+#   maxImageBytes: 20971520 # 单张图片/参考图字节上限；JSON 上限为 max(64KiB, 两倍该值)
+#   maxImages: 4 # 图片/参考图数量上限，临时 URL 串行下载
 #   generateModel: image
 #   models:
 #     - id: image
@@ -518,7 +525,13 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  * @param features - 选中的功能模块列表
  * @param configs - 用户自定义配置值
  * @param includeDisabled - 是否输出所有模块的完整注释示例（fullstack 使用，未启用模块保留注释）
+ * @param configContents - 按配置名索引的已渲染 YAML，使示例与真实引用一致；省略项使用默认模板。
  * @returns .env.example 文件内容
+ * @example 模块内部上下文
+ * ```ts
+ * const yaml = generateConfigFile('db', { db: { type: 'postgresql', database: 'shop' } })
+ * const example = generateEnvExample(['db'], undefined, false, { db: yaml })
+ * ```
  */
 export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false, configContents: Record<string, string> = {}): string {
   const keys = new Set(['core', ...(configContents.serv ? ['serv'] : []), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
@@ -545,84 +558,71 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
   return `${sections.join('\n\n')}\n`
 }
 
+/**
+ * 为启用模块生成共享生产后端配置；凭据只列出必需入口，由私有环境注入。
+ * 只返回文本，不连接服务，也不保证私有凭据已提供。
+ * @param features - 本次启用的功能标识。
+ * @param configs - 用户指定的模块配置。
+ * @returns 共享生产后端的 dotenv 文本；凭据仅说明注入入口。
+ * @example 模块内部上下文
+ * ```ts
+ * const dotenv = generateProductionEnvironment(['ai', 'cache', 'storage'], { db: { type: 'mysql', database: 'shop' } })
+ * // AI 补齐 db/vecdb；生成 db/cache/storage/vecdb 服务 DNS，真实凭据另行注入。
+ * ```
+ */
+export function generateProductionEnvironment(features: FeatureId[], configs?: ModuleConfigs): string {
+  const enabled = new Set(features)
+  if (enabled.has('ai')) {
+    enabled.add('db')
+    enabled.add('vecdb')
+  }
+  const sections = [
+    '# 生产环境必须使用共享后端；以下服务名对应 Compose 内部 DNS。',
+    '# 凭据通过部署 Secret / 进程环境或被忽略的 .env.local 注入，禁止提交真实值。',
+    'HAI_CORE_ENV=production',
+    'HAI_CORE_LOGGING_LEVEL=info',
+  ]
+  if (enabled.has('db')) {
+    const mysql = configs?.db?.type === 'mysql'
+    const database = configs?.db?.type !== 'sqlite' && configs?.db?.database ? configs.db.database : 'hai'
+    sections.push('', '# 必须私有注入 HAI_DB_PASSWORD；外部数据库可覆盖下列连接字段。', `HAI_DB_TYPE=${mysql ? 'mysql' : 'postgresql'}`, 'HAI_DB_HOST=db', `HAI_DB_PORT=${mysql ? 3306 : 5432}`, renderEnvironment([{ name: 'HAI_DB_DATABASE', path: 'db.database', value: database, constraint: '生产数据库名' }]), `HAI_DB_USER=${mysql ? 'root' : 'postgres'}`)
+  }
+  if (enabled.has('cache'))
+    sections.push('', '# 必须私有注入 HAI_CACHE_PASSWORD。', 'HAI_CACHE_TYPE=redis', 'HAI_CACHE_HOST=cache', 'HAI_CACHE_PORT=6379')
+  if (enabled.has('storage')) {
+    sections.push('', '# 必须私有注入 HAI_STORAGE_ACCESSKEYID / HAI_STORAGE_SECRETACCESSKEY。', 'HAI_STORAGE_TYPE=s3', 'HAI_STORAGE_BUCKET=hai', 'HAI_STORAGE_REGION=us-east-1', 'HAI_STORAGE_ENDPOINT=http://storage:9000', 'HAI_STORAGE_FORCEPATHSTYLE=true')
+  }
+  if (enabled.has('vecdb'))
+    sections.push('', '# 受保护的 Qdrant 必须私有注入 HAI_VECDB_APIKEY。', 'HAI_VECDB_TYPE=qdrant', 'HAI_VECDB_URL=http://vecdb:6333')
+  if (enabled.has('ai'))
+    sections.push('', '# 必须私有注入 HAI_AI_LLM_APIKEY 及所选模型的其它凭据；AI 自动复用已初始化的共享 db/vecdb。')
+  if (enabled.has('reach')) {
+    sections.push('', '# 必须私有注入 HAI_REACH_PROVIDERS 的真实 SMTP/SMS/API JSON（包含凭据）。', '# 空数组有意让配置校验拒绝启动，生产不得沿用开发 console Provider。', 'HAI_REACH_PROVIDERS=\'[]\'')
+  }
+  return `${sections.join('\n')}\n`
+}
+
 function generateDeployConfig(): string {
-  return `# =============================================================================
-# 部署配置 (@h-ai/deploy)
-# =============================================================================
-# 部署平台凭证通过 ~/.hai/credentials.yml 管理
-# 环境变量引用格式: \${VAR_NAME:default_value}
-
-# 部署平台
+  return `# 部署已有镜像；运行 pnpm run deploy --build 可先构建再发布。
+# SSH 参数由向导保存在本机 .env.local；离线打包不要求 SSH。
 provider:
-  type: vercel
-  token: \${HAI_DEPLOY_PROVIDER_TOKEN}
+  type: docker-ssh
+  remote:
+    baseDir: /opt/hai/apps
+    runtime: auto # 优先 Podman，其次 Docker
+  expose:
+    hostPort: 18080
+    containerPort: 3000
 
-# ---------------------------------------------------------------------------
-# 方式二：docker-ssh — 将应用容器化后通过 SSH 部署到任意 Linux 主机
-# 远程主机只需具备 SSH + docker/podman + compose，本地需 docker 或 podman
-# 切换时用下方 provider 替换上面的 vercel provider
-# ---------------------------------------------------------------------------
+container:
+  s3Engine: \${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs} # rustfs | minio
+
+# 完整包包含自建中间件镜像，服务器启动禁止拉取。
+# 外部数据库/存储等连接在对应模块配置和环境文件中设置。
+# Vercel 仅消费已有 .vercel/output，云 Provider/Provisioner 不适用于完全离线。
 # provider:
-#   type: docker-ssh
-#   ssh:
-#     host: \${HAI_DEPLOY_PROVIDER_SSH_HOST}
-#     port: 22
-#     username: deploy
-#     identityFile: \${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE}   # 私钥文件路径（省略则用 ssh-agent）
-#     knownHostsFile: \${HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE}
-#     strictHostKeyChecking: true
-#     connectTimeoutSeconds: 10
-#   remote:
-#     baseDir: /opt/hai/apps
-#     runtime: auto                          # auto 优先 podman，其次 docker
-#   expose:
-#     type: port
-#     containerPort: 3000
-#     hostPort: 18080                        # 访问地址 http://<host>:18080
-
-# Compose 中间件参数；镜像构建设置在工程 hai.build.json。
-# container:
-#   s3Engine: rustfs # rustfs | minio；应用使用 storage.type=s3
-
-# 基础设施服务（按需开启）
-# services:
-  # PostgreSQL 数据库 (Neon)
-  # db:
-  #   provisioner: neon
-  #   apiKey: \${HAI_DEPLOY_SERVICES_DB_APIKEY}
-
-  # Redis 缓存 (Upstash)
-  # cache:
-  #   provisioner: upstash
-  #   email: \${HAI_DEPLOY_SERVICES_CACHE_EMAIL}
-  #   apiKey: \${HAI_DEPLOY_SERVICES_CACHE_APIKEY}
-
-  # S3 存储 (Cloudflare R2)
-  # storage:
-  #   provisioner: cloudflare-r2
-  #   accountId: \${HAI_DEPLOY_SERVICES_STORAGE_ACCOUNTID}
-  #   apiToken: \${HAI_DEPLOY_SERVICES_STORAGE_APITOKEN}
-  #   accessKeyId: \${HAI_DEPLOY_SERVICES_STORAGE_ACCESSKEYID}
-  #   secretAccessKey: \${HAI_DEPLOY_SERVICES_STORAGE_SECRETACCESSKEY}
-
-  # 邮件 (Resend)
-  # email:
-  #   provisioner: resend
-  #   apiKey: \${HAI_DEPLOY_SERVICES_EMAIL_APIKEY}
-  #   from: \${HAI_DEPLOY_SERVICES_EMAIL_FROM}
-
-  # 短信 (阿里云)
-  # sms:
-  #   provisioner: aliyun
-  #   accessKeyId: \${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYID}
-  #   accessKeySecret: \${HAI_DEPLOY_SERVICES_SMS_ACCESSKEYSECRET}
-  #   signName: \${HAI_DEPLOY_SERVICES_SMS_SIGNNAME}
-
-# docker-ssh 说明：
-# - 先 pnpm build --target docker；deploy 消费已有镜像并生成一个 Compose tar 后上传
-# - compose 按实际后端生成中间件；S3 默认 RustFS，可通过 s3Engine 选择 MinIO
-# - 镜像清单含 Web 时一并部署，Web 不接收 API 的私有变量；--bundle-only 可手工搬运
-# - 若同时配置了对应云 Provisioner，则优先使用云资源，不再自建 sidecar
+#   type: vercel
+#   token: \${HAI_DEPLOY_PROVIDER_TOKEN}
 `
 }
 
@@ -636,6 +636,8 @@ type: lancedb
 
 # LanceDB 数据目录
 path: ./data/vecdb
+url: \${HAI_VECDB_URL:http://localhost:6333}
+apiKey: \${HAI_VECDB_APIKEY:}
 
 # 距离度量: cosine | euclidean | dot
 # metric: cosine
@@ -657,6 +659,7 @@ path: ./data/vecdb
 # apiKey: ''
 
 # Chroma 配置（替换 type；url 指向已有服务，path 用于本地子进程数据目录）
+# 直连仅支持 HTTP(S) 根 url；apiKey 按 Bearer 网关协议发送，不提供 Chroma Cloud 配置。
 # type: chroma
 # path: ./data/chroma
 # url: http://localhost:8000
@@ -736,6 +739,12 @@ templates: []
 #   strategy: delay
 #   start: "22:00"
 #   end: "08:00"
+
+# 延迟队列重试策略（入队时持久保存；领取/崩溃恢复计数，超限 dead；unknown 禁止自动重发）
+queue:
+  maxAttempts: \${HAI_REACH_QUEUE_MAXATTEMPTS:5}
+  retryDelayMs: \${HAI_REACH_QUEUE_RETRYDELAYMS:60000}
+  maxRetryDelayMs: \${HAI_REACH_QUEUE_MAXRETRYDELAYMS:3600000}
 `
 }
 
@@ -744,18 +753,18 @@ function generateSchedulerConfig(): string {
 # 任务调度配置 (@h-ai/scheduler)
 # =============================================================================
 
-# 是否启用数据库日志（需要 @h-ai/reldb）
+# 必须先初始化共享 @h-ai/reldb；执行日志和租约始终落库，不能设 false
 enableDb: true
 
 # 检查间隔（毫秒）
 tickInterval: 1000
 
-# 锁过期时间（毫秒）
-lockExpireMs: 300000
+# 执行租约（1000～86400000 毫秒，运行中自动续期）；unknown 须人工核对并先停止旧执行
+leaseMs: 300000
 
 # 节点 ID 默认自动生成；多节点部署时每个实例应使用独立 ID。
 # nodeId: worker-1
-# 执行日志保留策略（启用数据库时使用）
+# 尝试日志保留策略（不删除执行journal与去重历史）
 # maxLogs: 10000
 # retentionDays: 30
 `
@@ -782,27 +791,32 @@ function generatePaymentConfig(): string {
 # 支付配置 (@h-ai/payment)
 # =============================================================================
 
-# 微信支付（按需开启）
+# 微信支付（仅公众号 JSAPI，需当前 appId 的 openid）
 # wechat:
 #   mchId: ''
 #   apiV3Key: ''
 #   serialNo: ''
 #   privateKey: ''
-#   platformCert: ''
+#   platformKeys: # 必填；按 Wechatpay-Serial 精确选择平台证书/公钥，轮换时保留新旧项
+#     PUB_KEY_ID_123: '' # 平台公钥 PEM；证书则以其真实序列号作为 key
 #   appId: ''
 
-# 支付宝（按需开启）
+# 支付宝（仅 H5/WAP，浏览器 POST 签名字段）
 # alipay:
 #   appId: ''
+#   sellerId: '' # 必填；回调 seller_id 必须与此一致
 #   privateKey: ''
 #   alipayPublicKey: ''
+#   returnUrl: 'https://app.example/payment/return' # 必填 HTTPS；回跳不代表已付款
 #   signType: RSA2
 #   sandbox: false
 
-# Stripe（按需开启）
+# Stripe（按需开启；先初始化共享 reldb，持久化渠道映射和幂等结果）
 # stripe:
 #   secretKey: ''
 #   webhookSecret: ''
+#   successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}'
+#   cancelUrl: 'https://app.example/payment/cancel' # 可选
 #   webhookToleranceSeconds: 300
 `
 }

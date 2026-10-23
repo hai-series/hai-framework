@@ -16,6 +16,13 @@ test.describe('h5-app core flows', () => {
 
     await bottomNav.getByRole('button', { name: /首页|Home/ }).click()
     await expect(page).toHaveURL(/\/$/)
+    for (const width of [390, 1440, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: 960 })
+      const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      expect((await page.locator('.hai-mobile-shell').boundingBox())!.width).toBeGreaterThan(availableWidth - 2)
+      expect((await bottomNav.boundingBox())!.width).toBeGreaterThan(availableWidth - 2)
+    }
   })
 
   test('paraglide locale cookie renders english copy', async ({ context, page, baseURL }) => {

@@ -5,7 +5,15 @@
  * @module platform
  */
 
-/** 运行平台 */
+/**
+ * 运行平台
+ *
+ * @example
+ * ```ts
+ * import type { Platform } from '@h-ai/ui'
+ * const example: Platform = 'web'
+ * ```
+ */
 export type Platform = 'web' | 'h5' | 'android' | 'ios' | 'unknown'
 
 const ANDROID_UA_REGEX = /android/
@@ -18,10 +26,8 @@ const IOS_UA_REGEX = /iphone|ipad|ipod/
  *
  * @example
  * ```ts
+ * import { detectPlatform } from '@h-ai/ui'
  * const platform = detectPlatform()
- * if (platform === 'android') {
- *   // Android 特定逻辑
- * }
  * ```
  */
 export function detectPlatform(): Platform {
@@ -57,6 +63,13 @@ export function detectPlatform(): Platform {
 
 /**
  * 判断是否为移动端
+ * @returns 当前是否为 H5 或 Android/iOS 原生壳。
+ *
+ * @example
+ * ```ts
+ * import { isMobile } from '@h-ai/ui'
+ * const compactLayout = isMobile()
+ * ```
  */
 export function isMobile(): boolean {
   const platform = detectPlatform()
@@ -65,6 +78,13 @@ export function isMobile(): boolean {
 
 /**
  * 判断是否为 Capacitor App
+ * @returns 是否为 Capacitor Android/iOS 原生壳。
+ *
+ * @example
+ * ```ts
+ * import { isNativeApp } from '@h-ai/ui'
+ * const useNativeBridge = isNativeApp()
+ * ```
  */
 export function isNativeApp(): boolean {
   const platform = detectPlatform()
@@ -77,17 +97,10 @@ export function isNativeApp(): boolean {
  * @returns 包含当前平台、是否移动端和是否原生应用的响应式对象
  *
  * @example
- * ```svelte
- * <script>
- *   import { usePlatform } from '@hai/ui'
- *   const platform = usePlatform()
- * </script>
- *
- * {#if platform.isMobile}
- *   <BottomNav />
- * {:else}
- *   <Sidebar />
- * {/if}
+ * ```ts
+ * import { usePlatform } from '@h-ai/ui'
+ * const platform = usePlatform()
+ * const device = platform.current
  * ```
  */
 export function usePlatform() {

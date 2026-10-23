@@ -4,19 +4,31 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/core](../core/README.ja.md)
 
-> Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマを提供します。
+## 概要
 
-## インストール
+内蔵メッセージは `zh-CN`、`en-US`、`ja-JP` に対応し、言語セレクターは既定で3言語を表示します。
+
+Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US）、15 種類の厳選テーマを提供します。
+
+## 主な機能
+
+- フォーム、テーブル、ダイアログ、ナビゲーション、チャートなどの部品。
+- 認証、CRUD、AI コンテンツ、操作ガイド、ヘルプセンター。
+- Svelte 5、テーマ、レスポンシブ表示、中国語・英語・日本語のコンポーネント文言。
+
+## 使い始める
+
+### インストール
 
 ```bash
-npm install @h-ai/ui
+npm install @h-ai/ui @h-ai/core
 ```
 
-`@h-ai/core` に依存し、自動的にインストールされます。
+Node サーバーでは UI と core の両方を本番依存に含め、ログなどのネイティブ依存を通常どおり読み込めるようにします。
 
-## クイックスタート
+### クイックスタート
 
-### 1. svelte.config.js の設定
+#### 1. svelte.config.js の設定
 
 ```js
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
@@ -33,7 +45,7 @@ const config = {
 export default config
 ```
 
-### 2. vite.config.ts の設定
+#### 2. vite.config.ts の設定
 
 ```ts
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
@@ -51,11 +63,13 @@ export default defineConfig({
     // 避免首次进入业务路由时触发依赖再优化与整页刷新
     include: [...haiPrebundledDeps],
   },
-  ssr: { noExternal: [/@h-ai\//] },
+  ssr: { noExternal: ['@h-ai/ui', '@h-ai/kit'], external: ['@h-ai/core', 'sm-crypto'] },
 })
 ```
 
-### 3. src/app.css の設定
+Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypto@0.5.7` を含めます。CLI 生成済みのプロジェクトでは設定済みです。手動導入は `pnpm add sm-crypto@0.5.7` を実行してください。adapter-node は直接の本番依存も参照するため、external 指定だけでは不十分です。
+
+#### 3. src/app.css の設定
 
 ```css
 @import 'tailwindcss';
@@ -76,7 +90,7 @@ export default defineConfig({
 
 > `@source` で TailwindCSS に `@h-ai/ui` の class を走査させます。ない場合はスタイルが欠落します。monorepo 内のアプリでは依存がルート `node_modules` に置かれる場合があるため、両方のパスを残すことを推奨します。
 
-### 4. コンポーネントの使用
+#### 4. コンポーネントの使用
 
 ```svelte
 <script>
@@ -108,7 +122,7 @@ import { Button } from '@h-ai/ui/components/primitives/index'
 import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 ```
 
-### data-\* 属性の転送
+#### data-\* 属性の転送
 
 公開 Svelte コンポーネントは `data-*` をルート・主操作要素へ転送し、テスト・計測・自動化に使えます。通常の未知属性は転送しません。
 
@@ -120,7 +134,7 @@ import { getThemeInfo, THEMES } from '@h-ai/ui/theme'
 
 `data-testid` のためだけにボタン・入力・ポップアップをラップする必要はありません。
 
-## コンポーネント構成
+### コンポーネント構成
 
 3 層で構成します（primitives → compounds → scenes）：
 
@@ -137,9 +151,9 @@ components/
     └── crypto/   # 暗号表示
 ```
 
-## コンポーネント一覧
+### コンポーネント一覧
 
-### Primitives：基本コンポーネント（20）
+#### Primitives：基本コンポーネント（20）
 
 | コンポーネント   | 説明                   | 主なプロパティ                                                                 |
 | ---------------- | ---------------------- | ------------------------------------------------------------------------------ |
@@ -166,9 +180,9 @@ components/
 
 `BareInput` の `type="file"` では `onchange` の `event.currentTarget.files` を読み取り、ファイルパスの `value` はバインドしません。他の入力型では `bind:value` を使用できます。
 
-### Compounds：複合コンポーネント（37）
+#### Compounds：複合コンポーネント（37）
 
-#### フォーム
+##### フォーム
 
 | コンポーネント | 説明               | 主なプロパティ                               |
 | -------------- | ------------------ | -------------------------------------------- |
@@ -177,7 +191,7 @@ components/
 | `FormLayout` | フォーム配置 | `columns`, `labelPosition`, `labelWidth` |
 | `TagInput`     | タグ入力           | `tags`, `maxTags`, `allowDuplicates`, `size` |
 
-#### フォームのレイアウトと検証
+##### フォームのレイアウトと検証
 
 `Form` とネイティブ `<form>` 内で使う `FormLayout` は、`columns={1 | 2}`、`labelPosition="top" | "left"`、`labelWidth`（既定 `8rem`）を共有します。既定は1列・ラベルを上に配置します。コンテナー幅が `36rem` 未満では1列、`28rem` 未満では横並びラベルも縦並びになります。
 
@@ -206,14 +220,14 @@ components/
 </Form>
 ```
 
-#### フィードバック
+##### フィードバック
 
 | コンポーネント   | 説明           | 主なプロパティ                           |
 | ---------------- | -------------- | ---------------------------------------- |
 | `Alert`          | アラート       | `variant`, `title`, `dismissible`        |
 | `ToastContainer` | 通知コンテナー | 全体に配置し、`toast` シングルトンと併用 |
 
-#### オーバーレイ
+##### オーバーレイ
 
 | コンポーネント | 説明           | 主なプロパティ                                                               |
 | -------------- | -------------- | ---------------------------------------------------------------------------- |
@@ -222,7 +236,7 @@ components/
 | `Confirm`      | 確認ダイアログ | `open`, `title`, `message`, `variant`, `onconfirm`                           |
 | `Popover`      | ポップオーバー | `open`, `position`, `trigger`, `offset`, `portal`                            |
 
-#### データ表示
+##### データ表示
 
 | コンポーネント | 説明             | 主なプロパティ                                                                                                                        |
 | -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -231,7 +245,7 @@ components/
 | `Accordion`    | アコーディオン   | `items: AccordionItem[]`                                                                                                              |
 | `Timeline`     | タイムライン     | `items: TimelineItem[]`                                                                                                               |
 
-#### Bits UI によるヘッドレス UI
+##### Bits UI によるヘッドレス UI
 
 | コンポーネント | 説明                       | 主なプロパティ                                              |
 | -------------- | -------------------------- | ----------------------------------------------------------- |
@@ -241,7 +255,7 @@ components/
 
 > 日付値には `@internationalized/date` の `DateValue` / `CalendarDate` を使います。
 
-#### モバイル・拡張操作
+##### モバイル・拡張操作
 
 | コンポーネント   | 説明                   | 主なプロパティ                                         |
 | ---------------- | ---------------------- | ------------------------------------------------------ |
@@ -253,7 +267,7 @@ components/
 | `SafeArea`       | セーフエリアコンテナー | `top`, `bottom`, `left`, `right`                       |
 | `SwipeCell`      | スワイプ操作           | `leftActions`, `rightActions`, `threshold`, `onaction` |
 
-#### ナビゲーション
+##### ナビゲーション
 
 | コンポーネント | 説明                              | 主なプロパティ                                                                                             |
 | -------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -264,7 +278,7 @@ components/
 | `Dropdown`     | ドロップダウンメニュー            | `items`, `trigger`, `triggerClass`, `position`                                                             |
 | `Tooltip`      | ツールチップ                      | `content`, `position`, `delay`                                                                             |
 
-#### 状態表示
+##### 状態表示
 
 | コンポーネント | 説明       | 主なプロパティ                        |
 | -------------- | ---------- | ------------------------------------- |
@@ -272,22 +286,22 @@ components/
 | `Empty`        | 空状態     | `title`, `description`, `icon`        |
 | `Result`       | 結果ページ | `status`, `title`, `description`      |
 
-#### ページ単位
+##### ページ単位
 
 | コンポーネント | 説明           | 主なプロパティ                                 |
 | -------------- | -------------- | ---------------------------------------------- |
 | `PageHeader`   | ページヘッダー | `title`, `description`、`actions` スロット対応 |
 
-### Scenes：用途別コンポーネント（36）
+#### Scenes：用途別コンポーネント（36）
 
-#### Guide：案内・ヘルプ（2）
+##### Guide：案内・ヘルプ（2）
 
 | コンポーネント | 説明 | 主なプロパティ |
 | --- | --- | --- |
 | `GuideHost` | 初回案内・ガイド・ヘルプダイアログ | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | 独立して使える検索付きヘルプ | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-#### App：アプリ全体（7）
+##### App：アプリ全体（7）
 
 | コンポーネント     | 説明                                        | 主なプロパティ                                           |
 | ------------------ | ------------------------------------------- | -------------------------------------------------------- |
@@ -299,13 +313,13 @@ components/
 | `ThemeSelector`    | テーマ選択パネル                            | プロパティ不要                                           |
 | `ThemeToggle`      | ライト・ダーク切り替え                      | プロパティ不要                                           |
 
-#### IAM：認証（10）
+##### IAM：認証（10）
 
 | コンポーネント       | 説明                                    | 主なプロパティ                                                                                         |
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `AuthPanel`          | 設定による認証画面 | `config`, `actions`, `loginHeader/loginFields/loginFooter`, `registerHeader/registerFields/registerFooter` |
 | `AuthShell`          | 認証ページ配置（中央カード / 左右分割） | `variant`, `title`, `subtitle`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` |
-| `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showRememberMe`, `onsubmit`                                                      |
+| `LoginForm`          | ログインフォーム                        | `loading`, `errors`, `showForgotPassword`, `onsubmit`                                                      |
 | `RegisterForm`       | 登録フォーム                            | `loading`, `errors`, `fields`, `onsubmit`                                                              |
 | `ForgotPasswordForm` | パスワード忘れ                          | `mode`, `loading`, `errors`, `onsubmit`                                                                |
 | `ResetPasswordForm`  | パスワードリセット                      | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
@@ -314,7 +328,7 @@ components/
 | `PermGuard`          | 権限ガード                              | `permissions`, `mode`, `fallback`                                                                      |
 | `UserProfile`        | ユーザープロフィール                    | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
-#### Storage：ストレージ（4）
+##### Storage：ストレージ（4）
 
 | コンポーネント | 説明                 | 主なプロパティ                                               |
 | -------------- | -------------------- | ------------------------------------------------------------ |
@@ -325,7 +339,7 @@ components/
 
 アップロード部品は presign・ヘッダー・PUT/POST を内蔵しません。アプリは `uploadHandler(file, { signal, onProgress })` からサービスを呼び、`{ url?, response? }` を返します。画像・アバターには表示可能な `url` が必要です。handler がなければ `FileUpload` は選択のみ、画像・アバターはローカルのプレビューのみを作成します。
 
-#### Crypto：暗号表示（3）
+##### Crypto：暗号表示（3）
 
 入力変更で `encryptedValue` を即座に消去し、現在の入力の成功結果のみを反映します。消去・コールバック置換・破棄で旧リクエストを無効化します。失敗時は組み込みエラーを表示し暗号文は空です。暗号化対象の送信は現在の暗号文が空でない場合に限ってください。
 
@@ -339,7 +353,7 @@ components/
 
 既定は `@h-ai/crypto` と共通で、暗号化入力は `SM4`、ハッシュは `SM3`、署名は `SM2` です。
 
-#### AI：文書・表計算（4）
+##### AI：文書・表計算（4）
 
 | コンポーネント           | 説明                     | 主なプロパティ・機能                                                                                       |
 | ------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
@@ -370,7 +384,7 @@ components/
 />
 ```
 
-#### Charts：グラフ
+##### Charts：グラフ
 
 `Chart type='line'` は既定で LayerChart の折れ線を使います。監視画面で分割線・点・最寄りの点への hover・縦基準線が必要な場合は `lineVariant='segmented-point'` を使います：
 
@@ -389,7 +403,7 @@ components/
 />
 ```
 
-#### CRUD：一覧操作（5）
+##### CRUD：一覧操作（5）
 
 | コンポーネント      | 説明                                                   | 主なプロパティ・機能                                                                                                                                                                                                                                                        |
 | ------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -405,7 +419,7 @@ components/
 >
 > 列は先に 7rem まで縮小し長文を切り詰め、総幅が容器を超える場合のみ横スクロールを出します。操作列は右に固定し、横スクロール中も表示します。
 
-#### エラーページ（1）
+##### エラーページ（1）
 
 | コンポーネント | 説明                                               | 主なプロパティ・機能                                                    |
 | -------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -436,9 +450,9 @@ components/
 >
 > `Tabs` は遅延表示に対応し、`lazy` では未使用タブの内容を描画しません（`children` の `isActivated(key)` で判定）。`onactivate(key)` は初回のみ実行し、`createCrudController({ autoLoad: false })` と組み合わせて最初に表示されたときに読み込めます。
 
-## 使用例
+### 使用例
 
-### Toast 通知
+#### Toast 通知
 
 ```svelte
 <script>
@@ -458,7 +472,7 @@ components/
 
 > `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` を内蔵し、アプリ独自の toast ツールは不要です。`notifyError(err, fallback?)` は `Error`・文字列と代替文言を受け付け、既定は成功 3 秒・失敗 5 秒です。
 
-### Message 表示
+#### Message 表示
 
 ```svelte
 <script>
@@ -476,7 +490,7 @@ components/
 <MessageContainer />
 ```
 
-### 標準的な CRUD ページ
+#### 標準的な CRUD ページ
 
 ```svelte
 <script>
@@ -546,7 +560,7 @@ components/
 
 `Modal` は `title` / `header` がなくても右上の閉じるボタンを表示し、ヘッダー全体は追加しません。角丸は `radius="1.4rem"`、内部ドロップダウンなどを外に表示する場合は `bodyOverflow="visible"` を指定できます。
 
-### 宣言的な CRUD ページ（CrudPage）
+#### 宣言的な CRUD ページ（CrudPage）
 
 ```svelte
 <script lang='ts'>
@@ -572,7 +586,7 @@ components/
 
 > ドロワーは `form={{ variant: 'drawer', drawerWidth: '40rem' }}` に変更できます。ユーザーが変更した幅が初期幅より優先され、リソースごとに記憶されます。
 
-### ログインページ
+#### ログインページ
 
 ```svelte
 <script>
@@ -598,7 +612,7 @@ components/
 <LoginForm {loading} {errors} onsubmit={handleLogin} showRegisterLink />
 ```
 
-### PasswordInput の制御モード
+#### PasswordInput の制御モード
 
 ```svelte
 <script>
@@ -615,7 +629,7 @@ components/
 />
 ```
 
-## スタイルの依存関係
+### スタイルの依存関係
 
 コンポーネントは TailwindCSS v4 + DaisyUI を使います。アプリの `app.css` に次を設定します：
 
@@ -654,7 +668,7 @@ components/
 </div>
 ```
 
-### アイコン
+#### アイコン
 
 Iconify（Tabler Icons）を使用します：
 
@@ -669,7 +683,7 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 }
 ```
 
-### テーマ切り替え
+#### テーマ切り替え
 
 内蔵ツールで 15 種類の厳選 DaisyUI テーマを管理します：
 
@@ -713,7 +727,7 @@ const themeBootstrapScript = createThemeBootstrapScript({
 transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstrapScript)
 ```
 
-## 国際化（i18n）
+### 国際化（i18n）
 
 @h-ai/ui は**コンポーネント内蔵翻訳**を使います：
 
@@ -722,7 +736,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 - アプリは**ページ単位の文言**のみを扱い、内部テキストは @h-ai/ui が管理します。
 - 個別文言の変更は `submitText`・`labels` などの props で指定。
 
-### createLocaleStore
+#### createLocaleStore
 
 クライアントの locale 状態を管理し、`@h-ai/core` の全体管理器へ自動同期します：
 
@@ -746,7 +760,7 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 </select>
 ```
 
-### エクスポートされる i18n ツール
+#### エクスポートされる i18n ツール
 
 ```ts
 import {
@@ -762,7 +776,9 @@ import {
 } from '@h-ai/ui/i18n'
 ```
 
-## 設定による認証画面
+### 設定による認証画面
+
+パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
 
 YAML の `|` で `agreements.userAgreementMarkdown` と `privacyPolicyMarkdown` を設定できます。Modal は本文を安全に描画し、同じ規約の URL より本文を優先します。URL のみの場合は隔離 iframe を使用します。
 
@@ -795,7 +811,7 @@ AuthPanel は SSR 中のフォーム操作を無効にし、クライアント�
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
-## 初回ガイドとヘルプセンター
+### 初回ガイドとヘルプセンター
 
 `@h-ai/ui/guide` から `createGuide`、`GuideHost`、`HelpCenter` をインポートします。init/close は不要です。ガイド開始時にエンジンを読み込み、既存テーマと中国語・英語・日本語の共通文言を使用します。業務内容はアプリの翻訳関数を使います。
 
@@ -847,7 +863,7 @@ start(id) は Promise<boolean> を返し、手動で再表示できます。失�
 
 HelpCenter は articles、任意の tours、locale、selectedId、onstart で独立ページにも配置できます。admin-console と CLI fullstack Web/App/Desktop は初回案内、ヘルプ、プロフィールガイドを標準搭載します。[詳細ガイド](../cli/templates/skills/hai-ui/guide.md)を参照してください。
 
-## その他のエクスポート
+### その他のエクスポート
 
 ```ts
 // 类型
@@ -877,3 +893,31 @@ import { toast } from '@h-ai/ui'
   {/snippet}
 </AuthPanel>
 ```
+
+
+### リクエスト言語の分離
+
+Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleRequest())` で囲みます。SvelteKit は `kit.i18n.runWithLocale(locale, () => resolve(event))` を使えます。serv はリクエストヘッダーから自動設定します。非同期の子処理も言語を継承し、明示的な `MessageOptions.locale`、リクエスト言語、起動時の既定値の順で優先します。コンテキスト内の `setGlobalLocale` はそのリクエストだけを変更します。コンテキスト外の設定は起動時に限定し、リクエスト hook から呼びません。
+
+ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
+
+## 開発とテスト
+
+```sh
+pnpm --filter @h-ai/ui typecheck
+pnpm --filter @h-ai/ui lint
+pnpm --filter @h-ai/ui build
+pnpm --filter @h-ai/ui test
+```
+
+コンポーネントのサブパスは package.exports に明記した barrel（例: `@h-ai/ui/components/primitives/index`）に限定します。内部実装やストレージ補助関数は非公開で、ホストのクリップボード登録は引き続き公開します。
+
+`@h-ai/ui/i18n` の createLocaleStore は、解決できる保存値、navigator.languages 全体（その後 navigator.language）、defaultLocale、対応一覧の先頭の順で選択します。未対応の最初の候補で既定値に戻しません。大小文字、言語略称、地域・スクリプトの段階的フォールバックを照合し、設定済みのコードを返します。同じ言語の複数候補は supportedLocales 順です。実際の一致がなければ detectBrowserLocale は null、空の対応一覧では最終的に呼出側の既定値を返します。SSR はブラウザー候補を読まず全体の言語を変更しません。Paraglide アプリは独自の setLocale 同期が必要で、対応一覧の追加だけでは UI 内蔵辞書は増えません。
+
+## 入力制約と HTTP 機能
+
+キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../../docs/storage-api-capabilities.md)を参照してください。
+
+## ライセンス
+
+Apache-2.0

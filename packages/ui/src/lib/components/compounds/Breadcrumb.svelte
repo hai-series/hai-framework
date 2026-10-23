@@ -1,4 +1,5 @@
 <!--
+  @component Breadcrumb
   =============================================================================
   @h-ai/ui - Breadcrumb 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Breadcrumb } from '@h-ai/ui'
+  const props: ComponentProps<typeof Breadcrumb> = { items: [{ label: '首页', href: '/' }, { label: '设置' }] }
+  const component = mount(Breadcrumb, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { BreadcrumbProps, DataAttributes } from '../../types.js'

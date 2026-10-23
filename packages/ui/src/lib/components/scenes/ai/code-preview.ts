@@ -7,6 +7,14 @@ const HTML_LANGUAGE_SET = new Set(['html', 'htm', 'xhtml', 'xml', 'svg'])
 const JAVASCRIPT_LANGUAGE_SET = new Set(['javascript', 'js', 'typescript', 'ts'])
 const CSS_LANGUAGE_SET = new Set(['css'])
 
+/**
+ * 内置代码预览的安全策略和标题，默认不执行任意代码。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: BuiltInCodePreviewOptions = { previewTitle: '预览', allowUnsafeCodePreview: false }
+ * ```
+ */
 export interface BuiltInCodePreviewOptions {
   /**
    * 是否允许执行内置的不安全代码预览。
@@ -22,11 +30,31 @@ export interface BuiltInCodePreviewOptions {
  * 根据运行结果构造 iframe sandbox 值。
  *
  * 默认不允许脚本执行；只有显式声明 `allowScripts` 时才放开 `allow-scripts`。
+ * @param allowScripts - 是否显式允许 iframe 脚本。
+ * @returns iframe sandbox 属性值；默认不开放脚本权限。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const sandbox = resolvePreviewSandbox(false)
+ * // 默认不添加 allow-scripts，只有受信任的显式选择才开放脚本。
+ * ```
  */
 export function resolvePreviewSandbox(allowScripts: boolean | undefined): string {
   return allowScripts ? 'allow-scripts' : ''
 }
 
+/**
+ * 按语言创建受控预览；未授权的 HTML/JS/CSS 返回 undefined，需由宿主明确处理。
+ * @param request - 包含来源、内容和动作标识的请求。
+ * @param options - 本次操作的行为与显示选项。
+ * @returns 受控预览结果；未授权或不支持的代码返回 undefined。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const result = createBuiltInCodePreview({ blockId: 'md-1', code: '# 报告', language: 'markdown', sourceKind: 'code' }, { previewTitle: '预览', allowUnsafeCodePreview: false })
+ * if (result) { const markdown = result.content }
+ * ```
+ */
 export function createBuiltInCodePreview(
   request: MarkdownCodeRunRequest,
   options: BuiltInCodePreviewOptions,

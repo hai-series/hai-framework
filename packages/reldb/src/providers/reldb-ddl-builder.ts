@@ -16,6 +16,11 @@ import { escapeSqlString, quoteIdentifier } from '../reldb-security.js'
  * 列定义 SQL 构建选项
  *
  * 各 Provider 通过不同选项控制方言差异（类型映射、主键内联方式等）。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: ColumnSqlOptions = { quoteId: quoteIdentifier, mapType: def => def.type, inlinePrimaryKey: true }
+ * void options
+ * ```
  */
 export interface ColumnSqlOptions {
   /** 标识符引用函数 */
@@ -34,6 +39,15 @@ export interface ColumnSqlOptions {
  * 通用 buildColumnSql 骨架
  *
  * 各 Provider 仅提供 typeMap 和 overrides 即可。
+ * @param name - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param def - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param options - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * const sql = buildColumnSqlBase('name', { type: 'TEXT', notNull: true }, { quoteId: quoteIdentifier, mapType: def => def.type, inlinePrimaryKey: true })
+ * void sql
+ * ```
  */
 export function buildColumnSqlBase(
   name: string,
@@ -106,6 +120,16 @@ export function buildColumnSqlBase(
  * 默认 CREATE TABLE SQL 生成（SQLite / PostgreSQL 通用）
  *
  * 列定义内联主键和外键，无额外子句。
+ * @param buildColumnSql - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param quotedTable - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param columns - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param ifNotExists - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * const sql = buildDefaultCreateTableSql((name, def) => buildColumnSqlBase(name, def, { quoteId: quoteIdentifier, mapType: value => value.type, inlinePrimaryKey: true }), quoteIdentifier('users'), { id: { type: 'TEXT', primaryKey: true } }, true)
+ * void sql
+ * ```
  */
 export function buildDefaultCreateTableSql(
   buildColumnSql: (name: string, def: ReldbColumnDef) => string,
@@ -124,6 +148,16 @@ export function buildDefaultCreateTableSql(
  * 默认 CREATE INDEX SQL 生成（SQLite / PostgreSQL 通用）
  *
  * 支持 IF NOT EXISTS 与 WHERE 子句。
+ * @param quoteId - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param quotedTable - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param quotedIndex - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param indexDef - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier('users'), quoteIdentifier('users_name_idx'), { columns: ['name'] })
+ * void sql
+ * ```
  */
 export function buildDefaultCreateIndexSql(
   quoteId: (name: string) => string,
@@ -139,6 +173,13 @@ export function buildDefaultCreateIndexSql(
 
 /**
  * 默认 RENAME TABLE SQL 生成（SQLite / PostgreSQL 通用）
+ * @param quotedOld - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param quotedNew - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * void buildDefaultRenameTableSql(quoteIdentifier('users_old'), quoteIdentifier('users'))
+ * ```
  */
 export function buildDefaultRenameTableSql(quotedOld: string, quotedNew: string): string {
   return `ALTER TABLE ${quotedOld} RENAME TO ${quotedNew}`
@@ -146,6 +187,14 @@ export function buildDefaultRenameTableSql(quotedOld: string, quotedNew: string)
 
 /**
  * 默认 DROP INDEX SQL 生成（SQLite / PostgreSQL 通用）
+ * @param quoteId - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param indexName - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param ifExists - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * void buildDefaultDropIndexSql(quoteIdentifier, 'users_name_idx', true)
+ * ```
  */
 export function buildDefaultDropIndexSql(
   quoteId: (name: string) => string,

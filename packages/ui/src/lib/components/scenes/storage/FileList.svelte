@@ -1,4 +1,5 @@
 <!--
+  @component FileList
   =============================================================================
   @h-ai/ui - FileList 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $state, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { FileList } from '@h-ai/ui'
+  const props: ComponentProps<typeof FileList> = { files: [{ id: 'f1', name: 'report.pdf', size: 1024, type: 'application/pdf' }], showSize: true }
+  const component = mount(FileList, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

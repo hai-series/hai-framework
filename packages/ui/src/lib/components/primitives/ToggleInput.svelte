@@ -1,4 +1,5 @@
 <!--
+  @component ToggleInput
   =============================================================================
   @h-ai/ui - ToggleInput 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ToggleInput } from '@h-ai/ui'
+  const props: ComponentProps<typeof ToggleInput> = { name: 'expanded', checked: true }
+  const component = mount(ToggleInput, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, ToggleCheckboxProps } from '../../types.js'

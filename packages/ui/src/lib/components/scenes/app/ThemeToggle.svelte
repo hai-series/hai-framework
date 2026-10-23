@@ -8,10 +8,14 @@
   @prop {string} darkTheme - 暗色主题名称
 
   @example
-  <ThemeToggle
-    currentTheme={$theme}
-    onchange={(theme) => themeStore.set(theme)}
-  />
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ThemeToggle } from '@h-ai/ui'
+  const props: ComponentProps<typeof ThemeToggle> = { currentTheme: 'light', lightTheme: 'light', darkTheme: 'dark' }
+  const component = mount(ThemeToggle, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'
@@ -20,6 +24,19 @@
   import { getDataAttributes } from '../../../utils.js'
   import IconButton from '../../primitives/IconButton.svelte'
 
+  /**
+   * ThemeToggle 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { ThemeToggle } from '@h-ai/ui'
+   * const props: ComponentProps<typeof ThemeToggle> = { currentTheme: 'light', lightTheme: 'light', darkTheme: 'dark' }
+   * const component = mount(ThemeToggle, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     currentTheme?: string
     onchange?: (theme: string) => void

@@ -1,4 +1,5 @@
 <!--
+  @component Checkbox
   =============================================================================
   @h-ai/ui - Checkbox 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Checkbox } from '@h-ai/ui'
+  const props: ComponentProps<typeof Checkbox> = { label: '同意条款', checked: true }
+  const component = mount(Checkbox, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { CheckboxProps, DataAttributes } from '../../types.js'

@@ -116,9 +116,9 @@ async function runInitApp(): Promise<void> {
       }
     : iamConfig
 
-  // 3. 确保数据目录存在
-  const dbDir = path.dirname(dbConfig.database)
-  await mkdir(dbDir, { recursive: true })
+  // 3. 仅 SQLite 文件需要本机目录；网络数据库名称/URL 不是文件路径。
+  if (dbConfig.type === 'sqlite' && dbConfig.database !== ':memory:')
+    await mkdir(path.dirname(dbConfig.database), { recursive: true })
 
   // 4. 初始化数据库连接
   const dbResult = await reldb.init(dbConfig)

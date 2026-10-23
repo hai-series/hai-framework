@@ -51,6 +51,18 @@ Merge the previous summary with the new conversation messages to create an updat
  * @param token - Token 操作接口（用于估算摘要 Token 数）
  * @param config - Summary 配置
  * @returns SummaryOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function summarize(llmConfig: LLMConfig, llm: LLMOperations, token: TokenOperations, config: SummaryConfig) {
+ *   const summary = createSummaryOperations(llmConfig, llm, token, config)
+ *   const result = await summary.summarize([{ role: 'user', content: '周一发布周报。' }])
+ *   if (!result.success)
+ *     return result
+ *   return result.data.summary
+ * }
+ * ```
  */
 export function createSummaryOperations(
   llmConfig: LLMConfig,

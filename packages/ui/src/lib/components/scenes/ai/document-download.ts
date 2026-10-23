@@ -42,9 +42,24 @@ function renderDocumentBlocksForExport(blocks: MarkdownDocumentBlock[]): string 
 
 /**
  * 组件内置支持的文档导出格式。
+ *
+ * @example
+ * ```ts
+ * import type { AiDocumentDownloadFormat } from '@h-ai/ui'
+ * const example: AiDocumentDownloadFormat = 'markdown'
+ * ```
  */
 export type AiDocumentDownloadFormat = 'word' | 'markdown' | 'pdf'
 
+/**
+ * 归一化后的下载菜单项目。
+ *
+ * @example
+ * ```ts
+ * import type { AiDocumentResolvedDownloadAction } from '@h-ai/ui'
+ * const example: AiDocumentResolvedDownloadAction = { id: 'markdown', label: 'Markdown', badgeLabel: 'MD' }
+ * ```
+ */
 export interface AiDocumentResolvedDownloadAction {
   /** 菜单项稳定 id；内置格式直接复用格式名，自定义动作沿用上游传入值。 */
   id: string
@@ -54,6 +69,15 @@ export interface AiDocumentResolvedDownloadAction {
   badgeLabel?: string
 }
 
+/**
+ * 文档下载输入；自定义动作应由宿主回调处理。
+ *
+ * @example
+ * ```ts
+ * import type { AiDocumentDownloadRequest } from '@h-ai/ui'
+ * const example: AiDocumentDownloadRequest = { actionId: 'markdown', content: '# 报告\n正文', filename: 'report.md', sourceKind: 'document' }
+ * ```
+ */
 export interface AiDocumentDownloadRequest {
   /** 用户当前选中的下载动作 id。 */
   actionId: string
@@ -72,6 +96,17 @@ export interface AiDocumentDownloadRequest {
 /**
  * code 类型产物通常只有裸代码正文。
  * 下载和预览都通过同一份规范化逻辑包装成 fenced markdown，避免两边导出的结构不一致。
+ * @param value - 待处理或校验的值。
+ * @param kind - 本次操作输入，具体字段见参数类型。
+ * @param language - 待识别的语言标记。
+ * @returns 保留原文或按代码来源包装后的 Markdown。
+ *
+ * @example
+ * ```ts
+ * import { resolveDocumentMarkdownContent } from '@h-ai/ui'
+ * const markdown = resolveDocumentMarkdownContent('const count = 42', 'code', 'typescript')
+ * // 裸代码会包装成足够长的 Markdown fence，保留源码中的反引号。
+ * ```
  */
 export function resolveDocumentMarkdownContent(
   value: string,
@@ -94,6 +129,14 @@ export function resolveDocumentMarkdownContent(
 
 /**
  * 把自定义动作和内置动作统一归一成统一的菜单项，保证左右两侧下载菜单展示一致。
+ * @param actions - 宿主提供的动作列表。
+ * @returns 具备显示标签的标准下载动作列表。
+ *
+ * @example
+ * ```ts
+ * import { resolveDocumentDownloadActions } from '@h-ai/ui'
+ * const actions = resolveDocumentDownloadActions([{ id: 'markdown', label: 'Markdown', badgeLabel: 'MD' }])
+ * ```
  */
 export function resolveDocumentDownloadActions(
   actions: MarkdownToolbarDownloadAction[] = [],
@@ -121,6 +164,15 @@ export function resolveDocumentDownloadActions(
 
 /**
  * 执行内置下载动作；未知动作直接跳过，方便外层保留自定义回调扩展口。
+ * @param request - 包含来源、内容和动作标识的请求。
+ * @returns 下载流程的 Promise；SSR 或未知动作无操作。
+ * @throws 浏览器渲染、第三方解析或下载失败时抛出异常，由交互边界显示错误。
+ *
+ * @example
+ * ```ts
+ * import { downloadAiDocument } from '@h-ai/ui'
+ * await downloadAiDocument({ actionId: 'markdown', content: '# 报告\n正文', title: '报告', filename: 'report.md', sourceKind: 'document' })
+ * ```
  */
 export async function downloadAiDocument(
   request: AiDocumentDownloadRequest,
@@ -392,6 +444,20 @@ function htmlToPdfFilename(title: string): string {
   return title.endsWith('.pdf') ? title : `${title}.pdf`
 }
 
+/**
+ * PDF 导出的隔离 iframe 和可清理渲染节点；异常时同样移除临时 DOM。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const frameElement = document.createElement('iframe')
+ * document.body.append(frameElement)
+ * const frameDocument = frameElement.contentDocument
+ * const frameWindow = frameElement.contentWindow
+ * if (!frameDocument || !frameWindow) throw new Error('PDF frame unavailable')
+ * const host: BrowserPdfRenderHost = { frameElement, frameDocument, frameWindow, renderRoot: frameDocument.body, cleanup: () => frameElement.remove() }
+ * host.cleanup()
+ * ```
+ */
 interface BrowserPdfRenderHost {
   cleanup: () => void
   frameElement: HTMLIFrameElement

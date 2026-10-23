@@ -7,20 +7,33 @@
   @prop {Snippet} actions - 右侧操作按钮插槽
 
   @example
-  <PageHeader title="用户管理" description="管理系统用户">
-    {#snippet actions()}
-      <Button onclick={createUser}>
-        <span class='icon-[tabler--plus] size-4'></span>
-        新建用户
-      </Button>
-    {/snippet}
-  </PageHeader>
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { PageHeader } from '@h-ai/ui'
+  const props: ComponentProps<typeof PageHeader> = { title: '用户管理', description: '维护用户资料' }
+  const component = mount(PageHeader, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../types.js'
   import { getDataAttributes } from '../../utils.js'
 
+  /**
+   * PageHeader 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { PageHeader } from '@h-ai/ui'
+   * const props: ComponentProps<typeof PageHeader> = { title: '用户管理', description: '维护用户资料' }
+   * const component = mount(PageHeader, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     title: string
     description?: string

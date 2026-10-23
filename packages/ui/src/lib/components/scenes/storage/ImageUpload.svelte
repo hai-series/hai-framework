@@ -1,4 +1,5 @@
 <!--
+  @component ImageUpload
   =============================================================================
   @h-ai/ui - ImageUpload 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives 组件：IconButton, Spinner
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ImageUpload } from '@h-ai/ui'
+  const props: ComponentProps<typeof ImageUpload> = { accept: 'image/png,image/jpeg', maxSize: 5 * 1024 * 1024 }
+  const component = mount(ImageUpload, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

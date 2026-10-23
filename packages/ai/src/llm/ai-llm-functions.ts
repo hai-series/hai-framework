@@ -1,7 +1,7 @@
 /**
  * @h-ai/ai — LLM 子功能工厂
  *
- * 根据配置创建 OpenAI Provider，组装 LLM 操作接口。
+ * 根据配置的 API 协议选择 Provider，组装 LLM 操作接口。
  * 同时导出工具与流处理的纯函数包装器（不依赖配置，可独立使用）。
  * @module ai-llm-functions
  */
@@ -31,7 +31,7 @@ import { z } from 'zod'
 
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
-import { sessionStoreKey } from '../store/ai-store-key.js'
+import { updateSessionInfo } from '../store/ai-store-session.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './ai-llm-tool.js'
 import { createLLMProvider } from './providers/ai-llm-provider-router.js'
@@ -40,7 +40,17 @@ const logger = core.logger.child({ module: 'ai', scope: 'llm' })
 
 // ─── LLM 子功能 ───
 
-/** LLM 子功能存储依赖 */
+/**
+ * LLM 子功能存储依赖
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bindHistory(recordStore: AIRelStore<ChatRecord>, sessionStore: AIRelStore<SessionInfo>): AILLMStores {
+ *   return { recordStore, sessionStore }
+ * }
+ * ```
+ */
 export interface AILLMStores {
   /** 对话记录存储（可选；未传入时不记录） */
   recordStore?: AIRelStore<ChatRecord>
@@ -48,7 +58,17 @@ export interface AILLMStores {
   sessionStore?: AIRelStore<SessionInfo>
 }
 
-/** LLM 子功能创建结果 */
+/**
+ * LLM 子功能创建结果
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function encodeMessage(functions: AILLMFunctions): string {
+ *   return functions.stream.encodeSSE({ event: 'message', data: '你好' })
+ * }
+ * ```
+ */
 export interface AILLMFunctions {
   /** LLM 操作接口（对话 / 流式对话 / 模型列表 / 历史 / 会话） */
   llm: LLMOperations
@@ -61,12 +81,23 @@ export interface AILLMFunctions {
 /**
  * 创建 LLM 相关的全部子功能
  *
- * 根据配置创建 OpenAI Provider，组装 LLM、工具、流处理三个操作接口。
+ * 根据配置的 API 协议选择 Provider，组装 LLM、工具、流处理三个操作接口。
  * 若传入 `deps.recordStore`，chat 调用会自动保存 ChatRecord。
  *
  * @param config - 校验后的 AI 配置
  * @param deps - 可选依赖（记录存储、会话存储）
  * @returns `{ llm, tools, stream }` 三个操作接口
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function ask(config: AIConfig, stores: AILLMStores) {
+ *   const functions = createAILLMFunctions(config, stores)
+ *   const result = await functions.llm.chat({ messages: [{ role: 'user', content: '你好' }], objectId: 'user-1', sessionId: 'session-1' })
+ *   if (!result.success) throw new Error(result.error.message)
+ *   return result.data
+ * }
+ * ```
  */
 export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILLMFunctions {
   const provider = createLLMProvider({ config })
@@ -101,22 +132,13 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     logger.trace('Chat record saved', { id: record.id, objectId: record.objectId, sessionId: record.sessionId })
 
     if (sessionStore) {
-      // 会话目录与上下文正文共用同一复合键，避免不同主体相同 sessionId 互相覆盖
-      const sessionKey = sessionStoreKey({ objectId: record.objectId, sessionId: record.sessionId })
-      const existing = await sessionStore.get(sessionKey)
-      const now = Date.now()
-      if (existing) {
-        await sessionStore.save(sessionKey, { ...existing, updatedAt: now }, { objectId: existing.objectId })
-      }
-      else {
-        await sessionStore.save(sessionKey, {
-          sessionId: record.sessionId,
-          objectId: record.objectId,
-          title: extractTitle(messages),
-          createdAt: now,
-          updatedAt: now,
-        }, { objectId: record.objectId })
-      }
+      await updateSessionInfo(sessionStore, record, (existing, now) => {
+        if (existing?.deleted)
+          return undefined
+        return existing
+          ? { ...existing, updatedAt: now }
+          : { sessionId: record.sessionId, objectId: record.objectId, title: extractTitle(messages), createdAt: now, updatedAt: now }
+      })
     }
   }
 
@@ -312,7 +334,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         objectId,
         orderBy: { field: 'updatedAt', direction: 'desc' },
       })
-      return ok(sessions)
+      return ok(sessions.filter(item => !item.deleted))
     }
     catch (error) {
       return err(HaiAIError.LLM_HISTORY_FAILED, aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)

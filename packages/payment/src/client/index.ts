@@ -4,5 +4,5 @@
  * @module client
  */
 
-export type { InvokePaymentOptions, InvokePaymentResult } from './payment-client-types.js'
+export type { InvokePaymentResult } from './payment-client-types.js'
 export { invokePayment } from './payment-client-web.js'

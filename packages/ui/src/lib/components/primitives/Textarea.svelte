@@ -1,4 +1,5 @@
 <!--
+  @component Textarea
   =============================================================================
   @h-ai/ui - Textarea 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   支持自定义验证消息（validationMessage）覆盖浏览器原生提示
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Textarea } from '@h-ai/ui'
+  const props: ComponentProps<typeof Textarea> = { name: 'description', rows: 4, maxlength: 500 }
+  const component = mount(Textarea, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, TextareaProps } from '../../types.js'

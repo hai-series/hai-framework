@@ -1,8 +1,19 @@
 <!--
+  @component BottomNav
   @h-ai/ui — BottomNav（底部导航栏）
 
   用法：
   <BottomNav items={navItems} active="home" onchange={(id) => goto(`/${id}`)} />
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { BottomNav } from '@h-ai/ui'
+  const props: ComponentProps<typeof BottomNav> = { items: [{ id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' }], active: 'home', maxWidth: 'lg' }
+  const component = mount(BottomNav, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'
@@ -12,6 +23,19 @@
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { BottomNavItem }
 
+  /**
+   * 底部导航的内容宽度预设；none 取消预设宽度约束。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { BottomNav } from '@h-ai/ui'
+   * const props: ComponentProps<typeof BottomNav> = { items: [{ id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' }], active: 'home', maxWidth: 'lg' }
+   * const component = mount(BottomNav, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   type BottomNavMaxWidth = 'sm' | 'md' | 'lg' | 'xl' | 'none'
 
   const MAX_WIDTH_CLASS: Record<BottomNavMaxWidth, string> = {
@@ -22,6 +46,19 @@
     none: '',
   }
 
+  /**
+   * BottomNav 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { BottomNav } from '@h-ai/ui'
+   * const props: ComponentProps<typeof BottomNav> = { items: [{ id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' }], active: 'home', maxWidth: 'lg' }
+   * const component = mount(BottomNav, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 导航项列表 */
     items: BottomNavItem[]

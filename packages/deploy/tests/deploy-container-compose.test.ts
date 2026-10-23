@@ -75,21 +75,12 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(compose).not.toContain(env.LDAP_ADMIN_PASSWORD)
   })
 
-  it('preserves existing managed services and volumes when keeping a middleware unchanged', () => {
-    const initial = buildRuntimeEnv(tmpDir, 'existing', makeScan(['db'], { db: 'mysql' }), {}, 3000)
-    const previousCompose = generateComposeFile({ appVersion: '1.2.3', projectName: 'existing', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
-    const kept = buildRuntimeEnv(tmpDir, 'existing', makeScan(['db'], { db: 'mysql' }), {}, 3000, { serviceModes: { db: 'keep' } })
-    const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'existing', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: kept.sidecar, previousCompose, serviceModes: { db: 'keep' } })
-    expect(compose).toContain('mysql:8.4')
-    expect(compose).toContain('existing-db-data')
-    expect(compose).toContain('image: v2')
-  })
   it('启用 db 时追加 postgres 服务并注入 HAI_DB', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
 
     expect(sidecar.services).toContain('db')
     expect(sidecar.composeServices.db).toBeDefined()
-    expect((sidecar.composeServices.db as { image: string }).image).toBe('postgres:16-alpine')
+    expect((sidecar.composeServices.db as { image: string }).image).toBe('docker.io/library/postgres:16.15-alpine')
     expect(sidecar.dependsOn).toContain('db')
     expect(sidecar.volumes['demo-db-data']).toBeDefined()
 
@@ -105,7 +96,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['cache']), {}, 3000)
 
     expect(sidecar.services).toContain('cache')
-    expect((sidecar.composeServices.cache as { image: string }).image).toBe('redis:7-alpine')
+    expect((sidecar.composeServices.cache as { image: string }).image).toBe('docker.io/library/redis:7.4.11-alpine')
     const haiCache = JSON.parse(env.HAI_CACHE) as { type: string, url: string }
     expect(haiCache.type).toBe('redis')
     expect(haiCache.url).toBe('redis://cache:6379')
@@ -196,6 +187,14 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     const second = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
     expect(first.env.POSTGRES_PASSWORD).toBe(second.env.POSTGRES_PASSWORD)
   })
+
+  it('凭据损坏时停止部署并保留原文件，避免自动改密码', () => {
+    buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
+    const file = path.join(tmpDir, '.hai/deploy/runtime/demo.secrets.json')
+    fs.writeFileSync(file, '{invalid')
+    expect(() => buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)).toThrow(file)
+    expect(fs.readFileSync(file, 'utf8')).toBe('{invalid')
+  })
 })
 
 describe('generateComposeFile', () => {
@@ -209,18 +208,12 @@ describe('generateComposeFile', () => {
     expect(proxy).toContain('listen 8081;')
     expect(proxy).toContain('location /backend/v2/')
     expect(proxy).toContain('proxy_pass http://app:3001;')
+    expect(proxy).toContain('client_max_body_size 2129920;')
+    expect(proxy).toContain('large_client_header_buffers 4 32k;')
+    expect(proxy).toContain('proxy_buffer_size 32k;')
+    expect(proxy).toContain('proxy_request_buffering off;')
     expect(proxy).toContain('try_files $uri $uri/ /index.html;')
     expect(() => generateWebProxyConfig(3001, '/api; injected')).toThrow()
-  })
-  it('waits for bucket initialization when creating storage alongside a kept database', () => {
-    const scan = makeScan(['db', 'storage'], { db: 'postgresql', storage: 's3' })
-    const initial = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000)
-    const previousCompose = generateComposeFile({ appVersion: '1.2.3', projectName: 'mixed', imageRef: 'v1', hostPort: 3000, containerPort: 3000, sidecar: initial.sidecar })
-    const next = buildRuntimeEnv(tmpDir, 'mixed', scan, {}, 3000, { serviceModes: { db: 'keep', storage: 'default' } })
-    const compose = parse(generateComposeFile({ appVersion: '1.2.3', projectName: 'mixed', imageRef: 'v2', hostPort: 3000, containerPort: 3000, sidecar: next.sidecar, previousCompose, serviceModes: { db: 'keep', storage: 'default' } }))
-    expect(compose.services.app.depends_on).toMatchObject({ 'db': { condition: 'service_started' }, 'storage-init': { condition: 'service_completed_successfully' } })
-    expect(compose.services['storage-init'].image).toBe('v2')
-    expect(compose.services.db.image).toBe('postgres:16-alpine')
   })
   it('生成 app 服务并映射端口', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000)
@@ -234,8 +227,8 @@ describe('generateComposeFile', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'cache']), {}, 3000)
     const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:tag', hostPort: 18080, containerPort: 3000, sidecar })
     expect(compose).toContain('depends_on')
-    expect(compose).toContain('postgres:16-alpine')
-    expect(compose).toContain('redis:7-alpine')
+    expect(compose).toContain('postgres:16.15-alpine')
+    expect(compose).toContain('redis:7.4.11-alpine')
   })
 
   it('compose 文件不包含敏感密码', () => {

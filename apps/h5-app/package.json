@@ -1,7 +1,7 @@
 {
   "name": "h5-app",
   "type": "module",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.67",
   "private": true,
   "description": "hai Agent Framework - 移动端拍照识别示例应用",
   "keywords": [
@@ -32,7 +32,9 @@
     "test:watch": "vitest",
     "test:e2e": "node ../../scripts/run-e2e.mjs",
     "clean": "rimraf .svelte-kit build .turbo",
-    "compile": "vite build"
+    "compile": "vite build",
+    "build:images": "hai build --target docker",
+    "deploy": "hai deploy"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
@@ -44,10 +46,13 @@
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
+    "@h-ai/vecdb": "workspace:*",
+    "sm-crypto": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@h-ai/cli": "workspace:*",
+    "@h-ai/deploy": "workspace:*",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",
     "@inlang/paraglide-js": "catalog:",

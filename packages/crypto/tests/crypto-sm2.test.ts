@@ -30,6 +30,25 @@ describe('crypto.asymmetric', () => {
 
   // ─── 密钥格式校验 ───
 
+  it('handles an unprefixed public key whose X coordinate itself starts with 04', () => {
+    // 由 sm-crypto 使用测试标量 11 生成，专门覆盖坐标前缀与编码前缀的歧义。
+    const publicKey = '04b3cb10c9c6d8e27c1aab770f67f543125dcdd589c2ff82668c74d78ce20ace63516355287e39fe4918e5c02e2b0b930c94816e63c4bc72739a8fd805174a4b'
+    const privateKey = (11).toString(16).padStart(64, '0')
+    expect(crypto.asymmetric.isValidPublicKey(publicKey)).toBe(true)
+    const encrypted = crypto.asymmetric.encrypt('prefix-boundary', publicKey)
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+    const decrypted = crypto.asymmetric.decrypt(encrypted.data, privateKey)
+    expect(decrypted.success && decrypted.data).toBe('prefix-boundary')
+    const signature = crypto.asymmetric.sign('prefix-boundary', privateKey)
+    expect(signature.success).toBe(true)
+    if (!signature.success)
+      return
+    const verified = crypto.asymmetric.verify('prefix-boundary', signature.data, publicKey)
+    expect(verified.success && verified.data).toBe(true)
+  })
+
   it('should accept public key without 04 prefix', () => {
     const result = crypto.asymmetric.generateKeyPair()
     expect(result.success).toBe(true)

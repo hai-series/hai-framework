@@ -11,7 +11,6 @@
   "login_username_placeholder": "请输入用户名或邮箱",
   "login_password": "密码",
   "login_password_placeholder": "请输入密码",
-  "login_remember_me": "记住我",
   "login_forgot_password": "忘记密码？",
   "login_submit": "登录",
   "login_title": "登录",

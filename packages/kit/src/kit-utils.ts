@@ -13,6 +13,11 @@
  *
  * @param value - 待检测值
  * @returns 是否为 Response（或 Response-like 对象）
+ * @example 模块内部上下文
+ * ```ts
+ * const value: unknown = new Response('ready')
+ * if (isResponseLike(value)) void value.status
+ * ```
  */
 export function isResponseLike(value: unknown): value is Response {
   if (value instanceof Response)
@@ -41,6 +46,11 @@ export function isResponseLike(value: unknown): value is Response {
  *
  * @param value - 被捕获的异常
  * @returns 是否为 SvelteKit 控制流
+ * @example 模块内部上下文
+ * ```ts
+ * const passthrough = isSvelteKitControlFlow(new Response(null, { status: 303 }))
+ * void passthrough
+ * ```
  */
 export function isSvelteKitControlFlow(value: unknown): boolean {
   // Response 对象不是控制流

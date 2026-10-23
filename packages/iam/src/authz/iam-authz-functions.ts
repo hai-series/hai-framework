@@ -37,6 +37,14 @@ const logger = core.logger.child({ module: 'iam', scope: 'authz' })
 
 /**
  * 授权子功能依赖
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function assemble(config: IamConfig, session: SessionOperations) {
+ *   const deps: AuthzOperationsDeps = { config, session }
+ *   return createAuthzOperations(deps)
+ * }
+ * ```
  */
 export interface AuthzOperationsDeps {
   config: IamConfig
@@ -47,6 +55,18 @@ export interface AuthzOperationsDeps {
  * 创建授权子功能
  *
  * 内部创建 RBAC 所需的存储层，返回授权管理接口。
+ * @param deps - 由 IAM 生命周期按依赖顺序创建的内部组件。
+ * @returns 成功返回数据，失败返回业务或基础设施错误；调用方必须先判断 success。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function permission(deps: AuthzOperationsDeps) {
+ *   const result = await createAuthzOperations(deps)
+ *   if (!result.success)
+ *     return result
+ *   return result.data.checkPermission('user-1', 'report:read')
+ * }
+ * ```
  */
 export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<HaiResult<AuthzOperations>> {
   try {
@@ -91,6 +111,16 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
 
 /**
  * RBAC 管理器内部配置
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function authorization(config: RbacManagerConfig) {
+ *   const roles = await config.userRoleRepository.getRoleIds('user-1')
+ *   if (!roles.success)
+ *     return roles
+ *   return config.rolePermissionRepository.getPermissionCodesForRoles(roles.data)
+ * }
+ * ```
  */
 interface RbacManagerConfig {
   rbacConfig?: RbacConfig

@@ -5,9 +5,14 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { DndConfigSchema, HaiReachError, ReachConfigSchema, TemplateConfigSchema } from '../src/index.js'
+import { DndConfigSchema, HaiReachError, ReachConfigSchema, ReachQueueConfigSchema, TemplateConfigSchema } from '../src/index.js'
 
 describe('reach config', () => {
+  it('重试策略有明确默认值与上界，拒绝负值和反向退避范围', () => {
+    expect(ReachQueueConfigSchema.parse({})).toEqual({ maxAttempts: 5, retryDelayMs: 60_000, maxRetryDelayMs: 3_600_000 })
+    for (const config of [{ maxAttempts: 0 }, { maxAttempts: 101 }, { maxAttempts: 1.5 }, { retryDelayMs: 0 }, { retryDelayMs: 2000, maxRetryDelayMs: 1000 }])
+      expect(ReachQueueConfigSchema.safeParse(config).success).toBe(false)
+  })
   it('单个 console provider 配置应正确解析', () => {
     const result = ReachConfigSchema.safeParse({
       providers: [{ name: 'dev', type: 'console' }],
@@ -99,7 +104,6 @@ describe('reach config', () => {
     expect(HaiReachError.TEMPLATE_NOT_FOUND.code).toBe('hai:reach:002')
     expect(HaiReachError.PROVIDER_NOT_FOUND.code).toBe('hai:reach:005')
     expect(HaiReachError.DND_BLOCKED.code).toBe('hai:reach:006')
-    expect(HaiReachError.DND_DEFERRED.code).toBe('hai:reach:007')
     expect(HaiReachError.CONFIG_ERROR.code).toBe('hai:reach:012')
   })
 

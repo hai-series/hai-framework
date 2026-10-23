@@ -3,8 +3,7 @@
     {
       "name": "app",
       "context": "../..",
-      "dockerfile": "apps/desktop-app/Dockerfile",
-      "target": "runtime",
+      "dockerfile": "images/app.Dockerfile",
       "containerPort": 8080
     }
   ],

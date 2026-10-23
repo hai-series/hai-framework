@@ -1,6 +1,16 @@
 <!--
   @component ResetPasswordForm
   重置密码表单组件（配合验证码/链接使用）。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { ResetPasswordForm } from '@h-ai/ui'
+  const props: ComponentProps<typeof ResetPasswordForm> = { showCode: true, minPasswordLength: 12 }
+  const component = mount(ResetPasswordForm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

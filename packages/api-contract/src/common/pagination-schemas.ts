@@ -12,13 +12,12 @@ import { z } from 'zod'
  *
  * 页码和页大小均为可选，由服务端提供合理默认值（page=1, pageSize=20）。
  * 支持字符串 coerce，适配 GET 请求 query string 场景。
- *
  * @example
  * ```ts
- * // 扩展为领域专属查询参数
- * const IamListUsersInputSchema = PaginationQuerySchema.extend({
- *   search: z.string().optional(),
- * })
+ * import { PaginationQuerySchema } from '@h-ai/api-contract'
+ *
+ * const value = PaginationQuerySchema.parse({})
+ * void value
  * ```
  */
 export const PaginationQuerySchema = z.object({
@@ -34,13 +33,14 @@ export const PaginationQuerySchema = z.object({
  *
  * @param itemSchema - 分页项的 Zod Schema
  * @returns 包含 items/total/page/pageSize 的对象 Schema
- *
  * @example
  * ```ts
- * const listUsers = route({ method: 'GET', path: '/users' })
- *   .output(haiResultSchema(paginatedSchema(IamUserSchema)))
- * // 解析结果形如：
- * // { success: true, data: { items: [...], total: 100, page: 1, pageSize: 20 } }
+ * import { apiContract } from '@h-ai/api-contract'
+ * import { z } from 'zod'
+ *
+ * const page = apiContract.paginatedSchema(z.object({ id: z.string() }))
+ *   .parse({ items: [{ id: 'order_1' }], total: 1, page: 1, pageSize: 20 })
+ * void page
  * ```
  */
 export function paginatedSchema<T extends z.ZodType>(itemSchema: T) {

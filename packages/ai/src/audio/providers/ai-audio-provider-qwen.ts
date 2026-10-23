@@ -43,7 +43,16 @@ const QWEN_FORMAT: Record<AudioFormat, string> = {
   opus: 'opus',
 }
 
-/** Qwen 服务端事件（仅取本模块关心的字段，字段名做防御性兼容） */
+/**
+ * Qwen 服务端事件（仅取本模块关心的字段，字段名做防御性兼容）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const event: QwenServerEvent = { type: 'conversation.item.input_audio_transcription.completed', transcript: '你好' }
+ * const text = event.transcript ?? event.text ?? ''
+ * ```
+ */
 interface QwenServerEvent {
   type?: string
   text?: string
@@ -56,6 +65,18 @@ interface QwenServerEvent {
  * 创建 Qwen Audio Provider
  *
  * @internal
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function invoke(request: ProviderTranscriptionRequest) {
+ *   const provider = createQwenAudioProvider()
+ *   if (!provider.transcription) throw new Error('Audio operation is unavailable')
+ *   const result = await provider.transcription.transcribe(request)
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createQwenAudioProvider(): AudioProvider {
   function connect(model: ResolvedAudioModel, signal?: AbortSignal): Promise<AudioWsConnection> {

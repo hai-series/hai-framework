@@ -7,6 +7,7 @@
  * - 豆包二进制协议的字节级断言、Qwen 实时事件断言
  */
 
+import type { AudioModelEntry } from '../src/index.js'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -88,15 +89,15 @@ import { ai, HaiAIError } from '../src/index.js'
 
 // ─── 公共测试数据 ───
 
-const AUDIO_MODELS = [
-  { id: 'oa-asr', provider: 'openai' as const, model: 'gpt-4o-transcribe', operations: ['transcribe'] as const, apiKey: 'sk-oa' },
-  { id: 'oa-tts', provider: 'openai' as const, model: 'gpt-4o-mini-tts', operations: ['synthesize'] as const, apiKey: 'sk-oa' },
-  { id: 'mimo-asr', provider: 'mimo' as const, model: 'mimo-v2.5-asr', operations: ['transcribe'] as const, apiKey: 'mk' },
-  { id: 'mimo-tts', provider: 'mimo' as const, model: 'mimo-v2.5-tts', operations: ['synthesize'] as const, apiKey: 'mk' },
-  { id: 'qwen-asr', provider: 'qwen' as const, model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] as const, apiKey: 'qk' },
-  { id: 'qwen-tts', provider: 'qwen' as const, model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] as const, apiKey: 'qk' },
-  { id: 'doubao-asr', provider: 'doubao' as const, model: 'bigmodel', operations: ['transcribe'] as const, apiKey: 'dk' },
-  { id: 'doubao-tts', provider: 'doubao' as const, model: 'seed-tts-2.0', operations: ['synthesize'] as const, apiKey: 'dk' },
+const AUDIO_MODELS: AudioModelEntry[] = [
+  { id: 'oa-asr', provider: 'openai', model: 'gpt-4o-transcribe', operations: ['transcribe'], apiKey: 'sk-oa' },
+  { id: 'oa-tts', provider: 'openai', model: 'gpt-4o-mini-tts', operations: ['synthesize'], apiKey: 'sk-oa' },
+  { id: 'mimo-asr', provider: 'mimo', model: 'mimo-v2.5-asr', operations: ['transcribe'], apiKey: 'mk' },
+  { id: 'mimo-tts', provider: 'mimo', model: 'mimo-v2.5-tts', operations: ['synthesize'], apiKey: 'mk' },
+  { id: 'qwen-asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'], apiKey: 'qk' },
+  { id: 'qwen-tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'], apiKey: 'qk' },
+  { id: 'doubao-asr', provider: 'doubao', model: 'bigmodel', operations: ['transcribe'], apiKey: 'dk' },
+  { id: 'doubao-tts', provider: 'doubao', model: 'seed-tts-2.0', operations: ['synthesize'], apiKey: 'dk' },
 ]
 
 function wavAudio(bytes = 16): { data: Uint8Array, format: 'wav' } {
@@ -303,7 +304,7 @@ describe('ai.audio MiMo Provider', () => {
   })
 
   it('transcribe 请求格式符合 MiMo 契约并返回文本', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: '识别结果' } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { content: '识别结果' } }] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const r = await ai.audio.transcribe({ audio: wavAudio(), language: 'zh' })
@@ -325,7 +326,7 @@ describe('ai.audio MiMo Provider', () => {
   it('synthesize 将 assistant 文本合成为音频并解码 Base64', async () => {
     const pcm = new Uint8Array([9, 8, 7, 6])
     const base64 = Buffer.from(pcm).toString('base64')
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const r = await ai.audio.synthesize({ text: '欢迎参加访谈', voice: 'Chloe', format: 'wav' })
@@ -342,7 +343,7 @@ describe('ai.audio MiMo Provider', () => {
   it('完整合成对 mp3 使用与流式一致的输出格式（issue #10：mp3 → pcm16，不再退回 wav）', async () => {
     const pcm = new Uint8Array([1, 2, 3, 4])
     const base64 = Buffer.from(pcm).toString('base64')
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     const r = await ai.audio.synthesize({ text: '一致性', format: 'mp3' })
@@ -617,7 +618,7 @@ describe('ai.audio 提示词 / 风格指令 / pcm→wav', () => {
     vi.clearAllMocks()
     await initAudio({ synthesizeModel: 'mimo-tts' })
     const base64 = Buffer.from(new Uint8Array([1, 2])).toString('base64')
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ choices: [{ message: { audio: { data: base64 } } }] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     await ai.audio.synthesize({ text: '欢迎', instruction: '用轻快的语气', format: 'wav' })

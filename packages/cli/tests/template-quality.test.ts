@@ -129,3 +129,13 @@ describe.each(svelteAppNames)('生成项目 %s 的 Svelte 门禁', (name) => {
     ]))
   })
 })
+
+describe('固定窗口限流模板', () => {
+  it.each([false, true])('cache=%s 的实际hooks可通过生成项目lint', async (enabled) => {
+    const projectPath = path.join(tmpRoot, `rate-limit-${enabled}`)
+    await generateFromTemplates(projectPath, buildTemplateContext({ name: `rate-limit-${enabled}`, appType: 'website', features: enabled ? ['cache'] : [], packageManager: 'pnpm' }))
+    const eslint = new ESLint({ cwd: projectPath, overrideConfigFile: path.join(projectPath, 'eslint.config.js') })
+    const results = await eslint.lintFiles(['src/hooks.server.ts'])
+    expect(results.flatMap(result => result.messages.filter(message => message.severity === 2))).toEqual([])
+  })
+})

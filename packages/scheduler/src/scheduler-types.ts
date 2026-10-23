@@ -24,37 +24,108 @@ const SchedulerErrorInfo = {
   DB_SAVE_FAILED: '026:500',
   ALREADY_RUNNING: '027:409',
   NOT_RUNNING: '028:400',
-  LOCK_ACQUIRE_FAILED: '029:409',
   JS_COMPILE_FAILED: '030:500',
   HOOK_EXECUTION_FAILED: '031:500',
+  LOG_PERSIST_FAILED: '032:500',
 } as const satisfies ErrorInfo
 
+/**
+ * Scheduler 领域错误定义；业务调用先判断 success 再按错误码分支。
+ *
+ * @example
+ * ```ts
+ * import { HaiSchedulerError, scheduler } from '@h-ai/scheduler'
+ *
+ * const result = await scheduler.trigger('missing-task')
+ * if (!result.success && result.error.code === HaiSchedulerError.TASK_NOT_FOUND.code) {
+ *   const missingTask = true
+ * }
+ * ```
+ */
 export const HaiSchedulerError = core.error.buildHaiErrorsDef('scheduler', SchedulerErrorInfo)
 
 // ─── 任务定义 ───
 
-/** 任务参数字典（键值对） */
+/**
+ * 任务参数字典（键值对）
+ *
+ * @example
+ * ```ts
+ * import type { TaskParams } from '@h-ai/scheduler'
+ *
+ * const params: TaskParams = { month: '2026-10', dryRun: true }
+ * const month = params.month
+ * ```
+ */
 export type TaskParams = Record<string, unknown>
 
-/** 任务触发类型 */
+/**
+ * 任务触发类型
+ *
+ * @example
+ * ```ts
+ * import type { TaskTriggerType } from '@h-ai/scheduler'
+ *
+ * const triggerType: TaskTriggerType = 'manual'
+ * const isManual = triggerType === 'manual'
+ * ```
+ */
 export type TaskTriggerType = 'scheduled' | 'manual'
 
-/** 任务处理器类型 */
+/**
+ * 任务处理器类型
+ *
+ * @example
+ * ```ts
+ * import type { TaskHandlerKind } from '@h-ai/scheduler'
+ *
+ * const kind: TaskHandlerKind = 'api'
+ * const needsNetwork = kind === 'api'
+ * ```
+ */
 export type TaskHandlerKind = 'api' | 'js'
 
-/** 失败重试策略 */
+/**
+ * 失败重试策略
+ *
+ * @example
+ * ```ts
+ * import type { TaskRetryPolicy } from '@h-ai/scheduler'
+ *
+ * const retry: TaskRetryPolicy = { maxAttempts: 3, backoffMs: [1000, 5000] }
+ * // 只有外部副作用确实按 occurrenceId 持久去重时，任务才能声明 idempotent。
+ * ```
+ */
 export interface TaskRetryPolicy {
-  /** 最大尝试次数（包含首次执行，最小 1） */
+  /** 最大尝试次数（含首次及崩溃恢复，范围 1–100，默认 1）。 */
   maxAttempts: number
   /** 每次重试前的退避时间（毫秒）；按顺序对应第 2、3... 次尝试 */
   backoffMs?: number[]
 }
 
-/** 任务执行目标类型 */
+/**
+ * 任务执行目标类型
+ *
+ * @example
+ * ```ts
+ * import type { TaskExecutionTargetType } from '@h-ai/scheduler'
+ *
+ * const target: TaskExecutionTargetType = 'hook'
+ * const usesHostCallback = target === 'hook'
+ * ```
+ */
 export type TaskExecutionTargetType = TaskHandlerKind | 'hook'
 
 /**
  * API 任务配置
+ *
+ * @example
+ * ```ts
+ * import type { ApiTaskConfig } from '@h-ai/scheduler'
+ *
+ * const handler: ApiTaskConfig = { kind: 'api', url: 'https://example.com/health', method: 'GET', timeout: 5000, maxResponseBytes: 4096 }
+ * // API 接收端若支持重试，须持久处理 Idempotency-Key 与 fencing 元数据。
+ * ```
  */
 export interface ApiTaskConfig {
   /** 处理器类型 */
@@ -82,6 +153,14 @@ export interface ApiTaskConfig {
  *
  * `code` 为 JS 函数字符串，例如：
  * `(context) => ({ taskId: context.task.id, params: context.params })`
+ *
+ * @example
+ * ```ts
+ * import type { JsTaskConfig } from '@h-ai/scheduler'
+ *
+ * const handler: JsTaskConfig = { kind: 'js', code: '(context) => ({ taskId: context.taskId })', timeout: 1000 }
+ * // 仅装载受信任的服务端源码；工作线程不是不可信代码沙箱。
+ * ```
  */
 export interface JsTaskConfig {
   /** 处理器类型 */
@@ -92,7 +171,17 @@ export interface JsTaskConfig {
   timeout?: number
 }
 
-/** 统一任务处理器配置 */
+/**
+ * 统一任务处理器配置
+ *
+ * @example
+ * ```ts
+ * import type { TaskHandlerConfig } from '@h-ai/scheduler'
+ *
+ * const handler: TaskHandlerConfig = { kind: 'api', url: 'https://example.com/health' }
+ * const timeout = handler.timeout ?? 30000
+ * ```
+ */
 export type TaskHandlerConfig = ApiTaskConfig | JsTaskConfig
 
 /**
@@ -100,27 +189,13 @@ export type TaskHandlerConfig = ApiTaskConfig | JsTaskConfig
  *
  * @example
  * ```ts
- * const jsTask: TaskDefinition = {
- *   id: 'cleanup',
- *   name: '清理过期数据',
- *   cron: '0 2 * * *',
- *   params: { channel: 'nightly' },
- *   handler: {
- *     kind: 'js',
- *     code: '(context) => ({ taskId: context.task.id, params: context.params })',
- *   },
- * }
+ * import type { TaskDefinition } from '@h-ai/scheduler'
+ * import { scheduler } from '@h-ai/scheduler'
  *
- * const apiTask: TaskDefinition = {
- *   id: 'health-check',
- *   name: '健康检查',
- *   cron: '&#42;/5 * * * *',
- *   handler: {
- *     kind: 'api',
- *     url: 'https://api.example.com/health',
- *     method: 'GET',
- *   },
- * }
+ * // 宿主已成功初始化共享 reldb 与 scheduler。
+ * const definition: TaskDefinition = { ...{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, handler: { kind: 'api', url: 'https://example.com/health', maxResponseBytes: 4096 } }
+ * const registered = await scheduler.register(definition)
+ * if (!registered.success) throw new Error(registered.error.message)
  * ```
  */
 export interface TaskDefinition {
@@ -132,7 +207,7 @@ export interface TaskDefinition {
   description?: string
   /** cron 表达式（标准 5 字段：分 时 日 月 周） */
   cron: string
-  /** IANA 时区，用于解释 cron 墙上时间；省略时使用运行环境默认时区 */
+  /** IANA 时区，用于解释 cron 墙上时间；省略或清空时统一使用 UTC，不读取节点 TZ。 */
   timezone?: string
   /** 是否启用（默认 true） */
   enabled?: boolean
@@ -140,6 +215,8 @@ export interface TaskDefinition {
   deleteAfterRun?: boolean
   /** 失败重试策略 */
   retry?: TaskRetryPolicy
+  /** 全部副作用按 context.occurrenceId 原子持久去重时才为 true；默认 false，未知结果禁止自动重跑。 */
+  idempotent?: boolean
   /** 通用参数 */
   params?: TaskParams
   /** 任务处理器；为空时可由全局事件回调统一处理 */
@@ -150,6 +227,14 @@ export interface TaskDefinition {
 
 /**
  * 任务触发信息
+ *
+ * @example
+ * ```ts
+ * import type { TaskTriggerInfo } from '@h-ai/scheduler'
+ *
+ * const trigger: TaskTriggerInfo = { type: 'manual', source: 'billing-console' }
+ * const source = trigger.source ?? 'cron'
+ * ```
  */
 export interface TaskTriggerInfo {
   /** 触发类型 */
@@ -160,10 +245,27 @@ export interface TaskTriggerInfo {
 
 /**
  * 任务执行上下文
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerTaskContext } from '@h-ai/scheduler'
+ *
+ * function safeReceipt(context: SchedulerTaskContext): string {
+ *   if (!context.occurrenceId || !context.executionToken) throw new Error('Shared execution identity required')
+ *   return context.occurrenceId
+ * }
+ * // 接收端将稳定 receipt 原子持久去重；executionToken 不写入用户可见日志。
+ * ```
  */
 export interface SchedulerTaskContext {
   /** 一次调度发生的稳定标识；所有重试共享，供宿主构造业务幂等键。 */
   occurrenceId?: string
+  /** 当前领取独有的凭据，用于宿主条件提交；续租失败后不能继续产生副作用。 */
+  executionToken?: string
+  /** 数据库执行序号；与 attempt 组成接收端可比较的 fencing 版本。 */
+  sequence?: number
+  /** 同一 occurrence 中持久化的尝试次数。 */
+  attempt?: number
   /** 当前任务 */
   task: TaskDefinition
   /** 任务 ID */
@@ -174,13 +276,38 @@ export interface SchedulerTaskContext {
   trigger: TaskTriggerInfo
 }
 
-/** 编译后的 JS 任务函数 */
+/**
+ * 编译后的 JS 任务函数
+ *
+ * @example
+ * ```ts
+ * import type { JsTaskHandler } from '@h-ai/scheduler'
+ *
+ * const handler: JsTaskHandler = (context, signal) => {
+ *   signal?.throwIfAborted()
+ *   return { taskId: context.taskId, batch: context.params.batch }
+ * }
+ * ```
+ */
 export type JsTaskHandler = (context: SchedulerTaskContext, signal?: AbortSignal) => unknown | Promise<unknown>
 
 // ─── 生命周期回调 ───
 
-/** 任务开始事件 */
+/**
+ * 任务开始事件
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerTaskStartEvent } from '@h-ai/scheduler'
+ *
+ * function summarizeStart(event: SchedulerTaskStartEvent) {
+ *   return { taskId: event.task.id, occurrenceId: event.context?.occurrenceId, observedAt: event.startedAt }
+ * }
+ * ```
+ */
 export interface SchedulerTaskStartEvent {
+  /** 已领取执行的持久身份，观测回调也可据此标记或幂等处理；竞争中断时不存在。 */
+  context?: SchedulerTaskContext
   /** 关闭调度器时取消；回调必须停止后续副作用并释放资源 */
   signal: AbortSignal
   /** 当前任务 */
@@ -191,13 +318,37 @@ export interface SchedulerTaskStartEvent {
   startedAt: number
 }
 
-/** 任务执行事件 */
+/**
+ * 任务执行事件
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerTaskExecuteEvent } from '@h-ai/scheduler'
+ *
+ * function execute(event: SchedulerTaskExecuteEvent) {
+ *   event.signal.throwIfAborted()
+ *   return { taskId: event.context.taskId, params: event.context.params }
+ * }
+ * ```
+ */
 export interface SchedulerTaskExecuteEvent extends SchedulerTaskStartEvent {
   /** 执行上下文 */
   context: SchedulerTaskContext
 }
 
-/** 任务中断事件 */
+/**
+ * 任务中断事件
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerTaskInterruptedEvent } from '@h-ai/scheduler'
+ *
+ * function summarizeInterruption(event: SchedulerTaskInterruptedEvent) {
+ *   return { taskId: event.task.id, reason: event.reason, observedAt: event.interruptedAt }
+ * }
+ * // 中断观测不能证明外部副作用不存在。
+ * ```
+ */
 export interface SchedulerTaskInterruptedEvent extends SchedulerTaskStartEvent {
   /** 中断时间（Unix 时间戳，毫秒） */
   interruptedAt: number
@@ -205,7 +356,19 @@ export interface SchedulerTaskInterruptedEvent extends SchedulerTaskStartEvent {
   reason: string
 }
 
-/** 任务结束事件 */
+/**
+ * 任务结束事件
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerTaskFinishEvent } from '@h-ai/scheduler'
+ *
+ * function needsLogRepair(event: SchedulerTaskFinishEvent): boolean {
+ *   return event.log.persistence.status === 'pending'
+ * }
+ * // 结束回调是观测；业务是否已提交以 journal 为准。
+ * ```
+ */
 export interface SchedulerTaskFinishEvent extends SchedulerTaskStartEvent {
   /** 结束时间（Unix 时间戳，毫秒） */
   finishedAt: number
@@ -218,6 +381,19 @@ export interface SchedulerTaskFinishEvent extends SchedulerTaskStartEvent {
  *
  * - `onTaskExecute` 可用于统一处理无内置 handler 的任务
  * - `onTaskStart` / `onTaskInterrupted` / `onTaskFinish` 用于观测生命周期
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerTaskHooks } from '@h-ai/scheduler'
+ *
+ * const hooks: SchedulerTaskHooks = {
+ *   onTaskExecute: ({ context, signal }) => {
+ *     signal.throwIfAborted()
+ *     return { taskId: context.taskId }
+ *   },
+ * }
+ * // 有副作用的宿主需使用 context.occurrenceId 和持久条件写入。
+ * ```
  */
 export interface SchedulerTaskHooks {
   /** 任务开始前触发 */
@@ -232,15 +408,59 @@ export interface SchedulerTaskHooks {
 
 // ─── 执行日志 ───
 
-/** 执行状态 */
-export type ExecutionStatus = 'success' | 'failed' | 'interrupted'
+/**
+ * 执行状态
+ *
+ * @example
+ * ```ts
+ * import type { ExecutionStatus } from '@h-ai/scheduler'
+ *
+ * function needsReconciliation(status: ExecutionStatus): boolean {
+ *   return status === 'unknown'
+ * }
+ * // unknown 先隔离旧执行并核对外部效果，不换键重试。
+ * ```
+ */
+export type ExecutionStatus = 'success' | 'failed' | 'interrupted' | 'unknown'
+
+/**
+ * 日志投影状态，与业务 status 独立；unconfirmed 表示没有可补写的已确认终态。
+ *
+ * @example
+ * ```ts
+ * import type { TaskLogPersistence } from '@h-ai/scheduler'
+ *
+ * const persistence: TaskLogPersistence = { status: 'pending', error: { code: 'hai:scheduler:032', message: 'Log projection pending' } }
+ * const needsRepair = persistence.status === 'pending'
+ * ```
+ */
+export interface TaskLogPersistence {
+  /** pending 可由已发布 journal 补写；persisted 已确认日志和回执；unconfirmed 不能推断业务结果。 */
+  status: 'pending' | 'persisted' | 'unconfirmed'
+  /** 安全的公开错误，不包含 SQL、驱动 cause 或连接参数。 */
+  error?: { code: string, message: string }
+}
 
 /**
  * 任务执行日志
+ *
+ * @example
+ * ```ts
+ * import type { TaskExecutionLog } from '@h-ai/scheduler'
+ *
+ * function summarize(log: TaskExecutionLog) {
+ *   return { businessStatus: log.status, logStatus: log.persistence.status, occurrenceId: log.occurrenceId }
+ * }
+ * // pending 的成功业务只补写日志，不重跑处理器。
+ * ```
  */
 export interface TaskExecutionLog {
-  /** 日志 ID */
-  id: number
+  /** 持久执行回执；相同定时 occurrence 或手动幂等键共用。 */
+  occurrenceId?: string
+  /** 每次尝试固定的 UUID 主键；未知写入回执或并发补写均复用。 */
+  id: string
+  /** 独立持久化状态；业务成功不等于日志保存成功。 */
+  persistence: TaskLogPersistence
   /** 任务 ID */
   taskId: string
   /** 任务名称 */
@@ -253,7 +473,7 @@ export interface TaskExecutionLog {
   triggerSource: string | null
   /** 执行状态 */
   status: ExecutionStatus
-  /** 执行结果（JSON 字符串） */
+  /** 序列化 JS/Hook 结果或 API 响应正文；无结果为 null */
   result: string | null
   /** 错误或中断信息 */
   error: string | null
@@ -269,6 +489,17 @@ export interface TaskExecutionLog {
 
 /**
  * 执行日志查询选项
+ *
+ * @example
+ * ```ts
+ * import type { LogQueryOptions } from '@h-ai/scheduler'
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * const options: LogQueryOptions = { taskId: 'daily-report', status: 'success', pagination: { page: 1, pageSize: 20 } }
+ * const logs = await scheduler.getLogs(options)
+ * if (!logs.success) throw new Error(logs.error.message)
+ * const page = logs.data.items
+ * ```
  */
 export interface LogQueryOptions {
   /** 按任务 ID 过滤 */
@@ -287,7 +518,17 @@ export interface LogQueryOptions {
   pagination?: PaginationOptionsInput
 }
 
-/** 日志清理策略 */
+/**
+ * 日志清理策略
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerLogCleanupPolicy } from '@h-ai/scheduler'
+ *
+ * const policy: SchedulerLogCleanupPolicy = { maxLogs: 1000, retentionDays: 30 }
+ * // 仅清理日志投影，不撤销或重排共享 execution journal。
+ * ```
+ */
 export interface SchedulerLogCleanupPolicy {
   /** 最多保留日志条数 */
   maxLogs?: number
@@ -302,15 +543,28 @@ export interface SchedulerLogCleanupPolicy {
  *
  * 可更新的字段包括：名称、cron 表达式、启用状态、参数、处理器。
  * 任务 ID 不可更新。
+ *
+ * @example
+ * ```ts
+ * import type { TaskUpdateInput } from '@h-ai/scheduler'
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * const updates: TaskUpdateInput = { enabled: false, timezone: null }
+ * const changed = await scheduler.updateTask('daily-report', updates)
+ * if (!changed.success) throw new Error(changed.error.message)
+ * // null 时区恢复 UTC，任务 ID 不能修改。
+ * ```
  */
 export interface TaskUpdateInput {
+  /** 全部副作用的持久去重能力声明。 */
+  idempotent?: boolean
   /** 任务名称 */
   name?: string
   /** 任务描述 */
   description?: string
   /** cron 表达式 */
   cron?: string
-  /** IANA 时区；传 null 表示清空任务时区 */
+  /** IANA 时区；传 null 表示清空并恢复 UTC，不读取节点 TZ。 */
   timezone?: string | null
   /** 是否启用 */
   enabled?: boolean
@@ -324,10 +578,100 @@ export interface TaskUpdateInput {
   handler?: TaskHandlerConfig | null
 }
 
-/** 手工触发输入 */
+/**
+ * 手工触发输入
+ *
+ * @example
+ * ```ts
+ * import type { TriggerTaskInput } from '@h-ai/scheduler'
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * const options: TriggerTaskInput = { source: 'billing-console', idempotencyKey: 'billing-2026-10' }
+ * const result = await scheduler.trigger('daily-report', options)
+ * if (!result.success) throw new Error(result.error.message)
+ * const status = result.data.status
+ * ```
+ */
 export interface TriggerTaskInput {
   /** 手工触发来源（例如 admin-console / api / cli） */
   source?: string
+  /** 稳定业务触发键（1–128 字符）；同任务重复使用会命中同一持久执行。 */
+  idempotencyKey?: string
+}
+
+/**
+ * 可信运维可见的执行状态；unknown 继续占用任务串行槽。
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerExecutionState } from '@h-ai/scheduler'
+ *
+ * function occupiesUncertainSlot(state: SchedulerExecutionState): boolean {
+ *   return state === 'unknown'
+ * }
+ * ```
+ */
+export type SchedulerExecutionState = 'claimed' | 'running' | ExecutionStatus | 'discarded'
+
+/**
+ * 不包含代码、参数、URL 或 owner 凭据的共享执行记录。
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerExecutionEntry } from '@h-ai/scheduler'
+ *
+ * function publicAudit(entry: SchedulerExecutionEntry) {
+ *   return { occurrenceId: entry.occurrenceId, status: entry.status, revision: entry.updatedAt }
+ * }
+ * // 安全投影不包含 owner token 和业务载荷。
+ * ```
+ */
+export interface SchedulerExecutionEntry {
+  /** 稳定执行回执。 */
+  occurrenceId: string
+  /** 任务标识。 */
+  taskId: string
+  /** 共享状态。 */
+  status: SchedulerExecutionState
+  /** 数据库序号，配合 attempt 用于外部 fencing。 */
+  sequence: number
+  /** 已开始的尝试次数。 */
+  attemptCount: number
+  /** 最近状态版本（Unix 毫秒），用于人工裁定条件。 */
+  updatedAt: number
+  /** 日志投影独立状态；pending 不会重新排队业务。 */
+  logPersistence: TaskLogPersistence['status']
+}
+
+/**
+ * 可信服务端的执行查询与人工核对入口。
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerExecutionOperations } from '@h-ai/scheduler'
+ *
+ * async function repairPending(execution: SchedulerExecutionOperations) {
+ *   const pending = await execution.listLogFailures({ limit: 20 })
+ *   if (!pending.success) return pending
+ *   for (const entry of pending.data) {
+ *     const repaired = await execution.repairLog(entry.occurrenceId)
+ *     if (!repaired.success) return repaired
+ *   }
+ * }
+ * // 此链路不会调用业务 handler。
+ * ```
+ */
+export interface SchedulerExecutionOperations {
+  /** 按回执查询安全元数据。@example await scheduler.execution.get(occurrenceId) */
+  get: (occurrenceId: string) => Promise<HaiResult<SchedulerExecutionEntry | null>>
+  /** 有界查询待核对的 unknown；每页 1–100 条。@example await scheduler.execution.listUnknown({ limit: 50, offset: 0 }) */
+  listUnknown: (options?: { limit?: number, offset?: number }) => Promise<HaiResult<SchedulerExecutionEntry[]>>
+  /** 分页查询已有终态但日志尚待补写的回执，不含业务载荷。@example await scheduler.execution.listLogFailures({ limit: 50 }) */
+  listLogFailures: (options?: { limit?: number, offset?: number }) => Promise<HaiResult<SchedulerExecutionEntry[]>>
+  /** 只从已发布 journal 幂等补写日志，不执行业务；并发调用安全。@example await scheduler.execution.repairLog(occurrenceId) */
+  repairLog: (occurrenceId: string) => Promise<HaiResult<void>>
+  /** 先终止旧 runner 并核对外部结果，再条件裁定；不能重新排队。@example await scheduler.execution.resolveUnknown(id, { status: 'discarded', expectedUpdatedAt: entry.updatedAt }) */
+  resolveUnknown: (occurrenceId: string, resolution: { status: 'success' | 'discarded', expectedUpdatedAt: number }) => Promise<HaiResult<void>>
 }
 
 // ─── 初始化输入 ───
@@ -336,6 +680,17 @@ export interface TriggerTaskInput {
  * 调度器初始化输入
  *
  * 包含调度器配置、可选的预定义任务列表，以及可选的全局生命周期回调。
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerInitInput } from '@h-ai/scheduler'
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * // 宿主已成功初始化共享 reldb。
+ * const input: SchedulerInitInput = { leaseMs: 60000, tasks: [{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }], hooks: { onTaskExecute: ({ context }) => ({ taskId: context.taskId }) } }
+ * const initialized = await scheduler.init(input)
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * ```
  */
 export interface SchedulerInitInput extends SchedulerConfigInput {
   /** 预定义任务列表（从配置中加载，初始化时自动注册） */
@@ -348,8 +703,22 @@ export interface SchedulerInitInput extends SchedulerConfigInput {
 
 /**
  * 调度器函数接口
+ *
+ * @example
+ * ```ts
+ * import type { SchedulerFunctions } from '@h-ai/scheduler'
+ *
+ * async function stopScheduler(instance: SchedulerFunctions) {
+ *   const stopped = instance.stop()
+ *   if (!stopped.success) return stopped
+ *   await instance.close()
+ * }
+ * // close 返回 Promise<void>，宿主随后关闭自己拥有的共享数据库。
+ * ```
  */
 export interface SchedulerFunctions {
+  /** 共享执行状态、未知结果查询与可信人工裁定。 */
+  readonly execution: SchedulerExecutionOperations
   /** 刷新共享数据库中的任务定义，用于跨实例配置读取。 */
   refreshTasks: () => Promise<HaiResult<void>>
   /** 初始化调度器 */

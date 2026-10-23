@@ -2,7 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `HaiResult<T>`。与 `@h-ai/api-client` 配合时，Token 仅存于原生安全存储，不回退到 Web `localStorage`。
+> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块。设备、推送等领域操作返回 `HaiResult<T>`；TokenStorage 是直接 Promise 适配器，失败会拒绝。与 `@h-ai/api-client` 配合时，Token 仅存于原生安全存储，不回退到 Web `localStorage`。
 
 ## 运行环境
 
@@ -42,12 +42,14 @@ await capacitor.close()
 
 ### 2. Token 安全存储（与 api-client 配合）
 
+先复用应用已有的 API 初始化入口。示例中的 `apiBase` 由应用解析公开运行配置，已经包含 API 前缀，不重复拼接 `/api/v1`。Web 部署可通过 `runtime-config.js` 覆盖地址；原生包在复制静态资源前设置公开配置。
+
 ```typescript
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 await apiClient.init({
-  baseUrl: import.meta.env.PUBLIC_API_BASE,
+  baseUrl: apiBase,
   auth: {
     storage: createCapacitorTokenStorage(),
   },
@@ -58,9 +60,11 @@ await apiClient.init({
 
 - Android → Android KeyStore + 加密 SharedPreferences
 - iOS → Keychain
-- Web → **不回退到 localStorage**；`get*()` 返回 `null`，`set*()` / `clear()` 为 no-op
+- Web → **不提供原生存储回退**；适配器方法拒绝 Promise，Web 入口选择 api-client 的 Cookie/内存存储
 
-所有方法内置 try-catch；原生安全存储异常时 get 返回 `null`、set/clear 静默失败并记录日志。
+读取、保存与删除失败均拒绝 Promise。调用方通过 `apiClient.auth` 串行更新凭据并捕获 setTokens/clear 失败；界面释放 loading，退出失败仍清理内存身份并提示错误。`clear()` 开始立即屏蔽本实例两类旧凭据，等待两个删除都结束；即使失败也保持屏蔽，相应 key 成功写入后重新开放。屏蔽不等于持久删除，跨实例/重启撤销仍依赖服务端退出/撤销会话。插件恢复后可以在同一实例重试，不缓存永久失败状态。
+
+任一 key 写入失败也会屏蔽整对凭据，避免 access 已落盘而 refresh 保存失败后的半完成登录。登录/注册保存失败后尝试 `auth.clear()` 清理部分数据；清理失败继续显示未确认删除的错误，不能只清界面身份或宣称持久删除成功。
 
 #### Preferences 子操作
 
@@ -165,7 +169,7 @@ await capacitor.statusBar.show()
 | API | 用途 | 返回值 |
 | --- | --- | --- |
 | `capacitor.init()` | 初始化模块（检测环境） | `HaiResult<void>` |
-| `capacitor.close()` | 关闭模块，重置状态 | `Promise<void>` |
+| `capacitor.close()` | 关闭模块并回收推送，失败可重试 | `Promise<HaiResult<void>>` |
 | `capacitor.getPlatform()` | 获取当前平台 | `'android' \| 'ios' \| 'web'` |
 | `capacitor.isNative()` | 是否为原生环境 | `boolean` |
 | `capacitor.isInitialized` | 是否已初始化 | `boolean` |
@@ -176,7 +180,7 @@ await capacitor.statusBar.show()
 | `capacitor.device.getInfo()` | 设备信息 | `HaiResult<DeviceInfo>` |
 | `capacitor.device.getAppVersion()` | 应用版本 | `HaiResult<{ version, build }>` |
 | `capacitor.push.register()` | 注册推送 | `HaiResult<PushRegistration>` |
-| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<() => Promise<void>>`（async 清理函数） |
+| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<PushCleanup>`（cleanup 返回 `Promise<HaiResult<void>>`） |
 | `capacitor.camera.takePhoto(options?)` | 拍照 / 选取图片 | `HaiResult<PhotoResult>` |
 | `capacitor.statusBar.configure(config)` | 配置状态栏 | `HaiResult<void>` |
 | `capacitor.statusBar.show()` | 显示状态栏 | `HaiResult<void>` |
@@ -236,7 +240,7 @@ export async function initCapacitor() {
 
 ### SPA 模式配置（必需）
 
-Capacitor 应用使用 Vite 构建 SPA，并让原生壳读取 `dist`：
+Capacitor 原生壳读取 `webDir` 指定的静态产物。纯 Vite 模板默认为 `dist`；SvelteKit 项目需配置静态适配器，输出可能是 `build`。构建器、容器与 `webDir` 必须一致，以下是 Vite 示例：
 
 ```typescript
 // capacitor.config.ts
@@ -258,9 +262,9 @@ export default config
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
-export async function initApi() {
+export async function initApi(apiBase: string) {
   return apiClient.init({
-    baseUrl: `${import.meta.env.PUBLIC_API_BASE}/api/v1`,
+    baseUrl: apiBase,
     auth: {
       storage: createCapacitorTokenStorage(),
     },
@@ -350,3 +354,5 @@ async function captureAndUpload() {
 - `hai-ui`：移动端 UI 组件（SafeArea、BottomNav 等）
 
 原生交付必须单独执行 Tauri/Gradle/Xcode 打包，并在目标 OS/设备验证安装启动、登录/退出、重启会话、安全 TokenStore、真实 API 域名与覆盖升级。Web 构建/E2E 不代替原生验收。保存提交、包 hash、平台/工具链及逐项结果；缺平台写未验证，禁止静默 skip。hai-framework 仓库参考 `.github/workflows/native.yml` 与 desktop-app / mobile-app README 的「原生交付与验收」章节。
+
+推送仅在实际原生平台调用插件。`push.register({ signal? })` 与 `push.listen(callbacks, { signal? })` 的设置阶段限时 30 秒（包含权限和监听器挂载）；失败、超时、取消及 `capacitor.close()` 都会停止回调并移除本次拥有的句柄，迟到的句柄在完成后立即移除，不调用影响其他消费者的 removeAllListeners。listen 成功后信号仍有效，也可调用返回的 cleanup。cleanup 与 close 均返回 `HaiResult<void>`；原生 remove 失败返回 `PUSH_CLEANUP_FAILED`（`capacitor:032`），失败句柄保留供再次调用重试，成功移除的句柄不重复操作。模块关闭后立即不可用；重新初始化前先重试遗留清理。自动化验证控制插件时序，不能代替 Android/iOS 真机 FCM/APNs 权限、注册与反复挂载验收。

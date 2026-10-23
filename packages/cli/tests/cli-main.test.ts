@@ -77,14 +77,6 @@ vi.mock('../src/commands/cli-commands.js', () => ({
   initProject: commandMocks.initProject,
 }))
 
-vi.mock('@h-ai/core', () => ({
-  core: {
-    logger: {
-      info: vi.fn(),
-    },
-  },
-}))
-
 async function loadCliMain() {
   vi.resetModules()
   cliState.commands.clear()
@@ -226,6 +218,13 @@ describe('cli-main', () => {
       name: 'sample-name',
       type: expectedType,
     })
+  })
+
+  it('passes workspace selection to the generator and its API shortcut', async () => {
+    await getCommandAction('g')('api', 'orders', { workspace: 'demo-serv' })
+    expect(commandMocks.generate).toHaveBeenLastCalledWith(expect.objectContaining({ workspace: 'demo-serv', type: 'api' }))
+    await getCommandAction('g:api <name>')('orders', { workspace: 'apps/service' })
+    expect(commandMocks.generate).toHaveBeenLastCalledWith(expect.objectContaining({ workspace: 'apps/service', type: 'api' }))
   })
 
   it('wires deploy command to deployCommand', async () => {

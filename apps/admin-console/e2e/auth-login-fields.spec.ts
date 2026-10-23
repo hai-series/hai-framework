@@ -1,0 +1,59 @@
+/** 真实表单与 Cookie 认证链路不展示或提交未实现的持久会话选项。 */
+import { expect, test } from '@playwright/test'
+import { registerAndLogin, registerViaApi, uniqueUser, waitForHydration } from './helpers'
+
+test('密码登录仅提交标识符和密码，真实会话可用', async ({ page, request }) => {
+  const user = uniqueUser('fields')
+  const registered = await registerViaApi(request, user)
+  expect(registered.ok()).toBe(true)
+  await page.goto('/auth/login')
+  await waitForHydration(page)
+  await expect(page.locator('.login-form input[type="checkbox"]')).toHaveCount(0)
+  await page.locator('#login-username').fill(user.username)
+  await page.locator('input[type="password"]').fill(user.password)
+  const submitted = page.waitForRequest(value => new URL(value.url()).pathname === '/api/auth/login' && value.method() === 'POST')
+  await page.locator('button[type="submit"]').click()
+  const body: unknown = (await submitted).postDataJSON()
+  expect(body).toEqual({ identifier: user.username, password: user.password })
+  await expect(page).toHaveURL(/\/admin/)
+  const current = await page.request.get('/api/auth/me')
+  expect(current.ok()).toBe(true)
+  expect((await current.json()).success).toBe(true)
+})
+
+test('邮件验证码登录仍发送实际代码并建立真实会话', async ({ page, request }) => {
+  const user = uniqueUser('otpfield')
+  const registered = await registerViaApi(request, user)
+  expect(registered.ok()).toBe(true)
+  await page.goto('/auth/login')
+  await waitForHydration(page)
+  await page.getByRole('button', { name: '邮件验证码', exact: true }).click()
+  await expect(page.locator('.login-form input[type="checkbox"]')).toHaveCount(0)
+  await page.locator('#login-username').fill(user.email)
+  await page.getByRole('button', { name: '发送验证码', exact: true }).click()
+  await expect(page.getByRole('button', { name: /秒后重发/ })).toBeDisabled()
+  const notification = await page.request.get(`http://127.0.0.1:12580/messages?to=${encodeURIComponent(user.email)}`)
+  const messages = await notification.json() as { template: string, vars: Record<string, string> }[]
+  const code = messages.filter(value => value.template === 'otp_email').at(-1)?.vars.code
+  expect(code).toMatch(/^\d{6}$/)
+  await page.locator('#login-code').fill(code ?? '')
+  const submitted = page.waitForRequest(value => new URL(value.url()).pathname === '/api/auth/login/otp' && value.method() === 'POST')
+  await page.locator('button[type="submit"]').click()
+  const body: unknown = (await submitted).postDataJSON()
+  expect(body).toEqual({ identifier: user.email, code })
+  await expect(page).toHaveURL(/\/admin/)
+})
+
+test('独立 Gallery LoginForm 无持久会话选择框且可正常提交', async ({ page, request }) => {
+  await registerAndLogin(page, request, 'gallery')
+  await page.goto('/admin/ui-gallery/scenes')
+  await waitForHydration(page)
+  const form = page.locator('.login-form')
+  await expect(form).toBeVisible()
+  await expect(form.locator('input[type="checkbox"]')).toHaveCount(0)
+  await expect(form.locator('a[href="/forgot-password"]')).toBeVisible()
+  await form.locator('#login-username').fill('gallery-user')
+  await form.locator('input[type="password"]').fill('ExamplePassword123')
+  await form.locator('button[type="submit"]').click()
+  await expect(page.getByText('登录: gallery-user', { exact: true })).toBeVisible()
+})

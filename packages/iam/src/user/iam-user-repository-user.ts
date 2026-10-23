@@ -17,12 +17,32 @@ import { HaiIamError } from '../iam-types.js'
 
 /**
  * 用户存储接口
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * async function commitPassword(repository: UserRepository, current: StoredUser, passwordHash: string) {
+ *   const written = await repository.setPassword({ userId: current.id, expectedVersion: current.credentialVersion ?? '', passwordHash })
+ *   if (!written.success)
+ *     return written
+ *   if (!written.data)
+ *     return { applied: false } // 凭据代际已变化；不能继续签发本次认证的会话。
+ *   return { applied: true }
+ * }
+ * ```
  */
 export interface UserRepository extends ReldbCrudRepository<StoredUser> {
+  /** 按读取到的凭据代际改密并撤销重置令牌；旧版本不能覆盖较新密码。 */
+  setPassword: (input: { userId: string, expectedVersion: string, passwordHash: string }) => Promise<HaiResult<boolean>>
+  /** 按用户快照发布新重置令牌；不使用 Redis/数据库之间的伪事务。 */
+  publishPasswordReset: (input: { user: StoredUser, tokenHash: string, expiresAt: Date }) => Promise<HaiResult<boolean>>
+  /** 按当前重置代际计次并颁发提交快照；新发布/尝试使旧快照失效。 */
+  claimPasswordReset: (tokenHash: string, maxAttempts: number) => Promise<HaiResult<StoredUser>>
+  /** 最终一条 SQL 同时验证授权代际、有效期、启用状态、消费令牌并改密。 */
+  commitPasswordReset: (input: { user: StoredUser, tokenHash: string, passwordHash: string }) => Promise<HaiResult<boolean>>
   /** 在数据库中原子累加失败次数并执行锁定策略。 */
   recordLoginFailure: (userId: string, policy: { maxLoginAttempts: number, lockoutDuration: number }) => Promise<HaiResult<void>>
   /** 仅未锁定且启用的账户可以清除失败计数。 */
-  resetLoginFailures: (userId: string) => Promise<HaiResult<void>>
+  resetLoginFailures: (userId: string, expectedCredentialVersion: string) => Promise<HaiResult<void>>
   /**
    * 根据用户名获取用户
    */
@@ -66,6 +86,11 @@ const TABLE_NAME = 'hai_iam_users'
  * 用户字段定义
  */
 const USER_FIELDS: ReldbCrudFieldDefinition[] = [
+  { fieldName: 'credentialVersion', columnName: 'credential_version', def: { type: 'TEXT', notNull: true, defaultValue: '' }, select: true, create: false, update: false },
+  { fieldName: 'resetVersion', columnName: 'reset_version', def: { type: 'TEXT', notNull: true, defaultValue: '' }, select: true, create: false, update: false },
+  { fieldName: 'resetHash', columnName: 'reset_hash', def: { type: 'TEXT' }, select: true, create: false, update: false },
+  { fieldName: 'resetExpiresAt', columnName: 'reset_expires_at', def: { type: 'BIGINT' }, select: true, create: false, update: false },
+  { fieldName: 'resetAttempts', columnName: 'reset_attempts', def: { type: 'INTEGER', notNull: true, defaultValue: 0 }, select: true, create: false, update: false },
   {
     fieldName: 'id',
     columnName: 'id',
@@ -212,6 +237,13 @@ let userRepoSqlOps: unknown = null
  * 重置用户存储单例
  *
  * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ * 仅重置本地引用，不删除共享存储数据。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 所有使用该仓储的 IAM 子功能均已关闭后，才清理工厂缓存。
+ * resetUserRepoSingleton()
+ * ```
  */
 export function resetUserRepoSingleton(): void {
   userRepoInstance = null
@@ -225,6 +257,16 @@ export function resetUserRepoSingleton(): void {
  * db 重新初始化后自动创建新实例。
  *
  * @returns 用户存储接口实现
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // RelDB 已初始化；后续仓储读取仍可能失败，必须检查 HaiResult。
+ * const repository = await createDbUserRepository()
+ * const found = await repository.findByUsername('alice')
+ * if (!found.success)
+ *   return found
+ * return found.data?.credentialVersion ?? null
+ * ```
  */
 export async function createDbUserRepository(): Promise<UserRepository> {
   if (userRepoInstance && userRepoSqlOps === reldb.sql)
@@ -251,6 +293,69 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     })
   }
 
+  /** 数据库时钟在执行最终 SQL 时核验有效期，暂停进程不能复用旧的 Date.now()。 */
+  private databaseNow(): string {
+    if (reldb.config?.type === 'postgresql')
+      return '(EXTRACT(EPOCH FROM clock_timestamp()) * 1000)'
+    if (reldb.config?.type === 'mysql')
+      return '(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000)'
+    return 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+  }
+
+  /** 改密推进凭据代际；会话存储清理失败也不能让旧凭据恢复授权。 */
+  async setPassword(input: { userId: string, expectedVersion: string, passwordHash: string }): Promise<HaiResult<boolean>> {
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0 WHERE id = ? AND credential_version = ? AND enabled = ?`,
+      [input.passwordHash, reldb.config?.type === 'sqlite' ? Date.now() : new Date(), crypto.randomUUID(), crypto.randomUUID(), input.userId, input.expectedVersion, reldb.config?.type === 'postgresql' ? true : 1],
+    )
+    return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
+  }
+
+  /** 发布只替换读取到的重置代际；旧发送者暂停后不能覆盖接管节点的新令牌。 */
+  async publishPasswordReset(input: { user: StoredUser, tokenHash: string, expiresAt: Date }): Promise<HaiResult<boolean>> {
+    const expiry = input.expiresAt.getTime()
+    if (!Number.isSafeInteger(expiry))
+      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_resetTokenInvalid'))
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET reset_hash = ?, reset_expires_at = ?, reset_attempts = 0, reset_version = ? WHERE id = ? AND credential_version = ? AND reset_version = ? AND enabled = ? AND ? > ${this.databaseNow()}`,
+      [input.tokenHash, expiry, crypto.randomUUID(), input.user.id, input.user.credentialVersion ?? '', input.user.resetVersion ?? '', reldb.config?.type === 'postgresql' ? true : 1, expiry],
+    )
+    return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
+  }
+
+  /** 条件计次返回新代际；业务策略失败也消耗尝试次数。 */
+  async claimPasswordReset(tokenHash: string, maxAttempts: number): Promise<HaiResult<StoredUser>> {
+    const found = await this.findOneBy('reset_hash = ?', [tokenHash])
+    if (!found.success)
+      return found
+    const user = found.data
+    if (!user)
+      return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+    if (!user.enabled)
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    if ((user.resetAttempts ?? 0) >= maxAttempts)
+      return err(HaiIamError.RESET_TOKEN_MAX_ATTEMPTS, iamM('iam_resetTokenMaxAttempts'))
+    const version = crypto.randomUUID()
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET reset_attempts = reset_attempts + 1, reset_version = ? WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_attempts < ? AND reset_expires_at > ${this.databaseNow()} AND enabled = ?`,
+      [version, user.id, tokenHash, user.resetVersion ?? '', user.credentialVersion ?? '', maxAttempts, reldb.config?.type === 'postgresql' ? true : 1],
+    )
+    if (!result.success)
+      return this.buildQueryError(result.error, result.error)
+    if (result.data.changes !== 1)
+      return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
+    return ok({ ...user, resetVersion: version, resetAttempts: (user.resetAttempts ?? 0) + 1 })
+  }
+
+  /** 密码与令牌消费同一行原子提交，禁止先消费 Redis 凭据再无条件写数据库。 */
+  async commitPasswordReset(input: { user: StoredUser, tokenHash: string, passwordHash: string }): Promise<HaiResult<boolean>> {
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0, login_failed_count = 0, locked_until = NULL, last_login_failed_at = NULL WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_expires_at > ${this.databaseNow()} AND enabled = ?`,
+      [input.passwordHash, reldb.config?.type === 'sqlite' ? Date.now() : new Date(), crypto.randomUUID(), crypto.randomUUID(), input.user.id, input.tokenHash, input.user.resetVersion ?? '', input.user.credentialVersion ?? '', reldb.config?.type === 'postgresql' ? true : 1],
+    )
+    return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
+  }
+
   async recordLoginFailure(userId: string, policy: { maxLoginAttempts: number, lockoutDuration: number }): Promise<HaiResult<void>> {
     const sqlite = reldb.config?.type === 'sqlite'
     const now = sqlite ? Date.now() : new Date()
@@ -270,10 +375,10 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     return ok(undefined)
   }
 
-  async resetLoginFailures(userId: string): Promise<HaiResult<void>> {
+  async resetLoginFailures(userId: string, expectedCredentialVersion: string): Promise<HaiResult<void>> {
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND enabled = ? AND (locked_until IS NULL OR locked_until <= ?)`,
-      [userId, reldb.config?.type === 'postgresql' ? true : 1, reldb.config?.type === 'sqlite' ? Date.now() : new Date()],
+      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND credential_version = ? AND enabled = ? AND (locked_until IS NULL OR locked_until <= ?)`,
+      [userId, expectedCredentialVersion, reldb.config?.type === 'postgresql' ? true : 1, reldb.config?.type === 'sqlite' ? Date.now() : new Date()],
     )
     if (!result.success)
       return this.buildQueryError(result.error, result.error)
@@ -283,6 +388,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
         return user
       if (!user.data?.enabled)
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if ((user.data.credentialVersion ?? '') !== expectedCredentialVersion)
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       if (user.data.lockedUntil && user.data.lockedUntil > new Date())
         return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }

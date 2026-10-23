@@ -1,5 +1,5 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
-import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
 import { kit } from '../src/kit-main.js'
@@ -66,7 +66,10 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
 }
 
 function createTransportFetch(options: { encryptedResponseBody?: string } = {}) {
-  const manager = expectManager(crypto.transport.createServer())
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  const manager = expectManager(crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } }))
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = toRequest(input, init)
     const url = new URL(request.url)
@@ -74,29 +77,30 @@ function createTransportFetch(options: { encryptedResponseBody?: string } = {}) 
     if (url.pathname === KEY_EXCHANGE_URL || url.pathname === '/my/exchange') {
       const body = await request.json() as { clientPublicKey: string }
       const clientId = await manager.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), serverKeyId: manager.getServerKeyId(), clientId }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    if (options.encryptedResponseBody) {
-      const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
-      expect(clientId).toBeTruthy()
-      const enc = await manager.encryptResponse(clientId!, options.encryptedResponseBody)
-      expect(enc.success).toBe(true)
-      if (!enc.success)
-        throw new Error(enc.error.message)
-      return new Response(JSON.stringify(enc.data), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
-        },
-      })
-    }
-
-    return new Response('OK', { status: 200 })
+    if (!request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER))
+      return new Response('OK')
+    const verified = await authenticateTransportRequest(manager, request)
+    if (!verified.success)
+      throw new Error(verified.error.message)
+    const clientId = request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
+    expect(clientId).toBeTruthy()
+    const enc = await manager.encryptResponse(verified.data.context, options.encryptedResponseBody ?? 'OK', 200)
+    expect(enc.success).toBe(true)
+    if (!enc.success)
+      throw new Error(enc.error.message)
+    return new Response(JSON.stringify(enc.data), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE,
+      },
+    })
   })
 }
 
@@ -338,7 +342,7 @@ describe('createKitClient - auth', () => {
     const [, init] = fetchSpy.mock.calls[0]!
     const headers = new Headers(init.headers)
     expect(headers.get('Authorization')).toBe('Bearer memory_token_123')
-    // auth:true 的安全默认不应触碰 localStorage，持久化存储必须由调用方显式传入 BrowserTokenStore。
+    // 浏览器认证不得触碰 localStorage；自定义 store 也必须使用内存或平台安全存储。
     expect(getItem).not.toHaveBeenCalled()
   })
 
@@ -389,7 +393,8 @@ describe('installBrowserTransportFetch', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
     const dataRequest = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
     expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBeTruthy()
-    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+    expect(dataRequest.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)).toBe(true)
     expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
     expect(await response.text()).toBe(originalPayload)
   })

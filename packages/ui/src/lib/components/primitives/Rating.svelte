@@ -1,4 +1,5 @@
 <!--
+  @component Rating
   =============================================================================
   @h-ai/ui - Rating 组件
   =============================================================================
@@ -7,12 +8,35 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 DaisyUI rating 类
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Rating } from '@h-ai/ui'
+  const props: ComponentProps<typeof Rating> = { value: 4, max: 5, readonly: true }
+  const component = mount(Rating, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
+  /**
+   * Rating 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Rating } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Rating> = { value: 4, max: 5, readonly: true }
+   * const component = mount(Rating, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 当前评分值 (0 - max) */
     value?: number

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const locale = vi.hoisted(() => ({ current: 'en-US' }))
+vi.mock('@h-ai/ui/i18n', () => ({ getGlobalLocale: () => locale.current }))
+
 const login = vi.fn()
 const register = vi.fn()
 const logout = vi.fn()
@@ -28,6 +31,7 @@ describe('auth-store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    locale.current = 'en-US'
   })
 
   it('login 成功后写入 token 并更新当前用户', async () => {
@@ -90,7 +94,7 @@ describe('auth-store', () => {
 
     const authStore = await import('../src/lib/auth-store.svelte.js')
     await authStore.refreshCurrentUser()
-    await authStore.logout()
+    expect(await authStore.logout()).toBeNull()
 
     expect(clearTokens).toHaveBeenCalledTimes(1)
     expect(authStore.currentUser()).toBeNull()
@@ -143,7 +147,7 @@ describe('auth-store', () => {
     expect(authStore.hasPermission('user:list')).toBe(true)
   })
 
-  it('logout 服务端失败时仍会清理本地 token', async () => {
+  it('logout 网络失败清理本地token，但向调用方返回服务端撤销未确认', async () => {
     currentUser.mockResolvedValueOnce({
       success: true,
       data: { id: 'u-4', username: 'dave', roles: ['user'], permissions: [] },
@@ -152,11 +156,56 @@ describe('auth-store', () => {
 
     const authStore = await import('../src/lib/auth-store.svelte.js')
     await authStore.refreshCurrentUser()
-    await expect(authStore.logout()).resolves.toBeUndefined()
+    await expect(authStore.logout()).resolves.toMatch('Server sign-out was not confirmed')
 
     expect(clearTokens).toHaveBeenCalledTimes(1)
     expect(authStore.currentUser()).toBeNull()
     expect(authStore.isAuthenticated()).toBe(false)
+    expect(authStore.isLoading()).toBe(false)
+  })
+
+  it.each([
+    { language: 'en-US', message: 'Server sign-out was not confirmed' },
+    { language: 'zh-CN', message: '服务端登出未确认' },
+    { language: 'ja-JP', message: 'サーバーでのログアウトを確認できませんでした' },
+  ])('logout HaiResult失败使用$language文案且仍清理本地凭据', async ({ language, message }) => {
+    locale.current = language
+    logout.mockResolvedValueOnce({ success: false, error: { code: 'REPOSITORY_ERROR', message: 'state unavailable' } })
+    const authStore = await import('../src/lib/auth-store.svelte.js')
+    const error = await authStore.logout()
+    expect(error).toContain(message)
+    expect(clearTokens).toHaveBeenCalledOnce()
+    expect(authStore.isAuthenticated()).toBe(false)
+    expect(authStore.isLoading()).toBe(false)
+  })
+
+  it.each([
+    { language: 'en-US', loginRequest: 'Login request failed', registerRequest: 'Register request failed', loginResponse: 'Unexpected login response from server', registerResponse: 'Unexpected register response from server' },
+    { language: 'zh-CN', loginRequest: '登录请求失败', registerRequest: '注册请求失败', loginResponse: '服务端登录响应异常', registerResponse: '服务端注册响应异常' },
+    { language: 'ja-JP', loginRequest: 'ログインリクエストに失敗しました', registerRequest: '登録リクエストに失敗しました', loginResponse: 'サーバーからのログイン応答が無効です', registerResponse: 'サーバーからの登録応答が無効です' },
+  ])('登录注册的未知响应与请求失败使用$language文案', async (messages) => {
+    locale.current = messages.language
+    const authStore = await import('../src/lib/auth-store.svelte.js')
+    const loginInput = { identifier: 'alice', password: 'secret12' }
+    const registerInput = { username: 'alice', password: 'secret12' }
+    login.mockResolvedValueOnce({})
+    expect(await authStore.login(loginInput)).toBe(messages.loginResponse)
+    register.mockResolvedValueOnce({})
+    expect(await authStore.register(registerInput)).toBe(messages.registerResponse)
+    login.mockRejectedValueOnce({})
+    expect(await authStore.login(loginInput)).toBe(messages.loginRequest)
+    register.mockRejectedValueOnce({})
+    expect(await authStore.register(registerInput)).toBe(messages.registerRequest)
+    expect(authStore.isLoading()).toBe(false)
+  })
+
+  it('logout本地安全存储清理失败也显示明确错误并结束加载', async () => {
+    logout.mockResolvedValueOnce({ success: true, data: undefined })
+    clearTokens.mockRejectedValueOnce(new Error('Injected storage failure'))
+    const authStore = await import('../src/lib/auth-store.svelte.js')
+    expect(await authStore.logout()).toContain('Local credentials could not be cleared')
+    expect(authStore.isLoading()).toBe(false)
+    expect(authStore.currentUser()).toBeNull()
   })
 
   it('refreshCurrentUser 网络异常时回退为未登录并完成初始化', async () => {

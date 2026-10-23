@@ -1,8 +1,18 @@
 # {{api.contractPackageName}}
 
+## 简介
+
 {{projectName}} API service 的共享 contract 包。
 
-## 包含内容
+## 核心功能清单
+
+- 共享接口路径、输入输出 Schema 和类型。
+- 客户端与服务端使用同一份 contract。
+- 不包含服务端业务实现，也不加载私有配置。
+
+## 使用入门
+
+### 包含内容
 
 - `app-contract.ts`：应用级接口定义，业务 path 与一次性输出 Schema 就近内联
 - `app-schemas.ts`：跨接口、跨层复用的输入/数据 Zod Schema
@@ -10,9 +20,20 @@
 
 API 前缀、健康检查与跨端 Header 等传输配置位于 service 的 `config/_serv.yml`。
 
-## 常用命令
+### 常用命令
 
 ```bash
 pnpm --filter {{api.contractPackageName}} build
 pnpm --filter {{api.contractPackageName}} test
 ```
+
+## 开发测试
+
+```sh
+pnpm --filter {{api.contractPackageName}} typecheck
+pnpm --filter {{api.contractPackageName}} test
+```
+
+## 许可证
+
+Apache-2.0

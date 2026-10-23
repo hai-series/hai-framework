@@ -112,6 +112,13 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
 
   await page.goto('/')
   await expect(page.getByTestId('connection-status')).toContainText('已连接')
+  for (const width of [390, 1440, 1920, 2560, 3840]) {
+    await page.setViewportSize({ width, height: 960 })
+    const availableWidth = await page.evaluate(() => document.documentElement.clientWidth)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - 2)
+  }
+  await page.setViewportSize({ width: 1280, height: 960 })
 
   await page.getByLabel('聊天消息').fill('你好，请介绍这个实验台。')
   await page.getByTestId('chat-send').click()

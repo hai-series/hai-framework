@@ -10,6 +10,13 @@ import { kitM } from '../kit-i18n.js'
 
 /**
  * 角色守卫配置
+ * @example
+ * ```ts
+ * import type { RoleGuardConfig } from '@h-ai/kit'
+ *
+ * const value: RoleGuardConfig = { roles: ['editor'] }
+ * void value
+ * ```
  */
 export interface RoleGuardConfig {
   /** 需要的角色列表（默认 OR 逻辑，满足任一即通过） */
@@ -30,12 +37,10 @@ export interface RoleGuardConfig {
  *
  * @param config - 角色守卫配置
  * @returns RouteGuard 实例
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * guards: [
- *   { guard: kit.guard.role({ roles: ['admin'], apiMode: true }), paths: ['/api/admin/*'] },
- * ]
+ * const guard = roleGuard({ roles: ['editor'] })
+ * void guard
  * ```
  */
 export function roleGuard(config: RoleGuardConfig): RouteGuard {

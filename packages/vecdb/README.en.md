@@ -4,22 +4,27 @@
 
 [Framework home](../../README.en.md) · Related modules: [@h-ai/core](../core/README.en.md)
 
+## Introduction
+
 A vector database module with a unified `vecdb` object for LanceDB, pgvector, Qdrant, and Chroma.
 
-## Supported vector databases
+## Core features
 
-- LanceDB (embedded, local file storage, zero configuration)
-- pgvector (PostgreSQL + pgvector extension)
-- Qdrant (high-performance vector search engine; server 1.10.0+ with the Query API)
-- Chroma (automatically start a local service in embedded mode, or connect to an existing service)
+- Create collections with a defined vector dimension.
+- Store document vectors, search by similarity and filter metadata.
+- Use LanceDB, pgvector, Qdrant or Chroma; backend setup is described below.
 
-## Quick start
+## Getting started
+
+### Quick start
 
 ```ts
 import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
 // 初始化（LanceDB）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+const initialized = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+if (!initialized.success)
+  throw new Error(initialized.error.message)
 
 // 创建集合
 await vecdb.collection.create('docs', { dimension: 1536 })
@@ -44,7 +49,7 @@ if (!closeResult.success) {
 }
 ```
 
-## Configuration
+### Configuration
 
 ```ts
 // LanceDB（默认，嵌入式本地存储）
@@ -76,10 +81,34 @@ await vecdb.init({ type: 'chroma', url: 'http://localhost:8000' })
 ```
 
 > On Node, Chroma provides only an HTTP client, with no in-process embedded database. In embedded mode, `vecdb.init`
-> starts a local service with `serverCommand` (default: `chroma`, from the `chromadb` package), and `vecdb.close`
-> stops the process. Install the optional `chromadb` dependency; if the command is unavailable, `init` returns `CONNECTION_FAILED`.
+> starts a local service with `serverCommand` (default: `chroma`), and `vecdb.close` stops the process.
+> The optional npm package `chromadb` supplies the HTTP client; install the server CLI separately. An unavailable command makes `init` return `CONNECTION_FAILED`.
 
-### Operation logging
+Chroma `url` accepts only an HTTP(S) root endpoint, such as `https://chroma.example.com:8443/`, and takes precedence over `host/port`. URL credentials, path prefixes, query strings and fragments are rejected. Without `url`, `host/port` uses HTTP. Configuration uses the `host/port/ssl/headers` arguments of `chromadb 3.5.0`; see the [official TypeScript client](https://docs.trychroma.com/reference/typescript/client).
+
+For Chroma, this module sends the optional `apiKey` as `Authorization: Bearer <apiKey>` to self-hosted services or gateways implementing that protocol. Use HTTPS for remote credentials. An empty string omits credentials; nonempty tokens cannot contain whitespace, control characters or non-ASCII characters. This interface uses the default tenant/database and does not configure Chroma Cloud. Initialization checks the collection-count data endpoint after heartbeat. Authentication or permission failures return `CONNECTION_FAILED` without publishing a connected state; callers must check `success`.
+
+Direct initialization has a total deadline of 5 seconds; local server startup uses `startupTimeout`. Expiry aborts candidate HTTP requests. Successful initialization clears the timer, so this deadline does not limit subsequent business requests.
+
+Qdrant uses the actual types and Query API of `@qdrant/js-client-rest 1.18.0`. It supports an unnamed vector field with cosine/euclidean/dot metrics. Info, writes and searches on external named-vector or Manhattan collections return `CONFIG_ERROR`, without guessing zero dimensions or a default cosine metric. Only HTTP 404 means a collection is absent. Provider URL logs use core's shared sanitizer.
+
+Chroma metadata/filter values follow native `chromadb 3.5.0` validation. Invalid values return operation errors without dropping filters or issuing unfiltered queries. Document content may be omitted and search still returns `undefined`; internal writes use the SDK's string field. Check each backend's null, complex-metadata and filter semantics separately.
+
+LanceDB stores dimensions in Arrow's fixed-size vector field and the collection metric in the same schema's metadata, including empty collections. The metric in `collection.create` takes precedence; the connection metric only supplies a default for new collections. Restarting or changing that default does not alter existing collections. Operations read persisted schemas and check other connections' commits. Missing or invalid definitions return `CONFIG_ERROR`, without dummy-vector probes or guessed metrics. Rebuild legacy/external tables that lack this definition; no compatibility inference is provided.
+
+LanceDB is an embedded local-file backend. Processes share data only when they access the same persistent directory on a filesystem supporting LanceDB's concurrent commits. Identically named local paths on separate nodes do not share data. Prefer pgvector, Qdrant, or a Chroma server for distributed services. AI Knowledge requires persistent reldb and vecdb stores pointing to the same business dataset; changing embedding dimensions requires a matching rebuilt collection.
+
+Search uses the persisted collection metric, mapping `euclidean` to LanceDB's `l2`. Scores follow the public 0–1, higher-is-more-similar contract: cosine uses `clamp(1 - distance / 2, 0, 1)`, euclidean uses `1 / (1 + squaredL2)`, and dot uses `sigmoid(dotProduct)` to preserve ranking, not to estimate probabilities. `minScore` filters converted scores; thresholds are not universally calibrated across metrics or backends.
+
+Atomic LanceDB writes are verified against `@lancedb/lancedb 0.40.0 / Lance 13`. New tables declare a non-null id primary key in their initial Arrow schema. Both insert and upsert use native merge on id for strict key conflict detection. Sources: [Lance 13 table format](https://github.com/lance-format/lance/blob/v13.0.0/docs/src/format/table/index.md#unenforced-primary-key), [Lance 13 transaction](https://github.com/lance-format/lance/blob/v13.0.0/protos/transaction.proto), [Node binding 0.40.0](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/table.ts).
+
+LanceDB `insert` preserves existing IDs; `upsert` inserts or replaces complete rows. Duplicate IDs within a batch, missing merge support, or missing persisted primary keys return `CONFIG_ERROR` before writing. Rebuild old tables; no automatic migration or cleanup occurs. Each merge commits atomically, with concurrent winners determined by commit order. Multiple merges and reldb/vecdb operations do not share a transaction. No delete/add fallback is used. Reconcile unknown outcomes by ID. External native add calls bypass these safeguards.
+
+LanceDB stores `metadata` in a native JSON field, accepts nested JSON, and restores search metadata as objects. Explicit Arrow JSON input schemas encode both insert and upsert as JSONB. Writes or filters on legacy Utf8 metadata tables return `CONFIG_ERROR`; rebuild them without automatic migration.
+
+LanceDB `filter` supports AND equality on literal top-level keys, for example `{ tenant: 'acme', page: 1, active: true, removedAt: null }`. Values may be strings, finite numbers, booleans, or null. Types remain distinct: `1` differs from `'1'`, and `true` from `'true'`. Null matches explicit JSON null, never a missing key. Dots/brackets are literal key characters; quotes, backslashes, `%`, and `_` have no SQL or wildcard meaning. An empty object adds no restriction. Objects, arrays, undefined, and nonfinite numbers return `CONFIG_ERROR`, never an unfiltered query. Filtering precedes vector topK selection; minScore then filters scores. Other providers retain native restrictions and do not promise identical null, complex-value, or path semantics. Check capabilities when switching backends. Sources: [Lance 13 JSON UDF](https://github.com/lance-format/lance/blob/v13.0.0/rust/lance-datafusion/src/udf/json.rs), [Node 0.40.0 JSON field](https://github.com/lancedb/lancedb/blob/v0.40.0/nodejs/lancedb/arrow.ts).
+
+#### Operation logging
 
 Enable operation logging with `operationLog` in the vector database configuration. Logs are emitted before collection/vector operations reach the real provider, without a shared wrapper in `vecdb-main.ts`.
 
@@ -111,7 +140,9 @@ await vecdb.init({
 
 > Behavior: empty batch `insert/upsert/delete` calls are no-ops. Writes and searches validate vector dimensions, returning `HaiVecdbError.DIMENSION_MISMATCH` on a mismatch; missing optional drivers return `HaiVecdbError.DRIVER_NOT_FOUND`.
 
-## Error handling
+Qdrant `insert/upsert/delete` use `wait: true`, so success means the server applied that operation. `vector.count` requests an exact count rather than approximate collection statistics. Multiple operations do not form a transaction.
+
+### Error handling
 
 All operations return `HaiResult<T>`; check `result.success` for success or failure.
 
@@ -132,13 +163,23 @@ if (!result.success) {
 }
 ```
 
-## Tests
+## Development and testing
 
 ```bash
 pnpm --filter @h-ai/vecdb test
 ```
 
 > pgvector / Qdrant tests require Docker.
+
+## Production shared state
+
+Production uses Qdrant, pgvector or remote Chroma. LanceDB and embedded Chroma are for development/explicit tests. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
+## Closing and recovery
+
+close immediately stops current operations, including previously captured operation references. Failed candidates and resources that failed to close retain cleanup ownership without serving requests. Concurrent close calls coalesce; an in-flight init settles ownership before close proceeds. error.ext.cleanupPending requires retrying close on the same module. init cannot replace a resource until cleanup succeeds. Embedded Chroma waits for the actual spawn event and direct child exit: 1.5 seconds after normal termination it sends a forced signal, then waits another 1.5 seconds. Unconfirmed exit returns failure and retains the handle. Direct-child verification does not establish process-tree termination or live Chroma CLI readiness.
+
+Source JSDoc follows the [shared conventions](../../docs/module-jsdoc.md): public examples use published entry points, and internal examples are checked in their module scope. After building, run `pnpm check:jsdoc --package vecdb`; compiling examples does not replace backend behavior tests.
 
 ## License
 

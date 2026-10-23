@@ -29,11 +29,15 @@ export function createAuthProcedures() {
       return result
     await recordAudit({ ...context, session: { userId: result.data.user.id, roles: result.data.roles, permissions: result.data.permissions } }, 'login', 'auth')
     return result
-  }).route('logout').auth().handle(async ({ context }) => {
-    const result = await iam.auth.logout(context.accessToken ?? '')
+  }).route('logout', async ({ input, context }) => {
+    const token = input.accessToken ?? context.accessToken
+    if (!token)
+      return err(HaiCommonError.UNAUTHORIZED, serverM('unauthorized', { locale: context.locale }))
+    const result = await iam.auth.logout(token)
     if (!result.success)
       return result
-    await recordAudit(context, 'logout', 'auth')
+    if (context.session)
+      await recordAudit(context, 'logout', 'auth')
     return result
   }).route('changePassword').auth().handle(async ({ input, context }) => {
     const result = await iam.user.changeCurrentUserPassword(context.accessToken ?? '', input.oldPassword, input.newPassword)

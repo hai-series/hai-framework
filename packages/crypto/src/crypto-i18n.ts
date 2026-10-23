@@ -10,18 +10,26 @@ import messagesEnUS from '../messages/en-US.json'
 import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-/** 加密模块 i18n 消息键类型（自动从 zh-CN 消息文件推断） */
+/**
+ * 模块内合法消息键，由中文词典推导；与英文词典一起维护。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const key: CryptoMessageKey = 'crypto_sm2PublicKeyInvalid'
+ * const message = cryptoM(key)
+ * ```
+ */
 type CryptoMessageKey = keyof typeof messagesZhCN
 
 /**
- * 加密模块 i18n 消息获取器
+ * 按 Core 当前 locale 获取加密模块消息；错误插值不能包含密钥或明文。
+ * @param key - 已维护的消息键。
+ * @param options - locale 覆盖与 params 插值选项。
+ * @returns 本地化消息。
  *
- * 根据当前全局 locale 返回对应语言的消息文本，支持参数插值。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * cryptoM('crypto_sm2PublicKeyInvalid')
- * cryptoM('crypto_initFailed', { params: { error: 'bad config' } })
+ * const message = cryptoM('crypto_initFailed', { locale: 'en-US', params: { error: 'Initialization failed' } })
  * ```
  */
 export const cryptoM = core.i18n.createMessageGetter<CryptoMessageKey>({

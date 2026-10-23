@@ -1,4 +1,5 @@
 <!--
+  @component Timeline
   =============================================================================
   @h-ai/ui - Timeline 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $derived)
   使用 DaisyUI timeline 类
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Timeline } from '@h-ai/ui'
+  const props: ComponentProps<typeof Timeline> = { items: [{ id: 'created', title: '已创建', time: '2026-01-01', completed: true }] }
+  const component = mount(Timeline, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 
 <script lang='ts'>
@@ -15,6 +26,19 @@
   import type { TimelineItem } from './timeline-types.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
+  /**
+   * Timeline 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Timeline } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Timeline> = { items: [{ id: 'created', title: '已创建', time: '2026-01-01', completed: true }] }
+   * const component = mount(Timeline, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 时间线项数据 */
     items: TimelineItem[]

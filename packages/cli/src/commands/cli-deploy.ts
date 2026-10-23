@@ -7,9 +7,9 @@
 
 import type { DeploymentEnvironment } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { core } from '@h-ai/core'
@@ -17,9 +17,18 @@ import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
-import { configureDeployMiddleware, displayDeployValue } from './cli-deploy-middleware.js'
+import { writeCliError, writeCliMessage } from '../cli-utils.js'
+import { buildCommand } from './cli-build.js'
+import { configureDeployMiddleware } from './cli-deploy-middleware.js'
 
-/** deploy 命令选项 */
+/**
+ * deploy 命令选项
+ * 构建与部署分离；bundleOnly 只打包，不表示服务已上线。SSH 中断后的远端状态需按部署 ID 与结果文件核对。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: DeployCommandOptions = { cwd: '/workspace/shop', appDir: 'packages/shop-serv', env: 'prod', yes: true, bundleOnly: true, output: '.hai/shop.tar' }
+ * ```
+ */
 export interface DeployCommandOptions extends GlobalOptions {
   /** 部署环境；省略时必须交互输入。 */
   env?: string
@@ -35,6 +44,16 @@ export interface DeployCommandOptions extends GlobalOptions {
   skipMiddleware?: boolean
   /** 已构建镜像目录。 */
   artifactDir?: string
+  /** 本次更新的服务，逗号分隔。 */
+  services?: string
+  /** 先构建镜像。 */
+  build?: boolean
+  /** 本地容器引擎。 */
+  runtime?: 'auto' | 'podman' | 'docker'
+  /** 构建阶段的网络与原生依赖设置。 */
+  network?: string
+  sqlitePrebuildMirror?: string
+  httpProxy?: boolean
   /** 只生成 tar，手工搬运。 */
   bundleOnly?: boolean
   /** 部署 tar 输出路径。 */
@@ -56,14 +75,22 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     if (existing.type && existing.type !== 'docker-ssh')
       throw new Error(cliM('cli_deploy_bundle_provider'))
     config.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...existing }
+    const candidate = module.ProviderConfigSchema.safeParse(config.provider)
+    // 仅打包不依赖 SSH；未填写完整的连接由交付目录中的目标文件补齐。
+    if (!candidate.success && candidate.error.issues.some(issue => issue.path[0] === 'ssh')) {
+      const provider = configObject(config.provider)
+      delete provider.ssh
+    }
   }
   const current = module.ProviderConfigSchema.safeParse(config.provider)
   if (current.success && (bundleOnly || current.data.type !== 'docker-ssh' || current.data.ssh)) {
     config.provider = current.data
-    core.logger.info(cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' ? current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : cliM('cli_deploy_bundle_local') : 'Vercel' } }))
+    writeCliMessage(bundleOnly
+      ? cliM('cli_deploy_bundle_target')
+      : cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' && current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : 'Vercel' } }))
     return
   }
-  if (nonInteractive)
+  if (nonInteractive || bundleOnly)
     throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : current.error.issues.map(issue => `provider.${issue.path.join('.')}`).join(', ') } }))
 
   const original = configObject(config.provider)
@@ -81,10 +108,10 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     const answer = await prompts({
       type: options.secret ? 'password' : 'text',
       name: 'value',
-      message: cliM('cli_deploy_target_field', { params: { name } }),
+      message: cliM(`cli_deploy_input${name.split('_').at(-1)}` as Parameters<typeof cliM>[0]),
       initial: options.secret ? undefined : initial === undefined ? '' : String(initial),
       validate: (value: string) => options.port
-        ? (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) || cliM('cli_deploy_invalid_value')
+        ? (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) || cliM('cli_deploy_port_invalid')
         : options.optional || !!value.trim() || cliM('cli_deploy_invalid_value'),
     })
     if (answer.value === undefined)
@@ -93,7 +120,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
   }
   let provider: Record<string, unknown>
   if (platform.value === 'docker-ssh') {
-    core.logger.info(cliM('cli_deploy_target_ssh_hint'))
+    writeCliMessage(cliM('cli_deploy_target_ssh_hint'))
     const ssh = configObject(original.ssh)
     const remote = configObject(original.remote)
     const expose = configObject(original.expose)
@@ -125,23 +152,43 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
   if (!saved.success)
     throw new Error(saved.error.message)
   config.provider = validated.data
-  core.logger.info(cliM('cli_deploy_target_saved'))
+  writeCliMessage(cliM('cli_deploy_target_saved'))
 }
 
 /**
  * 执行部署命令
  *
  * @param options - 部署选项
- * @example `await deployCommand({ env: 'prod', skipMiddleware: true, yes: true })`
+ * 显式加载目标环境、配置中间件并检查 HaiResult；退出时恢复原进程环境并关闭部署模块。
+ * @throws Error - 扫描、配置、构建、打包或部署失败；SSH 本地终止不等于远端部署已停止。
+ * @returns 部署或仅打包流程结束；具体模式见 bundleOnly。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前工程已构建镜像产物，且有 config/_deploy.yml 与生产公共/私有环境。
+ * await deployCommand({ cwd: process.cwd(), env: 'prod', yes: true, bundleOnly: true, output: '.hai/shop.tar' })
+ * // 等价：hai deploy --env prod --yes --bundle-only --output .hai/shop.tar。
+ * ```
  */
 export async function deployCommand(options: DeployCommandOptions): Promise<void> {
   const spinner = ora()
   const cwd = options.cwd ?? process.cwd()
   let appDir = resolve(cwd, options.appDir ?? '.')
   let closeDeploy: (() => Promise<void>) | null = null
+  let restoreProjectLogger: (() => void) | undefined
   const originalEnv = { ...process.env }
+  const previousLogLevel = core.logger.getLevel()
+  core.logger.setLevel('fatal')
 
   try {
+    if (options.runtime && !['auto', 'podman', 'docker'].includes(options.runtime))
+      throw new Error(cliM('cli_build_runtime_missing'))
+    if (options.artifactDir && options.build)
+      throw new Error(cliM('cli_deploy_build_artifact_conflict'))
+    if (!options.build && (options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+      throw new Error(cliM('cli_deploy_build_options_required'))
+    let selectedServices = options.services?.split(',').map(name => name.trim())
+    if (selectedServices && (!selectedServices.length || selectedServices.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selectedServices).size !== selectedServices.length))
+      throw new Error(cliM('cli_build_selection_invalid'))
     // 环境选择是第一步；取消、无 TTY 或缺文件均不能继续认证/开通资源。
     let environmentName = options.env
     if (!environmentName) {
@@ -159,6 +206,15 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     try {
       // 全局安装的 CLI 先使用目标工程的 deploy 版本，不依赖 CLI 的开发依赖。
       const localRequire = createRequire(resolve(appDir, 'package.json'))
+      try {
+        const { core: projectCore } = await import(pathToFileURL(localRequire.resolve('@h-ai/core')).href) as typeof import('@h-ai/core')
+        if (projectCore !== core) {
+          const level = projectCore.logger.getLevel()
+          projectCore.logger.setLevel('fatal')
+          restoreProjectLogger = () => projectCore.logger.setLevel(level)
+        }
+      }
+      catch { /* 未安装项目依赖时，由 deploy 导入错误统一提示。 */ }
       let localModule: string | undefined
       try {
         localModule = localRequire.resolve('@h-ai/deploy')
@@ -167,8 +223,8 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       deployModule = localModule ? await import(pathToFileURL(localModule).href) : await import('@h-ai/deploy')
     }
     catch {
-      core.logger.error(chalk.red(cliM('cli_deploy_module_missing')))
-      core.logger.info(chalk.cyan('  pnpm add @h-ai/deploy'))
+      writeCliError(chalk.red(cliM('cli_deploy_module_missing')))
+      writeCliMessage(chalk.cyan('  pnpm add -D @h-ai/deploy'))
       throw new Error(cliM('cli_deploy_module_missing'))
     }
 
@@ -179,6 +235,15 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(cliM('cli_deploy_scan_failed', { params: { message: scanResult.error.message } }))
     const scan = scanResult.data
     appDir = scan.appDir ?? appDir
+    let buildRoot = appDir
+    while (!existsSync(resolve(buildRoot, 'hai.build.json')) && dirname(buildRoot) !== buildRoot)
+      buildRoot = dirname(buildRoot)
+    const buildFile = resolve(buildRoot, 'hai.build.json')
+    const buildConfig: { images?: Array<{ name: string }> } = existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : {}
+    const names = [...(buildConfig.images?.map(image => image.name) ?? ['app', 'web']), ...(scan.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend)).map(item => item.service)]
+    const available = [...new Set(names)]
+    if (selectedServices?.some(name => !available.includes(name)))
+      throw new Error(cliM('cli_deploy_services_invalid', { params: { services: available.join(', ') } }))
     const environment = deployModule.loadDeploymentEnvironment({ environment: environmentName, envDir: scan.envDir ?? appDir })
     if (!environment.success)
       throw new Error(environment.error.message)
@@ -197,7 +262,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     const configPath = resolve(appDir, 'config', '_deploy.yml')
     if (!existsSync(configPath)) {
       spinner.fail(chalk.red(cliM('cli_deploy_config_missing', { params: { path: configPath } })))
-      core.logger.info(chalk.cyan(cliM('cli_deploy_config_hint')))
+      writeCliMessage(chalk.cyan(cliM('cli_deploy_config_hint')))
       throw new Error(cliM('cli_deploy_config_missing', { params: { path: configPath } }))
     }
 
@@ -206,11 +271,55 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(loadedConfig.error.message)
     const deployConfig = loadedConfig.data
     spinner.succeed(cliM('cli_deploy_config_loaded'))
+    if (!options.build && !selectedServices && configObject(deployConfig.provider).type === 'docker-ssh') {
+      let artifactDirectory = options.artifactDir ? resolve(cwd, options.artifactDir) : resolve(buildRoot, '.hai/build/docker')
+      if (existsSync(resolve(artifactDirectory, 'latest'))) {
+        const pointer = readFileSync(resolve(artifactDirectory, 'latest'), 'utf8').trim()
+        if (!/^[a-z0-9][\w.+-]*$/i.test(pointer))
+          throw new Error(cliM('cli_deploy_artifact_invalid'))
+        artifactDirectory = resolve(artifactDirectory, pointer)
+      }
+      if (existsSync(resolve(artifactDirectory, 'manifest.json'))) {
+        try {
+          const artifact = await deployModule.readDeploymentArtifact(artifactDirectory)
+          if (artifact.partial)
+            selectedServices = artifact.images.map(image => image.name)
+        }
+        catch {
+          throw new Error(cliM('cli_deploy_artifact_invalid'))
+        }
+      }
+    }
     await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes, options.bundleOnly)
+    if (configObject(deployConfig.provider).type !== 'docker-ssh' && (selectedServices || options.build))
+      throw new Error(cliM('cli_deploy_bundle_provider'))
+
+    if (!options.yes && !selectedServices && configObject(deployConfig.provider).type === 'docker-ssh') {
+      if (existsSync(buildFile)) {
+        if (available.length > 1) {
+          const choice = await prompts({ type: 'multiselect', name: 'value', message: cliM('cli_deploy_choose_services'), choices: available.map(name => ({ title: name, value: name, selected: true })), min: 1 })
+          if (!Array.isArray(choice.value) || choice.value.length === 0)
+            throw new Error(cliM('cli_deploy_cancelled'))
+          if (choice.value.length !== available.length)
+            selectedServices = choice.value
+        }
+      }
+    }
 
     spinner.succeed(cliM('cli_deploy_scanned', { params: { name: scan.appName, sveltekit: String(scan.isSvelteKit), services: scan.requiredServices.join(', ') || cliM('cli_deploy_none') } }))
 
-    let skipMiddleware = options.skipMiddleware
+    if (options.build) {
+      if (!existsSync(buildFile))
+        throw new Error(cliM('cli_build_images_missing'))
+      const imageNames = selectedServices?.filter(name => ['app', 'web'].includes(name))
+      if (!selectedServices || imageNames?.length) {
+        writeCliMessage(cliM('cli_deploy_build_started'))
+        await buildCommand({ cwd: buildRoot, target: 'docker', images: imageNames?.join(','), runtime: options.runtime, network: options.network, sqlitePrebuildMirror: options.sqlitePrebuildMirror, httpProxy: options.httpProxy })
+      }
+    }
+    if (selectedServices)
+      writeCliMessage(cliM('cli_deploy_services', { params: { services: selectedServices.join(', ') } }))
+    let skipMiddleware = options.skipMiddleware || selectedServices?.every(name => ['app', 'web'].includes(name))
     if (!skipMiddleware && !options.yes && scan.requiredServices.length) {
       const action = await prompts({
         type: 'select',
@@ -223,10 +332,10 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       skipMiddleware = action.value === 'skip'
     }
     if (skipMiddleware)
-      core.logger.info(cliM('cli_deploy_middleware_skipped'))
+      writeCliMessage(cliM('cli_deploy_middleware_skipped'))
     const serviceModes = skipMiddleware
       ? Object.fromEntries(scan.requiredServices.map(service => [service, 'keep' as const]))
-      : await configureDeployMiddleware(deployModule, scan, environment.data, deployConfig, options.yes)
+      : await configureDeployMiddleware(deployModule, { ...scan, middlewares: scan.middlewares?.filter(item => !selectedServices || selectedServices.includes(item.service)) }, environment.data, deployConfig, options.yes)
     if (skipMiddleware)
       deployConfig.services = undefined
     // 刚写入文件的值不能被本次命令之前注入的快照覆盖；保留用户原有进程变量优先级。
@@ -244,7 +353,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     spinner.start(cliM('cli_deploy_initializing'))
     const validatedConfig = deployModule.DeployConfigSchema.safeParse(deployConfig)
     if (!validatedConfig.success)
-      throw new Error(cliM('cli_deploy_init_failed', { params: { message: cliM('cli_deploy_invalid_value') } }))
+      throw new Error(cliM('cli_deploy_config_invalid', { params: { path: configPath, fields: validatedConfig.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
     const initResult = await deploy.init(validatedConfig.data)
     if (!initResult.success) {
       throw new Error(cliM('cli_deploy_init_failed', { params: { message: initResult.error.message } }))
@@ -256,6 +365,9 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     spinner.start(cliM('cli_deploy_deploying'))
     const deployResult = await deploy.deployApp(appDir, {
       projectName: options.projectName,
+      selectedServices,
+      runtime: options.runtime,
+      onProgress: stage => writeCliMessage(cliM(`cli_deploy_stage_${stage}`)),
       skipMiddleware,
       artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined,
       bundleOnly: options.bundleOnly,
@@ -266,46 +378,35 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     })
 
     if (!deployResult.success) {
+      const execution = deployModule.getDeployCommandState(deployResult.error)
+      if (execution) {
+        const localKey = execution.localTermination === 'not-started' ? 'cli_deploy_local_not_started' : execution.localTermination === 'confirmed' ? 'cli_deploy_local_confirmed' : 'cli_deploy_local_unknown'
+        writeCliMessage(cliM(localKey))
+        if (execution.remoteExecution)
+          writeCliMessage(cliM(execution.remoteExecution === 'finished' ? 'cli_deploy_remote_finished' : 'cli_deploy_remote_unknown'))
+        if (execution.deploymentId && execution.resultFile)
+          writeCliMessage(cliM('cli_deploy_result_check', { params: { id: execution.deploymentId, path: execution.resultFile } }))
+      }
       if (deployResult.error.ext?.recovery) {
-        core.logger.warn(deployResult.error.suggestion ?? cliM('cli_deploy_command_failed'), {
-          recovery: deployResult.error.ext.recovery,
-        })
+        writeCliMessage(deployResult.error.suggestion ?? cliM('cli_deploy_command_failed'))
       }
       throw new Error(cliM('cli_deploy_failed', { params: { message: deployResult.error.message } }))
     }
 
     spinner.succeed(chalk.green(cliM(deployResult.data.status === 'packaged' ? 'cli_deploy_bundle_ready' : 'cli_deploy_success')))
-    for (const key of Object.keys(process.env)) {
-      if (originalEnv[key] === undefined)
-        delete process.env[key]
-    }
-    Object.assign(process.env, originalEnv)
-    const completedEnvironment = deployModule.loadDeploymentEnvironment({ environment: environment.data.environment, envDir: environment.data.envDir })
-    if (!completedEnvironment.success)
-      throw new Error(completedEnvironment.error.message)
-    for (const requirement of scan.middlewares ?? []) {
-      if ((serviceModes[requirement.envPrefix] ?? serviceModes[requirement.service]) === 'keep')
-        continue
-      const value = completedEnvironment.data.values[requirement.envPrefix]
-      if (value !== undefined)
-        core.logger.info(cliM('cli_deploy_saved', { params: { name: requirement.envPrefix, value: displayDeployValue(requirement.envPrefix, value) } }))
-    }
-    core.logger.info('')
-    if (deployResult.data.bundlePath)
-      core.logger.info(cliM('cli_deploy_bundle_path', { params: { path: deployResult.data.bundlePath } }))
+    writeCliMessage('')
+    if (deployResult.data.bundlePath && (deployResult.data.status !== 'packaged' || !deployResult.data.instructions))
+      writeCliMessage(cliM('cli_deploy_bundle_path', { params: { path: deployResult.data.bundlePath } }))
     if (deployResult.data.status === 'packaged')
-      core.logger.info(deployResult.data.instructions ?? '')
+      writeCliMessage(deployResult.data.instructions ?? '')
     else
-      core.logger.info(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
-    core.logger.info(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
-    if (deployResult.data.envVarsSet.length > 0) {
-      core.logger.info(chalk.gray(cliM('cli_deploy_env', { params: { names: deployResult.data.envVarsSet.join(', ') } })))
-    }
-    core.logger.info('')
+      writeCliMessage(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
+    writeCliMessage(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
+    writeCliMessage('')
   }
   catch (error) {
     spinner.fail(chalk.red(cliM('cli_deploy_command_failed')))
-    core.logger.error(error instanceof Error ? error.message : String(error))
+    writeCliError(error instanceof Error ? error.message : String(error))
     throw error
   }
   finally {
@@ -314,7 +415,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         await closeDeploy()
       }
       catch (error) {
-        core.logger.error('Failed to close deploy module', { error })
+        writeCliError('Failed to close deploy module', error)
         process.exitCode = 1
       }
     }
@@ -323,5 +424,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         delete process.env[key]
     }
     Object.assign(process.env, originalEnv)
+    core.logger.setLevel(previousLogLevel)
+    restoreProjectLogger?.()
   }
 }

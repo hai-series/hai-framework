@@ -1,4 +1,16 @@
-<!-- 表单字段布局，供 Form 和原生表单/场景组件共同复用。 -->
+<!--
+  @component FormLayout 表单字段布局，供 Form 和原生表单/场景组件共同复用。
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { FormLayout } from '@h-ai/ui'
+  const props: ComponentProps<typeof FormLayout> = { columns: 2, labelPosition: 'top', children: createRawSnippet(() => ({ render: () => "<span>表单字段</span>" })) }
+  const component = mount(FormLayout, { target: document.body, props })
+  await unmount(component)
+  ```
+-->
 <script lang='ts'>
   import type { FormLayoutProps } from '../../types.js'
   import { setContext } from 'svelte'

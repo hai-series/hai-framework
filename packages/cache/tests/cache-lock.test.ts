@@ -1,193 +1,107 @@
-/**
- * =============================================================================
- * @h-ai/cache - 分布式锁操作测试
- * =============================================================================
- */
-
+/** @h-ai/cache — 每次获取独立凭据的锁契约回归。 */
 import { describe, expect, it } from 'vitest'
+import { CacheConfigSchema } from '../src/cache-config.js'
 import { cache } from '../src/index.js'
+import { createRedisProvider } from '../src/providers/cache-provider-redis.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
+import { acquireRedisContainer } from './helpers/redis-container.js'
 
-async function waitUntilLockCanBeAcquired(
-  key: string,
-  timeoutMs = 4000,
-  intervalMs = 100,
-) {
-  const deadline = Date.now() + timeoutMs
-  let result = await cache.lock.acquire(key)
-
-  while (result.success && !result.data && Date.now() < deadline) {
-    await new Promise(resolve => setTimeout(resolve, intervalMs))
-    result = await cache.lock.acquire(key)
-  }
-
-  return result
+async function acquire(key: string, ttl = 30): Promise<string> {
+  const result = await cache.lock.acquire(key, { ttl })
+  if (!result.success || !result.data)
+    throw new Error('Expected an acquisition token')
+  return result.data
 }
 
 describe('cache lock operations', () => {
-  const defineCommon = () => {
-    // ─── acquire ───
+  const common = () => {
+    it('每次获取返回唯一凭据，重入返回null', async () => {
+      const first = await acquire('key')
+      expect(typeof first).toBe('string')
+      expect(await cache.lock.acquire('key')).toEqual({ success: true, data: null })
+      expect(await acquire('other')).not.toBe(first)
+      expect((await cache.lock.isLocked('key')).success).toBe(true)
+    })
 
-    it('首次 acquire 应成功', async () => {
-      const result = await cache.lock.acquire('my-lock')
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toBe(true)
+    it('仅本次凭据可释放，重新获取使用新凭据', async () => {
+      const first = await acquire('key')
+      expect(await cache.lock.release('key', 'wrong')).toEqual({ success: true, data: false })
+      expect(await cache.lock.release('key', first)).toEqual({ success: true, data: true })
+      const second = await acquire('key')
+      expect(second).not.toBe(first)
+      expect(await cache.lock.release('key', first)).toEqual({ success: true, data: false })
+      expect(await cache.lock.isLocked('key')).toEqual({ success: true, data: true })
+    })
+
+    it('仅本次凭据可续租，缺失凭据不能强制操作', async () => {
+      const owner = await acquire('key')
+      expect(await cache.lock.extend('key', 60, 'wrong')).toEqual({ success: true, data: false })
+      expect(await cache.lock.extend('key', 60, owner)).toEqual({ success: true, data: true })
+      // @ts-expect-error 同时校验 JavaScript 消费者绕过类型时仍拒绝无凭据释放。
+      expect(await cache.lock.release('key')).toEqual({ success: true, data: false })
+      // @ts-expect-error 无凭据续租不允许绕过所有权检查。
+      expect(await cache.lock.extend('key', 60)).toEqual({ success: true, data: false })
+      expect(await cache.lock.isLocked('key')).toEqual({ success: true, data: true })
+    })
+
+    it('不存在的锁不能释放或续租', async () => {
+      expect(await cache.lock.release('missing', 'wrong')).toEqual({ success: true, data: false })
+      expect(await cache.lock.extend('missing', 60, 'wrong')).toEqual({ success: true, data: false })
+      expect(await cache.lock.isLocked('missing')).toEqual({ success: true, data: false })
+    })
+
+    it('过期重获后旧凭据不能影响新锁', async () => {
+      const old = await acquire('key', 1)
+      const deadline = Date.now() + 4000
+      let next = await cache.lock.acquire('key')
+      while (next.success && !next.data && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+        next = await cache.lock.acquire('key')
       }
-    })
-
-    it('同一锁键 acquire 两次，第二次应失败', async () => {
-      const first = await cache.lock.acquire('dup-lock')
-      expect(first.success).toBe(true)
-      if (first.success)
-        expect(first.data).toBe(true)
-
-      const second = await cache.lock.acquire('dup-lock')
-      expect(second.success).toBe(true)
-      if (second.success)
-        expect(second.data).toBe(false)
-    })
-
-    it('不同锁键应各自独立', async () => {
-      const a = await cache.lock.acquire('lock-a')
-      const b = await cache.lock.acquire('lock-b')
-      expect(a.success).toBe(true)
-      expect(b.success).toBe(true)
-      if (a.success)
-        expect(a.data).toBe(true)
-      if (b.success)
-        expect(b.data).toBe(true)
-    })
-
-    it('acquire 支持自定义 owner', async () => {
-      const result = await cache.lock.acquire('owned-lock', { owner: 'node-1' })
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
-    })
-
-    it('acquire 支持自定义 ttl', async () => {
-      const result = await cache.lock.acquire('ttl-lock', { ttl: 5 })
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
-    })
-
-    // ─── release ───
-
-    it('release 已持有的锁应成功', async () => {
-      await cache.lock.acquire('rel-lock')
-      const released = await cache.lock.release('rel-lock')
-      expect(released.success).toBe(true)
-      if (released.success)
-        expect(released.data).toBe(true)
-    })
-
-    it('release 不存在的锁应返回 false', async () => {
-      const released = await cache.lock.release('nonexistent-lock')
-      expect(released.success).toBe(true)
-      if (released.success)
-        expect(released.data).toBe(false)
-    })
-
-    it('release 后可重新 acquire', async () => {
-      await cache.lock.acquire('reacquire-lock')
-      await cache.lock.release('reacquire-lock')
-
-      const result = await cache.lock.acquire('reacquire-lock')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
-    })
-
-    it('release 带 owner 匹配时应成功', async () => {
-      await cache.lock.acquire('owner-rel', { owner: 'node-1' })
-      const released = await cache.lock.release('owner-rel', 'node-1')
-      expect(released.success).toBe(true)
-      if (released.success)
-        expect(released.data).toBe(true)
-    })
-
-    it('release 带 owner 不匹配时应失败', async () => {
-      await cache.lock.acquire('owner-mismatch', { owner: 'node-1' })
-      const released = await cache.lock.release('owner-mismatch', 'node-2')
-      expect(released.success).toBe(true)
-      if (released.success)
-        expect(released.data).toBe(false)
-    })
-
-    // ─── isLocked ───
-
-    it('isLocked 已持有锁应返回 true', async () => {
-      await cache.lock.acquire('check-lock')
-      const result = await cache.lock.isLocked('check-lock')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
-    })
-
-    it('isLocked 不存在的锁应返回 false', async () => {
-      const result = await cache.lock.isLocked('no-lock')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(false)
-    })
-
-    it('isLocked 释放后应返回 false', async () => {
-      await cache.lock.acquire('check-release')
-      await cache.lock.release('check-release')
-      const result = await cache.lock.isLocked('check-release')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(false)
-    })
-
-    // ─── extend ───
-
-    it('extend 已持有锁应成功', async () => {
-      await cache.lock.acquire('ext-lock', { ttl: 10 })
-      const result = await cache.lock.extend('ext-lock', 60)
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
-    })
-
-    it('extend 不存在的锁应返回 false', async () => {
-      const result = await cache.lock.extend('no-ext-lock', 60)
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(false)
-    })
-
-    it('extend 带 owner 匹配应成功', async () => {
-      await cache.lock.acquire('ext-owner', { owner: 'node-1' })
-      const result = await cache.lock.extend('ext-owner', 60, 'node-1')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
-    })
-
-    it('extend 带 owner 不匹配应失败', async () => {
-      await cache.lock.acquire('ext-mismatch', { owner: 'node-1' })
-      const result = await cache.lock.extend('ext-mismatch', 60, 'node-2')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(false)
-    })
-
-    // ─── 过期自动释放 ───
-
-    it('锁过期后应自动释放（可重新获取）', async () => {
-      await cache.lock.acquire('expire-lock', { ttl: 1 })
-      // Redis 的 EX 以秒为单位，整仓测试负载较高时 1100ms 边界值容易抖动；
-      // 这里改为在合理时间窗口内轮询，直到锁真正过期并可重新获取。
-      const result = await waitUntilLockCanBeAcquired('expire-lock')
-      expect(result.success).toBe(true)
-      if (result.success)
-        expect(result.data).toBe(true)
+      expect(next.success && next.data).toBeTruthy()
+      if (!next.success || !next.data)
+        throw new Error('Lock did not expire')
+      expect(next.data).not.toBe(old)
+      expect(await cache.lock.release('key', old)).toEqual({ success: true, data: false })
+      expect(await cache.lock.extend('key', 600, old)).toEqual({ success: true, data: false })
+      expect(await cache.lock.isLocked('key')).toEqual({ success: true, data: true })
+      expect(await cache.lock.release('key', next.data)).toEqual({ success: true, data: true })
     })
   }
+  defineCacheSuite('memory', memoryEnv, common)
+  defineCacheSuite('redis', redisEnv, common)
 
-  defineCacheSuite('memory', memoryEnv, defineCommon)
-  defineCacheSuite('redis', redisEnv, defineCommon)
+  it('独立Redis客户端接管后拒绝旧客户端凭据', async () => {
+    const lease = await acquireRedisContainer()
+    const left = createRedisProvider()
+    const right = createRedisProvider()
+    try {
+      const config = CacheConfigSchema.parse({ type: 'redis', host: lease.host, port: lease.port })
+      expect((await left.connect(config)).success).toBe(true)
+      expect((await right.connect(config)).success).toBe(true)
+      const original = await left.lock.acquire('cross-client', { ttl: 1 })
+      if (!original.success || !original.data)
+        throw new Error('Initial lock failed')
+      expect(await right.lock.acquire('cross-client')).toEqual({ success: true, data: null })
+      let current = await right.lock.acquire('cross-client')
+      const deadline = Date.now() + 4000
+      while (current.success && !current.data && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+        current = await right.lock.acquire('cross-client')
+      }
+      if (!current.success || !current.data)
+        throw new Error('Takeover failed')
+      expect(await left.lock.release('cross-client', original.data)).toEqual({ success: true, data: false })
+      expect(await left.lock.extend('cross-client', 600, original.data)).toEqual({ success: true, data: false })
+      expect(await right.lock.release('cross-client', current.data)).toEqual({ success: true, data: true })
+    }
+    finally {
+      try {
+        await Promise.allSettled([left.close(), right.close()])
+      }
+      finally {
+        await lease.release()
+      }
+    }
+  }, 120000)
 })

@@ -1,6 +1,16 @@
 <!--
   @component Tabs
   标签页组件，支持 line/card/pills 三种样式。
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Tabs } from '@h-ai/ui'
+  const props: ComponentProps<typeof Tabs> = { items: [{ key: 'profile', label: '资料' }, { key: 'security', label: '安全' }], active: 'profile', lazy: true }
+  const component = mount(Tabs, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, TabsProps } from '../../types.js'

@@ -18,6 +18,13 @@ import type { Buffer } from 'node:buffer'
  * - `pdf` — 使用 pdfjs-dist 解析 PDF（需安装可选依赖）
  * - `docx` — 使用 mammoth 解析 Word 文档（需安装可选依赖）
  * - `ocr` — 通过视觉 LLM 进行 OCR 识别（图片及无原生解析器的格式）
+ *
+ * @example
+ * ```ts
+ * import type { FileParseMethod } from '@h-ai/ai'
+ *
+ * const value: FileParseMethod = 'text'
+ * ```
  */
 export type FileParseMethod = 'text' | 'html' | 'pdf' | 'docx' | 'ocr'
 
@@ -26,6 +33,13 @@ export type FileParseMethod = 'text' | 'html' | 'pdf' | 'docx' | 'ocr'
  * - `text` — 纯文本（默认），适合程序处理
  * - `markdown` — Markdown 格式，保留文档结构（标题、列表、粗斜体等），
  *   适用于 HTML、PDF、DOCX；图片 OCR 会提示模型输出 Markdown
+ *
+ * @example
+ * ```ts
+ * import type { OutputFormat } from '@h-ai/ai'
+ *
+ * const value: OutputFormat = 'markdown'
+ * ```
  */
 export type OutputFormat = 'text' | 'markdown'
 
@@ -33,6 +47,13 @@ export type OutputFormat = 'text' | 'markdown'
 
 /**
  * 文件解析选项
+ *
+ * @example
+ * ```ts
+ * import type { FileParseOptions } from '@h-ai/ai'
+ *
+ * const value: FileParseOptions = { mimeType: 'text/html', outputFormat: 'markdown' }
+ * ```
  */
 export interface FileParseOptions {
   /** 强制使用指定 MIME 类型（覆盖自动检测） */
@@ -58,6 +79,13 @@ export interface FileParseOptions {
 
 /**
  * 文件解析请求
+ *
+ * @example
+ * ```ts
+ * import type { FileParseRequest } from '@h-ai/ai'
+ *
+ * const value: FileParseRequest = { content: '<h1>周报</h1><p>完成索引升级。</p>', filename: 'weekly.html', options: { outputFormat: 'markdown' } }
+ * ```
  */
 export interface FileParseRequest {
   /**
@@ -75,6 +103,15 @@ export interface FileParseRequest {
 
 /**
  * 文件解析结果
+ *
+ * @example
+ * ```ts
+ * import type { FileParseResult } from '@h-ai/ai'
+ *
+ * function preview(parsed: FileParseResult): string {
+ *   return `${parsed.method}: ${parsed.text.slice(0, 160)}`
+ * }
+ * ```
  */
 export interface FileParseResult {
   /** 提取的文本内容（当 `outputFormat` 为 `'markdown'` 时为 Markdown 格式） */
@@ -107,20 +144,15 @@ export interface FileParseResult {
  *
  * @example
  * ```ts
- * import { readFile } from 'node:fs/promises'
+ * import { ai } from '@h-ai/ai'
  *
- * // 解析 PDF（OCR 模型通过 llm.scenarios.ocr 配置）
- * ai.init({ llm: { apiKey: 'sk-...', scenarios: { ocr: 'gpt-4o' } } })
- *
- * const pdf = await readFile('document.pdf')
- * const result = await ai.file.parse({ content: pdf, filename: 'document.pdf' })
- *
- * // 解析图片（OCR）
- * const image = await readFile('screenshot.png')
- * const result = await ai.file.parse({ content: image, filename: 'screenshot.png' })
- *
- * // 便捷方法：直接获取文本
- * const text = await ai.file.parseText(content, 'document.pdf')
+ * // 应用启动已成功初始化 ai；这里是业务服务函数。
+ * async function run() {
+ *   const result = await ai.file.parse({ content: '会议决定周一发布。', filename: 'minutes.txt' })
+ *   if (!result.success)
+ *     return result
+ *   return result.data.text
+ * }
  * ```
  */
 export interface FileOperations {

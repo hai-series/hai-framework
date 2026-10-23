@@ -9,6 +9,7 @@ import type { AppType, CreateProjectOptions, FeatureId, FrontendTarget, Generato
 import process from 'node:process'
 import { cac } from 'cac'
 import chalk from 'chalk'
+import { cliM } from './cli-i18n.js'
 import { getCliVersion, writeCliMessage } from './cli-utils.js'
 import { addModule, buildCommand, createProject, deployCommand, generate, initProject } from './commands/cli-commands.js'
 
@@ -19,23 +20,24 @@ const VERSION = getCliVersion()
 const cli = cac('hai')
 
 // 全局选项
-cli.option('-v, --verbose', '显示详细输出')
-cli.option('-C, --cwd <path>', '工作目录')
+cli.option('-v, --verbose', cliM('cli_help_verbose'))
+cli.option('-C, --cwd <path>', cliM('cli_help_cwd'))
 
 // 创建项目命令
 cli
-  .command('create [name]', '创建新的 hai 项目')
-  .option('--type <type>', '应用类型 (admin, website, h5, api, mobile-app, fullstack)')
-  .option('--frontends <targets>', '前后端分离工程前端目标 (逗号分隔: web,app,miniapp,desktop)')
-  .option('-t, --template <template>', '项目模板 (minimal, default, full, custom)')
-  .option('-f, --features <features>', '功能列表 (逗号分隔: iam,db,cache,ai,storage,crypto)')
-  .option('--examples', '添加示例代码')
-  .option('--no-examples', '不添加示例代码')
-  .option('--no-install', '不安装依赖')
-  .option('-p, --package-manager <pm>', '包管理器 (pnpm, npm, yarn)')
-  .option('--no-git', '不初始化 Git')
-  .option('--git-remote <url>', 'Git 远程仓库地址')
-  .option('-y, --yes', '使用默认配置，跳过交互')
+  .command('create [name]', cliM('cli_help_create'))
+  .option('--type <type>', cliM('cli_help_appType'))
+  .option('--frontends <targets>', cliM('cli_help_frontends'))
+  .option('-t, --template <template>', cliM('cli_help_template'))
+  .option('-f, --features <features>', cliM('cli_help_features'))
+  .option('--examples', cliM('cli_help_examples'))
+  .option('--no-examples', cliM('cli_help_noExamples'))
+  .option('--no-install', cliM('cli_help_noInstall'))
+  .option('--no-deploy', cliM('cli_help_noDeploy'))
+  .option('-p, --package-manager <pm>', cliM('cli_help_packageManager'))
+  .option('--no-git', cliM('cli_help_noGit'))
+  .option('--git-remote <url>', cliM('cli_help_gitRemote'))
+  .option('-y, --yes', cliM('cli_help_yes'))
   .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
       // 解析功能列表
@@ -52,6 +54,7 @@ cli
         frontends,
         template: options.template as CreateProjectOptions['template'],
         features,
+        deploy: options.deploy as boolean,
         examples: options.examples as boolean,
         install: options.install as boolean,
         packageManager: options.packageManager as CreateProjectOptions['packageManager'],
@@ -70,8 +73,8 @@ cli
 
 // 增量添加模块
 cli
-  .command('add [module]', '向现有项目添加模块')
-  .option('--no-install', '不安装依赖')
+  .command('add [module]', cliM('cli_help_add'))
+  .option('--no-install', cliM('cli_help_noInstall'))
   .action(async (module: string | undefined, options: Record<string, unknown>) => {
     try {
       await addModule({
@@ -88,8 +91,8 @@ cli
 
 // 初始化/校验配置
 cli
-  .command('init', '初始化/校验项目配置')
-  .option('-f, --force', '强制重新生成配置')
+  .command('init', cliM('cli_help_init'))
+  .option('-f, --force', cliM('cli_help_forceConfig'))
   .action(async (options: Record<string, unknown>) => {
     try {
       await initProject({
@@ -105,16 +108,18 @@ cli
 
 // 代码生成命令
 cli
-  .command('generate [type] [name]', '生成代码')
+  .command('generate [type] [name]', cliM('cli_help_generate'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .alias('g')
-  .option('-o, --output <path>', '输出路径')
-  .option('-f, --force', '覆盖现有文件')
+  .option('-o, --output <path>', cliM('cli_help_output'))
+  .option('-f, --force', cliM('cli_help_force'))
   .action(async (type: string | undefined, name: string | undefined, options: Record<string, unknown>) => {
     try {
       await generate({
         type: type as GeneratorType,
         name: name ?? '',
         output: options.output as string,
+        ...(options.workspace ? { workspace: String(options.workspace) } : {}),
         force: options.force as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
@@ -127,14 +132,15 @@ cli
 
 // 构建与部署分别执行；构建不读取部署环境配置。
 cli
-  .command('build', '构建源码、Docker 镜像或 Tauri 安装包（不区分部署环境）')
-  .option('--target <target>', '产物类型：compile（默认）/ docker / desktop')
-  .option('--runtime <runtime>', '本地容器引擎：auto（优先 Podman）/ podman / docker')
-  .option('--network <network>', '容器构建网络（默认引擎设置），例如 rootless Podman 的 pasta')
-  .option('--platform <platform>', 'Tauri 目标系统：windows / linux / macos（在对应系统构建）')
-  .option('--arch <arch>', 'Tauri 目标架构：x64 / arm64')
-  .option('--sqlite-prebuild-mirror <url>', 'SQLite 预编译二进制镜像根地址')
-  .option('--no-http-proxy', 'Podman 构建不继承本机代理')
+  .command('build', cliM('cli_help_build'))
+  .option('--target <target>', cliM('cli_help_target'))
+  .option('--images <names>', cliM('cli_help_images'))
+  .option('--runtime <runtime>', cliM('cli_help_buildRuntime'))
+  .option('--network <network>', cliM('cli_help_buildNetwork'))
+  .option('--platform <platform>', cliM('cli_help_platform'))
+  .option('--arch <arch>', cliM('cli_help_arch'))
+  .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_sqliteMirror'))
+  .option('--no-http-proxy', cliM('cli_help_noHttpProxy'))
   .action(async (options: Parameters<typeof buildCommand>[0]) => {
     try {
       await buildCommand(options)
@@ -147,15 +153,21 @@ cli
 
 // 部署命令
 cli
-  .command('deploy [appDir]', '部署应用到云平台')
-  .option('--env <environment>', '部署环境（test / prod 等，必须存在对应环境文件）')
-  .option('--env-dir <path>', '环境文件所在目录（默认自动查找）')
-  .option('-y, --yes', '按当前后端默认配置部署，目标环境已有完整配置时保持不变')
-  .option('--project-name <name>', '项目名称（默认服务包名，缺失时为目录名；附加环境后缀）')
-  .option('--skip-middleware', '配置已完备，跳过全部中间件处理，直接部署')
-  .option('--artifact-dir <path>', '已有镜像构建产物目录（含 manifest.json）')
-  .option('--bundle-only', '只生成 Compose 部署 tar，手工搬运；不连接 SSH')
-  .option('--output <path>', '部署 tar 输出路径，自动补应用版本后缀')
+  .command('deploy [appDir]', cliM('cli_help_deploy'))
+  .option('--env <environment>', cliM('cli_help_environment'))
+  .option('--env-dir <path>', cliM('cli_help_envDir'))
+  .option('-y, --yes', cliM('cli_help_deployYes'))
+  .option('--project-name <name>', cliM('cli_help_projectName'))
+  .option('--skip-middleware', cliM('cli_help_skipMiddleware'))
+  .option('--artifact-dir <path>', cliM('cli_help_artifactDir'))
+  .option('--services <names>', cliM('cli_help_services'))
+  .option('--build', cliM('cli_help_deployBuild'))
+  .option('--network <network>', cliM('cli_help_deployNetwork'))
+  .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_deploySqliteMirror'))
+  .option('--no-http-proxy', cliM('cli_help_deployNoProxy'))
+  .option('--runtime <runtime>', cliM('cli_help_deployRuntime'))
+  .option('--bundle-only', cliM('cli_help_bundleOnly'))
+  .option('--output <path>', cliM('cli_help_bundleOutput'))
   .action(async (appDir: string | undefined, options: Record<string, unknown>) => {
     try {
       await deployCommand({
@@ -166,6 +178,12 @@ cli
         projectName: options.projectName as string,
         skipMiddleware: options.skipMiddleware as boolean,
         artifactDir: options.artifactDir as string,
+        services: options.services as string,
+        build: options.build as boolean,
+        network: options.network as string,
+        sqlitePrebuildMirror: options.sqlitePrebuildMirror as string,
+        httpProxy: options.httpProxy as boolean,
+        runtime: options.runtime as 'auto' | 'podman' | 'docker',
         bundleOnly: options.bundleOnly as boolean,
         output: options.output as string,
         verbose: options.verbose as boolean,
@@ -173,33 +191,37 @@ cli
       })
     }
     catch {
-      process.exit(1)
+      process.exitCode = 1
     }
   })
 
 // 快捷生成命令
 cli
-  .command('g:page <name>', '生成页面')
+  .command('g:page <name>', cliM('cli_help_generatePage'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'page', name, cwd: options.cwd as string })
+    await generate({ type: 'page', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 cli
-  .command('g:component <name>', '生成组件')
+  .command('g:component <name>', cliM('cli_help_generateComponent'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'component', name, cwd: options.cwd as string })
+    await generate({ type: 'component', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 cli
-  .command('g:api <name>', '生成 API')
+  .command('g:api <name>', cliM('cli_help_generateApi'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'api', name, cwd: options.cwd as string })
+    await generate({ type: 'api', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 cli
-  .command('g:model <name>', '生成数据模型')
+  .command('g:model <name>', cliM('cli_help_generateModel'))
+  .option('-w, --workspace <name>', cliM('cli_help_workspace'))
   .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'model', name, cwd: options.cwd as string })
+    await generate({ type: 'model', name, cwd: options.cwd as string, ...(options.workspace ? { workspace: String(options.workspace) } : {}) })
   })
 
 // 版本和帮助

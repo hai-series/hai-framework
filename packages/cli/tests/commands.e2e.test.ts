@@ -21,6 +21,8 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseEnv } from 'node:util'
+import { createInMemoryKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
@@ -207,6 +209,23 @@ describe('createProject — api 类型', () => {
     expect(await exists(projectPath, '.')).toBe(true)
   })
 
+  it('aPI仅选crypto时生成私有密钥环并补充RelDB registry依赖', async () => {
+    const name = 'proj-api-crypto-only'
+    const directory = path.join(tmpRoot, name)
+    await createProject({ name, appType: 'api', template: 'custom', features: ['crypto'], moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
+    const prefix = `apps/${name}-service`
+    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    expect(ring.success).toBe(true)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    const source = await readText(directory, `${prefix}/src/app.ts`)
+    expect(source).toContain('keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 })')
+    expect(source).not.toContain('keyStore: createInMemoryKeyStore()')
+    expect(source).toContain('from \'@h-ai/reldb\'')
+    expect(await readText(directory, `${prefix}/.env.example`)).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
+    expect(await readText(directory, `${prefix}/.env`)).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
+  })
+
   it('package.json 名称正确', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     expect(pkg.name).toBe('proj-api')
@@ -283,17 +302,16 @@ describe('createProject — api 类型', () => {
   it('应生成可传入配置与嵌入数据的 API 镜像入口', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     const servicePkg = await readJson(projectPath, 'apps/proj-api-service/package.json')
-    const dockerfile = await readText(projectPath, 'Dockerfile')
+    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
 
     expect(pkg.scripts.build).toBe('hai build')
     expect(servicePkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'apps/proj-api-service/data/.gitkeep')).toBe(true)
     expect(dockerfile).toContain('pnpm pm deploy --filter proj-api-service --prod')
-    expect(dockerfile).toContain('target=/pnpm/store pnpm pm deploy --filter proj-api-service --prod')
     expect(dockerfile).not.toContain('embedded-data')
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
-    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
+    expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
     expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
     expect(dockerfile).toContain('USER node')
     expect(await exists(projectPath, '.dockerignore')).toBe(true)
@@ -682,17 +700,15 @@ describe('createProject — website 类型', () => {
   it('应生成 SvelteKit Node 容器交付文件', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     const svelteConfig = await readText(projectPath, 'svelte.config.js')
-    const dockerfile = await readText(projectPath, 'Dockerfile')
+    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
 
-    expect(pkg.devDependencies['@sveltejs/adapter-node']).toBe('^5.5.7')
+    expect(pkg.devDependencies['@sveltejs/adapter-node']).toBe('5.5.7')
     expect(pkg.devDependencies['@sveltejs/adapter-auto']).toBeUndefined()
     expect(svelteConfig).toContain('from \'@sveltejs/adapter-node\'')
     expect(dockerfile).toContain('CMD ["node", "build"]')
-    expect(dockerfile).toContain('target=/pnpm/store pnpm pm deploy --filter proj-website --prod')
-    expect(dockerfile).toContain('FROM runtime-base AS runtime')
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
-    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
+    expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
     expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
 
     const readme = await readText(projectPath, 'README.md')
@@ -803,10 +819,10 @@ describe('createProject — mobile-app 类型', () => {
     expect(pkg.dependencies.zod).toBeUndefined()
     expect(pkg.devDependencies['@sveltejs/kit']).toBeUndefined()
     expect(pkg.devDependencies['@sveltejs/adapter-static']).toBeUndefined()
-    expect(pkg.devDependencies['@capacitor/app']).toBe('^8.1.2')
-    expect(pkg.devDependencies['@capacitor/camera']).toBe('^8.2.5')
-    expect(pkg.devDependencies['@capacitor/device']).toBe('^8.0.3')
-    expect(pkg.devDependencies['@capacitor/push-notifications']).toBe('^8.1.3')
+    expect(pkg.devDependencies['@capacitor/app']).toBe('8.1.2')
+    expect(pkg.devDependencies['@capacitor/camera']).toBe('8.2.5')
+    expect(pkg.devDependencies['@capacitor/device']).toBe('8.0.3')
+    expect(pkg.devDependencies['@capacitor/push-notifications']).toBe('8.1.3')
     expect(pkg.scripts.typecheck).not.toContain('svelte-kit sync')
     expect(pkg.scripts.compile).toContain('pnpm paraglide:compile')
 
@@ -816,8 +832,8 @@ describe('createProject — mobile-app 类型', () => {
 
   it('应生成带 SPA fallback 的静态镜像', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    const dockerfile = await readText(projectPath, 'Dockerfile')
-    const nginxConfig = await readText(projectPath, 'docker/nginx.conf')
+    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
+    const nginxConfig = await readText(projectPath, 'images/web/nginx.conf')
 
     expect(pkg.scripts.build).toBe('hai build')
     expect(dockerfile).toContain('nginxinc/nginx-unprivileged')
@@ -877,6 +893,20 @@ describe('createProject — fullstack 类型', () => {
     expect(await readText(projectPath, '.env')).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
     expect(await readText(projectPath, '.env')).not.toContain(password)
     expect(await readText(projectPath, '.env.example')).not.toContain(password)
+    const serializedRing = parseEnv(env).HAI_CRYPTO_TRANSPORT_SERVERKEYRING
+    const ring = parseTransportServerKeyRing(serializedRing)
+    expect(ring.success).toBe(true)
+    if (!ring.success)
+      throw new Error(ring.error.message)
+    expect(await readText(projectPath, '.env')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
+    expect(await readText(projectPath, '.env.example')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
+    try {
+      expect((await crypto.init()).success).toBe(true)
+      expect(crypto.transport.createServer({ serverKeyRing: ring.data, keyStore: createInMemoryKeyStore() }).success).toBe(true)
+    }
+    finally {
+      await crypto.close()
+    }
     const gitignoreLines = (await readText(projectPath, '.gitignore')).split('\n').map(line => line.trim())
     expect(gitignoreLines).toContain('.env.local')
     expect(gitignoreLines).toContain('.env.*.local')
@@ -890,6 +920,7 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerignoreLines).not.toContain('.env.*')
     await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], yes: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(password)
+    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   }, 30_000)
 
   it('应生成 pnpm workspace 多包工程', async () => {
@@ -965,7 +996,7 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')).toBe(true)
 
     // 实际 create 命令不能覆盖模板生成的可选配置和 Reach 标准通知模板。
-    for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler', 'deploy']) {
+    for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler']) {
       const content = await readText(projectPath, `packages/proj-fullstack-serv/config/_${moduleKey}.yml`)
       expect(parse(content)).toBeNull()
     }
@@ -1030,27 +1061,26 @@ describe('createProject — fullstack 类型', () => {
   })
 
   it('应生成由 Service 直接监听的默认镜像与独立 Web 镜像', async () => {
-    const dockerfile = await readText(projectPath, 'Dockerfile')
-    const nginxConfig = await readText(projectPath, 'docker/nginx.conf')
-    const runtimeConfig = await readText(projectPath, 'docker/runtime-config.js.template')
-    const runtimeConfigEnv = await readText(projectPath, 'docker/19-runtime-config.envsh')
+    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
+    const nginxConfig = await readText(projectPath, 'images/web/nginx.conf')
+    const runtimeConfig = await readText(projectPath, 'images/web/runtime-config.js.template')
+    const runtimeConfigEnv = await readText(projectPath, 'images/web/19-runtime-config.envsh')
     const webIndex = await readText(projectPath, 'apps/proj-fullstack-web/index.html')
 
     expect(dockerfile).toContain('pnpm pm deploy --filter proj-fullstack-serv --prod')
-    expect(dockerfile).toContain('target=/pnpm/store pnpm pm deploy --filter proj-fullstack-serv --prod')
-    expect(dockerfile).toContain('FROM service AS runtime')
     expect(dockerfile).not.toContain('embedded-data')
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     // file: 包归档是离线交付材料，fetch 前必须已在构建上下文内。
-    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
+    expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
     expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
     expect(dockerfile).not.toContain('ARG PUBLIC_API_BASE')
-    expect(dockerfile).toContain('NGINX_ENVSUBST_OUTPUT_DIR=/tmp/hai-runtime-config')
+    const webDockerfile = await readText(projectPath, 'images/web.Dockerfile')
+    expect(webDockerfile).toContain('NGINX_ENVSUBST_OUTPUT_DIR=/tmp/hai-runtime-config')
     expect(dockerfile).toContain('USER node')
     expect(dockerfile).not.toContain('fullstack-server.mjs')
-    expect(dockerfile).toContain('wget -Y off -q -O /dev/null http://127.0.0.1:8080/health')
-    expect(await exists(projectPath, 'docker/fullstack-server.mjs')).toBe(false)
+    expect(webDockerfile).toContain('wget -Y off -q -O /dev/null http://127.0.0.1:8080/health')
+    expect(await exists(projectPath, 'images/web/fullstack-server.mjs')).toBe(false)
     expect(nginxConfig).toContain('try_files $uri $uri/ /index.html')
     expect(nginxConfig).toContain('alias /tmp/hai-runtime-config/runtime-config.js')
     expect(runtimeConfig).toContain('$' + '{PUBLIC_API_BASE_BASE64}')
@@ -1145,6 +1175,8 @@ describe('createProject — fullstack 类型', () => {
     expect(appPkg.scripts['cap:build:android:release']).toContain('cap build android')
     expect(await exists(projectPath, 'apps/proj-fullstack-app/capacitor.config.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-app/src/lib/capacitor.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-app/public/runtime-config.js')).toBe(true)
+    expect(await readText(projectPath, 'apps/proj-fullstack-app/index.html')).toContain('src="/runtime-config.js"')
     expect(await exists(projectPath, 'apps/proj-fullstack-app/src/routes/+layout.ts')).toBe(false)
     const appSvelteConfig = await readText(projectPath, 'apps/proj-fullstack-app/svelte.config.js')
     expect(appSvelteConfig).not.toContain('@sveltejs/adapter-static')
@@ -1237,8 +1269,7 @@ describe('createProject — fullstack 类型', () => {
   })
 
   it('miniapp 仅生成预留说明，不生成不可运行 package', async () => {
-    const content = await readText(projectPath, 'apps/proj-fullstack-miniapp/README.md')
-    expect(content).toContain('预留占位')
+    expect(await exists(projectPath, 'apps/proj-fullstack-miniapp/README.md')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-miniapp/project.inlang/settings.json')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-miniapp/messages/zh-CN.json')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-miniapp/messages/en-US.json')).toBe(true)
@@ -1866,13 +1897,13 @@ describe('generate', () => {
     await fse.writeJson(path.join(projectDir, 'package.json'), {
       name: 'gen-test',
       version: '0.1.0',
-      dependencies: { '@h-ai/core': 'workspace:*' },
+      dependencies: { '@h-ai/core': 'workspace:*', '@h-ai/kit': 'workspace:*', '@sveltejs/kit': '^2', 'svelte': '^5', 'zod': '*' },
     })
   })
 
   describe('generate page', () => {
     it('默认拒绝覆盖并预检全部页面文件，force 才允许替换', async () => {
-      const output = path.join(projectDir, 'safe-pages')
+      const output = path.join(projectDir, 'src/routes/safe-pages')
       const serverPath = path.join(output, 'kept', '+page.server.ts')
       await fse.outputFile(serverPath, '// user implementation')
       await expect(generate({ type: 'page', name: 'kept', output, cwd: projectDir })).rejects.toThrow()

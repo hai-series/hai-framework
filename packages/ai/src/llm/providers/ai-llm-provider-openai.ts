@@ -8,14 +8,13 @@
 import type { HaiErrorDef, HaiResult } from '@h-ai/core'
 
 import type {
-  AILLMFunctionsDeps,
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
-  LLMProvider,
   TempModelConfig,
 } from '../ai-llm-types.js'
+import type { AILLMFunctionsDeps, LLMProvider } from './ai-llm-provider-types.js'
 
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
@@ -113,7 +112,17 @@ function toOpenAIMessage(message: ChatMessage): OpenAI.Chat.Completions.ChatComp
 
 // ─── 工厂函数 ───
 
-/** 已解析的客户端及其参数回填默认值（maxTokens/temperature 仅临时模型路径有值） */
+/**
+ * 已解析的客户端及其参数回填默认值（maxTokens/temperature 仅临时模型路径有值）
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function resolved(client: OpenAI, model: string): ResolvedClient {
+ *   return { client, model, api: 'chat', maxTokens: 1024 }
+ * }
+ * ```
+ */
 interface ResolvedClient {
   client: OpenAI
   model: string
@@ -132,6 +141,17 @@ interface ResolvedClient {
  *
  * @param deps - LLM 子功能依赖（含校验后配置）
  * @returns LLMProvider 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function complete(deps: AILLMFunctionsDeps) {
+ *   const provider = createOpenAIProvider(deps)
+ *   const result = await provider.chat({ messages: [{ role: 'user', content: '你好' }] })
+ *   if (!result.success) return result
+ *   return result.data.choices[0]?.message.content
+ * }
+ * ```
  */
 export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
   const { config } = deps

@@ -1,13 +1,16 @@
 {
   "name": "@h-ai/iam",
   "type": "module",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.67",
   "description": "Hai Framework identity and access management module.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
       "types": "./dist/index.d.ts",
-      "browser": "./dist/browser.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }

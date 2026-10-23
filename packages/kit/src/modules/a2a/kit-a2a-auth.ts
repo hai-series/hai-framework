@@ -8,7 +8,16 @@
 import type { RequestEvent } from '@sveltejs/kit'
 import { iam } from '@h-ai/iam'
 
-/** A2A API Key 认证器配置 */
+/**
+ * A2A API Key 认证器配置
+ * @example
+ * ```ts
+ * import type { A2AApiKeyAuthConfig } from '@h-ai/kit'
+ *
+ * const value: A2AApiKeyAuthConfig = { in: 'header', name: 'X-Agent-Key' }
+ * void value
+ * ```
+ */
 export interface A2AApiKeyAuthConfig {
   /** API Key 的传递位置 */
   in: 'header' | 'query'
@@ -28,6 +37,12 @@ export interface A2AApiKeyAuthConfig {
  *
  * @param config - API Key 提取配置
  * @returns authenticate 函数，可直接赋给 HandleA2AConfig.authenticate
+ * @example 模块内部上下文
+ * ```ts
+ * const authenticate = createA2AApiKeyAuthenticator({ in: 'header', name: 'X-Agent-Key' })
+ * // 应用先初始化 IAM；拒绝返回 null，交给路由转为 401。
+ * void authenticate
+ * ```
  */
 export function createA2AApiKeyAuthenticator(
   config: A2AApiKeyAuthConfig,

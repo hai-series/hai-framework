@@ -1,6 +1,16 @@
 <!--
   @component Button
   通用按钮组件，支持多种变体和尺寸。
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Button } from '@h-ai/ui'
+  const props: ComponentProps<typeof Button> = { variant: 'primary', type: 'submit', children: createRawSnippet(() => ({ render: () => "<span>保存</span>" })) }
+  const component = mount(Button, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { ButtonProps, DataAttributes } from '../../types.js'

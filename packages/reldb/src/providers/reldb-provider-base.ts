@@ -33,6 +33,14 @@ import { createTxWrap } from './reldb-tx-assembler.js'
  * 操作上下文：由 Provider 在创建 ops 时传入
  *
  * 对标 VecdbOpsContext：统一的连接状态检查 + 日志记录。
+ * @example 模块内部上下文
+ * ```ts
+ * function connected(ctx: ReldbOpsContext) {
+ *   if (!ctx.isConnected()) return false
+ *   ctx.logger.debug('Database ready', {})
+ *   return true
+ * }
+ * ```
  */
 export interface ReldbOpsContext {
   /** 连接状态检查 */
@@ -48,31 +56,48 @@ export interface ReldbOpsContext {
   operationLog?: () => ReldbOperationLogConfig | undefined
 }
 
+/**
+ * ReldbOperationCategory 的数据约束与操作契约。
+ * @example 模块内部上下文
+ * ```ts
+ * const category: ReldbOperationCategory = 'read'
+ * void category
+ * ```
+ */
 type ReldbOperationCategory = 'read' | 'write'
 
-function stringifyOperationPayload(payload: unknown, maxLength: number): string {
-  if (maxLength <= 0) {
-    return ''
-  }
-
+/** 仅提取固定的数量信息；SQL 字面量、参数、默认值及错误对象不进入日志。 */
+function summarizeOperationPayload(payload: unknown): Record<string, number> {
   try {
-    const text = JSON.stringify(payload, (_key, value: unknown) => {
-      if (typeof value === 'bigint') {
-        return value.toString()
-      }
-      if (typeof value === 'function') {
-        return '[Function]'
-      }
-      return value
-    })
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    if (!payload || typeof payload !== 'object')
+      return {}
+    const fields = payload as Record<string, unknown>
+    return {
+      ...(typeof fields.sql === 'string' ? { sqlLength: fields.sql.length } : {}),
+      ...(Array.isArray(fields.params) ? { parameterCount: fields.params.length } : {}),
+      ...(Array.isArray(fields.statements) ? { statementCount: fields.statements.length } : {}),
+      ...(fields.columns && typeof fields.columns === 'object' ? { columnCount: Object.keys(fields.columns).length } : {}),
+    }
   }
   catch {
-    const text = String(payload)
-    return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+    return {}
   }
 }
 
+/**
+ * 记录不含 SQL 原文及绑定值的操作摘要。
+ *
+ * @param ctx - Provider 日志和配置上下文
+ * @param category - 读取或写入类别
+ * @param operation - 内部固定操作名
+ * @param payload - 仅用于计算语句长度和参数数量，不序列化原值
+ * @example 模块内部上下文
+ * ```ts
+ * function read(ctx: ReldbOpsContext) {
+ *   logReldbOperation(ctx, 'read', 'sql.get', { sql: 'SELECT id FROM users WHERE id = ?', params: ['u1'] })
+ * } // 日志仅记录 SQL 长度和参数数量。
+ * ```
+ */
 export function logReldbOperation(
   ctx: ReldbOpsContext,
   category: ReldbOperationCategory,
@@ -87,7 +112,7 @@ export function logReldbOperation(
   ctx.logger[config.level]('RelDB operation executed', {
     category,
     operation,
-    payload: stringifyOperationPayload(payload, config.maxLength),
+    payload: config.maxLength <= 0 ? '' : JSON.stringify(summarizeOperationPayload(payload)).slice(0, config.maxLength),
   })
 }
 
@@ -115,7 +140,8 @@ async function wrapOp<T>(
     return await fn()
   }
   catch (error) {
-    ctx.logger.error(errorLabel, { ...errorMeta, error })
+    // 驱动错误可携带完整 SQL、参数或含值的错误消息，日志仅使用框架错误码。
+    ctx.logger.error(errorLabel, { ...summarizeOperationPayload(errorMeta), errorCode: errorDef.code })
     return err(errorDef, reldbM('reldb_queryFailed', { params: { error: String(error) } }), error)
   }
 }
@@ -126,6 +152,15 @@ async function wrapOp<T>(
  * 创建标准 DDL 操作
  *
  * 各 Provider 只需提供 raw DdlOperations，base 层统一处理标识符校验、连接守卫与运行时异常。
+ * @param ctx - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param raw - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(ctx: ReldbOpsContext, raw: DdlOperations) {
+ *   return createBaseDdlOps(ctx, raw)
+ * }
+ * ```
  */
 export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlOperations {
   return {
@@ -216,6 +251,15 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
  * 创建标准 DML 操作
  *
  * 各 Provider 只需提供 raw DmlOperations，base 层统一处理连接守卫与运行时异常。
+ * @param ctx - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param raw - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(ctx: ReldbOpsContext, raw: DmlOperations) {
+ *   return createBaseDmlOps(ctx, raw)
+ * }
+ * ```
  */
 export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlOperations {
   return {
@@ -248,6 +292,15 @@ export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlO
  * 创建标准事务管理器
  *
  * 各 Provider 只需提供 beginTx 函数，base 层统一处理连接守卫 + tx.wrap 语法糖。
+ * @param ctx - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @param beginTx - 当前操作所需的输入；以声明类型和上文约束为准。
+ * @returns 声明返回类型对应的操作结果。
+ * @example 模块内部上下文
+ * ```ts
+ * function wrap(ctx: ReldbOpsContext, begin: () => Promise<HaiResult<import('../reldb-types.js').DmlWithTxOperations>>) {
+ *   return createBaseTxManager(ctx, begin)
+ * }
+ * ```
  */
 export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['begin']): TxManager {
   const begin: TxManager['begin'] = async () => {
@@ -283,6 +336,12 @@ export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['be
  *
  * @param ops - DML 操作接口
  * @returns CRUD 管理器
+ * @example 模块内部上下文
+ * ```ts
+ * function users(ops: DmlOperations) {
+ *   return createBaseCrudManager(ops).table<{ id: string }>({ table: 'users', dbType: 'postgresql' })
+ * }
+ * ```
  */
 export function createBaseCrudManager(ops: DmlOperations): CrudManager {
   return {
@@ -301,6 +360,12 @@ export function createBaseCrudManager(ops: DmlOperations): CrudManager {
  * @param queryRows - 查询多行的原始函数
  * @param options - 分页查询参数
  * @returns 分页结果
+ * @example 模块内部上下文
+ * ```ts
+ * async function page(query: (sql: string, params?: unknown[]) => Promise<unknown[]>) {
+ *   return queryPageAsync<{ id: string }>(query, { sql: 'SELECT id FROM users', pagination: { page: 1, pageSize: 10 } })
+ * }
+ * ```
  */
 export async function queryPageAsync<T>(
   queryRows: (sql: string, params?: unknown[]) => Promise<unknown[]>,

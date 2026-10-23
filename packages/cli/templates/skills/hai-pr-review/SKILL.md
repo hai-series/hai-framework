@@ -49,11 +49,11 @@ description: "审查 PR 范围、风险、验证证据和合并准备度。"
 
 - AI Review 默认只评论、不阻塞 merge。
 - 只有在 CI 稳定、误报可控、团队明确同意后，才考虑将特定静态规则设为 blocking。
-- AI 的建议必须由人类判断，不得自动 merge。
+- AI 建议须用实现与测试核实；执行合并必须有用户授权并满足仓库规则。
 
 ## AI-assisted PR 要求
 
-PR 描述必须说明：
+按仓库 PR 模板说明；要求披露 AI 使用时包含：
 
 - 是否使用 AI 辅助
 - AI 负责了哪部分：搜索、实现、测试、review、文档
@@ -62,7 +62,7 @@ PR 描述必须说明：
 
 ## Issue 关联与上下文交接
 
-- PR 必须关联 issue 或说明为什么不需要 issue。
+- 按当前仓库规则关联 issue；没有 issue 时清楚描述需求与验收。
 - PR scope 必须与 issue 的目标、验收标准和明确不做事项一致。
 - AI-assisted PR 必须说明 AI 负责了哪些阶段，以及人类如何复核。
 - 多人或多 agent 协作时，PR 描述必须列出 reviewer focus，避免重复 review。
@@ -82,7 +82,7 @@ PR 描述必须说明：
 
 - ❌ 不在 `pull_request_target` 中运行 AI agent 读取 PR 代码和 secrets。
 - ❌ 不给 AI Review workflow 默认 `contents: write`、`pull-requests: write`，除非只用于评论且触发源可信。
-- ❌ 不允许 AI 自动合并 PR。
+- ❌ 不因收到审查任务就擅自合并 PR。
 - ❌ 不把私有提示词、聊天原文、token、cookie、连接串写入 PR。
 - ✅ AI Review 的 prompt 必须限制任务范围、禁止执行 secrets、要求引用具体文件/行。
 

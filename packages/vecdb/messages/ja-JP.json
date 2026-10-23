@@ -10,6 +10,11 @@
   "vecdb_connectionFailed": "ベクトルデータベースへの接続に失敗しました: {error}",
   "vecdb_collectionNotFound": "コレクションが見つかりません: {name}",
   "vecdb_collectionAlreadyExists": "コレクションは既に存在します: {name}",
+  "vecdb_invalidCollectionSchema": "コレクションに有効な永続化済みのベクトル次元または距離メトリックがありません：{name}",
+  "vecdb_atomicUpsertUnavailable": "LanceDB コレクションまたはドライバーに安全な主キーによるアトミックな merge 機能がありません。書き込みは行っていません。コレクションを再作成するか、対応ドライバーを使用してください",
+  "vecdb_duplicateDocumentIds": "同一バッチのベクトル文書 ID は一意である必要があります。書き込みは行っていません",
+  "vecdb_jsonMetadataRequired": "LanceDB コレクションにはネイティブ JSON メタデータが必要です。旧形式の文字列メタデータを使用するコレクションは、書き込みやフィルター処理の前に再作成してください",
+  "vecdb_invalidMetadataFilter": "LanceDB メタデータフィルターは通常のオブジェクトとし、最上位の値には文字列、有限数、真偽値、null のみ指定できます。入れ子のオブジェクト、配列、undefined は使用できません",
   "vecdb_dimensionMismatch": "ベクトルの次元が一致しません: 期待値{expected}、実際の値{actual}",
   "vecdb_insertFailed": "ベクトルの挿入に失敗しました: {error}",
   "vecdb_deleteFailed": "ベクトルの削除に失敗しました: {error}",
@@ -19,5 +24,8 @@
   "vecdb_serializationFailed": "シリアライズまたはデシリアライズに失敗しました: {error}",
   "vecdb_invalidDimension": "ベクトルの次元が無効です: {dimension}。正の整数を指定してください",
   "vecdb_configPathRequired": "データベースの保存パスは必須です",
-  "vecdb_configDatabaseRequired": "データベース名は必須です"
+  "vecdb_configDatabaseRequired": "データベース名は必須です",
+  "vecdb_sharedBackendRequired": "本番環境には共有バックエンドが必要です。ローカルファイルとメモリーバックエンドは開発環境または明示的な E2E テストでのみ使用できます。",
+  "vecdb_chromaEndpointInvalid": "Chroma には HTTP(S) のルートエンドポイントを指定してください。認証情報、パスプレフィックス、クエリ、フラグメントは使用できません",
+  "vecdb_chromaTokenInvalid": "Chroma Bearer トークンには空白を含まない表示可能な ASCII 文字のみ使用できます"
 }

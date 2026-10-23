@@ -46,6 +46,10 @@ beforeAll(async () => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', TEST_PASSWORD)
   core.init({ configDir: './config' })
   await initializeModules()
+  const key = crypto.asymmetric.generateKeyPair()
+  if (!key.success)
+    throw new Error(key.error.message)
+  vi.stubEnv('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', JSON.stringify({ activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }))
   app = createServerApp()
   transport = crypto.transport.createClient({
     keyExchangeUrl: `http://localhost${PREFIX}/_hai/key-exchange`,
@@ -339,7 +343,10 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('rejects stale administrator snapshots and reports fresh user roles', async () => {
-    const stale = await iam.session.update(userToken, { roles: ['admin'], permissions: ['*'] })
+    const snapshot = await iam.session.get(userToken)
+    if (!snapshot.success || !snapshot.data)
+      throw new Error('Session unavailable')
+    const stale = await iam.session.update(userToken, { roles: ['admin'], permissions: ['*'] }, snapshot.data.version)
     expect(stale.success).toBe(true)
     for (const [route, input] of [['/admin/users/list', { page: 1, pageSize: 20 }], ['/admin/roles/list', undefined], ['/admin/audit/list', { page: 1, pageSize: 20 }]] as const) {
       const denied = await call(route, input, userToken)
@@ -354,8 +361,11 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('returns a conflict when another administrator holds the mutation lock and resumes after release', async () => {
-    const locked = await cache.lock.acquire('hai:app:admin-mutation', { owner: 'test-owner', ttl: 10 })
+    const locked = await cache.lock.acquire('hai:app:admin-mutation', { ttl: 10 })
     expect(locked.success).toBe(true)
+    if (!locked.success || !locked.data)
+      throw new Error('Mutation lock unavailable')
+    const owner = locked.data
     try {
       const result = await call('/admin/users/update', { id: user.id, displayName: 'Locked' }, adminToken)
       expect(result.success).toBe(false)
@@ -363,7 +373,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
         expect(result.error.httpStatus).toBe(409)
     }
     finally {
-      expect((await cache.lock.release('hai:app:admin-mutation', 'test-owner')).success).toBe(true)
+      expect((await cache.lock.release('hai:app:admin-mutation', owner)).success).toBe(true)
     }
     expect((await call('/admin/users/update', { id: user.id, displayName: 'Unlocked' }, adminToken)).success).toBe(true)
   })

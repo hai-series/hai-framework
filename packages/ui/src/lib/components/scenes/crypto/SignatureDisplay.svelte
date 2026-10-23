@@ -1,4 +1,5 @@
 <!--
+  @component SignatureDisplay
   =============================================================================
   @h-ai/ui - SignatureDisplay 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives 组件：IconButton, Badge
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { SignatureDisplay } from '@h-ai/ui'
+  const props: ComponentProps<typeof SignatureDisplay> = { signature: 'example-signature', verified: false, showPublicKey: false }
+  const component = mount(SignatureDisplay, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

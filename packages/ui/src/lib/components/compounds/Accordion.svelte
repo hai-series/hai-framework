@@ -1,4 +1,5 @@
 <!--
+  @component Accordion
   =============================================================================
   @h-ai/ui - Accordion 组件
   =============================================================================
@@ -7,6 +8,16 @@
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 DaisyUI collapse 类
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Accordion } from '@h-ai/ui'
+  const props: ComponentProps<typeof Accordion> = { items: [{ id: 'intro', title: '简介', content: '操作说明' }], value: 'intro' }
+  const component = mount(Accordion, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 
 <script lang='ts'>
@@ -17,6 +28,19 @@
   import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
   import ToggleRadio from '../primitives/ToggleRadio.svelte'
 
+  /**
+   * Accordion 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Accordion } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Accordion> = { items: [{ id: 'intro', title: '简介', content: '操作说明' }], value: 'intro' }
+   * const component = mount(Accordion, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 折叠项数据 */
     items: AccordionItem[]

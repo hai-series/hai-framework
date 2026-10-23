@@ -3,13 +3,16 @@
  *
  * 定义文件存储相关 API 的接口边界：预签名 URL 生成与文件管理。
  * 所有接口均需 Bearer Token 认证（由 `@h-ai/serv` 的 feature 层强制）。
+ * 资源访问还须通过应用注入的 authorize 策略；认证不等同于拥有任意 key 的访问权。
  * @module storage-contract
  */
 
-import { haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
+import { z } from 'zod'
+import { HaiErrorSchema, haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
 import {
   StorageDeleteFilesInputSchema,
+  StorageDeleteSummarySchema,
   StorageFileKeyInputSchema,
   StorageFileMetadataSchema,
   StorageListFilesDataSchema,
@@ -22,7 +25,16 @@ import {
 // 下载与上传接口共享同一响应结构，仅在本 contract 内复用。
 const presignedUrlOutputSchema = haiResultSchema(StoragePresignedUrlSchema)
 
-/** Storage 领域 oRPC contract。 */
+/**
+ * Storage 领域 oRPC contract。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.storage
+ * void contract
+ * ```
+ */
 export const storageContract = {
   presignedUrls: {
     createDownload: route({ method: 'POST', path: '/storage/presigned-urls/download', operationId: 'storage.presignedUrls.createDownload', summary: 'Create presigned download URL', tags: ['storage'] })
@@ -44,8 +56,25 @@ export const storageContract = {
       .output(HaiVoidResultSchema),
     deleteMany: route({ method: 'POST', path: '/storage/files/delete-many', operationId: 'storage.files.deleteMany', summary: 'Delete files', tags: ['storage'] })
       .input(StorageDeleteFilesInputSchema)
-      .output(HaiVoidResultSchema),
+      .output(z.discriminatedUnion('success', [
+        z.object({ success: z.literal(true), data: StorageDeleteSummarySchema }),
+        z.object({
+          success: z.literal(false),
+          error: HaiErrorSchema.extend({ ext: z.object({ deleteMany: StorageDeleteSummarySchema.optional() }).catchall(z.unknown()).optional() }),
+        }),
+      ])),
   },
 }
 
+/**
+ * storage 领域公开 procedure 契约的完整类型。
+ * @example
+ * ```ts
+ * import type { StorageContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract: StorageContract = apiContract.storage
+ * void contract
+ * ```
+ */
 export type StorageContract = typeof storageContract

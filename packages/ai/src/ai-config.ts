@@ -20,6 +20,19 @@ import { CompressionStrategySchema } from './compress/ai-compress-types.js'
  *
  * 配置文件中的空插值、空白字符串或 YAML null 都表示“未配置”，输出统一为 undefined；
  * 非空密钥保持原值，避免模块调用方重复编写兼容清洗逻辑。
+ *
+ * @example
+ * ```ts
+ * import { OptionalSecretSchema } from '@h-ai/ai'
+ *
+ * const result = OptionalSecretSchema.safeParse(null)
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const OptionalSecretSchema = z.string().nullable().transform(value =>
   value === null || value.trim() === '' ? undefined : value,
@@ -45,10 +58,33 @@ export const OptionalSecretSchema = z.string().nullable().transform(value =>
  * - `rerank` — 文档重排序场景
  * - `ocr` — 图片 OCR 识别场景（视觉模型）
  * - `fast` — 快速响应场景（低延迟优先）
+ *
+ * @example
+ * ```ts
+ * import { ModelScenarioSchema } from '@h-ai/ai'
+ *
+ * const result = ModelScenarioSchema.safeParse('summary')
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'plan', 'execute', 'extraction', 'summary', 'embedding', 'rerank', 'ocr', 'fast'])
 
-/** 模型场景类型 */
+/**
+ * 模型场景类型
+ *
+ * @example
+ * ```ts
+ * import type { ModelScenario } from '@h-ai/ai'
+ * import { ModelScenarioSchema } from '@h-ai/ai'
+ *
+ * const config: ModelScenario = ModelScenarioSchema.parse('summary')
+ * ```
+ */
 export type ModelScenario = z.infer<typeof ModelScenarioSchema>
 
 /**
@@ -58,11 +94,34 @@ export type ModelScenario = z.infer<typeof ModelScenarioSchema>
  *
  * - `chat` — OpenAI Chat Completions API（`/v1/chat/completions`，默认，兼容绝大多数厂商）
  * - `responses` — OpenAI Responses API（`/v1/responses`，新一代有状态接口）
- * - `anthropic` — Anthropic Messages API（Claude 原生协议，需安装 `@anthropic-ai/sdk`）
+ * - `anthropic` — Anthropic Messages API（Claude 原生协议，使用 fetch 直接调用）
+ *
+ * @example
+ * ```ts
+ * import { ApiTypeSchema } from '@h-ai/ai'
+ *
+ * const result = ApiTypeSchema.safeParse('anthropic')
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const ApiTypeSchema = z.enum(['chat', 'responses', 'anthropic'])
 
-/** LLM API 协议类型 */
+/**
+ * LLM API 协议类型
+ *
+ * @example
+ * ```ts
+ * import type { ApiType } from '@h-ai/ai'
+ * import { ApiTypeSchema } from '@h-ai/ai'
+ *
+ * const config: ApiType = ApiTypeSchema.parse('anthropic')
+ * ```
+ */
 export type ApiType = z.infer<typeof ApiTypeSchema>
 
 /**
@@ -72,11 +131,14 @@ export type ApiType = z.infer<typeof ApiTypeSchema>
  *
  * @example
  * ```ts
- * const model = {
- *   id: 'gpt-4o',
- *   model: 'gpt-4o',
- *   maxTokens: 8192,
- *   temperature: 0.3,
+ * import { ModelEntrySchema } from '@h-ai/ai'
+ *
+ * const result = ModelEntrySchema.safeParse({ id: 'chat', model: 'gpt-4o-mini', temperature: 0.2 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
@@ -99,7 +161,17 @@ export const ModelEntrySchema = z.object({
   timeout: z.number().positive().optional(),
 })
 
-/** 模型条目类型 */
+/**
+ * 模型条目类型
+ *
+ * @example
+ * ```ts
+ * import type { ModelEntry } from '@h-ai/ai'
+ * import { ModelEntrySchema } from '@h-ai/ai'
+ *
+ * const config: ModelEntry = ModelEntrySchema.parse({ id: 'chat', model: 'gpt-4o-mini', temperature: 0.2 })
+ * ```
+ */
 export type ModelEntry = z.infer<typeof ModelEntrySchema>
 
 /**
@@ -114,22 +186,14 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
  *
  * @example
  * ```ts
- * const llmConfig = {
- *   // 全局默认值（各模型未指定时回退到此处）
- *   apiKey: 'sk-xxx',
- *   baseUrl: 'https://api.openai.com/v1',
- *   model: 'gpt-4o-mini',
- *   maxTokens: 4096,
- *   temperature: 0.7,
- *   timeout: 60000,
- *   // 多模型注册（各字段可选，未指定时回退到全局默认值）
- *   models: [
- *     { id: 'fast', model: 'gpt-4o-mini', temperature: 0.3 },
- *     { id: 'strong', model: 'gpt-4o', maxTokens: 8192 },
- *     { id: 'rerank', model: 'rerank-english-v3.0', baseUrl: 'https://api.cohere.com' },
- *   ],
- *   // 场景映射（场景名 → 模型 ID 或模型名称）
- *   scenarios: { chat: 'fast', reasoning: 'strong', rerank: 'rerank' },
+ * import { LLMConfigSchema } from '@h-ai/ai'
+ *
+ * const result = LLMConfigSchema.safeParse({ apiKey: process.env.HAI_AI_LLM_APIKEY, models: [{ id: 'fast', model: 'gpt-4o-mini' }], scenarios: { chat: 'fast', summary: 'fast' } })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
@@ -156,13 +220,33 @@ export const LLMConfigSchema = z.object({
   scenarios: z.object(Object.fromEntries(ModelScenarioSchema.options.map(k => [k, z.string().optional()])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
 })
 
-/** LLM 配置类型 */
+/**
+ * LLM 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { LLMConfig } from '@h-ai/ai'
+ * import { LLMConfigSchema } from '@h-ai/ai'
+ *
+ * const config: LLMConfig = LLMConfigSchema.parse({ apiKey: process.env.HAI_AI_LLM_APIKEY, models: [{ id: 'fast', model: 'gpt-4o-mini' }], scenarios: { chat: 'fast', summary: 'fast' } })
+ * ```
+ */
 export type LLMConfig = z.infer<typeof LLMConfigSchema>
 
 /**
  * 已解析的模型配置
  *
  * 由 `resolveModelEntry()` 返回，包含模型名称和完整的参数配置（已合并全局默认值和环境变量）。
+ *
+ * @example
+ * ```ts
+ * import type { ResolvedModelConfig } from '@h-ai/ai'
+ *
+ * // 展示模型选择，不输出配置中的 apiKey。
+ * function label(config: ResolvedModelConfig): string {
+ *   return `${config.api}/${config.model}, timeout=${config.timeout}ms`
+ * }
+ * ```
  */
 export interface ResolvedModelConfig {
   /** 模型名称（传给 API 的实际模型名） */
@@ -183,6 +267,13 @@ export interface ResolvedModelConfig {
 
 /**
  * 必需模型解析选项
+ *
+ * @example
+ * ```ts
+ * import type { ResolveRequiredModelEntryOptions } from '@h-ai/ai'
+ *
+ * const value: ResolveRequiredModelEntryOptions = { missingApiKeyMessage: '请在服务端私有配置中提供模型凭据。' }
+ * ```
  */
 export interface ResolveRequiredModelEntryOptions {
   /** 缺少 API Key 时的自定义错误消息 */
@@ -200,6 +291,17 @@ export interface ResolveRequiredModelEntryOptions {
  * @param explicit - 调用方显式指定的模型名称（最高优先级）
  * @param options - 必需校验选项
  * @returns 成功返回已解析模型配置，失败返回 `CONFIGURATION_ERROR`
+ *
+ * @example
+ * ```ts
+ * import { LLMConfigSchema, resolveModelEntry } from '@h-ai/ai'
+ *
+ * const config = LLMConfigSchema.parse({ apiKey: process.env.HAI_AI_LLM_APIKEY, models: [{ id: 'fast', model: 'gpt-4o-mini' }], scenarios: { summary: 'fast' } })
+ * const result = resolveModelEntry(config, 'summary')
+ * if (result.success) {
+ *   const modelName = result.data.model
+ * }
+ * ```
  */
 export function resolveModelEntry(
   llmConfig: LLMConfig,
@@ -254,6 +356,14 @@ export function resolveModelEntry(
  * @param explicitModel - 显式指定的模型名/ID（可选）
  * @param tempApi - 临时模型显式指定的 API 协议（可选，最高优先级）
  * @returns 解析出的 API 协议
+ *
+ * @example
+ * ```ts
+ * import { LLMConfigSchema, resolveModelApi } from '@h-ai/ai'
+ *
+ * const config = LLMConfigSchema.parse({ models: [{ id: 'claude', model: 'claude-sonnet-4', api: 'anthropic' }] })
+ * const protocol = resolveModelApi(config, 'claude')
+ * ```
  */
 export function resolveModelApi(llmConfig: LLMConfig, explicitModel?: string, tempApi?: ApiType): ApiType {
   if (tempApi)
@@ -266,7 +376,22 @@ export function resolveModelApi(llmConfig: LLMConfig, explicitModel?: string, te
 
 // ─── MCP 配置 Schema ───
 
-/** MCP 服务器能力 Schema */
+/**
+ * MCP 服务器能力 Schema
+ *
+ * @example
+ * ```ts
+ * import { MCPServerCapabilitiesSchema } from '@h-ai/ai'
+ *
+ * const result = MCPServerCapabilitiesSchema.safeParse({ tools: true, resources: false, prompts: true })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
+ */
 export const MCPServerCapabilitiesSchema = z.object({
   /** 是否支持工具调用（默认 `true`） */
   tools: z.boolean().optional().default(true),
@@ -276,10 +401,35 @@ export const MCPServerCapabilitiesSchema = z.object({
   prompts: z.boolean().optional().default(true),
 })
 
-/** MCP 服务器能力类型 */
+/**
+ * MCP 服务器能力类型
+ *
+ * @example
+ * ```ts
+ * import type { MCPServerCapabilities } from '@h-ai/ai'
+ * import { MCPServerCapabilitiesSchema } from '@h-ai/ai'
+ *
+ * const config: MCPServerCapabilities = MCPServerCapabilitiesSchema.parse({ tools: true, resources: false, prompts: true })
+ * ```
+ */
 export type MCPServerCapabilities = z.infer<typeof MCPServerCapabilitiesSchema>
 
-/** MCP 服务器配置 Schema */
+/**
+ * MCP 服务器配置 Schema
+ *
+ * @example
+ * ```ts
+ * import { MCPServerConfigSchema } from '@h-ai/ai'
+ *
+ * const result = MCPServerConfigSchema.safeParse({ name: 'support-tools', version: '1.0.0', capabilities: { tools: true, resources: false, prompts: false } })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
+ */
 export const MCPServerConfigSchema = z.object({
   /** 服务器名称 */
   name: z.string(),
@@ -289,7 +439,17 @@ export const MCPServerConfigSchema = z.object({
   capabilities: MCPServerCapabilitiesSchema.optional(),
 })
 
-/** MCP 服务器配置类型 */
+/**
+ * MCP 服务器配置类型
+ *
+ * @example
+ * ```ts
+ * import type { MCPServerConfig } from '@h-ai/ai'
+ * import { MCPServerConfigSchema } from '@h-ai/ai'
+ *
+ * const config: MCPServerConfig = MCPServerConfigSchema.parse({ name: 'support-tools', version: '1.0.0', capabilities: { tools: true, resources: false, prompts: false } })
+ * ```
+ */
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 
 /**
@@ -299,12 +459,14 @@ export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
  *
  * @example
  * ```ts
- * const mcpConfig = {
- *   server: {
- *     name: 'my-app',
- *     version: '1.0.0',
- *     capabilities: { tools: true, resources: true, prompts: true },
- *   },
+ * import { MCPConfigSchema } from '@h-ai/ai'
+ *
+ * const result = MCPConfigSchema.safeParse({ server: { name: 'support-tools', version: '1.0.0' } })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
@@ -313,7 +475,17 @@ export const MCPConfigSchema = z.object({
   server: MCPServerConfigSchema.optional(),
 })
 
-/** MCP 配置类型 */
+/**
+ * MCP 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { MCPConfig } from '@h-ai/ai'
+ * import { MCPConfigSchema } from '@h-ai/ai'
+ *
+ * const config: MCPConfig = MCPConfigSchema.parse({ server: { name: 'support-tools', version: '1.0.0' } })
+ * ```
+ */
 export type MCPConfig = z.infer<typeof MCPConfigSchema>
 
 // ─── 统一 AI 配置 ───
@@ -327,9 +499,14 @@ export type MCPConfig = z.infer<typeof MCPConfigSchema>
  *
  * @example
  * ```ts
- * const embeddingConfig = {
- *   dimensions: 1536,
- *   batchSize: 100,
+ * import { EmbeddingConfigSchema } from '@h-ai/ai'
+ *
+ * const result = EmbeddingConfigSchema.safeParse({ dimensions: 1536, batchSize: 20 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
@@ -340,7 +517,17 @@ export const EmbeddingConfigSchema = z.object({
   batchSize: z.number().int().positive().default(100),
 })
 
-/** Embedding 配置类型 */
+/**
+ * Embedding 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { EmbeddingConfig } from '@h-ai/ai'
+ * import { EmbeddingConfigSchema } from '@h-ai/ai'
+ *
+ * const config: EmbeddingConfig = EmbeddingConfigSchema.parse({ dimensions: 1536, batchSize: 20 })
+ * ```
+ */
 export type EmbeddingConfig = z.infer<typeof EmbeddingConfigSchema>
 
 // ─── Knowledge 配置 Schema ───
@@ -357,10 +544,14 @@ export type { CompressionStrategy } from './compress/ai-compress-types.js'
  *
  * @example
  * ```ts
- * const knowledgeConfig = {
- *   collection: 'my-knowledge',
- *   dimension: 1536,
- *   enableEntityExtraction: true
+ * import { KnowledgeConfigSchema } from '@h-ai/ai'
+ *
+ * const result = KnowledgeConfigSchema.safeParse({ collection: 'product_docs', dimension: 1536, enableEntityExtraction: true, chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 } })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
@@ -383,6 +574,8 @@ export const KnowledgeConfigSchema = z.object({
    *
    * 字段含义与 @h-ai/datapipe ChunkOptionsInput 完全一致，
    * 支持 mode、maxSize、overlap、separator、markdownMinLevel 等完整选项。
+   * word 按非空白词计量，其余按 Unicode code point；上限包含分隔符及 overlap，且 overlap < maxSize。
+   * AI 默认 markdown/1500/200；导入覆盖预算时仍须满足约束，分块失败不会退回整篇文档。
    */
   chunkOptions: ChunkOptionsSchema.default(ChunkOptionsSchema.parse({
     mode: 'markdown',
@@ -397,7 +590,17 @@ export const KnowledgeConfigSchema = z.object({
   systemPrompt: z.string().optional(),
 })
 
-/** Knowledge 配置类型 */
+/**
+ * Knowledge 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { KnowledgeConfig } from '@h-ai/ai'
+ * import { KnowledgeConfigSchema } from '@h-ai/ai'
+ *
+ * const config: KnowledgeConfig = KnowledgeConfigSchema.parse({ collection: 'product_docs', dimension: 1536, enableEntityExtraction: true, chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 } })
+ * ```
+ */
 export type KnowledgeConfig = z.infer<typeof KnowledgeConfigSchema>
 
 // ─── Memory 配置 Schema ───
@@ -415,25 +618,27 @@ export type { EntityType } from './knowledge/ai-knowledge-types.js'
  *
  * @example
  * ```ts
- * const memoryConfig = {
- *   provider: 'native',
- *   maxEntriesPerObject: 1000,
- *   maxEntriesGlobal: 100000,
- *   embeddingEnabled: true,
- *   recencyDecay: 0.95,
- *   defaultTopK: 10,
+ * import { MemoryConfigSchema } from '@h-ai/ai'
+ *
+ * const result = MemoryConfigSchema.safeParse({ provider: 'native', maxEntriesPerObject: 500, defaultTopK: 5 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
 export const MemoryConfigSchema = z.object({
-  /** 记忆后端：native = 逐条写回；mem0 = 批量 ADD/UPDATE/DELETE 合并（均为嵌入式，复用 HAI 组件） */
+  /** 记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端 */
   provider: z.enum(['native', 'mem0']).default('native'),
   /**
    * 是否允许在配置了持久化向量后端但 mem0 无法映射时退回内存存储（默认 false）
    *
-   * 仅影响 `provider='mem0'`：mem0 TS 仅支持 qdrant / pgvector。当底层 vecdb 是
+   * 仅影响 `provider='mem0'`：当前框架适配仅映射 qdrant；pgvector 的 SDK 连接无法公开关闭，所有环境拒绝。底层 vecdb 是
    * lancedb / chroma / 未知后端时，默认 fail-fast（初始化失败），避免服务重启后记忆静默丢失；
-   * 仅当显式设为 true 时才退回 mem0 自带 in-memory 存储（数据不持久）。
+   * 仅当显式设为 true 时才在开发或明确 E2E 环境退回内存存储（数据不持久）。
+   * 生产始终要求实际持久化连接，不能通过此开关绕过共享状态要求。
    */
   allowEphemeralFallback: z.boolean().default(false),
   /**
@@ -472,7 +677,17 @@ export const MemoryConfigSchema = z.object({
   writebackRelatedTopK: z.number().int().positive().default(20),
 })
 
-/** Memory 配置类型 */
+/**
+ * Memory 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { MemoryConfig } from '@h-ai/ai'
+ * import { MemoryConfigSchema } from '@h-ai/ai'
+ *
+ * const config: MemoryConfig = MemoryConfigSchema.parse({ provider: 'native', maxEntriesPerObject: 500, defaultTopK: 5 })
+ * ```
+ */
 export type MemoryConfig = z.infer<typeof MemoryConfigSchema>
 // MemoryTypeSchema / MemoryType 定义在 memory/ai-memory-types.ts 中
 export { MemoryTypeSchema } from './memory/ai-memory-types.js'
@@ -485,7 +700,15 @@ export type { MemoryType } from './memory/ai-memory-types.js'
  *
  * @example
  * ```ts
- * const tokenConfig = { tokenRatio: 0.25 }
+ * import { TokenConfigSchema } from '@h-ai/ai'
+ *
+ * const result = TokenConfigSchema.safeParse({ tokenRatio: 0.25 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const TokenConfigSchema = z.object({
@@ -493,7 +716,17 @@ export const TokenConfigSchema = z.object({
   tokenRatio: z.number().positive().default(0.25),
 })
 
-/** Token 配置类型 */
+/**
+ * Token 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { TokenConfig } from '@h-ai/ai'
+ * import { TokenConfigSchema } from '@h-ai/ai'
+ *
+ * const config: TokenConfig = TokenConfigSchema.parse({ tokenRatio: 0.25 })
+ * ```
+ */
 export type TokenConfig = z.infer<typeof TokenConfigSchema>
 
 /**
@@ -505,7 +738,15 @@ export type TokenConfig = z.infer<typeof TokenConfigSchema>
  *
  * @example
  * ```ts
- * const summaryConfig = { systemPrompt: 'You are a summarizer.' }
+ * import { SummaryConfigSchema } from '@h-ai/ai'
+ *
+ * const result = SummaryConfigSchema.safeParse({ systemPrompt: '保留已确认决策与未完成事项。' })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const SummaryConfigSchema = z.object({
@@ -513,7 +754,17 @@ export const SummaryConfigSchema = z.object({
   systemPrompt: z.string().optional(),
 })
 
-/** Summary 配置类型 */
+/**
+ * Summary 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { SummaryConfig } from '@h-ai/ai'
+ * import { SummaryConfigSchema } from '@h-ai/ai'
+ *
+ * const config: SummaryConfig = SummaryConfigSchema.parse({ systemPrompt: '保留已确认决策与未完成事项。' })
+ * ```
+ */
 export type SummaryConfig = z.infer<typeof SummaryConfigSchema>
 
 /**
@@ -523,10 +774,14 @@ export type SummaryConfig = z.infer<typeof SummaryConfigSchema>
  *
  * @example
  * ```ts
- * const compressConfig = {
- *   defaultStrategy: 'hybrid',
- *   defaultMaxTokens: 4000,
- *   preserveLastN: 4,
+ * import { CompressConfigSchema } from '@h-ai/ai'
+ *
+ * const result = CompressConfigSchema.safeParse({ defaultStrategy: 'hybrid', defaultMaxTokens: 4000, preserveLastN: 4 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
  * }
  * ```
  */
@@ -539,7 +794,17 @@ export const CompressConfigSchema = z.object({
   preserveLastN: z.number().int().min(0).default(4),
 })
 
-/** Compress 配置类型 */
+/**
+ * Compress 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { CompressConfig } from '@h-ai/ai'
+ * import { CompressConfigSchema } from '@h-ai/ai'
+ *
+ * const config: CompressConfig = CompressConfigSchema.parse({ defaultStrategy: 'hybrid', defaultMaxTokens: 4000, preserveLastN: 4 })
+ * ```
+ */
 export type CompressConfig = z.infer<typeof CompressConfigSchema>
 
 // ─── File 配置 Schema ───
@@ -549,13 +814,36 @@ export type CompressConfig = z.infer<typeof CompressConfigSchema>
  *
  * 配置文件解析参数：OCR 提示词。
  * OCR 使用的视觉模型通过 `llm.scenarios.ocr` 指定。
+ *
+ * @example
+ * ```ts
+ * import { FileConfigSchema } from '@h-ai/ai'
+ *
+ * const result = FileConfigSchema.safeParse({ systemPrompt: '忠实提取图片中的可见文字，不补写缺失内容。' })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const FileConfigSchema = z.object({
   /** OCR 系统提示词（可选，覆盖内置默认提示词） */
   systemPrompt: z.string().optional(),
 })
 
-/** File 配置类型 */
+/**
+ * File 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { FileConfig } from '@h-ai/ai'
+ * import { FileConfigSchema } from '@h-ai/ai'
+ *
+ * const config: FileConfig = FileConfigSchema.parse({ systemPrompt: '忠实提取图片中的可见文字，不补写缺失内容。' })
+ * ```
+ */
 export type FileConfig = z.infer<typeof FileConfigSchema>
 
 // ─── Retrieval 配置 Schema ───
@@ -564,6 +852,19 @@ export type FileConfig = z.infer<typeof FileConfigSchema>
  * 检索源配置 Schema
  *
  * 与 `RetrievalSource` 接口字段对齐，支持在 `ai.init()` 中预注册检索源。
+ *
+ * @example
+ * ```ts
+ * import { RetrievalSourceSchema } from '@h-ai/ai'
+ *
+ * const result = RetrievalSourceSchema.safeParse({ id: 'docs', collection: 'product_docs', name: '产品文档', topK: 5, minScore: 0.7 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const RetrievalSourceSchema = z.object({
   /** 来源唯一标识 */
@@ -582,7 +883,17 @@ export const RetrievalSourceSchema = z.object({
   filter: z.record(z.string(), z.unknown()).optional(),
 })
 
-/** 检索源配置类型 */
+/**
+ * 检索源配置类型
+ *
+ * @example
+ * ```ts
+ * import type { RetrievalSourceConfig } from '@h-ai/ai'
+ * import { RetrievalSourceSchema } from '@h-ai/ai'
+ *
+ * const config: RetrievalSourceConfig = RetrievalSourceSchema.parse({ id: 'docs', collection: 'product_docs', name: '产品文档', topK: 5, minScore: 0.7 })
+ * ```
+ */
 export type RetrievalSourceConfig = z.infer<typeof RetrievalSourceSchema>
 
 /**
@@ -592,15 +903,15 @@ export type RetrievalSourceConfig = z.infer<typeof RetrievalSourceSchema>
  *
  * @example
  * ```ts
- * ai.init({
- *   llm: { apiKey: 'sk-xxx', model: 'gpt-4o-mini' },
- *   retrieval: {
- *     sources: [
- *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
- *       { id: 'faq',  collection: 'faq', name: '常见问题' },
- *     ],
- *   },
- * })
+ * import { RetrievalConfigSchema } from '@h-ai/ai'
+ *
+ * const result = RetrievalConfigSchema.safeParse({ sources: [{ id: 'docs', collection: 'product_docs', topK: 5 }] })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const RetrievalConfigSchema = z.object({
@@ -608,12 +919,37 @@ export const RetrievalConfigSchema = z.object({
   sources: z.array(RetrievalSourceSchema).optional(),
 })
 
-/** Retrieval 配置类型 */
+/**
+ * Retrieval 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { RetrievalConfig } from '@h-ai/ai'
+ * import { RetrievalConfigSchema } from '@h-ai/ai'
+ *
+ * const config: RetrievalConfig = RetrievalConfigSchema.parse({ sources: [{ id: 'docs', collection: 'product_docs', topK: 5 }] })
+ * ```
+ */
 export type RetrievalConfig = z.infer<typeof RetrievalConfigSchema>
 
 // ─── A2A 配置 Schema ───
 
-/** A2A Agent Skill 配置 Schema */
+/**
+ * A2A Agent Skill 配置 Schema
+ *
+ * @example
+ * ```ts
+ * import { A2ASkillConfigSchema } from '@h-ai/ai'
+ *
+ * const result = A2ASkillConfigSchema.safeParse({ id: 'support', name: '产品支持', tags: ['documentation'] })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
+ */
 export const A2ASkillConfigSchema = z.object({
   /** 技能 ID */
   id: z.string(),
@@ -632,20 +968,27 @@ export const A2ASkillConfigSchema = z.object({
  *
  * @example
  * ```ts
- * ai.init({
- *   llm: { apiKey: 'sk-xxx', model: 'gpt-4o-mini' },
- *   a2a: {
- *     agentCard: {
- *       name: 'my-agent',
- *       description: 'An example agent',
- *       url: 'https://example.com',
- *       skills: [{ id: 'chat', name: 'General Chat' }],
- *     },
- *   },
- * })
+ * import { A2AConfigSchema } from '@h-ai/ai'
+ *
+ * const result = A2AConfigSchema.safeParse({ agentCard: { name: 'support', url: 'https://agent.example.com/a2a', skills: [{ id: 'help', name: '产品帮助' }] }, security: { apiKey: { in: 'header', name: 'x-api-key' } } })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const A2AConfigSchema = z.object({
+  /** 共享执行预算；最终提交同时受数据库租约与绝对执行期限约束。 */
+  execution: z.object({
+    /** 活跃执行租约毫秒数，默认30秒，范围1秒至1天。 */
+    leaseMs: z.number().int().min(1000).max(86_400_000).default(30000),
+    /** 共享事件/状态订阅轮询间隔毫秒数，默认250。 */
+    pollIntervalMs: z.number().int().min(10).max(5000).default(250),
+    /** 单次执行绝对上限毫秒数，默认5分钟；超时标中断，不自动重放。 */
+    maxExecutionMs: z.number().int().min(1000).max(86_400_000).default(300000),
+  }).prefault({}),
   /** Agent Card 配置 */
   agentCard: z.object({
     /** Agent 名称 */
@@ -671,7 +1014,17 @@ export const A2AConfigSchema = z.object({
   }).optional(),
 })
 
-/** A2A 配置类型 */
+/**
+ * A2A 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { A2AConfig } from '@h-ai/ai'
+ * import { A2AConfigSchema } from '@h-ai/ai'
+ *
+ * const config: A2AConfig = A2AConfigSchema.parse({ agentCard: { name: 'support', url: 'https://agent.example.com/a2a', skills: [{ id: 'help', name: '产品帮助' }] }, security: { apiKey: { in: 'header', name: 'x-api-key' } } })
+ * ```
+ */
 export type A2AConfig = z.infer<typeof A2AConfigSchema>
 
 // ─── Audio 配置 Schema ───
@@ -689,22 +1042,83 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
  * - `indextts` — hai-framework IndexTTS Service 协议（HTTP 合成，可自托管）
  *
  * 平台仅表示「用哪种协议调用」，不表示服务部署在哪里；`whisper` / `indextts` 需显式配置 `baseUrl`。
+ *
+ * @example
+ * ```ts
+ * import { AudioProviderSchema } from '@h-ai/ai'
+ *
+ * const result = AudioProviderSchema.safeParse('indextts')
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const AudioProviderSchema = z.enum(['openai', 'mimo', 'qwen', 'doubao', 'whisper', 'indextts'])
 
-/** 语音平台类型 */
+/**
+ * 语音平台类型
+ *
+ * @example
+ * ```ts
+ * import type { AudioProviderName } from '@h-ai/ai'
+ * import { AudioProviderSchema } from '@h-ai/ai'
+ *
+ * const config: AudioProviderName = AudioProviderSchema.parse('indextts')
+ * ```
+ */
 export type AudioProviderName = z.infer<typeof AudioProviderSchema>
 
-/** 单个语音操作类型 */
+/**
+ * 单个语音操作类型
+ *
+ * @example
+ * ```ts
+ * import { AudioOperationSchema } from '@h-ai/ai'
+ *
+ * const result = AudioOperationSchema.safeParse('synthesize')
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
+ */
 export const AudioOperationSchema = z.enum(['transcribe', 'synthesize'])
 
-/** 语音操作类型 */
+/**
+ * 语音操作类型
+ *
+ * @example
+ * ```ts
+ * import type { AudioOperation } from '@h-ai/ai'
+ * import { AudioOperationSchema } from '@h-ai/ai'
+ *
+ * const config: AudioOperation = AudioOperationSchema.parse('synthesize')
+ * ```
+ */
 export type AudioOperation = z.infer<typeof AudioOperationSchema>
 
 /**
  * 语音模型允许的操作列表
  *
  * 至少一项，且不允许重复。
+ *
+ * @example
+ * ```ts
+ * import { AudioOperationsSchema } from '@h-ai/ai'
+ *
+ * const result = AudioOperationsSchema.safeParse(['transcribe', 'synthesize'])
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const AudioOperationsSchema = z
   .array(AudioOperationSchema)
@@ -720,7 +1134,15 @@ export const AudioOperationsSchema = z
  *
  * @example
  * ```ts
- * const model = { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] }
+ * import { AudioModelEntrySchema } from '@h-ai/ai'
+ *
+ * const result = AudioModelEntrySchema.safeParse({ id: 'local-tts', provider: 'indextts', model: 'indextts2', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8000' })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const AudioModelEntrySchema = z.object({
@@ -748,7 +1170,17 @@ export const AudioModelEntrySchema = z.object({
   timeout: z.number().positive().optional(),
 })
 
-/** 语音模型条目类型 */
+/**
+ * 语音模型条目类型
+ *
+ * @example
+ * ```ts
+ * import type { AudioModelEntry } from '@h-ai/ai'
+ * import { AudioModelEntrySchema } from '@h-ai/ai'
+ *
+ * const config: AudioModelEntry = AudioModelEntrySchema.parse({ id: 'local-tts', provider: 'indextts', model: 'indextts2', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8000' })
+ * ```
+ */
 export type AudioModelEntry = z.infer<typeof AudioModelEntrySchema>
 
 /**
@@ -758,16 +1190,15 @@ export type AudioModelEntry = z.infer<typeof AudioModelEntrySchema>
  *
  * @example
  * ```ts
- * ai.init({
- *   audio: {
- *     models: [
- *       { id: 'asr', provider: 'qwen', model: 'qwen3-asr-flash-realtime', operations: ['transcribe'] },
- *       { id: 'tts', provider: 'qwen', model: 'qwen3-tts-flash-realtime', operations: ['synthesize'] },
- *     ],
- *     transcribeModel: 'asr',
- *     synthesizeModel: 'tts',
- *   },
- * })
+ * import { AudioConfigSchema } from '@h-ai/ai'
+ *
+ * const result = AudioConfigSchema.safeParse({ models: [{ id: 'local-tts', provider: 'indextts', model: 'indextts2', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8000' }], synthesizeModel: 'local-tts', inheritLlmApiKey: false })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const AudioConfigSchema = z.object({
@@ -785,7 +1216,17 @@ export const AudioConfigSchema = z.object({
   maxStreamDurationMs: z.number().int().positive().default(5 * 60 * 1000),
 })
 
-/** Audio 配置类型 */
+/**
+ * Audio 配置类型
+ *
+ * @example
+ * ```ts
+ * import type { AudioConfig } from '@h-ai/ai'
+ * import { AudioConfigSchema } from '@h-ai/ai'
+ *
+ * const config: AudioConfig = AudioConfigSchema.parse({ models: [{ id: 'local-tts', provider: 'indextts', model: 'indextts2', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8000' }], synthesizeModel: 'local-tts', inheritLlmApiKey: false })
+ * ```
+ */
 export type AudioConfig = z.infer<typeof AudioConfigSchema>
 
 /**
@@ -793,6 +1234,16 @@ export type AudioConfig = z.infer<typeof AudioConfigSchema>
  *
  * 由 `resolveAudioModel()` 返回，凭据已按模型条目、显式 LLM 继承、平台环境变量的顺序解析，
  * 端点已应用平台默认值。
+ *
+ * @example
+ * ```ts
+ * import type { ResolvedAudioModel } from '@h-ai/ai'
+ *
+ * // 凭据只供请求使用，不写入面向用户的模型标签。
+ * function label(model: ResolvedAudioModel): string {
+ *   return `${model.provider}/${model.model}, timeout=${model.timeout}ms`
+ * }
+ * ```
  */
 export interface ResolvedAudioModel {
   /** 模型条目 ID */
@@ -866,6 +1317,17 @@ function audioProviderEnvApiKey(provider: AudioProviderName): string | undefined
  * @param explicit - 请求显式指定的模型 ID（最高优先级）
  * @param llmApiKey - LLM 全局密钥，仅在 `inheritLlmApiKey` 启用时参与解析
  * @returns 成功返回已解析模型；无匹配模型返回 `AUDIO_MODEL_NOT_FOUND`；缺少凭据返回 `CONFIGURATION_ERROR`
+ *
+ * @example
+ * ```ts
+ * import { AudioConfigSchema, resolveAudioModel } from '@h-ai/ai'
+ *
+ * const config = AudioConfigSchema.parse({ models: [{ id: 'tts', provider: 'indextts', model: 'indextts2', operations: ['synthesize'], baseUrl: 'http://127.0.0.1:8000' }], synthesizeModel: 'tts' })
+ * const result = resolveAudioModel(config, 'synthesize')
+ * if (result.success) {
+ *   const endpoint = result.data.baseUrl
+ * }
+ * ```
  */
 export function resolveAudioModel(
   audioConfig: AudioConfig,
@@ -921,6 +1383,20 @@ export function resolveAudioModel(
  *
  * @param model - 已解析模型
  * @returns 缺少必需凭据时返回 `CONFIGURATION_ERROR`，否则返回 `null`
+ *
+ * @example
+ * ```ts
+ * import { AudioConfigSchema, ensureAudioCredential, resolveAudioModel } from '@h-ai/ai'
+ *
+ * const config = AudioConfigSchema.parse({ models: [{ id: 'asr', provider: 'openai', model: 'whisper-1', operations: ['transcribe'] }], transcribeModel: 'asr' })
+ * const result = resolveAudioModel(config, 'transcribe')
+ * if (result.success) {
+ *   const missingCredential = ensureAudioCredential(result.data)
+ *   if (missingCredential) {
+ *     const code = missingCredential.code
+ *   }
+ * }
+ * ```
  */
 export function ensureAudioCredential(model: ResolvedAudioModel): HaiError | null {
   if (AUDIO_PROVIDER_CREDENTIAL_OPTIONAL.has(model.provider))
@@ -941,13 +1417,51 @@ export function ensureAudioCredential(model: ResolvedAudioModel): HaiError | nul
  * - `qwen` — 阿里云百炼 Qwen-Image 2.0 / 3.0
  * - `seedream` — 火山方舟 Seedream 4.x / 5.x
  * - `pollinations` — Pollinations 免费额度图片 API
+ *
+ * @example
+ * ```ts
+ * import { ImageProviderSchema } from '@h-ai/ai'
+ *
+ * const result = ImageProviderSchema.safeParse('openai')
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
  */
 export const ImageProviderSchema = z.enum(['openai', 'google', 'qwen', 'seedream', 'pollinations'])
 
-/** 文生图平台类型 */
+/**
+ * 文生图平台类型
+ *
+ * @example
+ * ```ts
+ * import type { ImageProviderName } from '@h-ai/ai'
+ * import { ImageProviderSchema } from '@h-ai/ai'
+ *
+ * const config: ImageProviderName = ImageProviderSchema.parse('openai')
+ * ```
+ */
 export type ImageProviderName = z.infer<typeof ImageProviderSchema>
 
-/** 文生图模型条目 Schema */
+/**
+ * 文生图模型条目 Schema
+ *
+ * @example
+ * ```ts
+ * import { ImageModelEntrySchema } from '@h-ai/ai'
+ *
+ * const result = ImageModelEntrySchema.safeParse({ id: 'image', provider: 'openai', model: 'gpt-image-1', apiKey: process.env.HAI_AI_IMAGE_OPENAI_APIKEY })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
+ */
 export const ImageModelEntrySchema = z.object({
   /** 模型唯一标识（供请求选择） */
   id: z.string(),
@@ -961,25 +1475,75 @@ export const ImageModelEntrySchema = z.object({
   baseUrl: z.url().optional(),
   /** 阿里云百炼业务空间 ID（可选） */
   workspaceId: z.string().optional(),
-  /** 请求超时（毫秒，默认 120000） */
-  timeout: z.number().int().positive().default(120000),
+  /** 整次图片生成与下载超时（毫秒，1–2147483647，默认 120000） */
+  timeout: z.number().int().positive().max(2_147_483_647).default(120000),
 })
 
-/** 文生图模型条目类型 */
+/**
+ * 文生图模型条目类型
+ *
+ * @example
+ * ```ts
+ * import type { ImageModelEntry } from '@h-ai/ai'
+ * import { ImageModelEntrySchema } from '@h-ai/ai'
+ *
+ * const config: ImageModelEntry = ImageModelEntrySchema.parse({ id: 'image', provider: 'openai', model: 'gpt-image-1', apiKey: process.env.HAI_AI_IMAGE_OPENAI_APIKEY })
+ * ```
+ */
 export type ImageModelEntry = z.infer<typeof ImageModelEntrySchema>
 
-/** 文生图配置 Schema */
+/**
+ * 文生图配置 Schema；资源限制对所有厂商路径生效。
+ *
+ * @example
+ * ```ts
+ * import { ImageConfigSchema } from '@h-ai/ai'
+ *
+ * const result = ImageConfigSchema.safeParse({ models: [{ id: 'image', provider: 'openai', model: 'gpt-image-1', apiKey: process.env.HAI_AI_IMAGE_OPENAI_APIKEY }], generateModel: 'image', maxImages: 2, maxImageBytes: 20971520 })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
+ * ```
+ */
 export const ImageConfigSchema = z.object({
+  /** 单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。 */
+  maxImageBytes: z.number().int().positive().max(100 * 1024 * 1024).default(20 * 1024 * 1024),
+  /** 单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。 */
+  maxImages: z.number().int().positive().max(16).default(4),
   /** 注册的文生图模型 */
   models: z.array(ImageModelEntrySchema).optional(),
   /** 默认文生图模型 ID */
   generateModel: z.string().optional(),
 })
 
-/** 文生图配置类型 */
+/**
+ * 文生图配置类型
+ *
+ * @example
+ * ```ts
+ * import type { ImageConfig } from '@h-ai/ai'
+ * import { ImageConfigSchema } from '@h-ai/ai'
+ *
+ * const config: ImageConfig = ImageConfigSchema.parse({ models: [{ id: 'image', provider: 'openai', model: 'gpt-image-1', apiKey: process.env.HAI_AI_IMAGE_OPENAI_APIKEY }], generateModel: 'image', maxImages: 2, maxImageBytes: 20971520 })
+ * ```
+ */
 export type ImageConfig = z.infer<typeof ImageConfigSchema>
 
-/** 已解析的文生图模型 */
+/**
+ * 已解析的文生图模型
+ *
+ * @example
+ * ```ts
+ * import type { ResolvedImageModel } from '@h-ai/ai'
+ *
+ * function label(model: ResolvedImageModel): string {
+ *   return `${model.provider}/${model.model}`
+ * }
+ * ```
+ */
 export interface ResolvedImageModel {
   id: string
   provider: ImageProviderName
@@ -1019,6 +1583,17 @@ function imageProviderEnvApiKey(provider: ImageProviderName): string | undefined
  * @param imageConfig - 文生图配置
  * @param explicit - 请求显式模型 ID 或厂商模型名
  * @returns 已解析模型；模型或凭据缺失时返回 HaiResult 错误
+ *
+ * @example
+ * ```ts
+ * import { ImageConfigSchema, resolveImageModel } from '@h-ai/ai'
+ *
+ * const config = ImageConfigSchema.parse({ models: [{ id: 'image', provider: 'openai', model: 'gpt-image-1', apiKey: process.env.HAI_AI_IMAGE_OPENAI_APIKEY }], generateModel: 'image' })
+ * const result = resolveImageModel(config)
+ * if (result.success) {
+ *   const modelName = result.data.model
+ * }
+ * ```
  */
 export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): HaiResult<ResolvedImageModel> {
   const target = explicit ?? imageConfig.generateModel
@@ -1049,39 +1624,15 @@ export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): 
  *
  * @example
  * ```ts
- * ai.init({
- *   llm: {
- *     apiKey: 'sk-xxx',
- *     model: 'gpt-4o-mini',
- *     maxTokens: 4096,
- *     models: [
- *       { id: 'rerank', model: 'rerank-english-v3.0', baseUrl: 'https://api.cohere.com' },
- *     ],
- *     scenarios: {
- *       extraction: 'gpt-4o',
- *       summary: 'gpt-4o-mini',
- *       embedding: 'text-embedding-3-small',
- *       rerank: 'rerank',
- *       ocr: 'gpt-4o',
- *     },
- *   },
- *   embedding: { dimensions: 1536 },
- *   knowledge: {
- *     collection: 'docs',
- *     enableEntityExtraction: true,
- *     cleanOptions: { removeHtml: true },
- *     chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 },
- *   },
- *   retrieval: {
- *     sources: [
- *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
- *     ],
- *   },
- *   memory: { maxEntriesPerObject: 500, embeddingEnabled: true },
- *   token: { tokenRatio: 0.25 },
- *   summary: { systemPrompt: 'You are a summarizer.' },
- *   compress: { defaultStrategy: 'hybrid', preserveLastN: 4 },
- * })
+ * import { AIConfigSchema } from '@h-ai/ai'
+ *
+ * const result = AIConfigSchema.safeParse({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }, token: { tokenRatio: 0.25 }, compress: { defaultStrategy: 'hybrid', preserveLastN: 4 } })
+ * if (!result.success) {
+ *   const issues = result.error.issues
+ * }
+ * else {
+ *   const config = result.data
+ * }
  * ```
  */
 export const AIConfigSchema = z.object({
@@ -1120,8 +1671,27 @@ export const AIConfigSchema = z.object({
   image: ImageConfigSchema.optional(),
 })
 
-/** AI 配置类型（校验后的完整类型） */
+/**
+ * AI 配置类型（校验后的完整类型）
+ *
+ * @example
+ * ```ts
+ * import type { AIConfig } from '@h-ai/ai'
+ * import { AIConfigSchema } from '@h-ai/ai'
+ *
+ * const config: AIConfig = AIConfigSchema.parse({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }, token: { tokenRatio: 0.25 }, compress: { defaultStrategy: 'hybrid', preserveLastN: 4 } })
+ * ```
+ */
 export type AIConfig = z.infer<typeof AIConfigSchema>
 
-/** AI 配置输入类型（允许部分字段） */
+/**
+ * AI 配置输入类型（允许部分字段）
+ *
+ * @example
+ * ```ts
+ * import type { AIConfigInput } from '@h-ai/ai'
+ *
+ * const value: AIConfigInput = { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY }, embedding: { dimensions: 1536 } }
+ * ```
+ */
 export type AIConfigInput = z.input<typeof AIConfigSchema>

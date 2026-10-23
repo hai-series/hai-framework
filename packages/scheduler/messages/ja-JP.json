@@ -22,11 +22,15 @@
   "scheduler_invalidPersistedTask": "保存されたタスク{taskId}が無効です: {error}",
   "scheduler_taskRunning": "タスクは現在実行中です: {taskId}",
   "scheduler_invalidApiConfig": "タスクのapi_configが無効です: {taskId}",
-  "scheduler_lockAcquireFailed": "分散ロックの取得に失敗しました。別のノードが既に保持しています: {taskId}",
   "scheduler_jsCompileFailed": "JSタスクのコンパイルに失敗しました: {error}",
   "scheduler_hookExecutionFailed": "タスクのライフサイクルフックの実行に失敗しました: {error}",
   "scheduler_taskHandlerMissing": "実行可能なハンドラーもグローバルexecuteフックも設定されていません: {taskId}",
   "scheduler_invalidHandlerConfig": "タスクハンドラーの設定が無効です: {taskId}",
   "scheduler_invalidRetryConfig": "タスクの再試行ポリシーの設定が無効です: {taskId}",
-  "scheduler_reldbNotInitialized": "enableDbはtrueですが、@h-ai/reldbが初期化されていません。先にreldb.init()を呼び出してください"
+  "scheduler_reldbNotInitialized": "enableDbはtrueですが、@h-ai/reldbが初期化されていません。先にreldb.init()を呼び出してください",
+  "scheduler_executionUnknown": "実行結果は不明です。手動解決する前に古い実行プロセスを停止し、外部への影響を確認してください",
+  "scheduler_executionStateFailed": "共有実行状態を利用できないか、所有者リースが失われました",
+  "scheduler_executionInputInvalid": "実行識別子または管理操作の入力が無効です",
+  "scheduler_occurrenceHandled": "タスク {taskId} の今回のスケジュールは既に処理済みです",
+  "scheduler_logPersistFailed": "実行ログの永続化は未確認です。受領記録に基づいてログを補完し、業務タスクを再実行しないでください"
 }

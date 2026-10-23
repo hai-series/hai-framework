@@ -13,6 +13,14 @@ import { ok } from '@h-ai/core'
  *
  * oRPC contract 中 list 类返回常用 `{ items: [...] }` 信封；
  * 业务模块通常直接返回数组，本工具负责套上信封。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const mapped = wrapItemsResult(ok([{ id: 'report-1' }]))
+ * if (!mapped.success) return mapped
+ * return mapped.data.items
+ * ```
  */
 export function wrapItemsResult<T>(result: HaiResult<T[]>): HaiResult<{ items: T[] }> {
   if (!result.success)
@@ -22,6 +30,14 @@ export function wrapItemsResult<T>(result: HaiResult<T[]>): HaiResult<{ items: T
 
 /**
  * 把 `HaiResult<T>` 通过 mapper 映射为 `HaiResult<U>`，错误透传。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const mapped = mapHaiResult(ok({ id: 'report-1', hidden: true }), value => ({ id: value.id }))
+ * if (!mapped.success) return mapped
+ * return mapped.data
+ * ```
  */
 export function mapHaiResult<T, U>(result: HaiResult<T>, mapper: (data: T) => U): HaiResult<U> {
   if (!result.success)

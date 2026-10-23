@@ -8,3 +8,7 @@ bucket: ${HAI_STORAGE_BUCKET:}
 region: ${HAI_STORAGE_REGION:us-east-1}
 accessKeyId: ${HAI_STORAGE_ACCESSKEYID:}
 secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}
+
+# S3 兼容端点；生产默认连接 Compose storage 服务。
+endpoint: ${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
+forcePathStyle: ${HAI_STORAGE_FORCEPATHSTYLE:false}

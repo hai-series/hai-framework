@@ -103,7 +103,7 @@ test.describe('IAM Users UI', () => {
   // ---------------------------------------------------------------------------
   // 用户表格
   // ---------------------------------------------------------------------------
-  test('用户表格包含必要的列头', async ({ page, request }) => {
+  test('用户表格包含必要列头，并在宽屏充分使用内容区', async ({ page, request }, testInfo) => {
     await registerAndLogin(page, request, 'usrui')
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
@@ -115,6 +115,17 @@ test.describe('IAM Users UI', () => {
     const count = await headers.count()
     // 至少有用户名、邮箱、角色、状态、创建时间、操作 6 列
     expect(count).toBeGreaterThanOrEqual(4)
+    for (const width of [1440, 1920, 2560, 3840, 390]) {
+      await page.setViewportSize({ width, height: 960 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      if (width >= 1440) {
+        const main = await page.locator('main').boundingBox()
+        const content = await table.locator('..').boundingBox()
+        expect(content!.width).toBeGreaterThan(main!.width - 100)
+      }
+      if (width === 1920)
+        await page.screenshot({ path: testInfo.outputPath('admin-1920.png'), animations: 'disabled' })
+    }
   })
 
   test('数据区纵向滚动时表头保持固定', async ({ page, request }) => {

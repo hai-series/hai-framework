@@ -1,4 +1,5 @@
 <!--
+  @component Range
   =============================================================================
   @h-ai/ui - Range 组件
   =============================================================================
@@ -7,12 +8,35 @@
   使用 Svelte 5 Runes ($props, $derived)
   使用 DaisyUI range 类
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Range } from '@h-ai/ui'
+  const props: ComponentProps<typeof Range> = { value: 50, min: 0, max: 100, step: 5 }
+  const component = mount(Range, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import BareInput from './BareInput.svelte'
 
+  /**
+   * Range 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { Range } from '@h-ai/ui'
+   * const props: ComponentProps<typeof Range> = { value: 50, min: 0, max: 100, step: 5 }
+   * const component = mount(Range, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 当前值 */
     value?: number

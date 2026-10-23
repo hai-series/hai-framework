@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { configEnvironmentVariables, moduleEnvironmentVariables, renderEnvironment, runtimeEnvironmentVariables } from '../packages/cli/src/commands/cli-config-environment.ts'
+import { environmentReferenceSource } from './env-reference-source.mjs'
 
 const catalog = JSON.parse(await readFile('packages/cli/src/commands/cli-config-catalog.json', 'utf8'))
 const byName = new Map(catalog.map(variable => [variable.name, variable]))
@@ -19,7 +20,7 @@ async function runtimeVariables(directory, names = new Set()) {
       await runtimeVariables(file, names)
     }
     else if (/\.(?:ts|js|svelte)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
-      for (const variable of runtimeEnvironmentVariables(await readFile(file, 'utf8')))
+      for (const variable of runtimeEnvironmentVariables(environmentReferenceSource(await readFile(file, 'utf8'), file)))
         names.add(variable.name)
     }
   }

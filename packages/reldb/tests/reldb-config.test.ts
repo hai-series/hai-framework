@@ -16,6 +16,14 @@ import { reldb, ReldbConfigSchema } from '../src/index.js'
 // =============================================================================
 
 describe('dbConfigSchema', () => {
+  it('mysql 空环境 URL 使用分字段，非空 URL 仍严格校验且无地址时必须有 database', () => {
+    const parsed = ReldbConfigSchema.parse({ type: 'mysql', database: 'business', url: '' })
+    expect(parsed.url).toBeUndefined()
+    expect(ReldbConfigSchema.safeParse({ type: 'mysql', url: '' }).success).toBe(false)
+    expect(ReldbConfigSchema.safeParse({ type: 'mysql', database: 'business', url: 'https://db.example' }).success).toBe(false)
+    expect(ReldbConfigSchema.safeParse({ type: 'mysql', database: 'business', url: 'mysql://db.example/business?ssl=false' }).success).toBe(false)
+  })
+
   it('应校验通过有效的 sqlite 配置', () => {
     const result = ReldbConfigSchema.parse({
       type: 'sqlite',
@@ -32,8 +40,7 @@ describe('dbConfigSchema', () => {
       sqlite: {},
     })
     expect(result.type).toBe('sqlite')
-    expect(result.sqlite?.walMode).toBe(true)
-    expect(result.sqlite?.readonly).toBe(false)
+    expect(result).toMatchObject({ sqlite: { walMode: true, readonly: false } })
   })
 
   it('应校验通过有效的 postgresql 配置', () => {
@@ -47,7 +54,7 @@ describe('dbConfigSchema', () => {
     })
     expect(result.type).toBe('postgresql')
     expect(result.database).toBe('testdb')
-    expect(result.host).toBe('127.0.0.1')
+    expect(result).toHaveProperty('host', '127.0.0.1')
   })
 
   it('应校验通过 postgresql 配置并使用 pool 默认值', () => {
@@ -56,10 +63,7 @@ describe('dbConfigSchema', () => {
       database: 'testdb',
       pool: {},
     })
-    expect(result.pool?.min).toBe(1)
-    expect(result.pool?.max).toBe(10)
-    expect(result.pool?.idleTimeout).toBe(30000)
-    expect(result.pool?.acquireTimeout).toBe(10000)
+    expect(result).toMatchObject({ type: 'postgresql', pool: { min: 1, max: 10, idleTimeout: 30000, acquireTimeout: 10000 } })
   })
 
   it('应校验通过有效的 mysql 配置', () => {
@@ -81,7 +85,7 @@ describe('dbConfigSchema', () => {
       database: 'testdb',
       mysql: {},
     })
-    expect(result.mysql?.charset).toBe('utf8mb4')
+    expect(result).toHaveProperty('mysql.charset', 'utf8mb4')
   })
 
   it('缺少 type 字段应抛出校验错误', () => {
@@ -126,7 +130,7 @@ describe('dbConfigSchema', () => {
       database: 'test',
       ssl: true,
     })
-    expect(result.ssl).toBe(true)
+    expect(result).toHaveProperty('ssl', true)
   })
 
   it('应支持 ssl 模式字符串', () => {
@@ -135,7 +139,7 @@ describe('dbConfigSchema', () => {
       database: 'test',
       ssl: 'require',
     })
-    expect(result.ssl).toBe('require')
+    expect(result).toHaveProperty('ssl', 'require')
   })
 
   it('应支持 ssl 对象', () => {
@@ -144,7 +148,7 @@ describe('dbConfigSchema', () => {
       database: 'test',
       ssl: { rejectUnauthorized: false },
     })
-    expect(result.ssl).toEqual({ rejectUnauthorized: false })
+    expect(result).toHaveProperty('ssl', { rejectUnauthorized: false })
   })
 
   it('应支持操作日志配置并填充默认等级和长度', () => {

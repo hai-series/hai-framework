@@ -1,4 +1,5 @@
 <!--
+  @component Radio
   =============================================================================
   @h-ai/ui - Radio 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Radio } from '@h-ai/ui'
+  const props: ComponentProps<typeof Radio> = { options: [{ value: 'email', label: '邮件' }], value: 'email' }
+  const component = mount(Radio, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts' generics="T = string">
   import type { DataAttributes, RadioProps, SelectOption } from '../../types.js'

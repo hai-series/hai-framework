@@ -13,15 +13,26 @@ import messagesZhCN from '../messages/zh-CN.json'
 // ─── i18n ───
 
 /**
- * 触达模块文案 Key 类型
+ * 内部消息键，由中文词典推导；中英词典同步维护。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const key: ReachMessageKey = 'reach_notInitialized'
+ * const message = reachM(key)
+ * ```
  */
 type ReachMessageKey = keyof typeof messagesZhCN
 
 /**
- * 获取触达模块文案。
- * @param key - 文案 Key
- * @param options - 插值参数与格式化选项
- * @returns 本地化后的文案字符串
+ * 获取当前locale的Reach消息；插值不应包含正文、收件人或凭据。
+ * @param key - 已维护的消息键。
+ * @param options - locale覆盖与params插值。
+ * @returns 本地化消息。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const message = reachM('reach_notInitialized', { locale: 'en-US' })
+ * ```
  */
 export const reachM = core.i18n.createMessageGetter<ReachMessageKey>({
   'zh-CN': messagesZhCN,

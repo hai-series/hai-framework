@@ -9,5 +9,12 @@
   "cache_keyNotFound": "Key not found",
   "cache_indexOutOfRange": "Index out of range",
   "cache_configError": "Cache config validation failed: {error}",
-  "cache_invalidHashSetInput": "Invalid hash hset input: pass a field and value, or a field object"
+  "cache_invalidHashSetInput": "Invalid hash hset input: pass a field and value, or a field object",
+  "cache_invalidScan": "Invalid scan cursor or options",
+  "cache_scanTopologyChanged": "Scan topology or match changed; restart from 0",
+  "cache_crossSlot": "This operation requires keys in the same Redis Cluster slot; use a shared hash tag",
+  "cache_sharedBackendRequired": "Production mode requires a shared backend; local files and memory backends are for development or explicit end-to-end tests.",
+  "cache_invalidSetOptions": "Invalid SET options: use one positive safe-integer expiry, do not combine it with keepTtl, and choose at most one of nx/xx",
+  "cache_setUnexpectedReply": "Redis returned an unexpected SET result",
+  "cache_serializationFailed": "The cache value could not be serialized as JSON"
 }

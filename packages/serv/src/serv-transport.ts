@@ -16,20 +16,35 @@
  * @module serv-transport
  */
 
-import type { CryptoFunctions, EncryptedPayload, TransportEncryptionManager, TransportKeyStore } from '@h-ai/crypto'
+import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
-import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
 
-/** 单次响应加密的体积上限（1 MiB）。超过则 fail-closed，避免内存放大和明文泄露。 */
-const MAX_ENCRYPTED_BODY = 1_048_576
 const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
 
-/** {@link createApp} 的 `transport` 配置项。 */
+/**
+ * {@link createApp} 的 `transport` 配置项。
+ *
+ * @example
+ * ```ts
+ * import type { ServTransportConfig } from '@h-ai/serv'
+ * import { serv } from '@h-ai/serv'
+ *
+ * import { crypto } from '@h-ai/crypto'
+ *
+ * function configure(serverKeyRing: ServTransportConfig['serverKeyRing'], keyStore: ServTransportConfig['keyStore']): ServTransportConfig {
+ *   return { crypto, serverKeyRing, keyStore }
+ * }
+ * // 私有 keyring 跨节点共享并支持轮换；生产 keyStore 原子消费重放标识，不能用进程 Map。
+ * ```
+ */
 export interface ServTransportConfig {
+  /** 受管服务端密钥环，仅运行时从私有 Secret 注入。 */
+  readonly serverKeyRing: TransportServerKeyRing
   /**
    * crypto 服务实例。serv 通过 `crypto.transport.createServer()` 创建
    * 传输加密管理器，并使用 `crypto.transport.protocol` 中的协议常量。
@@ -45,9 +60,7 @@ export interface ServTransportConfig {
    */
   readonly excludePaths?: readonly string[]
   /** 共享客户端公钥存储；适用于多节点部署。 */
-  readonly keyStore?: TransportKeyStore
-  /** 服务端可缓存的客户端公钥数量上限。默认 10000。 */
-  readonly maxClients?: number
+  readonly keyStore: TransportKeyStore
 }
 
 /**
@@ -61,6 +74,15 @@ export interface ServTransportConfig {
  * @param manager - 由 `crypto.transport.createServer()` 创建的管理器
  * @param keyExchangePath - 密钥协商绝对路径（已与 apiPrefix 拼接）
  * @param excludePaths - 不参与加解密的路径
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function mount(manager: TransportEncryptionManager) {
+ *   return createTransportMiddleware(manager, '/api/v1/_hai/key-exchange', ['/health'])
+ * }
+ * // 请求先验证 method/pathHash/clientId/requestId 完整性并原子防重放，之后才执行 handler。
+ * ```
  */
 export function createTransportMiddleware(
   manager: TransportEncryptionManager,
@@ -83,16 +105,17 @@ export function createTransportMiddleware(
     if (!clientId)
       return jsonError(servM('serv_transportClientIdRequired'), 400)
 
-    const clientPublicKey = await manager.getClientPublicKey(clientId)
-    if (!clientPublicKey)
-      return jsonError(servM('serv_transportClientKeyNotFound'), 400)
-
-    // Step 4：对带 body 的请求先解密；解密后下游看到的是普通 JSON Request。
-    // 空 body 请求（如无 input 的 POST 过程）无需解密；下游 Zod 校验会拒绝缺字段输入。
-    if (hasBody(c.req.method) && !isEmptyBody(c.req.raw)) {
-      const decErr = await decryptRequestInPlace(c, manager)
-      if (decErr)
-        return decErr
+    let requestContext: TransportMessageContext
+    try {
+      const verified = await authenticateTransportRequest(manager, c.req.raw)
+      if (!verified.success)
+        return jsonError(servM('serv_transportDecryptFailed'), 400)
+      requestContext = verified.data.context
+      if (c.req.method !== 'GET' && c.req.method !== 'HEAD')
+        replaceRequestBody(c, verified.data.plaintext)
+    }
+    catch (error) {
+      return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
     }
 
     // Step 5：明文请求进入后续 Hono / oRPC 流程。
@@ -102,49 +125,51 @@ export function createTransportMiddleware(
       return
     // Step 6：受保护路由响应必须加密；无法加密时 fail-closed，禁止明文透传。
     const contentType = response.headers.get('Content-Type') ?? ''
-    if (isEmptyResponse(response))
-      return
-    if (!canEncryptResponseContentType(contentType)) {
+    const bodyless = c.req.method === 'HEAD' || isEmptyResponse(response)
+    if (bodyless)
+      void response.body?.cancel().catch(() => {})
+    // Hono 的 res setter 会合并旧响应头，先清理其表征元数据，避免重新引入旧编码/长度。
+    c.header('Content-Length', undefined)
+    c.header('Content-Encoding', undefined)
+    c.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, undefined)
+    c.header(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, undefined)
+    if (!bodyless && !canEncryptResponseContentType(contentType)) {
+      void response.body?.cancel().catch(() => {})
       c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
     }
-    const contentLength = response.headers.get('Content-Length')
-    if (contentLength && Number.parseInt(contentLength, 10) > MAX_ENCRYPTED_BODY) {
-      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
-      return
-    }
-
     let bodyText: string
     try {
-      bodyText = await response.clone().text()
+      bodyText = bodyless
+        ? ''
+        : await readTransportBody(response.body, {
+            maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+            signal: c.req.raw.signal,
+          })
     }
     catch (cause) {
       logger.warn('Failed to read response body for encryption', { error: cause })
       c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
     }
-    if (!bodyText)
-      return
-    // 二次防御：分块传输（chunked）等场景没有 Content-Length 头，需在读取后再校验体积。
-    // 超过上限则 fail-closed，避免大 body 加密导致内存放大且禁止明文泄露。
-    if (bodyText.length > MAX_ENCRYPTED_BODY) {
-      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
-      return
-    }
+    const headers = new Headers(response.headers)
+    headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+    headers.delete('Content-Length')
+    headers.delete('Content-Encoding')
 
     // Step 7：把下游返回的明文 JSON 重新加密后替换回响应对象。
-    const encResult = await manager.encryptResponse(clientId, bodyText)
+    const encResult = await manager.encryptResponse(requestContext, bodyText, response.status)
     if (!encResult.success) {
       logger.warn('Failed to encrypt response', { error: encResult.error })
       c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
     }
 
-    const headers = new Headers(response.headers)
     headers.set('Content-Type', 'application/json; charset=utf-8')
     headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-    headers.delete('Content-Length')
-    c.res = new Response(JSON.stringify(encResult.data), {
+    if (bodyless)
+      headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encResult.data))
+    c.res = new Response(bodyless ? null : JSON.stringify(encResult.data), {
       status: response.status,
       statusText: response.statusText,
       headers,
@@ -155,22 +180,30 @@ export function createTransportMiddleware(
 // ─── 内部 ───
 
 async function handleKeyExchange(request: Request, manager: TransportEncryptionManager): Promise<Response> {
-  let body: { clientPublicKey?: unknown }
+  let body: unknown
   try {
     // Step 1：读取客户端提交的公钥。
-    body = await request.json() as { clientPublicKey?: unknown }
+    body = JSON.parse(await readTransportBody(request.body, {
+      maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes,
+      signal: request.signal,
+    }))
   }
-  catch {
+  catch (error) {
+    return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+  }
+  if (!body || typeof body !== 'object' || !('clientPublicKey' in body)
+    || !isValidSM2PublicKey(body.clientPublicKey)
+    || new TextEncoder().encode(body.clientPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes) {
     return jsonError(servM('serv_transportInvalidPayload'), 400)
   }
-  if (typeof body.clientPublicKey !== 'string' || body.clientPublicKey.length === 0)
-    return jsonError(servM('serv_transportInvalidPayload'), 400)
 
   try {
     // Step 2：注册客户端公钥，换取稳定的 clientId；并返回服务端公钥给客户端完成协商。
-    const clientId = await manager.registerClientKey(body.clientPublicKey)
     const serverPublicKey = manager.getServerPublicKey()
-    return new Response(JSON.stringify({ serverPublicKey, clientId }), {
+    if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
+      return jsonError(servM('serv_transportKeyExchangeFailed'), 500)
+    const clientId = await manager.registerClientKey(body.clientPublicKey)
+    return new Response(JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId }), {
       status: 200,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })
@@ -181,48 +214,24 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
   }
 }
 
-async function decryptRequestInPlace(
-  c: Parameters<MiddlewareHandler>[0],
-  manager: TransportEncryptionManager,
-): Promise<Response | undefined> {
-  // Step A：请求必须显式声明自己是加密 payload，避免把普通 JSON 误当密文解析。
-  const isEncrypted = c.req.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) === TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE
-  if (!isEncrypted)
-    return jsonError(servM('serv_transportInvalidPayload'), 400)
-
-  let payload: unknown
-  try {
-    // Step B：先以 JSON 读取密文载荷。
-    payload = await c.req.raw.clone().json()
-  }
-  catch {
-    return jsonError(servM('serv_transportInvalidPayload'), 400)
-  }
-  if (!isEncryptedPayloadShape(payload))
-    return jsonError(servM('serv_transportInvalidPayload'), 400)
-
-  // Step C：调用 transport manager 做真正的解密。
-  const decResult = manager.decryptRequest(payload)
-  if (!decResult.success) {
-    logger.warn('Failed to decrypt request', { error: decResult.error })
-    return jsonError(servM('serv_transportDecryptFailed'), 400)
-  }
-
-  // Step D：重建一个“明文 Request”回写到 `c.req.raw`，下游业务完全不需要感知加密协议。
+/** 替换已消费的原始流并清空 Hono 正文缓存，保证 oRPC 与 c.req.json 均读取新正文。 */
+function replaceRequestBody(c: Parameters<MiddlewareHandler>[0], body: string): void {
   const original = c.req.raw
   const newHeaders = new Headers(original.headers)
   newHeaders.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
   newHeaders.delete('Content-Length')
+  newHeaders.delete('Content-Encoding')
   newHeaders.set('Content-Type', 'application/json; charset=utf-8')
   const newRequest = new Request(original.url, {
     method: original.method,
     headers: newHeaders,
-    body: decResult.data,
+    body,
+    signal: original.signal,
     // @ts-expect-error Node fetch 需要 duplex 才能携带流式 body。
     duplex: 'half',
   })
-  ;(c.req as unknown as { raw: Request }).raw = newRequest
-  return undefined
+  c.req.raw = newRequest
+  c.req.bodyCache = {}
 }
 
 function shouldExclude(pathname: string, excludePaths: readonly string[], keyExchangePath: string): boolean {
@@ -238,22 +247,8 @@ function canEncryptResponseContentType(contentType: string): boolean {
 function isEmptyResponse(response: Response): boolean {
   if ([204, 304].includes(response.status))
     return true
-  return response.headers.get('Content-Length') === '0'
-}
-
-function hasBody(method: string): boolean {
-  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
-}
-
-/** 判断请求是否携带 body：Content-Length=0 或缺失 Content-Type 视为空 body。 */
-function isEmptyBody(req: Request): boolean {
-  if (req.body === null)
-    return true
-  const cl = req.headers.get('Content-Length')
-  if (cl !== null)
-    return Number.parseInt(cl, 10) === 0
-  // 无 Content-Length 且无 Content-Type 的 body-bearing 请求按空 body 处理。
-  return !req.headers.get('Content-Type')
+  // Content-Length 是可写元数据，不能据此放行实际仍含明文的响应流。
+  return response.body === null
 }
 
 function jsonError(message: string, status: number): Response {
@@ -261,11 +256,4 @@ function jsonError(message: string, status: number): Response {
     status,
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   })
-}
-
-function isEncryptedPayloadShape(value: unknown): value is EncryptedPayload {
-  if (!value || typeof value !== 'object')
-    return false
-  const p = value as Record<string, unknown>
-  return typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
 }

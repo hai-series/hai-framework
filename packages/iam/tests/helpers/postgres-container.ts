@@ -29,7 +29,7 @@ export async function acquirePostgresContainer(): Promise<PostgresContainerLease
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('postgres:alpine')
+    containerPromise = new GenericContainer('docker.io/library/postgres:16.15-alpine')
       .withExposedPorts(5432)
       .withEnvironment({
         POSTGRES_DB,

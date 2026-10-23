@@ -19,8 +19,8 @@ describe('reach-repository-template: types', () => {
       provider: 'email',
       subject: '欢迎',
       body: '你好 {name}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
     expect(record.id).toBe(1)
@@ -35,8 +35,8 @@ describe('reach-repository-template: types', () => {
       provider: 'sms',
       subject: null,
       body: '验证码 {code}',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
     expect(record.subject).toBeNull()

@@ -6,8 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { SchedulerLogRepository } from './repositories/index.js'
-import type { ExecutionStatus, SchedulerLogCleanupPolicy, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
+import type { ExecutionStatus, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -17,28 +16,6 @@ import { compileJsTaskHandler } from './scheduler-js-compiler.js'
 import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
-
-let currentLogRepo: SchedulerLogRepository | null = null
-let currentCleanupPolicy: SchedulerLogCleanupPolicy = {}
-
-export function setLogRepository(repo: SchedulerLogRepository | null, cleanupPolicy: SchedulerLogCleanupPolicy = {}): void {
-  currentLogRepo = repo
-  currentCleanupPolicy = { ...cleanupPolicy }
-}
-
-function sanitizeUrl(url: string): string {
-  try {
-    const parsedUrl = new URL(url)
-    if (parsedUrl.password)
-      parsedUrl.password = '***'
-    if (parsedUrl.username)
-      parsedUrl.username = '***'
-    return parsedUrl.toString()
-  }
-  catch {
-    return '(invalid url)'
-  }
-}
 
 function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHooks>): TaskExecutionTargetType {
   if (task.handler)
@@ -50,9 +27,9 @@ function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHook
   return 'hook'
 }
 
-function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo, occurrenceId?: string): SchedulerTaskContext {
+function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo, execution?: Partial<SchedulerTaskContext>): SchedulerTaskContext {
   return {
-    ...(occurrenceId ? { occurrenceId } : {}),
+    ...execution,
     task,
     taskId: task.id,
     params: task.params ?? {},
@@ -96,7 +73,7 @@ async function notifyTaskFinish(hooks: Readonly<SchedulerTaskHooks>, event: Sche
   }
 }
 
-async function saveExecutionLog(
+function createExecutionLog(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
   taskType: TaskExecutionTargetType,
@@ -105,9 +82,11 @@ async function saveExecutionLog(
   finishedAt: number,
   result: string | null,
   error: string | null,
-): Promise<TaskExecutionLog> {
+  occurrenceId?: string,
+): TaskExecutionLog {
   const log: TaskExecutionLog = {
-    id: 0,
+    id: crypto.randomUUID(),
+    persistence: { status: 'unconfirmed' },
     taskId: task.id,
     taskName: task.name,
     taskType,
@@ -119,27 +98,25 @@ async function saveExecutionLog(
     startedAt,
     finishedAt,
     duration: finishedAt - startedAt,
-  }
-
-  if (!currentLogRepo)
-    return log
-
-  await currentLogRepo.saveLog(log)
-
-  const cleanupResult = await currentLogRepo.cleanupLogs(currentCleanupPolicy)
-  if (!cleanupResult.success) {
-    logger.warn('Failed to cleanup execution logs', {
-      taskId: task.id,
-      error: cleanupResult.error.message,
-      maxLogs: currentCleanupPolicy.maxLogs,
-      retentionDays: currentCleanupPolicy.retentionDays,
-    })
+    ...(occurrenceId ? { occurrenceId } : {}),
   }
 
   return log
 }
 
-export async function saveInterruptedTaskLog(
+/**
+ * 构造本地中断观测；不代表已确认业务终态。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const now = Date.now()
+ * const log = await createInterruptedTaskLog(task, { type: 'manual', source: 'console' }, 'Stopped by host', 'hook', now, now)
+ * // 这只是观测，persistence 为 unconfirmed，不能补写成已提交业务成功。
+ * ```
+ */
+export async function createInterruptedTaskLog(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
   reason: string,
@@ -147,9 +124,20 @@ export async function saveInterruptedTaskLog(
   startedAt: number,
   finishedAt: number,
 ): Promise<TaskExecutionLog> {
-  return saveExecutionLog(task, trigger, taskType, 'interrupted', startedAt, finishedAt, null, reason)
+  return createExecutionLog(task, trigger, taskType, 'interrupted', startedAt, finishedAt, null, reason)
 }
 
+/**
+ * 生成中断观测并调用开始/中断回调；不领取执行、不调用业务处理器、不发布共享终态。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const log = await interruptTask(task, { type: 'manual', source: 'console' }, 'Stopped by host', {})
+ * const interrupted = log.status === 'interrupted'
+ * ```
+ */
 export async function interruptTask(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
@@ -163,7 +151,7 @@ export async function interruptTask(
   await notifyTaskStart(hooks, { task, trigger, startedAt, signal })
 
   const finishedAt = Date.now()
-  const interruptedLog = await saveInterruptedTaskLog(task, trigger, reason, taskType, startedAt, finishedAt)
+  const interruptedLog = await createInterruptedTaskLog(task, trigger, reason, taskType, startedAt, finishedAt)
 
   await notifyTaskInterrupted(hooks, {
     task,
@@ -177,6 +165,19 @@ export async function interruptTask(
   return interruptedLog
 }
 
+/**
+ * 在可终止工作线程中执行受信任 JS；编译、执行和取消异常转换为 HaiResult。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { ...{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, handler: { kind: 'js', code: '(context) => context.params.batch', timeout: 1000 } }
+ * const result = await executeJsTask(task, { task, taskId: task.id, params: { batch: '2026-10' }, trigger: { type: 'manual', source: null } })
+ * if (!result.success) return result
+ * const serialized = result.data
+ * return serialized
+ * ```
+ */
 export async function executeJsTask(
   task: TaskDefinition,
   context: SchedulerTaskContext,
@@ -209,6 +210,19 @@ export async function executeJsTask(
   }
 }
 
+/**
+ * 执行 API 请求并有界读取完整响应；超时覆盖响应体，context 中的持久身份传给接收端去重。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { ...{ id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }, handler: { kind: 'api', url: 'https://example.com/health', timeout: 1000, maxResponseBytes: 4096 } }
+ * const result = await executeApiTask(task, { task, taskId: task.id, params: {}, trigger: { type: 'manual', source: null } })
+ * if (!result.success) return result
+ * const body = result.data
+ * return body
+ * ```
+ */
 export async function executeApiTask(
   task: TaskDefinition,
   context: SchedulerTaskContext,
@@ -229,12 +243,18 @@ export async function executeApiTask(
   const timer = setTimeout(() => controller.abort(), timeout)
 
   try {
+    const requestHeaders = new Headers(headers)
+    if (body !== undefined)
+      requestHeaders.set('Content-Type', 'application/json')
+    if (context.occurrenceId) {
+      requestHeaders.set('Idempotency-Key', context.occurrenceId)
+      requestHeaders.set('X-Scheduler-Sequence', String(context.sequence))
+      requestHeaders.set('X-Scheduler-Attempt', String(context.attempt))
+      requestHeaders.set('X-Scheduler-Task', encodeURIComponent(context.taskId))
+    }
     const response = await fetch(url, {
       method,
-      headers: {
-        ...headers,
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: requestHeaders,
       signal: AbortSignal.any([signal, controller.signal]),
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
@@ -268,7 +288,7 @@ export async function executeApiTask(
       logger.error('API task returned non-OK status', {
         taskId: context.taskId,
         status: response.status,
-        url: sanitizeUrl(url),
+        url: core.sanitize.sanitizeUrl(url),
       })
       return err(
         HaiSchedulerError.API_EXECUTION_FAILED,
@@ -282,7 +302,7 @@ export async function executeApiTask(
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    logger.error('API task execution failed', { taskId: context.taskId, error: message, url: sanitizeUrl(url) })
+    logger.error('API task execution failed', { taskId: context.taskId, error: message, url: core.sanitize.sanitizeUrl(url) })
     return err(
       HaiSchedulerError.API_EXECUTION_FAILED,
       schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),
@@ -331,18 +351,33 @@ async function executeHookTask(
   }
 }
 
+/**
+ * 执行一次 API/JS/Hook 尝试并返回本地日志；共享 owner 和最终提交由 runner 负责，未知副作用不据此自动重放。
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const task: TaskDefinition = { id: 'daily-report', name: '每日报表', cron: '0 2 * * *', timezone: 'UTC' }
+ * const log = await executeTask(task, { type: 'manual', source: 'console' }, { onTaskExecute: ({ context, signal }) => {
+ *   signal.throwIfAborted()
+ *   return { taskId: context.taskId }
+ * } })
+ * // executeTask 只生成尝试日志；runner 另以有效 owner/DB deadline 确认终态。
+ * const observedStatus = log.status
+ * ```
+ */
 export async function executeTask(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
   hooks: Readonly<SchedulerTaskHooks>,
   signal: AbortSignal = new AbortController().signal,
-  occurrenceId?: string,
+  execution?: Partial<SchedulerTaskContext>,
 ): Promise<TaskExecutionLog> {
   const startedAt = Date.now()
   const taskType = resolveTaskType(task, hooks)
-  const context = createTaskContext(task, trigger, occurrenceId)
+  const context = createTaskContext(task, trigger, execution)
 
-  await notifyTaskStart(hooks, { task, trigger, startedAt, signal })
+  await notifyTaskStart(hooks, { task, trigger, startedAt, signal, context })
 
   let executionResult: HaiResult<string | null>
   let shouldNotifyInterrupted = false
@@ -364,10 +399,13 @@ export async function executeTask(
 
   shouldNotifyInterrupted ||= signal.aborted
   const finishedAt = Date.now()
-  const status: ExecutionStatus = executionResult.success
+  let status: ExecutionStatus = executionResult.success
     ? 'success'
     : (shouldNotifyInterrupted ? 'interrupted' : 'failed')
-  const log = await saveExecutionLog(
+  // 分布式执行已经进入持久 running；缺少外部幂等保障时，失败/取消都不能推断副作用未发生。
+  if (execution?.executionToken && !task.idempotent && !executionResult.success)
+    status = 'unknown'
+  const log = createExecutionLog(
     task,
     trigger,
     taskType,
@@ -376,6 +414,7 @@ export async function executeTask(
     finishedAt,
     executionResult.success ? executionResult.data : null,
     executionResult.success ? null : executionResult.error.message,
+    context.occurrenceId,
   )
 
   if (!executionResult.success && shouldNotifyInterrupted) {
@@ -386,11 +425,12 @@ export async function executeTask(
       interruptedAt: finishedAt,
       signal,
       reason: executionResult.error.message,
+      context,
     })
   }
 
-  if (status !== 'interrupted')
-    await notifyTaskFinish(hooks, { task, trigger, startedAt, finishedAt, log, signal })
+  if (status !== 'interrupted' && !signal.aborted)
+    await notifyTaskFinish(hooks, { task, trigger, startedAt, finishedAt, log, signal, context })
 
   return log
 }

@@ -1,160 +1,37 @@
 ---
 name: hai-audit
-description: "使用 @h-ai/audit 记录、查询、统计和清理操作审计。"
+description: "接入 @h-ai/audit 记录业务操作，查询分页日志与统计，并按保留期清理。"
 ---
 
-# @h-ai/audit — 审计日志模块
+# hai-audit
 
 ## 能力契约
 
-| 项目 | 契约 |
-| --- | --- |
-| 能力 | 使用 @h-ai/audit 记录、查询、统计和清理操作审计 |
-| 适用场景 | 业务操作留痕与审计记录检索 |
-| 输入 | AuditConfigInput、已初始化 reldb、审计事件与查询条件 |
-| 输出 | 记录/查询/统计的 HaiResult |
-| 限制 | 仅服务端；审计内容需脱敏，保留期和清理范围由应用策略决定。 |
+| 项目     | 契约                                                       |
+| -------- | ---------------------------------------------------------- |
+| 能力     | 使用 @h-ai/audit 记录、查询、统计和清理操作审计            |
+| 适用场景 | 业务操作留痕与审计记录检索                                 |
+| 输入     | AuditInitConfigInput、已初始化 reldb、审计事件与查询条件   |
+| 输出     | 记录/查询/统计的 HaiResult                                 |
+| 限制     | 仅服务端；审计内容需脱敏，保留期和清理范围由应用策略决定。 |
 
-统一审计日志模块，基于 `@h-ai/reldb` 实现持久化，提供审计日志的记录、分页查询、清理与统计。
+## 使用路径
 
-## 运行环境
+1. 确认已初始化 reldb，校验 `AuditInitConfigInput` 后初始化 audit；init 等待DDL就绪才成功，失败保持未初始化；每步失败停止后续操作。
+2. 在实际业务成功/失败边界记录事件，明确审计失败如何影响业务，不重复记录同一事件。
+3. 查询使用返回的分页元数据；清理前核对保留期及授权范围。凭证字段会被脱敏，个人信息仍需业务策略。
+4. 检查写入、查询和清理的 HaiResult，先关闭 audit 再关闭数据库。
 
-> ⚠️ **服务端模块（Node.js only）。** 审计日志由服务端自动记录，浏览器端通过 API 端点查询审计数据。
+常见事件使用 `audit.helper` 与公开 `AuditHelper` 类型；内部记录器装配工厂不从包入口导出。
 
-## 依赖
+## 按需参考
 
-| 模块 | 用途 | 是否必需 | 初始化要求 |
-| --- | --- | --- | --- |
-| `@h-ai/reldb` | 数据库（审计日志持久化） | **必需** | 需在 `audit.init()` 前初始化 |
+按本次操作读取对应小节；以已安装版本的公开类型核验签名，示例中的业务变量由应用提供。
 
-## 使用步骤
-
-### 1. 配置
-
-审计模块依赖已初始化的 `@h-ai/reldb` 单例，无需独立配置文件。审计日志固定存储在 `hai_audit_logs` 表中。
-
-### 2. 初始化
-
-```ts
-import { audit } from '@h-ai/audit'
-import { reldb } from '@h-ai/reldb'
-
-// 先初始化依赖
-await reldb.init({ type: 'sqlite', database: './data.db' })
-
-// 再初始化审计模块（自动使用已初始化的 reldb 单例）
-const result = await audit.init()
-if (!result.success) {
-  // 处理错误
-}
-```
-
-自定义用户表映射：
-
-```ts
-await audit.init({
-  userTable: 'hai_iam_users',
-  userIdColumn: 'id',
-  userNameColumn: 'username',
-})
-```
-
-### 3. 关闭
-
-```ts
-const closeResult = await audit.close()
-if (!closeResult.success) {
-  throw new Error(closeResult.error.message)
-}
-```
-
-## 核心 API
-
-### 生命周期
-
-| 方法                  | 签名                                                             | 说明       |
-| --------------------- | ---------------------------------------------------------------- | ---------- |
-| `audit.init`          | `(config: AuditInitConfig) => Promise<HaiResult<void>>` | 初始化模块 |
-| `audit.close`         | `() => Promise<HaiResult<void>>`                                 | 关闭模块   |
-| `audit.isInitialized` | `boolean`                                                        | 初始化状态 |
-
-### 日志操作
-
-| 方法                  | 签名                                                                                | 说明                 |
-| --------------------- | ----------------------------------------------------------------------------------- | -------------------- |
-| `audit.log`           | `(input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>`             | 记录审计日志         |
-| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<HaiResult<PaginatedResult<AuditLogWithUser>>>` | 分页查询（items/total/page/pageSize，含用户名；使用返回的规范化元数据，默认 pageSize 20） |
-| `audit.getUserRecent` | `(userId: string, limit?: number) => Promise<HaiResult<AuditLog[]>>`       | 用户最近活动         |
-| `audit.cleanup`       | `(olderThanDays?: number) => Promise<HaiResult<number>>`                   | 清理旧日志           |
-| `audit.getStats`      | `(days?: number) => Promise<HaiResult<AuditStatItem[]>>`                   | 操作统计             |
-
-### 便捷记录器 (`audit.helper`)
-
-| 方法                                                                           | 说明         |
-| ------------------------------------------------------------------------------ | ------------ |
-| `audit.helper.login(userId, ip?, ua?)`                                         | 登录         |
-| `audit.helper.logout(userId, ip?, ua?)`                                        | 登出         |
-| `audit.helper.register(userId, ip?, ua?)`                                      | 注册         |
-| `audit.helper.passwordResetRequest(email, ip?, ua?)`                           | 密码重置请求 |
-| `audit.helper.passwordResetComplete(userId, ip?, ua?)`                         | 密码重置完成 |
-| `audit.helper.crud(input)` | CRUD 操作    |
-
-> `audit.log()` / `audit.helper.*()` 中的 `details` 仅会自动脱敏凭证类字段（如 `password` / `token` / `secret`）；邮箱、手机号默认保留原值。
-
-## 错误码
-
-| 错误码                            | code             | 说明         |
-| --------------------------------- | ---------------- | ------------ |
-| `HaiAuditError.LOG_FAILED`       | `hai:audit:001`  | 记录失败     |
-| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002`  | 查询失败     |
-| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003`  | 清理失败     |
-| `HaiAuditError.STATS_FAILED`     | `hai:audit:004`  | 统计失败     |
-| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005`  | 初始化进行中 |
-| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010`  | 模块未初始化 |
-| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012`  | 配置错误     |
-
-## 常见模式
-
-### 用户认证审计
-
-```ts
-// 登录
-await audit.helper.login(userId, request.ip, request.headers['user-agent'])
-
-// 登出
-await audit.helper.logout(userId, request.ip, request.headers['user-agent'])
-```
-
-### CRUD 操作审计
-
-```ts
-await audit.helper.crud({ userId, action: 'create', resource: 'users', resourceId: newUser.id, details: { name: newUser.name } })
-await audit.helper.crud({ userId, action: 'update', resource: 'roles', resourceId: roleId, details: { changes } })
-await audit.helper.crud({ userId, action: 'delete', resource: 'permissions', resourceId: permId })
-```
-
-### 仪表盘数据
-
-```ts
-// 最近日志
-const recentLogs = await audit.list({ pageSize: 10 })
-
-// 7 天统计
-const stats = await audit.getStats(7)
-```
-
-### 定期清理
-
-```ts
-// 清理 90 天前的日志
-const result = await audit.cleanup(90)
-if (result.success) {
-  logger.info(`Cleaned up ${result.data} old audit logs`)
-}
-```
-
-## 相关 Skills
-
-- `hai-reldb` — 数据库模块（审计模块依赖）
-- `hai-iam` — 身份认证与权限管理（审计的主要记录对象）
-- `hai-core` — 核心工具（日志、ID 生成、i18n）
+- [运行环境](reference.md#运行环境)
+- [依赖](reference.md#依赖)
+- [使用步骤](reference.md#使用步骤)
+- [核心 API](reference.md#核心-api)
+- [错误码](reference.md#错误码)
+- [常见模式](reference.md#常见模式)
+- [相关 Skills](reference.md#相关-skills)

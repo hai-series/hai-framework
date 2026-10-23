@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/audit",
   "type": "module",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.67",
   "description": "Hai Framework audit logging module.",
   "license": "Apache-2.0",
   "exports": {
@@ -40,6 +40,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

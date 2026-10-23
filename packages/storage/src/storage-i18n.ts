@@ -11,7 +11,14 @@ import messagesEnUS from '../messages/en-US.json'
 import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-/** 消息键类型（从 zh-CN 翻译文件自动推断） */
+/**
+ * 消息键类型（从 zh-CN 翻译文件自动推断）
+ * @example 模块内部上下文
+ * ```ts
+ * const key: StorageMessageKey = 'storage_notInitialized'
+ * void storageM(key)
+ * ```
+ */
 type StorageMessageKey = keyof typeof messagesZhCN
 
 /**
@@ -19,10 +26,9 @@ type StorageMessageKey = keyof typeof messagesZhCN
  *
  * 根据当前 locale 自动选择 zh-CN、en-US 或 ja-JP 的文案，
  * 支持带参数插值（通过 `{ params: { key: value } }`）。
- *
- * @example
+ * @example 模块内部上下文
  * ```ts
- * storageM('storage_fileNotFound', { params: { key: 'a.txt' } })
+ * void storageM('storage_notInitialized', { locale: 'en-US' })
  * ```
  */
 export const storageM = core.i18n.createMessageGetter<StorageMessageKey>({

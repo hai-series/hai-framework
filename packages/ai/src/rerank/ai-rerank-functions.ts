@@ -26,6 +26,13 @@ const logger = core.logger.child({ module: 'ai', scope: 'rerank' })
 
 /**
  * Cohere Rerank API 响应结果条目
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const item: CohereRerankResult = { index: 1, relevance_score: 0.9, document: { text: '框架说明' } }
+ * const score = item.relevance_score
+ * ```
  */
 interface CohereRerankResult {
   index: number
@@ -35,6 +42,13 @@ interface CohereRerankResult {
 
 /**
  * Cohere Rerank API 响应体
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const response: CohereRerankResponse = { id: 'rerank-1', results: [{ index: 0, relevance_score: 0.9 }] }
+ * const indices = response.results.map(item => item.index)
+ * ```
  */
 interface CohereRerankResponse {
   id: string
@@ -51,6 +65,17 @@ interface CohereRerankResponse {
  *
  * @param config - 校验后的 AI 配置
  * @returns RerankOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function rerank(config: AIConfig) {
+ *   const reranker = createRerankOperations(config)
+ *   const result = await reranker.rerank({ query: '开发语言', documents: ['项目使用 TypeScript', '明天天气晴'], topN: 1 })
+ *   if (!result.success) return result
+ *   return result.data.results
+ * }
+ * ```
  */
 export function createRerankOperations(config: AIConfig): RerankOperations {
   /** 将输入文档统一转换为文本数组和 id 映射 */

@@ -123,10 +123,12 @@ function isArray<T = unknown>(value: unknown): value is T[] {
 
 /**
  * 类型检查工具对象。
- *
  * @example
  * ```ts
- * typeUtils.isDefined('x')
+ * import { core } from '@h-ai/core'
+ * const tools = core.typeUtils
+ * const value: unknown = 'order-1'
+ * if (tools.isString(value)) value.toUpperCase()
  * ```
  */
 export const typeUtils = {
@@ -140,5 +142,13 @@ export const typeUtils = {
   isArray,
 }
 
-/** typeUtils 子工具类型 */
+/**
+ * typeUtils 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: TypeUtilFn = typeUtils
+ * const value: unknown = 'order-1'
+ * if (tools.isString(value)) value.toUpperCase()
+ * ```
+ */
 export type TypeUtilFn = typeof typeUtils

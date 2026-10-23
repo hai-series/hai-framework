@@ -59,6 +59,17 @@ function createScopedMemory(core: MemoryCoreOperations, binding: ScopedMemoryBin
  *
  * @param core - Provider 实现的核心操作
  * @returns 增加 scoped / admin 且对 clear 施加空过滤保护的公共接口
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function scoped(core: MemoryCoreOperations) {
+ *   const memory = createMemoryOperations(core).scoped({ objectId: 'user-1', scope: { tenant: 'tenant-1' } })
+ *   const result = await memory.add({ content: '用户喜欢绿茶', type: 'preference' })
+ *   if (!result.success) return result
+ *   return result.data.id
+ * }
+ * ```
  */
 export function createMemoryOperations(core: MemoryCoreOperations): MemoryOperations {
   return {

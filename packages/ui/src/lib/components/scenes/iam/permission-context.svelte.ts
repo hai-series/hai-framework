@@ -6,20 +6,12 @@
  *
  * @example
  * ```svelte
- * <!-- +layout.svelte -->
- * <script>
- *   import { setPermissionContext } from '@h-ai/ui'
- *   setPermissionContext(() => data.user?.permissions ?? [])
+ * <script lang="ts">
+ *   import { setPermissionContext, PermGuard } from '@h-ai/ui'
+ *   const permissions = ['user:create']
+ *   setPermissionContext(() => permissions)
  * </script>
- *
- * <!-- 子组件 -->
- * <script>
- *   import { usePermission } from '@h-ai/ui'
- *   const { hasPerm, hasAnyPerm, hasAllPerms } = usePermission()
- * </script>
- * {#if hasPerm('user:create')}
- *   <button>新建用户</button>
- * {/if}
+ * <PermGuard permission="user:create"><button type="button">新建用户</button></PermGuard>
  * ```
  *
  * @module permission-context.svelte
@@ -44,6 +36,13 @@ const PERMISSION_CONTEXT_KEY = Symbol('hai-permission-context')
  * @param required - 需要检查的权限码
  * @param userPermissions - 用户拥有的权限列表
  * @returns 是否匹配
+ *
+ * @example
+ * ```ts
+ * import { matchPermission } from '@h-ai/ui'
+ * const canRead = matchPermission('user:read', ['user:*'])
+ * const canDelete = matchPermission('user:delete', ['user:read'])
+ * ```
  */
 export function matchPermission(required: string, userPermissions: string[]): boolean {
   for (const userPerm of userPermissions) {
@@ -57,13 +56,32 @@ export function matchPermission(required: string, userPermissions: string[]): bo
 
 // ─── Context 类型 ───
 
-/** 权限上下文内部存储 */
+/**
+ * 权限上下文内部存储
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const example: PermissionContextValue = { getPermissions: () => ['user:read'] }
+ * ```
+ */
 interface PermissionContextValue {
   /** 响应式权限列表获取函数 */
   getPermissions: () => string[]
 }
 
-/** 权限上下文消费接口 */
+/**
+ * 权限上下文消费接口
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { usePermission } from '@h-ai/ui'
+ *   import type { PermissionContext } from '@h-ai/ui'
+ *   const permission: PermissionContext = usePermission()
+ * </script>
+ * {#if permission.hasPerm('user:read')}<span>用户列表</span>{/if}
+ * ```
+ */
 export interface PermissionContext {
   /** 当前用户权限列表（响应式） */
   readonly permissions: string[]
@@ -85,15 +103,16 @@ export interface PermissionContext {
  * 以便权限变化时自动触发子组件更新。
  *
  * @param getPermissions - 返回当前用户权限列表的函数
+ * @returns {void} 无返回值；注册当前组件树的权限读取函数。
  *
  * @example
  * ```svelte
- * <script>
+ * <script lang="ts">
  *   import { setPermissionContext } from '@h-ai/ui'
- *   let { data } = $props()
- *   const userPermissions = $derived(data.user?.permissions ?? [])
- *   setPermissionContext(() => userPermissions)
+ *   let permissions = $state(['user:read'])
+ *   setPermissionContext(() => permissions)
  * </script>
+ * <main>在此渲染需要权限上下文的子组件。</main>
  * ```
  */
 export function setPermissionContext(getPermissions: () => string[]): void {
@@ -110,13 +129,11 @@ export function setPermissionContext(getPermissions: () => string[]): void {
  *
  * @example
  * ```svelte
- * <script>
+ * <script lang="ts">
  *   import { usePermission } from '@h-ai/ui'
- *   const { hasPerm } = usePermission()
+ *   const permission = usePermission()
  * </script>
- * {#if hasPerm('role:create')}
- *   <button>创建角色</button>
- * {/if}
+ * {#if permission.hasAnyPerm('user:read', 'user:update')}<span>用户管理</span>{/if}
  * ```
  */
 export function usePermission(): PermissionContext {

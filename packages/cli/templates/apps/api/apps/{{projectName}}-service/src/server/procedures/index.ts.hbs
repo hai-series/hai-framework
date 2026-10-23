@@ -7,12 +7,20 @@ import type { AppProcedureDeps } from './app-procedures.js'
 import { storage } from '@h-ai/storage'
 {{/if}}import { createAppProcedures } from './app-procedures.js'
 
+// @hai-generator:procedures:imports
+
 /** 创建应用级 procedures 聚合。 */
 export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDeps }) {
   return {
+    // @hai-generator:procedures:entries
 {{#if features.iam}}    iam: createIamProcedures({ iam }),
-{{/if}}{{#if features.storage}}    storage: createStorageProcedures({ storage }),
-{{/if}}{{#if features.ai}}    ai: createAiProcedures({ ai }),
+{{/if}}{{#if features.storage}}    storage: createStorageProcedures({
+      storage,
+      authorize: ({ context, keys }) => keys.every(key =>
+        key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+    }),
+{{/if}}{{#if features.ai}}    // AI 默认绑定可信 session.userId，跨主体访问需另行提供 authorizeObject 策略。
+    ai: createAiProcedures({ ai }),
 {{/if}}    app: createAppProcedures(deps.app),
   }
 }

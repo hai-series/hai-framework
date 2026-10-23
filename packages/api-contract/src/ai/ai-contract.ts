@@ -4,6 +4,7 @@
  * 定义 AI 功能相关 API 的接口边界：聊天补全、记忆管理与会话管理。
  * 聊天补全使用 OpenAI 兼容结构（`messages` 数组 + `choices` 数组）。
  * 所有接口均需 Bearer Token 认证（由 `@h-ai/serv` 的 feature 层强制）。
+ * 默认绑定认证用户的 objectId；其它主体和会话的访问须经过服务端资源授权。
  * @module ai-contract
  */
 
@@ -24,10 +25,19 @@ import {
   AiSessionListInputSchema,
 } from './ai-schemas.js'
 
-/** AI 领域 oRPC contract。 */
+/**
+ * AI 领域 oRPC contract。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.ai
+ * void contract
+ * ```
+ */
 export const aiContract = {
   chats: {
-    createCompletion: route({ method: 'POST', path: '/ai/chats/completions', operationId: 'ai.chats.createCompletion', summary: 'Create chat completion', tags: ['ai', 'chats'] })
+    createCompletion: route({ method: 'POST', path: '/ai/chats/completions', operationId: 'ai.chats.createCompletion', summary: 'Create non-streaming chat completion with function tools', tags: ['ai', 'chats'] })
       .input(AiChatCompletionInputSchema)
       .output(haiResultSchema(AiChatCompletionDataSchema)),
     sendMessage: route({ method: 'POST', path: '/ai/chats/messages', operationId: 'ai.chats.sendMessage', summary: 'Send a single chat message', tags: ['ai', 'chats'] })
@@ -52,4 +62,15 @@ export const aiContract = {
   },
 }
 
+/**
+ * ai 领域公开 procedure 契约的完整类型。
+ * @example
+ * ```ts
+ * import type { AiContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract: AiContract = apiContract.ai
+ * void contract
+ * ```
+ */
 export type AiContract = typeof aiContract

@@ -1,27 +1,37 @@
 <!--
+  @component PermGuard
   @h-ai/ui — PermGuard 权限守卫组件
 
   根据权限上下文条件渲染子内容。
   当用户拥有指定权限时渲染 children，否则渲染 fallback（可选）。
 
   @example
-  ```svelte
-  <PermGuard permission="user:create">
-    <button>新建用户</button>
-  </PermGuard>
-
-  <PermGuard permissions={['user:update', 'user:delete']} mode="any">
-    <button>操作</button>
-    {#snippet fallback()}
-      <span>无权限</span>
-    {/snippet}
-  </PermGuard>
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { PermGuard } from '@h-ai/ui'
+  const props: ComponentProps<typeof PermGuard> = { permission: 'user:read', children: createRawSnippet(() => ({ render: () => "<span>用户列表</span>" })) }
+  const component = mount(PermGuard, { target: document.body, props })
+  await unmount(component)
   ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import { usePermission } from './permission-context.svelte.js'
 
+  /**
+   * PermGuard 组件的属性契约；通过公开组件配置使用。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount, createRawSnippet } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { PermGuard } from '@h-ai/ui'
+   * const props: ComponentProps<typeof PermGuard> = { permission: 'user:read', children: createRawSnippet(() => ({ render: () => "<span>用户列表</span>" })) }
+   * const component = mount(PermGuard, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   interface Props {
     /** 单个权限码 */
     permission?: string

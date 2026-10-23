@@ -42,7 +42,7 @@
 | 公共 API | oRPC contract + Hono + typed client |
 | 认证     | Bearer access token + httpOnly refresh cookie（浏览器推荐） |
 
-pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。
+pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 
 ### SvelteKit Adapter 模式
 
@@ -150,13 +150,15 @@ const db = await reldb.init(dbConfig.data)
 if (!db.success) return db
 const cached = await cache.init(cacheConfig.data)
 if (!cached.success) {
-  await reldb.close()
-  return cached
+  const cleanup = await reldb.close()
+  return cleanup.success ? cached : cleanup
 }
 const identity = await iam.init(iamConfig.data)
 if (!identity.success) {
-  await cache.close()
-  await reldb.close()
+  const cacheCleanup = await cache.close()
+  const dbCleanup = await reldb.close()
+  if (!cacheCleanup.success) return cacheCleanup
+  if (!dbCleanup.success) return dbCleanup
   return identity
 }
 // 应用结束时 await iam.close()、cache.close()、reldb.close()；
@@ -277,11 +279,14 @@ pnpm --filter <app-name> test:e2e
 pnpm --filter <app-name> test
 pnpm --filter <app-name> test:e2e
 
-# Refactor：质量门禁
+# Refactor：按下方分轮验证流程收集适用门禁
 pnpm typecheck
 pnpm lint
+pnpm build # 构建/配置/模板/跨包契约变更
 pnpm test
 ```
+
+以上命令按 [分轮验证与集中修复](../hai-app-tests/validation.md) 调度，不在普通失败时立即修改并从头重跑。
 
 ## 统一编码规范
 
@@ -311,7 +316,7 @@ return kit.response.ok(result.data)
 
 ### 质量门禁
 
-按当前项目已定义的 scripts 和变更影响执行；PowerShell 使用 `pnpm.cmd`：
+按当前项目已定义的 scripts 和变更影响选择检查，执行 [分轮验证与集中修复](../hai-app-tests/validation.md)：普通失败先记录，独立检查继续，汇总后集中修复。PowerShell 使用 `pnpm.cmd`：
 
 ```bash
 pnpm typecheck    # TypeScript 类型检查
@@ -338,11 +343,9 @@ pnpm test         # Vitest 单元测试
 
 ### 变更后：验证
 
-1. `pnpm typecheck` 通过
-2. `pnpm lint` 通过
-3. 构建/配置/跨包变更 `pnpm build` 通过
-4. `pnpm test` 通过（单元测试）
-5. UI/路由/端到端改动执行相应 `test:e2e`；从 package.json 确认入口
-6. 搜索确认所有引用点已更新，报告未验证边界
+1. 按影响范围调度一轮 typecheck/lint/build/test；UI/路由/端到端改动加相应 E2E，从 package.json 确认入口
+2. 记录全部可执行结果与日志；真实前置失败只阻塞依赖项，普通失败不边测边改
+3. 归并问题并集中修复，再验证失败、阻塞及受影响项；最终必需门禁对最终代码有效通过
+4. 搜索确认所有引用点已更新，报告未验证边界与结果来源
 
 涉及原生交付时按当前项目 Tauri/Gradle/Xcode 等实际入口打包，在目标 OS/设备验证安装启动、会话、安全 TokenStorage、API 域名及覆盖升级。Web 构建/E2E 不代替原生验收；记录平台/工具链与结果，缺平台写未验证。

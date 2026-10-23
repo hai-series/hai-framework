@@ -37,5 +37,11 @@
   "users_failed": "Load failed",
   "username": "Username",
   "email": "Email",
-  "status": "Status"
+  "status": "Status",
+  "logoutUnconfirmed": "Server sign-out was not confirmed. The session may still be active; please retry later.",
+  "logoutLocalClearFailed": "Local credentials could not be cleared. Close the app and check secure storage.",
+  "auth_login_response_invalid": "Unexpected login response from server",
+  "auth_register_response_invalid": "Unexpected register response from server",
+  "auth_login_request_failed": "Login request failed",
+  "auth_register_request_failed": "Register request failed"
 }

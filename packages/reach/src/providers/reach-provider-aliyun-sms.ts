@@ -8,7 +8,8 @@
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
 
-import type { ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
+import type { ReachMessage, SendResult } from '../reach-types.js'
+import type { ReachProvider } from './reach-provider-types.js'
 import { createHmac, randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 
@@ -42,12 +43,18 @@ function percentEncode(str: string): string {
 }
 
 /**
- * 构造阿里云 POP API 签名
+ * 按阿里云POP规范排序/编码并执行HMAC-SHA1；不能替换为框架默认HMAC-SM3。
+ * @param params - 不含Signature的请求参数。
+ * @param accessKeySecret - 私有Secret，禁止写日志。
+ * @param method - 实际HTTP方法。
+ * @returns Base64签名，只用于对应请求。
  *
- * @param params - 请求参数（不含 Signature）
- * @param accessKeySecret - AccessKey Secret
- * @param method - HTTP 方法
- * @returns 签名值
+ * @example 模块内部上下文
+ * ```ts
+ * const secret = process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET
+ * if (!secret) throw new Error('Missing SMS credential')
+ * const signature = signRequest({ Action: 'SendSms', Format: 'JSON' }, secret, 'POST')
+ * ```
  */
 function signRequest(params: Record<string, string>, accessKeySecret: string, method: string): string {
   const sortedKeys = Object.keys(params).sort()
@@ -63,15 +70,27 @@ function signRequest(params: Record<string, string>, accessKeySecret: string, me
 }
 
 /**
- * 创建阿里云短信 Provider（直接调用 HTTP API）
+ * 内部阿里云POP短信适配器，使用平台指定的HMAC-SHA1签名，不用框架HMAC-SM3替代。
+ * 短信发送无接收端持久幂等声明，已开始后失败不自动接管重发。
+ * @returns Provider；私有AccessKey由配置注入，不进入示例常量或日志。
  *
- * @returns 阿里云短信 Provider 实例
+ * @example 模块内部上下文
+ * ```ts
+ * const provider = createAliyunSmsProvider()
+ * const { AliyunSmsProviderConfigSchema } = await import('@h-ai/reach')
+ * const config = AliyunSmsProviderConfigSchema.parse({ name: 'sms', type: 'aliyun-sms', accessKeyId: process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYID, accessKeySecret: process.env.HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET, signName: process.env.HAI_REACH_PROVIDERS_0_SIGNNAME })
+ * const connected = await provider.connect(config)
+ * if (!connected.success) throw new Error(connected.error.message)
+ * try { const connectedNow = provider.isConnected(); const retrySafe = provider.supportsIdempotency }
+ * finally { await provider.close() }
+ * ```
  */
 export function createAliyunSmsProvider(): ReachProvider {
   let smsConfig: AliyunSmsProviderConfig | null = null
 
   return {
     name: 'aliyun-sms',
+    supportsIdempotency: false,
 
     async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'aliyun-sms') {

@@ -106,7 +106,7 @@
 </script>
 
 <div class='hai-mobile-viewport'>
-  <div class='hai-mobile-shell max-w-lg'>
+  <div class='hai-mobile-shell min-w-0'>
     <AppBar title={appConfig.name} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8'>
       {#snippet trailing()}
         <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} compact />
@@ -139,7 +139,7 @@
 {{#if features.iam}}
     {#if authenticated && !booting && !bootError}
 {{/if}}
-      <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='lg' />
+      <BottomNav items={navItems} active={router.path.slice(1)} onchange={handleTabChange} safeArea centered maxWidth='none' />
 {{#if features.iam}}
     {/if}
 {{/if}}

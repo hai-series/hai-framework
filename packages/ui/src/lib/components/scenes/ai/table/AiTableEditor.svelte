@@ -1,4 +1,5 @@
 <!--
+  @component AiTableEditor
   =============================================================================
   @h-ai/ui - AiTableEditor 组件
   =============================================================================
@@ -10,6 +11,16 @@
 
   使用 Svelte 5 Runes ($props, $state, $derived, $effect)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { AiTableEditor } from '@h-ai/ui'
+  const props: ComponentProps<typeof AiTableEditor> = { title: '销量', tableData: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] } }
+  const component = mount(AiTableEditor, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../../types.js'
@@ -28,6 +39,14 @@
   import { cn, getDataAttributes } from '../../../../utils.js'
   import AiDocumentDownloadMenu from '../AiDocumentDownloadMenu.svelte'
 
+  /**
+   * 流式表格 JSON 中提取的数组片段；complete=false 时不能当作完整最终数据。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: ExtractedArrayChunk = { source: '[{"row_id":"r1"}]', complete: true }
+   * ```
+   */
   interface ExtractedArrayChunk {
     /** 从原始字符串里截取到的数组片段（可能是不完整数组）。 */
     source: string
@@ -35,8 +54,24 @@
     complete: boolean
   }
 
+  /**
+   * 拖放行相对目标行的插入方向。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: AiTableRowDropPosition = 'before'
+   * ```
+   */
   type AiTableRowDropPosition = 'before' | 'after'
 
+  /**
+   * 表格拖放产生的新快照和前后索引；未变更时 nextData 为 null。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: ReorderedTableResult = { nextData: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] }, fromIndex: 1, toIndex: 0 }
+   * ```
+   */
   interface ReorderedTableResult {
     /** 重排后的完整表格快照；未真正变更顺序时为 `null`。 */
     nextData: AiTableData | null
@@ -683,6 +718,19 @@
     clearScheduledCellChange()
   }
 
+  /**
+   * 立即交付尚在防抖窗口中的单元格修改，关闭或保存前可通过组件引用调用。
+   * @returns 无返回值；立即交付最后一份待发送的单元格修改。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import { AiTableEditor } from '@h-ai/ui'
+   * const editor = mount(AiTableEditor, { target: document.body, props: { tableData: { table_columns: [{ key: 'sales', label: '销量', type: 'number' }], table_rows: [{ row_id: 'r1', sales: 42 }] } } })
+   * editor.flushPendingTableChange()
+   * await unmount(editor)
+   * ```
+   */
   export function flushPendingTableChange(): void {
     const pendingPayload = pendingCellChangePayload
     if (!pendingPayload) {

@@ -100,6 +100,17 @@ function matchScope(entry: MemoryEntry, scope: Record<string, unknown>): boolean
  * @param store - 记忆条目持久化存储
  * @param vectorStore - 向量库存储（用于语义检索）
  * @returns MemoryCoreOperations 实例
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function prepare(config: MemoryConfig, llm: LLMOperations, store: AIRelStore<MemoryEntry>, vectors: AIVectorStore, embedding: EmbeddingOperations) {
+ *   const memory = createNativeMemoryOperations(config, llm, embedding, store, vectors)
+ *   const result = await memory.recall('茶饮偏好', { objectId: 'user-1', topK: 5 })
+ *   if (!result.success) return result
+ *   return result.data
+ * }
+ * ```
  */
 export function createNativeMemoryOperations(
   config: MemoryConfig,

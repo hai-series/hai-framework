@@ -3,9 +3,11 @@ name: hai-ui
 description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手引导、帮助中心、主题与 AI 内容展示。"
 ---
 
-# hai-ui — @h-ai/ui 快速指南
+# hai-ui
 
 ## 能力契约
+
+主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`；默认主题取应用配置，选择范围与已编译 CSS 主题一致。
 
 | 项目 | 契约 |
 | --- | --- |
@@ -15,286 +17,39 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 | 输出 | 复用原子/组合/场景组件的界面及交互验证 |
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
-`@h-ai/ui` 提供 Svelte 5 Runes 组件库，覆盖 primitives / compounds / scenes 三层组件架构，以及主题、i18n、Toast、平台检测、AI 输出展示等能力。
+## 使用路径
 
-> 完整安装步骤、组件清单与长示例见 [CLI UI 参考](../../../packages/cli/templates/skills/hai-ui/reference.md)；本文件保留工作区内最常用的集成要点，避免上下文过重。
+- 密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
 
-## 使用边界
+修改框架组件先读 [模块规范](../../instructions/module-conventions.md)；修改应用页面按 [应用规范](../../instructions/app-conventions.md)，在示例应用验证公共 Props、SSR 和浏览器交互。
 
-- 新手引导和帮助中心复用 `@h-ai/ui/guide` 的 `createGuide` / `GuideHost` / `HelpCenter`；按 [引导接入与状态契约](../../../packages/cli/templates/skills/hai-ui/guide.md) 配置业务文案、导航、用户范围和 data-guide 锚点。
-
-- 加密输入变更会清空密文，乱序/清空/卸载后的旧结果不会回填；失败显示错误。提交前确认当前密文非空，不缓存上次密文。
-
-- `EncryptedInput` 的 `onencrypt` 必须接入真实加密服务；`algorithm` 仅标注算法。缺少回调时显示不可用，不生成密文，不允许用编码代替加密。
-
-- 浏览器端界面优先复用 `@h-ai/ui` 现有组件，禁止在 app 内重复造轮子。
-- AuthPanel 当前完整 URL 的链接仅切换认证场景，不额外调用 goto/reload；跨路径、查询串或 hash 由应用路由接管。验证重置密码后立即返回并登录，避免重复导航清空输入。
-- 只消费部分组件时优先检查公开 `@h-ai/ui/components/*` 目录入口；主题工具通过 `@h-ai/ui/theme` 获取，避免根入口引入无关 AI/图表依赖。先确认安装版本的 exports，禁止内部 src/dist 导入。
-- Svelte 组件使用 Svelte 5 Runes（`$state` / `$derived` / `$effect`）。
-- 主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`；默认主题取应用配置，选择范围与已编译 CSS 主题一致。
-- 页面级文案走应用自己的 i18n；`@h-ai/ui` 组件内置文案由 UI 包统一提供。
+- 先检查组件导入、Tailwind @source 和主题 CSS，再选场景 → 组合 → 原子组件，缺能力才自定义。
+- 按安装版本的 exports 选择明确列出的 components barrel 入口（不开放任意内部文件）；主题工具使用 `@h-ai/ui/theme`，避免仅为主题加载根入口的 AI/图表组件。禁止导入内部 src/dist；例如原子组件使用 `@h-ai/ui/components/primitives/index`。
+- 自动导入识别无分号、跨行及别名的运行时 import；已绑定的本地组件名称不会重复注入。
+- 后台列表与工作区使用可用宽度，不在外壳叠加固定 max-width；flex/grid 子项使用 min-width: 0，表格自行滚动。正文、认证表单保留阅读宽度。验证 390/1440/1920/2560/3840px 的内容占宽、导航和整页横向溢出。
+- 应用只提供页面级文案；组件内部中英日文由 @h-ai/ui 维护。
 - `UserProfile` 用 `avatarAccept` / `avatarHint` 对齐业务的头像格式与大小限制；文件最终校验和上传由业务回调完成。
 - `BareInput type="file"` 通过 `onchange` 的 `currentTarget.files` 读取文件，不绑定文件路径 `value`；其他输入类型可 `bind:value`。
-- `toast`、类型导入以及 `Range` 需要显式 `import`；其它公开 Svelte 组件可自动导入。
-- 自动导入识别无分号、跨行及别名的运行时 import；已绑定的本地组件名称不会重复注入。
+- AI 文本视为不可信；Markdown/Mermaid 预览与允许执行 HTML/JS 的预览有不同边界。
 
-## 必备集成
+## 按需参考
 
-### Svelte 预处理
+新手引导、首次 Cookie 提示、操作导览和帮助中心见 [引导指南](../../../packages/cli/templates/skills/hai-ui/guide.md)。fullstack 默认在共享管理界面接入，新增业务只补内容与 data-guide 锚点。
 
-```js
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+按任务读取 [UI 参考](../../../packages/cli/templates/skills/hai-ui/reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
-export default {
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
-  compilerOptions: { runes: true },
-}
-```
-
-`autoImportHaiUi()` 必须放在 `vitePreprocess()` 前面。
-
-### Vite / SSR
-
-```ts
-export default defineConfig({
-  plugins: [sveltekit(), tailwindcss()],
-  optimizeDeps: { exclude: ['bits-ui'] },
-  ssr: { noExternal: [/@h-ai\//] },
-})
-```
-
-### 样式导入
-
-```css
-@import 'tailwindcss';
-@import '@h-ai/ui/styles/global.css';
-@import '@h-ai/ui/styles/theme.css';
-@import '@h-ai/ui/styles/design-tokens.css';
-@import '@h-ai/ui/styles/mobile.css';
-
-@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
-@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
-```
-
-未配置 `@source` 时，Tailwind 不会扫描 `@h-ai/ui` 组件类名，样式会丢失。
-
-## 常用能力
-
-- primitives：`Button`、`Input`、`Textarea`、`Badge`、`Avatar`、`Spinner` 等。
-- compounds：`Form`、`Modal`、`Drawer`（可选拖动并记忆宽度）、`DataTable`（列头排序、列单元格点击）、`Tabs`、`Combobox`、`DatePicker` 等。
-- mobile：`SafeArea`、`AppBar`、`BottomNav`、`PullRefresh`、`ActionSheet`、`SwipeCell`。
-- scenes：IAM / Storage / CRUD / AI / 错误页 / 设置 场景组件。
-
-Storage 上传组件只负责选择、校验、进度和预览。真实上传通过应用 service 注入 `uploadHandler(file, { signal, onProgress })`；签名 URL、认证头和 PUT/POST 协议不得写入 UI 层。
-
-## 场景组件速查
-
-| 组件 | 用途 |
-| --- | --- |
-| `ErrorPage` | 通用错误页，内置 `401/403/404/500/503` 预设；`status` 驱动预设，`onhome`/`onback` 自定义跳转。SvelteKit 在 `+error.svelte` 中按 `page.status` 使用 |
-| `SettingsLayout` | 设置页布局：顶部标题/描述 + 左侧分区导航（`sections` + `active` + `onselect`）+ 右侧内容（children） |
-| `AuthShell` | 认证页布局：`variant='card'`（居中卡片）或 `'split'`（左右分栏）；split 支持 `brandTitle`/`brandText`，也支持 `illustration`/`description`/`highlights` 自由内容 |
-
-### DataTable 排序
-
-- 列定义加 `sortable: true` 即可点击列头排序；默认客户端排序当前数据。
-- 受控（服务端）排序：传 `sortKey` / `sortDir` 并实现 `onsort(key, dir)`。
-- `CrudPage` 默认使用 `TableToolbar` 图标弹层工具栏，`toolbarStyle='filter-bar'` 可切换为平铺筛选栏；`toolbarLeading` 注入左侧标题/说明且可配合 `showHeader={false}` 隐藏默认页头，`toolbarActions` 注入右侧业务操作，`card` 插槽用于保留卡片列表视图，`sortableColumns` 声明服务端排序字段。
-- `Pagination` 统一为 table 风格（总数 + 每页 + 第 X / Y 页 + 首/上/下/末 + 跳转到）。`CrudPage` 占满父级可用高度，仅数据区滚动，表头和分页栏保持固定；需要 Tooltip 等交互式单元格时，使用 `tableCell(row, columnKey)` 插槽。
-
-## AI 场景组件
-
-| 组件 | 用途 |
-| --- | --- |
-| `MarkdownRenderer` | Markdown 渲染（内置 Shiki 代码高亮，支持 `fontSize` / `allowHtmlTags`） |
-| `AiDocumentDownloadMenu` | AI 文档下载菜单 |
-| `AiDocumentEditor` | AI 文档编辑器，支持大纲、复制、代码/预览切换、Mermaid，以及 `fontSize` / `allowHtmlTags` |
-| `AiTableEditor` | AI 结构化表格展示与编辑 |
-
-### AiDocumentEditor 与 Mermaid
-
-- `sourceKind='document'`：文档里的 ```` ```mermaid ```` 代码块会在阅读态自动渲染为图表。
-- `sourceKind='code'` + `codeLanguage='mermaid'` + `showCodePreviewToggle`：保留源码视图，并可切换到 Mermaid 图表预览。
-- Mermaid 使用懒加载 + `securityLevel: 'strict'`，输出为消毒后的 SVG；**不需要** `allowUnsafeCodePreview`。
-- `allowUnsafeCodePreview` 仍只用于 HTML / JS / CSS 等高风险预览。
-
-文档模式示例：
-
-```svelte
-<AiDocumentEditor
-  title="订单履约流程"
-  sourceKind="document"
-  content={`# 流程\n\n\`\`\`mermaid\nflowchart TD\n  A[下单] --> B[发货]\n\`\`\``}
-  showToolbar
-  showOutline
-/>
-```
-
-代码模式示例：
-
-```svelte
-<AiDocumentEditor
-  title="订单状态机"
-  sourceKind="code"
-  codeLanguage="mermaid"
-  content={`stateDiagram-v2\n  [*] --> 待支付\n  待支付 --> 已支付`}
-  showCodePreviewToggle
-  showCopyButton
-  showOutline={false}
-/>
-```
-
-### 字号与 HTML 标签解析
-
-- `fontSize` 支持 `number`（按 px）或 CSS 长度字符串（如 `1.125rem`）。
-- `allowHtmlTags` 默认关闭；开启后会按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等标签，危险标签与属性仍会被消毒。
-
-```svelte
-<MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
-
-<AiDocumentEditor
-  title="方案文档"
-  content={documentMarkdown}
-  fontSize={18}
-  allowHtmlTags
-  showToolbar
-  showOutline={false}
-/>
-```
-
-## Charts 图表
-
-`Chart type='line'` 默认使用 LayerChart 原生折线图；监控看板类场景需要“分段线 + 圆点 + 最近点 hover + 竖向参考线”时，使用 `lineVariant='segmented-point'`：
-
-```svelte
-<Chart
-  type='line'
-  data={trendData}
-  x='label'
-  y={['rateLimit', 'circuitBreak']}
-  series={trendSeries}
-  lineVariant='segmented-point'
-  tooltipMode='nearest'
-  showCrosshair
-  legend
-  grid
-/>
-```
-
-## CRUD 场景组件（CrudPage）
-
-`CrudPage` 基于 `kit.crud.define()` 或框架级 `defineCrud()` 的资源定义，自动渲染列表 + 搜索过滤 + 分页 + 详情 + 编辑/新建 + 删除确认 + 查询中/失败/空态。
-
-| 配置项 | 说明 |
-| --- | --- |
-| `form.variant` | `'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口） |
-| `form.drawerSize` / `form.drawerWidth` / `form.drawerResizable` | 抽屉尺寸预设 / 自定义 CSS 宽度 / 是否允许拖动并按资源记忆宽度（默认允许） |
-| `form.modalSize` / `form.modalWidth` / `form.modalHeight` | 弹窗尺寸预设 / 自定义宽高 |
-| `pagination.showSizeChanger` | 每页条数选择器（默认开启） |
-| `pagination.pageSizeOptions` | 每页条数候选项（默认 `[10, 20, 50, 100]`） |
-| `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
-| `pagination.showPageInfo` / `pagination.showFirstLast` | 页码文案 / 首页末页按钮（默认开启；紧凑视图可关闭） |
-| `density` | 列表密度：`'normal'`（默认）或 `'compact'`；仅影响列表行、行内操作、分页与创建/编辑/详情表单 |
-| `toolbarStyle` | `'toolbar'`（图标弹层，默认）或 `'filter-bar'`（平铺筛选栏） |
-| `showHeader` / `toolbarLeading` | 隐藏默认页头，并在 toolbar 左侧放置页面标题或说明 |
-| `toolbarActions` | 工具栏业务操作 snippet |
-| `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
-| `detailColumns` | 点击后打开详情抽屉的列 key，例如 `['title']` |
-| `sortableColumns` | 可执行服务端排序的列；为空时使用全部列表列 |
-| `loading` / `loaded` / `error` / `onRetry` / `keepPreviousData` | 受控加载态：仅 `loaded && total===0` 显示空状态；首次显示查询中；失败显示错误+重试；`keepPreviousData`（默认 true）失败保留旧数据 |
-
-分页栏始终显示，不再因数据量小而隐藏。
-
-### SPA CRUD 控制器与惰性页签
-
-- 纯客户端用 `defineCrud` + `createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。传 `{ autoLoad: false }` 做惰性加载。
-- `Tabs` 传 `lazy` 后未激活页签内容不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`，不预加载不可见页签。
-- Toast 已内置 `notifySuccess` / `notifyError(err, fallback?)` / `notifyInfo` / `notifyWarning`，业务应用无需自建 toast 工具文件。
-
-```svelte
-<CrudPage
-  crud={roleCrud}
-  {data}
-  permissions={{ create: true, update: true, delete: true }}
-  form={{ variant: 'modal', modalSize: 'lg' }}
-  pagination={{ showSizeChanger: true, showJumper: true }}
-  density='compact'
-  detailColumns={['name']}
-  sortableColumns={[{ key: 'createdAt', label: '创建时间' }]}
-  {nav}
-/>
-```
-
-## 配置驱动认证页面
-
-协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
-
-```yaml
-agreements:
-  showOnRegister: true
-  showOnLogin: false
-  userAgreementMarkdown: |
-    # 用户协议
-
-    **账户使用条款**
-
-    - 请妥善保管账户凭据。
-  privacyPolicyMarkdown: |
-    # 隐私政策
-
-    注册资料用于账户管理，会话信息用于身份认证。
-  # 可选 URL；同主题同时配置 Markdown 和 URL 时，弹窗优先显示 Markdown。
-  # userAgreementUrl: https://example.com/terms
-  # privacyPolicyUrl: https://example.com/privacy
-```
-
-
-
-AuthPanel 直接接收 IAM 白名单配置和 actions，内置登录（密码/LDAP/邮件/短信）、注册、找回、重置及协议展示。使用 `config.ui` 配置卡片/分栏、标题、品牌、Logo 和配图。`LoginForm` 提供 methods、onsendotp、otpLength、resendInterval；密码表单接受 passwordPolicy。组件只渲染与交互，网络和 Token 存储通过 actions 注入。认证场景按公开 IAM 错误码显示当前 UI 语言的提示，应用自定义错误保留原文。
-
-AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事件后自动开放输入，避免接管时丢失早到的输入。应用无需额外的就绪适配；E2E 等待控件可编辑，并覆盖客户端脚本延迟加载的场景。
-
-
-协议在 Modal 内显示并保留表单输入；使用 URL 时，协议页面须允许 iframe 嵌入，组件禁用其脚本，另提供新窗口查看入口。登录/注册表单使用 `header/extraFields/footer` snippet，AuthPanel 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`，底部保留内置导航。自定义字段由应用绑定状态和提交，不会隐式写入 IAM 用户模型。
-
-```svelte
-<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
-<AuthPanel {config} {actions}>
-  {#snippet loginHeader()}
-    <p>{m.loginHelp()}</p>
-  {/snippet}
-  {#snippet registerFields()}
-    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
-  {/snippet}
-</AuthPanel>
-```
-
-上例的 subscribe 为应用自身的 $state，应用包装 register 动作校验/提交扩展业务数据；如需单独组合表单，使用 `<RegisterForm> {#snippet extraFields()}...{/snippet} </RegisterForm>`。扩展里的按钮须为 `type="button"`，避免误提交。
-
-
-## data-* 属性透传
-
-- 公开 Svelte 组件支持调用方直接传入 `data-*` 属性；组件会把它们透传到根节点或主交互节点。
-- 推荐测试和自动化直接使用 `data-testid`、`data-analytics-id` 等属性，不要为了测试 ID 在应用层重复封装 `Button/Input/Modal`。
-- 只透传 `data-*`，不要依赖未声明的普通属性透传。
-
-## 主题与平台
-- 主题：`applyTheme()`、`getCurrentTheme()`、`isDarkTheme()`。
-- 平台：`detectPlatform()`、`isMobile()`、`isNativeApp()`、`usePlatform()`。
-
-## 重要约定
-
-1. 组件优先复用 `@h-ai/ui`，不要在 app 中重复实现同类组件。
-2. 页面级文案与业务逻辑放在应用层；UI 组件只做展示与交互。
-3. `@h-ai/*` 需纳入 `ssr.noExternal`，否则 SSR 下 Svelte 组件可能无法正确编译。
-4. `{@html}` 只能渲染已清洗的受控内容；`AiDocumentEditor` / `MarkdownRenderer` 已内置安全处理链。
-
-## 相关 Skills
-
-- [hai-kit](../../../packages/cli/templates/skills/hai-kit/SKILL.md)：SvelteKit 路由、服务端控制流、端点集成
-- [hai-usage-iam](../hai-usage-iam/SKILL.md)：认证鉴权 + IAM 场景组件搭配
-- [hai-capacitor](../../../packages/cli/templates/skills/hai-capacitor/SKILL.md)：原生 App 场景（SafeArea / AppBar / BottomNav）
+- 运行环境
+- 适用场景
+- 使用边界
+- AI 使用顺序（先判断，再落地）
+- 项目配置（从 npm 安装）
+- 三层组件架构
+- Design Token 系统
+- 主题系统
+- 代码高亮（Shiki）
+- 重要约定
+- 导出路径
+- 相关 Skills
 
 ## 表单布局与错误提示
 
@@ -309,3 +64,7 @@ UserProfile 的 `fieldConstraints` 按字段声明 `required/minlength/maxlength
 IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。字段错误只在 FormField 或控件其中一处展示。
 
 验证一列/双列与两种标签位置、自动/显式跨列、窄抽屉/手机、无效提交与修正、切换语言后的错误、按钮和回车提交，以及关闭重开后的状态。
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
+
+`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。

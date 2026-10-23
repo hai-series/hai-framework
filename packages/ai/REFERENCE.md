@@ -4,7 +4,9 @@
 
 ## 初始化与依赖
 
-未初始化 reldb/vecdb 时，`ai.init()` 自动使用进程内临时 Store；两者均已初始化时使用持久化 DB Provider。Memory、Context、Persona、Knowledge 等需要跨进程持久化的生产场景必须使用 DB 或自定义 Provider。
+开发/显式测试未初始化 reldb/vecdb 时，`ai.init()` 使用临时 Store；两者就绪时使用 DB Provider。生产标记 `NODE_ENV` 或 `HAI_CORE_ENV=production` 要求 `stateScope: 'shared'`，内置实现须为 PostgreSQL/MySQL + 网络 vecdb；本地后端会初始化失败。自定义 Provider 必须兑现存储时钟、版本 CAS 与最终截止条件。
+
+MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确的 ER_DUP_KEYNAME/1061，并重新核对列及顺序、非唯一完整列、升序可见 BTREE 和无表达式；已有同名错误结构仍失败。账户需要建表和 INDEX 权限，元数据读取、权限或其他 DDL 错误使 ai.init 返回 CONFIGURATION_ERROR。返回前等待全部已启动 DDL 结束；MySQL DDL 不回滚，失败保留已创建结构，修复权限/结构后再重试。逐步检查初始化结果，失败不接收业务请求，并逆序关闭 AI、vecdb、reldb。
 
 - `ai.tools`：无需 `ai.init()`；无外部依赖。
 - `ai.stream`：无需 `ai.init()`；无外部依赖。
@@ -87,8 +89,14 @@ Embedding OpenAI 客户端按 `apiKey + baseURL + timeout` 缓存；同一 key �
 Memory 后端通过 `memory.provider` 选择：
 
 - `native`（默认）：HAI 原生引擎，复用 vecdb/reldb/LLM/Embedding。`extract` 采用 Mem0 式批量合并（ADD/UPDATE/DELETE/NONE + `category`）；`maxEntriesPerObject`（单主体配额）/`maxEntriesGlobal`（全局上限）/`recencyDecay`/`embeddingEnabled`/`writebackRelatedTopK` 作用于此后端；淘汰按 `objectId` 分区。
-- `mem0`：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式）。LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容，场景模型 `extraction` / `embedding`）；向量库从底层 vecdb 后端提取（`storeProvider.getVectorBackend()`），qdrant/pgvector 复用同一后端；无法映射 lancedb/chroma 等后端时**默认 fail-fast**（除非 `memory.allowEphemeralFallback: true` 才退回 mem0 in-memory）；历史默认禁用。
-- 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后以 `infer:false` 写入（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；mem0 后端 `update` 涉及 type/importance/metadata 时会重建记忆并重新分配 `id`。
+- `mem0`：直接使用 `mem0ai/oss` 的 `Memory` 引擎（嵌入式）。LLM/Embedder 从 `llm` 配置提取（OpenAI 兼容，场景模型 `extraction` / `embedding`）；向量库从底层 vecdb 后端提取（`storeProvider.getVectorBackend()`），qdrant 复用同一后端；当前适配仅映射带完整连接参数的 `qdrant`；生产环境（`NODE_ENV` 或 `HAI_CORE_ENV` 为 `production`）即使设置 `memory.allowEphemeralFallback: true` 也拒绝实际内存回退。临时回退仅限开发或明确的 `HAI_E2E=1` / `HAI_E2E_MOCK=1`；缺少后端同样不能在生产启动。历史默认禁用。
+- 两者对外 API（extract/recall/injectMemories/add/update/get/remove/list/listPage/clear）完全一致；`objectId` 隔离不同主体的记忆，`scope`（key-value）用于业务作用域隔离（recall/list/listPage/clear 均严格过滤）。mem0 后端 `extract` 在框架层分类打分后以 `infer:false` 写入（保留 `hai_type`/`hai_importance`），`recall` 支持 `types`/`recencyWeight`，与 native 一致；Mem0 的 `update` 使用 SDK 原地修改文本与元数据，保持 `id` 和创建时间。SDK 查询使用 `filters.user_id`，写入和整主体删除使用 `userId`。SDK 无列表游标：`list` / `listPage` / 条件 `clear` 最多支持每主体 1000 条原始候选（含过期条目），多取一条探测完整性；超限返回 `MEMORY_LIST_INCOMPLETE`（906），不会伪造 total 或执行部分条件删除。候选完整时按 UTC 日期剔除过期项，再按类型/scope 过滤和分页；仅 `objectId` 的清理使用 SDK `deleteAll`，不受列表上限限制。公共空条件清理被拒绝；跨主体全清仅限受信管理员显式 `admin.clearAll({ confirm: true })`。
+
+Mem0 3.3.1 的 Qdrant 适配仍依赖 `QdrantClient.search`；项目将 `@qdrant/js-client-rest` 精确锁定为受测的 `1.18.0`，AI 的可选 peer 也声明此版本。启动会检查该公开方法，缺失时明确配置失败；不要覆盖为已移除此方法的 1.19。
+
+Mem0 的 pgvector 组合在所有环境拒绝启动：当前 SDK 将 PostgreSQL 连接保存在私有对象中，未提供公开关闭入口，框架无法履行资源清理契约。需要 pgvector 时选择 `memory.provider: native`；该原生后端保持支持。`disableHistory: true` 使用 SDK 无资源的历史占位实现，不创建历史 SQLite 文件。工厂通过公开的一条有界只读查询等待实际后端 ready 后才发布成功。
+
+`add` / `extract` 的 SDK 回执不含完整业务字段，框架写后读取权威记录再返回；并发提取等待全部在途写入结束。若写入或写后读失败，`error.ext.requiresEffectReconciliation=true`，`memoryIds` 保存已知写入 ID（回执丢失时可能为空）。应按主体核对实际记忆后决定恢复，不能盲目重做 add/extract；框架不自动重放。
 
 ## Retrieval / RAG
 
@@ -111,25 +119,44 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 ## Knowledge
 
-- `setup(options?)`：初始化 collection / 表 / 索引。
-- `ingest(input)`：文档入库。
-- `ingestFile(input)`：从文件导入（Node.js）。
-- `ingestBatch(inputs, onProgress?)`：批量导入。
-- `retrieve(query, options?)`：实体增强检索。
-- `ask(query, options?)`：知识库问答。
-- `findByEntity(entityName, options?)`：实体关联文档。
-- `listEntities(options?)` / `listDocuments(options?)`：列表。
-- `removeDocument(documentId, options?)`：删除文档和关联。
+| 方法                                                 | 说明                                           |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| `setup(options?)`                                    | 初始化 collection / 表 / 索引                  |
+| `ingest(input)`                                      | 文档入库                                       |
+| `ingestFile(input)`                                  | 从文件导入（Node.js）                          |
+| `ingestBatch(inputs, onProgress?)`                   | 批量导入                                       |
+| `retrieve(query, options?)`                          | 实体增强检索                                   |
+| `ask(query, options?)`                               | 知识库问答                                     |
+| `findByEntity(entityName, options?)`                 | 实体关联文档                                   |
+| `listEntities(options?)` / `listDocuments(options?)` | 列表                                           |
+| `removeDocument(documentId, options?)`               | 删除文档和关联                                 |
+| `repair({ collection?, offset?, limit? })`           | 有界恢复过期暂存与失败清理，删除集合后也可调用 |
 
-入库链路：parse/clean → chunk → embedding → vecdb upsert → reldb metadata/entity index。
+入库链路：clean/chunk → embedding/完整实体提取 → 持久暂存清单 → vecdb upsert → 单文档 CAS 发布完整正文、实体和元数据。每次产生唯一 revision/chunk ID，相同文档并发重建只允许一个 writer；失败保留旧版，短文档重建不显示旧尾块。向量检索只保留当前发布版，切换期间重试，持续冲突或候选扩展超限返回错误。
+
+`ingest` 成功返回 `revision`、`cleanupPending`。后者为 true 表示完整新版已经发布但旧向量删除失败，须检查并安排 repair，不能当作全部清理完成。`setup` 自动扫描前 100 份清单；应用定期分页 repair（offset≥0，limit 1–1000，默认100），根据 processed/total 覆盖全部页。存储端时钟的 5 分钟暂存过期后旧 owner 不能发布；废弃写入的永久补偿墓碑用于反复清理迟到外部写入，不能随日志删除。SQL 与 vecdb 无跨库事务，故障/重启后的清理依赖持久记录及重复扫描。
+
+删除先撤销可见性，清理失败返回错误并保留补偿信息。集合删除保留物理向量集合与代际墓碑，重新 setup 不会恢复旧代数据。默认 Store 的正文/实体来自同一已发布快照；自定义 KnowledgeStore 必须实现相同发布、删除和补偿契约。Qdrant 写入/删除等待应用，候选上限使用精确计数；LanceDB 使用持久主键原子 merge。
+
+使用 LanceDB 时，集合维度与 metric 随 Arrow schema 持久化；连接 metric 只影响新集合。重启后复用同一持久目录，embedding 维数改变时重建匹配集合；多个节点各自的本地路径不会自动共享，分布式 Knowledge 推荐服务端向量后端。
+
+Knowledge `retrieve/ask` 与默认 DB Store 的 filter 透传向量 Provider，校验/查询失败必须传播（Knowledge 为 KNOWLEDGE_RETRIEVE_FAILED，ask 为 RAG_FAILED），不能当作空成功结果。LanceDB 仅支持顶层字面量键的 string/有限 number/boolean/null AND 匹配，例如 `{ tenant: 'acme', active: true }`；null 不匹配缺失字段，对象/数组/undefined 返回错误。过滤在向量 topK 前执行；其它后端的 null/复杂值语义须独立核对。LanceDB 原生 JSON 字段保留嵌套 JSON，但旧 Utf8 metadata 集合必须重建后才能写入或过滤。
 
 ## Context
+
+本节点后台记忆提取的异常和失败 HaiResult 均由 flush 返回 MEMORY_EXTRACT_FAILED（含数量）；pendingMemoryTasks=0 不保证成功。同轮并发 flush 共享结果，返回即确认本批报告，下一批独立观察，不自动重放副作用。save/reset(waitForMemoryTasks)/consolidate 必须检查并传播该失败，失败时不进行后续状态/记忆写入。
+
+`scope` 必填；共享 scope 用版本化聚合记录保存消息、摘要、owner、轮次和 pending。所有消息、对外 delta 与提交即时持久化。同步 getters 仅返回本管理器最近一次成功读写的独立快照，读取其他节点修改前调用 `await manager.reload()` 或 `restoreManager()`。`save()` 等待本节点记忆提取、刷新快照并同步目录，不能覆盖远端版本。`markTurnSpeaking` 为异步持久化方法。
+
+共享单活动生成租约为存储端时钟30秒，每10秒续租，最终 CAS 同时检查版本、owner 和截止时间。过期生成仅 interrupted，不自动重放 LLM/工具/记忆；manual pending 持久保存，可跨节点/重启按 turnId 提交。相同终态与真实文本重复提交幂等，内容冲突失败。queue 可取消轮询，不保证FIFO。reset 更换共享纪元，删除保留永久墓碑且 scope 不复用。外部 LLM/工具/本地后台记忆不与上下文跨系统原子提交；崩溃后的未知副作用必须由应用核对。
+
+自定义 `AIRelStore` 必须提供版本化读取、原子 CAS 和存储端 `currentTime()`；普通 save/saveMany 也推进版本。CAS 缺失版本只允许创建，notAfter 在最终持久化时严格检查，存储故障抛错不能当空数据；业务 HaiResult 边界负责转失败。默认 DB schema 含 version 列，不自动迁移旧表；多节点优先 PostgreSQL/MySQL，SQLite 文件仅在实际一致共享文件系统中可共享。
 
 `ai.context.createManager(options)` 返回有状态管理器，适合多轮对话。
 
 常用选项：
 
-- `scope: { objectId, sessionId }`
+- `scope: { objectId, sessionId }`（必填）
 - `systemPrompt`
 - `compress: { auto, strategy, maxTokens, preserveLastN }`
 - `memory: { enable, enableExtract, topK }`
@@ -149,6 +176,8 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 ## Audio
 
+IndexTTS 在 Node 使用同版本 Undici fetch/Agent/FormData，模型 timeout 覆盖响应头与正文等待；主动取消为 AUDIO_CANCELLED，超时为 AUDIO_TIMEOUT，成功/失败/取消均关闭连接。完整调用返回 HaiResult，按段流式降级仍在迭代中抛错。
+
 - `transcribe(request)`：完整音频 → `HaiResult<TranscriptionResult>`（`text`，可选 `language` / `durationMs` / `segments[]`，词级时间戳存于 `segments[].words`，毫秒整数）。
 - `transcribeStream(request)`：完整音频或 `AudioInputStream` → `AsyncIterable<TranscriptionEvent>`。事件为 `speech_started` / `{ type: 'transcript', text, final, startMs?, endMs?, words? }` / `speech_stopped`（支持服务端 VAD 的平台产出语音起止事件，可据此即时反应）。无原生流式的平台（如 whisper）：完整音频降级为最终结果，持续音频输入 → `AUDIO_UNSUPPORTED_INPUT`。
 - `synthesize(request)`：完整文本 → `HaiResult<SynthesisResult>`（`AudioContent` + 可选 `durationMs` / `metadata.durationMatched` / `metadata.speed`）。
@@ -165,8 +194,12 @@ const result = await ai.rag.query('核心架构是什么？', {
 
 - `generate({ prompt, model?, size?, referenceImages?, signal? })`：文本提示和可选参考图生成图片，返回 `HaiResult<{ images: GeneratedImage[] }>`。
 - `ReferenceImage` 只含 `data: Uint8Array` 与 `mimeType: string`；空字节或非 `image/*` MIME 会在调用厂商前返回 `IMAGE_INVALID_REQUEST`。
-- `GeneratedImage` 仅含图片 `Uint8Array`、MIME 类型与可选实际宽高；厂商原始响应、Provider 和临时 URL 不属于公共契约。
+- `GeneratedImage` 仅含图片 `Uint8Array`、MIME 类型与可选宽高提示；宽高来自请求/厂商，不做图片解码核验。厂商原始响应、Provider 和临时 URL 不属于公共契约。
 - 配置：`image.models: [{ id, provider, model, apiKey?, baseUrl?, workspaceId?, timeout? }]` + `generateModel`。
+- 资源：`image.maxImageBytes` 默认 20971520（20MiB，范围1–104857600字节），限制单张输出/参考图；`image.maxImages` 默认4（1–16），限制输出/参考图数量。环境入口为 `HAI_AI_IMAGE_MAXIMAGEBYTES` / `HAI_AI_IMAGE_MAXIMAGES`。JSON响应最多 `max(64KiB, 2×maxImageBytes)`，错误正文64KiB；实际解压后字节也受限，Base64解码前校验大小，URL串行下载。
+- 模型 timeout 默认120000ms，覆盖 API、每跳重定向、全部下载和响应流读取；signal 可取消整次操作。取消返回 IMAGE_CANCELLED，超时 IMAGE_TIMEOUT；超限 IMAGE_TOO_LARGE，地址拒绝 IMAGE_DOWNLOAD_BLOCKED。
+- 临时URL只允许默认443端口、无凭证公网HTTPS；实际socket lookup一次解析并校验所有DNS候选，直接使用该批地址，阻止私网/回环/链路本地/映射/转换/保留IPv4/IPv6。最多3跳重定向，每跳重新校验，下载不转发认证头或Cookie。baseUrl属可信运维配置，API请求不跟随重定向；没有放开私网下载的开关。
+- 输出须为PNG/JPEG/GIF/WebP且MIME匹配魔数，拒绝SVG；魔数不是完整图片解码或像素安全检查。应用处理图片时仍须使用合适的解码/存储策略。网络依据：[Undici Fetch](https://github.com/nodejs/undici/blob/main/docs/docs/api/Fetch.md)、[Node net](https://nodejs.org/api/net.html)、[IANA IPv4](https://www.iana.org/assignments/iana-ipv4-special-registry)、[IANA IPv6](https://www.iana.org/assignments/iana-ipv6-special-registry)。
 
 | Provider       | 支持模型                   | 官方请求差异                                                                                  | 原始响应          | 框架处理       |
 | -------------- | -------------------------- | --------------------------------------------------------------------------------------------- | ----------------- | -------------- |
@@ -182,13 +215,15 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 
 ## A2A
 
+入站日志落库后重验执行代际/期限才启动 executor，出站 agent 日志在已有有界事件队列中等待成功后才发布 journal。日志失败会使 Task failed/interrupted，重复 receipt 不重执；日志与 journal 无跨记录原子性，已有日志不是交付回执，须核对 requiresEffectReconciliation。listMessages 的存储失败返回安全的 A2A_LIST_MESSAGES_FAILED（984）。
+
 - `registerExecutor(executor)`：注册 Agent executor。
 - `getAgentCard()`：获取完整 A2A 0.3 Agent Card，含 streaming/MIME/securitySchemes；默认发现路径为 `/.well-known/agent-card.json`。
 - `handleRequest(body, context?)`：处理 A2A JSON-RPC 请求。
 - `listMessages(filter)`：管理接口，按 callerId/contextId/since/status（消息角色）查询；调用方负责授权。
 - `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor。
 
-任务与消息存储在 `ai.init()` 中初始化。任务读取使用可信 `context.agentId` 的主体作用域；匿名请求共享匿名作用域，需要隔离时必须开启认证。历史任务不自动推断主体，升级迁移要求见 README 的 A2A 协议边界。内部 RelStore 遇到 SQL 错误会抛给上层转换为 HaiResult/协议错误，不将故障解释为查询无数据。
+任务 journal、context 归属与消息存储在 `ai.init()` 中初始化。可信 `context.agentId` 是主体来源，匿名共用一个主体，生产须在传输层认证。Task/事件一次 CAS 持久化；跨节点订阅与真实 owner 取消、input-required 续接无需粘性路由。同 message ID/内容重试复用同一轮结果，旧消息或内容变化拒绝；取消确认前同一 Task 不接受新消息，以隔离迟到取消回调。失租/期限/未完成退出标记 failed/interrupted 与 `metadata.haiExecution.requiresEffectReconciliation=true`，不自动重放未知副作用。内部 RelStore 故障转换固定协议错误，不当作无数据。`a2a.execution` 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；完整限制见[共享状态能力表](../../docs/distributed-state.md)。
 
 ## 错误码速查
 
@@ -196,7 +231,7 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 - `hai:ai:010-012`：初始化，含 `NOT_INITIALIZED` / `CONFIGURATION_ERROR` / `INIT_IN_PROGRESS`。
 - `hai:ai:020-033`：Rerank / File。
 - `hai:ai:050-059`：Audio（`AUDIO_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UNSUPPORTED_INPUT` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CONNECTION_FAILED` / `TIMEOUT` / `INPUT_TOO_LARGE` / `CANCELLED`）。
-- `hai:ai:060-065`：Image（`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED`）。
+- `hai:ai:060-068`：Image（`IMAGE_INVALID_REQUEST` / `MODEL_NOT_FOUND` / `PROVIDER_NOT_FOUND` / `UPSTREAM_ERROR` / `PROTOCOL_ERROR` / `CANCELLED` / `DOWNLOAD_BLOCKED` / `TOO_LARGE` / `TIMEOUT`）。
 - `hai:ai:100-107`：LLM / 历史记录。
 - `hai:ai:200-204`：MCP。
 - `hai:ai:300-302`：Embedding。
@@ -204,15 +239,21 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 - `hai:ai:500-502`：Reasoning。
 - `hai:ai:600-701`：Retrieval / RAG。
 - `hai:ai:800-805`：Knowledge。
-- `hai:ai:900-905`：Memory。
+- `hai:ai:900-906`：Memory。
 - `hai:ai:950-971`：Context / Store / Session。
 - `hai:ai:980-984`：A2A。
 
 ## 浏览器端
 
-浏览器端通过 `@h-ai/api-client` 或自定义 endpoint 访问服务端 AI 能力。`ai.stream` 可在浏览器直接用于解析服务端流式 chunk。
+浏览器 HTTP 通过 `@h-ai/api-client` 的真实 typed contract 访问 AI；默认聊天补全非流式。A2A 与应用自定义流须绑定应用 contract。`@h-ai/ai/client` 只导出独立的 `createAudioClient`；不存在字符串路径 HTTP 客户端或重复 SSE parser。浏览器不导出 Node 服务单例 `ai`。
 
 ```ts
 const response = await apiClient.ai.chats.createCompletion({ messages })
 const memories = await apiClient.ai.memories.recall({ query: '偏好', objectId: 'user-001', topK: 5 })
 ```
+
+Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
+
+JSDoc 公开示例使用真实包入口，内部工厂示例标记“模块内部上下文”；框架仓库执行 `pnpm check:jsdoc --package ai` 校验结构体、公开函数和示例类型。调用示例须保留 HaiResult 成功检查、受信主体范围、共享 CAS 版本与存储端期限，不将后台 flush 失败或未知外部效果当作成功重试。
+
+SSE：Node 的 ai.stream 解码器支持跨片 LF/CRLF/CR、多行 data，只去冒号后一个空格；无 data 块不派发，空或缺省事件名按 message，id/retry 继承最近有效值，reset 清空连接状态，EOF 不补空行。encodeSSE 允许合法 data 换行并规范化，id/event 换行、id 的 NUL、非负安全整数以外的 retry 显式抛 TypeError/RangeError。真实 Anthropic/MiMo 使用同一内部 UTF-8 reader，退出/取消/协议结束/错误均取消正文并释放 reader；无自动重连/副作用重放。Anthropic 总 timeout 覆盖正文，MiMo 保留每请求独立 timeout。

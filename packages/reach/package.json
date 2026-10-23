@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/reach",
   "type": "module",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.67",
   "description": "Hai Framework user reach module for email, SMS, and webhook channels.",
   "license": "Apache-2.0",
   "exports": {
@@ -46,6 +46,7 @@
     "@types/node": "catalog:",
     "@types/nodemailer": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

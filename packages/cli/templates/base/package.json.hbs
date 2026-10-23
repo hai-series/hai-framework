@@ -1,7 +1,7 @@
 {
   "engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" },
   "name": "{{projectName}}",
-  "version": "0.1.0-alpha.66",
+  "version": "0.1.0-alpha.67",
   "private": true,
   "packageManager": "pnpm@12.11.2",
   "description": "{{#if_eq appType 'admin'}}Enterprise management system built with hai Agent Framework{{/if_eq}}{{#if_eq appType 'website'}}Enterprise website built with hai Agent Framework{{/if_eq}}{{#if_eq appType 'h5'}}Mobile H5 app built with hai Agent Framework{{/if_eq}}{{#if_eq appType 'api'}}REST API service built with hai Agent Framework{{/if_eq}}{{#if_eq appType 'mobile-app'}}Mobile app built with hai Agent Framework{{/if_eq}}",
@@ -25,7 +25,9 @@
     "dev:prod": "vite dev --mode prod",
     "compile": "{{#if hasI18n}}pnpm paraglide:compile && {{/if}}vite build",
     "build": "hai build",
+{{#if features.deploy}}
     "deploy": "hai deploy",
+{{/if}}
 {{#unless isSvelteOnlyApp}}
     "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js",
     "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local build/index.js",
@@ -57,6 +59,9 @@
   {{#if isSvelteOnlyApp}}
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
     "@h-ai/capacitor": "{{haiPackageSpecifier}}",
+{{#if features.crypto}}
+    "@h-ai/crypto": "{{haiPackageSpecifier}}",
+{{/if}}
     "@h-ai/ui": "{{haiPackageSpecifier}}"
   {{else}}
     "@h-ai/core": "{{haiPackageSpecifier}}",
@@ -73,16 +78,19 @@
     "@h-ai/payment": "{{haiPackageSpecifier}}"{{/if}}{{#if features.vecdb}},
     "@h-ai/vecdb": "{{haiPackageSpecifier}}"{{/if}}{{#if features.datapipe}},
     "@h-ai/datapipe": "{{haiPackageSpecifier}}"{{/if}}{{#if features.scheduler}},
-    "@h-ai/scheduler": "{{haiPackageSpecifier}}"{{/if}}{{#if features.deploy}},
-    "@h-ai/deploy": "{{haiPackageSpecifier}}"{{/if}}{{#if features.api-client}},
+    "@h-ai/scheduler": "{{haiPackageSpecifier}}"{{/if}}{{#if features.api-client}},
     "@h-ai/api-client": "{{haiPackageSpecifier}}"{{/if}}{{#if features.capacitor}},
     "@h-ai/capacitor": "{{haiPackageSpecifier}}"{{/if}}{{#if isCapacitorApp}}{{#unless features.api-client}},
     "@h-ai/api-client": "{{haiPackageSpecifier}}"{{/unless}}{{#unless features.capacitor}},
     "@h-ai/capacitor": "{{haiPackageSpecifier}}"{{/unless}}{{/if}},
+    "sm-crypto": "0.5.7",
     "zod": "{{versions.zod}}"
 {{/if}}
   },
   "devDependencies": {
+{{#if features.deploy}}
+    "@h-ai/deploy": "{{haiPackageSpecifier}}",
+{{/if}}
     "@h-ai/cli": "{{haiPackageSpecifier}}",
 {{#if isSvelteOnlyApp}}
     "@h-ai/core": "{{haiPackageSpecifier}}",

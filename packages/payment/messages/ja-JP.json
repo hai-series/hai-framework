@@ -7,11 +7,16 @@
   "payment_notifyParseFailed": "支払い通知の解析に失敗しました",
   "payment_signFailed": "支払い署名の生成に失敗しました",
   "payment_providerNotFound": "決済プロバイダーが見つかりません",
+  "payment_invalidCreateOrderInput": "決済注文の入力が無効です",
   "payment_invalidAmount": "支払金額が無効です",
   "payment_notInitialized": "決済モジュールが初期化されていません。先にpayment.init()を呼び出してください",
+  "payment_wechatBridgeUnavailable": "WeChat 決済ブリッジが利用可能になるまでお待ちください",
   "payment_invokeWebFailed": "Web決済の呼び出しに失敗しました",
-  "payment_invokeAppFailed": "アプリ決済の呼び出しに失敗しました",
   "payment_configError": "決済設定の検証に失敗しました: {error}",
   "payment_initFailed": "決済モジュールの初期化に失敗しました: {error}",
-  "payment_configFieldRequired": "この設定項目は必須です"
+  "payment_configFieldRequired": "この設定項目は必須です",
+  "payment_stripeDatabaseRequired": "Stripe 決済には初期化済みの共有 reldb データベースが必要です",
+  "payment_stripeStoreInitFailed": "Stripe 決済の永続化ストアの初期化に失敗しました",
+  "payment_stripeKeyInvalid": "Stripe には sk_test_、sk_live_、rk_test_、rk_live_ のいずれかで始まるサーバー API キーが必要です",
+  "payment_unsupportedTradeType": "この決済プロバイダーは指定された取引種別に対応していません"
 }

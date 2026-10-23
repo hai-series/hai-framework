@@ -46,7 +46,7 @@
 </svelte:head>
 
 <section class='py-20 px-4 lg:px-8'>
-  <div class='max-w-7xl mx-auto'>
+  <div class='w-full max-w-[120rem] mx-auto'>
     <div class='text-center mb-12'>
       <h1 class='text-4xl font-bold tracking-tight text-base-content'>{m.services_page_title()}</h1>
       <p class='text-base-content/50 mt-2 max-w-2xl mx-auto'>{m.services_page_subtitle()}</p>

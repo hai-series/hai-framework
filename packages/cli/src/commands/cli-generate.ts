@@ -4,125 +4,120 @@
  */
 
 import type { GenerateOptions, GeneratorType, TemplateContext } from '../cli-types.js'
+import type { GeneratedFile } from './cli-generate-serv.js'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
-import { createTemplateContext } from '../cli-utils.js'
-import { detectProject } from './cli-create.js'
+import { createTemplateContext, writeCliError, writeCliMessage } from '../cli-utils.js'
+import { generateServApi } from './cli-generate-serv.js'
+import { generateArchitecture, resolveGenerateTarget } from './cli-generate-target.js'
 
 /**
  * 生成器配置
  */
 const GENERATORS: Record<GeneratorType, {
-  description: string
+  description: () => string
   defaultPath: string
   generate: (context: TemplateContext, outputDir: string) => Promise<Array<{ path: string, content: string }>>
 }> = {
   page: {
-    description: 'SvelteKit 页面',
+    description: () => cliM('cli_generatePageDescription'),
     defaultPath: 'src/routes',
     generate: generatePage,
   },
   component: {
-    description: 'Svelte 组件',
+    description: () => cliM('cli_generateComponentDescription'),
     defaultPath: 'src/lib/components',
     generate: generateComponent,
   },
   api: {
-    description: 'API 端点',
+    description: () => cliM('cli_generateApiDescription'),
     defaultPath: 'src/routes/api',
     generate: generateApi,
   },
   model: {
-    description: '数据模型',
+    description: () => cliM('cli_generateModelDescription'),
     defaultPath: 'src/lib/models',
     generate: generateModel,
   },
   migration: {
-    description: '数据库迁移',
+    description: () => cliM('cli_generateMigrationDescription'),
     defaultPath: 'migrations',
     generate: generateMigration,
   },
 }
 
 /**
- * 生成代码
+ * 按实际应用/workspace 架构生成代码，并在文件写入失败时回滚本次修改。
+ * @param options - 生成类型、名称、workspace 及覆盖选项。
+ * @returns 文件生成并接入已有路由入口后完成。
+ * @throws Error | AggregateError - 架构不支持、路径/覆盖冲突，或写入及回滚失败。
+ * @example 模块内部上下文
+ * ```ts
+ * // 前提：当前工程是 CLI 创建的 fullstack，shop-serv 含可识别的聚合标记。
+ * await generate({ cwd: process.cwd(), workspace: 'shop-serv', type: 'api', name: 'orders' })
+ * // 等价：hai g api orders --workspace shop-serv；不支持纯 Vite 文件路由时会拒绝。
+ * ```
  */
 export async function generate(options: GenerateOptions): Promise<void> {
   const spinner = ora()
   const cwd = options.cwd ?? '.'
 
   try {
-    // 检查是否在 hai 项目中
-    const project = await detectProject(cwd)
-
-    if (!project?.isHaiProject) {
-      core.logger.warn(chalk.yellow('警告: 当前目录不是 hai 项目'))
-    }
-
     // 交互式获取选项
     const resolvedOptions = await resolveGenerateOptions(options)
     const generator = GENERATORS[resolvedOptions.type]
-
-    if (!generator) {
-      throw new Error(`未知的生成器类型: ${resolvedOptions.type}`)
-    }
 
     // 名称会同时进入路径、标识符与源码字符串，禁止路径片段和代码字符。
     if (!/^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/i.test(resolvedOptions.name))
       throw new Error(cliM('cli_invalidGenerateName'))
 
-    const outputDir = path.resolve(cwd, resolvedOptions.output || generator.defaultPath)
-
-    // 安全校验：输出路径必须在当前工作目录内，防止路径遍历
-    const resolvedCwd = path.resolve(cwd)
-    if (!outputDir.startsWith(resolvedCwd + path.sep) && outputDir !== resolvedCwd) {
-      throw new Error(cliM('cli_generateOutsideWorkspace'))
+    const target = await resolveGenerateTarget(resolvedOptions)
+    const architecture = generateArchitecture(target.target)
+    const outputDir = path.resolve(target.target.directory, resolvedOptions.output || generator.defaultPath)
+    // 文件路由必须在真实应用的路由目录内，不能生成不会被消费的“页面”。
+    if (['page', 'api'].includes(resolvedOptions.type) && architecture === 'sveltekit') {
+      const routes = path.join(target.target.directory, 'src/routes')
+      if (!outputDir.startsWith(routes + path.sep) && outputDir !== routes)
+        throw new Error(cliM('cli_generateInvalidRouteOutput'))
     }
+    if (resolvedOptions.type === 'api' && architecture === 'serv' && resolvedOptions.output)
+      throw new Error(cliM('cli_generateInvalidRouteOutput'))
+    const relativeOutput = path.relative(target.root, outputDir)
+    if (relativeOutput === '..' || relativeOutput.startsWith(`..${path.sep}`) || path.isAbsolute(relativeOutput))
+      throw new Error(cliM('cli_generateOutsideWorkspace'))
 
     const context = createTemplateContext(resolvedOptions.name, {
-      projectName: project?.name,
+      projectName: target.target.name,
     })
 
-    spinner.start(`生成 ${generator.description}...`)
+    spinner.start(cliM('cli_generateProgress', { params: { description: generator.description() } }))
 
-    const files = await generator.generate(context, outputDir)
-    const realCwd = await fse.realpath(resolvedCwd)
-    // 先检查全部目标，再落盘，避免页面的第二个文件冲突时已覆盖第一个。
-    for (const file of files) {
-      if (!resolvedOptions.force && await fse.pathExists(file.path))
-        throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
-      let ancestor = file.path
-      while (!await fse.pathExists(ancestor))
-        ancestor = path.dirname(ancestor)
-      const realAncestor = await fse.realpath(ancestor)
-      const relative = path.relative(realCwd, realAncestor)
-      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
-        throw new Error(cliM('cli_generateOutsideWorkspace'))
-    }
-    for (const file of files) {
-      await fse.ensureDir(path.dirname(file.path))
-      await fse.writeFile(file.path, file.content, { encoding: 'utf-8', flag: resolvedOptions.force ? 'w' : 'wx' })
-    }
+    const files = resolvedOptions.type === 'api' && architecture === 'serv'
+      ? await generateServApi(context, target)
+      : await generator.generate(context, outputDir)
+    await writeGeneratedFiles(files, target.root, resolvedOptions.force)
 
-    spinner.succeed()
+    spinner.succeed(cliM('cli_generateComplete'))
 
-    core.logger.info('', {})
-    core.logger.info(chalk.green('✔ 生成完成！'))
-    core.logger.info('', {})
-    core.logger.info('创建的文件:')
+    writeCliMessage('')
+    writeCliMessage(cliM('cli_generateFiles'))
     files.forEach((file) => {
-      core.logger.info(chalk.cyan(`  ${path.relative(cwd, file.path)}`))
+      writeCliMessage(chalk.cyan(`  ${path.relative(cwd, file.path)}`))
     })
-    core.logger.info('', {})
+    writeCliMessage('')
   }
   catch (error) {
-    spinner.fail()
-    core.logger.error(chalk.red('生成失败:'), { error })
+    spinner.fail(cliM('cli_generateFailed'))
+    writeCliError(cliM('cli_generateFailureDetail'), { error })
+    if (error instanceof AggregateError) {
+      for (const cause of error.errors)
+        writeCliError(cliM('cli_generateFailureDetail'), { error: cause })
+    }
     throw error
   }
 }
@@ -131,15 +126,15 @@ export async function generate(options: GenerateOptions): Promise<void> {
  * 解析生成选项
  */
 async function resolveGenerateOptions(options: GenerateOptions): Promise<Required<GenerateOptions>> {
-  const questions: prompts.PromptObject[] = []
+  const questions: prompts.PromptObject<'type' | 'name'>[] = []
 
   if (!options.type) {
     questions.push({
       type: 'select',
       name: 'type',
-      message: '选择生成类型:',
+      message: cliM('cli_generateTypePrompt'),
       choices: Object.entries(GENERATORS).map(([key, value]) => ({
-        title: `${key} - ${value.description}`,
+        title: `${key} - ${value.description()}`,
         value: key,
       })),
     })
@@ -149,25 +144,124 @@ async function resolveGenerateOptions(options: GenerateOptions): Promise<Require
     questions.push({
       type: 'text',
       name: 'name',
-      message: '名称:',
+      message: cliM('cli_generateNamePrompt'),
       validate: (value: string) => {
         if (!value.trim())
-          return '名称不能为空'
+          return cliM('cli_generateNameRequired')
         return true
       },
     })
   }
 
-  const answers = questions.length > 0 ? await prompts(questions) : {}
+  const answers = questions.length > 0
+    ? await prompts<'type' | 'name'>(questions, { onCancel: () => { throw new Error(cliM('cli_generateCancelled')) } })
+    : {}
+  const type: unknown = options.type || ('type' in answers ? answers.type : undefined)
+  const name: unknown = options.name || ('name' in answers ? answers.name : undefined)
+  if (!isGeneratorType(type))
+    throw new Error(cliM('cli_generateUnknownType', { params: { type: String(type ?? '') } }))
+  if (typeof name !== 'string' || !name.trim())
+    throw new Error(cliM('cli_generateNameRequired'))
 
   return {
-    type: options.type || answers.type,
-    name: options.name || answers.name,
+    type,
+    name,
     output: options.output ?? '',
     force: options.force ?? false,
     verbose: options.verbose ?? false,
     cwd: options.cwd ?? '.',
+    workspace: options.workspace ?? '',
   }
+}
+
+/** 校验真实生成类型，避免未识别参数或对象原型成员绕过提示。 */
+function isGeneratorType(value: unknown): value is GeneratorType {
+  return typeof value === 'string' && Object.hasOwn(GENERATORS, value)
+}
+
+/**
+ * 先校验全部路径与覆盖条件，再暂存并逐个提交；失败时只回滚仍等于本次内容的文件，保留外部并发修改。
+ * @param files - 生成文件计划；聚合入口必须携带原内容。
+ * @param root - 已解析的真实 workspace 根目录。
+ * @param force - 仅允许覆盖普通生成文件，不绕过聚合入口的原内容检查。
+ * @returns 所有文件提交及临时文件清理完成。
+ * @example 模块内部上下文
+ * ```ts
+ * const root = await fse.realpath(process.cwd())
+ * const file = path.join(root, 'src/lib/models/order-item.ts')
+ * await writeGeneratedFiles([{ path: file, content: 'export interface OrderItem { id: string }\n' }], root, false)
+ * ```
+ */
+async function writeGeneratedFiles(files: GeneratedFile[], root: string, force: boolean): Promise<void> {
+  if (new Set(files.map(file => path.resolve(file.path))).size !== files.length)
+    throw new Error(cliM('cli_generateUnsupportedAggregator'))
+  const previous = new Map<string, string | undefined>()
+  const stages = new Map<string, string>()
+  const written: GeneratedFile[] = []
+  const failures: unknown[] = []
+  for (const file of files) {
+    const relativeFile = path.relative(root, file.path)
+    if (relativeFile === '..' || relativeFile.startsWith(`..${path.sep}`) || path.isAbsolute(relativeFile))
+      throw new Error(cliM('cli_generateOutsideWorkspace'))
+    let ancestor = file.path
+    while (!await fse.pathExists(ancestor))
+      ancestor = path.dirname(ancestor)
+    const relative = path.relative(root, await fse.realpath(ancestor))
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+      throw new Error(cliM('cli_generateOutsideWorkspace'))
+    const content = await fse.pathExists(file.path) ? await fse.readFile(file.path, 'utf8') : undefined
+    if (file.previousContent !== undefined ? content !== file.previousContent : content !== undefined && !force)
+      throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+    previous.set(file.path, content)
+  }
+  try {
+    for (const file of files) {
+      await fse.ensureDir(path.dirname(file.path))
+      const stage = path.join(path.dirname(file.path), `.${path.basename(file.path)}.${randomUUID()}.tmp`)
+      stages.set(file.path, stage)
+      await fse.writeFile(stage, file.content, { encoding: 'utf8', flag: 'wx' })
+    }
+    for (const file of files) {
+      const current = await fse.pathExists(file.path) ? await fse.readFile(file.path, 'utf8') : undefined
+      if (current !== previous.get(file.path))
+        throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+      await fse.rename(stages.get(file.path)!, file.path)
+      written.push(file)
+    }
+  }
+  catch (error) {
+    failures.push(error)
+    for (const file of written.reverse()) {
+      try {
+        if (await fse.readFile(file.path, 'utf8') !== file.content)
+          throw new Error(cliM('cli_generateExists', { params: { path: file.path } }))
+        const original = previous.get(file.path)
+        if (original === undefined)
+          await fse.unlink(file.path)
+        else
+          await fse.writeFile(file.path, original, 'utf8')
+      }
+      catch (rollbackError) {
+        failures.push(rollbackError)
+      }
+    }
+  }
+  finally {
+    for (const stage of stages.values()) {
+      try {
+        await fse.unlink(stage)
+      }
+      catch (error) {
+        // 已提交的 stage 被 rename 移走；其余清理失败逐项保留，不遮盖主错误。
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT')
+          failures.push(error)
+      }
+    }
+  }
+  if (failures.length > 1)
+    throw new AggregateError(failures, cliM('cli_generateRollbackFailed'))
+  if (failures.length === 1)
+    throw failures[0]
 }
 
 /**

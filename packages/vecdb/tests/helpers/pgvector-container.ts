@@ -2,7 +2,7 @@
  * =============================================================================
  * @h-ai/vecdb - pgvector 测试容器管理
  *
- * 使用 Testcontainers 启动 pgvector/pgvector:pg17 容器，提供带 vector 扩展的
+ * 使用 Testcontainers 启动 docker.io/pgvector/pgvector:0.8.0-pg17 容器，提供带 vector 扩展的
  * PostgreSQL 实例供集成测试使用。采用引用计数管理容器生命周期。
  * =============================================================================
  */
@@ -37,7 +37,7 @@ export async function acquirePgvectorContainer(): Promise<PgvectorContainerLease
   refCount += 1
 
   if (!containerPromise) {
-    containerPromise = new GenericContainer('pgvector/pgvector:pg17')
+    containerPromise = new GenericContainer('docker.io/pgvector/pgvector:0.8.0-pg17')
       .withExposedPorts(5432)
       .withEnvironment({
         POSTGRES_DB: PG_DB,

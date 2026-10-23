@@ -4,9 +4,11 @@
 
 [フレームワークのホーム](../../README.ja.md) · 関連モジュール：[@h-ai/api-contract](../api-contract/README.ja.md) · [@h-ai/core](../core/README.ja.md) · [@h-ai/datapipe](../datapipe/README.ja.md) · [@h-ai/reldb](../reldb/README.ja.md) · [@h-ai/vecdb](../vecdb/README.ja.md)
 
+## 概要
+
 共通の `ai` サービスで LLM 対話、画像生成、ツール、MCP、Embedding、記憶、検索/RAG、知識ベース、コンテキスト管理、ファイル解析、Rerank、音声（ASR/TTS）、A2A を提供します。Node.js では `ai.init()` で初期化し、ブラウザーからは API/client を経由します。
 
-## 機能概要
+## 主な機能
 
 - `ai.tools`：ツール定義・登録・一括実行。初期化不要。
 - `ai.stream`：ChatCompletion のストリーミング chunk 処理。初期化不要。
@@ -22,14 +24,19 @@
 - `ai.audio`：通常・ストリーミングの音声認識（ASR）と音声合成（TTS）。OpenAI / MiMo / Qwen / Doubao に対応。
 - `ai.image`：OpenAI GPT Image、Google Gemini Image / Nano Banana、Qwen-Image 2.0/3.0、Seedream 4.x/5.x、Pollinations の無料枠モデルによる画像生成。
 - `ai.a2a`：Agent-to-Agent のリクエスト処理とリモート呼び出し。
-- `@h-ai/ai/client`：API サービスと連携する軽量フロントエンドクライアント。
-- `AIStoreProvider`：共通のストレージ抽象。DB がなければプロセス内の一時 Store、reldb + vecdb が初期化済みなら永続 DB Provider を自動使用。
+- `@h-ai/ai/client`：独立したブラウザー Audio WebSocket クライアント。
+
+`@h-ai/ai/client` は `createAudioClient({ url, getTicket })` と Audio クライアント型のみを公開します。HTTP は `@h-ai/api-client` の型付きドメインメソッドを使います。既定のチャット補完は非ストリーミングで、ストリームと A2A はアプリ独自の contract に結び付けます。文字列パスの旧クライアントと重複 SSE helper は削除しました。ブラウザーには Node の `ai` シングルトンを公開しません。
+
+- `AIStoreProvider`：ストレージ抽象。本番は `stateScope: 'shared'` が必須で、組み込み実装は PostgreSQL/MySQL とネットワーク vecdb の初期化を必要とします。開発・明示的テストでは一時 Store を利用できます。
 
 詳しいメソッド一覧・エラーコード・長い例は [REFERENCE.md（中国語）](./REFERENCE.md) を参照してください。
 
-## クイックスタート
+## 使い始める
 
-### LLM のみ（DB 依存なし）
+### クイックスタート
+
+#### 開発用 LLM のみ（DB 依存なし）
 
 ```ts
 import { ai } from '@h-ai/ai'
@@ -50,41 +57,52 @@ const result = await ai.llm.chat({
 await ai.close()
 ```
 
-reldb/vecdb が未初期化の場合、AI はセッションなどの状態をプロセス内の一時 Store に保存します。`ai.close()`、プロセス終了、インスタンス切り替え後は保持されません。Memory、Context、Persona、セッションを再起動後も保持する場合は以下の DB Provider を使います。
+開発・明示的テストで reldb/vecdb が未初期化の場合、一時 Store を使い、終了やインスタンス切り替えで失われます。`NODE_ENV` または `HAI_CORE_ENV` が production の場合、一時 Store・SQLite・ローカル vecdb は初期化に失敗します。共有 RelDB とネットワーク vecdb を先に初期化するか、同等の原子的契約を満たす共有 Provider を指定してください。
 
-### 永続 DB Provider（reldb + vecdb）
+#### 永続 DB Provider（reldb + vecdb）
 
 ```ts
 import { ai } from '@h-ai/ai'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-await reldb.init({ type: 'sqlite', database: './ai.db' })
-await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
-
-const init = await ai.init({
-  llm: {
-    model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-  },
-})
-if (!init.success) {
-  // 按 init.error.code 处理配置/依赖错误
-}
-
-const result = await ai.llm.chat({
-  messages: [{ role: 'user', content: '你好！' }],
-})
-if (result.success) {
+// 开发/测试使用本地后端；生产改为共享 PostgreSQL/MySQL 与网络 vecdb。
+const failures: unknown[] = []
+try {
+  const database = await reldb.init({ type: 'sqlite', database: './ai.db' })
+  if (!database.success)
+    throw new Error(database.error.message)
+  const vectors = await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
+  if (!vectors.success)
+    throw new Error(vectors.error.message)
+  const initialized = await ai.init({
+    llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_APIKEY },
+  })
+  if (!initialized.success)
+    throw new Error(initialized.error.message)
+  const result = await ai.llm.chat({ messages: [{ role: 'user', content: 'Hello!' }] })
+  if (!result.success)
+    throw new Error(result.error.message)
   const reply = result.data.choices[0]?.message.content ?? ''
 }
-
-await ai.close()
-await vecdb.close()
-await reldb.close()
+catch (error) {
+  failures.push(error)
+}
+finally {
+  await ai.close()
+  for (const service of [vecdb, reldb]) {
+    const closed = await service.close()
+    if (!closed.success)
+      failures.push(new Error(closed.error.message))
+  }
+}
+if (failures.length)
+  throw new AggregateError(failures, 'AI operation or cleanup failed')
 ```
 
-### 独自 StoreProvider
+MySQL の初回初期化は複数ノードで実行できます。mysql2 の明示的な ER_DUP_KEYNAME/1061 だけを受け入れ、実際の列・順序、非一意・列全体・昇順・可視 BTREE・式なしを再確認します。同名でも構造が異なれば失敗します。テーブル作成と INDEX 権限が必要で、メタデータ取得・権限・その他 DDL の失敗は ai.init の CONFIGURATION_ERROR になります。開始した全 DDL の終了を待ってから返します。MySQL DDL はロールバックされないため、権限や構造を修正してから再試行してください。各初期化結果を確認し、失敗時は業務リクエストを受けず、AI・vecdb・reldb の逆順で終了します。
+
+#### 独自 StoreProvider
 
 ```ts
 import type { AIStoreProvider } from '@h-ai/ai'
@@ -100,17 +118,17 @@ await ai.init(
 await ai.close()
 ```
 
-## API 契約
+### API 契約
 
 - 公開入口は `ai` サービスと `createMcpServer` など少数の独立ファクトリー。
 - ライフサイクルは `await ai.init(config, options?)` / `await ai.close()`。終了時は独自 `AIStoreProvider.close()` を待ちます。
 - ドメイン操作は `HaiResult<T>` または `Promise<HaiResult<T>>` を返し、`result.success === false` と `result.error.code` で失敗を表します。`AsyncIterable`、クライアント通信、外部コールバックは開始・反復時に例外を投げる場合があります。
 - `ai.tools` と `ai.stream` は純粋関数で、初期化せず使用できます。
-- reldb/vecdb がなければプロセス内の一時 Store、両方が初期化済みなら DB Provider を自動使用します。独自 Provider はほかの保存先を隠蔽できます。
+- 開発・テストで reldb/vecdb がなければ一時 Store、両方が初期化済みなら DB Provider を使います。本番では実際の DB/vecdb 共有能力を検証し、独自 Provider も正確な `stateScope` を宣言する必要があります。
 
-## API 一覧
+### API 一覧
 
-### LLM
+#### LLM
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -140,7 +158,7 @@ const temp = await ai.llm.chat({
 })
 ```
 
-### ツール呼び出し
+#### ツール呼び出し
 
 ```ts
 import { z } from 'zod'
@@ -172,13 +190,19 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
-### A2A プロトコルの境界
+#### A2A プロトコルの境界
 
 `ai.a2a.getAgentCard()` は `protocolVersion`、MIME、streaming 機能を含む完全な A2A 0.3 Agent Card を返します。Kit の既定検出パスは `/.well-known/agent-card.json`。`handleRequest()` は常に JSON-RPC/SSE の結果を返し、未初期化時は JSON-RPC エラーです。信頼された HTTP の `agentId` を executor の `context.user.userName` に対応付けます。JSON-RPC/SSE に対応し、push notifications・gRPC・REST 対応は宣言しません。業務リソースの認可はアプリの責任です。
 
-A2A のタスク・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続を含め、タスクは信頼された `agentId` で分離します。匿名は共通 scope なので、分離が必要な環境は認証を有効にしてください。`listMessages` はサーバー管理 API で `callerId`・`contextId`・`since` を使えますが、未認可クライアントへ公開しません。旧タスクの主体は信頼できず、更新時に所有者の推定や自動削除はしません。アプリ側の審査後に `object_id` を `user:<agentId>`（匿名は `anonymous`）へ移行します。主体・context を持たない旧メッセージは対応フィルターに一致しません。
+A2A の journal・context 所有者・メッセージテーブルは `ai.init()` で初期化します。取得・キャンセル・継続は信頼された `agentId` で分離します。匿名は共通主体のため、本番は信頼された伝送層で認証してください。`listMessages` は `callerId`・`contextId`・`since` を持つ管理 API であり、未認可クライアントへ公開しません。
 
-### MCP Server
+Task とイベントは同じ共有 journal を使用し、従来の独立 TaskStore は組み込みません。push notification 設定と authenticated extended card の RPC は SDK 標準の未対応・未設定エラーを返し、タスクを実行しません。executor 関連型は公開を維持し、内部 handler/Store の組み立て型は公開契約に含めません。
+
+入力メッセージの永続化後、共有実行世代と期限を再確認してから executor を開始します。agent メッセージは既存の有界イベントキューでログ保存を待ち、journal に公開します。保存失敗は failed/interrupted Task となり、成功を偽装せず、同じメッセージの再送で業務を再実行しません。ログと journal は別レコードなので、ログの存在だけで配信成功と判断せず、Task の `requiresEffectReconciliation` に従って副作用を確認します。照会失敗は SQL・接続情報を含まない `A2A_LIST_MESSAGES_FAILED`（984）です。
+
+Task とイベントは同じ CAS で保存し、任意ノードで購読できます。同一 message ID/内容の再試行は同じ結果を返し、内容変更や古いラウンドは拒否します。別ノードからのキャンセルは実行 owner の executor.cancelTask を呼び、確認待ちの間は同じ Task の新規メッセージを拒否して古いコールバックの影響を防ぎます。input-required は再起動後も継続できます。租約切れ・実行期限・working のまま終了した実行器は failed/interrupted となり、`metadata.haiExecution.requiresEffectReconciliation=true` を付けます。古い owner の書き込みと未知の外部効果の自動再実行を禁止します。`a2a.execution` の既定値は `leaseMs: 30000`、`pollIntervalMs: 250`、`maxExecutionMs: 300000`。上限はメッセージ 1 MiB、journal 8 MiB、1 ラウンド 2048 イベント、Task 256 回执、reference tasks 32 件です。安定した業務冪等キーと外部効果の照合が必要です。[共有状態表（中国語）](../../docs/distributed-state.md)に保証と検証範囲を記載しています。
+
+#### MCP Server
 
 `ai.mcp` はプロセス内の登録機能、独立 `createMcpServer` は SDK transport を使い、互いの自動登録はしません。`ai.mcp` は登録時にツールの JSON Schema をコンパイルし、呼び出し時に入力を検証します。リソースは `text` / `blob` のいずれか一方だけを持ちます。プロンプト引数・SDK メッセージ出力も検証し、画像・音声に対応します。HTTP 例は transport 接続のみで、アプリがリクエスト処理・認証を接続し、終了時に server を閉じる必要があります。
 
@@ -193,10 +217,20 @@ server.registerTool('search', {
 }, async ({ query }) => ({
   content: [{ type: 'text', text: `Results for ${query}` }],
 }))
-await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: crypto.randomUUID }))
+await server.connect(new StreamableHTTPServerTransport({ sessionIdGenerator: () => globalThis.crypto.randomUUID() }))
 ```
 
-### Memory / RAG / Knowledge
+#### Memory / RAG / Knowledge
+
+Knowledge は取り込みごとに一意の `revision` と chunk ID を生成します。全文・ベクトル・エンティティを準備し、永続ステージングマニフェストとベクトルを書いた後、共有 Store CAS で完全なスナップショットを一度に公開します。同じ文書の再構築は一つの writer に制限され、失敗時は完全な旧版を保持します。短い新版に旧末尾 chunk が混在しません。検索は未公開版を除外し、公開と競合すれば再試行します。競合が続く場合はエラーを返します。候補拡張や清掃待ちは検索負荷を増やすことがあります。
+
+成功結果の `revision` と `cleanupPending` を確認してください。後者が true の場合、新版は公開済みですが旧ベクトルの清掃が残っています。`repair({ collection, offset, limit })` で全ページを定期処理してください。setup は最初の 100 マニフェストを確認します。ステージングは保存先時計で 5 分後に失効し、旧 writer は公開できません。遅延した外部書き込みを繰り返し清掃するため、放棄版の墓碑は永久保持し、ログと共に削除しません。SQL とベクトルは共通トランザクションではありません。文書・集合の削除は先に可視性を取り消し、清掃失敗を返します。集合削除は空ベクトル集合と世代墓碑を補償用に残し、再 setup で旧世代を復元しません。
+
+DB Store は集合・ベクトルの失敗を伝播します。LanceDB は永続主キーの原子 merge を使い、Qdrant は書き込み・削除の適用を待ち、正確な件数を取得します。分散ノードは同一の関係保存先とサーバー型ベクトル基盤を共有します。独自 KnowledgeStore も同じ公開・補償契約が必要です。
+
+LanceDB の集合次元と metric は Arrow schema に永続化され、接続設定は新規集合にのみ影響します。再起動後は同じ永続ディレクトリを使い、embedding 次元を変更する場合は集合を再作成してください。別ノードのローカルパスは自動共有されないため、分散 Knowledge にはサーバー型ベクトルバックエンドを使用します。
+
+Knowledge の `retrieve/ask` と既定 DB Store は `filter` をベクトル Provider に渡し、検証・検索エラーを上位に伝えます。Knowledge は空結果に偽装せず `KNOWLEDGE_RETRIEVE_FAILED`（ask は `RAG_FAILED`）を返します。LanceDB は最上位のリテラルキーについて string・有限 number・boolean・null の AND 完全一致のみを支援します。例：`{ tenant: 'acme', active: true }`。null は欠落キーに一致せず、オブジェクト・配列・undefined は非対応です。フィルターはベクトル topK の前に適用します。他バックエンドの null・複合値の意味は個別に確認してください。LanceDB metadata は入れ子 JSON も保存できるネイティブ JSON フィールドになり、旧文字列形式は書き込み・フィルター前に再作成が必要です。
 
 ```ts
 const enriched = await ai.memory.injectMemories(messages, { objectId: 'user-001', topK: 5 })
@@ -217,11 +251,18 @@ const rag = await ai.rag.query('核心架构是什么？', { sources: ['docs'], 
 
 const setup = await ai.knowledge.setup()
 if (setup.success) {
-  await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  const ingested = await ai.knowledge.ingest({ documentId: 'doc-001', content: markdownText, title: '产品手册' })
+  if (!ingested.success)
+    return ingested
+  if (ingested.data.cleanupPending) {
+    const repaired = await ai.knowledge.repair({ offset: 0, limit: 100 })
+    if (!repaired.success)
+      return repaired
+  }
 }
 ```
 
-### 音声（Audio）
+#### 音声（Audio）
 
 先に `ai.init()` で音声モデルを登録し、既定の認識・合成モデルを対応付けます。認証情報はプラットフォームの環境変数へフォールバックします。LLM と音声が同じ認証情報を使うと確認できた場合にのみ、`inheritLlmApiKey` を明示的に有効化してください：
 
@@ -328,9 +369,11 @@ return playable.data
 
 ブラウザー・モバイルは `@h-ai/serv` の共通音声 WebSocket を使用します。`@h-ai/ai/client` は通信詳細を隠して Node と同じ `audio.*` API を提供します。クライアントは正常終了・キャンセル（`AUDIO_CANCELLED`）・異常切断（`AUDIO_CONNECTION_FAILED`）を区別し、キャンセルや `end` 前の切断で対応コードを throw します。`synthesize` は未完了の部分音声を成功として返しません。
 
+Node の IndexTTS は同じ Undici バージョンの fetch・Agent・multipart 型を組み合わせます。モデル `timeout` は応答ヘッダーと本文の待機に適用し、利用者の取消は `AUDIO_CANCELLED`、期限超過は `AUDIO_TIMEOUT` です。成功・失敗・取消のいずれも専用接続を閉じ、区間単位ストリーミングのエラーは反復中に送出します。
+
 > 自前の CPU/GPU モデルサービス（faster-whisper / IndexTTS / Qwen3-4B）、重み取得、オフライン化は [models/（中国語）](./models/README.md) を参照してください。イメージ・重みは ModelScope を優先し、HuggingFace ミラーへ自動フォールバックします。
 
-### 画像生成（Image）
+#### 画像生成（Image）
 
 `ai.init()` で登録後、呼び出し元は標準化された画像バイト列のみを受け取り、サービス固有の Base64・インラインデータ・一時 URL を意識しません：
 
@@ -360,7 +403,13 @@ if (result.success) {
 
 `referenceImages` は省略可能です。公開層は画像バイト列と MIME のみを受け付け、multipart・`inlineData`・Data URL は Provider が変換します。認証情報はモデル項目、`HAI_AI_IMAGE_<PROVIDER>_APIKEY`、サービス環境変数で指定できます。Qwen・Seedream の一時 URL は Provider 内ですぐダウンロードし、公開戻り値に出しません。詳細は [REFERENCE.md（中国語）](./REFERENCE.md#image) を参照してください。
 
-### Context 管理
+ダウンロードは認証情報を含まない既定ポート 443 の公開 HTTPS に限定します。socket の DNS 解決で全アドレスを検証し、同じ結果で接続します。IPv4/IPv6 のプライベート・ループバック・リンクローカル・変換/マップ・予約アドレスを拒否します。リダイレクトは最大 3 回で各段階を再検証し、独立接続に厂商認証ヘッダーやアプリ Cookie を渡しません。`baseUrl` は運用者が管理する信頼された設定で、厂商 API 自体のリダイレクトは拒否します。
+
+`image.maxImageBytes` は出力/参照画像ごとに既定 20971520（20 MiB、最大 100 MiB）、`image.maxImages` は出力/参照画像数ごとに既定 4（最大 16）です。URL は順次取得し、解凍後を含む実測バイト数が上限を超えると応答をキャンセルします。JSON は `max(64 KiB, 2 × maxImageBytes)`、エラー本文は 64 KiB までです。モデル `timeout` は既定 120000ms で API・リダイレクト・全ダウンロードを含み、`signal` で全体をキャンセルできます。出力は PNG/JPEG/GIF/WebP の MIME とマジック値の一致を要求し、SVG は拒否します。完全な画像デコード・寸法検証は行いません。アドレス拒否・上限超過・タイムアウトはそれぞれ `IMAGE_DOWNLOAD_BLOCKED`・`IMAGE_TOO_LARGE`・`IMAGE_TIMEOUT` を返すため、success を確認してください。
+
+#### Context 管理
+
+自動記憶抽出は現在のノードのバックグラウンドで動作し、`pendingMemoryTasks=0` だけでは成功を示しません。`flush()` は当該バッチを待ち、例外と失敗 HaiResult を件数付き `MEMORY_EXTRACT_FAILED` として返します。同時の観測者は同じ結果を受け取り、戻り時点で報告を確認済みとし、次回は新規タスクだけを観測します。部分実行の可能性がある処理を自動再実行しません。`save()`・`reset({ waitForMemoryTasks: true })`・`consolidate()` は失敗時に後続の書き込みへ進まず、プロセス停止後の外部効果は別途確認します。
 
 ```ts
 const manager = ai.context.createManager({
@@ -371,7 +420,9 @@ const manager = ai.context.createManager({
 })
 if (manager.success) {
   const reply = await manager.data.chat('你好')
-  await manager.data.save()
+  const saved = await manager.data.save()
+  if (!saved.success)
+    return saved
   // reset 生命周期完整：终止活动生成、清空消息/摘要/轮次，默认保留系统提示词
   await manager.data.reset() // 可传 { preserveSystemPrompt, cancelActiveTurn, waitForMemoryTasks }
 }
@@ -379,7 +430,7 @@ if (manager.success) {
 
 同じ管理器では既定で**同時に 1 つの生成のみ**を許可し、前の AI が終了する前に次の user が書き込まれる順序乱れを防ぎます。`reset()` は非同期で、活動中の生成を停止し、並行処理の障壁を解放、ターンを消去し、既定で Persona/System Prompt を再登録します。
 
-#### 実際の対話状態（Conversation Commit Layer）
+##### 実際の対話状態（Conversation Commit Layer）
 
 既定（`turnCommit: 'auto'`）では `chat` / `chatStream` が**生成した全文**を context に保存します。しかし生成 → TTS → 再生の途中で発話が遮られた場合、次のターンで共有すべき状態は全文ではなく**実際に再生された部分**です。
 
@@ -388,12 +439,15 @@ if (manager.success) {
 `chatStream` は**モデル呼び出し前**にターン登録と `turn_started` を行います（`turn_started → delta* → done`、キャンセル時は `turn_started → delta* → cancelled`）。途中で `AbortSignal` により中止しても `turnId` と生成済みテキストを取得し、実際の内容を保存できます：
 
 ```ts
-const m = ai.context.createManager({ turnCommit: 'manual' /* ... */ }).data
+const created = ai.context.createManager({ scope: { objectId: 'user-001', sessionId: 'sess-001' }, turnCommit: 'manual' })
+if (!created.success)
+  return created
+const m = created.data
 const controller = new AbortController()
 
 for await (const ev of m.chatStream('请展开讲讲', { signal: controller.signal })) {
   if (ev.type === 'turn_started') {
-    m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
+    await m.markTurnSpeaking(ev.turnId) // 可选：标记进入播放
   }
   else if (ev.type === 'delta') {
     feedTts(ev.text) // 边生成边合成播放
@@ -416,7 +470,7 @@ const turns = m.getTurns()
 - `committed` の内容のみが context・記憶抽出に入り、未保存・破棄された部分は後続ターンへ影響しません。
 - 流れの完了前に `interruptTurn` で遮った場合（司会が割り込む瞬間にモデルが終了する場合など）、`chatStream` は **`done` を返しません**。正常終了と誤認した追加保存を防ぎます。
 
-#### セッションの定着（Memory ライフサイクル）
+##### セッションの定着（Memory ライフサイクル）
 
 セッション中は各ターンで `scope: { sessionId }` の**短期セッション記憶**を抽出し、終了時に `consolidate()` で
 短期記憶 + 要約を**セッションをまたぐ長期記憶**にします。`Session Memory → Summary → Long-term Memory` の流れです：
@@ -430,7 +484,7 @@ if (result.success) {
 }
 ```
 
-### Persona（AI の人格）
+#### Persona（AI の人格）
 
 Memory は `objectId` / `scope` で誰の記憶かを表し、Persona は AI が誰かを定義します。各 AI に
 安定したシステムプロンプト・性格を定義し、`scope: { personaId }` で長期記憶と関連付けます：
@@ -446,6 +500,7 @@ await ai.persona.save({
 // 组合出可直接喂给 ContextManager 的系统提示词（systemPrompt + traits）
 const composed = await ai.persona.compose('xiaoq')
 const manager = ai.context.createManager({
+  scope: { objectId: 'user-001', sessionId: 'persona-session' },
   systemPrompt: composed.data,
   memory: { enable: true, enableExtract: true, scope: { personaId: 'xiaoq' } },
 })
@@ -508,9 +563,15 @@ memory:
 ```
 
 - **`native`（既定・推奨）**：HAI のネイティブエンジンは vecdb、reldb、LLM、Embedding を再利用します。`extract` は **Mem0 型の一括マージ**で、抽出した事実と既存記憶に 1 回の LLM 呼び出しで ADD / UPDATE / DELETE / NONE を決定し、増分更新・重複除去・矛盾削除・`category` 分類を実現します。`maxEntriesPerObject`、`maxEntriesGlobal`、`recencyDecay`、`embeddingEnabled`、`writebackRelatedTopK` が適用されます。削除は `objectId` ごとなので、ある主体の大量書き込みでほかの主体の記憶は失いません。scope の候補は `objectId` で絞り（≤ `maxEntriesPerObject`）、PostgreSQL はさらに JSONB 包含検索へ scope を渡して **GIN インデックス**を使います。SQLite/MySQL はメモリー照合で同じ結果を返します。
-- **`mem0`（mem0ai/oss）**：`mem0ai/oss` の `Memory` エンジンを直接組み込み、クラウドを使いません。LLM/Embedder は `llm` 設定から取得し、`qdrant` / `pgvector` は vecdb を再利用できます。`lancedb` / `chroma` など対応できないバックエンドは即座に失敗し、明示的な `memory.allowEphemeralFallback: true` の場合のみメモリーへ移行します。再起動後の無通知の記憶消失を防ぎ、履歴は既定で無効です。
+- **`mem0`（mem0ai/oss）**：`mem0ai/oss` の `Memory` エンジンを直接組み込み、クラウドを使いません。LLM/Embedder は `llm` 設定から取得し、`qdrant` は vecdb を再利用できます。現在のアダプターは完全な接続設定を持つ Qdrant のみをマッピングします。本番（`NODE_ENV` または `HAI_CORE_ENV=production`）では `memory.allowEphemeralFallback: true` でも実際のメモリーへの移行を拒否し、バックエンド未指定も失敗します。一時利用は開発または明示的な `HAI_E2E=1` / `HAI_E2E_MOCK=1` に限ります。履歴は既定で無効です。
 
-両 Provider は同じ `ai.memory.*`（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）を提供し、`objectId` の主体分離と `{ topicId, personaId }` などの `scope` をサポートします。`recall` / `list` / `listPage` / `clear` は scope を厳密に絞り、`clear` に `types` / `scope` を渡すと同時一致のみを削除します。mem0 の `extract` は共通抽出器で分類・採点（`types` / `model` / `minImportance` / `systemPrompt`）後、`infer:false` で `hai_type` / `hai_importance` を保存します。`recall` も `types` と `recencyWeight` 減衰に対応し、native と同じ動作です。ただし mem0 の type/importance/metadata 更新は記憶を再作成して `id` を変更し、native は維持します。
+両 Provider は同じ `ai.memory.*`（`extract` / `recall` / `injectMemories` / `add` / `update` / `get` / `remove` / `list` / `listPage` / `clear`）を提供し、`objectId` の主体分離と `{ topicId, personaId }` などの `scope` をサポートします。`recall` / `list` / `listPage` / `clear` は scope を厳密に絞り、`clear` に `types` / `scope` を渡すと同時一致のみを削除します。mem0 の `extract` は共通抽出器で分類・採点（`types` / `model` / `minImportance` / `systemPrompt`）後、`infer:false` で `hai_type` / `hai_importance` を保存します。`recall` も `types` と `recencyWeight` 減衰に対応し、native と同じ動作です。Mem0 はテキストとメタデータをその場で更新し、`id` と作成時刻を保持します。SDK の検索は `filters.user_id`、書き込みと主体全体の削除は `userId` を使います。SDK に一覧カーソルがないため、`list` / `listPage` / 条件付き `clear` は期限切れを含む主体候補 1000 件まで対応します。1 件余分に読み、超過は `MEMORY_LIST_INCOMPLETE`（906）で失敗します。不正確な total や一部のみの条件付き削除は行いません。候補が完全な場合、UTC の有効期限、型、scope で絞ってからページ分割します。主体全体の `deleteAll` は一覧上限の対象外です。公開 API の空条件 clear は拒否し、全主体の削除は信頼された管理者による明示的な `admin.clearAll({ confirm: true })` に限定します。
+
+Mem0 3.3.1 は `QdrantClient.search` を呼び出すため、カタログと AI の optional peer は検証済みの `@qdrant/js-client-rest` `1.18.0` に固定します。起動時に公開メソッドを確認し、不整合は設定エラーにします。このメソッドを削除した 1.19 への上書きはできません。
+
+Mem0 + pgvector は全環境で起動を拒否します。SDK が PostgreSQL 接続を私有オブジェクトに保持し、公開された close API がないためです。pgvector は `memory.provider: native` で利用でき、ネイティブの対応は維持します。`disableHistory: true` はリソースを持たない履歴実装を選び、履歴 SQLite ファイルを作成しません。ファクトリーは上限付きの公開読み取りでバックエンドの準備完了を待ってから成功を公開します。
+
+SDK の追加応答には完全な業務フィールドがないため、`add` / `extract` は書き込み後に保存済みレコードを読み取ります。extract は全ての進行中の書き込み完了を待ちます。書き込みまたは再読み取り失敗時、`error.ext.requiresEffectReconciliation=true` と既知の ID の `memoryIds` を返します（応答消失時は空の場合もあります）。主体の実データを照合してから復旧し、add/extract を無条件に繰り返さないでください。自動再実行は行いません。
 
 **候補集合と scope の検索漏れ**：`topK` で先に切り捨てると、別の話題・人格の関連性が高い記憶が対象 scope を押し出します。そのため `recall` / `injectMemories` は `topK × candidateMultiplier`（既定 5）件を取得してから絞り、`topK` 件にします。`topicId` + `personaId` など細かく分離する場合は `candidateMultiplier` を増やせます：
 
@@ -525,14 +586,14 @@ const memories = await ai.memory.recall('经济发展', {
 
 `ai.config` はマスク済み設定を返し、`apiKey`、`privateKey`、URL 内認証情報などをそのまま公開しません。
 
-## セキュリティ上の境界
+### セキュリティ上の境界
 
 - Prompt・検索文書・モデル出力は信頼できない入力として扱い、変更不可のシステム規則へユーザー内容を組み込まないでください。
 - Zod はツール引数の形を検証するだけで権限を保証しません。高権限 handler は主体・テナント・所有者・割当量を確認し、自動実行を許可したツールのみをモデルへ登録してください。
 - `callRemoteAgent()` は `ai.init()` のみで使える独立クライアントで、Agent Card・ローカル executor は不要です。非 HTTP(S)・URL 内認証情報を拒否しますが、アプリは origin 許可リストと出口側での DNS リバインディング・内部網へのリダイレクト・クラウドメタデータ対策を行う必要があります。
 - 完全な Prompt・ツール引数・A2A headers・一時認証情報・query 付き遠隔 URL を記録せず、監査が必要な場合もマスク済みの概要のみ保存してください。
 
-## エラー処理
+### エラー処理
 
 ```ts
 const result = await ai.llm.chat({ messages })
@@ -556,11 +617,11 @@ if (!result.success) {
 - `hai:ai:600-701`：Retrieval/RAG。
 - `hai:ai:800-805`：Knowledge。
 - `hai:ai:050-059`：Audio。
-- `hai:ai:060-065`：Image。
-- `hai:ai:900-905`：Memory。
+- `hai:ai:060-068`：Image（ダウンロード拒否、リソース上限、全体タイムアウトを含む）。
+- `hai:ai:900-906`：Memory。
 - `hai:ai:980-984`：A2A。
 
-## テスト
+## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/ai typecheck
@@ -569,6 +630,14 @@ pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
 
-## License
+Store の拡張には公開 AIStoreProvider を使用します。組み込み LLM Provider、ファクトリ依存、Context 内部依存は非公開です。モデル接続は設定で行い、履歴照会、AskOptions、ChatRecord は公開を維持します。
+
+公開 JSDoc の例は実際のパッケージ入口から import し、内部ファクトリの例はモジュール内部コンテキストを明示して実宣言で型検証します。ルートで `pnpm check:jsdoc --package ai` を実行すると網羅性と例の型を検証できます。通常の業務 API は HaiResult を確認し、ストリームとブラウザー AudioClient は明示された例外契約に従います。
+
+Knowledge は datapipe の単位と上限に従い、word は語数、その他は Unicode code point として清洗後テキストの区切りを保持します。AI の既定は markdown/maxSize=1500/overlap=200 のままです。maxSize を小さく上書きする際は継承する overlap もそれ未満にしてください。不正な分割設定・正規表現は embedding と版の公開前に KNOWLEDGE_INGEST_FAILED を返し、文書全体への無制限フォールバックは行いません。
+
+SSE は [WHATWG のイベントストリーム規則](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)に従い、分割された LF/CRLF/CR、複数 data 行、コロン直後の空白一つ、id/retry の継承、既定の message を扱います。EOF の未完了イベントは配信しません。encodeSSE は data の改行を正規化し、不正なメタデータは明示的に例外を返します。Anthropic/MiMo は UTF-8 reader を共有し、終了・取消・失敗時に本文を取消して解放します。自動再接続や業務再実行は行わず、Anthropic の timeout は本文まで、MiMo は各 HTTP リクエスト単位で適用します。
+
+## ライセンス
 
 Apache-2.0

@@ -1,4 +1,5 @@
 <!--
+  @component Tooltip
   =============================================================================
   @h-ai/ui - Tooltip 组件
   =============================================================================
@@ -8,6 +9,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount, createRawSnippet } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Tooltip } from '@h-ai/ui'
+  const props: ComponentProps<typeof Tooltip> = { content: '复制链接', position: 'top', children: createRawSnippet(() => ({ render: () => "<span>复制</span>" })) }
+  const component = mount(Tooltip, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, TooltipProps } from '../../types.js'

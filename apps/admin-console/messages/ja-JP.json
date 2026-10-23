@@ -365,7 +365,7 @@
   "modules_storage_op_download": "ダウンロード",
   "modules_storage_op_download_desc": "ファイルをダウンロード",
   "modules_storage_op_presign": "署名付きURL",
-  "modules_storage_op_presign_desc": "署名付きアクセスURLを生成",
+  "modules_storage_op_presign_desc": "S3 の署名付き URL を生成します。ローカルストレージは非対応を返します",
   "modules_storage_op_list": "ファイル一覧",
   "modules_storage_op_list_desc": "ディレクトリ内のファイルを一覧表示",
   "modules_ai_feat_chat_name": "テキスト生成",

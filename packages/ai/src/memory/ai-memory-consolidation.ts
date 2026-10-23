@@ -48,7 +48,16 @@ const MEMORY_CONSOLIDATION_SYSTEM_PROMPT = [
   'Return JSON only, without markdown fences or explanation.',
 ].join('\n')
 
-/** 单条合并操作 */
+/**
+ * 单条合并操作
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * const operation: ConsolidationOp = { event: 'UPDATE', id: 'memory-1', text: '用户偏好绿茶', type: 'preference', importance: 0.7 }
+ * const requiresExistingId = operation.event !== 'ADD'
+ * ```
+ */
 interface ConsolidationOp {
   event: 'ADD' | 'UPDATE' | 'DELETE' | 'NONE'
   id?: string
@@ -58,7 +67,17 @@ interface ConsolidationOp {
   category?: string
 }
 
-/** 合并依赖：默认记忆引擎通过公共操作接口注入 */
+/**
+ * 合并依赖：默认记忆引擎通过公共操作接口注入
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * function bind(llm: LLMOperations, memory: MemoryOperations): ConsolidationDeps {
+ *   return { llm, recall: memory.recall, add: memory.add, update: memory.update, remove: memory.remove, relatedTopK: 5 }
+ * }
+ * ```
+ */
 export interface ConsolidationDeps {
   llm: LLMOperations
   recall: MemoryOperations['recall']
@@ -247,6 +266,16 @@ async function applyConsolidationOps(
  * @param messages - 对话消息列表
  * @param options - 抽取选项（types / minImportance / objectId / scope / model 等）
  * @returns 新增与更新后的记忆条目
+ *
+ * @example
+ * ```ts
+ * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
+ * async function consolidate(deps: ConsolidationDeps) {
+ *   const result = await extractAndConsolidate(deps, [{ role: 'user', content: '我改喝绿茶了' }], { objectId: 'user-1' })
+ *   if (!result.success) return result
+ *   return result.data.map(memory => memory.id)
+ * }
+ * ```
  */
 export async function extractAndConsolidate(
   deps: ConsolidationDeps,

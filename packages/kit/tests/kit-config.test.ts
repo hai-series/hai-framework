@@ -55,9 +55,6 @@ describe('kit transport config', () => {
     expect(resolveKitTransportConfig({ excludePaths: ['/api/public'] })).toEqual({
       keyExchangePath: '/api/_hai/key-exchange',
       excludePaths: ['/api/public'],
-      requireEncryption: true,
-      encryptResponse: true,
-      maxClients: 10000,
     })
   })
 
@@ -65,18 +62,12 @@ describe('kit transport config', () => {
     expect(KitConfigSchema.parse({
       transport: {
         keyExchangePath: '/custom/key-exchange',
-        requireEncryption: false,
-        encryptResponse: false,
-        maxClients: 32,
       },
     })).toEqual({
       server: DEFAULT_SERVER,
       transport: {
         keyExchangePath: '/custom/key-exchange',
         excludePaths: [],
-        requireEncryption: false,
-        encryptResponse: false,
-        maxClients: 32,
       },
     })
   })

@@ -4,9 +4,11 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/audit](../audit/README.md) · [@h-ai/cache](../cache/README.md) · [@h-ai/core](../core/README.md) · [@h-ai/crypto](../crypto/README.md) · [@h-ai/reldb](../reldb/README.md) · [@h-ai/reach](../reach/README.md)
 
+## 简介
+
 身份与访问管理模块，提供统一的 `iam` 对象实现认证、会话、授权与用户管理。
 
-## 功能特性
+## 核心功能清单
 
 | 功能           | 说明                                                                                   |
 | -------------- | -------------------------------------------------------------------------------------- |
@@ -18,27 +20,29 @@
 | **一次性票据** | 短期、一次性能力票据（签发 / 原子消费），用于 WebSocket 等无法携带 Bearer Token 的通道 |
 | **前端客户端** | HTTP API 契约定义，支持独立前端使用                                                    |
 
-## 安装
+## 使用入门
+
+### 安装
 
 ```bash
 pnpm add @h-ai/iam
 ```
 
-## 依赖
+### 依赖
 
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
-- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/一次性票据/共享锁），**需在 iam.init() 前初始化**
+- `@h-ai/cache` — 缓存（会话/OTP/一次性票据），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 - `@h-ai/audit` — 审计日志（RBAC 关键操作记录）
 
 - `@h-ai/reach` — **可选**，应用安装、初始化并注入后可使用标准邮件/短信模板；自定义发送回调无需 Reach。
 - `ldapts` — **可选**，仅在显式启用 LDAP 且没有注入 `ldapClientFactory` 时加载。
 
-## 可选 LDAP 与通知接入
+### 可选 LDAP 与通知接入
 
 只使用密码、用户管理和 RBAC 时，无需安装或初始化 LDAP/Reach。两者均为可选 peer dependency，应用只安装选用的集成。下列发送、LDAP 片段位于应用启动/认证函数中，reldb/cache 必须先成功初始化；`username/password` 来自已校验输入。
 
-### LDAP / Active Directory
+#### LDAP / Active Directory
 
 使用默认客户端时执行 `pnpm add ldapts`，再显式设置 `login.ldap: true` 和 `ldap` 连接配置。只提供连接配置不会启用 LDAP。启用默认客户端却缺少 SDK 时，`iam.init()` 返回配置错误。
 
@@ -58,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。可传 `ldapSyncUser: false` 或自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
+`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有启用的本地用户以绑定数据库凭据代际；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -75,7 +79,7 @@ if (!result.success)
 return result
 ```
 
-### 使用可选 Reach 自动发送
+#### 使用可选 Reach 自动发送
 
 执行 `pnpm add @h-ai/reach`，应用负责 Reach 的配置、初始化和关闭，IAM 只使用传入的实例。以下 SMTP/HTTP Provider 为示例，SMS 网关按 [Reach 接口](../reach/README.md) 接收通知。Console 只记录元数据，不能用于实际收信。
 
@@ -133,7 +137,7 @@ if (!initialized.success)
 return iam.auth.sendOtp('user@example.com')
 ```
 
-### 应用自定义短信 / 邮件发送
+#### 应用自定义短信 / 邮件发送
 
 注入 `onOtpSendEmail`、`onOtpSendSms` 和 `onPasswordResetRequest` 即可接入现有发送服务；可只实现需要的回调，也可与 Reach 混用，显式回调优先。以下服务为应用实现，示例假定其 Promise 仅在投递成功时完成；若服务返回 HaiResult，须检查 `success`，失败时在回调内抛错。IAM 捕获回调异常并返回业务错误，不将验证码、令牌或内部投递详情写入用户提示。
 
@@ -145,26 +149,26 @@ import { mailService, smsService } from './notifications.js'
 // 调用方须检查服务投递结果，失败时拒绝 Promise，不能吞掉错误。
 const initialized = await iam.init({
   otp: { email: true, sms: true },
-  onOtpSendEmail: async (email, code) => {
-    await mailService.send({ to: email, subject: 'Verification code', text: code })
+  onOtpSendEmail: async (email, code, context) => {
+    await mailService.send({ to: email, subject: 'Verification code', text: code, idempotencyKey: context.idempotencyKey })
   },
-  onOtpSendSms: async (phone, code) => {
-    await smsService.send({ to: phone, code })
+  onOtpSendSms: async (phone, code, context) => {
+    await smsService.send({ to: phone, code, idempotencyKey: context.idempotencyKey })
   },
   passwordReset: { mode: 'email' },
-  onPasswordResetRequest: async (user, token, expiresAt) => {
+  onPasswordResetRequest: async (user, token, context) => {
     if (!user.email)
       throw new Error('Reset recipient unavailable')
     const url = new URL('https://app.example.com/auth/reset-password')
     url.searchParams.set('token', token)
-    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt })
+    await mailService.send({ to: user.email, subject: 'Password reset', text: url.toString(), expiresAt: context.expiresAt, idempotencyKey: context.idempotencyKey })
   },
 })
 if (!initialized.success)
   return initialized
 ```
 
-## 快速开始
+### 快速开始
 
 ```ts
 import { cache } from '@h-ai/cache'
@@ -209,9 +213,9 @@ if (!result.success)
 
 `iam.config` 返回的是**脱敏后的配置快照**：LDAP `url` / `bindPassword` 等敏感配置会自动隐藏，便于状态检查但不能代替原始配置源。
 
-## 设计说明
+### 设计说明
 
-### 架构概览
+#### 架构概览
 
 IAM 是**生命周期单例**模块，通过 `iam.init()` / `iam.close()` 管理运行时状态。内部由 5 个子模块构成，按依赖顺序初始化：
 
@@ -228,29 +232,29 @@ iam.init()
 
 初始化前访问任何子模块方法，均返回 `NOT_INITIALIZED` 错误（基于 `NotInitializedKit` Proxy）。
 
-### 数据存储分布
+#### 数据存储分布
 
-| 数据类型                                          | 存储位置                           | 说明                                                                                                                          |
-| ------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 用户、角色、权限、关联关系、API Key               | DB（基础 5 张，可选 API Key 1 张） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
-| 会话（accessToken → Session）                     | 缓存                               | 有 TTL，滑动续期可选                                                                                                          |
-| Token 映射（refreshToken → userId + accessToken） | 缓存                               | 独立 key，refresh 后旧 token 立即失效                                                                                         |
-| OTP 验证码                                        | 缓存                               | 有 TTL + 尝试次数限制                                                                                                         |
-| 密码重置令牌                                      | 缓存                               | 有 TTL + 最大验证次数限制                                                                                                     |
-| API Key                                           | DB                                 | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
+| 数据类型                            | 存储位置                           | 说明                                                                                                                          |
+| ----------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| 用户、角色、权限、关联关系、API Key | DB（基础 5 张，可选 API Key 1 张） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| 会话（accessToken → Session）       | 缓存                               | 有 TTL，滑动续期可选                                                                                                          |
+| Refresh 消费状态                    | 缓存的用户分区                     | 与 session/索引在单键 CAS 中提交                                                                                              |
+| OTP 验证码                          | 缓存                               | 有 TTL + 尝试次数限制                                                                                                         |
+| 密码重置令牌                        | 用户数据库行                       | SM3 摘要、数据库有效期、尝试次数及最终条件提交                                                                                |
+| API Key                             | DB                                 | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
 
 ---
 
-### 子模块：认证（authn）— `iam.auth`
+#### 子模块：认证（authn）— `iam.auth`
 
-#### 关键对象
+##### 关键对象
 
 - **`AuthnOperations`** — 认证操作接口，包含 `login` / `loginWithOtp` / `loginWithLdap` / `loginWithApiKey` / `logout` / `verifyToken` / `sendOtp` / `registerAndLogin`
 - **`AuthStrategy`** — 认证策略接口（`type` + `authenticate` + `challenge?`），4 种实现：密码、OTP、LDAP、API Key
 - **`AuthResult`** — 登录结果，含用户信息、`TokenPair`（accessToken + refreshToken）、角色/权限列表
 - **`Credentials`** — 统一凭证联合类型（`{ type: 'password' | 'otp' | 'ldap' | 'apikey' } & 具体凭证`）
 
-#### 关键流程
+##### 关键流程
 
 **密码登录流程：**
 
@@ -274,13 +278,14 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → 缓存查询
+  → 读取持久用户，校验启用状态与会话绑定的 credentialVersion
   → 滑动续期模式下自动延长 TTL
-  → 读取当前用户状态 + 角色 JOIN + 批量权限查询（无角色时省略权限查询）
-  → 用户停用或数据库读取失败时拒绝；API Key 会话再次收敛 scope
+  → 再次读取当前用户，复核启用状态与 credentialVersion，并读取角色 JOIN + 批量权限（无角色时省略权限查询）
+  → 任一持久读取失败、用户缺失/停用或凭据代不匹配时拒绝；API Key 会话再次收敛 scope
   → 返回当前 Session 对象（含 userId、roles、permissions）
 ```
 
-#### 使用方式
+##### 使用方式
 
 以下示例运行于服务端，reldb/cache/IAM 已成功初始化，参数来自校验后的请求。密码登录默认可用；OTP 需 `login.otp: true`、`otp` 通道和发送回调/Reach 模板；LDAP 需 `login.ldap: true`（配置见前文）；API Key 需 `login.apikey: true`（完整流程见下文）。登录返回 `AuthResult`，注册并登录返回相同认证结构；`register.enabled` 与密码登录开关分别控制。
 
@@ -312,7 +317,7 @@ async function registerWithSession(username: string, password: string) {
 }
 ```
 
-#### 特别关注
+##### 特别关注
 
 - **Timing attack 防护**：用户不存在时执行 dummy password hash，保持响应时间一致
 - **账户锁定**：连续登录失败 `maxLoginAttempts` 次后锁定 `lockoutDuration` 秒
@@ -321,38 +326,36 @@ async function registerWithSession(username: string, password: string) {
 
 ---
 
-### 子模块：会话（session）— `iam.session`
+#### 子模块：会话（session）— `iam.session`
 
-#### 关键对象
+##### 关键对象
 
 - **`SessionOperations`** — 会话操作接口：`create` / `get` / `verifyToken` / `update` / `delete` / `deleteByUserId` / `refresh` / `revokeRefresh` / `patchUserSessions`
 - **`Session`** — 会话实体，含 userId、roles、permissions、accessToken、过期时间等
 - **`TokenPair`** — 令牌对：`{ accessToken, refreshToken, expiresIn, tokenType: 'Bearer' }`
 
-#### 关键流程
+##### 关键流程
 
 **Token 刷新（Rotation 策略）：**
 
 ```
 refresh(refreshToken)
-  → 从缓存读取 refreshToken → { userId, accessToken } 映射
-  → 获取旧 session（通过 accessToken）
-  → 删除旧 refreshToken（缓存 key 立即失效 → 防重放攻击）
-  → 删除旧 accessToken session
-  → 创建全新 session（复用旧 session 的用户上下文）
-  → 返回新的 TokenPair
+  → 读取用户分区中的旧会话和版本，验证授权
+  → 构造新令牌候选（尚未生效）
+  → 单键 CAS 再核验版本和 refresh，原子撤销旧会话并发布唯一后继
+  → 仅提交成功后返回 TokenPair
 ```
 
 **单设备登录：**
 
 ```
 create(options) [singleDevice=true]
-  → 清除该用户所有已有令牌（遍历 user→tokens 映射）
-  → 生成新的 accessToken + refreshToken
-  → 存储 session 到缓存
+  → 构造新 accessToken + refreshToken
+  → 单键 CAS 同时替换该用户全部旧会话与索引
+  → 提交失败不踢出原会话
 ```
 
-#### 使用方式
+##### 使用方式
 
 登录成功后通过 `tokens.accessToken` 认证请求，通过 `tokens.refreshToken` 换取新令牌；`expiresIn` 单位为秒。独立 API 使用 `Authorization: Bearer <accessToken>`；SvelteKit Cookie 入口使用 kit 的标准认证集成，详见下方前端调用。
 
@@ -387,27 +390,27 @@ async function forceSignOut(userId: string) {
 }
 ```
 
-#### 特别关注
+##### 特别关注
 
 - **纯缓存存储**：不落库；Memory 重启后丢失，共享 Redis 可跨 IAM 服务重启保留会话直至 TTL 或撤销
-- **滑动续期**：`sliding: true` 时每次 `get()` 自动延长 TTL
-- **Refresh Rotation**：旧 refreshToken 单次使用后立即失效，检测到重放即说明 token 泄漏
+- **滑动续期**：`sliding: true` 时每次 `get()` 单调延长 access 期限；分区保留期限另由 access/refresh 最大期限确定
+- **Refresh Rotation**：旧 refresh 仅能成功消费一次；重复请求也可能来自合法并发或响应丢失，不能仅据此断言凭据泄露。
 - **Token 强度**：256-bit crypto random（`crypto.getRandomValues(new Uint8Array(32))`），base64url 编码
 
 ---
 
-### 子模块：授权（authz）— `iam.authz`
+#### 子模块：授权（authz）— `iam.authz`
 
 角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
 
-#### 关键对象
+##### 关键对象
 
 - **`AuthzOperations`** — 授权操作接口，覆盖角色 CRUD、权限 CRUD、角色-权限/用户-角色分配、权限检查
 - **`Role`** — 角色实体：`{ id, code, name, description, isSystem }`
 - **`Permission`** — 权限实体：`{ id, code, name, type, resource, action }`，type 可为 `menu` / `api` / `button`
 - **`PermissionType`** — 权限类型枚举
 
-#### 关键流程
+##### 关键流程
 
 **权限检查（`checkPermission`）：**
 
@@ -430,7 +433,7 @@ assignPermissionToRole(roleId, permId)
   （best-effort：同步失败仅 log.error，不影响权限分配结果）
 ```
 
-#### 使用方式
+##### 使用方式
 
 先创建权限，使用权限 **ID** 保存角色的 `permissionIds`，再使用角色 **ID** 分配用户。会话中的 `roles`/`permissions` 和守卫使用稳定 **code**；显示 `name` 可独立修改，不能代替 ID/code。示例默认 RBAC 已启用，管理操作须由应用先校验调用者权限和资源范围。
 
@@ -478,19 +481,19 @@ async function currentAuthorization(userId: string) {
 }
 ```
 
-#### 特别关注
+##### 特别关注
 
 - **通配符匹配**：`admin:*` 匹配 `admin:read`、`admin:write:detail` 等（单层 `*` 匹配冒号后全部）
 - **超管角色**：配置的 `rbac.superAdminRole`（默认 `super_admin`）自动拥有所有权限
 - **事务保护**：`deleteRole` / `deletePermission` 使用 DB 事务，先清关联再删实体
-- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，每次读取当前状态与授权，读取失败拒绝。`iam.session.verifyToken` 仅验证会话快照。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
+- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，先验证会话绑定的持久凭据代，再复核当前用户状态与凭据代并读取最新授权，任一步读取失败即拒绝。`iam.session.get/verifyToken` 同样检查持久用户启用状态与 `credentialVersion`，但角色/权限字段仍是会话快照，不能替代当前授权。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
 - **种子数据**：`seedDefaultData: true` 时自动创建 admin/user/guest 三个默认角色及基础权限，幂等执行
 
 ---
 
-### 子模块：用户管理（user）— `iam.user`
+#### 子模块：用户管理（user）— `iam.user`
 
-#### 关键对象
+##### 关键对象
 
 - **`UserOperations`** — 用户操作接口：注册、查询、更新、删除、密码修改与重置、密码强度验证
 - **`User`** — 用户实体（公开字段）：`{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`
@@ -498,7 +501,7 @@ async function currentAuthorization(userId: string) {
 - **`RegisterOptions`** / **`RegisterResult`** — 注册输入与输出
 - **`UpdateCurrentUserInput`** — 当前用户可修改的白名单字段（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）
 
-#### 关键流程
+##### 关键流程
 
 **用户注册流程：**
 
@@ -528,7 +531,7 @@ confirmPasswordReset(token, newPassword)
   → 删除已使用的重置令牌
 ```
 
-#### 使用方式
+##### 使用方式
 
 `register` 返回用户但不登录；需要同时登录时使用 `auth.registerAndLogin`。`createUser` 是管理端入口，关闭自助注册不阻止管理员建用户。当前用户资料用 `getCurrentUser/updateCurrentUser`，允许 username/email/displayName/avatarUrl/phone/metadata，安全字段和角色使用经授权的管理入口。
 
@@ -586,7 +589,7 @@ async function disableUser(userId: string) {
 }
 ```
 
-#### 特别关注
+##### 特别关注
 
 - **`toUser()` 字段脱敏**：所有对外返回的用户对象均剥离 `passwordHash`、`loginFailedCount` 等敏感字段
 - **会话联动**：`deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset` 自动清除受影响用户的所有活跃会话
@@ -597,17 +600,17 @@ async function disableUser(userId: string) {
 
 ---
 
-### 子模块：API Key — `iam.apiKey`
+#### 子模块：API Key — `iam.apiKey`
 
 `scopes` 与主体权限取交集，支持 `*` 和命名空间 `:*`；默认空数组只保留身份，不授予操作权限。受限 key 的会话 `roles` 为空，通过 permission 守卫访问，显式 `*` 也不能超出主体授权。API Key 登录绑定 key ID，派生会话的 get/verifyToken/refresh 每次检查持久化 key，撤销、禁用、过期或 DB 读取失败即拒绝。单独 verifyApiKey 仅返回验证后的 key 元数据，仍需主体与操作授权。
 
-#### 关键对象
+##### 关键对象
 
 - **`ApiKeyOperations`** — API Key 操作接口：`createApiKey` / `listApiKeys` / `getApiKey` / `revokeApiKey` / `verifyApiKey`
 - **`ApiKey`** — API Key 实体（公开字段）：`{ id, userId, name, keyPrefix, enabled, expiresAt, scopes }`
 - **`CreateApiKeyResult`** — 创建结果：`{ apiKey, rawKey }`（明文密钥仅返回一次）
 
-#### 关键流程
+##### 关键流程
 
 **API Key 验证：**
 
@@ -621,7 +624,7 @@ verifyApiKey(rawKey)
   → 返回 ApiKey 实体
 ```
 
-#### 使用方式
+##### 使用方式
 
 先在初始化配置中启用 API Key。它是用户的受限凭据，不能独立授予用户未拥有的权限：**有效权限 = 当前主体权限 ∩ scopes**。scopes 是与权限 code 相同的字符串，不是角色名、菜单名称或资源 ID；不会创建权限，也不会替代租户/记录归属校验。
 
@@ -707,7 +710,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 `expirationDays: 0` 表示不设过期时间，省略时使用 `apikey.defaultExpirationDays`；需要限时访问时显式设置。明文 Key 和 Token 不进入 URL、日志、公开配置或普通 localStorage。
 
-#### 特别关注
+##### 特别关注
 
 - **明文不落库**：数据库仅存储 hash，创建时返回的 `rawKey` 是唯一获取机会
 - **前缀检索**：使用 `keyPrefix` 缩小候选集，避免全表扫描
@@ -716,11 +719,11 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 ---
 
-## 更多用法
+### 更多用法
 
 详细 API 参数、错误码及集成模式请参考 Skill 模板（`packages/cli/templates/skills/hai-iam/SKILL.md`）。
 
-## 前端 API 调用
+### 前端 API 调用
 
 公共 HTTP API 由 `@h-ai/api-contract` 定义，并通过 `@h-ai/api-client` 生成 typed client 调用：
 
@@ -745,7 +748,7 @@ await apiClient.iam.auth.changePassword({
 })
 ```
 
-## 密码重置
+### 密码重置
 
 重置需要启用 `passwordReset.enabled` 和可用的通知回调/Reach 模板。申请成功仅表示请求已处理，不证明账户存在或用户已收信；发送或内部处理失败仍须处理失败 HaiResult。令牌只允许一次成功消费且有有效期/尝试限制，成功后撤销旧会话。管理员重置无需旧密码，但须由应用验证管理权限。
 
@@ -768,7 +771,7 @@ async function resetByAdministrator(userId: string, newPassword: string) {
 }
 ```
 
-## 一次性票据 — `iam.ticket`
+### 一次性票据 — `iam.ticket`
 
 短期、一次性能力票据。用于无法携带 Bearer Token 的通道（如 WebSocket URL）：由已认证的 HTTP 请求签发一个绑定主体、用途与操作的票据，服务端在首次校验时**原子消费**（单次有效）。
 
@@ -801,7 +804,9 @@ async function consumeAudioTicket(ticket: string) {
 
 特性：密码学安全随机值、TTL、原子单次消费（并发消费仅一个成功）、用途绑定（防跨用途重放）。
 
-## 配置驱动认证页面
+### 配置驱动认证页面
+
+密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
 
 服务端通过 `iam.publicConfig` 提供白名单配置，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 接入见上方可选配置，默认关闭；只有选用默认客户端时才安装 ldapts。
 
@@ -822,7 +827,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 协议在 Modal 中打开，关闭后保留表单输入。使用 URL 时，协议页面须允许 iframe 嵌入；禁止脚本执行，并提供新窗口查看入口。`LoginForm/RegisterForm` 提供 `header/extraFields/footer` snippet，`AuthPanel` 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`；自定义字段由应用绑定状态并在动作中处理。示例见 [UI 用法](../ui/README.md#配置驱动认证页面)。
 
-### Markdown 协议内容
+#### Markdown 协议内容
 
 协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
 
@@ -845,15 +850,15 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-### 分布式安全与边界
+#### 分布式安全与边界
 
-所有节点必须共享同一数据库和 Redis；Memory 仅用于单进程。登录 `maxLoginAttempts / lockoutDuration` 使用数据库原子更新，到期后的失败重新计数。OTP `maxAttempts / resendInterval` 使用共享锁和独立发送间隔状态，耗尽或消费验证码不能绕过重发限制，并发只消费一次。重置 `tokenExpiresIn / maxAttempts` 使用共享缓存 TTL 和每用户共享锁；每次有效令牌请求（包括密码策略失败）计数，最新令牌有效且只成功消费一次。重置后撤销旧会话、解除登录锁定；禁用用户不能通过密码、LDAP、OTP 登录。密码策略以服务端为准。
+所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验数据库当前代际；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
 
 标准 HTTP 入口：`GET /auth/config`、`POST /auth/login/ldap`、`POST /auth/password-reset/request`、`POST /auth/password-reset/confirm`；验证码继续使用 `/auth/otp/send` 与 `/auth/login/otp`。安全错误：`SECURITY_BUSY (hai:iam:023)`、`PASSWORD_RESET_DISABLED (hai:iam:024)`。
 
-## 错误处理
+### 错误处理
 
 所有操作返回 `HaiResult<T>`，通过 `HaiIamError` 做分支判断：
 
@@ -868,11 +873,35 @@ if (!result.success) {
 }
 ```
 
-## 测试
+会话与 refresh 消费记录统一保存在 `hai:iam:sessions:{SHA256(userId)}` 版本化文档，不再使用独立 token 映射/索引。Bearer token 携带不可作为凭据的分区提示和 256 位随机值；客户端必须视为不透明字符串。`Session.version` 用于轮换提交校验。Memory 仅用于单进程测试，生产所有节点共享 Redis（含 Cluster）。并发冲突从最新文档重试，耗尽返回 CONFLICT；旧 refresh 不会产生第二个后继。若响应丢失后结果不明，调用方按失败关闭并重新登录，不假定旧凭据仍有效；全部会话仍受同一用户状态索引管理。
+
+`iam.session.update(token, patch, expectedVersion)` 必须传入读取到的 Session.version。旧版本返回 CONFLICT，已撤销 token 返回 SESSION_NOT_FOUND；不会将旧内容重新写回或覆盖新会话。仅滑动时间戳更新不改变内容版本，允许正常并行请求。批量权限更新绑定首次读取的 token/版本集合，不将迟到数据应用到后续登录；遇到较新内容版本失败，调用方重新查询授权后再提交。
+
+## 开发测试
+
+公开示例从 `@h-ai/iam` 导入，区分可省略默认值的 `IamConfigInput` 与 Schema 解析后的 `IamConfig`。服务端依赖先初始化；`HaiResult` 先检查 `success`，会话修改使用读取到的 `version`，通知复用持久幂等键。内部策略/仓储示例标记为“模块内部上下文”，不作为应用的深层导入入口。检查器只验证示例类型；真实 Redis/数据库、LDAP 和通知投递仍需对应集成测试。见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
 
 ```bash
-pnpm test
+pnpm --filter @h-ai/iam typecheck
+pnpm --filter @h-ai/iam lint
+pnpm --filter @h-ai/iam build
+pnpm --filter @h-ai/iam test
+node scripts/check-module-jsdoc.mjs --package iam
 ```
+
+`create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。
+
+access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
+
+会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
+
+缓存清理失败可能返回失败，但已提交的新密码与凭据代际不会回滚；重新登录，不用旧凭据自动重试。
+
+Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+
+浏览器条件入口仅导出配置 Schema、类型和 HaiIamError，不包含服务端 `iam` 实例；认证通过 HTTP/typed client 调用服务端。
+
+`iam.auth.logout(accessToken)` 直接按完整不透明令牌在用户分区执行一次 CAS，原子撤销 access 与关联 refresh；access 已到期也不能跳过撤销。非法/不存在的令牌幂等成功，缓存读取或提交故障返回失败，恢复后可用同一令牌重试。HTTP 登出只允许撤销所持令牌，不以 userId 定位他人会话，也不要求该 access 仍通过认证。调用方必须检查 `success`；本地 Cookie/安全存储清理不代表服务端撤销已经确认，失败应显示提示。
 
 ## 许可证
 

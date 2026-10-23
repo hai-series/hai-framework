@@ -7,13 +7,13 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 ## 能力契约
 
-| 项目 | 契约 |
-| --- | --- |
-| 能力 | 在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约 |
-| 适用场景 | 框架源码 packages 内新增能力 |
-| 输入 | 真实调用需求、目标 packages 路径、现有模块和导出约定 |
-| 输出 | 符合模块类型的实现、类型、错误定义、测试和文档 |
-| 限制 | 先决定生命周期/纯函数/工厂类型；无多个真实实现时不新增 Provider 抽象。错误命名空间不可冲突。 |
+| 项目     | 契约                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------- |
+| 能力     | 在 hai-framework 源码仓库新增模块、子功能或 Provider，并维护公共契约                         |
+| 适用场景 | 框架源码 packages 内新增能力                                                                 |
+| 输入     | 真实调用需求、目标 packages 路径、现有模块和导出约定                                         |
+| 输出     | 符合模块类型的实现、类型、错误定义、测试和文档                                               |
+| 限制     | 先决定生命周期/纯函数/工厂类型；无多个真实实现时不新增 Provider 抽象。错误命名空间不可冲突。 |
 
 > 面向 AI 助手的模块创建指南。**本文档只含决策表与原则**；代码范本（main.ts、types.ts、config.ts、package.json 等可直接套用的模板）请按需读 [reference.md](reference.md)。
 >
@@ -21,208 +21,70 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 >
 > **变量约定**：`xx` = 模块名（如 storage、iam），`yy` / `zz` = 子功能名，`aaa` = Provider 实现名。
 
-## §0 核心原则（动手前重读）
-
-> 优先级固定：**正确性 > 简单性 > 可读性 > 可扩展性**。"更通用"与"更清晰"冲突时，永远选"更清晰"。
-
-### 简单优先（Less is More）
-
-- 最少目录、最少接口、最少配置、最少层级。
-- 能放在现有模块/现有文件解决，不要新增一层概念。
-- 一个清晰实现优先于"理论上更灵活"的多层封装。
-
-### 最小知识（Law of Demeter）
-
-- 使用方只需要知道公共入口 `xx`、必要配置和业务返回值。
-- 对外类型只暴露业务字段，不暴露 DB 行 / 内部状态 / 中间对象。
-- 多子特性依赖同一上游时，顶层注入一次，由模块内部派生，禁止使用方写转发样板。
-
-### 整洁代码
-
-- 命名直白；函数主流程一眼可读；单一职责 + early return。
-- 死代码、注释代码、一次性包装、纯转发样板：**删除**。
-
-### 反过度设计（YAGNI）
-
-- 没有第二个真实实现 → 不引入 Provider / 抽象基类 / 策略层。
-- 没有真实使用场景 → 不新增配置项、扩展点、兼容层、开关。
-- 没有跨文件复用 → 不预先拆出 utils / constants / helper。
-- 没有对外使用 → 不新增导出。
-
-### 创建前四问（动笔前必须先答）
-
-1. 不加这个抽象 / 子目录 / 配置项，模块会不会更简单？
-2. 仓库里是否已有可复用的模式或实现？
-3. 使用方会不会因为这次设计被迫理解内部结构？
-4. 这个扩展点是否有**当前、明确、可验证**的真实场景？
-
 ## §1 架构决策（按顺序回答）
 
 ### 前置：模块类型
 
-| 类型 | 特征 | 代表模块 |
-| --- | --- | --- |
-| **生命周期单例** | `export const xx: XxFunctions`，有 init/close | reldb, storage, cache, ai, iam, payment, crypto, capacitor, vecdb, audit, scheduler, reach, deploy, api-client |
-| **纯函数模块** | 无状态，无 init/close | datapipe |
-| **基础设施模块** | 提供底层能力（日志、配置、i18n、HaiResult） | core |
+| 类型                | 特征                                          | 代表模块                                                                                                       |
+| ------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **生命周期单例**    | `export const xx: XxFunctions`，有 init/close | reldb, storage, cache, ai, iam, payment, crypto, capacitor, vecdb, audit, scheduler, reach, deploy, api-client |
+| **纯函数/定义模块** | 无 init/close，工具按签名返回                 | datapipe、api-contract、kit                                                                                    |
+| **工厂/组件**       | 生命周期由应用管理                            | serv、ui                                                                                                       |
+| **基础设施模块**    | 提供底层能力（日志、配置、i18n、HaiResult）   | core                                                                                                           |
 
 ### 决策红线（任一命中即停手）
 
 - 没有第二个真实实现 → **不引入 Provider / 抽象接口 / 策略层**
-- 没有两个明确操作域 → **不拆子操作对象，扁平 API**
+- 操作域划分不能降低使用成本 → 保留简单 API，不机械拆分
 - 没有跨文件复用 → **不提前提取 utils / helper / constants**
-- 没有真实 consumer → **不导出类型、函数、配置项**
+- 没有真实消费或扩展契约 → **不增加公共类型、函数、配置项**；内部跨文件复用可 export，但不自动经包入口公开。
 - 只是转发上游能力 → **不要求使用方手写样板转发**
 
 ### 问题 1：是否有子功能？
 
-| 判断 | main.ts 模式 | 说明 |
-| --- | --- | --- |
-| 无子功能 | main.ts 直接管理操作 | 操作接口在 xx-types.ts 定义，由 functions.ts 或 Provider 实现 |
-| 有子功能 | main.ts 通过工厂创建子功能 | 各子功能在独立目录，通过 `get` 访问器暴露 |
+| 判断     | main.ts 模式               | 说明                                                          |
+| -------- | -------------------------- | ------------------------------------------------------------- |
+| 无子功能 | main.ts 直接管理操作       | 操作接口在 xx-types.ts 定义，由 functions.ts 或 Provider 实现 |
+| 有子功能 | main.ts 通过工厂创建子功能 | 各子功能在独立目录，通过 `get` 访问器暴露                     |
 
 ### 问题 2：是否需要 Provider？
 
 > Provider 是高成本抽象。**只有同 PR/仓库内已有 ≥2 个真实后端**时才用。禁止"先抽出来以后可能用"。
 
-| 判断 | Provider 位置 |
-| --- | --- |
-| 不需要 | 无 Provider，功能直接实现 |
-| 需要 + 无子功能 | `src/providers/xx-provider-aaa.ts`，由 main.ts 管理 |
+| 判断            | Provider 位置                                                                  |
+| --------------- | ------------------------------------------------------------------------------ |
+| 不需要          | 无 Provider，功能直接实现                                                      |
+| 需要 + 无子功能 | `src/providers/xx-provider-aaa.ts`，由 main.ts 管理                            |
 | 需要 + 有子功能 | `src/yy/providers/xx-yy-provider-aaa.ts`，由子功能工厂内部管理，main.ts 不感知 |
 
 ### 组合速查 → 选 main.ts 模板
 
-| 子功能 | Provider | main.ts 写法 | 范本 |
-| --- | --- | --- | --- |
-| 无 | 无 | 直接实现 | `reference.md` §R3.1 |
-| 无 | 有（模块级） | Provider 委托 | `reference.md` §R3.2 |
-| 有 | 无 或 有（子功能级） | 工厂创建子功能 | `reference.md` §R3.3 |
+| 子功能 | Provider             | main.ts 写法   | 范本                 |
+| ------ | -------------------- | -------------- | -------------------- |
+| 无     | 无                   | 直接实现       | `reference.md` §R3.1 |
+| 无     | 有（模块级）         | Provider 委托  | `reference.md` §R3.2 |
+| 有     | 无 或 有（子功能级） | 工厂创建子功能 | `reference.md` §R3.3 |
 
 ### 问题 3：API 风格——扁平方法 vs 子操作对象？
 
 > **默认优先扁平 API**。只有分组能明显降低理解成本时才用子操作对象。
 
-| 判断 | 风格 | 示例模块 |
-| --- | --- | --- |
+| 判断                                 | 风格                 | 示例模块                                                                                                                                                                                                                                           |
+| ------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 操作可按领域分 ≥2 组且每组 ≥2 个方法 | 子操作对象（getter） | reldb (sql/ddl/crud/tx), cache (kv/hash/list/set_/zset), ai (llm/tools/embedding/...), iam (auth/authz/user/session), crypto (asymmetric/hash/symmetric/password), capacitor (device/camera/push/statusBar/preferences), vecdb (collection/vector) |
-| 操作少（≤6）或语义高度内聚 | 扁平方法 | payment, audit, scheduler, deploy, reach |
+| 操作少（≤6）或语义高度内聚           | 扁平方法             | payment, audit, scheduler, deploy, reach                                                                                                                                                                                                           |
 
-**选定后整个模块保持统一风格，禁止混用。**
+按职责保持一致；生命周期、getter、工厂与业务操作可以有不同返回契约，不因形式统一增加包装。
 
 ## §2 目录结构
 
-### 2.1 基础模块（无子功能）
-
-```
-packages/xx/
-  package.json
-  README.md
-  tsconfig.json
-  tsup.config.ts
-  vitest.config.ts
-  messages/
-    en-US.json
-    ja-JP.json
-    zh-CN.json
-  src/
-    index.ts              # 唯一入口，仅 export *
-    xx-main.ts            # 服务对象（export const xx）
-    xx-types.ts           # 公共类型
-    xx-config.ts          # 错误码 + Zod Schema
-    xx-i18n.ts            # i18n 获取器
-    xx-functions.ts       # 业务逻辑工厂（可选）
-    xx-utils.ts           # 工具（可选）
-    xx-repository-zz.ts   # Repository（可选）
-    providers/            # Provider 实现（可选，仅多后端时）
-      xx-provider-aaa.ts
-    repositories/         # ≥3 个 Repository 时集中（可选）
-  tests/
-```
-
-### 2.2 有子功能的模块
-
-子功能用独立目录，**目录内不放 index.ts**。
-
-```
-packages/xx/
-  src/
-    index.ts
-    xx-main.ts
-    xx-types.ts            # 聚合 + re-export 子功能类型
-    xx-config.ts
-    xx-i18n.ts
-    yy/                    # 子功能目录
-      xx-yy-types.ts
-      xx-yy-functions.ts
-      xx-yy-repository-zz.ts  # 可选
-      providers/              # 子功能 Provider（可选）
-        xx-yy-provider-aaa.ts
-    zz/
-      ...
-```
-
-### 2.3 带 Client（前后端分离）
-
-在 2.1/2.2 基础上：
-
-```
-packages/xx/
-  src/
-    index.ts              # Node 入口
-    xx-index.browser.ts   # Browser 入口（仅 client + types）
-    client/
-      index.ts
-      xx-client.ts        # 浏览器端 HTTP 客户端
-```
-
-### 2.4 带 API 契约的模块
-
-契约统一放 `packages/api-contract`，服务端 procedure 放 `packages/serv`，**不在业务模块内新增 `./api` 子路径**。详见 `reference.md` §R4.5。
+按模块类型复用相邻模块的真实布局；范本见 [reference.md](reference.md)。不要在确认消费者前创建空目录或 Provider 层。
 
 ## §3 命名规范
 
-### 3.1 文件命名
+文件、服务对象、类型、表名与缓存键遵守 [模块规范](../../instructions/module-conventions.md#命名一致性)。公开入口、内部状态与客户端契约分开；已有上游类型直接复用。
 
-| 类别 | 规范 | 示例 |
-| --- | --- | --- |
-| 文件名 | `{模块}-{职责}.ts` kebab-case | `reldb-main.ts`、`iam-authn-functions.ts` |
-| 子功能文件 | `{模块}-{功能}-{角色}.ts` | `iam-session-types.ts`、`ai-llm-functions.ts` |
-| Provider 文件 | `{模块}-provider-{实现}.ts` | `reldb-provider-sqlite.ts` |
-| Repository | `{模块}-repository-{实体}.ts` | `audit-repository-log.ts` |
-
-### 3.2 标识符命名
-
-| 类别 | 规范 | 示例 |
-| --- | --- | --- |
-| 服务对象 | 小写模块名 | `export const reldb` |
-| 函数接口 | `{Module}Functions` | `ReldbFunctions` |
-| 子操作接口 | `{Domain}Operations` | `KvOperations`、`DeviceOperations` |
-| 错误定义对象 | `Hai{Module}Error`（`buildHaiErrorsDef` 生成） | `HaiReldbError.NOT_INITIALIZED` |
-| 错误类型 | 统一 `HaiError` | `HaiError` |
-| 配置 Schema | `{Module}ConfigSchema` | `StorageConfigSchema` |
-| 配置类型 | `{Module}Config` / `{Module}ConfigInput` | `ReldbConfig` / `ReldbConfigInput` |
-| Provider 接口 | `{Module}Provider` | `ReldbProvider` |
-| Provider 工厂 | `create{Impl}Provider` | `createSqliteProvider()` |
-| Repository 类 | `{Module}{Entity}Repository` | `AuditLogRepository` |
-| i18n 获取器 | `{缩写}M` | `reldbM()` |
-| 消息键 | `{module}_{camelCase}` | `storage_notInitialized` |
-| 请求体 | `{Domain}Req` | `LoginReq` |
-| 响应体 | `{Domain}Resp` | `LoginResp` |
-| HTTP 契约对象 | `apiContract.{module}` | `apiContract.storage` |
-
-### 3.3 命名三问
-
-1. 看名字能知道它是做什么的吗？
-2. 会和项目中其他名字混淆吗？
-3. 6 个月后还能理解这个名字的含义吗？
-
-### 3.4 表名与缓存 key（强制）
-
-- 关系表名：`hai_<module>_<feature>`（snake_case），示例 `hai_iam_users`。
-- 缓存 key：`hai:<module>:<feature>`，示例 `hai:iam:user:123`。
-- 常量**就近定义**在 Repository / functions 文件内。
-- **不支持配置化**（禁止 `config.tableName` / `config.keyPrefix`）。
+同族源文件保持“模块/领域/角色/实体或实现”的命名顺序，保留框架固定入口、Svelte 组件及协议领域的例外，见[代码风格清单](../../../docs/module-code-style.md)。可选依赖使用 type import 与动态 import 复用真实 SDK；不要仿造最小 SDK 接口、猜测旧版异常形态或保留无验证的兼容分支。
 
 ## §4 错误码段位（注册表）
 
@@ -235,29 +97,31 @@ packages/xx/
 
 **已注册命名空间**：
 
-| 命名空间 | 模块 | 说明 |
-| --- | --- | --- |
-| `hai:common` | core | 通用错误 |
-| `hai:core` | core | 配置错误 |
-| `hai:api-client` | api-client | HTTP 客户端 |
-| `hai:crypto` | crypto | 加密/签名/哈希 |
-| `hai:reldb` | reldb | 关系数据库 |
-| `hai:vecdb` | vecdb | 向量数据库 |
-| `hai:cache` | cache | 缓存 |
-| `hai:iam` | iam | 身份认证与授权 |
-| `hai:storage` | storage | 对象存储 |
-| `hai:payment` | payment | 支付 |
-| `hai:capacitor` | capacitor | 移动端原生 |
-| `hai:reach` | reach | 消息触达 |
-| `hai:datapipe` | datapipe | 数据管道 |
-| `hai:deploy` | deploy | 部署 |
-| `hai:audit` | audit | 审计 |
-| `hai:scheduler` | scheduler | 定时任务 |
-| `hai:ai` | ai | AI / LLM / RAG / MCP |
+| 命名空间         | 模块       | 说明                 |
+| ---------------- | ---------- | -------------------- |
+| `hai:common`     | core       | 通用错误             |
+| `hai:core`       | core       | 配置错误             |
+| `hai:api-client` | api-client | HTTP 客户端          |
+| `hai:crypto`     | crypto     | 加密/签名/哈希       |
+| `hai:reldb`      | reldb      | 关系数据库           |
+| `hai:vecdb`      | vecdb      | 向量数据库           |
+| `hai:cache`      | cache      | 缓存                 |
+| `hai:iam`        | iam        | 身份认证与授权       |
+| `hai:storage`    | storage    | 对象存储             |
+| `hai:payment`    | payment    | 支付                 |
+| `hai:capacitor`  | capacitor  | 移动端原生           |
+| `hai:reach`      | reach      | 消息触达             |
+| `hai:datapipe`   | datapipe   | 数据管道             |
+| `hai:deploy`     | deploy     | 部署                 |
+| `hai:audit`      | audit      | 审计                 |
+| `hai:scheduler`  | scheduler  | 定时任务             |
+| `hai:ai`         | ai         | AI / LLM / RAG / MCP |
 
 ### 分环境配置
 
 修改公开 Schema 或变量入口后，构建受影响模块，执行 `pnpm generate:env` 同步根清单、CLI 元数据和示例，再用 `pnpm check:env` 验证；不要读取或生成真实私有凭据。
+
+入口提取排除 JS/TS（含 Svelte script）的真实 JSDoc，避免示例变量扩展配置契约；Schema 字段注释仍参与说明生成。不要用正则删除字符串中的注释标记，YAML/模板的可选字段和生成代码引用必须保留。
 
 - 运行参数使用 `HAI_<配置名>_<字段路径>`，camelCase 不拆词；YAML 显式引用并保留本地回退，逐项同步根及项目 `.env.example` 的用途、默认值、枚举与范围。`PUBLIC_` / `VITE_` 不包含密钥。
 - `.env.example`、公共基础 `.env` 和环境覆盖 `.env.dev` / `.env.test` / `.env.prod` 提交 Git；`.env.local` 只保存本机私有覆盖并忽略。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。
@@ -277,7 +141,7 @@ packages/xx/
 8. **Provider 实现**（如需）→ R4.2
 9. **Repository 实现**（如需）→ R4.3
 10. **`xx-main.ts`** → R3.1/R3.2/R3.3
-11. **`index.ts`** → 仅 `export * from './xx-main.js'` + `export * from './xx-types.js'`
+11. **公开入口** → 根据 package.exports 选择公共符号；全量源文件确为公共契约时才 export *，允许 selective/type-only/Svelte 默认转发与 client/server 条件分隔。内部 Provider/Deps 不经公共 barrel；保留真实扩展接口。
 12. **Client / API 契约**（如有）→ R4.5/R4.6
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
@@ -286,7 +150,7 @@ packages/xx/
 
 ## §6 创建检查清单
 
-所有测试临时工程、镜像、容器、辅助进程、日志、截图与报告须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源，不提交验收产物。
+测试临时工程、镜像、容器、辅助进程与数据须在 finally/teardown 自动清理，成功、失败和取消均执行；只清理本次创建的资源。日志、截图与报告保留到分析和交付结束再清理，不提交验收产物。
 
 - [ ] 已答 §0 创建前四问
 - [ ] 已通过 §1 决策红线检查（无单实现 Provider / 无单组子操作）
@@ -295,9 +159,11 @@ packages/xx/
 - [ ] 目录结构符合 §2
 - [ ] 命名符合 §3（含表名/缓存 key 规则）
 - [ ] 表名/缓存 key 就近定义且不可配置
-- [ ] 所有公共 API JSDoc 含 `@example`
+- [ ] 所有公共 API JSDoc 含 fenced ts/svelte `@example`，从实际公开入口导入并检查 HaiResult；内部示例标明“模块内部上下文”，以 check-module-jsdoc 对真实类型校验
 - [ ] 公共方法返回 `HaiResult<T>`，未使用 `throw`（合规场景除外）
 - [ ] 已实现 NotInitializedKit + `initInProgress` 并发防护（并发调用返回 HaiResult 错误）
+- [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现
 - [ ] README + 对应 CLI Skill 模板（如存在）同步
-- [ ] `pnpm typecheck` → `pnpm lint` → `pnpm test` → `pnpm build` 全部通过
+- [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者
+- [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过

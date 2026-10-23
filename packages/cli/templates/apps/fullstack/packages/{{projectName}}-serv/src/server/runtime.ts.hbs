@@ -2,6 +2,9 @@ import type { CoreConfig, HaiResult } from '@h-ai/core'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+{{#if features.ai}}
+import { ai, AIConfigSchema } from '@h-ai/ai'
+{{/if}}
 import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -11,13 +14,20 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { ServConfigSchema } from '@h-ai/serv'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
+{{#if features.vecdb}}
+import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
+{{/if}}
 import { serverM } from './messages.js'
 
 let initialized = false
 let initializing: Promise<void> | undefined
+let closing: Promise<void> | undefined
+let cleanupPending = false
 
 /** 初始化失败停止启动并反序释放资源；不把功能缺失降级为成功。 */
 export async function initializeModules(): Promise<void> {
+  if (closing)
+    await closing
   if (initialized)
     return
   initializing ??= runInitialization().finally(() => {
@@ -27,6 +37,9 @@ export async function initializeModules(): Promise<void> {
 }
 
 async function runInitialization(): Promise<void> {
+  if (cleanupPending)
+    await cleanupModules()
+  cleanupPending = true
   try {
     requireInitialized(core.config.validate('serv', ServConfigSchema), 'serv-config')
     const db = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
@@ -38,6 +51,10 @@ async function runInitialization(): Promise<void> {
       await mkdir(path.dirname(db.database), { recursive: true })
     requireInitialized(await reldb.init(db), 'reldb')
     requireInitialized(await cache.init(cacheConfig), 'cache')
+{{#if features.vecdb}}
+    const vectorConfig = VecdbConfigSchema.parse(core.config.getOrThrow('vecdb'))
+    requireInitialized(await vecdb.init(vectorConfig), 'vecdb')
+{{/if}}
     requireInitialized(await crypto.init(), 'crypto')
     requireInitialized(await storage.init(storageConfig), 'storage')
     const reachConfig = core.config.get('reach')
@@ -45,13 +62,23 @@ async function runInitialization(): Promise<void> {
       requireInitialized(await reach.init(ReachConfigSchema.parse(reachConfig)), 'reach')
     requireInitialized(await iam.init({ ...iamConfig, reach }), 'iam')
     requireInitialized(await audit.init(auditConfig), 'audit')
+{{#if features.ai}}
+    const aiConfig = AIConfigSchema.parse(core.config.getOrThrow('ai'))
+    requireInitialized(await ai.init(aiConfig), 'ai')
+{{/if}}
     await ensureRolesAndAdmin()
     initialized = true
+    cleanupPending = false
     const app = core.config.getOrThrow<CoreConfig>('core')
     core.logger.info('Application initialized', { name: app.name, version: app.version, environment: app.env })
   }
   catch (error) {
-    await closeModules()
+    try {
+      await cleanupModules()
+    }
+    catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Application startup and cleanup failed')
+    }
     throw error
   }
 }
@@ -91,12 +118,36 @@ async function ensureRolesAndAdmin(): Promise<void> {
 
 /** 关闭顺序与依赖初始化顺序相反，同时覆盖启动失败路径。 */
 export async function closeModules(): Promise<void> {
-  for (const [name, module] of [['audit', audit], ['iam', iam], ['reach', reach], ['storage', storage], ['crypto', crypto], ['cache', cache], ['reldb', reldb]] as const) {
-    if (!module.isInitialized)
-      continue
-    const result = await module.close()
-    if (result && !result.success)
-      core.logger.error('Failed to close application module', { module: name, error: result.error.code })
+  if (!closing) {
+    const pending = initializing
+    closing = (async () => {
+      if (pending)
+        await pending.catch(() => undefined)
+      await cleanupModules()
+    })().finally(() => {
+      closing = undefined
+    })
+  }
+  return closing
+}
+
+/** 不依赖 isInitialized 推断资源是否释放；关闭失败必须保留义务供重试。 */
+async function cleanupModules(): Promise<void> {
+  const failures: unknown[] = []
+  for (const [name, module] of [{{#if features.ai}}['ai', ai], {{/if}}['audit', audit], ['iam', iam], ['reach', reach], ['storage', storage], ['crypto', crypto], {{#if features.vecdb}}['vecdb', vecdb], {{/if}}['cache', cache], ['reldb', reldb]] as const) {
+    try {
+      const result = await module.close()
+      if (result && !result.success) {
+        core.logger.error('Failed to close application module', { module: name, error: result.error.code })
+        failures.push(result.error)
+      }
+    }
+    catch (error) {
+      failures.push(error)
+    }
   }
   initialized = false
+  cleanupPending = failures.length > 0
+  if (failures.length > 0)
+    throw new AggregateError(failures, 'Application cleanup failed; retry closeModules()')
 }

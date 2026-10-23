@@ -1,245 +1,159 @@
 /**
- * @h-ai/iam — OTP 存储实现
- *
- * 基于 @h-ai/cache 的 OTP 存储实现。
+ * @h-ai/iam — 单身份 CAS 验证码状态；不依赖可过期的进程租约。
  * @module iam-authn-otp-repository-otp
  */
-
 import type { HaiResult } from '@h-ai/core'
+import type { IamNotificationContext } from '../../iam-types.js'
 import { cache } from '@h-ai/cache'
-import { err, ok } from '@h-ai/core'
-
+import { core, err, ok } from '@h-ai/core'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 
-// ─── OTP 存储接口与类型 ───
-
 /**
- * OTP 记录
+ * 单次发布的状态；消费保留冷却期，旧版本不能修改后续发布。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const state: OtpState = { version: crypto.randomUUID(), code: null, attempts: 0, expiresAt: 0, cooldownUntil: 0 }
+ * const hasChallenge = state.code !== null
+ * ```
  */
-export interface OtpRecord {
-  /** 标识符（邮箱/手机号） */
-  identifier: string
-  /** 验证码 */
-  code: string
-  /** 过期时间 */
-  expiresAt: Date
-  /** 尝试次数 */
+interface OtpState {
+  version: string
+  code: string | null
   attempts: number
-  /** 创建时间 */
-  createdAt: Date
+  expiresAt: number
+  cooldownUntil: number
 }
 
 /**
- * OTP 存储接口
+ * 验证码存储；发布、次数和消费都在同一共享 key 原子提交。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // Cache 已初始化；示例消费用户提交的验证码，不回传或记录保存值。
+ * const repository = createCacheOtpRepository()
+ * const result = await repository.consumeOtp('alice@example.com', '123456', 3)
+ * if (!result.success)
+ *   return result
+ * return result.data
+ * ```
  */
 export interface OtpRepository {
-  /**
-   * 存储验证码
-   */
-  saveOtp: (identifier: string, code: string, expiresIn: number) => Promise<HaiResult<void>>
-
-  /**
-   * 获取验证码
-   */
-  fetchOtp: (identifier: string) => Promise<HaiResult<OtpRecord | null>>
-
-  /**
-   * 增加尝试次数
-   */
-  incrementOtpAttempts: (identifier: string) => Promise<HaiResult<number>>
-
-  /**
-   * 删除验证码
-   */
-  removeOtp: (identifier: string) => Promise<HaiResult<void>>
+  /** 发布成功才允许通知；CAS 冲突拒绝，不能覆盖新代。 */
+  issueOtp: (input: { identifier: string, code: string, expiresIn: number, resendInterval: number }) => Promise<HaiResult<IamNotificationContext>>
+  /** 比较验证码并原子消费；错误次数的 CAS 只重试同一代。 */
+  consumeOtp: (identifier: string, code: string, maxAttempts: number) => Promise<HaiResult<void>>
 }
 
-// ─── 缓存键构建 ───
-
-/** OTP 缓存键前缀 */
-const OTP_KEY_PREFIX = 'hai:iam:otp:'
-/** OTP 尝试次数键前缀（单独存储以支持原子 incr） */
-const OTP_ATTEMPTS_KEY_PREFIX = 'hai:iam:otp:attempts:'
-
 /**
- * 规范化标识符：邮箱转小写，电话号移除分隔符，避免同一身份因大小写 / 空格产生不同缓存键。
+ * 邮箱转小写，电话移除分隔符；同一身份共用发送与消费状态。
+ * @param identifier - 用户提交的邮箱或手机号。
+ * @returns 去除首尾空白后的邮箱小写值，或移除空白与连字符的手机号。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const email = normalizeOtpIdentifier(' Alice@Example.com ')
+ * const sameIdentity = email === normalizeOtpIdentifier('alice@example.com')
+ * ```
  */
 export function normalizeOtpIdentifier(identifier: string): string {
   const trimmed = identifier.trim()
-  if (trimmed.includes('@'))
-    return trimmed.toLowerCase()
-  // 电话：移除空格和连字符
-  return trimmed.replace(/[\s-]/g, '')
+  return trimmed.includes('@') ? trimmed.toLowerCase() : trimmed.replace(/[\s-]/g, '')
 }
 
-/**
- * 构建 OTP 缓存 key
- *
- * @param identifier - 标识符（邮箱/手机号）
- * @returns 格式：`iam:otp:{identifier}`
- */
-function buildOtpKey(identifier: string): string {
-  return `${OTP_KEY_PREFIX}${normalizeOtpIdentifier(identifier)}`
-}
-
-/**
- * 构建 OTP 尝试次数缓存 key
- */
-function buildOtpAttemptsKey(identifier: string): string {
-  return `${OTP_ATTEMPTS_KEY_PREFIX}${normalizeOtpIdentifier(identifier)}`
-}
-
-/**
- * 修复从缓存反序列化后的日期字段
- *
- * 缓存存储后日期可能为字符串，需要重新转为 Date 对象。
- */
-function restoreOtpDates(record: OtpRecord): OtpRecord {
-  return {
-    ...record,
-    expiresAt: record.expiresAt instanceof Date ? record.expiresAt : new Date(record.expiresAt),
-    createdAt: record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt),
-  }
-}
-
-// ─── 缓存实现 ───
-
-/** OTP 存储单例缓存 */
 let otpRepoInstance: OtpRepository | null = null
 
 /**
- * 重置 OTP 存储单例
- *
- * 在 iam.close() 时调用，释放对旧 cache 实例的引用。
+ * IAM 关闭时释放仓储引用；共享状态由 cache 管理。
+ * 仅重置本地引用，不删除共享存储数据。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // 所有 OTP 操作结束并关闭 IAM 后重置本地工厂引用，不删除共享挑战。
+ * resetOtpRepoSingleton()
+ * ```
  */
 export function resetOtpRepoSingleton(): void {
   otpRepoInstance = null
 }
 
 /**
- * 创建基于缓存的 OTP 存储实例
- *
- * 单例模式：重复调用返回缓存实例。
- *
- * @returns OTP 存储接口实现
+ * 创建缓存仓储；生产 cache 必须连接同一支持原子 CAS 的共享后端。
+ * @returns 已初始化的内部仓储；初始化失败抛出异常，由上层子功能工厂转换为 HaiResult。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * // Cache 已初始化；示例消费用户提交的验证码，不回传或记录保存值。
+ * const repository = createCacheOtpRepository()
+ * const result = await repository.consumeOtp('alice@example.com', '123456', 3)
+ * if (!result.success)
+ *   return result
+ * return result.data
+ * ```
  */
 export function createCacheOtpRepository(): OtpRepository {
   if (otpRepoInstance)
     return otpRepoInstance
 
-  const repo: OtpRepository = {
-    async saveOtp(identifier, code, expiresIn): Promise<HaiResult<void>> {
+  const keyFor = (identifier: string) => `hai:iam:otp:${normalizeOtpIdentifier(identifier)}`
+  const failure = () => err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'))
+  const invalid = () => err(HaiIamError.OTP_INVALID, iamM('iam_otpNotExistOrExpired'))
+  otpRepoInstance = {
+    async issueOtp(input) {
       const now = Date.now()
-      const record: OtpRecord = {
-        identifier: normalizeOtpIdentifier(identifier),
-        code,
-        expiresAt: new Date(now + expiresIn * 1000),
+      const state: OtpState = {
+        version: crypto.randomUUID(),
+        code: input.code,
         attempts: 0,
-        createdAt: new Date(now),
+        expiresAt: now + input.expiresIn * 1000,
+        cooldownUntil: now + input.resendInterval * 1000,
       }
-
-      // 直接 set 覆盖（cache 天然支持 upsert 语义）
-      const result = await cache.kv.set(buildOtpKey(identifier), record, { ex: expiresIn })
-      if (!result.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_saveOtpFailed', { params: { message: result.error.message } }),
-          result.error,
-        )
+      const key = keyFor(input.identifier)
+      const current = await cache.kv.get<OtpState>(key)
+      if (!current.success)
+        return failure()
+      if (current.data && current.data.cooldownUntil > Date.now()) {
+        return err(HaiIamError.OTP_RESEND_TOO_FAST, iamM('iam_otpResendTooFast', { params: { seconds: Math.ceil((current.data.cooldownUntil - Date.now()) / 1000) } }))
       }
-
-      // 同步重置尝试计数器（避免新生成的 OTP 复用旧计数）
-      const reset = await cache.kv.del(buildOtpAttemptsKey(identifier))
-      if (!reset.success)
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), reset.error)
-
-      return ok(undefined)
+      if (Date.now() >= state.expiresAt)
+        return invalid()
+      const published = await cache.kv.compareAndSwap(key, current.data ?? undefined, state, { px: Math.max(state.expiresAt, state.cooldownUntil) - Date.now() })
+      if (!published.success)
+        return failure()
+      if (!published.data)
+        return err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
+      if (Date.now() >= state.expiresAt)
+        return invalid()
+      return ok({ idempotencyKey: `iam-otp:${state.version}`, expiresAt: new Date(state.expiresAt) })
     },
 
-    async fetchOtp(identifier): Promise<HaiResult<OtpRecord | null>> {
-      const result = await cache.kv.get<OtpRecord>(buildOtpKey(identifier))
-      if (!result.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_queryOtpFailed', { params: { message: result.error.message } }),
-          result.error,
-        )
+    async consumeOtp(identifier, code, maxAttempts) {
+      const key = keyFor(identifier)
+      let version: string | undefined
+      for (let attempt = 0; attempt < 16; attempt++) {
+        const current = await cache.kv.get<OtpState>(key)
+        if (!current.success)
+          return failure()
+        const state = current.data
+        if (!state || state.code === null || state.expiresAt <= Date.now() || state.attempts >= maxAttempts || (version && state.version !== version))
+          return invalid()
+        version = state.version
+        const correct = core.string.constantTimeEqual(state.code, code)
+        const attempts = state.attempts + 1
+        const next: OtpState = { ...state, attempts, code: correct || attempts >= maxAttempts ? null : state.code }
+        // TTL 包含发送冷却期；消费不能删除冷却状态，也不能重建已过期的 key。
+        const committed = await cache.kv.compareAndSwap(key, state, next, { keepTtl: true })
+        if (!committed.success)
+          return failure()
+        if (!committed.data)
+          continue
+        if (!correct || state.expiresAt <= Date.now())
+          return err(HaiIamError.OTP_INVALID, iamM('iam_otpWrong'))
+        return ok(undefined)
       }
-
-      if (!result.data) {
-        return ok(null)
-      }
-
-      // 合并存储的尝试次数（独立键，支持原子 incr）
-      const attemptsResult = await cache.kv.get<number>(buildOtpAttemptsKey(identifier))
-      if (!attemptsResult.success)
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), attemptsResult.error)
-      const attempts = attemptsResult.success && typeof attemptsResult.data === 'number'
-        ? attemptsResult.data
-        : 0
-
-      const restored = restoreOtpDates(result.data)
-      return ok({ ...restored, attempts })
-    },
-
-    async incrementOtpAttempts(identifier): Promise<HaiResult<number>> {
-      const otpKey = buildOtpKey(identifier)
-      const attemptsKey = buildOtpAttemptsKey(identifier)
-
-      // 确认 OTP 本身存在
-      const current = await cache.kv.get<OtpRecord>(otpKey)
-      if (!current.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_queryOtpFailed', { params: { message: current.error.message } }),
-          current.error,
-        )
-      }
-
-      if (!current.data) {
-        return ok(0)
-      }
-
-      // 原子递增，避免并发竞态导致尝试次数统计失真
-      const incrResult = await cache.kv.incr(attemptsKey)
-      if (!incrResult.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_updateOtpAttemptsFailed', { params: { message: incrResult.error.message } }),
-          incrResult.error,
-        )
-      }
-
-      // 同步对齐 OTP 键剩余 TTL，确保 attempts 与 OTP 同时过期
-      const ttlResult = await cache.kv.ttl(otpKey)
-      if (!ttlResult.success)
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), ttlResult.error)
-      const ttl = ttlResult.success && ttlResult.data > 0 ? ttlResult.data : 1
-      const expire = await cache.kv.expire(attemptsKey, ttl)
-      if (!expire.success)
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), expire.error)
-
-      return ok(incrResult.data)
-    },
-
-    async removeOtp(identifier): Promise<HaiResult<void>> {
-      const result = await cache.kv.del(buildOtpKey(identifier))
-      if (!result.success) {
-        return err(
-          HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_deleteOtpFailed', { params: { message: result.error.message } }),
-          result.error,
-        )
-      }
-      // 同步清理尝试计数键
-      const removed = await cache.kv.del(buildOtpAttemptsKey(identifier))
-      if (!removed.success)
-        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_securityStateFailed'), removed.error)
-      return ok(undefined)
+      return err(HaiIamError.SECURITY_BUSY, iamM('iam_securityBusy'))
     },
   }
-
-  otpRepoInstance = repo
-  return repo
+  return otpRepoInstance
 }

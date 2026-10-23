@@ -27,6 +27,17 @@ async function generate(data: StorageData, options: ChecksumOptions = {}): Promi
   }
 }
 
+/**
+ * Node 端无状态字节校验工具；无需初始化，流只能消费一次。
+ * @example 模块内部上下文
+ * ```ts
+ * const calculated = await checksum.generate('hello', { algorithm: 'sha256' })
+ * if (!calculated.success) throw new Error(calculated.error.message)
+ * const checked = await checksum.verify('hello', calculated.data)
+ * if (!checked.success) throw new Error(checked.error.message)
+ * void checked.data
+ * ```
+ */
 export const checksum: ChecksumOperations = {
   generate,
   async verify(data, expected, options = {}) {

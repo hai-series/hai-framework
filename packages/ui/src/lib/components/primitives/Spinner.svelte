@@ -1,4 +1,5 @@
 <!--
+  @component Spinner
   =============================================================================
   @h-ai/ui - Spinner 组件
   =============================================================================
@@ -6,6 +7,16 @@
 
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { Spinner } from '@h-ai/ui'
+  const props: ComponentProps<typeof Spinner> = { size: 'sm', variant: 'primary' }
+  const component = mount(Spinner, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes, SpinnerProps } from '../../types.js'

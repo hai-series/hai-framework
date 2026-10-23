@@ -25,23 +25,14 @@
   @prop {Function} onPrimaryAction - 主操作回调
 
   @example
-  <TableToolbar
-    searchable
-    searchPlaceholder="搜索..."
-    bind:searchValue
-    filterFields={[
-      { id: 'status', label: '状态', type: 'enum', options: [{ label: '启用', value: 'active' }] }
-    ]}
-    bind:filterValues
-    sortableColumns={[{ key: 'name', label: '名称' }]}
-    sortBy="name"
-    sortDirection="asc"
-    onsearch={(v) => handleSearch(v)}
-    onfilterchange={(f) => handleFilter(f)}
-    onsort={(key, dir) => handleSort(key, dir)}
-  >
-    <Button size="sm" onclick={handleExport}>导出</Button>
-  </TableToolbar>
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { TableToolbar } from '@h-ai/ui'
+  const props: ComponentProps<typeof TableToolbar> = { searchable: true, searchValue: 'Ada', filterFields: [{ id: 'active', label: '状态', type: 'boolean' }] }
+  const component = mount(TableToolbar, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
@@ -50,7 +41,14 @@
   import { uiM } from '../../messages.js'
   import { getDataAttributes } from '../../utils.js'
 
-  /** 工具栏筛选字段定义。 */
+  /**
+   * 工具栏筛选字段定义。
+   *
+   * @example 模块内部上下文
+   * ```ts
+   * const example: FilterFieldDef = { id: 'active', label: '状态', type: 'boolean' }
+   * ```
+   */
   type FilterFieldDef = {
     /** 筛选字段 key，同时作为回调中的属性名。 */
     id: string
@@ -74,7 +72,19 @@
     options?: Array<{ label: string, value: string | number | boolean }> | (() => Array<{ label: string, value: string | number | boolean }>)
   }
 
-  /** TableToolbar 对外入参。 */
+  /**
+   * TableToolbar 对外入参。
+   *
+   * @example
+   * ```ts
+   * import { mount, unmount } from 'svelte'
+   * import type { ComponentProps } from 'svelte'
+   * import { TableToolbar } from '@h-ai/ui'
+   * const props: ComponentProps<typeof TableToolbar> = { searchable: true, searchValue: 'Ada', filterFields: [{ id: 'active', label: '状态', type: 'boolean' }] }
+   * const component = mount(TableToolbar, { target: document.body, props })
+   * await unmount(component)
+   * ```
+   */
   type TableToolbarProps = {
     /** 是否显示搜索框，默认 true。 */
     searchable?: boolean

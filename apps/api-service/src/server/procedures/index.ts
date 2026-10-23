@@ -11,7 +11,12 @@ import { createAppProcedures } from './app-procedures.js'
 export function createApiServiceProcedures(deps: { app: AppProcedureDeps }) {
   return {
     iam: createIamProcedures({ iam }),
-    storage: createStorageProcedures({ storage }),
+    storage: createStorageProcedures({
+      storage,
+      authorize: ({ context, keys }) => keys.every(key =>
+        key.startsWith(`users/${encodeURIComponent(context.session.userId)}/`)),
+    }),
+    // AI 默认绑定可信 session.userId，跨主体访问需另行提供 authorizeObject 策略。
     ai: createAiProcedures({ ai }),
     app: createAppProcedures(deps.app),
   }

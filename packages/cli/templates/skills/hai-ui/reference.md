@@ -39,7 +39,7 @@
 至少检查以下四项：
 
 - `svelte.config.*`：`autoImportHaiUi()` 在 `vitePreprocess()` 前。
-- `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/*`，`optimizeDeps.exclude` 包含 `bits-ui`。
+- `vite.config.*`：`ssr.noExternal` 包含 `@h-ai/ui` 和 `@h-ai/kit`，`optimizeDeps.exclude` 包含 `bits-ui`。
 - `app.css`：已导入 `global.css` / `theme.css`；移动端还要导入 `design-tokens.css` / `mobile.css`。
 - Tailwind：已配置 `@source` 扫描 `@h-ai/ui/dist/**/*.{svelte,js,ts}`。
 
@@ -52,7 +52,6 @@
 - **primitives**：单个交互单元，例如 `Button`、`Input`、`Select`、`Badge`。
 - **compounds**：通用业务骨架，例如 `Form`、`Modal`、`Drawer`、`DataTable`、`Pagination`。
 - **scenes**：完整业务流，例如 `LoginForm`、`FileUpload`、`CrudPage`、`AiDocumentEditor`。
-
 经验法则：
 
 - 只是做一个输入控件或按钮行 → 先看 primitives。
@@ -89,7 +88,7 @@
 
 ```bash
 # 核心包
-npm install @h-ai/ui
+npm install @h-ai/ui @h-ai/core
 
 # 必须的对等依赖与构建工具
 npm install -D svelte @sveltejs/kit @sveltejs/vite-plugin-svelte
@@ -98,6 +97,8 @@ npm install -D tailwindcss @tailwindcss/vite daisyui
 # 图标（可选但推荐）
 npm install -D @iconify/tailwind4 @iconify-json/tabler
 ```
+
+Node adapter 使用 Crypto、Kit 或 IAM 时，还需将 `sm-crypto@0.5.7` 作为直接生产依赖安装，保留 Node 原生模块解析。
 
 ### 2. svelte.config.js
 
@@ -143,7 +144,8 @@ export default defineConfig({
   },
   ssr: {
     // @h-ai 包为 ESM + Svelte 组件，需 Vite 在 SSR 时处理
-    noExternal: [/@h-ai\//],
+    noExternal: ['@h-ai/ui', '@h-ai/kit'],
+    external: ['@h-ai/core', 'sm-crypto'],
   },
 })
 ```
@@ -358,7 +360,7 @@ const p = usePlatform()
 | 组件           | Props 要点                                      | 说明     |
 | -------------- | ----------------------------------------------- | -------- |
 | `AuthShell`    | `variant`('card'/'split'), `title`, `brandTitle`, `brandText`, `illustration`, `description`, `highlights` | 认证页布局（包裹登录/注册表单） |
-| `LoginForm`    | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
+| `LoginForm`    | `showForgotPassword`, `showRegisterLink`, `errors`  | 登录表单 |
 | `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
 | `UserProfile`  | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint` | 用户资料，选择器和提示对齐业务校验；最终验证和上传仍由回调负责 |
 
@@ -579,6 +581,8 @@ typescript, javascript, python, java, go, rust, c, cpp, csharp, ruby, php, swift
 
 ## 配置驱动认证页面
 
+密码登录只接收 identifier/password；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。
+
 协议支持 `agreements.userAgreementMarkdown` 与 `privacyPolicyMarkdown` 直接从配置加载；YAML 的 `|` 保留 Markdown 段落和换行。弹窗复用安全 MarkdownRenderer，关闭原始 HTML、脚本和代码复制工具。同主题同时提供正文与 URL 时优先正文，URL 可作为额外查看入口；只有 URL 时使用隔离 iframe。
 
 ```yaml
@@ -634,8 +638,9 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 4. **Combobox 统一单选/多选**：`MultiSelect` 已删除
 5. **移动端样式**：务必引入 `design-tokens.css` + `mobile.css`，使用 SafeArea 包裹原生 App 页面
 6. **`@source` 必须配置**：未配置则 TailwindCSS 无法扫描 `@h-ai/ui` 组件中的 class，样式会丢失
-7. **`ssr.noExternal`**：Vite SSR 需要将 `@h-ai/*` 包纳入处理，否则 SSR 时 Svelte 组件无法正确编译
-8. **data-* 属性透传**：公开 Svelte 组件会把调用方传入的 `data-*` 属性透传到根节点或主交互节点；测试和自动化优先直接使用 `data-testid`、`data-analytics-id`，不要为测试 ID 重复封装组件
+7. **响应式布局**：后台工作区和数据列表使用可用宽度，避免外壳固定 max-width 造成宽屏两侧留白。flex/grid 子项设 min-width: 0，表格在自身容器滚动；正文和登录框保留阅读宽度。至少验证 390、1440、1920、2560、3840px 的内容占宽、导航与全页溢出。
+8. **`ssr.noExternal`**：Svelte 组件及 `@h-ai/kit/client` 的 `$app/*` 路由别名需要 Vite 编译，UI 和 Kit 保持 noExternal，core 及其他纯服务端包保留原生加载；本地链接的框架包也要显式 external，避免日志、数据库等原生依赖被重复打包。sm-crypto 使用动态 CommonJS require，应放入 `ssr.external`，并以明确版本列入应用 dependencies；adapter-node 只根据直接生产依赖排除二次打包，不能仅依赖它作为框架的传递依赖。
+9. **data-* 属性透传**：公开 Svelte 组件会把调用方传入的 `data-*` 属性透传到根节点或主交互节点；测试和自动化优先直接使用 `data-testid`、`data-analytics-id`，不要为测试 ID 重复封装组件
 
 ## 导出路径
 
@@ -647,7 +652,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 | `@h-ai/ui/theme`           | 轻量主题元数据与工具，不经过组件根入口 |
 | `@h-ai/ui/i18n`            | 轻量语言工具，供状态层使用，不加载组件或引导 CSS |
 | `@h-ai/ui/auto-import`     | Svelte 预处理器：组件自动导入          |
-| `@h-ai/ui/components/*`    | 公开组件目录的 JS 入口，按实际 exports/产物选择 |
+| `@h-ai/ui/components/primitives/index` 等明确 barrel | 仅 package.exports 列出的组件目录；组件默认导出经 barrel 转发 |
 | `@h-ai/ui/components/primitives/index` | 公开原子组件目录入口，如 Button/Input |
 | `@h-ai/ui/styles/global.css`       | 全局基础样式（重置/滚动条/焦点）       |
 | `@h-ai/ui/styles/theme.css`        | Tailwind v4 `@theme` Token            |
@@ -682,3 +687,7 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
   <Button type="submit">{m.save()}</Button>
 </Form>
 ```
+
+Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
+
+`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。

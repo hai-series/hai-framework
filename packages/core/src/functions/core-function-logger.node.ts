@@ -29,10 +29,7 @@ if (process.platform === 'win32' && process.stdout.isTTY) {
       process.stderr.setDefaultEncoding('utf8')
     }
 
-    // 通过环境变量强制 Node.js 使用 UTF-8
-    process.env.LANG = 'zh_CN.UTF-8'
-    process.env.LC_ALL = 'zh_CN.UTF-8'
-    process.env.PYTHONIOENCODING = 'utf-8'
+    // 仅调整当前终端，不改写调用方语言或子进程编码环境。
   }
   // eslint-disable-next-line unused-imports/no-unused-vars
   catch (_e) {
@@ -292,10 +289,11 @@ function getLogger(): Logger {
 
 /**
  * Node.js Logger 函数集合。
- *
  * @example
  * ```ts
- * logger.createLogger({ name: 'service' }).info('boot')
+ * import { core } from '@h-ai/core'
+ * const logger = core.logger.create({ name: 'orders' })
+ * logger.info('Order created', { orderId: 'order-1' })
  * ```
  */
 export const logger: LoggerFunctions = {

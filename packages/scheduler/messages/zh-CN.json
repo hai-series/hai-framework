@@ -22,11 +22,15 @@
   "scheduler_invalidPersistedTask": "持久化任务 {taskId} 无效：{error}",
   "scheduler_taskRunning": "任务正在执行中: {taskId}",
   "scheduler_invalidApiConfig": "任务 api_config 格式无效: {taskId}",
-  "scheduler_lockAcquireFailed": "获取分布式锁失败，其他节点已获锁: {taskId}",
   "scheduler_jsCompileFailed": "JS 任务编译失败: {error}",
   "scheduler_hookExecutionFailed": "任务生命周期回调执行失败: {error}",
   "scheduler_taskHandlerMissing": "任务缺少可执行 handler，且未配置全局执行回调: {taskId}",
   "scheduler_invalidHandlerConfig": "任务 handler 配置无效: {taskId}",
   "scheduler_invalidRetryConfig": "任务重试策略配置无效: {taskId}",
-  "scheduler_reldbNotInitialized": "enableDb 为 true 但 @h-ai/reldb 未初始化，请先调用 reldb.init()"
+  "scheduler_reldbNotInitialized": "enableDb 为 true 但 @h-ai/reldb 未初始化，请先调用 reldb.init()",
+  "scheduler_executionUnknown": "执行结果未知；请先终止旧 runner 并核对外部副作用后裁定",
+  "scheduler_executionStateFailed": "共享执行状态不可用或 owner 租约已失效",
+  "scheduler_executionInputInvalid": "执行标识或运维输入不合法",
+  "scheduler_occurrenceHandled": "本次调度已处理: {taskId}",
+  "scheduler_logPersistFailed": "执行日志尚未确认持久化，请按执行回执补写；不要重新执行业务"
 }

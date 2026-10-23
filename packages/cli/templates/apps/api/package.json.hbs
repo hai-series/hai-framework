@@ -15,7 +15,9 @@
     "dev:prod": "pnpm --filter {{api.servicePackageName}} dev:prod",
     "compile": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present build",
     "build": "hai build",
+{{#if features.deploy}}
     "deploy": "hai deploy apps/{{projectName}}-service",
+{{/if}}
     "check": "pnpm typecheck",
     "typecheck": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present typecheck",
     "lint": "eslint *.js *.ts e2e && pnpm -r --if-present lint",
@@ -30,6 +32,9 @@
     "{{api.contractPackageName}}": "workspace:*"
   },
   "devDependencies": {
+{{#if features.deploy}}
+    "@h-ai/deploy": "{{haiPackageSpecifier}}",
+{{/if}}
     "@h-ai/cli": "{{haiPackageSpecifier}}",
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
 {{#if features.crypto}}

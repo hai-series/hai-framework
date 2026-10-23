@@ -10,6 +10,8 @@
 
 ## 文件命名与职责
 
+- 常规模块源文件使用 `<模块>[-<领域>]-<角色>[-<实体或实现>].ts`；同族文件的角色位置一致，例如 `scheduler-repository-task.ts`、`payment-provider-wechat.ts`。嵌套目录也保留模块前缀，便于日志、搜索和独立审阅定位。
+- 框架固定入口 `index.ts`、条件入口 `browser.ts`、Svelte 组件 `PascalCase.svelte` 及其局部工具保留实际契约；`api-contract` 按协议领域命名 `payment-schemas.ts` 等，不叠加无意义的包名前缀。审查依据与 21 包例外见[代码风格清单](../../docs/module-code-style.md)。
 - `xx-main.ts`：模块主入口，仅生命周期管理（init/close）和 API 编排，禁止具体业务逻辑（调度循环、数据处理等）
 - `xx-types.ts`：对外接口类型定义（public types）
 - `xx-config.ts`：配置定义与默认值、错误定义（现有模块通常在 xx-types.ts；以实际定义为准）
@@ -18,9 +20,13 @@
 
 ## 导出规则
 
-- `index.ts` 仅做 `export *` 聚合，禁止选择性导出/重命名
-- 在源文件中控制导出边界
-- 任何 API 变更必须同步 README / Skill 模板 / 测试
+- 分清三层：`package.json.exports` 声明可导入的公开入口；入口文件选择公共符号；普通源文件的 `export` 只供模块内部跨文件复用，不自动成为包 API。
+- 入口保持转发，不放业务逻辑；仅在源文件全部导出都属于公共契约时使用 `export *`。允许选择性导出、`export type`、明确别名和 Svelte 组件默认导出的转发，保留 client/server 条件入口。CLI 命令启动入口按命令契约处理。
+- 内置 Provider、Repository、工厂依赖等类型放在实际实现边界，不经公共 barrel 转出。公开签名需要的扩展接口必须保留，例如 `PaymentProvider` 和 `AIStoreProvider`；不能只因仓库内调用少就删掉真实扩展能力。
+- browser 分支先于 Node types，分别声明真实 types/default；声明打包后再次检查 type-only 语义，必要时改为明确类型列表，不能让不存在的运行时函数出现在可调用声明中。
+- `exports` 的每个条件/子路径必须有真实构建文件与配套声明；不声明空实现或将目录通配当作任意内部文件的公开许可。
+- 变更后构建受影响包，执行 `pnpm generate:api`、`pnpm check:api` 与 `pnpm test:api`，核对 [公开 API 清单](../../docs/module-api-inventory.md)。浏览器入口完整打包不得引入 Node 内建模块，Svelte 组件由真实编译器验证。
+- 任何 API 变更必须同步实现、消费者、README、Skill 模板、LLMS 与测试。
 
 ## 错误处理
 
@@ -63,7 +69,7 @@ function register(tool: Tool): HaiResult<void> {
 
 - 初始化统一 `<模块>.init(config)` / `<模块>.close()`
 - `init()` 使用 `initInProgress` 防并发；并发调用返回 HaiResult 错误，`try/finally` 释放标记，禁止抛异常或泄漏连接
-- Node 与 Browser 的 API 形态必须一致，浏览器端不暴露独立 init 函数
+- 同一项跨端能力保持一致调用形态；Node 专属服务不伪造浏览器实现。浏览器纯配置/类型入口可显式收窄导出，文档须说明条件差异，不暴露独立 init 函数。
 - 使用 NotInitializedKit 模式防止未初始化调用：
   - `core.module.createNotInitializedKit(HaiXxError.NOT_INITIALIZED, () => xxM('xx_notInitialized'))`
   - 每个子操作接口都有对应 `notInitialized.proxy<T>()` 占位
@@ -71,6 +77,8 @@ function register(tool: Tool): HaiResult<void> {
   - close() 后状态回到未初始化，getter 自动切换回 Proxy
 
 ## 配置校验
+
+生产共享状态要求以 `core.module.requiresSharedState(process.env)` 为准：`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时拒绝本机业务状态后端，显式 E2E 测试除外。初始化依赖、Provider 能力与故障恢复见[生产共享状态表](../../docs/distributed-state.md)。公开初始化结果失败时不能继续启动依赖模块；自定义 Store 的 `stateScope` 必须反映真实持久化/原子能力，不能仅按工厂名称声明共享。
 
 环境文件采用六类：`.env.example` 完整列出字段用途、默认值、枚举和范围；`.env` 为公共基础；`.env.dev`、`.env.test`、`.env.prod` 为公共环境覆盖，这五类均提交 Git。`.env.local` 为本机私有配置，不提交 Git。优先级为进程环境 > `.env.local` > 环境文件 > `.env`；Vite 在 Node 配置阶段调用 `core.config.loadEnvFiles({ mode, envDir })` 并检查 success 后注入进程，Node 脚本按相同顺序传入 `--env-file`。`core.init` 不自行读取 dotenv。
 
@@ -89,7 +97,7 @@ function register(tool: Tool): HaiResult<void> {
 ## 命名一致性
 
 - 类名、文件名、变量名三者一致
-- 接口名与实现工厂对应（例如 `StorageProvider` ↔ `createS3StorageProvider`）
+- 接口名与实现工厂对应（例如 `StorageProvider` ↔ `createS3Provider`）
 - 重命名必须同步更新：引用点、测试、注释、文档
 - 禁止含糊命名（如 data / info / handle / process）
 - 服务对象：小写模块名（`export const storage`）
@@ -109,7 +117,7 @@ function register(tool: Tool): HaiResult<void> {
 
 - 只 export 使用方直接需要的类型/函数，内部辅助类型不导出
 - `xx-types.ts` 中的公共类型只含使用方关心的字段，不暴露内部实现细节（DB 列名、Provider 内部状态等）
-- Provider 接口是内部实现，禁止暴露给模块消费者
+- 内置 Provider 的装配接口属于内部实现；公开注册/依赖注入契约所需的 Provider 类型可以导出，范围以真实扩展入口为准（如 `payment.registerProvider`、`AIStoreProvider`）。
 - 模块消费者需要的上游类型，在模块自身 re-export，不要求消费者 import 上游包
 
 ### 参数精简
@@ -163,11 +171,11 @@ function register(tool: Tool): HaiResult<void> {
 
 日志上下文中可能包含敏感信息时（URL / 连接字符串 / 配置对象中的 password、token、apiKey、secret 等），必须先通过 `sanitize*` 辅助函数脱敏后再传入 logger，禁止直接输出原始值。
 
-| 场景                                        | 脱敏方式                                                                                |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| URL 类（redis://、postgres://、http:// 等） | `new URL()` 解析后将 `username`/`password` 替换为 `***`，解析失败返回 `'(invalid url)'` |
-| 配置对象                                    | 剥离或遮蔽 `password`/`token`/`apiKey`/`secret` 字段                                    |
-| 函数命名                                    | `sanitize{Subject}`，放在对应 Provider / functions 文件顶部                             |
+| 场景                                        | 脱敏方式                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| URL 类（redis://、postgres://、http:// 等） | 使用 `core.sanitize.sanitizeUrl()`；遮蔽 userinfo、敏感 query/OAuth fragment，非法地址返回固定占位符 |
+| 配置对象                                    | 剥离或遮蔽 `password`/`token`/`apiKey`/`secret` 字段                                                 |
+| 函数命名                                    | `sanitize{Subject}`，放在对应 Provider / functions 文件顶部                                          |
 
 ## 模块禁止事项
 
@@ -181,3 +189,5 @@ function register(tool: Tool): HaiResult<void> {
 - `as unknown as T` 类型强转：禁止用此模式绕过真实类型差异，应修改接口/函数签名使用正确的类型；合规例外：第三方库类型缺失时的 workaround（须加注释说明原因）
 - 将表名/缓存 key 定义在模块 main、全局 constants 或配置文件中，导致与实现分离
 - 将表名/缓存 key 设计为可配置项（如 `config.tableName` / `config.keyPrefix`）
+
+公开声明与内部结构的 JSDoc 示例使用真实入口及合法参数；内部上下文要显式标明，禁止占位断言或虚构 export。具体范围、格式与仅编译不执行的校验见 [模块 JSDoc](../../docs/module-jsdoc.md)。构建受影响包后运行 `node scripts/check-module-jsdoc.mjs --package <模块>`；全库最终执行 `pnpm check:jsdoc`。

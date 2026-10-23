@@ -33,7 +33,7 @@
   <meta name='description' content={m.page_description()} />
 </svelte:head>
 
-<main class='mx-auto max-w-7xl px-4 py-8 lg:px-8 lg:py-10'>
+<main class='w-full min-w-0 px-4 py-8 lg:px-8 lg:py-10'>
   <section class='mb-7 flex flex-col justify-between gap-5 lg:flex-row lg:items-end'>
     <div class='max-w-3xl'>
       <div class='mb-3 flex items-center gap-2 text-sm font-medium text-primary'>

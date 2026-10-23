@@ -2,6 +2,7 @@ import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { iam } from '../src/index.js'
+import { TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam atomic role permission replacement', () => {
   beforeEach(async () => {
@@ -44,6 +45,10 @@ describe('iam atomic role permission replacement', () => {
   })
 
   it('replaces permissions without metadata and updates an existing session after commit', async () => {
+    const user = await iam.user.createUser({ username: 'atomic-user', password: TEST_PASSWORD })
+    expect(user.success).toBe(true)
+    if (!user.success)
+      return
     const permission = await iam.authz.createPermission({ code: 'atomic:view', name: 'view' })
     expect(permission.success).toBe(true)
     if (!permission.success)
@@ -52,11 +57,13 @@ describe('iam atomic role permission replacement', () => {
     expect(role.success).toBe(true)
     if (!role.success)
       return
-    expect((await iam.authz.assignRole('atomic-user', role.data.id)).success).toBe(true)
-    const session = await iam.session.create({ userId: 'atomic-user', roles: ['atomic-session'], permissions: ['atomic:view'] })
+    // 真实用户默认带有 user 角色；本用例只保留被测角色，隔离默认权限而非伪造用户。
+    expect((await iam.authz.syncRoles(user.data.user.id, [role.data.id])).success).toBe(true)
+    const session = await iam.session.create({ userId: user.data.user.id, roles: ['atomic-session'], permissions: ['atomic:view'] })
     expect(session.success).toBe(true)
     if (!session.success)
       return
+    expect(await iam.session.get(session.data.accessToken)).toMatchObject({ success: true, data: { userId: user.data.user.id, permissions: ['atomic:view'] } })
     expect((await iam.authz.updateRole(role.data.id, { permissionIds: [] })).success).toBe(true)
     expect(await iam.authz.getRolePermissions(role.data.id)).toMatchObject({ success: true, data: [] })
     expect(await iam.session.get(session.data.accessToken)).toMatchObject({ success: true, data: { permissions: [] } })

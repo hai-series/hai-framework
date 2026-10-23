@@ -4,20 +4,30 @@
 
 [框架首页](../../README.md) · 相关模块：[@h-ai/core](../core/README.md) · [@h-ai/reldb](../reldb/README.md)
 
+## 简介
+
 统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/reldb` 实现持久化。
 
-## 依赖
+## 核心功能清单
+
+- 记录用户操作与安全事件，支持按用户、时间和操作筛选。
+- 查询分页日志与操作统计，并按保留天数清理。
+- 使用关系数据库持久化，写入前隐藏凭证类字段。
+
+## 使用入门
+
+### 依赖
 
 - `@h-ai/reldb` — 数据库（审计日志持久化），**需在 audit.init() 前初始化**
 
-## 适用场景
+### 适用场景
 
 - 用户操作审计（登录、登出、注册、密码重置等）
 - CRUD 操作审计（创建、读取、更新、删除资源）
 - 安全事件追踪与合规审计
 - 运营数据统计（操作频次、活跃用户等）
 
-## 快速开始
+### 快速开始
 
 ```ts
 import { audit } from '@h-ai/audit'
@@ -60,7 +70,7 @@ if (!closeResult.success) {
 }
 ```
 
-## 初始化配置
+### 初始化配置
 
 ```ts
 // 默认配置（无需传参）
@@ -76,7 +86,7 @@ await audit.init({
 
 审计日志固定存储在 `hai_audit_logs` 表中，依赖 `@h-ai/reldb` 已初始化。
 
-## API 概览
+### API 概览
 
 - `audit.init(config)` - 初始化审计模块
 - `audit.log(input)` - 记录审计日志
@@ -87,7 +97,9 @@ await audit.init({
 - `audit.helper.login/logout/register/...` - 便捷记录器
 - `audit.close()` - 关闭模块
 
-### 输入约束
+常见事件通过 `audit.helper` 记录，对应的 `AuditHelper` 类型保持公开；便捷记录器的内部装配工厂不属于包 API。
+
+#### 输入约束
 
 - `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
 - `audit.log(input)`：`details` 中的凭证类敏感字段（如 `password` / `token` / `secret`）会在持久化前自动脱敏；邮箱、手机号默认保留原值。
@@ -96,7 +108,7 @@ await audit.init({
 - `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
 - `audit.getStats(days)`：`days`（如传入）必须为非负整数。
 
-## 错误码
+### 错误码
 
 所有操作返回 `HaiResult<T>`，常用错误码如下：
 
@@ -112,12 +124,16 @@ await audit.init({
 
 > 说明：`audit.close()` 也返回 `HaiResult<void>`；`audit.helper.passwordResetRequest()` 会记录原始邮箱，默认不会额外掩码。
 
-## 测试
+`audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
+
+## 开发测试
 
 ```bash
 pnpm --filter @h-ai/audit test
 ```
 
-## License
+审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
+
+## 许可证
 
 Apache-2.0

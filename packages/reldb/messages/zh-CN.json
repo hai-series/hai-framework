@@ -9,7 +9,6 @@
   "reldb_postgresTxFailed": "事务执行失败: {error}",
   "reldb_postgresOnlyPostgresql": "PostgreSQL Provider 仅支持 postgresql 类型",
   "reldb_postgresConnectionFailed": "连接 PostgreSQL 失败: {error}",
-
   "reldb_sqliteOnlySqlite": "SQLite Provider 仅支持 sqlite 类型",
   "reldb_sqliteNeedPath": "SQLite 需要提供数据库路径（database 字段）",
   "reldb_sqliteConnectionFailed": "连接 SQLite 失败: {error}",
@@ -18,11 +17,16 @@
   "reldb_mysqlOnlyMysql": "MySQL Provider 仅支持 mysql 类型",
   "reldb_mysqlConnectionFailed": "连接 MySQL 失败: {error}",
   "reldb_mysqlTxFailed": "事务执行失败: {error}",
-
+  "reldb_mysqlPoolQueueFull": "MySQL 连接获取等待队列已满",
+  "reldb_mysqlPoolAcquireTimeout": "MySQL 连接获取已超过截止期限",
+  "reldb_mysqlPoolReleaseFailed": "MySQL 连接归还失败，请关闭数据库后重试",
+  "reldb_mysqlTlsDnsRequired": "MySQL 当前驱动的主机身份验证要求使用与证书匹配的 DNS 主机名，不能验证 IP 地址身份",
   "reldb_crudEmptyPayload": "CRUD 数据为空，请提供数据",
   "reldb_crudNoValidColumns": "CRUD 数据没有有效列",
   "reldb_crudRecordNotFound": "记录不存在: {id}",
   "reldb_invalidIdentifier": "非法的 SQL 标识符: {name}（仅允许字母、数字和下划线）",
   "reldb_configError": "数据库配置校验失败：{error}",
-  "reldb_txFailed": "事务执行失败: {error}"
+  "reldb_txFailed": "事务执行失败: {error}",
+  "reldb_sharedBackendRequired": "生产模式需要跨节点共享后端；本机文件或内存后端仅用于开发和显式端到端测试。",
+  "reldb_jsonPatchObjectRequired": "JSON 合并补丁必须是对象"
 }

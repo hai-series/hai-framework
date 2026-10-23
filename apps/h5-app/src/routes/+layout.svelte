@@ -85,7 +85,7 @@
   {@render children()}
 {:else}
   <div class='hai-mobile-viewport'>
-    <div class='hai-mobile-shell max-w-lg'>
+    <div class='hai-mobile-shell min-w-0'>
       <!-- 顶部应用栏 -->
       <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8'>
         {#snippet trailing()}
@@ -113,7 +113,7 @@
         onchange={handleTabChange}
         safeArea
         centered
-        maxWidth='lg'
+        maxWidth='none'
         class='border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]'
       />
     </div>

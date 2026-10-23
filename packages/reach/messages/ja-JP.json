@@ -10,7 +10,14 @@
   "reach_providerNotFound": "プロバイダーが見つかりません: {provider}",
   "reach_providerRequired": "プロバイダーが指定されていません。メッセージまたはテンプレートのproviderを設定してください",
   "reach_dndBlocked": "通知を停止する時間帯のため、メッセージを破棄しました",
-  "reach_dndDeferred": "通知を停止する時間帯のため、終了後にメッセージを送信します",
+  "reach_dndPersistenceRequired": "通知制限時間帯の配信延期には初期化済みのデータベースと準備済みのキューテーブルが必要です",
+  "reach_dndEnqueueFailed": "メッセージを確実にキューへ登録できませんでした。しばらくしてから再試行してください",
+  "reach_sendRecordSaveFailed": "配信記録の永続化に失敗しました",
+  "reach_invalidStoredInteger": "配信記録の {field} は安全な非負整数ではありません",
+  "reach_claimLost": "有効な配信リースが失われました",
+  "reach_unknownResolutionFailed": "結果不明の配信が見つからないか、既に解決されています",
+  "reach_queueInputInvalid": "キューの受領記録または手動解決のパラメーターが無効です",
+  "reach_deliveryUnknown": "外部への配信結果は不明です。手動確認が必要なため、自動再配信を停止しました",
   "reach_smsSendFailed": "SMSの送信に失敗しました: {error}",
   "reach_emailSendFailed": "メールの送信に失敗しました: {error}",
   "reach_apiSendFailed": "APIコールバックの送信に失敗しました: {error}",
@@ -29,5 +36,8 @@
   "reach_config_providersRequired": "少なくとも1つのプロバイダーが必要です",
   "reach_templateDbInitFailed": "テンプレートデータベースの初期化に失敗しました: {error}",
   "reach_templateSaveFailed": "テンプレートの保存に失敗しました: {error}",
-  "reach_templateDeleteFailed": "テンプレートの削除に失敗しました: {error}"
+  "reach_templateDeleteFailed": "テンプレートの削除に失敗しました: {error}",
+  "reach_queueRetryInvalid": "maxRetryDelayMs は retryDelayMs 以上にしてください",
+  "reach_deadRequeueFailed": "配信不能メッセージが変更されたか、存在しません。復元する前に状態を再読み込みしてください",
+  "reach_productionProviderRequired": "本番環境には配信プロバイダーが必要です。console は開発環境または明示的なテストモードでのみ使用できます"
 }

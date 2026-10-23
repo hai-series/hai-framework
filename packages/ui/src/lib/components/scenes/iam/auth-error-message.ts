@@ -32,6 +32,16 @@ const messages: Partial<Record<string, UIMessageKey>> = {
   'hai:iam:999': 'auth_error_service',
 }
 
+/**
+ * 将已知 IAM 错误码映射为当前语言的认证提示，未知错误保留原消息。
+ * @param error - 待显示的安全错误对象或消息。
+ * @returns 当前语言的已知认证错误提示；未知错误保留服务端消息。
+ *
+ * @example 模块内部上下文
+ * ```ts
+ * const message = authErrorMessage({ code: 'hai:iam:020', message: '登录失败' })
+ * ```
+ */
 export function authErrorMessage(error: Pick<HaiError, 'code' | 'message'>): string {
   const key = messages[error.code]
   return key ? uiM(key) : error.message

@@ -5,22 +5,19 @@
  * @module payment-client-types
  */
 
-import type { PaymentOrder } from '../payment-types.js'
-
-/** 支付调起结果 */
+/**
+ * 支付调起结果
+ * @example
+ * ```ts
+ * import type { InvokePaymentResult } from '@h-ai/payment/client'
+ * function needsRetry(result: InvokePaymentResult): boolean {
+ *   return !result.invoked // invoked=true 仍不证明付款，可能只是提交页面/桥接请求。
+ * }
+ * ```
+ */
 export interface InvokePaymentResult {
-  /** 是否成功调起 */
+  /** 是否已经提交客户端调起；即使用户取消也可能为 true，不能作为付款证明。 */
   invoked: boolean
   /** 额外信息 */
   message?: string
-}
-
-/** 支付调起选项 */
-export interface InvokePaymentOptions {
-  /** 支付订单（来自后端 createOrder 返回） */
-  order: PaymentOrder
-  /** 成功回调 URL（Web 跳转场景） */
-  successUrl?: string
-  /** 取消回调 URL */
-  cancelUrl?: string
 }

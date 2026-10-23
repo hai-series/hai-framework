@@ -27,11 +27,13 @@ cors:
     - Content-Type
 {{#if features.crypto}}    - X-Client-Id
     - X-Encrypted
+    - X-Hai-Transport
 {{/if}}    - X-Hai-Locale
     - X-Request-Id
     - X-Requested-With
   exposedHeaders:
 {{#if features.crypto}}    - X-Encrypted
+    - X-Hai-Transport
 {{/if}}    - X-Request-Id
 
 {{#if features.crypto}}transport:
@@ -42,6 +44,5 @@ cors:
     - /openapi.json
     - /docs
     - /_hai/scalar.js
-  maxClients: 10000
 {{else}}transport: false
 {{/if}}

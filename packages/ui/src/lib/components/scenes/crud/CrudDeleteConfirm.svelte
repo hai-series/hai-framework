@@ -4,6 +4,16 @@
 
   使用 Svelte 5 Runes ($props)
   使用 compounds 组件：Confirm
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { CrudDeleteConfirm } from '@h-ai/ui'
+  const props: ComponentProps<typeof CrudDeleteConfirm> = { open: true, title: '删除用户', message: '删除后不可恢复。' }
+  const component = mount(CrudDeleteConfirm, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../../types.js'

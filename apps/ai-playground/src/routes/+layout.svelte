@@ -36,7 +36,7 @@
 </script>
 
 <header class='sticky top-0 z-20 border-b border-base-content/8 bg-base-100/82 backdrop-blur-xl'>
-  <div class='mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-8'>
+  <div class='flex w-full min-w-0 flex-wrap items-center justify-between gap-4 px-4 py-3 lg:px-8'>
     <div class='flex items-center gap-3'>
       <div class='grid size-10 place-items-center rounded-2xl bg-primary text-primary-content shadow-lg shadow-primary/20'>
         <span class='icon-[tabler--sparkles] size-5'></span>

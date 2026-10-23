@@ -18,7 +18,16 @@ const WebhookBodySchema = z.unknown()
 // 微信与支付宝通知共享同一响应结构，仅在本 contract 内复用。
 const notifyMessageOutputSchema = haiResultSchema(PaymentNotifyMessageSchema)
 
-/** Payment 领域 oRPC contract。 */
+/**
+ * Payment 领域 oRPC contract。
+ * @example
+ * ```ts
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract = apiContract.payment
+ * void contract
+ * ```
+ */
 export const paymentContract = {
   orders: {
     create: route({ method: 'POST', path: '/payment/orders', operationId: 'payment.orders.create', summary: 'Create payment order', tags: ['payment', 'orders'] })
@@ -44,4 +53,15 @@ export const paymentContract = {
   },
 }
 
+/**
+ * payment 领域公开 procedure 契约的完整类型。
+ * @example
+ * ```ts
+ * import type { PaymentContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
+ *
+ * const contract: PaymentContract = apiContract.payment
+ * void contract
+ * ```
+ */
 export type PaymentContract = typeof paymentContract

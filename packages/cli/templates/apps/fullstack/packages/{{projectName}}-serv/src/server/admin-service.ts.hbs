@@ -21,18 +21,19 @@ export async function withAdminMutation<T>(context: ServContext, work: () => Pro
   if (adminMutationActive)
     return err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
   adminMutationActive = true
-  const owner = core.id.uuid()
+  let owner = ''
   const key = 'hai:app:admin-mutation'
   let acquired = false
   let leaseLost = false
   let renewalPending = false
   let renewalTimer: ReturnType<typeof setInterval> | undefined
   try {
-    const locked = await cache.lock.acquire(key, { owner, ttl: 300 })
+    const locked = await cache.lock.acquire(key, { ttl: 300 })
     if (!locked.success)
       return locked
     if (!locked.data)
       return err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
+    owner = locked.data
     acquired = true
     renewalTimer = setInterval(() => {
       if (renewalPending || leaseLost)

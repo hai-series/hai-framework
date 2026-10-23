@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { ReldbProvider } from './providers/reldb-provider-types.js'
 import type { ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type {
   CrudManager,
@@ -13,10 +14,10 @@ import type {
   DmlOperations,
   ReldbFunctions,
   ReldbJsonOps,
-  ReldbProvider,
   TxManager,
 } from './reldb-types.js'
 
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { createBaseCrudManager } from './providers/reldb-provider-base.js'
@@ -45,6 +46,52 @@ let currentJsonOps: ReldbJsonOps | null = null
 
 /** 初始化进行中标记，防止并发调用导致 Provider 泄漏 */
 let initInProgress = false
+
+/** 尚未释放的候选/旧 Provider；绝不用于业务操作，清理成功后才能替换。 */
+let pendingProvider: ReldbProvider | null = null
+/** 初始化完成屏障，供 close 等待候选资源归属确定。 */
+let initCompletion: Promise<void> | null = null
+/** 合并并发关闭，避免同一连接重复释放。 */
+let closingPromise: Promise<HaiResult<void>> | null = null
+
+/** 停止发布资源并重试清理；失败时保留唯一所有权供下一次 close/init 重试。 */
+async function closeOwnedProvider(): Promise<HaiResult<void>> {
+  if (currentProvider) {
+    pendingProvider = currentProvider
+    currentProvider = null
+  }
+  currentConfig = null
+  currentJsonOps = null
+  if (!pendingProvider)
+    return ok(undefined)
+  try {
+    const result = await pendingProvider.close()
+    if (!result.success)
+      return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true } })
+    pendingProvider = null
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Provider cleanup failed; retaining resource for retry', { error })
+    return err({ ...HaiReldbError.CONNECTION_FAILED, message: reldbM('reldb_closeFailed', {
+      params: { error: error instanceof Error ? error.message : String(error) },
+    }), cause: error, ext: { cleanupPending: true } })
+  }
+}
+
+/** 初始化失败后释放候选；保留原始错误，并明确指出清理尚未完成。 */
+async function failInitialization(result: HaiResult<void>): Promise<HaiResult<void>> {
+  const cleanup = await closeOwnedProvider()
+  if (result.success)
+    return result
+  if (cleanup.success) {
+    const ext = { ...result.error.ext }
+    delete ext.cleanupPending
+    delete ext.cleanupError
+    return err({ ...result.error, ext: Object.keys(ext).length > 0 ? ext : undefined })
+  }
+  return err({ ...result.error, ext: { ...result.error.ext, cleanupPending: true, cleanupError: cleanup.error } })
+}
 
 // ─── Provider 工厂 ───
 
@@ -105,33 +152,21 @@ const notInitializedTx: TxManager = {
  * - `reldb.json` - JSON 路径操作 SQL 构建器（提取、设置、插入、删除、合并）
  * - `reldb.config` - 当前配置
  * - `reldb.isInitialized` - 初始化状态
- *
  * @example
  * ```ts
  * import { reldb } from '@h-ai/reldb'
  *
- * // 初始化
- * await reldb.init({ type: 'sqlite', database: ':memory:' })
- *
- * // DDL 操作
- * await reldb.ddl.createTable('users', {
- *     id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
- *     name: { type: 'TEXT', notNull: true }
- * })
- *
- * // SQL 操作
- * await reldb.sql.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
- * const users = await reldb.sql.query('SELECT * FROM users')
- *
- * // 事务操作
- * await reldb.tx.wrap(async (tx) => {
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
- *     return 'done'
- * })
- *
- * // 关闭连接
- * await reldb.close()
+ * const initialized = await reldb.init({ type: 'sqlite', database: ':memory:' }) // 仅示例/测试。
+ * if (!initialized.success) throw new Error(initialized.error.message)
+ * try {
+ *   const created = await reldb.ddl.createTable('users', { id: { type: 'TEXT', primaryKey: true }, name: { type: 'TEXT' } })
+ *   if (!created.success) throw new Error(created.error.message)
+ *   const inserted = await reldb.sql.execute('INSERT INTO users (id, name) VALUES (?, ?)', ['u1', 'Alice'])
+ *   if (!inserted.success) throw new Error(inserted.error.message)
+ * } finally {
+ *   const closed = await reldb.close()
+ *   if (!closed.success) throw new Error(closed.error.message)
+ * }
  * ```
  */
 export const reldb: ReldbFunctions = {
@@ -140,19 +175,30 @@ export const reldb: ReldbFunctions = {
    *
    * @param config - 数据库配置（允许部分字段，内部会补齐默认值）
    * @returns 初始化结果，失败时包含错误信息
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
    */
   async init(config: ReldbConfigInput): Promise<HaiResult<void>> {
-    if (initInProgress) {
+    if (initInProgress || closingPromise) {
       logger.warn('RelDB module init is already in progress, skipping concurrent call')
       return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', { params: { error: 'init already in progress' } }))
     }
 
     initInProgress = true
+    let resolveInit!: () => void
+    initCompletion = new Promise<void>((resolve) => {
+      resolveInit = resolve
+    })
     try {
-      if (currentProvider) {
-        logger.warn('RelDB module is already initialized, reinitializing')
-        await reldb.close()
-      }
+      const cleanup = await closeOwnedProvider()
+      if (!cleanup.success)
+        return cleanup
 
       logger.info('Initializing RelDB module')
 
@@ -162,17 +208,21 @@ export const reldb: ReldbFunctions = {
         return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', { params: { error: parseResult.error.message } }), parseResult.error)
       }
       const parsed = parseResult.data
+      if (core.module.requiresSharedState(process.env) && (parsed.type === 'sqlite'))
+        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sharedBackendRequired'))
 
       try {
         const provider = createProvider(parsed)
+        pendingProvider = provider
         const connectResult = await provider.connect(parsed)
         if (!connectResult.success) {
           logger.error('RelDB module initialization failed', {
             code: connectResult.error.code,
             message: connectResult.error.message,
           })
-          return connectResult
+          return await failInitialization(connectResult)
         }
+        pendingProvider = null
         currentProvider = provider
         currentConfig = parsed
         currentJsonOps = createJsonOps(parsed.type)
@@ -181,11 +231,13 @@ export const reldb: ReldbFunctions = {
       }
       catch (error) {
         logger.error('RelDB module initialization failed', { error })
-        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
+        return await failInitialization(err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error))
       }
     }
     finally {
       initInProgress = false
+      initCompletion = null
+      resolveInit()
     }
   },
 
@@ -224,7 +276,13 @@ export const reldb: ReldbFunctions = {
 
   /** 获取当前脱敏后的配置快照（未初始化时为 null） */
   get config(): ReldbConfig | null {
-    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+    if (!currentConfig)
+      return null
+    const snapshot = core.sanitize.sanitizeSensitiveFields(currentConfig)
+    // 通用敏感字段匹配不包含普通 key；TLS 客户端私钥必须在配置快照中单独遮蔽。
+    if ('ssl' in snapshot && snapshot.ssl && typeof snapshot.ssl === 'object' && 'key' in snapshot.ssl)
+      snapshot.ssl.key = core.sanitize.defaultSensitiveReplacement
+    return snapshot
   },
 
   /** 检查是否已初始化 */
@@ -274,35 +332,25 @@ export const reldb: ReldbFunctions = {
   /**
    * 关闭数据库连接
    *
-   * 多次调用安全，未初始化时直接返回。
+   * 等待初始化和在途事务，停止接收新操作；失败时保留资源供 close/init 重试。
+   * @returns 所有资源释放成功才返回成功；并发关闭共享同一清理过程。
+   * @example
+   * ```ts
+   * import { reldb } from '@h-ai/reldb'
+   *
+   * const result = await reldb.close()
+   * if (!result.success) throw new Error(result.error.message)
+   * void result.data
+   * ```
    */
   async close(): Promise<HaiResult<void>> {
-    if (!currentProvider) {
-      currentConfig = null
-      currentJsonOps = null
-      logger.info('RelDB module already closed, skipping')
-      return ok(undefined)
+    if (!closingPromise) {
+      closingPromise = (async () => {
+        if (initCompletion)
+          await initCompletion
+        return await closeOwnedProvider()
+      })().finally(() => { closingPromise = null })
     }
-
-    logger.info('Closing RelDB module')
-
-    try {
-      const closeResult = await currentProvider.close()
-      if (!closeResult.success) {
-        logger.error('RelDB module close failed', { code: closeResult.error.code, message: closeResult.error.message })
-        return closeResult
-      }
-      logger.info('RelDB module closed')
-      return ok(undefined)
-    }
-    catch (error) {
-      logger.error('RelDB module close failed', { error })
-      return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
-    }
-    finally {
-      currentProvider = null
-      currentConfig = null
-      currentJsonOps = null
-    }
+    return await closingPromise
   },
 }

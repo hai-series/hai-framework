@@ -1,4 +1,5 @@
 <!--
+  @component MessageBoxContainer
   =============================================================================
   @h-ai/ui - MessageBoxContainer 组件
   =============================================================================
@@ -7,6 +8,16 @@
 
   使用 DaisyUI 样式 + tabler icon，不依赖 ElementUI。
   =============================================================================
+
+  @example
+  ```ts
+  import { mount, unmount } from 'svelte'
+  import type { ComponentProps } from 'svelte'
+  import { MessageBoxContainer } from '@h-ai/ui'
+  const props: ComponentProps<typeof MessageBoxContainer> = { 'data-testid': 'message-boxes' }
+  const component = mount(MessageBoxContainer, { target: document.body, props })
+  await unmount(component)
+  ```
 -->
 <script lang='ts'>
   import type { DataAttributes } from '../../types.js'

@@ -52,6 +52,8 @@ pnpm test
 
 从当前 package.json 确认实际 scripts，使用声明的最低 Node 版本验证并与 engines/README 同步；PowerShell 使用 `pnpm.cmd`。测试内容由 `hai-app-tests` 定义；本技能决定门禁如何稳定执行。
 
+AI 本地验收和排查按 [分轮验证与集中修复](../hai-app-tests/validation.md) 收集所有可执行结果，再集中修复；普通失败不立即从头重跑。独立 CI job 可继续收集结果，真实前置失败则阻塞其依赖 job；必需检查与发布步骤仍须全部成功，不以继续收集为由设置 `continue-on-error` 或放行失败。
+
 lint/typecheck 只能执行已配置的规则。新增开发规范时区分可静态检测项（如显式 any/console.log）与必须行为验收项（如资源越权、事务/幂等、失败结果、生命周期清理），后者在适用单元/集成/E2E 中验证。禁止通过关闭规则、添加无依据忽略或把 `|| true` 加到门禁来“统一风格”。
 
 ### E2E 策略

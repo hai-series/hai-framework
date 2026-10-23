@@ -10,19 +10,6 @@
 name: ${HAI_CORE_NAME:hai Admin Console}
 version: ${HAI_CORE_VERSION:0.1.0}
 env: ${HAI_CORE_ENV:development}
-debug: ${HAI_CORE_DEBUG:true}
 
 # 语言设置
 defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}
-supportedLocales:
-  - zh-CN
-  - ja-JP
-  - en-US
-
-# 功能开关
-features:
-  registration: ${HAI_CORE_FEATURES_REGISTRATION:true}
-  apiAccess: ${HAI_CORE_FEATURES_APIACCESS:true}
-  aiEnabled: ${HAI_CORE_FEATURES_AIENABLED:true}
-  mcpEnabled: ${HAI_CORE_FEATURES_MCPENABLED:false}
-  fileUpload: ${HAI_CORE_FEATURES_FILEUPLOAD:true}
