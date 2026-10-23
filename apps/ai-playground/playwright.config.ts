@@ -7,10 +7,10 @@ const live = process.env.HAI_E2E_LIVE === '1'
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
+  fullyParallel: !live,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  retries: 0,
+  workers: live ? 1 : 2,
   reporter: 'list',
   timeout: live ? 180_000 : 30_000,
 
@@ -22,7 +22,7 @@ export default defineConfig({
     launchOptions: {
       args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],
     },
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
 

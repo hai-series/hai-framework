@@ -11,11 +11,9 @@ const testDataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-h5
  */
 export default defineConfig({
   testDir: './e2e',
-  globalSetup: './e2e/global-setup.ts',
-  globalTeardown: './e2e/global-teardown.ts',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   workers: 2,
   reporter: 'list',
   timeout: 30_000,
@@ -26,7 +24,7 @@ export default defineConfig({
     extraHTTPHeaders: {
       Origin: baseURL,
     },
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
 

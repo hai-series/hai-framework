@@ -58,6 +58,8 @@ try {
   const runRoot = mkdtempSync(join(evidenceParent, 'run-'))
   for (const [index, args] of groups.entries()) {
     const groupRoot = join(runRoot, `group-${index + 1}`)
+    const groupDataRoot = join(dataRoot, `group-${index + 1}`)
+    mkdirSync(groupDataRoot)
     const hasOutput = args.some(argument => argument === '--output' || argument.startsWith('--output='))
     const outputArgs = hasOutput ? [] : ['--output', join(groupRoot, 'results')]
     const html = process.env.PLAYWRIGHT_HTML_OUTPUT_DIR || process.env.PLAYWRIGHT_HTML_REPORT
@@ -70,14 +72,17 @@ try {
           ...process.env,
           ...(!html ? { PLAYWRIGHT_HTML_OUTPUT_DIR: join(groupRoot, 'html') } : {}),
           HAI_AUTH_EVIDENCE_DIR: process.env.HAI_AUTH_EVIDENCE_DIR || join(groupRoot, 'evidence'),
-          HAI_E2E_DATA_ROOT: dataRoot,
+          HAI_E2E_DATA_ROOT: groupDataRoot,
         },
       })
       child.once('error', reject)
       child.once('exit', resolve)
     })
-    if (code !== 0 || interrupted) {
-      process.exitCode = typeof code === 'number' && code !== 0 ? code : 1
+    // 配置组互相独立，普通失败继续收集；保留首个失败码，中断才停止后续组。
+    if (code !== 0)
+      process.exitCode ||= typeof code === 'number' && code !== 0 ? code : 1
+    if (interrupted) {
+      process.exitCode ||= 1
       break
     }
   }

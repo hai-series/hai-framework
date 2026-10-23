@@ -4,6 +4,7 @@ import process from 'node:process'
 
 import { defineConfig } from '@playwright/test'
 import { createE2eServerEnv } from '../../scripts/e2e-env.js'
+import { transportAdmin } from './e2e/helpers.js'
 
 const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173'
 const previewUrl = new URL(baseURL)
@@ -21,13 +22,12 @@ const transportRing = JSON.stringify({
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/transport-on.spec.ts',
-  globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   timeout: 60_000,
-  workers: 1,
+  workers: 2,
   reporter: 'line',
   use: {
     baseURL,
@@ -51,12 +51,13 @@ export default defineConfig({
       HAI_CACHE: JSON.stringify({ type: 'memory' }),
       HAI_STORAGE: JSON.stringify({ type: 'local', root: `${testDataDir}/uploads` }),
       HAI_E2E: '1',
+      HAI_IAM: JSON.stringify({ rbac: { defaultRole: 'admin' } }),
       // 测试数据目录使用独立本地后端，不继承生产 Compose 服务地址。
       HAI_DB_TYPE: 'sqlite',
       HAI_CACHE_TYPE: 'memory',
       HAI_STORAGE_TYPE: 'local',
       HAI_CORE_ENV: 'development',
-      HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
+      HAI_ADMIN_DEFAULT_PASSWORD: transportAdmin.password,
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
       HAI_CRYPTO_TRANSPORT_SERVERKEYRING: transportRing,

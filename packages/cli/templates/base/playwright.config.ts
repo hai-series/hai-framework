@@ -36,9 +36,9 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
  */
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   workers: 2,
   reporter: 'list',
   timeout: 30_000,
@@ -46,7 +46,7 @@ export default defineConfig({
   use: {
     baseURL,
     channel: 'chrome',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
 

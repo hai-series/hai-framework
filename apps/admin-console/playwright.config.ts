@@ -18,14 +18,13 @@ const testDataDir = path.join(process.env.HAI_E2E_DATA_ROOT || '.', `data-e2e-tr
 export default defineConfig({
   testDir: './e2e',
   testIgnore: ['**/debug-login.spec.ts', '**/transport-on.spec.ts'],
-  globalSetup: './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
   metadata: { notificationFixture: true },
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  // 共用单个 preview 服务与同一份 SQLite / storage 测试数据目录时，文件级并发会放大状态串扰与锁竞争。
-  workers: 1,
+  retries: 0,
+  // 每个用例拥有独立用户和浏览器上下文，限制并发以控制 SQLite 写入压力。
+  workers: 2,
   reporter: 'list',
   timeout: 30_000,
 
@@ -35,7 +34,7 @@ export default defineConfig({
     extraHTTPHeaders: {
       Origin: baseURL,
     },
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
 
@@ -59,6 +58,7 @@ export default defineConfig({
       HAI_CORE_ENV: 'production',
       // LDAP 是可选 YAML 字段，使用整个 IAM 对象覆盖并保留本轮验收的密码/会话策略。
       HAI_IAM: JSON.stringify({
+        rbac: { defaultRole: 'admin' },
         login: { password: true, otp: true, ldap: true },
         password: { minLength: 8, maxLength: 128, requireUppercase: false, requireLowercase: false, requireNumber: false, requireSpecialChar: false },
         session: { maxAge: 900, refreshTokenMaxAge: 604800 },

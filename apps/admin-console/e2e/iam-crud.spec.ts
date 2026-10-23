@@ -55,7 +55,7 @@ test.describe('IAM Users CRUD', () => {
     expect(updateBody.data.email).toBe(newEmail)
 
     // 4. 验证列表中包含该用户
-    const listRes = await request.get('/api/iam/users')
+    const listRes = await request.get(`/api/iam/users?search=${encodeURIComponent(u.username)}`)
     expect(listRes.ok()).toBe(true)
     const listBody = await listRes.json()
     expect(listBody.success).toBe(true)
@@ -124,12 +124,11 @@ test.describe('IAM Users CRUD', () => {
     const meUser = getUserPayload(meBody) as { id?: string }
     const myId = meUser?.id
 
-    if (myId) {
-      const deleteRes = await request.delete(`/api/iam/users/${myId}`)
-      expect(deleteRes.status()).toBe(400)
-      const body = await deleteRes.json()
-      expect(body.success).toBe(false)
-    }
+    expect(myId).toBeTruthy()
+    const deleteRes = await request.delete(`/api/iam/users/${myId}`)
+    expect(deleteRes.status()).toBe(400)
+    const body = await deleteRes.json()
+    expect(body.success).toBe(false)
   })
 
   test('GET /api/iam/users/:id 不存在的用户返回 404', async ({ request }) => {

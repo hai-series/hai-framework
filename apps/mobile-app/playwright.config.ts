@@ -14,8 +14,8 @@ const apiEnv = { PUBLIC_API_BASE: `http://127.0.0.1:${servicePort}/api/v1` }
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: true,
+  workers: 2,
   retries: 0,
   webServer: [{
     command: 'node ../admin-console/e2e/notification-fixture.mjs',
@@ -56,6 +56,8 @@ export default defineConfig({
   use: {
     baseURL,
     channel: 'chrome',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   projects: [
     {

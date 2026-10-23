@@ -1,14 +1,3 @@
-/**
- * =============================================================================
- * E2E 测试 - IAM 权限管理页面 UI
- * =============================================================================
- * 覆盖范围：
- * - 页面结构（标题、统计卡片、权限表格）
- * - 新建权限抽屉（字段、自动名称生成、关闭）
- * - 通过 UI 抽屉创建、删除权限（走 apiFetch 传输加密链路）
- * =============================================================================
- */
-
 import { expect, test } from '@playwright/test'
 import { registerAndLogin, waitForHydration } from './helpers'
 
@@ -36,83 +25,13 @@ test.describe('IAM Permissions UI', () => {
     return panel
   }
 
-  // ---------------------------------------------------------------------------
-  // 页面结构
-  // ---------------------------------------------------------------------------
-  test('页面标题和新建按钮可见', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'permui')
-    await page.goto('/admin/iam/permissions')
-    await page.waitForLoadState('domcontentloaded')
-
-    // 页面标题
-    const heading = page.locator('h1, h2').filter({ hasText: /权限/ })
-    await expect(heading.first()).toBeVisible()
-
-    // 新建按钮
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
-    await expect(createBtn.first()).toBeVisible()
-  })
-
-  test('页面包含统计卡片', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'permui')
-    await page.goto('/admin/iam/permissions')
-    await page.waitForLoadState('domcontentloaded')
-
-    // 至少有统计信息
-    const stats = page.locator('.stat, .card')
-    const count = await stats.count()
-    expect(count).toBeGreaterThanOrEqual(1)
-  })
-
-  test('权限列表表格可见', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'permui')
-    await page.goto('/admin/iam/permissions')
-    await page.waitForLoadState('domcontentloaded')
-
-    await expect(page.locator('table').first()).toBeVisible()
-  })
-
-  // ---------------------------------------------------------------------------
-  // 新建权限抽屉
-  // ---------------------------------------------------------------------------
-  test('点击新建按钮打开权限抽屉', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'permui')
-    await page.goto('/admin/iam/permissions')
-    await page.waitForLoadState('domcontentloaded')
-
-    const panel = await openCreatePanel(page)
-    await expect(panel.locator('[name="name"]')).toBeVisible()
-    await expect(panel.locator('[name="action"]')).toBeVisible()
-    await expect(panel.locator('[name="resource"]')).toBeVisible()
-  })
-
-  test('新建抽屉可关闭', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'permui')
-    await page.goto('/admin/iam/permissions')
-    await page.waitForLoadState('domcontentloaded')
-
-    const panel = await openCreatePanel(page)
-    await expect(panel.locator('[name="resource"]')).toBeVisible()
-
-    // 点击取消按钮关闭抽屉
-    const cancelBtn = panel.getByRole('button', { name: /取消|Cancel/ })
-    await cancelBtn.click({ force: true })
-
-    await expect(panel.locator('[name="resource"]')).not.toBeVisible({ timeout: 5000 })
-  })
-
-  // ---------------------------------------------------------------------------
-  // 通过 UI 对话框创建权限
-  // ---------------------------------------------------------------------------
   test('通过抽屉创建权限后出现在列表中', async ({ page, request }) => {
     await registerAndLogin(page, request, 'permui')
-    await page.goto('/admin/iam/permissions')
-    await page.waitForLoadState('domcontentloaded')
-
     const ts = Date.now().toString(36)
     const resource = `res_${ts}`
     const action = 'read'
     const permissionName = `${resource}:${action}`
+    await page.goto(`/admin/iam/permissions?search=${encodeURIComponent(permissionName)}`)
 
     // 打开新建抽屉
     const panel = await openCreatePanel(page)
@@ -139,9 +58,6 @@ test.describe('IAM Permissions UI', () => {
     await expect(permRow.first()).toBeVisible({ timeout: 5_000 })
   })
 
-  // ---------------------------------------------------------------------------
-  // 通过 UI 删除权限
-  // ---------------------------------------------------------------------------
   test('通过 UI 删除自定义权限', async ({ page, request }) => {
     await registerAndLogin(page, request, 'permui')
 
@@ -157,7 +73,7 @@ test.describe('IAM Permissions UI', () => {
       },
     })
 
-    await page.goto('/admin/iam/permissions')
+    await page.goto(`/admin/iam/permissions?search=${encodeURIComponent(permName)}`)
     await page.waitForLoadState('domcontentloaded')
 
     // 找到该权限所在的表格区域

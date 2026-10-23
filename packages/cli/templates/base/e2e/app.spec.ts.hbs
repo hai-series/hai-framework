@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -67,7 +68,7 @@ test('configured IAM registration and password login', async ({ page, context })
 {{/if_eq}}
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
-  const username = `scaf${Date.now()}`
+  const username = `scaf${randomUUID().replaceAll('-', '').slice(0, 12)}`
   const password = 'ScaffoldPassword123'
   const authUrl = '{{#if isCapacitorApp}}/{{else}}/auth/login{{/if}}'
   await page.goto(authUrl)
@@ -76,11 +77,15 @@ test('configured IAM registration and password login', async ({ page, context })
   await expect(page.locator('footer')).toBeVisible()
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-login.png'), fullPage: true })
   await page.getByRole('{{#if isCapacitorApp}}button{{else}}link{{/if}}', { name: /立即注册|Register now/i }).click()
-  await expect(page.locator('input[name="username"]')).toBeVisible()
+{{#unless isCapacitorApp}}
+  await expect(page).toHaveURL(/\/auth\/register(?:\?|$)/)
+{{/unless}}
+  const registerForm = page.locator('.register-form')
+  await expect(registerForm.locator('#register-username')).toBeVisible()
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-register.png'), fullPage: true })
   if (process.env.IAM_NOTIFICATION_URL) {
     // 协议弹窗留在认证页，关闭后继续填写注册表单。
-    await page.getByRole('button', { name: /用户协议|User Agreement/i, exact: true }).click()
+    await registerForm.getByRole('button', { name: /用户协议|Terms of Service/i, exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.getByRole('dialog').getByRole('heading', { name: 'Configured registration agreement' })).toBeVisible()
     await expect(page.locator('iframe')).toHaveCount(0)
@@ -88,11 +93,11 @@ test('configured IAM registration and password login', async ({ page, context })
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).not.toBeVisible()
   }
-  await page.locator('input[name="username"]').fill(username)
-  await page.locator('input[name="email"]').fill(`${username}@example.com`)
-  await page.locator('input[type="password"]').nth(0).fill(password)
-  await page.locator('input[type="password"]').nth(1).fill(password)
-  await page.locator('button[type="submit"]').click()
+  await registerForm.locator('#register-username').fill(username)
+  await registerForm.locator('#register-email').fill(`${username}@example.com`)
+  await registerForm.locator('#register-password').fill(password)
+  await registerForm.locator('#register-confirm-password').fill(password)
+  await registerForm.locator('button[type="submit"]').click()
   await expect(page.locator('.register-form')).not.toBeVisible()
 {{#unless isCapacitorApp}}
   const me = await page.request.get('/api/auth/me')

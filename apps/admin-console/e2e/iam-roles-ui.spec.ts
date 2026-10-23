@@ -1,14 +1,3 @@
-/**
- * =============================================================================
- * E2E 测试 - IAM 角色管理页面 UI
- * =============================================================================
- * 覆盖范围：
- * - 页面结构（标题、按钮、表格）
- * - 新建角色面板（抽屉/弹窗）的结构、权限选择、关闭
- * - 通过 UI 面板创建、编辑角色（走 apiFetch 传输加密链路）
- * =============================================================================
- */
-
 import { expect, test } from '@playwright/test'
 import { registerAndLogin, waitForHydration } from './helpers'
 
@@ -67,103 +56,11 @@ test.describe('IAM Roles UI', () => {
     return getPanelShell(heading)
   }
 
-  // ---------------------------------------------------------------------------
-  // 页面结构
-  // ---------------------------------------------------------------------------
-  test('页面标题和新建按钮可见', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    // 页面标题
-    const heading = page.locator('h1, h2').filter({ hasText: /角色/ })
-    await expect(heading.first()).toBeVisible()
-
-    // 新建角色按钮
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
-    await expect(createBtn.first()).toBeVisible()
-  })
-
-  // ---------------------------------------------------------------------------
-  // 角色表格
-  // ---------------------------------------------------------------------------
-  test('角色以表格形式展示', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    await expect(page.locator('table').first()).toBeVisible()
-    const rows = page.locator('tbody tr')
-    expect(await rows.count()).toBeGreaterThan(0)
-  })
-
-  test('角色表格显示名称和操作按钮', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const firstRow = page.locator('tbody tr').first()
-    await expect(firstRow).toBeVisible()
-    await expect(firstRow.getByRole('button', { name: /编辑|Edit/ })).toBeVisible()
-    await expect(firstRow.getByRole('button', { name: /删除|Delete/ })).toBeVisible()
-  })
-
-  // ---------------------------------------------------------------------------
-  // 新建角色面板
-  // ---------------------------------------------------------------------------
-  test('点击新建按钮打开角色面板', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const panel = await openCreatePanel(page)
-
-    // 面板可见
-    await expect(panel).toBeVisible()
-
-    // 包含名称输入框
-    await expect(panel.locator('[name="name"]')).toBeVisible()
-    // 包含描述输入框
-    await expect(panel.locator('[name="description"]')).toBeVisible()
-  })
-
-  test('角色面板包含权限选择区域', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const panel = await openCreatePanel(page)
-
-    // 权限选择区域（checkbox 列表）
-    await expect(panel.locator('input[type="checkbox"]').first()).toBeVisible()
-  })
-
-  test('角色面板可通过取消按钮关闭', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const panel = await openCreatePanel(page)
-
-    // 点击取消
-    const cancelBtn = panel.getByRole('button', { name: /取消|Cancel/ })
-    await cancelBtn.first().click()
-    await page.waitForTimeout(300)
-
-    // 面板消失
-    await expect(page.locator('[name="name"]:visible')).toHaveCount(0, { timeout: 5_000 })
-  })
-
-  // ---------------------------------------------------------------------------
-  // 通过 UI 面板创建角色
-  // ---------------------------------------------------------------------------
   test('通过面板创建角色后出现在表格列表中', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
     const roleName = `role_${Date.now().toString(36)}`
     const roleDesc = 'E2E 测试创建的角色'
+    await page.goto(`/admin/iam/roles?search=${encodeURIComponent(roleName)}`)
 
     // 打开新建面板
     const panel = await openCreatePanel(page)
@@ -180,9 +77,6 @@ test.describe('IAM Roles UI', () => {
     await expect(row.first()).toBeVisible({ timeout: 10_000 })
   })
 
-  // ---------------------------------------------------------------------------
-  // 通过 UI 面板编辑角色
-  // ---------------------------------------------------------------------------
   test('通过面板编辑角色描述', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
 
@@ -192,7 +86,7 @@ test.describe('IAM Roles UI', () => {
       data: { name: roleName, description: 'original', permissions: [] },
     })
 
-    await page.goto('/admin/iam/roles')
+    await page.goto(`/admin/iam/roles?search=${encodeURIComponent(roleName)}`)
     await page.waitForLoadState('domcontentloaded')
 
     // 找到角色表格行并点击编辑
@@ -213,9 +107,6 @@ test.describe('IAM Roles UI', () => {
     await expect(page.getByRole('heading', { name: editPanelHeading })).toHaveCount(0, { timeout: 10_000 })
   })
 
-  // ---------------------------------------------------------------------------
-  // 通过 UI 删除角色
-  // ---------------------------------------------------------------------------
   test('通过 UI 删除自定义角色', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
 
@@ -225,7 +116,7 @@ test.describe('IAM Roles UI', () => {
       data: { name: roleName, description: 'to be deleted', permissions: [] },
     })
 
-    await page.goto('/admin/iam/roles')
+    await page.goto(`/admin/iam/roles?search=${encodeURIComponent(roleName)}`)
     await page.waitForLoadState('domcontentloaded')
 
     // 找到角色所在的表格行

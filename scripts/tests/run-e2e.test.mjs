@@ -28,6 +28,7 @@ fs.writeFileSync(path.join(html, 'index.html'), 'test')
 fs.writeFileSync(path.join(evidence, 'auth.png'), 'test')
 fs.writeFileSync(process.env.HAI_E2E_DATA_ROOT + '/test.db', 'test data')
 fs.writeFileSync('data-root.txt', process.env.HAI_E2E_DATA_ROOT)
+fs.appendFileSync('data-roots.jsonl', JSON.stringify(process.env.HAI_E2E_DATA_ROOT) + '\\n')
 fs.writeFileSync('child-pid.txt', String(process.pid))
 fs.appendFileSync('observations.jsonl', JSON.stringify({ output, html, evidence }) + '\\n')
 fs.appendFileSync('runs.txt', JSON.stringify(process.argv.slice(2)) + '\\n')
@@ -36,7 +37,7 @@ if (process.argv.includes('--wait')) {
   setInterval(() => {}, 1000)
 }
 else {
-  process.exit(process.argv.includes('--fail') ? 7 : 0)
+  process.exit(process.argv.includes('--other-fail') ? 9 : process.argv.includes('--fail') ? 7 : 0)
 }
 `)
 })
@@ -52,18 +53,20 @@ it.each([0, 7])('测试退出 %s 后保留证据、回收数据且保留退出�
   expect(existsSync(join(directory, 'package.json'))).toBe(true)
   expect(existsSync(readFileSync(join(directory, 'data-root.txt'), 'utf8'))).toBe(false)
 })
-it('多配置各自保留证据，失败后不再执行后续组且回收数据', () => {
-  const result = spawnSync(process.execPath, [resolve('scripts/run-e2e.mjs'), '--config', 'first.ts', '--next', '--fail', '--next', '--config', 'last.ts'], { cwd: directory })
+it('独立配置失败后继续收集，隔离数据与证据并保留首个失败码', () => {
+  const result = spawnSync(process.execPath, [resolve('scripts/run-e2e.mjs'), '--config', 'first.ts', '--next', '--fail', '--next', '--config', 'last.ts', '--other-fail'], { cwd: directory })
   expect(result.status).toBe(7)
   const runs = readFileSync(join(directory, 'runs.txt'), 'utf8')
   expect(runs).toContain('first.ts')
-  expect(runs).not.toContain('last.ts')
+  expect(runs).toContain('last.ts')
   const groups = observations()
-  expect(groups).toHaveLength(2)
-  expect(new Set(groups.map(group => group.output)).size).toBe(2)
+  expect(groups).toHaveLength(3)
+  expect(new Set(groups.map(group => group.output)).size).toBe(3)
   for (const group of groups)
     expect(existsSync(resolve(directory, group.output, 'screenshot.png'))).toBe(true)
-  expect(existsSync(readFileSync(join(directory, 'data-root.txt'), 'utf8'))).toBe(false)
+  const roots = readFileSync(join(directory, 'data-roots.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line))
+  expect(new Set(roots).size).toBe(3)
+  expect(roots.every(root => !existsSync(root))).toBe(true)
 })
 
 it('取消时结束测试进程、回收数据并保留已写入的报告', async () => {

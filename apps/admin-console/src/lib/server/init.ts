@@ -105,17 +105,6 @@ async function runInitApp(): Promise<void> {
   const reachConfig = core.config.get<ReachConfigInput>('reach')
   const storageConfig = core.config.get<StorageConfigInput>('storage')
 
-  // E2E 模式下将默认角色提升为 admin，便于覆盖完整后台能力；非 E2E 不受影响
-  const effectiveIamConfig: IamConfigSettingsInput = process.env.HAI_E2E === '1'
-    ? {
-        ...iamConfig,
-        rbac: {
-          ...iamConfig.rbac,
-          defaultRole: 'admin',
-        },
-      }
-    : iamConfig
-
   // 3. 仅 SQLite 文件需要本机目录；网络数据库名称/URL 不是文件路径。
   if (dbConfig.type === 'sqlite' && dbConfig.database !== ':memory:')
     await mkdir(path.dirname(dbConfig.database), { recursive: true })
@@ -154,7 +143,7 @@ async function runInitApp(): Promise<void> {
 
   // 8. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
   const iamResult = await iam.init({
-    ...effectiveIamConfig,
+    ...iamConfig,
     reach,
   })
   if (!iamResult.success) {

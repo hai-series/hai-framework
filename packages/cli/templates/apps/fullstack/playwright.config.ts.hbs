@@ -50,16 +50,17 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
 
 export default defineConfig({
   testDir: './e2e',
+  // 多个界面验收共用管理员资料与引导状态，保留串行以免互相覆盖。
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   workers: 1,
   reporter: 'list',
   timeout: 30_000,
   use: {
     baseURL,
     channel: 'chrome',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   webServer: [

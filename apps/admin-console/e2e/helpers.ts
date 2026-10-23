@@ -6,12 +6,8 @@
 
 import type { APIRequestContext, Page } from '@playwright/test'
 
-interface LoginBody {
-  success?: boolean
-  data?: {
-    accessToken?: string
-  }
-}
+/** 加密验收使用符合 IAM 默认密码策略的独立管理员凭据。 */
+export const transportAdmin = { username: 'admin', password: 'TransportAdmin123!' }
 
 async function sleep(ms: number) {
   await new Promise(resolve => setTimeout(resolve, ms))
@@ -83,13 +79,9 @@ export async function registerViaApi(request: APIRequestContext, user: ReturnTyp
 /**
  * 在页面上完成登录流程
  *
- * 在浏览器上下文中通过 fetch 调用登录 API，cookie 自动生效。
+ * page.request 与浏览器上下文共享 Cookie，后续导航使用真实服务端会话。
  */
 export async function loginOnPage(page: Page, username: string, password: string, options: { keepGuide?: boolean } = {}) {
-  // 先导航到登录页以建立浏览器上下文
-  await page.goto('/auth/login')
-  await page.waitForLoadState('domcontentloaded')
-
   // 通过 page.request 调用登录 API
   let loginRes = await page.request.post('/api/auth/login', {
     data: { identifier: username, password },
@@ -151,7 +143,7 @@ export async function registerAndLogin(page: Page, request: APIRequestContext, p
 
 /**
  * 通过 API 注册并登录（纯 API，不需要 page）
- * 会为当前 request 实例自动补充 Authorization 头
+ * 通过响应设置的 httpOnly Cookie 验证会话，不改写 request 方法。
  */
 export async function registerAndLoginViaApi(request: APIRequestContext, prefix = 'api') {
   const user = uniqueUser(prefix)
@@ -174,53 +166,6 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
   const loginBody = await loginRes.json()
   if (!loginRes.ok() || !loginBody.success) {
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginBody)}`)
-  }
-
-  const accessToken = (loginBody as LoginBody).data?.accessToken
-
-  const requestWithAuth = request as APIRequestContext & {
-    __authState?: {
-      accessToken: string
-      originalGet: APIRequestContext['get']
-      originalPost: APIRequestContext['post']
-      originalPut: APIRequestContext['put']
-      originalPatch: APIRequestContext['patch']
-      originalDelete: APIRequestContext['delete']
-    }
-    get: APIRequestContext['get']
-    post: APIRequestContext['post']
-    put: APIRequestContext['put']
-    patch: APIRequestContext['patch']
-    delete: APIRequestContext['delete']
-  }
-
-  if (accessToken && !requestWithAuth.__authState) {
-    const authState = {
-      accessToken,
-      originalGet: request.get.bind(request),
-      originalPost: request.post.bind(request),
-      originalPut: request.put.bind(request),
-      originalPatch: request.patch.bind(request),
-      originalDelete: request.delete.bind(request),
-    }
-
-    const withAuthHeaders = (options: Parameters<APIRequestContext['get']>[1] = {}) => ({
-      ...options,
-      headers: {
-        ...(options.headers ?? {}),
-        Authorization: options.headers?.Authorization ?? `Bearer ${authState.accessToken}`,
-      },
-    })
-
-    requestWithAuth.get = ((url, options) => authState.originalGet(url, withAuthHeaders(options))) as APIRequestContext['get']
-    requestWithAuth.post = ((url, options) => authState.originalPost(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['post']
-    requestWithAuth.put = ((url, options) => authState.originalPut(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['put']
-    requestWithAuth.patch = ((url, options) => authState.originalPatch(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['patch']
-    requestWithAuth.delete = ((url, options) => authState.originalDelete(url, withAuthHeaders(options))) as APIRequestContext['delete']
-    requestWithAuth.__authState = authState
-  }
-  else if (accessToken && requestWithAuth.__authState) {
-    requestWithAuth.__authState.accessToken = accessToken
   }
 
   const meRes = await request.get('/api/auth/me')
