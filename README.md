@@ -655,6 +655,8 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 
 `pnpm dev` / `dev:test` / `dev:prod` 选择开发、测试和生产配置，Node 服务构建后使用 `start:test` / `start:prod`。Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles({ mode, envDir })` 结果后注入，Node 按基础、环境、本机的顺序传入 `--env-file`；`core.init` 不读取 dotenv。`development` / `production` 文件模式映射为 `dev` / `prod`。Provider 切换和旧变量迁移步骤见应用 skill 的[环境配置](packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 
+配置字段、实际消费点、环境命名及生成应用之间的对应关系见[21 包配置对应表](docs/configuration-map.md)。
+
 ### 质量门禁
 
 按影响范围选择命令；跨包契约或根配置变更提升到根命令执行：
@@ -683,5 +685,3 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 ## 许可证
 
 [Apache-2.0](./LICENSE)
-
-配置字段、实际消费点、环境命名及生成应用之间的对应关系见[21 包配置对应表](docs/configuration-map.md)。

@@ -288,15 +288,15 @@ if (!result.success) {
 
 The admin console's online encryption demo calls the Crypto SM3/SM4 APIs directly. SM4 uses a random temporary key and IV and verifies decryption before showing success; keys are not saved. Changing input clears previous results. Random digests or Base64 must not be presented as cryptographic results.
 
+## Production shared state
+
+Production transport registries must declare stateScope=shared and actually use Redis or PostgreSQL/MySQL. Memory, Redis factories over memory, and RelDB factories over SQLite are rejected. All nodes load the same managed versioned key ring. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/crypto test
 ```
-
-## Production shared state
-
-Production transport registries must declare stateScope=shared and actually use Redis or PostgreSQL/MySQL. Memory, Redis factories over memory, and RelDB factories over SQLite are rejected. All nodes load the same managed versioned key ring. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
 
 ## License
 

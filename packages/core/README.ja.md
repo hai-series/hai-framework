@@ -406,6 +406,8 @@ core.id.isValidUUID('f47ac10b-...') // true/false
 core.id.isValidNanoId('abc123', 6) // true/false
 ```
 
+UUID は暗号学的乱数の randomUUID/getRandomValues のみを使用し、どちらも利用できない場合は例外を送出します。Math.random にはフォールバックしません。
+
 #### ツール関数
 
 ```typescript
@@ -477,6 +479,8 @@ core.time.addHours(date, 2)
 core.time.startOfDay(date)
 core.time.endOfDay(date)
 ```
+
+Node 入口は元の UTF-16 コード単位を UTF-16LE に変換し、同じバイト長を node:crypto.timingSafeEqual で比較します。長さが違えば false となり、長さ自体は隠しません。ブラウザー実装には JavaScript エンジンの定時間保証がなく、サーバーの認証境界には使用しません。周辺の分岐・変換・リクエスト処理まで定時間になるわけではありません。
 
 #### モジュール共通ツール（module）
 
@@ -565,21 +569,17 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
 
+## 設定の消費範囲
+
+`_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../docs/configuration-map.md)を参照してください。
+
 ## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
 
-## 設定の消費範囲
-
-`_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../docs/configuration-map.md)を参照してください。
-
 宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。Node core.init は同期的に void を返します。単一ファイルの config.load 失敗結果は記録して続行するため、必須設定は validate して success を確認してください。ディレクトリー走査などの例外は伝播する場合があります。業務 HaiResult API は success を先に確認します。
-
-Node 入口は元の UTF-16 コード単位を UTF-16LE に変換し、同じバイト長を node:crypto.timingSafeEqual で比較します。長さが違えば false となり、長さ自体は隠しません。ブラウザー実装には JavaScript エンジンの定時間保証がなく、サーバーの認証境界には使用しません。周辺の分岐・変換・リクエスト処理まで定時間になるわけではありません。
-
-UUID は暗号学的乱数の randomUUID/getRandomValues のみを使用し、どちらも利用できない場合は例外を送出します。Math.random にはフォールバックしません。
 
 ## ライセンス
 

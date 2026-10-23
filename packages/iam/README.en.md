@@ -324,6 +324,8 @@ async function registerWithSession(username: string, password: string) {
 - **Independent strategy toggles**: `login.password` / `login.otp` / `login.ldap` / `login.apikey`.
 - **OTP security**: rejection sampling avoids modulo bias, constant-time comparison mitigates timing attacks, and `resendInterval` limits frequency.
 
+`iam.auth.logout(accessToken)` uses the complete opaque token to revoke its access and refresh credentials in one user-partition CAS, including when access has expired. Invalid or absent tokens are idempotent successes. Cache read/commit failures return failure and can be retried with the same token after recovery. The HTTP endpoint revokes only a possessed token, accepts no userId target and does not require a still-authenticated access token. Callers must inspect `success`; clearing local cookies or secure storage is not confirmation of server revocation and failures must be shown.
+
 ---
 
 #### Sessions (session) — `iam.session`
@@ -396,6 +398,14 @@ async function forceSignOut(userId: string) {
 - **Sliding renewal**: with `sliding: true`, each `get()` extends TTL automatically.
 - **Refresh rotation**: old refreshToken expires after one use; replay detection indicates token leakage.
 - **Token strength**: 256-bit cryptographic randomness (`crypto.getRandomValues(new Uint8Array(32))`), base64url encoded.
+
+`create({ maxAge })` overrides the configured default with a positive safe integer in seconds, persisted as `Session.maxAge`. Issuance and refresh return that duration in `expiresIn`. Sliding renewal uses this duration and returns committed `lastActiveAt/expiresAt`; delayed requests cannot shorten a newer renewal. Explicit `update` applies valid date patches and creates a new content version. Clients schedule refresh from the returned `expiresIn` rather than a hardcoded default.
+
+Access and refresh expire independently. The user partition remains until the latest live access/refresh deadline, while access authentication checks only its own `expiresAt`. An expired access token can still be rotated with a live refresh token. Each rotation starts a new `refreshTokenMaxAge` period and invalidates both old credentials. Access deletion, logoutAll and single-device replacement also revoke refresh-only records; revokeRefresh preserves a still-live access token. Refresh routes validate refresh credentials without requiring a live access token first.
+
+Session cache read/commit failures return failed HaiResult values, never absence/expiry or cleanup compensation. Sessions and their index share one document, so batch updates no longer use per-token get/ttl calls or a separate index; cleanup uses confirmed absolute deadlines only. After recovery, re-read and retry updates/logout; logoutAll still covers every original record. Malformed state fails closed and is preserved for operator repair instead of being overwritten with an empty document.
+
+Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real enabled local user and binds its current generation; it cannot create an authenticated identity without a database record.
 
 ---
 
@@ -748,6 +758,8 @@ await apiClient.iam.auth.changePassword({
 })
 ```
 
+The browser entry exports configuration schemas, types and HaiIamError, without the server `iam` instance. Authenticate through the HTTP/typed client.
+
 ### Password reset
 
 Password reset requires `passwordReset.enabled` and a working delivery callback/Reach template. Success does not prove that the account exists or the recipient received a message. Handle delivery/internal failures through HaiResult. Reset tokens expire, limit attempts, and permit one successful consumption; success revokes old sessions. Administrator resets do not require the old password, but applications must authorize the administrator.
@@ -770,6 +782,8 @@ async function resetByAdministrator(userId: string, newPassword: string) {
   return iam.user.adminResetPassword(userId, newPassword)
 }
 ```
+
+Cache cleanup may return a failure after the new password and credential generation have committed; they are not rolled back. Sign in again instead of automatically retrying with old credentials.
 
 ### One-time tickets — `iam.ticket`
 
@@ -879,20 +893,6 @@ pnpm --filter @h-ai/iam build
 pnpm --filter @h-ai/iam test
 node scripts/check-module-jsdoc.mjs --package iam
 ```
-
-`create({ maxAge })` overrides the configured default with a positive safe integer in seconds, persisted as `Session.maxAge`. Issuance and refresh return that duration in `expiresIn`. Sliding renewal uses this duration and returns committed `lastActiveAt/expiresAt`; delayed requests cannot shorten a newer renewal. Explicit `update` applies valid date patches and creates a new content version. Clients schedule refresh from the returned `expiresIn` rather than a hardcoded default.
-
-Access and refresh expire independently. The user partition remains until the latest live access/refresh deadline, while access authentication checks only its own `expiresAt`. An expired access token can still be rotated with a live refresh token. Each rotation starts a new `refreshTokenMaxAge` period and invalidates both old credentials. Access deletion, logoutAll and single-device replacement also revoke refresh-only records; revokeRefresh preserves a still-live access token. Refresh routes validate refresh credentials without requiring a live access token first.
-
-Session cache read/commit failures return failed HaiResult values, never absence/expiry or cleanup compensation. Sessions and their index share one document, so batch updates no longer use per-token get/ttl calls or a separate index; cleanup uses confirmed absolute deadlines only. After recovery, re-read and retry updates/logout; logoutAll still covers every original record. Malformed state fails closed and is preserved for operator repair instead of being overwritten with an empty document.
-
-Cache cleanup may return a failure after the new password and credential generation have committed; they are not rolled back. Sign in again instead of automatically retrying with old credentials.
-
-Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real enabled local user and binds its current generation; it cannot create an authenticated identity without a database record.
-
-The browser entry exports configuration schemas, types and HaiIamError, without the server `iam` instance. Authenticate through the HTTP/typed client.
-
-`iam.auth.logout(accessToken)` uses the complete opaque token to revoke its access and refresh credentials in one user-partition CAS, including when access has expired. Invalid or absent tokens are idempotent successes. Cache read/commit failures return failure and can be retried with the same token after recovery. The HTTP endpoint revokes only a possessed token, accepts no userId target and does not require a still-authenticated access token. Callers must inspect `success`; clearing local cookies or secure storage is not confirmation of server revocation and failures must be shown.
 
 ## License
 

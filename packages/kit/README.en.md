@@ -262,6 +262,8 @@ Because the browser may read this configuration, `_kit.yml` must contain only pu
 
 With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
 
+Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
+
 ### Export paths
 
 Use runtime methods through the `kit` namespace or explicit subpaths; types are exported separately. Browser declarations do not expose server factories. Vite configuration uses `@sveltejs/kit/vite`; there is no `@h-ai/kit/vite` plugin.
@@ -281,6 +283,8 @@ Agreements support configuration-loaded userAgreementMarkdown/privacyPolicyMarkd
 Export standard handlers from kit.auth.createApi(iam), use kit.auth.publicPaths for anonymous endpoints, and connect AuthPanel with kit.client.createAuthActions({ apiFetch }). Validation, Cookie writes and HaiResult mapping are built in; current-user and password-change endpoints remain guarded.
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
+
+`kit.auth.logout(cookies, accessToken)` returns `Promise<HaiResult<void>>`. Without a token it only clears cookies and succeeds; with a token but no configured auth operations it fails. Local cookies are cleared for every server outcome. Callers must preserve failed results in their HTTP response or UI; local clearing does not confirm server revocation. Underlying control-flow exceptions still propagate.
 
 ### Error handling
 
@@ -312,11 +316,7 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 pnpm --filter @h-ai/kit test
 ```
 
-Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
-
 Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.
-
-`kit.auth.logout(cookies, accessToken)` returns `Promise<HaiResult<void>>`. Without a token it only clears cookies and succeeds; with a token but no configured auth operations it fails. Local cookies are cleared for every server outcome. Callers must preserve failed results in their HTTP response or UI; local clearing does not confirm server revocation. Underlying control-flow exceptions still propagate.
 
 ## License
 

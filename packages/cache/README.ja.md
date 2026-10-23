@@ -101,6 +101,10 @@ await cache.init({
 })
 ```
 
+`cache.init(config)` は組み込み memory/redis を選択します。Provider は内部契約であり、独自バックエンドの登録 API はありません。
+
+`password` は単独・Cluster・Sentinel のデータノードに使用され、発見・リダイレクト後の接続にも適用します。`url` 指定時は URL 内の認証情報を使用し、独立した password フィールドでは上書きしません。
+
 ### API 一覧
 
 - `cache.kv`：文字列・オブジェクトのキーと値、および TTL（`set/get/mget/mset/expire/ttl/...`）。
@@ -109,6 +113,10 @@ await cache.init({
 - `cache.set_`：集合（`sadd/smembers/sismember/...`）。
 - `cache.zset`：ソート済み集合（`zadd/zrange/zrevrange/...`）。
 - `cache.lock`：分散ロック（`acquire/release/isLocked/extend`）。
+
+`kv.set` は `HaiResult<boolean>` を返し、`data=true` は書き込みの適用を表します。NX/XX が不成立なら `success=true,data=false` となり、値と TTL を変更しません。チケット、セッション、公鍵登録の発行前に両方を確認してください。`ex/px/exat/pxat` の単位は秒、ミリ秒、Unix 秒、Unix ミリ秒です。正の安全な整数を一つだけ指定し、`keepTtl=true` と併用できません。NX と XX も排他です。ゼロ、負数、小数、非有限値、オーバーフローは `INVALID_SET_OPTIONS`（`cache:016`）となり、永続キーを作成しません。過去の正の絶対期限は即時失効します。期限を省略すると既存 TTL は削除され、`keepTtl` は既存 TTL を維持します。新規キーは期限なしです。両 provider は JSON スナップショットを保存します。
+
+compareAndSwap は単一キーの JSON 値を原子的に比較・置換/削除し、適用有無を返します。expected の undefined は不存在、value の undefined は削除、null は JSON 値です。px は正の整数で keepTtl と排他です。期限省略時は永続保存し、不一致なら TTL を変更しません。
 
 ### Cluster の複数キー操作と走査
 
@@ -144,6 +152,8 @@ if (acquired.success && acquired.data)
 - **Redis バックエンド**：`SET NX EX` でアトミックにロックを取得。Lua スクリプトで owner を検証して安全に解除・延長します。
 - `acquire` は取得ごとの一意なトークン（競合時は `null`）を返します。解除・延長にはこのトークンが必須です。ノード ID やトークンなしの操作は使用できません。
 
+owner はリース延長・解除の所有権であり、リソースの fencing token ではありません。停止した処理は期限切れ後も再開できるため、最終書込には保存先の CAS・世代条件・トランザクション制約が必要です。延長や処理後の失敗返却だけでは旧書込を防げません。
+
 ### エラーコード
 
 すべての操作は `HaiResult<T>` を返します。主なエラーコード：
@@ -160,6 +170,10 @@ if (acquired.success && acquired.data)
 | `HaiCacheError.UNSUPPORTED_TYPE`       | `hai:cache:011` | 未対応のキャッシュ種別 |
 | `HaiCacheError.CONFIG_ERROR`           | `hai:cache:012` | 設定エラー             |
 
+## 本番の共有状態
+
+本番は Redis（Cluster を含む）が必須です。memory は開発・明示的テスト用であり、Redis 障害時もローカルへフォールバックしません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+
 ## 開発とテスト
 
 ```bash
@@ -167,20 +181,6 @@ pnpm --filter @h-ai/cache test
 ```
 
 > Redis 関連のテストには Docker が必要です。
-
-## 本番の共有状態
-
-本番は Redis（Cluster を含む）が必須です。memory は開発・明示的テスト用であり、Redis 障害時もローカルへフォールバックしません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
-
-`cache.init(config)` は組み込み memory/redis を選択します。Provider は内部契約であり、独自バックエンドの登録 API はありません。
-
-`password` は単独・Cluster・Sentinel のデータノードに使用され、発見・リダイレクト後の接続にも適用します。`url` 指定時は URL 内の認証情報を使用し、独立した password フィールドでは上書きしません。
-
-compareAndSwap は単一キーの JSON 値を原子的に比較・置換/削除し、適用有無を返します。expected の undefined は不存在、value の undefined は削除、null は JSON 値です。px は正の整数で keepTtl と排他です。期限省略時は永続保存し、不一致なら TTL を変更しません。
-
-owner はリース延長・解除の所有権であり、リソースの fencing token ではありません。停止した処理は期限切れ後も再開できるため、最終書込には保存先の CAS・世代条件・トランザクション制約が必要です。延長や処理後の失敗返却だけでは旧書込を防げません。
-
-`kv.set` は `HaiResult<boolean>` を返し、`data=true` は書き込みの適用を表します。NX/XX が不成立なら `success=true,data=false` となり、値と TTL を変更しません。チケット、セッション、公鍵登録の発行前に両方を確認してください。`ex/px/exat/pxat` の単位は秒、ミリ秒、Unix 秒、Unix ミリ秒です。正の安全な整数を一つだけ指定し、`keepTtl=true` と併用できません。NX と XX も排他です。ゼロ、負数、小数、非有限値、オーバーフローは `INVALID_SET_OPTIONS`（`cache:016`）となり、永続キーを作成しません。過去の正の絶対期限は即時失効します。期限を省略すると既存 TTL は削除され、`keepTtl` は既存 TTL を維持します。新規キーは期限なしです。両 provider は JSON スナップショットを保存します。
 
 公開契約と内部構造には型検査できる例を用意しています。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。
 

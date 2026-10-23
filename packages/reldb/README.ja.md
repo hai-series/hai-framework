@@ -134,6 +134,8 @@ if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
 
+MySQL の空 `url`（空の環境変数を含む）は host/port/database/user/password を使用します。空でない URL は厳密に検証します。
+
 #### MySQL TLS
 
 `ssl` を省略するか `false` にすると TLS を使用しません。有効化には厳密なオブジェクトを指定し、空オブジェクトの既定値は `{ rejectUnauthorized: true, verifyIdentity: true }` です。`ca` は信頼する CA の PEM 内容で、省略時は Node の信頼ストアを使います。任意のクライアント `cert` / `key` も PEM 内容で、必ず対で指定します。未知の TLS フィールド、`true`、PostgreSQL の文字列モードは拒否し、任意の設定やコールバックは透過しません。
@@ -197,6 +199,8 @@ await reldb.init({
   },
 })
 ```
+
+操作ログには固定の操作名とSQL長・パラメータ数・バッチ数のみを記録します。SQL本文、値、ドライバーのエラー内容は失敗時も出力しません。
 
 ### トランザクション
 
@@ -510,6 +514,8 @@ await reldb.sql.execute(
 )
 ```
 
+`json.merge(column, patch)` は三つのバックエンドで RFC 7396 のオブジェクトパッチを実装します。未変更の入れ子キーを保持し、null が指定したキーを削除し、配列を全体置換します。PostgreSQL はパラメーター化した再帰 CTE を単一 SQL 内で適用し、関数の事前インストールやアプリ側の読み取り後の書き戻しを必要としません。パッチのルートは JSON シリアライズ可能なオブジェクトに限ります。列式は開発者の静的 SQL で、パスと値はパラメーターです。[RFC 7396](https://www.rfc-editor.org/rfc/rfc7396)・[PostgreSQL JSON 演算](https://www.postgresql.org/docs/16/functions-json.html)。
+
 #### 完全な使用例
 
 ```ts
@@ -584,6 +590,10 @@ if (!result.success) {
 
 `BaseReldbCrudRepository` の派生クラスで独自 SQL を実行する前に `await this.ensureReady()` を確認します。構築時に建表を開始するだけなので、サービス init は候補の準備完了後に公開します。PostgreSQL の並行初回 `CREATE TABLE IF NOT EXISTS` は `23505/pg_type_typname_nsp_index` の競合だけ同じ DDL を一度再実行し、他のエラーは失敗のままです。
 
+## 本番の共有状態
+
+本番は PostgreSQL/MySQL が必須です。ファイルを含む SQLite は開発・明示的テスト用であり、ホスト間の共有状態を保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+
 ## 開発とテスト
 
 ```bash
@@ -591,16 +601,6 @@ pnpm --filter @h-ai/reldb test
 ```
 
 > MySQL/PostgreSQL のテストには Docker が必要です。
-
-## 本番の共有状態
-
-本番は PostgreSQL/MySQL が必須です。ファイルを含む SQLite は開発・明示的テスト用であり、ホスト間の共有状態を保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
-
-操作ログには固定の操作名とSQL長・パラメータ数・バッチ数のみを記録します。SQL本文、値、ドライバーのエラー内容は失敗時も出力しません。
-
-MySQL の空 `url`（空の環境変数を含む）は host/port/database/user/password を使用します。空でない URL は厳密に検証します。
-
-`json.merge(column, patch)` は三つのバックエンドで RFC 7396 のオブジェクトパッチを実装します。未変更の入れ子キーを保持し、null が指定したキーを削除し、配列を全体置換します。PostgreSQL はパラメーター化した再帰 CTE を単一 SQL 内で適用し、関数の事前インストールやアプリ側の読み取り後の書き戻しを必要としません。パッチのルートは JSON シリアライズ可能なオブジェクトに限ります。列式は開発者の静的 SQL で、パスと値はパラメーターです。[RFC 7396](https://www.rfc-editor.org/rfc/rfc7396)・[PostgreSQL JSON 演算](https://www.postgresql.org/docs/16/functions-json.html)。
 
 ソースの JSDoc は[共通規約](../../docs/module-jsdoc.md)に従います。公開例は実際の公開入口、内部例は元のモジュールスコープで型検査します。ビルド後に `pnpm check:jsdoc --package reldb` を実行してください。例の型検査は実バックエンドの動作検証の代わりにはなりません。
 

@@ -104,6 +104,8 @@ export default { fetch: handler }
 
 Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。内部 RPC 仍按连接对端限制。
 
+toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，RequestInit 可覆盖 method、headers、body、signal 等字段；不修改原 Request 的字段，正文已消费/锁定或非法正文组合会以 Promise 拒绝。预取消和派发前取消不进入 handler，进行中取消结束调用方等待并把有效 signal 传给应用；监听器在完成/失败/取消后释放，取消后的迟到响应会取消未消费正文。取消不能回滚已经开始的外部副作用；Response 交付后的流由应用监听 request.signal 并自行关闭。
+
 #### Audio WebSocket：ticket 与服务端授权
 
 语音入口必须使用短期、一次性 ticket。应用通过已登录 HTTP endpoint 签发 ticket（推荐 `iam.ticket.issue`），并在 `verifyTicket` 中原子消费（推荐 `iam.ticket.consume`）；连接建立即完成鉴权（独立预鉴权超时），未鉴权不处理任何业务帧。框架保存返回的 `ServSession` 与可选 `grant`，再调用 `authorize` 确认付费参数：
@@ -267,6 +269,8 @@ const app = serv.createApp({
   },
 })
 ```
+
+标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
 
 #### 自定义 procedure（认证 + 权限）
 
@@ -684,6 +688,10 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
 
+## 输入约束与 HTTP 能力
+
+存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../../docs/storage-api-capabilities.md)。
+
 ## 开发测试
 
 ```bash
@@ -692,15 +700,7 @@ pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
 
-## 输入约束与 HTTP 能力
-
-存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../../docs/storage-api-capabilities.md)。
-
-标准登出入口 `auth.logout` 从 input.accessToken 或 Authorization Bearer 取得要撤销的完整令牌，不要求 access 仍有效。它不接受 userId 授权或撤销目标；缺少令牌返回失败，未知令牌幂等成功。共享存储故障原样保留失败 HaiResult，Cookie middleware 只对成功结果清理 refresh Cookie。普通 procedure 继续使用既有 HTTP 200 / HaiResult 协议，客户端必须检查 success，不能只检查状态码。
-
 声明旁的 JSDoc 示例从实际 `@h-ai/serv` 或已公开的 features 子路径导入；内部 Hono/guard/router/transport 示例明确标注“模块内部上下文”，不代表根 API。示例区分工厂的启动配置异常、领域 HaiResult、HTTP middleware 状态码和监听句柄的 Promise<void> 关闭；默认 AI completion 仍只返回非流式 JSON。框架维护运行 `node scripts/check-module-jsdoc.mjs --package serv` 对实际声明和内部词法绑定编译示例，编译不代替真实 HTTP、授权与分布式防重放验收。
-
-toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，RequestInit 可覆盖 method、headers、body、signal 等字段；不修改原 Request 的字段，正文已消费/锁定或非法正文组合会以 Promise 拒绝。预取消和派发前取消不进入 handler，进行中取消结束调用方等待并把有效 signal 传给应用；监听器在完成/失败/取消后释放，取消后的迟到响应会取消未消费正文。取消不能回滚已经开始的外部副作用；Response 交付后的流由应用监听 request.signal 并自行关闭。
 
 ## 许可证
 

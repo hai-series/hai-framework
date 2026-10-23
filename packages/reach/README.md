@@ -207,6 +207,10 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 
 恢复仅条件更新同一版本的 dead；并发/过时请求失败，unknown 无法恢复。它重置领取次数并保留 queueId、原退避策略及接收端幂等要求。dead 仅表示停止自动处理，不证明外部副作用未发生；曾开始的幂等 API 可能仍有旧请求迟到，恢复前仍须确认接收端持久去重有效。不可修复的坏载荷应保留死信并人工排查，重复恢复不会修复内容。
 
+## 生产共享状态
+
+生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+
 ## 开发测试
 
 ```bash
@@ -214,10 +218,6 @@ pnpm --filter @h-ai/reach test
 ```
 
 跨库时间回归用例 `tests/reach-repository-send-log-databases.test.ts` 通过 Testcontainers 启动隔离 PostgreSQL 16.15 / MySQL 8.4.11，并在结束时清理容器；须提供可用的 Docker API。使用 Podman 时，将 `DOCKER_HOST` 指向其兼容 socket；rootless 环境可按 Testcontainers 要求设置 `TESTCONTAINERS_RYUK_DISABLED=true`。
-
-## 生产共享状态
-
-生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
 
 ## 许可证
 

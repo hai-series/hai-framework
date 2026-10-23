@@ -76,6 +76,8 @@ YAML 提供默认值；环境变量按 `HAI_<配置名>_<YAML 路径>` 自动覆
 Pollinations 返回 HTTP 402 表示账户余额或该 API Key 的预算耗尽，请在
 [Pollinations 控制台](https://enter.pollinations.ai/) 检查余额、模型白名单和 Key 预算。
 
+服务端限流使用 @h-ai/cache：开发默认memory，生产必须配置共享Redis（HAI_CACHE_TYPE=redis及连接参数），并确保所有实例使用相同namespace和窗口。缓存不可用时503，超限429；HAI_E2E_MOCK仅用于测试，不得用于部署。初始化由hooks保证，AI和限流使用同一config目录。
+
 ### 镜像构建与部署
 
 在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.build.json` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
@@ -122,5 +124,3 @@ HAI_E2E_LIVE=1 pnpm --filter ai-playground test:e2e live-ai.spec.ts
 ## 许可证
 
 Apache-2.0
-
-服务端限流使用 @h-ai/cache：开发默认memory，生产必须配置共享Redis（HAI_CACHE_TYPE=redis及连接参数），并确保所有实例使用相同namespace和窗口。缓存不可用时503，超限429；HAI_E2E_MOCK仅用于测试，不得用于部署。初始化由hooks保证，AI和限流使用同一config目录。

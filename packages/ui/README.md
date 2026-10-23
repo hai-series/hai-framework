@@ -733,6 +733,65 @@ transformPageChunk: ({ html }) => html.replace('%theme_bootstrap%', themeBootstr
 - 应用层只需处理**页面级文本**，组件内部文本由 @h-ai/ui 统一管理
 - 如需覆盖特定文本，通过 `submitText`、`labels` 等 props 传入
 
+#### createLocaleStore
+
+用于客户端 locale 状态管理，自动同步到 `@h-ai/core` 全局 locale 管理器：
+
+```svelte
+<script>
+  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
+  import { setLocale } from '$lib/paraglide/runtime'
+
+  const localeStore = createLocaleStore()
+
+  function changeLocale(code) {
+    localeStore.set(code)       // 更新 UI store + 同步到 @h-ai/core
+    setLocale(code)             // 同步到 Paraglide（应用层）
+  }
+</script>
+
+<select value={localeStore.current} onchange={(e) => changeLocale(e.currentTarget.value)}>
+  {#each localeStore.supported as l}
+    <option value={l.code}>{l.label}</option>
+  {/each}
+</select>
+```
+
+`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
+
+#### 导出的 i18n 工具
+
+```ts
+import {
+  createLocaleStore, // Svelte 响应式 locale store
+  DEFAULT_LOCALE, // 默认 locale: 'zh-CN'
+  DEFAULT_LOCALES, // 支持的 locale 列表
+  detectBrowserLocale, // 检测浏览器语言
+  getGlobalLocale, // 获取当前全局 locale
+  interpolate, // 字符串插值（如 "Hello {name}"）
+  isLocaleSupported, // 检查 locale 是否支持
+  resolveLocale, // 解析 locale（支持回退）
+  setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
+} from '@h-ai/ui/i18n'
+```
+
+
+协议在 Modal 内显示并保留表单输入；使用 URL 时，协议页面须允许 iframe 嵌入，组件禁用其脚本，另提供新窗口查看入口。登录/注册表单使用 `header/extraFields/footer` snippet，AuthPanel 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`，底部保留内置导航。自定义字段由应用绑定状态和提交，不会隐式写入 IAM 用户模型。
+
+```svelte
+<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
+<AuthPanel {config} {actions}>
+  {#snippet loginHeader()}
+    <p>{m.loginHelp()}</p>
+  {/snippet}
+  {#snippet registerFields()}
+    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
+  {/snippet}
+</AuthPanel>
+```
+
+上例的 subscribe 为应用自身的 $state，应用包装 register 动作校验/提交扩展业务数据；如需单独组合表单，使用 `<RegisterForm> {#snippet extraFields()}...{/snippet} </RegisterForm>`。扩展里的按钮须为 `type="button"`，避免误提交。
+
 ### 配置驱动认证页面
 
 密码登录只提交 `identifier` 和 `password`；`AuthPanel` 将 `LoginForm` 的 `username` 映射为 `identifier`。会话有效期由服务端 `session.maxAge` / `session.refreshTokenMaxAge` 配置决定，登录表单不提供按次登录的持久会话选项。
@@ -767,63 +826,6 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 认证链接指向当前完整 URL 时，AuthPanel 只切换场景并阻止重复导航，返回登录后可立即输入。路径、查询串或 hash 不同时交给应用路由处理；Ctrl/Cmd 等修改键点击保留浏览器行为。
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
-
-#### createLocaleStore
-
-用于客户端 locale 状态管理，自动同步到 `@h-ai/core` 全局 locale 管理器：
-
-```svelte
-<script>
-  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui/i18n'
-  import { setLocale } from '$lib/paraglide/runtime'
-
-  const localeStore = createLocaleStore()
-
-  function changeLocale(code) {
-    localeStore.set(code)       // 更新 UI store + 同步到 @h-ai/core
-    setLocale(code)             // 同步到 Paraglide（应用层）
-  }
-</script>
-
-<select value={localeStore.current} onchange={(e) => changeLocale(e.currentTarget.value)}>
-  {#each localeStore.supported as l}
-    <option value={l.code}>{l.label}</option>
-  {/each}
-</select>
-```
-
-#### 导出的 i18n 工具
-
-```ts
-import {
-  createLocaleStore, // Svelte 响应式 locale store
-  DEFAULT_LOCALE, // 默认 locale: 'zh-CN'
-  DEFAULT_LOCALES, // 支持的 locale 列表
-  detectBrowserLocale, // 检测浏览器语言
-  getGlobalLocale, // 获取当前全局 locale
-  interpolate, // 字符串插值（如 "Hello {name}"）
-  isLocaleSupported, // 检查 locale 是否支持
-  resolveLocale, // 解析 locale（支持回退）
-  setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
-} from '@h-ai/ui/i18n'
-```
-
-
-协议在 Modal 内显示并保留表单输入；使用 URL 时，协议页面须允许 iframe 嵌入，组件禁用其脚本，另提供新窗口查看入口。登录/注册表单使用 `header/extraFields/footer` snippet，AuthPanel 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`，底部保留内置导航。自定义字段由应用绑定状态和提交，不会隐式写入 IAM 用户模型。
-
-```svelte
-<!-- config 来自 IAM 公开配置，actions 来自 Kit/API client；m 为应用翻译。 -->
-<AuthPanel {config} {actions}>
-  {#snippet loginHeader()}
-    <p>{m.loginHelp()}</p>
-  {/snippet}
-  {#snippet registerFields()}
-    <label><input type='checkbox' bind:checked={subscribe} />{m.subscribe()}</label>
-  {/snippet}
-</AuthPanel>
-```
-
-上例的 subscribe 为应用自身的 $state，应用包装 register 动作校验/提交扩展业务数据；如需单独组合表单，使用 `<RegisterForm> {#snippet extraFields()}...{/snippet} </RegisterForm>`。扩展里的按钮须为 `type="button"`，避免误提交。
 
 ### 新手引导与帮助中心
 
@@ -896,11 +898,17 @@ import { toast } from '@h-ai/ui'
 ```
 
 
+组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。宿主剪贴板注册仍是公开能力。
+
 ### 请求语言隔离
 
 Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest())`；SvelteKit 可使用 `kit.i18n.runWithLocale(locale, () => resolve(event))`，serv 自动按请求头建立上下文。异步子任务继承请求语言，优先级为显式 `MessageOptions.locale`、请求语言、进程启动默认语言。`setGlobalLocale` 在请求上下文中只更新当前请求；上下文外仅用于启动默认值，不能在请求 hook 中调用它修改默认值。
 
 浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
+
+## 输入约束与 HTTP 能力
+
+存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../../docs/storage-api-capabilities.md)。
 
 ## 开发测试
 
@@ -910,14 +918,6 @@ pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
-
-组件子路径只开放 package.exports 明确列出的 barrel，例如 `@h-ai/ui/components/primitives/index`；不开放任意组件实现或内部存储辅助函数。宿主剪贴板注册仍是公开能力。
-
-`@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
-
-## 输入约束与 HTTP 能力
-
-存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../../docs/storage-api-capabilities.md)。
 
 ## 许可证
 

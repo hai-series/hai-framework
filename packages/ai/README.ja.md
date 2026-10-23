@@ -126,6 +126,8 @@ await ai.close()
 - `ai.tools` と `ai.stream` は純粋関数で、初期化せず使用できます。
 - 開発・テストで reldb/vecdb がなければ一時 Store、両方が初期化済みなら DB Provider を使います。本番では実際の DB/vecdb 共有能力を検証し、独自 Provider も正確な `stateScope` を宣言する必要があります。
 
+Store の拡張には公開 AIStoreProvider を使用します。組み込み LLM Provider、ファクトリ依存、Context 内部依存は非公開です。モデル接続は設定で行い、履歴照会、AskOptions、ChatRecord は公開を維持します。
+
 ### API 一覧
 
 #### LLM
@@ -157,6 +159,8 @@ const temp = await ai.llm.chat({
   tempModel: { model: 'claude-3-5-sonnet', api: 'anthropic', apiKey: 'sk-temp' },
 })
 ```
+
+SSE は [WHATWG のイベントストリーム規則](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)に従い、分割された LF/CRLF/CR、複数 data 行、コロン直後の空白一つ、id/retry の継承、既定の message を扱います。EOF の未完了イベントは配信しません。encodeSSE は data の改行を正規化し、不正なメタデータは明示的に例外を返します。Anthropic/MiMo は UTF-8 reader を共有し、終了・取消・失敗時に本文を取消して解放します。自動再接続や業務再実行は行わず、Anthropic の timeout は本文まで、MiMo は各 HTTP リクエスト単位で適用します。
 
 #### ツール呼び出し
 
@@ -261,6 +265,8 @@ if (setup.success) {
   }
 }
 ```
+
+Knowledge は datapipe の単位と上限に従い、word は語数、その他は Unicode code point として清洗後テキストの区切りを保持します。AI の既定は markdown/maxSize=1500/overlap=200 のままです。maxSize を小さく上書きする際は継承する overlap もそれ未満にしてください。不正な分割設定・正規表現は embedding と版の公開前に KNOWLEDGE_INGEST_FAILED を返し、文書全体への無制限フォールバックは行いません。
 
 #### 音声（Audio）
 
@@ -508,6 +514,8 @@ const manager = ai.context.createManager({
 
 `ai.persona` は `save` / `get` / `update` / `remove` / `list` / `compose` を提供します。プロフィールは全体で共有し、`objectId` では分離しません。
 
+### 設定
+
 ```yaml
 llm:
   apiKey: ''
@@ -630,13 +638,7 @@ pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
 
-Store の拡張には公開 AIStoreProvider を使用します。組み込み LLM Provider、ファクトリ依存、Context 内部依存は非公開です。モデル接続は設定で行い、履歴照会、AskOptions、ChatRecord は公開を維持します。
-
 公開 JSDoc の例は実際のパッケージ入口から import し、内部ファクトリの例はモジュール内部コンテキストを明示して実宣言で型検証します。ルートで `pnpm check:jsdoc --package ai` を実行すると網羅性と例の型を検証できます。通常の業務 API は HaiResult を確認し、ストリームとブラウザー AudioClient は明示された例外契約に従います。
-
-Knowledge は datapipe の単位と上限に従い、word は語数、その他は Unicode code point として清洗後テキストの区切りを保持します。AI の既定は markdown/maxSize=1500/overlap=200 のままです。maxSize を小さく上書きする際は継承する overlap もそれ未満にしてください。不正な分割設定・正規表現は embedding と版の公開前に KNOWLEDGE_INGEST_FAILED を返し、文書全体への無制限フォールバックは行いません。
-
-SSE は [WHATWG のイベントストリーム規則](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)に従い、分割された LF/CRLF/CR、複数 data 行、コロン直後の空白一つ、id/retry の継承、既定の message を扱います。EOF の未完了イベントは配信しません。encodeSSE は data の改行を正規化し、不正なメタデータは明示的に例外を返します。Anthropic/MiMo は UTF-8 reader を共有し、終了・取消・失敗時に本文を取消して解放します。自動再接続や業務再実行は行わず、Anthropic の timeout は本文まで、MiMo は各 HTTP リクエスト単位で適用します。
 
 ## ライセンス
 

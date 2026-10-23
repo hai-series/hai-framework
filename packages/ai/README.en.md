@@ -126,6 +126,8 @@ await ai.close()
 - `ai.tools` and `ai.stream` are pure-function subsystems usable without initialization.
 - Development/tests without reldb/vecdb use temporary storage; both initialized selects DB storage. Production validates the real database/vector backend capability. Custom providers must accurately declare `stateScope`.
 
+Inject stores through the public AIStoreProvider extension. Built-in LLM providers, factory dependencies and Context dependencies are internal. Configure model endpoints through configuration; history queries, AskOptions and ChatRecord remain public.
+
 ### API overview
 
 #### LLM
@@ -157,6 +159,8 @@ const temp = await ai.llm.chat({
   tempModel: { model: 'claude-3-5-sonnet', api: 'anthropic', apiKey: 'sk-temp' },
 })
 ```
+
+SSE text decoding follows [WHATWG event-stream rules](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation): split LF/CRLF/CR, multiline data, one optional space, inherited valid id/retry, default message events, and no dispatch of unfinished EOF data. encodeSSE normalizes data line endings and explicitly throws for invalid metadata. Anthropic/MiMo share an internal UTF-8 reader that cancels/releases the body on exit, cancellation, termination or failure, without reconnecting or replaying business operations. Anthropic deadlines cover the body; MiMo retains separate deadlines per HTTP request.
 
 #### Tool calls
 
@@ -261,6 +265,8 @@ if (setup.success) {
   }
 }
 ```
+
+Knowledge chunks use datapipe units and hard bounds: words for word mode, Unicode code points otherwise, retaining separators from cleaned text. AI defaults remain markdown/maxSize=1500/overlap=200; a smaller maxSize override must also keep inherited overlap below it. Invalid chunk configuration or expressions return KNOWLEDGE_INGEST_FAILED before embedding and revision publication, without an unbounded whole-document fallback.
 
 #### Audio
 
@@ -508,6 +514,8 @@ const manager = ai.context.createManager({
 
 `ai.persona` exposes `save` / `get` / `update` / `remove` / `list` / `compose`. Profiles are shared globally, not isolated by `objectId`.
 
+### Configuration
+
 ```yaml
 llm:
   apiKey: ''
@@ -630,13 +638,7 @@ pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
 
-Inject stores through the public AIStoreProvider extension. Built-in LLM providers, factory dependencies and Context dependencies are internal. Configure model endpoints through configuration; history queries, AskOptions and ChatRecord remain public.
-
 Public JSDoc examples import actual package entrypoints; internal factory examples are marked with their module context and compiled against real local declarations. Run `pnpm check:jsdoc --package ai` from the repository root to verify coverage and example types. Ordinary business calls check HaiResult; streams and the browser AudioClient retain their explicit throwing contracts.
-
-Knowledge chunks use datapipe units and hard bounds: words for word mode, Unicode code points otherwise, retaining separators from cleaned text. AI defaults remain markdown/maxSize=1500/overlap=200; a smaller maxSize override must also keep inherited overlap below it. Invalid chunk configuration or expressions return KNOWLEDGE_INGEST_FAILED before embedding and revision publication, without an unbounded whole-document fallback.
-
-SSE text decoding follows [WHATWG event-stream rules](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation): split LF/CRLF/CR, multiline data, one optional space, inherited valid id/retry, default message events, and no dispatch of unfinished EOF data. encodeSSE normalizes data line endings and explicitly throws for invalid metadata. Anthropic/MiMo share an internal UTF-8 reader that cancels/releases the body on exit, cancellation, termination or failure, without reconnecting or replaying business operations. Anthropic deadlines cover the body; MiMo retains separate deadlines per HTTP request.
 
 ## License
 

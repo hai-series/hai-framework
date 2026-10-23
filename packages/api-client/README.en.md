@@ -146,16 +146,16 @@ Client-side failures such as missing initialization, network errors, timeouts, a
 
 Automatic refresh handles an actual HTTP 401 (`Response.status`) or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`). After a successful refresh, the original request is retried once. Built-in login and registration routes and the configured `auth.refreshPath` never trigger automatic refresh; other failures such as 403/500 do not trigger it either. Ordinary serv procedures still return HTTP 200. Callers must check the final `success` and `error.code` and handle expired authentication when refresh fails.
 
+## Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
+
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
-
-## Input limits and HTTP capabilities
-
-Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
 
 ## License
 
