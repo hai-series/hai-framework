@@ -27,13 +27,13 @@ import { deploy } from '@h-ai/deploy'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
-import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_OWNER_LABEL, DEPLOY_FIXTURE_WEB_PORT, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages } from './helpers/deploy-container-fixture.js'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages } from './helpers/deploy-container-fixture.js'
 
 /** 探测可用容器运行时（优先 podman，用 `version` 确认引擎可达）。 */
 function detectRuntime(): 'podman' | 'docker' | null {
   for (const runtime of ['podman', 'docker'] as const) {
     try {
-      execFileSync(runtime, ['version'], { stdio: 'ignore' })
+      execFileSync(runtime, ['version'], { stdio: 'ignore', windowsHide: true, timeout: 15_000 })
       return runtime
     }
     catch {
@@ -60,7 +60,6 @@ const CONTAINER_NETWORK = process.env.HAI_DEPLOY_E2E_CONTAINER_NETWORK
 
 // 外层资源按本轮身份隔离；内部端口固定，宿主端口由引擎原子分配。
 const RUN_ID = randomBytes(16).toString('hex')
-const FIXTURE_IMAGE = `localhost/hai-deploy-e2e-fixture:${RUN_ID}`
 const HOST_PORT = DEPLOY_FIXTURE_WEB_PORT
 const API_PORT = DEPLOY_FIXTURE_API_PORT
 const APPLICATION_VERSION = '2.4.6'
@@ -72,28 +71,6 @@ const BASE_IMAGES = ['python:3.11.17-slim-trixie', 'node:24.22.1-bookworm-slim',
 const APT_SOURCES_FIX = APT_MIRROR
   ? `sed -i 's#deb.debian.org#${APT_MIRROR}#g' /etc/apt/sources.list.d/debian.sources && `
   : ''
-const CONTAINERFILE = `FROM python:3.11.17-slim-trixie
-RUN ${APT_SOURCES_FIX}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources \\
-  && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 update \\
-  && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 install -y --no-install-recommends curl openssh-server podman uidmap fuse-overlayfs nftables iptables aardvark-dns util-linux \\
-  && rm -rf /var/lib/apt/lists/* && ssh-keygen -A && mkdir -p /root/.ssh && chmod 700 /root/.ssh
-RUN pip install --no-cache-dir podman-compose==1.6.0
-RUN mkdir -p /etc/containers && printf '[containers]\\ncgroups = "disabled"\\n[engine]\\ncgroup_manager = "cgroupfs"\\nevents_logger = "file"\\n' > /etc/containers/containers.conf
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-EXPOSE 22
-ENTRYPOINT ["/entrypoint.sh"]
-`
-
-const ENTRYPOINT = `#!/bin/sh
-set -e
-if [ -n "$AUTHORIZED_KEY" ]; then
-  echo "$AUTHORIZED_KEY" > /root/.ssh/authorized_keys
-  chmod 600 /root/.ssh/authorized_keys
-fi
-sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-exec /usr/sbin/sshd -D -e
-`
 
 let workDir: string
 let keyPath: string
@@ -226,19 +203,9 @@ function useLocalPackages(project: string): void {
 }
 
 /** 受限网络下通过镜像预拉取基础镜像并回标为原 docker.io 名称。 */
-function prepareBaseImages(rt: string): void {
-  if (!REGISTRY_MIRROR)
-    return
+function prepareBaseImages(rt: 'podman' | 'docker', deadline: number): void {
   for (const img of BASE_IMAGES) {
-    try {
-      run(rt, ['image', 'inspect', img])
-      continue
-    }
-    catch {
-      // 本地无缓存，经镜像拉取
-    }
-    run(rt, ['pull', `${REGISTRY_MIRROR}/${img.includes('/') ? '' : 'library/'}${img}`])
-    run(rt, ['tag', `${REGISTRY_MIRROR}/${img.includes('/') ? '' : 'library/'}${img}`, img])
+    ensureDeployTestBaseImage(rt, img, deadline - Date.now(), REGISTRY_MIRROR)
   }
 }
 
@@ -247,8 +214,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** 轮询等待 sshd 就绪。 */
-async function waitForSsh(): Promise<void> {
-  const deadline = Date.now() + 120_000
+async function waitForSsh(setupDeadline: number): Promise<void> {
+  const deadline = Math.min(Date.now() + 120_000, setupDeadline)
   let lastError: unknown
   while (Date.now() < deadline) {
     try {
@@ -267,7 +234,7 @@ async function waitForSsh(): Promise<void> {
         'ConnectTimeout=5',
         'root@127.0.0.1',
         'true',
-      ], { stdio: 'ignore' })
+      ], { stdio: 'ignore', windowsHide: true, timeout: Math.max(1, Math.min(10_000, deadline - Date.now())) })
       return
     }
     catch (error) {
@@ -280,6 +247,9 @@ async function waitForSsh(): Promise<void> {
 
 describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + 容器运行时）', () => {
   beforeAll(async () => {
+    // 600s 总准备期限早于 900s hook，余量覆盖 SSH 就绪与按 ID 终止/核验。
+    const deadline = Date.now() + 600_000
+    const signal = AbortSignal.timeout(600_000)
     // Windows 宿主机的 localhost 代理不能在隔离测试容器内使用；不改变用户系统配置。
     for (const key of proxyKeys) {
       originalProxies.set(key, process.env[key])
@@ -291,22 +261,32 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
     knownHostsPath = path.join(workDir, 'known_hosts')
 
     // 1. 生成一次性 SSH 密钥对
-    run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', keyPath])
+    execFileSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', keyPath], { windowsHide: true, timeout: 10_000, stdio: 'ignore' })
     const publicKey = readFileSync(`${keyPath}.pub`, 'utf-8').trim()
 
-    // 2. 预拉取基础镜像（受限网络），再构建 sshd + podman 夹具镜像
-    prepareBaseImages(rt)
-    writeFileSync(path.join(workDir, 'Containerfile'), CONTAINERFILE)
-    writeFileSync(path.join(workDir, 'entrypoint.sh'), ENTRYPOINT)
-    run(rt, ['build', ...(rt === 'podman' ? ['--http-proxy=false'] : []), '--label', `${DEPLOY_FIXTURE_OWNER_LABEL}=${RUN_ID}`, '--iidfile', path.join(workDir, 'fixture.iid'), '-t', FIXTURE_IMAGE, '-f', path.join(workDir, 'Containerfile'), workDir])
-    testImages.set(FIXTURE_IMAGE, recordDeployTestImage(rt, FIXTURE_IMAGE, RUN_ID))
-
-    // 3. create 成功先记录 ID，start 失败也只回收该 ID；不按名称预删。
-    fixtureContext = createDeployTestFixture(rt, FIXTURE_IMAGE, publicKey, workDir, RUN_ID)
+    // 2. 准备固定公共基础镜像；不通过 host build 启动无拥有权账本的后台 builder。
+    prepareBaseImages(rt, deadline)
+    if (APT_MIRROR && !/^[a-z0-9.-]+$/i.test(APT_MIRROR))
+      throw new Error('Expected an APT mirror hostname')
+    // 3. 先登记 create 的 ID，再在其私有 PID namespace 内安装；任何准备失败按 ID 停全树。
+    fixtureContext = await createDeployTestFixture(rt, 'python:3.11.17-slim-trixie', publicKey, workDir, RUN_ID, {
+      command: ['sleep', 'infinity'],
+      nestedRuntime: true,
+      timeoutMs: deadline - Date.now(),
+      signal,
+      prepare: async (fixture, signal) => {
+        await executeDeployTestFixture(rt, fixture, ['sh', '-ec', `${APT_SOURCES_FIX}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources; apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=20 -o APT::Update::Error-Mode=any update`], { timeoutMs: 180_000, signal, stage: 'apt-update' })
+        await executeDeployTestFixture(rt, fixture, ['apt-get', '-o', 'Acquire::Retries=3', '-o', 'Acquire::https::Timeout=20', 'install', '-y', '--no-install-recommends', 'curl', 'openssh-server', 'podman', 'uidmap', 'fuse-overlayfs', 'nftables', 'iptables', 'aardvark-dns', 'util-linux'], { timeoutMs: 360_000, signal, stage: 'apt-install' })
+        await executeDeployTestFixture(rt, fixture, ['pip', 'install', '--no-cache-dir', 'podman-compose==1.6.0'], { timeoutMs: 120_000, signal, stage: 'pip' })
+        await executeDeployTestFixture(rt, fixture, ['sh', '-ec', `rm -rf /var/lib/apt/lists/*; ssh-keygen -A; mkdir -p /run/sshd /root/.ssh /etc/containers; chmod 700 /root/.ssh; printf '%s\\n' "$AUTHORIZED_KEY" > /root/.ssh/authorized_keys; chmod 600 /root/.ssh/authorized_keys; printf '\\nPermitRootLogin prohibit-password\\nPasswordAuthentication no\\n' >> /etc/ssh/sshd_config; printf '[containers]\\ncgroups = "disabled"\\n[engine]\\ncgroup_manager = "cgroupfs"\\nevents_logger = "file"\\n' > /etc/containers/containers.conf; /usr/sbin/sshd`], { timeoutMs: 30_000, signal, stage: 'sshd' })
+        // 真实解析刚写入的 TOML 并启动嵌套运行时，不能以 shell 语法检查代替。
+        await executeDeployTestFixture(rt, fixture, ['podman', 'info', '--format', '{{.Host.Arch}}'], { timeoutMs: 30_000, signal, stage: 'nested-runtime' })
+      },
+    })
 
     // 4. 等待 sshd 就绪
-    await waitForSsh()
-    run(rt, ['exec', fixture().containerId, 'sh', '-c', 'mkdir -p /etc/containers/registries.conf.d && printf \'[[registry]]\\nprefix = "docker.io"\\nblocked = true\\n[[registry]]\\nprefix = "ghcr.io"\\nblocked = true\\n\' > /etc/containers/registries.conf.d/offline.conf'])
+    await waitForSsh(deadline + 120_000)
+    await executeDeployTestFixture(rt, fixture(), ['sh', '-c', 'mkdir -p /etc/containers/registries.conf.d && printf \'[[registry]]\\nprefix = "docker.io"\\nblocked = true\\n[[registry]]\\nprefix = "ghcr.io"\\nblocked = true\\n\' > /etc/containers/registries.conf.d/offline.conf'], { timeoutMs: 10_000, signal: AbortSignal.timeout(Math.max(1, deadline + 120_000 - Date.now())) })
   }, 900_000)
 
   afterAll(async () => {

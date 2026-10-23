@@ -130,6 +130,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作を実行します。デプロイ検証は実リソースの所有権と動的ホストポートの分離に加え、オフライン tar、SSH/手動配布、増分更新とロールバックを扱います。当該実行が記録したコンテナー ID と専用イメージ tag だけを回収します。安全なメタデータは ignored の `tmp/validation/module-review/VERIFY-05/` に残し、一時プロジェクト、SSH 鍵とプロジェクトデータは引き続き削除します。生成したブラウザー画像、trace とレポートは既定で ignored の `tmp/validation/module-review/scaffold-browser/` または `deploy-browser/` に保持します。明示した証拠・HTML・出力先も尊重し、一時プロジェクト、鍵、データとプロセスは回収します。ネイティブと実クラウドは別途検証してください。
 
+デプロイ用 fixture は固定版の公開基盤イメージを確認し、不在を確認した場合だけ取得します。HAI_DEPLOY_E2E_MIRROR を利用でき、公開キャッシュは回収対象にしません。create 成功時のコンテナー ID を先に記録し、専用 PID namespace 内で APT/pip/sshd を非同期準備します。準備失敗、期限超過、協調的取消ではローカルクライアントの終了を待ち、記録した ID だけを削除して消失を確認します。特権を使うのはネストした Podman fixture のみです。HAI_DEPLOY_E2E_APT_MIRROR はホスト名のみを受け付け、HTTPS を維持します。所有権テストは固定公開イメージに実行専用 tag を付け、同じ内容の外部 tag、tag の付け替え、動的ポート、外部 sentinel の保護を維持します。create の応答喪失で信頼できる ID がない場合や、テストが強制終了した場合は不明状態を残し、名前や label を根拠に回収しません。
+
 `--generate` は対象を絞ったルート検証です。インストール済み依存を再利用し、SvelteKit・serv API・fullstack バックエンドを実際に生成・ビルドして新ルートへアクセスします（transport を含む）。完全なインストールとブラウザー検証の代わりにはなりません。
 
 `test:e2e` は各サービスに隔離されたテスト用バックエンドと絶対データパスを明示します。サービス子プロセスは外部の `HAI_*` / `PUBLIC_*` / `VITE_*` 設定やユーザーの `.env.local` を読み込みません。テスト専用の `HAI_E2E=1` は通常開発・本番の dotenv と共有バックエンド要件を変更せず、transport は毎回生成する信頼済み SM2 ring と実際の registry を使います。生成プロジェクトのブラウザー検証では独立 TCP 計数プロセスで外部 DB への接続がないことも確認します。完全な fullstack デプロイ検証では実 Redis/S3、増分更新とロールバックを維持します。

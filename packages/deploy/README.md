@@ -181,6 +181,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 进程门禁运行 `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts`。设置同一 `HAI_DEPLOY_E2E=1` 后运行 `tests/deploy-command-runtime.e2e.test.ts`，先构建 deploy；它使用真实 Linux、OpenSSH 和发布 dist，验证远端继续执行/完成回执以及本地进程组。该夹具需联网安装 sshd；Compose/HTTP 为确定性夹具，发布 deadline 缩短为 2500 毫秒，并注入暂停消费模拟丢失回执。
 
+部署夹具先检查固定公开基础镜像，仅明确缺失时拉取，可沿用 HAI_DEPLOY_E2E_MIRROR；公共缓存不进入清理账本。成功 create 后先登记容器 ID，再在其私有 PID namespace 内异步安装 APT/pip 并启动 sshd。准备失败、超时或合作式取消会等待本地客户端退出，按已登记 ID 回收并确认消失；仅重型嵌套 Podman 夹具使用特权。HAI_DEPLOY_E2E_APT_MIRROR 只接受镜像站主机名并保留 HTTPS。拥有权测试用固定公开镜像的本轮私有 tag，保留同内容外部 tag、重指向保护、动态端口和外部 sentinel 检查。create 回执丢失且未获得可信 ID、测试进程被强制终止等情况仍需记录未知状态，不能按名称或 label 认领清理。
+
 ## 许可证
 
 Apache-2.0

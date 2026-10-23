@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05；定向复核新增 CORE-05；第二轮全量复核新增 DOC-04、VERIFY-06，共 94 个，另有 21 个按模块拆分的 JSDoc 任务，共 115 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 64/65（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 65/65（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -1056,7 +1056,8 @@
 
 ### VERIFY-06 · P2 · 部署夹具超时后回收引擎端进程与准备资源
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：删除host fixture build，先确认固定公共base并登记create ID，再在私有PID namespace异步准备；仅嵌套Podman特权，安装/复制/SSH共用总deadline与取消信号，等待客户端close后按ID回收并核验，清理失败聚合。原3拥有权加超时/错误/取消/预取消共7通过，真实parent/setsid child证明客户端退出后仍增长、清理后心跳停止且外部sentinel存活；Linux锁5与运行时4通过。新增20s复制上限过紧的前置失败保留，最终使用原180s总预算剩余，运行时4复验约88s；CLI准备600s/原hook900s、Linux180s/原hook300s不放宽，清理hook90s覆盖rm60+确认15。严格noEmit、12文件零警告lint、skills37/330通过，三语README/规范/应用测试skill及全部调用方同步；无生产API/依赖变化。12文件hash与snapshot稳定，11个登记ID及8个私有tag均已核验消失；两个旧external builder缺排他身份原样保留未知，Docker未实跑，heavy7留最终完整门禁。证据tmp/module-repair-20261022/VERIFY-06/handoff.json与tmp/validation/module-review/VERIFY-06/resources-final.json；全量回归按用户要求在全部任务实施后执行。
 - **位置**：deploy 的 Linux command-runtime 测试、CLI 的真实 SSH 部署夹具及拥有权 helper。
 - **证据与影响**：第二轮 Linux 命令夹具在镜像准备阶段未完成，重型部署夹具明确 `spawnSync podman ETIMEDOUT`；四个命令场景、七个重型部署场景均未执行。客户端退出后仍有外部构建容器，旧 fixture 未持久记录其排他身份或核验引擎端构建终止，不能用临时目录消失代替完整回收。网络下载慢与夹具终止/清理缺陷分别记录。
 - **修正内容**：将网络准备纳入可凭成功创建 ID 终止的本轮资源生命周期，保留失败诊断并聚合清理失败；成功、失败、超时和取消均只回收当前拥有资源。保留独立端口、私有镜像 tag/内容 ID 保护、全部原业务场景与外部 sentinel，不通过扩大超时、使用旧镜像或跳过断言换取通过。
