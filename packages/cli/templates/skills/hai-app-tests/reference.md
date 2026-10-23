@@ -52,7 +52,7 @@
 
 1. 参照 `hai-app-review` 技能审查代码规范
 2. 重构后执行受影响测试与必要回归，确认已有行为保持通过
-3. 多项门禁按 [分轮验证与集中修复](validation.md) 收集一轮结果，汇总后修复、再验证；不要把目标用例的小范围 TDD 扩大为每修一处就从头运行全量门禁。PowerShell 使用 `pnpm.cmd`
+3. 多项门禁按 [分轮验证与集中修复](validation.md) 收集一轮结果，汇总后集中修复；先定向确认失败和直接受影响项均已解决，再执行较完整验收。定向回归未通过时继续小范围修复，不从头重复全量门禁。PowerShell 使用 `pnpm.cmd`
 
 ## 测试目录约定
 
@@ -210,16 +210,16 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: 0,
   workers: 2,
   reporter: 'list',
   timeout: 30_000,
   use: {
     baseURL,
     channel: 'chrome',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   webServer: {

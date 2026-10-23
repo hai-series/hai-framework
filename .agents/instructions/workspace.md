@@ -46,7 +46,7 @@
 
 按影响范围使用 `pnpm --filter <workspace>`；跨包契约或根配置变更提升到根命令。Windows PowerShell 使用 `pnpm.cmd`。
 
-执行多项门禁必须先读 [分轮验证与集中修复](../../packages/cli/templates/skills/hai-app-tests/validation.md)。默认先收集一轮全部可执行结果，再归并根因、集中修复、开启下一轮；普通失败不立即修改并从头重跑。以下是默认调度顺序，不是遇错即停的链条：
+执行多项门禁必须先读 [分轮验证与集中修复](../../packages/cli/templates/skills/hai-app-tests/validation.md)。默认先收集一轮全部可执行结果，再归并根因、集中修复；先定向确认失败和直接受影响项已解决，通过后再开启较完整验收。定向回归未通过时不重跑整套门禁，普通失败不立即修改并从头重跑。以下是默认调度顺序，不是遇错即停的链条：
 
 1. `pnpm typecheck`
 2. `pnpm lint`（根命令包含 `pnpm check:skills`）
@@ -57,7 +57,7 @@
 收集阶段使用一次脚本化调度，逐项保存退出码、耗时与日志，只读取汇总和必要失败片段。本仓库另须注意：
 
 - 根 `lint`、`build`、`test` 内含 `check:skills`、lint 或 `test:scripts` 等 `&&` 前置；前置失败不代表后面的 Turbo 任务已执行。需要继续收集时分别记录前置检查，再调度对应 Turbo 图；不能漏掉前置或把子任务结果冒充完整根门禁。修复后执行适用的原门禁确认最终结果。
-- 使用本地 Turbo 的 `--continue=dependencies-successful` 继续独立任务；依赖失败的任务记为阻塞，不用 `--continue=always` 读取旧 `dist` 验收。容器测试保留现有 `--concurrency=1`；typecheck 也可能触发依赖构建，不与清理/重写相同产物的任务并行。
+- 使用本地 Turbo 的 `--continue=dependencies-successful` 继续独立任务；依赖失败的任务记为阻塞，不用 `--continue=always` 读取旧 `dist` 验收。根 `test` 按 manifest 的 Testcontainers 依赖分类：未声明该依赖的包并发上限 4，声明该依赖的包上限 1；每组启动前再按两个文件 worker 的 CPU 预算和每包 2 GiB 空闲内存预算收紧实际并发，最低为 1，并记录实际值。真实容器测试须声明该测试依赖，包括通过其他包 helper 启动容器的测试。两组顺序运行，避免不同任务图同时重写共享构建产物。浏览器独立配置组失败后继续收集其他组，中断时停止；各组隔离数据与证据。typecheck 也可能触发依赖构建，不与清理/重写相同产物的任务并行。
 - 需要强制实际执行时使用 `--force`；本地 Turbo 的 `--no-cache` 仍可能读缓存，不能据此宣称已重新运行。复用结果须符合分轮规范的输入未变条件；真实运行验收不能由缓存代替。
 
 测试验证可观察行为，避免为措辞、纯格式修改新增镜像测试。TDD 的 Red 阶段要求新增目标用例因目标行为缺失而失败，既有回归应保持通过。
