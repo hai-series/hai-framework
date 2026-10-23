@@ -13,11 +13,6 @@ import { buildTemplateContext } from '../src/commands/cli-template-engine.js'
 /* ---------- detectProject 导入验证 ---------- */
 
 describe('detectProject', () => {
-  it('应能正常导入 detectProject 函数', async () => {
-    const { detectProject } = await import('../src/commands/cli-create.js')
-    expect(typeof detectProject).toBe('function')
-  }, 15000)
-
   it('在不含 package.json 的目录中应返回 null', async () => {
     const { detectProject } = await import('../src/commands/cli-create.js')
     // /tmp 或系统临时目录不含 package.json
@@ -25,7 +20,6 @@ describe('detectProject', () => {
     expect(result).toBeNull()
   })
 })
-
 /* ---------- buildTemplateContext 验证 ---------- */
 
 describe('buildTemplateContext', () => {
@@ -202,20 +196,5 @@ describe('fullstack TemplateContext', () => {
     })
 
     expect(ctx.fullstack?.nativeAppIdSegment).toBe('app123demoapp')
-  })
-})
-
-/* ---------- 安全：项目名校验 ---------- */
-
-describe('create command - 项目名校验', () => {
-  const validNames = ['my-app', 'test123', 'a', 'hello-world-2']
-  const invalidNames = ['../evil', 'my app', 'MY_APP', 'my.app', '../../etc']
-
-  it.each(validNames)('合法项目名 "%s" 应通过正则', (name) => {
-    expect(/^[a-z0-9-]+$/.test(name)).toBe(true)
-  })
-
-  it.each(invalidNames)('非法项目名 "%s" 应被正则拒绝', (name) => {
-    expect(/^[a-z0-9-]+$/.test(name)).toBe(false)
   })
 })

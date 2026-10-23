@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -37,6 +37,17 @@ afterEach(async () => {
 })
 
 describe('create 用户输出', () => {
+  it.each(['../escape', 'my app', 'MY_APP', 'my.app', 'nested\\name'])('非法名称 %s 应拒绝且不产生工程文件', async (name) => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hai-create-invalid-'))
+    temporaryRoots.push(root)
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    await expect(createProject({ name, appType: 'api', yes: true, install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow()
+    expect(stderr).toHaveBeenCalled()
+    expect(await readdir(root)).toEqual([])
+    expect(commandMocks.execSync).not.toHaveBeenCalled()
+  })
+
   it.each([
     { locale: 'zh-CN', exitCode: '退出码: 1' },
     { locale: 'en-US', exitCode: 'Exit code: 1' },

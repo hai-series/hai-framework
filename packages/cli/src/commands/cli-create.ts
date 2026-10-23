@@ -283,10 +283,8 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     const resolvedOptions = await resolveOptions(options)
 
     // 安全校验：项目名必须仅含小写字母、数字和连字符，防止路径遍历
-    if (!PROJECT_NAME_REGEX.test(resolvedOptions.name)) {
-      writeCliError(chalk.red(cliM('cli_createInvalidName', { params: { name: resolvedOptions.name } })))
-      return
-    }
+    if (!PROJECT_NAME_REGEX.test(resolvedOptions.name))
+      throw new Error(cliM('cli_createInvalidName', { params: { name: resolvedOptions.name } }))
 
     const projectPath = path.resolve(resolvedOptions.cwd ?? '.', resolvedOptions.name)
 

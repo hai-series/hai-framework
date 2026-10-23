@@ -125,7 +125,7 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     const root = await fixture()
     const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(() => 'admin')
     const typed = vi.spyOn(prompts.prompts, 'text').mockImplementation(() => 'bad/name')
-    await createProject({ cwd: root, name: '', features: [], moduleConfigs: {}, examples: false, install: false, git: false, packageManager: 'pnpm', template: 'minimal', deploy: false })
+    await expect(createProject({ cwd: root, name: '', features: [], moduleConfigs: {}, examples: false, install: false, git: false, packageManager: 'pnpm', template: 'minimal', deploy: false })).rejects.toThrow('bad/name')
     const appQuestion = selected.mock.calls[0]![0]
     const nameQuestion = typed.mock.calls[0]![0]
     selected.mockRestore()
@@ -158,7 +158,7 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     const typed = vi.spyOn(prompts.prompts, 'text').mockImplementation(question => question.initial)
     vi.spyOn(prompts.prompts, 'confirm').mockImplementation(() => false)
     // 非法名称在选项收集后拒绝，仍完整走过所有配置提示，且不会创建目录。
-    await createProject({ cwd: root, name: 'bad/name', appType: 'admin', template: 'custom', examples: false, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+    await expect(createProject({ cwd: root, name: 'bad/name', appType: 'admin', template: 'custom', examples: false, install: false, git: false, deploy: false, packageManager: 'pnpm' })).rejects.toThrow('bad/name')
     const questions = selected.mock.calls.map(([question]) => question)
     const choice = features.mock.calls[0]![0]
     selected.mockRestore()
@@ -220,6 +220,9 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     const initialized = run(service, ['init', '--force'])
     expect(initialized.status).toBe(0)
     const failed = run(service, ['add', 'unknown-module', '--no-install'])
+    const invalidName = run(root, ['create', 'BAD_NAME', '--type', 'api', '--yes', '--no-install', '--no-git', '--no-deploy'])
+    expect(invalidName.status).toBe(1)
+    expect(await fse.pathExists(path.join(root, 'BAD_NAME'))).toBe(false)
     const diagnostics = [created, added, initialized, failed].map(r => r.stdout + r.stderr).join('\n')
     expect(await fse.pathExists(path.join(target, 'apps/shop-service/src/index.ts'))).toBe(true)
     expect(await fse.pathExists(path.join(service, 'config/_cache.yml'))).toBe(true)
