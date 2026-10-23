@@ -1,12 +1,13 @@
 import type { Linter } from 'eslint'
 import type { AppType } from '../src/cli-types.js'
+import { mkdtemp, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { ESLint } from 'eslint'
-import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
-const tmpRoot = path.join(process.cwd(), `.tmp-template-quality-${process.pid}`)
+/** 每次运行独有的目录，避免进程 ID 复用导致误删其他运行中的工程。 */
+let tmpRoot = ''
 const linters = new Map<string, ESLint>()
 
 const projectTypes: AppType[] = ['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack']
@@ -14,7 +15,7 @@ const linterNames = ['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack',
 const svelteAppNames = ['admin', 'website', 'h5', 'mobile-app', 'web', 'app', 'desktop'] as const
 
 beforeAll(async () => {
-  await fse.remove(tmpRoot)
+  tmpRoot = await mkdtemp(path.join(process.cwd(), '.tmp-template-quality-'))
   for (const appType of projectTypes) {
     const name = `quality-${appType}`
     const projectPath = path.join(tmpRoot, name)
@@ -35,7 +36,13 @@ beforeAll(async () => {
 }, 120_000)
 
 afterAll(async () => {
-  await fse.remove(tmpRoot)
+  if (!tmpRoot)
+    return
+  const target = path.resolve(tmpRoot)
+  if (path.dirname(target) !== process.cwd() || !path.basename(target).startsWith('.tmp-template-quality-'))
+    throw new Error('Unexpected template quality cleanup directory')
+  // Windows 扫描器可能短暂持有刚生成的文件；只在已确认归属的目录内重试。
+  await rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
 })
 
 async function lint(name: string, code: string, filePath = 'src/quality.ts'): Promise<Linter.LintMessage[]> {

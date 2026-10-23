@@ -92,16 +92,14 @@ beforeAll(async () => {
   tmpRoot = await mkdtemp(path.join(process.cwd(), '.tmp-e2e-test-'))
 })
 
-it('默认提供开发期部署工具，关闭时移除入口，并忽略任意深度的依赖快照', async () => {
-  for (const enabled of [true, false]) {
-    const project = path.join(tmpRoot, `deployment-${enabled}`)
-    await generateFromTemplates(project, buildTemplateContext({ name: `deployment-${enabled}`, appType: 'fullstack', features: [], deploy: enabled, packageManager: 'pnpm' }))
-    const manifest = JSON.parse(await readGenerated(project, 'package.json'))
-    expect(manifest.dependencies['@h-ai/deploy']).toBeUndefined()
-    expect(manifest.devDependencies['@h-ai/deploy']).toBe(enabled ? 'catalog:' : undefined)
-    expect(manifest.scripts.deploy).toBe(enabled ? `hai deploy packages/deployment-${enabled}-serv` : undefined)
-    expect(await readGenerated(project, '.gitignore')).toContain('**/images/dependencies/')
-  }
+it.each([true, false])('部署工具选项 %s 保持依赖、入口和镜像忽略规则一致', async (enabled) => {
+  const project = path.join(tmpRoot, `deployment-${enabled}`)
+  await generateFromTemplates(project, buildTemplateContext({ name: `deployment-${enabled}`, appType: 'fullstack', features: [], deploy: enabled, packageManager: 'pnpm' }))
+  const manifest = JSON.parse(await readGenerated(project, 'package.json'))
+  expect(manifest.dependencies['@h-ai/deploy']).toBeUndefined()
+  expect(manifest.devDependencies['@h-ai/deploy']).toBe(enabled ? 'catalog:' : undefined)
+  expect(manifest.scripts.deploy).toBe(enabled ? `hai deploy packages/deployment-${enabled}-serv` : undefined)
+  expect(await readGenerated(project, '.gitignore')).toContain('**/images/dependencies/')
 })
 
 afterAll(async () => {
