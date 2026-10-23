@@ -3,13 +3,15 @@
 import type { Buffer } from 'node:buffer'
 import type { ChildProcess } from 'node:child_process'
 import { spawn, spawnSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { appendFile, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { crypto } from '@h-ai/crypto'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
 
@@ -20,39 +22,114 @@ const roots: string[] = []
 const processes: ChildProcess[] = []
 const clients: Array<ReturnType<typeof crypto.transport.createClient>> = []
 const serverOutputs: Array<() => string> = []
+const environments = new Map<string, NodeJS.ProcessEnv>()
+let evidence = ''
+
+beforeAll(async () => {
+  if (!enabled)
+    return
+  const parent = path.join(repository, 'tmp/validation/cli-generate-runtime')
+  await mkdir(parent, { recursive: true })
+  evidence = await mkdtemp(path.join(parent, 'run-'))
+})
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  for (const output of serverOutputs.splice(0))
-    await appendFile(path.join(repository, 'tmp/module-repair-20261022/CLI-01/runtime-servers.log'), `${output()}\n`)
-  for (const child of processes.splice(0)) {
-    if (child.exitCode !== null)
-      continue
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Generated server did not close')), 15_000)
-      child.once('close', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-      child.kill()
-    })
+  const failures: unknown[] = []
+  try {
+    for (const output of serverOutputs.splice(0))
+      await appendFile(path.join(evidence, 'runtime-servers.log'), `${output()}\n`)
   }
-  for (const root of roots.splice(0)) {
-    if (path.dirname(root) !== tempParent || !path.basename(root).startsWith('cli-generate-runtime-'))
-      throw new Error('Unexpected runtime cleanup path')
-    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  catch (error) {
+    failures.push(error)
   }
-  for (const client of clients.splice(0))
-    client.destroy()
-  await crypto.close()
-})
+  finally {
+    // 日志持久化失败也必须收回所有句柄；任一清理失败不能阻断其他独立资源的回收。
+    let processCleanupFailed = false
+    for (const child of processes.splice(0)) {
+      try {
+        if (child.exitCode !== null || child.signalCode !== null)
+          continue
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('Generated server did not close')), 15_000)
+          child.once('close', () => {
+            clearTimeout(timer)
+            resolve()
+          })
+          child.kill()
+        })
+      }
+      catch (error) {
+        processCleanupFailed = true
+        failures.push(error)
+      }
+    }
+    for (const root of roots.splice(0)) {
+      if (processCleanupFailed)
+        continue
+      try {
+        if (path.dirname(root) !== tempParent || !path.basename(root).startsWith('cli-generate-runtime-')) {
+          failures.push(new Error('Unexpected runtime cleanup path'))
+          continue
+        }
+        await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+      }
+      catch (error) {
+        failures.push(error)
+      }
+      environments.delete(root)
+    }
+    for (const client of clients.splice(0)) {
+      try {
+        client.destroy()
+      }
+      catch (error) {
+        failures.push(error)
+      }
+    }
+    try {
+      await crypto.close()
+    }
+    catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length)
+    throw new AggregateError(failures, 'Generated runtime evidence or cleanup failed')
+}, 30_000)
+
+/** 编译器和真实服务仅使用本轮明确后端；不继承开发者的模块或私有 dotenv 配置。 */
+function runtimeEnvironment(cwd: string): NodeJS.ProcessEnv {
+  const root = roots.find(root => cwd.startsWith(`${root}${path.sep}`))
+  if (!root)
+    throw new Error('Generated runtime requires an owned temporary project')
+  let env = environments.get(root)
+  if (!env) {
+    const data = path.join(root, 'runtime-data')
+    env = {
+      ...process.env,
+      ...createE2eServerEnv({
+        HAI_E2E_DATA_ROOT: data,
+        HAI_CORE_ENV: 'test',
+        HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(data, 'app.db') }),
+        HAI_CACHE: JSON.stringify({ type: 'memory' }),
+        HAI_STORAGE: JSON.stringify({ type: 'local', root: path.join(data, 'uploads') }),
+        HAI_VECDB: JSON.stringify({ type: 'lancedb', path: path.join(data, 'vecdb') }),
+        HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
+        HAI_ADMIN_DEFAULT_PASSWORD: `Aa1!${randomBytes(24).toString('base64url')}`,
+      }),
+    }
+    environments.set(root, env)
+  }
+  return env
+}
 
 /** 从已安装工具的真实 bin 启动，复用仓库依赖，不触发自动 install 或全量构建。 */
 async function tool(name: 'tsup' | 'vite' | 'eslint' | 'typescript', args: string[], cwd: string): Promise<void> {
   const manifestPath = fileURLToPath(import.meta.resolve(`${name}/package.json`))
   const manifest: { bin: Record<string, string> } = JSON.parse(await readFile(manifestPath, 'utf8'))
-  const result = spawnSync(process.execPath, [path.join(path.dirname(manifestPath), manifest.bin[name === 'typescript' ? 'tsc' : name]!), ...args], { cwd, windowsHide: true, encoding: 'utf8', timeout: 120_000, env: { ...process.env, HAI_E2E: '1', NODE_ENV: 'test' } })
-  await appendFile(path.join(repository, 'tmp/module-repair-20261022/CLI-01/runtime-builds.log'), `${cwd}\n${result.stdout}\n${result.stderr}\n`)
+  const result = spawnSync(process.execPath, [path.join(path.dirname(manifestPath), manifest.bin[name === 'typescript' ? 'tsc' : name]!), ...args], { cwd, windowsHide: true, encoding: 'utf8', timeout: 120_000, env: runtimeEnvironment(cwd) })
+  await appendFile(path.join(evidence, 'runtime-builds.log'), `${cwd}\n${result.stdout}\n${result.stderr}\n`)
   expect(result.error?.message).toBeUndefined()
   expect(result.status, result.stderr).toBe(0)
 }
@@ -72,7 +149,7 @@ async function port(): Promise<number> {
 async function start(cwd: string, args: string[], selectedPort: number): Promise<string> {
   let output = ''
   serverOutputs.push(() => output)
-  const child = spawn(process.execPath, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NODE_ENV: 'test', HAI_E2E: '1', HAI_CORE_ENV: 'test', PORT: String(selectedPort), HOST: '127.0.0.1', HAI_SERV_SERVER_PORT: String(selectedPort) } })
+  const child = spawn(process.execPath, args, { cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...runtimeEnvironment(cwd), PORT: String(selectedPort), HOST: '127.0.0.1', HAI_SERV_SERVER_PORT: String(selectedPort) } })
   processes.push(child)
   const capture = (data: Buffer) => {
     output = (output + data.toString()).slice(-16_000)
@@ -111,7 +188,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
       await generate({ type: 'page', name: 'route-page', cwd: project })
       await tool('vite', ['build'], project)
-      base = await start(project, ['--env-file=.env', '--env-file=.env.dev', '--env-file-if-exists=.env.local', 'build/index.js'], selectedPort)
+      base = await start(project, ['--env-file=.env', '--env-file=.env.dev', 'build/index.js'], selectedPort)
       const page = await fetch(`${base}/route-page`)
       expect(page.status).toBe(200)
       expect(await page.text()).toContain('RoutePage')
@@ -128,7 +205,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await tool('typescript', ['--noEmit'], service)
       await tool('tsup', [], service)
       const environmentRoot = appType === 'api' ? service : project
-      base = await start(service, [`--env-file=${path.join(environmentRoot, '.env')}`, `--env-file=${path.join(environmentRoot, '.env.dev')}`, `--env-file-if-exists=${path.join(environmentRoot, '.env.local')}`, 'dist/index.js'], selectedPort)
+      base = await start(service, [`--env-file=${path.join(environmentRoot, '.env')}`, `--env-file=${path.join(environmentRoot, '.env.dev')}`, 'dist/index.js'], selectedPort)
       if (appType === 'fullstack') {
         expect((await crypto.init()).success).toBe(true)
         const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange` })

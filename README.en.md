@@ -672,7 +672,7 @@ Choose commands by impact scope; use root commands for cross-package contracts o
 | End-to-end         | `pnpm e2e`                | UI / routes / end-to-end flows                           |
 | Release acceptance | `pnpm test:release-local` | Full pre-release validation (installation → E2E)         |
 
-> Use `pnpm.cmd` in Windows PowerShell. Root `pnpm e2e` covers CLI scaffolding and Playwright suites for Admin Console, AI Playground, Corporate Website, H5, and Mobile Web. Container unit tests require working Docker / Podman.
+> Use `pnpm.cmd` in Windows PowerShell. Root `pnpm test` runs up to four packages without Testcontainers dependencies concurrently, further limited by available CPUs and memory, then schedules container packages serially. Each package uses at most two file workers; the groups do not rebuild shared outputs simultaneously. Root `pnpm e2e` covers CLI scaffolding, deployment runtime and locks, and Playwright suites for Admin Console, AI Playground, Corporate Website, H5, and Mobile Web. Container unit tests require working Docker / Podman.
 
 ### Commit checks (Leak Hooks)
 

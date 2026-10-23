@@ -305,6 +305,7 @@ describe('createProject — api 类型', () => {
     const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
 
     expect(pkg.scripts.build).toBe('hai build')
+    expect(pkg.scripts.compile).toBe('pnpm -r --if-present build')
     expect(servicePkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'apps/proj-api-service/data/.gitkeep')).toBe(true)
     expect(dockerfile).toContain('pnpm pm deploy --filter proj-api-service --prod')
@@ -933,6 +934,7 @@ describe('createProject — fullstack 类型', () => {
     const pkg = await readJson(projectPath, 'package.json')
     expectNonWorkspaceDepsUseCatalog(pkg)
     expect(pkg.scripts['i18n:compile']).toBe('pnpm --filter proj-fullstack-shared paraglide:compile && pnpm --filter proj-fullstack-web paraglide:compile && pnpm --filter proj-fullstack-app paraglide:compile && pnpm --filter proj-fullstack-desktop paraglide:compile')
+    expect(pkg.scripts.compile).toBe('pnpm i18n:compile && pnpm -r --if-present build')
     expect(pkg.scripts.build).toBe('hai build')
     expect(pkg.scripts.deploy).toBe('hai deploy packages/proj-fullstack-serv')
     expect(pkg.scripts.typecheck).toBe('pnpm --filter proj-fullstack-contract build && pnpm i18n:compile && pnpm -r --if-present typecheck')

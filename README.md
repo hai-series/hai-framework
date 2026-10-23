@@ -672,7 +672,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 | 端到端   | `pnpm e2e`                | UI / 路由 / 端到端流程        |
 | 发布验收 | `pnpm test:release-local` | 发布前全量验收（安装→E2E）    |
 
-> Windows PowerShell 下使用 `pnpm.cmd`。仓库级 `pnpm e2e` 覆盖 CLI 脚手架门禁与 Admin Console、AI Playground、Corporate Website、H5、Mobile Web 的 Playwright 套件；容器单测需要可用的 Docker / Podman。
+> Windows PowerShell 下使用 `pnpm.cmd`。根 `pnpm test` 先将无 Testcontainers 依赖的包并行执行（最多 4 包，再受可用 CPU 和内存限制），再串行调度容器包；每包最多两个文件 worker，两组不同时重写共享构建产物。仓库级 `pnpm e2e` 覆盖 CLI 脚手架门禁、部署运行时与锁，以及 Admin Console、AI Playground、Corporate Website、H5、Mobile Web 的 Playwright 套件；容器单测需要可用的 Docker / Podman。
 
 ### 提交校验（Leak Hooks）
 

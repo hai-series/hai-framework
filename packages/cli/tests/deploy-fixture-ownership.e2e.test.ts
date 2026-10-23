@@ -22,7 +22,7 @@ function runtime(): DeployFixtureRuntime | undefined {
   return undefined
 }
 
-const selected = runtime()
+const selected = process.env.HAI_DEPLOY_E2E === '1' ? runtime() : undefined
 if (process.env.HAI_DEPLOY_E2E === '1' && !selected)
   throw new Error('Deployment ownership gate requires a reachable container engine')
 const enabled = process.env.HAI_DEPLOY_E2E === '1' && selected !== undefined
@@ -169,6 +169,25 @@ describe.skipIf(!enabled)('部署夹具资源拥有权（真实引擎）', () =>
     fixtures.set(a.containerId, a)
     const b = await createDeployTestFixture(selected!, imageRef, '', directory, undefined, { command: probeCommand })
     fixtures.set(b.containerId, b)
+    // PID1 必须真实回收 exec 父进程退出后的孤儿；不能只检查 --init 配置项。
+    const orphanMarker = `hai-orphan-${randomBytes(12).toString('hex')}`
+    const childCode = `/* ${orphanMarker} */setInterval(()=>{},1000)`
+    const orphanOutput = await executeDeployTestFixture(selected!, a, ['node', '-e', `const{spawn}=require('node:child_process');const children=Array.from({length:3},()=>{const child=spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{detached:true,stdio:'ignore'});child.unref();return child.pid});process.stdout.write(children.join(','))`], { timeoutMs: 10_000 })
+    const orphanPids = orphanOutput.split(',').map(Number)
+    expect(orphanPids).toHaveLength(3)
+    expect(orphanPids.every(pid => Number.isSafeInteger(pid) && pid > 1)).toBe(true)
+    const owned = `const fs=require('node:fs');const pids=${JSON.stringify(orphanPids)};const marker=${JSON.stringify(orphanMarker)};const owns=pid=>{try{return fs.readFileSync('/proc/'+pid+'/cmdline','utf8').includes(marker)}catch{return false}};`
+    try {
+      const reaped = await executeDeployTestFixture(selected!, a, ['node', '-e', `${owned}
+for(const pid of pids){if(!owns(pid))throw new Error('Owned orphan is missing');if(!/^PPid:\\s+1$/m.test(fs.readFileSync('/proc/'+pid+'/status','utf8')))throw new Error('Orphan was not adopted by PID1');process.kill(pid,'SIGTERM')}
+const deadline=Date.now()+4000;const timer=setInterval(()=>{if(pids.every(pid=>!fs.existsSync('/proc/'+pid))){clearInterval(timer);process.stdout.write('REAPED:'+pids.length)}else if(Date.now()>deadline){clearInterval(timer);process.exitCode=1}},20)
+`], { timeoutMs: 10_000 })
+      expect(reaped).toBe('REAPED:3')
+    }
+    finally {
+      // 只处理本轮记录且仍带独有 marker 的 PID，失败也不触碰 sentinel 或复用后的其他 PID。
+      await executeDeployTestFixture(selected!, a, ['node', '-e', `${owned}for(const pid of pids){if(owns(pid)){try{process.kill(pid,'SIGKILL')}catch(error){if(error.code!=='ESRCH')throw error}}}`], { timeoutMs: 10_000 })
+    }
     const ports = [a, b, sentinel].flatMap(fixture => [fixture.sshHostPort, fixture.webHostPort, fixture.apiHostPort])
     expect(new Set(ports).size).toBe(9)
     await Promise.all([expectReachable(a), expectReachable(b), expectReachable(sentinel)])
@@ -189,11 +208,32 @@ describe.skipIf(!enabled)('部署夹具资源拥有权（真实引擎）', () =>
     await expectReachable(sentinel)
   }, 120_000)
 
-  it('真实start失败回收已创建ID，create名称冲突不删除foreign容器', async () => {
+  it('真实启动进程失败回收已创建ID，create名称冲突不删除foreign容器', async () => {
     const failedRunId = randomBytes(16).toString('hex')
     run(['tag', otherBaseRef, failedRef])
     images.set(failedRef, recordDeployTestImage(selected!, failedRef))
-    await expect(createDeployTestFixture(selected!, failedRef, '', directory, failedRunId, { command: ['/hai-deploy-fixture-nonexistent-process'] })).rejects.toThrow()
+    const failedStartup = createDeployTestFixture(selected!, failedRef, '', directory, failedRunId, {
+      command: ['/hai-deploy-fixture-nonexistent-process'],
+      prepare: async (fixture) => {
+        // --init 自身可正常启动；必须观察其受控子命令的真实非零退出，不能假设 start 同步拒绝。
+        const deadline = Date.now() + 5000
+        while (Date.now() < deadline) {
+          const [running, exit] = run(['container', 'inspect', '--format', '{{.State.Running}} {{.State.ExitCode}}', fixture.containerId]).split(' ')
+          if (running === 'false') {
+            expect(Number.isInteger(Number(exit))).toBe(true)
+            expect(Number(exit)).toBeGreaterThan(0)
+            throw new Error('Fixture startup command exited unsuccessfully')
+          }
+          await new Promise(resolve => setTimeout(resolve, 25))
+        }
+        throw new Error('Fixture startup command did not exit')
+      },
+    }).then((fixture) => {
+      // 工厂若意外成功，断言仍失败，但已返回的真实拥有 ID 必须进入 afterAll 账本。
+      fixtures.set(fixture.containerId, fixture)
+      return fixture
+    })
+    await expect(failedStartup).rejects.toThrow('Fixture startup command exited unsuccessfully')
     expect(run(['ps', '-aq', '--filter', `label=${DEPLOY_FIXTURE_OWNER_LABEL}=${failedRunId}`])).toBe('')
     const collisionDirectory = path.join(directory, 'collision')
     mkdirSync(collisionDirectory)

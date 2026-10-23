@@ -1,29 +1,31 @@
 import { Buffer } from 'node:buffer'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest'
 
 const BLOCKED_TERM = 'fixture-blocked-词语'
 const LINE_COUNT = 8000
 const LARGE_CONTENT = `${'safe '.repeat(32)}\n`.repeat(LINE_COUNT)
 let directory
 let baseOid
+let seed
 
 function git(args) {
   return execFileSync('git', args, { cwd: directory, encoding: 'utf8', windowsHide: true }).trim()
 }
 
-beforeEach(() => {
+beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'hai-leak-words-'))
+  seed = directory
   mkdirSync(join(directory, 'scripts'))
   copyFileSync(resolve(import.meta.dirname, '../check-leak-words.mjs'), join(directory, 'scripts/check-leak-words.mjs'))
   git(['init', '--quiet'])
   git(['config', 'user.name', 'Leak Checker Test'])
   git(['config', 'user.email', 'leak-checker@example.invalid'])
-  git(['config', 'core.hooksPath', join(directory, '.git/hooks')])
+  git(['config', 'core.hooksPath', '.git/hooks'])
   git(['config', 'commit.gpgsign', 'false'])
   git(['config', 'core.autocrlf', 'false'])
   writeFileSync(join(directory, 'initial.txt'), 'initial\n')
@@ -32,7 +34,14 @@ beforeEach(() => {
   baseOid = git(['rev-parse', 'HEAD'])
 })
 
+beforeEach(() => {
+  directory = mkdtempSync(join(tmpdir(), 'hai-leak-words-'))
+  // 每例有独立索引和历史，只复用一次初始化的空白仓库，避免反复启动 git 配置进程。
+  cpSync(seed, directory, { recursive: true })
+})
+
 afterEach(() => rmSync(directory, { recursive: true, force: true }))
+afterAll(() => rmSync(seed, { recursive: true, force: true }))
 
 function check(args, input) {
   const result = spawnSync(process.execPath, [join(directory, 'scripts/check-leak-words.mjs'), ...args], {

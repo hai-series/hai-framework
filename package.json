@@ -24,7 +24,7 @@
     "model:list": "node packages/ai/models/build.mjs list",
     "model:prepare": "node packages/ai/models/build.mjs prepare",
     "model:run": "node packages/ai/models/build.mjs run",
-    "test": "pnpm test:scripts && turbo run test --concurrency=1",
+    "test": "pnpm test:scripts && node scripts/run-tests.mjs",
     "test:scripts": "vitest run --config scripts/vitest.config.ts",
     "test:coverage": "turbo run test:coverage",
     "typecheck": "turbo run typecheck",

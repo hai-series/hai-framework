@@ -1,14 +1,18 @@
 import type { Linter } from 'eslint'
 import type { AppType } from '../src/cli-types.js'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { ESLint } from 'eslint'
+import ts from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
+import { createProject } from '../src/commands/cli-create.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 /** 每次运行独有的目录，避免进程 ID 复用导致误删其他运行中的工程。 */
 let tmpRoot = ''
 const linters = new Map<string, ESLint>()
+const mobileProjects = new Map<boolean, string>()
 
 const projectTypes: AppType[] = ['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack']
 const linterNames = ['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack', 'web', 'app', 'desktop'] as const
@@ -28,6 +32,12 @@ beforeAll(async () => {
         linters.set(target, new ESLint({ cwd: frontendPath, overrideConfigFile: path.join(frontendPath, 'eslint.config.js') }))
       }
     }
+  }
+  // 两个真实创建分支共享同一套 lint 配置；只初始化已有 mobile linter，不重复加载插件。
+  for (const encrypted of [true, false]) {
+    const cwd = path.join(tmpRoot, `mobile-transport-${encrypted}`)
+    await createProject({ name: 'mobile-test', appType: 'mobile-app', template: 'custom', features: encrypted ? ['iam'] : ['api-client', 'capacitor'], yes: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd, examples: false })
+    mobileProjects.set(encrypted, path.join(cwd, 'mobile-test'))
   }
   // 首次初始化会加载全部 lint 插件，放在有明确超时的准备阶段。
   for (const eslint of linters.values()) {
@@ -61,7 +71,44 @@ async function lintFiles(name: string, patterns: string[]): Promise<Linter.LintM
   return results.flatMap(result => result.messages.filter(message => message.severity === 2))
 }
 
-describe.each(linterNames)('生成项目 %s 的质量门禁', (name) => {
+describe('实际移动工程的静态消费契约', () => {
+  it.each([true, false])('crypto=%s 的依赖、catalog 和公开配置与实际消费者一致', async (encrypted) => {
+    const project = mobileProjects.get(encrypted)
+    if (!project)
+      throw new Error('Missing generated mobile project')
+    const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
+    const workspace = parse(await readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8')) as { catalog: Record<string, string> }
+    const consumer = await readFile(path.join(project, 'src/lib/api.ts'), 'utf8')
+    const vite = await readFile(path.join(project, 'vite.config.ts'), 'utf8')
+    const environment = await readFile(path.join(project, '.env.example'), 'utf8')
+    expect(Boolean(manifest.dependencies['@h-ai/crypto'])).toBe(encrypted)
+    expect(Boolean(workspace.catalog['@h-ai/crypto'])).toBe(encrypted)
+    expect(consumer.includes('from \'@h-ai/crypto\'')).toBe(encrypted)
+    expect(vite.includes('apiTransport: process.env.PUBLIC_API_TRANSPORT')).toBe(encrypted)
+    if (encrypted) {
+      expect(environment).toContain('PUBLIC_API_TRANSPORT=')
+      expect(environment).toContain('PUBLIC_API_KEY_EXCHANGE_PATH=')
+    }
+    expect(manifest.dependencies['@h-ai/reldb']).toBeUndefined()
+    expect(manifest.dependencies['@h-ai/iam']).toBeUndefined()
+    expect(manifest.dependencies['@h-ai/cache']).toBeUndefined()
+    expect(await lint('mobile-app', consumer, 'src/lib/api.ts')).toEqual([])
+    expect(await lint('mobile-app', vite, 'vite.config.ts')).toEqual([])
+  }, 30_000)
+
+  it('crypto 开关的实际消费者一次解析公共类型声明并保持严格检查', () => {
+    const consumers = [...mobileProjects.values()].map(project => path.join(project, 'src/lib/api.ts'))
+    expect(consumers).toHaveLength(2)
+    // 复用仓库已安装的真实声明，不把静态消费检查当作独立安装验收。
+    const program = ts.createProgram(consumers, { noEmit: true, strict: true, skipLibCheck: true, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.Bundler, types: ['node', 'vite/client'] })
+    const diagnostics = ts.getPreEmitDiagnostics(program)
+    expect(diagnostics.map(item => ts.flattenDiagnosticMessageText(item.messageText, '\n'))).toEqual([])
+  }, 30_000)
+})
+
+// 共享规则的语法边界只跑一套；各生成配置仍用真实 ESLint 验证接线和覆盖规则。
+describe('共享质量规则', () => {
+  const name = 'admin'
   it.each([
     ['显式 any', 'export const value: any = 1\n', 'ts/no-explicit-any'],
     ['console.log', 'console.log(\'value\')\n', 'no-console'],
@@ -110,6 +157,45 @@ describe.each(linterNames)('生成项目 %s 的质量门禁', (name) => {
   ])('保留%s', async (_label, code) => {
     const messages = await lint(name, code)
     expect(messages).toEqual([])
+  })
+})
+
+describe.each(linterNames.filter(name => name !== 'admin'))('生成项目 %s 的质量规则接线', (name) => {
+  it('实际配置保留全部禁止规则及 JS 作用域检查', async () => {
+    const code = `/* eslint-disable */
+// @ts-ignore
+// @ts-nocheck
+// @ts-expect-error
+export const value: any = {} as unknown as { value: string }
+console.log(value)
+export { core } from '@h-ai/core/src/index.js'
+export const internal = import('@h-ai/core/dist/index.js')
+localStorage.setItem('accessToken', 'value')
+window.localStorage.setItem('refresh_token', 'value')
+`
+    // 无限禁用本身应失败；其余规则另用未禁用代码验证，避免豁免掩盖接线缺失。
+    expect(await lint(name, code)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ruleId: 'eslint-comments/no-unlimited-disable', severity: 2 }),
+      expect.objectContaining({ ruleId: 'eslint-comments/require-description', severity: 2 }),
+    ]))
+    const messages = await lint(name, code.replace('/* eslint-disable */\n', ''))
+    for (const ruleId of ['ts/no-explicit-any', 'ts/ban-ts-comment', 'no-console', 'no-restricted-syntax', 'no-restricted-imports'])
+      expect(messages).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId, severity: 2 })]))
+    const javascript = await lint(name, 'import fs from \'node:fs\'\n\nconst unused = 1\nconsole.warn(\'value\')\n', 'src/quality.js')
+    for (const ruleId of ['no-console', 'unused-imports/no-unused-vars', 'unused-imports/no-unused-imports'])
+      expect(javascript).toEqual(expect.arrayContaining([expect.objectContaining({ ruleId, severity: 2 })]))
+  })
+
+  it('公开入口、合理豁免和实际使用的 JS 表达式可通过', async () => {
+    expect(await lint(name, `export { core } from '@h-ai/core'
+export { createIamClient } from '@h-ai/iam/client'
+// eslint-disable-next-line no-restricted-syntax -- 第三方声明缺少字段，已核对实际返回类型
+export const value = {} as unknown as { value: string }
+// @ts-expect-error: 第三方声明尚未支持当前浏览器 API，升级后删除
+export const text: string = 1
+localStorage.setItem('theme', 'dark')
+`)).toEqual([])
+    expect(await lint(name, 'const value = 1\nexport const result = value + 1\n', 'src/quality.js')).toEqual([])
   })
 })
 

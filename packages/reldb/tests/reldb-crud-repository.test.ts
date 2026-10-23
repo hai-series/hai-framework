@@ -680,9 +680,9 @@ describe('db.BaseReldbCrudRepository', () => {
     })
   }
 
-  defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'))
+  defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'), { resetConnection: true })
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'))
+  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'), { resetConnection: true })
 
-  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'))
+  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'), { resetConnection: true })
 })

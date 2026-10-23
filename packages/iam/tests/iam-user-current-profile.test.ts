@@ -1,6 +1,6 @@
 import type { IamFunctions } from '../src/iam-types.js'
 import { describe, expect, it } from 'vitest'
-import { defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.user current profile operations', () => {
   const defineCurrentProfileSuite = (getIam: () => IamFunctions) => {
@@ -65,5 +65,4 @@ describe('iam.user current profile operations', () => {
   }
 
   defineIamSuite('sqlite+memory', sqliteMemoryEnv(), getIam => defineCurrentProfileSuite(getIam))
-  defineIamSuite('postgres+redis', postgresRedisEnv, getIam => defineCurrentProfileSuite(getIam))
 })

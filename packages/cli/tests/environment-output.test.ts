@@ -54,8 +54,10 @@ describe('generated environment profiles', () => {
     const service = appType === 'api' ? path.join(project, 'apps', `${name}-service`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
     await expectProfiles(appType === 'api' ? service : project, service)
   })
+})
 
-  it.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('fresh CLI Node 入口生成的 API 环境文件可由 Core 消费', async () => {
+describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environment output gates', () => {
+  it('fresh CLI Node 入口生成的 API 环境文件可由 Core 消费', async () => {
     const root = await fixture()
     const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--yes', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
     expect(created.error).toBeUndefined()

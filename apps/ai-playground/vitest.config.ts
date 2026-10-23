@@ -8,6 +8,7 @@ export default defineConfig({
     },
   },
   test: {
+    maxWorkers: 2,
     globals: true,
     environment: 'node',
     // 单元测试统一放在独立的 tests/ 目录，排除 Playwright 的 e2e 用例

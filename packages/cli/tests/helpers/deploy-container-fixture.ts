@@ -342,6 +342,7 @@ export async function createDeployTestFixture(runtime: DeployFixtureRuntime, ima
     const cidfile = path.join(directory, `fixture-${runId}.cid`)
     const output = command(runtime, [
       'create',
+      '--init',
       '--pull=never',
       '--network=bridge',
       ...(runtime === 'podman' ? ['--http-proxy=false'] : []),

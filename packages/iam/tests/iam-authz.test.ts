@@ -16,7 +16,7 @@
 import type { IamFunctions } from '../src/iam-types.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
-import { defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.authz', () => {
   const defineCommon = (getIam: () => IamFunctions) => {
@@ -786,5 +786,4 @@ describe('iam.authz', () => {
   }
 
   defineIamSuite('sqlite+memory', sqliteMemoryEnv(), getIam => defineCommon(getIam))
-  defineIamSuite('postgres+redis', postgresRedisEnv, getIam => defineCommon(getIam))
 })

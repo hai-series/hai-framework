@@ -36,6 +36,7 @@ export function defineDbSuite(
   label: string,
   setup: () => Promise<DbTestEnv> | DbTestEnv,
   defineTests: () => void,
+  options: { resetConnection?: boolean } = {},
 ): void {
   describe.sequential(`db (${label})`, () => {
     let env: DbTestEnv | null = null
@@ -45,6 +46,9 @@ export function defineDbSuite(
     }, 300000)
 
     beforeEach(async () => {
+      // 网络数据库本就保留同一份表数据；普通 SQL/DDL 场景复用池，事务和生命周期仍逐例重建。
+      if (!options.resetConnection && env!.config.type !== 'sqlite' && reldb.isInitialized)
+        return
       await reldb.close()
       const initResult = await reldb.init(env!.config)
       if (!initResult.success) {
@@ -54,12 +58,18 @@ export function defineDbSuite(
     }, 120000)
 
     afterEach(async () => {
-      await reldb.close()
+      if (options.resetConnection || env!.config.type === 'sqlite')
+        await reldb.close()
     })
 
     afterAll(async () => {
-      await env?.release?.()
-      env = null
+      try {
+        await reldb.close()
+      }
+      finally {
+        await env?.release?.()
+        env = null
+      }
     }, 300000)
 
     defineTests()

@@ -6,7 +6,7 @@ import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { reldb } from '@h-ai/reldb'
-import { expect, it } from 'vitest'
+import { afterAll, beforeAll, expect, it } from 'vitest'
 import { mysqlEnv } from '../../reldb/tests/helpers/reldb-test-suite.js'
 import { acquireQdrantContainer } from '../../vecdb/tests/helpers/qdrant-container.js'
 
@@ -25,6 +25,16 @@ interface NodeMessage {
 }
 
 type MysqlConfigInput = Extract<ReldbConfigInput, { type: 'mysql' }>
+
+let mysql: Awaited<ReturnType<typeof mysqlEnv>>
+
+beforeAll(async () => {
+  mysql = await mysqlEnv()
+}, 180_000)
+
+afterAll(async () => {
+  await mysql?.release?.()
+})
 
 function start(dbConfig: ReldbConfigInput, vectorUrl: string, barrier = false) {
   const child = spawn(process.execPath, [fileURLToPath(new URL('./fixtures/store-index-node.mjs', import.meta.url))], {
@@ -110,7 +120,7 @@ async function withDatabase(operation: (context: {
   node: (config?: MysqlConfigInput, barrier?: boolean) => ReturnType<typeof start>
   account: (user: string) => void
 }) => Promise<void>): Promise<void> {
-  const env = await mysqlEnv()
+  const env = mysql
   let vectors: Awaited<ReturnType<typeof acquireQdrantContainer>> | undefined
   const nodes: ReturnType<typeof start>[] = []
   const accounts: string[] = []
@@ -158,7 +168,7 @@ async function withDatabase(operation: (context: {
       await capture(async () => expect((await reldb.sql.execute(`DROP DATABASE ${database}`)).success).toBe(true))
     await capture(async () => expect((await reldb.close()).success).toBe(true))
     await capture(async () => expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true))
-    await Promise.all([capture(async () => env.release?.()), capture(async () => vectors?.release())])
+    await capture(async () => vectors?.release())
   }
   if (failures.length === 1)
     throw failures[0]

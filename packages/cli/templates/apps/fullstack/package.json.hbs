@@ -15,7 +15,7 @@
     "start:prod": "pnpm --filter {{fullstack.servPackageName}} start:prod",
     "dev:test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev:test",
     "dev:prod": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm --parallel --filter {{fullstack.servPackageName}}{{#each fullstack.frontendApps}} --filter {{packageName}}{{/each}} dev:prod",
-    "compile": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present build",
+    "compile": "pnpm i18n:compile && pnpm -r --if-present build",
     "build": "hai build",
 {{#if features.deploy}}
     "deploy": "hai deploy packages/{{projectName}}-serv",

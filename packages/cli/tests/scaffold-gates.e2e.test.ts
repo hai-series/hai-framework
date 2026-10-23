@@ -366,20 +366,27 @@ async function runQualityGates(projectPath: string, envOptions: GateEnvOptions =
   await runPnpm(projectPath, ['lint'], envOptions)
   // 注入仅属于构建机器的公开值，确认 Vite 和 Kit 都不会将 .env.local 固化进交付包。
   const sentinel = 'hai-build-must-ignore-local-1792584600'
-  if (existsSync(path.join(projectPath, 'svelte.config.js')))
+  const checksBuildIsolation = existsSync(path.join(projectPath, 'svelte.config.js'))
+  if (checksBuildIsolation)
     appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\n`)
-  await runPnpm(projectPath, ['build'], envOptions)
+  await runPnpm(projectPath, ['test'], envOptions)
+  // 各模板的 E2E 入口或 webServer 自带完整构建，保留一次真实编译和浏览器验收。
+  await runPnpm(projectPath, ['test:e2e'], envOptions)
+  if (!checksBuildIsolation)
+    return
+  let checkedFiles = 0
   for (const output of ['build', 'dist', '.svelte-kit/output']) {
     const directory = path.join(projectPath, output)
     if (!existsSync(directory))
       continue
     for (const file of readdirSync(directory, { recursive: true })) {
-      if (/\.(?:js|json|html|css|map)$/.test(String(file)))
+      if (/\.(?:js|json|html|css|map)$/.test(String(file))) {
+        checkedFiles++
         expect(readFileSync(path.join(directory, String(file)), 'utf8'), `Build leaked .env.local into ${output}/${String(file)}`).not.toContain(sentinel)
+      }
     }
   }
-  await runPnpm(projectPath, ['test'], envOptions)
-  await runPnpm(projectPath, ['test:e2e'], envOptions)
+  expect(checkedFiles, 'Build isolation requires actual generated output files').toBeGreaterThan(0)
 }
 
 function runNode(args: string[]): void {

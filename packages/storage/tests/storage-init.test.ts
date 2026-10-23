@@ -11,7 +11,7 @@ import * as path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
 import { HaiStorageError } from '../src/storage-types.js'
-import { defineS3StorageSuites, defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+import { defineS3StorageSuites, defineStorageSuite, localStorageEnv } from './helpers/storage-test-suite.js'
 
 const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-init-'))
 
@@ -21,26 +21,21 @@ afterAll(() => {
 
 describe('storage.init', () => {
   const defineCommon = (label: 'local' | 's3') => {
-    it(`${label}: init 后应记录配置并处于已初始化状态`, () => {
+    it(`${label}: 初始化配置脱敏，关闭后入口受保护，重复关闭幂等`, async () => {
       expect(storage.isInitialized).toBe(true)
       expect(storage.config?.type).toBe(label)
-    })
-
-    it(`${label}: close 后应恢复未初始化状态`, async () => {
-      const result = await storage.close()
-      expect(result.success).toBe(true)
-      expect(storage.isInitialized).toBe(false)
-      expect(storage.config).toBeNull()
-    })
-
-    it(`${label}: close 后文件操作应返回 NOT_INITIALIZED`, async () => {
+      if (storage.config?.type === 's3') {
+        expect(storage.config.accessKeyId).toBe('[REDACTED]')
+        expect(storage.config.secretAccessKey).toBe('[REDACTED]')
+      }
       const closeResult = await storage.close()
       expect(closeResult.success).toBe(true)
+      expect(storage.isInitialized).toBe(false)
+      expect(storage.config).toBeNull()
       const result = await storage.file.put('test.txt', 'hello')
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
-      }
+      expect(result).toMatchObject({ success: false, error: { code: HaiStorageError.NOT_INITIALIZED.code } })
+      expect((await storage.close()).success).toBe(true)
+      expect(storage.isInitialized).toBe(false)
     })
 
     if (label === 'local') {
@@ -54,14 +49,6 @@ describe('storage.init', () => {
         expect(storage.isInitialized).toBe(true)
       })
     }
-
-    it(`${label}: 重复 close 不应报错`, async () => {
-      const result1 = await storage.close()
-      const result2 = await storage.close()
-      expect(result1.success).toBe(true)
-      expect(result2.success).toBe(true)
-      expect(storage.isInitialized).toBe(false)
-    })
   }
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
@@ -159,26 +146,4 @@ describe('storage.init 配置校验', () => {
       expect(storage.config.fileMode).toBe(0o644)
     }
   })
-
-  it.each(['minio', 'rustfs'] as const)('%s: s3 config getter 应返回脱敏快照', async (backend) => {
-    const env = await s3Env(backend)
-
-    try {
-      await storage.close()
-      const result = await storage.init(env.config)
-      expect(result.success).toBe(true)
-      expect(storage.config?.type).toBe('s3')
-
-      if (storage.config?.type === 's3' && env.config.type === 's3') {
-        expect(storage.config.accessKeyId).toBe('[REDACTED]')
-        expect(storage.config.secretAccessKey).toBe('[REDACTED]')
-        expect(storage.config.accessKeyId).not.toBe(env.config.accessKeyId)
-        expect(storage.config.secretAccessKey).not.toBe(env.config.secretAccessKey)
-      }
-    }
-    finally {
-      await storage.close()
-      await env.cleanup?.()
-    }
-  }, 300000)
 })

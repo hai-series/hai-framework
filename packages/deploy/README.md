@@ -120,7 +120,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 完全隔离的 Linux 服务器上，将 tar 解到独立目录，运行 `sh apply.sh`，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
 
-服务器使用 util-linux `flock` 对部署根目录的 `.deploy.lock` 持有非阻塞内核锁，覆盖部署和失败恢复。锁文件永久保留，禁止删除、替换或按经过时间抢锁；目录所在文件系统须支持 `flock`。父 shell 被强杀后，继承文件描述符的活跃子命令继续持锁；所有持有进程退出或服务器重启后自动释放。旧 `.deploy-lock` 目录不再参与判锁，也不自动删除；升级前须结束旧版部署进程，勿混用旧包。强杀/断电不会运行恢复 trap，缺少结果文件时执行状态未知：先核对容器、镜像和 `current` 成功基线，再用新部署包恢复，不能把锁释放视为部署成功或副作用已回滚。
+服务器使用 util-linux `flock` 对部署根目录的 `.deploy.lock` 持有非阻塞内核锁，覆盖部署和失败恢复。正常前台部署及同步失败恢复收尾、发布终态后显式解锁，后台服务继续运行不阻塞后续部署。锁文件永久保留，禁止删除、替换或按经过时间抢锁；目录所在文件系统须支持 `flock`。HUP/INT/TERM 中断或父 shell 被强杀后，继承文件描述符的活跃子命令继续持锁，所有 holder 退出或服务器重启后才释放。旧 `.deploy-lock` 目录不再参与判锁，也不自动删除；升级前须结束旧版部署进程，勿混用旧包。强杀/断电不会运行恢复 trap，缺少结果文件时执行状态未知：先核对容器、镜像和 `current` 成功基线，再用新部署包恢复，不能把锁释放视为部署成功或副作用已回滚。
 
 #### 完全离线前再核对一次
 
@@ -171,13 +171,16 @@ pnpm --filter @h-ai/deploy typecheck
 pnpm --filter @h-ai/deploy lint
 pnpm --filter @h-ai/deploy build
 pnpm --filter @h-ai/deploy test
+pnpm --filter @h-ai/deploy test:e2e
 pnpm --filter @h-ai/cli test:scaffold-gates
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
+真实部署按 API、SSR、静态移动前端和 fullstack 选取代表：admin 覆盖 website/h5 共用的 SSR Dockerfile 与生产部署分支；各应用类型仍由八个 scaffold 场景分别安装、编译并执行 HTTP/浏览器验收。scaffold 与生成路由 runtime 按实测资源争用分批顺序执行，三个轻型 CLI 门禁可与 runtime 在最多两个 worker 内并行；生成场景复用 E2E 自带完整构建，保留生产构建隔离及真实产物检查。CLI 部署门禁保留认证/传输、增量更新、损坏制品和回滚，并用生产同版本 Nginx 对公开部署包执行 `nginx -t`。测试夹具通过 init 回收孤儿进程，并验证真实 PID 消失。
+
 验证真实生成项目与 SSH/人工部署，覆盖禁止访问镜像仓库、局部更新、归档损坏、同版本发布和健康失败。finally/teardown 只清理本次测试创建的项目、镜像、容器、日志和进程。
 
-定向锁门禁使用可连接的 Podman（优先）或 Docker，在真实 Linux 容器中运行公开 API 生成的 `apply.sh`，验证并发、父进程强杀后的子进程持锁、全部进程退出和重启恢复。Compose/HTTP 使用确定性夹具，不能替代真实容器服务部署验收。运行 `HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts`；PowerShell 先执行 `$env:HAI_DEPLOY_E2E='1'`，再运行同一 pnpm 命令。
+`test:e2e` 构建当前包，并在子进程中启用、串行执行锁与进程两组真实 Linux 门禁，根 `pnpm e2e` 也包含此入口。需要可连接的 Podman（优先）或 Docker，运行公开 API 生成的 `apply.sh`，验证并发、父进程强杀后的子进程持锁、全部进程退出和重启恢复。Compose/HTTP 使用确定性夹具，不能替代真实容器服务部署验收。
 
 进程门禁运行 `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts`。设置同一 `HAI_DEPLOY_E2E=1` 后运行 `tests/deploy-command-runtime.e2e.test.ts`，先构建 deploy；它使用真实 Linux、OpenSSH 和发布 dist，验证远端继续执行/完成回执以及本地进程组。该夹具需联网安装 sshd；Compose/HTTP 为确定性夹具，发布 deadline 缩短为 2500 毫秒，并注入暂停消费模拟丢失回执。
 

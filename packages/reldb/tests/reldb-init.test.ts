@@ -61,9 +61,9 @@ describe('reldb.init', () => {
     })
   }
 
-  defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite', { database: ':memory:' }))
+  defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite', { database: ':memory:' }), { resetConnection: true })
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'))
+  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'), { resetConnection: true })
 
-  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'))
+  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'), { resetConnection: true })
 })

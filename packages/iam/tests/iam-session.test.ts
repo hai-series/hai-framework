@@ -18,10 +18,12 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import type { CreateSessionOptions } from '../src/session/iam-session-types.js'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
 import { createDbUserRepository } from '../src/user/iam-user-repository-user.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+
+afterEach(() => vi.useRealTimers())
 
 /** 使用真实持久用户创建会话，避免凭空构造不存在的账号。 */
 async function createSession(target: IamFunctions, options: CreateSessionOptions) {
@@ -295,12 +297,13 @@ describe('iam.session', () => {
 
         const originalLastActive = createResult.data.lastActiveAt.getTime()
 
-        await new Promise(resolve => setTimeout(resolve, 50))
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(originalLastActive + 50)
 
         const getResult = await slidingIam.session.get(createResult.data.accessToken)
         expect(getResult.success).toBe(true)
         if (getResult.success && getResult.data) {
-          expect(getResult.data.lastActiveAt.getTime()).toBeGreaterThanOrEqual(originalLastActive)
+          expect(getResult.data.lastActiveAt.getTime()).toBe(originalLastActive + 50)
         }
       })
     })
@@ -318,8 +321,9 @@ describe('iam.session', () => {
         if (!createResult.success)
           return
 
-        // 等待 1.5 秒让会话过期
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        // access 到期由持久记录判定；真实 Redis TTL 另有集成回归。
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(createResult.data.expiresAt.getTime())
 
         const getResult = await getIam().session.get(createResult.data.accessToken)
         expect(getResult.success).toBe(true)
@@ -336,7 +340,8 @@ describe('iam.session', () => {
         if (!createResult.success)
           return
 
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(createResult.data.expiresAt.getTime())
 
         const result = await getIam().session.verifyToken(createResult.data.accessToken)
         expect(result.success).toBe(false)

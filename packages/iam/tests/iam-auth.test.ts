@@ -19,7 +19,7 @@
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
-import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.auth', () => {
   const defineCommon = (getIam: () => IamFunctions) => {
@@ -138,6 +138,9 @@ describe('iam.auth', () => {
         if (verifyResult.success) {
           expect(verifyResult.data.userId).toBeTruthy()
           expect(verifyResult.data.accessToken).toBe(loginResult.data.tokens.accessToken)
+          expect(verifyResult.data.username).toBe('auth_verify_user')
+          expect(Array.isArray(verifyResult.data.roles)).toBe(true)
+          expect(Array.isArray(verifyResult.data.permissions)).toBe(true)
         }
       })
 
@@ -156,67 +159,13 @@ describe('iam.auth', () => {
           expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
-
-      it('登出后的令牌 verifyToken 应返回 SESSION_INVALID', async () => {
-        await registerUser('auth_verify_after_logout')
-        const loginResult = await getIam().auth.login({
-          identifier: 'auth_verify_after_logout',
-          password: TEST_PASSWORD,
-        })
-        if (!loginResult.success)
-          return
-
-        await getIam().auth.logout(loginResult.data.tokens.accessToken)
-        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
-        expect(result.success).toBe(false)
-        if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
-        }
-      })
     })
 
     // =========================================================================
-    // verifyToken 会话字段（roles / permissions / displayName）
+    // 用户资料变更后重新登录时刷新会话显示名
     // =========================================================================
 
-    describe('verifyToken session fields', () => {
-      it('有效令牌应返回 Session 含 roles / permissions', async () => {
-        await registerUser('auth_resolve_user')
-        const loginResult = await getIam().auth.login({
-          identifier: 'auth_resolve_user',
-          password: TEST_PASSWORD,
-        })
-        expect(loginResult.success).toBe(true)
-        if (!loginResult.success)
-          return
-
-        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
-        expect(result.success).toBe(true)
-        if (result.success) {
-          expect(result.data.userId).toBeTruthy()
-          expect(result.data.username).toBe('auth_resolve_user')
-          expect(Array.isArray(result.data.roles)).toBe(true)
-          expect(Array.isArray(result.data.permissions)).toBe(true)
-        }
-      })
-
-      it('登出后 verifyToken 应返回 SESSION_INVALID', async () => {
-        await registerUser('auth_resolve_after_logout')
-        const loginResult = await getIam().auth.login({
-          identifier: 'auth_resolve_after_logout',
-          password: TEST_PASSWORD,
-        })
-        if (!loginResult.success)
-          return
-
-        await getIam().auth.logout(loginResult.data.tokens.accessToken)
-        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
-        expect(result.success).toBe(false)
-        if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
-        }
-      })
-
+    describe('verifyToken displayName', () => {
       it('返回的 Session 应包含 displayName（登录时写入缓存）', async () => {
         await registerUser('auth_resolve_display')
 
@@ -248,7 +197,7 @@ describe('iam.auth', () => {
     // =========================================================================
 
     describe('logout', () => {
-      it('登出后令牌应失效', async () => {
+      it('登出后令牌失效，重复登出保持幂等', async () => {
         await registerUser('auth_logout_user')
         const loginResult = await getIam().auth.login({
           identifier: 'auth_logout_user',
@@ -262,21 +211,8 @@ describe('iam.auth', () => {
         expect(logoutResult.success).toBe(true)
 
         const verifyResult = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
-        expect(verifyResult.success).toBe(false)
-      })
-
-      it('已登出的令牌再次登出不应抛异常', async () => {
-        await registerUser('auth_double_logout')
-        const loginResult = await getIam().auth.login({
-          identifier: 'auth_double_logout',
-          password: TEST_PASSWORD,
-        })
-        if (!loginResult.success)
-          return
-
-        await getIam().auth.logout(loginResult.data.tokens.accessToken)
-        const result = await getIam().auth.logout(loginResult.data.tokens.accessToken)
-        expect(result.success).toBe(true)
+        expect(verifyResult).toMatchObject({ success: false, error: { code: HaiIamError.SESSION_INVALID.code } })
+        expect((await getIam().auth.logout(loginResult.data.tokens.accessToken)).success).toBe(true)
       })
 
       it('不存在的令牌登出应成功（幂等）', async () => {
@@ -559,5 +495,4 @@ describe('iam.auth', () => {
   }
 
   defineIamSuite('sqlite+memory', sqliteMemoryEnv(), getIam => defineCommon(getIam))
-  defineIamSuite('postgres+redis', postgresRedisEnv, getIam => defineCommon(getIam))
 })

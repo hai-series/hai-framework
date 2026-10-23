@@ -104,6 +104,8 @@ pnpm run deploy --env prod --build --bundle-only
 
 失敗時はローカルの管理対象プロセス終了確認と、遠隔の不明/スクリプト完了状態、結果ファイルのパスを別々に表示します。ローカル SSH 終了だけでは遠隔停止を断定しません。不明状態をサーバーで確認し、CLI は配置や復元を自動再実行しません。Windows は内嵌のシステム PowerShell/.NET Job と Add-Type を使い、失敗時は管理外でコマンドを起動しません。
 
+通常の前景配置と同期の失敗復元は、後処理と終端結果の公開後に `.deploy.lock` を明示解放し、稼働中の背景サービスは次の配置を妨げません。HUP/INT/TERM または親 shell の強制終了時は、記述子を継承した実行中の子コマンドが全 holder の終了かサーバー再起動までロックを保持します。ロックファイルは残し、削除・置換しないでください。
+
 デスクトップ配布は `pnpm build --target desktop --platform windows|linux|macos --arch x64|arm64` を対象 OS とツールチェーンで実行します。コンテナの Web 表示とは別にネイティブ配布を検証してください。
 
 ### AI による開発
@@ -126,11 +128,15 @@ pnpm --filter @h-ai/cli lint
 pnpm --filter @h-ai/cli test
 pnpm check:skills
 pnpm --filter @h-ai/cli test:scaffold-gates
-pnpm --filter @h-ai/cli test:scaffold-gates --i18n
+pnpm --filter @h-ai/cli test:scaffold-gates --list --json
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作を実行します。デプロイ検証は実リソースの所有権と動的ホストポートの分離に加え、オフライン tar、SSH/手動配布、増分更新とロールバックを扱います。当該実行が記録したコンテナー ID と専用イメージ tag だけを回収します。安全なメタデータは ignored の `tmp/validation/module-review/VERIFY-05/` に残し、一時プロジェクト、SSH 鍵とプロジェクトデータは引き続き削除します。生成したブラウザー画像、trace とレポートは既定で ignored の `tmp/validation/module-review/scaffold-browser/` または `deploy-browser/` に保持します。明示した証拠・HTML・出力先も尊重し、一時プロジェクト、鍵、データとプロセスは回収します。ネイティブと実クラウドは別途検証してください。
+生成ゲートは八つのシナリオで全アプリ種別の実インストール、コンパイル、HTTP/ブラウザー検証を維持します。実測で構築とインストールの資源競合が発生したため、重い scaffold と生成ルート runtime はバッチを分けて順番に実行します。言語、CLI プロセス、環境消費の三ファイルは runtime と最大二つの worker で並列実行できます。各シナリオは E2E 入口の完全構築を再利用し、既存の本番構築分離チェックは E2E 後に空でない実成果物を検証します。実コンテナー配置は API、SSR（共通 Dockerfile と配置分岐を持つ website/h5 は admin で代表）、静的モバイル、fullstack を選びます。所有権、認証/暗号化、増分更新、破損成果物、復旧は維持します。fixture は init と孤児プロセスの実回収を検証し、高速ゲートは本番と同じ Nginx で公開 bundle に `nginx -t` を実行します。通常単体テストはエンジンを探測しません。workspace compile は依存グラフで contract を構築し、fullstack の共有 i18n 準備を保ちつつ二重構築を避けます。
+
+生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作に加え、生成した HTTP ルート、CLI プロセスの言語選択と環境ファイルの消費を検証します。`--generate` と `--i18n` で対象を絞って再実行できます。デプロイ検証は実リソースの所有権と動的ホストポートの分離に加え、オフライン tar、SSH/手動配布、増分更新とロールバックを扱います。当該実行が記録したコンテナー ID と専用イメージ tag だけを回収します。安全なメタデータは ignored の `tmp/validation/module-review/VERIFY-05/` に残します。生成したブラウザー画像、trace とレポートは既定で ignored の `tmp/validation/module-review/scaffold-browser/` または `deploy-browser/` に保持します。明示した証拠・HTML・出力先も尊重し、一時プロジェクト、鍵、データとプロセスは回収します。ネイティブと実クラウドは別途検証してください。
+
+Windows インストーラーの追加検証には Rust の `x86_64-pc-windows-msvc` ターゲットと MSVC ビルドツールが必要です。`HAI_CLI_NATIVE_BUILD=1` を設定して `pnpm --filter @h-ai/cli test:scaffold-gates` を実行すると、既存の fullstack シナリオが NSIS インストーラーを構築し、アプリルートのバージョンと成果物名を照合します。`CARGO_BUILD_JOBS=2` で Rust の構築並列数を制限できます。ネイティブ UI 操作と機器機能は別途検証します。
 
 デプロイ用 fixture は固定版の公開基盤イメージを確認し、不在を確認した場合だけ取得します。HAI_DEPLOY_E2E_MIRROR を利用でき、公開キャッシュは回収対象にしません。create 成功時のコンテナー ID を先に記録し、専用 PID namespace 内で APT/pip/sshd を非同期準備します。準備失敗、期限超過、協調的取消ではローカルクライアントの終了を待ち、記録した ID だけを削除して消失を確認します。特権を使うのはネストした Podman fixture のみです。HAI_DEPLOY_E2E_APT_MIRROR はホスト名のみを受け付け、HTTPS を維持します。所有権テストは固定公開イメージに実行専用 tag を付け、同じ内容の外部 tag、tag の付け替え、動的ポート、外部 sentinel の保護を維持します。create の応答喪失で信頼できる ID がない場合や、テストが強制終了した場合は不明状態を残し、名前や label を根拠に回収しません。
 

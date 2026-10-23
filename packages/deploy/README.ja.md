@@ -94,7 +94,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 隔離された Linux では独立ディレクトリに展開し、`sh apply.sh` を実行します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
 
-サーバーは util-linux の `flock` で配置ルートの `.deploy.lock` に非ブロッキングのカーネルロックを取得し、復元処理の終了まで保持します。このファイルは残し、削除・置換・経過時間による横取りをしないでください。対応するファイルシステムが必要です。親 shell を強制終了しても、記述子を継承した実行中の子コマンドはロックを保持します。全保持プロセスの終了またはサーバー再起動で自動解放されます。旧 `.deploy-lock` ディレクトリは判定に使わず削除もしません。更新前に旧配置プロセスを終了し、旧パッケージを併用しないでください。強制終了・停電では復元 trap が動きません。結果ファイルがなければ実行状態は不明です。コンテナー、イメージ、成功した `current` を確認して新しいパッケージで復旧してください。ロック解放は成功や副作用の取消を意味しません。
+サーバーは util-linux の `flock` で配置ルートの `.deploy.lock` に非ブロッキングのカーネルロックを取得し、復元処理の終了まで保持します。通常の前景配置と同期の失敗復元は、後処理と終端結果の公開後に明示解放し、背景サービスの稼働は次の配置を妨げません。このファイルは残し、削除・置換・経過時間による横取りをしないでください。対応するファイルシステムが必要です。HUP/INT/TERM または親 shell の強制終了時は、記述子を継承した実行中の子コマンドが全 holder の終了かサーバー再起動までロックを保持します。旧 `.deploy-lock` ディレクトリは判定に使わず削除もしません。更新前に旧配置プロセスを終了し、旧パッケージを併用しないでください。強制終了・停電では復元 trap が動きません。結果ファイルがなければ実行状態は不明です。コンテナー、イメージ、成功した `current` を確認して新しいパッケージで復旧してください。ロック解放は成功や副作用の取消を意味しません。
 
 #### 完全オフラインの前に確認する
 
@@ -142,13 +142,16 @@ pnpm --filter @h-ai/deploy typecheck
 pnpm --filter @h-ai/deploy lint
 pnpm --filter @h-ai/deploy build
 pnpm --filter @h-ai/deploy test
+pnpm --filter @h-ai/deploy test:e2e
 pnpm --filter @h-ai/cli test:scaffold-gates
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
+実配置は API、SSR、静的モバイル、fullstack を代表として選びます。admin は website/h5 と共通の SSR Dockerfile と本番配置分岐を検証し、全アプリ種別の個別インストール、コンパイル、HTTP/ブラウザー検証は八つの scaffold シナリオで維持します。実測の資源競合に基づき scaffold と生成ルート runtime は逐次バッチとし、三つの軽い CLI ゲートは runtime と最大二つの worker で並列実行できます。生成シナリオは E2E の完全構築を再利用し、本番構築分離と実成果物の検証を維持します。CLI 配置ゲートは認証/暗号化、増分更新、破損成果物と復旧を維持し、本番と同じ Nginx で公開 bundle に `nginx -t` を実行します。fixture は init を有効化し、引き取った孤児 PID の実消失を検証します。
+
 実際の生成プロジェクト、SSH と手動公開を検証します。レジストリー接続禁止、部分更新、破損アーカイブ、同一版での再公開、ヘルスチェック失敗を含めます。finally/teardown ではテスト自身が作成したプロジェクト、イメージ、コンテナー、ログ、プロセスのみを削除します。
 
-ロック専用ゲートは接続可能な Podman（優先）または Docker を使い、公開 API が生成した `apply.sh` を実際の Linux コンテナーで実行します。同時実行、親の強制終了後の子によるロック保持、全終了と再起動からの復旧を確認します。Compose/HTTP は決定的なテスト用実装で、実サービス公開の検証を代替しません。`HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts` を実行します。PowerShell は先に `$env:HAI_DEPLOY_E2E='1'` を設定してから同じ pnpm コマンドを実行してください。
+`test:e2e` は現在のパッケージをビルドし、子プロセスで Linux のロックとプロセスの両ゲートを有効にしてファイルを順番に実行します。ルートの `pnpm e2e` もこの入口を含みます。接続可能な Podman（優先）または Docker を使い、公開 API が生成した `apply.sh` を実行します。同時実行、親の強制終了後の子によるロック保持、全終了と再起動からの復旧を確認します。Compose/HTTP は決定的なテスト用実装で、実サービス公開の検証を代替しません。
 
 プロセス専用ゲートは `pnpm --filter @h-ai/deploy exec vitest run tests/deploy-command-process.test.ts tests/deploy-secret-masker.test.ts` です。同じ `HAI_DEPLOY_E2E=1` を設定し、deploy をビルドしてから `tests/deploy-command-runtime.e2e.test.ts` を実行すると、実 Linux/OpenSSH、公開 dist、遠隔の継続・完了、ローカルグループを検証します。sshd 導入にネットワークが必要で、Compose/HTTP はテスト用実装です。配置期限を 2500 ミリ秒に短縮し、出力消費を停止して応答喪失を再現します。
 

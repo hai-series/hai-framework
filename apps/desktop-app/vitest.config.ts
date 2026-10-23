@@ -10,6 +10,7 @@ export default defineConfig({
   define: { __DESKTOP_CRYPTO_CONFIG__: desktopBuildConfig('test') },
   plugins: [svelte({ hot: !process.env.VITEST })],
   test: {
+    maxWorkers: 2,
     environment: 'jsdom',
     globals: true,
     include: ['tests/**/*.{test,spec}.ts'],

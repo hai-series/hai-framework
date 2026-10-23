@@ -1,7 +1,7 @@
 /** 真实共享 Redis/SQLite 与独立 Node 进程验证暂停/接管后的最终提交。 */
 import type { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -64,7 +64,7 @@ async function removeTestFolder(folder: string): Promise<void> {
   await rm(absolute, { recursive: true, force: true })
 }
 
-it('独立旧节点实际暂停45秒后，OTP旧CAS与密码旧SQL都被接管后的持久状态拒绝', async () => {
+it('独立旧节点跨旧锁期限暂停后，OTP旧CAS与密码旧SQL都被接管后的持久状态拒绝', async () => {
   const folder = await mkdtemp(join(tmpdir(), 'hai-iam-commit-'))
   const workers: ReturnType<typeof pausedWorker>[] = []
   let redis: Awaited<ReturnType<typeof acquireRedisContainer>> | undefined
@@ -84,16 +84,19 @@ it('独立旧节点实际暂停45秒后，OTP旧CAS与密码旧SQL都被接管�
     expect((await iam.user.register({ username: 'commit-reset', password: 'Password123' })).success).toBe(true)
     expect((await iam.auth.sendOtp('commit-otp@example.com')).success).toBe(true)
     expect((await iam.user.requestPasswordReset('commit-reset')).success).toBe(true)
-    workers.push(pausedWorker({ db, cache: cacheConfig, operation: 'otp', identifier: 'commit-otp@example.com', code }))
-    workers.push(pausedWorker({ db, cache: cacheConfig, operation: 'reset', token }))
+    const resumeFile = join(folder, 'resume')
+    workers.push(pausedWorker({ db, cache: cacheConfig, resumeFile, operation: 'otp', identifier: 'commit-otp@example.com', code }))
+    workers.push(pausedWorker({ db, cache: cacheConfig, resumeFile, operation: 'reset', token }))
     await Promise.all(workers.map(worker => worker.paused))
     expect((await iam.user.requestPasswordReset('commit-reset')).success).toBe(true)
     expect((await iam.user.confirmPasswordReset(token, 'NewNodePassword345')).success).toBe(true)
     // 真实时间跨过配置的30秒发送间隔及旧锁期限，不改系统时钟或存储值。
     await new Promise(resolve => setTimeout(resolve, 31_000))
     expect((await iam.auth.sendOtp('commit-otp@example.com')).success).toBe(true)
+    // 新代持久状态全部提交后再恢复旧节点，避免固定额外暂停或负载导致提前恢复。
+    await writeFile(resumeFile, '')
     const results = await Promise.all(workers.map(worker => worker.done))
-    expect(results.every(result => result.pausedFor >= 44_000 && !result.success)).toBe(true)
+    expect(results.every(result => result.pausedFor >= 30_000 && !result.success)).toBe(true)
     expect((await iam.auth.loginWithOtp({ identifier: 'commit-otp@example.com', code })).success).toBe(true)
     expect((await iam.auth.login({ identifier: 'commit-reset', password: 'NewNodePassword345' })).success).toBe(true)
     expect((await iam.auth.login({ identifier: 'commit-reset', password: 'OldWorkerPassword234' })).success).toBe(false)

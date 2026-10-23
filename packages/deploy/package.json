@@ -26,6 +26,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
+    "test:e2e": "pnpm build && node tests/run-e2e.mjs",
     "test:watch": "vitest",
     "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "eslint .",

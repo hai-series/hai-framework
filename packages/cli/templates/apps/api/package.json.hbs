@@ -13,7 +13,7 @@
     "start:prod": "pnpm --filter {{api.servicePackageName}} start:prod",
     "dev:test": "pnpm --filter {{api.servicePackageName}} dev:test",
     "dev:prod": "pnpm --filter {{api.servicePackageName}} dev:prod",
-    "compile": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present build",
+    "compile": "pnpm -r --if-present build",
     "build": "hai build",
 {{#if features.deploy}}
     "deploy": "hai deploy apps/{{projectName}}-service",

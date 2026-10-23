@@ -5,7 +5,8 @@
     "scripts/typecheck.mjs",
     "scripts/vite-runtime-config.ts",
     "scripts/container-runtime-config.sh",
-    "packages/tsup.base.ts"
+    "packages/tsup.base.ts",
+    "packages/vitest.base.ts"
   ],
   "tasks": {
     "paraglide:compile": {
@@ -68,6 +69,13 @@
     },
     "test:e2e": {
       "passThroughEnv": [
+        "HAI_CLI_NATIVE_BUILD",
+        "CARGO_BUILD_JOBS",
+        "DOCKER_HOST",
+        "DOCKER_TLS_VERIFY",
+        "DOCKER_CERT_PATH",
+        "TESTCONTAINERS_*",
+        "HAI_DEPLOY_E2E_*",
         "HAI_AUTH_EVIDENCE_DIR",
         "PLAYWRIGHT_HTML_OUTPUT_DIR",
         "PLAYWRIGHT_HTML_REPORT"

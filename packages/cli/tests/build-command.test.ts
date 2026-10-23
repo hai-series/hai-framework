@@ -41,12 +41,14 @@ afterEach(() => {
 it('pnpm build 默认编译源码，不选择环境、不调用容器工具', async () => {
   vi.stubEnv('HAI_DEPLOY_ENVIRONMENT', 'prod')
   vi.stubEnv('PUBLIC_API_BASE', 'https://private-env.example')
+  vi.stubEnv('HAI_E2E', '1')
   vi.stubEnv('NODE_ENV', 'test')
   await buildCommand({ cwd: root })
   expect(state.calls).toHaveLength(1)
   expect(state.calls[0]).toMatchObject({ command: process.execPath, args: ['/tools/pnpm.cjs', 'run', 'compile'] })
   expect(state.calls[0].env.HAI_DEPLOY_ENVIRONMENT).toBeUndefined()
   expect(state.calls[0].env.PUBLIC_API_BASE).toBeUndefined()
+  expect(state.calls[0].env.HAI_E2E).toBeUndefined()
   expect(state.calls[0].env.NODE_ENV).toBe('production')
 })
 it('优先 Podman，全部镜像构建成功才发布清单，清单不含环境', async () => {

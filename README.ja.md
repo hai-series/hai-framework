@@ -672,7 +672,7 @@ Schema の既定値、実際の消費点、環境変数と生成アプリの関�
 | エンドツーエンド | `pnpm e2e`                | UI / ルート / 一連の処理                          |
 | 公開前の検証     | `pnpm test:release-local` | 公開前の全体検証（導入 → E2E）                    |
 
-> Windows PowerShell は `pnpm.cmd` を使います。ルートの `pnpm e2e` は CLI 生成と Admin Console・AI Playground・Corporate Website・H5・Mobile Web の Playwright を検証します。コンテナーテストには利用可能な Docker / Podman が必要です。
+> Windows PowerShell は `pnpm.cmd` を使います。ルートの `pnpm test` は Testcontainers に依存しないパッケージを最大 4 件、利用可能な CPU とメモリーでさらに制限して並列実行した後、コンテナーパッケージを直列実行します。各パッケージのファイル worker は最大 2 個です。2 つのグループは順番に実行し、共有ビルド出力の同時更新を防ぎます。ルートの `pnpm e2e` は CLI 生成、デプロイの実行とロック、および Admin Console・AI Playground・Corporate Website・H5・Mobile Web の Playwright を検証します。コンテナーテストには利用可能な Docker / Podman が必要です。
 
 ### コミット確認（Leak Hooks）
 

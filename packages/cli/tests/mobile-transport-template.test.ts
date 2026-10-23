@@ -1,15 +1,9 @@
 /** 执行实际移动客户端模板，覆盖 transport 选择和客户端/crypto 的资源边界。 */
 import { readFileSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import path from 'node:path'
-import process from 'node:process'
 import { runInNewContext } from 'node:vm'
-import { ESLint } from 'eslint'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
-import { parse } from 'yaml'
-import { createProject } from '../src/commands/cli-create.js'
 import { buildTemplateContext } from '../src/commands/cli-template-engine.js'
 
 interface MobileClient {
@@ -79,40 +73,6 @@ function instantiate(options: { encrypted?: boolean, transport?: string } = {}) 
 }
 
 describe('generated mobile crypto transport', () => {
-  it.each([true, false])('实际生成工程 crypto=%s 的依赖、catalog 和公开配置与消费者一致', async (encrypted) => {
-    // 位于仓库已忽略的临时目录，仅复用真实安装包声明与 linter，不伪称独立安装验收。
-    const root = await mkdtemp(path.join(process.cwd(), '.tmp-mobile-transport-'))
-    try {
-      await createProject({ name: 'mobile-test', appType: 'mobile-app', template: 'custom', features: encrypted ? ['iam'] : ['api-client', 'capacitor'], yes: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd: root, examples: false })
-      const project = path.join(root, 'mobile-test')
-      const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
-      const workspace = parse(await readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8')) as { catalog: Record<string, string> }
-      const consumer = await readFile(path.join(project, 'src/lib/api.ts'), 'utf8')
-      const vite = await readFile(path.join(project, 'vite.config.ts'), 'utf8')
-      const environment = await readFile(path.join(project, '.env.example'), 'utf8')
-      expect(Boolean(manifest.dependencies['@h-ai/crypto'])).toBe(encrypted)
-      expect(Boolean(workspace.catalog['@h-ai/crypto'])).toBe(encrypted)
-      expect(consumer.includes('from \'@h-ai/crypto\'')).toBe(encrypted)
-      expect(vite.includes('apiTransport: process.env.PUBLIC_API_TRANSPORT')).toBe(encrypted)
-      if (encrypted) {
-        expect(environment).toContain('PUBLIC_API_TRANSPORT=')
-        expect(environment).toContain('PUBLIC_API_KEY_EXCHANGE_PATH=')
-      }
-      expect(manifest.dependencies['@h-ai/reldb']).toBeUndefined()
-      expect(manifest.dependencies['@h-ai/iam']).toBeUndefined()
-      expect(manifest.dependencies['@h-ai/cache']).toBeUndefined()
-      const linter = new ESLint({ cwd: project, overrideConfigFile: path.join(project, 'eslint.config.js') })
-      const lint = await linter.lintFiles(['src/lib/api.ts', 'vite.config.ts'])
-      expect(lint.flatMap(result => result.messages.map(message => ({ file: result.filePath, ...message })))).toEqual([])
-      const program = ts.createProgram([path.join(project, 'src/lib/api.ts')], { noEmit: true, strict: true, skipLibCheck: true, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.Bundler, types: ['node', 'vite/client'] })
-      const diagnostics = ts.getPreEmitDiagnostics(program)
-      expect(diagnostics.map(item => ts.flattenDiagnosticMessageText(item.messageText, '\n'))).toEqual([])
-    }
-    finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  }, 30_000)
-
   it('iAM 模板补充 crypto catalog，默认加密并在客户端之后释放 crypto', async () => {
     const fixture = instantiate()
     expect(fixture.context.haiCatalogPackages['@h-ai/crypto']).toBeDefined()

@@ -1,4 +1,5 @@
 /** 实际阻塞 Node 事件循环超过旧租约期限，再恢复原存储提交。 */
+import { existsSync } from 'node:fs'
 import process from 'node:process'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -13,7 +14,12 @@ async function main() {
     await new Promise((resolve, reject) => process.send({ phase: 'paused', operation: input.operation }, error => error ? reject(error) : resolve()))
     const started = Date.now()
     // Atomics.wait 真正停止 JS 与续租定时器；不使用只暂停业务 Promise 的测试替身。
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 45_000)
+    const sleep = new Int32Array(new SharedArrayBuffer(4))
+    while (!existsSync(input.resumeFile)) {
+      if (Date.now() - started >= 75_000)
+        throw new Error('Commit worker resume timed out')
+      Atomics.wait(sleep, 0, 0, 25)
+    }
     pausedFor = Date.now() - started
   }
   try {

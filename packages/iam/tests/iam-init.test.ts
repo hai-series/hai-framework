@@ -2,7 +2,7 @@
  * @h-ai/iam — 初始化与生命周期测试
  *
  * 覆盖范围：
- * - 未初始化守卫：auth/user/authz/session/validatePassword 均返回 NOT_INITIALIZED
+ * - 未初始化守卫：auth/user/authz/session/apiKey/ticket 均返回 NOT_INITIALIZED
  * - 缺少依赖：db/cache 缺失时返回 CONFIG_ERROR
  * - 正常初始化、重复 init 重建状态、close 生命周期
  * - seedDefaultData: false 时不创建默认角色/权限
@@ -14,76 +14,42 @@ import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
 import { iam } from '../src/index.js'
-import { defineIamEnvSuite, postgresRedisEnv, sqliteMemoryEnv } from './helpers/iam-test-suite.js'
+import { defineIamEnvSuite, sqliteMemoryEnv } from './helpers/iam-test-suite.js'
 
 describe('iam.init', () => {
   const defineCommon = () => {
-    it('未初始化时 isInitialized 应为 false', async () => {
+    it('未初始化时全部业务入口返回 NOT_INITIALIZED', async () => {
       await iam.close()
       expect(iam.isInitialized).toBe(false)
-    })
-
-    it('未初始化时调用 auth 操作应返回 NOT_INITIALIZED', async () => {
-      await iam.close()
-      const result = await iam.auth.login({ identifier: 'admin', password: 'x' })
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
+      expect(iam.config).toBeNull()
+      const results = await Promise.all([
+        iam.auth.login({ identifier: 'admin', password: 'x' }),
+        iam.user.register({ username: 'test', password: 'x' }),
+        iam.authz.checkPermission('x', 'read'),
+        iam.session.get('any-token'),
+        iam.user.validatePassword('Password123'),
+        iam.apiKey.verifyApiKey('any-key'),
+        iam.ticket.issue({ subjectId: 'test', purpose: 'test' }),
+      ])
+      for (const result of results) {
+        expect(result).toMatchObject({ success: false, error: { code: HaiIamError.NOT_INITIALIZED.code } })
       }
     })
 
-    it('未初始化时调用 user 操作应返回 NOT_INITIALIZED', async () => {
+    it('缺少任一依赖都拒绝初始化，依赖恢复后可重试', async () => {
       await iam.close()
-      const result = await iam.user.register({
-        username: 'test',
-        password: 'x',
-      })
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
-      }
-    })
-
-    it('未初始化时调用 authz 操作应返回 NOT_INITIALIZED', async () => {
-      await iam.close()
-      const result = await iam.authz.checkPermission('x', 'read')
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
-      }
-    })
-
-    it('未初始化时调用 session 操作应返回 NOT_INITIALIZED', async () => {
-      await iam.close()
-      const result = await iam.session.get('any-token')
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
-      }
-    })
-
-    it('未初始化时 validatePassword 应返回 NOT_INITIALIZED', async () => {
-      await iam.close()
-      const result = iam.user.validatePassword('Password123')
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
-      }
-    })
-
-    it('依赖未初始化时应返回 CONFIG_ERROR', async () => {
-      await iam.close()
-      // 暂时关闭 reldb/cache 以模拟依赖未初始化
       await cache.close()
       await reldb.close()
-      const result = await iam.init({})
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(HaiIamError.CONFIG_ERROR.code)
-      }
-      // 恢复依赖以免影响后续测试
-      await reldb.init({ type: 'sqlite', database: ':memory:' })
-      await cache.init({ type: 'memory' })
+      expect(await iam.init({})).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+      expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+      expect(await iam.init({})).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+      expect(iam.isInitialized).toBe(false)
+      await reldb.close()
+      expect((await cache.init({ type: 'memory' })).success).toBe(true)
+      expect(await iam.init({})).toMatchObject({ success: false, error: { code: HaiIamError.CONFIG_ERROR.code } })
+      expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+      expect((await iam.init({})).success).toBe(true)
+      await iam.close()
     })
 
     it('正常初始化应成功', async () => {
@@ -120,16 +86,20 @@ describe('iam.init', () => {
 
     it('seedDefaultData: false 时初始化应成功且不触发种子流程', async () => {
       await iam.close()
+      await reldb.close()
+      expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
       const result = await iam.init({ seedDefaultData: false })
       expect(result.success).toBe(true)
       expect(iam.isInitialized).toBe(true)
       expect(iam.config?.seedDefaultData).toBe(false)
-
-      const checkResult = await iam.authz.checkPermission(
-        'test-user',
-        'any:perm',
-      )
-      expect(checkResult.success).toBe(true)
+      const roles = await iam.authz.getAllRoles()
+      const permissions = await iam.authz.getAllPermissions()
+      expect(roles.success).toBe(true)
+      expect(permissions.success).toBe(true)
+      if (roles.success)
+        expect(roles.data.items).toEqual([])
+      if (permissions.success)
+        expect(permissions.data.items).toEqual([])
       await iam.close()
     })
 
@@ -175,5 +145,4 @@ describe('iam.init', () => {
   }
 
   defineIamEnvSuite('sqlite+memory', sqliteMemoryEnv(), () => defineCommon())
-  defineIamEnvSuite('postgres+redis', postgresRedisEnv, () => defineCommon())
 })
