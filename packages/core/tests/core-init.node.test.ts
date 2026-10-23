@@ -7,8 +7,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { core, CoreConfigSchema } from '../src/index.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { core, CoreConfigSchema, HaiConfigError } from '../src/index.js'
 
 describe('core.init', () => {
   let tempDir: string
@@ -19,7 +19,10 @@ describe('core.init', () => {
   })
 
   afterEach(() => {
+    core.config.unwatch()
     core.config.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -62,10 +65,85 @@ describe('core.init', () => {
     expect(() => core.init({ configDir: join(tempDir, 'nonexistent') })).not.toThrow()
   })
 
+  it('目录扫描的文件系统异常仍向调用方传播', () => {
+    const file = join(tempDir, 'not-a-directory.yml')
+    writeFileSync(file, 'ready: true\n')
+    expect(() => core.init({ configDir: file })).toThrow()
+  })
+
   it('init 应该支持 .yaml 后缀', () => {
     writeFileSync(join(tempDir, 'settings.yaml'), 'key: value\n', 'utf-8')
     core.init({ configDir: tempDir })
     expect(core.config.get('settings')).toEqual({ key: 'value' })
+  })
+
+  it.each(['_deploy.yml', '_deploy.yaml'])('自动扫描不解析缺少部署凭据的保留文件 %s', (filename) => {
+    vi.stubEnv('HAI_DEPLOY', undefined)
+    vi.stubEnv('HAI_DEPLOY_PROVIDER', undefined)
+    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH', undefined)
+    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH_HOST', undefined)
+    writeFileSync(join(tempDir, filename), `provider:\n  ssh:\n    host: \${HAI_DEPLOY_PROVIDER_SSH_HOST}\n`)
+    writeFileSync(join(tempDir, 'app.yml'), 'ready: true\n')
+    const errors = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+
+    core.init({ configDir: tempDir, watchConfig: true })
+
+    expect(errors).not.toHaveBeenCalled()
+    expect(core.config.has('deploy')).toBe(false)
+    expect(core.config.isWatching('deploy')).toBe(false)
+    expect(core.config.get('app')).toEqual({ ready: true })
+  })
+
+  it.each(['_deploy.yml', '_deploy.yaml'])('自动扫描和监听均跳过有效部署保留文件 %s', (filename) => {
+    writeFileSync(join(tempDir, filename), 'provider:\n  type: vercel\n')
+
+    core.init({ configDir: tempDir, watchConfig: true })
+
+    expect(core.config.has('deploy')).toBe(false)
+    expect(core.config.isWatching('deploy')).toBe(false)
+  })
+
+  it('普通业务 deploy.yml 仍加载和监听，不与部署保留文件混淆', () => {
+    writeFileSync(join(tempDir, '_deploy.yml'), 'provider:\n  type: vercel\n')
+    writeFileSync(join(tempDir, 'deploy.yml'), 'business: true\n')
+
+    core.init({ configDir: tempDir, watchConfig: true })
+
+    expect(core.config.get('deploy')).toEqual({ business: true })
+    expect(core.config.isWatching('deploy')).toBe(true)
+  })
+
+  it('手动加载部署保留文件仍报告缺失变量，提供变量后仍可读取', () => {
+    vi.stubEnv('HAI_DEPLOY', undefined)
+    vi.stubEnv('HAI_DEPLOY_PROVIDER', undefined)
+    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH', undefined)
+    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH_HOST', undefined)
+    const file = join(tempDir, '_deploy.yaml')
+    writeFileSync(file, `provider:\n  ssh:\n    host: \${HAI_DEPLOY_PROVIDER_SSH_HOST}\n`)
+
+    const missing = core.config.load('deploy', file)
+    expect(missing.success).toBe(false)
+    if (!missing.success)
+      expect(missing.error.code).toBe(HaiConfigError.CONFIG_ENV_VAR_MISSING.code)
+
+    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH_HOST', 'deployment.example.test')
+    const loaded = core.config.load('deploy', file)
+    expect(loaded.success).toBe(true)
+    if (loaded.success)
+      expect(loaded.data).toEqual({ provider: { ssh: { host: 'deployment.example.test' } } })
+  })
+
+  it('其它单项配置失败仍记录错误并继续加载有效业务配置', () => {
+    writeFileSync(join(tempDir, 'broken.yml'), 'values: [\n')
+    writeFileSync(join(tempDir, 'app.yml'), 'ready: true\n')
+    const errors = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
+
+    expect(() => core.init({ configDir: tempDir })).not.toThrow()
+
+    expect(errors).toHaveBeenCalledTimes(1)
+    expect(errors.mock.calls[0]?.[0]).toContain('Config load failed: broken')
+    expect(core.config.has('broken')).toBe(false)
+    expect(core.config.get('app')).toEqual({ ready: true })
   })
 
   it('init watchConfig 应该启用配置文件监听', () => {

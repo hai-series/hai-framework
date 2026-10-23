@@ -282,13 +282,15 @@ if (!result.success) {
 
 > ブラウザーにはファイルシステムがないため、`core.config` は代替 API の形状のみを提供します。ファイル関連メソッドは `SERVICE_UNAVAILABLE` を返し、YAML を読み込みません。
 
+Node は実行時の `.yml` / `.yaml` を自動読み込み・監視しますが、予約名 `_deploy.yml` と `_deploy.yaml` は除外します。これらはデプロイ CLI が対象環境と認証情報の読み込み後に個別解析します。業務用 `deploy.yml` と明示的な `core.config.load` は引き続き利用できます。単一ファイルの失敗結果はログに記録して続行するため、アプリは必須設定を validate して `success` を確認してください。ディレクトリー走査や Logger 設定などの例外は伝播する場合があります。
+
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -573,7 +575,7 @@ pnpm --filter @h-ai/core test
 
 `_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../docs/configuration-map.md)を参照してください。
 
-宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。Node core.init は同期的に void を返し、設定エラーでは例外を送出します。業務 HaiResult API は success を先に確認します。
+宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。Node core.init は同期的に void を返します。単一ファイルの config.load 失敗結果は記録して続行するため、必須設定は validate して success を確認してください。ディレクトリー走査などの例外は伝播する場合があります。業務 HaiResult API は success を先に確認します。
 
 Node 入口は元の UTF-16 コード単位を UTF-16LE に変換し、同じバイト長を node:crypto.timingSafeEqual で比較します。長さが違えば false となり、長さ自体は隠しません。ブラウザー実装には JavaScript エンジンの定時間保証がなく、サーバーの認証境界には使用しません。周辺の分岐・変換・リクエスト処理まで定時間になるわけではありません。
 

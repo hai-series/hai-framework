@@ -54,7 +54,7 @@ return result
 
 | 模块 | 选择依据与入口 | 关键边界 |
 | --- | --- | --- |
-| @h-ai/core | [配置、日志、i18n、ID、HaiResult](packages/cli/templates/skills/hai-core/SKILL.md) | YAML/环境映射仅 Node；无 close；Node 请求/SSR 使用 runWithLocale 隔离异步语言，显式 locale 优先 |
+| @h-ai/core | [配置、日志、i18n、ID、HaiResult](packages/cli/templates/skills/hai-core/SKILL.md) | YAML/环境映射仅 Node；自动加载/监听跳过 `_deploy.yml` / `_deploy.yaml`，由部署 CLI 独立解析，业务 deploy.yml/手动load保留；单项load返回失败记日志并继续，必需配置须validate检查success，目录扫描等异常仍可能传播；无 close；Node 请求/SSR 使用 runWithLocale 隔离异步语言，显式 locale 优先 |
 | @h-ai/reldb | [SQL、DDL、CRUD、事务、分页](packages/cli/templates/skills/hai-reldb/SKILL.md) | 纯配置入口@h-ai/reldb/schemas仅Zod、无实例/驱动，可CLI/浏览器校验；SQLite/PostgreSQL/MySQL；动态值参数化；MySQL有界FIFO借用deadline/queueLimit，拒绝min/idleTimeout/timezone，URL优先且禁query/fragment；TLS严格对象默认校验证书链及DNS身份，IP验证拒绝；operationLog只输出安全数量摘要，不记录SQL原文/值/驱动错误；init失败清理候选，close返回HaiResult；清理失败保留待重试资源并停止业务操作；JSON.merge为三后端RFC7396对象补丁，PG参数化递归CTE单SQL提交，非应用读改写 |
 | @h-ai/vecdb | [向量集合与检索](packages/cli/templates/skills/hai-vecdb/SKILL.md) | LanceDB/pgvector/Qdrant/Chroma；LanceDB schema 持久维度/metric/id主键，原生 JSON metadata 顶层标量精确预过滤，insert 保留已有 ID、upsert 原子 merge；同名本地路径不自动跨节点共享；Qdrant 服务端 1.10.0+；Chroma 根端点/Bearer 网关认证，初始化验证数据权限；关闭失败保留清理所有权、旧操作停止服务、同一close可重试；内嵌Chroma确认直接子进程exit |
 | @h-ai/cache | [KV、Hash/List/Set/ZSet、锁](packages/cli/templates/skills/hai-cache/SKILL.md) | Memory 不跨节点；锁 owner 每次获锁唯一；release/extend 必须携带；Cluster 鉴权覆盖发现节点，URL 使用 URL 凭据；scan 使用可移交字符串游标遍历全部 master 并返回逻辑 key，mset/集合多键须同 slot；compareAndSwap 原子比较快照并更新值/TTL；init失败清理候选，close返回HaiResult；清理失败保留待重试资源并停止业务操作；SET 检查 success 与 boolean applied，过期选项显式校验 |

@@ -282,13 +282,15 @@ if (!result.success) {
 
 > 浏览器端没有文件系统，`core.config` 仅提供占位 API：文件相关方法返回 `SERVICE_UNAVAILABLE`，不会加载 YAML。
 
+Node 自动加载和监听运行时 `.yml` / `.yaml`，精确跳过保留文件 `_deploy.yml`、`_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们。业务 `deploy.yml` 仍自动加载，手动 `core.config.load` 不受影响。单项加载返回失败时记录错误并继续，必需配置由应用调用 `core.config.validate` 并检查 `success`；目录扫描、日志设置等异常仍可能传播。
+
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -573,7 +575,7 @@ pnpm --filter @h-ai/core test
 
 `_core.yml` 仅接受 name/version/env/defaultLocale 元数据与 logging；未知字段加载失败。Core 不提供全局 debug、ID 长度/前缀、业务 features 或语言注册列表；日志级别用 logging.level，ID 选项在每次 core.id 调用传入，业务配置放 app.yml 并由应用 Schema 校验。defaultLocale 是可读取的元数据，不会替应用注册翻译或切换 Paraglide。导入 Logger 不改写 LANG、LC_ALL、PYTHONIOENCODING，包括 Windows TTY。全部模块的配置与环境消费链见[配置对应表](../../docs/configuration-map.md)。
 
-公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。Node core.init 同步返回 void，配置失败时抛出异常；模块业务 HaiResult 则先检查 success，不能把两类接口混用。
+公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。Node core.init 同步返回 void；单项 config.load 返回失败时记录错误并继续，必需配置须 validate 并检查 success。目录扫描等异常仍可能抛出；模块业务 HaiResult 则先检查 success。
 
 Node 入口的 core.string.constantTimeEqual 将原始 UTF-16 单元编码后使用 node:crypto.timingSafeEqual 比较等长字节，长度不相同时直接 false，长度本身不受保护。浏览器实现仅避免按内容提前返回，不提供 JavaScript 引擎级恒时保证，不用于服务端凭证校验。外围分支、编码和请求处理不因此自动成为恒时。
 

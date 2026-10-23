@@ -34,12 +34,14 @@
 ```typescript
 import { core } from '@h-ai/core'
 
-// 自动加载 config/ 目录下的所有 _*.yml 和 *.yml
+// 自动加载运行时 .yml / .yaml，跳过 _deploy.yml / _deploy.yaml
 core.init({ configDir: './config' })
 
 // 也可指定日志级别和配置监听
 core.init({ configDir: './config', watchConfig: true })
 ```
+
+`_deploy.yml` / `_deploy.yaml` 由部署 CLI 在加载目标环境与凭据后独立解析，不参加 Core 的自动加载和监听；业务 `deploy.yml`、手动 `core.config.load` 不受影响。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
 
 ### 2. 使用功能
 
@@ -60,7 +62,7 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 
 | 方法        | 签名                              | 说明                                      |
 | ----------- | --------------------------------- | ----------------------------------------- |
-| `core.init` | `(options?: CoreOptions) => void` | 初始化（同步，加载配置目录中的所有 YAML） |
+| `core.init` | `(options?: CoreOptions) => void` | 同步加载运行时 YAML，排除两个 `_deploy` 保留文件 |
 
 > `CoreOptions`：`{ logging?: Partial<LoggingConfig>, configDir?: string, watchConfig?: boolean }`
 >

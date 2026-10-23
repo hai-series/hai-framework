@@ -1,10 +1,10 @@
 # 全模块审查与修正任务清单（2026-10-22）
 
-审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。交付前 HEAD 更新为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
+审查起始基线：`320c9ddb15f938a9e40e44ca0ce17a83a70bcba9`，根版本 `0.1.0-alpha.67`。初审清单生成时的 HEAD 为 `eb0f2216c20b63d2fdcea8600009736b248aa146`，已核对两者仅有 30 个 package 文件的版本同步，所引用运行时源码未变。范围覆盖 `packages/*` 的 21 个模块，并追踪受影响的应用、CLI 模板、配置、文档和 skills。按用户要求不考虑向后兼容：应直接修正契约并同步消费者，不保留已知不安全或错误的旧路径。
 
-本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
+本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05；定向复核新增 CORE-05，共 92 个，另有 21 个按模块拆分的 JSDoc 任务，共 113 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 62/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 63/63（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -27,7 +27,7 @@
 | cache | 7 | 28 | 1 | 20 | CACHE-01、CACHE-02、CACHE-03、CACHE-04 | JSDOC-05 |
 | capacitor | 9 | 31 | 1 | 18 | CAP-01、CAP-02 | JSDOC-06 |
 | cli | 17 | 75 | 7 | 63 | CLI-01、CLI-02、CLI-03、CLI-04、CLI-05 | JSDOC-07 |
-| core | 23 | 85 | 21 | 47 | CORE-01、CORE-02、CORE-03、CORE-04 | JSDOC-08 |
+| core | 23 | 85 | 21 | 47 | CORE-01、CORE-02、CORE-03、CORE-04、CORE-05 | JSDOC-08 |
 | crypto | 15 | 48 | 1 | 44 | CRYPTO-01、CRYPTO-02、CRYPTO-03、CRYPTO-04 | JSDOC-09 |
 | datapipe | 8 | 23 | 0 | 14 | PIPE-01 | JSDOC-10 |
 | deploy | 26 | 75 | 1 | 55 | DEPLOY-01、DEPLOY-02、DEPLOY-03 | JSDOC-11 |
@@ -1027,3 +1027,12 @@
 - **证据与影响**：仓库实际 mobile API 已接入 crypto transport，而模板只初始化 apiClient 的 baseUrl/auth；IAM 的既有依赖闭合包含 crypto，但 Svelte 依赖/catalog 早返回且客户端未消费该能力。旧 scaffold/部署测试通过关闭复用 API 服务的 transport 掩盖了该消费差异。
 - **修正内容**：在已选择 crypto 的移动工程接入真实初始化、transport、失败清理及关闭顺序，同步依赖/catalog 和已有 apiTransport/keyExchangePath 配置；无 crypto 的工程保留其明确能力边界，不无条件新增模块。公开导出函数补齐中文 JSDoc 与真实示例。
 - **验收标准**：默认、显式 IAM 和无 crypto 三种生成结果依赖/类型/行为一致，可信 SM2 链路真实完成，初始化失败不泄漏资源；调用方、文档/skill/配置同步。E2E-01 删除明文绕过后验证生成移动客户端，完整 scaffold/部署留最终全量轮。
+
+### CORE-05 · P2 · 运行时自动扫描排除仅供 CLI 解析的部署配置
+
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：运行时扫描精确跳过保留的_deploy.yml/_deploy.yaml，业务deploy.yml、手动load与CLI独立环境/凭据解析不变，watch自然不登记部署文件。公开init/扫描/CoreOptions中文JSDoc、三语README、双Core skill/reference、配置流转图和LLMS同步；单项HaiResult失败记日志继续，目录/日志等异常仍可传播，必需配置由消费者validate/check success。真实行为5项Red后最终3文件52通过，覆盖两扩展、业务同名、手动失败/显式值成功、其它错误继续和真实目录IO异常；source与严格测试类型、package lint零警告、fresh Core ESM/DTS、JSDoc94/94、skills37/330均通过。fresh公开Core Node入口读取H5/官网/AI真实YAML三场景均无Config load failed，runtime加载/watch正确且缓存/监听清理，手动缺SSH仍失败、公开部署独立parser仍成功。证据tmp/module-repair-20261022/CORE-05/handoff.json与app-yaml-proof.json；探针不代表DB/服务/浏览器或远端部署，完整应用启动复核留全量轮；全量回归按用户要求在全部任务实施后执行。
+- **位置**：`core-main.node.ts` 配置目录扫描、Core 初始化注释、三语 README、双 Core skill 与配置加载回归。
+- **证据与影响**：H5、官网和 AI 示例的真实浏览器启动日志均记录 `Config load failed: deploy`，因为应用自动扫描 `_deploy.yml` 时没有仅在 CLI 部署阶段注入的 SSH 凭据。业务请求仍成功，不能把该启动 ERROR 隐去或用假 SSH 配置掩盖。另有 Core 公开注释/README 说加载失败会抛错，与既有逐项记录错误并继续的实现和测试不一致。
+- **修正内容**：自动扫描仅排除保留的 `_deploy.yml`、`_deploy.yaml`；普通业务 `deploy.yml`、显式 `config.load` 和 CLI 独立环境/凭据解析保持明确契约，不新增泛化排除抽象或迁移全仓路径。按实际行为纠正初始化失败文档，并同步规范示例。
+- **验收标准**：真实 YAML 加载证明两保留配置不自动解析/监听、不记录部署缺凭据错误，业务同名配置和其它错误仍按原契约处理；手动加载仍校验并在显式提供测试值后成功。真实应用配置探针、严格类型、lint、JSDoc 与 skills 通过，最终全量应用启动复核部署 ERROR 已消失。

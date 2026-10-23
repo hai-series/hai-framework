@@ -282,13 +282,15 @@ if (!result.success) {
 
 > Browsers have no filesystem access. `core.config` offers placeholder APIs only: file-related methods return `SERVICE_UNAVAILABLE` and do not load YAML.
 
+Node automatically loads and watches runtime `.yml` / `.yaml` files, excluding exactly `_deploy.yml` and `_deploy.yaml`. The deployment CLI parses those reserved files after loading its target environment and credentials. Business `deploy.yml` and explicit `core.config.load` remain supported. A failed per-file load result is logged and loading continues; applications must validate required configuration and check `success`. Directory scanning, logger setup and other exceptions may still propagate.
+
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
-// 方式 1：init 时自动加载整个配置目录
+// 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描该目录所有 .yml 文件
+  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
   watchConfig: true, // 监听变更并自动重载
 })
 
@@ -573,7 +575,7 @@ pnpm --filter @h-ai/core test
 
 `_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../docs/configuration-map.md).
 
-See the [module JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for declaration comments and compilable examples. Node core.init is synchronous and returns void; invalid configuration throws. Business HaiResult APIs require a success check.
+See the [module JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
 
 The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
 

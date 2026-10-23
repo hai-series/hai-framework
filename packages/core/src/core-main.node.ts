@@ -89,9 +89,11 @@ function createNodeCore(): NodeCoreFunctions {
  * Core 服务对象 - 聚合常用功能（Node.js）。
  * @example
  * ```ts
- * import { core } from '@h-ai/core'
- * core.init({ configDir: './config' }) // 同步初始化；配置加载失败会抛出异常
- * core.logger.info('Application ready')
+ * import { core, CoreConfigSchema } from '@h-ai/core'
+ * core.init({ configDir: './config' }) // 单项加载失败记录日志并继续。
+ * const required = core.config.validate('core', CoreConfigSchema)
+ * if (!required.success) core.logger.error('Required config unavailable', { error: required.error })
+ * else core.logger.info('Application ready', { name: required.data.name })
  * ```
  */
 export const core: NodeCoreFunctions = createNodeCore()
@@ -119,14 +121,16 @@ interface ConfigLoadItem {
  * 约定：
  * - 以 `_` 开头的文件为内置模块配置（如 `_core.yml` → name='core'）
  * - 其他文件为业务配置（如 `app.yml` → name='app'）
+ * - `_deploy.yml` / `_deploy.yaml` 留给部署 CLI 独立解析，不参与运行时加载和监听；业务 `deploy.yml` 不受影响
  *
  * @param configDir - 配置目录路径
  * @returns 配置加载项列表；目录不存在时返回空数组并输出警告
+ * @throws 目录存在但不可读取等文件系统异常会向调用方传播。
  *
- * @example
+ * @example 模块内部上下文
  * ```ts
  * const items = scanConfigDir('./config')
- * // [{ name: 'core', filePath: './config/_core.yml' }, { name: 'app', filePath: './config/app.yml' }]
+ * core.logger.debug('Runtime configs selected', { names: items.map(item => item.name) })
  * ```
  */
 function scanConfigDir(
@@ -145,6 +149,9 @@ function scanConfigDir(
   )
 
   for (const file of files) {
+    // 部署凭据由 CLI 按目标环境加载，不能要求应用启动时提供 SSH / 云平台参数。
+    if (file === '_deploy.yml' || file === '_deploy.yaml')
+      continue
     const filePath = join(configDir, file)
     const baseName = file.replace(YAML_EXTENSION_REGEX, '')
 
@@ -172,14 +179,19 @@ function scanConfigDir(
  *
  * 执行流程：
  * 1. 配置日志（若提供 `options.logging`）
- * 2. 扫描并加载配置目录中的所有 YAML 文件
+ * 2. 扫描并加载运行时 YAML，跳过保留部署文件 `_deploy.yml` / `_deploy.yaml`
  * 3. 启用配置文件监听（若 `options.watchConfig` 为 true）
  *
- * @param options - 初始化选项
+ * 单项 `config.load` 返回失败时记录日志并继续；必需配置由调用方 `config.validate` 并检查 success。
  *
- * @example
+ * @param options - 初始化选项
+ * @throws 目录扫描、日志设置等异常仍会传播；不把单项配置的失败结果改为异常。
+ *
+ * @example 模块内部上下文
  * ```ts
  * core.init({ configDir: './config', watchConfig: true })
+ * const required = core.config.validate('core', CoreConfigSchema)
+ * if (!required.success) core.logger.error('Required config unavailable', { error: required.error })
  * ```
  */
 function initCore(options: CoreOptions = {}): void {
