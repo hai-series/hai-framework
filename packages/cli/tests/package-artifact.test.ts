@@ -62,7 +62,8 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   // 工具安装只含公开归档及其已声明生产依赖；目标应用始终没有 node_modules。
   await fse.writeJson(path.join(tool, 'package.json'), { name: 'published-cli-closure', private: true, type: 'module', dependencies: archives })
   await fse.writeFile(path.join(tool, 'pnpm-workspace.yaml'), `packages: []\noverrides:\n  \"@h-ai/core\": ${JSON.stringify(archives['@h-ai/core'])}\n`)
-  const installed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['install', '--offline', '--ignore-scripts'], { cwd: tool, shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 90_000, env: cleanEnv })
+  // frozen-lockfile 安装不保证缓存中含 semver 元数据；发布安装缺少元数据时应从 registry 获取。
+  const installed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['install', '--prefer-offline', '--ignore-scripts'], { cwd: tool, shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 90_000, env: cleanEnv })
   expect(installed.status, installed.error?.message || installed.stderr || installed.stdout).toBe(0)
   const installedCli = path.join(tool, 'node_modules/@h-ai/cli/dist/index.js')
   const metadata = await fse.readJson(path.join(tool, 'node_modules/@h-ai/cli/dist/metafile-esm.json')) as { inputs: Record<string, { imports: Array<{ path: string, external?: boolean }> }> }

@@ -995,6 +995,7 @@
 ### CLI-04 · P2 · 部署向导按真实数据库 Schema 校验 TLS 配置
 
 - [x] 已修正并通过定向验证（2026-10-23）。
+- **干净缓存 CI 复验（2026-10-23）**：原发布包测试把工作区 frozen install 误当成 registry semver 元数据已完整缓存，GitHub Actions 在 `nanoid@^6.0.2` 报 `ERR_PNPM_NO_OFFLINE_META`，尚未执行 Schema 断言。改用正常的 `--prefer-offline --ignore-scripts` 安装生产依赖，缺少元数据时从 registry 获取；目标应用仍无 `node_modules`，Schema 内联、非法 TLS 不落盘、有效配置保存及 DB 驱动不得加载的断言全部保留。Linux Node 24.18.0 / pnpm 12.11.2、仓库当前真实 core/deploy/cli 三个 tarball、两份彼此独立空 cache/store 下，旧测试先真实失败，修复后的两个原始 Vitest 文件 10/10 通过。证据 `tmp/stash-reconcile-20261023/linux-published-bdc97994-c552-46a7-99ea-6959af49a43e/`；不把该测试描述为离线安装验收，无生产代码或依赖配置变化。
 - **实施与验证**：复用真实Reldb Schema并新增纯公开/schemas入口，CLI内联schema/Zod，不初始化或依赖目标应用DB驱动；按MySQL/PostgreSQL分别校验TLS并在持久化前检查完整配置，非法输入保留原YAML/公共及私有环境，不放宽安全契约。11个非法值旧实现真实Red后最终3文件55通过，含仓库外实际tarball离线安装、空app node_modules/空NODE_PATH/禁止workspace逃逸和DB加载；有效配置写入后故意缺制品停止，不冒称部署成功。真实MySQL TLS6通过；源/严格测试类型、正常适用lint18文件零警告、fresh RelDB/CLI ESM+DTS、94 JSDoc、skills37/330、API21导入/30browser及env/api生成检查通过。三语README、双skill/reference、配置/样式图、生成metadata和LLMS同步；无新运行依赖/锁变化，完整部署另留最终轮；全量回归按用户要求在全部任务实施后执行。
 - **位置**：CLI deploy middleware 输入、reldb 配置公开入口及对应测试/生成元数据。
 - **证据与影响**：向导通用 ssl 校验接受 MySQL `true`，写出后真实 `core.config.load` + `ReldbConfigSchema` 拒绝；PostgreSQL 和 MySQL 的公开 TLS 契约不同。
