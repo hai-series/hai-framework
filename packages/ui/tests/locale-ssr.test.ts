@@ -28,9 +28,10 @@ describe('sSR locale isolation', () => {
       await Promise.resolve()
       return `<html lang="${store.current}">${uiM('password_show')}|${core.i18n.coreM('core_errorTimeout')}</html>`
     })
-    expect(await Promise.all([render('en-US'), render('zh-CN')])).toEqual([
+    expect(await Promise.all([render('en-US'), render('zh-CN'), render('ja-JP')])).toEqual([
       '<html lang="en-US">Show password|Request timeout</html>',
       '<html lang="zh-CN">显示密码|请求超时</html>',
+      '<html lang="ja-JP">パスワードを表示|リクエストがタイムアウトしました</html>',
     ])
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
   })

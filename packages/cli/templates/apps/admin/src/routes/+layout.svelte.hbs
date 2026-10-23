@@ -9,8 +9,8 @@
 {{/if}}
   import { page } from '$app/state'
 {{#if hasI18n}}
-  import { getLocale } from '$lib/paraglide/runtime.js'
-  import { setGlobalLocale } from '@h-ai/ui'
+  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+  import { LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
 {{/if}}
   import '../app.css'
 
@@ -20,6 +20,11 @@
 
   const { children }: Props = $props()
 {{#if hasI18n}}
+
+  function handleLanguageChange(language: string) {
+    setGlobalLocale(language)
+    setLocale(language as Parameters<typeof setLocale>[0])
+  }
 
   if (browser) {
     const paraglideLocale = getLocale()
@@ -33,7 +38,12 @@
 </svelte:head>
 
 <div class='min-h-screen flex flex-col bg-base-200'>
-  <header class='navbar border-b border-base-300 bg-base-100 px-6'><span class='text-lg font-semibold'>{page.data.appConfig.name}</span></header>
+  <header class='navbar border-b border-base-300 bg-base-100 px-6'>
+    <span class='flex-1 text-lg font-semibold'>{page.data.appConfig.name}</span>
+{{#if hasI18n}}
+    <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} />
+{{/if}}
+  </header>
   <div class='flex-1'>{@render children()}</div>
   <footer class='border-t border-base-300 bg-base-100 p-3 text-center text-xs text-base-content/60'>{page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}</footer>
 </div>

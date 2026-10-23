@@ -22,6 +22,8 @@
 
 ## Getting started
 
+`sequence` preserves SvelteKit resolve options: page transformations run from inner to outer, while the first preload and serialized-header filter win. This preserves the i18n HTML language replacement.
+
 ### Installation
 
 ```bash

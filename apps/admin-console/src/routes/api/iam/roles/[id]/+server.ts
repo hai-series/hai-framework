@@ -15,13 +15,14 @@ import { kit } from '@h-ai/kit'
  * 需要权限：role:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'role:list')
 
   const { id } = kit.validate.params(params, IdParamSchema)
 
   const role = await getAdminRole(id)
   if (!role) {
-    return kit.response.notFound(m.api_iam_roles_not_found())
+    return kit.response.notFound(m.api_iam_roles_not_found({}, { locale }))
   }
   return kit.response.ok(role)
 })
@@ -32,6 +33,7 @@ export const GET = kit.handler(async ({ params, locals }) => {
  * 需要权限：role:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'role:api:update')
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
@@ -40,7 +42,7 @@ export const PUT = kit.handler(async ({ params, request, locals }) => {
   // 检查角色是否存在
   const existing = await getAdminRole(roleId)
   if (!existing) {
-    return kit.response.notFound(m.api_iam_roles_not_found())
+    return kit.response.notFound(m.api_iam_roles_not_found({}, { locale }))
   }
 
   // 批量转换权限代码为 ID
@@ -66,6 +68,7 @@ export const PUT = kit.handler(async ({ params, request, locals }) => {
  * 需要权限：role:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'role:api:delete')
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
@@ -73,7 +76,7 @@ export const DELETE = kit.handler(async ({ params, locals }) => {
   // 检查角色是否存在
   const existing = await getAdminRole(roleId)
   if (!existing) {
-    return kit.response.notFound(m.api_iam_roles_not_found())
+    return kit.response.notFound(m.api_iam_roles_not_found({}, { locale }))
   }
 
   // 删除角色（IAM authz 内部已记录审计日志）

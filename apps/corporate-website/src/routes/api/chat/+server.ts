@@ -20,7 +20,7 @@ Keep responses concise, professional, and in the same language as the user's que
 If you don't know something specific about the company, provide a helpful general response.`
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : 'zh-CN'
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const { message } = await kit.validate.body(request, ChatSchema)
 
   if (!ai.isInitialized) {

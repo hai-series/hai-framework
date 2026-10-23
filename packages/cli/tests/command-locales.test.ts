@@ -72,7 +72,7 @@ async function render(question: PromptObject): Promise<string> {
   }
 }
 
-describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
+describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale) => {
   beforeEach(() => core.i18n.setGlobalLocale(locale))
 
   it('真实创建 API 工程并本地化完成提示，目标语言配置独立保留', async () => {
@@ -84,6 +84,10 @@ describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
       expect(output()).not.toMatch(/\p{Script=Han}/u)
       expect(output()).toContain('Project created')
       expect(output()).toContain('Database')
+    }
+    else if (locale === 'ja-JP') {
+      expect(output()).toContain('プロジェクトを作成しました')
+      expect(output()).toContain('データベース')
     }
     else {
       expect(output()).toContain('项目创建成功')
@@ -106,6 +110,11 @@ describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
       expect(output()).toContain('Project configuration initialized')
       expect(output()).toContain('No project found')
     }
+    else if (locale === 'ja-JP') {
+      expect(output()).toContain('モジュール cache を追加しました')
+      expect(output()).toContain('プロジェクト設定を初期化しました')
+      expect(output()).toContain('プロジェクトが見つかりません')
+    }
     else {
       expect(output()).toContain('模块 cache 添加成功')
       expect(output()).toContain('项目配置初始化完成')
@@ -121,12 +130,12 @@ describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
     const nameQuestion = typed.mock.calls[0]![0]
     selected.mockRestore()
     typed.mockRestore()
-    expect(await render(appQuestion)).toContain(locale === 'en-US' ? 'Application type' : '应用类型')
+    expect(await render(appQuestion)).toContain(locale === 'en-US' ? 'Application type' : locale === 'ja-JP' ? 'アプリケーション種別' : '应用类型')
     const validate = nameQuestion.validate
     expect(typeof validate).toBe('function')
     if (typeof validate === 'function') {
       const invalid = await validate('../escape', {}, nameQuestion)
-      expect(invalid).toBe(locale === 'en-US' ? 'Project names may contain only lowercase letters, digits and hyphens' : '项目名称只能包含小写字母、数字和连字符')
+      expect(invalid).toBe(locale === 'en-US' ? 'Project names may contain only lowercase letters, digits and hyphens' : locale === 'ja-JP' ? 'プロジェクト名には小文字の英字、数字、ハイフンのみ使用できます' : '项目名称只能包含小写字母、数字和连字符')
     }
     expect(await fse.pathExists(path.join(root, 'bad'))).toBe(false)
     if (locale === 'en-US')
@@ -137,7 +146,7 @@ describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
     const addQuestion = addChoice.mock.calls[0]![0]
     addChoice.mockRestore()
     const rendered = await render(addQuestion)
-    expect(rendered).toContain(locale === 'en-US' ? 'Select a module' : '选择要添加的模块')
+    expect(rendered).toContain(locale === 'en-US' ? 'Select a module' : locale === 'ja-JP' ? 'モジュールを選択してください' : '选择要添加的模块')
     if (locale === 'en-US')
       expect(rendered).not.toMatch(/\p{Script=Han}/u)
   })
@@ -163,10 +172,16 @@ describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
       expect(descriptions).toContain('Database type')
       expect(descriptions).toContain('Storage type')
     }
+    else if (locale === 'ja-JP') {
+      expect(descriptions).toContain('認証とアクセス管理')
+      expect(descriptions).toContain('データベース種別')
+      expect(descriptions).toContain('ストレージ種別')
+      expect(descriptions).toContain('日本語（ja-JP）')
+    }
     else {
       expect(descriptions).toContain('数据库类型')
     }
-    expect(await render(choice)).toContain(locale === 'en-US' ? 'Select features' : '选择功能')
+    expect(await render(choice)).toContain(locale === 'en-US' ? 'Select features' : locale === 'ja-JP' ? '機能を選択してください' : '选择功能')
     expect(await fse.pathExists(path.join(root, 'bad'))).toBe(false)
   })
 
@@ -179,19 +194,19 @@ describe.each(['zh-CN', 'en-US'])('create/add/init locale %s', (locale) => {
       throw new Error('Cancelled test process')
     })
     await expect(createProject({ cwd: root, name: '' })).rejects.toThrow('Cancelled test process')
-    expect(output()).toContain(locale === 'en-US' ? 'Cancelled' : '已取消')
+    expect(output()).toContain(locale === 'en-US' ? 'Cancelled' : locale === 'ja-JP' ? 'キャンセルしました' : '已取消')
     exit.mockRestore()
     await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'locale-app', version: '1.0.0', dependencies: { '@h-ai/core': '*' } }))
     vi.spyOn(fse, 'writeJson').mockRejectedValue(new Error('Filesystem unavailable'))
     await expect(addModule({ cwd: root, module: 'cache', install: false })).rejects.toThrow('Filesystem unavailable')
-    expect(output()).toContain(locale === 'en-US' ? 'Adding module failed' : '添加模块失败')
+    expect(output()).toContain(locale === 'en-US' ? 'Adding module failed' : locale === 'ja-JP' ? 'モジュールの追加に失敗しました' : '添加模块失败')
     if (locale === 'en-US')
       expect(output()).not.toMatch(/\p{Script=Han}/u)
   })
 })
 
 describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/init locale gates', () => {
-  it.each(['zh-CN', 'en-US'])('实际 Node 入口完成创建/添加/初始化/失败并保存可消费产物 %s', async (locale) => {
+  it.each(['zh-CN', 'en-US', 'ja-JP'])('实际 Node 入口完成创建/添加/初始化/失败并保存可消费产物 %s', async (locale) => {
     const root = await fixture()
     const env = { ...process.env, HAI_CORE_DEFAULTLOCALE: locale }
     const binary = path.resolve('dist/index.js')
@@ -211,6 +226,10 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     if (locale === 'en-US') {
       expect(diagnostics).not.toMatch(/\p{Script=Han}/u)
       expect(diagnostics).toContain('Unknown module: unknown-module')
+    }
+    else if (locale === 'ja-JP') {
+      expect(diagnostics).toContain('プロジェクトを作成しました')
+      expect(diagnostics).toContain('不明なモジュール：unknown-module')
     }
     else {
       expect(diagnostics).toContain('项目创建成功')

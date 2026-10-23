@@ -63,7 +63,7 @@ async function renderPrompt(question: prompts.PromptObject, text = ''): Promise<
   }
 }
 
-describe.each(['zh-CN', 'en-US'])('generate locale %s', (locale) => {
+describe.each(['zh-CN', 'en-US', 'ja-JP'])('generate locale %s', (locale) => {
   beforeEach(() => {
     core.i18n.setGlobalLocale(locale)
   })
@@ -144,16 +144,20 @@ describe.each(['zh-CN', 'en-US'])('generate locale %s', (locale) => {
 
 describe.skipIf(process.env.HAI_CLI_RUN_I18N_GATES !== '1')('built CLI locale environment gates', () => {
   it.each([
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'en-US', LANG: 'zh_CN.UTF-8' }, english: true },
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'zh-CN', LANG: 'en_US.UTF-8' }, english: false },
-    { environment: { LC_ALL: 'en_GB.UTF-8', LC_MESSAGES: 'zh_CN', LANG: 'zh_CN' }, english: true },
-    { environment: { LC_MESSAGES: 'en_US.UTF-8', LANG: 'zh_CN' }, english: true },
-    { environment: { LANG: 'en_US.UTF-8' }, english: true },
-    { environment: { HAI_CORE_DEFAULTLOCALE: ' ', LC_ALL: ' C.UTF-8 ' }, english: true },
-    { environment: { LANG: 'POSIX' }, english: true },
-    { environment: { LC_MESSAGES: 'zh_TW.UTF-8', LANG: 'en_US.UTF-8' }, english: false },
-    { environment: { HAI_CORE_DEFAULTLOCALE: 'ja-JP', LANG: 'en_US.UTF-8' }, english: false },
-  ])('真实进程的help/成功/失败按环境选择语言 $environment', async ({ environment, english }) => {
+    { environment: { HAI_CORE_DEFAULTLOCALE: 'en-US', LANG: 'zh_CN.UTF-8' }, locale: 'en-US' },
+    { environment: { HAI_CORE_DEFAULTLOCALE: 'zh-CN', LANG: 'en_US.UTF-8' }, locale: 'zh-CN' },
+    { environment: { LC_ALL: 'en_GB.UTF-8', LC_MESSAGES: 'zh_CN', LANG: 'zh_CN' }, locale: 'en-US' },
+    { environment: { LC_MESSAGES: 'en_US.UTF-8', LANG: 'zh_CN' }, locale: 'en-US' },
+    { environment: { LANG: 'en_US.UTF-8' }, locale: 'en-US' },
+    { environment: { HAI_CORE_DEFAULTLOCALE: ' ', LC_ALL: ' C.UTF-8 ' }, locale: 'en-US' },
+    { environment: { LANG: 'POSIX' }, locale: 'en-US' },
+    { environment: { LC_MESSAGES: 'zh_TW.UTF-8', LANG: 'en_US.UTF-8' }, locale: 'zh-CN' },
+    { environment: { HAI_CORE_DEFAULTLOCALE: 'ja-JP', LANG: 'en_US.UTF-8' }, locale: 'ja-JP' },
+    { environment: { LC_ALL: 'ja_JP.UTF-8', LC_MESSAGES: 'en_US.UTF-8' }, locale: 'ja-JP' },
+    { environment: { LC_MESSAGES: 'ja_JP.UTF-8', LANG: 'en_US.UTF-8' }, locale: 'ja-JP' },
+    { environment: { LANG: 'ja_JP.UTF-8' }, locale: 'ja-JP' },
+    { environment: { HAI_CORE_DEFAULTLOCALE: 'fr-FR', LANG: 'en_US.UTF-8' }, locale: 'zh-CN' },
+  ])('真实进程的help/成功/失败按环境选择语言 $environment', async ({ environment, locale }) => {
     const root = await project()
     const env = { ...process.env }
     for (const key of ['HAI_CORE_DEFAULTLOCALE', 'LC_ALL', 'LC_MESSAGES', 'LANG'])
@@ -168,10 +172,15 @@ describe.skipIf(process.env.HAI_CLI_RUN_I18N_GATES !== '1')('built CLI locale en
     const failure = run(['generate', 'toString', 'Unknown'])
     expect(failure.status).toBe(1)
     const output = help.stdout + help.stderr + success.stdout + success.stderr + failure.stdout + failure.stderr
-    if (english) {
+    if (locale === 'en-US') {
       expect(output).not.toMatch(/\p{Script=Han}/u)
       expect(output).toContain('Generation complete')
       expect(output).toContain('Unknown generator type: toString')
+    }
+    else if (locale === 'ja-JP') {
+      expect(output).toContain('生成が完了しました')
+      expect(output).toContain('不明な生成種別：toString')
+      expect(help.stdout).toContain('出力先パス')
     }
     else {
       expect(output).toContain('生成完成')

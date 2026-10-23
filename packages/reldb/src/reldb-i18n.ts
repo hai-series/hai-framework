@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 // ─── i18n ───
@@ -35,4 +36,5 @@ type ReldbMessageKey = keyof typeof messagesZhCN
 export const reldbM = core.i18n.createMessageGetter<ReldbMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 // ─── i18n ───
@@ -36,4 +37,5 @@ type AuditMessageKey = keyof typeof messagesZhCN
 export const auditM = core.i18n.createMessageGetter<AuditMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

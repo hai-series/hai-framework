@@ -2,6 +2,8 @@
 
 ## 简介
 
+支持中文、英文、日语；在个人设置中无刷新切换，页面、组件与 API 语言保持同步。
+
 基于 Svelte 5、`@h-ai/api-client`、`@h-ai/api-service-contract` 与 Capacitor 的移动端应用，可同步构建 Android / iOS 原生工程。
 
 ## 核心功能清单

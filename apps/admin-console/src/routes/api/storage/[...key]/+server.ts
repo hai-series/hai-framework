@@ -19,11 +19,12 @@ function isSafeStorageKey(key: string): boolean {
     && !key.split('/').some(segment => segment === '..' || segment.length === 0)
 }
 
-export const GET = kit.handler(async ({ params }) => {
+export const GET = kit.handler(async ({ params, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const key = params.key
 
   if (!isSafeStorageKey(key)) {
-    return kit.response.badRequest(m.common_error())
+    return kit.response.badRequest(m.common_error({}, { locale }))
   }
 
   const [headResult, fileResult] = await Promise.all([
@@ -32,7 +33,7 @@ export const GET = kit.handler(async ({ params }) => {
   ])
 
   if (!headResult.success || !fileResult.success) {
-    return kit.response.notFound(m.common_error())
+    return kit.response.notFound(m.common_error({}, { locale }))
   }
 
   // Node Buffer 在最新 @types/node 下不再直接被 BodyInit 接受，转为标准 Uint8Array<ArrayBuffer> 视图

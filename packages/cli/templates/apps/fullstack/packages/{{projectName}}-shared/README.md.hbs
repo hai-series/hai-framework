@@ -40,11 +40,11 @@ Language and theme preferences are saved in IAM user metadata, restored after lo
 
 AdminWorkspace mounts the shared `@h-ai/ui/guide` controller and GuideHost after authentication. AppShell includes a help button; first-use invitations offer start, later and dismiss. Web stores preferences in Cookies, while App/Desktop use localStorage, scoped by the current user and tour version. Help articles link to the overview and profile tours.
 
-Extend `src/lib/stores/guide-store.ts` and the shared Chinese/English messages, then add stable data-guide attributes to existing components. Navigation uses the same ManagementStore. Keep business text as i18n callbacks and preserve the host's locale/scope binding. Browser tests cover completion, reload, replay, settings navigation and mobile help.
+Extend `src/lib/stores/guide-store.ts` and the shared Chinese/English/Japanese messages, then add stable data-guide attributes to existing components. Navigation uses the same ManagementStore. Keep business text as i18n callbacks and preserve the host's locale/scope binding. Browser tests cover completion, reload, replay, settings navigation and mobile help.
 
 ### i18n and themes
 
-Shared page copy belongs in `messages/{zh-CN,en-US}.json`. Frontend-specific copy belongs in each app's own messages directory. Keep `baseLocale` and `locales` aligned across all enabled projects, then run root `pnpm i18n:compile`; do not edit generated Paraglide files.
+Shared page copy belongs in `messages/{zh-CN,en-US,ja-JP}.json`. Frontend-specific copy belongs in each app's own messages directory. Keep `baseLocale` and `locales` aligned across all enabled projects, then run root `pnpm i18n:compile`; do not edit generated Paraglide files.
 
 All frontend and shared projects load the installed message-format plugin from the workspace root `node_modules`, matching the scaffold's hoisted dependency layout. Compilation uses the workspace dependency version and does not fetch a plugin from a CDN.
 

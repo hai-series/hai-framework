@@ -413,6 +413,8 @@ function buildTokenManager(config: ApiClientConfig, transport: TransportClient |
   const refreshFetch: typeof fetch = async (input, init) => {
     const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
     const headers = new Headers(configured)
+    if (!headers.has('accept-language'))
+      headers.set('accept-language', core.i18n.getGlobalLocale())
     headers.set('x-request-client', config.clientName ?? DEFAULT_CLIENT_NAME)
     new Headers(init?.headers).forEach((value, name) => headers.set(name, value))
     return fetchFn(input, { ...init, headers })
@@ -492,9 +494,12 @@ async function buildHeaders(
   tokenManager: TokenManager | undefined,
 ): Promise<Record<string, string>> {
   const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
+  const headers = new Headers(configured)
+  if (!headers.has('accept-language'))
+    headers.set('accept-language', core.i18n.getGlobalLocale())
   const accessToken = await tokenManager?.storage.getAccessToken()
   return {
-    ...configured,
+    ...Object.fromEntries(headers),
     'x-request-client': config.clientName ?? DEFAULT_CLIENT_NAME,
     ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
   }

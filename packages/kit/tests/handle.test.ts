@@ -206,6 +206,25 @@ describe('createHandle', () => {
 })
 
 describe('sequence', () => {
+  it('保留语言转换并按顺序组合 resolve 选项', async () => {
+    const first: Handle = ({ event, resolve }) => resolve(event, {
+      transformPageChunk: ({ html }) => html.replace('%lang%', 'ja-JP'),
+      preload: () => false,
+    })
+    const second: Handle = ({ event, resolve }) => resolve(event, {
+      transformPageChunk: ({ html }) => `${html}<p>日本語</p>`,
+      preload: () => true,
+    })
+    const combined = sequence(first, second)
+    const resolve: Parameters<Handle>[0]['resolve'] = async (_event, options) => {
+      expect(options?.preload?.({ type: 'js', path: '/app.js' })).toBe(false)
+      const html = await options?.transformPageChunk?.({ html: '<html lang="%lang%">', done: true })
+      return new Response(html)
+    }
+    const response = await combined({ event: createMockEvent(), resolve })
+    expect(await response.text()).toBe('<html lang="ja-JP"><p>日本語</p>')
+  })
+
   it('应该组合多个 handle', async () => {
     const order: number[] = []
 

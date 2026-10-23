@@ -1,5 +1,5 @@
 <script lang='ts'>
-  // 全局布局：主题（深/浅）与语言（中/英）切换，并在挂载时恢复用户偏好
+  // 全局布局：主题（深/浅）与语言（中/英/日）切换，并在挂载时恢复用户偏好
   import { browser } from '$app/environment'
   import * as m from '$lib/paraglide/messages.js'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
@@ -21,7 +21,7 @@
 
   function handleLanguageChange(language: string) {
     setGlobalLocale(language)
-    setLocale(language as 'zh-CN' | 'en-US')
+    setLocale(language as 'zh-CN' | 'en-US' | 'ja-JP')
     currentLanguage = language
   }
 

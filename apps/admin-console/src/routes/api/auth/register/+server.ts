@@ -10,9 +10,10 @@ import { audit } from '@h-ai/audit'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-export const POST = kit.handler(async ({ request, cookies, getClientAddress }) => {
+export const POST = kit.handler(async ({ request, cookies, getClientAddress, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!iam.isRegisterEnabled) {
-    return kit.response.forbidden(m.common_error())
+    return kit.response.forbidden(m.common_error({}, { locale }))
   }
 
   const { username, email, phone, password } = await kit.validate.body(request, createRegisterSchema())
@@ -20,7 +21,7 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
   const result = await kit.auth.registerAndLogin(cookies, { username, email, phone, password })
   if (!result.success) {
     if (result.error.code === HaiIamError.USER_NOT_FOUND.code || result.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
-      return kit.response.conflict(m.api_auth_username_or_email_taken())
+      return kit.response.conflict(m.api_auth_username_or_email_taken({}, { locale }))
     }
     return kit.response.fromError(result.error)
   }

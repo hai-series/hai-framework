@@ -43,7 +43,7 @@ try {
 
   result = spawnSync(
     process.execPath,
-    [vitestCli, 'run', ...(deployGate ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts'] : [i18nGate ? 'tests/generate-i18n.test.ts' : generateGate ? 'tests/generate-runtime.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts']), '--testTimeout', '1800000', ...vitestArgs],
+    [vitestCli, 'run', ...(deployGate ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts'] : i18nGate ? ['tests/generate-i18n.test.ts', 'tests/command-locales.test.ts'] : [generateGate ? 'tests/generate-runtime.e2e.test.ts' : 'tests/scaffold-gates.e2e.test.ts']), '--testTimeout', '1800000', ...vitestArgs],
     {
       env: {
         ...process.env,
@@ -51,7 +51,7 @@ try {
         HAI_CLI_PACKAGE_OVERRIDES: JSON.stringify(packageOverrides),
         HAI_CLI_RUN_SCAFFOLD_GATES: '1',
         ...(generateGate ? { HAI_CLI_RUN_GENERATE_GATES: '1' } : {}),
-        ...(i18nGate ? { HAI_CLI_RUN_I18N_GATES: '1' } : {}),
+        ...(i18nGate ? { HAI_CLI_RUN_I18N_GATES: '1', HAI_CLI_RUN_LOCALE_GATES: '1' } : {}),
         ...(deployGate ? { HAI_DEPLOY_E2E: '1' } : {}),
       },
       // 直接启动 Node，测试名中的空格/正则不能被 Windows shell 当成命令。

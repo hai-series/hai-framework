@@ -11,6 +11,7 @@ describe('core.i18n (node)', () => {
   it('隔离交错异步请求，显式语言优先，完成后不污染默认值', async () => {
     const enStarted = Promise.withResolvers<void>()
     const zhStarted = Promise.withResolvers<void>()
+    const jaStarted = Promise.withResolvers<void>()
     const en = core.i18n.runWithLocale('en', async () => {
       enStarted.resolve()
       await zhStarted.promise
@@ -20,10 +21,20 @@ describe('core.i18n (node)', () => {
     const zh = core.i18n.runWithLocale('zh', async () => {
       await enStarted.promise
       zhStarted.resolve()
-      await Promise.resolve()
+      await jaStarted.promise
       return core.i18n.coreM('core_errorTimeout')
     })
-    expect(await Promise.all([en, zh])).toEqual(['Request timeout', '请求超时'])
+    const ja = core.i18n.runWithLocale('ja', async () => {
+      await zhStarted.promise
+      jaStarted.resolve()
+      expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
+      await expect(core.i18n.runWithLocale('en', async () => {
+        throw new Error('nested request failed')
+      })).rejects.toThrow('nested request failed')
+      expect(core.i18n.coreM('core_errorTimeout', { locale: 'en' })).toBe('Request timeout')
+      return core.i18n.coreM('core_errorTimeout')
+    })
+    expect(await Promise.all([en, zh, ja])).toEqual(['Request timeout', '请求超时', 'リクエストがタイムアウトしました'])
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
   })
 
@@ -55,6 +66,20 @@ describe('core.i18n (node)', () => {
 
     core.i18n.setGlobalLocale('zh')
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
+
+    core.i18n.setGlobalLocale('ja')
+    expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
+  })
+
+  it('日语消息支持全局切换、请求覆盖、插值与缺少字典时回退', () => {
+    expect(core.i18n.DEFAULT_LOCALES).toContainEqual({ code: 'ja-JP', label: '日本語' })
+    core.i18n.setGlobalLocale('ja')
+    expect(core.i18n.coreM('core_errorTimeout')).toBe('リクエストがタイムアウトしました')
+    expect(core.i18n.coreM('core_validationMinLength', { params: { field: '名前', min: 3 } }))
+      .toBe('名前は3文字以上で入力してください')
+    expect(core.i18n.coreM('core_errorTimeout', { locale: 'en-US' })).toBe('Request timeout')
+    expect(core.i18n.getGlobalLocale()).toBe('ja-JP')
+    expect(core.i18n.createMessageGetter({ 'zh-CN': { hello: '你好' } })('hello')).toBe('你好')
   })
 
   it('createMessageGetter 应该处理 locale 回退与占位符保留', () => {

@@ -8,7 +8,8 @@ import * as m from '$lib/paraglide/messages.js'
 import { generateImage } from '$lib/server/ai-lab.js'
 import { kit } from '@h-ai/kit'
 
-export const POST = kit.handler(async ({ request }) => {
+export const POST = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const formData = await request.formData()
   const parsed = ImageRequestSchema.safeParse({
     prompt: formData.get('prompt'),
@@ -16,11 +17,11 @@ export const POST = kit.handler(async ({ request }) => {
     height: Number(formData.get('height')),
   })
   if (!parsed.success)
-    return kit.response.badRequest(m.image_error_invalid_request())
+    return kit.response.badRequest(m.image_error_invalid_request({}, { locale }))
 
   const files = formData.getAll('referenceImages')
   if (files.some(file => !(file instanceof File) || file.size === 0 || file.size > MAX_REFERENCE_IMAGE_BYTES || !file.type.startsWith('image/')))
-    return kit.response.badRequest(m.image_error_invalid_reference())
+    return kit.response.badRequest(m.image_error_invalid_reference({}, { locale }))
 
   const referenceImages = await Promise.all((files as File[]).map(async file => ({
     data: new Uint8Array(await file.arrayBuffer()),

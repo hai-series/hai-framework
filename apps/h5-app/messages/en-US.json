@@ -23,7 +23,6 @@
   "discover_error_failed": "Analysis failed, please try again later",
   "discover_theme": "Theme",
   "discover_language": "Language",
-
   "home_search_placeholder": "Search products",
   "home_banner_new_title": "New Arrivals",
   "home_banner_new_subtitle": "Selected goodies are waiting for you",
@@ -47,7 +46,6 @@
   "home_tag_new": "New",
   "home_tag_hot": "Hot",
   "home_tag_special": "Special",
-
   "cart_title": "Cart",
   "cart_empty": "Your cart is empty",
   "cart_go_shopping": "Go shopping",
@@ -56,7 +54,6 @@
   "cart_decrease_qty": "Decrease quantity",
   "cart_increase_qty": "Increase quantity",
   "cart_remove_item": "Remove item",
-
   "profile_title": "Profile",
   "profile_guest_title": "Not logged in",
   "profile_guest_login_hint": "Login to unlock more benefits",
@@ -71,7 +68,6 @@
   "profile_menu_coupon": "Coupons",
   "profile_menu_settings": "Settings",
   "profile_logout": "Logout",
-
   "auth_login_title": "Welcome Back",
   "auth_login_subtitle": "Sign in to your account",
   "auth_login_back": "Back",
@@ -79,7 +75,6 @@
   "auth_login_register_link": "Register now",
   "auth_login_error_generic": "Login failed",
   "auth_login_error_network": "Network error, please retry",
-
   "auth_register_title": "Create Account",
   "auth_register_subtitle": "Register a new account to get started",
   "auth_register_back": "Back",
@@ -90,17 +85,24 @@
   "api_upload_invalid_path": "Invalid file path",
   "api_upload_storage_unavailable": "File storage is not configured",
   "api_upload_file_not_found": "File not found",
-
   "action_share": "Share",
   "action_edit_profile": "Edit Profile",
   "action_clear_cache": "Clear Cache",
   "action_cancel": "Cancel",
   "action_more": "More Actions",
-
   "swipe_delete": "Delete",
   "swipe_collect": "Collect",
-
   "pull_refresh_done": "Refreshed",
   "load_no_more": "No more data",
-  "load_loading": "Loading..."
+  "load_loading": "Loading...",
+  "vision_storage_unavailable": "File storage is not configured",
+  "vision_ai_unavailable": "AI service is not configured",
+  "vision_size_exceeded": "Image size exceeds 4MB limit",
+  "vision_type_unsupported": "Only JPG, PNG, WEBP are supported",
+  "vision_upload_failed": "Image upload failed",
+  "vision_analysis_failed": "AI analysis failed",
+  "vision_save_failed": "Record save failed",
+  "vision_system_prompt": "You are an image recognition assistant. Return strict JSON only with keys: summary(string), details(string[]), tags(string[]), confidence(number 0..1).",
+  "vision_user_prompt": "Analyze this image and describe key content. Extra request: {prompt}",
+  "vision_no_prompt": "none"
 }

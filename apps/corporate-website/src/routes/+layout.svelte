@@ -23,7 +23,7 @@
   const { children }: Props = $props()
 
   let currentTheme = $state('corporate')
-  let currentLocale = $state<'zh-CN' | 'en-US'>('zh-CN')
+  let currentLocale = $state<'zh-CN' | 'en-US' | 'ja-JP'>('zh-CN')
 
   const navItems = $derived([
     { href: '/', label: m.nav_home() },
@@ -35,7 +35,7 @@
   ])
 
   function handleLanguageChange(lang: string) {
-    if (lang !== 'zh-CN' && lang !== 'en-US') {
+    if (lang !== 'zh-CN' && lang !== 'en-US' && lang !== 'ja-JP') {
       return
     }
 
@@ -57,7 +57,7 @@
     const savedLocale = getLocale()
     const savedTheme = getSavedTheme()
 
-    currentLocale = savedLocale as 'zh-CN' | 'en-US'
+    currentLocale = savedLocale as 'zh-CN' | 'en-US' | 'ja-JP'
     currentTheme = savedTheme
 
     setGlobalLocale(savedLocale)

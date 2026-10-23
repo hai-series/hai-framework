@@ -134,7 +134,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 1. **架构决策**（§1）→ 选定模块类型 / 子功能 / Provider / API 风格
 2. **目录骨架**（§2）→ 创建文件夹与空文件
 3. **`xx-config.ts`** → R1
-4. **`messages/{zh-CN,en-US}.json`** → R5
+4. **`messages/{zh-CN,en-US,ja-JP}.json`** → R5
 5. **`xx-i18n.ts`** → R4.4
 6. **`xx-types.ts`** → R2
 7. **子功能 types + functions**（如有）→ R4.1

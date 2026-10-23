@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
+フレームワークの各モジュール、`apps/` のサンプル、CLI テンプレートは簡体字中国語（`zh-CN`）、英語（`en-US`）、日本語（`ja-JP`）に対応します。`core.i18n.setGlobalLocale('ja')` は `ja-JP` に正規化されます。アプリでは言語メニューから切り替えます。
+
 > 現在は `0.1.0-alpha` 段階で、公開契約は開発中です。本番導入前にバージョンを固定し、用途に応じた安全性・処理能力を検証してください。
 
 複数インスタンスの本番構成は[21 パッケージの共有状態・復旧能力表（中国語）](docs/distributed-state.md)を確認してください。PostgreSQL/MySQL、Redis、共有オブジェクト・ベクトルサービスを使用し、初期化時にローカル後端を拒否します。CAS・租約・冪等性・未知の外部効果と検証範囲を記載しています。
@@ -537,7 +539,7 @@ if (login.success)
 
 ## 初回ガイドとヘルプセンター
 
-`@h-ai/ui/guide` は `createGuide`、`GuideHost`、`HelpCenter` を提供します。Cookie による初回案内、手動再表示、対象ページへの移動と段階的な強調表示、Markdown ヘルプの検索を利用できます。既存テーマに対応し、共通文言は中国語・英語、業務内容はアプリの i18n を使用します。
+`@h-ai/ui/guide` は `createGuide`、`GuideHost`、`HelpCenter` を提供します。Cookie による初回案内、手動再表示、対象ページへの移動と段階的な強調表示、Markdown ヘルプの検索を利用できます。既存テーマに対応し、共通文言は中国語・英語・日本語、業務内容はアプリの i18n を使用します。
 
 admin-console と CLI fullstack の Web/App/Desktop で標準搭載されます。ユーザーとガイドのバージョンごとに状態を保存し、後で表示する選択肢と再通知しない選択肢を提供します。[UI ガイド](packages/ui/README.ja.md#初回ガイドとヘルプセンター)を参照してください。
 

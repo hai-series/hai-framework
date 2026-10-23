@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
+Framework modules, `apps/` examples and CLI templates include Simplified Chinese (`zh-CN`), English (`en-US`) and Japanese (`ja-JP`). `core.i18n.setGlobalLocale('ja')` normalizes to `ja-JP`; applications expose a language menu.
+
 > Currently in the `0.1.0-alpha` stage: public contracts are still evolving. Pin versions and validate security and capacity for your own use cases before production adoption.
 
 For production deployments with multiple instances, review the [21-package shared-state and recovery matrix (Chinese)](docs/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
@@ -537,7 +539,7 @@ if (login.success)
 
 ## Onboarding and help center
 
-`@h-ai/ui/guide` provides `createGuide`, `GuideHost` and `HelpCenter` for first-use cookie invitations, manual replay, navigation to guided pages and searchable Markdown help. Tours follow existing themes; built-in controls support Chinese and English, while business content uses application i18n.
+`@h-ai/ui/guide` provides `createGuide`, `GuideHost` and `HelpCenter` for first-use cookie invitations, manual replay, navigation to guided pages and searchable Markdown help. Tours follow existing themes; built-in controls support Chinese, English and Japanese, while business content uses application i18n.
 
 The admin-console example and CLI fullstack Web/App/Desktop enable this by default. Preferences are isolated by user and tour version, with later and dismiss options. See [UI onboarding](packages/ui/README.en.md#onboarding-and-help-center).
 

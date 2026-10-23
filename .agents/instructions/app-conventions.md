@@ -16,17 +16,17 @@
 ## i18n 规则
 
 - 所有用户可见字符串必须使用 i18n key（标题、Toast、Alert、按钮、校验提示、错误信息）
-- 翻译文件位于 `messages/{zh-CN,en-US}.json`
+- 翻译文件位于 `messages/{zh-CN,en-US,ja-JP}.json`
 - ❌ 禁止直接修改 `src/lib/paraglide` 生成文件
 
 ## @h-ai/ui 组件使用
 
-- @h-ai/ui 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale
+- @h-ai/ui 场景组件（`scenes/`）内置中英日文翻译，自动响应全局 locale
 - **应用层只管页面级文本**：标题、错误提示、导航等由应用层 i18n 处理
 - **不要把页面翻译样板传给 UI 组件**：组件内部默认文本由 @h-ai/ui 统一管理
 - 可选覆盖：仅使用组件显式提供的 `submitText` / `placeholderText` 等 props 覆盖特定文本
 - @h-ai/ui 已有组件不得重复实现
-- 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US}.json`
+- 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US,ja-JP}.json`
 
 ## 路由与端点安全
 

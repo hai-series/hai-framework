@@ -6,6 +6,8 @@
 
 ## 概要
 
+生成プロジェクトは既定で `zh-CN`、`en-US`、`ja-JP` を有効にします。対話設定で日本語を既定に選択でき、fullstack は `fullstack.i18n.locales` で言語を制限できます。CLI は `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` の順で中国語・英語・日本語を選択します。
+
 `hai` でアプリ作成、モジュール追加、ひな型生成、ビルド、配布を行います。SvelteKit、独立 API、フロントとバックを分離した工程に対応します。全体の流れは[利用ガイド](../../docs/usage/README.ja.md)を参照してください。
 
 ## 主な機能
@@ -79,7 +81,7 @@ hai generate migration add-orders
 
 page は SvelteKit のファイルルートに対応し、api は対象アプリに応じて SvelteKit または serv の共有 contract/procedure を生成します。API/fullstack のルートでは一意なバックエンドを自動選択します。複数候補は `--workspace <パッケージ名または相対パス>` で指定するか、対象 workspace に移動してください。通常の Vite への page/api 生成は拒否します。serv は `--output` を受け付けず、SvelteKit の出力は `src/routes` 内に限定し、独自の `kit.files` は推測せず拒否します。SvelteKit API には `@h-ai/kit` と `zod` が必要です。serv は `@hai-generator` マーカーのある既存の集約入口だけを更新し、未知の構成には手動統合を要求します。名前にパスは指定できません。既存ファイルは `--force` が必要ですが、登録済み業務領域は置換しません。一括検査後に書き込み、失敗時は今回の変更を戻します。マイグレーションは up/down 関数のみ生成するため、実行前にデータへの影響を確認してください。
 
-CLI メッセージは中国語と英語に対応します。`HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` の最初の空でない値を使い、`en`/`zh` の地域別表記は既存辞書に対応付けます。`C`/`POSIX` は英語です。未知の言語は現在の core 言語（既定は中国語）を保持します。PowerShell では `$env:HAI_CORE_DEFAULTLOCALE='en-US'` の後に `hai generate` を実行してください。CLI 内部のコマンドも `core.i18n.setGlobalLocale('en-US')` による同一プロセス内の言語切替を反映します。種類や名前を省略すると対話入力になり、取消時はファイルを書きません。生成コードの中国語コメントとユーザー指定名は変更しません。
+CLI メッセージは中国語・英語・日本語に対応します。`HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` の最初の空でない値を使い、`en`/`zh`/`ja` の地域別表記は既存辞書に対応付けます。`C`/`POSIX` は英語です。未知の言語は現在の core 言語（既定は中国語）を保持します。PowerShell では `$env:HAI_CORE_DEFAULTLOCALE='en-US'` の後に `hai generate` を実行してください。CLI 内部のコマンドも `core.i18n.setGlobalLocale('en-US')` による同一プロセス内の言語切替を反映します。種類や名前を省略すると対話入力になり、取消時はファイルを書きません。生成コードの中国語コメントとユーザー指定名は変更しません。
 
 `create`、`add`、`init`、`generate` のプロンプト、検証、モジュール/テンプレート名、説明と完了メッセージは現在の CLI 言語を使用します。選択肢は参照時に翻訳するため、同一プロセス内の locale 変更も反映します。CLI 言語と生成アプリの `core.defaultLocale` は独立しています。生成される中国語 README、設定/コードのコメント、ユーザー入力と外部ツールの元の診断は変更しません。
 
@@ -136,7 +138,7 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 `test:e2e` は各サービスに隔離されたテスト用バックエンドと絶対データパスを明示します。サービス子プロセスは外部の `HAI_*` / `PUBLIC_*` / `VITE_*` 設定やユーザーの `.env.local` を読み込みません。テスト専用の `HAI_E2E=1` は通常開発・本番の dotenv と共有バックエンド要件を変更せず、transport は毎回生成する信頼済み SM2 ring と実際の registry を使います。生成プロジェクトのブラウザー検証では独立 TCP 計数プロセスで外部 DB への接続がないことも確認します。完全な fullstack デプロイ検証では実 Redis/S3、増分更新とロールバックを維持します。
 
-`--i18n` は CLI をビルドし、独立プロセスで言語の優先順位・help・生成成功・失敗を検証し、中国語/英語の入力・検証・取消も確認します。
+`--i18n` は CLI をビルドし、独立プロセスで言語の優先順位・help・生成成功・失敗を検証し、中国語/英語/日本語の入力・検証・取消と create/add/init も確認します。
 
 ## ライセンス
 

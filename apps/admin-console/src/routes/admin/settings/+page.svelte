@@ -35,7 +35,7 @@
     // 同步到全局 locale（经 @h-ai/ui 转发，影响核心模块错误消息等）
     setGlobalLocale(lang)
     // setLocale 会设置 cookie 并触发页面语言切换（Paraglide UI 翻译）
-    setLocale(lang as 'zh-CN' | 'en-US')
+    setLocale(lang as 'zh-CN' | 'en-US' | 'ja-JP')
   }
 
   // ========== 初始化 ==========

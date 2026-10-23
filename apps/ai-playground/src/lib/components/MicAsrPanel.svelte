@@ -10,7 +10,7 @@
 
   const TRANSCRIBE_INTERVAL_SECONDS = 2
 
-  let language = $state<'auto' | 'zh' | 'en'>('auto')
+  let language = $state<'auto' | 'zh' | 'en' | 'ja'>('auto')
   let phase = $state<Phase>('idle')
   let transcript = $state('')
   let error = $state('')
@@ -172,6 +172,7 @@
     <option value='auto'>{m.asr_language_auto()}</option>
     <option value='zh'>{m.asr_language_zh()}</option>
     <option value='en'>{m.asr_language_en()}</option>
+    <option value='ja'>{m.asr_language_ja()}</option>
   </select>
 
   <div class='mt-4 min-h-24 rounded-lg bg-base-200 p-4' data-testid='mic-result'>

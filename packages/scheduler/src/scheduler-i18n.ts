@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 // ─── i18n ───
@@ -39,4 +40,5 @@ type SchedulerMessageKey = keyof typeof messagesZhCN
 export const schedulerM = core.i18n.createMessageGetter<SchedulerMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

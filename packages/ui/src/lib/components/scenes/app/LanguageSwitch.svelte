@@ -69,6 +69,7 @@
     languages = [
       { value: 'zh-CN', label: '简体中文', flag: 'CN' },
       { value: 'en-US', label: 'English', flag: 'US' },
+      { value: 'ja-JP', label: '日本語', flag: 'JP' },
     ],
     onchange,
     align = 'end',

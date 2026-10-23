@@ -8,6 +8,7 @@
 import type { AsyncLocalStorage } from 'node:async_hooks'
 import type { Locale, LocaleInfo, LocaleMessages, MessageOptions } from '../core-types.js'
 import messagesEnUS from '../../messages/en-US.json'
+import messagesJaJP from '../../messages/ja-JP.json'
 import messagesZhCN from '../../messages/zh-CN.json'
 
 // ─── 常量 ───
@@ -15,6 +16,7 @@ import messagesZhCN from '../../messages/zh-CN.json'
 const DEFAULT_LOCALES: LocaleInfo[] = [
   { code: 'zh-CN', label: '简体中文' },
   { code: 'en-US', label: 'English' },
+  { code: 'ja-JP', label: '日本語' },
 ]
 
 const DEFAULT_LOCALE: Locale = 'zh-CN'
@@ -42,7 +44,7 @@ export function installRequestLocales(storage: AsyncLocalStorage<{ locale: Local
 
 /** 规范化公共语言简写，未知语言由消息获取器按字典回退。 */
 function normalizeLocale(locale: Locale): Locale {
-  return locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  return locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : locale
 }
 
 function getGlobalLocale(): Locale {
@@ -147,6 +149,7 @@ type CoreMessageKey = keyof typeof messagesZhCN
 const coreM = createMessageGetter<CoreMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })
 
 // ─── 对外入口 ───

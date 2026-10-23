@@ -337,5 +337,7 @@
   "cli_coreLabel": "Core",
   "cli_serviceLabel": "Service",
   "cli_yes": "Yes",
-  "cli_no": "No"
+  "cli_no": "No",
+  "cli_createEnglishLocale": "English (en-US)",
+  "cli_createJapaneseLocale": "Japanese (ja-JP)"
 }

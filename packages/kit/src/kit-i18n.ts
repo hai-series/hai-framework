@@ -7,10 +7,11 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 /**
- * Kit 中英消息字典的合法 key 联合。
+ * Kit 中英日消息字典的合法 key 联合。
  * @example 模块内部上下文
  * ```ts
  * const key: KitMessageKey = 'kit_accessDenied'
@@ -29,7 +30,7 @@ type KitMessageKey = keyof typeof messagesZhCN
  * ```
  */
 export const kitM
-  = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
+  = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS, 'ja-JP': messagesJaJP })
 
 /**
  * 设置浏览器应用语言或 Node 启动默认语言；请求中只更新当前 runWithLocale 上下文。

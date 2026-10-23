@@ -40,7 +40,8 @@ apps/{app-name}/
 │   └── ...
 ├── messages/                  # i18n 翻译文件
 │   ├── zh-CN.json
-│   └── en-US.json
+│   ├── en-US.json
+│   └── ja-JP.json
 ├── project.inlang/            # Paraglide 配置
 │   └── settings.json
 ├── src/
@@ -360,7 +361,7 @@ export const { apiFetch } = client
 
 ### 文件位置
 
-- 应用翻译：`messages/{zh-CN,en-US}.json`
+- 应用翻译：`messages/{zh-CN,en-US,ja-JP}.json`
 - UI 组件翻译：`packages/ui/src/lib/messages/`（由 @h-ai/ui 管理）
 - 禁止直接修改 `src/lib/paraglide/` 生成文件
 

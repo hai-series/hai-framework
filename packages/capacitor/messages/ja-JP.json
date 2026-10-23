@@ -1,0 +1,18 @@
+{
+  "capacitor_initFailed": "Capacitorの初期化に失敗しました",
+  "capacitor_initInProgress": "Capacitorの初期化は既に実行中です",
+  "capacitor_notAvailable": "この環境ではCapacitorを利用できません",
+  "capacitor_secureStorageClearFailed": "安全なストレージのログイン認証情報を完全に削除できませんでした。ログアウトを再試行してください",
+  "capacitor_preferencesGetFailed": "Capacitor Preferencesからの読み取りに失敗しました",
+  "capacitor_preferencesSetFailed": "Capacitor Preferencesへの書き込みに失敗しました",
+  "capacitor_preferencesRemoveFailed": "Capacitor Preferencesからの削除に失敗しました",
+  "capacitor_deviceInfoFailed": "デバイス情報の取得に失敗しました",
+  "capacitor_appVersionFailed": "アプリのバージョンの取得に失敗しました",
+  "capacitor_pushRegisterFailed": "プッシュ通知の登録に失敗しました",
+  "capacitor_pushListenFailed": "プッシュ通知の受信設定に失敗しました",
+  "capacitor_cameraFailed": "カメラへのアクセスに失敗しました",
+  "capacitor_statusBarFailed": "ステータスバーの設定に失敗しました",
+  "capacitor_notInitialized": "Capacitorモジュールが初期化されていません",
+  "capacitor_pushCancelled": "プッシュ操作がキャンセルされたか、タイムアウトしたか、モジュールが終了しました",
+  "capacitor_pushCleanupFailed": "プッシュリスナーを完全に削除できませんでした。クリーンアップを再試行するか、モジュールを終了してください"
+}

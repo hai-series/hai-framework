@@ -7,8 +7,9 @@ import { kit } from '@h-ai/kit'
  * 修改当前登录用户密码，成功后要求重新登录。
  */
 export const PUT = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!locals.accessToken) {
-    return kit.response.unauthorized(m.common_error())
+    return kit.response.unauthorized(m.common_error({}, { locale }))
   }
 
   const data = await kit.validate.body(request, createChangeCurrentPasswordSchema())

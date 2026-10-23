@@ -164,14 +164,38 @@ describe('auth-store', () => {
     expect(authStore.isLoading()).toBe(false)
   })
 
-  it.each(['en-US', 'zh-CN'])('logout HaiResult失败使用%s文案且仍清理本地凭据', async (language) => {
+  it.each([
+    { language: 'en-US', message: 'Server sign-out was not confirmed' },
+    { language: 'zh-CN', message: '服务端登出未确认' },
+    { language: 'ja-JP', message: 'サーバーでのログアウトを確認できませんでした' },
+  ])('logout HaiResult失败使用$language文案且仍清理本地凭据', async ({ language, message }) => {
     locale.current = language
     logout.mockResolvedValueOnce({ success: false, error: { code: 'REPOSITORY_ERROR', message: 'state unavailable' } })
     const authStore = await import('../src/lib/auth-store.svelte.js')
     const error = await authStore.logout()
-    expect(error).toContain(language === 'zh-CN' ? '服务端登出未确认' : 'Server sign-out was not confirmed')
+    expect(error).toContain(message)
     expect(clearTokens).toHaveBeenCalledOnce()
     expect(authStore.isAuthenticated()).toBe(false)
+    expect(authStore.isLoading()).toBe(false)
+  })
+
+  it.each([
+    { language: 'en-US', loginRequest: 'Login request failed', registerRequest: 'Register request failed', loginResponse: 'Unexpected login response from server', registerResponse: 'Unexpected register response from server' },
+    { language: 'zh-CN', loginRequest: '登录请求失败', registerRequest: '注册请求失败', loginResponse: '服务端登录响应异常', registerResponse: '服务端注册响应异常' },
+    { language: 'ja-JP', loginRequest: 'ログインリクエストに失敗しました', registerRequest: '登録リクエストに失敗しました', loginResponse: 'サーバーからのログイン応答が無効です', registerResponse: 'サーバーからの登録応答が無効です' },
+  ])('登录注册的未知响应与请求失败使用$language文案', async (messages) => {
+    locale.current = messages.language
+    const authStore = await import('../src/lib/auth-store.svelte.js')
+    const loginInput = { identifier: 'alice', password: 'secret12' }
+    const registerInput = { username: 'alice', password: 'secret12' }
+    login.mockResolvedValueOnce({})
+    expect(await authStore.login(loginInput)).toBe(messages.loginResponse)
+    register.mockResolvedValueOnce({})
+    expect(await authStore.register(registerInput)).toBe(messages.registerResponse)
+    login.mockRejectedValueOnce({})
+    expect(await authStore.login(loginInput)).toBe(messages.loginRequest)
+    register.mockRejectedValueOnce({})
+    expect(await authStore.register(registerInput)).toBe(messages.registerRequest)
     expect(authStore.isLoading()).toBe(false)
   })
 

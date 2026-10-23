@@ -10,7 +10,7 @@
 
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
-  const languageOptions = $derived(locales.filter(locale => store.info?.supportedLocales.includes(locale)).map(locale => ({ value: locale, label: locale === 'zh-CN' ? '简体中文' : 'English' })))
+  const languageOptions = $derived(locales.filter(locale => store.info?.supportedLocales.includes(locale)).map(locale => ({ value: locale, label: locale === 'zh-CN' ? '简体中文' : locale === 'ja-JP' ? '日本語' : 'English' })))
   const themeOptions = AVAILABLE_THEMES.map(theme => ({ value: theme, label: getThemeInfo(theme)?.name ?? theme }))
 </script>
 

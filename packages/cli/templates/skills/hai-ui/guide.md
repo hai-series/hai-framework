@@ -4,7 +4,7 @@
 
 ## 最小接入
 
-下面的 `m`、`locale`、`currentUser`、`createUser` 来自应用。翻译 key 需要在应用中英文消息文件定义；`nav` 使用当前宿主的公开导航适配器。
+下面的 `m`、`locale`、`currentUser`、`createUser` 来自应用。翻译 key 需要在应用中英日文消息文件定义；`nav` 使用当前宿主的公开导航适配器。
 
 ```svelte
 <script lang='ts'>
@@ -64,7 +64,7 @@
 
 ## i18n、样式与边界
 
-- 通用按钮、进度和错误由 UI 内置中英文维护。业务文案使用 `() => m.key()` 延迟求值；GuideHost 的 locale 接入应用已有语言状态，不另建语言体系。
+- 通用按钮、进度和错误由 UI 内置中英日文维护。业务文案使用 `() => m.key()` 延迟求值；GuideHost 的 locale 接入应用已有语言状态，不另建语言体系。
 - 语言变化时宿主重新解析文案并刷新当前浮层。应用若采用整页重载或销毁组件切换语言，应按自身生命周期重新挂载宿主。
 - 目标优先使用 `data-guide`，不依赖 Tailwind 类名或 DOM 顺序；现有 UI 组件支持 data 属性透传。复杂目标可用 `target: () => document.querySelector(...)`。
 - 步骤标题和说明按纯文本显示；帮助正文使用现有安全 MarkdownRenderer，原始 HTML 关闭。
@@ -74,6 +74,6 @@
 
 ## 默认应用
 
-fullstack 的 Web/App/Desktop 在共享 AdminWorkspace 中启用帮助入口、首次邀请和个人设置导览；Web 使用 Cookie，App/Desktop 使用 localStorage，按当前用户 ID 隔离。新增业务功能时，在共享 guide-store 和中英文消息中补充文章、导览和稳定锚点。
+fullstack 的 Web/App/Desktop 在共享 AdminWorkspace 中启用帮助入口、首次邀请和个人设置导览；Web 使用 Cookie，App/Desktop 使用 localStorage，按当前用户 ID 隔离。新增业务功能时，在共享 guide-store 和中英日文消息中补充文章、导览和稳定锚点。
 
 验证首次提示、完成后刷新、手动重看、跳转后等待、缺失目标、账号/版本隔离、语言与主题、移动宽度、键盘和卸载取消。

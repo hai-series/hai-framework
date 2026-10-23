@@ -85,7 +85,7 @@
   "asr_error_file_required": "Choose an audio file",
   "asr_error_file_size": "Audio size must be between 1 byte and 10 MiB",
   "asr_error_file_type": "Only WAV and MP3 audio are supported",
-  "asr_error_language": "Language must be auto, Chinese, or English",
+  "asr_error_language": "Language must be auto, Chinese, English, or Japanese",
   "mic_title": "Live mic transcription",
   "mic_description": "See a live transcript while recording, without stopping first.",
   "mic_start": "Start recording",
@@ -98,5 +98,6 @@
   "mic_error_permission": "Cannot access the microphone. Please check browser permissions.",
   "mic_error_empty": "No audio captured, please try again.",
   "error_unknown": "Unknown error",
-  "error_request": "Request failed: {detail}"
+  "error_request": "Request failed: {detail}",
+  "asr_language_ja": "Japanese"
 }

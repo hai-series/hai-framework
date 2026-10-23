@@ -17,7 +17,7 @@
 - 📂 **图片存储** — @h-ai/storage 存储原图
 - 💾 **数据持久化** — @h-ai/reldb 保存识别历史
 - ⚡ **缓存加速** — @h-ai/cache（memory / Redis）
-- 🌍 **国际化** — Paraglide 集成，中英文实时切换
+- 🌍 **国际化** — Paraglide 集成，中英日文实时切换
 - 🎨 **主题切换** — 基于 @h-ai/ui 的 DaisyUI 多主题支持
 - 📱 **移动优先** — 针对移动端优化的响应式布局
 - 🧩 **组件自动导入** — @h-ai/ui 组件无需显式 import
@@ -108,11 +108,11 @@ pnpm --filter h5-app preview
 
 本应用使用 [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 实现国际化。
 
-- **翻译文件**：`messages/zh-CN.json` 和 `messages/en-US.json`
+- **翻译文件**：`messages/zh-CN.json`、`messages/en-US.json`、`messages/ja-JP.json`
 - **编译命令**：`pnpm paraglide:compile`
 - **运行时切换**：页面可实时切换语言
 
-添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
+添加新翻译：在 `messages/zh-CN.json`、`messages/en-US.json`、`messages/ja-JP.json` 中同时添加对应 key 即可。
 
 ### 镜像构建与部署
 

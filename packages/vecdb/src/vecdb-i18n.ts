@@ -7,6 +7,7 @@
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
+import messagesJaJP from '../messages/ja-JP.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
 // ─── i18n ───
@@ -36,4 +37,5 @@ type VecdbMessageKey = keyof typeof messagesZhCN
 export const vecdbM = core.i18n.createMessageGetter<VecdbMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
+  'ja-JP': messagesJaJP,
 })

@@ -5,7 +5,7 @@
   import { Button, Card } from '@h-ai/ui'
 
   let file = $state<File | undefined>()
-  let language = $state<'auto' | 'zh' | 'en'>('auto')
+  let language = $state<'auto' | 'zh' | 'en' | 'ja'>('auto')
   let busy = $state(false)
   let error = $state('')
   let transcript = $state('')
@@ -56,6 +56,7 @@
     <option value='auto'>{m.asr_language_auto()}</option>
     <option value='zh'>{m.asr_language_zh()}</option>
     <option value='en'>{m.asr_language_en()}</option>
+    <option value='ja'>{m.asr_language_ja()}</option>
   </select>
 
   {#if error}

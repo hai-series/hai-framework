@@ -19,7 +19,7 @@
 - ⚡ **缓存加速** — @h-ai/cache（memory / Redis）
 - 📂 **文件归档** — @h-ai/storage（local / S3）
 - 📧 **消息触达** — @h-ai/reach（邮件 / 短信 通知）
-- 🌍 **国际化** — Paraglide 集成，中英文实时切换
+- 🌍 **国际化** — Paraglide 集成，中英日文实时切换
 - 🎨 **主题切换** — 基于 @h-ai/ui 的 DaisyUI 多主题支持
 - 🧩 **组件自动导入** — @h-ai/ui 组件无需显式 import
 
@@ -108,11 +108,11 @@ pnpm --filter corporate-website preview
 
 本应用使用 [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 实现国际化。
 
-- **翻译文件**：`messages/zh-CN.json` 和 `messages/en-US.json`
+- **翻译文件**：`messages/zh-CN.json`、`messages/en-US.json`、`messages/ja-JP.json`
 - **编译命令**：`pnpm paraglide:compile`
 - **运行时切换**：页面可实时切换语言
 
-添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
+添加新翻译：在 `messages/zh-CN.json`、`messages/en-US.json`、`messages/ja-JP.json` 中同时添加对应 key 即可。
 
 ### 镜像构建与部署
 
@@ -154,7 +154,7 @@ pnpm --filter corporate-website paraglide:compile # 编译 i18n 翻译文件
 - `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
 - `@h-ai/ui`：UI 组件库（场景组件、自动导入）
 
-失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用双语消息。中文与英文分别验证未配置、失败和成功路径，无需调用付费服务。
+失败与降级提示也必须国际化：官网 API 按请求 locale 生成 AI 降级/邮件送达状态；未送达不能称为已接收。CLI 部署状态使用 cliM，Gallery 加密能力限制使用三语消息。中文、英文与日语分别验证未配置、失败和成功路径，无需调用付费服务。
 
 ## 开发测试
 

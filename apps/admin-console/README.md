@@ -16,7 +16,7 @@
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志；用户按角色 code 在数据库分页前筛选，总数与结果一致
 - 🧩 **UI Gallery** — @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
-- 🌍 **国际化** — Paraglide 集成，中英文消息，中英文实时切换
+- 🌍 **国际化** — Paraglide 集成，中英日文消息，中英日文实时切换
 - 📱 **响应式布局** — Sidebar + TopBar 自适应，移动端友好
 - 🧩 **组件自动导入** — 页面中使用 @h-ai/ui 组件无需显式 import
 
@@ -48,7 +48,7 @@
 
 登录后首次显示简短邀请，可开始、稍后或不再提醒。顶栏帮助按钮可搜索使用说明，随时重看后台导览或进入个人资料页进行操作导览。引导不会自动提交表单；完成状态通过 Cookie 按当前用户和引导版本保存。
 
-内容定义在 `src/lib/guide/admin-guide.ts`，中英文文案在应用 messages；为目标元素添加 data-guide 属性即可扩展步骤。交互、主题适配和安全 Markdown 渲染由 `@h-ai/ui/guide` 提供，根后台布局负责装配已有导航和 locale。浏览器用例覆盖首次完成、刷新、帮助搜索、跳转重看和手机暗色主题。
+内容定义在 `src/lib/guide/admin-guide.ts`，中英日文文案在应用 messages；为目标元素添加 data-guide 属性即可扩展步骤。交互、主题适配和安全 Markdown 渲染由 `@h-ai/ui/guide` 提供，根后台布局负责装配已有导航和 locale。浏览器用例覆盖首次完成、刷新、帮助搜索、跳转重看和手机暗色主题。
 
 ### 🚀 快速开始
 
@@ -136,12 +136,12 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 本应用使用 [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 实现国际化。
 
-- **翻译文件**：`messages/zh-CN.json` 和 `messages/en-US.json`，包含 中英文消息
+- **翻译文件**：`messages/zh-CN.json`、`messages/en-US.json` 和 `messages/ja-JP.json`，包含 中英日文消息
 - **编译命令**：`pnpm paraglide:compile` （编译后输出到 `src/lib/paraglide/`）
 - **运行时切换**：Settings 页面可实时切换语言
 - **服务端中间件**：`hooks.server.ts` 中的 `i18nHandle` 自动检测请求语言（跳过 `/api/*`）
 
-添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
+添加新翻译：在 `messages/zh-CN.json`、`messages/en-US.json`、`messages/ja-JP.json` 中同时添加对应 key 即可。
 
 ### 🧩 @h-ai/ui 组件自动导入
 

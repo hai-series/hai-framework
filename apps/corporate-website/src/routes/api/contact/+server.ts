@@ -15,7 +15,7 @@ const ContactSchema = z.object({
 })
 
 export const POST = kit.handler(async ({ request, locals }) => {
-  const locale = locals.locale === 'en-US' ? 'en-US' : 'zh-CN'
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const { name, email, message } = await kit.validate.body(request, ContactSchema)
 
   const reachModule = await import('@h-ai/reach')

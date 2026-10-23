@@ -42,7 +42,7 @@
 - 需求迁移到 SvelteKit 时同步运行环境、路由、初始化、构建与原生壳集成；不能仅添加 `+page.svelte` 等文件就视为完成迁移。
 - 原生能力通过 `@h-ai/capacitor` 使用；token 原生端使用 Capacitor 安全存储，Web 预览仅使用内存存储。
 - API 调用使用 `@h-ai/api-client`，业务错误按 HaiResult 处理。
-- 页面文本走 i18n，同步中英文 messages。
+- 页面文本走 i18n，同步中英日文 messages。
 - 原生桥接与设备调用放在 `src/lib/capacitor.ts` 或 service，避免散落在页面模板中。
 - 本样板默认不使用 `@h-ai/core`、`@h-ai/kit`、`@h-ai/serv`、`@h-ai/api-contract` 作为主架构。
 

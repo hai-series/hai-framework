@@ -885,7 +885,8 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
     message: cliM('cli_createLocalePrompt'),
     choices: [
       { title: cliM('cli_createChineseLocale'), value: 'zh-CN' },
-      { title: 'English (en-US)', value: 'en-US' },
+      { title: cliM('cli_createEnglishLocale'), value: 'en-US' },
+      { title: cliM('cli_createJapaneseLocale'), value: 'ja-JP' },
     ],
     initial: 0,
   }, { onCancel })

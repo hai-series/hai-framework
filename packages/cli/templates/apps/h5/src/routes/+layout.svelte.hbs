@@ -13,8 +13,8 @@
   import { page } from '$app/state'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
-  import { getLocale } from '$lib/paraglide/runtime.js'
-  import { AppBar, BottomNav, setGlobalLocale } from '@h-ai/ui'
+  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+  import { AppBar, BottomNav, LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
 {{else}}
   import { AppBar, BottomNav } from '@h-ai/ui'
 {{/if}}
@@ -49,6 +49,11 @@
   }
 {{#if hasI18n}}
 
+  function handleLanguageChange(language: string) {
+    setGlobalLocale(language)
+    setLocale(language as Parameters<typeof setLocale>[0])
+  }
+
   if (browser) {
     const paraglideLocale = getLocale()
     setGlobalLocale(paraglideLocale)
@@ -62,7 +67,13 @@
 
 <div class='hai-mobile-viewport'>
   <div class='hai-mobile-shell min-w-0'>
-    <AppBar title={page.data.appConfig.name} safeArea fixed={false} />
+    <AppBar title={page.data.appConfig.name} safeArea fixed={false}>
+{{#if hasI18n}}
+      {#snippet trailing()}
+        <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} compact />
+      {/snippet}
+{{/if}}
+    </AppBar>
     <main class='hai-mobile-main'>{@render children()}</main>
     <footer class='border-t border-base-300 bg-base-100 p-2 text-center text-xs text-base-content/60'>
       {page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}

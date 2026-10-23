@@ -32,3 +32,5 @@ description: "接入或排查 @h-ai/api-client typed API、登录 Token、自动
 - [核心 API](reference.md#核心-api)
 - [常见模式](reference.md#常见模式)
 - [配置驱动认证页面](reference.md#配置驱动认证页面)
+
+普通请求与 Token 刷新自动将当前 `core.i18n` 语言发送为 `Accept-Language`；切换语言时同步 core。`headers` 中显式配置的同名头优先。

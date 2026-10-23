@@ -1,0 +1,20 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "cache_notInitialized": "キャッシュが初期化されていません。先にcache.init()を呼び出してください",
+  "cache_operationFailed": "キャッシュ操作に失敗しました: {error}",
+  "cache_redisConnectionFailed": "Redisへの接続に失敗しました: {error}",
+  "cache_initFailed": "キャッシュの初期化に失敗しました: {error}",
+  "cache_unsupportedType": "未対応のキャッシュの種類です: {type}",
+  "cache_valueNotNumber": "値が数値ではありません",
+  "cache_keyNotFound": "キーが見つかりません",
+  "cache_indexOutOfRange": "インデックスが範囲外です",
+  "cache_configError": "キャッシュ設定の検証に失敗しました: {error}",
+  "cache_invalidHashSetInput": "ハッシュのhset入力が無効です。フィールドと値、またはフィールドオブジェクトを渡してください",
+  "cache_invalidScan": "スキャンカーソルまたはオプションが無効です",
+  "cache_scanTopologyChanged": "スキャンのトポロジーまたは一致条件が変更されました。0 から再開してください",
+  "cache_crossSlot": "この操作のキーは同じ Redis Cluster スロットに配置する必要があります。共通のハッシュタグを使用してください",
+  "cache_sharedBackendRequired": "本番環境には共有バックエンドが必要です。ローカルファイルとメモリーバックエンドは開発環境または明示的な E2E テストでのみ使用できます。",
+  "cache_invalidSetOptions": "SET オプションが無効です。有効期限には正の安全な整数を1種類だけ指定し、keepTtl と併用しないでください。nx と xx は同時に指定できません",
+  "cache_setUnexpectedReply": "Redis が予期しない SET の結果を返しました",
+  "cache_serializationFailed": "キャッシュ値を JSON にシリアライズできませんでした"
+}

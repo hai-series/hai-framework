@@ -6,7 +6,7 @@
  * @module kit-handle
  */
 
-import type { Handle, RequestEvent } from '@sveltejs/kit'
+import type { Handle, RequestEvent, ResolveOptions } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import { core } from '@h-ai/core'
@@ -417,9 +417,34 @@ export function sequence(...handles: Handle[]): Handle {
     return filtered[0]
   }
   return async ({ event, resolve }) => {
-    return filtered.reduceRight(
-      (next, handle) => (event: RequestEvent) => handle({ event, resolve: next }),
-      resolve,
-    )(event)
+    function applyHandle(index: number, currentEvent: RequestEvent, options?: ResolveOptions): ReturnType<Handle> {
+      if (index === filtered.length)
+        return resolve(currentEvent, options)
+
+      return filtered[index]({
+        event: currentEvent,
+        resolve: async (nextEvent, nextOptions) => {
+          const merged: ResolveOptions = {
+            ...options,
+            ...nextOptions,
+            preload: options?.preload ?? nextOptions?.preload,
+            filterSerializedResponseHeaders: options?.filterSerializedResponseHeaders ?? nextOptions?.filterSerializedResponseHeaders,
+          }
+          // 页面转换按内层到外层执行，保留 i18n 的语言标记替换。
+          if (options?.transformPageChunk || nextOptions?.transformPageChunk) {
+            merged.transformPageChunk = async ({ html, done }) => {
+              if (nextOptions?.transformPageChunk)
+                html = (await nextOptions.transformPageChunk({ html, done })) ?? ''
+              if (options?.transformPageChunk)
+                html = (await options.transformPageChunk({ html, done })) ?? ''
+              return html
+            }
+          }
+          return applyHandle(index + 1, nextEvent, merged)
+        },
+      })
+    }
+
+    return applyHandle(0, event)
   }
 }

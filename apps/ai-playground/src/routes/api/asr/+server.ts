@@ -16,21 +16,22 @@ const AUDIO_FORMATS = new Map<string, 'wav' | 'mp3'>([
   ['audio/mp3', 'mp3'],
 ])
 
-export const POST = kit.handler(async ({ request }) => {
+export const POST = kit.handler(async ({ request, locals }) => {
+  const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   const formData = await request.formData()
   const file = formData.get('audio')
   const language = String(formData.get('language') ?? 'auto')
 
   if (!(file instanceof File))
-    return kit.response.badRequest(m.asr_error_file_required())
+    return kit.response.badRequest(m.asr_error_file_required({}, { locale }))
   if (file.size === 0 || file.size > MAX_AUDIO_BYTES)
-    return kit.response.badRequest(m.asr_error_file_size())
+    return kit.response.badRequest(m.asr_error_file_size({}, { locale }))
 
   const format = AUDIO_FORMATS.get(file.type)
   if (!format)
-    return kit.response.badRequest(m.asr_error_file_type())
-  if (!['auto', 'zh', 'en'].includes(language))
-    return kit.response.badRequest(m.asr_error_language())
+    return kit.response.badRequest(m.asr_error_file_type({}, { locale }))
+  if (!['auto', 'zh', 'en', 'ja'].includes(language))
+    return kit.response.badRequest(m.asr_error_language({}, { locale }))
 
   const data = new Uint8Array(await file.arrayBuffer())
   const result = await transcribeSpeech({ data, format, language })

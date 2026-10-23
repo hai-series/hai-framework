@@ -986,3 +986,74 @@ describe('生成产物结构完整性', () => {
     expect(await fileExists(projectPath, 'messages')).toBe(false)
   })
 })
+
+describe('japanese scaffolds', () => {
+  it.each(['admin', 'website', 'h5', 'mobile-app'] as const)('%s supports Japanese as the default language', async (appType) => {
+    const project = path.join(tmpRoot, `japanese-${appType}`)
+    await generateFromTemplates(project, buildTemplateContext({
+      name: `japanese-${appType}`,
+      appType,
+      features: [],
+      packageManager: 'pnpm',
+      moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
+    }))
+    const settings = JSON.parse(await readGenerated(project, 'project.inlang/settings.json'))
+    expect(settings.baseLocale).toBe('ja-JP')
+    expect(settings.locales).toContain('ja-JP')
+    const ja = JSON.parse(await readGenerated(project, 'messages/ja-JP.json'))
+    const en = JSON.parse(await readGenerated(project, 'messages/en-US.json'))
+    expect(Object.keys(ja).sort()).toEqual(Object.keys(en).sort())
+    expect(ja.app_title).toBeTruthy()
+  })
+
+  it('aPI scaffolds use Japanese with the current strict core configuration', async () => {
+    const project = path.join(tmpRoot, 'japanese-api')
+    await generateFromTemplates(project, buildTemplateContext({
+      name: 'japanese-api',
+      appType: 'api',
+      features: [],
+      packageManager: 'pnpm',
+      moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
+    }))
+    const config = loadConfigText<{ defaultLocale: string }>('core', await readGenerated(project, 'apps/japanese-api-service/config/_core.yml'))
+    expect(config.defaultLocale).toBe('ja-JP')
+    expect(config).not.toHaveProperty('supportedLocales')
+  })
+
+  it('fullstack shares Japanese across all targets and preference validation', async () => {
+    const project = path.join(tmpRoot, 'japanese-fullstack')
+    await generateFromTemplates(project, buildTemplateContext({
+      name: 'japanese-fullstack',
+      appType: 'fullstack',
+      frontends: ['web', 'app', 'desktop', 'miniapp'],
+      features: [],
+      packageManager: 'pnpm',
+      moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
+    }))
+    for (const directory of ['packages/japanese-fullstack-shared', ...['web', 'app', 'desktop', 'miniapp'].map(target => `apps/japanese-fullstack-${target}`)]) {
+      const settings = JSON.parse(await readGenerated(project, `${directory}/project.inlang/settings.json`))
+      expect(settings.baseLocale).toBe('ja-JP')
+      expect(settings.locales).toEqual(['ja-JP', 'zh-CN', 'en-US'])
+      const ja = JSON.parse(await readGenerated(project, `${directory}/messages/ja-JP.json`))
+      const en = JSON.parse(await readGenerated(project, `${directory}/messages/en-US.json`))
+      expect(Object.keys(ja).sort()).toEqual(Object.keys(en).sort())
+    }
+    const schemaSource = await readGenerated(project, 'packages/japanese-fullstack-contract/src/admin-schemas.ts')
+    expect(schemaSource).toContain('locale: z.enum([\'ja-JP\', \'zh-CN\', \'en-US\']).optional()')
+    expect(await readGenerated(project, 'packages/japanese-fullstack-serv/src/server/messages.ts')).toContain('\'ja-JP\':')
+  })
+
+  it('fullstack preference validation follows an explicitly restricted locale list', async () => {
+    const project = path.join(tmpRoot, 'restricted-locales')
+    await generateFromTemplates(project, buildTemplateContext({
+      name: 'restricted-locales',
+      appType: 'fullstack',
+      frontends: ['web'],
+      features: [],
+      packageManager: 'pnpm',
+      moduleConfigs: { fullstack: { i18n: { baseLocale: 'ja-JP', locales: ['ja-JP'] } } },
+    }))
+    const source = await readGenerated(project, 'packages/restricted-locales-contract/src/admin-schemas.ts')
+    expect(source).toContain('locale: z.enum([\'ja-JP\']).optional()')
+  })
+})

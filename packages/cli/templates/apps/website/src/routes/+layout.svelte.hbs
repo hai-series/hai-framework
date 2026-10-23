@@ -11,8 +11,8 @@
   import { page } from '$app/state'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
-  import { getLocale } from '$lib/paraglide/runtime.js'
-  import { setGlobalLocale } from '@h-ai/ui'
+  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+  import { LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
 {{/if}}
   import '../app.css'
 
@@ -36,6 +36,11 @@
 {{/if}}
   ] as const
 {{#if hasI18n}}
+
+  function handleLanguageChange(language: string) {
+    setGlobalLocale(language)
+    setLocale(language as Parameters<typeof setLocale>[0])
+  }
 
   if (browser) {
     const paraglideLocale = getLocale()
@@ -64,6 +69,9 @@
         {/each}
       </ul>
     </nav>
+{{#if hasI18n}}
+    <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} />
+{{/if}}
   </header>
 
   <main class='flex-1'>

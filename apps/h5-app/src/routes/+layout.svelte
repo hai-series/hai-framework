@@ -38,7 +38,7 @@
 
   function handleLanguageChange(lang: string) {
     setGlobalLocale(lang)
-    setLocale(lang as 'zh-CN' | 'en-US')
+    setLocale(lang as 'zh-CN' | 'en-US' | 'ja-JP')
     currentLanguage = lang
   }
 

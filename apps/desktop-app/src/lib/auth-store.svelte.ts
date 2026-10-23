@@ -135,12 +135,12 @@ export async function login(input: IamLoginInput): Promise<string | null> {
   loading = true
   try {
     const result = await desktopApiClient.iam.auth.login(input)
-    const failure = resolveHaiResultFailure(result, 'Unexpected login response from server')
+    const failure = resolveHaiResultFailure(result, authMessage('auth_login_response_invalid'))
     if (!failure.success)
       return failure.message
 
     if (!isSuccessResult<LoginSuccessResult['data']>(result))
-      return 'Unexpected login response from server'
+      return authMessage('auth_login_response_invalid')
 
     const nextRoles = Array.isArray(result.data.roles) ? result.data.roles : []
     const nextPermissions = Array.isArray(result.data.permissions) ? result.data.permissions : []
@@ -150,7 +150,7 @@ export async function login(input: IamLoginInput): Promise<string | null> {
     return null
   }
   catch (error) {
-    return resolveRequestErrorMessage(error, 'Login request failed')
+    return resolveRequestErrorMessage(error, authMessage('auth_login_request_failed'))
   }
   finally {
     loading = false
@@ -162,12 +162,12 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
   loading = true
   try {
     const result = await desktopApiClient.iam.auth.register(input)
-    const failure = resolveHaiResultFailure(result, 'Unexpected register response from server')
+    const failure = resolveHaiResultFailure(result, authMessage('auth_register_response_invalid'))
     if (!failure.success)
       return failure.message
 
     if (!isSuccessResult<RegisterSuccessResult['data']>(result))
-      return 'Unexpected register response from server'
+      return authMessage('auth_register_response_invalid')
 
     const nextRoles = Array.isArray(result.data.roles) ? result.data.roles : []
     const nextPermissions = Array.isArray(result.data.permissions) ? result.data.permissions : []
@@ -177,7 +177,7 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
     return null
   }
   catch (error) {
-    return resolveRequestErrorMessage(error, 'Register request failed')
+    return resolveRequestErrorMessage(error, authMessage('auth_register_request_failed'))
   }
   finally {
     loading = false

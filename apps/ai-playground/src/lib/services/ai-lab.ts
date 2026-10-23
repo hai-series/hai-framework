@@ -145,7 +145,7 @@ export async function generateImage(input: { prompt: string, width: number, heig
 }
 
 /** 语音识别（一次性）：上传音频文件返回识别文本 */
-export function transcribe(file: File, language: 'auto' | 'zh' | 'en'): Promise<{ text: string }> {
+export function transcribe(file: File, language: 'auto' | 'zh' | 'en' | 'ja'): Promise<{ text: string }> {
   const formData = new FormData()
   formData.set('audio', file)
   formData.set('language', language)

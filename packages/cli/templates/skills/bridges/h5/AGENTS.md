@@ -37,7 +37,7 @@
 ## 架构边界
 
 - 使用移动端友好的布局和 `@h-ai/ui` 移动组件。
-- 页面文本走 i18n，同步中英文 messages。
+- 页面文本走 i18n，同步中英日文 messages。
 - API 输入必须校验，业务错误按 HaiResult 传递。
 - `+server.ts` 只能导出 handler 和 SvelteKit 允许的配置项；helper 放到 `src/lib/**`。
 - 敏感 token 不要写入不安全存储；优先复用模板已有的鉴权与请求模式。

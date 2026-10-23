@@ -4,7 +4,10 @@
  * =============================================================================
  */
 
-type ParaglideMessageFn = (params?: Record<string, unknown>) => string
+type ParaglideMessageFn = (
+  params?: Record<string, unknown>,
+  options?: { locale?: 'zh-CN' | 'en-US' | 'ja-JP' },
+) => string
 
 declare module '$lib/paraglide/messages' {
   const messages: Record<string, ParaglideMessageFn>

@@ -76,7 +76,7 @@ export const AdminAuditSchema = z.object({
 export const ProfileUpdateSchema = z.object({
   displayName: z.string().max(100).optional(),
   email: z.union([z.email(), z.literal('')]).optional(),
-  locale: z.enum(['zh-CN', 'en-US']).optional(),
+  locale: z.enum([{{#each fullstack.i18n.locales}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]).optional(),
   theme: z.string().min(1).max(40).regex(/^[\w-]+$/).optional(),
 }).strict()
 /** 512 KiB 头像以 JSON 传输，上传及响应均经过统一加密。 */

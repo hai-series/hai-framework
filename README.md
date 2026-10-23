@@ -2,6 +2,8 @@
 
 [简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
 
+框架模块、`apps/` 示例和 CLI 模板均内置简体中文（`zh-CN`）、英文（`en-US`）和日语（`ja-JP`）。`core.i18n.setGlobalLocale('ja')` 会规范化为 `ja-JP`；应用通过语言菜单切换。
+
 > 当前处于 `0.1.0-alpha` 阶段：公共契约仍在演进。生产采用前请锁定版本，并针对自身场景完成安全与容量验证。
 
 生产多实例部署请先核对[21 包共享状态与恢复能力表](docs/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
@@ -537,7 +539,7 @@ if (login.success)
 
 ## 新手引导与帮助中心
 
-`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost` 和 `HelpCenter`：首次 Cookie 提示、手动重看、进入指定页面后逐步高亮，以及可搜索的 Markdown 帮助中心。样式跟随现有主题，通用文案内置中英文，业务内容复用应用 i18n。
+`@h-ai/ui/guide` 提供 `createGuide`、`GuideHost` 和 `HelpCenter`：首次 Cookie 提示、手动重看、进入指定页面后逐步高亮，以及可搜索的 Markdown 帮助中心。样式跟随现有主题，通用文案内置中英日文，业务内容复用应用 i18n。
 
 `apps/admin-console` 与 CLI fullstack 的 Web/App/Desktop 默认启用。引导偏好按用户和版本隔离，支持稍后与不再提醒。接入示例和完整边界见 [UI 新手引导](packages/ui/README.md#新手引导与帮助中心)。
 

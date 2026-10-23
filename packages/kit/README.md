@@ -28,6 +28,8 @@
 
 ## 使用入门
 
+`sequence` 保留并组合 SvelteKit 的 `resolve` 选项：页面转换由内向外执行，`preload` 与序列化响应头过滤使用首个配置，确保 i18n 的 HTML 语言标记正确替换。
+
 ### 安装
 
 ```bash
