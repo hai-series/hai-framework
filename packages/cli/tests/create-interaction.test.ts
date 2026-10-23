@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -18,6 +19,11 @@ vi.mock('node:child_process', async importOriginal => ({
 
 const temporaryRoots: string[] = []
 const originalColumns = Object.getOwnPropertyDescriptor(process.stdout, 'columns')
+// prompts 按平台选择符号；在同一宿主覆盖 Unicode 与 Windows 符号触发的不同换行分支。
+const require = createRequire(import.meta.url)
+const promptFigures: Record<string, string> = require('prompts/lib/util/figures')
+
+const originalFigures = { ...promptFigures }
 afterEach(async () => {
   vi.restoreAllMocks()
   core.i18n.setGlobalLocale('zh-CN')
@@ -26,6 +32,7 @@ afterEach(async () => {
   else
     Reflect.deleteProperty(process.stdout, 'columns')
   commandMocks.execSync.mockReset()
+  Object.assign(promptFigures, originalFigures)
   await Promise.all(temporaryRoots.splice(0).map(root => rm(root, { recursive: true, force: true })))
 })
 
@@ -52,7 +59,10 @@ describe('create 用户输出', () => {
     expect(stdout.mock.calls.map(([message]) => String(message)).join('')).not.toContain('"level":')
   })
 
-  it.each([60, 80, 120].flatMap(columns => ['zh-CN', 'ja-JP'].map(locale => ({ columns, locale }))))('$locale select/multiselect 在 $columns 列终端重绘与确认时清除全部行', async ({ columns, locale }) => {
+  it.each([60, 80, 120].flatMap(columns => ['zh-CN', 'ja-JP'].flatMap(locale => ['unicode', 'windows'].map(symbols => ({ columns, locale, symbols })))))('$locale select/multiselect 在 $columns 列终端重绘与确认时清除全部行 ($symbols)', async ({ columns, locale, symbols }) => {
+    Object.assign(promptFigures, symbols === 'unicode'
+      ? { radioOn: '◉', radioOff: '◯', tick: '✔', cross: '✖', ellipsis: '…', pointerSmall: '›', pointer: '❯' }
+      : { radioOn: '(*)', radioOff: '( )', tick: '√', cross: '×', ellipsis: '...', pointerSmall: '»', pointer: '>' })
     core.i18n.setGlobalLocale(locale)
     Object.defineProperty(process.stdout, 'columns', { value: columns, configurable: true })
     const root = await mkdtemp(path.join(tmpdir(), 'hai-create-prompt-'))
