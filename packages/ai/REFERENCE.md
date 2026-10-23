@@ -223,7 +223,7 @@ Pollinations 提供免费额度的开发者 API Key，额度与可用模型以�
 - `listMessages(filter)`：管理接口，按 callerId/contextId/since/status（消息角色）查询；调用方负责授权。
 - `callRemoteAgent(remoteUrl, message, options?)`：调用远端 Agent；只依赖 `ai.init()`，不要求本地 executor。
 
-任务 journal、context 归属与消息存储在 `ai.init()` 中初始化。可信 `context.agentId` 是主体来源，匿名共用一个主体，生产须在传输层认证。Task/事件一次 CAS 持久化；跨节点订阅与真实 owner 取消、input-required 续接无需粘性路由。同 message ID/内容重试复用同一轮结果，旧消息或内容变化拒绝；取消确认前同一 Task 不接受新消息，以隔离迟到取消回调。失租/期限/未完成退出标记 failed/interrupted 与 `metadata.haiExecution.requiresEffectReconciliation=true`，不自动重放未知副作用。内部 RelStore 故障转换固定协议错误，不当作无数据。`a2a.execution` 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；完整限制见[共享状态能力表](../../docs/distributed-state.md)。
+任务 journal、context 归属与消息存储在 `ai.init()` 中初始化。可信 `context.agentId` 是主体来源，匿名共用一个主体，生产须在传输层认证。Task/事件一次 CAS 持久化；跨节点订阅与真实 owner 取消、input-required 续接无需粘性路由。同 message ID/内容重试复用同一轮结果，旧消息或内容变化拒绝；取消确认前同一 Task 不接受新消息，以隔离迟到取消回调。失租/期限/未完成退出标记 failed/interrupted 与 `metadata.haiExecution.requiresEffectReconciliation=true`，不自动重放未知副作用。内部 RelStore 故障转换固定协议错误，不当作无数据。`a2a.execution` 默认 leaseMs=30000、pollIntervalMs=250、maxExecutionMs=300000；完整限制见[共享状态能力表](../../.agents/instructions/distributed-state.md)。
 
 ## 错误码速查
 

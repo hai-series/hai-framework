@@ -248,8 +248,8 @@ function markdown(inventory) {
 function main() {
   const inventory = inspectModuleApi(root)
   const outputs = [
-    ['docs/module-api-inventory.json', `${JSON.stringify(inventory, null, 2)}\n`],
-    ['docs/module-api-inventory.md', markdown(inventory)],
+    ['scripts/generated/module-api-inventory.json', `${JSON.stringify(inventory, null, 2)}\n`],
+    ['scripts/generated/module-api-inventory.md', markdown(inventory)],
   ]
   const errors = [...inventory.errors]
   for (const [path, content] of outputs) {

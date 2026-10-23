@@ -11,7 +11,7 @@
 ## 文件命名与职责
 
 - 常规模块源文件使用 `<模块>[-<领域>]-<角色>[-<实体或实现>].ts`；同族文件的角色位置一致，例如 `scheduler-repository-task.ts`、`payment-provider-wechat.ts`。嵌套目录也保留模块前缀，便于日志、搜索和独立审阅定位。
-- 框架固定入口 `index.ts`、条件入口 `browser.ts`、Svelte 组件 `PascalCase.svelte` 及其局部工具保留实际契约；`api-contract` 按协议领域命名 `payment-schemas.ts` 等，不叠加无意义的包名前缀。审查依据与 21 包例外见[代码风格清单](../../docs/module-code-style.md)。
+- 框架固定入口 `index.ts`、条件入口 `browser.ts`、Svelte 组件 `PascalCase.svelte` 及其局部工具保留实际契约；`api-contract` 按协议领域命名 `payment-schemas.ts` 等，不叠加无意义的包名前缀。审查依据与 21 包例外见[代码风格清单](module-conventions.md#文件族清单)。
 - `xx-main.ts`：模块主入口，仅生命周期管理（init/close）和 API 编排，禁止具体业务逻辑（调度循环、数据处理等）
 - `xx-types.ts`：对外接口类型定义（public types）
 - `xx-config.ts`：配置定义与默认值、错误定义（现有模块通常在 xx-types.ts；以实际定义为准）
@@ -25,7 +25,7 @@
 - 内置 Provider、Repository、工厂依赖等类型放在实际实现边界，不经公共 barrel 转出。公开签名需要的扩展接口必须保留，例如 `PaymentProvider` 和 `AIStoreProvider`；不能只因仓库内调用少就删掉真实扩展能力。
 - browser 分支先于 Node types，分别声明真实 types/default；声明打包后再次检查 type-only 语义，必要时改为明确类型列表，不能让不存在的运行时函数出现在可调用声明中。
 - `exports` 的每个条件/子路径必须有真实构建文件与配套声明；不声明空实现或将目录通配当作任意内部文件的公开许可。
-- 变更后构建受影响包，执行 `pnpm generate:api`、`pnpm check:api` 与 `pnpm test:api`，核对 [公开 API 清单](../../docs/module-api-inventory.md)。浏览器入口完整打包不得引入 Node 内建模块，Svelte 组件由真实编译器验证。
+- 变更后构建受影响包，执行 `pnpm generate:api`、`pnpm check:api` 与 `pnpm test:api`，核对 [公开 API 清单](../../scripts/generated/module-api-inventory.md)。浏览器入口完整打包不得引入 Node 内建模块，Svelte 组件由真实编译器验证。
 - 任何 API 变更必须同步实现、消费者、README、Skill 模板、LLMS 与测试。
 
 ## 错误处理
@@ -78,7 +78,7 @@ function register(tool: Tool): HaiResult<void> {
 
 ## 配置校验
 
-生产共享状态要求以 `core.module.requiresSharedState(process.env)` 为准：`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时拒绝本机业务状态后端，显式 E2E 测试除外。初始化依赖、Provider 能力与故障恢复见[生产共享状态表](../../docs/distributed-state.md)。公开初始化结果失败时不能继续启动依赖模块；自定义 Store 的 `stateScope` 必须反映真实持久化/原子能力，不能仅按工厂名称声明共享。
+生产共享状态要求以 `core.module.requiresSharedState(process.env)` 为准：`NODE_ENV` 或 `HAI_CORE_ENV` 为 production 时拒绝本机业务状态后端，显式 E2E 测试除外。初始化依赖、Provider 能力与故障恢复见[生产共享状态表](distributed-state.md)。公开初始化结果失败时不能继续启动依赖模块；自定义 Store 的 `stateScope` 必须反映真实持久化/原子能力，不能仅按工厂名称声明共享。
 
 环境文件采用六类：`.env.example` 完整列出字段用途、默认值、枚举和范围；`.env` 为公共基础；`.env.dev`、`.env.test`、`.env.prod` 为公共环境覆盖，这五类均提交 Git。`.env.local` 为本机私有配置，不提交 Git。优先级为进程环境 > `.env.local` > 环境文件 > `.env`；Vite 在 Node 配置阶段调用 `core.config.loadEnvFiles({ mode, envDir })` 并检查 success 后注入进程，Node 脚本按相同顺序传入 `--env-file`。`core.init` 不自行读取 dotenv。
 
@@ -190,4 +190,98 @@ function register(tool: Tool): HaiResult<void> {
 - 将表名/缓存 key 定义在模块 main、全局 constants 或配置文件中，导致与实现分离
 - 将表名/缓存 key 设计为可配置项（如 `config.tableName` / `config.keyPrefix`）
 
-公开声明与内部结构的 JSDoc 示例使用真实入口及合法参数；内部上下文要显式标明，禁止占位断言或虚构 export。具体范围、格式与仅编译不执行的校验见 [模块 JSDoc](../../docs/module-jsdoc.md)。构建受影响包后运行 `node scripts/check-module-jsdoc.mjs --package <模块>`；全库最终执行 `pnpm check:jsdoc`。
+公开声明与内部结构的 JSDoc 示例使用真实入口及合法参数；内部上下文要显式标明，禁止占位断言或虚构 export。具体范围、格式与仅编译不执行的校验见 [模块 JSDoc](module-conventions.md#jsdoc-与示例验证)。构建受影响包后运行 `node scripts/check-module-jsdoc.mjs --package <模块>`；全库最终执行 `pnpm check:jsdoc`。
+
+## 文件族清单
+
+本清单记录 21 个框架包的命名与导出边界。规则正文见[模块规范](module-conventions.md)，实际公开符号见[API 清单](../../scripts/generated/module-api-inventory.md)；不把普通源文件的 `export` 当作包的公开 API。
+
+### 文件族
+
+常规 TypeScript 源文件使用 `<模块>[-<领域>]-<角色>[-<实体或实现>].ts`。同一文件族保持角色位置一致，例如 `scheduler-repository-task.ts`、`scheduler-repository-log.ts`、`payment-provider-wechat.ts`。已有明确协议领域与框架固定名称按下表保留，避免只为增加前缀而产生路径迁移。
+
+| 包           | 命名依据与保留的入口                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| ai           | `ai-*`、`ai-<领域>-*`；A2A Card 构建为 `ai-a2a-card.ts`，任务运行逻辑为 `ai-a2a-runtime.ts`                       |
+| api-client   | `api-client-*`，`index.ts` 转发公共客户端契约                                                                     |
+| api-contract | 根入口及协议领域目录；`payment-schemas.ts`、`storage-contract.ts` 等直接表达对应协议                              |
+| audit        | `audit-*`；便捷记录器工厂只在模块内部复用                                                                         |
+| cache        | `cache-*`，后端为 `cache-provider-*`                                                                              |
+| capacitor    | `capacitor-*`，Node/Browser 条件入口保留对应构建契约                                                              |
+| cli          | `cli-*`；命令启动入口与生成模板遵循 CLI、SvelteKit、Vite、Tauri 各自固定名称                                      |
+| core         | `core-*`、`core-function-*`、`core-util-*`；Node/Browser 入口保持实际环境差异                                     |
+| crypto       | `crypto-*`、`crypto-transport-*`；客户端子路径与服务端入口分开                                                    |
+| datapipe     | `datapipe-*`；纯函数与显式抛错工具按签名处理                                                                      |
+| deploy       | `deploy-*`、`deploy-<领域>-*`；容器与平台配置文件保留工具原生名称                                                 |
+| iam          | `iam-*`、`iam-<领域>-*`；Provider 与 Repository 在实际实现目录中                                                  |
+| kit          | `kit-*`；`browser.ts` 是已发布的条件入口，SvelteKit 路由文件保留框架名称                                          |
+| payment      | Provider 统一为 `payment-provider-<渠道>.ts`，渠道协议工具为 `payment-<渠道>-<角色>.ts`                           |
+| reach        | `reach-*`、`reach-provider-*`                                                                                     |
+| reldb        | `reldb-*`、`reldb-provider-*`；内部 Provider 契约留在 providers 目录；纯 schemas 子路径独立构建                                              |
+| scheduler    | `scheduler-*`；Repository 统一为 `scheduler-repository-<实体>.ts`                                                 |
+| serv         | `serv-*`、`serv-feature-*`、`serv-middleware-*`；App 工厂保持实际生命周期                                         |
+| storage      | `storage-*`、`storage-provider-*`；browser-safe schemas 子路径独立构建                                            |
+| ui           | Svelte 组件保留 `PascalCase.svelte`，局部工具按组件/场景命名，`.svelte.ts` 表示实际 rune 模块；不改组件公共导入名 |
+| vecdb        | `vecdb-*`、`vecdb-provider-*`；直接复用各可选 SDK 的真实类型                                                      |
+
+`index.ts` 等转发入口可按公共契约选择性导出。仅当整个源文件都是公共契约时使用 `export *`。测试可按行为或对应源文件命名；源文件镜像测试随文件族同步迁移，测试夹具与框架路由不强加模块前缀。
+
+### 冗余与边界
+
+- A2A 的持久任务与事件只由共享 journal 发布。旧 `ReldbA2ATaskStore` 与 SDK 默认 handler 的重复装配已删除，不再注册旧 tasks 表。Card、send/stream/get/cancel/resubscribe 和不支持 RPC 的标准错误仍由完整 handler 契约覆盖；取消、代际、期限、租约与消息幂等规则不变。SDK ResultManager 的事件合并对象只用于当前事件的局部计算，合并结果与事件一次 CAS 发布，不能成为独立的任务权威。
+- 内部审计记录器工厂通过源文件 export 供模块复用；调用方使用 `audit.helper` 与其公开 `AuditHelper` 类型。真实 Provider 注册扩展，如 `PaymentProvider`、`AIStoreProvider`，继续保留。
+- Qdrant/Chroma 使用 type import 与动态 import，删除仿造 SDK 接口、重复字段断言和没有当前驱动依据的旧错误/返回值兼容分支。Qdrant 只把真实 REST 错误的顶层 HTTP 404 视为集合不存在；外部 named-vector 或 Manhattan 集合不映射为未命名 cosine 集合。Chroma 宽 metadata/filter 边界仍交给真实 SDK 校验，省略的可选 content 按当前 SDK 的字符串字段处理。
+- Qdrant URL 复用 `core.sanitize.sanitizeUrl`，同时覆盖用户信息、敏感 query 和 fragment。原 logger 链已经再次脱敏；这里删除的是冗余局部 helper，不把 helper 的覆盖差异宣称为已发生的日志泄漏。
+
+### 验证方式
+
+迁移后核对旧路径零引用、相对导入大小写、实际包构建与公开入口声明，再执行受影响行为用例。可选后端类型与协议行为必须用对应真实 SDK/服务验证；mock 只验证受控故障或日志上下文边界。模板完整门禁与根全量测试在所有修正任务完成后统一执行。
+
+## JSDoc 与示例验证
+
+公开函数、常量、工厂、类以及全部 `type` / `interface` 都应紧邻声明编写中文 JSDoc。说明用途、状态所有者、默认值和单位；函数说明参数、返回值及实际失败方式。有生命周期时展示初始化结果检查和关闭；纯函数、工厂、Core、serv 和 kit 按各自真实契约使用。关键并发、授权、原子提交、外部效果与清理逻辑说明约束及失败边界，不用注释重复代码。
+
+每个声明至少有一个 fenced `ts` / `svelte` 的 `@example`。公开用法从真实 package exports 导入并包含所需数据；业务操作先检查 `HaiResult.success`。示例不能靠 `any`、空对象断言、虚构 API 或未声明的业务变量通过。类型示例应展示有含义的数据或消费方式。
+
+```ts
+import { ok, type HaiResult } from '@h-ai/core'
+
+const result: HaiResult<{ id: string }> = ok({ id: 'order-1' })
+const label = result.success ? result.data.id : result.error.message
+```
+
+内部工厂或结构不能伪造包公开入口。它们的示例以 `@example 模块内部上下文` 标明，在声明的词法作用域内说明实际参数、状态或调用；不嵌入 `import` / `export`。无法提供真实调用前提时，可展示接收该类型的完整函数及其实际字段消费。Svelte `<script>` 内的注释使用 TypeScript 组件属性或 `mount` 示例，避免示例中的结束标签提前关闭宿主脚本。
+
+仓库维护命令：
+
+```sh
+pnpm check:jsdoc
+node scripts/check-module-jsdoc.mjs --package core
+node scripts/check-module-jsdoc.mjs --package core --coverage-only
+```
+
+校验扫描自有运行时代码、Svelte 脚本、公开声明和全部内部结构；生成的 Paraglide 与构建声明不重复计入。公开示例独立使用真实发布声明和条件解析；内部示例在内存中注入原词法作用域。Svelte 示例通过实际编译器转换后类型检查。编译使用 `noEmit`，不执行示例、不写源码旁文件、不连接后端。门禁验证类型和可消费性，不能替代对注释语义、关键逻辑、真实 Provider 或 UI 行为的人工审查和行为测试。
+
+先构建受影响包，再校验其公开示例；缺失构建不能用旧声明补成通过。修改示例不得扩大包导出面，公开入口变化继续执行 [API 边界验证](module-conventions.md#公开入口验证)。这些仓库脚本不复制到生成应用；应用示例以安装版本公开入口和自身类型检查为准。
+
+## 公开入口验证
+
+公开边界由 `package.json.exports`、入口转发和构建声明共同决定。[实际 API 清单](../../scripts/generated/module-api-inventory.md)覆盖 21 个包；完整 JSON 记录每个条件、子路径、导出名称和运行时/类型种类。普通源文件为跨文件复用而 export，不代表使用方可以跨包导入该文件。
+
+维护公开入口时先确认用途。配置、业务类型、公开操作与实际扩展点保留；内置适配器、Repository 状态和工厂依赖留在实现目录。`PaymentProvider` 通过 registerProvider/getProvider 扩展支付渠道，`AIStoreProvider` 通过初始化注入存储，二者是公共契约。cache/storage/reldb/reach 的固定后端 Provider、LLM 内部适配器/工厂依赖、Context 组装依赖及会话存储键不属于包 API。删除没有实现的入口，不为它补造功能。
+
+入口只聚合必要契约。允许选择性导出、类型转发、明确别名、Svelte 默认组件转发及 client/server 分隔。`export *` 适用于被转发源文件的全部导出都确为公共 API 的情况。Kit 的运行时方法通过 kit 命名空间及明确子路径使用；UI 只开放清单中的 13 个组件 barrel，保留样式资产子路径，不开放任意组件实现或内部存储 helper。Kit 没有 vite 插件；Vite 接入使用 `@sveltejs/kit/vite`，UI 开发预打包辅助使用真实的 `@h-ai/ui/vite`。
+
+Node 与浏览器条件分别指向真实 JS 和声明文件，browser 分支在 Node types 前。IAM 浏览器入口只提供配置、错误与类型；AI 浏览器入口提供配置、协议、领域类型及 HTTP 客户端；服务端实例、构造器和工厂留在 Node。core 浏览器保留配置占位接口，文件配置方法按原契约返回 SERVICE_UNAVAILABLE。不能仅依据源码 type-only 标记判断发布声明：声明打包器可能把星号类型转发提升为可调用值，实际输出须用正负类型消费验证；必要时改为明确的类型列表。
+
+更改公开 API 后按依赖顺序构建受影响包，再执行：
+
+```sh
+pnpm generate:api
+pnpm check:api
+pnpm test:api
+```
+
+`generate:api` 从实际构建产物生成快照，缺失产物会失败；`check:api` 验证快照与产物一致。`test:api` 使用真实自引用包解析检查 21 包声明、Node/Browser 条件及内部导出的拒绝，随后隔离进程导入各包，完整打包浏览器入口并拒绝 Node 内建模块。UI 经真实 Svelte 编译器转换并执行 SSR 导入，浏览器组件及 Rune 模块也完整编译；CLI 以独立进程运行 help/version。SvelteKit 的 `$app/navigation`、`$app/state` 是宿主提供的虚拟模块，不是 Node polyfill；CSS 只在此 JavaScript 图验证中省略输出，组件视觉行为仍需各自测试。
+
+API 冒烟不初始化服务、连接外部后端、发送支付或消息，也不替代功能回归。更新 Schema 或扩展协议仍须同步调用方、三语 README、skills、LLMS、配置和对应验证。生成应用仅按安装版本的公开入口消费；仓库维护脚本不复制到应用。

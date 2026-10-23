@@ -90,7 +90,7 @@ if (!result.success) {
 pnpm --filter @h-ai/datapipe test
 ```
 
-Source examples distinguish pure functions, synchronous HaiResult and asynchronous pipelines; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
+Source examples distinguish pure functions, synchronous HaiResult and asynchronous pipelines; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 
 ## License
 

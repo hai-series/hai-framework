@@ -18,9 +18,9 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
 
 5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [环境配置与维护流程](README.md#配置与环境变量)。
 
-框架源码的文件族、固定入口例外与冗余清理依据见[21 包代码风格清单](docs/module-code-style.md)。
+框架源码的文件族、固定入口例外与冗余清理依据见[21 包代码风格清单](.agents/instructions/module-conventions.md#文件族清单)。
 
-公开入口审查读取 [21 包实际 API 清单](docs/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
+公开入口审查读取 [21 包实际 API 清单](scripts/generated/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
 
 ## 生命周期与返回值
 
@@ -50,7 +50,7 @@ return result
 
 以下 skills 位于 CLI 模板源目录，可在生成应用中通过 `.agents/skills/<同名目录>/` 读取。
 
-生产部署先核对[21 包共享状态与恢复能力表](docs/distributed-state.md)，使用共享后端并逐步检查初始化/关闭结果；NODE_ENV 或 HAI_CORE_ENV 为 production 时拒绝本地状态后端，只有明确 E2E 测试豁免。
+生产部署先核对[21 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)，使用共享后端并逐步检查初始化/关闭结果；NODE_ENV 或 HAI_CORE_ENV 为 production 时拒绝本地状态后端，只有明确 E2E 测试豁免。
 
 | 模块 | 选择依据与入口 | 关键边界 |
 | --- | --- | --- |
@@ -117,4 +117,4 @@ return result
 - [hai-ui-design](packages/cli/templates/skills/hai-ui-design/SKILL.md)：页面任务、信息结构、状态、设计约定和真实组件映射。
 - [hai-ui-review](packages/cli/templates/skills/hai-ui-review/SKILL.md)：真实页面的交互、布局、语言/主题、可访问性和恢复验收。
 - [工作交接](packages/cli/templates/skills/hai-spec-implement/handoff.md)、[差异审查](packages/cli/templates/skills/hai-app-review/differential.md)、[行为回放](packages/cli/templates/skills/hai-spec-implement/evaluation.md)。
-- [界面设计约定与示例](docs/ui-design.md)。技能目录与 name 一致；仓库和生成应用采用相同领域命名。
+- [界面设计约定与示例](.agents/instructions/ui-design.md)。技能目录与 name 一致；仓库和生成应用采用相同领域命名。

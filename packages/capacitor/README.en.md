@@ -156,7 +156,7 @@ pnpm --filter @h-ai/capacitor test
 
 > Tests must mock `@capacitor/*` modules because they depend on native plugins.
 
-Public operations, internal resource scopes and types include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md). Typechecking does not prove device permissions or live FCM/APNs delivery.
+Public operations, internal resource scopes and types include typechecked examples; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证). Typechecking does not prove device permissions or live FCM/APNs delivery.
 
 ## License
 

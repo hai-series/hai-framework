@@ -165,7 +165,7 @@ if (!result.success) {
 
 ## Production shared state
 
-Production uses Qdrant, pgvector or remote Chroma. LanceDB and embedded Chroma are for development/explicit tests. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+Production uses Qdrant, pgvector or remote Chroma. LanceDB and embedded Chroma are for development/explicit tests. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
 
 ## Closing and recovery
 
@@ -179,7 +179,7 @@ pnpm --filter @h-ai/vecdb test
 
 > pgvector / Qdrant tests require Docker.
 
-Source JSDoc follows the [shared conventions](../../docs/module-jsdoc.md): public examples use published entry points, and internal examples are checked in their module scope. After building, run `pnpm check:jsdoc --package vecdb`; compiling examples does not replace backend behavior tests.
+Source JSDoc follows the [shared conventions](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证): public examples use published entry points, and internal examples are checked in their module scope. After building, run `pnpm check:jsdoc --package vecdb`; compiling examples does not replace backend behavior tests.
 
 ## License
 

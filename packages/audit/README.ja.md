@@ -132,7 +132,7 @@ await audit.init({
 pnpm --filter @h-ai/audit test
 ```
 
-ソース例は RelDB を先に初期化し、監査結果と依存関係の逆順による終了結果を確認します。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。
+ソース例は RelDB を先に初期化し、監査結果と依存関係の逆順による終了結果を確認します。[JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。
 
 ## ライセンス
 

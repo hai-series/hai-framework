@@ -250,7 +250,7 @@ node scripts/check-module-jsdoc.mjs --package payment
 pnpm --filter @h-ai/payment exec vitest run tests/payment-provider-alipay.test.ts tests/payment-provider-wechat.test.ts tests/payment-provider-stripe.test.ts
 ```
 
-声明中的示例使用真实 `@h-ai/payment` / `@h-ai/payment/client` 入口，区分配置输入与解析输出、`HaiResult.success` 与业务付款/退款状态。内部签名、协议解析和持久操作仓库标注“模块内部上下文”，不能作为应用的深层导入入口。运行 `node scripts/check-module-jsdoc.mjs --package payment` 校验覆盖及示例类型；它不会执行真实支付、网络请求、设备桥接或业务履约，渠道集成仍需对应验收。详见 [模块 JSDoc 规范](../../docs/module-jsdoc.md)。
+声明中的示例使用真实 `@h-ai/payment` / `@h-ai/payment/client` 入口，区分配置输入与解析输出、`HaiResult.success` 与业务付款/退款状态。内部签名、协议解析和持久操作仓库标注“模块内部上下文”，不能作为应用的深层导入入口。运行 `node scripts/check-module-jsdoc.mjs --package payment` 校验覆盖及示例类型；它不会执行真实支付、网络请求、设备桥接或业务履约，渠道集成仍需对应验收。详见 [模块 JSDoc 规范](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。
 
 ## 许可证
 

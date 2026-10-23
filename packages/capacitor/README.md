@@ -156,7 +156,7 @@ pnpm --filter @h-ai/capacitor test
 
 > 由于原生插件依赖，测试中需 mock `@capacitor/*` 模块。
 
-公开操作、内部资源作用域与类型均提供可类型检查的示例；见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。推送示例的类型检查不证明设备权限或 FCM/APNs 实际可用。
+公开操作、内部资源作用域与类型均提供可类型检查的示例；见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。推送示例的类型检查不证明设备权限或 FCM/APNs 实际可用。
 
 ## 许可证
 

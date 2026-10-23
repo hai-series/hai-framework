@@ -6,7 +6,7 @@
 
 > 現在は `0.1.0-alpha` 段階で、公開契約は開発中です。本番導入前にバージョンを固定し、用途に応じた安全性・処理能力を検証してください。
 
-複数インスタンスの本番構成は[21 パッケージの共有状態・復旧能力表（中国語）](docs/distributed-state.md)を確認してください。PostgreSQL/MySQL、Redis、共有オブジェクト・ベクトルサービスを使用し、初期化時にローカル後端を拒否します。CAS・租約・冪等性・未知の外部効果と検証範囲を記載しています。
+複数インスタンスの本番構成は[21 パッケージの共有状態・復旧能力表（中国語）](.agents/instructions/distributed-state.md)を確認してください。PostgreSQL/MySQL、Redis、共有オブジェクト・ベクトルサービスを使用し、初期化時にローカル後端を拒否します。CAS・租約・冪等性・未知の外部効果と検証範囲を記載しています。
 
 <p align="center">
   <strong>AI Runtime · 企業向けフルスタックモジュール · Agent Skills · エンドツーエンドの型安全性</strong>
@@ -657,7 +657,7 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 
 全項目・既定値はルートの `.env.example` が基準です。個別アプリでは対応する `README.md` と `.env.example` で追加設定を確認します。
 
-Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[21 パッケージの設定対応表（中国語）](docs/configuration-map.md)を参照してください。
+Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[21 パッケージの設定対応表（中国語）](.agents/skills/hai-module-create/configuration.md)を参照してください。
 
 ### 品質チェック
 

@@ -90,7 +90,7 @@ if (!result.success) {
 pnpm --filter @h-ai/datapipe test
 ```
 
-源码示例区分无需生命周期的纯函数、同步 HaiResult 与异步管线；类型检查方法见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
+源码示例区分无需生命周期的纯函数、同步 HaiResult 与异步管线；类型检查方法见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。
 
 ## 许可证
 

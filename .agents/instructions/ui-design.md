@@ -32,4 +32,4 @@ admin-console 的 `/admin/ui-gallery/compounds` 包含完整的状态与交互�
 
 至少检查目标手机与桌面、明暗主题、项目支持的全部语言、长内容、键盘和适用触摸行为。后台列表与工作台另检查 1920/2560/3840px 的内容占宽；当前示例覆盖中英日文。截图保存布局证据，操作与断言验证行为。原生宿主和真实 Provider 另行保留各自证据。验收产物放忽略目录。
 
-设计使用 [hai-ui-design](../packages/cli/templates/skills/hai-ui-design/SKILL.md)，实现使用 [hai-ui](../packages/cli/templates/skills/hai-ui/SKILL.md)，审查使用 [hai-ui-review](../packages/cli/templates/skills/hai-ui-review/SKILL.md)。SDD 交接沿 [handoff.md](../packages/cli/templates/skills/hai-spec-implement/handoff.md) 维护需求、验收与当前证据。
+设计使用 [hai-ui-design](../../packages/cli/templates/skills/hai-ui-design/SKILL.md)，实现使用 [hai-ui](../../packages/cli/templates/skills/hai-ui/SKILL.md)，审查使用 [hai-ui-review](../../packages/cli/templates/skills/hai-ui-review/SKILL.md)。SDD 交接沿 [handoff.md](../../packages/cli/templates/skills/hai-spec-implement/handoff.md) 维护需求、验收与当前证据。

@@ -237,7 +237,7 @@ node scripts/check-module-jsdoc.mjs --package payment
 pnpm --filter @h-ai/payment exec vitest run tests/payment-provider-alipay.test.ts tests/payment-provider-wechat.test.ts tests/payment-provider-stripe.test.ts
 ```
 
-宣言の例は実際の `@h-ai/payment` / `@h-ai/payment/client` を使い、設定入力と解析済み出力、`HaiResult.success` と決済・返金の確定状態を区別します。署名、プロトコル解析、永続操作の内部ヘルパーには「模块内部上下文」と明記し、アプリからの深い import の入口にはしません。`node scripts/check-module-jsdoc.mjs --package payment` で網羅性と例の型を確認できます。実決済、ネットワーク通信、端末ブリッジ、履行は実行しないため、別途統合検証が必要です。[モジュール JSDoc 規約](../../docs/module-jsdoc.md)も参照してください。
+宣言の例は実際の `@h-ai/payment` / `@h-ai/payment/client` を使い、設定入力と解析済み出力、`HaiResult.success` と決済・返金の確定状態を区別します。署名、プロトコル解析、永続操作の内部ヘルパーには「模块内部上下文」と明記し、アプリからの深い import の入口にはしません。`node scripts/check-module-jsdoc.mjs --package payment` で網羅性と例の型を確認できます。実決済、ネットワーク通信、端末ブリッジ、履行は実行しないため、別途統合検証が必要です。[モジュール JSDoc 規約](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)も参照してください。
 
 ## ライセンス
 

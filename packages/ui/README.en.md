@@ -908,7 +908,7 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 
 ## Input limits and HTTP capabilities
 
-Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
 ## Development and testing
 
@@ -921,7 +921,7 @@ pnpm --filter @h-ai/ui test
 
 ## Design and interaction acceptance
 
-Use [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md) for page decisions, [hai-ui](../cli/templates/skills/hai-ui/SKILL.md) for implementation, and [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) for rendered UI review. See the [shared design guidance](../../docs/ui-design.md).
+Use [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md) for page decisions, [hai-ui](../cli/templates/skills/hai-ui/SKILL.md) for implementation, and [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) for rendered UI review. See the [shared design guidance](../../.agents/instructions/ui-design.md).
 
 Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables expose sort/loading state and keyboard row activation. Pagination labels follow locale and external page changes update the jump input. Toolbar panels manage focus and view buttons expose selection. Empty/Alert wrap long content. theme.css imports shared tokens; focus follows the current theme and global.css respects reduced motion. Applications still implement filtering, sorting, paging and recovery.
 

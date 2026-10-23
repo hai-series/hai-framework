@@ -84,7 +84,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 文件、服务对象、类型、表名与缓存键遵守 [模块规范](../../instructions/module-conventions.md#命名一致性)。公开入口、内部状态与客户端契约分开；已有上游类型直接复用。
 
-同族源文件保持“模块/领域/角色/实体或实现”的命名顺序，保留框架固定入口、Svelte 组件及协议领域的例外，见[代码风格清单](../../../docs/module-code-style.md)。可选依赖使用 type import 与动态 import 复用真实 SDK；不要仿造最小 SDK 接口、猜测旧版异常形态或保留无验证的兼容分支。
+同族源文件保持“模块/领域/角色/实体或实现”的命名顺序，保留框架固定入口、Svelte 组件及协议领域的例外，见[代码风格清单](../../instructions/module-conventions.md#文件族清单)。配置字段、环境变量及真实消费点见[配置对应表](configuration.md)。可选依赖使用 type import 与动态 import 复用真实 SDK；不要仿造最小 SDK 接口、猜测旧版异常形态或保留无验证的兼容分支。
 
 ## §4 错误码段位（注册表）
 

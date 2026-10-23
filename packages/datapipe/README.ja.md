@@ -90,7 +90,7 @@ if (!result.success) {
 pnpm --filter @h-ai/datapipe test
 ```
 
-ソース例は純関数・同期 HaiResult・非同期パイプラインを区別します。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。
+ソース例は純関数・同期 HaiResult・非同期パイプラインを区別します。[JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。
 
 ## ライセンス
 

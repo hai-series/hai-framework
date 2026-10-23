@@ -156,7 +156,7 @@ pnpm --filter @h-ai/capacitor test
 
 > ネイティブプラグインへの依存があるため、テストでは `@capacitor/*` モジュールを mock する必要があります。
 
-公開操作、内部リソースと型には型検査できる例があります。[JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。型検査は端末権限や FCM/APNs の実配信を保証しません。
+公開操作、内部リソースと型には型検査できる例があります。[JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。型検査は端末権限や FCM/APNs の実配信を保証しません。
 
 ## ライセンス
 

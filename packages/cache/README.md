@@ -183,7 +183,7 @@ owner 只保护锁的续期与释放，不是资源 fencing token。进程暂停
 
 ## 生产共享状态
 
-生产仅使用 Redis（含 Cluster）；memory 只用于开发/明确测试。Redis 故障返回失败，不回退本机缓存。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+生产仅使用 Redis（含 Cluster）；memory 只用于开发/明确测试。Redis 故障返回失败，不回退本机缓存。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md)。
 
 ## 开发测试
 
@@ -193,7 +193,7 @@ pnpm --filter @h-ai/cache test
 
 > Redis 相关测试需要 Docker 环境。
 
-公开契约与内部结构均提供可类型检查的示例；见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
+公开契约与内部结构均提供可类型检查的示例；见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。
 
 ## 许可证
 

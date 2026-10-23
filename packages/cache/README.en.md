@@ -172,7 +172,7 @@ All operations return `HaiResult<T>`. Common error codes:
 
 ## Production shared state
 
-Production requires Redis (including Cluster); memory is for development/explicit tests. Redis errors fail rather than falling back locally. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+Production requires Redis (including Cluster); memory is for development/explicit tests. Redis errors fail rather than falling back locally. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
 
 ## Development and testing
 
@@ -182,7 +182,7 @@ pnpm --filter @h-ai/cache test
 
 > Redis tests require Docker.
 
-Public contracts and internal structures include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
+Public contracts and internal structures include typechecked examples; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).
 
 ## License
 

@@ -316,7 +316,7 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 pnpm --filter @h-ai/kit test
 ```
 
-Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
+Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
 
 ## ライセンス
 

@@ -911,7 +911,7 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 ## 输入约束与 HTTP 能力
 
-存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../../docs/storage-api-capabilities.md)。
+存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
 
 ## 开发测试
 
@@ -924,7 +924,7 @@ pnpm --filter @h-ai/ui test
 
 ## 设计与交互验收
 
-页面设计使用 [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)，组件实现使用 [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)，真实界面走查使用 [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md)。[设计约定](../../docs/ui-design.md) 说明布局、状态和示例。
+页面设计使用 [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)，组件实现使用 [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)，真实界面走查使用 [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md)。[设计约定](../../.agents/instructions/ui-design.md) 说明布局、状态和示例。
 
 Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提供排序与加载状态和行键盘操作；分页导航/输入名称跟随语言，外部页码同步跳页输入；工具栏弹层管理焦点，视图按钮提供选中状态。Empty/Alert 支持长内容换行。theme.css 引入共享 tokens，焦点跟随当前主题，global.css 响应减少动态效果。应用仍需接入实际筛选、排序、分页与失败恢复。
 

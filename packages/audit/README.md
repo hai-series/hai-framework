@@ -132,7 +132,7 @@ await audit.init({
 pnpm --filter @h-ai/audit test
 ```
 
-审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../docs/module-jsdoc.md)。
+审计源码示例明确先初始化 RelDB、检查审计写入结果，再按依赖反序检查关闭结果；参见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。
 
 ## 许可证
 

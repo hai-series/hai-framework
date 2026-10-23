@@ -156,4 +156,4 @@
 - 模块级 Map/Set：SDK client、不可变配置、连接池、单节点 memory provider 内部状态合规；跨节点业务数据不合规。
 - 同步 I/O：仅 CLI 或 init 一次性路径合规；请求/任务热路径不合规。
 
-模块注释与示例按 [JSDoc 验证约定](../../../docs/module-jsdoc.md) 检查；使用真实公共入口和数据，内部类型示例标明词法上下文。受影响包构建后执行 `node scripts/check-module-jsdoc.mjs --package <模块>`；该仓库命令不复制到应用模板。
+模块注释与示例按 [JSDoc 验证约定](../../instructions/module-conventions.md#jsdoc-与示例验证) 检查；使用真实公共入口和数据，内部类型示例标明词法上下文。受影响包构建后执行 `node scripts/check-module-jsdoc.mjs --package <模块>`；该仓库命令不复制到应用模板。

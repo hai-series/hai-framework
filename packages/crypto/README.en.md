@@ -290,7 +290,7 @@ The admin console's online encryption demo calls the Crypto SM3/SM4 APIs directl
 
 ## Production shared state
 
-Production transport registries must declare stateScope=shared and actually use Redis or PostgreSQL/MySQL. Memory, Redis factories over memory, and RelDB factories over SQLite are rejected. All nodes load the same managed versioned key ring. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+Production transport registries must declare stateScope=shared and actually use Redis or PostgreSQL/MySQL. Memory, Redis factories over memory, and RelDB factories over SQLite are rejected. All nodes load the same managed versioned key ring. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
 
 ## Development and testing
 

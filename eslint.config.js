@@ -27,6 +27,7 @@ export default antfu({
     '**/paraglide/**', // Paraglide 自动生成的文件
     '**/src-tauri/gen/**', // Tauri 自动生成的能力与平台 schema
     '**/docs/**/*.md', // 设计/报告文档（示例与伪代码片段）不参与 lint
+    'scripts/generated/module-api-inventory.md', // API 清单沿用生成格式，由 check:api 核对快照
     '**/.agents/skills/**/*.md', // 仓库内 AI Skill 文档（示例代码片段）不参与 lint
     '**/packages/cli/templates/skills/**/*.md', // Skill 模板文档（示例代码片段）不参与 lint
     '**/packages/ui/README*.md', // 三语 README 沿用现有 markdown 规则冲突豁免

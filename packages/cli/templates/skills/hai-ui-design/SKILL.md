@@ -26,6 +26,6 @@ description: "为 Hai 前端的新页面、业务流程或较大改版制定信�
 
 ## 设计记录
 
-沿用项目已有设计文件。小任务在任务记录或方案中说明即可；跨页面共用规则确实需要持久维护时使用一份 `docs/ui-design.md`（或项目既定位置）。记录用户/任务、目标端、主题/token 对应、布局/密度、组件、交互和验收；页面仅记录差异，避免复制需求或整份组件 API。
+沿用项目已有设计文件。小任务在任务记录或方案中说明即可；跨页面共用规则确实需要持久维护时使用一份 `.agents/instructions/ui-design.md`（或项目既定位置）。记录用户/任务、目标端、主题/token 对应、布局/密度、组件、交互和验收；页面仅记录差异，避免复制需求或整份组件 API。
 
 前端工作与 SDD 通过 [交接契约](../hai-spec-implement/handoff.md) 传递范围和验收。设计来源可参考 [UI/UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) 的场景匹配与全局/页面分层，以及 [Impeccable](https://github.com/pbakaus/impeccable) 的任务模式；所有建议须经现有产品、平台和真实组件核验。

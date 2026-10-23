@@ -209,7 +209,7 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 
 ## 本番の共有状態
 
-本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
 
 ## 開発とテスト
 
