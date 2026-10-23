@@ -211,6 +211,7 @@ describe('generateComposeFile', () => {
     expect(proxy).toContain('client_max_body_size 2129920;')
     expect(proxy).toContain('large_client_header_buffers 4 32k;')
     expect(proxy).toContain('proxy_buffer_size 32k;')
+    expect(proxy).toContain('proxy_buffers 8 32k;')
     expect(proxy).toContain('proxy_request_buffering off;')
     expect(proxy).toContain('try_files $uri $uri/ /index.html;')
     expect(() => generateWebProxyConfig(3001, '/api; injected')).toThrow()

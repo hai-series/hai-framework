@@ -602,6 +602,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;
+    proxy_buffers 8 32k;
   }
 }
 `
