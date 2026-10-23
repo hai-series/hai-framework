@@ -4,7 +4,17 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05；定向复核新增 CORE-05；第二轮全量复核新增 DOC-04、VERIFY-06，共 94 个，另有 21 个按模块拆分的 JSDoc 任务，共 115 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 65/65（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：115/115 项代码已合入主目录 `main`；定向验证均有通过记录。验收状态：P1 50/50；P2 63/65；E2E-01、VERIFY-06 因第三轮真实部署门禁未通过而重新打开。其余 113 项的定向通过不代表合并后的 `main` 已通过全量验证。
+
+## 当前交付与未完成项（2026-10-23）
+
+- 全部任务提交已通过 `9eb513ae`、`f62c9c16` 合入主目录 `C:\workspaces\hai-series\hai-framework` 的 `main`，保留原任务提交历史；用户根版本 `0.1.0-alpha.68` 单独提交为 `2f5c92b0`。本节只记录本地合并，不表示已推送 GitHub。
+- **已通过**：修正分支第三轮根类型检查、单元测试 6062 项（另有 58 跳过）、根 E2E 237 项浏览器/HTTP 检查（另有 1 项 AI live 跳过）、Linux 命令/部署锁 9 项、部署夹具拥有权 7 项、Storage 原生浏览器 10 项，以及 API、环境变量、2337 个导出声明的 JSDoc 示例检查和 CLI 生成专项。
+- **未完成 E2E-01 / VERIFY-06**：第三轮真实 SSH/Podman 部署 7 项全部失败。fullstack 首次部署在 `/health` 检查失败，增量用例没有成功部署基线；api/admin/website/h5/mobile 的部署健康验收也未通过，完整增量/回滚及部署后浏览器流程未完成。准备阶段和拥有权测试通过，不能替代这些业务验收。根因尚未完成定位，不能将全部失败归因于网络或单一原因。
+- **其他验证缺口**：第三轮根 lint 因 6 份 README 的本地混合换行产生 12 个格式错误，根 build 被其 lint 前置阻止；独立构建图 34/34 通过不能替代原根 build。合并后的主目录尚未复验这两个原门禁，也未重新运行整套全量测试。
+- **合并针对验证**：CLI/deploy/api-client/kit 的构建与类型共 17 项通过；deploy 单测 197 项通过、10 项 opt-in 跳过，api-client 37 项、kit 23 项通过；CLI 合并初轮 42 项通过、2 项因新增输出 mock 与原 stdout spy 不一致失败，统一输出断言后 13 项命令测试通过。4 个受影响包 360 个 JSDoc 声明/示例、冲突文件 lint 与 skills 通过。新集成工作区初次全仓 JSDoc 因其余包尚未构建而失败，该结果未冒充全仓通过。
+- **原有未提交工作**：用户已确认暂停其他写入。主目录原有 23 个未提交文件完整保存在 stash `bf0cfa7bb91337e0517690247a5374465d767895` 及忽略目录 `tmp/module-review-integration-20261023/paused-main/`；恢复时发生 13 个文件冲突，另有一个新增测试同名，因此整批原改动尚未重新应用，避免部分混合覆盖已合入代码。主目录当前保留完整任务代码，没有冲突标记；这批原工作需要单独协调合并，未被丢弃。
+- 按最新要求先交付全部本地合并与验证状态；未继续扩大修复范围，也未删除本清单及 JSDoc 附件。商业音频、真实 AI live、原生设备、Docker 引擎和生产宿主等未验证边界仍保留。
 
 ## 使用与验收规则
 
@@ -1002,7 +1012,7 @@
 
 ### E2E-01 · P2 · 应用与生成工程显式装配隔离测试后端
 
-- [x] 已修正并通过定向验证（2026-10-23）。
+- [ ] 已实施并通过定向验证；第三轮真实部署验收失败，待修正和复验（2026-10-23）。
 - **实施与验证**：Playwright 服务子进程显式装配完整 SQLite/memory/local/LanceDB 测试配置并删除继承的模块/公开环境，托管入口提供绝对独有数据目录；实际 Vite/desktop 委托入口在 E2E 下跳过开发 dotenv，普通开发/生产契约保留。API 测试直接运行 dist，可信 SM2 ring/registry 替代 transport=false 绕过；部署本地主机 fixture 显式 E2E profile、Redis/S3 与增量/回滚断言保留；调用方、README、双skill、LLMS同步。严格类型与配置内 lint零警告、skills37/330、helper8/8、desktop配置3/3；fresh CLI及21真实tarballs后原3API质量/浏览器门禁通过（2+3+3），三独立DB计数器正控1/额外0/closed及PID退出，owned工程清理。H5真实注册/OTP/重置、官网原route.fulfill投递UI、AI明确mock各1/1真实Chrome通过，端口/观察到的本轮PID/托管数据回收；原无匹配selector失败单列。证据 tmp/module-repair-20261022/E2E-01/handoff.json 与 tmp/validation/module-review/E2E-01/apps-targeted-handoff.json。旧计数器两次超时根因无法还原，当前受测范围通过并保留安全诊断；额外强制扫描原排除skill的既有lint与Python启动器意外更新记录单列；应用未消费部署配置的启动ERROR另列CORE-05修正，不以UI通过认定其无问题；全量回归按用户要求在全部任务实施后执行。
 - **位置**：应用/CLI 模板 Playwright 启动、测试运行入口和 CLI 部署夹具环境。
 - **证据与影响**：首轮生成工程三个 API 场景启动失败；H5/corporate 连接生产 Compose `db` 地址失败，AI playground 缺少可用限流缓存，mobile 后端读取生产环境；部署 API 测试使用本地后端却按生产运行，触发共享状态守卫。根因和具体异常分别保留，不混称为同一网络错误。
@@ -1056,8 +1066,8 @@
 
 ### VERIFY-06 · P2 · 部署夹具超时后回收引擎端进程与准备资源
 
-- [x] 已修正并通过定向验证（2026-10-23）。
-- **实施与验证**：删除host fixture build，先确认固定公共base并登记create ID，再在私有PID namespace异步准备；仅嵌套Podman特权，安装/复制/SSH共用总deadline与取消信号，等待客户端close后按ID回收并核验，清理失败聚合。原3拥有权加超时/错误/取消/预取消共7通过，真实parent/setsid child证明客户端退出后仍增长、清理后心跳停止且外部sentinel存活；Linux锁5与运行时4通过。新增20s复制上限过紧的前置失败保留，最终使用原180s总预算剩余，运行时4复验约88s；CLI准备600s/原hook900s、Linux180s/原hook300s不放宽，清理hook90s覆盖rm60+确认15。严格noEmit、12文件零警告lint、skills37/330通过，三语README/规范/应用测试skill及全部调用方同步；无生产API/依赖变化。12文件hash与snapshot稳定，11个登记ID及8个私有tag均已核验消失；两个旧external builder缺排他身份原样保留未知，Docker未实跑，heavy7留最终完整门禁。证据tmp/module-repair-20261022/VERIFY-06/handoff.json与tmp/validation/module-review/VERIFY-06/resources-final.json；全量回归按用户要求在全部任务实施后执行。
+- [ ] 已实施并通过定向验证；第三轮真实部署验收失败，待修正和复验（2026-10-23）。
+- **实施与验证**：删除host fixture build，先确认固定公共base并登记create ID，再在私有PID namespace异步准备；仅嵌套Podman特权，安装/复制/SSH共用总deadline与取消信号，等待客户端close后按ID回收并核验，清理失败聚合。原3拥有权加超时/错误/取消/预取消共7通过，真实parent/setsid child证明客户端退出后仍增长、清理后心跳停止且外部sentinel存活；Linux锁5与运行时4通过。新增20s复制上限过紧的前置失败保留，最终使用原180s总预算剩余，运行时4复验约88s；CLI准备600s/原hook900s、Linux180s/原hook300s不放宽，清理hook90s覆盖rm60+确认15。严格noEmit、4个受改TS文件零警告lint、skills37/330通过，三语README/规范/应用测试skill及全部调用方同步；无生产API/依赖变化。12文件hash与snapshot稳定，11个登记ID及8个私有tag均已核验消失；两个旧external builder缺排他身份原样保留未知，Docker未实跑，heavy7留最终完整门禁。证据tmp/module-repair-20261022/VERIFY-06/handoff.json与tmp/validation/module-review/VERIFY-06/resources-final.json；全量回归按用户要求在全部任务实施后执行。
 - **位置**：deploy 的 Linux command-runtime 测试、CLI 的真实 SSH 部署夹具及拥有权 helper。
 - **证据与影响**：第二轮 Linux 命令夹具在镜像准备阶段未完成，重型部署夹具明确 `spawnSync podman ETIMEDOUT`；四个命令场景、七个重型部署场景均未执行。客户端退出后仍有外部构建容器，旧 fixture 未持久记录其排他身份或核验引擎端构建终止，不能用临时目录消失代替完整回收。网络下载慢与夹具终止/清理缺陷分别记录。
 - **修正内容**：将网络准备纳入可凭成功创建 ID 终止的本轮资源生命周期，保留失败诊断并聚合清理失败；成功、失败、超时和取消均只回收当前拥有资源。保留独立端口、私有镜像 tag/内容 ID 保护、全部原业务场景与外部 sentinel，不通过扩大超时、使用旧镜像或跳过断言换取通过。
