@@ -105,17 +105,19 @@ pnpm --filter ai-playground test:e2e
 
 ```powershell
 $env:HAI_E2E_LIVE='1'
-pnpm --filter ai-playground exec playwright test live-ai.spec.ts
+pnpm --filter ai-playground test:e2e live-ai.spec.ts
 Remove-Item Env:HAI_E2E_LIVE
 ```
 
 Bash：
 
 ```bash
-HAI_E2E_LIVE=1 pnpm --filter ai-playground exec playwright test live-ai.spec.ts
+HAI_E2E_LIVE=1 pnpm --filter ai-playground test:e2e live-ai.spec.ts
 ```
 
 真实 E2E 会调用计费接口，仅在明确需要联调时运行。
+
+经 `test:e2e` 托管入口分配本轮绝对数据目录。服务显式使用隔离的 SQLite、Memory 和 LanceDB，不继承外部模块配置，也不读取开发者 `.env.local`；普通开发与生产加载规则保持不变。live 模式只转发调用方明确注入进程的 `HAI_AI_*` 配置，需自行提供真实服务凭据；默认 mock 结果不代表真实商业模型验收。
 
 ## 许可证
 

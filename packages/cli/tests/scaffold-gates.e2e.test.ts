@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
+import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
+import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
 
 const runScaffoldGates = process.env.HAI_CLI_RUN_SCAFFOLD_GATES === '1'
 const cliBin = path.resolve(process.cwd(), 'dist/index.js')
@@ -275,15 +277,19 @@ async function startNativeApiService(root: string, baseUrl: string): Promise<() 
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
-      ...authFixtureEnv(),
-      HAI_CORE_ENV: 'test',
-      HAI_CORE_LOGGING_LEVEL: 'error',
-      HAI_SERV_SERVER_PORT: new URL(baseUrl).port,
-      HAI_SERV_TRANSPORT: 'false',
-      HAI_DB_DATABASE: path.join(root, 'api-data/app.db'),
-      HAI_VECDB_PATH: path.join(root, 'api-data/vecdb'),
-      HAI_STORAGE_ROOT: path.join(root, 'api-data/uploads'),
-      HAI_IAM_REGISTER_ENABLED: 'true',
+      ...createE2eServerEnv({
+        ...authFixtureEnv(),
+        HAI_E2E_DATA_ROOT: path.join(root, 'api-data'),
+        HAI_CORE_ENV: 'test',
+        HAI_CORE_LOGGING_LEVEL: 'error',
+        HAI_SERV_SERVER_PORT: new URL(baseUrl).port,
+        HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(root, 'api-data/app.db') }),
+        HAI_CACHE: JSON.stringify({ type: 'memory' }),
+        HAI_VECDB: JSON.stringify({ type: 'lancedb', path: path.join(root, 'api-data/vecdb') }),
+        HAI_STORAGE: JSON.stringify({ type: 'local', root: path.join(root, 'api-data/uploads') }),
+        HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
+        HAI_IAM_REGISTER_ENABLED: 'true',
+      }),
     },
   })
   let startupError = ''
@@ -394,6 +400,14 @@ function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): 
     const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || path.join(process.cwd(), '../../tmp/validation/module-review/scaffold-browser'))
     mkdirSync(parent, { recursive: true })
     env.HAI_AUTH_EVIDENCE_DIR = mkdtempSync(path.join(parent, `${path.basename(cwd)}-`))
+    const owner = [...tempRoots].find((root) => {
+      const relative = path.relative(root, cwd)
+      return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative)
+    })
+    if (!owner)
+      throw new Error('Database isolation requires an owned scaffold project')
+    withDatabaseIsolation(cwd, env.HAI_AUTH_EVIDENCE_DIR, env, () => runGate(pnpmBin, args, cwd, env, true))
+    return
   }
   runGate(pnpmBin, args, cwd, env, true)
 }

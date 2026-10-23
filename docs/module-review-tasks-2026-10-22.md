@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 61/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 62/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -994,7 +994,8 @@
 
 ### E2E-01 · P2 · 应用与生成工程显式装配隔离测试后端
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：Playwright 服务子进程显式装配完整 SQLite/memory/local/LanceDB 测试配置并删除继承的模块/公开环境，托管入口提供绝对独有数据目录；实际 Vite/desktop 委托入口在 E2E 下跳过开发 dotenv，普通开发/生产契约保留。API 测试直接运行 dist，可信 SM2 ring/registry 替代 transport=false 绕过；部署本地主机 fixture 显式 E2E profile、Redis/S3 与增量/回滚断言保留；调用方、README、双skill、LLMS同步。严格类型与配置内 lint零警告、skills37/330、helper8/8、desktop配置3/3；fresh CLI及21真实tarballs后原3API质量/浏览器门禁通过（2+3+3），三独立DB计数器正控1/额外0/closed及PID退出，owned工程清理。H5真实注册/OTP/重置、官网原route.fulfill投递UI、AI明确mock各1/1真实Chrome通过，端口/观察到的本轮PID/托管数据回收；原无匹配selector失败单列。证据 tmp/module-repair-20261022/E2E-01/handoff.json 与 tmp/validation/module-review/E2E-01/apps-targeted-handoff.json。旧计数器两次超时根因无法还原，当前受测范围通过并保留安全诊断；额外强制扫描原排除skill的既有lint与Python启动器意外更新记录单列；应用未消费部署配置的启动ERROR另列CORE-05修正，不以UI通过认定其无问题；全量回归按用户要求在全部任务实施后执行。
 - **位置**：应用/CLI 模板 Playwright 启动、测试运行入口和 CLI 部署夹具环境。
 - **证据与影响**：首轮生成工程三个 API 场景启动失败；H5/corporate 连接生产 Compose `db` 地址失败，AI playground 缺少可用限流缓存，mobile 后端读取生产环境；部署 API 测试使用本地后端却按生产运行，触发共享状态守卫。根因和具体异常分别保留，不混称为同一网络错误。
 - **修正内容**：测试启动明确使用本轮临时 SQLite/memory/local 等后端及测试身份，隔离数据和 ambient 配置，保留可信传输 keyring 与注册表装配；生产环境和分布式守卫不放宽。同步文档、skill 和真实消费者。

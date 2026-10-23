@@ -1,5 +1,6 @@
 import process from 'node:process'
 import { defineConfig } from '@playwright/test'
+import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from './scripts/e2e-env.js'
 
 const defaultBaseURL = 'http://127.0.0.1:3000'
 const baseURL = process.env.BASE_URL || defaultBaseURL
@@ -47,11 +48,18 @@ export default defineConfig({
   },
   webServer: [{
     name: '{{api.servicePackageName}}',
-    command: 'pnpm --filter {{api.servicePackageName}} start',
-    env: {
+    command: 'pnpm --filter {{api.servicePackageName}} exec node dist/index.js',
+    env: createE2eServerEnv({
+      ...createE2eNotificationEnv(),
+      HAI_CORE_ENV: 'test',
+      HAI_DB: JSON.stringify({ type: 'sqlite', database: `${process.env.HAI_E2E_DATA_ROOT}/api.db` }),
+      HAI_CACHE: JSON.stringify({ type: 'memory' }),
+      HAI_STORAGE: JSON.stringify({ type: 'local', root: `${process.env.HAI_E2E_DATA_ROOT}/uploads` }),
+      HAI_VECDB: JSON.stringify({ type: 'lancedb', path: `${process.env.HAI_E2E_DATA_ROOT}/vecdb` }),
+      HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
       HOST: serviceHost,
       PORT: servicePort,
-    },
+    }),
     url: `${baseURL}/health`,
     reuseExistingServer: false,
     timeout: 120_000,

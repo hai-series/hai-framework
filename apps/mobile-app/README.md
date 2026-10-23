@@ -144,6 +144,8 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 ## 开发测试
 
+浏览器验证通过 `pnpm --filter mobile-app test:e2e` 托管入口分配本轮绝对数据目录。独立 API 后端显式使用隔离的 SQLite/Memory/Local/LanceDB 与可信 SM2 ring，保留真实加密客户端握手；前端和后端均隔离 ambient 模块变量与用户 `.env.local`。这不替代设备验收，也不改变普通开发和生产配置规则。
+
 ```bash
 pnpm --filter mobile-app check
 pnpm --filter mobile-app lint

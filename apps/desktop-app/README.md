@@ -179,6 +179,8 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 ## 开发测试
 
+桌面 Web 预览的跨端浏览器验证由 `pnpm --filter mobile-app test:e2e` 托管，显式使用本轮 loopback API、可信 transport 与独立数据目录。`HAI_E2E=1` 时预览不读取用户 `.env.local`；普通开发、生产启动的 dotenv 规则保持不变。浏览器结果不能代替桌面安装包和原生设备验收。
+
 ```bash
 pnpm --filter desktop-app typecheck
 pnpm --filter desktop-app lint

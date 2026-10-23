@@ -160,6 +160,7 @@ function verifyDeployedBrowser(metadata: { name: string, version: string, env: s
     PUBLIC_API_BASE: '',
     BASE_URL: `http://127.0.0.1:${fixture().webHostPort}`,
     HAI_AUTH_EVIDENCE_DIR: evidence,
+    HAI_E2E_DATA_ROOT: path.join(workDir, 'browser-data'),
     ...(process.env.PLAYWRIGHT_HTML_OUTPUT_DIR || process.env.PLAYWRIGHT_HTML_REPORT ? {} : { PLAYWRIGHT_HTML_OUTPUT_DIR: path.join(evidence, 'html') }),
   }
   writeFileSync(path.join(project, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: [] }\n`)
@@ -422,7 +423,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       const serviceDir = path.join(appDir, 'packages/e2e-fullstack-serv')
       writeFileSync(path.join(serviceDir, 'config/_cache.yml'), 'type: redis\n')
       writeFileSync(path.join(serviceDir, 'config/_storage.yml'), 'type: s3\n')
-      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
+      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
       const deployConfig = {
         provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: HOST_PORT } },
         container: { s3Engine: 'rustfs' },
@@ -568,6 +569,9 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
     await createProject({ name, appType, yes: true, install: false, git: false, examples: false, packageManager: 'pnpm', cwd: workDir })
     const project = path.join(workDir, name)
     useLocalPackages(project)
+    // 本轮测试配置显式允许隔离本地状态；生产环境文件和共享状态守卫保持不变。
+    const fixtureEnvironment = path.join(project, appType === 'api' ? `apps/${name}-service/.env.test` : '.env.test')
+    writeFileSync(fixtureEnvironment, `${readFileSync(fixtureEnvironment, 'utf8')}\nHAI_E2E=1\nHAI_DB='{"type":"sqlite","database":"/app/data/e2e.db"}'\nHAI_CACHE='{"type":"memory"}'\nHAI_STORAGE='{"type":"local","root":"/app/data/uploads"}'\n`)
     runPnpm(['install', '--prefer-offline'], project)
     const dockerfilePath = path.join(project, 'images/app.Dockerfile')
     if (NPM_MIRROR)
@@ -582,7 +586,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       const apiProject = path.join(workDir, 'delivery-api')
       const apiService = path.join(apiProject, 'apps/delivery-api-service')
       const apiEnvironment = path.join(apiService, '.env.test')
-      writeFileSync(apiEnvironment, `${readFileSync(apiEnvironment, 'utf8')}\nHAI_SERV_TRANSPORT=false\nHAI_SERV_CORS_ORIGIN=http://127.0.0.1:${fixture().webHostPort}\n`)
+      writeFileSync(apiEnvironment, `${readFileSync(apiEnvironment, 'utf8')}\nHAI_SERV_CORS_ORIGIN=http://127.0.0.1:${fixture().webHostPort}\n`)
       const apiBuildId = readFileSync(path.join(apiProject, '.hai/build/docker/latest'), 'utf8').trim()
       await deploy.close()
       expect(await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { hostPort: API_PORT } } })).toMatchObject({ success: true })

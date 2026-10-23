@@ -132,6 +132,8 @@ Scaffold gates generate real projects and run install, typecheck, lint, build, t
 
 `--generate` runs focused route gates: it reuses installed workspace dependencies, generates and builds real SvelteKit, serv API and fullstack backend projects, then accesses their new routes, including transport. It does not replace the full installation and browser matrix.
 
+`test:e2e` gives each server explicit isolated backends and an absolute data directory. Server children do not inherit external `HAI_*` / `PUBLIC_*` / `VITE_*` settings or read the user's `.env.local`. Test-only `HAI_E2E=1` preserves ordinary development/production dotenv behavior and shared-backend requirements; transport cases use a fresh trusted SM2 ring and the actual registry. Scaffold browser runs also use an independent TCP counter to verify that external database settings are never contacted. Complete deployment acceptance retains real Redis/S3, incremental updates and rollback for fullstack.
+
 `--i18n` builds the CLI and checks language precedence, help, successful generation and errors in separate processes, alongside Chinese/English prompt, validation and cancellation cases.
 
 ## License

@@ -239,6 +239,8 @@ Apache License 2.0
 
 ## 开发测试
 
+浏览器验证使用 `pnpm --filter admin-console test:e2e` 托管入口分配绝对数据目录，服务子进程显式选择隔离的 SQLite/Memory/Local，不继承外部模块变量或读取用户 `.env.local`。原有 transport 开启/关闭两组保持独立，开启组使用本轮可信 SM2 ring 与实际 registry；普通开发和生产配置规则不变。
+
 ```sh
 pnpm --filter admin-console typecheck
 pnpm --filter admin-console lint

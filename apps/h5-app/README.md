@@ -158,6 +158,8 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 ## 开发测试
 
+浏览器验证通过 `pnpm --filter h5-app test:e2e` 分配本轮绝对数据目录。服务子进程显式选择隔离的 SQLite/Memory/Local，清除继承的模块变量并跳过用户 `.env.local`；普通开发和生产的 dotenv 与共享后端要求不变。
+
 ```sh
 pnpm --filter h5-app typecheck
 pnpm --filter h5-app lint

@@ -472,6 +472,7 @@ export const { apiFetch } = client
 - 配置文件：`playwright.config.ts`
 - 覆盖关键用户流程（登录 → 操作 → 登出）
 - 包含关键页面和 API 端点的测试
+- 经 `test:e2e` 托管入口运行，服务子进程显式选择本轮 SQLite/Memory/Local 等测试后端与绝对数据目录，隔离 ambient 模块变量和用户 `.env.local`；普通生产配置与共享状态守卫保持生效。启用 transport 时传入本轮可信 ring，并保留真实客户端握手。
 
 ## §12 创建检查清单
 

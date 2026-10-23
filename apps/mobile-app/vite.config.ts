@@ -14,7 +14,7 @@ import { defineConfig } from 'vite'
 import { publicRuntimeConfig } from '../../scripts/vite-runtime-config.js'
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+  const envResult = command === 'build' || process.env.HAI_E2E === '1' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
