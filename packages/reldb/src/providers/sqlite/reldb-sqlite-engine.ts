@@ -17,6 +17,7 @@ import type BetterSqlite3 from 'better-sqlite3'
 import type { ExecuteResult } from '../../reldb-types.js'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { setTimeout as delay } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 
 const require = createRequire(import.meta.url)
@@ -109,8 +110,35 @@ export function createSyncSqliteEngine(options: SqliteEngineOptions): SqliteEngi
 
   return {
     async initialize() {
-      if (!initialized && options.walMode !== false)
-        db.pragma('journal_mode = WAL')
+      if (!initialized && options.walMode !== false) {
+        // 首次切换 WAL 的锁升级可能跳过原生 busy handler；只重试初始化，不重放业务 SQL。
+        // 与 worker 保持相同的单次 5 秒预算，原生等待和退避共同消耗该预算。
+        const deadline = performance.now() + 5000
+        let contention: unknown
+        try {
+          for (;;) {
+            if (contention && performance.now() >= deadline)
+              throw contention
+            db.pragma(`busy_timeout = ${Math.max(1, Math.ceil(deadline - performance.now()))}`)
+            try {
+              db.pragma('journal_mode = WAL')
+              break
+            }
+            catch (error) {
+              if (!error || typeof error !== 'object' || !('code' in error)
+                || typeof error.code !== 'string' || !/^SQLITE_BUSY(?:_|$)/.test(error.code)
+                || performance.now() >= deadline) {
+                throw error
+              }
+              contention = error
+              await delay(Math.min(25, Math.max(1, deadline - performance.now())))
+            }
+          }
+        }
+        finally {
+          db.pragma('busy_timeout = 5000')
+        }
+      }
       initialized = true
     },
     async all(sql, params) {

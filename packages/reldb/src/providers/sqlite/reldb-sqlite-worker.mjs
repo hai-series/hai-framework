@@ -10,6 +10,7 @@
  */
 
 import { createRequire } from 'node:module'
+import { setTimeout as delay } from 'node:timers/promises'
 import { parentPort, workerData } from 'node:worker_threads'
 
 const require = createRequire(import.meta.url)
@@ -23,7 +24,7 @@ function serializeError(error) {
   return { message: error instanceof Error ? error.message : String(error) }
 }
 
-/** 打开数据库连接并按需启用 WAL。 */
+/** 打开当前线程拥有的数据库连接；WAL 在初始化阶段单独配置。 */
 function openDatabase() {
   const Database = require('better-sqlite3')
   const database = new Database(workerData.database, { readonly: workerData.readonly ?? false })
@@ -32,81 +33,111 @@ function openDatabase() {
 
 let db = null
 
-try {
-  db = openDatabase()
-  // 先保存连接，再执行可能失败的 pragma；初始化失败仍能由 close/线程终止释放。
-  if (workerData.walMode !== false)
-    db.pragma('journal_mode = WAL')
-  parentPort.postMessage({ type: 'ready' })
-}
-catch (error) {
-  parentPort.postMessage({ type: 'init-error', error: serializeError(error) })
-}
-
-parentPort.on('message', (msg) => {
-  const { id, op, sql, params, statements } = msg
-
-  if (op === 'close') {
-    try {
-      db?.close()
-    }
-    catch {
-      // 忽略关闭异常，仍需回执并退出。
-    }
-    db = null
-    parentPort.postMessage({ id, ok: true, result: undefined })
-    parentPort.close()
-    return
-  }
-
+async function initialize() {
   try {
-    if (!db)
-      throw new Error('sqlite worker database is not open')
-
-    let result
-    switch (op) {
-      case 'all': {
-        const stmt = db.prepare(sql)
-        result = params ? stmt.all(...params) : stmt.all()
-        break
-      }
-      case 'get': {
-        const stmt = db.prepare(sql)
-        result = (params ? stmt.get(...params) : stmt.get()) ?? null
-        break
-      }
-      case 'run': {
-        const stmt = db.prepare(sql)
-        const runResult = params ? stmt.run(...params) : stmt.run()
-        result = { changes: runResult.changes, lastInsertRowid: runResult.lastInsertRowid }
-        break
-      }
-      case 'exec': {
-        db.exec(sql)
-        result = undefined
-        break
-      }
-      case 'batch': {
-        const database = db
-        const tx = database.transaction((items) => {
-          for (const item of items) {
-            const stmt = database.prepare(item.sql)
-            if (item.params)
-              stmt.run(...item.params)
-            else stmt.run()
+    db = openDatabase()
+    // 先保存连接，再执行可能失败的 pragma；初始化失败仍能由 close/线程终止释放。
+    if (workerData.walMode !== false) {
+      // 与同步引擎一致：WAL 锁升级可直接返回 BUSY，原生等待与退避共用 5 秒预算。
+      const deadline = performance.now() + 5000
+      let contention
+      try {
+        for (;;) {
+          if (contention && performance.now() >= deadline)
+            throw contention
+          db.pragma(`busy_timeout = ${Math.max(1, Math.ceil(deadline - performance.now()))}`)
+          try {
+            db.pragma('journal_mode = WAL')
+            break
           }
-        })
-        tx(statements)
-        result = undefined
-        break
+          catch (error) {
+            if (!error || typeof error !== 'object' || !('code' in error)
+              || typeof error.code !== 'string' || !/^SQLITE_BUSY(?:_|$)/.test(error.code)
+              || performance.now() >= deadline) {
+              throw error
+            }
+            contention = error
+            await delay(Math.min(25, Math.max(1, deadline - performance.now())))
+          }
+        }
       }
-      default:
-        throw new Error(`unknown sqlite worker op: ${op}`)
+      finally {
+        db.pragma('busy_timeout = 5000')
+      }
     }
-
-    parentPort.postMessage({ id, ok: true, result })
+    parentPort.postMessage({ type: 'ready' })
   }
   catch (error) {
-    parentPort.postMessage({ id, ok: false, error: serializeError(error) })
+    parentPort.postMessage({ type: 'init-error', error: serializeError(error) })
   }
-})
+
+  parentPort.on('message', (msg) => {
+    const { id, op, sql, params, statements } = msg
+
+    if (op === 'close') {
+      try {
+        db?.close()
+      }
+      catch {
+        // 忽略关闭异常，仍需回执并退出。
+      }
+      db = null
+      parentPort.postMessage({ id, ok: true, result: undefined })
+      parentPort.close()
+      return
+    }
+
+    try {
+      if (!db)
+        throw new Error('sqlite worker database is not open')
+
+      let result
+      switch (op) {
+        case 'all': {
+          const stmt = db.prepare(sql)
+          result = params ? stmt.all(...params) : stmt.all()
+          break
+        }
+        case 'get': {
+          const stmt = db.prepare(sql)
+          result = (params ? stmt.get(...params) : stmt.get()) ?? null
+          break
+        }
+        case 'run': {
+          const stmt = db.prepare(sql)
+          const runResult = params ? stmt.run(...params) : stmt.run()
+          result = { changes: runResult.changes, lastInsertRowid: runResult.lastInsertRowid }
+          break
+        }
+        case 'exec': {
+          db.exec(sql)
+          result = undefined
+          break
+        }
+        case 'batch': {
+          const database = db
+          const tx = database.transaction((items) => {
+            for (const item of items) {
+              const stmt = database.prepare(item.sql)
+              if (item.params)
+                stmt.run(...item.params)
+              else stmt.run()
+            }
+          })
+          tx(statements)
+          result = undefined
+          break
+        }
+        default:
+          throw new Error(`unknown sqlite worker op: ${op}`)
+      }
+
+      parentPort.postMessage({ id, ok: true, result })
+    }
+    catch (error) {
+      parentPort.postMessage({ id, ok: false, error: serializeError(error) })
+    }
+  })
+}
+
+void initialize()
