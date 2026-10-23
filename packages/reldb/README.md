@@ -77,6 +77,17 @@ await reldb.close()
 
 ### 配置
 
+`@h-ai/reldb/schemas` 直接导出同一组配置 Schema 和类型，只依赖 Zod，不加载数据库实例或驱动，可用于 CLI 或浏览器的配置校验。MySQL TLS 仅接受 `false` 或严格对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其布尔值、字符串模式及对象契约。
+
+```ts
+import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
+
+const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
+if (!checked.success)
+  throw new Error('Invalid database configuration')
+// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
+```
+
 支持连接字符串（`url`）或分字段（`host/port/database/user/password`）。
 
 ```ts

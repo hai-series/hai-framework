@@ -24769,6 +24769,432 @@
               "declarationKind": "FunctionDeclaration"
             }
           ]
+        },
+        {
+          "subpath": "./schemas",
+          "conditions": [
+            "default"
+          ],
+          "target": "./dist/schemas.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DbType",
+              "kind": "type",
+              "declaration": "DbType",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlConfig",
+              "kind": "type",
+              "declaration": "MysqlConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlOptionsSchema",
+              "kind": "value",
+              "declaration": "MysqlOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlPoolConfig",
+              "kind": "type",
+              "declaration": "MysqlPoolConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlPoolConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlPoolConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlSslConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlSslConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PoolConfig",
+              "kind": "type",
+              "declaration": "PoolConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PoolConfigSchema",
+              "kind": "value",
+              "declaration": "PoolConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PostgresqlConfig",
+              "kind": "type",
+              "declaration": "PostgresqlConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PostgresqlConfigSchema",
+              "kind": "value",
+              "declaration": "PostgresqlConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbConfig",
+              "kind": "type",
+              "declaration": "ReldbConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbConfigInput",
+              "kind": "type",
+              "declaration": "ReldbConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbConfigSchema",
+              "kind": "value",
+              "declaration": "ReldbConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbOperationLogConfig",
+              "kind": "type",
+              "declaration": "ReldbOperationLogConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbOperationLogConfigSchema",
+              "kind": "value",
+              "declaration": "ReldbOperationLogConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbTypeSchema",
+              "kind": "value",
+              "declaration": "ReldbTypeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SqliteConfig",
+              "kind": "type",
+              "declaration": "SqliteConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SqliteConfigSchema",
+              "kind": "value",
+              "declaration": "SqliteConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SqliteOptionsSchema",
+              "kind": "value",
+              "declaration": "SqliteOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SslConfig",
+              "kind": "type",
+              "declaration": "SslConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SslConfigSchema",
+              "kind": "value",
+              "declaration": "SslConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./schemas",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/schemas.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DbType",
+              "kind": "type",
+              "declaration": "DbType",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlConfig",
+              "kind": "type",
+              "declaration": "MysqlConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlOptionsSchema",
+              "kind": "value",
+              "declaration": "MysqlOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlPoolConfig",
+              "kind": "type",
+              "declaration": "MysqlPoolConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlPoolConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlPoolConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlSslConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlSslConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PoolConfig",
+              "kind": "type",
+              "declaration": "PoolConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PoolConfigSchema",
+              "kind": "value",
+              "declaration": "PoolConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PostgresqlConfig",
+              "kind": "type",
+              "declaration": "PostgresqlConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PostgresqlConfigSchema",
+              "kind": "value",
+              "declaration": "PostgresqlConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbConfig",
+              "kind": "type",
+              "declaration": "ReldbConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbConfigInput",
+              "kind": "type",
+              "declaration": "ReldbConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbConfigSchema",
+              "kind": "value",
+              "declaration": "ReldbConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbOperationLogConfig",
+              "kind": "type",
+              "declaration": "ReldbOperationLogConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbOperationLogConfigSchema",
+              "kind": "value",
+              "declaration": "ReldbOperationLogConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbTypeSchema",
+              "kind": "value",
+              "declaration": "ReldbTypeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SqliteConfig",
+              "kind": "type",
+              "declaration": "SqliteConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SqliteConfigSchema",
+              "kind": "value",
+              "declaration": "SqliteConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SqliteOptionsSchema",
+              "kind": "value",
+              "declaration": "SqliteOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SslConfig",
+              "kind": "type",
+              "declaration": "SslConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SslConfigSchema",
+              "kind": "value",
+              "declaration": "SslConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./schemas",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/schemas.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "DbType",
+              "kind": "type",
+              "declaration": "DbType",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlConfig",
+              "kind": "type",
+              "declaration": "MysqlConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlOptionsSchema",
+              "kind": "value",
+              "declaration": "MysqlOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlPoolConfig",
+              "kind": "type",
+              "declaration": "MysqlPoolConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MysqlPoolConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlPoolConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MysqlSslConfigSchema",
+              "kind": "value",
+              "declaration": "MysqlSslConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PoolConfig",
+              "kind": "type",
+              "declaration": "PoolConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PoolConfigSchema",
+              "kind": "value",
+              "declaration": "PoolConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PostgresqlConfig",
+              "kind": "type",
+              "declaration": "PostgresqlConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PostgresqlConfigSchema",
+              "kind": "value",
+              "declaration": "PostgresqlConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbConfig",
+              "kind": "type",
+              "declaration": "ReldbConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbConfigInput",
+              "kind": "type",
+              "declaration": "ReldbConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbConfigSchema",
+              "kind": "value",
+              "declaration": "ReldbConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbOperationLogConfig",
+              "kind": "type",
+              "declaration": "ReldbOperationLogConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ReldbOperationLogConfigSchema",
+              "kind": "value",
+              "declaration": "ReldbOperationLogConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReldbTypeSchema",
+              "kind": "value",
+              "declaration": "ReldbTypeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SqliteConfig",
+              "kind": "type",
+              "declaration": "SqliteConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SqliteConfigSchema",
+              "kind": "value",
+              "declaration": "SqliteConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SqliteOptionsSchema",
+              "kind": "value",
+              "declaration": "SqliteOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SslConfig",
+              "kind": "type",
+              "declaration": "SslConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SslConfigSchema",
+              "kind": "value",
+              "declaration": "SslConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
         }
       ]
     },

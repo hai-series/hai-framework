@@ -422,7 +422,7 @@ for (const [name, entry] of variables) {
 const catalog = [...variables.values()].sort((a, b) => a.module.localeCompare(b.module) || a.name.localeCompare(b.name))
 const catalogText = `${JSON.stringify(catalog.map(({ constraints, enums, ...entry }) => ({
   ...entry,
-  constraint: [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
+  constraint: entry.name === 'HAI_DB_SSL' ? 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象' : [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
 })), null, 2)}\n`
 const catalogFile = path.join(root, 'packages/cli/src/commands/cli-config-catalog.json')
 const envText = [

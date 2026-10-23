@@ -137,7 +137,7 @@ function variableConstraint(name: string, value: string): string {
     HAI_STORAGE_TYPE: 'local | s3',
     HAI_VECDB_TYPE: 'lancedb | pgvector | qdrant | chroma',
     HAI_AI_LLM_API: 'chat | responses | anthropic',
-    HAI_DB_SSL: 'false | true | require | prefer | allow | disable；或 TLS 对象',
+    HAI_DB_SSL: 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象',
     HAI_IAM_PASSWORD_MINLENGTH: '整数 >= 1，且不大于 maxLength',
     HAI_IAM_PASSWORD_MAXLENGTH: '整数 1–256，且不小于 minLength',
     HAI_IAM_PASSWORD_EXPIRATIONDAYS: '整数 >= 0，单位天；0 表示不过期',

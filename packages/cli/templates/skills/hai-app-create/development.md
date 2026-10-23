@@ -76,7 +76,7 @@ Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加�
 | `HAI_DB_TYPE`                                                     | `sqlite \| postgresql \| mysql`                                                        |
 | `HAI_DB_DATABASE`                                                 | SQLite 文件路径或 `:memory:`；网络数据库为数据库名                                     |
 | `HAI_DB_HOST` / `HAI_DB_PORT` / `HAI_DB_USER` / `HAI_DB_PASSWORD` | 主机、整数端口 1–65535、用户名、敏感密码；PostgreSQL 常用 5432，MySQL 常用 3306        |
-| `HAI_DB_URL` / `HAI_DB_SSL`                                       | 非空连接 URL 优先于拆分字段；TLS 为布尔值、require/prefer/allow/disable 或 TLS 对象    |
+| `HAI_DB_URL` / `HAI_DB_SSL`                                       | 非空连接 URL 优先于拆分字段；MySQL TLS 仅 false 或严格对象（{} 默认验证证书链和 DNS 身份）；PostgreSQL 接受其布尔/字符串模式或对象    |
 | `HAI_CACHE_TYPE` / `HAI_CACHE_DB`                                 | `memory \| redis`；DB 为整数 0–15；memory 仅单进程使用                                 |
 | `HAI_STORAGE_TYPE`                                                | `local \| s3`；local 要求 root，s3 要求 bucket、region、accessKeyId、secretAccessKey   |
 | `HAI_SERV_SERVER_HOST` / `HAI_SERV_SERVER_PORT`                   | HTTP 主机和整数端口 1–65535；部署平台 HOST/PORT 可覆盖                                 |
@@ -108,7 +108,7 @@ HAI_DB_USER=my_app
 HAI_DB_SSL=require
 ```
 
-切换到 MySQL 时相应设置 `HAI_DB_TYPE=mysql`、端口和凭据。确保项目已安装所选 Provider 的驱动；数据库数据迁移另行执行，切换配置不会搬迁数据。缓存切到 Redis、存储切到 S3 时同样填写对应连接字段。
+切换到 MySQL 时相应设置 `HAI_DB_TYPE=mysql`、端口和凭据，并把 `HAI_DB_SSL=require` 改为严格 TLS 对象，例如 `HAI_DB_SSL='{}'`（默认校验证书链和 DNS 身份）；自签 CA 使用 `ca` PEM，mTLS 的 `cert` / `key` PEM 必须成对。私钥仅放被忽略的 `.env.local` 或目标进程环境。确保项目已安装所选 Provider 的驱动；数据库数据迁移另行执行，切换配置不会搬迁数据。缓存切到 Redis、存储切到 S3 时同样填写对应连接字段。
 
 ## CLI 安装与命令
 

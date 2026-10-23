@@ -28,6 +28,7 @@ const browsers = new Map([
   ['capacitor', ['.']],
   ['datapipe', ['.']],
   ['storage', ['./schemas']],
+  ['reldb', ['./schemas']],
 ])
 
 const hidden = new Map([
@@ -52,6 +53,10 @@ function typeSmoke(directories, suffix, browser, generated) {
       source.push('import { createAudioClient } from \'@h-ai/ai/client\'', 'export type AudioFactory = typeof createAudioClient')
       for (const name of ['AIClient', 'AIClientConfig', 'AIApiAdapter', 'A2AClientOperations', 'StreamProgress', 'StreamOptions', 'createAIClient', 'createA2AClient', 'parseSSE', 'collectStreamContent', 'createUnconfiguredAudioClient'])
         source.push('// @ts-expect-error Removed redundant legacy client binding', `import type { ${name} } from '@h-ai/ai/client'`)
+    }
+    if (directory === 'reldb') {
+      source.push('import { ReldbConfigSchema, MysqlSslConfigSchema } from \'@h-ai/reldb/schemas\'', 'export const database = ReldbConfigSchema.parse({ type: \'mysql\', database: \'app\', ssl: {} })', 'export const tls = MysqlSslConfigSchema.parse({})')
+      source.push('// @ts-expect-error Pure schemas do not export the server singleton', 'import { reldb } from \'@h-ai/reldb/schemas\'')
     }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')

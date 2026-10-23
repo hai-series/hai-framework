@@ -77,6 +77,17 @@ await reldb.close()
 
 ### Configuration
 
+`@h-ai/reldb/schemas` exports the same configuration schemas and types with only Zod, without loading the database singleton or drivers. CLI and browser code can validate configuration through this entry. MySQL TLS accepts `false` or a strict object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL retains its boolean, string mode and object contract.
+
+```ts
+import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
+
+const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
+if (!checked.success)
+  throw new Error('Invalid database configuration')
+// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
+```
+
 Use either a connection string (`url`) or separate fields (`host/port/database/user/password`).
 
 ```ts

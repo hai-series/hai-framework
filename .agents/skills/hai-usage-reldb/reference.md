@@ -9,6 +9,8 @@
 
 ## §1 配置与初始化
 
+只做校验时从 `@h-ai/reldb/schemas` 导入同一组 Schema/类型；该入口只依赖 Zod，无数据库实例或驱动。MySQL `ssl` 只接受 `false` 或严格对象；`{}` 默认开启证书链和 DNS 身份验证，不能用 `true` 或 PostgreSQL 字符串模式。实际连接仍需服务端驱动。
+
 ### 配置
 
 ```yaml

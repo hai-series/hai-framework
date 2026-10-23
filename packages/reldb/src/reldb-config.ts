@@ -17,7 +17,7 @@ import { z } from 'zod'
  * - `mysql` - MySQL 数据库（使用 mysql2）
  * @example
  * ```ts
- * import { ReldbTypeSchema } from '@h-ai/reldb'
+ * import { ReldbTypeSchema } from '@h-ai/reldb/schemas'
  *
  * const value = ReldbTypeSchema.parse('postgresql')
  * void value
@@ -29,7 +29,7 @@ export const ReldbTypeSchema = z.enum(['sqlite', 'postgresql', 'mysql'])
  * 数据库类型
  * @example
  * ```ts
- * import type { DbType } from '@h-ai/reldb'
+ * import type { DbType } from '@h-ai/reldb/schemas'
  *
  * const value: DbType = 'postgresql'
  * void value
@@ -41,7 +41,7 @@ export type DbType = z.infer<typeof ReldbTypeSchema>
  * ReldbOperationLogConfigSchema 的数据约束与操作契约。
  * @example
  * ```ts
- * import { ReldbOperationLogConfigSchema } from '@h-ai/reldb'
+ * import { ReldbOperationLogConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = ReldbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 100, level: 'debug' })
  * void value
@@ -59,7 +59,7 @@ export const ReldbOperationLogConfigSchema = z.object({
  * ReldbOperationLogConfig 的数据约束与操作契约。
  * @example
  * ```ts
- * import { ReldbOperationLogConfigSchema, type ReldbOperationLogConfig } from '@h-ai/reldb'
+ * import { ReldbOperationLogConfigSchema, type ReldbOperationLogConfig } from '@h-ai/reldb/schemas'
  *
  * const value: ReldbOperationLogConfig = ReldbOperationLogConfigSchema.parse({ read: false, write: true, maxLength: 100, level: 'debug' })
  * void value
@@ -78,7 +78,7 @@ const OperationLogConfigFieldSchema = {
  * MySQL 使用独立的 MysqlPoolConfigSchema；SQLite 不使用连接池。
  * @example
  * ```ts
- * import { PoolConfigSchema } from '@h-ai/reldb'
+ * import { PoolConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = PoolConfigSchema.parse({ max: 10, acquireTimeout: 5000 })
  * void value
@@ -99,7 +99,7 @@ export const PoolConfigSchema = z.object({
  * PostgreSQL 连接池配置类型。
  * @example
  * ```ts
- * import { PoolConfigSchema, type PoolConfig } from '@h-ai/reldb'
+ * import { PoolConfigSchema, type PoolConfig } from '@h-ai/reldb/schemas'
  *
  * const value: PoolConfig = PoolConfigSchema.parse({ max: 10, acquireTimeout: 5000 })
  * void value
@@ -114,7 +114,7 @@ export type PoolConfig = z.infer<typeof PoolConfigSchema>
  * 空闲连接由 mysql2/服务端管理；本模块不承诺最小保留数或可配置的空闲回收期限。
  * @example
  * ```ts
- * import { MysqlPoolConfigSchema } from '@h-ai/reldb'
+ * import { MysqlPoolConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = MysqlPoolConfigSchema.parse({ max: 10, acquireTimeout: 5000, queueLimit: 100 })
  * void value
@@ -133,7 +133,7 @@ export const MysqlPoolConfigSchema = z.object({
  * MySQL 解析后的连接池配置。
  * @example
  * ```ts
- * import { MysqlPoolConfigSchema, type MysqlPoolConfig } from '@h-ai/reldb'
+ * import { MysqlPoolConfigSchema, type MysqlPoolConfig } from '@h-ai/reldb/schemas'
  *
  * const value: MysqlPoolConfig = MysqlPoolConfigSchema.parse({ max: 10, acquireTimeout: 5000, queueLimit: 100 })
  * void value
@@ -150,7 +150,7 @@ export type MysqlPoolConfig = z.infer<typeof MysqlPoolConfigSchema>
  * - 自定义对象 - 详细 SSL 配置
  * @example
  * ```ts
- * import { SslConfigSchema } from '@h-ai/reldb'
+ * import { SslConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = SslConfigSchema.parse({ rejectUnauthorized: true })
  * void value
@@ -166,7 +166,7 @@ export const SslConfigSchema = z.union([
  * PostgreSQL SSL 配置类型
  * @example
  * ```ts
- * import { SslConfigSchema, type SslConfig } from '@h-ai/reldb'
+ * import { SslConfigSchema, type SslConfig } from '@h-ai/reldb/schemas'
  *
  * const value: SslConfig = SslConfigSchema.parse({ rejectUnauthorized: true })
  * void value
@@ -181,7 +181,7 @@ export type SslConfig = z.infer<typeof SslConfigSchema>
  * 显式关闭验证会记录风险日志；本模块不提供任意 TLS 参数或回调透传。
  * @example
  * ```ts
- * import { MysqlSslConfigSchema } from '@h-ai/reldb'
+ * import { MysqlSslConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = MysqlSslConfigSchema.parse({ rejectUnauthorized: true, verifyIdentity: true })
  * void value
@@ -207,7 +207,7 @@ export const MysqlSslConfigSchema = z.union([
  * SQLite 特定选项 Schema
  * @example
  * ```ts
- * import { SqliteOptionsSchema } from '@h-ai/reldb'
+ * import { SqliteOptionsSchema } from '@h-ai/reldb/schemas'
  *
  * const value = SqliteOptionsSchema.parse({ walMode: true, executor: 'worker' })
  * void value
@@ -234,7 +234,7 @@ export const SqliteOptionsSchema = z.object({
  * MySQL 特定选项 Schema
  * @example
  * ```ts
- * import { MysqlOptionsSchema } from '@h-ai/reldb'
+ * import { MysqlOptionsSchema } from '@h-ai/reldb/schemas'
  *
  * const value = MysqlOptionsSchema.parse({ charset: 'utf8mb4' })
  * void value
@@ -286,7 +286,7 @@ const NetworkConfigSchema = z.object({
  * SQLite 配置 Schema
  * @example
  * ```ts
- * import { SqliteConfigSchema } from '@h-ai/reldb'
+ * import { SqliteConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = SqliteConfigSchema.parse({ type: 'sqlite', database: './data/app.db' })
  * void value
@@ -305,7 +305,7 @@ export const SqliteConfigSchema = z.object({
  * PostgreSQL 配置 Schema
  * @example
  * ```ts
- * import { PostgresqlConfigSchema } from '@h-ai/reldb'
+ * import { PostgresqlConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = PostgresqlConfigSchema.parse({ type: 'postgresql', database: 'app', host: 'db', pool: { max: 10 } })
  * void value
@@ -320,7 +320,7 @@ export const PostgresqlConfigSchema = NetworkConfigSchema.extend({
  * MySQL 配置 Schema
  * @example
  * ```ts
- * import { MysqlConfigSchema } from '@h-ai/reldb'
+ * import { MysqlConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = MysqlConfigSchema.parse({ type: 'mysql', database: 'app', host: 'db', pool: { max: 10, queueLimit: 100 } })
  * void value
@@ -347,7 +347,7 @@ export const MysqlConfigSchema = NetworkConfigSchema.extend({
  * 根据 `type` 字段区分不同数据库类型的配置。
  * @example
  * ```ts
- * import { ReldbConfigSchema } from '@h-ai/reldb'
+ * import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
  *
  * const value = ReldbConfigSchema.parse({ type: 'postgresql', database: 'app', host: 'db' })
  * void value
@@ -363,7 +363,7 @@ export const ReldbConfigSchema = z.discriminatedUnion('type', [
  * 数据库配置类型（判别联合体）
  * @example
  * ```ts
- * import { ReldbConfigSchema, type ReldbConfig } from '@h-ai/reldb'
+ * import { ReldbConfigSchema, type ReldbConfig } from '@h-ai/reldb/schemas'
  *
  * const value: ReldbConfig = ReldbConfigSchema.parse({ type: 'postgresql', database: 'app', host: 'db' })
  * void value
@@ -375,7 +375,7 @@ export type ReldbConfig = z.infer<typeof ReldbConfigSchema>
  * SQLite 配置类型
  * @example
  * ```ts
- * import { SqliteConfigSchema, type SqliteConfig } from '@h-ai/reldb'
+ * import { SqliteConfigSchema, type SqliteConfig } from '@h-ai/reldb/schemas'
  *
  * const value: SqliteConfig = SqliteConfigSchema.parse({ type: 'sqlite', database: './data/app.db' })
  * void value
@@ -387,7 +387,7 @@ export type SqliteConfig = z.infer<typeof SqliteConfigSchema>
  * PostgreSQL 配置类型
  * @example
  * ```ts
- * import { PostgresqlConfigSchema, type PostgresqlConfig } from '@h-ai/reldb'
+ * import { PostgresqlConfigSchema, type PostgresqlConfig } from '@h-ai/reldb/schemas'
  *
  * const value: PostgresqlConfig = PostgresqlConfigSchema.parse({ type: 'postgresql', database: 'app', host: 'db', pool: { max: 10 } })
  * void value
@@ -399,7 +399,7 @@ export type PostgresqlConfig = z.infer<typeof PostgresqlConfigSchema>
  * MySQL 配置类型
  * @example
  * ```ts
- * import { MysqlConfigSchema, type MysqlConfig } from '@h-ai/reldb'
+ * import { MysqlConfigSchema, type MysqlConfig } from '@h-ai/reldb/schemas'
  *
  * const value: MysqlConfig = MysqlConfigSchema.parse({ type: 'mysql', database: 'app', host: 'db', pool: { max: 10, queueLimit: 100 } })
  * void value
@@ -414,7 +414,7 @@ export type MysqlConfig = z.infer<typeof MysqlConfigSchema>
  * 因此对外 API（如 reldb.init）更适合接收 ReldbConfigInput。
  * @example
  * ```ts
- * import type { ReldbConfigInput } from '@h-ai/reldb'
+ * import type { ReldbConfigInput } from '@h-ai/reldb/schemas'
  *
  * const value: ReldbConfigInput = { type: 'postgresql', host: 'db', database: 'app' }
  * void value

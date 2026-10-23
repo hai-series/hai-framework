@@ -136,7 +136,9 @@ function generateDbConfig(cfg?: DbModuleConfig): string {
   const user = dbType === 'mysql' ? 'root' : 'postgres'
   const connection = stringify({ host, port, user, password: '' }).trim()
   const networkOptions = `# url: \${HAI_DB_URL} # 可用连接串替代 host/port/user/password
-# ssl: false # false | true | require | prefer | allow | disable，或 TLS 对象
+# PostgreSQL ssl：布尔值、require/prefer/allow/disable 或 TLS 对象。
+# MySQL ssl：false 或严格对象；{} 默认校验证书链和 DNS 身份，不能用 true 或 PostgreSQL 字符串模式。
+# MySQL 自定义 CA / mTLS 使用 ca/cert/key 的 PEM 内容；cert/key 必须成对，私钥仅注入私有环境。
 # pool:
 #   min: 1
 #   max: 10

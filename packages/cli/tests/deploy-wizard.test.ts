@@ -5,7 +5,7 @@ import process from 'node:process'
 import { core } from '@h-ai/core'
 import { deploy, loadDeploymentEnvironment } from '@h-ai/deploy'
 import * as deployModule from '@h-ai/deploy'
-import { ReldbConfigSchema } from '@h-ai/reldb'
+import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
 import { cliM } from '../src/cli-i18n.js'
@@ -160,7 +160,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
     HAI_DB_DATABASE: 'business',
     HAI_DB_USER: 'operator',
     HAI_DB_PASSWORD: 'test-private-password',
-    HAI_DB_SSL: 'true',
+    HAI_DB_SSL: JSON.stringify({ rejectUnauthorized: true, verifyIdentity: true, ca: 'test-ca-pem', cert: 'test-cert-pem', key: '-----BEGIN PRIVATE KEY-----\ntest-private-client-key\n-----END PRIVATE KEY-----' }),
   }
   mocked.prompt.mockImplementation(async (question) => {
     if (question.type === 'multiselect')
@@ -183,6 +183,13 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     if (name === 'HAI_DB_PORT')
       expect(question.validate('70000')).not.toBe(true)
+    if (name === 'HAI_DB_SSL') {
+      for (const invalid of ['true', 'require', 'prefer', 'allow', 'disable', '{ ca: "" }', '{ rejectUnauthorized: "true" }', '{ cert: cert-only }', '{ key: key-only }', '{ unknown: true }'])
+        expect(question.validate(invalid), invalid).not.toBe(true)
+      expect(question.validate('{}')).toBe(true)
+      expect(question.validate('false')).toBe(true)
+      expect(question.validate(inputValues.HAI_DB_SSL)).toBe(true)
+    }
     return { value: name ? inputValues[name] ?? question.initial : question.initial }
   })
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'https://example.test', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
@@ -191,6 +198,8 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ environment: 'test', envDir: app, serviceModes: expect.objectContaining({ db: 'custom', cache: 'keep' }) }))
   const mode = readFileSync(join(app, '.env.test'), 'utf8')
   expect(mode).not.toContain('test-private-password')
+  expect(mode).not.toContain('test-private-client-key')
+  expect(readFileSync(join(app, '.env.local'), 'utf8')).toContain('test-private-client-key')
   expect(mode).toContain('mysql.internal')
   expect(mode).toContain('HAI_CACHE=\'{"type":"memory"}\'')
   const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: app })
@@ -200,5 +209,75 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   for (const [key, value] of Object.entries(loaded.data.values))
     vi.stubEnv(key, value)
   const database = core.config.load('db', join(service, 'config/_db.yml'), ReldbConfigSchema)
-  expect(database).toMatchObject({ success: true, data: { type: 'mysql', host: 'mysql.internal', port: 3307, database: 'business', user: 'operator', password: 'test-private-password', ssl: true } })
+  expect(database).toMatchObject({ success: true, data: { type: 'mysql', host: 'mysql.internal', port: 3307, database: 'business', user: 'operator', password: 'test-private-password', ssl: JSON.parse(inputValues.HAI_DB_SSL!) } })
+}, 30_000)
+
+it.each(['true', 'require', 'prefer', 'allow', 'disable', '{ ca: "" }', '{ cert: cert-only }', '{ key: key-only }', '{ unexpected: true }', '[false]'])('rejects invalid MySQL TLS %s before changing YAML or either environment file', async (ssl) => {
+  const { app, service } = await fullstackFixture()
+  writeFileSync(join(service, 'config/_db.yml'), 'type: mysql\ndatabase: business\nhost: mysql.internal\nssl: false\n')
+  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const scanned = await deploy.scan(service, { environment: 'test', envDir: app })
+  expect(environment.success && scanned.success).toBe(true)
+  if (!environment.success || !scanned.success)
+    return
+  const files = [join(service, 'config/_db.yml'), join(app, '.env.test'), join(app, '.env.local')]
+  const before = files.map(file => readFileSync(file, 'utf8'))
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.choices)
+      return { value: question.message.includes('How should') ? 'custom' : 'mysql' }
+    const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
+    return { value: name === 'HAI_DB_SSL' ? ssl : question.initial }
+  })
+  await expect(configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } })).rejects.toThrow()
+  expect(files.map(file => readFileSync(file, 'utf8'))).toEqual(before)
+}, 30_000)
+
+it('rejects invalid noninteractive MySQL TLS before persistence', async () => {
+  const { app, service } = await fullstackFixture()
+  writeFileSync(join(app, '.env.test'), 'HAI_CORE_ENV=test\nHAI_DB_TYPE=mysql\nHAI_DB_SSL=true\n')
+  writeFileSync(join(service, 'config/_db.yml'), 'type: mysql\ndatabase: business\nhost: mysql.internal\nssl: true\n')
+  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const scanned = await deploy.scan(service, { environment: 'test', envDir: app })
+  expect(environment.success && scanned.success).toBe(true)
+  if (!environment.success || !scanned.success)
+    return
+  const files = [join(service, 'config/_db.yml'), join(app, '.env.test'), join(app, '.env.local')]
+  const before = files.map(file => readFileSync(file, 'utf8'))
+  await expect(configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } }, true)).rejects.toThrow()
+  expect(files.map(file => readFileSync(file, 'utf8'))).toEqual(before)
+  expect(mocked.prompt).not.toHaveBeenCalled()
+}, 30_000)
+
+it.each([
+  ['mysql', '{}', { rejectUnauthorized: true, verifyIdentity: true }],
+  ['mysql', 'false', false],
+  ['postgresql', 'true', true],
+  ['postgresql', 'require', 'require'],
+  ['postgresql', 'prefer', 'prefer'],
+  ['postgresql', 'allow', 'allow'],
+  ['postgresql', 'disable', 'disable'],
+] as const)('round trips %s TLS %s through the wizard and actual Core schema loader', async (backend, ssl, expected) => {
+  const { app, service } = await fullstackFixture()
+  writeFileSync(join(service, 'config/_db.yml'), `type: ${backend}\ndatabase: business\nhost: db.internal\nssl: false\n`)
+  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  const scanned = await deploy.scan(service, { environment: 'test', envDir: app })
+  expect(environment.success && scanned.success).toBe(true)
+  if (!environment.success || !scanned.success)
+    return
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.choices)
+      return { value: question.message.includes('How should') ? 'custom' : backend }
+    const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
+    if (name === 'HAI_DB_SSL')
+      expect(question.validate(ssl)).toBe(true)
+    return { value: name === 'HAI_DB_SSL' ? ssl : question.initial }
+  })
+  await configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } })
+  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  expect(loaded.success).toBe(true)
+  if (!loaded.success)
+    return
+  for (const [key, value] of Object.entries(loaded.data.values)) vi.stubEnv(key, value)
+  const database = core.config.load('db', join(service, 'config/_db.yml'), ReldbConfigSchema)
+  expect(database).toMatchObject({ success: true, data: { type: backend, ssl: expected } })
 }, 30_000)

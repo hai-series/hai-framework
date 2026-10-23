@@ -2,6 +2,7 @@
 import type { DeploymentEnvironment, MiddlewareBackend, MiddlewareField, MiddlewareMode, MiddlewareRequirement, ScanResult } from '@h-ai/deploy'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
 import prompts from 'prompts'
 import { isMap, isScalar, parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
@@ -133,8 +134,8 @@ async function ask(question: prompts.PromptObject): Promise<unknown> {
   return answer.value
 }
 
-/** 校验连接字段；与模块 Schema 的基础取值约束一致。 */
-function validateField(value: string, field: MiddlewareField): boolean | string {
+/** 校验连接字段；数据库 TLS 复用所选后端的真实公开 Schema。 */
+function validateField(value: string, field: MiddlewareField, backend: string): boolean | string {
   if (value === '')
     return field.required ? cliM('cli_deploy_required') : true
   if (field.kind === 'port')
@@ -151,8 +152,8 @@ function validateField(value: string, field: MiddlewareField): boolean | string 
   }
   if (field.name === 'ssl') {
     const parsed = parseDocument(value)
-    const ssl: unknown = parsed.errors.length ? undefined : parsed.toJS()
-    return (typeof ssl === 'boolean' || ['require', 'prefer', 'allow', 'disable'].includes(String(ssl)) || (ssl !== null && typeof ssl === 'object' && !Array.isArray(ssl))) || cliM('cli_deploy_invalid_value')
+    const schema = backend === 'mysql' ? MysqlSslConfigSchema : SslConfigSchema
+    return (parsed.errors.length === 0 && schema.safeParse(parsed.toJS()).success) || cliM('cli_deploy_invalid_value')
   }
   if (field.name === 'headers') {
     try {
@@ -306,7 +307,10 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)
         const variable = `${requirement.envPrefix}_${field.name.toUpperCase()}`
         const info = moduleEnvironmentVariables(requirement.configName).find(item => item.name === variable)
-        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { name: variable, description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field) })) : initial
+        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { name: variable, description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field, backendName) })) : initial
+        // TLS 交互返回值与非交互值保存前再次校验，不依赖 prompts UI 曾调用 validate。
+        if (field.name === 'ssl' && validateField(value, field, backendName) !== true)
+          throw new Error(cliM('cli_deploy_invalid_value'))
         // 默认的服务端凭据由 sidecar/云开通器生成，不要求用户填写。
         if (value !== '') {
           connection[field.name] = field.kind === 'number' || field.kind === 'port' ? Number(value) : field.kind === 'boolean' ? value === 'true' : field.name === 'headers' || field.name === 'ssl' ? parseDocument(value).toJS() : value
@@ -314,6 +318,11 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         else {
           delete connection[field.name]
         }
+      }
+      if (requirement.service === 'db') {
+        const validated = ReldbConfigSchema.safeParse({ ...connection, type: backendName })
+        if (!validated.success)
+          throw new Error(cliM('cli_deploy_config_invalid', { params: { path: join(scan.appDir ?? '.', 'config', '_db.yml'), fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
       }
       Object.assign(updates, connectionEnv(requirement, backendName, connection))
     }

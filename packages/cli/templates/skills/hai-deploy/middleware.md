@@ -8,6 +8,8 @@
 
 ## 识别与逐项选择
 
+数据库连接保存前复用所选后端的公开配置 Schema；MySQL `ssl` 仅 `false` 或严格对象，`{}` 默认验证证书链和 DNS 身份，`ca/cert/key` 为 PEM 内容且 `cert/key` 必须成对；私钥仅进入私有环境。PostgreSQL 保留其布尔值/字符串模式/对象契约。CLI 内联 `@h-ai/reldb/schemas` 与 Zod，无需为配置校验给目标应用额外安装数据库包或驱动；部署本身仍需已安装的 `@h-ai/deploy`，实际运行应用仍需其数据库依赖。
+
 先用 `deploy.scan(appDir, { environment, envDir })` 核对实际依赖、配置与环境值。扫描从目标 workspace 的 `pnpm-lock.yaml` importer 出发，沿 dependencies/optionalDependencies 遍历，排除 devDependencies、peerDependencies 和其他应用未被引用的依赖；workspace link 只沿运行依赖继续。pnpm 12 的工具链 YAML 文档不能混入应用图。lockfile、目标 importer 或依赖节点缺失时先执行 `pnpm install` 修复；依赖图不读取 package.json、pnpm-workspace.yaml 或项目目录布局。配置文件决定已识别模块的后端，保留的旧配置不能自行启用未依赖的模块。
 
 `ScanResult.haiModules` 列出所有实际运行依赖中的 Hai 模块；`ScanResult.middlewares` 提供服务、后端、来源、配置路径和变量前缀；连接配置可能含凭据，不能整体记入日志。`DEPLOY_MIDDLEWARE` 是后端和连接字段的公共目录，字段名称、类型与约束须与模块 Schema 同步。

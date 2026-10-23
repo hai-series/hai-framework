@@ -23,7 +23,7 @@
 | kit          | `kit-*`；`browser.ts` 是已发布的条件入口，SvelteKit 路由文件保留框架名称                                          |
 | payment      | Provider 统一为 `payment-provider-<渠道>.ts`，渠道协议工具为 `payment-<渠道>-<角色>.ts`                           |
 | reach        | `reach-*`、`reach-provider-*`                                                                                     |
-| reldb        | `reldb-*`、`reldb-provider-*`；内部 Provider 契约留在 providers 目录                                              |
+| reldb        | `reldb-*`、`reldb-provider-*`；内部 Provider 契约留在 providers 目录；纯 schemas 子路径独立构建                                              |
 | scheduler    | `scheduler-*`；Repository 统一为 `scheduler-repository-<实体>.ts`                                                 |
 | serv         | `serv-*`、`serv-feature-*`、`serv-middleware-*`；App 工厂保持实际生命周期                                         |
 | storage      | `storage-*`、`storage-provider-*`；browser-safe schemas 子路径独立构建                                            |

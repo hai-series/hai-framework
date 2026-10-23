@@ -77,6 +77,17 @@ await reldb.close()
 
 ### 設定
 
+`@h-ai/reldb/schemas` は同じ設定 Schema と型を Zod のみで公開し、DB インスタンスやドライバーを読み込みません。CLI やブラウザーで設定検証に利用できます。MySQL TLS は `false` または厳密なオブジェクトのみで、`{}` は証明書チェーンと DNS ID を検証します。PostgreSQL の真偽値・文字列モード・オブジェクト契約は維持します。
+
+```ts
+import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
+
+const checked = ReldbConfigSchema.safeParse({ type: 'mysql', database: 'shop', ssl: {} })
+if (!checked.success)
+  throw new Error('Invalid database configuration')
+// checked.data.ssl: { rejectUnauthorized: true, verifyIdentity: true }
+```
+
 接続文字列（`url`）または個別フィールド（`host/port/database/user/password`）を指定できます。
 
 ```ts

@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 58/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 59/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -976,7 +976,8 @@
 
 ### CLI-04 · P2 · 部署向导按真实数据库 Schema 校验 TLS 配置
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：复用真实Reldb Schema并新增纯公开/schemas入口，CLI内联schema/Zod，不初始化或依赖目标应用DB驱动；按MySQL/PostgreSQL分别校验TLS并在持久化前检查完整配置，非法输入保留原YAML/公共及私有环境，不放宽安全契约。11个非法值旧实现真实Red后最终3文件55通过，含仓库外实际tarball离线安装、空app node_modules/空NODE_PATH/禁止workspace逃逸和DB加载；有效配置写入后故意缺制品停止，不冒称部署成功。真实MySQL TLS6通过；源/严格测试类型、正常适用lint18文件零警告、fresh RelDB/CLI ESM+DTS、94 JSDoc、skills37/330、API21导入/30browser及env/api生成检查通过。三语README、双skill/reference、配置/样式图、生成metadata和LLMS同步；无新运行依赖/锁变化，完整部署另留最终轮；全量回归按用户要求在全部任务实施后执行。
 - **位置**：CLI deploy middleware 输入、reldb 配置公开入口及对应测试/生成元数据。
 - **证据与影响**：向导通用 ssl 校验接受 MySQL `true`，写出后真实 `core.config.load` + `ReldbConfigSchema` 拒绝；PostgreSQL 和 MySQL 的公开 TLS 契约不同。
 - **修正内容**：从真实纯配置 Schema 复用校验，按后端校验输入并在写入前验证完整配置；CLI 打包内联纯 Schema，不要求目标应用安装依赖，不扩大 TLS 接受范围、不静默降级。私钥只写私有环境，错误提示不暴露秘密。
