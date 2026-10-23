@@ -1,6 +1,6 @@
 # Feedback 模块设计方案
 
-日期：2026-10-22。状态：待实施的设计方案，本文中的新模块、组件和 API 均为拟定能力，当前尚未实现。
+日期：2026-10-22。本文为实施设计与验收依据；当前实现进度、验证结果及已验收基线见[任务清单](feedback-tasks.md)，不由设计文档的存在推定完成。
 
 需求来源：[Issue #73](https://github.com/hai-series/hai-framework/issues/73) 及本轮补充要求。模块命名为 `@h-ai/feedback`；独立的 telemetry 功能另行设计，不作为本模块的前置依赖。
 
@@ -261,4 +261,4 @@ manifest 记录协议版本、反馈/证据修订、应用/服务版本、build/
 - [ ] 断开开发侧的生产网络及公共网络，仅用问题包和对应源码能查看截图/回放、分页查询证据并开展 AI 分析；无外链请求，缺失材料明确可见。
 - [ ] 覆盖 SQLite/PostgreSQL/MySQL、真实 S3 兼容服务、真实 SMTP 测试服务及多实例任务协调；不能用单元 mock 代替这些验收。
 
-实施验证遵循仓库分轮门禁，执行受影响包的 typecheck、lint、build、test 与 UI E2E；跨包契约变化提升到适用根门禁。AI 文档运行 `pnpm check:skills`，CLI 模板运行 `test:scaffold-gates`。本方案文档本身不改变运行时代码，当前不代表上述功能或验收已完成。
+实施验证遵循仓库分轮门禁，执行受影响包的 typecheck、lint、build、test 与 UI E2E；跨包契约变化提升到适用根门禁。AI 文档运行 `pnpm check:skills`，CLI 模板运行 `test:scaffold-gates`。本方案文档本身不改变运行时代码；验收勾选项的完成证据和基线统一记录在任务清单及关联任务记录。
