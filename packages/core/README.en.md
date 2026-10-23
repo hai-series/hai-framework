@@ -408,6 +408,8 @@ core.id.isValidUUID('f47ac10b-...') // true/false
 core.id.isValidNanoId('abc123', 6) // true/false
 ```
 
+UUID generation requires cryptographic randomUUID/getRandomValues and throws if neither is available; it never falls back to Math.random.
+
 #### Utilities
 
 ```typescript
@@ -479,6 +481,8 @@ core.time.addHours(date, 2)
 core.time.startOfDay(date)
 core.time.endOfDay(date)
 ```
+
+The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
 
 #### Module utilities (module)
 
@@ -567,21 +571,17 @@ Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleReque
 
 Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
 
+## Configuration consumption
+
+`_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../docs/configuration-map.md).
+
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/core test
 ```
 
-## Configuration consumption
-
-`_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../docs/configuration-map.md).
-
 See the [module JSDoc conventions (Chinese)](../../docs/module-jsdoc.md) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
-
-The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
-
-UUID generation requires cryptographic randomUUID/getRandomValues and throws if neither is available; it never falls back to Math.random.
 
 ## License
 

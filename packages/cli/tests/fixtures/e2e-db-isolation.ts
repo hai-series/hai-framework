@@ -27,16 +27,16 @@ interface SentinelState {
  * @param project - 已由样板门禁确认所有权的临时工程。
  * @param evidence - 本轮独立且已创建的证据目录。
  * @param env - 仅用于当前浏览器门禁子进程的环境克隆。
- * @param run - 同步运行真实门禁；失败仍恢复私有文件并停止计数进程。
- * @returns {void} 成功时保留计数证明。
+ * @param run - 运行真实门禁；失败仍恢复私有文件并停止计数进程。
+ * @returns 成功时保留计数证明，并等待本轮子进程真实退出。
  * @throws 正控未触达、隔离失败、计数进程未真实退出或原门禁失败时抛错。
  * @example
  * ```ts
  * // 测试内部上下文；所有路径均属于当前门禁。
- * withDatabaseIsolation(project, evidence, env, () => runGate(pnpmBin, ['test:e2e'], project, env, true))
+ * await withDatabaseIsolation(project, evidence, env, () => runGate(pnpmBin, ['test:e2e'], project, env, true))
  * ```
  */
-export function withDatabaseIsolation(project: string, evidence: string, env: NodeJS.ProcessEnv, run: () => void): void {
+export async function withDatabaseIsolation(project: string, evidence: string, env: NodeJS.ProcessEnv, run: () => void | Promise<void>): Promise<void> {
   const stateFile = path.join(evidence, 'database-isolation.json')
   const savedFiles = new Map<string, Buffer | undefined>()
   const diagnostic = path.join(evidence, 'database-isolation-process.log')
@@ -47,8 +47,33 @@ export function withDatabaseIsolation(project: string, evidence: string, env: No
   child.once('error', (error) => {
     spawnFailure = error
   })
-  const command = (mode: 'ready' | 'probe' | 'closed' | 'exited') => {
-    const result = spawnSync(process.execPath, [sentinel, mode, stateFile, String(child.pid)], { env, windowsHide: true, encoding: 'utf8', timeout: 15_000 })
+  // 在同步门禁开始前登记 close，结束后让出事件循环，由 Node 回收自己创建的进程。
+  const exited = new Promise<void>(resolve => child.once('close', () => resolve()))
+  /**
+   * 等待已登记句柄关闭；异常收尾也必须确认退出，不能只发出 kill 请求。
+   * @returns 子进程已退出且 stdio 已关闭时完成。
+   * @example
+   * ```ts
+   * child.kill()
+   * await waitForExit()
+   * ```
+   */
+  const waitForExit = async (): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        exited,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Database isolation process did not exit')), 10_000)
+        }),
+      ])
+    }
+    finally {
+      clearTimeout(timer)
+    }
+  }
+  const command = (mode: 'ready' | 'probe' | 'closed') => {
+    const result = spawnSync(process.execPath, [sentinel, mode, stateFile], { env, windowsHide: true, encoding: 'utf8', timeout: 15_000 })
     if (result.error || result.status !== 0)
       throw result.error ?? new Error(`Database isolation ${mode} failed: ${result.stderr}; state=${existsSync(stateFile) ? readFileSync(stateFile, 'utf8') : 'absent'}; process=${readFileSync(diagnostic, 'utf8')}`)
   }
@@ -78,7 +103,7 @@ export function withDatabaseIsolation(project: string, evidence: string, env: No
       savedFiles.set(local, before)
       writeFileSync(local, `${before?.toString('utf8') ?? ''}\nHAI_DB='${database}'\n`)
     }
-    run()
+    await run()
   }
   catch (error) {
     failures.push(error)
@@ -98,6 +123,9 @@ export function withDatabaseIsolation(project: string, evidence: string, env: No
     try {
       writeFileSync(`${stateFile}.stop`, '')
       command('closed')
+      await waitForExit()
+      if (child.exitCode !== 0 || child.signalCode !== null)
+        failures.push(new Error(`Database isolation process exited unexpectedly (${child.signalCode ?? child.exitCode})`))
       const final = readState()
       if (baseline > 0 && (final.connections !== baseline || !final.closed))
         failures.push(new Error(`E2E server connected to ambient or .env.local database (${final.connections - baseline} unexpected connections)`))
@@ -107,7 +135,7 @@ export function withDatabaseIsolation(project: string, evidence: string, env: No
       child.kill()
       failures.push(error)
       try {
-        command('exited')
+        await waitForExit()
       }
       catch (exitError) {
         failures.push(exitError)

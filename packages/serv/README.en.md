@@ -104,6 +104,8 @@ export default { fetch: handler }
 
 Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`. Internal RPC checks the connection peer.
 
+toFetch constructs Request(input, init) for Request, URL and string inputs, applying RequestInit overrides including method, headers, body and signal without mutating input fields. Consumed or locked bodies and invalid body combinations reject the returned Promise. Cancellation before dispatch skips the handler; in-flight cancellation ends the caller wait and reaches the app through the effective signal. Listeners are released on completion, failure or cancellation, and a discarded late response body is cancelled. Cancellation cannot roll back external effects already started; after Response delivery the app owns streaming cleanup through request.signal.
+
 #### Audio WebSocket: tickets and server authorization
 
 Audio connections require short-lived, one-time tickets. Issue them through an authenticated HTTP endpoint (recommended: `iam.ticket.issue`) and consume atomically in `verifyTicket` (recommended: `iam.ticket.consume`). Authentication runs at connection time with a separate timeout; no business frames are processed beforehand. The framework stores the returned `ServSession` and optional `grant`, then calls `authorize` to approve paid parameters:
@@ -267,6 +269,8 @@ const app = serv.createApp({
   },
 })
 ```
+
+The default `auth.logout` endpoint takes the complete token from input.accessToken or Authorization Bearer without requiring live access authentication. It grants no userId-based authority and accepts no userId revocation target. Missing tokens fail; unknown tokens succeed idempotently. Shared-store failures remain failed HaiResult values, and cookie middleware clears refresh cookies only after success. Ordinary procedures retain the existing HTTP 200 / HaiResult envelope: clients must inspect success, not only the HTTP status.
 
 #### Custom procedures (authentication + permissions)
 
@@ -684,6 +688,10 @@ Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleReque
 
 Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
 
+## Input limits and HTTP capabilities
+
+Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
+
 ## Development and testing
 
 ```bash
@@ -692,15 +700,7 @@ pnpm --filter @h-ai/serv typecheck
 pnpm --filter @h-ai/serv lint
 ```
 
-## Input limits and HTTP capabilities
-
-Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../../docs/storage-api-capabilities.md).
-
-The default `auth.logout` endpoint takes the complete token from input.accessToken or Authorization Bearer without requiring live access authentication. It grants no userId-based authority and accepts no userId revocation target. Missing tokens fail; unknown tokens succeed idempotently. Shared-store failures remain failed HaiResult values, and cookie middleware clears refresh cookies only after success. Ordinary procedures retain the existing HTTP 200 / HaiResult envelope: clients must inspect success, not only the HTTP status.
-
 Declaration JSDoc examples import actual `@h-ai/serv` entries or published feature subpaths. Internal Hono, guard, router and transport examples are marked as internal module context and are not root APIs. Examples distinguish startup configuration exceptions, domain HaiResult, HTTP middleware statuses, and listener shutdown returning Promise<void>; default AI completion still returns non-streaming JSON only. Maintainers can run `node scripts/check-module-jsdoc.mjs --package serv` against actual declarations and internal lexical bindings. Compilation does not replace real HTTP, authorization or distributed replay-protection validation.
-
-toFetch constructs Request(input, init) for Request, URL and string inputs, applying RequestInit overrides including method, headers, body and signal without mutating input fields. Consumed or locked bodies and invalid body combinations reject the returned Promise. Cancellation before dispatch skips the handler; in-flight cancellation ends the caller wait and reaches the app through the effective signal. Listeners are released on completion, failure or cancellation, and a discarded late response body is cancelled. Cancellation cannot roll back external effects already started; after Response delivery the app owns streaming cleanup through request.signal.
 
 ## License
 

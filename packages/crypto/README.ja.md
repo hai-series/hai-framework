@@ -288,15 +288,15 @@ if (!result.success) {
 
 管理画面のオンライン暗号化デモは Crypto の SM3/SM4 API を直接呼びます。SM4 はランダムな一時鍵と IV を使い、成功表示前に復号を検証します。鍵は保存しません。入力が変わると古い結果を消去し、ランダムなダイジェストや Base64 を暗号処理の結果として表示してはいけません。
 
+## 本番の共有状態
+
+本番の伝送 registry は stateScope=shared と実際の Redis または PostgreSQL/MySQL が必須です。memory、および memory/SQLite を包む工場も拒否します。各ノードは同じ管理されたバージョン付き鍵セットを読み込みます。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+
 ## 開発とテスト
 
 ```bash
 pnpm --filter @h-ai/crypto test
 ```
-
-## 本番の共有状態
-
-本番の伝送 registry は stateScope=shared と実際の Redis または PostgreSQL/MySQL が必須です。memory、および memory/SQLite を包む工場も拒否します。各ノードは同じ管理されたバージョン付き鍵セットを読み込みます。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
 
 ## ライセンス
 

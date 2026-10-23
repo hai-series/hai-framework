@@ -143,6 +143,8 @@ await ai.close()
 - `ai.tools` 与 `ai.stream` 是纯函数子系统，无需初始化即可使用。
 - 开发/测试缺少 reldb/vecdb 时使用临时 Store；两者均已初始化时自动使用 DB Provider。生产校验真实数据库与向量后端共享能力，自定义 Provider 必须如实声明 `stateScope`。
 
+公共扩展通过 AIStoreProvider 注入 Store；内置 LLM Provider/工厂依赖与 Context 内部依赖不属于公开 API。模型接入使用配置，历史查询、AskOptions 和 ChatRecord 保持公开。
+
 ### API 概览
 
 #### LLM
@@ -174,6 +176,8 @@ const temp = await ai.llm.chat({
   tempModel: { model: 'claude-3-5-sonnet', api: 'anthropic', apiKey: 'sk-temp' },
 })
 ```
+
+SSE 文本解码遵循 [WHATWG 事件流规则](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)：LF/CRLF/CR 跨片、多行 data、仅去冒号后一个空格、继承有效 id/retry；空或缺省 event 按 message，EOF 不补空行派发残余事件。encodeSSE 规范化 data 换行，并对 id/event 换行、id 的 NUL 或无效 retry 显式抛错。Anthropic/MiMo 共用内部 UTF-8 流读取；消费方退出、取消、协议结束和失败均取消正文并释放 reader，不自动重连或重放业务。Anthropic timeout 覆盖正文，MiMo 保留每个 HTTP 请求的独立 timeout。
 
 #### 工具调用
 
@@ -278,6 +282,8 @@ if (setup.success) {
   }
 }
 ```
+
+Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
 
 #### 语音（Audio）
 
@@ -531,6 +537,8 @@ const manager = ai.context.createManager({
 
 `ai.persona` 提供 `save` / `get` / `update` / `remove` / `list` / `compose`；角色档案全局共享（不按 `objectId` 隔离）。
 
+### 配置
+
 ```yaml
 llm:
   apiKey: ''
@@ -653,13 +661,7 @@ pnpm --filter @h-ai/ai test
 pnpm --filter @h-ai/ai build
 ```
 
-公共扩展通过 AIStoreProvider 注入 Store；内置 LLM Provider/工厂依赖与 Context 内部依赖不属于公开 API。模型接入使用配置，历史查询、AskOptions 和 ChatRecord 保持公开。
-
 源码 JSDoc 的公开示例从实际包入口导入，内部工厂示例标记“模块内部上下文”，分别按真实声明编译。根目录执行 `pnpm check:jsdoc --package ai` 核验覆盖与示例类型；普通业务方法检查 HaiResult，流式与浏览器 AudioClient 保留显式抛错契约。
-
-Knowledge 分块直接遵循 datapipe 的单位与硬上限：word 为词，其他为 Unicode code point，保留清洗后文本的分隔符；AI 默认 chunkOptions 仍为 markdown/maxSize=1500/overlap=200，覆盖较小 maxSize 时须同时保证继承的 overlap 小于它。分块配置/表达式失败返回 KNOWLEDGE_INGEST_FAILED，embedding 与版本发布均不会执行，不退回整篇文本绕过预算。
-
-SSE 文本解码遵循 [WHATWG 事件流规则](https://html.spec.whatwg.org/multipage/server-sent-events.html#event-stream-interpretation)：LF/CRLF/CR 跨片、多行 data、仅去冒号后一个空格、继承有效 id/retry；空或缺省 event 按 message，EOF 不补空行派发残余事件。encodeSSE 规范化 data 换行，并对 id/event 换行、id 的 NUL 或无效 retry 显式抛错。Anthropic/MiMo 共用内部 UTF-8 流读取；消费方退出、取消、协议结束和失败均取消正文并释放 reader，不自动重连或重放业务。Anthropic timeout 覆盖正文，MiMo 保留每个 HTTP 请求的独立 timeout。
 
 ## 许可证
 

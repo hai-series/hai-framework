@@ -207,6 +207,10 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 
 一致する dead バージョンのみ復元し、並行・古い要求は失敗、unknown は復元できません。回数をリセットしますが queueId・保存済み設定・受信側の冪等性要件は保持します。dead は自動処理の停止を意味し、副作用がなかった証明にはなりません。古い冪等 API 要求が遅れて届く可能性があるため、復元前にも受信側の永続的な重複排除を確認してください。修復不能なペイロードは dead に残して調査し、復元だけで内容が直るとは考えないでください。
 
+## 本番の共有状態
+
+本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
+
 ## 開発とテスト
 
 ```bash
@@ -214,10 +218,6 @@ pnpm --filter @h-ai/reach test
 ```
 
 `tests/reach-repository-send-log-databases.test.ts` は Testcontainers で隔離した PostgreSQL 16.15 / MySQL 8.4.11 を起動し、終了後に削除します。利用可能な Docker API が必要です。Podman では `DOCKER_HOST` を互換ソケットに向け、rootless 環境では Testcontainers の要件に従って `TESTCONTAINERS_RYUK_DISABLED=true` を設定してください。
-
-## 本番の共有状態
-
-本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../docs/distributed-state.md)。
 
 ## ライセンス
 

@@ -324,6 +324,8 @@ async function registerWithSession(username: string, password: string) {
 - **方式ごとの有効化**：`login.password` / `login.otp` / `login.ldap` / `login.apikey` で制御。
 - **OTP の安全性**：rejection sampling で剰余偏りを除去、定時間比較でタイミング攻撃を防ぎ、`resendInterval` で頻度制限。
 
+`iam.auth.logout(accessToken)` は完全な不透明 Token を使い、ユーザー文書の一回の CAS で access と refresh を同時に取り消します。access 期限後も実行します。不正・不存在 Token は冪等成功ですが、キャッシュの読取・確定障害は失敗で返し、復旧後に同じ Token で再試行できます。HTTP 入口は保持している Token だけを取り消し、userId を対象にせず、有効な access 認証を前提にしません。呼出側は `success` を確認し、Cookie・安全ストレージのローカル消去だけでサーバー失効を成功と扱わず、失敗を表示します。
+
 ---
 
 #### セッション（session）— `iam.session`
@@ -396,6 +398,14 @@ async function forceSignOut(userId: string) {
 - **自動延長**：`sliding: true` なら各 `get()` で TTL を延長。
 - **Refresh Rotation**：refresh は一度だけ消費します。重複は正常な並行処理や応答喪失でも発生し、それだけで漏洩と判断しません。
 - **Token 強度**：256-bit の暗号学的乱数（`crypto.getRandomValues(new Uint8Array(32))`）、base64url 形式。
+
+`create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
+
+access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
+
+セッションの読取・確定障害は失敗 HaiResult として返し、不存在や期限切れと解釈せず補償削除もしません。索引と会話は同じ文書で保持し、個別 get/ttl や二重索引を廃止します。確定した期限だけで整理し、復旧後の再読取・全ログアウトは元の全記録を対象にします。破損状態は保持して認証を拒否し、空文書で上書きせず運用者が修復します。
+
+Session.credentialVersion は作成時の DB 資格情報世代に結び付けます。CreateSessionOptions.expectedCredentialVersion は検証済みの信頼する戦略だけが指定し、旧世代は拒否します。省略した低レベル create でも実在する有効なローカルユーザーを DB から読み、現世代に結び付けるため、DB 記録のない認証済み ID は作れません。
 
 ---
 
@@ -748,6 +758,8 @@ await apiClient.iam.auth.changePassword({
 })
 ```
 
+browser 条件の入口は設定 Schema、型、HaiIamError のみを公開し、サーバーの `iam` インスタンスは含みません。認証には HTTP/typed client を使用します。
+
 ### パスワードリセット
 
 リセットには `passwordReset.enabled` と送信コールバック/Reach テンプレートが必要です。成功はアカウントの存在や受信を証明しません。送信・内部処理の HaiResult エラーも処理します。期限/試行回数制限があり、一度だけ成功消費でき、成功時に旧セッションを取り消します。管理者リセットに旧パスワードは不要ですが、アプリで管理権限を確認します。
@@ -770,6 +782,8 @@ async function resetByAdministrator(userId: string, newPassword: string) {
   return iam.user.adminResetPassword(userId, newPassword)
 }
 ```
+
+キャッシュ削除が失敗を返しても、確定した新パスワードと資格情報世代は巻き戻しません。旧資格情報で自動再試行せず、再ログインしてください。
 
 ### 一度限りのチケット — `iam.ticket`
 
@@ -875,20 +889,6 @@ pnpm --filter @h-ai/iam build
 pnpm --filter @h-ai/iam test
 node scripts/check-module-jsdoc.mjs --package iam
 ```
-
-`create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
-
-access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
-
-セッションの読取・確定障害は失敗 HaiResult として返し、不存在や期限切れと解釈せず補償削除もしません。索引と会話は同じ文書で保持し、個別 get/ttl や二重索引を廃止します。確定した期限だけで整理し、復旧後の再読取・全ログアウトは元の全記録を対象にします。破損状態は保持して認証を拒否し、空文書で上書きせず運用者が修復します。
-
-キャッシュ削除が失敗を返しても、確定した新パスワードと資格情報世代は巻き戻しません。旧資格情報で自動再試行せず、再ログインしてください。
-
-Session.credentialVersion は作成時の DB 資格情報世代に結び付けます。CreateSessionOptions.expectedCredentialVersion は検証済みの信頼する戦略だけが指定し、旧世代は拒否します。省略した低レベル create でも実在する有効なローカルユーザーを DB から読み、現世代に結び付けるため、DB 記録のない認証済み ID は作れません。
-
-browser 条件の入口は設定 Schema、型、HaiIamError のみを公開し、サーバーの `iam` インスタンスは含みません。認証には HTTP/typed client を使用します。
-
-`iam.auth.logout(accessToken)` は完全な不透明 Token を使い、ユーザー文書の一回の CAS で access と refresh を同時に取り消します。access 期限後も実行します。不正・不存在 Token は冪等成功ですが、キャッシュの読取・確定障害は失敗で返し、復旧後に同じ Token で再試行できます。HTTP 入口は保持している Token だけを取り消し、userId を対象にせず、有効な access 認証を前提にしません。呼出側は `success` を確認し、Cookie・安全ストレージのローカル消去だけでサーバー失効を成功と扱わず、失敗を表示します。
 
 ## ライセンス
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
+import { createInterface } from 'node:readline'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const CONFIG_PATH = resolve(ROOT, '.leak-words.json')
@@ -73,12 +74,12 @@ function redactTerms(text, terms) {
   }, text)
 }
 
-function parsePatchMatches(patchText, blockedTerms) {
+async function parsePatchMatches(lines, blockedTerms) {
   const matches = []
   let currentFile = ''
   let newLineNumber = 0
 
-  for (const line of patchText.split('\n')) {
+  for await (const line of lines) {
     if (line.startsWith('diff --git ')) {
       currentFile = ''
       newLineNumber = 0
@@ -120,6 +121,36 @@ function parsePatchMatches(patchText, blockedTerms) {
   }
 
   return matches
+}
+
+async function scanGitPatch(args, blockedTerms) {
+  // 补丁可能超过 execFileSync 默认缓冲上限，逐行扫描并保留完整检查范围。
+  const child = spawn('git', args, { cwd: ROOT, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+  let stderr = ''
+  child.stderr.setEncoding('utf8')
+  child.stderr.on('data', (chunk) => {
+    stderr = (stderr + chunk).slice(-64 * 1024)
+  })
+
+  const completion = new Promise((resolve, reject) => {
+    child.once('error', reject)
+    child.once('close', (code, signal) => {
+      if (code === 0)
+        resolve()
+      else
+        reject(new Error(stderr.trim() || `git exited with ${signal ? `signal ${signal}` : `code ${code}`}.`))
+    })
+  })
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
+  try {
+    const [matches] = await Promise.all([parsePatchMatches(lines, blockedTerms), completion])
+    return matches
+  }
+  finally {
+    lines.close()
+    if (child.exitCode === null && child.signalCode === null)
+      child.kill()
+  }
 }
 
 function printPatchMatches(header, matches) {
@@ -164,8 +195,7 @@ function scanCommitMessageFile(messageFile, config) {
 }
 
 function scanStagedPatch(config) {
-  const patch = runGit(['diff', '--cached', '--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=AMCR'])
-  return parsePatchMatches(patch, config.blockedTerms)
+  return scanGitPatch(['diff', '--cached', '--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=AMCR'], config.blockedTerms)
 }
 
 function getCommitsForPushUpdate(localOid, remoteOid) {
@@ -188,8 +218,7 @@ function scanCommitMessage(commitOid, config) {
 }
 
 function scanCommitPatch(commitOid, config) {
-  const patch = runGit(['show', '--format=', '--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=AMCR', commitOid])
-  return parsePatchMatches(patch, config.blockedTerms)
+  return scanGitPatch(['show', '--format=', '--unified=0', '--no-color', '--no-ext-diff', '--diff-filter=AMCR', commitOid], config.blockedTerms)
 }
 
 function failWithSummary(title, detailsPrinter) {
@@ -199,8 +228,8 @@ function failWithSummary(title, detailsPrinter) {
   process.exit(1)
 }
 
-function handleStagedMode(config) {
-  const matches = scanStagedPatch(config)
+async function handleStagedMode(config) {
+  const matches = await scanStagedPatch(config)
   if (matches.length === 0) {
     return
   }
@@ -225,7 +254,7 @@ function handleCommitMessageMode(messageFile, config) {
   })
 }
 
-function handlePushMode(config) {
+async function handlePushMode(config) {
   const stdin = readFileSync(0, 'utf-8').trim()
   if (!stdin) {
     return
@@ -250,7 +279,7 @@ function handlePushMode(config) {
       seen.add(commitOid)
 
       const messageMatches = scanCommitMessage(commitOid, config)
-      const patchMatches = scanCommitPatch(commitOid, config)
+      const patchMatches = await scanCommitPatch(commitOid, config)
 
       if (messageMatches.length === 0 && patchMatches.length === 0) {
         continue
@@ -269,7 +298,7 @@ function handlePushMode(config) {
   }
 }
 
-function handleRangeMode(baseOid, headOid, config) {
+async function handleRangeMode(baseOid, headOid, config) {
   if (!headOid)
     throw new Error('Missing head commit for --range mode.')
 
@@ -279,7 +308,7 @@ function handleRangeMode(baseOid, headOid, config) {
 
   for (const commitOid of commits) {
     const messageMatches = scanCommitMessage(commitOid, config)
-    const patchMatches = scanCommitPatch(commitOid, config)
+    const patchMatches = await scanCommitPatch(commitOid, config)
     if (messageMatches.length === 0 && patchMatches.length === 0)
       continue
 
@@ -292,7 +321,7 @@ function handleRangeMode(baseOid, headOid, config) {
   }
 }
 
-function main() {
+async function main() {
   const config = getConfig()
   if (!config) {
     process.stdout.write('No leak words configured. Skipping leak word check.\n')
@@ -302,7 +331,7 @@ function main() {
   const args = process.argv.slice(2)
 
   if (args.includes('--staged')) {
-    handleStagedMode(config)
+    await handleStagedMode(config)
     return
   }
 
@@ -313,17 +342,17 @@ function main() {
   }
 
   if (args.includes('--push')) {
-    handlePushMode(config)
+    await handlePushMode(config)
     return
   }
 
   const rangeIndex = args.indexOf('--range')
   if (rangeIndex >= 0) {
-    handleRangeMode(args[rangeIndex + 1], args[rangeIndex + 2], config)
+    await handleRangeMode(args[rangeIndex + 1], args[rangeIndex + 2], config)
     return
   }
 
   throw new Error('Unsupported mode. Use --staged, --commit-msg-file <path>, --push, or --range <base> <head>.')
 }
 
-main()
+await main()

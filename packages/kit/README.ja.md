@@ -270,6 +270,8 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 
 `crypto.encryptedCookies` を設定する場合、`crypto.cookieEncryptionKey` または `HAI_KIT_COOKIE_KEY` が必要です。鍵がなければ `createHandle()` ですぐエラーになります。保護対象 Cookie の平文・破損暗号文・復号失敗は未存在として扱い、暗号化失敗時も平文保存に切り替えません。
 
+認証 Cookie は `NODE_ENV` または `HAI_CORE_ENV` が `production` の場合に `Secure` を既定で有効にします。`HAI_E2E` / `HAI_E2E_MOCK` は Cookie の安全要件を緩和しません。本番のレート制限も両方の環境変数を認識し、明示的なテストフラグだけがメモリカウンターを許可します。
+
 ### エクスポートパス
 
 実行時メソッドは `kit` 名前空間または明示したサブパスを使用し、型は個別に公開します。browser 宣言はサーバーファクトリを公開しません。Vite 設定には `@sveltejs/kit/vite` を使い、`@h-ai/kit/vite` プラグインはありません。
@@ -289,6 +291,8 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し、AuthPanel には kit.client.createAuthActions({ apiFetch }) を接続します。検証、Cookie、HaiResult 変換を共通化し、ユーザー情報と改密の保護を維持します。
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
+
+`kit.auth.logout(cookies, accessToken)` は `Promise<HaiResult<void>>` を返します。Token がなければ Cookie のみ消去して成功し、Token があるのに認証操作が未設定なら失敗します。サーバー結果にかかわらず Cookie は消去しますが、呼出側は失敗を HTTP 応答や UI に伝えます。ローカル消去はサーバー失効の確認ではありません。制御フロー例外は引き続き伝播します。
 
 ### エラー処理
 
@@ -312,11 +316,7 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 pnpm --filter @h-ai/kit test
 ```
 
-認証 Cookie は `NODE_ENV` または `HAI_CORE_ENV` が `production` の場合に `Secure` を既定で有効にします。`HAI_E2E` / `HAI_E2E_MOCK` は Cookie の安全要件を緩和しません。本番のレート制限も両方の環境変数を認識し、明示的なテストフラグだけがメモリカウンターを許可します。
-
 Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../docs/module-jsdoc.md) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
-
-`kit.auth.logout(cookies, accessToken)` は `Promise<HaiResult<void>>` を返します。Token がなければ Cookie のみ消去して成功し、Token があるのに認証操作が未設定なら失敗します。サーバー結果にかかわらず Cookie は消去しますが、呼出側は失敗を HTTP 応答や UI に伝えます。ローカル消去はサーバー失効の確認ではありません。制御フロー例外は引き続き伝播します。
 
 ## ライセンス
 

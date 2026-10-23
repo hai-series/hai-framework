@@ -101,6 +101,10 @@ await cache.init({
 })
 ```
 
+`cache.init(config)` selects the built-in memory/redis backend. Provider implementations are internal; there is no custom backend registration API.
+
+`password` authenticates standalone, Cluster, and Sentinel data nodes, including discovered/redirected Cluster connections. In `url` mode the credentials in the URL take precedence; the separate password field does not override them.
+
 ### API overview
 
 - `cache.kv`: string/object key-value storage and TTL (`set/get/mget/mset/expire/ttl/...`).
@@ -109,6 +113,10 @@ await cache.init({
 - `cache.set_`: sets (`sadd/smembers/sismember/...`).
 - `cache.zset`: sorted sets (`zadd/zrange/zrevrange/...`).
 - `cache.lock`: distributed locks (`acquire/release/isLocked/extend`).
+
+`kv.set` returns `HaiResult<boolean>`: `data=true` means the write applied. An NX/XX miss returns `success=true,data=false` without changing the value or TTL. Check both fields before issuing tickets, sessions or key registrations. `ex/px/exat/pxat` use seconds, milliseconds, Unix seconds and Unix milliseconds; choose one positive safe integer, excluding `keepTtl=true`. NX and XX are mutually exclusive. Zero, negative, fractional, non-finite or overflowing values return `INVALID_SET_OPTIONS` (`cache:016`) without creating a permanent key. A positive absolute deadline in the past expires immediately. Omitting expiry removes an existing TTL; `keepTtl` retains it and leaves new keys permanent. Both providers store JSON snapshots.
+
+compareAndSwap atomically compares one JSON value and replaces/deletes it, returning boolean applied. Undefined expected means absent; undefined value deletes; null is a JSON value. px is a positive integer and excludes keepTtl. Omitting expiry persists the replacement; a comparison miss preserves TTL. Use it for shared versioned commits.
 
 ### Cluster multi-key operations and scanning
 
@@ -144,6 +152,8 @@ if (acquired.success && acquired.data)
 - **Redis backend**: atomic locking with `SET NX EX`; Lua scripts verify the owner for safe release and renewal.
 - `acquire` returns a unique acquisition token, or `null` while occupied. Release/renewal require this token; node IDs and ownerless operations are not supported.
 
+The owner token only protects lease renewal and release; it is not a resource fencing token. A paused task can resume after expiry. Final writes require CAS, generation predicates or transactional constraints in the resource store; renewal or returning a failure afterwards cannot prevent a stale commit.
+
 ### Error codes
 
 All operations return `HaiResult<T>`. Common error codes:
@@ -160,6 +170,10 @@ All operations return `HaiResult<T>`. Common error codes:
 | `HaiCacheError.UNSUPPORTED_TYPE`       | `hai:cache:011` | Unsupported cache type |
 | `HaiCacheError.CONFIG_ERROR`           | `hai:cache:012` | Invalid configuration  |
 
+## Production shared state
+
+Production requires Redis (including Cluster); memory is for development/explicit tests. Redis errors fail rather than falling back locally. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## Development and testing
 
 ```bash
@@ -167,20 +181,6 @@ pnpm --filter @h-ai/cache test
 ```
 
 > Redis tests require Docker.
-
-## Production shared state
-
-Production requires Redis (including Cluster); memory is for development/explicit tests. Redis errors fail rather than falling back locally. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
-
-`cache.init(config)` selects the built-in memory/redis backend. Provider implementations are internal; there is no custom backend registration API.
-
-`password` authenticates standalone, Cluster, and Sentinel data nodes, including discovered/redirected Cluster connections. In `url` mode the credentials in the URL take precedence; the separate password field does not override them.
-
-compareAndSwap atomically compares one JSON value and replaces/deletes it, returning boolean applied. Undefined expected means absent; undefined value deletes; null is a JSON value. px is a positive integer and excludes keepTtl. Omitting expiry persists the replacement; a comparison miss preserves TTL. Use it for shared versioned commits.
-
-The owner token only protects lease renewal and release; it is not a resource fencing token. A paused task can resume after expiry. Final writes require CAS, generation predicates or transactional constraints in the resource store; renewal or returning a failure afterwards cannot prevent a stale commit.
-
-`kv.set` returns `HaiResult<boolean>`: `data=true` means the write applied. An NX/XX miss returns `success=true,data=false` without changing the value or TTL. Check both fields before issuing tickets, sessions or key registrations. `ex/px/exat/pxat` use seconds, milliseconds, Unix seconds and Unix milliseconds; choose one positive safe integer, excluding `keepTtl=true`. NX and XX are mutually exclusive. Zero, negative, fractional, non-finite or overflowing values return `INVALID_SET_OPTIONS` (`cache:016`) without creating a permanent key. A positive absolute deadline in the past expires immediately. Omitting expiry removes an existing TTL; `keepTtl` retains it and leaves new keys permanent. Both providers store JSON snapshots.
 
 Public contracts and internal structures include typechecked examples; see the [JSDoc conventions (Chinese)](../../docs/module-jsdoc.md).
 

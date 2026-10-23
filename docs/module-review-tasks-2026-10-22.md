@@ -8,6 +8,7 @@
 
 ## 当前交付与未完成项（2026-10-23）
 
+- **主目录模板夹具复验**：部署工具开启/关闭分别作为独立用例生成完整项目；质量门禁使用每轮独有目录，在核对归属后用有限重试处理 Windows 短暂文件占用。所有原断言与测试期限保留，三个受影响文件 315/315、CLI 类型检查及七个受改文件零警告 lint 通过；此前完整 CLI 单测中的文件占用和冷启动超时日志保留，最终完整单测仍须再次确认。此项仅改测试组织与临时资源回收，无生产运行时代码影响。
 - 全部任务提交已通过 `9eb513ae`、`f62c9c16` 合入主目录 `C:\workspaces\hai-series\hai-framework` 的 `main`，保留原任务提交历史；用户根版本 `0.1.0-alpha.68` 单独提交为 `2f5c92b0`。本节只记录本地合并，不表示已推送 GitHub。
 - **已通过**：修正分支第三轮根类型检查、单元测试 6062 项（另有 58 跳过）、根 E2E 237 项浏览器/HTTP 检查（另有 1 项 AI live 跳过）、Linux 命令/部署锁 9 项、部署夹具拥有权 7 项、Storage 原生浏览器 10 项，以及 API、环境变量、2337 个导出声明的 JSDoc 示例检查和 CLI 生成专项。
 - **未完成 E2E-01 / VERIFY-06**：第三轮真实 SSH/Podman 部署 7 项全部失败。fullstack 首次部署在 `/health` 检查失败，增量用例没有成功部署基线；api/admin/website/h5/mobile 的部署健康验收也未通过，完整增量/回滚及部署后浏览器流程未完成。准备阶段和拥有权测试通过，不能替代这些业务验收。根因尚未完成定位，不能将全部失败归因于网络或单一原因。
@@ -995,6 +996,7 @@
 ### CLI-04 · P2 · 部署向导按真实数据库 Schema 校验 TLS 配置
 
 - [x] 已修正并通过定向验证（2026-10-23）。
+- **干净缓存 CI 复验（2026-10-23）**：原发布包测试把工作区 frozen install 误当成 registry semver 元数据已完整缓存，GitHub Actions 在 `nanoid@^6.0.2` 报 `ERR_PNPM_NO_OFFLINE_META`，尚未执行 Schema 断言。改用正常的 `--prefer-offline --ignore-scripts` 安装生产依赖，缺少元数据时从 registry 获取；目标应用仍无 `node_modules`，Schema 内联、非法 TLS 不落盘、有效配置保存及 DB 驱动不得加载的断言全部保留。Linux Node 24.18.0 / pnpm 12.11.2、仓库当前真实 core/deploy/cli 三个 tarball、两份彼此独立空 cache/store 下，旧测试先真实失败，修复后的两个原始 Vitest 文件 10/10 通过。证据 `tmp/stash-reconcile-20261023/linux-published-bdc97994-c552-46a7-99ea-6959af49a43e/`；不把该测试描述为离线安装验收，无生产代码或依赖配置变化。
 - **实施与验证**：复用真实Reldb Schema并新增纯公开/schemas入口，CLI内联schema/Zod，不初始化或依赖目标应用DB驱动；按MySQL/PostgreSQL分别校验TLS并在持久化前检查完整配置，非法输入保留原YAML/公共及私有环境，不放宽安全契约。11个非法值旧实现真实Red后最终3文件55通过，含仓库外实际tarball离线安装、空app node_modules/空NODE_PATH/禁止workspace逃逸和DB加载；有效配置写入后故意缺制品停止，不冒称部署成功。真实MySQL TLS6通过；源/严格测试类型、正常适用lint18文件零警告、fresh RelDB/CLI ESM+DTS、94 JSDoc、skills37/330、API21导入/30browser及env/api生成检查通过。三语README、双skill/reference、配置/样式图、生成metadata和LLMS同步；无新运行依赖/锁变化，完整部署另留最终轮；全量回归按用户要求在全部任务实施后执行。
 - **位置**：CLI deploy middleware 输入、reldb 配置公开入口及对应测试/生成元数据。
 - **证据与影响**：向导通用 ssl 校验接受 MySQL `true`，写出后真实 `core.config.load` + `ReldbConfigSchema` 拒绝；PostgreSQL 和 MySQL 的公开 TLS 契约不同。
@@ -1013,6 +1015,7 @@
 ### E2E-01 · P2 · 应用与生成工程显式装配隔离测试后端
 
 - [ ] 已实施并通过定向验证；第三轮真实部署验收失败，待修正和复验（2026-10-23）。
+- **Linux CI 回归修正（2026-10-23）**：GitHub Actions `39917712028` 的三个隔离计数失败源于同步父线程阻塞 Linux 子进程回收；哨兵已关闭 TCP 但 PID 仍可被探测，不能靠轮询 PID 等待父线程完成回收。计数快照关闭与持有句柄的异步 `close` 分开确认，所有样板调用方同步 `await`，异常路径仍停止本轮进程并保留原错误。相同 Node 24.18.0 的 Linux 夹具先复现旧失败，修复后正常隔离、实际意外连接、异步门禁错误三场景均通过且 PID 确认消失；Linux 原始两个 Vitest 文件 10/10、Windows 受影响三个文件 315/315 通过。证据留主目录 `tmp/stash-reconcile-20261023/`；这不代表真实 SSH/容器部署已通过，也不替代尚未执行的远端 E2E。
 - **实施与验证**：Playwright 服务子进程显式装配完整 SQLite/memory/local/LanceDB 测试配置并删除继承的模块/公开环境，托管入口提供绝对独有数据目录；实际 Vite/desktop 委托入口在 E2E 下跳过开发 dotenv，普通开发/生产契约保留。API 测试直接运行 dist，可信 SM2 ring/registry 替代 transport=false 绕过；部署本地主机 fixture 显式 E2E profile、Redis/S3 与增量/回滚断言保留；调用方、README、双skill、LLMS同步。严格类型与配置内 lint零警告、skills37/330、helper8/8、desktop配置3/3；fresh CLI及21真实tarballs后原3API质量/浏览器门禁通过（2+3+3），三独立DB计数器正控1/额外0/closed及PID退出，owned工程清理。H5真实注册/OTP/重置、官网原route.fulfill投递UI、AI明确mock各1/1真实Chrome通过，端口/观察到的本轮PID/托管数据回收；原无匹配selector失败单列。证据 tmp/module-repair-20261022/E2E-01/handoff.json 与 tmp/validation/module-review/E2E-01/apps-targeted-handoff.json。旧计数器两次超时根因无法还原，当前受测范围通过并保留安全诊断；额外强制扫描原排除skill的既有lint与Python启动器意外更新记录单列；应用未消费部署配置的启动ERROR另列CORE-05修正，不以UI通过认定其无问题；全量回归按用户要求在全部任务实施后执行。
 - **本轮追加修正**：部署夹具将嵌套应用监听端口设为引擎分配的宿主端口，并在已登记容器内以真实 TCP 转发连接固定入口，避免部署器误查宿主固定端口。生产内外健康检查、全部 7 个原业务场景及端口隔离保留。实际最终函数经 Python 基础容器验证：无上游时两入口均失败，两个真实 HTTP 服务的宿主/远端响应一致，容器和临时目录已回收；函数/实际 helper 严格类型与两文件零警告 lint 通过。独立探针不替代完整部署验收，原任务待主目录全量门禁；无生产 API、配置或依赖变更。
 - **位置**：应用/CLI 模板 Playwright 启动、测试运行入口和 CLI 部署夹具环境。

@@ -134,6 +134,8 @@ if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
 
+MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/database/user/password；非空 URL 仍严格校验。
+
 #### MySQL TLS
 
 `ssl` 省略或为 `false` 时不启用 TLS；启用时只能传严格对象，空对象默认 `{ rejectUnauthorized: true, verifyIdentity: true }`。`ca` 是受信 CA 的 PEM 内容，省略时使用 Node 信任库；可选客户端 `cert` / `key` 也必须是 PEM 内容且成对提供。未知 TLS 字段、`true` 和 PostgreSQL 字符串模式明确拒绝，不提供任意参数/回调透传。
@@ -197,6 +199,8 @@ await reldb.init({
   },
 })
 ```
+
+操作日志仅包含固定操作名和SQL长度、参数数量、批量数量等安全摘要；失败路径也不记录SQL原文、值或驱动错误内容。
 
 ### 事务
 
@@ -510,6 +514,8 @@ await reldb.sql.execute(
 )
 ```
 
+`json.merge(column, patch)` 在三种后端均实现 RFC 7396 的对象补丁：递归保留未改键，补丁 null 删除指定键，数组整体替换。PostgreSQL 用参数化递归 CTE 在单次 SQL 中修改当前行，不要求预装函数，也不先在应用读取再写回。补丁根必须是可 JSON 序列化的对象；此契约不扩展为任意 JSON 根补丁。列表达式由开发者静态提供，动态路径和值全部作为参数。参见 [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) 和 [PostgreSQL JSON 运算](https://www.postgresql.org/docs/16/functions-json.html)。
+
 #### 完整示例
 
 ```ts
@@ -584,6 +590,10 @@ if (!result.success) {
 
 派生 `BaseReldbCrudRepository` 的自定义 SQL 方法先检查 `await this.ensureReady()`；构造函数启动自动建表不等于仓库就绪，服务 init 必须等待候选仓库的就绪入口再发布。PostgreSQL 并发首次 `CREATE TABLE IF NOT EXISTS` 的 `23505/pg_type_typname_nsp_index` 目录冲突仅重执行相同 DDL 一次，其他错误继续失败。
 
+## 生产共享状态
+
+生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
+
 ## 开发测试
 
 ```bash
@@ -591,16 +601,6 @@ pnpm --filter @h-ai/reldb test
 ```
 
 > MySQL/PostgreSQL 测试需要 Docker。
-
-## 生产共享状态
-
-生产仅使用 PostgreSQL/MySQL；SQLite（含磁盘文件）只用于开发/明确测试，不能作为跨主机共享状态。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../docs/distributed-state.md)。
-
-操作日志仅包含固定操作名和SQL长度、参数数量、批量数量等安全摘要；失败路径也不记录SQL原文、值或驱动错误内容。
-
-MySQL 的空 `url`（例如空环境变量占位）表示使用 host/port/database/user/password；非空 URL 仍严格校验。
-
-`json.merge(column, patch)` 在三种后端均实现 RFC 7396 的对象补丁：递归保留未改键，补丁 null 删除指定键，数组整体替换。PostgreSQL 用参数化递归 CTE 在单次 SQL 中修改当前行，不要求预装函数，也不先在应用读取再写回。补丁根必须是可 JSON 序列化的对象；此契约不扩展为任意 JSON 根补丁。列表达式由开发者静态提供，动态路径和值全部作为参数。参见 [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) 和 [PostgreSQL JSON 运算](https://www.postgresql.org/docs/16/functions-json.html)。
 
 源码 JSDoc 遵循[统一规范](../../docs/module-jsdoc.md)：公开示例使用实际发布入口，内部示例在原模块作用域检查。构建后执行 `pnpm check:jsdoc --package reldb`；示例编译不代替真实后端行为验证。
 

@@ -134,6 +134,8 @@ if (!initialized.success)
   throw new Error(initialized.error.message)
 ```
 
+An empty MySQL `url` (including an empty environment placeholder) selects host/port/database/user/password; nonempty URLs remain strictly validated.
+
 #### MySQL TLS
 
 Omitting `ssl` or using `false` disables TLS. Enabling it requires a strict object; an empty object defaults to `{ rejectUnauthorized: true, verifyIdentity: true }`. `ca` contains trusted CA PEM text, or Node's trust store is used when omitted. Optional client `cert` and `key` must contain PEM text and be provided together. Unknown TLS fields, `true` and PostgreSQL string modes are rejected; arbitrary options and callbacks are not forwarded.
@@ -197,6 +199,8 @@ await reldb.init({
   },
 })
 ```
+
+Operation logs contain only fixed operation names and numeric SQL/parameter/batch counts. SQL text, values and driver error content are excluded, including failure paths.
 
 ### Transactions
 
@@ -510,6 +514,8 @@ await reldb.sql.execute(
 )
 ```
 
+`json.merge(column, patch)` implements RFC 7396 object patches on all three backends: preserve untouched nested keys, delete keys targeted by null, and replace arrays as a whole. PostgreSQL applies parameterized steps in a recursive CTE within one SQL statement, with no installed function or application read-modify-write. The patch root must be a JSON-serializable object; arbitrary JSON patch roots are outside this contract. Column expressions are developer-owned SQL; paths and values remain parameters. See [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) and [PostgreSQL JSON operators](https://www.postgresql.org/docs/16/functions-json.html).
+
 #### Complete example
 
 ```ts
@@ -584,6 +590,10 @@ Common error codes:
 
 Custom SQL methods in `BaseReldbCrudRepository` subclasses must check `await this.ensureReady()`. Construction starts table creation; service init must await candidate readiness before publication. PostgreSQL concurrent first `CREATE TABLE IF NOT EXISTS` retries the same DDL once only for `23505/pg_type_typname_nsp_index` catalog contention; other errors remain failures.
 
+## Production shared state
+
+Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
+
 ## Development and testing
 
 ```bash
@@ -591,16 +601,6 @@ pnpm --filter @h-ai/reldb test
 ```
 
 > MySQL/PostgreSQL tests require Docker.
-
-## Production shared state
-
-Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../docs/distributed-state.md)。
-
-Operation logs contain only fixed operation names and numeric SQL/parameter/batch counts. SQL text, values and driver error content are excluded, including failure paths.
-
-An empty MySQL `url` (including an empty environment placeholder) selects host/port/database/user/password; nonempty URLs remain strictly validated.
-
-`json.merge(column, patch)` implements RFC 7396 object patches on all three backends: preserve untouched nested keys, delete keys targeted by null, and replace arrays as a whole. PostgreSQL applies parameterized steps in a recursive CTE within one SQL statement, with no installed function or application read-modify-write. The patch root must be a JSON-serializable object; arbitrary JSON patch roots are outside this contract. Column expressions are developer-owned SQL; paths and values remain parameters. See [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) and [PostgreSQL JSON operators](https://www.postgresql.org/docs/16/functions-json.html).
 
 Source JSDoc follows the [shared conventions](../../docs/module-jsdoc.md): public examples use published entry points, and internal examples are checked in their module scope. After building, run `pnpm check:jsdoc --package reldb`; compiling examples does not replace backend behavior tests.
 

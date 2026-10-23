@@ -133,6 +133,8 @@ transport:
 
 [完整配置与安全约束](../../packages/iam/README.md)
 
+登出会检查服务端 HaiResult，并在网络或服务端撤销失败时显示中英文 Toast；仍清理本地身份。安全存储清理失败会显示独立警告并结束加载，不能把本地页面退出当作服务端凭据已经失效。认证提示位于 `messages/zh-CN.json`、`messages/en-US.json`。
+
 ### 原生交付与验收
 
 桌面端原生打包独立于 Web 构建：`pnpm build` 默认编译资源，`pnpm build --target desktop` 调用 Tauri 生成安装包。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在 Windows 上安装锁定依赖、构建共享包后调用相同入口，不接收部署环境或 API 地址。API Origin 与 CSP 在程序启动时注入；打包成功不代替安装后的行为验收。
@@ -191,5 +193,3 @@ pnpm --filter desktop-app build
 ## 许可证
 
 Apache-2.0
-
-登出会检查服务端 HaiResult，并在网络或服务端撤销失败时显示中英文 Toast；仍清理本地身份。安全存储清理失败会显示独立警告并结束加载，不能把本地页面退出当作服务端凭据已经失效。认证提示位于 `messages/zh-CN.json`、`messages/en-US.json`。

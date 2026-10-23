@@ -657,6 +657,8 @@ Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` 
 
 The root `.env.example` defines complete fields and defaults. When working on an example app, consult its `README.md` and `.env.example` for additional settings.
 
+See the [21-package configuration and consumer map (Chinese)](docs/configuration-map.md) for schema defaults, runtime consumers, environment names and generated apps.
+
 ### Quality gates
 
 Choose commands by impact scope; use root commands for cross-package contracts or root configuration changes:
@@ -685,5 +687,3 @@ The entry points are `.husky/pre-commit`, `.husky/commit-msg`, `.husky/pre-push`
 ## License
 
 [Apache-2.0](./LICENSE)
-
-See the [21-package configuration and consumer map (Chinese)](docs/configuration-map.md) for schema defaults, runtime consumers, environment names and generated apps.

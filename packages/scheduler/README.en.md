@@ -246,19 +246,19 @@ API task `timeout` (default 30000 ms) covers the request and full response body 
 
 `init()` succeeds only after loading all tasks. Empty or duplicate IDs (including persisted duplicates), invalid cron, database read failures, and persisted-task parse failures return failure and clear initialization state. Correct configuration or data before retrying. Do not redeclare existing database tasks in `tasks`.
 
+Cron is matched by minute; the same minute determines a persistent occurrenceId. Delayed ticks still check the current minute once per running scheduler.
+
+Claim, begin, renewal, completion, expiration scans and isolation calculate/check lease deadlines inside the database statement using its clock: PostgreSQL clock_timestamp, MySQL SYSDATE(3), or SQLite now. Reading a time first cannot replace the final atomic deadline condition. Cron uses DB time for both the minute occurrence and expression matching. An omitted timezone means UTC; an explicit IANA timezone changes only wall-time interpretation, while node TZ does not change matching or identity. Node Date.now is diagnostic only; opposing node clocks cannot take over early or revive expired ownership. A write waiting on a row lock must still pass its deadline before publishing success. Keep the database service clock trustworthy; unknown external effects still require reconciliation rather than automatic replay.
+
 ### Optional integrations
 
 When a scheduled task sends Reach notifications, a scheduler lock or task completion does not guarantee one external delivery. Follow [Reach queue semantics](../reach/README.en.md) with persistent queueId keys. HTTP receivers must atomically persist deduplication with their side effects. Review unknown in-flight SMTP/SMS outcomes manually; scheduler retries must not blindly send them again.
-
-Cron is matched by minute; the same minute determines a persistent occurrenceId. Delayed ticks still check the current minute once per running scheduler.
 
 ## Development and testing
 
 ```bash
 pnpm --filter @h-ai/scheduler test
 ```
-
-Claim, begin, renewal, completion, expiration scans and isolation calculate/check lease deadlines inside the database statement using its clock: PostgreSQL clock_timestamp, MySQL SYSDATE(3), or SQLite now. Reading a time first cannot replace the final atomic deadline condition. Cron uses DB time for both the minute occurrence and expression matching. An omitted timezone means UTC; an explicit IANA timezone changes only wall-time interpretation, while node TZ does not change matching or identity. Node Date.now is diagnostic only; opposing node clocks cannot take over early or revive expired ownership. A write waiting on a row lock must still pass its deadline before publishing success. Keep the database service clock trustworthy; unknown external effects still require reconciliation rather than automatic replay.
 
 Declaration JSDoc examples import real public entries. Internal repositories, the runner, compiler and cron helpers are marked as internal module context and are not root exports. Examples distinguish HaiResult, explicit cancellation rejection, and close returning Promise<void>; business status and log persistence remain separate, and log repair never reruns business work. Maintainers can run `node scripts/check-module-jsdoc.mjs --package scheduler` to check declaration coverage and real types. Compiling examples does not replace shared-database and independent-process validation.
 

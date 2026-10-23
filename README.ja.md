@@ -657,6 +657,8 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 
 全項目・既定値はルートの `.env.example` が基準です。個別アプリでは対応する `README.md` と `.env.example` で追加設定を確認します。
 
+Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[21 パッケージの設定対応表（中国語）](docs/configuration-map.md)を参照してください。
+
 ### 品質チェック
 
 影響範囲に合わせてコマンドを選び、複数パッケージ契約・ルート設定の変更はルートで実行します：
@@ -685,5 +687,3 @@ Git hooks は `git commit` / `git push` 前に漏洩キーワードを確認し�
 ## ライセンス
 
 [Apache-2.0](./LICENSE)
-
-Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[21 パッケージの設定対応表（中国語）](docs/configuration-map.md)を参照してください。
