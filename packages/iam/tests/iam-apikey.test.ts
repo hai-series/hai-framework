@@ -12,7 +12,7 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
 import { defineIamEnvSuite, defineIamSuite, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
@@ -384,6 +384,34 @@ describe('iam.apiKey（启用）', () => {
     // =========================================================================
 
     describe('apiKey 过期', () => {
+      it('到达过期时刻即拒绝 key、派生 access 和 refresh', async () => {
+        const user = await registerUser('apikey_expiry_boundary')
+        const created = await getIam().apiKey.createApiKey(user.id, { name: 'expiry-boundary', expirationDays: 1 })
+        expect(created.success).toBe(true)
+        if (!created.success || !created.data.apiKey.expiresAt)
+          throw new Error('Missing expiring API key')
+        vi.useFakeTimers({ toFake: ['Date'] })
+        try {
+          vi.setSystemTime(created.data.apiKey.expiresAt.getTime() - 1000)
+          const login = await getIam().auth.loginWithApiKey({ key: created.data.rawKey })
+          expect(login.success).toBe(true)
+          if (!login.success)
+            throw new Error(login.error.message)
+          vi.setSystemTime(created.data.apiKey.expiresAt)
+          for (const result of await Promise.all([
+            getIam().apiKey.verifyApiKey(created.data.rawKey),
+            getIam().auth.loginWithApiKey({ key: created.data.rawKey }),
+            getIam().session.verifyToken(login.data.tokens.accessToken),
+            getIam().session.refresh(login.data.tokens.refreshToken),
+          ])) {
+            expect(result).toMatchObject({ success: false, error: { code: HaiIamError.APIKEY_EXPIRED.code } })
+          }
+        }
+        finally {
+          vi.useRealTimers()
+        }
+      })
+
       it('带 expirationDays 创建的 key 应有 expiresAt', async () => {
         const user = await registerUser('apikey_expiration_user')
         const result = await getIam().apiKey.createApiKey(user.id, {

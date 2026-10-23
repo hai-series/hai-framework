@@ -153,7 +153,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
 
       // 检查是否过期
-      if (candidate.expiresAt && new Date() > candidate.expiresAt) {
+      if (candidate.expiresAt && new Date() >= candidate.expiresAt) {
         return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
       }
 

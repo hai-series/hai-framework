@@ -183,7 +183,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
     if (!key.enabled)
       return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
-    if (key.expiresAt && new Date() > key.expiresAt)
+    if (key.expiresAt && new Date() >= key.expiresAt)
       return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
     return ok(applyApiKeyScopes({ ...session, apiKeyScopes: key.scopes }, key.scopes))
   }
