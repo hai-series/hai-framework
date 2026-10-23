@@ -75,7 +75,7 @@ return result
 | @h-ai/deploy | [使用与离线部署](packages/deploy/README.md)、[部署与基础设施](packages/cli/templates/skills/hai-deploy/SKILL.md)、[环境与中间件](packages/cli/templates/skills/hai-deploy/middleware.md) | 先选环境，核对 Provider、工具链和发布授权；build 按 images/ 独立 Dockerfile 选择镜像；deploy --build 可串联构建，完整离线包自动包含中间件，--services 增量更新，--bundle-only 生成跨平台脚本，测试产物自动清理；Linux flock 固定锁及继承 FD 子命令退出后释放；命令跨块脱敏/背压/有界捕获，异常后核验本地 Job/进程组退出；getDeployCommandState 分离本地终止与远端 unknown/匹配终态 finished，未知不自动重跑或回滚 |
 | @h-ai/ui | [组件、主题、移动适配、AI 内容](packages/cli/templates/skills/hai-ui/SKILL.md) | 表单 Form/FormLayout 支持 columns、labelPosition、自动/显式 colSpan；控件与 CRUD 失焦校验、修正即时更新，错误随 UI 语言更新；认证使用 AuthPanel + IAM 公开配置、Markdown/URL 协议弹窗和表单 snippet；components 公开入口与轻量 /theme、/i18n；SSR locale store/setter 不写全局语言，由 Node 请求上下文供消息读取；Tailwind 扫描路径须正确；locale遍历全部浏览器候选后回退，区域匹配返回支持列表代码，SSR不写全局 |
 | @h-ai/ui/guide | [新手引导与帮助中心](packages/cli/templates/skills/hai-ui/guide.md) | createGuide + GuideHost；首次 Cookie 提示、手动重看、宿主导航与 data-guide；业务翻译延迟求值、显式 locale、按用户和版本记录；fullstack Web/App/Desktop 默认接入 |
-| @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出 |
+| @h-ai/cli | [安装、创建、添加模块、生成与脚手架验证](packages/cli/README.md#安装-cli) | 先 `pnpm add -g @h-ai/cli`，再执行 `hai`；PowerShell 使用 `pnpm.cmd`，以已安装 CLI 的 `--help` 和模板为准；生成框架依赖固定为 CLI 对应版本，安装失败展示命令和原始输出；独立 mobile 选 IAM/crypto 时默认加密 typed client，明文模式须与 API 明确匹配，握手失败不降级 |
 
 ## 任务导航
 

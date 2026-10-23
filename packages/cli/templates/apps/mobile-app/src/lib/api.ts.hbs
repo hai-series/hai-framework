@@ -5,21 +5,83 @@
  */
 import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+{{#if features.crypto}}
+import { crypto } from '@h-ai/crypto'
+{{/if}}
 
 const DEFAULT_API_BASE = 'http://localhost:3000/api/v1'
 
 let initialized = false
+let initializing: Promise<void> | undefined
+let closing: Promise<void> | undefined
+{{#if features.crypto}}
+// 只关闭本客户端实际初始化的 crypto，保留外部调用方已有实例。
+let ownsCrypto = false
 
+/**
+ * 解析客户端传输选项；仅显式 off 连接匹配的明文 API，握手失败不降级。
+ * @returns 绑定实际 crypto 与公开协商子路径的选项，或显式明文模式的 undefined。
+ * @example 模块内部上下文
+ * ```ts
+ * const transport = resolveTransport()
+ * if (transport) {
+ *   await initApi()
+ *   try {
+ *     if (!apiClient.config?.transport) throw new Error('Transport configuration missing')
+ *   }
+ *   finally { await closeApi() }
+ * }
+ * ```
+ */
+function resolveTransport() {
+  const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiTransport?: string, apiKeyExchangePath?: string } }).__HAI_PUBLIC_CONFIG__
+  if ((runtime?.apiTransport || import.meta.env.PUBLIC_API_TRANSPORT) === 'off')
+    return undefined
+  return { crypto, keyExchangePath: runtime?.apiKeyExchangePath || import.meta.env.PUBLIC_API_KEY_EXCHANGE_PATH || '/_hai/key-exchange' }
+}
+{{/if}}
+
+/**
+ * 按公开运行配置、构建配置、本地示例地址的顺序解析含 API 前缀的 baseUrl。
+ * @returns API baseUrl；服务端私钥和连接配置不属于该公开地址。
+ * @example 模块内部上下文
+ * ```ts
+ * const base = new URL(resolveApiBase())
+ * const apiOrigin = base.origin
+ * ```
+ */
 export function resolveApiBase(): string {
   const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__
   return runtime?.apiBase || import.meta.env.PUBLIC_API_BASE || DEFAULT_API_BASE
 }
 
+/**
+ * 查询实际 Capacitor 平台，决定安全原生存储或 Web 内存存储。
+ * @returns 是否处于 Capacitor 原生平台；浏览器预览返回 false。
+ * @throws Error - 平台模块加载或检测失败时拒绝 Promise，不伪装为 Web 模式。
+ * @example 模块内部上下文
+ * ```ts
+ * if (await usesNativeTokenStorage()) {
+ *   const storage = createCapacitorTokenStorage()
+ *   const accessToken = await storage.getAccessToken() // 只用于认证，不输出令牌。
+ * }
+ * ```
+ */
 export async function usesNativeTokenStorage(): Promise<boolean> {
   const { Capacitor } = await import('@capacitor/core')
   return Capacitor.isNativePlatform()
 }
 
+/**
+ * 按真实平台创建 TokenStorage；绑定 client 后通过 client.auth 变更身份。
+ * @returns 原生安全存储或 Web 内存存储；其方法的读写故障继续拒绝 Promise。
+ * @throws Error - 平台检测或存储工厂失败时拒绝，不改用较弱的持久化方式。
+ * @example 模块内部上下文
+ * ```ts
+ * const storage = await createTokenStorage()
+ * const accessToken = await storage.getAccessToken() // null 表示未认证，不记录令牌。
+ * ```
+ */
 async function createTokenStorage() {
   if (await usesNativeTokenStorage())
     return createCapacitorTokenStorage()
@@ -27,29 +89,125 @@ async function createTokenStorage() {
   return apiClient.tokenStorage.memory()
 }
 
+/**
+ * 合并在途初始化并等待关闭；安全存储、所选 crypto 与 typed client 依次就绪。
+ * @returns 客户端已准备；重复调用复用同一客户端。
+ * @throws Error - 安全存储、crypto 或 client 初始化失败，业务 HaiResult 在此边界明确转成拒绝。
+ * @throws AggregateError - 初始化和本次 crypto 清理同时失败，后续 closeApi 可重试。
+ * @example 模块内部上下文；目标 API 已提供标准 IAM 端点。
+ * ```ts
+ * await initApi()
+ * try {
+ *   const current = await apiClient.iam.auth.currentUser()
+ *   if (!current.success) throw new Error(current.error.message)
+ * }
+ * finally { await closeApi() }
+ * ```
+ */
 export async function initApi(): Promise<void> {
+  if (closing)
+    await closing
   if (initialized)
     return
-
-  const initResult = await apiClient.init({
-    baseUrl: resolveApiBase(),
-    auth: {
-      storage: await createTokenStorage(),
-    },
+  if (initializing)
+    return initializing
+{{#if features.crypto}}
+  if (ownsCrypto)
+    await closeApi()
+{{/if}}
+  initializing = initialize().finally(() => {
+    initializing = undefined
   })
-
-  if (!initResult.success)
-    throw new Error(initResult.error.message)
-
-  initialized = true
+  return initializing
 }
 
-export async function closeApi(): Promise<void> {
-  if (!initialized)
-    return
+/**
+ * 在初始化屏障内装配客户端；安全存储先就绪，失败不退回明文并释放本次资源。
+ * @returns 当前客户端已初始化；由 initApi 管理并发屏障。
+ * @throws Error - 平台、所选 crypto 或 client 拒绝初始化。
+ * @throws AggregateError - 初始化失败且本次 crypto 未确认清理，保留关闭重试义务。
+ * @example 模块内部上下文；仅在初始化屏障内调用。
+ * ```ts
+ * await initialize()
+ * try {
+ *   const current = await apiClient.iam.auth.currentUser()
+ *   if (!current.success) throw new Error(current.error.message)
+ * }
+ * finally { await closeApi() }
+ * ```
+ */
+async function initialize(): Promise<void> {
+  const storage = await createTokenStorage()
+{{#if features.crypto}}
+  const transport = resolveTransport()
+  try {
+    if (transport && !crypto.isInitialized) {
+      const result = await crypto.init()
+      if (!result.success)
+        throw new Error(result.error.message)
+      ownsCrypto = true
+    }
+    const result = await apiClient.init({
+      baseUrl: resolveApiBase(),
+      auth: { storage },
+      ...(transport ? { transport } : {}),
+    })
+    if (!result.success)
+      throw new Error(result.error.message)
+    initialized = true
+  }
+  catch (error) {
+    if (ownsCrypto) {
+      try {
+        await crypto.close()
+        ownsCrypto = false
+      }
+      catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Mobile API initialization and crypto cleanup failed')
+      }
+    }
+    throw error
+  }
+{{else}}
+  const result = await apiClient.init({ baseUrl: resolveApiBase(), auth: { storage } })
+  if (!result.success)
+    throw new Error(result.error.message)
+  initialized = true
+{{/if}}
+}
 
-  await apiClient.close()
-  initialized = false
+/**
+ * 等待在途初始化，先销毁客户端 transport，再释放自身初始化的 crypto。
+ * @returns 所有本次资源确认关闭；无资源或并发关闭时安全复用。
+ * @throws Error - client 或 crypto 未确认关闭；保留状态供下一次 closeApi 重试。
+ * @example 模块内部上下文；目标 API 已提供标准 IAM 端点。
+ * ```ts
+ * await initApi()
+ * try {
+ *   const current = await apiClient.iam.auth.currentUser()
+ *   if (!current.success) throw new Error(current.error.message)
+ * }
+ * finally { await closeApi() } // 先 client，再本客户端初始化的 crypto。
+ * ```
+ */
+export async function closeApi(): Promise<void> {
+  closing ??= (async () => {
+    if (initializing)
+      await initializing.catch(() => undefined)
+    if (initialized) {
+      await apiClient.close()
+      initialized = false
+    }
+{{#if features.crypto}}
+    if (ownsCrypto) {
+      await crypto.close()
+      ownsCrypto = false
+    }
+{{/if}}
+  })().finally(() => {
+    closing = undefined
+  })
+  return closing
 }
 
 export { apiClient }

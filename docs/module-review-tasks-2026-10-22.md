@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 57/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 58/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -1017,7 +1017,8 @@
 
 ### CLI-05 · P2 · 移动模板按 crypto 功能同步实际传输客户端
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：生成mobile仅选中crypto/IAM时安装浏览器crypto并接typed transport，转发已有公开off/keyExchangePath设置，握手失败不降级；安全存储先就绪，合并在途init/close、只清本次crypto并逆序关闭，失败保留重试。3目标Red后3文件43通过，含真实HTTP/SM2/SQLite registry3场景和握手503无明文业务请求；两模式真实生成lint/声明类型、源码及严格测试类型、零警告lint、skills37/330、freshCLI ESM/DTS通过。4导出与3关键内部函数中文JSDoc，crypto7/plain6示例严格类型及渲染lint通过，注释后token流等价复用43测试。依赖仅CLI实际测试consumer的api-client devDependency和lock importer3行；三语README、双skill/reference、生成README及LLMS同步。未声称完整IAM服务、物理原生设备或隔离应用安装；8场景scaffold和真实完整部署留最终轮；全量回归按用户要求在全部任务实施后执行。
 - **位置**：mobile-app api.ts.hbs、Svelte package/catalog 依赖、Vite runtime public config 及对应生成回归。
 - **证据与影响**：仓库实际 mobile API 已接入 crypto transport，而模板只初始化 apiClient 的 baseUrl/auth；IAM 的既有依赖闭合包含 crypto，但 Svelte 依赖/catalog 早返回且客户端未消费该能力。旧 scaffold/部署测试通过关闭复用 API 服务的 transport 掩盖了该消费差异。
 - **修正内容**：在已选择 crypto 的移动工程接入真实初始化、transport、失败清理及关闭顺序，同步依赖/catalog 和已有 apiTransport/keyExchangePath 配置；无 crypto 的工程保留其明确能力边界，不无条件新增模块。公开导出函数补齐中文 JSDoc 与真实示例。

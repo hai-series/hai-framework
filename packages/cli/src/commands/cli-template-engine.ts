@@ -411,6 +411,8 @@ function buildAppHaiCatalogPackages(options: {
 
   if (options.isSvelteOnlyApp) {
     packageNames.push('@h-ai/api-client', '@h-ai/api-contract', '@h-ai/capacitor', '@h-ai/ui')
+    if (options.featureMap.crypto)
+      packageNames.push('@h-ai/crypto')
     return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)
   }
 

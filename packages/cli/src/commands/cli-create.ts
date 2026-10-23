@@ -1225,7 +1225,7 @@ function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' |
 
 ### 页面布局与路由
 
-页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}
+页面统一继承根布局的 header/footer。${appType === 'mobile-app' ? '页面放 src/lib/pages/**/*.svelte，hash 路由自动发现，刷新与前进后退恢复当前页。' : '使用 SvelteKit 自动文件路由，新增 +page.svelte 无需维护路由表；刷新定位与服务端鉴权保持一致。'}${appType === 'mobile-app' ? '\n\n选择 IAM 或 crypto 的移动客户端默认启用加密 transport，先初始化 crypto，再初始化 typed API client；结束时按相反顺序关闭。仅明确连接匹配的明文 API 时设置 PUBLIC_API_TRANSPORT=off；PUBLIC_API_KEY_EXCHANGE_PATH 仅覆盖公开协商子路径。握手失败不会退回明文，服务端私钥不进入客户端。未选择 crypto 的客户端保留明文 API 模式。' : ''}
 
 ### 开发
 

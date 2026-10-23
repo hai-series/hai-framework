@@ -53,7 +53,7 @@ export default defineConfig(({ mode, command }) => {
 {{/if}}
     plugins: [
   {{#if isSvelteOnlyApp}}
-      publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, core: appConfig }),
+      publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, {{#if features.crypto}}apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH, {{/if}}core: appConfig }),
       svelte(),
   {{else}}
       sveltekit(),
