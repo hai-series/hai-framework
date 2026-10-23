@@ -158,6 +158,8 @@ After `core.init()` loads `_core.yml.logging`, or after `configure` / `setLevel`
 
 Browser logs still use the DevTools console: `pretty` prints readable messages with context, while `json` prints a JSON string containing `level` / `msg`. Default credential masking and configured path redaction both apply, including nested dot/bracket paths and `*`. Callers remain responsible for redacting message text.
 
+Native `Error` values in log context are copied into diagnostics containing `name`, `message`, `stack`, `cause`, `AggregateError.errors`, and enumerable own context before default field/URL masking and configured `redact` paths run. Both backends use the same rules and leave the original error unchanged. Error-subgraph cycles become `[Circular]` and the 32-level limit becomes `[MaxDepth]`; custom replacements in these subgraphs follow the same normalization, while ordinary-object replacement behavior is unchanged. Ordinary-object cycles without an Error retain their original structure and are not guaranteed to be directly JSON-serializable. `name/message/stack` are free text: secrets embedded in them are not automatically parsed. Clean them before logging or mask whole paths such as `error.message` / `error.stack`.
+
 `core.logger` redacts log context by default: credentials such as `password`, `token`, `secret`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask embedded usernames/passwords, sensitive query parameters, and OAuth key/value fragments; malformed URLs return a fixed placeholder. Email addresses and phone numbers are not masked by default.
 
 ##### Log level conventions

@@ -158,6 +158,8 @@ const level = core.logger.getLevel() // 'debug'
 
 浏览器仍输出到 DevTools console：`pretty` 使用可读消息与上下文，`json` 输出包含 `level` / `msg` 的 JSON 字符串。默认凭据脱敏与配置的字段路径脱敏同时生效，支持嵌套点/括号路径和 `*`；消息文本本身需调用方脱敏。
 
+日志上下文中的原生 `Error` 会先转为包含 `name`、`message`、`stack`、`cause`、`AggregateError.errors` 与可枚举自有上下文的副本，再执行默认字段/URL 脱敏与配置的 `redact`；两端规则一致，原异常不变。异常子图循环返回 `[Circular]`，32 层上限返回 `[MaxDepth]`；其中的自定义替换值也经同一规范化处理，普通对象的替换语义不变。无 Error 的普通对象循环仍保留原结构，不保证可直接 JSON 序列化。`name/message/stack` 是自由文本，不自动解析其中的秘密；调用方应先清理，或用 `error.message` / `error.stack` 等路径整体遮蔽。
+
 `core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段会掩码 URL 中的用户名、密码和敏感查询参数（含 OAuth 键值 fragment）；非法 URL 返回固定占位符；邮箱、手机号默认不会被遮盖。
 
 ##### 日志级别规范

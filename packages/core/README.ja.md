@@ -158,6 +158,8 @@ const level = core.logger.getLevel() // 'debug'
 
 ブラウザーでは引き続き DevTools console に出力します。`pretty` は読みやすいメッセージと context、`json` は `level` / `msg` を含む JSON 文字列です。既定の認証情報マスキングと設定したパスのマスキングを併用し、ネストしたドット・括弧パスと `*` に対応します。メッセージ本文の機密情報は呼び出し側で除去してください。
 
+ログ文脈のネイティブ `Error` は、`name`、`message`、`stack`、`cause`、`AggregateError.errors` と列挙可能な自身の文脈を持つコピーに変換してから、既定のフィールド/URL マスクと設定済み `redact` を適用します。両環境で同じ規則を使い、元の例外は変更しません。例外サブグラフの循環は `[Circular]`、32 階層の上限は `[MaxDepth]` になり、この範囲の独自置換値にも同じ正規化を適用します。通常オブジェクトの置換動作は変えません。Error を含まない通常オブジェクトの循環は元の構造を保持し、直接 JSON 化できる保証はありません。`name/message/stack` は自由文で、含まれる秘密を自動解析しません。記録前に除去するか、`error.message` / `error.stack` などのパス全体を隠してください。
+
 `core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワード、機密クエリ値、OAuth 形式の fragment をマスクします。不正な URL は固定値を返します。メールアドレス・電話番号は既定では隠しません。
 
 ##### ログレベルの規約

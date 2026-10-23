@@ -163,4 +163,128 @@ describe('core.sanitize', () => {
   it('空对象操作应正常工作', () => {
     expect(core.sanitize.sanitizeSensitiveFields({})).toEqual({})
   })
+
+  it('原生异常保留诊断、cause 和枚举上下文，字段与 URL 脱敏不修改原值', () => {
+    const cause = Object.assign(new TypeError('Connection refused'), { endpoint: 'https://cause-user:cause-pass@example.com/?token=cause-token' })
+    const failure = Object.assign(new AggregateError([cause], 'Startup failed', { cause }), {
+      password: 'own-password',
+      token: 'own-token',
+      authorization: 'Bearer own-authorization',
+      privateKey: 'own-private-key',
+      apiKey: 'own-api-key',
+      context: { requestId: 'request-1', apiV3Key: 'nested-key', endpoint: 'https://user:pass@example.com/?token=query-token#access_token=fragment-token' },
+    })
+    const descriptors = Object.getOwnPropertyDescriptors(failure)
+    const causeDescriptors = Object.getOwnPropertyDescriptors(cause)
+    const context = failure.context
+    const sanitized = core.sanitize.sanitizeSensitiveValue(failure, null)
+    expect(sanitized).toMatchObject({
+      name: 'AggregateError',
+      message: 'Startup failed',
+      stack: failure.stack,
+      cause: { name: 'TypeError', message: 'Connection refused', stack: cause.stack, endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]' },
+      errors: [{ name: 'TypeError', message: 'Connection refused' }],
+      password: '[REDACTED]',
+      token: '[REDACTED]',
+      authorization: '[REDACTED]',
+      privateKey: '[REDACTED]',
+      apiKey: '[REDACTED]',
+      context: { requestId: 'request-1', apiV3Key: '[REDACTED]', endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]#access_token=[REDACTED]' },
+    })
+    expect(sanitized).not.toBe(failure)
+    expect(() => JSON.stringify({ error: sanitized })).not.toThrow()
+    expect(Object.getOwnPropertyDescriptors(failure)).toEqual(descriptors)
+    expect(Object.getOwnPropertyDescriptors(cause)).toEqual(causeDescriptors)
+    expect(failure.context).toBe(context)
+    expect(failure.context.apiV3Key).toBe('nested-key')
+    expect(cause.endpoint).toContain('cause-token')
+  })
+
+  it('异常自因、cause 环、aggregate 环和混合普通对象祖先环都可序列化', () => {
+    const self = new Error('Self cause')
+    self.cause = self
+    const first = new Error('First cause')
+    const second = new Error('Second cause', { cause: first })
+    first.cause = second
+    const aggregate = new AggregateError([], 'Aggregate self')
+    aggregate.errors.push(aggregate)
+    const mixed = new Error('Mixed cause')
+    const mixedAggregate = new AggregateError([mixed], 'Mixed aggregate')
+    mixed.cause = mixedAggregate
+    const nested: { token: string, self?: unknown, error?: Error } = { token: 'nested-token' }
+    nested.self = nested
+    const nestedError = Object.assign(new Error('Nested plain cycle'), { context: nested })
+    const ancestor: { error?: Error } = {}
+    const ancestorError = Object.assign(new Error('Plain ancestor'), { context: ancestor })
+    ancestor.error = ancestorError
+    const cases: Array<[string, unknown]> = [
+      ['self', self],
+      ['cause chain', first],
+      ['aggregate', aggregate],
+      ['mixed aggregate/cause', mixed],
+      ['error-owned plain cycle', nestedError],
+      ['plain ancestor', ancestor],
+      ['repeated reference', [self, self]],
+    ]
+    for (const [name, value] of cases) {
+      const sanitized = core.sanitize.sanitizeSensitiveValue(value, null)
+      const serialized = JSON.stringify({ value: sanitized })
+      expect(serialized, name).toContain('[Circular]')
+      expect(() => JSON.parse(serialized), name).not.toThrow()
+      expect(serialized, name).not.toContain('nested-token')
+    }
+    expect(self.cause).toBe(self)
+    expect(aggregate.errors[0]).toBe(aggregate)
+    expect(nested.self).toBe(nested)
+    expect(ancestor.error).toBe(ancestorError)
+    // 无 Error 的普通对象循环仍按公开契约保留，不在本修复中改成序列化占位符。
+    const plain: { self?: unknown } = {}
+    plain.self = plain
+    const plainCopy = core.sanitize.sanitizeSensitiveFields(plain)
+    expect(plainCopy.self).toBe(plainCopy)
+  })
+
+  it('异常诊断限定深度且忽略危险原型键与可执行 toJSON', () => {
+    const failure = Object.assign(new Error('Deep cause'), {
+      count: 123n,
+      toJSON: () => {
+        throw new Error('Must not execute')
+      },
+    })
+    for (const key of ['__proto__', 'constructor', 'prototype'])
+      Object.defineProperty(failure, key, { value: `${key}-private-value`, enumerable: true })
+    let current: Error = failure
+    for (let index = 0; index < 64; index++) {
+      const next = new Error(`Cause ${index}`)
+      current.cause = next
+      current = next
+    }
+    const sanitized = core.sanitize.sanitizeSensitiveValue(failure, null)
+    expect(sanitized).toMatchObject({ name: 'Error', message: 'Deep cause', count: '123' })
+    const serialized = JSON.stringify({ error: sanitized })
+    expect(serialized).toContain('[MaxDepth]')
+    expect(serialized).not.toContain('__proto__-private-value')
+    expect(serialized).not.toContain('constructor-private-value')
+    expect(serialized).not.toContain('prototype-private-value')
+    expect(failure.count).toBe(123n)
+    expect(Object.hasOwn(failure, '__proto__')).toBe(true)
+    expect(core.sanitize.sanitizeSensitiveValue(new Error('Private message'), null, { matcher: ['message'], replacement: '[HIDDEN]' }))
+      .toMatchObject({ message: '[HIDDEN]' })
+  })
+
+  it('异常子图的自定义替换值同样可序列化，普通对象替换语义不变', () => {
+    const failure = Object.assign(new Error('Sensitive context'), { password: 'own-password' })
+    const numeric = core.sanitize.sanitizeSensitiveValue(failure, null, { replacement: 123n })
+    expect(numeric).toMatchObject({ password: '123' })
+    expect(() => JSON.stringify({ error: numeric })).not.toThrow()
+    const replacement: { self?: unknown } = {}
+    replacement.self = replacement
+    const cyclic = core.sanitize.sanitizeSensitiveValue(failure, null, { replacement })
+    expect(cyclic).toMatchObject({ password: { self: '[Circular]' } })
+    expect(() => JSON.stringify({ error: cyclic })).not.toThrow()
+    expect(replacement.self).toBe(replacement)
+    expect(failure.password).toBe('own-password')
+    const plain = core.sanitize.sanitizeSensitiveFields({ password: 'own-password' }, { replacement })
+    expect(plain.password).toBe(replacement)
+  })
 })

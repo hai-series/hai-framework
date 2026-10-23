@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 59/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 60/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -1010,7 +1010,8 @@
 
 ### CORE-04 · P2 · 两端日志保留异常诊断并脱敏错误上下文
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：共享sanitize物化Error/AggregateError/cause及枚举上下文后沿用字段/URL脱敏与两端redact，保留name/message/stack和原对象；Error子图独立活动路径、32层及Circular标记，bigint/循环replacement安全化，不执行toJSON；普通plain缓存/循环/替换语义保持。初轮7 Red及replacement1 Red后最终5文件40通过；源/严格测试类型、零警告lint、94 JSDoc、skills37/330、fresh ESM/DTS通过。最终真实Chrome155公开browser出口6组断言/5条JSON通过，metafile无src别名/Node入口，页面无错误且context/browser/server关闭。三语README/生成Core skill与reference同步，无新API/配置/依赖；自由文本仍须调用方清理或整路径redact，不声称解析任意秘密；全量回归按用户要求在全部任务实施后执行。
 - **位置**：core 两端 logger、共享敏感字段处理与 Logger 文档示例。
 - **证据与影响**：真实部署入口按公开示例记录 `{ error }`，Node 日志实际为 `error: {}`。共享脱敏器仅遍历 plain record，Pino 默认异常 serializer 仅处理 `err` 字段，浏览器 JSON 序列化也丢失原生 Error 的非枚举属性；仅补 Node serializer 又会让错误自有敏感字段绕过脱敏。
 - **修正内容**：在共享边界规范化原生 Error/AggregateError/cause 与可枚举上下文，再执行既有字段/URL 脱敏，保留两端一致的可诊断结构；不修改调用方原异常，不新增重复公开错误 API。

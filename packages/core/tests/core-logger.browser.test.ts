@@ -98,4 +98,60 @@ describe('core.logger (browser)', () => {
     // 恢复
     core.logger.setLevel('info')
   })
+
+  it.each([false, true])('browser 实际 JSON 输出保留异常并应用默认/路径脱敏：redact=%s', (redactDiagnostic) => {
+    const cause = Object.assign(new Error('Connection lost'), { privateKey: 'cause-private-key' })
+    const child = Object.assign(new TypeError('Provider rejected'), { endpoint: 'https://child-user:child-pass@example.com/?token=child-token' })
+    const error = Object.assign(new AggregateError([child], 'Startup failed', { cause }), {
+      password: 'own-password',
+      token: 'own-token',
+      authorization: 'Bearer own-authorization',
+      apiKey: 'own-api-key',
+      context: { customerId: 'customer-private', requestId: 'request-1', endpoint: 'https://user:pass@example.com/?token=query-token#access_token=fragment-token' },
+    })
+    cause.cause = error
+    const descriptors = Object.getOwnPropertyDescriptors(error)
+    const redact = redactDiagnostic ? ['error.message', 'error.stack', 'error.cause.message', 'error.errors[0].message', 'error.context.customerId'] : []
+
+    const writes: string[] = []
+    core.logger.configure({ level: 'info', format: 'json', redact })
+    const logger = core.logger.create({ name: 'browser-error-diagnostic', format: 'json' })
+    const rawLogger = log.getLogger('browser-error-diagnostic')
+    const originalError = rawLogger.error
+    rawLogger.error = (...args: unknown[]) => writes.push(args.map(value => String(value)).join(' '))
+    try {
+      logger.error('Error diagnostic fixture', { error })
+    }
+    finally {
+      rawLogger.error = originalError
+      core.logger.configure({ level: 'info', format: 'pretty', redact: [] })
+    }
+    expect(writes).toHaveLength(1)
+    const output = writes[0] ?? ''
+    const record: unknown = JSON.parse(output)
+    expect(record).toMatchObject({
+      level: 'error',
+      msg: 'Error diagnostic fixture',
+      error: {
+        name: 'AggregateError',
+        message: redactDiagnostic ? '[REDACTED]' : 'Startup failed',
+        stack: redactDiagnostic ? '[REDACTED]' : error.stack,
+        cause: { name: 'Error', message: redactDiagnostic ? '[REDACTED]' : 'Connection lost', stack: cause.stack, privateKey: '[REDACTED]', cause: '[Circular]' },
+        errors: [{ name: 'TypeError', message: redactDiagnostic ? '[REDACTED]' : 'Provider rejected', stack: child.stack, endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]' }],
+        password: '[REDACTED]',
+        token: '[REDACTED]',
+        authorization: '[REDACTED]',
+        apiKey: '[REDACTED]',
+        context: { customerId: redactDiagnostic ? '[REDACTED]' : 'customer-private', requestId: 'request-1', endpoint: 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]#access_token=[REDACTED]' },
+      },
+    })
+    for (const secret of ['own-password', 'own-token', 'own-authorization', 'own-api-key', 'cause-private-key', 'child-user', 'child-pass', 'child-token', 'query-token', 'fragment-token'])
+      expect(output).not.toContain(secret)
+    if (redactDiagnostic)
+      expect(output).not.toContain('customer-private')
+    expect(Object.getOwnPropertyDescriptors(error)).toEqual(descriptors)
+    expect(error.message).toBe('Startup failed')
+    expect(error.context.customerId).toBe('customer-private')
+    expect(cause.cause).toBe(error)
+  })
 })

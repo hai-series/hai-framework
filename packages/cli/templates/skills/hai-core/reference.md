@@ -150,6 +150,8 @@ core.logger.error('Failed to connect', { error })
 core.logger.debug('Processing item', { id, step: 'validation' })
 ```
 
+原生 `Error` 的 `name/message/stack/cause`、`AggregateError.errors` 与可枚举自有上下文先转成副本，再走字段/URL 脱敏与附加 `redact`；两端原异常均不变。Error 子图循环用 `[Circular]`，达到 32 层用 `[MaxDepth]`，自定义替换值也经过同一规范化；普通对象的循环与替换语义不变。自由文本不会自动解析秘密，可配置 `redact: ['error.message', 'error.stack']` 遮蔽整条诊断路径。
+
 **管理方法**：
 
 | 方法        | 签名                                   | 说明                     |
