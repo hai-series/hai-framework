@@ -278,9 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → 缓存查询
+  → 读取持久用户，校验启用状态与会话绑定的 credentialVersion
   → 滑动续期模式下自动延长 TTL
-  → 读取当前用户状态 + 角色 JOIN + 批量权限查询（无角色时省略权限查询）
-  → 用户停用或数据库读取失败时拒绝；API Key 会话再次收敛 scope
+  → 再次读取当前用户，复核启用状态与 credentialVersion，并读取角色 JOIN + 批量权限（无角色时省略权限查询）
+  → 任一持久读取失败、用户缺失/停用或凭据代不匹配时拒绝；API Key 会话再次收敛 scope
   → 返回当前 Session 对象（含 userId、roles、permissions）
 ```
 
@@ -485,7 +486,7 @@ async function currentAuthorization(userId: string) {
 - **通配符匹配**：`admin:*` 匹配 `admin:read`、`admin:write:detail` 等（单层 `*` 匹配冒号后全部）
 - **超管角色**：配置的 `rbac.superAdminRole`（默认 `super_admin`）自动拥有所有权限
 - **事务保护**：`deleteRole` / `deletePermission` 使用 DB 事务，先清关联再删实体
-- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，每次读取当前状态与授权，读取失败拒绝。`iam.session.verifyToken` 仅验证会话快照。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
+- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，先验证会话绑定的持久凭据代，再复核当前用户状态与凭据代并读取最新授权，任一步读取失败即拒绝。`iam.session.get/verifyToken` 同样检查持久用户启用状态与 `credentialVersion`，但角色/权限字段仍是会话快照，不能替代当前授权。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
 - **种子数据**：`seedDefaultData: true` 时自动创建 admin/user/guest 三个默认角色及基础权限，幂等执行
 
 ---

@@ -30,7 +30,7 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 - LDAP/Reach 均可选：基础认证无需安装；默认 LDAP 关闭，选用默认客户端才安装 ldapts 并设置 login.ldap + ldap。OTP 邮件/短信由 otp.email/sms 控制，选择 Reach 标准模板或自定义发送回调；具体签名与失败处理见参考中的“可选 LDAP 与通知”。
 - 多节点共享 DB + Redis，Memory 只用于单进程。重置的策略失败计入 maxAttempts；OTP 消费不解除 resendInterval。管理员 createUser 不受自助注册开关限制。
 
-- 受保护请求使用 `iam.auth.verifyToken`：当前用户状态 + 角色 JOIN + 批量权限读取，失败即拒绝；`iam.session.verifyToken` 仅验证会话快照。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
+- 受保护请求使用 `iam.auth.verifyToken`：先核验会话绑定的持久凭据代，再复核当前用户启用状态与凭据代并读取当前角色/权限；任一持久读取失败即拒绝。`iam.session.get/verifyToken` 也读取持久用户并校验启用状态与 `credentialVersion`，但返回的角色/权限仍是会话快照，不能替代当前授权。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
 - 用户批量读取用 `iam.user.getUsers(ids, { include: ['roles'] })`（最多 1000，去重保留输入顺序，缺失省略）；角色筛选用 `listUsers({ roleCode })`，在分页前执行，避免 N+1 和分页后过滤。
 
 ## 按需参考

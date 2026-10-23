@@ -278,9 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → キャッシュ検索
+  → 永続ユーザーの有効状態とセッションに紐付く credentialVersion を検証
   → 自動延長モードなら TTL を延長
-  → 現在のユーザー状態・ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
-  → 無効ユーザー・DB 読取失敗は拒否し、API Key scope を再適用
+  → 現在のユーザーを再読込し、有効状態と credentialVersion を再確認して、ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
+  → 永続データの読取失敗、ユーザー不在・無効、資格情報の世代不一致は拒否し、API Key scope を再適用
   → 現在の Session を返す（userId、roles、permissions）
 ```
 
@@ -485,7 +486,7 @@ async function currentAuthorization(userId: string) {
 - **ワイルドカード**：`admin:*` は `admin:read`、`admin:write:detail` などに一致。1 つの `*` がコロン以降全体に一致します。
 - **最高管理者**：`rbac.superAdminRole`（既定 `super_admin`）はすべての権限を持ちます。
 - **トランザクション**：`deleteRole` / `deletePermission` は DB トランザクションで関連を削除してから本体を削除。
-- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` で現在の状態・権限を読み、読取失敗を拒否します。`iam.session.verifyToken` はスナップショット検証のみです。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
+- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` でセッションに紐付く永続資格情報の世代を検証し、現在のユーザー状態・資格情報の世代を再確認して最新の認可を読みます。いずれかの読取に失敗すれば拒否します。`iam.session.get/verifyToken` も永続ユーザーの有効状態と `credentialVersion` を検証しますが、ロール・権限はセッションのスナップショットであり、現在の認可を代替しません。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
 - **初期データ**：`seedDefaultData: true` で admin/user/guest と基本権限を冪等に作成。
 
 ---

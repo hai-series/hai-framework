@@ -278,9 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → cache lookup
+  → Read the persistent user and validate enabled status and the session-bound credentialVersion
   → Extend TTL automatically when sliding renewal is enabled
-  → Read current user status, role JOIN and one batched permission query (skip permissions for no roles)
-  → Reject disabled users or database failures; intersect API Key scopes again
+  → Read the current user again, recheck enabled status and credentialVersion, then read the role JOIN and batched permissions (skip permissions for no roles)
+  → Reject any persistent read failure, missing/disabled user or credential-version mismatch; intersect API Key scopes again
   → Return current Session (userId, roles, permissions)
 ```
 
@@ -485,7 +486,7 @@ async function currentAuthorization(userId: string) {
 - **Wildcard matching**: `admin:*` matches `admin:read`, `admin:write:detail`, etc.; one `*` matches everything after the colon.
 - **Super-admin role**: `rbac.superAdminRole` (default `super_admin`) automatically grants all permissions.
 - **Transactions**: `deleteRole` / `deletePermission` clear associations before deleting entities in a DB transaction.
-- **Session synchronization**: cache updates are best-effort. Protected requests use `iam.auth.verifyToken` to read current user status and authorization and reject read failures. `iam.session.verifyToken` validates a session snapshot only. `iam.authz.getUserAuthorization(userId)` shares the role JOIN and batched permission query.
+- **Session synchronization**: cache updates are best-effort. Protected requests use `iam.auth.verifyToken` to validate the session-bound persistent credential version, then recheck current user status and credential version and read fresh authorization. Failure at either read rejects authentication. `iam.session.get/verifyToken` also checks persistent user enabled status and `credentialVersion`, but its role/permission fields remain a session snapshot and do not replace current authorization. `iam.authz.getUserAuthorization(userId)` shares the role JOIN and batched permission query.
 - **Seed data**: `seedDefaultData: true` idempotently creates admin/user/guest roles and basic permissions.
 
 ---
