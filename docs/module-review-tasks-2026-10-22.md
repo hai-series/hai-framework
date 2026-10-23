@@ -4,7 +4,7 @@
 
 本清单保留审查基线并逐项记录实施结果；已修正项附定向验证证据，全部任务实施完成后再执行全量回归。初审发现 65 个行为/安全/分布式/规范任务；实施复核新增 VECDB-03、CORE-03、AI-06、VECDB-04、UI-02、CLI-03、AI-07、VECDB-05、DOC-02、AI-08、IAM-07、SCHED-03、RELDB-03、STORAGE-04、IAM-08、SERV-06、DOC-03、VERIFY-01；首轮全量复核新增 VERIFY-05、VERIFY-02、CLI-04、IAM-09、E2E-01、VERIFY-04、CORE-04、CLI-05，共 91 个，另有 21 个按模块拆分的 JSDoc 任务，共 112 项。清单是当前源码审查发现集合，不代表已穷尽所有运行环境和第三方服务缺陷。
 
-实施进度：P1 50/50；P2 60/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
+实施进度：P1 50/50；P2 61/62（任务定向验证与全量验收分别记录，最终结果见全量回归记录）。
 
 ## 使用与验收规则
 
@@ -1002,7 +1002,8 @@
 
 ### VERIFY-04 · P2 · E2E 保留本轮日志与浏览器证据并尊重指定输出目录
 
-- [ ] 待修正。
+- [x] 已修正并通过定向验证（2026-10-23）。
+- **实施与验证**：仓库与模板 wrapper 使用本轮独立 run/group 输出，尊重证据、CLI output 及新旧 HTML 输出变量；仅回收本轮数据与进程，取消等待 Windows 进程树退出。scaffold/deploy 浏览器报告外置，失败日志保留，Turbo strict 透传与三语 README、生成环境目录和测试 skill 同步。wrapper 7/7（含真实子进程取消/PID 消失、原 exit7、分组停止、清理故障）；实际安装版 Playwright/Chrome 提取原回调的成功/故意失败 6 场景，截图/trace/HTML/log 在 owned 工程清理后保留，扫描未复制私有 env/key，旧独立报告 sentinel 存活；显式两种 HTML 变量实际写入指定含空格路径。strict TS、定向 ESLint 零警告、skills 与实际 Turbo strict 3项透传/2项剥离通过。证据 tmp/validation/module-review/VERIFY-04 与 verify04-*.log；浏览器小工程不代替完整 scaffold/SSH 业务验收，极长 Windows 路径未声明支持；全量回归按用户要求在全部任务实施后执行。
 - **位置**：`scripts/run-e2e.mjs`、CLI wrapper 模板、scaffold helper 及脚本回归。
 - **证据与影响**：现有 wrapper 覆盖指定 evidence 路径，并在成功、失败和取消后删除整个 test-results/playwright-report；scaffold 删除临时工程时也丢失报告，不符合工作规范中分析/交付前保留证据的要求。
 - **修正内容**：使用忽略目录下本轮独有输出，尊重调用方显式目录，保留本轮日志/报告/截图；只回收本轮子进程、临时工程和数据，不复制私有环境/密钥/用户数据库，不删除既存报告。

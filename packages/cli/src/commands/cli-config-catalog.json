@@ -3904,6 +3904,22 @@
     "constraint": "保留系统原值；由操作系统路径分隔符连接，不要在 .env 中置空或作为应用配置覆盖"
   },
   {
+    "name": "PLAYWRIGHT_HTML_OUTPUT_DIR",
+    "module": "runtime",
+    "path": "PLAYWRIGHT_HTML_OUTPUT_DIR",
+    "description": "环境入口；使用位置 packages/cli/templates/shared/run-e2e.mjs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "PLAYWRIGHT_HTML_REPORT",
+    "module": "runtime",
+    "path": "PLAYWRIGHT_HTML_REPORT",
+    "description": "环境入口；使用位置 packages/cli/templates/shared/run-e2e.mjs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "POLLINATIONS_API_KEY",
     "module": "runtime",
     "path": "POLLINATIONS_API_KEY",

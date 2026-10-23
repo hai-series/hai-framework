@@ -6,7 +6,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process'
-import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -374,9 +374,28 @@ function runNode(args: string[]): void {
   runGate(process.execPath, args, process.cwd(), buildChildEnv(), false)
 }
 
+/**
+ * 运行生成工程的 pnpm 命令；浏览器证据写到工程外，临时工程仍由上层回收。
+ * @param cwd - 本轮生成工程的绝对路径。
+ * @param args - pnpm 子命令及独立参数。
+ * @param envOptions - 本轮 loopback 服务与前端地址。
+ * @returns {void} 命令成功后返回。
+ * @throws 子命令执行或证据目录创建失败时抛错。
+ * @example
+ * ```ts
+ * runPnpm(projectPath, ['test:e2e'])
+ * ```
+ */
 function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): void {
   const nodeEnv = args[0] === 'build' || args[0] === 'test:e2e' ? 'production' : 'test'
-  runGate(pnpmBin, args, cwd, buildChildEnv(envOptions, nodeEnv), true)
+  const env = buildChildEnv(envOptions, nodeEnv)
+  if (args[0] === 'test:e2e') {
+    // 只持久保留浏览器产物，临时工程及私有环境仍由 removeTempRoot 回收。
+    const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || path.join(process.cwd(), '../../tmp/validation/module-review/scaffold-browser'))
+    mkdirSync(parent, { recursive: true })
+    env.HAI_AUTH_EVIDENCE_DIR = mkdtempSync(path.join(parent, `${path.basename(cwd)}-`))
+  }
+  runGate(pnpmBin, args, cwd, env, true)
 }
 
 /**
@@ -452,8 +471,7 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
     HAI_CORE_VERSION: '9.8.7',
     HAI_CORE_ENV: 'test',
     HAI_CORE_LOGGING_LEVEL: 'warn',
-    // 截图使用生成项目自己的 test-results，测试结束后自动清理。
-    HAI_AUTH_EVIDENCE_DIR: '',
+    // 浏览器执行时由 runPnpm 分配独立证据目录，不覆盖调用方的证据根目录。
   }
 }
 

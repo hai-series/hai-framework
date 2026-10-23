@@ -20,6 +20,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import { crypto } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
@@ -131,11 +132,25 @@ function runPnpm(args: string[], cwd: string, env?: NodeJS.ProcessEnv): string {
   return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd, env) : run(entry, args, cwd, env)
 }
 
-/** 浏览器直接访问 SSH 服务器上的 Web/API；不启动本地预览或本地 API。 */
+/**
+ * 浏览器访问本轮 SSH 服务器上的 Web/API，并在私有工程回收后保留验收证据。
+ * @param metadata - 部署元数据的预期值。
+ * @param metadata.name - 预期的应用名称。
+ * @param metadata.version - 预期的已部署版本。
+ * @param metadata.env - 预期的运行环境。
+ * @param project - 本轮生成并已部署的工程路径，默认使用 appDir。
+ * @returns {void} 验收成功后返回。
+ * @throws 浏览器验收或证据持久化失败时抛错。
+ * @example
+ * ```ts
+ * verifyDeployedBrowser({ name: 'Acceptance app', version: '2.4.6', env: 'test' }, appDir)
+ * ```
+ */
 function verifyDeployedBrowser(metadata: { name: string, version: string, env: string }, project = appDir): void {
   const local = parseEnv(readFileSync(path.join(project, '.env.local'), 'utf8'))
-  const evidence = path.join(workDir, 'browser-evidence')
-  mkdirSync(evidence, { recursive: true })
+  const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url)))
+  mkdirSync(parent, { recursive: true })
+  const evidence = mkdtempSync(path.join(parent, `${RUN_ID}-${path.basename(project)}-`))
   const env = {
     HAI_CORE_NAME: metadata.name,
     HAI_CORE_VERSION: metadata.version,
@@ -145,13 +160,16 @@ function verifyDeployedBrowser(metadata: { name: string, version: string, env: s
     PUBLIC_API_BASE: '',
     BASE_URL: `http://127.0.0.1:${fixture().webHostPort}`,
     HAI_AUTH_EVIDENCE_DIR: evidence,
+    ...(process.env.PLAYWRIGHT_HTML_OUTPUT_DIR || process.env.PLAYWRIGHT_HTML_REPORT ? {} : { PLAYWRIGHT_HTML_OUTPUT_DIR: path.join(evidence, 'html') }),
   }
-  const command = process.platform === 'win32' ? 'cmd.exe' : 'pnpm'
-  const args = (items: string[]) => process.platform === 'win32' ? ['/d', '/s', '/c', `pnpm.cmd ${items.join(' ')}`] : items
   writeFileSync(path.join(project, 'playwright.deploy.config.ts'), `import config from './playwright.config.js'\nexport default { ...config, webServer: [] }\n`)
   try {
-    const output = run(command, args(['exec', 'playwright', 'test', '--config', 'playwright.deploy.config.ts']), project, env)
+    const output = runPnpm(['exec', 'playwright', 'test', '--config', 'playwright.deploy.config.ts', '--output', path.join(evidence, 'results')], project, env)
     writeFileSync(path.join(evidence, 'playwright.log'), output)
+  }
+  catch (error) {
+    writeFileSync(path.join(evidence, 'playwright.log'), error instanceof Error ? error.message : String(error))
+    throw error
   }
   finally {
     rmSync(path.join(project, 'playwright.deploy.config.ts'), { force: true })
@@ -476,9 +494,9 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       expect(metadata).toBeDefined()
       if (metadata)
         verifyDeployedBrowser(metadata)
-      // 可选的短暂人工视觉复核窗口；随后仍由 afterAll 自动清理全部截图。
+      // 可选人工视觉复核；截图留在独立证据根目录，工程和密钥仍由 afterAll 清理。
       if (process.env.HAI_DEPLOY_E2E_REVIEW === '1') {
-        process.stdout.write(`Review screenshots: ${path.join(workDir, 'browser-evidence')}\n`)
+        process.stdout.write(`Review screenshots: ${process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url))}\n`)
         await sleep(60_000)
       }
     }, 1_200_000)

@@ -128,7 +128,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates --i18n
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试。部署门禁覆盖实际资源拥有权、动态宿主端口隔离，以及离线包、SSH/人工发布、增量更新和回滚。只回收本轮已记录的容器 ID 和私有镜像 tag；安全元数据报告保留在 ignored `tmp/validation/module-review/VERIFY-05/`，临时工程、SSH 密钥和项目数据仍自动回收。测试自动清理本轮资源；按需保留的截图写入指定证据目录。原生壳和真实云服务单独验收。
+脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试。部署门禁覆盖实际资源拥有权、动态宿主端口隔离，以及离线包、SSH/人工发布、增量更新和回滚。只回收本轮已记录的容器 ID 和私有镜像 tag；安全元数据报告保留在 ignored `tmp/validation/module-review/VERIFY-05/`，临时工程、SSH 密钥和项目数据仍自动回收。已生成的浏览器截图、trace 和报告默认保留在 ignored `tmp/validation/module-review/scaffold-browser/` 或 `deploy-browser/`；也可显式指定证据、HTML 报告和输出目录。临时工程、密钥、数据及进程仍自动回收。原生壳和真实云服务单独验收。
 
 `--generate` 是定向路由门禁：复用仓库已安装依赖，实际生成、构建并访问 SvelteKit、serv API、fullstack 后端的新路由（含 transport）。它不替代上面的完整安装与浏览器矩阵。
 
