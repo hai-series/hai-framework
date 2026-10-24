@@ -23,4 +23,4 @@
 | §10/11 | 自包含包、完整性校验、离线查看与 CLI 查询；core/api-client/serv/kit 中立扩展点 |
 | §12 | 两个消费入口、CLI 模板、三语文档、skills 与配置导航；静态、定向、容器、浏览器和脚手架门禁 |
 
-当前步骤：成果检查点 `6de2f2ad` 已通过集成提交 `a66a45e3` 合入其他任务的 `33b6fc85`，追加默认行为及 Node 安全要求已同步。I3=`02fe3b1c` 后管理台七场景通过，模板命中测试前提已校正；独立审查发现混合附件失败后的隐私边界，正在按有效 Red 集中修复并补实际删除恢复验证。继续全栈专项及最终完整门禁。验收日志放 `tmp/feedback-validation/`，运行证据不得提交。未验证的环境/Provider 不标通过；所有范围验收后才推进 B/H。
+当前步骤：按用户最新要求先合 main 再验收，实际合并 M=`042ba3edcd4ecc1abe745edc41d029d1b22629fd`，原目录已正常切到 main 并核对 327 处遗留内容，根版本独立提交 V=`fe2ac6c1c83f68cbfdbc40fcb5e320993bef5b0e`。原 main 第一轮功能门禁、离线查看器和管理台 7 场景通过；实际产物发现 SSR/client buildId 不同，CLI 模板尚未固化实际 build/commit，正在集中修复。B/H 保持未建立；新增部署密码与配置记忆另见 [部署任务](deploy-tasks.md)。验收日志放 ignored `tmp/feedback-validation/`，未验证项不标通过。

@@ -173,3 +173,12 @@
 - 只读审查另确认混合文件失败可能留下隐藏附件：SDK 先放入有效 A，再因无效 B 失败；UI 删除两项待选后恢复提交，却未删除 SDK 的 A。`attachment-batch-red-status.json` 实际 31 项为 27 通过、4 失败，覆盖混合批次/缺失标记及读取期间包络冻结；旧并发用例保持通过。先收集完整 Red，再集中修批次原子性并防止覆盖并发新增。
 - 管理台第七场景补充混合文件失败、删除恢复及 owner 附件元数据不存在两文件的浏览器回归；仍为 7 场景和原 60 秒限制。待修复后真实重跑，不把先前普通角色通过冒充该新隐私流程已验收。
 - `batch-fixes-targeted-status.json` 全部 exit 0：客户端/服务端隐私 32 项、feedback/UI 类型检查、变更 lint、skills。SDK 新增文件及缺失标记先暂存，全部成功后同步合并到最新草稿；提交前复核草稿身份、冻结和最终 20 项限额，失败不持久化，保留并发新增。公共方法注释、三语 README 和共享 skill 同步，未新增 API 或配置。
+
+## 原目录 main 收集与构建事实缺口
+
+- I4=`18477ec4e827e4383ca15f1387d6f1053172751c` 的全栈专项通过，严格遮挡像素、大文本和 ZIP 字节断言保留；管理台 7 场景及离线查看通过，实际目检 16 张截图。
+- 用户要求先合并后统一验收。M=`042ba3edcd4ecc1abe745edc41d029d1b22629fd` 两 parent 为原 main `33b6fc85` 与 I4，tree 与 I4 相同；原目录安全切到 main，327 路径逐项核对后 clean。V=`fe2ac6c1c83f68cbfdbc40fcb5e320993bef5b0e` 只改根版本 alpha.69，部署/容量任务祖先保留。
+- 原 main V 的 `original-final-2026-10-24T03-37-23-668Z-fe2ac6c1c83f/results.json`：冻结安装、类型 51、lint 30、fresh build 35、脚本、原根测试普通组 38/38 与容器组 31/31、公开 API/inventory/JSDoc/skills/env、离线查看和管理台 7 场景均 exit 0。额外 root/admin 产物标识核对 exit 1，不将整轮标为通过；未启动最终全部 11 类模板。
+- 有效实际产物 Red：同次 admin 构建的 client/server commit 均为 V、版本均来自应用 manifest，但 buildId 不同。SvelteKit 二次求值配置时重复 randomUUID；CLI 按约定剥离外层 HAI 变量，验收脚本要求外层 ID 相等的前提也不成立。保留观察 JSON 和 hash，修复仍要求同一产物非空共享 ID，不放宽事实要求。
+- 需求覆盖补查发现 §93/241 未完整接入：CLI buildId 仅写部署清单，模板反馈未读取实际编译 build/commit，fullstack 还把服务配置版本当作前端版本。整轮收齐后集中补可信元数据注入和分侧读取，不扩大到 telemetry，不修改已有环境隔离契约。
+- 用户已升级系统 Node；实际 `C:\Program Files\nodejs\node.exe` 与默认命令均为 24.22.1，SHA256 与已验证官方 exe 一致。早期“系统未替换”仅是当时记录；本轮正式运行继续固定同版本工具链。
