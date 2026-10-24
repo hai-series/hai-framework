@@ -122,6 +122,7 @@ http:
 # 开发期默认关闭 transport；启用 @h-ai/crypto 后可按需改为对象配置
 transport: false
 # transport:
+#   maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576} # 双向 UTF-8 明文，1 KiB～64 MiB
 #   keyExchangePath: /_hai/key-exchange
 #   excludePaths: [/health, /ready]
 `

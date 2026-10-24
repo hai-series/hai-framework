@@ -49,5 +49,7 @@
   "crypto_transportResponseEncryptFailed": "通信レスポンス本文の暗号化に失敗しました",
   "crypto_transportResponseDecryptFailed": "通信レスポンス本文の復号に失敗しました",
   "crypto_transportSessionKeyEncryptFailed": "通信セッション鍵の暗号化に失敗しました",
-  "crypto_transportSessionKeyDecryptFailed": "通信セッション鍵の復号に失敗しました"
+  "crypto_transportSessionKeyDecryptFailed": "通信セッション鍵の復号に失敗しました",
+  "crypto_transportBodyLimitInvalid": "通信平文の上限は 1024 から 67108864 バイトの整数で指定してください",
+  "crypto_transportBodyTooLarge": "暗号化通信のデータが設定されたバイト上限を超えています"
 }

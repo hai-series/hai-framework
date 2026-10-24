@@ -3,7 +3,7 @@ import { apiContract } from '@h-ai/api-contract'
 import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { apiClient } from '../src/index.js'
+import { apiClient, HaiApiClientError } from '../src/index.js'
 
 const testContract = {
   echo: apiContract
@@ -138,6 +138,15 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
 }
 
 describe('api-client transport', () => {
+  it('客户端容量超限映射为稳定 HaiResult 错误，保留字节诊断', async () => {
+    const client = apiClient.create(testContract)
+    expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch: makeServerFetch(), transport: { crypto, maxPlaintextBytes: 1024 } })).success).toBe(true)
+    try {
+      const result = await client.echo({ msg: 'a'.repeat(1024) })
+      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.PAYLOAD_TOO_LARGE.code, httpStatus: 413, cause: { direction: 'request', limitBytes: 1024 } } })
+    }
+    finally { await client.close() }
+  })
   beforeAll(async () => {
     await crypto.init()
   })

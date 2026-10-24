@@ -49,5 +49,7 @@ cors:
     - X-Hai-Transport
 
 transport:
+  # 双向业务明文 UTF-8 字节；默认 1 MiB，范围 1 KiB～64 MiB，密文容量自动推导。
+  maxPlaintextBytes: ${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}
   keyExchangePath: /_hai/key-exchange
   # excludePaths: [/health, /ready]

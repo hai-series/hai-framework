@@ -47,6 +47,15 @@ it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，�
   expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['app', 'web'] : ['app'])
 })
 
+it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中由同一环境值解析', async (appType) => {
+  const name = `capacity-${appType}`
+  const project = path.join(tmpRoot, name)
+  await generateFromTemplates(project, buildTemplateContext({ name, appType, frontends: ['web'], features: ['crypto', 'db'], packageManager: 'pnpm' }))
+  const service = appType === 'api' ? `apps/${name}-service` : `packages/${name}-serv`
+  const loaded = loadDeploymentConfig('serv', path.join(project, service, 'config/_serv.yml'), { HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES: '8388608' })
+  expect(loaded).toMatchObject({ success: true, data: { transport: { maxPlaintextBytes: 8388608 } } })
+})
+
 /**
  * 生成一个测试项目并返回其路径
  */

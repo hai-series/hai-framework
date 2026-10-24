@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -59,6 +59,45 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
 async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
+
+it.each([false, true])('完整与增量模式 %s 从正式配置生成一致密文预算并携带代理更新产物', async (partial) => {
+  writeFileSync(join(root, 'config/_serv.yml'), `http:\n  apiPrefix: /custom-api/v2\ntransport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
+  writeFileSync(join(root, '.env.test'), 'HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=8388608\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: partial ? ['app'] : undefined })
+  if (!result.success || !result.data.bundlePath)
+    throw new Error('Expected a deployment bundle')
+  const directory = dirname(result.data.bundlePath)
+  expect(readFileSync(join(directory, 'web.conf'), 'utf8')).toContain('client_max_body_size 16809984;')
+  expect(parseEnv(readFileSync(join(directory, '.env.runtime'), 'utf8')).HAI_SERV).toContain('"maxPlaintextBytes":8388608')
+  const proof = join(directory, 'capacity-proof')
+  mkdirSync(proof)
+  execFileSync('tar', ['-xf', result.data.bundlePath, '-C', proof])
+  const proxy = readFileSync(join(proof, 'web.conf'), 'utf8')
+  expect(proxy).toContain('client_max_body_size 16809984;')
+  const overlay = JSON.parse(readFileSync(join(proof, 'proxy-entry.json'), 'utf8'))
+  expect(overlay.services.web.volumes[0]).toContain('/web.conf:/etc/nginx/conf.d/default.conf:ro')
+})
+
+it('部署阶段拒绝非法传输容量而不生成阈值不一致的代理', async () => {
+  writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 0\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code } })
+})
+
+it('svelteKit 部署从同一 _kit 配置推导 adapter-node 正文预算', async () => {
+  writeArtifact(false)
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'capacity-adapter', version: '1.2.3', dependencies: { '@sveltejs/kit': '^2' } }))
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@sveltejs/kit': { version: '2.0.0' } } } }, packages: { '@sveltejs/kit@2.0.0': {} }, snapshots: { '@sveltejs/kit@2.0.0': {} } }))
+  writeFileSync(join(root, 'config/_kit.yml'), `transport:\n  maxPlaintextBytes: \${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
+  writeFileSync(join(root, '.env.test'), 'HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES=8388608\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  if (!result.success || !result.data.bundlePath)
+    throw new Error('Expected a SvelteKit deployment bundle')
+  expect(parseEnv(readFileSync(join(dirname(result.data.bundlePath), '.env.runtime'), 'utf8')).BODY_SIZE_LIMIT).toBe('16809984')
+})
 
 it('存储初始化是内部任务，不能作为独立部署服务', async () => {
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/storage': { version: '1' } } } }, packages: { '@h-ai/storage@1': {} }, snapshots: { '@h-ai/storage@1': {} } }))

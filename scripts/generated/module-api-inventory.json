@@ -16764,6 +16764,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "createTransportErrorResponse",
+              "kind": "value",
+              "declaration": "createTransportErrorResponse",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "crypto",
               "kind": "value",
               "declaration": "crypto",
@@ -16872,6 +16878,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "resolveTransportBodyLimits",
+              "kind": "value",
+              "declaration": "resolveTransportBodyLimits",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "SignOptions",
               "kind": "type",
               "declaration": "SignOptions",
@@ -16926,10 +16938,28 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "TRANSPORT_PLAINTEXT_RANGE",
+              "kind": "value",
+              "declaration": "TRANSPORT_PLAINTEXT_RANGE",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "TRANSPORT_PROTOCOL",
               "kind": "value",
               "declaration": "TRANSPORT_PROTOCOL",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TransportBodyLimits",
+              "kind": "type",
+              "declaration": "TransportBodyLimits",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyTooLargeError",
+              "kind": "value+type",
+              "declaration": "TransportBodyTooLargeError",
+              "declarationKind": "ClassDeclaration"
             },
             {
               "name": "TransportClient",
@@ -17056,6 +17086,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "createTransportErrorResponse",
+              "kind": "value",
+              "declaration": "createTransportErrorResponse",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "crypto",
               "kind": "value",
               "declaration": "crypto",
@@ -17164,6 +17200,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "resolveTransportBodyLimits",
+              "kind": "value",
+              "declaration": "resolveTransportBodyLimits",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "SignOptions",
               "kind": "type",
               "declaration": "SignOptions",
@@ -17218,10 +17260,28 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "TRANSPORT_PLAINTEXT_RANGE",
+              "kind": "value",
+              "declaration": "TRANSPORT_PLAINTEXT_RANGE",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "TRANSPORT_PROTOCOL",
               "kind": "value",
               "declaration": "TRANSPORT_PROTOCOL",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TransportBodyLimits",
+              "kind": "type",
+              "declaration": "TransportBodyLimits",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyTooLargeError",
+              "kind": "value+type",
+              "declaration": "TransportBodyTooLargeError",
+              "declarationKind": "ClassDeclaration"
             },
             {
               "name": "TransportClient",
@@ -17348,6 +17408,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "createTransportErrorResponse",
+              "kind": "value",
+              "declaration": "createTransportErrorResponse",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "crypto",
               "kind": "value",
               "declaration": "crypto",
@@ -17456,6 +17522,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "resolveTransportBodyLimits",
+              "kind": "value",
+              "declaration": "resolveTransportBodyLimits",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "SignOptions",
               "kind": "type",
               "declaration": "SignOptions",
@@ -17510,10 +17582,28 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "TRANSPORT_PLAINTEXT_RANGE",
+              "kind": "value",
+              "declaration": "TRANSPORT_PLAINTEXT_RANGE",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "TRANSPORT_PROTOCOL",
               "kind": "value",
               "declaration": "TRANSPORT_PROTOCOL",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TransportBodyLimits",
+              "kind": "type",
+              "declaration": "TransportBodyLimits",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportBodyTooLargeError",
+              "kind": "value+type",
+              "declaration": "TransportBodyTooLargeError",
+              "declarationKind": "ClassDeclaration"
             },
             {
               "name": "TransportClient",

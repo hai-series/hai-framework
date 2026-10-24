@@ -11,6 +11,7 @@ import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
@@ -558,18 +559,22 @@ export function generateComposeFile(options: {
 
 /**
  * 生成同源 Web/API 的 Nginx 配置，保留运行时配置及 SPA 页面刷新。
- * API 上限与 @h-ai/crypto 的 TRANSPORT_BODY_LIMITS.encryptedPayloadBytes（2 MiB + 32 KiB）一致；
+ * API 上限由 @h-ai/crypto 的同一明文容量推导密文预算；
  * 关闭请求缓冲，让应用在读取过程中执行握手、公钥和正文的更细预算。
  * @param port - API 容器监听端口
  * @param apiPrefix - 应用实际 API 前缀，不允许向 Nginx 配置注入指令
- * @param webPort - Web 容器监听端口
+ * @param options - Web 监听端口和双向业务明文 UTF-8 字节上限，缺省使用 crypto 默认值
+ * @param options.webPort - Web 容器监听端口，默认 8080。
+ * @param options.maxPlaintextBytes - 业务明文 UTF-8 字节上限。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
- * const nginx = generateWebProxyConfig(3000, '/api', 8080) // Web 将同源 /api 转发至 app 服务。
+ * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 app 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, webPort = 8080): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number } = {}): string {
+  const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
+  const webPort = options.webPort ?? 8080
   if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535))
     throw new Error('Invalid web proxy target')
   return `server {
@@ -594,7 +599,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
     proxy_set_header Host $http_host;
   }
   location ${apiPrefix.replace(/\/$/, '')}/ {
-    client_max_body_size 2129920;
+    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
     proxy_pass http://app:${port};
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;

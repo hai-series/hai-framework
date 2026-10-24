@@ -80,5 +80,6 @@
   "deploy_commandTreeActive": "Child processes remain active after the main command exited",
   "deploy_commandExecutionFailed": "Command execution failed",
   "deploy_remoteUnknown": "Remote execution is unknown. Local SSH termination does not prove remote deployment stopped; inspect the server result and actual containers.",
-  "deploy_remoteFinished": "A matching server result confirms the deployment script and recovery finished: stage {stage}, exit {code}. Verify actual service health."
+  "deploy_remoteFinished": "A matching server result confirms the deployment script and recovery finished: stage {stage}, exit {code}. Verify actual service health.",
+  "deploy_transportBodyLimitInvalid": "Invalid transport.maxPlaintextBytes: use an integer from 1024 to 67108864 bytes"
 }

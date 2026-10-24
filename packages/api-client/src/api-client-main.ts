@@ -60,6 +60,7 @@ import type {
 } from './api-client-types.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
+import { TransportBodyTooLargeError } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import {
@@ -445,7 +446,7 @@ function buildTransportSession(config: ApiClientConfig): TransportClient | undef
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
   const path = config.transport.keyExchangePath ?? '/_hai/key-exchange'
   const keyExchangeUrl = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`
-  return config.transport.crypto.transport.createClient({ keyExchangeUrl, fetch: baseFetch })
+  return config.transport.crypto.transport.createClient({ keyExchangeUrl, fetch: baseFetch, maxPlaintextBytes: config.transport.maxPlaintextBytes })
 }
 
 /**
@@ -645,9 +646,14 @@ async function fetchWithTimeout(
  * ```
  */
 function mapClientError(error: unknown) {
+  const capacity = error instanceof TransportBodyTooLargeError ? error : error instanceof Error && error.cause instanceof TransportBodyTooLargeError ? error.cause : undefined
+  if (capacity)
+    return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, { direction: capacity.direction, stage: capacity.stage, limitBytes: capacity.limitBytes, actualBytes: capacity.actualBytes })
   if (error instanceof ORPCError) {
     // 保留 ORPCError 的原始 code / status / data，供上层区分具体业务异常（不仅是 HTTP 状态码）。
     const detail = { orpcCode: error.code, status: error.status, data: error.data }
+    if (error.status === 413)
+      return err(HaiApiClientError.PAYLOAD_TOO_LARGE, error.message, detail)
     if (error.status === 400 || error.status === 422)
       return err(HaiApiClientError.VALIDATION_FAILED, error.message, detail)
     if (error.status === 401)

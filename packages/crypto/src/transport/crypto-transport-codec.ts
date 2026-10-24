@@ -4,11 +4,12 @@
  * @module crypto-transport-codec
  */
 import type { HaiResult } from '@h-ai/core'
+import type { TransportBodyLimits } from './crypto-transport-body.js'
 import type { EncryptedPayload, TransportCryptoServiceLike, TransportMessageContext } from './crypto-transport-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { HaiCryptoError } from '../crypto-types.js'
-import { TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
+import { TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /** 固定位置数组防止对象属性顺序、字段拼接或查询参数边界产生歧义。 */
@@ -114,8 +115,12 @@ export function sealTransportPayload(
   status: number,
   recipientPublicKey: string,
   senderPrivateKey: string,
+  limits: TransportBodyLimits = TRANSPORT_BODY_LIMITS,
 ): HaiResult<EncryptedPayload> {
   try {
+    const bytes = new TextEncoder().encode(plaintext).byteLength
+    if (bytes > limits.plaintextBytes)
+      return err(HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE, cryptoM('crypto_transportBodyTooLarge'), new TransportBodyTooLargeError(limits.plaintextBytes, bytes, { direction }))
     const encryptionKey = service.symmetric.generateKey()
     // MAC 使用独立的 256 位随机密钥，禁止直接复用 SM4 密钥。
     const authenticationKey = service.symmetric.generateKey() + service.symmetric.generateKey()
@@ -132,7 +137,7 @@ export function sealTransportPayload(
     if (!signature.success)
       return transportAuthenticationFailure()
     const authenticated = { ...payload, tag: tag.data, signature: signature.data }
-    return isValidEncryptedPayload(authenticated) ? ok(authenticated) : transportAuthenticationFailure()
+    return isValidEncryptedPayload(authenticated, limits) ? ok(authenticated) : transportAuthenticationFailure()
   }
   catch {
     return transportAuthenticationFailure()
@@ -172,9 +177,10 @@ export function openTransportPayload(
   payload: EncryptedPayload,
   recipientPrivateKey: string,
   senderPublicKey: string,
+  limits: TransportBodyLimits = TRANSPORT_BODY_LIMITS,
 ): HaiResult<string> {
   try {
-    if (!isValidEncryptedPayload(payload))
+    if (!isValidEncryptedPayload(payload, limits))
       return transportAuthenticationFailure()
     const text = authenticatedText(payload)
     const verified = service.asymmetric.verify(JSON.stringify([text, payload.tag]), payload.signature, senderPublicKey)
@@ -195,6 +201,9 @@ export function openTransportPayload(
     const plaintext = service.symmetric.decryptWithIV(payload.ciphertext, keys[0], payload.iv)
     if (!plaintext.success)
       return transportAuthenticationFailure()
+    const bytes = new TextEncoder().encode(plaintext.data).byteLength
+    if (bytes > limits.plaintextBytes)
+      return err(HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE, cryptoM('crypto_transportBodyTooLarge'), new TransportBodyTooLargeError(limits.plaintextBytes, bytes, { direction: payload.direction }))
     return plaintext
   }
   catch {
@@ -226,7 +235,7 @@ export function openTransportPayload(
  * finally { await crypto.close() }
  * ```
  */
-export function isValidEncryptedPayload(value: unknown): value is EncryptedPayload {
+export function isValidEncryptedPayload(value: unknown, limits: TransportBodyLimits = TRANSPORT_BODY_LIMITS): value is EncryptedPayload {
   if (!value || typeof value !== 'object')
     return false
   const p = value as Record<string, unknown>
@@ -241,7 +250,7 @@ export function isValidEncryptedPayload(value: unknown): value is EncryptedPaylo
     && (p.direction === 'request' || p.direction === 'response')
     && Number.isInteger(p.status) && (p.direction === 'request' ? p.status === 0 : Number(p.status) >= 100 && Number(p.status) <= 599)
     && typeof p.encryptedKey === 'string' && /^[a-f0-9]{1,8192}$/i.test(p.encryptedKey)
-    && typeof p.ciphertext === 'string' && p.ciphertext.length <= TRANSPORT_BODY_LIMITS.encryptedPayloadBytes
+    && typeof p.ciphertext === 'string' && p.ciphertext.length <= limits.encryptedPayloadBytes
     && p.ciphertext.length > 0 && p.ciphertext.length % 32 === 0 && /^[a-f0-9]+$/i.test(p.ciphertext)
     && typeof p.iv === 'string' && /^[a-f0-9]{32}$/i.test(p.iv)
     && typeof p.tag === 'string' && /^[a-f0-9]{64}$/.test(p.tag)

@@ -22,7 +22,7 @@ import type {
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
-import { readTransportBody, TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
+import { readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sameTransportContext, sealTransportPayload } from './crypto-transport-codec.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
@@ -45,6 +45,8 @@ import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
  * ```
  */
 export interface CreateTransportClientOptions {
+  /** 可选本地明文上限；未指定时跟随服务端握手，指定时取两者较小值。 */
+  maxPlaintextBytes?: number
   /** 加密能力实现（通常直接传 `crypto` 实例）。 */
   crypto: TransportCryptoServiceLike
   /** 密钥协商完整 URL，例如 `https://api.example.com/_hai/key-exchange`。 */
@@ -83,6 +85,9 @@ export interface CreateTransportClientOptions {
  */
 export function createTransportClient(options: CreateTransportClientOptions): TransportClient {
   const baseFetch = options.fetch ?? fetch
+  // 显式本地配置立即校验；未配置时由可信 TLS 握手提供服务端预算。
+  const localLimits = options.maxPlaintextBytes === undefined ? undefined : resolveTransportBodyLimits(options.maxPlaintextBytes)
+  let bodyLimits = localLimits ?? resolveTransportBodyLimits()
   let keyPair: TransportKeyPair | null = null
   let serverPublicKey: string | null = null
   let serverKeyId: string | null = null
@@ -144,6 +149,14 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportKeyExchangeMissingFields'))
       }
 
+      try {
+        const serverLimits = resolveTransportBodyLimits(body.maxPlaintextBytes)
+        bodyLimits = resolveTransportBodyLimits(Math.min(localLimits?.plaintextBytes ?? serverLimits.plaintextBytes, serverLimits.plaintextBytes))
+      }
+      catch {
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportBodyLimitInvalid'))
+      }
+
       keyPair = localKeyPair
       serverPublicKey = body.serverPublicKey
       serverKeyId = body.serverKeyId
@@ -198,7 +211,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   function encryptBody(plaintext: string, context: TransportMessageContext): HaiResult<EncryptedPayload> {
     if (!serverPublicKey || !serverKeyId || !keyPair)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-    return sealTransportPayload(options.crypto, plaintext, context, 'request', 0, serverPublicKey, keyPair.privateKey)
+    return sealTransportPayload(options.crypto, plaintext, context, 'request', 0, serverPublicKey, keyPair.privateKey, bodyLimits)
   }
 
   /**
@@ -218,7 +231,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   function decryptPayload(payload: EncryptedPayload): HaiResult<string> {
     if (!keyPair || !serverPublicKey)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
-    return openTransportPayload(options.crypto, payload, keyPair.privateKey, serverPublicKey)
+    return openTransportPayload(options.crypto, payload, keyPair.privateKey, serverPublicKey, bodyLimits)
   }
 
   const encryptedFetch: typeof fetch = async (input, init) => {
@@ -266,7 +279,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (rawBody == null && requestInput) {
       const method = (init?.method ?? requestInput.method).toUpperCase()
       if (method !== 'GET' && method !== 'HEAD') {
-        const text = await readTransportBody(requestInput.body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal })
+        const text = await readTransportBody(requestInput.body, { maxBytes: bodyLimits.plaintextBytes, signal })
         if (text)
           rawBody = text
       }
@@ -287,13 +300,13 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       method,
       pathHash: pathHash.data,
     }
-    const plaintext = rawBody == null ? '' : await readTransportBody(new Response(rawBody).body, { maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes, signal })
+    const plaintext = rawBody == null ? '' : await readTransportBody(new Response(rawBody).body, { maxBytes: bodyLimits.plaintextBytes, signal })
     const encResult = encryptBody(plaintext, context)
     if (!encResult.success)
       throw new Error(encResult.error.message)
     const serialized = JSON.stringify(encResult.data)
-    if (new TextEncoder().encode(serialized).byteLength > TRANSPORT_BODY_LIMITS.encryptedPayloadBytes)
-      throw new RangeError('Transport request envelope byte limit exceeded')
+    if (new TextEncoder().encode(serialized).byteLength > bodyLimits.encryptedPayloadBytes)
+      throw new TransportBodyTooLargeError(bodyLimits.encryptedPayloadBytes, new TextEncoder().encode(serialized).byteLength, { stage: 'encrypted' })
     let nextBody: BodyInit | null | undefined
     headers.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
     headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
@@ -302,7 +315,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (method === 'GET' || method === 'HEAD') {
       // Fetch 禁止 GET/HEAD 正文；仍必须认证请求，空正文封装使用有界头字段。
       if (new TextEncoder().encode(serialized).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
-        throw new RangeError('Transport request envelope header byte limit exceeded')
+        throw new TransportBodyTooLargeError(TRANSPORT_BODY_LIMITS.envelopeHeaderBytes, new TextEncoder().encode(serialized).byteLength, { stage: 'header' })
       headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, serialized)
     }
     else {
@@ -333,6 +346,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     // 本次请求已认证，禁止删除布尔标记后把明文/其它响应冒充当前请求的响应。
     if (response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) !== TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE) {
       void response.body?.cancel().catch(() => {})
+      if (response.status === 413)
+        throw new TransportBodyTooLargeError(bodyLimits.encryptedPayloadBytes, undefined, { stage: 'encrypted' })
       throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
     }
 
@@ -344,23 +359,43 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
       }
       if (envelope && new TextEncoder().encode(envelope).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
-        throw new RangeError('Transport response envelope byte limit exceeded')
-      payload = JSON.parse(envelope ?? await readTransportBody(response.body, { maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes, signal }))
+        throw new TransportBodyTooLargeError(TRANSPORT_BODY_LIMITS.envelopeHeaderBytes, new TextEncoder().encode(envelope).byteLength, { direction: 'response', stage: 'header' })
+      payload = JSON.parse(envelope ?? await readTransportBody(response.body, { maxBytes: bodyLimits.encryptedPayloadBytes, direction: 'response', stage: 'encrypted', signal }))
     }
-    catch {
+    catch (error) {
+      if (error instanceof TransportBodyTooLargeError)
+        throw error
       // 保留调用方取消语义；其它解析异常不携带可能包含明文/密文的原始响应片段。
       throw new Error(cryptoM('crypto_transportResponseDecryptFailed'), signal?.aborted ? { cause: signal.reason } : undefined)
     }
-    if (!isValidEncryptedPayload(payload) || payload.direction !== 'response' || payload.status !== response.status
+    if (!isValidEncryptedPayload(payload, bodyLimits) || payload.direction !== 'response' || payload.status !== response.status
       || !sameTransportContext(payload.context, context)) {
       throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))
     }
 
     const decResult = decryptPayload(payload)
-    if (!decResult.success)
+    if (!decResult.success) {
+      if (decResult.error.cause instanceof TransportBodyTooLargeError)
+        throw decResult.error.cause
       throw new Error(decResult.error.message)
-    if (new TextEncoder().encode(decResult.data).byteLength > TRANSPORT_BODY_LIMITS.plaintextBytes)
-      throw new RangeError('Transport response plaintext byte limit exceeded')
+    }
+    if (new TextEncoder().encode(decResult.data).byteLength > bodyLimits.plaintextBytes)
+      throw new TransportBodyTooLargeError(bodyLimits.plaintextBytes, new TextEncoder().encode(decResult.data).byteLength, { direction: 'response' })
+
+    // 只从已验签/MAC、关联请求和状态的错误报文恢复服务端响应容量诊断。
+    if (response.status === 500) {
+      let failure: { success?: unknown, error?: { code?: unknown, details?: Record<string, unknown> } } | undefined
+      try {
+        failure = JSON.parse(decResult.data)
+      }
+      catch {}
+      const details = failure?.error?.details
+      if (failure?.success === false && failure.error?.code === 'hai:crypto:070' && details?.direction === 'response'
+        && (details.stage === 'plaintext' || details.stage === 'encrypted' || details.stage === 'header')
+        && typeof details.limitBytes === 'number' && Number.isSafeInteger(details.limitBytes) && details.limitBytes >= 0) {
+        throw new TransportBodyTooLargeError(details.limitBytes, typeof details.actualBytes === 'number' ? details.actualBytes : undefined, { direction: 'response', stage: details.stage })
+      }
+    }
 
     // 透传原响应头但去掉加密标记；Content-Type 还原为下游可能期望的 JSON。
     const respHeaders = new Headers(response.headers)

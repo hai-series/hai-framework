@@ -53,7 +53,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 每个镜像独立 Dockerfile；web 的 Nginx 配置与启动资源放 `images/web/`。Dockerfile 内保留编译/运行阶段，配置不再选择阶段。没有 Web 或 desktop 时删除相应项。
 
-部署生成的 `web.conf` 在 API location 设置 `client_max_body_size 2129920`（2 MiB + 32 KiB），并关闭 `proxy_request_buffering` / `proxy_buffering`。这允许 transport 的 1 MiB 明文经编码形成密文后通过，应用仍逐块执行更细的握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB 预算。自有反向代理须允许该密文预算并传递取消，不能用增大代理上限代替 serv/kit 的有界读取；大文件上传走明确的独立路径和体积策略。
+业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 全量和 app 增量部署都从解析后的 `_serv.yml` 推导代理上限；容量变化会复用现有 Web 镜像重建代理，健康失败恢复旧配置。SvelteKit 的 adapter-node `BODY_SIZE_LIMIT` 从 `_kit.yml` 同步推导。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
 无正文认证封装通过 X-Hai-Transport 头传输，生成配置使用 large_client_header_buffers 4 32k 与 proxy_buffer_size 32k 容纳头字段；自有代理也须允许并保留该头。
 

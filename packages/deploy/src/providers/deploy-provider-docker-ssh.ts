@@ -15,9 +15,10 @@ import type {
 import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
@@ -152,6 +153,23 @@ export function createDockerSshProvider(
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
     if (sidecar.composeServices['storage-init'] && !app && options?.selectedServices?.includes('storage'))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageArtifactRequired'))
+    if (scan.isSvelteKit) {
+      const kitPath = join(appDir, 'config', '_kit.yml')
+      const kit = existsSync(kitPath) ? loadDeploymentConfig('kit', kitPath, env) : ok({})
+      if (!kit.success)
+        return kit
+      const transport = (kit.data as Record<string, unknown>).transport
+      if (transport && typeof transport === 'object') {
+        try {
+          const limits = resolveTransportBodyLimits((transport as { maxPlaintextBytes?: number }).maxPlaintextBytes)
+          // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
+          env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
+        }
+        catch {
+          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+        }
+      }
+    }
     let webProxy: string | undefined
     if (hasWeb) {
       // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
@@ -163,7 +181,14 @@ export function createDockerSshProvider(
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
       if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
-      webProxy = generateWebProxyConfig(containerPort, apiPrefix, webContainerPort)
+      const transport = server.data.transport as { maxPlaintextBytes?: number } | false | undefined
+      try {
+        const limits = resolveTransportBodyLimits(transport ? transport.maxPlaintextBytes : undefined)
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes })
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+      }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
       env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && config.ssh ? url : cors?.origin ?? '*' } })
     }

@@ -135,9 +135,13 @@ export async function createDeploymentBundle(options: {
     }
     put('.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
     put('middleware.env', options.middlewareEnv)
-    if (selected.includes('web'))
+    if (options.hasWeb)
       put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)
+    if (options.hasWeb) {
+      // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
+      put('proxy-entry.json', JSON.stringify({ services: { web: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
+    }
     put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWeb}:${options.hasWeb ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
     put('image-list', `${imageList.join('\n')}\n`)
     put('dependencies', `${[...dependencies].join('\n')}\n`)
