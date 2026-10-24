@@ -37,6 +37,14 @@ function plainTextFile(text: string, name = 'diagnostic.log'): File {
   return file
 }
 
+function pngFile(name = 'pending.png'): { file: File, bytes: Uint8Array<ArrayBuffer> } {
+  const bytes = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lMsAAAAASUVORK5CYII=', 'base64'))
+  const file = new File([bytes], name, { type: 'image/png' })
+  // jsdom 未实现 Blob.arrayBuffer；返回真实 PNG 内容，保持 File.size 与读取结果一致。
+  Object.defineProperty(file, 'arrayBuffer', { value: vi.fn(async () => bytes.slice().buffer) })
+  return { file, bytes }
+}
+
 afterEach(async () => {
   for (const client of clients.splice(0))
     await client.close()
@@ -189,6 +197,86 @@ describe('feedback browser collection', () => {
       expect(added.error.code).toBe('hai:feedback:024')
     expect(client.getDraft()!.attachments).toHaveLength(0)
     expect(transport.upload).not.toHaveBeenCalled()
+  })
+
+  it.each(['oversized', 'invalid-type', 'json-missing'] as const)('混合附件批次%s失败保持原草稿，清空待选文件后不提交或上传隐藏文件', async (mode) => {
+    const { client, transport } = await setup({ afterCount: 0, screenshot: true, captureScreenshot: async () => {
+      throw new Error('Screenshot unavailable')
+    } })
+    expect((await client.prepare()).success).toBe(true)
+    expect((await client.addFiles([plainTextFile('existing safe log', 'existing.log')])).success).toBe(true)
+    const original = structuredClone(client.getDraft()!)
+    const existingIds = original.attachments.map(item => item.id)
+    const image = pngFile()
+    let first = image.file
+    if (mode === 'json-missing') {
+      const text = JSON.stringify({ message: 'safe diagnostic line'.repeat(1000) })
+      first = new File([text], 'pending.json', { type: 'application/json' })
+      Object.defineProperty(first, 'text', { value: vi.fn(async () => text) })
+    }
+    const bad = mode === 'oversized'
+      ? new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'oversized.png', { type: 'image/png' })
+      : new File(['unsupported'], 'unsupported.bin', { type: 'application/octet-stream' })
+    const result = await client.addFiles([first, bad])
+    expect(mode === 'json-missing' ? first.text : first.arrayBuffer).toHaveBeenCalledOnce()
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(mode === 'oversized' ? 'hai:feedback:024' : 'hai:feedback:025')
+    expect.soft(client.getDraft()).toEqual(original)
+    expect((await client.submit({ files: [] })).success).toBe(true)
+    expect((await client.flush()).success).toBe(true)
+    const submitted = vi.mocked(transport.submit).mock.calls[0]![0]
+    expect.soft(submitted.attachments?.map(item => item.id)).toEqual(existingIds)
+    expect.soft(vi.mocked(transport.upload).mock.calls.map(([input]) => input.attachmentId)).toEqual(existingIds)
+    expect.soft(client.getDraft()!.missing).toEqual(original.missing)
+  })
+
+  it('读取待选附件期间首次包络已冻结时拒绝补入，不生成包络之外的隐藏上传', async () => {
+    const { client, transport } = await setup({ afterCount: 0 })
+    expect((await client.prepare()).success).toBe(true)
+    const image = pngFile('late.png')
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    vi.mocked(image.file.arrayBuffer).mockImplementationOnce(async () => {
+      entered.resolve()
+      await release.promise
+      return image.bytes.slice().buffer
+    })
+    const pending = client.addFiles([image.file])
+    try {
+      await entered.promise
+      expect((await client.submit({ files: [] })).success).toBe(true)
+      expect(vi.mocked(transport.submit).mock.calls[0]![0].attachments).toEqual([])
+    }
+    finally { release.resolve() }
+    const added = await pending
+    expect.soft(added.success).toBe(false)
+    if (!added.success)
+      expect(added.error.code).toBe('hai:feedback:023')
+    expect.soft(client.getDraft()!.attachments).toHaveLength(0)
+    expect((await client.flush()).success).toBe(true)
+    expect(transport.upload).not.toHaveBeenCalled()
+  })
+
+  it('并发添加附件不会用慢批次的旧快照覆盖已完成批次', async () => {
+    const { client } = await setup()
+    expect((await client.prepare()).success).toBe(true)
+    const image = pngFile('slow.png')
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    vi.mocked(image.file.arrayBuffer).mockImplementationOnce(async () => {
+      entered.resolve()
+      await release.promise
+      return image.bytes.slice().buffer
+    })
+    const pending = client.addFiles([image.file])
+    try {
+      await entered.promise
+      expect((await client.addFiles([plainTextFile('fast safe log', 'fast.log')])).success).toBe(true)
+    }
+    finally { release.resolve() }
+    expect((await pending).success).toBe(true)
+    expect(client.getDraft()!.attachments.map(item => item.name).sort()).toEqual(['fast.log', 'slow.png'])
   })
 
   it('受理失败保留现场和稳定提交标识，重试不生成第二份问题', async () => {

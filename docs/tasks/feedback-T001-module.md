@@ -164,3 +164,12 @@
 - `ui-screenshot-review-merged-01/index.md` 实际目检 28 张，管理台已通过六场景无新增实质问题；fullstack 的反馈弹窗受顶栏 backdrop 包含块影响，顶部离屏且被背景表头覆盖。局部图片不作为清晰视觉验收通过。修复范围限定共享 FeedbackModal，复用既有 portal 到 body；通用 Modal 行为和公开参数保持原契约，同时补实际视口边界/遮盖及窄屏截图验证。
 - UI 有效 Red 为 `modal-portal-red-status.json`：15 项中原 14 通过，新顶栏包含块用例失败。仅共享 FeedbackModal 使用既有 portal 后，反馈与通用 Modal 键盘回归 17/17 通过，卸载节点清理也已校验。
 - `fixes-targeted-status.json` 全部 exit 0：客户端/服务端隐私 27 项、feedback/UI 类型检查、变更文件 lint、skills；补充脱敏后膨胀超限的两入口边界，未编造该既有 guard 的 Red。纯文本源码、三语 README、共享 skill 同步，未新增公共 API 或配置。源码冻结后先实际重跑全栈专项和管理台七场景，再扩大门禁。
+
+## 七场景与批量附件隐私回归
+
+- 修复检查点 I3=`02fe3b1cdf2cc4c5074823058cb1bb3ab9d78e79` 正常提交，14 路径；原目录只读切换预演核对 327 路径及 index 无漂移，仅记录 main 尚待集成的前置，未修改原树。
+- `admin-merged-02-status.json` exit 0，管理台 7/7 通过；普通 user 的入口/390px 收集和回执、owner 读取及管理页面/操作 403 已实测。root 目检普通用户窄屏两张截图，收集和回执均可读。
+- `scaffold-merged-feedback-targeted-03-status.json` exit 1；实际截图确认 portal 后弹窗已完整位于视口且未被表头覆盖。新命中断言误取圆形关闭按钮外角，修正其圆内九点；标题/图片原九点、视口、像素、下载、ZIP 和超时不变，不将此测试前提错误解释为产品缺陷。
+- 只读审查另确认混合文件失败可能留下隐藏附件：SDK 先放入有效 A，再因无效 B 失败；UI 删除两项待选后恢复提交，却未删除 SDK 的 A。`attachment-batch-red-status.json` 实际 31 项为 27 通过、4 失败，覆盖混合批次/缺失标记及读取期间包络冻结；旧并发用例保持通过。先收集完整 Red，再集中修批次原子性并防止覆盖并发新增。
+- 管理台第七场景补充混合文件失败、删除恢复及 owner 附件元数据不存在两文件的浏览器回归；仍为 7 场景和原 60 秒限制。待修复后真实重跑，不把先前普通角色通过冒充该新隐私流程已验收。
+- `batch-fixes-targeted-status.json` 全部 exit 0：客户端/服务端隐私 32 项、feedback/UI 类型检查、变更 lint、skills。SDK 新增文件及缺失标记先暂存，全部成功后同步合并到最新草稿；提交前复核草稿身份、冻结和最终 20 项限额，失败不持久化，保留并发新增。公共方法注释、三语 README 和共享 skill 同步，未新增 API 或配置。

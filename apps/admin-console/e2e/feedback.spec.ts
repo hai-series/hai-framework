@@ -333,6 +333,39 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     await expect(memberPage.getByTestId('feedback-open')).toBeVisible()
     await openFeedback(memberPage)
     await capture(memberPage, 'feedback-default-member-collect-mobile.png', testInfo)
+    const form = memberPage.locator('.feedback-form')
+    const pendingPngName = `${user.username}-pending.png`
+    const overLimitName = `${user.username}-oversize.txt`
+    const validPng = Buffer.from(await memberPage.evaluate(() => {
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 64
+      const context = canvas.getContext('2d')!
+      context.fillStyle = '#2563eb'
+      context.fillRect(0, 0, 64, 64)
+      return canvas.toDataURL('image/png').split(',')[1]!
+    }), 'base64')
+    await form.locator('summary').filter({ hasText: '更多选项' }).click()
+    // 同一批先有有效图片、后有超限文件，失败不得把前者留在不可见的 SDK 草稿中。
+    await form.locator('input[type="file"]').setInputFiles([
+      { name: pendingPngName, mimeType: 'image/png', buffer: validPng },
+      { name: overLimitName, mimeType: 'text/plain', buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 'B') },
+    ])
+    const filesError = form.getByRole('alert').first()
+    await expect(filesError).toBeVisible()
+    await expect(filesError).not.toHaveText('')
+    await expect(form.getByText(pendingPngName, { exact: true })).toBeVisible()
+    await expect(form.getByText(overLimitName, { exact: true })).toBeVisible()
+    await expect(form.getByRole('button', { name: '提交反馈', exact: true })).toBeDisabled()
+    await filesError.scrollIntoViewIfNeeded()
+    await capture(memberPage, 'feedback-default-member-files-rejected-mobile.png', testInfo)
+    await form.getByRole('button', { name: `删除 ${pendingPngName}`, exact: true }).click()
+    await form.getByRole('button', { name: `删除 ${overLimitName}`, exact: true }).click()
+    await expect(form.getByText(pendingPngName, { exact: true })).toHaveCount(0)
+    await expect(form.getByText(overLimitName, { exact: true })).toHaveCount(0)
+    await expect(form.getByRole('button', { name: '提交反馈', exact: true })).toBeEnabled()
+    await form.locator('summary').filter({ hasText: '更多选项' }).click()
+    await form.locator('textarea[name="description"]').scrollIntoViewIfNeeded()
+    await capture(memberPage, 'feedback-default-member-files-cleared-mobile.png', testInfo)
     await memberPage.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
     const receipt = memberPage.locator('.feedback-form [role="status"]').first()
     await expect(receipt).toContainText(/已受理：FB-/)
@@ -351,7 +384,15 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
       throw new Error('Accepted ordinary-user report is missing')
     expect(report.userId).toBe(userId)
     // 所有者可读取自己的回执/材料，列表、处理、撤销、导出属于管理权限。
-    expect((await memberPage.request.get(`/api/feedback/reports/${report.id}`)).status()).toBe(200)
+    const ownReportResponse = await memberPage.request.get(`/api/feedback/reports/${report.id}`)
+    expect(ownReportResponse.status()).toBe(200)
+    const ownReport: HaiResult<FeedbackDetail> = await ownReportResponse.json()
+    expect(ownReport.success).toBe(true)
+    if (!ownReport.success)
+      throw new Error(ownReport.error.message)
+    const savedAttachmentNames = ownReport.data.attachments.map(item => item.name)
+    expect(savedAttachmentNames).not.toContain(pendingPngName)
+    expect(savedAttachmentNames).not.toContain(overLimitName)
     expect((await memberPage.request.get('/api/feedback/reports')).status()).toBe(403)
     for (const status of ['handled', 'pending'])
       expect((await memberPage.request.patch(`/api/feedback/reports/${report.id}/status`, { data: { id: report.id, status, expectedVersion: report.version } })).status()).toBe(403)

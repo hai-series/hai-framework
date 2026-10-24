@@ -542,14 +542,14 @@ test('feedback submits an empty description and administrator can process and re
   const desktopViewport = page.viewportSize()
   if (!desktopViewport)
     throw new Error('Feedback browser viewport is missing')
-  async function expectUncovered(target: typeof dialog) {
-    await expect.poll(() => target.evaluate((element) => {
+  async function expectUncovered(target: typeof dialog, fractions = [0.1, 0.5, 0.9]) {
+    await expect.poll(() => target.evaluate((element, samples) => {
       const rect = element.getBoundingClientRect()
-      return [0.1, 0.5, 0.9].every(x => [0.1, 0.5, 0.9].every((y) => {
+      return samples.every(x => samples.every((y) => {
         const top = document.elementFromPoint(rect.left + rect.width * x, rect.top + rect.height * y)
         return top !== null && (top === element || element.contains(top))
       }))
-    }), { message: 'Feedback content must not be covered by the background header or table' }).toBe(true)
+    }, fractions), { message: 'Feedback content must not be covered by the background header or table' }).toBe(true)
   }
   async function expectDialogViewport() {
     await expect.poll(() => dialog.evaluate((element) => {
@@ -557,7 +557,8 @@ test('feedback submits an empty description and administrator can process and re
       return rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight
     }), { message: 'The entire feedback dialog must stay inside the viewport' }).toBe(true)
     await expectUncovered(dialog.getByRole('heading').first())
-    await expectUncovered(dialog.getByRole('button', { name: /关闭|Close|閉じる/ }).first())
+    // 关闭按钮为圆形，采样点须位于圆内；标题与图片仍检查原有九点范围。
+    await expectUncovered(dialog.getByRole('button', { name: /关闭|Close|閉じる/ }).first(), [0.25, 0.5, 0.75])
   }
   await expectDialogViewport()
   await capture(page, 'feedback-collect-desktop.png', testInfo.outputPath('feedback-collect-desktop.png'))

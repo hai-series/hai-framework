@@ -57,6 +57,8 @@ return submitted
 
 完整客户端方法为 `init(config)`、`prepare/submit/flush/record/getDraft/annotate/addFiles/exportDraft(input?)/close`。将表单 `onfileschange` 连接 `addFiles` 后刷新草稿附件预览，用户便可在提交前标注、遮挡或删除新增图片。`data-feedback-action` 标记关键操作，`data-feedback-private` 遮挡敏感内容，`data-feedback-ignore` 排除反馈界面自身。首次发送后包络冻结；同一提交重试时修改输入会返回冲突并保留输入，可先本地导出。
 
+`addFiles` 按批次原子添加：全部文件通过校验才合并，任一失败均保留原附件和缺失标记，不保存半批文件。并发成功批次不会相互覆盖，合并后仍最多 20 项；读取期间草稿切换或首次包络冻结时返回 `CONFLICT`，不会补入包络之外的隐藏上传。
+
 `annotate(id, annotation)` 的坐标单位是浏览器解码后原图的像素。UI 的 `FeedbackAnnotation.rect` 使用 0–1 比例；在 `Image.decode()` 后，将 x/width 乘 `naturalWidth`、y/height 乘 `naturalHeight` 再调用 SDK。使用原图尺寸而非 CSS 显示尺寸，使 JPEG 方向与 SDK 解码一致；对象 URL 仍由创建方在替换或销毁时释放。
 
 草稿由 SDK 持有并通过 `annotate`、`addFiles` 等方法更新。Svelte 宿主保存该引用时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 `getDraft()` 刷新附件视图；不要将 SDK 草稿放入深度 `$state` 代理，否则 SDK 替换图片字节后，代理可能继续返回已缓存的旧字节。

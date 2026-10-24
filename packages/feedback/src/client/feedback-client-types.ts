@@ -121,6 +121,21 @@ export interface FeedbackBrowserClient {
   record: (event: { kind: FeedbackEvidenceInput['kind'], data: Record<string, unknown>, requestId?: string, errorId?: string }) => void
   getDraft: () => FeedbackDraft | undefined
   annotate: (id: string, annotation: FeedbackImageAnnotation) => Promise<HaiResult<void>>
+  /**
+   * 原子添加一批附件，全部校验成功后合并到最新草稿；失败保留原附件和缺失标记，不保存半批文件。
+   * 原文件及脱敏结果各最多 5 MiB，合并后最多 20 项；读取期间草稿切换或提交冻结返回 CONFLICT。
+   * @example
+   * ```ts
+   * import type { FeedbackBrowserClient } from '@h-ai/feedback/client'
+   * // 上下文：宿主已初始化 client 并成功调用 prepare。
+   * async function addSelectedFiles(client: FeedbackBrowserClient, files: readonly File[]) {
+   *   const result = await client.addFiles(files)
+   *   if (!result.success) return result
+   *   return client.getDraft()
+   * }
+   * void addSelectedFiles
+   * ```
+   */
   addFiles: (files: readonly File[]) => Promise<HaiResult<void>>
   exportDraft: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<Uint8Array>>
   close: () => Promise<void>

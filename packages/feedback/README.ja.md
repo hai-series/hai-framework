@@ -55,6 +55,8 @@ return submitted
 
 クライアントの全操作は `init(config)`、`prepare/submit/flush/record/getDraft/annotate/addFiles/exportDraft(input?)/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
 
+`addFiles` は一括追加を原子的に行い、全ファイルの検証に成功してから統合します。一つでも失敗した場合、既存の添付と欠落マーカーを維持し、一部だけを保存しません。並行して成功した追加を上書きせず、統合後も最大 20 件です。読取中に下書きが変わるか初回送信内容が固定された場合は `CONFLICT` を返し、送信内容に含まれない添付を後から隠れてアップロードしません。
+
 `annotate(id, annotation)` の座標単位は、ブラウザーでデコードした元画像のピクセルです。UI の `FeedbackAnnotation.rect` は 0–1 の比率なので、`Image.decode()` 後に x/width を `naturalWidth`、y/height を `naturalHeight` と掛け合わせて SDK に渡します。CSS の表示サイズではなく元画像の寸法を使うことで、JPEG の向きを SDK のデコードと一致させます。オブジェクト URL は作成元が置換時または破棄時に解放します。
 
 下書きは SDK が保持し、`annotate` や `addFiles` で更新します。Svelte 側では参照を `$state.raw<FeedbackDraft>()` に保持し、操作成功後に `getDraft()` から添付ビューを更新してください。深い `$state` プロキシに格納すると、SDK が元の下書きの画像バイトを置き換えても、キャッシュされた古いバイトが返る場合があります。

@@ -507,9 +507,12 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       return failure('NOT_INITIALIZED')
     if (draft.submission && files.length)
       return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
+    const current = draft
+    const items: FeedbackClientAttachment[] = []
+    const newMissing: string[] = []
     try {
       for (const file of files) {
-        if (draft.attachments.length >= 20 || file.size > 5 * 1024 * 1024)
+        if (items.length >= 20 || file.size > 5 * 1024 * 1024)
           return failure('LIMIT_EXCEEDED')
         if (!['image/png', 'image/jpeg', 'image/webp', 'text/plain', 'application/json'].includes(file.type))
           return failure('INVALID_INPUT')
@@ -517,7 +520,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (file.type.startsWith('text/') || file.type === 'application/json') {
           const raw = await file.text()
           if (file.type === 'application/json' && raw.length > 8192)
-            draft.missing.push(`attachment-text-truncated:${String(sanitizeFeedbackData({ text: file.name }).text).slice(0, 100)}`)
+            newMissing.push(`attachment-text-truncated:${String(sanitizeFeedbackData({ text: file.name }).text).slice(0, 100)}`)
           bytes = file.type === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(raw))))
             : new TextEncoder().encode(sanitizeFeedbackText(raw))
@@ -528,9 +531,24 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (bytes.byteLength > 5 * 1024 * 1024)
           return failure('LIMIT_EXCEEDED')
         const item = await attachment(file.name, file.type, bytes)
-        if (!draft.attachments.some(existing => existing.name === item.name && existing.checksum === item.checksum))
-          draft.attachments.push(item)
+        if (!items.some(existing => existing.name === item.name && existing.checksum === item.checksum))
+          items.push(item)
       }
+      // 读取/摘要计算期间草稿可能切换或冻结；失败批次不能留下附件或缺失标记。
+      if (draft !== current || closing)
+        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+      if (current.submission && files.length)
+        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
+      // 在最新附件上合并，保留读取期间另一成功批次的新增项；最终校验与提交之间没有 await。
+      const merged = [...current.attachments]
+      for (const item of items) {
+        if (!merged.some(existing => existing.name === item.name && existing.checksum === item.checksum))
+          merged.push(item)
+      }
+      if (merged.length > 20)
+        return failure('LIMIT_EXCEEDED')
+      current.attachments = merged
+      current.missing.push(...newMissing)
       schedulePersist()
       return ok(undefined)
     }
