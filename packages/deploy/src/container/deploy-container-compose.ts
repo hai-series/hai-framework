@@ -400,7 +400,8 @@ export function planSidecars(
 /**
  * 构建运行期环境变量并规划 sidecar。
  *
- * 合并顺序（后者覆盖前者）：框架默认 < sidecar 自建 < Provisioner 输出。
+ * 合并顺序（后者覆盖前者）：目标环境默认 < 应用显式配置 < sidecar 自建 < Provisioner 输出。
+ * NODE_ENV 默认按目标模式选择：dev/development 为 development，test 为 test，其余为 production。
  * @param appDir - 应用根目录
  * @param projectName - 项目名
  * @param scan - 扫描结果
@@ -430,8 +431,10 @@ export function buildRuntimeEnv(
   s3Engine: 'rustfs' | 'minio' = 'rustfs',
 ): RuntimeEnvPlan {
   const sidecar = planSidecars(appDir, projectName, scan, provisionEnv, options, s3Engine)
+  const environment = options?.environment ?? appEnv.HAI_DEPLOY_ENVIRONMENT ?? 'prod'
+  const nodeEnv = environment === 'dev' || environment === 'development' ? 'development' : environment === 'test' ? 'test' : 'production'
   const env: Record<string, string> = {
-    NODE_ENV: 'production',
+    NODE_ENV: nodeEnv,
     HOST: '0.0.0.0',
     PORT: String(containerPort),
     HAI_SERV_SERVER_HOST: '0.0.0.0',

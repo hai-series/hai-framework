@@ -108,7 +108,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 node packages/cli/tests/feedback-offline-browser.mjs
 ```
 
-验收需分别核对单元/浏览器、SQLite/PG/MySQL、真实 S3 与 SMTP、多节点恢复和断网离线查看；构建或 mock 通过不能代替真实 Provider 和用户流程。设计与任务入口：[方案](../../docs/feedback-module-design.md)、[任务清单](../../docs/feedback-tasks.md)。
+验收需分别核对单元/浏览器、SQLite/PG/MySQL、真实 S3 与 SMTP、多节点恢复和断网离线查看；构建或 mock 通过不能代替真实 Provider 和用户流程。应用接入与部署流程见[使用指南](../../docs/usage/README.md)。
 
 ## 许可证
 

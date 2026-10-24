@@ -106,7 +106,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 node packages/cli/tests/feedback-offline-browser.mjs
 ```
 
-ブラウザー、SQLite/PG/MySQL、実際の S3/SMTP、複数インスタンス回復、ネットワーク切断時の表示をそれぞれ確認します。ビルドや mock の成功で代用しません。[設計](../../docs/feedback-module-design.md)と[タスク](../../docs/feedback-tasks.md)を参照してください。
+ブラウザー、SQLite/PG/MySQL、実際の S3/SMTP、複数インスタンス回復、ネットワーク切断時の表示をそれぞれ確認します。ビルドや mock の成功で代用しません。アプリの接続と配置は[利用ガイド](../../docs/usage/README.ja.md)を参照してください。
 
 ## ライセンス
 

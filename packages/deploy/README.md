@@ -197,6 +197,12 @@ finally {
 
 SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连接只读核对 `result-<deploymentId>.json`，仅完整、未截断且 ID 匹配的终态记录可确认 `finished`，同时给出真实阶段及退出码；脚本结束不表示容器停止。即使终态退出码为 0，原 SSH/输出失败仍保留为失败，避免丢失回执被伪装成成功。CLI 分别显示本地和远端状态及结果路径；缺结果、旧 ID、损坏内容或重连失败均保持未知，不自动重跑发布或回滚。手工上传脚本在 SSH 失败时保守提示未知和核对目录，部署 ID 见包内 manifest。先核对步骤文件、`current`、真实服务与数据，再决定恢复。
 
+### 运行环境文件与重复部署
+
+每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`，供 Compose 加载运行配置；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
+
+项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值；自建中间件的稳定随机凭据另缓存于服务扫描目录的 `.hai/deploy/runtime/<项目名>-<环境>.secrets.json`，不要删除该文件后直接复用旧数据卷。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。首次仅打包不会收集 SSH 信息，需先在工程配置连接；修改交付目录的 `deploy-target.json` 不会回写工程。
+
 ## 开发测试
 
 ```sh

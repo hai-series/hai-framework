@@ -202,11 +202,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-service`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
-`deploy` 支持 `${变量:回退值}` 与 `HAI_DEPLOY_*` 分层覆盖（例如 `HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT`）；父对象可用 JSON 整体覆盖。部署变量优先级为进程环境 > `.env.local` > `.env.<环境>` > `.env`，凭据保存在私有环境文件。构建不加载部署环境和密钥。
+`deploy` 支持 `${变量:回退值}` 与 `HAI_DEPLOY_*` 分层覆盖（例如 `HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT`）；父对象可用 JSON 整体覆盖。部署变量优先级为进程环境 > `.env.<环境>.local` > `.env.<环境>` > 旧 `.env.local` > `.env`；其他模块保留进程 > 环境私有 > 旧全局私有 > 环境公共 > 基础的顺序。按环境私有层仅由部署 SDK 加载，不改变 Core 的普通运行规则。构建不加载部署环境和密钥。
 
 已有项目需把原构建对象移入 `hai.json.build`，把原部署 YAML 转成 JSON 放入 `hai.json.deploy`，删除原文件并保留现有 `HAI_DEPLOY_*` 变量。已有自建 S3 的项目首次升级必须全量部署：旧成功基线仍含已退出的一次性初始化服务，直接使用新增量包会被依赖存活检查拒绝；全量部署同时刷新中间件环境中的 `createBucket`，之后即可继续增量更新。
 
-直接部署时，向导按“服务器地址、SSH 登录用户、私钥文件、访问端口”等说明补齐缺少的配置，并复用已有完整配置。SSH 参数仅写本机 `.env.local`；私钥只保存路径。`--bundle-only` 不询问 SSH 连接信息，后续上传前在 `deploy-target.json` 中填写。
+直接部署首次补齐 SSH 连接和认证方式，支持私钥/agent 和密码；SSH 参数保存在 `.env.<环境>.local`，密码隐藏输入、私钥只保存路径。中间件公共配置写 `.env.<环境>`，秘密值写 `.env.<环境>.local`。完整配置后使用 `--yes` 无交互复用，需要保持中间件时追加 `--skip-middleware`。`--bundle-only` 不询问 SSH，已有连接会写入 `deploy-target.json`；修改该文件只影响当前包，不回写工程。离线密码从操作机的 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD` 等 target 引用变量读取，不写入交付包。
+
+每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`。`--env test` 默认写 `NODE_ENV=test`，dev 为 development，prod 及其他模式为 production；显式环境配置可以覆盖。该文件是运行产物，下次配置来自工程环境文件。`--build` 的正式优化模式不改变此运行默认值；旧包需重新打包。自建中间件随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有数据卷时应保留。
 
 #### 按应用真正需要的中间件处理
 

@@ -106,7 +106,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 node packages/cli/tests/feedback-offline-browser.mjs
 ```
 
-Validate browser flows, SQLite/PG/MySQL, real S3 and SMTP, multi-instance recovery and disconnected bundle viewing separately. Build/mock success cannot replace those checks. See the [design](../../docs/feedback-module-design.md) and [task list](../../docs/feedback-tasks.md).
+Validate browser flows, SQLite/PG/MySQL, real S3 and SMTP, multi-instance recovery and disconnected bundle viewing separately. Build/mock success cannot replace those checks. See the [usage guide](../../docs/usage/README.en.md) for application integration and deployment.
 
 ## License
 

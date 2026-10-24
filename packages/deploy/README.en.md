@@ -171,6 +171,12 @@ Command deadlines include helper startup and output handling. Timeouts, input/ou
 
 SSH interruptions initially report `remoteExecution: 'unknown'`. The docker-ssh SDK reconnects read-only to inspect `result-<deploymentId>.json`. Only a complete, untruncated terminal record with the matching ID confirms `finished`, with the actual stage and exit code. Finished scripts do not imply stopped containers. Even exit code 0 preserves the original SSH/output failure. CLI shows local and remote states separately with the result path. Missing, stale, damaged or unreadable records remain unknown; deployment and rollback are never retried automatically. Manual upload scripts conservatively report unknown on SSH failure with the inspection directory; find the deployment ID in the bundle manifest. Inspect steps, `current`, actual services and data before recovery.
 
+### Runtime environment files and repeated deployments
+
+Each delivery still generates `.hai/deploy/<environment>/bundle-.../.env.runtime` for Compose. This is generated output, not the saved configuration source. The default `NODE_ENV` follows the target: `test` → `test`, `dev/development` → `development`, and `prod/production` or other modes → `production`. Explicit `NODE_ENV` values in environment configuration override this default; build optimization does not select the runtime environment. Rebuild the bundle to update old deliveries.
+
+Project-root `hai.json.deploy` stores deployment structure, `.env.<environment>` stores public settings, and `.env.<environment>.local` stores SSH settings and middleware secrets. Stable generated middleware credentials are also cached under the scanned service directory at `.hai/deploy/runtime/<project>-<environment>.secrets.json`; retain this file when reusing data volumes. Environment files default to the project/workspace root; override with `--env-dir`. After configuration, `pnpm run deploy --env test --build --bundle-only --yes` reuses complete settings without prompts; add `--skip-middleware` to retain middleware configuration. Bundle-only mode does not collect SSH settings initially. Configure the project connection once; editing a delivery's `deploy-target.json` does not update the project.
+
 ## Development and testing
 
 ```sh

@@ -171,6 +171,12 @@ finally {
 
 SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は別接続で `result-<deploymentId>.json` を読みます。完全で未切断、ID が一致する終端結果だけ `finished` と実際の段階・終了値を確認できます。script 終了はコンテナー停止を意味しません。終了値が 0 でも元の SSH/出力失敗は失敗として残します。CLI はローカルと遠隔の状態と結果パスを別々に表示します。欠落・旧 ID・破損・再接続失敗は不明のまま、配置や rollback を自動再実行しません。手動アップロード script は SSH 失敗を不明と表示し、確認先を示します。配置 ID はパッケージの manifest で確認します。手順、`current`、実サービスとデータを確認して復旧してください。
 
+### 実行環境ファイルと設定の再利用
+
+配布ごとに Compose 用の `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。これは生成物であり、設定の保存元ではありません。`NODE_ENV` の既定値は対象環境に従い、`test` は `test`、`dev/development` は `development`、`prod/production` とその他は `production` です。環境設定の明示的な `NODE_ENV` が優先され、構築の最適化モードとは別です。旧配布物は再度パッケージ化してください。
+
+プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。自動生成した固定認証情報は走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` にも保持するため、既存データボリューム再利用時は削除しないでください。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。初回の bundle-only では SSH を質問しないため、接続先を一度プロジェクトに設定します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。
+
 ## 開発とテスト
 
 ```sh

@@ -172,6 +172,25 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(env.PORT).toBe('3000')
   })
 
+  it.each([
+    ['dev', 'development'],
+    ['development', 'development'],
+    ['test', 'test'],
+    ['prod', 'production'],
+    ['production', 'production'],
+    ['staging', 'production'],
+  ])('目标环境 %s 默认使用 NODE_ENV=%s', (environment, nodeEnv) => {
+    const { env } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000, { environment })
+    expect(env.NODE_ENV).toBe(nodeEnv)
+  })
+
+  it('未传选项时读取部署标记，显式应用 NODE_ENV 仍可覆盖默认值', () => {
+    const fromMarker = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000, undefined, { HAI_DEPLOY_ENVIRONMENT: 'test' })
+    expect(fromMarker.env.NODE_ENV).toBe('test')
+    const explicit = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000, { environment: 'test' }, { NODE_ENV: 'production' })
+    expect(explicit.env.NODE_ENV).toBe('production')
+  })
+
   it('多功能同时启用时并存', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'cache', 'storage']), {}, 3000)
     expect(sidecar.services).toEqual(expect.arrayContaining(['db', 'cache', 'storage']))

@@ -15,6 +15,8 @@
 
 `.env.<mode>.local` 仅属于部署 SDK 的配置读取和记忆；Core 的普通应用加载规则不变，不能据此宣称 dev/start 会读取这个文件。
 
+交付目录的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有卷时应保留。
+
 ## 识别与逐项选择
 
 数据库连接保存前复用所选后端的公开配置 Schema；MySQL `ssl` 仅 `false` 或严格对象，`{}` 默认验证证书链和 DNS 身份，`ca/cert/key` 为 PEM 内容且 `cert/key` 必须成对；私钥仅进入私有环境。PostgreSQL 保留其布尔值/字符串模式/对象契约。CLI 内联 `@h-ai/reldb/schemas` 与 Zod，无需为配置校验给目标应用额外安装数据库包或驱动；部署本身仍需已安装的 `@h-ai/deploy`，实际运行应用仍需其数据库依赖。

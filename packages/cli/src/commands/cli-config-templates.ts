@@ -609,7 +609,7 @@ export function generateProductionEnvironment(features: FeatureId[], configs?: M
 
 function generateDeployConfig(): string {
   return `# 部署已有镜像；运行 pnpm run deploy --build 可先构建再发布。
-# SSH 参数由向导保存在本机 .env.local；离线打包不要求 SSH。
+# SSH 参数由向导保存在本机 .env.<环境>.local；离线打包不要求 SSH。
 provider:
   type: docker-ssh
   remote:
