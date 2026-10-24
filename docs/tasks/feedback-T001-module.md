@@ -1,7 +1,7 @@
 # T001 · Feedback 全流程与复用交付
 
 - 清单：[feedback-tasks](../feedback-tasks.md)。
-- 状态：进行中；任务分支 `codex/feedback/isolated-delivery`（原 `codex/feedback/t001-module` 保留）；主分支 `main`。
+- 状态：已完成；任务分支 `codex/feedback/isolated-delivery`（原 `codex/feedback/t001-module` 保留）；最终验收目录为原目录，主分支 `main`。
 - 来源：[方案](../feedback-module-design.md) §1–13；原始提交 `88421e4c86c45d58269960aad59b4bf3ac8d3756`，原目标文档提交 S=`e2275a291b1b3d47c5917a0adb31f70da0cee440`（含 Reach 通知前置、保留清理边界，以及进度指向任务清单的纯文档澄清）；按用户追加要求固定目标 S2=`a66a45e30f8e9a0491325ffddc05ffa03697119a`，最终验收使用 S2 的完整方案。
 - 前置：无。复用 core/reldb/storage/reach、oRPC/serv、UI、CLI fullstack 模板；不新增通用 telemetry 模块。
 
@@ -195,3 +195,15 @@
 - M2=da427756165edbcf57c1a7c51e07f1d609de357f 在原 main 的 fresh build 和管理台重建均核对通过：各产物版本来自应用manifest，client/server共享非空buildId，commit精确对应M2；7场景公开证据接口验证实际前后端标识，截图已留原目录tmp。
 - M2 根容器组31/31、feedback111项、reldb643项、storage315项、crypto194项通过；CLI569项通过/45正常跳过。整轮仍因部署PowerShell两例及其6条内部JSDoc失败为exit1，按集中修复流程收敛，不以管理台通过冒充全部交付。
 - 构建skill、CLI三语及LLMS补充实际产物标识、Core运行时覆盖与部署命名空间规则的边界，移除容易漂移的模块YAML固定数量表述；仅文档同步，无新增运行行为。最终全部11类模板和真实部署尚待main修复后的正式收集，B/H保持未建立。
+
+## 原目录 main F2 最终验收 · 2026-10-24
+
+- G3=`14ca32cb94e44fa6be89619ec7eef132d01f54de` 修复受限环境的 Windows 上传入口并补内部 JSDoc；G4=`08ea8af4b5441575fb4f96380b026e349ac4628e` 同步文档。合并 F2=`bdceab7b3f88755ffa981e778854da8035705160` 在原目录 main 验收，前后 HEAD/分支/clean 均核对通过，系统及固定工具链为 Node 24.22.1。根版本保持独立提交 V 的 alpha.69，各应用版本仍按各自 manifest。
+- `original-final-2026-10-24T04-57-55-150Z-bdceab7b3f88` 的 16 阶段全部退出 0：冻结安装、类型 51/51、lint 30/30、强制 fresh build 35/35、原根测试普通组 38/38 与容器组 31/31、脚本、公开 API/inventory/JSDoc、skills/env、离线查看及管理台。根测试复用了合法 Turbo 缓存，不宣称每项都强制重跑；feedback 111 项、CLI 569 项通过，CLI 45 项为既定跳过。
+- root/admin 实际编译产物身份核对均通过。管理台 client/server 版本来自自身 manifest，共享 buildId `25991f79-fbeb-4ef6-9ef5-6a18b194e9fa`，commit 精确为 F2；保留实际 chunk hash。生成工程读取自身版本和 Git 来源，显式 fullstack 故意设置前端 `2.4.6-frontend`、后端 `7.8.9-service` 及临时 Git 提交；默认无 Git 工程两侧为 `0.1.0`、commit 明确 `unknown`。实际运行证据和 ZIP 均核对，不借用服务端展示版本或外层 runner ID。
+- 管理台 7/7 覆盖默认入口、普通用户提交/owner 读取与管理操作 403、混合附件失败后删除恢复、分页/详情、处理与撤销、遮挡和离线恢复。正式离线查看器 `run-R7Znl3` 通过，外部请求 0，包内脚本隔离与缺失材料可见；真实 ZIP 的 checksum、遮挡像素、大文本全文和脱敏字节由程序验证。
+- 第一轮原始脚手架命令 `original-scaffold-11-2026-10-24T06-18-40-815Z-bdceab7b3f88` 的实际 11 类通过，但前置 website generate 在原 120 秒预算超时，完整命令 raw1；记录保留。随后原生 `tests/run-scaffold-gates.mjs --generate` 的三场景同源、同预算通过，未改源码或断言，超时根因未确定。
+- 第二轮原始 `pnpm --filter @h-ai/cli test:scaffold-gates` 在 `original-scaffold-11-2026-10-24T06-56-45-658Z-bdceab7b3f88` 自然退出 0，1265.31 秒；前置 20 通过/33 既定跳过，实际 11/11。真实 pack、独立安装、类型/lint/build/test/启动及浏览器均由原始门禁执行，未追加外部名称过滤或复用选项。显式 feedback 与省略 features 的默认 fullstack 均验收。
+- 最终新截图工程为 `sample-fullstack-feedback-fSzf8G` 和 `sample-fullstack-lLAYP1`，两组各 9 张关键 PNG 已逐图目检，含 390px 收集、遮挡前后、回执、处理及撤销。管理台 17 张和离线查看器等目检记录、实际 ZIP、hash 与失败历史统一保存在 ignored `tmp/feedback-acceptance/index.md`；保留轻微重复标题和弹窗内部滚动的证据边界，不提交验收二进制。
+- SQLite/PostgreSQL/MySQL、真实 S3 兼容服务、本机 SMTP 协议接收器及双 Node 协调通过。SMTP 接受不等于外部管理员邮箱入箱；未向外部生产主机部署，未执行根 `pnpm e2e` 的所有无关应用套件。相关管理台、CLI 模板和真实部署门禁已分别执行，详见部署任务。
+- 最终文档基线 B=S2=`a66a45e30f8e9a0491325ffddc05ffa03697119a`，实现基线 H=F2。本次最终收口仅更新任务记录，无运行时代码影响；先前失败与有效 Red 保留为历史。
