@@ -359,5 +359,7 @@
   "cli_feedback_invalidBundle": "问题包文件无效或超过容量限制",
   "cli_feedback_viewerStarted": "离线查看器：{url}（按 Ctrl+C 关闭）",
   "cli_featureFeedbackName": "问题反馈",
-  "cli_featureFeedbackDescription": "用户现场、私有截图、管理员处理与离线问题包"
+  "cli_featureFeedbackDescription": "用户现场、私有截图、管理员处理与离线问题包",
+  "cli_deploy_processEnvironment": "当前部署进程环境",
+  "cli_deploy_adminPasswordSource": "  管理员：admin；初始密码变量 HAI_ADMIN_DEFAULT_PASSWORD，来源：{source}。仅首次创建管理员时生效；已有账号请使用原密码。"
 }

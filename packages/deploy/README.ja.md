@@ -179,6 +179,14 @@ SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は�
 
 フレームワークの永続設定は `HAI_*` を使います。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` はミドルウェアイメージ必須の名前を維持し、非公開の `middleware-runtime.env` にだけ生成してミドルウェアに渡します。プロジェクト環境ファイルやアプリの `.env.runtime` には新規保存しません。増分アプリ更新用の `middleware.env` は `HAI_*` 設定のみです。既存の原生変数は自動削除せず、新しいアプリ環境から除外します。未更新サービスは以前の配布ファイルを使い続けます。
 
+サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、app/Web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
+
+Podman では設定済みの healthcheck を明示的に実行して状態を再確認し、systemd の自動実行に依存しません。今回の検査が失敗した場合、保存状態が `healthy` でも app の起動を許可しません。
+
+孤立コンテナーの削除は最初の起動バッチのみで行い、後続の app/Web 起動では準備済みのミドルウェアを維持します。
+
+生成 fullstack の初期管理者パスワードと開発用転送鍵リングは、Git 対象外の `.env.local` に保存され、`.env.<mode>.local` で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。Secret Manager で全ノードに同じ有効リングを配布し、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
+
 配布ごとに Compose 用の `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。これは生成物であり、設定の保存元ではありません。`NODE_ENV` の既定値は対象環境に従い、`test` は `test`、`dev/development` は `development`、`prod/production` とその他は `production` です。環境設定の明示的な `NODE_ENV` が優先され、構築の最適化モードとは別です。旧配布物は再度パッケージ化してください。
 
 プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。自動生成した固定認証情報は走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` にも保持するため、既存データボリューム再利用時は削除しないでください。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。初回の bundle-only では SSH を質問しないため、接続先を一度プロジェクトに設定します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。

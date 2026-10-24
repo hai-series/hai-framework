@@ -245,6 +245,19 @@ it('requires the selected file before loading credentials or starting deployment
   expect(mocked.prompt).not.toHaveBeenCalled()
 }, 30_000)
 
+it('部署完成后显示当前模式初始管理员密码的实际来源，不受日志级别影响且不显示秘密值', async () => {
+  const { app, service } = await fullstackFixture()
+  const password = 'Private-fixture-password-Aa1!'
+  writeFileSync(join(app, '.env.test.local'), `HAI_ADMIN_DEFAULT_PASSWORD='${password}'\nHAI_CORE_LOGGING_LEVEL=error\n`)
+  const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
+  vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://example.test:18080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
+  await deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true })
+  const text = output.mock.calls.map(([message]) => message).join('\n')
+  expect(text).toContain('HAI_ADMIN_DEFAULT_PASSWORD')
+  expect(text).toContain(join(app, '.env.test.local'))
+  expect(text).not.toContain(password)
+}, 30_000)
+
 it('asks for the environment first, configures MySQL field-by-field and skips a kept cache', async () => {
   const { app, service } = await fullstackFixture()
   writeFileSync(join(app, '.env.test'), 'HAI_CORE_ENV=test\nHAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","ssh":{"host":"example.test","username":"deploy"},"expose":{"hostPort":18080}}\'\nHAI_CACHE=\'{"type":"memory"}\'\n')

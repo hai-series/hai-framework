@@ -89,5 +89,6 @@
   "deploy_bundleFull": "Full deployment",
   "deploy_bundlePartial": "Partial deployment (requires a successful full baseline)",
   "deploy_bundleSelection": "Deployment mode: {mode}\nSelected services: {services}; see partial and selectedServices in manifest.json.",
-  "deploy_transportBodyLimitInvalid": "Invalid transport.maxPlaintextBytes: use an integer from 1024 to 67108864 bytes"
+  "deploy_transportBodyLimitInvalid": "Invalid transport.maxPlaintextBytes: use an integer from 1024 to 67108864 bytes",
+  "deploy_transportKeyRingInvalid": "The transport key ring is missing or invalid; the application has not been uploaded. Set HAI_CRYPTO_TRANSPORT_SERVERKEYRING in {path} or the deployment process using complete valid JSON, and distribute the same managed ring to every node."
 }

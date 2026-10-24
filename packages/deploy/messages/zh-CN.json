@@ -89,5 +89,6 @@
   "deploy_bundleFull": "全量部署",
   "deploy_bundlePartial": "增量部署（要求已有成功的全量基线）",
   "deploy_bundleSelection": "部署模式：{mode}\n更新服务：{services}；可在 manifest.json 中核对 partial 和 selectedServices。",
-  "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes 无效：必须是 1024 到 67108864 字节之间的整数"
+  "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes 无效：必须是 1024 到 67108864 字节之间的整数",
+  "deploy_transportKeyRingInvalid": "传输密钥环缺失或无效，尚未上传应用。请在 {path} 或部署进程中设置 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，使用完整有效的 JSON，并向所有节点分发同一受管密钥环。"
 }

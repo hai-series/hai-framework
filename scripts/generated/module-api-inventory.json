@@ -19676,6 +19676,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "mergeEnvironmentLayers",
+              "kind": "value",
+              "declaration": "mergeEnvironmentLayers",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MiddlewareBackend",
               "kind": "type",
               "declaration": "MiddlewareBackend",
@@ -19902,6 +19908,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "mergeEnvironmentLayers",
+              "kind": "value",
+              "declaration": "mergeEnvironmentLayers",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MiddlewareBackend",
               "kind": "type",
               "declaration": "MiddlewareBackend",
@@ -20125,6 +20137,12 @@
               "name": "loadDeploymentEnvironment",
               "kind": "value",
               "declaration": "loadDeploymentEnvironment",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "mergeEnvironmentLayers",
+              "kind": "value",
+              "declaration": "mergeEnvironmentLayers",
               "declarationKind": "FunctionDeclaration"
             },
             {

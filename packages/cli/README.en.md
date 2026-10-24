@@ -58,6 +58,8 @@ A standalone `mobile-app` with IAM or crypto installs frontend crypto and enable
 
 Includes user management, roles, audit logs, avatars, personal settings, themes, languages, onboarding and help. Sign in as `admin` using the random `HAI_ADMIN_DEFAULT_PASSWORD` in root `.env.local`. Existing users are not reset. Adapt the sample business rules as needed; authorization remains on the server.
 
+Generated fullstack projects save the initial administrator password and development transport key ring in ignored `.env.local`; deployment modes may override them in `.env.<mode>.local`. Before upload, deployment identifies missing or malformed `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` for transport-enabled applications. Distribute the same valid managed ring through a Secret Manager instead of generating one per node. CLI completion identifies the actual source of `HAI_ADMIN_DEFAULT_PASSWORD` without printing it, independently of log level. It applies only when initially creating the administrator. Offline scripts also identify the password variable in the server's private `.env.runtime`.
+
 ### Application configuration and display
 
 See `.env.example` for settings. Commit shared `.env` and `.env.dev/.env.test/.env.prod`; keep private overrides in `.env.local`. Precedence is process environment > local private file > selected environment > shared base. API projects keep these files in the service directory; fullstack uses the root. See the [usage guide](../../docs/usage/README.en.md) for YAML, environment overrides and application metadata.

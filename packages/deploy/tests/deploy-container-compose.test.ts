@@ -27,6 +27,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  if (path.dirname(tmpDir) !== os.tmpdir() || !path.basename(tmpDir).startsWith('hai-deploy-compose-'))
+    throw new Error('Unexpected compose fixture cleanup path')
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -45,6 +47,22 @@ function makeScan(
 }
 
 describe('buildRuntimeEnv 按功能追加 sidecar', () => {
+  it('sidecar 和云开通的整体配置清除被替换的旧叶配置，保留其它业务变量', () => {
+    const { env } = buildRuntimeEnv(tmpDir, 'override', makeScan(['cache', 'storage']), { HAI_STORAGE: '{"type":"s3","endpoint":"https://external.example"}' }, 3000, {}, {
+      HAI_CACHE_TYPE: 'memory',
+      HAI_CACHE_URL: 'redis://old.example',
+      HAI_STORAGE_TYPE: 'local',
+      HAI_STORAGE_PATH: '/old',
+      APP_LABEL: 'retain',
+      APP_LABEL_DETAIL: 'also-retain',
+    })
+    expect(JSON.parse(env.HAI_CACHE)).toEqual({ type: 'redis', url: 'redis://cache:6379' })
+    expect(JSON.parse(env.HAI_STORAGE)).toMatchObject({ type: 's3', endpoint: 'https://external.example' })
+    for (const name of ['HAI_CACHE_TYPE', 'HAI_CACHE_URL', 'HAI_STORAGE_TYPE', 'HAI_STORAGE_PATH'])
+      expect(env).not.toHaveProperty(name)
+    expect(env).toMatchObject({ APP_LABEL: 'retain', APP_LABEL_DETAIL: 'also-retain' })
+  })
+
   it('中间件原生变量仅用于容器，不进入应用环境或框架配置', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'isolated', makeScan(['db', 'storage', 'ldap'], { db: 'postgresql', storage: 's3', ldap: 'ldap' }), {}, 3000, { environment: 'test' }, { POSTGRES_DB: 'legacy', RUSTFS_ADDRESS: 'legacy', APP_LABEL: 'retained' })
     expect(env).not.toHaveProperty('POSTGRES_USER')

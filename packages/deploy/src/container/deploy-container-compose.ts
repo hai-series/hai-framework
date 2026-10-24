@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
+import { mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
 
@@ -162,6 +163,7 @@ function planPostgresDb(plan: SidecarPlan, projectName: string, password: string
     restart: 'unless-stopped',
     env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-db-data:/var/lib/postgresql/data`],
+    healthcheck: { test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'hai', '-d', 'hai'], interval: '2s', timeout: '5s', retries: 60 },
     networks: net,
   }
   plan.volumes[`${projectName}-db-data`] = null
@@ -182,6 +184,7 @@ function planMysqlDb(plan: SidecarPlan, projectName: string, password: string, n
     restart: 'unless-stopped',
     env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-db-data:/var/lib/mysql`],
+    healthcheck: { test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --silent'], interval: '2s', timeout: '5s', retries: 60 },
     networks: net,
   }
   plan.volumes[`${projectName}-db-data`] = null
@@ -201,6 +204,7 @@ function planRedisCache(plan: SidecarPlan, projectName: string, net: string[]): 
     image: IMAGES.redis,
     container_name: `hai-${projectName}-cache`,
     restart: 'unless-stopped',
+    healthcheck: { test: ['CMD', 'redis-cli', 'ping'], interval: '2s', timeout: '5s', retries: 60 },
     networks: net,
   }
   plan.env.HAI_CACHE = JSON.stringify({ type: 'redis', url: 'redis://cache:6379' })
@@ -215,6 +219,7 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
     container_name: `hai-${projectName}-storage`,
     restart: 'unless-stopped',
     ...(engine === 'minio' ? { command: ['server', '/data'] } : {}),
+    healthcheck: { test: engine === 'rustfs' ? ['CMD', 'curl', '--noproxy', '*', '-fsS', 'http://127.0.0.1:9000/minio/health/ready'] : ['CMD', 'mc', 'ready', 'http://127.0.0.1:9000'], interval: '2s', timeout: '5s', retries: 60 },
     env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-storage-data:/data`],
     networks: net,
@@ -459,16 +464,13 @@ export function buildRuntimeEnv(
   const sidecar = planSidecars(appDir, projectName, scan, provisionEnv, options, s3Engine)
   const environment = options?.environment ?? appEnv.HAI_DEPLOY_ENVIRONMENT ?? 'prod'
   const nodeEnv = environment === 'dev' || environment === 'development' ? 'development' : environment === 'test' ? 'test' : 'production'
-  const env: Record<string, string> = {
+  const env = mergeEnvironmentLayers([{
     NODE_ENV: nodeEnv,
     HOST: '0.0.0.0',
     PORT: String(containerPort),
     HAI_SERV_SERVER_HOST: '0.0.0.0',
     HAI_SERV_SERVER_PORT: String(containerPort),
-    ...Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))),
-    ...sidecar.env,
-    ...provisionEnv,
-  }
+  }, Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))), sidecar.env, provisionEnv])
   return { env, sidecar }
 }
 
@@ -517,7 +519,7 @@ export function generateComposeFile(options: {
   if (sidecar.appVolumes.length > 0)
     app.volumes = sidecar.appVolumes
   if (sidecar.dependsOn.length > 0)
-    app.depends_on = sidecar.dependsOn
+    app.depends_on = Object.fromEntries(sidecar.dependsOn.map(name => [name, { condition: sidecar.composeServices[name]?.healthcheck ? 'service_healthy' : 'service_started' }]))
 
   const services: Record<string, ComposeService> = { app, ...sidecar.composeServices }
   if (options.web) {

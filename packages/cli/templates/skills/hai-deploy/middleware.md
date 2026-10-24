@@ -21,6 +21,14 @@
 
 交付目录的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有卷时应保留。
 
+自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 app/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
+
+Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，不依赖 systemd 自动调度；当前探测失败时，即使旧状态为 `healthy` 也不能放行 app 启动。
+
+分批启动仅在首批清理孤立容器，后续 app/Web 启动必须保留已经就绪的中间件。
+
+生成的 fullstack 项目将初始管理员密码和开发传输密钥环保存在被忽略的 `.env.local`；部署环境可在 `.env.<mode>.local` 覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；应从 Secret Manager 分发同一有效密钥环，不能为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+
 ## 识别与逐项选择
 
 框架 `HAI_*` 连接配置与镜像原生变量分开：PostgreSQL/MySQL/RustFS/MinIO/LDAP 的原生键必须按镜像契约命名，只写私有 `middleware-runtime.env`、只让中间件加载。不得改成镜像不识别的 HAI 前缀，也不得写回工程 `.env.<mode>` / 私有覆盖或注入应用 `.env.runtime`。应用的增量覆盖文件 `middleware.env` 只含 `HAI_*`。旧工程原生字段不自动删除，新应用环境忽略框架曾生成的已知原生键；不要批量过滤其他业务变量。

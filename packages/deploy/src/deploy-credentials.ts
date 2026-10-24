@@ -129,22 +129,24 @@ function writeCredentialsFile(data: Record<string, string>): void {
  * 加载全局凭证文件并注入到 process.env
  *
  * 读取 `~/.hai/credentials.yml` 中的所有键值对，
- * 将每个 key-value 设置到 `process.env` 中，
+ * 仅为尚未设置的键注入默认值；已有父配置也优先于全局文件的细分键，
  * 使后续 core 配置加载时自动解析 `${HAI_DEPLOY_*}` 变量。
- * @returns 成功返回加载的凭证键名列表
+ * @returns 返回文件中可识别的键名，包括被当前配置遮盖而未注入的键。
  * @example 模块内部上下文
  * ```ts
  * const loaded = loadCredentials()
  * if (!loaded.success) throw new Error(loaded.error.message)
- * const injectedNames = loaded.data // 仅键名；已有 process.env 值优先。
+ * const credentialNames = loaded.data // 仅文件键名；已有 process.env 值优先。
  * ```
  */
 export function loadCredentials(): HaiResult<string[]> {
   try {
     const data = readCredentialsFile()
     const keys = Object.keys(data)
+    const configured = Object.keys(process.env).filter(key => (key === 'HAI_DEPLOY' || isAllowedCredentialKey(key)) && process.env[key] !== undefined)
     for (const key of keys) {
-      process.env[key] = String(data[key])
+      if (!configured.some(name => key === name || key.startsWith(`${name}_`)))
+        process.env[key] = String(data[key])
     }
     logger.debug('Credentials loaded', { count: keys.length })
     return ok(keys)

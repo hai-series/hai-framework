@@ -18,7 +18,7 @@ import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
-import { resolveTransportBodyLimits } from '@h-ai/crypto'
+import { parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
 import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
@@ -149,6 +149,12 @@ export function createDockerSshProvider(
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    const updatesApp = options?.selectedServices ? options.selectedServices.includes('app') : !!app
+    const serverPath = join(appDir, 'config', '_serv.yml')
+    const server = existsSync(serverPath) || hasWeb ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
+    if (!server.success)
+      return server
+    let protectedTransport = !!server.data.transport
     if (scan.isSvelteKit) {
       const kitPath = join(appDir, 'config', '_kit.yml')
       const kit = existsSync(kitPath) ? loadDeploymentConfig('kit', kitPath, env) : ok({})
@@ -156,6 +162,7 @@ export function createDockerSshProvider(
         return kit
       const transport = (kit.data as Record<string, unknown>).transport
       if (transport && typeof transport === 'object') {
+        protectedTransport = !('enabled' in transport) || transport.enabled !== false
         try {
           const limits = resolveTransportBodyLimits((transport as { maxPlaintextBytes?: number }).maxPlaintextBytes)
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
@@ -166,12 +173,11 @@ export function createDockerSshProvider(
         }
       }
     }
+    if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !parseTransportServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', { params: { path: join(scan.envDir ?? appDir, `.env.${options?.environment ?? 'prod'}.local`) } }))
     let webProxy: string | undefined
     if (hasWeb) {
       // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
-      const server = loadDeploymentConfig('serv', join(appDir, 'config', '_serv.yml'), env)
-      if (!server.success)
-        return server
       const http = server.data.http as { apiPrefix?: string } | undefined
       const cors = server.data.cors as { origin?: string } | undefined
       const apiPrefix = http?.apiPrefix ?? '/api/v1'

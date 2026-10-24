@@ -359,5 +359,7 @@
   "cli_feedback_invalidBundle": "問題パッケージが無効か容量制限を超えています",
   "cli_feedback_viewerStarted": "オフライン表示：{url}（Ctrl+Cで終了）",
   "cli_featureFeedbackName": "問題フィードバック",
-  "cli_featureFeedbackDescription": "ユーザーの証拠、非公開スクリーンショット、管理者の処理とオフライン診断"
+  "cli_featureFeedbackDescription": "ユーザーの証拠、非公開スクリーンショット、管理者の処理とオフライン診断",
+  "cli_deploy_processEnvironment": "現在のデプロイプロセス環境",
+  "cli_deploy_adminPasswordSource": "  管理者: admin。初期パスワード変数 HAI_ADMIN_DEFAULT_PASSWORD の保存元: {source}。初回管理者作成時だけ有効です。既存アカウントは元のパスワードを使用してください。"
 }

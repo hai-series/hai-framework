@@ -29,7 +29,7 @@
   "crypto_hashFormatInvalid": "无效的哈希格式",
   "crypto_passwordVerifyFailed": "密码验证失败",
   "crypto_transportClientKeyGenerateFailed": "传输加密客户端密钥生成失败",
-  "crypto_transportServerKeyRingInvalid": "服务端传输密钥环缺失或无效",
+  "crypto_transportServerKeyRingInvalid": "服务端传输密钥环缺失或无效。请检查私有环境变量 HAI_CRYPTO_TRANSPORT_SERVERKEYRING 是否为完整有效的 JSON，并向所有节点分发同一密钥环。",
   "crypto_transportServerKeyUnknown": "服务端传输密钥版本未知或已撤销",
   "crypto_transportKeyStoreRequired": "传输加密必须显式提供客户端公钥存储",
   "crypto_transportKeyStoreTtlInvalid": "公钥存储 TTL 必须为 1 到 2147483647 之间的整数秒",

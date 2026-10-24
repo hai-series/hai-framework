@@ -29,7 +29,7 @@
   "crypto_hashFormatInvalid": "Invalid hash format",
   "crypto_passwordVerifyFailed": "Password verification failed",
   "crypto_transportClientKeyGenerateFailed": "Failed to generate transport client key pair",
-  "crypto_transportServerKeyRingInvalid": "Transport server key ring is missing or invalid",
+  "crypto_transportServerKeyRingInvalid": "The server transport key ring is missing or invalid. Check that private HAI_CRYPTO_TRANSPORT_SERVERKEYRING contains complete valid JSON and distribute the same ring to every node.",
   "crypto_transportServerKeyUnknown": "Transport server key version is unknown or revoked",
   "crypto_transportKeyStoreRequired": "Transport encryption requires an explicit client public key store",
   "crypto_transportKeyStoreTtlInvalid": "Public-key store TTL must be an integer between 1 and 2147483647 seconds",

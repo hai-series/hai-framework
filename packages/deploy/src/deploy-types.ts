@@ -334,7 +334,7 @@ export interface DeployCredentialOperations {
    */
   getPath: () => string
   /**
-   * 加载凭证文件并注入 `process.env`。
+   * 加载凭证文件并补齐 `process.env` 缺项；已有同名或父配置优先，返回文件中可识别的键名。
    * @example
    * ```ts
    * import { deploy } from '@h-ai/deploy'

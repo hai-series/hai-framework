@@ -47,9 +47,9 @@
 | @h-ai/crypto | `. (types)` | 52 |
 | @h-ai/datapipe | `. (import)` | 19 |
 | @h-ai/datapipe | `. (types)` | 19 |
-| @h-ai/deploy | `. (default)` | 36 |
-| @h-ai/deploy | `. (import)` | 36 |
-| @h-ai/deploy | `. (types)` | 36 |
+| @h-ai/deploy | `. (default)` | 37 |
+| @h-ai/deploy | `. (import)` | 37 |
+| @h-ai/deploy | `. (types)` | 37 |
 | @h-ai/feedback | `. (import)` | 22 |
 | @h-ai/feedback | `. (types)` | 22 |
 | @h-ai/feedback | `./bundle (import)` | 14 |

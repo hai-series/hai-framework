@@ -89,5 +89,6 @@
   "deploy_bundleFull": "完全デプロイ",
   "deploy_bundlePartial": "部分デプロイ（正常な完全配置の基準が必要）",
   "deploy_bundleSelection": "デプロイ方式: {mode}\n更新サービス: {services}。manifest.json の partial と selectedServices で確認できます。",
-  "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes は 1024 から 67108864 バイトの整数で指定してください"
+  "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes は 1024 から 67108864 バイトの整数で指定してください",
+  "deploy_transportKeyRingInvalid": "転送鍵リングが不足または不正のため、アプリはまだアップロードしていません。{path} またはデプロイプロセスの HAI_CRYPTO_TRANSPORT_SERVERKEYRING に完全で有効な JSON を設定し、全ノードに同じ管理リングを配布してください。"
 }

@@ -118,6 +118,61 @@ remove_selected() {
     done
   done
 }
+wait_services() {
+  for waiting_service in "$@"; do
+    ready=false
+    attempt=0
+    while [ "$attempt" -lt 60 ]; do
+      containers=$("$runtime" ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$waiting_service") || return 1
+      test -n "$containers" || { printf 'Service %s is not running. Inspect its startup diagnostics.\n' "$waiting_service" >&2; return 1; }
+      ready=true
+      for container in $containers; do
+        running=$("$runtime" inspect --format '{{.State.Running}}' "$container") || return 1
+        test "$running" = true || { printf 'Service %s stopped during startup.\n' "$waiting_service" >&2; return 1; }
+        health=$("$runtime" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container") || return 1
+        # 独立 Podman 可能没有 systemd 调度；主动探测后重读状态，失败不能放行业务。
+        case "$runtime:$health" in
+          podman:starting|podman:unhealthy|podman:healthy)
+            probe_ready=false
+            if "$runtime" healthcheck run "$container" >/dev/null 2>&1; then probe_ready=true; fi
+            health=$("$runtime" inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container") || return 1
+            # 当前探测失败不能依赖旧 healthy 状态放行。
+            if [ "$probe_ready" != true ] && [ "$health" = healthy ]; then health=starting; fi
+            ;;
+        esac
+        case "$health" in
+          healthy|none) ;;
+          unhealthy) printf 'Service %s is unhealthy. Inspect its startup diagnostics.\n' "$waiting_service" >&2; return 1;;
+          *) ready=false;;
+        esac
+      done
+      if [ "$ready" = true ]; then break; fi
+      attempt=$((attempt + 1))
+      sleep 2
+    done
+    test "$ready" = true || { printf 'Service %s did not become ready before the startup deadline.\n' "$waiting_service" >&2; return 1; }
+  done
+}
+start_services() {
+  middleware_services=''
+  application_services=''
+  application_orphan_option=$orphan_option
+  for service in "$@"; do
+    case "$service" in app|web) ;; *) middleware_services="$middleware_services $service";; esac
+  done
+  if [ -n "$middleware_services" ]; then
+    compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $middleware_services || return 1
+    wait_services $middleware_services || return 1
+    # Podman Compose 按本批服务清理孤立容器；后批不能删除已经就绪的中间件。
+    application_orphan_option=''
+  fi
+  # --no-deps 保留未选容器；先等本次中间件就绪，再启动应用和依赖它的 Web。
+  case " $* " in *' app '*) application_services=app;; esac
+  case " $* " in *' web '*) application_services="$application_services web";; esac
+  if [ -n "$application_services" ]; then
+    compose up -d --no-deps --no-build --pull never "$recreate_option" $application_orphan_option $application_services || return 1
+  fi
+}
 finish() {
   code=$?
   trap - EXIT HUP INT TERM
@@ -146,7 +201,7 @@ finish() {
       recover_selected=$selected
       if [ "$partial" = false ]; then recover_selected=$(cat "$root/releases/$previous/services"); fi
       restore="$previous"
-      if remove_selected $recover_selected && compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $recover_selected; then
+      if remove_selected $recover_selected && start_services $recover_selected; then
         case " $selected " in *' app '*)
           if grep -qx web "$root/releases/$previous/services"; then compose exec -T web nginx -s reload || true; fi
           ;;
@@ -225,7 +280,7 @@ if [ "$partial" = true ]; then
     previous_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' "$previous_proxy" | sha256sum)
     current_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' web.conf | sha256sum)
     test "$previous_shape" = "$current_shape" || { printf 'API routes or proxy policy changed. Create a full deployment bundle.\n' >&2; exit 1; }
-    case " $selected " in *' app ') ;; *) printf 'Transport capacity changes require the app service. Include app in the partial deployment.\n' >&2; exit 1;; esac
+    case " $selected " in *' app '*) ;; *) printf 'Transport capacity changes require the app service. Include app in the partial deployment.\n' >&2; exit 1;; esac
     case " $selected " in *' web '*) ;; *) selected="$selected web"; proxy_update=true;; esac
   fi
 fi
@@ -272,16 +327,12 @@ if [ "$partial" = true ]; then cat "$release/services" >> "$release/dependencies
 while IFS= read -r dependency; do
   test -n "$dependency" || continue
   case " $selected " in *" $dependency "*) continue;; esac
-  running=$("$runtime" ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$dependency")
-  test -n "$running" || { printf 'Dependency %s is not running. Include it in a full deployment.\n' "$dependency" >&2; exit 1; }
-  for container in $running; do
-    test "$("$runtime" inspect --format '{{.State.Running}}' "$container")" = true || { printf 'Dependency %s is stopped. Start it before retrying.\n' "$dependency" >&2; exit 1; }
-  done
+  wait_services "$dependency"
 done < "$release/dependencies"
 step start 'Updating selected services'
 changed=true
 remove_selected $selected
-compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $selected
+start_services $selected
 case " $selected " in
   *' app '*)
     case " $selected " in *' web '*) ;; *)
@@ -303,6 +354,12 @@ done
 step complete 'Deployment passed all checks'
 printf '%s\n' "$id" > "$root/current.next"
 mv "$root/current.next" "$root/current"
+case " $selected " in *' app '*)
+  if grep -q '^HAI_ADMIN_DEFAULT_PASSWORD=' "$release/.env.runtime"; then
+    printf '[INFO] Initial administrator password source: %s/.env.runtime (HAI_ADMIN_DEFAULT_PASSWORD). Existing users keep their passwords.\n' "$release"
+  fi
+  ;;
+esac
 printf '[PASS] %s\n' "$id"
 `.replace(/@@([A-Z]+)@@/g, (_match, name: string) => values[name]!)
 }

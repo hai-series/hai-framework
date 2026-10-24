@@ -12,6 +12,7 @@ import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createApplyScript } from '../src/container/deploy-scripts.js'
 import { deploy } from '../src/index.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
@@ -70,9 +71,30 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
 printf '%s\\n' "$*" >> /fixture/commands.log
 case "$*" in
   *'up --help'*) printf 'never\\n';;
-  *'config --services'*) if [ -f /fixture/has-web ]; then printf 'app\\nweb\\n'; else printf 'app\\n'; fi;;
+  'healthcheck run '*)
+    if [ -f /fixture/probe-error ]; then exit 125; fi
+    touch /fixture/health-probed;;
+  *'inspect --format'*'State.Running'*) printf 'true\\n';;
+  *'inspect --format'*'State.Health'*)
+    if [ -f /fixture/unhealthy ]; then printf 'unhealthy\\n'; exit 0; fi
+    if [ -f /fixture/manual-health ]; then
+      if [ -f /fixture/health-probed ]; then printf 'healthy\\n'; else printf 'starting\\n'; fi
+      exit 0
+    fi
+    count=0
+    if [ -f /fixture/health-count ]; then count=$(cat /fixture/health-count); fi
+    count=$((count + 1)); printf '%s' "$count" > /fixture/health-count
+    if [ "$count" -lt 3 ]; then printf 'starting\\n'; else printf 'healthy\\n'; fi;;
+  *'ps -q'*) printf 'fixture-container\\n';;
+  *'config --services'*)
+    if [ -f /fixture/has-web ]; then printf 'app\\nweb\\n'; else printf 'app\\n'; fi
+    if [ -f /fixture/has-db ]; then printf 'db\\n'; fi;;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
+if [ -f /fixture/manual-health ]; then
+  # Podman Compose 按本次服务集清理孤立容器；第二批不能再移除已经就绪的依赖。
+  case " $* " in *' up -d '*--remove-orphans*' app '*) touch /fixture/dependency-removed;; esac
+fi
 if [ "$1" = load ] && [ -f /fixture/block-load ]; then
   printf '%s\\n' "$$" > /fixture/runtime.pid
   touch /fixture/entered-load
@@ -87,7 +109,7 @@ if [ -f /fixture/background-service ]; then
   esac
 fi
 `)
-    writeFileSync(join(root, 'bin/curl'), '#!/bin/sh\ntest ! -f /fixture/fail-health\n')
+    writeFileSync(join(root, 'bin/curl'), '#!/bin/sh\ntest ! -f /fixture/fail-health && test ! -f /fixture/dependency-removed\n')
     const created = execFileSync(runtime, ['run', '-d', '--name', containerName, '--entrypoint', 'node', 'docker.io/library/node:24.22.1-bookworm-slim', '-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
     if (!/^[a-f0-9]{64}$/.test(created))
       throw new Error('Expected an owned deployment fixture container ID')
@@ -126,7 +148,7 @@ fi
     expect(execute(`cat /fixture/server/releases/${full.id}/middleware.env`)).toBe(legacyContent.trim())
   }, 60_000)
 
-  it('真实 Linux 执行 app 增量容量更新：复用 Web 镜像更新代理，失败恢复旧配置', async () => {
+  it.each([{ selected: ['app'] }, { selected: ['app', 'web'] }, { selected: ['web', 'app'] }])('真实 Linux 执行 $selected 增量容量更新并恢复失败配置', async ({ selected }) => {
     const artifacts = join(root, '.hai/build/docker/release-1')
     mkdirSync(join(root, 'config'))
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
@@ -141,13 +163,14 @@ fi
     const full = await pack()
     expect(apply(full).status).toBe(0)
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 8388608\n')
-    const incremental = await pack(['app'])
+    const incremental = await pack(selected)
     const applied = apply(incremental)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
     expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
-    expect(execute(`cat /fixture/server/releases/${incremental.id}/compose-files`)).toContain('proxy-entry.json')
+    const composeFiles = execute(`cat /fixture/server/releases/${incremental.id}/compose-files`)
+    expect(composeFiles.includes('proxy-entry.json')).toBe(!selected.includes('web'))
     expect(execute('cat /fixture/commands.log')).toContain('--no-recreate app web')
-    expect(execute('cat /fixture/commands.log')).not.toContain(`load -i /fixture/server/releases/${incremental.id}/images/web-`)
+    expect(execute('cat /fixture/commands.log').includes(`load -i /fixture/server/releases/${incremental.id}/images/web-`)).toBe(selected.includes('web'))
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 4194304\n')
     const failed = await pack(['app'])
     execute('touch /fixture/fail-health; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
@@ -155,6 +178,54 @@ fi
     expect(execute('cat /fixture/server/current')).toBe(incremental.id)
     expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
     expect(execute('cat /fixture/commands.log')).toContain(`/releases/${incremental.id}/compose-entry.json`)
+  }, 60_000)
+
+  it.each(['docker', 'podman'] as const)('真实 shell 在 %s 中等待中间件健康后才启动 app，不健康时不启动 app', async (remoteRuntime) => {
+    execute('touch /fixture/has-db')
+    if (remoteRuntime === 'podman') {
+      // 模拟没有 systemd 自动调度的独立 Podman；只有实际执行探测才会更新状态。
+      execute('ln -s /fixture/bin/docker /fixture/bin/podman; touch /fixture/manual-health; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
+    }
+    const password = 'Fixture-administrator-Aa1!'
+    writeFileSync(join(root, '.env.test'), `HAI_ADMIN_DEFAULT_PASSWORD=${password}\n`)
+    async function readinessBundle(selectedServices?: string[]) {
+      const bundle = await pack(selectedServices)
+      const file = join(root, 'readiness.sh')
+      writeFileSync(file, createApplyScript({ deploymentId: bundle.id, projectName: 'readiness-test', environment: 'test', directory: '/fixture/server', runtime: remoteRuntime, partial: !!selectedServices, selected: selectedServices ?? ['app', 'db'], hostPort: 18080, healthPaths: ['/health'] }))
+      execFileSync(runtime, ['cp', file, `${container}:/fixture/${bundle.directory}/apply.sh`], { windowsHide: true })
+      execute(`cd /fixture/${bundle.directory}; sed '/  apply.sh$/d' SHA256SUMS > SHA256SUMS.next; sha256sum apply.sh >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
+      return bundle
+    }
+    const full = await readinessBundle()
+    const applied = apply(full)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
+    expect(applied.stdout).toContain(`/releases/${full.id}/.env.runtime`)
+    expect(applied.stdout).toContain('HAI_ADMIN_DEFAULT_PASSWORD')
+    expect(applied.stdout).not.toContain(password)
+    const commands = execute('cat /fixture/commands.log')
+    const applicationStart = / up -d [^\n]* app(?: |$)/m
+    const applicationCommand = commands.match(applicationStart)?.[0] ?? ''
+    expect(applicationCommand).toBeTruthy()
+    expect(applicationCommand).not.toContain('--remove-orphans')
+    if (remoteRuntime === 'podman')
+      expect(commands).toContain('healthcheck run fixture-container')
+    else
+      expect(Number(execute('cat /fixture/health-count'))).toBeGreaterThanOrEqual(3)
+    expect(commands.indexOf('--remove-orphans db')).toBeLessThan(commands.lastIndexOf('State.Health'))
+    expect(commands.lastIndexOf('State.Health')).toBeLessThan(commands.indexOf(applicationCommand))
+    const failed = await readinessBundle()
+    execute('touch /fixture/unhealthy; : > /fixture/commands.log')
+    expect(apply(failed).status).toBe(1)
+    expect(execute('cat /fixture/commands.log')).not.toMatch(applicationStart)
+    expect(execute('cat /fixture/server/current')).toBe(full.id)
+    if (remoteRuntime === 'podman') {
+      // 未选依赖保留旧 healthy 状态，当前探测故障时仍不能更新 app。
+      execute('rm -f /fixture/unhealthy; touch /fixture/probe-error; : > /fixture/commands.log')
+      const brokenProbe = await readinessBundle(['app'])
+      expect(apply(brokenProbe).status).toBe(1)
+      expect(execute('cat /fixture/commands.log')).not.toMatch(applicationStart)
+      expect(execute('cat /fixture/server/current')).toBe(full.id)
+    }
   }, 60_000)
 
   it('并发只允许一个，活跃长部署不被超时偷锁；完成后同一 inode 可复用', async () => {

@@ -201,6 +201,10 @@ pnpm build --target desktop --platform windows --arch x64
 
 配布ごとに `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。`--env test` は既定で `NODE_ENV=test`、dev は development、prod とその他は production です。明示設定が優先されます。この生成物は次回設定の保存元ではなく、構築の最適化モードとも別です。旧パッケージは再生成してください。既存ボリュームを使う際は、走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` の固定認証情報を保持します。
 
+サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、app/Web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
+
+生成 fullstack の初期管理者パスワードと開発用転送鍵リングは、Git 対象外の `.env.local` に保存され、`.env.<mode>.local` で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。Secret Manager で全ノードに同じ有効リングを配布し、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
+
 #### 本当に必要なミドルウェアだけを設定する
 
 接続設定は `HAI_*` を使い、イメージが要求する `POSTGRES_*`、`RUSTFS_*` などは元の名前を維持して非公開 `middleware-runtime.env` に分離します。読み込むのはミドルウェアだけで、プロジェクト設定やアプリの `.env.runtime` には混在しません。アプリの増分 `middleware.env` はフレームワーク設定のみです。旧設定は自動削除せず、既知の生成済み原生キーを新しいアプリ環境から除外します。

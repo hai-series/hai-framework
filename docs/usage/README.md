@@ -214,6 +214,10 @@ pnpm build --target desktop --platform windows --arch x64
 
 每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`。`--env test` 默认写 `NODE_ENV=test`，dev 为 development，prod 及其他模式为 production；显式环境配置可以覆盖。该文件是运行产物，下次配置来自工程环境文件。`--build` 的正式优化模式不改变此运行默认值；旧包需重新打包。自建中间件随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有数据卷时应保留。
 
+自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 app/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
+
+生成的 fullstack 项目将初始管理员密码和开发传输密钥环保存在被忽略的 `.env.local`；部署环境可在 `.env.<mode>.local` 覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；应从 Secret Manager 分发同一有效密钥环，不能为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+
 #### 按应用真正需要的中间件处理
 
 框架连接配置使用 `HAI_*`。镜像要求的 `POSTGRES_*`、`RUSTFS_*` 等原生变量保留原名，单独写入私有 `middleware-runtime.env`，仅中间件容器读取，不再混入工程环境配置或应用 `.env.runtime`；应用增量覆盖 `middleware.env` 只保留框架配置。旧工程原生字段不会自动删除，但新应用环境会忽略框架曾生成的已知原生键。

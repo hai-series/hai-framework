@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createECDH, createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -23,6 +23,30 @@ vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
 })
 let root: string
 let artifacts: string
+
+it.each(['missing', 'malformed', 'valid'])('部署启用 transport 的应用时提前校验密钥环并保持私有值完整：%s', async (state) => {
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/crypto': { version: '1' } } } }, packages: { '@h-ai/crypto@1': {} }, snapshots: { '@h-ai/crypto@1': {} } }))
+  writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\nhttp:\n  apiPrefix: /api/v1\n')
+  const key = createECDH('SM2')
+  key.generateKeys()
+  const ring = JSON.stringify({ activeKeyId: 'v1', keys: { v1: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } })
+  if (state !== 'missing')
+    writeFileSync(join(root, '.env.test.local'), `HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${state === 'valid' ? ring : 'invalid-fixture-ring'}'\n`)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result.success).toBe(state === 'valid')
+  if (result.success) {
+    const env = parseEnv(readFileSync(join(deliveryDirectory(result), '.env.runtime'), 'utf8'))
+    expect(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING === ring).toBe(true)
+  }
+  else {
+    expect(result.error.code).toBe(HaiDeployError.CONFIG_ERROR.code)
+    expect(result.error.message).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
+    expect(result.error.message).toContain('.env.test.local')
+    expect(JSON.stringify(result).includes(ring)).toBe(false)
+  }
+  expect(ssh.upload).not.toHaveBeenCalled()
+})
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-fullstack-deploy-'))
   artifacts = join(root, '.hai/build/docker/release-1')

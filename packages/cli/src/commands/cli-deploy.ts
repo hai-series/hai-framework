@@ -12,6 +12,7 @@ import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { parseEnv } from 'node:util'
 import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import ora from 'ora'
@@ -422,6 +423,16 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     else
       writeCliMessage(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
     writeCliMessage(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
+    if (refreshed.data.values.HAI_ADMIN_DEFAULT_PASSWORD && (!selectedServices || selectedServices.includes('app'))) {
+      const passwordKey = 'HAI_ADMIN_DEFAULT_PASSWORD'
+      const source = originalEnv[passwordKey] !== undefined
+        ? cliM('cli_deploy_processEnvironment')
+        : [`.env.${refreshed.data.environment}.local`, '.env.local', `.env.${refreshed.data.environment}`, '.env']
+            .map(file => resolve(refreshed.data.envDir, file))
+            .find(file => existsSync(file) && parseEnv(readFileSync(file, 'utf8'))[passwordKey] !== undefined)
+      if (source)
+        writeCliMessage(chalk.cyan(cliM('cli_deploy_adminPasswordSource', { params: { source } })))
+    }
     writeCliMessage('')
   }
   catch (error) {

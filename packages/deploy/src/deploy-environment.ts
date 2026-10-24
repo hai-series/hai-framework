@@ -100,18 +100,29 @@ function environmentFile(path: string): Record<string, string> {
   return values
 }
 
-/** 部署来源逐层归并；高层父对象清除低层叶，同层按父→叶处理。 */
-function deploymentVariables(layers: Array<Record<string, string | undefined>>): Record<string, string> {
+/**
+ * 按来源归并环境变量；HAI 高层父配置清除旧叶，同层按父→叶处理。
+ * @param layers - 从低到高优先级的环境来源。
+ * @param prefix - 可选变量前缀，仅归并该模块。
+ * @returns 归并后的字面量环境变量，可能包含秘密。
+ * @example 模块内部上下文
+ * ```ts
+ * const env = mergeEnvironmentLayers([{ HAI_CACHE_TYPE: 'memory' }, { HAI_CACHE: '{"type":"redis"}' }])
+ * ```
+ */
+export function mergeEnvironmentLayers(layers: Array<Record<string, string | undefined>>, prefix?: string): Record<string, string> {
   const result: Record<string, string> = {}
   for (const layer of layers) {
-    const names = Object.keys(layer).filter(name => name === 'HAI_DEPLOY' || name.startsWith('HAI_DEPLOY_')).sort((left, right) => left.length - right.length)
+    const names = Object.keys(layer).filter(name => !prefix || name === prefix || name.startsWith(`${prefix}_`)).sort((left, right) => left.length - right.length)
     for (const name of names) {
       const value = layer[name]
       if (value === undefined)
         continue
-      for (const previous of Object.keys(result)) {
-        if (previous.startsWith(`${name}_`))
-          delete result[previous]
+      if (name.startsWith('HAI_')) {
+        for (const previous of Object.keys(result)) {
+          if (previous.startsWith(`${name}_`))
+            delete result[previous]
+        }
       }
       result[name] = value
     }
@@ -216,7 +227,7 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
       if (name === 'HAI_DEPLOY' || name.startsWith('HAI_DEPLOY_'))
         delete values[name]
     }
-    Object.assign(values, deploymentVariables([base, globalPrivate, selected, modePrivate, process.env]))
+    Object.assign(values, mergeEnvironmentLayers([base, globalPrivate, selected, modePrivate, process.env], 'HAI_DEPLOY'))
     values.HAI_DEPLOY_ENVIRONMENT = environment
     values.HAI_CORE_ENV ??= environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
     return ok({ environment, envDir, values, targetValues: selected })
