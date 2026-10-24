@@ -154,7 +154,7 @@ export interface ScanResult {
   middlewares?: MiddlewareRequirement[]
   /** 从运行依赖图识别的 Hai 模块；peer 和开发依赖不启用模块。 */
   haiModules?: string[]
-  /** 应用名称（目录名称；可用 projectName 显式覆盖部署资源名）。 */
+  /** 工程名称（工程根 package.json 的 name，缺失时取工程根目录名；projectName 可显式覆盖部署资源名）。 */
   appName: string
   /** 是否为 SvelteKit 项目 */
   isSvelteKit: boolean
@@ -297,7 +297,7 @@ export interface DeployAppOptions {
   envDir?: string
   /** 按服务或变量前缀选择处理方式；如 HAI_REACH_PROVIDERS_1 可独立于另一邮件连接。 */
   serviceModes?: Partial<Record<string, MiddlewareMode>>
-  /** 项目名称（默认使用明确指定的部署目录名称）。 */
+  /** 部署项目名，默认工程根 package.json 的 name，缺失时用工程根目录名；显式环境会附加后缀。 */
   projectName?: string
   /** 是否跳过全部中间件配置与开通，默认 false；例如配置完备时设为 true。 */
   skipMiddleware?: boolean

@@ -153,7 +153,7 @@
   "cli_help_environment": "デプロイ環境（test/prod など）。対応する環境ファイルが必要です",
   "cli_help_envDir": "環境ファイルのディレクトリ。既定では自動検出",
   "cli_help_deployYes": "プロンプトを表示せず保存済み設定または既定値を使用し、不足する必須項目を報告",
-  "cli_help_projectName": "プロジェクト名。既定ではサービスパッケージ名またはディレクトリ名に環境名を付加",
+  "cli_help_projectName": "配置プロジェクト名。既定はルート package.json の name、未指定ならルートディレクトリ名。環境名を付加",
   "cli_help_skipMiddleware": "ミドルウェアが設定済みの場合、設定とリソース準備をスキップ",
   "cli_help_artifactDir": "manifest.json を含む既存イメージ成果物のディレクトリ",
   "cli_help_services": "更新するサービス（web、app、app,web など）。省略時は成果物から選択",

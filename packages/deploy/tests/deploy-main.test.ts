@@ -6,6 +6,9 @@
  * 通过 mock 验证 deploy 单例的 init / close / provisionAll / deployApp 流程。
  */
 
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deploy } from '../src/deploy-main.js'
 import { HaiDeployError } from '../src/deploy-types.js'
@@ -197,6 +200,25 @@ describe('deploy singleton', () => {
   })
 
   describe('deployApp', () => {
+    it('平台 Provider 同样使用工程名，并去除 npm scope', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'hai-deploy-platform-name-'))
+      try {
+        const service = join(root, 'packages/orders-serv')
+        mkdirSync(join(service, '.vercel/output'), { recursive: true })
+        writeFileSync(join(root, 'package.json'), '{"name":"@example/orders"}')
+        writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: \'9.0\'\nimporters:\n  .: {}\n  packages/orders-serv: {}\n')
+        mockFetch.mockResolvedValueOnce(mockJsonResponse({ user: { username: 'testuser' } }))
+        expect(await deploy.init({ provider: { type: 'vercel', token: 'test-token' } })).toMatchObject({ success: true })
+        mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'project-id' }))
+        mockFetch.mockResolvedValueOnce(mockJsonResponse({}))
+        // 不提供构建配置，确认解析项目后在制品校验处结束，不向平台发布。
+        const result = await deploy.deployApp(service, { skipMiddleware: true })
+        expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.UPLOAD_FAILED.code } })
+        expect(mockFetch.mock.calls.some(([url]) => String(url).endsWith('/v10/projects/orders'))).toBe(true)
+      }
+      finally { rmSync(root, { recursive: true, force: true }) }
+    })
+
     it('未初始化时应返回 NOT_INITIALIZED', async () => {
       const result = await deploy.deployApp('/some/app')
       expect(result.success).toBe(false)

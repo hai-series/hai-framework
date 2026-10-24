@@ -153,7 +153,7 @@
   "cli_help_environment": "Deployment environment, such as test/prod; its environment file must exist",
   "cli_help_envDir": "Environment file directory; detected automatically by default",
   "cli_help_deployYes": "Use saved/default configuration without prompts; report missing required values",
-  "cli_help_projectName": "Project name; defaults to the service package or directory name, with environment suffix",
+  "cli_help_projectName": "Deployment project name; defaults to the project-root package.json name, then root directory name, with environment suffix",
   "cli_help_skipMiddleware": "Skip middleware configuration/provisioning when already configured",
   "cli_help_artifactDir": "Existing image artifact directory containing manifest.json",
   "cli_help_services": "Update selected services, such as web, app or app,web; otherwise select from the artifact",

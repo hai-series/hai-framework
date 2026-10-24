@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -59,6 +59,51 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
 async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
+
+it.each([
+  { name: 'hai-delivery', projectName: undefined, expected: 'hai-delivery', online: true },
+  { name: '@example/hai-delivery', projectName: undefined, expected: 'hai-delivery', online: false },
+  { name: 'hai-delivery', projectName: 'hai-delivery-serv', expected: 'hai-delivery-serv', online: false },
+])('fullstack 使用工程名称统一交付包、远端、容器、卷与基线 ($expected)', async ({ name, projectName, expected, online }) => {
+  const service = join(root, 'packages/hai-delivery-serv')
+  mkdirSync(join(service, 'config'), { recursive: true })
+  writeFileSync(join(service, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n')
+  writeFileSync(join(service, 'config/_db.yml'), 'type: postgresql\n')
+  writeFileSync(join(service, 'package.json'), JSON.stringify({ name: 'hai-delivery-serv' }))
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name }))
+  writeFileSync(join(root, 'hai.json'), '{"build":{"images":[{"name":"app"},{"name":"web"}]}}')
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': {}, 'packages/hai-delivery-serv': { dependencies: { '@h-ai/reldb': { version: '1' } } } }, packages: { '@h-ai/reldb@1': {} }, snapshots: { '@h-ai/reldb@1': {} } }))
+  await initialize(online)
+  const scanned = await deploy.scan(service, { environment: 'test' })
+  expect(scanned).toMatchObject({ success: true, data: { appName: name, appDir: service, requiredServices: ['db'] } })
+  const result = await deploy.deployApp(service, { environment: 'test', projectName, bundleOnly: !online })
+  const directory = deliveryDirectory(result)
+  const target = JSON.parse(readFileSync(join(directory, 'deploy-target.json'), 'utf8'))
+  expect(target.directory).toBe(`/opt/hai/apps/${expected}-test`)
+  if (online) {
+    expect(ssh.upload).toHaveBeenCalledWith(join(directory, target.bundle), `${target.directory}/incoming/${target.bundle}`)
+    expect(ssh.exec.mock.calls.some(([command]) => String(command).includes(`'${target.directory}'`))).toBe(true)
+  }
+  expect(target.bundle).toMatch(new RegExp(`^bundle-${expected}-test-.*-1\\.2\\.3\\.tar$`))
+  expect(basename(directory)).toBe(target.bundle.slice(0, -4))
+  expect(dirname(directory)).toBe(join(root, '.hai/deploy/test'))
+  const compose = parse(readFileSync(join(directory, 'docker-compose-1.2.3.yml'), 'utf8'))
+  for (const part of ['app', 'web', 'db'])
+    expect(compose.services[part].container_name).toBe(`hai-${expected}-test-${part}`)
+  expect(compose.volumes).toHaveProperty(`${expected}-test-db-data`)
+  const secretFile = join(service, '.hai/deploy/runtime', `${expected}-test.secrets.json`)
+  const secrets = readFileSync(secretFile, 'utf8')
+  const unpacked = join(root, 'identity-proof')
+  mkdirSync(unpacked)
+  execFileSync('tar', ['-xf', join(directory, target.bundle), '-C', unpacked])
+  const script = readFileSync(join(unpacked, 'apply.sh'), 'utf8')
+  expect(script).toContain(`project='hai-${expected}-test'`)
+  expect(script).toContain(`/opt/hai/apps/${expected}-test`)
+  const updated = await deploy.deployApp(service, { environment: 'test', projectName, bundleOnly: true, selectedServices: ['web'] })
+  const updatedTarget = JSON.parse(readFileSync(join(deliveryDirectory(updated), 'deploy-target.json'), 'utf8'))
+  expect(updatedTarget.directory).toBe(target.directory)
+  expect(readFileSync(secretFile, 'utf8')).toBe(secrets)
+})
 
 it('中间件原生变量与应用、持久配置和离线服务环境隔离', async () => {
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reldb': { version: '1' }, '@h-ai/storage': { version: '1' } } } }, packages: { '@h-ai/reldb@1': {}, '@h-ai/storage@1': {} }, snapshots: { '@h-ai/reldb@1': {}, '@h-ai/storage@1': {} } }))

@@ -6,6 +6,25 @@ import { stringify } from 'yaml'
 import { deploy } from '../src/deploy-main.js'
 
 describe('deploy.scan', () => {
+  it.each([
+    { entry: '.', name: 'orders-serv', expected: 'orders-serv' },
+    { entry: 'apps/orders-service', name: 'orders', expected: 'orders' },
+    { entry: 'packages/orders-serv', name: undefined, expected: undefined },
+    { entry: 'packages/orders-serv', name: '   ', expected: undefined },
+  ])('工程命名独立于扫描入口，缺少名称回退工程根目录 ($entry, $name)', async ({ entry, name, expected }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-project-name-'))
+    try {
+      const app = path.join(root, entry)
+      fs.mkdirSync(app, { recursive: true })
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': {}, [entry]: {} } }))
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name }))
+      if (entry !== '.')
+        fs.writeFileSync(path.join(app, 'package.json'), '{"name":"irrelevant-service-name"}')
+      expect(await deploy.scan(app)).toMatchObject({ success: true, data: { appName: expected ?? path.basename(root), appDir: app } })
+    }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
+  })
+
   it.each(['console', 'api'])('keeps email and SMS %s providers distinct without dropping repeated email backends', async (type) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-reach-channels-'))
     try {

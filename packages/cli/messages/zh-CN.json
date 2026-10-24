@@ -153,7 +153,7 @@
   "cli_help_environment": "部署环境（test / prod 等，必须存在对应环境文件）",
   "cli_help_envDir": "环境文件所在目录（默认自动查找）",
   "cli_help_deployYes": "无交互使用已有或默认配置；缺少必需参数时说明原因",
-  "cli_help_projectName": "项目名称（默认服务包名，缺失时为目录名；附加环境后缀）",
+  "cli_help_projectName": "部署项目名（默认工程根 package.json 的 name，缺失时用工程根目录名；附加环境后缀）",
   "cli_help_skipMiddleware": "配置已完备，跳过全部中间件处理，直接部署",
   "cli_help_artifactDir": "已有镜像构建产物目录（含 manifest.json）",
   "cli_help_services": "只更新指定服务，例如 web、app 或 app,web；省略时部署制品中的全部服务",

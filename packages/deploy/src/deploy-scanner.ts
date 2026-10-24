@@ -6,6 +6,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { parseAllDocuments } from 'yaml'
 import { loadDeploymentConfig, loadDeploymentEnvironment } from './deploy-environment.js'
+import { resolveProjectDirectory } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
 
@@ -95,6 +96,11 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
   try {
     const appDir = resolve(inputDir)
     const graph = runtimeDependencies(appDir)
+    // 服务目录只决定依赖和配置；资源属于工程，不能把 -serv 等工作区后缀带入部署名。
+    const projectDir = resolveProjectDirectory(appDir)
+    const packageFile = join(projectDir, 'package.json')
+    const project = existsSync(packageFile) ? record(JSON.parse(readFileSync(packageFile, 'utf8'))) : {}
+    const appName = typeof project.name === 'string' && project.name.trim() ? project.name.trim() : basename(projectDir)
     const envDir = options?.envDir ? resolve(options.envDir) : existsSync(join(appDir, '.env')) ? appDir : graph.root
     const loaded = loadDeploymentEnvironment({ environment: options?.environment ?? 'prod', envDir, requireFile: options?.environment !== undefined })
     if (!loaded.success)
@@ -148,7 +154,7 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       envDir,
       middlewares,
       haiModules: [...deps].filter(name => name.startsWith('@h-ai/')).sort(),
-      appName: basename(appDir),
+      appName,
       isSvelteKit,
       adapterInstalled: graph.build.has('@sveltejs/adapter-vercel'),
       nodeAdapterInstalled: graph.build.has('@sveltejs/adapter-node'),

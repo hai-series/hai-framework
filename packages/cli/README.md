@@ -102,6 +102,10 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
+默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时取工程根目录名，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、凭据缓存文件名及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+
+部署名属于资源身份。旧版已部署项目若需沿用原目录、数据卷、凭据和增量基线，在项目 deploy 脚本保留 `--project-name hai-delivery-serv`，环境仍由 `--env test` 追加，并保留原凭据缓存。只修改 `deploy-target.json.directory` 不能迁移 Compose 资源；更名需另行迁移数据及建立新基线，工具不自动搬移或删除旧资源。已有离线包须重新生成。
+
 完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。仅打包不询问 SSH，会复用已有连接并生成 tar、带逐项说明的 `deploy-target.json` 与 Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh`。上传前核对 target 并补齐缺项，两个脚本均读取此文件，支持 key/agent 和 password，均无需 Node/pnpm。target 只引用 `passwordEnv`（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）；密码取自操作机环境，仅进入本次 SSH/SCP 子进程，不进入应用环境或包内。修改 target 仅影响本包，不回写工程。完全隔离的 Linux 服务器复制整个目录后运行 `sh deploy-local.sh`，自动解包部署。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
 
 直接部署首次补齐缺失的 SSH 连接和认证信息，完整有效配置（包括 `--yes`）直接复用；密码隐藏输入，保留前后空格和前导零。新连接和中间件秘密值写 `.env.<环境>.local`，旧 `.env.local` 保留为兼容回退。部署 SDK 的 `HAI_DEPLOY_*` 优先级为进程 > 环境私有 > 环境公共 > 旧全局私有 > 基础；其他模块为进程 > 环境私有 > 旧全局私有 > 环境公共 > 基础。此私有层仅用于部署 SDK，不改变 Core 的普通应用加载。目标环境完整中间件配置在 `--yes` 下保持，不重复询问或云开通；交互模式仍可选择本次范围。

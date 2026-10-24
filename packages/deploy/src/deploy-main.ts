@@ -135,7 +135,7 @@ const deployCredentials: DeployCredentialOperations = {
   saveAll: (entries: Record<string, string>) => saveCredentials(entries),
 }
 
-/** 归一化项目名为容器/镜像安全的 `[a-z0-9-]`。 */
+/** 归一化项目名为部署资源安全的 `[a-z0-9-]`，去除 npm scope。 */
 function normalizeProjectName(name: string): string {
   const normalized = name
     .replace(/^@[^/]+\//, '')
@@ -415,7 +415,7 @@ export const deploy: DeployFunctions = {
       }
     }
     const appEnv = Object.fromEntries(Object.entries(environment.data.values).filter(([key]) => key !== 'HAI_DEPLOY' && !connectionVariables.has(key) && !key.startsWith('HAI_CLI_') && (!key.startsWith('HAI_DEPLOY_') || key === 'HAI_DEPLOY_ENVIRONMENT')))
-    const projectName = `${options?.projectName ?? scan.appName}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
+    const projectName = `${options?.projectName ?? normalizeProjectName(scan.appName)}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
     options = {
       ...options,
       ...(scanOptions.environment ? { environment: environment.data.environment } : {}),

@@ -37,7 +37,7 @@ pnpm build --target docker --images web
 pnpm run deploy --env prod --services web
 ```
 
-使用 pnpm run deploy，避免与 pnpm 自带 deploy 混淆。fullstack 指向 packages/<项目>-serv，API workspace 指向 apps/<项目>-service；这是扫描入口，不是镜像选择。--services 负责选择；--skip-middleware 只跳过配置及开通。--yes 复用有效配置，缺值时不盲目继续。
+使用 pnpm run deploy，避免与 pnpm 自带 deploy 混淆。fullstack 指向 packages/<项目>-serv，API workspace 指向 apps/<项目>-service；这是扫描入口，不是镜像选择。默认资源名取工程根 package.json.name（缺失用工程根目录名）并附加显式环境，统一交付包、远端目录、容器、卷及基线；旧部署用 --project-name 保留原资源身份，不能只改 target.directory 迁移。--services 负责选择；--skip-middleware 只跳过配置及开通。--yes 复用有效配置，缺值时不盲目继续。
 
 ## SDK
 

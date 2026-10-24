@@ -187,6 +187,10 @@ The root package.json.version identifies the application. `.hai/build/docker/<bu
 
 #### Prepare the environment and destination
 
+The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), falling back to the root directory name, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, credential cache filenames and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
+
+Names identify resources. For existing deployments, retain `--project-name hai-delivery-serv` in the project deploy script (`--env test` still adds the environment) and keep the original credential cache to reuse the original directory, volumes and baseline. Editing `deploy-target.json.directory` does not migrate Compose resources. Renaming requires a separate data migration and new baseline; old resources are never moved or deleted automatically. Regenerate existing offline bundles.
+
 Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-service, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
 
 `deploy` supports `${VARIABLE:fallback}` and hierarchical `HAI_DEPLOY_*` overrides, including whole JSON objects. Deployment precedence is process > `.env.<environment>.local` > `.env.<environment>` > legacy `.env.local` > `.env`. Other modules retain process > mode-private > legacy global-private > mode-public > base. The deployment-only private layer does not change Core runtime loading. Builds do not load deployment environments or secrets.
