@@ -36,6 +36,9 @@
   },
   "devDependencies": {
     "@h-ai/cli": "{{haiPackageSpecifier}}",
+{{#if features.feedback}}
+    "@h-ai/feedback": "{{haiPackageSpecifier}}",
+{{/if}}
 {{#if features.deploy}}
     "@h-ai/deploy": "{{haiPackageSpecifier}}",
 {{/if}}

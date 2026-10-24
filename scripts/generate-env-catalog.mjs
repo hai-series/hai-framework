@@ -16,6 +16,7 @@ const modules = [
   ['ai', 'ai', 'AIConfigSchema'],
   ['vecdb', 'vecdb', 'VecdbConfigSchema'],
   ['reach', 'reach', 'ReachConfigSchema'],
+  ['feedback', 'feedback', 'FeedbackConfigSchema'],
   ['payment', 'payment', 'PaymentConfigSchema'],
   ['audit', 'audit', 'AuditInitConfigSchema'],
   ['scheduler', 'scheduler', 'SchedulerConfigSchema'],

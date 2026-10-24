@@ -517,5 +517,15 @@
   "gallery_interaction_retry": "重试",
   "gallery_interaction_empty_title": "没有匹配的记录",
   "gallery_interaction_empty_description": "尝试调整搜索条件，或清除筛选后查看全部记录。LongIdentifierWithoutSpacesForResponsiveLayoutVerification0123456789",
-  "gallery_interaction_reset": "清除筛选"
+  "gallery_interaction_reset": "清除筛选",
+  "feedback_title": "问题反馈",
+  "feedback_open": "反馈问题",
+  "feedback_request_failed": "反馈请求失败，请重试。",
+  "feedback_config_failed": "问题反馈配置无效。",
+  "feedback_forbidden": "没有查看此反馈的权限。",
+  "feedback_invalid_query": "反馈筛选条件无效。",
+  "feedback_attachment_pending": "附件仍在收集中或暂不可用。",
+  "feedback_export_pending": "问题包仍在准备中，请稍后在详情中重试。",
+  "feedback_material_logs": "诊断记录",
+  "feedback_material_missing": "缺失材料"
 }

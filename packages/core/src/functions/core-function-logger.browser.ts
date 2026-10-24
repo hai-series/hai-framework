@@ -9,6 +9,8 @@ import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
 import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
+import { requestContext } from './core-function-context.js'
+import { emitLogRecord } from './core-function-log-observer.js'
 
 // ─── 全局配置 ───
 
@@ -153,25 +155,37 @@ function formatMessage(message: string, context?: LogContext, format: LogFormat 
  * @returns 统一 Logger 实例
  */
 function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Record<string, unknown>, resolveFormat: () => LogFormat): Logger {
+  const write = (level: LogLevel, message: string, ctx?: LogContext): void => {
+    const output = resolveLogger()
+    const priorities: Record<LogLevel, number> = { trace: 0, debug: 1, info: 2, warn: 3, error: 4, fatal: 4 }
+    if (priorities[level] < output.getLevel())
+      return
+    const context = sanitizeLogContext({ ...resolveContext(), ...ctx, ...requestContext.get() }) ?? {}
+    const text = formatMessage(message, context, resolveFormat(), level)
+    if (level === 'fatal')
+      output.error(resolveFormat() === 'json' ? text : `[FATAL] ${text}`)
+    else output[level](text)
+    if (!requestContext.get().suppressLogObservers)
+      emitLogRecord({ timestamp: Date.now(), level, message, context })
+  }
   return {
     trace(message: string, ctx?: LogContext) {
-      resolveLogger().trace(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'trace'))
+      write('trace', message, ctx)
     },
     debug(message: string, ctx?: LogContext) {
-      resolveLogger().debug(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'debug'))
+      write('debug', message, ctx)
     },
     info(message: string, ctx?: LogContext) {
-      resolveLogger().info(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'info'))
+      write('info', message, ctx)
     },
     warn(message: string, ctx?: LogContext) {
-      resolveLogger().warn(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'warn'))
+      write('warn', message, ctx)
     },
     error(message: string, ctx?: LogContext) {
-      resolveLogger().error(formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'error'))
+      write('error', message, ctx)
     },
     fatal(message: string, ctx?: LogContext) {
-      const text = formatMessage(message, { ...resolveContext(), ...ctx }, resolveFormat(), 'fatal')
-      resolveLogger().error(resolveFormat() === 'json' ? text : `[FATAL] ${text}`)
+      write('fatal', message, ctx)
     },
     child(childContext: Record<string, unknown>): Logger {
       return wrapLoglevel(resolveLogger, () => ({ ...resolveContext(), ...childContext }), resolveFormat)

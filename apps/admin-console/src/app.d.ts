@@ -7,6 +7,7 @@ import '@h-ai/ui/auto-import'
  */
 
 declare global {
+  const __HAI_BUILD_METADATA__: { appVersion: string, buildId: string, commit: string }
   namespace App {
     interface Error {
       code?: string

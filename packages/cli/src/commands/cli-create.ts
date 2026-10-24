@@ -147,6 +147,13 @@ const FEATURES: Record<string, FeatureDefinition> = {
     get description() { return cliM('cli_featureReachDescription') },
     packages: ['@h-ai/reach'],
   },
+  'feedback': {
+    id: 'feedback',
+    get name() { return cliM('cli_featureFeedbackName') },
+    get description() { return cliM('cli_featureFeedbackDescription') },
+    packages: ['@h-ai/feedback'],
+    dependencies: ['db', 'storage', 'reach', 'iam'],
+  },
   'payment': {
     id: 'payment',
     get name() { return cliM('cli_featurePaymentName') },
@@ -205,6 +212,7 @@ const SELECTABLE_FEATURES: FeatureId[] = [
   'crypto',
   'audit',
   'reach',
+  'feedback',
   'payment',
   'vecdb',
   'datapipe',
@@ -242,6 +250,7 @@ const PROJECT_TEMPLATES = {
       'storage',
       'audit',
       'reach',
+      'feedback',
       'payment',
       'vecdb',
       'datapipe',
@@ -349,7 +358,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           // fullstack 已用模块配置 helper 渲染完整配置，不能再覆盖 Reach 模板等应用默认值。
           if (isFullstack && await fse.pathExists(configPath))
             continue
-          await writeFile(configPath, generateConfigFile(configKey, configs))
+          const baseConfig = generateConfigFile(configKey, configs)
+          const renderedConfig = configKey === 'reach' && resolvedOptions.features.includes('feedback') ? baseConfig.replace('name: console_dev', 'name: email') : baseConfig
+          await writeFile(configPath, configKey === 'feedback' ? renderedConfig.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${resolvedOptions.name}`) : renderedConfig)
         }
       }
 
@@ -1050,6 +1061,7 @@ function getFeatureConfigKey(featureId: FeatureId): string | null {
     deploy: 'deploy',
     vecdb: 'vecdb',
     reach: 'reach',
+    feedback: 'feedback',
     scheduler: 'scheduler',
     audit: 'audit',
     payment: 'payment',
@@ -1379,7 +1391,7 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 ### 配置扩展
 
-服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
+服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy、feedback 共 14 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
 
 自动生成的 \`.env\` 包含已启用模块的环境参数；YAML 显式引用相同变量并保留本地回退。编辑环境参数优先修改对应 \`.env\`；未启用模块仍保留注释。
 

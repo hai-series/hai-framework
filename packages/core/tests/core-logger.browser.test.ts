@@ -9,6 +9,21 @@ import { describe, expect, it } from 'vitest'
 import { core } from '../src/core-index.browser.js'
 
 describe('core.logger (browser)', () => {
+  it('observes filtered, redacted browser records and releases the listener', () => {
+    const records: { level: string, context: Readonly<Record<string, unknown>> }[] = []
+    const logger = core.logger.create({ name: 'browser-observer', level: 'warn' })
+    const stop = core.logger.observe(record => records.push(record))
+    try {
+      logger.debug('Not collected')
+      logger.error('Browser error', { authorization: 'Bearer private-token' })
+      expect(records).toHaveLength(1)
+      expect(records[0]).toMatchObject({ level: 'error', context: { authorization: '[REDACTED]' } })
+      stop()
+      logger.error('After stop')
+      expect(records).toHaveLength(1)
+    }
+    finally { stop() }
+  })
   it('logger 应该为单例', () => {
     expect(core.logger).toBe(core.logger)
   })

@@ -390,6 +390,50 @@ export interface LogContext {
 }
 
 /**
+ * 可信关联范围，不包含访问令牌。Node 异步请求/任务隔离，浏览器仅同步作用域。
+ * @example
+ * ```ts
+ * import type { RequestContext } from '@h-ai/core'
+ * const context: RequestContext = { requestId: 'request-1', scopeId: 'tenant-1', userId: 'user-1' }
+ * ```
+ */
+export interface RequestContext {
+  readonly requestId?: string
+  readonly scopeId?: string
+  readonly userId?: string
+  readonly jobId?: string
+  /** 内部采集/存储路径可暂停观察回调，常规日志输出仍执行。 */
+  readonly suppressLogObservers?: boolean
+}
+
+/**
+ * 经过当前级别和脱敏策略的日志，不代表日志已持久化。
+ * @example
+ * ```ts
+ * import type { LogRecord } from '@h-ai/core'
+ * const record: LogRecord = { timestamp: 1, level: 'error', message: 'Request failed', context: { requestId: 'request-1' } }
+ * ```
+ */
+export interface LogRecord {
+  readonly timestamp: number
+  readonly level: LogLevel
+  readonly message: string
+  readonly context: Readonly<LogContext>
+}
+
+/**
+ * 同步日志观察者；只做有界内存收集，I/O 由消费者异步处理。
+ * @example
+ * ```ts
+ * import { core, type LogObserver } from '@h-ai/core'
+ * const observer: LogObserver = record => { const requestId = record.context.requestId }
+ * const unsubscribe = core.logger.observe(observer)
+ * unsubscribe()
+ * ```
+ */
+export type LogObserver = (record: LogRecord) => void
+
+/**
  * 日志选项。
  * @example
  * ```ts
@@ -438,6 +482,18 @@ export interface Logger {
  * ```
  */
 export interface CoreLogger extends Logger {
+  /**
+   * 观察通过日志级别与脱敏策略的记录，返回取消函数；异常与同步重入被隔离。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * const records: string[] = []
+   * const unsubscribe = core.logger.observe(record => { records.push(record.message) })
+   * core.logger.info('Application ready')
+   * unsubscribe()
+   * ```
+   */
+  observe: (observer: LogObserver) => () => void
   /** 创建新的 Logger 实例 */
   create: (options?: LoggerOptions) => Logger
   /** 配置全局 Logger 选项，后续输出同时应用到已有默认、模块与 child Logger。 */
@@ -599,6 +655,22 @@ export interface MessageOptions {
  * ```
  */
 export interface CoreFunctions {
+  /**
+   * Node 中跨 await 隔离请求关联，浏览器仅同步作用域；不向下游注入任何凭据。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * await core.context.run({ requestId: 'request-1' }, async () => {
+   *   await Promise.resolve()
+   *   core.logger.info('Work completed')
+   * })
+   * const outside = core.context.get()
+   * ```
+   */
+  readonly context: {
+    readonly get: () => Readonly<RequestContext>
+    readonly run: <T>(context: RequestContext, operation: () => T) => T
+  }
   /** 默认 Logger（懒加载单例），同时提供日志管理方法 */
   readonly logger: CoreLogger
   /** 国际化工具 */

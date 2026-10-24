@@ -41,7 +41,7 @@ import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-r
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
 import { createClientIpResolver, readRemoteAddress } from './serv-client-ip.js'
 import { resolveServHttpConfig } from './serv-config.js'
-import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
+import { buildAuthContextFactory, parseRequestContext, resolveRequestId } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
 import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
@@ -348,7 +348,11 @@ export function createApp<
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
   // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
-  app.use('*', (c, next) => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), next))
+  app.use('*', async (c, next) => {
+    const requestId = resolveRequestId(c.req.header('x-request-id') ?? null)
+    await core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), next))
+    c.header('x-request-id', requestId)
+  })
   // 缺失路由也返回标准 JSON，保持 404 并允许统一传输加密。
   app.notFound(c => c.json(buildHaiErrorBody(
     HaiCommonError.NOT_FOUND,
@@ -528,7 +532,7 @@ async function handleORPC(
   // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
   const context = await createContext({ request: c.req.raw, remoteAddress: readRemoteAddress(c.env) })
   // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
-  const { matched, response } = await handler.handle(c.req.raw, { prefix, context })
+  const { matched, response } = await core.context.run({ requestId: context.requestId, userId: context.session?.userId, scopeId: context.scopeId }, () => handler.handle(c.req.raw, { prefix, context }))
   if (!matched) {
     // Step C：当前前缀下没有匹配路由，继续交给 Hono 后续路由处理。
     await next()

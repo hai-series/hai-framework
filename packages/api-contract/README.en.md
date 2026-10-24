@@ -132,6 +132,20 @@ pnpm --filter @h-ai/api-contract typecheck
 
 Schemas, inferred types and composition helpers include typechecked examples; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证). Schema samples use validated local data and do not prove provider execution.
 
+## Feedback domain contract
+
+`apiContract.feedback` exposes reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection and attachments.upload/get. A minimal submission needs only submissionId/appId, without a description or exception. Client inputs cannot supply identities, permissions, S3 keys, or email recipients. `@h-ai/api-contract/feedback` provides the same schemas and types through an optional subpath.
+
+Evidence append returns acknowledged/evidenceRevision; clients release only acknowledged blocks. setStatus requires expectedVersion. export pins the evidence revision, and getExport reads the completed bundle. Base64 attachments are limited to 5 MiB of original data; the server must still verify bytes, type, and SHA-256. Report.appVersion is the application version; Report.version is the concurrency counter.
+
+```ts
+import { apiContract, FeedbackSubmitInputSchema } from '@h-ai/api-contract'
+
+const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', appId: 'orders' })
+const contract = apiContract.create({ feedback: apiContract.feedback })
+const path = apiContract.pathOf(contract.feedback.reports.submit)
+```
+
 ## License
 
 Apache-2.0

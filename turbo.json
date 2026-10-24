@@ -25,6 +25,8 @@
       "env": [
         "HAI_DOCKER_PROD_BUILD",
         "HAI_E2E",
+        "HAI_BUILD_ID",
+        "HAI_BUILD_COMMIT",
         "PUBLIC_*",
         "VITE_*",
         "TAURI_*"

@@ -6,7 +6,7 @@
 
 > 現在は `0.1.0-alpha` 段階で、公開契約は開発中です。本番導入前にバージョンを固定し、用途に応じた安全性・処理能力を検証してください。
 
-複数インスタンスの本番構成は[21 パッケージの共有状態・復旧能力表（中国語）](.agents/instructions/distributed-state.md)を確認してください。PostgreSQL/MySQL、Redis、共有オブジェクト・ベクトルサービスを使用し、初期化時にローカル後端を拒否します。CAS・租約・冪等性・未知の外部効果と検証範囲を記載しています。
+複数インスタンスの本番構成は[22 パッケージの共有状態・復旧能力表（中国語）](.agents/instructions/distributed-state.md)を確認してください。PostgreSQL/MySQL、Redis、共有オブジェクト・ベクトルサービスを使用し、初期化時にローカル後端を拒否します。CAS・租約・冪等性・未知の外部効果と検証範囲を記載しています。
 
 <p align="center">
   <strong>AI Runtime · 企業向けフルスタックモジュール · Agent Skills · エンドツーエンドの型安全性</strong>
@@ -56,7 +56,7 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 | **共通ライフサイクル** | 状態を持つモジュールは `init() → use → close()` の共通パターンに従います。            |
 | **明示的な失敗**       | ドメイン操作は `HaiResult<T>` で成功と失敗を型レベルで区別します。                    |
 | **設定の検証**         | Zod Schema が `init()` で設定を検証し、起動時にエラーを検出します。                   |
-| **必要に応じた構成**   | 独立公開の 21 モジュール。最小依存の `@h-ai/core` から必要に応じて追加します。        |
+| **必要に応じた構成**   | 独立公開の 22 モジュール。最小依存の `@h-ai/core` から必要に応じて追加します。        |
 | **全体の型安全性**     | 厳密な TypeScript と `api-contract → serv → api-client` 全体の型推論。                |
 | **複数端末の UI**      | デスクトップ・モバイル向けの 92 Svelte 5 Runes コンポーネント（基本・複合・用途別）。 |
 | **生成・デプロイ**     | `hai create` で作成し、`hai deploy` で Vercel・自前ホストへ展開。                     |
@@ -170,7 +170,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 ## モジュール一覧
 
-現在 **21 の独立公開モジュール**を、5 層に分類して提供しています。
+現在 **22 の独立公開モジュール**を、5 層に分類して提供しています。
 
 ### 基盤機能
 
@@ -195,6 +195,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 | ----------------- | --------------------------------------------------------------------------------------------------------- | :-------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | `@h-ai/iam`       | 認証・アクセス管理：パスワード/OTP/LDAP、RBAC、セッション、ユーザー                                       |                 —                 |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
 | `@h-ai/reach`     | 通知：メール、SMS、API 通知、テンプレート、DND                                                            | ✅ SMTP / Alibaba Cloud SMS / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
+| `@h-ai/feedback`  | 問題報告：現場収集、非公開画像、メール、一覧処理、オフライン診断                                          |          DB / S3 / SMTP           |                                                     —                                                     |
 | `@h-ai/ai`        | AI：通常・ストリーミング対話、画像、ASR/TTS、ツール、MCP、Embedding、RAG/知識、記憶、Context、Rerank、A2A |     ✅ OpenAI 互換 / 拡張可能     |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
 | `@h-ai/payment`   | 決済：注文作成、複数端末からの開始、通知                                                                  |  ✅ WeChat Pay / Alipay / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
 | `@h-ai/audit`     | 監査：記録、ページ検索、統計、定期削除                                                                    |                 —                 |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
@@ -231,6 +232,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 | データ      | `@h-ai/datapipe`     | [`packages/datapipe/README.ja.md`](./packages/datapipe/README.ja.md)         |
 | 業務機能    | `@h-ai/iam`          | [`packages/iam/README.ja.md`](./packages/iam/README.ja.md)                   |
 | 業務機能    | `@h-ai/reach`        | [`packages/reach/README.ja.md`](./packages/reach/README.ja.md)               |
+| 業務機能    | `@h-ai/feedback`     | [`packages/feedback/README.ja.md`](./packages/feedback/README.ja.md)         |
 | 業務機能    | `@h-ai/ai`           | [`packages/ai/README.ja.md`](./packages/ai/README.ja.md)                     |
 | 業務機能    | `@h-ai/payment`      | [`packages/payment/README.ja.md`](./packages/payment/README.ja.md)           |
 | 業務機能    | `@h-ai/audit`        | [`packages/audit/README.ja.md`](./packages/audit/README.ja.md)               |
@@ -586,7 +588,7 @@ pnpm --filter @h-ai/reldb test  # 只运行某个模块
 
 ```
 hai-framework/
-├── packages/            # 21 のフレームワークパッケージ（@h-ai/*）
+├── packages/            # 22 のフレームワークパッケージ（@h-ai/*）
 │   └── cli/templates/   # CLI と Skill のテンプレート（生成アプリへ配布）
 ├── apps/                # サンプルアプリ
 ├── scripts/             # 検証・公開スクリプト
@@ -652,12 +654,13 @@ Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用�
 | AI             | `HAI_AI_LLM_*`                           | `@h-ai/ai` の LLM API Key・Base URL・モデル                |
 | VecDB          | `HAI_VECDB_*`                            | `@h-ai/vecdb` の LanceDB / pgvector / Qdrant / Chroma      |
 | Reach          | `HAI_REACH_*`                            | `@h-ai/reach` の SMTP・SMS・Webhook                        |
+| Feedback       | `HAI_FEEDBACK_*`                         | フィードバック、管理者、収集上限と保存期間                 |
 | Payment        | `HAI_PAYMENT_*`                          | `@h-ai/payment` の WeChat Pay・Alipay・Stripe の加盟店設定 |
 | Deploy         | `HAI_DEPLOY_*`                           | `@h-ai/deploy` / `@h-ai/cli` の展開・基盤認証情報          |
 
 全項目・既定値はルートの `.env.example` が基準です。個別アプリでは対応する `README.md` と `.env.example` で追加設定を確認します。
 
-Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[21 パッケージの設定対応表（中国語）](.agents/skills/hai-module-create/configuration.md)を参照してください。
+Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[22 パッケージの設定対応表（中国語）](.agents/skills/hai-module-create/configuration.md)を参照してください。
 
 ### 品質チェック
 

@@ -148,6 +148,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 ```
 
 > CSRF Header は `apiFetch` が自動付与します。`@h-ai/kit` は独立した CSRF middleware ファクトリーを提供しません。
+> `apiFetch` は文字列、URL、Request を受け付けます。Request のメソッド、ヘッダー、本文を保持し、書き込みには CSRF を付与します。transport 有効時は対応する本文のみ暗号化し、multipart の境界を保持します。
 >
 > 同一オリジンの SvelteKit endpoint は httpOnly Cookie を使い、サーバーで検証します。ブラウザーの Bearer Header が必要なら `kit.auth.setBrowserToken()` でページ内メモリーに保存してから `kit.client.create({ auth: true })` を使います。独自の `BrowserTokenStore` もメモリーまたはプラットフォームの安全なストレージを使用し、機密の認証情報を Web Storage に永続化しないでください。
 
@@ -317,6 +318,31 @@ pnpm --filter @h-ai/kit test
 ```
 
 Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
+
+## フィードバック入口とリクエスト関連付け
+
+`kit.createFeedbackHandler` は `/api/feedback/[...path]/+server.ts` の GET/POST/PATCH に使用できます。serv と同じ api-contract schema を再利用し、入力ストリームの容量とクライアント認証情報の混入を制限します。resolveContext は検証済み locals.session から範囲・権限を作り、null は拒否します。既存 createHandle の認証・CSRF・通信暗号化を維持してください。
+
+createHandle は有効な上限付き X-Request-Id を保持して応答に付け、非同期業務にリクエストと検証済みユーザーを伝播します。通常の業務ログを収集する場合、ホストの middleware で `core.context.run({ scopeId: 'configured-product' }, next)` により業務を包みます。範囲は feedback と一致させ、クライアントのヘッダーから取得しません。
+
+```ts
+import type { SessionData } from '@h-ai/kit'
+import { feedback } from '@h-ai/feedback'
+import { kit } from '@h-ai/kit'
+
+const handler = kit.createFeedbackHandler({
+  feedback,
+  resolveContext: (event) => {
+    const session = (event.locals as { session?: SessionData }).session
+    return session
+      ? { scopeId: 'configured-product', userId: session.userId, permissions: session.permissions }
+      : null
+  },
+})
+export const GET = handler
+export const POST = handler
+export const PATCH = handler
+```
 
 ## ライセンス
 

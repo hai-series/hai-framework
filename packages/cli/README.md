@@ -132,7 +132,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates --list --json
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-生成门禁保留八个场景，逐应用类型执行真实安装、编译及 HTTP/浏览器验收。scaffold 与生成路由 runtime 两个重型文件分批顺序执行，避免实测的构建和安装资源争用；三个语言、CLI 进程和环境消费文件可与 runtime 在最多两个 worker 内并行。各场景复用 E2E 入口自带的完整构建，原有生产构建隔离检查在 E2E 后验证非空的真实产物。真实容器部署按运行形态选取 API、SSR（admin 代表 website/h5 共用的 Dockerfile 与部署分支）、静态移动前端和 fullstack；资源拥有权、认证/传输、增量更新、损坏制品与回滚验收保留。部署夹具启用 init 并验证孤儿进程实际回收；快速 Nginx 门禁用生产同版本镜像对部署包执行 `nginx -t`，普通单测不探测引擎。workspace 的 compile 通过真实依赖图构建 contract，fullstack 先准备共享 i18n，避免重复编译 contract。
+生成门禁保留十个场景，逐应用类型执行真实安装、编译及 HTTP/浏览器验收。scaffold 与生成路由 runtime 两个重型文件分批顺序执行，避免实测的构建和安装资源争用；三个语言、CLI 进程和环境消费文件可与 runtime 在最多两个 worker 内并行。各场景复用 E2E 入口自带的完整构建，原有生产构建隔离检查在 E2E 后验证非空的真实产物。真实容器部署按运行形态选取 API、SSR（admin 代表 website/h5 共用的 Dockerfile 与部署分支）、静态移动前端和 fullstack；资源拥有权、认证/传输、增量更新、损坏制品与回滚验收保留。部署夹具启用 init 并验证孤儿进程实际回收；快速 Nginx 门禁用生产同版本镜像对部署包执行 `nginx -t`，普通单测不探测引擎。workspace 的 compile 通过真实依赖图构建 contract，fullstack 先准备共享 i18n，避免重复编译 contract。
 
 脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试，同时覆盖生成路由的实际 HTTP 入口、CLI 进程语言选择和环境文件消费；`--generate`、`--i18n` 可分别定向复测。部署门禁覆盖实际资源拥有权、动态宿主端口隔离，以及离线包、SSH/人工发布、增量更新和回滚。只回收本轮已记录的容器 ID 和私有镜像 tag；安全元数据报告保留在 ignored `tmp/validation/module-review/VERIFY-05/`。已生成的浏览器截图、trace 和报告默认保留在 ignored `tmp/validation/module-review/scaffold-browser/` 或 `deploy-browser/`；也可显式指定证据、HTML 报告和输出目录。临时工程、密钥、数据及进程仍自动回收。原生壳和真实云服务单独验收。
 
@@ -151,6 +151,12 @@ pnpm --filter @h-ai/cli test:deploy-gates
 工作流统一使用 hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review。需求、验收、发现与证据通过 [交接契约](templates/skills/hai-spec-implement/handoff.md) 连接，文档差异仍沿已有 Git 基线推进。
 
 UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui 与 [hai-ui-review](templates/skills/hai-ui-review/SKILL.md)；纯 API 模板排除这些前端技能。init/add 保留已有私有入口并补齐缺失参考资源。仓库同职责技能采用同名入口。
+
+### 问题反馈与离线分析
+
+使用 `hai create my-app --type fullstack --frontends web --features feedback --yes` 或 API 工程启用反馈；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
+
+离线工具：`hai feedback summary <包.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view`。查看器仅本机监听，Ctrl+C 关闭，无需生产连接。
 
 ## 许可证
 

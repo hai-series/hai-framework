@@ -23,6 +23,7 @@ import {
   setBrowserToken,
 } from './kit-auth.js'
 import { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-config.js'
+import { createFeedbackHandler } from './kit-feedback.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
@@ -45,6 +46,8 @@ export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
  * ```
  */
 export const kit = {
+  /** 创建反馈的受控 catch-all HTTP handler，身份范围由宿主解析。 */
+  createFeedbackHandler,
   /** 原子限流工厂；共享store生命周期由应用管理。 */
   middleware: {
     rateLimit: rateLimitMiddleware,

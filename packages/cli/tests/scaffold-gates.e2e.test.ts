@@ -40,6 +40,18 @@ interface GateEnvOptions {
 
 const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   {
+    title: 'api-feedback',
+    projectName: 'sample-api-feedback',
+    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'feedback', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['apps/sample-api-feedback-service/config/_feedback.yml', 'e2e/api-service.spec.ts'],
+  },
+  {
+    title: 'fullstack-feedback',
+    projectName: 'sample-fullstack-feedback',
+    createArgs: ['--type', 'fullstack', '--frontends', 'web', '--features', 'feedback', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    expectedFiles: ['packages/sample-fullstack-feedback-shared/src/lib/pages/feedback.svelte', 'packages/sample-fullstack-feedback-serv/config/_feedback.yml'],
+  },
+  {
     title: 'api',
     projectName: 'sample-api',
     createArgs: ['--type', 'api', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
@@ -131,7 +143,7 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
       const baseUrl = await allocateBaseUrl()
       const envOptions: GateEnvOptions = { baseUrl }
 
-      if (scenario.title === 'fullstack') {
+      if (scenario.title.startsWith('fullstack')) {
         envOptions.serviceBaseUrl = await allocateBaseUrl()
         envOptions.frontendUrls = { app: await allocateBaseUrl(), desktop: await allocateBaseUrl() }
       }
@@ -147,23 +159,23 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
-      if (scenario.title === 'fullstack' || scenario.title === 'mobile-app') {
-        const pageRoot = scenario.title === 'fullstack'
+      if (scenario.title.startsWith('fullstack') || scenario.title === 'mobile-app') {
+        const pageRoot = scenario.title.startsWith('fullstack')
           ? `packages/${scenario.projectName}-shared/src/lib/pages`
           : 'src/lib/pages'
         // 生成后只新增页面文件，禁止修改路由器或菜单，验证页面目录自动发现。
         await writeFile(path.join(projectPath, pageRoot, 'auto-discovered.svelte'), '<section data-testid=\'route-probe\'>Scaffold discovered page</section>\n')
         const discovery = await readFile(path.resolve(process.cwd(), 'tests/fixtures/hash-discovery.ts'), 'utf8')
-        await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title))
+        await writeFile(path.join(projectPath, 'e2e/hash-discovery.spec.ts'), discovery.replaceAll('SCAFFOLD_HASH_APP_TYPE', scenario.title.startsWith('fullstack') ? 'fullstack' : scenario.title))
       }
-      if (scenario.title === 'admin' || scenario.title === 'fullstack') {
+      if (scenario.title === 'admin' || scenario.title.startsWith('fullstack')) {
         // 验证实际安装的 tarball 公共类型与运行行为，不能只靠框架源码别名。
-        const moduleRoot = scenario.title === 'fullstack' ? `packages/${scenario.projectName}-serv` : '.'
+        const moduleRoot = scenario.title.startsWith('fullstack') ? `packages/${scenario.projectName}-serv` : '.'
         const testsRoot = path.join(projectPath, moduleRoot, 'tests')
         const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
         await writeFile(path.join(testsRoot, 'public-capabilities.test.ts'), await readFile(path.join(fixtures, 'public-capabilities.ts')))
         const include = [`${moduleRoot}/tests/public-capabilities.test.ts`]
-        if (scenario.title === 'fullstack') {
+        if (scenario.title.startsWith('fullstack')) {
           await writeFile(path.join(testsRoot, 'public-client-ip.test.ts'), await readFile(path.join(fixtures, 'public-client-ip.ts')))
           include.push(`${moduleRoot}/tests/public-client-ip.test.ts`)
         }
@@ -238,7 +250,7 @@ it('generated migration executes up and down with HaiResult', async () => {
         expect(await readFile(path.join(projectPath, '.agents/skills/hai-spec-implement', resource), 'utf8'))
           .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-spec-implement', resource), 'utf8'))
       }
-      if (scenario.title === 'fullstack') {
+      if (scenario.title.startsWith('fullstack')) {
         for (const [skill, resource] of [['hai-ui-design', 'patterns.md'], ['hai-ui-review', 'checklist.md']]) {
           expect(await readFile(path.join(projectPath, '.agents/skills', skill, resource), 'utf8'))
             .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', skill, resource), 'utf8'))

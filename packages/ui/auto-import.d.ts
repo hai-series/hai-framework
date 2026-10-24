@@ -81,6 +81,9 @@ declare global {
   const Tooltip: typeof import('@h-ai/ui')['Tooltip']
 
   // scenes - app
+  const FeedbackDetail: typeof import('@h-ai/ui')['FeedbackDetail']
+  const FeedbackForm: typeof import('@h-ai/ui')['FeedbackForm']
+  const FeedbackList: typeof import('@h-ai/ui')['FeedbackList']
   const FeedbackModal: typeof import('@h-ai/ui')['FeedbackModal']
   const LanguageSwitch: typeof import('@h-ai/ui')['LanguageSwitch']
   const SettingsLayout: typeof import('@h-ai/ui')['SettingsLayout']

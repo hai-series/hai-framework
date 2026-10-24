@@ -702,6 +702,36 @@ pnpm --filter @h-ai/serv lint
 
 Declaration JSDoc examples import actual `@h-ai/serv` entries or published feature subpaths. Internal Hono, guard, router and transport examples are marked as internal module context and are not root APIs. Examples distinguish startup configuration exceptions, domain HaiResult, HTTP middleware statuses, and listener shutdown returning Promise<void>; default AI completion still returns non-streaming JSON only. Maintainers can run `node scripts/check-module-jsdoc.mjs --package serv` against actual declarations and internal lexical bindings. Compilation does not replace real HTTP, authorization or distributed replay-protection validation.
 
+## Optional feedback service and trusted scope
+
+Mount `apiContract.feedback` with `createFeedbackProcedures` from `@h-ai/serv/features/feedback`. The runtime root does not load the feedback service. Initialize reldb/storage/reach/feedback in the host, then map verified sessions and deployment policy to feedback scope. A null resolver result or mismatched user is denied; the domain module also checks scope and permissions.
+
+All HTTP responses, including health, 404, and middleware short circuits, carry a bounded X-Request-Id. For ordinary business logs, provide the optional scopeId from the existing createContext factory. It is never read from client headers. The HTTP boundary clears previous identities, and authenticated asynchronous operations inherit the current request and user.
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { feedback } from '@h-ai/feedback'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
+
+const contract = apiContract.create({ feedback: apiContract.feedback })
+const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+const procedures = {
+  feedback: createFeedbackProcedures({
+    feedback,
+    resolveContext: context => context.scopeId
+      ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
+      : null,
+  }),
+}
+const app = serv.createApp({
+  contract,
+  procedures,
+  createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
+})
+```
+
 ## License
 
 Apache-2.0

@@ -53,6 +53,9 @@ import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
+{{#if features.feedback}}
+import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
+{{/if}}
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
 {{/if}}
@@ -258,6 +261,12 @@ async function doInit(): Promise<void> {
     throw new Error(`AI initialization failed: ${aiResult.error.message}`)
 {{/if}}
 
+{{#if features.feedback}}
+  const feedbackResult = await feedback.init(FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')))
+  if (!feedbackResult.success)
+    throw new Error(`Feedback initialization failed: ${feedbackResult.error.message}`)
+{{/if}}
+
   core.logger.info('Application initialized', { app: core.config.getOrThrow<CoreConfig>('core').name })
 }
 
@@ -265,6 +274,9 @@ async function doInit(): Promise<void> {
 async function cleanupModules(): Promise<void> {
   const failures: unknown[] = []
   const closers: Array<() => Promise<HaiResult<void> | void>> = [
+{{#if features.feedback}}
+    () => feedback.close(),
+{{/if}}
 {{#if features.ai}}
     () => ai.close(),
 {{/if}}

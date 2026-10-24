@@ -9,6 +9,9 @@ import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
+{{#if features.feedback}}
+import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
+{{/if}}
 import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
@@ -62,6 +65,9 @@ async function runInitialization(): Promise<void> {
       requireInitialized(await reach.init(ReachConfigSchema.parse(reachConfig)), 'reach')
     requireInitialized(await iam.init({ ...iamConfig, reach }), 'iam')
     requireInitialized(await audit.init(auditConfig), 'audit')
+{{#if features.feedback}}
+    requireInitialized(await feedback.init(FeedbackConfigSchema.parse(core.config.getOrThrow('feedback'))), 'feedback')
+{{/if}}
 {{#if features.ai}}
     const aiConfig = AIConfigSchema.parse(core.config.getOrThrow('ai'))
     requireInitialized(await ai.init(aiConfig), 'ai')
@@ -134,7 +140,7 @@ export async function closeModules(): Promise<void> {
 /** 不依赖 isInitialized 推断资源是否释放；关闭失败必须保留义务供重试。 */
 async function cleanupModules(): Promise<void> {
   const failures: unknown[] = []
-  for (const [name, module] of [{{#if features.ai}}['ai', ai], {{/if}}['audit', audit], ['iam', iam], ['reach', reach], ['storage', storage], ['crypto', crypto], {{#if features.vecdb}}['vecdb', vecdb], {{/if}}['cache', cache], ['reldb', reldb]] as const) {
+  for (const [name, module] of [{{#if features.feedback}}['feedback', feedback], {{/if}}{{#if features.ai}}['ai', ai], {{/if}}['audit', audit], ['iam', iam], ['reach', reach], ['storage', storage], ['crypto', crypto], {{#if features.vecdb}}['vecdb', vecdb], {{/if}}['cache', cache], ['reldb', reldb]] as const) {
     try {
       const result = await module.close()
       if (result && !result.success) {

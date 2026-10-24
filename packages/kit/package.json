@@ -54,12 +54,14 @@
     "build:clean": "rimraf dist"
   },
   "peerDependencies": {
+    "@h-ai/feedback": "workspace:*",
     "@sveltejs/adapter-node": "catalog:",
     "@sveltejs/adapter-static": "catalog:",
     "@sveltejs/kit": "catalog:",
     "svelte": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@h-ai/feedback": { "optional": true },
     "@sveltejs/adapter-node": {
       "optional": true
     },
@@ -76,6 +78,7 @@
   },
   "devDependencies": {
     "@h-ai/cache": "workspace:*",
+    "@h-ai/feedback": "workspace:*",
     "@sveltejs/kit": "catalog:",
     "@types/node": "catalog:",
     "rimraf": "catalog:",

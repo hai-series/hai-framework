@@ -19,6 +19,7 @@ export type FeatureId
     | 'crypto' // 加密模块
     | 'audit' // 审计日志
     | 'reach' // 触达服务
+    | 'feedback' // 问题反馈
     | 'kit' // SvelteKit 集成
     | 'ui' // UI 组件库
     | 'deploy' // 自动化部署

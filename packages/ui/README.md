@@ -292,7 +292,7 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-#### 场景组件 Scenes（36 个）
+#### 场景组件 Scenes（40 个）
 
 ##### Guide 引导与帮助（2 个）
 
@@ -301,17 +301,23 @@ components/
 | `GuideHost` | 首次邀请、页面导览与帮助弹窗宿主 | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | 可独立使用的帮助中心 | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App 应用级（7 个）
+##### App 应用级（11 个）
 
 | 组件             | 描述             | 主要属性           |
 | ---------------- | ---------------- | ------------------ |
 | `FeedbackModal`  | 反馈模态框       | `open`, `onsubmit` |
+| `FeedbackForm` | 独立反馈表单 | `attachments`, `evidenceSummary`, `onsubmit`, `onfileschange` |
+| `FeedbackList` | 服务端分页、筛选与处理操作 | `data`, `query`, `permissions`, `onquerychange`, `onstatus` |
+| `FeedbackDetail` | 诊断材料、处理历史与导出 | `report`, `evidence`, `attachments`, `history`, `onexport` |
+| `FeedbackScreenshot` | 图片预览、圈选与遮挡 | `attachment`, `onannotate` |
 | `SettingsModal`  | 设置模态框       | `open`, `onclose`  |
 | `SettingsLayout` | 设置页布局（分区导航 + 内容区） | `title`, `description`, `sections`, `active`, `onselect` |
 | `LanguageSwitch` | 语言切换         | 无需 Props         |
 | `ThemeColorPicker` | 主题色选择器   | `value`, `presets`, `onchange` |
 | `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
 | `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
+
+反馈说明可为空；宿主先用 `@h-ai/feedback/client` 的 `prepare()` 固定现场，再打开弹窗。表单通过 `onfileschange` 准备主动附件、通过 `onannotate` 将标注烧录到图片；受理失败保留输入并可本地导出。列表展示说明或服务端事实摘要，以 `onquerychange` 取得分页数据；界面权限不代替服务端授权。完整接入与离线工具见 [feedback 模块](../feedback/README.md)。
 
 ##### IAM 身份认证（10 个）
 

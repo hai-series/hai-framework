@@ -140,6 +140,25 @@ describe('createKitClient - 仅 CSRF', () => {
     expect(headers.get('X-CSRF-Token')).toBe('abc123')
   })
 
+  it('request POST 保留正文与请求头，并继承写方法附加 CSRF', async () => {
+    setDocumentCookie('hai_csrf=request-token')
+    const request = new Request('http://localhost/api/feedback/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Request-ID': 'logical-request-1' },
+      body: '{"description":"request input"}',
+    })
+    const { apiFetch } = createKitClient()
+    await apiFetch(request)
+
+    const [input, init] = fetchSpy.mock.calls[0]!
+    expect(input).toBe(request)
+    expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('request-token')
+    expect(new Headers(init.headers).get('X-Request-ID')).toBe('logical-request-1')
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
+    expect(request.bodyUsed).toBe(false)
+    expect(await new Request(input, init).text()).toBe('{"description":"request input"}')
+  })
+
   it('delete 请求自动附加 CSRF Token', async () => {
     setDocumentCookie('hai_csrf=token456')
 
@@ -248,6 +267,42 @@ describe('createKitClient - 传输加密', () => {
     const headers = new Headers(init.headers)
     expect(headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
     expect(headers.has('Content-Type')).toBe(false)
+  })
+
+  it('request JSON 正文加密，保留继承的写方法与 CSRF', async () => {
+    setDocumentCookie('hai_csrf=request-token')
+    const request = new Request('http://localhost/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"name":"Alice"}',
+    })
+    fetchSpy = createTransportFetch()
+    vi.stubGlobal('fetch', fetchSpy)
+    const client = createKitClient({ transport: { crypto } })
+    expect((await client.apiFetch(request)).ok).toBe(true)
+
+    const encrypted = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
+    expect(encrypted.method).toBe('POST')
+    expect(encrypted.headers.get('X-CSRF-Token')).toBe('request-token')
+    expect(encrypted.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+  })
+
+  it('request multipart 正文透传且保留 CSRF，不触发密钥交换', async () => {
+    setDocumentCookie('hai_csrf=upload-token')
+    const formData = new FormData()
+    formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
+    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData })
+    const client = createKitClient({ transport: { crypto } })
+    await client.apiFetch(request)
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const [input, init] = fetchSpy.mock.calls[0]!
+    expect(input).toBe(request)
+    expect(request.bodyUsed).toBe(false)
+    const actual = new Request(input, init)
+    expect(actual.headers.get('X-CSRF-Token')).toBe('upload-token')
+    expect(actual.headers.get('Content-Type')).toContain('multipart/form-data; boundary=')
+    expect((await actual.formData()).get('file')).toBeInstanceOf(File)
   })
 
   it('excludePaths 命中时跳过 transport', async () => {

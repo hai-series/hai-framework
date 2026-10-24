@@ -1,0 +1,40 @@
+{{! @skipIfEmpty }}
+{{#if features.feedback}}
+import type { FeedbackAttachmentData } from '@h-ai/api-contract/feedback'
+import { createFeedbackClient } from '@h-ai/feedback/client'
+import { managementApi } from './api-client.js'
+
+/** 仅装配共享采集器，不复制采集、脱敏、上传或离线打包逻辑。 */
+export const browserFeedback = createFeedbackClient()
+
+export async function initializeBrowserFeedback(appVersion?: string): Promise<void> {
+  const result = await browserFeedback.init({
+    appId: '{{projectName}}',
+    appVersion,
+    screenshot: true,
+    persistDraft: false,
+    actions: {
+      submit: input => managementApi.feedback.reports.submit(input),
+      appendEvidence: input => managementApi.feedback.reports.appendEvidence(input),
+      completeCollection: input => managementApi.feedback.reports.completeCollection(input),
+      upload: input => managementApi.feedback.attachments.upload(input),
+    },
+  })
+  if (!result.success)
+    throw new Error(result.error.message)
+}
+
+/** 下载的内容来自受权 API 或本地采集器；对象 URL 在发起后释放。 */
+export function downloadFeedback(bytes: Uint8Array, name: string, contentType = 'application/zip'): void {
+  const url = URL.createObjectURL(new Blob([new Uint8Array(bytes).buffer], { type: contentType }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export function feedbackDataBytes(data: FeedbackAttachmentData): Uint8Array {
+  return Uint8Array.from(atob(data.dataBase64), value => value.charCodeAt(0))
+}
+{{/if}}

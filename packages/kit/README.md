@@ -148,6 +148,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 ```
 
 > CSRF Header 注入由 `apiFetch` 自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
+> `apiFetch` 接受字符串、URL 或 Request；Request 自带的方法、请求头与正文会保留，写方法同样附加 CSRF。启用 transport 时仅加密可支持的正文，multipart 上传保持原始边界。
 >
 > 同源 SvelteKit endpoint 使用 httpOnly Cookie，由服务端读取 Cookie 完成鉴权。浏览器 Bearer Token 使用 `kit.auth.setBrowserToken()` 写入页面内存，再通过 `kit.client.create({ auth: true })` 注入。自定义 `BrowserTokenStore` 也必须使用内存或平台安全存储，禁止将敏感凭据写入 Web Storage。
 
@@ -317,6 +318,31 @@ pnpm --filter @h-ai/kit test
 ```
 
 模块无统一 init/close；共享缓存、IAM 与 crypto 由应用启动时初始化并统一关闭。示例使用真实公开入口并作类型检查，见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。请求认证必须调用 iam.auth.verifyToken，不能把非空 token 视为有效身份。
+
+## 反馈接口与普通请求关联
+
+`kit.createFeedbackHandler` 可作为 `/api/feedback/[...path]/+server.ts` 的 GET/POST/PATCH handler，复用 api-contract schema，与 serv 使用同一数据契约；输入流受大小上限约束，客户端身份/租户字段被拒绝。宿主通过 resolveContext 从已经验证的 locals.session 映射范围和权限，null 拒绝访问，并保留现有 createHandle 的 CSRF、认证与传输加密。
+
+createHandle 保留有效且有界的入站 X-Request-Id，补写响应头，并为异步业务传递请求 ID 和已验证用户。需要收集普通业务后端日志时，在宿主 middleware 中以 `core.context.run({ scopeId: 'configured-product' }, next)` 包住实际业务；该可信范围应与反馈接口一致，不能从客户端头推导。
+
+```ts
+import type { SessionData } from '@h-ai/kit'
+import { feedback } from '@h-ai/feedback'
+import { kit } from '@h-ai/kit'
+
+const handler = kit.createFeedbackHandler({
+  feedback,
+  resolveContext: (event) => {
+    const session = (event.locals as { session?: SessionData }).session
+    return session
+      ? { scopeId: 'configured-product', userId: session.userId, permissions: session.permissions }
+      : null
+  },
+})
+export const GET = handler
+export const POST = handler
+export const PATCH = handler
+```
 
 ## 许可证
 

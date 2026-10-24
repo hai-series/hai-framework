@@ -159,6 +159,20 @@ pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
 
+## Logical request observation
+
+`client.observeRequests` observes each logical call once and returns an unsubscribe function. Records contain requestId, procedure, duration, HTTP status, final success/errorCode, and business request attempts. A failed HaiResult with HTTP 200 is a failure. Authentication retries retain the same requestId. Records exclude bodies, tokens, and URL query parameters. Refresh and key exchange are not presented as user operations. close clears subscriptions, so subscribe again after reinitializing.
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const unsubscribe = apiClient.observeRequests((record) => {
+  const failed = !record.success
+  const requestId = record.requestId
+})
+unsubscribe()
+```
+
 ## License
 
 Apache-2.0

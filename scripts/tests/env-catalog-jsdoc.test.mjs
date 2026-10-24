@@ -16,7 +16,7 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
     throw new Error('Unexpected fixture path')
   try {
     // Schema 仍由真实包入口加载；只复制生成器读取的源码说明，不模拟另一套配置实现。
-    for (const name of ['core', 'reldb', 'cache', 'storage', 'iam', 'ai', 'vecdb', 'reach', 'payment', 'audit', 'scheduler', 'deploy', 'serv', 'kit', 'datapipe', 'crypto']) {
+    for (const name of ['core', 'reldb', 'cache', 'storage', 'iam', 'ai', 'vecdb', 'reach', 'payment', 'audit', 'scheduler', 'deploy', 'serv', 'kit', 'datapipe', 'crypto', 'feedback']) {
       const directory = path.join(repository, 'packages', name, 'src')
       for (const file of await readdir(directory, { recursive: true })) {
         if (!/(?:config|types)\.ts$/.test(file) || file.endsWith('.d.ts'))

@@ -702,6 +702,36 @@ pnpm --filter @h-ai/serv lint
 
 宣言の JSDoc 例は実在する `@h-ai/serv` または公開 features サブパスから import します。内部 Hono・guard・router・transport は「模块内部上下文」と明記し、ルート API として扱いません。起動設定の例外、業務 HaiResult、HTTP middleware の status、listener の Promise<void> 終了を区別し、既定の AI completion は非ストリーミング JSON のままです。保守時は `node scripts/check-module-jsdoc.mjs --package serv` で実際の宣言と内部スコープに対して例をコンパイルします。実 HTTP、認可、共有リプレイ防止の検証を代替しません。
 
+## オプションのフィードバックサービスと信頼範囲
+
+`@h-ai/serv/features/feedback` の `createFeedbackProcedures` で `apiContract.feedback` を接続します。通常のランタイム入口は feedback サービスを読み込みません。ホストで reldb/storage/reach/feedback を初期化し、検証済みセッションと配置ポリシーから範囲を作ります。null またはユーザー不一致は拒否し、ドメイン側も範囲と権限を検証します。
+
+ヘルスチェック・404・中間件の早期応答を含む全 HTTP 応答に上限付き X-Request-Id を付けます。通常の業務ログでは既存 createContext の省略可能な scopeId を信頼できるホストから設定します。クライアントのヘッダーからは取得しません。HTTP 境界で古い認証情報を消去し、認証後の非同期処理に現在の ID とユーザーを伝播します。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { feedback } from '@h-ai/feedback'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
+
+const contract = apiContract.create({ feedback: apiContract.feedback })
+const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+const procedures = {
+  feedback: createFeedbackProcedures({
+    feedback,
+    resolveContext: context => context.scopeId
+      ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
+      : null,
+  }),
+}
+const app = serv.createApp({
+  contract,
+  procedures,
+  createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
+})
+```
+
 ## ライセンス
 
 Apache-2.0

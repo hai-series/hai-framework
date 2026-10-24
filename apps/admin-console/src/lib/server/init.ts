@@ -33,16 +33,20 @@
  */
 
 import type { CacheConfigInput } from '@h-ai/cache'
+import type { FeedbackConfigInput } from '@h-ai/feedback'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
 import type { StorageConfigInput } from '@h-ai/storage'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { adminBuildMetadata } from '$lib/build-metadata.js'
 import * as m from '$lib/paraglide/messages.js'
+import { seedFeedbackPermissions } from '$lib/server/feedback.js'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
+import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
 import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
@@ -104,6 +108,7 @@ async function runInitApp(): Promise<void> {
   const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
   const reachConfig = core.config.get<ReachConfigInput>('reach')
   const storageConfig = core.config.get<StorageConfigInput>('storage')
+  const feedbackConfig = core.config.get<FeedbackConfigInput>('feedback')
 
   // 3. 仅 SQLite 文件需要本机目录；网络数据库名称/URL 不是文件路径。
   if (dbConfig.type === 'sqlite' && dbConfig.database !== ':memory:')
@@ -160,6 +165,17 @@ async function runInitApp(): Promise<void> {
   const auditResult = await audit.init({ userTable: 'hai_iam_users' })
   if (!auditResult.success) {
     core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
+  }
+
+  // 反馈复用宿主已初始化的数据库、存储和触达模块；配置错误不能伪装成已启用。
+  if (feedbackConfig) {
+    const parsedFeedback = FeedbackConfigSchema.safeParse({ ...feedbackConfig, ...adminBuildMetadata })
+    if (!parsedFeedback.success)
+      throw new Error(m.feedback_config_failed())
+    const feedbackResult = await feedback.init(parsedFeedback.data)
+    if (!feedbackResult.success)
+      throw new Error(feedbackResult.error.message)
+    await seedFeedbackPermissions()
   }
 
   // 10. 如果没有任何用户，自动创建默认管理员

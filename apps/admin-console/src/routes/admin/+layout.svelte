@@ -12,10 +12,12 @@
   import { createAdminGuide } from '$lib/guide/admin-guide'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
+  import { addFeedbackFiles, annotateFeedback, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
   import { apiFetch } from '$lib/utils/api'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { applyTheme, getSavedTheme, setPermissionContext, usePermission } from '@h-ai/ui'
+  import { applyTheme, FeedbackModal, getSavedTheme, setPermissionContext, usePermission } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
+  import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
 
   interface Props {
@@ -37,6 +39,37 @@
   let sidebarCollapsed = $state(false)
   let mobileMenuOpen = $state(false)
   let userMenuOpen = $state(false)
+  let feedbackOpen = $state(false)
+  let feedbackPreparing = $state(false)
+  let feedbackError = $state('')
+  let feedbackMaterials = $state<Awaited<ReturnType<typeof prepareFeedback>>>({ attachments: [], evidenceSummary: [] })
+  let feedbackResetKey = $state('')
+
+  onMount(() => {
+    if (data.feedbackEnabled)
+      void initFeedbackBrowser(data.buildMetadata).catch(() => { feedbackError = m.feedback_request_failed() })
+    return () => {
+      void closeFeedbackBrowser()
+    }
+  })
+
+  async function openFeedback() {
+    if (feedbackPreparing)
+      return
+    feedbackPreparing = true
+    feedbackError = ''
+    try {
+      feedbackMaterials = await prepareFeedback()
+      feedbackResetKey = feedbackDraftId()
+      feedbackOpen = true
+    }
+    catch (cause) {
+      feedbackError = cause instanceof Error ? cause.message : m.feedback_request_failed()
+    }
+    finally {
+      feedbackPreparing = false
+    }
+  }
 
   // 顶栏主题快速切换（亮/暗）
   let currentTheme = $derived(browser ? getSavedTheme() : 'light')
@@ -46,7 +79,7 @@
     currentTheme = theme
   }
 
-  type AdminResolvedPath = '/admin' | '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/ui-gallery' | '/admin/modules' | '/admin/logs' | '/admin/settings' | '/admin/profile'
+  type AdminResolvedPath = '/admin' | '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/ui-gallery' | '/admin/modules' | '/admin/logs' | '/admin/settings' | '/admin/profile' | '/admin/feedback'
 
   type AdminNavPath = AdminResolvedPath | '/admin/iam'
 
@@ -80,6 +113,7 @@
     { icon: 'icon-[tabler--components]', title: m.nav_ui_gallery(), path: '/admin/ui-gallery' },
     { icon: 'icon-[tabler--puzzle]', title: m.nav_modules(), path: '/admin/modules' },
     { icon: 'icon-[tabler--file-text]', title: m.nav_logs(), path: '/admin/logs', requiredPermissions: ['system:logs'] },
+    { icon: 'icon-[tabler--messages]', title: m.feedback_title(), path: '/admin/feedback', requiredPermissions: ['feedback:read'] },
     { icon: 'icon-[tabler--settings]', title: m.nav_settings(), path: '/admin/settings' },
   ])
 
@@ -293,6 +327,11 @@
         </div>
 
         <div class='flex items-center gap-2'>
+          {#if data.feedbackEnabled && hasPerm('feedback:create')}
+            <Button variant='ghost' size='sm' loading={feedbackPreparing} ariaLabel={m.feedback_open()} onclick={openFeedback} data-feedback-ignore='true' data-testid='feedback-open'>
+              <span class='icon-[tabler--message-report] size-4'></span><span class='hidden sm:inline'>{m.feedback_open()}</span>
+            </Button>
+          {/if}
           {#if data.appConfig?.env === 'development'}
             <span data-testid='app-environment-badge' class='hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/15'>
               {m.common_dev_env()}
@@ -382,5 +421,21 @@
     </footer>
   </div>
 </div>
+
+{#if feedbackError}<div class='fixed bottom-4 right-4 z-50 max-w-sm break-words rounded-lg bg-error p-3 text-error-content' role='alert'>{feedbackError}</div>{/if}
+<FeedbackModal
+  bind:open={feedbackOpen}
+  attachments={feedbackMaterials.attachments}
+  evidenceSummary={feedbackMaterials.evidenceSummary}
+  resetKey={feedbackResetKey}
+  onsubmit={submitFeedback}
+  onexport={exportLocalFeedback}
+  onannotate={async (input) => {
+    feedbackMaterials = await annotateFeedback(input)
+  }}
+  onfileschange={async (files) => {
+    feedbackMaterials = await addFeedbackFiles(files)
+  }}
+/>
 
 <GuideHost {guide} locale={getLocale()} scope={data.user.id} autoStart='overview' />

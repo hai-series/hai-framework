@@ -132,6 +132,20 @@ pnpm --filter @h-ai/api-contract typecheck
 
 Schema、推导类型与组合工具均提供可类型检查的示例；见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。Schema 示例使用受约束的本地数据，不代表 provider 已执行。
 
+## 反馈领域契约
+
+`apiContract.feedback` 包含 reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection 与 attachments.upload/get。最小提交仅需 submissionId/appId，不要求描述或异常；身份、权限、S3 key 与邮件收件人不接受客户端输入。按需通过 `@h-ai/api-contract/feedback` 导入同一组 schema 与类型。
+
+追加证据返回 acknowledged/evidenceRevision，客户端只释放已确认的块。setStatus 需要 expectedVersion；export 固定证据修订，getExport 读取已完成问题包。附件 base64 输入限制原始 5 MiB，服务端仍须验证实际字节、类型与 SHA-256。Report.appVersion 是应用版本，Report.version 是乐观锁计数。
+
+```ts
+import { apiContract, FeedbackSubmitInputSchema } from '@h-ai/api-contract'
+
+const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', appId: 'orders' })
+const contract = apiContract.create({ feedback: apiContract.feedback })
+const path = apiContract.pathOf(contract.feedback.reports.submit)
+```
+
 ## 许可证
 
 Apache-2.0

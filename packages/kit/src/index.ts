@@ -28,6 +28,7 @@ export { matchPermission } from './guards/kit-permission.js'
 export type {
   CookieProxyConfig,
 } from './hooks/index.js'
+export type { FeedbackHandlerOptions } from './kit-feedback.js'
 // 运行时导出 — kit 统一命名空间与配置辅助
 export { kit, KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-main.js'
 export * from './kit-types.js'

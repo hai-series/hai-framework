@@ -18,6 +18,10 @@
       "types": "./dist/features/storage.d.ts",
       "import": "./dist/features/storage.js"
     },
+    "./features/feedback": {
+      "types": "./dist/features/feedback.d.ts",
+      "import": "./dist/features/feedback.js"
+    },
     "./features/ai": {
       "types": "./dist/features/ai.d.ts",
       "import": "./dist/features/ai.js"
@@ -47,6 +51,7 @@
   },
   "peerDependencies": {
     "@h-ai/ai": "workspace:*",
+    "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/storage": "workspace:*"
   },
@@ -54,6 +59,7 @@
     "@h-ai/ai": {
       "optional": true
     },
+    "@h-ai/feedback": { "optional": true },
     "@h-ai/iam": {
       "optional": true
     },
@@ -78,6 +84,7 @@
     "@h-ai/ai": "workspace:*",
     "@h-ai/api-client": "workspace:*",
     "@h-ai/cache": "workspace:*",
+    "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",

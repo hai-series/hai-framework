@@ -116,6 +116,8 @@ catalog:
   # Mem0 3.3.1 仍调用 search；1.19 已移除，按真实 SDK 回归锁定受测版本。
   '@qdrant/js-client-rest': 1.18.0
 
+  '@rrweb/record': ^2.1.7
+  '@rrweb/replay': ^2.1.7
   '@scalar/api-reference': ^1.73.1
 
   # ---------------------------------------------------------------------------
@@ -161,6 +163,7 @@ catalog:
   d3-shape: ^3.2.0
   daisyui: ^5.7.47
   driver.js: 1.9.0
+  esbuild: ^0.28.2
   # ---------------------------------------------------------------------------
   # ESLint (已内置代码格式化，无需 Prettier)
   # ---------------------------------------------------------------------------
@@ -173,6 +176,7 @@ catalog:
   eslint-plugin-svelte: ^3.23.1
   fast-string-width: ^3.0.2
   fast-wrap-ansi: ^0.2.2
+  fflate: ^0.8.3
   fs-extra: ^11.4.1
   handlebars: ^4.7.10
   hono: ^4.13.13

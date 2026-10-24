@@ -11,7 +11,7 @@ import { cac } from 'cac'
 import chalk from 'chalk'
 import { cliM } from './cli-i18n.js'
 import { getCliVersion, writeCliMessage } from './cli-utils.js'
-import { addModule, buildCommand, createProject, deployCommand, generate, initProject } from './commands/cli-commands.js'
+import { addModule, buildCommand, createProject, deployCommand, feedbackCommand, generate, initProject } from './commands/cli-commands.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
 const VERSION = getCliVersion()
@@ -191,6 +191,38 @@ cli
       })
     }
     catch {
+      process.exitCode = 1
+    }
+  })
+
+// 快捷生成命令
+cli
+  .command('feedback <action> <bundle>', cliM('cli_help_feedback'))
+  .option('--page <number>', cliM('cli_feedback_page'))
+  .option('--page-size <number>', cliM('cli_feedback_pageSize'))
+  .option('--kind <kind>', cliM('cli_feedback_kind'))
+  .option('--request-id <id>', cliM('cli_feedback_requestId'))
+  .option('--error-id <id>', cliM('cli_feedback_errorId'))
+  .option('--from <timestamp>', cliM('cli_feedback_from'))
+  .option('--to <timestamp>', cliM('cli_feedback_to'))
+  .option('--port <number>', cliM('cli_feedback_port'))
+  .action(async (action: string, bundle: string, options: Record<string, unknown>) => {
+    try {
+      const numberOption = (value: unknown) => value === undefined ? undefined : Number(value)
+      await feedbackCommand(action, bundle, {
+        cwd: options.cwd as string,
+        page: numberOption(options.page),
+        pageSize: numberOption(options.pageSize),
+        kind: options.kind as string,
+        requestId: options.requestId as string,
+        errorId: options.errorId as string,
+        from: numberOption(options.from),
+        to: numberOption(options.to),
+        port: numberOption(options.port),
+      })
+    }
+    catch (error) {
+      writeCliMessage(error instanceof Error ? error.message : String(error))
       process.exitCode = 1
     }
   })

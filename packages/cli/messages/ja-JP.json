@@ -339,5 +339,20 @@
   "cli_yes": "はい",
   "cli_no": "いいえ",
   "cli_createEnglishLocale": "英語（en-US）",
-  "cli_createJapaneseLocale": "日本語（ja-JP）"
+  "cli_createJapaneseLocale": "日本語（ja-JP）",
+  "cli_help_feedback": "オフライン診断パッケージ：inspect / summary / evidence / view",
+  "cli_feedback_page": "証拠のページ番号",
+  "cli_feedback_pageSize": "ページごとの件数（最大100）",
+  "cli_feedback_kind": "証拠の種類",
+  "cli_feedback_requestId": "リクエストIDで絞り込み",
+  "cli_feedback_errorId": "エラーIDで絞り込み",
+  "cli_feedback_from": "開始時刻（ミリ秒）",
+  "cli_feedback_to": "終了時刻（ミリ秒）",
+  "cli_feedback_port": "ローカル表示ポート（既定はランダム）",
+  "cli_feedback_invalidOptions": "証拠の検索条件またはポートが無効です",
+  "cli_feedback_invalidAction": "対応操作：inspect、summary、evidence、view",
+  "cli_feedback_invalidBundle": "問題パッケージが無効か容量制限を超えています",
+  "cli_feedback_viewerStarted": "オフライン表示：{url}（Ctrl+Cで終了）",
+  "cli_featureFeedbackName": "問題フィードバック",
+  "cli_featureFeedbackDescription": "ユーザーの証拠、非公開スクリーンショット、管理者の処理とオフライン診断"
 }

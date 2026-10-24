@@ -87,6 +87,8 @@ export interface ServIam {
  * ```
  */
 export interface ServContext {
+  /** 仅由宿主可信上下文工厂赋值；不从请求头解析租户范围。 */
+  readonly scopeId?: string
   readonly requestId: string
   readonly locale: string
   readonly ip?: string
@@ -150,6 +152,17 @@ const HEADER_AUTHORIZATION = 'authorization'
 const HEADER_USER_AGENT = 'user-agent'
 
 /**
+ * 内部：客户端关联 ID 只作定位且必须有界，不提供任何授权。
+ * @example 模块内部上下文
+ * ```ts
+ * const id = resolveRequestId('request-1')
+ * ```
+ */
+export function resolveRequestId(value: string | null): string {
+  return value && /^[\w.:-]{1,128}$/.test(value) ? value : core.id.uuid()
+}
+
+/**
  * 从 Authorization header 中提取 Bearer token。
  *
  * 这里只处理 **access token**。
@@ -201,7 +214,7 @@ export function extractBearerToken(value: string | null): string | undefined {
  */
 export function parseRequestContext(input: CreateServContextInput): ServContext {
   const headers = input.request.headers
-  const requestId = headers.get(HEADER_REQUEST_ID) ?? core.id.uuid()
+  const requestId = core.context.get().requestId ?? resolveRequestId(headers.get(HEADER_REQUEST_ID))
   // 显式 ip: undefined 表示代理链未确认客户端，不能再回退成代理对端。
   const ip = normalizeClientIp(Object.hasOwn(input, 'ip') ? input.ip : input.remoteAddress)
   const locale = resolveRequestLocale(headers)

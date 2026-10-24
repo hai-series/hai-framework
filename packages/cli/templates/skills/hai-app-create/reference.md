@@ -313,7 +313,7 @@ interface CreateArticleInput {
 
 ## 初始化顺序
 
-CLI 项目统一忽略 `**/data/`，含根目录、workspace 子目录及 `.gitkeep`；数据库/上传文件不入 Git。Fullstack 的服务端 config 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML，未启用模块整份注释，可选字段及替代 Provider 按块注释，`.env.example` 也保留未启用模块的注释凭据。
+CLI 项目统一忽略 `**/data/`，含根目录、workspace 子目录及 `.gitkeep`；数据库/上传文件不入 Git。Fullstack 的服务端 config 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy、feedback 共 14 份 YAML，未启用模块整份注释，可选字段及替代 Provider 按块注释，`.env.example` 也保留未启用模块的注释凭据。
 
 H5 所有页面继承根布局的 header/footer；认证页隐藏底部导航，业务页面使用 `@h-ai/ui` 的 `BottomNav` 与移动端壳样式，导航启用 centered/maxWidth/safeArea，与页面同宽。
 

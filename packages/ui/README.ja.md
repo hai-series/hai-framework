@@ -292,7 +292,7 @@ components/
 | -------------- | -------------- | ---------------------------------------------- |
 | `PageHeader`   | ページヘッダー | `title`, `description`、`actions` スロット対応 |
 
-#### Scenes：用途別コンポーネント（36）
+#### Scenes：用途別コンポーネント（40）
 
 ##### Guide：案内・ヘルプ（2）
 
@@ -301,17 +301,23 @@ components/
 | `GuideHost` | 初回案内・ガイド・ヘルプダイアログ | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | 独立して使える検索付きヘルプ | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App：アプリ全体（7）
+##### App：アプリ全体（11）
 
 | コンポーネント     | 説明                                        | 主なプロパティ                                           |
 | ------------------ | ------------------------------------------- | -------------------------------------------------------- |
 | `FeedbackModal`    | フィードバックモーダル                      | `open`, `onsubmit`                                       |
+| `FeedbackForm` | 独立したフィードバックフォーム | `attachments`, `evidenceSummary`, `onsubmit`, `onfileschange` |
+| `FeedbackList` | サーバー側ページング・絞り込み・処理操作 | `data`, `query`, `permissions`, `onquerychange`, `onstatus` |
+| `FeedbackDetail` | 診断情報・処理履歴・エクスポート | `report`, `evidence`, `attachments`, `history`, `onexport` |
+| `FeedbackScreenshot` | 画像のプレビュー・強調・マスキング | `attachment`, `onannotate` |
 | `SettingsModal`    | 設定モーダル                                | `open`, `onclose`                                        |
 | `SettingsLayout`   | 設定レイアウト（区分ナビゲーション + 本文） | `title`, `description`, `sections`, `active`, `onselect` |
 | `LanguageSwitch`   | 言語切り替え                                | プロパティ不要                                           |
 | `ThemeColorPicker` | テーマカラー選択                            | `value`, `presets`, `onchange`                           |
 | `ThemeSelector`    | テーマ選択パネル                            | プロパティ不要                                           |
 | `ThemeToggle`      | ライト・ダーク切り替え                      | プロパティ不要                                           |
+
+説明は任意です。モーダルを開く前に `@h-ai/feedback/client` の `prepare()` で現場を固定します。`onfileschange` で添付を準備し、`onannotate` で注釈を画像のピクセルに反映します。送信失敗時は入力を保持し、ローカルに出力できます。一覧は説明またはサーバーの要約を表示し、`onquerychange` でページを取得します。UI の権限表示とは別にサーバーの認可が必要です。接続方法とオフラインツールは [feedback モジュール](../feedback/README.ja.md) を参照してください。
 
 ##### IAM：認証（10）
 

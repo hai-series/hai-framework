@@ -339,5 +339,20 @@
   "cli_yes": "是",
   "cli_no": "否",
   "cli_createEnglishLocale": "英语 (en-US)",
-  "cli_createJapaneseLocale": "日语 (ja-JP)"
+  "cli_createJapaneseLocale": "日语 (ja-JP)",
+  "cli_help_feedback": "离线诊断包：inspect / summary / evidence / view",
+  "cli_feedback_page": "证据页码",
+  "cli_feedback_pageSize": "每页条数（最多100）",
+  "cli_feedback_kind": "证据类型",
+  "cli_feedback_requestId": "按请求ID筛选",
+  "cli_feedback_errorId": "按错误ID筛选",
+  "cli_feedback_from": "起始时间戳（毫秒）",
+  "cli_feedback_to": "结束时间戳（毫秒）",
+  "cli_feedback_port": "本机查看器端口（默认随机）",
+  "cli_feedback_invalidOptions": "问题包查询或端口参数无效",
+  "cli_feedback_invalidAction": "支持的操作：inspect、summary、evidence、view",
+  "cli_feedback_invalidBundle": "问题包文件无效或超过容量限制",
+  "cli_feedback_viewerStarted": "离线查看器：{url}（按 Ctrl+C 关闭）",
+  "cli_featureFeedbackName": "问题反馈",
+  "cli_featureFeedbackDescription": "用户现场、私有截图、管理员处理与离线问题包"
 }

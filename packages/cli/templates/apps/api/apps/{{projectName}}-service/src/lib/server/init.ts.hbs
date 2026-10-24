@@ -7,6 +7,7 @@
 {{/if}}{{#if features.cache}}import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}import { core } from '@h-ai/core'
 {{#if features.crypto}}import { crypto } from '@h-ai/crypto'
+{{/if}}{{#if features.feedback}}import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}{{#if features.iam}}import { iam, IamConfigSchema } from '@h-ai/iam'
 {{/if}}{{#if features.reach}}import { reach, ReachConfigSchema } from '@h-ai/reach'
 {{/if}}{{#if features.db}}import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
@@ -173,6 +174,11 @@ async function doInit(): Promise<void> {
   if (!storageResult.success) {
     throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
   }
+{{/if}}{{#if features.feedback}}
+
+  const feedbackResult = await feedback.init(FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')))
+  if (!feedbackResult.success)
+    throw new Error('Feedback initialization failed')
 {{/if}}{{#if features.ai}}
 
   const aiResult = await ai.init(aiConfig)
@@ -211,7 +217,8 @@ async function doCloseApp(): Promise<void> {
 async function cleanupModules(): Promise<void> {
   const failures: unknown[] = []
   const closers: Array<readonly [string, () => unknown]> = [
-{{#if features.ai}}    ['ai', () => ai.close()],
+{{#if features.feedback}}    ['feedback', () => feedback.close()],
+{{/if}}{{#if features.ai}}    ['ai', () => ai.close()],
 {{/if}}{{#if features.storage}}    ['storage', () => storage.close()],
 {{/if}}{{#if features.iam}}    ['iam', () => iam.close()],
 {{/if}}{{#if features.vecdb}}    ['vecdb', () => vecdb.close()],

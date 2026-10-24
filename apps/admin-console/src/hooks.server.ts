@@ -13,6 +13,7 @@ import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getAdminKitConfig } from '$lib/server/kit-config.js'
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -115,6 +116,7 @@ async function createHaiHandle(): Promise<Handle> {
   }
 
   return kit.createHandle({
+    middleware: [(_context, next) => core.context.run({ scopeId: 'admin-console' }, next)],
     auth: {
       verifyToken: validateSession,
       loginUrl: '/auth/login',

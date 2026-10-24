@@ -583,6 +583,31 @@ pnpm --filter @h-ai/core test
 
 See the [module JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
 
+## Request correlation and log observation
+
+Collection persistence and upload paths can use `core.context.run({ suppressLogObservers: true }, operation)` to prevent observing their own asynchronous logs. Normal output such as stdout remains enabled; observation resumes outside the scope.
+
+`core.logger.observe` receives records permitted by the current log level after default and custom field redaction, and returns an unsubscribe function. Subscribers should collect into bounded memory and persist asynchronously; observation does not imply persistence. Observer failures and synchronous reentry are isolated. Free text and images still require capture-specific privacy rules.
+
+On Node, `core.context.run` uses AsyncLocalStorage to isolate concurrent requests and child tasks. Existing module loggers inherit requestId/userId/scopeId/jobId. Only trusted server code supplies identities; correlation IDs do not authorize access. The browser exposes the same API but run only establishes a synchronous scope, without isolation across await.
+
+```ts
+import type { LogRecord } from '@h-ai/core'
+import { core } from '@h-ai/core'
+
+const records: LogRecord[] = []
+const unsubscribe = core.logger.observe((record) => {
+  if (records.length === 100)
+    records.shift()
+  records.push(record)
+})
+await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'user-1' }, async () => {
+  await Promise.resolve()
+  core.logger.warn('Business operation failed')
+})
+unsubscribe()
+```
+
 ## License
 
 Apache-2.0

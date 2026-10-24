@@ -9,6 +9,7 @@ export default defineConfig({
     'storage/index': 'src/storage/index.ts',
     'ai/index': 'src/ai/index.ts',
     'payment/index': 'src/payment/index.ts',
+    'feedback/index': 'src/feedback/index.ts',
   },
   external: ['@h-ai/storage/schemas', '@h-ai/core', '@orpc/contract', 'zod'],
 })

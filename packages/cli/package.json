@@ -60,6 +60,7 @@
     "@h-ai/cache": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/deploy": "workspace:*",
+    "@h-ai/feedback": "workspace:*",
     "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",

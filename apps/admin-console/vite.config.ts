@@ -4,6 +4,8 @@
  * =============================================================================
  */
 
+import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { core } from '@h-ai/core'
@@ -22,7 +24,17 @@ export default defineConfig(({ mode, command }) => {
     Object.assign(process.env, env.data)
   }
 
+  let commit = process.env.HAI_BUILD_COMMIT ?? 'unknown'
+  if (commit === 'unknown') {
+    try {
+      commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim()
+    }
+    catch { /* 源码归档构建可能没有 .git，明确保留 unknown。 */ }
+  }
+  const metadata = { appVersion: appPackage.version, buildId: process.env.HAI_BUILD_ID ?? randomUUID(), commit }
+
   return {
+    define: { __HAI_BUILD_METADATA__: JSON.stringify(metadata) },
     envDir: false,
     plugins: [
       sveltekit(),

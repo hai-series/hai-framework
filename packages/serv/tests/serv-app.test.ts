@@ -8,6 +8,20 @@ const contract = apiContract.create({})
 const procedures = serv.implement(contract).context<ServContext>().build()
 
 describe('@h-ai/serv', () => {
+  it('returns a bounded correlation ID for health, missing routes and middleware responses', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      middlewares: [{ path: '/early', middleware: c => c.text('accepted') }],
+    })
+    for (const path of ['/health', '/missing', '/early']) {
+      const response = await app.request(path, { headers: { 'x-request-id': 'feedback-request-1' } })
+      expect(response.headers.get('x-request-id')).toBe('feedback-request-1')
+    }
+    const invalid = await app.request('/health', { headers: { 'x-request-id': 'x'.repeat(129) } })
+    expect(invalid.headers.get('x-request-id')).toMatch(/^[\w.:-]{1,128}$/)
+  })
+
   it('isolates module messages across interleaved async HTTP requests', async () => {
     const gate = Promise.withResolvers<void>()
     const app = serv.createApp({

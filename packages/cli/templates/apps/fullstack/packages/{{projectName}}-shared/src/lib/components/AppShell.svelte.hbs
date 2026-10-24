@@ -3,6 +3,9 @@
   import type { ManagementPage, ManagementStore } from '../stores/management-store.svelte.js'
   import { Avatar, Badge, BareButton, Button } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
+{{#if features.feedback}}
+  import FeedbackEntry from './FeedbackEntry.svelte'
+{{/if}}
 
   interface Props {
     platform: 'web' | 'app' | 'desktop' | 'miniapp'
@@ -18,6 +21,9 @@
       { id: 'users' as const, label: m.nav_users(), icon: 'icon-[tabler--users]' },
       { id: 'roles' as const, label: m.nav_roles(), icon: 'icon-[tabler--shield-lock]' },
       { id: 'audit' as const, label: m.nav_audit(), icon: 'icon-[tabler--file-text]' },
+{{#if features.feedback}}
+      { id: 'feedback' as const, label: m.nav_feedback(), icon: 'icon-[tabler--message-report]' },
+{{/if}}
     ]
 : []),
     { id: 'settings' as const, label: m.settings_title(), icon: 'icon-[tabler--settings]' },
@@ -56,6 +62,9 @@
       </div>
       <div class="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <Button variant="ghost" size="sm" onclick={onhelp} data-guide="admin-help" data-testid="admin-help" ariaLabel={m.guide_help_title()}><span class="icon-[tabler--help-circle] size-4"></span><span class="hidden sm:inline">{m.guide_help_title()}</span></Button>
+{{#if features.feedback}}
+        <FeedbackEntry />
+{{/if}}
         <Badge variant="ghost" size="sm" data-testid="app-environment">{store.info?.env}</Badge>
         {#if store.user}
           <BareButton class="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-base-content/5 sm:px-2" ariaLabel={m.settings_title()} onclick={() => navigate('settings')} data-guide="admin-profile">

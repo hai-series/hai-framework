@@ -15,6 +15,9 @@ export const {{fullstack.contractExportName}} = apiContract.create({
   iam: { auth: authContract },
   admin: adminContract,
   profile: profileContract,
+{{#if features.feedback}}
+  feedback: apiContract.feedback,
+{{/if}}
 })
 
 export type FullstackContract = typeof {{fullstack.contractExportName}}

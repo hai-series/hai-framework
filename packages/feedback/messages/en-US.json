@@ -1,0 +1,22 @@
+{
+  "feedback_notInitialized": "Feedback has not been initialized",
+  "feedback_initInProgress": "Feedback initialization is in progress",
+  "feedback_configError": "Invalid feedback configuration or unavailable dependency",
+  "feedback_operationFailed": "Feedback operation failed. Please retry",
+  "feedback_notFound": "Feedback or evidence was not found",
+  "feedback_forbidden": "Access to this feedback is denied",
+  "feedback_conflict": "Feedback changed or an operation identifier conflicts. Refresh and retry",
+  "feedback_exportPending": "The feedback bundle is being generated. Please retry shortly",
+  "feedback_limitExceeded": "Feedback evidence exceeds the allowed capacity",
+  "feedback_invalidInput": "Invalid feedback input",
+  "feedback_checksumMismatch": "Attachment integrity verification failed",
+  "feedback_received": "New feedback received",
+  "feedback_submittedAt": "Submitted at (UTC)",
+  "feedback_materialStatus": "Material status",
+  "feedback_materialCollecting": "Collecting",
+  "feedback_materialComplete": "Complete",
+  "feedback_materialPartial": "Partially missing",
+  "feedback_materialFailed": "Collection failed",
+  "feedback_defaultSummary": "User feedback",
+  "feedback_retryInputChanged": "The first submission has already been sent. Restore the original text and attachments to retry, then open a new feedback."
+}

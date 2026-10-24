@@ -22,6 +22,10 @@
       "types": "./dist/ai/index.d.ts",
       "import": "./dist/ai/index.js"
     },
+    "./feedback": {
+      "types": "./dist/feedback/index.d.ts",
+      "import": "./dist/feedback/index.js"
+    },
     "./payment": {
       "types": "./dist/payment/index.d.ts",
       "import": "./dist/payment/index.js"

@@ -22,6 +22,8 @@ export * from './common/response-schemas.js'
 export { HaiErrorSchema } from './common/result-schemas.js'
 // 组合 contract 输入/输出类型。
 export type { CreateApiContractOptions, CreatedApiContract } from './composition/create-api-contract.js'
+export type { FeedbackContract } from './feedback/feedback-contract.js'
+export * from './feedback/feedback-schemas.js'
 
 export type { IamContract } from './iam/iam-contract.js'
 
