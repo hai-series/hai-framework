@@ -39,7 +39,17 @@ export interface SshExecutor {
   ping: () => Promise<HaiResult<void>>
 }
 
-/** 显式 key 优先；空密码不会改变省略 auth 时的原 key/agent 默认行为。 */
+/**
+ * 显式 key 优先；空密码不会改变省略 auth 时的原 key/agent 默认行为。
+ * @example 模块内部上下文
+ * ```ts
+ * function inspectAuthentication(password: string) {
+ *   const inferred = usesSshPassword({ password })
+ *   const explicitKey = usesSshPassword({ auth: 'key', password })
+ *   return { inferred, explicitKey }
+ * }
+ * ```
+ */
 export function usesSshPassword(config: Pick<SshConfig, 'auth' | 'password'>): boolean {
   return config.auth === 'password' || (config.auth === undefined && Boolean(config.password))
 }

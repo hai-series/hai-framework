@@ -9,7 +9,16 @@ import { deployM } from '../deploy-i18n.js'
 import { HaiDeployError } from '../deploy-types.js'
 import { runCommand } from './deploy-command.js'
 
-/** 固定 C# 程序仅从环境读取密码，不含编译期或持久化凭据。 */
+/**
+ * 固定 C# 程序仅从环境读取密码，不含编译期或持久化凭据。
+ * @example 模块内部上下文
+ * ```ts
+ * // sourceFile 由调用方在本次私有临时目录中分配；只落盘固定源码。
+ * function writeWindowsSource(sourceFile: string): void {
+ *   writeFileSync(sourceFile, windowsAskpassSource, { mode: 0o600 })
+ * }
+ * ```
+ */
 export const windowsAskpassSource = String.raw`using System;
 using System.Diagnostics;
 using System.IO;
@@ -73,17 +82,50 @@ public static class HaiDeployAskpass {
 }
 `
 
-/** POSIX helper 只输出环境原值；主机信任确认不应由密码代答。 */
+/**
+ * POSIX helper 只输出环境原值；主机信任确认不应由密码代答。
+ * @example 模块内部上下文
+ * ```ts
+ * // helperFile 位于本次私有临时目录；密码由执行时的 child env 提供。
+ * function writePosixHelper(helperFile: string): void {
+ *   writeFileSync(helperFile, posixAskpassSource, { mode: 0o700 })
+ * }
+ * ```
+ */
 export const posixAskpassSource = String.raw`#!/bin/sh
 test "\${SSH_ASKPASS_PROMPT:-}" != confirm || exit 1
 test -n "\${HAI_DEPLOY_ASKPASS_PASSWORD:-}" || exit 1
 printf '%s\n' "$HAI_DEPLOY_ASKPASS_PASSWORD"
 `.replaceAll('\\${', '${')
 
-/** Windows PowerShell 5/.NET Framework 编译；不使用不支持原生 ConsoleApplication 的 pwsh。 */
+/**
+ * Windows PowerShell 5/.NET Framework 编译；不使用不支持原生 ConsoleApplication 的 pwsh。
+ * @example 模块内部上下文
+ * ```ts
+ * // compiler 是系统 Windows PowerShell 5；两个文件路径均由本次私有目录分配。
+ * async function compileHelper(compiler: string, sourceFile: string, outputFile: string) {
+ *   const compiled = await runCommand(compiler, ['-NoProfile', '-NonInteractive', '-Command', compileAskpassScript], {
+ *     env: { HAI_DEPLOY_ASKPASS_SOURCE: sourceFile, HAI_DEPLOY_ASKPASS_OUTPUT: outputFile, HAI_DEPLOY_ASKPASS_PASSWORD: '' },
+ *     timeoutMs: 30000,
+ *   })
+ *   if (!compiled.success) return compiled
+ *   return ok(undefined)
+ * }
+ * ```
+ */
 export const compileAskpassScript = '$ErrorActionPreference=\'Stop\'; Add-Type -Language CSharp -TypeDefinition ([System.IO.File]::ReadAllText($env:HAI_DEPLOY_ASKPASS_SOURCE, [System.Text.Encoding]::UTF8)) -OutputType ConsoleApplication -OutputAssembly $env:HAI_DEPLOY_ASKPASS_OUTPUT'
 
-/** 本次 helper 的受控环境与清理操作；目录只属于当前命令调用。 */
+/**
+ * 本次 helper 的受控环境与清理操作；目录只属于当前命令调用。
+ * @example 模块内部上下文
+ * ```ts
+ * function finishHelper(helper: SshAskpass): HaiResult<void> {
+ *   const removed = helper.cleanup()
+ *   if (!removed.success) return removed
+ *   return ok(undefined)
+ * }
+ * ```
+ */
 export interface SshAskpass {
   env: Record<string, string>
   cleanup: () => HaiResult<void>
@@ -100,6 +142,17 @@ function helperFailure(key: 'deploy_sshAskpassFailed' | 'deploy_sshAskpassCleanu
  * @param deadline - performance.now() 的绝对毫秒期限；Infinity 表示命令没有整体期限。
  * @param terminationTimeoutMs - 原受管理进程树终止核验预算。
  * @returns 固定 helper 环境及清理函数；失败不暴露原异常或降级交互输入。
+ * @example 模块内部上下文
+ * ```ts
+ * async function inspectPreparedHelper(password: string) {
+ *   const prepared = await prepareSshAskpass(password, performance.now() + 20000)
+ *   if (!prepared.success) return prepared
+ *   const askpassMode = prepared.data.env.SSH_ASKPASS_REQUIRE
+ *   const removed = prepared.data.cleanup()
+ *   if (!removed.success) return removed
+ *   return ok(askpassMode)
+ * }
+ * ```
  */
 export async function prepareSshAskpass(password: string, deadline: number, terminationTimeoutMs?: number): Promise<HaiResult<SshAskpass>> {
   let directory: string | undefined
