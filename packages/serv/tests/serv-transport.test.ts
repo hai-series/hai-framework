@@ -2,7 +2,7 @@ import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, Transp
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, ok } from '@h-ai/core'
-import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
@@ -48,6 +48,21 @@ function createFailingEncryptManager(): TransportEncryptionManager {
 }
 
 describe('serv.createApp({ transport })', () => {
+  it.each([600_000, -600_000])('时间偏差 %s 经真实 HTTP 中间件返回加密校时提示', async (offset) => {
+    const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false }, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto } })
+    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange', fetch: async (input, init) => {
+      const request = new Request(input, init)
+      const clock = request.url.endsWith('/_hai/key-exchange') ? undefined : vi.spyOn(Date, 'now').mockReturnValue(Date.now() + offset)
+      try {
+        return await app.fetch(request)
+      }
+      finally { clock?.mockRestore() }
+    } })
+    try {
+      await expect(client.encryptedFetch('http://localhost/api/v1/whatever', { method: 'POST', body: '{}' })).rejects.toThrow(TransportTimeError)
+    }
+    finally { client.destroy() }
+  })
   beforeAll(async () => {
     await crypto.init()
     const key = crypto.asymmetric.generateKeyPair()

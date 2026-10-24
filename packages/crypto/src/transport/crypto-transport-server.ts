@@ -19,6 +19,7 @@ import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
 import { resolveTransportBodyLimits } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
+import { TransportTimeError } from './crypto-transport-error.js'
 import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
@@ -135,11 +136,8 @@ export function createTransportEncryption(
         // 在任何异步 registry 调用前捕获快照，避免调用方修改同一对象造成认证/消费上下文错位。
         const authenticated = { ...payload, context: { ...payload.context } }
         const c = authenticated.context
-        const now = Date.now()
         const pathHash = hashTransportPath(cryptoService, expected.path)
-        if (!pathHash.success || c.clientId !== expected.clientId || c.method !== expected.method || c.pathHash !== pathHash.data
-          || c.issuedAt > now + TRANSPORT_PROTOCOL.CLOCK_SKEW_MS
-          || now >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS) {
+        if (!pathHash.success || c.clientId !== expected.clientId || c.method !== expected.method || c.pathHash !== pathHash.data) {
           return transportAuthenticationFailure()
         }
         const key = serverKeys.get(c.serverKeyId)
@@ -149,14 +147,20 @@ export function createTransportEncryption(
         const plaintext = openTransportPayload(cryptoService, authenticated, key.privateKey, clientPublicKey, bodyLimits)
         if (!plaintext.success)
           return plaintext
-        if (Date.now() >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
-          return transportAuthenticationFailure()
+        const timeFailure = () => {
+          const error = new TransportTimeError(c)
+          return err(HaiCryptoError.TRANSPORT_TIME_INVALID, error.message, error)
+        }
+        // 只有请求绑定、签名和 MAC 可信后才区分时间错误，不能把篡改报文误报为时钟问题。
+        const now = Date.now()
+        if (c.issuedAt > now + TRANSPORT_PROTOCOL.CLOCK_SKEW_MS || now >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
+          return timeFailure()
         // 只有完整认证成功后才占用 nonce；原子 claim 失败或存储故障均不向业务返回明文。
         if (!await keyStore.claimRequest(c.clientId, c.requestId, c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS + 2 * TRANSPORT_PROTOCOL.CLOCK_SKEW_MS)) {
           return transportAuthenticationFailure()
         }
         if (Date.now() >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)
-          return transportAuthenticationFailure()
+          return timeFailure()
         return plaintext
       }
       catch {

@@ -1,6 +1,6 @@
 import type { EncryptedPayload, EncryptedRequestPayload, TransportKeyPair, TransportMessageContext } from '../../src/index.js'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '../../src/index.js'
+import { authenticateTransportRequest, createInMemoryKeyStore, crypto, HaiCryptoError, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '../../src/index.js'
 import { sealTransportPayload } from '../../src/transport/crypto-transport-codec.js'
 
 let serverKey: TransportKeyPair
@@ -51,6 +51,20 @@ describe('authenticated transport protocol', () => {
   })
   afterEach(() => vi.restoreAllMocks())
   afterAll(async () => crypto.close())
+
+  it.each([TRANSPORT_PROTOCOL.CLOCK_SKEW_MS + 1000, -TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS - 1000])('已认证请求的时间偏差 %s 提供校时错误且不消费 nonce', async (offset) => {
+    const f = await fixture()
+    const context = { ...f.payload.context, issuedAt: Date.now() + offset }
+    const sealed = sealTransportPayload(crypto, '{}', context, 'request', 0, serverKey.publicKey, clientKey.privateKey)
+    if (!sealed.success)
+      throw new Error(sealed.error.message)
+    const claim = vi.spyOn(f.keyStore, 'claimRequest')
+    const result = await f.a.decryptRequest({ ...sealed.data, direction: 'request', status: 0 }, f.expected)
+    expect(result).toMatchObject({ success: false, error: { code: HaiCryptoError.TRANSPORT_TIME_INVALID.code, cause: expect.any(TransportTimeError) } })
+    expect(claim).not.toHaveBeenCalled()
+    const tampered = await f.a.decryptRequest({ ...f.payload, context }, f.expected)
+    expect(tampered).toMatchObject({ success: false, error: { code: HaiCryptoError.INVALID_INPUT.code } })
+  })
 
   it.each(['encryptedKey', 'ciphertext', 'iv', 'tag', 'signature'] as const)('篡改 %s 在 CBC 解密和 nonce 消费前拒绝', async (field) => {
     const f = await fixture()

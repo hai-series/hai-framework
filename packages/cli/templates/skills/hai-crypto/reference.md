@@ -231,6 +231,10 @@ const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keySto
 
 业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；resolveTransportBodyLimits 自动推导密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 自定义适配器使用 manager.bodyLimits 和 readTransportBody 消费原流，不 clone/tee；握手返回 maxPlaintextBytes。
 
+serv/kit 对通过请求绑定、签名和 MAC 校验但超出时间窗口的报文返回加密的 HTTP 400 时间错误；客户端抛 `TransportTimeError`（`hai:crypto:071`），提示同步设备和服务器时间后刷新重试。`api-client` 映射为 `VALIDATION_FAILED`，在 `cause.transportCode` 保留该原因。不会自动重放请求或放宽防重放窗口；篡改或未认证报文仍返回通用认证失败。
+
+自定义 HTTP 适配器检查失败原因 `error instanceof TransportTimeError && error.context` 后，使用 `createTransportErrorResponse(error, { manager, context: error.context })` 加密拒绝响应；不能根据未认证报文的时间戳给出可信时间诊断。
+
 根入口纯函数 `readTransportBody(stream, { maxBytes, signal? })` 无需 init，直接消费原始流；超限抛 RangeError，无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason。超限/取消会立即取消流并释放 reader，清理失败不覆盖原异常。不要把 clone/tee 分支交给它，否则另一分支仍可能缓冲正文。成功读取后重建 Request/Response，清除旧 Content-Length/Content-Encoding 并保留 signal。
 
 ```ts
@@ -264,6 +268,9 @@ const payload: unknown = JSON.parse(text)
 | `HaiCryptoError.HASH_FAILED` | `hai:crypto:040` | 哈希计算失败 |
 | `HaiCryptoError.HMAC_FAILED` | `hai:crypto:041` | HMAC 计算失败 |
 | `HaiCryptoError.INVALID_IV` | `hai:crypto:060` | 无效 IV |
+
+| `HaiCryptoError.TRANSPORT_PAYLOAD_TOO_LARGE` | `hai:crypto:070` | 传输容量超限 |
+| `HaiCryptoError.TRANSPORT_TIME_INVALID` | `hai:crypto:071` | 已认证请求时间超出窗口 |
 
 ## 常见模式
 

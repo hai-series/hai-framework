@@ -51,5 +51,6 @@
   "crypto_transportSessionKeyEncryptFailed": "传输加密会话密钥加密失败",
   "crypto_transportSessionKeyDecryptFailed": "传输加密会话密钥解密失败",
   "crypto_transportBodyLimitInvalid": "传输明文容量必须是 1024 到 67108864 字节之间的整数",
-  "crypto_transportBodyTooLarge": "加密传输报文超过配置的字节上限"
+  "crypto_transportBodyTooLarge": "加密传输报文超过配置的字节上限",
+  "crypto_transportTimeInvalid": "设备与服务器时间可能不同步，或请求已过期。请开启自动校时并刷新重试；若仍失败，请联系管理员检查服务器时间。"
 }

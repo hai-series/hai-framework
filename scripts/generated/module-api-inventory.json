@@ -18618,6 +18618,12 @@
               "kind": "type",
               "declaration": "TransportServerKeyRing",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportTimeError",
+              "kind": "value+type",
+              "declaration": "TransportTimeError",
+              "declarationKind": "ClassDeclaration"
             }
           ]
         },
@@ -18940,6 +18946,12 @@
               "kind": "type",
               "declaration": "TransportServerKeyRing",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportTimeError",
+              "kind": "value+type",
+              "declaration": "TransportTimeError",
+              "declarationKind": "ClassDeclaration"
             }
           ]
         },
@@ -19262,6 +19274,12 @@
               "kind": "type",
               "declaration": "TransportServerKeyRing",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "TransportTimeError",
+              "kind": "value+type",
+              "declaration": "TransportTimeError",
+              "declarationKind": "ClassDeclaration"
             }
           ]
         }

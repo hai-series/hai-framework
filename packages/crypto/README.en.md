@@ -254,6 +254,10 @@ Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD c
 
 Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [容量配置、文件换算与升级](TRANSPORT-CAPACITY.md)。
 
+serv/kit return an encrypted HTTP 400 time error for an out-of-window message only after request binding, signature and MAC verification. The client throws `TransportTimeError` (`hai:crypto:071`) with advice to synchronize device/server clocks and refresh. `api-client` maps it to `VALIDATION_FAILED` and preserves `cause.transportCode`. Requests are not replayed automatically and replay windows remain unchanged; tampered or unauthenticated messages retain the generic authentication failure.
+
+Custom HTTP adapters check `error instanceof TransportTimeError && error.context`, then encrypt the rejection with `createTransportErrorResponse(error, { manager, context: error.context })`. Never classify an unverified message by its timestamp.
+
 Custom HTTP adapters can import the pure `readTransportBody(stream, { maxBytes, signal? })` helper from the root entry without `crypto.init()`. Pass the original stream, rebuild Request/Response after reading, and clear stale Content-Length/Content-Encoding. The helper throws RangeError for byte limits, TypeError for invalid UTF-8, and preserves the original read/abort failure.
 
 ```ts

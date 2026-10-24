@@ -51,5 +51,6 @@
   "crypto_transportSessionKeyEncryptFailed": "通信セッション鍵の暗号化に失敗しました",
   "crypto_transportSessionKeyDecryptFailed": "通信セッション鍵の復号に失敗しました",
   "crypto_transportBodyLimitInvalid": "通信平文の上限は 1024 から 67108864 バイトの整数で指定してください",
-  "crypto_transportBodyTooLarge": "暗号化通信のデータが設定されたバイト上限を超えています"
+  "crypto_transportBodyTooLarge": "暗号化通信のデータが設定されたバイト上限を超えています",
+  "crypto_transportTimeInvalid": "端末とサーバーの時刻が同期していないか、要求の有効期限が切れています。自動時刻同期を有効にしてページを再読み込みしてください。解消しない場合は管理者にサーバーの時刻確認を依頼してください。"
 }

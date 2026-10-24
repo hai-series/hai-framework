@@ -22,8 +22,10 @@ import type {
 } from './crypto-transport-types.js'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
+import { HaiCryptoError } from '../crypto-types.js'
 import { readTransportBody, resolveTransportBodyLimits, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sameTransportContext, sealTransportPayload } from './crypto-transport-codec.js'
+import { TransportTimeError } from './crypto-transport-error.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
 /**
@@ -343,7 +345,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     }
     const response = await baseFetch(finalInput, finalInit)
 
-    // 本次请求已认证，禁止删除布尔标记后把明文/其它响应冒充当前请求的响应。
+    // 请求携带认证信息，响应同样必须验证；禁止删除标记后把明文冒充当前请求的响应。
     if (response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) !== TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE) {
       void response.body?.cancel().catch(() => {})
       if (response.status === 413)
@@ -382,6 +384,16 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (new TextEncoder().encode(decResult.data).byteLength > bodyLimits.plaintextBytes)
       throw new TransportBodyTooLargeError(bodyLimits.plaintextBytes, new TextEncoder().encode(decResult.data).byteLength, { direction: 'response' })
 
+    // 时间建议只来自已验签/MAC、关联当前请求的响应；明文 400 不作为可信时间诊断。
+    if (response.status === 400) {
+      let failure: { success?: unknown, error?: { code?: unknown } } | undefined
+      try {
+        failure = JSON.parse(decResult.data)
+      }
+      catch {}
+      if (failure?.success === false && failure.error?.code === HaiCryptoError.TRANSPORT_TIME_INVALID.code)
+        throw new TransportTimeError()
+    }
     // 只从已验签/MAC、关联请求和状态的错误报文恢复服务端响应容量诊断。
     if (response.status === 500) {
       let failure: { success?: unknown, error?: { code?: unknown, details?: Record<string, unknown> } } | undefined

@@ -1,7 +1,7 @@
 import type { TransportMessageContext } from '@h-ai/crypto'
 import { apiContract } from '@h-ai/api-contract'
-import { authenticateTransportRequest, createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { authenticateTransportRequest, createInMemoryKeyStore, createTransportErrorResponse, crypto, HaiCryptoError, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
 
@@ -22,7 +22,7 @@ const protectedContract = {
  * 模拟一个对端 serv：处理 key-exchange + 解密 echo 请求 + 加密响应。
  * 直接用 crypto.transport.createServer 复用真实加解密路径。
  */
-function makeServerFetch(): typeof fetch {
+function makeServerFetch(clockOffset = 0): typeof fetch {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
@@ -47,9 +47,13 @@ function makeServerFetch(): typeof fetch {
     // 解密 → 业务回显 → 加密
     const clientId = req.headers.get('X-Client-Id')
     expect(clientId).toBeTruthy()
-    const verified = await authenticateTransportRequest(mgr, req)
-    if (!verified.success)
+    const clock = clockOffset ? vi.spyOn(Date, 'now').mockReturnValue(Date.now() + clockOffset) : undefined
+    const verified = await authenticateTransportRequest(mgr, req).finally(() => clock?.mockRestore())
+    if (!verified.success) {
+      if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
+        return createTransportErrorResponse(verified.error.cause, { manager: mgr, context: verified.error.cause.context })
       throw new Error(verified.error.message)
+    }
     const input2 = JSON.parse(verified.data.plaintext) as { msg: string }
     const respPlain = JSON.stringify({ success: true, data: { echoed: input2 } })
     const enc = await mgr.encryptResponse(verified.data.context, respPlain, 200)
@@ -138,6 +142,17 @@ function makeRefreshServerFetch(domainUnauthorized = false): { fetch: typeof fet
 }
 
 describe('api-client transport', () => {
+  it.each([600_000, -600_000])('服务端时钟偏差 %s 经真实加密链路映射为校时提示，业务不执行', async (offset) => {
+    const client = apiClient.create(testContract)
+    const fetch = vi.fn(makeServerFetch(offset))
+    expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch, transport: { crypto } })).success).toBe(true)
+    try {
+      const result = await client.echo({ msg: 'pending business request' })
+      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, message: new TransportTimeError().message, cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code } } })
+      expect(fetch.mock.calls.filter(([request]) => new URL(request instanceof Request ? request.url : String(request)).pathname.endsWith('/echo'))).toHaveLength(1)
+    }
+    finally { await client.close() }
+  })
   it('客户端容量超限映射为稳定 HaiResult 错误，保留字节诊断', async () => {
     const client = apiClient.create(testContract)
     expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch: makeServerFetch(), transport: { crypto, maxPlaintextBytes: 1024 } })).success).toBe(true)

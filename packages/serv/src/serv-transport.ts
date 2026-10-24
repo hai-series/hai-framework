@@ -19,7 +19,7 @@
 import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
-import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
@@ -110,8 +110,11 @@ export function createTransportMiddleware(
     let requestContext: TransportMessageContext
     try {
       const verified = await authenticateTransportRequest(manager, c.req.raw)
-      if (!verified.success)
+      if (!verified.success) {
+        if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
+          return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
         return jsonError(servM('serv_transportDecryptFailed'), 400)
+      }
       requestContext = verified.data.context
       if (c.req.method !== 'GET' && c.req.method !== 'HEAD')
         replaceRequestBody(c, verified.data.plaintext)

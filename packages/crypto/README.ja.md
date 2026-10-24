@@ -254,6 +254,10 @@ const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 
 `transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [容量配置、文件换算与升级](TRANSPORT-CAPACITY.md)。
 
+serv/kit は要求の結合、署名、MAC を検証した後、時間窓を超えた報文に暗号化した HTTP 400 時刻エラーを返します。クライアントは `TransportTimeError`（`hai:crypto:071`）で端末とサーバーの時刻同期・再読み込みを案内します。`api-client` は `VALIDATION_FAILED` に変換し `cause.transportCode` に原因を保持します。自動再送やリプレイ時間窓の緩和は行わず、改ざん・未認証の要求は従来の認証エラーです。
+
+独自 HTTP アダプターでは `error instanceof TransportTimeError && error.context` を確認し、`createTransportErrorResponse(error, { manager, context: error.context })` で拒否応答を暗号化します。未認証の報文のタイムスタンプだけで時刻異常を診断しないでください。
+
 独自 HTTP アダプターではルート入口の純粋関数 `readTransportBody(stream, { maxBytes, signal? })` を `crypto.init()` なしで利用できます。元のストリームを渡し、読み取り後は Request/Response を再構築して古い Content-Length/Content-Encoding を削除してください。上限超過は RangeError、不正 UTF-8 は TypeError、読み取り例外・signal.reason は元の理由で拒否します。ストリームのキャンセル処理が失敗しても元の例外を維持します。
 
 ```ts

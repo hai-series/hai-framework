@@ -161,6 +161,8 @@ pnpm --filter @h-ai/api-client typecheck
 
 Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md).
 
+serv/kit return an encrypted HTTP 400 time error for an out-of-window message only after request binding, signature and MAC verification. The client throws `TransportTimeError` (`hai:crypto:071`) with advice to synchronize device/server clocks and refresh. `api-client` maps it to `VALIDATION_FAILED` and preserves `cause.transportCode`. Requests are not replayed automatically and replay windows remain unchanged; tampered or unauthenticated messages retain the generic authentication failure.
+
 ## Logical request observation
 
 `client.observeRequests` observes each logical call once and returns an unsubscribe function. Records contain requestId, procedure, duration, HTTP status, final success/errorCode, and business request attempts. A failed HaiResult with HTTP 200 is a failure. Authentication retries retain the same requestId. Records exclude bodies, tokens, and URL query parameters. Refresh and key exchange are not presented as user operations. close clears subscriptions, so subscribe again after reinitializing.

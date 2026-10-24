@@ -62,7 +62,7 @@ import type {
 } from './api-client-types.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
-import { TransportBodyTooLargeError } from '@h-ai/crypto'
+import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import {
@@ -715,6 +715,9 @@ async function fetchWithTimeout(
  * ```
  */
 function mapClientError(error: unknown) {
+  const time = error instanceof TransportTimeError ? error : error instanceof Error && error.cause instanceof TransportTimeError ? error.cause : undefined
+  if (time)
+    return err(HaiApiClientError.VALIDATION_FAILED, time.message, { transportCode: time.code })
   const capacity = error instanceof TransportBodyTooLargeError ? error : error instanceof Error && error.cause instanceof TransportBodyTooLargeError ? error.cause : undefined
   if (capacity)
     return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, { direction: capacity.direction, stage: capacity.stage, limitBytes: capacity.limitBytes, actualBytes: capacity.actualBytes })

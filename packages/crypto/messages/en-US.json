@@ -51,5 +51,6 @@
   "crypto_transportSessionKeyEncryptFailed": "Failed to encrypt transport session key",
   "crypto_transportSessionKeyDecryptFailed": "Failed to decrypt transport session key",
   "crypto_transportBodyLimitInvalid": "Transport plaintext limit must be an integer between 1024 and 67108864 bytes",
-  "crypto_transportBodyTooLarge": "Encrypted transport payload exceeds the configured byte limit"
+  "crypto_transportBodyTooLarge": "Encrypted transport payload exceeds the configured byte limit",
+  "crypto_transportTimeInvalid": "Your device and server clocks may be out of sync, or the request has expired. Enable automatic time synchronization and refresh to retry. If this continues, ask an administrator to check the server clock."
 }

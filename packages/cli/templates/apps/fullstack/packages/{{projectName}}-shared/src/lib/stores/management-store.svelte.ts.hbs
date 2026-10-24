@@ -72,7 +72,7 @@ export class ManagementStore {
       }
       const info = await managementApi.app.info()
       if (!info.success) {
-        this.error = m.home_error()
+        this.error = info.error.httpStatus === 400 ? info.error.message : m.home_error()
         return
       }
       this.info = info.data
@@ -90,7 +90,7 @@ export class ManagementStore {
         await this.navigate(this.router.path.slice(1))
       }
       else if (me.error.httpStatus !== 401) {
-        this.error = m.operation_failed()
+        this.error = me.error.httpStatus === 400 ? me.error.message : m.operation_failed()
       }
     }
     catch {
@@ -373,7 +373,7 @@ export class ManagementStore {
           this.error = m.forbidden()
         }
         else {
-          this.error = result.error.httpStatus === 403 ? m.forbidden() : result.error.httpStatus === 409 ? m.conflict() : result.error.httpStatus === 400 || result.error.httpStatus === 422 ? m.validation_failed() : m.operation_failed()
+          this.error = result.error.httpStatus === 403 ? m.forbidden() : result.error.httpStatus === 409 ? m.conflict() : result.error.httpStatus === 400 || result.error.httpStatus === 422 ? result.error.message || m.validation_failed() : m.operation_failed()
         }
       }
       return result

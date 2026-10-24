@@ -4,13 +4,15 @@ import * as m from '../src/lib/paraglide/messages.js'
 import { ManagementStore } from '../src/lib/stores/management-store.svelte.js'
 
 const api = vi.hoisted(() => ({
+  initialize: vi.fn(),
+  app: { info: vi.fn() },
   auth: { clear: vi.fn() },
   iam: { auth: { logout: vi.fn(), currentUser: vi.fn() } },
   admin: { users: { list: vi.fn() } },
 }))
 vi.mock('../src/lib/api/api-client.js', () => ({
   managementApi: api,
-  initializeManagementApi: vi.fn(),
+  initializeManagementApi: api.initialize,
   resolveAvatarUrl: (url: string | undefined) => url,
 }))
 
@@ -50,6 +52,26 @@ function createStore() {
 }
 
 describe('management session and request ownership', () => {
+  it('preserves the clock synchronization advice when application bootstrap is rejected', async () => {
+    const message = 'Synchronize device and server clocks, then refresh to retry.'
+    api.initialize.mockResolvedValueOnce({ success: true })
+    api.app.info.mockResolvedValueOnce({ success: false, error: { code: 'hai:api-client:007', httpStatus: 400, message, cause: { transportCode: 'hai:crypto:071' } } })
+    const store = createStore()
+    await store.initialize({ baseUrl: 'https://api.example.test' })
+    expect(store.error).toBe(message)
+    expect(store.initializing).toBe(false)
+    expect(api.iam.auth.currentUser).not.toHaveBeenCalled()
+  })
+
+  it('preserves useful validation advice instead of replacing it with a generic operation error', async () => {
+    const message = 'Synchronize device and server clocks, then refresh to retry.'
+    api.admin.users.list.mockResolvedValueOnce({ success: false, error: { code: 'hai:api-client:007', httpStatus: 400, message } })
+    const store = createStore()
+    store.user = administrator
+    await store.loadUsers()
+    expect(store.error).toBe(message)
+    expect(store.loading).toBe(false)
+  })
   it('ignores a previous administrator failure after logout and another user login', async () => {
     const oldRequest = deferred<typeof forbidden>()
     api.admin.users.list.mockReturnValueOnce(oldRequest.promise)

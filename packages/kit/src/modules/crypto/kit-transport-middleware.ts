@@ -8,7 +8,7 @@
 import type { TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
-import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
@@ -77,8 +77,11 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     let requestContext: TransportMessageContext
     try {
       const verified = await authenticateTransportRequest(manager, event.request)
-      if (!verified.success)
+      if (!verified.success) {
+        if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
+          return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
         return jsonError(kitM('kit_transportDecryptFailed'), 400)
+      }
       requestContext = verified.data.context
       if (event.request.method !== 'GET' && event.request.method !== 'HEAD')
         replaceRequestBody(event, verified.data.plaintext)

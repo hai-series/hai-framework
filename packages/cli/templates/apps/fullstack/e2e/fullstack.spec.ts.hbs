@@ -56,6 +56,29 @@ async function userEditor(page: Page, username: string) {
   return row
 }
 
+for (const scenario of [{ offset: -600_000, width: 1440 }, { offset: 600_000, width: 390 }]) {
+  test(`clock offset ${scenario.offset} displays synchronization advice and recovers after correction`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: scenario.width, height: 900 })
+    await page.addInitScript((offset) => {
+      const now = Date.now.bind(Date)
+      Date.now = () => now() + offset
+    }, scenario.offset)
+    await page.goto('/')
+    const advice = page.getByRole('alert').filter({ hasText: /同步|synchron|時刻/i })
+    await expect(advice).toBeVisible()
+    await expect(advice).toContainText(/刷新|refresh|再読み込み/i)
+    await capture(page, `clock-skew-${scenario.width}.png`, testInfo.outputPath(`clock-skew-${scenario.width}.png`))
+    // 校时后由用户明确刷新；不能自动重放之前失败的业务请求。
+    await page.evaluate((offset) => {
+      const now = Date.now.bind(Date)
+      Date.now = () => now() - offset
+    }, scenario.offset)
+    await page.getByRole('button', { name: /刷新|Refresh|再読み込み/i }).click()
+    await expect(page.getByTestId('login-form')).toBeVisible()
+    await expect(advice).toHaveCount(0)
+  })
+}
+
 test('service health endpoint is ready', async ({ request }) => {
   const response = await request.get(`${apiBaseUrl}/health`)
   await expect(response).toBeOK()

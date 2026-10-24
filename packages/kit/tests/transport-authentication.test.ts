@@ -1,6 +1,6 @@
 import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { Handle, RequestEvent } from '@sveltejs/kit'
-import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { createInMemoryKeyStore, crypto, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
 
@@ -21,6 +21,24 @@ describe('kit authenticated transport boundary', () => {
     serverKeyRing = { activeKeyId: 'v1', keys: { v1: key.data } }
   })
   afterAll(async () => crypto.close())
+
+  it.each([600_000, -600_000])('时间偏差 %s 返回可认证的校时错误，不执行 resolve', async (offset) => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
+    const resolve = vi.fn(() => Response.json({ accepted: true }))
+    const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/_hai/key-exchange', fetch: async (input, init) => {
+      const request = new Request(input, init)
+      const clock = request.url.endsWith('/_hai/key-exchange') ? undefined : vi.spyOn(Date, 'now').mockReturnValue(Date.now() + offset)
+      try {
+        return await dispatch(handle, request, resolve)
+      }
+      finally { clock?.mockRestore() }
+    } })
+    try {
+      await expect(client.encryptedFetch('http://localhost/api/order', { method: 'POST', body: '{}' })).rejects.toThrow(TransportTimeError)
+      expect(resolve).not.toHaveBeenCalled()
+    }
+    finally { client.destroy() }
+  })
 
   it.each(['iv', 'ciphertext', 'encryptedKey', 'tag', 'signature', 'client-header', 'method', 'path', 'query', 'marker'])('真实 %s 篡改不进入 SvelteKit resolve', async (field) => {
     const handle = kit.createHandle({ crypto: { crypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
