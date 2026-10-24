@@ -15,6 +15,7 @@ import { deployM } from '../deploy-i18n.js'
 import { getDeployCommandState } from '../deploy-recovery.js'
 import { HaiDeployError } from '../deploy-types.js'
 import { runCommand } from './deploy-command.js'
+import { prepareSshAskpass } from './deploy-ssh-askpass.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'ssh' })
 
@@ -38,9 +39,17 @@ export interface SshExecutor {
   ping: () => Promise<HaiResult<void>>
 }
 
-/** 构造 ssh 公共连接选项。 */
+/** 显式 key 优先；空密码不会改变省略 auth 时的原 key/agent 默认行为。 */
+export function usesSshPassword(config: Pick<SshConfig, 'auth' | 'password'>): boolean {
+  return config.auth === 'password' || (config.auth === undefined && Boolean(config.password))
+}
+
+/** 构造 ssh 公共连接选项；密码从 child env 供给，不进入参数。 */
 function buildConnectOptions(config: SshConfig): string[] {
-  const args: string[] = ['-o', 'BatchMode=yes']
+  const password = usesSshPassword(config)
+  const args: string[] = ['-o', password ? 'BatchMode=no' : 'BatchMode=yes']
+  if (password)
+    args.push('-o', 'PreferredAuthentications=password', '-o', 'PasswordAuthentication=yes', '-o', 'PubkeyAuthentication=no', '-o', 'NumberOfPasswordPrompts=1')
   args.push('-o', `ConnectTimeout=${config.connectTimeoutSeconds}`)
   args.push('-o', `StrictHostKeyChecking=${config.strictHostKeyChecking ? 'accept-new' : 'no'}`)
   if (config.knownHostsFile) {
@@ -48,7 +57,7 @@ function buildConnectOptions(config: SshConfig): string[] {
     const path = config.knownHostsFile.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
     args.push('-o', `UserKnownHostsFile="${path}"`)
   }
-  if (config.identityFile) {
+  if (!password && config.identityFile) {
     args.push('-i', config.identityFile)
     args.push('-o', 'IdentitiesOnly=yes')
   }
@@ -116,8 +125,42 @@ export function buildScpUploadArgs(config: SshConfig, localPath: string, remoteP
  * ```
  */
 export function createSshExecutor(config: SshConfig): SshExecutor {
+  /** 密码 helper 与实际 SSH 共用预算；不引入全局凭据缓存或长连接生命周期。 */
+  const runAuthenticated = async (command: string, args: string[], options: CommandOptions): Promise<HaiResult<CommandResult>> => {
+    if (!usesSshPassword(config))
+      return runCommand(command, args, options)
+    if (!config.password || (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 2147483647)))
+      return err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM('deploy_sshPasswordInvalid'), ext: { commandExecution: { reason: 'configuration', localTermination: 'not-started' } } })
+    const deadline = options.timeoutMs === undefined ? Number.POSITIVE_INFINITY : performance.now() + options.timeoutMs
+    const prepared = await prepareSshAskpass(config.password, deadline, options.terminationTimeoutMs)
+    if (!prepared.success)
+      return prepared
+    let result: HaiResult<CommandResult>
+    let removed: HaiResult<void> = ok(undefined)
+    try {
+      const remaining = deadline - performance.now()
+      result = remaining <= 0
+        ? err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM('deploy_sshAskpassFailed'), ext: { commandExecution: { reason: 'timeout', localTermination: 'not-started' } } })
+        : await runCommand(command, args, {
+            ...options,
+            env: prepared.data.env,
+            timeoutMs: Number.isFinite(deadline) ? Math.ceil(remaining) : undefined,
+            secrets: [...(options.secrets ?? []), config.password],
+          })
+    }
+    catch {
+      result = err({ ...HaiDeployError.REMOTE_COMMAND_FAILED, message: deployM('deploy_sshAskpassFailed'), ext: { commandExecution: { reason: 'configuration', localTermination: 'unknown' } } })
+    }
+    finally {
+      removed = prepared.data.cleanup()
+    }
+    if (!removed.success)
+      return result.success ? removed : err({ ...result.error, message: `${result.error.message}\n${removed.error.message}` })
+    return result
+  }
+
   const exec: SshExecutor['exec'] = async (remoteCommand, options) => {
-    const result = await runCommand('ssh', buildSshExecArgs(config, remoteCommand), {
+    const result = await runAuthenticated('ssh', buildSshExecArgs(config, remoteCommand), {
       timeoutMs: options?.timeoutMs,
       terminationTimeoutMs: options?.terminationTimeoutMs,
       maxCaptureChars: options?.maxCaptureChars,
@@ -133,7 +176,7 @@ export function createSshExecutor(config: SshConfig): SshExecutor {
 
   const upload: SshExecutor['upload'] = async (localPath, remotePath) => {
     const args = buildScpUploadArgs(config, localPath, remotePath)
-    const result = await runCommand('scp', args, { timeoutMs: 600_000 })
+    const result = await runAuthenticated('scp', args, { timeoutMs: 600_000 })
     if (!result.success) {
       return err({ ...HaiDeployError.IMAGE_TRANSFER_FAILED, message: deployM('deploy_imageTransferFailed', { params: { error: result.error.message } }), ext: result.error.ext })
     }

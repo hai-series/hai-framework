@@ -115,7 +115,7 @@ it('keeps nested SMTP pass values out of the public environment file', () => {
   const connection = { name: 'mail', type: 'smtp', host: 'smtp.example.test', pass: 'test-smtp-private' }
   expect(saveDeploymentEnvironment(snapshot.data, { HAI_REACH_PROVIDERS_0: JSON.stringify(connection) }).success).toBe(true)
   expect(readFileSync(join(envDir, '.env.test'), 'utf8')).not.toContain('test-smtp-private')
-  expect(readFileSync(join(envDir, '.env.local'), 'utf8')).toContain('test-smtp-private')
+  expect(readFileSync(join(envDir, '.env.test.local'), 'utf8')).toContain('test-smtp-private')
 })
 
 it('keeps HTTP API headers and access key identifiers private', () => {
@@ -129,7 +129,7 @@ it('keeps HTTP API headers and access key identifiers private', () => {
   const publicFile = readFileSync(join(envDir, '.env.test'), 'utf8')
   expect(publicFile).not.toContain('test-private-header')
   expect(publicFile).not.toContain('test-private-access-id')
-  expect(readFileSync(join(envDir, '.env.local'), 'utf8')).toContain('test-private-header')
+  expect(readFileSync(join(envDir, '.env.test.local'), 'utf8')).toContain('test-private-header')
 })
 
 it('stores machine-specific host, port and key paths privately and reloads them', () => {
@@ -150,7 +150,7 @@ it('stores machine-specific host, port and key paths privately and reloads them'
   expect(loadDeploymentConfig('deploy', file, loaded.data.values)).toMatchObject({ success: true, data: { provider } })
 })
 
-it('switches away from an old private whole-object override without deleting other private values', () => {
+it('shadows an old shared private object only in the selected mode without deleting shared values', () => {
   const envDir = fixture()
   writeFileSync(join(envDir, '.env.test'), 'HAI_DB_TYPE=postgresql\n')
   writeFileSync(join(envDir, '.env.local'), 'HAI_DB=\'{"type":"postgresql","database":"old","password":"old-password"}\'\nHAI_AI_LLM_APIKEY=test-key\n')
@@ -159,6 +159,10 @@ it('switches away from an old private whole-object override without deleting oth
     throw new Error('Missing fixture')
   expect(saveDeploymentEnvironment(loaded.data, { HAI_DB: '{"type":"sqlite","database":"./data/new.db"}' }).success).toBe(true)
   const local = parseEnv(readFileSync(join(envDir, '.env.local'), 'utf8'))
-  expect(local.HAI_DB).toBeUndefined()
+  expect(local.HAI_DB).toBe('{"type":"postgresql","database":"old","password":"old-password"}')
   expect(local.HAI_AI_LLM_APIKEY).toBe('test-key')
+  const selected = loadDeploymentEnvironment({ environment: 'test', envDir })
+  expect(selected.success).toBe(true)
+  if (selected.success)
+    expect(JSON.parse(selected.data.values.HAI_DB)).toEqual({ type: 'sqlite', database: './data/new.db' })
 })

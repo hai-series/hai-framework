@@ -6,6 +6,7 @@ import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
 import { LineCounter, parse, parseDocument } from 'yaml'
+import { ProviderConfigSchema } from './deploy-config.js'
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
 
@@ -39,18 +40,83 @@ function environmentValue(value: string): unknown {
   }
 }
 
-/** 在已解析的 YAML 结构上处理覆盖，避免密码中的冒号、引号、井号变成 YAML 语法。 */
-function resolveConfig(value: unknown, prefix: string, env: Record<string, string | undefined>): unknown {
-  if (env[prefix] !== undefined)
-    return environmentValue(env[prefix])
+const SSH_PREFIX = 'HAI_DEPLOY_PROVIDER_SSH'
+const sshProvider = ProviderConfigSchema.options.find(provider => 'ssh' in provider.shape)
+// 从同一 Schema 读取已知键；不把任意环境变量扩成配置字段。
+const sshFields = new Map(sshProvider && 'ssh' in sshProvider.shape
+  ? Object.keys(sshProvider.shape.ssh.unwrap().shape).map(name => [name.toUpperCase(), name])
+  : [])
+const numericSshFields = new Set(['PORT', 'CONNECTTIMEOUTSECONDS', 'STRICTHOSTKEYCHECKING'])
+
+/** 在已解析的结构上覆盖；部署父对象仍允许同来源、更具体的 SSH 字段覆盖。 */
+function resolveConfig(value: unknown, prefix: string, env: Record<string, string | undefined>, deployment = false, literal = false): unknown {
+  const sshField = prefix.startsWith(`${SSH_PREFIX}_`) ? prefix.slice(SSH_PREFIX.length + 1) : undefined
+  const textSshField = sshField !== undefined && sshFields.has(sshField) && !numericSshFields.has(sshField)
+  if (env[prefix] !== undefined) {
+    if (deployment && textSshField)
+      return env[prefix]
+    if (!deployment)
+      return environmentValue(env[prefix])
+    value = environmentValue(env[prefix])
+    // 环境 JSON 中的密码等文本已经是字面量，不能二次展开其中的 ${...}。
+    literal = true
+  }
   if (Array.isArray(value))
-    return value.map((item, index) => resolveConfig(item, `${prefix}_${index}`, env))
-  if (value && typeof value === 'object')
-    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, resolveConfig(nested, `${prefix}_${key.toUpperCase()}`, env)]))
+    return value.map((item, index) => resolveConfig(item, `${prefix}_${index}`, env, deployment, literal))
+  if (value && typeof value === 'object') {
+    const input: Record<string, unknown> = { ...value }
+    if (deployment) {
+      const hasSshInput = env[SSH_PREFIX] !== undefined || [...sshFields.keys()].some(field => env[`${SSH_PREFIX}_${field}`] !== undefined)
+      if (hasSshInput && prefix === 'HAI_DEPLOY' && input.provider === undefined)
+        input.provider = {}
+      if (hasSshInput && prefix === 'HAI_DEPLOY_PROVIDER' && input.ssh === undefined)
+        input.ssh = {}
+      if (prefix === SSH_PREFIX) {
+        for (const [field, name] of sshFields) {
+          if (env[`${SSH_PREFIX}_${field}`] !== undefined && !(name in input))
+            input[name] = undefined
+        }
+      }
+    }
+    return Object.fromEntries(Object.entries(input).map(([key, nested]) => [key, resolveConfig(nested, `${prefix}_${key.toUpperCase()}`, env, deployment, literal)]))
+  }
   if (typeof value !== 'string')
     return value
+  if (literal)
+    return value
   const resolved = value.replace(/\$\{([^:}]+)(?::([^}]*))?\}/g, (_match, name: string, fallback?: string) => env[name] ?? fallback ?? '')
-  return /^\$\{[^}]+\}$/.test(value) ? environmentValue(resolved) : resolved
+  return /^\$\{[^}]+\}$/.test(value) && !textSshField ? environmentValue(resolved) : resolved
+}
+
+/** 读取单层 dotenv；所有错误由调用边界转换为脱敏 HaiResult。 */
+function environmentFile(path: string): Record<string, string> {
+  const values: Record<string, string> = {}
+  if (existsSync(path)) {
+    for (const [name, value] of Object.entries(parseEnv(readFileSync(path, 'utf8')))) {
+      if (value !== undefined)
+        values[name] = value
+    }
+  }
+  return values
+}
+
+/** 部署来源逐层归并；高层父对象清除低层叶，同层按父→叶处理。 */
+function deploymentVariables(layers: Array<Record<string, string | undefined>>): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const layer of layers) {
+    const names = Object.keys(layer).filter(name => name === 'HAI_DEPLOY' || name.startsWith('HAI_DEPLOY_')).sort((left, right) => left.length - right.length)
+    for (const name of names) {
+      const value = layer[name]
+      if (value === undefined)
+        continue
+      for (const previous of Object.keys(result)) {
+        if (previous.startsWith(`${name}_`))
+          delete result[previous]
+      }
+      result[name] = value
+    }
+  }
+  return result
 }
 
 /**
@@ -92,7 +158,7 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
       input = document.toJS()
     }
-    const config = resolveConfig(input, `HAI_${name.toUpperCase()}`, values)
+    const config = resolveConfig(input, `HAI_${name.toUpperCase()}`, values, name === 'deploy')
     if (config !== null && (typeof config !== 'object' || Array.isArray(config)))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
     return ok(config && typeof config === 'object' && !Array.isArray(config) ? config as Record<string, unknown> : {})
@@ -104,7 +170,8 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
 
 /**
  * 加载部署环境；指定环境文件缺失时返回错误并要求用户创建。
- * 进程环境优先于 .env.local、目标环境文件、基础文件；targetValues 只记录目标文件显式项，不包含其它覆盖。
+ * 部署目标按进程 > 模式私有 > 模式公共 > 旧全局私有 > 基础归并。
+ * 其它模块保留进程 > 模式私有 > 旧全局私有 > 模式公共 > 基础；targetValues 仅记录模式公共项。
  * @param options - 模式、环境目录与是否强制存在目标文件
  * @param options.environment - dev/test/prod 或自定义模式
  * @param options.envDir - 环境文件所在目录
@@ -130,22 +197,29 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
   if (!loaded.success)
     return loaded
   try {
-    const values = { ...loaded.data }
+    const base = environmentFile(join(envDir, '.env'))
+    const globalPrivate = environmentFile(join(envDir, '.env.local'))
+    const selected = environmentFile(target)
+    const modePrivate = environmentFile(join(envDir, `.env.${environment}.local`))
+    const values = { ...loaded.data, ...modePrivate }
+    // Core 已处理原三层；模式私有层也必须继续服从显式进程覆盖。
+    for (const name of Object.keys(values)) {
+      if (process.env[name] !== undefined)
+        values[name] = process.env[name]
+    }
     // 只传递应用配置和显式声明的运行变量，不上传整个调用者进程环境。
     for (const [name, value] of Object.entries(process.env)) {
       if (/^(?:HAI_|PUBLIC_|VITE_)/.test(name) && value !== undefined)
         values[name] = value
     }
+    for (const name of Object.keys(values)) {
+      if (name === 'HAI_DEPLOY' || name.startsWith('HAI_DEPLOY_'))
+        delete values[name]
+    }
+    Object.assign(values, deploymentVariables([base, globalPrivate, selected, modePrivate, process.env]))
     values.HAI_DEPLOY_ENVIRONMENT = environment
     values.HAI_CORE_ENV ??= environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
-    const targetValues: Record<string, string> = {}
-    if (existsSync(target)) {
-      for (const [name, value] of Object.entries(parseEnv(readFileSync(target, 'utf8')))) {
-        if (value !== undefined)
-          targetValues[name] = value
-      }
-    }
-    return ok({ environment, envDir, values, targetValues })
+    return ok({ environment, envDir, values, targetValues: selected })
   }
   catch {
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentReadFailed'))
@@ -231,12 +305,12 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
 }
 
 /**
- * 保存部署产生的变量：公共值写目标环境文件，凭据写 `.env.local`。
+ * 保存部署变量：公共值写目标环境文件，凭据写 `.env.<environment>.local`；旧共享私有文件不删除。
  * 返回实际写入的变量名，调用者只展示名称或脱敏值。
  * @param environment - 已加载的目标环境快照
  * @param values - 需要更新的变量；未提供的项保持原状
  * @param options - private 为 true 时所有值只保存在本机；适用于 SSH 地址、端口及密钥路径
- * @param options.private - 是否将全部值仅保存到 .env.local
+ * @param options.private - 是否将全部值保存到选中模式的私有文件
  * @returns 已保存的变量名或脱敏错误
  * @example
  * ```ts
@@ -245,7 +319,7 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
  * if (!loaded.success) throw new Error(loaded.error.message)
  * const saved = saveDeploymentEnvironment(loaded.data, { HAI_DB_HOST: 'db' })
  * if (!saved.success) throw new Error(saved.error.message)
- * // 密钥应以 { private: true } 写入被忽略的 .env.local，不能放公共环境文件。
+ * // 密钥应以 { private: true } 写入被忽略的 .env.prod.local，不能放公共环境文件。
  * ```
  */
 export function saveDeploymentEnvironment(environment: DeploymentEnvironment, values: Record<string, string>, options: { private?: boolean } = {}): HaiResult<string[]> {
@@ -269,17 +343,25 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
         shared[name] = value
       }
     }
+    const privatePath = join(environment.envDir, `.env.${environment.environment}.local`)
+    const globalPrivate = environmentFile(join(environment.envDir, '.env.local'))
+    // 非部署模块保留旧 private 优先级；显式换后端时在当前模式遮盖旧值，不破坏其它环境的 fallback。
+    for (const [name, value] of Object.entries(shared)) {
+      if (!(name in privateValues) && globalPrivate[name] !== undefined && name !== 'HAI_DEPLOY' && !name.startsWith('HAI_DEPLOY_'))
+        privateValues[name] = value
+    }
     if (Object.keys(shared).length)
       updateFile(join(environment.envDir, `.env.${environment.environment}`), shared, false)
     if (Object.keys(privateValues).length)
-      updateFile(join(environment.envDir, '.env.local'), privateValues, true)
+      updateFile(privatePath, privateValues, true)
     removeOverrides(join(environment.envDir, `.env.${environment.environment}`), Object.keys(privateValues).filter(name => !(name in shared)), false)
-    removeOverrides(join(environment.envDir, '.env.local'), Object.keys(shared).filter(name => !(name in privateValues)))
+    removeOverrides(privatePath, Object.keys(shared).filter(name => !(name in privateValues)))
     if (Object.keys(privateValues).length) {
       const ignorePath = join(environment.envDir, '.gitignore')
       const ignore = existsSync(ignorePath) ? readFileSync(ignorePath, 'utf8') : ''
-      if (!ignore.split(/\r?\n/).includes('.env.local'))
-        writeFileSync(ignorePath, `${ignore.trimEnd()}\n.env.local\n.hai/deploy/\n`)
+      const missing = ['.env.local', '.env.*.local', '.hai/deploy/'].filter(line => !ignore.split(/\r?\n/).includes(line))
+      if (missing.length)
+        writeFileSync(ignorePath, `${ignore.trimEnd()}\n${missing.join('\n')}\n`)
     }
     return ok(Object.keys(values))
   }

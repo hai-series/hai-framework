@@ -67,8 +67,8 @@ function configObject(value: unknown): Record<string, unknown> {
 }
 
 /**
- * 补齐部署目标，完整配置直接复用；本机 SSH 参数和平台 Token 只写 `.env.local`。
- * @example 首次输入主机和密钥路径后，下次执行 `hai deploy --env prod` 自动复用。
+ * 补齐部署目标，完整配置直接复用；SSH 参数和平台 Token 只写 `.env.<环境>.local`。
+ * @example 首次输入主机和密钥或密码后，下次执行 `hai deploy --env prod` 自动复用。
  */
 async function configureDeployTarget(module: typeof import('@h-ai/deploy'), config: Record<string, unknown>, environment: DeploymentEnvironment, nonInteractive?: boolean, bundleOnly?: boolean): Promise<void> {
   if (bundleOnly) {
@@ -105,7 +105,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
   if (!platform.value)
     throw new Error(cliM('cli_deploy_cancelled'))
 
-  const input = async (name: string, initial: unknown, options: { optional?: boolean, secret?: boolean, port?: boolean } = {}): Promise<string> => {
+  const input = async (name: string, initial: unknown, options: { optional?: boolean, secret?: boolean, port?: boolean, trim?: boolean } = {}): Promise<string> => {
     const answer = await prompts({
       type: options.secret ? 'password' : 'text',
       name: 'value',
@@ -113,11 +113,11 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
       initial: options.secret ? undefined : initial === undefined ? '' : String(initial),
       validate: (value: string) => options.port
         ? (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) || cliM('cli_deploy_port_invalid')
-        : options.optional || !!value.trim() || cliM('cli_deploy_invalid_value'),
+        : options.optional || !!(options.trim === false ? value : value.trim()) || cliM('cli_deploy_invalid_value'),
     })
     if (answer.value === undefined)
       throw new Error(cliM('cli_deploy_cancelled'))
-    return String(answer.value).trim()
+    return options.trim === false ? String(answer.value) : String(answer.value).trim()
   }
   let provider: Record<string, unknown>
   if (platform.value === 'docker-ssh') {
@@ -128,7 +128,21 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     const host = await input('HAI_DEPLOY_PROVIDER_SSH_HOST', ssh.host)
     const port = Number(await input('HAI_DEPLOY_PROVIDER_SSH_PORT', ssh.port ?? 22, { port: true }))
     const username = await input('HAI_DEPLOY_PROVIDER_SSH_USERNAME', ssh.username)
-    const identityFile = await input('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', ssh.identityFile, { optional: true })
+    const previousPasswordMode = ssh.auth === 'password' || (ssh.auth !== 'key' && typeof ssh.password === 'string' && ssh.password.length > 0)
+    const authentication = await prompts({
+      type: 'select',
+      name: 'value',
+      message: cliM('cli_deploy_target_auth'),
+      choices: [{ title: cliM('cli_deploy_target_auth_key'), value: 'key' }, { title: cliM('cli_deploy_target_auth_password'), value: 'password' }],
+      initial: previousPasswordMode ? 1 : 0,
+    })
+    if (!['key', 'password'].includes(authentication.value))
+      throw new Error(cliM('cli_deploy_cancelled'))
+    const auth = authentication.value as 'key' | 'password'
+    const password = auth === 'password'
+      ? previousPasswordMode && typeof ssh.password === 'string' && ssh.password.length > 0 ? ssh.password : await input('HAI_DEPLOY_PROVIDER_SSH_PASSWORD', undefined, { secret: true, trim: false })
+      : undefined
+    const identityFile = auth === 'key' ? await input('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', ssh.identityFile, { optional: true }) : undefined
     const knownHostsFile = await input('HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE', ssh.knownHostsFile, { optional: true })
     const baseDir = await input('HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR', remote.baseDir || '/opt/hai/apps')
     const runtime = await prompts({ type: 'select', name: 'value', message: cliM('cli_deploy_target_runtime'), choices: ['auto', 'podman', 'docker'].map(value => ({ title: value, value })), initial: ['auto', 'podman', 'docker'].indexOf(String(remote.runtime ?? 'auto')) })
@@ -138,7 +152,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     const containerPort = Number(await input('HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT', expose.containerPort || 3000, { port: true }))
     provider = {
       type: 'docker-ssh',
-      ssh: { ...ssh, host, port, username, identityFile: identityFile || undefined, knownHostsFile: knownHostsFile || undefined },
+      ssh: { ...ssh, host, port, username, auth, password, identityFile: identityFile || undefined, knownHostsFile: knownHostsFile || undefined },
       remote: { ...remote, baseDir, runtime: runtime.value },
       expose: { type: 'port', hostPort, containerPort },
     }

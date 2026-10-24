@@ -24,6 +24,10 @@ const SshConfigSchema = z.object({
   port: z.number().int().min(1).max(65535).default(22),
   /** SSH 用户名 */
   username: z.string().regex(/^[a-z_][\w-]*$/i),
+  /** 认证方式；省略时非空 password 使用密码，否则保留私钥/agent；显式 key 忽略残留密码。 */
+  auth: z.enum(['key', 'password']).optional(),
+  /** SSH 密码（保留原值）；密码方式必须非空、无 CR/LF/NUL，UTF-8 不超过 1023 字节。 */
+  password: z.string().optional(),
   /** 私钥文件路径（省略时使用 ssh-agent 或 ~/.ssh 默认密钥） */
   identityFile: z.string().min(1).optional(),
   /** known_hosts 文件路径（省略时使用默认；配合 CI/临时环境隔离主机指纹） */
@@ -32,6 +36,12 @@ const SshConfigSchema = z.object({
   strictHostKeyChecking: z.boolean().default(true),
   /** 连接超时（秒） */
   connectTimeoutSeconds: z.number().int().positive().default(10),
+}).superRefine((ssh, context) => {
+  // 未启用的旧密码不影响显式 key；空串不改变省略 auth 时的原有默认行为。
+  if (ssh.auth === 'key' || (ssh.auth === undefined && !ssh.password))
+    return
+  if (!ssh.password || /[\r\n\0]/.test(ssh.password) || new TextEncoder().encode(ssh.password).length > 1023)
+    context.addIssue({ code: 'custom', path: ['password'], message: deployM('deploy_sshPasswordInvalid') })
 })
 
 /** 端口直出暴露配置 */
@@ -80,7 +90,7 @@ export const ProviderConfigSchema = z.discriminatedUnion('type', [
 
 /**
  * SSH 连接配置（parse 后）
- * 这是 Schema 解析后的类型，默认字段已必填；私钥路径可省略以使用 ssh-agent/默认密钥。
+ * 这是 Schema 解析后的类型，默认字段已必填；auth 省略时非空密码选择 password，否则使用 ssh-agent/默认密钥；显式 key 忽略残留 password。
  * @example
  * ```ts
  * import type { SshConfig } from '@h-ai/deploy'

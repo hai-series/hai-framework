@@ -32,7 +32,7 @@ import {
   saveCredentials,
 } from './deploy-credentials.js'
 import { loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
-import { resolveArtifactDirectory, resolveOutputDir, usesDefaultMiddleware } from './deploy-functions.js'
+import { resolveArtifactDirectory, resolveOutputDir, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
 import { scanApp } from './deploy-scanner.js'
@@ -398,7 +398,23 @@ export const deploy: DeployFunctions = {
     const environment = loadDeploymentEnvironment({ environment: scanOptions.environment ?? 'prod', envDir: scan.envDir ?? appDir, requireFile: scanOptions.environment !== undefined })
     if (!environment.success)
       return environment
-    const appEnv = Object.fromEntries(Object.entries(environment.data.values).filter(([key]) => !key.startsWith('HAI_CLI_') && (!key.startsWith('HAI_DEPLOY_') || key === 'HAI_DEPLOY_ENVIRONMENT')))
+    // SSH 密码允许引用自定义变量名；按配置来源排除，不能按密码值删除同值的应用配置。
+    const connectionVariables = new Set<string>()
+    const projectFile = join(resolveProjectDirectory(appDir), 'hai.json')
+    if (existsSync(projectFile)) {
+      try {
+        const project: { deploy?: { provider?: { ssh?: { password?: unknown } } } } = JSON.parse(readFileSync(projectFile, 'utf8'))
+        const reference = project?.deploy?.provider?.ssh?.password
+        if (typeof reference === 'string') {
+          for (const match of reference.matchAll(/\$\{([^:}]+)(?::[^}]*)?\}/g))
+            connectionVariables.add(match[1]!)
+        }
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path: projectFile, line: '1' } }))
+      }
+    }
+    const appEnv = Object.fromEntries(Object.entries(environment.data.values).filter(([key]) => key !== 'HAI_DEPLOY' && !connectionVariables.has(key) && !key.startsWith('HAI_CLI_') && (!key.startsWith('HAI_DEPLOY_') || key === 'HAI_DEPLOY_ENVIRONMENT')))
     const projectName = `${options?.projectName ?? scan.appName}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
     options = {
       ...options,
