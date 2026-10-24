@@ -20,6 +20,7 @@ import type { ReldbOpsContext } from './reldb-provider-base.js'
 import type { ReldbProvider } from './reldb-provider-types.js'
 
 import { createRequire } from 'node:module'
+import { setTimeout as delay } from 'node:timers/promises'
 import { core, err, ok } from '@h-ai/core'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
@@ -315,24 +316,31 @@ export function createPostgresProvider(): ReldbProvider {
     return result.rows
   }
 
+  /** 仅重试自动提交、单条幂等建表/索引的 PostgreSQL 系统目录竞争。事务失败须由调用方回滚。 */
+  async function executeStatement(sql: string, params?: unknown[]) {
+    try {
+      return await pool!.query(sql, params)
+    }
+    catch (error) {
+      const kind = /^\s*CREATE\s+(TABLE|(?:UNIQUE\s+)?INDEX)\s+IF\s+NOT\s+EXISTS\s+/i.exec(sql)?.[1]?.toUpperCase()
+      const single = !sql.trim().replace(/;$/, '').includes(';')
+      const catalogConflict = typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
+        && 'schema' in error && error.schema === 'pg_catalog'
+        && 'constraint' in error && (error.constraint === 'pg_class_relname_nsp_index' || (kind === 'TABLE' && error.constraint === 'pg_type_typname_nsp_index'))
+      if (!kind || !single || !catalogConflict)
+        throw error
+      // 胜者已提交后原语句会命中 IF NOT EXISTS；第二次失败照常交由公共操作包装器返回。
+      return pool!.query(sql, params)
+    }
+  }
+
   // ─── DDL 操作 ───
 
   const rawDdl: DdlOperations = {
     async createTable(name, columns, ifNotExists = true) {
       const quotedTable = quoteIdentifier(name)
       const sql = buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists)
-      try {
-        await pool!.query(sql)
-      }
-      catch (error) {
-        // PostgreSQL并发首次创建同表可能在IF NOT EXISTS生效前竞争pg_type唯一索引。
-        // 仅该已确认的系统目录竞态重执行原DDL；其它约束/权限/定义错误仍原样失败。
-        if (!ifNotExists || typeof error !== 'object' || error === null || !('code' in error) || error.code !== '23505'
-          || !('constraint' in error) || error.constraint !== 'pg_type_typname_nsp_index') {
-          throw error
-        }
-        await pool!.query(sql)
-      }
+      await executeStatement(sql)
       return ok(undefined)
     },
     async dropTable(name, ifExists) {
@@ -355,7 +363,7 @@ export function createPostgresProvider(): ReldbProvider {
     },
     async createIndex(table, index, def) {
       const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
-      await pool!.query(sql)
+      await executeStatement(sql)
       return ok(undefined)
     },
     async dropIndex(index, ifExists = true) {
@@ -364,7 +372,7 @@ export function createPostgresProvider(): ReldbProvider {
       return ok(undefined)
     },
     async raw(sql) {
-      await pool!.query(sql)
+      await executeStatement(sql)
       return ok(undefined)
     },
   }
@@ -381,7 +389,7 @@ export function createPostgresProvider(): ReldbProvider {
       return ok((rows[0] as T) ?? null)
     },
     async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
-      const result = await pool!.query(convertPlaceholders(sql), params)
+      const result = await executeStatement(convertPlaceholders(sql), params)
       return ok({ changes: result.rowCount ?? 0 })
     },
     async batch(statements) {
@@ -533,8 +541,18 @@ export function createPostgresProvider(): ReldbProvider {
           })
         })
 
-        // 验证连接可用性
-        await pool.query('SELECT 1')
+        // 新容器网络的 DNS 可能短暂未就绪；仅启动探测的 EAI_AGAIN 有界重试，不重放业务 SQL。
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await pool.query('SELECT 1')
+            break
+          }
+          catch (error) {
+            if (attempt >= 2 || typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'EAI_AGAIN')
+              throw error
+            await delay(250 * (attempt + 1))
+          }
+        }
 
         ready = true
         currentConfig = config

@@ -5,7 +5,7 @@
 > `@h-ai/reldb` 提供统一的数据库操作接口，支持 SQLite、PostgreSQL、MySQL，包含 DDL、SQL、CRUD 抽象、事务与分页。
 
 
-派生 `BaseReldbCrudRepository` 的自定义 SQL 方法先检查 `await this.ensureReady()`；构造函数启动自动建表不等于仓库就绪，服务 init 必须等待候选仓库的就绪入口再发布。PostgreSQL 并发首次 `CREATE TABLE IF NOT EXISTS` 的 `23505/pg_type_typname_nsp_index` 目录冲突仅重执行相同 DDL 一次，其他错误继续失败。
+派生 `BaseReldbCrudRepository` 的自定义 SQL 方法先检查 `await this.ensureReady()`；构造函数启动自动建表不等于仓库就绪，服务 init 必须等待候选仓库的就绪入口再发布。PostgreSQL 自动提交的单条 `CREATE TABLE/INDEX IF NOT EXISTS` 仅对 `23505/pg_class_relname_nsp_index`（建表还包括 `pg_type_typname_nsp_index`）目录竞争重执行一次，DDL 与 SQL 入口一致；事务、业务唯一约束及其他错误不自动重试。初始化连接探测仅对临时 DNS 错误 `EAI_AGAIN` 最多尝试三次，间隔 250/500 ms；不重放业务 SQL。
 
 ## 运行环境
 
@@ -160,6 +160,8 @@ interface ReldbColumnDef {
 > MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。INTEGER + autoIncrement 在 MySQL 映射为 BIGINT。
 
 Unix 毫秒使用 BIGINT，不能使用 PostgreSQL/MySQL 的普通 INTEGER。原始 SQL/CRUD 与 BaseReldbCrudRepository 的 BIGINT 保留 driver 的 number/string/bigint 类型；业务需要 number 时须在读取边界校验非负整数和 Number.isSafeInteger，拒绝精度丢失。TIMESTAMP 经 BaseReldbCrudRepository 映射为 Date。
+
+原始 `sql.query<T>` / `queryPage<T>` 的泛型只声明类型，不执行字段/日期/JSON 转换；JOIN 等自定义查询须自行加引号保留别名大小写，并在仓库边界映射驱动值。基类读取将 SQL NULL 映射为 undefined、JSON 解析为对象；若业务公开契约要求 null 或 JSON 字符串，仓库需显式归一化。
 
 ### SQL — `reldb.sql`
 
@@ -332,7 +334,7 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 - 主键生成（非 autoIncrement 主键默认使用随机 UUID，底层带安全上下文守卫，不可用时回退；业务侧手动生成 UUID 一律用 `core.id.uuid()`）
 - BOOLEAN → 1/0（SQLite/MySQL）或 true/false（PostgreSQL）
 - TIMESTAMP → 毫秒时间戳（SQLite）或 Date（PG/MySQL）
-- JSON → 字符串序列化（SQLite/MySQL）或原生 JSONB（PG）
+- JSON 写入统一序列化为字符串；数据库列为 SQLite TEXT、PostgreSQL JSONB、MySQL JSON，基类读取时解析为对象
 
 ### 事务 — `reldb.tx`
 

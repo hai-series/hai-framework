@@ -588,7 +588,7 @@ if (!result.success) {
 | `HaiReldbError.TIMEOUT`              | `hai:reldb:009` | MySQL 接続取得の期限超過   |
 | `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:011` | MySQL 接続待機キューが満杯 |
 
-`BaseReldbCrudRepository` の派生クラスで独自 SQL を実行する前に `await this.ensureReady()` を確認します。構築時に建表を開始するだけなので、サービス init は候補の準備完了後に公開します。PostgreSQL の並行初回 `CREATE TABLE IF NOT EXISTS` は `23505/pg_type_typname_nsp_index` の競合だけ同じ DDL を一度再実行し、他のエラーは失敗のままです。
+`BaseReldbCrudRepository` の派生クラスで独自 SQL を実行する前に `await this.ensureReady()` を確認します。構築時に建表を開始するだけなので、サービス init は候補の準備完了後に公開します。PostgreSQL の自動コミットによる単一の `CREATE TABLE/INDEX IF NOT EXISTS` は、`23505/pg_class_relname_nsp_index`（建表は `pg_type_typname_nsp_index` も対象）の競合に限り、DDL/SQL の両入口で一度だけ再実行します。トランザクション、業務の一意制約、その他の失敗は再試行しません。初期接続確認の一時 DNS エラー `EAI_AGAIN` は 250/500 ms 間隔で最大三回試行し、業務 SQL は再送しません。
 
 ## 本番の共有状態
 
