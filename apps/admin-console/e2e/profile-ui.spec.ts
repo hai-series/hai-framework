@@ -148,6 +148,10 @@ test.describe('Profile UI', () => {
     await expect(summaryAvatar).toHaveCount(0)
     await expect(formAvatar).toHaveCount(0)
 
+    // 限定资料表单，避免误选全局反馈组件的附件入口。
+    const fileInput = page.locator('.user-profile input[type="file"][accept*="image"]')
+    await expect(fileInput).toHaveCount(1)
+
     const uploadResponsePromise = page.waitForResponse(response =>
       response.url().includes('/api/auth/profile/avatar')
       && response.request().method() === 'POST',
@@ -157,10 +161,7 @@ test.describe('Profile UI', () => {
       && response.request().method() === 'PUT',
     )
 
-    // 找到文件输入框并走真实 UI 上传链路（apiFetch + 解密 + 持久化）
-    const fileInput = page.locator('input[type="file"][accept*="image"]')
-    await expect(fileInput).toHaveCount(1)
-
+    // 走真实 UI 上传链路（apiFetch + 解密 + 持久化）。
     await fileInput.setInputFiles({
       name: 'avatar.png',
       mimeType: 'image/png',
