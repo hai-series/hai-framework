@@ -44,6 +44,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   let lastKeyScreenshot = 0
   let keyScreenshotPromise: Promise<void> | undefined
   let closing = false
+  let closePromise: Promise<void> | undefined
   let collectionFinished = false
   let collectionSealed = false
   let draftBytes = 0
@@ -143,17 +144,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   async function init(input: FeedbackClientConfig): Promise<HaiResult<void>> {
     if (initializing)
       return err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
-    if (config)
-      await close()
-    if (typeof window === 'undefined' || !input.appId || !input.actions || ['submit', 'appendEvidence', 'completeCollection', 'upload'].some(key => typeof input.actions[key as keyof typeof input.actions] !== 'function'))
-      return failure('INVALID_INPUT')
-    const numeric = [input.maxEvents, input.maxBytes, input.maxAgeMs, input.beforeCount, input.afterCount, input.afterTimeoutMs, input.screenshotTimeoutMs, input.maxKeyScreenshots, input.keyScreenshotThrottleMs]
-    if (numeric.some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0)))
-      return failure('INVALID_INPUT')
-    if (input.persistDraft && !input.persistenceKey)
-      return failure('INVALID_INPUT')
     initializing = true
     try {
+      if (config || closePromise)
+        await close()
+      if (typeof window === 'undefined' || !input.appId || !input.actions || ['submit', 'appendEvidence', 'completeCollection', 'upload'].some(key => typeof input.actions[key as keyof typeof input.actions] !== 'function'))
+        return failure('INVALID_INPUT')
+      const numeric = [input.maxEvents, input.maxBytes, input.maxAgeMs, input.beforeCount, input.afterCount, input.afterTimeoutMs, input.screenshotTimeoutMs, input.maxKeyScreenshots, input.keyScreenshotThrottleMs]
+      if (numeric.some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0)) || (input.persistDraft && !input.persistenceKey))
+        return failure('INVALID_INPUT')
       config = input
       closing = false
       source = `browser:${core.id.uuid()}`
@@ -161,6 +160,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       if (input.persistDraft) {
         try {
           const restored = await restoreFeedbackDraft(storageKey)
+          if (closing || config !== input)
+            return failure('NOT_INITIALIZED')
           if (restored && Array.isArray(restored.evidence) && restored.evidence.every(item => FeedbackEvidenceInputSchema.safeParse(item).success)
             && Array.isArray(restored.attachments) && restored.attachments.every(item => item.bytes instanceof Uint8Array)
             && (!restored.report || FeedbackReportSchema.safeParse(restored.report).success)) {
@@ -170,6 +171,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           }
           else {
             const checkpoint = await restoreFeedbackCheckpoint(storageKey)
+            if (closing || config !== input)
+              return failure('NOT_INITIALIZED')
             if (checkpoint && typeof checkpoint === 'object' && 'evidence' in checkpoint && Array.isArray(checkpoint.evidence) && 'expiresAt' in checkpoint && typeof checkpoint.expiresAt === 'number' && checkpoint.expiresAt > Date.now()) {
               const parsed = checkpoint.evidence.map(item => FeedbackEvidenceInputSchema.safeParse(item))
               if (parsed.every(item => item.success)) {
@@ -184,6 +187,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           }
         }
         catch {
+          if (closing || config !== input)
+            return failure('NOT_INITIALIZED')
           missing.add('browser-persistence-unavailable')
         }
       }
@@ -229,7 +234,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         void flush()
       })
       if (input.replay)
-        await startReplay()
+        await startReplay(input)
+      if (closing || config !== input)
+        return failure('NOT_INITIALIZED')
       flushTimer = setInterval(() => {
         if (draft?.report)
           void flush()
@@ -245,9 +252,11 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     }
   }
 
-  async function startReplay() {
+  async function startReplay(activeConfig: FeedbackClientConfig) {
     try {
       const { record: start } = await import('@rrweb/record')
+      if (closing || config !== activeConfig)
+        return
       stopReplay = start({
         maskAllInputs: true,
         maskTextSelector: '[data-feedback-private],.rr-mask',
@@ -283,7 +292,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       }) ?? undefined
     }
     catch {
-      missing.add('replay-recorder-unavailable')
+      if (!closing && config === activeConfig)
+        missing.add('replay-recorder-unavailable')
     }
   }
 
@@ -302,11 +312,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           return
         }
         const image = await attachment(`operation-${lastKeyScreenshot}.png`, 'image/png', bytes)
+        if (closing || config !== activeConfig)
+          return
         keyScreenshots.push({ attachment: image, timestamp: lastKeyScreenshot })
         keyScreenshots = keyScreenshots.filter(item => item.timestamp >= Date.now() - limits().age).slice(-Math.min(activeConfig.maxKeyScreenshots ?? 3, 5))
       }
       catch {
-        missing.add('key-screenshot-unavailable')
+        if (!closing && config === activeConfig)
+          missing.add('key-screenshot-unavailable')
       }
     })().finally(() => {
       keyScreenshotPromise = undefined
@@ -315,8 +328,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   async function doPrepare(): Promise<HaiResult<FeedbackDraft>> {
-    if (!config)
+    if (!config || closing)
       return failure('NOT_INITIALIZED')
+    const activeConfig = config
     if (draft?.report && !collectionFinished) {
       // 新反馈开始前先确认上一份待传材料，不能以关闭弹窗丢弃附件。
       if (Date.now() < deadline && afterCount < limits().after)
@@ -325,6 +339,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       const settled = await flush()
       if (!settled.success)
         return settled
+      if (closing || config !== activeConfig)
+        return failure('NOT_INITIALIZED')
     }
     if (draft && !collectionFinished)
       return ok(draft)
@@ -353,6 +369,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     const other = buffer.filter(item => item.kind !== 'log' && item.kind !== 'error').slice(-100)
     if (keyScreenshotPromise)
       await keyScreenshotPromise
+    if (closing || config !== activeConfig)
+      return failure('NOT_INITIALIZED')
     keyScreenshots = keyScreenshots.filter(item => item.timestamp >= now - limits().age)
     draft = { submissionId: core.id.uuid(), anchorTime: anchor?.timestamp ?? now, anchorKind: anchor ? 'error' : 'feedback', errorId: anchor?.errorId, evidence: [...selected, ...other, ...replayChunks.flat()].sort((a, b) => a.sequence - b.sequence), attachments: keyScreenshots.map(item => item.attachment), missing: [...missing], expiresAt: now + 86_400_000 }
     while (draft.evidence.length > limits().events || new TextEncoder().encode(JSON.stringify(draft.evidence)).byteLength > limits().bytes) {
@@ -366,17 +384,27 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     deadline = (anchor?.timestamp ?? now) + (config.afterTimeoutMs ?? 30_000)
     record({ kind: 'environment', data: { appId: config.appId, appVersion: config.appVersion, buildId: config.buildId, commit: config.commit, url: feedbackPageUrl(location.href), browser: navigator.userAgent, language: navigator.language, timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, online: navigator.onLine, cookies: collectFeedbackCookies(document.cookie, config.cookieAllowlist ?? []) } })
     if (config.screenshot !== false) {
+      const current = draft
       try {
         const bytes = await bounded(config.captureScreenshot?.() ?? captureFeedbackScreenshot(), config.screenshotTimeoutMs ?? 3000)
-        if (bytes.byteLength > 5 * 1024 * 1024)
-          draft.missing.push('screenshot-size-limit-exceeded')
-        else
-          draft.attachments.push(await attachment('screenshot.png', 'image/png', bytes))
+        if (closing || config !== activeConfig || draft !== current)
+          return failure('NOT_INITIALIZED')
+        if (bytes.byteLength > 5 * 1024 * 1024) {
+          current.missing.push('screenshot-size-limit-exceeded')
+        }
+        else {
+          const image = await attachment('screenshot.png', 'image/png', bytes)
+          if (closing || config !== activeConfig || draft !== current)
+            return failure('NOT_INITIALIZED')
+          current.attachments.push(image)
+        }
       }
       catch (cause) {
-        draft.missing.push('screenshot-unavailable')
+        if (closing || config !== activeConfig || draft !== current)
+          return failure('NOT_INITIALIZED')
+        current.missing.push('screenshot-unavailable')
         if (cause instanceof Error)
-          draft.missing.push(`screenshot-error:${String(sanitizeFeedbackData({ message: cause.message }).message).slice(0, 300)}`)
+          current.missing.push(`screenshot-error:${String(sanitizeFeedbackData({ message: cause.message }).message).slice(0, 300)}`)
       }
     }
     schedulePersist()
@@ -391,14 +419,17 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   async function submit(input: FeedbackClientSubmitInput = {}): Promise<HaiResult<FeedbackReport>> {
-    if (!config)
+    if (!config || closing)
       return failure('NOT_INITIALIZED')
+    const activeConfig = config
     const prepared = preparePromise ? await preparePromise : draft ? ok(draft) : await prepare()
     if (!prepared.success)
       return prepared
     const current = prepared.data
     try {
       const fingerprint = await digestHex(new TextEncoder().encode(JSON.stringify({ description: sanitizeFeedbackData({ text: input.description ?? '' }).text, category: input.category ?? '', contact: sanitizeFeedbackData({ text: input.contact ?? '' }).text, files: (input.files ?? []).map(item => ({ name: item.name, size: item.size, lastModified: item.lastModified })), removed: [...(input.removedAttachmentIds ?? [])].sort() })))
+      if (closing || config !== activeConfig || draft !== current)
+        return failure('NOT_INITIALIZED')
       if (current.submission && current.userInputFingerprint && fingerprint !== current.userInputFingerprint)
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
       if (!current.submission && input.removedAttachmentIds?.length)
@@ -408,11 +439,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (!added.success)
           return added
       }
+      if (closing || config !== activeConfig || draft !== current)
+        return failure('NOT_INITIALIZED')
       current.submission ??= FeedbackSubmitInputSchema.parse({ submissionId: current.submissionId, appId: config.appId, appVersion: config.appVersion, buildId: config.buildId, commit: config.commit, description: typeof input.description === 'string' ? String(sanitizeFeedbackData({ text: input.description }).text) : undefined, category: input.category, contact: input.contact, url: feedbackPageUrl(location.href), anchor: { kind: current.anchorKind, timestamp: current.anchorTime, errorId: current.errorId }, evidence: current.evidence, attachments: current.attachments.map(({ bytes: _bytes, ...metadata }) => metadata) })
       current.userInputFingerprint = fingerprint
       schedulePersist()
-      const result = await config.actions.submit(current.submission)
+      const result = await activeConfig.actions.submit(current.submission)
       if (!result.success)
+        return result
+      if (closing || config !== activeConfig || draft !== current)
         return result
       current.report = result.data
       initialIds = new Set(current.submission.evidence?.map(item => item.id))
@@ -485,15 +520,21 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   async function annotate(id: string, mark: Parameters<typeof annotateFeedbackImage>[1]): Promise<HaiResult<void>> {
-    if (!draft)
+    if (!draft || closing)
       return failure('NOT_INITIALIZED')
-    const item = draft.attachments.find(value => value.id === id)
-    if (!item || draft.submission)
+    const current = draft
+    const item = current.attachments.find(value => value.id === id)
+    if (!item || current.submission)
       return failure('INVALID_INPUT')
+    const originalBytes = item.bytes
     try {
-      const bytes = await annotateFeedbackImage(item.bytes, mark)
+      const bytes = await annotateFeedbackImage(originalBytes, mark)
       const name = /\.[^.]+$/.test(item.name) ? item.name.replace(/\.[^.]+$/, '.png') : `${item.name}.png`
-      Object.assign(item, await attachment(name, 'image/png', bytes), { id })
+      const updated = await attachment(name, 'image/png', bytes)
+      // 渲染/摘要结束后再原子替换；提交、关闭、删除或另一标注不能被旧异步结果覆盖。
+      if (closing || draft !== current || current.submission || !current.attachments.includes(item) || item.bytes !== originalBytes)
+        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+      Object.assign(item, updated, { id })
       schedulePersist()
       return ok(undefined)
     }
@@ -593,7 +634,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     }
   }
 
-  async function close(): Promise<void> {
+  function close(): Promise<void> {
+    closePromise ??= doClose().finally(() => {
+      closePromise = undefined
+    })
+    return closePromise
+  }
+
+  async function doClose(): Promise<void> {
     closing = true
     unsubscribeLogger?.()
     unsubscribeLogger = undefined
@@ -607,6 +655,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       clearTimeout(persistTimer)
     flushTimer = undefined
     persistTimer = undefined
+    // 截图有既定超时；等待采集退出后再清空草稿，避免旧回调复活会话。
+    await preparePromise
+    await keyScreenshotPromise
     if (draft?.report)
       await flush()
     if (config?.persistDraft && draft && !collectionFinished)

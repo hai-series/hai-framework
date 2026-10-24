@@ -114,12 +114,14 @@ export interface FeedbackClientSubmitInput {
  * ```
  */
 export interface FeedbackBrowserClient {
+  /** 并发初始化返回 INIT_IN_PROGRESS；重初始化先等待旧会话关闭。 */
   init: (config: FeedbackClientConfig) => Promise<HaiResult<void>>
   prepare: () => Promise<HaiResult<FeedbackDraft>>
   submit: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<FeedbackReport>>
   flush: () => Promise<HaiResult<void>>
   record: (event: { kind: FeedbackEvidenceInput['kind'], data: Record<string, unknown>, requestId?: string, errorId?: string }) => void
   getDraft: () => FeedbackDraft | undefined
+  /** 异步标注完成时再核验草稿和附件；冻结、关闭或并发更新冲突时保留原附件并返回 CONFLICT。 */
   annotate: (id: string, annotation: FeedbackImageAnnotation) => Promise<HaiResult<void>>
   /**
    * 原子添加一批附件，全部校验成功后合并到最新草稿；失败保留原附件和缺失标记，不保存半批文件。
@@ -138,6 +140,7 @@ export interface FeedbackBrowserClient {
    */
   addFiles: (files: readonly File[]) => Promise<HaiResult<void>>
   exportDraft: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<Uint8Array>>
+  /** 停止采集，等待有界截图及已提交材料续传后释放会话；并发关闭共用同一清理过程。 */
   close: () => Promise<void>
 }
 

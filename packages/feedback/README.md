@@ -63,6 +63,8 @@ return submitted
 
 `annotate(id, annotation)` 的坐标单位是浏览器解码后原图的像素。UI 的 `FeedbackAnnotation.rect` 使用 0–1 比例；在 `Image.decode()` 后，将 x/width 乘 `naturalWidth`、y/height 乘 `naturalHeight` 再调用 SDK。使用原图尺寸而非 CSS 显示尺寸，使 JPEG 方向与 SDK 解码一致；对象 URL 仍由创建方在替换或销毁时释放。
 
+并发 `init` 返回 `INIT_IN_PROGRESS`；`close` 等待有界截图退出后清理会话。截图期间关闭使 `prepare` 返回失败，不复活草稿。异步标注完成时若草稿已冻结、关闭、删除图片或被另一标注更新，则返回 `CONFLICT`，不改变已提交附件的字节或 checksum。
+
 草稿由 SDK 持有并通过 `annotate`、`addFiles` 等方法更新。Svelte 宿主保存该引用时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 `getDraft()` 刷新附件视图；不要将 SDK 草稿放入深度 `$state` 代理，否则 SDK 替换图片字节后，代理可能继续返回已缓存的旧字节。
 
 单附件上限为 5 MiB 原始字节，Base64 约需 6.67 MiB，另需 JSON 字段空间。参考管理台及启用 feedback 的新 API/fullstack 项目在既有 `kit.transport.maxPlaintextBytes` 或 `serv.transport.maxPlaintextBytes` 显式配置 `8388608`（8 MiB）；框架全局默认仍为 1 MiB。客户端缺省跟随服务端握手，显式较小的本地预算仍会拒绝超限请求。8 MiB 明文对应推导的加密请求体预算为 `16,809,984` 字节；生产 adapter-node 的 `BODY_SIZE_LIMIT` 与外层代理须匹配该预算，未启用传输加密时按实际 JSON 大小设置。框架部署自动推导，无需新增 feedback 配置。`hai add` 保留宿主既有配置，接入方需显式调整容量。

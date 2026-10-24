@@ -61,6 +61,8 @@ return submitted
 
 `annotate(id, annotation)` の座標単位は、ブラウザーでデコードした元画像のピクセルです。UI の `FeedbackAnnotation.rect` は 0–1 の比率なので、`Image.decode()` 後に x/width を `naturalWidth`、y/height を `naturalHeight` と掛け合わせて SDK に渡します。CSS の表示サイズではなく元画像の寸法を使うことで、JPEG の向きを SDK のデコードと一致させます。オブジェクト URL は作成元が置換時または破棄時に解放します。
 
+並行 `init` は `INIT_IN_PROGRESS` を返します。`close` は時間制限付き画面取得の終了後にセッションを解放します。取得中の終了は `prepare` を失敗させ、草稿を復活させません。送信、終了、画像削除、別の注釈更新後に完了した注釈は `CONFLICT` を返し、送信済みバイト列と checksum を変更しません。
+
 下書きは SDK が保持し、`annotate` や `addFiles` で更新します。Svelte 側では参照を `$state.raw<FeedbackDraft>()` に保持し、操作成功後に `getDraft()` から添付ビューを更新してください。深い `$state` プロキシに格納すると、SDK が元の下書きの画像バイトを置き換えても、キャッシュされた古いバイトが返る場合があります。
 
 添付の元データ上限は 5 MiB で、Base64 では約 6.67 MiB と JSON フィールドの容量が必要です。参照管理画面と feedback を有効にした新規 API/fullstack プロジェクトは、既存の `kit.transport.maxPlaintextBytes` または `serv.transport.maxPlaintextBytes` を `8388608`（8 MiB）に設定します。フレームワーク全体の既定値は 1 MiB のままです。クライアントは既定でサーバーのハンドシェイクに従いますが、明示したローカル上限が小さい場合は拒否します。8 MiB の平文から暗号化ボディ上限 `16,809,984` バイトを導出し、本番 adapter-node の `BODY_SIZE_LIMIT` と外側のプロキシも合わせます。暗号化を無効にする場合は実際の JSON サイズに合わせてください。フレームワークのデプロイが自動導出するため、新しい feedback 設定は不要です。`hai add` はホストの既存設定を保持するので、容量はホスト側で明示的に調整します。

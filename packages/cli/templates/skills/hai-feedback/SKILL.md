@@ -38,6 +38,8 @@ text/plain 附件在 5 MiB 范围内全文脱敏并保留安全正文，超限�
 
 addFiles 按批次原子加入附件：任一文件失败不改变原草稿的附件或缺失标记，也不保存半批材料；成功后合并最新草稿，保留并发批次新增且总数最多 20 项。读取期间草稿切换或首次提交已冻结则返回 CONFLICT，调用方保留待选输入并让用户重新准备，不得在界面删除后继续上传隐藏文件。
 
+并发 `init` 返回 `INIT_IN_PROGRESS`；`close` 等待有界截图退出后清理会话。截图期间关闭使 `prepare` 返回失败，不复活草稿。异步标注完成时若草稿已冻结、关闭、删除图片或被另一标注更新，则返回 `CONFLICT`，不改变已提交附件的字节或 checksum。
+
 单附件 5 MiB 原始字节经 Base64 后约需 6.67 MiB，另需 JSON 空间；参考管理台和启用 feedback 的新 API/fullstack 项目在既有 kit.transport.maxPlaintextBytes 或 serv.transport.maxPlaintextBytes 配置 8388608（8 MiB），框架全局默认仍为 1 MiB。客户端缺省随服务端握手，显式较小本地上限仍可拒绝。8 MiB 平文推导加密请求体预算 16,809,984 字节，生产 adapter-node BODY_SIZE_LIMIT 与代理须匹配，未启用加密时按实际 JSON 大小设置；框架部署自动推导，不新增 feedback 配置/API。hai add 保留宿主已有配置，需宿主显式调整。
 
 captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非凭据用户/租户 persistenceKey。keyScreenshots 默认 true，受 screenshot 总开关控制，maxKeyScreenshots 默认3/上限5，keyScreenshotThrottleMs 默认10000ms。data-feedback-action 标记关键操作，data-feedback-private 遮挡敏感区域，data-feedback-ignore 排除反馈界面自身。回放、普通 Cookie 白名单和持久化由产品明确启用。

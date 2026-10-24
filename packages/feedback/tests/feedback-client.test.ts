@@ -6,6 +6,7 @@ import { webcrypto } from 'node:crypto'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFeedbackBundle } from '../src/bundle/index.js'
+import * as images from '../src/client/feedback-client-image.js'
 import { sanitizeFeedbackReplay } from '../src/client/feedback-client-sanitize.js'
 import { createFeedbackClient } from '../src/client/index.js'
 
@@ -49,10 +50,52 @@ afterEach(async () => {
   for (const client of clients.splice(0))
     await client.close()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
 describe('feedback browser collection', () => {
+  it('提交期间完成的旧标注不能修改冻结附件及校验和', async () => {
+    const { client, transport } = await setup({ screenshot: true, captureScreenshot: async () => pngFile().bytes })
+    await client.prepare()
+    const original = client.getDraft()!.attachments[0]!
+    const checksum = original.checksum
+    let complete!: (bytes: Uint8Array) => void
+    vi.spyOn(images, 'annotateFeedbackImage').mockReturnValueOnce(new Promise(resolve => complete = resolve))
+    const pending = client.annotate(original.id, { x: 0, y: 0, width: 1, height: 1, mode: 'mask' })
+    expect((await client.submit()).success).toBe(true)
+    complete(new Uint8Array([4, 5, 6]))
+    expect((await pending).success).toBe(false)
+    expect(original.checksum).toBe(checksum)
+    expect(vi.mocked(transport.submit).mock.calls[0]![0].attachments?.[0]?.checksum).toBe(checksum)
+  })
+
+  it('并发重初始化仅有一个成功，日志不重复采集', async () => {
+    const { client } = await setup()
+    const config = { appId: 'orders', actions: actions(), screenshot: false }
+    const results = await Promise.all([client.init(config), client.init(config)])
+    expect(results.filter(result => result.success)).toHaveLength(1)
+    core.logger.info('Lifecycle collection probe')
+    await client.prepare()
+    expect(client.getDraft()!.evidence.filter(item => item.kind === 'log' && item.data.message === 'Lifecycle collection probe')).toHaveLength(1)
+  })
+
+  it('截图期间关闭会话不抛异常、不复活草稿，并允许之后重新初始化', async () => {
+    let complete!: (bytes: Uint8Array) => void
+    const captureScreenshot = vi.fn(() => new Promise<Uint8Array>(resolve => complete = resolve))
+    const { client } = await setup({ screenshot: true, captureScreenshot })
+    const pending = client.prepare()
+    await vi.waitFor(() => expect(captureScreenshot).toHaveBeenCalledOnce())
+    const stopped = client.close()
+    complete(pngFile().bytes)
+    expect((await pending).success).toBe(false)
+    await stopped
+    expect(client.getDraft()).toBeUndefined()
+    expect((await client.init({ appId: 'next', actions: actions(), screenshot: false })).success).toBe(true)
+    expect((await client.prepare()).success).toBe(true)
+    expect(client.getDraft()!.attachments).toEqual([])
+  })
+
   it('没有描述、异常或截图也能提交，并将身份交给服务端', async () => {
     const { client, transport } = await setup()
     expect((await client.prepare()).success).toBe(true)
