@@ -444,6 +444,14 @@ SSH 中断时先核对远端结果文件和容器状态，再决定是否重试�
 #>
 param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
 $ErrorActionPreference = 'Stop'
+$windowsRuntime = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+$previousSystemRoot = [Environment]::GetEnvironmentVariable('SystemRoot', 'Process')
+try {
+if ($windowsRuntime) {
+  $windowsDirectory = [Environment]::GetFolderPath('Windows')
+  if ([string]::IsNullOrEmpty($windowsDirectory)) { throw 'Cannot locate the Windows system directory.' }
+  $env:SystemRoot = $windowsDirectory
+}
 Set-Location -LiteralPath $PSScriptRoot
 $target = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'deploy-target.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($target.host -eq 'SERVER_HOST') { throw 'Set the server host in deploy-target.json.' }
@@ -512,7 +520,7 @@ $savedEnvironment = @{}
 try {
   if ($auth -eq 'password') {
     $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'Process')
-    if ($null -eq $password -and $env:OS -eq 'Windows_NT') { $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'User') }
+    if ($null -eq $password -and $windowsRuntime) { $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'User') }
     if ([string]::IsNullOrEmpty($password) -or $password.IndexOfAny([char[]]@([char]0, [char]10, [char]13)) -ge 0 -or [Text.Encoding]::UTF8.GetByteCount($password) -gt 1023) { throw 'Set a valid SSH password in the configured local environment variable.' }
     foreach ($name in @('SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'SSH_ASKPASS_PROMPT', 'DISPLAY', 'HAI_DEPLOY_ASKPASS_PASSWORD', 'HAI_DEPLOY_ASKPASS_SOURCE', 'HAI_DEPLOY_ASKPASS_OUTPUT')) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     $temporary = Join-Path $temporaryRoot ('hai-ssh-askpass-' + [Guid]::NewGuid().ToString('N'))
@@ -526,8 +534,8 @@ try {
     $env:HAI_DEPLOY_ASKPASS_OUTPUT = $helper
     # 编译进程不继承专用密码；固定源码及命令均不包含凭据。
     $env:HAI_DEPLOY_ASKPASS_PASSWORD = ''
-    if ($env:OS -ne 'Windows_NT') { throw 'Use sh deploy.sh for password authentication on POSIX systems.' }
-    $compiler = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    if (-not $windowsRuntime) { throw 'Use sh deploy.sh for password authentication on POSIX systems.' }
+    $compiler = Join-Path $windowsDirectory 'System32/WindowsPowerShell/v1.0/powershell.exe'
     $compileScript = '$ErrorActionPreference="Stop"; Add-Type -Language CSharp -TypeDefinition ([System.IO.File]::ReadAllText($env:HAI_DEPLOY_ASKPASS_SOURCE, [System.Text.Encoding]::UTF8)) -OutputType ConsoleApplication -OutputAssembly $env:HAI_DEPLOY_ASKPASS_OUTPUT'
     & $compiler -NoProfile -NonInteractive -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($compileScript))) 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'Cannot prepare the SSH password helper.' }
@@ -554,8 +562,12 @@ try {
     Remove-Item -LiteralPath $temporary -Recurse -Force
   }
 }
+} finally {
+  [Environment]::SetEnvironmentVariable('SystemRoot', $previousSystemRoot, 'Process')
+}
 `.replace('@@WINDOWS_ASKPASS@@', windowsAskpassSource)
-  return { sh, ps1, reader: createTargetReader() }
+  // Windows PowerShell 5 将无 BOM 的 UTF-8 视为 ANSI；中文注释也可能改变脚本的实际解析结果。
+  return { sh, ps1: `\uFEFF${ps1}`, reader: createTargetReader() }
 }
 
 /**

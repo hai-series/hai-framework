@@ -136,7 +136,14 @@ function global:scp {
   $global:LASTEXITCODE = if ($env:HAI_TEST_COMMAND_EXIT) { [int]$env:HAI_TEST_COMMAND_EXIT } else { 0 }
 }
 `
-  writeFileSync(wrapper, `$ErrorActionPreference = 'Stop'\n${functions}\n& $env:HAI_TEST_SCRIPT\n`)
+  writeFileSync(wrapper, `$ErrorActionPreference = 'Stop'\n${functions}\n${String.raw`
+if ($env:HAI_TEST_REMOVE_PLATFORM_ENV -eq '1') {
+  foreach ($name in @('OS', 'SystemRoot', 'windir')) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+}
+$previousSystemRoot = [Environment]::GetEnvironmentVariable('SystemRoot', 'Process')
+& $env:HAI_TEST_SCRIPT
+if ([Environment]::GetEnvironmentVariable('SystemRoot', 'Process') -ne $previousSystemRoot) { throw 'Deployment script did not restore SystemRoot.' }
+`}`)
   const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[], powershell?: string } = {}) => {
     const env = {
       ...process.env,
@@ -308,4 +315,18 @@ it.skipIf(process.platform !== 'win32' || !hasPwsh)('pwsh password模式执行he
     expect(call).toContain('BatchMode=no')
     expect(call).not.toContain('-i')
   }
+})
+
+describe.each([{ engine: 'powershell.exe', available: hasPowerShell }, { engine: 'pwsh', available: hasPwsh }])('filtered Windows environment in $engine', ({ engine, available }) => {
+  it.skipIf(process.platform !== 'win32' || !available)('不依赖OS或SystemRoot环境变量完成密码上传并清理helper', () => {
+    const { directory, target, execute, commands, authLog } = fixture()
+    const password = ' 0019 中 "$value" '
+    writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password' }))
+    const result = execute('ps1', { powershell: engine, env: { OS: undefined, SystemRoot: undefined, windir: undefined, HAI_TEST_REMOVE_PLATFORM_ENV: '1', HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
+    expect(commands('ps1').map(call => call[0])).toEqual(['ssh', 'scp', 'ssh'])
+    for (const helper of readFileSync(authLog, 'utf8').trimEnd().split('\n'))
+      expect(existsSync(helper.trimEnd())).toBe(false)
+  })
 })

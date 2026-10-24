@@ -18,3 +18,10 @@ SDK、环境解析、CLI、跨平台交付脚本、三语文档/skills 已集中
 独立审查发现自定义密码变量引用与裸 HAI_DEPLOY 父对象可能进入应用环境，均以实际生成和解包环境文件记录有效 Red，再按配置来源排除；同值普通应用配置保留。另收集到 Windows PowerShell 7 密码入口调用错误分支，新增有效 Red 后已修复。最终以 main 的真实 SSH、错误密码、SCP、主机指纹拒绝、超时及 PS5/PS7/sh 入口为准；当前不把 mock/静态通过称为真实连接验收。
 
 按任务分开提交，再合入原 main 验收；实际提交、最终退出码、源码 SHA 和未验证边界随后记录，状态保持进行中。
+
+## 原 main 第一轮集成回归与集中修复
+
+- 实现提交：G1=2cc8fe8d5bdb9caa3a181f40a56a8e32e4c00bdc（构建事实），G2=5b10c5664ccb8b25588dc2a990d50f6faf52398f（密码与配置复用），原 main 合并 M2=da427756165edbcf57c1a7c51e07f1d609de357f；根 alpha.69 保持。
+- M2 完整收集目录 original-final-2026-10-24T04-28-13-725Z-da427756165e：安装、类型、lint、fresh build、实际产物、脚本、API/inventory、skills/env、离线查看与管理台7场景均通过。根测试普通组37/38（CLI569通过/45正常跳过），容器组31/31；失败为部署上传脚本PS5/PS7两用例。另JSDoc缺6条内部导出示例，整轮exit1保持，不标完成。
+- Turbo严格环境过滤OS，脚本误判Windows为POSIX；补运行时平台识别与系统目录定位，CLR加载前临时补SystemRoot并finally恢复。PS5读取中文源码需要UTF-8 BOM，生成脚本同步补齐。新增在PowerShell进程内真实清空OS/SystemRoot/windir的有效Red，修复后上传入口43/43通过，覆盖两种Windows引擎、原值/脱敏/清理。
+- 内部helper的6条JSDoc补模块上下文示例，部署99/99通过；不增加公开index/API。仍待合入main最终门禁、实际sshd与完整CLI部署/模板验证，B/H继续未建立。
