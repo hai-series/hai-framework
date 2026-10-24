@@ -17,6 +17,22 @@ function fixture(): string {
   return root
 }
 
+it('loads only the named hai.json section and preserves deployment environment overrides', () => {
+  const file = join(fixture(), 'hai.json')
+  writeFileSync(file, JSON.stringify({ build: { images: [{ name: 'app' }] }, deploy: { provider: { type: 'docker-ssh', expose: { hostPort: `\${APP_PORT:18080}` } }, container: { s3Engine: 'rustfs' } } }))
+  expect(loadDeploymentConfig('deploy', file, { APP_PORT: '8088', HAI_DEPLOY_CONTAINER_S3ENGINE: 'minio' })).toEqual({ success: true, data: { provider: { type: 'docker-ssh', expose: { hostPort: 8088 } }, container: { s3Engine: 'minio' } } })
+  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"vercel","token":"test: key#value$&"}' })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token: 'test: key#value$&' } } })
+  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY: '{"provider":{"type":"vercel","token":"test"}}' })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token: 'test' } } })
+})
+
+it('rejects malformed JSON and missing or scalar project sections', () => {
+  const file = join(fixture(), 'hai.json')
+  for (const content of ['{"deploy":', '{}', '{"deploy":null}', '{"deploy":[]}', '{"deploy":"invalid"}']) {
+    writeFileSync(file, content)
+    expect(loadDeploymentConfig('deploy', file, {}).success).toBe(false)
+  }
+})
+
 it('requires the selected mode file and rejects path traversal/reserved private files', () => {
   const envDir = fixture()
   for (const environment of ['../prod', 'local', 'LOCAL', 'example', 'Example', 'prod'])

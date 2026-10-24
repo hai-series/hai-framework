@@ -31,7 +31,7 @@
 
 模板通过 `projectName`、`appType`、`features`、`hasUi`、`hasI18n`、`versions` 以及 `api`/`fullstack` 上下文渲染，完整字段见 [cli-types.ts](../src/cli-types.ts)。模块 YAML 使用 `moduleConfig` helper，与 [配置生成器](../src/commands/cli-config-templates.ts) 共用字段和默认值。
 
-部署默认启用，`--no-deploy` 可关闭；SDK 是开发依赖。每个镜像使用 `images/` 中独立 Dockerfile，Web 资源放 `images/web/`。`hai.build.json` 直接选择文件；依赖输入由构建器生成到 `images/dependencies/`。所有根 `.gitignore` 均忽略 `**/images/dependencies/`、运行数据和私有环境文件。
+部署默认启用，`--no-deploy` 可关闭；SDK 是开发依赖。每个镜像使用 `images/` 中独立 Dockerfile，Web 资源放 `images/web/`。`hai.json` 的 `build.images` 选择文件，`deploy` 保存项目级部署参数；依赖输入由构建器生成到 `images/dependencies/`。所有根 `.gitignore` 均忽略 `**/images/dependencies/`、运行数据和私有环境文件。
 
 Fullstack 服务端保留各模块的配置示例，未使用模块保持注释。安装依赖、校验和初始化、接入业务后才启用对应配置。修改公开 Schema 时同步配置生成器、环境变量说明、调用方与技能。
 

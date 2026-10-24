@@ -1,7 +1,7 @@
 /** 部署环境的加载和持久化；公开环境文件不保存真实凭据。 */
 import type { HaiResult } from '@h-ai/core'
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { extname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
@@ -55,9 +55,9 @@ function resolveConfig(value: unknown, prefix: string, env: Record<string, strin
 
 /**
  * 按部署环境解析配置；未选择的可选 Provisioner 缺少凭据时保留空值，选择完成后由 Schema 校验。
- * 不修改 core 缓存或进程变量，不在 YAML 文本上拼接凭据。
+ * hai.json 只读取对应的根分区；运行时模块继续读取 YAML。不修改 core 缓存或进程变量。
  * @param name - 模块配置名，例如 deploy/db/iam
- * @param path - YAML 文件绝对路径
+ * @param path - hai.json 或运行时 YAML 文件的绝对路径
  * @param values - 已加载的目标环境变量
  * @returns 配置对象；解析错误已脱敏
  * @example
@@ -65,18 +65,34 @@ function resolveConfig(value: unknown, prefix: string, env: Record<string, strin
  * import { loadDeploymentConfig, loadDeploymentEnvironment } from '@h-ai/deploy'
  * const environment = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
  * if (!environment.success) throw new Error(environment.error.message)
- * const config = loadDeploymentConfig('deploy', `${process.cwd()}/config/_deploy.yml`, environment.data.values)
+ * const config = loadDeploymentConfig('deploy', `${process.cwd()}/hai.json`, environment.data.values)
  * if (!config.success) throw new Error(config.error.message)
  * // 返回对象仍需经 DeployConfigSchema 或 deploy.init 验证。
  * ```
  */
 export function loadDeploymentConfig(name: string, path: string, values: Record<string, string | undefined>): HaiResult<Record<string, unknown>> {
   try {
-    const lineCounter = new LineCounter()
-    const document = parseDocument(readFileSync(path, 'utf8'), { lineCounter, prettyErrors: false })
-    if (document.errors.length)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
-    const config = resolveConfig(document.toJS(), `HAI_${name.toUpperCase()}`, values)
+    const content = readFileSync(path, 'utf8')
+    let input: unknown
+    if (extname(path).toLowerCase() === '.json') {
+      try {
+        const project: unknown = JSON.parse(content)
+        input = project && typeof project === 'object' && !Array.isArray(project) ? (project as Record<string, unknown>)[name] : undefined
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
+      }
+      if (!input || typeof input !== 'object' || Array.isArray(input))
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
+    }
+    else {
+      const lineCounter = new LineCounter()
+      const document = parseDocument(content, { lineCounter, prettyErrors: false })
+      if (document.errors.length)
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
+      input = document.toJS()
+    }
+    const config = resolveConfig(input, `HAI_${name.toUpperCase()}`, values)
     if (config !== null && (typeof config !== 'object' || Array.isArray(config)))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
     return ok(config && typeof config === 'object' && !Array.isArray(config) ? config as Record<string, unknown> : {})

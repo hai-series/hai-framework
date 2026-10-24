@@ -6,7 +6,7 @@
  * @module storage-provider-s3
  */
 
-import type { S3ClientConfig } from '@aws-sdk/client-s3'
+import type { BucketLocationConstraint, S3ClientConfig } from '@aws-sdk/client-s3'
 import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
 import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageDeleteFailure, StorageDeleteResult, StorageDeleteSummary } from '../storage-types.js'
@@ -15,9 +15,11 @@ import { Buffer } from 'node:buffer'
 import { Readable } from 'node:stream'
 import {
   CopyObjectCommand,
+  CreateBucketCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -147,7 +149,7 @@ function withoutPrefix(key: string, prefix: string): string {
  * 创建 S3 存储 Provider
  *
  * 基于 AWS SDK v3 实现的 StorageProvider。
- * connect 时会创建 S3Client 并通过 ListObjectsV2 验证连接。
+ * connect 时创建 S3Client，按 createBucket 可选检查/创建桶，再通过 ListObjectsV2 验证连接。
  * 支持配置 prefix 重定向所有 key，对用户透明。
  *
  * 实现说明：
@@ -705,6 +707,34 @@ export function createS3Provider(): StorageProvider {
         client = new S3Client(clientConfig)
         // 回执丢失时重放可能删除并发新版本；只允许上层对明确的逐项瞬时错误重试。
         deleteClient = new S3Client({ ...clientConfig, maxAttempts: 1 })
+
+        if (cfg.createBucket) {
+          try {
+            await client.send(new HeadBucketCommand({ Bucket: cfg.bucket }))
+          }
+          catch (error) {
+            // HeadBucket 只有明确 404 才证明缺失；403、网络错误与服务异常必须阻止启动。
+            if (!(error && typeof error === 'object' && '$metadata' in error
+              && error.$metadata && typeof error.$metadata === 'object'
+              && 'httpStatusCode' in error.$metadata && error.$metadata.httpStatusCode === 404)) {
+              throw error
+            }
+            try {
+              await client.send(new CreateBucketCommand({
+                Bucket: cfg.bucket,
+                // AWS us-east-1 要省略 LocationConstraint；兼容服务可使用自定义区域名。
+                ...(cfg.region === 'us-east-1' ? {} : { CreateBucketConfiguration: { LocationConstraint: cfg.region as BucketLocationConstraint } }),
+              }))
+              logger.info('S3 bucket created', { bucket: cfg.bucket })
+            }
+            catch (createError) {
+              // 并发应用仅接受本账号已拥有的桶，并重新核验访问；全局名称冲突不能当成功。
+              if (!(createError instanceof Error && createError.name === 'BucketAlreadyOwnedByYou'))
+                throw createError
+              await client.send(new HeadBucketCommand({ Bucket: cfg.bucket }))
+            }
+          }
+        }
 
         // 测试连接：尝试列出一个对象
         await client.send(new ListObjectsV2Command({

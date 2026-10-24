@@ -20,6 +20,7 @@ import { cliM } from '../cli-i18n.js'
 import { writeCliError, writeCliMessage } from '../cli-utils.js'
 import { buildCommand } from './cli-build.js'
 import { configureDeployMiddleware } from './cli-deploy-middleware.js'
+import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
  * deploy 命令选项
@@ -164,7 +165,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
  * @returns 部署或仅打包流程结束；具体模式见 bundleOnly。
  * @example 模块内部上下文
  * ```ts
- * // 前提：当前工程已构建镜像产物，且有 config/_deploy.yml 与生产公共/私有环境。
+ * // 前提：当前工程已构建镜像产物，且有根 hai.json.deploy 与生产公共/私有环境。
  * await deployCommand({ cwd: process.cwd(), env: 'prod', yes: true, bundleOnly: true, output: '.hai/shop.tar' })
  * // 等价：hai deploy --env prod --yes --bundle-only --output .hai/shop.tar。
  * ```
@@ -235,12 +236,17 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(cliM('cli_deploy_scan_failed', { params: { message: scanResult.error.message } }))
     const scan = scanResult.data
     appDir = scan.appDir ?? appDir
-    let buildRoot = appDir
-    while (!existsSync(resolve(buildRoot, 'hai.build.json')) && dirname(buildRoot) !== buildRoot)
-      buildRoot = dirname(buildRoot)
-    const buildFile = resolve(buildRoot, 'hai.build.json')
-    const buildConfig: { images?: Array<{ name: string }> } = existsSync(buildFile) ? JSON.parse(readFileSync(buildFile, 'utf8')) : {}
-    const names = [...(buildConfig.images?.map(image => image.name) ?? ['app', 'web']), ...(scan.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend)).map(item => item.service)]
+    const buildFile = projectConfigPath(appDir)
+    const buildRoot = dirname(buildFile)
+    const project = existsSync(buildFile) ? readProjectConfig(buildFile) : {}
+    const buildConfig = configObject(project.build)
+    const imageNames = Array.isArray(buildConfig.images)
+      ? buildConfig.images.flatMap((image) => {
+          const name = configObject(image).name
+          return typeof name === 'string' ? [name] : []
+        })
+      : ['app', 'web']
+    const names = [...imageNames, ...(scan.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend)).map(item => item.service)]
     const available = [...new Set(names)]
     if (selectedServices?.some(name => !available.includes(name)))
       throw new Error(cliM('cli_deploy_services_invalid', { params: { services: available.join(', ') } }))
@@ -259,7 +265,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     // 2. 读取部署配置
     spinner.start(cliM('cli_deploy_load_config'))
-    const configPath = resolve(appDir, 'config', '_deploy.yml')
+    const configPath = buildFile
     if (!existsSync(configPath)) {
       spinner.fail(chalk.red(cliM('cli_deploy_config_missing', { params: { path: configPath } })))
       writeCliMessage(chalk.cyan(cliM('cli_deploy_config_hint')))

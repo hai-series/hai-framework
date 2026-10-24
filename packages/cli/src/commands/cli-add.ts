@@ -12,10 +12,31 @@ import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
+import { parse } from 'yaml'
 import { cliM } from '../cli-i18n.js'
 import { detectPackageManager, fileExists, getCliVersion, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
 import { generateConfigFile, generateProductionEnvironment } from './cli-config-templates.js'
 import { detectProject } from './cli-create.js'
+import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
+
+/**
+ * 为部署工具补齐根配置分区，保留已有构建配置和用户字段。
+ * @param cwd - 当前项目或服务目录。
+ * @returns 根配置已包含 deploy 分区。
+ * @example 模块内部上下文
+ * ```ts
+ * await ensureDeployConfig('/workspace/shop/packages/shop-serv')
+ * // 已有 hai.json.build 和 deploy 自定义项保持不变。
+ * ```
+ */
+async function ensureDeployConfig(cwd: string): Promise<void> {
+  const configPath = projectConfigPath(cwd)
+  const project = await fileExists(configPath) ? readProjectConfig(configPath) : {}
+  if (project.deploy === undefined) {
+    project.deploy = parse(generateConfigFile('deploy'))
+    await fse.writeJson(configPath, project, { spaces: 2 })
+  }
+}
 
 /**
  * add 命令选项
@@ -121,6 +142,8 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
 
     // 检查是否已安装
     if (moduleDef.packages.every(p => project.haiPackages.includes(p))) {
+      if (moduleName === 'deploy')
+        await ensureDeployConfig(cwd)
       const generatedFiles = await generateProjectAiSupport(
         cwd,
         resolveSkillNamesForPackages(project.haiPackages),
@@ -180,7 +203,10 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     spinner.succeed()
 
     // 生成配置文件
-    if (moduleDef.configKey) {
+    if (moduleDef.configKey === 'deploy') {
+      await ensureDeployConfig(cwd)
+    }
+    else if (moduleDef.configKey) {
       const configDir = path.join(cwd, 'config')
       const configPath = path.join(configDir, `_${moduleDef.configKey}.yml`)
       if (!(await fileExists(configPath))) {

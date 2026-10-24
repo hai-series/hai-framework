@@ -107,7 +107,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 
     expect(sidecar.services).toContain('storage')
     expect((sidecar.composeServices.storage as { image: string }).image).toContain(engine === 'rustfs' ? 'ghcr.io/rustfs/rustfs:1.0.1' : 'ghcr.io/coollabsio/minio:RELEASE')
-    expect(sidecar.composeServices['storage-init']).toBeDefined()
+    expect(sidecar.composeServices['storage-init']).toBeUndefined()
     const haiStorage = JSON.parse(env.HAI_STORAGE) as { type: string, endpoint: string, bucket: string }
     expect(haiStorage.type).toBe('s3')
     expect(haiStorage.endpoint).toBe('http://storage:9000')
@@ -198,6 +198,19 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 })
 
 describe('generateComposeFile', () => {
+  it('多服务使用 hai-app 网络且输出不含 YAML 锚点', () => {
+    const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'cache', 'storage']), {}, 3000)
+    const content = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'app:1', hostPort: 8080, containerPort: 3000, sidecar })
+    expect(content).not.toMatch(/[&*]a\d+/)
+    const compose = parse(content)
+    expect(Object.keys(compose.networks)).toEqual(['hai-app'])
+    for (const service of Object.values(compose.services) as Array<{ networks: string[] }>)
+      expect(service.networks).toEqual(['hai-app'])
+    expect(compose.services['storage-init']).toBeUndefined()
+    expect(JSON.parse(sidecar.env.HAI_STORAGE).createBucket).toBe(true)
+    expect(sidecar.env.HAI_STORAGE_CREATEBUCKET).toBe('true')
+  })
+
   it('web 仅公开一个同源端口，不挂载 API 私有环境，代理保持自定义前缀及 SPA 刷新', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3001)
     const compose = parse(generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'api:v1', hostPort: 18080, containerPort: 3001, sidecar, web: { imageRef: 'web:v1', containerPort: 8081 } }))
@@ -221,7 +234,7 @@ describe('generateComposeFile', () => {
     const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:20260922-abc', hostPort: 18080, containerPort: 3000, sidecar })
     expect(compose).toContain('image: hai-demo:20260922-abc')
     expect(compose).toContain('18080:3000')
-    expect(compose).toContain('name: hai-demo')
+    expect(parse(compose).networks).toEqual({ 'hai-app': {} })
   })
 
   it('app 服务 depends_on 包含已启用 sidecar', () => {

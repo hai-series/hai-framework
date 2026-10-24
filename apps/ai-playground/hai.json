@@ -1,0 +1,36 @@
+{
+  "build": {
+    "images": [
+      {
+        "name": "app",
+        "context": "../..",
+        "dockerfile": "images/app.Dockerfile",
+        "containerPort": 3000
+      }
+    ]
+  },
+  "deploy": {
+    "provider": {
+      "type": "${HAI_DEPLOY_PROVIDER_TYPE:docker-ssh}",
+      "ssh": {
+        "host": "${HAI_DEPLOY_PROVIDER_SSH_HOST}",
+        "port": "${HAI_DEPLOY_PROVIDER_SSH_PORT:22}",
+        "username": "${HAI_DEPLOY_PROVIDER_SSH_USERNAME:deploy}",
+        "identityFile": "${HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE}"
+      },
+      "remote": {
+        "baseDir": "${HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR:/opt/hai/apps}",
+        "runtime": "${HAI_DEPLOY_PROVIDER_REMOTE_RUNTIME:auto}"
+      },
+      "expose": {
+        "type": "${HAI_DEPLOY_PROVIDER_EXPOSE_TYPE:port}",
+        "containerPort": "${HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT:3000}",
+        "hostPort": "${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18080}"
+      }
+    },
+    "container": {
+      "s3Engine": "${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}"
+    },
+    "services": {}
+  }
+}

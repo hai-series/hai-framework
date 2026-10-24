@@ -121,7 +121,6 @@ interface ConfigLoadItem {
  * 约定：
  * - 以 `_` 开头的文件为内置模块配置（如 `_core.yml` → name='core'）
  * - 其他文件为业务配置（如 `app.yml` → name='app'）
- * - `_deploy.yml` / `_deploy.yaml` 留给部署 CLI 独立解析，不参与运行时加载和监听；业务 `deploy.yml` 不受影响
  *
  * @param configDir - 配置目录路径
  * @returns 配置加载项列表；目录不存在时返回空数组并输出警告
@@ -149,9 +148,6 @@ function scanConfigDir(
   )
 
   for (const file of files) {
-    // 部署凭据由 CLI 按目标环境加载，不能要求应用启动时提供 SSH / 云平台参数。
-    if (file === '_deploy.yml' || file === '_deploy.yaml')
-      continue
     const filePath = join(configDir, file)
     const baseName = file.replace(YAML_EXTENSION_REGEX, '')
 
@@ -179,7 +175,7 @@ function scanConfigDir(
  *
  * 执行流程：
  * 1. 配置日志（若提供 `options.logging`）
- * 2. 扫描并加载运行时 YAML，跳过保留部署文件 `_deploy.yml` / `_deploy.yaml`
+ * 2. 扫描并加载配置目录中的所有 YAML
  * 3. 启用配置文件监听（若 `options.watchConfig` 为 true）
  *
  * 单项 `config.load` 返回失败时记录日志并继续；必需配置由调用方 `config.validate` 并检查 success。

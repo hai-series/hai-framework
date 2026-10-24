@@ -4,10 +4,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
 import prompts from 'prompts'
-import { isMap, isScalar, parseDocument } from 'yaml'
+import { parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { moduleEnvironmentVariables } from './cli-config-environment.js'
+import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
  * 部署包的真实运行时命名空间类型，仅供向导依赖注入，不重新仿造部署 API。
@@ -221,18 +222,15 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
         throw new Error(cliM('cli_deploy_invalid_value'))
       config.container = { ...container, s3Engine: engine }
       updates.HAI_DEPLOY_CONTAINER_S3ENGINE = engine
-      const deploymentFile = join(scan.appDir ?? '.', 'config', '_deploy.yml')
-      const deployment = parseDocument(readFileSync(deploymentFile, 'utf8'))
-      if (deployment.errors.length)
-        throw new Error(cliM('cli_deploy_invalid_value'))
-      if (!deployment.hasIn(['container', 's3Engine'])) {
-        const node = deployment.get('container', true)
-        if (node === undefined || (isScalar(node) && node.value === null))
-          deployment.set('container', deployment.createNode({}))
-        else if (!isMap(node))
-          throw new Error(cliM('cli_deploy_yaml_node', { params: { path: deploymentFile, field: 'container' } }))
-        deployment.setIn(['container', 's3Engine'], `\${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}`)
-        writeFileSync(deploymentFile, deployment.toString())
+      const deploymentFile = projectConfigPath(scan.appDir ?? environment.envDir)
+      const project: { deploy?: { container?: Record<string, unknown> | null } } = readProjectConfig(deploymentFile)
+      project.deploy ??= {}
+      if (project.deploy.container != null && (typeof project.deploy.container !== 'object' || Array.isArray(project.deploy.container)))
+        throw new Error(cliM('cli_deploy_config_node', { params: { path: deploymentFile, field: 'deploy.container' } }))
+      project.deploy.container ??= {}
+      if (!('s3Engine' in project.deploy.container)) {
+        project.deploy.container.s3Engine = `\${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}`
+        writeFileSync(deploymentFile, `${JSON.stringify(project, null, 2)}\n`)
       }
     }
     if (mode === 'default' && provider?.type === 'vercel') {

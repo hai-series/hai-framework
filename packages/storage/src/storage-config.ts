@@ -90,6 +90,9 @@ export const S3ConfigSchema = z.object({
   /** 存储桶名称 */
   bucket: z.string().min(1, storageM('storage_config_bucketRequired')),
 
+  /** 初始化时检查并创建缺失的桶；默认关闭，启用后凭据须有建桶权限。 */
+  createBucket: z.boolean().default(false),
+
   /** 区域 */
   region: z.string().min(1, storageM('storage_config_regionRequired')),
 

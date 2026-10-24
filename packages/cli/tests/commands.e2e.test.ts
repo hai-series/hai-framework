@@ -1552,6 +1552,21 @@ describe('ai 支持交付与回填', () => {
 })
 
 describe('addModule', () => {
+  it('adds and repairs root deployment configuration while preserving build and custom fields', async () => {
+    const dir = path.join(tmpRoot, 'add-deploy-config')
+    await fse.ensureDir(dir)
+    await fse.writeJson(path.join(dir, 'package.json'), { name: 'add-deploy-config', version: '0.1.0', dependencies: { '@h-ai/core': 'workspace:*' } })
+    const build = { images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }] }
+    await fse.writeJson(path.join(dir, 'hai.json'), { build, custom: { enabled: true } })
+    await addModule({ module: 'deploy', install: false, cwd: dir, verbose: false })
+    const project = await fse.readJson(path.join(dir, 'hai.json'))
+    expect(project).toMatchObject({ build, custom: { enabled: true }, deploy: { provider: { type: expect.stringContaining('docker-ssh') } } })
+    expect(await fse.pathExists(path.join(dir, 'config/_deploy.yml'))).toBe(false)
+    project.deploy.container = { s3Engine: 'minio' }
+    await fse.writeJson(path.join(dir, 'hai.json'), project)
+    await addModule({ module: 'deploy', install: false, cwd: dir, verbose: false })
+    expect(await fse.readJson(path.join(dir, 'hai.json'))).toEqual(project)
+  })
   it('已有 catalog: 风格时新增模块应继续使用 catalog:', async () => {
     const dir = path.join(tmpRoot, 'add-ai-catalog')
     await fse.ensureDir(dir)

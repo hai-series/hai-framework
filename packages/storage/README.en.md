@@ -148,10 +148,14 @@ Cancelling a checksum stops waiting for the next chunk and requests closure of t
 
 ### Configuration
 
-- **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `endpoint / forcePathStyle / prefix / publicUrl`.
+- **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `createBucket / endpoint / forcePathStyle / prefix / publicUrl`.
 - **Local**: requires `root`; optional `directoryMode / fileMode`.
 
-MinIO and RustFS share the S3 provider with `type: 's3'`; no separate storage type is needed. For self-hosted instances, set the S3 API endpoint (usually port 9000) and enable path-style access. Create the bucket beforehand.
+MinIO and RustFS share the S3 provider with `type: 's3'`; no separate storage type is needed. For self-hosted instances, set the S3 API endpoint (usually port 9000) and enable path-style access.
+
+`createBucket` defaults to `false`, requiring an existing bucket. When enabled, `storage.init()` checks `HeadBucket` and creates the bucket only on an explicit 404. Existing buckets and objects are preserved. Permission, network, creation, and subsequent connection-check failures return failure, dispose clients, and leave storage uninitialized. A concurrent `BucketAlreadyOwnedByYou` is accepted only after another access check. Creation omits LocationConstraint for AWS `us-east-1` and uses the configured region elsewhere. Default self-hosted S3 deployments enable `HAI_STORAGE_CREATEBUCKET=true`; external S3 creation requires explicit permission.
+
+Use `createBucket: ${HAI_STORAGE_CREATEBUCKET:false}` in YAML for environment control; direct `storage.init()` input requires a boolean.
 
 ```ts
 const initResult = await storage.init({
@@ -162,6 +166,7 @@ const initResult = await storage.init({
   accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
   secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
   forcePathStyle: true,
+  createBucket: true,
 })
 if (!initResult.success) {
   throw new Error(initResult.error.message)

@@ -195,33 +195,6 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
     volumes: [`${projectName}-storage-data:/data`],
     networks: net,
   }
-  plan.composeServices['storage-init'] = {
-    depends_on: ['storage'],
-    env_file: ['.env.runtime'],
-    entrypoint: [
-      'node',
-      '--input-type=module',
-      '-e',
-      // 复用应用 @h-ai/storage 已依赖的 SDK；不额外拉取失效的 mc 镜像，不把密钥拼进命令。
-      `import { S3Client, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
-const config = JSON.parse(process.env.HAI_STORAGE);
-const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: config.forcePathStyle, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } });
-let ready = false;
-for (let attempt = 0; attempt < 120; attempt++) {
-  try {
-    try { await client.send(new HeadBucketCommand({ Bucket: config.bucket })); }
-    catch (error) {
-      if (error.$$metadata?.httpStatusCode !== 404) throw error;
-      await client.send(new CreateBucketCommand({ Bucket: config.bucket }));
-    }
-    ready = true; break;
-  } catch { await new Promise(resolve => setTimeout(resolve, 1000)); }
-}
-client.destroy();
-if (!ready) throw new Error('S3 bucket initialization failed');`,
-    ],
-    networks: net,
-  }
   plan.volumes[`${projectName}-storage-data`] = null
   if (engine === 'rustfs') {
     Object.assign(plan.env, { RUSTFS_ACCESS_KEY: 'hai-storage', RUSTFS_SECRET_KEY: password, RUSTFS_ADDRESS: '0.0.0.0:9000', RUSTFS_VOLUMES: '/data', RUSTFS_CONSOLE_ENABLE: 'false' })
@@ -237,7 +210,9 @@ if (!ready) throw new Error('S3 bucket initialization failed');`,
     accessKeyId: 'hai-storage',
     secretAccessKey: password,
     forcePathStyle: true,
+    createBucket: true,
   })
+  plan.env.HAI_STORAGE_CREATEBUCKET = 'true'
   plan.secrets.push(password)
 }
 
@@ -532,29 +507,19 @@ export function generateComposeFile(options: {
       networks: ['hai-app'],
     }
   }
-  if (services['storage-init'])
-    services['storage-init'] = { ...services['storage-init'], image: imageRef }
   const compose: Record<string, unknown> = {
     'x-hai-version': options.appVersion,
     services,
     'networks': {
-      'hai-app': { name: `hai-${projectName}` },
+      'hai-app': {},
     },
   }
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
 
-  // S3 服务启动不等于桶已创建；初始化失败必须阻止应用启动，不能只依靠 HTTP 健康检查。
-  if (services['storage-init']) {
-    app.depends_on = {
-      ...Object.fromEntries((app.depends_on as string[] | undefined ?? []).map(name => [name, { condition: 'service_started' }])),
-      'storage-init': { condition: 'service_completed_successfully' },
-    }
-  }
-
   for (const service of Object.values(services))
     service.pull_policy = 'never'
-  return stringify(compose)
+  return stringify(compose, { aliasDuplicateObjects: false })
 }
 
 /**

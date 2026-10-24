@@ -344,7 +344,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
       for (const featureId of resolvedOptions.features) {
         const configKey = getFeatureConfigKey(featureId)
-        if (configKey) {
+        if (configKey && configKey !== 'deploy') {
           const configPath = path.join(configDir, `_${configKey}.yml`)
           // fullstack 已用模块配置 helper 渲染完整配置，不能再覆盖 Reach 模板等应用默认值。
           if (isFullstack && await fse.pathExists(configPath))
@@ -1179,7 +1179,7 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
   return `### 构建与部署
 
 创建时默认包含部署工具；不需要时使用 hai create --no-deploy。
-每个镜像对应 images/ 中一个 Dockerfile，hai.build.json 用 dockerfile 指定文件。
+每个镜像对应 images/ 中一个 Dockerfile，根 hai.json 的 build 分区指定文件，deploy 分区保存整个项目的部署配置。
 下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 
@@ -1200,8 +1200,8 @@ ${pm} exec hai deploy ${appDir} --env prod --services web
 完整离线包自动携带自建中间件镜像；准备中间件镜像需要构建机有可用 Podman/Docker，缺镜像时在打包阶段拉取。
 服务器需要 Linux、Docker/Podman、Docker Compose v2 或 podman-compose 1.6.0 及以上、sh、tar、sha256sum、awk、curl、util-linux flock 和支持 flock 的文件系统，启动阶段不联网拉取。
 固定 .deploy.lock 内核锁覆盖部署及恢复；禁止删除或替换，所有持有进程退出或重启后自动释放。强杀后须核对结果文件、current 和容器状态，再用新包恢复。
-tar 旁的部署目录提供 deploy.ps1（Windows）和 deploy.sh（Linux/macOS），按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
-完全隔离时手工搬运 tar，独立目录解包后执行 sh apply.sh，或传入部署目录覆盖默认位置。
+每次离线交付生成独立目录，tar、Compose、运行环境、deploy.ps1（Windows）和 deploy.sh（Linux/macOS）全部位于该目录，复制整个目录即可。脚本按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
+完全隔离时复制整个交付目录，运行 sh deploy-local.sh 自动解包并部署；可传入部署目录覆盖默认位置。
 部分更新要求已有成功的完整部署，保留未选服务及数据卷；失败返回非零退出码，已有部署尝试恢复选中服务。
 中间件连接齐全时使用 --skip-middleware 跳过配置向导。包中包含私有配置，不提交 Git。
 `
@@ -1379,7 +1379,7 @@ CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\`
 
 ### 配置扩展
 
-服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy 共 13 份 YAML。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
+服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler 共 12 份 YAML；构建部署配置统一位于项目根 hai.json。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
 
 自动生成的 \`.env\` 包含已启用模块的环境参数；YAML 显式引用相同变量并保留本地回退。编辑环境参数优先修改对应 \`.env\`；未启用模块仍保留注释。
 

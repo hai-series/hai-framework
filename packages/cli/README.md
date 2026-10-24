@@ -89,7 +89,7 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 数据库连接保存前使用所选后端的真实公开 Schema 校验：MySQL `ssl` 仅 `false` 或严格 TLS 对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其模式。CLI 已内联纯 Schema 和 Zod，配置校验不要求目标应用安装数据库包/驱动；实际运行应用仍需相应依赖。部署功能仍须能解析已安装的 `@h-ai/deploy`（生成工程将其作为开发依赖）。
 
-`pnpm build` 只编译源码。镜像使用 `images/` 中独立 Dockerfile，由 `hai.build.json` 指定文件；`--images` 决定构建哪些镜像，`--services` 决定更新哪些服务。容器引擎 auto 优先 Podman，再尝试 Docker。下载、安装和整理生产依赖共用包缓存与 SQLite 驱动缓存，避免重复下载。
+`pnpm build` 只编译源码。镜像使用 `images/` 中独立 Dockerfile，由项目根 `hai.json` 的 `build.images` 指定文件，部署参数放在同文件的 `deploy`；`--images` 决定构建哪些镜像，`--services` 决定更新哪些服务。容器引擎 auto 优先 Podman，再尝试 Docker。下载、安装和整理生产依赖共用包缓存与 SQLite 驱动缓存，避免重复下载。
 
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库。需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 

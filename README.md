@@ -106,7 +106,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 ## 快速入门
 
-从环境准备、手工编码或 AI first 开发，到编译、镜像/原生打包、自动或离线部署、框架升级，见完整使用指南：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。其中包含命令参数、`hai.build.json` 配置和实际 skills 的使用流程。
+从环境准备、手工编码或 AI first 开发，到编译、镜像/原生打包、自动或离线部署、框架升级，见完整使用指南：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。其中包含命令参数、`hai.json` 配置和实际 skills 的使用流程。
 
 准备符合项目 `engines` 的 Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）与 pnpm 12.11.2；PowerShell 使用 `pnpm.cmd`。
 
@@ -150,7 +150,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，`hai.build.json` 指定对应文件。完整离线包包含自建中间件镜像，并附 Windows/Linux/macOS 上传部署脚本；隔离服务器可直接执行包内 apply.sh。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。
+部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，根 `hai.json` 的 `build` 指定构建文件，`deploy` 保存整个项目的部署参数。离线交付将 tar、配置、清单和 Windows/Linux/macOS 脚本全部放在本次单一目录；隔离服务器复制该目录后执行 `sh deploy-local.sh`，自动校验、解包和部署。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。
 
 ### 在现有项目中集成
 

@@ -52,10 +52,13 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
     await writeFile(path.join(root, 'apps/fixture/optional.yml'), '# token: ${HAI_DOC02_YAML_OPTIONAL:}\n')
     await writeFile(path.join(root, 'apps/fixture/Runtime.ts'), '/** process.env.HAI_CORE_NAME is a documentation example only. */\nexport const port = process.env.PORT\n')
     await writeFile(path.join(root, 'apps/fixture/.env.example'), '# Public fixture environment\n')
+    // eslint-disable-next-line no-template-curly-in-string -- 项目 JSON 的部署占位符由生成器解析。
+    await writeFile(path.join(root, 'apps/fixture/hai.json'), JSON.stringify({ build: { images: [] }, deploy: { provider: { remote: { baseDir: '${HAI_DOC02_PROJECT_ROOT:/srv/fixture}' }, expose: { hostPort: '${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18123}' } } } }))
     const result = spawnSync(process.execPath, [path.join(repository, 'scripts/generate-env-catalog.mjs')], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000 })
     expect(result.status, result.stdout + result.stderr).toBe(0)
     const catalog = JSON.parse(await readFile(path.join(root, 'packages/cli/src/commands/cli-config-catalog.json'), 'utf8'))
     const variables = new Set(catalog.map(entry => entry.name))
+    expect(variables.has('HAI_DOC02_PROJECT_ROOT')).toBe(true)
     for (const suffix of ['DOCUMENTATION', 'NESTED', 'EOF', 'SVELTE_DOC']) expect(variables.has(`HAI_DOC02_${suffix}`), suffix).toBe(false)
     for (const suffix of ['RUNTIME', 'BRACKET', 'STRING', 'GENERATED_DOC', 'GENERATED_RUNTIME', 'TEMPLATE_TAIL', 'SVELTE_RUNTIME', 'TEMPLATE_DOC', 'HBS_RUNTIME', 'YAML_OPTIONAL']) expect(variables.has(`HAI_DOC02_${suffix}`), suffix).toBe(true)
     const appResult = spawnSync(process.execPath, [path.join(repository, 'scripts/generate-app-env.mjs')], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000 })
@@ -63,6 +66,9 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
     const application = await readFile(path.join(root, 'apps/fixture/.env.example'), 'utf8')
     expect(application).toContain('PORT=')
     expect(application).not.toContain('HAI_CORE_NAME=')
+    expect(application).toContain("HAI_DOC02_PROJECT_ROOT='/srv/fixture'")
+    expect(application).toContain("HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT='18123'")
+    expect(application).toContain('HAI_DEPLOY_CONTAINER_S3ENGINE=')
   }
   finally {
     await rm(root, { recursive: true, force: true })

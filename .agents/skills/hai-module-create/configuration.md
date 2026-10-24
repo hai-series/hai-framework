@@ -7,7 +7,7 @@
 ## 配置经过哪些步骤
 
 1. `core.config.loadEnvFiles` 读取公共基础、环境及本机私有文件，返回合并结果；调用方决定是否注入进程。已有进程环境优先，空字符串也是显式覆盖。不要在环境总表中填入真实凭据。
-2. `core.init({ configDir })` 扫描运行时 YAML，精确排除 `_deploy.yml` / `_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们，业务 `deploy.yml` 与手动 `core.config.load` 不受影响。只有 `_core.yml` 自动用 Core Schema 校验，其它运行时 YAML 先进入配置缓存；单项加载返回失败时记日志并继续，目录扫描等异常仍可能传播。应用必须 validate 必需配置并检查 success，再交给对应模块 `init` 或工厂/适配器，不能把“文件已加载”等同于“模块已初始化”。
+2. `core.init({ configDir })` 扫描运行时 YAML；构建部署配置独立放在项目根 `hai.json`，Core 不为特定 YAML 文件名设置例外。只有 `_core.yml` 自动用 Core Schema 校验，其它运行时 YAML 先进入配置缓存；单项加载返回失败时记日志并继续，目录扫描等异常仍可能传播。应用必须 validate 必需配置并检查 success，再交给对应模块 `init` 或工厂/适配器，不能把“文件已加载”等同于“模块已初始化”。
 3. 约定变量为 `HAI_<配置名>_<路径>`，camelCase 不拆词；数据库配置名是 `db`，所以是 `HAI_DB_*`。父对象/数组整体覆盖优先于叶子覆盖；叶子覆盖要求 YAML 存在该路径，缺少路径时使用父节点的完整 JSON/YAML 值。数组索引不是单个固定 Provider。
 4. 初始化 Schema 填充默认值并检查字段；后端连接/资源就绪成功后才发布实例。关闭按依赖反序执行并检查结果。纯函数、客户端工厂、serv 和 kit 按自身公开契约使用，不能套用服务端生命周期。
 5. `pnpm generate:env` 在依赖包 fresh build 后更新总表与应用示例，`pnpm check:env` 检查生成一致性；`check:skills` 检查 skill 契约。它们不证明字段已传入 SDK、共享状态正确或真实投递成功，仍须验证对应消费者及真实后端行为。

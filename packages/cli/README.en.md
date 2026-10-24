@@ -89,7 +89,7 @@ Prompts, validation, module/template names, descriptions and completion messages
 
 Database connections are validated against the selected backend’s public schema before saving. MySQL `ssl` accepts only `false` or a strict TLS object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL keeps its modes. CLI bundles the pure schemas and Zod, so validation needs no database package or driver in the target application; running that application still requires its dependencies. Deployment still requires an installed, resolvable `@h-ai/deploy` (a development dependency in generated projects).
 
-`pnpm build` compiles sources. Each image has its own Dockerfile in `images/`, selected through `hai.build.json`. `--images` selects build outputs; `--services` selects deployed services. Automatic engine detection prefers reachable Podman, then Docker. Downloads, installation and production dependency packaging share package and SQLite driver caches to avoid downloading them again.
+`pnpm build` compiles sources. Each image has its own Dockerfile in `images/`, selected through `hai.json.build.images`, alongside the project deployment settings in `deploy`. `--images` selects build outputs; `--services` selects deployed services. Automatic engine detection prefers reachable Podman, then Docker. Downloads, installation and production dependency packaging share package and SQLite driver caches to avoid downloading them again.
 
 The default container supports CPU workloads or remote AI services without downloading extra GPU runtimes. To use the deployment host's GPU, customize the image and container runtime settings.
 

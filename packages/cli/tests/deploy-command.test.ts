@@ -44,8 +44,8 @@ function createDeployApp(): string {
   const appDir = join(tmpRoot, 'app')
   mkdirSync(join(appDir, 'config'), { recursive: true })
   writeFileSync(
-    join(appDir, 'config', '_deploy.yml'),
-    'provider:\n  type: vercel\n  token: test-token\n',
+    join(appDir, 'hai.json'),
+    JSON.stringify({ deploy: { provider: { type: 'vercel', token: 'test-token' } } }),
     'utf-8',
   )
   writeFileSync(join(appDir, '.env.prod'), 'HAI_CORE_ENV=production\n')

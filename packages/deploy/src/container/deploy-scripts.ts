@@ -56,6 +56,10 @@ export function createApplyScript(options: {
     HEALTH: options.healthPaths.map(shellArgument).join(' '),
   }
   return String.raw`#!/bin/sh
+# 服务器部署流程：由 deploy-local.sh 或 SSH 入口自动解包后调用，无需手工解包。
+# 需要 Linux、sha256sum、tar、awk、curl、flock 和可用的 Docker/Podman Compose；不会联网拉镜像。
+# 本次全量/增量及服务清单由生成时的 manifest.json 和下方 partial/selected 固定。
+# 增量要求服务器已有成功的全量基线；校验失败不会开始替换服务，失败恢复保留数据卷。
 set -eu
 umask 077
 source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -139,7 +143,7 @@ finish() {
     if [ "$changed" = true ] && [ -n "$previous" ]; then
       printf '[RECOVER] Restoring previous selected services\n' >&2
       recover_selected=$selected
-      if [ "$partial" = false ]; then recover_selected=$(grep -v -- '-init$' "$root/releases/$previous/services"); fi
+      if [ "$partial" = false ]; then recover_selected=$(cat "$root/releases/$previous/services"); fi
       restore="$previous"
       if remove_selected $recover_selected && compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $recover_selected; then
         case " $selected " in *' app '*)
@@ -265,7 +269,6 @@ step dependencies 'Checking dependencies of selected services'
 if [ "$partial" = true ]; then cat "$release/services" >> "$release/dependencies"; fi
 while IFS= read -r dependency; do
   test -n "$dependency" || continue
-  case "$dependency" in *-init) continue;; esac
   case " $selected " in *" $dependency "*) continue;; esac
   running=$("$runtime" ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$dependency")
   test -n "$running" || { printf 'Dependency %s is not running. Include it in a full deployment.\n' "$dependency" >&2; exit 1; }
@@ -276,11 +279,6 @@ done < "$release/dependencies"
 step start 'Updating selected services'
 changed=true
 remove_selected $selected
-if [ -f "$release/initialize-storage" ]; then
-  remove_selected storage-init
-  compose up -d --no-deps --no-build --pull never storage
-  compose up --no-deps --no-build --pull never "$recreate_option" --exit-code-from storage-init storage-init
-fi
 compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $selected
 case " $selected " in
   *' app '*)
@@ -321,9 +319,13 @@ printf '[PASS] %s\n' "$id"
  */
 export function createUploadScripts(): { sh: string, ps1: string, reader: string } {
   const sh = String.raw`#!/bin/sh
+# 操作机上传入口：整个交付目录可直接复制；tar、deploy-target.json 与本脚本须放在同一目录。
+# 先修改 deploy-target.json 的服务器、用户、密钥路径；需要 sh、awk 及 OpenSSH 的 ssh/scp。
+# 执行：sh deploy.sh [主机 [端口 [用户]]]；可用 HAI_DEPLOY_IDENTITY_FILE 覆盖当前电脑的私钥。
+# manifest.json 的 partial/selectedServices 说明本次模式；服务器会核验增量基线，上传后自动部署并检查 HTTP。
 set -eu
 source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-cd "$source_dir/.."
+cd "$source_dir"
 command -v awk >/dev/null || { printf 'Install POSIX awk to read deploy-target.json.\n' >&2; exit 1; }
 read_target() {
   LC_ALL=C awk -v field="$1" -v expected="$2" -v fallback="$3" -f "$source_dir/read-target.awk" "$source_dir/deploy-target.json"
@@ -378,9 +380,16 @@ else
   exit "$code"
 fi
 `
-  const ps1 = String.raw`param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
+  const ps1 = String.raw`<#
+操作机上传入口：复制整个交付目录后，先修改同目录 deploy-target.json 的服务器、用户和密钥路径。
+需要 Windows PowerShell 5+/PowerShell 及 OpenSSH 的 ssh/scp；tar 必须与本脚本放在同一目录。
+执行：powershell -File .\deploy.ps1 [-IdentityFile 当前电脑的私钥路径]。
+manifest.json 的 partial/selectedServices 标明全量或增量；服务器会检查基线，上传后自动部署并核验 HTTP。
+SSH 中断时先核对远端结果文件和容器状态，再决定是否重试。
+#>
+param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
 $ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
+Set-Location -LiteralPath $PSScriptRoot
 $target = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'deploy-target.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($target.host -eq 'SERVER_HOST') { throw 'Set the server host in deploy-target.json.' }
 if ($target.host -isnot [string] -or $target.host -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.:-]*$' -or $target.username -isnot [string] -or $target.username -notmatch '^[a-zA-Z_][a-zA-Z0-9_-]*$' -or $target.directory -isnot [string] -or $target.directory -notmatch '^/[a-zA-Z0-9/_. -]*$' -or $target.directory -match '(^|/)\.\.(/|$)' -or $target.bundle -isnot [string] -or $target.bundle -notmatch '^[a-zA-Z0-9_.+-]+\.tar$') { throw 'Invalid deployment target.' }
@@ -442,4 +451,46 @@ try {
 }
 `
   return { sh, ps1, reader: createTargetReader() }
+}
+
+/**
+ * 生成服务器本地入口，自动解包后调用同一 apply 流程。
+ * @param options - 同目录 tar 名称和默认服务器部署目录；都由已校验的部署配置生成。
+ * @param options.bundle - 不含目录的 tar 文件名。
+ * @param options.directory - 服务器部署目录，执行时可用第一个参数覆盖。
+ * @returns 不依赖 Node、pnpm、SSH 或手工解包的 POSIX shell 脚本。
+ * @example 模块内部上下文
+ * ```ts
+ * const script = createLocalInstallScript({ bundle: 'bundle-shop-1.0.0.tar', directory: '/opt/hai/apps/shop-prod' })
+ * // 保存为与 tar 同目录的 deploy-local.sh，目标 Linux 直接执行 sh deploy-local.sh。
+ * ```
+ */
+export function createLocalInstallScript(options: { bundle: string, directory: string }): string {
+  return String.raw`#!/bin/sh
+# 目标服务器本地入口：把整个交付目录复制到 Linux，直接执行 sh deploy-local.sh [服务器部署目录]。
+# 自动解包到本次独立临时目录并调用 apply.sh；不需要手工解包，也不需要 SSH、Node 或 pnpm。
+# 需要 tar、mktemp 和 apply.sh 所列的容器运行环境；全量/增量由 manifest.json 固定，增量要求已有成功基线。
+# 执行日志保留在本交付目录，退出时只清理本次临时解包目录，业务数据由 apply.sh 保留。
+set -eu
+umask 077
+source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+bundle=@@BUNDLE@@
+destination=@@DIRECTORY@@
+if [ "$#" -gt 0 ]; then destination=$1; fi
+for tool in tar mktemp date; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
+test -f "$source_dir/$bundle" || { printf 'Bundle missing: %s\n' "$bundle" >&2; exit 1; }
+log="$source_dir/deploy-local-$(date +%Y%m%d-%H%M%S)-$$.log"
+temporary=$(mktemp -d /tmp/hai-deploy.XXXXXX)
+cleanup() { rm -rf -- "$temporary"; }
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+printf 'Deployment log: %s\n' "$log"
+if (tar -xf "$source_dir/$bundle" -C "$temporary" && sh "$temporary/apply.sh" "$destination") > "$log" 2>&1; then
+  cat "$log"
+else
+  code=$?
+  cat "$log" >&2
+  exit "$code"
+fi
+`.replace('@@BUNDLE@@', shellArgument(options.bundle)).replace('@@DIRECTORY@@', shellArgument(options.directory))
 }

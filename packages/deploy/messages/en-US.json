@@ -50,7 +50,7 @@
   "deploy_webProxyInvalid": "The API prefix must be an absolute path containing only letters, numbers, underscores, hyphens and slashes.",
   "deploy_artifactInvalid": "Image artifacts are missing or invalid. Run pnpm build --target docker, select valid --artifact-dir, or use pnpm run deploy --build.",
   "deploy_sshRequired": "Automatic deployment requires SSH settings. Use --bundle-only for manual transfer when the server is unreachable.",
-  "deploy_bundleInstructions": "Bundle: {file}\nIncludes all images needed by selected services, including self-hosted middleware.\nWith SSH access, first edit deploy-target.json in the adjacent deployment directory using its _comments, then run deploy.ps1 (Windows) or deploy.sh (Linux/macOS) there. Both read this JSON; the sh entry also requires local awk.\nFor isolated servers, copy and extract the tar into a separate directory, then run sh apply.sh (uses the configured target directory).\nLinux requires Docker/Podman, Compose, sh, tar, sha256sum, awk, curl, util-linux flock and filesystem/container permissions on a filesystem supporting flock.\nNever delete or replace .deploy.lock; its lock releases after every holder exits or the server restarts. Inspect execution and recovery state after forced termination.\nPartial updates require a successful full installation with matching ports/layout. Steps return nonzero on failure; result-DEPLOYMENT_ID.json records the outcome.\nThe bundle contains private runtime configuration; transfer it securely.\nIncluded images:\n{images}",
+  "deploy_bundleInstructions": "Bundle: {file}\nIncludes all images needed by selected services, including self-hosted middleware.\nWith SSH access, first edit deploy-target.json in the same delivery directory using its _comments, then run deploy.ps1 (Windows) or deploy.sh (Linux/macOS) there. Both read this JSON; the sh entry also requires local awk.\nFor isolated servers, copy the entire delivery directory to Linux and run sh deploy-local.sh there. It extracts the archive, applies it and preserves logs. An optional first argument overrides the server deployment directory.\nLinux requires Docker/Podman, Compose, sh, tar, sha256sum, awk, curl, util-linux flock and filesystem/container permissions on a filesystem supporting flock.\nNever delete or replace .deploy.lock; its lock releases after every holder exits or the server restarts. Inspect execution and recovery state after forced termination.\nPartial updates require a successful full installation with matching ports/layout. Steps return nonzero on failure; result-DEPLOYMENT_ID.json records the outcome.\nThe bundle contains private runtime configuration; transfer it securely.\nIncluded images:\n{images}",
   "deploy_bundleMetadata": "Application version: {version}\nBuild ID: {buildId}\nCompose file: {compose}",
   "deploy_targetHost": "Required: Linux server address or SSH alias. Replace SERVER_HOST before running either upload script.",
   "deploy_targetPort": "SSH port, integer 1-65535; default 22.",
@@ -71,7 +71,6 @@
   "deploy_configFileUnreadable": "Cannot read configuration file {path}. Check its path and permissions.",
   "deploy_bundleNameInvalid": "Bundle filenames may contain letters, numbers, dots, plus signs, hyphens and underscores; parent directories may contain spaces.",
   "deploy_secretsInvalid": "Middleware credentials are damaged or incomplete: {path}. Restore a backup; passwords are not regenerated because existing data may become inaccessible.",
-  "deploy_storageArtifactRequired": "Storage initialization requires the application image. Select a complete artifact containing app with --artifact-dir, or run pnpm build --target docker --images app first.",
   "deploy_localStopped": "The local command process tree has been confirmed exited.",
   "deploy_localUnknown": "Local process tree termination is unconfirmed; inspect local execution state.",
   "deploy_localNotStarted": "The local command was not started.",
@@ -81,5 +80,9 @@
   "deploy_commandExecutionFailed": "Command execution failed",
   "deploy_remoteUnknown": "Remote execution is unknown. Local SSH termination does not prove remote deployment stopped; inspect the server result and actual containers.",
   "deploy_remoteFinished": "A matching server result confirms the deployment script and recovery finished: stage {stage}, exit {code}. Verify actual service health.",
+  "deploy_bundleDirectoryExists": "Delivery directory already exists: {path}. Choose another output name to preserve the existing bundle.",
+  "deploy_bundleFull": "Full deployment",
+  "deploy_bundlePartial": "Partial deployment (requires a successful full baseline)",
+  "deploy_bundleSelection": "Deployment mode: {mode}\nSelected services: {services}; see partial and selectedServices in manifest.json.",
   "deploy_transportBodyLimitInvalid": "Invalid transport.maxPlaintextBytes: use an integer from 1024 to 67108864 bytes"
 }

@@ -1987,7 +1987,7 @@
     "name": "HAI_DEPLOY_CONTAINER",
     "module": "deploy",
     "path": "deploy.container",
-    "description": "Docker Compose 部署参数；构建配置位于项目 hai.build.json。",
+    "description": "Docker Compose 部署参数；构建配置位于项目 hai.json.build。",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
@@ -4510,6 +4510,14 @@
     "description": "存储桶名称",
     "value": "",
     "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_STORAGE_CREATEBUCKET",
+    "module": "storage",
+    "path": "storage.createBucket",
+    "description": "初始化时检查并创建缺失的桶；默认关闭，启用后凭据须有建桶权限。",
+    "value": "false",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_STORAGE_DIRECTORYMODE",

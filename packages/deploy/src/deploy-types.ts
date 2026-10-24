@@ -303,9 +303,9 @@ export interface DeployAppOptions {
   skipMiddleware?: boolean
   /** 已构建镜像目录；默认最近构建入口/锁文件目录下的 .hai/build/docker。 */
   artifactDir?: string
-  /** 只生成部署 tar，不连接 SSH；仅 docker-ssh 支持。 */
+  /** 只生成独立交付目录（含 tar 和部署脚本），不连接 SSH；仅 docker-ssh 支持。 */
   bundleOnly?: boolean
-  /** 部署 tar 输出路径；默认 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>.tar，自定义文件名自动补 -<版本>。 */
+  /** 交付包命名路径；默认在 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 中输出同名 tar 和脚本，自定义 release.tar 输出 release-<版本>/release-<版本>.tar；已有目录拒绝覆盖。 */
   output?: string
 }
 

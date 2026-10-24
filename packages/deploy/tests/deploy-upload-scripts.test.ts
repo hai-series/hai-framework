@@ -68,7 +68,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'hai-upload-script-'))
   temporary.push(root)
   const generated = join(root, 'generated')
-  const scripts = join(generated, 'release-1.0.0-deploy')
+  const scripts = generated
   const bin = join(root, 'bin')
   const unrelated = join(root, 'unrelated cwd')
   mkdirSync(scripts, { recursive: true })
@@ -96,7 +96,7 @@ function fixture() {
   writeFileSync(join(generated, target.bundle), 'test archive')
   const parent = join(root, 'moved package 中文')
   renameSync(generated, parent)
-  const directory = join(parent, 'release-1.0.0-deploy')
+  const directory = parent
   const log = join(root, 'commands.log')
   for (const command of ['ssh', 'scp']) {
     writeFileSync(join(bin, command), `#!/bin/sh\nprintf '%s\\0' '${command}' "$@" >> "$HAI_TEST_COMMANDS"\nprintf '\\n' >> "$HAI_TEST_COMMANDS"\nexit "\${HAI_TEST_COMMAND_EXIT:-0}"\n`, { mode: 0o700 })

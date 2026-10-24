@@ -490,7 +490,7 @@ export interface CoreOptions {
    * - `_core.yml` → 自动使用 CoreConfigSchema 校验
    * - `_xx.yml` → 加载为 'xx'（各模块自行调用 `config.validate` 校验）
    * - `app.yml` → 加载为 'app'（需使用方自行校验）
-   * - `_deploy.yml` / `_deploy.yaml` → 只由部署 CLI 解析，自动加载和监听均跳过；业务 `deploy.yml` 仍加载
+   * 项目构建和部署配置位于根目录 hai.json，不参与运行时 YAML 扫描。
    *
    * 单项加载返回失败时记日志并继续；必需配置须检查 `config.validate` 的 success。
    * 目录扫描等文件系统异常仍可能向调用方传播。
