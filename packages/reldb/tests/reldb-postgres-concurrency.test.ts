@@ -61,6 +61,19 @@ describe.each(['table', 'index'] as const)('concurrent PostgreSQL %s creation', 
   }, 15_000)
 })
 
+it.each(['heap_create_with_catalog', 'TypeCreate'])('建表类型竞争 %s 仅重执行一次并实际创建可用表', async (routine) => {
+  const table = `type_race_${routine.toLowerCase()}`
+  const error = Object.assign(new Error('Injected row type race'), { code: '42710', routine })
+  const query = vi.spyOn(pg.Pool.prototype, 'query').mockRejectedValueOnce(error)
+  const result = await reldb.sql.execute(`CREATE TABLE IF NOT EXISTS "${table}" ("id" TEXT)`)
+  expect(result.success).toBe(true)
+  expect(query).toHaveBeenCalledTimes(2)
+  query.mockRestore()
+  expect((await reldb.sql.execute(`INSERT INTO "${table}" (id) VALUES (?)`, ['ready'])).success).toBe(true)
+  const read = await reldb.sql.get<{ id: string }>(`SELECT id FROM "${table}"`)
+  expect(read.success && read.data?.id).toBe('ready')
+})
+
 it.each([
   { statement: 'INSERT INTO events VALUES (1)', code: '23505', constraint: 'pg_class_relname_nsp_index', calls: 1 },
   { statement: 'CREATE INDEX duplicate ON events(id)', code: '23505', constraint: 'pg_class_relname_nsp_index', calls: 1 },
@@ -68,8 +81,13 @@ it.each([
   { statement: 'CREATE UNIQUE INDEX IF NOT EXISTS business ON events(id)', code: '23505', constraint: 'business_unique', calls: 1 },
   { statement: 'CREATE INDEX IF NOT EXISTS still_failing ON events(id)', code: '23505', constraint: 'pg_class_relname_nsp_index', calls: 2 },
   { statement: 'INSERT INTO events VALUES (1)', code: 'EAI_AGAIN', constraint: '', calls: 1 },
-])('保留失败且有界执行：$statement', async ({ statement, code, constraint, calls }) => {
-  const error = Object.assign(new Error('Injected driver failure'), { code, constraint, schema: 'pg_catalog' })
+  { statement: 'CREATE INDEX IF NOT EXISTS duplicate ON events(id)', code: '42710', constraint: '', routine: 'TypeCreate', calls: 1 },
+  { statement: 'CREATE TABLE duplicate (id TEXT)', code: '42710', constraint: '', routine: 'TypeCreate', calls: 1 },
+  { statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT); SELECT 1', code: '42710', constraint: '', routine: 'TypeCreate', calls: 1 },
+  { statement: 'CREATE TABLE IF NOT EXISTS duplicate (id TEXT)', code: '42710', constraint: '', routine: 'DefineRelation', calls: 1 },
+  { statement: 'CREATE TABLE IF NOT EXISTS still_failing (id TEXT)', code: '42710', constraint: '', routine: 'TypeCreate', calls: 2 },
+])('保留失败且有界执行：$statement', async ({ statement, code, constraint, routine, calls }) => {
+  const error = Object.assign(new Error('Injected driver failure'), { code, constraint, routine, schema: 'pg_catalog' })
   const query = vi.spyOn(pg.Pool.prototype, 'query').mockImplementation(async () => {
     throw error
   })
@@ -87,6 +105,31 @@ it('业务唯一索引即使与系统目录同名也不重复构建', async () =
   if (!result.success)
     expect(result.error.cause).toMatchObject({ code: '23505', schema: 'public', constraint: 'pg_class_relname_nsp_index' })
   expect(query).toHaveBeenCalledTimes(1)
+})
+
+it.each(['ddl', 'sql', 'transaction'] as const)('真实同名类型冲突不会被 %s 入口当作成功', async (entry) => {
+  const table = `existing_type_${entry}`
+  expect((await reldb.ddl.raw(`CREATE TYPE "${table}" AS ENUM ('reserved')`)).success).toBe(true)
+  const query = vi.spyOn(pg.Pool.prototype, 'query')
+  const begun = entry === 'transaction' ? await reldb.tx.begin() : undefined
+  if (begun && !begun.success)
+    throw new Error(begun.error.message)
+  try {
+    const statement = `CREATE TABLE IF NOT EXISTS "${table}" (id TEXT)`
+    const result = begun?.success
+      ? await begun.data.execute(statement)
+      : entry === 'ddl' ? await reldb.ddl.createTable(table, { id: { type: 'TEXT' } }) : await reldb.sql.execute(statement)
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.cause).toMatchObject({ code: '42710', routine: 'heap_create_with_catalog' })
+    // 自动提交只重试一次；事务内错误保留给调用方回滚。
+    expect(query).toHaveBeenCalledTimes(entry === 'transaction' ? 0 : 2)
+  }
+  finally {
+    if (begun?.success)
+      await begun.data.rollback()
+    query.mockRestore()
+  }
 })
 
 it.each([

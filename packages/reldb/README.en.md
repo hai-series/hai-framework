@@ -588,7 +588,7 @@ Common error codes:
 | `HaiReldbError.TIMEOUT`              | `hai:reldb:009` | MySQL acquisition deadline exceeded |
 | `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:011` | MySQL acquisition queue is full     |
 
-Custom SQL methods in `BaseReldbCrudRepository` subclasses must check `await this.ensureReady()`. Construction starts table creation; service init must await candidate readiness before publication. PostgreSQL retries a single autocommit `CREATE TABLE/INDEX IF NOT EXISTS` once only for `23505/pg_class_relname_nsp_index` catalog contention (also `pg_type_typname_nsp_index` for tables), consistently through DDL and SQL entry points. Transactions, business uniqueness errors and other failures are not retried. Initial connection probing attempts temporary DNS `EAI_AGAIN` failures at most three times, with 250/500 ms delays; business SQL is never replayed.
+Custom SQL methods in `BaseReldbCrudRepository` subclasses must check `await this.ensureReady()`. Construction starts table creation; service init must await candidate readiness before publication. PostgreSQL retries a single autocommit `CREATE TABLE/INDEX IF NOT EXISTS` once only for `23505/pg_class_relname_nsp_index` catalog contention (also `pg_type_typname_nsp_index` for tables), or a table row-type race reported as `42710` with server routine `heap_create_with_catalog` / `TypeCreate`, consistently through DDL and SQL entry points. A failed retry remains an error. Transactions, business uniqueness errors and other failures are not retried. Initial connection probing attempts temporary DNS `EAI_AGAIN` failures at most three times, with 250/500 ms delays; business SQL is never replayed.
 
 ## Production shared state
 
