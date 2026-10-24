@@ -91,6 +91,7 @@
   "common_network_error": "Network error, please try again later",
   "server_init_db_failed": "Database initialization failed: {message}",
   "server_init_cache_failed": "Cache initialization failed: {message}",
+  "server_init_storage_failed": "Storage initialization failed: {message}",
   "server_init_iam_failed": "IAM initialization failed: {message}",
   "server_error_with_cause": "{message} (Cause: {cause})",
   "server_init_not_initialized": "Application not initialized. Call initApp() first.",

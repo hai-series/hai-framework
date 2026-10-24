@@ -27,6 +27,7 @@ const handleTransportConfig = kitTransportConfig === false
   ? false
   : {
       keyExchangePath: kitTransportConfig.keyExchangePath,
+      maxPlaintextBytes: kitTransportConfig.maxPlaintextBytes,
       excludePaths: [...kitTransportConfig.excludePaths],
     }
 const transportPublicPaths = kitTransportConfig === false

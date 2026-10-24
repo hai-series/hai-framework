@@ -124,6 +124,7 @@ http:
 # 开发期默认关闭 transport；启用 @h-ai/crypto 后可按需改为对象配置
 transport: false
 # transport:
+#   maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576} # 双向 UTF-8 明文，1 KiB～64 MiB
 #   keyExchangePath: /_hai/key-exchange
 #   excludePaths: [/health, /ready]
 `
@@ -323,6 +324,8 @@ function generateStorageConfig(cfg?: StorageModuleConfig): string {
 # directoryMode: 493 # 0o755
 # fileMode: 420 # 0o644`
   const s3 = `bucket: ''
+# 显式开启后，storage.init 检查并创建缺失桶；外部存储默认不开启。
+createBucket: false
 region: us-east-1
 accessKeyId: ''
 secretAccessKey: ''
@@ -592,7 +595,7 @@ export function generateProductionEnvironment(features: FeatureId[], configs?: M
   if (enabled.has('cache'))
     sections.push('', '# 必须私有注入 HAI_CACHE_PASSWORD。', 'HAI_CACHE_TYPE=redis', 'HAI_CACHE_HOST=cache', 'HAI_CACHE_PORT=6379')
   if (enabled.has('storage')) {
-    sections.push('', '# 必须私有注入 HAI_STORAGE_ACCESSKEYID / HAI_STORAGE_SECRETACCESSKEY。', 'HAI_STORAGE_TYPE=s3', 'HAI_STORAGE_BUCKET=hai', 'HAI_STORAGE_REGION=us-east-1', 'HAI_STORAGE_ENDPOINT=http://storage:9000', 'HAI_STORAGE_FORCEPATHSTYLE=true')
+    sections.push('', '# 必须私有注入 HAI_STORAGE_ACCESSKEYID / HAI_STORAGE_SECRETACCESSKEY。', 'HAI_STORAGE_TYPE=s3', 'HAI_STORAGE_BUCKET=hai', 'HAI_STORAGE_REGION=us-east-1', 'HAI_STORAGE_ENDPOINT=http://storage:9000', 'HAI_STORAGE_FORCEPATHSTYLE=true', 'HAI_STORAGE_CREATEBUCKET=true')
   }
   if (enabled.has('vecdb'))
     sections.push('', '# 受保护的 Qdrant 必须私有注入 HAI_VECDB_APIKEY。', 'HAI_VECDB_TYPE=qdrant', 'HAI_VECDB_URL=http://vecdb:6333')

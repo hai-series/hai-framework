@@ -14,6 +14,7 @@
 - 🔒 **API 传输加密** — 浏览器与 `/api/*` 默认通过 `@h-ai/crypto` 做密钥协商与请求/响应加解密
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志；用户按角色 code 在数据库分页前筛选，总数与结果一致
+- 💬 **问题反馈** — 默认开启，普通用户可提交，管理员分页查看、处理/撤销并导出离线诊断包
 - 🧩 **UI Gallery** — @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
 - 🌍 **国际化** — Paraglide 集成，中英日文消息，中英日文实时切换
@@ -32,6 +33,7 @@
 - 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
 - 🧩 UI Gallery：组件交互式展示（4 标签页）（`/admin/ui-gallery`）
 - 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
+- 💬 问题反馈：顶栏收集入口与管理员处理（`/admin/feedback`）
 - ⚙️ 设置：主题切换、语言切换（`/admin/settings`）
 
 #### 角色与演示行为
@@ -41,6 +43,14 @@
 角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
 
 管理端在线加密演示直接调用 Crypto SM3/SM4 API，SM4 使用随机临时密钥和 IV，并在显示成功前解密校验；密钥不保存。输入改变即清空旧结果，禁止用随机摘要或 Base64 伪装算法结果。
+
+## 默认问题反馈
+
+管理台提交的 config/_feedback.yml 默认启用问题反馈。启动时复用数据库、存储和 Reach，管理员通知使用配置的 email Provider；生产配置私有 S3、真实 SMTP 和通知地址。
+
+普通 user 角色获得 feedback:create，可从顶栏直接提交空说明或附带图片；窄屏仍保留带可访问名称的入口。admin 角色获得 feedback:create/read/process/reopen/export，可打开 /admin/feedback，分页筛选、查看材料、处理或撤销并导出诊断包。创建者可读取自己的报告/续传材料；普通用户不能列出管理记录或执行管理操作。无角色且未授权的用户不显示提交入口，服务端仍拒绝请求。
+
+采集失败可再次点击入口；提交失败保留说明、附件与现场，可重试或保存本地包。受理回执分别提示采集状态，受理不代表邮件已投递。权限沿用 IAM 默认 user/admin 角色，不新增角色体系。
 
 ## 使用入门
 
@@ -54,7 +64,7 @@
 
 #### 前置要求
 
-- Node.js 22.22.2+ / 24.15.0+ / 26+
+- Node.js 22.23.4+ / 24.22.1+ / 26.12.1+
 - pnpm ≥ 12.11.2
 
 #### 安装与启动
@@ -185,7 +195,7 @@ LDAP 与 Reach 为可选集成。需要默认 LDAP 客户端时，在负责 IAM 
 
 ### 镜像构建与部署
 
-在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.build.json` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
+在本应用目录执行，镜像定义为 `images/app.Dockerfile`，`hai.json` 的 `build.images` 指定文件与仓库根构建上下文。Web 运行配置位于 `images/web/`（如有）。应用版本来自本目录的 `package.json.version`。
 
 ```sh
 pnpm build:images                         # 只构建镜像并导出 tar
@@ -193,7 +203,7 @@ pnpm run deploy --env prod --build        # 构建、打包、上传、启动并
 pnpm run deploy --env prod --build --bundle-only --output release-prod.tar
 ```
 
-先准备 `.env.prod` 与 `config/_deploy.yml`；首次向导以说明文字收集服务器连接信息并保存到 `.env.local`。完整离线包包含应用和自建中间件镜像，目标 Linux 需预装容器引擎、Compose 与脚本要求的工具。把 tar 和同名 `-deploy/` 目录一起搬到操作机，Windows 执行 `deploy.ps1`，Linux/macOS 执行 `deploy.sh`；完全隔离的服务器解包后执行 `sh apply.sh`。
+先准备 `.env.prod` 与项目根 `hai.json` 的 `deploy`；首次向导以说明文字收集服务器连接信息并保存到 `.env.local`。完整离线包包含应用和自建中间件镜像，目标 Linux 需预装容器引擎、Compose 与脚本要求的工具。把本次 `.hai/deploy/<环境>/bundle-*/` 整个目录复制到操作机（tar、配置和脚本均在其中），Windows 执行 `deploy.ps1`，Linux/macOS 执行 `deploy.sh`；完全隔离的服务器复制整个交付目录后执行 `sh deploy-local.sh`，自动解包并部署。
 
 已有成功安装时，可用 `--services app` 只更新本应用；多个镜像的工程按服务名选择。局部发布保留其他容器和持久化卷，不执行整个项目 `down`，失败保留诊断并尝试恢复旧容器。相同版本允许重建，每次以独立构建 ID 区分内容。`images/dependencies/` 为忽略 Git 的依赖输入，配合引擎缓存和分层减少重复下载。
 

@@ -86,6 +86,7 @@
   "common_network_error": "网络错误，请稍后重试",
   "server_init_db_failed": "数据库初始化失败: {message}",
   "server_init_cache_failed": "缓存初始化失败: {message}",
+  "server_init_storage_failed": "存储初始化失败: {message}",
   "server_init_iam_failed": "IAM 初始化失败: {message}",
   "server_error_with_cause": "{message} (原因: {cause})",
   "server_init_not_initialized": "应用未初始化，请先调用 initApp()",

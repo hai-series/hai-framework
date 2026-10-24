@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v6.5.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           cache: pnpm
 
       - name: Install dependencies
@@ -105,7 +105,7 @@ jobs:
 
       - uses: actions/setup-node@v6.5.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -245,7 +245,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v6.5.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
       - name: Sync and commit versions
         run: |
           node scripts/sync-versions.mjs

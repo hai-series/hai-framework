@@ -49,5 +49,7 @@
   "crypto_transportResponseEncryptFailed": "Failed to encrypt transport response body",
   "crypto_transportResponseDecryptFailed": "Failed to decrypt transport response body",
   "crypto_transportSessionKeyEncryptFailed": "Failed to encrypt transport session key",
-  "crypto_transportSessionKeyDecryptFailed": "Failed to decrypt transport session key"
+  "crypto_transportSessionKeyDecryptFailed": "Failed to decrypt transport session key",
+  "crypto_transportBodyLimitInvalid": "Transport plaintext limit must be an integer between 1024 and 67108864 bytes",
+  "crypto_transportBodyTooLarge": "Encrypted transport payload exceeds the configured byte limit"
 }

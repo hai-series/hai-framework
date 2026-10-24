@@ -1,4 +1,4 @@
-/** 从示例应用的公开 YAML 与统一模块清单更新环境说明，不读取 .env.local。 */
+/** 从示例应用的公开 YAML、hai.json 与统一模块清单更新环境说明，不读取 .env.local。 */
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -49,6 +49,16 @@ for (const app of await readdir('apps')) {
     for (const variable of configEnvironmentVariables(module, await readFile(path.join(directory, 'config', configFile), 'utf8')))
       active.set(variable.name, variable)
   }
+  // 部署属于项目级配置；迁移到 JSON 后仍保留显式变量、路径及可选部署字段。
+  const projectConfig = await readFile(path.join(directory, 'hai.json'), 'utf8').catch(error => error.code === 'ENOENT' ? null : Promise.reject(error))
+  if (projectConfig !== null) {
+    const project = JSON.parse(projectConfig)
+    if (project.deploy && typeof project.deploy === 'object' && !Array.isArray(project.deploy)) {
+      modules.add('deploy')
+      for (const variable of configEnvironmentVariables('deploy', JSON.stringify(project.deploy)))
+        active.set(variable.name, variable)
+    }
+  }
   // 纯客户端应用的公开地址来自已有公共示例；本机私有覆盖不参与生成。
   for (const [name, value] of Object.entries(parseEnv(previous))) {
     if (name.startsWith('PUBLIC_'))
@@ -74,7 +84,7 @@ for (const app of await readdir('apps')) {
     '# 环境配置示例：包含本应用完整可用字段、说明和取值约束。',
     '# .env / .env.dev / .env.test / .env.prod 为公共配置，提交 Git；.env.local 为本机私有覆盖，不提交。',
     '# 优先级：进程环境 > .env.local > .env.<dev|test|prod> > .env。',
-    '# 可选字段先在 YAML 声明，或使用父级对象整体覆盖；完整框架变量见根 .env.example。',
+    '# 可选字段先在 YAML 或 hai.json.deploy 声明，或使用父级对象整体覆盖；完整框架变量见根 .env.example。',
     '',
     renderEnvironment([...active.values()]),
     '',

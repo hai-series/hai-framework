@@ -2,7 +2,7 @@
  * @h-ai/deploy — 凭证管理
  *
  * 管理全局凭证文件 `~/.hai/credentials.yml`。
- * 这些 helper 由 `deploy.credentials.*` 对外暴露，供 CLI 在加载 `_deploy.yml`
+ * 这些 helper 由 `deploy.credentials.*` 对外暴露，供 CLI 在加载项目 `hai.json` 的部署配置
  * 之前注入 `HAI_DEPLOY_*` 环境变量。
  * @module deploy-credentials
  */

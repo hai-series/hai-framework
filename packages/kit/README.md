@@ -222,7 +222,7 @@ transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` �
 
 空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
-固定预算与 serv/客户端共享 `@h-ai/crypto` 的 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB，单个公钥 4 KiB，明文 1 MiB，密文 JSON 2 MiB + 32 KiB，均按实际 UTF-8 字节计数。逐块读取原始流，超限/取消立即停止、取消流并释放 reader，不克隆后完整缓冲。请求正文超限返回 413，响应超限返回 500，无效公钥返回 400。重建 Request 时保留 signal，重建请求/响应时移除旧 Content-Length/Content-Encoding。预算不属于 `_kit.yml` 或环境变量配置。
+业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
 #### 使用 `_kit.yml` 统一 transport 配置
 

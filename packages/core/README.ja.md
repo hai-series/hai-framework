@@ -284,7 +284,7 @@ if (!result.success) {
 
 > ブラウザーにはファイルシステムがないため、`core.config` は代替 API の形状のみを提供します。ファイル関連メソッドは `SERVICE_UNAVAILABLE` を返し、YAML を読み込みません。
 
-Node は実行時の `.yml` / `.yaml` を自動読み込み・監視しますが、予約名 `_deploy.yml` と `_deploy.yaml` は除外します。これらはデプロイ CLI が対象環境と認証情報の読み込み後に個別解析します。業務用 `deploy.yml` と明示的な `core.config.load` は引き続き利用できます。単一ファイルの失敗結果はログに記録して続行するため、アプリは必須設定を validate して `success` を確認してください。ディレクトリー走査や Logger 設定などの例外は伝播する場合があります。
+Node は設定ディレクトリー内のすべての `.yml` / `.yaml` を自動読み込み・監視します。CLI はプロジェクトルートの `hai.json` から `build` / `deploy` を読み取り、特別扱いする YAML ファイル名はありません。単一ファイルの失敗結果はログに記録して続行するため、アプリは必須設定を validate して `success` を確認してください。ディレクトリー走査や Logger 設定などの例外は伝播する場合があります。
 
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
@@ -292,7 +292,7 @@ import { z } from 'zod'
 
 // 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
+  configDir: './config', // 扫描配置目录内所有 .yml / .yaml
   watchConfig: true, // 监听变更并自动重载
 })
 

@@ -19,7 +19,7 @@
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -87,7 +87,7 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 | 分野                   | 採用技術                                                       |
 | ---------------------- | -------------------------------------------------------------- |
 | 言語                   | TypeScript 6 / 7（厳密モード）                                 |
-| ランタイム             | Node.js 22.22.2+ / 24.15.0+ / 26+                              |
+| ランタイム             | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                         |
 | フロントエンド         | Svelte 5（Runes）+ SvelteKit 2                                 |
 | UI                     | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                        |
 | API 契約               | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
@@ -106,9 +106,11 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 
 ## はじめに
 
-環境準備、手作業・AI first 開発、コンパイル、イメージ/ネイティブパッケージ、自動・オフラインデプロイ、フレームワーク更新は完全ガイドを参照してください：[日本語](docs/usage/README.ja.md) · [简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md)。コマンド引数、`hai.build.json`、各工程で使う skills も説明しています。
+環境準備、手作業・AI first 開発、コンパイル、イメージ/ネイティブパッケージ、自動・オフラインデプロイ、フレームワーク更新は完全ガイドを参照してください：[日本語](docs/usage/README.ja.md) · [简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md)。コマンド引数、`hai.json`、各工程で使う skills も説明しています。
 
-プロジェクトの `engines` に合う Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）と pnpm 12.11.2 を用意します。PowerShell では `pnpm.cmd` を使ってください。
+プロジェクトの `engines` に合う Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）と pnpm 12.11.2 を用意します。PowerShell では `pnpm.cmd` を使ってください。
+
+最低バージョンは [2026-10-21 の Node.js 公式セキュリティリリース](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)に基づきます。Node.js 22・24・26 の各系列で上記の最低バージョンを満たすものだけをサポートし、それ以前のバージョン、保守終了した系列、未検証の将来のメジャーバージョンはサポートしません。開発・CI・コンテナーには Node.js 24.22.1 LTS を推奨します。
 
 ### 新規プロジェクト作成
 
@@ -150,7 +152,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.build.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは apply.sh を実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
+デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは deploy-local.sh が検証・展開・配置を自動実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
 
 ### 既存プロジェクトへの導入
 

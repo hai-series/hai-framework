@@ -24,7 +24,7 @@ let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-build-command-'))
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'sample-app', version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.build.json'), JSON.stringify({ images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 }], desktop: ['apps/desktop'] }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 }], desktop: ['apps/desktop'] } }))
   mkdirSync(join(root, 'images'), { recursive: true })
   writeFileSync(join(root, 'images/app.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
   writeFileSync(join(root, 'images/web.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
@@ -32,6 +32,12 @@ beforeEach(() => {
   state.failPodman = false
   state.failWeb = false
   vi.stubEnv('npm_execpath', '/tools/pnpm.cjs')
+})
+
+it('reports malformed project JSON without exposing configuration values', async () => {
+  writeFileSync(join(root, 'hai.json'), '{"deploy":{"provider":{"token":"private-config-value"}},')
+  await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.toThrow('hai.json')
+  await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.not.toThrow('private-config-value')
 })
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -88,7 +94,7 @@ it('只构建 Web 并记录部分制品，未知镜像名在启动引擎前失�
 })
 
 it.each(['app', 'web'])('部分构建保留未选镜像的显式容器端口：%s', async (selected) => {
-  writeFileSync(join(root, 'hai.build.json'), JSON.stringify({ images: [{ name: 'app', dockerfile: 'images/app.Dockerfile', containerPort: 4100 }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8181 }] }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app', dockerfile: 'images/app.Dockerfile', containerPort: 4100 }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8181 }] } }))
   await buildCommand({ cwd: root, target: 'docker', images: selected })
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
@@ -189,7 +195,7 @@ it('错误版本、容器端口或不适用的构建参数在启动工具前失�
     await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.toThrow()
   }
   writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.build.json'), JSON.stringify({ images: [{ name: 'app', containerPort: 70000 }] }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app', containerPort: 70000 }] } }))
   await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.toThrow()
   await expect(buildCommand({ cwd: root, target: 'compile', runtime: 'docker' })).rejects.toThrow()
   await expect(buildCommand({ cwd: root, target: 'compile', network: 'pasta' })).rejects.toThrow()

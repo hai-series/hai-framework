@@ -19,7 +19,7 @@
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -87,7 +87,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 | 层面       | 选型                                                           |
 | ---------- | -------------------------------------------------------------- |
 | 语言       | TypeScript 6 / 7（严格模式）                                   |
-| 运行时     | Node.js 22.22.2+ / 24.15.0+ / 26+                              |
+| 运行时     | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                         |
 | 前端框架   | Svelte 5（Runes）+ SvelteKit 2                                 |
 | UI         | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                        |
 | API 契约   | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
@@ -106,9 +106,11 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 ## 快速入门
 
-从环境准备、手工编码或 AI first 开发，到编译、镜像/原生打包、自动或离线部署、框架升级，见完整使用指南：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。其中包含命令参数、`hai.build.json` 配置和实际 skills 的使用流程。
+从环境准备、手工编码或 AI first 开发，到编译、镜像/原生打包、自动或离线部署、框架升级，见完整使用指南：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。其中包含命令参数、`hai.json` 配置和实际 skills 的使用流程。
 
-准备符合项目 `engines` 的 Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）与 pnpm 12.11.2；PowerShell 使用 `pnpm.cmd`。
+准备符合项目 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2；PowerShell 使用 `pnpm.cmd`。
+
+上述最低版本来自 [2026-10-21 Node.js 官方安全发布](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)。仅支持 Node.js 22、24、26 各发布线中符合最低版本的版本；不支持较旧版本、已停止维护的发布线或未经验证的未来主版本。开发、CI 与容器推荐使用 Node.js 24.22.1 LTS。
 
 ### 创建新项目
 
@@ -150,7 +152,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，`hai.build.json` 指定对应文件。完整离线包包含自建中间件镜像，并附 Windows/Linux/macOS 上传部署脚本；隔离服务器可直接执行包内 apply.sh。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。
+部署工具默认作为开发依赖安装，不需要时在创建命令中加 `--no-deploy`。每个镜像在 `images/` 下使用独立 Dockerfile，根 `hai.json` 的 `build` 指定构建文件，`deploy` 保存整个项目的部署参数。离线交付将 tar、配置、清单和 Windows/Linux/macOS 脚本全部放在本次单一目录；隔离服务器复制该目录后执行 `sh deploy-local.sh`，自动校验、解包和部署。局部发布以服务器成功版本为基线，保留其他服务和数据卷，不执行全项目 down。同版本允许重新构建，构建 ID 和校验和区分内容。依赖缓存、人工操作与失败恢复见[使用指南](docs/usage/README.md)。
 
 ### 在现有项目中集成
 

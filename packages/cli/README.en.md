@@ -21,7 +21,7 @@ Use `hai` to create applications, add modules, generate starter code, build and 
 
 ### Install the CLI
 
-Use Node.js matching `engines` (`^22.22.2 || ^24.15.0 || >=26.0.0`) and pnpm 12.11.2. In PowerShell use `pnpm.cmd`.
+Use Node.js matching `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.11.2. In PowerShell use `pnpm.cmd`.
 
 ```sh
 pnpm add -g @h-ai/cli
@@ -50,7 +50,7 @@ Omit options for interactive choices, or use `--yes` for defaults. Installation 
 | `mobile-app`               | Svelte + Vite + Capacitor                                                       |
 | `fullstack`                | Contract, API, shared UI and selected Web/App/Desktop; miniapp is a placeholder |
 
-Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage and audit for its default management UI. It does not install AI/ONNX/CUDA by default.
+Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage and audit for its management UI. When `--features` is omitted, it also enables feedback and reach. An explicit feature list keeps optional modules under your control; other application types still require feedback to be selected. AI/ONNX/CUDA are not installed by default.
 
 A standalone `mobile-app` with IAM or crypto installs frontend crypto and enables encrypted typed-client transport by default. Without crypto, a deliberate plaintext API remains supported. Use `PUBLIC_API_TRANSPORT=off` only with a matching plaintext service; `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. A failed handshake never falls back to plaintext, and server private keys never enter the client. Cleanup closes client transport before crypto initialized by that client.
 
@@ -89,7 +89,7 @@ Prompts, validation, module/template names, descriptions and completion messages
 
 Database connections are validated against the selected backend’s public schema before saving. MySQL `ssl` accepts only `false` or a strict TLS object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL keeps its modes. CLI bundles the pure schemas and Zod, so validation needs no database package or driver in the target application; running that application still requires its dependencies. Deployment still requires an installed, resolvable `@h-ai/deploy` (a development dependency in generated projects).
 
-`pnpm build` compiles sources. Each image has its own Dockerfile in `images/`, selected through `hai.build.json`. `--images` selects build outputs; `--services` selects deployed services. Automatic engine detection prefers reachable Podman, then Docker. Downloads, installation and production dependency packaging share package and SQLite driver caches to avoid downloading them again.
+`pnpm build` compiles sources. Each image has its own Dockerfile in `images/`, selected through `hai.json.build.images`, alongside the project deployment settings in `deploy`. `--images` selects build outputs; `--services` selects deployed services. Automatic engine detection prefers reachable Podman, then Docker. Downloads, installation and production dependency packaging share package and SQLite driver caches to avoid downloading them again.
 
 The default container supports CPU workloads or remote AI services without downloading extra GPU runtimes. To use the deployment host's GPU, customize the image and container runtime settings.
 
@@ -132,7 +132,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates --list --json
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-The ten scaffold scenarios retain real installation, compilation and HTTP/browser checks for every application type. The heavy scaffold and generated-route runtime files run in sequential batches because measured build and installation resource contention made concurrent runs slower. The three smaller locale, CLI process and environment-consumption files can share the runtime batch, with at most two file workers. Each scenario uses the complete build already provided by its E2E entry; existing production build isolation checks inspect nonempty generated outputs after E2E. Real container deployment selects API, SSR (admin represents the shared website/h5 Dockerfile and deployment branch), static mobile and fullstack shapes. Ownership, authentication/transport, incremental updates, damaged artifacts and rollback checks remain. Fixtures enable init and verify orphan reaping; a fast gate runs the production Nginx version against the public bundle with `nginx -t`. Unit tests do not probe engines. Workspace compilation builds contracts through the dependency graph; fullstack prepares shared i18n first without compiling contracts twice.
+The eleven scaffold scenarios retain real installation, compilation and HTTP/browser checks for every application type. The heavy scaffold and generated-route runtime files run in sequential batches because measured build and installation resource contention made concurrent runs slower. The three smaller locale, CLI process and environment-consumption files can share the runtime batch, with at most two file workers. Each scenario uses the complete build already provided by its E2E entry; existing production build isolation checks inspect nonempty generated outputs after E2E. Real container deployment selects API, SSR (admin represents the shared website/h5 Dockerfile and deployment branch), static mobile and fullstack shapes. Ownership, authentication/transport, incremental updates, damaged artifacts and rollback checks remain. Fixtures enable init and verify orphan reaping; a fast gate runs the production Nginx version against the public bundle with `nginx -t`. Unit tests do not probe engines. Workspace compilation builds contracts through the dependency graph; fullstack prepares shared i18n first without compiling contracts twice.
 
 Scaffold gates generate real projects and run install, typecheck, lint, build, tests and browser workflows, including generated HTTP routes, CLI process locale selection and environment file consumption. Use `--generate` or `--i18n` for focused reruns. Deployment gates cover actual resource ownership and dynamic host port isolation, as well as offline bundles, SSH/manual deployment, incremental updates and rollback. Cleanup uses only container IDs and private image tags recorded by the current run. Safe metadata remains in ignored `tmp/validation/module-review/VERIFY-05/`. Produced browser screenshots, traces and reports remain under ignored `tmp/validation/module-review/scaffold-browser/` or `deploy-browser/` by default. Explicit evidence, HTML report and output paths are respected; temporary projects, keys, data and processes are still cleaned up. Native shells and real cloud providers need separate acceptance.
 
@@ -154,7 +154,7 @@ UI delivery includes [hai-ui-design](templates/skills/hai-ui-design/SKILL.md), h
 
 ### Feedback and offline analysis
 
-Enable feedback with `hai create my-app --type fullstack --frontends web --features feedback --yes` or an API project. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
+A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Signed-in users can submit reports. Only administrators see the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
 
 Offline commands: `hai feedback summary <bundle.zip>`, `inspect`, `evidence --request-id <ID> --page 1 --page-size 20`, and `view`. The viewer binds only to loopback and closes on Ctrl+C; no production connection is needed.
 

@@ -373,6 +373,7 @@ function buildTransportMiddleware(
     keyExchangePath: transportOpts.keyExchangePath,
     excludePaths: transportOpts.excludePaths,
     keyStore: transportOpts.keyStore,
+    maxPlaintextBytes: transportOpts.maxPlaintextBytes,
   })
 }
 

@@ -29,15 +29,43 @@ pnpm build --target desktop --platform windows --arch x64
 
 `--target` は compile（既定）、docker、desktop を選択します。`--images app|web|app,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
-#### hai.build.json でパッケージの構成を指定する
+#### hai.json でパッケージの構成を指定する
 
 ```json
-{ "images": [{ "name": "app", "context": ".", "dockerfile": "images/app.Dockerfile", "containerPort": 3000 }, { "name": "web", "context": ".", "dockerfile": "images/web.Dockerfile", "containerPort": 8080 }] }
+{
+  "build": {
+    "images": [
+      {
+        "name": "app",
+        "context": ".",
+        "dockerfile": "images/app.Dockerfile",
+        "containerPort": 3000
+      },
+      {
+        "name": "web",
+        "context": ".",
+        "dockerfile": "images/web.Dockerfile",
+        "containerPort": 8080
+      }
+    ]
+  },
+  "deploy": {
+    "provider": {
+      "type": "docker-ssh",
+      "expose": {
+        "hostPort": "${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18080}"
+      }
+    },
+    "container": {
+      "s3Engine": "rustfs"
+    }
+  }
+}
 ```
 
 各イメージに独立した Dockerfile を用意します。Web 用設定は images/web/ に置きます。Dockerfile 内の構築・実行段階は維持しますが、設定から段階を選びません。不要なイメージ項目は削除し、desktop ディレクトリは対象プロジェクトのみ設定します。
 
-生成する `web.conf` は API location に `client_max_body_size 2129920`（2 MiB + 32 KiB）を設定し、`proxy_request_buffering` / `proxy_buffering` を無効にします。transport の平文 1 MiB を暗号化した JSON を通過させ、アプリ側では鍵交換 16 KiB、公開鍵 4 KiB、平文 1 MiB の制限を逐次検証します。独自プロキシでも暗号文の上限を許可し、キャンセルを伝播してください。プロキシ上限の変更だけでは serv/kit の有界読み取りを代替できません。大容量アップロードは専用パスと容量ポリシーを用意します。
+`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 全量と app の増分デプロイは同じ `_serv.yml` からプロキシ上限を算出します。容量変更時は既存 Web イメージでプロキシを再作成し、ヘルスチェック失敗時は旧設定を復元します。SvelteKit の adapter-node `BODY_SIZE_LIMIT` も `_kit.yml` から算出します。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
 本文なし認証封装には X-Hai-Transport を使います。生成設定は large_client_header_buffers 4 32k と proxy_buffer_size 32k を指定します。独自プロキシもこのヘッダーを保持し、通過させてください。
 
@@ -49,16 +77,11 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 環境と接続先を用意する
 
-`.env.<環境>` とサービスの config/_deploy.yml を用意します。fullstack の deploy は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-service を指定します。これは設定と実行依存の走査入口で、成果物は構築設定のルートから読み込みます。
+`.env.<環境>` とプロジェクトルートの `hai.json` を用意します。`build` にイメージ・ネイティブ構築、`deploy` にアプリ全体の配置設定を保存します。fullstack は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-service を実行依存とモジュール YAML の走査入口として使います。フロントとバックエンドは同じ設定を共有します。
 
-```yaml
-provider:
-  type: docker-ssh
-  expose:
-    hostPort: 18080
-container:
-  s3Engine: rustfs
-```
+`deploy` は `${変数:既定値}` と `HAI_DEPLOY_*` による階層的な上書き（JSON オブジェクト全体も可）をサポートします。優先順はプロセス環境 > `.env.local` > `.env.<環境>` > `.env` です。認証情報は非公開ファイルに保存し、構築時には読み込みません。
+
+既存プロジェクトは旧構築オブジェクトを `hai.json.build`、旧配置 YAML を JSON に変換して `hai.json.deploy` に移し、元のファイルを削除します。`HAI_DEPLOY_*` は継続利用できます。既存の自前 S3 は今回の初回更新で全量配置が必要です。旧基準には終了済みの初期化サービスが残っており、新しい増分パッケージの依存稼働チェックで拒否されます。全量配置で `createBucket` 設定も更新した後は増分更新を継続できます。
 
 直接デプロイでは、サーバー、SSH ユーザー、任意の鍵・指紋ファイル、公開ポートの不足項目を説明付きで質問し、完全な設定は再利用します。接続情報は .env.local、秘密鍵はパスのみ保存します。`--bundle-only` では SSH 接続情報を質問せず、後でアップロードする前に `deploy-target.json` に設定します。
 
@@ -78,11 +101,11 @@ pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
 ```
 
-部分更新には成功済みの完全インストールと一致するポート・構成が必要です。Compose 標準の設定合成で未選択サービス、設定、ボリュームを保持します。スクリプトはプロジェクト名とサービス名で選択した旧コンテナーだけを削除し、ボリュームを保持します。その後 `compose up -d --no-deps --no-build --pull never --no-recreate web` で新しいコンテナーを作成します。他のコンテナーは稼働したままで、全体の down は実行しません。storage-init は S3 バケットの一時初期化処理で、ストレージ初期化を伴う場合に限り実行します。
+部分更新には成功済みの完全インストールと一致するポート・構成が必要です。Compose 標準の設定合成で未選択サービス、設定、ボリュームを保持します。スクリプトはプロジェクト名とサービス名で選択した旧コンテナーだけを削除し、ボリュームを保持します。その後 `compose up -d --no-deps --no-build --pull never --no-recreate web` で新しいコンテナーを作成します。他のコンテナーは稼働したままで、全体の down は実行しません。自前 S3 のバケットはアプリの `storage.init()` が任意設定 `createBucket` に従って初期化します。
 
 `-d` はバックグラウンド起動、`--no-deps` は依存サービスを更新しない指定、`--no-build` はサーバーでの構築禁止、`--pull never` は取得禁止、`--no-recreate` は残っているコンテナーを保持します。選択した旧コンテナーは事前に削除されているため、新しいコンテナーが作成されます。末尾の `web` は Compose サービス名で、複数指定は空白で区切ります。
 
-`storage-init` はアプリの S3 SDK でストレージの準備を待ち、不足するバケットを作成します。既存データは削除しません。storage 起動後に `compose up --no-deps --no-build --pull never --force-recreate --exit-code-from storage-init storage-init` を実行し、終了コード 0 を確認してアプリを起動します。 部分更新では旧 storage-init コンテナーを先に削除し、このコマンドの `--force-recreate` を `--no-recreate` に替えて、稼働中のアプリを保持します。`storage` だけを更新する場合も、初期化のために `app` イメージを含む成果物が必要です。直近のビルドが Web のみなら、`--artifact-dir` で元の完全な成果物を選ぶか、先に `pnpm build --target docker --images app` を実行します。このイメージは初期化に使い、稼働中の `app` サービスは更新しません。
+S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAGE_CREATEBUCKET=true` を設定し、アプリ初期化時に不足するバケットだけを作成します。外部 S3 は任意で有効化します。Compose は YAML アンカーを使わず `hai-app` ネットワークを使います。storage だけの更新にアプリイメージは不要で、新規バケットは次回のアプリ初期化時に作成します。
 
 #### マシン同士が接続できない場合：パッケージをコピー
 
@@ -90,9 +113,11 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-既定では `.hai/build/` と同じプロジェクトルートの `.hai/deploy/<環境>/` にデプロイキャッシュ、tar と隣接する -deploy/ 操作ディレクトリを生成します。アーカイブ名はプロジェクト名、配置 ID、アプリ版を含み、例は `bundle-demo-<配置ID>-1.2.3.tar` です。`--output release-prod.tar` を明示すると、コマンドの作業ディレクトリを基準に release-prod-1.2.3.tar と操作ディレクトリを生成します。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
+毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、tar、Compose、環境、web.conf、マニフェストと各 OS のスクリプトを同じ場所に保存します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
 
-隔離された Linux では独立ディレクトリに展開し、`sh apply.sh` を実行します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
+隔離された Linux では交付ディレクトリ全体をコピーし、`sh deploy-local.sh` を実行します。スクリプトが同じ場所の tar を展開し、apply.sh が内容を検証して配置します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
+
+パッケージの `manifest.json` の `partial` と `selectedServices`、実行スクリプトに配置モードと対象を記録します。完全な構築で `--services` を省略すると全量、明示的なサービス選択または部分構築では増分です。増分にはサーバーの成功済み `current` と一致する基準が必要で、初回インストールは拒否します。
 
 サーバーは util-linux の `flock` で配置ルートの `.deploy.lock` に非ブロッキングのカーネルロックを取得し、復元処理の終了まで保持します。通常の前景配置と同期の失敗復元は、後処理と終端結果の公開後に明示解放し、背景サービスの稼働は次の配置を妨げません。このファイルは残し、削除・置換・経過時間による横取りをしないでください。対応するファイルシステムが必要です。HUP/INT/TERM または親 shell の強制終了時は、記述子を継承した実行中の子コマンドが全 holder の終了かサーバー再起動までロックを保持します。旧 `.deploy-lock` ディレクトリは判定に使わず削除もしません。更新前に旧配置プロセスを終了し、旧パッケージを併用しないでください。強制終了・停電では復元 trap が動きません。結果ファイルがなければ実行状態は不明です。コンテナー、イメージ、成功した `current` を確認して新しいパッケージで復旧してください。ロック解放は成功や副作用の取消を意味しません。
 

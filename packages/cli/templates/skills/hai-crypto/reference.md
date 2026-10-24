@@ -229,7 +229,7 @@ const manager = crypto.transport.createServer({ serverKeyRing: ring.data, keySto
 
 ### 传输正文预算与自定义适配器
 
-serv、kit 和客户端统一从根入口导入 `TRANSPORT_BODY_LIMITS`：握手 JSON 16 KiB、单个公钥 4 KiB、明文 1 MiB、密文 JSON 2 MiB + 32 KiB，均为实际 UTF-8 字节上限，不使用 Content-Length 判定。客户端共享握手最多等待 30 秒；单个业务请求取消只中断自己的等待，其 signal 继续用于请求及响应读取。异常加密响应会 reject，不返回原密文。
+业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；resolveTransportBodyLimits 自动推导密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 自定义适配器使用 manager.bodyLimits 和 readTransportBody 消费原流，不 clone/tee；握手返回 maxPlaintextBytes。
 
 根入口纯函数 `readTransportBody(stream, { maxBytes, signal? })` 无需 init，直接消费原始流；超限抛 RangeError，无效 UTF-8 抛 TypeError，保留读取异常或 signal.reason。超限/取消会立即取消流并释放 reader，清理失败不覆盖原异常。不要把 clone/tee 分支交给它，否则另一分支仍可能缓冲正文。成功读取后重建 Request/Response，清除旧 Content-Length/Content-Encoding 并保留 signal。
 

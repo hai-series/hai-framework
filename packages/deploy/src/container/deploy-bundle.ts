@@ -7,7 +7,7 @@ import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
 import { deployM } from '../deploy-i18n.js'
 import { runCommand } from './deploy-command.js'
-import { createApplyScript, createUploadScripts } from './deploy-scripts.js'
+import { createApplyScript, createLocalInstallScript, createUploadScripts } from './deploy-scripts.js'
 
 /**
  * 打包所选服务；完整交付自动导出中间件，服务器启动时禁止联网拉取。
@@ -21,7 +21,7 @@ import { createApplyScript, createUploadScripts } from './deploy-scripts.js'
  * @param options.environment - 部署环境标识，通常为 prod。
  * @param options.config - 已通过 Schema 解析的 docker-ssh 配置。
  * @param options.runtime - 容器引擎策略；auto 探测可用引擎并优先 Podman。
- * @param options.output - tar 输出路径，按应用版本自动补文件名后缀。
+ * @param options.output - 本次独立交付目录内的最终 tar 输出路径。
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
  * @param options.middlewareEnv - 只用于受保护文件的中间件 dotenv 内容。
@@ -57,9 +57,7 @@ export async function createDeploymentBundle(options: {
   containerPort: number
 }): Promise<{ bundlePath: string, instructions: string, startName: string }> {
   const { directory, artifactDir, artifact, projectName, environment, config, selected } = options
-  const stem = basename(options.output).replace(/\.tar$/i, '')
-  const suffix = `-${artifact.appVersion}`
-  const output = resolve(dirname(options.output), `${stem.endsWith(suffix) ? stem : `${stem}${suffix}`}.tar`)
+  const output = resolve(options.output)
   if (!/^[\w.+-]+\.tar$/.test(basename(output)))
     throw new Error(deployM('deploy_bundleNameInvalid'))
   const staging = mkdtempSync(join(directory, '.bundle-'))
@@ -135,17 +133,21 @@ export async function createDeploymentBundle(options: {
     }
     put('.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
     put('middleware.env', options.middlewareEnv)
-    if (selected.includes('web'))
+    if (options.hasWeb)
       put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)
+    if (options.hasWeb) {
+      // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
+      put('proxy-entry.json', JSON.stringify({ services: { web: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
+    }
     put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWeb}:${options.hasWeb ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
     put('image-list', `${imageList.join('\n')}\n`)
     put('dependencies', `${[...dependencies].join('\n')}\n`)
-    if (selected.includes('storage-init'))
-      put('initialize-storage', '')
-    put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: `${config.remote.baseDir}/${projectName}`, runtime: config.remote.runtime, partial: options.partial, selected: selected.filter(name => name !== 'storage-init'), hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
+    put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: `${config.remote.baseDir}/${projectName}`, runtime: config.remote.runtime, partial: options.partial, selected, hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
     const instructionParams = { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: 'compose.json' }
-    const instructions = deployM('deploy_bundleInstructions', { params: instructionParams })
+    const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')
+    const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
+    const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
     put('README.txt', `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, compose: 'compose.json' } })}\n${instructions}\n`)
     const checksums = []
     for (const file of files)
@@ -157,9 +159,11 @@ export async function createDeploymentBundle(options: {
     chmodSync(temporaryTar, 0o600)
     renameSync(temporaryTar, output)
     const upload = createUploadScripts()
-    const scripts = `${output.slice(0, -4)}-deploy`
-    mkdirSync(scripts, { recursive: true, mode: 0o700 })
+    const scripts = directory
+    // 镜像只保存在 tar 中，目录外层提供检查模式所需的清单和说明，避免双份大镜像。
+    copyFileSync(join(staging, 'manifest.json'), join(directory, 'manifest.json'))
     writeFileSync(join(scripts, 'deploy.sh'), upload.sh, { mode: 0o700 })
+    writeFileSync(join(scripts, 'deploy-local.sh'), createLocalInstallScript({ bundle: basename(output), directory: `${config.remote.baseDir}/${projectName}` }), { mode: 0o700 })
     writeFileSync(join(scripts, 'deploy.ps1'), upload.ps1)
     writeFileSync(join(scripts, 'read-target.awk'), upload.reader)
     const target = {
@@ -185,8 +189,8 @@ export async function createDeploymentBundle(options: {
       bundle: deployM('deploy_targetBundle'),
     }
     writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...target, _comments: comments }, null, 2)}\n`)
-    writeFileSync(join(scripts, 'README.txt'), instructions)
-    return { bundlePath: output, instructions: `${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
+    writeFileSync(join(scripts, 'README.txt'), readFileSync(join(staging, 'README.txt'), 'utf8'))
+    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
   }
   finally {
     rmSync(staging, { recursive: true, force: true })

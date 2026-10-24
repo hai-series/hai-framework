@@ -4,6 +4,8 @@
 
 `hai deploy` 首先输入部署环境，或用 `hai deploy --env test` 指定。`.env.test` / `.env.prod` 必须由用户先创建；缺失时停止，不代替用户创建一个空文件继续部署。指定要部署的目录，例如 `hai deploy packages/my-app-serv --env test`，该目录必须对应 lockfile 的一个 importer；不遍历 apps/packages 或猜测 fullstack 布局。环境文件默认取当前目录（有 `.env` 时）或 lockfile 根目录，必要时传 `--env-dir`。
 
+构建与部署配置统一在项目根 `hai.json`：`build` 保存 images/desktop，`deploy` 保存 provider/container/services 等项目级配置。服务目录只扫描运行依赖与模块 YAML。`deploy` 支持 `${变量:回退值}` 和 `HAI_DEPLOY_*` 分层覆盖；父对象可用 JSON 整体覆盖，凭据不要直接写入 hai.json。构建不读取部署环境或密钥。
+
 环境文件遵循项目的六文件规范：`.env.example` 为带说明/枚举/范围的完整清单，`.env` 为公共基础，`.env.dev/test/prod` 为公共环境覆盖，以上五类提交 Git；`.env.local` 为忽略 Git 的本机私有覆盖。加载顺序为进程 > `.env.local` > 目标环境 > `.env`。真实密码、API Key、含认证信息的连接 URL 写 `.env.local`，公共后端和地址写目标环境文件；CLI 仅报告保存结果，不打印环境变量名或值。调用 deploy API 时显式传 `{ environment: 'test', envDir: '/workspace/app' }`，不要用调用者的 `NODE_ENV` 猜测部署目标。
 
 ## 识别与逐项选择
@@ -77,13 +79,13 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 
 构建与部署可分开，也可通过 pnpm run deploy --build 明确串联。构建保持环境无关；部署选择环境并只消费所选镜像。完整包自动包含 Compose 自建中间件镜像，因此导出阶段需要本地 Podman/Docker，缺镜像在打包阶段准备，不能留给隔离服务器下载。
 
-部署缓存、带版本 tar 与 -deploy/ 目录默认位于工程根 .hai/deploy/<环境>/；--output 可显式指定其他 tar 路径，相对命令执行目录解析。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器搬运并解包后执行 sh apply.sh。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
+每次离线交付都放在单一 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 目录，tar、配置、清单与全部入口都在其中。--output release.tar 相对命令目录生成 release-<版本>/release-<版本>.tar，禁止覆盖已有交付目录。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器直接复制整个目录并运行 sh deploy-local.sh，由脚本自动解包并执行部署。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
 
-部分更新通过 --services 指定，使用服务器成功基线保留未选服务和中间件凭据。首次安装不能使用部分包。storage-init 复用应用镜像及 S3 SDK 检查/创建桶，不清空数据；只有涉及存储初始化时执行，并检查退出码。仅更新 storage 仍需含 app 镜像的制品；最近为 web-only 时，用 --artifact-dir 选择原完整制品，或先 pnpm build --target docker --images app。app 镜像仅用于初始化，不会更新 app 服务。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
+manifest.json 的 partial 与 selectedServices、apply 脚本共同记录部署模式：完整构建且未指定 --services 为全量；显式 --services 或部分构建为增量。增量使用服务器成功基线保留未选服务和中间件凭据，首次安装拒绝增量包。S3 createBucket 默认 false，自建 S3 注入 HAI_STORAGE_CREATEBUCKET=true，由 storage.init 检查并创建缺失桶；仅更新 storage 不需要应用镜像，新桶在下次应用初始化时创建。Compose 网络统一 hai-app，不输出 YAML 锚点。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
 
 服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock、支持 flock 的持久化文件系统和容器/目录权限。部署和恢复使用固定 `.deploy.lock` 内核锁，不可删除/替换或按时间抢锁；活跃子命令继承 FD，全部持有进程退出或重启后自动释放。强杀/断电后的执行状态需核对结果文件、current 和容器，不能将锁释放当作恢复成功。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
 
-生成的 `web.conf` 在 API location 设 `client_max_body_size 2129920`（2 MiB + 32 KiB），用 large_client_header_buffers 4 32k / proxy_buffer_size 32k 容纳 X-Hai-Transport 认证头，并配套 proxy_buffers 8 32k，保证关闭 buffering 时也能通过 Nginx 缓冲区配置校验。请求/响应 proxy buffering 保持关闭；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
+生成 web.conf 时从目标环境解析后的 _serv.yml 读取 transport.maxPlaintextBytes，调用 crypto.resolveTransportBodyLimits 推导 client_max_body_size；默认 2129920 字节，8 MiB 明文对应 16809984 字节。请求/响应 buffering 关闭，认证头缓冲固定。SvelteKit 从 _kit.yml 自动推导 adapter-node BODY_SIZE_LIMIT。app 增量包携带代理配置；容量变化时复用现有 Web 镜像重建代理并纳入失败恢复，容量不变保留 Web 容器。容量变化须选择 app；路由/端口/其他代理策略改变仍要求全量部署。应用继续独立限制业务文件、解压和行数。自管代理调用 resolveTransportBodyLimits 获取同一预算。
 
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
 

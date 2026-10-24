@@ -37,14 +37,23 @@ let tmpRoot = ''
 it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
   const project = path.join(tmpRoot, `deploy-${target}`)
   await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: [], packageManager: 'pnpm' }))
-  const loaded = loadDeploymentConfig('deploy', path.join(project, `packages/deploy-${target}-serv/config/_deploy.yml`), {})
+  const loaded = loadDeploymentConfig('deploy', path.join(project, 'hai.json'), {})
   expect(loaded.success).toBe(true)
   if (!loaded.success)
     throw new Error(loaded.error.message)
   expect(loaded.data.container).toEqual({ s3Engine: 'rustfs' })
-  const build = JSON.parse(await readGenerated(project, 'hai.build.json')) as { images: Array<{ name: string, dockerfile: string }> }
+  const build = (JSON.parse(await readGenerated(project, 'hai.json')) as { build: { images: Array<{ name: string, dockerfile: string }> } }).build
   expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(true)
   expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['app', 'web'] : ['app'])
+})
+
+it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中由同一环境值解析', async (appType) => {
+  const name = `capacity-${appType}`
+  const project = path.join(tmpRoot, name)
+  await generateFromTemplates(project, buildTemplateContext({ name, appType, frontends: ['web'], features: ['crypto', 'db'], packageManager: 'pnpm' }))
+  const service = appType === 'api' ? `apps/${name}-service` : `packages/${name}-serv`
+  const loaded = loadDeploymentConfig('serv', path.join(project, service, 'config/_serv.yml'), { HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES: '8388608' })
+  expect(loaded).toMatchObject({ success: true, data: { transport: { maxPlaintextBytes: 8388608 } } })
 })
 
 /**
@@ -99,6 +108,10 @@ it.each([true, false])('部署工具选项 %s 保持依赖、入口和镜像忽�
   expect(manifest.dependencies['@h-ai/deploy']).toBeUndefined()
   expect(manifest.devDependencies['@h-ai/deploy']).toBe(enabled ? 'catalog:' : undefined)
   expect(manifest.scripts.deploy).toBe(enabled ? `hai deploy packages/deployment-${enabled}-serv` : undefined)
+  const projectConfig = JSON.parse(await readGenerated(project, 'hai.json'))
+  expect(projectConfig.build.images).toHaveLength(2)
+  expect(projectConfig.deploy !== undefined).toBe(enabled)
+  expect(await fileExists(project, `packages/deployment-${enabled}-serv/config/_deploy.yml`)).toBe(false)
   expect(await readGenerated(project, '.gitignore')).toContain('**/images/dependencies/')
 })
 

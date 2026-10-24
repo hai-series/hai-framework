@@ -237,7 +237,7 @@ fi
     const evidence = JSON.parse(output.split('\n').find(line => line.startsWith('DIST:'))!.slice(5))
     expect(evidence.stateReader).toBe('function')
     expect(existsSync(evidence.bundle)).toBe(true)
-    const scripts = evidence.bundle.replace(/\.tar$/, '-deploy')
+    const scripts = path.dirname(evidence.bundle)
     execFileSync(runtime, ['cp', path.join(scripts, 'deploy.sh'), `${container}:/fixture/operator.sh`], { windowsHide: true })
     execute('sh -n /fixture/operator.sh')
     if (process.platform === 'win32') {

@@ -91,6 +91,7 @@
   "common_network_error": "ネットワークエラーです。しばらくしてから再試行してください",
   "server_init_db_failed": "データベースの初期化に失敗しました: {message}",
   "server_init_cache_failed": "キャッシュの初期化に失敗しました: {message}",
+  "server_init_storage_failed": "ストレージの初期化に失敗しました: {message}",
   "server_init_iam_failed": "IAMの初期化に失敗しました: {message}",
   "server_error_with_cause": "{message}（原因: {cause}）",
   "server_init_not_initialized": "アプリが初期化されていません。先にinitApp()を呼び出してください。",

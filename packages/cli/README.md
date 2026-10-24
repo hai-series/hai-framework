@@ -21,7 +21,7 @@
 
 ### 安装 CLI
 
-需要符合项目 `engines` 的 Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
+需要符合项目 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
 
 ```sh
 pnpm add -g @h-ai/cli
@@ -50,7 +50,7 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                         |
 | `fullstack`                | contract、API、共享界面与所选 Web/App/Desktop；miniapp 仅预留说明 |
 
-`--template minimal|default|full|custom` 选择模块预设，`--features iam,db,...` 选择业务模块。Fullstack 始终保留默认管理界面所需的 IAM、数据库、缓存、加密、存储和审计；默认不安装 AI/ONNX/CUDA。
+`--template minimal|default|full|custom` 选择模块预设，`--features iam,db,...` 选择业务模块。Fullstack 始终保留默认管理界面所需的 IAM、数据库、缓存、加密、存储和审计；未指定 `--features` 时默认开启 feedback 并补齐 Reach。显式功能列表保留可选模块选择，其它应用类型仍需显式启用反馈。默认不安装 AI/ONNX/CUDA。
 
 独立 `mobile-app` 选择 IAM 或 crypto 时会安装前端 crypto 并默认启用 typed client 加密传输；未选择 crypto 时可连接明确的明文 API。`PUBLIC_API_TRANSPORT=off` 只用于匹配的明文服务，`PUBLIC_API_KEY_EXCHANGE_PATH` 仅覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
 
@@ -89,7 +89,7 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 数据库连接保存前使用所选后端的真实公开 Schema 校验：MySQL `ssl` 仅 `false` 或严格 TLS 对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其模式。CLI 已内联纯 Schema 和 Zod，配置校验不要求目标应用安装数据库包/驱动；实际运行应用仍需相应依赖。部署功能仍须能解析已安装的 `@h-ai/deploy`（生成工程将其作为开发依赖）。
 
-`pnpm build` 只编译源码。镜像使用 `images/` 中独立 Dockerfile，由 `hai.build.json` 指定文件；`--images` 决定构建哪些镜像，`--services` 决定更新哪些服务。容器引擎 auto 优先 Podman，再尝试 Docker。下载、安装和整理生产依赖共用包缓存与 SQLite 驱动缓存，避免重复下载。
+`pnpm build` 只编译源码。镜像使用 `images/` 中独立 Dockerfile，由项目根 `hai.json` 的 `build.images` 指定文件，部署参数放在同文件的 `deploy`；`--images` 决定构建哪些镜像，`--services` 决定更新哪些服务。容器引擎 auto 优先 Podman，再尝试 Docker。下载、安装和整理生产依赖共用包缓存与 SQLite 驱动缓存，避免重复下载。
 
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库。需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 
@@ -132,7 +132,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates --list --json
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-生成门禁保留十个场景，逐应用类型执行真实安装、编译及 HTTP/浏览器验收。scaffold 与生成路由 runtime 两个重型文件分批顺序执行，避免实测的构建和安装资源争用；三个语言、CLI 进程和环境消费文件可与 runtime 在最多两个 worker 内并行。各场景复用 E2E 入口自带的完整构建，原有生产构建隔离检查在 E2E 后验证非空的真实产物。真实容器部署按运行形态选取 API、SSR（admin 代表 website/h5 共用的 Dockerfile 与部署分支）、静态移动前端和 fullstack；资源拥有权、认证/传输、增量更新、损坏制品与回滚验收保留。部署夹具启用 init 并验证孤儿进程实际回收；快速 Nginx 门禁用生产同版本镜像对部署包执行 `nginx -t`，普通单测不探测引擎。workspace 的 compile 通过真实依赖图构建 contract，fullstack 先准备共享 i18n，避免重复编译 contract。
+生成门禁保留十一个场景，逐应用类型执行真实安装、编译及 HTTP/浏览器验收。scaffold 与生成路由 runtime 两个重型文件分批顺序执行，避免实测的构建和安装资源争用；三个语言、CLI 进程和环境消费文件可与 runtime 在最多两个 worker 内并行。各场景复用 E2E 入口自带的完整构建，原有生产构建隔离检查在 E2E 后验证非空的真实产物。真实容器部署按运行形态选取 API、SSR（admin 代表 website/h5 共用的 Dockerfile 与部署分支）、静态移动前端和 fullstack；资源拥有权、认证/传输、增量更新、损坏制品与回滚验收保留。部署夹具启用 init 并验证孤儿进程实际回收；快速 Nginx 门禁用生产同版本镜像对部署包执行 `nginx -t`，普通单测不探测引擎。workspace 的 compile 通过真实依赖图构建 contract，fullstack 先准备共享 i18n，避免重复编译 contract。
 
 脚手架门禁生成真实项目，执行安装、typecheck、lint、build、test 和浏览器测试，同时覆盖生成路由的实际 HTTP 入口、CLI 进程语言选择和环境文件消费；`--generate`、`--i18n` 可分别定向复测。部署门禁覆盖实际资源拥有权、动态宿主端口隔离，以及离线包、SSH/人工发布、增量更新和回滚。只回收本轮已记录的容器 ID 和私有镜像 tag；安全元数据报告保留在 ignored `tmp/validation/module-review/VERIFY-05/`。已生成的浏览器截图、trace 和报告默认保留在 ignored `tmp/validation/module-review/scaffold-browser/` 或 `deploy-browser/`；也可显式指定证据、HTML 报告和输出目录。临时工程、密钥、数据及进程仍自动回收。原生壳和真实云服务单独验收。
 
@@ -154,7 +154,7 @@ UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)�
 
 ### 问题反馈与离线分析
 
-使用 `hai create my-app --type fullstack --frontends web --features feedback --yes` 或 API 工程启用反馈；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
+使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。登录用户可提交反馈，管理员才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
 
 离线工具：`hai feedback summary <包.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view`。查看器仅本机监听，Ctrl+C 关闭，无需生产连接。
 

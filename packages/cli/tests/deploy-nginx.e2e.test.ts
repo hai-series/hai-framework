@@ -3,9 +3,11 @@ import type { DeployFixtureCleanupFailure, DeployTestFixture } from './helpers/d
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from './helpers/deploy-container-fixture.js'
@@ -95,4 +97,61 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     expect(checked).toContain('test is successful')
     expect(checked).toContain('NGINX_EXIT:0')
   }, 60_000)
+
+  it('正式配置生成的真实 Nginx 允许 4 MiB XLSX 加密上传和大 JSON 响应，拒绝超限密文', async () => {
+    if (!fixture)
+      throw new Error('Expected an owned proxy fixture')
+    const maxPlaintextBytes = 8 * 1024 * 1024
+    const limits = resolveTransportBodyLimits(maxPlaintextBytes)
+    const image = 'docker.io/library/node:24.22.1-bookworm-slim'
+    ensureDeployTestBaseImage(runtime, image, 30_000)
+    let nodeContainer: string | undefined
+    try {
+      const project = path.join(root, 'capacity-project')
+      const artifacts = path.join(project, '.hai/build/docker/capacity')
+      mkdirSync(artifacts, { recursive: true })
+      mkdirSync(path.join(project, 'config'))
+      writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'proxy-capacity', version: '1.2.3' }))
+      writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
+      writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=test\nHAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}\n`)
+      writeFileSync(path.join(project, 'config/_serv.yml'), `transport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
+      const images = ['app', 'web'].map((name) => {
+        const file = `${name}-1.2.3.tar`
+        writeFileSync(path.join(artifacts, file), name)
+        return { name, file, imageRef: `localhost/proxy-capacity-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 18080 : 3000 }
+      })
+      writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'capacity', hasWeb: true, images }))
+      await deploy.close()
+      expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
+      const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
+      if (!bundle.success)
+        throw new Error(bundle.error.message)
+      if (!bundle.data.bundlePath)
+        throw new Error('Expected a public deployment bundle')
+      const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+      expect(proxy).toContain(`client_max_body_size ${limits.encryptedPayloadBytes};`)
+      const source = path.join(root, 'capacity-nginx.conf')
+      writeFileSync(source, `pid /tmp/capacity-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://app:', 'http://127.0.0.1:')}\n}\n`)
+      execFileSync(runtime, ['cp', source, `${fixture.containerId}:/tmp/capacity-nginx.conf`], { windowsHide: true })
+      await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/capacity-nginx.conf'], { timeoutMs: 15_000 })
+      // Node 与真实 Nginx 共用本次容器网络，不依赖 Windows 宿主回连或外部网络。
+      const require = createRequire(import.meta.url)
+      const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
+      const flow = path.join(root, 'transport-flow.mjs')
+      execFileSync(process.execPath, [builder, path.resolve('tests/fixtures/transport-capacity-node.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', `--outfile=${flow}`, '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);'], { windowsHide: true, timeout: 15_000 })
+      const identity = execFileSync(runtime, ['create', '--network', `container:${fixture.containerId}`, '-e', 'NODE_ENV=test', '-e', `HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}`, '--entrypoint', 'node', image, '/tmp/transport-flow.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
+      if (!/^[a-f0-9]{64}$/.test(identity))
+        throw new Error('Expected an owned Node container identity')
+      nodeContainer = identity
+      execFileSync(runtime, ['cp', flow, `${nodeContainer}:/tmp/transport-flow.mjs`], { windowsHide: true, timeout: 15_000 })
+      const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 60_000 })
+      expect(output).toContain('TRANSPORT_CAPACITY_PASS')
+    }
+    finally {
+      if (nodeContainer) {
+        execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000 })
+        expect(spawnSync(runtime, ['inspect', nodeContainer], { windowsHide: true, stdio: 'ignore' }).status).not.toBe(0)
+      }
+    }
+  }, 120_000)
 })

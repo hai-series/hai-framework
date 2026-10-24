@@ -252,7 +252,7 @@ const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 
 空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
 
-serv、kit、クライアントは `TRANSPORT_BODY_LIMITS` を共有します。鍵交換 JSON は 16 KiB、公開鍵は 1 個あたり 4 KiB、平文は 1 MiB、暗号文 JSON は 2 MiB + 32 KiB です。すべて実際の UTF-8 バイト数で計算します。クライアントの鍵交換は最大 30 秒です。超過、不正 UTF-8、キャンセル時は元のストリームを停止して reader を解放し、clone/tee は作りません。呼び出し元の signal を維持し、1 件のキャンセルは他のリクエストと共有する鍵交換に影響しません。不正な暗号化応答は生の暗号文を返さず reject します。
+`transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [容量配置、文件换算与升级](TRANSPORT-CAPACITY.md)。
 
 独自 HTTP アダプターではルート入口の純粋関数 `readTransportBody(stream, { maxBytes, signal? })` を `crypto.init()` なしで利用できます。元のストリームを渡し、読み取り後は Request/Response を再構築して古い Content-Length/Content-Encoding を削除してください。上限超過は RangeError、不正 UTF-8 は TypeError、読み取り例外・signal.reason は元の理由で拒否します。ストリームのキャンセル処理が失敗しても元の例外を維持します。
 

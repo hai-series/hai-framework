@@ -18,7 +18,7 @@ description: "配置 hai 应用启动、YAML/环境变量、日志、i18n 与 Ha
 ## 使用路径
 
 - Node 启动用 core.init({ configDir }) 加载配置；勿传 logging 覆盖 _core.yml 中的日志设置，除非任务明确要求。
-- 自动加载和监听精确跳过 `_deploy.yml` / `_deploy.yaml`，部署 CLI 按目标环境和凭据独立解析；业务 `deploy.yml`、手动 `config.load` 不受影响。单项 load 返回失败时记日志并继续，必需配置须 validate 并检查 success；目录扫描、日志设置等异常仍可能传播。
+- 自动加载和监听配置目录内所有 YAML；项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取，不进入运行时配置。单项 load 返回失败时记日志并继续，必需配置须 validate 并检查 success；目录扫描、日志设置等异常仍可能传播。
 - 应用名称、版本、环境、默认语言和日志设置统一从 `_core.yml` 经 core.config 获取，日志使用 core.logger；UI 不另维护硬编码副本。SvelteKit layout / fullstack app.info 仅下发公开字段白名单；独立 Vite mobile-app 在 Node 构建时解析并注入公开默认值，修改这些编译默认值需要重新构建。静态 Web 的公开 API 地址等通过 `runtime-config.js` 覆盖时无需重建镜像，原生包在复制静态资源前准备配置入口。浏览器不加载 YAML，不接收完整模块配置、密钥或日志脱敏上下文。
 - `HAI_<配置名>_<路径>` 可整体覆盖根/对象/数组；父节点优先，未覆盖时才遍历已有叶子。camelCase 不拆词，约定变量优先于显式插值。
 - 环境文件采用六类：`.env.example` 完整列出字段用途、默认值、枚举和范围；`.env` 为公共基础；`.env.dev`、`.env.test`、`.env.prod` 为公共环境覆盖，这五类均提交 Git。`.env.local` 为本机私有配置，不提交 Git。优先级为进程环境 > `.env.local` > 环境文件 > `.env`；Vite 在 Node 配置阶段调用 `core.config.loadEnvFiles({ mode, envDir })` 并检查 success 后注入进程，Node 脚本按相同顺序传入 `--env-file`。`core.init` 不自行读取 dotenv。

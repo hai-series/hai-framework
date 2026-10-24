@@ -89,6 +89,6 @@ requestId 至少保留到 issuedAt + 6 分钟，覆盖节点之间的最大 60 �
 - 普通响应：JSON 正文承载封装。HEAD、204、304 或实际无正文响应：封装放在 `X-Hai-Transport` 响应头。
 - 同一消息不允许同时用头和正文承载封装。CORS 需允许并暴露 X-Hai-Transport。
 
-预算均按 UTF-8 实际字节：握手 JSON 16 KiB、公钥 4 KiB、明文 1 MiB、正文封装 2 MiB + 32 KiB、头封装 16 KiB。已验证最大 UTF-8 正文加 8 KiB 路径的真实算法封装可容纳；读取超限/取消必须取消原流并释放 reader。生成的 Nginx 使用 client_max_body_size=2129920 和 32 KiB 请求/上游头缓冲；自有代理须保留认证头及预算。
+业务预算由 maxPlaintextBytes 配置，默认明文 1 MiB，范围 1 KiB～64 MiB；密文预算由 resolveTransportBodyLimits 推导为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、头封装 16 KiB、路径 8 KiB 及所有认证/防重放约束保持独立。读取超限/取消必须取消原流并释放 reader；生成的代理与 adapter-node 使用同一派生预算。详见 [容量配置与升级](TRANSPORT-CAPACITY.md)。
 
 明文接口通过服务端 excludePaths 和对应客户端排除规则显式隔离。kit 不提供 requireEncryption/encryptResponse 降级开关；业务拒绝响应经 transport 返回时也应认证。

@@ -34,14 +34,14 @@
 ```typescript
 import { core } from '@h-ai/core'
 
-// 自动加载运行时 .yml / .yaml，跳过 _deploy.yml / _deploy.yaml
+// 自动加载配置目录内所有 .yml / .yaml
 core.init({ configDir: './config' })
 
 // 也可指定日志级别和配置监听
 core.init({ configDir: './config', watchConfig: true })
 ```
 
-`_deploy.yml` / `_deploy.yaml` 由部署 CLI 在加载目标环境与凭据后独立解析，不参加 Core 的自动加载和监听；业务 `deploy.yml`、手动 `core.config.load` 不受影响。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
+项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取；Core 自动加载和监听配置目录内所有 YAML，不设置保留文件名。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
 
 ### 2. 使用功能
 

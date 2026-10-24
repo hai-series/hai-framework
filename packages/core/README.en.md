@@ -284,7 +284,7 @@ if (!result.success) {
 
 > Browsers have no filesystem access. `core.config` offers placeholder APIs only: file-related methods return `SERVICE_UNAVAILABLE` and do not load YAML.
 
-Node automatically loads and watches runtime `.yml` / `.yaml` files, excluding exactly `_deploy.yml` and `_deploy.yaml`. The deployment CLI parses those reserved files after loading its target environment and credentials. Business `deploy.yml` and explicit `core.config.load` remain supported. A failed per-file load result is logged and loading continues; applications must validate required configuration and check `success`. Directory scanning, logger setup and other exceptions may still propagate.
+Node automatically loads and watches all `.yml` / `.yaml` files in the configuration directory. The CLI reads `build` / `deploy` from the project root `hai.json`; no YAML filename needs special handling. A failed per-file load result is logged and loading continues; applications must validate required configuration and check `success`. Directory scanning, logger setup and other exceptions may still propagate.
 
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
@@ -292,7 +292,7 @@ import { z } from 'zod'
 
 // 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
+  configDir: './config', // 扫描配置目录内所有 .yml / .yaml
   watchConfig: true, // 监听变更并自动重载
 })
 

@@ -52,6 +52,12 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
     expectedFiles: ['packages/sample-fullstack-feedback-shared/src/lib/pages/feedback.svelte', 'packages/sample-fullstack-feedback-serv/config/_feedback.yml'],
   },
   {
+    title: 'api-transport',
+    projectName: 'sample-api-transport',
+    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'crypto,db', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    expectedFiles: ['apps/sample-api-transport-service/config/_serv.yml', 'e2e/api-service.spec.ts'],
+  },
+  {
     title: 'api',
     projectName: 'sample-api',
     createArgs: ['--type', 'api', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],

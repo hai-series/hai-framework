@@ -148,10 +148,14 @@ checksum の中止時は次のチャンクを待つ処理を終了し、入力�
 
 ### 設定
 
-- **S3**：`bucket / region / accessKeyId / secretAccessKey` は必須。`endpoint / forcePathStyle / prefix / publicUrl` は任意。
+- **S3**：`bucket / region / accessKeyId / secretAccessKey` は必須。`createBucket / endpoint / forcePathStyle / prefix / publicUrl` は任意。
 - **Local**：`root` は必須。`directoryMode / fileMode` は任意。
 
-MinIO と RustFS は S3 Provider を共有し、`type: 's3'` を使います。専用のストレージ種別は不要です。自前のインスタンスでは S3 API endpoint（通常ポート 9000）とパス形式を設定し、バケットは事前に作成してください。
+MinIO と RustFS は S3 Provider を共有し、`type: 's3'` を使います。専用のストレージ種別は不要です。自前のインスタンスでは S3 API endpoint（通常ポート 9000）とパス形式を設定します。
+
+`createBucket` の既定値は `false` で、既存バケットが必要です。`true` では `storage.init()` が HeadBucket を確認し、明示的な 404 の場合のみ作成します。既存バケットとオブジェクトは保持します。権限・ネットワーク・作成・後続の接続確認が失敗すると、失敗結果を返しクライアントを解放して未初期化状態を維持します。同時作成の `BucketAlreadyOwnedByYou` は再度アクセスを確認してから受け入れます。AWS `us-east-1` では LocationConstraint を省略し、他のリージョンでは設定値を渡します。標準の自前 S3 デプロイでは `HAI_STORAGE_CREATEBUCKET=true` を有効にし、外部 S3 は必要な権限に応じて明示的に設定します。
+
+YAML では `createBucket: ${HAI_STORAGE_CREATEBUCKET:false}` で環境変数を参照し、`storage.init()` への直接入力は真偽値を使います。
 
 ```ts
 const initResult = await storage.init({
@@ -162,6 +166,7 @@ const initResult = await storage.init({
   accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
   secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
   forcePathStyle: true,
+  createBucket: true,
 })
 if (!initResult.success) {
   throw new Error(initResult.error.message)

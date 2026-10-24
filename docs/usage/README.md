@@ -21,7 +21,7 @@
 
 | 工作 | 需要准备什么 |
 | --- | --- |
-| 创建、开发、编译、运行 CLI | Node.js `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0`，pnpm 12.11.2；以项目 `engines`、`packageManager` 为准 |
+| 创建、开发、编译、运行 CLI | Node.js `^22.23.4 \|\| ^24.22.1 \|\| ^26.12.1`，pnpm 12.11.2；以项目 `engines`、`packageManager` 为准 |
 | 管理版本、AI 按文档实施 | Git；能读取项目文件并执行命令的 AI 编程助手 |
 | 构建容器镜像 | 已安装且运行中的 Podman 或 Docker；Windows 上使用 Linux 容器环境 |
 | 生成桌面安装包 | 对应系统上的 Rust、目标架构工具链、Tauri 所需系统 SDK 和打包工具 |
@@ -151,15 +151,40 @@ pnpm build --target desktop --platform windows --arch x64
 | `--sqlite-prebuild-mirror` | SQLite 预编译包的可信 HTTP(S) 根地址 |
 | `--platform` / `--arch` | 原生安装包的系统与架构 |
 
-#### 用 hai.build.json 描述要打什么包
+#### 用 hai.json 描述要打什么包
 
 ```json
 {
-  "images": [
-    { "name": "app", "context": ".", "dockerfile": "images/app.Dockerfile", "containerPort": 3000 },
-    { "name": "web", "context": ".", "dockerfile": "images/web.Dockerfile", "containerPort": 8080 }
-  ],
-  "desktop": ["apps/demo-desktop"]
+  "build": {
+    "images": [
+      {
+        "name": "app",
+        "context": ".",
+        "dockerfile": "images/app.Dockerfile",
+        "containerPort": 3000
+      },
+      {
+        "name": "web",
+        "context": ".",
+        "dockerfile": "images/web.Dockerfile",
+        "containerPort": 8080
+      }
+    ],
+    "desktop": [
+      "apps/demo-desktop"
+    ]
+  },
+  "deploy": {
+    "provider": {
+      "type": "docker-ssh",
+      "expose": {
+        "hostPort": "${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18080}"
+      }
+    },
+    "container": {
+      "s3Engine": "rustfs"
+    }
+  }
 }
 ```
 
@@ -175,16 +200,11 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 先准备环境与部署目标
 
-准备 `.env.<环境>`，例如 `.env.prod`，以及服务目录的 `config/_deploy.yml`。fullstack 的根 deploy 脚本指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-service`；这是配置扫描入口，镜像清单仍在工程根。
+准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-service`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
-```yaml
-provider:
-  type: docker-ssh
-  expose:
-    hostPort: 18080
-container:
-  s3Engine: rustfs
-```
+`deploy` 支持 `${变量:回退值}` 与 `HAI_DEPLOY_*` 分层覆盖（例如 `HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT`）；父对象可用 JSON 整体覆盖。部署变量优先级为进程环境 > `.env.local` > `.env.<环境>` > `.env`，凭据保存在私有环境文件。构建不加载部署环境和密钥。
+
+已有项目需把原构建对象移入 `hai.json.build`，把原部署 YAML 转成 JSON 放入 `hai.json.deploy`，删除原文件并保留现有 `HAI_DEPLOY_*` 变量。已有自建 S3 的项目首次升级必须全量部署：旧成功基线仍含已退出的一次性初始化服务，直接使用新增量包会被依赖存活检查拒绝；全量部署同时刷新中间件环境中的 `createBucket`，之后即可继续增量更新。
 
 直接部署时，向导按“服务器地址、SSH 登录用户、私钥文件、访问端口”等说明补齐缺少的配置，并复用已有完整配置。SSH 参数仅写本机 `.env.local`；私钥只保存路径。`--bundle-only` 不询问 SSH 连接信息，后续上传前在 `deploy-target.json` 中填写。
 
@@ -214,11 +234,11 @@ pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
 ```
 
-部分更新需要服务器已有成功的完整安装，并且端口、应用布局相同。以服务器成功状态为基线，只替换选中的镜像和配置，保留其他服务、连接与卷。部署脚本先按项目和服务名移除选中的旧容器（保留数据卷），再执行 `compose up -d --no-deps --no-build --pull never --no-recreate web` 创建新容器；其他容器保持运行，不执行整个项目 down。首次安装使用完整包。storage-init 是创建 S3 桶的一次性任务，只在涉及存储初始化时执行，成功后再启动应用。
+部分更新需要服务器已有成功的完整安装，并且端口、应用布局相同。以服务器成功状态为基线，只替换选中的镜像和配置，保留其他服务、连接与卷。部署脚本先按项目和服务名移除选中的旧容器（保留数据卷），再执行 `compose up -d --no-deps --no-build --pull never --no-recreate web` 创建新容器；其他容器保持运行，不执行整个项目 down。首次安装使用完整包。自建 S3 的桶由应用的 `storage.init()` 按可选 `createBucket` 初始化。
 
 命令中的 `-d` 表示后台启动，`--no-deps` 不连带启动或重启依赖，`--no-build` 不在服务器编译，`--pull never` 禁止拉取镜像，`--no-recreate` 保留仍存在的容器；选中的旧容器已由脚本移除，因此会创建新容器，末尾 `web` 是 Compose 服务名（不是镜像标签）。多个服务用空格分隔。
 
-`storage-init` 复用应用镜像内的 S3 SDK，等待存储服务就绪并检查桶；桶存在就跳过，不删除数据。脚本先启动 storage，再执行 `compose up --no-deps --no-build --pull never --force-recreate --exit-code-from storage-init storage-init`；初始化退出码为 0 后才启动选中应用。 部分更新时，脚本先移除旧的 storage-init 容器，并将该命令的 `--force-recreate` 改为 `--no-recreate`，避免连带重建应用。只更新 `storage` 时，初始化仍需包含 `app` 镜像的制品；若最近只构建了 Web，用 `--artifact-dir` 选择原完整制品，或先执行 `pnpm build --target docker --images app`。该镜像用于初始化，不会更新正在运行的 `app` 服务。
+S3 的 `createBucket` 默认为 `false`；部署器为自建 S3 注入 `HAI_STORAGE_CREATEBUCKET=true`，应用初始化时检查并创建缺失的桶，已有桶保持不变。外部 S3 由用户决定是否启用。Compose 使用 `hai-app` 网络，不生成 YAML 锚点。只更新 `storage` 无须应用镜像；新的桶在下次应用初始化时创建。
 
 
 #### 两机不通：生成包，手工复制
@@ -227,9 +247,11 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-默认将部署缓存、tar 和同名 `-deploy/` 操作目录放到工程根 `.hai/deploy/<环境>/`，与 `.hai/build/` 使用同一工程根。归档名包含项目名、部署 ID 和应用版本，例如 `bundle-demo-<部署ID>-1.2.3.tar`。显式传入 `--output release-prod.tar` 时，按命令执行目录输出 `release-prod-1.2.3.tar` 和相邻操作目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
+每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，tar、Compose、环境、web.conf、清单与跨平台脚本全部在其中，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
 
-完全隔离的 Linux 服务器上，将 tar 解到独立目录，运行 `sh apply.sh`，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
+完全隔离的 Linux 服务器上，复制整个交付目录后运行 `sh deploy-local.sh`；脚本自动校验和解包同目录 tar，再调用包内 apply.sh，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
+
+离线包的 `manifest.json` 用 `partial` 与 `selectedServices` 明确记录模式和本次服务；执行脚本固化同一选择，不靠文件名猜测。不指定 `--services` 且使用完整构建时为全量；指定 `--services` 或使用部分构建时为增量。增量包必须匹配服务器 `current` 的成功基线，首次安装会拒绝。
 
 #### 完全离线前再核对一次
 

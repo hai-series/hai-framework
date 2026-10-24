@@ -5,7 +5,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { EncryptedRequestPayload, TransportEncryptionManager, TransportMessageContext } from './crypto-transport-types.js'
 import { ok } from '@h-ai/core'
-import { readTransportBody, TRANSPORT_BODY_LIMITS } from './crypto-transport-body.js'
+import { readTransportBody, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
 import { isValidEncryptedPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 
@@ -47,9 +47,10 @@ export async function authenticateTransportRequest(
   if ((bodyless && (!envelope || request.body !== null)) || (!bodyless && envelope !== null))
     return reject()
   if (envelope && new TextEncoder().encode(envelope).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
-    throw new RangeError('Transport request envelope byte limit exceeded')
+    throw new TransportBodyTooLargeError(TRANSPORT_BODY_LIMITS.envelopeHeaderBytes, new TextEncoder().encode(envelope).byteLength, { stage: 'header' })
   const text = envelope ?? await readTransportBody(request.body, {
-    maxBytes: TRANSPORT_BODY_LIMITS.encryptedPayloadBytes,
+    maxBytes: manager.bodyLimits.encryptedPayloadBytes,
+    stage: 'encrypted',
     signal: request.signal,
   })
   let payload: unknown
@@ -59,7 +60,7 @@ export async function authenticateTransportRequest(
   catch {
     return transportAuthenticationFailure()
   }
-  if (!isValidEncryptedPayload(payload) || payload.direction !== 'request' || payload.status !== 0)
+  if (!isValidEncryptedPayload(payload, manager.bodyLimits) || payload.direction !== 'request' || payload.status !== 0)
     return transportAuthenticationFailure()
   const url = new URL(request.url)
   const decrypted = await manager.decryptRequest(payload as EncryptedRequestPayload, {
@@ -67,10 +68,13 @@ export async function authenticateTransportRequest(
     method: request.method,
     path: url.pathname + url.search,
   })
-  if (!decrypted.success)
+  if (!decrypted.success) {
+    if (decrypted.error.cause instanceof TransportBodyTooLargeError)
+      throw decrypted.error.cause
     return decrypted
-  if (new TextEncoder().encode(decrypted.data).byteLength > TRANSPORT_BODY_LIMITS.plaintextBytes)
-    throw new RangeError('Transport request plaintext byte limit exceeded')
+  }
+  if (new TextEncoder().encode(decrypted.data).byteLength > manager.bodyLimits.plaintextBytes)
+    throw new TransportBodyTooLargeError(manager.bodyLimits.plaintextBytes, new TextEncoder().encode(decrypted.data).byteLength)
   if (bodyless && decrypted.data !== '')
     return transportAuthenticationFailure()
   return ok({ plaintext: decrypted.data, context: payload.context })

@@ -165,11 +165,8 @@ export async function initApp(): Promise<void> {
     if (storageConfig) {
       trackOwned(storage)
       const storageResult = await storage.init(storageConfig)
-      if (!storageResult.success) {
-        core.logger.warn('Storage initialization failed, file upload unavailable', {
-          error: storageResult.error.message,
-        })
-      }
+      if (!storageResult.success)
+        throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
     }
 
     // 7. 未配置 Key 时不启用 AI；启用后共享依赖失败不能静默降级。

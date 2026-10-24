@@ -79,6 +79,7 @@ function authenticatedGetHeaders() {
 
 function createFailingEncryptManager(): TransportEncryptionManager {
   return {
+    bodyLimits: TRANSPORT_BODY_LIMITS,
     getServerKeyId: () => 'test-v1',
     getServerPublicKey: () => 'server-public-key',
     registerClientKey: async () => 'client-id',
@@ -257,7 +258,9 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     const response = await dispatch(handle, new Request('http://localhost/api/data', { headers: authenticatedGetHeaders() }), () => new Response(body, { headers: { 'Content-Type': 'application/json', 'Content-Length': '1' } }))
     expect(response.status).toBe(500)
     expect(await response.text()).not.toContain('你')
-    expect(encrypt).not.toHaveBeenCalled()
+    expect(encrypt).toHaveBeenCalledOnce()
+    expect(encrypt.mock.calls[0]?.[1]).not.toContain('你')
+    expect(JSON.parse(encrypt.mock.calls[0]![1])).toMatchObject({ success: false, error: { code: 'hai:crypto:070', details: { direction: 'response' } } })
     expect(cancel).toHaveBeenCalledOnce()
     expect(body.locked).toBe(false)
   })

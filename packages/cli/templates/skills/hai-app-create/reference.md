@@ -313,7 +313,7 @@ interface CreateArticleInput {
 
 ## 初始化顺序
 
-CLI 项目统一忽略 `**/data/`，含根目录、workspace 子目录及 `.gitkeep`；数据库/上传文件不入 Git。Fullstack 的服务端 config 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、deploy、feedback 共 14 份 YAML，未启用模块整份注释，可选字段及替代 Provider 按块注释，`.env.example` 也保留未启用模块的注释凭据。
+CLI 项目统一忽略 `**/data/`，含根目录、workspace 子目录及 `.gitkeep`；数据库/上传文件不入 Git。Fullstack 的服务端 config 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、feedback 共 13 份 YAML；构建部署配置统一位于项目根 hai.json，未启用模块整份注释，可选字段及替代 Provider 按块注释，`.env.example` 也保留未启用模块的注释凭据。
 
 H5 所有页面继承根布局的 header/footer；认证页隐藏底部导航，业务页面使用 `@h-ai/ui` 的 `BottomNav` 与移动端壳样式，导航启用 centered/maxWidth/safeArea，与页面同宽。
 
@@ -335,7 +335,7 @@ core.init() → crypto.init() → reldb.init() → cache.init() → iam.init() �
 
 仅涉及容器构建/部署变更时使用本节；普通功能开发无需每次启动镜像。
 
-- 保持脚手架 `images/*.Dockerfile`、`.dockerignore` 与 `package.json` 中 `build` / `compile` 命令与 hai.build.json同步。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
+- 保持脚手架 `images/*.Dockerfile`、`.dockerignore` 与 `package.json` 中 `build` / `compile` 命令与 hai.json 的 build/deploy 配置同步。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 - Podman 多阶段构建保持 `--format docker --jobs=1`；前者保留 `HEALTHCHECK`，后者避免部分 Podman 5.8/Buildah 组合在并行 stage 构建时触发内部 semaphore panic。
 - 先复制 lockfile、workspace 配置与构建器准备的 `images/dependencies/` 安装输入执行 `pnpm fetch --ignore-scripts`，再复制源码并离线安装、构建；fetch、安装和 `pnpm pm deploy` 共用 pnpm store，安装与生产依赖整理共用 SQLite 驱动缓存，避免重复下载，兼容新增 workspace、本地归档与补丁。
 - 默认容器面向 CPU 运行或远程 AI 服务，Dockerfile 设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，跳过额外 CUDA/TensorRT 下载；使用宿主机 GPU 时定制镜像和运行参数，不修改本机 npm 或全局 AI/GPU 配置。

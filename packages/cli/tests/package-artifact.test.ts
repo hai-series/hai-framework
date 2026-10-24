@@ -112,7 +112,7 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   const version = (await fse.readJson(path.join(packageRoot, 'package.json')) as { version: string }).version
   await fse.writeJson(path.join(app, 'package.json'), { name: 'schema-app', version: '1.0.0', type: 'module', dependencies: { '@h-ai/reldb': version } })
   await fse.writeFile(path.join(app, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reldb': { version } } } }, packages: { [`@h-ai/reldb@${version}`]: {} }, snapshots: { [`@h-ai/reldb@${version}`]: {} } }))
-  await fse.writeFile(path.join(app, 'config/_deploy.yml'), 'provider:\n  type: docker-ssh\n')
+  await fse.writeJson(path.join(app, 'hai.json'), { deploy: { provider: { type: 'docker-ssh' } } })
   const envFile = path.join(app, '.env.test')
   const args = ['deploy', '--env', 'test', '--yes', '--bundle-only', '--artifact-dir', 'absent-artifact']
   await fse.writeFile(envFile, 'HAI_CORE_ENV=test\n')

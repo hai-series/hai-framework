@@ -16,12 +16,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
-import { stringify } from 'yaml'
+import { parse, stringify } from 'yaml'
 import { getCliVersion } from '../cli-utils.js'
 import { parameterizeConfig } from './cli-config-environment.js'
 import { generateConfigFile } from './cli-config-templates.js'
 
 // 注册自定义 Handlebars helpers
+Handlebars.registerHelper('deploymentConfig', () => JSON.stringify(parse(generateConfigFile('deploy')), null, 2))
 Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
   return a === b ? options.fn(this) : options.inverse(this)
 })
@@ -1354,6 +1355,9 @@ function shouldCopyRenderedStaticPathFile(relPath: string, context: TemplateCont
 }
 
 function normalizeRenderedContent(content: string, outRelPath: string): string {
+  // 项目工具配置由多个模板分区组合，写入前统一校验 JSON 并规范缩进。
+  if (path.basename(outRelPath) === 'hai.json')
+    return `${JSON.stringify(JSON.parse(content), null, 2)}\n`
   const normalizedLineEndings = content.replace(/\r\n/g, '\n')
   const ext = path.extname(outRelPath)
   const normalized = NORMALIZED_RENDER_EXTENSIONS.has(ext)

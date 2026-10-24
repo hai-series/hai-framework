@@ -159,6 +159,8 @@ pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
 
+Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md).
+
 ## Logical request observation
 
 `client.observeRequests` observes each logical call once and returns an unsubscribe function. Records contain requestId, procedure, duration, HTTP status, final success/errorCode, and business request attempts. A failed HaiResult with HTTP 200 is a failure. Authentication retries retain the same requestId. Records exclude bodies, tokens, and URL query parameters. Refresh and key exchange are not presented as user operations. close clears subscriptions, so subscribe again after reinitializing.

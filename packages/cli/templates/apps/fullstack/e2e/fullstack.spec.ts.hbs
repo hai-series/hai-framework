@@ -533,11 +533,16 @@ test('feedback submits an empty description and administrator can process and re
     context.fillRect(0, 0, 64, 64)
     return canvas.toDataURL('image/png').split(',')[1]!
   }), 'base64')
+  // 大于框架默认 1 MiB 的真实日志必须经加密 HTTP 上传，并从服务端问题包逐字节取回。
+  const feedbackLog = Buffer.from('INFO feedback diagnostic: operation completed successfully\n'.repeat(36 * 1024))
+  expect(feedbackLog.byteLength).toBeGreaterThan(1024 * 1024)
+  expect(feedbackLog.byteLength).toBeLessThan(5 * 1024 * 1024)
   await page.getByTestId('feedback-open').click()
   const dialog = page.getByRole('dialog')
   await dialog.locator('summary').filter({ hasText: /更多选项|More options|その他のオプション/ }).click()
   await dialog.locator('input[type=file]').setInputFiles([
     { name: 'attached-preview.png', mimeType: 'image/png', buffer: feedbackImage },
+    { name: 'attached-large-log.txt', mimeType: 'text/plain', buffer: feedbackLog },
     { name: 'discarded.txt', mimeType: 'text/plain', buffer: Buffer.from('discarded local material') },
   ])
   const uploaded = dialog.locator('img[alt="attached-preview.png"]')
@@ -609,6 +614,11 @@ test('feedback submits an empty description and administrator can process and re
   if (!masked)
     throw new Error('The exported masked attachment is missing')
   expect(bundle.files[masked.path]).toEqual(new Uint8Array(maskedPreview.bytes))
+  const largeLog = bundle.manifest.files.find(file => file.kind === 'attachment' && file.name === 'attached-large-log.txt')
+  expect(largeLog?.contentType).toBe('text/plain')
+  if (!largeLog)
+    throw new Error('The exported large log attachment is missing')
+  expect(bundle.files[largeLog.path]).toEqual(new Uint8Array(feedbackLog))
   expect(bundle.manifest.files.some(file => file.name === 'discarded.txt')).toBe(false)
   await testInfo.attach('feedback-export-masked', { body: Buffer.from(bundle.files[masked.path]!), contentType: 'image/png' })
 })

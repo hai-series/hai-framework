@@ -1692,6 +1692,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       yaml:
         specifier: 'catalog:'
         version: 2.9.1

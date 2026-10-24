@@ -126,11 +126,8 @@ export async function initApp(): Promise<void> {
 
       trackOwned(storage)
       const storageResult = await storage.init(storageConfig)
-      if (!storageResult.success) {
-        core.logger.warn('Storage initialization failed, partner archive unavailable', {
-          error: storageResult.error.message,
-        })
-      }
+      if (!storageResult.success)
+        throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
     }
 
     // 6. 确保业务表存在

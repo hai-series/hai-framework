@@ -68,7 +68,7 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
 printf '%s\\n' "$*" >> /fixture/commands.log
 case "$*" in
   *'up --help'*) printf 'never\\n';;
-  *'config --services'*) printf 'app\\n';;
+  *'config --services'*) if [ -f /fixture/has-web ]; then printf 'app\\nweb\\n'; else printf 'app\\n'; fi;;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
 if [ "$1" = load ] && [ -f /fixture/block-load ]; then
@@ -103,6 +103,37 @@ fi
         throw new Error('Unexpected deployment lock fixture cleanup path')
       rmSync(root, { recursive: true, force: true })
     }
+  }, 60_000)
+
+  it('真实 Linux 执行 app 增量容量更新：复用 Web 镜像更新代理，失败恢复旧配置', async () => {
+    const artifacts = join(root, '.hai/build/docker/release-1')
+    mkdirSync(join(root, 'config'))
+    writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
+    const images = ['app', 'web'].map((name) => {
+      const file = `${name}-1.2.3.tar`
+      const content = `prebuilt-${name}`
+      writeFileSync(join(artifacts, file), content)
+      return { name, file, imageRef: `localhost/capacity-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+    })
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    execute('touch /fixture/has-web')
+    const full = await pack()
+    expect(apply(full).status).toBe(0)
+    writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 8388608\n')
+    const incremental = await pack(['app'])
+    const applied = apply(incremental)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
+    expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
+    expect(execute(`cat /fixture/server/releases/${incremental.id}/compose-files`)).toContain('proxy-entry.json')
+    expect(execute('cat /fixture/commands.log')).toContain('--no-recreate app web')
+    expect(execute('cat /fixture/commands.log')).not.toContain(`load -i /fixture/server/releases/${incremental.id}/images/web-`)
+    writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 4194304\n')
+    const failed = await pack(['app'])
+    execute('touch /fixture/fail-health; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
+    expect(apply(failed).status).toBe(1)
+    expect(execute('cat /fixture/server/current')).toBe(incremental.id)
+    expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
+    expect(execute('cat /fixture/commands.log')).toContain(`/releases/${incremental.id}/compose-entry.json`)
   }, 60_000)
 
   it('并发只允许一个，活跃长部署不被超时偷锁；完成后同一 inode 可复用', async () => {
@@ -212,4 +243,15 @@ fi
     expect(unsupported.stderr).toContain('Check filesystem flock support and permissions')
     expect(unsupported.stderr).not.toContain('Another deployment is running')
   }, 60_000)
+  it('完整目录复制到含空格路径后自动解包并执行相同部署流程', async () => {
+    const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+    expect(result.success).toBe(true)
+    if (!result.success || !result.data.bundlePath)
+      throw new Error('Expected a deployment bundle')
+    execFileSync(runtime, ['cp', dirname(result.data.bundlePath), `${container}:/fixture/local package`], { windowsHide: true })
+    execute('export PATH=/fixture/bin:$PATH; cd /; sh \'/fixture/local package/deploy-local.sh\' /fixture/server')
+    expect(execute('cat /fixture/server/current')).toBe(result.data.deploymentId)
+    expect(execute('find \'/fixture/local package\' -maxdepth 1 -name \'deploy-local-*.log\' | wc -l')).toBe('1')
+    expect(execute('find /tmp -maxdepth 1 -type d -name \'hai-deploy.*\' | wc -l')).toBe('0')
+  }, 30_000)
 })

@@ -11,6 +11,7 @@ import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
@@ -194,33 +195,6 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
     volumes: [`${projectName}-storage-data:/data`],
     networks: net,
   }
-  plan.composeServices['storage-init'] = {
-    depends_on: ['storage'],
-    env_file: ['.env.runtime'],
-    entrypoint: [
-      'node',
-      '--input-type=module',
-      '-e',
-      // 复用应用 @h-ai/storage 已依赖的 SDK；不额外拉取失效的 mc 镜像，不把密钥拼进命令。
-      `import { S3Client, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
-const config = JSON.parse(process.env.HAI_STORAGE);
-const client = new S3Client({ endpoint: config.endpoint, region: config.region, forcePathStyle: config.forcePathStyle, credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey } });
-let ready = false;
-for (let attempt = 0; attempt < 120; attempt++) {
-  try {
-    try { await client.send(new HeadBucketCommand({ Bucket: config.bucket })); }
-    catch (error) {
-      if (error.$$metadata?.httpStatusCode !== 404) throw error;
-      await client.send(new CreateBucketCommand({ Bucket: config.bucket }));
-    }
-    ready = true; break;
-  } catch { await new Promise(resolve => setTimeout(resolve, 1000)); }
-}
-client.destroy();
-if (!ready) throw new Error('S3 bucket initialization failed');`,
-    ],
-    networks: net,
-  }
   plan.volumes[`${projectName}-storage-data`] = null
   if (engine === 'rustfs') {
     Object.assign(plan.env, { RUSTFS_ACCESS_KEY: 'hai-storage', RUSTFS_SECRET_KEY: password, RUSTFS_ADDRESS: '0.0.0.0:9000', RUSTFS_VOLUMES: '/data', RUSTFS_CONSOLE_ENABLE: 'false' })
@@ -236,7 +210,9 @@ if (!ready) throw new Error('S3 bucket initialization failed');`,
     accessKeyId: 'hai-storage',
     secretAccessKey: password,
     forcePathStyle: true,
+    createBucket: true,
   })
+  plan.env.HAI_STORAGE_CREATEBUCKET = 'true'
   plan.secrets.push(password)
 }
 
@@ -531,45 +507,39 @@ export function generateComposeFile(options: {
       networks: ['hai-app'],
     }
   }
-  if (services['storage-init'])
-    services['storage-init'] = { ...services['storage-init'], image: imageRef }
   const compose: Record<string, unknown> = {
     'x-hai-version': options.appVersion,
     services,
     'networks': {
-      'hai-app': { name: `hai-${projectName}` },
+      'hai-app': {},
     },
   }
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
 
-  // S3 服务启动不等于桶已创建；初始化失败必须阻止应用启动，不能只依靠 HTTP 健康检查。
-  if (services['storage-init']) {
-    app.depends_on = {
-      ...Object.fromEntries((app.depends_on as string[] | undefined ?? []).map(name => [name, { condition: 'service_started' }])),
-      'storage-init': { condition: 'service_completed_successfully' },
-    }
-  }
-
   for (const service of Object.values(services))
     service.pull_policy = 'never'
-  return stringify(compose)
+  return stringify(compose, { aliasDuplicateObjects: false })
 }
 
 /**
  * 生成同源 Web/API 的 Nginx 配置，保留运行时配置及 SPA 页面刷新。
- * API 上限与 @h-ai/crypto 的 TRANSPORT_BODY_LIMITS.encryptedPayloadBytes（2 MiB + 32 KiB）一致；
+ * API 上限由 @h-ai/crypto 的同一明文容量推导密文预算；
  * 关闭请求缓冲，让应用在读取过程中执行握手、公钥和正文的更细预算。
  * @param port - API 容器监听端口
  * @param apiPrefix - 应用实际 API 前缀，不允许向 Nginx 配置注入指令
- * @param webPort - Web 容器监听端口
+ * @param options - Web 监听端口和双向业务明文 UTF-8 字节上限，缺省使用 crypto 默认值
+ * @param options.webPort - Web 容器监听端口，默认 8080。
+ * @param options.maxPlaintextBytes - 业务明文 UTF-8 字节上限。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
- * const nginx = generateWebProxyConfig(3000, '/api', 8080) // Web 将同源 /api 转发至 app 服务。
+ * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 app 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, webPort = 8080): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number } = {}): string {
+  const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
+  const webPort = options.webPort ?? 8080
   if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535))
     throw new Error('Invalid web proxy target')
   return `server {
@@ -594,7 +564,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, webPort 
     proxy_set_header Host $http_host;
   }
   location ${apiPrefix.replace(/\/$/, '')}/ {
-    client_max_body_size 2129920;
+    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
     proxy_pass http://app:${port};
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;

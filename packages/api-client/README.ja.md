@@ -159,6 +159,8 @@ pnpm --filter @h-ai/api-client test
 pnpm --filter @h-ai/api-client typecheck
 ```
 
+`transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../crypto/TRANSPORT-CAPACITY.md)を参照してください。
+
 ## 論理リクエストの監視
 
 `client.observeRequests` は論理呼び出しごとに一度通知し、解除関数を返します。requestId、procedure、所要時間、HTTP 状態、最終 success/errorCode、業務リクエストの attempts を含みます。HTTP 200 の失敗 HaiResult も失敗として扱い、認証更新後の再試行も同じ requestId を保持します。本文・Token・URL クエリーは含みません。認証更新や鍵交換をユーザー操作としません。close は購読を解除するため、再初期化後は再購読してください。

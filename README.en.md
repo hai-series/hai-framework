@@ -19,7 +19,7 @@ For production deployments with multiple instances, review the [22-package share
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -87,7 +87,7 @@ This philosophy leads to these decisions:
 | Layer                | Technology                                                         |
 | -------------------- | ------------------------------------------------------------------ |
 | Language             | TypeScript 6 / 7 (strict mode)                                     |
-| Runtime              | Node.js 22.22.2+ / 24.15.0+ / 26+                                  |
+| Runtime              | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                             |
 | Frontend             | Svelte 5（Runes）+ SvelteKit 2                                     |
 | UI                   | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                            |
 | API contracts        | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`）     |
@@ -106,9 +106,11 @@ This philosophy leads to these decisions:
 
 ## Getting started
 
-Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.build.json`, and the skills used throughout the workflow.
+Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.json`, and the skills used throughout the workflow.
 
-Use Node.js matching the project's `engines` (`^22.22.2 || ^24.15.0 || >=26.0.0`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
+Use Node.js matching the project's `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
+
+These minimum versions follow the [official Node.js security release on 2026-10-21](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases). Support is limited to Node.js 22, 24, and 26 at or above the stated minimum within each release line; older versions, EOL releases, and unvalidated future major versions are unsupported. Use Node.js 24.22.1 LTS for development, CI, and containers.
 
 ### Create a project
 
@@ -150,7 +152,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.build.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run the bundled apply.sh. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.
+Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run deploy-local.sh to verify, extract and deploy automatically. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.
 
 ### Integrate into an existing project
 

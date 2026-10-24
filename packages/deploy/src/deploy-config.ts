@@ -175,7 +175,7 @@ export const DeployConfigSchema = z.object({
   environment: z.string().regex(/^[a-z0-9][\w-]*$/i).refine(value => !['local', 'example'].includes(value.toLowerCase())).optional(),
   provider: ProviderConfigSchema,
   services: ServicesConfigSchema,
-  /** Docker Compose 部署参数；构建配置位于项目 hai.build.json。 */
+  /** Docker Compose 部署参数；构建配置位于项目 hai.json.build。 */
   container: z.object({
     /** 自建 S3 服务实现；协议仍为 storage.type=s3。 */
     s3Engine: z.enum(['rustfs', 'minio']).default('rustfs'),

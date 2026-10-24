@@ -15,9 +15,10 @@ import type {
 import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
@@ -127,9 +128,7 @@ export function createDockerSshProvider(
     const { appDir, projectName, scan, provisionEnv, appEnv, options } = context
     const deploymentId = makeDeploymentId()
     const hostPort = config.expose.hostPort
-    const artifactDir = join(resolveProjectDirectory(appDir), '.hai', 'deploy', options?.environment ?? 'prod')
-    mkdirSync(artifactDir, { recursive: true, mode: 0o700 })
-    chmodSync(artifactDir, 0o700)
+    const deploymentRoot = join(resolveProjectDirectory(appDir), '.hai', 'deploy', options?.environment ?? 'prod')
     const artifact = context.artifact
     const resolvedBuildDir = context.artifactDir
     const images = artifact.images
@@ -150,8 +149,23 @@ export function createDockerSshProvider(
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
-    if (sidecar.composeServices['storage-init'] && !app && options?.selectedServices?.includes('storage'))
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageArtifactRequired'))
+    if (scan.isSvelteKit) {
+      const kitPath = join(appDir, 'config', '_kit.yml')
+      const kit = existsSync(kitPath) ? loadDeploymentConfig('kit', kitPath, env) : ok({})
+      if (!kit.success)
+        return kit
+      const transport = (kit.data as Record<string, unknown>).transport
+      if (transport && typeof transport === 'object') {
+        try {
+          const limits = resolveTransportBodyLimits((transport as { maxPlaintextBytes?: number }).maxPlaintextBytes)
+          // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
+          env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
+        }
+        catch {
+          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+        }
+      }
+    }
     let webProxy: string | undefined
     if (hasWeb) {
       // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
@@ -163,10 +177,30 @@ export function createDockerSshProvider(
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
       if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
-      webProxy = generateWebProxyConfig(containerPort, apiPrefix, webContainerPort)
+      const transport = server.data.transport as { maxPlaintextBytes?: number } | false | undefined
+      try {
+        const limits = resolveTransportBodyLimits(transport ? transport.maxPlaintextBytes : undefined)
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes })
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+      }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
       env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && config.ssh ? url : cors?.origin ?? '*' } })
     }
+    // 一次交付对应一个目录；自定义同名输出也不覆盖已经可复制的旧包。
+    const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar`)
+    const stem = basename(requestedOutput).replace(/\.tar$/i, '')
+    const suffix = `-${artifact.appVersion}`
+    const name = stem.endsWith(suffix) ? stem : `${stem}${suffix}`
+    if (!/^[\w.+-]+$/.test(name))
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleNameInvalid'))
+    const artifactDir = resolve(dirname(requestedOutput), name)
+    if (existsSync(artifactDir))
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_bundleDirectoryExists', { params: { path: artifactDir } }))
+    mkdirSync(dirname(artifactDir), { recursive: true, mode: 0o700 })
+    mkdirSync(artifactDir, { mode: 0o700 })
+    chmodSync(artifactDir, 0o700)
     const envPath = join(artifactDir, '.env.runtime')
     writeFileSync(envPath, serializeEnvFile(env), { mode: 0o600 })
     if (options?.environment) {
@@ -199,8 +233,6 @@ export function createDockerSshProvider(
       if (['app', 'web'].includes(name) && !images.some(image => image.name === name))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: name } }))
     }
-    if (selected.includes('storage') && sidecar.composeServices['storage-init'] && !selected.includes('storage-init'))
-      selected.push('storage-init')
     options?.onProgress?.('packaging')
     const bundle = await createDeploymentBundle({
       directory: artifactDir,
@@ -217,7 +249,7 @@ export function createDockerSshProvider(
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env),
       healthPaths: hasWeb ? ['/health', '/_hai/web-health', '/'] : [scan.isSvelteKit ? '/' : '/health'],
-      output: options?.output ?? join(artifactDir, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar`),
+      output: join(artifactDir, `${name}.tar`),
     })
     if (options?.bundleOnly)
       return ok({ url: '', deploymentId, status: 'packaged', provider: 'docker-ssh', healthCheck: 'skipped', envVarsSet: Object.keys(env), ...bundle })

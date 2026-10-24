@@ -402,6 +402,7 @@ export function createApp<
     const mgr = options.transport.crypto.transport.createServer({
       serverKeyRing: options.transport.serverKeyRing,
       keyStore: options.transport.keyStore,
+      maxPlaintextBytes: options.transport.maxPlaintextBytes,
     })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到

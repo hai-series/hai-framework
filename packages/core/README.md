@@ -284,7 +284,7 @@ if (!result.success) {
 
 > 浏览器端没有文件系统，`core.config` 仅提供占位 API：文件相关方法返回 `SERVICE_UNAVAILABLE`，不会加载 YAML。
 
-Node 自动加载和监听运行时 `.yml` / `.yaml`，精确跳过保留文件 `_deploy.yml`、`_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们。业务 `deploy.yml` 仍自动加载，手动 `core.config.load` 不受影响。单项加载返回失败时记录错误并继续，必需配置由应用调用 `core.config.validate` 并检查 `success`；目录扫描、日志设置等异常仍可能传播。
+Node 自动加载和监听配置目录内所有 `.yml` / `.yaml`，没有保留文件名例外。项目根 `hai.json` 中的 `build` / `deploy` 由 CLI 读取，不进入运行时 YAML 配置。单项加载返回失败时记录错误并继续，必需配置由应用调用 `core.config.validate` 并检查 `success`；目录扫描、日志设置等异常仍可能传播。
 
 ```typescript
 import { core, HaiConfigError } from '@h-ai/core'
@@ -292,7 +292,7 @@ import { z } from 'zod'
 
 // 方式 1：init 时自动加载运行时配置
 core.init({
-  configDir: './config', // 扫描 .yml / .yaml，排除 _deploy.yml / _deploy.yaml
+  configDir: './config', // 扫描配置目录内所有 .yml / .yaml
   watchConfig: true, // 监听变更并自动重载
 })
 

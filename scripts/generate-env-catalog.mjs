@@ -270,7 +270,7 @@ async function scan(directory) {
       await scan(file)
       continue
     }
-    if (!/\.(?:ts|js|mjs|py|svelte|ya?ml|hbs|example)$/.test(item.name) || item.name.endsWith('.d.ts'))
+    if ((!/\.(?:ts|js|mjs|py|svelte|ya?ml|hbs|example)$/.test(item.name) && item.name !== 'hai.json') || item.name.endsWith('.d.ts'))
       continue
     const content = environmentReferenceSource(await readFile(file, 'utf8'), file)
     const location = path.relative(root, file).replaceAll('\\', '/')

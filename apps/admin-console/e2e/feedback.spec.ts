@@ -6,7 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { readFeedbackBundle } from '@h-ai/feedback/bundle'
 import { expect, test } from '@playwright/test'
-import { loginOnPage, uniqueUser, waitForHydration } from './helpers'
+import { loginOnPage, registerViaApi, uniqueUser, waitForHydration } from './helpers'
 
 async function capture(page: Page, name: string, testInfo: TestInfo) {
   await page.screenshot({ path: testInfo.outputPath(name), fullPage: true, animations: 'disabled' })
@@ -203,6 +203,9 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
   finally {
     await page.unroute('**/api/feedback/reports')
   }
+  await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
+  await expect(page.locator('.feedback-form [role="status"]').first()).toContainText(/已受理：FB-/)
+  await capture(page, 'feedback-network-recovered.png', testInfo)
 })
 
 test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async ({ page }, testInfo) => {
@@ -276,4 +279,72 @@ test('邮件反馈链接直接定位详情，关闭后恢复列表查询', async
   await expect(page).not.toHaveURL(/feedback=/)
   await expect(page).toHaveURL(/pageSize=1/)
   await expect(page.locator('.feedback-list')).toBeVisible()
+})
+
+test('默认反馈入口向普通用户开放，管理页面和操作仍受管理员权限控制', async ({ page, browser, baseURL }, testInfo) => {
+  test.setTimeout(60_000)
+  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await expect(page.getByTestId('feedback-open')).toBeVisible()
+  await expect(page.locator('a[href="/admin/feedback"]')).toBeVisible()
+  await capture(page, 'feedback-default-admin-entry.png', testInfo)
+  const user = uniqueUser('fbnormal')
+  const context = await browser.newContext({ baseURL, viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { Origin: baseURL! } })
+  const memberPage = await context.newPage()
+  let userId = ''
+  try {
+    const registered = await registerViaApi(memberPage.request, user)
+    expect(registered.ok()).toBe(true)
+    const registeredBody: HaiResult<{ user: { id: string } }> = await registered.json()
+    expect(registeredBody.success).toBe(true)
+    if (!registeredBody.success)
+      throw new Error(registeredBody.error.message)
+    userId = registeredBody.data.user.id
+    const loadedUser = await page.request.get(`/api/iam/users/${userId}`)
+    const userBody: HaiResult<{ roles: string[] }> = await loadedUser.json()
+    expect(userBody.success).toBe(true)
+    if (!userBody.success)
+      throw new Error(userBody.error.message)
+    expect(userBody.data.roles).toContain('user')
+    expect(userBody.data.roles).not.toContain('admin')
+    await loginOnPage(memberPage, user.username, user.password)
+    await expect(memberPage.getByTestId('feedback-open')).toBeVisible()
+    await expect(memberPage.locator('a[href="/admin/feedback"]')).toHaveCount(0)
+    await capture(memberPage, 'feedback-default-member-entry.png', testInfo)
+    await memberPage.setViewportSize({ width: 390, height: 844 })
+    await expect(memberPage.getByTestId('feedback-open')).toBeVisible()
+    await openFeedback(memberPage)
+    await capture(memberPage, 'feedback-default-member-collect-mobile.png', testInfo)
+    await memberPage.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
+    const receipt = memberPage.locator('.feedback-form [role="status"]').first()
+    await expect(receipt).toContainText(/已受理：FB-/)
+    const number = (await receipt.textContent())?.match(/FB-[\w-]+/)?.[0]
+    expect(number).toBeTruthy()
+    await capture(memberPage, 'feedback-default-member-accepted-mobile.png', testInfo)
+    await memberPage.locator('.feedback-form').getByRole('button', { name: '关闭', exact: true }).click()
+    const reportsResponse = await page.request.get('/api/feedback/reports', { params: { search: number!, page: 1, pageSize: 20 } })
+    const reports: HaiResult<PaginatedResult<FeedbackReport>> = await reportsResponse.json()
+    expect(reports.success).toBe(true)
+    if (!reports.success)
+      throw new Error(reports.error.message)
+    const report = reports.data.items.find(item => item.number === number)
+    expect(report).toBeDefined()
+    if (!report)
+      throw new Error('Accepted ordinary-user report is missing')
+    expect(report.userId).toBe(userId)
+    // 所有者可读取自己的回执/材料，列表、处理、撤销、导出属于管理权限。
+    expect((await memberPage.request.get(`/api/feedback/reports/${report.id}`)).status()).toBe(200)
+    expect((await memberPage.request.get('/api/feedback/reports')).status()).toBe(403)
+    for (const status of ['handled', 'pending'])
+      expect((await memberPage.request.patch(`/api/feedback/reports/${report.id}/status`, { data: { id: report.id, status, expectedVersion: report.version } })).status()).toBe(403)
+    expect((await memberPage.request.post(`/api/feedback/reports/${report.id}/exports`, { data: { id: report.id } })).status()).toBe(403)
+    const deniedPage = await memberPage.goto('/admin/feedback')
+    expect(deniedPage?.status()).toBe(403)
+    await capture(memberPage, 'feedback-default-member-management-denied.png', testInfo)
+  }
+  finally {
+    await context.close()
+    if (userId)
+      expect((await page.request.delete(`/api/iam/users/${userId}`)).ok()).toBe(true)
+  }
 })

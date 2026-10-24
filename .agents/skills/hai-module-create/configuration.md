@@ -7,7 +7,7 @@
 ## 配置经过哪些步骤
 
 1. `core.config.loadEnvFiles` 读取公共基础、环境及本机私有文件，返回合并结果；调用方决定是否注入进程。已有进程环境优先，空字符串也是显式覆盖。不要在环境总表中填入真实凭据。
-2. `core.init({ configDir })` 扫描运行时 YAML，精确排除 `_deploy.yml` / `_deploy.yaml`；部署 CLI 在加载目标环境与凭据后独立解析它们，业务 `deploy.yml` 与手动 `core.config.load` 不受影响。只有 `_core.yml` 自动用 Core Schema 校验，其它运行时 YAML 先进入配置缓存；单项加载返回失败时记日志并继续，目录扫描等异常仍可能传播。应用必须 validate 必需配置并检查 success，再交给对应模块 `init` 或工厂/适配器，不能把“文件已加载”等同于“模块已初始化”。
+2. `core.init({ configDir })` 扫描运行时 YAML；构建部署配置独立放在项目根 `hai.json`，Core 不为特定 YAML 文件名设置例外。只有 `_core.yml` 自动用 Core Schema 校验，其它运行时 YAML 先进入配置缓存；单项加载返回失败时记日志并继续，目录扫描等异常仍可能传播。应用必须 validate 必需配置并检查 success，再交给对应模块 `init` 或工厂/适配器，不能把“文件已加载”等同于“模块已初始化”。
 3. 约定变量为 `HAI_<配置名>_<路径>`，camelCase 不拆词；数据库配置名是 `db`，所以是 `HAI_DB_*`。父对象/数组整体覆盖优先于叶子覆盖；叶子覆盖要求 YAML 存在该路径，缺少路径时使用父节点的完整 JSON/YAML 值。数组索引不是单个固定 Provider。
 4. 初始化 Schema 填充默认值并检查字段；后端连接/资源就绪成功后才发布实例。关闭按依赖反序执行并检查结果。纯函数、客户端工厂、serv 和 kit 按自身公开契约使用，不能套用服务端生命周期。
 5. `pnpm generate:env` 在依赖包 fresh build 后更新总表与应用示例，`pnpm check:env` 检查生成一致性；`check:skills` 检查 skill 契约。它们不证明字段已传入 SDK、共享状态正确或真实投递成功，仍须验证对应消费者及真实后端行为。
@@ -44,7 +44,7 @@
 | api-contract | 只有领域输入/输出 Schema 和 contract 工厂，没有连接配置或生命周期；其验证不代表鉴权、资源所有权或 Provider 已执行 | [README](../../../packages/api-contract/README.md)、[存储限制](../../../packages/storage/README.md#存储输入约束与跨端能力) |
 | capacitor | [公开类型](../../../packages/capacitor/src/capacitor-types.ts) 与 [init](../../../packages/capacitor/src/capacitor-main.ts) 驱动原生能力；Push 的取消/超时/清理和安全 TokenStorage 按实际插件契约使用。CAPACITOR_SERVER_URL 是示例原生构建入口，不是服务端框架配置 | [README](../../../packages/capacitor/README.md)、[skill](../../../packages/cli/templates/skills/hai-capacitor/reference.md) |
 | cli | [ModuleConfigs / FeatureId](../../../packages/cli/src/cli-types.ts) 由命令及 [配置生成器](../../../packages/cli/src/commands/cli-config-templates.ts) 消费；语言优先级 HAI_CORE_DEFAULTLOCALE → LC_ALL → LC_MESSAGES → LANG。命令与服务端配置不是同一生命周期 | [README](../../../packages/cli/README.md)、[应用创建 skill](../../../packages/cli/templates/skills/hai-app-create/development.md) |
-| crypto | 纯运算、transport 工厂和共享 key registry 通过 [公开类型](../../../packages/crypto/src/crypto-types.ts) 与 [transport 类型](../../../packages/crypto/src/transport/crypto-transport-types.ts) 接收参数；没有 `_crypto.yml` 统一初始化 Schema。服务端 keyring 由适配层显式读取 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，绝不能下发给浏览器 | [README](../../../packages/crypto/README.md)、[skill](../../../packages/cli/templates/skills/hai-crypto/reference.md) |
+| crypto | 纯运算、transport 工厂和共享 key registry 通过 [公开类型](../../../packages/crypto/src/crypto-types.ts) 与 [transport 类型](../../../packages/crypto/src/transport/crypto-transport-types.ts) 接收参数；没有 `_crypto.yml` 统一初始化 Schema。transport 的 maxPlaintextBytes 默认 1 MiB、范围 1 KiB～64 MiB；serv/kit 的正式配置转发到服务端，握手同步客户端，resolveTransportBodyLimits 推导密文及代理预算，安全预算独立。服务端 keyring 由适配层显式读取 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，绝不能下发给浏览器 | [README](../../../packages/crypto/README.md)、[skill](../../../packages/cli/templates/skills/hai-crypto/reference.md) |
 | datapipe | [CleanOptionsSchema / ChunkOptionsSchema](../../../packages/datapipe/src/datapipe-config.ts) 在每次 clean/chunk 调用解析；独立 chunk 默认 overlap=0，AI Knowledge 父配置默认 overlap=200，不能把复用子 Schema 的默认值错写为消费者默认值 | [README](../../../packages/datapipe/README.md)、[skill](../../../packages/cli/templates/skills/hai-datapipe/reference.md) |
 | ui | Svelte props、store 工厂和主题/语言 API 通过调用参数配置；supportedLocales 属于 locale store 或应用翻译工程，不能写进 Core YAML 期待自动注册翻译。上传组件只负责交互，服务端校验不由 props 替代 | [README](../../../packages/ui/README.md)、[开发 skill](../hai-ui/SKILL.md)、[应用 skill](../../../packages/cli/templates/skills/hai-ui/reference.md) |
 

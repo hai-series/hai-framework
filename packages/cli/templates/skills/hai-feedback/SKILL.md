@@ -30,6 +30,10 @@ description: "接入 @h-ai/feedback 用户反馈、前后端现场、管理员�
 
 SDK 的 annotate(id, annotation) 使用浏览器解码后原图的像素；UI FeedbackAnnotation.rect 使用 0–1 比例。宿主应在 Image.decode() 后，将 x/width 乘 naturalWidth、y/height 乘 naturalHeight，不能使用 CSS 显示尺寸；这样与 SDK 的 JPEG 方向和图像尺寸一致。附件元数据没有 width/height 字段，不臆造该能力；对象 URL 由创建方在替换或销毁时释放。
 
+草稿由 SDK 持有并通过 annotate/addFiles 等方法更新；Svelte 保存引用时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 getDraft() 刷新附件视图。不要把该草稿放入深度 `$state` 代理，避免 SDK 替换图片字节后视图继续读取代理缓存的旧 bytes。
+
+单附件 5 MiB 原始字节经 Base64 后约需 6.67 MiB，另需 JSON 空间；参考管理台和启用 feedback 的新 API/fullstack 项目在既有 kit.transport.maxPlaintextBytes 或 serv.transport.maxPlaintextBytes 配置 8388608（8 MiB），框架全局默认仍为 1 MiB。客户端缺省随服务端握手，显式较小本地上限仍可拒绝。8 MiB 平文推导加密请求体预算 16,809,984 字节，生产 adapter-node BODY_SIZE_LIMIT 与代理须匹配，未启用加密时按实际 JSON 大小设置；框架部署自动推导，不新增 feedback 配置/API。hai add 保留宿主已有配置，需宿主显式调整。
+
 captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非凭据用户/租户 persistenceKey。keyScreenshots 默认 true，受 screenshot 总开关控制，maxKeyScreenshots 默认3/上限5，keyScreenshotThrottleMs 默认10000ms。data-feedback-action 标记关键操作，data-feedback-private 遮挡敏感区域，data-feedback-ignore 排除反馈界面自身。回放、普通 Cookie 白名单和持久化由产品明确启用。
 
 自动截图从脱敏克隆 DOM 经 SVG foreignObject 重建可见页面；跨域图片、iframe/video、未就绪网络字体可能缺失。浏览器或 CSP 限制失败时标 missing 并保留手动附件入口。

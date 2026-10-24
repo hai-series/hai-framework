@@ -125,7 +125,7 @@ function extractCredentials(serviceConfig: Record<string, unknown>): Record<stri
 /**
  * Deploy 凭证子功能。
  *
- * 这些操作仅处理本地 `~/.hai/credentials.yml`，供 CLI 在读取 `_deploy.yml`
+ * 这些操作仅处理本地 `~/.hai/credentials.yml`，供 CLI 在读取项目 `hai.json` 的部署配置
  * 之前注入 `HAI_DEPLOY_*` 环境变量，因此不依赖 `deploy.init()`。
  */
 const deployCredentials: DeployCredentialOperations = {

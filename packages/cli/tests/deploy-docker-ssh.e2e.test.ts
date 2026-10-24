@@ -571,7 +571,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
         container: { s3Engine: 'rustfs' },
       }
       writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
-      writeFileSync(path.join(serviceDir, 'config/_deploy.yml'), stringify(deployConfig))
+      writeFileSync(path.join(appDir, 'hai.json'), JSON.stringify({ ...JSON.parse(readFileSync(path.join(appDir, 'hai.json'), 'utf8')), deploy: deployConfig }, null, 2))
       await runPnpm(commands, ['run', 'build', '--target', 'docker', '--runtime', runtime ?? 'auto', ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
       const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
       const artifact = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', buildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
@@ -588,23 +588,32 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       expect((await crypto.init()).success).toBe(true)
       let metadata: { name: string, version: string, env: string } | undefined
       for (let attempt = 0; attempt < 3; attempt++) {
+        const deploymentRoot = path.join(appDir, '.hai/deploy/test')
+        const previousDeliveries = new Set(existsSync(deploymentRoot) ? readdirSync(deploymentRoot) : [])
         await runPnpm(commands, ['run', 'deploy', '--env', 'test', '--yes', ...(attempt > 0 ? ['--skip-middleware'] : []), ...(attempt === 1 ? ['--bundle-only', '--output', path.join(workDir, 'manual-test.tar')] : [])], appDir)
+        // 按本次实际创建的目录定位文件，不读取旧外层文件，也不猜测最新部署。
+        let deliveryDirectory = path.join(workDir, `manual-test-${APPLICATION_VERSION}`)
+        if (attempt !== 1) {
+          const created = readdirSync(deploymentRoot).filter(name => !previousDeliveries.has(name))
+          expect(created).toHaveLength(1)
+          deliveryDirectory = path.join(deploymentRoot, created[0]!)
+        }
         if (attempt === 1) {
-          // 模拟无 SSH 的手工搬运：将一个 tar 复制到 Linux，再执行包内脚本。
+          // 模拟无 SSH 的手工搬运：复制一个完整交付目录，再用本地入口解包与部署。
           const manualArchive = `manual-test-${APPLICATION_VERSION}.tar`
-          expect(existsSync(path.join(workDir, manualArchive))).toBe(true)
-          await commands.run(runtime!, ['cp', path.join(workDir, manualArchive), `${fixture().containerId}:/tmp/${manualArchive}`])
-          await commands.run(runtime!, ['exec', fixture().containerId, 'sh', '-c', `mkdir -p /opt/manual-release && chmod 700 /opt/manual-release && tar -xf /tmp/${manualArchive} -C /opt/manual-release && cd /opt/manual-release && sh apply.sh '/opt/hai/apps with spaces/e2e-fullstack-serv-test'`])
+          const manualDirectory = `manual-test-${APPLICATION_VERSION}`
+          expect(existsSync(path.join(workDir, manualDirectory, manualArchive))).toBe(true)
+          await commands.run(runtime!, ['cp', path.join(workDir, manualDirectory), `${fixture().containerId}:/tmp/${manualDirectory}`])
+          await commands.run(runtime!, ['exec', fixture().containerId, 'sh', '-c', `sh '/tmp/${manualDirectory}/deploy-local.sh' '/opt/hai/apps with spaces/e2e-fullstack-serv-test'`])
           const second = path.join(workDir, 'script-test.tar')
           await runPnpm(commands, ['run', 'deploy', '--env', 'test', '--yes', '--skip-middleware', '--bundle-only', '--output', second], appDir)
           if (process.platform === 'win32')
-            await commands.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(workDir, `script-test-${APPLICATION_VERSION}-deploy/deploy.ps1`)])
+            await commands.run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(workDir, `script-test-${APPLICATION_VERSION}/deploy.ps1`)])
           const shellPackage = 'shell-script-test'
           await runPnpm(commands, ['run', 'deploy', '--env', 'test', '--yes', '--skip-middleware', '--bundle-only', '--output', path.join(workDir, `${shellPackage}.tar`)], appDir)
-          await commands.run(runtime!, ['cp', path.join(workDir, `${shellPackage}-${APPLICATION_VERSION}.tar`), `${fixture().containerId}:/tmp/`])
-          await commands.run(runtime!, ['cp', path.join(workDir, `${shellPackage}-${APPLICATION_VERSION}-deploy`), `${fixture().containerId}:/tmp/`])
+          await commands.run(runtime!, ['cp', path.join(workDir, `${shellPackage}-${APPLICATION_VERSION}`), `${fixture().containerId}:/tmp/`])
           await commands.run(runtime!, ['cp', keyPath, `${fixture().containerId}:/tmp/hai-script-key`])
-          await commands.run(runtime!, ['exec', fixture().containerId, 'sh', '-c', `chmod 600 /tmp/hai-script-key && HAI_DEPLOY_IDENTITY_FILE=/tmp/hai-script-key HAI_DEPLOY_KNOWN_HOSTS_FILE=/dev/null sh '/tmp/${shellPackage}-${APPLICATION_VERSION}-deploy/deploy.sh' 127.0.0.1 22 root`])
+          await commands.run(runtime!, ['exec', fixture().containerId, 'sh', '-c', `chmod 600 /tmp/hai-script-key && HAI_DEPLOY_IDENTITY_FILE=/tmp/hai-script-key HAI_DEPLOY_KNOWN_HOSTS_FILE=/dev/null sh '/tmp/${shellPackage}-${APPLICATION_VERSION}/deploy.sh' 127.0.0.1 22 root`])
           for (let probe = 0; probe < 40; probe++) {
             if ((await commands.fetch(`http://127.0.0.1:${fixture().webHostPort}/health`).catch(() => null))?.ok)
               break
@@ -626,8 +635,7 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
         const login = await client.encryptedFetch(`http://127.0.0.1:${fixture().webHostPort}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD }) })
         expect(await login.json()).toMatchObject({ success: true })
         client.destroy()
-        const artifactDir = path.join(appDir, '.hai/deploy/test')
-        const compose = parse(readFileSync(path.join(artifactDir, `docker-compose-${APPLICATION_VERSION}.yml`), 'utf8'))
+        const compose = parse(readFileSync(path.join(deliveryDirectory, `docker-compose-${APPLICATION_VERSION}.yml`), 'utf8'))
         expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
         expect(compose.services.app.ports).toBeUndefined()
         expect(compose.services.web.ports).toEqual([`${remoteWebPort}:8080`])
