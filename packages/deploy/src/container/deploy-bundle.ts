@@ -1,7 +1,7 @@
 /** 完整或增量交付包，包含所选服务需要的全部镜像及跨平台部署入口。 */
 import type { DeploymentArtifact } from '../deploy-artifact.js'
 import type { DockerSshProviderConfig } from '../deploy-config.js'
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
@@ -25,7 +25,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.output - 本次独立交付目录内的最终 tar 输出路径。
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
- * @param options.middlewareEnv - 只用于受保护文件的中间件 dotenv 内容。
+ * @param options.middlewareEnv - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
  * @param options.hasWeb - 工程是否包含独立 Web 服务拓扑。
  * @param options.containerPort - 应用容器的实际监听端口。
@@ -90,8 +90,11 @@ export async function createDeploymentBundle(options: {
         for (const dependency of Array.isArray(service.depends_on) ? service.depends_on as string[] : Object.keys(service.depends_on))
           dependencies.add(dependency)
       }
-      if (service.env_file)
-        service.env_file = [`../${options.deploymentId}/.env.runtime`, `../${options.deploymentId}/middleware.env`]
+      if (service.env_file) {
+        service.env_file = name === 'app'
+          ? [`../${options.deploymentId}/.env.runtime`, `../${options.deploymentId}/middleware.env`]
+          : [`../${options.deploymentId}/middleware-runtime.env`]
+      }
       if (Array.isArray(service.volumes))
         service.volumes = service.volumes.map(mount => typeof mount === 'string' ? mount.replace('./web.conf:', `../${options.deploymentId}/web.conf:`) : mount)
     }
@@ -134,6 +137,8 @@ export async function createDeploymentBundle(options: {
     }
     put('.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
     put('middleware.env', options.middlewareEnv)
+    const middlewareRuntime = join(directory, 'middleware-runtime.env')
+    put('middleware-runtime.env', existsSync(middlewareRuntime) ? readFileSync(middlewareRuntime, 'utf8') : '')
     if (options.hasWeb)
       put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)

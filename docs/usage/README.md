@@ -212,6 +212,8 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 按应用真正需要的中间件处理
 
+框架连接配置使用 `HAI_*`。镜像要求的 `POSTGRES_*`、`RUSTFS_*` 等原生变量保留原名，单独写入私有 `middleware-runtime.env`，仅中间件容器读取，不再混入工程环境配置或应用 `.env.runtime`；应用增量覆盖 `middleware.env` 只保留框架配置。旧工程原生字段不会自动删除，但新应用环境会忽略框架曾生成的已知原生键。
+
 根据锁文件运行依赖和模块配置识别数据库、缓存、文件存储、向量库、LDAP、邮件等。逐项选择默认、自定义或保持。配置完备可用 `--skip-middleware` 跳过向导和开通。SQLite、Memory cache、本地存储不产生外部镜像；Compose 自建服务的镜像自动加入完整交付包。外部服务仍需目标网络可达，云开通不属于完全离线部署。
 
 #### deploy 的可选参数

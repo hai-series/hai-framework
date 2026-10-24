@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
+import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deploy } from '../src/index.js'
 
@@ -55,7 +56,8 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
       throw new Error('Deployment lock gate requires a reachable Podman or Docker engine')
     runtime = candidate
     root = mkdtempSync(join(tmpdir(), 'hai-deploy-lock-'))
-    container = `hai-deploy-lock-${randomUUID()}`
+    const containerName = `hai-deploy-lock-${randomUUID()}`
+    container = ''
     const artifacts = join(root, '.hai/build/docker/release-1')
     mkdirSync(artifacts, { recursive: true })
     mkdirSync(join(root, 'bin'))
@@ -86,7 +88,10 @@ if [ -f /fixture/background-service ]; then
 fi
 `)
     writeFileSync(join(root, 'bin/curl'), '#!/bin/sh\ntest ! -f /fixture/fail-health\n')
-    execFileSync(runtime, ['run', '-d', '--name', container, '--entrypoint', 'node', 'docker.io/library/node:24.22.1-bookworm-slim', '-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, stdio: 'ignore' })
+    const created = execFileSync(runtime, ['run', '-d', '--name', containerName, '--entrypoint', 'node', 'docker.io/library/node:24.22.1-bookworm-slim', '-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    if (!/^[a-f0-9]{64}$/.test(created))
+      throw new Error('Expected an owned deployment fixture container ID')
+    container = created
     execFileSync(runtime, ['cp', root, `${container}:/fixture`], { windowsHide: true })
     execute('chmod 700 /fixture/bin/*; command -v flock; mkdir -p /fixture/server/.deploy-lock')
     expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
@@ -103,6 +108,22 @@ fi
         throw new Error('Unexpected deployment lock fixture cleanup path')
       rmSync(root, { recursive: true, force: true })
     }
+  }, 60_000)
+
+  it('真实 Linux 增量仅继承旧基线的框架变量，不重新注入镜像原生变量', async () => {
+    const full = await pack()
+    expect(apply(full).status).toBe(0)
+    const database = JSON.stringify({ type: 'postgresql', password: 'retained-fixture-password' })
+    const legacyContent = `HAI_DB='${database}'\nPOSTGRES_USER=hai\nPOSTGRES_PASSWORD=legacy-native-password\nRUSTFS_ADDRESS=0.0.0.0:9000\n`
+    const legacyFile = join(root, 'legacy-middleware.env')
+    writeFileSync(legacyFile, legacyContent)
+    execFileSync(runtime, ['cp', legacyFile, `${container}:/fixture/server/releases/${full.id}/middleware.env`], { windowsHide: true })
+    const incremental = await pack(['app'])
+    const applied = apply(incremental)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
+    const inherited = parseEnv(execute(`cat /fixture/server/releases/${incremental.id}/middleware.env`))
+    expect(inherited).toEqual({ HAI_DB: database })
+    expect(execute(`cat /fixture/server/releases/${full.id}/middleware.env`)).toBe(legacyContent.trim())
   }, 60_000)
 
   it('真实 Linux 执行 app 增量容量更新：复用 Web 镜像更新代理，失败恢复旧配置', async () => {

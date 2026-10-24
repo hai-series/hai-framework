@@ -19,6 +19,8 @@
 
 ## 识别与逐项选择
 
+框架 `HAI_*` 连接配置与镜像原生变量分开：PostgreSQL/MySQL/RustFS/MinIO/LDAP 的原生键必须按镜像契约命名，只写私有 `middleware-runtime.env`、只让中间件加载。不得改成镜像不识别的 HAI 前缀，也不得写回工程 `.env.<mode>` / 私有覆盖或注入应用 `.env.runtime`。应用的增量覆盖文件 `middleware.env` 只含 `HAI_*`。旧工程原生字段不自动删除，新应用环境忽略框架曾生成的已知原生键；不要批量过滤其他业务变量。
+
 数据库连接保存前复用所选后端的公开配置 Schema；MySQL `ssl` 仅 `false` 或严格对象，`{}` 默认验证证书链和 DNS 身份，`ca/cert/key` 为 PEM 内容且 `cert/key` 必须成对；私钥仅进入私有环境。PostgreSQL 保留其布尔值/字符串模式/对象契约。CLI 内联 `@h-ai/reldb/schemas` 与 Zod，无需为配置校验给目标应用额外安装数据库包或驱动；部署本身仍需已安装的 `@h-ai/deploy`，实际运行应用仍需其数据库依赖。
 
 先用 `deploy.scan(appDir, { environment, envDir })` 核对实际依赖、配置与环境值。扫描从目标 workspace 的 `pnpm-lock.yaml` importer 出发，沿 dependencies/optionalDependencies 遍历，排除 devDependencies、peerDependencies 和其他应用未被引用的依赖；workspace link 只沿运行依赖继续。pnpm 12 的工具链 YAML 文档不能混入应用图。lockfile、目标 importer 或依赖节点缺失时先执行 `pnpm install` 修复；依赖图不读取 package.json、pnpm-workspace.yaml 或项目目录布局。配置文件决定已识别模块的后端，保留的旧配置不能自行启用未依赖的模块。

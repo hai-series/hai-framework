@@ -45,6 +45,20 @@ function makeScan(
 }
 
 describe('buildRuntimeEnv 按功能追加 sidecar', () => {
+  it('中间件原生变量仅用于容器，不进入应用环境或框架配置', () => {
+    const { env, sidecar } = buildRuntimeEnv(tmpDir, 'isolated', makeScan(['db', 'storage', 'ldap'], { db: 'postgresql', storage: 's3', ldap: 'ldap' }), {}, 3000, { environment: 'test' }, { POSTGRES_DB: 'legacy', RUSTFS_ADDRESS: 'legacy', APP_LABEL: 'retained' })
+    expect(env).not.toHaveProperty('POSTGRES_USER')
+    expect(env).not.toHaveProperty('POSTGRES_DB')
+    expect(env).not.toHaveProperty('RUSTFS_ADDRESS')
+    expect(env).not.toHaveProperty('LDAP_ADMIN_PASSWORD')
+    expect(env.APP_LABEL).toBe('retained')
+    expect(Object.keys(sidecar.env).every(name => name.startsWith('HAI_'))).toBe(true)
+    const compose = parse(generateComposeFile({ projectName: 'isolated', appVersion: '1.0.0', imageRef: 'app:1', hostPort: 3000, containerPort: 3000, sidecar }))
+    expect(compose.services.app.env_file).toEqual(['.env.runtime'])
+    for (const service of ['db', 'storage', 'ldap'])
+      expect(compose.services[service].env_file).toEqual(['middleware-runtime.env'])
+    expect(compose).not.toHaveProperty('services.db.environment.POSTGRES_PASSWORD')
+  })
   it('does not create middleware credentials when every service is kept unchanged', () => {
     const scan = makeScan(['db', 'cache', 'storage'], { db: 'postgresql', cache: 'redis', storage: 's3' })
     const { sidecar } = buildRuntimeEnv(tmpDir, 'direct', scan, {}, 3000, { serviceModes: { db: 'keep', cache: 'keep', storage: 'keep' } })
@@ -69,10 +83,10 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'directory', makeScan(['ldap', 'email'], { ldap: 'ldap', email: 'smtp' }), {}, 3000)
     expect(sidecar.services).toEqual(['ldap', 'email'])
     expect(JSON.parse(env.HAI_IAM_LDAP)).toMatchObject({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org' })
-    expect(env.LDAP_ADMIN_PASSWORD).toBeTruthy()
+    expect(sidecar.containerEnv.LDAP_ADMIN_PASSWORD).toBeTruthy()
     expect(JSON.parse(env.HAI_REACH_PROVIDERS_0)).toMatchObject({ type: 'smtp', host: 'email', port: 1025, secure: false })
     const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'directory', imageRef: 'test', hostPort: 3000, containerPort: 3000, sidecar })
-    expect(compose).not.toContain(env.LDAP_ADMIN_PASSWORD)
+    expect(compose).not.toContain(sidecar.containerEnv.LDAP_ADMIN_PASSWORD)
   })
 
   it('启用 db 时追加 postgres 服务并注入 HAI_DB', () => {
@@ -84,9 +98,9 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(sidecar.dependsOn).toContain('db')
     expect(sidecar.volumes['demo-db-data']).toBeDefined()
 
-    expect(env.POSTGRES_USER).toBe('hai')
-    expect(env.POSTGRES_DB).toBe('hai')
-    expect(env.POSTGRES_PASSWORD).toBeTruthy()
+    expect(sidecar.containerEnv.POSTGRES_USER).toBe('hai')
+    expect(sidecar.containerEnv.POSTGRES_DB).toBe('hai')
+    expect(sidecar.containerEnv.POSTGRES_PASSWORD).toBeTruthy()
     const haiDb = JSON.parse(env.HAI_DB) as { type: string, url: string }
     expect(haiDb.type).toBe('postgresql')
     expect(haiDb.url).toContain('@db:5432/hai')
@@ -112,6 +126,8 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(haiStorage.type).toBe('s3')
     expect(haiStorage.endpoint).toBe('http://storage:9000')
     expect(haiStorage.bucket).toBe('hai')
+    for (const name of Object.keys(sidecar.containerEnv))
+      expect(env).not.toHaveProperty(name)
   })
 
   it('启用 db(mysql) 时追加 mysql 服务并注入 mysql 版 HAI_DB', () => {
@@ -119,8 +135,9 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 
     expect(sidecar.services).toContain('db')
     expect((sidecar.composeServices.db as { image: string }).image).toContain('mysql')
-    expect(env.MYSQL_DATABASE).toBe('hai')
-    expect(env.MYSQL_PASSWORD).toBeTruthy()
+    expect(sidecar.containerEnv.MYSQL_DATABASE).toBe('hai')
+    expect(sidecar.containerEnv.MYSQL_PASSWORD).toBeTruthy()
+    expect(env).not.toHaveProperty('MYSQL_PASSWORD')
     const haiDb = JSON.parse(env.HAI_DB) as { type: string, url: string }
     expect(haiDb.type).toBe('mysql')
     expect(haiDb.url).toContain('@db:3306/hai')
@@ -204,7 +221,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
   it('重复调用复用稳定的 sidecar 凭据', () => {
     const first = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
     const second = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
-    expect(first.env.POSTGRES_PASSWORD).toBe(second.env.POSTGRES_PASSWORD)
+    expect(first.sidecar.containerEnv.POSTGRES_PASSWORD).toBe(second.sidecar.containerEnv.POSTGRES_PASSWORD)
   })
 
   it('凭据损坏时停止部署并保留原文件，避免自动改密码', () => {
@@ -267,8 +284,8 @@ describe('generateComposeFile', () => {
   it('compose 文件不包含敏感密码', () => {
     const { env, sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'storage']), {}, 3000)
     const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:tag', hostPort: 18080, containerPort: 3000, sidecar })
-    expect(env.POSTGRES_PASSWORD.length).toBeGreaterThan(0)
-    expect(compose).not.toContain(env.POSTGRES_PASSWORD)
+    expect(sidecar.containerEnv.POSTGRES_PASSWORD.length).toBeGreaterThan(0)
+    expect(compose).not.toContain(sidecar.containerEnv.POSTGRES_PASSWORD)
     expect(compose).not.toContain(JSON.parse(env.HAI_STORAGE).secretAccessKey)
   })
 })

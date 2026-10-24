@@ -199,6 +199,8 @@ Each delivery still generates `.hai/deploy/<environment>/bundle-.../.env.runtime
 
 #### Configure only the middleware the application needs
 
+Framework connections use `HAI_*`. Image-native variables such as `POSTGRES_*` and `RUSTFS_*` keep their required names in private `middleware-runtime.env`, loaded only by middleware. They no longer enter project settings or the application's `.env.runtime`; the application's incremental `middleware.env` contains framework settings only. Previously saved native entries are not automatically removed, but known generated native keys are excluded from new application environments.
+
 Runtime lockfile dependencies and configuration determine middleware. Choose defaults, custom connections or keep settings. --skip-middleware skips configuration/provisioning. SQLite, memory cache and local storage need no external images. Complete bundles automatically include self-hosted middleware images. External services still require reachable destinations; cloud provisioning is not an offline operation.
 
 #### Deployment options

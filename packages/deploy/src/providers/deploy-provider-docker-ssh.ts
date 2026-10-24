@@ -203,6 +203,7 @@ export function createDockerSshProvider(
     chmodSync(artifactDir, 0o700)
     const envPath = join(artifactDir, '.env.runtime')
     writeFileSync(envPath, serializeEnvFile(env), { mode: 0o600 })
+    writeFileSync(join(artifactDir, 'middleware-runtime.env'), serializeEnvFile(sidecar.containerEnv), { mode: 0o600 })
     if (options?.environment) {
       const environment = loadDeploymentEnvironment({ environment: options.environment, envDir: options.envDir ?? scan.envDir ?? appDir })
       if (!environment.success)

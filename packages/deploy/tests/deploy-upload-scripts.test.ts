@@ -140,9 +140,14 @@ function global:scp {
 if ($env:HAI_TEST_REMOVE_PLATFORM_ENV -eq '1') {
   foreach ($name in @('OS', 'SystemRoot', 'windir')) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
 }
+if ($env:HAI_TEST_SYSTEMROOT_STATE -eq 'absent') { Remove-Item -LiteralPath Env:SystemRoot -ErrorAction SilentlyContinue }
+elseif ($env:HAI_TEST_SYSTEMROOT_STATE -eq 'empty') { [Environment]::SetEnvironmentVariable('SystemRoot', '', 'Process') }
+elseif ($env:HAI_TEST_SYSTEMROOT_STATE -eq 'value') { [Environment]::SetEnvironmentVariable('SystemRoot', 'retained-system-root', 'Process') }
+$previousSystemRootExists = Test-Path -LiteralPath Env:SystemRoot
 $previousSystemRoot = [Environment]::GetEnvironmentVariable('SystemRoot', 'Process')
 & $env:HAI_TEST_SCRIPT
 if ([Environment]::GetEnvironmentVariable('SystemRoot', 'Process') -ne $previousSystemRoot) { throw 'Deployment script did not restore SystemRoot.' }
+if ((Test-Path -LiteralPath Env:SystemRoot) -ne $previousSystemRootExists) { throw 'Deployment script changed SystemRoot presence.' }
 `}`)
   const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[], powershell?: string } = {}) => {
     const env = {
@@ -315,6 +320,15 @@ it.skipIf(process.platform !== 'win32' || !hasPwsh)('pwsh password模式执行he
     expect(call).toContain('BatchMode=no')
     expect(call).not.toContain('-i')
   }
+})
+
+describe('powershell SystemRoot restoration', () => {
+  it.skipIf(!hasPowerShell && !hasPwsh).each(['absent', 'empty', 'value'])('保留 SystemRoot 的 %s 状态及原值', (state) => {
+    const { execute, commands } = fixture()
+    const result = execute('ps1', { powershell: hasPwsh ? 'pwsh' : powershell, env: { HAI_TEST_SYSTEMROOT_STATE: state } })
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(commands('ps1').map(call => call[0])).toEqual(['ssh', 'scp', 'ssh'])
+  })
 })
 
 describe.each([{ engine: 'powershell.exe', available: hasPowerShell }, { engine: 'pwsh', available: hasPwsh }])('filtered Windows environment in $engine', ({ engine, available }) => {

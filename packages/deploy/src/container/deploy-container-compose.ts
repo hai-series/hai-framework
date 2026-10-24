@@ -3,7 +3,7 @@
  *
  * 根据应用扫描结果生成 compose 文件与运行期环境：按需为 db/cache/storage
  * 追加自建 sidecar 服务，并注入对应的 HAI_DB / HAI_CACHE / HAI_STORAGE 覆盖变量。
- * 敏感值仅写入 .env.runtime，禁止进入 compose 文件。
+ * 敏感值仅写入受保护的环境文件，应用与中间件分开，禁止进入 compose 文件。
  * @module deploy-container-compose
  */
 
@@ -30,6 +30,28 @@ const IMAGES = {
   smtp: 'docker.io/axllent/mailpit:v1.27.4',
 } as const
 
+// 旧版本曾把镜像原生变量保存到应用环境；读取旧配置时也不再传给业务容器。
+const CONTAINER_ENV_KEYS = new Set([
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_DB',
+  'MYSQL_ROOT_PASSWORD',
+  'MYSQL_DATABASE',
+  'MYSQL_USER',
+  'MYSQL_PASSWORD',
+  'MINIO_ROOT_USER',
+  'MINIO_ROOT_PASSWORD',
+  'RUSTFS_ACCESS_KEY',
+  'RUSTFS_SECRET_KEY',
+  'RUSTFS_ADDRESS',
+  'RUSTFS_VOLUMES',
+  'RUSTFS_CONSOLE_ENABLE',
+  'LDAP_DOMAIN',
+  'LDAP_ORGANISATION',
+  'LDAP_ADMIN_PASSWORD',
+  'LDAP_TLS',
+])
+
 /**
  * compose 服务定义（结构化对象，交由 yaml 序列化）。
  * 内部 Compose 文档对象，不是公开部署配置 Schema。
@@ -45,7 +67,7 @@ type ComposeService = Record<string, unknown>
  * 无中间件应用的空计划是合法输入；有连接时 env/secrets 可能含私密值，不能整体展示。
  * @example 模块内部上下文
  * ```ts
- * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, dependsOn: [], secrets: [] }
+ * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] }
  * const yaml = generateComposeFile({ projectName: 'shop', appVersion: '1.0.0', imageRef: 'shop:1.0.0-build1', hostPort: 8080, containerPort: 3000, sidecar })
  * ```
  */
@@ -58,8 +80,10 @@ export interface SidecarPlan {
   volumes: Record<string, unknown>
   /** 挂载到 app 容器的卷（如 sqlite/lancedb 的本地数据目录持久化） */
   appVolumes: string[]
-  /** 追加到 .env.runtime 的环境变量（含 HAI_* 覆盖与 sidecar 凭据） */
+  /** 框架 HAI_* 配置，允许保存到工程环境并注入应用。 */
   env: Record<string, string>
+  /** 镜像要求的原生变量，仅写 middleware-runtime.env 并注入中间件。 */
+  containerEnv: Record<string, string>
   /** app 服务的 depends_on 列表 */
   dependsOn: string[]
   /** 需要在日志中脱敏的敏感值 */
@@ -70,7 +94,7 @@ export interface SidecarPlan {
  * 运行期环境构建结果。
  * @example 模块内部上下文
  * ```ts
- * const plan: RuntimeEnvPlan = { env: { NODE_ENV: 'production' }, sidecar: { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, dependsOn: [], secrets: [] } }
+ * const plan: RuntimeEnvPlan = { env: { NODE_ENV: 'production' }, sidecar: { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] } }
  * const content = serializeEnvFile(plan.env)
  * ```
  */
@@ -136,14 +160,14 @@ function planPostgresDb(plan: SidecarPlan, projectName: string, password: string
     image: IMAGES.postgres,
     container_name: `hai-${projectName}-db`,
     restart: 'unless-stopped',
-    env_file: ['.env.runtime'],
+    env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-db-data:/var/lib/postgresql/data`],
     networks: net,
   }
   plan.volumes[`${projectName}-db-data`] = null
-  plan.env.POSTGRES_USER = 'hai'
-  plan.env.POSTGRES_PASSWORD = password
-  plan.env.POSTGRES_DB = 'hai'
+  plan.containerEnv.POSTGRES_USER = 'hai'
+  plan.containerEnv.POSTGRES_PASSWORD = password
+  plan.containerEnv.POSTGRES_DB = 'hai'
   plan.env.HAI_DB = JSON.stringify({ type: 'postgresql', url: `postgresql://hai:${password}@db:5432/hai`, database: 'hai' })
   plan.secrets.push(password)
 }
@@ -156,15 +180,15 @@ function planMysqlDb(plan: SidecarPlan, projectName: string, password: string, n
     image: IMAGES.mysql,
     container_name: `hai-${projectName}-db`,
     restart: 'unless-stopped',
-    env_file: ['.env.runtime'],
+    env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-db-data:/var/lib/mysql`],
     networks: net,
   }
   plan.volumes[`${projectName}-db-data`] = null
-  plan.env.MYSQL_ROOT_PASSWORD = password
-  plan.env.MYSQL_DATABASE = 'hai'
-  plan.env.MYSQL_USER = 'hai'
-  plan.env.MYSQL_PASSWORD = password
+  plan.containerEnv.MYSQL_ROOT_PASSWORD = password
+  plan.containerEnv.MYSQL_DATABASE = 'hai'
+  plan.containerEnv.MYSQL_USER = 'hai'
+  plan.containerEnv.MYSQL_PASSWORD = password
   plan.env.HAI_DB = JSON.stringify({ type: 'mysql', url: `mysql://hai:${password}@db:3306/hai`, database: 'hai' })
   plan.secrets.push(password)
 }
@@ -191,16 +215,16 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
     container_name: `hai-${projectName}-storage`,
     restart: 'unless-stopped',
     ...(engine === 'minio' ? { command: ['server', '/data'] } : {}),
-    env_file: ['.env.runtime'],
+    env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-storage-data:/data`],
     networks: net,
   }
   plan.volumes[`${projectName}-storage-data`] = null
   if (engine === 'rustfs') {
-    Object.assign(plan.env, { RUSTFS_ACCESS_KEY: 'hai-storage', RUSTFS_SECRET_KEY: password, RUSTFS_ADDRESS: '0.0.0.0:9000', RUSTFS_VOLUMES: '/data', RUSTFS_CONSOLE_ENABLE: 'false' })
+    Object.assign(plan.containerEnv, { RUSTFS_ACCESS_KEY: 'hai-storage', RUSTFS_SECRET_KEY: password, RUSTFS_ADDRESS: '0.0.0.0:9000', RUSTFS_VOLUMES: '/data', RUSTFS_CONSOLE_ENABLE: 'false' })
   }
   else {
-    Object.assign(plan.env, { MINIO_ROOT_USER: 'hai-storage', MINIO_ROOT_PASSWORD: password })
+    Object.assign(plan.containerEnv, { MINIO_ROOT_USER: 'hai-storage', MINIO_ROOT_PASSWORD: password })
   }
   plan.env.HAI_STORAGE = JSON.stringify({
     type: 's3',
@@ -239,15 +263,15 @@ function planPgvectorVecdb(plan: SidecarPlan, projectName: string, password: str
     image: IMAGES.pgvector,
     container_name: `hai-${projectName}-vecdb`,
     restart: 'unless-stopped',
-    env_file: ['.env.runtime'],
+    env_file: ['middleware-runtime.env'],
     volumes: [`${projectName}-vecdb-data:/var/lib/postgresql/data`],
     networks: net,
   }
   plan.volumes[`${projectName}-vecdb-data`] = null
-  // 与 postgres db sidecar 共用 POSTGRES_* 凭据（不同实例、不同卷，值一致即可）
-  plan.env.POSTGRES_USER = 'hai'
-  plan.env.POSTGRES_PASSWORD = password
-  plan.env.POSTGRES_DB = 'hai'
+  // 与 postgres db sidecar 共用 POSTGRES_* 凭据（不同实例、不同卷，值一致即可）。
+  plan.containerEnv.POSTGRES_USER = 'hai'
+  plan.containerEnv.POSTGRES_PASSWORD = password
+  plan.containerEnv.POSTGRES_DB = 'hai'
   plan.env.HAI_VECDB = JSON.stringify({ type: 'pgvector', url: `postgresql://hai:${password}@vecdb:5432/hai`, database: 'hai' })
   plan.secrets.push(password)
 }
@@ -326,6 +350,7 @@ export function planSidecars(
     volumes: {},
     appVolumes: [],
     env: {},
+    containerEnv: {},
     dependsOn: [],
     secrets: [],
   }
@@ -373,10 +398,11 @@ export function planSidecars(
       const password = secrets.ldapPassword ?? secrets.dbPassword
       plan.services.push('ldap')
       plan.dependsOn.push('ldap')
-      plan.composeServices.ldap = { image: IMAGES.ldap, restart: 'unless-stopped', env_file: ['.env.runtime'], networks: net, volumes: [`${projectName}-ldap-data:/var/lib/ldap`, `${projectName}-ldap-config:/etc/ldap/slapd.d`] }
+      plan.composeServices.ldap = { image: IMAGES.ldap, restart: 'unless-stopped', env_file: ['middleware-runtime.env'], networks: net, volumes: [`${projectName}-ldap-data:/var/lib/ldap`, `${projectName}-ldap-config:/etc/ldap/slapd.d`] }
       plan.volumes[`${projectName}-ldap-data`] = null
       plan.volumes[`${projectName}-ldap-config`] = null
-      Object.assign(plan.env, { LDAP_DOMAIN: 'example.org', LDAP_ORGANISATION: 'HAI', LDAP_ADMIN_PASSWORD: password, LDAP_TLS: 'false', HAI_IAM_LOGIN_LDAP: 'true', HAI_IAM_LDAP: JSON.stringify({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org', bindPassword: password, searchBase: 'dc=example,dc=org' }) })
+      Object.assign(plan.containerEnv, { LDAP_DOMAIN: 'example.org', LDAP_ORGANISATION: 'HAI', LDAP_ADMIN_PASSWORD: password, LDAP_TLS: 'false' })
+      Object.assign(plan.env, { HAI_IAM_LOGIN_LDAP: 'true', HAI_IAM_LDAP: JSON.stringify({ url: 'ldap://ldap:389', bindDn: 'cn=admin,dc=example,dc=org', bindPassword: password, searchBase: 'dc=example,dc=org' }) })
       plan.secrets.push(password)
     }
     else if (service === 'email' && (scan.middlewares ? scan.middlewares.some(item => item.service === 'email' && item.backend === 'smtp' && (options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email ?? 'default') === 'default') : backends.email === 'smtp') && !provisionEnv.HAI_REACH_PROVIDERS) {
@@ -439,7 +465,7 @@ export function buildRuntimeEnv(
     PORT: String(containerPort),
     HAI_SERV_SERVER_HOST: '0.0.0.0',
     HAI_SERV_SERVER_PORT: String(containerPort),
-    ...appEnv,
+    ...Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))),
     ...sidecar.env,
     ...provisionEnv,
   }
@@ -461,7 +487,7 @@ export function buildRuntimeEnv(
  * @returns compose YAML 字符串
  * @example 模块内部上下文
  * ```ts
- * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, dependsOn: [], secrets: [] }
+ * const sidecar: SidecarPlan = { services: [], composeServices: {}, volumes: {}, appVolumes: [], env: {}, containerEnv: {}, dependsOn: [], secrets: [] }
  * const yaml = generateComposeFile({ projectName: 'shop', appVersion: '1.0.0', imageRef: 'shop:1.0.0-build1', hostPort: 8080, containerPort: 3000, sidecar })
  * ```
  */

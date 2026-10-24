@@ -237,7 +237,8 @@ if [ -f "$release/web.conf" ]; then chmod 644 "$release/web.conf"; fi
 : > "$release/compose-files"
 if [ "$partial" = true ]; then
   cp "$root/releases/$previous/compose-files" "$release/compose-files"
-  cp "$root/releases/$previous/middleware.env" "$release/middleware.env"
+  # 旧版本的生成文件混有镜像原生变量；每项单行，只继承框架连接配置。
+  awk '/^HAI_[A-Z0-9_]+=/ { print }' "$root/releases/$previous/middleware.env" > "$release/middleware.env"
   for service in $selected; do
     grep -qx "$service" "$root/releases/$previous/services" || { printf 'Service %s has no installed baseline. Use a full deployment.\n' "$service" >&2; exit 1; }
   done
@@ -563,7 +564,10 @@ try {
   }
 }
 } finally {
-  [Environment]::SetEnvironmentVariable('SystemRoot', $previousSystemRoot, 'Process')
+  if ($windowsRuntime) {
+    if ($null -eq $previousSystemRoot) { Remove-Item -LiteralPath Env:SystemRoot -ErrorAction SilentlyContinue }
+    else { [Environment]::SetEnvironmentVariable('SystemRoot', $previousSystemRoot, 'Process') }
+  }
 }
 `.replace('@@WINDOWS_ASKPASS@@', windowsAskpassSource)
   // Windows PowerShell 5 将无 BOM 的 UTF-8 视为 ANSI；中文注释也可能改变脚本的实际解析结果。

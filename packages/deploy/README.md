@@ -199,6 +199,8 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 
 ### 运行环境文件与重复部署
 
+框架持久配置使用 `HAI_*` 命名。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` 是中间件镜像的原生协议，必须保留原名，但只生成到私有的 `middleware-runtime.env` 并由中间件容器加载；不再写入工程环境文件或应用的 `.env.runtime`。应用增量部署沿用的 `middleware.env` 仅保存框架 `HAI_*` 配置。旧工程已保存的这些原生字段不会被自动删除，新应用环境会忽略它们；新包与旧成功基线可共存，旧服务仍读取其原交付文件。
+
 每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`，供 Compose 加载运行配置；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值；自建中间件的稳定随机凭据另缓存于服务扫描目录的 `.hai/deploy/runtime/<项目名>-<环境>.secrets.json`，不要删除该文件后直接复用旧数据卷。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。首次仅打包不会收集 SSH 信息，需先在工程配置连接；修改交付目录的 `deploy-target.json` 不会回写工程。
