@@ -11,7 +11,7 @@ test.describe('Transport enabled E2E', () => {
     await page.locator('#login-username').fill(transportAdmin.username)
     await page.locator('input[type="password"]').first().fill(transportAdmin.password)
     const [loginResponse] = await Promise.all([
-      page.waitForResponse(response => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST'),
+      page.waitForResponse(response => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST').then(expectEncrypted),
       page.locator('button[type="submit"]').click(),
     ])
     expect(loginResponse.status()).toBe(200)
@@ -24,11 +24,11 @@ test.describe('Transport enabled E2E', () => {
 
   async function expectEncrypted(response: import('@playwright/test').Response) {
     expect(response.ok()).toBe(true)
+    const payload = await response.json()
     const requestHeaders = await response.request().allHeaders()
     expect(requestHeaders['x-client-id']).toBeTruthy()
     expect(requestHeaders['x-encrypted']).toBe('true')
     expect((await response.allHeaders())['x-encrypted']).toBe('true')
-    const payload = await response.json()
     expect(payload).toMatchObject({
       direction: 'response',
       status: response.status(),
@@ -39,33 +39,33 @@ test.describe('Transport enabled E2E', () => {
       tag: expect.any(String),
       signature: expect.any(String),
     })
+    return response
   }
 
   test('encrypts login, API GET and SvelteKit navigation while the browser receives usable data', async ({ page }) => {
-    const loginResponse = page.waitForResponse(response => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST')
     await loginViaUi(page)
     await expect(page.getByTestId('app-environment-badge')).toBeVisible()
-    await expectEncrypted(await loginResponse)
 
-    const meResponse = page.waitForResponse(response => response.url().endsWith('/api/auth/me') && response.request().method() === 'GET')
-    const me = await page.evaluate(async () => {
-      const response = await fetch('/api/auth/me')
-      return { status: response.status, body: await response.json() }
-    })
+    // 在收到响应时立即读取密文，避免页面跳转后 Chrome 已释放旧请求的响应体。
+    const [networkMe, me] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/auth/me') && response.request().method() === 'GET').then(expectEncrypted),
+      page.evaluate(async () => {
+        const response = await fetch('/api/auth/me')
+        return { status: response.status, body: await response.json() }
+      }),
+    ])
     expect(me.status).toBe(200)
     expect(me.body.success).toBe(true)
     expect(me.body.user?.username ?? me.body.data?.user?.username).toBe(transportAdmin.username)
-    const networkMe = await meResponse
     expect((await networkMe.request().allHeaders())['x-hai-transport']).toBeTruthy()
-    await expectEncrypted(networkMe)
 
-    const dataResponse = page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json'))
-    await page.locator('a[href="/admin/iam/roles"]').first().click()
+    const [networkData] = await Promise.all([
+      page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json')).then(expectEncrypted),
+      page.locator('a[href="/admin/iam/roles"]').first().click(),
+    ])
     await expect(page).toHaveURL(/\/admin\/iam\/roles/)
     await expect(page.locator('table')).toBeVisible()
-    const networkData = await dataResponse
     expect((await networkData.request().allHeaders())['x-hai-transport']).toBeTruthy()
-    await expectEncrypted(networkData)
   })
 
   test('renders Mermaid document/code demos in UI gallery scenes with transport enabled', async ({ page }) => {
