@@ -23,7 +23,7 @@ import { dirname, join, resolve } from 'node:path'
 export function resolveProjectDirectory(appDir: string): string {
   let directory = resolve(appDir)
   while (true) {
-    if (existsSync(join(directory, 'hai.build.json')) || existsSync(join(directory, 'pnpm-lock.yaml')))
+    if (existsSync(join(directory, 'hai.json')) || existsSync(join(directory, 'pnpm-lock.yaml')))
       return directory
     const parent = dirname(directory)
     if (parent === directory)

@@ -77,35 +77,8 @@ describe('core.init', () => {
     expect(core.config.get('settings')).toEqual({ key: 'value' })
   })
 
-  it.each(['_deploy.yml', '_deploy.yaml'])('自动扫描不解析缺少部署凭据的保留文件 %s', (filename) => {
-    vi.stubEnv('HAI_DEPLOY', undefined)
-    vi.stubEnv('HAI_DEPLOY_PROVIDER', undefined)
-    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH', undefined)
-    vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH_HOST', undefined)
-    writeFileSync(join(tempDir, filename), `provider:\n  ssh:\n    host: \${HAI_DEPLOY_PROVIDER_SSH_HOST}\n`)
-    writeFileSync(join(tempDir, 'app.yml'), 'ready: true\n')
-    const errors = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
-
-    core.init({ configDir: tempDir, watchConfig: true })
-
-    expect(errors).not.toHaveBeenCalled()
-    expect(core.config.has('deploy')).toBe(false)
-    expect(core.config.isWatching('deploy')).toBe(false)
-    expect(core.config.get('app')).toEqual({ ready: true })
-  })
-
-  it.each(['_deploy.yml', '_deploy.yaml'])('自动扫描和监听均跳过有效部署保留文件 %s', (filename) => {
-    writeFileSync(join(tempDir, filename), 'provider:\n  type: vercel\n')
-
-    core.init({ configDir: tempDir, watchConfig: true })
-
-    expect(core.config.has('deploy')).toBe(false)
-    expect(core.config.isWatching('deploy')).toBe(false)
-  })
-
-  it('普通业务 deploy.yml 仍加载和监听，不与部署保留文件混淆', () => {
-    writeFileSync(join(tempDir, '_deploy.yml'), 'provider:\n  type: vercel\n')
-    writeFileSync(join(tempDir, 'deploy.yml'), 'business: true\n')
+  it.each(['_deploy.yml', '_deploy.yaml', 'deploy.yml'])('所有 YAML 配置均按文件名约定加载和监听 %s', (filename) => {
+    writeFileSync(join(tempDir, filename), 'business: true\n')
 
     core.init({ configDir: tempDir, watchConfig: true })
 
@@ -113,7 +86,19 @@ describe('core.init', () => {
     expect(core.config.isWatching('deploy')).toBe(true)
   })
 
-  it('手动加载部署保留文件仍报告缺失变量，提供变量后仍可读取', () => {
+  it('项目构建部署 JSON 不参与运行时 YAML 扫描', () => {
+    // eslint-disable-next-line no-template-curly-in-string -- 工具配置中的变量应保持原文，Core 不解析项目 JSON。
+    writeFileSync(join(tempDir, 'hai.json'), JSON.stringify({ deploy: { provider: { ssh: { host: '${HAI_SSH_HOST}' } } } }))
+    writeFileSync(join(tempDir, 'app.yml'), 'ready: true\n')
+
+    core.init({ configDir: tempDir, watchConfig: true })
+
+    expect(core.config.has('hai')).toBe(false)
+    expect(core.config.has('deploy')).toBe(false)
+    expect(core.config.get('app')).toEqual({ ready: true })
+  })
+
+  it('手动加载 YAML 报告缺失变量，提供变量后可读取', () => {
     vi.stubEnv('HAI_DEPLOY', undefined)
     vi.stubEnv('HAI_DEPLOY_PROVIDER', undefined)
     vi.stubEnv('HAI_DEPLOY_PROVIDER_SSH', undefined)

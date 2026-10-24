@@ -24,3 +24,5 @@ secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY:}
 # S3 兼容端点；生产默认连接 Compose storage 服务。
 endpoint: ${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 forcePathStyle: ${HAI_STORAGE_FORCEPATHSTYLE:false}
+# 可选自动建桶；生产自建 S3 由环境启用，需具备建桶权限。
+createBucket: ${HAI_STORAGE_CREATEBUCKET:false}

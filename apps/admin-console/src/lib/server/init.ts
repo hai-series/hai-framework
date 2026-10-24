@@ -124,11 +124,8 @@ async function runInitApp(): Promise<void> {
   // 6. 初始化存储（可选，配置不存在时跳过）
   if (storageConfig) {
     const storageResult = await storage.init(storageConfig)
-    if (!storageResult.success) {
-      core.logger.warn('Storage module initialization failed, file upload features will be unavailable', {
-        error: storageResult.error.message,
-      })
-    }
+    if (!storageResult.success)
+      throw new Error(m.server_init_storage_failed({ message: storageResult.error.message }))
   }
 
   // 7. 初始化 Reach 触达服务（可选，配置不存在时跳过）

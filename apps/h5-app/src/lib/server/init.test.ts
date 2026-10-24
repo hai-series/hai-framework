@@ -80,6 +80,25 @@ beforeEach(() => {
 })
 
 describe('h5-app application startup', () => {
+  it('已配置存储连接失败时停止启动，释放本次资源并允许恢复后重试', async () => {
+    state.config.storage = { type: 's3', createBucket: true }
+    state.settings.failInit = 'storage'
+    const { initApp } = await import('./init.js')
+    await expect(initApp()).rejects.toThrow('Storage initialization failed')
+    expect(state.modules.ai.init).not.toHaveBeenCalled()
+    expect(state.calls.filter(call => call.endsWith('.close'))).toEqual(['storage.close', 'iam.close', 'cache.close', 'reldb.close'])
+    state.settings.failInit = ''
+    await initApp()
+    expect(state.modules.storage.init).toHaveBeenCalledTimes(2)
+    expect(state.initialized.has('storage')).toBe(true)
+  })
+
+  it('未配置存储仍可正常初始化', async () => {
+    const { initApp } = await import('./init.js')
+    await initApp()
+    expect(state.modules.storage.init).not.toHaveBeenCalled()
+  })
+
   it('启用AI时先成功连接vecdb再AI，重复初始化不重复连接', async () => {
     const { initApp } = await import('./init.js')
     await initApp()

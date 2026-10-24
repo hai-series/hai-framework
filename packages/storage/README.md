@@ -148,10 +148,14 @@ if (!result.success) {
 
 ### 配置
 
-- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
+- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `createBucket / endpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
 
-MinIO、RustFS 共用 S3 Provider，使用 `type: 's3'`，无需单独的存储类型。连接自建实例时指定 S3 API 端点（通常为 9000 端口）并启用路径风格；存储桶须预先创建。
+MinIO、RustFS 共用 S3 Provider，使用 `type: 's3'`，无需单独的存储类型。连接自建实例时指定 S3 API 端点（通常为 9000 端口）并启用路径风格。
+
+`createBucket` 默认 `false`，桶须预先存在。设为 `true` 后，`storage.init()` 先用 `HeadBucket` 检查，仅在明确返回 404 时创建缺失的桶；已有桶及对象保持不变。权限、网络、建桶或后续连接检查失败均返回失败，清理客户端且不发布就绪状态。并发创建只接受 `BucketAlreadyOwnedByYou`，并再次确认可访问。AWS `us-east-1` 创建时省略 LocationConstraint，其他区域按配置传入；默认自建 S3 部署通过 `HAI_STORAGE_CREATEBUCKET=true` 启用，外部 S3 按需授权。
+
+YAML 显式引用 `createBucket: ${HAI_STORAGE_CREATEBUCKET:false}` 后可由环境变量控制；直接传入 `storage.init()` 时使用布尔值。
 
 ```ts
 const initResult = await storage.init({
@@ -162,6 +166,7 @@ const initResult = await storage.init({
   accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID!,
   secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY!,
   forcePathStyle: true,
+  createBucket: true,
 })
 if (!initResult.success) {
   throw new Error(initResult.error.message)

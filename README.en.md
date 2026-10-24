@@ -106,7 +106,7 @@ This philosophy leads to these decisions:
 
 ## Getting started
 
-Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.build.json`, and the skills used throughout the workflow.
+Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.json`, and the skills used throughout the workflow.
 
 Use Node.js matching the project's `engines` (`^22.22.2 || ^24.15.0 || >=26.0.0`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
 
@@ -150,7 +150,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.build.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run the bundled apply.sh. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.
+Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run deploy-local.sh to verify, extract and deploy automatically. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.
 
 ### Integrate into an existing project
 

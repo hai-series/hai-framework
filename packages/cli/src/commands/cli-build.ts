@@ -8,6 +8,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
+import { readProjectConfig } from './cli-project-config.js'
 
 /**
  * 构建参数，不接受部署环境。
@@ -38,7 +39,7 @@ export interface BuildCommandOptions extends GlobalOptions {
 
 /**
  * 项目构建描述；app/web 共用 buildId。
- * 从 hai.build.json 读取；镜像名称为 app/web，构建命令还会校验唯一性与路径边界。
+ * 从 hai.json 的 build 分区读取；镜像名称为 app/web，构建命令还会校验唯一性与路径边界。
  * @example 模块内部上下文
  * ```ts
  * const config: BuildConfig = { images: [{ name: 'app', context: '.', dockerfile: 'images/app.Dockerfile', containerPort: 3000 }], desktop: ['apps/shop-desktop'] }
@@ -117,7 +118,8 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const appVersion = metadata.version
   if (typeof appVersion !== 'string' || appVersion.length > 80 || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i.test(appVersion))
     throw new Error(cliM('cli_build_version_invalid'))
-  const config = JSON.parse(readFileSync(join(cwd, 'hai.build.json'), 'utf8')) as BuildConfig
+  const project = readProjectConfig(join(cwd, 'hai.json'))
+  const config = (project.build ?? {}) as BuildConfig
   if (target === 'desktop') {
     const platforms = { win32: 'windows', linux: 'linux', darwin: 'macos' } as const
     const host = platforms[process.platform as keyof typeof platforms]

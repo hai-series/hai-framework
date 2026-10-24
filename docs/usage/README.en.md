@@ -26,7 +26,7 @@ Commands describe the CLI and templates in this repository. For an installed rel
 | Build container images | An installed, running Podman or Docker engine; use Linux containers on Windows |
 | Build desktop installers | Rust, the target architecture toolchain, and Tauri's system SDKs and packaging tools on the target OS |
 | Deploy automatically to Linux | Local `tar`, `ssh`, and `scp`; a server with a container engine, Compose, `sh`, `tar`, `sha256sum`, `awk`, `curl`, util-linux `flock`, a filesystem supporting flock and directory permissions |
-| Generate a deployment bundle only | Local `tar`, installed project dependencies, and complete build artifacts; no SSH or local container engine required |
+| Generate a deployment bundle only | Local `tar`, installed project dependencies, and complete build artifacts; exporting middleware images also requires a local container engine; no SSH required |
 
 Commands below use `pnpm`; use `pnpm.cmd` in Windows PowerShell. Engine auto-detection checks available Podman/Docker installations; it does not install or start them.
 
@@ -141,10 +141,38 @@ pnpm build --target desktop --platform windows --arch x64
 
 `--target` selects compile (default), docker or desktop. `--images app|web|app,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
-#### Describe packaging in hai.build.json
+#### Describe packaging in hai.json
 
 ```json
-{"images":[{"name":"app","context":".","dockerfile":"images/app.Dockerfile","containerPort":3000},{"name":"web","context":".","dockerfile":"images/web.Dockerfile","containerPort":8080}]}
+{
+  "build": {
+    "images": [
+      {
+        "name": "app",
+        "context": ".",
+        "dockerfile": "images/app.Dockerfile",
+        "containerPort": 3000
+      },
+      {
+        "name": "web",
+        "context": ".",
+        "dockerfile": "images/web.Dockerfile",
+        "containerPort": 8080
+      }
+    ]
+  },
+  "deploy": {
+    "provider": {
+      "type": "docker-ssh",
+      "expose": {
+        "hostPort": "${HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT:18080}"
+      }
+    },
+    "container": {
+      "s3Engine": "rustfs"
+    }
+  }
+}
 ```
 
 Each image has its own Dockerfile. Web runtime assets live in images/web/. Dockerfiles retain internal build/runtime stages; configuration does not select stages. Omit absent images and add desktop directories only for native projects.
@@ -159,16 +187,11 @@ The root package.json.version identifies the application. `.hai/build/docker/<bu
 
 #### Prepare the environment and destination
 
-Prepare `.env.<environment>` and the service config/_deploy.yml. Fullstack deploy scripts point to packages/<project>-serv; API workspaces use apps/<project>-service. Artifact lookup remains rooted at the build configuration.
+Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-service, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
 
-```yaml
-provider:
-  type: docker-ssh
-  expose:
-    hostPort: 18080
-container:
-  s3Engine: rustfs
-```
+`deploy` supports `${VARIABLE:fallback}` and hierarchical `HAI_DEPLOY_*` overrides, including whole JSON objects. Deployment precedence is process environment > `.env.local` > `.env.<environment>` > `.env`. Keep credentials private. Builds do not load deployment environments or secrets.
+
+For existing projects, move the previous build object into `hai.json.build`, convert deployment YAML into `hai.json.deploy`, remove the old files and retain `HAI_DEPLOY_*` variables. Existing self-hosted S3 installations must use a full deployment for this upgrade: their old baseline contains an exited initialization service, which fails the dependency checks of new incremental packages. The full deployment also refreshes the `createBucket` middleware setting; subsequent incremental updates work normally.
 
 For direct deployment, the wizard asks for missing server, SSH user, optional key/fingerprint files and public port settings using readable labels, and reuses complete settings. Local connection settings go to .env.local; private keys are referenced by path. `--bundle-only` skips SSH connection questions; fill in `deploy-target.json` before uploading later.
 
@@ -188,11 +211,11 @@ pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
 ```
 
-Partial updates require a successful full server installation and matching ports/layout. Merge selected services into the server's successful baseline; preserve unselected services, settings and volumes. The deployment script first removes only the selected old containers by project and service labels, retaining their volumes. It then runs `compose up -d --no-deps --no-build --pull never --no-recreate web` to create replacements while other containers keep running, without project-wide down. storage-init is a one-time S3 bucket initialization task, executed only when storage initialization is selected.
+Partial updates require a successful full server installation and matching ports/layout. Merge selected services into the server's successful baseline; preserve unselected services, settings and volumes. The deployment script first removes only the selected old containers by project and service labels, retaining their volumes. It then runs `compose up -d --no-deps --no-build --pull never --no-recreate web` to create replacements while other containers keep running, without project-wide down. The application initializes self-hosted S3 buckets through the optional `storage.init()` setting `createBucket`.
 
 Here `-d` starts in the background; `--no-deps` leaves dependencies untouched; `--no-build` prevents server builds; `--pull never` forbids registry pulls; `--no-recreate` preserves containers that still exist; the selected old containers were already removed by the script, so their replacements are created. `web` is a Compose service name, not an image tag; separate multiple services with spaces.
 
-`storage-init` uses the application's S3 SDK to wait for storage and create a missing bucket without deleting data. Start storage first, then run `compose up --no-deps --no-build --pull never --force-recreate --exit-code-from storage-init storage-init`. Start selected application services only after initialization exits with zero. For partial updates, the script first removes the old storage-init container and uses `--no-recreate` instead of `--force-recreate` here, preserving running application containers. Updating only `storage` still requires an artifact containing the `app` image for initialization. If the most recent build contains only Web, select the original complete artifact with `--artifact-dir`, or run `pnpm build --target docker --images app` first. This image is used for initialization without updating the running `app` service.
+S3 `createBucket` defaults to `false`. Self-hosted S3 deployments set `HAI_STORAGE_CREATEBUCKET=true`; application initialization creates a missing bucket and preserves an existing one. External S3 remains opt-in. Compose uses the `hai-app` network without YAML anchors. Storage-only updates need no application image; new buckets are initialized on the next application startup.
 
 
 #### When the machines cannot connect: copy a bundle
@@ -201,9 +224,11 @@ Here `-d` starts in the background; `--no-deps` leaves dependencies untouched; `
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-Deployment caches, archives and adjacent -deploy/ directories default to `.hai/deploy/<environment>/` at the same project root as `.hai/build/`. Archive names include the project, deployment ID and application version, such as `bundle-demo-<deploymentId>-1.2.3.tar`. An explicit `--output release-prod.tar` instead produces `release-prod-1.2.3.tar` and its adjacent operation directory relative to the command's working directory. The tar includes selected application/middleware images, configurations, private environment files, checksums, README and apply.sh. Before running either upload script, open `deploy-target.json` in the operation directory and use its per-field descriptions to edit and check the server, SSH user and port, private key and known-hosts files, remote directory and other settings. Run deploy.ps1 on Windows or deploy.sh on Linux/macOS; both scripts read this JSON to upload over SSH and execute the same server workflow. Running deploy.sh locally requires sh, awk, ssh and scp. Use `sh deploy.sh HOST [PORT] [USER]` to override the connection address, or pass `-IdentityFile` to deploy.ps1 to override its private key. Both scripts support HAI_DEPLOY_IDENTITY_FILE and HAI_DEPLOY_KNOWN_HOSTS_FILE to override key and known-hosts paths. After moving to another computer or operating system, update these paths to files on that computer.
+Each delivery creates one `.hai/deploy/<environment>/bundle-<project>-<deploymentId>-<version>/` directory containing its tar, Compose, environment, web.conf, manifest and cross-platform scripts. Copy that directory as a unit. Explicit `--output release-prod.tar` produces `release-prod-<version>/release-prod-<version>.tar` relative to the command directory, with all companion files alongside it. The tar includes selected application/middleware images, configurations, private environment files, checksums, README and apply.sh. Before running either upload script, open `deploy-target.json` in the operation directory and use its per-field descriptions to edit and check the server, SSH user and port, private key and known-hosts files, remote directory and other settings. Run deploy.ps1 on Windows or deploy.sh on Linux/macOS; both scripts read this JSON to upload over SSH and execute the same server workflow. Running deploy.sh locally requires sh, awk, ssh and scp. Use `sh deploy.sh HOST [PORT] [USER]` to override the connection address, or pass `-IdentityFile` to deploy.ps1 to override its private key. Both scripts support HAI_DEPLOY_IDENTITY_FILE and HAI_DEPLOY_KNOWN_HOSTS_FILE to override key and known-hosts paths. After moving to another computer or operating system, update these paths to files on that computer.
 
-On isolated Linux servers, extract into a separate package directory and run `sh apply.sh`, optionally passing the deployment root. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
+On isolated Linux servers, copy the delivery directory and run `sh deploy-local.sh`, optionally passing the deployment root. The script verifies and extracts the adjacent tar and invokes the bundled apply.sh automatically. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
+
+The bundle `manifest.json` records `partial` and `selectedServices`, and the apply script embeds the same choice. A complete build without `--services` is a full deployment; explicit service selection or a partial build is incremental. Incremental packages require a matching successful `current` baseline and cannot perform a first installation.
 
 #### Before going fully offline
 

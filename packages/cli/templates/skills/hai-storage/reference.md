@@ -29,6 +29,7 @@ root: ./data/storage
 # accessKeyId: ''
 # secretAccessKey: ''
 # bucket: my-bucket
+# createBucket: ${HAI_STORAGE_CREATEBUCKET:false}
 # forcePathStyle: false
 # prefix: ''
 # publicUrl: ''
@@ -42,9 +43,9 @@ operationLog:
 约定环境变量优先于 YAML，例如 `HAI_STORAGE_ROOT`、
 `HAI_STORAGE_ACCESSKEYID`、`HAI_STORAGE_SECRETACCESSKEY`。
 
-MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoint`（通常为 9000 端口）和 `forcePathStyle: true`，并预先创建 `bucket`；不要新增 `type: minio` 或 `type: rustfs`。
+MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoint`（通常为 9000 端口）和 `forcePathStyle: true`。`createBucket` 默认 false，需要预先创建 `bucket`；设为 true 后，`storage.init` 用 HeadBucket 检查，明确 404 时才创建，存在的桶及其中对象保留。权限、网络或创建失败均返回失败且不发布连接；凭据须有检查及创建桶的权限。不要新增 `type: minio` 或 `type: rustfs`。
 
-使用 hai-deploy 的默认自建 S3 配置时，可通过 `container.s3Engine`（`HAI_DEPLOY_CONTAINER_S3ENGINE`，`rustfs | minio`）选择实现，默认 RustFS。部署流程复用应用镜像中的 S3 SDK 幂等初始化 bucket，不依赖单独的 mc 镜像；自定义外部 S3 服务仍需确认 bucket 已存在且凭据有相应权限。
+使用 hai-deploy 的默认自建 S3 配置时，可通过 `hai.json` 的 `deploy.container.s3Engine`（`HAI_DEPLOY_CONTAINER_S3ENGINE`，`rustfs | minio`）选择实现，默认 RustFS。运行环境启用 `HAI_STORAGE_CREATEBUCKET=true` 后由应用初始化 storage 时建桶；部署不再生成独立初始化服务或脚本。自定义外部 S3 默认不建桶，可按凭据权限显式启用。
 
 `operationLog` 在 Local/S3 Provider 的真实 file/dir/presign 操作处输出日志，不要在 `storage-main.ts` 或调用方重复包装。文件内容不会写入日志，上传数据只记录字节长度；`maxLength` 用于截断序列化后的参数，`level` 默认 `debug`。
 

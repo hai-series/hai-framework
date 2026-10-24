@@ -106,7 +106,7 @@ hai Framework は **AI Runtime を中核に、企業向け機能を必要に応�
 
 ## はじめに
 
-環境準備、手作業・AI first 開発、コンパイル、イメージ/ネイティブパッケージ、自動・オフラインデプロイ、フレームワーク更新は完全ガイドを参照してください：[日本語](docs/usage/README.ja.md) · [简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md)。コマンド引数、`hai.build.json`、各工程で使う skills も説明しています。
+環境準備、手作業・AI first 開発、コンパイル、イメージ/ネイティブパッケージ、自動・オフラインデプロイ、フレームワーク更新は完全ガイドを参照してください：[日本語](docs/usage/README.ja.md) · [简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md)。コマンド引数、`hai.json`、各工程で使う skills も説明しています。
 
 プロジェクトの `engines` に合う Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）と pnpm 12.11.2 を用意します。PowerShell では `pnpm.cmd` を使ってください。
 
@@ -150,7 +150,7 @@ pnpm run deploy --env prod --build --services web
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.build.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは apply.sh を実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
+デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは deploy-local.sh が検証・展開・配置を自動実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
 
 ### 既存プロジェクトへの導入
 

@@ -7,7 +7,7 @@ import { deploy, loadDeploymentEnvironment } from '@h-ai/deploy'
 import * as deployModule from '@h-ai/deploy'
 import { ReldbConfigSchema } from '@h-ai/reldb/schemas'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { stringify } from 'yaml'
+import { parse, stringify } from 'yaml'
 import { cliM } from '../src/cli-i18n.js'
 import * as cliUtils from '../src/cli-utils.js'
 import { moduleEnvironmentVariables } from '../src/commands/cli-config-environment.js'
@@ -19,6 +19,12 @@ const mocked = vi.hoisted(() => ({ prompt: vi.fn() }))
 vi.mock('prompts', () => ({ default: mocked.prompt }))
 const roots: string[] = []
 let stdinDescriptor: PropertyDescriptor | undefined
+
+function setDeployment(app: string, content: string): void {
+  const file = join(app, 'hai.json')
+  const project = JSON.parse(readFileSync(file, 'utf8'))
+  writeFileSync(file, JSON.stringify({ ...project, deploy: parse(content) }, null, 2))
+}
 
 it('asks once per email and SMS provider and reports saved services without environment variables', async () => {
   const { app, service } = await fullstackFixture()
@@ -49,10 +55,10 @@ it('asks once per email and SMS provider and reports saved services without envi
   expect(output).toHaveBeenCalledWith(cliM('cli_deploy_saved', { params: { service: 'sms' } }))
 }, 30_000)
 
-it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles S3 engine configuration with YAML %s', async (node) => {
+it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles S3 engine configuration in project JSON (%s)', async (node) => {
   const { app, service } = await fullstackFixture()
-  const file = join(service, 'config/_deploy.yml')
-  writeFileSync(file, `provider:\n  type: docker-ssh\n${node}`)
+  const file = join(app, 'hai.json')
+  setDeployment(app, `provider:\n  type: docker-ssh\n${node}`)
   writeFileSync(join(service, 'config/_storage.yml'), 'type: s3\n')
   writeFileSync(join(app, '.env.test'), 'HAI_STORAGE=\'{"type":"s3"}\'\n')
   const scan = await deploy.scan(service, { environment: 'test', envDir: app })
@@ -63,11 +69,12 @@ it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles 
   const operation = configureDeployMiddleware(deployModule, { ...scan.data, middlewares: scan.data.middlewares?.filter(item => item.service === 'storage') }, environment.data, { provider: { type: 'docker-ssh' } }, true)
   if (node.includes('invalid')) {
     await expect(operation).rejects.toThrow(file)
-    expect(readFileSync(file, 'utf8')).toContain('container: invalid')
+    expect(JSON.parse(readFileSync(file, 'utf8')).deploy.container).toBe('invalid')
   }
   else {
     await expect(operation).resolves.toMatchObject({ storage: 'default' })
-    expect(readFileSync(file, 'utf8')).toContain('s3Engine:')
+    expect(JSON.parse(readFileSync(file, 'utf8')).deploy.container.s3Engine).toBe(`\${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}`)
+    expect(JSON.parse(readFileSync(file, 'utf8')).build.images).toHaveLength(2)
   }
 }, 30_000)
 
@@ -110,7 +117,7 @@ it('infers Web selection from a partial artifact before configuring middleware',
 
 it('guides SSH setup once, saves parameters privately and reuses them without prompts', async () => {
   const { app, service } = await fullstackFixture()
-  writeFileSync(join(service, 'config/_deploy.yml'), 'provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n')
+  setDeployment(app, 'provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n')
   const inputs: Record<string, string> = {
     HAI_DEPLOY_PROVIDER_SSH_HOST: 'server.internal',
     HAI_DEPLOY_PROVIDER_SSH_PORT: '2202',
@@ -143,7 +150,7 @@ it('guides SSH setup once, saves parameters privately and reuses them without pr
 it.each(['missing', 'partial', 'saved'])('bundle-only skips SSH prompts and only reuses complete saved SSH settings (%s)', async (targetState) => {
   const { app, service } = await fullstackFixture()
   const savedTarget = targetState === 'saved'
-  writeFileSync(join(service, 'config/_deploy.yml'), `provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n${targetState === 'partial' ? '  ssh:\n    host: partial-server.internal\n' : ''}`)
+  setDeployment(app, `provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n${targetState === 'partial' ? '  ssh:\n    host: partial-server.internal\n' : ''}`)
   const ssh = { host: 'saved-server.internal', username: 'deployer', port: 2202 }
   if (savedTarget)
     writeFileSync(join(app, '.env.local'), `HAI_DEPLOY_PROVIDER='${JSON.stringify({ type: 'docker-ssh', ssh, expose: { hostPort: 8080 } })}'\n`)
@@ -185,7 +192,7 @@ async function fullstackFixture(): Promise<{ root: string, app: string, service:
   expect(JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).devDependencies['@h-ai/deploy']).toBe('catalog:')
   const service = join(app, 'packages/deploy-app-serv')
   writeFileSync(join(app, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { 'packages/deploy-app-serv': { dependencies: Object.fromEntries(['iam', 'reldb', 'cache', 'storage', 'reach'].map(name => [`@h-ai/${name}`, { version: '1' }])) } }, packages: Object.fromEntries(['iam', 'reldb', 'cache', 'storage', 'reach'].map(name => [`@h-ai/${name}@1`, {}])), snapshots: Object.fromEntries(['iam', 'reldb', 'cache', 'storage', 'reach'].map(name => [`@h-ai/${name}@1`, {}])) }))
-  writeFileSync(join(service, 'config/_deploy.yml'), 'provider:\n  type: docker-ssh\n  ssh:\n    host: example.test\n    username: deploy\n  expose:\n    hostPort: 18080\n')
+  setDeployment(app, 'provider:\n  type: docker-ssh\n  ssh:\n    host: example.test\n    username: deploy\n  expose:\n    hostPort: 18080\n')
   return { root, app, service }
 }
 

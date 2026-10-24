@@ -17,7 +17,7 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 
 ## 使用路径
 
-1. Node 端配置 Local/S3，校验并检查 init；MinIO/RustFS 使用 s3 类型，确认桶和权限。
+1. Node 端配置 Local/S3，校验并检查 init；MinIO/RustFS 使用 s3 类型。S3 `createBucket` 默认 false，需自动建桶时设 true（YAML 用 `${HAI_STORAGE_CREATEBUCKET:false}`）；初始化只在 HeadBucket 明确 404 时创建，权限/网络/建桶失败会阻止就绪。默认自建 S3 部署通过环境启用此项。
 2. 从 file/dir/presign 选择操作，检查 HaiResult。流与 checksum 按真实签名处理，checksum 在 Node 无需 init。
 3. 客户端经受保护 API 或预签名 URL，服务端校验路径、内容、大小及资源权限；putUrl 不强制 maxSize。
    进度上传使用原生 XHR；预取消不发送，取消/错误一次结算并清理监听，完成后取消不影响旧请求。取消不回滚远端对象，先核对状态再授权删除。

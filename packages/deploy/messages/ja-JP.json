@@ -50,7 +50,7 @@
   "deploy_webProxyInvalid": "APIプレフィックスは、英数字、アンダースコア、ハイフン、スラッシュのみを含む絶対パスで指定してください。",
   "deploy_artifactInvalid": "イメージ成果物が存在しないか、無効です。pnpm build --target docker を実行するか、--artifact-dir で有効な成果物を選択するか、pnpm run deploy --build を使用してください。",
   "deploy_sshRequired": "自動デプロイにはSSH設定が必要です。サーバーに接続できない場合は--bundle-onlyで手動転送用のバンドルを生成してください。",
-  "deploy_bundleInstructions": "バンドル：{file}\n選択したサービスに必要なすべてのイメージを含みます（セルフホストのミドルウェアを含む）。\nSSH を使用する場合、隣接するデプロイディレクトリの deploy-target.json を _comments に従って編集し、同じ場所で deploy.ps1（Windows）または deploy.sh（Linux/macOS）を実行してください。両方ともこの JSON を読み込みます。sh の実行にはローカルの awk も必要です。\n隔離されたサーバーでは、tar を別のディレクトリへコピーして展開し、sh apply.sh を実行してください（設定された対象ディレクトリを使用します）。\nLinux には Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux の flock が必要です。flock に対応したファイルシステム上で、ファイルシステムとコンテナーの操作権限も必要です。\n.deploy.lock は削除も置換もしないでください。すべての保持プロセスが終了するか、サーバーが再起動するとロックが解放されます。強制終了後は実行状態と復旧状態を確認してください。\n部分更新にはポートと構成が一致する正常な完全インストールが必要です。各手順は失敗時に非ゼロで終了し、result-DEPLOYMENT_ID.json に結果を記録します。\nバンドルには非公開の実行時設定が含まれます。安全に転送してください。\n同梱イメージ：\n{images}",
+  "deploy_bundleInstructions": "バンドル：{file}\n選択したサービスに必要なすべてのイメージを含みます（セルフホストのミドルウェアを含む）。\nSSH を使用する場合、同じ交付ディレクトリの deploy-target.json を _comments に従って編集し、同じ場所で deploy.ps1（Windows）または deploy.sh（Linux/macOS）を実行してください。両方ともこの JSON を読み込みます。sh の実行にはローカルの awk も必要です。\n隔離されたサーバーには交付ディレクトリ全体をコピーし、sh deploy-local.sh を実行します。自動展開と配置を実行し、ログを保持します。第1引数でサーバーの配置先を上書きできます。\nLinux には Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux の flock が必要です。flock に対応したファイルシステム上で、ファイルシステムとコンテナーの操作権限も必要です。\n.deploy.lock は削除も置換もしないでください。すべての保持プロセスが終了するか、サーバーが再起動するとロックが解放されます。強制終了後は実行状態と復旧状態を確認してください。\n部分更新にはポートと構成が一致する正常な完全インストールが必要です。各手順は失敗時に非ゼロで終了し、result-DEPLOYMENT_ID.json に結果を記録します。\nバンドルには非公開の実行時設定が含まれます。安全に転送してください。\n同梱イメージ：\n{images}",
   "deploy_bundleMetadata": "アプリのバージョン: {version}\nビルドID: {buildId}\nComposeファイル: {compose}",
   "deploy_targetHost": "必須：Linux サーバーのアドレスまたは SSH エイリアス。アップロードスクリプトを実行する前に SERVER_HOST を置き換えてください。",
   "deploy_targetPort": "SSH ポート。1〜65535の整数。既定値は22です。",
@@ -71,7 +71,6 @@
   "deploy_configFileUnreadable": "設定ファイル {path} を読み込めません。パスと権限を確認してください。",
   "deploy_bundleNameInvalid": "バンドルのファイル名には英数字、ドット、プラス、ハイフン、アンダースコアを使用できます。親ディレクトリには空白を使用できます。",
   "deploy_secretsInvalid": "ミドルウェアの認証情報が破損しているか、不完全です：{path}。バックアップを復元してください。既存データにアクセスできなくなる可能性があるため、パスワードは再生成しません。",
-  "deploy_storageArtifactRequired": "ストレージの初期化にはアプリケーションイメージが必要です。--artifact-dir で app を含む完全な成果物を選択するか、先に pnpm build --target docker --images app を実行してください。",
   "deploy_localStopped": "ローカルコマンドのプロセスツリーの終了を確認しました。",
   "deploy_localUnknown": "ローカルプロセスツリーの終了は未確認です。ローカルの実行状態を確認してください。",
   "deploy_localNotStarted": "ローカルコマンドは起動していません。",
@@ -81,5 +80,9 @@
   "deploy_commandExecutionFailed": "コマンドの実行に失敗しました",
   "deploy_remoteUnknown": "リモートの実行状態は不明です。ローカル SSH の終了はリモートデプロイの停止を意味しません。サーバーの結果と実際のコンテナーを確認してください。",
   "deploy_remoteFinished": "対応するサーバーの結果により、デプロイスクリプトと復旧処理の終了を確認しました：段階 {stage}、終了コード {code}。実際のサービスの稼働状態を確認してください。",
+  "deploy_bundleDirectoryExists": "交付ディレクトリは既に存在します: {path}。既存のバンドルを保持するため別の出力名を選択してください。",
+  "deploy_bundleFull": "完全デプロイ",
+  "deploy_bundlePartial": "部分デプロイ（正常な完全配置の基準が必要）",
+  "deploy_bundleSelection": "デプロイ方式: {mode}\n更新サービス: {services}。manifest.json の partial と selectedServices で確認できます。",
   "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes は 1024 から 67108864 バイトの整数で指定してください"
 }
