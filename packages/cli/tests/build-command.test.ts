@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +8,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { buildCommand } from '../src/commands/cli-build.js'
 
 const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv }>, failPodman: false, failWeb: false }))
-vi.mock('node:child_process', () => ({
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
   spawn: (command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
     const child = new EventEmitter()
     state.calls.push({ command, args, env: options.env })
@@ -56,6 +58,52 @@ it('pnpm build 默认编译源码，不选择环境、不调用容器工具', as
   expect(state.calls[0].env.PUBLIC_API_BASE).toBeUndefined()
   expect(state.calls[0].env.HAI_E2E).toBeUndefined()
   expect(state.calls[0].env.NODE_ENV).toBe('production')
+})
+
+it('compile 仅投递本次生成的构建身份，外层伪造值与凭据仍被过滤', async () => {
+  vi.stubEnv('HAI_BUILD_ID', 'forged-outer-build')
+  vi.stubEnv('HAI_BUILD_COMMIT', 'f'.repeat(40))
+  vi.stubEnv('HAI_PRIVATE_TOKEN', 'private-build-secret')
+  vi.stubEnv('VITE_PRIVATE_TOKEN', 'private-build-secret')
+  await buildCommand({ cwd: root })
+  const first = state.calls[0]!.env
+  expect(first.HAI_BUILD_ID).toMatch(/^[\w.+-]+$/)
+  expect(first.HAI_BUILD_ID).not.toBe('forged-outer-build')
+  expect(first.HAI_BUILD_COMMIT).toBe('unknown')
+  expect(first.HAI_PRIVATE_TOKEN).toBeUndefined()
+  expect(first.VITE_PRIVATE_TOKEN).toBeUndefined()
+  await buildCommand({ cwd: root })
+  expect(state.calls[1]!.env.HAI_BUILD_ID).not.toBe(first.HAI_BUILD_ID)
+  expect(process.env.HAI_BUILD_ID).toBe('forged-outer-build')
+})
+
+it('构建身份使用当前受Git管理工程的精确提交，未跟踪的子工程不能冒用父仓库HEAD', async () => {
+  execFileSync('git', ['init', '--quiet'], { cwd: root })
+  execFileSync('git', ['add', 'package.json'], { cwd: root })
+  execFileSync('git', ['-c', 'user.name=Build fixture', '-c', 'user.email=build@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root })
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
+  await buildCommand({ cwd: root })
+  expect(state.calls[0]!.env.HAI_BUILD_COMMIT).toBe(commit)
+  const nested = join(root, 'temporary-project')
+  mkdirSync(nested)
+  writeFileSync(join(nested, 'package.json'), JSON.stringify({ version: 'compile-is-not-semver-restricted' }))
+  await buildCommand({ cwd: nested })
+  expect(state.calls[1]!.env.HAI_BUILD_COMMIT).toBe('unknown')
+  await buildCommand({ cwd: root, target: 'docker', runtime: 'docker' })
+  for (const build of state.calls.filter(call => call.args[0] === 'build'))
+    expect(build.args).toContain(`HAI_BUILD_COMMIT=${commit}`)
+})
+
+it('docker 将同一次制品身份显式交给每个镜像编译，不继承外层metadata', async () => {
+  vi.stubEnv('HAI_BUILD_ID', 'forged-docker-build')
+  vi.stubEnv('HAI_BUILD_COMMIT', 'f'.repeat(40))
+  await buildCommand({ cwd: root, target: 'docker', runtime: 'docker' })
+  const parent = join(root, '.hai/build/docker')
+  const buildId = readFileSync(join(parent, 'latest'), 'utf8').trim()
+  for (const build of state.calls.filter(call => call.args[0] === 'build')) {
+    expect(build.args).toEqual(expect.arrayContaining(['--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', 'HAI_BUILD_COMMIT=unknown']))
+    expect(build.args).not.toContain('HAI_BUILD_ID=forged-docker-build')
+  }
 })
 it('优先 Podman，全部镜像构建成功才发布清单，清单不含环境', async () => {
   await buildCommand({ cwd: root, target: 'docker', httpProxy: false })

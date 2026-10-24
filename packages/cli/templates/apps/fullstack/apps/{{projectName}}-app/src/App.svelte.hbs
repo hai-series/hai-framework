@@ -8,6 +8,9 @@
   import { Button, Spinner } from '@h-ai/ui/components/primitives/index'
   import { onMount } from 'svelte'
   import { AdminWorkspace, messages } from '{{fullstack.sharedPackageName}}'
+{{#if features.feedback}}
+  import { buildMetadata } from './build-metadata.js'
+{{/if}}
   import { initCapacitor } from './lib/capacitor.js'
   import { setLocale } from './lib/paraglide/runtime.js'
 
@@ -45,7 +48,7 @@
     <Button onclick={() => void initialize()}>{messages.home_refresh()}</Button>
   </div>
 {:else if apiOptions}
-  <AdminWorkspace platform="app" {apiOptions} onLocaleChange={syncLocale} />
+  <AdminWorkspace platform="app" {apiOptions}{{#if features.feedback}} {buildMetadata}{{/if}} onLocaleChange={syncLocale} />
 {:else}
   <div class="flex min-h-dvh items-center justify-center"><Spinner /></div>
 {/if}

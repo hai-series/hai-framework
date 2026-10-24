@@ -7,10 +7,10 @@ import { managementApi } from './api-client.js'
 /** 仅装配共享采集器，不复制采集、脱敏、上传或离线打包逻辑。 */
 export const browserFeedback = createFeedbackClient()
 
-export async function initializeBrowserFeedback(appVersion?: string): Promise<void> {
+export async function initializeBrowserFeedback(metadata: { appVersion: string, buildId: string, commit: string }): Promise<void> {
   const result = await browserFeedback.init({
     appId: '{{projectName}}',
-    appVersion,
+    ...metadata,
     screenshot: true,
     persistDraft: false,
     actions: {

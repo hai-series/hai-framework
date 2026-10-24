@@ -2,6 +2,9 @@
 {{#if fullstack.frontends.web}}
 <script lang="ts">
   import { AdminWorkspace } from '{{fullstack.sharedPackageName}}'
+{{#if features.feedback}}
+  import { buildMetadata } from './build-metadata.js'
+{{/if}}
   import { setLocale } from './lib/paraglide/runtime.js'
 
   const apiOptions = { clientName: '{{projectName}}-web' }
@@ -11,5 +14,5 @@
   }
 </script>
 
-<AdminWorkspace platform="web" {apiOptions} onLocaleChange={syncLocale} />
+<AdminWorkspace platform="web" {apiOptions}{{#if features.feedback}} {buildMetadata}{{/if}} onLocaleChange={syncLocale} />
 {{/if}}

@@ -20,6 +20,9 @@ import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{#if features.vecdb}}
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 {{/if}}
+{{#if features.feedback}}
+import { buildMetadata } from '../build-metadata.js'
+{{/if}}
 import { serverM } from './messages.js'
 
 let initialized = false
@@ -66,7 +69,7 @@ async function runInitialization(): Promise<void> {
     requireInitialized(await iam.init({ ...iamConfig, reach }), 'iam')
     requireInitialized(await audit.init(auditConfig), 'audit')
 {{#if features.feedback}}
-    requireInitialized(await feedback.init(FeedbackConfigSchema.parse(core.config.getOrThrow('feedback'))), 'feedback')
+    requireInitialized(await feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), 'feedback')
 {{/if}}
 {{#if features.ai}}
     const aiConfig = AIConfigSchema.parse(core.config.getOrThrow('ai'))

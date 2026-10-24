@@ -1,4 +1,4 @@
-import type { FeedbackAttachmentData, FeedbackDetail, FeedbackReport } from '@h-ai/api-contract/feedback'
+import type { FeedbackAttachmentData, FeedbackDetail, FeedbackEvidence, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Page, TestInfo } from '@playwright/test'
 import { Buffer } from 'node:buffer'
@@ -6,7 +6,27 @@ import { readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { readFeedbackBundle } from '@h-ai/feedback/bundle'
 import { expect, test } from '@playwright/test'
+import { readAdminBuildFacts } from './build-metadata'
 import { loginOnPage, registerViaApi, uniqueUser, waitForHydration } from './helpers'
+
+let buildFacts: ReturnType<typeof readAdminBuildFacts>
+test.beforeAll(async ({ browserName }, testInfo) => {
+  buildFacts = readAdminBuildFacts()
+  await testInfo.attach('admin-build-facts', { body: JSON.stringify({ browserName, ...buildFacts }, null, 2), contentType: 'application/json' })
+})
+
+/** 公开证据接口分别校验浏览器和服务产物，不能以相同空值冒充一致。 */
+async function expectReportBuildFacts(page: Page, id: string): Promise<void> {
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/feedback/reports/${id}/evidence`, { params: { kind: 'environment', page: 1, pageSize: 100 } })
+    const result: HaiResult<PaginatedResult<FeedbackEvidence>> = await response.json()
+    if (!result.success)
+      return { error: result.error.code }
+    const browser = result.data.items.find(item => item.source.startsWith('browser:'))
+    const server = result.data.items.find(item => item.source.startsWith('server:'))
+    return { browser: browser?.data, server: server?.data.service }
+  }, { timeout: 15_000, message: 'Each environment must describe its actual compiled artifact' }).toMatchObject({ browser: buildFacts.client, server: buildFacts.server })
+}
 
 async function capture(page: Page, name: string, testInfo: TestInfo) {
   await page.screenshot({ path: testInfo.outputPath(name), fullPage: true, animations: 'disabled' })
@@ -41,6 +61,7 @@ async function storedPng(page: Page, number: string, name: string): Promise<Buff
     throw new Error(reports.error.message)
   const acceptedReport = reports.data.items.find(item => item.number === number)
   expect(acceptedReport).toBeDefined()
+  await expectReportBuildFacts(page, acceptedReport!.id)
   let attachmentId = ''
   await expect.poll(async () => {
     const response = await page.request.get(`/api/feedback/reports/${acceptedReport!.id}`)
@@ -390,6 +411,7 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     expect(ownReport.success).toBe(true)
     if (!ownReport.success)
       throw new Error(ownReport.error.message)
+    await expectReportBuildFacts(memberPage, report.id)
     const savedAttachmentNames = ownReport.data.attachments.map(item => item.name)
     expect(savedAttachmentNames).not.toContain(pendingPngName)
     expect(savedAttachmentNames).not.toContain(overLimitName)

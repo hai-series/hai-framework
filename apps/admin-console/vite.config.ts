@@ -24,14 +24,18 @@ export default defineConfig(({ mode, command }) => {
     Object.assign(process.env, env.data)
   }
 
-  let commit = process.env.HAI_BUILD_COMMIT ?? 'unknown'
+  let commit = process.env.HAI_BUILD_COMMIT?.trim() || 'unknown'
   if (commit === 'unknown') {
     try {
       commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim()
     }
     catch { /* 源码归档构建可能没有 .git，明确保留 unknown。 */ }
   }
-  const metadata = { appVersion: appPackage.version, buildId: process.env.HAI_BUILD_ID ?? randomUUID(), commit }
+  // SvelteKit 会在同一进程再次加载配置构建浏览器产物，复用本次构建身份。
+  const buildId = process.env.HAI_BUILD_ID?.trim() || randomUUID()
+  process.env.HAI_BUILD_ID = buildId
+  process.env.HAI_BUILD_COMMIT = commit
+  const metadata = { appVersion: appPackage.version, buildId, commit }
 
   return {
     define: { __HAI_BUILD_METADATA__: JSON.stringify(metadata) },

@@ -15,12 +15,12 @@ let initialize: Promise<void> | undefined
 let stopRequests: (() => void) | undefined
 const previewUrls = new Set<string>()
 
-export async function initFeedbackBrowser(metadata: { appVersion?: string, buildId?: string, commit?: string } = adminBuildMetadata): Promise<void> {
+export async function initFeedbackBrowser(): Promise<void> {
   initialize ??= (async () => {
     const initialized = await http.init({ baseUrl: feedbackApiBaseUrl(), fetch: apiFetch, clientName: 'admin-console' })
     if (!initialized.success)
       throw new Error(initialized.error.message)
-    const result = await capture.init({ appId: 'admin-console', ...metadata, cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'], actions: {
+    const result = await capture.init({ appId: 'admin-console', ...adminBuildMetadata, cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'], actions: {
       submit: input => http.feedback.reports.submit(input),
       appendEvidence: input => http.feedback.reports.appendEvidence(input),
       completeCollection: input => http.feedback.reports.completeCollection(input),

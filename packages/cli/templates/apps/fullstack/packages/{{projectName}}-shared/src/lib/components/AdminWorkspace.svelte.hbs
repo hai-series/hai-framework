@@ -18,10 +18,13 @@
 
   interface Props {
     platform: 'web' | 'app' | 'desktop'
+{{#if features.feedback}}
+    buildMetadata: { appVersion: string, buildId: string, commit: string }
+{{/if}}
     apiOptions?: ManagementApiOptions
     onLocaleChange?: (locale: string) => void
   }
-  const { platform, apiOptions = {}, onLocaleChange }: Props = $props()
+  const { platform, apiOptions = {}, onLocaleChange{{#if features.feedback}}, buildMetadata{{/if}} }: Props = $props()
   const pages = import.meta.glob<{ default: Component<{ store: ManagementStore }> }>('../pages/**/*.svelte')
   const router = new HashRouter(Object.keys(pages), '/users')
   const store = new ManagementStore(router)
@@ -58,7 +61,7 @@
   $effect(() => {
     const userId = store.user?.id
     if (userId)
-      void initializeBrowserFeedback(store.info?.version).catch((cause) => { store.error = cause instanceof Error ? cause.message : m.operation_failed() })
+      void initializeBrowserFeedback(buildMetadata).catch((cause) => { store.error = cause instanceof Error ? cause.message : m.operation_failed() })
     else
       void browserFeedback.close()
     return () => {

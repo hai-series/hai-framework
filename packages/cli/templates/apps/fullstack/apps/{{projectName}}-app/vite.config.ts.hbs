@@ -1,5 +1,6 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.app}}
+import type { Plugin } from 'vite'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
@@ -8,6 +9,7 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vitest/config'
+import { resolveBuildMetadata } from '../../scripts/build-metadata.js'
 
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
@@ -17,10 +19,18 @@ export default defineConfig(({ mode, command }) => {
     throw new Error(envResult.error.message)
   const env = envResult.data
   Object.assign(process.env, env)
+  const buildMetadata = resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))
+  const metadataAsset: Plugin = {
+    name: 'hai-build-metadata',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build-metadata.json', source: JSON.stringify(buildMetadata) })
+    },
+  }
   const target = (env.PUBLIC_API_BASE || process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000').replace(/\/api\/v1\/?$/, '')
   const proxy = { '/api': { target, changeOrigin: true } }
   return {
     envDir: false,
+    define: { __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata) },
     server: { proxy },
     preview: { proxy },
     build: {
@@ -37,6 +47,7 @@ export default defineConfig(({ mode, command }) => {
       },
     },
     plugins: [
+      metadataAsset,
       svelte(),
       paraglideVitePlugin({
         project: './project.inlang',
