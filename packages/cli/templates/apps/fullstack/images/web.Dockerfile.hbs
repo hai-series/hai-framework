@@ -14,7 +14,9 @@ COPY images/dependencies/ ./
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --ignore-scripts
 COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
-RUN pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile && pnpm --filter {{projectName}}-web... --if-present build
+ARG HAI_BUILD_ID=
+ARG HAI_BUILD_COMMIT=unknown
+RUN pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile && HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" pnpm --filter {{projectName}}-web... --if-present build
 
 FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS web
 

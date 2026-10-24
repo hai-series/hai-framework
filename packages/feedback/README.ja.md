@@ -18,6 +18,8 @@
 
 ## はじめに
 
+ブラウザーとサーバーには各実成果物の `appVersion/buildId/commit` を渡します。フロント側は自分の識別情報を保持し、同じ SSR ビルドの client/server 出力は buildId を共有します。管理画面と base/API/fullstack テンプレートにはコンパイル時の識別情報を組み込んでいます。`hai build` は内部で識別情報を生成し、Docker のビルド引数にも渡します。バージョンは各対象の package.json から取得し、所属する Git コミットがない場合は `unknown` を記録します。テンプレートの `build-metadata.json` には同じ三つの非機密項目のみを保存します。
+
 core、reldb、storage、reach を初期化し、各結果を確認してから feedback を初期化します。本番は共有 PostgreSQL/MySQL、非公開 S3、実際の SMTP を使用します。接続と秘密情報はアプリケーションが管理します。開発用 Console 通知は実際のメール配信の証明にはなりません。
 
 依存モジュール初期化済みの非同期関数内の例です。context は信頼できるサーバー認証・認可から取得します。

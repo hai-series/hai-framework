@@ -92,15 +92,24 @@ pnpm build --target desktop --platform windows --arch x64
 
 准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-service`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
-`deploy` 支持 `${变量:回退值}` 与 `HAI_DEPLOY_*` 分层覆盖（例如 `HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT`）；父对象可用 JSON 整体覆盖。部署变量优先级为进程环境 > `.env.local` > `.env.<环境>` > `.env`，凭据保存在私有环境文件。构建不加载部署环境和密钥。
+`deploy` 支持 `${变量:回退值}` 与 `HAI_DEPLOY_*` 分层覆盖（例如 `HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT`）；父对象可用 JSON 整体覆盖，缺省的 SSH 节点也可由 Schema 已知的叶级变量补齐。高优先级来源的父对象覆盖低层叶字段，同一来源中叶字段优先。SSH 文本保留原值，不把数字密码或前后空格转换成其他类型。
+
+部署 SDK 的环境优先级从高到低为：
+
+- `HAI_DEPLOY_*`：进程 > `.env.<环境>.local` > `.env.<环境>` > 旧 `.env.local` > `.env`。
+- 其他模块：进程 > `.env.<环境>.local` > 旧 `.env.local` > `.env.<环境>` > `.env`，保留原有私有凭据优先级。
+
+新保存的连接和中间件凭据写入忽略 Git 的 `.env.<环境>.local`；公共后端和地址保留在 `.env.<环境>`。旧 `.env.local` 继续作为共享兼容回退，不自动迁移或删除；所选环境明确的部署目标优先。按环境私有文件仅由部署 SDK 加载，Core 的普通应用加载规则不变。构建不加载部署环境和密钥。
 
 已有项目需把原构建对象移入 `hai.json.build`，把原部署 YAML 转成 JSON 放入 `hai.json.deploy`，删除原文件并保留现有 `HAI_DEPLOY_*` 变量。已有自建 S3 的项目首次升级必须全量部署：旧成功基线仍含已退出的一次性初始化服务，直接使用新增量包会被依赖存活检查拒绝；全量部署同时刷新中间件环境中的 `createBucket`，之后即可继续增量更新。
 
-直接部署时，向导按“服务器地址、SSH 登录用户、私钥文件、访问端口”等说明补齐缺少的配置，并复用已有完整配置。SSH 参数仅写本机 `.env.local`；私钥只保存路径。`--bundle-only` 不询问 SSH 连接信息，后续上传前在 `deploy-target.json` 中填写。
+直接部署时，向导按说明补齐服务器、SSH 用户、认证方式和端口等缺失配置，完整有效配置直接复用；`--yes` 不重复询问。SSH 支持 `auth: key`（私钥/agent）或 `auth: password`。省略 `auth` 时，仅非空 `password` 启用密码方式，否则保留 key/agent；显式 `key` 忽略残留密码。密码输入不回显并保留前后空格、前导零；有效密码不得包含 CR/LF/NUL，UTF-8 最多 1023 字节。私钥只保存路径，不读取或复制私钥内容。
+
+SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 不询问 SSH，已有连接会带入交付目录；缺少的参数可在上传前补到 `deploy-target.json`。修改某包的 target 只影响本包，不回写工程；新包仍从工程保存的环境配置生成。
 
 #### 按应用真正需要的中间件处理
 
-根据锁文件运行依赖和模块配置识别数据库、缓存、文件存储、向量库、LDAP、邮件等。逐项选择默认、自定义或保持。配置完备可用 `--skip-middleware` 跳过向导和开通。SQLite、Memory cache、本地存储不产生外部镜像；Compose 自建服务的镜像自动加入完整交付包。外部服务仍需目标网络可达，云开通不属于完全离线部署。
+根据锁文件运行依赖和模块配置识别数据库、缓存、文件存储、向量库、LDAP、邮件等。逐项选择默认、自定义或保持。目标环境已有完整配置时，`--yes` 保持原值，不重新输入或重复云开通；交互模式仍可选择本次处理范围。配置完备可用 `--skip-middleware` 跳过向导和开通。SQLite、Memory cache、本地存储不产生外部镜像；Compose 自建服务的镜像自动加入完整交付包。外部服务仍需目标网络可达，云开通不属于完全离线部署。
 
 #### deploy 的可选参数
 
@@ -137,6 +146,8 @@ pnpm run deploy --env prod --build --bundle-only
 ```
 
 每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，tar、Compose、环境、web.conf、清单与跨平台脚本全部在其中，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
+
+离线上传支持密钥和密码认证。`deploy-target.json` 只保存认证方式及 `passwordEnv` 名称（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`），不保存密码值。密码由操作机环境提供，仅传给本次 SSH/SCP 子进程，不进入应用环境、tar 或 manifest；Windows 也可读取用户持久环境。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。修改 target 只影响当前交付目录，不回写工程；新交付仍使用工程保存的环境配置。
 
 完全隔离的 Linux 服务器上，复制整个交付目录后运行 `sh deploy-local.sh`；脚本自动校验和解包同目录 tar，再调用包内 apply.sh，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
 

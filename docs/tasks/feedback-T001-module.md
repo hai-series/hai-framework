@@ -182,3 +182,10 @@
 - 有效实际产物 Red：同次 admin 构建的 client/server commit 均为 V、版本均来自应用 manifest，但 buildId 不同。SvelteKit 二次求值配置时重复 randomUUID；CLI 按约定剥离外层 HAI 变量，验收脚本要求外层 ID 相等的前提也不成立。保留观察 JSON 和 hash，修复仍要求同一产物非空共享 ID，不放宽事实要求。
 - 需求覆盖补查发现 §93/241 未完整接入：CLI buildId 仅写部署清单，模板反馈未读取实际编译 build/commit，fullstack 还把服务配置版本当作前端版本。整轮收齐后集中补可信元数据注入和分侧读取，不扩大到 telemetry，不修改已有环境隔离契约。
 - 用户已升级系统 Node；实际 `C:\Program Files\nodejs\node.exe` 与默认命令均为 24.22.1，SHA256 与已验证官方 exe 一致。早期“系统未替换”仅是当时记录；本轮正式运行继续固定同版本工具链。
+
+## 构建身份集中修复
+
+- CLI 编译与 Docker 构建内部生成可信 buildId/commit，继续剥离外部 HAI/PUBLIC/VITE；各目标自己的 manifest 版本编译进运行代码。私有模板 helper 在 SSR 重入时复用 ID；前后端各自上报，不借用后端展示版本。三字段旁证与代码内联共用值，旁证不单独充当运行验收。
+- CLI 构建有效 Red 为新增 3 项失败、原 15 项通过；模板接入 Red 为 3 类缺失。修复定向 32 项通过；与部署引导组合收集为 62 通过、一个新增模板生成/lint 测试超过默认 5 秒预算，按同类重型测试单独明确预算后再验证，不修改原浏览器/脚手架时限。管理台真实产物读取器也记录到 client/server ID 不同的有效 Red。
+- 管理台不再从服务端 layout 借用浏览器身份，7 场景新增公开证据接口与实际 client/server 产物核对；fullstack 的独立临时 Git 工程故意设置不同前后端版本，ZIP 分侧校验各自 manifest/产物/提交。像素、较大日志、下载、权限和超时断言保留。
+- 当前仍为进行中，B/H 未建立；这些定向证据不能代替合入原 main 后的 fresh 构建、根门禁、实际浏览器和全部 11 类模板验收。

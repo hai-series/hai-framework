@@ -4,9 +4,16 @@
 
 `hai deploy` 首先输入部署环境，或用 `hai deploy --env test` 指定。`.env.test` / `.env.prod` 必须由用户先创建；缺失时停止，不代替用户创建一个空文件继续部署。指定要部署的目录，例如 `hai deploy packages/my-app-serv --env test`，该目录必须对应 lockfile 的一个 importer；不遍历 apps/packages 或猜测 fullstack 布局。环境文件默认取当前目录（有 `.env` 时）或 lockfile 根目录，必要时传 `--env-dir`。
 
-构建与部署配置统一在项目根 `hai.json`：`build` 保存 images/desktop，`deploy` 保存 provider/container/services 等项目级配置。服务目录只扫描运行依赖与模块 YAML。`deploy` 支持 `${变量:回退值}` 和 `HAI_DEPLOY_*` 分层覆盖；父对象可用 JSON 整体覆盖，凭据不要直接写入 hai.json。构建不读取部署环境或密钥。
+构建与部署配置统一在项目根 `hai.json`：`build` 保存 images/desktop，`deploy` 保存 provider/container/services 等项目级配置。服务目录只扫描运行依赖与模块 YAML。`deploy` 支持 `${变量:回退值}` 和 `HAI_DEPLOY_*` 分层覆盖；父对象可用 JSON 整体覆盖，缺省 SSH 节点可由 Schema 已知字段补齐，不接受未知字段。高层来源父对象覆盖低层叶字段，同一来源叶字段优先。凭据不要直接写入 hai.json。构建不读取部署环境或密钥。
 
-环境文件遵循项目的六文件规范：`.env.example` 为带说明/枚举/范围的完整清单，`.env` 为公共基础，`.env.dev/test/prod` 为公共环境覆盖，以上五类提交 Git；`.env.local` 为忽略 Git 的本机私有覆盖。加载顺序为进程 > `.env.local` > 目标环境 > `.env`。真实密码、API Key、含认证信息的连接 URL 写 `.env.local`，公共后端和地址写目标环境文件；CLI 仅报告保存结果，不打印环境变量名或值。调用 deploy API 时显式传 `{ environment: 'test', envDir: '/workspace/app' }`，不要用调用者的 `NODE_ENV` 猜测部署目标。
+公共文件沿用 `.env.example` 清单、`.env` 基础和 `.env.dev/test/prod` 环境覆盖。部署 SDK 新保存的 SSH 连接、密码、API Key 和含认证 URL 写忽略 Git 的 `.env.<mode>.local`；公共后端和地址写目标环境文件。旧 `.env.local` 保留为共享兼容回退，不猜测其环境归属、不强制迁移、不删除旧值。CLI 不打印秘密值。调用 deploy API 时显式传 `{ environment: 'test', envDir: '/workspace/app' }`，不要用调用者的 `NODE_ENV` 猜测部署目标。
+
+部署 SDK 的来源优先级从高到低为：
+
+- `HAI_DEPLOY_*`：进程 > `.env.<mode>.local` > `.env.<mode>` > 旧 `.env.local` > `.env`，所选环境明确目标胜过旧全局目标。
+- 普通模块：进程 > `.env.<mode>.local` > 旧 `.env.local` > `.env.<mode>` > `.env`，保留旧私有凭据优先级。
+
+`.env.<mode>.local` 仅属于部署 SDK 的配置读取和记忆；Core 的普通应用加载规则不变，不能据此宣称 dev/start 会读取这个文件。
 
 ## 识别与逐项选择
 
@@ -31,13 +38,15 @@
 
 1. **使用默认配置**：选择后端；Compose 生成匹配容器/卷，云平台调用已支持的 Provisioner，并保存实际连接配置。MySQL、LDAP、向量库等没有云自动开通器时，明确提示改用自定义连接；不能声称已经创建云资源。Resend 需要已验证的发件域名，R2 需要已有 S3 访问密钥，阿里云短信需要签名/模板与额度。
 2. **使用自定义配置**：逐项输入所选后端的连接字段，展示字段用途与约束，校验必填项、端口、布尔和 URL；凭据用密码输入。保存配置后跳过该服务的开通与 sidecar。
-3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.local`/进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
+3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.<mode>.local`、兼容 `.env.local` 或进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
 
 逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍校验已有构建产物并执行部署及健康检查。命令行使用唯一的 `--skip-middleware`，SDK 使用 `skipMiddleware`。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
 
 `--yes` 用于已授权的自动化：目标环境已有完整配置时保持不变，否则使用当前后端默认配置；不支持的云后端或缺少必需凭据直接失败。自动化直接部署用 `hai deploy packages/my-app-serv --env prod --yes --skip-middleware`。跳过不作为配置完整性或连接成功的证明。
 
-直接部署的目标不完整时，先引导选择 SSH/Vercel。SSH 逐项输入主机、端口、用户名、私钥文件路径、known_hosts 路径、远程目录/运行时及容器/主机端口；端口范围 1–65535。密钥路径留空使用 ssh-agent/默认密钥，known_hosts 留空使用 OpenSSH 默认文件。完整目标自动复用；修改 `.env.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。首次填写的整个目标对象（包括地址、端口、路径、Token）只保存 `.env.local` 并添加 Git 忽略，不把机器信息写公共环境文件。`--bundle-only` 不询问 SSH，连接信息可在后续上传前填写到生成的 `deploy-target.json`。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
+直接部署的目标不完整时，先引导选择 SSH/Vercel。SSH 补齐主机、端口、用户名、认证方式、对应凭据、known_hosts 路径、远程目录/运行时及容器/主机端口；端口范围 1–65535。`auth: key` 使用私钥/agent，密钥路径留空使用 ssh-agent/默认密钥；`auth: password` 使用隐藏输入的密码。省略 auth 时，仅非空 password 启用密码方式，否则保持 key/agent；显式 key 忽略残留密码。密码原样保留空格、前导零，不经 YAML 类型转换；有效密码拒绝 CR/LF/NUL，UTF-8 最多 1023 字节。known_hosts 留空使用 OpenSSH 默认文件，不关闭主机键校验。
+
+完整有效目标自动复用，`--yes` 不重新询问；修改选中环境 `.env.<mode>.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。新填写的目标（含地址、端口、路径、Token、密码）只保存该环境私有文件并添加 Git 忽略。`--bundle-only` 不询问 SSH，已有参数带入交付物，缺项可在上传前填写到 `deploy-target.json`。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
 
 ### Hai 模块与中间件的关系
 
@@ -80,6 +89,8 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 构建与部署可分开，也可通过 pnpm run deploy --build 明确串联。构建保持环境无关；部署选择环境并只消费所选镜像。完整包自动包含 Compose 自建中间件镜像，因此导出阶段需要本地 Podman/Docker，缺镜像在打包阶段准备，不能留给隔离服务器下载。
 
 每次离线交付都放在单一 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 目录，tar、配置、清单与全部入口都在其中。--output release.tar 相对命令目录生成 release-<版本>/release-<版本>.tar，禁止覆盖已有交付目录。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器直接复制整个目录并运行 sh deploy-local.sh，由脚本自动解包并执行部署。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
+
+离线 target 保存 auth 和 passwordEnv，不保存密码值；passwordEnv 默认 HAI_DEPLOY_PROVIDER_SSH_PASSWORD。操作机配置该环境变量后可重复上传，Windows 也可读取用户持久环境。密码仅进入本次 SSH/SCP 子进程环境，不进入参数、helper 源码、应用环境、tar、manifest 或公开 JSON。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。target 的修改只影响本交付目录，不回写工程；新包仍从工程保存的选中环境配置生成。
 
 manifest.json 的 partial 与 selectedServices、apply 脚本共同记录部署模式：完整构建且未指定 --services 为全量；显式 --services 或部分构建为增量。增量使用服务器成功基线保留未选服务和中间件凭据，首次安装拒绝增量包。S3 createBucket 默认 false，自建 S3 注入 HAI_STORAGE_CREATEBUCKET=true，由 storage.init 检查并创建缺失桶；仅更新 storage 不需要应用镜像，新桶在下次应用初始化时创建。Compose 网络统一 hai-app，不输出 YAML 锚点。失败恢复尝试还原容器和配置，保留数据卷，不回退已写业务数据。
 

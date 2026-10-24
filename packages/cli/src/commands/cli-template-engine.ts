@@ -1175,6 +1175,7 @@ export async function generateFromTemplates(
   // 多包模板不继承 base；所有应用统一复制同一份 E2E 清理入口。
   await fse.copy(path.join(root, 'shared', 'run-e2e.mjs'), path.join(projectPath, 'scripts', 'run-e2e.mjs'))
   await fse.copy(path.join(root, 'shared', 'e2e-env.ts'), path.join(projectPath, 'scripts', 'e2e-env.ts'))
+  await fse.copy(path.join(root, 'shared', 'build-metadata.ts'), path.join(projectPath, 'scripts', 'build-metadata.ts'))
   await fse.ensureDir(path.join(projectPath, 'images', 'dependencies'))
   await fse.writeFile(path.join(projectPath, 'images', 'dependencies', '.gitkeep'), '')
   await fse.copy(path.join(root, 'shared', '.gitattributes'), path.join(projectPath, '.gitattributes'))

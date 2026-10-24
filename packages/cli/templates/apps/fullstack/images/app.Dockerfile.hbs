@@ -14,7 +14,9 @@ COPY images/dependencies/ ./
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --ignore-scripts
 COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
-RUN pnpm --filter {{fullstack.servPackageName}}... --if-present build
+ARG HAI_BUILD_ID=
+ARG HAI_BUILD_COMMIT=unknown
+RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" pnpm --filter {{fullstack.servPackageName}}... --if-present build
 
 RUN --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds pnpm pm deploy --filter {{fullstack.servPackageName}} --prod /prod/service

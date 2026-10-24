@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test'
 import { Buffer } from 'node:buffer'
+{{#if features.feedback}}
+import { execFileSync } from 'node:child_process'
+{{/if}}
 import { randomUUID } from 'node:crypto'
 import { mkdir{{#if features.feedback}}, readFile{{/if}} } from 'node:fs/promises'
 import path from 'node:path'
@@ -638,6 +641,35 @@ test('feedback submits an empty description and administrator can process and re
   if (!opened.success)
     throw new Error(opened.error.message)
   const bundle = opened.data
+  // 对照各自产物旁证、各自 manifest 和本工程 Git；不能用服务端展示配置冒充浏览器版本。
+  const browserMetadata: { appVersion: string, buildId: string, commit: string } = JSON.parse(await readFile(path.resolve('apps/{{projectName}}-{{fullstack.e2eFrontend.target}}/dist/build-metadata.json'), 'utf8'))
+  const serverMetadata: { appVersion: string, buildId: string, commit: string } = JSON.parse(await readFile(path.resolve('packages/{{projectName}}-serv/dist/build-metadata.json'), 'utf8'))
+  const browserManifest: { version: string } = JSON.parse(await readFile(path.resolve('apps/{{projectName}}-{{fullstack.e2eFrontend.target}}/package.json'), 'utf8'))
+  const serverManifest: { version: string } = JSON.parse(await readFile(path.resolve('packages/{{projectName}}-serv/package.json'), 'utf8'))
+  let expectedCommit = 'unknown'
+  try {
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', 'package.json'], { stdio: 'pipe', windowsHide: true })
+    expectedCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: 'pipe', windowsHide: true }).trim()
+  }
+  catch { /* 无 Git 的源码归档必须明确保留 unknown，不冒用父工程提交。 */ }
+  if (process.env.E2E_BUILD_COMMIT) {
+    expect(expectedCommit).toBe(process.env.E2E_BUILD_COMMIT)
+    expect(expectedCommit).toMatch(/^(?:[a-f\d]{40}|[a-f\d]{64})$/i)
+    expect(browserManifest.version).not.toBe(serverManifest.version)
+  }
+  for (const [metadata, version] of [[browserMetadata, browserManifest.version], [serverMetadata, serverManifest.version]] as const) {
+    expect(Object.keys(metadata).sort()).toEqual(['appVersion', 'buildId', 'commit'])
+    expect(metadata.appVersion).toBe(version)
+    expect(metadata.buildId).toMatch(/^[\w.+-]{1,160}$/)
+    expect(metadata.buildId).not.toBe('unknown')
+    expect(metadata.commit).toBe(expectedCommit)
+  }
+  const browserEnvironment = bundle.evidence.find(item => item.kind === 'environment' && item.source.startsWith('browser:'))
+  const serverEnvironment = bundle.evidence.find(item => item.kind === 'environment' && item.source.startsWith('server:'))
+  expect(browserEnvironment?.data).toMatchObject(browserMetadata)
+  expect(serverEnvironment?.data.service).toMatchObject(serverMetadata)
+  expect(bundle.report).toMatchObject(browserMetadata)
+  await testInfo.attach('feedback-build-metadata', { body: JSON.stringify({ browser: browserMetadata, server: serverMetadata }), contentType: 'application/json' })
   expect(bundle.report.number).toBe(number)
   expect(bundle.manifest.reportId).toBe(bundle.report.id)
   expect(bundle.manifest.evidenceRevision).toBe(bundle.report.evidenceRevision)

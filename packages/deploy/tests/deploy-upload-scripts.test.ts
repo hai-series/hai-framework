@@ -11,6 +11,7 @@ const temporary: string[] = []
 const shell = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/bash.exe' : '/bin/sh'
 const powershell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh'
 const hasPowerShell = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { windowsHide: true }).status === 0
+const hasPwsh = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], { windowsHide: true }).status === 0
 let nativeTools: string | undefined
 type Script = 'sh' | 'ps1'
 
@@ -32,6 +33,7 @@ function createNativeCapture(): string {
   const executable = join(nativeTools, 'ssh.exe')
   const source = join(nativeTools, 'Capture.cs')
   writeFileSync(source, String.raw`using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 public static class Capture {
@@ -44,6 +46,18 @@ public static class Capture {
     }
     line.Append('\n');
     File.AppendAllText(Environment.GetEnvironmentVariable("HAI_TEST_COMMANDS"), line.ToString(), new UTF8Encoding(false));
+    if (Environment.GetEnvironmentVariable("HAI_TEST_EXPECTED_PASSWORD") != null) {
+      string helper = Environment.GetEnvironmentVariable("SSH_ASKPASS");
+      ProcessStartInfo start = new ProcessStartInfo(helper);
+      start.UseShellExecute = false; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
+      start.StandardOutputEncoding = new UTF8Encoding(false);
+      using (Process child = Process.Start(start)) {
+        string password = child.StandardOutput.ReadToEnd().TrimEnd('\r', '\n'); child.WaitForExit();
+        if (child.ExitCode != 0 || password != Environment.GetEnvironmentVariable("HAI_TEST_EXPECTED_PASSWORD")) return 8;
+        File.AppendAllText(Environment.GetEnvironmentVariable("HAI_TEST_AUTH"), helper + "\n", new UTF8Encoding(false));
+        Console.Out.Write(password); Console.Error.Write(password);
+      }
+    }
     if (command == "scp" && (args.Length < 2 || !File.Exists(args[args.Length - 2]))) {
       Console.Error.WriteLine("Local archive missing from native process directory: " + Directory.GetCurrentDirectory());
       return 9;
@@ -98,8 +112,9 @@ function fixture() {
   renameSync(generated, parent)
   const directory = parent
   const log = join(root, 'commands.log')
+  const authLog = join(root, 'auth.log')
   for (const command of ['ssh', 'scp']) {
-    writeFileSync(join(bin, command), `#!/bin/sh\nprintf '%s\\0' '${command}' "$@" >> "$HAI_TEST_COMMANDS"\nprintf '\\n' >> "$HAI_TEST_COMMANDS"\nexit "\${HAI_TEST_COMMAND_EXIT:-0}"\n`, { mode: 0o700 })
+    writeFileSync(join(bin, command), `#!/bin/sh\nprintf '%s\\0' '${command}' "$@" >> "$HAI_TEST_COMMANDS"\nprintf '\\n' >> "$HAI_TEST_COMMANDS"\nif [ -n "\${HAI_TEST_EXPECTED_PASSWORD+x}" ]; then\n password=$("$SSH_ASKPASS") || exit 8\n test "$password" = "$HAI_TEST_EXPECTED_PASSWORD" || exit 8\n printf '%s\\n' "$SSH_ASKPASS" >> "$HAI_TEST_AUTH"\n printf '%s' "$password"\n printf '%s' "$password" >&2\nfi\nexit "\${HAI_TEST_COMMAND_EXIT:-0}"\n`, { mode: 0o700 })
   }
   if (process.platform === 'win32' && hasPowerShell) {
     const executable = createNativeCapture()
@@ -122,11 +137,12 @@ function global:scp {
 }
 `
   writeFileSync(wrapper, `$ErrorActionPreference = 'Stop'\n${functions}\n& $env:HAI_TEST_SCRIPT\n`)
-  const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[] } = {}) => {
+  const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[], powershell?: string } = {}) => {
     const env = {
       ...process.env,
       PATH: [bin, ...(process.platform === 'win32' ? ['C:/Program Files/Git/usr/bin'] : []), process.env.PATH].join(delimiter),
       HAI_TEST_COMMANDS: log.replaceAll('\\', '/'),
+      HAI_TEST_AUTH: authLog,
       HAI_TEST_SCRIPT: join(directory, `deploy.${script}`),
       HAI_DEPLOY_IDENTITY_FILE: '',
       HAI_DEPLOY_KNOWN_HOSTS_FILE: '',
@@ -135,7 +151,7 @@ function global:scp {
     }
     return script === 'sh'
       ? spawnSync(shell, [join(directory, 'deploy.sh'), ...options.args ?? []], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
-      : spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', wrapper], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
+      : spawnSync(options.powershell ?? powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', wrapper], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
   }
   const commands = (script: Script): string[][] => {
     if (!existsSync(log))
@@ -149,11 +165,12 @@ function global:scp {
       return [command!, ...encoded.map(value => Buffer.from(value, 'base64').toString('utf8'))]
     })
   }
-  return { directory, target, execute, commands }
+  return { directory, target, execute, commands, authLog }
 }
 
 describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) => {
   const test = script === 'ps1' && !hasPowerShell ? it.skip : it
+  const passwordTest = script === 'ps1' && process.platform !== 'win32' ? it.skip : test
 
   test('reads edited JSON after moving the package and starting from another working directory', () => {
     const { target, execute, commands } = fixture()
@@ -236,4 +253,59 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
     expect(result.status).not.toBe(0)
     expect(commands(script)).toEqual([])
   })
+
+  passwordTest('复用本机密码环境执行三步、原值不进入参数或日志并清理helper', () => {
+    const { directory, target, execute, commands, authLog } = fixture()
+    const password = ' 0019 中 "$value" '
+    writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password', passwordEnv: 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD' }))
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = execute(script, { env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
+    }
+    const calls = commands(script)
+    expect(calls).toHaveLength(6)
+    for (const call of calls) {
+      expect(call).toContain('BatchMode=no')
+      expect(call).toContain('PreferredAuthentications=password')
+      expect(call).not.toContain('-i')
+      expect(call.join(' ')).not.toContain(password)
+    }
+    for (const helper of readFileSync(authLog, 'utf8').trimEnd().split('\n'))
+      expect(existsSync(helper.trimEnd())).toBe(false)
+  })
+
+  test.each(['', 'line\nbreak', '中'.repeat(342)])('无效密码在连接前失败且不泄漏', (password) => {
+    const { directory, target, execute, commands } = fixture()
+    writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password' }))
+    const result = execute(script, { env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password } })
+    expect(result.status).not.toBe(0)
+    expect(commands(script)).toEqual([])
+    if (password)
+      expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
+  })
+
+  test.each([{ auth: 'other' }, { auth: 'password', passwordEnv: 'BAD;command' }, { auth: 'password', password: 'forbidden' }])('拒绝损坏认证配置 %j', (invalid) => {
+    const { directory, target, execute, commands } = fixture()
+    writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, ...invalid }))
+    const result = execute(script)
+    expect(result.status).not.toBe(0)
+    expect(commands(script)).toEqual([])
+  })
+})
+
+it.skipIf(process.platform !== 'win32' || !hasPwsh)('pwsh password模式执行helper而不是向ssh/scp传--run', () => {
+  const { directory, target, execute, commands } = fixture()
+  const password = ' 0019 中 "$value" '
+  writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password' }))
+  const result = execute('ps1', { powershell: 'pwsh', env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
+  expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+  expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
+  const calls = commands('ps1')
+  expect(calls).toHaveLength(3)
+  for (const call of calls) {
+    expect(call).not.toContain('--run')
+    expect(call).toContain('BatchMode=no')
+    expect(call).not.toContain('-i')
+  }
 })

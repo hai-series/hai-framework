@@ -1,8 +1,8 @@
 /** `pnpm build` 的环境无关构建入口：源码、OCI 镜像或 Tauri 安装包。 */
 import type { DeploymentArtifact } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
-import { spawn } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+import { execFileSync, spawn } from 'node:child_process'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
@@ -51,9 +51,14 @@ interface BuildConfig {
 }
 
 /** 子进程不经过 shell；pnpm 使用当前原生或 JS 入口，兼容 Windows 路径。 */
-async function run(command: string, args: string[], cwd: string, quiet = false): Promise<void> {
+async function run(command: string, args: string[], cwd: string, quiet = false, identity?: { buildId: string, commit: string }): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/.test(key)))
+    // 仅显式加入本次构建器生成的身份，不透传调用者的同名环境变量。
+    if (identity) {
+      env.HAI_BUILD_ID = identity.buildId
+      env.HAI_BUILD_COMMIT = identity.commit
+    }
     env.NODE_ENV = 'production'
     // Tauri 的 CI 参数只接受 true/false，兼容 CI 平台常用的 1/0 写法。
     if (env.CI === '1' || env.CI === '0')
@@ -65,26 +70,43 @@ async function run(command: string, args: string[], cwd: string, quiet = false):
 }
 
 /** 使用已安装的 pnpm，不通过 Corepack 下载另一套工具链。 */
-async function pnpm(args: string[], cwd: string): Promise<void> {
+async function pnpm(args: string[], cwd: string, identity: { buildId: string, commit: string }): Promise<void> {
   const entry = process.env.npm_execpath
   if (entry && /(?:^|[/\\])pnpm(?:-native)?(?:\.exe|\.[cm]?js)?$/i.test(entry))
-    return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd) : run(entry, args, cwd)
+    return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd, false, identity) : run(entry, args, cwd, false, identity)
   // CLI 直接调用时从 PATH 定位原生或 JS 入口；Windows 的 .cmd 不能由无 shell spawn 执行。
   if (process.platform === 'win32') {
     const directories = (process.env.PATH ?? '').split(';')
     for (const directory of directories) {
       const executable = join(directory, 'pnpm.exe')
       if (existsSync(executable))
-        return run(executable, args, cwd)
+        return run(executable, args, cwd, false, identity)
       for (const relative of ['node_modules/pnpm/bin/pnpm.cjs', 'pnpm.cjs']) {
         const candidate = join(directory, relative)
         if (existsSync(candidate))
-          return run(process.execPath, [candidate, ...args], cwd)
+          return run(process.execPath, [candidate, ...args], cwd, false, identity)
       }
     }
     throw new Error(cliM('cli_build_use_pnpm'))
   }
-  return run('pnpm', args, cwd)
+  return run('pnpm', args, cwd, false, identity)
+}
+
+/** 只有工程 manifest 受当前仓库管理时，才将其 HEAD 作为源码事实。 */
+function sourceCommit(cwd: string): string {
+  try {
+    const options = { cwd, encoding: 'utf8' as const, stdio: 'pipe' as const, windowsHide: true }
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], options).trim()
+    const manifest = relative(root, join(cwd, 'package.json')).replaceAll('\\', '/')
+    if (manifest.startsWith('../'))
+      return 'unknown'
+    execFileSync('git', ['ls-files', '--error-unmatch', '--', manifest], { ...options, cwd: root })
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], options).trim()
+    return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit) ? commit : 'unknown'
+  }
+  catch {
+    return 'unknown'
+  }
 }
 
 /**
@@ -110,7 +132,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     throw new Error(cliM('cli_build_options_invalid'))
   }
   if (target === 'compile') {
-    await pnpm(['run', 'compile'], cwd)
+    await pnpm(['run', 'compile'], cwd, { buildId: randomUUID(), commit: sourceCommit(cwd) })
     return
   }
   const metadata: { version?: unknown } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
@@ -131,8 +153,9 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       throw new Error(cliM('cli_build_desktop_missing'))
     const rustTarget = `${arch === 'x64' ? 'x86_64' : 'aarch64'}-${platform === 'windows' ? 'pc-windows-msvc' : platform === 'macos' ? 'apple-darwin' : 'unknown-linux-gnu'}`
     const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
+    const identity = { buildId: randomUUID(), commit: sourceCommit(cwd) }
     for (const directory of config.desktop)
-      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, '--config', JSON.stringify({ version: appVersion })], resolve(cwd, directory))
+      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, '--config', JSON.stringify({ version: appVersion })], resolve(cwd, directory), identity)
     writeCliMessage(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
     return
   }
@@ -168,6 +191,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       throw new Error(cliM('cli_build_mirror_invalid'))
   }
   const buildId = `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`
+  const commit = sourceCommit(cwd)
   const artifact: DeploymentArtifact = { version: 3, appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
   // 部分构建仍保留工程显式声明的端口，不用构建默认值覆盖部署配置。
   for (const image of config.images) {
@@ -187,6 +211,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       const context = resolve(cwd, image.context ?? '.')
       const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
       const args = ['build', '-f', resolve(cwd, image.dockerfile), '-t', imageRef]
+      args.push('--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', `HAI_BUILD_COMMIT=${commit}`)
       if (options.network !== undefined)
         args.push('--network', options.network)
       const ignore = `${resolve(cwd, image.dockerfile)}.dockerignore`

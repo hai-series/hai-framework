@@ -5,7 +5,6 @@
  */
 
 import type { LayoutServerLoad } from './$types'
-import { adminBuildMetadata } from '$lib/build-metadata.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { redirect } from '@sveltejs/kit'
@@ -42,6 +41,5 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     // 与认证页面共用 IAM 公开配置，session.maxAge 已包含在标准白名单中。
     iamPublicConfig: iam.publicConfig!,
     feedbackEnabled: Boolean(core.config.get('feedback')),
-    buildMetadata: adminBuildMetadata,
   }
 }

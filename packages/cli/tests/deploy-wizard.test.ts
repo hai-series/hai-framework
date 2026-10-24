@@ -139,7 +139,7 @@ it('guides SSH setup once, saves parameters privately and reuses them without pr
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://server.internal:8080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   const init = vi.spyOn(deploy, 'init')
   await deployCommand({ appDir: service, env: 'test', skipMiddleware: true })
-  expect(readFileSync(join(app, '.env.local'), 'utf8')).toContain('server.internal')
+  expect(readFileSync(join(app, '.env.test.local'), 'utf8')).toContain('server.internal')
   expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('server.internal')
   mocked.prompt.mockClear()
   await deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true })
@@ -147,6 +147,47 @@ it('guides SSH setup once, saves parameters privately and reuses them without pr
   expect(run).toHaveBeenCalledTimes(2)
   expect(init).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ type: 'docker-ssh', ssh: expect.objectContaining({ host: 'server.internal', port: 2202, username: 'deployer', identityFile: 'C:/keys/deploy' }), expose: expect.objectContaining({ hostPort: 8080 }) }) }))
 }, 30_000)
+it('saves a hidden SSH password unchanged and reuses it without another prompt', async () => {
+  const { app, service } = await fullstackFixture()
+  setDeployment(app, 'provider:\n  type: docker-ssh\n  expose:\n    hostPort: 8080\n')
+  const password = '  0012#\'"$中文  '
+  const inputs: Record<string, string> = {
+    HAI_DEPLOY_PROVIDER_SSH_HOST: 'password-server.internal',
+    HAI_DEPLOY_PROVIDER_SSH_PORT: '2202',
+    HAI_DEPLOY_PROVIDER_SSH_USERNAME: 'deployer',
+    HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password,
+    HAI_DEPLOY_PROVIDER_REMOTE_BASEDIR: '/srv/apps',
+    HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT: '8080',
+    HAI_DEPLOY_PROVIDER_EXPOSE_CONTAINERPORT: '3000',
+  }
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.message === cliM('cli_deploy_target_auth'))
+      return { value: 'password' }
+    if (question.type === 'multiselect')
+      return { value: question.choices.map((item: { value: string }) => item.value) }
+    if (question.choices)
+      return { value: question.choices[0].value }
+    const name = Object.keys(inputs).find(key => question.message === cliM(`cli_deploy_input${key.split('_').at(-1)}` as Parameters<typeof cliM>[0]))
+    return { value: name ? inputs[name] : question.initial ?? '' }
+  })
+  const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
+  vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://password-server.internal:8080', deploymentId: 'password-test', status: 'ready', envVarsSet: [] } })
+  const init = vi.spyOn(deploy, 'init')
+  await deployCommand({ appDir: service, env: 'test', skipMiddleware: true })
+  expect(init).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ ssh: expect.objectContaining({ auth: 'password', password }) }) }))
+  expect(mocked.prompt.mock.calls.some(([question]) => question.type === 'password' && question.message === cliM('cli_deploy_inputPASSWORD'))).toBe(true)
+  const privatePath = join(app, '.env.test.local')
+  const saved = readFileSync(privatePath, 'utf8')
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('password-server.internal')
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain(password)
+  mocked.prompt.mockClear()
+  await deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true })
+  expect(mocked.prompt).not.toHaveBeenCalled()
+  expect(readFileSync(privatePath, 'utf8')).toBe(saved)
+  expect(init).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ ssh: expect.objectContaining({ auth: 'password', password }) }) }))
+  expect(output.mock.calls.map(([message]) => message).join('\n')).not.toContain(password)
+}, 30_000)
+
 it.each(['missing', 'partial', 'saved'])('bundle-only skips SSH prompts and only reuses complete saved SSH settings (%s)', async (targetState) => {
   const { app, service } = await fullstackFixture()
   const savedTarget = targetState === 'saved'
@@ -254,7 +295,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   const mode = readFileSync(join(app, '.env.test'), 'utf8')
   expect(mode).not.toContain('test-private-password')
   expect(mode).not.toContain('test-private-client-key')
-  expect(readFileSync(join(app, '.env.local'), 'utf8')).toContain('test-private-client-key')
+  expect(readFileSync(join(app, '.env.test.local'), 'utf8')).toContain('test-private-client-key')
   expect(mode).toContain('mysql.internal')
   expect(mode).toContain('HAI_CACHE=\'{"type":"memory"}\'')
   const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: app })

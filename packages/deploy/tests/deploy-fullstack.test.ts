@@ -10,7 +10,7 @@ import { parse } from 'yaml'
 import { deploy, DeploymentArtifactSchema, getDeployCommandState, HaiDeployError } from '../src/index.js'
 
 const ssh = vi.hoisted(() => ({ ping: vi.fn(), exec: vi.fn(), upload: vi.fn() }))
-vi.mock('../src/container/deploy-ssh.js', () => ({ createSshExecutor: () => ssh }))
+vi.mock('../src/container/deploy-ssh.js', async importOriginal => ({ ...await importOriginal<typeof import('../src/container/deploy-ssh.js')>(), createSshExecutor: () => ssh }))
 vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../src/container/deploy-command.js')>()
   return { ...original, runCommand: async (command: string, args: string[]) => {
@@ -59,6 +59,41 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
 async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
+
+it('custom SSH 密码变量不进入应用环境或离线归档', async () => {
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ deploy: { provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', username: 'deploy', auth: 'password', password: `\${CUSTOM_CONNECTION_VALUE}` } } } }))
+  writeFileSync(join(root, '.env.test'), 'CUSTOM_CONNECTION_VALUE=0012\nAPP_LABEL=0012\n')
+  expect(await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', username: 'deploy', auth: 'password', password: '0012' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result, JSON.stringify(result)).toMatchObject({ success: true })
+  const directory = deliveryDirectory(result)
+  const environment = parseEnv(readFileSync(join(directory, '.env.runtime'), 'utf8'))
+  expect(environment.CUSTOM_CONNECTION_VALUE).toBeUndefined()
+  expect(environment.APP_LABEL).toBe('0012')
+  const unpacked = join(root, 'password-reference-proof')
+  mkdirSync(unpacked)
+  if (!result.success || !result.data.bundlePath)
+    throw new Error('Expected a deployment bundle')
+  execFileSync('tar', ['-xf', result.data.bundlePath, '-C', unpacked])
+  expect(parseEnv(readFileSync(join(unpacked, '.env.runtime'), 'utf8')).CUSTOM_CONNECTION_VALUE).toBeUndefined()
+})
+
+it.each(['HAI_DEPLOY', 'HAI_DEPLOY_PROVIDER'])('父对象覆盖 %s 不进入应用环境或离线归档', async (variable) => {
+  const provider = { type: 'docker-ssh', ssh: { host: '127.0.0.1', username: 'deploy', auth: 'password', password: 'private-parent-password' }, expose: { hostPort: 18080 } }
+  writeFileSync(join(root, '.env.test.local'), `${variable}='${JSON.stringify(variable === 'HAI_DEPLOY' ? { provider } : provider)}'\n`)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  const directory = deliveryDirectory(result)
+  const content = readFileSync(join(directory, '.env.runtime'), 'utf8')
+  expect(content).not.toContain('private-parent-password')
+  expect(parseEnv(content)[variable]).toBeUndefined()
+  const unpacked = join(root, 'parent-password-proof')
+  mkdirSync(unpacked)
+  if (!result.success || !result.data.bundlePath)
+    throw new Error('Expected a deployment bundle')
+  execFileSync('tar', ['-xf', result.data.bundlePath, '-C', unpacked])
+  expect(readFileSync(join(unpacked, '.env.runtime'), 'utf8')).not.toContain('private-parent-password')
+})
 
 /** 从成功结果定位本次独立交付目录，避免读取上一次部署文件。 */
 function deliveryDirectory(result: Awaited<ReturnType<typeof deploy.deployApp>>): string {

@@ -47,7 +47,7 @@
 
   onMount(() => {
     if (data.feedbackEnabled)
-      void initFeedbackBrowser(data.buildMetadata).catch(() => { feedbackError = m.feedback_request_failed() })
+      void initFeedbackBrowser().catch(() => { feedbackError = m.feedback_request_failed() })
     return () => {
       void closeFeedbackBrowser()
     }

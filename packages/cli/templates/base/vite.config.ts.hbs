@@ -4,8 +4,10 @@
 {{#if isSvelteOnlyApp}}
 import type { CoreConfig } from '@h-ai/core'
 {{/if}}
+import type { Plugin } from 'vite'
 import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
 {{#if hasUi}}
 import { haiOptimizeExclude, haiPrebundledDeps } from '@h-ai/ui/vite'
@@ -22,6 +24,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 {{/if}}
 import { defineConfig } from 'vite'
+import { resolveBuildMetadata } from './scripts/build-metadata.js'
 {{#if isSvelteOnlyApp}}
 import { publicRuntimeConfig } from './scripts/vite-runtime-config.js'
 {{/if}}
@@ -32,6 +35,13 @@ export default defineConfig(({ mode, command }) => {
     throw new Error(envResult.error.message)
   const env = envResult.data
   Object.assign(process.env, env)
+  const buildMetadata = resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))
+  const metadataAsset: Plugin = {
+    name: 'hai-build-metadata',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'build-metadata.json', source: JSON.stringify(buildMetadata) })
+    },
+  }
 {{#if isSvelteOnlyApp}}
   // 浏览器无法读取 YAML；构建时通过 core 解析，仅注入明确可公开的字段。
   core.init({ configDir: './config' })
@@ -48,10 +58,14 @@ export default defineConfig(({ mode, command }) => {
   return {
     envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
+    define: {
+      __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata),
 {{#if isSvelteOnlyApp}}
-    define: { __APP_CORE_CONFIG__: JSON.stringify(appConfig) },
+      __APP_CORE_CONFIG__: JSON.stringify(appConfig),
 {{/if}}
+    },
     plugins: [
+      metadataAsset,
   {{#if isSvelteOnlyApp}}
       publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, {{#if features.crypto}}apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH, {{/if}}core: appConfig }),
       svelte(),

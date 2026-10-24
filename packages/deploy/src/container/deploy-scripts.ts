@@ -1,3 +1,4 @@
+import { windowsAskpassSource } from './deploy-ssh-askpass.js'
 /** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
 import { createTargetReader } from './deploy-target.js'
 
@@ -339,6 +340,9 @@ identity=$(read_target identityFile string '')
 known_hosts=$(read_target knownHostsFile string '')
 strict=$(read_target strictHostKeyChecking boolean true)
 timeout=$(read_target connectTimeoutSeconds number 10)
+auth=$(read_target auth string key)
+password_env=$(read_target passwordEnv string HAI_DEPLOY_PROVIDER_SSH_PASSWORD)
+test -z "$(read_target password string '')" || { printf 'Password values are forbidden in deploy-target.json. Use passwordEnv.\n' >&2; exit 1; }
 if [ "$#" -ge 1 ]; then host=$1; fi
 if [ "$#" -ge 2 ]; then port=$2; fi
 if [ "$#" -ge 3 ]; then user=$3; fi
@@ -359,27 +363,78 @@ case "$bundle" in ''|*[!a-zA-Z0-9_.+-]*) invalid_target;; esac
 case "$strict" in true) strict=accept-new;; false) strict=no;; *) invalid_target;; esac
 test -f "./$bundle" || { printf 'Bundle missing: %s\n' "$bundle" >&2; exit 1; }
 for tool in ssh scp; do command -v "$tool" >/dev/null || { printf 'Install OpenSSH (%s).\n' "$tool" >&2; exit 1; }; done
-set -- -o BatchMode=yes -o "StrictHostKeyChecking=$strict" -o "ConnectTimeout=$timeout"
-if [ -n "$identity" ]; then set -- "$@" -i "$identity" -o IdentitiesOnly=yes; fi
+temporary=''
+temporary_root=''
+cleanup() {
+  if [ -n "$temporary" ]; then
+    case "$temporary" in "$temporary_root"/hai-ssh-askpass.*) test ! -L "$temporary" && rm -rf -- "$temporary";; *) return 1;; esac
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
+case "$auth" in key|password) ;; *) invalid_target;; esac
+case "$password_env" in HAI_DEPLOY_[A-Z0-9_]*) ;; *) invalid_target;; esac
+case "$password_env" in *[!A-Z0-9_]*) invalid_target;; esac
+set -- -o "StrictHostKeyChecking=$strict" -o "ConnectTimeout=$timeout"
+if [ "$auth" = password ]; then
+  for tool in mktemp mkfifo od; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
+  # 后缀哨兵保留末尾换行，以便拒绝 readpass 无法安全传递的 CR/LF。
+  password=$(printenv "$password_env"; printf '.')
+  password=@@PASSWORD_TRIM@@
+  password=@@PASSWORD_NEWLINE@@
+  export HAI_DEPLOY_ASKPASS_PASSWORD="$password"
+  if ! LC_ALL=C awk 'BEGIN {p=ENVIRON["HAI_DEPLOY_ASKPASS_PASSWORD"]; exit (length(p) == 0 || length(p) > 1023 || p ~ /[\r\n]/) ? 1 : 0}'; then printf 'Set a valid SSH password in the configured local environment variable.\n' >&2; exit 1; fi
+  umask 077
+  temporary_root=$(CDPATH= cd -- "@@TEMP_ROOT@@" && pwd -P)
+  temporary=$(mktemp -d "$temporary_root/hai-ssh-askpass.XXXXXXXX")
+  cat > "$temporary/askpass.sh" <<'HAI_ASKPASS'
+#!/bin/sh
+test "@@ASKPASS_PROMPT@@" != confirm || exit 1
+test -n "$HAI_DEPLOY_ASKPASS_PASSWORD" || exit 1
+printf '%s\n' "$HAI_DEPLOY_ASKPASS_PASSWORD"
+HAI_ASKPASS
+  chmod 700 "$temporary/askpass.sh"
+  export SSH_ASKPASS="$temporary/askpass.sh" SSH_ASKPASS_REQUIRE=force SSH_ASKPASS_PROMPT='' DISPLAY=hai-deploy:0
+  mkfifo "$temporary/output"
+  set -- "$@" -o BatchMode=no -o PreferredAuthentications=password -o PasswordAuthentication=yes -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1
+else
+  set -- "$@" -o BatchMode=yes
+  if [ -n "$identity" ]; then set -- "$@" -i "$identity" -o IdentitiesOnly=yes; fi
+fi
+# 固定字节流过滤器最多保留一个密码长度，不把值交给 argv、正则或磁盘。
+run_native() {
+  if [ "$auth" = key ]; then "$@"; return; fi
+  (od -An -v -tu1 "$temporary/output" | LC_ALL=C awk '
+    BEGIN {secret=ENVIRON["HAI_DEPLOY_ASKPASS_PASSWORD"]; n=length(secret); pending=""}
+    {for(i=1;i<=NF;i++) {pending=pending sprintf("%c",$i); while(length(pending)>=n) {
+      if(substr(pending,1,n)==secret) {printf "***"; pending=substr(pending,n+1)}
+      else {printf "%s",substr(pending,1,1); pending=substr(pending,2)}
+    }}}
+    END {printf "%s",pending}') &
+  filter=$!
+  if "$@" > "$temporary/output" 2>&1; then code=0; else code=$?; fi
+  if ! wait "$filter"; then printf 'Cannot filter SSH output.\n' >&2; return 1; fi
+  return "$code"
+}
 if [ -n "$known_hosts" ]; then
   known_hosts=$(printf '%s' "$known_hosts" | sed 's/[\\"]/\\&/g')
   set -- "$@" -o "UserKnownHostsFile=\"$known_hosts\""
 fi
 printf '[1/3] Connecting to %s\n' "$host"
-ssh "$@" -p "$port" "$user@$host" "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"
+run_native ssh "$@" -p "$port" "$user@$host" "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"
 printf '[2/3] Uploading %s\n' "$bundle"
 scp_host=$host
 case "$host" in *:*) scp_host="[$host]";; esac
-scp "$@" -P "$port" "./$bundle" "$user@$scp_host:$remote/incoming/$bundle"
+run_native scp "$@" -P "$port" "./$bundle" "$user@$scp_host:$remote/incoming/$bundle"
 printf '[3/3] Applying package and checking HTTP access\n'
-if ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"; then
+if run_native ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"; then
   :
 else
   code=$?
   printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.\n' "$remote" >&2
   exit "$code"
 fi
-`
+`.replace('@@PASSWORD_TRIM@@', '$' + '{password%.}').replace('@@PASSWORD_NEWLINE@@', '$' + '{password%?}').replace('@@TEMP_ROOT@@', '$' + '{TMPDIR:-/tmp}').replace('@@ASKPASS_PROMPT@@', '$' + '{SSH_ASKPASS_PROMPT:-}')
   const ps1 = String.raw`<#
 操作机上传入口：复制整个交付目录后，先修改同目录 deploy-target.json 的服务器、用户和密钥路径。
 需要 Windows PowerShell 5+/PowerShell 及 OpenSSH 的 ssh/scp；tar 必须与本脚本放在同一目录。
@@ -399,9 +454,17 @@ if ($port -is [string] -or [string]$port -notmatch '^[0-9]+$' -or $port -lt 1 -o
 if ($null -ne $target.strictHostKeyChecking -and $target.strictHostKeyChecking -isnot [bool]) { throw 'Invalid host key policy.' }
 if (($null -ne $target.identityFile -and $target.identityFile -isnot [string]) -or ($null -ne $target.knownHostsFile -and $target.knownHostsFile -isnot [string])) { throw 'Invalid SSH file path.' }
 $strict = if ($target.strictHostKeyChecking -eq $false) { 'no' } else { 'accept-new' }
-$options = @('-o', 'BatchMode=yes', '-o', "StrictHostKeyChecking=$strict", '-o', "ConnectTimeout=$timeout")
+$auth = if ($null -eq $target.auth) { 'key' } else { $target.auth }
+$passwordEnv = if ($null -eq $target.passwordEnv) { 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD' } else { $target.passwordEnv }
+if ($auth -isnot [string] -or $auth -notin @('key', 'password') -or $passwordEnv -isnot [string] -or $passwordEnv -cnotmatch '^HAI_DEPLOY_[A-Z0-9_]+$' -or $null -ne $target.password) { throw 'Invalid SSH authentication configuration. Store password values only in the configured local environment variable.' }
+$options = @('-o', "StrictHostKeyChecking=$strict", '-o', "ConnectTimeout=$timeout")
 if (-not $IdentityFile) { $IdentityFile = $target.identityFile }
-if ($IdentityFile) { $options += @('-i', $IdentityFile, '-o', 'IdentitiesOnly=yes') }
+if ($auth -eq 'password') {
+  $options += @('-o', 'BatchMode=no', '-o', 'PreferredAuthentications=password', '-o', 'PasswordAuthentication=yes', '-o', 'PubkeyAuthentication=no', '-o', 'NumberOfPasswordPrompts=1')
+} else {
+  $options += @('-o', 'BatchMode=yes')
+  if ($IdentityFile) { $options += @('-i', $IdentityFile, '-o', 'IdentitiesOnly=yes') }
+}
 $knownHosts = if ($env:HAI_DEPLOY_KNOWN_HOSTS_FILE) { $env:HAI_DEPLOY_KNOWN_HOSTS_FILE } else { $target.knownHostsFile }
 if ($knownHosts) {
   $knownHosts = $knownHosts.Replace('\', '\\').Replace('"', '\"')
@@ -421,6 +484,10 @@ function ConvertTo-NativeArgument([string]$Value) {
 function Invoke-Step([string]$Name, [string]$Command, [string[]]$Arguments) {
   Write-Host "[$Name]"
   $nativeCommand = Get-Command $Command -ErrorAction Stop
+  if ($auth -eq 'password' -and $nativeCommand.CommandType -eq 'Application') {
+    $Arguments = @('--run', $nativeCommand.Source) + $Arguments
+    $nativeCommand = Get-Command $env:SSH_ASKPASS -ErrorAction Stop
+  }
   if ($PSVersionTable.PSVersion.Major -lt 6 -and $nativeCommand.CommandType -eq 'Application') {
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $nativeCommand.Source
@@ -431,14 +498,45 @@ function Invoke-Step([string]$Name, [string]$Command, [string[]]$Arguments) {
     $child = [System.Diagnostics.Process]::Start($start)
     try { $child.WaitForExit(); $code = $child.ExitCode } finally { $child.Dispose() }
   } else {
-    & $Command @Arguments
+    $invokeCommand = if ($nativeCommand.CommandType -eq 'Application') { $nativeCommand.Source } else { $Command }
+    & $invokeCommand @Arguments
     $code = $LASTEXITCODE
   }
   $global:LASTEXITCODE = $code
   if ($code -ne 0) { throw "$Name failed (exit $code)." }
 }
 $applying = $false
+$temporary = $null
+$temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+$savedEnvironment = @{}
 try {
+  if ($auth -eq 'password') {
+    $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'Process')
+    if ($null -eq $password -and $env:OS -eq 'Windows_NT') { $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'User') }
+    if ([string]::IsNullOrEmpty($password) -or $password.IndexOfAny([char[]]@([char]0, [char]10, [char]13)) -ge 0 -or [Text.Encoding]::UTF8.GetByteCount($password) -gt 1023) { throw 'Set a valid SSH password in the configured local environment variable.' }
+    foreach ($name in @('SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'SSH_ASKPASS_PROMPT', 'DISPLAY', 'HAI_DEPLOY_ASKPASS_PASSWORD', 'HAI_DEPLOY_ASKPASS_SOURCE', 'HAI_DEPLOY_ASKPASS_OUTPUT')) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+    $temporary = Join-Path $temporaryRoot ('hai-ssh-askpass-' + [Guid]::NewGuid().ToString('N'))
+    [System.IO.Directory]::CreateDirectory($temporary) | Out-Null
+    $source = Join-Path $temporary 'askpass.cs'
+    $helper = Join-Path $temporary 'askpass.exe'
+    [System.IO.File]::WriteAllText($source, @'
+@@WINDOWS_ASKPASS@@
+'@, (New-Object System.Text.UTF8Encoding($false)))
+    $env:HAI_DEPLOY_ASKPASS_SOURCE = $source
+    $env:HAI_DEPLOY_ASKPASS_OUTPUT = $helper
+    # 编译进程不继承专用密码；固定源码及命令均不包含凭据。
+    $env:HAI_DEPLOY_ASKPASS_PASSWORD = ''
+    if ($env:OS -ne 'Windows_NT') { throw 'Use sh deploy.sh for password authentication on POSIX systems.' }
+    $compiler = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    $compileScript = '$ErrorActionPreference="Stop"; Add-Type -Language CSharp -TypeDefinition ([System.IO.File]::ReadAllText($env:HAI_DEPLOY_ASKPASS_SOURCE, [System.Text.Encoding]::UTF8)) -OutputType ConsoleApplication -OutputAssembly $env:HAI_DEPLOY_ASKPASS_OUTPUT'
+    & $compiler -NoProfile -NonInteractive -EncodedCommand ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($compileScript))) 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'Cannot prepare the SSH password helper.' }
+    $env:SSH_ASKPASS = $helper
+    $env:SSH_ASKPASS_REQUIRE = 'force'
+    $env:SSH_ASKPASS_PROMPT = ''
+    $env:DISPLAY = 'hai-deploy:0'
+    $env:HAI_DEPLOY_ASKPASS_PASSWORD = $password
+  }
   foreach ($tool in @('ssh', 'scp')) { Get-Command $tool -ErrorAction Stop | Out-Null }
   Invoke-Step '1/3 Connect' 'ssh' ($options + @('-p', [string]$port, $destination, "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"))
   Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$port, "./$bundle", "$($scpDestination):$remote/incoming/$bundle"))
@@ -448,8 +546,15 @@ try {
   if ($applying) { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.") }
   Write-Error $_
   exit 1
+} finally {
+  foreach ($name in $savedEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process') }
+  if ($null -ne $temporary -and (Test-Path -LiteralPath $temporary)) {
+    $item = Get-Item -LiteralPath $temporary -Force
+    if ([System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($temporary)) -ne $temporaryRoot -or $item.Name -notlike 'hai-ssh-askpass-*' -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) { throw 'Refusing to clean an unexpected SSH helper directory.' }
+    Remove-Item -LiteralPath $temporary -Recurse -Force
+  }
 }
-`
+`.replace('@@WINDOWS_ASKPASS@@', windowsAskpassSource)
   return { sh, ps1, reader: createTargetReader() }
 }
 

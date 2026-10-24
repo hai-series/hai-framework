@@ -346,7 +346,7 @@ export function createDockerSshProvider(
       const reason = error instanceof Error ? error.message : String(error)
       let safeReason = 'Deployment bundle failed'
       try {
-        safeReason = maskSecrets(reason, Object.values(context.appEnv ?? {}).filter(Boolean))
+        safeReason = maskSecrets(reason, [...Object.values(context.appEnv ?? {}), config.ssh?.password ?? ''].filter(Boolean))
       }
       catch {
         // 脱敏配置无效时保留固定诊断，不重新暴露原异常。

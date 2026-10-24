@@ -28,6 +28,8 @@ description: "接入 @h-ai/feedback 用户反馈、前后端现场、管理员�
 
 范围/用户/应用和证据关联 ID 精确匹配，不能依赖 MySQL 默认排序规则放宽相等。附件 ID 为区分大小写的有效 Unicode（1–128 字符）；ZIP 路径由摘要生成，读取 manifest 中的路径，不从 ID 或名称推导。文本脱敏覆盖常见凭据键、JSON/转义 JSON、Bearer/Basic，业务专有敏感内容仍需宿主白名单与 DOM 标记。
 
+构建标识来自实际产物的 appVersion/buildId/commit，浏览器不能使用服务端返回的版本。CLI/base/API/fullstack 模板在编译时内联，Docker 经 build args 传入；每个目标读取自己的 package.json，同一 SSR 的 client/server 共享 buildId，无所属 Git 提交时明确 unknown。模板的 build-metadata.json 只记录这三个非敏感字段。验收需把反馈 API/ZIP 中前后端证据分别与对应产物、manifest、实际源码提交核对，不能只比较两个空值或只检查旁证文件。
+
 SDK 的 annotate(id, annotation) 使用浏览器解码后原图的像素；UI FeedbackAnnotation.rect 使用 0–1 比例。宿主应在 Image.decode() 后，将 x/width 乘 naturalWidth、y/height 乘 naturalHeight，不能使用 CSS 显示尺寸；这样与 SDK 的 JPEG 方向和图像尺寸一致。附件元数据没有 width/height 字段，不臆造该能力；对象 URL 由创建方在替换或销毁时释放。
 
 草稿由 SDK 持有并通过 annotate/addFiles 等方法更新；Svelte 保存引用时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 getDraft() 刷新附件视图。不要把该草稿放入深度 `$state` 代理，避免 SDK 替换图片字节后视图继续读取代理缓存的旧 bytes。

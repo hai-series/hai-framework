@@ -8,6 +8,7 @@ import { artifactChecksum } from '../deploy-artifact.js'
 import { deployM } from '../deploy-i18n.js'
 import { runCommand } from './deploy-command.js'
 import { createApplyScript, createLocalInstallScript, createUploadScripts } from './deploy-scripts.js'
+import { usesSshPassword } from './deploy-ssh.js'
 
 /**
  * 打包所选服务；完整交付自动导出中间件，服务器启动时禁止联网拉取。
@@ -170,6 +171,8 @@ export async function createDeploymentBundle(options: {
       host: config.ssh?.host ?? 'SERVER_HOST',
       port: config.ssh?.port ?? 22,
       username: config.ssh?.username ?? 'deploy',
+      auth: config.ssh && usesSshPassword(config.ssh) ? 'password' : 'key',
+      passwordEnv: 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD',
       identityFile: config.ssh?.identityFile ?? '',
       knownHostsFile: config.ssh?.knownHostsFile ?? '',
       strictHostKeyChecking: config.ssh?.strictHostKeyChecking ?? true,
@@ -181,6 +184,8 @@ export async function createDeploymentBundle(options: {
       host: deployM('deploy_targetHost'),
       port: deployM('deploy_targetPort'),
       username: deployM('deploy_targetUsername'),
+      auth: deployM('deploy_targetAuth'),
+      passwordEnv: deployM('deploy_targetPasswordEnv'),
       identityFile: deployM('deploy_targetIdentityFile'),
       knownHostsFile: deployM('deploy_targetKnownHostsFile'),
       strictHostKeyChecking: deployM('deploy_targetStrictHostKeyChecking'),

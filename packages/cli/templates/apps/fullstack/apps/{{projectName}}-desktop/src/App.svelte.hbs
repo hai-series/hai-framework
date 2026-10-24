@@ -4,6 +4,9 @@
   import type { ManagementApiOptions } from '{{fullstack.sharedPackageName}}'
   import { apiClient } from '@h-ai/api-client'
   import { AdminWorkspace } from '{{fullstack.sharedPackageName}}'
+{{#if features.feedback}}
+  import { buildMetadata } from './build-metadata.js'
+{{/if}}
   import { setLocale } from './lib/paraglide/runtime.js'
 
   const native = '__TAURI_INTERNALS__' in globalThis
@@ -17,5 +20,5 @@
   }
 </script>
 
-<AdminWorkspace platform="desktop" {apiOptions} onLocaleChange={syncLocale} />
+<AdminWorkspace platform="desktop" {apiOptions}{{#if features.feedback}} {buildMetadata}{{/if}} onLocaleChange={syncLocale} />
 {{/if}}

@@ -75,6 +75,10 @@ import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 {{/if}}
 
+{{#if features.feedback}}
+import { buildMetadata } from '../build-metadata.js'
+{{/if}}
+
 {{#if features.db}}
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 {{/if}}
@@ -262,7 +266,7 @@ async function doInit(): Promise<void> {
 {{/if}}
 
 {{#if features.feedback}}
-  const feedbackResult = await feedback.init(FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')))
+  const feedbackResult = await feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata })
   if (!feedbackResult.success)
     throw new Error(`Feedback initialization failed: ${feedbackResult.error.message}`)
 {{/if}}

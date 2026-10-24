@@ -18,6 +18,8 @@ Collect user feedback and diagnostic evidence, notify administrators, review rep
 
 ## Getting started
 
+Supply `appVersion/buildId/commit` from each actual browser or server artifact. A browser must retain its own identity; one SSR build shares its buildId across client and server output. Admin Console and generated base/API/fullstack projects inline these values. `hai build` creates internal metadata and passes it through Docker build arguments. Each target reads its own package.json version; a missing owning Git commit is `unknown`. Template `build-metadata.json` contains only these three nonsecret fields and matches the inlined values.
+
 Initialize core and check initialization of reldb, storage and reach before feedback. Production requires shared PostgreSQL/MySQL, private S3 and a real SMTP provider. The application owns credentials and connection lifecycles. Local development providers and Console notifications are not proof of actual mail delivery.
 
 The following snippet runs inside an async function after dependencies are initialized. Trusted server authentication and authorization must supply the context:

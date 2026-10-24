@@ -36,6 +36,7 @@ interface GateEnvOptions {
   serviceBaseUrl?: string
   publicApiBase?: string
   frontendUrls?: Record<string, string>
+  expectedBuildCommit?: string
 }
 
 const scaffoldGateCases: readonly ScaffoldGateCase[] = [
@@ -222,6 +223,21 @@ it('generated migration executes up and down with HaiResult', async () => {
   }
 })
 `)
+      }
+      if (scenario.title === 'fullstack-feedback') {
+        // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
+        for (const [target, version] of [['apps/sample-fullstack-feedback-web', '2.4.6-frontend'], ['packages/sample-fullstack-feedback-serv', '7.8.9-service']]) {
+          const manifestPath = path.join(projectPath, target, 'package.json')
+          const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+          await writeFile(manifestPath, `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
+        }
+        runGate('git', ['init', '--quiet'], projectPath, process.env, false)
+        runGate('git', ['add', '--all'], projectPath, process.env, false)
+        runGate('git', ['-c', 'core.hooksPath=.git/empty-hooks', '-c', 'user.name=Scaffold metadata', '-c', 'user.email=scaffold@example.invalid', 'commit', '--quiet', '-m', 'metadata acceptance fixture'], projectPath, process.env, false)
+        const committed = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: projectPath, encoding: 'utf8', windowsHide: true })
+        if (committed.status !== 0 || !/^[a-f\d]{40,64}$/i.test(committed.stdout.trim()))
+          throw new Error('The metadata fixture must have its own exact Git commit')
+        envOptions.expectedBuildCommit = committed.stdout.trim()
       }
       if (scenario.title === 'mobile-app') {
         envOptions.serviceBaseUrl = await allocateBaseUrl()
@@ -508,6 +524,7 @@ function buildChildEnv(envOptions: GateEnvOptions = {}, nodeEnv: 'test' | 'produ
         }
       : {}),
     ...Object.fromEntries(Object.entries(envOptions.frontendUrls ?? {}).map(([target, url]) => [`HAI_E2E_${target.toUpperCase()}_URL`, url])),
+    ...(envOptions.expectedBuildCommit ? { E2E_BUILD_COMMIT: envOptions.expectedBuildCommit } : {}),
     CI: '1',
     // 产物按生产模式构建，业务环境独立使用 core 覆盖值，避免继承 Vitest 的开发编译模式。
     NODE_ENV: nodeEnv,

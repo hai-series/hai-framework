@@ -1403,17 +1403,17 @@
     "name": "HAI_BUILD_COMMIT",
     "module": "build",
     "path": "HAI_BUILD_COMMIT",
-    "description": "环境入口；使用位置 apps/admin-console/vite.config.ts",
+    "description": "当前编译目标所属的源码提交；无所属 Git 提交时明确 unknown",
     "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
+    "constraint": "40或64位十六进制 Git SHA，或 unknown；hai build 内部确定，不继承调用者的同名值"
   },
   {
     "name": "HAI_BUILD_ID",
     "module": "build",
     "path": "HAI_BUILD_ID",
-    "description": "环境入口；使用位置 apps/admin-console/vite.config.ts",
+    "description": "CLI 内部生成并向编译目标传递的产物标识；同次 SSR 构建复用",
     "value": "",
-    "constraint": "字符串；按使用位置的校验规则填写"
+    "constraint": "非空字母、数字、下划线、点、加减号，最多160字符；hai build 不继承调用者的同名值"
   },
   {
     "name": "HAI_CACHE",
@@ -2000,6 +2000,14 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_DEPLOY_ASKPASS_PASSWORD",
+    "module": "deploy",
+    "path": "HAI_DEPLOY_ASKPASS_PASSWORD",
+    "description": "凭据输入；使用位置 packages/deploy/src/container/deploy-ssh-askpass.ts",
+    "value": "",
+    "constraint": "敏感字符串；启用相应功能时必填，不得提交真实值"
+  },
+  {
     "name": "HAI_DEPLOY_CONTAINER",
     "module": "deploy",
     "path": "deploy.container",
@@ -2096,6 +2104,14 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_AUTH",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.auth",
+    "description": "认证方式；省略时非空 password 使用密码，否则保留私钥/agent；显式 key 忽略残留密码。",
+    "value": "key",
+    "constraint": "字符串；取值：key | password"
+  },
+  {
     "name": "HAI_DEPLOY_PROVIDER_SSH_CONNECTTIMEOUTSECONDS",
     "module": "deploy",
     "path": "deploy.provider.ssh.connectTimeoutSeconds",
@@ -2126,6 +2142,14 @@
     "description": "known_hosts 文件路径（省略时使用默认；配合 CI/临时环境隔离主机指纹）",
     "value": "",
     "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_SSH_PASSWORD",
+    "module": "deploy",
+    "path": "deploy.provider.ssh.password",
+    "description": "SSH 密码（保留原值）；密码方式必须非空、无 CR/LF/NUL，UTF-8 不超过 1023 字节。",
+    "value": "",
+    "constraint": "字符串"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_SSH_PORT",
@@ -3886,6 +3910,14 @@
     "description": "端到端测试创建的管理员密码",
     "value": "",
     "constraint": "满足 IAM 密码策略；仅测试进程使用"
+  },
+  {
+    "name": "E2E_BUILD_COMMIT",
+    "module": "runtime",
+    "path": "E2E_BUILD_COMMIT",
+    "description": "环境入口；使用位置 packages/cli/templates/apps/fullstack/e2e/fullstack.spec.ts.hbs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "E2E_PORT",

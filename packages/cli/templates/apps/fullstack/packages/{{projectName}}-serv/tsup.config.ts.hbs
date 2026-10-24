@@ -1,6 +1,15 @@
+import { writeFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'tsup'
+import { resolveBuildMetadata } from '../../scripts/build-metadata.js'
+
+const buildMetadata = resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))
 
 export default defineConfig({
+  define: { __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata) },
+  async onSuccess() {
+    await writeFile(new URL('./dist/build-metadata.json', import.meta.url), JSON.stringify(buildMetadata))
+  },
   entry: ['src/index.ts'],
   format: ['esm'],
   dts: { compilerOptions: { ignoreDeprecations: '6.0' } },

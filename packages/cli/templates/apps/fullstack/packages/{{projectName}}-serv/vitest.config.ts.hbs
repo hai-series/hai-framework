@@ -1,0 +1,12 @@
+import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vitest/config'
+import { resolveBuildMetadata } from '../../scripts/build-metadata.js'
+
+export default defineConfig({
+  define: { __HAI_BUILD_METADATA__: JSON.stringify(resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))) },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+  },
+})

@@ -1,0 +1,9 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.web}}
+{{#if features.feedback}}
+/** 当前应用编译时烘焙的产物身份；运行时配置不能覆盖。 */
+declare const __HAI_BUILD_METADATA__: { appVersion: string, buildId: string, commit: string }
+
+export const buildMetadata = __HAI_BUILD_METADATA__
+{{/if}}
+{{/if}}
