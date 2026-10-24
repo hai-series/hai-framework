@@ -2,6 +2,8 @@
 
 统一审计日志模块，基于 `@h-ai/reldb` 实现持久化，提供审计日志的记录、分页查询、清理与统计。
 
+SQLite、PostgreSQL、MySQL 均返回 `createdAt: Date`、`details: string | null`（JSON 字符串），缺失可空字段为 `null`。日期筛选与写入保持同一驱动转换；`getStats()` 数量为安全整数，超出范围返回 `STATS_FAILED`，不要把底层驱动 JSON 对象或时间戳当成公开审计结果。
+
 
 `audit.init()` 会等待自动建表和仓库就绪才返回成功；DDL 失败保持 `isInitialized=false`，修正数据库后可重试。自定义 JOIN、统计和清理也使用同一就绪屏障；初始化期间关闭会使迟到结果失效。先检查 init 的 HaiResult，再立即记录或查询；audit 不拥有共享 RelDB 的连接，关闭 audit 后再关闭数据库。
 

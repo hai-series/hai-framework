@@ -20,6 +20,32 @@ const logger = core.logger.child({ module: 'audit', scope: 'repository' })
 const AUDIT_TABLE = 'hai_audit_logs'
 
 /**
+ * 原始 SQL 与基类映射的日期、JSON 返回值可能不同，在审计边界统一。
+ * @example 模块内部上下文
+ * ```ts
+ * const row: AuditReadRow = { id: 'audit_example', userId: null, action: 'login', resource: 'auth', resourceId: null, details: { source: 'web' }, ipAddress: null, userAgent: null, createdAt: Date.now() }
+ * const record = normalizeAuditLog(row)
+ * ```
+ */
+type AuditReadRow = Omit<AuditLog, 'details' | 'createdAt'> & {
+  details: unknown
+  createdAt: Date | string | number
+}
+
+/** 保持公开审计契约：Date、JSON 字符串和显式 null。 */
+function normalizeAuditLog(row: AuditReadRow): AuditLog {
+  return {
+    ...row,
+    userId: row.userId ?? null,
+    resourceId: row.resourceId ?? null,
+    details: row.details == null ? null : typeof row.details === 'string' ? row.details : JSON.stringify(row.details) ?? null,
+    ipAddress: row.ipAddress ?? null,
+    userAgent: row.userAgent ?? null,
+    createdAt: row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
+  }
+}
+
+/**
  * 审计仓储内部的用户表关联映射；由已校验的初始化配置构造。
  * @example 模块内部上下文
  * ```ts
@@ -96,13 +122,13 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   /**
    * 将 Date 转为适合当前数据库类型的 SQL 参数
    *
-   * SQLite 存储 TIMESTAMP 为毫秒时间戳，其他数据库使用 ISO 字符串。
+   * 与基类写入保持一致：SQLite 使用毫秒，其他数据库由驱动转换 Date。
    *
    * @param date - 要转换的日期
-   * @returns SQLite 返回毫秒时间戳（number），其他返回 ISO 字符串
+   * @returns SQLite 返回毫秒时间戳，其他返回 Date
    */
-  private toDateParam(date: Date): number | string {
-    return this.isSqlite ? date.getTime() : date.toISOString()
+  private toDateParam(date: Date): number | Date {
+    return this.isSqlite ? date.getTime() : date
   }
 
   /**
@@ -194,6 +220,9 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const conditions: string[] = []
     const params: unknown[] = []
     const { userTable, userIdColumn, userNameColumn } = this.repoConfig
+    // 配置标识符已由 init 校验；别名加引号防止 PostgreSQL 折叠大小写。
+    const quote = this.db.config?.type === 'mysql' ? '`' : '"'
+    const identifier = (name: string) => `${quote}${name.replaceAll(quote, quote + quote)}${quote}`
 
     if (options.userId) {
       conditions.push('a.user_id = ?')
@@ -219,12 +248,12 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
     try {
-      const result = await this.sql().queryPage<AuditLogWithUser>({
-        sql: `SELECT a.id, a.user_id AS userId, a.action, a.resource, a.resource_id AS resourceId,
-                a.details, a.ip_address AS ipAddress, a.user_agent AS userAgent,
-                a.created_at AS createdAt, u.${userNameColumn} AS username
+      const result = await this.sql().queryPage<AuditReadRow & { username: string | null }>({
+        sql: `SELECT a.id, a.user_id AS ${identifier('userId')}, a.action, a.resource, a.resource_id AS ${identifier('resourceId')},
+                a.details, a.ip_address AS ${identifier('ipAddress')}, a.user_agent AS ${identifier('userAgent')},
+                a.created_at AS ${identifier('createdAt')}, u.${identifier(userNameColumn)} AS username
          FROM ${AUDIT_TABLE} a
-         LEFT JOIN ${userTable} u ON a.user_id = u.${userIdColumn}
+         LEFT JOIN ${identifier(userTable)} u ON a.user_id = u.${identifier(userIdColumn)}
          ${whereClause}
          ORDER BY a.created_at DESC`,
         params,
@@ -241,7 +270,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         )
       }
 
-      return ok(result.data)
+      return ok({ ...result.data, items: result.data.items.map(row => ({ ...normalizeAuditLog(row), username: row.username ?? null })) })
     }
     catch (error) {
       logger.error('Failed to query audit logs', { error })
@@ -279,7 +308,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         )
       }
 
-      return ok(result.data)
+      return ok(result.data.map(normalizeAuditLog))
     }
     catch (error) {
       return err(
@@ -350,7 +379,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     cutoff.setDate(cutoff.getDate() - days)
 
     try {
-      const result = await this.sql().query<AuditStatItem>(
+      const result = await this.sql().query<{ action: string, count: number | string | bigint }>(
         `SELECT action, COUNT(*) as count
          FROM ${AUDIT_TABLE}
          WHERE created_at >= ?
@@ -368,7 +397,10 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         )
       }
 
-      return ok(result.data.map(item => ({ action: item.action, count: Number(item.count) })))
+      const statistics = result.data.map(item => ({ action: item.action, count: Number(item.count) }))
+      if (statistics.some(item => !Number.isSafeInteger(item.count) || item.count < 0))
+        return err(HaiAuditError.STATS_FAILED, auditM('audit_invalidStatCount'))
+      return ok(statistics)
     }
     catch (error) {
       logger.error('Failed to query audit statistics', { error })

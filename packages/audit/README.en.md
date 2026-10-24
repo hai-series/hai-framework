@@ -8,6 +8,8 @@
 
 A unified audit logging module. The `audit` object records, queries, cleans up, and aggregates audit logs, with persistence provided by `@h-ai/reldb`.
 
+SQLite, PostgreSQL and MySQL share the same read contract: `createdAt` is a `Date`, `details` is a JSON string or `null`, and absent nullable fields return `null`. Date filters use the same driver conversion as writes. Counts are safe integers; out-of-range counts return `STATS_FAILED`.
+
 ## Core features
 
 - Record user actions and security events; filter by user, date and action.
