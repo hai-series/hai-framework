@@ -1,19 +1,34 @@
 {
   "name": "@h-ai/feedback",
   "type": "module",
-  "version": "0.1.0-alpha.68",
+  "version": "0.1.0-alpha.69",
   "description": "Hai Framework feedback collection, evidence, notifications and offline diagnostic bundles.",
   "license": "Apache-2.0",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./client": { "types": "./dist/client/index.d.ts", "import": "./dist/client/index.js" },
-    "./bundle": { "types": "./dist/bundle/index.d.ts", "import": "./dist/bundle/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./bundle": {
+      "types": "./dist/bundle/index.d.ts",
+      "import": "./dist/bundle/index.js"
+    }
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
-  "publishConfig": { "access": "public" },
-  "engines": { "node": "^22.23.4 || ^24.22.1 || ^26.12.1" },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
