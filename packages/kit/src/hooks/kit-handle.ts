@@ -117,126 +117,131 @@ export function createHandle(config: HandleConfig = {}): Handle {
   const cookieProxyConfig = buildCookieProxyConfig(cryptoConfig)
 
   return async ({ event, resolve }) => {
-    const requestId = generateId('req')
-    const context: MiddlewareContext = {
-      event,
-      requestId,
-    }
+    const suppliedRequestId = event.request.headers.get('x-request-id')
+    const requestId = suppliedRequestId && /^[\w.:-]{1,128}$/.test(suppliedRequestId) ? suppliedRequestId : generateId('req')
+    return core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, async () => {
+      const context: MiddlewareContext = {
+        event,
+        requestId,
+      }
 
-    // 注入 requestId 到 event.locals
-    // Workaround：SvelteKit App.Locals 是项目侧声明的 interface，库代码无法靠模块增强检查动态 key。
-    const locals = event.locals as unknown as Record<string, unknown>
-    locals.requestId = requestId
+      // 注入 requestId 到 event.locals
+      // Workaround：SvelteKit App.Locals 是项目侧声明的 interface，库代码无法靠模块增强检查动态 key。
+      const locals = event.locals as unknown as Record<string, unknown>
+      locals.requestId = requestId
 
-    // ── Cookie 加密代理（透明） ──
-    if (cookieProxyConfig) {
-      const proxiedCookies = createEncryptedCookieProxy(event.cookies, cookieProxyConfig)
-      Object.defineProperty(event, 'cookies', {
-        value: proxiedCookies,
-        writable: true,
-        configurable: true,
-      })
-    }
+      // ── Cookie 加密代理（透明） ──
+      if (cookieProxyConfig) {
+        const proxiedCookies = createEncryptedCookieProxy(event.cookies, cookieProxyConfig)
+        Object.defineProperty(event, 'cookies', {
+          value: proxiedCookies,
+          writable: true,
+          configurable: true,
+        })
+      }
 
-    const runRequest = async (): Promise<Response> => {
-      try {
+      const runRequest = async (): Promise<Response> => {
+        try {
         // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
-        if (a2aResolved) {
-          const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
-          if (a2aResponse)
-            return a2aResponse
-        }
+          if (a2aResolved) {
+            const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
+            if (a2aResponse)
+              return a2aResponse
+          }
 
-        // ── 会话解析 ──
-        let session: SessionData | undefined
+          // ── 会话解析 ──
+          let session: SessionData | undefined
 
-        if (authConfig) {
-          const token = getAccessToken(event.request, event.cookies)
-          if (token) {
-            session = await authConfig.verifyToken(token) ?? undefined
-            locals.session = session
-            if (session) {
-              locals.accessToken = token
+          if (authConfig) {
+            const token = getAccessToken(event.request, event.cookies)
+            if (token) {
+              session = await authConfig.verifyToken(token) ?? undefined
+              locals.session = session
+              if (session) {
+                locals.accessToken = token
+              }
             }
           }
-        }
-        context.session = session
+          context.session = session
 
-        // ── 执行守卫 ──
-        for (const guardConfig of guards) {
-          const guardResult = await executeGuard(guardConfig, event, session)
+          return await core.context.run({ userId: session?.userId }, async () => {
+            // ── 执行守卫 ──
+            for (const guardConfig of guards) {
+              const guardResult = await executeGuard(guardConfig, event, session)
 
-          if (!guardResult.allowed) {
-            if (guardResult.redirect) {
-              return new Response(null, {
-                status: 302,
-                headers: { Location: guardResult.redirect },
-              })
+              if (!guardResult.allowed) {
+                if (guardResult.redirect) {
+                  return new Response(null, {
+                    status: 302,
+                    headers: { Location: guardResult.redirect },
+                  })
+                }
+
+                return new Response(
+                  JSON.stringify({
+                    success: false,
+                    error: {
+                      code: 'FORBIDDEN',
+                      message: guardResult.message ?? kitM('kit_accessDenied'),
+                    },
+                    requestId,
+                  }),
+                  {
+                    status: guardResult.status ?? 403,
+                    headers: { 'Content-Type': 'application/json' },
+                  },
+                )
+              }
             }
 
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: {
-                  code: 'FORBIDDEN',
-                  message: guardResult.message ?? kitM('kit_accessDenied'),
-                },
-                requestId,
-              }),
-              {
-                status: guardResult.status ?? 403,
-                headers: { 'Content-Type': 'application/json' },
-              },
+            // ── 中间件链 ──
+            const response = await executeMiddlewareChain(
+              allMiddleware,
+              context,
+              () => resolve(event),
             )
-          }
+
+            return response
+          })
         }
-
-        // ── 中间件链 ──
-        const response = await executeMiddlewareChain(
-          allMiddleware,
-          context,
-          () => resolve(event),
-        )
-
-        return response
-      }
-      catch (error) {
+        catch (error) {
         // SvelteKit 控制流异常（redirect / error）必须继续抛出
-        if (isSvelteKitControlFlow(error)) {
-          throw error
-        }
+          if (isSvelteKitControlFlow(error)) {
+            throw error
+          }
 
-        core.logger.error('Request failed', { requestId, error: error instanceof Error ? error.message : error })
+          core.logger.error('Request failed', { requestId, error: error instanceof Error ? error.message : error })
 
-        if (onError) {
-          return onError(error, event)
-        }
+          if (onError) {
+            return onError(error, event)
+          }
 
-        // 默认错误响应
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: {
-              code: 'INTERNAL_ERROR',
-              message: kitM('kit_internalError'),
+          // 默认错误响应
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: {
+                code: 'INTERNAL_ERROR',
+                message: kitM('kit_internalError'),
+              },
+              requestId,
+            }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json' },
             },
-            requestId,
-          }),
-          {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          },
-        )
+          )
+        }
       }
-    }
 
-    const response = transportMiddleware
-      ? await transportMiddleware(context, runRequest)
-      : await runRequest()
+      const response = transportMiddleware
+        ? await transportMiddleware(context, runRequest)
+        : await runRequest()
 
-    applyDefaultSecurityHeaders(response)
-    response.headers.set('X-Request-Id', requestId)
-    return response
+      applyDefaultSecurityHeaders(response)
+      response.headers.set('X-Request-Id', requestId)
+      return response
+    })
   }
 }
 

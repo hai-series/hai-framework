@@ -11,7 +11,8 @@ import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import pino from 'pino'
-import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
+import { requestContext } from './core-function-context.js'
+import { emitLogRecord, sanitizeLogFields } from './core-function-log-observer.js'
 
 // ESM 场景下通过 createRequire 复用 CommonJS 的 resolve 能力，用来探测可选依赖是否存在。
 const nodeRequire = createRequire(import.meta.url)
@@ -113,7 +114,7 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
     return ctx
   }
 
-  return sanitizeUtils.sanitizeSensitiveFields(ctx) as LogContext
+  return sanitizeLogFields(ctx, globalRedact)
 }
 
 // ─── Logger 实现 ───
@@ -128,24 +129,33 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
  * @returns 统一 Logger 实例
  */
 function wrapPino(resolvePino: () => pino.Logger, resolveContext: () => Record<string, unknown>): Logger {
+  const write = (level: LogLevel, message: string, ctx?: LogContext): void => {
+    const output = resolvePino()
+    if (!output.isLevelEnabled(level))
+      return
+    const context = sanitizeLogContext({ ...resolveContext(), ...ctx, ...requestContext.get() }) ?? {}
+    output[level](context, message)
+    if (!requestContext.get().suppressLogObservers)
+      emitLogRecord({ timestamp: Date.now(), level, message, context })
+  }
   return {
     trace(message: string, ctx?: LogContext) {
-      resolvePino().trace(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
+      write('trace', message, ctx)
     },
     debug(message: string, ctx?: LogContext) {
-      resolvePino().debug(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
+      write('debug', message, ctx)
     },
     info(message: string, ctx?: LogContext) {
-      resolvePino().info(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
+      write('info', message, ctx)
     },
     warn(message: string, ctx?: LogContext) {
-      resolvePino().warn(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
+      write('warn', message, ctx)
     },
     error(message: string, ctx?: LogContext) {
-      resolvePino().error(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
+      write('error', message, ctx)
     },
     fatal(message: string, ctx?: LogContext) {
-      resolvePino().fatal(sanitizeLogContext({ ...resolveContext(), ...ctx }) ?? {}, message)
+      write('fatal', message, ctx)
     },
     child(childContext: Record<string, unknown>): Logger {
       // 只保存本地上下文，输出时继承父级的当前配置；不绑定旧 pino child。

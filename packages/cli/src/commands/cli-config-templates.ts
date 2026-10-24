@@ -47,6 +47,8 @@ function generateLiteralConfigFile(moduleKey: string, configs?: ModuleConfigs): 
       return generateVecdbConfig()
     case 'reach':
       return generateReachConfig()
+    case 'feedback':
+      return generateFeedbackConfig()
     case 'scheduler':
       return generateSchedulerConfig()
     case 'audit':
@@ -538,7 +540,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  */
 export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false, configContents: Record<string, string> = {}): string {
   const keys = new Set(['core', ...(configContents.serv ? ['serv'] : []), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
-  const allKeys = ['core', 'serv', 'db', 'cache', 'iam', 'storage', 'ai', 'vecdb', 'reach', 'payment', 'scheduler', 'deploy', 'audit']
+  const allKeys = ['core', 'serv', 'db', 'cache', 'iam', 'storage', 'ai', 'vecdb', 'reach', 'payment', 'scheduler', 'deploy', 'audit', 'feedback']
   const sections = [`# Environment configuration
 # .env / .env.dev / .env.test / .env.prod are public configuration tracked in Git.
 # .env.local is private to this machine and ignored by Git.
@@ -821,5 +823,25 @@ function generatePaymentConfig(): string {
 #   successUrl: 'https://app.example/payment/success?session_id={CHECKOUT_SESSION_ID}'
 #   cancelUrl: 'https://app.example/payment/cancel' # 可选
 #   webhookToleranceSeconds: 300
+`
+}
+
+function generateFeedbackConfig(): string {
+  return `# 问题反馈：生产使用共享数据库、S3 私有桶和真实 SMTP。
+appId: my-app
+appVersion: 0.1.0
+recipients:
+  - admin@example.test
+notificationProvider: email
+adminUrl: http://localhost:5173/#/feedback
+collectionTimeoutMs: 60000
+workerIntervalMs: 1000
+leaseMs: 30000
+maxAttempts: 5
+retentionDays: 30
+maxAttachmentBytes: 5242880
+envAllowlist:
+  - NODE_ENV
+  - TZ
 `
 }

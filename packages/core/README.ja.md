@@ -583,6 +583,31 @@ pnpm --filter @h-ai/core test
 
 宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。Node core.init は同期的に void を返します。単一ファイルの config.load 失敗結果は記録して続行するため、必須設定は validate して success を確認してください。ディレクトリー走査などの例外は伝播する場合があります。業務 HaiResult API は success を先に確認します。
 
+## リクエスト関連付けとログの監視
+
+収集側の保存・アップロード処理は `core.context.run({ suppressLogObservers: true }, operation)` で自身の非同期ログ監視を一時停止できます。stdout など通常の出力は維持し、スコープ外では監視を再開します。
+
+`core.logger.observe` は現在のレベルと既定・追加フィールドのマスキングを通過したレコードを受け取り、購読解除関数を返します。購読側は上限付きメモリに収集して非同期で保存してください。監視は永続化の完了を意味しません。コールバックの失敗と同期再入は業務処理から隔離されます。自由文や画像には収集側の追加プライバシー処理が必要です。
+
+Node の `core.context.run` は AsyncLocalStorage で並行リクエストと子タスクを隔離し、既存 logger に requestId/userId/scopeId/jobId を付加します。認証範囲は信頼できるサーバーからのみ設定し、関連 ID を認可に使用しません。ブラウザーは同じ API を公開しますが、run は同期スコープのみで await をまたぐ隔離を提供しません。
+
+```ts
+import type { LogRecord } from '@h-ai/core'
+import { core } from '@h-ai/core'
+
+const records: LogRecord[] = []
+const unsubscribe = core.logger.observe((record) => {
+  if (records.length === 100)
+    records.shift()
+  records.push(record)
+})
+await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'user-1' }, async () => {
+  await Promise.resolve()
+  core.logger.warn('Business operation failed')
+})
+unsubscribe()
+```
+
 ## ライセンス
 
 Apache-2.0

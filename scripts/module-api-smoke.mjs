@@ -25,6 +25,7 @@ const browsers = new Map([
   ['crypto', ['.']],
   ['api-client', ['.']],
   ['api-contract', ['.']],
+  ['feedback', ['./client', './bundle']],
   ['capacitor', ['.']],
   ['datapipe', ['.']],
   ['storage', ['./schemas']],
@@ -38,6 +39,7 @@ const hidden = new Map([
   ['storage', ['StorageProvider']],
   ['reldb', ['ReldbProvider']],
   ['reach', ['ReachProvider']],
+  ['feedback', ['FeedbackReportRepository', 'FeedbackRuntime', 'FeedbackCapture', 'createFeedbackOperations']],
   ['ui', ['readStoredValue', 'writeStoredValue']],
 ])
 
@@ -60,6 +62,11 @@ function typeSmoke(directories, suffix, browser, generated) {
     }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
+    if (directory === 'feedback') {
+      source.push('import { createFeedbackClient } from \'@h-ai/feedback/client\'', 'import { createFeedbackBundle, readFeedbackBundle } from \'@h-ai/feedback/bundle\'', 'export const factories = [createFeedbackClient, createFeedbackBundle, readFeedbackBundle]')
+      source.push('// @ts-expect-error Browser collector does not export the Node singleton', 'import { feedback } from \'@h-ai/feedback/client\'')
+      source.push('// @ts-expect-error Offline bundles do not export the Node singleton', 'import { feedback as bundleService } from \'@h-ai/feedback/bundle\'')
+    }
     if (directory === 'kit') {
       source.push('// @ts-expect-error No implementation exists for this subpath', 'import * as absent from \'@h-ai/kit/vite\'')
       source.push('// @ts-expect-error Runtime helpers belong to the kit namespace or client subpath', 'api.createHandle({})')
@@ -120,8 +127,8 @@ const generatedDirectories = [{ directory: temporary, parent: tmpdir() }]
 const failures = []
 let imports = 0
 let bundles = 0
+const directories = []
 try {
-  const directories = []
   for (const directory of readdirSync(join(root, 'packages'))) {
     const base = join(root, 'packages', directory)
     let manifest
@@ -217,4 +224,4 @@ if (failures.length) {
   process.stderr.write(`${failures.join('\n')}\n`)
   process.exitCode = 1
 }
-process.stdout.write(`API smoke: ${imports}/21 package imports; ${bundles} browser entries\n`)
+process.stdout.write(`API smoke: ${imports}/${directories.length} package imports; ${bundles} browser entries\n`)

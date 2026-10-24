@@ -395,6 +395,17 @@ export interface ApiClientAuth {
  */
 export interface ApiClientLifecycle {
   /**
+   * 观察一次逻辑调用的最终结果；刷新重试保留关联 ID，不包含请求正文或凭据。
+   * close 清理订阅；回调异常不影响请求，返回函数可提前取消。
+   * @example
+   * ```ts
+   * import { apiClient } from '@h-ai/api-client'
+   * const unsubscribe = apiClient.observeRequests(record => { const requestId = record.requestId })
+   * unsubscribe()
+   * ```
+   */
+  readonly observeRequests: (observer: ApiRequestObserver) => () => void
+  /**
    * 构造并提交客户端运行状态；初始化失败返回 CONFIG_ERROR，未提交半初始化对象。
    * 并发 init 共享同一初始化；已初始化再调用会失败，切换配置先 close。
    * @param config - baseUrl、认证、fetch 与可选加密配置。
@@ -436,6 +447,39 @@ export interface ApiClientLifecycle {
   /** Token 辅助操作。 */
   readonly auth: ApiClientAuth
 }
+
+/**
+ * 逻辑请求诊断摘要。HTTP 200 的失败 HaiResult 同样 success=false。
+ * @example
+ * ```ts
+ * import type { ApiRequestRecord } from '@h-ai/api-client'
+ * const record: ApiRequestRecord = { requestId: 'request-1', procedure: 'orders.get', timestamp: 1, duration: 10, success: false, attempts: 1, errorCode: 'orders:missing' }
+ * ```
+ */
+export interface ApiRequestRecord {
+  readonly requestId: string
+  readonly procedure: string
+  readonly timestamp: number
+  readonly duration: number
+  readonly success: boolean
+  readonly attempts: number
+  readonly errorCode?: string
+  readonly method?: string
+  readonly url?: string
+  readonly status?: number
+}
+
+/**
+ * 同步观察者，只做有界收集。
+ * @example
+ * ```ts
+ * import { apiClient, type ApiRequestObserver } from '@h-ai/api-client'
+ * const observer: ApiRequestObserver = record => { const failed = !record.success }
+ * const unsubscribe = apiClient.observeRequests(observer)
+ * unsubscribe()
+ * ```
+ */
+export type ApiRequestObserver = (record: ApiRequestRecord) => void
 
 /**
  * 由 oRPC 契约推导的 JSON typed client，与生命周期组合；procedure 的输入/输出由契约决定。

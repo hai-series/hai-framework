@@ -1400,6 +1400,22 @@
     "constraint": "目录路径"
   },
   {
+    "name": "HAI_BUILD_COMMIT",
+    "module": "build",
+    "path": "HAI_BUILD_COMMIT",
+    "description": "环境入口；使用位置 apps/admin-console/vite.config.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_BUILD_ID",
+    "module": "build",
+    "path": "HAI_BUILD_ID",
+    "description": "环境入口；使用位置 apps/admin-console/vite.config.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
     "name": "HAI_CACHE",
     "module": "cache",
     "path": "cache",
@@ -2398,6 +2414,158 @@
     "description": "Fullstack Web 端验收地址",
     "value": "",
     "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
+  },
+  {
+    "name": "HAI_FEEDBACK",
+    "module": "feedback",
+    "path": "feedback",
+    "description": "feedback. 配置对象",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_FEEDBACK_ADMINURL",
+    "module": "feedback",
+    "path": "feedback.adminUrl",
+    "description": "管理员通知中的反馈管理页面地址。",
+    "value": "http://localhost:5173/admin/feedback",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_FEEDBACK_APPID",
+    "module": "feedback",
+    "path": "feedback.appId",
+    "description": "反馈所属应用标识；应与浏览器及 API 入口配置一致。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_FEEDBACK_APPVERSION",
+    "module": "feedback",
+    "path": "feedback.appVersion",
+    "description": "当前应用版本，作为默认诊断信息保存。",
+    "value": "",
+    "constraint": "字符串；最大字符数 128"
+  },
+  {
+    "name": "HAI_FEEDBACK_BUILDID",
+    "module": "feedback",
+    "path": "feedback.buildId",
+    "description": "构建标识，帮助定位发布产物。",
+    "value": "",
+    "constraint": "字符串；最大字符数 128"
+  },
+  {
+    "name": "HAI_FEEDBACK_COLLECTIONTIMEOUTMS",
+    "module": "feedback",
+    "path": "feedback.collectionTimeoutMs",
+    "description": "补充材料收集超时，单位毫秒；超时后冻结为完整或部分材料。",
+    "value": "60000",
+    "constraint": "整数；>= 0；<= 300000"
+  },
+  {
+    "name": "HAI_FEEDBACK_COMMIT",
+    "module": "feedback",
+    "path": "feedback.commit",
+    "description": "源码提交标识，帮助定位对应代码。",
+    "value": "",
+    "constraint": "字符串；最大字符数 128"
+  },
+  {
+    "name": "HAI_FEEDBACK_ENVALLOWLIST",
+    "module": "feedback",
+    "path": "feedback.envAllowlist",
+    "description": "允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 100"
+  },
+  {
+    "name": "HAI_FEEDBACK_ENVALLOWLIST_0",
+    "module": "feedback",
+    "path": "feedback.envAllowlist.0",
+    "description": "允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_FEEDBACK_LEASEMS",
+    "module": "feedback",
+    "path": "feedback.leaseMs",
+    "description": "持久任务执行租约时长，单位毫秒；过期后允许其他实例接管。",
+    "value": "30000",
+    "constraint": "整数；>= 1000；<= 300000"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXATTACHMENTBYTES",
+    "module": "feedback",
+    "path": "feedback.maxAttachmentBytes",
+    "description": "单个附件允许的最大字节数。",
+    "value": "5242880",
+    "constraint": "整数；>= 1；<= 5242880"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXATTEMPTS",
+    "module": "feedback",
+    "path": "feedback.maxAttempts",
+    "description": "汇集、通知和导出任务最大尝试次数；到期清理持续重试。",
+    "value": "5",
+    "constraint": "整数；>= 1；<= 20"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXEVIDENCEBYTES",
+    "module": "feedback",
+    "path": "feedback.maxEvidenceBytes",
+    "description": "单份反馈累计证据允许的最大字节数。",
+    "value": "4194304",
+    "constraint": "整数；>= 1024；<= 33554432"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXEVIDENCECOUNT",
+    "module": "feedback",
+    "path": "feedback.maxEvidenceCount",
+    "description": "单份反馈累计证据允许的最大条数。",
+    "value": "2000",
+    "constraint": "整数；>= 1；<= 10000"
+  },
+  {
+    "name": "HAI_FEEDBACK_NOTIFICATIONPROVIDER",
+    "module": "feedback",
+    "path": "feedback.notificationProvider",
+    "description": "已初始化 Reach 邮件 Provider 的唯一名称。",
+    "value": "email",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_FEEDBACK_RECIPIENTS",
+    "module": "feedback",
+    "path": "feedback.recipients",
+    "description": "接收待处理反馈通知的管理员邮件地址。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 20"
+  },
+  {
+    "name": "HAI_FEEDBACK_RECIPIENTS_0",
+    "module": "feedback",
+    "path": "feedback.recipients.0",
+    "description": "接收待处理反馈通知的管理员邮件地址。；此变量整体替换单个数组项",
+    "value": "admin@localhost.test",
+    "constraint": "字符串；格式 email；正则 ^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+  },
+  {
+    "name": "HAI_FEEDBACK_RETENTIONDAYS",
+    "module": "feedback",
+    "path": "feedback.retentionDays",
+    "description": "已受理反馈及对象附件的保留天数。",
+    "value": "30",
+    "constraint": "整数；>= 1；<= 3650"
+  },
+  {
+    "name": "HAI_FEEDBACK_WORKERINTERVALMS",
+    "module": "feedback",
+    "path": "feedback.workerIntervalMs",
+    "description": "持久任务扫描间隔，单位毫秒；零值由宿主手动运行任务。",
+    "value": "1000",
+    "constraint": "整数；>= 0；<= 60000"
   },
   {
     "name": "HAI_IAM",

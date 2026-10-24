@@ -57,6 +57,8 @@ import type {
   ApiClientAuth,
   ApiClientConfig,
   ApiClientLifecycle,
+  ApiRequestObserver,
+  ApiRequestRecord,
 } from './api-client-types.js'
 import { apiContract } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
@@ -84,6 +86,15 @@ const AUTH_ENTRY_PATHS = [
   apiContract.pathOf(apiContract.iam.auth.register),
 ]
 const TRAILING_SLASHES_REGEX = /\/+$/
+const REQUEST_OBSERVATION = Symbol('hai.api-client.request-observation')
+/**
+ * 内部构造的可变摘要，不对消费者暴露写入能力。
+ * @example 模块内部上下文
+ * ```ts
+ * function update(record: MutableRequestRecord) { record.attempts += 1 }
+ * ```
+ */
+type MutableRequestRecord = { -readonly [Key in keyof ApiRequestRecord]: ApiRequestRecord[Key] }
 
 /** Token 存储方案集合：内存 / httpOnly Cookie。 */
 const tokenStorage = {
@@ -127,11 +138,13 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null
     tokenManager: TokenManager | undefined
     transport: TransportClient | undefined
+    observers: Set<ApiRequestObserver>
   } = {
     config: null,
     rawClient: null,
     tokenManager: undefined,
     transport: undefined,
+    observers: new Set(),
   }
 
   const auth: ApiClientAuth = {
@@ -192,6 +205,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       }
     },
     async close() {
+      state.observers.clear()
       state.transport?.destroy()
       state.config = null
       state.rawClient = null
@@ -201,6 +215,12 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     get config() { return state.config ? core.sanitize.sanitizeSensitiveFields(state.config) : null },
     get isInitialized() { return state.rawClient !== null },
     auth,
+    observeRequests(observer) {
+      state.observers.add(observer)
+      return () => {
+        state.observers.delete(observer)
+      }
+    },
   }
 
   // 生命周期成员优先，其余属性只记录真实契约路径，末端调用才交给 rawClient。
@@ -316,6 +336,7 @@ export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiCli
  * 构造只记录属性路径的内部代理，末端调用交给 callProcedure；不在访问属性时发送请求。
  * @param state - 当前 rawClient，可在 close 后变为 null。
  * @param state.rawClient - 当前 oRPC 客户端；未初始化或关闭后为 null。
+ * @param state.observers - 本实例逻辑请求订阅集合。
  * @param path - 已访问的 contract 属性路径。
  * @returns 动态代理；由契约公开类型约束调用路径，不对外承诺任意字符串 API。
  *
@@ -326,7 +347,7 @@ export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiCli
  * ```
  */
 function createProcedureProxy<TContract extends AnyContractRouter>(
-  state: { rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null },
+  state: { rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null, observers?: Set<ApiRequestObserver> },
   path: string[],
 ): unknown {
   return new Proxy(() => undefined, {
@@ -336,9 +357,31 @@ function createProcedureProxy<TContract extends AnyContractRouter>(
       return createProcedureProxy(state, [...path, property])
     },
     apply(_t, _thisArg, args) {
-      return callProcedure(state.rawClient, path, args)
+      return callObservedProcedure(state.rawClient, path, args, state.observers)
     },
   })
+}
+
+/** 不复制业务入参；通过 oRPC 每次调用的 context 将同一关联传给传输层。 */
+async function callObservedProcedure(rawClient: unknown, path: string[], args: unknown[], observers?: ReadonlySet<ApiRequestObserver>): Promise<unknown> {
+  const record: MutableRequestRecord = { requestId: core.context.get().requestId ?? core.id.uuid(), procedure: path.join('.'), timestamp: Date.now(), duration: 0, success: false, attempts: 0 }
+  const provided = args[1] && typeof args[1] === 'object' ? args[1] as Record<string, unknown> : {}
+  const providedContext = provided.context && typeof provided.context === 'object' ? provided.context : {}
+  const options = { ...provided, context: { ...providedContext, [REQUEST_OBSERVATION]: record } }
+  const result = await callProcedure(rawClient, path, [args[0], options])
+  record.duration = Math.max(0, Date.now() - record.timestamp)
+  record.success = !(result && typeof result === 'object' && 'success' in result && result.success === false)
+  if (result && typeof result === 'object' && 'error' in result && result.error && typeof result.error === 'object' && 'code' in result.error)
+    record.errorCode = String(result.error.code)
+  for (const observer of observers ?? []) {
+    try {
+      const observed: unknown = observer(Object.freeze({ ...record }))
+      if (observed instanceof Promise)
+        void observed.catch(() => {})
+    }
+    catch { /* 观察失败不改变请求结果。 */ }
+  }
+  return result
 }
 
 /**
@@ -470,12 +513,31 @@ function buildRawClient<TContract extends AnyContractRouter>(
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
 ): JsonifiedClient<ContractRouterClient<TContract>> {
-  const link = new OpenAPILink(contract, {
+  const link = new OpenAPILink<Record<PropertyKey, unknown>>(contract, {
     url: config.baseUrl,
-    headers: async () => buildHeaders(config, tokenManager),
-    fetch: async (request, init) => fetchWithRefresh(request, init, config, tokenManager, transport),
+    headers: async options => buildHeaders(config, tokenManager, getObservation(options.context)?.requestId),
+    fetch: async (request, init, options) => {
+      const record = getObservation(options.context)
+      if (record) {
+        record.method = request.method
+        const url = new URL(request.url)
+        url.search = ''
+        url.hash = ''
+        record.url = core.sanitize.sanitizeUrl(url.toString())
+      }
+      const response = await fetchWithRefresh(request, init, config, tokenManager, transport, record)
+      if (record)
+        record.status = response.status
+      return response
+    },
   })
   return createORPCClient<JsonifiedClient<ContractRouterClient<TContract>>>(link)
+}
+
+/** 内部 context 属性只由逻辑调用建立，不能从业务输入读取。 */
+function getObservation(context: Record<PropertyKey, unknown>): MutableRequestRecord | undefined {
+  const record = context[REQUEST_OBSERVATION]
+  return record && typeof record === 'object' && 'requestId' in record ? record as MutableRequestRecord : undefined
 }
 
 /**
@@ -493,6 +555,7 @@ function buildRawClient<TContract extends AnyContractRouter>(
 async function buildHeaders(
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
+  requestId?: string,
 ): Promise<Record<string, string>> {
   const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
   const headers = new Headers(configured)
@@ -502,6 +565,7 @@ async function buildHeaders(
   return {
     ...Object.fromEntries(headers),
     'x-request-client': config.clientName ?? DEFAULT_CLIENT_NAME,
+    'x-request-id': requestId ?? core.context.get().requestId ?? core.id.uuid(),
     ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
   }
 }
@@ -530,10 +594,13 @@ async function fetchWithRefresh(
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
+  observation?: MutableRequestRecord,
 ): Promise<Response> {
   // Fetch Request 的 body 是一次性可读流；为了支持 401 后重发 POST/PUT 等带 body 的请求，
   // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
   const retryRequest = tokenManager ? request.clone() : undefined
+  if (observation)
+    observation.attempts++
   const response = await fetchWithTimeout(request, init, config, transport)
   if (!tokenManager || !retryRequest)
     return response
@@ -553,6 +620,8 @@ async function fetchWithRefresh(
 
   const headers = new Headers(retryRequest.headers)
   headers.set('authorization', `Bearer ${tokens.accessToken}`)
+  if (observation)
+    observation.attempts++
   return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
 }
 

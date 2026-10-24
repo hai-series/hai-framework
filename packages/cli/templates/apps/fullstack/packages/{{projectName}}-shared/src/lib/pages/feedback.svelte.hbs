@@ -1,0 +1,155 @@
+{{! @skipIfEmpty }}
+{{#if features.feedback}}
+<script lang='ts'>
+  import type { FeedbackDetail as Detail, FeedbackEvidenceInput, FeedbackReport } from '@h-ai/api-contract/feedback'
+  import type { FeedbackEvidenceQuery, FeedbackListQuery, FeedbackReportView, FeedbackStatusChange } from '@h-ai/ui'
+  import type { ManagementStore } from '../stores/management-store.svelte.js'
+  import { FeedbackDetail, FeedbackList } from '@h-ai/ui/components/scenes/app/index'
+  import { onMount } from 'svelte'
+  import { managementApi } from '../api/api-client.js'
+  import { downloadFeedback, feedbackDataBytes } from '../api/feedback-client.js'
+  import * as m from '../paraglide/messages.js'
+
+  const { store }: { store: ManagementStore } = $props()
+  let page = $state({ items: [] as FeedbackReportView[], total: 0, page: 1, pageSize: 20 })
+  let query = $state<FeedbackListQuery>({ page: 1, pageSize: 20 })
+  let selected = $state<Detail>()
+  let evidence = $state({ items: [] as FeedbackEvidenceInput[], total: 0, page: 1, pageSize: 20 })
+  let loading = $state(false)
+  let error = $state('')
+  let requestVersion = 0
+  let detailVersion = 0
+  let imageUrls = $state<Record<string, string>>({})
+  const permissions = $derived({ read: store.isAdmin, process: store.isAdmin, reopen: store.isAdmin, export: store.isAdmin, retry: store.isAdmin })
+  function view(report: FeedbackReport): FeedbackReportView {
+    return { ...report, description: report.description || report.summary || '', appVersion: report.appVersion || '' }
+  }
+  async function load(next: FeedbackListQuery = query) {
+    const version = ++requestVersion
+    query = next
+    loading = true
+    error = ''
+    try {
+      const result = await managementApi.feedback.reports.list(next)
+      if (!result.success)
+        throw new Error(result.error.message)
+      if (version === requestVersion)
+        page = { ...result.data, items: result.data.items.map(view) }
+    }
+    catch (cause) {
+      if (version === requestVersion)
+        error = cause instanceof Error ? cause.message : m.operation_failed()
+    }
+    finally {
+      if (version === requestVersion)
+        loading = false
+    }
+  }
+  async function loadEvidence(next: FeedbackEvidenceQuery = { page: 1, pageSize: 20 }) {
+    if (!selected)
+      return
+    const id = selected.report.id
+    const kind = next.kind as FeedbackEvidenceInput['kind'] | undefined
+    const result = await managementApi.feedback.reports.getEvidence({ ...next, kind, id })
+    if (!result.success)
+      throw new Error(result.error.message)
+    if (selected?.report.id === id)
+      evidence = result.data
+  }
+  async function selectId(id: string) {
+    const version = ++detailVersion
+    const result = await managementApi.feedback.reports.get({ id })
+    if (version !== detailVersion)
+      return
+    if (!result.success)
+      throw new Error(result.error.message)
+    selected = result.data
+    await loadEvidence()
+  }
+  async function select(report: FeedbackReportView) {
+    await selectId(report.id)
+  }
+  function closeDetail() {
+    detailVersion++
+    selected = undefined
+  }
+  async function status(input: FeedbackStatusChange) {
+    const result = await managementApi.feedback.reports.setStatus(input)
+    if (!result.success)
+      throw new Error(result.error.message)
+    if (selected?.report.id === input.id)
+      await select(view(result.data))
+    await load()
+  }
+  async function retry(report: FeedbackReportView) {
+    const result = await managementApi.feedback.reports.retry({ id: report.id, target: 'notify' })
+    if (!result.success)
+      throw new Error(result.error.message)
+    await load()
+  }
+  async function exportBundle(report: FeedbackReportView) {
+    const started = await managementApi.feedback.reports.export({ id: report.id })
+    if (!started.success)
+      throw new Error(started.error.message)
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const result = await managementApi.feedback.reports.getExport({ id: report.id, jobId: started.data.id })
+      if (result.success) {
+        downloadFeedback(feedbackDataBytes(result.data), result.data.name)
+        return
+      }
+      if (result.error.httpStatus !== 409)
+        throw new Error(result.error.message)
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    throw new Error(m.feedback_export_pending())
+  }
+  async function attachment(id: string) {
+    if (!selected)
+      return
+    const result = await managementApi.feedback.attachments.get({ id: selected.report.id, attachmentId: id })
+    if (!result.success)
+      throw new Error(result.error.message)
+    if (result.data.contentType.startsWith('image/')) {
+      if (imageUrls[id])
+        URL.revokeObjectURL(imageUrls[id])
+      imageUrls = { ...imageUrls, [id]: URL.createObjectURL(new Blob([new Uint8Array(feedbackDataBytes(result.data)).buffer], { type: result.data.contentType })) }
+    }
+    else {
+      downloadFeedback(feedbackDataBytes(result.data), result.data.name, result.data.contentType)
+    }
+  }
+  onMount(() => {
+    let active = true
+    void load().then(async () => {
+      if (!active)
+        return
+      const id = new URL(location.href).searchParams.get('feedback')
+      if (id)
+        await selectId(id)
+    }).catch((cause) => {
+      if (active)
+        error = cause instanceof Error ? cause.message : m.operation_failed()
+    })
+    return () => {
+      active = false
+      requestVersion++
+      detailVersion++
+      for (const url of Object.values(imageUrls)) {
+        URL.revokeObjectURL(url)
+      }
+    }
+  })
+</script>
+
+<section data-testid='feedback-page' class='flex min-h-0 flex-1 flex-col gap-5'>
+  <h1 class='text-xl font-semibold'>{m.nav_feedback()}</h1>
+  {#if selected}
+    <FeedbackDetail report={view(selected.report)} {evidence} history={selected.history.map(item => ({ id: item.id, actorId: item.userId, fromStatus: item.from, toStatus: item.to, createdAt: item.timestamp, note: item.note }))} {permissions}
+      attachments={selected.attachments.map(item => ({ ...item, mimeType: item.contentType, url: imageUrls[item.id] }))}
+      onevidencequery={loadEvidence} onstatus={status} onexport={exportBundle} onretry={retry}
+      onattachment={item => attachment(item.id)} onclose={closeDetail} />
+  {:else}
+    <FeedbackList data={page} bind:query {permissions} {loading} {error} onquerychange={load} onview={select} onstatus={status} onexport={exportBundle} onretry={retry} />
+  {/if}
+</section>
+{{/if}}

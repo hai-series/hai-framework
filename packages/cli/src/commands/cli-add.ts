@@ -70,6 +70,7 @@ const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKe
   'vecdb': { packages: ['@h-ai/vecdb'], configKey: 'vecdb', get description() { return cliM('cli_featureVecdbName') } },
   'datapipe': { packages: ['@h-ai/datapipe'], get description() { return cliM('cli_featureDatapipeName') } },
   'reach': { packages: ['@h-ai/reach'], configKey: 'reach', get description() { return cliM('cli_featureReachName') } },
+  'feedback': { packages: ['@h-ai/feedback'], deps: ['crypto', 'db', 'cache', 'storage', 'reach', 'iam'], configKey: 'feedback', get description() { return cliM('cli_featureFeedbackName') } },
   'scheduler': { packages: ['@h-ai/scheduler'], deps: ['db'], configKey: 'scheduler', get description() { return cliM('cli_featureSchedulerName') } },
   'audit': { packages: ['@h-ai/audit'], deps: ['db'], configKey: 'audit', get description() { return cliM('cli_featureAuditName') } },
   'payment': { packages: ['@h-ai/payment'], configKey: 'payment', get description() { return cliM('cli_featurePaymentName') } },
@@ -227,7 +228,9 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         if (depDef?.configKey) {
           const depConfigPath = path.join(cwd, 'config', `_${depDef.configKey}.yml`)
           if (!(await fileExists(depConfigPath))) {
-            const content = generateConfigFile(depDef.configKey)
+            // feedback 新建通知配置与默认 notificationProvider 对齐，已有私有文件保持不变。
+            const generated = generateConfigFile(depDef.configKey)
+            const content = moduleName === 'feedback' && dep === 'reach' ? generated.replace('name: console_dev', 'name: email') : generated
             await writeFile(depConfigPath, content)
             writeCliMessage(chalk.gray(cliM('cli_addDependencyConfig', { params: { config: depDef.configKey } })))
           }

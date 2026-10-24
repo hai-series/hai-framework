@@ -22,6 +22,10 @@
       "types": "./dist/ai/index.d.ts",
       "import": "./dist/ai/index.js"
     },
+    "./feedback": {
+      "types": "./dist/feedback/index.d.ts",
+      "import": "./dist/feedback/index.js"
+    },
     "./payment": {
       "types": "./dist/payment/index.d.ts",
       "import": "./dist/payment/index.js"
@@ -36,7 +40,7 @@
     "access": "public"
   },
   "engines": {
-    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "build": "tsup",

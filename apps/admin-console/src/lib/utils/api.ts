@@ -8,6 +8,7 @@
  * =============================================================================
  */
 
+import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -28,4 +29,83 @@ import { kit } from '@h-ai/kit'
  */
 const client = kit.client.create()
 
-export const { apiFetch } = client
+const observers = new Set<(record: Record<string, unknown>) => void>()
+
+/** 只保留请求元数据及有界响应包络的成功/错误码，不记录 Cookie、header 或正文。 */
+export function observeAdminRequests(observer: (record: Record<string, unknown>) => void): () => void {
+  observers.add(observer)
+  return () => observers.delete(observer)
+}
+
+export const apiFetch: typeof fetch = async (input, init) => {
+  const rawUrl = input instanceof Request ? input.url : String(input)
+  const requestId = core.id.uuid()
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+  headers.set('X-Request-Id', requestId)
+  const started = Date.now()
+  let status: number | undefined
+  let observingResponse = false
+  const excluded = rawUrl.includes('/feedback/')
+  const metadata = () => ({ requestId, url: rawUrl.split(/[?#]/)[0], method: init?.method ?? (input instanceof Request ? input.method : 'GET'), timestamp: started, duration: Date.now() - started, status: status ?? null })
+  try {
+    const response = await client.apiFetch(input, { ...init, headers })
+    status = response.status
+    if (!excluded) {
+      observingResponse = true
+      // 旁路读取有界副本，不延迟业务响应，也不消费调用方的原始 body。
+      if (response.headers.get('content-type')?.includes('application/json'))
+        void observeResponse(response.clone(), metadata())
+      else
+        notify({ ...metadata(), success: response.ok })
+    }
+    return response
+  }
+  finally {
+    if (!excluded && !observingResponse)
+      notify({ ...metadata(), success: false, errorCode: 'network-error' })
+  }
+}
+
+async function observeResponse(response: Response, metadata: Record<string, unknown>): Promise<void> {
+  let businessSuccess = response.ok
+  let errorCode: string | number | undefined
+  const reader = response.body?.getReader()
+  try {
+    if (reader && response.headers.get('content-type')?.includes('application/json')) {
+      const decoder = new TextDecoder()
+      let bytes = 0
+      let text = ''
+      while (true) {
+        const chunk = await reader.read()
+        if (chunk.done)
+          break
+        bytes += chunk.value.byteLength
+        if (bytes > 64 * 1024) {
+          void reader.cancel().catch(() => undefined)
+          return
+        }
+        text += decoder.decode(chunk.value, { stream: true })
+      }
+      const body: unknown = JSON.parse(text + decoder.decode())
+      if (body && typeof body === 'object' && 'success' in body && body.success === false) {
+        businessSuccess = false
+        if ('error' in body && body.error && typeof body.error === 'object' && 'code' in body.error && (typeof body.error.code === 'string' || typeof body.error.code === 'number'))
+          errorCode = body.error.code
+      }
+    }
+  }
+  catch { /* 非 JSON、取消与解析失败只影响补充信息。 */ }
+  finally {
+    reader?.releaseLock()
+    notify({ ...metadata, success: businessSuccess, ...(errorCode === undefined ? {} : { errorCode }) })
+  }
+}
+
+function notify(data: Record<string, unknown>): void {
+  for (const observer of observers) {
+    try {
+      observer(data)
+    }
+    catch { /* 观察失败不能改变业务请求。 */ }
+  }
+}

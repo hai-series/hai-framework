@@ -9,6 +9,11 @@ const state = vi.hoisted(() => ({
 vi.mock('$lib/paraglide/messages.js', () => ({
   server_init_storage_failed: ({ message }: { message: string }) => `Storage initialization failed: ${message}`,
 }))
+vi.mock('$lib/build-metadata.js', () => ({ adminBuildMetadata: { appVersion: 'test', buildId: 'test', commit: 'test' } }))
+vi.mock('@h-ai/feedback', () => ({
+  feedback: { init: vi.fn(async () => ({ success: true })) },
+  FeedbackConfigSchema: { safeParse: vi.fn() },
+}))
 vi.mock('@h-ai/core', () => ({ core: {
   init: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn() },

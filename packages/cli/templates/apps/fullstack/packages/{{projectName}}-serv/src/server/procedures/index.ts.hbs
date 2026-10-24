@@ -1,4 +1,8 @@
 import type { CreateAppProceduresOptions } from './app-procedures.js'
+{{#if features.feedback}}
+import { feedback } from '@h-ai/feedback'
+import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
+{{/if}}
 import { createAdminProcedures, createAuthProcedures, createProfileProcedures } from './admin-procedures.js'
 import { createAppProcedures } from './app-procedures.js'
 
@@ -16,5 +20,18 @@ export function createServerProcedures(options: CreateServerProceduresOptions) {
     iam: { auth: createAuthProcedures() },
     admin: createAdminProcedures(),
     profile: createProfileProcedures(),
+{{#if features.feedback}}
+    feedback: createFeedbackProcedures({
+      feedback,
+      resolveContext: ({ session }) => ({
+        scopeId: '{{projectName}}',
+        userId: session.userId,
+        // 示例角色映射；实际产品应从可信租户与资源权限确定范围。
+        permissions: session.roles.includes('admin')
+          ? ['feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export']
+          : ['feedback:create'],
+      }),
+    }),
+{{/if}}
   }
 }

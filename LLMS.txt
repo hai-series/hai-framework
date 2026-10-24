@@ -18,15 +18,15 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
 
 5. 配置变量总表读取根 [.env.example](.env.example)；分环境加载与 CLI 模板入口读取 [环境配置与维护流程](README.md#配置与环境变量)。
 
-框架源码的文件族、固定入口例外与冗余清理依据见[21 包代码风格清单](.agents/instructions/module-conventions.md#文件族清单)。
+框架源码的文件族、固定入口例外与冗余清理依据见[22 包代码风格清单](.agents/instructions/module-conventions.md#文件族清单)。
 
-公开入口审查读取 [21 包实际 API 清单](scripts/generated/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
+公开入口审查读取 [22 包实际 API 清单](scripts/generated/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
 
 ## 生命周期与返回值
 
 | 类别 | 契约 |
 | --- | --- |
-| reldb/cache/crypto/iam/ai/storage/vecdb/payment/reach/audit/scheduler/deploy/api-client/capacitor | 有状态模块，按各包 init → use → close；领域操作通常返回 HaiResult，getter/工厂/流另看签名 |
+| reldb/cache/crypto/iam/ai/storage/vecdb/payment/reach/feedback/audit/scheduler/deploy/api-client/capacitor | 有状态模块，按各包 init → use → close；领域操作通常返回 HaiResult，getter/工厂/流另看签名 |
 | core | init 同步返回 void，无 close；工具直接返回值，配置 validate/load 等返回 HaiResult；浏览器不加载文件配置 |
 | datapipe / kit / api-contract | 纯函数或契约定义，无 init/close |
 | serv | App 工厂，无 init/close；createApp 启动配置错误可抛出，依赖由应用管理 |
@@ -50,7 +50,7 @@ return result
 
 以下 skills 位于 CLI 模板源目录，可在生成应用中通过 `.agents/skills/<同名目录>/` 读取。
 
-生产部署先核对[21 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)，使用共享后端并逐步检查初始化/关闭结果；NODE_ENV 或 HAI_CORE_ENV 为 production 时拒绝本地状态后端，只有明确 E2E 测试豁免。
+生产部署先核对[22 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)，使用共享后端并逐步检查初始化/关闭结果；NODE_ENV 或 HAI_CORE_ENV 为 production 时拒绝本地状态后端，只有明确 E2E 测试豁免。
 
 | 模块 | 选择依据与入口 | 关键边界 |
 | --- | --- | --- |
@@ -62,6 +62,7 @@ return result
 | @h-ai/datapipe | [文本清洗与分块](packages/cli/templates/skills/hai-datapipe/SKILL.md) | 不负责 embedding，无生命周期；分块保留源文，word按词其余codepoint，max含overlap，默认overlap0且小于max |
 | @h-ai/iam | [登录、会话、用户、RBAC](packages/cli/templates/skills/hai-iam/SKILL.md) | 服务端公开入口 iam.auth，verifyToken 读取当前状态/授权并拒绝读取失败；API Key scopes 收敛权限，受限 key 无角色授权；先初始化 reldb/cache；公开配置 iam.publicConfig；配置输入/解析输出与可信会话版本示例按真实入口校验，内部工厂不作为应用扩展入口；LDAP/Reach 可选；共享 DB + Redis，会话/refresh/索引在用户单键CAS中原子发布；token 为不透明字符串；session.update 必须传读取的 version，批量更新不覆盖后续登录代际；会话固有 maxAge 统一签发/刷新 expiresIn 与单调滑动时间；refresh 独立于 access 到期，logout 对过期 access 仍原子撤销 refresh并传播缓存故障，HTTP撤销只认持有令牌，Kit/客户端不得吞失败；删除与轮换原子撤销二者；OTP单key CAS与密码重置DB代际条件提交；会话绑定credentialVersion，通知稳定幂等键与投递unknown边界；密码登录仅 identifier/password，AuthPanel 映射 username，表单不提供持久会话偏好，期限由服务端 session 配置决定 |
 | @h-ai/reach | [邮件、短信、API 通知](packages/cli/templates/skills/hai-reach/SKILL.md) | DND delay 先初始化 reldb，持久化成功才返回 deferred/queueId；queue策略随消息保存、有限退避/超限dead，可信服务端list/requeueDead按版本恢复；API idempotent须接收端持久去重，非幂等在途不明结果unknown仅resolveUnknown人工裁定，禁止重排；真实发送遵循授权 |
+| @h-ai/feedback | [用户反馈、现场、管理员处理与离线包](packages/cli/templates/skills/hai-feedback/SKILL.md) | 先初始化 reldb/storage/reach；反馈、证据和任务入库，附件在私有 S3；范围来自可信服务端；处理/采集/通知独立；浏览器 /client 无 Node SDK，/bundle 可断网校验/查询，回放不等同重新执行业务 |
 | @h-ai/ai | [LLM、Tools/MCP、RAG、记忆、图像、Audio、A2A](packages/cli/templates/skills/hai-ai/SKILL.md) | tools/stream 无需 init；生产 Store 必须 shared（PostgreSQL/MySQL+网络vecdb），临时 Store 仅开发/测试；图片 URL 仅公网 HTTPS，下载/响应流有界且覆盖总超时；Context scope 必填、共享 CAS/存储端期限，跨节点读 reload，pending 按 turnId 幂等提交；flush报告后台HaiResult/异常并传播至save/reset(wait)/consolidate，同轮报告后确认且不重放；IndexTTS同版本Undici fetch/Agent；Knowledge 按 revision 原子发布，cleanupPending 须分页 repair；A2A共享journal支持跨节点订阅/真实owner取消/续接，日志失败不发布成功，查询984，失租标中断且不重放未知副作用；Knowledge分块失败在embedding/发布前返回错误，不绕过长度预算；MySQL并发初始化只接受1061后真实索引结构一致，DDL/权限失败阻止启动，待全部在途结束后逆序清理；Mem0生产核验实际持久Qdrant，列表/条件清理1000原始候选超限906且无部分删除，原地更新保留ID；/client仅独立createAudioClient，HTTP走api-client typed契约，无legacy字符串路径/SSE helper；JSDoc公开例从真实入口导入、内部例按模块作用域编译，check:jsdoc --package ai；SSE统一CRLF/LF/CR与UTF8跨片，保留data空白/多行/连接metadata，EOF不补事件，encoder非法metadata显式throw，退出取消释放正文且不重连重放 |
 | @h-ai/payment | [订单、回调、查单、退款](packages/cli/templates/skills/hai-payment/SKILL.md) | 创建矩阵仅微信jsapi（openid必填）/支付宝h5（returnUrl必填HTTPS，签名fields由浏览器POST固定网关、不解析HTML）/Stripe h5；公开TradeType仅jsapi/h5，其它组合联网前拒绝。 微信必填platformKeys按serial验签/轮换并限制签名时钟300秒，支付宝必填sellerId核对app/商户并严格北京时间；所有通知返回eventId/currency，应用事务持久去重+订单CAS+outbox，外部履约携稳定键幂等。支付宝查单/退款/关单校验业务码/envelope/字段/订单号，HTTP 200不代表成功，退款processing需渠道确认。Stripe仅h5托管Checkout、当前账户且拒绝Connect/context，successUrl必填/cancelUrl可选；主动关单需确认Session expired，已付款拒绝。先初始化共享reldb，持久化Session/PaymentIntent映射和稳定orderNo/refundNo幂等结果；未知结果超过23小时先核对渠道。completed/unpaid为pending，只有status=paid才履约且防乱序回退；浏览器/client调起不代表已付款；公开示例区分配置输入/输出和HaiResult/渠道状态，内部签名与幂等仓库不作深层导入 |
 | @h-ai/audit | [审计记录、查询、清理](packages/cli/templates/skills/hai-audit/SKILL.md) | 服务端，init等待DDL/仓库就绪才发布；审计数据须脱敏；list 返回统一 PaginatedResult，直接使用规范化 page/pageSize |

@@ -1,5 +1,5 @@
 import type { CoreConfig } from '@h-ai/core'
-import type { ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
+import type { {{#if features.feedback}}CreateServContext, {{/if}}ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
 {{#if features.crypto}}import process from 'node:process'
 {{/if}}
 import { core } from '@h-ai/core'
@@ -51,6 +51,14 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{#if features.iam}}
   const refreshCookie = _options.refreshCookie === 'disabled' ? undefined : { secure: security.secureRefreshCookie }
 {{/if}}
+{{#if features.feedback}}
+  // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
+  const authenticatedContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+  const createContext: CreateServContext = async input => ({
+    ...await authenticatedContext(input),
+    scopeId: '{{projectName}}',
+  })
+{{/if}}
 
   const appOptions: Parameters<typeof serv.createApp>[0] = {
     contract: {{api.contractExportName}},
@@ -74,6 +82,9 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{#if features.iam}}
     iam,
     refreshCookie,
+{{/if}}
+{{#if features.feedback}}
+    createContext,
 {{/if}}
 {{#if features.crypto}}
     transport,

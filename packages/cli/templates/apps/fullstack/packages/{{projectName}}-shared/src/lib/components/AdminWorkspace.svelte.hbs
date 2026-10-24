@@ -12,6 +12,9 @@
   import { createManagementGuide } from '../stores/guide-store.js'
   import { ManagementStore } from '../stores/management-store.svelte.js'
   import AppShell from './AppShell.svelte'
+{{#if features.feedback}}
+  import { browserFeedback, initializeBrowserFeedback } from '../api/feedback-client.js'
+{{/if}}
 
   interface Props {
     platform: 'web' | 'app' | 'desktop'
@@ -51,6 +54,18 @@
       void store.close()
     }
   })
+{{#if features.feedback}}
+  $effect(() => {
+    const userId = store.user?.id
+    if (userId)
+      void initializeBrowserFeedback(store.info?.version).catch((cause) => { store.error = cause instanceof Error ? cause.message : m.operation_failed() })
+    else
+      void browserFeedback.close()
+    return () => {
+      void browserFeedback.close()
+    }
+  })
+{{/if}}
   $effect(() => {
     if (store.info)
       document.title = store.info.name

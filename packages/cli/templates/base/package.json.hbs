@@ -1,5 +1,5 @@
 {
-  "engines": { "node": "^22.22.2 || ^24.15.0 || >=26.0.0" },
+  "engines": { "node": "^22.23.4 || ^24.22.1 || ^26.12.1" },
   "name": "{{projectName}}",
   "version": "0.1.0-alpha.68",
   "private": true,
@@ -74,7 +74,8 @@
     "@h-ai/storage": "{{haiPackageSpecifier}}"{{/if}}{{#if features.ai}},
     "@h-ai/ai": "{{haiPackageSpecifier}}"{{/if}}{{#if features.audit}},
     "@h-ai/audit": "{{haiPackageSpecifier}}"{{/if}}{{#if features.reach}},
-    "@h-ai/reach": "{{haiPackageSpecifier}}"{{/if}}{{#if features.payment}},
+    "@h-ai/reach": "{{haiPackageSpecifier}}"{{/if}}{{#if features.feedback}},
+    "@h-ai/feedback": "{{haiPackageSpecifier}}"{{/if}}{{#if features.payment}},
     "@h-ai/payment": "{{haiPackageSpecifier}}"{{/if}}{{#if features.vecdb}},
     "@h-ai/vecdb": "{{haiPackageSpecifier}}"{{/if}}{{#if features.datapipe}},
     "@h-ai/datapipe": "{{haiPackageSpecifier}}"{{/if}}{{#if features.scheduler}},

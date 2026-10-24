@@ -46,6 +46,8 @@ export type {
   ApiClientConfig,
   ApiClientLifecycle,
   ApiClientTransportConfig,
+  ApiRequestObserver,
+  ApiRequestRecord,
   AuthConfig,
   TokenPair,
   TokenStorage,

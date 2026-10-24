@@ -1,5 +1,5 @@
 import type { CoreConfig } from '@h-ai/core'
-import type { ServHttpApp } from '@h-ai/serv'
+import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
 import { core } from '@h-ai/core'
 import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
@@ -29,6 +29,14 @@ export function createServerApp(): ServHttpApp {
     ...(servConfig.http.openapi && security.exposeApiDocs ? [servConfig.http.openapi.path] : []),
     ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path] : []),
   ]
+{{#if features.feedback}}
+  // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
+  const authenticatedContext = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+  const createContext: CreateServContext = async input => ({
+    ...await authenticatedContext(input),
+    scopeId: '{{projectName}}',
+  })
+{{/if}}
 
   return serv.createApp({
     contract: contracts.{{fullstack.contractExportName}},
@@ -44,6 +52,9 @@ export function createServerApp(): ServHttpApp {
       },
     }),
     iam,
+{{#if features.feedback}}
+    createContext,
+{{/if}}
     refreshCookie: {
       secure: security.secureRefreshCookie,
       nativeTokenTransport: { isRequest: request => request.headers.get('x-hai-token-transport') === 'body'

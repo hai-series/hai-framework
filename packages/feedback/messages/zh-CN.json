@@ -1,0 +1,22 @@
+{
+  "feedback_notInitialized": "反馈模块尚未初始化",
+  "feedback_initInProgress": "反馈模块正在初始化",
+  "feedback_configError": "反馈配置无效或前置服务不可用",
+  "feedback_operationFailed": "反馈操作失败，请重试",
+  "feedback_notFound": "反馈或材料不存在",
+  "feedback_forbidden": "没有访问该反馈的权限",
+  "feedback_conflict": "反馈已更新或操作标识冲突，请刷新后重试",
+  "feedback_exportPending": "问题包正在生成，请稍后重试",
+  "feedback_limitExceeded": "反馈材料超过允许的容量",
+  "feedback_invalidInput": "反馈参数无效",
+  "feedback_checksumMismatch": "附件完整性校验失败",
+  "feedback_received": "收到新的问题反馈",
+  "feedback_submittedAt": "反馈时间（UTC）",
+  "feedback_materialStatus": "材料状态",
+  "feedback_materialCollecting": "收集中",
+  "feedback_materialComplete": "完整",
+  "feedback_materialPartial": "部分缺失",
+  "feedback_materialFailed": "采集失败",
+  "feedback_defaultSummary": "用户提交的问题反馈",
+  "feedback_retryInputChanged": "首次提交已发出，重试需保持原说明和附件。请恢复原输入完成确认后，再发起新反馈。"
+}

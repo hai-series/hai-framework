@@ -65,7 +65,7 @@ async function exists(dir: string, rel: string) {
 }
 
 function expectQualityGateScripts(pkg: { scripts?: Record<string, string>, engines?: { node?: string } }) {
-  expect(pkg.engines?.node).toBe('^22.22.2 || ^24.15.0 || >=26.0.0')
+  expect(pkg.engines?.node).toBe('^22.23.4 || ^24.22.1 || ^26.12.1')
   expect(pkg.scripts?.build).toBeDefined()
   expect(pkg.scripts?.typecheck).toBeDefined()
   expect(pkg.scripts?.lint).toBeDefined()

@@ -6,7 +6,7 @@ Framework modules, `apps/` examples and CLI templates include Simplified Chinese
 
 > Currently in the `0.1.0-alpha` stage: public contracts are still evolving. Pin versions and validate security and capacity for your own use cases before production adoption.
 
-For production deployments with multiple instances, review the [21-package shared-state and recovery matrix (Chinese)](.agents/instructions/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
+For production deployments with multiple instances, review the [22-package shared-state and recovery matrix (Chinese)](.agents/instructions/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
 
 <p align="center">
   <strong>AI Runtime · Enterprise full-stack modules · Agent Skills · End-to-end type safety</strong>
@@ -19,7 +19,7 @@ For production deployments with multiple instances, review the [21-package share
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -50,17 +50,17 @@ A consistent API style brings together four capability groups, helping AI assist
 
 ## Highlights
 
-| Feature                        | Description                                                                                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------- |
-| **AI-first design**            | APIs prioritize correct use by AI coding assistants, improving usability for human developers too. |
-| **Consistent lifecycle**       | Stateful modules follow `init() → use → close()` with a consistent usage pattern.                  |
-| **Explicit failures**          | Domain operations return `HaiResult<T>`, distinguishing success from failure at the type level.    |
-| **Validated configuration**    | Zod validates configuration during `init()`, exposing errors at startup.                           |
-| **Composable modules**         | 21 independently published modules, with `@h-ai/core` as the minimum dependency, added as needed.  |
-| **End-to-end type safety**     | Strict TypeScript with inference across `api-contract → serv → api-client`.                        |
-| **Cross-platform UI**          | Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.                |
-| **Scaffolding and deployment** | `hai create` scaffolds projects; `hai deploy` targets Vercel or self-hosted machines.              |
-| **Built-in Agent Skills**      | Standardized module skills give AI assistants direct access to correct usage.                      |
+| Feature                        | Description                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **AI-first design**            | APIs prioritize correct use by AI coding assistants, improving usability for human developers too.  |
+| **Consistent lifecycle**       | Stateful modules follow `init() → use → close()` with a consistent usage pattern.                   |
+| **Explicit failures**          | Domain operations return `HaiResult<T>`, distinguishing success from failure at the type level.     |
+| **Validated configuration**    | Zod validates configuration during `init()`, exposing errors at startup.                            |
+| **Composable modules**         | 22 independently publishable modules, with `@h-ai/core` as the minimum dependency, added as needed. |
+| **End-to-end type safety**     | Strict TypeScript with inference across `api-contract → serv → api-client`.                         |
+| **Cross-platform UI**          | Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.                 |
+| **Scaffolding and deployment** | `hai create` scaffolds projects; `hai deploy` targets Vercel or self-hosted machines.               |
+| **Built-in Agent Skills**      | Standardized module skills give AI assistants direct access to correct usage.                       |
 
 ## Design philosophy
 
@@ -87,7 +87,7 @@ This philosophy leads to these decisions:
 | Layer                | Technology                                                         |
 | -------------------- | ------------------------------------------------------------------ |
 | Language             | TypeScript 6 / 7 (strict mode)                                     |
-| Runtime              | Node.js 22.22.2+ / 24.15.0+ / 26+                                  |
+| Runtime              | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                             |
 | Frontend             | Svelte 5（Runes）+ SvelteKit 2                                     |
 | UI                   | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                            |
 | API contracts        | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`）     |
@@ -108,7 +108,9 @@ This philosophy leads to these decisions:
 
 Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.json`, and the skills used throughout the workflow.
 
-Use Node.js matching the project's `engines` (`^22.22.2 || ^24.15.0 || >=26.0.0`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
+Use Node.js matching the project's `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
+
+These minimum versions follow the [official Node.js security release on 2026-10-21](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases). Support is limited to Node.js 22, 24, and 26 at or above the stated minimum within each release line; older versions, EOL releases, and unvalidated future major versions are unsupported. Use Node.js 24.22.1 LTS for development, CI, and containers.
 
 ### Create a project
 
@@ -170,7 +172,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 ## Module catalog
 
-The framework provides **21 independently published modules**, organized into five layers.
+The framework provides **22 independently publishable modules**, organized into five layers.
 
 ### Foundation
 
@@ -195,6 +197,7 @@ The framework provides **21 independently published modules**, organized into fi
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- | :-------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | `@h-ai/iam`       | Identity/access management: password/OTP/LDAP authentication, RBAC, sessions, users                              |                 —                 |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
 | `@h-ai/reach`     | Notifications: email, SMS, API callbacks, templates, do-not-disturb (DND)                                        | ✅ SMTP / Alibaba Cloud SMS / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
+| `@h-ai/feedback`  | User feedback: evidence, private screenshots, email, review and offline bundles                                  |          DB / S3 / SMTP           |                                                     —                                                     |
 | `@h-ai/ai`        | AI: full/streaming chat, images, ASR/TTS, tools, MCP, embeddings, RAG/knowledge, memory, context, reranking, A2A | ✅ OpenAI-compatible / extensible |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
 | `@h-ai/payment`   | Payments: order creation, cross-platform initiation, callbacks                                                   |  ✅ WeChat Pay / Alipay / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
 | `@h-ai/audit`     | Audit logs: recording, paginated queries, statistics, scheduled cleanup                                          |                 —                 |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
@@ -231,6 +234,7 @@ The framework provides **21 independently published modules**, organized into fi
 | Data           | `@h-ai/datapipe`     | [`packages/datapipe/README.en.md`](./packages/datapipe/README.en.md)         |
 | Business       | `@h-ai/iam`          | [`packages/iam/README.en.md`](./packages/iam/README.en.md)                   |
 | Business       | `@h-ai/reach`        | [`packages/reach/README.en.md`](./packages/reach/README.en.md)               |
+| Business       | `@h-ai/feedback`     | [`packages/feedback/README.en.md`](./packages/feedback/README.en.md)         |
 | Business       | `@h-ai/ai`           | [`packages/ai/README.en.md`](./packages/ai/README.en.md)                     |
 | Business       | `@h-ai/payment`      | [`packages/payment/README.en.md`](./packages/payment/README.en.md)           |
 | Business       | `@h-ai/audit`        | [`packages/audit/README.en.md`](./packages/audit/README.en.md)               |
@@ -586,7 +590,7 @@ pnpm --filter @h-ai/reldb test  # 只运行某个模块
 
 ```
 hai-framework/
-├── packages/            # 21 framework packages (@h-ai/*)
+├── packages/            # 22 framework packages (@h-ai/*)
 │   └── cli/templates/   # CLI scaffolding and skills distributed to generated apps
 ├── apps/                # Example applications
 ├── scripts/             # Validation and release scripts
@@ -652,12 +656,13 @@ Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` 
 | AI             | `HAI_AI_LLM_*`                           | LLM API keys, base URLs, and models for `@h-ai/ai`                     |
 | VecDB          | `HAI_VECDB_*`                            | LanceDB / pgvector / Qdrant / Chroma for `@h-ai/vecdb`                 |
 | Reach          | `HAI_REACH_*`                            | SMTP, SMS, webhooks for `@h-ai/reach`                                  |
+| Feedback       | `HAI_FEEDBACK_*`                         | Feedback application, administrators, capture quotas and retention     |
 | Payment        | `HAI_PAYMENT_*`                          | WeChat Pay / Alipay / Stripe merchant settings for `@h-ai/payment`     |
 | Deploy         | `HAI_DEPLOY_*`                           | Deployment/infrastructure credentials for `@h-ai/deploy` / `@h-ai/cli` |
 
 The root `.env.example` defines complete fields and defaults. When working on an example app, consult its `README.md` and `.env.example` for additional settings.
 
-See the [21-package configuration and consumer map (Chinese)](.agents/skills/hai-module-create/configuration.md) for schema defaults, runtime consumers, environment names and generated apps.
+See the [22-package configuration and consumer map (Chinese)](.agents/skills/hai-module-create/configuration.md) for schema defaults, runtime consumers, environment names and generated apps.
 
 ### Quality gates
 

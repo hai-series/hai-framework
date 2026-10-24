@@ -702,6 +702,36 @@ pnpm --filter @h-ai/serv lint
 
 声明旁的 JSDoc 示例从实际 `@h-ai/serv` 或已公开的 features 子路径导入；内部 Hono/guard/router/transport 示例明确标注“模块内部上下文”，不代表根 API。示例区分工厂的启动配置异常、领域 HaiResult、HTTP middleware 状态码和监听句柄的 Promise<void> 关闭；默认 AI completion 仍只返回非流式 JSON。框架维护运行 `node scripts/check-module-jsdoc.mjs --package serv` 对实际声明和内部词法绑定编译示例，编译不代替真实 HTTP、授权与分布式防重放验收。
 
+## 可选的反馈服务与可信范围
+
+通过 `@h-ai/serv/features/feedback` 的 `createFeedbackProcedures` 挂载 `apiContract.feedback`；只导入运行时根入口不会加载反馈服务。宿主先初始化 reldb/storage/reach/feedback，再从已验证的会话与部署策略映射反馈范围。resolveContext 返回 null 或用户不匹配时拒绝访问；领域模块再次校验范围与权限。
+
+所有 HTTP 响应（包括探活、404、中间件短路）携带有界 X-Request-Id。普通业务日志需由已有 createContext 的可选 scopeId 建立可信范围，scopeId 从不读取客户端头。HTTP 入口清理旧身份，认证后的异步业务日志自动继承当前请求 ID 与用户。
+
+```ts
+import { apiContract } from '@h-ai/api-contract'
+import { feedback } from '@h-ai/feedback'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
+
+const contract = apiContract.create({ feedback: apiContract.feedback })
+const authenticate = serv.buildAuthContextFactory(token => iam.auth.verifyToken(token))
+const procedures = {
+  feedback: createFeedbackProcedures({
+    feedback,
+    resolveContext: context => context.scopeId
+      ? { scopeId: context.scopeId, userId: context.session.userId, permissions: context.session.permissions }
+      : null,
+  }),
+}
+const app = serv.createApp({
+  contract,
+  procedures,
+  createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
+})
+```
+
 ## 许可证
 
 Apache-2.0

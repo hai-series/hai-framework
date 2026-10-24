@@ -11,7 +11,7 @@
     "svelte5"
   ],
   "engines": {
-    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
@@ -37,11 +37,14 @@
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
+    "@h-ai/api-client": "workspace:*",
+    "@h-ai/api-contract": "workspace:*",
     "@h-ai/audit": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/datapipe": "workspace:*",
+    "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
     "@h-ai/reach": "workspace:*",

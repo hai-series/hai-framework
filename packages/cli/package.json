@@ -27,7 +27,7 @@
     "access": "public"
   },
   "engines": {
-    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "build": "tsup",
@@ -60,6 +60,7 @@
     "@h-ai/cache": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/deploy": "workspace:*",
+    "@h-ai/feedback": "workspace:*",
     "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",

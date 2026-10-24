@@ -24,6 +24,7 @@ import { paginatedSchema } from './common/pagination-schemas.js'
 import { haiResultSchema, HaiVoidResultSchema } from './common/result-schemas.js'
 import { pathOf, route } from './common/route.js'
 import { createApiContract } from './composition/create-api-contract.js'
+import { feedbackContract } from './feedback/feedback-contract.js'
 import { iamContract } from './iam/iam-contract.js'
 import { paymentContract } from './payment/payment-contract.js'
 import { storageContract } from './storage/storage-contract.js'
@@ -63,4 +64,6 @@ export const apiContract = {
   ai: aiContract,
   /** Payment 领域 contract。 */
   payment: paymentContract,
+  /** 用户反馈、证据采集和离线导出。 */
+  feedback: feedbackContract,
 }

@@ -583,6 +583,31 @@ pnpm --filter @h-ai/core test
 
 公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。Node core.init 同步返回 void；单项 config.load 返回失败时记录错误并继续，必需配置须 validate 并检查 success。目录扫描等异常仍可能抛出；模块业务 HaiResult 则先检查 success。
 
+## 请求关联与日志观察
+
+采集器内部的持久化/上传路径可使用 `core.context.run({ suppressLogObservers: true }, operation)` 暂停观察回调，避免异步采集自身日志；stdout 等常规日志输出保持生效，退出作用域后恢复。
+
+`core.logger.observe` 观察当前级别允许且已执行默认/自定义字段脱敏的记录，返回取消函数。订阅者应只做有界内存收集，再异步持久化；日志观察本身不代表已经保存。回调异常和同步重入不影响业务。自由文本与图像仍需采集侧的专门隐私策略。
+
+`core.context.run` 在 Node 中用 AsyncLocalStorage 隔离并发请求和子任务，现有模块 logger 自动附带当前 requestId/userId/scopeId/jobId。身份范围只来自可信服务端代码；关联 ID 不是授权。浏览器保持同一 API，但 run 只建立同步作用域，不能用于跨 await 的身份隔离。
+
+```ts
+import type { LogRecord } from '@h-ai/core'
+import { core } from '@h-ai/core'
+
+const records: LogRecord[] = []
+const unsubscribe = core.logger.observe((record) => {
+  if (records.length === 100)
+    records.shift()
+  records.push(record)
+})
+await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'user-1' }, async () => {
+  await Promise.resolve()
+  core.logger.warn('Business operation failed')
+})
+unsubscribe()
+```
+
 ## 许可证
 
 Apache-2.0

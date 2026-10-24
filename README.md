@@ -6,7 +6,7 @@
 
 > 当前处于 `0.1.0-alpha` 阶段：公共契约仍在演进。生产采用前请锁定版本，并针对自身场景完成安全与容量验证。
 
-生产多实例部署请先核对[21 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
+生产多实例部署请先核对[22 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
 
 <p align="center">
   <strong>AI Runtime · 企业级全栈模块 · Agent Skills · 端到端类型安全</strong>
@@ -19,7 +19,7 @@
 <p align="center">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.22.2%20%7C%20%5E24.15.0%20%7C%20%3E%3D26.0.0-339933.svg">
+  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
   <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
 </p>
 
@@ -56,7 +56,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 | **统一生命周期**      | 有状态模块遵循 `init() → use → close()`，有状态模块共享使用习惯；工厂和纯函数按各自契约。 |
 | **显式失败语义**      | 领域操作统一返回 `HaiResult<T>`，成功与失败在类型层面强制区分。                           |
 | **配置即校验**        | Zod Schema 在 `init()` 阶段完成校验，配置错误在启动时暴露，而非运行时。                   |
-| **按需组合**          | 21 个独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。                          |
+| **按需组合**          | 22 个可独立发布的模块，最小依赖 `@h-ai/core`，按业务场景逐步引入。                        |
 | **端到端类型安全**    | 严格模式 TypeScript，`api-contract → serv → api-client` 全链路类型推断。                  |
 | **多端 UI**           | Svelte 5 Runes 组件（原子 / 组合 / 场景），覆盖桌面与移动端。                             |
 | **脚手架与部署**      | `hai create` 创建完整项目，`hai deploy` 部署到 Vercel 或自建主机。                        |
@@ -87,7 +87,7 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 | 层面       | 选型                                                           |
 | ---------- | -------------------------------------------------------------- |
 | 语言       | TypeScript 6 / 7（严格模式）                                   |
-| 运行时     | Node.js 22.22.2+ / 24.15.0+ / 26+                              |
+| 运行时     | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                         |
 | 前端框架   | Svelte 5（Runes）+ SvelteKit 2                                 |
 | UI         | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                        |
 | API 契约   | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
@@ -108,7 +108,9 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 从环境准备、手工编码或 AI first 开发，到编译、镜像/原生打包、自动或离线部署、框架升级，见完整使用指南：[简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md) · [日本語](docs/usage/README.ja.md)。其中包含命令参数、`hai.json` 配置和实际 skills 的使用流程。
 
-准备符合项目 `engines` 的 Node.js（`^22.22.2 || ^24.15.0 || >=26.0.0`）与 pnpm 12.11.2；PowerShell 使用 `pnpm.cmd`。
+准备符合项目 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2；PowerShell 使用 `pnpm.cmd`。
+
+上述最低版本来自 [2026-10-21 Node.js 官方安全发布](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)。仅支持 Node.js 22、24、26 各发布线中符合最低版本的版本；不支持较旧版本、已停止维护的发布线或未经验证的未来主版本。开发、CI 与容器推荐使用 Node.js 24.22.1 LTS。
 
 ### 创建新项目
 
@@ -170,7 +172,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 ## 功能清单
 
-框架当前提供 **21 个独立发布的模块**，按职责分为五层。
+框架当前提供 **22 个可独立发布的模块**，按职责分为五层。
 
 ### 基础能力
 
@@ -195,6 +197,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理                                                         |             —              |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
 | `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                                                                      | ✅ SMTP / 阿里云短信 / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
+| `@h-ai/feedback`  | 用户反馈：现场采集、私有截图、邮件通知、分页处理与离线诊断包                                                                 |       DB / S3 / SMTP       |                                                     —                                                     |
 | `@h-ai/ai`        | AI 集成：LLM 对话（同步/流式）、文生图、语音（ASR/TTS）、工具调用、MCP、Embedding、RAG/知识库、记忆、上下文管理、Rerank、A2A |  ✅ OpenAI 兼容 / 可扩展   |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
 | `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                                                                       | ✅ 微信 / 支付宝 / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
 | `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                                                                             |             —              |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
@@ -231,6 +234,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 | 数据层     | `@h-ai/datapipe`     | [`packages/datapipe/README.md`](./packages/datapipe/README.md)         |
 | 业务能力   | `@h-ai/iam`          | [`packages/iam/README.md`](./packages/iam/README.md)                   |
 | 业务能力   | `@h-ai/reach`        | [`packages/reach/README.md`](./packages/reach/README.md)               |
+| 业务能力   | `@h-ai/feedback`     | [`packages/feedback/README.md`](./packages/feedback/README.md)         |
 | 业务能力   | `@h-ai/ai`           | [`packages/ai/README.md`](./packages/ai/README.md)                     |
 | 业务能力   | `@h-ai/payment`      | [`packages/payment/README.md`](./packages/payment/README.md)           |
 | 业务能力   | `@h-ai/audit`        | [`packages/audit/README.md`](./packages/audit/README.md)               |
@@ -586,7 +590,7 @@ pnpm --filter @h-ai/reldb test  # 只运行某个模块
 
 ```
 hai-framework/
-├── packages/            # 21 个框架包（@h-ai/*）
+├── packages/            # 22 个框架包（@h-ai/*）
 │   └── cli/templates/   # CLI 脚手架模板（含 skills 模板，分发到生成应用）
 ├── apps/                # 示例应用
 ├── scripts/             # 校验与发布脚本
@@ -646,6 +650,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 | AI             | `HAI_AI_LLM_*`                           | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置              |
 | VecDB          | `HAI_VECDB_*`                            | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant / Chroma 配置 |
 | Reach          | `HAI_REACH_*`                            | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                  |
+| Feedback       | `HAI_FEEDBACK_*`                         | 反馈应用、管理员收件人、采集容量与保留期限                 |
 | Payment        | `HAI_PAYMENT_*`                          | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置            |
 | Deploy         | `HAI_DEPLOY_*`                           | `@h-ai/deploy` / `@h-ai/cli` 的部署与基础设施凭据          |
 
@@ -657,7 +662,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 
 `pnpm dev` / `dev:test` / `dev:prod` 选择开发、测试和生产配置，Node 服务构建后使用 `start:test` / `start:prod`。Vite 在 Node 配置阶段检查 `core.config.loadEnvFiles({ mode, envDir })` 结果后注入，Node 按基础、环境、本机的顺序传入 `--env-file`；`core.init` 不读取 dotenv。`development` / `production` 文件模式映射为 `dev` / `prod`。Provider 切换和旧变量迁移步骤见应用 skill 的[环境配置](packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 
-配置字段、实际消费点、环境命名及生成应用之间的对应关系见[21 包配置对应表](.agents/skills/hai-module-create/configuration.md)。
+配置字段、实际消费点、环境命名及生成应用之间的对应关系见[22 包配置对应表](.agents/skills/hai-module-create/configuration.md)。
 
 ### 质量门禁
 

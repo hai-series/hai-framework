@@ -1,0 +1,22 @@
+{
+  "feedback_notInitialized": "フィードバックが初期化されていません",
+  "feedback_initInProgress": "フィードバックを初期化しています",
+  "feedback_configError": "設定が無効、または依存サービスが利用できません",
+  "feedback_operationFailed": "操作に失敗しました。再試行してください",
+  "feedback_notFound": "フィードバックまたは資料が見つかりません",
+  "feedback_forbidden": "このフィードバックへのアクセス権限がありません",
+  "feedback_conflict": "フィードバックが更新されたか操作識別子が重複しています。再読込してください",
+  "feedback_exportPending": "問題パッケージを生成しています。しばらくしてから再試行してください",
+  "feedback_limitExceeded": "資料が許容容量を超えています",
+  "feedback_invalidInput": "入力が無効です",
+  "feedback_checksumMismatch": "添付ファイルの整合性を確認できません",
+  "feedback_received": "新しいフィードバックを受信しました",
+  "feedback_submittedAt": "報告日時（UTC）",
+  "feedback_materialStatus": "資料の状態",
+  "feedback_materialCollecting": "収集中",
+  "feedback_materialComplete": "完全",
+  "feedback_materialPartial": "一部不足",
+  "feedback_materialFailed": "収集失敗",
+  "feedback_defaultSummary": "ユーザーのフィードバック",
+  "feedback_retryInputChanged": "最初の送信は開始されています。元の説明と添付ファイルに戻して送信結果を確認してから、新しいフィードバックを作成してください。"
+}

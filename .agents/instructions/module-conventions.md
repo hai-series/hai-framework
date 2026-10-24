@@ -11,7 +11,7 @@
 ## 文件命名与职责
 
 - 常规模块源文件使用 `<模块>[-<领域>]-<角色>[-<实体或实现>].ts`；同族文件的角色位置一致，例如 `scheduler-repository-task.ts`、`payment-provider-wechat.ts`。嵌套目录也保留模块前缀，便于日志、搜索和独立审阅定位。
-- 框架固定入口 `index.ts`、条件入口 `browser.ts`、Svelte 组件 `PascalCase.svelte` 及其局部工具保留实际契约；`api-contract` 按协议领域命名 `payment-schemas.ts` 等，不叠加无意义的包名前缀。审查依据与 21 包例外见[代码风格清单](module-conventions.md#文件族清单)。
+- 框架固定入口 `index.ts`、条件入口 `browser.ts`、Svelte 组件 `PascalCase.svelte` 及其局部工具保留实际契约；`api-contract` 按协议领域命名 `payment-schemas.ts` 等，不叠加无意义的包名前缀。审查依据与 22 包例外见[代码风格清单](module-conventions.md#文件族清单)。
 - `xx-main.ts`：模块主入口，仅生命周期管理（init/close）和 API 编排，禁止具体业务逻辑（调度循环、数据处理等）
 - `xx-types.ts`：对外接口类型定义（public types）
 - `xx-config.ts`：配置定义与默认值、错误定义（现有模块通常在 xx-types.ts；以实际定义为准）
@@ -194,7 +194,7 @@ function register(tool: Tool): HaiResult<void> {
 
 ## 文件族清单
 
-本清单记录 21 个框架包的命名与导出边界。规则正文见[模块规范](module-conventions.md)，实际公开符号见[API 清单](../../scripts/generated/module-api-inventory.md)；不把普通源文件的 `export` 当作包的公开 API。
+本清单记录 22 个框架包的命名与导出边界。规则正文见[模块规范](module-conventions.md)，实际公开符号见[API 清单](../../scripts/generated/module-api-inventory.md)；不把普通源文件的 `export` 当作包的公开 API。
 
 ### 文件族
 
@@ -213,6 +213,7 @@ function register(tool: Tool): HaiResult<void> {
 | crypto       | `crypto-*`、`crypto-transport-*`；客户端子路径与服务端入口分开                                                    |
 | datapipe     | `datapipe-*`；纯函数与显式抛错工具按签名处理                                                                      |
 | deploy       | `deploy-*`、`deploy-<领域>-*`；容器与平台配置文件保留工具原生名称                                                 |
+| feedback     | `feedback-*`；根入口为 Node 服务，`/client` 为浏览器采集器，`/bundle` 为 Node/浏览器共享的纯离线协议与工具        |
 | iam          | `iam-*`、`iam-<领域>-*`；Provider 与 Repository 在实际实现目录中                                                  |
 | kit          | `kit-*`；`browser.ts` 是已发布的条件入口，SvelteKit 路由文件保留框架名称                                          |
 | payment      | Provider 统一为 `payment-provider-<渠道>.ts`，渠道协议工具为 `payment-<渠道>-<角色>.ts`                           |
@@ -266,7 +267,7 @@ node scripts/check-module-jsdoc.mjs --package core --coverage-only
 
 ## 公开入口验证
 
-公开边界由 `package.json.exports`、入口转发和构建声明共同决定。[实际 API 清单](../../scripts/generated/module-api-inventory.md)覆盖 21 个包；完整 JSON 记录每个条件、子路径、导出名称和运行时/类型种类。普通源文件为跨文件复用而 export，不代表使用方可以跨包导入该文件。
+公开边界由 `package.json.exports`、入口转发和构建声明共同决定。[实际 API 清单](../../scripts/generated/module-api-inventory.md)覆盖 22 个包；完整 JSON 记录每个条件、子路径、导出名称和运行时/类型种类。普通源文件为跨文件复用而 export，不代表使用方可以跨包导入该文件。
 
 维护公开入口时先确认用途。配置、业务类型、公开操作与实际扩展点保留；内置适配器、Repository 状态和工厂依赖留在实现目录。`PaymentProvider` 通过 registerProvider/getProvider 扩展支付渠道，`AIStoreProvider` 通过初始化注入存储，二者是公共契约。cache/storage/reldb/reach 的固定后端 Provider、LLM 内部适配器/工厂依赖、Context 组装依赖及会话存储键不属于包 API。删除没有实现的入口，不为它补造功能。
 
@@ -282,6 +283,6 @@ pnpm check:api
 pnpm test:api
 ```
 
-`generate:api` 从实际构建产物生成快照，缺失产物会失败；`check:api` 验证快照与产物一致。`test:api` 使用真实自引用包解析检查 21 包声明、Node/Browser 条件及内部导出的拒绝，随后隔离进程导入各包，完整打包浏览器入口并拒绝 Node 内建模块。UI 经真实 Svelte 编译器转换并执行 SSR 导入，浏览器组件及 Rune 模块也完整编译；CLI 以独立进程运行 help/version。SvelteKit 的 `$app/navigation`、`$app/state` 是宿主提供的虚拟模块，不是 Node polyfill；CSS 只在此 JavaScript 图验证中省略输出，组件视觉行为仍需各自测试。
+`generate:api` 从实际构建产物生成快照，缺失产物会失败；`check:api` 验证快照与产物一致。`test:api` 使用真实自引用包解析检查 22 包声明、Node/Browser 条件及内部导出的拒绝，随后隔离进程导入各包，完整打包浏览器入口并拒绝 Node 内建模块。UI 经真实 Svelte 编译器转换并执行 SSR 导入，浏览器组件及 Rune 模块也完整编译；CLI 以独立进程运行 help/version。SvelteKit 的 `$app/navigation`、`$app/state` 是宿主提供的虚拟模块，不是 Node polyfill；CSS 只在此 JavaScript 图验证中省略输出，组件视觉行为仍需各自测试。
 
 API 冒烟不初始化服务、连接外部后端、发送支付或消息，也不替代功能回归。更新 Schema 或扩展协议仍须同步调用方、三语 README、skills、LLMS、配置和对应验证。生成应用仅按安装版本的公开入口消费；仓库维护脚本不复制到应用。

@@ -142,6 +142,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 ```
 
 > `apiFetch` injects the CSRF header automatically; `@h-ai/kit` does not expose a separate CSRF middleware factory.
+> `apiFetch` accepts a string, URL, or Request. It preserves the Request method, headers, and body and adds CSRF for writes. With transport enabled, supported bodies are encrypted and multipart uploads retain their original boundaries.
 >
 > Use httpOnly cookies for same-origin SvelteKit endpoints and verify them on the server. For browser Bearer headers, set an in-memory token with `kit.auth.setBrowserToken()` before `kit.client.create({ auth: true })`. Custom `BrowserTokenStore` implementations must use memory or platform secure storage; never persist sensitive credentials in Web Storage.
 
@@ -319,6 +320,31 @@ pnpm --filter @h-ai/kit test
 ```
 
 Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.
+
+## Feedback endpoint and request correlation
+
+`kit.createFeedbackHandler` can serve GET/POST/PATCH in `/api/feedback/[...path]/+server.ts`. It reuses the same api-contract schemas as serv, bounds the input stream, and rejects client identity/scope fields. resolveContext maps an already verified locals.session to server-controlled scope and permissions; null denies access. Keep the existing createHandle authentication, CSRF, and transport encryption.
+
+createHandle preserves a valid bounded incoming X-Request-Id, adds it to responses, and propagates the request and verified user across asynchronous work. To collect ordinary business logs, wrap the actual business operation in a host middleware using `core.context.run({ scopeId: 'configured-product' }, next)`. This trusted scope must match feedback scope and cannot come from client headers.
+
+```ts
+import type { SessionData } from '@h-ai/kit'
+import { feedback } from '@h-ai/feedback'
+import { kit } from '@h-ai/kit'
+
+const handler = kit.createFeedbackHandler({
+  feedback,
+  resolveContext: (event) => {
+    const session = (event.locals as { session?: SessionData }).session
+    return session
+      ? { scopeId: 'configured-product', userId: session.userId, permissions: session.permissions }
+      : null
+  },
+})
+export const GET = handler
+export const POST = handler
+export const PATCH = handler
+```
 
 ## License
 

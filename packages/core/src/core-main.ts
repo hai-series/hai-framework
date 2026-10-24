@@ -6,8 +6,10 @@
  */
 
 import type { CoreFunctions, CoreLogger, LoggerFunctions } from './core-types.js'
+import { requestContext } from './functions/core-function-context.js'
 import { error } from './functions/core-function-error.js'
 import { id } from './functions/core-function-id.js'
+import { observeLogs } from './functions/core-function-log-observer.js'
 import { i18n } from './i18n/core-i18n-utils.js'
 import { zodValidation } from './i18n/core-zod-mapper.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
@@ -51,10 +53,12 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
       configure: loggerFns.configureLogger,
       setLevel: loggerFns.setLogLevel,
       getLevel: loggerFns.getLogLevel,
+      observe: observeLogs,
     }
   }
 
   return {
+    context: requestContext,
     // ─── Logger ───
 
     /**

@@ -10,6 +10,7 @@ import stringWidth from 'fast-string-width'
 import prompts from 'prompts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../src/commands/cli-create.js'
+import * as templateEngine from '../src/commands/cli-template-engine.js'
 
 const commandMocks = vi.hoisted(() => ({ execSync: vi.fn() }))
 vi.mock('node:child_process', async importOriginal => ({
@@ -80,9 +81,12 @@ describe('create 用户输出', () => {
     temporaryRoots.push(root)
     const select = vi.spyOn(prompts.prompts, 'select').mockImplementation(() => 'fullstack')
     const multiselect = vi.spyOn(prompts.prompts, 'multiselect').mockImplementation(() => ['web', 'app', 'desktop'])
+    // 问题已收集后终止文件生成，重绘仍使用下方真实 prompts；工程生成由独立门禁验证。
+    const promptsCollected = new Error('Prompt fixture stops before template generation')
+    vi.spyOn(templateEngine, 'generateFromTemplates').mockRejectedValueOnce(promptsCollected)
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    await createProject({ name: 'prompt-test', examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    await expect(createProject({ name: 'prompt-test', examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toBe(promptsCollected)
     const questions = [select.mock.calls[0][0], multiselect.mock.calls[0][0]]
     select.mockRestore()
     multiselect.mockRestore()

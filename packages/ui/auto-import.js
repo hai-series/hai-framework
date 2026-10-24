@@ -71,6 +71,9 @@ const UI_COMPONENTS = new Set([
   'ToastContainer',
   'Tooltip',
   // scenes - app
+  'FeedbackDetail',
+  'FeedbackForm',
+  'FeedbackList',
   'FeedbackModal',
   'LanguageSwitch',
   'SettingsLayout',

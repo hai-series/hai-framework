@@ -8,6 +8,7 @@ export const {{api.contractExportName}} = apiContract.create({
 {{#if features.iam}}  iam: apiContract.iam,
 {{/if}}{{#if features.storage}}  storage: apiContract.storage,
 {{/if}}{{#if features.ai}}  ai: apiContract.ai,
+{{/if}}{{#if features.feedback}}  feedback: apiContract.feedback,
 {{/if}}  // @hai-generator:contracts:entries
   app: appContract,
 })

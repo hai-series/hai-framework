@@ -1,7 +1,9 @@
 import type { AppProcedureDeps } from './app-procedures.js'
 {{#if features.ai}}import { ai } from '@h-ai/ai'
+{{/if}}{{#if features.feedback}}import { feedback } from '@h-ai/feedback'
 {{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
 {{/if}}{{#if features.ai}}import { createAiProcedures } from '@h-ai/serv/features/ai'
+{{/if}}{{#if features.feedback}}import { createFeedbackProcedures } from '@h-ai/serv/features/feedback'
 {{/if}}{{#if features.iam}}import { createIamProcedures } from '@h-ai/serv/features/iam'
 {{/if}}{{#if features.storage}}import { createStorageProcedures } from '@h-ai/serv/features/storage'
 import { storage } from '@h-ai/storage'
@@ -21,6 +23,19 @@ export function {{api.serviceProceduresFactoryName}}(deps: { app: AppProcedureDe
     }),
 {{/if}}{{#if features.ai}}    // AI 默认绑定可信 session.userId，跨主体访问需另行提供 authorizeObject 策略。
     ai: createAiProcedures({ ai }),
-{{/if}}    app: createAppProcedures(deps.app),
+{{/if}}{{#if features.feedback}}
+    feedback: createFeedbackProcedures({
+      feedback,
+      resolveContext: ({ session }) => ({
+        scopeId: '{{projectName}}',
+        userId: session.userId,
+        // 示例角色映射；实际产品应从可信租户与资源权限确定范围。
+        permissions: session.roles.includes('admin')
+          ? ['feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export']
+          : ['feedback:create'],
+      }),
+    }),
+{{/if}}
+    app: createAppProcedures(deps.app),
   }
 }

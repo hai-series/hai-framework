@@ -518,5 +518,15 @@
   "gallery_interaction_retry": "再試行",
   "gallery_interaction_empty_title": "一致するレコードがありません",
   "gallery_interaction_empty_description": "検索条件を変更するか、絞り込みを解除してください。LongIdentifierWithoutSpacesForResponsiveLayoutVerification0123456789",
-  "gallery_interaction_reset": "絞り込みを解除"
+  "gallery_interaction_reset": "絞り込みを解除",
+  "feedback_title": "フィードバック",
+  "feedback_open": "問題を報告",
+  "feedback_request_failed": "フィードバックの取得に失敗しました。再試行してください。",
+  "feedback_config_failed": "フィードバック設定が無効です。",
+  "feedback_forbidden": "このフィードバックを表示する権限がありません。",
+  "feedback_invalid_query": "絞り込み条件が無効です。",
+  "feedback_attachment_pending": "添付ファイルを収集中、または取得できません。",
+  "feedback_export_pending": "問題パッケージを準備しています。詳細画面から再試行してください。",
+  "feedback_material_logs": "診断記録",
+  "feedback_material_missing": "不足している資料"
 }

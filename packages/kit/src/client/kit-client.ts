@@ -83,7 +83,7 @@ export interface KitClientConfig {
  */
 export interface KitClient {
   /** 统一 API fetch（写请求自动附加 CSRF，启用 transport 时自动加解密） */
-  apiFetch: (url: string, init?: RequestInit) => Promise<Response>
+  apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   /** 传输加密是否就绪（未启用传输加密时始终为 true） */
   readonly ready: boolean
   /**
@@ -127,15 +127,12 @@ function canEncryptRequestBody(body: BodyInit | null | undefined): boolean {
 }
 
 /**
- * 判断全局 fetch 包装路径下，某个 `Request` 是否可走传输加密。
+ * 判断某个 `Request` 的有效方法、请求头与原始正文是否可走传输加密。
  *
- * 与上方 {@link canEncryptRequestBody} 区别：本谓词服务于 {@link installBrowserTransportFetch}
- * 的全局包装路径，输入是完整 `Request`，故可基于 method（GET/HEAD 无 body 安全放行）与
- * `Content-Type`（仅 JSON 可重注入明文）综合判定；而 `canEncryptRequestBody` 服务于
- * `createKitClient` 的 `apiFetch` 路径，仅拿到 `BodyInit`，只能按 body 类型粗判。
- * 两者判定维度不同是有意为之，请勿合并。
+ * `Request.body` 已转换为流，必须结合 Content-Type 识别可重注入的 JSON，
+ * 避免把 multipart 等二进制正文当文本加密。纯 BodyInit 则仍按原始类型判定。
  */
-function canUseTransportForRequest(request: Request): boolean {
+function canUseTransportForRequest(request: Pick<Request, 'method' | 'headers' | 'body'>): boolean {
   const method = request.method.toUpperCase()
   if (method === 'GET' || method === 'HEAD') {
     return true
@@ -342,12 +339,15 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   /**
    * 统一 API fetch
    */
-  async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
-    const method = (init.method ?? 'GET').toUpperCase()
+  async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const request = input instanceof Request ? input : undefined
+    const method = (init.method ?? request?.method ?? 'GET').toUpperCase()
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method)
-    const canUseTransport = canEncryptRequestBody(init.body)
-
-    const headers = new Headers(init.headers)
+    const headers = new Headers(init.headers ?? request?.headers)
+    // 仅检查元数据，不构建/读取 Request，确保透传上传的流与浏览器边界保持可用。
+    const canUseTransport = request && init.body === undefined
+      ? canUseTransportForRequest({ method, headers, body: request.body })
+      : canEncryptRequestBody(init.body)
 
     // ── Auth ──
     if (authStore) {
@@ -369,17 +369,17 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     if (
       transportClient
       && canUseTransport
-      && shouldUseTransportForUrl(url, {
+      && shouldUseTransportForUrl(request?.url ?? (input instanceof URL ? input : String(input)), {
         origin: transportOrigin,
         keyExchangePath: transportKeyExchangePath,
         excludePaths: transportConfig?.excludePaths,
       })
     ) {
-      return transportClient.encryptedFetch(url, { ...init, headers })
+      return transportClient.encryptedFetch(input, { ...init, headers })
     }
 
     // ── 发送（FormData/Blob/Stream 等保持原样，不破坏浏览器边界） ──
-    return fetch(url, { ...init, headers })
+    return fetch(input, { ...init, headers })
   }
 
   return {

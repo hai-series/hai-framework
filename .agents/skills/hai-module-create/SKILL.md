@@ -111,6 +111,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 | `hai:payment`    | payment    | 支付                 |
 | `hai:capacitor`  | capacitor  | 移动端原生           |
 | `hai:reach`      | reach      | 消息触达             |
+| `hai:feedback` | feedback | 用户问题反馈、证据、处理与离线包 |
 | `hai:datapipe`   | datapipe   | 数据管道             |
 | `hai:deploy`     | deploy     | 部署                 |
 | `hai:audit`      | audit      | 审计                 |

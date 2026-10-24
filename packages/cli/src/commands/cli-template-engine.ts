@@ -37,7 +37,10 @@ Handlebars.registerHelper('jsString', (value: string) => `'${JSON.stringify(valu
 // 未选择的模块只输出注释；说明也加两层注释，整文件去掉外层后仍是合法 YAML。
 Handlebars.registerHelper('moduleConfig', function (this: TemplateContext, moduleKey: string, enabled: boolean) {
   // 文件模板自身保留结尾换行，helper 不再重复输出空行。
-  const content = generateConfigFile(moduleKey, this.moduleConfigs).trimEnd()
+  const generated = generateConfigFile(moduleKey, this.moduleConfigs).trimEnd()
+  const content = moduleKey === 'feedback'
+    ? generated.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${this.projectName}`)
+    : generated
   const configured = this.appType === 'fullstack' && moduleKey === 'iam'
     ? content.replace('HAI_IAM_SEEDDEFAULTDATA:true', 'HAI_IAM_SEEDDEFAULTDATA:false').replace('variant: card', 'variant: split')
     : content
@@ -171,6 +174,7 @@ const HAI_CATALOG_PACKAGE_NAMES = [
   '@h-ai/crypto',
   '@h-ai/datapipe',
   '@h-ai/deploy',
+  '@h-ai/feedback',
   '@h-ai/iam',
   '@h-ai/kit',
   '@h-ai/payment',
@@ -388,6 +392,8 @@ function buildApiWorkspaceCatalogPackages(featureMap: Record<string, boolean>): 
     packageNames.push('@h-ai/audit')
   if (featureMap.reach)
     packageNames.push('@h-ai/reach')
+  if (featureMap.feedback)
+    packageNames.push('@h-ai/feedback')
   if (featureMap.payment)
     packageNames.push('@h-ai/payment')
   if (featureMap.vecdb)
@@ -436,6 +442,8 @@ function buildAppHaiCatalogPackages(options: {
     packageNames.push('@h-ai/audit')
   if (options.featureMap.reach)
     packageNames.push('@h-ai/reach')
+  if (options.featureMap.feedback)
+    packageNames.push('@h-ai/feedback')
   if (options.featureMap.payment)
     packageNames.push('@h-ai/payment')
   if (options.featureMap.vecdb)
@@ -475,6 +483,8 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], dep
     packageNames.push(...FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES)
   if (deploy)
     packageNames.push('@h-ai/deploy')
+  if (features.feedback)
+    packageNames.push('@h-ai/feedback')
   if (features.ai)
     packageNames.push('@h-ai/ai')
   if (features.vecdb)
@@ -846,6 +856,11 @@ export function buildTemplateContext(options: {
   // fullstack 默认交付完整 mini 管理功能，不能移除其必需模块。
   if (options.appType === 'fullstack') {
     for (const feature of ['iam', 'db', 'cache', 'crypto', 'storage', 'audit']) featureMap[feature] = true
+  }
+
+  // feedback 的默认 HTTP 接入使用认证，并复用持久化、附件和触达。
+  if (featureMap.feedback) {
+    for (const feature of ['db', 'storage', 'reach', 'iam']) featureMap[feature] = true
   }
 
   // 强制补全模块硬依赖，防止调用方未经过 resolveFeatureDependencies 时遗漏依赖

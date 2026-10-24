@@ -161,6 +161,20 @@ pnpm --filter @h-ai/api-client typecheck
 
 客户端默认从服务端握手获取 `transport.maxPlaintextBytes`；可显式设置本地同名字段取较小值。容量失败返回 `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`），保留方向、阶段和字节诊断。见 [容量配置与升级](../crypto/TRANSPORT-CAPACITY.md)。
 
+## 逻辑请求观察
+
+`client.observeRequests` 返回可取消的逻辑请求观察：requestId、procedure、耗时、HTTP 状态、最终 success/errorCode 与实际业务请求 attempts。HTTP 200 的失败 HaiResult 也记为失败，自动刷新后的重试保留同一 requestId，整个逻辑调用只产生一次结果。记录不包含正文、Token 或 URL 查询参数。刷新/密钥协商不伪装成用户业务操作；close 清理本实例的订阅，重新 init 后需重新订阅。
+
+```ts
+import { apiClient } from '@h-ai/api-client'
+
+const unsubscribe = apiClient.observeRequests((record) => {
+  const failed = !record.success
+  const requestId = record.requestId
+})
+unsubscribe()
+```
+
 ## 许可证
 
 Apache-2.0

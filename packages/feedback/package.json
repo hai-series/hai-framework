@@ -1,0 +1,50 @@
+{
+  "name": "@h-ai/feedback",
+  "type": "module",
+  "version": "0.1.0-alpha.68",
+  "description": "Hai Framework feedback collection, evidence, notifications and offline diagnostic bundles.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./client": { "types": "./dist/client/index.d.ts", "import": "./dist/client/index.js" },
+    "./bundle": { "types": "./dist/bundle/index.d.ts", "import": "./dist/bundle/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
+  "engines": { "node": "^22.23.4 || ^24.22.1 || ^26.12.1" },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo",
+    "build:clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@h-ai/api-contract": "workspace:*",
+    "@h-ai/core": "workspace:*",
+    "@h-ai/reach": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
+    "@h-ai/storage": "workspace:*",
+    "@rrweb/record": "catalog:",
+    "@rrweb/replay": "catalog:",
+    "fflate": "catalog:",
+    "html2canvas": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "jsdom": "catalog:",
+    "rimraf": "catalog:",
+    "testcontainers": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -21,7 +21,7 @@ Commands describe the CLI and templates in this repository. For an installed rel
 
 | Work | Requirements |
 | --- | --- |
-| Create, develop, compile, and run the CLI | Node.js `^22.22.2 \|\| ^24.15.0 \|\| >=26.0.0`, pnpm 12.11.2; check the project's `engines` and `packageManager` |
+| Create, develop, compile, and run the CLI | Node.js `^22.23.4 \|\| ^24.22.1 \|\| ^26.12.1`, pnpm 12.11.2; check the project's `engines` and `packageManager` |
 | Version control and document-driven AI development | Git; an AI coding assistant that can read project files and run commands |
 | Build container images | An installed, running Podman or Docker engine; use Linux containers on Windows |
 | Build desktop installers | Rust, the target architecture toolchain, and Tauri's system SDKs and packaging tools on the target OS |

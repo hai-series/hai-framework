@@ -88,3 +88,26 @@ test('configured IAM supports registration, OTP and reset', async ({ request }) 
   expect((await actions.login({ identifier: username, password: 'ApiResetPassword456' })).success).toBe(true)
 })
 {{/if}}
+{{#if features.feedback}}
+
+test('feedback intake is idempotent and creator can append evidence without administrator access', async () => {
+  const actions = apiClient.createAuthActions(client)
+  const username = `feedback${Date.now()}`
+  const password = 'Feedback-test-Password123!'
+  expect((await actions.register({ username, password, email: `${username}@example.test` })).success).toBe(true)
+  expect((await actions.login({ identifier: username, password })).success).toBe(true)
+  const submissionId = `submission-${Date.now()}`
+  const created = await client.feedback.reports.submit({ appId: '{{projectName}}', submissionId })
+  expect(created.success).toBe(true)
+  if (!created.success)
+    return
+  const duplicate = await client.feedback.reports.submit({ appId: '{{projectName}}', submissionId })
+  expect(duplicate.success).toBe(true)
+  if (duplicate.success)
+    expect(duplicate.data.id).toBe(created.data.id)
+  const evidence = await client.feedback.reports.appendEvidence({ id: created.data.id, evidence: [{ id: 'event-1', source: 'api-test', sequence: 1, kind: 'business', timestamp: Date.now(), data: { action: 'api-feedback' } }] })
+  expect(evidence.success).toBe(true)
+  expect((await client.feedback.reports.completeCollection({ id: created.data.id, missing: ['browser-not-applicable'] })).success).toBe(true)
+  expect((await client.feedback.reports.list({})).success).toBe(false)
+})
+{{/if}}

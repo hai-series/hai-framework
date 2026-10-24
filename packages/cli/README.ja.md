@@ -21,7 +21,7 @@
 
 ### CLI のインストール
 
-Node.js は `engines`（`^22.22.2 || ^24.15.0 || >=26.0.0`）に合わせ、pnpm 12.11.2 を使用します。PowerShell では `pnpm.cmd` を使用してください。
+Node.js は `engines`（`^22.23.4 || ^24.22.1 || ^26.12.1`）に合わせ、pnpm 12.11.2 を使用します。PowerShell では `pnpm.cmd` を使用してください。
 
 ```sh
 pnpm add -g @h-ai/cli
@@ -50,7 +50,7 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                            |
 | `fullstack`                | contract、API、共通 UI、選択した Web/App/Desktop。miniapp は説明のみ |
 
-`--template minimal|default|full|custom` で構成を選び、`--features iam,db,...` で業務モジュールを指定します。Fullstack は管理 UI に必要な IAM・DB・cache・crypto・storage・audit を保持します。AI/ONNX/CUDA は既定で入りません。
+`--template minimal|default|full|custom` で構成を選び、`--features iam,db,...` で業務モジュールを指定します。Fullstack は管理 UI に必要な IAM・DB・cache・crypto・storage・audit を保持します。`--features` を省略すると feedback と reach も有効になります。明示した機能一覧では任意モジュールの選択を保持し、他のアプリ種別では問題報告を明示的に選択します。AI/ONNX/CUDA は既定で入りません。
 
 独立した `mobile-app` で IAM または crypto を選択すると、フロント用 crypto を導入し、typed client の暗号化 transport を既定で有効にします。crypto を選択しない明示的な平文 API も利用できます。`PUBLIC_API_TRANSPORT=off` は対応する平文サービスにのみ使用し、`PUBLIC_API_KEY_EXCHANGE_PATH` は公開された鍵交換パスだけを変更します。鍵交換失敗時に平文へ切り替えず、サーバー秘密鍵をクライアントへ渡しません。終了時は client transport の後に自身が初期化した crypto を解放します。
 
@@ -132,7 +132,7 @@ pnpm --filter @h-ai/cli test:scaffold-gates --list --json
 pnpm --filter @h-ai/cli test:deploy-gates
 ```
 
-生成ゲートは八つのシナリオで全アプリ種別の実インストール、コンパイル、HTTP/ブラウザー検証を維持します。実測で構築とインストールの資源競合が発生したため、重い scaffold と生成ルート runtime はバッチを分けて順番に実行します。言語、CLI プロセス、環境消費の三ファイルは runtime と最大二つの worker で並列実行できます。各シナリオは E2E 入口の完全構築を再利用し、既存の本番構築分離チェックは E2E 後に空でない実成果物を検証します。実コンテナー配置は API、SSR（共通 Dockerfile と配置分岐を持つ website/h5 は admin で代表）、静的モバイル、fullstack を選びます。所有権、認証/暗号化、増分更新、破損成果物、復旧は維持します。fixture は init と孤児プロセスの実回収を検証し、高速ゲートは本番と同じ Nginx で公開 bundle に `nginx -t` を実行します。通常単体テストはエンジンを探測しません。workspace compile は依存グラフで contract を構築し、fullstack の共有 i18n 準備を保ちつつ二重構築を避けます。
+生成ゲートは十一個のシナリオで全アプリ種別の実インストール、コンパイル、HTTP/ブラウザー検証を維持します。実測で構築とインストールの資源競合が発生したため、重い scaffold と生成ルート runtime はバッチを分けて順番に実行します。言語、CLI プロセス、環境消費の三ファイルは runtime と最大二つの worker で並列実行できます。各シナリオは E2E 入口の完全構築を再利用し、既存の本番構築分離チェックは E2E 後に空でない実成果物を検証します。実コンテナー配置は API、SSR（共通 Dockerfile と配置分岐を持つ website/h5 は admin で代表）、静的モバイル、fullstack を選びます。所有権、認証/暗号化、増分更新、破損成果物、復旧は維持します。fixture は init と孤児プロセスの実回収を検証し、高速ゲートは本番と同じ Nginx で公開 bundle に `nginx -t` を実行します。通常単体テストはエンジンを探測しません。workspace compile は依存グラフで contract を構築し、fullstack の共有 i18n 準備を保ちつつ二重構築を避けます。
 
 生成検証は実工程でインストール、typecheck、lint、build、test、ブラウザー操作に加え、生成した HTTP ルート、CLI プロセスの言語選択と環境ファイルの消費を検証します。`--generate` と `--i18n` で対象を絞って再実行できます。デプロイ検証は実リソースの所有権と動的ホストポートの分離に加え、オフライン tar、SSH/手動配布、増分更新とロールバックを扱います。当該実行が記録したコンテナー ID と専用イメージ tag だけを回収します。安全なメタデータは ignored の `tmp/validation/module-review/VERIFY-05/` に残します。生成したブラウザー画像、trace とレポートは既定で ignored の `tmp/validation/module-review/scaffold-browser/` または `deploy-browser/` に保持します。明示した証拠・HTML・出力先も尊重し、一時プロジェクト、鍵、データとプロセスは回収します。ネイティブと実クラウドは別途検証してください。
 
@@ -151,6 +151,12 @@ Windows インストーラーの追加検証には Rust の `x86_64-pc-windows-m
 hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review が [共通の引き継ぎ契約](templates/skills/hai-spec-implement/handoff.md) で要件、受け入れ条件、指摘と証拠を接続します。文書差分は既存の Git 基準を維持します。
 
 UI には [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui、[hai-ui-review](templates/skills/hai-ui-review/SKILL.md) を一緒に配布し、API テンプレートでは除外します。init/add は既存の独自入口を保持して不足リソースを補完します。リポジトリ側でも同じ責務には同じ名前を使います。
+
+### 問題報告とオフライン分析
+
+`hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。ログインユーザーは報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは管理者に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。`_feedback.yml` で管理者とURLを設定し、本番は共有DB、非公開S3、実際のSMTPを使います。Consoleは開発専用です。
+
+`hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
 
 ## ライセンス
 

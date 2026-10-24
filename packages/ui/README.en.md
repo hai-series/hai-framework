@@ -292,7 +292,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-#### Scenes (36)
+#### Scenes (40)
 
 ##### Guide (2)
 
@@ -301,17 +301,23 @@ Client validation appears on the first blur and updates as invalid input is corr
 | `GuideHost` | First-use invitations, tours and help dialog host | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | Standalone searchable help center | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App (7)
+##### App (11)
 
 | Component          | Description                                    | Key props                                                |
 | ------------------ | ---------------------------------------------- | -------------------------------------------------------- |
 | `FeedbackModal`    | Feedback modal                                 | `open`, `onsubmit`                                       |
+| `FeedbackForm` | Standalone feedback form | `attachments`, `evidenceSummary`, `onsubmit`, `onfileschange` |
+| `FeedbackList` | Server pagination, filters and processing actions | `data`, `query`, `permissions`, `onquerychange`, `onstatus` |
+| `FeedbackDetail` | Diagnostic evidence, history and exports | `report`, `evidence`, `attachments`, `history`, `onexport` |
+| `FeedbackScreenshot` | Image preview, highlighting and masking | `attachment`, `onannotate` |
 | `SettingsModal`    | Settings modal                                 | `open`, `onclose`                                        |
 | `SettingsLayout`   | Settings layout (section navigation + content) | `title`, `description`, `sections`, `active`, `onselect` |
 | `LanguageSwitch`   | Language switcher                              | No props required                                        |
 | `ThemeColorPicker` | Theme color picker                             | `value`, `presets`, `onchange`                           |
 | `ThemeSelector`    | Full theme selector                            | No props required                                        |
 | `ThemeToggle`      | Light/dark toggle                              | No props required                                        |
+
+Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before opening the modal. Connect `onfileschange` to attachment preparation and `onannotate` to image editing that burns annotations into the pixels. Failed submissions retain input and support local export. The list shows the description or server summary and requests pages through `onquerychange`; UI permissions do not replace server authorization. See the [feedback module](../feedback/README.en.md) for integration and offline tools.
 
 ##### IAM authentication (10)
 
