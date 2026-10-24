@@ -93,6 +93,8 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库。需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 
+CLI 在过滤调用者的 `HAI_/PUBLIC_/VITE_` 后，只注入内部生成的 `HAI_BUILD_ID/HAI_BUILD_COMMIT`，Docker 将同一镜像批次标识传入实际编译。生成应用的反馈分别读取前后端自己的 `appVersion/buildId/commit`，版本来自各自 manifest，同次 SSR 共用构建 ID；无所属 Git 提交时明确 `unknown`。三字段 `build-metadata.json` 与代码内联值一致，用于与 API/ZIP 实际证据核对。
+
 ```sh
 pnpm build --target docker
 pnpm run deploy --env prod

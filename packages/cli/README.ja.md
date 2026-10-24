@@ -93,6 +93,8 @@ DB 接続は保存前に選択したバックエンドの公開 Schema で検証
 
 標準コンテナーは CPU 実行またはリモート AI サービスへの接続向けで、追加の GPU ランタイムをダウンロードしません。デプロイ先の GPU を使う場合は、イメージとコンテナーの実行設定を個別に調整してください。
 
+CLI は呼び出し元の `HAI_/PUBLIC_/VITE_` を除外し、内部で生成した `HAI_BUILD_ID/HAI_BUILD_COMMIT` のみを注入します。Docker は同じイメージバッチの識別情報をコンパイルに渡します。フィードバックはブラウザーとサーバー各自の `appVersion/buildId/commit` を使用し、バージョンは各 manifest、同じ SSR ビルドの ID は共通です。所属する Git コミットがなければ `unknown` を記録します。三項目の `build-metadata.json` とコード内の値を一致させ、API/ZIP の実際の証拠と照合します。
+
 ```sh
 pnpm build --target docker
 pnpm run deploy --env prod

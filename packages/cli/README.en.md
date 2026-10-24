@@ -93,6 +93,8 @@ Database connections are validated against the selected backend’s public schem
 
 The default container supports CPU workloads or remote AI services without downloading extra GPU runtimes. To use the deployment host's GPU, customize the image and container runtime settings.
 
+After filtering caller `HAI_/PUBLIC_/VITE_` values, CLI injects only internally generated `HAI_BUILD_ID/HAI_BUILD_COMMIT`; Docker passes the image batch identity to compilation. Feedback reads each browser/server artifact's own `appVersion/buildId/commit`, with its own manifest version and a shared ID within one SSR build. Missing owning Git commits are explicitly `unknown`. The three-field `build-metadata.json` matches inlined code and supports comparison with actual API/ZIP evidence.
+
 ```sh
 pnpm build --target docker
 pnpm run deploy --env prod
