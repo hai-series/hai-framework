@@ -3,7 +3,15 @@ import { redactFeedbackText } from '../feedback-sanitize-text.js'
 
 const CREDENTIAL_NAME = /authorization|password|passcode|secret|token|session|csrf|credential|api.?key|private.?key/i
 
-function sanitizeText(value: string): string {
+/**
+ * 浏览器自由文本全文脱敏；附件总字节数由调用方限制，结构化字段自行裁剪。
+ * @example 模块内部上下文
+ * ```ts
+ * const safeText = sanitizeFeedbackText('Request failed token=example-only')
+ * void safeText
+ * ```
+ */
+export function sanitizeFeedbackText(value: string): string {
   return redactFeedbackText(value).replace(/\bhttps?:\/\/[^\s<>"']+/gi, url => core.sanitize.sanitizeUrl(url))
 }
 
@@ -20,7 +28,7 @@ export function sanitizeFeedbackData(value: unknown): Record<string, unknown> {
     if (depth > 8)
       return '[TRUNCATED]'
     if (typeof input === 'string')
-      return sanitizeText(input).slice(0, 8192)
+      return sanitizeFeedbackText(input).slice(0, 8192)
     if (input instanceof Error)
       return visit({ name: input.name, message: input.message, stack: input.stack }, depth + 1)
     if (!input || typeof input !== 'object')
@@ -54,7 +62,7 @@ export function sanitizeFeedbackReplay(value: unknown): Record<string, unknown> 
     if (depth > 64)
       throw new Error('Replay snapshot exceeds depth limit')
     if (typeof input === 'string')
-      return sanitizeText(input)
+      return sanitizeFeedbackText(input)
     if (input === undefined)
       return null
     if (!input || typeof input !== 'object')
@@ -75,7 +83,7 @@ export function sanitizeFeedbackReplay(value: unknown): Record<string, unknown> 
             continue
           }
           if (attribute === 'style' && typeof content === 'string' && /url\s*\(/i.test(content)) {
-            attributes.style = sanitizeText(content).replace(/url\s*\([^)]*\)/gi, '')
+            attributes.style = sanitizeFeedbackText(content).replace(/url\s*\([^)]*\)/gi, '')
             attributes['data-feedback-missing-resource'] = true
           }
           else {
@@ -85,7 +93,7 @@ export function sanitizeFeedbackReplay(value: unknown): Record<string, unknown> 
         output[key] = attributes
       }
       else if (key === 'textContent' && typeof item === 'string') {
-        output[key] = sanitizeText(item).replace(/(?:url|@import)\s*\([^)]*\)|@import\s+["'][^"']+["']/gi, '')
+        output[key] = sanitizeFeedbackText(item).replace(/(?:url|@import)\s*\([^)]*\)|@import\s+["'][^"']+["']/gi, '')
       }
       else {
         output[key] = CREDENTIAL_NAME.test(key) ? '[REDACTED]' : visit(item, depth + 1)

@@ -2,7 +2,7 @@
 
 - 清单：[feedback-tasks](../feedback-tasks.md)。
 - 状态：进行中；任务分支 `codex/feedback/isolated-delivery`（原 `codex/feedback/t001-module` 保留）；主分支 `main`。
-- 来源：[方案](../feedback-module-design.md) §1–12；原始提交 `88421e4c86c45d58269960aad59b4bf3ac8d3756`，目标文档提交 S=`e2275a291b1b3d47c5917a0adb31f70da0cee440`（含 Reach 通知前置、保留清理边界，以及进度指向任务清单的纯文档澄清）。
+- 来源：[方案](../feedback-module-design.md) §1–13；原始提交 `88421e4c86c45d58269960aad59b4bf3ac8d3756`，原目标文档提交 S=`e2275a291b1b3d47c5917a0adb31f70da0cee440`（含 Reach 通知前置、保留清理边界，以及进度指向任务清单的纯文档澄清）；按用户追加要求固定目标 S2=`a66a45e30f8e9a0491325ffddc05ffa03697119a`，最终验收使用 S2 的完整方案。
 - 前置：无。复用 core/reldb/storage/reach、oRPC/serv、UI、CLI fullstack 模板；不新增通用 telemetry 模块。
 
 ## 第 1 轮 · 2026-10-24
@@ -143,7 +143,24 @@
 - 第二个真实截图缺陷已由 trace 证实：操作正确命中上传图片，SDK 更新原始附件时 Svelte 深代理仍缓存旧字节。模板草稿改为 `$state.raw`，保留原像素、图片卡和 ZIP 断言；不把旧图 URL 更新当作烧录完成。
 - 参考 admin 与选用 feedback 的新 API/fullstack 工程显式用 8 MiB 明文预算容纳 5 MiB 附件的 Base64；框架全局默认和既有宿主配置保留。原全栈 E2E 另上传约 2.07 MiB 文本日志并校验服务器 ZIP 字节。首次整行条件放在 env 花括号内导致 HBS 语法失败，已保留前置失败日志并改为整行 if，不计业务 Red。
 - fullstack 默认功能的有效 Red 为 3 通过、1 因缺少真实 `@h-ai/feedback` 生成依赖失败；实现仅在省略 features 时默认加入 feedback，同 4 项 Green（`tmp/feedback-default-validation/`）。显式选择与其他应用类型保持原约定；默认完整脚手架现合并为 11 类（含 main 的独立传输容量场景）。
-- 管理台默认启用与角色分权原本已实现；新增 IAM 公开行为 4/4 通过，未制造 Red。正式浏览器由 6 增为 7 场景，补默认普通注册用户的桌面/窄屏提交、自己的报告读取、管理页面和 API 拒绝，以及断网后重试回执；浏览器仍待最终运行。
+- 管理台默认启用与角色分权原本已实现；新增 IAM 公开行为 4/4 通过，未制造 Red。正式浏览器由 6 增为 7 场景，补既有普通 user 角色的桌面/窄屏提交、自己的报告读取、管理页面和 API 拒绝，以及断网后重试回执；通用 E2E fixture 仍默认注册为 admin，本例注册后通过管理员公开 API 同步为既有 user 角色并重新登录，验证默认反馈入口与普通角色边界，不宣称验证该 fixture 的默认注册角色；浏览器仍待最终运行。
 - Node 依据 2026-10-21 官方安全补丁收口为 `^22.23.4 || ^24.22.1 || ^26.12.1`，42 份实际/模板 engines、5 处 CI 和三语说明已同步；Docker 已是 24.22.1。用户目录独立运行时经官方 ZIP SHA256 与实际 node.exe 校验，Node 24.22.1/pnpm 12.11.2 下 frozen install exit 0。系统 `Program Files` 的 24.18.0 未替换，当前进程没有管理员权限，不把独立工具链安装称为系统级升级。
 - `merged-prerequisite-build-status.json`：在 Node 24.22.1 下 23 项公开依赖强制 fresh build 全部通过、无缓存；随后 API inventory 重生成 exit 0。源码冻结后先重跑失败的实际全栈专项，再开启合并后的完整根门禁与全部 11 类生成工程。
 - 原目录 327 路径、原 index、HEAD/分支及二进制差异已完整备份到 `tmp/feedback-integration-safety/2026-10-24T01-55-47-503Z`，文件 SHA256 全程稳定。原目录存储启动测试已确认属于 main 叠加 feedback 依赖 mock，没有剩余不明来源源码；物理切换前仍须逐项比较最新内容，不删除其他任务成果。
+
+## 合并后定向收集与导出竞态修复
+
+- 集成提交 I2=`a66a45e30f8e9a0491325ffddc05ffa03697119a`，保留两个真实 parent；Husky 正常完成，260 路径经过 staged/提交清单核对。方案新增 §13 的 Git blob 在此提交固定为 S2，B/H 仍未建立。
+- `scaffold-merged-feedback-targeted-01-status.json` exit 1；安装、类型、lint、构建和单元通过，浏览器 10/11。严格 (12,12) 像素已是 `[17,17,17,255]`，反馈、较大附件、处理与撤销均已到达；本次失败发生于实际 ZIP 下载。
+- trace 显示列表响应后仍追加证据，模板却向导出传列表缓存的 evidenceRevision；页面提示材料不存在，只有导出 POST、没有 getExport GET。传输体保持加密，未将未解密 body 冒充原始错误；结合控制流及服务端旧修订分支核对根因。仅将默认导出改为 `{ id }`，由事务固定当前快照；显式历史修订语义保留，共享 skill 同步，超时、像素及包内字节断言未改。
+- `admin-merged-01-status.json` exit 1，原六场景均通过，新增普通用户场景在角色断言处得到实际 `[admin]`；生产配置仍为默认 user，是既有通用 E2E fixture 的覆盖。通过公开管理员 API 分配既有 user 角色后重新登录，保留全部权限及窄屏断言，不改生产角色或既有套件默认值。
+- 两条完整定向结果及清理结束后集中应用上述修复。继续先验证原失败，全部通过后再开启根门禁及默认 11 类脚手架；截图与日志留 ignored tmp/test-results。
+
+## 大文本附件与真实弹窗截图收敛
+
+- `scaffold-merged-feedback-targeted-02-status.json` exit 1；实际 ZIP 已下载且公开读取器完整性校验通过，遮挡 PNG 与预览字节一致；后续较大文本的完整字节断言发现附件只保留 8192 字节。原失败日志和 ZIP 保留，未用下载事件冒充材料完整验收。
+- 根因为 plain text 附件复用了结构化证据字段的 8 KiB 截断策略；单附件已具有读取前 5 MiB 限制。将纯文本改为在既有附件上限内全文脱敏，保留 JSON/结构化证据的字段、数量和深度限制；在线上传及冻结草稿后的本地包追加必须使用同一规则。
+- 公共客户端有效 Red：`client-large-text-red-status.json` exit 1，24 项为 20 通过、4 因 8192 截断失败；旧回归及新增超限拒绝保持通过。目标包括较大日志全文、尾端凭据脱敏、离线追加及精确 5 MiB/超限边界，避免只验证短文本前缀。
+- `ui-screenshot-review-merged-01/index.md` 实际目检 28 张，管理台已通过六场景无新增实质问题；fullstack 的反馈弹窗受顶栏 backdrop 包含块影响，顶部离屏且被背景表头覆盖。局部图片不作为清晰视觉验收通过。修复范围限定共享 FeedbackModal，复用既有 portal 到 body；通用 Modal 行为和公开参数保持原契约，同时补实际视口边界/遮盖及窄屏截图验证。
+- UI 有效 Red 为 `modal-portal-red-status.json`：15 项中原 14 通过，新顶栏包含块用例失败。仅共享 FeedbackModal 使用既有 portal 后，反馈与通用 Modal 键盘回归 17/17 通过，卸载节点清理也已校验。
+- `fixes-targeted-status.json` 全部 exit 0：客户端/服务端隐私 27 项、feedback/UI 类型检查、变更文件 lint、skills；补充脱敏后膨胀超限的两入口边界，未编造该既有 guard 的 Red。纯文本源码、三语 README、共享 skill 同步，未新增公共 API 或配置。源码冻结后先实际重跑全栈专项和管理台七场景，再扩大门禁。

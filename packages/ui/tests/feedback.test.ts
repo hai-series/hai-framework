@@ -50,6 +50,32 @@ const report: FeedbackReportView = {
 }
 
 describe('feedback collection', () => {
+  it('反馈弹窗脱离粘性模糊顶栏，并在卸载时清理body挂载节点', async () => {
+    const header = document.createElement('header')
+    header.style.cssText = 'position: sticky; top: 0; backdrop-filter: blur(8px)'
+    const target = document.createElement('div')
+    header.append(target)
+    document.body.append(header)
+    const component = mount(FeedbackModal, { target, props: { 'open': true, 'data-testid': 'feedback-in-sticky-header' } })
+    let portalRoot: HTMLElement | null = null
+    try {
+      flushSync()
+      const host = document.body.querySelector<HTMLElement>('[data-testid="feedback-in-sticky-header"]')!
+      const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!
+      expect(dialog).not.toBeNull()
+      // JSDOM 不计算布局；验证弹窗已脱离创建 fixed 包含块的顶栏，实际边界由浏览器验收。
+      expect(header.contains(dialog)).toBe(false)
+      portalRoot = host.parentElement
+      expect(portalRoot?.parentElement).toBe(document.body)
+    }
+    finally {
+      await unmount(component)
+      header.remove()
+    }
+    expect(document.body.querySelector('[data-testid="feedback-in-sticky-header"]')).toBeNull()
+    expect(portalRoot?.isConnected).toBe(false)
+  })
+
   it.each([['初始', false], ['响应式更新后', true]] as const)('公开data属性在%s仅挂载于Modal宿主，不重复落在Form', async (_phase, update) => {
     const target = document.createElement('div')
     document.body.append(target)
@@ -65,12 +91,12 @@ describe('feedback collection', () => {
         attributes.set('tracking', 'feedback-updated')
         flushSync()
       }
-      const host = target.querySelector<HTMLElement>('.hai-modal')!
-      const form = target.querySelector<HTMLFormElement>('.feedback-form')!
+      const host = document.body.querySelector<HTMLElement>('[data-testid="public-feedback-entry"].hai-modal')!
+      const form = host.querySelector<HTMLFormElement>('.feedback-form')!
       expect(host.getAttribute('data-tracking')).toBe(update ? 'feedback-updated' : 'feedback-initial')
       expect(host.getAttribute('data-testid')).toBe('public-feedback-entry')
-      expect([...target.querySelectorAll('[data-tracking]')]).toEqual([host])
-      expect([...target.querySelectorAll('[data-testid="public-feedback-entry"]')]).toEqual([host])
+      expect([...document.body.querySelectorAll('[data-tracking]')]).toEqual([host])
+      expect([...document.body.querySelectorAll('[data-testid="public-feedback-entry"]')]).toEqual([host])
       expect(form.hasAttribute('data-tracking')).toBe(false)
       expect(form.hasAttribute('data-testid')).toBe(false)
       expect(form.getAttribute('data-feedback-ignore')).toBe('true')
@@ -88,7 +114,7 @@ describe('feedback collection', () => {
     const component = mount(FeedbackModal, { target, props: { open: true, onsubmit } })
     try {
       flushSync()
-      const submit = [...target.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('提交反馈'))!
+      const submit = [...document.body.querySelectorAll<HTMLButtonElement>('.feedback-form button')].find(button => button.textContent?.includes('提交反馈'))!
       submit.click()
       await vi.waitFor(() => expect(onsubmit).toHaveBeenCalledOnce())
       expect(onsubmit.mock.calls[0]?.[0]).toMatchObject({ description: '' })
@@ -106,18 +132,19 @@ describe('feedback collection', () => {
     const component = mount(FeedbackModal, { target, props: { open: true, onsubmit } })
     try {
       flushSync()
-      button(target, '提交反馈').click()
-      await vi.waitFor(() => expect(target.textContent).toContain('已受理：FB-321'))
-      expect(target.textContent).toContain('材料收集中')
-      expect(target.querySelector('textarea')).toBeNull()
+      const form = document.body.querySelector<HTMLElement>('.feedback-form')!
+      button(form, '提交反馈').click()
+      await vi.waitFor(() => expect(form.textContent).toContain('已受理：FB-321'))
+      expect(form.textContent).toContain('材料收集中')
+      expect(form.querySelector('textarea')).toBeNull()
       setUILocale('en-US')
       flushSync()
-      expect(target.textContent).toContain('Accepted: FB-321')
-      expect(target.textContent).toContain('Collecting materials')
+      expect(form.textContent).toContain('Accepted: FB-321')
+      expect(form.textContent).toContain('Collecting materials')
       setUILocale('ja-JP')
       flushSync()
-      expect(target.textContent).toContain('受理しました：FB-321')
-      expect(target.textContent).toContain('資料を収集中')
+      expect(form.textContent).toContain('受理しました：FB-321')
+      expect(form.textContent).toContain('資料を収集中')
     }
     finally {
       await unmount(component)

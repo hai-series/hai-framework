@@ -1,9 +1,11 @@
 import type { FeedbackReport } from '@h-ai/api-contract/feedback'
 // @vitest-environment jsdom
 import type { FeedbackClientActions } from '../src/client/index.js'
+import { Buffer } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFeedbackBundle } from '../src/bundle/index.js'
 import { sanitizeFeedbackReplay } from '../src/client/feedback-client-sanitize.js'
 import { createFeedbackClient } from '../src/client/index.js'
 
@@ -26,6 +28,13 @@ async function setup(overrides: Partial<Parameters<ReturnType<typeof createFeedb
   const transport = actions()
   expect((await client.init({ appId: 'orders', actions: transport, screenshot: false, ...overrides })).success).toBe(true)
   return { client, transport }
+}
+
+function plainTextFile(text: string, name = 'diagnostic.log'): File {
+  const file = new File([text], name, { type: 'text/plain' })
+  // jsdom 未实现 Blob.text；补齐浏览器标准接口，实际 File.size 仍由构造内容决定。
+  Object.defineProperty(file, 'text', { value: vi.fn(async () => text) })
+  return file
 }
 
 afterEach(async () => {
@@ -76,6 +85,110 @@ describe('feedback browser collection', () => {
     expect(serialized).not.toContain('"private"')
     expect(serialized).not.toContain('"secret"')
     expect(serialized).toContain('dark')
+  })
+
+  it('大于8KiB的安全纯文本附件保留全文，提交上传不复用证据字段截断', async () => {
+    const { client, transport } = await setup({ afterCount: 0 })
+    expect((await client.prepare()).success).toBe(true)
+    const text = `${'diagnostic log line completed\n'.repeat(75_000)}safe-log-tail`
+    const original = new TextEncoder().encode(text)
+    expect(original.byteLength).toBeGreaterThan(2 * 1024 * 1024)
+    expect((await client.addFiles([plainTextFile(text)])).success).toBe(true)
+    const draft = client.getDraft()!
+    expect(draft.attachments).toHaveLength(1)
+    expect(draft.attachments[0]!.bytes.byteLength).toBe(original.byteLength)
+    expect(new TextDecoder().decode(draft.attachments[0]!.bytes) === text).toBe(true)
+    expect(draft.missing.some(reason => reason.startsWith('attachment-text-truncated:'))).toBe(false)
+    expect((await client.submit()).success).toBe(true)
+    expect((await client.flush()).success).toBe(true)
+    const uploaded = vi.mocked(transport.upload).mock.calls[0]![0]
+    expect(Buffer.from(uploaded.dataBase64, 'base64').toString('utf8') === text).toBe(true)
+  })
+
+  it('纯文本附件末尾超过8KiB位置的凭据仍脱敏，安全尾部保留', async () => {
+    const { client } = await setup()
+    expect((await client.prepare()).success).toBe(true)
+    const prefix = 'safe diagnostic entry\n'.repeat(2000)
+    const text = `${prefix}{"password":"tail-password-sentinel"}\ntoken=tail-token-sentinel\nAuthorization: Basic dGFpbC1iYXNpYy1zZW50aW5lbA==\nhttps://example.test/check?token=tail-url-sentinel&visible=keep\nsafe-final-line`
+    expect((await client.addFiles([plainTextFile(text)])).success).toBe(true)
+    const sanitized = new TextDecoder().decode(client.getDraft()!.attachments[0]!.bytes)
+    expect(sanitized.length).toBeGreaterThan(8192)
+    expect(sanitized.startsWith(prefix)).toBe(true)
+    expect(sanitized.endsWith('safe-final-line')).toBe(true)
+    expect(sanitized).toContain('[REDACTED]')
+    expect(sanitized).not.toContain('tail-password-sentinel')
+    expect(sanitized).not.toContain('tail-token-sentinel')
+    expect(sanitized).not.toContain('dGFpbC1iYXNpYy1zZW50aW5lbA==')
+    expect(sanitized).not.toContain('tail-url-sentinel')
+  })
+
+  it('首次提交冻结后，本地导出新增纯文本也保留安全全文和末尾脱敏', async () => {
+    const transport = actions()
+    vi.mocked(transport.submit).mockRejectedValueOnce(new Error('Response lost'))
+    const { client } = await setup({ actions: transport })
+    expect((await client.submit()).success).toBe(false)
+    const prefix = 'offline diagnostic line\n'.repeat(2000)
+    const text = `${prefix}session=offline-session-sentinel\nsafe-offline-tail`
+    const exported = await client.exportDraft({ files: [plainTextFile(text, 'offline.log')] })
+    expect(exported.success).toBe(true)
+    if (!exported.success)
+      return
+    const bundle = await readFeedbackBundle(exported.data)
+    expect(bundle.success).toBe(true)
+    if (!bundle.success)
+      return
+    const entry = bundle.data.manifest.files.find(file => file.kind === 'attachment' && file.name === 'offline.log')
+    expect(entry).toBeDefined()
+    if (!entry)
+      return
+    const sanitized = new TextDecoder().decode(bundle.data.files[entry.path])
+    expect(sanitized.length).toBeGreaterThan(8192)
+    expect(sanitized.startsWith(prefix)).toBe(true)
+    expect(sanitized.endsWith('safe-offline-tail')).toBe(true)
+    expect(sanitized).not.toContain('offline-session-sentinel')
+    expect(client.getDraft()!.attachments).toHaveLength(0)
+  })
+
+  it.each([5 * 1024 * 1024, 5 * 1024 * 1024 + 1])('纯文本附件按原始文件字节数保持5MiB边界：%i', async (size) => {
+    const { client, transport } = await setup()
+    expect((await client.prepare()).success).toBe(true)
+    const file = plainTextFile('x'.repeat(size), 'boundary.log')
+    expect(file.size).toBe(size)
+    const added = await client.addFiles([file])
+    if (size <= 5 * 1024 * 1024) {
+      expect(added.success).toBe(true)
+      expect(client.getDraft()!.attachments[0]!.bytes.byteLength).toBe(size)
+    }
+    else {
+      expect(added.success).toBe(false)
+      if (!added.success)
+        expect(added.error.code).toBe('hai:feedback:024')
+      expect(client.getDraft()!.attachments).toHaveLength(0)
+      expect(file.text).not.toHaveBeenCalled()
+    }
+    expect(transport.upload).not.toHaveBeenCalled()
+  })
+
+  it.each(['addFiles', 'frozen-export'] as const)('原文未超限但脱敏结果超过5MiB时拒绝，不能产生非法附件或上传：%s', async (mode) => {
+    const { client, transport } = await setup()
+    expect((await client.prepare()).success).toBe(true)
+    if (mode === 'frozen-export') {
+      vi.mocked(transport.submit).mockRejectedValueOnce(new Error('Response lost'))
+      expect((await client.submit()).success).toBe(false)
+    }
+    const credentials = 'token=x\n'.repeat(1000)
+    const text = `${'s'.repeat(5 * 1024 * 1024 - credentials.length - 1)}\n${credentials}`
+    const file = plainTextFile(text, 'redaction-expansion.log')
+    expect(file.size).toBe(5 * 1024 * 1024)
+    const added = mode === 'addFiles'
+      ? await client.addFiles([file])
+      : await client.exportDraft({ files: [file] })
+    expect(file.text).toHaveBeenCalledOnce()
+    expect(added.success).toBe(false)
+    if (!added.success)
+      expect(added.error.code).toBe('hai:feedback:024')
+    expect(client.getDraft()!.attachments).toHaveLength(0)
+    expect(transport.upload).not.toHaveBeenCalled()
   })
 
   it('受理失败保留现场和稳定提交标识，重试不生成第二份问题', async () => {

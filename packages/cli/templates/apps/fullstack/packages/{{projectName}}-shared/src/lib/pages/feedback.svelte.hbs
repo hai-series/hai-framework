@@ -88,7 +88,7 @@
     await load()
   }
   async function exportBundle(report: FeedbackReportView) {
-    const started = await managementApi.feedback.reports.export({ id: report.id, evidenceRevision: report.evidenceRevision })
+    const started = await managementApi.feedback.reports.export({ id: report.id })
     if (!started.success)
       throw new Error(started.error.message)
     for (let attempt = 0; attempt < 40; attempt++) {

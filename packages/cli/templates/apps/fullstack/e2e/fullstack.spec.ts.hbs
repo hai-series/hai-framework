@@ -539,6 +539,33 @@ test('feedback submits an empty description and administrator can process and re
   expect(feedbackLog.byteLength).toBeLessThan(5 * 1024 * 1024)
   await page.getByTestId('feedback-open').click()
   const dialog = page.getByRole('dialog')
+  const desktopViewport = page.viewportSize()
+  if (!desktopViewport)
+    throw new Error('Feedback browser viewport is missing')
+  async function expectUncovered(target: typeof dialog) {
+    await expect.poll(() => target.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return [0.1, 0.5, 0.9].every(x => [0.1, 0.5, 0.9].every((y) => {
+        const top = document.elementFromPoint(rect.left + rect.width * x, rect.top + rect.height * y)
+        return top !== null && (top === element || element.contains(top))
+      }))
+    }), { message: 'Feedback content must not be covered by the background header or table' }).toBe(true)
+  }
+  async function expectDialogViewport() {
+    await expect.poll(() => dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight
+    }), { message: 'The entire feedback dialog must stay inside the viewport' }).toBe(true)
+    await expectUncovered(dialog.getByRole('heading').first())
+    await expectUncovered(dialog.getByRole('button', { name: /关闭|Close|閉じる/ }).first())
+  }
+  await expectDialogViewport()
+  await capture(page, 'feedback-collect-desktop.png', testInfo.outputPath('feedback-collect-desktop.png'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expectDialogViewport()
+  await capture(page, 'feedback-collect-mobile.png', testInfo.outputPath('feedback-collect-mobile.png'))
+  await page.setViewportSize(desktopViewport)
+  await expectDialogViewport()
   await dialog.locator('summary').filter({ hasText: /更多选项|More options|その他のオプション/ }).click()
   await dialog.locator('input[type=file]').setInputFiles([
     { name: 'attached-preview.png', mimeType: 'image/png', buffer: feedbackImage },
@@ -548,6 +575,8 @@ test('feedback submits an empty description and administrator can process and re
   const uploaded = dialog.locator('img[alt="attached-preview.png"]')
   await expect(uploaded).toBeVisible()
   await uploaded.scrollIntoViewIfNeeded()
+  await expectDialogViewport()
+  await expectUncovered(uploaded)
   await capture(page, 'feedback-image-before-mask.png', testInfo.outputPath('feedback-image-before-mask.png'))
   await uploaded.screenshot({ path: testInfo.outputPath('feedback-image-before-mask-detail.png'), animations: 'disabled' })
   const originalPreview = await uploaded.getAttribute('src')
@@ -571,6 +600,8 @@ test('feedback submits an empty description and administrator can process and re
   await dialog.getByRole('button', { name: /^(删除|Remove|削除) discarded.txt$/ }).click()
   await expect(dialog.getByText('discarded.txt', { exact: true })).toHaveCount(0)
   await uploaded.scrollIntoViewIfNeeded()
+  await expectDialogViewport()
+  await expectUncovered(uploaded)
   await capture(page, 'feedback-preview.png', testInfo.outputPath('feedback-preview.png'))
   await uploaded.screenshot({ path: testInfo.outputPath('feedback-image-after-mask-detail.png'), animations: 'disabled' })
   await dialog.getByRole('button', { name: /提交反馈|Submit Feedback|フィードバックを送信/ }).click()
@@ -579,6 +610,7 @@ test('feedback submits an empty description and administrator can process and re
   expect(number).toBeTruthy()
   if (!number)
     throw new Error('Feedback receipt number is missing')
+  await expectDialogViewport()
   await capture(page, 'feedback-accepted.png', testInfo.outputPath('feedback-accepted.png'))
   await dialog.getByRole('button', { name: /关闭|Close|閉じる/ }).filter({ hasText: /关闭|Close|閉じる/ }).click()
   await page.getByTestId('nav-feedback').click()

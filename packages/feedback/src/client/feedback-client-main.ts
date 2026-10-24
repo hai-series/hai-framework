@@ -6,7 +6,7 @@ import { core, err, ok } from '@h-ai/core'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
 import { annotateFeedbackImage, captureFeedbackScreenshot } from './feedback-client-image.js'
-import { collectFeedbackCookies, feedbackPageUrl, sanitizeFeedbackData, sanitizeFeedbackReplay } from './feedback-client-sanitize.js'
+import { collectFeedbackCookies, feedbackPageUrl, sanitizeFeedbackData, sanitizeFeedbackReplay, sanitizeFeedbackText } from './feedback-client-sanitize.js'
 import { deleteFeedbackDraft, restoreFeedbackCheckpoint, restoreFeedbackDraft, saveFeedbackCheckpoint, saveFeedbackDraft } from './feedback-client-store.js'
 
 /**
@@ -516,15 +516,17 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         let bytes: Uint8Array
         if (file.type.startsWith('text/') || file.type === 'application/json') {
           const raw = await file.text()
-          if (raw.length > 8192)
+          if (file.type === 'application/json' && raw.length > 8192)
             draft.missing.push(`attachment-text-truncated:${String(sanitizeFeedbackData({ text: file.name }).text).slice(0, 100)}`)
           bytes = file.type === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(raw))))
-            : new TextEncoder().encode(String(sanitizeFeedbackData({ text: raw }).text))
+            : new TextEncoder().encode(sanitizeFeedbackText(raw))
         }
         else {
           bytes = new Uint8Array(await file.arrayBuffer())
         }
+        if (bytes.byteLength > 5 * 1024 * 1024)
+          return failure('LIMIT_EXCEEDED')
         const item = await attachment(file.name, file.type, bytes)
         if (!draft.attachments.some(existing => existing.name === item.name && existing.checksum === item.checksum))
           draft.attachments.push(item)
@@ -558,7 +560,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
             return failure('INVALID_INPUT')
           const bytes = file.type === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(await file.text()))))
-            : file.type.startsWith('text/') ? new TextEncoder().encode(String(sanitizeFeedbackData({ text: await file.text() }).text)) : new Uint8Array(await file.arrayBuffer())
+            : file.type.startsWith('text/') ? new TextEncoder().encode(sanitizeFeedbackText(await file.text())) : new Uint8Array(await file.arrayBuffer())
+          if (bytes.byteLength > 5 * 1024 * 1024)
+            return failure('LIMIT_EXCEEDED')
           const item = await attachment(file.name, file.type, bytes)
           if (!attachments.some(existing => existing.name === item.name && existing.checksum === item.checksum))
             attachments.push(item)

@@ -51,6 +51,8 @@ return submitted
 
 ブラウザーとサーバーは共通のテキスト秘匿処理を使い、一般的な認証キー、JSON・エスケープされた JSON、Bearer/Basic の値を隠します。保存資料、API、オフライン ZIP でも同じ結果を維持します。業務固有の機密情報はホスト側の許可リストと機密 DOM マーカーで指定してください。
 
+`text/plain` 添付は 5 MiB のファイル上限内で全文を秘匿処理し、安全な本文と末尾のログを保持します。構造化証拠のフィールド切り捨ては適用しません。上限を超える元ファイルは読取前に拒否し、秘匿処理後も同じ添付バイト上限を適用します。JSON 添付と構造化証拠には文字列長・深さ・件数の上限が残り、切り捨てられる場合があります。完全なログにはプレーンテキスト添付を使用してください。送信前の添付と、初回送信内容の固定後にローカル出力へ追加したファイルに同じ規則を適用します。
+
 クライアントの全操作は `init(config)`、`prepare/submit/flush/record/getDraft/annotate/addFiles/exportDraft(input?)/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
 
 `annotate(id, annotation)` の座標単位は、ブラウザーでデコードした元画像のピクセルです。UI の `FeedbackAnnotation.rect` は 0–1 の比率なので、`Image.decode()` 後に x/width を `naturalWidth`、y/height を `naturalHeight` と掛け合わせて SDK に渡します。CSS の表示サイズではなく元画像の寸法を使うことで、JPEG の向きを SDK のデコードと一致させます。オブジェクト URL は作成元が置換時または破棄時に解放します。

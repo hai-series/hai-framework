@@ -15,7 +15,7 @@
 <script lang='ts'>
   import type { ComponentProps } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { getDataAttributes } from '../../../utils.js'
+  import { getDataAttributes, portal } from '../../../utils.js'
   import Modal from '../../compounds/Modal.svelte'
   import FeedbackForm from './FeedbackForm.svelte'
 
@@ -24,12 +24,15 @@
   const formProps = $derived(Object.fromEntries(Object.entries(restProps).filter(([key]) => !key.startsWith('data-'))) as ComponentProps<typeof FeedbackForm>)
 </script>
 
-<Modal {...dataAttributes} bind:open title={formProps.labels?.title ?? uiM('feedback_title')} size='lg' data-feedback-ui='true' data-feedback-ignore='true'>
-  <FeedbackForm {...formProps} oncancel={() => {
-    open = false
-    formProps.oncancel?.()
-  }} oncomplete={() => {
-    open = false
-    formProps.oncomplete?.()
-  }} />
-</Modal>
+<!-- 脱离顶栏的 fixed 包含块与层叠上下文；包装层不参与布局，卸载由 portal 清理。 -->
+<div use:portal class='contents'>
+  <Modal {...dataAttributes} bind:open title={formProps.labels?.title ?? uiM('feedback_title')} size='lg' data-feedback-ui='true' data-feedback-ignore='true'>
+    <FeedbackForm {...formProps} oncancel={() => {
+      open = false
+      formProps.oncancel?.()
+    }} oncomplete={() => {
+      open = false
+      formProps.oncomplete?.()
+    }} />
+  </Modal>
+</div>
