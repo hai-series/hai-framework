@@ -23,6 +23,7 @@ const ApiClientErrorInfo = {
   NOT_FOUND: '006:404',
   VALIDATION_FAILED: '007:400',
   TOKEN_REFRESH_FAILED: '008:401',
+  PAYLOAD_TOO_LARGE: '020:413',
   NOT_INITIALIZED: '010:500',
   CONFIG_ERROR: '011:500',
   UNKNOWN: '099:500',
@@ -274,6 +275,8 @@ export interface ApiClientConfig {
  * ```
  */
 export interface ApiClientTransportConfig {
+  /** 可选本地明文 UTF-8 字节上限；缺省自动跟随服务端，指定时取较小值。 */
+  readonly maxPlaintextBytes?: number
   /**
    * crypto 服务实例（通常直接传入 `@h-ai/crypto` 的 `crypto`）。
    * api-client 通过 `crypto.transport.createClient(...)` 创建会话。

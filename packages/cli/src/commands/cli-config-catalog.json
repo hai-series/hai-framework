@@ -3072,6 +3072,14 @@
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {
+    "name": "HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES",
+    "module": "kit",
+    "path": "kit.transport.maxPlaintextBytes",
+    "description": "双向业务明文 UTF-8 字节上限；默认 1 MiB，密文与代理预算自动推导",
+    "value": "1048576",
+    "constraint": "整数；>= 1024；<= 67108864"
+  },
+  {
     "name": "HAI_MODEL_API_KEY",
     "module": "model",
     "path": "HAI_MODEL_API_KEY",
@@ -4470,6 +4478,14 @@
     "description": "客户端与服务端约定的密钥交换端点",
     "value": "/_hai/key-exchange",
     "constraint": "字符串；以 / 开头的路径字符串"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES",
+    "module": "serv",
+    "path": "serv.transport.maxPlaintextBytes",
+    "description": "双向业务明文 UTF-8 字节上限；默认 1 MiB，密文与代理预算自动推导",
+    "value": "1048576",
+    "constraint": "整数；>= 1024；<= 67108864"
   },
   {
     "name": "HAI_STORAGE",

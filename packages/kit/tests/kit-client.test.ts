@@ -65,11 +65,11 @@ function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
   return new Request(new URL(input.toString(), 'http://localhost'), init)
 }
 
-function createTransportFetch(options: { encryptedResponseBody?: string } = {}) {
+function createTransportFetch(options: { encryptedResponseBody?: string, maxPlaintextBytes?: number } = {}) {
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)
     throw new Error(key.error.message)
-  const manager = expectManager(crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } } }))
+  const manager = expectManager(crypto.transport.createServer({ keyStore: createInMemoryKeyStore(), serverKeyRing: { activeKeyId: 'test-v1', keys: { 'test-v1': key.data } }, maxPlaintextBytes: options.maxPlaintextBytes }))
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = toRequest(input, init)
     const url = new URL(request.url)
@@ -77,7 +77,7 @@ function createTransportFetch(options: { encryptedResponseBody?: string } = {}) 
     if (url.pathname === KEY_EXCHANGE_URL || url.pathname === '/my/exchange') {
       const body = await request.json() as { clientPublicKey: string }
       const clientId = await manager.registerClientKey(body.clientPublicKey)
-      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), serverKeyId: manager.getServerKeyId(), clientId }), {
+      return new Response(JSON.stringify({ serverPublicKey: manager.getServerPublicKey(), serverKeyId: manager.getServerKeyId(), clientId, maxPlaintextBytes: manager.bodyLimits.plaintextBytes }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -381,6 +381,15 @@ describe('createKitClient - auth', () => {
 })
 
 describe('installBrowserTransportFetch', () => {
+  it('公开浏览器安装器跟随运行时握手容量，不被构建时的旧容量限制', async () => {
+    const payload = JSON.stringify({ text: '合法内容'.repeat(90_000) })
+    fetchSpy = createTransportFetch({ encryptedResponseBody: payload, maxPlaintextBytes: 2 * 1024 * 1024 })
+    stubBrowserFetch(fetchSpy)
+    kit.client.installBrowserTransport({ server: { host: '127.0.0.1', port: 3000 }, transport: { keyExchangePath: KEY_EXCHANGE_URL, excludePaths: [], maxPlaintextBytes: 1024 } }, { crypto })
+    const response = await fetch('http://localhost/api/data')
+    expect(await response.text()).toBe(payload)
+  })
+
   it('自动保护 SvelteKit __data.json 请求', async () => {
     const originalPayload = JSON.stringify({ type: 'data', nodes: [] })
     fetchSpy = createTransportFetch({ encryptedResponseBody: originalPayload })

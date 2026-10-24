@@ -392,6 +392,8 @@ export interface HandleA2AConfig {
  * ```
  */
 export interface TransportEncryptionOptions {
+  /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
+  maxPlaintextBytes?: number
   /** 受管服务端版本化密钥环，不进入公开 YAML/客户端配置。 */
   serverKeyRing: TransportServerKeyRing
   /** 密钥交换端点路径（默认 `'/api/_hai/key-exchange'`） */

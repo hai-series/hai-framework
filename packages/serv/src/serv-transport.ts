@@ -19,7 +19,7 @@
 import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
-import { authenticateTransportRequest, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
@@ -44,6 +44,8 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
  */
 export interface ServTransportConfig {
   /** 受管服务端密钥环，仅运行时从私有 Secret 注入。 */
+  /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
+  readonly maxPlaintextBytes?: number
   readonly serverKeyRing: TransportServerKeyRing
   /**
    * crypto 服务实例。serv 通过 `crypto.transport.createServer()` 创建
@@ -115,6 +117,8 @@ export function createTransportMiddleware(
         replaceRequestBody(c, verified.data.plaintext)
     }
     catch (error) {
+      if (error instanceof TransportBodyTooLargeError)
+        return createTransportErrorResponse(error)
       return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
     }
 
@@ -143,11 +147,16 @@ export function createTransportMiddleware(
       bodyText = bodyless
         ? ''
         : await readTransportBody(response.body, {
-            maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+            maxBytes: manager.bodyLimits.plaintextBytes,
+            direction: 'response',
             signal: c.req.raw.signal,
           })
     }
     catch (cause) {
+      if (cause instanceof TransportBodyTooLargeError) {
+        c.res = await createTransportErrorResponse(cause, { manager, context: requestContext })
+        return
+      }
       logger.warn('Failed to read response body for encryption', { error: cause })
       c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
@@ -203,7 +212,7 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     if (new TextEncoder().encode(serverPublicKey).byteLength > TRANSPORT_BODY_LIMITS.publicKeyBytes)
       return jsonError(servM('serv_transportKeyExchangeFailed'), 500)
     const clientId = await manager.registerClientKey(body.clientPublicKey)
-    return new Response(JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId }), {
+    return new Response(JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId, maxPlaintextBytes: manager.bodyLimits.plaintextBytes }), {
       status: 200,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     })

@@ -80,5 +80,6 @@
   "deploy_commandTreeActive": "メインコマンド終了後も子プロセスが動作しています",
   "deploy_commandExecutionFailed": "コマンドの実行に失敗しました",
   "deploy_remoteUnknown": "リモートの実行状態は不明です。ローカル SSH の終了はリモートデプロイの停止を意味しません。サーバーの結果と実際のコンテナーを確認してください。",
-  "deploy_remoteFinished": "対応するサーバーの結果により、デプロイスクリプトと復旧処理の終了を確認しました：段階 {stage}、終了コード {code}。実際のサービスの稼働状態を確認してください。"
+  "deploy_remoteFinished": "対応するサーバーの結果により、デプロイスクリプトと復旧処理の終了を確認しました：段階 {stage}、終了コード {code}。実際のサービスの稼働状態を確認してください。",
+  "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes は 1024 から 67108864 バイトの整数で指定してください"
 }

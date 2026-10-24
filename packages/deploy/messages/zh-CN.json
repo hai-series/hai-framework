@@ -80,5 +80,6 @@
   "deploy_commandTreeActive": "主命令退出后仍有活跃的子进程",
   "deploy_commandExecutionFailed": "命令执行失败",
   "deploy_remoteUnknown": "远端执行状态未知；本地 SSH 结束不证明远端部署已停止，请核对服务器结果与实际容器状态。",
-  "deploy_remoteFinished": "匹配的服务器结果确认部署脚本及恢复已结束：阶段 {stage}，退出码 {code}。请核对实际服务健康状态。"
+  "deploy_remoteFinished": "匹配的服务器结果确认部署脚本及恢复已结束：阶段 {stage}，退出码 {code}。请核对实际服务健康状态。",
+  "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes 无效：必须是 1024 到 67108864 字节之间的整数"
 }

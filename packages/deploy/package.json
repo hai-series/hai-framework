@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
+    "@h-ai/crypto": "workspace:*",
     "yaml": "catalog:",
     "zod": "catalog:"
   },

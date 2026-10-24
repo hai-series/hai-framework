@@ -8,7 +8,7 @@
 import type { TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
-import { authenticateTransportRequest, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
@@ -39,6 +39,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
   const result = config.crypto.transport.createServer({
     serverKeyRing: config.serverKeyRing,
     keyStore: config.keyStore,
+    maxPlaintextBytes: config.maxPlaintextBytes,
   })
   if (!result.success) {
     // 安全策略：transport 已启用但服务端管理器不可用时，受保护路由必须 fail-closed，禁止明文透传。
@@ -83,6 +84,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
         replaceRequestBody(event, verified.data.plaintext)
     }
     catch (error) {
+      if (error instanceof TransportBodyTooLargeError)
+        return createTransportErrorResponse(error)
       return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
     }
 
@@ -105,7 +108,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
       const responseBody = bodyless
         ? ''
         : await readTransportBody(response.body, {
-            maxBytes: TRANSPORT_BODY_LIMITS.plaintextBytes,
+            maxBytes: manager.bodyLimits.plaintextBytes,
+            direction: 'response',
             signal: event.request.signal,
           })
       const headers = new Headers(response.headers)
@@ -127,7 +131,9 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
         headers,
       })
     }
-    catch {
+    catch (error) {
+      if (error instanceof TransportBodyTooLargeError)
+        return createTransportErrorResponse(error, { manager, context: requestContext })
       return jsonError(kitM('kit_transportEncryptFailed'), 500)
     }
   }
@@ -210,7 +216,7 @@ async function handleKeyExchange(
     const clientId = await manager.registerClientKey(body.clientPublicKey)
 
     return new Response(
-      JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId }),
+      JSON.stringify({ serverKeyId: manager.getServerKeyId(), serverPublicKey, clientId, maxPlaintextBytes: manager.bodyLimits.plaintextBytes }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     )
   }

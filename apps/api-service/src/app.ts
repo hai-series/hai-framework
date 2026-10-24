@@ -50,6 +50,7 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
       serverKeyRing: ring.data,
       keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
       keyExchangePath: servConfig.transport.keyExchangePath,
+      maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
       excludePaths: [...servConfig.transport.excludePaths],
     }
   }

@@ -7,6 +7,7 @@
  */
 
 import process from 'node:process'
+import { TRANSPORT_BODY_LIMITS, TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
 import { z } from 'zod'
 import { isTrustedProxyEntry } from './serv-client-ip.js'
 
@@ -131,6 +132,8 @@ export interface ServRpcHttpConfig {
  * ```
  */
 export interface ServTransportRuntimeConfig {
+  /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
+  readonly maxPlaintextBytes?: number
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }
@@ -222,6 +225,7 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  * ```
  */
 export type ServTransportRuntimeConfigInput = Partial<{
+  readonly maxPlaintextBytes: number
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }>
@@ -302,6 +306,7 @@ const RpcHttpConfigInputSchema = z.union([
 const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
+    maxPlaintextBytes: z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max).optional().describe('双向业务明文 UTF-8 字节上限；默认 1 MiB，密文与代理预算自动推导').meta({ default: TRANSPORT_BODY_LIMITS.plaintextBytes }),
     keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
   }),

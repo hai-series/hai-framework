@@ -27,6 +27,7 @@ const CryptoErrorInfo = {
   HASH_FAILED: '040:500',
   HMAC_FAILED: '041:500',
   INVALID_IV: '060:400',
+  TRANSPORT_PAYLOAD_TOO_LARGE: '070:413',
 } as const satisfies ErrorInfo
 
 /**
@@ -981,6 +982,7 @@ export interface TransportOperations {
    * @param options - 实际调用输入，按该方法约束验证。
    * @param options.keyExchangeUrl - 密钥协商端点完整 URL。
    * @param options.fetch - 实际发送 HTTP 请求的 fetch，默认 `globalThis.fetch`。
+   * @param options.maxPlaintextBytes - 可选本地明文 UTF-8 字节上限，默认跟随服务端。
    * @returns 直接返回值，使用前先初始化模块。
    *
    * @example
@@ -1001,7 +1003,7 @@ export interface TransportOperations {
    * finally { await crypto.close() }
    * ```
    */
-  createClient: (options: { keyExchangeUrl: string, fetch?: typeof fetch }) => TransportClient
+  createClient: (options: { keyExchangeUrl: string, fetch?: typeof fetch, maxPlaintextBytes?: number }) => TransportClient
   /** 协议常量（headers、密钥协商默认路径）。 */
   readonly protocol: typeof TRANSPORT_PROTOCOL_T
 }

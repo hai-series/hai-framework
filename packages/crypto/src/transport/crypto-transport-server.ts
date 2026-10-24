@@ -17,6 +17,7 @@ import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { cryptoM } from '../crypto-i18n.js'
 import { isValidSM2PublicKey } from '../crypto-public-key.js'
 import { HaiCryptoError } from '../crypto-types.js'
+import { resolveTransportBodyLimits } from './crypto-transport-body.js'
 import { hashTransportPath, isValidEncryptedPayload, openTransportPayload, sealTransportPayload, transportAuthenticationFailure } from './crypto-transport-codec.js'
 import { parseTransportServerKeyRing } from './crypto-transport-keyring.js'
 import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
@@ -58,6 +59,13 @@ export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
   options: TransportCreateServerOptions,
 ): HaiResult<TransportEncryptionManager> {
+  let bodyLimits
+  try {
+    bodyLimits = resolveTransportBodyLimits(options?.maxPlaintextBytes)
+  }
+  catch {
+    return err(HaiCryptoError.INVALID_INPUT, cryptoM('crypto_transportBodyLimitInvalid'))
+  }
   const ring = parseTransportServerKeyRing(options?.serverKeyRing)
   if (!ring.success)
     return ring
@@ -85,6 +93,7 @@ export function createTransportEncryption(
   const keyStore = options.keyStore
 
   const manager: TransportEncryptionManager = {
+    bodyLimits,
     getServerKeyId() {
       return activeKeyId
     },
@@ -111,7 +120,7 @@ export function createTransportEncryption(
         const key = serverKeys.get(context.serverKeyId)
         if (!key)
           return transportAuthenticationFailure()
-        return sealTransportPayload(cryptoService, data, context, 'response', status, clientPublicKey, key.privateKey)
+        return sealTransportPayload(cryptoService, data, context, 'response', status, clientPublicKey, key.privateKey, bodyLimits)
       }
       catch {
         // registry/注入实现故障仍按 HaiResult 返回，不携带可能包含连接凭据的原始异常。
@@ -121,7 +130,7 @@ export function createTransportEncryption(
 
     async decryptRequest(payload, expected) {
       try {
-        if (!isValidEncryptedPayload(payload) || payload.direction !== 'request' || payload.status !== 0)
+        if (!isValidEncryptedPayload(payload, bodyLimits) || payload.direction !== 'request' || payload.status !== 0)
           return transportAuthenticationFailure()
         // 在任何异步 registry 调用前捕获快照，避免调用方修改同一对象造成认证/消费上下文错位。
         const authenticated = { ...payload, context: { ...payload.context } }
@@ -137,7 +146,7 @@ export function createTransportEncryption(
         const clientPublicKey = await keyStore.get(c.clientId)
         if (!key || !clientPublicKey)
           return transportAuthenticationFailure()
-        const plaintext = openTransportPayload(cryptoService, authenticated, key.privateKey, clientPublicKey)
+        const plaintext = openTransportPayload(cryptoService, authenticated, key.privateKey, clientPublicKey, bodyLimits)
         if (!plaintext.success)
           return plaintext
         if (Date.now() >= c.issuedAt + TRANSPORT_PROTOCOL.REQUEST_WINDOW_MS)

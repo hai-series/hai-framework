@@ -83,7 +83,7 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 
 服务器需要 Linux、Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock、支持 flock 的持久化文件系统和容器/目录权限。部署和恢复使用固定 `.deploy.lock` 内核锁，不可删除/替换或按时间抢锁；活跃子命令继承 FD，全部持有进程退出或重启后自动释放。强杀/断电后的执行状态需核对结果文件、current 和容器，不能将锁释放当作恢复成功。完整交付包含自建服务镜像；自定义外部连接仍需准备服务、账号和网络可达性。云 Provider/Provisioner 需要外网，不能用于完全离线。
 
-生成的 `web.conf` 在 API location 设 `client_max_body_size 2129920`（2 MiB + 32 KiB），用 large_client_header_buffers 4 32k / proxy_buffer_size 32k 容纳 X-Hai-Transport 认证头，并配套 proxy_buffers 8 32k，保证关闭 buffering 时也能通过 Nginx 缓冲区配置校验。请求/响应 proxy buffering 保持关闭；这与 transport 密文预算一致，避免 Nginx 默认上限拦截合法的 1 MiB 明文编码结果。应用仍执行握手 16 KiB、公钥 4 KiB、明文 1 MiB 的有界读取。自有反向代理须允许相同密文预算并传播取消，不替代应用字节限制；大文件上传使用独立路径和明确预算。
+生成 web.conf 时从目标环境解析后的 _serv.yml 读取 transport.maxPlaintextBytes，调用 crypto.resolveTransportBodyLimits 推导 client_max_body_size；默认 2129920 字节，8 MiB 明文对应 16809984 字节。请求/响应 buffering 关闭，认证头缓冲固定。SvelteKit 从 _kit.yml 自动推导 adapter-node BODY_SIZE_LIMIT。app 增量包携带代理配置；容量变化时复用现有 Web 镜像重建代理并纳入失败恢复，容量不变保留 Web 容器。容量变化须选择 app；路由/端口/其他代理策略改变仍要求全量部署。应用继续独立限制业务文件、解压和行数。自管代理调用 resolveTransportBodyLimits 获取同一预算。
 
 完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
 

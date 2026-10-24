@@ -176,3 +176,5 @@ CLI 独立 mobile 模板在选择 IAM/crypto 时安装前端 crypto 并默认启
 ## 配置驱动认证页面
 
 `apiClient.createAuthActions(client)` 为含标准 iam contract 的客户端提供 publicConfig、login、register、sendOtp、requestPasswordReset、confirmPasswordReset。login 输入使用 identifier/password/method/code，method 为 password、ldap、email、sms。成功认证自动调用既有安全 TokenStorage；应用只需把动作传给 AuthPanel，并在 onauthenticated 中刷新自己的用户状态或导航。
+
+传输容量默认从服务端握手获取 `maxPlaintextBytes`；可选客户端 `transport.maxPlaintextBytes` 只收紧上限。容量失败映射为 `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`），cause 保留 direction/stage/limitBytes/actualBytes，应用可据此显示本地化提示。

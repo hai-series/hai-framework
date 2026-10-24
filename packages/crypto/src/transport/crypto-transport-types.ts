@@ -76,6 +76,8 @@ export interface KeyExchangeRequest {
  * ```
  */
 export interface KeyExchangeResponse {
+  /** 服务端业务明文 UTF-8 字节上限；缺省表示旧服务端的 1 MiB 默认值。 */
+  readonly maxPlaintextBytes?: number
   /** 服务端当前加密密钥版本；业务请求必须带回该值。 */
   readonly serverKeyId: string
   readonly serverPublicKey: string
@@ -449,6 +451,8 @@ export interface TransportKeyStore {
  * ```
  */
 export interface TransportCreateServerOptions {
+  /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
+  readonly maxPlaintextBytes?: number
   /** 必填受管服务端密钥环；没有隐式随机生成或进程密钥回退。 */
   readonly serverKeyRing: TransportServerKeyRing
   /** 客户端公钥存储；生产必须注入跨节点共享实现。 */
@@ -489,6 +493,8 @@ export interface TransportCreateServerOptions {
  * ```
  */
 export interface TransportEncryptionManager {
+  /** 本管理器不可变的双向预算；由 maxPlaintextBytes 推导，安全预算独立。 */
+  readonly bodyLimits: import('./crypto-transport-body.js').TransportBodyLimits
   /**
    * 当前新协商使用的服务端密钥 ID。
    * @returns 直接返回值，使用前先初始化模块。

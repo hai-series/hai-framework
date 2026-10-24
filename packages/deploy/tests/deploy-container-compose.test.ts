@@ -204,7 +204,7 @@ describe('generateComposeFile', () => {
     expect(compose.services.app.ports).toBeUndefined()
     expect(compose.services.web.ports).toEqual(['18080:8081'])
     expect(compose.services.web.env_file).toBeUndefined()
-    const proxy = generateWebProxyConfig(3001, '/backend/v2', 8081)
+    const proxy = generateWebProxyConfig(3001, '/backend/v2', { webPort: 8081 })
     expect(proxy).toContain('listen 8081;')
     expect(proxy).toContain('location /backend/v2/')
     expect(proxy).toContain('proxy_pass http://app:3001;')

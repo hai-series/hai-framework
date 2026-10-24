@@ -72,6 +72,7 @@ if [ "$partial" = false ]; then orphan_option=--remove-orphans; fi
 recreate_option=--force-recreate
 if [ "$partial" = true ]; then recreate_option=--no-recreate; fi
 selected=@@SELECTED@@
+proxy_update=false
 release="$root/releases/$id"
 case "$release/" in "$source_dir/"*) printf 'Extract the package outside the deployment directory before applying it.\n' >&2; exit 1;; esac
 stage=''
@@ -206,7 +207,22 @@ if [ -f "$root/current" ]; then
 fi
 if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
-  cmp -s layout "$root/releases/$previous/layout" || { printf 'Ports, API routes or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
+  if ! cmp -s layout "$root/releases/$previous/layout"; then
+    # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
+    test "$(awk -F: '{print $1 ":" $2 ":" $3}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3}' "$root/releases/$previous/layout")" || { printf 'Ports or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
+    test -f web.conf && test -f proxy-entry.json || { printf 'Proxy configuration missing. Create a full deployment bundle.\n' >&2; exit 1; }
+    previous_proxy=
+    while IFS= read -r compose_file; do
+      candidate_proxy="$(dirname -- "$compose_file")/web.conf"
+      if [ -f "$candidate_proxy" ]; then previous_proxy=$candidate_proxy; fi
+    done < "$root/releases/$previous/compose-files"
+    test -n "$previous_proxy" || { printf 'Proxy baseline missing. Create a full deployment bundle.\n' >&2; exit 1; }
+    previous_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' "$previous_proxy" | sha256sum)
+    current_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' web.conf | sha256sum)
+    test "$previous_shape" = "$current_shape" || { printf 'API routes or proxy policy changed. Create a full deployment bundle.\n' >&2; exit 1; }
+    case " $selected " in *' app ') ;; *) printf 'Transport capacity changes require the app service. Include app in the partial deployment.\n' >&2; exit 1;; esac
+    case " $selected " in *' web '*) ;; *) selected="$selected web"; proxy_update=true;; esac
+  fi
 fi
 test ! -e "$release" || { printf 'This deployment ID was already used. Create a new deployment bundle.\n' >&2; exit 1; }
 mkdir -p "$release"
@@ -222,6 +238,9 @@ if [ "$partial" = true ]; then
   done
 fi
 printf '%s\n' "$release/compose-entry.json" >> "$release/compose-files"
+if [ "$proxy_update" = true ]; then
+  printf '%s\n' "$release/proxy-entry.json" >> "$release/compose-files"
+fi
 compose config >/dev/null
 compose config --services > "$release/services"
 : > "$release/rollback-images"

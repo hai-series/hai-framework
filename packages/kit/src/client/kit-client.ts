@@ -28,6 +28,8 @@ const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_
  * ```
  */
 export interface ClientTransportConfig {
+  /** 可选本地明文上限；缺省跟随服务端握手。 */
+  maxPlaintextBytes?: number
   /** @h-ai/crypto 服务实例 */
   crypto: CryptoFunctions
   /** 密钥交换端点 URL（默认 `'/api/_hai/key-exchange'`） */
@@ -210,6 +212,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
   const transportClient = transportConfig.crypto.transport.createClient({
     keyExchangeUrl,
     fetch: originalFetch,
+    maxPlaintextBytes: transportConfig.maxPlaintextBytes,
   })
 
   const wrappedFetch: typeof fetch = async (input, init) => {
@@ -332,6 +335,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     ? transportConfig.crypto.transport.createClient({
         keyExchangeUrl: transportKeyExchangeUrl,
         fetch,
+        maxPlaintextBytes: transportConfig.maxPlaintextBytes,
       })
     : null
 
