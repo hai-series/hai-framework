@@ -51,22 +51,23 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
     { id: 'en', choice: 'English', ready: 'Ready', empty: 'Empty', filter: 'Filter', next: 'Next page' },
     { id: 'ja', choice: '日本語', ready: '通常', empty: '空の結果', filter: '絞り込み', next: '次のページ' },
   ]) {
-    test(`实际布局与焦点：${locale.id}`, async ({ page, request }, testInfo) => {
-      await registerAndLogin(page, request, `ui${locale.id}`)
-      if (locale.choice) {
-        await page.goto('/admin/settings')
+    // 主题各自保留完整宽度矩阵，避免全部高分辨率截图挤在一个用例的总时限内。
+    for (const theme of ['light', 'dark']) {
+      test(`实际布局与焦点：${locale.id} / ${theme}`, async ({ page, request }, testInfo) => {
+        await registerAndLogin(page, request, `ui${locale.id}`)
+        if (locale.choice) {
+          await page.goto('/admin/settings')
+          await waitForHydration(page)
+          await page.getByRole('button', { name: /区域|Region/ }).click()
+          await page.getByRole('button', { name: /切换语言|Switch language/ }).last().click()
+          await page.locator('.dropdown-content').getByRole('button', { name: new RegExp(locale.choice) }).click()
+        }
+        await page.goto('/admin/ui-gallery/compounds')
         await waitForHydration(page)
-        await page.getByRole('button', { name: /区域|Region/ }).click()
-        await page.getByRole('button', { name: /切换语言|Switch language/ }).last().click()
-        await page.locator('.dropdown-content').getByRole('button', { name: new RegExp(locale.choice) }).click()
-      }
-      await page.goto('/admin/ui-gallery/compounds')
-      await waitForHydration(page)
-      await page.emulateMedia({ reducedMotion: 'reduce' })
-      const demo = page.getByTestId('interaction-patterns')
-      for (const width of locale.id === 'zh' ? [390, 1440, 1920, 2560, 3840] : [390, 1440]) {
-        await page.setViewportSize({ width, height: 1000 })
-        for (const theme of ['light', 'dark']) {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        const demo = page.getByTestId('interaction-patterns')
+        for (const width of locale.id === 'zh' ? [390, 1440, 1920, 2560, 3840] : [390, 1440]) {
+          await page.setViewportSize({ width, height: 1000 })
           await page.evaluate(themeName => document.documentElement.setAttribute('data-theme', themeName), theme)
           await demo.getByRole('tab', { name: locale.empty, exact: true }).click()
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -91,13 +92,13 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
           expect(box!.height).toBeGreaterThanOrEqual(44)
           expect(box!.width).toBeGreaterThanOrEqual(44)
         }
-      }
-      expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto')
-      const duration = await demo.evaluate((element) => {
-        element.classList.add('hai-fade-in')
-        return Number.parseFloat(getComputedStyle(element).animationDuration)
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto')
+        const duration = await demo.evaluate((element) => {
+          element.classList.add('hai-fade-in')
+          return Number.parseFloat(getComputedStyle(element).animationDuration)
+        })
+        expect(duration).toBeLessThan(0.001)
       })
-      expect(duration).toBeLessThan(0.001)
-    })
+    }
   }
 })
