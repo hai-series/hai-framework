@@ -41,6 +41,8 @@ export type {
   MarkdownTextAlignKind,
   MarkdownToolbarDownloadAction,
 } from './document-types.js'
+// Shiki 同步语法高亮（CSS Variables 主题，DaisyUI 自适应）
+export { highlightCode, isLanguageSupported } from './highlight.js'
 export { parseMarkdown } from './markdown-parse.js'
 export type { MarkdownParseOptions } from './markdown-parse.js'
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte'

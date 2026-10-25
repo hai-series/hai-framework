@@ -241,6 +241,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | Component   | Description    | Key props                                                                                                                                   |
 | ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Card`      | Card container | `title`, `bordered`, `shadow`, `padding`                                                                                                    |
+| `JsonViewer` | JSON tree viewer | `value`, `defaultExpandedDepth`, `maxScalarLength`, `showCopy`, `onCopy`; circular references are replaced with a placeholder |
 | `DataTable` | Data table     | `data`, `columns`, `keyField`, `loading`, `sortKey`, `sortDir`, `onsort`; `cell` slot and `onrowclick` (`sortable` columns support sorting) |
 | `Accordion` | Accordion      | `items: AccordionItem[]`                                                                                                                    |
 | `Timeline`  | Timeline       | `items: TimelineItem[]`                                                                                                                     |

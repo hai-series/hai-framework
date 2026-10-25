@@ -41,6 +41,8 @@ export { default as FormField } from './FormField.svelte'
 export { default as FormLayout } from './FormLayout.svelte'
 // 无限滚动 / 上拉加载
 export { default as InfiniteScroll } from './InfiniteScroll.svelte'
+// JSON 树查看器（可折叠、复制、主题自适应）
+export { default as JsonViewer } from './JsonViewer.svelte'
 // MessageBox 命令式弹框（类似 ElementUI MessageBox）
 export { default as MessageBoxContainer } from './MessageBoxContainer.svelte'
 export { default as MessageBoxDialog } from './MessageBoxDialog.svelte'

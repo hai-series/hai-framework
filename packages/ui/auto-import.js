@@ -51,6 +51,7 @@ const UI_COMPONENTS = new Set([
   'FormField',
   'FormLayout',
   'InfiniteScroll',
+  'JsonViewer',
   'MessageContainer',
   'MessageBoxContainer',
   'MessageBoxDialog',
