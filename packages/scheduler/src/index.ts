@@ -1,3 +1,4 @@
 export * from './scheduler-config.js'
 export * from './scheduler-main.js'
+export * from './scheduler-migration.js'
 export * from './scheduler-types.js'

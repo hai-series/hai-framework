@@ -22,6 +22,7 @@ const ReachErrorInfo = {
   UNSUPPORTED_TYPE: '011:400',
   CONFIG_ERROR: '012:500',
   DELIVERY_REJECTED: '020:422',
+  MESSAGE_EXPIRED: '021:410',
 } as const satisfies ErrorInfo
 
 /**
@@ -81,6 +82,12 @@ export interface ReachMessage {
   extra?: Record<string, unknown>
   /** API 接收端幂等键；直接发送可指定，队列投递固定使用持久化 queueId。 */
   idempotencyKey?: string
+  /** 凭据通知只在内存中投递；正文、变量、收件人不持久化，不进入延迟或重投队列。 */
+  sensitive?: boolean
+  /** sensitive=true 时必填的凭据截止时间（Unix 毫秒），不延长业务凭据有效期。 */
+  expiresAt?: number
+  /** 遇到免打扰时交给 Reach 队列，或返回 DND_BLOCKED 让已有业务 outbox 延后；默认 queue。 */
+  deferPolicy?: 'queue' | 'reject'
 }
 
 /**
@@ -113,6 +120,8 @@ export interface ReachMessage {
  * ```
  */
 export type SendResult = {
+  /** 无载荷凭据回执，可通过 queue.get 查询；不代表进入延迟队列。 */
+  receiptId?: string
   /** 是否已完成 Provider 发送或可靠入队；具体状态同时检查 deferred。 */
   success: boolean
   /** Provider 返回的消息 ID（如有） */

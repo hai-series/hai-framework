@@ -17,6 +17,7 @@ import { core, err, ok } from '@h-ai/core'
 import { ReachQueueConfigSchema } from './reach-config.js'
 import { deliverClaimedMessage } from './reach-delivery.js'
 import { reachM } from './reach-i18n.js'
+import { sendSensitive } from './reach-send-sensitive.js'
 import {
   HaiReachError,
 
@@ -488,8 +489,13 @@ export async function executeSend(
     )
   }
 
+  if (preprocessed.data.sensitive)
+    return sendSensitive(preprocessed.data, providers.get(providerName)!, repo, isDndBlocked(dndConfig))
+
   // DND 检查
   if (isDndBlocked(dndConfig)) {
+    if (message.deferPolicy === 'reject')
+      return err(HaiReachError.DND_BLOCKED, reachM('reach_dndBlocked'))
     const strategy = dndConfig?.strategy ?? 'discard'
 
     if (strategy === 'delay') {

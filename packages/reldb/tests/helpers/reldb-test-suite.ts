@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import type { ReldbConfigInput } from '../../src/index.js'
+import type { ReldbConfigInput, ReldbFunctions } from '../../src/index.js'
 import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'vitest'
 import { reldb } from '../../src/index.js'
 import { acquireMysqlContainer } from './mysql-container.js'
@@ -19,10 +19,10 @@ async function delay(ms: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function waitForReady(maxAttempts = 10, intervalMs = 2000): Promise<void> {
+async function waitForReady(database: ReldbFunctions, maxAttempts = 10, intervalMs = 2000): Promise<void> {
   let lastError: string | null = null
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const ping = await reldb.sql.query('SELECT 1')
+    const ping = await database.sql.query('SELECT 1')
     if (ping.success) {
       return
     }
@@ -36,8 +36,9 @@ export function defineDbSuite(
   label: string,
   setup: () => Promise<DbTestEnv> | DbTestEnv,
   defineTests: () => void,
-  options: { resetConnection?: boolean } = {},
+  options: { resetConnection?: boolean, database?: ReldbFunctions } = {},
 ): void {
+  const database = options.database ?? reldb
   describe.sequential(`db (${label})`, () => {
     let env: DbTestEnv | null = null
 
@@ -47,24 +48,24 @@ export function defineDbSuite(
 
     beforeEach(async () => {
       // 网络数据库本就保留同一份表数据；普通 SQL/DDL 场景复用池，事务和生命周期仍逐例重建。
-      if (!options.resetConnection && env!.config.type !== 'sqlite' && reldb.isInitialized)
+      if (!options.resetConnection && env!.config.type !== 'sqlite' && database.isInitialized)
         return
-      await reldb.close()
-      const initResult = await reldb.init(env!.config)
+      await database.close()
+      const initResult = await database.init(env!.config)
       if (!initResult.success) {
         throw new Error(`db init failed: ${initResult.error.code} ${initResult.error.message}`)
       }
-      await waitForReady()
+      await waitForReady(database)
     }, 120000)
 
     afterEach(async () => {
       if (options.resetConnection || env!.config.type === 'sqlite')
-        await reldb.close()
+        await database.close()
     })
 
     afterAll(async () => {
       try {
-        await reldb.close()
+        await database.close()
       }
       finally {
         await env?.release?.()

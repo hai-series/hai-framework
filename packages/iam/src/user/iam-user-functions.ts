@@ -5,7 +5,7 @@
  * @module iam-user-functions
  */
 
-import type { HaiResult, PaginatedResult } from '@h-ai/core'
+import type { HaiError, HaiResult, PaginatedResult } from '@h-ai/core'
 import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
@@ -23,7 +23,7 @@ import type {
 } from './iam-user-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
-import { reldb } from '@h-ai/reldb'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { isAccountLocked, recordLoginFailure, resetLoginFailures } from '../authn/iam-authn-utils.js'
 import { buildAgreementDisplay } from '../iam-agreement.js'
@@ -152,19 +152,18 @@ function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: str
 /**
  * 将底层更新错误转换为领域层 IAM 错误。
  *
- * @param message 底层错误消息
+ * @param error 底层结构化错误
  * @returns 领域层错误结果
  */
-function mapUpdateErrorAsDomainError(message: string): HaiResult<never> {
-  const loweredMessage = message.toLowerCase()
-  if (loweredMessage.includes('unique') || loweredMessage.includes('duplicate')) {
+function mapUpdateErrorAsDomainError(error: HaiError): HaiResult<never> {
+  if (error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
     return err(
       HaiIamError.USER_ALREADY_EXISTS,
       iamM('iam_userAlreadyExist'),
     )
   }
 
-  return mapRepositoryError('iam_updateUserFailed', message)
+  return mapRepositoryError('iam_updateUserFailed', error.message)
 }
 
 /**
@@ -338,7 +337,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
 
     if (!createResult.success) {
       await tx.rollback()
-      return mapUpdateErrorAsDomainError(createResult.error.message) as HaiResult<RegisterResult>
+      return mapUpdateErrorAsDomainError(createResult.error) as HaiResult<RegisterResult>
     }
 
     const createdUserResult = await userRepository.findByUsername(options.username, tx)
@@ -575,7 +574,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
 
       const updateResult = await userRepository.updateById(userId, safeData)
       if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error.message) as HaiResult<User>
+        return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
       }
 
       if (updateResult.data.changes === 0) {
@@ -620,7 +619,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
 
       const updateResult = await userRepository.updateById(userId, data)
       if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error.message) as HaiResult<User>
+        return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
       }
 
       if (updateResult.data.changes === 0) {

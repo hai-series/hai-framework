@@ -39,5 +39,8 @@
   "reach_templateDeleteFailed": "Template delete failed: {error}",
   "reach_queueRetryInvalid": "maxRetryDelayMs must be at least retryDelayMs",
   "reach_deadRequeueFailed": "Dead message changed or does not exist; reload its state before restoring",
-  "reach_productionProviderRequired": "Production requires a delivery provider; console is available only in development or explicit test mode"
+  "reach_productionProviderRequired": "Production requires a delivery provider; console is available only in development or explicit test mode",
+  "reach_sensitivePolicyRequired": "Credential notifications require a database receipt, stable idempotency key and expiry",
+  "reach_sensitiveDeliveryUnconfirmed": "Credential delivery is unconfirmed and will not be retried automatically. Check the receipt or request new credentials.",
+  "reach_messageExpired": "The credentials expired before delivery"
 }

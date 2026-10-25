@@ -59,6 +59,16 @@ describe('reldb.sql', () => {
       }
     })
 
+    it(`${label}: 唯一约束使用稳定业务码，诊断不保留绑定值`, async () => {
+      expect((await reldb.ddl.dropTable('unique_values', true)).success).toBe(true)
+      expect((await reldb.ddl.createTable('unique_values', { value: { type: 'TEXT', unique: true } })).success).toBe(true)
+      const secret = 'PRIVATE_UNIQUE_VALUE'
+      expect((await reldb.sql.execute('INSERT INTO unique_values (value) VALUES (?)', [secret])).success).toBe(true)
+      const result = await reldb.sql.execute('INSERT INTO unique_values (value) VALUES (?)', [secret])
+      expect(result).toMatchObject({ success: false, error: { code: HaiReldbError.DUPLICATE_ENTRY.code, httpStatus: 409, traceId: expect.any(String) } })
+      expect(JSON.stringify(result)).not.toContain(secret)
+    })
+
     it(`${label}: query 无匹配行应返回空数组`, async () => {
       await reldb.ddl.dropTable('users', true)
       await reldb.ddl.createTable('users', {

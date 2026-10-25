@@ -22,7 +22,7 @@ import type {
 
 import { audit } from '@h-ai/audit'
 import { core, err, ok } from '@h-ai/core'
-import { reldb } from '@h-ai/reldb'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { RbacConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -563,8 +563,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (!createResult.success) {
           if (ownTx)
             await tx.rollback()
-          const msg = createResult.error.message.toLowerCase()
-          if (msg.includes('unique') || msg.includes('duplicate')) {
+          if (createResult.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
             return err(HaiIamError.ROLE_ALREADY_EXISTS, iamM('iam_roleAlreadyExist'))
           }
           return mapRepositoryError('iam_createRoleFailed', createResult.error.message) as HaiResult<Role>
@@ -611,10 +610,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        const msg = String(error).toLowerCase()
-        if (msg.includes('unique') || msg.includes('duplicate')) {
-          return err(HaiIamError.ROLE_ALREADY_EXISTS, iamM('iam_roleAlreadyExist'))
-        }
         return err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_createRoleFailed', { params: { message: String(error) } }),
@@ -840,8 +835,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (!createResult.success) {
           if (ownTx)
             await tx.rollback()
-          const msg = createResult.error.message.toLowerCase()
-          if (msg.includes('unique') || msg.includes('duplicate')) {
+          if (createResult.error.code === HaiReldbError.DUPLICATE_ENTRY.code) {
             return err(HaiIamError.PERMISSION_ALREADY_EXISTS, iamM('iam_permissionAlreadyExist'))
           }
           return mapRepositoryError('iam_createPermissionFailed', createResult.error.message) as HaiResult<Permission>
@@ -873,10 +867,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       catch (error) {
         if (ownTx)
           await tx.rollback()
-        const msg = String(error).toLowerCase()
-        if (msg.includes('unique') || msg.includes('duplicate')) {
-          return err(HaiIamError.PERMISSION_ALREADY_EXISTS, iamM('iam_permissionAlreadyExist'))
-        }
         return err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_createPermissionFailed', { params: { message: String(error) } }),

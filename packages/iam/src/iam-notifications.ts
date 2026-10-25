@@ -33,7 +33,7 @@ export async function resolveIamNotifications(input: IamConfigInput): Promise<Pi
     if (!reach?.isInitialized || !provider || !to)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))
     // Reach 的返回结果与投递状态都必须成功，不能把 HTTP/调用完成当作通知送达。
-    const result = await reach.send({ provider, to, template, vars, idempotencyKey: context.idempotencyKey })
+    const result = await reach.send({ provider, to, template, vars, idempotencyKey: context.idempotencyKey, sensitive: true, expiresAt: context.expiresAt.getTime() })
     if (!result.success || !result.data.success)
       throw new Error(iamM('iam_passwordResetDeliveryFailed'))
   }

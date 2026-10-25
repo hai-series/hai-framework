@@ -24,6 +24,7 @@ import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permi
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
+import { migrateIam } from './iam-migration.js'
 import { resolveIamNotifications } from './iam-notifications.js'
 import { buildIamPublicConfig } from './iam-public-config.js'
 import { seedIamData } from './iam-seed.js'
@@ -162,6 +163,9 @@ export const iam: IamFunctions = {
       logger.info('IAM notification channels resolved', { email: Boolean(onOtpSendEmail), sms: Boolean(onOtpSendSms), passwordReset: Boolean(onPasswordResetRequest) })
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
+      const migration = await migrateIam()
+      if (!migration.success)
+        return migration
       const credentialUsers = await createDbUserRepository()
       const sessionResult = await createSessionOperations({
         config: parsed,
@@ -251,16 +255,36 @@ export const iam: IamFunctions = {
     }
   },
 
-  get auth(): AuthnOperations { return currentAuth ?? notInitializedAuth },
-  get user(): UserOperations { return currentUser ?? notInitializedUser },
-  get authz(): AuthzOperations { return currentAuthz ?? notInitializedAuthz },
-  get session(): SessionOperations { return currentSession ?? notInitializedSession },
-  get apiKey(): ApiKeyOperations { return currentApiKey ?? notInitializedApiKey },
-  get ticket(): TicketOperations { return currentTicket ?? notInitializedTicket },
-  get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
-  get publicConfig() { return currentPublicConfig ? structuredClone(currentPublicConfig) : null },
-  get isInitialized() { return currentConfig !== null },
-  get isRegisterEnabled() { return currentConfig?.register?.enabled !== false },
+  get auth(): AuthnOperations {
+    return currentAuth ?? notInitializedAuth
+  },
+  get user(): UserOperations {
+    return currentUser ?? notInitializedUser
+  },
+  get authz(): AuthzOperations {
+    return currentAuthz ?? notInitializedAuthz
+  },
+  get session(): SessionOperations {
+    return currentSession ?? notInitializedSession
+  },
+  get apiKey(): ApiKeyOperations {
+    return currentApiKey ?? notInitializedApiKey
+  },
+  get ticket(): TicketOperations {
+    return currentTicket ?? notInitializedTicket
+  },
+  get config() {
+    return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null
+  },
+  get publicConfig() {
+    return currentPublicConfig ? structuredClone(currentPublicConfig) : null
+  },
+  get isInitialized() {
+    return currentConfig !== null
+  },
+  get isRegisterEnabled() {
+    return currentConfig?.register?.enabled !== false
+  },
 
   async close() {
     if (currentConfig === null && currentAuth === null && currentUser === null && currentAuthz === null && currentSession === null) {

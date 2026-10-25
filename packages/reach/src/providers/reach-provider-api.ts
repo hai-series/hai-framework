@@ -116,6 +116,7 @@ export function createApiProvider(): ReachProvider {
           vars: message.vars,
           extra: message.extra,
           idempotencyKey: message.idempotencyKey,
+          expiresAt: message.expiresAt,
         }
 
         const controller = new AbortController()

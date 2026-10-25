@@ -1,5 +1,5 @@
 import type { ReldbOpsContext } from '../src/providers/reldb-provider-base.js'
-import { ok } from '@h-ai/core'
+import { core, ok } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createBaseDdlOps, createBaseDmlOps, createBaseTxManager, logReldbOperation } from '../src/providers/reldb-provider-base.js'
 
@@ -37,14 +37,15 @@ describe('reldb operation log', () => {
     })
   })
 
-  it('never logs SQL literals, bound values, DDL defaults or driver error content', async () => {
+  it('logs detailed driver errors with the trace but excludes SQL literals, bound values and DDL defaults', async () => {
     const ctx = createContext()
     ctx.operationLog = () => ({ read: true, write: true, maxLength: 1000, level: 'trace' })
     const secret = 'NOT_A_REAL_SECRET'
     logReldbOperation(ctx, 'write', 'execute', { sql: `INSERT INTO secrets VALUES ('${secret}')`, params: [secret] })
     logReldbOperation(ctx, 'write', 'batch', { statements: [{ sql: secret, params: [secret] }] })
     logReldbOperation(ctx, 'write', 'ddl.createTable', { columns: { password: { defaultValue: secret } } })
-    const rawError = Object.assign(new Error(`Driver rejected ${secret}`), { sql: secret, parameters: [secret] })
+    const rawError = Object.assign(new Error(`Driver rejected ${secret}`), { code: '23505', schema: 'public', constraint: 'entries_2_key', routine: '_bt_check_unique', sql: secret, parameters: [secret] })
+    rawError.stack = `Error: Driver rejected ${secret}\n    at execute (database.ts:25:50)`
     const dml = createBaseDmlOps(ctx, {
       query: vi.fn(async () => { throw rawError }),
       get: vi.fn(async () => ok(null)),
@@ -52,12 +53,20 @@ describe('reldb operation log', () => {
       batch: vi.fn(async () => ok(undefined)),
       queryPage: vi.fn(async () => ok({ items: [], total: 0, page: 1, pageSize: 20 })),
     })
-    expect((await dml.query('SELECT ?', [secret])).success).toBe(false)
+    const result = await core.context.run({ requestId: 'sql-detail' }, () => dml.query('SELECT ?, ?, ?', [secret, 2, 5]))
+    expect(result).toMatchObject({ success: false, error: { traceId: 'sql-detail' } })
+    if (!result.success) {
+      expect(result.error.message).not.toContain(secret)
+      expect(result.error.cause).toMatchObject({ code: '23505', schema: 'public', constraint: 'entries_2_key', routine: '_bt_check_unique', stack: expect.stringContaining('database.ts:25:50') })
+    }
     const logged = JSON.stringify([vi.mocked(ctx.logger.trace).mock.calls, vi.mocked(ctx.logger.error).mock.calls])
     expect(logged).not.toContain(secret)
     expect(logged).not.toContain('INSERT INTO')
     expect(logged).toContain('parameterCount')
     expect(logged).toContain('statementCount')
+    expect(logged).toContain('Driver rejected')
+    expect(logged).toContain('23505')
+    expect(logged).toContain('sql-detail')
   })
 
   it('logs from base DML operations before delegating to raw operations', async () => {

@@ -414,7 +414,8 @@ export const reach: ReachFunctions = {
       return notInitialized.result()
     }
 
-    return executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo, currentConfig!.queue)
+    const send = () => executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo, currentConfig!.queue)
+    return message.sensitive ? core.context.run({ suppressLogObservers: true }, send) : send()
   },
 
   get template(): ReachTemplateRegistry {

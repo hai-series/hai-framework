@@ -39,5 +39,8 @@
   "reach_templateDeleteFailed": "テンプレートの削除に失敗しました: {error}",
   "reach_queueRetryInvalid": "maxRetryDelayMs は retryDelayMs 以上にしてください",
   "reach_deadRequeueFailed": "配信不能メッセージが変更されたか、存在しません。復元する前に状態を再読み込みしてください",
-  "reach_productionProviderRequired": "本番環境には配信プロバイダーが必要です。console は開発環境または明示的なテストモードでのみ使用できます"
+  "reach_productionProviderRequired": "本番環境には配信プロバイダーが必要です。console は開発環境または明示的なテストモードでのみ使用できます",
+  "reach_sensitivePolicyRequired": "認証情報の通知にはデータベースの受領記録、固定の冪等キーと有効期限が必要です",
+  "reach_sensitiveDeliveryUnconfirmed": "認証情報の配信を確認できません。自動再送せず、受領記録の確認または認証情報の再発行が必要です。",
+  "reach_messageExpired": "認証情報の期限が切れたため配信しませんでした"
 }

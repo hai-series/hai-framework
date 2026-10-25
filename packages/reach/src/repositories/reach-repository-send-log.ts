@@ -12,6 +12,7 @@ import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { reachM } from '../reach-i18n.js'
+import { migrateReach } from '../reach-migration.js'
 import { HaiReachError } from '../reach-types.js'
 
 // ─── 发送日志实体类型 ───
@@ -142,6 +143,8 @@ export interface StoredSendLog {
  * ```
  */
 export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
+  /** 只结算无载荷的凭据回执；不覆盖已恢复或人工裁定的状态。 */
+  settleSensitive: (queueId: string, status: 'sent' | 'unknown' | 'discarded', messageId?: string) => Promise<HaiResult<void>>
   /**
    * 获取所有待发送记录（按创建时间升序）
    * @param tx - 可选受控数据库事务。
@@ -610,6 +613,9 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
   if (sendLogRepoInstance && sendLogRepoSqlOps === db.sql)
     return ok(sendLogRepoInstance)
 
+  const migration = await migrateReach({}, db)
+  if (!migration.success)
+    return migration
   const repo = new DbSendLogRepository(db)
   // 触发表创建（BaseReldbCrudRepository 的表创建是异步的）
   const initResult = await repo.count()
@@ -629,6 +635,16 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
  * 基于数据库的发送日志存储实现
  */
 class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> implements SendLogRepository {
+  async settleSensitive(queueId: string, status: 'sent' | 'unknown' | 'discarded', messageId?: string): Promise<HaiResult<void>> {
+    const settled = await this.sql().execute(
+      `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, locked_until = NULL, updated_at = ? WHERE queue_id = ? AND status = 'sending' AND body IS NULL AND vars_json IS NULL AND retry_safe = FALSE`,
+      [status, messageId ?? null, Date.now(), queueId],
+    )
+    if (!settled.success)
+      return settled
+    return settled.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_sensitiveDeliveryUnconfirmed'))
+  }
+
   constructor(db: ReldbFunctions) {
     super(db, {
       table: TABLE_NAME,

@@ -8,7 +8,7 @@
  * @module reldb-provider-base
  */
 
-import type { HaiErrorDef, HaiResult, PaginatedResult } from '@h-ai/core'
+import type { HaiError, HaiErrorDef, HaiResult, PaginatedResult } from '@h-ai/core'
 
 import type { ReldbOperationLogConfig } from '../reldb-config.js'
 import type {
@@ -19,7 +19,7 @@ import type {
   TxManager,
 } from '../reldb-types.js'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
@@ -136,13 +136,65 @@ async function wrapOp<T>(
   if (!ctx.isConnected()) {
     return err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
   }
+  const failed = (error: unknown, original?: HaiError): HaiResult<T> => {
+    let definition = original ?? errorDef
+    const traceId = core.context.get().traceId ?? core.context.get().requestId ?? original?.traceId ?? core.id.uuid()
+    const fields = error && typeof error === 'object' ? error as Record<string, unknown> : {}
+    // 驱动差异在数据库层收敛；业务不解析本地化消息或依赖驱动类型。
+    if (definition.code === HaiReldbError.QUERY_FAILED.code && (['23505', 'ER_DUP_ENTRY', 'SQLITE_CONSTRAINT_UNIQUE', 'SQLITE_CONSTRAINT_PRIMARYKEY'].includes(String(fields.code)) || fields.errno === 1062))
+      definition = HaiReldbError.DUPLICATE_ENTRY
+    const secrets = new Set<string>()
+    const seen = new WeakSet<object>()
+    const collect = (value: unknown): void => {
+      if (typeof value === 'string' && value) {
+        secrets.add(value)
+      }
+      else if (typeof value === 'number' || typeof value === 'bigint') {
+        secrets.add(String(value))
+      }
+      else if (value && typeof value === 'object' && !seen.has(value)) {
+        seen.add(value)
+        Object.values(value).forEach(collect)
+      }
+    }
+    collect(errorMeta?.params)
+    const payloads = [errorMeta, ...(Array.isArray(errorMeta?.statements) ? errorMeta.statements as Record<string, unknown>[] : [])]
+    for (const payload of payloads) {
+      collect(payload?.params)
+      for (const match of (typeof payload?.sql === 'string' ? payload.sql : '').matchAll(/'((?:''|[^'])*)'/g))
+        secrets.add(match[1].replaceAll('\'\'', '\''))
+    }
+    // 只复制驱动诊断白名单；完整 SQL、绑定参数和连接配置从不进入日志。
+    const diagnostic: Record<string, unknown> = {}
+    for (const key of ['name', 'message', 'stack', 'code', 'errno', 'sqlState', 'detail', 'hint', 'constraint', 'schema', 'routine', 'severity', 'table', 'column']) {
+      const value: unknown = error instanceof Error && key === 'message' ? error.message : error instanceof Error && key === 'stack' ? error.stack : fields[key]
+      if (typeof value === 'string') {
+        if (['code', 'sqlState', 'schema', 'routine', 'severity', 'constraint', 'table', 'column'].includes(key)) {
+          diagnostic[key] = core.sanitize.sanitizeText(value)
+        }
+        else {
+          // 参数值只遮蔽诊断正文，不把数字参数误当成错误码或堆栈行号。
+          const frames = key === 'stack' ? value.search(/^\s+at\s/m) : -1
+          const body = frames < 0 ? value : value.slice(0, frames)
+          diagnostic[key] = core.sanitize.sanitizeText(body, [...secrets]).replace(/'(?:''|[^'])*'/g, '\'[REDACTED]\'') + (frames < 0 ? '' : core.sanitize.sanitizeText(value.slice(frames)))
+        }
+      }
+      else if (typeof value === 'number') {
+        diagnostic[key] = value
+      }
+    }
+    if (!Object.keys(diagnostic).length)
+      diagnostic.message = core.sanitize.sanitizeText(String(error), [...secrets])
+    ctx.logger.error(errorLabel, { ...summarizeOperationPayload(errorMeta), table: errorMeta?.tableName, column: errorMeta?.columnName, errorCode: definition.code, traceId, error: diagnostic })
+    const key = definition.code === HaiReldbError.DDL_FAILED.code ? 'reldb_ddlFailed' : definition.code === HaiReldbError.TRANSACTION_FAILED.code ? 'reldb_txFailed' : 'reldb_queryFailed'
+    return err({ ...definition, traceId, message: definition.code === HaiReldbError.DUPLICATE_ENTRY.code ? reldbM('reldb_duplicateEntry') : original ? core.sanitize.sanitizeText(original.message, [...secrets]) : reldbM(key), cause: diagnostic })
+  }
   try {
-    return await fn()
+    const result = await fn()
+    return result.success ? result : failed(result.error.cause ?? result.error, result.error)
   }
   catch (error) {
-    // 驱动错误可携带完整 SQL、参数或含值的错误消息，日志仅使用框架错误码。
-    ctx.logger.error(errorLabel, { ...summarizeOperationPayload(errorMeta), errorCode: errorDef.code })
-    return err(errorDef, reldbM('reldb_queryFailed', { params: { error: String(error) } }), error)
+    return failed(error)
   }
 }
 
@@ -240,7 +292,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
 
     raw(sql) {
       logReldbOperation(ctx, 'write', 'ddl.raw', { sql })
-      return wrapOp(ctx, () => raw.raw(sql), HaiReldbError.DDL_FAILED, 'DDL: raw failed')
+      return wrapOp(ctx, () => raw.raw(sql), HaiReldbError.DDL_FAILED, 'DDL: raw failed', { sql })
     },
   }
 }
@@ -265,23 +317,23 @@ export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlO
   return {
     query: (sql, params) => {
       logReldbOperation(ctx, 'read', 'query', { sql, params })
-      return wrapOp(ctx, () => raw.query(sql, params), HaiReldbError.QUERY_FAILED, 'DML: query failed')
+      return wrapOp(ctx, () => raw.query(sql, params), HaiReldbError.QUERY_FAILED, 'DML: query failed', { sql, params })
     },
     get: (sql, params) => {
       logReldbOperation(ctx, 'read', 'get', { sql, params })
-      return wrapOp(ctx, () => raw.get(sql, params), HaiReldbError.QUERY_FAILED, 'DML: get failed')
+      return wrapOp(ctx, () => raw.get(sql, params), HaiReldbError.QUERY_FAILED, 'DML: get failed', { sql, params })
     },
     execute: (sql, params) => {
       logReldbOperation(ctx, 'write', 'execute', { sql, params })
-      return wrapOp(ctx, () => raw.execute(sql, params), HaiReldbError.QUERY_FAILED, 'DML: execute failed')
+      return wrapOp(ctx, () => raw.execute(sql, params), HaiReldbError.QUERY_FAILED, 'DML: execute failed', { sql, params })
     },
     batch: (statements) => {
       logReldbOperation(ctx, 'write', 'batch', { count: statements.length, statements })
-      return wrapOp(ctx, () => raw.batch(statements), HaiReldbError.QUERY_FAILED, 'DML: batch failed')
+      return wrapOp(ctx, () => raw.batch(statements), HaiReldbError.QUERY_FAILED, 'DML: batch failed', { statements })
     },
     queryPage: (options) => {
       logReldbOperation(ctx, 'read', 'queryPage', options)
-      return wrapOp(ctx, () => raw.queryPage(options), HaiReldbError.QUERY_FAILED, 'DML: queryPage failed')
+      return wrapOp(ctx, () => raw.queryPage(options), HaiReldbError.QUERY_FAILED, 'DML: queryPage failed', { ...options })
     },
   }
 }
