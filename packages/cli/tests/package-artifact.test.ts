@@ -51,7 +51,18 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   cleanEnv.NODE_PATH = ''
   cleanEnv.NODE_OPTIONS = ''
   const archives: Record<string, string> = {}
-  for (const name of ['core', 'deploy', 'cli']) {
+  const roots = ['core', 'deploy', 'cli']
+  const packages = new Set(roots)
+  const dependencyEdges: Record<string, string> = {}
+  // 按真实生产及可选依赖闭包打包，发布前不能从 registry 获取本次尚未发布的框架包。
+  for (const name of packages) {
+    const manifest = await fse.readJson(path.resolve(packageRoot, '..', name, 'package.json')) as { name: string, dependencies?: Record<string, string>, optionalDependencies?: Record<string, string> }
+    for (const dependency of Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies })) {
+      if (!dependency.startsWith('@h-ai/'))
+        continue
+      packages.add(dependency.slice('@h-ai/'.length))
+      dependencyEdges[`${manifest.name}>${dependency}`] = dependency
+    }
     const destination = path.join(root, 'archives', name)
     await fse.ensureDir(destination)
     const packed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['pack', '--pack-destination', destination], { cwd: path.resolve(packageRoot, '..', name), shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 60_000, env: cleanEnv })
@@ -60,9 +71,9 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
     expect(archive).toBeDefined()
     archives[`@h-ai/${name}`] = `file:${path.join(destination, archive!).replaceAll(path.sep, '/')}`
   }
-  // 工具安装只含公开归档及其已声明生产依赖；目标应用始终没有 node_modules。
-  await fse.writeJson(path.join(tool, 'package.json'), { name: 'published-cli-closure', private: true, type: 'module', dependencies: archives })
-  await fse.writeFile(path.join(tool, 'pnpm-workspace.yaml'), `packages: []\noverrides:\n  \"@h-ai/core\": ${JSON.stringify(archives['@h-ai/core'])}\n`)
+  // 仅覆盖真实依赖边，不把传递依赖提升为工具直接依赖；目标应用始终没有 node_modules。
+  await fse.writeJson(path.join(tool, 'package.json'), { name: 'published-cli-closure', private: true, type: 'module', dependencies: Object.fromEntries(roots.map(name => [`@h-ai/${name}`, archives[`@h-ai/${name}`]])) })
+  await fse.writeFile(path.join(tool, 'pnpm-workspace.yaml'), stringify({ packages: [], overrides: Object.fromEntries(Object.entries(dependencyEdges).map(([edge, dependency]) => [edge, archives[dependency]])) }))
   // frozen-lockfile 安装不保证缓存中含 semver 元数据；发布安装缺少元数据时应从 registry 获取。
   const installed = spawnSync(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['install', '--prefer-offline', '--ignore-scripts'], { cwd: tool, shell: process.platform === 'win32', encoding: 'utf8', windowsHide: true, timeout: 90_000, env: cleanEnv })
   expect(installed.status, installed.error?.message || installed.stderr || installed.stdout).toBe(0)
