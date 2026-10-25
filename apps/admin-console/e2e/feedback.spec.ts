@@ -450,9 +450,13 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
   await page.mouse.down()
   await page.mouse.move(bounds!.x + bounds!.width - 2, bounds!.y + bounds!.height - 2, { steps: 4 })
   await page.mouse.up()
+  const previousPreviewUrl = await tinyPreview.getAttribute('src')
   await added.getByRole('button', { name: '应用标注', exact: true }).click()
   const preview = page.locator('.feedback-form img[alt="added-photo.png"]')
   await expect(preview).toBeVisible()
+  // 连续标注沿用同名 PNG；必须等待新预览和解码，不能把旧图片已加载当作本次完成。
+  await expect(preview).not.toHaveAttribute('src', previousPreviewUrl!)
+  await preview.evaluate(image => (image as HTMLImageElement).decode())
   await expect.poll(() => preview.evaluate(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth === 64)).toBe(true)
   const pixel = await preview.evaluate((image) => {
     const canvas = document.createElement('canvas')
