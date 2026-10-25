@@ -56,7 +56,7 @@
   "deploy_targetAuth": "認証方式：keyは秘密鍵またはssh-agent、passwordはpasswordEnvが指定するローカル環境変数を使用します。",
   "deploy_targetPasswordEnv": "パスワード値ではなく環境変数名のみです。操作端末で一度設定すれば再利用できます。既定値はHAI_DEPLOY_PROVIDER_SSH_PASSWORDです。",
   "deploy_bundleInstructions": "バンドル：{file}\n選択したサービスに必要なすべてのイメージを含みます（セルフホストのミドルウェアを含む）。\nSSH を使用する場合、同じ交付ディレクトリの deploy-target.json を _comments に従って編集し、同じ場所で deploy.ps1（Windows）または deploy.sh（Linux/macOS）を実行してください。両方ともこの JSON を読み込みます。sh の実行にはローカルの awk も必要です。\n隔離されたサーバーには交付ディレクトリ全体をコピーし、sh deploy-local.sh を実行します。自動展開と配置を実行し、ログを保持します。第1引数でサーバーの配置先を上書きできます。\nLinux には Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux の flock が必要です。flock に対応したファイルシステム上で、ファイルシステムとコンテナーの操作権限も必要です。\n.deploy.lock は削除も置換もしないでください。すべての保持プロセスが終了するか、サーバーが再起動するとロックが解放されます。強制終了後は実行状態と復旧状態を確認してください。\n部分更新にはポートと構成が一致する正常な完全インストールが必要です。各手順は失敗時に非ゼロで終了し、result-DEPLOYMENT_ID.json に結果を記録します。\nバンドルには非公開の実行時設定が含まれます。安全に転送してください。\n同梱イメージ：\n{images}",
-  "deploy_bundleMetadata": "アプリのバージョン: {version}\nビルドID: {buildId}\nComposeファイル: {compose}",
+  "deploy_bundleMetadata": "アプリのバージョン: {version}\nビルドID: {buildId}\nComposeファイル: {compose}\nデプロイ ID: {deploymentId}",
   "deploy_targetHost": "必須：Linux サーバーのアドレスまたは SSH エイリアス。アップロードスクリプトを実行する前に SERVER_HOST を置き換えてください。",
   "deploy_targetPort": "SSH ポート。1〜65535の整数。既定値は22です。",
   "deploy_targetUsername": "SSH ログインユーザー名。既定値は deploy です。対象ディレクトリへの書き込み権限とコンテナーランタイムの操作権限が必要です。",

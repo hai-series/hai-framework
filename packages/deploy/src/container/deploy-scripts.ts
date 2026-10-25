@@ -381,7 +381,7 @@ export function createUploadScripts(): { sh: string, ps1: string, reader: string
 # 操作机上传入口：整个交付目录可直接复制；tar、deploy-target.json 与本脚本须放在同一目录。
 # 先修改 deploy-target.json 的服务器、用户、密钥路径；需要 sh、awk 及 OpenSSH 的 ssh/scp。
 # 执行：sh deploy.sh [主机 [端口 [用户]]]；可用 HAI_DEPLOY_IDENTITY_FILE 覆盖当前电脑的私钥。
-# manifest.json 的 partial/selectedServices 说明本次模式；服务器会核验增量基线，上传后自动部署并检查 HTTP。
+# tar 内 manifest.json 的 partial/selectedServices 说明本次模式；服务器会核验增量基线，上传后自动部署并检查 HTTP。
 set -eu
 source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$source_dir"
@@ -489,7 +489,7 @@ if run_native ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir 
   :
 else
   code=$?
-  printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.\n' "$remote" >&2
+  printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in README.txt), current and containers before retrying.\n' "$remote" >&2
   exit "$code"
 fi
 `.replace('@@PASSWORD_TRIM@@', '$' + '{password%.}').replace('@@PASSWORD_NEWLINE@@', '$' + '{password%?}').replace('@@TEMP_ROOT@@', '$' + '{TMPDIR:-/tmp}').replace('@@ASKPASS_PROMPT@@', '$' + '{SSH_ASKPASS_PROMPT:-}')
@@ -497,7 +497,7 @@ fi
 操作机上传入口：复制整个交付目录后，先修改同目录 deploy-target.json 的服务器、用户和密钥路径。
 需要 Windows PowerShell 5+/PowerShell 及 OpenSSH 的 ssh/scp；tar 必须与本脚本放在同一目录。
 执行：powershell -File .\deploy.ps1 [-IdentityFile 当前电脑的私钥路径]。
-manifest.json 的 partial/selectedServices 标明全量或增量；服务器会检查基线，上传后自动部署并核验 HTTP。
+tar 内 manifest.json 的 partial/selectedServices 标明全量或增量；服务器会检查基线，上传后自动部署并核验 HTTP。
 SSH 中断时先核对远端结果文件和容器状态，再决定是否重试。
 #>
 param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
@@ -609,7 +609,7 @@ try {
   $applying = $true
   Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
 } catch {
-  if ($applying) { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in manifest.json), current and containers before retrying.") }
+  if ($applying) { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in README.txt), current and containers before retrying.") }
   Write-Error $_
   exit 1
 } finally {

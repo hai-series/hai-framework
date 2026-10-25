@@ -56,7 +56,7 @@
   "deploy_targetAuth": "认证方式：key 使用私钥或 ssh-agent；password 从 passwordEnv 指定的本机环境读取密码。",
   "deploy_targetPasswordEnv": "仅密码环境变量名，不是密码值。请在当前操作机配置一次并复用；默认 HAI_DEPLOY_PROVIDER_SSH_PASSWORD。",
   "deploy_bundleInstructions": "部署包：{file}\n包中已包含本次选择服务需要的镜像，包括自建中间件。\n有 SSH 连接时，先按 _comments 说明修改同一交付目录中的 deploy-target.json，再运行同目录的 deploy.ps1（Windows）或 deploy.sh（Linux/macOS）；两者均读取此 JSON，sh 入口还需本机安装 awk。\n完全隔离时，把整个交付目录复制到 Linux 服务器，在该目录执行 sh deploy-local.sh；脚本自动解包、部署并保留日志。可传入第一个参数覆盖服务器部署目录。\n服务器需要 Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock，以及支持 flock 的文件系统和目录、容器运行权限。\n固定锁文件 .deploy.lock 禁止删除或替换；全部持有进程退出或重启后自动释放。强杀后的执行与恢复状态须人工核对。\n部分更新要求服务器已有成功的完整部署，端口及应用布局保持一致。每步失败会返回非零退出码；结果记录在部署目录 result-部署ID.json。\n包包含私有运行配置，请安全传输。\n所含镜像：\n{images}",
-  "deploy_bundleMetadata": "应用版本：{version}\n构建编号：{buildId}\nCompose 文件：{compose}",
+  "deploy_bundleMetadata": "应用版本：{version}\n构建编号：{buildId}\nCompose 文件：{compose}\n部署 ID: {deploymentId}",
   "deploy_targetHost": "必填：Linux 服务器地址或 SSH 别名。执行任一上传脚本前，将 SERVER_HOST 改为实际地址。",
   "deploy_targetPort": "SSH 端口，1-65535 的整数，默认 22。",
   "deploy_targetUsername": "SSH 登录用户名，默认 deploy；需要目标目录写入权限及容器运行权限。",

@@ -154,7 +154,7 @@ export async function createDeploymentBundle(options: {
     const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')
     const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
     const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
-    put('README.txt', `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, compose: 'compose.json' } })}\n${instructions}\n`)
+    put('README.txt', `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n`)
     const checksums = []
     for (const file of files)
       checksums.push(`${await artifactChecksum(join(staging, file))}  ${file}`)
@@ -166,8 +166,7 @@ export async function createDeploymentBundle(options: {
     renameSync(temporaryTar, output)
     const upload = createUploadScripts()
     const scripts = directory
-    // 镜像只保存在 tar 中，目录外层提供检查模式所需的清单和说明，避免双份大镜像。
-    copyFileSync(join(staging, 'manifest.json'), join(directory, 'manifest.json'))
+    // 部署配置、清单和镜像只保存在 tar 中，外层仅保留实际入口、目标与说明。
     writeFileSync(join(scripts, 'deploy.sh'), upload.sh, { mode: 0o700 })
     writeFileSync(join(scripts, 'deploy-local.sh'), createLocalInstallScript({ bundle: basename(output), directory: `${config.remote.baseDir}/${projectName}` }), { mode: 0o700 })
     writeFileSync(join(scripts, 'deploy.ps1'), upload.ps1)
@@ -200,6 +199,8 @@ export async function createDeploymentBundle(options: {
     }
     writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...target, _comments: comments }, null, 2)}\n`)
     writeFileSync(join(scripts, 'README.txt'), readFileSync(join(staging, 'README.txt'), 'utf8'))
+    for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', ...(options.hasWeb ? ['web.conf'] : [])])
+      rmSync(join(directory, file), { force: true })
     return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
   }
   finally {
