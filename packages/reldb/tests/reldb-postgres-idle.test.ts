@@ -18,7 +18,7 @@ it('a killed idle PG backend cannot crash the application; a later query opens a
   let lease: Awaited<ReturnType<typeof acquirePostgresContainer>> | undefined
   let observer: Pool | undefined
   let child: ReturnType<typeof fork> | undefined
-  let closed: Promise<number | null> | undefined
+  let closed: Promise<{ code: number | null, signal: NodeJS.Signals | null, timedOut: boolean }> | undefined
   let killTimer: ReturnType<typeof setTimeout> | undefined
   try {
     await build({
@@ -32,7 +32,10 @@ it('a killed idle PG backend cannot crash the application; a later query opens a
     })
     const script = path.join(directory, 'application.mjs')
     await writeFile(script, `
-import { reldb } from ${JSON.stringify(pathToFileURL(path.join(directory, 'bundle/index.js')).href)}
+import { core } from '@h-ai/core'
+// 只验证数据库连接与关闭，不为短生命周期夹具创建 pretty 日志线程。
+core.logger.configure({ format: 'json' })
+const { reldb } = await import(${JSON.stringify(pathToFileURL(path.join(directory, 'bundle/index.js')).href)})
 const config = JSON.parse(process.argv[2])
 const initialized = await reldb.init(config)
 if (!initialized.success) throw new Error(initialized.error.message)
@@ -59,11 +62,15 @@ process.send({ stage: 'ready', pid: process.pid, backend: first.data.pid })
     child.stdout?.on('data', chunk => output += chunk.toString())
     child.stderr?.on('data', chunk => output += chunk.toString())
     let exited = false
-    closed = new Promise(resolve => child!.once('close', (code) => {
+    let timedOut = false
+    closed = new Promise(resolve => child!.once('close', (code, signal) => {
       exited = true
-      resolve(code)
+      resolve({ code, signal, timedOut })
     }))
-    killTimer = setTimeout(() => child?.kill(), 20_000)
+    killTimer = setTimeout(() => {
+      timedOut = true
+      child?.kill()
+    }, 20_000)
     const reports = new Map<string, Record<string, unknown>>()
     child.on('message', (message) => {
       if (message && typeof message === 'object' && 'stage' in message && typeof message.stage === 'string') {
@@ -87,8 +94,8 @@ process.send({ stage: 'ready', pid: process.pid, backend: first.data.pid })
     expect(output).not.toContain(lease.password)
     expect(output).not.toContain('terminating connection due to administrator command')
     child.send({ action: 'close' })
-    expect(await closed).toBe(0)
-    expect(reports.get('closed')!.result).toEqual({ success: true })
+    await vi.waitFor(() => expect(reports.get('closed')?.result, output).toEqual({ success: true }), { timeout: 5_000 })
+    expect(await closed, output).toEqual({ code: 0, signal: null, timedOut: false })
   }
   finally {
     if (child && child.exitCode === null)
