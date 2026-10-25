@@ -57,6 +57,21 @@ export function emitLogRecord(record: LogRecord): void {
  */
 export function sanitizeLogFields(value: LogContext, paths: readonly string[]): LogContext {
   const result = sanitize.sanitizeSensitiveFields(value)
+  const seen = new WeakSet<object>()
+  const clean = (record: Record<string, unknown>) => {
+    if (seen.has(record))
+      return
+    seen.add(record)
+    for (const [key, item] of Object.entries(record)) {
+      if (typeof item === 'string')
+        record[key] = sanitize.sanitizeText(item)
+      else if (item && typeof item === 'object' && (Array.isArray(item) || Object.getPrototypeOf(item) === Object.prototype))
+        clean(item as Record<string, unknown>)
+    }
+  }
+  clean(result)
+  if (!result.traceId && result.requestId)
+    result.traceId = result.requestId
   for (const path of paths)
     redactPath(result, path.match(/\*|[^.[\]"']+/g) ?? [])
   return result

@@ -347,11 +347,19 @@ export function createApp<
   const http = resolveServHttpConfig(options.http)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
+  app.onError((error, c) => {
+    const traceId = core.context.get().traceId ?? core.context.get().requestId ?? resolveRequestId(c.req.header('x-request-id') ?? null)
+    core.logger.error('HTTP handler failed', { traceId, error, method: c.req.method })
+    c.header('x-trace-id', traceId)
+    const safe = core.error.toPublic({ ...HaiCommonError.INTERNAL_ERROR, message: '' }, traceId)
+    return c.json({ success: false, error: safe }, 500)
+  })
   // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
   app.use('*', async (c, next) => {
     const requestId = resolveRequestId(c.req.header('x-request-id') ?? null)
     await core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), next))
     c.header('x-request-id', requestId)
+    c.header('x-trace-id', requestId)
   })
   // 缺失路由也返回标准 JSON，保持 404 并允许统一传输加密。
   app.notFound(c => c.json(buildHaiErrorBody(
@@ -582,7 +590,8 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
     success: false,
     error: {
       code: HaiCommonError.VALIDATION_ERROR.code,
-      message: servM('serv_validationFailed', { locale }),
+      traceId: core.context.get().traceId ?? core.context.get().requestId,
+      message: core.error.formatMessage({ message: servM('serv_validationFailed', { locale }), traceId: core.context.get().traceId ?? core.context.get().requestId }),
       httpStatus: HaiCommonError.VALIDATION_ERROR.httpStatus,
       system: HaiCommonError.VALIDATION_ERROR.system,
       module: HaiCommonError.VALIDATION_ERROR.module,

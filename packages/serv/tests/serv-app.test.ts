@@ -116,7 +116,7 @@ describe('@h-ai/serv', () => {
     expect(response.headers.get('content-type')).toContain('application/json')
     expect(await response.json()).toMatchObject({
       success: false,
-      error: { code: HaiCommonError.NOT_FOUND.code, message: core.i18n.coreM('core_errorNotFound', { locale: 'en-US' }) },
+      error: { code: HaiCommonError.NOT_FOUND.code, message: expect.stringContaining(core.i18n.coreM('core_errorNotFound', { locale: 'en-US' })) },
     })
   })
 
@@ -126,7 +126,7 @@ describe('@h-ai/serv', () => {
     expect(response.status).toBe(404)
     expect(await response.json()).toMatchObject({
       success: false,
-      error: { code: HaiCommonError.NOT_FOUND.code, message: 'リソースが見つかりません' },
+      error: { code: HaiCommonError.NOT_FOUND.code, message: expect.stringContaining('リソースが見つかりません') },
     })
   })
 
@@ -232,11 +232,11 @@ describe('@h-ai/serv', () => {
       headers: { 'accept-language': 'zh-CN' },
     })
     expect(missingToken.status).toBe(401)
-    expect(await missingToken.json()).toEqual({
+    expect(await missingToken.json()).toMatchObject({
       success: false,
       error: {
         code: 'hai:common:100',
-        message: '未登录或登录已失效',
+        message: expect.stringMatching(/^未登录或登录已失效 \(traceId: [\w.:-]+\)$/),
         httpStatus: 401,
         system: 'hai',
         module: 'common',

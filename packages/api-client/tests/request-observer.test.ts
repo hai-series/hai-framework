@@ -22,6 +22,10 @@ describe('logical request observations', () => {
     try {
       const result = await client.task({ token: 'private-body-token' })
       expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.traceId).toBe(requestId)
+        expect(result.error.message).toBe(`Denied (traceId: ${requestId})`)
+      }
       expect(records).toHaveLength(1)
       expect(records[0]).toMatchObject({ requestId, procedure: 'task', success: false, errorCode: 'app:denied', method: 'POST', status: 200, attempts: 1 })
       expect(requestId).toMatch(/^[\w.:-]{1,128}$/)

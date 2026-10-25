@@ -196,7 +196,7 @@ describe('serv chain router', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.httpStatus).toBe(401)
-      expect(result.error.message).toBe('未登录或登录已失效')
+      expect(result.error.message).toBe('未登录或登录已失效 (traceId: req-router-test)')
     }
   })
 
@@ -280,7 +280,7 @@ describe('serv chain router', () => {
     expect(denied.success).toBe(false)
     if (!denied.success) {
       expect(denied.error.httpStatus).toBe(403)
-      expect(denied.error.message).toBe('无权执行该操作')
+      expect(denied.error.message).toBe('无权执行该操作 (traceId: req-router-test)')
     }
 
     const allowed = await handler(handlerOptions(handler, createContext({
@@ -369,7 +369,7 @@ describe('serv chain router', () => {
       permissions: [],
     }), { message: 'hello' }))
 
-    expect(result).toBe(expected)
+    expect(result).toMatchObject({ success: false, error: { code: 'router:test', httpStatus: 418, message: 'expected (traceId: req-router-test)', traceId: 'req-router-test' } })
   })
 
   it('maps guarded async exceptions with the request locale', async () => {
@@ -399,7 +399,7 @@ describe('serv chain router', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.httpStatus).toBe(500)
-      expect(result.error.message).toBe('Internal server error')
+      expect(result.error.message).toBe('Internal error (traceId: req-router-test)')
     }
   })
 

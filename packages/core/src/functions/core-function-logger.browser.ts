@@ -10,7 +10,7 @@ import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core
 import log from 'loglevel'
 import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
 import { requestContext } from './core-function-context.js'
-import { emitLogRecord } from './core-function-log-observer.js'
+import { emitLogRecord, sanitizeLogFields } from './core-function-log-observer.js'
 
 // ─── 全局配置 ───
 
@@ -99,26 +99,7 @@ function sanitizeLogContext(ctx?: LogContext): LogContext | undefined {
     return ctx
   }
 
-  const sanitized = sanitizeUtils.sanitizeSensitiveFields(ctx)
-  for (const path of globalRedact)
-    redactPath(sanitized, path.match(/\*|[^.[\]"']+/g) ?? [])
-  return sanitized
-}
-
-/** 在已脱敏的副本上处理点/括号路径和通配符，不修改调用方原始对象。 */
-function redactPath(value: unknown, segments: string[]): void {
-  if (!value || typeof value !== 'object' || segments.length === 0)
-    return
-  const record = value as Record<string, unknown>
-  const [segment, ...rest] = segments
-  const keys = segment === '*' ? Object.keys(record) : [segment!]
-  for (const key of keys) {
-    if (!Object.hasOwn(record, key) || ['__proto__', 'constructor', 'prototype'].includes(key))
-      continue
-    if (rest.length === 0)
-      record[key] = '[REDACTED]'
-    else redactPath(record[key], rest)
-  }
+  return sanitizeLogFields(ctx, globalRedact)
 }
 
 // ─── Logger 实现 ───
@@ -161,6 +142,7 @@ function wrapLoglevel(resolveLogger: () => log.Logger, resolveContext: () => Rec
     if (priorities[level] < output.getLevel())
       return
     const context = sanitizeLogContext({ ...resolveContext(), ...ctx, ...requestContext.get() }) ?? {}
+    message = sanitizeUtils.sanitizeText(message)
     const text = formatMessage(message, context, resolveFormat(), level)
     if (level === 'fatal')
       output.error(resolveFormat() === 'json' ? text : `[FATAL] ${text}`)

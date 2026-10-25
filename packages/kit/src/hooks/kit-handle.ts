@@ -210,7 +210,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
             throw error
           }
 
-          core.logger.error('Request failed', { requestId, error: error instanceof Error ? error.message : error })
+          core.logger.error('Request failed', { requestId, error })
 
           if (onError) {
             return onError(error, event)
@@ -222,7 +222,8 @@ export function createHandle(config: HandleConfig = {}): Handle {
               success: false,
               error: {
                 code: 'INTERNAL_ERROR',
-                message: kitM('kit_internalError'),
+                message: core.error.formatMessage({ message: kitM('kit_internalError'), traceId: requestId }),
+                traceId: requestId,
               },
               requestId,
             }),
@@ -240,6 +241,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
 
       applyDefaultSecurityHeaders(response)
       response.headers.set('X-Request-Id', requestId)
+      response.headers.set('X-Trace-Id', requestId)
       return response
     })
   }

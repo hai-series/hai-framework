@@ -246,12 +246,16 @@ export interface HaiErrorDef {
 export interface HaiError {
   code: string | number
   message: string
+  /** 用户提示与前后端诊断共用的关联标识。 */
+  traceId?: string
   httpStatus?: number
   system?: string
   module?: string
   cause?: unknown
   suggestion?: string
   ext?: Record<string, unknown>
+  /** 由服务端明确批准公开的业务进度；边界转换为 ext，内部 ext 默认不公开。 */
+  publicExt?: Record<string, unknown>
 }
 
 // ─── 标准错误码常量 ───
@@ -399,6 +403,7 @@ export interface LogContext {
  */
 export interface RequestContext {
   readonly requestId?: string
+  readonly traceId?: string
   readonly scopeId?: string
   readonly userId?: string
   readonly jobId?: string

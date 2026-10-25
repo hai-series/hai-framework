@@ -16,6 +16,7 @@ import { array as arrayUtils } from './utils/core-util-array.js'
 import { async as asyncUtils } from './utils/core-util-async.js'
 import { createNotInitializedKit, requiresSharedState } from './utils/core-util-module.js'
 import { object as objectUtils } from './utils/core-util-object.js'
+import { createRuntime } from './utils/core-util-runtime.js'
 import { sanitize as sanitizeUtils } from './utils/core-util-sanitize.js'
 
 import { string as stringUtils } from './utils/core-util-string.js'
@@ -241,6 +242,7 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      * ```
      */
     module: {
+      createRuntime,
       createNotInitializedKit,
       requiresSharedState,
     },

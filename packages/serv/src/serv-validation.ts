@@ -40,6 +40,7 @@ export interface ServValidationFailureBody {
   readonly error: {
     readonly code: string | number
     readonly message: string
+    readonly traceId?: string
     readonly httpStatus: number
     readonly system: string
     readonly module: string

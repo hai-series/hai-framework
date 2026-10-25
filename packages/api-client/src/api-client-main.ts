@@ -368,11 +368,30 @@ async function callObservedProcedure(rawClient: unknown, path: string[], args: u
   const provided = args[1] && typeof args[1] === 'object' ? args[1] as Record<string, unknown> : {}
   const providedContext = provided.context && typeof provided.context === 'object' ? provided.context : {}
   const options = { ...provided, context: { ...providedContext, [REQUEST_OBSERVATION]: record } }
-  const result = await callProcedure(rawClient, path, [args[0], options])
+  let result = await callProcedure(rawClient, path, [args[0], options])
   record.duration = Math.max(0, Date.now() - record.timestamp)
   record.success = !(result && typeof result === 'object' && 'success' in result && result.success === false)
-  if (result && typeof result === 'object' && 'error' in result && result.error && typeof result.error === 'object' && 'code' in result.error)
+  if (result && typeof result === 'object' && 'error' in result && result.error && typeof result.error === 'object' && 'code' in result.error) {
     record.errorCode = String(result.error.code)
+    if ('message' in result.error && typeof result.error.message === 'string') {
+      const error = result.error as Parameters<typeof core.error.toPublic>[0]
+      const receivedId = error.traceId && /^[\w.:-]{1,128}$/.test(error.traceId) ? error.traceId : record.requestId
+      record.requestId = receivedId
+      const safe = core.error.toPublic({ ...error, publicExt: error.ext }, receivedId)
+      if (error.cause && typeof error.cause === 'object' && !Array.isArray(error.cause)) {
+        const metadata: Record<string, unknown> = {}
+        for (const key of ['orpcCode', 'status', 'transportCode', 'direction', 'stage', 'limitBytes', 'actualBytes']) {
+          const value: unknown = Reflect.get(error.cause, key)
+          if (typeof value === 'number' || typeof value === 'string')
+            metadata[key] = core.sanitize.sanitizeSensitiveValue(value, key)
+        }
+        if (Object.keys(metadata).length)
+          safe.cause = metadata
+      }
+      core.logger.error('API request failed', { traceId: safe.traceId, requestId: record.requestId, procedure: record.procedure, status: record.status, error: result.error })
+      result = { ...result, error: safe }
+    }
+  }
   for (const observer of observers ?? []) {
     try {
       const observed: unknown = observer(Object.freeze({ ...record }))
@@ -526,8 +545,12 @@ function buildRawClient<TContract extends AnyContractRouter>(
         record.url = core.sanitize.sanitizeUrl(url.toString())
       }
       const response = await fetchWithRefresh(request, init, config, tokenManager, transport, record)
-      if (record)
+      if (record) {
         record.status = response.status
+        const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')
+        if (traceId && /^[\w.:-]{1,128}$/.test(traceId))
+          record.requestId = traceId
+      }
       return response
     },
   })

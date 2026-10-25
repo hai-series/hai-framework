@@ -7,6 +7,7 @@
 
 import type { HaiError, HaiErrorDef, HaiResult } from '../core-types.js'
 
+import type { createRuntime } from './core-util-runtime.js'
 import { error as errorUtils } from '../functions/core-function-error.js'
 
 // ─── 未初始化工具集 ───
@@ -150,11 +151,12 @@ export function requiresSharedState(environment: { NODE_ENV?: string, HAI_CORE_E
  * 模块初始化占位与生产共享状态要求的工具契约。
  * @example 模块内部上下文
  * ```ts
- * const tools: ModuleFn = { createNotInitializedKit, requiresSharedState }
- * const shared = tools.requiresSharedState({ NODE_ENV: 'production' })
+ * function createHostRuntime(tools: ModuleFn) { return tools.createRuntime([]) }
  * ```
  */
 export interface ModuleFn {
+  /** 顺序启动和反序关闭真实模块；不持有业务配置。 */
+  createRuntime: typeof createRuntime
   createNotInitializedKit: CreateNotInitializedKitFn
   /** 生产共享状态要求；浏览器工具为纯函数，不隐式读取进程环境。 */
   requiresSharedState: typeof requiresSharedState

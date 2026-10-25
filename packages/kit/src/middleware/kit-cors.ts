@@ -46,6 +46,7 @@ const defaultConfig: Required<CorsConfig> = {
  */
 export function corsMiddleware(config: CorsConfig = {}): Middleware {
   const mergedConfig = { ...defaultConfig, ...config }
+  mergedConfig.exposedHeaders = [...new Set(['X-Request-Id', 'X-Trace-Id', ...mergedConfig.exposedHeaders])]
 
   return async (context, next) => {
     const { event } = context

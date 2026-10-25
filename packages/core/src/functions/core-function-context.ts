@@ -32,6 +32,7 @@ export const requestContext = {
     // 仅传播关联字段，不能把调用方的权限列表或其它身份对象顺带写入日志。
     const merged = Object.freeze({
       requestId: Object.hasOwn(value, 'requestId') ? value.requestId : previousValue.requestId,
+      traceId: value.traceId ?? (Object.hasOwn(value, 'requestId') ? value.requestId : previousValue.traceId),
       scopeId: Object.hasOwn(value, 'scopeId') ? value.scopeId : previousValue.scopeId,
       userId: Object.hasOwn(value, 'userId') ? value.userId : previousValue.userId,
       jobId: Object.hasOwn(value, 'jobId') ? value.jobId : previousValue.jobId,

@@ -10,6 +10,7 @@
 
 import type { HaiError } from '@h-ai/core'
 import type { ApiResponse } from './kit-types.js'
+import { core } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
 /**
@@ -108,19 +109,22 @@ export function error(
   requestId?: string,
   details?: unknown,
 ): Response {
+  const safe = core.error.toPublic({ code, message, httpStatus: status }, requestId)
+  core.logger.error('API request failed', { traceId: safe.traceId, error: { code, message, httpStatus: status, details } })
   const response: ApiResponse = {
     success: false,
     error: {
       code,
-      message,
-      details,
+      message: safe.message,
+      traceId: safe.traceId,
+      details: status < 500 ? core.sanitize.sanitizeSensitiveFields(details) : undefined,
     },
-    requestId,
+    requestId: requestId ?? core.context.get().requestId ?? safe.traceId,
   }
 
   return new Response(JSON.stringify(response), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Trace-Id': safe.traceId! },
   })
 }
 
@@ -304,9 +308,8 @@ export function fromResult<T>(
     return ok(result.data, requestId)
   }
 
-  const { code, message } = result.error
-  const status = httpStatusMap?.[code] ?? 400
-  return error(String(code), message, status, requestId)
+  const status = httpStatusMap?.[result.error.code] ?? (typeof result.error.httpStatus === 'number' ? result.error.httpStatus : 400)
+  return fromError({ ...result.error, httpStatus: status }, requestId)
 }
 
 /**
@@ -326,5 +329,7 @@ export function fromError(
   haiError: HaiError,
   requestId?: string,
 ): Response {
-  return error(String(haiError.code), haiError.message, haiError.httpStatus ?? 400, requestId)
+  const safe = core.error.toPublic(haiError, requestId)
+  core.logger.error('API operation failed', { traceId: safe.traceId, error: haiError })
+  return error(String(safe.code), safe.message, safe.httpStatus ?? 400, safe.traceId)
 }

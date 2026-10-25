@@ -7,6 +7,56 @@
  */
 
 import type { HaiError, HaiErrorDef } from '../core-types'
+import { i18n } from '../i18n/core-i18n-utils.js'
+import { sanitize } from '../utils/core-util-sanitize.js'
+import { requestContext } from './core-function-context.js'
+import { id } from './core-function-id.js'
+
+/**
+ * 错误提示末尾显示关联标识；重复格式化不会重复追加。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const message = core.error.formatMessage({ message: '保存失败', traceId: 'request-1' })
+ * ```
+ */
+function formatMessage(error: Pick<HaiError, 'message' | 'traceId'>): string {
+  return error.traceId && /^[\w.:-]{1,128}$/.test(error.traceId) && !error.message.endsWith(`(traceId: ${error.traceId})`)
+    ? `${error.message} (traceId: ${error.traceId})`
+    : error.message
+}
+
+/**
+ * HTTP/UI 边界仅公开安全消息和关联标识；内部异常及扩展信息留在脱敏日志。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const safe = core.error.toPublic({ code: 'app:failed', message: 'Internal detail', httpStatus: 500 }, 'request-1')
+ * ```
+ */
+function toPublic(error: HaiError, traceId?: string, locale?: string): HaiError {
+  const context = requestContext.get()
+  const candidate = traceId ?? context.traceId ?? context.requestId ?? error.traceId
+  const safeTraceId = candidate && /^[\w.:-]{1,128}$/.test(candidate) ? candidate : id.uuid()
+  const result: HaiError = {
+    code: error.code,
+    message: (error.httpStatus ?? 400) >= 500 ? i18n.coreM('core_errorInternal', { locale }) : sanitize.sanitizeText(error.message),
+    traceId: safeTraceId,
+    ...(error.httpStatus !== undefined ? { httpStatus: error.httpStatus } : {}),
+    ...(error.system ? { system: error.system } : {}),
+    ...(error.module ? { module: error.module } : {}),
+  }
+  if (error.publicExt)
+    result.ext = sanitize.sanitizeSensitiveFields(error.publicExt)
+  // 字段校验只携带已本地化的 field/message，不复制 rejectedValue 或原始 Zod issue。
+  if ((error.httpStatus === 400 || error.httpStatus === 422) && Array.isArray(error.cause)) {
+    result.cause = error.cause.flatMap((item: unknown) => item && typeof item === 'object' && 'field' in item && typeof item.field === 'string' && 'message' in item && typeof item.message === 'string'
+      ? [{ field: item.field, message: sanitize.sanitizeText(item.message) }]
+      : [])
+  }
+  result.message = formatMessage(result)
+  return result
+}
 
 /**
  * 根据模块错误映射生成标准错误定义对象。
@@ -107,6 +157,8 @@ function buildHaiErrorInst(def: HaiErrorDef, message: string, cause?: unknown, s
 export const error = {
   buildHaiErrorsDef,
   buildHaiErrorInst,
+  formatMessage,
+  toPublic,
 }
 
 /**

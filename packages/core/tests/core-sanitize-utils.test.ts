@@ -8,6 +8,11 @@ import { describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
 
 describe('core.sanitize', () => {
+  it.each(['verificationCode', 'verification_code', 'verifyCode', 'otpCode', 'totpCode', 'smsCode', 'emailCode', 'captchaCode', 'oneTimeCode', 'twoFactorCode'])('默认脱敏验证码字段 %s，保留普通业务code', (key) => {
+    expect(core.sanitize.sanitizeSensitiveFields({ nested: { [key]: 'credential-sentinel', code: 'ORDER_ACCEPTED' } })).toEqual({ nested: { [key]: '[REDACTED]', code: 'ORDER_ACCEPTED' } })
+    expect(core.sanitize.sanitizeUrl(`https://example.test/verify?${key}=credential-sentinel&code=ORDER_ACCEPTED`)).not.toContain('credential-sentinel')
+  })
+
   it('uRL 参数按解码名称脱敏并保留重复项和普通参数', () => {
     const value = core.sanitize.sanitizeUrl('https://u:p@example.com/a?to%6ben=one&token=two&apiKey=three&limit=10#access_token=four&state=ok')
     expect(value).toBe('https://[REDACTED]:[REDACTED]@example.com/a?token=[REDACTED]&token=[REDACTED]&apiKey=[REDACTED]&limit=10#access_token=[REDACTED]&state=ok')

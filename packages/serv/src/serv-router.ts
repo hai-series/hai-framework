@@ -603,9 +603,10 @@ class ServRouterBuilderRuntime {
 
     // 点路径反射会丢失单条 contract 的泛型；路径已由 expectedPaths 校验，
     // handler 的精确 input/output 则由公开的 ServRouteHandler 在调用侧保证。
-    const safeHandler = hasGuards(guards)
+    const guardedHandler = hasGuards(guards)
       ? applyServGuards(guards, handler as AuthenticatedRuntimeProcedureHandler)
-      : mapHaiError(handler as RuntimeProcedureHandler)
+      : handler as RuntimeProcedureHandler
+    const safeHandler = mapHaiError(guardedHandler)
     const implemented = Reflect.apply(
       implementHandler,
       procedureImplementer,

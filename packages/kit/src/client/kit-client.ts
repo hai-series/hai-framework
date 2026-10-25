@@ -9,6 +9,7 @@
 import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
 import type { KitConfig } from '../kit-config.js'
+import { core } from '@h-ai/core'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { getDefaultBrowserTokenStore } from '../kit-auth.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
@@ -344,6 +345,9 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     const method = (init.method ?? request?.method ?? 'GET').toUpperCase()
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method)
     const headers = new Headers(init.headers ?? request?.headers)
+    const suppliedId = headers.get('x-request-id')
+    const traceId = suppliedId && /^[\w.:-]{1,128}$/.test(suppliedId) ? suppliedId : core.id.uuid()
+    headers.set('x-request-id', traceId)
     // 仅检查元数据，不构建/读取 Request，确保透传上传的流与浏览器边界保持可用。
     const canUseTransport = request && init.body === undefined
       ? canUseTransportForRequest({ method, headers, body: request.body })
@@ -375,11 +379,24 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
         excludePaths: transportConfig?.excludePaths,
       })
     ) {
-      return transportClient.encryptedFetch(input, { ...init, headers })
+      return send(() => transportClient.encryptedFetch(input, { ...init, headers }))
     }
 
     // ── 发送（FormData/Blob/Stream 等保持原样，不破坏浏览器边界） ──
-    return fetch(input, { ...init, headers })
+    return send(() => fetch(input, { ...init, headers }))
+
+    async function send(operation: () => Promise<Response>): Promise<Response> {
+      try {
+        const response = await operation()
+        if (!response.ok)
+          core.logger.error('HTTP request failed', { traceId: response.headers.get('x-trace-id') ?? response.headers.get('x-request-id') ?? traceId, method, status: response.status })
+        return response
+      }
+      catch (error) {
+        core.logger.error('HTTP transport failed', { traceId, method, error })
+        throw error
+      }
+    }
   }
 
   return {

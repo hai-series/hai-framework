@@ -7,7 +7,7 @@
  */
 
 import type { ServProcedureHandler } from './serv-pipeline-types.js'
-import { err, HaiCommonError } from '@h-ai/core'
+import { core, err, HaiCommonError } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 
 /**
@@ -45,7 +45,8 @@ export function buildHaiErrorBody(def: ServErrorBodyDef, message: string) {
     success: false as const,
     error: {
       code: def.code,
-      message,
+      message: core.error.formatMessage({ message, traceId: core.context.get().traceId ?? core.context.get().requestId }),
+      traceId: core.context.get().traceId ?? core.context.get().requestId,
       httpStatus: def.httpStatus,
       system: def.system,
       module: def.module,
@@ -71,11 +72,18 @@ export function buildHaiErrorBody(def: ServErrorBodyDef, message: string) {
 export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>): ServProcedureHandler<TInput, TOutput> {
   return async (options) => {
     try {
-      return await handler(options)
+      const result = await handler(options)
+      if (result.success)
+        return result
+      const error = core.error.toPublic(result.error, options.context.requestId, options.context.locale)
+      options.context.logger.error('Procedure failed', { traceId: error.traceId, error: result.error })
+      return { success: false, error }
     }
     catch (error) {
       // 所有未捕获异常统一在这里收口，避免直接把异常冒泡到 HTTP 层。
-      return err(HaiCommonError.INTERNAL_ERROR, servM('serv_errorInternal', { locale: options.context.locale }), error)
+      const safe = core.error.toPublic({ ...HaiCommonError.INTERNAL_ERROR, message: servM('serv_errorInternal', { locale: options.context.locale }) }, options.context.requestId, options.context.locale)
+      options.context.logger.error('Procedure threw an exception', { traceId: safe.traceId, error })
+      return err(safe)
     }
   }
 }

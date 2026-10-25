@@ -86,7 +86,7 @@ describe('serv feature storage', () => {
     const body = await response.json()
     expect(body.success).toBe(false)
     expect(body.error.code).toBe(HaiCommonError.VALIDATION_ERROR.code)
-    expect(body.error.message).toBe('Validation failed')
+    expect(body.error.message).toMatch(/^Validation failed \(traceId: [\w.:-]+\)$/)
     expect(body.error.cause).toEqual([
       { field: 'key', message: 'Invalid input format' },
     ])
@@ -110,7 +110,7 @@ describe('serv feature storage', () => {
     const body = await response.json()
     expect(body.success).toBe(false)
     expect(body.error.code).toBe(HaiCommonError.VALIDATION_ERROR.code)
-    expect(body.error.message).toBe('数据验证失败')
+    expect(body.error.message).toMatch(/^数据验证失败 \(traceId: [\w.:-]+\)$/)
     expect(body.error.cause).toEqual([
       { field: 'keys.1', message: '输入格式无效' },
     ])

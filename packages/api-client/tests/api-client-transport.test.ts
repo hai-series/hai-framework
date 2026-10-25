@@ -148,7 +148,7 @@ describe('api-client transport', () => {
     expect((await client.init({ baseUrl: 'https://test.local/api/v1', fetch, transport: { crypto } })).success).toBe(true)
     try {
       const result = await client.echo({ msg: 'pending business request' })
-      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, message: new TransportTimeError().message, cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code } } })
+      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, message: expect.stringContaining(new TransportTimeError().message), cause: { transportCode: HaiCryptoError.TRANSPORT_TIME_INVALID.code } } })
       expect(fetch.mock.calls.filter(([request]) => new URL(request instanceof Request ? request.url : String(request)).pathname.endsWith('/echo'))).toHaveLength(1)
     }
     finally { await client.close() }

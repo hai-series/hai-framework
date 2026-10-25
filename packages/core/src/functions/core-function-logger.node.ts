@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import pino from 'pino'
+import { sanitize } from '../utils/core-util-sanitize.js'
 import { requestContext } from './core-function-context.js'
 import { emitLogRecord, sanitizeLogFields } from './core-function-log-observer.js'
 
@@ -134,6 +135,7 @@ function wrapPino(resolvePino: () => pino.Logger, resolveContext: () => Record<s
     if (!output.isLevelEnabled(level))
       return
     const context = sanitizeLogContext({ ...resolveContext(), ...ctx, ...requestContext.get() }) ?? {}
+    message = sanitize.sanitizeText(message)
     output[level](context, message)
     if (!requestContext.get().suppressLogObservers)
       emitLogRecord({ timestamp: Date.now(), level, message, context })

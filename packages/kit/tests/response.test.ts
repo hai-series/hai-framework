@@ -63,7 +63,8 @@ describe('response Helpers', () => {
       const body = await response.json()
       expect(body.success).toBe(false)
       expect(body.error.code).toBe('TEST_ERROR')
-      expect(body.error.message).toBe('Test message')
+      expect(body.error.message).toBe('Test message (traceId: req123)')
+      expect(body.error.traceId).toBe('req123')
       expect(body.error.details).toEqual({ extra: 'data' })
     })
   })
@@ -108,7 +109,7 @@ describe('response Helpers', () => {
       expect(response.status).toBe(404)
 
       const body = await response.json()
-      expect(body.error.message).toBe('User not found')
+      expect(body.error.message).toMatch(/^User not found \(traceId:/)
     })
   })
 

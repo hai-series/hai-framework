@@ -13,7 +13,7 @@ import type { StorageFunctions } from '@h-ai/storage'
 import type { ServContext } from '../serv-context.js'
 import type { ServMessageKey } from '../serv-i18n.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
-import { apiContract } from '@h-ai/api-contract'
+import { apiContract, StorageDeleteSummarySchema } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { getStorageKeyIssue, STORAGE_KEY_MAX_BYTES, StorageDeleteKeysSchema } from '@h-ai/storage/schemas'
 import { servM } from '../serv-i18n.js'
@@ -250,7 +250,11 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
       const access = await authorize({ context, operation: 'deleteMany', keys: keysResult.data })
       if (!access.success)
         return access
-      return storage.file.deleteMany(keysResult.data)
+      const result = await storage.file.deleteMany(keysResult.data)
+      if (result.success)
+        return result
+      const progress = StorageDeleteSummarySchema.safeParse(result.error.ext?.deleteMany)
+      return err({ ...result.error, publicExt: progress.success ? { deleteMany: progress.data } : undefined })
     })
 
     .build()

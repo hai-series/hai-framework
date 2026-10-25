@@ -463,6 +463,7 @@ export interface ApiResponse<T = unknown> {
   error?: {
     code: string
     message: string
+    traceId?: string
     details?: unknown
   }
   /** 请求 ID */

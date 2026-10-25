@@ -42,7 +42,7 @@ describe('pipeline.orpc', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toContain('common')
-      expect(result.error.message).toBe('服务器内部错误')
+      expect(result.error.message).toBe('内部错误 (traceId: req-1)')
     }
   })
 })

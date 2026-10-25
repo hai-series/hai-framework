@@ -5,6 +5,24 @@
 
 import { typeUtils } from './core-util-type.js'
 
+// 普通引号与一层 JSON 转义引号共用一套文本规则；结构化字段仍按下方键名规则处理。
+const CREDENTIAL_TEXT = /\b(?:Bearer|Basic)\s+[\w.~+/-]+=*|\b(?:[\w-]*[_-])?(?:password|passwd|passcode|secret|token|session(?:[_-]?id)?|authorization|cookie|csrf|credential|api[_-]?key|private[_-]?key|(?:access|refresh|id|csrf)token|(?:otp|totp|verification|verify|captcha|sms|email|auth|one[_-]?time|two[_-]?factor)[_-]?code)(?:\\?["'])?\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\"(?:[^\\]|\\\\\\\\|\\\\\\"|\\\\[^"\\])*\\"|[^\s,;&}\]]+)/gi
+
+/**
+ * 清理诊断文本中的显式凭据、URL 凭据及调用方已知的秘密值；不猜测无标签的任意文本。
+ * @example
+ * ```ts
+ * import { core } from '@h-ai/core'
+ * const safe = core.sanitize.sanitizeText('verificationCode=123456')
+ * ```
+ */
+export function sanitizeText(text: string, secretValues: readonly string[] = []): string {
+  let result = text
+  for (const value of [...new Set(secretValues)].filter(Boolean).sort((a, b) => b.length - a.length))
+    result = result.replaceAll(value, '[REDACTED]')
+  return result.replace(/\b[a-z][a-z\d+.-]*:\/\/[^\s<>"']+/gi, url => sanitizeUrl(url)).replace(CREDENTIAL_TEXT, match => match.includes('[REDACTED') ? match : '[REDACTED]')
+}
+
 /**
  * 默认敏感字段匹配规则（仅针对凭证类字段）
  * @example
@@ -13,7 +31,7 @@ import { typeUtils } from './core-util-type.js'
  * const credential = core.sanitize.isSensitiveKey('apiKey') // true
  * ```
  */
-export const DEFAULT_SENSITIVE_KEY_REGEX = /(?:^|_)(?:pass|passcode|password|secret|authorization|cookie|otp|session|token)$|(?:^|_)otp_code$|(?:^|_)private_key$|(?:^|_)access_key(?:_id|_secret)?$|(?:^|_)secret_access_key$|(?:^|_)api(?:_[a-z0-9]+)*_key$|^apikey$/i
+export const DEFAULT_SENSITIVE_KEY_REGEX = /(?:^|_)(?:pass|passcode|password|secret|authorization|cookie|otp|session|token)$|(?:^|_)(?:otp|totp|verification|verify|captcha|sms|email|auth|one_time|two_factor)_code$|(?:^|_)private_key$|(?:^|_)access_key(?:_id|_secret)?$|(?:^|_)secret_access_key$|(?:^|_)api(?:_[a-z0-9]+)*_key$|^apikey$/i
 
 /**
  * 默认脱敏替换值
@@ -264,7 +282,8 @@ function sanitizeSensitiveValueWithContext(
   errorDepth = 0,
 ): unknown {
   const isPlainObjectValue = isPlainRecord(value)
-  const isErrorDiagnostic = errorPath !== undefined || value instanceof Error
+  const errorValue = value instanceof Error ? value : typeof DOMException !== 'undefined' && value instanceof DOMException ? value : undefined
+  const isErrorDiagnostic = errorPath !== undefined || errorValue !== undefined
 
   if (key !== null) {
     const normalizedKey = normalizeKeyForMatching(key)
@@ -288,7 +307,7 @@ function sanitizeSensitiveValueWithContext(
     if (typeof value === 'function' || typeof value === 'symbol')
       return undefined
     if (value === null || typeof value !== 'object')
-      return value
+      return typeof value === 'string' ? sanitizeText(value) : value
 
     const activePath = errorPath ?? new WeakSet<object>()
     if (activePath.has(value))
@@ -304,14 +323,15 @@ function sanitizeSensitiveValueWithContext(
 
       // 只复制枚举上下文，显式补齐原生异常的非枚举诊断；不调用原对象的 toJSON。
       const fields: Record<string, unknown> = { ...value }
-      if (value instanceof Error) {
-        fields.name = value.name
-        fields.message = value.message
-        fields.stack = value.stack
-        if (Object.hasOwn(value, 'cause'))
-          fields.cause = value.cause
-        if (value instanceof AggregateError)
-          fields.errors = value.errors
+      if (errorValue) {
+        fields.name = errorValue.name
+        fields.message = errorValue.message
+        if ('stack' in errorValue)
+          fields.stack = errorValue.stack
+        if (Object.hasOwn(errorValue, 'cause') && 'cause' in errorValue)
+          fields.cause = errorValue.cause
+        if (errorValue instanceof AggregateError)
+          fields.errors = errorValue.errors
       }
 
       const sanitized: Record<string, unknown> = {}
@@ -418,6 +438,7 @@ export const sanitize = {
   defaultSensitiveReplacement: DEFAULT_SENSITIVE_REPLACEMENT,
   isSensitiveKey,
   sanitizeUrl,
+  sanitizeText,
   sanitizeSensitiveValue,
   sanitizeSensitiveFields,
 }

@@ -209,7 +209,7 @@ describe('apiClient.create', () => {
     const result = await client.health()
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(result.error.message).toBe('Still unauthorized')
+      expect(result.error.message).toMatch(/^Still unauthorized \(traceId: [\w.:-]+\)$/)
     expect(calls).toBe(2)
     expect(fetch).toHaveBeenCalledTimes(3)
     await client.close()
@@ -220,7 +220,13 @@ describe('apiClient.create', () => {
     const fetch = vi.fn(async () => Response.json(failure))
     const client = apiClient.create(testContract)
     expect((await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch, auth: {} })).success).toBe(true)
-    expect(await client.health()).toEqual(failure)
+    const result = await client.health()
+    expect(result).toMatchObject({ success: false, error: { code: failure.error.code, httpStatus: status, traceId: expect.any(String) } })
+    if (!result.success) {
+      expect(result.error.message).toMatch(/\(traceId: [\w.:-]+\)$/)
+      if (status === 500)
+        expect(result.error.message).not.toContain('Failure')
+    }
     expect(fetch).toHaveBeenCalledTimes(1)
     await client.close()
   })

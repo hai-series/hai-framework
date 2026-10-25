@@ -27,6 +27,7 @@ import { z } from 'zod'
 export const HaiErrorSchema = z.object({
   code: z.union([z.string(), z.number()]),
   message: z.string(),
+  traceId: z.string().max(128).optional(),
   httpStatus: z.number().optional(),
   system: z.string().optional(),
   module: z.string().optional(),
