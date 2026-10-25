@@ -53,10 +53,23 @@ it('rejects invalid scan inputs for memory without treating zero count as defaul
 it('scans all masters with transferable cursors and performs independent cross-slot operations', async () => {
   const ports = await reservePorts()
   // 三个真实 Redis 进程共用容器网络；总线使用内部端口，数据端口与主机保持一致。
-  const start = ports.map(port => `mkdir -p /tmp/redis-${port}; redis-server --port ${port} --cluster-enabled yes --cluster-config-file /tmp/redis-${port}/nodes.conf --cluster-announce-ip 127.0.0.1 --cluster-announce-port ${port} --cluster-announce-bus-port ${port + 10000} --daemonize yes --logfile /tmp/redis-${port}/redis.log`).join('; ')
+  // daemonize 返回时监听端口可能尚未就绪；所有节点实际响应后才发布启动标记。
+  const start = ports.map(port => `
+mkdir -p /tmp/redis-${port}
+redis-server --port ${port} --cluster-enabled yes --cluster-config-file /tmp/redis-${port}/nodes.conf --cluster-announce-ip 127.0.0.1 --cluster-announce-port ${port} --cluster-announce-bus-port ${port + 10000} --daemonize yes --logfile /tmp/redis-${port}/redis.log
+attempt=0
+until [ "$(redis-cli -p ${port} ping 2>/dev/null)" = PONG ]; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 100 ]; then
+    echo "Redis fixture did not become ready on port ${port}" >&2
+    exit 1
+  fi
+  sleep 0.05
+done
+`).join('\n')
   const container = await new GenericContainer('docker.io/library/redis:7.4.11-alpine')
     .withExposedPorts(...ports.map(port => ({ container: port, host: port })))
-    .withCommand(['sh', '-c', `${start}; echo fixture-started; tail -f /dev/null`])
+    .withCommand(['sh', '-c', `set -eu\n${start}\necho fixture-started; tail -f /dev/null`])
     .withWaitStrategy(Wait.forLogMessage('fixture-started'))
     .start()
   const clients: Redis[] = []
