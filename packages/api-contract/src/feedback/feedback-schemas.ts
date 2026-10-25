@@ -37,7 +37,7 @@ export const FeedbackCollectionStatusSchema = z.enum(['collecting', 'complete', 
  * FeedbackNotificationStatusSchema.parse('pending')
  * ```
  */
-export const FeedbackNotificationStatusSchema = z.enum(['pending', 'sending', 'sent', 'deferred', 'failed'])
+export const FeedbackNotificationStatusSchema = z.enum(['disabled', 'pending', 'sending', 'sent', 'deferred', 'failed'])
 
 /**
  * 单条有界、JSON 可序列化的诊断证据。

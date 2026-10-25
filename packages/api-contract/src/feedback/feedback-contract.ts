@@ -1,7 +1,9 @@
+import { z } from 'zod'
 /** @h-ai/api-contract — 反馈的受权 HTTP 契约。 */
 import { paginatedSchema } from '../common/pagination-schemas.js'
 import { haiResultSchema, HaiVoidResultSchema } from '../common/result-schemas.js'
 import { route } from '../common/route.js'
+import { FeedbackBudgetSchema } from './feedback-budget.js'
 import {
   FeedbackAppendEvidenceInputSchema,
   FeedbackAttachmentDataSchema,
@@ -35,6 +37,9 @@ import {
  */
 export const feedbackContract = {
   reports: {
+    policy: route({ method: 'GET', path: '/feedback/policy', operationId: 'feedback.reports.policy', summary: 'Effective feedback capacity', tags: ['feedback'] })
+      .input(z.object({}))
+      .output(haiResultSchema(FeedbackBudgetSchema)),
     submit: route({ method: 'POST', path: '/feedback/reports', operationId: 'feedback.reports.submit', summary: 'submit feedback', tags: ['feedback'] })
       .input(FeedbackSubmitInputSchema)
       .output(haiResultSchema(FeedbackReportSchema)),

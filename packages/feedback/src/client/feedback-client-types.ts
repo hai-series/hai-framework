@@ -1,6 +1,22 @@
-import type { FeedbackAppendEvidenceInput, FeedbackAttachmentInput, FeedbackCompleteInput, FeedbackEvidenceInput, FeedbackReport, FeedbackSubmitInput, FeedbackUploadInput } from '@h-ai/api-contract/feedback'
+import type { FeedbackAppendEvidenceInput, FeedbackAttachmentInput, FeedbackBudget, FeedbackCompleteInput, FeedbackEvidenceInput, FeedbackReport, FeedbackSubmitInput, FeedbackUploadInput } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
+import type { FeedbackSaveResult } from './feedback-client-files.js'
 import type { FeedbackImageAnnotation } from './feedback-client-image.js'
+
+/**
+ * 可直接传给反馈界面的草稿视图；对象 URL 的所有权属于采集会话。
+ * @example
+ * ```ts
+ * import type { FeedbackDraftView } from '@h-ai/feedback/client'
+ * function attachmentCount(view: FeedbackDraftView) { return view.attachments.length }
+ * ```
+ */
+export interface FeedbackDraftView {
+  attachments: Array<{ id: string, name: string, size: number, mimeType: string, url: string }>
+  evidence: FeedbackEvidenceInput[]
+  missing: string[]
+  budget: FeedbackBudget
+}
 
 /**
  * 宿主将鉴权后的 HTTP 客户端注入一次，采集器不依赖 UI 或服务端 SDK。
@@ -11,6 +27,7 @@ import type { FeedbackImageAnnotation } from './feedback-client-image.js'
  * ```
  */
 export interface FeedbackClientActions {
+  policy?: () => Promise<HaiResult<FeedbackBudget>>
   submit: (input: FeedbackSubmitInput) => Promise<HaiResult<FeedbackReport>>
   appendEvidence: (input: FeedbackAppendEvidenceInput) => Promise<HaiResult<{ acknowledged: string[], evidenceRevision: number }>>
   completeCollection: (input: FeedbackCompleteInput) => Promise<HaiResult<unknown>>
@@ -27,6 +44,8 @@ export interface FeedbackClientActions {
  * ```
  */
 export interface FeedbackClientConfig {
+  /** 离线接入可提供策略；在线优先从 actions.policy 读取服务端有效预算。 */
+  budget?: FeedbackBudget
   appId: string
   appVersion?: string
   buildId?: string
@@ -114,9 +133,17 @@ export interface FeedbackClientSubmitInput {
  * ```
  */
 export interface FeedbackBrowserClient {
+  readonly budget: FeedbackBudget
+  /** URL 按附件修订复用，删除、替换和会话关闭时释放。 */
+  getView: () => FeedbackDraftView
+  releasePreviews: () => void
+  /** 导出并使用当前平台的保存/分享入口。 */
+  saveDraft: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<FeedbackSaveResult>>
   /** 并发初始化返回 INIT_IN_PROGRESS；重初始化先等待旧会话关闭。 */
   init: (config: FeedbackClientConfig) => Promise<HaiResult<void>>
   prepare: () => Promise<HaiResult<FeedbackDraft>>
+  /** 补充当前可见页面截图；传附件 ID 则原位替换。冻结或异步冲突时保留原材料。 */
+  captureScreenshot: (attachmentId?: string) => Promise<HaiResult<void>>
   submit: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<FeedbackReport>>
   flush: () => Promise<HaiResult<void>>
   record: (event: { kind: FeedbackEvidenceInput['kind'], data: Record<string, unknown>, requestId?: string, errorId?: string }) => void
@@ -138,10 +165,10 @@ export interface FeedbackBrowserClient {
    * void addSelectedFiles
    * ```
    */
-  addFiles: (files: readonly File[]) => Promise<HaiResult<void>>
+  addFiles: (files: readonly File[], removedAttachmentIds?: readonly string[]) => Promise<HaiResult<void>>
   exportDraft: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<Uint8Array>>
   /** 停止采集，等待有界截图及已提交材料续传后释放会话；并发关闭共用同一清理过程。 */
-  close: () => Promise<void>
+  close: (options?: { discard?: boolean }) => Promise<void>
 }
 
 export type { FeedbackImageAnnotation } from './feedback-client-image.js'

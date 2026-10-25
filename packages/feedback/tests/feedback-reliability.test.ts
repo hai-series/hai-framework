@@ -146,13 +146,13 @@ describe.sequential('反馈可靠性边界', () => {
     }
   })
 
-  it('首版拒绝已开启reach DND的配置，不静默建立无法幂等关联的第二条队列', async () => {
+  it('reach 免打扰不会阻止反馈初始化', async () => {
     await feedback.close()
     await reach.close()
     expect((await reach.init({ providers: [{ name: 'email', type: 'console' }], dnd: { enabled: true, strategy: 'delay', start: '00:00', end: '23:59' } })).success).toBe(true)
     const initialized = await feedback.init(config)
-    expect(initialized).toMatchObject({ success: false, error: { code: HaiFeedbackError.CONFIG_ERROR.code } })
-    expect(feedback.isInitialized).toBe(false)
+    expect(initialized.success).toBe(true)
+    expect(feedback.isInitialized).toBe(true)
   })
 
   it('补采耗尽尝试后进入failed终态，人工重试时才重新进入collecting', async () => {

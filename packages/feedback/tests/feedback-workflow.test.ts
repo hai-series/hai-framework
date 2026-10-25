@@ -132,6 +132,24 @@ describe.sequential('反馈公开流程', () => {
     expect(stored.success && stored.data.total).toBe(0)
   })
 
+  it.each(['video/webm', 'video/mp4'])('短录屏%s校验容器字节，上传和授权读取保留原内容', async (contentType) => {
+    const bytes = contentType === 'video/webm' ? Buffer.from([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0]) : Buffer.from([0, 0, 0, 12, 102, 116, 121, 112, 105, 115, 111, 109])
+    const invalid = Buffer.alloc(bytes.length)
+    for (const [key, data] of [['valid', bytes], ['invalid', invalid]] as const) {
+      const report = await feedback.submit({ submissionId: `recording-${contentType}-${key}`, appId: config.appId, attachments: [{ id: 'recording', name: 'recording', contentType, size: data.length, checksum: createHash('sha256').update(data).digest('hex') }] }, actor)
+      expect(report.success).toBe(true)
+      if (!report.success)
+        return
+      const uploaded = await feedback.uploadAttachment({ id: report.data.id, attachmentId: 'recording', dataBase64: data.toString('base64') }, actor)
+      expect(uploaded.success).toBe(key === 'valid')
+      if (key === 'valid') {
+        const loaded = await feedback.getAttachment({ id: report.data.id, attachmentId: 'recording' }, actor)
+        expect(loaded.success && loaded.data.dataBase64).toBe(data.toString('base64'))
+        expect((await feedback.getAttachment({ id: report.data.id, attachmentId: 'recording' }, other)).success).toBe(false)
+      }
+    }
+  })
+
   it('截图验证字节/类型/checksum，私有读授权并随离线包导出', async () => {
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/x9sAAAAASUVORK5CYII=', 'base64')
     const checksum = createHash('sha256').update(png).digest('hex')

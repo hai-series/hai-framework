@@ -10,6 +10,41 @@ import { readAdminBuildFacts } from './build-metadata'
 import { loginOnPage, registerViaApi, uniqueUser, waitForHydration } from './helpers'
 
 let buildFacts: ReturnType<typeof readAdminBuildFacts>
+
+test('Desktop 默认 CSP 允许 Blob 截图预览、像素遮挡和下载，并保持脚本来源限制', async ({ page }) => {
+  const template = await readFile(new URL('../../../packages/cli/templates/apps/fullstack/apps/{{projectName}}-desktop/src-tauri/tauri.conf.json.hbs', import.meta.url), 'utf8')
+  const policy = /"csp":\s*"([^"]+)"/.exec(template)?.[1]
+  expect(policy).toBeTruthy()
+  expect(policy!.split(';').find(value => value.trim().startsWith('script-src'))).not.toContain('blob:')
+  await page.route('https://desktop-csp.test/', route => route.fulfill({ status: 200, headers: { 'Content-Security-Policy': policy! }, contentType: 'text/html', body: '<!doctype html><title>Desktop capture</title><body></body>' }))
+  await page.goto('https://desktop-csp.test/')
+  const pixels = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 100
+    canvas.height = 80
+    const context = canvas.getContext('2d')!
+    context.fillStyle = '#ff0000'
+    context.fillRect(0, 0, 100, 80)
+    context.fillStyle = '#111111'
+    context.fillRect(20, 20, 10, 10)
+    const blob = await new Promise<Blob>(resolve => canvas.toBlob(value => resolve(value!), 'image/png'))
+    const url = URL.createObjectURL(blob)
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    document.body.append(image)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'desktop-feedback.png'
+    link.textContent = 'Save screenshot'
+    document.body.append(link)
+    return { naturalWidth: image.naturalWidth, mask: [...context.getImageData(25, 25, 1, 1).data] }
+  })
+  expect(pixels).toEqual({ naturalWidth: 100, mask: [17, 17, 17, 255] })
+  const download = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Save screenshot' }).click()
+  expect((await download).suggestedFilename()).toBe('desktop-feedback.png')
+})
 test.beforeAll(async ({ browserName }, testInfo) => {
   buildFacts = readAdminBuildFacts()
   await testInfo.attach('admin-build-facts', { body: JSON.stringify({ browserName, ...buildFacts }, null, 2), contentType: 'application/json' })
@@ -36,6 +71,7 @@ async function capture(page: Page, name: string, testInfo: TestInfo) {
 async function openFeedback(page: Page) {
   await page.getByTestId('feedback-open').click()
   await expect(page.locator('.feedback-form textarea[name="description"]')).toBeVisible()
+  await expect(page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true })).toBeInViewport({ ratio: 1 })
 }
 
 async function submitFeedback(page: Page, description = '') {
@@ -132,6 +168,140 @@ test('无说明反馈受理，分页管理详情可处理和撤销且保留历�
   await capture(page, 'feedback-detail-mobile.png', testInfo)
 })
 
+test('当前截图、换页补图、材料内容、真实编码录屏和页面回放完成同一反馈流程', async ({ page }, testInfo) => {
+  test.setTimeout(120_000)
+  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const description = `capture-${uniqueUser('flow').username}`
+  // 在真实当前页面放置颜色探针，检查采集的PNG内容，避免只验证文件存在。
+  await page.evaluate(() => {
+    const marker = document.createElement('div')
+    marker.id = 'feedback-current-page-probe'
+    marker.style.cssText = 'position:fixed;left:200px;top:180px;width:80px;height:80px;background:rgb(19,221,119);z-index:900'
+    document.body.append(marker)
+  })
+  await openFeedback(page)
+  const form = page.locator('.feedback-form')
+  await expect(form.locator('section img').first()).toHaveAttribute('alt', 'screenshot.png')
+  const pixel = await form.locator('img[alt="screenshot.png"]').evaluate(async (image) => {
+    const source = image as HTMLImageElement
+    await source.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = source.naturalWidth
+    canvas.height = source.naturalHeight
+    const context = canvas.getContext('2d')!
+    context.drawImage(source, 0, 0)
+    return Array.from(context.getImageData(240, 220, 1, 1).data)
+  })
+  expect(pixel.slice(0, 3)).toEqual([19, 221, 119])
+  await form.locator('textarea[name="description"]').fill(description)
+  const materials = form.locator('details').filter({ has: page.locator('summary', { hasText: /^收集材料$/ }) }).first()
+  await materials.locator('summary').first().click()
+  const environment = materials.locator('details').filter({ has: page.locator('summary', { hasText: 'environment' }) }).first()
+  await environment.locator('summary').click()
+  await expect(environment.locator('pre')).toContainText('admin-console')
+  await expect(environment.locator('pre')).toContainText('1440')
+  await capture(page, 'feedback-material-contents.png', testInfo)
+  await form.getByRole('button', { name: '添加页面截图', exact: true }).click()
+  await expect(form).toBeHidden()
+  await page.locator('a[href="/admin/modules"]').first().click()
+  await expect(page).toHaveURL(/\/admin\/modules/)
+  await page.getByRole('button', { name: '截取当前页面', exact: true }).click()
+  await expect(form).toBeVisible()
+  await expect(form.locator('section img')).toHaveCount(2)
+  await expect(form.locator('textarea[name="description"]')).toHaveValue(description)
+  await form.getByRole('button', { name: '重新截图', exact: true }).first().click()
+  await page.getByRole('button', { name: '截取当前页面', exact: true }).click()
+  await expect(form).toBeVisible()
+  await expect(form.locator('section img')).toHaveCount(2)
+  // 仅替代系统选屏授权，编码使用 Chrome 的真实 MediaRecorder 和视频轨。
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 320
+      canvas.height = 180
+      const context = canvas.getContext('2d')!
+      let frame = 0
+      const draw = () => {
+        context.fillStyle = frame++ % 2 ? '#2563eb' : '#16a34a'
+        context.fillRect(0, 0, 320, 180)
+        context.fillStyle = '#fff'
+        context.fillText('Feedback video', 20, 80)
+      }
+      draw()
+      const stream = canvas.captureStream(10)
+      const timer = setInterval(draw, 100)
+      for (const track of stream.getTracks()) {
+        const stop = track.stop.bind(track)
+        track.stop = () => {
+          clearInterval(timer)
+          stop()
+        }
+      }
+      Object.assign(window, { __feedbackTestStream: stream })
+      return stream
+    } })
+  })
+  await form.getByRole('button', { name: '录屏', exact: true }).click()
+  await form.getByRole('button', { name: '开始录屏', exact: true }).click()
+  await expect(form).toBeHidden()
+  await expect(page.getByRole('status').filter({ hasText: '正在录屏' })).toContainText('2 秒', { timeout: 6000 })
+  await page.getByRole('button', { name: '停止录屏', exact: true }).click()
+  await expect(form).toBeVisible()
+  const video = form.locator('video')
+  await expect(video).toBeVisible()
+  await expect.poll(() => video.evaluate(element => element.readyState)).toBeGreaterThanOrEqual(2)
+  expect(await page.evaluate(() => (Reflect.get(window, '__feedbackTestStream') as MediaStream).getTracks().every(track => track.readyState === 'ended'))).toBe(true)
+  await video.evaluate(element => element.play())
+  await expect.poll(() => video.evaluate(element => element.currentTime)).toBeGreaterThan(0)
+  await expect(form.getByRole('button', { name: '提交反馈', exact: true })).toBeInViewport({ ratio: 1 })
+  await capture(page, 'feedback-recording-preview.png', testInfo)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(form.getByRole('button', { name: '提交反馈', exact: true })).toBeInViewport({ ratio: 1 })
+  await expect(form.getByRole('button', { name: '保存反馈到本地', exact: true })).toBeInViewport({ ratio: 1 })
+  await capture(page, 'feedback-actions-narrow.png', testInfo)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const downloading = page.waitForEvent('download')
+  await form.getByRole('button', { name: '保存反馈到本地', exact: true }).click()
+  const download = await downloading
+  const archivePath = testInfo.outputPath('feedback-recording.zip')
+  await download.saveAs(archivePath)
+  const bundle = await readFeedbackBundle(await readFile(archivePath))
+  expect(bundle.success).toBe(true)
+  if (!bundle.success)
+    throw new Error(bundle.error.message)
+  expect(bundle.data.report.description).toBe(description)
+  const recorded = bundle.data.manifest.files.find(item => item.contentType === 'video/webm')!
+  expect(recorded).toBeDefined()
+  expect(bundle.data.files[recorded.path]!.subarray(0, 4)).toEqual(new Uint8Array([0x1A, 0x45, 0xDF, 0xA3]))
+  expect(bundle.data.evidence.some(item => item.kind === 'replay' && (item.data as { event?: { type?: number } }).event?.type === 2)).toBe(true)
+  await form.getByRole('button', { name: '提交反馈', exact: true }).click()
+  const receipt = form.locator('[role="status"]').first()
+  await expect(receipt).toContainText(/已受理：FB-/)
+  const number = (await receipt.textContent())!.match(/FB-[\w-]+/)![0]
+  await form.getByRole('button', { name: '关闭', exact: true }).click()
+  await page.goto(`/admin/feedback?search=${encodeURIComponent(number)}`)
+  await waitForHydration(page)
+  await page.getByRole('button', { name: '查看详情', exact: true }).click()
+  const detail = page.locator('.feedback-detail')
+  await detail.getByRole('tab', { name: '页面回放', exact: true }).click()
+  await expect(detail.locator('.replayer-wrapper iframe')).toBeVisible()
+  await expect(detail.getByRole('button', { name: '播放', exact: true })).toBeEnabled()
+  await detail.getByRole('button', { name: '播放', exact: true }).click()
+  await expect(detail.getByRole('button', { name: '暂停', exact: true })).toBeEnabled()
+  await capture(page, 'feedback-page-replay.png', testInfo)
+  await detail.getByRole('button', { name: '暂停', exact: true }).click()
+  await detail.getByRole('slider', { name: '页面回放', exact: true }).fill('1000')
+  await detail.getByRole('tab', { name: '操作现场', exact: true }).click()
+  const recording = detail.locator('article').filter({ hasText: recorded.name })
+  await expect(recording).toBeVisible()
+  await recording.getByRole('button', { name: '查看 / 下载', exact: true }).click()
+  await expect(recording.locator('video')).toBeVisible()
+  await expect.poll(() => recording.locator('video').evaluate(element => element.readyState)).toBeGreaterThanOrEqual(2)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await capture(page, 'feedback-video-mobile.png', testInfo)
+})
+
 test('列表通过服务端分页与筛选取得不同记录', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
@@ -200,11 +370,12 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
   try {
     await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
     await expect(page.locator('.feedback-form [role="alert"]')).toBeVisible()
+    await expect(page.locator('.feedback-form [role="alert"]')).toContainText(/\(traceId: [\w.:-]+\)$/)
     await expect(page.locator('.feedback-form textarea[name="description"]')).toHaveValue(description)
     const downloading = page.waitForEvent('download')
-    await page.locator('.feedback-form').getByRole('button', { name: '保存本地问题包', exact: true }).click()
+    await page.locator('.feedback-form').getByRole('button', { name: '保存反馈到本地', exact: true }).click()
     const download = await downloading
-    expect(download.suggestedFilename()).toBe('feedback-local.zip')
+    expect(download.suggestedFilename()).toMatch(/^feedback-[\w-]+\.zip$/)
     const output = testInfo.outputPath('feedback-local.zip')
     await download.saveAs(output)
     const bundle = await readFeedbackBundle(await readFile(output))
@@ -246,16 +417,39 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
   })
   await page.locator('.feedback-form summary').filter({ hasText: '更多选项' }).click()
   await page.locator('.feedback-form input[type="file"]').setInputFiles({ name: 'added-photo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(jpeg, 'base64') })
-  const added = page.locator('.feedback-form section > div').filter({ has: page.locator('img[alt="added-photo.jpg"]') })
+  const added = page.locator('.feedback-form section > div').filter({ has: page.locator('img[alt^="added-photo."]') })
   await expect(added).toBeVisible()
   await added.locator('img[alt="added-photo.jpg"]').scrollIntoViewIfNeeded()
   await capture(page, 'feedback-added-image-before-mask.png', testInfo)
   await added.locator('img[alt="added-photo.jpg"]').screenshot({ path: testInfo.outputPath('feedback-added-image-before-mask-detail.png'), animations: 'disabled' })
   await added.getByRole('button', { name: '遮挡敏感区域', exact: true }).click()
-  await added.getByRole('spinbutton', { name: '左侧 (%)', exact: true }).fill('0')
-  await added.getByRole('spinbutton', { name: '顶部 (%)', exact: true }).fill('0')
-  await added.getByRole('spinbutton', { name: '宽度 (%)', exact: true }).fill('100')
-  await added.getByRole('spinbutton', { name: '高度 (%)', exact: true }).fill('100')
+  await expect(added.getByRole('spinbutton')).toHaveCount(0)
+  // 实际放大图片后反向框选不足一个原始像素的边缘区域，遮挡不能通过抗锯齿透出原图。
+  await added.locator('img').evaluate(image => image.style.width = '128px')
+  await added.locator('img').scrollIntoViewIfNeeded()
+  const tinyBounds = (await added.locator('img').boundingBox())!
+  expect(tinyBounds.width).toBeGreaterThan(64)
+  await page.mouse.move(tinyBounds.x + 0.8, tinyBounds.y + 0.8)
+  await page.mouse.down()
+  await page.mouse.move(tinyBounds.x + 0.2, tinyBounds.y + 0.2)
+  await page.mouse.up()
+  await added.getByRole('button', { name: '应用标注', exact: true }).click()
+  const tinyPreview = added.locator('img[alt="added-photo.png"]')
+  await expect(tinyPreview).toBeVisible()
+  await expect.poll(() => tinyPreview.evaluate((image) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 64
+    const context = canvas.getContext('2d')!
+    context.drawImage(image as HTMLImageElement, 0, 0)
+    return Array.from(context.getImageData(0, 0, 1, 1).data)
+  })).toEqual([17, 17, 17, 255])
+  await added.locator('img').scrollIntoViewIfNeeded()
+  const bounds = await added.locator('img').boundingBox()
+  expect(bounds).not.toBeNull()
+  await page.mouse.move(bounds!.x + 2, bounds!.y + 2)
+  await page.mouse.down()
+  await page.mouse.move(bounds!.x + bounds!.width - 2, bounds!.y + bounds!.height - 2, { steps: 4 })
+  await page.mouse.up()
   await added.getByRole('button', { name: '应用标注', exact: true }).click()
   const preview = page.locator('.feedback-form img[alt="added-photo.png"]')
   await expect(preview).toBeVisible()
@@ -272,12 +466,14 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
   await preview.scrollIntoViewIfNeeded()
   await capture(page, 'feedback-added-image-masked.png', testInfo)
   await preview.screenshot({ path: testInfo.outputPath('feedback-added-image-masked-detail.png'), animations: 'disabled' })
+  const submittedImage = await preview.evaluate(async image => Array.from(new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())))
   await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
   const receipt = page.locator('.feedback-form [role="status"]').first()
   await expect(receipt).toContainText(/已受理：FB-/)
   const number = (await receipt.textContent())?.match(/FB-[\w-]+/)?.[0]
   expect(number).toBeTruthy()
   const png = await storedPng(page, number!, 'added-photo.png')
+  expect(png).toEqual(Buffer.from(submittedImage))
   const imagePath = testInfo.outputPath('annotated-user-upload.png')
   await writeFile(imagePath, png)
   await testInfo.attach('annotated-user-upload', { path: imagePath, contentType: 'image/png' })

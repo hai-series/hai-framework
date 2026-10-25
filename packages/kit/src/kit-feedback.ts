@@ -56,7 +56,9 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     try {
       actor = await options.resolveContext(event)
     }
-    catch { return fromError({ ...HaiCommonError.INTERNAL_ERROR, message: kitM('kit_internalError') }) }
+    catch {
+      return fromError({ ...HaiCommonError.INTERNAL_ERROR, message: kitM('kit_internalError') })
+    }
     if (!actor?.scopeId || !actor.userId)
       return fromError({ ...HaiCommonError.UNAUTHORIZED, message: kitM('kit_unauthorized') })
     const suffix = event.url.pathname.startsWith(`${basePath}/`) ? event.url.pathname.slice(basePath.length + 1) : ''
@@ -64,7 +66,11 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     try {
       parts = suffix.split('/').map(decodeURIComponent)
     }
-    catch { return invalid(400) }
+    catch {
+      return invalid(400)
+    }
+    if (parts.length === 1 && parts[0] === 'policy' && event.request.method === 'GET')
+      return ok(options.feedback.budget)
     if (parts[0] !== 'reports' || parts.length > 4)
       return fromError({ ...HaiCommonError.NOT_FOUND, message: core.i18n.coreM('core_errorNotFound') })
     let body: unknown = {}
@@ -72,9 +78,11 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
       if (event.request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json')
         return invalid(415)
       try {
-        body = await readBoundedJson(event.request)
+        body = await readBoundedJson(event.request, options.feedback.budget.maxTransportBytes)
       }
-      catch (error) { return invalid(error instanceof RangeError ? 413 : 400) }
+      catch (error) {
+        return invalid(error instanceof RangeError ? 413 : 400)
+      }
     }
     if (!body || typeof body !== 'object' || Array.isArray(body))
       return invalid(400)
@@ -138,7 +146,7 @@ function invalid(status: number): Response {
 }
 
 /** 读取时限制实际字节数，不能只信 Content-Length。 */
-async function readBoundedJson(request: Request): Promise<unknown> {
+async function readBoundedJson(request: Request, maximum: number): Promise<unknown> {
   const reader = request.body?.getReader()
   if (!reader)
     return {}
@@ -151,7 +159,7 @@ async function readBoundedJson(request: Request): Promise<unknown> {
       if (chunk.done)
         break
       length += chunk.value.byteLength
-      if (length > 8 * 1024 * 1024) {
+      if (length > maximum) {
         await reader.cancel()
         throw new RangeError('Feedback request is too large')
       }
@@ -160,5 +168,7 @@ async function readBoundedJson(request: Request): Promise<unknown> {
     text += decoder.decode()
     return text ? JSON.parse(text) : {}
   }
-  finally { reader.releaseLock() }
+  finally {
+    reader.releaseLock()
+  }
 }

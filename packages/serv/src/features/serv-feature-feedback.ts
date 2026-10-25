@@ -3,7 +3,7 @@ import type { FeedbackContext, FeedbackFunctions } from '@h-ai/feedback'
 import type { ServContext } from '../serv-context.js'
 import type { AuthenticatedServContext } from '../serv-router.js'
 import { apiContract } from '@h-ai/api-contract'
-import { core, err, HaiCommonError } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { servM } from '../serv-i18n.js'
 import { implement } from '../serv-router.js'
 
@@ -44,6 +44,12 @@ export function createFeedbackProcedures(deps: FeedbackProcedureDeps) {
   }
   const router = implement(apiContract.feedback).context<ServContext>()
   return router
+    .route('reports.policy')
+    .auth()
+    .handle(async ({ context }) => {
+      const actor = await contextFor(context)
+      return actor.success ? ok(deps.feedback.budget) : actor
+    })
     .route('reports.submit')
     .auth()
     .handle(async ({ input, context }) => {

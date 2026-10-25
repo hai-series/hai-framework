@@ -12,6 +12,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { FeedbackListQuery, FeedbackPage, FeedbackPermissions, FeedbackReportView, FeedbackStatusChange } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
+  import { errorMessage } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import DataTable from '../../compounds/DataTable.svelte'
   import Pagination from '../../compounds/Pagination.svelte'
@@ -81,7 +82,7 @@
       await onquerychange?.(query)
     }
     catch (cause) {
-      actionError = cause instanceof Error ? cause.message : uiM('feedback_action_failed')
+      actionError = errorMessage(cause, uiM('feedback_action_failed'))
     }
   }
   function filter(values: Record<string, unknown>) {
@@ -98,7 +99,7 @@
       await action()
     }
     catch (cause) {
-      actionError = cause instanceof Error ? cause.message : uiM('feedback_action_failed')
+      actionError = errorMessage(cause, uiM('feedback_action_failed'))
     }
     finally {
       busyId = ''

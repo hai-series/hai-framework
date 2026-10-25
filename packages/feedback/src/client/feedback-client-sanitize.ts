@@ -76,14 +76,14 @@ export function sanitizeFeedbackReplay(value: unknown): Record<string, unknown> 
       if (key === 'attributes' && item && typeof item === 'object') {
         const attributes: Record<string, unknown> = {}
         for (const [attribute, content] of Object.entries(item)) {
-          if (/^on|^(?:srcdoc|action|formaction|href|srcset)$/i.test(attribute) || CREDENTIAL_NAME.test(attribute))
+          if (/^on|^(?:srcdoc|action|formaction|href|srcset|rr_src)$/i.test(attribute) || CREDENTIAL_NAME.test(attribute))
             continue
           if (attribute === 'src' && typeof content === 'string' && !/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(content)) {
             attributes['data-feedback-missing-resource'] = true
             continue
           }
-          if (attribute === 'style' && typeof content === 'string' && /url\s*\(/i.test(content)) {
-            attributes.style = sanitizeFeedbackText(content).replace(/url\s*\([^)]*\)/gi, '')
+          if ((attribute === 'style' || attribute === '_cssText') && typeof content === 'string') {
+            attributes[attribute] = sanitizeFeedbackText(content).replace(/(?:url|@import)\s*\([^)]*\)|@import\s+["'][^"']+["']/gi, '')
             attributes['data-feedback-missing-resource'] = true
           }
           else {

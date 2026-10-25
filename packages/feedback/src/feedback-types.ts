@@ -2,6 +2,7 @@ import type {
   FeedbackAppendEvidenceInput,
   FeedbackAttachment,
   FeedbackAttachmentData,
+  FeedbackBudget,
   FeedbackCompleteInput,
   FeedbackDetail,
   FeedbackEvidence,
@@ -75,6 +76,7 @@ export interface FeedbackFunctions {
   close: () => Promise<HaiResult<void>>
   readonly isInitialized: boolean
   readonly config: FeedbackConfig | null
+  readonly budget: FeedbackBudget
   submit: (input: FeedbackSubmitInput, context: FeedbackContext) => Promise<HaiResult<FeedbackReport>>
   list: (input: FeedbackListInput, context: FeedbackContext) => Promise<HaiResult<PaginatedResult<FeedbackReport>>>
   get: (id: string, context: FeedbackContext) => Promise<HaiResult<FeedbackDetail>>

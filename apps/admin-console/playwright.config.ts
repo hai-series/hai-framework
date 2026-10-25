@@ -68,6 +68,8 @@ export default defineConfig({
         ui: { variant: 'split', brandTitle: 'IAM flow branding', illustrationUrl: '/iam-illustration.svg' },
       }),
       HAI_REACH_PROVIDERS: JSON.stringify([{ name: 'email', type: 'api', url: 'http://127.0.0.1:12580/send' }, { name: 'sms', type: 'api', url: 'http://127.0.0.1:12580/send' }]),
+      // 邮件用例显式选择 Reach；示例应用默认使用独立 Console 通知。
+      HAI_FEEDBACK: JSON.stringify({ appId: 'admin-console', notificationMode: 'reach', recipients: ['feedback@example.test'], notificationProvider: 'email', adminUrl: `${baseURL}/admin/feedback` }),
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,

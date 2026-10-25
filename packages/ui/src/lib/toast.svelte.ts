@@ -6,6 +6,7 @@
  */
 
 import type { ToastProps } from './types.js'
+import { core } from '@h-ai/core'
 
 /**
  * Toast 项
@@ -231,10 +232,31 @@ export function notifySuccess(message: string, duration: number = SUCCESS_DURATI
  * ```
  */
 export function notifyError(error: unknown, fallback = '', duration: number = ERROR_DURATION): string {
-  const message = error instanceof Error
-    ? error.message
-    : (typeof error === 'string' ? error : fallback)
-  return toast.error(message || fallback, duration)
+  return toast.error(errorMessage(error, fallback), duration)
+}
+
+/**
+ * 行内错误和 Toast 共用的安全提示；日志保留脱敏原因，提示末尾共用 traceId。
+ * @example
+ * ```ts
+ * import { errorMessage } from '@h-ai/ui'
+ * const text = errorMessage(new Error('Internal detail'), '保存失败')
+ * ```
+ */
+export function errorMessage(error: unknown, fallback = ''): string {
+  let known: Parameters<typeof core.error.toPublic>[0] | undefined
+  if (error && typeof error === 'object' && !(error instanceof Error) && Object.hasOwn(error, 'code') && Object.hasOwn(error, 'message') && 'message' in error && typeof error.message === 'string')
+    known = error as Parameters<typeof core.error.toPublic>[0]
+  const receivedMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  const embeddedTraceId = /\(traceId: ([\w.:-]{1,128})\)$/.exec(receivedMessage)?.[1]
+  const traceId = known?.traceId ?? embeddedTraceId ?? core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
+  core.logger.error('User operation failed', { traceId, error })
+  let message = fallback || core.i18n.coreM('core_errorInternal')
+  if (known)
+    message = core.error.toPublic(known, traceId).message
+  else if (typeof error === 'string' || embeddedTraceId)
+    message = receivedMessage
+  return core.error.formatMessage({ message, traceId: /\(traceId: [\w.:-]{1,128}\)$/.test(message) ? undefined : traceId })
 }
 
 /**

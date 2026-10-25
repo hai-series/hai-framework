@@ -1,26 +1,27 @@
 /** 反馈页面的 API 与采集编排；界面仅调用这些动作。 */
-import type { FeedbackListInput } from '@h-ai/api-contract/feedback'
+import type { FeedbackEvidence, FeedbackListInput } from '@h-ai/api-contract/feedback'
 import type { FeedbackAnnotation, FeedbackFormData, FeedbackListQuery } from '@h-ai/ui/components/scenes/app/index'
 import { adminBuildMetadata } from '$lib/build-metadata.js'
 import * as m from '$lib/paraglide/messages.js'
 import { apiFetch, observeAdminRequests } from '$lib/utils/api.js'
-import { downloadFeedbackBytes, feedbackApiBaseUrl, feedbackBase64Bytes, feedbackBlobUrl, feedbackImageSize } from '$lib/utils/feedback-browser.js'
+import { feedbackApiBaseUrl } from '$lib/utils/feedback-browser.js'
 import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
-import { createFeedbackClient } from '@h-ai/feedback/client'
+import { createFeedbackClient, createFeedbackReview } from '@h-ai/feedback/client'
 
 const http = apiClient.create(apiContract.create({ feedback: apiContract.feedback }))
 const capture = createFeedbackClient()
 let initialize: Promise<void> | undefined
 let stopRequests: (() => void) | undefined
-const previewUrls = new Set<string>()
+const review = createFeedbackReview(http.feedback.reports)
 
 export async function initFeedbackBrowser(): Promise<void> {
   initialize ??= (async () => {
     const initialized = await http.init({ baseUrl: feedbackApiBaseUrl(), fetch: apiFetch, clientName: 'admin-console' })
     if (!initialized.success)
       throw new Error(initialized.error.message)
-    const result = await capture.init({ appId: 'admin-console', ...adminBuildMetadata, cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'], actions: {
+    const result = await capture.init({ appId: 'admin-console', ...adminBuildMetadata, cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'], replay: true, actions: {
+      policy: () => http.feedback.reports.policy({}),
       submit: input => http.feedback.reports.submit(input),
       appendEvidence: input => http.feedback.reports.appendEvidence(input),
       completeCollection: input => http.feedback.reports.completeCollection(input),
@@ -47,17 +48,10 @@ export async function prepareFeedback() {
 }
 
 export function feedbackDraftView() {
-  for (const url of previewUrls)
-    URL.revokeObjectURL(url)
-  previewUrls.clear()
   const draft = capture.getDraft()
   return {
-    attachments: (draft?.attachments ?? []).map((item) => {
-      const url = feedbackBlobUrl(item.bytes, item.contentType)
-      previewUrls.add(url)
-      return { id: item.id, name: item.name, mimeType: item.contentType, size: item.size, url }
-    }),
-    evidenceSummary: [{ label: m.feedback_material_logs(), count: draft?.evidence.length ?? 0, status: 'complete' as const }, { label: m.feedback_material_missing(), count: draft?.missing.length ?? 0, status: draft?.missing.length ? 'partial' as const : 'complete' as const, detail: draft?.missing.join(', ') }],
+    ...capture.getView(),
+    evidenceSummary: [{ label: m.feedback_material_missing(), count: draft?.missing.length ?? 0, status: draft?.missing.length ? 'partial' as const : 'complete' as const, detail: draft?.missing.join(', ') }],
   }
 }
 
@@ -69,28 +63,31 @@ export async function submitFeedback(input: FeedbackFormData) {
 }
 
 export async function annotateFeedback(input: FeedbackAnnotation) {
-  const attachment = capture.getDraft()?.attachments.find(item => item.id === input.id)
-  if (!attachment)
-    throw new Error(m.feedback_request_failed())
-  const dimensions = await feedbackImageSize(attachment.bytes, attachment.contentType)
-  const result = await capture.annotate(input.id, { mode: input.mode, x: input.rect.x * dimensions.width, y: input.rect.y * dimensions.height, width: input.rect.width * dimensions.width, height: input.rect.height * dimensions.height })
+  const result = await capture.annotate(input.id, { mode: input.mode, ...input.rect, coordinateSpace: 'ratio' })
   if (!result.success)
     throw new Error(result.error.message)
   return feedbackDraftView()
 }
 
-export async function addFeedbackFiles(files: File[]) {
-  const result = await capture.addFiles(files)
+export async function captureFeedbackPage(attachmentId?: string) {
+  const result = await capture.captureScreenshot(attachmentId)
+  if (!result.success)
+    throw new Error(result.error.message)
+  return feedbackDraftView()
+}
+
+export async function addFeedbackFiles(files: File[], removedAttachmentIds: readonly string[] = []) {
+  const result = await capture.addFiles(files, removedAttachmentIds)
   if (!result.success)
     throw new Error(result.error.message)
   return feedbackDraftView()
 }
 
 export async function exportLocalFeedback(input: FeedbackFormData) {
-  const result = await capture.exportDraft({ ...input, category: input.type })
+  const result = await capture.saveDraft({ ...input, category: input.type })
   if (!result.success)
     throw new Error(result.error.message)
-  downloadFeedbackBytes('feedback-local.zip', result.data)
+  return result.data.status !== 'cancelled'
 }
 
 export function feedbackDraftId() {
@@ -103,30 +100,24 @@ export function feedbackListParameters(query: FeedbackListQuery): FeedbackListIn
 
 export const feedbackApi = http
 
+export async function loadFeedbackReplay(id: string): Promise<FeedbackEvidence[]> {
+  const result = await review.loadReplay(id)
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data
+}
+
 export async function exportFeedback(id: string) {
-  const job = await http.feedback.reports.export({ id })
-  if (!job.success)
-    throw new Error(job.error.message)
-  for (let attempt = 0; attempt < 60; attempt++) {
-    const exported = await http.feedback.reports.getExport({ id, jobId: job.data.id })
-    if (exported.success) {
-      downloadFeedbackBytes(exported.data.name, feedbackBase64Bytes(exported.data.dataBase64), exported.data.contentType)
-      return
-    }
-    if (exported.error.httpStatus !== 409)
-      throw new Error(exported.error.message)
-    await new Promise(resolve => setTimeout(resolve, 500))
-  }
-  throw new Error(m.feedback_export_pending())
+  const result = await review.exportReport(id)
+  if (!result.success)
+    throw new Error(result.error.message)
 }
 
 export async function closeFeedbackBrowser() {
   stopRequests?.()
   stopRequests = undefined
-  await capture.close()
+  review.close()
+  await capture.close({ discard: true })
   await http.close()
-  for (const url of previewUrls)
-    URL.revokeObjectURL(url)
-  previewUrls.clear()
   initialize = undefined
 }

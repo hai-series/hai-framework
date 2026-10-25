@@ -50,6 +50,98 @@ const report: FeedbackReportView = {
 }
 
 describe('feedback collection', () => {
+  it.each([
+    { name: '小数', bounds: [10, 20, 200, 100], start: [31, 41], end: [130, 80], rect: { x: 0.105, y: 0.21, width: 0.495, height: 0.39 } },
+    { name: '小于百分之一', bounds: [10, 20, 200, 100], start: [30, 40], end: [30.5, 40.5], rect: { x: 0.1, y: 0.2, width: 0.0025, height: 0.005 } },
+    { name: '越过边缘反向拖动', bounds: [10, 20, 200, 100], start: [220, 130], end: [0, 0], rect: { x: 0, y: 0, width: 1, height: 1 } },
+    { name: '缩放显示', bounds: [10, 20, 50, 25], start: [15, 25], end: [40, 40], rect: { x: 0.1, y: 0.2, width: 0.5, height: 0.6 } },
+  ])('$name框选按实际图片归一化，表单不产生步长错误', async ({ bounds, start, end, rect }) => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const onannotate = vi.fn(async (_input: FeedbackAnnotation) => {})
+    const component = mount(FeedbackForm, { target, props: { onannotate, attachments: [{ id: 'screen', name: 'screen.png', mimeType: 'image/png', url: 'blob:screen' }] } })
+    try {
+      flushSync()
+      button(target, '遮挡敏感区域').click()
+      const image = target.querySelector('img')!.parentElement!
+      vi.spyOn(target.querySelector('img')!, 'getBoundingClientRect').mockReturnValue(new DOMRect(...bounds))
+      image.dispatchEvent(new MouseEvent('pointerdown', { clientX: start[0], clientY: start[1], bubbles: true, cancelable: true }))
+      image.dispatchEvent(new MouseEvent('pointermove', { clientX: end[0], clientY: end[1], bubbles: true }))
+      image.dispatchEvent(new MouseEvent('pointerup', { clientX: end[0], clientY: end[1], bubbles: true }))
+      flushSync()
+      button(target, '应用标注').click()
+      await vi.waitFor(() => expect(onannotate).toHaveBeenCalledOnce())
+      expect(onannotate.mock.calls[0]![0].mode).toBe('mask')
+      for (const key of ['x', 'y', 'width', 'height'] as const)
+        expect(onannotate.mock.calls[0]![0].rect[key]).toBeCloseTo(rect[key])
+      expect(target.querySelector('form')?.checkValidity()).toBe(true)
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
+  it('收集材料显示日志和真实环境内容，诊断文本不解释为HTML', async () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const component = mount(FeedbackForm, { target, props: { evidence: [
+      { id: 'log', source: 'browser:one', sequence: 1, timestamp: 1, kind: 'log', data: { message: '<script>diagnostic()</script>' } },
+      { id: 'env', source: 'browser:one', sequence: 2, timestamp: 2, kind: 'environment', data: { viewport: { width: 390, height: 844 }, appVersion: 'actual-build' } },
+    ] } })
+    try {
+      flushSync()
+      expect(target.textContent).toContain('收集材料')
+      const materials = [...target.querySelectorAll('details')].find(item => item.querySelector('summary')?.textContent === '收集材料')!
+      expect(materials.querySelector('pre')).toBeNull()
+      for (const item of materials.querySelectorAll('details')) {
+        item.open = true
+        item.dispatchEvent(new Event('toggle'))
+      }
+      flushSync()
+      expect(materials.textContent).toContain('actual-build')
+      expect(materials.textContent).toContain('390')
+      expect(materials.textContent).toContain('<script>diagnostic()</script>')
+      expect(materials.querySelector('script')).toBeNull()
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
+  it('补充和替换截图时隐藏弹窗，采集后恢复原输入，取消不调用宿主', async () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const oncapture = vi.fn(async (_id?: string) => {})
+    const component = mount(FeedbackModal, { target, props: { open: true, oncapture, attachments: [{ id: 'screen', name: 'screen.png', mimeType: 'image/png', url: 'blob:screen' }] } })
+    try {
+      flushSync()
+      field(document.body, 'Keep the description')
+      button(document.body, '添加页面截图').click()
+      flushSync()
+      const host = document.body.querySelector<HTMLElement>('.hai-modal')!
+      expect(host.style.display).toBe('none')
+      button(document.body, '截取当前页面').click()
+      await vi.waitFor(() => expect(oncapture).toHaveBeenCalledWith(undefined))
+      await vi.waitFor(() => expect(host.style.display).not.toBe('none'))
+      expect(document.body.querySelector('textarea')?.value).toBe('Keep the description')
+      button(document.body, '重新截图').click()
+      flushSync()
+      button(document.body, '返回反馈').click()
+      flushSync()
+      expect(oncapture).toHaveBeenCalledOnce()
+      button(document.body, '重新截图').click()
+      flushSync()
+      button(document.body, '截取当前页面').click()
+      await vi.waitFor(() => expect(oncapture).toHaveBeenLastCalledWith('screen'))
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
   it('反馈弹窗脱离粘性模糊顶栏，并在卸载时清理body挂载节点', async () => {
     const header = document.createElement('header')
     header.style.cssText = 'position: sticky; top: 0; backdrop-filter: blur(8px)'
@@ -83,7 +175,9 @@ describe('feedback collection', () => {
     const component = mount(FeedbackModal, { target, props: {
       'open': true,
       'data-testid': 'public-feedback-entry',
-      get 'data-tracking'() { return attributes.get('tracking') },
+      get 'data-tracking'() {
+        return attributes.get('tracking')
+      },
     } })
     try {
       flushSync()
@@ -169,12 +263,12 @@ describe('feedback collection', () => {
       upload.dispatchEvent(new Event('change', { bubbles: true }))
       flushSync()
       button(target, '提交反馈').click()
-      await vi.waitFor(() => expect(target.textContent).toContain('Service unavailable'))
+      await vi.waitFor(() => expect(target.textContent).toContain('提交失败，请重试 (traceId:'))
       expect(target.querySelector('textarea')?.value).toBe('The save button did nothing')
       expect(target.textContent).toContain('evidence.txt')
       expect(target.textContent).toContain('Logs · 12')
       expect(target.textContent).toContain('Truncated')
-      button(target, '保存本地问题包').click()
+      button(target, '保存反馈到本地').click()
       await vi.waitFor(() => expect(onexport).toHaveBeenCalledOnce())
       expect(onexport.mock.calls[0]?.[0]).toMatchObject({ description: 'The save button did nothing', files: [file] })
     }
@@ -215,11 +309,13 @@ describe('feedback collection', () => {
     try {
       flushSync()
       expect(target.querySelector('img')?.getAttribute('src')).toBe('blob:screen')
+      expect(target.querySelector('input[type="number"]')).toBeNull()
       button(target, '遮挡敏感区域').click()
       flushSync()
       button(target, '应用标注').click()
       await vi.waitFor(() => expect(onannotate).toHaveBeenCalledOnce())
       expect(onannotate.mock.calls[0]?.[0]).toEqual({ id: 'screen', mode: 'mask', rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } })
+      await vi.waitFor(() => expect(target.querySelector<HTMLButtonElement>('[aria-label="删除 screen.png"]')!.disabled).toBe(false))
       target.querySelector<HTMLButtonElement>('[aria-label="删除 screen.png"]')!.click()
       flushSync()
       expect(target.querySelector('img')).toBeNull()
@@ -286,7 +382,7 @@ describe('feedback collection', () => {
       const upload = target.querySelector<HTMLInputElement>('input[type="file"]')!
       Object.defineProperty(upload, 'files', { value: [file] })
       upload.dispatchEvent(new Event('change', { bubbles: true }))
-      await vi.waitFor(() => expect(target.textContent).toContain('Preparation unavailable'))
+      await vi.waitFor(() => expect(target.textContent).toContain('操作失败，请重试 (traceId:'))
       expect(target.textContent).toContain('retry-image.png')
       expect(target.querySelector('textarea')?.value).toBe('Keep this description')
       expect(button(target, '提交反馈').disabled).toBe(true)
@@ -370,7 +466,7 @@ describe('feedback management', () => {
       button(target, '标记已处理').click()
       await vi.waitFor(() => expect(onstatus).toHaveBeenCalledOnce())
       expect(onstatus.mock.calls[0]?.[0]).toEqual({ id: report.id, status: 'handled', expectedVersion: 7 })
-      await vi.waitFor(() => expect(target.textContent).toContain('Version conflict'))
+      await vi.waitFor(() => expect(target.textContent).toContain('操作失败，请重试 (traceId:'))
       expect(target.textContent).toContain('未处理')
     }
     finally {

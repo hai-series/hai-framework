@@ -149,20 +149,26 @@ describe('toast notify helpers', () => {
     expect(mod.toast.items[0].message).toBe('保存成功')
   })
 
-  it('notifyError 从 Error 取 message', () => {
-    mod.notifyError(new Error('炸了'))
+  it('notifyError 隐藏底层 Error，提示安全文案并附上 traceId', () => {
+    mod.notifyError(new Error('SQL private details'), '保存失败')
     expect(mod.toast.items[0].variant).toBe('error')
-    expect(mod.toast.items[0].message).toBe('炸了')
+    expect(mod.toast.items[0].message).toMatch(/^保存失败 \(traceId: [\w.:-]+\)$/)
+    expect(mod.toast.items[0].message).not.toContain('SQL')
   })
 
   it('notifyError 非 Error 且为空时使用兜底文案', () => {
     mod.notifyError(undefined, '未知错误')
-    expect(mod.toast.items[0].message).toBe('未知错误')
+    expect(mod.toast.items[0].message).toMatch(/^未知错误 \(traceId: [\w.:-]+\)$/)
   })
 
   it('notifyError 接受字符串文案', () => {
     mod.notifyError('直接文案')
-    expect(mod.toast.items[0].message).toBe('直接文案')
+    expect(mod.toast.items[0].message).toMatch(/^直接文案 \(traceId: [\w.:-]+\)$/)
+  })
+
+  it('notifyError 保留 API 返回的 traceId 且不重复追加', () => {
+    mod.notifyError(new Error('请求失败 (traceId: req-api)'), '兜底')
+    expect(mod.toast.items[0].message).toBe('请求失败 (traceId: req-api)')
   })
 
   it('notifyInfo 与 notifyWarning 变体正确', () => {

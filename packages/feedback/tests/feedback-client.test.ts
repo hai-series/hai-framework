@@ -1,8 +1,10 @@
 import type { FeedbackReport } from '@h-ai/api-contract/feedback'
+import type { HaiResult, LogRecord } from '@h-ai/core'
 // @vitest-environment jsdom
 import type { FeedbackClientActions } from '../src/client/index.js'
 import { Buffer } from 'node:buffer'
 import { webcrypto } from 'node:crypto'
+import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFeedbackBundle } from '../src/bundle/index.js'
@@ -38,6 +40,30 @@ function plainTextFile(text: string, name = 'diagnostic.log'): File {
   return file
 }
 
+it('服务端策略限制附件总量，失败不留下半批材料，预览在关闭时统一释放', async () => {
+  const budget = resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 })
+  const policy = vi.fn(async () => ok(budget))
+  const transport = actions()
+  const { client } = await setup({ actions: { ...transport, policy } })
+  expect(policy).toHaveBeenCalledOnce()
+  expect(client.budget).toEqual(budget)
+  await client.prepare()
+  const large = new File([new Uint8Array(budget.maxAttachmentsBytes)], 'large.webm', { type: 'video/webm' })
+  Object.defineProperty(large, 'arrayBuffer', { value: async () => new Uint8Array(budget.maxAttachmentsBytes).buffer })
+  expect((await client.addFiles([large, pngFile().file])).success).toBe(false)
+  expect(client.getDraft()!.attachments).toHaveLength(0)
+  const create = vi.fn(() => 'blob:owned-preview')
+  const revoke = vi.fn()
+  vi.stubGlobal('URL', class extends URL { static createObjectURL = create; static revokeObjectURL = revoke })
+  expect((await client.addFiles([pngFile().file])).success).toBe(true)
+  expect(client.getView().attachments[0]?.url).toBe('blob:owned-preview')
+  client.getView()
+  expect(create).toHaveBeenCalledOnce()
+  await client.close({ discard: true })
+  expect(revoke).toHaveBeenCalledWith('blob:owned-preview')
+  expect(client.getView().attachments).toEqual([])
+})
+
 function pngFile(name = 'pending.png'): { file: File, bytes: Uint8Array<ArrayBuffer> } {
   const bytes = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lMsAAAAASUVORK5CYII=', 'base64'))
   const file = new File([bytes], name, { type: 'image/png' })
@@ -55,6 +81,95 @@ afterEach(async () => {
 })
 
 describe('feedback browser collection', () => {
+  it('本地失败返回安全提示与关联标识，详细脱敏日志和本地 UI trace 可检索', async () => {
+    const { client } = await setup({ captureScreenshot: async () => {
+      throw new Error('Capture driver unavailable verificationCode=PRIVATE_DIAGNOSTIC_CODE')
+    } })
+    await client.prepare()
+    const records: LogRecord[] = []
+    const stop = core.logger.observe(record => records.push(record))
+    try {
+      const result = await client.captureScreenshot()
+      expect(result.success).toBe(false)
+      if (result.success)
+        return
+      expect(result.error.message).toContain(`(traceId: ${result.error.traceId})`)
+      expect(result.error.message).not.toContain('Capture driver')
+      const logged = JSON.stringify(records)
+      expect(logged).toContain('Capture driver unavailable')
+      expect(logged).toContain(result.error.traceId!)
+      expect(logged).not.toContain('PRIVATE_DIAGNOSTIC_CODE')
+      core.logger.warn('UI local boundary', { traceId: 'local-ui-trace' })
+      expect(client.getDraft()!.evidence.find(item => item.data.message === 'UI local boundary')?.requestId).toBe('local-ui-trace')
+    }
+    finally { stop() }
+  })
+
+  it('当前页面截图排在历史操作截图之前，换页重开草稿补充当前现场', async () => {
+    const captureScreenshot = vi.fn(async () => pngFile().bytes)
+    const { client } = await setup({ screenshot: true, captureScreenshot })
+    client.record({ kind: 'error', data: { message: 'Earlier page failed' } })
+    await vi.waitFor(() => expect(captureScreenshot).toHaveBeenCalledOnce())
+    await client.prepare()
+    const draft = client.getDraft()!
+    expect(draft.attachments[0]?.name).toBe('screenshot.png')
+    expect(draft.attachments[1]?.name).toMatch(/^operation-/)
+    const submissionId = draft.submissionId
+    const previousUrl = location.href
+    try {
+      history.replaceState(null, '', '/another-page')
+      await client.prepare()
+      expect(client.getDraft()?.submissionId).toBe(submissionId)
+      expect(client.getDraft()?.attachments).toHaveLength(3)
+      expect(client.getDraft()?.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url).toBe(`${location.origin}/another-page`)
+    }
+    finally {
+      history.replaceState(null, '', previousUrl)
+    }
+  })
+
+  it('可补充及替换当前截图，截图失败或提交冻结不破坏原材料', async () => {
+    const captureScreenshot = vi.fn(async () => pngFile().bytes)
+    const { client } = await setup({ screenshot: true, captureScreenshot })
+    await client.prepare()
+    const first = client.getDraft()!.attachments[0]!
+    expect((await client.captureScreenshot()).success).toBe(true)
+    expect(client.getDraft()!.attachments).toHaveLength(2)
+    expect((await client.captureScreenshot(first.id)).success).toBe(true)
+    expect(client.getDraft()!.attachments).toHaveLength(2)
+    expect(client.getDraft()!.attachments.some(item => item.id === first.id)).toBe(true)
+    const before = [...client.getDraft()!.attachments]
+    captureScreenshot.mockRejectedValueOnce(new Error('Capture unavailable'))
+    expect((await client.captureScreenshot(first.id)).success).toBe(false)
+    expect(client.getDraft()!.attachments).toEqual(before)
+    await client.submit()
+    expect((await client.captureScreenshot()).success).toBe(false)
+    expect(client.getDraft()!.attachments).toEqual(before)
+  })
+
+  it('浏览器环境来自当前页面和实际构建，视频附件保留字节并可离线读取', async () => {
+    const { client } = await setup({ appVersion: 'version-fixture', buildId: 'build-fixture', commit: 'commit-fixture' })
+    await client.prepare()
+    const env = client.getDraft()!.evidence.find(item => item.kind === 'environment')!
+    expect(env.data).toMatchObject({ url: `${location.origin}${location.pathname}`, appVersion: 'version-fixture', buildId: 'build-fixture', commit: 'commit-fixture', browser: navigator.userAgent, viewport: { width: innerWidth, height: innerHeight } })
+    const bytes = new Uint8Array([0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0, 0, 0, 0, 0])
+    const file = new File([bytes], 'recording.webm', { type: 'video/webm' })
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes.buffer })
+    expect((await client.addFiles([file])).success).toBe(true)
+    const exported = await client.exportDraft({ description: 'Local diagnostic' })
+    expect(exported.success).toBe(true)
+    if (!exported.success)
+      return
+    const bundle = await readFeedbackBundle(exported.data)
+    expect(bundle.success).toBe(true)
+    if (!bundle.success)
+      return
+    expect(bundle.data.report).toMatchObject({ description: 'Local diagnostic', appVersion: 'version-fixture', buildId: 'build-fixture', commit: 'commit-fixture' })
+    const video = bundle.data.manifest.files.find(item => item.name === 'recording.webm')!
+    expect(video.path).toMatch(/\.webm$/)
+    expect(bundle.data.files[video.path]).toEqual(bytes)
+  })
+
   it('提交期间完成的旧标注不能修改冻结附件及校验和', async () => {
     const { client, transport } = await setup({ screenshot: true, captureScreenshot: async () => pngFile().bytes })
     await client.prepare()
@@ -291,7 +406,9 @@ describe('feedback browser collection', () => {
       expect((await client.submit({ files: [] })).success).toBe(true)
       expect(vi.mocked(transport.submit).mock.calls[0]![0].attachments).toEqual([])
     }
-    finally { release.resolve() }
+    finally {
+      release.resolve()
+    }
     const added = await pending
     expect.soft(added.success).toBe(false)
     if (!added.success)
@@ -317,7 +434,9 @@ describe('feedback browser collection', () => {
       await entered.promise
       expect((await client.addFiles([plainTextFile('fast safe log', 'fast.log')])).success).toBe(true)
     }
-    finally { release.resolve() }
+    finally {
+      release.resolve()
+    }
     expect((await pending).success).toBe(true)
     expect(client.getDraft()!.attachments.map(item => item.name).sort()).toEqual(['fast.log', 'slow.png'])
   })
@@ -518,4 +637,65 @@ describe('feedback browser collection', () => {
       expect(changed.error.code).toBe('hai:feedback:023')
     expect(transport.submit).toHaveBeenCalledOnce()
   })
+})
+
+it('退出发生在策略读取期间时，迟到初始化不能复活采集会话', async () => {
+  vi.stubGlobal('crypto', webcrypto)
+  const client = createFeedbackClient()
+  clients.push(client)
+  let release!: (value: HaiResult<ReturnType<typeof resolveFeedbackBudget>>) => void
+  const policy = new Promise<HaiResult<ReturnType<typeof resolveFeedbackBudget>>>((resolve) => {
+    release = resolve
+  })
+  const pending = client.init({ appId: 'orders', actions: { ...actions(), policy: () => policy } })
+  await client.close({ discard: true })
+  release(ok(resolveFeedbackBudget()))
+  expect((await pending).success).toBe(false)
+  expect((await client.prepare()).success).toBe(false)
+  expect(client.getDraft()).toBeUndefined()
+})
+
+it('离线策略请求失败仍可保存本地草稿，在线提交重新确认有效预算', async () => {
+  const transport = actions()
+  const policy = vi.fn().mockResolvedValueOnce(err(HaiCommonError.NETWORK_ERROR, 'Offline')).mockResolvedValueOnce(ok(resolveFeedbackBudget()))
+  const { client } = await setup({ actions: { ...transport, policy } })
+  expect((await client.prepare()).success).toBe(true)
+  expect(client.getDraft()?.missing).toContain('server-policy-unavailable')
+  const exported = await client.exportDraft({ description: 'Offline feedback' })
+  expect(exported.success).toBe(true)
+  expect((await client.submit()).success).toBe(true)
+  expect(policy).toHaveBeenCalledTimes(2)
+  expect(transport.submit).toHaveBeenCalledOnce()
+})
+
+it('删除旧附件后添加新文件按剩余预算原子合并', async () => {
+  const { client } = await setup({ budget: resolveFeedbackBudget({ maxTotalBytes: 4 * 1048576 }) })
+  await client.prepare()
+  const file = new File([new Uint8Array(1048576)], 'old.webm', { type: 'video/webm' })
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => new Uint8Array(1048576).buffer })
+  expect((await client.addFiles([file])).success).toBe(true)
+  const id = client.getDraft()!.attachments[0]!.id
+  expect((await client.addFiles([pngFile('replacement.png').file], [id])).success).toBe(true)
+  expect(client.getDraft()?.attachments.map(file => file.name)).toEqual(['replacement.png'])
+})
+
+it('hash 路由换页重开补充当前截图，片段参数不进入诊断包', async () => {
+  const original = location.href
+  const { client } = await setup({ screenshot: true, captureScreenshot: async () => pngFile().bytes })
+  try {
+    history.replaceState({}, '', '/#/overview')
+    await client.prepare()
+    const id = client.getDraft()!.submissionId
+    history.replaceState({}, '', '/#/users?verificationCode=HASH_PRIVATE_SENTINEL')
+    await client.prepare()
+    expect(client.getDraft()?.submissionId).toBe(id)
+    expect(client.getDraft()?.attachments).toHaveLength(2)
+    const exported = await client.exportDraft()
+    expect(exported.success).toBe(true)
+    if (!exported.success)
+      return
+    const bundle = await readFeedbackBundle(exported.data)
+    expect(JSON.stringify(bundle)).not.toContain('HASH_PRIVATE_SENTINEL')
+  }
+  finally { history.replaceState({}, '', original) }
 })

@@ -41,12 +41,12 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { adminBuildMetadata } from '$lib/build-metadata.js'
-import * as m from '$lib/paraglide/messages.js'
 import { seedFeedbackPermissions } from '$lib/server/feedback.js'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
+import { crypto } from '@h-ai/crypto'
+import { feedback } from '@h-ai/feedback'
 import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
@@ -54,132 +54,44 @@ import { storage } from '@h-ai/storage'
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 
-// =============================================================================
-// 状态
-// =============================================================================
+/** 依赖顺序由应用声明；并发、回滚和关闭重试由 core 统一处理。 */
+const runtime = core.module.createRuntime([
+  { name: 'configuration', start: () => {
+    core.init({ configDir: './config' })
+  }, close: () => {} },
+  { name: 'reldb', start: async () => {
+    const config = core.config.getOrThrow<DbConfigInput>('db')
+    if (config.type === 'sqlite' && config.database !== ':memory:')
+      await mkdir(path.dirname(config.database), { recursive: true })
+    return reldb.init(config)
+  }, close: () => reldb.close() },
+  { name: 'cache', start: () => cache.init(core.config.getOrThrow<CacheConfigInput>('cache')), close: () => cache.close() },
+  { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
+  { name: 'storage', enabled: () => Boolean(core.config.get('storage')), start: () => storage.init(core.config.getOrThrow<StorageConfigInput>('storage')), close: () => storage.close() },
+  { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(core.config.getOrThrow<ReachConfigInput>('reach')), close: () => reach.close() },
+  { name: 'iam', start: () => iam.init({ ...core.config.getOrThrow<IamConfigSettingsInput>('iam'), reach }), close: () => iam.close() },
+  { name: 'audit', start: () => audit.init({ userTable: 'hai_iam_users' }), close: () => audit.close() },
+  { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: () => feedback.init({ ...core.config.getOrThrow<FeedbackConfigInput>('feedback'), ...adminBuildMetadata }), close: () => feedback.close() },
+  { name: 'bootstrap', start: async () => {
+    if (feedback.isInitialized)
+      await seedFeedbackPermissions()
+    await ensureDefaultAdmin()
+    core.logger.info('Application initialized.')
+  }, close: () => {} },
+])
 
-let initialized = false
-let initPromise: Promise<void> | null = null
-
-// =============================================================================
-// 业务表 Schema
-// =============================================================================
-
-// =============================================================================
-// 初始化函数
-// =============================================================================
-/**
- * 初始化应用
- *
- * 按顺序初始化所有模块：
- * 1. 使用 core.init 加载配置文件（约定优于配置）
- * 2. 初始化数据库连接
- * 3. 初始化缓存
- * 4. 初始化存储（可选）
- * 5. 初始化 Reach 触达服务
- * 6. 初始化 IAM 模块（使用 reach 发送通知）
- * 7. 创建业务表
- */
+/** 初始化真实依赖；失败只公开模块、配置字段路径及错误码。 */
 export async function initApp(): Promise<void> {
-  if (initialized)
-    return
-
-  initPromise ??= runInitApp().finally(() => {
-    initPromise = null
-  })
-
-  return initPromise
+  const result = await runtime.start()
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
-async function runInitApp(): Promise<void> {
-  if (initialized)
-    return
-
-  // 1. 使用 core.init 加载配置文件（约定优于配置）
-  // 内置模块配置文件以 _ 开头，自动匹配对应的 Schema
-  core.init({
-    configDir: './config',
-    logging: { level: 'info' },
-  })
-
-  // 2. 获取配置
-  const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
-  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
-  const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
-  const reachConfig = core.config.get<ReachConfigInput>('reach')
-  const storageConfig = core.config.get<StorageConfigInput>('storage')
-  const feedbackConfig = core.config.get<FeedbackConfigInput>('feedback')
-
-  // 3. 仅 SQLite 文件需要本机目录；网络数据库名称/URL 不是文件路径。
-  if (dbConfig.type === 'sqlite' && dbConfig.database !== ':memory:')
-    await mkdir(path.dirname(dbConfig.database), { recursive: true })
-
-  // 4. 初始化数据库连接
-  const dbResult = await reldb.init(dbConfig)
-  if (!dbResult.success) {
-    throw new Error(m.server_init_db_failed({ message: dbResult.error.message }))
-  }
-
-  // 5. 初始化缓存
-  const cacheResult = await cache.init(cacheConfig)
-  if (!cacheResult.success) {
-    throw new Error(m.server_init_cache_failed({ message: cacheResult.error.message }))
-  }
-
-  // 6. 初始化存储（可选，配置不存在时跳过）
-  if (storageConfig) {
-    const storageResult = await storage.init(storageConfig)
-    if (!storageResult.success)
-      throw new Error(m.server_init_storage_failed({ message: storageResult.error.message }))
-  }
-
-  // 7. 初始化 Reach 触达服务（可选，配置不存在时跳过）
-  if (reachConfig) {
-    const reachResult = await reach.init(reachConfig)
-    if (!reachResult.success) {
-      core.logger.warn('Reach module initialization failed, notification features will be unavailable', {
-        error: reachResult.error.message,
-      })
-    }
-  }
-
-  // 8. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
-  const iamResult = await iam.init({
-    ...iamConfig,
-    reach,
-  })
-  if (!iamResult.success) {
-    const cause = iamResult.error.cause
-    const causeMsg = cause instanceof Error ? cause.message : String(cause)
-    const baseMessage = m.server_init_iam_failed({ message: iamResult.error.message })
-    const fullMessage = cause
-      ? m.server_error_with_cause({ message: baseMessage, cause: causeMsg })
-      : baseMessage
-    throw new Error(fullMessage)
-  }
-
-  // 9. 初始化审计日志模块（IAM 用户表为 iam_users）
-  const auditResult = await audit.init({ userTable: 'hai_iam_users' })
-  if (!auditResult.success) {
-    core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
-  }
-
-  // 反馈复用宿主已初始化的数据库、存储和触达模块；配置错误不能伪装成已启用。
-  if (feedbackConfig) {
-    const parsedFeedback = FeedbackConfigSchema.safeParse({ ...feedbackConfig, ...adminBuildMetadata })
-    if (!parsedFeedback.success)
-      throw new Error(m.feedback_config_failed())
-    const feedbackResult = await feedback.init(parsedFeedback.data)
-    if (!feedbackResult.success)
-      throw new Error(feedbackResult.error.message)
-    await seedFeedbackPermissions()
-  }
-
-  // 10. 如果没有任何用户，自动创建默认管理员
-  await ensureDefaultAdmin()
-
-  initialized = true
-  core.logger.info('Application initialized.')
+/** 关闭失败保留清理义务，宿主可重试。 */
+export async function closeApp(): Promise<void> {
+  const result = await runtime.close()
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
 // =============================================================================
@@ -194,7 +106,7 @@ async function runInitApp(): Promise<void> {
 async function ensureDefaultAdmin(): Promise<void> {
   const usersResult = await iam.user.listUsers({ page: 1, pageSize: 1 })
   if (!usersResult.success) {
-    core.logger.warn(m.server_init_default_admin_failed({ message: usersResult.error.message }))
+    core.logger.warn('Default administrator lookup failed', { error: usersResult.error })
     return
   }
 
@@ -217,7 +129,7 @@ async function ensureDefaultAdmin(): Promise<void> {
   })
 
   if (!registerResult.success) {
-    core.logger.warn(m.server_init_default_admin_failed({ message: registerResult.error.message }))
+    core.logger.warn('Default administrator creation failed', { error: registerResult.error })
     return
   }
 
@@ -235,12 +147,12 @@ async function ensureDefaultAdmin(): Promise<void> {
     passwordSource: 'HAI_ADMIN_DEFAULT_PASSWORD',
   }
 
-  core.logger.info(m.server_init_default_admin_created(), credentialLogContext)
+  core.logger.info('Default administrator created', credentialLogContext)
 }
 
 /**
  * 检查应用是否已初始化
  */
 export function isAppInitialized(): boolean {
-  return initialized
+  return runtime.isInitialized
 }

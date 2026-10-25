@@ -6,7 +6,7 @@
   import { goto, invalidateAll } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser } from '$lib/services/feedback.js'
+  import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser, loadFeedbackReplay } from '$lib/services/feedback.js'
   import { downloadFeedbackBytes, feedbackBase64Bytes, feedbackBlobUrl } from '$lib/utils/feedback-browser.js'
   import { FeedbackDetail, FeedbackList, usePermission } from '@h-ai/ui'
   import { onDestroy, untrack } from 'svelte'
@@ -113,9 +113,10 @@
     if (!result.success)
       throw new Error(result.error.message)
     const bytes = feedbackBase64Bytes(result.data.dataBase64)
-    if (['image/png', 'image/jpeg', 'image/webp'].includes(result.data.contentType)) {
+    if (['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4'].includes(result.data.contentType)) {
       const url = feedbackBlobUrl(bytes, result.data.contentType)
       attachments = attachments.map(value => value.id === item.id ? { ...value, url } : value)
+      return
     }
     downloadFeedbackBytes(result.data.name, bytes, result.data.contentType)
   }
@@ -148,7 +149,7 @@
 <div class='flex h-full min-h-0 min-w-0 flex-col gap-4' data-testid='feedback-management'>
   {#if detail}
     <div class='min-h-0 overflow-y-auto rounded-xl bg-base-100 p-4 sm:p-6'>
-      <FeedbackDetail report={reportView(detail.report)} {evidence} {attachments} {history} {permissions} {loading} error={actionError} bind:evidenceQuery onevidencequery={loadEvidence} onstatus={status} onretry={retry} onexport={report => exportFeedback(report.id)} onattachment={attachment} onclose={closeDetail} />
+      <FeedbackDetail report={reportView(detail.report)} {evidence} {attachments} {history} {permissions} {loading} error={actionError} bind:evidenceQuery onevidencequery={loadEvidence} onreplay={() => loadFeedbackReplay(detail!.report.id)} onstatus={status} onretry={retry} onexport={report => exportFeedback(report.id)} onattachment={attachment} onclose={closeDetail} />
     </div>
   {:else}
     <FeedbackList data={reportRows} {query} {permissions} {loading} error={actionError} onquerychange={changeQuery} onview={view} onstatus={status} onretry={retry} onexport={report => exportFeedback(report.id)} />

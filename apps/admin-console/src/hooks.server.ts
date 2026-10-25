@@ -22,18 +22,6 @@ import { reldb } from '@h-ai/reldb'
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
 
-const kitTransportConfig = getAdminKitConfig().transport
-const handleTransportConfig = kitTransportConfig === false
-  ? false
-  : {
-      keyExchangePath: kitTransportConfig.keyExchangePath,
-      maxPlaintextBytes: kitTransportConfig.maxPlaintextBytes,
-      excludePaths: [...kitTransportConfig.excludePaths],
-    }
-const transportPublicPaths = kitTransportConfig === false
-  ? []
-  : [kitTransportConfig.keyExchangePath]
-
 let haiHandlePromise: Promise<Handle> | null = null
 
 async function ensureAppInitialized() {
@@ -104,11 +92,22 @@ async function validateSession(token: string) {
  * 因此必须先等待 `crypto.init()` 完成，再构建 handle。
  */
 async function createHaiHandle(): Promise<Handle> {
+  // initHandle 已完成模块初始化，此时读取反馈的真实容量，保留显式关闭传输的配置。
+  const kitTransportConfig = getAdminKitConfig().transport
+  const handleTransportConfig = kitTransportConfig === false
+    ? false
+    : {
+        keyExchangePath: kitTransportConfig.keyExchangePath,
+        maxPlaintextBytes: kitTransportConfig.maxPlaintextBytes,
+        excludePaths: [...kitTransportConfig.excludePaths],
+      }
+  const transportPublicPaths = kitTransportConfig === false ? [] : [kitTransportConfig.keyExchangePath]
   let managedTransport: TransportEncryptionOptions | undefined
   if (handleTransportConfig !== false) {
-    const initResult = await crypto.init()
-    if (!initResult.success) {
-      throw new Error(initResult.error.message)
+    if (!crypto.isInitialized) {
+      const initResult = await crypto.init()
+      if (!initResult.success)
+        throw new Error(initResult.error.message)
     }
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)

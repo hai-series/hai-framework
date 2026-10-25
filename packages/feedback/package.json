@@ -16,6 +16,14 @@
     "./bundle": {
       "types": "./dist/bundle/index.d.ts",
       "import": "./dist/bundle/index.js"
+    },
+    "./tauri": {
+      "types": "./dist/tauri.d.ts",
+      "import": "./dist/tauri.js"
+    },
+    "./capacitor": {
+      "types": "./dist/capacitor.d.ts",
+      "import": "./dist/capacitor.js"
     }
   },
   "main": "./dist/index.js",
@@ -40,10 +48,33 @@
     "clean": "rimraf dist .turbo",
     "build:clean": "rimraf dist"
   },
+  "peerDependencies": {
+    "@capacitor/filesystem": "catalog:",
+    "@capacitor/share": "catalog:",
+    "@h-ai/reach": "workspace:*",
+    "@tauri-apps/plugin-dialog": "catalog:",
+    "@tauri-apps/plugin-fs": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@capacitor/filesystem": {
+      "optional": true
+    },
+    "@capacitor/share": {
+      "optional": true
+    },
+    "@h-ai/reach": {
+      "optional": true
+    },
+    "@tauri-apps/plugin-dialog": {
+      "optional": true
+    },
+    "@tauri-apps/plugin-fs": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
-    "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@rrweb/record": "catalog:",
@@ -53,6 +84,11 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@capacitor/filesystem": "catalog:",
+    "@capacitor/share": "catalog:",
+    "@h-ai/reach": "workspace:*",
+    "@tauri-apps/plugin-dialog": "catalog:",
+    "@tauri-apps/plugin-fs": "catalog:",
     "@types/node": "catalog:",
     "esbuild": "catalog:",
     "jsdom": "catalog:",

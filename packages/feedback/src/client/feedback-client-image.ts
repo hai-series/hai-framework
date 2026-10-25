@@ -1,6 +1,6 @@
 /**
  * 截图与标注都在浏览器侧执行，不把原始 DOM 上传到受理服务。
- * 标注坐标使用浏览器解码后原图的像素；UI 的 0–1 坐标需将 x/width 乘 naturalWidth、y/height 乘 naturalHeight。
+ * 标注默认使用原图像素；UI 可直接传 coordinateSpace: 'ratio'，由 SDK 换算实际图片尺寸。
  * @example
  * ```ts
  * import type { FeedbackImageAnnotation } from '@h-ai/feedback/client'
@@ -8,6 +8,8 @@
  * ```
  */
 export interface FeedbackImageAnnotation {
+  /** ratio 由 SDK 按解码后的原图换算，宿主无需处理缩放或 JPEG 方向。 */
+  coordinateSpace?: 'pixel' | 'ratio'
   x: number
   y: number
   width: number
@@ -38,13 +40,15 @@ export async function captureFeedbackScreenshot(): Promise<Uint8Array> {
   }
   const { default: html2canvas } = await import('html2canvas')
   const canvas = await html2canvas(document.body, {
-    width: Math.min(window.innerWidth, 1920),
-    height: Math.min(window.innerHeight, 1200),
-    scale: 1,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    scale: Math.min(1, 1920 / window.innerWidth, 1200 / window.innerHeight),
     // 原生 SVG foreignObject 保留 CSS mask 图标与字体基线，避免 CanvasRenderer 裁切文本。
     foreignObjectRendering: true,
-    scrollX: -window.scrollX,
-    scrollY: -window.scrollY,
+    x: window.scrollX,
+    y: window.scrollY,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
     useCORS: false,
     allowTaint: false,
     logging: false,
@@ -112,6 +116,11 @@ export async function annotateFeedbackImage(bytes: Uint8Array, annotation: Feedb
   try {
     image.src = imageUrl
     await image.decode()
+    if (annotation.coordinateSpace === 'ratio') {
+      if ([annotation.x, annotation.y, annotation.width, annotation.height].some(value => value < 0 || value > 1))
+        throw new Error('Invalid annotation ratio')
+      annotation = { ...annotation, x: annotation.x * image.naturalWidth, y: annotation.y * image.naturalHeight, width: annotation.width * image.naturalWidth, height: annotation.height * image.naturalHeight }
+    }
     canvas.width = image.naturalWidth
     canvas.height = image.naturalHeight
     const context = canvas.getContext('2d')
@@ -120,7 +129,10 @@ export async function annotateFeedbackImage(bytes: Uint8Array, annotation: Feedb
     context.drawImage(image, 0, 0)
     if (annotation.mode === 'mask') {
       context.fillStyle = '#111'
-      context.fillRect(annotation.x, annotation.y, annotation.width, annotation.height)
+      // 向外覆盖完整像素，避免小数选区的抗锯齿透出敏感内容。
+      const left = Math.floor(annotation.x)
+      const top = Math.floor(annotation.y)
+      context.fillRect(left, top, Math.ceil(annotation.x + annotation.width) - left, Math.ceil(annotation.y + annotation.height) - top)
     }
     else {
       context.strokeStyle = '#e11d48'

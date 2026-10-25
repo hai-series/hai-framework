@@ -21,9 +21,9 @@ import {
   FeedbackSetStatusInputSchema,
   FeedbackSubmitInputSchema,
   FeedbackUploadInputSchema,
+  resolveFeedbackBudget,
 } from '@h-ai/api-contract/feedback'
 import { core, err, ok } from '@h-ai/core'
-import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { createFeedbackBundle } from './bundle/index.js'
@@ -41,7 +41,7 @@ import { HaiFeedbackError } from './feedback-types.js'
  * void drain
  * ```
  */
-export type FeedbackRuntime = Omit<FeedbackFunctions, 'init' | 'close' | 'config' | 'isInitialized'> & { start: () => void, close: () => Promise<void> }
+export type FeedbackRuntime = Omit<FeedbackFunctions, 'init' | 'close' | 'config' | 'budget' | 'isInitialized'> & { start: () => void, close: () => Promise<void> }
 
 /** 将异常留在公共 HaiResult 边界之内；不向用户返回 SDK/SQL/凭据原文。 */
 function failed() {
@@ -86,6 +86,7 @@ function escapeHtml(value: string) {
  * ```
  */
 export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture): FeedbackRuntime {
+  const budget = resolveFeedbackBudget(config)
   const table = repo.tables
   const clock = feedbackClockSql()
   let stopped = false
@@ -166,12 +167,12 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     const revision = Number(row.revision) + 1
     const params: unknown[] = [additions.length, bytes, revision, Date.now()]
     const identity = `${feedbackTextEquals('id', row.id, params)} AND ${feedbackTextEquals('scope_id', row.scope_id, params)}`
-    params.push(row.revision, additions.length, config.maxEvidenceCount, bytes, config.maxEvidenceBytes)
+    params.push(row.revision, additions.length, budget.maxEvidenceCount, bytes, budget.maxEvidenceBytes)
     const changed = await tx.execute(`UPDATE ${table.reports} SET evidence_count = evidence_count + ?, evidence_bytes = evidence_bytes + ?, revision = ?, updated_at = ? WHERE ${identity} AND revision = ? AND deleting = 0 AND evidence_count + ? <= ? AND evidence_bytes + ? <= ?`, params)
     if (!changed.success)
       return changed
     if (!changed.data.changes)
-      return Number(row.evidence_count) + additions.length > config.maxEvidenceCount || Number(row.evidence_bytes) + bytes > config.maxEvidenceBytes ? limited() : conflict()
+      return Number(row.evidence_count) + additions.length > budget.maxEvidenceCount || Number(row.evidence_bytes) + bytes > budget.maxEvidenceBytes ? limited() : conflict()
     for (const { key, event, bytes: itemBytes } of additions) {
       const inserted = await tx.execute(`INSERT INTO ${table.evidence} (id, report_id, scope_id, user_id, app_id, source, sequence, kind, timestamp, request_id, error_id, revision, bytes, expires_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [key, row.id, row.scope_id, row.user_id, row.app_id, event.source, event.sequence, event.kind, event.timestamp, event.requestId ?? null, event.errorId ?? null, revision, itemBytes, row.expires_at, JSON.stringify(event)])
       if (!inserted.success)
@@ -207,11 +208,14 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   }
 
   async function notificationSummary(id: string) {
+    if (config.notificationMode === 'disabled')
+      return reldb.sql.execute(`UPDATE ${table.reports} SET notification_status = 'disabled' WHERE id = ?`, [id])
     return reldb.sql.execute(`UPDATE ${table.reports} SET notification_status = CASE
       WHEN EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND (status = 'failed' OR last_error IS NOT NULL)) THEN 'failed'
       WHEN NOT EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND status <> 'succeeded') THEN 'sent'
       WHEN EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND status = 'running') THEN 'sending'
-      ELSE 'pending' END WHERE id = ?`, [id, id, id, id])
+      WHEN EXISTS (SELECT 1 FROM ${table.jobs} WHERE report_id = ? AND kind = 'notify' AND status = 'pending' AND result IS NOT NULL) THEN 'deferred'
+      ELSE 'pending' END WHERE id = ?`, [id, id, id, id, id])
   }
   async function history(id: string, sql: DmlOperations = reldb.sql) {
     const result = await sql.query<{ payload: unknown }>(`SELECT payload FROM ${table.history} WHERE report_id = ? ORDER BY id`, [id])
@@ -287,13 +291,13 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         commit: sanitized.commit ?? config.commit,
         status: 'pending',
         collectionStatus: 'collecting',
-        notificationStatus: 'pending',
+        notificationStatus: config.notificationMode === 'disabled' ? 'disabled' : 'pending',
         createdAt: now,
         updatedAt: now,
         version: 1,
         evidenceRevision: 1,
       }
-      const row: FeedbackReportRow = { id, scope_id: actor.scopeId, user_id: actor.userId, app_id: config.appId, number: report.number, app_version: report.appVersion ?? null, summary: report.summary ?? '', submission_key: submissionKey, submission_hash: digest, status: 'pending', collection_status: 'collecting', notification_status: 'pending', created_at: now, updated_at: now, version: 1, revision: 1, evidence_count: 0, evidence_bytes: 0, collect_deadline: now + config.collectionTimeoutMs, expires_at: now + config.retentionDays * 86400000, payload: report, deleting: 0 }
+      const row: FeedbackReportRow = { id, scope_id: actor.scopeId, user_id: actor.userId, app_id: config.appId, number: report.number, app_version: report.appVersion ?? null, summary: report.summary ?? '', submission_key: submissionKey, submission_hash: digest, status: 'pending', collection_status: 'collecting', notification_status: report.notificationStatus, created_at: now, updated_at: now, version: 1, revision: 1, evidence_count: 0, evidence_bytes: 0, collect_deadline: now + config.collectionTimeoutMs, expires_at: now + config.retentionDays * 86400000, payload: report, deleting: 0 }
       const result = await repo.transaction(async (tx) => {
         const inserted = await repo.create({ ...row }, tx)
         if (!inserted.success)
@@ -301,8 +305,10 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const initial = await appendInside(tx, row, sanitized.evidence ?? [])
         if (!initial.success)
           return initial
+        if ((sanitized.attachments ?? []).reduce((total, file) => total + file.size, 0) > budget.maxAttachmentsBytes)
+          return limited()
         for (const attachment of sanitized.attachments ?? []) {
-          if (attachment.size > config.maxAttachmentBytes || !allowedContentType(attachment.contentType))
+          if (attachment.size > budget.maxAttachmentBytes || !allowedContentType(attachment.contentType))
             return invalid()
           const attachmentId = hash(`${id}:${attachment.id}`)
           const data: FeedbackAttachment = { ...attachment, feedbackId: id, status: 'pending' }
@@ -310,7 +316,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           if (!saved.success)
             return saved
         }
-        for (const recipient of config.recipients) {
+        for (const recipient of config.notificationMode === 'disabled' ? [] : config.notificationMode === 'console' ? ['console'] : config.recipients) {
           const saved = await insertJob(tx, report, 'notify', recipient, { recipient }, row.collect_deadline)
           if (!saved.success)
             return saved
@@ -476,6 +482,11 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!updated.data.changes)
           return conflict()
         const change: FeedbackHistory = { id: randomUUID(), feedbackId: input.id, userId: actor.userId, from: repo.report(row.data).status, to: parsed.data.status, timestamp: now, note: parsed.data.note ? redactFeedbackText(parsed.data.note) : undefined }
+        const previousHistory = await history(input.id, tx)
+        if (!previousHistory.success)
+          return previousHistory
+        if (Buffer.byteLength(JSON.stringify([...previousHistory.data, change])) > 256 * 1024)
+          return limited()
         const saved = await tx.execute(`INSERT INTO ${table.history} (id, report_id, payload) VALUES (?, ?, ?)`, [change.id, input.id, JSON.stringify(change)])
         return saved.success ? ok({ ...repo.report(row.data), status: parsed.data.status, version: parsed.data.expectedVersion + 1, updatedAt: now }) : saved
       })
@@ -658,7 +669,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     const attachment = found.data
     const metadata = attachmentData(attachment)
     const bytes = Buffer.from(parsed.data.dataBase64, 'base64')
-    if (bytes.length !== Number(attachment.size) || bytes.length > config.maxAttachmentBytes || !matchesContentType(bytes, metadata.contentType))
+    if (bytes.length !== Number(attachment.size) || bytes.length > budget.maxAttachmentBytes || !matchesContentType(bytes, metadata.contentType))
       return invalid()
     if (hash(bytes) !== attachment.checksum)
       return err(HaiFeedbackError.CHECKSUM_MISMATCH, feedbackM('feedback_checksumMismatch'))
@@ -732,7 +743,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const status = result.success ? pendingReceipt ? 'pending' : 'succeeded' : job.kind !== 'cleanup' && Number(job.attempts) + 1 >= config.maxAttempts ? 'failed' : 'pending'
         const saved = purged
           ? await reldb.sql.execute(`DELETE FROM ${table.jobs} WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [job.id, token])
-          : await reldb.sql.execute(`UPDATE ${table.jobs} SET status = ?, token = NULL, lease_until = 0, next_run_at = ${clock} + ?, updated_at = ${clock}, last_error = ?, result = CASE WHEN ? = 1 THEN ? ELSE result END WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [status, Math.min(60000, 1000 * 2 ** Math.min(Number(job.attempts), 6)), result.success ? null : result.error.code, result.success ? 1 : 0, result.success ? JSON.stringify(result.data) : null, job.id, token])
+          : await reldb.sql.execute(`UPDATE ${table.jobs} SET status = ?, attempts = attempts - ?, token = NULL, lease_until = 0, next_run_at = ${clock} + ?, updated_at = ${clock}, last_error = ?, result = CASE WHEN ? = 1 THEN ? ELSE result END WHERE id = ? AND token = ? AND status = 'running' AND lease_until > ${clock}`, [status, pendingReceipt ? 1 : 0, Math.min(60000, 1000 * 2 ** Math.min(Number(job.attempts), 6)), result.success ? null : result.error.code, result.success ? 1 : 0, result.success ? JSON.stringify(result.data) : null, job.id, token])
         if (!saved.success)
           return saved
         if (saved.data.changes && status === 'failed' && job.kind === 'collect') {
@@ -806,25 +817,35 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       return updated.success ? ok({ collected: captured.length }) : updated
     }
     if (job.kind === 'notify') {
+      if (config.notificationMode === 'disabled')
+        return ok({ disabled: true })
       const recipient = 'recipient' in payload && typeof payload.recipient === 'string' ? payload.recipient : ''
-      if (!config.recipients.includes(recipient))
+      if (config.notificationMode === 'reach' && !config.recipients.includes(recipient))
         return invalid()
-      if (reach.config?.dnd?.enabled)
-        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
       // 受理通知与补采独立；发送前以数据库租约和存活报告再次确认副作用资格。
       const live = await withLease(job, tx => access(report.id, actor, undefined, tx))
       if (!live.success)
         return live
       const current = repo.report(live.data)
+      if (config.notificationMode === 'console') {
+        core.logger.info('Feedback notification', { module: 'feedback', number: current.number, appId: current.appId, summary: current.summary, collectionStatus: current.collectionStatus })
+        return ok({ channel: 'console' })
+      }
+      const { HaiReachError, reach } = await import('@h-ai/reach')
       const materialStatus = {
         collecting: feedbackM('feedback_materialCollecting'),
         complete: feedbackM('feedback_materialComplete'),
         partial: feedbackM('feedback_materialPartial'),
         failed: feedbackM('feedback_materialFailed'),
       }[current.collectionStatus]
-      const detailUrl = new URL(config.adminUrl)
-      detailUrl.searchParams.set('feedback', report.id)
-      const sent = await reach.send({ provider: config.notificationProvider, to: recipient, subject: `${feedbackM('feedback_received')} ${current.number}`, body: `<p>${escapeHtml(current.number)}</p><p>${escapeHtml(current.appId)} ${escapeHtml(current.appVersion ?? '')}</p><p>${escapeHtml(feedbackM('feedback_submittedAt'))}: ${escapeHtml(new Date(current.createdAt).toISOString())}</p><p>${escapeHtml(feedbackM('feedback_materialStatus'))}: ${escapeHtml(materialStatus)}</p><p>${escapeHtml(current.summary ?? '')}</p><p><a href="${escapeHtml(detailUrl.href)}">${escapeHtml(current.number)}</a></p>`, idempotencyKey: job.id })
+      const detailUrl = config.adminUrl ? new URL(config.adminUrl) : undefined
+      detailUrl?.searchParams.set('feedback', report.id)
+      const facts = [current.number, `${current.appId} ${current.appVersion ?? ''}`, `${feedbackM('feedback_submittedAt')}: ${new Date(current.createdAt).toISOString()}`, `${feedbackM('feedback_materialStatus')}: ${materialStatus}`, current.summary ?? '', ...(detailUrl ? [detailUrl.href] : [])]
+      const isEmail = reach.config?.providers.find(provider => provider.name === config.notificationProvider)?.type === 'smtp'
+      const body = isEmail ? facts.map(value => `<p>${escapeHtml(value)}</p>`).join('') : facts.join('\n')
+      const sent = await reach.send({ provider: config.notificationProvider, to: recipient, subject: `${feedbackM('feedback_received')} ${current.number}`, body, idempotencyKey: job.id, deferPolicy: 'reject' })
+      if (!sent.success && sent.error.code === HaiReachError.DND_BLOCKED.code)
+        return ok({ pending: true, deferred: true })
       if (!sent.success)
         return sent
       if (!sent.data.success)
@@ -857,7 +878,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const info = attachmentData(file)
         files.push({ id: info.id, name: info.name, contentType: info.contentType, checksum: info.checksum, bytes: stored.data })
       }
-      const bundle = await createFeedbackBundle({ report: fixed.report, evidence: fixed.evidence, history: fixed.history, attachments: files, missing: unavailable })
+      const bundle = await createFeedbackBundle({ maxBytes: budget.maxTotalBytes, report: fixed.report, evidence: fixed.evidence, history: fixed.history, attachments: files, missing: unavailable })
       if (!bundle.success)
         return bundle
       const key = `feedback/${hash(report.scopeId).slice(0, 16)}/${report.id}/exports/${job.id}-${job.token}.zip`
@@ -910,7 +931,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
 }
 
 function allowedContentType(type: string) {
-  return ['image/png', 'image/jpeg', 'image/webp', 'text/plain', 'application/json', 'application/pdf'].includes(type)
+  return ['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json', 'application/pdf'].includes(type)
 }
 function matchesContentType(bytes: Buffer, type: string) {
   if (type === 'image/png')
@@ -921,6 +942,10 @@ function matchesContentType(bytes: Buffer, type: string) {
     return bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP'
   if (type === 'application/pdf')
     return bytes.subarray(0, 5).toString() === '%PDF-'
+  if (type === 'video/webm')
+    return bytes.length >= 12 && bytes.subarray(0, 4).equals(Buffer.from([0x1A, 0x45, 0xDF, 0xA3]))
+  if (type === 'video/mp4')
+    return bytes.length >= 12 && bytes.subarray(4, 8).toString() === 'ftyp'
   if (type === 'application/json') {
     try {
       JSON.parse(bytes.toString('utf8'))

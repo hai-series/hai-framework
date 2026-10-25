@@ -162,6 +162,8 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
     const report = jsonObject(input.report)
     if (typeof report.id !== 'string' || !SAFE_ID.test(report.id))
       throw new Error('Invalid report')
+    if (['appVersion', 'buildId', 'commit'].some(key => report[key] !== undefined && (typeof report[key] !== 'string' || report[key].length > 128)))
+      throw new Error('Invalid build metadata')
     if (report.evidenceRevision !== undefined && (typeof report.evidenceRevision !== 'number' || !Number.isSafeInteger(report.evidenceRevision) || report.evidenceRevision < 0))
       throw new Error('Invalid evidence revision')
     const evidence = input.evidence.map(evidenceFrom)
@@ -182,7 +184,7 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
       if (typeof attachment.id !== 'string' || attachment.id.length < 1 || attachment.id.length > 128 || ids.has(attachment.id) || attachment.bytes.byteLength > MAX_FILE_BYTES)
         throw new Error('Invalid attachment')
       ids.add(attachment.id)
-      const suffix = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'text/plain': 'txt', 'application/json': 'json' } as Record<string, string>)[attachment.contentType] ?? 'bin'
+      const suffix = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/webm': 'webm', 'video/mp4': 'mp4', 'text/plain': 'txt', 'application/json': 'json' } as Record<string, string>)[attachment.contentType] ?? 'bin'
       // 原始标识仅保存在清单，使用区分大小写且保留字符串编码的摘要构造安全路径。
       const path = `attachments/${await checksum(strToU8(JSON.stringify(attachment.id)))}.${suffix}`
       const hash = await checksum(attachment.bytes)
@@ -202,7 +204,7 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
     }
     files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
     const total = Object.values(files).reduce((sum, file) => sum + file.byteLength, 0)
-    if (Object.keys(files).length > MAX_FILES || total > MAX_BYTES || Object.values(files).some(file => file.byteLength > MAX_FILE_BYTES))
+    if (Object.keys(files).length > MAX_FILES || total > Math.min(input.maxBytes ?? MAX_BYTES, MAX_BYTES) || Object.values(files).some(file => file.byteLength > MAX_FILE_BYTES))
       throw new Error('Bundle limits exceeded')
     return ok(zipSync(files, { level: 1, mtime: new Date(1980, 0, 1) }))
   }
@@ -241,6 +243,8 @@ export async function readFeedbackBundle(bytes: Uint8Array, options?: FeedbackBu
     if (total > limits.maxBytes)
       throw new Error('Bundle expansion limit')
     const report = objectFromFile(files, 'report.json')
+    if (['appVersion', 'buildId', 'commit'].some(key => report[key] !== undefined && (typeof report[key] !== 'string' || report[key].length > 128)))
+      throw new Error('Invalid build metadata')
     if (typeof report.id !== 'string' || report.id !== manifest.reportId)
       throw new Error('Report mismatch')
     const records: unknown = JSON.parse(strFromU8(files['evidence/records.json'] ?? new Uint8Array()))

@@ -18,12 +18,14 @@ export const FeedbackConfigSchema = z.strictObject({
   buildId: z.string().max(128).optional(),
   /** 源码提交标识，帮助定位对应代码。 */
   commit: z.string().max(128).optional(),
-  /** 接收待处理反馈通知的管理员邮件地址。 */
-  recipients: z.array(z.email()).min(1).max(20),
-  /** 已初始化 Reach 邮件 Provider 的唯一名称。 */
+  /** disabled 不通知，console 输出安全摘要，reach 使用已有通知通道。 */
+  notificationMode: z.enum(['disabled', 'console', 'reach']).default('reach'),
+  /** Reach 接收方，由实际 Provider 校验邮箱、手机号或业务目的地。 */
+  recipients: z.array(z.string().min(1).max(320)).max(20).default([]),
+  /** 已初始化 Reach Provider 的唯一名称，不限制为邮件。 */
   notificationProvider: z.string().min(1).default('email'),
   /** 管理员通知中的反馈管理页面地址。 */
-  adminUrl: z.url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol)),
+  adminUrl: z.url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol)).optional(),
   /** 补充材料收集超时，单位毫秒；超时后冻结为完整或部分材料。 */
   collectionTimeoutMs: z.number().int().min(0).max(300000).default(60000),
   /** 持久任务扫描间隔，单位毫秒；零值由宿主手动运行任务。 */
@@ -36,12 +38,17 @@ export const FeedbackConfigSchema = z.strictObject({
   retentionDays: z.number().int().min(1).max(3650).default(30),
   /** 允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。 */
   envAllowlist: z.array(z.string().min(1).max(128)).max(100).default([]),
-  /** 单个附件允许的最大字节数。 */
+  /** 未压缩导出总预算；客户端、附件总量和传输预算由此派生。 */
+  maxTotalBytes: z.number().int().min(4 * 1024 * 1024).max(40 * 1024 * 1024).default(32 * 1024 * 1024),
+  /** 单个附件允许的最大字节数；同时受总预算约束。 */
   maxAttachmentBytes: z.number().int().min(1).max(5 * 1024 * 1024).default(5 * 1024 * 1024),
   /** 单份反馈累计证据允许的最大字节数。 */
-  maxEvidenceBytes: z.number().int().min(1024).max(32 * 1024 * 1024).default(4 * 1024 * 1024),
+  maxEvidenceBytes: z.number().int().min(1024).max(4 * 1024 * 1024).default(4 * 1024 * 1024),
   /** 单份反馈累计证据允许的最大条数。 */
   maxEvidenceCount: z.number().int().min(1).max(10000).default(2000),
+}).superRefine((config, context) => {
+  if (config.notificationMode === 'reach' && !config.recipients.length)
+    context.addIssue({ code: 'custom', path: ['recipients'], message: 'Reach recipients are required' })
 })
 
 /**

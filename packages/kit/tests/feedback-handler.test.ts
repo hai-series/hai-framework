@@ -1,5 +1,6 @@
 import type { FeedbackFunctions } from '@h-ai/feedback'
 import type { RequestEvent } from '@sveltejs/kit'
+import { resolveFeedbackBudget } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/index.js'
@@ -7,7 +8,7 @@ import { kit } from '../src/index.js'
 function fixture() {
   const unused = async () => err(HaiCommonError.NOT_FOUND, 'Missing')
   const appendEvidence = vi.fn<FeedbackFunctions['appendEvidence']>(async input => ok({ acknowledged: input.evidence.map(item => item.id), evidenceRevision: 2 }))
-  const feedback: FeedbackFunctions = { init: async () => ok(undefined), close: async () => ok(undefined), config: null, isInitialized: true, submit: unused, list: unused, get: unused, getEvidence: unused, setStatus: unused, appendEvidence, completeCollection: unused, uploadAttachment: unused, getAttachment: unused, retry: unused, export: unused, getExport: unused, runJobs: unused }
+  const feedback: FeedbackFunctions = { init: async () => ok(undefined), close: async () => ok(undefined), config: null, budget: resolveFeedbackBudget(), isInitialized: true, submit: unused, list: unused, get: unused, getEvidence: unused, setStatus: unused, appendEvidence, completeCollection: unused, uploadAttachment: unused, getAttachment: unused, retry: unused, export: unused, getExport: unused, runJobs: unused }
   const actor = { scopeId: 'trusted-scope', userId: 'user-1', permissions: ['feedback:create'] }
   const resolveContext = vi.fn(() => actor)
   const handler = kit.createFeedbackHandler({ feedback, resolveContext })

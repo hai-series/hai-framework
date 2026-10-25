@@ -1,10 +1,11 @@
 import type { FeedbackEvidenceInput, FeedbackReport } from '@h-ai/api-contract/feedback'
 import type { HaiResult } from '@h-ai/core'
 import type { FeedbackBrowserClient, FeedbackClientAttachment, FeedbackClientConfig, FeedbackClientSubmitInput, FeedbackDraft } from './feedback-client-types.js'
-import { FeedbackEvidenceInputSchema, FeedbackReportSchema, FeedbackSubmitInputSchema } from '@h-ai/api-contract/feedback'
+import { FeedbackBudgetSchema, FeedbackEvidenceInputSchema, FeedbackReportSchema, FeedbackSubmitInputSchema, resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, ok } from '@h-ai/core'
 import { feedbackM } from '../feedback-i18n.js'
 import { HaiFeedbackError } from '../feedback-types.js'
+import { saveFeedbackFile } from './feedback-client-files.js'
 import { annotateFeedbackImage, captureFeedbackScreenshot } from './feedback-client-image.js'
 import { collectFeedbackCookies, feedbackPageUrl, sanitizeFeedbackData, sanitizeFeedbackReplay, sanitizeFeedbackText } from './feedback-client-sanitize.js'
 import { deleteFeedbackDraft, restoreFeedbackCheckpoint, restoreFeedbackDraft, saveFeedbackCheckpoint, saveFeedbackDraft } from './feedback-client-store.js'
@@ -21,8 +22,38 @@ import { deleteFeedbackDraft, restoreFeedbackCheckpoint, restoreFeedbackDraft, s
  */
 export function createFeedbackClient(): FeedbackBrowserClient {
   let config: FeedbackClientConfig | undefined
-  let initializing = false
   let draft: FeedbackDraft | undefined
+  let sessionVersion = 0
+  let policyVerified = false
+  let preparedPage = ''
+  let budget = resolveFeedbackBudget()
+  const previews = new Map<string, { checksum: string, url: string }>()
+  let discardOnClose = false
+  let saveController = new AbortController()
+
+  function releasePreviews() {
+    for (const preview of previews.values()) URL.revokeObjectURL(preview.url)
+    previews.clear()
+  }
+
+  function getView() {
+    const files = draft?.attachments ?? []
+    for (const [id, preview] of previews) {
+      if (!files.some(file => file.id === id && file.checksum === preview.checksum)) {
+        URL.revokeObjectURL(preview.url)
+        previews.delete(id)
+      }
+    }
+    return { attachments: files.map((file) => {
+      let preview = previews.get(file.id)
+      if (!preview) {
+        preview = { checksum: file.checksum, url: URL.createObjectURL(new Blob([new Uint8Array(file.bytes).buffer], { type: file.contentType })) }
+        previews.set(file.id, preview)
+      }
+      return { id: file.id, name: file.name, size: file.size, mimeType: file.contentType, url: preview.url }
+    }), evidence: draft?.evidence ?? [], missing: draft?.missing ?? [], budget: { ...budget } }
+  }
+  let initializing = false
   let sequence = 0
   let buffer: FeedbackEvidenceInput[] = []
   let bufferBytes = 0
@@ -38,6 +69,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   let persistTimer: ReturnType<typeof setTimeout> | undefined
   let flushTimer: ReturnType<typeof setInterval> | undefined
   let stopReplay: (() => void) | undefined
+  let screenshotCaptures = 0
   let unsubscribeLogger: (() => void) | undefined
   let source = ''
   let keyScreenshots: Array<{ attachment: FeedbackClientAttachment, timestamp: number }> = []
@@ -55,11 +87,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
 
   function failure(code: keyof typeof HaiFeedbackError = 'OPERATION_FAILED', cause?: unknown) {
     const key = code === 'NOT_INITIALIZED' ? 'feedback_notInitialized' : code === 'LIMIT_EXCEEDED' ? 'feedback_limitExceeded' : code === 'INVALID_INPUT' ? 'feedback_invalidInput' : 'feedback_operationFailed'
-    return err(HaiFeedbackError[code], feedbackM(key), cause)
+    const traceId = core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
+    const error = { ...HaiFeedbackError[code], traceId, message: feedbackM(key), cause }
+    core.logger[cause === undefined ? 'warn' : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
+    return err({ ...error, message: core.error.formatMessage(error) })
   }
 
   function limits() {
-    return { events: config?.maxEvents ?? 1000, bytes: config?.maxBytes ?? 2 * 1024 * 1024, age: config?.maxAgeMs ?? 300_000, before: config?.beforeCount ?? 100, after: config?.afterCount ?? 100 }
+    return { events: Math.min(config?.maxEvents ?? 1000, budget.maxEvidenceCount), bytes: Math.min(config?.maxBytes ?? 2 * 1024 * 1024, budget.maxEvidenceBytes), age: config?.maxAgeMs ?? 300_000, before: config?.beforeCount ?? 100, after: config?.afterCount ?? 100 }
   }
 
   function schedulePersist() {
@@ -127,6 +162,11 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       missing.add('browser-error-windows-truncated')
     }
     schedulePersist()
+    appendToDraft(item, size)
+  }
+
+  function appendToDraft(item: FeedbackEvidenceInput, size: number) {
+    const bounds = limits()
     if (draft && !collectionFinished && !collectionSealed && ((Date.now() <= deadline && afterCount < bounds.after) || item.kind === 'environment') && draft.evidence.length < bounds.events && draftBytes + size <= bounds.bytes) {
       draft.evidence.push(item)
       draftBytes += size
@@ -153,7 +193,18 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       const numeric = [input.maxEvents, input.maxBytes, input.maxAgeMs, input.beforeCount, input.afterCount, input.afterTimeoutMs, input.screenshotTimeoutMs, input.maxKeyScreenshots, input.keyScreenshotThrottleMs]
       if (numeric.some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0)) || (input.persistDraft && !input.persistenceKey))
         return failure('INVALID_INPUT')
+      if (!FeedbackSubmitInputSchema.pick({ appId: true, appVersion: true, buildId: true, commit: true }).safeParse({ appId: input.appId, appVersion: input.appVersion, buildId: input.buildId, commit: input.commit }).success)
+        return failure('INVALID_INPUT')
+      const initVersion = sessionVersion
+      const policy = input.actions.policy ? await input.actions.policy().catch(() => failure('OPERATION_FAILED')) : ok(input.budget ?? resolveFeedbackBudget())
+      if (initVersion !== sessionVersion)
+        return failure('NOT_INITIALIZED')
+      policyVerified = policy.success
+      budget = FeedbackBudgetSchema.parse(policy.success ? policy.data : input.budget ?? resolveFeedbackBudget())
+      if (!policy.success)
+        missing.add('server-policy-unavailable')
       config = input
+      saveController = new AbortController()
       closing = false
       source = `browser:${core.id.uuid()}`
       storageKey = `${input.appId}:${input.persistenceKey ?? ''}`
@@ -195,7 +246,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       unsubscribeLogger = core.logger.observe((entry) => {
         if (entry.context.module === 'feedback' || entry.context.feedback === true)
           return
-        record({ kind: ['error', 'fatal'].includes(entry.level) ? 'error' : 'log', requestId: typeof entry.context.requestId === 'string' ? entry.context.requestId : undefined, data: { level: entry.level, message: entry.message, context: entry.context } })
+        record({ kind: ['error', 'fatal'].includes(entry.level) ? 'error' : 'log', requestId: typeof entry.context.requestId === 'string' ? entry.context.requestId : typeof entry.context.traceId === 'string' ? entry.context.traceId : undefined, data: { level: entry.level, message: entry.message, context: entry.context } })
       })
       listen('error', event => record({ kind: 'error', data: { message: event.message, stack: event.error instanceof Error ? event.error.stack : undefined, filename: feedbackPageUrl(event.filename || location.href), line: event.lineno, column: event.colno } }))
       listen('unhandledrejection', event => record({ kind: 'error', data: { reason: event.reason } }))
@@ -255,19 +306,22 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   async function startReplay(activeConfig: FeedbackClientConfig) {
     try {
       const { record: start } = await import('@rrweb/record')
-      if (closing || config !== activeConfig)
+      if (closing || config !== activeConfig || screenshotCaptures || stopReplay)
         return
+      let firstEvent = true
       stopReplay = start({
         maskAllInputs: true,
         maskTextSelector: '[data-feedback-private],.rr-mask',
         blockSelector: '[data-feedback-ignore],[data-feedback-private],.rr-block,iframe,canvas,video',
-        inlineImages: true,
+        // rrweb 内联跨域图像会修改原 img 的 crossOrigin，可能破坏带凭据的头像等资源。
+        inlineImages: false,
         inlineStylesheet: true,
         collectFonts: false,
         checkoutEveryNms: 30_000,
         emit: (event, isCheckout) => {
-          if (isCheckout || replayChunks.length === 0)
+          if (firstEvent || isCheckout || replayChunks.length === 0)
             replayChunks.push([])
+          firstEvent = false
           let payload: Record<string, unknown>
           try {
             payload = sanitizeFeedbackReplay(event)
@@ -280,6 +334,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           if (!safe.success)
             return
           replayChunks.at(-1)?.push(safe.data)
+          appendToDraft(safe.data, new TextEncoder().encode(JSON.stringify(safe.data)).byteLength)
           while (replayChunks.length > 2)
             replayChunks.shift()
           const count = replayChunks.reduce((total, chunk) => total + chunk.length, 0)
@@ -304,10 +359,10 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     lastKeyScreenshot = Date.now()
     keyScreenshotPromise = (async () => {
       try {
-        const bytes = await bounded(activeConfig.captureScreenshot?.() ?? captureFeedbackScreenshot(), activeConfig.screenshotTimeoutMs ?? 3000)
+        const bytes = await takeScreenshot(activeConfig)
         if (closing || config !== activeConfig)
           return
-        if (bytes.byteLength > 5 * 1024 * 1024) {
+        if (bytes.byteLength > budget.maxAttachmentBytes) {
           missing.add('key-screenshot-size-limit-exceeded')
           return
         }
@@ -327,6 +382,24 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     return keyScreenshotPromise
   }
 
+  function takeScreenshot(activeConfig: FeedbackClientConfig): Promise<Uint8Array> {
+    // rrweb 即使遮挡 iframe 也会观察其文档。暂停自己的记录器，避免采集 html2canvas 的克隆及样式变更。
+    screenshotCaptures++
+    stopReplay?.()
+    stopReplay = undefined
+    const captured = (async () => {
+      try {
+        return await (activeConfig.captureScreenshot?.() ?? captureFeedbackScreenshot())
+      }
+      finally {
+        screenshotCaptures--
+        if (!screenshotCaptures && !closing && config === activeConfig && activeConfig.replay)
+          await startReplay(activeConfig)
+      }
+    })()
+    return bounded(captured, activeConfig.screenshotTimeoutMs ?? 3000)
+  }
+
   async function doPrepare(): Promise<HaiResult<FeedbackDraft>> {
     if (!config || closing)
       return failure('NOT_INITIALIZED')
@@ -342,8 +415,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       if (closing || config !== activeConfig)
         return failure('NOT_INITIALIZED')
     }
-    if (draft && !collectionFinished)
+    if (draft && !collectionFinished) {
+      if (!draft.submission && config.screenshot !== false && preparedPage !== pageIdentity()) {
+        const captured = await captureScreenshot()
+        if (!captured.success)
+          return captured
+      }
       return ok(draft)
+    }
     collectionFinished = false
     collectionSealed = false
     initialIds.clear()
@@ -372,7 +451,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (closing || config !== activeConfig)
       return failure('NOT_INITIALIZED')
     keyScreenshots = keyScreenshots.filter(item => item.timestamp >= now - limits().age)
-    draft = { submissionId: core.id.uuid(), anchorTime: anchor?.timestamp ?? now, anchorKind: anchor ? 'error' : 'feedback', errorId: anchor?.errorId, evidence: [...selected, ...other, ...replayChunks.flat()].sort((a, b) => a.sequence - b.sequence), attachments: keyScreenshots.map(item => item.attachment), missing: [...missing], expiresAt: now + 86_400_000 }
+    draft = { submissionId: core.id.uuid(), anchorTime: anchor?.timestamp ?? now, anchorKind: anchor ? 'error' : 'feedback', errorId: anchor?.errorId, evidence: [...selected, ...other, ...replayChunks.flat()].sort((a, b) => a.sequence - b.sequence), attachments: [], missing: [...missing], expiresAt: now + 86_400_000 }
     while (draft.evidence.length > limits().events || new TextEncoder().encode(JSON.stringify(draft.evidence)).byteLength > limits().bytes) {
       draft.evidence.shift()
       missing.add('browser-draft-truncated')
@@ -382,32 +461,25 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       draft.missing.push(`browser-buffer-truncated:${dropped}`)
     afterCount = frozenWindow?.after ?? (anchor ? Math.max(0, logs.length - anchorIndex - 1) : 0)
     deadline = (anchor?.timestamp ?? now) + (config.afterTimeoutMs ?? 30_000)
-    record({ kind: 'environment', data: { appId: config.appId, appVersion: config.appVersion, buildId: config.buildId, commit: config.commit, url: feedbackPageUrl(location.href), browser: navigator.userAgent, language: navigator.language, timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, online: navigator.onLine, cookies: collectFeedbackCookies(document.cookie, config.cookieAllowlist ?? []) } })
+    recordEnvironment()
     if (config.screenshot !== false) {
       const current = draft
-      try {
-        const bytes = await bounded(config.captureScreenshot?.() ?? captureFeedbackScreenshot(), config.screenshotTimeoutMs ?? 3000)
-        if (closing || config !== activeConfig || draft !== current)
-          return failure('NOT_INITIALIZED')
-        if (bytes.byteLength > 5 * 1024 * 1024) {
-          current.missing.push('screenshot-size-limit-exceeded')
-        }
-        else {
-          const image = await attachment('screenshot.png', 'image/png', bytes)
-          if (closing || config !== activeConfig || draft !== current)
-            return failure('NOT_INITIALIZED')
-          current.attachments.push(image)
-        }
-      }
-      catch (cause) {
-        if (closing || config !== activeConfig || draft !== current)
-          return failure('NOT_INITIALIZED')
-        current.missing.push('screenshot-unavailable')
-        if (cause instanceof Error)
-          current.missing.push(`screenshot-error:${String(sanitizeFeedbackData({ message: cause.message }).message).slice(0, 300)}`)
+      const captured = await captureScreenshot(undefined, 'screenshot.png')
+      if (closing || config !== activeConfig || draft !== current)
+        return failure('NOT_INITIALIZED')
+      if (!captured.success) {
+        current.missing.push(captured.error.code === HaiFeedbackError.LIMIT_EXCEEDED.code ? 'screenshot-size-limit-exceeded' : 'screenshot-unavailable')
+        current.missing.push(`screenshot-error:${captured.error.message.slice(0, 300)}`)
       }
     }
+    // 当前页面优先占预算，历史关键帧只能使用剩余额度。
+    for (const { attachment: image } of keyScreenshots) {
+      if (image.size > budget.maxAttachmentBytes || draft.attachments.length >= budget.maxAttachmentCount || draft.attachments.reduce((sum, file) => sum + file.size, image.size) > budget.maxAttachmentsBytes)
+        draft.missing.push('key-screenshot-budget-exceeded')
+      else draft.attachments.push(image)
+    }
     schedulePersist()
+    preparedPage = pageIdentity()
     return ok(draft)
   }
 
@@ -416,6 +488,57 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       preparePromise = undefined
     })
     return preparePromise
+  }
+
+  function recordEnvironment() {
+    if (!config)
+      return
+    record({ kind: 'environment', data: { appId: config.appId, appVersion: config.appVersion, buildId: config.buildId, commit: config.commit, url: feedbackPageUrl(location.href), browser: navigator.userAgent, language: navigator.language, timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone, viewport: { width: innerWidth, height: innerHeight, pixelRatio: devicePixelRatio }, online: navigator.onLine, cookies: collectFeedbackCookies(document.cookie, config.cookieAllowlist ?? []) } })
+  }
+
+  /** Hash 路由只在会话内用于换页识别，不把片段中的参数写入诊断材料。 */
+  function pageIdentity() {
+    return `${location.origin}${location.pathname}${location.hash.startsWith('#/') ? location.hash.split('?')[0] : ''}`
+  }
+
+  async function captureScreenshot(attachmentId?: string, name?: string): Promise<HaiResult<void>> {
+    if (!config || !draft || closing)
+      return failure('NOT_INITIALIZED')
+    const current = draft
+    const activeConfig = config
+    const previous = attachmentId ? current.attachments.find(item => item.id === attachmentId) : undefined
+    const previousChecksum = previous?.checksum
+    if (current.submission)
+      return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+    if (attachmentId && (!previous || !previous.contentType.startsWith('image/')))
+      return failure('INVALID_INPUT')
+    if (!previous && current.attachments.length >= budget.maxAttachmentCount)
+      return failure('LIMIT_EXCEEDED')
+    try {
+      const bytes = await takeScreenshot(activeConfig)
+      if (bytes.byteLength > budget.maxAttachmentBytes)
+        return failure('LIMIT_EXCEEDED')
+      const previousName = previous && (/\.[^.]+$/.test(previous.name) ? previous.name.replace(/\.[^.]+$/, '.png') : `${previous.name}.png`)
+      const image = await attachment(name ?? previousName ?? `screenshot-${core.id.uuid()}.png`, 'image/png', bytes)
+      if (closing || config !== activeConfig || draft !== current || current.submission || (previous && (!current.attachments.includes(previous) || previous.checksum !== previousChecksum)))
+        return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
+      if (current.attachments.reduce((total, item) => total + (item === previous ? 0 : item.size), image.size) > budget.maxAttachmentsBytes)
+        return failure('LIMIT_EXCEEDED')
+      if (previous)
+        current.attachments = current.attachments.map(item => item === previous ? { ...image, id: previous.id } : item)
+      else if (current.attachments.length < budget.maxAttachmentCount)
+        current.attachments.unshift(image)
+      else
+        return failure('LIMIT_EXCEEDED')
+      if (!name)
+        recordEnvironment()
+      preparedPage = pageIdentity()
+      schedulePersist()
+      return ok(undefined)
+    }
+    catch (cause) {
+      return failure('OPERATION_FAILED', cause)
+    }
   }
 
   async function submit(input: FeedbackClientSubmitInput = {}): Promise<HaiResult<FeedbackReport>> {
@@ -427,6 +550,23 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       return prepared
     const current = prepared.data
     try {
+      if (!policyVerified && activeConfig.actions.policy) {
+        const policy = await activeConfig.actions.policy()
+        if (closing || config !== activeConfig || draft !== current)
+          return failure('NOT_INITIALIZED')
+        if (!policy.success)
+          return policy
+        budget = FeedbackBudgetSchema.parse(policy.data)
+        policyVerified = true
+        missing.delete('server-policy-unavailable')
+        current.missing = current.missing.filter(reason => reason !== 'server-policy-unavailable')
+        while (current.evidence.length && (current.evidence.length > limits().events || new TextEncoder().encode(JSON.stringify(current.evidence)).byteLength > limits().bytes)) {
+          current.evidence.shift()
+          if (!current.missing.includes('browser-draft-truncated'))
+            current.missing.push('browser-draft-truncated')
+        }
+        draftBytes = new TextEncoder().encode(JSON.stringify(current.evidence)).byteLength
+      }
       const fingerprint = await digestHex(new TextEncoder().encode(JSON.stringify({ description: sanitizeFeedbackData({ text: input.description ?? '' }).text, category: input.category ?? '', contact: sanitizeFeedbackData({ text: input.contact ?? '' }).text, files: (input.files ?? []).map(item => ({ name: item.name, size: item.size, lastModified: item.lastModified })), removed: [...(input.removedAttachmentIds ?? [])].sort() })))
       if (closing || config !== activeConfig || draft !== current)
         return failure('NOT_INITIALIZED')
@@ -490,7 +630,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (pending.some(item => !initialIds.has(item.id)))
           return failure()
         drainPasses++
-        if (drainPasses >= 20)
+        if (drainPasses >= budget.maxAttachmentCount)
           return ok(undefined)
       }
       if (collectionSealed) {
@@ -531,6 +671,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       const bytes = await annotateFeedbackImage(originalBytes, mark)
       const name = /\.[^.]+$/.test(item.name) ? item.name.replace(/\.[^.]+$/, '.png') : `${item.name}.png`
       const updated = await attachment(name, 'image/png', bytes)
+      if (updated.size > budget.maxAttachmentBytes || current.attachments.reduce((sum, file) => sum + (file === item ? 0 : file.size), updated.size) > budget.maxAttachmentsBytes)
+        return failure('LIMIT_EXCEEDED')
       // 渲染/摘要结束后再原子替换；提交、关闭、删除或另一标注不能被旧异步结果覆盖。
       if (closing || draft !== current || current.submission || !current.attachments.includes(item) || item.bytes !== originalBytes)
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
@@ -543,19 +685,19 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     }
   }
 
-  async function addFiles(files: readonly File[]): Promise<HaiResult<void>> {
+  async function addFiles(files: readonly File[], removedAttachmentIds: readonly string[] = []): Promise<HaiResult<void>> {
     if (!draft)
       return failure('NOT_INITIALIZED')
-    if (draft.submission && files.length)
+    if (draft.submission && (files.length || removedAttachmentIds.length))
       return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
     const current = draft
     const items: FeedbackClientAttachment[] = []
     const newMissing: string[] = []
     try {
       for (const file of files) {
-        if (items.length >= 20 || file.size > 5 * 1024 * 1024)
+        if (items.length >= budget.maxAttachmentCount || file.size > budget.maxAttachmentBytes)
           return failure('LIMIT_EXCEEDED')
-        if (!['image/png', 'image/jpeg', 'image/webp', 'text/plain', 'application/json'].includes(file.type))
+        if (!['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json'].includes(file.type))
           return failure('INVALID_INPUT')
         let bytes: Uint8Array
         if (file.type.startsWith('text/') || file.type === 'application/json') {
@@ -569,7 +711,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         else {
           bytes = new Uint8Array(await file.arrayBuffer())
         }
-        if (bytes.byteLength > 5 * 1024 * 1024)
+        if (bytes.byteLength > budget.maxAttachmentBytes)
           return failure('LIMIT_EXCEEDED')
         const item = await attachment(file.name, file.type, bytes)
         if (!items.some(existing => existing.name === item.name && existing.checksum === item.checksum))
@@ -578,15 +720,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       // 读取/摘要计算期间草稿可能切换或冻结；失败批次不能留下附件或缺失标记。
       if (draft !== current || closing)
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_conflict'))
-      if (current.submission && files.length)
+      if (current.submission && (files.length || removedAttachmentIds.length))
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_retryInputChanged'))
       // 在最新附件上合并，保留读取期间另一成功批次的新增项；最终校验与提交之间没有 await。
-      const merged = [...current.attachments]
+      const merged = current.attachments.filter(file => !removedAttachmentIds.includes(file.id))
       for (const item of items) {
         if (!merged.some(existing => existing.name === item.name && existing.checksum === item.checksum))
           merged.push(item)
       }
-      if (merged.length > 20)
+      if (merged.length > budget.maxAttachmentCount || merged.reduce((total, item) => total + item.size, 0) > budget.maxAttachmentsBytes)
         return failure('LIMIT_EXCEEDED')
       current.attachments = merged
       current.missing.push(...newMissing)
@@ -613,28 +755,30 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       else {
         // 离线兜底保留失败后新增的本地文件，但不改变已发送包络或后续上传队列。
         for (const file of input.files ?? []) {
-          if (attachments.length >= 20 || file.size > 5 * 1024 * 1024)
+          if (attachments.length >= budget.maxAttachmentCount || file.size > budget.maxAttachmentBytes)
             return failure('LIMIT_EXCEEDED')
-          if (!['image/png', 'image/jpeg', 'image/webp', 'text/plain', 'application/json'].includes(file.type))
+          if (!['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json'].includes(file.type))
             return failure('INVALID_INPUT')
           const bytes = file.type === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(await file.text()))))
             : file.type.startsWith('text/') ? new TextEncoder().encode(sanitizeFeedbackText(await file.text())) : new Uint8Array(await file.arrayBuffer())
-          if (bytes.byteLength > 5 * 1024 * 1024)
+          if (bytes.byteLength > budget.maxAttachmentBytes)
             return failure('LIMIT_EXCEEDED')
           const item = await attachment(file.name, file.type, bytes)
           if (!attachments.some(existing => existing.name === item.name && existing.checksum === item.checksum))
             attachments.push(item)
         }
       }
-      return createFeedbackBundle({ report: { ...(draft.report ?? { id: draft.submissionId, appId: config?.appId, anchor: { kind: draft.anchorKind, timestamp: draft.anchorTime }, evidenceRevision: 1 }), ...sanitizeFeedbackData({ description: input.description ?? draft.report?.description ?? '', category: input.category, contact: input.contact }) }, evidence: draft.evidence, attachments: attachments.filter(item => !input.removedAttachmentIds?.includes(item.id)), missing: [...new Set([...draft.missing, ...missing, ...(!draft.report ? ['server-evidence-not-obtained', 'feedback-not-yet-accepted'] : [])])] })
+      return createFeedbackBundle({ maxBytes: budget.maxTotalBytes, report: { ...(draft.report ?? { id: draft.submissionId, appId: config?.appId, appVersion: config?.appVersion, buildId: config?.buildId, commit: config?.commit, url: draft.evidence.filter(item => item.kind === 'environment').at(-1)?.data.url, anchor: { kind: draft.anchorKind, timestamp: draft.anchorTime }, evidenceRevision: 1 }), ...sanitizeFeedbackData({ description: input.description ?? draft.report?.description ?? '', category: input.category, contact: input.contact }) }, evidence: draft.evidence, attachments: attachments.filter(item => !input.removedAttachmentIds?.includes(item.id)), missing: [...new Set([...draft.missing, ...missing, ...(!draft.report ? ['server-evidence-not-obtained', 'feedback-not-yet-accepted'] : [])])] })
     }
     catch (cause) {
       return failure('OPERATION_FAILED', cause)
     }
   }
 
-  function close(): Promise<void> {
+  function close(options: { discard?: boolean } = {}): Promise<void> {
+    sessionVersion++
+    discardOnClose ||= options.discard === true
     closePromise ??= doClose().finally(() => {
       closePromise = undefined
     })
@@ -643,6 +787,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
 
   async function doClose(): Promise<void> {
     closing = true
+    saveController.abort()
     unsubscribeLogger?.()
     unsubscribeLogger = undefined
     stopReplay?.()
@@ -660,9 +805,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     await keyScreenshotPromise
     if (draft?.report)
       await flush()
-    if (config?.persistDraft && draft && !collectionFinished)
+    if (discardOnClose && storageKey)
+      await deleteFeedbackDraft(storageKey).catch(() => undefined)
+    else if (config?.persistDraft && draft && !collectionFinished)
       await saveFeedbackDraft(storageKey, draft).catch(() => undefined)
+    releasePreviews()
+    discardOnClose = false
     config = undefined
+    preparedPage = ''
     buffer = []
     bufferBytes = 0
     draft = undefined
@@ -679,7 +829,17 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     collectionSealed = false
   }
 
-  return { init, prepare, submit, flush, record, getDraft: () => draft, annotate, addFiles, exportDraft, close }
+  return { init, prepare, captureScreenshot, submit, flush, record, getDraft: () => draft, getView, releasePreviews, annotate, addFiles, exportDraft, async saveDraft(input) {
+    const session = config
+    const exported = await exportDraft(input)
+    if (!exported.success)
+      return exported
+    if (closing || !session || session !== config)
+      return failure('NOT_INITIALIZED')
+    return saveFeedbackFile(exported.data, `feedback-${draft?.submissionId ?? 'local'}.zip`, 'application/zip', saveController.signal)
+  }, close, get budget() {
+    return { ...budget }
+  } }
 }
 
 /**

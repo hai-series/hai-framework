@@ -1,8 +1,8 @@
 import type { FeedbackConfigInput } from './feedback-config.js'
 import type { FeedbackRuntime } from './feedback-functions.js'
 import type { FeedbackFunctions } from './feedback-types.js'
+import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, ok } from '@h-ai/core'
-import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { createFeedbackCapture } from './feedback-capture.js'
@@ -47,12 +47,20 @@ export const feedback: FeedbackFunctions = {
     let candidateCapture: ReturnType<typeof createFeedbackCapture> | undefined
     try {
       const parsed = FeedbackConfigSchema.safeParse(config)
-      if (!parsed.success || !reldb.isInitialized || !storage.isInitialized || !reach.isInitialized)
-        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
-      if (reach.config?.dnd?.enabled)
-        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
-      if (!reach.config?.providers.some(provider => provider.name === parsed.data.notificationProvider))
-        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+      if (!parsed.success)
+        return configFailure(parsed.error.issues.map(issue => issue.path.join('.')))
+      if (!reldb.isInitialized || !storage.isInitialized)
+        return configFailure([!reldb.isInitialized ? 'reldb' : 'storage'])
+      if (parsed.data.notificationMode === 'reach') {
+        const provider = await import('@h-ai/reach').catch(() => undefined)
+        if (!provider)
+          return configFailure(['reach'])
+        const { reach } = provider
+        if (!reach.isInitialized)
+          return configFailure(['reach'])
+        if (!reach.config?.providers.some(provider => provider.name === parsed.data.notificationProvider))
+          return configFailure(['notificationProvider'])
+      }
       if (current) {
         const previous = current
         current = null
@@ -109,6 +117,9 @@ export const feedback: FeedbackFunctions = {
   get config() {
     return current ? { ...current.config, recipients: [...current.config.recipients], envAllowlist: [...current.config.envAllowlist] } : null
   },
+  get budget() {
+    return resolveFeedbackBudget(current?.config)
+  },
   submit: (input, actor) => guarded(() => (current?.operations ?? unavailable).submit(input, actor)),
   list: (input, actor) => guarded(() => (current?.operations ?? unavailable).list(input, actor)),
   get: (id, actor) => guarded(() => (current?.operations ?? unavailable).get(id, actor)),
@@ -122,6 +133,10 @@ export const feedback: FeedbackFunctions = {
   export: (input, actor) => guarded(() => (current?.operations ?? unavailable).export(input, actor)),
   getExport: (input, actor) => guarded(() => (current?.operations ?? unavailable).getExport(input, actor)),
   runJobs: () => guarded(() => (current?.operations ?? unavailable).runJobs()),
+}
+
+function configFailure(fields: string[]) {
+  return { success: false as const, error: { ...HaiFeedbackError.CONFIG_ERROR, message: feedbackM('feedback_configError'), ext: { module: 'feedback', fields } } }
 }
 
 async function guarded<T>(work: () => Promise<import('@h-ai/core').HaiResult<T>>) {

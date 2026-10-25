@@ -132,6 +132,7 @@
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "@internationalized/date": "catalog:",
+    "@rrweb/replay": "catalog:",
     "@shikijs/langs": "catalog:",
     "bits-ui": "catalog:",
     "driver.js": "catalog:",

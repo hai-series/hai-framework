@@ -25,4 +25,9 @@ describe('authentication error localization', () => {
     expect(authErrorMessage({ code: 'app:account:001', message: 'Application message' })).toBe('Application message')
     expect(authErrorMessage({ code: 400, message: 'Numeric application error' })).toBe('Numeric application error')
   })
+
+  it('重新本地化认证错误后仍在末尾保留 traceId', () => {
+    setUILocale('en-US')
+    expect(authErrorMessage({ code: 'hai:iam:002', message: '密码错误', traceId: 'req-login' })).toBe('Username or password is incorrect. (traceId: req-login)')
+  })
 })

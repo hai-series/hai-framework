@@ -35,7 +35,7 @@ export interface FeedbackReportView {
   commit?: string
   status: FeedbackStatus
   collectionStatus: 'collecting' | 'complete' | 'partial' | 'failed'
-  notificationStatus: 'pending' | 'sending' | 'sent' | 'deferred' | 'failed'
+  notificationStatus: 'disabled' | 'pending' | 'sending' | 'sent' | 'deferred' | 'failed'
   createdAt: number
   updatedAt: number
   version: number

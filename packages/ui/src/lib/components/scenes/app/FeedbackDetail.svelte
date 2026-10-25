@@ -12,6 +12,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { FeedbackAttachmentView, FeedbackEvidenceQuery, FeedbackEvidenceView, FeedbackHistoryView, FeedbackPage, FeedbackPermissions, FeedbackReportView, FeedbackStatusChange } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
+  import { errorMessage } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -22,6 +23,7 @@
   import Input from '../../primitives/Input.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
   import { collectionLabel, evidenceText, feedbackTime, imagePreviewUrl, notificationLabel } from './feedback-functions.js'
+  import FeedbackReplay from './FeedbackReplay.svelte'
 
   let {
     report,
@@ -37,6 +39,7 @@
     onexport,
     onretry,
     onattachment,
+    onreplay,
     onclose,
     class: className = '',
     ...restProps
@@ -54,6 +57,8 @@
     onexport?: (report: FeedbackReportView) => void | Promise<void>
     onretry?: (report: FeedbackReportView) => void | Promise<void>
     onattachment?: (attachment: FeedbackAttachmentView) => void | Promise<void>
+    /** 按需取得完整回放事件；普通材料分页不能代替完整快照。 */
+    onreplay?: () => Promise<FeedbackEvidenceView[]>
     onclose?: () => void
     class?: string
   } & DataAttributes = $props()
@@ -72,6 +77,7 @@
   const tabs = $derived([
     { key: 'overview', label: uiM('feedback_overview') },
     { key: 'scene', label: uiM('feedback_scene') },
+    { key: 'replay', label: uiM('feedback_replay') },
     { key: 'logs', label: uiM('feedback_logs') },
     { key: 'environment', label: uiM('feedback_environment') },
     { key: 'history', label: uiM('feedback_history') },
@@ -86,7 +92,7 @@
       await action()
     }
     catch (cause) {
-      actionError = cause instanceof Error ? cause.message : uiM('feedback_action_failed')
+      actionError = errorMessage(cause, uiM('feedback_action_failed'))
     }
     finally {
       busy = false
@@ -102,7 +108,7 @@
     }
     catch (cause) {
       if (generation === queryGeneration)
-        actionError = cause instanceof Error ? cause.message : uiM('feedback_action_failed')
+        actionError = errorMessage(cause, uiM('feedback_action_failed'))
     }
     finally {
       if (generation === queryGeneration)
@@ -147,6 +153,10 @@
               {#if report.commit}<div><dt class='text-base-content/55'>{uiM('feedback_commit')}</dt><dd class='break-all'>{report.commit}</dd></div>{/if}
             </dl>
           </div>
+        {:else if tab === 'replay'}
+          <div class='py-4'>
+            {#if onreplay}<FeedbackReplay load={onreplay} />{:else}<p class='text-sm'>{uiM('feedback_replay_empty')}</p>{/if}
+          </div>
         {:else if tab === 'scene' || tab === 'logs' || tab === 'environment'}
           <div class='space-y-4 py-4'>
             {#if tab === 'scene'}
@@ -155,6 +165,8 @@
                   <article class='rounded-lg border border-base-content/10 p-3 min-w-0 space-y-2'>
                     <p class='font-medium text-sm break-all'>{attachment.name}</p>
                     {#if attachment.mimeType?.startsWith('image/') && imagePreviewUrl(attachment.url)}<img src={imagePreviewUrl(attachment.url)} alt={attachment.name} class='max-w-full rounded' loading='lazy' referrerpolicy='no-referrer' onerror={() => failedPreviews = [...failedPreviews, attachment.id]} onload={() => failedPreviews = failedPreviews.filter(id => id !== attachment.id)} />{/if}
+                    {#if attachment.mimeType?.startsWith('video/') && imagePreviewUrl(attachment.url)}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
+                      <video src={imagePreviewUrl(attachment.url)} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
                     {#if failedPreviews.includes(attachment.id)}<p class='text-warning text-sm'>{uiM('feedback_preview_failed')}</p>{/if}
                     {#if attachment.missingReason}<p class='text-warning break-words'>{uiM('feedback_missing')}: {attachment.missingReason}</p>
                     {:else if onattachment}<Button size='sm' variant='ghost' disabled={busy} onclick={() => run(() => onattachment(attachment))}>{uiM('feedback_download')}</Button>{/if}

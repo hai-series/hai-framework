@@ -12,7 +12,7 @@
   import { createAdminGuide } from '$lib/guide/admin-guide'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
-  import { addFeedbackFiles, annotateFeedback, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
+  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
   import { apiFetch } from '$lib/utils/api'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { applyTheme, FeedbackModal, getSavedTheme, setPermissionContext, usePermission } from '@h-ai/ui'
@@ -42,7 +42,7 @@
   let feedbackOpen = $state(false)
   let feedbackPreparing = $state(false)
   let feedbackError = $state('')
-  let feedbackMaterials = $state<Awaited<ReturnType<typeof prepareFeedback>>>({ attachments: [], evidenceSummary: [] })
+  let feedbackMaterials = $state<Partial<Awaited<ReturnType<typeof prepareFeedback>>>>({ attachments: [], evidence: [], evidenceSummary: [] })
   let feedbackResetKey = $state('')
 
   onMount(() => {
@@ -426,15 +426,18 @@
 <FeedbackModal
   bind:open={feedbackOpen}
   attachments={feedbackMaterials.attachments}
+  evidence={feedbackMaterials.evidence}
+  budget={feedbackMaterials.budget}
   evidenceSummary={feedbackMaterials.evidenceSummary}
+  oncapture={async (id) => { feedbackMaterials = await captureFeedbackPage(id) }}
   resetKey={feedbackResetKey}
   onsubmit={submitFeedback}
   onexport={exportLocalFeedback}
   onannotate={async (input) => {
     feedbackMaterials = await annotateFeedback(input)
   }}
-  onfileschange={async (files) => {
-    feedbackMaterials = await addFeedbackFiles(files)
+  onfileschange={async (files, removedAttachmentIds) => {
+    feedbackMaterials = await addFeedbackFiles(files, removedAttachmentIds)
   }}
 />
 

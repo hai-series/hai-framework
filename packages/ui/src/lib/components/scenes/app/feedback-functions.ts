@@ -10,6 +10,7 @@ const collectionKeys: Record<FeedbackReportView['collectionStatus'], UIMessageKe
   failed: 'feedback_failed',
 }
 const notificationKeys: Record<FeedbackReportView['notificationStatus'], UIMessageKey> = {
+  disabled: 'feedback_notification_disabled',
   pending: 'feedback_notification_pending',
   sending: 'feedback_notification_sending',
   sent: 'feedback_notification_sent',

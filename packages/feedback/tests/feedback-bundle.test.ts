@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest'
 import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from '../src/bundle/index.js'
 
 describe('feedback 离线问题包', () => {
+  it('构建身份在诊断包中同样限制为 128 字符', async () => {
+    const accepted = await createFeedbackBundle({ report: { id: 'fb-build', buildId: 'b'.repeat(128) }, evidence: [] })
+    expect(accepted.success).toBe(true)
+    if (accepted.success)
+      expect((await readFeedbackBundle(accepted.data)).success).toBe(true)
+    for (const field of ['buildId', 'appVersion', 'commit']) {
+      expect((await createFeedbackBundle({ report: { id: 'fb-build', [field]: 'b'.repeat(129) }, evidence: [] })).success).toBe(false)
+    }
+  })
+
   it('无生产连接也能归档并读取现场与截图', async () => {
     const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
     const created = await createFeedbackBundle({

@@ -29,6 +29,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.restoreAllMocks()
   await feedback.close()
   await reach.close()
@@ -41,10 +42,34 @@ afterEach(async () => {
 })
 
 describe('服务端自由文本隐私边界', () => {
+  it('服务环境只包含允许的实际值，缺失值明确为null，凭据和非白名单值不收集', async () => {
+    vi.stubEnv('FEEDBACK_REGION', 'region-fixture')
+    vi.stubEnv('FEEDBACK_SECRET', 'secret-sentinel')
+    vi.stubEnv('FEEDBACK_OTHER', 'other-sentinel')
+    await feedback.close()
+    expect((await feedback.init({ ...config, envAllowlist: ['FEEDBACK_REGION', 'FEEDBACK_ABSENT', 'FEEDBACK_SECRET'] })).success).toBe(true)
+    const report = await feedback.submit({ appId: config.appId, submissionId: 'env-allowlist' }, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    await feedback.completeCollection({ id: report.data.id }, actor)
+    await feedback.runJobs()
+    const result = await feedback.getEvidence({ id: report.data.id, kind: 'environment' }, actor)
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+    const environment = result.data.items.find(item => item.source.startsWith('server:'))!
+    expect(environment.data.environment).toEqual({ FEEDBACK_REGION: 'region-fixture', FEEDBACK_ABSENT: null })
+    expect(JSON.stringify(environment.data)).not.toContain('secret-sentinel')
+    expect(JSON.stringify(environment.data)).not.toContain('other-sentinel')
+    expect(environment.data.runtime).toMatchObject({ name: 'node', version: process.version })
+  })
+
   it('真实logger的JSON凭据、token、session和Basic在DB、API及ZIP中均不保留哨兵', async () => {
     const basic = Buffer.from('fixture:PRIVACY_BASIC_SENTINEL').toString('base64')
     const messages = [
       '{"password":"PRIVACY_JSON_SENTINEL"}',
+      '{"verificationCode":"PRIVACY_VERIFICATION_SENTINEL"}',
       'token=PRIVACY_TOKEN_SENTINEL',
       'session: PRIVACY_SESSION_SENTINEL',
       '{"id_token":"PRIVACY_ID_TOKEN_SENTINEL"}',
@@ -58,6 +83,7 @@ describe('服务端自由文本隐私边界', () => {
       JSON.stringify({ body: JSON.stringify({ password: 'prefix " PRIVACY_NESTED_QUOTE_SENTINEL and PRIVACY_NESTED_TAIL_SENTINEL' }) }),
     ]
     const sentinels = ['PRIVACY_JSON_SENTINEL', 'PRIVACY_TOKEN_SENTINEL', 'PRIVACY_SESSION_SENTINEL', 'PRIVACY_ID_TOKEN_SENTINEL', basic, 'PRIVACY_ESCAPED_SENTINEL', 'PRIVACY_SINGLE_QUOTED_SENTINEL', 'PRIVACY_SESSION_ID_SENTINEL', 'PRIVACY_BEARER_SENTINEL', 'PRIVACY_MULTIPLE_ONE', 'PRIVACY_MULTIPLE_TWO', 'PRIVACY_STRUCTURED_SENTINEL', 'PRIVACY_URL_SENTINEL', 'escaped-key-sentinel', 'nested-token-sentinel', 'PRIVACY_NESTED_QUOTE_SENTINEL', 'PRIVACY_NESTED_TAIL_SENTINEL']
+    sentinels.push('PRIVACY_VERIFICATION_SENTINEL')
     const logger = core.logger.create({ name: 'server-privacy', level: 'error', format: 'json' })
     core.context.run({ scopeId: actor.scopeId, userId: actor.userId, requestId: 'privacy-request' }, () => {
       for (const message of messages)

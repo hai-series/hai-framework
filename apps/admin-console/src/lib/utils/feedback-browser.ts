@@ -29,6 +29,8 @@ export function downloadFeedbackBytes(name: string, bytes: Uint8Array, contentTy
   const link = document.createElement('a')
   link.href = url
   link.download = name
+  document.body.append(link)
   link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
