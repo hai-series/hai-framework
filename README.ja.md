@@ -679,6 +679,17 @@ Schema の既定値、実際の消費点、環境変数と生成アプリの関�
 
 > Windows PowerShell は `pnpm.cmd` を使います。ルートの `pnpm test` は Testcontainers に依存しないパッケージを最大 4 件、利用可能な CPU とメモリーでさらに制限して並列実行した後、コンテナーパッケージを直列実行します。各パッケージのファイル worker は最大 2 個です。2 つのグループは順番に実行し、共有ビルド出力の同時更新を防ぎます。ルートの `pnpm e2e` は CLI 生成、デプロイの実行とロック、および Admin Console・AI Playground・Corporate Website・H5・Mobile Web の Playwright を検証します。コンテナーテストには利用可能な Docker / Podman が必要です。
 
+CLI の Vitest グローバル teardown は、`test`、`test:e2e`、`test:deploy-gates` の成功・失敗・通常のキャンセル後に、その実行でビルドしたイメージを回収します。Podman では中間イメージにも実行ごとの識別ラベルを付け、Docker では今回のビルド台帳に記録された最終イメージの tag を回収します。イメージをビルドしないテストにはコンテナーエンジンは不要です。回収にはビルドに使用したエンジンを使い、今回の識別情報とビルド台帳に該当するリソースだけを処理します。公開ベースイメージ、外部の tag、ほかのタスクのリソースは保持し、全体の prune や強制削除は行いません。レポートは `packages/cli/test-results/image-cleanup-*.json` に保存され、回収に失敗するとゲートも失敗します。プロセスの強制終了、停電、エンジンとの接続切断ではリソースが残る場合があります。Docker BuildKit の独立したビルドキャッシュは、このイメージ回収の対象外です。
+
+過去の tag なし Podman ビルドイメージは、まずプレビューしてから明示的に削除できます。既定では、作成から 24 時間を超え、履歴上の名前がランダムなハッシュに `-tmp` を付けた形式のイメージだけを選びます。ほかのイメージやコンテナーから参照されているイメージは保持します。
+
+```bash
+node scripts/cleanup-test-images.mjs --runtime=podman --legacy
+node scripts/cleanup-test-images.mjs --runtime=podman --legacy --apply
+```
+
+`--min-age-hours=24` で対象イメージの最小経過時間を変更し、`--report=tmp/container-cleanup/report.json` で項目別レポートの保存先を指定できます。`--runtime=docker` にも対応しています。信頼できる出所のメタデータがない過去の Docker イメージは保持し、自動 teardown では両エンジンとも今回のラベルと台帳を使います。実エンジンでの回帰検証は、`HAI_TEST_IMAGE_SMOKE=1` と `HAI_TEST_IMAGE_RUNTIME=podman`（または `docker`）を設定して `pnpm test:scripts` を実行します。成功、アサーション失敗、ビルド失敗、SIGINT/SIGTERM によるキャンセル後の回収と、外部イメージの保護を検証します。
+
 ### コミット確認（Leak Hooks）
 
 Git hooks は `git commit` / `git push` 前に漏洩キーワードを確認します。ローカルの `.leak-words.json` を作成できます（Git 除外・ローカルのみ）：

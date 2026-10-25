@@ -679,6 +679,17 @@ Choose commands by impact scope; use root commands for cross-package contracts o
 
 > Use `pnpm.cmd` in Windows PowerShell. Root `pnpm test` runs up to four packages without Testcontainers dependencies concurrently, further limited by available CPUs and memory, then schedules container packages serially. Each package uses at most two file workers; the groups do not rebuild shared outputs simultaneously. Root `pnpm e2e` covers CLI scaffolding, deployment runtime and locks, and Playwright suites for Admin Console, AI Playground, Corporate Website, H5, and Mobile Web. Container unit tests require working Docker / Podman.
 
+The CLI's Vitest global teardown reclaims images built by the current run after `test`, `test:e2e`, and `test:deploy-gates` succeed, fail, or are gracefully cancelled. Podman builds also label intermediate images with the run identity; Docker cleanup uses the final image tags recorded for the run. Tests that do not build images do not require a container engine. Cleanup uses the engine that performed the build and only processes the current run's identity and build ledger. Public base images, external tags, and resources belonging to other tasks are preserved; cleanup never runs a global prune or forces deletion. Reports are written to `packages/cli/test-results/image-cleanup-*.json`, and cleanup failures make the gate fail. Forced termination, power loss, or a disconnected engine can still leave resources behind. Docker BuildKit's separate build cache is outside the image cleanup scope.
+
+Preview historical untagged Podman build images before explicitly deleting them. By default, only images older than 24 hours with a historical name consisting of a random hash followed by `-tmp` are selected; images still referenced by another image or container are preserved:
+
+```bash
+node scripts/cleanup-test-images.mjs --runtime=podman --legacy
+node scripts/cleanup-test-images.mjs --runtime=podman --legacy --apply
+```
+
+Use `--min-age-hours=24` to adjust the minimum image age and `--report=tmp/container-cleanup/report.json` to choose the itemized report path. The script also supports `--runtime=docker`. Historical Docker images without reliable provenance metadata are preserved; automatic teardown uses the current run's labels and ledger for both engines. To run the real-engine regression tests, set `HAI_TEST_IMAGE_SMOKE=1` and `HAI_TEST_IMAGE_RUNTIME=podman` (or `docker`), then run `pnpm test:scripts`. These tests verify cleanup and external-image protection after success, assertion failure, build failure, and SIGINT/SIGTERM cancellation.
+
 ### Commit checks (Leak Hooks)
 
 Git hooks check leakage keywords before `git commit` / `git push`. Create local `.leak-words.json` (ignored by Git and local-only):

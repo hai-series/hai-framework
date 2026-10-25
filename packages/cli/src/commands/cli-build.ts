@@ -3,7 +3,7 @@ import type { DeploymentArtifact } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { cliM } from '../cli-i18n.js'
@@ -211,6 +211,17 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       const context = resolve(cwd, image.context ?? '.')
       const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
       const args = ['build', '-f', resolve(cwd, image.dockerfile), '-t', imageRef]
+      // 仅仓库 Vitest 托管构建使用这对内部变量；正常构建保留缓存与镜像。
+      const testRun = process.env.HAI_TEST_IMAGE_RUN
+      const testLedger = process.env.HAI_TEST_IMAGE_LEDGER
+      if (testLedger && /^[a-f0-9-]{36}$/.test(testRun ?? '')) {
+        const label = `org.h-ai.test.image-run=${testRun}`
+        args.push('--label', label)
+        if (runtime === 'podman')
+          args.push('--layer-label', label)
+        // 启动前写入明确的构建 tag；构建失败的中间层也在 teardown 按本轮 owner 回收。
+        appendFileSync(testLedger, `${JSON.stringify({ runtime, imageRef })}\n`)
+      }
       args.push('--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', `HAI_BUILD_COMMIT=${commit}`)
       if (options.network !== undefined)
         args.push('--network', options.network)

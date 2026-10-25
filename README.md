@@ -679,6 +679,17 @@ Skill 模板统一管理在 `packages/cli/templates/skills/`，由 `@h-ai/cli` �
 
 > Windows PowerShell 下使用 `pnpm.cmd`。根 `pnpm test` 先将无 Testcontainers 依赖的包并行执行（最多 4 包，再受可用 CPU 和内存限制），再串行调度容器包；每包最多两个文件 worker，两组不同时重写共享构建产物。仓库级 `pnpm e2e` 覆盖 CLI 脚手架门禁、部署运行时与锁，以及 Admin Console、AI Playground、Corporate Website、H5、Mobile Web 的 Playwright 套件；容器单测需要可用的 Docker / Podman。
 
+CLI 的 Vitest 全局 teardown 会在 `test`、`test:e2e`、`test:deploy-gates` 成功、失败或正常取消后回收本轮构建的镜像。Podman 构建同时给中间层标记本轮身份；Docker 按本轮最终镜像 tag 回收。未构建镜像的测试不需要容器引擎。回收按实际构建引擎执行，只处理本轮身份与构建账本，保留公共基础镜像、外部 tag 和其他任务资源，不执行全局 prune 或强制删除。报告写入 `packages/cli/test-results/image-cleanup-*.json`；清理失败会使门禁失败。强杀进程、断电或引擎失联仍可能留下资源，Docker BuildKit 的独立构建缓存不在镜像回收范围内。
+
+历史 Podman 无 tag 构建层可先预览，再显式删除（默认只选择超过 24 小时、历史名称为随机哈希加 `-tmp` 的镜像；仍被镜像或容器引用的层会保留）：
+
+```bash
+node scripts/cleanup-test-images.mjs --runtime=podman --legacy
+node scripts/cleanup-test-images.mjs --runtime=podman --legacy --apply
+```
+
+`--min-age-hours=24` 调整历史镜像的最小年龄，`--report=tmp/container-cleanup/report.json` 指定逐项报告。该脚本也支持 `--runtime=docker`；没有可靠来源元数据的 Docker 历史层会保留，自动 teardown 使用本轮标签与账本处理两种引擎。真实引擎回归可用 `HAI_TEST_IMAGE_SMOKE=1`、`HAI_TEST_IMAGE_RUNTIME=podman`（或 `docker`）运行 `pnpm test:scripts`，验证成功、断言失败、构建失败、SIGINT/SIGTERM 取消后的回收与外部镜像保护。
+
 ### 提交校验（Leak Hooks）
 
 仓库通过 Git hooks 在 `git commit` / `git push` 前检查泄漏关键词。本地可创建 `.leak-words.json`（已在 `.gitignore` 中，仅本地生效）：

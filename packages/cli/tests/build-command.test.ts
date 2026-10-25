@@ -34,6 +34,9 @@ beforeEach(() => {
   state.failPodman = false
   state.failWeb = false
   vi.stubEnv('npm_execpath', '/tools/pnpm.cjs')
+  // 本文件模拟构建器，不向真实引擎清理账本登记虚构镜像。
+  vi.stubEnv('HAI_TEST_IMAGE_RUN', '')
+  vi.stubEnv('HAI_TEST_IMAGE_LEDGER', '')
 })
 
 it('reports malformed project JSON without exposing configuration values', async () => {
@@ -44,6 +47,22 @@ it('reports malformed project JSON without exposing configuration values', async
 afterEach(() => {
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
+})
+
+it.each(['podman', 'docker'] as const)('托管 %s 测试构建登记 tag，Podman 同时标记中间层', async (runtime) => {
+  const run = 'a1111111-1111-1111-1111-111111111111'
+  const ledger = join(root, 'images.jsonl')
+  vi.stubEnv('HAI_TEST_IMAGE_RUN', run)
+  vi.stubEnv('HAI_TEST_IMAGE_LEDGER', ledger)
+  await buildCommand({ cwd: root, target: 'docker', runtime })
+  const builds = state.calls.filter(call => call.args[0] === 'build')
+  expect(builds).toHaveLength(2)
+  for (const build of builds) {
+    expect(build.args).toEqual(expect.arrayContaining(['--label', `org.h-ai.test.image-run=${run}`]))
+    expect(build.args.includes('--layer-label')).toBe(runtime === 'podman')
+  }
+  const records = readFileSync(ledger, 'utf8').trim().split('\n').map(line => JSON.parse(line))
+  expect(records).toEqual(builds.map(build => ({ runtime, imageRef: build.args[build.args.indexOf('-t') + 1] })))
 })
 
 it('pnpm build 默认编译源码，不选择环境、不调用容器工具', async () => {
