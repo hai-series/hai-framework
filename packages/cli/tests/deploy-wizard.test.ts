@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { parseEnv } from 'node:util'
 import { core } from '@h-ai/core'
 import { deploy, loadDeploymentEnvironment } from '@h-ai/deploy'
 import * as deployModule from '@h-ai/deploy'
@@ -210,6 +211,81 @@ it.each(['missing', 'partial', 'saved'])('bundle-only skips SSH prompts and only
     await expect(deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true })).rejects.toThrow('provider.ssh')
     expect(run).toHaveBeenCalledOnce()
   }
+}, 30_000)
+
+it.each(['missing', 'partial', 'saved', 'password'])('离线打包最后确认 SSH，按环境保存并用于本次及后续 target：%s', async (state) => {
+  const { app, service } = await fullstackFixture()
+  const password = '  synthetic updated SSH password 001  '
+  const original = { type: 'docker-ssh', ssh: state === 'missing' ? undefined : { host: 'old.internal', ...(state !== 'partial' ? { username: 'old-user', port: 2222 } : {}), ...(state === 'password' ? { auth: 'password', password: 'synthetic old SSH password' } : {}) }, expose: { hostPort: 8080 } }
+  setDeployment(app, stringify({ provider: original }))
+  const artifacts = join(app, '.hai/build/docker/release')
+  mkdirSync(artifacts, { recursive: true })
+  writeFileSync(join(app, '.hai/build/docker/latest'), 'release\n')
+  writeFileSync(join(artifacts, 'app-1.2.3.tar'), 'synthetic app image')
+  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release', images: [{ name: 'app', file: 'app-1.2.3.tar', imageRef: 'localhost/wizard:1.2.3', sha256: await deployModule.artifactChecksum(join(artifacts, 'app-1.2.3.tar')) }] }))
+  const inputs: Record<string, string> = { HOST: 'new.internal', PORT: '2202', USERNAME: 'new-user', IDENTITYFILE: 'C:/keys/deploy', KNOWNHOSTSFILE: '', BASEDIR: '/srv/apps', HOSTPORT: '8080', CONTAINERPORT: '3000' }
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.type === 'confirm')
+      return { value: true }
+    if (question.message === cliM('cli_deploy_target_auth') && state === 'password')
+      return { value: 'password' }
+    if (question.type === 'password') {
+      expect(question.initial).toBeUndefined()
+      return { value: password }
+    }
+    if (question.choices)
+      return { value: question.choices[0].value }
+    const name = Object.keys(inputs).find(key => question.message === cliM(`cli_deploy_input${key}` as Parameters<typeof cliM>[0]))
+    return { value: name ? inputs[name] : question.initial }
+  })
+  const publicBefore = readFileSync(join(app, '.env.test'), 'utf8')
+  const deploymentBefore = readFileSync(join(app, 'hai.json'), 'utf8')
+  const run = vi.spyOn(deploy, 'deployApp')
+  await deployCommand({ appDir: service, env: 'test', bundleOnly: true, services: 'app', skipMiddleware: true })
+  expect(mocked.prompt.mock.calls[0]?.[0].type).toBe('confirm')
+  const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
+  expect(environment.success).toBe(true)
+  if (!environment.success)
+    return
+  expect(JSON.parse(environment.data.values.HAI_DEPLOY_PROVIDER!)).toMatchObject({ ssh: { host: 'new.internal', port: 2202, username: 'new-user' }, remote: { baseDir: '/srv/apps' } })
+  if (state === 'password')
+    expect(JSON.parse(environment.data.values.HAI_DEPLOY_PROVIDER!).ssh.password).toBe(password)
+  expect(parseEnv(readFileSync(join(app, '.env.test'), 'utf8'))).toMatchObject(parseEnv(publicBefore))
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('new.internal')
+  expect(readFileSync(join(app, 'hai.json'), 'utf8')).toBe(deploymentBefore)
+  mocked.prompt.mockClear()
+  await deployCommand({ appDir: service, env: 'test', yes: true, bundleOnly: true, services: 'app', skipMiddleware: true })
+  expect(mocked.prompt).not.toHaveBeenCalled()
+  for (const promise of run.mock.results.map(result => result.value)) {
+    const result = await promise
+    expect(result.success).toBe(true)
+    if (!result.success || !result.data.bundlePath)
+      throw new Error('Expected offline bundle')
+    const target = JSON.parse(readFileSync(join(result.data.bundlePath, '..', 'deploy-target.json'), 'utf8'))
+    expect(target).toMatchObject({ host: 'new.internal', port: 2202, username: 'new-user', auth: state === 'password' ? 'password' : 'key', identityFile: state === 'password' ? '' : 'C:/keys/deploy', directory: '/srv/apps/deploy-app-test' })
+    expect(target.password).toBeUndefined()
+    expect(readFileSync(result.data.bundlePath).includes(password)).toBe(false)
+  }
+}, 30_000)
+
+it.each([false, undefined])('离线 SSH 提示允许跳过，取消时不继续打包：%s', async (answer) => {
+  const { app, service } = await fullstackFixture()
+  mocked.prompt.mockResolvedValue({ value: answer })
+  const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: '', deploymentId: 'offline', status: 'packaged', envVarsSet: [] } })
+  const init = vi.spyOn(deploy, 'init')
+  const command = deployCommand({ appDir: service, env: 'test', bundleOnly: true, services: 'app', skipMiddleware: true })
+  if (answer === undefined) {
+    await expect(command).rejects.toThrow(cliM('cli_deploy_cancelled'))
+    expect(run).not.toHaveBeenCalled()
+    expect(init).not.toHaveBeenCalled()
+  }
+  else {
+    await command
+    expect(run).toHaveBeenCalledOnce()
+    expect(init).toHaveBeenCalledWith(expect.objectContaining({ provider: expect.objectContaining({ ssh: expect.objectContaining({ host: 'example.test' }) }) }))
+  }
+  expect(mocked.prompt).toHaveBeenCalledOnce()
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('HAI_DEPLOY_PROVIDER')
 }, 30_000)
 
 afterEach(async () => {

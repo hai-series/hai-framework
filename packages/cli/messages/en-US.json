@@ -79,7 +79,7 @@
   "cli_build_ready": "Build ready ({runtime}): {path}. Reuse these images across deployment environments.",
   "cli_build_native_ready": "Tauri build ready: {target}. Installers are under src-tauri/target/{target}/release/bundle in each project.",
   "cli_deploy_bundle_provider": "Offline packaging, integrated image builds and selected-service deployment require a docker-ssh Compose destination.",
-  "cli_deploy_bundle_target": "Generating a bundle without connecting to a server. Review and edit deploy-target.json in the operation directory before deploying.",
+  "cli_deploy_bundle_target": "Generating a bundle without connecting to a server. Saved connections populate deploy-target.json; review it before deploying.",
   "cli_deploy_bundle_ready": "Deployment bundle ready; the server has not been deployed.",
   "cli_deploy_bundle_path": "Deployment bundle: {path}",
   "cli_build_selection_invalid": "Choose image names declared in the build section of hai.json: app, web or app,web.",
@@ -361,5 +361,7 @@
   "cli_featureFeedbackName": "Feedback",
   "cli_featureFeedbackDescription": "User evidence, private screenshots, administrator review and offline diagnostic bundles",
   "cli_deploy_processEnvironment": "the current deployment process environment",
-  "cli_deploy_adminPasswordSource": "  Administrator: admin; initial password variable HAI_ADMIN_DEFAULT_PASSWORD, source: {source}. Used only for initial administrator creation; existing accounts keep their password."
+  "cli_deploy_adminPasswordSource": "  Administrator: admin; initial password variable HAI_ADMIN_DEFAULT_PASSWORD, source: {source}. Used only for initial administrator creation; existing accounts keep their password.",
+  "cli_deploy_bundle_configure_ssh": "Add or update the saved SSH deployment settings for this environment?",
+  "cli_deploy_inputPASSWORDKEEP": "SSH password (leave blank to keep the saved password)"
 }

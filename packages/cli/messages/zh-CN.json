@@ -79,7 +79,7 @@
   "cli_build_ready": "构建完成（{runtime}）：{path}。此镜像可用于不同部署环境。",
   "cli_build_native_ready": "Tauri 构建完成：{target}，安装包位于对应工程 src-tauri/target/{target}/release/bundle。",
   "cli_deploy_bundle_provider": "离线打包、一体化镜像构建和按服务局部部署需要 docker-ssh Compose 目标。",
-  "cli_deploy_bundle_target": "仅生成部署包，不连接服务器。部署前请检查并修改操作目录中的 deploy-target.json。",
+  "cli_deploy_bundle_target": "仅生成部署包，不连接服务器。已保存的连接会写入 deploy-target.json，部署前请核对。",
   "cli_deploy_bundle_ready": "部署包已生成；服务器尚未部署。",
   "cli_deploy_bundle_path": "部署包：{path}",
   "cli_build_selection_invalid": "请选择 hai.json 的 build 分区 中已有的镜像名称，例如 app、web 或 app,web。",
@@ -361,5 +361,7 @@
   "cli_featureFeedbackName": "问题反馈",
   "cli_featureFeedbackDescription": "用户现场、私有截图、管理员处理与离线问题包",
   "cli_deploy_processEnvironment": "当前部署进程环境",
-  "cli_deploy_adminPasswordSource": "  管理员：admin；初始密码变量 HAI_ADMIN_DEFAULT_PASSWORD，来源：{source}。仅首次创建管理员时生效；已有账号请使用原密码。"
+  "cli_deploy_adminPasswordSource": "  管理员：admin；初始密码变量 HAI_ADMIN_DEFAULT_PASSWORD，来源：{source}。仅首次创建管理员时生效；已有账号请使用原密码。",
+  "cli_deploy_bundle_configure_ssh": "是否添加或修改本环境保存的 SSH 部署信息？",
+  "cli_deploy_inputPASSWORDKEEP": "SSH 密码（留空保留已有密码）"
 }

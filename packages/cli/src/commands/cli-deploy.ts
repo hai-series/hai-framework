@@ -72,8 +72,10 @@ function configObject(value: unknown): Record<string, unknown> {
  * @example 首次输入主机和密钥或密码后，下次执行 `hai deploy --env prod` 自动复用。
  */
 async function configureDeployTarget(module: typeof import('@h-ai/deploy'), config: Record<string, unknown>, environment: DeploymentEnvironment, nonInteractive?: boolean, bundleOnly?: boolean): Promise<void> {
+  const original = configObject(config.provider)
+  let editBundleTarget = false
   if (bundleOnly) {
-    const existing = configObject(config.provider)
+    const existing = original
     if (existing.type && existing.type !== 'docker-ssh')
       throw new Error(cliM('cli_deploy_bundle_provider'))
     config.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...existing }
@@ -83,34 +85,41 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
       const provider = configObject(config.provider)
       delete provider.ssh
     }
+    if (!nonInteractive) {
+      const answer = await prompts({ type: 'confirm', name: 'value', message: cliM('cli_deploy_bundle_configure_ssh'), initial: false })
+      if (answer.value === undefined)
+        throw new Error(cliM('cli_deploy_cancelled'))
+      editBundleTarget = answer.value === true
+    }
   }
   const current = module.ProviderConfigSchema.safeParse(config.provider)
-  if (current.success && (bundleOnly || current.data.type !== 'docker-ssh' || current.data.ssh)) {
+  if (!editBundleTarget && current.success && (bundleOnly || current.data.type !== 'docker-ssh' || current.data.ssh)) {
     config.provider = current.data
     writeCliMessage(bundleOnly
       ? cliM('cli_deploy_bundle_target')
       : cliM('cli_deploy_target_reused', { params: { target: current.data.type === 'docker-ssh' && current.data.ssh ? `${current.data.ssh.username}@${current.data.ssh.host}:${current.data.ssh.port}` : 'Vercel' } }))
     return
   }
-  if (nonInteractive || bundleOnly)
+  if (nonInteractive || (bundleOnly && !editBundleTarget))
     throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : current.error.issues.map(issue => `provider.${issue.path.join('.')}`).join(', ') } }))
 
-  const original = configObject(config.provider)
-  const platform = await prompts({
-    type: 'select',
-    name: 'value',
-    message: cliM('cli_deploy_target_platform'),
-    choices: [{ title: cliM('cli_deploy_target_ssh'), value: 'docker-ssh' }, { title: 'Vercel', value: 'vercel' }],
-    initial: original.type === 'vercel' ? 1 : 0,
-  })
+  const platform = bundleOnly
+    ? { value: 'docker-ssh' }
+    : await prompts({
+        type: 'select',
+        name: 'value',
+        message: cliM('cli_deploy_target_platform'),
+        choices: [{ title: cliM('cli_deploy_target_ssh'), value: 'docker-ssh' }, { title: 'Vercel', value: 'vercel' }],
+        initial: original.type === 'vercel' ? 1 : 0,
+      })
   if (!platform.value)
     throw new Error(cliM('cli_deploy_cancelled'))
 
-  const input = async (name: string, initial: unknown, options: { optional?: boolean, secret?: boolean, port?: boolean, trim?: boolean } = {}): Promise<string> => {
+  const input = async (name: string, initial: unknown, options: { optional?: boolean, secret?: boolean, keepSecret?: boolean, port?: boolean, trim?: boolean } = {}): Promise<string> => {
     const answer = await prompts({
       type: options.secret ? 'password' : 'text',
       name: 'value',
-      message: cliM(`cli_deploy_input${name.split('_').at(-1)}` as Parameters<typeof cliM>[0]),
+      message: options.keepSecret ? cliM('cli_deploy_inputPASSWORDKEEP') : cliM(`cli_deploy_input${name.split('_').at(-1)}` as Parameters<typeof cliM>[0]),
       initial: options.secret ? undefined : initial === undefined ? '' : String(initial),
       validate: (value: string) => options.port
         ? (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) || cliM('cli_deploy_port_invalid')
@@ -140,8 +149,9 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     if (!['key', 'password'].includes(authentication.value))
       throw new Error(cliM('cli_deploy_cancelled'))
     const auth = authentication.value as 'key' | 'password'
+    const previousPassword = previousPasswordMode && typeof ssh.password === 'string' && ssh.password.length > 0 ? ssh.password : undefined
     const password = auth === 'password'
-      ? previousPasswordMode && typeof ssh.password === 'string' && ssh.password.length > 0 ? ssh.password : await input('HAI_DEPLOY_PROVIDER_SSH_PASSWORD', undefined, { secret: true, trim: false })
+      ? previousPassword && !editBundleTarget ? previousPassword : await input('HAI_DEPLOY_PROVIDER_SSH_PASSWORD', undefined, { secret: true, trim: false, optional: !!previousPassword, keepSecret: !!previousPassword }) || previousPassword
       : undefined
     const identityFile = auth === 'key' ? await input('HAI_DEPLOY_PROVIDER_SSH_IDENTITYFILE', ssh.identityFile, { optional: true }) : undefined
     const knownHostsFile = await input('HAI_DEPLOY_PROVIDER_SSH_KNOWNHOSTSFILE', ssh.knownHostsFile, { optional: true })
@@ -311,7 +321,15 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         }
       }
     }
-    await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes, options.bundleOnly)
+    if (options.bundleOnly) {
+      const provider = configObject(deployConfig.provider)
+      if (provider.type && provider.type !== 'docker-ssh')
+        throw new Error(cliM('cli_deploy_bundle_provider'))
+      deployConfig.provider = { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 3000 }, ...provider }
+    }
+    else {
+      await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes)
+    }
     if (configObject(deployConfig.provider).type !== 'docker-ssh' && (selectedServices || options.build))
       throw new Error(cliM('cli_deploy_bundle_provider'))
 
@@ -359,6 +377,9 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       : await configureDeployMiddleware(deployModule, { ...scan, middlewares: scan.middlewares?.filter(item => !selectedServices || selectedServices.includes(item.service)) }, environment.data, deployConfig, options.yes)
     if (skipMiddleware)
       deployConfig.services = undefined
+    // 离线模式在构建和中间件配置之后最后询问；生成 tar 和 target 时使用同一份目标。
+    if (options.bundleOnly)
+      await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes, true)
     // 刚写入文件的值不能被本次命令之前注入的快照覆盖；保留用户原有进程变量优先级。
     for (const key of Object.keys(process.env)) {
       if (originalEnv[key] === undefined)

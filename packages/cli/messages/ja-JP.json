@@ -79,7 +79,7 @@
   "cli_build_ready": "ビルドの準備が完了しました（{runtime}）: {path}。これらのイメージはデプロイ環境間で再利用できます。",
   "cli_build_native_ready": "Tauriビルドが完了しました: {target}。各プロジェクトのsrc-tauri/target/{target}/release/bundleにインストーラーがあります。",
   "cli_deploy_bundle_provider": "オフラインパッケージ化、組み込みのイメージビルド、サービスを選択したデプロイには docker-ssh Compose のデプロイ先が必要です。",
-  "cli_deploy_bundle_target": "サーバーに接続せずバンドルを生成します。デプロイ前に操作ディレクトリの deploy-target.json を確認し、編集してください。",
+  "cli_deploy_bundle_target": "サーバーに接続せずバンドルを生成します。保存済み接続は deploy-target.json に反映されます。デプロイ前に確認してください。",
   "cli_deploy_bundle_ready": "デプロイバンドルの準備が完了しました。サーバーへのデプロイは実行していません。",
   "cli_deploy_bundle_path": "デプロイバンドル: {path}",
   "cli_build_selection_invalid": "hai.json の build セクション に定義されたイメージ名を選択してください：app、web、または app,web。",
@@ -361,5 +361,7 @@
   "cli_featureFeedbackName": "問題フィードバック",
   "cli_featureFeedbackDescription": "ユーザーの証拠、非公開スクリーンショット、管理者の処理とオフライン診断",
   "cli_deploy_processEnvironment": "現在のデプロイプロセス環境",
-  "cli_deploy_adminPasswordSource": "  管理者: admin。初期パスワード変数 HAI_ADMIN_DEFAULT_PASSWORD の保存元: {source}。初回管理者作成時だけ有効です。既存アカウントは元のパスワードを使用してください。"
+  "cli_deploy_adminPasswordSource": "  管理者: admin。初期パスワード変数 HAI_ADMIN_DEFAULT_PASSWORD の保存元: {source}。初回管理者作成時だけ有効です。既存アカウントは元のパスワードを使用してください。",
+  "cli_deploy_bundle_configure_ssh": "この環境の SSH デプロイ設定を追加または変更しますか？",
+  "cli_deploy_inputPASSWORDKEEP": "SSH パスワード（空欄で保存済みの値を維持）"
 }
