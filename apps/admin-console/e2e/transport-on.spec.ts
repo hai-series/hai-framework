@@ -1,3 +1,4 @@
+import type { APIResponse, Request, Response } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 import { transportAdmin, waitForHydration } from './helpers'
 
@@ -11,7 +12,7 @@ test.describe('Transport enabled E2E', () => {
     await page.locator('#login-username').fill(transportAdmin.username)
     await page.locator('input[type="password"]').first().fill(transportAdmin.password)
     const [loginResponse] = await Promise.all([
-      page.waitForResponse(response => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST').then(expectEncrypted),
+      page.waitForResponse(response => response.url().endsWith('/api/auth/login') && response.request().method() === 'POST').then(response => expectEncrypted(response, response.request())),
       page.locator('button[type="submit"]').click(),
     ])
     expect(loginResponse.status()).toBe(200)
@@ -22,13 +23,13 @@ test.describe('Transport enabled E2E', () => {
     await page.locator('a[href="/admin/iam/roles"]').first().waitFor({ state: 'visible', timeout: 15_000 })
   }
 
-  async function expectEncrypted(response: import('@playwright/test').Response) {
+  async function expectEncrypted<T extends Response | APIResponse>(response: T, request: Request): Promise<T> {
     expect(response.ok()).toBe(true)
     const payload = await response.json()
-    const requestHeaders = await response.request().allHeaders()
+    const requestHeaders = await request.allHeaders()
     expect(requestHeaders['x-client-id']).toBeTruthy()
     expect(requestHeaders['x-encrypted']).toBe('true')
-    expect((await response.allHeaders())['x-encrypted']).toBe('true')
+    expect(response.headers()['x-encrypted']).toBe('true')
     expect(payload).toMatchObject({
       direction: 'response',
       status: response.status(),
@@ -48,7 +49,7 @@ test.describe('Transport enabled E2E', () => {
 
     // 在收到响应时立即读取密文，避免页面跳转后 Chrome 已释放旧请求的响应体。
     const [networkMe, me] = await Promise.all([
-      page.waitForResponse(response => response.url().endsWith('/api/auth/me') && response.request().method() === 'GET').then(expectEncrypted),
+      page.waitForResponse(response => response.url().endsWith('/api/auth/me') && response.request().method() === 'GET').then(response => expectEncrypted(response, response.request())),
       page.evaluate(async () => {
         const response = await fetch('/api/auth/me')
         return { status: response.status, body: await response.json() }
@@ -59,13 +60,19 @@ test.describe('Transport enabled E2E', () => {
     expect(me.body.user?.username ?? me.body.data?.user?.username).toBe(transportAdmin.username)
     expect((await networkMe.request().allHeaders())['x-hai-transport']).toBeTruthy()
 
-    const [networkData] = await Promise.all([
-      page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json')).then(expectEncrypted),
-      page.locator('a[href="/admin/iam/roles"]').first().click(),
-    ])
+    // 在放行导航数据前读取并校验密文，避免 Chrome 在切换路由后回收响应体。
+    // route.fetch 保留真实服务端加密响应；fulfill 将相同响应交给浏览器解密。
+    await page.route('**/admin/iam/roles/__data.json*', async (route) => {
+      const response = await route.fetch()
+      await expectEncrypted(response, route.request())
+      expect((await route.request().allHeaders())['x-hai-transport']).toBeTruthy()
+      await route.fulfill({ response })
+    })
+    const networkDataPromise = page.waitForResponse(response => response.url().includes('/admin/iam/roles/__data.json'))
+    await page.locator('a[href="/admin/iam/roles"]').first().click()
+    await networkDataPromise
     await expect(page).toHaveURL(/\/admin\/iam\/roles/)
     await expect(page.locator('table')).toBeVisible()
-    expect((await networkData.request().allHeaders())['x-hai-transport']).toBeTruthy()
   })
 
   test('renders Mermaid document/code demos in UI gallery scenes with transport enabled', async ({ page }) => {

@@ -88,12 +88,9 @@ test.describe('Profile UI', () => {
     const submitBtn = passwordCard.getByRole('button', { name: /修改|提交|save|保存|change/i })
     await submitBtn.click()
 
-    // 应显示成功提示或跳转到登录页
-    const successOrRedirect = await Promise.race([
-      page.locator('[data-testid="profile-password-success"]').waitFor({ timeout: 10_000 }).then(() => 'success'),
-      page.waitForURL('**/auth/login**', { timeout: 10_000 }).then(() => 'redirect'),
-    ])
-    expect(['success', 'redirect']).toContain(successOrRedirect)
+    // 改密成功后接口要求重新登录；等待页面跳转完成，再验证新旧密码，避免与上下文关闭竞态。
+    await page.waitForURL('**/auth/login**', { timeout: 10_000, waitUntil: 'load' })
+    await waitForHydration(page)
     const oldLogin = await request.post('/api/auth/login', {
       data: { identifier: user.username, password: user.password },
     })
