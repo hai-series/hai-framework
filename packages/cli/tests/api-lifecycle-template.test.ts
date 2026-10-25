@@ -1,6 +1,7 @@
 /** 渲染并执行 API 初始化模板，验证 HaiResult 关闭失败与功能条件分支。 */
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
+import { core } from '@h-ai/core'
 import Handlebars from 'handlebars'
 import ts from 'typescript'
 import { describe, expect, it, vi } from 'vitest'
@@ -28,6 +29,7 @@ function instantiate(features: Record<string, boolean>) {
     require(name: string) {
       if (name === '@h-ai/core') {
         return { core: {
+          module: core.module,
           init: () => undefined,
           logger: { info: vi.fn(), warn: vi.fn() },
           config: {
@@ -39,7 +41,8 @@ function instantiate(features: Record<string, boolean>) {
       }
       return {
         [name.slice('@h-ai/'.length)]: clients.get(name.slice('@h-ai/'.length)),
-        ReachConfigSchema: { parse: (value: unknown) => value },
+        // 本文件验证资源编排；配置 Schema 的真实校验另由 production-state 和生成工程门禁覆盖。
+        ...Object.fromEntries(['AIConfigSchema', 'IamConfigSchema', 'CacheConfigSchema', 'ReldbConfigSchema', 'StorageConfigSchema', 'VecdbConfigSchema', 'ReachConfigSchema'].map(key => [key, { parse: (value: unknown) => value }])),
       }
     },
   })
@@ -60,12 +63,12 @@ describe('generated API lifecycle', () => {
     await application.closeApp()
   })
 
-  it('rejects a returned cleanup failure, continues other closers, and retries before reinit', async () => {
+  it('retains dependencies on returned cleanup failure and retries cleanup before reinit', async () => {
     const { application, cacheClose, clients } = instantiate({ cache: true, db: true })
     await application.initApp()
     cacheClose.mockResolvedValueOnce({ success: false })
-    await expect(application.closeApp()).rejects.toThrow('Application resource cleanup failed')
-    expect(clients.get('reldb')!.close).toHaveBeenCalledOnce()
+    await expect(application.closeApp()).rejects.toMatchObject({ cause: { ext: { module: 'cache', phase: 'close' } } })
+    expect(clients.get('reldb')!.close).not.toHaveBeenCalled()
     await application.initApp()
     expect(cacheClose).toHaveBeenCalledTimes(2)
     expect(clients.get('cache')!.init).toHaveBeenCalledTimes(2)

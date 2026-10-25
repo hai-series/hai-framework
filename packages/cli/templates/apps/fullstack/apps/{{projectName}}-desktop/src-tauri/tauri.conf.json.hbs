@@ -28,7 +28,7 @@
         "Cross-Origin-Embedder-Policy": "require-corp",
         "Cross-Origin-Resource-Policy": "same-origin"
       },
-      "csp": "default-src 'self'; img-src 'self' data: https: http://localhost:3000 http://127.0.0.1:3000; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:* ws://127.0.0.1:*; font-src 'self' data:"
+      "csp": "default-src 'self'; img-src 'self' blob: data: https: http://localhost:3000 http://127.0.0.1:3000; media-src 'self' blob:; frame-src 'self' about: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' http://localhost:3000 http://127.0.0.1:3000 ws://localhost:* ws://127.0.0.1:*; font-src 'self' data:"
     }
   },
   "bundle": {

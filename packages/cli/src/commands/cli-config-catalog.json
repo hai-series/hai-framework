@@ -1413,7 +1413,7 @@
     "path": "HAI_BUILD_ID",
     "description": "CLI 内部生成并向编译目标传递的产物标识；同次 SSR 构建复用",
     "value": "",
-    "constraint": "非空字母、数字、下划线、点、加减号，最多160字符；hai build 不继承调用者的同名值"
+    "constraint": "非空字母、数字、下划线、点、加减号，最多128字符；显式非法值拒绝构建；hai build 不继承调用者的同名值"
   },
   {
     "name": "HAI_CACHE",
@@ -2523,7 +2523,7 @@
     "name": "HAI_FEEDBACK_MAXATTACHMENTBYTES",
     "module": "feedback",
     "path": "feedback.maxAttachmentBytes",
-    "description": "单个附件允许的最大字节数。",
+    "description": "单个附件允许的最大字节数；同时受总预算约束。",
     "value": "5242880",
     "constraint": "整数；>= 1；<= 5242880"
   },
@@ -2541,7 +2541,7 @@
     "path": "feedback.maxEvidenceBytes",
     "description": "单份反馈累计证据允许的最大字节数。",
     "value": "4194304",
-    "constraint": "整数；>= 1024；<= 33554432"
+    "constraint": "整数；>= 1024；<= 4194304"
   },
   {
     "name": "HAI_FEEDBACK_MAXEVIDENCECOUNT",
@@ -2552,10 +2552,26 @@
     "constraint": "整数；>= 1；<= 10000"
   },
   {
+    "name": "HAI_FEEDBACK_MAXTOTALBYTES",
+    "module": "feedback",
+    "path": "feedback.maxTotalBytes",
+    "description": "未压缩导出总预算；客户端、附件总量和传输预算由此派生。",
+    "value": "33554432",
+    "constraint": "整数；>= 4194304；<= 41943040"
+  },
+  {
+    "name": "HAI_FEEDBACK_NOTIFICATIONMODE",
+    "module": "feedback",
+    "path": "feedback.notificationMode",
+    "description": "disabled 不通知，console 输出安全摘要，reach 使用已有通知通道。",
+    "value": "reach",
+    "constraint": "字符串；取值：disabled | console | reach"
+  },
+  {
     "name": "HAI_FEEDBACK_NOTIFICATIONPROVIDER",
     "module": "feedback",
     "path": "feedback.notificationProvider",
-    "description": "已初始化 Reach 邮件 Provider 的唯一名称。",
+    "description": "已初始化 Reach Provider 的唯一名称，不限制为邮件。",
     "value": "email",
     "constraint": "字符串；最小字符数 1"
   },
@@ -2563,17 +2579,17 @@
     "name": "HAI_FEEDBACK_RECIPIENTS",
     "module": "feedback",
     "path": "feedback.recipients",
-    "description": "接收待处理反馈通知的管理员邮件地址。",
-    "value": "",
-    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 20"
+    "description": "Reach 接收方，由实际 Provider 校验邮箱、手机号或业务目的地。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 20"
   },
   {
     "name": "HAI_FEEDBACK_RECIPIENTS_0",
     "module": "feedback",
     "path": "feedback.recipients.0",
-    "description": "接收待处理反馈通知的管理员邮件地址。；此变量整体替换单个数组项",
-    "value": "admin@localhost.test",
-    "constraint": "字符串；格式 email；正则 ^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+    "description": "Reach 接收方，由实际 Provider 校验邮箱、手机号或业务目的地。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 320"
   },
   {
     "name": "HAI_FEEDBACK_RETENTIONDAYS",
@@ -4838,6 +4854,22 @@
     "description": "存储类型",
     "value": "local",
     "constraint": "字符串；取值：s3 | local"
+  },
+  {
+    "name": "HAI_TEST_IMAGE_LEDGER",
+    "module": "test",
+    "path": "HAI_TEST_IMAGE_LEDGER",
+    "description": "环境入口；使用位置 packages/cli/src/commands/cli-build.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
+  },
+  {
+    "name": "HAI_TEST_IMAGE_RUN",
+    "module": "test",
+    "path": "HAI_TEST_IMAGE_RUN",
+    "description": "环境入口；使用位置 packages/cli/src/commands/cli-build.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "HAI_VECDB",

@@ -52,6 +52,10 @@ pub fn run() {
         serde_json::json!({ "apiBase": api.as_str() })
     );
     tauri::Builder::default()
+{{#if features.feedback}}
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+{{/if}}
         .plugin(tauri_plugin_shell::init())
         .append_invoke_initialization_script(script)
         .invoke_handler(tauri::generate_handler![greet])

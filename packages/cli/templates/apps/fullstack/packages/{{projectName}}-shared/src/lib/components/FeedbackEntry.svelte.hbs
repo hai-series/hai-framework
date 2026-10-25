@@ -6,7 +6,7 @@
   import { FeedbackModal } from '@h-ai/ui/components/scenes/app/index'
   import { Button } from '@h-ai/ui/components/primitives/index'
   import { onDestroy } from 'svelte'
-  import { browserFeedback, downloadFeedback } from '../api/feedback-client.js'
+  import { browserFeedback } from '../api/feedback-client.js'
   import * as m from '../paraglide/messages.js'
 
   let open = $state(false)
@@ -14,18 +14,8 @@
   let error = $state('')
   let draft = $state.raw<FeedbackDraft>()
   let attachments = $state<FeedbackAttachmentView[]>([])
-  let urls: string[] = []
-  function releaseUrls() {
-    for (const url of urls) URL.revokeObjectURL(url)
-    urls = []
-  }
   function refreshAttachments() {
-    releaseUrls()
-    attachments = (draft?.attachments ?? []).map((item) => {
-      const url = URL.createObjectURL(new Blob([new Uint8Array(item.bytes).buffer], { type: item.contentType }))
-      urls.push(url)
-      return { id: item.id, name: item.name, size: item.size, mimeType: item.contentType, url }
-    })
+    attachments = browserFeedback.getView().attachments
   }
   async function prepare() {
     preparing = true
@@ -55,36 +45,37 @@
     return result.data
   }
   async function annotate(mark: FeedbackAnnotation) {
-    const attachment = attachments.find(item => item.id === mark.id)
-    if (!attachment?.url)
-      throw new Error(m.operation_failed())
-    // UI 使用 0–1 比例；与 SDK 一样按浏览器解码后的原图像素换算，避免 CSS 缩放和 JPEG 方向差异。
-    const image = new Image()
-    image.src = attachment.url
-    await image.decode()
-    const result = await browserFeedback.annotate(mark.id, { mode: mark.mode, x: mark.rect.x * image.naturalWidth, y: mark.rect.y * image.naturalHeight, width: mark.rect.width * image.naturalWidth, height: mark.rect.height * image.naturalHeight })
+    const result = await browserFeedback.annotate(mark.id, { mode: mark.mode, ...mark.rect, coordinateSpace: 'ratio' })
     if (!result.success)
       throw new Error(result.error.message)
     refreshAttachments()
   }
-  async function addFiles(files: File[]) {
-    const result = await browserFeedback.addFiles(files)
+  async function capturePage(id?: string) {
+    const result = await browserFeedback.captureScreenshot(id)
+    if (!result.success)
+      throw new Error(result.error.message)
+    draft = browserFeedback.getDraft()
+    refreshAttachments()
+  }
+  async function addFiles(files: File[], removedAttachmentIds: readonly string[] = []) {
+    const result = await browserFeedback.addFiles(files, removedAttachmentIds)
     if (!result.success)
       throw new Error(result.error.message)
     draft = browserFeedback.getDraft()
     refreshAttachments()
   }
   async function exportLocal(data: FeedbackFormData) {
-    const result = await browserFeedback.exportDraft(input(data))
+    const result = await browserFeedback.saveDraft(input(data))
     if (!result.success)
       throw new Error(result.error.message)
-    downloadFeedback(result.data, `feedback-${draft?.submissionId ?? 'local'}.zip`)
+    return result.data.status !== 'cancelled'
   }
-  onDestroy(releaseUrls)
+  onDestroy(browserFeedback.releasePreviews)
 </script>
 
 <Button variant='ghost' size='sm' loading={preparing} onclick={() => void prepare()} data-testid='feedback-open'>{m.nav_feedback()}</Button>
 {#if error}<span role='alert' class='text-xs text-error'>{error}</span>{/if}
-<FeedbackModal bind:open {attachments} resetKey={draft?.submissionId} onsubmit={submit} onannotate={annotate} onexport={exportLocal} onfileschange={addFiles}
-  evidenceSummary={[{ label: m.feedback_logs(), count: draft?.evidence.length ?? 0, status: draft?.missing.length ? 'partial' : 'complete' }]} />
+<FeedbackModal bind:open {attachments} budget={browserFeedback.budget} resetKey={draft?.submissionId} onsubmit={submit} oncapture={capturePage} onannotate={annotate} onexport={exportLocal} onfileschange={addFiles}
+  evidence={draft?.evidence ?? []}
+  evidenceSummary={draft?.missing.length ? [{ label: m.feedback_logs(), status: 'partial', detail: draft.missing.join(', ') }] : []} />
 {{/if}}

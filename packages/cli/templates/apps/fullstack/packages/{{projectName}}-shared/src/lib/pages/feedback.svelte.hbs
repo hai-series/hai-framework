@@ -7,7 +7,7 @@
   import { FeedbackDetail, FeedbackList } from '@h-ai/ui/components/scenes/app/index'
   import { onMount } from 'svelte'
   import { managementApi } from '../api/api-client.js'
-  import { downloadFeedback, feedbackDataBytes } from '../api/feedback-client.js'
+  import { downloadFeedback, feedbackDataBytes, feedbackReview } from '../api/feedback-client.js'
   import * as m from '../paraglide/messages.js'
 
   const { store }: { store: ManagementStore } = $props()
@@ -66,6 +66,15 @@
     selected = result.data
     await loadEvidence()
   }
+  async function loadReplay() {
+    const id = selected?.report.id
+    if (!id)
+      return []
+    const result = await feedbackReview.loadReplay(id)
+    if (!result.success)
+      throw new Error(result.error.message)
+    return result.data
+  }
   async function select(report: FeedbackReportView) {
     await selectId(report.id)
   }
@@ -88,20 +97,9 @@
     await load()
   }
   async function exportBundle(report: FeedbackReportView) {
-    const started = await managementApi.feedback.reports.export({ id: report.id })
-    if (!started.success)
-      throw new Error(started.error.message)
-    for (let attempt = 0; attempt < 40; attempt++) {
-      const result = await managementApi.feedback.reports.getExport({ id: report.id, jobId: started.data.id })
-      if (result.success) {
-        downloadFeedback(feedbackDataBytes(result.data), result.data.name)
-        return
-      }
-      if (result.error.httpStatus !== 409)
-        throw new Error(result.error.message)
-      await new Promise(resolve => setTimeout(resolve, 500))
-    }
-    throw new Error(m.feedback_export_pending())
+    const result = await feedbackReview.exportReport(report.id)
+    if (!result.success)
+      throw new Error(result.error.message)
   }
   async function attachment(id: string) {
     if (!selected)
@@ -109,13 +107,13 @@
     const result = await managementApi.feedback.attachments.get({ id: selected.report.id, attachmentId: id })
     if (!result.success)
       throw new Error(result.error.message)
-    if (result.data.contentType.startsWith('image/')) {
+    if (result.data.contentType.startsWith('image/') || result.data.contentType.startsWith('video/')) {
       if (imageUrls[id])
         URL.revokeObjectURL(imageUrls[id])
       imageUrls = { ...imageUrls, [id]: URL.createObjectURL(new Blob([new Uint8Array(feedbackDataBytes(result.data)).buffer], { type: result.data.contentType })) }
     }
     else {
-      downloadFeedback(feedbackDataBytes(result.data), result.data.name, result.data.contentType)
+      await downloadFeedback(feedbackDataBytes(result.data), result.data.name, result.data.contentType)
     }
   }
   onMount(() => {
@@ -146,7 +144,7 @@
   {#if selected}
     <FeedbackDetail report={view(selected.report)} {evidence} history={selected.history.map(item => ({ id: item.id, actorId: item.userId, fromStatus: item.from, toStatus: item.to, createdAt: item.timestamp, note: item.note }))} {permissions}
       attachments={selected.attachments.map(item => ({ ...item, mimeType: item.contentType, url: imageUrls[item.id] }))}
-      onevidencequery={loadEvidence} onstatus={status} onexport={exportBundle} onretry={retry}
+      onevidencequery={loadEvidence} onreplay={loadReplay} onstatus={status} onexport={exportBundle} onretry={retry}
       onattachment={item => attachment(item.id)} onclose={closeDetail} />
   {:else}
     <FeedbackList data={page} bind:query {permissions} {loading} {error} onquerychange={load} onview={select} onstatus={status} onexport={exportBundle} onretry={retry} />

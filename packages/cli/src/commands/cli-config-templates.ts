@@ -827,11 +827,15 @@ function generatePaymentConfig(): string {
 }
 
 function generateFeedbackConfig(): string {
-  return `# 问题反馈：生产使用共享数据库、S3 私有桶和真实 SMTP。
+  return `# 问题反馈：生产使用共享数据库与私有存储；通知独立选择 disabled / console / reach。
 appId: my-app
 appVersion: 0.1.0
-recipients:
-  - admin@example.test
+notificationMode: console
+maxTotalBytes: 33554432
+recipients: []
+# Reach 模式设置真实 Provider 和接收方，不影响其它通知的免打扰策略。
+# recipients:
+#   - \${HAI_FEEDBACK_RECIPIENTS_0:}
 notificationProvider: email
 adminUrl: http://localhost:5173/#/feedback
 collectionTimeoutMs: 60000

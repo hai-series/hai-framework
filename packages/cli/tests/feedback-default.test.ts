@@ -34,7 +34,7 @@ describe('fullstack 默认反馈生成', () => {
     for (const dependency of ['feedback', 'reach', 'storage', 'iam', 'reldb', 'cache', 'crypto'])
       expect(manifest.dependencies[`@h-ai/${dependency}`], dependency).toBe('catalog:')
     const config = parse(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8'))
-    expect(config).toMatchObject({ notificationProvider: expect.any(String), recipients: expect.any(Array) })
+    expect(config).toMatchObject({ notificationMode: expect.stringContaining(':console'), recipients: [] })
     expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('8388608')
     expect(parseEnv(await readFile(path.join(directory, '.env'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('8388608')
     const procedures = await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')

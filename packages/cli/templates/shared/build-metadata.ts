@@ -8,10 +8,16 @@ import process from 'node:process'
 export function resolveBuildMetadata(directory: string): { appVersion: string, buildId: string, commit: string } {
   const manifest: { version?: unknown } = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))
   const appVersion = typeof manifest.version === 'string' && manifest.version.trim() ? manifest.version.trim() : 'unknown'
+  if (appVersion.length > 128)
+    throw new Error('Invalid package.json version: maximum length is 128')
   const suppliedId = process.env.HAI_BUILD_ID?.trim()
-  const buildId = suppliedId && /^[\w.+-]{1,160}$/.test(suppliedId) ? suppliedId : randomUUID()
+  if (process.env.HAI_BUILD_ID !== undefined && !/^[\w.+-]{1,128}$/.test(suppliedId ?? ''))
+    throw new Error('Invalid HAI_BUILD_ID: expected 1–128 letters, digits, underscores, dots, plus or minus signs')
+  const buildId = suppliedId ?? randomUUID()
   const suppliedCommit = process.env.HAI_BUILD_COMMIT?.trim()
-  const commit = suppliedCommit && /^(?:[a-f\d]{40}|[a-f\d]{64}|unknown)$/i.test(suppliedCommit) ? suppliedCommit : sourceCommit(directory)
+  if (process.env.HAI_BUILD_COMMIT !== undefined && !/^(?:[a-f\d]{40}|[a-f\d]{64}|unknown)$/i.test(suppliedCommit ?? ''))
+    throw new Error('Invalid HAI_BUILD_COMMIT: expected a full Git SHA or unknown')
+  const commit = suppliedCommit ?? sourceCommit(directory)
   // SvelteKit 在同一构建进程内重新求值 Vite 配置；不依赖临时配置模块缓存。
   process.env.HAI_BUILD_ID = buildId
   process.env.HAI_BUILD_COMMIT = commit

@@ -11,7 +11,7 @@ import { cac } from 'cac'
 import chalk from 'chalk'
 import { cliM } from './cli-i18n.js'
 import { getCliVersion, writeCliMessage } from './cli-utils.js'
-import { addModule, buildCommand, createProject, deployCommand, feedbackCommand, generate, initProject } from './commands/cli-commands.js'
+import { addModule, buildCommand, createProject, deployCommand, feedbackCommand, generate, initProject, upgradeCommand } from './commands/cli-commands.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
 const VERSION = getCliVersion()
@@ -152,8 +152,21 @@ cli
   })
 
 // 部署命令
+cli.command('upgrade <version>', cliM('cli_help_upgrade')).action(async (version: string, options: { cwd?: string }) => {
+  try {
+    await upgradeCommand(version, options)
+  }
+  catch (error) {
+    writeCliMessage(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  }
+})
+
+// 部署命令
 cli
   .command('deploy [appDir]', cliM('cli_help_deploy'))
+  .option('--plan', cliM('cli_help_deployPlan'))
+  .option('--inspect-remote', cliM('cli_help_inspectRemote'))
   .option('--env <environment>', cliM('cli_help_environment'))
   .option('--env-dir <path>', cliM('cli_help_envDir'))
   .option('-y, --yes', cliM('cli_help_deployYes'))

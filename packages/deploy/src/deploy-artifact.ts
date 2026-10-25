@@ -23,7 +23,7 @@ export const DeploymentArtifactSchema = z.object({
   /** 应用根 package.json 的版本，用于归档、Compose 与桌面交付；最长 80 字符。 */
   appVersion: z.string().max(80).regex(/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i),
   /** 本次构建标识；同一应用版本允许重复构建。 */
-  buildId: z.string().regex(/^[a-z0-9][\w.+-]*$/i),
+  buildId: z.string().max(128).regex(/^[a-z0-9][\w.+-]*$/i),
   /** 只包含所选镜像的构建不能用于首次安装。 */
   partial: z.boolean().default(false),
   /** API 单独构建时仍保留工程的 Web 拓扑。 */

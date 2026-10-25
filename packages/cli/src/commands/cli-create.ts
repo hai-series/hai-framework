@@ -39,48 +39,84 @@ const RE_GIT_SSH_URL = /^git@.+:.+/
  */
 const APP_TYPES: Record<AppType, { name: string, description: string, defaultFeatures: FeatureId[] }> = {
   'admin': {
-    get name() { return cliM('cli_appAdminName') },
-    get description() { return cliM('cli_appAdminDescription') },
+    get name() {
+      return cliM('cli_appAdminName')
+    },
+    get description() {
+      return cliM('cli_appAdminDescription')
+    },
     defaultFeatures: ['iam', 'db', 'cache', 'crypto'],
   },
   'website': {
-    get name() { return cliM('cli_appWebsiteName') },
-    get description() { return cliM('cli_appWebsiteDescription') },
+    get name() {
+      return cliM('cli_appWebsiteName')
+    },
+    get description() {
+      return cliM('cli_appWebsiteDescription')
+    },
     defaultFeatures: ['db', 'cache'],
   },
   'h5': {
-    get name() { return cliM('cli_appH5Name') },
-    get description() { return cliM('cli_appH5Description') },
+    get name() {
+      return cliM('cli_appH5Name')
+    },
+    get description() {
+      return cliM('cli_appH5Description')
+    },
     defaultFeatures: ['db', 'cache'],
   },
   'api': {
-    get name() { return cliM('cli_appApiName') },
-    get description() { return cliM('cli_appApiDescription') },
+    get name() {
+      return cliM('cli_appApiName')
+    },
+    get description() {
+      return cliM('cli_appApiDescription')
+    },
     defaultFeatures: ['db', 'cache'],
   },
   'mobile-app': {
-    get name() { return cliM('cli_appMobileName') },
-    get description() { return cliM('cli_appMobileDescription') },
+    get name() {
+      return cliM('cli_appMobileName')
+    },
+    get description() {
+      return cliM('cli_appMobileDescription')
+    },
     defaultFeatures: ['api-client', 'capacitor'],
   },
   'fullstack': {
-    get name() { return cliM('cli_appFullstackName') },
-    get description() { return cliM('cli_appFullstackDescription') },
+    get name() {
+      return cliM('cli_appFullstackName')
+    },
+    get description() {
+      return cliM('cli_appFullstackDescription')
+    },
     defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'storage', 'audit'],
   },
 }
 
 const FRONTEND_TARGETS: Record<FrontendTarget, { name: string, description: string, implemented: boolean }> = {
-  web: { name: 'Web', get description() { return cliM('cli_frontendWebDescription') }, implemented: true },
-  app: { name: 'App', get description() { return cliM('cli_frontendAppDescription') }, implemented: true },
+  web: { name: 'Web', get description() {
+    return cliM('cli_frontendWebDescription')
+  }, implemented: true },
+  app: { name: 'App', get description() {
+    return cliM('cli_frontendAppDescription')
+  }, implemented: true },
   miniapp: {
-    get name() { return cliM('cli_frontendMiniappName') },
-    get description() { return cliM('cli_frontendMiniappDescription') },
+    get name() {
+      return cliM('cli_frontendMiniappName')
+    },
+    get description() {
+      return cliM('cli_frontendMiniappDescription')
+    },
     implemented: false,
   },
   desktop: {
-    get name() { return cliM('cli_frontendDesktopName') },
-    get description() { return cliM('cli_frontendDesktopDescription') },
+    get name() {
+      return cliM('cli_frontendDesktopName')
+    },
+    get description() {
+      return cliM('cli_frontendDesktopDescription')
+    },
     implemented: true,
   },
 }
@@ -97,105 +133,169 @@ const DEFAULT_FULLSTACK_FRONTENDS: FrontendTarget[] = ['web', 'app', 'desktop']
 const FEATURES: Record<string, FeatureDefinition> = {
   'iam': {
     id: 'iam',
-    get name() { return cliM('cli_featureIamName') },
-    get description() { return cliM('cli_featureIamDescription') },
+    get name() {
+      return cliM('cli_featureIamName')
+    },
+    get description() {
+      return cliM('cli_featureIamDescription')
+    },
     packages: ['@h-ai/iam'],
     dependencies: ['crypto', 'db', 'cache'],
   },
   'db': {
     id: 'db',
-    get name() { return cliM('cli_featureDbName') },
-    get description() { return cliM('cli_featureDbDescription') },
+    get name() {
+      return cliM('cli_featureDbName')
+    },
+    get description() {
+      return cliM('cli_featureDbDescription')
+    },
     packages: ['@h-ai/reldb'],
   },
   'cache': {
     id: 'cache',
-    get name() { return cliM('cli_featureCacheName') },
-    get description() { return cliM('cli_featureCacheDescription') },
+    get name() {
+      return cliM('cli_featureCacheName')
+    },
+    get description() {
+      return cliM('cli_featureCacheDescription')
+    },
     packages: ['@h-ai/cache'],
   },
   'ai': {
     id: 'ai',
-    get name() { return cliM('cli_featureAiName') },
-    get description() { return cliM('cli_featureAiDescription') },
+    get name() {
+      return cliM('cli_featureAiName')
+    },
+    get description() {
+      return cliM('cli_featureAiDescription')
+    },
     packages: ['@h-ai/ai'],
     dependencies: ['db', 'vecdb'],
   },
   'storage': {
     id: 'storage',
-    get name() { return cliM('cli_featureStorageName') },
-    get description() { return cliM('cli_featureStorageDescription') },
+    get name() {
+      return cliM('cli_featureStorageName')
+    },
+    get description() {
+      return cliM('cli_featureStorageDescription')
+    },
     packages: ['@h-ai/storage'],
   },
   'crypto': {
     id: 'crypto',
-    get name() { return cliM('cli_featureCryptoName') },
-    get description() { return cliM('cli_featureCryptoDescription') },
+    get name() {
+      return cliM('cli_featureCryptoName')
+    },
+    get description() {
+      return cliM('cli_featureCryptoDescription')
+    },
     packages: ['@h-ai/crypto'],
     dependencies: ['db'],
   },
   'audit': {
     id: 'audit',
-    get name() { return cliM('cli_featureAuditName') },
-    get description() { return cliM('cli_featureAuditDescription') },
+    get name() {
+      return cliM('cli_featureAuditName')
+    },
+    get description() {
+      return cliM('cli_featureAuditDescription')
+    },
     packages: ['@h-ai/audit'],
     dependencies: ['db'],
   },
   'reach': {
     id: 'reach',
-    get name() { return cliM('cli_featureReachName') },
-    get description() { return cliM('cli_featureReachDescription') },
+    get name() {
+      return cliM('cli_featureReachName')
+    },
+    get description() {
+      return cliM('cli_featureReachDescription')
+    },
     packages: ['@h-ai/reach'],
   },
   'feedback': {
     id: 'feedback',
-    get name() { return cliM('cli_featureFeedbackName') },
-    get description() { return cliM('cli_featureFeedbackDescription') },
+    get name() {
+      return cliM('cli_featureFeedbackName')
+    },
+    get description() {
+      return cliM('cli_featureFeedbackDescription')
+    },
     packages: ['@h-ai/feedback'],
-    dependencies: ['db', 'storage', 'reach', 'iam'],
+    dependencies: ['db', 'storage', 'iam'],
   },
   'payment': {
     id: 'payment',
-    get name() { return cliM('cli_featurePaymentName') },
-    get description() { return cliM('cli_featurePaymentDescription') },
+    get name() {
+      return cliM('cli_featurePaymentName')
+    },
+    get description() {
+      return cliM('cli_featurePaymentDescription')
+    },
     packages: ['@h-ai/payment'],
     dependencies: ['db'],
   },
   'vecdb': {
     id: 'vecdb',
-    get name() { return cliM('cli_featureVecdbName') },
-    get description() { return cliM('cli_featureVecdbDescription') },
+    get name() {
+      return cliM('cli_featureVecdbName')
+    },
+    get description() {
+      return cliM('cli_featureVecdbDescription')
+    },
     packages: ['@h-ai/vecdb'],
   },
   'datapipe': {
     id: 'datapipe',
-    get name() { return cliM('cli_featureDatapipeName') },
-    get description() { return cliM('cli_featureDatapipeDescription') },
+    get name() {
+      return cliM('cli_featureDatapipeName')
+    },
+    get description() {
+      return cliM('cli_featureDatapipeDescription')
+    },
     packages: ['@h-ai/datapipe'],
   },
   'scheduler': {
     id: 'scheduler',
-    get name() { return cliM('cli_featureSchedulerName') },
-    get description() { return cliM('cli_featureSchedulerDescription') },
+    get name() {
+      return cliM('cli_featureSchedulerName')
+    },
+    get description() {
+      return cliM('cli_featureSchedulerDescription')
+    },
     packages: ['@h-ai/scheduler'],
     dependencies: ['db'],
   },
   'deploy': {
     id: 'deploy',
-    get name() { return cliM('cli_featureDeployName') },
-    get description() { return cliM('cli_featureDeployDescription') },
+    get name() {
+      return cliM('cli_featureDeployName')
+    },
+    get description() {
+      return cliM('cli_featureDeployDescription')
+    },
     packages: ['@h-ai/deploy'],
   },
   'api-client': {
     id: 'api-client',
-    get name() { return cliM('cli_featureApiClientName') },
-    get description() { return cliM('cli_featureApiClientDescription') },
+    get name() {
+      return cliM('cli_featureApiClientName')
+    },
+    get description() {
+      return cliM('cli_featureApiClientDescription')
+    },
     packages: ['@h-ai/api-client'],
   },
   'capacitor': {
     id: 'capacitor',
-    get name() { return cliM('cli_featureCapacitorName') },
-    get description() { return cliM('cli_featureCapacitorDescription') },
+    get name() {
+      return cliM('cli_featureCapacitorName')
+    },
+    get description() {
+      return cliM('cli_featureCapacitorDescription')
+    },
     packages: ['@h-ai/capacitor'],
   },
 }
@@ -230,17 +330,23 @@ const PROJECT_NAME_REGEX = /^[a-z0-9-]+$/
 const PROJECT_TEMPLATES = {
   minimal: {
     name: 'minimal',
-    get description() { return cliM('cli_templateMinimalDescription') },
+    get description() {
+      return cliM('cli_templateMinimalDescription')
+    },
     features: [] as FeatureId[],
   },
   default: {
     name: 'default',
-    get description() { return cliM('cli_templateDefaultDescription') },
+    get description() {
+      return cliM('cli_templateDefaultDescription')
+    },
     features: ['iam', 'db', 'cache', 'crypto'] as FeatureId[],
   },
   full: {
     name: 'full',
-    get description() { return cliM('cli_templateFullDescription') },
+    get description() {
+      return cliM('cli_templateFullDescription')
+    },
     features: [
       'iam',
       'db',
@@ -262,7 +368,9 @@ const PROJECT_TEMPLATES = {
   },
   custom: {
     name: 'custom',
-    get description() { return cliM('cli_templateCustomDescription') },
+    get description() {
+      return cliM('cli_templateCustomDescription')
+    },
     features: [] as FeatureId[],
   },
 }
@@ -359,7 +467,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           if (isFullstack && await fse.pathExists(configPath))
             continue
           const baseConfig = generateConfigFile(configKey, configs)
-          const renderedConfig = configKey === 'reach' && resolvedOptions.features.includes('feedback') ? baseConfig.replace('name: console_dev', 'name: email') : baseConfig
+          const renderedConfig = baseConfig
           await writeFile(configPath, configKey === 'feedback' ? renderedConfig.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${resolvedOptions.name}`) : renderedConfig)
         }
       }

@@ -1,48 +1,4 @@
-/**
- * =============================================================================
- * {{projectName}} - 应用初始化
- * =============================================================================
- *
- * 统一管理所有模块的初始化流程。
- *
- * 初始化顺序：
- * 1. core.init — 加载配置文件（约定优于配置）
-{{#if features.db}}
- * 2. reldb.init — 数据库连接
-{{/if}}
-{{#if features.cache}}
- * 3. cache.init — 缓存
-{{/if}}
-{{#if features.storage}}
- * 4. storage.init — 文件存储（可选）
-{{/if}}
-{{#if features.reach}}
- * 5. reach.init — 触达服务（可选）
-{{/if}}
-{{#if features.iam}}
- * 6. iam.init — 身份认证
-{{/if}}
-{{#if features.ai}}
- * 7. ai.init — AI 集成（可选）
-{{/if}}
- */
-
-{{#if features.ai}}
-import type { AIConfigInput } from '@h-ai/ai'
-{{/if}}
-{{#if features.audit}}
-import type { AuditInitConfigInput } from '@h-ai/audit'
-{{/if}}
-import type { CoreConfig, HaiResult } from '@h-ai/core'
-{{#if features.iam}}
-import type { IamConfigSettingsInput } from '@h-ai/iam'
-{{/if}}
-{{#if features.reach}}
-import type { ReachConfigInput } from '@h-ai/reach'
-{{/if}}
-{{#if features.storage}}
-import type { StorageConfigInput } from '@h-ai/storage'
-{{/if}}
+/** 应用声明真实模块顺序；并发、失败回滚与关闭重试由 core 处理。 */
 {{#if features.ai}}
 import { ai, AIConfigSchema } from '@h-ai/ai'
 {{/if}}
@@ -53,17 +9,17 @@ import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
-{{#if features.feedback}}
-import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
-{{/if}}
 {{#if features.crypto}}
 import { crypto } from '@h-ai/crypto'
 {{/if}}
+{{#if features.feedback}}
+import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
+{{/if}}
 {{#if features.iam}}
-import { iam } from '@h-ai/iam'
+import { iam, IamConfigSchema } from '@h-ai/iam'
 {{/if}}
 {{#if features.reach}}
-import { reach } from '@h-ai/reach'
+import { reach, ReachConfigSchema } from '@h-ai/reach'
 {{/if}}
 {{#if features.db}}
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
@@ -74,271 +30,63 @@ import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{#if features.vecdb}}
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 {{/if}}
-
 {{#if features.feedback}}
 import { buildMetadata } from '../build-metadata.js'
 {{/if}}
 
+const runtime = core.module.createRuntime([
+  { name: 'configuration', start: () => { core.init({ configDir: './config' }) }, close: () => {} },
 {{#if features.db}}
-type DbConfigInput = Parameters<typeof reldb.init>[0]
+  { name: 'reldb', start: async () => {
+    const config = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
+    if (config.type === 'sqlite' && config.database !== ':memory:') {
+      const { mkdir } = await import('node:fs/promises')
+      const { dirname } = await import('node:path')
+      await mkdir(dirname(config.database), { recursive: true })
+    }
+    return reldb.init(config)
+  }, close: () => reldb.close() },
 {{/if}}
 {{#if features.cache}}
-type CacheConfigInput = Parameters<typeof cache.init>[0]
+  { name: 'cache', start: () => cache.init(CacheConfigSchema.parse(core.config.getOrThrow('cache'))), close: () => cache.close() },
 {{/if}}
+{{#if features.vecdb}}
+  { name: 'vecdb', start: () => vecdb.init(VecdbConfigSchema.parse(core.config.getOrThrow('vecdb'))), close: () => vecdb.close() },
+{{/if}}
+{{#if features.crypto}}
+  { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
+{{/if}}
+{{#if features.storage}}
+  { name: 'storage', start: () => storage.init(StorageConfigSchema.parse(core.config.getOrThrow('storage'))), close: () => storage.close() },
+{{/if}}
+{{#if features.reach}}
+  { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(ReachConfigSchema.parse(core.config.getOrThrow('reach'))), close: () => reach.close() },
+{{/if}}
+{{#if features.iam}}
+  { name: 'iam', start: () => iam.init({ ...IamConfigSchema.parse(core.config.getOrThrow('iam')){{#if features.reach}}, reach{{/if}} }), close: () => iam.close() },
+{{/if}}
+{{#if features.audit}}
+  { name: 'audit', start: () => audit.init(AuditInitConfigSchema.parse(core.config.get('audit') ?? {})), close: () => audit.close() },
+{{/if}}
+{{#if features.feedback}}
+  { name: 'feedback', start: () => feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), close: () => feedback.close() },
+{{/if}}
+{{#if features.ai}}
+  { name: 'ai', start: () => ai.init(AIConfigSchema.parse(core.config.getOrThrow('ai'))), close: () => ai.close() },
+{{/if}}
+  { name: 'bootstrap', start: () => { core.logger.info('Application initialized') }, close: () => {} },
+])
 
-let initialized = false
-let initializing: Promise<void> | undefined
-let closing: Promise<void> | undefined
-let cleanupPending = false
-
-/**
- * 初始化应用
- */
+/** 启动失败只报告模块、错误码和配置路径，私密值不进入错误上下文。 */
 export async function initApp(): Promise<void> {
-  if (closing)
-    await closing
-  if (initialized)
-    return
-  if (!initializing) {
-    initializing = (async () => {
-      if (cleanupPending)
-        await cleanupModules()
-      cleanupPending = true
-      try {
-        await doInit()
-        initialized = true
-        cleanupPending = false
-      }
-      catch (error) {
-        try {
-          await cleanupModules()
-        }
-        catch (cleanupError) {
-          throw new AggregateError([error, cleanupError], 'Application startup and cleanup failed')
-        }
-        throw error
-      }
-    })().finally(() => {
-      initializing = undefined
-    })
-  }
-  return initializing
+  const result = await runtime.start()
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
-/** 实际启动只有一个调用者执行，失败由外层检查清理结果后再抛出。 */
-async function doInit(): Promise<void> {
-  // 1. 加载配置
-  core.init({
-    configDir: './config',
-  })
-
-{{#if features.crypto}}
-  // 加密模块初始化完成后才继续启动依赖它的 IAM / transport。
-  const cryptoResult = await crypto.init()
-  if (!cryptoResult.success)
-    throw new Error(`Crypto initialization failed: ${cryptoResult.error.message}`)
-{{/if}}
-
-{{#if features.db}}
-  // ─── 配置校验 ───
-  const dbValidation = core.config.validate('db', ReldbConfigSchema)
-  if (!dbValidation.success) {
-    throw new Error(`DB config invalid: ${dbValidation.error.message}`)
-  }
-{{/if}}
-{{#if features.cache}}
-  const cacheValidation = core.config.validate('cache', CacheConfigSchema)
-  if (!cacheValidation.success) {
-    throw new Error(`Cache config invalid: ${cacheValidation.error.message}`)
-  }
-{{/if}}
-{{#if features.audit}}
-  const auditValidation = core.config.validate('audit', AuditInitConfigSchema)
-  if (!auditValidation.success)
-    throw new Error(`Audit config invalid: ${auditValidation.error.message}`)
-{{/if}}
-{{#if features.vecdb}}
-  const vectorValidation = core.config.validate('vecdb', VecdbConfigSchema)
-  if (!vectorValidation.success)
-    throw new Error(`VecDB config invalid: ${vectorValidation.error.message}`)
-{{/if}}
-{{#if features.ai}}
-  const aiValidation = core.config.validate('ai', AIConfigSchema)
-  if (!aiValidation.success)
-    throw new Error(`AI config invalid: ${aiValidation.error.message}`)
-{{/if}}
-
-{{#if features.db}}
-  // ─── 获取配置 ───
-  const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
-{{/if}}
-{{#if features.cache}}
-  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
-{{/if}}
-{{#if features.iam}}
-  const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
-{{/if}}
-{{#if features.audit}}
-  const auditConfig = core.config.getOrThrow<AuditInitConfigInput>('audit')
-{{/if}}
-{{#if features.storage}}
-  const storageConfig = core.config.getOrThrow<StorageConfigInput>('storage')
-{{/if}}
-{{#if features.ai}}
-  const aiConfig = core.config.getOrThrow<AIConfigInput>('ai')
-{{/if}}
-{{#if features.vecdb}}
-  const vectorConfig = core.config.getOrThrow<Parameters<typeof vecdb.init>[0]>('vecdb')
-{{/if}}
-{{#if features.reach}}
-  const reachConfig = core.config.getOrThrow<ReachConfigInput>('reach')
-{{/if}}
-
-{{#if features.db}}
-  // ─── 确保数据目录存在（SQLite） ───
-  if (dbConfig.type === 'sqlite') {
-    const path = await import('node:path')
-    const fs = await import('node:fs')
-    const dbDir = path.dirname(dbConfig.database)
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true })
-    }
-  }
-
-  // ─── 初始化数据库 ───
-  const dbResult = await reldb.init(dbConfig)
-  if (!dbResult.success) {
-    throw new Error(`Database initialization failed: ${dbResult.error.message}`)
-  }
-{{/if}}
-
-{{#if features.cache}}
-  // ─── 初始化缓存 ───
-  const cacheResult = await cache.init(cacheConfig)
-  if (!cacheResult.success) {
-    throw new Error(`Cache initialization failed: ${cacheResult.error.message}`)
-  }
-{{/if}}
-
-{{#if features.storage}}
-  const storageValidation = core.config.validate('storage', StorageConfigSchema)
-  if (!storageValidation.success)
-    throw new Error(`Storage config invalid: ${storageValidation.error.message}`)
-  const storageResult = await storage.init(storageConfig)
-  if (!storageResult.success)
-    throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
-{{/if}}
-
-{{#if features.vecdb}}
-  // 共享向量存储必须在 AI 选择默认 Store 之前就绪。
-  const vectorResult = await vecdb.init(vectorConfig)
-  if (!vectorResult.success)
-    throw new Error(`VecDB initialization failed: ${vectorResult.error.message}`)
-{{/if}}
-
-{{#if features.reach}}
-  const reachResult = await reach.init(reachConfig)
-  if (!reachResult.success)
-    throw new Error(`Reach initialization failed: ${reachResult.error.message}`)
-{{/if}}
-
-{{#if features.iam}}
-  // ─── 初始化 IAM ───
-  const iamResult = await iam.init({ ...iamConfig{{#if features.reach}}, reach{{/if}} })
-  if (!iamResult.success) {
-    throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
-  }
-{{/if}}
-
-{{#if features.audit}}
-  // ─── 初始化审计 ───
-  const auditResult = await audit.init(auditConfig)
-  if (!auditResult.success) {
-    throw new Error(`Audit initialization failed: ${auditResult.error.message}`)
-  }
-{{/if}}
-
-{{#if features.ai}}
-  // 显式启用的 AI 不得在持久 Store 不可用时降级为启动成功。
-  const aiResult = await ai.init(aiConfig)
-  if (!aiResult.success)
-    throw new Error(`AI initialization failed: ${aiResult.error.message}`)
-{{/if}}
-
-{{#if features.feedback}}
-  const feedbackResult = await feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata })
-  if (!feedbackResult.success)
-    throw new Error(`Feedback initialization failed: ${feedbackResult.error.message}`)
-{{/if}}
-
-  core.logger.info('Application initialized', { app: core.config.getOrThrow<CoreConfig>('core').name })
-}
-
-/** 逆序关闭所有应用拥有的模块；保留失败义务以便下一次重试。 */
-async function cleanupModules(): Promise<void> {
-  const failures: unknown[] = []
-  const closers: Array<() => Promise<HaiResult<void> | void>> = [
-{{#if features.feedback}}
-    () => feedback.close(),
-{{/if}}
-{{#if features.ai}}
-    () => ai.close(),
-{{/if}}
-{{#if features.audit}}
-    () => audit.close(),
-{{/if}}
-{{#if features.iam}}
-    () => iam.close(),
-{{/if}}
-{{#if features.reach}}
-    () => reach.close(),
-{{/if}}
-{{#if features.vecdb}}
-    () => vecdb.close(),
-{{/if}}
-{{#if features.storage}}
-    () => storage.close(),
-{{/if}}
-{{#if features.cache}}
-    () => cache.close(),
-{{/if}}
-{{#if features.db}}
-    () => reldb.close(),
-{{/if}}
-{{#if features.crypto}}
-    () => crypto.close(),
-{{/if}}
-  ]
-  for (const close of closers) {
-    try {
-      const result = await close()
-      if (result && !result.success)
-        failures.push(result.error)
-    }
-    catch (error) {
-      failures.push(error)
-    }
-  }
-  initialized = false
-  cleanupPending = failures.length > 0
-  if (cleanupPending)
-    throw new AggregateError(failures, 'Application cleanup failed; retry closeApp()')
-}
-
-/**
- * 关闭应用模块并与并发启动/关闭合并；清理失败抛错并允许重试。
- * @example `await closeApp()`
- */
+/** 清理失败时保留依赖和清理义务，可再次调用。 */
 export async function closeApp(): Promise<void> {
-  if (!closing) {
-    const pending = initializing
-    closing = (async () => {
-      if (pending)
-        await pending.catch(() => undefined)
-      await cleanupModules()
-    })().finally(() => {
-      closing = undefined
-    })
-  }
-  return closing
+  const result = await runtime.close()
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
 }

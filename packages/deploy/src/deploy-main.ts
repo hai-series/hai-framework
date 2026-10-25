@@ -32,7 +32,7 @@ import {
   saveCredentials,
 } from './deploy-credentials.js'
 import { loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
-import { resolveArtifactDirectory, resolveOutputDir, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
+import { normalizeProjectName, resolveArtifactDirectory, resolveOutputDir, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
 import { scanApp } from './deploy-scanner.js'
@@ -133,16 +133,6 @@ const deployCredentials: DeployCredentialOperations = {
   load: () => loadCredentials(),
   save: (key: string, value: string) => saveCredential(key, value),
   saveAll: (entries: Record<string, string>) => saveCredentials(entries),
-}
-
-/** 归一化项目名为部署资源安全的 `[a-z0-9-]`，去除 npm scope。 */
-function normalizeProjectName(name: string): string {
-  const normalized = name
-    .replace(/^@[^/]+\//, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return normalized || 'app'
 }
 
 /** 合并 Provisioner 输出环境变量，并聚合 HAI_REACH_PROVIDERS 数组。 */

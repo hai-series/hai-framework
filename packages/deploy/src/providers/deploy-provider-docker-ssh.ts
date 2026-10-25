@@ -17,6 +17,7 @@ import type { DeployResult } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
+import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, ok } from '@h-ai/core'
 import { parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
 import { z } from 'zod'
@@ -154,6 +155,18 @@ export function createDockerSshProvider(
     const server = existsSync(serverPath) || hasWeb ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
     if (!server.success)
       return server
+    let feedbackTransportBytes: number | undefined
+    if (scan.haiModules?.includes('@h-ai/feedback')) {
+      const policy = loadDeploymentConfig('feedback', join(appDir, 'config', '_feedback.yml'), env)
+      if (!policy.success)
+        return policy
+      try {
+        feedbackTransportBytes = resolveFeedbackBudget(policy.data).maxTransportBytes
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+      }
+    }
     let protectedTransport = !!server.data.transport
     if (scan.isSvelteKit) {
       const kitPath = join(appDir, 'config', '_kit.yml')
@@ -164,7 +177,7 @@ export function createDockerSshProvider(
       if (transport && typeof transport === 'object') {
         protectedTransport = !('enabled' in transport) || transport.enabled !== false
         try {
-          const limits = resolveTransportBodyLimits((transport as { maxPlaintextBytes?: number }).maxPlaintextBytes)
+          const limits = resolveTransportBodyLimits(feedbackTransportBytes ?? (transport as { maxPlaintextBytes?: number }).maxPlaintextBytes)
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
           env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
         }
@@ -185,7 +198,7 @@ export function createDockerSshProvider(
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
       const transport = server.data.transport as { maxPlaintextBytes?: number } | false | undefined
       try {
-        const limits = resolveTransportBodyLimits(transport ? transport.maxPlaintextBytes : undefined)
+        const limits = resolveTransportBodyLimits(feedbackTransportBytes ?? (transport ? transport.maxPlaintextBytes : undefined))
         webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes })
       }
       catch {

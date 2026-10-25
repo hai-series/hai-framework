@@ -13,11 +13,11 @@ import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 describe('feedback 生成工程', () => {
-  it.each(['api', 'fullstack'] as const)('%s 选择 feedback 补齐持久化、附件、触达和认证依赖', (appType) => {
+  it.each(['api', 'fullstack'] as const)('%s 选择 feedback 补齐持久化、附件和认证依赖', (appType) => {
     const context = buildTemplateContext({ name: 'feedback-sample', appType, features: ['feedback' as FeatureId], packageManager: 'pnpm' })
     expect(context.features.db).toBe(true)
     expect(context.features.storage).toBe(true)
-    expect(context.features.reach).toBe(true)
+    expect(context.features.reach).not.toBe(true)
     expect(context.features.iam).toBe(true)
     expect(context.haiCatalogPackages['@h-ai/feedback']).toBeDefined()
   })
@@ -28,6 +28,33 @@ describe('feedback 生成工程', () => {
     expect(yaml).toContain('notificationProvider:')
     expect(yaml).toContain('adminUrl:')
   })
+
+  it.each([false, true])('原生反馈保存按功能开关隔离依赖和权限，启用=%s', async (enabled) => {
+    const directory = await mkdtemp(path.join(process.cwd(), '.tmp-native-feedback-'))
+    try {
+      await generateFromTemplates(directory, buildTemplateContext({ name: 'native-feedback', appType: 'fullstack', frontends: ['app', 'desktop'], features: enabled ? ['feedback'] : [], packageManager: 'pnpm' }))
+      for (const target of ['app', 'desktop']) {
+        const root = path.join(directory, 'apps', `native-feedback-${target}`)
+        const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+        const plugins = target === 'app' ? ['@capacitor/filesystem', '@capacitor/share'] : ['@tauri-apps/plugin-dialog', '@tauri-apps/plugin-fs']
+        for (const name of ['@h-ai/feedback', ...plugins])
+          expect(Boolean(manifest.dependencies[name])).toBe(enabled)
+        expect((await readFile(path.join(root, 'src/main.ts'), 'utf8')).includes('configureFeedbackSaving')).toBe(enabled)
+      }
+      const native = path.join(directory, 'apps/native-feedback-desktop/src-tauri')
+      const capabilities = JSON.parse(await readFile(path.join(native, 'capabilities/default.json'), 'utf8'))
+      expect(capabilities.permissions.includes('dialog:allow-save')).toBe(enabled)
+      expect(capabilities.permissions.includes('fs:allow-write-file')).toBe(enabled)
+      expect((await readFile(path.join(native, 'Cargo.toml'), 'utf8')).includes('tauri-plugin-fs')).toBe(enabled)
+      expect((await readFile(path.join(native, 'src/lib.rs'), 'utf8')).includes('tauri_plugin_fs::init')).toBe(enabled)
+      const eslint = new ESLint({ cwd: directory, overrideConfigFile: path.join(directory, 'eslint.config.js') })
+      const results = await eslint.lintFiles(['apps/native-feedback-app/package.json', 'apps/native-feedback-app/capacitor.config.ts', 'apps/native-feedback-app/src/main.ts', 'apps/native-feedback-desktop/package.json', 'apps/native-feedback-desktop/src/main.ts'])
+      expect(results.flatMap(result => result.messages.filter(message => message.severity === 2).map(message => `${path.relative(directory, result.filePath)}:${message.line} ${message.ruleId} ${message.message}`))).toEqual([])
+    }
+    finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  }, 60_000)
 
   it.each(['api', 'fullstack'] as const)('%s 的普通业务上下文从可信令牌取得用户并绑定应用 scope', async (appType) => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-context-'))
@@ -75,14 +102,15 @@ describe('feedback 生成工程', () => {
       expect(entry).toContain('browserFeedback.prepare()')
       expect(entry).toContain('<FeedbackModal')
       expect(entry).toContain('onfileschange={addFiles}')
-      expect(entry).toContain('browserFeedback.addFiles(files)')
+      expect(entry).toContain('browserFeedback.addFiles(files, removedAttachmentIds)')
       expect(client).toContain('from \'@h-ai/feedback/client\'')
       expect(list).toContain('<FeedbackList')
       expect(list).toContain('<FeedbackDetail')
       expect(list).toContain('searchParams.get(\'feedback\')')
       const runtime = await readFile(path.join(directory, service, 'src/server/runtime.ts'), 'utf8')
-      expect(runtime.indexOf('await reach.init')).toBeLessThan(runtime.indexOf('await feedback.init'))
-      expect(runtime).toContain('[\'feedback\', feedback]')
+      expect(runtime).toContain('core.module.createRuntime')
+      expect(runtime).toContain('name: \'feedback\'')
+      expect(runtime).toContain('close: () => feedback.close()')
       expect(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8')).toContain('HAI_FEEDBACK_APPID:feedback-sample')
       const procedures = await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')
       expect(procedures).toContain('createFeedbackProcedures')

@@ -32,6 +32,10 @@ import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
  * ```
  */
 export interface DeployCommandOptions extends GlobalOptions {
+  /** 只读检查，不初始化 Provider、不写配置、不构建、不连接目标。 */
+  plan?: boolean
+  /** 配合 plan，只读检查目标 current 与成功发布目录。 */
+  inspectRemote?: boolean
   /** 部署环境；省略时必须交互输入。 */
   env?: string
   /** 环境文件目录，默认扫描应用/workspace 根。 */
@@ -206,6 +210,8 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
   core.logger.setLevel('fatal')
 
   try {
+    if (options.inspectRemote && !options.plan)
+      throw new Error(cliM('cli_deploy_plan_options'))
     if (options.runtime && !['auto', 'podman', 'docker'].includes(options.runtime))
       throw new Error(cliM('cli_build_runtime_missing'))
     if (options.artifactDir && options.build)
@@ -225,7 +231,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       if (!environmentName)
         throw new Error(cliM('cli_deploy_cancelled'))
     }
-    if (!options.yes && !process.stdin.isTTY)
+    if (!options.plan && !options.yes && !process.stdin.isTTY)
       throw new Error(cliM('cli_deploy_environment_hint'))
     // 动态导入 @h-ai/deploy（允许 CLI 在未安装 deploy 时仍可使用其他命令）
     let deployModule: typeof import('@h-ai/deploy')
@@ -278,6 +284,21 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     const environment = deployModule.loadDeploymentEnvironment({ environment: environmentName, envDir: scan.envDir ?? appDir })
     if (!environment.success)
       throw new Error(environment.error.message)
+    if (options.plan) {
+      if (options.build || options.bundleOnly || options.output)
+        throw new Error(cliM('cli_deploy_plan_options'))
+      const loaded = deployModule.loadDeploymentConfig('deploy', buildFile, { ...process.env, ...environment.data.values })
+      if (!loaded.success)
+        throw new Error(loaded.error.message)
+      const validated = deployModule.DeployConfigSchema.safeParse(loaded.data)
+      if (!validated.success)
+        throw new Error(cliM('cli_deploy_config_invalid', { params: { path: buildFile, fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
+      const plan = await deployModule.createDeploymentPlan(appDir, validated.data, { inspectRemote: options.inspectRemote, environment: environmentName, envDir: environment.data.envDir, projectName: options.projectName, selectedServices, skipMiddleware: options.skipMiddleware, artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined, runtime: options.runtime })
+      if (!plan.success)
+        throw new Error(plan.error.message)
+      writeCliMessage(JSON.stringify(plan.data, null, 2))
+      return
+    }
     Object.assign(process.env, environment.data.values)
 
     // 1. 加载凭证

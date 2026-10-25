@@ -29,7 +29,14 @@
   },
   "dependencies": {
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
+    {{#if features.feedback}}
+    "@h-ai/feedback": "{{haiPackageSpecifier}}",
+    {{/if}}
     "@h-ai/ui": "{{haiPackageSpecifier}}",
+    {{#if features.feedback}}
+    "@tauri-apps/plugin-dialog": "{{fullstack.packageSpecifiers.tauriDialog}}",
+    "@tauri-apps/plugin-fs": "{{fullstack.packageSpecifiers.tauriFs}}",
+    {{/if}}
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },
   "devDependencies": {

@@ -13,7 +13,9 @@
     "dev:prod": "vite --mode prod",
     "dev": "vite dev --host 127.0.0.1 --port {{fullstack.ports.app}}",
     "build": "pnpm paraglide:compile && vite build",
-    "package": "pnpm cap:sync",
+    "package": "pnpm package:android",
+    "package:android": "pnpm --dir ../.. exec hai build --target app --platform android",
+    "package:ios": "pnpm --dir ../.. exec hai build --target app --platform ios",
     "preview": "vite preview --host 127.0.0.1 --port {{fullstack.ports.app}} --strictPort",
     "check": "pnpm typecheck",
     "typecheck": "pnpm paraglide:compile && svelte-check --tsconfig ./tsconfig.json",
@@ -32,11 +34,18 @@
     "cap:run:android": "cap run android",
     "cap:run:ios": "cap run ios",
     "cap:build:android:debug": "pnpm build && cap sync android && cd android && gradlew.bat assembleDebug",
-    "cap:build:android:release": "pnpm build && cap sync android && cap build android --androidreleasetype APK",
-    "cap:build:ios": "pnpm build && cap sync ios && cap build ios"
+    "cap:build:android:release": "pnpm package:android",
+    "cap:build:ios": "pnpm package:ios"
   },
   "dependencies": {
+    {{#if features.feedback}}
+    "@capacitor/filesystem": "{{fullstack.packageSpecifiers.capacitorFilesystem}}",
+    "@capacitor/share": "{{fullstack.packageSpecifiers.capacitorShare}}",
+    {{/if}}
     "@h-ai/capacitor": "{{haiPackageSpecifier}}",
+    {{#if features.feedback}}
+    "@h-ai/feedback": "{{haiPackageSpecifier}}",
+    {{/if}}
     "@h-ai/ui": "{{haiPackageSpecifier}}",
     "{{fullstack.sharedPackageName}}": "workspace:*"
   },

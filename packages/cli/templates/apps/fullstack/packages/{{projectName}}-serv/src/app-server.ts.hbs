@@ -3,6 +3,9 @@ import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } f
 import process from 'node:process'
 import { core } from '@h-ai/core'
 import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+{{#if features.feedback}}
+import { feedback } from '@h-ai/feedback'
+{{/if}}
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { serv, ServConfigSchema } from '@h-ai/serv'
@@ -62,7 +65,16 @@ export function createServerApp(): ServHttpApp {
         && security.isNativeOrigin(request.headers.get('origin') ?? '') },
     },
     // 管理业务默认强制双向加密；各节点复用受管服务端密钥环与共享 reldb 客户端 registry。
-    transport: { ...(servConfig.transport || {}), excludePaths: publicPaths, crypto, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }) },
+    transport: {
+      ...(servConfig.transport || {}),
+{{#if features.feedback}}
+      maxPlaintextBytes: feedback.budget.maxTransportBytes,
+{{/if}}
+      excludePaths: publicPaths,
+      crypto,
+      serverKeyRing: ring.data,
+      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
+    },
     http: {
       ...servConfig.http,
       openapi: security.exposeApiDocs ? servConfig.http.openapi : false,

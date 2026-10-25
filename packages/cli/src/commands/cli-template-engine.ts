@@ -62,6 +62,10 @@ const CAPACITOR_SKIPPED_SERVER_FILES = new Set([
 // 以下版本号与生成项目的 pnpm-workspace.yaml catalog 保持一致；
 // 单包脚手架直接写具体版本，pnpm fullstack workspace 会通过 catalog: 引用这些版本。
 const VERSIONS = {
+  tauriFs: '2.7.1',
+  tauriDialog: '2.8.3',
+  capacitorShare: '8.0.3',
+  capacitorFilesystem: '8.1.5',
   antfuEslintConfig: '9.5.1',
   capacitorSecureStorage: '8.0.1',
   // UI / Icon
@@ -191,6 +195,10 @@ const HAI_CATALOG_PACKAGES: Record<string, string> = Object.fromEntries(
 )
 
 const FULLSTACK_EXTERNAL_CATALOG_PACKAGES: CatalogPackageVersions = {
+  '@tauri-apps/plugin-fs': VERSIONS.tauriFs,
+  '@tauri-apps/plugin-dialog': VERSIONS.tauriDialog,
+  '@capacitor/share': VERSIONS.capacitorShare,
+  '@capacitor/filesystem': VERSIONS.capacitorFilesystem,
   '@antfu/eslint-config': VERSIONS.antfuEslintConfig,
   '@aparajita/capacitor-secure-storage': VERSIONS.capacitorSecureStorage,
   '@capacitor/android': VERSIONS.capacitorAndroid,
@@ -310,6 +318,8 @@ const FULLSTACK_WEB_CATALOG_PACKAGE_NAMES = [
 ] as const
 
 const FULLSTACK_APP_CATALOG_PACKAGE_NAMES = [
+  '@capacitor/share',
+  '@capacitor/filesystem',
   ...FULLSTACK_WEB_CATALOG_PACKAGE_NAMES,
   '@aparajita/capacitor-secure-storage',
   '@capacitor/android',
@@ -326,6 +336,8 @@ const FULLSTACK_APP_CATALOG_PACKAGE_NAMES = [
 ] as const
 
 const FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES = [
+  '@tauri-apps/plugin-fs',
+  '@tauri-apps/plugin-dialog',
   ...FULLSTACK_WEB_CATALOG_PACKAGE_NAMES,
   '@tauri-apps/cli',
 ] as const
@@ -858,9 +870,9 @@ export function buildTemplateContext(options: {
     for (const feature of ['iam', 'db', 'cache', 'crypto', 'storage', 'audit']) featureMap[feature] = true
   }
 
-  // feedback 的默认 HTTP 接入使用认证，并复用持久化、附件和触达。
+  // feedback 默认使用独立控制台通知；HTTP 接入仍复用可信认证、持久化和附件。
   if (featureMap.feedback) {
-    for (const feature of ['db', 'storage', 'reach', 'iam']) featureMap[feature] = true
+    for (const feature of ['db', 'storage', 'iam']) featureMap[feature] = true
   }
 
   // 强制补全模块硬依赖，防止调用方未经过 resolveFeatureDependencies 时遗漏依赖

@@ -35,6 +35,7 @@
     "build:clean": "rimraf dist"
   },
   "dependencies": {
+    "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "yaml": "catalog:",

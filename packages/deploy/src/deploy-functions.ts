@@ -10,6 +10,17 @@ import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 /**
+ * 资源身份与执行、计划共用同一归一化规则。
+ * @example 模块内部上下文
+ * ```ts
+ * const name = normalizeProjectName('@shop/orders')
+ * ```
+ */
+export function normalizeProjectName(name: string): string {
+  return name.replace(/^@[^/]+\//, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'app'
+}
+
+/**
  * 定位工程根；API workspace 的环境文件可在服务包，构建与部署缓存仍位于工程根。
  * 只定位已约定的构建入口/锁文件，不从目录布局推断应用或中间件依赖。
  * 从目标包向上查找构建入口或锁文件；返回目录不表示清单已存在或通过校验。

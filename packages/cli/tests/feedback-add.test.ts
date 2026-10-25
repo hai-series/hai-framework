@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import { addModule } from '../src/commands/cli-add.js'
 
 describe('feedback 增量添加', () => {
@@ -12,14 +11,14 @@ describe('feedback 增量添加', () => {
       await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: 'feedback-add-sample', version: '0.1.0', dependencies: { '@h-ai/core': 'catalog:' } }))
       await addModule({ module: 'feedback', install: false, cwd: directory })
       const manifest = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'))
-      for (const name of ['feedback', 'crypto', 'reldb', 'cache', 'storage', 'reach', 'iam'])
+      for (const name of ['feedback', 'crypto', 'reldb', 'cache', 'storage', 'iam'])
         expect(manifest.dependencies[`@h-ai/${name}`]).toBe('catalog:')
-      for (const module of ['feedback', 'db', 'cache', 'storage', 'reach', 'iam'])
+      for (const module of ['feedback', 'db', 'cache', 'storage', 'iam'])
         expect(await readFile(path.join(directory, 'config', `_${module}.yml`), 'utf8')).not.toBe('')
-      const reach = parse(await readFile(path.join(directory, 'config/_reach.yml'), 'utf8'))
-      expect(reach.providers[0].name).toBe('email')
+      expect(manifest.dependencies['@h-ai/reach']).toBeUndefined()
+      await expect(readFile(path.join(directory, 'config/_reach.yml'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       const feedback = await readFile(path.join(directory, 'config/_feedback.yml'), 'utf8')
-      expect(feedback).toContain('HAI_FEEDBACK_NOTIFICATIONPROVIDER:email')
+      expect(feedback).toContain('HAI_FEEDBACK_NOTIFICATIONMODE:console')
       expect(await readFile(path.join(directory, '.env.prod'), 'utf8')).toContain('HAI_CACHE_')
       expect(await readFile(path.join(directory, '.agents/skills/hai-feedback/SKILL.md'), 'utf8')).toContain('name: hai-feedback')
       expect(await readFile(path.join(directory, '.agents/skills/hai-iam/SKILL.md'), 'utf8')).toContain('name: hai-iam')

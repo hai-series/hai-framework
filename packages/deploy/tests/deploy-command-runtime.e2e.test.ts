@@ -14,7 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import { createUploadScripts } from '../src/container/deploy-scripts.js'
 import * as sshModule from '../src/container/deploy-ssh.js'
-import { deploy, getDeployCommandState } from '../src/index.js'
+import { createDeploymentPlan, deploy, getDeployCommandState } from '../src/index.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
 let runtime: 'podman' | 'docker'
@@ -291,7 +291,8 @@ fi
           } }
         : options) }
     })
-    expect(await deploy.init({ provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: sshPort, username: 'root', identityFile: path.join(root, 'key'), knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false }, remote: { runtime: 'docker', baseDir: '/fixture/deploy' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+    const provider = { type: 'docker-ssh' as const, ssh: { host: '127.0.0.1', port: sshPort, username: 'root', identityFile: path.join(root, 'key'), knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false }, remote: { runtime: 'docker' as const, baseDir: '/fixture/deploy' }, expose: { hostPort: 18080 } }
+    expect(await deploy.init({ provider })).toMatchObject({ success: true })
     const app = application(`ssh-${mode}`)
     const result = await deploy.deployApp(app, { environment: 'test', skipMiddleware: true })
     expect(result.success).toBe(false)
@@ -312,6 +313,11 @@ fi
     else {
       expect(state?.remoteExitCode).toBe(0)
       expect(execute(`cat '/fixture/deploy/ssh-completed-test/current'`)).toBe(state?.deploymentId)
+      const snapshot = () => execute('find /fixture/deploy/ssh-completed-test -type f -exec sha256sum {} \\; | sort')
+      const before = snapshot()
+      const plan = await createDeploymentPlan(app, { provider }, { environment: 'test', skipMiddleware: true, inspectRemote: true })
+      expect(plan).toMatchObject({ success: true, data: { baseline: { state: 'verified', release: state?.deploymentId }, artifact: { buildId: 'release-1', verified: true } } })
+      expect(snapshot()).toBe(before)
     }
   }, 60_000)
 

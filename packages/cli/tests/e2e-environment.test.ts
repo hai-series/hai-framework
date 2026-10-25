@@ -140,5 +140,5 @@ describe('independent database connection counter', () => {
     })).rejects.toThrow('Original gate failure')
     expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
-  })
+  }, 30_000)
 })

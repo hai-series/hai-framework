@@ -68,7 +68,7 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
     response.setHeader('X-Content-Type-Options', 'nosniff')
     response.setHeader('Cache-Control', 'no-store')
     response.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
-    response.setHeader('Content-Security-Policy', 'default-src \'none\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' blob: data:; connect-src \'self\'; frame-src \'self\' about: blob:; font-src \'self\' data:; base-uri \'none\'; form-action \'none\'; frame-ancestors \'none\'')
+    response.setHeader('Content-Security-Policy', 'default-src \'none\'; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; img-src \'self\' blob: data:; media-src \'self\' blob:; connect-src \'self\'; frame-src \'self\' about: blob:; font-src \'self\' data:; base-uri \'none\'; form-action \'none\'; frame-ancestors \'none\'')
     const address = server.address()
     const host = address && typeof address === 'object' ? `127.0.0.1:${address.port}` : ''
     if (request.headers.host !== host || request.method !== 'GET' || !request.url?.startsWith(prefix)) {
@@ -88,10 +88,10 @@ export async function startFeedbackViewer(bundle: FeedbackBundle, options: { por
     }
     const viewerTypes: Record<string, string> = { 'viewer/index.html': 'text/html; charset=utf-8', 'viewer/app.js': 'text/javascript; charset=utf-8', 'viewer/replay.js': 'text/javascript; charset=utf-8', 'viewer/style.css': 'text/css; charset=utf-8' }
     const attachment = bundle.manifest.files.find(file => file.path === requested && file.kind === 'attachment')
-    const imageType = attachment && ['image/png', 'image/jpeg', 'image/webp'].includes(attachment.contentType ?? '') ? attachment.contentType : undefined
-    const contentType = viewerTypes[requested] ?? imageType ?? (requested.endsWith('.json') ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8')
+    const mediaType = attachment && ['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4'].includes(attachment.contentType ?? '') ? attachment.contentType : undefined
+    const contentType = viewerTypes[requested] ?? mediaType ?? (requested.endsWith('.json') ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8')
     response.setHeader('Content-Type', contentType)
-    if (requested.startsWith('attachments/') && !imageType)
+    if (requested.startsWith('attachments/') && !mediaType)
       response.setHeader('Content-Disposition', 'attachment')
     response.writeHead(200).end(bytes)
   })

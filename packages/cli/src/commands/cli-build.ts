@@ -8,6 +8,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
+import { buildMobileApp } from './cli-build-app.js'
 import { readProjectConfig } from './cli-project-config.js'
 
 /**
@@ -20,7 +21,7 @@ import { readProjectConfig } from './cli-project-config.js'
  */
 export interface BuildCommandOptions extends GlobalOptions {
   /** compile 编译源码，docker 导出镜像，desktop 调用 Tauri。 */
-  target?: 'compile' | 'docker' | 'desktop'
+  target?: 'compile' | 'docker' | 'desktop' | 'app'
   /** 逗号分隔的应用镜像名；省略时构建全部。 */
   images?: string
   /** auto 优先使用可达的 Podman。 */
@@ -28,7 +29,7 @@ export interface BuildCommandOptions extends GlobalOptions {
   /** 容器构建网络，默认采用引擎设置；例如 rootless Podman 的 pasta。 */
   network?: string
   /** 原生安装包的目标系统，必须与构建主机相同。 */
-  platform?: 'windows' | 'linux' | 'macos'
+  platform?: 'windows' | 'linux' | 'macos' | 'android' | 'ios'
   /** Rust 目标架构，默认当前主机架构。 */
   arch?: 'x64' | 'arm64'
   /** 可信 SQLite 预编译包根地址，不包含凭据。 */
@@ -48,6 +49,7 @@ export interface BuildCommandOptions extends GlobalOptions {
 interface BuildConfig {
   images?: Array<{ name: 'app' | 'web', context?: string, dockerfile: string, containerPort?: number }>
   desktop?: string[]
+  app?: string[]
 }
 
 /** 子进程不经过 shell；pnpm 使用当前原生或 JS 入口，兼容 Windows 路径。 */
@@ -60,6 +62,7 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
       env.HAI_BUILD_COMMIT = identity.commit
     }
     env.NODE_ENV = 'production'
+    delete env.CAPACITOR_SERVER_URL
     // Tauri 的 CI 参数只接受 true/false，兼容 CI 平台常用的 1/0 写法。
     if (env.CI === '1' || env.CI === '0')
       env.CI = env.CI === '1' ? 'true' : 'false'
@@ -125,10 +128,10 @@ function sourceCommit(cwd: string): string {
 export async function buildCommand(options: BuildCommandOptions): Promise<void> {
   const cwd = resolve(options.cwd ?? process.cwd())
   const target = options.target ?? 'compile'
-  if (!['compile', 'docker', 'desktop'].includes(target))
+  if (!['compile', 'docker', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
   if ((target !== 'docker' && (options.images !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
-    || (target !== 'desktop' && (options.platform !== undefined || options.arch !== undefined))) {
+    || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.arch !== undefined)) || (target === 'app' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
   if (target === 'compile') {
@@ -142,6 +145,14 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     throw new Error(cliM('cli_build_version_invalid'))
   const project = readProjectConfig(join(cwd, 'hai.json'))
   const config = (project.build ?? {}) as BuildConfig
+  if (target === 'app') {
+    if (!['android', 'ios'].includes(options.platform ?? ''))
+      throw new Error(cliM('cli_build_app_platform'))
+    const identity = { buildId: randomUUID(), commit: sourceCommit(cwd) }
+    const files = await buildMobileApp(cwd, config.app ?? [], options.platform as 'android' | 'ios', (args, directory) => pnpm(args, directory, identity))
+    for (const file of files) writeCliMessage(file)
+    return
+  }
   if (target === 'desktop') {
     const platforms = { win32: 'windows', linux: 'linux', darwin: 'macos' } as const
     const host = platforms[process.platform as keyof typeof platforms]

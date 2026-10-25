@@ -13,7 +13,7 @@
   import { ManagementStore } from '../stores/management-store.svelte.js'
   import AppShell from './AppShell.svelte'
 {{#if features.feedback}}
-  import { browserFeedback, initializeBrowserFeedback } from '../api/feedback-client.js'
+  import { browserFeedback, feedbackReview, initializeBrowserFeedback } from '../api/feedback-client.js'
 {{/if}}
 
   interface Props {
@@ -63,9 +63,11 @@
     if (userId)
       void initializeBrowserFeedback(buildMetadata).catch((cause) => { store.error = cause instanceof Error ? cause.message : m.operation_failed() })
     else
-      void browserFeedback.close()
+      feedbackReview.close()
+      void browserFeedback.close({ discard: true })
     return () => {
-      void browserFeedback.close()
+      feedbackReview.close()
+      void browserFeedback.close({ discard: true })
     }
   })
 {{/if}}

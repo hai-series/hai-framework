@@ -51,6 +51,47 @@ try {
     return globalThis.__FEEDBACK_EVENTS__
   })
   await recording.close()
+  const videoPage = await browser.newPage()
+  const videoBytes = await videoPage.evaluate(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 320
+    canvas.height = 180
+    document.body.append(canvas)
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#2563eb'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    const stream = canvas.captureStream(10)
+    const chunks = []
+    let frame = 0
+    const draw = () => {
+      context.fillStyle = frame++ % 2 ? '#2563eb' : '#16a34a'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      context.fillStyle = '#ffffff'
+      context.fillText(`Frame ${frame}`, 20, 80)
+      stream.getVideoTracks()[0].requestFrame?.()
+    }
+    const timer = setInterval(draw, 50)
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 200_000 })
+    try {
+      const stopped = new Promise(resolve => recorder.onstop = resolve)
+      recorder.ondataavailable = event => chunks.push(event.data)
+      recorder.start(100)
+      draw()
+      await new Promise(resolve => setTimeout(resolve, 1200))
+      recorder.stop()
+      await stopped
+      return Array.from(new Uint8Array(await new Blob(chunks, { type: 'video/webm' }).arrayBuffer()))
+    }
+    finally {
+      clearInterval(timer)
+      canvas.remove()
+      if (recorder.state !== 'inactive')
+        recorder.stop()
+      stream.getTracks().forEach(track => track.stop())
+    }
+  })
+  assert(videoBytes.length > 500, 'The recording fixture must contain encoded video frames')
+  await videoPage.close()
   assert(events.length >= 2, 'A real browser recording must include snapshot and events')
   const screenshot = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSxkAAAAASUVORK5CYII=', 'base64')
   const description = '<img src=x onerror="globalThis.__USER_SCRIPT__=true"> user-provided text'
@@ -60,7 +101,7 @@ try {
       ...events.map((event, index) => ({ id: `replay-${index}`, source: 'browser', kind: 'replay', sequence: index + 1, timestamp: event.timestamp, data: { event } })),
       ...Array.from({ length: 25 }, (_, index) => ({ source: 'server', kind: 'log', timestamp: index, requestId: `req-${index}`, data: { index } })),
     ],
-    attachments: [{ id: 'screenshot', name: 'screenshot.png', contentType: 'image/png', bytes: screenshot }],
+    attachments: [{ id: 'screenshot', name: 'screenshot.png', contentType: 'image/png', bytes: screenshot }, { id: 'recording', name: 'recording.webm', contentType: 'video/webm', bytes: new Uint8Array(videoBytes) }],
     missing: ['External application assets are not retained in this offline fixture'],
   })
   assert(created.success, 'Built feedback package must generate a bundle')
@@ -117,6 +158,13 @@ try {
   await expect(page.getByRole('heading', { name: 'Feedback report FB-OFFLINE-BROWSER' })).toBeVisible()
   await expect(page.getByText(description, { exact: true })).toBeVisible()
   await expect(page.locator('figure img')).toHaveJSProperty('naturalWidth', 1)
+  const videoFile = read.data.manifest.files.find(file => file.contentType === 'video/webm')
+  assert(videoFile, 'Video must be present in the offline ZIP')
+  const videoResponse = await fetch(new URL(`../${videoFile.path}`, viewerUrl))
+  assert.equal(videoResponse.headers.get('content-type'), 'video/webm')
+  await expect.poll(() => page.locator('video').evaluate(element => element.readyState)).toBeGreaterThanOrEqual(2)
+  await page.locator('video').evaluate(element => element.play())
+  await expect.poll(() => page.locator('video').evaluate(element => element.currentTime)).toBeGreaterThan(0)
   const replay = page.frameLocator('iframe')
   await expect(replay.getByRole('heading', { name: 'Recorded feedback page' })).toBeVisible()
   await expect(replay.locator('img')).toHaveAttribute('src', 'https://feedback-assets.invalid/unavailable.png')

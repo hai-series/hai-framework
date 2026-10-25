@@ -56,26 +56,64 @@ export interface AddModuleOptions extends GlobalOptions {
 // 可添加的模块与对应包
 const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
   // iam 依赖 crypto（password hash）/ db（user 存储）/ cache（session 缓存）
-  'iam': { packages: ['@h-ai/iam'], deps: ['crypto', 'db', 'cache'], configKey: 'iam', get description() { return cliM('cli_featureIamName') } },
+  'iam': { packages: ['@h-ai/iam'], deps: ['crypto', 'db', 'cache'], configKey: 'iam', get description() {
+    return cliM('cli_featureIamName')
+  } },
   // 'db' 和 'reldb' 都映射到 @h-ai/reldb，兼容用户习惯（hai add db 和 hai add reldb 均可）
-  'db': { packages: ['@h-ai/reldb'], configKey: 'db', get description() { return cliM('cli_featureDbName') } },
-  'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', get description() { return cliM('cli_featureDbName') } },
-  'cache': { packages: ['@h-ai/cache'], configKey: 'cache', get description() { return cliM('cli_featureCacheName') } },
-  'ai': { packages: ['@h-ai/ai'], deps: ['db', 'vecdb'], configKey: 'ai', get description() { return cliM('cli_featureAiName') } },
-  'storage': { packages: ['@h-ai/storage'], configKey: 'storage', get description() { return cliM('cli_featureStorageName') } },
-  'crypto': { packages: ['@h-ai/crypto'], deps: ['db'], get description() { return cliM('cli_featureCryptoName') } },
-  'kit': { packages: ['@h-ai/kit'], get description() { return cliM('cli_featureKitName') } },
-  'ui': { packages: ['@h-ai/ui'], get description() { return cliM('cli_featureUiName') } },
-  'deploy': { packages: ['@h-ai/deploy'], configKey: 'deploy', get description() { return cliM('cli_featureDeployName') } },
-  'vecdb': { packages: ['@h-ai/vecdb'], configKey: 'vecdb', get description() { return cliM('cli_featureVecdbName') } },
-  'datapipe': { packages: ['@h-ai/datapipe'], get description() { return cliM('cli_featureDatapipeName') } },
-  'reach': { packages: ['@h-ai/reach'], configKey: 'reach', get description() { return cliM('cli_featureReachName') } },
-  'feedback': { packages: ['@h-ai/feedback'], deps: ['crypto', 'db', 'cache', 'storage', 'reach', 'iam'], configKey: 'feedback', get description() { return cliM('cli_featureFeedbackName') } },
-  'scheduler': { packages: ['@h-ai/scheduler'], deps: ['db'], configKey: 'scheduler', get description() { return cliM('cli_featureSchedulerName') } },
-  'audit': { packages: ['@h-ai/audit'], deps: ['db'], configKey: 'audit', get description() { return cliM('cli_featureAuditName') } },
-  'payment': { packages: ['@h-ai/payment'], configKey: 'payment', get description() { return cliM('cli_featurePaymentName') } },
-  'capacitor': { packages: ['@h-ai/capacitor'], get description() { return cliM('cli_featureCapacitorName') } },
-  'api-client': { packages: ['@h-ai/api-client'], get description() { return cliM('cli_featureApiClientName') } },
+  'db': { packages: ['@h-ai/reldb'], configKey: 'db', get description() {
+    return cliM('cli_featureDbName')
+  } },
+  'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', get description() {
+    return cliM('cli_featureDbName')
+  } },
+  'cache': { packages: ['@h-ai/cache'], configKey: 'cache', get description() {
+    return cliM('cli_featureCacheName')
+  } },
+  'ai': { packages: ['@h-ai/ai'], deps: ['db', 'vecdb'], configKey: 'ai', get description() {
+    return cliM('cli_featureAiName')
+  } },
+  'storage': { packages: ['@h-ai/storage'], configKey: 'storage', get description() {
+    return cliM('cli_featureStorageName')
+  } },
+  'crypto': { packages: ['@h-ai/crypto'], deps: ['db'], get description() {
+    return cliM('cli_featureCryptoName')
+  } },
+  'kit': { packages: ['@h-ai/kit'], get description() {
+    return cliM('cli_featureKitName')
+  } },
+  'ui': { packages: ['@h-ai/ui'], get description() {
+    return cliM('cli_featureUiName')
+  } },
+  'deploy': { packages: ['@h-ai/deploy'], configKey: 'deploy', get description() {
+    return cliM('cli_featureDeployName')
+  } },
+  'vecdb': { packages: ['@h-ai/vecdb'], configKey: 'vecdb', get description() {
+    return cliM('cli_featureVecdbName')
+  } },
+  'datapipe': { packages: ['@h-ai/datapipe'], get description() {
+    return cliM('cli_featureDatapipeName')
+  } },
+  'reach': { packages: ['@h-ai/reach'], configKey: 'reach', get description() {
+    return cliM('cli_featureReachName')
+  } },
+  'feedback': { packages: ['@h-ai/feedback'], deps: ['crypto', 'db', 'cache', 'storage', 'iam'], configKey: 'feedback', get description() {
+    return cliM('cli_featureFeedbackName')
+  } },
+  'scheduler': { packages: ['@h-ai/scheduler'], deps: ['db'], configKey: 'scheduler', get description() {
+    return cliM('cli_featureSchedulerName')
+  } },
+  'audit': { packages: ['@h-ai/audit'], deps: ['db'], configKey: 'audit', get description() {
+    return cliM('cli_featureAuditName')
+  } },
+  'payment': { packages: ['@h-ai/payment'], configKey: 'payment', get description() {
+    return cliM('cli_featurePaymentName')
+  } },
+  'capacitor': { packages: ['@h-ai/capacitor'], get description() {
+    return cliM('cli_featureCapacitorName')
+  } },
+  'api-client': { packages: ['@h-ai/api-client'], get description() {
+    return cliM('cli_featureApiClientName')
+  } },
 }
 
 /**
@@ -228,9 +266,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
         if (depDef?.configKey) {
           const depConfigPath = path.join(cwd, 'config', `_${depDef.configKey}.yml`)
           if (!(await fileExists(depConfigPath))) {
-            // feedback 新建通知配置与默认 notificationProvider 对齐，已有私有文件保持不变。
-            const generated = generateConfigFile(depDef.configKey)
-            const content = moduleName === 'feedback' && dep === 'reach' ? generated.replace('name: console_dev', 'name: email') : generated
+            const content = generateConfigFile(depDef.configKey)
             await writeFile(depConfigPath, content)
             writeCliMessage(chalk.gray(cliM('cli_addDependencyConfig', { params: { config: depDef.configKey } })))
           }

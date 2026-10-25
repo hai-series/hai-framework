@@ -25,77 +25,53 @@ import { buildMetadata } from '../build-metadata.js'
 {{/if}}
 import { serverM } from './messages.js'
 
-let initialized = false
-let initializing: Promise<void> | undefined
-let closing: Promise<void> | undefined
-let cleanupPending = false
-
-/** 初始化失败停止启动并反序释放资源；不把功能缺失降级为成功。 */
-export async function initializeModules(): Promise<void> {
-  if (closing)
-    await closing
-  if (initialized)
-    return
-  initializing ??= runInitialization().finally(() => {
-    initializing = undefined
-  })
-  return initializing
-}
-
-async function runInitialization(): Promise<void> {
-  if (cleanupPending)
-    await cleanupModules()
-  cleanupPending = true
-  try {
-    requireInitialized(core.config.validate('serv', ServConfigSchema), 'serv-config')
-    const db = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
-    const cacheConfig = CacheConfigSchema.parse(core.config.getOrThrow('cache'))
-    const storageConfig = StorageConfigSchema.parse(core.config.getOrThrow('storage'))
-    const iamConfig = IamConfigSchema.parse(core.config.getOrThrow('iam'))
-    const auditConfig = AuditInitConfigSchema.parse(core.config.get('audit') ?? {})
-    if (db.type === 'sqlite' && db.database !== ':memory:')
-      await mkdir(path.dirname(db.database), { recursive: true })
-    requireInitialized(await reldb.init(db), 'reldb')
-    requireInitialized(await cache.init(cacheConfig), 'cache')
+const runtime = core.module.createRuntime([
+  { name: 'serv-config', start: () => core.config.validate('serv', ServConfigSchema), close: () => {} },
+  { name: 'reldb', start: async () => {
+    const config = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
+    if (config.type === 'sqlite' && config.database !== ':memory:')
+      await mkdir(path.dirname(config.database), { recursive: true })
+    return reldb.init(config)
+  }, close: () => reldb.close() },
+  { name: 'cache', start: () => cache.init(CacheConfigSchema.parse(core.config.getOrThrow('cache'))), close: () => cache.close() },
 {{#if features.vecdb}}
-    const vectorConfig = VecdbConfigSchema.parse(core.config.getOrThrow('vecdb'))
-    requireInitialized(await vecdb.init(vectorConfig), 'vecdb')
+  { name: 'vecdb', start: () => vecdb.init(VecdbConfigSchema.parse(core.config.getOrThrow('vecdb'))), close: () => vecdb.close() },
 {{/if}}
-    requireInitialized(await crypto.init(), 'crypto')
-    requireInitialized(await storage.init(storageConfig), 'storage')
-    const reachConfig = core.config.get('reach')
-    if (reachConfig)
-      requireInitialized(await reach.init(ReachConfigSchema.parse(reachConfig)), 'reach')
-    requireInitialized(await iam.init({ ...iamConfig, reach }), 'iam')
-    requireInitialized(await audit.init(auditConfig), 'audit')
+  { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
+  { name: 'storage', start: () => storage.init(StorageConfigSchema.parse(core.config.getOrThrow('storage'))), close: () => storage.close() },
+  { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(ReachConfigSchema.parse(core.config.getOrThrow('reach'))), close: () => reach.close() },
+  { name: 'iam', start: () => iam.init({ ...IamConfigSchema.parse(core.config.getOrThrow('iam')), reach }), close: () => iam.close() },
+  { name: 'audit', start: () => audit.init(AuditInitConfigSchema.parse(core.config.get('audit') ?? {})), close: () => audit.close() },
 {{#if features.feedback}}
-    requireInitialized(await feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), 'feedback')
+  { name: 'feedback', start: () => feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), close: () => feedback.close() },
 {{/if}}
 {{#if features.ai}}
-    const aiConfig = AIConfigSchema.parse(core.config.getOrThrow('ai'))
-    requireInitialized(await ai.init(aiConfig), 'ai')
+  { name: 'ai', start: () => ai.init(AIConfigSchema.parse(core.config.getOrThrow('ai'))), close: () => ai.close() },
 {{/if}}
+  { name: 'bootstrap', start: async () => {
     await ensureRolesAndAdmin()
-    initialized = true
-    cleanupPending = false
     const app = core.config.getOrThrow<CoreConfig>('core')
     core.logger.info('Application initialized', { name: app.name, version: app.version, environment: app.env })
-  }
-  catch (error) {
-    try {
-      await cleanupModules()
-    }
-    catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], 'Application startup and cleanup failed')
-    }
-    throw error
-  }
+  }, close: () => {} },
+])
+
+/** 仅声明模块和业务钩子，失败回滚、并发及关闭重试由 core 负责。 */
+export async function initializeModules(): Promise<void> {
+  const result = await runtime.start()
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
+}
+
+export async function closeModules(): Promise<void> {
+  const result = await runtime.close()
+  if (!result.success)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
 /** 此函数仅用于进程启动边界，业务请求继续返回 HaiResult。 */
 function requireInitialized<T>(result: HaiResult<T>, moduleName: string): T {
   if (!result.success)
-    throw new Error(`Failed to initialize ${moduleName}: ${result.error.message} (${result.error.code})`)
+    throw Object.assign(new Error(moduleName), { code: result.error.code, ext: { fields: moduleName === 'iam-bootstrap' ? ['HAI_ADMIN_DEFAULT_PASSWORD'] : [] } })
   return result.data
 }
 
@@ -110,7 +86,7 @@ async function ensureRolesAndAdmin(): Promise<void> {
     return
   const password = process.env.HAI_ADMIN_DEFAULT_PASSWORD?.trim()
   if (!password)
-    throw new Error('Set HAI_ADMIN_DEFAULT_PASSWORD before the first start to create the administrator account')
+    throw Object.assign(new Error('Administrator bootstrap configuration required'), { ext: { fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } })
   const registered = requireInitialized(await iam.user.createUser({ username: 'admin', password, displayName: serverM('admin') }), 'iam-bootstrap')
   const adminRole = requireInitialized(await iam.authz.getRoleByCode('admin'), 'iam-role')
   if (!adminRole)
@@ -123,40 +99,4 @@ async function ensureRolesAndAdmin(): Promise<void> {
     requireInitialized(assigned, 'iam-bootstrap-role')
   }
   core.logger.info('Initial administrator created', { username: 'admin', passwordSource: 'HAI_ADMIN_DEFAULT_PASSWORD' })
-}
-
-/** 关闭顺序与依赖初始化顺序相反，同时覆盖启动失败路径。 */
-export async function closeModules(): Promise<void> {
-  if (!closing) {
-    const pending = initializing
-    closing = (async () => {
-      if (pending)
-        await pending.catch(() => undefined)
-      await cleanupModules()
-    })().finally(() => {
-      closing = undefined
-    })
-  }
-  return closing
-}
-
-/** 不依赖 isInitialized 推断资源是否释放；关闭失败必须保留义务供重试。 */
-async function cleanupModules(): Promise<void> {
-  const failures: unknown[] = []
-  for (const [name, module] of [{{#if features.feedback}}['feedback', feedback], {{/if}}{{#if features.ai}}['ai', ai], {{/if}}['audit', audit], ['iam', iam], ['reach', reach], ['storage', storage], ['crypto', crypto], {{#if features.vecdb}}['vecdb', vecdb], {{/if}}['cache', cache], ['reldb', reldb]] as const) {
-    try {
-      const result = await module.close()
-      if (result && !result.success) {
-        core.logger.error('Failed to close application module', { module: name, error: result.error.code })
-        failures.push(result.error)
-      }
-    }
-    catch (error) {
-      failures.push(error)
-    }
-  }
-  initialized = false
-  cleanupPending = failures.length > 0
-  if (failures.length > 0)
-    throw new AggregateError(failures, 'Application cleanup failed; retry closeModules()')
 }

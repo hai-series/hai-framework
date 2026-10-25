@@ -7,6 +7,7 @@ import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { runInNewContext } from 'node:vm'
 import { CacheConfigSchema } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { VecdbConfigSchema } from '@h-ai/vecdb'
@@ -49,7 +50,7 @@ function runtimeHarness(source: string) {
       if (name === './messages.js')
         return { serverM: () => 'test' }
       if (name === '@h-ai/core')
-        return { core: { init: () => undefined, config: { get: (key: string) => configs[key] ?? {}, getOrThrow: (key: string) => configs[key] ?? {}, validate: (key: string) => ({ success: true, data: configs[key] ?? {} }) }, logger: { info: () => undefined, error: () => undefined, warn: () => undefined } } }
+        return { core: { module: core.module, init: () => undefined, config: { get: (key: string) => configs[key] ?? {}, getOrThrow: (key: string) => configs[key] ?? {}, validate: (key: string) => ({ success: true, data: configs[key] ?? {} }) }, logger: { info: () => undefined, error: () => undefined, warn: () => undefined } } }
       const moduleName = name.slice('@h-ai/'.length)
       return { [moduleName]: modules[moduleName], AIConfigSchema: schema, VecdbConfigSchema: schema, ReldbConfigSchema: schema, CacheConfigSchema: schema, StorageConfigSchema: schema, IamConfigSchema: schema, AuditInitConfigSchema: schema, ServConfigSchema: schema, ReachConfigSchema: schema }
     },
@@ -179,8 +180,8 @@ describe('shared production configuration', () => {
     const runtime = runtimeHarness(await readFile(path.join(service, runtimeFile), 'utf8'))
     runtime.state.vectorFailure = true
     runtime.state.cleanupFailure = true
-    await expect(runtime.initialize()).rejects.toThrow('startup and cleanup failed')
-    expect(runtime.calls).toContain('reldb.close')
+    await expect(runtime.initialize()).rejects.toMatchObject({ cause: { ext: { module: 'vecdb', phase: 'start', cleanup: { module: 'vecdb', phase: 'close' } } } })
+    expect(runtime.calls).not.toContain('reldb.close')
     expect(runtime.calls).not.toContain('ai.init')
     runtime.state.vectorFailure = false
     runtime.state.cleanupFailure = false

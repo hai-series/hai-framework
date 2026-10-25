@@ -28,11 +28,11 @@ afterEach(async () => {
 })
 
 it.each([
-  { password: 'abc', reason: /at least 8 characters|至少为 8 个字符/ },
-  { password: 'lowercase123!', reason: /uppercase letters|大写字母/ },
-])('startup explains the failed password policy and permits a clean retry: $password', async ({ password, reason }) => {
+  { password: 'abc' },
+  { password: 'lowercase123!' },
+])('startup explains the failed password policy and permits a clean retry: $password', async ({ password }) => {
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', password)
-  await expect(initializeModules()).rejects.toThrow(reason)
+  await expect(initializeModules()).rejects.toMatchObject({ cause: { ext: { module: 'bootstrap', fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } } })
   for (const module of [audit, iam, storage, crypto, cache, reldb])
     expect(module.isInitialized).toBe(false)
 

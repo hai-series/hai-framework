@@ -297,34 +297,19 @@ function planChromaVecdb(plan: SidecarPlan, projectName: string, net: string[]):
 }
 
 /**
- * 规划自建 sidecar 服务。
- *
- * 仅为 scan.requiredServices 中、且 Provisioner 未提供对应 HAI_* 变量的服务追加 sidecar；
- * db 与 vecdb 按扫描到的后端类型（postgresql/mysql/sqlite、qdrant/pgvector/chroma/lancedb）生成匹配实现。
- * keep 不创建 sidecar；云开通结果和现有连接分别处理，不能把任何依赖都当成需要新建服务。
- * @param appDir - 应用根目录
- * @param projectName - 项目名
- * @param scan - 扫描结果
- * @param provisionEnv - Provisioner 输出的环境变量
- * @returns sidecar 规划
- * @param options - 本次操作选项；字段含义见各子项。
- * @param s3Engine - 自建 S3 服务实现；协议仍为 s3，默认 rustfs。
+ * 解析 keep 策略；保留内部连接仍交付对应 sidecar，未选择的服务保持不变。
+ * @param scan - 实际配置扫描结果。
+ * @param options - 本次部署策略。
+ * @returns 与执行端共用的有效策略，不读写文件或凭据。
  * @example 模块内部上下文
  * ```ts
  * const { scanApp } = await import('../deploy-scanner.js')
  * const scanned = await scanApp(process.cwd())
  * if (!scanned.success) throw new Error(scanned.error.message)
- * const plan = planSidecars(process.cwd(), 'shop', scanned.data, {}, { serviceModes: { db: 'keep' } })
+ * const options = resolveSidecarOptions(scanned.data, { serviceModes: { db: 'keep' } })
  * ```
  */
-export function planSidecars(
-  appDir: string,
-  projectName: string,
-  scan: ScanResult,
-  provisionEnv: Record<string, string>,
-  options?: DeployAppOptions,
-  s3Engine: 'rustfs' | 'minio' = 'rustfs',
-): SidecarPlan {
+export function resolveSidecarOptions(scan: ScanResult, options?: DeployAppOptions): DeployAppOptions {
   // 保持配置不变仍需交付自建服务镜像；已保存的容器服务地址可明确区分外部连接。
   const serviceModes = { ...options?.serviceModes }
   for (const requirement of scan.middlewares ?? []) {
@@ -348,7 +333,38 @@ export function planSidecars(
       serviceModes[requirement.service] = 'default'
     }
   }
-  options = { ...options, serviceModes }
+  return { ...options, serviceModes }
+}
+
+/**
+ * 复用实际编排规则生成 sidecar；secretValues 仅供只读计划提供空占位值，默认执行仍读取稳定凭据。
+ * 仅为 requiredServices 中采用 default 且无 Provisioner 配置的服务规划匹配后端；文件后端共用 app 数据卷。
+ * @param appDir - 应用目录。
+ * @param projectName - 部署项目身份。
+ * @param scan - 实际依赖与配置扫描结果。
+ * @param provisionEnv - 已开通服务的环境变量。
+ * @param options - 执行选项。
+ * @param s3Engine - S3 服务实现。
+ * @param secretValues - 内部规划的凭据占位值，不是公开配置。
+ * @returns sidecar 计划，env 和 secrets 不得整体输出。
+ * @example 模块内部上下文
+ * ```ts
+ * const { scanApp } = await import('../deploy-scanner.js')
+ * const scanned = await scanApp(process.cwd())
+ * if (!scanned.success) throw new Error(scanned.error.message)
+ * const sidecar = planSidecars(process.cwd(), 'shop', scanned.data, {}, { serviceModes: { db: 'keep' } })
+ * ```
+ */
+export function planSidecars(
+  appDir: string,
+  projectName: string,
+  scan: ScanResult,
+  provisionEnv: Record<string, string>,
+  options?: DeployAppOptions,
+  s3Engine: 'rustfs' | 'minio' = 'rustfs',
+  secretValues?: Record<string, string>,
+): SidecarPlan {
+  options = resolveSidecarOptions(scan, options)
   const plan: SidecarPlan = {
     services: [],
     composeServices: {},
@@ -362,7 +378,7 @@ export function planSidecars(
   // 全部保持不变时，连默认中间件凭据文件也不读取或创建。
   if (!scan.requiredServices.some(service => usesDefaultMiddleware(scan, service, options)))
     return plan
-  const secrets = resolveSidecarSecrets(appDir, projectName)
+  const secrets = secretValues ?? resolveSidecarSecrets(appDir, projectName)
   const net = ['hai-app']
   const backends = scan.serviceBackends
 

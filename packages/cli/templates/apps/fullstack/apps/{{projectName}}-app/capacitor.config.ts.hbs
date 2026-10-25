@@ -7,11 +7,13 @@ const config: CapacitorConfig = {
   appId: 'com.hai.{{fullstack.nativeAppIdSegment}}.app',
   appName: {{jsString fullstack.appName}},
   webDir: 'dist',
-  server: {
-    // 仅用于 Capacitor live reload 前端页面；API 地址由前端配置或 shared client 参数控制。
-    url: process.env.CAPACITOR_SERVER_URL,
-    cleartext: process.env.CAPACITOR_SERVER_URL?.startsWith('http://') ?? false,
-  },
+  server: process.env.NODE_ENV === 'production'
+    ? undefined
+    : {
+        // 仅用于 Capacitor live reload 前端页面；API 地址由前端配置或 shared client 参数控制。
+        url: process.env.CAPACITOR_SERVER_URL,
+        cleartext: process.env.CAPACITOR_SERVER_URL?.startsWith('http://') ?? false,
+      },
 }
 
 export default config
