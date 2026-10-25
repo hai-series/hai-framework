@@ -217,6 +217,14 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值；自建中间件的稳定随机凭据另缓存于服务扫描目录的 `.hai/deploy/runtime/<项目名>-<环境>.secrets.json`，不要删除该文件后直接复用旧数据卷。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 
+## 只读部署计划
+
+`createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
+
+需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
+
+资源清单复用执行端的 sidecar 规划：`containers` 只列显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；`logicalVolumes` 是 Compose 逻辑卷键，实际引擎卷名由 Compose 项目作用域决定。keep 内部连接、跳过、局部更新和云开通配置均按实际执行规则计算，不展示凭据值。
+
 ## 开发测试
 
 ```sh

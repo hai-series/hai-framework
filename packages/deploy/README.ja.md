@@ -191,6 +191,14 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。自動生成した固定認証情報は走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` にも保持するため、既存データボリューム再利用時は削除しないでください。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。対話式 bundle-only は最後に SSH 設定の保存・変更を確認します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。
 
+## 読み取り専用デプロイ計画
+
+`createDeploymentPlan(appDir, config, options)` は Provider 初期化、認証情報・出力作成、対象への接続を行いません。実際の走査、環境解決、命名と checksum 検証を共用し、版、ビルド ID、更新・保持範囲、設定元とキー名、基準要件と復旧先を返します。値と SSH 認証情報を除外します。未読の current は not-inspected とし、部分更新は実行時に成功基準を厳密に要求します。Compose 復旧は DB データや移行を戻しません。CLI は `hai deploy --env prod --plan`。
+
+`--plan --inspect-remote`（SDK inspectRemote:true）で SSH 経由の current と成功ディレクトリーを読み取り、verified/missing/unavailable と復旧リリース ID を示します。対象への書込は行いません。
+
+リソースは実行側の sidecar 計画を共用します。`containers` は明示名のみ、Compose が命名する LDAP/SMTP は `composeManagedServices` に表示します。`logicalVolumes` は Compose の論理キーで、実際のエンジン名は Compose プロジェクトのスコープで決まります。内部接続の keep、スキップ、部分更新、クラウド開通も実行規則に従い、認証値を表示しません。
+
 ## 開発とテスト
 
 ```sh

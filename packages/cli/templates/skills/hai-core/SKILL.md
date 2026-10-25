@@ -26,6 +26,8 @@ description: "配置 hai 应用启动、YAML/环境变量、日志、i18n 与 Ha
 - 日志可用 `{ error }` 记录原生 Error；两端先规范化诊断再字段/URL 脱敏，配置 redact 路径仍生效。原异常不变，错误子图循环/深度用固定标记；message/stack 自由文本中的秘密需调用方先清理或遮蔽整条路径。
 - 初始化前创建的默认、模块与嵌套 child Logger 在后续输出中应用当前全局 logging；configure/setLevel 也作用于已有实例。create 的显式 level/format/context 优先，未指定项动态继承。浏览器 json/pretty 与附加 redact 路径实际生效，消息文本仍由调用方脱敏。
 
+错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId，提示末尾显示 traceId；重新翻译后用 core.error.formatMessage 保留标识。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
+
 ## 按需参考
 
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。

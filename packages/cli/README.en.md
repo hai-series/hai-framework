@@ -124,6 +124,26 @@ Root `AGENTS.md` points to `.agents/skills/`; Claude, Copilot and OpenCode entry
 
 Skill entries define task boundaries and load adjacent references as needed. `hai init` / `hai add` fill missing content; merge existing custom rules deliberately and copy complete skill directories when syncing.
 
+## Skill workflows and frontend guidance
+
+The workflow uses hai-spec-review, hai-spec-implement, hai-app-create, hai-app-tests, hai-app-review and hai-pr-review. The [handoff contract](templates/skills/hai-spec-implement/handoff.md) connects requirements, acceptance, findings and evidence while retaining Git document baselines.
+
+UI delivery includes [hai-ui-design](templates/skills/hai-ui-design/SKILL.md), hai-ui and [hai-ui-review](templates/skills/hai-ui-review/SKILL.md). API templates exclude frontend skills. init/add preserve private entrypoints and backfill missing resources. Repository entrypoints use the same names for shared responsibilities.
+
+### Feedback and offline analysis
+
+A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Signed-in users can submit reports. Only administrators see the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
+
+Offline commands: `hai feedback summary <bundle.zip>`, `inspect`, `evidence --request-id <ID> --page 1 --page-size 20`, and `view`. The viewer binds only to loopback and closes on Ctrl+C; no production connection is needed.
+
+## Release inspection and native packaging
+
+`hai upgrade 0.1.0-alpha.71` reads all consumed framework packages plus exact CLI/deploy artifacts, integrity, skills and catalog/lock/installed drift. It never installs or overwrites local/custom files; incomplete releases exit nonzero. JSON includes module migration preflight, backups and legacy-session boundaries. `hai deploy --env prod --plan` verifies local artifacts and reports identity, configuration source keys, selected/retained scope, baseline requirements and recovery directories without building, generating credentials or connecting to the target; unobserved remote state is explicitly not-inspected.
+
+`hai build --target app --platform android|ios` creates and verifies new APK/IPA files. Add platforms and install Android SDK/JDK or macOS/Xcode, then configure signing. cap:sync only synchronizes. Missing platform/toolchain/artifacts fail. Release builds exclude CAPACITOR_SERVER_URL and reject reload URLs in synchronized native configuration. build.app lists App directories.
+
+Use `--plan --inspect-remote` (SDK inspectRemote:true) to read current and the successful release directory over SSH. It reports verified/missing/unavailable and the actual recovery release ID without target writes.
+
 ## Development and testing
 
 ### Local development usage
@@ -155,18 +175,6 @@ Deployment fixtures inspect pinned public base images and pull only confirmed mi
 `test:e2e` gives each server explicit isolated backends and an absolute data directory. Server children do not inherit external `HAI_*` / `PUBLIC_*` / `VITE_*` settings or read the user's `.env.local`. Test-only `HAI_E2E=1` preserves ordinary development/production dotenv behavior and shared-backend requirements; transport cases use a fresh trusted SM2 ring and the actual registry. Scaffold browser runs also use an independent TCP counter to verify that external database settings are never contacted. Complete deployment acceptance retains real Redis/S3, incremental updates and rollback for fullstack.
 
 `--i18n` builds the CLI and checks language precedence, help, successful generation and errors in separate processes, alongside Chinese/English/Japanese prompt, validation, cancellation and create/add/init cases.
-
-## Skill workflows and frontend guidance
-
-The workflow uses hai-spec-review, hai-spec-implement, hai-app-create, hai-app-tests, hai-app-review and hai-pr-review. The [handoff contract](templates/skills/hai-spec-implement/handoff.md) connects requirements, acceptance, findings and evidence while retaining Git document baselines.
-
-UI delivery includes [hai-ui-design](templates/skills/hai-ui-design/SKILL.md), hai-ui and [hai-ui-review](templates/skills/hai-ui-review/SKILL.md). API templates exclude frontend skills. init/add preserve private entrypoints and backfill missing resources. Repository entrypoints use the same names for shared responsibilities.
-
-### Feedback and offline analysis
-
-A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Signed-in users can submit reports. Only administrators see the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
-
-Offline commands: `hai feedback summary <bundle.zip>`, `inspect`, `evidence --request-id <ID> --page 1 --page-size 20`, and `view`. The viewer binds only to loopback and closes on Ctrl+C; no production connection is needed.
 
 ## License
 

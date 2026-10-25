@@ -132,7 +132,7 @@ if (result.data.deferred) {
 }
 ```
 
-队列的 `created_at`、`updated_at`、`locked_until`、`next_attempt_at` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步表结构，包括次数、退避策略和失败分类列；框架不自动迁移旧表。
+队列的 `created_at`、`updated_at`、`locked_until`、`next_attempt_at` 统一保存 Unix 毫秒，列类型为 `BIGINT`（SQLite 映射为 64 位 `INTEGER`）。Reach 仓库将 PostgreSQL 等驱动返回的整数字符串归一化为安全整数 `number`；负数、非整数及超出 JS 安全整数范围的存储值返回 `SEND_FAILED`，不会静默舍入。模板仓库的 `TIMESTAMP` 创建/更新时间映射为 `Date`。部署时须同步表结构，包括次数、退避策略和失败分类列；旧表升级由模块维护的版本迁移负责，见下文。
 
 #### 可靠队列重试
 
@@ -210,6 +210,12 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 ## 生产共享状态
 
 生产拒绝 console Provider，须配置真实 SMTP/短信/API 服务。console 的日志成功不是外部投递成功；非幂等服务的未知结果必须核对，不能自动重发证明 exactly-once。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md)。
+
+## 凭据通知与旧库升级
+
+发送密码、OTP 或重置令牌时使用 `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })`。expiresAt 是 Unix 毫秒，稳定操作键不可包含凭据。必须有共享发送账本：只持久化无载荷回执/状态，接收方脱敏，不存正文、变量或低熵凭据摘要，也不进入延迟队列。发送成功返回 receiptId；DND/过期不投递，异常或不明状态不自动重投。明确启用的开发控制台仍可显示业务允许的通知，持久采集观察器被隔离；生产 Console Provider 限制不变。普通通知可用 deferPolicy: reject 阻止二次排队。
+
+`migrateReach({ dryRun: true })` 预检；仓库初始化自动执行受支持步骤。升级保留发送状态与标识，旧在途转 unknown；旧正文/主题/模板变量/extra 一次性退役，待发旧载荷 discarded。生产需先备份停旧写入，不能恢复旧凭据重新投递。
 
 ## 开发测试
 

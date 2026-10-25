@@ -224,7 +224,7 @@ Repair shrinks the pending list. Drain batches repeatedly at offset=0 instead of
 
 Trusted server operators monitor `execution.listLogFailures({ limit, offset })` with the same bounds as listUnknown and call `execution.repairLog(occurrenceId)` to replay logs from the shared journal across nodes, restarts, or concurrent calls. Stable primary keys and complete payload comparison handle committed writes with lost acknowledgements. `LOG_PERSIST_FAILED` (032) retains pending state and emits a safe warning. If the entire database is unavailable before the terminal commit, reconcile unknown effects; do not assume a recoverable outcome exists. Repair and retention never call business hooks. Retention failure only warns. `onTaskFinish` reports local business completion with unconfirmed persistence; use the trigger result and execution.get.logPersistence for confirmation.
 
-Pre-claim interrupted events are observational logs without a committed outcome to repair; unacknowledged writes remain unconfirmed. JSON payloads preserve full results and all retries beyond MySQL's 255-character text mapping. Old log/execution tables are not migrated automatically. Closing waits for in-flight repairs; close scheduler before the database.
+Pre-claim interrupted events are observational logs without a committed outcome to repair; unacknowledged writes remain unconfirmed. JSON payloads preserve full results and all retries beyond MySQL's 255-character text mapping. Supported old logs are archived and copied by module migrations; execution ledgers remain separate. Closing waits for in-flight repairs; close scheduler before the database.
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
@@ -253,6 +253,10 @@ Claim, begin, renewal, completion, expiration scans and isolation calculate/chec
 ### Optional integrations
 
 When a scheduled task sends Reach notifications, a scheduler lock or task completion does not guarantee one external delivery. Follow [Reach queue semantics](../reach/README.en.md) with persistent queueId keys. HTTP receivers must atomically persist deduplication with their side effects. Review unknown in-flight SMTP/SMS outcomes manually; scheduler retries must not blindly send them again.
+
+## Legacy database upgrades
+
+After RelDB init, `migrateScheduler({ dryRun: true })` previews changes; scheduler.init applies supported migrations before repositories. Existing tasks retain data with idempotent=false. Legacy logs are archived as hai_scheduler_logs_alpha65 and copied with stable legacy:<id> keys, preserving complete snapshots without re-executing tasks or duplicating history after interruption. SQLite/PostgreSQL roll back transactions; MySQL resumes from actual structure with old writers stopped. Back up first and restore matching database/binaries for rollback.
 
 ## Development and testing
 

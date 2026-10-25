@@ -337,7 +337,7 @@ const extraDescriptions = {
   HAI_CONTACT_RECIPIENT: ['企业官网联系表单的通知收件人', '有效邮箱地址'],
   HAI_CONTAINER_ENGINE: ['部署/集成测试使用的容器引擎', 'docker | podman'],
   HAI_DOCKER_PROD_BUILD: ['容器生产构建时省略声明文件和 sourcemap', 'true 启用；其余值关闭'],
-  HAI_BUILD_ID: ['CLI 内部生成并向编译目标传递的产物标识；同次 SSR 构建复用', '非空字母、数字、下划线、点、加减号，最多160字符；hai build 不继承调用者的同名值'],
+  HAI_BUILD_ID: ['CLI 内部生成并向编译目标传递的产物标识；同次 SSR 构建复用', '非空字母、数字、下划线、点、加减号，最多128字符；显式非法值拒绝构建；hai build 不继承调用者的同名值'],
   HAI_BUILD_COMMIT: ['当前编译目标所属的源码提交；无所属 Git 提交时明确 unknown', '40或64位十六进制 Git SHA，或 unknown；hai build 内部确定，不继承调用者的同名值'],
   HAI_MODEL_API_KEY: ['本地语音模型 HTTP 服务的 Bearer 认证密钥', '敏感字符串；空值表示该模型服务未启用认证'],
   HAI_MODEL_ID: ['本地模型权重的 Hugging Face 仓库 ID', '有效模型仓库 ID，例如组织名/模型名；由模型目录提供默认值'],

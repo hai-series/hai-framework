@@ -891,6 +891,10 @@ if (!result.success) {
 
 `iam.session.update(token, patch, expectedVersion)` 必须传入读取到的 Session.version。旧版本返回 CONFLICT，已撤销 token 返回 SESSION_NOT_FOUND；不会将旧内容重新写回或覆盖新会话。仅滑动时间戳更新不改变内容版本，允许正常并行请求。批量权限更新绑定首次读取的 token/版本集合，不将迟到数据应用到后续登录；遇到较新内容版本失败，调用方重新查询授权后再提交。
 
+## 持久结构与凭据通知
+
+`migrateIam({ dryRun: true })` 在 RelDB 初始化后只读预检；iam.init 自动补齐支持版本的凭据/重置字段，保留用户与密码，不修改业务权限。升级前备份停旧写入；没有安全代次的旧会话需重新登录，不能回退数据库安全代次来恢复授权。默认 Reach 通知使用 sensitive/expiresAt/idempotencyKey，不落明文、不延迟重投；自定义回调同样须遵守有效期与凭据保护。
+
 ## 开发测试
 
 公开示例从 `@h-ai/iam` 导入，区分可省略默认值的 `IamConfigInput` 与 Schema 解析后的 `IamConfig`。服务端依赖先初始化；`HaiResult` 先检查 `success`，会话修改使用读取到的 `version`，通知复用持久幂等键。内部策略/仓储示例标记为“模块内部上下文”，不作为应用的深层导入入口。检查器只验证示例类型；真实 Redis/数据库、LDAP 和通知投递仍需对应集成测试。见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。

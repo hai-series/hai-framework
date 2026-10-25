@@ -636,6 +636,10 @@ components/
 />
 ```
 
+### フィードバック収集と配布確認
+
+フィードバックの `evidence` は脱敏済み資料の内容を表示します。`oncapture(id?)` はページ移動中に画面を閉じ、画像を追加・置換します。`onfileschange` 接続時はブラウザーの無音録画をWebM/MP4添付として確認・削除できます（最大60秒 / 5 MiB、動画は自動マスクされません）。`FeedbackDetail.onreplay` で完全な操作記録を必要時に取得して再生・移動し、ログと環境はページングで取得します。
+
 ### スタイルの依存関係
 
 コンポーネントは TailwindCSS v4 + DaisyUI を使います。アプリの `app.css` に次を設定します：
@@ -916,6 +920,18 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
 
+## デザインと操作の検証
+
+画面設計は [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)、実装は [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)、実画面の確認は [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) を参照してください。[共通設計指針](../../.agents/instructions/ui-design.md) も利用できます。
+
+Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab 入口に対応します。表は並べ替え・読み込み状態と行のキーボード操作を提供します。ページ切り替えのラベルは言語に従い、外部ページ変更を入力欄に同期します。ツールバーはフォーカスと表示切り替え状態を管理します。Empty/Alert は長文を折り返します。theme.css は共通 tokens を読み込み、global.css は動きを減らす設定に対応します。業務側で検索、並べ替え、ページ切り替えと復旧処理を接続してください。
+
+## エラー表示とログの関連付け
+
+HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
 ## 開発とテスト
 
 ```sh
@@ -924,12 +940,6 @@ pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
-
-## デザインと操作の検証
-
-画面設計は [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)、実装は [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)、実画面の確認は [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) を参照してください。[共通設計指針](../../.agents/instructions/ui-design.md) も利用できます。
-
-Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab 入口に対応します。表は並べ替え・読み込み状態と行のキーボード操作を提供します。ページ切り替えのラベルは言語に従い、外部ページ変更を入力欄に同期します。ツールバーはフォーカスと表示切り替え状態を管理します。Empty/Alert は長文を折り返します。theme.css は共通 tokens を読み込み、global.css は動きを減らす設定に対応します。業務側で検索、並べ替え、ページ切り替えと復旧処理を接続してください。
 
 ## ライセンス
 

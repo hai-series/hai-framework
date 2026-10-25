@@ -52,3 +52,5 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 - 容器交付
 - 检查清单
 - 相关 Skills
+
+宿主生命周期优先 core.module.createRuntime([{name,enabled?,start,close}])：声明真实顺序与业务钩子，失败回滚，关闭失败保留依赖和义务待重试。不要在应用复制并发/回滚/关闭状态机；纯函数与 core 配置不臆造 init/close。错误只报告模块、阶段、错误码和配置路径，不传播私密值。

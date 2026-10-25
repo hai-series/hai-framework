@@ -8,7 +8,6 @@ This guide follows an application through creation, development, builds, deliver
 
 Commands describe the CLI and templates in this repository. For an installed release, check `hai --version`, `hai build --help`, and `hai deploy --help` first: an older release does not gain unpublished source features. Find module examples in the [root README](../../README.en.md) and package READMEs. To work on the framework itself, follow [AGENTS.md](../../AGENTS.md).
 
-
 ## Core features
 
 - Create applications and configure environments.
@@ -261,6 +260,14 @@ You can request a specific version or ask for comparison only. The skill queries
 `hai init` can add missing AI entry files and skills to older projects while preserving existing files. It is not a framework upgrade command and does not overwrite old rules. Merge existing skills using the old template, application customizations, and new template. Framework `main` is not necessarily the version published to npm.
 
 After upgrading, run the project's typecheck, lint, build, test, and affected E2E checks, including real authentication, data, and critical workflows. Rebuild deliverable images or installers, then deploy as described in section 5. A version edit or successful build alone does not complete an upgrade.
+
+## Release inspection and native packaging
+
+`hai upgrade 0.1.0-alpha.71` reads all consumed framework packages plus exact CLI/deploy artifacts, integrity, skills and catalog/lock/installed drift. It never installs or overwrites local/custom files; incomplete releases exit nonzero. JSON includes module migration preflight, backups and legacy-session boundaries. `hai deploy --env prod --plan` verifies local artifacts and reports identity, configuration source keys, selected/retained scope, baseline requirements and recovery directories without building, generating credentials or connecting to the target; unobserved remote state is explicitly not-inspected.
+
+`hai build --target app --platform android|ios` creates and verifies new APK/IPA files. Add platforms and install Android SDK/JDK or macOS/Xcode, then configure signing. cap:sync only synchronizes. Missing platform/toolchain/artifacts fail. Release builds exclude CAPACITOR_SERVER_URL and reject reload URLs in synchronized native configuration. build.app lists App directories.
+
+`schemaColumns(reldb, table, sql?)` inspects real columns. `migrateSchema(reldb, module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
 
 ## Development and testing
 

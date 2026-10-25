@@ -123,15 +123,6 @@ Contract 只描述输入输出结构。业务错误由 procedure 返回 `HaiResu
 
 存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
 
-## 开发测试
-
-```bash
-pnpm --filter @h-ai/api-contract test
-pnpm --filter @h-ai/api-contract typecheck
-```
-
-Schema、推导类型与组合工具均提供可类型检查的示例；见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。Schema 示例使用受约束的本地数据，不代表 provider 已执行。
-
 ## 反馈领域契约
 
 `apiContract.feedback` 包含 reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection 与 attachments.upload/get。最小提交仅需 submissionId/appId，不要求描述或异常；身份、权限、S3 key 与邮件收件人不接受客户端输入。按需通过 `@h-ai/api-contract/feedback` 导入同一组 schema 与类型。
@@ -145,6 +136,15 @@ const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', app
 const contract = apiContract.create({ feedback: apiContract.feedback })
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
+
+## 开发测试
+
+```bash
+pnpm --filter @h-ai/api-contract test
+pnpm --filter @h-ai/api-contract typecheck
+```
+
+Schema、推导类型与组合工具均提供可类型检查的示例；见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。Schema 示例使用受约束的本地数据，不代表 provider 已执行。
 
 ## 许可证
 

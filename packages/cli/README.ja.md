@@ -124,6 +124,26 @@ pnpm run deploy --env prod --build --bundle-only
 
 入口には作業の範囲を置き、詳細資料は必要時だけ読みます。`hai init` / `hai add` は不足分を補うため、既存ルールは差分を確認して統合し、同期時は skill ディレクトリ全体をコピーします。
 
+## Skill ワークフローとフロントエンド指針
+
+hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review が [共通の引き継ぎ契約](templates/skills/hai-spec-implement/handoff.md) で要件、受け入れ条件、指摘と証拠を接続します。文書差分は既存の Git 基準を維持します。
+
+UI には [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui、[hai-ui-review](templates/skills/hai-ui-review/SKILL.md) を一緒に配布し、API テンプレートでは除外します。init/add は既存の独自入口を保持して不足リソースを補完します。リポジトリ側でも同じ責務には同じ名前を使います。
+
+### 問題報告とオフライン分析
+
+`hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。ログインユーザーは報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは管理者に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。`_feedback.yml` で管理者とURLを設定し、本番は共有DB、非公開S3、実際のSMTPを使います。Consoleは開発専用です。
+
+`hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
+
+## リリース確認とネイティブビルド
+
+`hai upgrade 0.1.0-alpha.71` は全消費パッケージと CLI/deploy の正確な版、tar の整合性、skills、catalog/lock/導入済み版と独自変更を読み取り専用で確認します。導入や上書きは行わず、不完全な公開は非ゼロ終了します。JSON は移行事前確認、バックアップと旧セッションの境界も示します。`hai deploy --env prod --plan` はローカル成果物、識別情報、設定元キー、更新・保持範囲、基準要件と復旧先を表示します。ビルド、認証情報作成、接続は行わず、未確認の遠隔状態は not-inspected です。
+
+`hai build --target app --platform android|ios` で新しい APK/IPA を生成・検証します。プラットフォーム、Android SDK/JDK または macOS/Xcode と署名設定が必要です。cap:sync は同期のみで、工程・ツール・成果物不足は失敗します。リリースは CAPACITOR_SERVER_URL を除外し、同期済み設定の開発 URL を拒否します。build.app は App フォルダー一覧です。
+
+`--plan --inspect-remote`（SDK inspectRemote:true）で SSH 経由の current と成功ディレクトリーを読み取り、verified/missing/unavailable と復旧リリース ID を示します。対象への書込は行いません。
+
 ## 開発とテスト
 
 ### 開発時のローカル利用
@@ -155,18 +175,6 @@ Windows インストーラーの追加検証には Rust の `x86_64-pc-windows-m
 `test:e2e` は各サービスに隔離されたテスト用バックエンドと絶対データパスを明示します。サービス子プロセスは外部の `HAI_*` / `PUBLIC_*` / `VITE_*` 設定やユーザーの `.env.local` を読み込みません。テスト専用の `HAI_E2E=1` は通常開発・本番の dotenv と共有バックエンド要件を変更せず、transport は毎回生成する信頼済み SM2 ring と実際の registry を使います。生成プロジェクトのブラウザー検証では独立 TCP 計数プロセスで外部 DB への接続がないことも確認します。完全な fullstack デプロイ検証では実 Redis/S3、増分更新とロールバックを維持します。
 
 `--i18n` は CLI をビルドし、独立プロセスで言語の優先順位・help・生成成功・失敗を検証し、中国語/英語/日本語の入力・検証・取消と create/add/init も確認します。
-
-## Skill ワークフローとフロントエンド指針
-
-hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review が [共通の引き継ぎ契約](templates/skills/hai-spec-implement/handoff.md) で要件、受け入れ条件、指摘と証拠を接続します。文書差分は既存の Git 基準を維持します。
-
-UI には [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui、[hai-ui-review](templates/skills/hai-ui-review/SKILL.md) を一緒に配布し、API テンプレートでは除外します。init/add は既存の独自入口を保持して不足リソースを補完します。リポジトリ側でも同じ責務には同じ名前を使います。
-
-### 問題報告とオフライン分析
-
-`hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。ログインユーザーは報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは管理者に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。`_feedback.yml` で管理者とURLを設定し、本番は共有DB、非公開S3、実際のSMTPを使います。Consoleは開発専用です。
-
-`hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
 
 ## ライセンス
 

@@ -313,14 +313,6 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
 
-## 開発とテスト
-
-```bash
-pnpm --filter @h-ai/kit test
-```
-
-Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
-
 ## フィードバック入口とリクエスト関連付け
 
 `kit.createFeedbackHandler` は `/api/feedback/[...path]/+server.ts` の GET/POST/PATCH に使用できます。serv と同じ api-contract schema を再利用し、入力ストリームの容量とクライアント認証情報の混入を制限します。resolveContext は検証済み locals.session から範囲・権限を作り、null は拒否します。既存 createHandle の認証・CSRF・通信暗号化を維持してください。
@@ -345,6 +337,20 @@ export const GET = handler
 export const POST = handler
 export const PATCH = handler
 ```
+
+## エラー表示とログの関連付け
+
+HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+## 開発とテスト
+
+```bash
+pnpm --filter @h-ai/kit test
+```
+
+Kit に共通の init/close はありません。共有 cache・IAM・crypto はアプリが初期化と終了を管理します。型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。認証は iam.auth.verifyToken で検証し、空でない token だけでは許可しません。
 
 ## ライセンス
 

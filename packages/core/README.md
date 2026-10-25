@@ -575,14 +575,6 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 `_core.yml` 仅接受 name/version/env/defaultLocale 元数据与 logging；未知字段加载失败。Core 不提供全局 debug、ID 长度/前缀、业务 features 或语言注册列表；日志级别用 logging.level，ID 选项在每次 core.id 调用传入，业务配置放 app.yml 并由应用 Schema 校验。defaultLocale 是可读取的元数据，不会替应用注册翻译或切换 Paraglide。导入 Logger 不改写 LANG、LC_ALL、PYTHONIOENCODING，包括 Windows TTY。全部模块的配置与环境消费链见[配置对应表](../../.agents/skills/hai-module-create/configuration.md)。
 
-## 开发测试
-
-```bash
-pnpm --filter @h-ai/core test
-```
-
-公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。Node core.init 同步返回 void；单项 config.load 返回失败时记录错误并继续，必需配置须 validate 并检查 success。目录扫描等异常仍可能抛出；模块业务 HaiResult 则先检查 success。
-
 ## 请求关联与日志观察
 
 采集器内部的持久化/上传路径可使用 `core.context.run({ suppressLogObservers: true }, operation)` 暂停观察回调，避免异步采集自身日志；stdout 等常规日志输出保持生效，退出作用域后恢复。
@@ -607,6 +599,28 @@ await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'u
 })
 unsubscribe()
 ```
+
+## 应用生命周期编排
+
+`core.module.createRuntime([{ name, enabled?, start, close }])` 按声明启动、反序关闭，合并并发调用。启动前登记部分资源的清理义务；失败回滚。关闭失败停在该模块并保留依赖，下次 close/start 重试，避免先关闭仍被使用的数据库。错误仅保留模块、阶段、错误码和配置字段路径；不转发配置值或 SDK 原始异常。base/API/fullstack 和管理台均使用此入口。
+
+## 错误提示与关联日志
+
+HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+
+`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+
+### 公开业务进度
+
+内部 ext 默认不公开。只有明确批准且经过 Schema 校验的业务进度才使用 publicExt，由边界转换为 ext；不能放入内部异常。
+
+## 开发测试
+
+```bash
+pnpm --filter @h-ai/core test
+```
+
+公开声明和内部结构的注释及可编译示例见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。Node core.init 同步返回 void；单项 config.load 返回失败时记录错误并继续，必需配置须 validate 并检查 success。目录扫描等异常仍可能抛出；模块业务 HaiResult 则先检查 success。
 
 ## 许可证
 

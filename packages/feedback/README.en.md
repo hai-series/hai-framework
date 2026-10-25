@@ -12,7 +12,7 @@ Collect user feedback and diagnostic evidence, notify administrators, review rep
 
 - Bounded browser/server logs, requests, errors, interactions, versions and allowed environment fields; up to 100 log records before and after an error by default.
 - Transactional intake, stable submission/evidence identifiers, checksum validation, independent processing/collection/notification state and durable leased jobs.
-- Existing Storage S3 and Reach SMTP implementations; this version requires Reach DND disabled so feedback owns the only notification outbox.
+- `notificationMode` independently selects `disabled` (no notification jobs), `console` (sanitized summaries, including production, without Reach/email), or `reach` (any configured provider and destinations; only this mode requires recipients). The default remains `reach` for existing configurations; generated projects explicitly select `console`. During Reach DND, the feedback outbox waits without adding a second delayed queue or changing other notification policy. Production Reach Console restrictions remain enforced. Sent means channel acceptance, not inbox delivery.
 - Browser screenshots, irreversible masking, annotations, optional rrweb recording, retries and local fallback export; `FeedbackModal`, `FeedbackList` and `FeedbackDetail` in `@h-ai/ui`.
 - Self-contained ZIP files, SHA-256 validation, an offline viewer and paginated evidence queries without production credentials.
 
@@ -20,7 +20,7 @@ Collect user feedback and diagnostic evidence, notify administrators, review rep
 
 Supply `appVersion/buildId/commit` from each actual browser or server artifact. A browser must retain its own identity; one SSR build shares its buildId across client and server output. Admin Console and generated base/API/fullstack projects inline these values. `hai build` creates internal metadata and passes it through Docker build arguments. Each target reads its own package.json version; a missing owning Git commit is `unknown`. Template `build-metadata.json` contains only these three nonsecret fields and matches the inlined values.
 
-Initialize core and check initialization of reldb, storage and reach before feedback. Production requires shared PostgreSQL/MySQL, private S3 and a real SMTP provider. The application owns credentials and connection lifecycles. Local development providers and Console notifications are not proof of actual mail delivery.
+Initialize core, reldb and private storage before feedback; initialize Reach only for reach notifications. Production uses shared databases and private object storage. The host owns connection credentials.
 
 The following snippet runs inside an async function after dependencies are initialized. Trusted server authentication and authorization must supply the context:
 
@@ -30,8 +30,7 @@ import { feedback } from '@h-ai/feedback'
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
-  recipients: ['admin@example.test'],
-  notificationProvider: 'email',
+  notificationMode: 'console',
   adminUrl: 'https://app.example.test/admin/feedback',
 })
 if (!initialized.success)
@@ -55,21 +54,39 @@ Browser and server text redaction share rules for common credential keys, JSON/e
 
 `text/plain` attachments are redacted in full within the 5 MiB file limit, preserving safe content and trailing log entries without structured evidence's per-field truncation. Oversized original files are rejected before reading, and redacted output remains subject to the same attachment byte limit. JSON attachments and structured evidence retain field length, depth and count limits and may be trimmed; use plain text for complete logs. The same rules apply to pending attachments and files added to a local export after the first submission envelope is frozen.
 
-The complete client exposes `init(config)`, `prepare/submit/flush/record/getDraft/annotate/addFiles/exportDraft(input?)/close`. Connect form `onfileschange` to `addFiles` and refresh draft attachment previews so new images can be marked, masked or removed before submission. Use `data-feedback-action` for key interactions, `data-feedback-private` for sensitive content and `data-feedback-ignore` for the feedback UI itself. The first transmitted envelope is frozen; changing input during a retry returns a conflict and preserves the input for local export.
+The complete client exposes `init(config)`, `prepare/captureScreenshot(attachmentId?)/submit/flush/record/getDraft/getView/annotate/addFiles/exportDraft/saveDraft/close`. Connect form `onfileschange` to `addFiles` and refresh draft attachment previews so new images can be marked, masked or removed before submission. Use `data-feedback-action` for key interactions, `data-feedback-private` for sensitive content and `data-feedback-ignore` for the feedback UI itself. The first transmitted envelope is frozen; changing input during a retry returns a conflict and preserves the input for local export.
 
 `addFiles` adds each batch atomically: all files must pass validation before merging. Any failure preserves existing attachments and missing markers without saving a partial batch. Successful concurrent batches preserve each other's files, with at most 20 merged attachments. If the draft changes or the first envelope freezes during reading, it returns `CONFLICT` without adding hidden uploads outside that envelope.
 
-`annotate(id, annotation)` uses pixels in the original image after browser decoding. The UI's `FeedbackAnnotation.rect` uses 0–1 coordinates: after `Image.decode()`, multiply x/width by `naturalWidth` and y/height by `naturalHeight` before calling the SDK. Use these intrinsic dimensions rather than CSS dimensions so JPEG orientation matches SDK decoding. The creator releases object URLs when replaced or disposed.
+`annotate(id, { ...rect, mode, coordinateSpace: 'ratio' })` accepts UI 0–1 coordinates directly. The SDK converts decoded intrinsic dimensions, including fractional/tiny selections, reverse dragging, edges and CSS scaling. Omitting coordinateSpace retains pixel coordinates. `getView()` owns and reuses preview URLs, releasing them on replacement, removal and close. Hosts need no image decoding or object URL bookkeeping.
 
 Concurrent `init` returns `INIT_IN_PROGRESS`; `close` drains bounded screenshots before clearing the session. Closing during capture makes `prepare` fail without resurrecting a draft. An annotation that finishes after submission, close, image removal or another annotation returns `CONFLICT`, preserving submitted bytes and checksums.
 
 The SDK owns the draft and updates it through methods such as `annotate` and `addFiles`. Svelte hosts should keep this reference in `$state.raw<FeedbackDraft>()` and refresh attachment views from `getDraft()` after successful operations. A deep `$state` proxy can retain cached image bytes after the SDK replaces them on the original draft.
 
-A 5 MiB raw attachment needs about 6.67 MiB of Base64 plus JSON fields. The reference admin and new API/fullstack projects with feedback explicitly set the existing `kit.transport.maxPlaintextBytes` or `serv.transport.maxPlaintextBytes` to `8388608` (8 MiB); the framework default remains 1 MiB. Clients follow the server handshake unless a smaller explicit local budget rejects the request. An 8 MiB plaintext budget derives an encrypted body budget of `16,809,984` bytes; production adapter-node `BODY_SIZE_LIMIT` and outer proxies must match it, or the actual JSON size when transport encryption is disabled. Framework deployment derives these limits automatically without a new feedback setting. `hai add` preserves existing host configuration, so the host must adjust capacity explicitly.
+`maxTotalBytes` defaults to 32 MiB (4–40 MiB). `feedback.budget` derives individual/total attachment, duplicate evidence and Base64/encrypted transport budgets from it. Defaults are 5 MiB per file, 22 MiB for attachments, 4 MiB/2000 evidence records, plus 2 MiB for history, metadata and the viewer. Submission validates declared totals; evidence updates enforce quotas atomically; processing history is limited to 256 KiB. The authenticated `reports.policy({})` supplies effective limits to the client and form. The reference admin, API/fullstack templates and framework deployment use `feedback.budget.maxTransportBytes` for transport, adapter-node and proxies. Existing custom hosts wire this value during initialization; `hai add` preserves existing configuration.
 
 `captureConsole` and `persistDraft` default to false. Persistence requires a host supplied, noncredential user/tenant `persistenceKey`. `keyScreenshots` defaults to true and follows the main `screenshot` switch; `maxKeyScreenshots` defaults to 3 with a hard limit of 5, and `keyScreenshotThrottleMs` defaults to 10000 milliseconds.
 
 Automatic screenshots reconstruct the visible page from a redacted DOM clone through SVG foreignObject. Cross-origin images, iframe/video content and network fonts that are not ready may be missing. Browser or CSP failures are recorded as missing, and users can still attach images manually.
+
+### Feedback capture and delivery checks
+
+The current screenshot is shown first. `captureScreenshot(attachmentId?)` adds the visible page or replaces that attachment. Connect `FeedbackModal.oncapture` to it: the modal hides while the user navigates and chooses “Capture this page”, retaining form input. `FeedbackForm.evidence` exposes sanitized logs, requests, environment facts and replay events; use `evidenceSummary` for missing-material notes. Browser facts come from the actual URL (without query/hash), viewport, language and compiled build. Server environment variables include only non-credential `envAllowlist` keys; absent values are null.
+
+Supported browsers offer “Record screen → Start recording”: users select a tab/window and record silent video for up to 60 seconds / 5 MiB at a low frame rate and bitrate. Stopping sharing, cancellation, timeout and component destruction release the stream. Video contains the selected raw screen without automatic masking; users can preview or remove it before sending. WebM/MP4 use the same private storage, checksum and 5 MiB attachment limit. Browsers without capture support can attach video files.
+
+The reference admin console and feedback-enabled fullstack templates explicitly enable `replay: true`; the SDK default remains false. Administrators use the detail “Page replay” tab to play or seek captured interactions. The host `onreplay` must load every page of `kind: replay` events. An empty recording has an explicit message; videos play under activity and attachments. After saving feedback locally, `hai feedback view <zip>` opens screenshots, video and replay. Local bundles mark server evidence that has not been obtained.
+
+`saveDraft(input?)` exports and saves through Web download, the Tauri save dialog or Capacitor cache/native sharing. Cancellation returns `status: 'cancelled'`; failures remain failures. Native plugins are optional peers and are configured by generated App/Desktop projects. Custom hosts install the corresponding plugins. `createFeedbackReview(typedClient.feedback.reports)` provides `loadReplay(id)` and cancellable `exportReport(id)`. On logout call `review.close()` and `client.close({ discard: true })` to stop collection/polling and clear previews and persisted drafts.
+
+Build identities share a 128-character limit. Invalid explicit HAI_BUILD_ID/HAI_BUILD_COMMIT fail the build without echoing values. Default redaction covers verificationCode, otpCode and common verification fields without hiding every business code.
+
+When server policy is unavailable, bounded local capture/export remain available with server-policy-unavailable. Online submission revalidates policy first. addFiles(files, removedAttachmentIds?) atomically removes deleted files while staging new ones so displayed and effective capacity agree.
+
+Console/disabled do not require the Reach package. Reach mode explicitly installs and initializes the @h-ai/reach optional peer. Credential sends expose generated receiptId only; provider messageId is neither persisted nor returned.
+
+Web clients never resolve or install native plugins. Custom hosts import saveTauriFeedbackFile from @h-ai/feedback/tauri or saveCapacitorFeedbackFile from @h-ai/feedback/capacitor and call configureFeedbackSaving(saver) at startup. Generated hosts already configure this; business code does not handle native file lifecycles.
 
 ### Reviewing and exporting
 
@@ -92,7 +109,7 @@ The viewer binds only to loopback, uses a random URL and trusted built-in viewer
 
 ### Configuration and errors
 
-`FeedbackConfigSchema` validates appId, recipients, notificationProvider, adminUrl, collectionTimeoutMs, workerIntervalMs, leaseMs, maxAttempts, retentionDays, envAllowlist and attachment/evidence quotas. Explicit YAML environment mappings use `HAI_FEEDBACK_*`. Browser policy must not expose SMTP or S3 secrets.
+`FeedbackConfigSchema` validates appId, notificationMode, recipients, maxTotalBytes, notificationProvider, adminUrl, collectionTimeoutMs, workerIntervalMs, leaseMs, maxAttempts, retentionDays, envAllowlist and attachment/evidence quotas. Explicit YAML environment mappings use `HAI_FEEDBACK_*`. Browser policy must not expose SMTP or S3 secrets.
 
 Check `success` for every domain result. `HaiFeedbackError` covers initialization, configuration, scope, missing records, conflicts, quota and checksum failures. HTTP 200 and SMTP acceptance do not prove final business success or inbox delivery; uncertain sends can be repeated.
 

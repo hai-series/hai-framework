@@ -152,17 +152,6 @@ Automatic refresh handles an actual HTTP 401 (`Response.status`) or a valid fail
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
-## Development and testing
-
-```bash
-pnpm --filter @h-ai/api-client test
-pnpm --filter @h-ai/api-client typecheck
-```
-
-Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md).
-
-serv/kit return an encrypted HTTP 400 time error for an out-of-window message only after request binding, signature and MAC verification. The client throws `TransportTimeError` (`hai:crypto:071`) with advice to synchronize device/server clocks and refresh. `api-client` maps it to `VALIDATION_FAILED` and preserves `cause.transportCode`. Requests are not replayed automatically and replay windows remain unchanged; tampered or unauthenticated messages retain the generic authentication failure.
-
 ## Logical request observation
 
 `client.observeRequests` observes each logical call once and returns an unsubscribe function. Records contain requestId, procedure, duration, HTTP status, final success/errorCode, and business request attempts. A failed HaiResult with HTTP 200 is a failure. Authentication retries retain the same requestId. Records exclude bodies, tokens, and URL query parameters. Refresh and key exchange are not presented as user operations. close clears subscriptions, so subscribe again after reinitializing.
@@ -176,6 +165,23 @@ const unsubscribe = apiClient.observeRequests((record) => {
 })
 unsubscribe()
 ```
+
+## Error messages and correlated logs
+
+HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+## Development and testing
+
+```bash
+pnpm --filter @h-ai/api-client test
+pnpm --filter @h-ai/api-client typecheck
+```
+
+Clients learn `transport.maxPlaintextBytes` from server key exchange. An explicit local limit selects the smaller value. Capacity failures return `HaiApiClientError.PAYLOAD_TOO_LARGE` (`hai:api-client:020`) with direction, stage and byte diagnostics. See [capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md).
+
+serv/kit return an encrypted HTTP 400 time error for an out-of-window message only after request binding, signature and MAC verification. The client throws `TransportTimeError` (`hai:crypto:071`) with advice to synchronize device/server clocks and refresh. `api-client` maps it to `VALIDATION_FAILED` and preserves `cause.transportCode`. Requests are not replayed automatically and replay windows remain unchanged; tampered or unauthenticated messages retain the generic authentication failure.
 
 ## License
 

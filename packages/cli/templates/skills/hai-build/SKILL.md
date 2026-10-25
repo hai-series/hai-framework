@@ -55,3 +55,5 @@ description: "构建或排查 hai 应用的源码、容器镜像和桌面产物�
 - 行为开发工作流
 - 统一编码规范
 - 标准工作流
+
+原生 App：hai build --target app --platform android|ios 使用 hai.json.build.app；cap:sync 只同步，不是 APK/IPA。先安装平台与 SDK/JDK 或 macOS/Xcode、配置签名；缺工程/工具链/本次产物必须失败。发布过滤 CAPACITOR_SERVER_URL，并核验同步后的原生配置；默认 package/发行别名走同一验证入口。构建身份统一 128 字符，显式非法 HAI_BUILD_ID/HAI_BUILD_COMMIT 报错且不回显原值。

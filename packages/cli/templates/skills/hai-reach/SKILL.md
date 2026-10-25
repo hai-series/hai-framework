@@ -37,3 +37,5 @@ description: "接入邮件、短信、API 通知与模板，处理发送结果�
 - 相关 Skills
 
 IAM 通知使用 `otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` 标准模板；将已初始化的 `reach` 传入 `iam.init`。Console Provider 只记录元数据，不输出验证码/令牌，不代替实际邮件/短信发送。
+
+凭据通知用 sensitive:true、Unix 毫秒 expiresAt 和无凭据的稳定 idempotencyKey。共享 DB 仅存元数据回执，不存正文/变量/凭据摘要，不延迟重投；成功返回 receiptId，不明结果不自动重发。开发 Console 明确允许的输出与持久观察器隔离，生产 Console 限制不变。普通通知可用 deferPolicy: reject 将排队交给调用方。升级先 migrateReach({dryRun:true})，旧载荷一次性退役，旧在途 unknown，先备份停旧写入。

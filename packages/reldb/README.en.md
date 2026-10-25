@@ -594,6 +594,18 @@ Custom SQL methods in `BaseReldbCrudRepository` subclasses must check `await thi
 
 Production requires PostgreSQL/MySQL. SQLite, including disk files, is for development/explicit tests and does not provide cross-host shared state. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
 
+## Module schema migrations
+
+`schemaColumns(reldb, table, sql?)` inspects real columns. `migrateSchema(reldb, module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](../../docs/usage/README.en.md).
+
+## Error messages and correlated logs
+
+Unique constraint violations return `HaiReldbError.DUPLICATE_ENTRY` (409); timeout, pool exhaustion and other existing error codes remain intact. Branch on error codes rather than localized messages or driver text. Logs preserve driver code/schema/routine/constraint and stack line numbers; numeric bound values do not obscure these diagnostic identifiers.
+
+HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
 ## Development and testing
 
 ```bash

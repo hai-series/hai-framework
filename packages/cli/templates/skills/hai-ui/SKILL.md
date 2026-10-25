@@ -58,7 +58,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 ## 表单布局与错误提示
 
-问题反馈使用 `FeedbackModal/FeedbackForm` 收集、`FeedbackList/FeedbackDetail` 管理、`FeedbackScreenshot` 标注。组件只负责交互，先固定现场再打开弹窗；可靠受理、上传、通知、权限和离线包按 [hai-feedback](../hai-feedback/SKILL.md) 接入，不把表单回调完成当作持久化成功。
+问题反馈使用 `FeedbackModal/FeedbackForm` 收集、`FeedbackList/FeedbackDetail` 管理、`FeedbackScreenshot` 标注。组件只负责交互，先固定现场再打开弹窗；跨页截图用 oncapture，实际脱敏材料用 evidence，短录屏随 onfileschange 接入，详情 onreplay 按需读取完整操作记录；可靠受理、上传、通知、权限和离线包按 [hai-feedback](../hai-feedback/SKILL.md) 接入，不把表单回调完成当作持久化成功。
 
 输入控件与 CRUD 新增/编辑默认在首次失焦后显示前端错误，修正输入时即时更新；未操作字段在提交时校验。Select 在焦点离开触发器及选项后校验。应用无需逐项绑定 blur；业务异步校验仍由应用提供。PasswordInput 的 minLength 提供时执行长度校验；登录现有密码时省略该属性。
 

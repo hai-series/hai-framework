@@ -243,9 +243,15 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 - `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
 - `@h-ai/ui`：UI 组件库（组件、场景组件、自动导入）
 
-### 📄 许可证
+## 反馈现场与交付检查
 
-Apache License 2.0
+反馈入口默认预览当前页面，支持换页补图、拖选标注与无声短录屏（60秒/5 MiB，原始录屏需自行避开敏感信息）。展开“收集材料”查看日志和实际环境；“保存反馈到本地”下载ZIP。管理员在详情的“页面回放”播放页面操作，在“操作现场”查看录屏。离线分析运行 `hai feedback view <zip>`。
+
+反馈示例默认 notificationMode: console，不要求邮箱或 Reach。服务端反馈预算同时用于传输设置；客户端从 /api/feedback/policy 读取有效容量，使用 SDK 的 getView、比例标注、saveDraft 和 createFeedbackReview；退出账号清理草稿与观察器。初始化使用 core.module.createRuntime，模块自己的迁移在仓库初始化前执行。
+
+## 界面设计与交互示例
+
+`/admin/ui-gallery/compounds` 的列表状态示例展示加载、空态、错误恢复、筛选、排序、分页与键盘操作。页面沿 [共享设计约定](../../.agents/instructions/ui-design.md) 和 hai-ui-design → hai-ui → hai-ui-review 工作流维护；浏览器测试覆盖实际渲染与交互，外部服务和原生平台另行验收。
 
 ## 开发测试
 
@@ -257,10 +263,6 @@ pnpm --filter admin-console lint
 pnpm --filter admin-console build
 pnpm --filter admin-console test
 ```
-
-## 界面设计与交互示例
-
-`/admin/ui-gallery/compounds` 的列表状态示例展示加载、空态、错误恢复、筛选、排序、分页与键盘操作。页面沿 [共享设计约定](../../.agents/instructions/ui-design.md) 和 hai-ui-design → hai-ui → hai-ui-review 工作流维护；浏览器测试覆盖实际渲染与交互，外部服务和原生平台另行验收。
 
 ## 许可证
 

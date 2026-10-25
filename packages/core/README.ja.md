@@ -575,14 +575,6 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 `_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../.agents/skills/hai-module-create/configuration.md)を参照してください。
 
-## 開発とテスト
-
-```bash
-pnpm --filter @h-ai/core test
-```
-
-宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。Node core.init は同期的に void を返します。単一ファイルの config.load 失敗結果は記録して続行するため、必須設定は validate して success を確認してください。ディレクトリー走査などの例外は伝播する場合があります。業務 HaiResult API は success を先に確認します。
-
 ## リクエスト関連付けとログの監視
 
 収集側の保存・アップロード処理は `core.context.run({ suppressLogObservers: true }, operation)` で自身の非同期ログ監視を一時停止できます。stdout など通常の出力は維持し、スコープ外では監視を再開します。
@@ -607,6 +599,28 @@ await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'u
 })
 unsubscribe()
 ```
+
+## アプリケーションのライフサイクル
+
+`core.module.createRuntime([{ name, enabled?, start, close }])` は宣言順で起動し、逆順で終了して並行呼出しを統合します。部分初期化前に清理義務を登録し、終了失敗時はモジュールと依存を保持して次回 close/start で再試行します。エラーはモジュール・段階・コード・設定パスのみを示し、値や SDK 例外を公開しません。base/API/fullstack と管理画面が利用します。
+
+## エラー表示とログの関連付け
+
+HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+### 公開する業務進捗
+
+内部 ext は非公開です。スキーマ検証済みの業務進捗だけを publicExt で明示し、ext として公開します。内部例外を入れないでください。
+
+## 開発とテスト
+
+```bash
+pnpm --filter @h-ai/core test
+```
+
+宣言の注釈と型検査できる例は [JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。Node core.init は同期的に void を返します。単一ファイルの config.load 失敗結果は記録して続行するため、必須設定は validate して success を確認してください。ディレクトリー走査などの例外は伝播する場合があります。業務 HaiResult API は success を先に確認します。
 
 ## ライセンス
 

@@ -882,6 +882,10 @@ Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(u
 
 `iam.session.update(token, patch, expectedVersion)` requires the Session.version from the read. Stale versions return CONFLICT; revoked tokens return SESSION_NOT_FOUND. Timestamp-only sliding updates keep the content version, allowing normal parallel requests. Batch permission updates bind the initial token/version set and never apply delayed snapshots to later sign-ins; newer content versions require re-reading authorization before retry.
 
+## Schema and credential notifications
+
+After RelDB initialization, `migrateIam({ dryRun: true })` previews changes without writes. iam.init upgrades supported credential/reset columns, retaining users/passwords and permissions. Back up and stop old writers first. Legacy sessions without credential versions must sign in again; never roll back credential generations to restore authorization. Default Reach notifications use sensitive/expiresAt/idempotencyKey without plaintext persistence or delayed replay. Custom callbacks must enforce the same expiry and credential protection.
+
 ## Development and testing
 
 Public examples import from `@h-ai/iam` and distinguish defaultable `IamConfigInput` from parsed `IamConfig`. Initialize server dependencies, check `HaiResult.success`, update sessions with their observed `version`, and reuse persistent notification idempotency keys. Strategy/repository examples marked as internal context do not define application deep imports. The checker verifies types only; Redis/database, LDAP and delivery behavior still require their integration tests. See the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证).

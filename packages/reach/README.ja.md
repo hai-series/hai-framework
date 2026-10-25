@@ -132,7 +132,7 @@ if (result.data.deferred) {
 }
 ```
 
-キューの `created_at`、`updated_at`、`locked_until`、`next_attempt_at` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に試行回数・退避設定・失敗分類を含むテーブル構造も更新してください。旧テーブルの自動移行は行いません。
+キューの `created_at`、`updated_at`、`locked_until`、`next_attempt_at` は Unix ミリ秒を `BIGINT`（SQLite では 64 ビット `INTEGER`）として保存します。Reach リポジトリーは PostgreSQL などのドライバーが返す整数文字列を安全な整数の `number` に変換します。負数、小数、JS の安全整数範囲外の保存値は丸めずに `SEND_FAILED` を返します。テンプレートの作成・更新 `TIMESTAMP` は `Date` に対応します。デプロイ時に試行回数・退避設定・失敗分類を含むテーブル構造も更新してください。対応する旧表はモジュール所有のバージョン移行で更新します（下記）。
 
 #### 永続化された再試行設定
 
@@ -210,6 +210,12 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 ## 本番の共有状態
 
 本番は console を拒否し、実際の SMTP・SMS・API サービスを必要とします。ログ書込は配信完了ではありません。冪等でないサービスの未知結果は照合が必要で、exactly-once は保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
+
+## 認証情報の通知と更新
+
+パスワード、OTP、リセットトークンは `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` を使います。expiresAt は Unix ミリ秒、操作キーに秘密値を含めません。共有台帳は本文・変数・認証値のハッシュを保存せず、脱機密化した宛先と受領状態のみを保持します。遅延キューに入れず、DND/期限切れは送信せず、不明な配信を自動再送しません。成功時は receiptId を返します。明示した開発用コンソール出力は永続観測から分離し、本番 Console 制限は維持します。通常通知は deferPolicy: reject で二重キューを防げます。
+
+`migrateReach({ dryRun: true })` で事前確認し、リポジトリー初期化で対応する移行を実行します。状態と識別子を保持し、旧処理中は unknown、旧ペイロードは一度廃棄し、旧待機ペイロードは discarded にします。更新前は旧書込を停止しバックアップし、古い認証情報を再送しないでください。
 
 ## 開発とテスト
 

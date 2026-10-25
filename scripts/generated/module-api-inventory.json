@@ -10504,6 +10504,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackBudget",
+              "kind": "type",
+              "declaration": "FeedbackBudget",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackBudgetSchema",
+              "kind": "value",
+              "declaration": "FeedbackBudgetSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackCollectionStatus",
               "kind": "type",
               "declaration": "FeedbackCollectionStatus",
@@ -11174,6 +11186,12 @@
               "kind": "value",
               "declaration": "PaymentTradeTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "resolveFeedbackBudget",
+              "kind": "value",
+              "declaration": "resolveFeedbackBudget",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "Schema",
@@ -11636,6 +11654,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackBudget",
+              "kind": "type",
+              "declaration": "FeedbackBudget",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackBudgetSchema",
+              "kind": "value",
+              "declaration": "FeedbackBudgetSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackCollectionStatus",
               "kind": "type",
               "declaration": "FeedbackCollectionStatus",
@@ -12306,6 +12336,12 @@
               "kind": "value",
               "declaration": "PaymentTradeTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "resolveFeedbackBudget",
+              "kind": "value",
+              "declaration": "resolveFeedbackBudget",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "Schema",
@@ -12768,6 +12804,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackBudget",
+              "kind": "type",
+              "declaration": "FeedbackBudget",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackBudgetSchema",
+              "kind": "value",
+              "declaration": "FeedbackBudgetSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackCollectionStatus",
               "kind": "type",
               "declaration": "FeedbackCollectionStatus",
@@ -13438,6 +13486,12 @@
               "kind": "value",
               "declaration": "PaymentTradeTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "resolveFeedbackBudget",
+              "kind": "value",
+              "declaration": "resolveFeedbackBudget",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "Schema",
@@ -14166,6 +14220,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackBudget",
+              "kind": "type",
+              "declaration": "FeedbackBudget",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackBudgetSchema",
+              "kind": "value",
+              "declaration": "FeedbackBudgetSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackCollectionStatus",
               "kind": "type",
               "declaration": "FeedbackCollectionStatus",
@@ -14404,6 +14470,12 @@
               "kind": "value",
               "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "resolveFeedbackBudget",
+              "kind": "value",
+              "declaration": "resolveFeedbackBudget",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -14470,6 +14542,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "FeedbackBudget",
+              "kind": "type",
+              "declaration": "FeedbackBudget",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackBudgetSchema",
+              "kind": "value",
+              "declaration": "FeedbackBudgetSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "FeedbackCollectionStatus",
               "kind": "type",
               "declaration": "FeedbackCollectionStatus",
@@ -14708,6 +14792,12 @@
               "kind": "value",
               "declaration": "FeedbackUploadInputSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "resolveFeedbackBudget",
+              "kind": "value",
+              "declaration": "resolveFeedbackBudget",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -19556,6 +19646,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createDeploymentPlan",
+              "kind": "value",
+              "declaration": "createDeploymentPlan",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "deploy",
               "kind": "value",
               "declaration": "deploy",
@@ -19788,6 +19884,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createDeploymentPlan",
+              "kind": "value",
+              "declaration": "createDeploymentPlan",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "deploy",
               "kind": "value",
               "declaration": "deploy",
@@ -20017,6 +20119,12 @@
               "name": "artifactChecksum",
               "kind": "value",
               "declaration": "artifactChecksum",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createDeploymentPlan",
+              "kind": "value",
+              "declaration": "createDeploymentPlan",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -20715,6 +20823,38 @@
           ]
         },
         {
+          "subpath": "./capacitor",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/capacitor.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "saveCapacitorFeedbackFile",
+              "kind": "value",
+              "declaration": "saveCapacitorFeedbackFile",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./capacitor",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/capacitor.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "saveCapacitorFeedbackFile",
+              "kind": "value",
+              "declaration": "saveCapacitorFeedbackFile",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
           "subpath": "./client",
           "conditions": [
             "import"
@@ -20723,9 +20863,21 @@
           "exists": true,
           "symbols": [
             {
+              "name": "configureFeedbackSaving",
+              "kind": "value",
+              "declaration": "configureFeedbackSaving",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createFeedbackClient",
               "kind": "value",
               "declaration": "createFeedbackClient",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createFeedbackReview",
+              "kind": "value",
+              "declaration": "createFeedbackReview",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -20765,16 +20917,52 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "feedbackDataBytes",
+              "kind": "value",
+              "declaration": "feedbackDataBytes",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "FeedbackDraft",
               "kind": "type",
               "declaration": "FeedbackDraft",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "FeedbackDraftView",
+              "kind": "type",
+              "declaration": "FeedbackDraftView",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackFileSaver",
+              "kind": "type",
+              "declaration": "FeedbackFileSaver",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackImageAnnotation",
               "kind": "type",
               "declaration": "FeedbackImageAnnotation",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackReviewActions",
+              "kind": "type",
+              "declaration": "FeedbackReviewActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackSaveResult",
+              "kind": "type",
+              "declaration": "FeedbackSaveResult",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "saveFeedbackFile",
+              "kind": "value",
+              "declaration": "saveFeedbackFile",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -20787,9 +20975,21 @@
           "exists": true,
           "symbols": [
             {
+              "name": "configureFeedbackSaving",
+              "kind": "value",
+              "declaration": "configureFeedbackSaving",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createFeedbackClient",
               "kind": "value",
               "declaration": "createFeedbackClient",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createFeedbackReview",
+              "kind": "value",
+              "declaration": "createFeedbackReview",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -20829,16 +21029,84 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "feedbackDataBytes",
+              "kind": "value",
+              "declaration": "feedbackDataBytes",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "FeedbackDraft",
               "kind": "type",
               "declaration": "FeedbackDraft",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "FeedbackDraftView",
+              "kind": "type",
+              "declaration": "FeedbackDraftView",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackFileSaver",
+              "kind": "type",
+              "declaration": "FeedbackFileSaver",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "FeedbackImageAnnotation",
               "kind": "type",
               "declaration": "FeedbackImageAnnotation",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackReviewActions",
+              "kind": "type",
+              "declaration": "FeedbackReviewActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackSaveResult",
+              "kind": "type",
+              "declaration": "FeedbackSaveResult",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "saveFeedbackFile",
+              "kind": "value",
+              "declaration": "saveFeedbackFile",
+              "declarationKind": "FunctionDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./tauri",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/tauri.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "saveTauriFeedbackFile",
+              "kind": "value",
+              "declaration": "saveTauriFeedbackFile",
+              "declarationKind": "VariableDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./tauri",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/tauri.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "saveTauriFeedbackFile",
+              "kind": "value",
+              "declaration": "saveTauriFeedbackFile",
+              "declarationKind": "VariableDeclaration"
             }
           ]
         }
@@ -22060,6 +22328,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "migrateIam",
+              "kind": "value",
+              "declaration": "migrateIam",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "OtpConfig",
               "kind": "type",
               "declaration": "OtpConfig",
@@ -22538,6 +22812,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "migrateIam",
+              "kind": "value",
+              "declaration": "migrateIam",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "OtpConfig",
               "kind": "type",
               "declaration": "OtpConfig",
@@ -23014,6 +23294,12 @@
               "kind": "value",
               "declaration": "LoginConfigSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "migrateIam",
+              "kind": "value",
+              "declaration": "migrateIam",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "OtpConfig",
@@ -25435,6 +25721,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "migrateReach",
+              "kind": "value",
+              "declaration": "migrateReach",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ProviderConfig",
               "kind": "type",
               "declaration": "ProviderConfig",
@@ -25685,6 +25977,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "migrateReach",
+              "kind": "value",
+              "declaration": "migrateReach",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ProviderConfig",
               "kind": "type",
               "declaration": "ProviderConfig",
@@ -25933,6 +26231,12 @@
               "kind": "value",
               "declaration": "HaiReachError",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "migrateReach",
+              "kind": "value",
+              "declaration": "migrateReach",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ProviderConfig",
@@ -26232,6 +26536,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "migrateSchema",
+              "kind": "value",
+              "declaration": "migrateSchema",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MysqlConfig",
               "kind": "type",
               "declaration": "MysqlConfig",
@@ -26416,6 +26726,24 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "schemaColumns",
+              "kind": "value",
+              "declaration": "schemaColumns",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "SchemaMigration",
+              "kind": "type",
+              "declaration": "SchemaMigration",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SchemaMigrationPlan",
+              "kind": "type",
+              "declaration": "SchemaMigrationPlan",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "SqliteConfig",
@@ -26578,6 +26906,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "migrateSchema",
+              "kind": "value",
+              "declaration": "migrateSchema",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MysqlConfig",
               "kind": "type",
               "declaration": "MysqlConfig",
@@ -26762,6 +27096,24 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "schemaColumns",
+              "kind": "value",
+              "declaration": "schemaColumns",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "SchemaMigration",
+              "kind": "type",
+              "declaration": "SchemaMigration",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SchemaMigrationPlan",
+              "kind": "type",
+              "declaration": "SchemaMigrationPlan",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "SqliteConfig",
@@ -26924,6 +27276,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "migrateSchema",
+              "kind": "value",
+              "declaration": "migrateSchema",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MysqlConfig",
               "kind": "type",
               "declaration": "MysqlConfig",
@@ -27108,6 +27466,24 @@
               "kind": "value",
               "declaration": "ReldbTypeSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "schemaColumns",
+              "kind": "value",
+              "declaration": "schemaColumns",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "SchemaMigration",
+              "kind": "type",
+              "declaration": "SchemaMigration",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SchemaMigrationPlan",
+              "kind": "type",
+              "declaration": "SchemaMigrationPlan",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "SqliteConfig",
@@ -27647,6 +28023,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "migrateScheduler",
+              "kind": "value",
+              "declaration": "migrateScheduler",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "scheduler",
               "kind": "value",
               "declaration": "scheduler",
@@ -27873,6 +28255,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "migrateScheduler",
+              "kind": "value",
+              "declaration": "migrateScheduler",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "scheduler",
               "kind": "value",
               "declaration": "scheduler",
@@ -28097,6 +28485,12 @@
               "kind": "type",
               "declaration": "LogQueryOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "migrateScheduler",
+              "kind": "value",
+              "declaration": "migrateScheduler",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "scheduler",
@@ -31716,6 +32110,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "errorMessage",
+              "kind": "value",
+              "declaration": "errorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ErrorPage",
               "kind": "value+type",
               "declaration": "ErrorPage",
@@ -33910,6 +34310,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "errorMessage",
+              "kind": "value",
+              "declaration": "errorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ErrorPage",
               "kind": "value+type",
               "declaration": "ErrorPage",
@@ -36102,6 +36508,12 @@
               "kind": "value",
               "declaration": "ERROR_PRESETS",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "errorMessage",
+              "kind": "value",
+              "declaration": "errorMessage",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "ErrorPage",

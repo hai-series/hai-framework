@@ -197,7 +197,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 | ----------------- | --------------------------------------------------------------------------------------------------------- | :-------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | `@h-ai/iam`       | 認証・アクセス管理：パスワード/OTP/LDAP、RBAC、セッション、ユーザー                                       |                 —                 |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
 | `@h-ai/reach`     | 通知：メール、SMS、API 通知、テンプレート、DND                                                            | ✅ SMTP / Alibaba Cloud SMS / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
-| `@h-ai/feedback`  | 問題報告：現場収集、非公開画像、メール、一覧処理、オフライン診断                                          |          DB / S3 / SMTP           |                                                     —                                                     |
+| `@h-ai/feedback`  | 問題報告：現場収集、非公開画像、メール、一覧処理、オフライン診断                                          |     DB / S3 / optional Reach      |                                                     —                                                     |
 | `@h-ai/ai`        | AI：通常・ストリーミング対話、画像、ASR/TTS、ツール、MCP、Embedding、RAG/知識、記憶、Context、Rerank、A2A |     ✅ OpenAI 互換 / 拡張可能     |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
 | `@h-ai/payment`   | 決済：注文作成、複数端末からの開始、通知                                                                  |  ✅ WeChat Pay / Alipay / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
 | `@h-ai/audit`     | 監査：記録、ページ検索、統計、定期削除                                                                    |                 —                 |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
@@ -572,6 +572,10 @@ admin-console と CLI fullstack の Web/App/Desktop で標準搭載されます�
 | `h5-app`            | `pnpm --filter h5-app dev`              |
 | `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev` |
 | `mobile-app`        | `pnpm --filter mobile-app dev`          |
+
+## フィードバック収集と配布確認
+
+フィードバック例は独立したコンソール通知、軽量録画とページ再生に対応し、容量、保存と旧表移行をフレームワークが扱います。`hai upgrade <exact-version>` と `hai deploy --env prod --plan` は読み取り専用です。[フィードバック](packages/feedback/README.ja.md)、[ライフサイクル](packages/core/README.ja.md#アプリケーションのライフサイクル)、[CLI](packages/cli/README.ja.md#リリース確認とネイティブビルド)を参照。
 
 ## 開発
 

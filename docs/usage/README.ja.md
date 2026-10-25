@@ -8,7 +8,6 @@
 
 コマンドは、このリポジトリーの CLI とテンプレートに対応しています。公開済みの CLI を使う場合は、まず `hai --version`、`hai build --help`、`hai deploy --help` で確認してください。未公開の機能は旧バージョンには含まれません。モジュールの使い方は[ルート README](../../README.ja.md)と各パッケージの README、フレームワーク自体の開発規約は [AGENTS.md](../../AGENTS.md) を参照してください。
 
-
 ## 主な機能
 
 - アプリ作成と環境設定。
@@ -261,6 +260,14 @@ pnpm run deploy --env prod --build --bundle-only
 `hai init` は旧プロジェクトに不足する AI 入口と skills を補いますが、既存ファイルは保持します。フレームワーク更新コマンドではなく、古いルールを上書きもしません。既存 skill は旧テンプレート、アプリ固有の変更、新テンプレートを比較して統合します。ソースの `main` と npm 公開版も同一とは限りません。
 
 更新後はプロジェクトの typecheck、lint、build、test と影響範囲の E2E を実行し、認証、データ、主要処理を実際に確認します。配布するイメージやインストーラーを再生成し、第 5 節の手順でデプロイします。版番号の変更やビルド成功だけでは更新完了とはいえません。
+
+## リリース確認とネイティブビルド
+
+`hai upgrade 0.1.0-alpha.71` は全消費パッケージと CLI/deploy の正確な版、tar の整合性、skills、catalog/lock/導入済み版と独自変更を読み取り専用で確認します。導入や上書きは行わず、不完全な公開は非ゼロ終了します。JSON は移行事前確認、バックアップと旧セッションの境界も示します。`hai deploy --env prod --plan` はローカル成果物、識別情報、設定元キー、更新・保持範囲、基準要件と復旧先を表示します。ビルド、認証情報作成、接続は行わず、未確認の遠隔状態は not-inspected です。
+
+`hai build --target app --platform android|ios` で新しい APK/IPA を生成・検証します。プラットフォーム、Android SDK/JDK または macOS/Xcode と署名設定が必要です。cap:sync は同期のみで、工程・ツール・成果物不足は失敗します。リリースは CAPACITOR_SERVER_URL を除外し、同期済み設定の開発 URL を拒否します。build.app は App フォルダー一覧です。
+
+`schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](../../docs/usage/README.ja.md)を参照。
 
 ## 開発とテスト
 

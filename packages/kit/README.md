@@ -313,14 +313,6 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
 
-## 开发测试
-
-```bash
-pnpm --filter @h-ai/kit test
-```
-
-模块无统一 init/close；共享缓存、IAM 与 crypto 由应用启动时初始化并统一关闭。示例使用真实公开入口并作类型检查，见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。请求认证必须调用 iam.auth.verifyToken，不能把非空 token 视为有效身份。
-
 ## 反馈接口与普通请求关联
 
 `kit.createFeedbackHandler` 可作为 `/api/feedback/[...path]/+server.ts` 的 GET/POST/PATCH handler，复用 api-contract schema，与 serv 使用同一数据契约；输入流受大小上限约束，客户端身份/租户字段被拒绝。宿主通过 resolveContext 从已经验证的 locals.session 映射范围和权限，null 拒绝访问，并保留现有 createHandle 的 CSRF、认证与传输加密。
@@ -345,6 +337,20 @@ export const GET = handler
 export const POST = handler
 export const PATCH = handler
 ```
+
+## 错误提示与关联日志
+
+HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+
+`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+
+## 开发测试
+
+```bash
+pnpm --filter @h-ai/kit test
+```
+
+模块无统一 init/close；共享缓存、IAM 与 crypto 由应用启动时初始化并统一关闭。示例使用真实公开入口并作类型检查，见[模块 JSDoc 约定](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)。请求认证必须调用 iam.auth.verifyToken，不能把非空 token 视为有效身份。
 
 ## 许可证
 

@@ -635,6 +635,10 @@ components/
 />
 ```
 
+### 反馈现场与交付检查
+
+反馈的 `evidence` 显示实际已脱敏材料；`oncapture(id?)` 支持隐藏弹窗后跨页补图或替换。接入 `onfileschange` 后提供浏览器原生无声短录屏，停止后作为 WebM/MP4 附件预览或删除（最多 60 秒 / 5 MiB，录屏不自动脱敏）。`FeedbackDetail.onreplay` 按需返回完整页面事件，在“页面回放”播放和定位；日志/环境仍分页读取。
+
 ### 样式依赖
 
 组件基于 TailwindCSS v4 + DaisyUI。应用层 `app.css` 需要以下配置：
@@ -919,6 +923,18 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
 
+## 设计与交互验收
+
+页面设计使用 [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)，组件实现使用 [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)，真实界面走查使用 [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md)。[设计约定](../../.agents/instructions/ui-design.md) 说明布局、状态和示例。
+
+Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提供排序与加载状态和行键盘操作；分页导航/输入名称跟随语言，外部页码同步跳页输入；工具栏弹层管理焦点，视图按钮提供选中状态。Empty/Alert 支持长内容换行。theme.css 引入共享 tokens，焦点跟随当前主题，global.css 响应减少动态效果。应用仍需接入实际筛选、排序、分页与失败恢复。
+
+## 错误提示与关联日志
+
+HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+
+`core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+
 ## 开发测试
 
 ```sh
@@ -927,12 +943,6 @@ pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
-
-## 设计与交互验收
-
-页面设计使用 [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)，组件实现使用 [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)，真实界面走查使用 [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md)。[设计约定](../../.agents/instructions/ui-design.md) 说明布局、状态和示例。
-
-Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提供排序与加载状态和行键盘操作；分页导航/输入名称跟随语言，外部页码同步跳页输入；工具栏弹层管理焦点，视图按钮提供选中状态。Empty/Alert 支持长内容换行。theme.css 引入共享 tokens，焦点跟随当前主题，global.css 响应减少动态效果。应用仍需接入实际筛选、排序、分页与失败恢复。
 
 ## 许可证
 

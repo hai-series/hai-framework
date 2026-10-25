@@ -124,6 +124,26 @@ pnpm run deploy --env prod --build --bundle-only
 
 Skill 入口保存任务边界，相邻参考按需读取。`hai init` / `hai add` 只补齐缺失内容，已有技能与自定义规则需合并；同步时复制完整目录。
 
+## 技能工作流与前端指引
+
+工作流统一使用 hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review。需求、验收、发现与证据通过 [交接契约](templates/skills/hai-spec-implement/handoff.md) 连接，文档差异仍沿已有 Git 基线推进。
+
+UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui 与 [hai-ui-review](templates/skills/hai-ui-review/SKILL.md)；纯 API 模板排除这些前端技能。init/add 保留已有私有入口并补齐缺失参考资源。仓库同职责技能采用同名入口。
+
+### 问题反馈与离线分析
+
+使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。登录用户可提交反馈，管理员才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
+
+离线工具：`hai feedback summary <包.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view`。查看器仅本机监听，Ctrl+C 关闭，无需生产连接。
+
+## 发布预检与原生打包
+
+`hai upgrade 0.1.0-alpha.71` 只读检查全部消费框架包及 CLI/deploy 的精确版本、发布 tar 完整性、CLI/skills 文件、catalog/lock/安装漂移和业务 skill 定制；不安装、不覆盖本地修改，缺包退出非零。JSON 包含模块迁移预检入口、备份与旧会话边界。`hai deploy --env prod --plan` 校验本地制品并显示项目/环境身份、配置来源键名、选中/保留范围、基线要求与恢复目录，不构建、不生成凭据或连接目标；未读取的远端基线明确 not-inspected。
+
+`hai build --target app --platform android|ios` 才生成并校验新 APK/IPA。先添加平台工程并安装 Android SDK/JDK 或 macOS/Xcode，配置原生签名。cap:sync 只是同步；没有工程、工具链或新产物均失败。发布过滤 CAPACITOR_SERVER_URL，并在同步后核验原生配置，拒绝开发热更新地址。build.app 指定 App 工程目录。
+
+需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
+
 ## 开发测试
 
 ### 开发阶段本地使用
@@ -155,18 +175,6 @@ pnpm --filter @h-ai/cli test:deploy-gates
 `test:e2e` 为本轮服务显式选择隔离的测试后端及绝对数据目录，服务子进程不继承外部 `HAI_*` / `PUBLIC_*` / `VITE_*` 配置或读取用户 `.env.local`。测试专用 `HAI_E2E=1` 不改变普通开发、生产 dotenv 或共享后端要求；启用 transport 的场景使用新建可信 SM2 ring 与实际 registry。样板浏览器阶段另用独立 TCP 计数进程核验外部数据库配置未被触达。完整部署验收仍保留 fullstack 的真实 Redis/S3、增量发布与回滚。
 
 `--i18n` 定向门禁构建 CLI 后，在独立进程中验证语言优先级、help、生成成功与失败，并重放中英日文选择/名称校验/取消交互。
-
-## 技能工作流与前端指引
-
-工作流统一使用 hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-review、hai-pr-review。需求、验收、发现与证据通过 [交接契约](templates/skills/hai-spec-implement/handoff.md) 连接，文档差异仍沿已有 Git 基线推进。
-
-UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui 与 [hai-ui-review](templates/skills/hai-ui-review/SKILL.md)；纯 API 模板排除这些前端技能。init/add 保留已有私有入口并补齐缺失参考资源。仓库同职责技能采用同名入口。
-
-### 问题反馈与离线分析
-
-使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。登录用户可提交反馈，管理员才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
-
-离线工具：`hai feedback summary <包.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view`。查看器仅本机监听，Ctrl+C 关闭，无需生产连接。
 
 ## 许可证
 

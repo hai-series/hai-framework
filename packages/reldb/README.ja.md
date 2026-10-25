@@ -594,6 +594,18 @@ if (!result.success) {
 
 本番は PostgreSQL/MySQL が必須です。ファイルを含む SQLite は開発・明示的テスト用であり、ホスト間の共有状態を保証しません。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
 
+## モジュールのスキーマ移行
+
+`schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](../../docs/usage/README.ja.md)を参照。
+
+## エラー表示とログの関連付け
+
+一意制約違反は `HaiReldbError.DUPLICATE_ENTRY`（409）に統一し、タイムアウトや待機列満杯など既存のコードは保持します。翻訳済みメッセージやドライバー文字列ではなくコードで分岐してください。ログには code/schema/routine/constraint とスタック行番号を残し、数値のバインド値でこれらの診断識別子を隠しません。
+
+HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
 ## 開発とテスト
 
 ```bash

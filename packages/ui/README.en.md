@@ -636,6 +636,10 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 />
 ```
 
+### Feedback capture and delivery checks
+
+Feedback `evidence` shows sanitized material contents. `oncapture(id?)` hides the modal for navigation and adds or replaces a screenshot. With `onfileschange`, native silent screen recording produces a previewable, removable WebM/MP4 attachment (up to 60 seconds / 5 MiB; video is not automatically masked). `FeedbackDetail.onreplay` loads complete page events on demand for playback and seeking; logs and environment remain paginated.
+
 ### Style dependencies
 
 Components use TailwindCSS v4 + DaisyUI. Configure application `app.css` as follows:
@@ -916,6 +920,18 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
+## Design and interaction acceptance
+
+Use [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md) for page decisions, [hai-ui](../cli/templates/skills/hai-ui/SKILL.md) for implementation, and [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) for rendered UI review. See the [shared design guidance](../../.agents/instructions/ui-design.md).
+
+Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables expose sort/loading state and keyboard row activation. Pagination labels follow locale and external page changes update the jump input. Toolbar panels manage focus and view buttons expose selection. Empty/Alert wrap long content. theme.css imports shared tokens; focus follows the current theme and global.css respects reduced motion. Applications still implement filtering, sorting, paging and recovery.
+
+## Error messages and correlated logs
+
+HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
 ## Development and testing
 
 ```sh
@@ -924,12 +940,6 @@ pnpm --filter @h-ai/ui lint
 pnpm --filter @h-ai/ui build
 pnpm --filter @h-ai/ui test
 ```
-
-## Design and interaction acceptance
-
-Use [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md) for page decisions, [hai-ui](../cli/templates/skills/hai-ui/SKILL.md) for implementation, and [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) for rendered UI review. See the [shared design guidance](../../.agents/instructions/ui-design.md).
-
-Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables expose sort/loading state and keyboard row activation. Pagination labels follow locale and external page changes update the jump input. Toolbar panels manage focus and view buttons expose selection. Empty/Alert wrap long content. theme.css imports shared tokens; focus follows the current theme and global.css respects reduced motion. Applications still implement filtering, sorting, paging and recovery.
 
 ## License
 

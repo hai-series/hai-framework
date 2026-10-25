@@ -52,6 +52,8 @@ LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IA
 
 完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
 
+启用反馈时使用 SDK 原生保存对话框，Tauri dialog/fs 插件只允许选择路径后写入。CSP 允许图片和视频 blob 预览、沙箱回放，脚本和网络来源限制保持明确；Web 浏览器验证不代替系统 WebView/安装包验收。
+
 ## 开发测试
 
 从工程根执行 `pnpm typecheck`、`pnpm lint`、`pnpm build`、`pnpm test` 和 `pnpm test:e2e`。浏览器预览通过后，原生壳仍需在对应系统或设备单独验收。

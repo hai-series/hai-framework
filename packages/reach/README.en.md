@@ -132,7 +132,7 @@ if (result.data.deferred) {
 }
 ```
 
-Queue columns `created_at`, `updated_at`, `locked_until`, and `next_attempt_at` store Unix milliseconds as `BIGINT` (64-bit `INTEGER` on SQLite). The Reach repository normalizes integer strings returned by drivers such as PostgreSQL into safe integer `number` values. Negative, fractional, or unsafe stored integers return `SEND_FAILED` instead of being silently rounded. Template creation/update `TIMESTAMP` fields map to `Date`. Update the complete table schema during deployment, including attempt counters, backoff policy, and failure classification; the framework does not migrate old tables automatically.
+Queue columns `created_at`, `updated_at`, `locked_until`, and `next_attempt_at` store Unix milliseconds as `BIGINT` (64-bit `INTEGER` on SQLite). The Reach repository normalizes integer strings returned by drivers such as PostgreSQL into safe integer `number` values. Negative, fractional, or unsafe stored integers return `SEND_FAILED` instead of being silently rounded. Template creation/update `TIMESTAMP` fields map to `Date`. Update the complete table schema during deployment, including attempt counters, backoff policy, and failure classification; module-owned versioned migrations handle supported legacy tables (below).
 
 #### Durable retry policy
 
@@ -210,6 +210,12 @@ Only the matching dead version is restored; concurrent/stale requests fail, and 
 ## Production shared state
 
 Production rejects console providers and requires SMTP, SMS or an actual API service. A log write is not a delivery receipt. Reconcile unknown outcomes from non-idempotent providers rather than claiming exactly-once delivery. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
+
+## Credential notifications and upgrades
+
+Use `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` for passwords, OTPs and reset tokens. expiresAt is Unix milliseconds; stable operation keys must contain no credentials. A shared ledger stores only metadata receipts/status and redacted destinations, never bodies, variables or credential hashes. There is no delayed credential queue. Success returns receiptId; DND/expired messages are not sent, and uncertain delivery is never automatically repeated. Explicit development console output is isolated from persistent observers. Production Console restrictions remain. Normal messages may use deferPolicy: reject to avoid a second queue.
+
+`migrateReach({ dryRun: true })` previews supported migrations, applied during repository initialization. Statuses/identifiers remain; legacy in-flight work becomes unknown. Legacy payloads are retired once and pending old payloads discarded. Back up and stop old writers before upgrading; never replay old credentials.
 
 ## Development and testing
 

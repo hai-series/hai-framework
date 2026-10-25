@@ -197,7 +197,7 @@ The framework provides **22 independently publishable modules**, organized into 
 | ----------------- | ---------------------------------------------------------------------------------------------------------------- | :-------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | `@h-ai/iam`       | Identity/access management: password/OTP/LDAP authentication, RBAC, sessions, users                              |                 —                 |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
 | `@h-ai/reach`     | Notifications: email, SMS, API callbacks, templates, do-not-disturb (DND)                                        | ✅ SMTP / Alibaba Cloud SMS / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
-| `@h-ai/feedback`  | User feedback: evidence, private screenshots, email, review and offline bundles                                  |          DB / S3 / SMTP           |                                                     —                                                     |
+| `@h-ai/feedback`  | User feedback: evidence, private screenshots, email, review and offline bundles                                  |     DB / S3 / optional Reach      |                                                     —                                                     |
 | `@h-ai/ai`        | AI: full/streaming chat, images, ASR/TTS, tools, MCP, embeddings, RAG/knowledge, memory, context, reranking, A2A | ✅ OpenAI-compatible / extensible |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
 | `@h-ai/payment`   | Payments: order creation, cross-platform initiation, callbacks                                                   |  ✅ WeChat Pay / Alipay / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
 | `@h-ai/audit`     | Audit logs: recording, paginated queries, statistics, scheduled cleanup                                          |                 —                 |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
@@ -572,6 +572,10 @@ The admin-console example and CLI fullstack Web/App/Desktop enable this by defau
 | `h5-app`            | `pnpm --filter h5-app dev`              |
 | `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev` |
 | `mobile-app`        | `pnpm --filter mobile-app dev`          |
+
+## Feedback capture and delivery checks
+
+Feedback examples support independent console notifications, lightweight screen recording and page replay, with framework-owned budgets, saving and schema upgrades. Use `hai upgrade <exact-version>` and `hai deploy --env prod --plan` for read-only preflight. See [feedback](packages/feedback/README.en.md), [lifecycle](packages/core/README.en.md#application-lifecycle) and [CLI](packages/cli/README.en.md#release-inspection-and-native-packaging).
 
 ## Development
 

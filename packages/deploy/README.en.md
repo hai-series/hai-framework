@@ -191,6 +191,14 @@ Each delivery still generates `.hai/deploy/<environment>/bundle-.../.env.runtime
 
 Project-root `hai.json.deploy` stores deployment structure, `.env.<environment>` stores public settings, and `.env.<environment>.local` stores SSH settings and middleware secrets. Stable generated middleware credentials are also cached under the scanned service directory at `.hai/deploy/runtime/<project>-<environment>.secrets.json`; retain this file when reusing data volumes. Environment files default to the project/workspace root; override with `--env-dir`. After configuration, `pnpm run deploy --env test --build --bundle-only --yes` reuses complete settings without prompts; add `--skip-middleware` to retain middleware configuration. Interactive bundle-only mode offers to save or update SSH settings at the final configuration step; editing a delivery's `deploy-target.json` does not update the project.
 
+## Read-only deployment plan
+
+`createDeploymentPlan(appDir, config, options)` initializes no provider, generates no credentials/output and connects to no target. It shares real scanning, environment resolution, resource naming and artifact checksums, reporting versions, build ID, selected/retained services, source files/key names, baseline requirements and recovery paths without values or SSH credentials. Unread remote current is not-inspected; execution still strictly requires a successful baseline for partial updates. Compose recovery does not undo database changes/migrations. CLI: `hai deploy --env prod --plan`.
+
+Use `--plan --inspect-remote` (SDK inspectRemote:true) to read current and the successful release directory over SSH. It reports verified/missing/unavailable and the actual recovery release ID without target writes.
+
+Resources use the execution sidecar planner: `containers` contains explicit names only; Compose-named LDAP/SMTP services appear in `composeManagedServices`. `logicalVolumes` contains Compose keys, with actual engine names scoped by the Compose project. Internal keep connections, skipped services, partial updates and cloud provisioning follow execution rules without exposing credential values.
+
 ## Development and testing
 
 ```sh

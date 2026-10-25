@@ -575,14 +575,6 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 
 `_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../.agents/skills/hai-module-create/configuration.md).
 
-## Development and testing
-
-```bash
-pnpm --filter @h-ai/core test
-```
-
-See the [module JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
-
 ## Request correlation and log observation
 
 Collection persistence and upload paths can use `core.context.run({ suppressLogObservers: true }, operation)` to prevent observing their own asynchronous logs. Normal output such as stdout remains enabled; observation resumes outside the scope.
@@ -607,6 +599,28 @@ await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'u
 })
 unsubscribe()
 ```
+
+## Application lifecycle
+
+`core.module.createRuntime([{ name, enabled?, start, close }])` starts in declaration order, closes in reverse order and merges concurrent calls. It registers cleanup before partial initialization. Failed close retains that module and dependencies for the next close/start retry. Errors expose module, phase, code and configuration paths, never raw configuration or SDK exceptions. Base/API/fullstack and the admin use this helper.
+
+## Error messages and correlated logs
+
+HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+### Public business progress
+
+Internal ext is private. Explicitly approved and schema-validated business progress uses publicExt and is serialized as ext; no internal exception should be placed there.
+
+## Development and testing
+
+```bash
+pnpm --filter @h-ai/core test
+```
+
+See the [module JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
 
 ## License
 

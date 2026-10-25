@@ -315,14 +315,6 @@ Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleReque
 
 Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
 
-## Development and testing
-
-```bash
-pnpm --filter @h-ai/kit test
-```
-
-Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.
-
 ## Feedback endpoint and request correlation
 
 `kit.createFeedbackHandler` can serve GET/POST/PATCH in `/api/feedback/[...path]/+server.ts`. It reuses the same api-contract schemas as serv, bounds the input stream, and rejects client identity/scope fields. resolveContext maps an already verified locals.session to server-controlled scope and permissions; null denies access. Keep the existing createHandle authentication, CSRF, and transport encryption.
@@ -347,6 +339,20 @@ export const GET = handler
 export const POST = handler
 export const PATCH = handler
 ```
+
+## Error messages and correlated logs
+
+HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+## Development and testing
+
+```bash
+pnpm --filter @h-ai/kit test
+```
+
+Kit has no module-wide init/close. The application initializes and closes shared cache, IAM and crypto dependencies. See the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for typechecked public examples. Authenticate requests with iam.auth.verifyToken; a nonempty token is not proof of identity.
 
 ## License
 

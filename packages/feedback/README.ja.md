@@ -12,7 +12,7 @@
 
 - ブラウザーとサーバーのログ、リクエスト、操作、バージョン、許可された環境情報を上限付きで収集します。既定ではエラーの前後それぞれ最大100件です。
 - トランザクションによる受理、提出と証拠の冪等性、checksum 検証、処理・収集・通知状態の分離、永続ジョブとリース回復。
-- Storage の S3 と Reach の SMTP を再利用します。初版は Reach DND を無効にし、feedback だけが通知再試行を管理します。
+- `notificationMode` は独立して選択できます。`disabled` は通知ジョブなし、`console` は本番でも脱機密化した概要のみを出力し Reach/メール不要、`reach` は任意の Provider と宛先を使い、このモードのみ recipients が必要です。既定の `reach` は既存設定を維持し、生成プロジェクトは `console` を明示します。Reach DND 中は feedback 自身の outbox で待機し、二重の遅延キューや他通知の方針変更を行いません。本番 Reach Console の制限は維持します。sent はチャネル受付であり受信完了を意味しません。
 - スクリーンショット、復元不能なマスク、注釈、任意の rrweb 記録、再試行とローカル出力。UI は `FeedbackModal`、`FeedbackList`、`FeedbackDetail` を提供します。
 - 自己完結 ZIP、SHA-256 検証、オフライン表示、証拠のページ検索。運用認証情報は含めません。
 
@@ -20,7 +20,7 @@
 
 ブラウザーとサーバーには各実成果物の `appVersion/buildId/commit` を渡します。フロント側は自分の識別情報を保持し、同じ SSR ビルドの client/server 出力は buildId を共有します。管理画面と base/API/fullstack テンプレートにはコンパイル時の識別情報を組み込んでいます。`hai build` は内部で識別情報を生成し、Docker のビルド引数にも渡します。バージョンは各対象の package.json から取得し、所属する Git コミットがない場合は `unknown` を記録します。テンプレートの `build-metadata.json` には同じ三つの非機密項目のみを保存します。
 
-core、reldb、storage、reach を初期化し、各結果を確認してから feedback を初期化します。本番は共有 PostgreSQL/MySQL、非公開 S3、実際の SMTP を使用します。接続と秘密情報はアプリケーションが管理します。開発用 Console 通知は実際のメール配信の証明にはなりません。
+core、reldb、非公開 storage の後に feedback を初期化します。Reach は reach 通知モードのみ必要です。本番は共有 DB と非公開ストレージを使用し、接続認証情報はホストが管理します。
 
 依存モジュール初期化済みの非同期関数内の例です。context は信頼できるサーバー認証・認可から取得します。
 
@@ -30,8 +30,7 @@ import { feedback } from '@h-ai/feedback'
 const initialized = await feedback.init({
   appId: 'orders',
   appVersion: '1.0.0',
-  recipients: ['admin@example.test'],
-  notificationProvider: 'email',
+  notificationMode: 'console',
   adminUrl: 'https://app.example.test/admin/feedback',
 })
 if (!initialized.success)
@@ -55,21 +54,39 @@ return submitted
 
 `text/plain` 添付は 5 MiB のファイル上限内で全文を秘匿処理し、安全な本文と末尾のログを保持します。構造化証拠のフィールド切り捨ては適用しません。上限を超える元ファイルは読取前に拒否し、秘匿処理後も同じ添付バイト上限を適用します。JSON 添付と構造化証拠には文字列長・深さ・件数の上限が残り、切り捨てられる場合があります。完全なログにはプレーンテキスト添付を使用してください。送信前の添付と、初回送信内容の固定後にローカル出力へ追加したファイルに同じ規則を適用します。
 
-クライアントの全操作は `init(config)`、`prepare/submit/flush/record/getDraft/annotate/addFiles/exportDraft(input?)/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
+クライアントの全操作は `init(config)`、`prepare/captureScreenshot(attachmentId?)/submit/flush/record/getDraft/getView/annotate/addFiles/exportDraft/saveDraft/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
 
 `addFiles` は一括追加を原子的に行い、全ファイルの検証に成功してから統合します。一つでも失敗した場合、既存の添付と欠落マーカーを維持し、一部だけを保存しません。並行して成功した追加を上書きせず、統合後も最大 20 件です。読取中に下書きが変わるか初回送信内容が固定された場合は `CONFLICT` を返し、送信内容に含まれない添付を後から隠れてアップロードしません。
 
-`annotate(id, annotation)` の座標単位は、ブラウザーでデコードした元画像のピクセルです。UI の `FeedbackAnnotation.rect` は 0–1 の比率なので、`Image.decode()` 後に x/width を `naturalWidth`、y/height を `naturalHeight` と掛け合わせて SDK に渡します。CSS の表示サイズではなく元画像の寸法を使うことで、JPEG の向きを SDK のデコードと一致させます。オブジェクト URL は作成元が置換時または破棄時に解放します。
+`annotate(id, { ...rect, mode, coordinateSpace: 'ratio' })` は UI の 0–1 座標を直接受け取り、SDK がデコード後の元画像サイズで換算します。小数、1% 未満、逆方向、端や CSS 拡大縮小に対応します。省略時は従来のピクセル座標です。`getView()` がプレビュー URL を管理し、置換・削除・終了時に解放するため、ホストの画像デコードや URL 管理は不要です。
 
 並行 `init` は `INIT_IN_PROGRESS` を返します。`close` は時間制限付き画面取得の終了後にセッションを解放します。取得中の終了は `prepare` を失敗させ、草稿を復活させません。送信、終了、画像削除、別の注釈更新後に完了した注釈は `CONFLICT` を返し、送信済みバイト列と checksum を変更しません。
 
 下書きは SDK が保持し、`annotate` や `addFiles` で更新します。Svelte 側では参照を `$state.raw<FeedbackDraft>()` に保持し、操作成功後に `getDraft()` から添付ビューを更新してください。深い `$state` プロキシに格納すると、SDK が元の下書きの画像バイトを置き換えても、キャッシュされた古いバイトが返る場合があります。
 
-添付の元データ上限は 5 MiB で、Base64 では約 6.67 MiB と JSON フィールドの容量が必要です。参照管理画面と feedback を有効にした新規 API/fullstack プロジェクトは、既存の `kit.transport.maxPlaintextBytes` または `serv.transport.maxPlaintextBytes` を `8388608`（8 MiB）に設定します。フレームワーク全体の既定値は 1 MiB のままです。クライアントは既定でサーバーのハンドシェイクに従いますが、明示したローカル上限が小さい場合は拒否します。8 MiB の平文から暗号化ボディ上限 `16,809,984` バイトを導出し、本番 adapter-node の `BODY_SIZE_LIMIT` と外側のプロキシも合わせます。暗号化を無効にする場合は実際の JSON サイズに合わせてください。フレームワークのデプロイが自動導出するため、新しい feedback 設定は不要です。`hai add` はホストの既存設定を保持するので、容量はホスト側で明示的に調整します。
+`maxTotalBytes` の既定値は 32 MiB（4–40 MiB）です。`feedback.budget` から単一・合計添付、二重保存する証拠と Base64/暗号化転送の上限を導出します。既定は各 5 MiB、添付合計 22 MiB、証拠 4 MiB/2000 件、履歴・メタデータ・ビューアー用 2 MiB です。受理前に添付宣言の合計を検証し、証拠更新は原子的に制限、処理履歴は 256 KiB までです。認証済み `reports.policy({})` でクライアントとフォームに有効値を渡します。管理画面、API/fullstack テンプレートとデプロイは `feedback.budget.maxTransportBytes` を転送、adapter-node、プロキシに適用します。既存の独自ホストは初期化時に同じ値を接続します。`hai add` は既存設定を維持します。
 
 `captureConsole` と `persistDraft` の既定値は false です。永続化にはホストが決定する非認証情報のユーザー/テナント `persistenceKey` が必要です。`keyScreenshots` は既定で true ですが `screenshot` 全体スイッチに従います。`maxKeyScreenshots` は既定 3、上限 5、`keyScreenshotThrottleMs` は既定 10000 ミリ秒です。
 
 自動画像は機密部分を隠したクローン DOM から SVG foreignObject を通して可視ページを再構築します。クロスオリジン画像、iframe/video、未準備のネットワークフォントは欠落する場合があります。ブラウザーや CSP 制限による失敗は missing として記録され、画像の手動添付も利用できます。
+
+### フィードバック収集と配布確認
+
+現在のページ画像を先頭に表示します。`captureScreenshot(attachmentId?)` は現在のページを追加し、IDを渡すと既存画像を置換します。`FeedbackModal.oncapture` に接続すると、入力を保持して画面を閉じ、ページを切り替えて撮影できます。`FeedbackForm.evidence` は脱敏済みログ、リクエスト、環境と操作記録を展開表示し、`evidenceSummary` は不足理由を補足します。ブラウザー環境は実際のURL（クエリとhashを除外）、画面、言語とビルドから取得します。サーバーは `envAllowlist` の非認証情報だけを収集し、未設定値は null です。
+
+対応ブラウザーでは「画面録画 → 録画を開始」からタブやウィンドウを選択し、最大60秒 / 5 MiBの無音動画を低フレームレート・低ビットレートで録画できます。共有停止、取消、時間切れとコンポーネント破棄でストリームを解放します。動画は選択した画面そのもので自動マスクされません。送信前に確認・削除できます。WebM/MP4も非公開保存、チェックサムと5 MiB制限に従い、非対応環境では動画ファイルを添付できます。
+
+管理台とfeedback有効のfullstackテンプレートは `replay: true` を明示し、SDKの既定は無効のままです。管理者は詳細の「ページ再生」で操作を再生・移動できます。宿主の `onreplay` は `kind: replay` の全ページを取得してください。未記録時は理由を表示し、録画は操作と添付で確認できます。ローカル保存後は `hai feedback view <zip>` で画像、録画と操作を表示できます。未取得のサーバー資料は不足として記録します。
+
+`saveDraft(input?)` は Web ダウンロード、Tauri 保存ダイアログ、Capacitor のキャッシュ/ネイティブ共有を統一します。取消は `status: 'cancelled'`、失敗は失敗として返します。ネイティブプラグインは optional peer で、生成 App/Desktop に依存と権限を設定済みです。独自ホストは対応プラグインを導入してください。`createFeedbackReview(typedClient.feedback.reports)` は `loadReplay(id)` と取消可能な `exportReport(id)` を提供します。ログアウト時は `review.close()` と `client.close({ discard: true })` で収集・ポーリング、プレビューと永続草稿を終了・削除します。
+
+ビルド識別子は一律 128 文字までです。明示した無効な HAI_BUILD_ID/HAI_BUILD_COMMIT は値を再表示せずビルドで拒否します。verificationCode、otpCode などを既定で脱機密化し、すべての業務 code を隠すことはしません。
+
+サーバーポリシー取得失敗時も有界のローカル収集・出力を継続し server-policy-unavailable を示します。オンライン送信前に再確認します。addFiles(files, removedAttachmentIds?) は旧添付削除と追加を原子的に処理し、表示と実容量を一致させます。
+
+console/disabled は Reach パッケージ不要です。reach モードは optional peer の @h-ai/reach を明示導入・初期化します。認証通知は生成 receiptId のみを返し、Provider messageId を保存・返却しません。
+
+Web クライアントは原生プラグインを解決・導入しません。独自ホストは @h-ai/feedback/tauri の saveTauriFeedbackFile または @h-ai/feedback/capacitor の saveCapacitorFeedbackFile を読み込み、起動時に configureFeedbackSaving(saver) を呼びます。生成工程には接続済みで、業務コードはネイティブファイルの管理を行いません。
 
 ### 一覧、処理、出力
 
@@ -92,7 +109,7 @@ hai feedback view feedback-FB-1.zip
 
 ### 設定とエラー
 
-`FeedbackConfigSchema` は appId、recipients、notificationProvider、adminUrl、collectionTimeoutMs、workerIntervalMs、leaseMs、maxAttempts、retentionDays、envAllowlist と資料の容量を検証します。YAML の環境参照は `HAI_FEEDBACK_*` を使い、ブラウザーへ SMTP/S3 の秘密を公開しません。
+`FeedbackConfigSchema` は appId、notificationMode、recipients、maxTotalBytes、notificationProvider、adminUrl、collectionTimeoutMs、workerIntervalMs、leaseMs、maxAttempts、retentionDays、envAllowlist と資料の容量を検証します。YAML の環境参照は `HAI_FEEDBACK_*` を使い、ブラウザーへ SMTP/S3 の秘密を公開しません。
 
 各業務結果の `success` を確認してください。`HaiFeedbackError` は初期化、設定、権限、存在しない記録、競合、容量、checksum エラーを表します。HTTP 200やSMTP受理だけでは、業務成功や受信箱への配信を証明できません。不確実な送信は重複する可能性があります。
 

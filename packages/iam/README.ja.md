@@ -878,6 +878,10 @@ if (!result.success) {
 
 `iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
 
+## スキーマと認証情報の通知
+
+RelDB 初期化後の `migrateIam({ dryRun: true })` は読み取り専用です。iam.init は対応する認証・リセット列を補い、ユーザー、パスワードと権限を保持します。事前に旧書込を停止しバックアップしてください。安全世代のない旧セッションは再ログインが必要で、認可復元のため世代を戻してはいけません。既定 Reach 通知は sensitive/expiresAt/idempotencyKey で平文保存や遅延再送を防ぎます。独自コールバックも同じ期限と保護を守ってください。
+
 ## 開発とテスト
 
 公開例は `@h-ai/iam` を使用し、既定値を省略できる `IamConfigInput` と解析済み `IamConfig` を区別します。依存を先に初期化し、`HaiResult.success` を確認し、会話更新には読取時の `version`、通知には永続的な冪等キーを使います。「模块内部上下文」の戦略・倉庫例はアプリ向け深い import の契約ではありません。チェッカーは型だけを確認し、Redis/DB・LDAP・配送の動作には対応する統合テストが必要です。[JSDoc 規約](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证)も参照してください。

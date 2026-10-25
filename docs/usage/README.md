@@ -8,7 +8,6 @@
 
 命令对应当前仓库的 CLI 与模板。使用已发布版本时，先用 `hai --version`、`hai build --help` 和 `hai deploy --help` 核对能力；尚未发布的源码能力不会自动出现在旧版 CLI 中。模块用法从[根 README](../../README.md)和各包 README 查找；维护框架源码请另读 [AGENTS.md](../../AGENTS.md)。
 
-
 ## 核心功能清单
 
 - 创建应用与配置环境。
@@ -287,6 +286,14 @@ pnpm run deploy --env prod --build --bundle-only
 `hai init` 可为旧项目补齐缺失的 AI 入口和 skills，但会保留已有文件；它不是框架升级命令，也不会覆盖旧规则。更新已有 skills 时按旧模板、应用自定义、新模板合并。框架源码的 `main` 也不等于 npm 已发布版本。
 
 升级后按项目 scripts 执行 typecheck、lint、build、test 和受影响 E2E，实际验证认证、数据与关键流程。重新生成需要交付的镜像或安装包，随后按第 5 节部署。只改版本号或只通过构建，还不能代表升级完成。
+
+## 发布预检与原生打包
+
+`hai upgrade 0.1.0-alpha.71` 只读检查全部消费框架包及 CLI/deploy 的精确版本、发布 tar 完整性、CLI/skills 文件、catalog/lock/安装漂移和业务 skill 定制；不安装、不覆盖本地修改，缺包退出非零。JSON 包含模块迁移预检入口、备份与旧会话边界。`hai deploy --env prod --plan` 校验本地制品并显示项目/环境身份、配置来源键名、选中/保留范围、基线要求与恢复目录，不构建、不生成凭据或连接目标；未读取的远端基线明确 not-inspected。
+
+`hai build --target app --platform android|ios` 才生成并校验新 APK/IPA。先添加平台工程并安装 Android SDK/JDK 或 macOS/Xcode，配置原生签名。cap:sync 只是同步；没有工程、工具链或新产物均失败。发布过滤 CAPACITOR_SERVER_URL，并在同步后核验原生配置，拒绝开发热更新地址。build.app 指定 App 工程目录。
+
+`schemaColumns(reldb, table, sql?)` 只读检查真实结构；`migrateSchema(reldb, module, steps, { dryRun: true })` 不创建账本。版本步骤由所属模块维护，业务不修改框架内部表。执行使用 `hai_schema_migrations`，SQLite/PostgreSQL 整体事务，MySQL DDL 隐式提交因此步骤必须可重入；失败不推进版本，重新检查真实结构后续做，拒绝向低版本降级。升级前停止所有旧写入并备份 DB/会话缓存；回退需恢复兼容数据库与旧代码，不能只换二进制。详见 [升级指南](../../docs/usage/README.md)。
 
 ## 开发测试
 

@@ -33,15 +33,17 @@ pnpm --filter {{projectName}}-app dev
 pnpm --filter {{projectName}}-app build
 
 # 同步原生工程；首次使用前按需执行 cap:add:android / cap:add:ios
-pnpm --filter {{projectName}}-app package
+pnpm --filter {{projectName}}-app cap:sync
 
 # Android / iOS 原生打包
 pnpm --filter {{projectName}}-app cap:build:android:debug
-pnpm --filter {{projectName}}-app cap:build:android:release
-pnpm --filter {{projectName}}-app cap:build:ios
+pnpm --filter {{projectName}}-app package:android
+pnpm --filter {{projectName}}-app package:ios
 ```
 
 本地开发通过根 `.env` 的 `PUBLIC_API_BASE` 配置代理。原生打包前，在本端 `public/runtime-config.js` 中设置 `globalThis.__HAI_PUBLIC_CONFIG__ = { apiBase: 'https://api.example.com/api/v1' }`，再编译并同步原生工程；这里只能放公开地址，不能放密钥。Android 模拟器访问宿主机通常使用 `http://10.0.2.2:3000/api/v1`。
+
+发布入口实际调用 hai build --target app，缺平台工程、工具链、签名配置或新的 APK/IPA 均失败。package 默认 Android；iOS 必须在 macOS/Xcode 上执行。CAPACITOR_SERVER_URL 仅开发使用，发行打包过滤并核验不进入原生配置。调试 APK 命令为 Windows Gradle 调试入口，不作为发行成功证据。
 
 ### IAM 认证配置
 
@@ -52,6 +54,8 @@ LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IA
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
 完整契约见生成应用的 `.agents/skills/hai-iam/reference.md`。
+
+启用反馈时，shared SDK 负责图片预览/比例标注/导出轮询；原生保存使用 Filesystem 缓存与 Share，完成/取消清理临时文件。首次添加 iOS 平台后按 Filesystem 插件要求配置 PrivacyInfo.xcprivacy。
 
 ## 开发测试
 

@@ -197,7 +197,7 @@ pnpm add @h-ai/ui                   # UI 组件库
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理                                                         |             —              |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
 | `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                                                                      | ✅ SMTP / 阿里云短信 / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
-| `@h-ai/feedback`  | 用户反馈：现场采集、私有截图、邮件通知、分页处理与离线诊断包                                                                 |       DB / S3 / SMTP       |                                                     —                                                     |
+| `@h-ai/feedback`  | 用户反馈：现场采集、私有截图、录屏回放与可选通知、分页处理与离线诊断包                                                       |  DB / S3 / optional Reach  |                                                     —                                                     |
 | `@h-ai/ai`        | AI 集成：LLM 对话（同步/流式）、文生图、语音（ASR/TTS）、工具调用、MCP、Embedding、RAG/知识库、记忆、上下文管理、Rerank、A2A |  ✅ OpenAI 兼容 / 可扩展   |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
 | `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                                                                       | ✅ 微信 / 支付宝 / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
 | `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                                                                             |             —              |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
@@ -572,6 +572,10 @@ if (login.success)
 | `h5-app`            | `pnpm --filter h5-app dev`              |
 | `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev` |
 | `mobile-app`        | `pnpm --filter mobile-app dev`          |
+
+## 反馈现场与交付检查
+
+反馈默认示例支持独立控制台通知、轻量录屏与页面回放；容量、保存和旧表升级由框架负责。发布前可执行 `hai upgrade <精确版本>` 和 `hai deploy --env prod --plan` 只读预检。见 [反馈接入](packages/feedback/README.md)、[生命周期](packages/core/README.md#应用生命周期编排) 与 [CLI](packages/cli/README.md#发布预检与原生打包)。
 
 ## 二次开发
 

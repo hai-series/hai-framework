@@ -694,16 +694,6 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
 
-## 開発とテスト
-
-```bash
-pnpm --filter @h-ai/serv test
-pnpm --filter @h-ai/serv typecheck
-pnpm --filter @h-ai/serv lint
-```
-
-宣言の JSDoc 例は実在する `@h-ai/serv` または公開 features サブパスから import します。内部 Hono・guard・router・transport は「模块内部上下文」と明記し、ルート API として扱いません。起動設定の例外、業務 HaiResult、HTTP middleware の status、listener の Promise<void> 終了を区別し、既定の AI completion は非ストリーミング JSON のままです。保守時は `node scripts/check-module-jsdoc.mjs --package serv` で実際の宣言と内部スコープに対して例をコンパイルします。実 HTTP、認可、共有リプレイ防止の検証を代替しません。
-
 ## オプションのフィードバックサービスと信頼範囲
 
 `@h-ai/serv/features/feedback` の `createFeedbackProcedures` で `apiContract.feedback` を接続します。通常のランタイム入口は feedback サービスを読み込みません。ホストで reldb/storage/reach/feedback を初期化し、検証済みセッションと配置ポリシーから範囲を作ります。null またはユーザー不一致は拒否し、ドメイン側も範囲と権限を検証します。
@@ -733,6 +723,22 @@ const app = serv.createApp({
   createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
 })
 ```
+
+## エラー表示とログの関連付け
+
+HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+## 開発とテスト
+
+```bash
+pnpm --filter @h-ai/serv test
+pnpm --filter @h-ai/serv typecheck
+pnpm --filter @h-ai/serv lint
+```
+
+宣言の JSDoc 例は実在する `@h-ai/serv` または公開 features サブパスから import します。内部 Hono・guard・router・transport は「模块内部上下文」と明記し、ルート API として扱いません。起動設定の例外、業務 HaiResult、HTTP middleware の status、listener の Promise<void> 終了を区別し、既定の AI completion は非ストリーミング JSON のままです。保守時は `node scripts/check-module-jsdoc.mjs --package serv` で実際の宣言と内部スコープに対して例をコンパイルします。実 HTTP、認可、共有リプレイ防止の検証を代替しません。
 
 ## ライセンス
 

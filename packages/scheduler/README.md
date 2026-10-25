@@ -224,7 +224,7 @@ const logs = await scheduler.getLogs({
 
 可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
 
-领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；新 schema 不自动迁移旧日志/执行表。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；支持的旧日志由模块版本迁移归档并复制；执行账本保持独立。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
@@ -253,6 +253,10 @@ API 任务的 `timeout`（默认 30000 毫秒）覆盖请求和完整响应体�
 ### 可选集成
 
 调度任务触发 Reach 通知时，调度锁或任务完成不等于外部消息只投递一次。按 [Reach 队列语义](../reach/README.md) 使用持久 queueId；HTTP 接收端须原子持久去重，SMTP/短信等在途未知结果须人工核对，不能由调度重试直接重发。
+
+## 旧库升级
+
+RelDB 初始化后调用 `migrateScheduler({ dryRun: true })` 查看变化，scheduler.init 在创建仓库前执行支持的版本迁移。旧任务保留，补 idempotent=false；旧日志表归档为 hai_scheduler_logs_alpha65，按稳定 legacy:<id> 幂等复制完整快照，超过一批和中断重试不重复历史，也不执行旧任务。SQLite/PostgreSQL 事务回滚；MySQL 按真实结构继续，需保持旧写入停止。升级前备份，回退恢复匹配数据库与代码，执行账本与旧历史不混为同一发生记录。
 
 ## 开发测试
 

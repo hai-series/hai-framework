@@ -123,15 +123,6 @@ Contracts describe input and output structures only. Procedures express business
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
-## Development and testing
-
-```bash
-pnpm --filter @h-ai/api-contract test
-pnpm --filter @h-ai/api-contract typecheck
-```
-
-Schemas, inferred types and composition helpers include typechecked examples; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证). Schema samples use validated local data and do not prove provider execution.
-
 ## Feedback domain contract
 
 `apiContract.feedback` exposes reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection and attachments.upload/get. A minimal submission needs only submissionId/appId, without a description or exception. Client inputs cannot supply identities, permissions, S3 keys, or email recipients. `@h-ai/api-contract/feedback` provides the same schemas and types through an optional subpath.
@@ -145,6 +136,15 @@ const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', app
 const contract = apiContract.create({ feedback: apiContract.feedback })
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
+
+## Development and testing
+
+```bash
+pnpm --filter @h-ai/api-contract test
+pnpm --filter @h-ai/api-contract typecheck
+```
+
+Schemas, inferred types and composition helpers include typechecked examples; see the [JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证). Schema samples use validated local data and do not prove provider execution.
 
 ## License
 

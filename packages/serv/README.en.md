@@ -694,16 +694,6 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
 
-## Development and testing
-
-```bash
-pnpm --filter @h-ai/serv test
-pnpm --filter @h-ai/serv typecheck
-pnpm --filter @h-ai/serv lint
-```
-
-Declaration JSDoc examples import actual `@h-ai/serv` entries or published feature subpaths. Internal Hono, guard, router and transport examples are marked as internal module context and are not root APIs. Examples distinguish startup configuration exceptions, domain HaiResult, HTTP middleware statuses, and listener shutdown returning Promise<void>; default AI completion still returns non-streaming JSON only. Maintainers can run `node scripts/check-module-jsdoc.mjs --package serv` against actual declarations and internal lexical bindings. Compilation does not replace real HTTP, authorization or distributed replay-protection validation.
-
 ## Optional feedback service and trusted scope
 
 Mount `apiContract.feedback` with `createFeedbackProcedures` from `@h-ai/serv/features/feedback`. The runtime root does not load the feedback service. Initialize reldb/storage/reach/feedback in the host, then map verified sessions and deployment policy to feedback scope. A null resolver result or mismatched user is denied; the domain module also checks scope and permissions.
@@ -733,6 +723,22 @@ const app = serv.createApp({
   createContext: async input => ({ ...await authenticate(input), scopeId: 'configured-product' }),
 })
 ```
+
+## Error messages and correlated logs
+
+HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+
+Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+## Development and testing
+
+```bash
+pnpm --filter @h-ai/serv test
+pnpm --filter @h-ai/serv typecheck
+pnpm --filter @h-ai/serv lint
+```
+
+Declaration JSDoc examples import actual `@h-ai/serv` entries or published feature subpaths. Internal Hono, guard, router and transport examples are marked as internal module context and are not root APIs. Examples distinguish startup configuration exceptions, domain HaiResult, HTTP middleware statuses, and listener shutdown returning Promise<void>; default AI completion still returns non-streaming JSON only. Maintainers can run `node scripts/check-module-jsdoc.mjs --package serv` against actual declarations and internal lexical bindings. Compilation does not replace real HTTP, authorization or distributed replay-protection validation.
 
 ## License
 

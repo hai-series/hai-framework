@@ -152,17 +152,6 @@ else {
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
 
-## 開発とテスト
-
-```bash
-pnpm --filter @h-ai/api-client test
-pnpm --filter @h-ai/api-client typecheck
-```
-
-`transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../crypto/TRANSPORT-CAPACITY.md)を参照してください。
-
-serv/kit は要求の結合、署名、MAC を検証した後、時間窓を超えた報文に暗号化した HTTP 400 時刻エラーを返します。クライアントは `TransportTimeError`（`hai:crypto:071`）で端末とサーバーの時刻同期・再読み込みを案内します。`api-client` は `VALIDATION_FAILED` に変換し `cause.transportCode` に原因を保持します。自動再送やリプレイ時間窓の緩和は行わず、改ざん・未認証の要求は従来の認証エラーです。
-
 ## 論理リクエストの監視
 
 `client.observeRequests` は論理呼び出しごとに一度通知し、解除関数を返します。requestId、procedure、所要時間、HTTP 状態、最終 success/errorCode、業務リクエストの attempts を含みます。HTTP 200 の失敗 HaiResult も失敗として扱い、認証更新後の再試行も同じ requestId を保持します。本文・Token・URL クエリーは含みません。認証更新や鍵交換をユーザー操作としません。close は購読を解除するため、再初期化後は再購読してください。
@@ -176,6 +165,23 @@ const unsubscribe = apiClient.observeRequests((record) => {
 })
 unsubscribe()
 ```
+
+## エラー表示とログの関連付け
+
+HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+
+HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+## 開発とテスト
+
+```bash
+pnpm --filter @h-ai/api-client test
+pnpm --filter @h-ai/api-client typecheck
+```
+
+`transport.maxPlaintextBytes` は鍵交換で取得します。ローカル上限を明示した場合は小さい値を採用します。容量エラーは `HaiApiClientError.PAYLOAD_TOO_LARGE`（`hai:api-client:020`）と方向・段階・バイト診断を返します。[容量と移行](../crypto/TRANSPORT-CAPACITY.md)を参照してください。
+
+serv/kit は要求の結合、署名、MAC を検証した後、時間窓を超えた報文に暗号化した HTTP 400 時刻エラーを返します。クライアントは `TransportTimeError`（`hai:crypto:071`）で端末とサーバーの時刻同期・再読み込みを案内します。`api-client` は `VALIDATION_FAILED` に変換し `cause.transportCode` に原因を保持します。自動再送やリプレイ時間窓の緩和は行わず、改ざん・未認証の要求は従来の認証エラーです。
 
 ## ライセンス
 

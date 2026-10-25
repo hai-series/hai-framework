@@ -224,7 +224,7 @@ const logs = await scheduler.getLogs({
 
 信頼されたサーバーは `execution.listLogFailures({ limit, offset })`（listUnknown と同じ上限）で pending を監視し、`execution.repairLog(occurrenceId)` で共有 journal から補完します。別ノード・再起動後・同時呼び出しも可能で、固定主キーと全内容の照合によりコミット後の応答消失を排除します。`LOG_PERSIST_FAILED`（032）は pending を維持して安全な警告を出します。終態の保存前に DB 全体が停止した場合は unknown の外部効果を照合し、復元可能な結果があると仮定しないでください。補完と保持処理は業務 Hook を呼ばず、保持失敗は警告のみです。`onTaskFinish` は未確定のローカル業務終了通知で、保存確認は trigger の戻り値と execution.get.logPersistence を使います。
 
-取得前の競合・スキップの interrupted は観測ログで、補完できる確定終態はありません。応答が確認できなければ unconfirmed です。JSON 列で MySQL の 255 文字制限を避け、完全な結果と全再試行を保持します。旧ログ・実行テーブルの自動移行はしません。終了は補完処理を待つため、DB より先に scheduler を終了してください。
+取得前の競合・スキップの interrupted は観測ログで、補完できる確定終態はありません。応答が確認できなければ unconfirmed です。JSON 列で MySQL の 255 文字制限を避け、完全な結果と全再試行を保持します。対応する旧ログはモジュール移行で保存・コピーし、実行台帳は独立します。終了は補完処理を待つため、DB より先に scheduler を終了してください。
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })
@@ -253,6 +253,10 @@ cron は分単位で照合し、同じ分から永続 occurrenceId を生成し�
 ### 任意の連携
 
 Reach 通知を実行するタスクでは、調度ロックやタスク完了だけで外部配信の一意性は保証できません。[Reach キューの意味](../reach/README.ja.md) に従い、永続化された queueId を使ってください。HTTP 受信側は副作用と重複排除を原子的に保存し、SMTP/SMS の配信中の結果不明は手動照合します。スケジューラーの再試行で無条件に再送しないでください。
+
+## 旧データベースの更新
+
+RelDB 初期化後に `migrateScheduler({ dryRun: true })` で確認し、scheduler.init がリポジトリー前に対応する移行を実行します。旧タスクを保持し idempotent=false を追加します。旧ログを hai_scheduler_logs_alpha65 に保存し、安定した legacy:<id> で完全なスナップショットを冪等コピーします。中断後も履歴を重複せず旧タスクを実行しません。SQLite/PostgreSQL はロールバック、MySQL は旧書込停止下で実構造から再開します。事前バックアップと互換 DB/コードによる復旧が必要です。
 
 ## 開発とテスト
 

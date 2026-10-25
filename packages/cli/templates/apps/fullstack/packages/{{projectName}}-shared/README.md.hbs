@@ -70,14 +70,17 @@ See `.agents/skills/hai-iam/reference.md` in the generated application for the c
 
 The user editor uses `FormLayout columns={2} labelPosition="left"`. Personal settings fill the available width and use two columns on wide screens, with stacked labels and a single avatar editor. Narrow containers automatically stack cards, fields and labels. UI controls and CRUD forms show client validation on blur, update errors while correcting input and validate untouched fields on submit. Field errors follow the current UI language. The management store syncs locale through the lightweight `@h-ai/ui/i18n` entry, without loading components or tour CSS. Configure `colSpan` on FormField to override automatic spans for textareas, uploads and multiple choices.
 
-## Development and testing
-
-Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Browser checks cover shared workflows; test native shells on their target platforms separately.
-
 ## 界面设计与验收
 
 共享管理界面的 Web/App/Desktop 使用同一套 UI 组件和状态。设计、实现、审查分别参考根目录 `.agents/skills/hai-ui-design/`、`hai-ui/`、`hai-ui-review/`；正常、加载、空态、错误恢复、键盘、语言/主题和窄容器均按实际场景验收。组件的筛选、排序和分页仍由业务数据回调接入。
 
+## 反馈现场与交付检查
+
+反馈的 console/disabled/reach 独立选择；SDK getView/ratio/saveDraft 与 createFeedbackReview 统一预览、标注、保存及轮询。退出身份清理草稿和观察器。宿主生命周期由 core.module.createRuntime 处理，框架表升级前备份停旧写入并运行各模块 dryRun 预检。
+
+## Development and testing
+
+Run root `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and `pnpm test:e2e`. Browser checks cover shared workflows; test native shells on their target platforms separately.
 
 ## License
 

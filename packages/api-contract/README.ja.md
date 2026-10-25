@@ -123,15 +123,6 @@ Contract は入出力構造のみを定義します。業務エラーは procedu
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
 
-## 開発とテスト
-
-```bash
-pnpm --filter @h-ai/api-contract test
-pnpm --filter @h-ai/api-contract typecheck
-```
-
-Schema、推論型と組合せツールには型検査できる例があります。[JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。Schema のローカル例は provider の実行証明ではありません。
-
 ## フィードバック領域の契約
 
 `apiContract.feedback` は reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection と attachments.upload/get を公開します。最小送信は submissionId/appId のみで、説明・例外は不要です。認証情報・権限・S3 key・メール受信者をクライアントから受け取りません。`@h-ai/api-contract/feedback` から同じ schema と型を個別に利用できます。
@@ -145,6 +136,15 @@ const input = FeedbackSubmitInputSchema.parse({ submissionId: 'operation-1', app
 const contract = apiContract.create({ feedback: apiContract.feedback })
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
+
+## 開発とテスト
+
+```bash
+pnpm --filter @h-ai/api-contract test
+pnpm --filter @h-ai/api-contract typecheck
+```
+
+Schema、推論型と組合せツールには型検査できる例があります。[JSDoc 規約（中国語）](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) を参照してください。Schema のローカル例は provider の実行証明ではありません。
 
 ## ライセンス
 
