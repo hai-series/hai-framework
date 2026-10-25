@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { createUploadScripts } from '../src/container/deploy-scripts.js'
@@ -17,13 +17,21 @@ type Script = 'sh' | 'ps1'
 
 afterEach(() => {
   for (const directory of temporary.splice(0))
-    rmSync(directory, { recursive: true, force: true })
+    removeFixture(directory)
 })
 
 afterAll(() => {
   if (nativeTools)
-    rmSync(nativeTools, { recursive: true, force: true })
+    removeFixture(nativeTools)
 })
+
+/** 仅回收本文件 mkdtemp 创建的目录；Windows 原生 EXE 映射释放允许有界重试。 */
+function removeFixture(directory: string): void {
+  const target = resolve(directory)
+  expect(dirname(target)).toBe(resolve(tmpdir()))
+  expect(basename(target)).toMatch(/^hai-upload-(?:script|native)-[a-z0-9]{6}$/i)
+  rmSync(target, { recursive: true, force: true, maxRetries: 6, retryDelay: 100 })
+}
 
 /** 原生 EXE 记录进程实际收到的参数，覆盖 PowerShell 5 到 Win32 命令行的编码边界。 */
 function createNativeCapture(): string {

@@ -61,18 +61,19 @@ describe('stream secret masking', () => {
     expect(JSON.stringify(result)).not.toContain(secret)
   })
 
-  it('真实失败、spawn异常和回调异常结果不带秘密原文或cause', async () => {
-    const failed = await runCommand(process.execPath, ['-e', `process.stderr.write(${JSON.stringify(secret)});process.exit(4)`], { secrets: [secret] })
-    const missing = await runCommand(`hai-missing-${secret}`, [], { secrets: [secret] })
-    const callback = await runCommand(process.execPath, ['-e', 'process.stdout.write("public")'], { onOutput: () => {
-      throw new Error(secret)
-    }, secrets: [secret] })
-    for (const result of [failed, missing, callback]) {
-      expect(result.success).toBe(false)
-      expect(JSON.stringify(result)).not.toContain(secret)
-      if (!result.success)
-        expect(result.error.cause).toBeUndefined()
-    }
+  // 三种独立失败分别保留默认时限，避免把 Windows Job 启动和退出核验成本累计到一个用例。
+  it.each(['exit', 'spawn', 'output'] as const)('真实 %s 失败结果不带秘密原文或cause', async (kind) => {
+    const command = kind === 'spawn' ? `hai-missing-${secret}` : process.execPath
+    const args = kind === 'exit' ? ['-e', `process.stderr.write(${JSON.stringify(secret)});process.exit(4)`] : kind === 'output' ? ['-e', 'process.stdout.write("public")'] : []
+    const result = await runCommand(command, args, { secrets: [secret], ...(kind === 'output'
+      ? { onOutput: () => {
+          throw new Error(secret)
+        } }
+      : {}) })
+    expect(result.success).toBe(false)
+    expect(JSON.stringify(result)).not.toContain(secret)
+    if (!result.success)
+      expect(result.error.cause).toBeUndefined()
   })
 
   it('异步回调在进程关闭后拒绝仍返回失败且不泄漏异常cause', async () => {

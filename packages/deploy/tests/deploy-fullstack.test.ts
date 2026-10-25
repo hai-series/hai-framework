@@ -14,11 +14,13 @@ vi.mock('../src/container/deploy-ssh.js', async importOriginal => ({ ...await im
 vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../src/container/deploy-command.js')>()
   return { ...original, runCommand: async (command: string, args: string[]) => {
+    // 归档断言保留真实 tar；进程监管有独立用例，避免每份小包重复编译 Windows Job。
+    let stdout = ''
     if (command === 'tar')
-      return original.runCommand(command, args)
-    if (args[0] === 'save')
+      stdout = execFileSync(command, args, { encoding: 'utf8', windowsHide: true, timeout: 5000 })
+    else if (args[0] === 'save')
       writeFileSync(args[args.indexOf('-o') + 1]!, 'middleware archive')
-    return { success: true, data: { code: 0, stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false } }
+    return { success: true, data: { code: 0, stdout, stderr: '', stdoutTruncated: false, stderrTruncated: false } }
   } }
 })
 let root: string
