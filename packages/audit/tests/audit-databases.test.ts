@@ -47,7 +47,7 @@ async function simultaneous(config: ReldbConfigInput) {
         clearTimeout(timer)
         reject(error)
       })
-      child.on('exit', (code) => {
+      child.on('close', (code) => {
         clearTimeout(timer)
         if (code === 0 && stdout === '{"success":true}')
           resolve()
@@ -61,7 +61,7 @@ async function simultaneous(config: ReldbConfigInput) {
         resolve()
         return
       }
-      child.once('exit', () => resolve())
+      child.once('close', () => resolve())
       child.kill()
     })))
   }
@@ -101,6 +101,16 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
         await simultaneous(config)
         const count = await reldb.sql.get<{ total: number }>('SELECT COUNT(*) AS total FROM hai_audit_logs')
         expect(count.success && Number(count.data?.total)).toBe(2)
+      }
+      if (type === 'postgresql') {
+        // 用真实权限错误验证子进程错误链，避免成功用例掩盖诊断信息丢失。
+        expect((await reldb.ddl.dropTable('hai_audit_logs', true)).success).toBe(true)
+        expect((await reldb.sql.execute('REVOKE CREATE ON SCHEMA public FROM PUBLIC')).success).toBe(true)
+        expect((await reldb.sql.execute('CREATE ROLE audit_denied LOGIN PASSWORD \'audit_denied_password\'')).success).toBe(true)
+        const denied = simultaneous({ ...config, user: 'audit_denied', password: 'audit_denied_password' })
+        await expect(denied).rejects.toThrow(/42501/)
+        await expect(denied).rejects.toThrow(/"traceId":/)
+        await expect(denied).rejects.not.toThrow('audit_denied_password')
       }
     }
     finally {

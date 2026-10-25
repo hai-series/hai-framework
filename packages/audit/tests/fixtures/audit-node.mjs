@@ -11,23 +11,23 @@ async function main() {
     const config = JSON.parse(process.env.AUDIT_DB_INPUT)
     const ready = await reldb.init(config)
     if (!ready.success)
-      throw new Error(`Database init failed: ${ready.error.message}`)
+      throw new Error('Database init failed', { cause: ready.error })
     await new Promise((resolve) => {
       process.once('message', resolve)
       process.send({ phase: 'ready' })
     })
     const initialized = await audit.init()
     if (!initialized.success)
-      throw new Error(`Audit init failed: ${initialized.error.message}`)
+      throw new Error('Audit init failed', { cause: initialized.error })
     for (const result of [await audit.log({ action: 'worker', resource: 'readiness' }), await audit.list(), await audit.getStats(), await audit.cleanup(90)]) {
       if (!result.success)
-        throw new Error(`Immediate operation failed: ${result.error.message}`)
+        throw new Error('Immediate operation failed', { cause: result.error })
     }
     process.stdout.write(JSON.stringify({ success: true }))
   }
   catch (error) {
     process.exitCode = 1
-    process.stderr.write(error instanceof Error ? error.message : 'Worker failure')
+    process.stderr.write(JSON.stringify(core.sanitize.sanitizeSensitiveFields(error)))
   }
   finally {
     await audit.close()
