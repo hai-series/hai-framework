@@ -275,10 +275,21 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   expect(recorded).toBeDefined()
   expect(bundle.data.files[recorded.path]!.subarray(0, 4)).toEqual(new Uint8Array([0x1A, 0x45, 0xDF, 0xA3]))
   expect(bundle.data.evidence.some(item => item.kind === 'replay' && (item.data as { event?: { type?: number } }).event?.type === 2)).toBe(true)
+  const accepted = page.waitForResponse(response => response.url().endsWith('/api/feedback/reports') && response.request().method() === 'POST')
   await form.getByRole('button', { name: '提交反馈', exact: true }).click()
+  const submitted: HaiResult<FeedbackReport> = await (await accepted).json()
+  expect(submitted.success).toBe(true)
+  if (!submitted.success)
+    throw new Error(submitted.error.message)
   const receipt = form.locator('[role="status"]').first()
   await expect(receipt).toContainText(/已受理：FB-/)
   const number = (await receipt.textContent())!.match(/FB-[\w-]+/)![0]
+  // 受理后附件继续后台上传；整页刷新前先确认已落地，不能主动中断本次验收的续传。
+  await expect.poll(async () => {
+    const response = await page.request.get(`/api/feedback/reports/${submitted.data.id}`)
+    const result: HaiResult<FeedbackDetail> = await response.json()
+    return result.success ? result.data.attachments.find(item => item.name === recorded.name)?.status : result.error.code
+  }).toBe('available')
   await form.getByRole('button', { name: '关闭', exact: true }).click()
   await page.goto(`/admin/feedback?search=${encodeURIComponent(number)}`)
   await waitForHydration(page)

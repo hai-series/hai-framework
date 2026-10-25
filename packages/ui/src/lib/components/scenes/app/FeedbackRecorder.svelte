@@ -75,6 +75,17 @@
         error = errorMessage('error' in event ? event.error : new Error('MediaRecorder failed'), uiM('feedback_record_failed'))
         stop(true)
       }
+      current.onstart = () => {
+        // 原生编码器可能延迟启动；录制时长必须从实际开始采集时计算。
+        if (!mounted || cancelled || current.state !== 'recording')
+          return
+        const started = Date.now()
+        timer = setInterval(() => {
+          seconds = Math.floor((Date.now() - started) / 1000)
+          if (seconds >= 60)
+            stop()
+        }, 250)
+      }
       current.onstop = async () => {
         release()
         active = false
@@ -105,12 +116,6 @@
       seconds = 0
       active = true
       onactive(true)
-      const started = Date.now()
-      timer = setInterval(() => {
-        seconds = Math.floor((Date.now() - started) / 1000)
-        if (seconds >= 60)
-          stop()
-      }, 250)
     }
     catch (cause) {
       release()

@@ -15,9 +15,10 @@ function button(target: ParentNode, text: string) {
 }
 
 describe('反馈短录屏', () => {
-  it.each(['停止', '取消', '共享结束', '超时', '卸载'] as const)('%s释放共享流，只有有效录屏成为附件', async (action) => {
-    if (action === '超时')
+  it.each(['停止', '取消', '共享结束', '超时', '卸载', '延迟启动'] as const)('%s释放共享流，只有有效录屏成为附件', async (action) => {
+    if (action === '超时' || action === '延迟启动')
       vi.useFakeTimers()
+    let beginEncoding = () => {}
     const track = Object.assign(new EventTarget(), { stop: vi.fn() })
     const getDisplayMedia = vi.fn(async () => ({ getTracks: () => [track], getVideoTracks: () => [track] }))
     vi.stubGlobal('navigator', { mediaDevices: { getDisplayMedia } })
@@ -29,10 +30,14 @@ describe('反馈短录屏', () => {
       state = 'inactive'
       ondataavailable?: (event: { data: Blob }) => void
       onstop?: () => void
+      onstart?: () => void
       onerror?: () => void
       constructor(_stream: unknown, readonly options: MediaRecorderOptions) {}
       start() {
         this.state = 'recording'
+        beginEncoding = () => this.onstart?.()
+        if (action !== '延迟启动')
+          queueMicrotask(beginEncoding)
       }
 
       stop() {
@@ -59,6 +64,13 @@ describe('反馈短录屏', () => {
       button(target, '开始录屏').click()
       await vi.waitFor(() => expect(onactive).toHaveBeenCalledWith(true))
       expect(getDisplayMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: false }))
+      if (action === '延迟启动') {
+        await vi.advanceTimersByTimeAsync(2500)
+        expect(document.querySelector('[role="status"]')?.textContent).toContain('0 秒')
+        beginEncoding()
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(document.querySelector('[role="status"]')?.textContent).toContain('2 秒')
+      }
       if (action === '卸载') {
         await unmount(component)
         disposed = true
@@ -70,11 +82,11 @@ describe('反馈短录屏', () => {
         await vi.advanceTimersByTimeAsync(60_000)
       }
       else {
-        button(document.body, action === '停止' ? '停止录屏' : '取消录屏').click()
+        button(document.body, action === '取消' ? '取消录屏' : '停止录屏').click()
       }
       await Promise.resolve()
       expect(track.stop).toHaveBeenCalledOnce()
-      if (action === '停止' || action === '共享结束' || action === '超时') {
+      if (action === '停止' || action === '共享结束' || action === '超时' || action === '延迟启动') {
         expect(onrecord).toHaveBeenCalledOnce()
         expect(onrecord.mock.calls[0]![0]).toMatchObject({ type: 'video/webm', size: 12 })
       }
