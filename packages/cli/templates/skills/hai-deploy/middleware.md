@@ -19,7 +19,7 @@
 
 `.env.<mode>.local` 仅属于部署 SDK 的配置读取和记忆；Core 的普通应用加载规则不变，不能据此宣称 dev/start 会读取这个文件。
 
-交付目录的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有卷时应保留。
+交付 tar 内的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有卷时应保留。
 
 自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 app/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
 
@@ -62,7 +62,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 直接部署的目标不完整时，先引导选择 SSH/Vercel。SSH 补齐主机、端口、用户名、认证方式、对应凭据、known_hosts 路径、远程目录/运行时及容器/主机端口；端口范围 1–65535。`auth: key` 使用私钥/agent，密钥路径留空使用 ssh-agent/默认密钥；`auth: password` 使用隐藏输入的密码。省略 auth 时，仅非空 password 启用密码方式，否则保持 key/agent；显式 key 忽略残留密码。密码原样保留空格、前导零，不经 YAML 类型转换；有效密码拒绝 CR/LF/NUL，UTF-8 最多 1023 字节。known_hosts 留空使用 OpenSSH 默认文件，不关闭主机键校验。
 
-完整有效目标自动复用，`--yes` 不重新询问；修改选中环境 `.env.<mode>.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。新填写的目标（含地址、端口、路径、Token、密码）只保存该环境私有文件并添加 Git 忽略。`--bundle-only` 不询问 SSH，已有参数带入交付物，缺项可在上传前填写到 `deploy-target.json`。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
+完整有效目标自动复用，`--yes` 不重新询问；修改选中环境 `.env.<mode>.local` 的 `HAI_DEPLOY_PROVIDER` 可切换连接。新填写的目标（含地址、端口、路径、Token、密码）只保存该环境私有文件并添加 Git 忽略。`--bundle-only` 在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，写入同一环境私有文件，并用于本次和后续 `deploy-target.json`；`--yes` 或跳过时复用已有参数，缺项仍可在上传前填写到 target。SDK 使用 `saveDeploymentEnvironment(snapshot, variables, { private: true })` 可显式保存本机参数。禁止读取、复制或打印私钥内容。
 
 ### Hai 模块与中间件的关系
 
@@ -104,7 +104,7 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 
 构建与部署可分开，也可通过 pnpm run deploy --build 明确串联。构建保持环境无关；部署选择环境并只消费所选镜像。完整包自动包含 Compose 自建中间件镜像，因此导出阶段需要本地 Podman/Docker，缺镜像在打包阶段准备，不能留给隔离服务器下载。
 
-每次离线交付都放在单一 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 目录，tar、配置、清单与全部入口都在其中。--output release.tar 相对命令目录生成 release-<版本>/release-<版本>.tar，禁止覆盖已有交付目录。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器直接复制整个目录并运行 sh deploy-local.sh，由脚本自动解包并执行部署。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
+每次离线交付都放在单一 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 目录，外层仅含 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest 仅保存在 tar 内，README 也记录部署 ID。--output release.tar 相对命令目录生成 release-<版本>/release-<版本>.tar，禁止覆盖已有交付目录。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器直接复制整个目录并运行 sh deploy-local.sh，由脚本自动解包并执行部署。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
 
 离线 target 保存 auth 和 passwordEnv，不保存密码值；passwordEnv 默认 HAI_DEPLOY_PROVIDER_SSH_PASSWORD。操作机配置该环境变量后可重复上传，Windows 也可读取用户持久环境。密码仅进入本次 SSH/SCP 子进程环境，不进入参数、helper 源码、应用环境、tar、manifest 或公开 JSON。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。target 的修改只影响本交付目录，不回写工程；新包仍从工程保存的选中环境配置生成。
 

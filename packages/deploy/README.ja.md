@@ -96,7 +96,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 直接デプロイでは、サーバー、SSH ユーザー、認証方式、ポートなどの不足項目を説明付きで質問します。有効で完全な設定は `--yes` でも再利用し、再入力を求めません。SSH は `auth: key`（秘密鍵/agent）と `auth: password` に対応します。`auth` を省略した場合、空でない `password` があるときだけパスワード認証を使い、それ以外は key/agent を維持します。明示した `key` は残存パスワードを無視します。パスワード入力は非表示で、前後の空白と先頭のゼロを保持します。有効なパスワードは CR/LF/NUL を含まず、UTF-8 で 1023 バイト以内である必要があります。秘密鍵はパスのみ参照し、内容を読み取り・コピーしません。
 
-SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundle-only` は SSH を質問せず、既存の接続情報を配布ディレクトリへ引き継ぎます。不足項目はアップロード前に `deploy-target.json` に補います。target の変更はその配布物だけに適用され、プロジェクトには書き戻しません。新しい配布物は保存済みの環境設定から生成します。
+SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundle-only` は構築・ミドルウェア設定後、梱包前の最後の対話で SSH 設定の追加・変更を確認します。同じ非公開ファイルに保存し、今回と次回以降の `deploy-target.json` に反映します。スキップすると既存設定を再利用し、不足項目はアップロード前に target へ補えます。`--yes` は質問せず再利用します。target の変更はその配布物だけに適用され、プロジェクトには書き戻しません。新しい配布物は保存済みの環境設定から生成します。
 
 #### 本当に必要なミドルウェアだけを設定する
 
@@ -126,7 +126,7 @@ S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAG
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、tar、Compose、環境、web.conf、マニフェストと各 OS のスクリプトを同じ場所に保存します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
+毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、外側には tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh、README.txt だけを保存します。Compose、実行環境、web.conf、manifest.json は tar 内に置き、外側の README にも配置 ID を記録します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
 
 オフラインアップロードは鍵とパスワードの両方に対応します。`deploy-target.json` に保存するのは認証方式と `passwordEnv` 名（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）だけで、パスワード値は含めません。操作する PC の環境から与え、今回の SSH/SCP 子プロセスだけに渡します。アプリ環境、tar、manifest には入りません。Windows では永続化したユーザー環境も参照できます。Windows は PowerShell 5+ と OpenSSH、Linux/macOS は sh、awk、ssh、scp が必要で、どちらも Node/pnpm は不要です。target の変更はその配布ディレクトリだけに適用し、プロジェクトには書き戻しません。新しい配布物は保存済みの環境設定を使います。
 
@@ -189,7 +189,7 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 配布ごとに Compose 用の `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。これは生成物であり、設定の保存元ではありません。`NODE_ENV` の既定値は対象環境に従い、`test` は `test`、`dev/development` は `development`、`prod/production` とその他は `production` です。環境設定の明示的な `NODE_ENV` が優先され、構築の最適化モードとは別です。旧配布物は再度パッケージ化してください。
 
-プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。自動生成した固定認証情報は走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` にも保持するため、既存データボリューム再利用時は削除しないでください。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。初回の bundle-only では SSH を質問しないため、接続先を一度プロジェクトに設定します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。
+プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。自動生成した固定認証情報は走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` にも保持するため、既存データボリューム再利用時は削除しないでください。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。対話式 bundle-only は最後に SSH 設定の保存・変更を確認します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。
 
 ## 開発とテスト
 

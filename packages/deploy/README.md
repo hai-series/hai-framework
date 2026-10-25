@@ -109,7 +109,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 直接部署时，向导按说明补齐服务器、SSH 用户、认证方式和端口等缺失配置，完整有效配置直接复用；`--yes` 不重复询问。SSH 支持 `auth: key`（私钥/agent）或 `auth: password`。省略 `auth` 时，仅非空 `password` 启用密码方式，否则保留 key/agent；显式 `key` 忽略残留密码。密码输入不回显并保留前后空格、前导零；有效密码不得包含 CR/LF/NUL，UTF-8 最多 1023 字节。私钥只保存路径，不读取或复制私钥内容。
 
-SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 不询问 SSH，已有连接会带入交付目录；缺少的参数可在上传前补到 `deploy-target.json`。修改某包的 target 只影响本包，不回写工程；新包仍从工程保存的环境配置生成。
+SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在构建和中间件配置后、打包前的最后一个交互步骤询问是否添加或修改 SSH 信息，保存到相同的私有文件，并用于本次及后续交付的 `deploy-target.json`；选择跳过则复用已有连接，缺项仍可在上传前补到 target。`--yes` 不询问，直接复用已有配置。修改某包的 target 只影响本包，不回写工程；新包仍从工程保存的环境配置生成。
 
 #### 按应用真正需要的中间件处理
 
@@ -149,7 +149,7 @@ S3 的 `createBucket` 默认为 `false`；部署器为自建 S3 注入 `HAI_STOR
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，tar、Compose、环境、web.conf、清单与跨平台脚本全部在其中，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
+每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，外层仅保留 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest.json 仅保存在 tar 内，README 同时记录部署 ID，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
 
 离线上传支持密钥和密码认证。`deploy-target.json` 只保存认证方式及 `passwordEnv` 名称（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`），不保存密码值。密码由操作机环境提供，仅传给本次 SSH/SCP 子进程，不进入应用环境、tar 或 manifest；Windows 也可读取用户持久环境。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。修改 target 只影响当前交付目录，不回写工程；新交付仍使用工程保存的环境配置。
 
@@ -215,7 +215,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`，供 Compose 加载运行配置；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
 
-项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值；自建中间件的稳定随机凭据另缓存于服务扫描目录的 `.hai/deploy/runtime/<项目名>-<环境>.secrets.json`，不要删除该文件后直接复用旧数据卷。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。首次仅打包不会收集 SSH 信息，需先在工程配置连接；修改交付目录的 `deploy-target.json` 不会回写工程。
+项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值；自建中间件的稳定随机凭据另缓存于服务扫描目录的 `.hai/deploy/runtime/<项目名>-<环境>.secrets.json`，不要删除该文件后直接复用旧数据卷。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 
 ## 开发测试
 

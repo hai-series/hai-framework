@@ -1213,7 +1213,7 @@ ${pm} exec hai deploy ${appDir} --env prod --services web
 完整离线包自动携带自建中间件镜像；准备中间件镜像需要构建机有可用 Podman/Docker，缺镜像时在打包阶段拉取。
 服务器需要 Linux、Docker/Podman、Docker Compose v2 或 podman-compose 1.6.0 及以上、sh、tar、sha256sum、awk、curl、util-linux flock 和支持 flock 的文件系统，启动阶段不联网拉取。
 固定 .deploy.lock 内核锁覆盖部署及恢复；禁止删除或替换，所有持有进程退出或重启后自动释放。强杀后须核对结果文件、current 和容器状态，再用新包恢复。
-每次离线交付生成独立目录，tar、Compose、运行环境、deploy.ps1（Windows）和 deploy.sh（Linux/macOS）全部位于该目录，复制整个目录即可。脚本按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
+每次离线交付生成独立目录，外层仅含 tar、deploy.ps1（Windows）、deploy.sh（Linux/macOS）、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境和清单仅在 tar 内。交互式打包在构建和中间件配置后最后询问是否保存或修改 SSH 信息，写入 .env.<环境>.local 并用于本次和后续 target；--yes 复用已有配置，复制整个目录即可。脚本按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
 完全隔离时复制整个交付目录，运行 sh deploy-local.sh 自动解包并部署；可传入部署目录覆盖默认位置。
 部分更新要求已有成功的完整部署，保留未选服务及数据卷；失败返回非零退出码，已有部署尝试恢复选中服务。
 中间件连接齐全时使用 --skip-middleware 跳过配置向导。包中包含私有配置，不提交 Git。
