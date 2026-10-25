@@ -91,10 +91,14 @@ it('notify 双节点与重启后重复到达不重复履约，校验失败和事
     const workerFile = path.join(directory, 'worker.mjs')
     await writeFile(workerFile, `
 import { readFile } from 'node:fs/promises'
-import { reldb } from '@h-ai/reldb'
-import { payment } from './bundle/payment.js'
-import { consumePaymentNotification } from './bundle/consumer.js'
+import { core } from '@h-ai/core'
+// 在加载业务模块前使用 JSON 日志，避免短生命周期夹具创建 pretty 日志线程。
+core.logger.configure({ format: 'json' })
+const { reldb } = await import('@h-ai/reldb')
+const { payment } = await import('./bundle/payment.js')
+const { consumePaymentNotification } = await import('./bundle/consumer.js')
 const fixtures = JSON.parse(await readFile(new URL('./fixtures.json', import.meta.url), 'utf8'))
+let result
 try {
   const db = await reldb.init({ type: 'sqlite', database: ${JSON.stringify(database)} })
   if (!db.success) throw new Error(db.error.message)
@@ -104,13 +108,17 @@ try {
   process.send('ready')
   await go
   const verified = await payment.handleNotify('alipay', fixtures.notifications[process.argv[2]])
-  const result = verified.success ? await consumePaymentNotification(reldb, 'alipay', 'trusted_merchant_scope', verified.data) : verified
-  process.stdout.write('NOTIFY_RESULT=' + JSON.stringify({ pid: process.pid, result }) + '\\n')
+  result = verified.success ? await consumePaymentNotification(reldb, 'alipay', 'trusted_merchant_scope', verified.data) : verified
 } finally {
-  await payment.close()
-  await reldb.close()
-  process.disconnect()
+  try {
+    await payment.close()
+    await reldb.close()
+  } finally {
+    process.disconnect()
+  }
 }
+// 结果同时证明业务执行及模块关闭完成；父进程仍须等待正常退出。
+process.stdout.write('NOTIFY_RESULT=' + JSON.stringify({ pid: process.pid, result }) + '\\n')
 `)
 
     /** 等所有独立进程就绪后同时开始，确保真实跨节点竞争同一业务订单。 */
@@ -127,15 +135,19 @@ try {
       const results = children.map(child => new Promise<{ pid: number, result: { success: boolean, data?: string } }>((resolve, reject) => {
         let stdout = ''
         let stderr = ''
-        const timer = setTimeout(() => child.kill(), 15_000)
+        let timedOut = false
+        const timer = setTimeout(() => {
+          timedOut = true
+          child.kill()
+        }, 15_000)
         child.stdout!.on('data', chunk => stdout += chunk.toString())
         child.stderr!.on('data', chunk => stderr += chunk.toString())
         child.once('error', reject)
-        child.once('close', (code) => {
+        child.once('close', (code, signal) => {
           clearTimeout(timer)
           const line = stdout.split('\n').find(value => value.startsWith('NOTIFY_RESULT='))
           if (code !== 0 || !line)
-            reject(new Error(`Notification worker failed ${code}: ${stderr}\n${stdout}`))
+            reject(new Error(`Notification worker failed (code=${code}, signal=${signal}, timedOut=${timedOut}): ${stderr}\n${stdout}`))
           else
             resolve(JSON.parse(line.slice('NOTIFY_RESULT='.length)))
         })
