@@ -34,6 +34,10 @@ export const IamUserSchema = z.object({
   displayName: z.string().optional(),
   avatarUrl: z.string().optional(),
   enabled: z.boolean(),
+  accountType: z.enum(['permanent', 'temporary']).optional(),
+  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+  accountExpiresAt: z.coerce.date().nullable().optional(),
+  lastLoginAt: z.coerce.date().nullable().optional(),
   emailVerified: z.boolean().optional(),
   phoneVerified: z.boolean().optional(),
   createdAt: z.coerce.date(),
@@ -454,6 +458,9 @@ export const IamListUsersInputSchema = PaginationQuerySchema.extend({
  * ```
  */
 export const IamAdminCreateUserInputSchema = z.object({
+  accountType: z.enum(['permanent', 'temporary']).optional(),
+  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+  accountExpiresAt: z.coerce.date().optional(),
   username: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().optional(),
@@ -464,6 +471,7 @@ export const IamAdminCreateUserInputSchema = z.object({
   enabled: z.boolean().optional(),
 })
 
+export const IamInviteUserInputSchema = IamAdminCreateUserInputSchema.omit({ password: true }).extend({ enabled: z.literal(true).optional(), accountStatus: z.literal('active').optional() })
 /**
  * Admin 更新用户入参 Schema。
  * @example
@@ -477,6 +485,9 @@ export const IamAdminCreateUserInputSchema = z.object({
  * ```
  */
 export const IamAdminUpdateUserInputSchema = z.object({
+  accountType: z.enum(['permanent', 'temporary']).optional(),
+  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+  accountExpiresAt: z.coerce.date().nullable().optional(),
   id: z.string().min(1),
   username: z.string().min(1).optional(),
   email: z.string().email().optional(),

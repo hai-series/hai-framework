@@ -14,7 +14,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
-import { toUser } from '../../user/iam-user-utils.js'
+import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
@@ -263,7 +263,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         let storedUser = localUserResult.data as StoredUser | null
 
         if (storedUser) {
-          if (!storedUser.enabled) {
+          if (!isUserActive(storedUser)) {
             return err(
               HaiIamError.USER_DISABLED,
               iamM('iam_accountDisabled'),

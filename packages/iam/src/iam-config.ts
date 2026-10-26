@@ -308,6 +308,7 @@ export const SecurityConfigSchema = z.object({
   lockoutDuration: z.number().int().min(60).default(900),
 })
 
+
 /**
  * 服务端账户失败计数与锁定策略。
  * @example
@@ -317,6 +318,7 @@ export const SecurityConfigSchema = z.object({
  * ```
  */
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
+
 
 /**
  * 协议展示配置
@@ -452,6 +454,21 @@ export const RbacConfigSchema = z.object({
  */
 export type RbacConfig = z.infer<typeof RbacConfigSchema>
 
+/**
+ * 可选账号闲置扫描；0天关闭自动休眠，不影响明确设置的账号状态与到期时间。
+ * @example
+ * ```ts
+ * import { AccountConfigSchema } from '@h-ai/iam'
+ * const config = AccountConfigSchema.parse({ dormantAfterDays: 90, scanIntervalSeconds: 3600 })
+ * ```
+ */
+export const AccountConfigSchema = z.object({
+  /** 连续未成功登录多少天后休眠，0 关闭。未登录账号从创建时间起算。 */
+  dormantAfterDays: z.number().int().min(0).max(36500).default(0),
+  /** 自动扫描间隔（秒）；开启自动休眠时执行，默认每小时。 */
+  scanIntervalSeconds: z.number().int().min(60).max(86400).default(3600),
+})
+
 // ─── 统一配置 ───
 
 /**
@@ -466,6 +483,8 @@ export type RbacConfig = z.infer<typeof RbacConfigSchema>
  * ```
  */
 export const IamConfigSchema = z.object({
+  /** 账号自动休眠策略；未配置时不启动扫描。 */
+  accounts: AccountConfigSchema.optional(),
   /** 认证页外观 */
   ui: AuthUiConfigSchema.optional(),
   // ─── 认证策略配置 ───
@@ -504,6 +523,7 @@ export const IamConfigSchema = z.object({
     showOnRegister: true,
     showOnLogin: false,
   }),
+
 
   /** 安全策略配置 */
   security: SecurityConfigSchema.default({

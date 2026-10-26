@@ -12,6 +12,23 @@ import type { RegisterOptions, User } from '../user/iam-user-types.js'
 
 // ─── 凭证类型 ───
 
+
+
+/**
+ * 由可信 HTTP 宿主提供的登录元数据，独立于客户端凭据输入。
+ * @example
+ * ```ts
+ * import type { AuthRequestContext } from '@h-ai/iam'
+ * const context: AuthRequestContext = { ip: '192.0.2.10', requestId: 'request-1' }
+ * ```
+ */
+export interface AuthRequestContext {
+  /** socket/平台或受信代理解析后的地址；不能直接复制 X-Forwarded-For。 */
+  ip?: string
+  userAgent?: string
+  requestId?: string
+}
+
 /**
  * 用户凭证（用于密码登录）
  * @example
@@ -156,12 +173,15 @@ export interface AuthStrategy {
  * ```
  */
 export interface AuthnOperations {
+
+
   /**
    * 登录（使用密码）
    *
    * 检查登录方式启用 → 密码策略认证 → 创建会话 → 返回令牌。
    *
    * @param credentials - 密码凭证（identifier + password）
+   * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult（用户信息、令牌、协议展示）；失败返回错误
    */
   login: (credentials: PasswordCredentials) => Promise<HaiResult<AuthResult>>
@@ -170,6 +190,7 @@ export interface AuthnOperations {
    * 使用验证码登录
    *
    * @param credentials - OTP 凭证（identifier + code）
+   * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult；验证码无效/过期返回 OTP_INVALID
    */
   loginWithOtp: (credentials: OtpCredentials) => Promise<HaiResult<AuthResult>>
@@ -178,6 +199,7 @@ export interface AuthnOperations {
    * 使用 LDAP 登录
    *
    * @param credentials - LDAP 凭证（username + password）
+   * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult（自动同步本地用户）；失败返回错误
    */
   loginWithLdap: (credentials: LdapCredentials) => Promise<HaiResult<AuthResult>>
@@ -189,6 +211,7 @@ export interface AuthnOperations {
    * 空 scopes 无操作权限；显式 * 也不超出主体权限。受限 key 通过 permission 授权，不保留角色入口。
    *
    * @param credentials - API Key 凭证
+   * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult；API Key 无效/过期/禁用返回对应错误
    */
   loginWithApiKey: (credentials: ApiKeyCredentials) => Promise<HaiResult<AuthResult>>

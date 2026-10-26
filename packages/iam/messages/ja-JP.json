@@ -1,4 +1,8 @@
 {
+  "iam_invitationDisabled": "招待機能が無効、または必要な通知経路が利用できません。",
+  "iam_invitationDeliveryUnknown": "アカウントは作成済みですが招待の配送は未確認です。配送状況を確認してから再設定通知を要求してください。",
+  "iam_reauthenticationRequired": "この操作を続けるにはパスワードを再確認してください。",
+  "iam_loginAccessDenied": "このアドレスまたは時間帯からのログインは許可されていません。",
   "iam_batchUserIdsInvalid": "空でないユーザーIDを1000件以内で指定してください",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "iam_securityStateFailed": "認証セキュリティ状態を更新できません。しばらくしてから再試行してください。",
@@ -186,5 +190,15 @@
   "iam_sessionStateFailed": "共有セッション状態の操作に失敗しました",
   "iam_sessionStateConflict": "セッション状態が変更されました。操作を再試行してください",
   "iam_sessionMaxAgeInvalid": "セッションの有効期間またはタイムスタンプが無効です",
-  "iam_notificationDeliveryUnknown": "通知の配信結果は不明で、成功した可能性があります。自動で再送しないでください。"
+  "iam_sessionLimitExceeded": "有効なセッション数が上限に達しました。他のセッションからログアウトしてください。",
+  "iam_accountPolicyInvalid": "アカウント種別、状態、または有効期限が無効です。",
+  "iam_accountUpdateFailed": "アカウントの更新に失敗しました。後で再試行してください。",
+  "iam_passwordChangeRequired": "最初のパスワードを変更してからログインしてください。",
+  "iam_passwordMustDiffer": "新しいパスワードは現在のパスワードと異なる必要があります。",
+  "iam_passwordCharacterClasses": "パスワードには少なくとも{count}種類の文字を含めてください。",
+  "iam_notificationDeliveryUnknown": "通知の配信結果は不明で、成功した可能性があります。自動で再送しないでください。",
+  "iam_captchaRequired": "先にセキュリティ確認を完了してください",
+  "iam_captchaInvalid": "セキュリティ確認が無効または期限切れです。再試行してください",
+  "iam_captchaDisabled": "セキュリティ確認は無効です",
+  "iam_captchaUnavailable": "セキュリティ確認を一時的に利用できません"
 }

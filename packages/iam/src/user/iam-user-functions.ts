@@ -16,6 +16,7 @@ import type {
   ListUsersOptions,
   RegisterOptions,
   RegisterResult,
+  StoredUser,
   UpdateCurrentUserInput,
   User,
   UserOperations,
@@ -32,7 +33,7 @@ import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { generateToken } from '../session/iam-session-utils.js'
 import { createDbUserRepository } from './iam-user-repository-user.js'
-import { toUser } from './iam-user-utils.js'
+import { isUserActive, toUser, validateAccountPolicy } from './iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'user' })
 
@@ -248,6 +249,7 @@ interface UserFnContext {
   onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 }
 
+
 // ─── 注册操作 ───
 
 /**
@@ -261,6 +263,9 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
    * 校验注册前置条件
    */
   async function validateRegisterPreconditions(options: RegisterOptions): Promise<HaiResult<void>> {
+    const accountPolicy = validateAccountPolicy(options)
+    if (!accountPolicy.success)
+      return accountPolicy
     const validateResult = validatePassword(options.password)
     if (!validateResult.success)
       return validateResult
@@ -304,7 +309,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     return authzFunctions.assignRole(userId, roleResult.data.id)
   }
 
-  async function createUser(options: RegisterOptions, enabled: boolean): Promise<HaiResult<RegisterResult>> {
+  async function createUser(options: RegisterOptions, enabled: boolean, managed = false): Promise<HaiResult<RegisterResult>> {
     // 校验前置条件
     const preResult = await validateRegisterPreconditions(options)
     if (!preResult.success)
@@ -328,6 +333,9 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       phone: options.phone,
       displayName: options.displayName,
       enabled,
+      accountType: options.accountType ?? 'permanent',
+      accountStatus: options.accountStatus ?? 'active',
+      accountExpiresAt: options.accountExpiresAt,
       emailVerified: false,
       phoneVerified: false,
       passwordHash: hashResult.data,
@@ -598,6 +606,19 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
     },
 
     async updateUser(userId: string, data: Partial<User>): Promise<HaiResult<User>> {
+      const currentAccount = await userRepository.findById(userId)
+      if (!currentAccount.success)
+        return currentAccount
+      if (!currentAccount.data)
+        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+      // 部分更新的 undefined 与持久化层一致，表示保留原值；null 才是显式清空到期时间。
+      const accountPolicy = validateAccountPolicy({
+        accountType: data.accountType === undefined ? currentAccount.data.accountType : data.accountType,
+        accountStatus: data.accountStatus === undefined ? currentAccount.data.accountStatus : data.accountStatus,
+        accountExpiresAt: data.accountExpiresAt === undefined ? currentAccount.data.accountExpiresAt : data.accountExpiresAt,
+      })
+      if (!accountPolicy.success)
+        return accountPolicy
       if (!hasUpdateFields(data)) {
         const currentResult = await userRepository.findById(userId)
         if (!currentResult.success) {
@@ -617,16 +638,32 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return uniqueResult as HaiResult<User>
       }
 
-      const updateResult = await userRepository.updateById(userId, data)
-      if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
+      const changesSecurity = data.enabled !== undefined || data.accountStatus !== undefined
+        || data.accountType !== undefined || data.accountExpiresAt !== undefined
+      // 状态与凭据代际同事务提交；恢复账号也不能让停用前的旧会话重新有效。
+      const transaction = changesSecurity ? await reldb.tx.begin() : undefined
+      if (transaction && !transaction.success)
+        return transaction
+      const tx = transaction?.success ? transaction.data : undefined
+      let transactionCommitted = false
+      try {
+        const updateResult = await userRepository.updateById(userId, data, tx)
+        if (!updateResult.success)
+          return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
+        if (updateResult.data.changes === 0)
+          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+        if (tx) {
+          const advanced = await tx.execute('UPDATE hai_iam_users SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE id = ? AND credential_version = ?', [globalThis.crypto.randomUUID(), globalThis.crypto.randomUUID(), userId, currentAccount.data.credentialVersion ?? ''])
+          if (!advanced.success || advanced.data.changes !== 1)
+            return advanced.success ? err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict')) : advanced
+          const committed = await tx.commit()
+          if (!committed.success)
+            return committed
+          transactionCommitted = true
+        }
       }
-
-      if (updateResult.data.changes === 0) {
-        return err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
+      catch (cause) {
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_accountUpdateFailed'), cause)
       }
 
       // 禁用用户时注销所有活跃会话
@@ -965,12 +1002,19 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
     loginConfig: SecurityConfigSchema.parse(deps.config.security ?? {}),
   }
 
+  const registration = buildRegistrationOps(ctx)
   return {
-    ...buildRegistrationOps(ctx),
+    ...registration,
     ...buildUserQueryOps(ctx),
     ...buildUserMutationOps(ctx),
     ...buildPasswordChangeOps(ctx),
     ...buildPasswordResetOps(ctx),
+    async scanInactiveAccounts() {
+      const days = deps.config.accounts?.dormantAfterDays ?? 0
+      if (days === 0)
+        return ok(0)
+      return deps.userRepository.suspendInactive(new Date(Date.now() - days * 86400_000))
+    },
   }
 }
 

@@ -16,7 +16,7 @@ import { crypto as haiCrypto } from '@h-ai/crypto'
 import { PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
-import { toUser } from '../../user/iam-user-utils.js'
+import { checkPasswordState, isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
 /**
@@ -165,10 +165,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
    * 校验账户状态（启用、锁定）
    */
   function checkAccountStatus(user: StoredUser): HaiResult<void> {
-    if (!user.enabled) {
+    if (!isUserActive(user)) {
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     }
-    if (isAccountLocked(user)) {
+    if (isAccountLocked(user, failurePolicy)) {
       return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }
     return ok(undefined)

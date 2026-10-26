@@ -16,7 +16,7 @@ import { core, err, ok } from '@h-ai/core'
 import { OtpConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
-import { toUser } from '../../user/iam-user-utils.js'
+import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import {
   ensureCredentialType,
   isAccountLocked,
@@ -184,7 +184,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       let storedUser = userResult.data
 
       if (storedUser) {
-        if (!storedUser.enabled) {
+        if (!isUserActive(storedUser)) {
           return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
         }
 
@@ -249,7 +249,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       }
 
       // 登录成功，重置失败计数
-      if (!storedUser.enabled)
+      if (!isUserActive(storedUser))
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       const resetResult = await resetLoginFailures(config.userRepository, storedUser)
       if (!resetResult.success)

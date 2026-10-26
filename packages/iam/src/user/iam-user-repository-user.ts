@@ -31,6 +31,10 @@ import { HaiIamError } from '../iam-types.js'
  * ```
  */
 export interface UserRepository extends ReldbCrudRepository<StoredUser> {
+  /** 成功鉴别后记录登录时间；不修改角色或其他用户资料。 */
+  recordSuccessfulLogin: (userId: string) => Promise<HaiResult<void>>
+  /** 按最后成功登录/创建时间原子休眠并推进凭据代际。 */
+  suspendInactive: (cutoff: Date) => Promise<HaiResult<number>>
   /** 按读取到的凭据代际改密并撤销重置令牌；旧版本不能覆盖较新密码。 */
   setPassword: (input: { userId: string, expectedVersion: string, passwordHash: string }) => Promise<HaiResult<boolean>>
   /** 按用户快照发布新重置令牌；不使用 Redis/数据库之间的伪事务。 */
@@ -86,6 +90,10 @@ const TABLE_NAME = 'hai_iam_users'
  * 用户字段定义
  */
 const USER_FIELDS: ReldbCrudFieldDefinition[] = [
+  { fieldName: 'accountType', columnName: 'account_type', def: { type: 'TEXT', notNull: true, defaultValue: 'permanent' }, select: true, create: true, update: true },
+  { fieldName: 'accountStatus', columnName: 'account_status', def: { type: 'TEXT', notNull: true, defaultValue: 'active' }, select: true, create: true, update: true },
+  { fieldName: 'accountExpiresAt', columnName: 'account_expires_at', def: { type: 'TIMESTAMP' }, select: true, create: true, update: true },
+  { fieldName: 'lastLoginAt', columnName: 'last_login_at', def: { type: 'TIMESTAMP' }, select: true, create: false, update: false },
   { fieldName: 'credentialVersion', columnName: 'credential_version', def: { type: 'TEXT', notNull: true, defaultValue: '' }, select: true, create: false, update: false },
   { fieldName: 'resetVersion', columnName: 'reset_version', def: { type: 'TEXT', notNull: true, defaultValue: '' }, select: true, create: false, update: false },
   { fieldName: 'resetHash', columnName: 'reset_hash', def: { type: 'TEXT' }, select: true, create: false, update: false },
@@ -183,6 +191,14 @@ const USER_FIELDS: ReldbCrudFieldDefinition[] = [
     fieldName: 'loginFailedCount',
     columnName: 'login_failed_count',
     def: { type: 'INTEGER' as const, defaultValue: 0 },
+    select: true,
+    create: true,
+    update: true,
+  },
+  {
+    fieldName: 'firstLoginFailedAt',
+    columnName: 'first_login_failed_at',
+    def: { type: 'TIMESTAMP' as const },
     select: true,
     create: true,
     update: true,
@@ -300,6 +316,19 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     if (reldb.config?.type === 'mysql')
       return '(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000)'
     return 'CAST((julianday(\'now\') - 2440587.5) * 86400000 AS INTEGER)'
+  }
+
+  async recordSuccessfulLogin(userId: string): Promise<HaiResult<void>> {
+    const result = await reldb.sql.execute(`UPDATE ${TABLE_NAME} SET last_login_at = ? WHERE id = ?`, [reldb.config?.type === 'sqlite' ? Date.now() : new Date(), userId])
+    return result.success ? ok(undefined) : this.buildQueryError(result.error, result.error)
+  }
+
+  async suspendInactive(cutoff: Date): Promise<HaiResult<number>> {
+    const result = await reldb.sql.execute(
+      `UPDATE ${TABLE_NAME} SET account_status = ?, credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE enabled = ? AND account_status = ? AND COALESCE(last_login_at, created_at) <= ?`,
+      ['dormant', crypto.randomUUID(), crypto.randomUUID(), reldb.config?.type === 'postgresql' ? true : 1, 'active', reldb.config?.type === 'sqlite' ? cutoff.getTime() : cutoff],
+    )
+    return result.success ? ok(result.data.changes) : this.buildQueryError(result.error, result.error)
   }
 
   /** 改密推进凭据代际；会话存储清理失败也不能让旧凭据恢复授权。 */

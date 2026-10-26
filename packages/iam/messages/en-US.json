@@ -1,4 +1,8 @@
 {
+  "iam_invitationDisabled": "Invitations are disabled or a required delivery channel is unavailable.",
+  "iam_invitationDeliveryUnknown": "Account created; invitation delivery is unconfirmed. Check delivery before requesting a new reset notification.",
+  "iam_reauthenticationRequired": "Verify your password again to continue this operation.",
+  "iam_loginAccessDenied": "Sign-in is not allowed from this address or at this time.",
   "iam_batchUserIdsInvalid": "Provide at most 1000 non-empty user IDs",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "iam_securityStateFailed": "Unable to update authentication security state. Please try again later.",
@@ -186,5 +190,15 @@
   "iam_sessionStateFailed": "Shared session state operation failed",
   "iam_sessionStateConflict": "Session state changed; retry the operation",
   "iam_sessionMaxAgeInvalid": "Invalid session lifetime or timestamp",
-  "iam_notificationDeliveryUnknown": "Notification delivery is unknown and may have succeeded; do not resend automatically."
+  "iam_sessionLimitExceeded": "The active session limit has been reached. Sign out another session first.",
+  "iam_accountPolicyInvalid": "Invalid account type, status, or expiry.",
+  "iam_accountUpdateFailed": "Account update failed. Please try again later.",
+  "iam_passwordChangeRequired": "Change your initial password before signing in.",
+  "iam_passwordMustDiffer": "The new password must differ from the current password.",
+  "iam_passwordCharacterClasses": "Use at least {count} character classes in the password.",
+  "iam_notificationDeliveryUnknown": "Notification delivery is unknown and may have succeeded; do not resend automatically.",
+  "iam_captchaRequired": "Complete the security check first",
+  "iam_captchaInvalid": "Security check is invalid or expired; try again",
+  "iam_captchaDisabled": "Security challenges are disabled",
+  "iam_captchaUnavailable": "Security check is temporarily unavailable"
 }

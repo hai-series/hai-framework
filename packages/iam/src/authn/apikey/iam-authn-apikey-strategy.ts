@@ -18,7 +18,7 @@ import { crypto as haiCrypto } from '@h-ai/crypto'
 import { ApiKeyConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
-import { toUser } from '../../user/iam-user-utils.js'
+import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType } from '../iam-authn-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'apikey-strategy' })
@@ -198,7 +198,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       if (!userResult.data) {
         return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       }
-      if (!userResult.data.enabled) {
+      if (!isUserActive(userResult.data)) {
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       }
 

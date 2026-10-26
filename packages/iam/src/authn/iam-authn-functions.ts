@@ -27,6 +27,7 @@ import { AgreementConfigSchema, ApiKeyConfigSchema, LoginConfigSchema, OtpConfig
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
+import { checkPasswordState, isUserActive } from '../user/iam-user-utils.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
 import { applyApiKeyScopes } from './apikey/iam-authn-apikey-scope.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
@@ -321,6 +322,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
   async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    if (!stored.data || !isUserActive(stored.data))
     const authorization = await authzFunctions.getUserAuthorization(user.id)
     if (!authorization.success)
       return authorization
@@ -349,6 +351,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
     }
 
+    // 只有真正签发会话的登录才刷新最近使用时间；配额/重复登录拒绝不能延缓休眠。
     const { credentialVersion, ...publicUser } = user
     void credentialVersion
     return ok({
@@ -403,7 +406,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
       return stored
-    if (!stored.data?.enabled)
+    if (!stored.data || !isUserActive(stored.data))
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' })
   }, authn: {
