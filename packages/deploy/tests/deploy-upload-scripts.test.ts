@@ -1,11 +1,12 @@
 import { Buffer } from 'node:buffer'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
-import { createUploadScripts } from '../src/container/deploy-scripts.js'
+import { createUploadScripts, shellArgument } from '../src/container/deploy-scripts.js'
+import { deployM } from '../src/deploy-i18n.js'
 
 const temporary: string[] = []
 const shell = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/bash.exe' : '/bin/sh'
@@ -44,8 +45,10 @@ function createNativeCapture(): string {
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 public static class Capture {
   public static int Main(string[] args) {
+    Console.OutputEncoding = new UTF8Encoding(false);
     string command = Path.GetFileNameWithoutExtension(Environment.GetCommandLineArgs()[0]);
     StringBuilder line = new StringBuilder("native");
     line.Append('\t').Append(command);
@@ -70,6 +73,12 @@ public static class Capture {
       Console.Error.WriteLine("Local archive missing from native process directory: " + Directory.GetCurrentDirectory());
       return 9;
     }
+    if (Environment.GetEnvironmentVariable("HAI_TEST_SLOW_UPLOAD") == "1") {
+      if (command == "scp") Thread.Sleep(3200);
+      else if (args.Length > 0 && args[args.Length - 1].StartsWith("wc -c < ")) Console.Out.WriteLine("6");
+    }
+    Console.Error.WriteLine("native command diagnostic");
+    if (args.Length > 0 && args[args.Length - 1].Contains(".contents/apply.sh") && Environment.GetEnvironmentVariable("HAI_TEST_APPLY_EXIT") != null) return int.Parse(Environment.GetEnvironmentVariable("HAI_TEST_APPLY_EXIT"));
     int exitCode;
     return int.TryParse(Environment.GetEnvironmentVariable("HAI_TEST_COMMAND_EXIT"), out exitCode) ? exitCode : 0;
   }
@@ -122,7 +131,7 @@ function fixture() {
   const log = join(root, 'commands.log')
   const authLog = join(root, 'auth.log')
   for (const command of ['ssh', 'scp']) {
-    writeFileSync(join(bin, command), `#!/bin/sh\nprintf '%s\\0' '${command}' "$@" >> "$HAI_TEST_COMMANDS"\nprintf '\\n' >> "$HAI_TEST_COMMANDS"\nif [ -n "\${HAI_TEST_EXPECTED_PASSWORD+x}" ]; then\n password=$("$SSH_ASKPASS") || exit 8\n test "$password" = "$HAI_TEST_EXPECTED_PASSWORD" || exit 8\n printf '%s\\n' "$SSH_ASKPASS" >> "$HAI_TEST_AUTH"\n printf '%s' "$password"\n printf '%s' "$password" >&2\nfi\nexit "\${HAI_TEST_COMMAND_EXIT:-0}"\n`, { mode: 0o700 })
+    writeFileSync(join(bin, command), `#!/bin/sh\nprintf '%s\\0' '${command}' "$@" >> "$HAI_TEST_COMMANDS"\nprintf '\\n' >> "$HAI_TEST_COMMANDS"\nif [ -n "\${HAI_TEST_EXPECTED_PASSWORD+x}" ]; then\n password=$("$SSH_ASKPASS") || exit 8\n test "$password" = "$HAI_TEST_EXPECTED_PASSWORD" || exit 8\n printf '%s\\n' "$SSH_ASKPASS" >> "$HAI_TEST_AUTH"\n printf '%s' "$password"\n printf '%s' "$password" >&2\nfi\nif [ "\${HAI_TEST_SLOW_UPLOAD:-}" = 1 ]; then\n if [ '${command}' = scp ]; then sleep 3.2; else case "$*" in *'wc -c < '*) printf '6\\n';; esac; fi\nfi\nprintf 'native command diagnostic\\n' >&2\nif [ -n \"\${HAI_TEST_APPLY_EXIT:-}\" ]; then case \"$*\" in *'.contents/apply.sh'*) exit \"$HAI_TEST_APPLY_EXIT\";; esac; fi\nexit "\${HAI_TEST_COMMAND_EXIT:-0}"\n`, { mode: 0o700 })
   }
   if (process.platform === 'win32' && hasPowerShell) {
     const executable = createNativeCapture()
@@ -136,7 +145,7 @@ function fixture() {
 function global:ssh {
   $line = ConvertTo-Json -InputObject (@('ssh') + @($args)) -Compress
   [System.IO.File]::AppendAllText($env:HAI_TEST_COMMANDS, $line + [Environment]::NewLine)
-  $global:LASTEXITCODE = if ($env:HAI_TEST_COMMAND_EXIT) { [int]$env:HAI_TEST_COMMAND_EXIT } else { 0 }
+  $global:LASTEXITCODE = if ($env:HAI_TEST_APPLY_EXIT -and $args[-1] -match '\.contents/apply\.sh') { [int]$env:HAI_TEST_APPLY_EXIT } elseif ($env:HAI_TEST_COMMAND_EXIT) { [int]$env:HAI_TEST_COMMAND_EXIT } else { 0 }
 }
 function global:scp {
   $line = ConvertTo-Json -InputObject (@('scp') + @($args)) -Compress
@@ -157,18 +166,19 @@ $previousSystemRoot = [Environment]::GetEnvironmentVariable('SystemRoot', 'Proce
 if ([Environment]::GetEnvironmentVariable('SystemRoot', 'Process') -ne $previousSystemRoot) { throw 'Deployment script did not restore SystemRoot.' }
 if ((Test-Path -LiteralPath Env:SystemRoot) -ne $previousSystemRootExists) { throw 'Deployment script changed SystemRoot presence.' }
 `}`)
+  const environment = (script: Script, overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    ...process.env,
+    PATH: [bin, ...(process.platform === 'win32' ? ['C:/Program Files/Git/usr/bin'] : []), process.env.PATH].join(delimiter),
+    HAI_TEST_COMMANDS: log.replaceAll('\\', '/'),
+    HAI_TEST_AUTH: authLog,
+    HAI_TEST_SCRIPT: join(directory, `deploy.${script}`),
+    HAI_DEPLOY_IDENTITY_FILE: '',
+    HAI_DEPLOY_KNOWN_HOSTS_FILE: '',
+    HAI_TEST_COMMAND_EXIT: '0',
+    ...overrides,
+  })
   const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[], powershell?: string } = {}) => {
-    const env = {
-      ...process.env,
-      PATH: [bin, ...(process.platform === 'win32' ? ['C:/Program Files/Git/usr/bin'] : []), process.env.PATH].join(delimiter),
-      HAI_TEST_COMMANDS: log.replaceAll('\\', '/'),
-      HAI_TEST_AUTH: authLog,
-      HAI_TEST_SCRIPT: join(directory, `deploy.${script}`),
-      HAI_DEPLOY_IDENTITY_FILE: '',
-      HAI_DEPLOY_KNOWN_HOSTS_FILE: '',
-      HAI_TEST_COMMAND_EXIT: '0',
-      ...options.env,
-    }
+    const env = environment(script, options.env)
     return script === 'sh'
       ? spawnSync(shell, [join(directory, 'deploy.sh'), ...options.args ?? []], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
       : spawnSync(options.powershell ?? powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', wrapper], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
@@ -185,8 +195,51 @@ if ((Test-Path -LiteralPath Env:SystemRoot) -ne $previousSystemRootExists) { thr
       return [command!, ...encoded.map(value => Buffer.from(value, 'base64').toString('utf8'))]
     })
   }
-  return { directory, target, execute, commands, authLog }
+  return { directory, target, execute, commands, authLog, environment }
 }
+
+const hasTerminalDriver = process.platform !== 'win32' && spawnSync('script', ['--version'], { stdio: 'ignore' }).status === 0
+
+it.skipIf(!hasTerminalDriver).each(['password', 'cancel'] as const)('缺少密码时从真实终端隐藏输入并恢复终端（%s）', async (mode) => {
+  const { directory, target, commands, environment } = fixture()
+  const passwordEnv = 'HAI_DEPLOY_TEST_PROMPT_PASSWORD'
+  const password = ' 0019 中 "$value" '
+  writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password', passwordEnv }))
+  const command = `before=$(stty -g); sh ${shellArgument(join(directory, 'deploy.sh'))}; code=$?; test "$before" = "$(stty -g)" || exit 91; exit "$code"`
+  const child = spawn('script', ['-q', '-e', '-c', command, '/dev/null'], { env: environment('sh', { [passwordEnv]: undefined, HAI_TEST_EXPECTED_PASSWORD: password }), stdio: ['pipe', 'pipe', 'pipe'] })
+  let output = ''
+  let supplied = false
+  const capture = (chunk: Buffer) => {
+    output += chunk.toString('utf8')
+    if (!supplied && output.includes(`(${passwordEnv}):`)) {
+      supplied = true
+      child.stdin.write(mode === 'password' ? `${password}\n` : '\x04')
+    }
+  }
+  child.stdout.on('data', capture)
+  child.stderr.on('data', capture)
+  const closed = new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('close', resolve)
+  })
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const code = await Promise.race([closed, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Terminal prompt did not finish: ${output}`)), 10_000)
+    })])
+    expect(supplied).toBe(true)
+    expect(code, output).toBe(mode === 'password' ? 0 : 1)
+    expect(output).not.toContain(password)
+    expect(commands('sh').map(call => call[0])).toEqual(mode === 'password' ? ['ssh', 'scp', 'ssh'] : [])
+    expect(readFileSync(join(directory, 'deploy-target.json'), 'utf8')).not.toContain(password)
+  }
+  finally {
+    clearTimeout(timer)
+    if (child.exitCode === null)
+      child.kill()
+    await closed
+  }
+}, 15_000)
 
 describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) => {
   const test = script === 'ps1' && !hasPowerShell ? it.skip : it
@@ -197,6 +250,8 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
     const result = execute(script)
     expect(result.error).toBeUndefined()
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(result.stdout).toContain('[UPLOAD] 0%')
+    expect(result.stdout).toContain('[UPLOAD] 100%')
     const calls = commands(script)
     expect(calls.map(call => call[0])).toEqual(['ssh', 'scp', 'ssh'])
     for (const call of calls) {
@@ -213,6 +268,25 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
     expect(calls[1]!.at(-2)!.replaceAll('\\', '/').split('/').at(-1)).toBe(target.bundle)
     expect(calls[1]!.at(-1)).toBe(`${target.username}@${target.host}:${target.directory}/incoming/${target.bundle}`)
     expect(calls[2]!.at(-1)).toContain(`'${target.bundle}.contents/apply.sh' '${target.directory}'`)
+  })
+
+  passwordTest('大包上传完成前显示远端已接收字节和百分比', () => {
+    const { execute } = fixture()
+    const result = execute(script, { env: { HAI_TEST_SLOW_UPLOAD: '1' } })
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(result.stdout).toContain('[UPLOAD] 50% (6/12 bytes)')
+    expect(result.stdout.indexOf('[UPLOAD] 50%')).toBeLessThan(result.stdout.indexOf('[UPLOAD] 100%'))
+  }, 15_000)
+
+  test.each([7, 255])('远端退出 %s 区分明确失败与未知连接状态', (exitCode) => {
+    const { execute, commands } = fixture()
+    const result = execute(script, { env: { HAI_TEST_APPLY_EXIT: String(exitCode) } })
+    expect(result.status).not.toBe(0)
+    expect(commands(script)).toHaveLength(3)
+    const output = `${result.stdout}\n${result.stderr}`
+    expect(output).toContain(exitCode === 7 ? '[FAIL] Remote deployment failed (exit 7)' : '[UNKNOWN] Remote execution may continue')
+    if (exitCode === 7)
+      expect(output).not.toContain('[UNKNOWN]')
   })
 
   test('keeps explicit key and known-hosts environment overrides ahead of JSON', () => {
@@ -274,17 +348,17 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
     expect(commands(script)).toEqual([])
   })
 
-  passwordTest('复用本机密码环境执行三步、原值不进入参数或日志并清理helper', () => {
+  passwordTest.each([1, 2])('复用本机密码环境执行三步、原值不进入参数或日志并清理helper（第 %s 次）', () => {
     const { directory, target, execute, commands, authLog } = fixture()
     const password = ' 0019 中 "$value" '
     writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password', passwordEnv: 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD' }))
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const result = execute(script, { env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
-      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
-      expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
-    }
+    const result = execute(script, { env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
+    expect(`${result.stdout}\n${result.stderr}`).toContain('native command diagnostic')
+    expect(`${result.stdout}\n${result.stderr}`).toContain('***')
     const calls = commands(script)
-    expect(calls).toHaveLength(6)
+    expect(calls).toHaveLength(3)
     for (const call of calls) {
       expect(call).toContain('BatchMode=no')
       expect(call).toContain('PreferredAuthentications=password')
@@ -301,8 +375,19 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
     const result = execute(script, { env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password } })
     expect(result.status).not.toBe(0)
     expect(commands(script)).toEqual([])
+    expect(`${result.stdout}\n${result.stderr}`).toContain('HAI_DEPLOY_PROVIDER_SSH_PASSWORD')
     if (password)
       expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
+  })
+
+  test('缺失自定义密码变量给出变量名和修复方法，连接前停止', () => {
+    const { directory, target, execute, commands } = fixture()
+    writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password', passwordEnv: 'HAI_DEPLOY_TEST_MISSING_PASSWORD' }))
+    const result = execute(script, { env: { HAI_DEPLOY_TEST_MISSING_PASSWORD: undefined } })
+    expect(result.status).not.toBe(0)
+    expect(`${result.stdout}\n${result.stderr}`).toContain('HAI_DEPLOY_TEST_MISSING_PASSWORD')
+    expect(`${result.stdout}\n${result.stderr}`).toContain(deployM('deploy_uploadPasswordUnavailable'))
+    expect(commands(script)).toEqual([])
   })
 
   test.each([{ auth: 'other' }, { auth: 'password', passwordEnv: 'BAD;command' }, { auth: 'password', password: 'forbidden' }])('拒绝损坏认证配置 %j', (invalid) => {

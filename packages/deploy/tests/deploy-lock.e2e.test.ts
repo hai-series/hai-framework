@@ -85,12 +85,13 @@ case "$*" in
     if [ -f /fixture/health-count ]; then count=$(cat /fixture/health-count); fi
     count=$((count + 1)); printf '%s' "$count" > /fixture/health-count
     if [ "$count" -lt 3 ]; then printf 'starting\\n'; else printf 'healthy\\n'; fi;;
-  *'ps -q'*) printf 'fixture-container\\n';;
+  *'ps -q'*) if [ -f /fixture/services-stopped ]; then exit 0; fi; printf 'fixture-container\\n';;
   *'config --services'*)
     if [ -f /fixture/has-web ]; then printf 'app\\nweb\\n'; else printf 'app\\n'; fi
     if [ -f /fixture/has-db ]; then printf 'db\\n'; fi;;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
+case " $* " in *' up -d '*) rm -f /fixture/services-stopped;; esac
 if [ -f /fixture/manual-health ]; then
   # Podman Compose 按本次服务集清理孤立容器；第二批不能再移除已经就绪的依赖。
   case " $* " in *' up -d '*--remove-orphans*' app '*) touch /fixture/dependency-removed;; esac
@@ -320,6 +321,30 @@ fi
     expect(execute('cat /fixture/server/current')).toBe(partial.id)
     expect(JSON.parse(execute(`cat /fixture/server/result-${failed.id}.json`))).toMatchObject({ stage: 'health', exitCode: 1 })
     expect(execute(`test -f /fixture/server/diagnostics-${failed.id}.log && echo retained`)).toBe('retained')
+  }, 60_000)
+
+  it('compose down 后增量更新先恢复旧基线，再检查未选服务', async () => {
+    const artifacts = join(root, '.hai/build/docker/release-1')
+    mkdirSync(join(root, 'config'))
+    writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
+    const images = ['app', 'web'].map((name) => {
+      const file = `${name}-1.2.3.tar`
+      const content = `prebuilt-${name}`
+      writeFileSync(join(artifacts, file), content)
+      return { name, file, imageRef: `localhost/recovery-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+    })
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    execute('touch /fixture/has-web')
+    const full = await pack()
+    expect(apply(full).status).toBe(0)
+    execute('touch /fixture/services-stopped; : > /fixture/commands.log')
+    const incremental = await pack(['web'])
+    const applied = apply(incremental)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
+    expect(applied.stdout).toContain('[recover] Starting stopped services')
+    expect(applied.stdout.indexOf('[recover]')).toBeLessThan(applied.stdout.indexOf('[dependencies]'))
+    expect(execute('cat /fixture/commands.log')).toContain('--no-recreate app web')
+    expect(execute('cat /fixture/server/current')).toBe(incremental.id)
   }, 60_000)
 
   it('缺失 flock 或文件系统锁失败时预检关闭，不冒充另一个活跃部署', async () => {

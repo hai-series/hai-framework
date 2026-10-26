@@ -1,5 +1,6 @@
-import { windowsAskpassSource } from './deploy-ssh-askpass.js'
 /** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
+import { deployM } from '../deploy-i18n.js'
+import { windowsAskpassSource } from './deploy-ssh-askpass.js'
 import { createTargetReader } from './deploy-target.js'
 
 /**
@@ -304,6 +305,21 @@ if [ "$proxy_update" = true ]; then
 fi
 compose config >/dev/null
 compose config --services > "$release/services"
+# 增量包依赖已安装的完整基线；先恢复 down/stop 后的服务，使用旧配置和本地镜像，不重建运行中的容器。
+if [ "$partial" = true ]; then
+  recover=false
+  while IFS= read -r service; do
+    case " $selected " in *" $service "*) continue;; esac
+    containers=$("$runtime" ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$service")
+    if [ -z "$containers" ]; then recover=true; fi
+  done < "$release/services"
+  if [ "$recover" = true ]; then
+    step recover 'Starting stopped services from the installed baseline'
+    restore=$previous
+    start_services $(cat "$root/releases/$previous/services")
+    restore=''
+  fi
+fi
 : > "$release/rollback-images"
 if [ -n "$previous" ]; then
   for service in $selected; do
@@ -380,6 +396,7 @@ export function createUploadScripts(): { sh: string, ps1: string, reader: string
   const sh = String.raw`#!/bin/sh
 # 操作机上传入口：整个交付目录可直接复制；tar、deploy-target.json 与本脚本须放在同一目录。
 # 先修改 deploy-target.json 的服务器、用户、密钥路径；需要 sh、awk 及 OpenSSH 的 ssh/scp。
+# 密码缺失时从终端隐藏输入，需要 stty；输入仅用于本次部署。
 # 执行：sh deploy.sh [主机 [端口 [用户]]]；可用 HAI_DEPLOY_IDENTITY_FILE 覆盖当前电脑的私钥。
 # tar 内 manifest.json 的 partial/selectedServices 说明本次模式；服务器会核验增量基线，上传后自动部署并检查 HTTP。
 set -eu
@@ -423,7 +440,16 @@ test -f "./$bundle" || { printf 'Bundle missing: %s\n' "$bundle" >&2; exit 1; }
 for tool in ssh scp; do command -v "$tool" >/dev/null || { printf 'Install OpenSSH (%s).\n' "$tool" >&2; exit 1; }; done
 temporary=''
 temporary_root=''
+upload=''
+monitor=''
+tty_state=''
 cleanup() {
+  # 中断隐藏输入时也恢复调用者的终端回显。
+  if [ -n "$tty_state" ]; then
+    (stty "$tty_state" </dev/tty; printf '\n' >/dev/tty) 2>/dev/null || :
+  fi
+  if [ -n "$monitor" ]; then kill "$monitor" 2>/dev/null || :; wait "$monitor" 2>/dev/null || :; fi
+  if [ -n "$upload" ]; then kill "$upload" 2>/dev/null || :; wait "$upload" 2>/dev/null || :; fi
   if [ -n "$temporary" ]; then
     case "$temporary" in "$temporary_root"/hai-ssh-askpass.*) test ! -L "$temporary" && rm -rf -- "$temporary";; *) return 1;; esac
   fi
@@ -437,11 +463,27 @@ set -- -o "StrictHostKeyChecking=$strict" -o "ConnectTimeout=$timeout"
 if [ "$auth" = password ]; then
   for tool in mktemp mkfifo od; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
   # 后缀哨兵保留末尾换行，以便拒绝 readpass 无法安全传递的 CR/LF。
-  password=$(printenv "$password_env"; printf '.')
-  password=@@PASSWORD_TRIM@@
-  password=@@PASSWORD_NEWLINE@@
+  password=''
+  if password=$(printenv "$password_env" && printf '.'); then
+    password=@@PASSWORD_TRIM@@
+    password=@@PASSWORD_NEWLINE@@
+  fi
+  if [ -z "$password" ]; then
+    if ! command -v stty >/dev/null || ! ( : </dev/tty >/dev/tty ) 2>/dev/null; then
+      printf '%s: %s\n' "$password_env" @@PASSWORD_UNAVAILABLE@@ >&2
+      exit 1
+    fi
+    tty_state=$(stty -g </dev/tty)
+    stty -echo </dev/tty
+    printf '%s (%s): ' @@PASSWORD_PROMPT@@ "$password_env" >/dev/tty
+    if IFS= read -r password </dev/tty; then input_code=0; else input_code=$?; fi
+    stty "$tty_state" </dev/tty
+    tty_state=''
+    printf '\n' >/dev/tty
+    if [ "$input_code" -ne 0 ]; then printf '%s\n' @@PASSWORD_CANCELLED@@ >&2; exit 1; fi
+  fi
   export HAI_DEPLOY_ASKPASS_PASSWORD="$password"
-  if ! LC_ALL=C awk 'BEGIN {p=ENVIRON["HAI_DEPLOY_ASKPASS_PASSWORD"]; exit (length(p) == 0 || length(p) > 1023 || p ~ /[\r\n]/) ? 1 : 0}'; then printf 'Set a valid SSH password in the configured local environment variable.\n' >&2; exit 1; fi
+  if ! LC_ALL=C awk 'BEGIN {p=ENVIRON["HAI_DEPLOY_ASKPASS_PASSWORD"]; exit (length(p) == 0 || length(p) > 1023 || p ~ /[\r\n]/) ? 1 : 0}'; then printf '%s: %s\n' "$password_env" @@PASSWORD_INVALID@@ >&2; exit 1; fi
   umask 077
   temporary_root=$(CDPATH= cd -- "@@TEMP_ROOT@@" && pwd -P)
   temporary=$(mktemp -d "$temporary_root/hai-ssh-askpass.XXXXXXXX")
@@ -453,7 +495,6 @@ printf '%s\n' "$HAI_DEPLOY_ASKPASS_PASSWORD"
 HAI_ASKPASS
   chmod 700 "$temporary/askpass.sh"
   export SSH_ASKPASS="$temporary/askpass.sh" SSH_ASKPASS_REQUIRE=force SSH_ASKPASS_PROMPT='' DISPLAY=hai-deploy:0
-  mkfifo "$temporary/output"
   set -- "$@" -o BatchMode=no -o PreferredAuthentications=password -o PasswordAuthentication=yes -o PubkeyAuthentication=no -o NumberOfPasswordPrompts=1
 else
   set -- "$@" -o BatchMode=yes
@@ -462,7 +503,11 @@ fi
 # 固定字节流过滤器最多保留一个密码长度，不把值交给 argv、正则或磁盘。
 run_native() {
   if [ "$auth" = key ]; then "$@"; return; fi
-  (od -An -v -tu1 "$temporary/output" | LC_ALL=C awk '
+  # 每次调用独立管道，允许上传与进度查询并行且保持密码脱敏。
+  output=$(mktemp "$temporary/output.XXXXXXXX") || return 1
+  rm -f "$output"
+  mkfifo "$output" || return 1
+  (od -An -v -tu1 "$output" | LC_ALL=C awk '
     BEGIN {secret=ENVIRON["HAI_DEPLOY_ASKPASS_PASSWORD"]; n=length(secret); pending=""}
     {for(i=1;i<=NF;i++) {pending=pending sprintf("%c",$i); while(length(pending)>=n) {
       if(substr(pending,1,n)==secret) {printf "***"; pending=substr(pending,n+1)}
@@ -470,8 +515,9 @@ run_native() {
     }}}
     END {printf "%s",pending}') &
   filter=$!
-  if "$@" > "$temporary/output" 2>&1; then code=0; else code=$?; fi
+  if "$@" > "$output" 2>&1; then code=0; else code=$?; fi
   if ! wait "$filter"; then printf 'Cannot filter SSH output.\n' >&2; return 1; fi
+  rm -f "$output"
   return "$code"
 }
 if [ -n "$known_hosts" ]; then
@@ -483,13 +529,43 @@ run_native ssh "$@" -p "$port" "$user@$host" "mkdir -p '$remote/incoming' && chm
 printf '[2/3] Uploading %s\n' "$bundle"
 scp_host=$host
 case "$host" in *:*) scp_host="[$host]";; esac
-run_native scp "$@" -P "$port" "./$bundle" "$user@$scp_host:$remote/incoming/$bundle"
+total=$(wc -c < "./$bundle" | tr -d '[:space:]')
+printf '[UPLOAD] 0%% (0/%s bytes)\n' "$total"
+run_native scp "$@" -P "$port" "./$bundle" "$user@$scp_host:$remote/incoming/$bundle" &
+upload=$!
+(
+  pause=''
+  trap 'if [ -n "$pause" ]; then kill "$pause" 2>/dev/null || :; wait "$pause" 2>/dev/null || :; fi; exit 0' HUP INT TERM
+  while kill -0 "$upload" 2>/dev/null; do
+    sleep 2 &
+    pause=$!
+    wait "$pause" || exit 1
+    pause=''
+    kill -0 "$upload" 2>/dev/null || break
+    received=$(run_native ssh "$@" -p "$port" "$user@$host" "wc -c < '$remote/incoming/$bundle'" 2>/dev/null) || continue
+    received=$(printf '%s' "$received" | tr -d '[:space:]')
+    case "$received" in ''|*[!0-9]*) continue;; esac
+    LC_ALL=C awk -v done="$received" -v total="$total" 'BEGIN {percent=total>0 ? done*100/total : 0; if(percent>99) percent=99; printf "[UPLOAD] %.0f%% (%s/%s bytes)\n",percent,done,total}'
+  done
+) &
+monitor=$!
+if wait "$upload"; then upload_code=0; else upload_code=$?; fi
+upload=''
+kill "$monitor" 2>/dev/null || :
+wait "$monitor" 2>/dev/null || :
+monitor=''
+if [ "$upload_code" -ne 0 ]; then printf '[FAIL] Upload failed (exit %s). Check SSH output above.\n' "$upload_code" >&2; exit "$upload_code"; fi
+printf '[UPLOAD] 100%% (%s/%s bytes)\n' "$total" "$total"
 printf '[3/3] Applying package and checking HTTP access\n'
 if run_native ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"; then
   :
 else
   code=$?
-  printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in README.txt), current and containers before retrying.\n' "$remote" >&2
+  if [ "$code" -lt 128 ]; then
+    printf '[FAIL] Remote deployment failed (exit %s). Inspect %s/result-<deploymentId>.json (ID in README.txt) and startup diagnostics.\n' "$code" "$remote" >&2
+  else
+    printf '[UNKNOWN] Remote execution may continue. Inspect %s/result-<deploymentId>.json (ID in README.txt), current and containers before retrying.\n' "$remote" >&2
+  fi
   exit "$code"
 fi
 `.replace('@@PASSWORD_TRIM@@', '$' + '{password%.}').replace('@@PASSWORD_NEWLINE@@', '$' + '{password%?}').replace('@@TEMP_ROOT@@', '$' + '{TMPDIR:-/tmp}').replace('@@ASKPASS_PROMPT@@', '$' + '{SSH_ASKPASS_PROMPT:-}')
@@ -502,6 +578,9 @@ SSH 中断时先核对远端结果文件和容器状态，再决定是否重试�
 #>
 param([string]$IdentityFile = $env:HAI_DEPLOY_IDENTITY_FILE)
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5 的重定向错误流默认沿用本机代码页；统一 UTF-8，保留多语言提示。
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+$OutputEncoding = [Console]::OutputEncoding
 $windowsRuntime = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 $previousSystemRoot = [Environment]::GetEnvironmentVariable('SystemRoot', 'Process')
 try {
@@ -522,7 +601,7 @@ if (($null -ne $target.identityFile -and $target.identityFile -isnot [string]) -
 $strict = if ($target.strictHostKeyChecking -eq $false) { 'no' } else { 'accept-new' }
 $auth = if ($null -eq $target.auth) { 'key' } else { $target.auth }
 $passwordEnv = if ($null -eq $target.passwordEnv) { 'HAI_DEPLOY_PROVIDER_SSH_PASSWORD' } else { $target.passwordEnv }
-if ($auth -isnot [string] -or $auth -notin @('key', 'password') -or $passwordEnv -isnot [string] -or $passwordEnv -cnotmatch '^HAI_DEPLOY_[A-Z0-9_]+$' -or $null -ne $target.password) { throw 'Invalid SSH authentication configuration. Store password values only in the configured local environment variable.' }
+if ($auth -isnot [string] -or $auth -notin @('key', 'password') -or $passwordEnv -isnot [string] -or $passwordEnv -cnotmatch '^HAI_DEPLOY_[A-Z0-9_]+$' -or $null -ne $target.password) { throw 'Invalid SSH authentication configuration. Store only passwordEnv in the target; passwords are read locally or prompted.' }
 $options = @('-o', "StrictHostKeyChecking=$strict", '-o', "ConnectTimeout=$timeout")
 if (-not $IdentityFile) { $IdentityFile = $target.identityFile }
 if ($auth -eq 'password') {
@@ -554,15 +633,63 @@ function Invoke-Step([string]$Name, [string]$Command, [string[]]$Arguments) {
     $Arguments = @('--run', $nativeCommand.Source) + $Arguments
     $nativeCommand = Get-Command $env:SSH_ASKPASS -ErrorAction Stop
   }
-  if ($PSVersionTable.PSVersion.Major -lt 6 -and $nativeCommand.CommandType -eq 'Application') {
+  if ($nativeCommand.CommandType -eq 'Application') {
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $nativeCommand.Source
     $start.WorkingDirectory = (Get-Location).ProviderPath
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
     $start.Arguments = ($Arguments | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' '
     $child = [System.Diagnostics.Process]::Start($start)
-    try { $child.WaitForExit(); $code = $child.ExitCode } finally { $child.Dispose() }
+    # 持续转发 SSH/部署诊断；密码模式的输出已由独立 helper 脱敏。
+    $streams = @(
+      @{ Reader = $child.StandardOutput; Pending = $child.StandardOutput.ReadLineAsync(); Writer = [Console]::Out },
+      @{ Reader = $child.StandardError; Pending = $child.StandardError.ReadLineAsync(); Writer = [Console]::Error }
+    )
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $nextProgress = 2000
+    try {
+      while (-not $child.HasExited -or $null -ne $streams[0].Pending -or $null -ne $streams[1].Pending) {
+        foreach ($stream in $streams) {
+          while ($null -ne $stream.Pending -and $stream.Pending.IsCompleted) {
+            $line = $stream.Pending.GetAwaiter().GetResult()
+            if ($null -eq $line) { $stream.Pending = $null }
+            else { $stream.Writer.WriteLine($line); $stream.Pending = $stream.Reader.ReadLineAsync() }
+          }
+        }
+        if ($Command -eq 'scp' -and -not $child.HasExited -and $clock.ElapsedMilliseconds -ge $nextProgress) {
+          $nextProgress = $clock.ElapsedMilliseconds + 2000
+          $query = $null
+          try {
+            $probe = New-Object System.Diagnostics.ProcessStartInfo
+            $probe.FileName = (Get-Command ssh -ErrorAction Stop).Source
+            $probeArgs = $options + @('-p', [string]$port, $destination, "wc -c < '$remote/incoming/$bundle'")
+            if ($auth -eq 'password') { $probeArgs = @('--run', $probe.FileName) + $probeArgs; $probe.FileName = $env:SSH_ASKPASS }
+            $probe.UseShellExecute = $false; $probe.CreateNoWindow = $true
+            $probe.RedirectStandardOutput = $true; $probe.RedirectStandardError = $true
+            $probe.Arguments = ($probeArgs | ForEach-Object { ConvertTo-NativeArgument $_ }) -join ' '
+            $query = [System.Diagnostics.Process]::Start($probe)
+            try {
+              $stdout = $query.StandardOutput.ReadToEndAsync()
+              $stderr = $query.StandardError.ReadToEndAsync()
+              if (-not $query.WaitForExit(5000)) { $query.Kill(); $query.WaitForExit() }
+              $received = $stdout.Result.Trim()
+              if ($query.ExitCode -eq 0 -and $received -match '^[0-9]+$') {
+                $percent = if ($uploadBytes -gt 0) { [Math]::Min(99, [Math]::Floor([double]$received * 100 / $uploadBytes)) } else { 0 }
+                Write-Host "[UPLOAD] $percent% ($received/$uploadBytes bytes)"
+                Write-Progress -Activity "Uploading $bundle" -Status "$received/$uploadBytes bytes" -PercentComplete $percent
+              }
+            } finally { if ($null -ne $query) { $query.Dispose() } }
+          } catch { [Console]::Error.WriteLine('[UPLOAD] Progress query unavailable; transfer continues.') }
+        }
+        Start-Sleep -Milliseconds 50
+      }
+      $code = $child.ExitCode
+    } finally { $child.Dispose(); if ($Command -eq 'scp') { Write-Progress -Activity "Uploading $bundle" -Completed } }
   } else {
     $invokeCommand = if ($nativeCommand.CommandType -eq 'Application') { $nativeCommand.Source } else { $Command }
     & $invokeCommand @Arguments
@@ -576,10 +703,25 @@ $temporary = $null
 $temporaryRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
 $savedEnvironment = @{}
 try {
+  foreach ($tool in @('ssh', 'scp')) { Get-Command $tool -ErrorAction Stop | Out-Null }
   if ($auth -eq 'password') {
     $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'Process')
     if ($null -eq $password -and $windowsRuntime) { $password = [Environment]::GetEnvironmentVariable($passwordEnv, 'User') }
-    if ([string]::IsNullOrEmpty($password) -or $password.IndexOfAny([char[]]@([char]0, [char]10, [char]13)) -ge 0 -or [Text.Encoding]::UTF8.GetByteCount($password) -gt 1023) { throw 'Set a valid SSH password in the configured local environment variable.' }
+    if ([string]::IsNullOrEmpty($password)) {
+      if ($Host.Name -eq 'ConsoleHost' -and [Console]::IsInputRedirected) { throw ($passwordEnv + ': ' + @@PASSWORD_UNAVAILABLE@@) }
+      $secure = $null
+      $pointer = [IntPtr]::Zero
+      try {
+        $secure = Read-Host -Prompt (@@PASSWORD_PROMPT@@ + ' (' + $passwordEnv + ')') -AsSecureString
+        $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+      } catch { throw ($passwordEnv + ': ' + @@PASSWORD_UNAVAILABLE@@) }
+      finally {
+        if ($pointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+        if ($null -ne $secure) { $secure.Dispose() }
+      }
+    }
+    if ([string]::IsNullOrEmpty($password) -or $password.IndexOfAny([char[]]@([char]0, [char]10, [char]13)) -ge 0 -or [Text.Encoding]::UTF8.GetByteCount($password) -gt 1023) { throw ($passwordEnv + ': ' + @@PASSWORD_INVALID@@) }
     foreach ($name in @('SSH_ASKPASS', 'SSH_ASKPASS_REQUIRE', 'SSH_ASKPASS_PROMPT', 'DISPLAY', 'HAI_DEPLOY_ASKPASS_PASSWORD', 'HAI_DEPLOY_ASKPASS_SOURCE', 'HAI_DEPLOY_ASKPASS_OUTPUT')) { $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     $temporary = Join-Path $temporaryRoot ('hai-ssh-askpass-' + [Guid]::NewGuid().ToString('N'))
     [System.IO.Directory]::CreateDirectory($temporary) | Out-Null
@@ -603,15 +745,19 @@ try {
     $env:DISPLAY = 'hai-deploy:0'
     $env:HAI_DEPLOY_ASKPASS_PASSWORD = $password
   }
-  foreach ($tool in @('ssh', 'scp')) { Get-Command $tool -ErrorAction Stop | Out-Null }
   Invoke-Step '1/3 Connect' 'ssh' ($options + @('-p', [string]$port, $destination, "mkdir -p '$remote/incoming' && chmod 700 '$remote' '$remote/incoming'"))
+  $uploadBytes = (Get-Item -LiteralPath "./$bundle").Length
+  Write-Host "[UPLOAD] 0% (0/$uploadBytes bytes)"
   Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$port, "./$bundle", "$($scpDestination):$remote/incoming/$bundle"))
+  Write-Host "[UPLOAD] 100% ($uploadBytes/$uploadBytes bytes)"
   $applying = $true
   Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
 } catch {
-  if ($applying) { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in README.txt), current and containers before retrying.") }
-  Write-Error $_
-  exit 1
+  if ($applying) {
+    if ($LASTEXITCODE -gt 0 -and $LASTEXITCODE -lt 128) { [Console]::Error.WriteLine("[FAIL] Remote deployment failed (exit $LASTEXITCODE). Inspect $remote/result-<deploymentId>.json (ID in README.txt) and startup diagnostics.") }
+    else { [Console]::Error.WriteLine("[UNKNOWN] Remote execution may continue. Inspect $remote/result-<deploymentId>.json (ID in README.txt), current and containers before retrying.") }
+  }
+  throw
 } finally {
   foreach ($name in $savedEnvironment.Keys) { [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process') }
   if ($null -ne $temporary -and (Test-Path -LiteralPath $temporary)) {
@@ -628,7 +774,18 @@ try {
 }
 `.replace('@@WINDOWS_ASKPASS@@', windowsAskpassSource)
   // Windows PowerShell 5 将无 BOM 的 UTF-8 视为 ANSI；中文注释也可能改变脚本的实际解析结果。
-  return { sh, ps1: `\uFEFF${ps1}`, reader: createTargetReader() }
+  const messages: Record<string, string> = {
+    PROMPT: deployM('deploy_uploadPasswordPrompt'),
+    UNAVAILABLE: deployM('deploy_uploadPasswordUnavailable'),
+    CANCELLED: deployM('deploy_uploadPasswordCancelled'),
+    INVALID: deployM('deploy_uploadPasswordInvalid'),
+  }
+  const pattern = /@@PASSWORD_(PROMPT|UNAVAILABLE|CANCELLED|INVALID)@@/g
+  return {
+    sh: sh.replace(pattern, (_match, name: string) => shellArgument(messages[name]!)),
+    ps1: `\uFEFF${ps1.replace(pattern, (_match, name: string) => `'${messages[name]!.replaceAll('\'', '\'\'')}'`)}`,
+    reader: createTargetReader(),
+  }
 }
 
 /**

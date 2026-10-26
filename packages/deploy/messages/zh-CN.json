@@ -54,7 +54,7 @@
   "deploy_sshAskpassFailed": "无法准备受控 SSH 密码 helper；请检查系统 OpenSSH 和 Windows PowerShell 5。",
   "deploy_sshAskpassCleanupFailed": "无法确认本次 SSH 密码 helper 已清理，请检查本机临时目录。",
   "deploy_targetAuth": "认证方式：key 使用私钥或 ssh-agent；password 从 passwordEnv 指定的本机环境读取密码。",
-  "deploy_targetPasswordEnv": "仅密码环境变量名，不是密码值。请在当前操作机配置一次并复用；默认 HAI_DEPLOY_PROVIDER_SSH_PASSWORD。",
+  "deploy_targetPasswordEnv": "仅保存环境变量名，不是密码值。优先复用操作机环境变量；缺失时部署入口隐藏输入，仅本次使用。默认 HAI_DEPLOY_PROVIDER_SSH_PASSWORD。",
   "deploy_bundleInstructions": "部署包：{file}\n包中已包含本次选择服务需要的镜像，包括自建中间件。\n有 SSH 连接时，先按 _comments 说明修改同一交付目录中的 deploy-target.json，再运行同目录的 deploy.ps1（Windows）或 deploy.sh（Linux/macOS）；两者均读取此 JSON，sh 入口还需本机安装 awk。\n完全隔离时，把整个交付目录复制到 Linux 服务器，在该目录执行 sh deploy-local.sh；脚本自动解包、部署并保留日志。可传入第一个参数覆盖服务器部署目录。\n服务器需要 Docker/Podman、Compose、sh、tar、sha256sum、awk、curl、util-linux flock，以及支持 flock 的文件系统和目录、容器运行权限。\n固定锁文件 .deploy.lock 禁止删除或替换；全部持有进程退出或重启后自动释放。强杀后的执行与恢复状态须人工核对。\n部分更新要求服务器已有成功的完整部署，端口及应用布局保持一致。每步失败会返回非零退出码；结果记录在部署目录 result-部署ID.json。\n包包含私有运行配置，请安全传输。\n所含镜像：\n{images}",
   "deploy_bundleMetadata": "应用版本：{version}\n构建编号：{buildId}\nCompose 文件：{compose}\n部署 ID: {deploymentId}",
   "deploy_targetHost": "必填：Linux 服务器地址或 SSH 别名。执行任一上传脚本前，将 SERVER_HOST 改为实际地址。",
@@ -75,7 +75,6 @@
   "deploy_configFileInvalid": "配置文件 {path} 第 {line} 行格式有误。请检查缩进、冒号和引号后重试。",
   "deploy_configFileUnreadable": "无法读取配置文件 {path}，请检查文件路径与读取权限。",
   "deploy_bundleNameInvalid": "部署包文件名只支持字母、数字、点、加号、短横线和下划线；所在目录可以包含空格。",
-  "deploy_secretsInvalid": "中间件凭据文件损坏或缺少字段：{path}。请从备份恢复；不会自动更换密码，以免已有数据无法访问。",
   "deploy_localStopped": "已确认本地命令进程树全部退出。",
   "deploy_localUnknown": "无法确认本地命令进程树已全部退出；请检查本机执行状态。",
   "deploy_localNotStarted": "本地命令尚未启动。",
@@ -90,5 +89,10 @@
   "deploy_bundlePartial": "增量部署（要求已有成功的全量基线）",
   "deploy_bundleSelection": "部署模式：{mode}\n更新服务：{services}；可在 manifest.json 中核对 partial 和 selectedServices。",
   "deploy_transportBodyLimitInvalid": "transport.maxPlaintextBytes 无效：必须是 1024 到 67108864 字节之间的整数",
-  "deploy_transportKeyRingInvalid": "传输密钥环缺失或无效，尚未上传应用。请在 {path} 或部署进程中设置 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，使用完整有效的 JSON，并向所有节点分发同一受管密钥环。"
+  "deploy_transportKeyRingInvalid": "传输密钥环缺失或无效，尚未上传应用。请在 {path} 或部署进程中设置 HAI_CRYPTO_TRANSPORT_SERVERKEYRING，使用完整有效的 JSON，并向所有节点分发同一受管密钥环。",
+  "deploy_uploadPasswordPrompt": "请输入 SSH 密码（隐藏输入）",
+  "deploy_uploadPasswordUnavailable": "当前无法交互输入密码；请先设置该操作机环境变量，再重新运行部署脚本。",
+  "deploy_uploadPasswordCancelled": "已取消密码输入，尚未连接服务器。",
+  "deploy_uploadPasswordInvalid": "SSH 密码须为 1–1023 个 UTF-8 字节，且不能包含换行。",
+  "deploy_secretsInvalid": "中间件凭据文件损坏或缺少字段：{path}。请从备份恢复；不会自动更换密码，以免已有数据无法访问。"
 }
