@@ -2,8 +2,8 @@
 import type { IamCreateCaptchaInputSchema, IamLoginInput, IamPublicConfig, IamRegisterInput } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { KitClient } from './kit-client.js'
-import { apiContract, IamPublicConfigSchema } from '@h-ai/api-contract'
-import { ok } from '@h-ai/core'
+import { apiContract, IamCaptchaChallengeSchema, IamPublicConfigSchema, IamReauthenticationProofSchema } from '@h-ai/api-contract'
+import { core, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { createKitClient } from './kit-client.js'
 
@@ -68,5 +68,9 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
     requestPasswordReset: (identifier: string, options?: { captcha?: string }) => post('password-reset/request', { identifier, ...options }),
     confirmPasswordReset: (token: string, newPassword: string) => post('password-reset/confirm', { token, newPassword }),
     renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => post('password/renew', input),
+    async reauthenticate(password: string, operation: string) {
+      const response = await apiFetch(`${base}/reauthenticate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, operation }) })
+      return apiContract.haiResultSchema(IamReauthenticationProofSchema).parse(await response.json())
+    },
   }
 }

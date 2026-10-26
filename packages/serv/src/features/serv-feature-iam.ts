@@ -59,12 +59,28 @@ export interface IamProcedureDeps {
 export function createIamProcedures(deps: IamProcedureDeps) {
   const { iam } = deps
 
+  // 权限守卫先执行；额外鉴别只绑定已授权操作，不提升原有权限。
+  async function sensitive<T>(context: ServContext, operation: string, run: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    const policy = iam.publicConfig?.reauthentication
+    if (policy?.enabled && policy.operations.includes(operation)) {
+      const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
+      if (!checked.success)
+        return checked
+    }
+    return run()
+  }
+
   return implement(iamContract)
     .context<ServContext>()
 
-    .route('auth.login', ({ input }) => iam.auth.login(input))
-    .route('auth.loginWithOtp', ({ input }) => iam.auth.loginWithOtp(input))
-    .route('auth.loginWithLdap', ({ input }) => iam.auth.loginWithLdap(input))
+    .route('auth.reauthenticate')
+    .auth()
+    .handle(({ input, context }) => iam.auth.reauthenticate(context.accessToken ?? '', input.password, input.operation))
+
+    .route('auth.login', ({ input, context }) => iam.auth.login(input, context))
+    .route('auth.createCaptcha', ({ input }) => iam.auth.createCaptcha(input))
+    .route('auth.loginWithOtp', ({ input, context }) => iam.auth.loginWithOtp(input, context))
+    .route('auth.loginWithLdap', ({ input, context }) => iam.auth.loginWithLdap(input, context))
     .route('auth.publicConfig', () => ok(iam.publicConfig))
     .route('auth.renewPassword', ({ input }) => iam.user.renewPassword(input))
     .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier, input))
@@ -137,11 +153,15 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('users.create')
     .permission('iam.users.write')
-    .handle(({ input }) => createUser(iam, input))
+    .handle(({ input, context }) => sensitive(context, 'iam.users.create', () => createUser(iam, input)))
+
+    .route('users.invite')
+    .permission('iam.users.write')
+    .handle(({ input, context }) => sensitive(context, 'iam.users.invite', () => createUser(iam, input)))
 
     .route('users.update')
     .permission('iam.users.write')
-    .handle(({ input }) => updateUser(iam, input))
+    .handle(({ input, context }) => sensitive(context, 'iam.users.update', () => updateUser(iam, input)))
 
     .route('users.delete')
     .permission('iam.users.write')
@@ -149,12 +169,12 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       // 防止自删：避免管理员误删自己的账号导致授权锁死。
       if (context.session.userId === input.id)
         return err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale }))
-      return iam.user.deleteUser(input.id)
+      return sensitive(context, 'iam.users.delete', () => iam.user.deleteUser(input.id))
     })
 
     .route('users.resetPassword')
     .permission('iam.users.write')
-    .handle(({ input }) => iam.user.adminResetPassword(input.id, input.newPassword))
+    .handle(({ input, context }) => sensitive(context, 'iam.users.resetPassword', () => iam.user.adminResetPassword(input.id, input.newPassword)))
 
     .route('roles.list')
     .permission('iam.roles.read')
@@ -166,18 +186,18 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('roles.create')
     .permission('iam.roles.write')
-    .handle(({ input }) => iam.authz.createRole(input))
+    .handle(({ input, context }) => sensitive(context, 'iam.roles.create', () => iam.authz.createRole(input)))
 
     .route('roles.update')
     .permission('iam.roles.write')
     .handle(({ input, context }) => {
       const { id, ...data } = input
-      return iam.authz.updateRole(id, data)
+      return sensitive(context, 'iam.roles.update', () => iam.authz.updateRole(id, data))
     })
 
     .route('roles.delete')
     .permission('iam.roles.write')
-    .handle(({ input }) => iam.authz.deleteRole(input.id))
+    .handle(({ input, context }) => sensitive(context, 'iam.roles.delete', () => iam.authz.deleteRole(input.id)))
 
     .route('permissions.list')
     .permission('iam.permissions.read')
@@ -189,11 +209,11 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('permissions.create')
     .permission('iam.permissions.write')
-    .handle(({ input }) => iam.authz.createPermission(input))
+    .handle(({ input, context }) => sensitive(context, 'iam.permissions.create', () => iam.authz.createPermission(input)))
 
     .route('permissions.delete')
     .permission('iam.permissions.write')
-    .handle(({ input }) => iam.authz.deletePermission(input.id))
+    .handle(({ input, context }) => sensitive(context, 'iam.permissions.delete', () => iam.authz.deletePermission(input.id)))
 
     .build()
 }

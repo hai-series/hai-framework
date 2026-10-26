@@ -21,7 +21,7 @@ const CAPACITOR_ORIGINS = [
 const defaultConfig: Required<CorsConfig> = {
   origin: '*',
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Hai-Reauthentication'],
   exposedHeaders: [],
   credentials: false,
   maxAge: 86400,

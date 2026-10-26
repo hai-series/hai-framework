@@ -9,6 +9,7 @@ import {
   IamLoginInputSchema,
   IamLogoutInputSchema,
   IamOtpLoginInputSchema,
+  IamReauthenticateInputSchema,
   IamRegisterInputSchema,
   IamRenewPasswordInputSchema,
   IamRequestPasswordResetInputSchema,
@@ -64,6 +65,10 @@ export function createAuthApi(iam: IamFunctions) {
     createCaptcha: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamCreateCaptchaInputSchema)
       return response(await iam.auth.createCaptcha(input))
+    }),
+    reauthenticate: handler(async ({ request, cookies }) => {
+      const input = await validateFormOrFail(request, IamReauthenticateInputSchema)
+      return response(await iam.auth.reauthenticate(getAccessToken(request, cookies) ?? '', input.password, input.operation))
     }),
     publicConfig: handler(() => ok(iam.publicConfig)),
     renewPassword: handler(async ({ request }) => {

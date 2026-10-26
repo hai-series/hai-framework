@@ -544,6 +544,12 @@ export const AccountConfigSchema = z.object({
 export const IamConfigSchema = z.object({
   /** 管理端可用单次邀请代替共享初始密码；需要已配置的密码重置通知通道。 */
   initialCredentials: z.object({ enabled: z.boolean().default(false) }).optional(),
+  /** 指定敏感操作额外验证原密码；凭据短期且单次使用。 */
+  reauthentication: z.object({
+    enabled: z.boolean().default(false),
+    operations: z.array(z.string().trim().min(1).max(128)).max(1000).default([]),
+    ttlSeconds: z.number().int().min(1).max(900).default(300),
+  }).optional(),
   /** 宿主提供可信客户端地址；绝不从凭据 JSON 或任意转发头取得 IP。 */
   loginAccess: LoginAccessConfigSchema.optional(),
   /** 账号自动休眠策略；未配置时不启动扫描。 */

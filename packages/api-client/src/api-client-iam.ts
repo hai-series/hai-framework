@@ -57,7 +57,7 @@ export type IamAuthLoginInput = IamLoginInput & { method?: 'password' | 'ldap' |
  * ```
  */
 export function createIamAuthActions(client: {
-  iam: { auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['iam']['auth'], 'publicConfig' | 'login' | 'loginWithLdap' | 'loginWithOtp' | 'register' | 'sendOtp' | 'requestPasswordReset' | 'confirmPasswordReset'> }
+  iam: { auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['iam']['auth'], 'publicConfig' | 'createCaptcha' | 'closeSession' | 'login' | 'loginWithLdap' | 'loginWithOtp' | 'register' | 'sendOtp' | 'requestPasswordReset' | 'confirmPasswordReset' | 'renewPassword' | 'reauthenticate'> }
   auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['auth'], 'setTokens'>
 }) {
   /**
@@ -120,5 +120,6 @@ export function createIamAuthActions(client: {
     requestPasswordReset: (identifier: string, options?: { captcha?: string }) => client.iam.auth.requestPasswordReset({ identifier, ...options }),
     confirmPasswordReset: (token: string, newPassword: string) => client.iam.auth.confirmPasswordReset({ token, newPassword }),
     renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => client.iam.auth.renewPassword(input),
+    reauthenticate: (password: string, operation: string) => client.iam.auth.reauthenticate({ password, operation }),
   }
 }

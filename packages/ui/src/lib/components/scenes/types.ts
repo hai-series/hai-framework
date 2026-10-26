@@ -247,6 +247,21 @@ export interface ChangePasswordFormData {
   confirmPassword: string
 }
 
+/**
+ * 敏感操作再鉴别对话框属性；宿主只在服务端选定操作前请求密码。
+ * @example
+ * ```ts
+ * import type { ReauthenticationDialogProps } from '@h-ai/ui'
+ * const props: ReauthenticationDialogProps = { open: false, onsubmit: async (password) => { void password }, onclose: () => {} }
+ * ```
+ */
+export interface ReauthenticationDialogProps {
+  open: boolean
+  loading?: boolean
+  error?: string
+  onsubmit: (password: string) => void | Promise<void>
+  onclose: () => void
+}
 
 /**
  * 修改密码表单属性

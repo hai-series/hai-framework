@@ -26,6 +26,7 @@ import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, ApiKeyConfigSchema, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+import { createTicketOperations } from '../ticket/iam-ticket-functions.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
 import { checkPasswordState, isUserActive } from '../user/iam-user-utils.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
@@ -456,6 +457,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
   }
 
+  const tickets = createTicketOperations()
+  const sensitive = config.reauthentication
+  const requiresProof = (operation: string) => sensitive?.enabled && sensitive.operations.includes(operation)
+
   return { loginRegisteredUser: async (user, context) => {
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
@@ -465,6 +470,41 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' }, undefined, context)
   }, authn: {
     createCaptcha: input => createIamCaptcha(config.captcha, input),
+    async reauthenticate(accessToken, password, operation) {
+      if (!requiresProof(operation))
+        return err(HaiIamError.PERMISSION_DENIED, iamM('iam_reauthenticationRequired'))
+      const current = await verifyCurrentSession(accessToken)
+      if (!current.success)
+        return current
+      const stored = await userRepository.findById(current.data.userId)
+      if (!stored.success)
+        return stored
+      if (!stored.data)
+        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      const verified = await passwordStrategy.authenticate({ type: 'password', identifier: stored.data.username, password })
+      if (!verified.success)
+        return verified
+      if (verified.data.credentialVersion !== current.data.credentialVersion)
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+      return tickets.issue({ subjectId: current.data.userId, purpose: `iam:reauth:${operation}`, ttlMs: sensitive!.ttlSeconds * 1000, grant: { operation, sessionVersion: current.data.version, credentialVersion: current.data.credentialVersion } })
+    },
+
+    async checkSensitiveOperation(accessToken, operation, ticket) {
+      const current = await verifyCurrentSession(accessToken)
+      if (!current.success)
+        return current
+      if (!requiresProof(operation))
+        return ok(undefined)
+      if (!ticket)
+        return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
+      const proof = await tickets.consume(ticket, { purpose: `iam:reauth:${operation}` })
+      if (!proof.success)
+        return proof
+      if (proof.data.subjectId !== current.data.userId || proof.data.grant.operation !== operation || proof.data.grant.sessionVersion !== current.data.version || proof.data.grant.credentialVersion !== current.data.credentialVersion)
+        return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
+      return ok(undefined)
+    },
+
     async login(credentials: PasswordCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('password', credentials, passwordStrategy, context)
     },

@@ -202,7 +202,25 @@ export interface AuthStrategy {
 export interface AuthnOperations {
   /** 生成短期单用、自托管挑战；启用后各交互入口在服务端校验解答。 */
   createCaptcha: (input: { operation: CaptchaOperation }) => Promise<HaiResult<IamCaptchaChallenge>>
+  /**
+   * 验证当前会话和原密码，为已配置的敏感操作签发短期单次证明。
+   * 不创建新会话，不替代操作本身的权限/资源检查。
+   * @param accessToken - 当前会话令牌。
+   * @param password - 原密码；失败计数与登录共用。
+   * @param operation - 配置中选定的操作 ID。
+   * @returns 绑定用户、会话与操作的单次票据，或鉴别失败。
+   */
+  reauthenticate: (accessToken: string, password: string, operation: string) => Promise<HaiResult<IssuedTicket>>
 
+  /**
+   * 操作入口完成权限检查后调用；关闭策略/未选操作仅验证当前会话。
+   * 选定操作原子消费证明；不能跨会话、跨操作或重复使用。
+   * @param accessToken - 当前会话令牌。
+   * @param operation - 服务端确定的操作 ID，不能由客户端选择要执行的守卫。
+   * @param ticket - reauthenticate 签发的短期证明。
+   * @returns 允许继续时成功；拒绝或基础设施失败时返回错误。
+   */
+  checkSensitiveOperation: (accessToken: string, operation: string, ticket?: string) => Promise<HaiResult<void>>
 
   /**
    * 登录（使用密码）

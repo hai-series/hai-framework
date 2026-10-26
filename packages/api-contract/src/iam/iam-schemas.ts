@@ -256,8 +256,25 @@ export const IamConfirmPasswordResetInputSchema = z.object({ token: z.string().m
  */
 export const IamRenewPasswordInputSchema = z.object({ identifier: z.string().trim().min(1), password: z.string().min(1), newPassword: z.string().min(1), captcha: captchaProofSchema })
 
+/**
+ * 对当前会话的指定操作重新鉴别；操作本身仍需独立授权。
+ * @example
+ * ```ts
+ * import { IamReauthenticateInputSchema } from '@h-ai/api-contract'
+ * const input = IamReauthenticateInputSchema.parse({ password: 'ChosenPassword123!', operation: 'iam.users.delete' })
+ * ```
+ */
 export const IamReauthenticateInputSchema = z.object({ password: z.string().min(1), operation: z.string().trim().min(1).max(128) })
 
+/**
+ * 短期、用途绑定的单次操作证明，不能持久化到浏览器存储。
+ * @example
+ * ```ts
+ * import { IamReauthenticationProofSchema } from '@h-ai/api-contract'
+ * const proof = IamReauthenticationProofSchema.parse({ ticket: 'example-only-ticket', expiresAt: Date.now() + 300000 })
+ * ```
+ */
+export const IamReauthenticationProofSchema = z.object({ ticket: z.string().min(1), expiresAt: z.number() })
 
 /**
  * 认证页面公开配置白名单，独立于服务端连接/凭据配置。

@@ -22,6 +22,7 @@ export {
 
 export type { PermissionContext } from './permission-context.svelte.js'
 
+export { default as ReauthenticationDialog } from './ReauthenticationDialog.svelte'
 export { default as RegisterForm } from './RegisterForm.svelte'
 export { default as ResetPasswordForm } from './ResetPasswordForm.svelte'
 // 用户信息

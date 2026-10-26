@@ -100,6 +100,7 @@ declare global {
   const LoginForm: typeof import('@h-ai/ui')['LoginForm']
   const PasswordInput: typeof import('@h-ai/ui')['PasswordInput']
   const PermGuard: typeof import('@h-ai/ui')['PermGuard']
+  const ReauthenticationDialog: typeof import('@h-ai/ui')['ReauthenticationDialog']
   const RegisterForm: typeof import('@h-ai/ui')['RegisterForm']
   const ResetPasswordForm: typeof import('@h-ai/ui')['ResetPasswordForm']
   const UserProfile: typeof import('@h-ai/ui')['UserProfile']

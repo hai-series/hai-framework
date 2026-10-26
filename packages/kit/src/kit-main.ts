@@ -10,6 +10,7 @@ import { createKitAuthActions } from './client/kit-client-auth.js'
 import { createKitClient, installBrowserTransport, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
 import { hasPermission, requirePermission } from './guards/kit-permission.js'
+import { requireSensitiveOperation } from './guards/kit-sensitive.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
 import { authApiPublicPaths, createAuthApi } from './kit-auth-api.js'
 import {
@@ -67,6 +68,8 @@ export const kit = {
   // ─── 路由守卫 ───
 
   guard: {
+    /** 选定敏感操作要求单次再鉴别；先调用现有权限与资源守卫。 */
+    requireSensitive: requireSensitiveOperation,
     /** 要求权限，不满足时 throw Response（SvelteKit 控制流） */
     require: requirePermission,
     /** 检查会话是否具有指定权限（布尔） */
