@@ -66,14 +66,14 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation'))
   const table = 'hai_schema_migrations'
   const targetVersion = steps.length
-  const failed = () => err({ ...HaiCommonError.INIT_FAILED, message: core.i18n.coreM('core_runtimeStartFailed', { params: { module } }), ext: { module, phase: 'migration' } })
+  const failed = (cause?: unknown) => err({ ...HaiCommonError.INIT_FAILED, message: core.i18n.coreM('core_runtimeStartFailed', { params: { module } }), ext: { module, phase: 'migration' }, cause })
   async function inspect(sql: DmlOperations): Promise<HaiResult<SchemaMigrationPlan>> {
     const columns = await schemaColumns(db, table, sql)
     if (!columns.success)
-      return failed()
+      return failed(columns.error)
     const row = columns.data.length ? await sql.get<{ version: number }>(`SELECT version FROM ${table} WHERE module=?`, [module]) : ok(null)
     if (!row.success)
-      return failed()
+      return failed(row.error)
     const currentVersion = Number(row.data?.version ?? 0)
     if (currentVersion > targetVersion)
       return failed()
@@ -81,7 +81,7 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     for (const step of steps) {
       const needed = await step.needed(sql)
       if (!needed.success)
-        return failed()
+        return failed(needed.error)
       if (needed.data)
         changes.push(step.name)
     }
@@ -91,15 +91,15 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     return inspect(db.sql)
   const created = await db.sql.execute(`CREATE TABLE IF NOT EXISTS ${table} (module VARCHAR(64) PRIMARY KEY, version INTEGER NOT NULL)`)
   if (!created.success)
-    return failed()
+    return failed(created.error)
   const seeded = await db.sql.execute(db.config?.type === 'mysql'
     ? `INSERT IGNORE INTO ${table}(module,version) VALUES (?,0)`
     : `INSERT INTO ${table}(module,version) VALUES (?,0) ON CONFLICT(module) DO NOTHING`, [module])
   if (!seeded.success)
-    return failed()
+    return failed(seeded.error)
   const started = await db.tx.begin()
   if (!started.success)
-    return failed()
+    return failed(started.error)
   const tx = started.data
   let mysqlLock = false
   let committed = false
@@ -108,41 +108,41 @@ export async function migrateSchema(db: ReldbFunctions, module: string, steps: r
     if (db.config?.type === 'mysql') {
       const lock = await tx.get<{ acquired: number }>('SELECT GET_LOCK(?,30) AS acquired', [`hai-schema:${module}`])
       if (!lock.success || Number(lock.data?.acquired) !== 1)
-        return failed()
+        return failed(lock.success ? new Error('Migration lock unavailable') : lock.error)
       mysqlLock = true
     }
     const locked = await tx.execute(`UPDATE ${table} SET version=version WHERE module=?`, [module])
     if (!locked.success)
-      return failed()
+      return failed(locked.error)
     const plan = await inspect(tx)
     if (!plan.success)
       return plan
     for (const step of steps) {
       const needed = await step.needed(tx)
       if (!needed.success)
-        return failed()
+        return failed(needed.error)
       if (needed.data) {
         const applied = await step.apply(tx)
         if (!applied.success)
-          return failed()
+          return failed(applied.error)
         const remaining = await step.needed(tx)
         if (!remaining.success || remaining.data)
-          return failed()
+          return failed(remaining.success ? new Error('Migration step did not converge') : remaining.error)
       }
     }
     const recorded = await tx.execute(`UPDATE ${table} SET version=? WHERE module=?`, [targetVersion, module])
     if (!recorded.success)
-      return failed()
+      return failed(recorded.error)
     if (mysqlLock) {
       await tx.get('SELECT RELEASE_LOCK(?)', [`hai-schema:${module}`])
       mysqlLock = false
     }
     const result = await tx.commit()
     committed = result.success
-    return result.success ? plan : failed()
+    return result.success ? plan : failed(result.error)
   }
-  catch {
-    return failed()
+  catch (error) {
+    return failed(error)
   }
   finally {
     if (mysqlLock)

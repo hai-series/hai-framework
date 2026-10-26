@@ -21,7 +21,7 @@ for (const [name, setup] of [['sqlite', sqliteMemoryEnv], ['postgresql', postgre
       }]
       expect((await migrateSchema(reldb, 'migration-test', steps, { dryRun: true })).success).toBe(true)
       expect(await schemaColumns(reldb, 'hai_schema_migrations')).toMatchObject({ success: true, data: [] })
-      expect((await migrateSchema(reldb, 'migration-test', steps)).success).toBe(false)
+      expect(await migrateSchema(reldb, 'migration-test', steps)).toMatchObject({ success: false, error: { cause: { code: HaiCommonError.INIT_FAILED.code, message: 'Retry required' } } })
       fail = false
       expect((await migrateSchema(reldb, 'migration-test', steps)).success).toBe(true)
       expect((await migrateSchema(reldb, 'migration-test', steps)).success).toBe(true)

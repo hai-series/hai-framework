@@ -7,7 +7,7 @@
  * `core.zodValidation.createPrefixedZodMessageGetter()` 处理。
  * 每种数据源都提供两类 API：
  * - 安全返回：`FormValidationResult`
- * - 失败抛出：`OrFail`（抛出 `Response` 以走 SvelteKit 控制流）
+ * - 失败抛出：`OrFail`（抛出 `Response`，由 kit.handler 作为 API 控制流处理）
  * @module kit-validation
  */
 

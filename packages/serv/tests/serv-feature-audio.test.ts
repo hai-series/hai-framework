@@ -95,6 +95,47 @@ function parseJsonMessages(ws: { messages: unknown[] }): Array<Record<string, un
 }
 
 describe('serv feature audio', () => {
+  it.each(['result', 'throw'] as const)('真实 WebSocket 的 %s 失败不泄露上游实现信息', async (mode) => {
+    const audio = createAudioMock()
+    audio.transcribe = async () => {
+      if (mode === 'throw')
+        throw new Error('SELECT private_column; postgres://private-user:private-pass@internal-db/private-schema')
+      return err({ code: 'provider:internal', httpStatus: 500 }, 'SELECT private_column; private-schema; credential=private-key')
+    }
+    const contract = apiContract.create({})
+    const app = serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), audio: { ai: { audio }, verifyTicket: async () => ok({ session: TEST_SESSION }) }, http: { openapi: false, docs: false, rpc: false } })
+    const handle = serv.listen(app, { host: '127.0.0.1', port: 0 })
+    let socket: WebSocket | undefined
+    try {
+      if (!handle.server.listening)
+        await once(handle.server, 'listening')
+      const address = handle.server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing test server address')
+      socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/v1/ai/audio?ticket=test-ticket`)
+      const received: string[] = []
+      socket.on('message', (data, binary) => {
+        if (!binary)
+          received.push(data.toString())
+      })
+      await once(socket, 'open')
+      const closed = once(socket, 'close')
+      socket.send(JSON.stringify({ type: 'start', operation: 'transcribe', stream: false, format: 'wav' }))
+      socket.send(new Uint8Array([1, 2, 3]))
+      socket.send(JSON.stringify({ type: 'done' }))
+      await closed
+      expect(received).toHaveLength(1)
+      expect(JSON.parse(received[0]!)).toMatchObject({ type: 'error', message: expect.stringContaining('traceId:') })
+      expect(received[0]).not.toContain('private')
+      expect(received[0]).not.toContain('SELECT')
+      expect(received[0]).not.toContain('postgres')
+    }
+    finally {
+      socket?.terminate()
+      await handle.close()
+    }
+  })
+
   it('node adapter 完成真实 WebSocket 握手并传输音频消息', async () => {
     const contract = apiContract.create({})
     const procedures = serv.implement(contract).context<ServContext>().build()

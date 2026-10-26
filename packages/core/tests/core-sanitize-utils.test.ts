@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
 
 describe('core.sanitize', () => {
-  it.each(['verificationCode', 'verification_code', 'verifyCode', 'otpCode', 'totpCode', 'smsCode', 'emailCode', 'captchaCode', 'oneTimeCode', 'twoFactorCode'])('默认脱敏验证码字段 %s，保留普通业务code', (key) => {
+  it.each(['verificationCode', 'verification_code', 'verifyCode', 'otpCode', 'totpCode', 'smsCode', 'emailCode', 'captcha', 'captchaCode', 'oneTimeCode', 'twoFactorCode', 'reauthentication', 'x-hai-reauthentication', 'ticket'])('默认脱敏鉴别凭据字段 %s，保留普通业务code', (key) => {
     expect(core.sanitize.sanitizeSensitiveFields({ nested: { [key]: 'credential-sentinel', code: 'ORDER_ACCEPTED' } })).toEqual({ nested: { [key]: '[REDACTED]', code: 'ORDER_ACCEPTED' } })
     expect(core.sanitize.sanitizeUrl(`https://example.test/verify?${key}=credential-sentinel&code=ORDER_ACCEPTED`)).not.toContain('credential-sentinel')
   })
