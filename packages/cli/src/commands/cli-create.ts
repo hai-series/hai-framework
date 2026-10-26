@@ -1493,6 +1493,8 @@ CLI 在根目录 .env.dev、.env.test、.env.prod 中为 admin、audit_admin、c
 
 \`_iam.yml\` 可按业务启用账号闲置扫描、密码复杂度/期限、ALTCHA 挑战、失败窗口锁定、一次性邀请、首次改密、敏感操作再认证、登录时间/IP 和会话期限/并发策略。敏感操作清单使用服务端操作标识；界面通过短期单次票据完成再认证。\`session.endOnPageHide\` 默认关闭，开启时页面离开尝试撤销，但浏览器通知仅最佳努力，需配合服务端闲置/绝对期限。\`_audit.yml\` 配置保留保护、私有备份及 Reach 告警；手动备份失败复用同一编号重试，回执含 key/记录数/SHA-256，不公开下载。归档不是原子数据库快照，严格恢复须暂停写入/清理或使用原生备份，在独立环境核验恢复。
 
+安全策略的配置位置、默认开关、逐项启用步骤及使用影响见[配置化安全使用指南](docs/security-configuration.md)。
+
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
 服务端版本化传输密钥环在创建时分别写入 \`.env.dev\`、\`.env.test\`、\`.env.prod\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，各环境密钥不同；运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry，也可通过进程环境或 Secret Manager 覆盖。私钥不进入 PUBLIC_/VITE_、日志或浏览器。

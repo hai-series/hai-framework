@@ -138,6 +138,8 @@ UI には [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui、[h
 
 fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`business_operator` と一般 `user` を分離し、システム管理者による他職務アカウントの奪取を拒否します。CLI は既存の環境設定方式を維持し、`.env.dev/.env.test/.env.prod` ごとに四職務の独立した初期パスワードを作成します。設定は共有でき、ローカル非公開ファイルや環境変数で上書きでき、既存アカウントの再設定・再割当は行いません。`_iam.yml`/`_audit.yml` の強化機能は業務ごとに選択し、生成 README を参照してください。
 
+各スイッチ、既定値、前提条件と利用への影響は [fullstack セキュリティ設定ガイドのテンプレート](templates/apps/fullstack/docs/security-configuration.md.hbs) を参照してください。新規プロジェクトには `docs/security-configuration.md` と README のリンクを生成します。
+
 ### 問題報告とオフライン分析
 
 `hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは business_operator に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。`_feedback.yml` で管理者とURLを設定し、本番は共有DB、非公開S3、実際のSMTPを使います。Consoleは開発専用です。

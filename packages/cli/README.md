@@ -138,6 +138,8 @@ UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)�
 
 fullstack 示例按应用配置分离 `admin`、`audit_admin`、`config_admin`、`business_operator` 与基础 `user`，系统管理员不能接管其他职责账号。CLI 沿用 `.env.dev/.env.test/.env.prod` 的环境配置方式，为每个环境的四类账号分别生成独立随机初始密码；配置随项目共享，本机私有文件或进程变量可覆盖；已有账号不改密、不重新分配职责。`_iam.yml` 和 `_audit.yml` 按业务启用安全增强，详见生成项目 README。
 
+fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化安全使用指南模板](templates/apps/fullstack/docs/security-configuration.md.hbs)；新项目会生成 `docs/security-configuration.md`，工程 README 提供入口。
+
 ### 问题反馈与离线分析
 
 使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。普通成员及业务操作员可提交反馈，business_operator 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。

@@ -1,0 +1,297 @@
+# fullstack 安全配置与使用影响
+
+本文对应本模板生成的 `{{projectName}}` 项目。开关由可信服务端配置决定，不是业务配置员网页里的开关。Web、App、Desktop 共用服务端策略及 shared 中的认证交互。
+
+## 配置在哪里，怎么生效
+
+| 文件                                                         | 用途                                               |
+| ------------------------------------------------------------ | -------------------------------------------------- |
+| `packages/{{projectName}}-serv/config/_iam.yml`              | 账号、密码、验证码、锁定、敏感操作、登录限制、会话 |
+| `packages/{{projectName}}-serv/config/_audit.yml`            | 审计采集、脱敏、保留、备份、告警                   |
+| `packages/{{projectName}}-serv/config/_reach.yml`            | 邮件、短信或通知 API 及通知模板                    |
+| `packages/{{projectName}}-serv/config/_scheduler.yml`        | 已有 Scheduler 的持久化及调度参数                  |
+| `packages/{{projectName}}-serv/config/_storage.yml`          | 备份实际使用的存储；生产归档必须私有               |
+| `packages/{{projectName}}-serv/src/server/security-roles.ts` | 本项目的职责角色与权限映射                         |
+| `.env.example`、`.env.dev/.env.test/.env.prod`、`.env.local` | 环境覆盖说明、所选环境配置、本机私有覆盖           |
+
+按功能把下面的配置段合并进已有 YAML，不要整文件覆盖掉登录方式、RBAC、品牌等其他配置。保存后重启服务端；多节点保持一致。客户端刷新页面以重新读取公开认证配置，不在前端放服务端秘密或完整安全策略。
+
+生成的 YAML 标量通常使用 `${HAI_…:默认值}`；环境覆盖优先于这里的默认值。普通应用加载顺序为进程环境 > `.env.local` > 所选环境文件 > `.env`。例如：
+
+```dotenv
+HAI_IAM_SESSION_IDLETIMEOUT=1800
+HAI_IAM_PASSWORD_EXPIRATIONDAYS=90
+HAI_AUDIT_BACKUP_ENABLED=true
+```
+
+数组和规则直接在 YAML 中编辑最清楚。变量名以项目 `.env.example` 为准，不在 camelCase 字段中额外插入下划线。不要用整个 `HAI_IAM` JSON 覆盖来代替单字段修改；整模块覆盖可能使未提供的策略回到 Schema 默认值。
+
+## 默认情况
+
+这里列的是 fullstack 模板默认值，不是所有项目或底层 Schema 的普适限制。
+
+| 条目                         | fullstack 默认及启用入口                                        | 使用影响                                                 |
+| ---------------------------- | --------------------------------------------------------------- | -------------------------------------------------------- |
+| B03 长期/临时账号            | 用户管理中的账号类型、到期时间                                  | 临时账号必须有未来到期时间；到期后旧会话也不能继续使用   |
+| B04 激活/休眠/注销           | 用户管理中的状态；另保留启用/禁用                               | 状态和禁用标志共同决定可用性；注销状态不等于物理删除     |
+| B05 不活动扫描               | `accounts.dormantAfterDays: 0` 关闭                             | 正数启用，扫描会把符合条件的账号设为休眠                 |
+| B06/B07 密码复杂度           | 默认 8–128 位、任意至少三类字符                                 | 新建、改密、重置等服务端入口统一校验                     |
+| B08 定期改密                 | `password.expirationDays: 0` 关闭；`preventSamePassword: false` | 正数开启到期改密；新旧相同可单独禁止                     |
+| B10 轻量验证码               | `captcha.enabled: false`                                        | 开启后认证页自动求解计算挑战，增加提交耗时，无需图片识别 |
+| B11 失败锁定                 | 已开启：24 小时固定窗口、5 次、锁 20 分钟                       | 可调整阈值/时间；关闭后历史锁不阻止密码鉴别              |
+| B13 初始凭据/通知            | 四类引导账号已各有随机密码；一次性邀请默认关闭                  | 开启邀请还需真实通知通道及正确设密页面地址               |
+| B14 首次改密                 | `password.requireInitialChange: false`                          | 管理端创建/重置的初始密码先更新，才允许普通登录          |
+| B16 敏感操作                 | `reauthentication.enabled: false`，操作列表为空                 | 只对清单中的已接入操作验证当前密码，不增加权限           |
+| B20–B24 职责分离             | 示例已按应用配置分离，无框架全局开关                            | 换账号会看到不同菜单，服务端同时限制权限                 |
+| B28 登录时间/IP              | `loginAccess.enabled: false`                                    | 开启后限制新登录；不是工作时间结束后自动强退已有会话     |
+| B29 自动审计                 | `capture.enabled: true`，`includeReads: false`                  | 重要写入及失败/拒绝自动记录；业务语义仍需业务显式记录    |
+| B30/B31 分类、字段、身份快照 | 内置，无单独开关                                                | 记录事件时身份；历史空字段不会伪造补齐                   |
+| B32 业务隐私脱敏             | `privacy.enabled: true`                                         | 可增补详情中的隐私字段；凭据脱敏始终生效                 |
+| B33 审计查询/排序/统计       | 审计管理员页面已接入                                            | 无需另开开关；系统管理员不因此获得审计权限               |
+| B34 分级告警                 | `alerts.enabled: false`                                         | 还需规则、人员/目标与 Reach；自动检查另开 schedule       |
+| B35 手动/自动备份            | `backup.enabled: false`，计划也关闭                             | 手动与定时分别启用；备份不自动清理原日志                 |
+| B36 保留保护                 | 示例已开启 `retention.enabled: true`、90 天                     | 保护期内不能修改、删除、覆盖；不是到期自动删除           |
+| B42 安全错误响应             | 默认生效，无关闭内部错误保护的业务开关                          | 自写接口也应使用统一错误边界，不把原始异常当作业务消息   |
+| B43 严格闲置期限             | `session.idleTimeout: 0` 关闭                                   | 设为 1800 即 30 分钟；access 和 refresh 都检查           |
+| B44 页面关闭策略             | 显式退出已可靠撤销；`endOnPageHide: false`                      | 开启会影响刷新/整页导航，关闭通知只能尽力发送            |
+| B45 每次登录新会话           | 默认生效，无需开关                                              | 每次登录新建随机服务端会话                               |
+| B46 并发会话数               | `session.maxSessions: 0` 不限制                                 | 正数开启额度，超限拒绝新登录                             |
+| B47 禁止重复登录             | `session.singleDevice: false`                                   | 开启后选择 replace 顶旧或 reject 拒绝新登录              |
+
+## 账号类型、状态和自动休眠
+
+在用户新增/编辑中选择长期账号 `permanent` 或临时账号 `temporary`，临时账号设置到期时间；状态为 `active`、`dormant`、`closed`。这些是账号数据，不需要先开启一个全局账号类型开关。状态、禁用和到期限制会影响已有 access/refresh 的后续服务端校验。
+
+如需 90 天未成功登录自动休眠，在 `_iam.yml` 设置：
+
+```yaml
+accounts:
+  dormantAfterDays: 90
+  scanIntervalSeconds: 3600
+```
+
+按最后成功登录时间计算，从未登录的账号按创建时间计算；不是按每一次业务访问计算，自动刷新 token 也不是重新登录。每 3600 秒扫描一次，扫描间隔范围 60–86400 秒。设回 `dormantAfterDays: 0` 停止自动休眠，但不会自动激活已休眠账号。普通业务账号可由系统管理员在用户管理中激活；独立职责账号另受防接管保护，其恢复由部署者通过可信运维流程处理。可信服务端也可调用 `iam.user.scanInactiveAccounts()`，并检查返回结果的 `success`。
+
+## 密码复杂度、到期和首次改密
+
+在 `_iam.yml` 按需设置：
+
+```yaml
+password:
+  minLength: 8
+  maxLength: 128
+  requireUppercase: false
+  requireLowercase: false
+  requireNumber: false
+  requireSpecialChar: false
+  minCharacterClasses: 3
+  expirationDays: 90
+  preventSamePassword: true
+  requireInitialChange: true
+```
+
+四类指大写、小写、数字、特殊字符。`minCharacterClasses: 3` 是任意三类；各 `require*` 是另外必须满足的条件，二者同时执行。例如要求必须含大写，再把 `requireUppercase` 改为 true。仅把类别数设为 0 不会取消仍为 true 的 `require*`。长度下限至少 1、最大长度最多 256，且最大值不能小于最小值。
+
+提高复杂度只校验今后的设密，不会从旧密码散列中反查复杂度或重写旧密码。`expirationDays: 90` 以保存的改密时间判断，存量旧密码可能立即到期；0 关闭期限。开启期限或首次强改时，即使 `preventSamePassword` 为 false，也不能改回当前旧密码。这里比较当前旧密码，不是保存最近 N 次历史密码。
+
+`requireInitialChange` 作用于管理员创建/重置的初始密码，自助注册自行设密不重复强改；开启它不等于给所有存量账号补上初始密码标记。首次/到期用户在登录页完成原密码验证和新密码设置，再重新登录。未完成时服务端不授权普通业务会话，前端隐藏提示不能绕过。
+
+## 轻量验证码与失败锁定
+
+```yaml
+captcha:
+  enabled: true
+  ttlSeconds: 120
+  cost: 5000
+  maxCounter: 100
+
+security:
+  lockoutEnabled: true
+  failureWindow: 86400
+  maxLoginAttempts: 5
+  lockoutDuration: 1200
+```
+
+以上放入 `_iam.yml`。验证码是自托管 ALTCHA 计算挑战，标准认证界面已接好；关闭时不加载求解器。启用后提交时出现验证/等待状态，弱机型可能更慢。`ttlSeconds` 为证明有效秒数（1–600），`cost`（100–50000）和 `maxCounter`（1–2000）控制工作量。证明按用途短期单用；重试密码也需要新证明。它提高自动化成本，不保证请求一定来自真人。
+
+登录、注册、OTP 发送、密码重置及匿名原密码续期等对应入口会按策略校验。自定义认证界面应复用框架认证动作，不能仅在页面加一个装饰性验证码。
+
+失败计数从首次失败起使用固定窗口，不是滚动 24 小时。`failureWindow`、`lockoutDuration` 单位为秒，阈值为次数；成功密码鉴别会重置失败计数。示例表示窗口内达到 5 次失败后锁定密码鉴别 20 分钟。可单独把 `lockoutEnabled` 设为 false，锁定时间最小 60 秒。
+
+## 独立初始凭据和安全邀请
+
+新项目已在 `.env.dev/.env.test/.env.prod` 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机密码，各环境也不同。同名进程变量或 `.env.local` 可覆盖；修改这些初始变量不会重设已有账号的密码。需要首次强改时，在首次创建这些账号前开启上一节的 `requireInitialChange`。
+
+日常创建业务账号希望改为一次性邀请，先配置真实发送通道，再设置：
+
+```yaml
+initialCredentials:
+  enabled: true
+passwordReset:
+  enabled: true
+  mode: email
+  resetUrl: https://app.example.com/
+  tokenExpiresIn: 3600
+  maxAttempts: 3
+```
+
+这些字段位于 `_iam.yml`。`mode: phone` 使用用户手机号和短信模板；邮箱模式须填写邮箱。`tokenExpiresIn` 单位秒、最小 300，`maxAttempts` 为验证次数。保留 `_reach.yml` 中的 `password_reset` / `password_reset_sms` 模板，把对应 provider 从开发 Console 换成真实 SMTP、短信或发送 API，并通过环境变量注入凭据。默认 Console 不是邮件或短信投递。已有引导账号不等于已绑定联系方式，各职责用户应先在个人资料中完善自己的邮箱/手机，才能使用对应的通知找回流程。
+
+fullstack 是 HashRouter 工作区，设密界面在 Web 根页面：这里填写实际可访问的 Web 根 URL，不是 API 地址，也不是通用示例里的 `/auth/reset-password`。服务端会附加 `?token=…`，页面进入设密流程，完成后清理 URL 中的令牌。没有可访问 Web 入口时，应先安排可用设密入口，或使用认证页“已有令牌”的流程。
+
+开启后用户管理走邀请流程，不向管理员展示可共享的初始秘密。关闭重置、缺少通道或缺少对应联系方式会失败。通知失败或结果不明时账号可能已创建；先核对用户与渠道，再通过重置流程处理，不要反复创建或盲目重发。
+
+## 敏感操作重新认证
+
+```yaml
+reauthentication:
+  enabled: true
+  ttlSeconds: 300
+  operations:
+    - iam.users.delete
+    - iam.roles.update
+    - audit.backup
+    - business.settings.update
+```
+
+放入 `_iam.yml`。只有列入清单且服务端已接入的操作要求当前密码；证明有效期 1–900 秒，短期、单次、用户/当前会话/操作绑定，不提升原权限。没有可用本地密码的账号不能完成这种密码再认证，需要业务安排可用凭据或调整操作清单。
+
+模板已接入的标识包括：`iam.users.create`、`iam.users.invite`、`iam.users.update`、`iam.users.delete`、`iam.users.avatar`、`iam.roles.update`、`iam.profile.update`、`iam.profile.avatar`、`business.settings.update`、`audit.backup`。标准界面会按公开配置弹出再认证对话框。
+
+自定义业务不能只往清单里加一个名字：服务端在完成授权/资源校验后调用 `iam.auth.checkSensitiveOperation()`，客户端通过 shared 的 `requestSensitive()` 取得并传递凭据。操作名两端一致；无票据、过期、重复使用或用途不符都应拒绝。敏感操作标识不等于审计 action 名称，不能想当然地互换。
+
+## 示例职责分离如何使用
+
+| 登录账号/角色     | 示例职责                     | 初始密码变量                     |
+| ----------------- | ---------------------------- | -------------------------------- |
+| admin             | 系统账号和角色管理           | `HAI_ADMIN_DEFAULT_PASSWORD`     |
+| audit_admin       | 审计查询、统计和备份         | `HAI_AUDIT_ADMIN_PASSWORD`       |
+| config_admin      | 业务基础配置，当前示例为公告 | `HAI_CONFIG_ADMIN_PASSWORD`      |
+| business_operator | 示例反馈业务处理             | `HAI_BUSINESS_OPERATOR_PASSWORD` |
+| user              | 普通自助和反馈提交           | 按注册/创建流程设置              |
+
+这部分已经启用，不需要一个“角色分离=true”。系统管理员不能接管其他职责账号；页面菜单和服务端授权共同限制。业务配置员的配置页不提供修改密码策略、审计保护等服务端安全配置的权限。
+
+角色名称及权限由 `src/server/security-roles.ts` 的 `APP_DUTIES` 维护，启动时按这个映射同步角色权限。项目改变职责时同步服务端守卫、UI 菜单和测试，不要只改菜单或临时改数据库。不把这些职责角色设成框架的 `rbac.superAdminRole`，模板会拒绝绕过职责分离的设置。这些是示例应用规则，可以按实际业务替换，不是框架对所有项目写死的角色。
+
+## 登录时间和客户端地址
+
+```yaml
+loginAccess:
+  enabled: true
+  timezone: Asia/Shanghai
+  allowIps: [203.0.113.0/24]
+  denyIps: [203.0.113.42]
+  windows:
+    - days: [1, 2, 3, 4, 5]
+      start: '09:00'
+      end: '18:00'
+```
+
+放入 `_iam.yml`，并先将示例地址换成真实允许的办公网 IP/CIDR。支持 IPv4/IPv6，拒绝优先。空 IP 列表不限制地址；空 windows 不限制时间。星期为周一 1 到周日 7，起点包含、终点不包含；跨午夜按开始日归属。时区使用 IANA 名称，模板默认 UTC，不能把它当作中国本地时间。
+
+此项控制新登录及其他新建登录会话入口，不是业务 API 防火墙，也不会在 18 点自动结束已有会话。IP 来自宿主可信地址；反向代理必须正确配置可信代理，不要直接相信客户端自己填的转发头。只有启用了地址列表时，缺少可信地址才会拒绝登录。
+
+## 闲置、绝对期限、关闭页面和并发会话
+
+```yaml
+session:
+  maxAge: 900
+  refreshTokenMaxAge: 604800
+  sliding: true
+  idleTimeout: 1800
+  absoluteTimeout: 28800
+  endOnPageHide: false
+  maxSessions: 3
+  singleDevice: false
+  singleDeviceMode: replace
+```
+
+放入 `_iam.yml`。上述示例为 access 15 分钟、refresh 凭据 7 天、闲置 30 分钟、首次登录起最多 8 小时、最多 3 个有效会话。时限单位均为秒。`maxAge` 不是严格闲置时间：自动刷新仍可能维持登录；`idleTimeout` 同时约束 access/refresh，自动刷新不延长闲置。服务端以受保护请求记录活动，业务自动轮询也可能构成请求活动。`absoluteTimeout` 不因刷新重新计时；期限变严可能影响存量会话。
+
+`idleTimeout`、`absoluteTimeout`、`maxSessions` 的 0 分别关闭对应限制。`sliding` 控制 access 滑动延长，不会取消闲置/绝对期限。并发数包含 access 已到期但仍可刷新的有效会话，达到额度会拒绝新登录；应从旧会话退出或安排撤销。
+
+若只允许同一用户一个登录会话，把 `singleDevice` 改为 true。`singleDeviceMode: replace` 顶掉旧会话；`reject` 保留旧会话、拒绝新登录。它限制登录会话，不是采集硬件设备标识；与 `maxSessions` 同时配置时，单会话策略更严格。额度在新登录提交时原子执行，切换配置不承诺立即清退所有存量会话。
+
+`endOnPageHide: true` 会在非 BFCache 的页面离开事件中尽力撤销，也可能发生在刷新或整页导航，用户可能因此需要重登。崩溃、断网和系统杀进程可能不发送事件，因此它不能保证关闭立即退出；通常保留 false，先使用服务端闲置/绝对期限。点击正常退出始终走可靠服务端撤销，不依赖此开关。
+
+## 审计采集、分类、脱敏与保留
+
+在 `_audit.yml` 按需设置：
+
+```yaml
+capture:
+  enabled: true
+  includeReads: false
+privacy:
+  enabled: true
+  fields: [customerPhone, identityNumber]
+retention:
+  enabled: true
+  minDays: 90
+```
+
+标准框架入口自动记录安全事件、重要写入和失败/拒绝；成功读取默认跳过。`includeReads: true` 会增加正常查询日志量。关闭自动采集不关闭显式 `audit.log()`。系统/业务分类、结果、等级、关联编号、可信来源及事件时身份快照是内置记录能力，不另设开关；历史空值不会伪造。
+
+业务详情按凭据和隐私字段名脱敏，`privacy.fields` 可补项目自己的键名，比较不区分大小写。即使关闭业务隐私开关，密码、token、captcha 等凭据仍脱敏。不要将敏感正文塞进 action、resource、resourceId 等标识字段。
+
+框架不能猜出项目自己的“订单审批”等业务含义；在业务服务完成/失败边界记录显式事件，分类为 business，并检查 `HaiResult.success`。事务事件使用现有 `audit.capture` 事务上下文配合提交/回滚。审计管理员登录后可筛选分类、结果、级别、时间等；高级筛选还可选择排序字段和升降序，无需另开开关。当前页面统计是最近 7 天按 action 计数，不等于列表自选起止日期；业务需要其他统计周期时可使用 `audit.getStats(days, filters)` 扩展对应界面。
+
+保留保护在本模板默认已开启 90 天。共享数据库阻止保护期内修改、删除、冲突覆盖，`cleanup(0)` 也不能绕过。90 天后不会自动删除，备份也不自动清理数据库。框架首次不配置 retention 时不强制启用；已有数据库策略会持久保留，删掉配置段不等于解除保护，只有可信启动配置显式关闭才解除。集群须统一配置。
+
+## 手动与自动审计备份
+
+```yaml
+backup:
+  enabled: true
+  batchSize: 200
+  maxRecordBytes: 1048576
+  schedule:
+    enabled: true
+    cron: '0 2 * * *'
+    timezone: Asia/Shanghai
+```
+
+放入 `_audit.yml`。只需手动备份时保持 `schedule.enabled: false`，由 audit_admin 在审计页点击备份；定时备份需要两个 enabled 都为 true。模板已把 `audit.schedulerPlan` 接入现有 Scheduler，无需另写系统 cron。这里每天中国时间 02:00 执行；默认 timezone 为 UTC 时，同一 cron 对应中国时间 10:00。
+
+`batchSize` 为每批记录数（1–1000），`maxRecordBytes` 为单条 UTF-8 字节上限（默认 1 MiB，范围 1 KiB–64 MiB）；超限失败，不截断原记录。回执包含 key、记录数和 SHA-256，失败重试沿用同一执行编号；已有完整归档经校验后复用，不覆盖。管理页已保留本次编号及回执。
+
+归档位于私有命名空间 `hai-private/audit-backups/`，不是公开下载链接。生产使用私有存储，开启时拒绝配置公开 publicUrl 的 S3；数据库保留策略与对象存储的保留/访问策略分别管理。校验用 `audit.backup.verify()` 并检查结果。归档支持离线核对，不是运行中数据库的原子时间点快照；严格恢复应停写/清理或采用数据库原生快照，并在独立环境恢复，不覆盖受保护在线记录。
+
+## 异常分级与告警人员
+
+```yaml
+alerts:
+  enabled: true
+  maxNotificationsPerCheck: 100
+  rules:
+    - id: login-failures
+      actions: [auth.login]
+      outcomes: [failure, denied]
+      minimumSeverity: info
+      severity: warning
+      threshold: 10
+      windowSeconds: 300
+      targets:
+        - id: security-team
+          provider: email
+          to: security@example.com
+  schedule:
+    enabled: true
+    cron: '* * * * *'
+    timezone: Asia/Shanghai
+```
+
+放入 `_audit.yml`，并把收件人换成实际目标。`provider` 是 `_reach.yml` 中已注册的 provider 名称，不是 provider 类型；真实通知先配置真实通道。默认 Console 可看调试摘要，但不会发邮件。启用告警必须有规则，空规则会导致配置校验失败。
+
+本例是全站匹配事件在固定 5 分钟窗口累计达到 10 次后告警，不是对每个账号各计 10 次；账号登录锁定由前面的 security 配置控制。`actions` 精确匹配实际审计事件名，不支持 `auth.*` 通配；应从审计记录复制实际 action，OTP/LDAP 等需分别按实际事件名加入。`resource` 可选过滤资源，`outcomes` 为空表示不按结果过滤；默认只看 failure/denied。`minimumSeverity` 过滤事件最低等级，`severity` 是发出告警的等级。窗口范围 60–86400 秒；规则/目标 id 稳定且各自唯一，改变规则或目标可能产生新通知。
+
+告警功能和自动检查分别开启；仅手动检查可关闭 schedule，在可信服务端调用 `audit.checkAlerts()` 并同时检查 `success` 与报告的 `failed`。`maxNotificationsPerCheck` 限制一轮尝试数，报告 more 表示仍有待后续检查的目标。模板已接 Scheduler，开启计划后自动检查。
+
+通知只发送规则、等级、次数和窗口等摘要，不复制敏感事件正文。共享数据库认领避免多节点重复尝试；渠道接受/入队不等于人员已读。结果不明时核对渠道及审计告警记录，不盲目重发；停机超过两个窗口不会补发全部历史通知。
+
+## 建议的启用顺序与已有项目
+
+先保留已有职责分离、8 位任意三类、登录失败锁定、审计采集/脱敏与保留保护，再按业务增加闲置期限、私有备份及真实通知。密码期限、首次改密、IP/时段、敏感操作和禁止重复登录先确认受影响用户和运维入口；不必一次开启全部增强。页面关闭即退出尤其应先评估刷新/导航体验。
+
+已存在的业务项目升级框架包，不会自动改写业务源码、守卫、表单和 YAML。核对认证动作、再认证服务端守卫、shared 对话框、页面离开接入、审计/Scheduler 装配与本指南；保留业务定制，不整目录覆盖。默认生产共享数据库、Redis 和私有存储的要求仍按项目现有部署规则执行；单机 Memory 不能证明跨节点并发额度或通知去重。

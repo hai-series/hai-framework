@@ -138,6 +138,8 @@ UI delivery includes [hai-ui-design](templates/skills/hai-ui-design/SKILL.md), h
 
 The fullstack example separates `admin`, `audit_admin`, `config_admin`, `business_operator` and basic `user` duties in application configuration. System administrators cannot take over other duty accounts. CLI creates independent random bootstrap passwords for all four duties in each `.env.dev/.env.test/.env.prod`, preserving shared environment configuration and local or process overrides, and existing accounts are never reset or reassigned. Select security enhancements in `_iam.yml`/`_audit.yml`; see the generated README.
 
+The [fullstack security configuration guide template](templates/apps/fullstack/docs/security-configuration.md.hbs) explains every switch, default, prerequisite and effect on users. New projects include it as `docs/security-configuration.md`, linked from their README.
+
 ### Feedback and offline analysis
 
 A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Members and business operators can submit reports. Only business_operator sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
