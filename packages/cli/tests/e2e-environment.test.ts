@@ -5,6 +5,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createE2eNotificationEnv, createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
 import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
@@ -118,6 +119,18 @@ describe('independent database connection counter', () => {
       expect(result.status).toBe(0)
     })
     expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
+    expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
+  })
+
+  it.skipIf(process.platform !== 'win32')('短暂的快照共享冲突可重试，计数与真实关闭仍通过独立进程确认', async () => {
+    const { root, evidence } = fixture()
+    const preload = path.join(root, 'rename-conflict.mjs')
+    const trace = path.join(root, 'rename-attempts.json')
+    writeFileSync(preload, `import fs from 'node:fs'; import {syncBuiltinESMExports} from 'node:module'; if(process.argv[2]==='serve'){const original=fs.promises.rename;let failures=0;fs.promises.rename=async(...args)=>{if(failures<3){failures++;fs.writeFileSync(${JSON.stringify(trace)},JSON.stringify({failures}));throw Object.assign(new Error('fixture sharing conflict'),{code:'EPERM'});}return original(...args)};syncBuiltinESMExports();}`)
+    const env = { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim() }
+    vi.stubEnv('NODE_OPTIONS', env.NODE_OPTIONS)
+    await withDatabaseIsolation(root, evidence, env, () => {})
+    expect(JSON.parse(readFileSync(trace, 'utf8'))).toEqual({ failures: 3 })
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
   })
 

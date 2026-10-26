@@ -11,8 +11,12 @@ for (const [name, setup] of [['sqlite', sqliteMemoryEnv], ['postgresql', postgre
       expect((await reldb.ddl.createTable('hai_scheduler_tasks', { id: { type: 'TEXT', primaryKey: true }, name: { type: 'TEXT' } })).success).toBe(true)
       await reldb.sql.execute('INSERT INTO hai_scheduler_tasks VALUES (?,?)', ['old-task', 'Kept task'])
       await reldb.sql.execute('CREATE TABLE hai_scheduler_logs (id INTEGER PRIMARY KEY,task_id TEXT,task_name TEXT,task_type TEXT,trigger_type TEXT,trigger_source TEXT,status TEXT,result TEXT,error TEXT,started_at BIGINT,finished_at BIGINT,duration INTEGER)')
-      for (let id = 1; id <= 105; id++)
-        await reldb.sql.execute('INSERT INTO hai_scheduler_logs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', [id, 'old-task', 'Kept task', 'hook', 'manual', null, 'success', `result-${id}`, null, 1000, 1001, 1])
+      // 批量准备同样的 105 条历史，避免容器网络往返耗尽迁移验证的时间窗口。
+      const rows = Array.from({ length: 105 }, (_, index) => [index + 1, 'old-task', 'Kept task', 'hook', 'manual', null, 'success', `result-${index + 1}`, null, 1000, 1001, 1])
+      for (let offset = 0; offset < rows.length; offset += 35) {
+        const batch = rows.slice(offset, offset + 35)
+        expect((await reldb.sql.execute(`INSERT INTO hai_scheduler_logs VALUES ${batch.map(() => '(?,?,?,?,?,?,?,?,?,?,?,?)').join(',')}`, batch.flat())).success).toBe(true)
+      }
       expect(await migrateScheduler({ dryRun: true })).toMatchObject({ success: true, data: { changes: ['explicit-task-idempotency', 'execution-history-snapshots'] } })
       expect((await migrateScheduler()).success).toBe(true)
       expect((await migrateScheduler()).success).toBe(true)

@@ -1,5 +1,6 @@
 /** 样板 E2E 的独立 TCP 计数进程；只处理本轮私有计数文件，不读取业务环境。 */
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { rename, writeFile } from 'node:fs/promises'
 import { createConnection, createServer } from 'node:net'
 import process from 'node:process'
 
@@ -43,9 +44,10 @@ async function waitFor(predicate) {
 
 if (mode === 'serve') {
   const current = { pid: process.pid, port: 0, connections: 0, closed: false }
+  let pending = Promise.resolve()
   /**
    * 单写者先完整写临时文件，再原子替换本轮快照，持久保留计数供父进程验收。
-   * @returns {void} 失败直接使计数进程失败，不能把无法测量报告成零连接。
+   * @returns {Promise<void>} 失败直接使计数进程失败，不能把无法测量报告成零连接。
    * @example
    * ```js
    * current.connections++
@@ -53,12 +55,28 @@ if (mode === 'serve') {
    * ```
    */
   const save = () => {
-    writeFileSync(`${stateFile}.next`, JSON.stringify(current))
-    renameSync(`${stateFile}.next`, stateFile)
+    const snapshot = JSON.stringify(current)
+    // 串行保存快照；短暂的 Windows 文件共享冲突不能使计数进程提前退出。
+    pending = pending.then(async () => {
+      await writeFile(`${stateFile}.next`, snapshot)
+      const deadline = Date.now() + 2000
+      for (;;) {
+        try {
+          await rename(`${stateFile}.next`, stateFile)
+          return
+        }
+        catch (error) {
+          if (process.platform !== 'win32' || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || Date.now() >= deadline)
+            throw error
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+      }
+    })
+    return pending
   }
   const server = createServer((socket) => {
     current.connections++
-    save()
+    void save()
     socket.destroy()
   })
   server.listen(0, '127.0.0.1', () => {
@@ -66,7 +84,7 @@ if (mode === 'serve') {
     if (!address || typeof address === 'string')
       throw new Error('Database isolation sentinel has no TCP address')
     current.port = address.port
-    save()
+    void save()
   })
   const stop = setInterval(() => {
     if (!existsSync(`${stateFile}.stop`))
@@ -74,7 +92,7 @@ if (mode === 'serve') {
     clearInterval(stop)
     server.close(() => {
       current.closed = true
-      save()
+      void save()
     })
   }, 20)
 }
