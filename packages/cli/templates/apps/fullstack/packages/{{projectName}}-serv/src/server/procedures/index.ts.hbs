@@ -26,10 +26,7 @@ export function createServerProcedures(options: CreateServerProceduresOptions) {
       resolveContext: ({ session }) => ({
         scopeId: '{{projectName}}',
         userId: session.userId,
-        // 示例角色映射；实际产品应从可信租户与资源权限确定范围。
-        permissions: session.roles.includes('admin')
-          ? ['feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export']
-          : ['feedback:create'],
+        permissions: session.permissions,
       }),
     }),
 {{/if}}

@@ -12,10 +12,12 @@
   import { createAdminGuide } from '$lib/guide/admin-guide'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
+  import { authActions } from '$lib/services/auth'
   import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
+  import { sensitiveActions } from '$lib/services/sensitive-actions.svelte.js'
   import { apiFetch } from '$lib/utils/api'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { applyTheme, FeedbackModal, getSavedTheme, setPermissionContext, usePermission } from '@h-ai/ui'
+  import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, setPermissionContext, usePermission } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
@@ -26,6 +28,11 @@
   }
 
   const { data, children }: Props = $props()
+  $effect(() => authActions.bindPageExit({ enabled: data.iamPublicConfig.session.endOnPageHide }))
+  $effect(() => {
+    sensitiveActions.configure(data.iamPublicConfig.reauthentication)
+    return () => sensitiveActions.cancel()
+  })
   const guide = createAdminGuide(createSvelteKitNavAdapter())
 
   const appName = $derived(data.appConfig?.name ?? m.app_title())
@@ -111,10 +118,10 @@
       ],
     },
     { icon: 'icon-[tabler--components]', title: m.nav_ui_gallery(), path: '/admin/ui-gallery' },
-    { icon: 'icon-[tabler--puzzle]', title: m.nav_modules(), path: '/admin/modules' },
+    { icon: 'icon-[tabler--puzzle]', title: m.nav_modules(), path: '/admin/modules', requiredPermissions: ['system:modules'] },
     { icon: 'icon-[tabler--file-text]', title: m.nav_logs(), path: '/admin/logs', requiredPermissions: ['system:logs'] },
     { icon: 'icon-[tabler--messages]', title: m.feedback_title(), path: '/admin/feedback', requiredPermissions: ['feedback:read'] },
-    { icon: 'icon-[tabler--settings]', title: m.nav_settings(), path: '/admin/settings' },
+    { icon: 'icon-[tabler--settings]', title: m.nav_settings(), path: '/admin/settings', requiredPermissions: ['system:settings'] },
   ])
 
   const menuItems = $derived(
@@ -187,6 +194,8 @@
     }
   }
 </script>
+
+<ReauthenticationDialog open={sensitiveActions.open} loading={sensitiveActions.loading} error={sensitiveActions.error} onsubmit={password => sensitiveActions.submit(password)} onclose={() => sensitiveActions.cancel()} />
 
 <svelte:document onclick={handleDocumentClick} />
 
@@ -380,14 +389,16 @@
                     <span class='icon-[tabler--user] size-4'></span>
                     {m.nav_profile()}
                   </a>
-                  <a
-                    href={adminSettingsPath}
-                    class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
-                    onclick={() => { userMenuOpen = false }}
-                  >
-                    <span class='icon-[tabler--settings] size-4'></span>
-                    {m.nav_settings()}
-                  </a>
+                  {#if hasPerm('system:settings')}
+                    <a
+                      href={adminSettingsPath}
+                      class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
+                      onclick={() => { userMenuOpen = false }}
+                    >
+                      <span class='icon-[tabler--settings] size-4'></span>
+                      {m.nav_settings()}
+                    </a>
+                  {/if}
                 </div>
                 <div class='border-t border-base-content/6 py-0.5'>
                   <Button
@@ -409,6 +420,7 @@
     <!-- 页面内容 -->
     <main class='flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4 sm:p-5 lg:p-6' data-guide='admin-content'>
       <div class='flex min-h-0 w-full min-w-0 flex-1 flex-col'>
+        {#if data.appConfig.notice}<p class='mb-4 rounded-lg bg-info/10 p-3 text-sm' data-testid='business-notice'>{data.appConfig.notice}</p>{/if}
         {@render children()}
       </div>
     </main>

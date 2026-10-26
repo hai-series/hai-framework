@@ -156,7 +156,7 @@ export async function createAdminRole(input: CreateRoleInput): Promise<HaiResult
   })
 
   if (!createResult.success) {
-    return err({ code: 'iam.role.create_failed', message: `${m.api_iam_roles_create_failed()}: ${createResult.error.message}` })
+    return err({ code: 'iam.role.create_failed', message: m.api_iam_roles_create_failed(), httpStatus: createResult.error.httpStatus ?? 500, cause: createResult.error })
   }
 
   const role = await getAdminRole(createResult.data.id)
@@ -208,7 +208,7 @@ export async function updateAdminRole(id: string, input: UpdateRoleInput): Promi
 
   const updateResult = await iam.authz.updateRole(id, { ...updateData, permissionIds: editableInput.permissions })
   if (!updateResult.success)
-    return err({ code: 'iam.role.update_failed', message: `${m.api_iam_roles_update_failed()}: ${updateResult.error.message}` })
+    return err({ code: 'iam.role.update_failed', message: m.api_iam_roles_update_failed(), httpStatus: updateResult.error.httpStatus ?? 500, cause: updateResult.error })
 
   return ok(await getAdminRole(id))
 }
@@ -224,7 +224,7 @@ export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
 
   const deleteResult = await iam.authz.deleteRole(id)
   if (!deleteResult.success) {
-    return err({ code: 'iam.role.delete_failed', message: `${m.api_iam_roles_delete_failed()}: ${deleteResult.error.message}` })
+    return err({ code: 'iam.role.delete_failed', message: m.api_iam_roles_delete_failed(), httpStatus: deleteResult.error.httpStatus ?? 500, cause: deleteResult.error })
   }
 
   return ok(true)
@@ -234,7 +234,7 @@ export async function deleteAdminRole(id: string): Promise<HaiResult<boolean>> {
 export async function createAdminPermission(input: CreatePermissionInput): Promise<HaiResult<PermissionWithSystem>> {
   const result = await iam.authz.createPermission(input)
   if (!result.success) {
-    return err({ code: 'iam.permission.create_failed', message: `${m.api_iam_permissions_create_failed()}: ${result.error.message}` })
+    return err({ code: 'iam.permission.create_failed', message: m.api_iam_permissions_create_failed(), httpStatus: result.error.httpStatus ?? 500, cause: result.error })
   }
 
   return ok(toPermissionWithSystem(result.data))
@@ -294,7 +294,7 @@ export async function listPermissionsGroupedByResource(): Promise<Record<string,
 export async function deleteAdminPermission(id: string): Promise<HaiResult<void>> {
   const result = await iam.authz.deletePermission(id)
   if (!result.success) {
-    return err({ code: 'iam.permission.delete_failed', message: `${m.api_iam_permissions_delete_failed()}: ${result.error.message}` })
+    return err({ code: 'iam.permission.delete_failed', message: m.api_iam_permissions_delete_failed(), httpStatus: result.error.httpStatus ?? 500, cause: result.error })
   }
   return ok(undefined)
 }
@@ -305,7 +305,7 @@ export function normalizeUniqueConstraintError(message: string | undefined, fall
   if (lower.includes('unique constraint') || lower.includes('duplicate')) {
     return m.api_auth_username_or_email_taken()
   }
-  return message ?? fallback
+  return fallback
 }
 
 /** IAM 用户对象转后台用户列表响应格式（含角色 code）。 */
@@ -323,6 +323,10 @@ export async function toIamUserResponse(user: IamUserInput) {
     display_name: user.displayName,
     avatar: user.avatarUrl,
     status: user.enabled !== false ? 'active' as const : 'inactive' as const,
+    accountType: loaded.accountType,
+    accountStatus: loaded.accountStatus,
+    accountExpiresAt: loaded.accountExpiresAt,
+    lastLoginAt: loaded.lastLoginAt,
     roles,
     created_at: user.createdAt,
     updated_at: user.updatedAt,

@@ -12,11 +12,11 @@ export function getFeedbackContext(event: Pick<RequestEvent, 'locals'>): Feedbac
   return { scopeId: 'admin-console', userId: session.userId, permissions: session.permissions }
 }
 
-/** 将反馈权限显式分配到宿主既有角色，不在 feedback 模块内推断 admin。 */
+/** 将反馈权限显式分配到宿主业务操作员角色，不在 feedback 模块内推断系统管理员。 */
 export async function seedFeedbackPermissions(): Promise<void> {
-  const admin = await iam.authz.getRoleByCode('admin')
-  if (!admin.success)
-    throw new Error(admin.error.message)
+  const operator = await iam.authz.getRoleByCode('business_operator')
+  if (!operator.success)
+    throw new Error(operator.error.message)
   const user = await iam.authz.getRoleByCode('user')
   if (!user.success)
     throw new Error(user.error.message)
@@ -30,8 +30,8 @@ export async function seedFeedbackPermissions(): Promise<void> {
       if (!permission.success)
         throw new Error(permission.error.message)
     }
-    if (admin.data && permission.data) {
-      const assigned = await iam.authz.assignPermissionToRole(admin.data.id, permission.data.id)
+    if (operator.data && permission.data) {
+      const assigned = await iam.authz.assignPermissionToRole(operator.data.id, permission.data.id)
       if (!assigned.success)
         throw new Error(assigned.error.message)
     }

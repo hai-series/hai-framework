@@ -20,7 +20,7 @@
   let requestVersion = 0
   let detailVersion = 0
   let imageUrls = $state<Record<string, string>>({})
-  const permissions = $derived({ read: store.isAdmin, process: store.isAdmin, reopen: store.isAdmin, export: store.isAdmin, retry: store.isAdmin })
+  const permissions = $derived({ read: store.hasPermission('feedback:read'), process: store.hasPermission('feedback:process'), reopen: store.hasPermission('feedback:reopen'), export: store.hasPermission('feedback:export'), retry: store.hasPermission('feedback:process') })
   function view(report: FeedbackReport): FeedbackReportView {
     return { ...report, description: report.description || report.summary || '', appVersion: report.appVersion || '' }
   }

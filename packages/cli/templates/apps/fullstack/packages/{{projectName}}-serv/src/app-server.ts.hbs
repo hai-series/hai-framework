@@ -84,7 +84,7 @@ export function createServerApp(): ServHttpApp {
       middleware: serv.cors({
         origin: security.allowOrigin,
         credentials: servConfig.cors.credentials,
-        allowedHeaders: [...new Set([...servConfig.cors.allowedHeaders, 'X-Client-Id', 'X-Encrypted', 'X-Hai-Transport', 'X-Request-Client', 'X-HAI-Token-Transport'])],
+        allowedHeaders: [...new Set([...servConfig.cors.allowedHeaders, 'X-Client-Id', 'X-Encrypted', 'X-Hai-Transport', 'X-Request-Client', 'X-HAI-Token-Transport', 'X-Hai-Reauthentication'])],
         exposedHeaders: [...new Set([...servConfig.cors.exposedHeaders, 'X-Encrypted', 'X-Hai-Transport'])],
       }),
     }, {

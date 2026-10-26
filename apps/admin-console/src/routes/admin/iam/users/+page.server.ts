@@ -7,6 +7,7 @@
 import type { UserSortDirection, UserSortField } from '@h-ai/iam'
 import type { PageServerLoad } from './$types'
 import { listAdminRoles, requireAdminData } from '$lib/server/iam-admin.js'
+import { canGrantRole } from '$lib/server/security-roles.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
@@ -20,6 +21,10 @@ interface UserData {
   status: 'active' | 'inactive' | 'suspended'
   roles: string[]
   roleIds: string[]
+  accountType?: 'permanent' | 'temporary'
+  accountStatus?: 'active' | 'dormant' | 'closed'
+  accountExpiresAt?: Date | null
+  lastLoginAt?: Date | null
   created_at: Date
   updated_at: Date
 }
@@ -132,6 +137,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       status: user.enabled ? 'active' : 'suspended' as const,
       roles: userRoles.map(r => r.name),
       roleIds: userRoles.map(r => r.id),
+      accountType: user.accountType,
+      accountStatus: user.accountStatus,
+      accountExpiresAt: user.accountExpiresAt,
+      lastLoginAt: user.lastLoginAt,
       created_at: user.createdAt,
       updated_at: user.updatedAt,
     }
@@ -143,6 +152,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     page,
     pageSize,
     roles,
+    grantableRoleIds: roles.filter(role => canGrantRole(locals.session, role)).map(role => role.id),
     search: search ?? '',
     status: statusParam ?? '',
     role: roleFilter ?? '',

@@ -5,10 +5,11 @@
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
   import { invalidateAll } from '$app/navigation'
+  import InviteUserDialog from '$lib/components/InviteUserDialog.svelte'
   import { createUserCrud } from '$lib/crud/admin-crud'
   import * as m from '$lib/paraglide/messages'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { CrudPage, usePermission } from '@h-ai/ui'
+  import { Button, CrudPage, usePermission } from '@h-ai/ui'
 
   interface UserData {
     id: string
@@ -45,6 +46,7 @@
   }
 
   const { data }: Props = $props()
+  let inviteOpen = $state(false)
 
   // 权限
   const { hasPerm } = usePermission()
@@ -53,7 +55,7 @@
   const canDelete = $derived(hasPerm('user:delete') && hasPerm('user:api:delete'))
 
   // 创建 CRUD 定义（传入 roles 选项）
-  const userCrud: CrudOperations = $derived(createUserCrud(data.roles))
+  const userCrud: CrudOperations = $derived(createUserCrud(data.roles, data.grantableRoleIds))
 
   // 转换数据格式：roleIds 用于编辑，roles（名称数组）用于显示
   const crudData = $derived({
@@ -106,8 +108,9 @@
   onaftersubmit={handleAfterSubmit}
   {nav}
 >
-  {#snippet editFormExtra(_editingItem, _mode)}
-    <!-- 密码字段是用户模块特有的，CrudPage 无法声明式处理，这里通过 snippet 注入 -->
-    <!-- 注意：密码处理建议在后续迭代中通过专门的用户管理组件实现 -->
+  {#snippet toolbarActions()}
+    {#if canCreate && data.iamPublicConfig.initialCredentials.enabled}<Button variant='outline' onclick={() => { inviteOpen = true }} data-testid='invite-user'>{m.invitation_title()}</Button>{/if}
   {/snippet}
 </CrudPage>
+
+<InviteUserDialog open={inviteOpen} mode={data.iamPublicConfig.passwordReset.mode} roles={data.roles.filter(role => data.grantableRoleIds.includes(role.id))} onclose={() => { inviteOpen = false }} onrefresh={handleAfterSubmit} />

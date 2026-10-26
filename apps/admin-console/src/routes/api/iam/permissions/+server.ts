@@ -7,6 +7,7 @@
 import * as m from '$lib/paraglide/messages.js'
 import { createAdminPermission, getAdminPermissionByCode, listAdminPermissionsPage } from '$lib/server/iam-admin.js'
 import { CreatePermissionSchema, ListPermissionsQuerySchema } from '$lib/server/schemas/index.js'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -28,9 +29,10 @@ export const GET = kit.handler(async ({ url, locals }) => {
  *
  * 需要权限：permission:api:create
  */
-export const POST = kit.handler(async ({ request, locals }) => {
+export const POST = kit.handler(async ({ request, locals, cookies }) => {
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'permission:api:create')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.permissions.create')
 
   const { name, description, resource, action, type } = await kit.validate.body(request, CreatePermissionSchema)
 
@@ -54,7 +56,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   })
 
   if (!createResult.success) {
-    return kit.response.badRequest(createResult.error.message)
+    return kit.response.fromError(createResult.error)
   }
 
   return kit.response.ok(createResult.data)

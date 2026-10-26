@@ -3,7 +3,7 @@
   import type { PageData } from './$types'
   import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
-  import { apiFetch } from '$lib/utils/api'
+  import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '$lib/services/profile-api'
 
   interface Props {
     data: PageData
@@ -81,11 +81,7 @@
     phone?: string
     avatar?: string
   }) {
-    const response = await apiFetch('/api/auth/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    const response = await updateProfile(payload)
     const body = await response.json()
     return { response, body }
   }
@@ -106,13 +102,7 @@
     profileSuccess = ''
 
     try {
-      const formData = new FormData()
-      formData.set('file', file)
-
-      const uploadResponse = await apiFetch('/api/auth/profile/avatar', {
-        method: 'POST',
-        body: formData,
-      })
+      const uploadResponse = await uploadProfileAvatar(file)
       const uploadBody = await uploadResponse.json()
       if (!uploadResponse.ok || !uploadBody.success) {
         profileErrors = { avatar: uploadBody.error?.message ?? m.common_error() }
@@ -230,14 +220,10 @@
     }
 
     try {
-      const response = await apiFetch('/api/auth/profile/password', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          old_password: formData.oldPassword,
-          new_password: formData.newPassword,
-          confirm_password: formData.confirmPassword,
-        }),
+      const response = await changeProfilePassword({
+        old_password: formData.oldPassword,
+        new_password: formData.newPassword,
+        confirm_password: formData.confirmPassword,
       })
 
       const body = await response.json()

@@ -1,3 +1,4 @@
+import { requireManageableUser } from '$lib/server/security-roles.js'
 /**
  * =============================================================================
  * Admin Console - 单个 API Key 管理 API（详情 / 吊销）
@@ -34,14 +35,20 @@ export const GET = kit.handler(async ({ params, locals }) => {
  *
  * 需要权限：apikey:delete
  */
-export const DELETE = kit.handler(async ({ params, locals }) => {
+export const DELETE = kit.handler(async ({ params, locals, request, cookies }) => {
   kit.guard.require(locals.session, 'apikey:delete')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.apiKeys.delete')
+  const key = await iam.apiKey.getApiKey(params.id ?? '')
+  if (!key.success)
+    return kit.response.fromError(key.error)
+  if (key.data)
+    await requireManageableUser(locals.session, key.data.userId)
 
   const { id } = kit.validate.params(params, kit.validate.IdParamSchema)
 
   const result = await iam.apiKey.revokeApiKey(id)
   if (!result.success) {
-    return kit.response.badRequest(result.error.message)
+    return kit.response.fromError(result.error)
   }
 
   return kit.response.noContent()

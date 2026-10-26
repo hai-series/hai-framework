@@ -1,0 +1,12 @@
+import type { AdminRoleCode } from '{{fullstack.contractPackageName}}'
+import * as m from '../paraglide/messages.js'
+
+export function roleLabel(code: AdminRoleCode): string {
+  const labels = { admin: m.role_admin, audit_admin: m.role_audit, config_admin: m.role_config, business_operator: m.role_operator, user: m.role_user }
+  return labels[code]()
+}
+
+export function roleCapabilities(code: AdminRoleCode): string {
+  const labels = { admin: m.role_admin_capabilities, audit_admin: m.role_audit_capabilities, config_admin: m.role_config_capabilities, business_operator: m.role_operator_capabilities, user: m.role_user_capabilities }
+  return labels[code]()
+}

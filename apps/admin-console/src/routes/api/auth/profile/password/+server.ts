@@ -16,11 +16,7 @@ export const PUT = kit.handler(async ({ request, locals }) => {
   const result = await iam.user.changeCurrentUserPassword(locals.accessToken, data.old_password, data.new_password)
 
   if (!result.success) {
-    return kit.response.badRequest(
-      result.error.message,
-      undefined,
-      { fieldErrors: { general: result.error.message } },
-    )
+    return kit.response.fromError(result.error)
   }
 
   return kit.response.ok({ reloginRequired: true })

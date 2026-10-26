@@ -1,12 +1,13 @@
+import * as m from '$lib/paraglide/messages.js'
 /**
  * =============================================================================
  * Admin Console - 用户管理 API
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
 import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
+import { requireGrantableRoles } from '$lib/server/security-roles.js'
 import { audit } from '@h-ai/audit'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -47,6 +48,10 @@ export const GET = kit.handler(async ({ url, locals }) => {
     display_name: user.displayName,
     avatar: user.avatarUrl,
     status: user.enabled !== false ? 'active' as const : 'inactive' as const,
+    accountType: user.accountType,
+    accountStatus: user.accountStatus,
+    accountExpiresAt: user.accountExpiresAt,
+    lastLoginAt: user.lastLoginAt,
     roles: (user.roles ?? []).map(r => r.code),
     created_at: user.createdAt,
     updated_at: user.updatedAt,
@@ -60,24 +65,30 @@ export const GET = kit.handler(async ({ url, locals }) => {
  *
  * 需要权限：user:api:create
  */
-export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
+export const POST = kit.handler(async ({ request, locals, getClientAddress, cookies }) => {
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:create')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.create')
 
-  const { username, email, password, roles, status } = await kit.validate.body(request, createCreateUserSchema())
+  const { username, email, password, display_name, roles, status, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createCreateUserSchema())
+  await requireGrantableRoles(locals.session, roles)
 
   // 管理员创建不受自助注册开关影响。
   const registerResult = await iam.user.createUser({
     username,
     email,
     password,
+    displayName: display_name,
+    accountType,
+    accountStatus,
+    accountExpiresAt,
   })
 
   if (!registerResult.success) {
     if (registerResult.error.code === HaiIamError.USER_NOT_FOUND.code || registerResult.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
       return kit.response.conflict(m.api_auth_username_or_email_taken({}, { locale }))
     }
-    return kit.response.badRequest(registerResult.error.message)
+    return kit.response.fromError(registerResult.error)
   }
 
   let { user } = registerResult.data

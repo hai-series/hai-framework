@@ -53,7 +53,15 @@ export function createCreateUserSchema() {
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
     status: z.enum(['active', 'inactive', 'suspended']).optional(),
+    accountType: z.enum(['permanent', 'temporary']).optional(),
+    accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+    accountExpiresAt: z.coerce.date().nullable().optional().transform(value => value ?? undefined),
   })
+}
+
+/** 更新用户请求 Schema */
+export function createInviteUserSchema() {
+  return createCreateUserSchema().omit({ password: true }).extend({ email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(), phone: z.string().trim().min(1).max(32).optional(), status: z.literal('active').optional(), accountStatus: z.literal('active').optional() })
 }
 
 /** 更新用户请求 Schema */
@@ -66,6 +74,9 @@ export function createUpdateUserSchema() {
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
     status: z.enum(['active', 'inactive', 'suspended']).optional(),
+    accountType: z.enum(['permanent', 'temporary']).optional(),
+    accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+    accountExpiresAt: z.coerce.date().nullable().optional(),
   })
 }
 

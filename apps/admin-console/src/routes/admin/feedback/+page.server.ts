@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types'
 import * as m from '$lib/paraglide/messages.js'
 import { getFeedbackContext } from '$lib/server/feedback.js'
 import { FeedbackIdInputSchema, FeedbackListInputSchema } from '@h-ai/api-contract/feedback'
+import { core } from '@h-ai/core'
 import { feedback } from '@h-ai/feedback'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
@@ -19,7 +20,10 @@ export const load: PageServerLoad = async (event) => {
   if (!parsed.success)
     throw error(400, { message: m.feedback_invalid_query() })
   const reports = await feedback.list(parsed.data, context)
-  if (!reports.success)
-    throw error(reports.error.httpStatus ?? 500, { message: reports.error.message })
+  if (!reports.success) {
+    const safe = core.error.toPublic(reports.error)
+    core.logger.error('Feedback page loading failed', { traceId: safe.traceId, error: reports.error })
+    throw error(safe.httpStatus ?? 500, { message: safe.message })
+  }
   return { reports: reports.data, query: { ...parsed.data, page: reports.data.page, pageSize: reports.data.pageSize }, feedbackId }
 }

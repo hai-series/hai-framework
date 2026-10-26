@@ -3,6 +3,7 @@ import type { AppEchoOutputData, AppFrontendTarget, AppInfoOutputData } from '{{
 import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
 import { appContract } from '{{fullstack.contractPackageName}}'
+import { readBusinessSettings } from '../business-settings.js'
 
 export interface CreateAppProceduresOptions {
   readonly name: string
@@ -19,7 +20,10 @@ export function createAppProcedures(options: CreateAppProceduresOptions) {
   return serv
     .implement(appContract)
     .context<ServContext>()
-    .route('info', () => ok(createAppInfo(options)))
+    .route('info', async () => {
+      const settings = await readBusinessSettings()
+      return settings.success ? ok({ ...createAppInfo(options), notice: settings.data.notice }) : settings
+    })
     .route('echo', ({ input, context }) => {
       const data: AppEchoOutputData = {
         message: input.message,
@@ -33,6 +37,7 @@ export function createAppProcedures(options: CreateAppProceduresOptions) {
 
 function createAppInfo(options: CreateAppProceduresOptions): AppInfoOutputData {
   return {
+    notice: '',
     name: options.name,
     version: options.version,
     env: options.env,
