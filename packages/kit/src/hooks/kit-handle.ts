@@ -6,9 +6,11 @@
  * @module kit-handle
  */
 
+import type { AuditActorSnapshot } from '@h-ai/audit'
 import type { Handle, RequestEvent, ResolveOptions } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
+import { audit } from '@h-ai/audit'
 import { core } from '@h-ai/core'
 import { configureAuth, getAccessToken } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
@@ -119,7 +121,36 @@ export function createHandle(config: HandleConfig = {}): Handle {
   return async ({ event, resolve }) => {
     const suppliedRequestId = event.request.headers.get('x-request-id')
     const requestId = suppliedRequestId && /^[\w.:-]{1,128}$/.test(suppliedRequestId) ? suppliedRequestId : generateId('req')
-    return core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, async () => {
+    let clientAddress: string | undefined
+    try {
+      clientAddress = event.getClientAddress()
+    }
+    catch { /* 静态预渲染等宿主可能没有连接地址，不能改信任请求转发头。 */ }
+    return core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => audit.withContext({
+      actor: null,
+      requestId,
+      traceId: requestId,
+      scopeId: undefined,
+      ipAddress: clientAddress,
+      userAgent: event.request.headers.get('user-agent')?.slice(0, 4096),
+    }, async () => {
+      let actor: AuditActorSnapshot | null = null
+      let guardDenied = false
+      let requestFailed = false
+      const captureRequest = async (status: number) => {
+        const resource = event.route.id ?? 'unmatched'
+        const written = await audit.capture({
+          action: 'request.execute',
+          resource,
+          userId: actor?.id ?? null,
+          actorSnapshot: actor,
+          category: /\/(?:auth|iam|audit)(?:\/|$)/.test(resource) ? 'system' : 'business',
+          outcome: guardDenied || [401, 403, 423, 429].includes(status) ? 'denied' : requestFailed || status >= 400 ? 'failure' : 'success',
+          details: { method: event.request.method, status },
+        }, { read: ['GET', 'HEAD', 'OPTIONS'].includes(event.request.method) })
+        if (!written.success)
+          core.logger.error('Request audit failed', { requestId, resource, error: written.error })
+      }
       const context: MiddlewareContext = {
         event,
         requestId,
@@ -163,13 +194,15 @@ export function createHandle(config: HandleConfig = {}): Handle {
             }
           }
           context.session = session
+          actor = session ? { id: session.userId, username: session.username, roles: session.roles } : null
 
-          return await core.context.run({ userId: session?.userId }, async () => {
+          return await audit.withContext({ actor }, () => core.context.run({ userId: session?.userId }, async () => {
             // ── 执行守卫 ──
             for (const guardConfig of guards) {
               const guardResult = await executeGuard(guardConfig, event, session)
 
               if (!guardResult.allowed) {
+                guardDenied = true
                 if (guardResult.redirect) {
                   return new Response(null, {
                     status: 302,
@@ -202,14 +235,18 @@ export function createHandle(config: HandleConfig = {}): Handle {
             )
 
             return response
-          })
+          }))
         }
         catch (error) {
         // SvelteKit 控制流异常（redirect / error）必须继续抛出
           if (isSvelteKitControlFlow(error)) {
+            // 控制流仍由 SvelteKit 处理；这里只记录结果，避免遗漏抛出的 HTTP 拒绝。
+            if (typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number')
+              await captureRequest(error.status)
             throw error
           }
 
+          requestFailed = true
           core.logger.error('Request failed', { requestId, error })
 
           if (onError) {
@@ -239,11 +276,12 @@ export function createHandle(config: HandleConfig = {}): Handle {
         ? await transportMiddleware(context, runRequest)
         : await runRequest()
 
+      await captureRequest(response.status)
       applyDefaultSecurityHeaders(response)
       response.headers.set('X-Request-Id', requestId)
       response.headers.set('X-Trace-Id', requestId)
       return response
-    })
+    }))
   }
 }
 

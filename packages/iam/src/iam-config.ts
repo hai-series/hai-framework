@@ -329,6 +329,31 @@ export const SecurityConfigSchema = z.object({
  */
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
 
+/**
+ * 登录时段与地址策略；空地址/时段列表不限制对应维度。周一为1，周日为7。
+ * @example
+ * ```ts
+ * import { LoginAccessConfigSchema } from '@h-ai/iam'
+ * const policy = LoginAccessConfigSchema.parse({ enabled: true, allowIps: ['192.0.2.0/24'], timezone: 'Asia/Shanghai' })
+ * ```
+ */
+export const LoginAccessConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  allowIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
+  denyIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
+  timezone: z.string().default('UTC').refine((value) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: value }).format()
+      return true
+    }
+    catch { return false }
+  }, 'Invalid IANA timezone'),
+  windows: z.array(z.object({
+    days: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+    start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+    end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  }).refine(value => value.start !== value.end, 'Time window start and end must differ')).max(100).default([]),
+})
 
 /**
  * 协议展示配置
@@ -505,6 +530,8 @@ export const AccountConfigSchema = z.object({
 export const IamConfigSchema = z.object({
   /** 管理端可用单次邀请代替共享初始密码；需要已配置的密码重置通知通道。 */
   initialCredentials: z.object({ enabled: z.boolean().default(false) }).optional(),
+  /** 宿主提供可信客户端地址；绝不从凭据 JSON 或任意转发头取得 IP。 */
+  loginAccess: LoginAccessConfigSchema.optional(),
   /** 账号自动休眠策略；未配置时不启动扫描。 */
   accounts: AccountConfigSchema.optional(),
   /** 认证页外观 */

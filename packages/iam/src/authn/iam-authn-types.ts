@@ -185,7 +185,7 @@ export interface AuthnOperations {
    * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult（用户信息、令牌、协议展示）；失败返回错误
    */
-  login: (credentials: PasswordCredentials) => Promise<HaiResult<AuthResult>>
+  login: (credentials: PasswordCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 
   /**
    * 使用验证码登录
@@ -194,7 +194,7 @@ export interface AuthnOperations {
    * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult；验证码无效/过期返回 OTP_INVALID
    */
-  loginWithOtp: (credentials: OtpCredentials) => Promise<HaiResult<AuthResult>>
+  loginWithOtp: (credentials: OtpCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 
   /**
    * 使用 LDAP 登录
@@ -203,7 +203,7 @@ export interface AuthnOperations {
    * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult（自动同步本地用户）；失败返回错误
    */
-  loginWithLdap: (credentials: LdapCredentials) => Promise<HaiResult<AuthResult>>
+  loginWithLdap: (credentials: LdapCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 
   /**
    * 使用 API Key 登录
@@ -215,7 +215,7 @@ export interface AuthnOperations {
    * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
    * @returns 成功返回 AuthResult；API Key 无效/过期/禁用返回对应错误
    */
-  loginWithApiKey: (credentials: ApiKeyCredentials) => Promise<HaiResult<AuthResult>>
+  loginWithApiKey: (credentials: ApiKeyCredentials, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 
   /**
    * 登出
@@ -256,5 +256,5 @@ export interface AuthnOperations {
    * @param options - 注册选项（用户名、密码、邮箱等）
    * @returns 成功返回 AuthResult（用户信息、令牌、协议展示）；失败返回对应错误码
    */
-  registerAndLogin: (options: RegisterOptions) => Promise<HaiResult<AuthResult>>
+  registerAndLogin: (options: RegisterOptions, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 }

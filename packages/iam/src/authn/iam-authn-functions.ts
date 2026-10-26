@@ -15,7 +15,7 @@ import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { User } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
 import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
-import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthRequestContext, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
@@ -31,6 +31,7 @@ import { checkPasswordState, isUserActive } from '../user/iam-user-utils.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
 import { applyApiKeyScopes } from './apikey/iam-authn-apikey-scope.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
+import { createLoginAccessCheck } from './iam-authn-access.js'
 import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
@@ -87,7 +88,7 @@ export interface AuthnOperationsResult {
   /** API Key 管理操作（仅在启用 apikey 登录时可用） */
   apiKeyFunctions: ApiKeyOperations | null
   /** 注册完成后直接创建会话，不受密码登录方式开关影响。 */
-  loginRegisteredUser: (user: User) => Promise<HaiResult<AuthResult>>
+  loginRegisteredUser: (user: User, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 }
 
 /**
@@ -266,6 +267,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
   const loginConfig = LoginConfigSchema.parse(config.login ?? {})
   const agreementConfig = AgreementConfigSchema.parse(config.agreements ?? {})
+  const checkAccess = createLoginAccessCheck(config.loginAccess)
 
   /**
    * 检查指定登录方式是否被禁用
@@ -325,8 +327,11 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @param user - 已认证的用户信息
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
-  async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
-    if (!user.enabled)
+  async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+    const permitted = checkAccess(context)
+    if (!permitted.success)
+      return permitted
+    if (!isUserActive(user))
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
@@ -397,7 +402,11 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     type: 'password' | 'otp' | 'ldap',
     credentials: PasswordCredentials | OtpCredentials | LdapCredentials,
     strategy?: AuthStrategy,
+    context?: AuthRequestContext,
   ): Promise<HaiResult<AuthResult>> {
+    const permitted = checkAccess(context)
+    if (!permitted.success)
+      return permitted
     const disabled = loginDisabled(type)
     if (disabled)
       return disabled as HaiResult<AuthResult>
@@ -443,27 +452,27 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
   }
 
-  return { loginRegisteredUser: async (user) => {
+  return { loginRegisteredUser: async (user, context) => {
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
       return stored
     if (!stored.data || !isUserActive(stored.data))
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-    return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' })
+    return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' }, undefined, context)
   }, authn: {
-    async login(credentials: PasswordCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('password', credentials, passwordStrategy)
+    async login(credentials: PasswordCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+      return loginWithStrategy('password', credentials, passwordStrategy, context)
     },
 
-    async loginWithOtp(credentials: OtpCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('otp', credentials, otpStrategy)
+    async loginWithOtp(credentials: OtpCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+      return loginWithStrategy('otp', credentials, otpStrategy, context)
     },
 
-    async loginWithLdap(credentials: LdapCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('ldap', credentials, ldapStrategy)
+    async loginWithLdap(credentials: LdapCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+      return loginWithStrategy('ldap', credentials, ldapStrategy, context)
     },
 
-    async loginWithApiKey(credentials: ApiKeyCredentials): Promise<HaiResult<AuthResult>> {
+    async loginWithApiKey(credentials: ApiKeyCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
       const disabled = loginDisabled('apikey')
       if (disabled)
         return disabled

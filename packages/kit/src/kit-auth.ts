@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ApiKeyCredentials, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
+import type { ApiKeyCredentials, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
@@ -249,6 +249,7 @@ async function runAuthLogin<TCredentials>(
 export async function login(
   cookies: CookieWriter,
   credentials: PasswordCredentials,
+  context?: AuthRequestContext,
 ): Promise<HaiResult<AuthResult>> {
   return runAuthLogin(cookies, credentials, (ops, input) => ops.login(input, context))
 }
@@ -272,6 +273,7 @@ export async function login(
 export async function loginWithOtp(
   cookies: CookieWriter,
   credentials: OtpCredentials,
+  context?: AuthRequestContext,
 ): Promise<HaiResult<AuthResult>> {
   return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithOtp(input, context))
 }
@@ -295,6 +297,7 @@ export async function loginWithOtp(
 export async function loginWithLdap(
   cookies: CookieWriter,
   credentials: LdapCredentials,
+  context?: AuthRequestContext,
 ): Promise<HaiResult<AuthResult>> {
   return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithLdap(input, context))
 }
@@ -318,6 +321,7 @@ export async function loginWithLdap(
 export async function loginWithApiKey(
   cookies: CookieWriter,
   credentials: ApiKeyCredentials,
+  context?: AuthRequestContext,
 ): Promise<HaiResult<AuthResult>> {
   return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithApiKey(input, context))
 }
@@ -340,6 +344,7 @@ export async function loginWithApiKey(
 export async function registerAndLogin(
   cookies: CookieWriter,
   options: RegisterOptions,
+  context?: AuthRequestContext,
 ): Promise<HaiResult<AuthResult>> {
   return runAuthLogin(cookies, options, (ops, input) => ops.registerAndLogin(input, context))
 }

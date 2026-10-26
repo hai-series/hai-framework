@@ -1,6 +1,7 @@
 import type { HaiResult } from '@h-ai/core'
 /** SvelteKit 标准认证端点，统一验证、Cookie 和 HaiResult 处理。 */
-import type { IamFunctions } from '@h-ai/iam'
+import type { AuthRequestContext, IamFunctions } from '@h-ai/iam'
+import type { RequestEvent } from '@sveltejs/kit'
 import {
   IamConfirmPasswordResetInputSchema,
   IamLdapLoginInputSchema,
