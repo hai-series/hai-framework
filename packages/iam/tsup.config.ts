@@ -7,5 +7,5 @@ export default defineConfig({
     index: 'src/index.ts',
     browser: 'src/iam-index.browser.ts',
   },
-  external: ['@h-ai/core', '@h-ai/audit', '@h-ai/crypto', '@h-ai/reldb', '@h-ai/cache', '@h-ai/reach', 'zod', 'ldapts'],
+  external: ['@h-ai/core', '@h-ai/audit', '@h-ai/crypto', '@h-ai/reldb', '@h-ai/cache', '@h-ai/reach', 'zod', 'ldapts', 'altcha/lib'],
 })

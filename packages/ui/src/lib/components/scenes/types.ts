@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { Challenge } from 'altcha/lib'
 import type { Snippet } from 'svelte'
 import type { DataAttributes, FormLayoutOptions, FormText, InputProps, Size } from '../../types.js'
 
@@ -447,6 +448,7 @@ export interface PasswordPolicy {
  * ```
  */
 export interface AuthPanelConfig {
+  captcha?: { enabled: boolean }
   /** 只有已启用且具备运行时依赖的方式才应为 true。 */
   login: { password: boolean, ldap: boolean, email: boolean, sms: boolean }
   register: { enabled: boolean }
@@ -480,14 +482,17 @@ export interface AuthPanelConfig {
  * ```
  */
 export interface AuthPanelActions {
+  /** 仅启用交互挑战时需要；动作返回可公开挑战，签名秘密保留在服务端。 */
+  createCaptcha?: (input: { operation: 'login' | 'register' | 'sendOtp' | 'passwordReset' | 'renewPassword' }) => Promise<HaiResult<{ id: string, challenge: Challenge }>>
   /** password/ldap 使用 password，email/sms 使用 code；成功后由工厂保存凭证。 */
-  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string }) => Promise<HaiResult<unknown>>
+  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string, captcha?: string }) => Promise<HaiResult<unknown>>
   /** 注册并登录；禁用新账户的待启用状态由面板单独提示。 */
-  register: (input: { username: string, password: string, email?: string, phone?: string, displayName?: string }) => Promise<HaiResult<unknown>>
-  sendOtp: (identifier: string) => Promise<HaiResult<unknown>>
-  requestPasswordReset: (identifier: string) => Promise<HaiResult<unknown>>
+  register: (input: { username: string, password: string, email?: string, phone?: string, displayName?: string, captcha?: string }) => Promise<HaiResult<unknown>>
+  sendOtp: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<unknown>>
+  requestPasswordReset: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<unknown>>
   confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<unknown>>
   /** 首次或密码过期时，验证原密码并换新；完成后重新登录。 */
+  renewPassword?: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => Promise<HaiResult<unknown>>
 }
 
 /**

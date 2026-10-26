@@ -174,6 +174,8 @@ export interface StoredUser extends User {
  * ```
  */
 export interface RegisterOptions {
+  /** 可选交互挑战证明；管理端 createUser/inviteUser 不使用。 */
+  captcha?: string
   /** 服务端管理入口可指定临时账号；公开注册接口不应允许修改生命周期字段。 */
   accountType?: 'permanent' | 'temporary'
   /** 管理入口指定初始状态；公开注册 Schema 不接受此字段。 */
@@ -375,6 +377,7 @@ export interface UserOperations {
    * if (!changed.success) throw new Error(changed.error.message)
    * ```
    */
+  renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => Promise<HaiResult<void>>
 
   /**
    * 修改密码
@@ -420,7 +423,7 @@ export interface UserOperations {
    *   requested.error.code // 投递未知不能当作成功或由调用端擅自重发通知。
    * ```
    */
-  requestPasswordReset: (identifier: string) => Promise<HaiResult<void>>
+  requestPasswordReset: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<void>>
 
   /**
    * 确认密码重置

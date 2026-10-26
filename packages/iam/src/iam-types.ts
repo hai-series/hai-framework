@@ -54,6 +54,10 @@ const IamErrorInfo = {
   LOGIN_ACCESS_DENIED: '026:403',
   INVITATION_DELIVERY_UNKNOWN: '028:502',
   INVITATION_DISABLED: '029:403',
+  CAPTCHA_REQUIRED: '030:400',
+  CAPTCHA_INVALID: '031:400',
+  CAPTCHA_DISABLED: '032:403',
+  CAPTCHA_UNAVAILABLE: '033:503',
 
   SESSION_NOT_FOUND: '101:401',
   SESSION_EXPIRED: '102:401',
@@ -259,7 +263,7 @@ export interface IamFunctions {
 // ─── 子功能类型 re-export ───
 
 export type { ApiKey, ApiKeyOperations, ApiKeySortDirection, ApiKeySortField, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './authn/apikey/iam-authn-apikey-types.js'
-export type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
+export type { ApiKeyCredentials, AuthnOperations, AuthRequestContext, AuthStrategy, CaptchaOperation, Credentials, IamCaptchaChallenge, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role } from './authz/iam-authz-types.js'
 export type { IamPublicConfig } from './iam-public-config.js'

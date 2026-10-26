@@ -318,6 +318,20 @@ export const SecurityConfigSchema = z.object({
   lockoutDuration: z.number().int().min(60).default(900),
 })
 
+/**
+ * 自托管 ALTCHA 计算挑战；默认关闭，强度与有效期由应用设置。
+ * @example
+ * ```ts
+ * import { CaptchaConfigSchema } from '@h-ai/iam'
+ * const config = CaptchaConfigSchema.parse({ enabled: true, ttlSeconds: 120 })
+ * ```
+ */
+export const CaptchaConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  ttlSeconds: z.number().int().min(1).max(600).default(120),
+  cost: z.number().int().min(100).max(50000).default(5000),
+  maxCounter: z.number().int().min(1).max(2000).default(100),
+})
 
 /**
  * 服务端账户失败计数与锁定策略。
@@ -573,6 +587,8 @@ export const IamConfigSchema = z.object({
     showOnLogin: false,
   }),
 
+  /** 可选的自托管交互挑战。 */
+  captcha: CaptchaConfigSchema.default(() => CaptchaConfigSchema.parse({})),
 
   /** 安全策略配置 */
   security: SecurityConfigSchema.default({

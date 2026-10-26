@@ -106,17 +106,19 @@ export function createIamAuthActions(client: {
       return stop
     },
     publicConfig: () => client.iam.auth.publicConfig(),
+    createCaptcha: (input: Parameters<typeof client.iam.auth.createCaptcha>[0]) => client.iam.auth.createCaptcha(input),
     login: async (input: IamAuthLoginInput) => {
       const result = input.method === 'ldap'
-        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password })
+        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password, captcha: input.captcha })
         : input.method === 'email' || input.method === 'sms'
-          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '' })
-          : await client.iam.auth.login({ identifier: input.identifier, password: input.password })
+          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '', captcha: input.captcha })
+          : await client.iam.auth.login({ identifier: input.identifier, password: input.password, captcha: input.captcha })
       return save(result)
     },
     register: async (input: IamRegisterInput) => save(await client.iam.auth.register(input)),
-    sendOtp: (identifier: string) => client.iam.auth.sendOtp({ identifier }),
-    requestPasswordReset: (identifier: string) => client.iam.auth.requestPasswordReset({ identifier }),
+    sendOtp: (identifier: string, options?: { captcha?: string }) => client.iam.auth.sendOtp({ identifier, ...options }),
+    requestPasswordReset: (identifier: string, options?: { captcha?: string }) => client.iam.auth.requestPasswordReset({ identifier, ...options }),
     confirmPasswordReset: (token: string, newPassword: string) => client.iam.auth.confirmPasswordReset({ token, newPassword }),
+    renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => client.iam.auth.renewPassword(input),
   }
 }

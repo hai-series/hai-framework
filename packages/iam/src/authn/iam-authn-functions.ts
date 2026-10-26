@@ -32,6 +32,7 @@ import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.j
 import { applyApiKeyScopes } from './apikey/iam-authn-apikey-scope.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
 import { createLoginAccessCheck } from './iam-authn-access.js'
+import { createIamCaptcha, verifyIamCaptcha } from './iam-authn-captcha.js'
 import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
@@ -404,6 +405,9 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     strategy?: AuthStrategy,
     context?: AuthRequestContext,
   ): Promise<HaiResult<AuthResult>> {
+    const captcha = await verifyIamCaptcha(config.captcha, 'login', credentials.captcha)
+    if (!captcha.success)
+      return captcha
     const permitted = checkAccess(context)
     if (!permitted.success)
       return permitted
@@ -460,6 +464,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' }, undefined, context)
   }, authn: {
+    createCaptcha: input => createIamCaptcha(config.captcha, input),
     async login(credentials: PasswordCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('password', credentials, passwordStrategy, context)
     },
@@ -491,7 +496,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
     verifyToken: verifyCurrentSession,
 
-    async sendOtp(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {
+    async sendOtp(identifier: string, options?: { captcha?: string }): Promise<HaiResult<{ expiresAt: Date }>> {
+      const captcha = await verifyIamCaptcha(config.captcha, 'sendOtp', options?.captcha)
+      if (!captcha.success)
+        return captcha
       const disabled = loginDisabled('otp')
       if (disabled) {
         return disabled as HaiResult<{ expiresAt: Date }>

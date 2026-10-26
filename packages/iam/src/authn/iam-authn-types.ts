@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { Challenge } from 'altcha/lib'
 import type { AuthStrategyType } from '../iam-config.js'
 import type { AuthResult, Session } from '../session/iam-session-types.js'
 import type { IssuedTicket } from '../ticket/iam-ticket-types.js'
@@ -13,7 +14,29 @@ import type { RegisterOptions, User } from '../user/iam-user-types.js'
 
 // ─── 凭证类型 ───
 
+/**
+ * 交互鉴别用途；同一挑战不能用于另一入口，API Key 机器鉴别不使用它。
+ * @example
+ * ```ts
+ * import type { CaptchaOperation } from '@h-ai/iam'
+ * const operation: CaptchaOperation = 'login'
+ * ```
+ */
+export type CaptchaOperation = 'login' | 'register' | 'sendOtp' | 'passwordReset' | 'renewPassword'
 
+/**
+ * 可公开的 ALTCHA 挑战；签名秘密仅存共享缓存，不包含在返回值中。
+ * @example
+ * ```ts
+ * import { iam, type IamCaptchaChallenge } from '@h-ai/iam'
+ * const result = await iam.auth.createCaptcha({ operation: 'login' })
+ * if (result.success) { const challenge: IamCaptchaChallenge = result.data; void challenge.id }
+ * ```
+ */
+export interface IamCaptchaChallenge {
+  id: string
+  challenge: Challenge
+}
 
 /**
  * 由可信 HTTP 宿主提供的登录元数据，独立于客户端凭据输入。
@@ -39,6 +62,7 @@ export interface AuthRequestContext {
  * ```
  */
 export interface PasswordCredentials {
+  captcha?: string
   /** 用户名/邮箱/手机号 */
   identifier: string
   /** 密码 */
@@ -54,6 +78,7 @@ export interface PasswordCredentials {
  * ```
  */
 export interface OtpCredentials {
+  captcha?: string
   /** 邮箱/手机号 */
   identifier: string
   /** 验证码 */
@@ -69,6 +94,7 @@ export interface OtpCredentials {
  * ```
  */
 export interface LdapCredentials {
+  captcha?: string
   /** 用户名 */
   username: string
   /** 密码 */
@@ -174,6 +200,8 @@ export interface AuthStrategy {
  * ```
  */
 export interface AuthnOperations {
+  /** 生成短期单用、自托管挑战；启用后各交互入口在服务端校验解答。 */
+  createCaptcha: (input: { operation: CaptchaOperation }) => Promise<HaiResult<IamCaptchaChallenge>>
 
 
   /**
@@ -245,7 +273,7 @@ export interface AuthnOperations {
    * @param identifier - 用户标识（邮箱/手机号）
    * @returns 成功返回验证码过期时间；频率限制返回 OTP_RESEND_TOO_FAST
    */
-  sendOtp: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
+  sendOtp: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<{ expiresAt: Date }>>
 
   /**
    * 注册并登录（一站式）

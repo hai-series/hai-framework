@@ -16,6 +16,8 @@ import { AuthUiConfigSchema, OtpConfigSchema, PasswordConfigSchema, SessionConfi
  * ```
  */
 export interface IamPublicConfig {
+  /** 只公开是否需要交互挑战，不公开秘密或缓存状态。 */
+  captcha: { enabled: boolean }
   /** 页面显示密码策略，不包含密码哈希或账户信息。 */
   password: ReturnType<typeof PasswordConfigSchema.parse>
   /** 自助注册开关；管理端创建账户仍需要独立授权。 */
@@ -57,6 +59,7 @@ export function buildIamPublicConfig(config: IamConfig, runtime: IamConfigInput)
   const email = config.login.otp && !!config.otp && otp.email && !!runtime.onOtpSendEmail
   const sms = config.login.otp && !!config.otp && otp.sms && !!runtime.onOtpSendSms
   return {
+    captcha: { enabled: config.captcha.enabled },
     password: PasswordConfigSchema.parse(config.password ?? {}),
     register: { enabled: config.register.enabled },
     login: { password: config.login.password, otp: email || sms, ldap: config.login.ldap && !!config.ldap, email, sms },

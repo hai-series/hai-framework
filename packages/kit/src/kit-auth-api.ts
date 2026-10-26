@@ -4,6 +4,7 @@ import type { AuthRequestContext, IamFunctions } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import {
   IamConfirmPasswordResetInputSchema,
+  IamCreateCaptchaInputSchema,
   IamLdapLoginInputSchema,
   IamLoginInputSchema,
   IamLogoutInputSchema,
@@ -28,7 +29,16 @@ import { validateFormOrFail } from './kit-validation.js'
  * void publicPaths
  * ```
  */
-export const authApiPublicPaths = ['/api/auth/config', '/api/auth/login', '/api/auth/login/ldap', '/api/auth/login/otp', '/api/auth/register', '/api/auth/otp/send', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm']
+export const authApiPublicPaths = ['/api/auth/session/close', '/api/auth/logout', '/api/auth/captcha', '/api/auth/config', '/api/auth/login', '/api/auth/login/ldap', '/api/auth/login/otp', '/api/auth/register', '/api/auth/otp/send', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm', '/api/auth/password/renew']
+
+function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'>): AuthRequestContext {
+  let ip: string | undefined
+  try {
+    ip = event.getClientAddress()
+  }
+  catch { /* 未配置可信连接地址时保持未知，启用 IP 限制将拒绝登录。 */ }
+  return { ip, userAgent: event.request.headers.get('user-agent') ?? undefined }
+}
 
 /**
  * 应用路由直接导出对应 handler；认证 ops 仍由 createHandle 注入。
@@ -50,6 +60,10 @@ export function createAuthApi(iam: IamFunctions) {
       const input = await validateFormOrFail(request, IamLogoutInputSchema)
       // 此入口不能清除 Cookie：页面离开响应可能晚于下一文档的新登录。
       return response(await iam.auth.logout(input.accessToken ?? getAccessToken(request, cookies) ?? ''))
+    }),
+    createCaptcha: handler(async ({ request }) => {
+      const input = await validateFormOrFail(request, IamCreateCaptchaInputSchema)
+      return response(await iam.auth.createCaptcha(input))
     }),
     publicConfig: handler(() => ok(iam.publicConfig)),
     renewPassword: handler(async ({ request }) => {

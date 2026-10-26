@@ -19,8 +19,10 @@ import {
   IamAdminResetPasswordInputSchema,
   IamAdminUpdateUserInputSchema,
   IamAuthResultSchema,
+  IamCaptchaChallengeSchema,
   IamChangePasswordInputSchema,
   IamConfirmPasswordResetInputSchema,
+  IamCreateCaptchaInputSchema,
   IamCreatePermissionInputSchema,
   IamCreateRoleInputSchema,
   IamCurrentUserSchema,
@@ -64,6 +66,9 @@ const roleOutputSchema = haiResultSchema(IamRoleSchema)
  */
 export const iamContract = {
   auth: {
+    createCaptcha: route({ method: 'POST', path: '/auth/captcha', operationId: 'iam.auth.createCaptcha', summary: 'Create self-hosted security challenge', tags: ['iam', 'auth'] })
+      .input(IamCreateCaptchaInputSchema)
+      .output(haiResultSchema(IamCaptchaChallengeSchema)),
     publicConfig: route({ method: 'GET', path: '/auth/config', operationId: 'iam.auth.publicConfig', summary: 'Public authentication configuration', tags: ['iam', 'auth'] })
       .output(haiResultSchema(IamPublicConfigSchema.nullable())),
     renewPassword: route({ method: 'POST', path: '/auth/password/renew', operationId: 'iam.auth.renewPassword', summary: 'Change initial or expired password', tags: ['iam', 'auth'] })

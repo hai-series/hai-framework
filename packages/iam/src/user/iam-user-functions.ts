@@ -26,6 +26,7 @@ import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
+import { verifyIamCaptcha } from '../authn/iam-authn-captcha.js'
 import { isAccountLocked, recordLoginFailure, resetLoginFailures } from '../authn/iam-authn-utils.js'
 import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
@@ -395,8 +396,11 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   }
 
   return {
-    createUser: options => createUser(options, true),
-    register(options) {
+    createUser: options => createUser(options, true, true),
+    async register(options) {
+      const captcha = await verifyIamCaptcha(ctx.config.captcha, 'register', options.captcha)
+      if (!captcha.success)
+        return captcha
       if (!registerConfig.enabled)
         return Promise.resolve(err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
       return createUser(options, registerConfig.defaultEnabled)
@@ -946,7 +950,10 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
   const { hashPassword } = ctx
 
   return {
-    async requestPasswordReset(identifier: string): Promise<HaiResult<void>> {
+    async requestPasswordReset(identifier: string, options?: { captcha?: string }): Promise<HaiResult<void>> {
+      const captcha = await verifyIamCaptcha(ctx.config.captcha, 'passwordReset', options?.captcha)
+      if (!captcha.success)
+        return captcha
       logger.debug('Password reset requested', { identifier })
 
       const resetConfig = ctx.resetConfig
@@ -1056,6 +1063,7 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       return created
     },
     async renewPassword(input) {
+      const captcha = await verifyIamCaptcha(deps.config.captcha, 'renewPassword', input.captcha)
       if (!captcha.success)
         return captcha
       const found = await deps.userRepository.findByIdentifier(input.identifier)
