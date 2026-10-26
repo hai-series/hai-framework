@@ -77,7 +77,22 @@ describe('core.module.createRuntime', () => {
     ])
     const result = await runtime.start()
     expect(result).toMatchObject({ success: false, error: { ext: { module: 'storage', fields: ['credentials.key'] } } })
+    if (!result.success)
+      expect(result.error.message).toContain('credentials.key')
     expect(JSON.stringify(result)).not.toContain('PRIVATE_SENTINEL')
     expect(unused).not.toHaveBeenCalled()
+  })
+
+  it('管理员配置失败的简短错误也包含字段名和领域错误码', async () => {
+    const runtime = core.module.createRuntime([{ name: 'bootstrap', start: () => {
+      throw Object.assign(new Error('PRIVATE_PASSWORD_SENTINEL'), { code: 'hai:iam:020', ext: { fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } })
+    }, close: () => {} }])
+    const result = await runtime.start()
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.message).toContain('HAI_ADMIN_DEFAULT_PASSWORD')
+      expect(result.error.message).toContain('hai:iam:020')
+      expect(result.error.message).not.toContain('PRIVATE_PASSWORD_SENTINEL')
+    }
   })
 })

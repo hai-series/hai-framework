@@ -345,12 +345,12 @@ describe('admin 应用类型生成', () => {
   })
 
   describe('i18n 支持', () => {
-    it('应包含 paraglide devDependencies 且不引入未使用的 pino-pretty', async () => {
+    it('应包含 paraglide 工具和运行时 pretty 日志依赖', async () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
       expect(pkg.devDependencies['@inlang/paraglide-js']).toBeDefined()
       expect(pkg.devDependencies['@inlang/plugin-message-format']).toBeDefined()
-      expect(pkg.devDependencies['pino-pretty']).toBeUndefined()
+      expect(pkg.dependencies['pino-pretty']).toBeDefined()
     })
 
     it('应生成 project.inlang/settings.json', async () => {

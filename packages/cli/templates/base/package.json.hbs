@@ -56,6 +56,7 @@
     "cap:build:ios": "pnpm compile && cap sync ios && cap build ios"{{/if}}
   },
   "dependencies": {
+    "pino-pretty": "{{versions.pinoPretty}}",
   {{#if isSvelteOnlyApp}}
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
     "@h-ai/capacitor": "{{haiPackageSpecifier}}",

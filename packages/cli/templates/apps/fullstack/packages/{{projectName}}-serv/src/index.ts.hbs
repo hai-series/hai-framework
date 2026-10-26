@@ -14,11 +14,18 @@ async function startServer(): Promise<void> {
     // HOST/PORT 环境变量优先于 config/_serv.yml。
     const { server } = ServConfigSchema.parse(core.config.getOrThrow<ServConfigInput>('serv'))
     const app = createServerApp()
-    serv.listen(app, {
-      host: server.host,
-      port: server.port,
-      onListening: info => core.logger.info('Application listening', { name: core.config.getOrThrow<CoreConfig>('core').name, host: server.host, port: info.port }),
-      onClose: closeModules,
+    await new Promise<void>((resolve, reject) => {
+      const listener = serv.listen(app, {
+        host: server.host,
+        port: server.port,
+        onListening: (info) => {
+          core.logger.info('Application listening', { name: core.config.getOrThrow<CoreConfig>('core').name, host: server.host, port: info.port })
+          resolve()
+        },
+        onClose: closeModules,
+      })
+      listener.server.once('error', reject)
+      listener.server.once('listening', () => listener.server.off('error', reject))
     })
   }
   catch (error) {
@@ -28,6 +35,6 @@ async function startServer(): Promise<void> {
 }
 
 void startServer().catch((error: unknown) => {
-  core.logger.fatal('Application startup failed', { error: error instanceof Error ? error.message : 'Unknown startup failure' })
+  core.logger.fatal('Application startup failed', { error })
   process.exitCode = 1
 })

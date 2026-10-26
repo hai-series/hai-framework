@@ -19,7 +19,7 @@
 
 ### 快速开始
 
-默认启用 transport，启动前必须通过服务端私有环境或 `apps/api-service/.env.local` 提供 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。密钥环由 Secret Manager/受管配置提供，运行时不随机生成；客户端公钥 registry 复用 reldb。多节点使用相同 ring 和共享数据库，无需会话粘性；私钥不放普通 YAML、PUBLIC_/VITE_ 或日志。解析、轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。CLI 新建项目会单独生成一次本机开发 ring，本仓库示例应自行注入私有值。
+默认启用 transport，启动前必须通过服务端私有环境或 `apps/api-service/.env.local` 提供 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`。密钥环由 Secret Manager/受管配置提供，运行时不随机生成；客户端公钥 registry 复用 reldb。多节点使用相同 ring 和共享数据库，无需会话粘性；私钥不放普通 YAML、PUBLIC_/VITE_ 或日志。解析、轮换与撤销步骤见 [Crypto 传输说明](../../packages/crypto/README.md)。CLI 新建项目会为 `.env.dev/.env.test/.env.prod` 分别生成并共享对应 ring，本仓库示例仍应自行注入私有值。
 
 ```bash
 pnpm install

@@ -46,7 +46,10 @@ function failure(module: string, phase: 'start' | 'close', detail?: unknown): { 
     }
   }
   const code = detail && typeof detail === 'object' && 'code' in detail && (typeof detail.code === 'number' || typeof detail.code === 'string') ? detail.code : undefined
-  return { success: false, error: { ...HaiCommonError.INIT_FAILED, message: i18n.coreM(phase === 'start' ? 'core_runtimeStartFailed' : 'core_runtimeCloseFailed', { params: { module } }), ext: { module, phase, ...(code !== undefined ? { code } : {}), ...(fields.length ? { fields } : {}) } } }
+  const message = i18n.coreM(phase === 'start' ? 'core_runtimeStartFailed' : 'core_runtimeCloseFailed', { params: { module } })
+  // 启动边界即使只打印 message，也保留可操作的错误码和字段名，不回显底层异常中的配置值。
+  const diagnostics = [code, ...new Set(fields)].filter(value => value !== undefined).join(', ')
+  return { success: false, error: { ...HaiCommonError.INIT_FAILED, message: diagnostics ? `${message} (${diagnostics})` : message, ext: { module, phase, ...(code !== undefined ? { code } : {}), ...(fields.length ? { fields } : {}) } } }
 }
 
 /**

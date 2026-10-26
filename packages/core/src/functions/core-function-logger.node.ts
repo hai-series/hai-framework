@@ -234,6 +234,10 @@ function createPinoOutput(options: LoggerOptions): { instance: pino.Logger, clos
         },
       })
       pinoInstance = pino(pinoOptions, transport)
+      // 日志 worker 不拥有应用生命周期；启动失败时仍由 pino 的退出钩子同步排空日志。
+      // pino 的 ThreadStream 声明未包含运行时 unref，使用能力检查兼容该声明。
+      if ('unref' in transport && typeof transport.unref === 'function')
+        transport.unref()
     }
     catch (error) {
       // 其他初始化异常应重新抛出，便于排查

@@ -512,26 +512,24 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const sharedVariables = envExample.split('\n').filter(line => /^[A-Z][A-Z0-9_]*=/.test(line))
       await writeFile(path.join(envDirectory, '.env'), `# 公共基础配置（可提交）；完整字段说明见 .env.example。\n${sharedVariables.join('\n')}\n`)
       for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
-        const values = mode === 'prod'
+        let values = mode === 'prod'
           ? generateProductionEnvironment(envFeatures, configs)
           : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
+        if (isFullstack) {
+          // 创建时为各环境分别生成随机初始密码，克隆项目后复用同一环境配置。
+          values += `\nHAI_ADMIN_DEFAULT_PASSWORD=Aa1!${randomBytes(24).toString('base64url')}\n`
+        }
+        if (isFullstack || (isApiWorkspace && resolvedOptions.features.includes('crypto'))) {
+          // 每个环境独立生成版本化密钥环；运行时不隐式生成或轮换。
+          const key = createECDH('SM2')
+          key.generateKeys()
+          const id = `${mode}-${randomBytes(6).toString('hex')}`
+          const ring = { activeKeyId: id, keys: { [id]: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } }
+          values += `\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'\n`
+        }
         await writeFile(path.join(envDirectory, `.env.${mode}`), values)
       }
-      const privateEntries: string[] = []
-      if (isFullstack) {
-        // 每个项目使用独立随机密码，保证四类字符；真实凭据只写入被忽略的本地文件。
-        const password = `Aa1!${randomBytes(24).toString('base64url')}`
-        privateEntries.push(`HAI_ADMIN_DEFAULT_PASSWORD=${password}`)
-      }
-      if (isFullstack || (isApiWorkspace && resolvedOptions.features.includes('crypto'))) {
-        // 仅在项目创建时生成一次本机开发 Secret；运行时禁止隐式生成，部署时由 Secret Manager 分发。
-        const key = createECDH('SM2')
-        key.generateKeys()
-        const id = `bootstrap-${randomBytes(6).toString('hex')}`
-        const ring = { activeKeyId: id, keys: { [id]: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } }
-        privateEntries.push(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'`)
-      }
-      await fse.writeFile(path.join(envDirectory, '.env.local'), `# 本机私有配置，不提交 Git；部署凭据由目标环境单独提供。\n${privateEntries.join('\n')}\n`, { mode: 0o600 })
+      await fse.writeFile(path.join(envDirectory, '.env.local'), '# 本机私有覆盖，不提交 Git；初始管理员密码和传输密钥环见 .env.dev / .env.test / .env.prod。\n', { mode: 0o600 })
     }
 
     // 生成 Skill 文件
@@ -1490,11 +1488,11 @@ Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/l
 
 ${hasFeedback ? '登录用户可从顶部“问题反馈”提交说明、截图与日志；只有管理员显示反馈管理菜单并能查看、处理、撤销和导出问题包。服务端继续按可信身份与应用范围授权。开发通知使用 Console，生产须在 _feedback.yml 与 _reach.yml 配置管理员和真实邮件。' : ''}
 
-CLI 已在根目录生成 \`.env.local\`，其中 \`HAI_ADMIN_DEFAULT_PASSWORD\` 是每个项目独立生成的随机强密码。直接运行 \`dev\` / \`start\` 即可，首次登录使用用户名 \`admin\` 和该密码；也可通过同名环境变量覆盖。密码须满足 \`_iam.yml\` 策略，启动失败会显示具体校验原因及错误码。\`.env.local\` 已被 Git 和容器构建忽略，\`.env.example\` 不含真实密码；部署时设置目标环境自己的密码。已有用户时不会重复创建管理员或重设密码。
+CLI 在根目录的 \`.env.dev\`、\`.env.test\`、\`.env.prod\` 中分别生成不同的随机强密码 \`HAI_ADMIN_DEFAULT_PASSWORD\`，这些文件随项目提交，克隆后可共享对应环境配置。首次登录使用用户名 \`admin\` 和当前环境的密码；同名进程环境或被忽略的 \`.env.local\` 可覆盖。密码须满足 \`_iam.yml\` 策略；启动失败显示模块、配置字段和错误码，端口占用显示 EADDRINUSE、地址和端口。已有用户时不会重复创建管理员或重设密码。
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
-服务端版本化传输密钥环在创建时一次性写入被忽略的 \`.env.local\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`；运行时不生成密钥。部署由 Secret Manager 向所有节点分发同一受管 ring，配合共享 registry。私钥不进入公开配置、PUBLIC_/VITE_ 或日志。
+服务端版本化传输密钥环在创建时分别写入 \`.env.dev\`、\`.env.test\`、\`.env.prod\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，各环境密钥不同；运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry，也可通过进程环境或 Secret Manager 覆盖。私钥不进入 PUBLIC_/VITE_、日志或浏览器。
 
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 

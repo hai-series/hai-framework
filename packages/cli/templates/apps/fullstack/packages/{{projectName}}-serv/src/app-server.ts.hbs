@@ -19,7 +19,7 @@ const STARTED_AT = new Date().toISOString()
 export function createServerApp(): ServHttpApp {
   const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
   if (!ring.success)
-    throw new Error(ring.error.message)
+    throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
   const coreConfig = core.config.getOrThrow<CoreConfig>('core')
   const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
   const security = serv.createRuntimeSecurityPolicy({

@@ -32,7 +32,7 @@
   "cli_deploy_url": "  地址：{url}",
   "cli_deploy_id": "  标识：{id}",
   "cli_deploy_command_failed": "部署命令失败",
-  "cli_adminPasswordSaved": "  管理员：admin；随机初始密码已保存到 .env.local 的 HAI_ADMIN_DEFAULT_PASSWORD",
+  "cli_adminPasswordSaved": "  管理员：admin；各环境的随机初始密码位于 .env.dev / .env.test / .env.prod 的 HAI_ADMIN_DEFAULT_PASSWORD",
   "cli_deploy_environment": "请输入部署环境（test / prod 等）",
   "cli_deploy_cancelled": "部署已取消。",
   "cli_deploy_environment_hint": "请指定 --env <环境>；非交互调用还需 --yes，或在交互终端逐项选择中间件。",

@@ -246,7 +246,7 @@ const serverKeyRing = ring.data
 const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 ```
 
-鍵交換は `{ serverKeyId, serverPublicKey, clientId }` を返し、暗号化リクエストは `serverKeyId` を送ります。サーバーは指定した秘密鍵だけを選び、不明・失効 ID は他の鍵を試さず拒否します。応答はクライアント公開鍵で暗号化します。更新時は全ノードに新旧の鍵を先に配布し、続いて `activeKeyId` を切り替えて manager を順次再構築します。移行期間後に古い ID を全ノードから削除します。旧クライアントは `destroy()` 後に再交渉し、非冪等処理を自動再送しません。同じ鍵環を Secret Manager またはサーバー専用の非公開環境から配布し、通常の YAML、PUBLIC_/VITE_、ログ、公開応答には含めないでください。CLI はプロジェクト作成時だけ独立した開発用鍵環を Git 対象外の `.env.local` に作成します。実行時には生成せず、本番には対象環境で管理する鍵を配布します。
+鍵交換は `{ serverKeyId, serverPublicKey, clientId }` を返し、暗号化リクエストは `serverKeyId` を送ります。サーバーは指定した秘密鍵だけを選び、不明・失効 ID は他の鍵を試さず拒否します。応答はクライアント公開鍵で暗号化します。更新時は全ノードに新旧の鍵を先に配布し、続いて `activeKeyId` を切り替えて manager を順次再構築します。移行期間後に古い ID を全ノードから削除します。旧クライアントは `destroy()` 後に再交渉し、非冪等処理を自動再送しません。同じ鍵環を Secret Manager またはサーバー専用の非公開環境から配布し、通常の YAML、PUBLIC_/VITE_、ログ、公開応答には含めないでください。CLI は `.env.dev/.env.test/.env.prod` ごとに独立した鍵環を作成し、Git に保存します。クローン後も環境ごとに共有でき、非公開環境や Secret Manager で上書きできます。実行時には生成しません。
 
 認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 

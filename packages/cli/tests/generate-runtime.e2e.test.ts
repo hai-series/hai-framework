@@ -4,7 +4,7 @@ import type { Buffer } from 'node:buffer'
 import type { ChildProcess } from 'node:child_process'
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { appendFile, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
@@ -205,8 +205,53 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await tool('typescript', ['--noEmit'], service)
       await tool('tsup', [], service)
       const environmentRoot = appType === 'api' ? service : project
-      base = await start(service, [`--env-file=${path.join(environmentRoot, '.env')}`, `--env-file=${path.join(environmentRoot, '.env.dev')}`, 'dist/index.js'], selectedPort)
+      // 模拟克隆工程没有本机覆盖文件；正常运行仍使用本轮隔离后端。
+      await rm(path.join(environmentRoot, '.env.local'), { force: true })
+      const entryArgs = [`--env-file=${path.join(environmentRoot, '.env')}`, `--env-file=${path.join(environmentRoot, '.env.dev')}`, 'dist/index.js']
+      const expectFailure = async (override: NodeJS.ProcessEnv, expected: string[]) => {
+        let output = ''
+        serverOutputs.push(() => `${appType} failure ${expected.join(', ')}\n${output}`)
+        const child = spawn(process.execPath, entryArgs, { cwd: service, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...runtimeEnvironment(service), PORT: String(selectedPort), HOST: '127.0.0.1', HAI_SERV_SERVER_PORT: String(selectedPort), ...override } })
+        processes.push(child)
+        child.stdout?.on('data', (chunk: Buffer) => output = (output + chunk.toString()).slice(-16_000))
+        child.stderr?.on('data', (chunk: Buffer) => output = (output + chunk.toString()).slice(-16_000))
+        const code = await new Promise<number | null>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            child.kill()
+            reject(new Error(`Startup failure did not release its resources (${expected.join(', ')}): ${output}`))
+          }, 15_000)
+          child.once('error', (error) => {
+            clearTimeout(timer)
+            reject(error)
+          })
+          child.once('close', (code) => {
+            clearTimeout(timer)
+            resolve(code)
+          })
+        })
+        expect(code, output).toBe(1)
+        for (const text of expected)
+          expect(output).toContain(text)
+        await appendFile(path.join(evidence, 'startup-diagnostics.log'), `${appType}: ${expected.join(', ')}\n${output}\n`)
+      }
+      const expectMissing = async (name: string, expected: string[]) => {
+        const profilePath = path.join(environmentRoot, '.env.dev')
+        const profile = await readFile(profilePath, 'utf8')
+        try {
+          // Windows 可能省略空环境值；真正移除环境文件中的值才能模拟配置缺失。
+          await writeFile(profilePath, profile.split('\n').filter(line => !line.startsWith(`${name}=`)).join('\n'))
+          await expectFailure({ [name]: undefined }, [name, ...expected])
+        }
+        finally {
+          await writeFile(profilePath, profile)
+        }
+      }
+      if (appType === 'fullstack')
+        await expectMissing('HAI_ADMIN_DEFAULT_PASSWORD', ['bootstrap'])
+      base = await start(service, entryArgs, selectedPort)
+      await expectFailure({}, ['EADDRINUSE', String(selectedPort)])
       if (appType === 'fullstack') {
+        await expectMissing('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', ['hai:crypto:'])
         expect((await crypto.init()).success).toBe(true)
         const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange` })
         clients.push(client)

@@ -13,11 +13,18 @@ async function main(): Promise<void> {
 
   // host/port 来自 config/_serv.yml 的 server（HOST/PORT 环境变量高于配置文件）。
   const { server } = core.config.getOrThrow<ServConfig>('serv')
-  serv.listen({{api.serviceAppFactoryName}}(), {
-    host: server.host,
-    port: server.port,
-    onListening: info => logger.info('API service listening', { address: info.address, port: info.port }),
-    onClose: closeApp,
+  await new Promise<void>((resolve, reject) => {
+    const listener = serv.listen({{api.serviceAppFactoryName}}(), {
+      host: server.host,
+      port: server.port,
+      onListening: (info) => {
+        logger.info('API service listening', { address: info.address, port: info.port })
+        resolve()
+      },
+      onClose: closeApp,
+    })
+    listener.server.once('error', reject)
+    listener.server.once('listening', () => listener.server.off('error', reject))
   })
 }
 

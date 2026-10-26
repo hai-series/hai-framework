@@ -74,7 +74,7 @@ env: development
 
 logging:
   level: info
-  format: json
+  format: pretty
   # context:
   #   service: api
   redact:
@@ -583,7 +583,7 @@ export function generateProductionEnvironment(features: FeatureId[], configs?: M
   }
   const sections = [
     '# 生产环境必须使用共享后端；以下服务名对应 Compose 内部 DNS。',
-    '# 凭据通过部署 Secret / 进程环境或被忽略的 .env.local 注入，禁止提交真实值。',
+    '# 其他服务凭据通过部署 Secret / 进程环境或被忽略的 .env.local 注入。',
     'HAI_CORE_ENV=production',
     'HAI_CORE_LOGGING_LEVEL=info',
   ]

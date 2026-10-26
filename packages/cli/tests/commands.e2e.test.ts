@@ -214,7 +214,7 @@ describe('createProject — api 类型', () => {
     const directory = path.join(tmpRoot, name)
     await createProject({ name, appType: 'api', template: 'custom', features: ['crypto'], moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
     const prefix = `apps/${name}-service`
-    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
     if (!ring.success)
       throw new Error(ring.error.message)
@@ -882,8 +882,8 @@ describe('createProject — fullstack 类型', () => {
     })
   })
 
-  it('随机管理员密码只写入被忽略的 .env.local，公共环境文件不含密码', async () => {
-    const env = await readText(projectPath, '.env.local')
+  it('各环境生成独立随机密码和密钥环，克隆共享且保留本机覆盖', async () => {
+    const env = await readText(projectPath, '.env.dev')
     const password = env.match(/^HAI_ADMIN_DEFAULT_PASSWORD=(.+)$/m)?.[1]?.trim()
     expect(password).toBeDefined()
     expect(password!.length).toBeGreaterThanOrEqual(24)
@@ -908,6 +908,22 @@ describe('createProject — fullstack 类型', () => {
     finally {
       await crypto.close()
     }
+    const passwords = new Set<string>()
+    const privateKeys = new Set<string>()
+    for (const mode of ['dev', 'test', 'prod']) {
+      const values = parseEnv(await readText(projectPath, `.env.${mode}`))
+      const parsed = parseTransportServerKeyRing(values.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+      expect(parsed.success).toBe(true)
+      if (!parsed.success)
+        throw new Error(parsed.error.message)
+      expect(values.HAI_ADMIN_DEFAULT_PASSWORD).toMatch(/^Aa1!.{24,}$/)
+      passwords.add(values.HAI_ADMIN_DEFAULT_PASSWORD!)
+      privateKeys.add(parsed.data.keys[parsed.data.activeKeyId]!.privateKey)
+    }
+    expect(passwords.size).toBe(3)
+    expect(privateKeys.size).toBe(3)
+    expect(await readText(projectPath, '.env.local')).not.toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
+    expect(await readText(projectPath, '.env.local')).not.toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING=')
     const gitignoreLines = (await readText(projectPath, '.gitignore')).split('\n').map(line => line.trim())
     expect(gitignoreLines).toContain('.env.local')
     expect(gitignoreLines).toContain('.env.*.local')
@@ -920,8 +936,8 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerignoreLines).not.toContain('.env')
     expect(dockerignoreLines).not.toContain('.env.*')
     await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], yes: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
-    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(password)
-    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.local')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
+    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.dev')).not.toContain(password)
+    expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.dev')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   }, 30_000)
 
   it('应生成 pnpm workspace 多包工程', async () => {

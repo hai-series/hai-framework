@@ -35,7 +35,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{/unless}}
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
-      throw new Error(ring.error.message)
+      throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
     transport = {
       crypto,
       serverKeyRing: ring.data,

@@ -602,7 +602,7 @@ unsubscribe()
 
 ## 应用生命周期编排
 
-`core.module.createRuntime([{ name, enabled?, start, close }])` 按声明启动、反序关闭，合并并发调用。启动前登记部分资源的清理义务；失败回滚。关闭失败停在该模块并保留依赖，下次 close/start 重试，避免先关闭仍被使用的数据库。错误仅保留模块、阶段、错误码和配置字段路径；不转发配置值或 SDK 原始异常。base/API/fullstack 和管理台均使用此入口。
+`core.module.createRuntime([{ name, enabled?, start, close }])` 按声明启动、反序关闭，合并并发调用。启动前登记部分资源的清理义务；失败回滚。关闭失败停在该模块并保留依赖，下次 close/start 重试，避免先关闭仍被使用的数据库。错误仅保留模块、阶段、错误码和配置字段路径；不转发配置值或 SDK 原始异常。base/API/fullstack 和管理台均使用此入口。 简短错误消息也包含错误码与字段路径，便于定位缺失的环境变量。
 
 ## 错误提示与关联日志
 

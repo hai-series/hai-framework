@@ -602,7 +602,7 @@ unsubscribe()
 
 ## Application lifecycle
 
-`core.module.createRuntime([{ name, enabled?, start, close }])` starts in declaration order, closes in reverse order and merges concurrent calls. It registers cleanup before partial initialization. Failed close retains that module and dependencies for the next close/start retry. Errors expose module, phase, code and configuration paths, never raw configuration or SDK exceptions. Base/API/fullstack and the admin use this helper.
+`core.module.createRuntime([{ name, enabled?, start, close }])` starts in declaration order, closes in reverse order and merges concurrent calls. It registers cleanup before partial initialization. Failed close retains that module and dependencies for the next close/start retry. Errors expose module, phase, code and configuration paths, never raw configuration or SDK exceptions. Base/API/fullstack and the admin use this helper. The short error message also includes the error code and field paths to identify missing environment variables.
 
 ## Error messages and correlated logs
 

@@ -100,6 +100,7 @@ const VERSIONS = {
   vite: '8.3.4',
   vitest: '4.1.11',
   tsup: '8.5.1',
+  pinoPretty: '^13.2.0',
   rimraf: '6.1.3',
   // ESLint
   eslint: '10.12.0',
@@ -225,6 +226,7 @@ const FULLSTACK_EXTERNAL_CATALOG_PACKAGES: CatalogPackageVersions = {
   'eslint': VERSIONS.eslint,
   'eslint-plugin-format': VERSIONS.eslintPluginFormat,
   'eslint-plugin-svelte': VERSIONS.eslintPluginSvelte,
+  'pino-pretty': VERSIONS.pinoPretty,
   'rimraf': VERSIONS.rimraf,
   'svelte': VERSIONS.svelte,
   'svelte-check': VERSIONS.svelteCheck,
@@ -267,6 +269,7 @@ const FULLSTACK_CONTRACT_CATALOG_PACKAGE_NAMES = [
 ] as const
 
 const FULLSTACK_SERV_CATALOG_PACKAGE_NAMES = [
+  'pino-pretty',
   '@h-ai/audit',
   '@h-ai/cache',
   '@h-ai/core',
@@ -343,6 +346,7 @@ const FULLSTACK_DESKTOP_CATALOG_PACKAGE_NAMES = [
 ] as const
 
 const API_WORKSPACE_EXTERNAL_CATALOG_PACKAGE_NAMES = [
+  'pino-pretty',
   '@antfu/eslint-config',
   '@playwright/test',
   '@types/node',
