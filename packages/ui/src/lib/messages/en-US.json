@@ -476,5 +476,7 @@
   "feedback_record_empty": "No video was recorded. Please retry.",
   "feedback_local_saved": "Your feedback download has started.",
   "feedback_notification_disabled": "Notifications disabled",
-  "feedback_capacity_hint": "Attachments {used}/{total} MiB · {single} MiB each · up to {count}"
+  "feedback_capacity_hint": "Attachments {used}/{total} MiB · {single} MiB each · up to {count}",
+  "json_viewer_copy": "Copy",
+  "json_viewer_copied": "Copied"
 }

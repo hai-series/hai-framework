@@ -476,5 +476,7 @@
   "feedback_record_empty": "映像がありません。再試行してください。",
   "feedback_local_saved": "フィードバックのダウンロードを開始しました。",
   "feedback_notification_disabled": "通知は無効です",
-  "feedback_capacity_hint": "添付 {used}/{total} MiB · 各 {single} MiB まで · 最大 {count} 件"
+  "feedback_capacity_hint": "添付 {used}/{total} MiB · 各 {single} MiB まで · 最大 {count} 件",
+  "json_viewer_copy": "コピー",
+  "json_viewer_copied": "コピーしました"
 }

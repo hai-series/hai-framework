@@ -241,6 +241,7 @@ components/
 | 组件        | 描述     | 主要属性                                 |
 | ----------- | -------- | ---------------------------------------- |
 | `Card`      | 卡片容器 | `title`, `bordered`, `shadow`, `padding` |
+| `JsonViewer` | JSON 树查看器 | `value`, `defaultExpandedDepth`, `maxScalarLength`, `showCopy`, `onCopy`；循环引用自动替换为占位符 |
 | `DataTable` | 数据表格 | `data`, `columns`, `keyField`, `loading`, `sortKey`, `sortDir`, `onsort`，`cell` 单元格插槽、`onrowclick`（列 `sortable` 可排序） |
 | `Accordion` | 手风琴   | `items: AccordionItem[]`                 |
 | `Timeline`  | 时间线   | `items: TimelineItem[]`                  |

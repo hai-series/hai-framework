@@ -241,6 +241,7 @@ components/
 | コンポーネント | 説明             | 主なプロパティ                                                                                                                        |
 | -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `Card`         | カードコンテナー | `title`, `bordered`, `shadow`, `padding`                                                                                              |
+| `JsonViewer`   | JSON ツリービューアー | `value`, `defaultExpandedDepth`, `maxScalarLength`, `showCopy`, `onCopy`；循環参照はプレースホルダーに置換 |
 | `DataTable`    | データテーブル   | `data`, `columns`, `keyField`, `loading`, `sortKey`, `sortDir`, `onsort`、`cell` スロット、`onrowclick`（列の `sortable` で並び替え） |
 | `Accordion`    | アコーディオン   | `items: AccordionItem[]`                                                                                                              |
 | `Timeline`     | タイムライン     | `items: TimelineItem[]`                                                                                                               |

@@ -1322,6 +1322,34 @@ export interface EmptyProps extends DataAttributes {
 }
 
 /**
+ * JSON 查看器属性
+ *
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { JsonViewer } from '@h-ai/ui'
+ *   import type { JsonViewerProps } from '@h-ai/ui'
+ *   const props: JsonViewerProps = { value: { name: 'wf', nested: { list: [1, 2] } } }
+ * </script>
+ * <JsonViewer {...props} />
+ * ```
+ */
+export interface JsonViewerProps extends DataAttributes {
+  /** 要展示的 JSON 数据；循环引用自动替换为占位符 */
+  value: unknown
+  /** 初始展开深度；0 表示全部折叠，1 展开顶层容器 */
+  defaultExpandedDepth?: number
+  /** 标量文本截断长度；超出部分以省略号结尾 */
+  maxScalarLength?: number
+  /** 是否显示复制按钮 */
+  showCopy?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 复制成功后的回调，参数为复制的格式化 JSON 文本 */
+  onCopy?: (text: string) => void
+}
+
+/**
  * 结果页属性
  *
  * @example

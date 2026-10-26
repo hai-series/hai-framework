@@ -60,6 +60,7 @@ declare global {
   const FormField: typeof import('@h-ai/ui')['FormField']
   const FormLayout: typeof import('@h-ai/ui')['FormLayout']
   const InfiniteScroll: typeof import('@h-ai/ui')['InfiniteScroll']
+  const JsonViewer: typeof import('@h-ai/ui')['JsonViewer']
   const MessageContainer: typeof import('@h-ai/ui')['MessageContainer']
   const MessageBoxContainer: typeof import('@h-ai/ui')['MessageBoxContainer']
   const MessageBoxDialog: typeof import('@h-ai/ui')['MessageBoxDialog']
