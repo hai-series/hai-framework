@@ -52,7 +52,7 @@
 
 ## 质量门禁
 
-先核对 package.json，按 [分轮验证与集中修复](.agents/skills/hai-app-tests/validation.md) 收集适用检查与日志，再归并修复、复测失败及受影响项；普通失败不中断独立检查，真实前置阻塞才暂停依赖项。文档检查引用，UI/路由变更加 E2E，未运行项说明原因。
+AI 先分析差异、调用方和受影响流程，默认只选择相关 test/E2E 与必要门禁，用户明确要求时才全量。核对 package.json，按 [分轮验证与集中修复](.agents/skills/hai-app-tests/validation.md) 收集所选检查与日志，再归并修复、复测失败及受影响项；普通失败不中断独立检查，真实前置阻塞才暂停依赖项。文档检查引用，UI/路由变更加相关 E2E，未运行项说明原因。
 
 ```bash
 pnpm typecheck

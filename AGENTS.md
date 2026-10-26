@@ -41,6 +41,6 @@ hai-framework monorepo：`packages/*` 为框架包，`apps/*` 为应用，`packa
 
 ## 验证与报告
 
-按 [工作规范](.agents/instructions/workspace.md#验证与交付) 分轮验证：先脚本化收集全部可执行门禁，普通失败只记录；汇总根因后集中修复，再验证失败及受影响项。默认顺序为 `pnpm typecheck` → `pnpm lint` → `pnpm build`（构建/模板/发布/跨包契约）→ `pnpm test`，优先用 `--filter <workspace>`；UI/路由/端到端改动加相应 `test:e2e` 或根 `pnpm e2e`。真实前置失败只阻塞依赖检查，不使用旧产物补成通过。
+按 [工作规范](.agents/instructions/workspace.md#验证与交付) 分轮验证：AI 先分析差异、调用方与受影响流程，默认只选变更相关 test/E2E 及必要门禁，用户明确要求时才全量。所选范围按 typecheck → lint → build（构建/模板/发布/跨包契约）→ test → 相关 E2E 调度，优先 workspace/文件/用例过滤；收集后集中修复并定向复测，不因局部修复重跑全仓。真实前置失败只阻塞依赖检查，不使用旧产物补成通过。
 
 AI 文档执行 `pnpm check:skills` 并检查引用；CLI 模板验证 `pnpm --filter @h-ai/cli test:scaffold-gates`。最终报告已执行门禁、未执行原因、已同步文档/skill/依赖方；文档改动需明确有无运行时代码影响。

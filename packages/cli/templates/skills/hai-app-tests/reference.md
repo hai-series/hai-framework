@@ -52,7 +52,7 @@
 
 1. 参照 `hai-app-review` 技能审查代码规范
 2. 重构后执行受影响测试与必要回归，确认已有行为保持通过
-3. 多项门禁按 [分轮验证与集中修复](validation.md) 收集一轮结果，汇总后集中修复；先定向确认失败和直接受影响项均已解决，再执行较完整验收。定向回归未通过时继续小范围修复，不从头重复全量门禁。PowerShell 使用 `pnpm.cmd`
+3. 验证前先分析变更和直接消费者，默认只选相关 test/E2E；全量仅在用户明确要求时执行。多项门禁按 [分轮验证与集中修复](validation.md) 收集一轮结果，汇总后集中修复；先定向确认失败和直接受影响项，再按真实依赖补充受影响流程，不从头重复全量门禁。PowerShell 使用 `pnpm.cmd`
 
 ## 测试目录约定
 
@@ -448,7 +448,7 @@ pnpm --filter <app-name> test:e2e
 # 覆盖率
 pnpm --filter <app-name> test:coverage
 
-# 全量门禁
+# 仅在用户明确要求全量验收时执行
 pnpm typecheck
 pnpm lint
 pnpm build # 构建/配置/跨包变更
