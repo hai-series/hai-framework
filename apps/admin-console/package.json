@@ -49,6 +49,7 @@
     "@h-ai/kit": "workspace:*",
     "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",
+    "@h-ai/scheduler": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",

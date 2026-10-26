@@ -134,6 +134,7 @@
     "@internationalized/date": "catalog:",
     "@rrweb/replay": "catalog:",
     "@shikijs/langs": "catalog:",
+    "altcha": "catalog:",
     "bits-ui": "catalog:",
     "driver.js": "catalog:",
     "html2canvas": "catalog:",

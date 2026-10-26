@@ -71,6 +71,7 @@
   },
   "dependencies": {
     "@h-ai/api-contract": "workspace:*",
+    "@h-ai/audit": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@hono/node-server": "catalog:",
@@ -92,6 +93,7 @@
     "@h-ai/storage": "workspace:*",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
+    "altcha": "catalog:",
     "rimraf": "catalog:",
     "testcontainers": "catalog:",
     "tsup": "catalog:",

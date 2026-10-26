@@ -33,11 +33,31 @@
     "clean": "rimraf dist .turbo",
     "build:clean": "rimraf dist"
   },
+  "peerDependencies": {
+    "@h-ai/reach": "workspace:*",
+    "@h-ai/scheduler": "workspace:*",
+    "@h-ai/storage": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@h-ai/reach": {
+      "optional": true
+    },
+    "@h-ai/scheduler": {
+      "optional": true
+    },
+    "@h-ai/storage": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@h-ai/core": "workspace:*",
-    "@h-ai/reldb": "workspace:*"
+    "@h-ai/reldb": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/reach": "workspace:*",
+    "@h-ai/scheduler": "workspace:*",
+    "@h-ai/storage": "workspace:*",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "testcontainers": "catalog:",

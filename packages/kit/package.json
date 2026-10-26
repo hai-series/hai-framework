@@ -73,6 +73,7 @@
   },
   "dependencies": {
     "@h-ai/api-contract": "workspace:*",
+    "@h-ai/audit": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/iam": "workspace:*",
@@ -81,6 +82,7 @@
   "devDependencies": {
     "@h-ai/cache": "workspace:*",
     "@h-ai/feedback": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "@sveltejs/kit": "catalog:",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
