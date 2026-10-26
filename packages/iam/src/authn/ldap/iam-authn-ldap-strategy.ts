@@ -14,7 +14,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
-import { toUser } from '../../user/iam-user-utils.js'
+import { isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
@@ -127,6 +127,8 @@ export interface LdapStrategyConfig {
   /** 是否同步用户到本地数据库 */
   syncUser?: boolean
   /** 最大登录失败次数（默认 5） */
+  lockoutEnabled?: boolean
+  failureWindow?: number
   maxLoginAttempts?: number
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
@@ -167,6 +169,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
     maxLoginAttempts = 5,
     lockoutDuration = 900,
   } = config
+  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
 
   /**
    * 获取 LDAP 搜索结果中的属性值
@@ -263,14 +266,14 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         let storedUser = localUserResult.data as StoredUser | null
 
         if (storedUser) {
-          if (!storedUser.enabled) {
+          if (!isUserActive(storedUser)) {
             return err(
               HaiIamError.USER_DISABLED,
               iamM('iam_accountDisabled'),
             )
           }
 
-          if (isAccountLocked(storedUser)) {
+          if (isAccountLocked(storedUser, failurePolicy)) {
             return err(
               HaiIamError.USER_LOCKED,
               iamM('iam_accountLocked'),
@@ -282,7 +285,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         const userBindResult = await client.bind(entry.dn, password)
         if (!userBindResult.success) {
           if (storedUser) {
-            const failureResult = await recordLoginFailure(userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
+            const failureResult = await recordLoginFailure(userRepository, storedUser, failurePolicy)
             if (!failureResult.success)
               return failureResult
           }
@@ -356,7 +359,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!storedUser)
           return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
 
-        const resetResult = await resetLoginFailures(userRepository, storedUser)
+        const resetResult = await resetLoginFailures(userRepository, storedUser, failurePolicy)
         if (!resetResult.success)
           return resetResult
         logger.info('LDAP authentication succeeded', { userId: storedUser.id })

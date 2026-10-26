@@ -17,6 +17,7 @@
  */
 
 import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
+import type { AuditContext } from '@h-ai/audit'
 import type { HaiResult } from '@h-ai/core'
 import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
 import type { Router } from '@orpc/server'
@@ -29,6 +30,7 @@ import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
 import { AUDIO_WS_PATH } from '@h-ai/api-contract'
+import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
 import { upgradeWebSocket } from '@hono/node-server'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
@@ -345,8 +347,11 @@ export function createApp<
 >(options: CreateServAppOptions<TContract, TProcedures>): ServHttpApp {
   // Step 1：先把用户输入的 HTTP 配置收敛成完整配置，后续挂载逻辑只处理一种形态。
   const http = resolveServHttpConfig(options.http)
+  const resolveIp = createClientIpResolver(http.trustedProxies)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
+  // 仅保存本次 Request 的可信解析结果，弱引用随请求释放；不充当身份或审计真值。
+  const requestAuditContexts = new WeakMap<Request, AuditContext>()
   app.onError((error, c) => {
     const traceId = core.context.get().traceId ?? core.context.get().requestId ?? resolveRequestId(c.req.header('x-request-id') ?? null)
     core.logger.error('HTTP handler failed', { traceId, error, method: c.req.method })
@@ -357,7 +362,32 @@ export function createApp<
   // 请求的语言沿异步处理链传递，模块错误消息不依赖共享的进程默认语言。
   app.use('*', async (c, next) => {
     const requestId = resolveRequestId(c.req.header('x-request-id') ?? null)
-    await core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), next))
+    await core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => core.i18n.runWithLocale(resolveRequestLocale(c.req.raw.headers), () => audit.withContext({
+      actor: null,
+      requestId,
+      traceId: requestId,
+      scopeId: undefined,
+      ipAddress: resolveIp(c.req.raw, readRemoteAddress(c.env)),
+      userAgent: c.req.header('user-agent')?.slice(0, 4096),
+    }, async () => {
+      await next()
+      // 契约校验、协议或中间件拒绝不会进入 procedure；按 HTTP 状态补齐这些事件。
+      if (c.res.status >= 400) {
+        const trusted = requestAuditContexts.get(c.req.raw)
+        const recorded = await audit.capture({
+          action: 'http.reject',
+          resource: c.req.routePath || 'unmatched',
+          category: 'system',
+          actorSnapshot: trusted?.actor ?? null,
+          userId: trusted?.actor?.id ?? null,
+          scopeId: trusted?.scopeId,
+          outcome: [401, 403, 423, 429].includes(c.res.status) ? 'denied' : 'failure',
+          details: { method: c.req.method, status: c.res.status },
+        })
+        if (!recorded.success)
+          core.logger.error('HTTP rejection audit failed', { requestId, error: recorded.error })
+      }
+    })))
     c.header('x-request-id', requestId)
     c.header('x-trace-id', requestId)
   })
@@ -382,8 +412,11 @@ export function createApp<
     ?? (iamRef ? (token: string) => iamRef.auth.verifyToken(token) : undefined)
   const contextFactory: CreateServContext = options.createContext
     ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
-  const resolveIp = createClientIpResolver(http.trustedProxies)
-  const createContext: CreateServContext = input => contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
+  const createContext: CreateServContext = async (input) => {
+    const context = await contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
+    requestAuditContexts.set(input.request, { actor: context.session ? { id: context.session.userId, username: context.session.username, roles: [...context.session.roles] } : null, scopeId: context.scopeId })
+    return context
+  }
 
   // Step 4：准备文档 spec 的懒缓存。只有真正访问 openapi/docs 时才生成，避免启动时做重活。
   // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。

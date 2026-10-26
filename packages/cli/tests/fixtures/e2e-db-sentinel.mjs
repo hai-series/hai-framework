@@ -51,7 +51,7 @@ if (mode === 'serve') {
    * @example
    * ```js
    * current.connections++
-   * save()
+   * await save()
    * ```
    */
   const save = () => {

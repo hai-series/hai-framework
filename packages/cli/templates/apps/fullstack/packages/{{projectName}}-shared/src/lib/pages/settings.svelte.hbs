@@ -4,6 +4,7 @@
   import { Badge, Select } from '@h-ai/ui/components/primitives/index'
   import { ChangePasswordForm, UserProfile } from '@h-ai/ui/components/scenes/iam/index'
   import { getThemeInfo } from '@h-ai/ui/theme'
+  import { roleLabel } from '../security/role-label.js'
   import * as m from '../paraglide/messages.js'
   import { locales } from '../paraglide/runtime.js'
   import { AVAILABLE_THEMES, themeStore } from '../stores/theme-store.svelte.js'
@@ -23,7 +24,7 @@
     <Card class='xl:row-span-2' title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
       <div class='mb-5 flex flex-wrap items-center gap-3 border-b border-base-content/8 pb-4'>
         <p class='min-w-0 break-all text-sm text-base-content/55'>@{store.user.username}</p>
-        <Badge size='sm' variant='ghost'>{store.isAdmin ? m.role_admin() : m.role_user()}</Badge>
+        <Badge size='sm' variant='ghost'>{store.user.roles.filter((code): code is import('{{fullstack.contractPackageName}}').AdminRoleCode => ['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'].includes(code)).map(roleLabel).join(', ')}</Badge>
       </div>
       <UserProfile columns={2} user={store.user} editable alwaysEditable fields={['avatar', 'displayName', 'email']} avatarAccept='image/png,image/jpeg,image/webp' avatarHint={m.avatar_hint()} loading={store.saving} onsubmit={data => store.saveProfile(data)} onavatarchange={file => void store.uploadAvatar(file)} data-testid='profile-form' />
     </Card>

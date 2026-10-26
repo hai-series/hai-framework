@@ -1,3 +1,4 @@
+import type { User } from '@h-ai/iam'
 /**
  * =============================================================================
  * Admin Console - 单个用户管理 API
@@ -5,8 +6,9 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { normalizeUniqueConstraintError, toIamUserResponse } from '$lib/server/iam-admin.js'
+import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { createUpdateUserSchema, IdParamSchema } from '$lib/server/schemas/index.js'
+import { requireGrantableRoles, requireManageableUser } from '$lib/server/security-roles.js'
 import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -35,12 +37,15 @@ export const GET = kit.handler(async ({ params, locals }) => {
  *
  * 需要权限：user:api:update
  */
-export const PUT = kit.handler(async ({ params, request, locals, getClientAddress }) => {
+export const PUT = kit.handler(async ({ params, request, locals, getClientAddress, cookies }) => {
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:update')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.update')
 
   const { id: userId } = kit.validate.params(params, IdParamSchema)
-  const { username, email, password, display_name, roles, status } = await kit.validate.body(request, createUpdateUserSchema())
+  const { username, email, password, display_name, roles, status, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createUpdateUserSchema())
+  await requireManageableUser(locals.session, userId)
+  await requireGrantableRoles(locals.session, roles)
 
   // 检查用户是否存在
   const existingResult = await iam.user.getUser(userId)
@@ -49,7 +54,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   }
 
   // 更新用户信息（含启用/禁用状态）
-  const updateData: Partial<{ username: string, email: string, displayName: string, enabled: boolean }> = {}
+  const updateData: Partial<User> = {}
   if (username)
     updateData.username = username
   if (email)
@@ -58,11 +63,17 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     updateData.displayName = display_name
   if (status !== undefined)
     updateData.enabled = status === 'active'
+  if (accountType !== undefined)
+    updateData.accountType = accountType
+  if (accountStatus !== undefined)
+    updateData.accountStatus = accountStatus
+  if (accountExpiresAt !== undefined)
+    updateData.accountExpiresAt = accountExpiresAt
 
   if (Object.keys(updateData).length > 0) {
     const updateResult = await iam.user.updateUser(userId, updateData)
     if (!updateResult.success) {
-      return kit.response.badRequest(normalizeUniqueConstraintError(updateResult.error.message, m.api_iam_users_update_failed({}, { locale })))
+      return kit.response.fromError(updateResult.error)
     }
   }
 
@@ -70,7 +81,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   if (password) {
     const resetResult = await iam.user.adminResetPassword(userId, password)
     if (!resetResult.success) {
-      return kit.response.badRequest(resetResult.error.message)
+      return kit.response.fromError(resetResult.error)
     }
   }
 
@@ -78,7 +89,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   if (roles !== undefined) {
     const syncResult = await iam.authz.syncRoles(userId, roles)
     if (!syncResult.success) {
-      return kit.response.badRequest(syncResult.error.message)
+      return kit.response.fromError(syncResult.error)
     }
   }
 
@@ -109,13 +120,15 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
  *
  * 需要权限：user:api:delete
  */
-export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
+export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress, cookies }) => {
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'user:api:delete')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.delete')
 
   const { id: userId } = kit.validate.params(params, IdParamSchema)
 
   // 检查用户是否存在
+  await requireManageableUser(locals.session, userId)
   const existingResult = await iam.user.getUser(userId)
   if (!existingResult.success || !existingResult.data) {
     return kit.response.notFound(m.api_iam_users_not_found({}, { locale }))

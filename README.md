@@ -254,10 +254,10 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 多数项目可按下列顺序初始化模块，既符合依赖关系，也便于 AI 助手推断：
 
-`core → reldb / cache / storage / vecdb → iam / audit / scheduler / reach → ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
+`core → reldb / cache / storage / vecdb → crypto / reach → audit → iam → scheduler / ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
 
 - `iam` 依赖已初始化的 `reldb` 与 `cache`
-- `audit` 依赖已初始化的 `reldb`
+- `audit` 依赖已初始化的 `reldb`；启用安全审计时先于 `iam` 初始化，告警依赖的 `reach` 更早初始化。关闭时先停 `scheduler`，再反序关闭模块
 - `scheduler` 启用 DB 持久化时建议先初始化 `reldb`；若 `cache` 已初始化，会自动启用分布式锁能力
 - `reach`、`payment`、`ai` 会按功能场景复用下游模块能力，详细配置以各模块 README 为准
 - `api-contract` 无需初始化，只描述公共 HTTP API 的 schema 与 oRPC contract
@@ -457,6 +457,14 @@ const loginResult = await iam.auth.login({ identifier: 'alice', password: 'Stron
 await iam.authz.assignRole(userId, 'admin')
 const allowed = await iam.authz.checkPermission(userId, 'users:read')
 ```
+
+### 可配置安全策略
+
+[IAM](packages/iam/README.md) 提供长期/临时账号、激活/休眠/注销状态、闲置账号扫描、密码长度/字符类别/改密期限、轻量 ALTCHA 挑战、共享失败窗口与锁定、一次性邀请、首次改密、用途绑定再认证和登录时段/IP 控制。增强策略按业务启用并设值，服务端统一执行；过期或初始密码有专用改密流程。会话每次登录独立创建，支持严格闲置/绝对期限、并发上限和拒绝新登录或替换旧会话。页面离开撤销默认关闭，启用后仅最佳努力，需结合服务端期限。
+
+[Audit](packages/audit/README.md) 统一系统/业务分类、事件时身份快照、失败/拒绝事件、脱敏、筛选排序和统计；可配置保留保护、私有手动/定时备份与 Reach 轻量告警。备份提供校验回执，不是数据库原子快照；恢复应在独立环境进行。默认值不代表不可变存储或部署合规保证。
+
+[管理台](apps/admin-console/README.md) 和 fullstack 模板演示系统管理员、审计管理员、业务配置员、业务操作员与基础成员的权限边界；服务端同时限制跨职责授权和账号接管。示例角色由应用定义，可按业务调整，框架不绑定具体角色名。
 
 ### 公共 API：契约 → 服务 → 客户端
 

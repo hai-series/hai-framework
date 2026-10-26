@@ -25,12 +25,12 @@ beforeEach(() => {
 })
 
 describe('admin feedback IAM integration', () => {
-  it('沿用 admin/user 角色，管理员获得五项权限，普通用户仅可提交', async () => {
+  it('沿用 business_operator/user 角色，业务操作员获得五项业务权限，普通用户仅可提交', async () => {
     await seedFeedbackPermissions()
-    expect(state.getRoleByCode.mock.calls.map(([code]) => code)).toEqual(['admin', 'user'])
+    expect(state.getRoleByCode.mock.calls.map(([code]) => code)).toEqual(['business_operator', 'user'])
     expect([...state.permissions.keys()]).toEqual(['feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export'])
     expect(state.assignPermissionToRole.mock.calls.filter(([role]) => role === 'user-role')).toEqual([['user-role', 'feedback:create']])
-    expect(state.assignPermissionToRole.mock.calls.filter(([role]) => role === 'admin-role').map(([, permission]) => permission)).toEqual([...state.permissions.keys()])
+    expect(state.assignPermissionToRole.mock.calls.filter(([role]) => role === 'business_operator-role').map(([, permission]) => permission)).toEqual([...state.permissions.keys()])
   })
 
   it('重复启动复用已注册权限，不重新创建权限记录', async () => {

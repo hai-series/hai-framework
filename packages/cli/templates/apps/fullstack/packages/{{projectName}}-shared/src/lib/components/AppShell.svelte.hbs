@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { ManagementPage, ManagementStore } from '../stores/management-store.svelte.js'
+  import { ReauthenticationDialog } from '@h-ai/ui/components/scenes/iam/index'
+  import { sensitiveActions } from '../api/sensitive-actions.svelte.js'
+  import { managementAuthActions } from '../api/api-client.js'
   import { Avatar, Badge, BareButton, Button } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
 {{#if features.feedback}}
@@ -14,20 +17,22 @@
     onhelp: () => void
   }
   const { platform, store, children, onhelp }: Props = $props()
+  $effect(() => managementAuthActions.bindPageExit({ enabled: Boolean(store.user) && store.authConfig?.session.endOnPageHide }))
+  $effect(() => {
+    sensitiveActions.configure(store.authConfig?.reauthentication ?? { enabled: false, operations: [] })
+    return () => sensitiveActions.cancel()
+  })
   let menuOpen = $state(false)
   const items = $derived([
-    ...(store.isAdmin
-? [
-      { id: 'users' as const, label: m.nav_users(), icon: 'icon-[tabler--users]' },
-      { id: 'roles' as const, label: m.nav_roles(), icon: 'icon-[tabler--shield-lock]' },
-      { id: 'audit' as const, label: m.nav_audit(), icon: 'icon-[tabler--file-text]' },
+    { id: 'users', label: m.nav_users(), icon: 'icon-[tabler--users]' },
+    { id: 'roles', label: m.nav_roles(), icon: 'icon-[tabler--shield-lock]' },
+    { id: 'configuration', label: m.business_settings_title(), icon: 'icon-[tabler--adjustments]' },
+    { id: 'audit', label: m.nav_audit(), icon: 'icon-[tabler--file-text]' },
 {{#if features.feedback}}
-      { id: 'feedback' as const, label: m.nav_feedback(), icon: 'icon-[tabler--message-report]' },
+    { id: 'feedback', label: m.nav_feedback(), icon: 'icon-[tabler--message-report]' },
 {{/if}}
-    ]
-: []),
-    { id: 'settings' as const, label: m.settings_title(), icon: 'icon-[tabler--settings]' },
-  ])
+    { id: 'settings', label: m.settings_title(), icon: 'icon-[tabler--settings]' },
+  ].filter(item => store.canOpenPage(item.id)))
   const title = $derived(items.find(item => item.id === store.page)?.label ?? store.info?.name ?? '')
 
   function navigate(page: ManagementPage) {
@@ -35,6 +40,8 @@
     void store.navigate(page)
   }
 </script>
+
+<ReauthenticationDialog open={sensitiveActions.open} loading={sensitiveActions.loading} error={sensitiveActions.error} onsubmit={password => sensitiveActions.submit(password)} onclose={() => sensitiveActions.cancel()} />
 
 <div class="flex h-dvh overflow-hidden bg-base-200/50 text-base-content" class:hai-safe-area={platform === 'app'}>
   {#if menuOpen}
@@ -75,7 +82,7 @@
         <Button variant="ghost" size="sm" loading={store.saving} onclick={() => void store.logout()} data-testid="logout">{m.logout()}</Button>
       </div>
     </header>
-    <main class="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-auto p-4 pb-8 sm:p-6 lg:p-8" data-guide="admin-content">{@render children()}</main>
+    <main class="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-auto p-4 pb-8 sm:p-6 lg:p-8" data-guide="admin-content">{#if store.info?.notice}<p class='mb-4 rounded-lg bg-info/10 p-3 text-sm' data-testid='business-notice'>{store.info.notice}</p>{/if}{@render children()}</main>
     <footer class="shrink-0 border-t border-base-content/8 px-6 py-3 text-center text-xs text-base-content/35">{store.info?.name} · v{store.info?.version}</footer>
   </div>
 </div>

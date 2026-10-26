@@ -37,6 +37,11 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 - CrudPage 占满宿主剩余高度，空数据和少量数据时分页保留在底部；宿主从视口外壳到内容区逐层使用 flex/grid 的剩余空间约束与 min-height: 0，避免自动高度包装层截断布局。数据区独立滚动，分页不覆盖数据。
 - theme.css 自动引入 design-tokens.css；全局样式的焦点使用 --hai-focus-color（缺省跟随当前 primary），减少动态效果时保留最终状态并缩短动画。长内容在 Empty/Alert 中换行；业务自定义 snippet 也要能收缩。
 
+
+敏感操作使用 ReauthenticationDialog（open/loading/error/onsubmit/onclose），网络与动作编排放服务层。服务通过 reauthenticate(password, operation) 获取短期单次用途凭据，只给本次请求；typed client 使用 options.context.reauthentication，不放全局 header/持久存储。Input 的 datetime-local 值需按本地时区转换为明确时间戳。
+
+AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供的 createCaptcha 自动完成自托管计算挑战。自定义认证动作保留 captcha 字段及 sendOtp/resetrequest 的可选 options；不要只在界面验证或持久化证明。关闭时不加载求解器，取消/卸载停止后续鉴别。
+
 ## 按需参考
 
 新手引导、首次 Cookie 提示、操作导览和帮助中心见 [guide.md](guide.md)。fullstack 默认在共享管理界面接入，新增业务只补内容与 data-guide 锚点。

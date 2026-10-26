@@ -2,6 +2,23 @@
 import type { apiContract, IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ApiClient } from './api-client-types.js'
+import { core } from '@h-ai/core'
+
+// 仅持有本机 DOM 监听器；业务会话真值仍由服务端撤销与超时决定。
+const pageExitBindings = new WeakMap<object, Set<() => void>>()
+
+/**
+ * 客户端关闭时清理本实例安装的页面监听器，不清理其它实例。
+ * @example 模块内部上下文
+ * ```ts
+ * clearIamPageExitBindings({}) // 没有绑定时幂等。
+ * ```
+ */
+export function clearIamPageExitBindings(auth: object): void {
+  for (const stop of pageExitBindings.get(auth) ?? [])
+    stop()
+  pageExitBindings.delete(auth)
+}
 
 /**
  * 认证表单登录输入；默认 password，ldap 使用 identifier/password，email/sms 使用 identifier/code。
@@ -40,7 +57,7 @@ export type IamAuthLoginInput = IamLoginInput & { method?: 'password' | 'ldap' |
  * ```
  */
 export function createIamAuthActions(client: {
-  iam: { auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['iam']['auth'], 'publicConfig' | 'login' | 'loginWithLdap' | 'loginWithOtp' | 'register' | 'sendOtp' | 'requestPasswordReset' | 'confirmPasswordReset'> }
+  iam: { auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['iam']['auth'], 'publicConfig' | 'createCaptcha' | 'closeSession' | 'login' | 'loginWithLdap' | 'loginWithOtp' | 'register' | 'sendOtp' | 'requestPasswordReset' | 'confirmPasswordReset' | 'renewPassword' | 'reauthenticate'> }
   auth: Pick<ApiClient<{ iam: typeof apiContract.iam }>['auth'], 'setTokens'>
 }) {
   /**
@@ -61,18 +78,48 @@ export function createIamAuthActions(client: {
     return result
   }
   return {
+    bindPageExit(options: { enabled?: boolean } = {}) {
+      if (!options.enabled || typeof window === 'undefined')
+        return () => {}
+      const target = window
+      let sent = false
+      const onPageHide = (event: PageTransitionEvent) => {
+        if (event.persisted || sent)
+          return
+        sent = true
+        // 不清理 Cookie/本地存储，避免迟到响应覆盖下一文档刚建立的新身份。
+        void client.iam.auth.closeSession({}, { context: { keepalive: true, autoRefresh: false } }).then((result) => {
+          if (!result.success)
+            core.logger.warn('Page exit session revocation failed', { errorCode: result.error.code })
+        }).catch(() => core.logger.warn('Page exit session request did not complete'))
+      }
+      target.addEventListener('pagehide', onPageHide)
+      const bindings = pageExitBindings.get(client.auth) ?? new Set<() => void>()
+      const stop = () => {
+        target.removeEventListener('pagehide', onPageHide)
+        bindings.delete(stop)
+        if (!bindings.size)
+          pageExitBindings.delete(client.auth)
+      }
+      bindings.add(stop)
+      pageExitBindings.set(client.auth, bindings)
+      return stop
+    },
     publicConfig: () => client.iam.auth.publicConfig(),
+    createCaptcha: (input: Parameters<typeof client.iam.auth.createCaptcha>[0]) => client.iam.auth.createCaptcha(input),
     login: async (input: IamAuthLoginInput) => {
       const result = input.method === 'ldap'
-        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password })
+        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password, captcha: input.captcha })
         : input.method === 'email' || input.method === 'sms'
-          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '' })
-          : await client.iam.auth.login({ identifier: input.identifier, password: input.password })
+          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '', captcha: input.captcha })
+          : await client.iam.auth.login({ identifier: input.identifier, password: input.password, captcha: input.captcha })
       return save(result)
     },
     register: async (input: IamRegisterInput) => save(await client.iam.auth.register(input)),
-    sendOtp: (identifier: string) => client.iam.auth.sendOtp({ identifier }),
-    requestPasswordReset: (identifier: string) => client.iam.auth.requestPasswordReset({ identifier }),
+    sendOtp: (identifier: string, options?: { captcha?: string }) => client.iam.auth.sendOtp({ identifier, ...options }),
+    requestPasswordReset: (identifier: string, options?: { captcha?: string }) => client.iam.auth.requestPasswordReset({ identifier, ...options }),
     confirmPasswordReset: (token: string, newPassword: string) => client.iam.auth.confirmPasswordReset({ token, newPassword }),
+    renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => client.iam.auth.renewPassword(input),
+    reauthenticate: (password: string, operation: string) => client.iam.auth.reauthenticate({ password, operation }),
   }
 }

@@ -5,6 +5,7 @@
  * @module iam-session-repository-cache
  */
 import type { HaiResult } from '@h-ai/core'
+import type { SessionConfig } from '../iam-config.js'
 import type { Session, TokenPair } from './iam-session-types.js'
 import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
@@ -49,10 +50,10 @@ interface SessionState {
 
 /** 恢复私有 JSON 日期，拒绝损坏的授权数据；错误不包含认证快照。 */
 function restoreSession(session: Session): Session {
-  const result = { ...session, createdAt: new Date(session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
+  const result = { ...session, createdAt: new Date(session.createdAt), startedAt: new Date(session.startedAt ?? session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
   if (typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
     || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
-    || ![result.createdAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
+    || ![result.createdAt, result.startedAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
     throw new TypeError('Invalid session state')
   }
   return result
@@ -117,7 +118,22 @@ export interface SessionRepository {
  * return found.data?.userId ?? null
  * ```
  */
-export function createCacheSessionRepository(refreshTokenMaxAge: number): SessionRepository {
+export function createCacheSessionRepository(
+  refreshTokenMaxAge: number,
+  policy: Partial<Pick<SessionConfig, 'idleTimeout' | 'absoluteTimeout' | 'maxSessions' | 'singleDeviceMode' | 'sliding'>> = {},
+): SessionRepository {
+  const idleTimeout = policy.idleTimeout ?? 0
+  const absoluteTimeout = policy.absoluteTimeout ?? 0
+  const maxSessions = policy.maxSessions ?? 0
+
+  /** 在读取及最终 CAS 提交时重复检查，防止迟到请求或刷新复活过期会话。 */
+  function policyExpired(session: Session): boolean {
+    const now = Date.now()
+    const activeAt = new Date(session.lastActiveAt).getTime()
+    const startedAt = new Date(session.startedAt ?? session.createdAt).getTime()
+    return (idleTimeout > 0 && activeAt + idleTimeout * 1000 <= now)
+      || (absoluteTimeout > 0 && startedAt + absoluteTimeout * 1000 <= now)
+  }
   /** 校验缓存快照的路由、主体和日期；损坏数据不能转为认证成功。 */
   async function read(scope: string): Promise<HaiResult<SessionState | undefined>> {
     try {
@@ -168,7 +184,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         // 私有快照由本仓库生成并经 read 校验；复制后修改，避免 Memory 引用别名。
         const next: SessionState = current.data ? JSON.parse(JSON.stringify(current.data)) : { revision: '', sessions: {} }
         for (const [token, entry] of Object.entries(next.sessions)) {
-          if (retainedUntil(entry) <= Date.now())
+          if (retainedUntil(entry) <= Date.now() || policyExpired(entry.session))
             delete next.sessions[token]
         }
         const outcome = operation(next)
@@ -199,16 +215,27 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
 
   return {
     save: (session, tokens, singleDevice = false) => mutate(getUserSessionScope(session.userId), (state) => {
-      if (singleDevice)
+      // 已被数据库凭据代际撤销的旧记录不占用有效会话配额。
+      const count = Object.values(state.sessions).filter(entry => entry.session.credentialVersion === session.credentialVersion).length
+      if (singleDevice && policy.singleDeviceMode !== 'reject') {
         state.sessions = {}
+      }
+      else if ((singleDevice && count > 0) || (maxSessions > 0 && count >= maxSessions)) {
+        return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+      }
       return storeSession(state, session, tokens)
     }),
     rotate: (previous, refreshToken, session, tokens) => mutate(getUserSessionScope(previous.userId), (state) => {
       const old = state.sessions[previous.accessToken]
-      if (!old || old.refreshToken !== refreshToken || old.refreshExpiresAt <= Date.now())
+      if (!old || old.refreshToken !== refreshToken || old.refreshExpiresAt <= Date.now() || policyExpired(old.session))
         return err(HaiIamError.TOKEN_EXPIRED, iamM('iam_refreshTokenExpired'))
       if (old.session.version !== previous.version || session.userId !== previous.userId)
         return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+      // 绝对期限从首次签发计算，不随 refresh 创建新 access 重新计时。
+      session.startedAt = new Date(old.session.startedAt ?? old.session.createdAt)
+      // 自动换票不算业务活动，避免后台定时 refresh 无限延长闲置期限。
+      if (idleTimeout > 0)
+        session.lastActiveAt = new Date(old.session.lastActiveAt)
       delete state.sessions[previous.accessToken]
       return storeSession(state, session, tokens)
     }),
@@ -223,7 +250,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
       if (!record)
         return ok(null)
       const session = restoreSession(record.session)
-      return ok(session.expiresAt.getTime() <= Date.now() ? null : session)
+      return ok(session.expiresAt.getTime() <= Date.now() || policyExpired(session) ? null : session)
     },
     async getByRefreshToken(token) {
       const scope = getTokenSessionScope(token)
@@ -235,7 +262,8 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
       const record = Object.values(result.data?.sessions ?? {}).find(entry => entry.refreshToken === token && entry.refreshExpiresAt > Date.now())
       if (!record)
         return ok(null)
-      return ok(restoreSession(record.session))
+      const session = restoreSession(record.session)
+      return ok(policyExpired(session) ? null : session)
     },
     async updateByAccessToken(token, patch, expectedVersion) {
       const scope = getTokenSessionScope(token)
@@ -243,7 +271,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
       return mutate(scope, (state) => {
         const entry = state.sessions[token]
-        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now())
+        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now() || policyExpired(entry.session))
           return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (!expectedVersion || entry.session.version !== expectedVersion)
           return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
@@ -260,7 +288,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
       return mutate(scope, (state) => {
         const entry = state.sessions[token]
-        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now())
+        if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now() || policyExpired(entry.session))
           return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (entry.session.version !== expectedVersion)
           return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
@@ -269,7 +297,7 @@ export function createCacheSessionRepository(refreshTokenMaxAge: number): Sessio
         const next = {
           ...current,
           lastActiveAt: new Date(Math.max(current.lastActiveAt.getTime(), now.getTime())),
-          expiresAt: new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
+          expiresAt: policy.sliding === false ? current.expiresAt : new Date(Math.max(current.expiresAt.getTime(), now.getTime() + current.maxAge * 1000)),
         }
         entry.session = next
         return ok(next)

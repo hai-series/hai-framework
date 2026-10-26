@@ -7,9 +7,18 @@ const state = vi.hoisted(() => ({
   iamInit: vi.fn(),
 }))
 vi.mock('$lib/paraglide/messages.js', () => ({
+  security_role_system: () => 'System',
+  security_role_audit: () => 'Audit',
+  security_role_config: () => 'Config',
+  security_role_operator: () => 'Operator',
+  security_role_member: () => 'Member',
   server_init_storage_failed: ({ message }: { message: string }) => `Storage initialization failed: ${message}`,
 }))
 vi.mock('$lib/build-metadata.js', () => ({ adminBuildMetadata: { appVersion: 'test', buildId: 'test', commit: 'test' } }))
+vi.mock('$lib/server/business-settings.js', () => ({ initBusinessSettings: vi.fn(async () => ({ success: true, data: undefined })) }))
+vi.mock('$lib/server/security-roles.js', () => ({ seedAdminDuties: vi.fn(async () => ({ success: true, data: undefined })), bootstrapDutyAccount: vi.fn(async () => ({ success: true, data: undefined })) }))
+vi.mock('$lib/server/audit-jobs.js', () => ({ startAuditJobs: vi.fn(async () => ({ success: true, data: undefined })) }))
+vi.mock('@h-ai/scheduler', () => ({ scheduler: { close: vi.fn() } }))
 vi.mock('@h-ai/feedback', () => ({
   feedback: { init: vi.fn(async () => ({ success: true })) },
   FeedbackConfigSchema: { safeParse: vi.fn() },
@@ -26,7 +35,10 @@ vi.mock('@h-ai/core', async (importOriginal) => {
 vi.mock('@h-ai/reldb', () => ({ reldb: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
 vi.mock('@h-ai/cache', () => ({ cache: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
 vi.mock('@h-ai/crypto', () => ({ crypto: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
-vi.mock('@h-ai/audit', () => ({ audit: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
+vi.mock('@h-ai/audit', () => ({
+  audit: { init: vi.fn(async () => ({ success: true })), close: vi.fn(), schedulerPlan: null },
+  AuditInitConfigSchema: { parse: (value: Record<string, unknown>) => value },
+}))
 vi.mock('@h-ai/iam', () => ({ iam: {
   init: state.iamInit,
   close: vi.fn(),

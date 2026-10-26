@@ -5,6 +5,8 @@
  */
 
 import type { LayoutServerLoad } from './$types'
+import { readBusinessSettings } from '$lib/server/business-settings.js'
+import { requireAdminData } from '$lib/server/iam-admin.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { redirect } from '@sveltejs/kit'
@@ -33,6 +35,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
       permissions: locals.session.permissions,
     },
     appConfig: {
+      notice: requireAdminData(await readBusinessSettings()).notice,
       name: coreConfig?.name ?? 'hai Admin Console',
       version: coreConfig?.version ?? '0.1.0',
       env: coreConfig?.env ?? 'development',

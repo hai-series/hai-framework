@@ -1,12 +1,32 @@
 import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAdminRole, listAdminPermissionsPage, listAdminRoles, resolvePermissionIds, updateAdminRole } from '../src/lib/server/iam-admin.js'
+import { createAdminRole, getAdminRole, listAdminPermissionsPage, listAdminRoles, normalizeUniqueConstraintError, resolvePermissionIds, updateAdminRole } from '../src/lib/server/iam-admin.js'
 import { load as loadDashboard } from '../src/routes/admin/+page.server.js'
 
 describe('admin read failures', () => {
+  it('keeps database failure status and hides internal details at the HTTP boundary', async () => {
+    vi.spyOn(iam.authz, 'createRole').mockResolvedValueOnce(err({ code: 'db.failed', httpStatus: 500, message: 'SELECT private_column FROM internal_role_table; driver=/private/database.sock' }))
+    const result = await createAdminRole({ code: 'outage-role', name: 'Outage role' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const response = kit.response.fromError(result.error)
+      expect(response.status).toBe(500)
+      const body = await response.text()
+      expect(body).not.toContain('SELECT')
+      expect(body).not.toContain('database.sock')
+      expect(body).not.toContain('internal_role_table')
+      expect(body).toContain('traceId')
+    }
+  })
+
+  it('uses a stable fallback instead of forwarding unknown driver errors', () => {
+    expect(normalizeUniqueConstraintError('driver error: private_table', 'Operation failed')).toBe('Operation failed')
+  })
+
   beforeEach(async () => {
     expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
     expect((await cache.init({ type: 'memory' })).success).toBe(true)
@@ -56,7 +76,7 @@ describe('admin read failures', () => {
 
   it('fails dashboard loading rather than displaying zero statistics during an outage', async () => {
     await reldb.close()
-    // 此 loader 不读取事件参数，用真实调用验证统计失败边界。
-    await expect(loadDashboard({} as Parameters<typeof loadDashboard>[0])).rejects.toMatchObject({ status: 503 })
+    // 具备读取权限时，数据库故障仍应中止统计，不能被职责过滤伪装为空数据。
+    await expect(loadDashboard({ locals: { session: { userId: 'test', roles: [], permissions: ['dashboard:view', 'user:list'] } } } as Parameters<typeof loadDashboard>[0])).rejects.toMatchObject({ status: 503 })
   })
 })

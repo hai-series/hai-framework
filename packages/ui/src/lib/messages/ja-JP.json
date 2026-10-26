@@ -350,6 +350,7 @@
   "auth_unavailable": "この認証機能は利用できません。",
   "auth_reset_sent": "アカウントが存在する場合、リセット通知を送信しました。メールまたはSMSをご確認ください。",
   "auth_reset_done": "パスワードをリセットしました。新しいパスワードでログインしてください。",
+  "auth_renew_title": "ログインパスワードの更新",
   "auth_have_token": "リセットトークンを持っています",
   "auth_brand": "アカウントセンター",
   "password_policy_length": "{min}～{max}文字で入力",
@@ -357,6 +358,7 @@
   "password_policy_lowercase": "英小文字を含める",
   "password_policy_number": "数字を含める",
   "password_policy_special": "特殊文字を含める",
+  "password_policy_classes": "大文字、小文字、数字、特殊文字のうち {count} 種類以上を含める",
   "guide_welcome": "ようこそ",
   "guide_start": "ツアーを開始",
   "guide_later": "後で通知",
@@ -478,5 +480,11 @@
   "feedback_notification_disabled": "通知は無効です",
   "feedback_capacity_hint": "添付 {used}/{total} MiB · 各 {single} MiB まで · 最大 {count} 件",
   "json_viewer_copy": "コピー",
-  "json_viewer_copied": "コピーしました"
+  "json_viewer_copied": "コピーしました",
+  "auth_captcha_error": "セキュリティ確認が未完了または利用できません。再試行してください",
+  "auth_captcha_verifying": "セキュリティ確認中",
+  "reauthentication_title": "重要な操作の確認",
+  "reauthentication_hint": "この操作を続けるには現在のパスワードを入力してください。",
+  "reauthentication_password": "現在のパスワード",
+  "reauthentication_confirm": "認証して続行"
 }

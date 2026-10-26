@@ -50,7 +50,7 @@ Omit options for interactive choices, or use `--yes` for defaults. Installation 
 | `mobile-app`               | Svelte + Vite + Capacitor                                                       |
 | `fullstack`                | Contract, API, shared UI and selected Web/App/Desktop; miniapp is a placeholder |
 
-Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage and audit for its management UI. When `--features` is omitted, it also enables feedback and reach. An explicit feature list keeps optional modules under your control; other application types still require feedback to be selected. AI/ONNX/CUDA are not installed by default.
+Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage, audit and the scheduler for optional backups/alerts for its management UI. When `--features` is omitted, it also enables feedback and reach. An explicit feature list keeps optional modules under your control; other application types still require feedback to be selected. AI/ONNX/CUDA are not installed by default.
 
 A standalone `mobile-app` with IAM or crypto installs frontend crypto and enables encrypted typed-client transport by default. Without crypto, a deliberate plaintext API remains supported. Use `PUBLIC_API_TRANSPORT=off` only with a matching plaintext service; `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. A failed handshake never falls back to plaintext, and server private keys never enter the client. Cleanup closes client transport before crypto initialized by that client.
 
@@ -136,9 +136,11 @@ The workflow uses hai-spec-review, hai-spec-implement, hai-app-create, hai-app-t
 
 UI delivery includes [hai-ui-design](templates/skills/hai-ui-design/SKILL.md), hai-ui and [hai-ui-review](templates/skills/hai-ui-review/SKILL.md). API templates exclude frontend skills. init/add preserve private entrypoints and backfill missing resources. Repository entrypoints use the same names for shared responsibilities.
 
+The fullstack example separates `admin`, `audit_admin`, `config_admin`, `business_operator` and basic `user` duties in application configuration. System administrators cannot take over other duty accounts. CLI creates independent random bootstrap passwords for all four duties in each `.env.dev/.env.test/.env.prod`, preserving shared environment configuration and local or process overrides, and existing accounts are never reset or reassigned. Select security enhancements in `_iam.yml`/`_audit.yml`; see the generated README.
+
 ### Feedback and offline analysis
 
-A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Signed-in users can submit reports. Only administrators see the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
+A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Members and business operators can submit reports. Only business_operator sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
 
 Offline commands: `hai feedback summary <bundle.zip>`, `inspect`, `evidence --request-id <ID> --page 1 --page-size 20`, and `view`. The viewer binds only to loopback and closes on Ctrl+C; no production connection is needed.
 

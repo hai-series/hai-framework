@@ -1,4 +1,10 @@
 {
+  "audit_eventFieldsInvalid": "事件字段无效",
+  "audit_identityMismatch": "身份快照与操作者不一致",
+  "audit_queryInvalid": "筛选条件或日期无效",
+  "audit_eventProcessingFailed": "事件处理失败",
+  "audit_sortInvalid": "排序字段或方向无效",
+  "audit_retentionPolicyFailed": "无法读取或更新审计最低保留策略",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "audit_notInitialized": "审计模块尚未初始化，请先调用 audit.init()",
   "audit_initFailed": "审计模块初始化失败：{error}",
@@ -9,5 +15,20 @@
   "audit_invalidStatCount": "审计统计数量超出有效范围，无法安全显示",
   "audit_configError": "审计配置校验失败：{error}",
   "audit_initInProgress": "审计模块正在初始化中，请勿并发调用",
-  "audit_invalidInput": "审计输入参数无效（{field}）：{reason}"
+  "audit_invalidInput": "审计输入参数无效（{field}）：{reason}",
+  "audit_backupDisabled": "审计备份未启用",
+  "audit_backupFailed": "审计备份操作失败",
+  "audit_backupInvalid": "审计备份参数无效",
+  "audit_backupConflict": "此备份编号已用于不同的导出条件",
+  "audit_backupStorageRequired": "启用审计备份需要已初始化的存储",
+  "audit_backupPrivateStorageRequired": "审计备份需要私有存储，请移除公开访问基础 URL 并限制归档读取",
+  "audit_backupVerificationFailed": "无法完成审计归档校验",
+  "audit_backupTaskName": "审计日志备份",
+  "audit_alertsDisabled": "审计告警未启用",
+  "audit_alertsFailed": "审计告警检查或通知失败",
+  "audit_alertReachRequired": "告警需要已初始化的 Reach 和有效通知渠道",
+  "audit_alertSubject": "[{severity}] 安全告警：{rule}",
+  "audit_alertTaskName": "审计异常告警检查",
+  "audit_unknownTask": "未知审计定时任务",
+  "audit_eventTimeUnavailable": "无法取得有效的数据库审计时间"
 }

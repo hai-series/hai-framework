@@ -1,12 +1,14 @@
+import { createAdminRole, listAdminRoles, resolvePermissionIds } from '$lib/server/iam-admin.js'
 /**
  * =============================================================================
  * Admin Console - 角色管理 API
  * =============================================================================
  */
 
-import { createAdminRole, listAdminRoles, resolvePermissionIds } from '$lib/server/iam-admin.js'
 import { CreateRoleSchema } from '$lib/server/schemas/index.js'
+import { requireGrantablePermissions } from '$lib/server/security-roles.js'
 import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -26,10 +28,12 @@ export const GET = kit.handler(async ({ locals }) => {
  *
  * 需要权限：role:api:create
  */
-export const POST = kit.handler(async ({ request, locals }) => {
+export const POST = kit.handler(async ({ request, locals, cookies }) => {
   kit.guard.require(locals.session, 'role:api:create')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.roles.create')
 
   const { name, description, permissions } = await kit.validate.body(request, CreateRoleSchema)
+  requireGrantablePermissions(locals.session, permissions ?? [])
 
   const permissionIds = await resolvePermissionIds(permissions) ?? []
 
@@ -42,7 +46,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   })
 
   if (!createResult.success) {
-    return kit.response.badRequest(createResult.error.message)
+    return kit.response.fromError(createResult.error)
   }
 
   return kit.response.ok(createResult.data)

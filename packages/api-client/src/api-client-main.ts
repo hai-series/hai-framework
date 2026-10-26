@@ -71,7 +71,7 @@ import {
   createTokenManager,
 } from './api-client-auth.js'
 import { apiClientM } from './api-client-i18n.js'
-import { createIamAuthActions } from './api-client-iam.js'
+import { clearIamPageExitBindings, createIamAuthActions } from './api-client-iam.js'
 import { HaiApiClientError } from './api-client-types.js'
 
 const DEFAULT_TIMEOUT = 30_000
@@ -205,6 +205,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       }
     },
     async close() {
+      clearIamPageExitBindings(auth)
       state.observers.clear()
       state.transport?.destroy()
       state.config = null
@@ -534,7 +535,13 @@ function buildRawClient<TContract extends AnyContractRouter>(
 ): JsonifiedClient<ContractRouterClient<TContract>> {
   const link = new OpenAPILink<Record<PropertyKey, unknown>>(contract, {
     url: config.baseUrl,
-    headers: async options => buildHeaders(config, tokenManager, getObservation(options.context)?.requestId),
+    headers: async (options) => {
+      const headers = await buildHeaders(config, tokenManager, getObservation(options.context)?.requestId)
+      // 单次操作凭据只附加到本次调用，不能放进跨并发请求共享的默认 header。
+      if (typeof options.context.reauthentication === 'string')
+        headers['x-hai-reauthentication'] = options.context.reauthentication
+      return headers
+    },
     fetch: async (request, init, options) => {
       const record = getObservation(options.context)
       if (record) {
@@ -544,7 +551,8 @@ function buildRawClient<TContract extends AnyContractRouter>(
         url.hash = ''
         record.url = core.sanitize.sanitizeUrl(url.toString())
       }
-      const response = await fetchWithRefresh(request, init, config, tokenManager, transport, record)
+      const requestInit = options.context.keepalive === true ? { ...init, keepalive: true } : init
+      const response = await fetchWithRefresh(request, requestInit, config, options.context.autoRefresh === false ? undefined : tokenManager, transport, record)
       if (record) {
         record.status = response.status
         const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')
@@ -599,6 +607,7 @@ async function buildHeaders(
  * @param request - 尚未消费的 Request。
  * @param init - oRPC 提供的重定向选项。
  * @param init.redirect - 可选的 fetch 重定向策略，原样传给首次请求及重试。
+ * @param init.keepalive - 页面离开请求保持存活的浏览器提示，原样传递。
  * @param config - 请求与刷新配置。
  * @param tokenManager - 缺省时直接返回首次响应。
  * @param transport - 刷新与重试共用的可选加密会话。
@@ -613,7 +622,7 @@ async function buildHeaders(
  */
 async function fetchWithRefresh(
   request: Request,
-  init: { redirect?: Request['redirect'] },
+  init: { redirect?: Request['redirect'], keepalive?: boolean },
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
@@ -685,6 +694,7 @@ async function isUnauthorizedResult(response: Response): Promise<boolean> {
  * @param request - 含调用方取消信号的 Request。
  * @param init - oRPC 重定向设置。
  * @param init.redirect - 可选的 fetch 重定向策略，原样交给本次实际 fetch。
+ * @param init.keepalive - 页面离开请求保持存活的浏览器提示，原样传递。
  * @param config - 超时与 fetch 配置。
  * @param transport - 可选加密 fetch，优先于原始 fetch。
  * @returns HTTP 响应；超时/取消异常由外层 procedure 映射，不能视为远端回滚。
@@ -698,7 +708,7 @@ async function isUnauthorizedResult(response: Response): Promise<boolean> {
  */
 async function fetchWithTimeout(
   request: Request,
-  init: { redirect?: Request['redirect'] },
+  init: { redirect?: Request['redirect'], keepalive?: boolean },
   config: ApiClientConfig,
   transport: TransportClient | undefined,
 ): Promise<Response> {

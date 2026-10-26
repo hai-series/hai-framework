@@ -15,7 +15,7 @@ import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { User } from '../user/iam-user-types.js'
 import type { ApiKeyStrategyResult } from './apikey/iam-authn-apikey-strategy.js'
 import type { ApiKey, ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
-import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { ApiKeyCredentials, AuthenticatedUser, AuthnOperations, AuthRequestContext, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
@@ -26,10 +26,14 @@ import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, ApiKeyConfigSchema, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+import { createTicketOperations } from '../ticket/iam-ticket-functions.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
+import { checkPasswordState, isUserActive } from '../user/iam-user-utils.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
 import { applyApiKeyScopes } from './apikey/iam-authn-apikey-scope.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
+import { createLoginAccessCheck } from './iam-authn-access.js'
+import { createIamCaptcha, verifyIamCaptcha } from './iam-authn-captcha.js'
 import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
@@ -86,7 +90,7 @@ export interface AuthnOperationsResult {
   /** API Key 管理操作（仅在启用 apikey 登录时可用） */
   apiKeyFunctions: ApiKeyOperations | null
   /** 注册完成后直接创建会话，不受密码登录方式开关影响。 */
-  loginRegisteredUser: (user: User) => Promise<HaiResult<AuthResult>>
+  loginRegisteredUser: (user: User, context?: AuthRequestContext) => Promise<HaiResult<AuthResult>>
 }
 
 /**
@@ -135,6 +139,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
       passwordConfig: config.password,
       userRepository,
       maxLoginAttempts: securityConfig.maxLoginAttempts,
+      lockoutEnabled: securityConfig.lockoutEnabled,
+      failureWindow: securityConfig.failureWindow,
       lockoutDuration: securityConfig.lockoutDuration,
     })
 
@@ -150,6 +156,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         autoRegister: true,
         registerConfig: config.register,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
+        lockoutEnabled: securityConfig.lockoutEnabled,
+        failureWindow: securityConfig.failureWindow,
         lockoutDuration: securityConfig.lockoutDuration,
         onUserAutoRegistered,
         onOtpSendEmail,
@@ -169,6 +177,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         syncUser: ldapSyncUser ?? true,
         defaultEnabled: config.register.defaultEnabled,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
+        lockoutEnabled: securityConfig.lockoutEnabled,
+        failureWindow: securityConfig.failureWindow,
         lockoutDuration: securityConfig.lockoutDuration,
         onUserAutoRegistered,
       })
@@ -259,6 +269,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
   const loginConfig = LoginConfigSchema.parse(config.login ?? {})
   const agreementConfig = AgreementConfigSchema.parse(config.agreements ?? {})
+  const checkAccess = createLoginAccessCheck(config.loginAccess)
 
   /**
    * 检查指定登录方式是否被禁用
@@ -318,9 +329,20 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
    * @param user - 已认证的用户信息
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
-  async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
-    if (!user.enabled)
+  async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+    const permitted = checkAccess(context)
+    if (!permitted.success)
+      return permitted
+    if (!isUserActive(user))
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    const stored = await userRepository.findById(user.id)
+    if (!stored.success)
+      return stored
+    if (!stored.data || !isUserActive(stored.data))
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    const passwordState = checkPasswordState(stored.data, config.password)
+    if (!passwordState.success)
+      return passwordState
     const authorization = await authzFunctions.getUserAuthorization(user.id)
     if (!authorization.success)
       return authorization
@@ -349,6 +371,15 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
     }
 
+    // 只有真正签发会话的登录才刷新最近使用时间；配额/重复登录拒绝不能延缓休眠。
+    const recorded = await userRepository.recordSuccessfulLogin(user.id)
+    if (!recorded.success) {
+      const revoked = await sessionFunctions.delete(session.accessToken)
+      if (!revoked.success)
+        logger.error('Failed to revoke session after login timestamp write failure', { userId: user.id, error: revoked.error })
+      return recorded
+    }
+
     const { credentialVersion, ...publicUser } = user
     void credentialVersion
     return ok({
@@ -373,7 +404,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     type: 'password' | 'otp' | 'ldap',
     credentials: PasswordCredentials | OtpCredentials | LdapCredentials,
     strategy?: AuthStrategy,
+    context?: AuthRequestContext,
   ): Promise<HaiResult<AuthResult>> {
+    const captcha = await verifyIamCaptcha(config.captcha, 'login', credentials.captcha)
+    if (!captcha.success)
+      return captcha
+    const permitted = checkAccess(context)
+    if (!permitted.success)
+      return permitted
     const disabled = loginDisabled(type)
     if (disabled)
       return disabled as HaiResult<AuthResult>
@@ -392,34 +430,94 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return authResult as HaiResult<AuthResult>
     }
 
-    const result = await buildAuthResult(authResult.data)
+    const result = await buildAuthResult(authResult.data, undefined, context)
     if (result.success) {
       logger.info('Login succeeded', { type, userId: authResult.data.id })
     }
     return result
   }
 
-  return { loginRegisteredUser: async (user) => {
+  async function verifyCurrentSession(accessToken: string): Promise<HaiResult<Session>> {
+    const session = await sessionFunctions.verifyToken(accessToken)
+    if (!session.success)
+      return session
+    const [user, authorization] = await Promise.all([
+      userRepository.findById(session.data.userId),
+      authzFunctions.getUserAuthorization(session.data.userId),
+    ])
+    if (!user.success)
+      return user
+    if (!user.data?.enabled)
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
+      return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+    if (!authorization.success)
+      return authorization
+    const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }
+    return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
+  }
+
+  const tickets = createTicketOperations()
+  const sensitive = config.reauthentication
+  const requiresProof = (operation: string) => sensitive?.enabled && sensitive.operations.includes(operation)
+
+  return { loginRegisteredUser: async (user, context) => {
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
       return stored
-    if (!stored.data?.enabled)
+    if (!stored.data || !isUserActive(stored.data))
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-    return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' })
+    return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' }, undefined, context)
   }, authn: {
-    async login(credentials: PasswordCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('password', credentials, passwordStrategy)
+    createCaptcha: input => createIamCaptcha(config.captcha, input),
+    async reauthenticate(accessToken, password, operation) {
+      if (!requiresProof(operation))
+        return err(HaiIamError.PERMISSION_DENIED, iamM('iam_reauthenticationRequired'))
+      const current = await verifyCurrentSession(accessToken)
+      if (!current.success)
+        return current
+      const stored = await userRepository.findById(current.data.userId)
+      if (!stored.success)
+        return stored
+      if (!stored.data)
+        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      const verified = await passwordStrategy.authenticate({ type: 'password', identifier: stored.data.username, password })
+      if (!verified.success)
+        return verified
+      if (verified.data.credentialVersion !== current.data.credentialVersion)
+        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+      return tickets.issue({ subjectId: current.data.userId, purpose: `iam:reauth:${operation}`, ttlMs: sensitive!.ttlSeconds * 1000, grant: { operation, sessionVersion: current.data.version, credentialVersion: current.data.credentialVersion } })
     },
 
-    async loginWithOtp(credentials: OtpCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('otp', credentials, otpStrategy)
+    async checkSensitiveOperation(accessToken, operation, ticket) {
+      const current = await verifyCurrentSession(accessToken)
+      if (!current.success)
+        return current
+      if (!requiresProof(operation))
+        return ok(undefined)
+      if (!ticket)
+        return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
+      const proof = await tickets.consume(ticket, { purpose: `iam:reauth:${operation}` })
+      if (!proof.success)
+        return proof
+      if (proof.data.subjectId !== current.data.userId || proof.data.grant.operation !== operation || proof.data.grant.sessionVersion !== current.data.version || proof.data.grant.credentialVersion !== current.data.credentialVersion)
+        return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))
+      return ok(undefined)
     },
 
-    async loginWithLdap(credentials: LdapCredentials): Promise<HaiResult<AuthResult>> {
-      return loginWithStrategy('ldap', credentials, ldapStrategy)
+    async login(credentials: PasswordCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+      return loginWithStrategy('password', credentials, passwordStrategy, context)
     },
 
-    async loginWithApiKey(credentials: ApiKeyCredentials): Promise<HaiResult<AuthResult>> {
+    async loginWithOtp(credentials: OtpCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+      return loginWithStrategy('otp', credentials, otpStrategy, context)
+    },
+
+    async loginWithLdap(credentials: LdapCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
+      return loginWithStrategy('ldap', credentials, ldapStrategy, context)
+    },
+
+    async loginWithApiKey(credentials: ApiKeyCredentials, context?: AuthRequestContext): Promise<HaiResult<AuthResult>> {
       const disabled = loginDisabled('apikey')
       if (disabled)
         return disabled
@@ -428,7 +526,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       const authenticated = await apiKeyStrategy.authenticate({ type: 'apikey', ...credentials })
       if (!authenticated.success)
         return authenticated
-      return buildAuthResult(authenticated.data.user, authenticated.data.apiKey)
+      return buildAuthResult(authenticated.data.user, authenticated.data.apiKey, context)
     },
 
     async logout(accessToken: string): Promise<HaiResult<void>> {
@@ -436,27 +534,12 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return sessionFunctions.delete(accessToken)
     },
 
-    async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
-      const session = await sessionFunctions.verifyToken(accessToken)
-      if (!session.success)
-        return session
-      const [user, authorization] = await Promise.all([
-        userRepository.findById(session.data.userId),
-        authzFunctions.getUserAuthorization(session.data.userId),
-      ])
-      if (!user.success)
-        return user
-      if (!user.data?.enabled)
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-      if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
-        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      if (!authorization.success)
-        return authorization
-      const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }
-      return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
-    },
+    verifyToken: verifyCurrentSession,
 
-    async sendOtp(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {
+    async sendOtp(identifier: string, options?: { captcha?: string }): Promise<HaiResult<{ expiresAt: Date }>> {
+      const captcha = await verifyIamCaptcha(config.captcha, 'sendOtp', options?.captcha)
+      if (!captcha.success)
+        return captcha
       const disabled = loginDisabled('otp')
       if (disabled) {
         return disabled as HaiResult<{ expiresAt: Date }>

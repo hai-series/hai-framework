@@ -5,6 +5,7 @@ export const AppFrontendTargetSchema = z.enum(['web', 'app', 'miniapp', 'desktop
 
 /** 服务信息响应数据。 */
 export const AppInfoOutputDataSchema = z.object({
+  notice: z.string().max(200),
   name: z.string(),
   version: z.string(),
   env: z.string(),

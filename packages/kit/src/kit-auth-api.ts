@@ -1,16 +1,21 @@
 import type { HaiResult } from '@h-ai/core'
 /** SvelteKit 标准认证端点，统一验证、Cookie 和 HaiResult 处理。 */
-import type { IamFunctions } from '@h-ai/iam'
+import type { AuthRequestContext, IamFunctions } from '@h-ai/iam'
+import type { RequestEvent } from '@sveltejs/kit'
 import {
   IamConfirmPasswordResetInputSchema,
+  IamCreateCaptchaInputSchema,
   IamLdapLoginInputSchema,
   IamLoginInputSchema,
+  IamLogoutInputSchema,
   IamOtpLoginInputSchema,
+  IamReauthenticateInputSchema,
   IamRegisterInputSchema,
+  IamRenewPasswordInputSchema,
   IamRequestPasswordResetInputSchema,
   IamSendOtpInputSchema,
 } from '@h-ai/api-contract'
-import { login, loginWithLdap, loginWithOtp, registerAndLogin } from './kit-auth.js'
+import { getAccessToken, login, loginWithLdap, loginWithOtp, registerAndLogin } from './kit-auth.js'
 import { handler } from './kit-handler.js'
 import { fromError, ok } from './kit-response.js'
 import { validateFormOrFail } from './kit-validation.js'
@@ -25,7 +30,16 @@ import { validateFormOrFail } from './kit-validation.js'
  * void publicPaths
  * ```
  */
-export const authApiPublicPaths = ['/api/auth/config', '/api/auth/login', '/api/auth/login/ldap', '/api/auth/login/otp', '/api/auth/register', '/api/auth/otp/send', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm']
+export const authApiPublicPaths = ['/api/auth/session/close', '/api/auth/logout', '/api/auth/captcha', '/api/auth/config', '/api/auth/login', '/api/auth/login/ldap', '/api/auth/login/otp', '/api/auth/register', '/api/auth/otp/send', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm', '/api/auth/password/renew']
+
+function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'>): AuthRequestContext {
+  let ip: string | undefined
+  try {
+    ip = event.getClientAddress()
+  }
+  catch { /* 未配置可信连接地址时保持未知，启用 IP 限制将拒绝登录。 */ }
+  return { ip, userAgent: event.request.headers.get('user-agent') ?? undefined }
+}
 
 /**
  * 应用路由直接导出对应 handler；认证 ops 仍由 createHandle 注入。
@@ -43,34 +57,55 @@ export function createAuthApi(iam: IamFunctions) {
     return result.success ? ok(result.data) : fromError(result.error)
   }
   return {
+    closeSession: handler(async ({ request, cookies }) => {
+      const input = await validateFormOrFail(request, IamLogoutInputSchema)
+      // 此入口不能清除 Cookie：页面离开响应可能晚于下一文档的新登录。
+      return response(await iam.auth.logout(input.accessToken ?? getAccessToken(request, cookies) ?? ''))
+    }),
+    createCaptcha: handler(async ({ request }) => {
+      const input = await validateFormOrFail(request, IamCreateCaptchaInputSchema)
+      return response(await iam.auth.createCaptcha(input))
+    }),
+    reauthenticate: handler(async ({ request, cookies }) => {
+      const input = await validateFormOrFail(request, IamReauthenticateInputSchema)
+      return response(await iam.auth.reauthenticate(getAccessToken(request, cookies) ?? '', input.password, input.operation))
+    }),
     publicConfig: handler(() => ok(iam.publicConfig)),
-    login: handler(async ({ request, cookies }) => {
+    renewPassword: handler(async ({ request }) => {
+      const input = await validateFormOrFail(request, IamRenewPasswordInputSchema)
+      return response(await iam.user.renewPassword(input))
+    }),
+    login: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLoginInputSchema)
-      const result = await login(cookies, input)
+      const result = await login(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
-    loginWithLdap: handler(async ({ request, cookies }) => {
+    loginWithLdap: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLdapLoginInputSchema)
-      const result = await loginWithLdap(cookies, input)
+      const result = await loginWithLdap(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
-    loginWithOtp: handler(async ({ request, cookies }) => {
+    loginWithOtp: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamOtpLoginInputSchema)
-      const result = await loginWithOtp(cookies, input)
+      const result = await loginWithOtp(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
-    register: handler(async ({ request, cookies }) => {
+    register: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamRegisterInputSchema)
-      const result = await registerAndLogin(cookies, input)
+      const result = await registerAndLogin(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
     sendOtp: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamSendOtpInputSchema)
-      return response(await iam.auth.sendOtp(input.identifier))
+      return response(await iam.auth.sendOtp(input.identifier, input))
     }),
     requestPasswordReset: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamRequestPasswordResetInputSchema)
-      return response(await iam.user.requestPasswordReset(input.identifier))
+      return response(await iam.user.requestPasswordReset(input.identifier, input))
     }),
     confirmPasswordReset: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamConfirmPasswordResetInputSchema)

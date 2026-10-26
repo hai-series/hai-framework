@@ -11,8 +11,8 @@
  * 3. 缓存初始化
  * 4. 存储初始化（可选）
  * 5. Reach 触达服务初始化
- * 6. IAM 模块（使用 reach 发送验证码和密码重置通知）
- * 7. 业务表创建
+ * 6. 审计模块、IAM 模块（使用 reach 发送验证码和密码重置通知）
+ * 7. 可选审计备份任务、业务表创建；关闭时反序排空任务后再关闭审计/存储
  *
  * 配置文件约定：
  * - `config/_core.yml`  → 使用 CoreConfigSchema
@@ -21,6 +21,7 @@
  * - `config/_iam.yml`   → 使用 IamConfigSchema
  * - `config/_reach.yml` → 使用 ReachConfigSchema
  * - `config/_storage.yml` → 使用 StorageConfigSchema（可选）
+ * - `config/_audit.yml` / `_scheduler.yml` → 审计保留、隐私及可选备份计划
  *
  * @example
  * ```ts
@@ -41,8 +42,12 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { adminBuildMetadata } from '$lib/build-metadata.js'
+import * as m from '$lib/paraglide/messages.js'
+import { startAuditJobs } from '$lib/server/audit-jobs.js'
+import { initBusinessSettings } from '$lib/server/business-settings.js'
 import { seedFeedbackPermissions } from '$lib/server/feedback.js'
-import { audit } from '@h-ai/audit'
+import { bootstrapDutyAccount, seedAdminDuties } from '$lib/server/security-roles.js'
+import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
@@ -50,6 +55,7 @@ import { feedback } from '@h-ai/feedback'
 import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
+import { scheduler } from '@h-ai/scheduler'
 import { storage } from '@h-ai/storage'
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
@@ -69,13 +75,25 @@ const runtime = core.module.createRuntime([
   { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
   { name: 'storage', enabled: () => Boolean(core.config.get('storage')), start: () => storage.init(core.config.getOrThrow<StorageConfigInput>('storage')), close: () => storage.close() },
   { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(core.config.getOrThrow<ReachConfigInput>('reach')), close: () => reach.close() },
+  { name: 'audit', start: () => audit.init({ ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}), storage, reach }), close: () => audit.close() },
   { name: 'iam', start: () => iam.init({ ...core.config.getOrThrow<IamConfigSettingsInput>('iam'), reach }), close: () => iam.close() },
-  { name: 'audit', start: () => audit.init({ userTable: 'hai_iam_users' }), close: () => audit.close() },
+  { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: startAuditJobs, close: () => scheduler.close() },
   { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: () => feedback.init({ ...core.config.getOrThrow<FeedbackConfigInput>('feedback'), ...adminBuildMetadata }), close: () => feedback.close() },
   { name: 'bootstrap', start: async () => {
+    const businessSettings = await initBusinessSettings()
+    if (!businessSettings.success)
+      return businessSettings
     if (feedback.isInitialized)
       await seedFeedbackPermissions()
+    const duties = await seedAdminDuties({ admin: m.security_role_system(), audit_admin: m.security_role_audit(), config_admin: m.security_role_config(), business_operator: m.security_role_operator(), user: m.security_role_member() })
+    if (!duties.success)
+      return duties
     await ensureDefaultAdmin()
+    for (const [username, password] of [['audit_admin', process.env.HAI_AUDIT_ADMIN_PASSWORD], ['config_admin', process.env.HAI_CONFIG_ADMIN_PASSWORD], ['business_operator', process.env.HAI_BUSINESS_OPERATOR_PASSWORD]] as const) {
+      const created = await bootstrapDutyAccount(username, password)
+      if (!created.success)
+        return created
+    }
     core.logger.info('Application initialized.')
   }, close: () => {} },
 ])

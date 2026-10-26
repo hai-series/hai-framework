@@ -170,6 +170,8 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `kit.client.installBrowserTransportFetch()`              | 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 |
 | `kit.crud.define()`                                      | 声明式 CRUD 资源                                         |
 
+`guard.require` 和 `validate` 的 OrFail Response 仅由 `kit.handler` 处理 API 控制流。页面 load 用 guard.check 加 SvelteKit error，查询参数先 safeParse；不能把 API Response 直接抛给页面运行时。
+
 ## 常见模式
 
 - SvelteKit 应用内同源请求用 `kit.client.create().apiFetch`。

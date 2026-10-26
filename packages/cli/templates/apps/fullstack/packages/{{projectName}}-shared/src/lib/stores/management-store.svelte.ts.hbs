@@ -1,13 +1,15 @@
 import type { IamPublicConfig } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
-import type { AdminAuditLog, AdminCreateUser, AdminRole, AdminUpdateUser, AdminUser, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
+import type { AdminAuditLog, AdminCreateUser, AdminInviteUser, AdminRole, AdminUpdateUser, AdminUser, AuditBackupReceipt, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
 import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import type { HashRouter } from '../navigation/hash-router.svelte.js'
 import { HaiApiClientError } from '@h-ai/api-client'
+import { matchPermission } from '@h-ai/ui/components/scenes/iam/index'
 import { setGlobalLocale } from '@h-ai/ui/i18n'
 import { SvelteDate } from 'svelte/reactivity'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../api/api-client.js'
+import { requestSensitive } from '../api/sensitive-actions.svelte.js'
 import * as m from '../paraglide/messages.js'
 import { getLocale, locales, setLocale } from '../paraglide/runtime.js'
 import { AVAILABLE_THEMES, DEFAULT_THEME, themeStore } from './theme-store.svelte.js'
@@ -47,6 +49,16 @@ export class ManagementStore {
   audit = $state<AdminAuditLog[]>([])
   auditTotal = $state(0)
   auditPage = $state(1)
+  businessNotice = $state('')
+  auditCategory = $state<'system' | 'business' | ''>('')
+  auditOutcome = $state<'success' | 'failure' | 'denied' | ''>('')
+  auditSeverity = $state<'info' | 'warning' | 'error' | 'critical' | ''>('')
+  auditSortBy = $state<'createdAt' | 'action' | 'resource' | 'category' | 'outcome' | 'severity'>('createdAt')
+  auditSortDirection = $state<'asc' | 'desc'>('desc')
+  auditStats = $state<{ action: string, count: number }[]>([])
+  auditBackupEnabled = $state(false)
+  auditBackupReceipt = $state<AuditBackupReceipt | null>(null)
+  private auditBackupId = ''
   auditAction = $state('')
   auditResource = $state('')
   auditStartDate = $state('')
@@ -56,8 +68,23 @@ export class ManagementStore {
   private sessionEpoch = 0
   private onLocaleChange?: (locale: string) => void
 
-  get isAdmin(): boolean {
-    return this.user?.roles.includes('admin') ?? false
+  canManageUser(user: AdminUser): boolean {
+    return user.roles.every(code => code === 'admin' || code === 'user')
+  }
+
+  localDateTime(value: string): string {
+    const date = new SvelteDate(value)
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
+    return date.toISOString().slice(0, 16)
+  }
+
+  hasPermission(permission: string): boolean {
+    return matchPermission(permission, this.user?.permissions ?? [])
+  }
+
+  canOpenPage(page: string): boolean {
+    const permissions: Record<string, string> = { users: 'app.users.manage', roles: 'app.roles.manage', audit: 'audit:read', configuration: 'app.config.manage', feedback: 'feedback:read' }
+    return !permissions[page] || this.hasPermission(permissions[page])
   }
 
   async initialize(options: ManagementApiOptions, onLocaleChange?: (locale: string) => void): Promise<void> {
@@ -131,7 +158,7 @@ export class ManagementStore {
       return
     this.requestVersion++
     this.loading = false
-    this.page = this.isAdmin ? page : 'settings'
+    this.page = this.canOpenPage(page) ? page : 'settings'
     if (this.router.path !== `/${this.page}`)
       this.router.navigate(`/${this.page}`)
     this.page = this.router.path.slice(1)
@@ -143,6 +170,26 @@ export class ManagementStore {
       await this.loadRoles()
     else if (this.page === 'audit')
       await this.loadAudit()
+    else if (this.page === 'configuration')
+      await this.loadConfiguration()
+  }
+
+  async loadConfiguration(): Promise<void> {
+    await this.load(async (version) => {
+      const result = await this.request(() => managementApi.admin.configuration.get(), version)
+      if (result?.success && version === this.requestVersion)
+        this.businessNotice = result.data.notice
+    })
+  }
+
+  async saveConfiguration(): Promise<void> {
+    await this.mutate(async () => {
+      const result = await this.request(() => requestSensitive('business.settings.update', options => managementApi.admin.configuration.update({ notice: this.businessNotice }, options)))
+      if (result?.success && this.info) {
+        this.info = { ...this.info, notice: result.data.notice }
+        this.notice = m.saved()
+      }
+    })
   }
 
   async loadUsers(page = 1): Promise<void> {
@@ -178,12 +225,19 @@ export class ManagementStore {
       const result = await this.request(() => managementApi.admin.audit.list({
         page,
         pageSize: this.pageSize,
+        category: this.auditCategory || undefined,
+        outcome: this.auditOutcome || undefined,
+        severity: this.auditSeverity || undefined,
+        sortBy: this.auditSortBy,
+        sortDirection: this.auditSortDirection,
         action: this.auditAction.trim() || undefined,
         resource: this.auditResource.trim() || undefined,
         startDate: this.auditStartDate ? new SvelteDate(`${this.auditStartDate}T00:00:00`).toISOString() : undefined,
         endDate: this.auditEndDate ? new SvelteDate(`${this.auditEndDate}T23:59:59.999`).toISOString() : undefined,
       }), version)
       if (result?.success && version === this.requestVersion) {
+        this.auditStats = result.data.stats
+        this.auditBackupEnabled = result.data.backupEnabled
         this.audit = result.data.items
         this.auditTotal = result.data.total
         this.auditPage = result.data.page
@@ -191,12 +245,27 @@ export class ManagementStore {
     })
   }
 
+  async backupAudit(): Promise<void> {
+    await this.mutate(async () => {
+      this.auditBackupId ||= crypto.randomUUID()
+      const id = this.auditBackupId
+      const result = await this.request(() => requestSensitive('audit.backup', options => managementApi.admin.audit.backup({ id }, options)))
+      if (!result?.success) {
+        this.error = `${this.error} ${m.audit_backup_retry_hint()}`
+        return
+      }
+      this.auditBackupReceipt = result.data
+      this.auditBackupId = ''
+      this.notice = m.audit_backup_private_hint()
+    })
+  }
+
   async saveUser(data: AdminCreateUser | AdminUpdateUser): Promise<boolean> {
     let saved = false
     await this.mutate(async () => {
       const result = 'id' in data
-        ? await this.request(() => managementApi.admin.users.update(data))
-        : await this.request(() => managementApi.admin.users.create(data))
+        ? await this.request(() => requestSensitive('iam.users.update', options => managementApi.admin.users.update(data, options)))
+        : await this.request(() => requestSensitive('iam.users.create', options => managementApi.admin.users.create(data, options)))
       if (!result?.success)
         return
       saved = true
@@ -206,10 +275,26 @@ export class ManagementStore {
     return saved
   }
 
+  async inviteUser(data: AdminInviteUser): Promise<boolean> {
+    let invited = false
+    await this.mutate(async () => {
+      const result = await this.request(() => requestSensitive('iam.users.invite', options => managementApi.admin.users.invite(data, options)))
+      const failure = this.error
+      await this.loadUsers()
+      if (!result?.success) {
+        this.error = `${failure} ${m.invitation_check_existing()}`
+        return
+      }
+      invited = true
+      this.notice = m.saved()
+    })
+    return invited
+  }
+
   async deleteUser(user: AdminUser): Promise<boolean> {
     let deleted = false
     await this.mutate(async () => {
-      const result = await this.request(() => managementApi.admin.users.delete({ id: user.id }))
+      const result = await this.request(() => requestSensitive('iam.users.delete', options => managementApi.admin.users.delete({ id: user.id }, options)))
       if (!result?.success)
         return
       deleted = true
@@ -223,7 +308,7 @@ export class ManagementStore {
   async saveRole(id: string, description: string): Promise<boolean> {
     let saved = false
     await this.mutate(async () => {
-      const result = await this.request(() => managementApi.admin.roles.update({ id, description }))
+      const result = await this.request(() => requestSensitive('iam.roles.update', options => managementApi.admin.roles.update({ id, description }, options)))
       if (!result?.success)
         return
       saved = true
@@ -239,7 +324,7 @@ export class ManagementStore {
 
   async savePreferences(data: ProfileUpdate): Promise<void> {
     await this.mutate(async () => {
-      const result = await this.request(() => managementApi.profile.update(data))
+      const result = await this.request(() => requestSensitive('iam.profile.update', options => managementApi.profile.update(data, options)))
       if (!result?.success)
         return
       const me = await this.request(() => managementApi.iam.auth.currentUser())
@@ -251,7 +336,7 @@ export class ManagementStore {
 
   async changePassword(data: ChangePasswordFormData): Promise<void> {
     await this.mutate(async () => {
-      if (!data.oldPassword || data.newPassword === data.oldPassword || data.newPassword !== data.confirmPassword || data.newPassword.length < 8) {
+      if (!data.oldPassword || data.newPassword !== data.confirmPassword) {
         this.error = m.validation_failed()
         return
       }
@@ -271,8 +356,8 @@ export class ManagementStore {
       if (!payload)
         return
       const result = userId
-        ? await this.request(() => managementApi.admin.users.avatar({ id: userId, ...payload }))
-        : await this.request(() => managementApi.profile.avatar(payload))
+        ? await this.request(() => requestSensitive('iam.users.avatar', options => managementApi.admin.users.avatar({ id: userId, ...payload }, options)))
+        : await this.request(() => requestSensitive('iam.profile.avatar', options => managementApi.profile.avatar(payload, options)))
       if (!result?.success)
         return
       if (!userId || userId === this.user?.id) {
@@ -306,6 +391,24 @@ export class ManagementStore {
     if (this.user?.id !== user.id)
       this.sessionEpoch++
     this.user = { ...user, avatarUrl: resolveAvatarUrl(user.avatarUrl) }
+    if (!this.hasPermission('app.users.manage')) {
+      this.users = []
+      this.usersTotal = 0
+      this.usersPage = 1
+    }
+    if (!this.hasPermission('app.roles.manage'))
+      this.roles = []
+    if (!this.hasPermission('audit:read')) {
+      this.audit = []
+      this.auditTotal = 0
+      this.auditPage = 1
+      this.auditStats = []
+      this.auditBackupEnabled = false
+    }
+    if (!this.hasPermission('audit:backup')) {
+      this.auditBackupReceipt = null
+      this.auditBackupId = ''
+    }
     this.applyLocale(typeof user.metadata?.locale === 'string' ? user.metadata.locale : this.info?.defaultLocale ?? getLocale())
     if (typeof user.metadata?.theme === 'string' && AVAILABLE_THEMES.includes(user.metadata.theme))
       themeStore.set(user.metadata.theme)
@@ -333,6 +436,10 @@ export class ManagementStore {
     this.users = []
     this.roles = []
     this.audit = []
+    this.auditStats = []
+    this.auditBackupEnabled = false
+    this.auditBackupReceipt = null
+    this.auditBackupId = ''
     this.page = 'settings'
   }
 
@@ -361,12 +468,9 @@ export class ManagementStore {
             return undefined
           if (current.success) {
             this.setUser(current.data)
-            if (!this.isAdmin) {
+            if (!this.canOpenPage(this.page)) {
               this.requestVersion++
               this.loading = false
-              this.users = []
-              this.roles = []
-              this.audit = []
               this.page = 'settings'
             }
           }

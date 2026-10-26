@@ -6,13 +6,14 @@
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime'
-  import { Badge } from '@h-ai/ui'
+  import { Badge, usePermission } from '@h-ai/ui'
 
   interface Props {
     data: PageData
   }
 
   const { data }: Props = $props()
+  const { hasPerm } = usePermission()
   const emptyRouteParams = {}
 
   type QuickLinkHref = '/admin/iam/users' | '/admin/iam/roles' | '/admin/iam/permissions' | '/admin/logs' | '/admin/ui-gallery' | '/admin/settings'
@@ -67,6 +68,7 @@
 
   const statCards = $derived([
     {
+      visible: data.canReadUsers,
       label: m.dashboard_total_users(),
       value: data.stats.userCount,
       sub: m.dashboard_active_count({ count: data.stats.activeUsers }),
@@ -76,6 +78,7 @@
       bar: 'bg-primary',
     },
     {
+      visible: data.canReadRoles,
       label: m.dashboard_total_roles(),
       value: data.stats.roleCount,
       sub: m.dashboard_role_desc(),
@@ -85,6 +88,7 @@
       bar: 'bg-emerald-500',
     },
     {
+      visible: data.canReadPermissions,
       label: m.dashboard_total_permissions(),
       value: data.stats.permissionCount,
       sub: m.dashboard_permission_desc(),
@@ -94,6 +98,7 @@
       bar: 'bg-amber-500',
     },
     {
+      visible: data.canReadAudit,
       label: m.dashboard_activity_7d(),
       value: data.auditStats.reduce((sum: number, s: { count: number }) => sum + s.count, 0),
       sub: m.dashboard_audit_logs(),
@@ -102,16 +107,16 @@
       accent: 'bg-sky-500/8',
       bar: 'bg-sky-500',
     },
-  ])
+  ].filter(card => card.visible))
 
   const quickLinks = $derived([
-    { href: '/admin/iam/users', icon: 'icon-[tabler--users]', label: m.nav_users(), color: 'text-primary' },
-    { href: '/admin/iam/roles', icon: 'icon-[tabler--shield-check]', label: m.nav_roles(), color: 'text-emerald-600' },
-    { href: '/admin/iam/permissions', icon: 'icon-[tabler--key]', label: m.nav_permissions(), color: 'text-amber-600' },
-    { href: '/admin/logs', icon: 'icon-[tabler--file-text]', label: m.nav_logs(), color: 'text-sky-600' },
-    { href: '/admin/ui-gallery', icon: 'icon-[tabler--components]', label: m.nav_ui_gallery(), color: 'text-violet-600' },
-    { href: '/admin/settings', icon: 'icon-[tabler--settings]', label: m.nav_settings(), color: 'text-base-content/50' },
-  ])
+    { permission: 'user:read', href: '/admin/iam/users', icon: 'icon-[tabler--users]', label: m.nav_users(), color: 'text-primary' },
+    { permission: 'role:read', href: '/admin/iam/roles', icon: 'icon-[tabler--shield-check]', label: m.nav_roles(), color: 'text-emerald-600' },
+    { permission: 'permission:read', href: '/admin/iam/permissions', icon: 'icon-[tabler--key]', label: m.nav_permissions(), color: 'text-amber-600' },
+    { permission: 'audit:read', href: '/admin/logs', icon: 'icon-[tabler--file-text]', label: m.nav_logs(), color: 'text-sky-600' },
+    { permission: 'profile:read', href: '/admin/ui-gallery', icon: 'icon-[tabler--components]', label: m.nav_ui_gallery(), color: 'text-violet-600' },
+    { permission: 'system:settings', href: '/admin/settings', icon: 'icon-[tabler--settings]', label: m.nav_settings(), color: 'text-base-content/50' },
+  ].filter(link => hasPerm(link.permission)))
 </script>
 
 <svelte:head>
@@ -163,50 +168,52 @@
       </div>
     </div>
 
-    <!-- 最近活动 -->
-    <div class='lg:col-span-2'>
-      <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
-        <div class='flex items-center justify-between mb-3'>
-          <div class='flex items-center gap-2'>
-            <span class='icon-[tabler--activity] size-4 text-base-content/40'></span>
-            <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_recent_activity()}</h2>
+    {#if data.canReadAudit}
+      <!-- 最近活动 -->
+      <div class='lg:col-span-2'>
+        <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+          <div class='flex items-center justify-between mb-3'>
+            <div class='flex items-center gap-2'>
+              <span class='icon-[tabler--activity] size-4 text-base-content/40'></span>
+              <h2 class='text-sm font-semibold text-base-content'>{m.dashboard_recent_activity()}</h2>
+            </div>
+            <a href={logsPath} class='text-xs text-primary/70 hover:text-primary font-medium flex items-center gap-0.5 transition-colors'>
+              {m.action_view_all()}
+              <span class='icon-[tabler--arrow-right] size-3.5'></span>
+            </a>
           </div>
-          <a href={logsPath} class='text-xs text-primary/70 hover:text-primary font-medium flex items-center gap-0.5 transition-colors'>
-            {m.action_view_all()}
-            <span class='icon-[tabler--arrow-right] size-3.5'></span>
-          </a>
-        </div>
 
-        <div class='divide-y divide-base-content/5'>
-          {#each data.recentActivity as activity (activity.id)}
-            <div class='flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0'>
-              <div class='shrink-0 w-7 h-7 rounded-full bg-base-content/5 flex items-center justify-center mt-0.5'>
-                <span class='icon-[tabler--user] size-3.5 text-base-content/40'></span>
-              </div>
-              <div class='flex-1 min-w-0'>
-                <div class='flex items-center gap-1.5 flex-wrap'>
-                  <span class='text-[13px] font-medium text-base-content'>{activity.username ?? m.common_unknown_user()}</span>
-                  <Badge variant={getActivityBadgeVariant(activity.action)} size='sm'>
-                    {translateAction(activity.action)}
-                  </Badge>
-                  <span class='text-base-content/45 text-xs'>{activity.resource}</span>
+          <div class='divide-y divide-base-content/5'>
+            {#each data.recentActivity as activity (activity.id)}
+              <div class='flex items-start gap-2.5 py-2.5 first:pt-0 last:pb-0'>
+                <div class='shrink-0 w-7 h-7 rounded-full bg-base-content/5 flex items-center justify-center mt-0.5'>
+                  <span class='icon-[tabler--user] size-3.5 text-base-content/40'></span>
                 </div>
-                {#if activity.details}
-                  <p class='text-xs text-base-content/35 truncate mt-0.5'>{activity.details}</p>
-                {/if}
+                <div class='flex-1 min-w-0'>
+                  <div class='flex items-center gap-1.5 flex-wrap'>
+                    <span class='text-[13px] font-medium text-base-content'>{activity.username ?? m.common_unknown_user()}</span>
+                    <Badge variant={getActivityBadgeVariant(activity.action)} size='sm'>
+                      {translateAction(activity.action)}
+                    </Badge>
+                    <span class='text-base-content/45 text-xs'>{activity.resource}</span>
+                  </div>
+                  {#if activity.details}
+                    <p class='text-xs text-base-content/35 truncate mt-0.5'>{activity.details}</p>
+                  {/if}
+                </div>
+                <div class='text-2xs text-base-content/30 whitespace-nowrap tabular-nums shrink-0'>
+                  {formatTime(activity.createdAt)}
+                </div>
               </div>
-              <div class='text-2xs text-base-content/30 whitespace-nowrap tabular-nums shrink-0'>
-                {formatTime(activity.createdAt)}
+            {:else}
+              <div class='py-8 text-center text-sm text-base-content/30'>
+                {m.common_no_activity()}
               </div>
-            </div>
-          {:else}
-            <div class='py-8 text-center text-sm text-base-content/30'>
-              {m.common_no_activity()}
-            </div>
-          {/each}
+            {/each}
+          </div>
         </div>
       </div>
-    </div>
+    {/if}
   </div>
 
   <!-- 活动统计 -->

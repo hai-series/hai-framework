@@ -1,10 +1,11 @@
+import { CreateApiKeySchema, ListApiKeysQuerySchema } from '$lib/server/schemas/index.js'
 /**
  * =============================================================================
  * Admin Console - API Key 管理 API（列表 / 创建）
  * =============================================================================
  */
 
-import { CreateApiKeySchema, ListApiKeysQuerySchema } from '$lib/server/schemas/index.js'
+import { requireGrantablePermissions, requireManageableUser } from '$lib/server/security-roles.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -51,14 +52,17 @@ export const GET = kit.handler(async ({ url, locals }) => {
  *
  * 注意：明文密钥仅在此次响应中返回，之后无法再获取。
  */
-export const POST = kit.handler(async ({ request, locals }) => {
+export const POST = kit.handler(async ({ request, locals, cookies }) => {
   kit.guard.require(locals.session, 'apikey:create')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.apiKeys.create')
 
   const { userId, name, expirationDays, scopes } = await kit.validate.body(request, CreateApiKeySchema)
+  await requireManageableUser(locals.session, userId)
+  requireGrantablePermissions(locals.session, scopes ?? [])
 
   const result = await iam.apiKey.createApiKey(userId, { name, expirationDays, scopes })
   if (!result.success) {
-    return kit.response.badRequest(result.error.message)
+    return kit.response.fromError(result.error)
   }
 
   return kit.response.created(result.data)

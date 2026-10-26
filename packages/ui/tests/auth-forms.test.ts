@@ -21,6 +21,47 @@ function snippet(text: string) {
 }
 
 describe('authentication form extensions and agreements', () => {
+  it.each(['hai:iam:007', 'hai:iam:025'])('首次/过期先验证旧密码并完成改密，不提前授权：%s', async (code) => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const action = async () => ok(undefined)
+    const renewPassword = vi.fn(action)
+    const onauthenticated = vi.fn()
+    const component = mount(AuthPanel, { target, props: {
+      config: { ...config, agreements: { showOnLogin: false, showOnRegister: false } },
+      actions: { login: async () => err({ code, message: 'Update password', httpStatus: 401 }), register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action, renewPassword },
+      onauthenticated,
+    } })
+    function input(selector: string, value: string) {
+      const element = target.querySelector<HTMLInputElement>(selector)!
+      element.value = value
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    try {
+      flushSync()
+      input('input[name="username"]', 'alice')
+      input('input[type="password"]', 'OldPassword123')
+      flushSync()
+      target.querySelector('form')!.requestSubmit()
+      await vi.waitFor(() => expect(target.querySelector('.change-password-form')).not.toBeNull())
+      expect(target.querySelector<HTMLInputElement>('#renew-identifier')!.value).toBe('alice')
+      expect(target.querySelector<HTMLInputElement>('#old-password')!.value).toBe('')
+      expect(onauthenticated).not.toHaveBeenCalled()
+      input('#old-password', 'OldPassword123')
+      input('#new-password', 'NewPassword123')
+      input('#confirm-password', 'NewPassword123')
+      flushSync()
+      target.querySelector('form')!.requestSubmit()
+      await vi.waitFor(() => expect(renewPassword).toHaveBeenCalledWith({ identifier: 'alice', password: 'OldPassword123', newPassword: 'NewPassword123' }))
+      await vi.waitFor(() => expect(target.querySelector('.login-form')).not.toBeNull())
+      expect(onauthenticated).not.toHaveBeenCalled()
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
   it.each(['password', 'email', 'sms'] as const)('登录仅提交实际认证字段且不展示未实现的持久会话选择：%s', async (method) => {
     const target = document.createElement('div')
     document.body.append(target)

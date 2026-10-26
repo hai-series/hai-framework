@@ -300,7 +300,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 ### 错误处理
 
 - 推荐使用 `kit.handler()` 包装 API 端点。
-- `kit.validate.body` / `kit.guard.require` 会抛出 `Response`（SvelteKit 控制流）。
+- `kit.validate.body` / `kit.guard.require` 抛出 `Response`，由 `kit.handler` 处理 API 控制流。页面 `load` 使用 `kit.guard.check` 和 SvelteKit `error`；校验查询参数用 `schema.safeParse` 后返回原生页面错误，不能直接抛 API Response。
 - 非控制流异常会由 `kit.handler()` 统一转换为 `500 INTERNAL_ERROR` 响应。
 
 ### CRUD fields
@@ -343,6 +343,18 @@ export const PATCH = handler
 HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+
+audit 已初始化时，createHandle 为业务 audit.log 绑定已验证会话的身份/角色快照、平台 getClientAddress 地址和请求编号。自动入口事件 request.execute 包含路由模板、方法、状态和成功/失败/拒绝，包含守卫跳转及 SvelteKit HTTP 控制流；不复制请求体或错误详情。capture.enabled 可关闭自动采集，capture.includeReads 可开启成功读取；默认保留失败读取、跳过成功读取。业务含义仍在应用完成/失败边界显式记录，关闭自动采集不影响业务 log。
+
+## 可选交互挑战
+
+将 kit.auth.createApi(iam).createCaptcha 导出为 POST /api/auth/captcha；kit.auth.publicPaths 已包含它。kit.client.createAuthActions() 保留标准交互请求的 captcha 字段，并提供 createCaptcha；AuthPanel 提交时自动求解。匿名首次/过期改密仍须导出 /api/auth/password/renew。服务端 IAM 检查证明，开启策略不会只依赖界面。
+
+策略、默认值和恢复边界见 [IAM](../iam/README.md)。
+
+## 页面离开会话策略
+
+`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
 
 ## 开发测试
 

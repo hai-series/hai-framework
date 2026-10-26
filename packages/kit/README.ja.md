@@ -300,7 +300,7 @@ kit.auth.createApi(iam) の標準 handler と kit.auth.publicPaths を使用し�
 ### エラー処理
 
 - API endpoint は `kit.handler()` でラップすることを推奨。
-- `kit.validate.body` / `kit.guard.require` は SvelteKit の制御フローとして `Response` を throw。
+- `kit.validate.body` / `kit.guard.require` の `Response` は `kit.handler` が API 制御フローとして処理します。ページ `load` では `kit.guard.check` と SvelteKit `error` を使い、検索条件は `safeParse` で検証してネイティブなページエラーに変換します。API Response をそのまま throw しません。
 - 制御フロー以外の例外は `kit.handler()` が `500 INTERNAL_ERROR` 応答に変換。
 
 ### CRUD fields
@@ -343,6 +343,18 @@ export const PATCH = handler
 HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+audit の初期化後、createHandle は検証済みセッションの身元/役割、プラットフォーム getClientAddress と要求 ID を業務 audit.log に関連付けます。request.execute はルート雛形・メソッド・状態・成功/失敗/拒否を記録し、守衛リダイレクトと SvelteKit HTTP 制御フローも含みます。要求本文・内部エラーは複製しません。capture.enabled で自動記録、capture.includeReads で成功読取を制御し、失敗した読取は既定で記録します。業務完了/失敗はアプリが明示的に記録し、自動記録を無効にしても業務 log は維持します。
+
+## 任意の対話チャレンジ
+
+kit.auth.createApi(iam).createCaptcha を POST /api/auth/captcha として公開します。kit.auth.publicPaths は対応済みです。kit.client.createAuthActions は captcha を保持し createCaptcha を提供し、AuthPanel が自動求解します。初回/期限切れ変更には /api/auth/password/renew も公開します。IAM がサーバーで証明を強制検証します。
+
+方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
+
+## ページ離脱時のセッション方針
+
+`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
 
 ## 開発とテスト
 

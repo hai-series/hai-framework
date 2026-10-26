@@ -726,9 +726,23 @@ const app = serv.createApp({
 
 ## エラー表示とログの関連付け
 
+ネイティブ Audio WebSocket も安全なエラー境界を使います。Provider/SDK の内部情報やスタックはマスク済みログだけに残し、クライアントには安定コード、安全な表示、traceId を返します。独自 CORS 設定でも機密操作の X-Hai-Reauthentication を許可してください。Serv/Kit の既定設定には含まれます。
+
 HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+audit の初期化後、procedure は検証済み主体・信頼できる接続元・要求/範囲 ID を関連付け、業務 audit.log に継承します。書込と失敗/拒否は request.execute、入力検証・プロトコル・ミドルウェア・ルート未検出の HTTP エラーは http.reject を記録します。操作・メソッド・状態・理由コードのみを記録し、要求本文・動的 URL・トークン・内部エラーは記録しません。capture.enabled で自動記録を無効化、capture.includeReads で成功読取を有効化できます。明示的業務 log は維持し、業務の完了/失敗はアプリが記録します。
+
+## 任意の対話チャレンジ
+
+標準 IAM procedure は operation を受けて公開 ALTCHA チャレンジを返す POST /auth/captcha を含みます。有効時はパスワード/OTP/LDAP、登録、通知要求、匿名の旧パスワード更新で IAM が単用証明を検証し、captcha を保持してクライアント判断に依存しません。
+
+方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
+
+## ページ離脱時のセッション方針
+
+`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
 
 ## 開発とテスト
 

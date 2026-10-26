@@ -5,13 +5,36 @@
   - 系统信息
 -->
 <script lang='ts'>
+  import type { PageData } from './$types'
   import { browser } from '$app/environment'
+  import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+  import { saveBusinessNotice } from '$lib/services/business-settings'
   import { applyTheme, getCurrentTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
 
+  interface Props { data: PageData }
+  const { data }: Props = $props()
+  let notice = $derived(data.businessSettings.notice)
+  let saving = $state(false)
+  let errorMessage = $state('')
+  async function save(event: SubmitEvent) {
+    event.preventDefault()
+    saving = true
+    errorMessage = ''
+    try {
+      const result = await saveBusinessNotice(notice)
+      if (!result.success)
+        errorMessage = result.error.message
+      else
+        await invalidateAll()
+    }
+    catch { errorMessage = m.common_network_error() }
+    finally { saving = false }
+  }
+
   // ========== 分区导航 ==========
-  let activeSection = $state('appearance')
+  let activeSection = $state('business')
 
   // ========== 主题设置 ==========
   let currentTheme = $state(browser ? getCurrentTheme() : 'light')
@@ -61,6 +84,7 @@
   title={m.settings_title()}
   description={m.settings_subtitle()}
   sections={[
+    { id: 'business', label: m.business_settings_title(), icon: 'icon-[tabler--message]' },
     { id: 'appearance', label: m.settings_appearance(), icon: 'icon-[tabler--palette]' },
     { id: 'region', label: m.settings_region(), icon: 'icon-[tabler--language]' },
     { id: 'about', label: m.settings_about(), icon: 'icon-[tabler--info-circle]' },
@@ -68,7 +92,16 @@
   active={activeSection}
   onselect={id => (activeSection = id)}
 >
-  {#if activeSection === 'appearance'}
+  {#if activeSection === 'business'}
+    <form class='max-w-xl space-y-4' onsubmit={save}>
+      <FormField label={m.business_notice_label()} for='business-notice'>
+        <Textarea id='business-notice' bind:value={notice} maxlength={200} rows={4} data-testid='business-notice-input' />
+      </FormField>
+      <p class='text-sm text-base-content/60'>{m.business_notice_hint()}</p>
+      {#if errorMessage}<p class='text-error' role='alert'>{errorMessage}</p>{/if}
+      <Button type='submit' loading={saving}>{m.settings_save()}</Button>
+    </form>
+  {:else if activeSection === 'appearance'}
     <!-- 外观设置（shadcn 风格：无卡片，分隔线 + 行） -->
     <section>
       <h2 class='text-lg font-medium text-base-content'>{m.settings_appearance()}</h2>

@@ -78,6 +78,16 @@ export interface User {
   avatarUrl?: string
   /** 是否启用 */
   enabled: boolean
+  /** 账号类型；未设置时为长期账号。 */
+  accountType?: 'permanent' | 'temporary'
+  /** 账号生命周期；与管理员 enabled 开关共同决定可用性。 */
+  accountStatus?: 'active' | 'dormant' | 'closed'
+  /** 临时账号到期时间；长期账号可为 null，临时账号必须设置。 */
+  accountExpiresAt?: Date | null
+  /** 最近成功登录时间，失败尝试不更新。 */
+  lastLoginAt?: Date | null
+  /** 初始凭据尚未更换；此时不能签发或使用普通业务会话。 */
+  mustChangePassword?: boolean
   /** 是否邮箱验证 */
   emailVerified?: boolean
   /** 是否手机验证 */
@@ -145,6 +155,8 @@ export interface StoredUser extends User {
   passwordUpdatedAt?: Date
   /** 登录失败次数 */
   loginFailedCount?: number
+  /** 当前固定失败计数窗口的起点。 */
+  firstLoginFailedAt?: Date
   /** 最后登录失败时间 */
   lastLoginFailedAt?: Date
   /** 锁定截止时间 */
@@ -162,6 +174,14 @@ export interface StoredUser extends User {
  * ```
  */
 export interface RegisterOptions {
+  /** 可选交互挑战证明；管理端 createUser/inviteUser 不使用。 */
+  captcha?: string
+  /** 服务端管理入口可指定临时账号；公开注册接口不应允许修改生命周期字段。 */
+  accountType?: 'permanent' | 'temporary'
+  /** 管理入口指定初始状态；公开注册 Schema 不接受此字段。 */
+  accountStatus?: 'active' | 'dormant' | 'closed'
+  /** 临时账号的到期时间。 */
+  accountExpiresAt?: Date
   /** 用户名 */
   username: string
   /** 邮箱 */
@@ -241,6 +261,15 @@ export interface UpdateCurrentUserInput {
  * ```
  */
 export interface UserOperations {
+  /**
+   * 创建独立随机初始凭据并发送短期单次邀请；不返回或通知原始初始密码。
+   * initialCredentials.enabled、passwordReset 与通知通道必须就绪；接收人使用现有重置页面设密。
+   * 投递未知时保留已创建账号并返回失败；核对后可通过重置通知流程恢复。
+   * @param options - 可信管理端输入，必须包含通知通道对应的邮箱/手机号。
+   * @returns 创建结果或失败；不能把通知结果未知当作未创建账号。
+   */
+  inviteUser: (options: Omit<RegisterOptions, 'password'>) => Promise<HaiResult<RegisterResult>>
+
   /** 批量查询最多 1000 个用户 ID，去重并保持输入顺序，忽略不存在的 ID；可批量包含角色。 */
   getUsers: (userIds: readonly string[], options?: { include?: ('roles')[] }) => Promise<HaiResult<User[]>>
   /** 管理端创建账户，不受自助注册开关限制；调用端必须执行管理员授权。 */
@@ -295,6 +324,17 @@ export interface UserOperations {
    * @returns 成功返回分页用户列表
    */
   listUsers: (options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>
+  /**
+   * 依据 accounts.dormantAfterDays 原子休眠长期未登录的账号，返回数量；0天时不执行。
+   * IAM 开启自动扫描时定时调用；外露管理接口须自行验证管理员权限。
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * const scanned = await iam.user.scanInactiveAccounts()
+   * if (!scanned.success) throw new Error(scanned.error.message)
+   * ```
+   */
+  scanInactiveAccounts: () => Promise<HaiResult<number>>
 
   /**
    * 更新用户信息
@@ -327,6 +367,17 @@ export interface UserOperations {
    * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND，密码不合规返回 PASSWORD_POLICY_VIOLATION
    */
   adminResetPassword: (userId: string, newPassword: string) => Promise<HaiResult<void>>
+  /**
+   * 使用原凭据完成首次或过期改密，不需要先获得普通会话。
+   * 仍执行账号状态、旧密码校验、失败锁定及新密码策略；成功后需重新登录。
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * const changed = await iam.user.renewPassword({ identifier: 'alice', password: 'Temporary123!', newPassword: 'ChosenPassword456!' })
+   * if (!changed.success) throw new Error(changed.error.message)
+   * ```
+   */
+  renewPassword: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => Promise<HaiResult<void>>
 
   /**
    * 修改密码
@@ -372,7 +423,7 @@ export interface UserOperations {
    *   requested.error.code // 投递未知不能当作成功或由调用端擅自重发通知。
    * ```
    */
-  requestPasswordReset: (identifier: string) => Promise<HaiResult<void>>
+  requestPasswordReset: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<void>>
 
   /**
    * 确认密码重置

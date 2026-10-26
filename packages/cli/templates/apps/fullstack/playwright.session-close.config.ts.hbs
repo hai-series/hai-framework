@@ -1,0 +1,18 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.e2eFrontend}}
+/** 页面离开策略使用独立数据目录与服务配置，普通会话恢复场景仍在默认组验证。 */
+import { defineConfig } from '@playwright/test'
+import base from './playwright.config.js'
+
+export default defineConfig({
+  ...base,
+  testMatch: '**/session-close.spec.ts',
+  testIgnore: [],
+  webServer: (Array.isArray(base.webServer) ? base.webServer : base.webServer ? [base.webServer] : []).map(server => ({
+    ...server,
+    env: server.env?.HAI_ADMIN_DEFAULT_PASSWORD
+      ? { ...server.env, HAI_IAM_SESSION_ENDONPAGEHIDE: 'true', HAI_IAM_SESSION_IDLETIMEOUT: '5', HAI_IAM_SESSION_ABSOLUTETIMEOUT: '60', HAI_IAM_PASSWORD_REQUIREINITIALCHANGE: 'true' }
+      : server.env,
+  })),
+})
+{{/if~}}

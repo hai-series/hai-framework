@@ -13,6 +13,7 @@ export default defineConfig({
   external: [
     '@h-ai/ai',
     '@h-ai/api-contract',
+    '@h-ai/audit',
     '@h-ai/core',
     '@h-ai/crypto',
     '@h-ai/feedback',

@@ -8,7 +8,7 @@
 import type { HaiError, HaiResult, PaginatedResult } from '@h-ai/core'
 import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
-import type { IamConfig } from '../iam-config.js'
+import type { IamConfig, PasswordResetConfig, SecurityConfig } from '../iam-config.js'
 import type { IamNotificationContext } from '../iam-types.js'
 import type { SessionOperations } from '../session/iam-session-types.js'
 import type { UserRepository } from './iam-user-repository-user.js'
@@ -16,6 +16,7 @@ import type {
   ListUsersOptions,
   RegisterOptions,
   RegisterResult,
+  StoredUser,
   UpdateCurrentUserInput,
   User,
   UserOperations,
@@ -25,6 +26,7 @@ import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
+import { verifyIamCaptcha } from '../authn/iam-authn-captcha.js'
 import { isAccountLocked, recordLoginFailure, resetLoginFailures } from '../authn/iam-authn-utils.js'
 import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
@@ -32,7 +34,7 @@ import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { generateToken } from '../session/iam-session-utils.js'
 import { createDbUserRepository } from './iam-user-repository-user.js'
-import { toUser } from './iam-user-utils.js'
+import { isUserActive, toUser, validateAccountPolicy } from './iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'user' })
 
@@ -243,9 +245,24 @@ interface UserFnContext {
   config: IamConfig
   registerConfig: { enabled: boolean, defaultEnabled: boolean }
   agreementConfig: IamConfig['agreements']
-  resetConfig: { enabled: boolean, tokenExpiresIn: number, maxAttempts: number }
-  loginConfig: { maxLoginAttempts: number, lockoutDuration: number }
+  resetConfig: PasswordResetConfig
+  loginConfig: SecurityConfig
   onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
+}
+
+/** 注册和所有改密入口共用强度规则；首次/过期改密不得以相同密码清除限制。 */
+function validatePasswordReplacement(ctx: UserFnContext, user: StoredUser, password: string): HaiResult<void> {
+  const strength = ctx.validatePassword(password)
+  if (!strength.success)
+    return strength
+  if (user.passwordHash && ((user.mustChangePassword && ctx.config.password?.requireInitialChange) || ctx.config.password?.preventSamePassword || (ctx.config.password?.expirationDays ?? 0) > 0)) {
+    const same = crypto.password.verify(password, user.passwordHash)
+    if (!same.success)
+      return same
+    if (same.data)
+      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordMustDiffer'))
+  }
+  return ok(undefined)
 }
 
 // ─── 注册操作 ───
@@ -261,6 +278,9 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
    * 校验注册前置条件
    */
   async function validateRegisterPreconditions(options: RegisterOptions): Promise<HaiResult<void>> {
+    const accountPolicy = validateAccountPolicy(options)
+    if (!accountPolicy.success)
+      return accountPolicy
     const validateResult = validatePassword(options.password)
     if (!validateResult.success)
       return validateResult
@@ -304,7 +324,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     return authzFunctions.assignRole(userId, roleResult.data.id)
   }
 
-  async function createUser(options: RegisterOptions, enabled: boolean): Promise<HaiResult<RegisterResult>> {
+  async function createUser(options: RegisterOptions, enabled: boolean, managed = false): Promise<HaiResult<RegisterResult>> {
     // 校验前置条件
     const preResult = await validateRegisterPreconditions(options)
     if (!preResult.success)
@@ -328,6 +348,10 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       phone: options.phone,
       displayName: options.displayName,
       enabled,
+      accountType: options.accountType ?? 'permanent',
+      accountStatus: options.accountStatus ?? 'active',
+      accountExpiresAt: options.accountExpiresAt,
+      mustChangePassword: managed && config.password?.requireInitialChange === true,
       emailVerified: false,
       phoneVerified: false,
       passwordHash: hashResult.data,
@@ -372,8 +396,11 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   }
 
   return {
-    createUser: options => createUser(options, true),
-    register(options) {
+    createUser: options => createUser(options, true, true),
+    async register(options) {
+      const captcha = await verifyIamCaptcha(ctx.config.captcha, 'register', options.captcha)
+      if (!captcha.success)
+        return captcha
       if (!registerConfig.enabled)
         return Promise.resolve(err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
       return createUser(options, registerConfig.defaultEnabled)
@@ -598,6 +625,19 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
     },
 
     async updateUser(userId: string, data: Partial<User>): Promise<HaiResult<User>> {
+      const currentAccount = await userRepository.findById(userId)
+      if (!currentAccount.success)
+        return currentAccount
+      if (!currentAccount.data)
+        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+      // 部分更新的 undefined 与持久化层一致，表示保留原值；null 才是显式清空到期时间。
+      const accountPolicy = validateAccountPolicy({
+        accountType: data.accountType === undefined ? currentAccount.data.accountType : data.accountType,
+        accountStatus: data.accountStatus === undefined ? currentAccount.data.accountStatus : data.accountStatus,
+        accountExpiresAt: data.accountExpiresAt === undefined ? currentAccount.data.accountExpiresAt : data.accountExpiresAt,
+      })
+      if (!accountPolicy.success)
+        return accountPolicy
       if (!hasUpdateFields(data)) {
         const currentResult = await userRepository.findById(userId)
         if (!currentResult.success) {
@@ -617,21 +657,42 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return uniqueResult as HaiResult<User>
       }
 
-      const updateResult = await userRepository.updateById(userId, data)
-      if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
+      const changesSecurity = data.enabled !== undefined || data.accountStatus !== undefined
+        || data.accountType !== undefined || data.accountExpiresAt !== undefined
+      // 状态与凭据代际同事务提交；恢复账号也不能让停用前的旧会话重新有效。
+      const transaction = changesSecurity ? await reldb.tx.begin() : undefined
+      if (transaction && !transaction.success)
+        return transaction
+      const tx = transaction?.success ? transaction.data : undefined
+      let transactionCommitted = false
+      try {
+        const updateResult = await userRepository.updateById(userId, data, tx)
+        if (!updateResult.success)
+          return mapUpdateErrorAsDomainError(updateResult.error) as HaiResult<User>
+        if (updateResult.data.changes === 0)
+          return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
+        if (tx) {
+          const advanced = await tx.execute('UPDATE hai_iam_users SET credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE id = ? AND credential_version = ?', [globalThis.crypto.randomUUID(), globalThis.crypto.randomUUID(), userId, currentAccount.data.credentialVersion ?? ''])
+          if (!advanced.success || advanced.data.changes !== 1)
+            return advanced.success ? err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict')) : advanced
+          const committed = await tx.commit()
+          if (!committed.success)
+            return committed
+          transactionCommitted = true
+        }
       }
-
-      if (updateResult.data.changes === 0) {
-        return err(
-          HaiIamError.USER_NOT_FOUND,
-          iamM('iam_userNotExist'),
-        )
+      catch (cause) {
+        return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_accountUpdateFailed'), cause)
       }
-
-      // 禁用用户时注销所有活跃会话
-      if (data.enabled === false) {
-        await sessionFunctions.deleteByUserId(userId)
+      finally {
+        // 包括 SDK/编程异常，均释放未提交的事务，防止后续 SQLite 操作等待自身锁。
+        if (tx && !transactionCommitted)
+          await tx.rollback()
+      }
+      if (tx) {
+        const revoked = await sessionFunctions.deleteByUserId(userId)
+        if (!revoked.success)
+          logger.warn('Account credentials revoked; session cache cleanup failed', { userId, error: revoked.error })
       }
 
       const updatedResult = await userRepository.findById(userId)
@@ -713,7 +774,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
  */
 function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'adminResetPassword' | 'changePassword' | 'changeCurrentUserPassword'> {
   const { userRepository, sessionFunctions } = ctx
-  const { validatePassword, hashPassword } = ctx
+  const { hashPassword } = ctx
 
   return {
     async adminResetPassword(userId: string, newPassword: string): Promise<HaiResult<void>> {
@@ -730,7 +791,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
         )
       }
 
-      const validateResult = validatePassword(newPassword)
+      const validateResult = validatePasswordReplacement(ctx, userResult.data, newPassword)
       if (!validateResult.success)
         return validateResult
 
@@ -738,7 +799,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       if (!hashResult.success)
         return hashResult as HaiResult<void>
 
-      const updateResult = await userRepository.setPassword({ userId, expectedVersion: userResult.data.credentialVersion ?? '', passwordHash: hashResult.data })
+      const updateResult = await userRepository.setPassword({ userId, expectedVersion: userResult.data.credentialVersion ?? '', passwordHash: hashResult.data, mustChangePassword: ctx.config.password?.requireInitialChange === true })
       if (!updateResult.success)
         return updateResult
       if (!updateResult.data)
@@ -769,10 +830,10 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       const user = userResult.data
 
       // 账户状态检查（防止被锁定/禁用的账户变更密码）
-      if (!user.enabled) {
+      if (!isUserActive(user)) {
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       }
-      if (isAccountLocked(user)) {
+      if (isAccountLocked(user, ctx.loginConfig)) {
         return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
       }
 
@@ -787,10 +848,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       const verifyResult = crypto.password.verify(oldPassword, user.passwordHash)
       if (!verifyResult.success || !verifyResult.data) {
         // 记录失败计数 / 触发锁定，防止通过 changePassword 端点暴力枚举旧密码
-        const failureResult = await recordLoginFailure(userRepository, user, {
-          maxLoginAttempts: ctx.loginConfig.maxLoginAttempts,
-          lockoutDuration: ctx.loginConfig.lockoutDuration,
-        })
+        const failureResult = await recordLoginFailure(userRepository, user, ctx.loginConfig)
         if (!failureResult.success)
           return failureResult
         return err(
@@ -800,12 +858,12 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       }
 
       // 成功验证旧密码后重置失败计数
-      const resetResult = await resetLoginFailures(userRepository, user)
+      const resetResult = await resetLoginFailures(userRepository, user, ctx.loginConfig)
       if (!resetResult.success)
         return resetResult
 
       // 验证新密码强度
-      const validateResult = validatePassword(newPassword)
+      const validateResult = validatePasswordReplacement(ctx, user, newPassword)
       if (!validateResult.success)
         return validateResult
 
@@ -851,15 +909,51 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
 // ─── 密码重置操作 ───
 
+/** 已确定用户的凭据通知发布；邀请与公开重置共用持久代际、到期及单次提交。 */
+async function issuePasswordReset(ctx: UserFnContext, stored: StoredUser): Promise<HaiResult<void>> {
+  const { userRepository, onPasswordResetRequest, resetConfig } = ctx
+  if (!onPasswordResetRequest)
+    return err(HaiIamError.PASSWORD_RESET_DISABLED, iamM('iam_passwordResetDisabled'))
+  const user = toUser(stored)
+  // 生成 256-bit 加密安全令牌（与 session token 强度一致）
+  const token = generateToken()
+  const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
+
+  // 保存新令牌并替换旧令牌，尝试次数与令牌拥有同一有效期。
+  const tokenHash = crypto.hash.hash(token)
+  if (!tokenHash.success)
+    return tokenHash
+  const saveResult = await userRepository.publishPasswordReset({ user: stored, tokenHash: tokenHash.data, expiresAt })
+  if (!saveResult.success)
+    return saveResult
+  if (!saveResult.data)
+    return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
+
+  // 通过回调通知业务层（如发送邮件）
+  try {
+    await onPasswordResetRequest(user, token, { expiresAt, idempotencyKey: `iam-reset:${tokenHash.data}` })
+  }
+  catch {
+    logger.error('Password reset callback failed', { userId: user.id })
+    return err(HaiIamError.INTERNAL_ERROR, iamM('iam_notificationDeliveryUnknown'))
+  }
+
+  logger.info('Password reset token generated', { userId: user.id })
+  return ok(undefined)
+}
+
 /**
  * 构建密码重置操作（请求重置、确认重置）
  */
 function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'requestPasswordReset' | 'confirmPasswordReset'> {
   const { userRepository, sessionFunctions, onPasswordResetRequest } = ctx
-  const { validatePassword, hashPassword } = ctx
+  const { hashPassword } = ctx
 
   return {
-    async requestPasswordReset(identifier: string): Promise<HaiResult<void>> {
+    async requestPasswordReset(identifier: string, options?: { captcha?: string }): Promise<HaiResult<void>> {
+      const captcha = await verifyIamCaptcha(ctx.config.captcha, 'passwordReset', options?.captcha)
+      if (!captcha.success)
+        return captcha
       logger.debug('Password reset requested', { identifier })
 
       const resetConfig = ctx.resetConfig
@@ -883,31 +977,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       if (!user.enabled)
         return ok(undefined)
 
-      // 生成 256-bit 加密安全令牌（与 session token 强度一致）
-      const token = generateToken()
-      const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
-
-      // 保存新令牌并替换旧令牌，尝试次数与令牌拥有同一有效期。
-      const tokenHash = crypto.hash.hash(token)
-      if (!tokenHash.success)
-        return tokenHash
-      const saveResult = await userRepository.publishPasswordReset({ user: userResult.data, tokenHash: tokenHash.data, expiresAt })
-      if (!saveResult.success)
-        return saveResult
-      if (!saveResult.data)
-        return err(HaiIamError.CONFLICT, iamM('iam_securityStateFailed'))
-
-      // 通过回调通知业务层（如发送邮件）
-      try {
-        await onPasswordResetRequest(user, token, { expiresAt, idempotencyKey: `iam-reset:${tokenHash.data}` })
-      }
-      catch {
-        logger.error('Password reset callback failed', { userId: user.id })
-        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_notificationDeliveryUnknown'))
-      }
-
-      logger.info('Password reset token generated', { userId: user.id })
-      return ok(undefined)
+      return issuePasswordReset(ctx, userResult.data)
     },
 
     async confirmPasswordReset(token: string, newPassword: string): Promise<HaiResult<void>> {
@@ -924,7 +994,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       const claimed = await userRepository.claimPasswordReset(tokenHash.data, resetConfig.maxAttempts)
       if (!claimed.success)
         return claimed
-      const validateResult = validatePassword(newPassword)
+      const validateResult = validatePasswordReplacement(ctx, claimed.data, newPassword)
       if (!validateResult.success)
         return validateResult
       const hashResult = hashPassword(newPassword)
@@ -965,12 +1035,53 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
     loginConfig: SecurityConfigSchema.parse(deps.config.security ?? {}),
   }
 
+  const passwordChanges = buildPasswordChangeOps(ctx)
+  const registration = buildRegistrationOps(ctx)
   return {
-    ...buildRegistrationOps(ctx),
+    ...registration,
     ...buildUserQueryOps(ctx),
     ...buildUserMutationOps(ctx),
-    ...buildPasswordChangeOps(ctx),
+    ...passwordChanges,
     ...buildPasswordResetOps(ctx),
+    async inviteUser(options) {
+      const destination = ctx.resetConfig.mode === 'phone' ? options.phone : options.email
+      if (!deps.config.initialCredentials?.enabled || !ctx.resetConfig.enabled || !ctx.onPasswordResetRequest || !destination)
+        return err(HaiIamError.INVITATION_DISABLED, iamM('iam_invitationDisabled'))
+      const policy = deps.passwordStrategyResult.passwordConfig
+      const length = Math.min(policy.maxLength, Math.max(32, policy.minLength))
+      // 初始秘密只用于内部独立散列，从不返回、投递或写入业务元数据。
+      const password = (`Aa1!${Array.from({ length: Math.ceil(length / 32) }, () => generateToken()).join('')}`).slice(0, length)
+      const created = await registration.createUser({ ...options, password })
+      if (!created.success)
+        return created
+      const stored = await deps.userRepository.findById(created.data.user.id)
+      if (!stored.success || !stored.data)
+        return err(HaiIamError.INVITATION_DELIVERY_UNKNOWN, iamM('iam_invitationDeliveryUnknown'))
+      const delivered = await issuePasswordReset(ctx, stored.data)
+      if (!delivered.success)
+        return err(HaiIamError.INVITATION_DELIVERY_UNKNOWN, iamM('iam_invitationDeliveryUnknown'), delivered.error)
+      return created
+    },
+    async renewPassword(input) {
+      const captcha = await verifyIamCaptcha(deps.config.captcha, 'renewPassword', input.captcha)
+      if (!captcha.success)
+        return captcha
+      const found = await deps.userRepository.findByIdentifier(input.identifier)
+      if (!found.success)
+        return found
+      if (!found.data) {
+        // 不存在账号同样执行散列工作，不暴露“账号不存在”分支。
+        crypto.password.hash('dummy-password-to-prevent-timing-leak')
+        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      }
+      return passwordChanges.changePassword(found.data.id, input.password, input.newPassword)
+    },
+    async scanInactiveAccounts() {
+      const days = deps.config.accounts?.dormantAfterDays ?? 0
+      if (days === 0)
+        return ok(0)
+      return deps.userRepository.suspendInactive(new Date(Date.now() - days * 86400_000))
+    },
   }
 }
 

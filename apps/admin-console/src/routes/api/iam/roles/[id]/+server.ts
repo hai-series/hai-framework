@@ -1,12 +1,14 @@
+import * as m from '$lib/paraglide/messages.js'
 /**
  * =============================================================================
  * Admin Console - 单个角色管理 API
  * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
 import { deleteAdminRole, getAdminRole, resolvePermissionIds, updateAdminRole } from '$lib/server/iam-admin.js'
 import { IdParamSchema, UpdateRoleSchema } from '$lib/server/schemas/index.js'
+import { requireGrantablePermissions, requireGrantableRoles } from '$lib/server/security-roles.js'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -32,12 +34,15 @@ export const GET = kit.handler(async ({ params, locals }) => {
  *
  * 需要权限：role:api:update
  */
-export const PUT = kit.handler(async ({ params, request, locals }) => {
+export const PUT = kit.handler(async ({ params, request, locals, cookies }) => {
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'role:api:update')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.roles.update')
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
   const input = await kit.validate.body(request, UpdateRoleSchema)
+  await requireGrantableRoles(locals.session, [roleId])
+  requireGrantablePermissions(locals.session, input.permissions ?? [])
 
   // 检查角色是否存在
   const existing = await getAdminRole(roleId)
@@ -56,7 +61,7 @@ export const PUT = kit.handler(async ({ params, request, locals }) => {
   })
 
   if (!updateResult.success) {
-    return kit.response.badRequest(updateResult.error.message)
+    return kit.response.fromError(updateResult.error)
   }
 
   return kit.response.ok(updateResult.data)
@@ -67,13 +72,15 @@ export const PUT = kit.handler(async ({ params, request, locals }) => {
  *
  * 需要权限：role:api:delete
  */
-export const DELETE = kit.handler(async ({ params, locals }) => {
+export const DELETE = kit.handler(async ({ params, locals, request, cookies }) => {
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   kit.guard.require(locals.session, 'role:api:delete')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.roles.delete')
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
 
   // 检查角色是否存在
+  await requireGrantableRoles(locals.session, [roleId])
   const existing = await getAdminRole(roleId)
   if (!existing) {
     return kit.response.notFound(m.api_iam_roles_not_found({}, { locale }))
@@ -82,7 +89,7 @@ export const DELETE = kit.handler(async ({ params, locals }) => {
   // 删除角色（IAM authz 内部已记录审计日志）
   const deleteResult = await deleteAdminRole(roleId)
   if (!deleteResult.success) {
-    return kit.response.badRequest(deleteResult.error.message)
+    return kit.response.fromError(deleteResult.error)
   }
 
   return kit.response.ok(null)

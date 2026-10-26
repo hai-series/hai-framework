@@ -1,4 +1,5 @@
 <script lang='ts'>
+  import type { LayoutData } from './$types'
   /**
    * H5 应用根布局 — 使用 @h-ai/ui AppBar + BottomNav 组件
    */
@@ -8,6 +9,7 @@
   import { page } from '$app/stores'
   import * as m from '$lib/paraglide/messages.js'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+  import { authActions } from '$lib/services/auth'
   import {
     AppBar,
     applyTheme,
@@ -20,10 +22,12 @@
   import '../app.css'
 
   interface Props {
+    data: LayoutData
     children: import('svelte').Snippet
   }
 
-  const { children }: Props = $props()
+  const { data, children }: Props = $props()
+  $effect(() => authActions.bindPageExit({ enabled: data.iamPublicConfig?.session.endOnPageHide }))
 
   let currentTheme = $state('light')
   let currentLanguage = $state('zh-CN')

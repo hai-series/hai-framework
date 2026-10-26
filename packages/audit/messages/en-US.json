@@ -1,4 +1,10 @@
 {
+  "audit_eventFieldsInvalid": "Invalid event fields",
+  "audit_identityMismatch": "Actor snapshot does not match the event identity",
+  "audit_queryInvalid": "Invalid filters or dates",
+  "audit_eventProcessingFailed": "Event processing failed",
+  "audit_sortInvalid": "Invalid sort field or direction",
+  "audit_retentionPolicyFailed": "Unable to read or update the audit retention policy",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "audit_notInitialized": "Audit module not initialized, call audit.init() first",
   "audit_initFailed": "Audit module initialization failed: {error}",
@@ -9,5 +15,20 @@
   "audit_invalidStatCount": "Audit count is outside the valid range and cannot be displayed safely",
   "audit_configError": "Audit config validation failed: {error}",
   "audit_initInProgress": "Audit module initialization is already in progress",
-  "audit_invalidInput": "Invalid audit input for {field}: {reason}"
+  "audit_invalidInput": "Invalid audit input for {field}: {reason}",
+  "audit_backupDisabled": "Audit backup is disabled",
+  "audit_backupFailed": "Audit backup operation failed",
+  "audit_backupInvalid": "Invalid audit backup input",
+  "audit_backupConflict": "This backup ID belongs to a different export request",
+  "audit_backupStorageRequired": "Audit backups require initialized storage",
+  "audit_backupPrivateStorageRequired": "Audit backups require private storage; remove the public base URL and restrict archive reads",
+  "audit_backupVerificationFailed": "Audit archive verification could not complete",
+  "audit_backupTaskName": "Audit log backup",
+  "audit_alertsDisabled": "Audit alerts are disabled",
+  "audit_alertsFailed": "Audit alert check or notification failed",
+  "audit_alertReachRequired": "Alerts require initialized Reach and valid notification providers",
+  "audit_alertSubject": "[{severity}] Security alert: {rule}",
+  "audit_alertTaskName": "Audit anomaly alert check",
+  "audit_unknownTask": "Unknown audit scheduled task",
+  "audit_eventTimeUnavailable": "A valid database audit time is unavailable"
 }

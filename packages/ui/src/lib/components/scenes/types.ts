@@ -6,6 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { Challenge } from 'altcha/lib'
 import type { Snippet } from 'svelte'
 import type { DataAttributes, FormLayoutOptions, FormText, InputProps, Size } from '../../types.js'
 
@@ -247,6 +248,22 @@ export interface ChangePasswordFormData {
 }
 
 /**
+ * 敏感操作再鉴别对话框属性；宿主只在服务端选定操作前请求密码。
+ * @example
+ * ```ts
+ * import type { ReauthenticationDialogProps } from '@h-ai/ui'
+ * const props: ReauthenticationDialogProps = { open: false, onsubmit: async (password) => { void password }, onclose: () => {} }
+ * ```
+ */
+export interface ReauthenticationDialogProps {
+  open: boolean
+  loading?: boolean
+  error?: string
+  onsubmit: (password: string) => void | Promise<void>
+  onclose: () => void
+}
+
+/**
  * 修改密码表单属性
  *
  * @example
@@ -421,6 +438,8 @@ export interface PasswordPolicy {
   requireLowercase: boolean
   requireNumber: boolean
   requireSpecialChar: boolean
+  /** 至少满足的字符类别数；0 或未提供时仅应用各项独立要求。 */
+  minCharacterClasses?: number
 }
 /**
  * 仅消费安全公开配置，不能将 iam.config 或连接密钥传入浏览器。
@@ -444,6 +463,7 @@ export interface PasswordPolicy {
  * ```
  */
 export interface AuthPanelConfig {
+  captcha?: { enabled: boolean }
   /** 只有已启用且具备运行时依赖的方式才应为 true。 */
   login: { password: boolean, ldap: boolean, email: boolean, sms: boolean }
   register: { enabled: boolean }
@@ -477,13 +497,17 @@ export interface AuthPanelConfig {
  * ```
  */
 export interface AuthPanelActions {
+  /** 仅启用交互挑战时需要；动作返回可公开挑战，签名秘密保留在服务端。 */
+  createCaptcha?: (input: { operation: 'login' | 'register' | 'sendOtp' | 'passwordReset' | 'renewPassword' }) => Promise<HaiResult<{ id: string, challenge: Challenge }>>
   /** password/ldap 使用 password，email/sms 使用 code；成功后由工厂保存凭证。 */
-  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string }) => Promise<HaiResult<unknown>>
+  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string, captcha?: string }) => Promise<HaiResult<unknown>>
   /** 注册并登录；禁用新账户的待启用状态由面板单独提示。 */
-  register: (input: { username: string, password: string, email?: string, phone?: string, displayName?: string }) => Promise<HaiResult<unknown>>
-  sendOtp: (identifier: string) => Promise<HaiResult<unknown>>
-  requestPasswordReset: (identifier: string) => Promise<HaiResult<unknown>>
+  register: (input: { username: string, password: string, email?: string, phone?: string, displayName?: string, captcha?: string }) => Promise<HaiResult<unknown>>
+  sendOtp: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<unknown>>
+  requestPasswordReset: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<unknown>>
   confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<unknown>>
+  /** 首次或密码过期时，验证原密码并换新；完成后重新登录。 */
+  renewPassword?: (input: { identifier: string, password: string, newPassword: string, captcha?: string }) => Promise<HaiResult<unknown>>
 }
 
 /**
@@ -495,7 +519,7 @@ export interface AuthPanelActions {
  * const example: AuthPanelMode = 'login'
  * ```
  */
-export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset'
+export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset' | 'renew'
 
 /**
  * 配置驱动认证场景；网络、通知和令牌存储由应用注入 actions。

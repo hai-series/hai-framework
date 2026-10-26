@@ -26,7 +26,7 @@
     "lint:fix": "eslint *.js *.ts e2e --fix && pnpm -r --if-present lint:fix",
     "test": "pnpm --filter {{fullstack.contractPackageName}} build && pnpm i18n:compile && pnpm -r --if-present test",
     "test:watch": "pnpm -r --parallel --if-present test:watch",
-    "test:e2e": "pnpm compile && node scripts/run-e2e.mjs",
+    "test:e2e": "pnpm compile && node scripts/run-e2e.mjs --config playwright.config.ts{{#if fullstack.e2eFrontend}} --next --config playwright.session-close.config.ts{{/if}}",
     "clean": "pnpm -r --if-present clean && rimraf node_modules .turbo"
   },
   "dependencies": {

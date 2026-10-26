@@ -22,6 +22,7 @@ import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.
 import { createAuthzOperations } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
+import { observeApiKeys, observeAuth, observeAuthorization, observeSessions, observeUsers } from './iam-audit.js'
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { migrateIam } from './iam-migration.js'
@@ -37,6 +38,7 @@ import { createSessionOperations } from './session/iam-session-functions.js'
 import { createTicketOperations } from './ticket/iam-ticket-functions.js'
 import { createUserOperations } from './user/iam-user-functions.js'
 import { createDbUserRepository, resetUserRepoSingleton } from './user/iam-user-repository-user.js'
+import { checkPasswordState, isUserActive } from './user/iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
@@ -52,6 +54,8 @@ let currentAuthz: AuthzOperations | null = null
 let currentSession: SessionOperations | null = null
 let currentApiKey: ApiKeyOperations | null = null
 let currentTicket: TicketOperations | null = null
+let accountScanTimer: ReturnType<typeof setInterval> | undefined
+let accountScanRunning: Promise<void> | undefined
 
 // ─── 未初始化占位 ───
 
@@ -173,22 +177,29 @@ export const iam: IamFunctions = {
           const found = await credentialUsers.findById(userId)
           if (!found.success)
             return found
-          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: found.data.enabled } : null)
+          if (found.data) {
+            const passwordState = checkPasswordState(found.data, parsed.password)
+            if (!passwordState.success)
+              return passwordState
+          }
+          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: isUserActive(found.data) } : null)
         },
       })
       if (!sessionResult.success) {
         return sessionResult
       }
+      const sessions = observeSessions(sessionResult.data)
 
-      const authzResult = await createAuthzOperations({ config: parsed, session: sessionResult.data })
+      const authzResult = await createAuthzOperations({ config: parsed, session: sessions })
       if (!authzResult.success) {
         return authzResult
       }
+      const authorization = observeAuthorization(authzResult.data)
 
       const authnResult = await createAuthnOperations({
         config: parsed,
-        sessionFunctions: sessionResult.data,
-        authzFunctions: authzResult.data,
+        sessionFunctions: sessions,
+        authzFunctions: authorization,
         ldapClientFactory,
         ldapSyncUser,
         onOtpSendEmail,
@@ -201,43 +212,57 @@ export const iam: IamFunctions = {
       const userResult = await createUserOperations({
         config: parsed,
         passwordStrategyResult: authnResult.data.passwordStrategyResult,
-        sessionFunctions: sessionResult.data,
-        authzFunctions: authzResult.data,
+        sessionFunctions: sessions,
+        authzFunctions: authorization,
         onPasswordResetRequest,
       })
       if (!userResult.success) {
         return userResult
       }
+      const users = observeUsers(userResult.data)
 
       // 种子数据
       if (parsed.seedDefaultData) {
-        const seedResult = await seedIamData(authzResult.data)
+        const seedResult = await seedIamData(authorization)
         if (!seedResult.success) {
           return seedResult
         }
       }
 
       // 所有子功能创建成功，原子性赋值到模块状态
-      currentSession = sessionResult.data
-      currentAuthz = authzResult.data
-      currentUser = userResult.data
+      currentSession = sessions
+      currentAuthz = authorization
+      currentUser = users
       currentConfig = parsed
       currentPublicConfig = buildIamPublicConfig(parsed, { ...config, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms })
-      currentApiKey = authnResult.data.apiKeyFunctions
+      currentApiKey = authnResult.data.apiKeyFunctions ? observeApiKeys(authnResult.data.apiKeyFunctions) : null
       // 一次性票据能力（仅依赖 cache + crypto，随 IAM 初始化即可用）
       currentTicket = createTicketOperations()
 
       // 组合 auth：注入 registerAndLogin（依赖 user + auth 两个子功能）
       const authn = authnResult.data.authn
-      currentAuth = {
+      currentAuth = observeAuth({
         ...authn,
-        async registerAndLogin(options) {
+        async registerAndLogin(options, context) {
           const regResult = await currentUser!.register(options)
           if (!regResult.success) {
             return regResult as HaiResult<AuthResult>
           }
-          return authnResult.data.loginRegisteredUser(regResult.data.user)
+          return authnResult.data.loginRegisteredUser(regResult.data.user, context)
         },
+      })
+      if ((parsed.accounts?.dormantAfterDays ?? 0) > 0) {
+        accountScanTimer = setInterval(() => {
+          if (accountScanRunning)
+            return
+          accountScanRunning = users.scanInactiveAccounts().then((result) => {
+            if (!result.success)
+              logger.error('Inactive account scan failed', { error: result.error })
+          }).catch((error: unknown) => {
+            logger.error('Inactive account scan failed', { error })
+          }).finally(() => { accountScanRunning = undefined })
+        }, (parsed.accounts?.scanIntervalSeconds ?? 3600) * 1000)
+        accountScanTimer.unref()
       }
       logger.info('IAM module initialized')
       return ok(undefined)
@@ -293,6 +318,9 @@ export const iam: IamFunctions = {
     }
 
     logger.info('Closing IAM module')
+    clearInterval(accountScanTimer)
+    accountScanTimer = undefined
+    await accountScanRunning
 
     currentAuth = null
     currentUser = null

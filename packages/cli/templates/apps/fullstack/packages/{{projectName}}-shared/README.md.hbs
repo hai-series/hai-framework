@@ -28,6 +28,10 @@ Vite development and preview servers read the workspace root environment files a
 
 An origin-only API base uses `/api/v1`. For a custom service `http.apiPrefix`, include that path in `PUBLIC_API_BASE` or the runtime API base; the client preserves the configured path and restricts avatar URLs to its matching resource prefix.
 
+### Configurable security and duties
+
+System administrators manage accounts and roles, auditors query/export private audit archives, configuration staff maintain the public notice, and business operators process feedback. Basic members retain self-service access. Navigation and server permissions follow the same application-owned duties. Management forms support temporary account expiry and active/dormant/closed states; optional invitations use one-time password setup notifications. `ReauthenticationDialog` collects confirmation for configured operations through the service layer, and proofs are passed only to the corresponding API call. Audit pages expose category/outcome/severity filters, sorting, seven-day statistics and private backup receipts. Page-exit revocation is optional and best effort; combine it with server idle/absolute deadlines.
+
 ### Authentication and preferences
 
 Web and browser previews keep access tokens in memory and refresh tokens in the server's httpOnly Cookie. Requests include credentials; reload restores the session through the encrypted refresh flow. Never store authentication tokens in localStorage.

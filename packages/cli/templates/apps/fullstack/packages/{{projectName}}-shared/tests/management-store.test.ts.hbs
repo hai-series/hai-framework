@@ -25,7 +25,7 @@ const member = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
-const administrator = { ...member, id: 'admin-id', username: 'admin', roles: ['admin'] }
+const administrator = { ...member, id: 'admin-id', username: 'admin', roles: ['admin'], permissions: ['app.users.manage', 'app.roles.manage'] }
 const forbidden = { success: false, error: { code: 'test:forbidden', message: 'Forbidden', httpStatus: 403 } } as const
 
 function deferred<T>() {

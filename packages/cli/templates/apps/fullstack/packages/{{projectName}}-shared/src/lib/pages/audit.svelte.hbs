@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { AdminAuditLog } from '{{fullstack.contractPackageName}}'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { DataTable, Modal, Pagination } from '@h-ai/ui/components/compounds/index'
-  import { Button, Input } from '@h-ai/ui/components/primitives/index'
+  import { DataTable, FormField, Modal, Pagination } from '@h-ai/ui/components/compounds/index'
+  import { Badge, Button, Input, Select } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
 
   interface Props { store: ManagementStore }
@@ -12,15 +12,22 @@
     { key: 'createdAt', label: m.created_at() },
     { key: 'username', label: m.audit_actor() },
     { key: 'action', label: m.audit_action() },
+    { key: 'category', label: m.audit_category() },
+    { key: 'outcome', label: m.audit_outcome() },
+    { key: 'severity', label: m.audit_severity() },
     { key: 'resource', label: m.audit_resource() },
     { key: 'ipAddress', label: m.audit_ip() },
   ])
 </script>
 
 <section class="flex min-h-0 flex-1 flex-col gap-5" data-testid="audit-page">
-  <div class="shrink-0"><h1 class="text-xl font-semibold tracking-tight">{m.nav_audit()}</h1><p class="mt-1 text-sm text-base-content/50">{m.audit_description()}</p></div>
-  <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100">
-    <form class="grid shrink-0 items-end gap-3 border-b border-base-content/8 p-4 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
+  <div class='flex shrink-0 flex-wrap items-center justify-between gap-3'>
+    <div><h1 class="text-xl font-semibold tracking-tight">{m.nav_audit()}</h1><p class="mt-1 text-sm text-base-content/50">{m.audit_description()}</p></div>
+    {#if store.auditBackupEnabled && store.hasPermission('audit:backup')}<Button variant='outline' loading={store.saving} onclick={() => void store.backupAudit()} data-testid='audit-backup'>{m.audit_backup_run()}</Button>{/if}
+    {#if store.auditBackupReceipt}<p class='basis-full break-all font-mono text-xs' data-testid='audit-backup-receipt'>{store.auditBackupReceipt.key} · {store.auditBackupReceipt.recordCount} · SHA-256: {store.auditBackupReceipt.sha256}</p>{/if}
+  </div>
+  <div class="flex min-h-0 flex-1 flex-col overflow-auto rounded-xl border border-base-content/8 bg-base-100">
+    <form class="grid shrink-0 grid-cols-2 items-end gap-3 border-b border-base-content/8 p-4 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] [&_.fieldset]:p-0" onsubmit={(event) => {
       event.preventDefault()
       void store.loadAudit()
     }}>
@@ -28,14 +35,30 @@
       <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-resource">{m.audit_resource()}</label><Input id="audit-resource" bind:value={store.auditResource} placeholder={m.audit_resource_placeholder()} data-testid="audit-resource" /></div>
       <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-start">{m.audit_start()}</label><input id="audit-start" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditStartDate} /></div>
       <div class="min-w-0 space-y-1"><label class="block text-xs text-base-content/60" for="audit-end">{m.audit_end()}</label><input id="audit-end" type="date" class="input block h-10 min-w-0 w-full" bind:value={store.auditEndDate} /></div>
-      <Button type="submit" variant="outline" disabled={store.loading} class="h-10 w-full">{m.search()}</Button>
+      <Button type="submit" variant="outline" disabled={store.loading} class="col-span-2 h-10 w-full xl:col-span-1">{m.search()}</Button>
     </form>
-    <div class="flex min-h-0 flex-1 flex-col overflow-auto">
+    <details class='shrink-0 border-b border-base-content/8' data-testid='audit-advanced'>
+      <summary class='cursor-pointer px-4 py-3 text-sm font-medium'>{m.audit_advanced_filters()}</summary>
+      <div class='grid items-end gap-3 p-4 sm:grid-cols-3'>
+        <FormField label={m.audit_category()}><Select bind:value={store.auditCategory} options={[{ value: '', label: m.audit_all() }, { value: 'system', label: m.audit_category_system() }, { value: 'business', label: m.audit_category_business() }]} data-testid='audit-category' /></FormField>
+        <FormField label={m.audit_outcome()}><Select bind:value={store.auditOutcome} options={[{ value: '', label: m.audit_all() }, { value: 'success', label: m.audit_success() }, { value: 'failure', label: m.audit_failure() }, { value: 'denied', label: m.audit_denied() }]} data-testid='audit-outcome' /></FormField>
+        <FormField label={m.audit_severity()}><Select bind:value={store.auditSeverity} options={[{ value: '', label: m.audit_all() }, { value: 'info', label: m.audit_info() }, { value: 'warning', label: m.audit_warning() }, { value: 'error', label: m.audit_error() }, { value: 'critical', label: m.audit_critical() }]} data-testid='audit-severity' /></FormField>
+        <FormField label={m.audit_sort()}><Select bind:value={store.auditSortBy} options={[{ value: 'createdAt', label: m.created_at() }, { value: 'action', label: m.audit_action() }, { value: 'resource', label: m.audit_resource() }, { value: 'category', label: m.audit_category() }, { value: 'outcome', label: m.audit_outcome() }, { value: 'severity', label: m.audit_severity() }]} /></FormField>
+        <FormField label={m.audit_sort_direction()}><Select bind:value={store.auditSortDirection} options={[{ value: 'asc', label: m.audit_asc() }, { value: 'desc', label: m.audit_desc() }]} /></FormField>
+        <Button variant='outline' disabled={store.loading} onclick={() => void store.loadAudit()}>{m.search()}</Button>
+      </div>
+      <div class='space-y-2 px-4 pb-4'>
+        <p class='text-xs text-base-content/60'>{m.audit_stats_hint()}</p>
+        <div class='flex flex-wrap gap-2'>{#each store.auditStats as stat (stat.action)}<Badge variant='ghost'>{stat.action}: {stat.count}</Badge>{/each}</div>
+      </div>
+    </details>
+    <div class="flex min-h-32 flex-1 flex-col overflow-auto">
       <DataTable data={store.audit} {columns} keyField="id" loading={store.loading} striped={false} class="min-h-0 flex-1 overflow-auto">
         {#snippet cell(entry, key)}
           {#if key === 'createdAt'}<span class="whitespace-nowrap text-xs">{store.formatDate(entry.createdAt)}</span>
           {:else if key === 'username'}{entry.username || m.audit_system()}
           {:else if key === 'action'}<span class="rounded-md bg-base-200 px-2 py-1 font-mono text-xs">{entry.action}</span>
+          {:else if key === 'category' || key === 'outcome' || key === 'severity'}{entry[key] ?? '—'}
           {:else if key === 'resource'}<span class="text-sm">{entry.resource}</span>
           {:else if key === 'ipAddress'}<span class="text-xs text-base-content/55">{entry.ipAddress || '—'}</span>{/if}
         {/snippet}
@@ -49,6 +72,10 @@
 <Modal open={!!selected} title={m.audit_details()} onclose={() => { selected = null }}>
   {#if selected}
     <dl class="grid grid-cols-[auto_1fr] gap-x-5 gap-y-3 text-sm">
+      <dt>{m.audit_request_id()}</dt><dd class='break-all'>{selected.requestId ?? '—'}</dd>
+      <dt>{m.audit_trace_id()}</dt><dd class='break-all'>{selected.traceId ?? '—'}</dd>
+      <dt>{m.audit_scope()}</dt><dd class='break-all'>{selected.scopeId ?? '—'}</dd>
+      <dt>{m.audit_actor_snapshot()}</dt><dd class='break-all'>{selected.actorSnapshot ? JSON.stringify(selected.actorSnapshot) : '—'}</dd>
       <dt class="text-base-content/50">{m.created_at()}</dt><dd>{store.formatDate(selected.createdAt)}</dd>
       <dt class="text-base-content/50">{m.audit_actor()}</dt><dd class="break-all">{selected.username || m.audit_system()}</dd>
       <dt class="text-base-content/50">{m.audit_action()}</dt><dd>{selected.action}</dd>

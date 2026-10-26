@@ -14,7 +14,7 @@
 - 🔒 **API 传输加密** — 浏览器与 `/api/*` 默认通过 `@h-ai/crypto` 做密钥协商与请求/响应加解密
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志；用户按角色 code 在数据库分页前筛选，总数与结果一致
-- 💬 **问题反馈** — 默认开启，普通用户可提交，管理员分页查看、处理/撤销并导出离线诊断包
+- 💬 **问题反馈** — 默认开启，普通用户可提交，业务操作员分页查看、处理/撤销并导出离线诊断包
 - 🧩 **UI Gallery** — @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI（含多厂商文生图）、Crypto 交互式示例
 - 🌍 **国际化** — Paraglide 集成，中英日文消息，中英日文实时切换
@@ -34,11 +34,25 @@
 - 🧩 UI Gallery：组件交互式展示（4 标签页）（`/admin/ui-gallery`）
 - 🔧 模块演示：Core / DB / Cache / Storage / AI（LLM、Audio、Image）/ Crypto 演示（`/admin/modules`）
 - 💬 问题反馈：顶栏收集入口与管理员处理（`/admin/feedback`）
-- ⚙️ 设置：主题切换、语言切换（`/admin/settings`）
+- ⚙️ 设置：业务公告、主题切换、语言切换（`/admin/settings`）
 
 #### 角色与演示行为
 
 角色使用独立 code，改名不改变标识。角色资料与权限集合在同一事务保存；权限列表传空数组会清空，省略则保持原值。
+
+| 示例角色            | 职责                                              |
+| ------------------- | ------------------------------------------------- |
+| `admin`             | 系统账号、角色、权限与模块管理                    |
+| `audit_admin`       | 审计查询、分类筛选、排序、最近 7 天统计和手动备份 |
+| `config_admin`      | 基础业务配置，目前为公开业务公告                  |
+| `business_operator` | 反馈查看、处理、撤销和导出                        |
+| `user`              | 个人自助与提交本人反馈                            |
+
+职责在 `src/lib/server/security-roles.ts` 中配置，服务端逐请求检查当前权限，并限制角色授予和受保护账号管理。系统管理员可配置基础成员，不能通过改角色、重置密码或创建 API Key 接管其他职责账号。这些角色是应用示例，可按项目需求调整，不是框架 IAM 的固定角色模型。
+
+创建自定义权限定义不会自动授予该权限；角色授权仍限制在管理员当前可授予范围。未分配的自定义定义可以清理，其他职责角色正在使用的权限定义受保护。
+
+首次启动可分别注入 `HAI_AUDIT_ADMIN_PASSWORD`、`HAI_CONFIG_ADMIN_PASSWORD`、`HAI_BUSINESS_OPERATOR_PASSWORD` 创建对应同名账号。没有配置的账号不会创建；已有账号不会改密或重新分配角色。请为每个职责使用独立密码。
 
 角色列表通过 `iam.authz.getRoleUserCounts(roleIds)` 一次聚合当前页角色的真实成员数，返回 `HaiResult<Map<string, number>>`。无关联为 0；查询失败显示加载错误，不生成零统计。
 
@@ -48,9 +62,9 @@
 
 管理台提交的 config/_feedback.yml 默认启用问题反馈。启动时复用数据库、存储和 Reach，管理员通知使用配置的 email Provider；生产配置私有 S3、真实 SMTP 和通知地址。
 
-普通 user 角色获得 feedback:create，可从顶栏直接提交空说明或附带图片；窄屏仍保留带可访问名称的入口。admin 角色获得 feedback:create/read/process/reopen/export，可打开 /admin/feedback，分页筛选、查看材料、处理或撤销并导出诊断包。创建者可读取自己的报告/续传材料；普通用户不能列出管理记录或执行管理操作。无角色且未授权的用户不显示提交入口，服务端仍拒绝请求。
+普通 user 角色获得 feedback:create，可从顶栏直接提交空说明或附带图片；窄屏仍保留带可访问名称的入口。business_operator 角色获得 feedback:create/read/process/reopen/export，可打开 /admin/feedback，分页筛选、查看材料、处理或撤销并导出诊断包。创建者可读取自己的报告/续传材料；普通用户不能列出管理记录或执行管理操作。无角色且未授权的用户不显示提交入口，服务端仍拒绝请求。
 
-采集失败可再次点击入口；提交失败保留说明、附件与现场，可重试或保存本地包。受理回执分别提示采集状态，受理不代表邮件已投递。权限沿用 IAM 默认 user/admin 角色，不新增角色体系。
+采集失败可再次点击入口；提交失败保留说明、附件与现场，可重试或保存本地包。受理回执分别提示采集状态，受理不代表邮件已投递。反馈权限由宿主应用显式分配。
 
 ## 使用入门
 
@@ -100,6 +114,14 @@ pnpm --filter admin-console preview
 ```
 
 ### ⚙️ 配置
+
+安全增强在 `_iam.yml` 中按业务选择：账号生命周期与临时到期、闲置账号扫描、密码长度/字符类别/期限、轻量 ALTCHA 挑战、失败计数窗口与锁定、独立初始凭据邀请、首次改密、用途绑定再认证、登录时段/IP，以及闲置/绝对会话期限、并发上限和重复登录策略。增强项可关闭；密码校验、拒绝访问和会话撤销在服务端执行。启用邀请后可从用户管理发送一次性设置密码通知，通知结果未知时先检查已创建账号，避免重复创建。
+
+敏感操作清单与 `reauthentication.operations` 对应，例如 `iam.users.create`、`iam.users.update`、`iam.users.delete`、`iam.users.invite`、`iam.roles.create`、`iam.roles.update`、`iam.roles.delete`、`iam.permissions.create`、`iam.permissions.delete`、`iam.apiKeys.create`、`iam.apiKeys.delete`、`iam.profile.update`、`iam.profile.avatar`、`business.settings.update`、`audit.backup`。界面按需弹出再认证框；凭据短期、单次且绑定当前会话与操作，不持久保存。
+
+`session.endOnPageHide` 默认关闭；启用后浏览器离开页面时尝试撤销当前会话，包含整页刷新与导航，BFCache 暂存除外。页面关闭通知只能最佳努力，需结合服务端闲置与绝对期限。显式退出始终请求服务端撤销。
+
+`_audit.yml` 控制采集、隐私脱敏、保留保护、备份与轻量告警。审计管理员可取得私有 JSONL 备份的 key、记录数和 SHA-256 回执，失败重试复用编号；`hai-private/audit-backups/` 不提供公开下载。自动任务复用 Scheduler，告警复用 Reach。归档不是数据库原子快照；严格时间点恢复须暂停写入/清理或使用数据库备份，并在独立环境核验、恢复。保留保护启用时清理不能突破最小保留时间；部署者仍须保护数据库和私有存储权限。
 
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
 
@@ -256,6 +278,8 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 ## 开发测试
 
 浏览器验证使用 `pnpm --filter admin-console test:e2e` 托管入口分配绝对数据目录，服务子进程显式选择隔离的 SQLite/Memory/Local，不继承外部模块变量或读取用户 `.env.local`。原有 transport 开启/关闭两组保持独立，开启组使用本轮可信 SM2 ring 与实际 registry；普通开发和生产配置规则不变。
+
+其它工作区占用默认端口时，可设置 `ADMIN_E2E_BASE_URL` 为本机空闲端口地址；该变量也由根 E2E 透传，两组管理台测试使用相同地址，仍独立启动本轮服务，不复用开发服务器。直接运行时原有 `BASE_URL` 优先。
 
 ```sh
 pnpm --filter admin-console typecheck

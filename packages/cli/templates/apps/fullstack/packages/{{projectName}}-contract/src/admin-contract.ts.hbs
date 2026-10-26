@@ -4,19 +4,27 @@ import {
   AdminAuditInputSchema,
   AdminAuditSchema,
   AdminCreateUserSchema,
+  AdminInviteUserSchema,
   AdminRoleSchema,
   AdminUpdateUserSchema,
   AdminUserSchema,
   AdminUsersInputSchema,
   AdminUsersSchema,
+  AuditBackupReceiptSchema,
   AvatarOutputSchema,
   AvatarUploadSchema,
+  BusinessSettingsSchema,
   ProfileUpdateSchema,
 } from './admin-schemas.js'
 
-/** mini 管理示例的业务路径；初始 admin/user 角色可按实际需求调整。 */
+/** mini 管理示例的业务路径；四类职责与权限由应用配置，可按项目需求调整。 */
 export const adminContract = {
+  configuration: {
+    get: apiContract.route({ method: 'POST', path: '/admin/configuration/get', tags: ['admin'] }).output(apiContract.haiResultSchema(BusinessSettingsSchema)),
+    update: apiContract.route({ method: 'POST', path: '/admin/configuration/update', tags: ['admin'] }).input(BusinessSettingsSchema).output(apiContract.haiResultSchema(BusinessSettingsSchema)),
+  },
   users: {
+    invite: apiContract.route({ method: 'POST', path: '/admin/users/invite', tags: ['admin'] }).input(AdminInviteUserSchema).output(apiContract.haiResultSchema(AdminUserSchema)),
     list: apiContract.route({ method: 'POST', path: '/admin/users/list', tags: ['admin'] })
       .input(AdminUsersInputSchema)
       .output(apiContract.haiResultSchema(AdminUsersSchema)),
@@ -41,6 +49,7 @@ export const adminContract = {
       .output(apiContract.haiResultSchema(AdminRoleSchema)),
   },
   audit: {
+    backup: apiContract.route({ method: 'POST', path: '/admin/audit/backup', tags: ['admin'] }).input(z.object({ id: z.uuid() }).strict()).output(apiContract.haiResultSchema(AuditBackupReceiptSchema)),
     list: apiContract.route({ method: 'POST', path: '/admin/audit/list', tags: ['admin'] })
       .input(AdminAuditInputSchema)
       .output(apiContract.haiResultSchema(AdminAuditSchema)),
@@ -57,17 +66,4 @@ export const profileContract = {
 }
 
 /** 复用框架认证契约；注册、通知和登录方式由 IAM 配置控制。 */
-export const authContract = {
-  publicConfig: apiContract.iam.auth.publicConfig,
-  register: apiContract.iam.auth.register,
-  loginWithLdap: apiContract.iam.auth.loginWithLdap,
-  loginWithOtp: apiContract.iam.auth.loginWithOtp,
-  sendOtp: apiContract.iam.auth.sendOtp,
-  requestPasswordReset: apiContract.iam.auth.requestPasswordReset,
-  confirmPasswordReset: apiContract.iam.auth.confirmPasswordReset,
-  login: apiContract.iam.auth.login,
-  logout: apiContract.iam.auth.logout,
-  currentUser: apiContract.iam.auth.currentUser,
-  refresh: apiContract.iam.auth.refresh,
-  changePassword: apiContract.iam.auth.changePassword,
-}
+export const authContract = apiContract.iam.auth

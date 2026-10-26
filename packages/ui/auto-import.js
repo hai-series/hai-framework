@@ -92,6 +92,7 @@ const UI_COMPONENTS = new Set([
   'LoginForm',
   'PasswordInput',
   'PermGuard',
+  'ReauthenticationDialog',
   'RegisterForm',
   'ResetPasswordForm',
   'UserProfile',

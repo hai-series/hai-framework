@@ -78,6 +78,7 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
     const sessionRepository = createCacheSessionRepository(
       sessionConfig.refreshTokenMaxAge ?? 604800,
+      sessionConfig,
     )
 
     const functions = buildSessionFunctions({
@@ -85,6 +86,7 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
       maxAge: sessionConfig.maxAge,
       sliding: sessionConfig.sliding,
       singleDevice: sessionConfig.singleDevice,
+      idleTimeout: sessionConfig.idleTimeout,
       sessionRepository,
       apiKeyRepository: config.login.apikey ? await createDbApiKeyRepository() : undefined,
     })
@@ -123,6 +125,8 @@ interface SessionBuilderConfig {
   sliding?: boolean
   /** 单设备登录（踢掉其他设备） */
   singleDevice?: boolean
+  /** access 不滑动时仍需记录活动，以执行独立闲置期限。 */
+  idleTimeout?: number
   /** 会话存储 */
   sessionRepository: SessionRepository
 }
@@ -244,7 +248,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         return validated
       let output = validated.data
 
-      if (sliding) {
+      if (sliding || (config.idleTimeout ?? 0) > 0) {
         const updateResult = await repo.touchByAccessToken(accessToken, session.version, new Date())
         if (!updateResult.success) {
           return updateResult as HaiResult<Session | null>

@@ -56,6 +56,7 @@
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
     "@h-ai/reldb": "workspace:*",
+    "altcha": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -4,7 +4,7 @@ import process from 'node:process'
 import { defineConfig } from '@playwright/test'
 import { createE2eServerEnv } from '../../scripts/e2e-env.js'
 
-const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173'
+const baseURL = process.env.BASE_URL || process.env.ADMIN_E2E_BASE_URL || 'http://127.0.0.1:4173'
 const previewUrl = new URL(baseURL)
 const previewHost = previewUrl.hostname || '127.0.0.1'
 const previewPort = Number.parseInt(previewUrl.port || '4173', 10)
@@ -71,6 +71,9 @@ export default defineConfig({
       // 邮件用例显式选择 Reach；示例应用默认使用独立 Console 通知。
       HAI_FEEDBACK: JSON.stringify({ appId: 'admin-console', notificationMode: 'reach', recipients: ['feedback@example.test'], notificationProvider: 'email', adminUrl: `${baseURL}/admin/feedback` }),
       HAI_ADMIN_DEFAULT_PASSWORD: 'admin123456',
+      HAI_AUDIT_ADMIN_PASSWORD: 'Audit-test-Admin123!',
+      HAI_CONFIG_ADMIN_PASSWORD: 'Config-test-Admin123!',
+      HAI_BUSINESS_OPERATOR_PASSWORD: 'Operator-test-Admin123!',
       HAI_DB_DATABASE: `${testDataDir}/admin.db`,
       HAI_STORAGE_ROOT: `${testDataDir}/uploads`,
       NODE_ENV: 'test',

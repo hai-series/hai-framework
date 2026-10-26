@@ -1,0 +1,4 @@
+# 自动审计备份启用时装配；执行状态与去重记录复用共享数据库。
+enableDb: true
+tickInterval: ${HAI_SCHEDULER_TICKINTERVAL:1000}
+leaseMs: ${HAI_SCHEDULER_LEASEMS:300000}

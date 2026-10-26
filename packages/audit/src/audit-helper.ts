@@ -47,23 +47,24 @@ function toVoid(result: HaiResult<AuditLog>): HaiResult<void> {
 export function createHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>): AuditHelper {
   return {
     async login(userId: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, action: 'login', resource: 'auth', ipAddress: ip, userAgent: ua })
+      const result = await logFn({ userId, category: 'system', action: 'login', resource: 'auth', ipAddress: ip, userAgent: ua })
       return toVoid(result)
     },
 
     async logout(userId: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, action: 'logout', resource: 'auth', ipAddress: ip, userAgent: ua })
+      const result = await logFn({ userId, category: 'system', action: 'logout', resource: 'auth', ipAddress: ip, userAgent: ua })
       return toVoid(result)
     },
 
     async register(userId: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, action: 'register', resource: 'auth', resourceId: userId, ipAddress: ip, userAgent: ua })
+      const result = await logFn({ userId, category: 'system', action: 'register', resource: 'auth', resourceId: userId, ipAddress: ip, userAgent: ua })
       return toVoid(result)
     },
 
     async passwordResetRequest(email: string, ip?: string, ua?: string): Promise<HaiResult<void>> {
       const result = await logFn({
         action: 'password_reset_request',
+        category: 'system',
         resource: 'auth',
         details: { email },
         ipAddress: ip,
@@ -73,22 +74,15 @@ export function createHelper(logFn: (input: CreateAuditLogInput) => Promise<HaiR
     },
 
     async passwordResetComplete(userId: string | null, ip?: string, ua?: string): Promise<HaiResult<void>> {
-      const result = await logFn({ userId, action: 'password_reset', resource: 'auth', ipAddress: ip, userAgent: ua })
+      const result = await logFn({ userId, category: 'system', action: 'password_reset', resource: 'auth', ipAddress: ip, userAgent: ua })
       return toVoid(result)
     },
 
     async crud(
       input: CrudAuditInput,
     ): Promise<HaiResult<void>> {
-      const result = await logFn({
-        userId: input.userId,
-        action: input.action,
-        resource: input.resource,
-        resourceId: input.resourceId,
-        details: input.details,
-        ipAddress: input.ip,
-        userAgent: input.ua,
-      })
+      const { ip, ua, ...fields } = input
+      const result = await logFn({ ...fields, ipAddress: ip, userAgent: ua })
       return toVoid(result)
     },
   }

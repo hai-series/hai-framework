@@ -65,8 +65,14 @@ export const PasswordConfigSchema = z.object({
   requireNumber: z.boolean().default(true),
   /** 需要特殊字符 */
   requireSpecialChar: z.boolean().default(false),
+  /** 至少包含的字符类别数（大小写、数字、特殊字符），0 不额外限制。 */
+  minCharacterClasses: z.number().int().min(0).max(4).default(0),
   /** 密码过期天数（0 表示不过期） */
   expirationDays: z.number().int().min(0).default(0),
+  /** 拒绝新旧密码相同；启用口令期限或首次强改时也始终拒绝相同密码。 */
+  preventSamePassword: z.boolean().default(false),
+  /** 管理员创建或重置的初始密码必须先更换；不影响用户自行注册设密。 */
+  requireInitialChange: z.boolean().default(false),
 }).refine(config => config.maxLength >= config.minLength, { message: 'maxLength must be >= minLength', path: ['maxLength'] })
 
 /**
@@ -302,10 +308,29 @@ export type RegisterConfig = z.infer<typeof RegisterConfigSchema>
  * ```
  */
 export const SecurityConfigSchema = z.object({
+  /** 是否启用失败计数锁定；关闭时忽略历史锁。 */
+  lockoutEnabled: z.boolean().default(true),
+  /** 从首次失败起的固定计数窗口（秒）。 */
+  failureWindow: z.number().int().min(1).max(31536000).default(86400),
   /** 最大登录失败次数（默认 5） */
   maxLoginAttempts: z.number().int().min(1).default(5),
   /** 锁定时长（秒，默认 900） */
   lockoutDuration: z.number().int().min(60).default(900),
+})
+
+/**
+ * 自托管 ALTCHA 计算挑战；默认关闭，强度与有效期由应用设置。
+ * @example
+ * ```ts
+ * import { CaptchaConfigSchema } from '@h-ai/iam'
+ * const config = CaptchaConfigSchema.parse({ enabled: true, ttlSeconds: 120 })
+ * ```
+ */
+export const CaptchaConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  ttlSeconds: z.number().int().min(1).max(600).default(120),
+  cost: z.number().int().min(100).max(50000).default(5000),
+  maxCounter: z.number().int().min(1).max(2000).default(100),
 })
 
 /**
@@ -317,6 +342,32 @@ export const SecurityConfigSchema = z.object({
  * ```
  */
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
+
+/**
+ * 登录时段与地址策略；空地址/时段列表不限制对应维度。周一为1，周日为7。
+ * @example
+ * ```ts
+ * import { LoginAccessConfigSchema } from '@h-ai/iam'
+ * const policy = LoginAccessConfigSchema.parse({ enabled: true, allowIps: ['192.0.2.0/24'], timezone: 'Asia/Shanghai' })
+ * ```
+ */
+export const LoginAccessConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  allowIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
+  denyIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
+  timezone: z.string().default('UTC').refine((value) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: value }).format()
+      return true
+    }
+    catch { return false }
+  }, 'Invalid IANA timezone'),
+  windows: z.array(z.object({
+    days: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+    start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+    end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+  }).refine(value => value.start !== value.end, 'Time window start and end must differ')).max(100).default([]),
+})
 
 /**
  * 协议展示配置
@@ -402,10 +453,20 @@ export type AuthUiConfig = z.infer<typeof AuthUiConfigSchema>
 export const SessionConfigSchema = z.object({
   /** 新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。 */
   maxAge: z.number().int().min(60).default(86400),
+  /** 页面离开时尽力撤销会话；浏览器关闭不可保证，仍应配置服务端闲置/绝对期限。 */
+  endOnPageHide: z.boolean().default(false),
   /** 是否滑动窗口（每次访问刷新过期时间） */
   sliding: z.boolean().default(true),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
+  /** 单设备超限策略：replace 顶旧保新，reject 保留旧会话并拒绝新登录。 */
+  singleDeviceMode: z.enum(['replace', 'reject']).default('replace'),
+  /** 每个用户的最大有效会话数，0 不限制；包含 access 到期但仍可刷新的会话。 */
+  maxSessions: z.number().int().min(0).max(10000).default(0),
+  /** 闲置期限（秒），0 关闭；真实访问记录活动，自动刷新不延长闲置；access/refresh 均执行。 */
+  idleTimeout: z.number().int().min(0).max(31536000).default(0),
+  /** 从首次登录起的绝对期限（秒），0 关闭；刷新不能重新起算。 */
+  absoluteTimeout: z.number().int().min(0).max(31536000).default(0),
   /** refreshToken 独立有效期（秒，默认 604800 = 7天）；从签发时刻起算，access 到期仍可刷新。 */
   refreshTokenMaxAge: z.number().int().min(3600).default(604800),
 })
@@ -452,6 +513,21 @@ export const RbacConfigSchema = z.object({
  */
 export type RbacConfig = z.infer<typeof RbacConfigSchema>
 
+/**
+ * 可选账号闲置扫描；0天关闭自动休眠，不影响明确设置的账号状态与到期时间。
+ * @example
+ * ```ts
+ * import { AccountConfigSchema } from '@h-ai/iam'
+ * const config = AccountConfigSchema.parse({ dormantAfterDays: 90, scanIntervalSeconds: 3600 })
+ * ```
+ */
+export const AccountConfigSchema = z.object({
+  /** 连续未成功登录多少天后休眠，0 关闭。未登录账号从创建时间起算。 */
+  dormantAfterDays: z.number().int().min(0).max(36500).default(0),
+  /** 自动扫描间隔（秒）；开启自动休眠时执行，默认每小时。 */
+  scanIntervalSeconds: z.number().int().min(60).max(86400).default(3600),
+})
+
 // ─── 统一配置 ───
 
 /**
@@ -466,6 +542,18 @@ export type RbacConfig = z.infer<typeof RbacConfigSchema>
  * ```
  */
 export const IamConfigSchema = z.object({
+  /** 管理端可用单次邀请代替共享初始密码；需要已配置的密码重置通知通道。 */
+  initialCredentials: z.object({ enabled: z.boolean().default(false) }).optional(),
+  /** 指定敏感操作额外验证原密码；凭据短期且单次使用。 */
+  reauthentication: z.object({
+    enabled: z.boolean().default(false),
+    operations: z.array(z.string().trim().min(1).max(128)).max(1000).default([]),
+    ttlSeconds: z.number().int().min(1).max(900).default(300),
+  }).optional(),
+  /** 宿主提供可信客户端地址；绝不从凭据 JSON 或任意转发头取得 IP。 */
+  loginAccess: LoginAccessConfigSchema.optional(),
+  /** 账号自动休眠策略；未配置时不启动扫描。 */
+  accounts: AccountConfigSchema.optional(),
   /** 认证页外观 */
   ui: AuthUiConfigSchema.optional(),
   // ─── 认证策略配置 ───
@@ -505,8 +593,13 @@ export const IamConfigSchema = z.object({
     showOnLogin: false,
   }),
 
+  /** 可选的自托管交互挑战。 */
+  captcha: CaptchaConfigSchema.default(() => CaptchaConfigSchema.parse({})),
+
   /** 安全策略配置 */
   security: SecurityConfigSchema.default({
+    lockoutEnabled: true,
+    failureWindow: 86400,
     maxLoginAttempts: 5,
     lockoutDuration: 900,
   }),

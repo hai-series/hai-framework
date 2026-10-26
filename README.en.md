@@ -254,10 +254,10 @@ The framework provides **22 independently publishable modules**, organized into 
 
 Most projects can initialize in this dependency order, which also helps AI assistants reason about usage:
 
-`core → reldb / cache / storage / vecdb → iam / audit / scheduler / reach → ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
+`core → reldb / cache / storage / vecdb → crypto / reach → audit → iam → scheduler / ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
 
 - `iam` requires initialized `reldb` and `cache`.
-- `audit` requires initialized `reldb`.
+- `audit` requires initialized `reldb`; initialize it before `iam` for security auditing, and initialize `reach` earlier when alerts use it. Stop `scheduler` first, then close modules in reverse order.
 - For persisted `scheduler` tasks, initialize `reldb` first. Initialized `cache` enables distributed locking automatically.
 - `reach`, `payment`, and `ai` reuse other module capabilities as needed; see their READMEs for configuration.
 - `api-contract` needs no initialization; it defines public HTTP schemas and oRPC contracts only.
@@ -457,6 +457,14 @@ const loginResult = await iam.auth.login({ identifier: 'alice', password: 'Stron
 await iam.authz.assignRole(userId, 'admin')
 const allowed = await iam.authz.checkPermission(userId, 'users:read')
 ```
+
+### Configurable security policies
+
+[IAM](packages/iam/README.en.md) provides permanent/temporary accounts, active/dormant/closed states, inactivity scans, password length/character classes/expiry, lightweight ALTCHA challenges, shared failure windows and lockout, one-time invitations, initial password renewal, purpose-bound reauthentication, and login time/IP controls. Enable and configure enhancements per application; the server enforces them, with a dedicated password renewal flow. Every login creates a separate session, with strict idle/absolute deadlines, concurrency limits, and explicit reject-new or replace-existing behavior. Page-exit revocation is disabled by default and remains best effort when enabled, alongside server deadlines.
+
+[Audit](packages/audit/README.en.md) unifies system/business categories, event-time identity snapshots, failure/denial events, redaction, filtering, sorting and statistics. Retention protection, private manual/scheduled backups and lightweight Reach alerts are configurable. Backup receipts support verification; archives are not atomic database snapshots and restoration belongs in an isolated environment. Defaults alone do not establish immutable storage or deployment compliance.
+
+The [admin console](apps/admin-console/README.md) and fullstack template demonstrate separate system, audit, configuration and business operator duties plus a basic member role. Server checks also prevent cross-duty grants and account takeover. Applications own and can adapt these example roles; IAM does not impose their names.
 
 ### Public APIs: contract → service → client
 

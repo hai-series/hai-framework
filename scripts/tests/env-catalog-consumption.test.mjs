@@ -16,3 +16,13 @@ it('preserves the actual reldb operationLog comment through schema object spread
   expect(description).toContain('0 表示省略摘要')
   expect(description).toContain('永不记录 SQL 原文或参数值')
 })
+
+it('documents independent host bootstrap secrets without adding them to module configuration', async () => {
+  const adminExample = await readFile(new URL('../../apps/admin-console/.env.example', import.meta.url), 'utf8')
+  const h5Example = await readFile(new URL('../../apps/h5-app/.env.example', import.meta.url), 'utf8')
+  for (const name of ['HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']) {
+    expect(catalog.find(entry => entry.name === name)).toMatchObject({ module: 'runtime', value: '' })
+    expect(adminExample).toContain(`${name}=''`)
+    expect(h5Example).not.toContain(name)
+  }
+})

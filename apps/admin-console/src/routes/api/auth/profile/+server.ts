@@ -29,7 +29,8 @@ export const GET = kit.handler(async ({ locals }) => {
  *
  * @returns 更新结果，成功返回最新用户信息
  */
-export const PUT = kit.handler(async ({ request, locals }) => {
+export const PUT = kit.handler(async ({ request, locals, cookies }) => {
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.profile.update')
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error({}, { locale }))
@@ -62,6 +63,8 @@ export const PUT = kit.handler(async ({ request, locals }) => {
   if (Object.keys(updatePatch).length > 0) {
     const updateResult = await iam.user.updateUser(userId, updatePatch)
     if (!updateResult.success) {
+      if ((updateResult.error.httpStatus ?? 500) >= 500)
+        return kit.response.fromError(updateResult.error)
       const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error({}, { locale }))
       return kit.response.badRequest(
         normalizedError,

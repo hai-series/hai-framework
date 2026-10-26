@@ -15,6 +15,7 @@ import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
 import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { scheduler } from '@h-ai/scheduler'
 import { ServConfigSchema } from '@h-ai/serv'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{#if features.vecdb}}
@@ -23,7 +24,10 @@ import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 {{#if features.feedback}}
 import { buildMetadata } from '../build-metadata.js'
 {{/if}}
+import { startAuditJobs } from './audit-jobs.js'
+import { initBusinessSettings } from './business-settings.js'
 import { serverM } from './messages.js'
+import { bootstrapDutyAccount, seedAppDuties } from './security-roles.js'
 
 const runtime = core.module.createRuntime([
   { name: 'serv-config', start: () => core.config.validate('serv', ServConfigSchema), close: () => {} },
@@ -40,8 +44,9 @@ const runtime = core.module.createRuntime([
   { name: 'crypto', start: () => crypto.init(), close: () => crypto.close() },
   { name: 'storage', start: () => storage.init(StorageConfigSchema.parse(core.config.getOrThrow('storage'))), close: () => storage.close() },
   { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(ReachConfigSchema.parse(core.config.getOrThrow('reach'))), close: () => reach.close() },
+  { name: 'audit', start: () => audit.init({ ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}), storage, reach }), close: () => audit.close() },
   { name: 'iam', start: () => iam.init({ ...IamConfigSchema.parse(core.config.getOrThrow('iam')), reach }), close: () => iam.close() },
-  { name: 'audit', start: () => audit.init(AuditInitConfigSchema.parse(core.config.get('audit') ?? {})), close: () => audit.close() },
+  { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: startAuditJobs, close: () => scheduler.close() },
 {{#if features.feedback}}
   { name: 'feedback', start: () => feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), close: () => feedback.close() },
 {{/if}}
@@ -49,6 +54,7 @@ const runtime = core.module.createRuntime([
   { name: 'ai', start: () => ai.init(AIConfigSchema.parse(core.config.getOrThrow('ai'))), close: () => ai.close() },
 {{/if}}
   { name: 'bootstrap', start: async () => {
+    requireInitialized(await initBusinessSettings(), 'business-settings')
     await ensureRolesAndAdmin()
     const app = core.config.getOrThrow<CoreConfig>('core')
     core.logger.info('Application initialized', { name: app.name, version: app.version, environment: app.env })
@@ -76,11 +82,13 @@ function requireInitialized<T>(result: HaiResult<T>, moduleName: string): T {
 }
 
 async function ensureRolesAndAdmin(): Promise<void> {
-  for (const code of ['admin', 'user'] as const) {
-    const existing = requireInitialized(await iam.authz.getRoleByCode(code), 'iam-role')
-    if (!existing)
-      requireInitialized(await iam.authz.createRole({ code, name: serverM(code), description: serverM(code === 'admin' ? 'adminDescription' : 'userDescription'), isSystem: true }), 'iam-role')
-  }
+  requireInitialized(await seedAppDuties(), 'app-duties')
+  await ensureInitialSystemAdmin()
+  for (const [username, password] of [['audit_admin', process.env.HAI_AUDIT_ADMIN_PASSWORD], ['config_admin', process.env.HAI_CONFIG_ADMIN_PASSWORD], ['business_operator', process.env.HAI_BUSINESS_OPERATOR_PASSWORD]] as const)
+    requireInitialized(await bootstrapDutyAccount(username, password), 'app-duty-bootstrap')
+}
+
+async function ensureInitialSystemAdmin(): Promise<void> {
   const users = requireInitialized(await iam.user.listUsers({ page: 1, pageSize: 1 }), 'iam-users')
   if (users.total > 0)
     return

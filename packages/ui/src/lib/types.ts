@@ -171,8 +171,8 @@ export interface InputProps extends DataAttributes {
   value?: string
   /** 占位符 */
   placeholder?: string
-  /** 类型 */
-  type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search'
+  /** 类型；datetime-local 使用浏览器本地时区，服务层应转换为明确的时间戳。 */
+  type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search' | 'datetime-local'
   /** 尺寸 */
   size?: Size
   /** 是否禁用 */

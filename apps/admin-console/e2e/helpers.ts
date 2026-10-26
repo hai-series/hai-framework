@@ -9,6 +9,13 @@ import type { APIRequestContext, Page } from '@playwright/test'
 /** 加密验收使用符合 IAM 默认密码策略的独立管理员凭据。 */
 export const transportAdmin = { username: 'admin', password: 'TransportAdmin123!' }
 
+/** 各职责使用独立账号，管理权限由真实启动种子配置。 */
+export const dutyAccounts = {
+  audit: { username: 'audit_admin', password: 'Audit-test-Admin123!' },
+  config: { username: 'config_admin', password: 'Config-test-Admin123!' },
+  operator: { username: 'business_operator', password: 'Operator-test-Admin123!' },
+} as const
+
 async function sleep(ms: number) {
   await new Promise(resolve => setTimeout(resolve, ms))
 }

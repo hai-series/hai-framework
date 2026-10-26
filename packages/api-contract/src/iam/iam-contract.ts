@@ -19,11 +19,14 @@ import {
   IamAdminResetPasswordInputSchema,
   IamAdminUpdateUserInputSchema,
   IamAuthResultSchema,
+  IamCaptchaChallengeSchema,
   IamChangePasswordInputSchema,
   IamConfirmPasswordResetInputSchema,
+  IamCreateCaptchaInputSchema,
   IamCreatePermissionInputSchema,
   IamCreateRoleInputSchema,
   IamCurrentUserSchema,
+  IamInviteUserInputSchema,
   IamLdapLoginInputSchema,
   IamListPermissionsInputSchema,
   IamListUsersInputSchema,
@@ -32,9 +35,12 @@ import {
   IamOtpLoginInputSchema,
   IamPermissionSchema,
   IamPublicConfigSchema,
+  IamReauthenticateInputSchema,
+  IamReauthenticationProofSchema,
   IamRefreshTokenDataSchema,
   IamRefreshTokenInputSchema,
   IamRegisterInputSchema,
+  IamRenewPasswordInputSchema,
   IamRequestPasswordResetInputSchema,
   IamRoleSchema,
   IamSendOtpDataSchema,
@@ -62,8 +68,17 @@ const roleOutputSchema = haiResultSchema(IamRoleSchema)
  */
 export const iamContract = {
   auth: {
+    createCaptcha: route({ method: 'POST', path: '/auth/captcha', operationId: 'iam.auth.createCaptcha', summary: 'Create self-hosted security challenge', tags: ['iam', 'auth'] })
+      .input(IamCreateCaptchaInputSchema)
+      .output(haiResultSchema(IamCaptchaChallengeSchema)),
+    reauthenticate: route({ method: 'POST', path: '/auth/reauthenticate', operationId: 'iam.auth.reauthenticate', summary: 'Verify current password for one sensitive operation', tags: ['iam', 'auth'] })
+      .input(IamReauthenticateInputSchema)
+      .output(haiResultSchema(IamReauthenticationProofSchema)),
     publicConfig: route({ method: 'GET', path: '/auth/config', operationId: 'iam.auth.publicConfig', summary: 'Public authentication configuration', tags: ['iam', 'auth'] })
       .output(haiResultSchema(IamPublicConfigSchema.nullable())),
+    renewPassword: route({ method: 'POST', path: '/auth/password/renew', operationId: 'iam.auth.renewPassword', summary: 'Change initial or expired password', tags: ['iam', 'auth'] })
+      .input(IamRenewPasswordInputSchema)
+      .output(HaiVoidResultSchema),
     loginWithLdap: route({ method: 'POST', path: '/auth/login/ldap', operationId: 'iam.auth.loginWithLdap', summary: 'LDAP login', tags: ['iam', 'auth'] })
       .input(IamLdapLoginInputSchema)
       .output(authResultOutputSchema),
@@ -80,6 +95,9 @@ export const iamContract = {
       .input(IamOtpLoginInputSchema)
       .output(authResultOutputSchema),
     logout: route({ method: 'POST', path: '/auth/logout', operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
+      .input(IamLogoutInputSchema)
+      .output(HaiVoidResultSchema),
+    closeSession: route({ method: 'POST', path: '/auth/session/close', operationId: 'iam.auth.closeSession', summary: 'Revoke departing client session without clearing newer cookies', tags: ['iam', 'auth'] })
       .input(IamLogoutInputSchema)
       .output(HaiVoidResultSchema),
     currentUser: route({ method: 'GET', path: '/auth/me', operationId: 'iam.auth.currentUser', summary: 'Get current user and access scope', tags: ['iam', 'auth'] })
@@ -101,6 +119,9 @@ export const iamContract = {
       .output(userOutputSchema),
   },
   users: {
+    invite: route({ method: 'POST', path: '/iam/users/invite', operationId: 'iam.users.invite', summary: 'Create account with one-time setup invitation', tags: ['iam', 'users'] })
+      .input(IamInviteUserInputSchema)
+      .output(userOutputSchema),
     list: route({ method: 'GET', path: '/iam/users', operationId: 'iam.users.list', summary: 'List users', tags: ['iam', 'users'] })
       .input(IamListUsersInputSchema)
       .output(haiResultSchema(paginatedSchema(IamUserSchema))),

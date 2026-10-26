@@ -65,8 +65,9 @@ for (const app of await readdir('apps')) {
       active.set(name, { ...byName.get(name), name, value, path: name })
   }
   const optionalNames = await runtimeVariables(directory)
-  if (modules.has('iam'))
+  if (modules.has('iam')) {
     optionalNames.add('HAI_ADMIN_DEFAULT_PASSWORD')
+  }
   if (modules.has('serv') || modules.has('kit')) {
     for (const name of ['HOST', 'PORT', 'NODE_ENV'])
       optionalNames.add(name)

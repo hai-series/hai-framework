@@ -109,6 +109,7 @@ export function buildSession(options: CreateSessionOptions, now: Date, sessionTt
     source: options.source,
     accessToken,
     createdAt: now,
+    startedAt: now,
     lastActiveAt: now,
     expiresAt: new Date(now.getTime() + sessionTtl * 1000),
     maxAge: sessionTtl,

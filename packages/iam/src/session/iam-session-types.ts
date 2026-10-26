@@ -108,7 +108,9 @@ export interface Session {
   accessToken: string
   /** 创建时间 */
   createdAt: Date
-  /** 最后活动时间 */
+  /** 首次签发时间；刷新保留，用于绝对期限。旧记录未设置时以 createdAt 为准。 */
+  startedAt?: Date
+  /** 最后活动时间；启用闲置策略时，自动 refresh 不延长此值。 */
   lastActiveAt: Date
   /** 过期时间 */
   expiresAt: Date

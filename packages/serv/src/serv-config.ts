@@ -320,7 +320,7 @@ const ServerConfigInputSchema = z.object({
 const CorsRuntimeConfigInputSchema = z.object({
   origin: z.string().optional(),
   nativeOrigins: z.string().optional(),
-  allowedHeaders: z.array(z.string()).default(['Authorization', 'Content-Type', 'X-Requested-With']),
+  allowedHeaders: z.array(z.string()).default(['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication']),
   exposedHeaders: z.array(z.string()).default([]),
   credentials: z.boolean().default(false),
 })

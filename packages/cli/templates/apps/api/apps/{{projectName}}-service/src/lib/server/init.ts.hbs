@@ -25,6 +25,11 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 {{/if}}
 import { ServConfigSchema } from '@h-ai/serv'
+{{#if features.audit}}
+{{#if features.scheduler}}
+import { scheduler, SchedulerConfigSchema } from '@h-ai/scheduler'
+{{/if}}
+{{/if}}
 {{#if features.storage}}
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{/if}}
@@ -64,11 +69,27 @@ const runtime = core.module.createRuntime([
 {{#if features.reach}}
   { name: 'reach', enabled: () => Boolean(core.config.get('reach')), start: () => reach.init(ReachConfigSchema.parse(core.config.getOrThrow('reach'))), close: () => reach.close() },
 {{/if}}
+{{#if features.audit}}
+  { name: 'audit', start: () => audit.init({ ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}){{#if features.storage}}, storage{{/if}}{{#if features.reach}}, reach{{/if}} }), close: () => audit.close() },
+{{/if}}
 {{#if features.iam}}
   { name: 'iam', start: () => iam.init({ ...IamConfigSchema.parse(core.config.getOrThrow('iam')){{#if features.reach}}, reach{{/if}} }), close: () => iam.close() },
 {{/if}}
 {{#if features.audit}}
-  { name: 'audit', start: () => audit.init(AuditInitConfigSchema.parse(core.config.get('audit') ?? {})), close: () => audit.close() },
+{{#if features.scheduler}}
+  { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: async () => {
+    const schedule = audit.schedulerPlan
+    if (!schedule)
+      return
+    const initialized = await scheduler.init({ ...SchedulerConfigSchema.parse(core.config.get('scheduler') ?? {}), ...schedule })
+    if (!initialized.success)
+      return initialized
+    const started = scheduler.start()
+    if (!started.success)
+      await scheduler.close()
+    return started
+  }, close: () => scheduler.close() },
+{{/if}}
 {{/if}}
 {{#if features.feedback}}
   { name: 'feedback', start: () => feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), close: () => feedback.close() },

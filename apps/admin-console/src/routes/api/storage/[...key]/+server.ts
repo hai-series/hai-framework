@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * Admin Console - 本地存储公开读取端点
+ * Admin Console - 本地头像公开读取端点
  * =============================================================================
  *
  * 仅用于本地开发 / E2E 下为 local storage 提供公开可访问 URL。
@@ -26,6 +26,10 @@ export const GET = kit.handler(async ({ params, locals }) => {
   if (!isSafeStorageKey(key)) {
     return kit.response.badRequest(m.common_error({}, { locale }))
   }
+
+  // 只开放服务器生成的规范头像键，避免 Windows 大小写/尾点别名绕过私有文件边界。
+  if (!/^avatars\/[\w-]+\/[\w-]+\.(?:png|jpe?g|webp)$/.test(key))
+    return kit.response.notFound(m.common_error({}, { locale }))
 
   const [headResult, fileResult] = await Promise.all([
     storage.file.head(key),

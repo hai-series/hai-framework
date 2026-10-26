@@ -6,7 +6,7 @@
 import { typeUtils } from './core-util-type.js'
 
 // 普通引号与一层 JSON 转义引号共用一套文本规则；结构化字段仍按下方键名规则处理。
-const CREDENTIAL_TEXT = /\b(?:Bearer|Basic)\s+[\w.~+/-]+=*|\b(?:[\w-]*[_-])?(?:password|passwd|passcode|secret|token|session(?:[_-]?id)?|authorization|cookie|csrf|credential|api[_-]?key|private[_-]?key|(?:access|refresh|id|csrf)token|(?:otp|totp|verification|verify|captcha|sms|email|auth|one[_-]?time|two[_-]?factor)[_-]?code)(?:\\?["'])?\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\"(?:[^\\]|\\\\\\\\|\\\\\\"|\\\\[^"\\])*\\"|[^\s,;&}\]]+)/gi
+const CREDENTIAL_TEXT = /\b(?:Bearer|Basic)\s+[\w.~+/-]+=*|\b(?:[\w-]*[_-])?(?:password|passwd|passcode|secret|token|session(?:[_-]?id)?|authorization|cookie|csrf|credential|captcha|reauthentication|ticket|api[_-]?key|private[_-]?key|(?:access|refresh|id|csrf)token|(?:otp|totp|verification|verify|captcha|sms|email|auth|one[_-]?time|two[_-]?factor)[_-]?code)(?:\\?["'])?\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\"(?:[^\\]|\\\\\\\\|\\\\\\"|\\\\[^"\\])*\\"|[^\s,;&}\]]+)/gi
 
 /**
  * 清理诊断文本中的显式凭据、URL 凭据及调用方已知的秘密值；不猜测无标签的任意文本。
@@ -31,7 +31,7 @@ export function sanitizeText(text: string, secretValues: readonly string[] = [])
  * const credential = core.sanitize.isSensitiveKey('apiKey') // true
  * ```
  */
-export const DEFAULT_SENSITIVE_KEY_REGEX = /(?:^|_)(?:pass|passcode|password|secret|authorization|cookie|otp|session|token)$|(?:^|_)(?:otp|totp|verification|verify|captcha|sms|email|auth|one_time|two_factor)_code$|(?:^|_)private_key$|(?:^|_)access_key(?:_id|_secret)?$|(?:^|_)secret_access_key$|(?:^|_)api(?:_[a-z0-9]+)*_key$|^apikey$/i
+export const DEFAULT_SENSITIVE_KEY_REGEX = /(?:^|_)(?:pass|passcode|password|secret|authorization|cookie|otp|captcha|reauthentication|ticket|session|token)$|(?:^|_)(?:otp|totp|verification|verify|captcha|sms|email|auth|one_time|two_factor)_code$|(?:^|_)private_key$|(?:^|_)access_key(?:_id|_secret)?$|(?:^|_)secret_access_key$|(?:^|_)api(?:_[a-z0-9]+)*_key$|^apikey$/i
 
 /**
  * 默认脱敏替换值

@@ -188,7 +188,7 @@ export function assertPermission(
 /**
  * 要求会话具有指定权限，不满足时 throw Response
  *
- * 利用 SvelteKit 控制流机制：throw 的 Response 对象会被框架捕获并直接作为响应返回。
+ * throw 的 Response 对象由 kit.handler 捕获并直接作为 API 响应返回。
  * 搭配 `kit.handler()` 使用时，无需手动检查返回值。
  *
  * @param session - 当前会话数据，null/undefined 视为未认证
@@ -198,7 +198,7 @@ export function assertPermission(
  * ```ts
  * import { kit } from '@h-ai/kit'
  *
- * kit.guard.require({ userId: 'user_1', roles: ['editor'], permissions: ['article:read'] }, 'article:read') // 拒绝时抛出 Response，由框架传递。
+ * kit.guard.require({ userId: 'user_1', roles: ['editor'], permissions: ['article:read'] }, 'article:read') // 拒绝时抛出 Response，由 kit.handler 传递。
  * ```
  */
 export function requirePermission(
@@ -215,9 +215,9 @@ export function requirePermission(
  * 权限守卫高阶函数包装器
  *
  * 将权限检查从业务逻辑中提取到装饰层，handler 内部无需关心权限。
- * 未认证返回 401、无权限返回 403（均通过 SvelteKit throw 控制流抛出）。
+ * 未认证返回 401、无权限返回 403（均抛出 Response，由 kit.handler 传递）。
  *
- * 适用于 page load、API handler 等所有 SvelteKit server 函数。
+ * 用于 kit.handler 包装的 API handler；page load 应以 guard.check 判断并调用 SvelteKit error。
  *
  * @param permission - 需要的权限码，如 `'user:read'`
  * @param handler - 原始处理函数

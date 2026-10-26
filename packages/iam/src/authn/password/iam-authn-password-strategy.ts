@@ -16,7 +16,7 @@ import { crypto as haiCrypto } from '@h-ai/crypto'
 import { PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
-import { toUser } from '../../user/iam-user-utils.js'
+import { checkPasswordState, isUserActive, toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
 /**
@@ -36,6 +36,8 @@ export interface PasswordStrategyConfig {
   /** 用户存储 */
   userRepository: UserRepository
   /** 最大登录失败次数（默认 5） */
+  lockoutEnabled?: boolean
+  failureWindow?: number
   maxLoginAttempts?: number
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
@@ -91,6 +93,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
+  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
   const passwordOps = haiCrypto.password
 
   function mapPasswordError(message: string): HaiResult<never> {
@@ -146,29 +149,21 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       )
     }
 
-    return ok(undefined)
-  }
+    const classes = [PASSWORD_UPPERCASE_REGEX, PASSWORD_LOWERCASE_REGEX, PASSWORD_DIGIT_REGEX, PASSWORD_SPECIAL_CHAR_REGEX].filter(pattern => pattern.test(password)).length
+    if (classes < passwordConfig.minCharacterClasses)
+      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordCharacterClasses', { params: { count: passwordConfig.minCharacterClasses } }))
 
-  /**
-   * 检查密码是否过期
-   */
-  function isPasswordExpired(user: StoredUser): boolean {
-    if (passwordConfig.expirationDays <= 0 || !user.passwordUpdatedAt) {
-      return false
-    }
-    const expirationDate = new Date(user.passwordUpdatedAt)
-    expirationDate.setDate(expirationDate.getDate() + passwordConfig.expirationDays)
-    return new Date() > expirationDate
+    return ok(undefined)
   }
 
   /**
    * 校验账户状态（启用、锁定）
    */
   function checkAccountStatus(user: StoredUser): HaiResult<void> {
-    if (!user.enabled) {
+    if (!isUserActive(user)) {
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     }
-    if (isAccountLocked(user)) {
+    if (isAccountLocked(user, failurePolicy)) {
       return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }
     return ok(undefined)
@@ -187,7 +182,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     if (!verifyResult.data) {
-      const failureResult = await recordLoginFailure(config.userRepository, user, { maxLoginAttempts, lockoutDuration })
+      const failureResult = await recordLoginFailure(config.userRepository, user, failurePolicy)
       if (!failureResult.success)
         return failureResult
       logger.warn('Password verification failed', { userId: user.id })
@@ -232,12 +227,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
         return pwResult as HaiResult<AuthenticatedUser>
 
       // 检查密码是否过期
-      if (isPasswordExpired(storedUser)) {
-        return err(HaiIamError.PASSWORD_EXPIRED, iamM('iam_passwordExpired'))
-      }
+      const passwordState = checkPasswordState(storedUser, passwordConfig)
+      if (!passwordState.success)
+        return passwordState
 
       // 登录成功，重置失败计数
-      const resetResult = await resetLoginFailures(config.userRepository, storedUser)
+      const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult
       logger.info('Password authentication succeeded', { userId: storedUser.id })

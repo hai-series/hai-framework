@@ -78,7 +78,8 @@ describe('audit.log', () => {
     }
   })
 
-  it('应仅脱敏凭证类字段，保留邮箱和手机号', async () => {
+  it('关闭业务隐私时仍脱敏凭据，并按配置保留邮箱和手机号', async () => {
+    expect((await audit.init({ privacy: { enabled: false } })).success).toBe(true)
     const result = await audit.log({
       action: 'password_reset_request',
       resource: 'auth',

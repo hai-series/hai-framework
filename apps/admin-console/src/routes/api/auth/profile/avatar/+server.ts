@@ -28,13 +28,14 @@ const EXT_MAP: Record<string, string> = {
  * 上传头像文件到存储服务，返回公开可访问 URL。
  *
  * 说明：
- * - admin-console 不再提供 `/api/storage/[...key]` 本地文件转发路由
- * - 因此此接口要求 `storage.presign.publicUrl(key)` 可用
+ * - 本地 `/api/storage/[...key]` 只公开服务器生成的规范头像路径
+ * - 优先使用 `storage.presign.publicUrl(key)`，本地存储回退到该头像端点
  * - 若未配置公开 URL（返回 null），接口返回内部错误
  *
  * @returns 上传处理结果，成功时返回头像 URL
  */
-export const POST = kit.handler(async ({ request, locals }) => {
+export const POST = kit.handler(async ({ request, locals, cookies }) => {
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.profile.avatar')
   const locale = locals.locale === 'en-US' ? 'en-US' : locals.locale === 'ja-JP' ? 'ja-JP' : 'zh-CN'
   if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error({}, { locale }))
@@ -70,7 +71,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
     return kit.response.internalError(m.common_error({}, { locale }))
   }
 
-  // 仅返回可公开访问的 URL；admin-console 不再提供本地文件转发路由
+  // 头像优先使用公开存储地址，本地存储由只开放规范头像键的端点读取。
   const origin = new URL(request.url).origin
   const encodedKey = key.split('/').map(segment => encodeURIComponent(segment)).join('/')
   const avatarUrl = storage.presign.publicUrl(key) ?? `${origin}/api/storage/${encodedKey}`

@@ -1,4 +1,8 @@
 {
+  "iam_invitationDisabled": "邀请功能未启用，或所需通知通道未就绪。",
+  "iam_invitationDeliveryUnknown": "账号已创建，邀请投递尚未确认。请核对投递后再请求新的重置通知。",
+  "iam_reauthenticationRequired": "请重新验证密码后继续此操作。",
+  "iam_loginAccessDenied": "当前地址或时段不允许登录。",
   "iam_batchUserIdsInvalid": "请提供最多 1000 个非空用户 ID",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "iam_securityStateFailed": "无法更新认证安全状态，请稍后重试",
@@ -186,5 +190,15 @@
   "iam_sessionStateFailed": "会话共享状态操作失败",
   "iam_sessionStateConflict": "会话状态已变化，请重试",
   "iam_sessionMaxAgeInvalid": "会话有效期或时间字段无效",
-  "iam_notificationDeliveryUnknown": "通知可能已送达，结果未知；请勿自动重发。"
+  "iam_sessionLimitExceeded": "有效会话数量已达上限，请先退出其他会话",
+  "iam_accountPolicyInvalid": "账号类型、状态或到期时间无效",
+  "iam_accountUpdateFailed": "账号更新失败，请稍后重试",
+  "iam_passwordChangeRequired": "请先更换初始密码后登录",
+  "iam_passwordMustDiffer": "新密码不能与当前密码相同",
+  "iam_passwordCharacterClasses": "密码至少应包含 {count} 类字符",
+  "iam_notificationDeliveryUnknown": "通知可能已送达，结果未知；请勿自动重发。",
+  "iam_captchaRequired": "请先完成安全验证",
+  "iam_captchaInvalid": "安全验证无效或已过期，请重试",
+  "iam_captchaDisabled": "安全验证未启用",
+  "iam_captchaUnavailable": "安全验证暂不可用，请稍后重试"
 }

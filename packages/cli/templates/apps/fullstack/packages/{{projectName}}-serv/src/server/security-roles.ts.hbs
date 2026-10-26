@@ -1,0 +1,83 @@
+/** 示例应用职责配置；可按项目需求调整，不改变框架 IAM 的通用规则。 */
+import type { HaiResult } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { HaiIamError, iam } from '@h-ai/iam'
+import { serverM } from './messages.js'
+
+export const APP_DUTIES = {
+  admin: ['app.users.manage', 'app.roles.manage'],
+  audit_admin: ['audit:read', 'audit:backup'],
+  config_admin: ['app.config.manage'],
+  business_operator: ['feedback:create', 'feedback:read', 'feedback:process', 'feedback:reopen', 'feedback:export'],
+  user: ['feedback:create'],
+} as const
+
+export async function seedAppDuties(): Promise<HaiResult<void>> {
+  if (iam.config?.rbac.superAdminRole && iam.config.rbac.superAdminRole in APP_DUTIES)
+    return err(HaiCommonError.VALIDATION_ERROR)
+  for (const code of ['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'] as const) {
+    const permissionIds: string[] = []
+    for (const permissionCode of APP_DUTIES[code]) {
+      let permission = await iam.authz.getPermissionByCode(permissionCode)
+      if (!permission.success)
+        return permission
+      if (!permission.data) {
+        permission = await iam.authz.createPermission({ code: permissionCode, name: permissionCode, type: 'api' })
+        if (!permission.success) {
+          permission = await iam.authz.getPermissionByCode(permissionCode)
+          if (!permission.success || !permission.data)
+            return permission.success ? err(HaiCommonError.INTERNAL_ERROR) : permission
+        }
+      }
+      if (permission.data)
+        permissionIds.push(permission.data.id)
+    }
+    let role = await iam.authz.getRoleByCode(code)
+    if (!role.success)
+      return role
+    if (!role.data) {
+      role = await iam.authz.createRole({ code, name: serverM(code), isSystem: true })
+      if (!role.success) {
+        role = await iam.authz.getRoleByCode(code)
+        if (!role.success || !role.data)
+          return role.success ? err(HaiCommonError.INTERNAL_ERROR) : role
+      }
+    }
+    if (!role.data)
+      return err(HaiCommonError.INTERNAL_ERROR)
+    const updated = await iam.authz.updateRole(role.data.id, { name: serverM(code), permissionIds })
+    if (!updated.success)
+      return updated
+  }
+  return ok(undefined)
+}
+
+/** 系统管理员不能通过代改资料、角色或头像控制另一个职责的账号。 */
+export async function checkManagedUser(id: string): Promise<HaiResult<void>> {
+  const roles = await iam.authz.getUserRoles(id)
+  if (!roles.success)
+    return roles
+  if (roles.data.some(role => role.code !== 'admin' && role.code !== 'user'))
+    return err(HaiCommonError.FORBIDDEN, serverM('dutyProtected'))
+  return ok(undefined)
+}
+
+/** 部署者独立设置初始凭据；不重设已有账号，也不通过管理 API 越权授予职责。 */
+export async function bootstrapDutyAccount(username: 'audit_admin' | 'config_admin' | 'business_operator', providedPassword?: string): Promise<HaiResult<void>> {
+  const password = providedPassword?.trim()
+  if (!password)
+    return ok(undefined)
+  const created = await iam.user.createUser({ username, password })
+  if (!created.success)
+    return created.error.code === HaiIamError.USER_ALREADY_EXISTS.code ? ok(undefined) : created
+  const role = await iam.authz.getRoleByCode(username)
+  if (!role.success || !role.data)
+    return role.success ? err(HaiCommonError.INTERNAL_ERROR) : role
+  const assigned = await iam.authz.syncRoles(created.data.user.id, [role.data.id])
+  if (!assigned.success) {
+    const removed = await iam.user.deleteUser(created.data.user.id)
+    if (!removed.success)
+      core.logger.error('Failed to roll back duty account bootstrap', { userId: created.data.user.id, errorCode: removed.error.code })
+  }
+  return assigned
+}

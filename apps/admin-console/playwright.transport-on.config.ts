@@ -6,7 +6,7 @@ import { defineConfig } from '@playwright/test'
 import { createE2eServerEnv } from '../../scripts/e2e-env.js'
 import { transportAdmin } from './e2e/helpers.js'
 
-const baseURL = process.env.BASE_URL || 'http://127.0.0.1:4173'
+const baseURL = process.env.BASE_URL || process.env.ADMIN_E2E_BASE_URL || 'http://127.0.0.1:4173'
 const previewUrl = new URL(baseURL)
 const previewHost = previewUrl.hostname || '127.0.0.1'
 const previewPort = Number.parseInt(previewUrl.port || '4173', 10)

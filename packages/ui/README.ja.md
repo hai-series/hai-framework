@@ -293,7 +293,7 @@ components/
 | -------------- | -------------- | ---------------------------------------------- |
 | `PageHeader`   | ページヘッダー | `title`, `description`、`actions` スロット対応 |
 
-#### Scenes：用途別コンポーネント（40）
+#### Scenes：用途別コンポーネント（41）
 
 ##### Guide：案内・ヘルプ（2）
 
@@ -320,7 +320,7 @@ components/
 
 説明は任意です。モーダルを開く前に `@h-ai/feedback/client` の `prepare()` で現場を固定します。`onfileschange` で添付を準備し、`onannotate` で注釈を画像のピクセルに反映します。送信失敗時は入力を保持し、ローカルに出力できます。一覧は説明またはサーバーの要約を表示し、`onquerychange` でページを取得します。UI の権限表示とは別にサーバーの認可が必要です。接続方法とオフラインツールは [feedback モジュール](../feedback/README.ja.md) を参照してください。
 
-##### IAM：認証（10）
+##### IAM：認証（11）
 
 | コンポーネント       | 説明                                    | 主なプロパティ                                                                                         |
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -332,6 +332,7 @@ components/
 | `ResetPasswordForm`  | パスワードリセット                      | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
 | `ChangePasswordForm` | パスワード変更                          | `loading`, `errors`, `requireOldPassword`, `onsubmit`                                                  |
 | `PasswordInput`      | パスワード入力                          | `value`, `showToggle`, `showStrength`, `minLength`                                                     |
+| `ReauthenticationDialog` | 機密操作の確認 | `open`, `loading`, `error`, `onsubmit`, `onclose` |
 | `PermGuard`          | 権限ガード                              | `permissions`, `mode`, `fallback`                                                                      |
 | `UserProfile`        | ユーザープロフィール                    | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
@@ -825,6 +826,8 @@ AuthPanel は SSR 中のフォーム操作を無効にし、クライアント�
 
 認証リンクが現在の完全な URL を指す場合、AuthPanel は再ナビゲーションせずに画面だけを切り替え、ログインに戻った直後の入力を保持します。パス、クエリー、hash が異なる場合はアプリのルーターに任せます。Ctrl/Cmd などの修飾キーを使ったクリックはブラウザーの動作を維持します。
 
+`ReauthenticationDialog` は `open/loading/error/onsubmit/onclose` でパスワード確認を表示します。サービスが `actions.reauthenticate(password, operation)` を呼び、短期・一回限りの証明を対象リクエストだけに渡します。取消・終了・送信で入力を消去し、証明自体は権限を付与しません。`Input` の `datetime-local` はブラウザーのローカル時刻のため、サービスで明確なタイムスタンプへ変換して送信します。
+
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 
 ### 初回ガイドとヘルプセンター
@@ -934,6 +937,12 @@ Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab �
 HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
+
+## 任意の対話チャレンジ
+
+AuthPanel は config.captcha.enabled の場合 actions.createCaptcha で自己ホスト ALTCHA を自動生成・非同期求解し、login/register/sendOtp/passwordReset/renewPassword 用の単用証明を送信します。無効時は求解器を読み込みません。createAuthActions は対応済みで、独自動作は captcha を保持し、不足時は通過しません。証明は現在のメモリ内だけに保持し、サーバーで必ず検証・消費します。
+
+方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
 
 ## 開発とテスト
 

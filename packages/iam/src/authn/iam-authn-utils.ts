@@ -55,6 +55,10 @@ export function ensureCredentialType<TType extends Credentials['type']>(
  * ```
  */
 export interface LoginFailurePolicy {
+  /** 关闭时不累计、不锁定，忽略历史锁。 */
+  lockoutEnabled?: boolean
+  /** 首次失败起的固定窗口（秒），默认 86400。 */
+  failureWindow?: number
   /** 最大登录失败次数 */
   maxLoginAttempts: number
   /** 锁定时长（秒） */
@@ -65,6 +69,7 @@ export interface LoginFailurePolicy {
  * 判断账户是否被锁定
  *
  * @param user - 内部用户数据（含 lockedUntil 字段）
+ * @param policy - 可选锁定开关；默认启用。
  * @returns 锁定中返回 true；未设置或已到期返回 false
  * @internal
  * @example 模块内部上下文
@@ -74,8 +79,8 @@ export interface LoginFailurePolicy {
  * }
  * ```
  */
-export function isAccountLocked(user: StoredUser): boolean {
-  if (!user.lockedUntil) {
+export function isAccountLocked(user: StoredUser, policy?: Pick<LoginFailurePolicy, 'lockoutEnabled'>): boolean {
+  if (policy?.lockoutEnabled === false || !user.lockedUntil) {
     return false
   }
   return new Date() < user.lockedUntil
@@ -117,6 +122,7 @@ export async function recordLoginFailure(
  *
  * @param userRepository - 用户存储实例
  * @param user - 当前用户数据
+ * @param policy - 可选锁定开关；关闭时允许清理历史锁。
  * @returns 成功返回数据，失败返回业务或基础设施错误；调用方必须先判断 success。
  * @internal
  * @example 模块内部上下文
@@ -132,6 +138,7 @@ export async function recordLoginFailure(
 export async function resetLoginFailures(
   userRepository: UserRepository,
   user: StoredUser,
+  policy?: Pick<LoginFailurePolicy, 'lockoutEnabled'>,
 ): Promise<HaiResult<void>> {
-  return userRepository.resetLoginFailures(user.id, user.credentialVersion ?? '')
+  return userRepository.resetLoginFailures(user.id, user.credentialVersion ?? '', policy?.lockoutEnabled)
 }

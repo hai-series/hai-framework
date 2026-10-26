@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
-export const AdminRoleCodeSchema = z.enum(['admin', 'user'])
+export const BusinessSettingsSchema = z.object({ notice: z.string().trim().max(200) }).strict()
+
+export const AdminRoleCodeSchema = z.enum(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'])
 export const AdminPageInputSchema = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
@@ -11,6 +13,10 @@ export const AdminUserSchema = z.object({
   email: z.string().optional(),
   displayName: z.string().optional(),
   avatarUrl: z.string().optional(),
+  accountType: z.enum(['permanent', 'temporary']),
+  accountStatus: z.enum(['active', 'dormant', 'closed']),
+  accountExpiresAt: z.string().datetime().nullable(),
+  lastLoginAt: z.string().datetime().nullable(),
   enabled: z.boolean(),
   roles: z.array(AdminRoleCodeSchema),
   createdAt: z.string().datetime(),
@@ -33,12 +39,19 @@ export const AdminCreateUserSchema = z.object({
   displayName: z.string().max(100).optional(),
   role: AdminRoleCodeSchema.default('user'),
   enabled: z.boolean().default(true),
+  accountType: z.enum(['permanent', 'temporary']).default('permanent'),
+  accountStatus: z.enum(['active', 'dormant', 'closed']).default('active'),
+  accountExpiresAt: z.string().datetime().nullable().optional(),
 }).strict()
+export const AdminInviteUserSchema = AdminCreateUserSchema.omit({ password: true }).extend({ phone: z.string().trim().min(1).max(32).optional(), accountStatus: z.literal('active').default('active'), enabled: z.literal(true).default(true) })
 export const AdminUpdateUserSchema = z.object({
   id: z.string().min(1),
   email: z.union([z.email(), z.literal('')]).optional(),
   displayName: z.string().max(100).optional(),
   enabled: z.boolean().optional(),
+  accountType: z.enum(['permanent', 'temporary']).optional(),
+  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+  accountExpiresAt: z.string().datetime().nullable().optional(),
   role: AdminRoleCodeSchema.optional(),
 }).strict()
 export const AdminRoleSchema = z.object({
@@ -49,6 +62,14 @@ export const AdminRoleSchema = z.object({
   userCount: z.number(),
 })
 export const AdminAuditInputSchema = AdminPageInputSchema.extend({
+  category: z.enum(['system', 'business']).optional(),
+  outcome: z.enum(['success', 'failure', 'denied']).optional(),
+  severity: z.enum(['info', 'warning', 'error', 'critical']).optional(),
+  scopeId: z.string().max(256).optional(),
+  requestId: z.string().max(256).optional(),
+  traceId: z.string().max(256).optional(),
+  sortBy: z.enum(['createdAt', 'action', 'resource', 'category', 'outcome', 'severity']).optional(),
+  sortDirection: z.enum(['asc', 'desc']).optional(),
   userId: z.string().max(100).optional(),
   action: z.string().max(50).optional(),
   resource: z.string().max(50).optional(),
@@ -56,6 +77,13 @@ export const AdminAuditInputSchema = AdminPageInputSchema.extend({
   endDate: z.string().datetime().optional(),
 })
 export const AdminAuditLogSchema = z.object({
+  category: z.enum(['system', 'business']).nullish(),
+  outcome: z.enum(['success', 'failure', 'denied']).nullish(),
+  severity: z.enum(['info', 'warning', 'error', 'critical']).nullish(),
+  scopeId: z.string().nullish(),
+  requestId: z.string().nullish(),
+  traceId: z.string().nullish(),
+  actorSnapshot: z.object({ id: z.string(), username: z.string().optional(), displayName: z.string().optional(), roles: z.array(z.string()).optional() }).nullish(),
   id: z.string(),
   userId: z.string().nullable(),
   username: z.string().nullable(),
@@ -67,7 +95,10 @@ export const AdminAuditLogSchema = z.object({
   userAgent: z.string().nullable(),
   createdAt: z.string().datetime(),
 })
+export const AuditBackupReceiptSchema = z.object({ id: z.string(), key: z.string(), recordCount: z.number(), sha256: z.string(), createdAt: z.string().datetime(), cutoff: z.string().datetime() })
 export const AdminAuditSchema = z.object({
+  backupEnabled: z.boolean(),
+  stats: z.array(z.object({ action: z.string(), count: z.number() })),
   items: z.array(AdminAuditLogSchema),
   total: z.number(),
   page: z.number(),
@@ -89,7 +120,9 @@ export const AvatarOutputSchema = z.object({ avatarUrl: z.string().describe('Gen
 export type AdminUser = z.infer<typeof AdminUserSchema>
 export type AdminRole = z.infer<typeof AdminRoleSchema>
 export type AdminRoleCode = z.infer<typeof AdminRoleCodeSchema>
+export type AuditBackupReceipt = z.infer<typeof AuditBackupReceiptSchema>
 export type AdminAuditLog = z.infer<typeof AdminAuditLogSchema>
+export type AdminInviteUser = z.infer<typeof AdminInviteUserSchema>
 export type AdminCreateUser = z.infer<typeof AdminCreateUserSchema>
 export type AdminUpdateUser = z.infer<typeof AdminUpdateUserSchema>
 export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>

@@ -317,7 +317,7 @@ class AudioConnection {
     if (this.closed)
       return
     if (!verified.success) {
-      this.fail(ws, String(verified.error.code), verified.error.message)
+      this.failFromError(ws, verified.error)
       return
     }
     this.session = verified.data.session
@@ -460,7 +460,7 @@ class AudioConnection {
     if (this.closed)
       return
     if (!authorized.success) {
-      this.fail(ws, String(authorized.error.code), authorized.error.message)
+      this.failFromError(ws, authorized.error)
       return
     }
 
@@ -557,7 +557,7 @@ class AudioConnection {
       if (this.closed)
         return
       if (!result.success) {
-        this.fail(ws, String(result.error.code), result.error.message)
+        this.failFromError(ws, result.error)
         return
       }
       this.send(ws, { type: 'transcript', text: result.data.text, final: true })
@@ -614,10 +614,12 @@ class AudioConnection {
   private failFromError(ws: WSContext, error: unknown): void {
     if (this.closed)
       return
-    const hai = error as Partial<HaiError>
-    const code = typeof hai?.code === 'string' ? hai.code : CODE_TICKET
-    const message = error instanceof Error ? error.message : String(error)
-    this.fail(ws, code, message)
+    logger.warn('Audio WebSocket operation failed', { error })
+    const hai: HaiError = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && 'message' in error && typeof error.message === 'string'
+      ? { code: error.code, message: error.message, httpStatus: 'httpStatus' in error && typeof error.httpStatus === 'number' ? error.httpStatus : 500 }
+      : { code: HaiCommonError.INTERNAL_ERROR.code, message: '', httpStatus: 500 }
+    const safe = core.error.toPublic(hai)
+    this.fail(ws, String(safe.code), safe.message)
   }
 
   private end(ws: WSContext): void {

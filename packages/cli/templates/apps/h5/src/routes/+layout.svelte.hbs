@@ -14,6 +14,11 @@
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
+{{/if}}
+{{#if features.iam}}
+  import { kit } from '@h-ai/kit'
+{{/if}}
+{{#if hasI18n}}
   import { AppBar, BottomNav, LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
 {{else}}
   import { AppBar, BottomNav } from '@h-ai/ui'
@@ -25,6 +30,10 @@
   }
 
   const { children }: Props = $props()
+{{#if features.iam}}
+  const authActions = kit.client.createAuthActions()
+  $effect(() => authActions.bindPageExit({ enabled: page.data.iamPublicConfig?.session.endOnPageHide }))
+{{/if}}
 
   const navItems: (BottomNavItem & { path: '/' | '/discover' | '/profile' })[] = [
 {{#if hasI18n}}

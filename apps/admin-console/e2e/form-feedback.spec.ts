@@ -57,8 +57,8 @@ test('个人资料失焦校验与响应式布局', async ({ page, request }, tes
     }
     await capture(page, `admin-profile-${width}.png`, testInfo)
   }
-  await expect(page.getByLabel('当前密码', { exact: true })).toHaveAttribute('autocomplete', 'current-password')
-  await page.getByLabel('当前密码', { exact: true }).scrollIntoViewIfNeeded()
+  await expect(page.locator('#old-password')).toHaveAttribute('autocomplete', 'current-password')
+  await page.locator('#old-password').scrollIntoViewIfNeeded()
   await capture(page, 'admin-password-mobile.png', testInfo)
 })
 

@@ -90,7 +90,7 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appFullstackDescription')
     },
-    defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'storage', 'audit'],
+    defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'storage', 'audit', 'scheduler'],
   },
 }
 
@@ -490,7 +490,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       let envExample = isApiWorkspace
         ? envContents
         : isFullstack
-          ? `${envContents}\n# First-start administrator password; must satisfy the IAM password policy.\nHAI_ADMIN_DEFAULT_PASSWORD=\n\n# Public API origin; never include credentials.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
+          ? `${envContents}\n# First-start administrator password; must satisfy the IAM password policy.\nHAI_ADMIN_DEFAULT_PASSWORD=\n# Independent first-start audit/configuration administrator passwords.\nHAI_AUDIT_ADMIN_PASSWORD=\nHAI_CONFIG_ADMIN_PASSWORD=\nHAI_BUSINESS_OPERATOR_PASSWORD=\n\n# Public API origin; never include credentials.\nPUBLIC_API_BASE=http://127.0.0.1:3000\n`
           : context.isSvelteOnlyApp
             ? `${envContents}\n# Public API URL including /api/v1; never include credentials.\nPUBLIC_API_BASE=http://10.0.2.2:3000/api/v1\n`
             : envContents
@@ -516,8 +516,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           ? generateProductionEnvironment(envFeatures, configs)
           : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
         if (isFullstack) {
-          // 创建时为各环境分别生成随机初始密码，克隆项目后复用同一环境配置。
-          values += `\nHAI_ADMIN_DEFAULT_PASSWORD=Aa1!${randomBytes(24).toString('base64url')}\n`
+          // 沿用各环境共享配置；各职责账号分别生成独立随机初始密码。
+          for (const name of ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD'])
+            values += `\n${name}=Aa1!${randomBytes(24).toString('base64url')}\n`
         }
         if (isFullstack || (isApiWorkspace && resolvedOptions.features.includes('crypto'))) {
           // 每个环境独立生成版本化密钥环；运行时不隐式生成或轮换。
@@ -1484,11 +1485,13 @@ Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/l
 
 以下描述可运行示例的初始业务，可按实际需求调整或移除，并同步代码、数据、鉴权、界面、测试和文档。
 
-默认启用 IAM、reldb、cache、audit、storage 和 crypto${hasFeedback ? '、feedback 和 Reach' : ''}。初始管理员可以管理用户（新增、编辑、禁用、删除、角色分配、头像上传）、查看 admin/user 角色及人数、维护角色说明、分页筛选审计日志；初始普通用户进入个人资料、头像、语言、主题和密码设置。默认密码修改后全部会话失效，需要重新登录；角色模型、访问范围和会话策略由业务需求决定。
+默认启用 IAM、reldb、cache、audit、storage、scheduler 和 crypto${hasFeedback ? '、feedback 和 Reach' : ''}。示例将职责分为 admin（账号和角色管理）、audit_admin（审计查询、统计与备份）、config_admin（公开业务公告配置）、business_operator（业务处理）及 user（个人自助）。服务端限制跨职责授权和账号接管，系统管理员可配置基础成员；角色名称及业务权限由应用维护，可按项目需求调整，不写死为 IAM 规则。密码修改后全部会话失效，需要重新登录。
 
-${hasFeedback ? '登录用户可从顶部“问题反馈”提交说明、截图与日志；只有管理员显示反馈管理菜单并能查看、处理、撤销和导出问题包。服务端继续按可信身份与应用范围授权。开发通知使用 Console，生产须在 _feedback.yml 与 _reach.yml 配置管理员和真实邮件。' : ''}
+${hasFeedback ? '普通成员和业务操作员可从顶部“问题反馈”提交说明、截图与日志；只有 business_operator 显示反馈管理菜单并能查看、处理、撤销和导出问题包。服务端继续按可信身份与应用范围授权。开发通知使用 Console，生产须在 _feedback.yml 与 _reach.yml 配置收件人和真实邮件。' : ''}
 
-CLI 在根目录的 \`.env.dev\`、\`.env.test\`、\`.env.prod\` 中分别生成不同的随机强密码 \`HAI_ADMIN_DEFAULT_PASSWORD\`，这些文件随项目提交，克隆后可共享对应环境配置。首次登录使用用户名 \`admin\` 和当前环境的密码；同名进程环境或被忽略的 \`.env.local\` 可覆盖。密码须满足 \`_iam.yml\` 策略；启动失败显示模块、配置字段和错误码，端口占用显示 EADDRINUSE、地址和端口。已有用户时不会重复创建管理员或重设密码。
+CLI 在根目录 .env.dev、.env.test、.env.prod 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_CONFIG_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD。同一环境的配置随项目提交供克隆后共享；被忽略的 .env.local 或同名进程环境可覆盖。已有账号不改密、不重新分配职责；未配置密码的独立职责账号不创建。密码须符合 _iam.yml 策略；启动失败保留模块、配置字段、错误码和端口占用诊断。
+
+\`_iam.yml\` 可按业务启用账号闲置扫描、密码复杂度/期限、ALTCHA 挑战、失败窗口锁定、一次性邀请、首次改密、敏感操作再认证、登录时间/IP 和会话期限/并发策略。敏感操作清单使用服务端操作标识；界面通过短期单次票据完成再认证。\`session.endOnPageHide\` 默认关闭，开启时页面离开尝试撤销，但浏览器通知仅最佳努力，需配合服务端闲置/绝对期限。\`_audit.yml\` 配置保留保护、私有备份及 Reach 告警；手动备份失败复用同一编号重试，回执含 key/记录数/SHA-256，不公开下载。归档不是原子数据库快照，严格恢复须暂停写入/清理或使用原生备份，在独立环境核验恢复。
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 

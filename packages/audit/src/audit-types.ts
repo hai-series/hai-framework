@@ -6,6 +6,8 @@
  */
 
 import type { ErrorInfo, HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
+import type { SchedulerInitInput } from '@h-ai/scheduler'
 import type { AuditInitConfigInput } from './audit-config.js'
 import { core } from '@h-ai/core'
 
@@ -19,6 +21,12 @@ const AuditErrorInfo = {
   INIT_IN_PROGRESS: '005:409',
   NOT_INITIALIZED: '010:500',
   CONFIG_ERROR: '012:500',
+  BACKUP_DISABLED: '020:403',
+  BACKUP_FAILED: '021:500',
+  BACKUP_INVALID: '022:400',
+  BACKUP_CONFLICT: '023:409',
+  ALERTS_DISABLED: '024:403',
+  ALERTS_FAILED: '025:500',
 } as const satisfies ErrorInfo
 
 /**
@@ -36,6 +44,57 @@ export const HaiAuditError = core.error.buildHaiErrorsDef('audit', AuditErrorInf
 // ─── 实体类型 ───
 
 /**
+ * 事件发生时的最小身份快照，不承载授权真值或凭据。
+ * @example
+ * ```ts
+ * import type { AuditActorSnapshot } from '@h-ai/audit'
+ * const actor: AuditActorSnapshot = { id: 'user-1', username: 'alice', roles: ['auditor'] }
+ * ```
+ */
+export interface AuditActorSnapshot {
+  id: string
+  username?: string
+  displayName?: string
+  roles?: string[]
+}
+
+/**
+ * 异步请求的审计上下文；不替代会话校验或权限守卫。
+ * @example
+ * ```ts
+ * import type { AuditContext } from '@h-ai/audit'
+ * const context: AuditContext = { requestId: 'request-1', actor: { id: 'user-1', username: 'alice' }, ipAddress: '192.0.2.8' }
+ * ```
+ */
+export interface AuditContext {
+  actor?: AuditActorSnapshot | null
+  category?: 'system' | 'business'
+  requestId?: string
+  traceId?: string
+  scopeId?: string
+  ipAddress?: string
+  userAgent?: string
+}
+
+/**
+ * 分类、结果、等级及事件身份；旧记录升级前未知的值保持 null。
+ * @example
+ * ```ts
+ * import type { AuditEventFields } from '@h-ai/audit'
+ * const fields: AuditEventFields = { category: 'system', outcome: 'denied', severity: 'warning', requestId: 'request-1' }
+ * ```
+ */
+export interface AuditEventFields {
+  category?: 'system' | 'business' | null
+  outcome?: 'success' | 'failure' | 'denied' | null
+  severity?: 'info' | 'warning' | 'error' | 'critical' | null
+  requestId?: string | null
+  traceId?: string | null
+  scopeId?: string | null
+  actorSnapshot?: AuditActorSnapshot | null
+}
+
+/**
  * 审计日志记录
  *
  * 表示一条已持久化的审计日志条目。
@@ -45,7 +104,7 @@ export const HaiAuditError = core.error.buildHaiErrorsDef('audit', AuditErrorInf
  * const record: AuditLog = { id: 'audit_example', userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: null, ipAddress: null, userAgent: null, createdAt: new Date() }
  * ```
  */
-export interface AuditLog {
+export interface AuditLog extends AuditEventFields {
   /** 审计日志 ID，格式为 `audit_` 前缀 + 随机串 */
   id: string
   /** 操作用户 ID；系统操作时为 null */
@@ -69,7 +128,7 @@ export interface AuditLog {
 /**
  * 审计日志记录（含用户名）
  *
- * 通过 LEFT JOIN 用户表获取 username 字段，用于列表展示。
+ * 新记录使用事件时身份快照；无快照的历史记录才保留旧的用户表关联展示。
  * @example
  * ```ts
  * import type { AuditLogWithUser } from '@h-ai/audit'
@@ -92,7 +151,7 @@ export interface AuditLogWithUser extends AuditLog {
  * const record: CreateAuditLogInput = { userId: 'user_1', action: 'create', resource: 'orders', resourceId: 'order_1', details: { status: 'pending' } }
  * ```
  */
-export interface CreateAuditLogInput {
+export interface CreateAuditLogInput extends AuditEventFields {
   /** 操作用户 ID；系统操作可省略 */
   userId?: string | null
   /** 操作类型（如 login / create / update / delete） */
@@ -120,6 +179,15 @@ export interface CreateAuditLogInput {
  * ```
  */
 export interface ListAuditLogsOptions extends PaginationOptionsInput {
+  /** 按可信入口生成或校验的请求/追踪编号定位关联事件。 */
+  requestId?: string
+  traceId?: string
+  category?: 'system' | 'business'
+  outcome?: 'success' | 'failure' | 'denied'
+  severity?: 'info' | 'warning' | 'error' | 'critical'
+  scopeId?: string
+  sortBy?: 'createdAt' | 'action' | 'resource' | 'category' | 'outcome' | 'severity'
+  sortDirection?: 'asc' | 'desc'
   /** 按用户 ID 过滤 */
   userId?: string
   /** 按操作类型过滤（精确匹配） */
@@ -159,7 +227,7 @@ export interface AuditStatItem {
  * const record: CrudAuditInput = { userId: 'user_1', action: 'update', resource: 'orders', resourceId: 'order_1', details: { status: 'paid' } }
  * ```
  */
-export interface CrudAuditInput {
+export interface CrudAuditInput extends AuditEventFields {
   /** 操作用户 ID（系统操作传 null） */
   userId?: string | null
   /** 操作类型 */
@@ -277,6 +345,19 @@ export interface AuditHelper {
  * ```
  */
 export interface AuditFunctions {
+  /** 手动流式归档与完整性核对，关闭后返回未初始化。 */
+  readonly backup: AuditBackupOperations
+  /** 宿主显式装配的备份/告警任务计划；没有启用自动任务时为 null。 */
+  readonly schedulerPlan: Required<Pick<SchedulerInitInput, 'tasks' | 'hooks'>> | null
+  /** 检查已提交事件的本窗口和前一窗口；每个规则/目标/窗口只尝试一次外部通知。 */
+  checkAlerts: (options?: { signal?: AbortSignal }) => Promise<HaiResult<AuditAlertReport>>
+  /**
+   * 在异步隔离的审计上下文中执行操作；同步或异步结果原样返回，调用方异常原样传播。
+   * @param context - 可信宿主解析的关联字段与身份快照。
+   * @param operation - 业务操作，内部 audit.log 自动补齐未显式指定的字段。
+   * @returns 业务操作的原始返回值或 Promise。
+   */
+  withContext: <T>(context: AuditContext, operation: () => T) => T
   /**
    * 初始化审计模块
    *
@@ -294,9 +375,20 @@ export interface AuditFunctions {
    * 记录一条审计日志
    *
    * @param input - 日志内容（action 和 resource 为必填）
+   * @param tx - 可选的调用者事务；提交或回滚同时决定事件，不在此提交事务。
    * @returns 成功时返回创建的 AuditLog；失败时返回 LOG_FAILED
    */
-  log: (input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>
+  log: (input: CreateAuditLogInput, tx?: DmlWithTxOperations) => Promise<HaiResult<AuditLog>>
+  /**
+   * 框架入口自动记录。模块未初始化或关闭自动采集时跳过；默认跳过成功读取。
+   * 不改变原业务结果；调用方仍须检查记录失败，避免静默丢失审计。
+   * @param input - 仅包含安全的事件字段，不应复制请求体或凭据。
+   * @param options - 入口是否属于读取操作；失败和拒绝的读取始终采集。
+   * @param options.read - 读取标志；默认 false。
+   * @param options.tx - 可选的调用者事务；回滚不会留下成功变更事件。
+   * @returns 持久化成功或按配置跳过时成功，否则返回审计错误。
+   */
+  capture: (input: CreateAuditLogInput, options?: { read?: boolean, tx?: DmlWithTxOperations }) => Promise<HaiResult<void>>
   /**
    * 分页查询审计日志列表（含用户名 LEFT JOIN）
    *
@@ -325,11 +417,90 @@ export interface AuditFunctions {
    * @param days - 统计天数，默认 7
    * @returns 成功时返回 AuditStatItem 数组；失败时返回 STATS_FAILED
    */
-  getStats: (days?: number) => Promise<HaiResult<AuditStatItem[]>>
+  getStats: (days?: number, filters?: Pick<ListAuditLogsOptions, 'category' | 'outcome' | 'severity' | 'scopeId' | 'userId' | 'resource'>) => Promise<HaiResult<AuditStatItem[]>>
   /**
    * 便捷记录器，封装常见审计场景
    *
    * 未初始化时调用任意方法均返回 NOT_INITIALIZED 错误。
    */
   readonly helper: AuditHelper
+}
+
+/**
+ * 私有归档键前缀；宿主公开文件入口须拒绝此命名空间，即使备份策略已关闭。
+ * @example
+ * ```ts
+ * import { AUDIT_BACKUP_PREFIX } from '@h-ai/audit'
+ * const key = `${AUDIT_BACKUP_PREFIX}daily-archive.jsonl`
+ * ```
+ */
+export const AUDIT_BACKUP_PREFIX = 'hai-private/audit-backups/'
+
+/**
+ * 归档扫描条件。缺省截止时刻在开始时固定，过程中新增日志交给下一次归档。
+ * @example
+ * ```ts
+ * import type { AuditBackupOptions } from '@h-ai/audit'
+ * const options: AuditBackupOptions = { id: 'daily-archive', from: new Date('2026-01-01T00:00:00Z') }
+ * ```
+ */
+export interface AuditBackupOptions {
+  /** 同一业务执行使用稳定 ID；省略时生成随机 ID。已有 ID 仅核对并复用完整归档。 */
+  id?: string
+  from?: Date
+  to?: Date
+  signal?: AbortSignal
+}
+
+/**
+ * 完整归档回执；SHA-256 校验内容完整性，不能替代独立存储权限或真实性认证。
+ * @example
+ * ```ts
+ * import { audit, type AuditBackupInfo } from '@h-ai/audit'
+ * // 宿主已初始化 RelDB、私有 Storage 和 Audit。
+ * const result = await audit.backup.run()
+ * if (result.success) { const receipt: AuditBackupInfo = result.data; void receipt.sha256 }
+ * ```
+ */
+export interface AuditBackupInfo {
+  id: string
+  key: string
+  recordCount: number
+  sha256: string
+  createdAt: Date
+  cutoff: Date
+}
+
+/**
+ * 备份不覆盖在线审计。JSONL 归档可核对后用于离线恢复/独立查询存储。
+ * @example
+ * ```ts
+ * import { audit, type AuditBackupOperations } from '@h-ai/audit'
+ * const operations: AuditBackupOperations = audit.backup
+ * const result = await operations.run({ id: 'daily-archive' })
+ * if (!result.success) result.error.code
+ * ```
+ */
+export interface AuditBackupOperations {
+  /** 创建或核对并复用同一 ID 的完整归档；已有归档不覆盖，输入无效、取消或存储失败返回失败。 */
+  run: (options?: AuditBackupOptions) => Promise<HaiResult<AuditBackupInfo>>
+  /** 有界流式核对规范、记录数和校验和；只允许读取私有归档命名空间。 */
+  verify: (key: string, options?: { signal?: AbortSignal }) => Promise<HaiResult<AuditBackupInfo>>
+}
+
+/**
+ * 本次检查的通知提交回执；submitted 不证明收件人已阅读，queued 仅表示 Reach 持久入队。
+ * @example
+ * ```ts
+ * import { audit, type AuditAlertReport } from '@h-ai/audit'
+ * const result = await audit.checkAlerts()
+ * if (result.success) { const report: AuditAlertReport = result.data; void report.failed }
+ * ```
+ */
+export interface AuditAlertReport {
+  submitted: number
+  queued: number
+  failed: number
+  /** 已达到单轮通知上限，后续检查继续领取未尝试目标。 */
+  more: boolean
 }

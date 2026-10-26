@@ -16,6 +16,8 @@ import { AuthUiConfigSchema, OtpConfigSchema, PasswordConfigSchema, SessionConfi
  * ```
  */
 export interface IamPublicConfig {
+  /** 只公开是否需要交互挑战，不公开秘密或缓存状态。 */
+  captcha: { enabled: boolean }
   /** 页面显示密码策略，不包含密码哈希或账户信息。 */
   password: ReturnType<typeof PasswordConfigSchema.parse>
   /** 自助注册开关；管理端创建账户仍需要独立授权。 */
@@ -31,7 +33,11 @@ export interface IamPublicConfig {
   /** 已经由外观 Schema 校验的标题、图像 URL 和布局。 */
   ui: ReturnType<typeof AuthUiConfigSchema.parse>
   /** 默认 access 有效时长，单位秒；真实认证期限由服务端会话状态决定。 */
-  session: { maxAge: number }
+  session: { maxAge: number, endOnPageHide: boolean }
+  /** 仅公开操作清单，便于界面在选定操作前请求再鉴别。 */
+  reauthentication: { enabled: boolean, operations: string[] }
+  /** 邀请入口同时要求开关、密码重置与通知通道就绪。 */
+  initialCredentials: { enabled: boolean }
 }
 
 /**
@@ -49,9 +55,11 @@ export interface IamPublicConfig {
  */
 export function buildIamPublicConfig(config: IamConfig, runtime: IamConfigInput): IamPublicConfig {
   const otp = OtpConfigSchema.parse(config.otp ?? {})
+  const session = SessionConfigSchema.parse(config.session ?? {})
   const email = config.login.otp && !!config.otp && otp.email && !!runtime.onOtpSendEmail
   const sms = config.login.otp && !!config.otp && otp.sms && !!runtime.onOtpSendSms
   return {
+    captcha: { enabled: config.captcha.enabled },
     password: PasswordConfigSchema.parse(config.password ?? {}),
     register: { enabled: config.register.enabled },
     login: { password: config.login.password, otp: email || sms, ldap: config.login.ldap && !!config.ldap, email, sms },
@@ -59,6 +67,8 @@ export function buildIamPublicConfig(config: IamConfig, runtime: IamConfigInput)
     otp: { length: otp.length, resendInterval: otp.resendInterval },
     agreements: { ...config.agreements },
     ui: AuthUiConfigSchema.parse(config.ui ?? {}),
-    session: { maxAge: SessionConfigSchema.parse(config.session ?? {}).maxAge },
+    session: { maxAge: session.maxAge, endOnPageHide: session.endOnPageHide },
+    reauthentication: { enabled: config.reauthentication?.enabled ?? false, operations: [...config.reauthentication?.operations ?? []] },
+    initialCredentials: { enabled: Boolean(config.initialCredentials?.enabled && config.passwordReset?.enabled !== false && runtime.onPasswordResetRequest) },
   }
 }

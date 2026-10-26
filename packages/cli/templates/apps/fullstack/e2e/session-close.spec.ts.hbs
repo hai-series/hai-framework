@@ -1,0 +1,61 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.e2eFrontend}}
+import type { Page } from '@playwright/test'
+import process from 'node:process'
+import { expect, test } from '@playwright/test'
+
+async function login(page: Page, username = 'admin', initialPassword = process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!') {
+  await page.goto('/')
+  await page.locator('#login-username').fill(username)
+  await page.getByTestId('login-form').locator('input[type=password]').fill(initialPassword)
+  await page.getByTestId('login-form').locator('button[type=submit]').click()
+  // 每例使用独立初始账号，真实完成服务端限制下的首次改密后才能建立普通会话。
+  await expect(page.locator('#old-password')).toBeVisible()
+  await expect(page.getByTestId('logout')).toHaveCount(0)
+  await page.screenshot({ path: test.info().outputPath('initial-password-renewal.png'), fullPage: true })
+  const password = `${initialPassword}-Renewed!`
+  await page.locator('#old-password').fill(initialPassword)
+  await page.locator('#new-password').fill(password)
+  await page.locator('#confirm-password').fill(password)
+  await page.locator('form').filter({ has: page.locator('#old-password') }).locator('button[type=submit]').click()
+  await expect(page.locator('#login-username')).toBeVisible()
+  await page.locator('#login-username').fill(username)
+  await page.getByTestId('login-form').locator('input[type=password]').fill(password)
+  await page.getByTestId('login-form').locator('button[type=submit]').click()
+  await expect(page.getByTestId('logout')).toBeVisible()
+  if (await page.getByTestId('guide-later').isVisible())
+    await page.getByTestId('guide-later').click()
+}
+
+test('configured page exit revokes the actual server session, while BFCache keeps it', async ({ page, context }) => {
+  await login(page)
+  let closes = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.endsWith('/auth/session/close'))
+      closes++
+  })
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })))
+  expect(closes).toBe(0)
+  const revoked = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/auth/session/close'))
+  // 浏览器关闭事件本身不保证送达；明确触发同一原生事件，验证已送达的请求确实撤销。
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })))
+  const response = await revoked
+  expect(response.status()).toBe(200)
+  await response.body()
+  expect(closes).toBe(1)
+  await page.close()
+  const reopened = await context.newPage()
+  await reopened.goto('/')
+  await expect(reopened.getByTestId('login-form')).toBeVisible()
+  await expect(reopened.getByTestId('logout')).toHaveCount(0)
+})
+
+test('server idle expiry rejects the next access and cookie refresh', async ({ page }) => {
+  await login(page, 'config_admin', 'Scaffold-test-Config123!')
+  // 此等待是被测的真实服务端闲置期限；期间不发业务保活请求。
+  await page.waitForTimeout(6500)
+  await page.getByTestId('nav-configuration').click()
+  await expect(page.getByTestId('login-form')).toBeVisible()
+  await expect(page.getByTestId('logout')).toHaveCount(0)
+})
+{{/if~}}

@@ -350,6 +350,7 @@
   "auth_unavailable": "This authentication feature is unavailable.",
   "auth_reset_sent": "If the account exists, a reset notification has been sent. Check your email or SMS.",
   "auth_reset_done": "Password reset. Sign in with your new password.",
+  "auth_renew_title": "Update your sign-in password",
   "auth_have_token": "I have a reset token",
   "auth_brand": "Account center",
   "password_policy_length": "Use {min}–{max} characters",
@@ -357,6 +358,7 @@
   "password_policy_lowercase": "Include lowercase letters",
   "password_policy_number": "Include numbers",
   "password_policy_special": "Include special characters",
+  "password_policy_classes": "Include at least {count} of uppercase, lowercase, numbers and special characters",
   "guide_welcome": "Welcome",
   "guide_start": "Start tour",
   "guide_later": "Remind me later",
@@ -478,5 +480,11 @@
   "feedback_notification_disabled": "Notifications disabled",
   "feedback_capacity_hint": "Attachments {used}/{total} MiB · {single} MiB each · up to {count}",
   "json_viewer_copy": "Copy",
-  "json_viewer_copied": "Copied"
+  "json_viewer_copied": "Copied",
+  "auth_captcha_error": "Security check is incomplete or unavailable. Try again.",
+  "auth_captcha_verifying": "Verifying security challenge",
+  "reauthentication_title": "Confirm sensitive action",
+  "reauthentication_hint": "Enter your current password to continue this action.",
+  "reauthentication_password": "Current password",
+  "reauthentication_confirm": "Verify and continue"
 }

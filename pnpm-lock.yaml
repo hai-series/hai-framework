@@ -351,6 +351,9 @@ catalogs:
     '@typescript/native':
       specifier: npm:typescript@^7.0.2
       version: 7.0.2
+    altcha:
+      specifier: ^3.5.0
+      version: 3.5.0
     better-sqlite3:
       specifier: ^12.11.1
       version: 12.11.1
@@ -621,6 +624,9 @@ importers:
       '@h-ai/reldb':
         specifier: workspace:*
         version: link:../../packages/reldb
+      '@h-ai/scheduler':
+        specifier: workspace:*
+        version: link:../../packages/scheduler
       '@h-ai/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -1428,7 +1434,19 @@ importers:
       '@h-ai/reldb':
         specifier: workspace:*
         version: link:../reldb
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
     devDependencies:
+      '@h-ai/reach':
+        specifier: workspace:*
+        version: link:../reach
+      '@h-ai/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
+      '@h-ai/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -1820,6 +1838,9 @@ importers:
       '@h-ai/reldb':
         specifier: workspace:*
         version: link:../reldb
+      altcha:
+        specifier: 'catalog:'
+        version: 3.5.0
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -1854,6 +1875,9 @@ importers:
       '@h-ai/api-contract':
         specifier: workspace:*
         version: link:../api-contract
+      '@h-ai/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
@@ -1879,6 +1903,9 @@ importers:
       '@h-ai/feedback':
         specifier: workspace:*
         version: link:../feedback
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../reldb
       '@sveltejs/kit':
         specifier: 'catalog:'
         version: 2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
@@ -2059,6 +2086,9 @@ importers:
       '@h-ai/api-contract':
         specifier: workspace:*
         version: link:../api-contract
+      '@h-ai/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
@@ -2117,6 +2147,9 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.2
+      altcha:
+        specifier: 'catalog:'
+        version: 3.5.0
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3
@@ -2187,6 +2220,9 @@ importers:
       '@shikijs/langs':
         specifier: 'catalog:'
         version: 4.5.0
+      altcha:
+        specifier: 'catalog:'
+        version: 3.5.0
       bits-ui:
         specifier: 'catalog:'
         version: 2.19.5(@internationalized/date@3.12.4)(@sveltejs/kit@2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))
@@ -5265,6 +5301,9 @@ packages:
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
 
+  altcha@3.5.0:
+    resolution: {integrity: sha512-wBXNK1bBeWs/XTOZiyE3JQvRNECgFKYEJqcPxFW7tFd7ErG62yQmMlRasygZrza3zyNTTuon3BfMF/PcBcepcw==}
+
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
     engines: {node: '>=8'}
@@ -6832,6 +6871,9 @@ packages:
   has-tostringtag@1.0.2:
     resolution: {integrity: sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==}
     engines: {node: '>= 0.4'}
+
+  hash-wasm@4.12.0:
+    resolution: {integrity: sha512-+/2B2rYLb48I/evdOIhP+K/DD2ca2fgBjp6O+GBEnCDk2e4rpeXIK8GvIyRPjTezgmWn9gmKwkQjjx6BtqDHVQ==}
 
   hashery@1.5.1:
     resolution: {integrity: sha512-iZyKG96/JwPz1N55vj2Ie2vXbhu440zfUfJvSwEqEbeLluk7NnapfGqa7LH0mOsnDxTF85Mx8/dyR6HfqcbmbQ==}
@@ -12770,6 +12812,10 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
+  altcha@3.5.0:
+    dependencies:
+      hash-wasm: 4.12.0
+
   ansi-regex@5.0.1: {}
 
   ansi-regex@6.4.0: {}
@@ -14408,6 +14454,8 @@ snapshots:
   has-tostringtag@1.0.2:
     dependencies:
       has-symbols: 1.1.0
+
+  hash-wasm@4.12.0: {}
 
   hashery@1.5.1:
     dependencies:

@@ -9,6 +9,7 @@ import type {
   IamAdminCreateUserInput,
   IamAdminUpdateUserInput,
   IamCurrentUser,
+  IamInviteUserInput,
 } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { IamFunctions, TokenPair, User } from '@h-ai/iam'
@@ -58,18 +59,43 @@ export interface IamProcedureDeps {
 export function createIamProcedures(deps: IamProcedureDeps) {
   const { iam } = deps
 
+  // 权限守卫先执行；额外鉴别只绑定已授权操作，不提升原有权限。
+  async function sensitive<T>(context: ServContext, operation: string, run: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+    const policy = iam.publicConfig?.reauthentication
+    if (policy?.enabled && policy.operations.includes(operation)) {
+      const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
+      if (!checked.success)
+        return checked
+    }
+    return run()
+  }
+
   return implement(iamContract)
     .context<ServContext>()
 
-    .route('auth.login', ({ input }) => iam.auth.login(input))
-    .route('auth.loginWithOtp', ({ input }) => iam.auth.loginWithOtp(input))
-    .route('auth.loginWithLdap', ({ input }) => iam.auth.loginWithLdap(input))
+    .route('auth.reauthenticate')
+    .auth()
+    .handle(({ input, context }) => iam.auth.reauthenticate(context.accessToken ?? '', input.password, input.operation))
+
+    .route('auth.login', ({ input, context }) => iam.auth.login(input, context))
+    .route('auth.createCaptcha', ({ input }) => iam.auth.createCaptcha(input))
+    .route('auth.loginWithOtp', ({ input, context }) => iam.auth.loginWithOtp(input, context))
+    .route('auth.loginWithLdap', ({ input, context }) => iam.auth.loginWithLdap(input, context))
     .route('auth.publicConfig', () => ok(iam.publicConfig))
-    .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier))
+    .route('auth.renewPassword', ({ input }) => iam.user.renewPassword(input))
+    .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier, input))
     .route('auth.confirmPasswordReset', ({ input }) => iam.user.confirmPasswordReset(input.token, input.newPassword))
 
     .route('auth.logout', ({ input, context }) => {
       // 仅撤销调用方持有的完整随机令牌；不要求 access 仍有效，也不接受 userId 撤销。
+      const token = input.accessToken ?? context.accessToken
+      if (!token)
+        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+      return iam.auth.logout(token)
+    })
+
+    .route('auth.closeSession', ({ input, context }) => {
+      // 页面离开只撤销持有的会话，不清 Cookie，避免迟到响应覆盖下一文档的新登录。
       const token = input.accessToken ?? context.accessToken
       if (!token)
         return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
@@ -96,8 +122,8 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .route('auth.refresh', async ({ input }) => {
       return mapHaiResult(await iam.session.refresh(input.refreshToken), tokens => ({ tokens }))
     })
-    .route('auth.sendOtp', ({ input }) => iam.auth.sendOtp(input.identifier))
-    .route('auth.register', ({ input }) => iam.auth.registerAndLogin(input))
+    .route('auth.sendOtp', ({ input }) => iam.auth.sendOtp(input.identifier, input))
+    .route('auth.register', ({ input, context }) => iam.auth.registerAndLogin(input, context))
 
     .route('auth.changePassword')
     .auth()
@@ -127,11 +153,15 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('users.create')
     .permission('iam.users.write')
-    .handle(({ input }) => createUser(iam, input))
+    .handle(({ input, context }) => sensitive(context, 'iam.users.create', () => createUser(iam, input)))
+
+    .route('users.invite')
+    .permission('iam.users.write')
+    .handle(({ input, context }) => sensitive(context, 'iam.users.invite', () => createUser(iam, input)))
 
     .route('users.update')
     .permission('iam.users.write')
-    .handle(({ input }) => updateUser(iam, input))
+    .handle(({ input, context }) => sensitive(context, 'iam.users.update', () => updateUser(iam, input)))
 
     .route('users.delete')
     .permission('iam.users.write')
@@ -139,12 +169,12 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       // 防止自删：避免管理员误删自己的账号导致授权锁死。
       if (context.session.userId === input.id)
         return err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale }))
-      return iam.user.deleteUser(input.id)
+      return sensitive(context, 'iam.users.delete', () => iam.user.deleteUser(input.id))
     })
 
     .route('users.resetPassword')
     .permission('iam.users.write')
-    .handle(({ input }) => iam.user.adminResetPassword(input.id, input.newPassword))
+    .handle(({ input, context }) => sensitive(context, 'iam.users.resetPassword', () => iam.user.adminResetPassword(input.id, input.newPassword)))
 
     .route('roles.list')
     .permission('iam.roles.read')
@@ -156,18 +186,18 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('roles.create')
     .permission('iam.roles.write')
-    .handle(({ input }) => iam.authz.createRole(input))
+    .handle(({ input, context }) => sensitive(context, 'iam.roles.create', () => iam.authz.createRole(input)))
 
     .route('roles.update')
     .permission('iam.roles.write')
-    .handle(({ input }) => {
+    .handle(({ input, context }) => {
       const { id, ...data } = input
-      return iam.authz.updateRole(id, data)
+      return sensitive(context, 'iam.roles.update', () => iam.authz.updateRole(id, data))
     })
 
     .route('roles.delete')
     .permission('iam.roles.write')
-    .handle(({ input }) => iam.authz.deleteRole(input.id))
+    .handle(({ input, context }) => sensitive(context, 'iam.roles.delete', () => iam.authz.deleteRole(input.id)))
 
     .route('permissions.list')
     .permission('iam.permissions.read')
@@ -179,17 +209,18 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('permissions.create')
     .permission('iam.permissions.write')
-    .handle(({ input }) => iam.authz.createPermission(input))
+    .handle(({ input, context }) => sensitive(context, 'iam.permissions.create', () => iam.authz.createPermission(input)))
 
     .route('permissions.delete')
     .permission('iam.permissions.write')
-    .handle(({ input }) => iam.authz.deletePermission(input.id))
+    .handle(({ input, context }) => sensitive(context, 'iam.permissions.delete', () => iam.authz.deletePermission(input.id)))
 
     .build()
 }
 
-async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Promise<HaiResult<User>> {
-  const registerResult = await iam.user.createUser(input)
+async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput | IamInviteUserInput): Promise<HaiResult<User>> {
+  const invited = !('password' in input)
+  const registerResult = 'password' in input ? await iam.user.createUser(input) : await iam.user.inviteUser(input)
   if (!registerResult.success)
     return registerResult
 
@@ -197,6 +228,11 @@ async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Pr
 
   // 任何后续步骤失败都需要回滚刚创建的用户，以避免重复用户名/邮箱错误阅存。
   async function rollback(reason: string): Promise<void> {
+    if (invited) {
+      // 邀请可能已经送达，不能回滚外部已发布凭据；保留账号供管理员补齐配置。
+      iamFeatureLogger.error('Invited account requires configuration repair', { userId, reason })
+      return
+    }
     const deleteResult = await iam.user.deleteUser(userId)
     if (!deleteResult.success)
       iamFeatureLogger.error('createUser rollback failed, orphan user may exist', { userId, reason, error: deleteResult.error })

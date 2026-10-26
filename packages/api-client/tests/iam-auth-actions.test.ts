@@ -27,6 +27,10 @@ describe('iAM login action input', () => {
       expect(requests).toHaveLength(1)
       expect(new URL(requests[0]!.url).pathname).toBe(`/api${path}`)
       expect(await requests[0]!.json()).toEqual(body)
+      const challenged = await actions.login({ identifier: 'alice', password: 'ExamplePassword123', method, code: '123456', captcha: 'opaque-single-use-proof' })
+      expect(challenged.success).toBe(false)
+      expect(requests).toHaveLength(2)
+      expect(await requests[1]!.json()).toEqual({ ...body, captcha: 'opaque-single-use-proof' })
       expectTypeOf<Extract<'rememberMe', keyof IamAuthLoginInput>>().toEqualTypeOf<never>()
     }
     finally {
