@@ -203,6 +203,42 @@ describe('db store provider saveMany', () => {
     expect(query).toHaveBeenCalledTimes(1)
   })
 
+  it('同表 Store 初始化不竞争系统目录，保留各自索引并允许独立表并行', async () => {
+    const sql = createMockSql([])
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const inFlight = new Set<string>()
+    const execute = vi.spyOn(sql, 'execute').mockImplementation(async (query) => {
+      const table = /^CREATE TABLE IF NOT EXISTS (\w+)/.exec(query)?.[1]
+      if (table) {
+        if (inFlight.has(table))
+          throw new Error('Concurrent CREATE TABLE conflicts in PostgreSQL system catalog')
+        inFlight.add(table)
+        if (table === 'hai_ai_shared_ddl')
+          await pending
+        inFlight.delete(table)
+      }
+      return ok({ changes: 0 })
+    })
+    const provider = createDbStoreProvider({ sql, jsonOps, dbType: 'postgresql', vecdb: createMockVecdb() })
+    provider.createRelStore('hai_ai_shared_ddl', { hasObjectId: true, hasSessionId: true })
+    provider.createRelStore('hai_ai_shared_ddl', { hasObjectId: true, hasSessionId: true })
+    provider.createRelStore('hai_ai_independent_ddl')
+    const initializing = provider.initialize()
+    const assertion = expect(initializing).resolves.toBeUndefined()
+    try {
+      await vi.waitFor(() => expect(execute.mock.calls.some(([query]) => query.startsWith('CREATE TABLE IF NOT EXISTS hai_ai_independent_ddl '))).toBe(true))
+    }
+    finally {
+      release()
+    }
+    await assertion
+    expect(execute.mock.calls.filter(([query]) => query.includes('idx_hai_ai_shared_ddl_object_id'))).toHaveLength(2)
+    expect(execute.mock.calls.filter(([query]) => query.includes('idx_hai_ai_shared_ddl_session_id'))).toHaveLength(2)
+  })
+
   it('首次 DDL 失败后仍等待其他在途 DDL 结束，才返回原始错误', async () => {
     const sql = createMockSql([])
     const failure = new Error('DDL denied')

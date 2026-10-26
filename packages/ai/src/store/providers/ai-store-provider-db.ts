@@ -654,8 +654,8 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
   const { sql, jsonOps, vecdb: vecdbDep } = deps
   const dbType = deps.dbType ?? 'sqlite'
 
-  /** 已创建的 RelStore 实例（用于批量建表） */
-  const relStores: ReldbAIRelStore<unknown>[] = []
+  /** 按表归组，避免同表 Store 并发 DDL 竞争 PostgreSQL 系统目录。 */
+  const relStores = new Map<string, ReldbAIRelStore<unknown>[]>()
 
   return {
     name: 'db',
@@ -667,7 +667,9 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
 
     createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T> {
       const store = new ReldbAIRelStore<T>(sql, name, jsonOps, dbType, options)
-      relStores.push(store as ReldbAIRelStore<unknown>)
+      const stores = relStores.get(name) ?? []
+      stores.push(store as ReldbAIRelStore<unknown>)
+      relStores.set(name, stores)
       return store
     },
 
@@ -695,19 +697,22 @@ export function createDbStoreProvider(deps: DbStoreProviderDeps): AIStoreProvide
     },
 
     async initialize(): Promise<void> {
-      if (relStores.length > 0) {
-        // 等待所有已启动的 DDL 结束，避免首个失败触发关闭后仍有建表操作在途。
-        const results = await Promise.allSettled(relStores.map(s => s.createTable()))
+      if (relStores.size > 0) {
+        // 同表串行、独立表并行；失败后仍等待所有在途 DDL，避免关闭连接时操作尚未结束。
+        const results = await Promise.allSettled([...relStores.values()].map(async (stores) => {
+          for (const store of stores)
+            await store.createTable()
+        }))
         for (const result of results) {
           if (result.status === 'rejected')
             throw result.reason
         }
-        logger.debug('DB store provider initialized', { tableCount: relStores.length })
+        logger.debug('DB store provider initialized', { tableCount: relStores.size })
       }
     },
 
     async close(): Promise<void> {
-      relStores.length = 0
+      relStores.clear()
     },
   }
 }
