@@ -998,10 +998,17 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')).toBe(true)
 
     // 实际 create 命令不能覆盖模板生成的可选配置和 Reach 标准通知模板。
-    for (const moduleKey of ['ai', 'vecdb', 'payment', 'scheduler']) {
+    for (const moduleKey of ['ai', 'vecdb', 'payment']) {
       const content = await readText(projectPath, `packages/proj-fullstack-serv/config/_${moduleKey}.yml`)
       expect(parse(content)).toBeNull()
     }
+    const scheduler = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_scheduler.yml'))
+    expect(scheduler).toEqual({ enableDb: '$' + '{HAI_SCHEDULER_ENABLEDB:true}', tickInterval: '$' + '{HAI_SCHEDULER_TICKINTERVAL:1000}', leaseMs: '$' + '{HAI_SCHEDULER_LEASEMS:300000}' })
+    const audit = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_audit.yml'))
+    expect(audit.backup.enabled).toBe('$' + '{HAI_AUDIT_BACKUP_ENABLED:false}')
+    expect(audit.backup.schedule.enabled).toBe('$' + '{HAI_AUDIT_BACKUP_SCHEDULE_ENABLED:false}')
+    expect(audit.alerts.enabled).toBe('$' + '{HAI_AUDIT_ALERTS_ENABLED:false}')
+    expect(audit.alerts.schedule.enabled).toBe('$' + '{HAI_AUDIT_ALERTS_SCHEDULE_ENABLED:false}')
     const reach = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_reach.yml'))
     expect(reach.templates.map((template: { name: string }) => template.name)).toEqual(['otp_email', 'otp_sms', 'password_reset', 'password_reset_sms'])
     expect(await readText(projectPath, '.env.example')).toContain('# HAI_AI_LLM_APIKEY=')

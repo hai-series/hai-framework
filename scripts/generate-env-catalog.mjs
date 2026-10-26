@@ -324,6 +324,9 @@ const extraDescriptions = {
   HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ['服务端受管版本化传输密钥环；仅私有环境或 Secret Manager 注入', 'JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志'],
   HAI_CRYPTO_TRANSPORT: ['桌面示例公开传输配置；在构建阶段与浏览器使用同一 Schema 校验', 'false 关闭；或 JSON/YAML 对象，keyExchangePath 须以 / 开头；不接受 true'],
   VITE_ADAPTER: ['SvelteKit 构建适配器', 'node | static；未识别的值回退 node'],
+  HAI_AUDIT_ADMIN_PASSWORD: ['首次创建审计管理员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
+  HAI_BUSINESS_OPERATOR_PASSWORD: ['首次创建业务操作员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
+  HAI_CONFIG_ADMIN_PASSWORD: ['首次创建业务配置员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
   HAI_ADMIN_DEFAULT_PASSWORD: ['首次创建管理员的密码', '满足 IAM 密码策略；敏感值仅在本地或目标进程注入'],
   HAI_E2E: ['示例/模板端到端测试开关', '1 启用；其余值关闭'],
   CI: ['持续集成环境标记', 'true 或 1 启用；未设置为本地运行'],
@@ -364,6 +367,8 @@ const extraDescriptions = {
   CAPACITOR_SERVER_URL: ['Capacitor 开发时的前端热加载地址', '有效 HTTP(S) URL；发布原生包时不设置'],
   E2E_ADMIN_PASSWORD: ['端到端测试创建的管理员密码', '满足 IAM 密码策略；仅测试进程使用'],
   E2E_PORT: ['端到端测试 Web 服务监听端口', '整数 1–65535'],
+  ADMIN_E2E_BASE_URL: ['管理台独立 E2E 服务地址，可由根验收透传以避开其它工作区端口', '本机 HTTP(S) URL；直接运行时 BASE_URL 优先'],
+  MOBILE_E2E_PORT: ['移动示例独立 E2E 预览端口，可由根验收透传', '整数 1–65535；默认 5175，直接运行时 E2E_PORT 优先'],
   BASE_URL: ['Playwright 验收访问的前端基础地址', '有效 HTTP(S) URL；按项目 Playwright 配置选择默认端口'],
   HAI_E2E_WEB_URL: ['Fullstack Web 端验收地址', '有效 HTTP(S) URL；同时决定对应预览服务的监听地址'],
   HAI_E2E_APP_URL: ['Fullstack 移动端浏览器预览验收地址', '有效 HTTP(S) URL；同时决定对应预览服务的监听地址'],
@@ -402,8 +407,8 @@ for (const [name, entry] of explicit) {
         ? '有效 URL；不得包含凭据'
         : '字符串；按使用位置的校验规则填写'
   add(name, {
-    // 该 Secret 只属于服务端实际读取入口，不能随桌面端公开 crypto 配置自动推荐。
-    module: name === 'HAI_CRYPTO_TRANSPORT_SERVERKEYRING' ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
+    // 宿主凭据只属于实际读取入口，不能随名称相似的模块 Schema 自动推荐。
+    module: ['HAI_CRYPTO_TRANSPORT_SERVERKEYRING', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD'].includes(name) ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
     path: name,
     description: meta?.[0] ?? `${sensitive ? '凭据输入' : '环境入口'}；使用位置 ${entry.source}`,
     constraints: [meta?.[1] ?? (sensitive ? '敏感字符串；启用相应功能时必填，不得提交真实值' : inferred)],

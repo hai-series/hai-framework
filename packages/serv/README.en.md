@@ -726,9 +726,23 @@ const app = serv.createApp({
 
 ## Error messages and correlated logs
 
+Native Audio WebSocket uses the same safe error boundary: internal Provider/SDK messages and stacks remain in sanitized logs, while clients receive stable codes, safe messages and traceId. Custom cross-origin configuration must preserve X-Hai-Reauthentication for sensitive actions; Serv/Kit defaults allow it.
+
 HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+With audit initialized, procedures bind verified actors, trusted client addresses and request/scope IDs; domain audit.log inherits this context. Writes and failed/denied procedures produce request.execute. Contract validation, protocol, middleware and missing-route HTTP errors produce http.reject. Events contain operation/method/status or reason codes, without bodies, dynamic URLs, tokens or internal errors. capture.enabled disables automatic capture and capture.includeReads enables successful reads; explicit domain logs remain active. Applications still record meaningful domain completion/failure events.
+
+## Optional interactive challenges
+
+Standard IAM procedures include POST /auth/captcha, taking operation and returning a public ALTCHA challenge. With IAM captcha enabled, password/OTP/LDAP, registration, notification requests and anonymous password renewal enforce one-use proofs in IAM; mappings preserve captcha instead of relying on client checks.
+
+See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
+
+## Page exit session policy
+
+`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
 
 ## Development and testing
 

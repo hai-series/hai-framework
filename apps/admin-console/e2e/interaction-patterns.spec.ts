@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin, waitForHydration } from './helpers'
+import { dutyAccounts, loginOnPage, registerAndLogin, waitForHydration } from './helpers'
 
 test('列表示例的键盘、排序、分页、筛选和错误恢复可连续操作', async ({ page, request }, testInfo) => {
   const errors: string[] = []
@@ -53,8 +53,8 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
   ]) {
     // 主题各自保留完整宽度矩阵，避免全部高分辨率截图挤在一个用例的总时限内。
     for (const theme of ['light', 'dark']) {
-      test(`实际布局与焦点：${locale.id} / ${theme}`, async ({ page, request }, testInfo) => {
-        await registerAndLogin(page, request, `ui${locale.id}`)
+      test(`实际布局与焦点：${locale.id} / ${theme}`, async ({ page }, testInfo) => {
+        await loginOnPage(page, dutyAccounts.config.username, dutyAccounts.config.password)
         if (locale.choice) {
           await page.goto('/admin/settings')
           await waitForHydration(page)

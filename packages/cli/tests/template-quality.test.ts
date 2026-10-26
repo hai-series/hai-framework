@@ -23,7 +23,7 @@ beforeAll(async () => {
   for (const appType of projectTypes) {
     const name = `quality-${appType}`
     const projectPath = path.join(tmpRoot, name)
-    const context = buildTemplateContext({ name, appType, features: [], packageManager: 'pnpm' })
+    const context = buildTemplateContext({ name, appType, features: appType === 'fullstack' ? ['iam', 'db', 'cache', 'crypto', 'storage', 'audit', 'scheduler', 'feedback'] : [], packageManager: 'pnpm' })
     await generateFromTemplates(projectPath, context)
     linters.set(appType, new ESLint({ cwd: projectPath, overrideConfigFile: path.join(projectPath, 'eslint.config.js') }))
     if (appType === 'fullstack') {
@@ -209,6 +209,20 @@ describe.each(['api', 'fullstack'])('生成 workspace %s 的根门禁', (name) =
   })
 })
 
+describe('生成 fullstack 的业务 workspace 质量', () => {
+  it.each(['contract', 'serv', 'shared', 'web', 'app', 'desktop'])('%s 业务源码通过实际 eslint 检查', async (workspace) => {
+    const eslint = linters.get('fullstack')
+    if (!eslint)
+      throw new Error('Missing generated fullstack linter')
+    // 按真实 workspace 分组保留全部源码检查，不把整个工程挤进单个单测时间预算。
+    const pattern = ['contract', 'serv', 'shared'].includes(workspace)
+      ? `packages/quality-fullstack-${workspace}/**/*.{ts,svelte}`
+      : `apps/quality-fullstack-${workspace}/src/**/*.{ts,svelte}`
+    const results = await eslint.lintFiles([pattern])
+    expect(results.flatMap(result => result.messages.filter(message => message.severity === 2).map(message => ({ filePath: result.filePath, ...message })))).toEqual([])
+  })
+})
+
 describe.each(svelteAppNames)('生成项目 %s 的 Svelte 门禁', (name) => {
   it('svelte.config.js 通过实际 eslint 检查', async () => {
     expect(await lintFiles(name, ['svelte.config.js'])).toEqual([])
@@ -220,6 +234,15 @@ describe.each(svelteAppNames)('生成项目 %s 的 Svelte 门禁', (name) => {
       expect.objectContaining({ ruleId: 'ts/no-explicit-any', severity: 2 }),
       expect.objectContaining({ ruleId: 'no-console', severity: 2 }),
     ]))
+  })
+})
+
+describe.each(['admin', 'website', 'h5'] as const)('生成项目 %s 的认证布局', (appType) => {
+  it.each([false, true])('iam=%s 的实际根布局通过生成项目 lint', async (enabled) => {
+    const projectPath = path.join(tmpRoot, `${appType}-layout-${enabled}`)
+    await generateFromTemplates(projectPath, buildTemplateContext({ name: `${appType}-layout-${enabled}`, appType, features: enabled ? ['iam'] : [], packageManager: 'pnpm' }))
+    const source = await readFile(path.join(projectPath, 'src/routes/+layout.svelte'), 'utf8')
+    expect((await lint(appType, source, 'src/routes/+layout.svelte')).filter(message => message.severity === 2)).toEqual([])
   })
 })
 

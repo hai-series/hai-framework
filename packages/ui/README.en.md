@@ -292,7 +292,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-#### Scenes (40)
+#### Scenes (41)
 
 ##### Guide (2)
 
@@ -319,7 +319,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 
 Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before opening the modal. Connect `onfileschange` to attachment preparation and `onannotate` to image editing that burns annotations into the pixels. Failed submissions retain input and support local export. The list shows the description or server summary and requests pages through `onquerychange`; UI permissions do not replace server authorization. See the [feedback module](../feedback/README.en.md) for integration and offline tools.
 
-##### IAM authentication (10)
+##### IAM authentication (11)
 
 | Component            | Description                                      | Key props                                                                                              |
 | -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
@@ -331,6 +331,7 @@ Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before 
 | `ResetPasswordForm`  | Reset password                                   | `loading`, `errors`, `showCode`, `onsubmit`                                                            |
 | `ChangePasswordForm` | Change password                                  | `loading`, `errors`, `requireOldPassword`, `onsubmit`                                                  |
 | `PasswordInput`      | Password input                                   | `value`, `showToggle`, `showStrength`, `minLength`                                                     |
+| `ReauthenticationDialog` | Sensitive action confirmation | `open`, `loading`, `error`, `onsubmit`, `onclose` |
 | `PermGuard`          | Permission guard                                 | `permissions`, `mode`, `fallback`                                                                      |
 | `UserProfile`        | User profile                                     | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
@@ -822,6 +823,8 @@ AuthPanel disables native form controls during SSR and enables input after clien
 
 When an authentication link points to the current complete URL, AuthPanel switches scenes without navigating again, so input entered after returning to login is preserved. Links with a different path, query, or hash use application routing. Modified clicks such as Ctrl/Cmd retain browser behavior.
 
+`ReauthenticationDialog` renders password confirmation through `open/loading/error/onsubmit/onclose`. The service calls `actions.reauthenticate(password, operation)` and passes the short-lived single-use proof only to the intended request; cancellation, closing and submission clear input, and proofs never grant permissions. `Input` supports `datetime-local`: convert its browser-local value to an explicit timestamp in the service layer.
+
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 
 ### Onboarding and help center
@@ -931,6 +934,12 @@ Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables 
 HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+## Optional interactive challenges
+
+AuthPanel uses actions.createCaptcha to automatically create and asynchronously solve self-hosted ALTCHA when config.captcha.enabled, submitting one-use proofs for login/register/sendOtp/passwordReset/renewPassword. The solver is not loaded when disabled. createAuthActions supplies the action; custom actions must preserve captcha and missing actions fail closed. Proofs stay in request memory and are always verified/consumed on the server.
+
+See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
 
 ## Development and testing
 

@@ -4,7 +4,7 @@ import process from 'node:process'
 import { defineConfig, devices } from '@playwright/test'
 import { createE2eServerEnv, createE2eTransportRing } from '../../scripts/e2e-env.js'
 
-const requestedPort = Number(process.env.E2E_PORT ?? 5175)
+const requestedPort = Number(process.env.E2E_PORT ?? process.env.MOBILE_E2E_PORT ?? 5175)
 const e2ePort = Number.isInteger(requestedPort) && requestedPort > 0 && requestedPort <= 65535 ? requestedPort : 5175
 const baseURL = process.env.BASE_URL || `http://127.0.0.1:${e2ePort}`
 const servicePort = 12581

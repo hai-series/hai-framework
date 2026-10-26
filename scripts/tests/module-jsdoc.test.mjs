@@ -1,5 +1,6 @@
 /** 文档门禁必须拒绝遗漏、虚构公开 API 和未收窄的 HaiResult；示例仅编译、不执行。 */
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { it } from 'vitest'
 import { collectDeclarations, extractExamples, typecheckVirtualFiles } from '../check-module-jsdoc.mjs'
@@ -37,4 +38,16 @@ it('内部 Svelte 依赖保留真实 Props 类型，不通过通用组件 shim �
   const code = 'import Button from "./Button.svelte"; import type { ComponentProps } from "svelte"; const props: ComponentProps<typeof Button> = { variant: "invalid-variant" }'
   const diagnostics = typecheckVirtualFiles(new Map([[file, code]]))
   assert.ok(diagnostics.some(item => item.code === 2322))
+})
+
+it('uI 既有 CSS ambient 声明支持真实样式资产，同时保留组件属性错误', () => {
+  const file = resolve('packages/ui/src/lib/components/primitives/__hai_doc_css_probe.ts')
+  const code = 'export async function load() { await import("@rrweb/replay/dist/style.css") }'
+  assert.ok(existsSync(resolve('node_modules/@rrweb/replay/dist/style.css')))
+  assert.ok(typecheckVirtualFiles(new Map([[file, code]])).some(item => item.code === 2307))
+  const ambient = resolve('packages/ui/ambient.d.ts')
+  const files = new Map([[file, code], [ambient, readFileSync(ambient, 'utf8')]])
+  assert.deepEqual(typecheckVirtualFiles(files), [])
+  files.set(file, `${code}\nimport Button from "./Button.svelte"; import type { ComponentProps } from "svelte"; const props: ComponentProps<typeof Button> = { variant: "invalid-variant" }`)
+  assert.ok(typecheckVirtualFiles(files).some(item => item.code === 2322))
 })

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { dutyAccounts, loginOnPage, registerAndLogin } from './helpers'
 
 test('侧栏导航、别名重定向和环境标记反映真实页面', async ({ page, request }) => {
   await registerAndLogin(page, request, 'layout')
@@ -10,7 +10,6 @@ test('侧栏导航、别名重定向和环境标记反映真实页面', async ({
     ['/admin/iam/users', '/admin/iam/users'],
     ['/admin/iam/roles', '/admin/iam/roles'],
     ['/admin/iam/permissions', '/admin/iam/permissions'],
-    ['/admin/settings', '/admin/settings'],
     ['/admin/modules', '/admin/modules'],
     ['/admin/ui-gallery', '/admin/ui-gallery/primitives'],
   ]) {
@@ -23,6 +22,12 @@ test('侧栏导航、别名重定向和环境标记反映真实页面', async ({
     await expect(page).toHaveURL(/\/admin\/iam\/users/)
     await expect(page.locator('table')).toBeVisible()
   }
+  await expect(sidebar.locator('a[href="/admin/settings"]')).toHaveCount(0)
+  await page.request.post('/api/auth/logout')
+  await loginOnPage(page, dutyAccounts.config.username, dutyAccounts.config.password)
+  await page.locator('aside a[href="/admin/settings"]').first().click()
+  await expect(page).toHaveURL(/\/admin\/settings$/)
+  await expect(page.locator('h1').first()).toBeVisible()
 })
 
 test('用户菜单可进入资料页并登出，原会话随后不能访问后台', async ({ page, request }) => {
@@ -31,7 +36,7 @@ test('用户菜单可进入资料页并登出，原会话随后不能访问后�
   await expect(menu.getByText(user.username, { exact: true })).toBeVisible()
   await menu.locator(':scope > button').click()
   await expect(menu.getByText(`@${user.username}`)).toBeVisible()
-  await expect(menu.locator('a[href="/admin/settings"]')).toBeVisible()
+  await expect(menu.locator('a[href="/admin/settings"]')).toHaveCount(0)
   await menu.locator('a[href="/admin/profile"]').click()
   await expect(page.locator('[data-testid="profile-username"]')).toHaveText(user.username)
   await menu.locator(':scope > button').click()

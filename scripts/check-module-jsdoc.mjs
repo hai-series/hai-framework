@@ -150,6 +150,13 @@ export async function checkPackages(packages, { examples = true } = {}) {
     }
   }
   for (const pkg of packages) {
+    if (pkg === 'ui') {
+      // 复用 UI 工程实际的 CSS 资产声明，不用虚构组件或忽略 Props 类型错误。
+      const ambient = join(root, 'packages/ui/ambient.d.ts')
+      const source = readFileSync(ambient, 'utf8')
+      virtualPublic.set(ambient, source)
+      internalEdits.set(ambient, source)
+    }
     let declarations = 0
     let exampleCount = 0
     for (const file of sourceFiles(join(root, 'packages', pkg, 'src'))) {

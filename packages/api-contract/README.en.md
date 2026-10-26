@@ -137,6 +137,16 @@ const contract = apiContract.create({ feedback: apiContract.feedback })
 const path = apiContract.pathOf(contract.feedback.reports.submit)
 ```
 
+## Optional interactive challenges
+
+IamCreateCaptchaInputSchema/IamCaptchaChallengeSchema define POST /auth/captcha purposes and public challenges. Interactive inputs accept optional captcha up to4096 characters; public configuration exposes only enabled, defaulting false. Schemas validate structure; IAM enforces expiry, purpose and one-use consumption server-side.
+
+See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
+
+## Page exit session policy
+
+`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
+
 ## Development and testing
 
 ```bash

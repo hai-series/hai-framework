@@ -71,6 +71,8 @@
     },
     "test:e2e": {
       "passThroughEnv": [
+        "ADMIN_E2E_BASE_URL",
+        "MOBILE_E2E_PORT",
         "HAI_CLI_NATIVE_BUILD",
         "CARGO_BUILD_JOBS",
         "DOCKER_HOST",

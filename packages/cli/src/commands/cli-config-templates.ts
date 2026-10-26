@@ -233,8 +233,17 @@ register:
   enabled: true
   defaultEnabled: true
 security:
+  lockoutEnabled: true # 可关闭；关闭后历史锁不阻止登录/旧密码验证
+  failureWindow: 86400 # 从首次失败起计数的固定窗口（秒）
   maxLoginAttempts: 5
-  lockoutDuration: 900
+  lockoutDuration: 1200
+
+# 自托管轻量挑战；关闭时不加载浏览器求解器。强度影响客户端计算时间。
+captcha:
+  enabled: false
+  ttlSeconds: 120
+  cost: 5000
+  maxCounter: 100
 
 # LDAP 可选：安装 ldapts 后开启 login.ldap；也可在 iam.init 中注入 ldapClientFactory。
 # ldap:
@@ -298,14 +307,42 @@ password:
   requireLowercase: false
   requireNumber: false
   requireSpecialChar: false
+  minCharacterClasses: 3 # 大写、小写、数字、特殊字符中至少满足的类别数；0 关闭
   expirationDays: 0 # 0 表示不限制密码有效期
+  preventSamePassword: false # 启用后新旧密码必须不同；有效期策略也强制不同
+  requireInitialChange: false # 管理员创建/重置后首次登录先改密
+
+initialCredentials:
+  enabled: false # 单次邀请；需密码重置和通知通道
+
+reauthentication:
+  enabled: false
+  ttlSeconds: 300
+  operations: [] # 例如 iam.users.delete、iam.roles.update
+
+loginAccess:
+  enabled: false
+  timezone: UTC
+  allowIps: [] # 空列表不限制；支持 IPv4、IPv6 与 CIDR
+  denyIps: [] # 拒绝优先
+  windows: [] # days 为周一1至周日7；start/end 为 HH:mm，支持跨午夜
 
 # 会话配置
 session:
+  endOnPageHide: false # 页面关闭/整页导航时尽力撤销；配合服务端超时
   maxAge: 86400 # 会话超时（秒），默认 24 小时
   sliding: true # 滑动窗口（每次请求刷新过期时间）
   singleDevice: false # 单设备登录
+  singleDeviceMode: replace # replace 顶旧保新；reject 拒绝重复登录
+  maxSessions: 0 # 每用户有效会话上限，0 不限制
+  idleTimeout: 0 # 闲置期限（秒），0 关闭；access/refresh 均执行
+  absoluteTimeout: 0 # 从首次登录起的绝对期限（秒），0 关闭
   refreshTokenMaxAge: 604800 # refreshToken 过期（秒），默认 7 天
+
+# 自动休眠策略
+accounts:
+  dormantAfterDays: 0 # 连续未成功登录天数，0 关闭
+  scanIntervalSeconds: 3600 # 开启时的扫描间隔（秒）
 
 # RBAC 配置
 rbac:
@@ -788,6 +825,48 @@ userIdColumn: id
 
 # 用户名列名
 userNameColumn: username
+
+# 框架自动事件采集；显式业务 audit.log 不受此开关影响
+capture:
+  enabled: true
+  includeReads: false
+
+# 应用示例保护近期日志；框架未配置时不强制启用。0天清理不能绕过已启用保护。
+retention:
+  enabled: true
+  minDays: 90
+
+# 凭据始终脱敏；仅业务隐私可关闭，可补充项目字段名
+privacy:
+  enabled: true
+  fields: []
+
+# 私有 JSONL 归档；生产使用私有存储，定时执行由应用现有 Scheduler 装配。
+backup:
+  enabled: false
+  batchSize: 200
+  maxRecordBytes: 1048576
+  schedule:
+    enabled: false
+    cron: '0 2 * * *'
+    timezone: UTC
+
+# 分级阈值告警：启用前配置规则及 Reach 通知目标。只统计已提交事件。
+alerts:
+  enabled: false
+  maxNotificationsPerCheck: 100
+  rules: []
+  # - id: login-failures
+  #   actions: [auth.login]
+  #   outcomes: [failure, denied]
+  #   threshold: 10
+  #   windowSeconds: 300
+  #   severity: warning
+  #   targets: [{ id: security-team, provider: email, to: security@example.com }]
+  schedule:
+    enabled: false
+    cron: '* * * * *'
+    timezone: UTC
 `
 }
 

@@ -300,12 +300,15 @@ test.describe('IAM Role-Permission Linkage', () => {
     const permBody = await permRes.json()
     const permName = permBody.data?.code ?? permBody.data?.name
 
-    // 创建角色并关联该权限
+    // 定义本身不授予管理员新权限；拒绝超出本人范围的角色授权。
+    const denied = await request.post('/api/iam/roles', { data: { name: `DeniedLink_${ts}`, permissions: [permName] } })
+    expect(denied.status()).toBe(403)
+    // 使用管理员已有权限验证真实关联流程。
     const roleRes = await request.post('/api/iam/roles', {
       data: {
         name: `LinkRole_${ts}`,
         description: 'Role with permissions',
-        permissions: [permName],
+        permissions: ['user:read'],
       },
     })
     expect(roleRes.ok()).toBe(true)
@@ -316,7 +319,7 @@ test.describe('IAM Role-Permission Linkage', () => {
     const roleId = roleBody.data.id
     const getRes = await request.get(`/api/iam/roles/${roleId}`)
     const getBody = await getRes.json()
-    expect(getBody.data.permissions).toBeDefined()
+    expect(getBody.data.permissions).toEqual(['user:read'])
   })
 })
 
@@ -370,13 +373,8 @@ test.describe('IAM Batch API Behavior', () => {
     await registerAndLoginViaApi(request, 'blink')
     const ts = Date.now().toString(36)
 
-    // 创建权限
-    const permRes = await request.post('/api/iam/permissions', {
-      data: { name: `BatchPerm_${ts}`, resource: `batch_${ts}`, action: 'read' },
-    })
-    expect(permRes.ok()).toBe(true)
-    const permBody = await permRes.json()
-    const permCode = permBody.data?.code ?? permBody.data?.name
+    // 批量读取仍验证实际关联，权限必须在当前管理员可授予范围。
+    const permCode = 'user:read'
 
     // 创建角色并关联权限
     const roleRes = await request.post('/api/iam/roles', {

@@ -401,7 +401,7 @@ async function forceSignOut(userId: string) {
 
 `create({ maxAge })` は設定の既定値を正の安全な整数秒で上書きし、`Session.maxAge` に保存します。発行と更新の `expiresIn` はこの値を使います。自動延長は同じ期間を使い、確定済みの `lastActiveAt/expiresAt` を返し、遅いリクエストが新しい延長を短縮しません。明示的な `update` は有効な日時を反映して内容版を更新します。クライアントは返された `expiresIn` から更新時刻を決めます。
 
-access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt のみを確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
+追加の休止・絶対期限が無効な場合、access と refresh は独立して期限切れになります。ユーザー文書は両期限の最大まで保持しますが、access 認証は自身の expiresAt を確認します。追加設定が有効なら access/refresh の両方で休止・絶対期限も確認します。access 期限後も有効な refresh で更新でき、更新ごとに新しい refreshTokenMaxAge を開始して旧資格情報を失効させます。access 削除・全ログアウト・単一端末置換は更新待ち記録も取り消し、revokeRefresh は有効な access を残します。更新経路で旧 access の認証成功を前提にしません。
 
 セッションの読取・確定障害は失敗 HaiResult として返し、不存在や期限切れと解釈せず補償削除もしません。索引と会話は同じ文書で保持し、個別 get/ttl や二重索引を廃止します。確定した期限だけで整理し、復旧後の再読取・全ログアウトは元の全記録を対象にします。破損状態は保持して認証を拒否し、空文書で上書きせず運用者が修復します。
 
@@ -878,9 +878,51 @@ if (!result.success) {
 
 `iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
 
+## 自己ホスト型の対話チャレンジ
+
+captcha.enabled は既定で false。ALTCHA の計算チャレンジを自己ホストし、ttlSeconds（既定120、1–600秒）、cost（既定5000、100–50000）、maxCounter（既定100、1–2000）で期限と計算量を指定します。外部 CAPTCHA アカウントは不要で、HMAC 秘密と一度限りの状態は既存の共有 Cache にのみ保存します。本番では共有バックエンドが必要です。計算量は自動化のコストを増やしますが、利用者が人間であることは保証しません。
+
+iam.auth.createCaptcha({operation}) は {id,challenge} を返します。operation は login/register/sendOtp/passwordReset/renewPassword。公式 altcha/lib の solveChallenge/pbkdf2 で解き、JSON.stringify({id,solution}) を captcha に渡します。パスワード/OTP/LDAP ログイン、公開登録、匿名の旧パスワード更新でサーバー側が強制確認します。sendOtp(identifier,{captcha}) と requestPasswordReset(identifier,{captcha}) は任意の第2引数です。用途を固定し、検証後に原子的に消費するため、誤ったパスワードでも再利用できません。Cache 障害で通過せず、TTL は再初期化で延長しません。管理者作成/招待、認証済みの変更、API Key の機械認証は既存の認可と認証情報を使います。
+
+Kit/Serv の標準入口は POST /auth/captcha（Kit は同一生成元の /api 接頭辞）。captcha を保持し、iam.publicConfig.captcha は enabled のみ公開します。AuthPanel/createAuthActions は有効時に送信操作で自動生成・非同期求解し、無効時には求解器を読み込みません。独自フォームも同じ手順を使えます。有効設定で createCaptcha がなければ送信を拒否し、取消/破棄後にログインしません。証明は資格情報として常に秘匿し、ブラウザーに永続保存しません。030/031/032/033 は確認必須・無効/使用済/期限切れ・無効設定・一時利用不可です。
+
+## 任意のパスワード・ログイン保護
+
+`password.minLength/maxLength` と各 `require*` は強度を指定します。`minCharacterClasses` は大文字、小文字、数字、特殊文字の任意 N 種類を要求し、0は追加制約なしです。CLI/admin 例は8文字・任意3種類です。作成・変更・リセットで同じ検証を使います。
+
+`expirationDays: 0` は定期変更を無効にし、正数は日数です。`preventSamePassword` は単独でも有効化でき、有効期限制約・初回変更時は旧パスワードを拒否します。`requireInitialChange` は管理者作成・リセットの認証情報に適用され、自分で登録時に設定したパスワードは再変更不要です。初期・期限切れパスワードでは通常セッションを取得・更新できません。`iam.user.renewPassword({ identifier, password, newPassword })` で旧パスワードを確認し、変更後に再ログインします。Kit/Serv と AuthPanel はこの完了経路を提供します。
+
+`security.lockoutEnabled` は既定で有効です。`failureWindow` は最初の失敗からの固定期間（既定86400秒）、`maxLoginAttempts` は閾値、`lockoutDuration` はロック秒数です。例は1200秒です。無効時は既存ロックも無視します。共有DBで計数・閾値を原子的に処理します。
+
+`initialCredentials.enabled` は `iam.user.inviteUser()` を有効にします。利用者ごとに非公開のランダム秘密を作り、短期・単回の設定招待だけ送ります。初期秘密は返却・送信しません。passwordReset の通知・期限・試行回数を再利用し、受信者は再設定画面でパスワードを選びます。通知未設定・リセット無効なら作成しません。配送未確認時は失敗とし、作成済みアカウント・招待を保持します。配送を確認後に再設定通知を要求してください。
+
+`loginAccess.enabled` は制限を有効にします。`allowIps/denyIps` は IPv4/IPv6/CIDR を受け付け、拒否を優先します。空リストは対象を制限しません。`windows` は `days`（月曜1〜日曜7）、`start/end`（HH:mm、開始を含み終了を含まず、日跨ぎ対応）、IANA `timezone` を指定します。ログインの第2引数は信頼できる `AuthRequestContext` です。Kit はプラットフォーム getClientAddress()、Serv は信頼プロキシで解決した context.ip を使います。任意の転送ヘッダー・入力 JSON の IP を信用してはいけません。アドレス制限時に信頼できるアドレスがなければ拒否し、自動ログイン・API Key にも適用します。
+
+`reauthentication.enabled/operations` で対象操作、`ttlSeconds` で証明期限を選びます。`reauthenticate(token, password, operation)` は単回証明を発行し、入口は権限・資源検証後に `checkSensitiveOperation(token, operation, ticket)` を呼びます。主体・現在セッション・操作に結びつけ、権限を増やしません。Serv IAM 更新操作と admin 守衛は `x-hai-reauthentication`、Kit は固有 ID と `kit.guard.requireSensitive(iam, event, operation)` を使います。証明は短時間メモリに保持し、公開設定は開閉・操作リストのみです。
+
+## アカウント種別とライフサイクル
+
+既定は `accountType: 'permanent'` と `accountStatus: 'active'` です。管理側は `accountExpiresAt` を指定して `temporary` アカウントを作成し、`updateUser` で `dormant` または `closed` に変更できます。状態と認証世代を同じトランザクションで更新し、期限切れまたは非アクティブなアカウントはすべてのログイン、access 検証、refresh で拒否します。管理者が明示的に再有効化しても旧トークンは復活せず、再ログインが必要です。`enabled` は独立した管理者スイッチです。`closed` は記録を保持し、物理削除は `deleteUser` が行います。個人データの保持と退会手順はアプリが決定します。
+
+`accounts.dormantAfterDays` の既定値 `0` は自動休止を無効にします。`90` にすると、最後のログイン成功から90日間使用していない有効なアカウントを `accounts.scanIntervalSeconds` ごと（既定3600秒）に確認します。未使用のアカウントは作成時刻から計算し、成功した認証だけが `lastLoginAt` を更新します。条件付きSQLのため複数ノードで繰り返しても重複変更しません。信頼された処理や既存スケジューラーから `iam.user.scanInactiveAccounts()` を呼び出すこともできます。`close()` はタイマーを停止して実行中の処理を待ちます。公開登録APIに管理用の項目を公開しないでください。
+
+## 任意のセッションセキュリティ設定
+
+`session.idleTimeout: 1800` は認証済みリクエストが30分間ない場合に再ログインを要求します。`0` は無効です。access の読み取り、活動の保存、refresh の更新で同じ期限を確認し、長期 refresh でも休止したセッションを復活できません。自動 refresh は休止期限を延長しません。バックグラウンド業務のポーリングは認証活動になるため、アプリは利用者の操作方針に合わせて設計してください。
+
+`absoluteTimeout` は最初のログインからの上限秒数で、更新しても起点を変更しません。`0` は無効です。`maxSessions` は利用者ごとの有効セッション数を制限し、access が期限切れでも更新可能な記録を含みます。`0` は無制限です。同時ログインの上限判定は共有状態の同じCASで行います。`singleDevice: true` は既存セッションを置換し、`singleDeviceMode: 'reject'` を併用すると既存を保持して重複ログインを拒否します。明示的なログアウトは両方のトークンを失効させます。ブラウザーを閉じることはサーバー側の期限の代わりにはなりません。
+
+期限を無効にした場合、access と refresh は独立した有効期間を保ちます。ログイン成功ごとに新しいランダムな認証情報を生成します。`SESSION_LIMIT_EXCEEDED` は設定されたセッション数の上限を示します。
+
 ## スキーマと認証情報の通知
 
 RelDB 初期化後の `migrateIam({ dryRun: true })` は読み取り専用です。iam.init は対応する認証・リセット列を補い、ユーザー、パスワードと権限を保持します。事前に旧書込を停止しバックアップしてください。安全世代のない旧セッションは再ログインが必要で、認可復元のため世代を戻してはいけません。既定 Reach 通知は sensitive/expiresAt/idempotencyKey で平文保存や遅延再送を防ぎます。独自コールバックも同じ期限と保護を守ってください。
+
+audit が初期化済みで capture.enabled が有効なら、IAM はアカウント・認証・パスワード・権限・API Key・セッションの重要イベントと失敗/拒否の安全な理由コードを記録します。audit を IAM より先に初期化し、逆順に終了してください。パスワード・単回証明・トークンは記録しません。ログイン成功後に主体を確定し、信頼できるサービス/CLI は audit.withContext で操作者と関連文脈を設定します。外部権限トランザクション内のイベントは一緒にコミット/ロールバックされ、失敗試行はロールバック後に呼出境界で記録します。監査失敗は診断を出し、反映済み業務を危険な再試行に変えません。
+
+## ページ離脱時のセッション方針
+
+`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
 
 ## 開発とテスト
 

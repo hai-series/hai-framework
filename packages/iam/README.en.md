@@ -882,9 +882,51 @@ Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(u
 
 `iam.session.update(token, patch, expectedVersion)` requires the Session.version from the read. Stale versions return CONFLICT; revoked tokens return SESSION_NOT_FOUND. Timestamp-only sliding updates keep the content version, allowing normal parallel requests. Batch permission updates bind the initial token/version set and never apply delayed snapshots to later sign-ins; newer content versions require re-reading authorization before retry.
 
+## Self-hosted interactive challenges
+
+captcha.enabled defaults to false. Enable self-hosted ALTCHA proof of work with ttlSeconds (default120, 1–600 seconds), cost (default5000, 100–50000) and maxCounter (default100, 1–2000). No external CAPTCHA account is needed. HMAC secrets and one-use state remain in the existing shared Cache; production still requires a shared backend. Computational challenges increase automation cost and do not guarantee a human requester.
+
+`iam.auth.createCaptcha({operation})` returns {id,challenge}, for login/register/sendOtp/passwordReset/renewPassword. Solve using official altcha/lib solveChallenge/pbkdf2 and pass JSON.stringify({id,solution}) as captcha. Password/OTP/LDAP login, public registration and anonymous password renewal enforce it on the server. sendOtp(identifier,{captcha}) and requestPasswordReset(identifier,{captcha}) accept an optional second argument. Proofs are purpose-bound, short-lived and atomically consumed before authentication; wrong passwords also consume them. Cache failure never bypasses validation. Cache TTL controls expiry and reinitialization does not extend it. Managed creation/invitations, authenticated password changes and API Key machine authentication retain their own authorization and credentials.
+
+Standard Kit/Serv expose POST /auth/captcha (Kit same-origin /api prefix) and preserve captcha. iam.publicConfig.captcha exposes only enabled. AuthPanel/createAuthActions automatically create, asynchronously solve and submit a fresh proof when enabled, and do not load the solver when disabled. Custom forms can reuse the protocol. Enabled UI configuration without createCaptcha fails closed; cancellation/unmount stops subsequent login. Proofs are always redacted as credentials and are not persisted in browser storage. Errors030/031/032/033 mean required, invalid/consumed/expired, disabled and unavailable respectively.
+
+## Optional password and login protection
+
+`password.minLength/maxLength` and individual `require*` flags control strength. `minCharacterClasses` accepts any N of uppercase, lowercase, digits and special characters; 0 adds no count requirement. CLI/admin examples use 8 characters and any 3 classes. All server creation/change/reset paths share validation.
+
+`expirationDays: 0` disables expiry; positive values are days. `preventSamePassword` is independent. Expiry/initial-change policies reject the current password. `requireInitialChange` applies to administrator-created/reset credentials, rather than self-chosen registration passwords. Initial/expired credentials cannot authorize sessions or refresh existing ones. `iam.user.renewPassword({ identifier, password, newPassword })` verifies the old password and requires fresh login; Kit/Serv and AuthPanel provide the completion flow.
+
+`security.lockoutEnabled` defaults to true. `failureWindow` defaults to 86400 seconds from the first failure, `maxLoginAttempts` is the threshold, and `lockoutDuration` is seconds locked. Examples use 1200 seconds. Disabling ignores historical locks. Shared database updates atomically enforce counts/thresholds.
+
+`initialCredentials.enabled` enables `iam.user.inviteUser()`: private random initial secrets are never returned or sent; only short-lived single-use setup invitations are delivered. This reuses passwordReset mode, expiry, attempt limits and sensitive delivery. Missing delivery/disabled reset prevents creation. Unconfirmed delivery returns failure while retaining the account/invitation; verify delivery before requesting another reset notification.
+
+`loginAccess.enabled` enables restrictions. `allowIps/denyIps` accept IPv4/IPv6/CIDR with deny precedence; empty lists leave that dimension unrestricted. `windows` use `days` (Monday1–Sunday7), `start/end` (HH:mm, inclusive start/exclusive end, overnight supported), and IANA `timezone`. Login methods take trusted `AuthRequestContext` as their second argument: Kit uses platform getClientAddress(), Serv uses context.ip resolved through trusted proxies. Never copy arbitrary forwarding headers or credential JSON addresses. Address restrictions fail closed without a trusted address and cover automatic registration login/API Key login.
+
+`reauthentication.enabled/operations` select sensitive operations; `ttlSeconds` bounds proof lifetime. `reauthenticate(token, password, operation)` issues a single-use proof; authorized handlers call `checkSensitiveOperation(token, operation, ticket)` after permission/resource checks. Proofs bind subject/session/operation and grant no extra permissions. Serv IAM writes/admin guards read `x-hai-reauthentication`; Kit business handlers use `kit.guard.requireSensitive(iam, event, operation)` with project-defined IDs. Keep proof tickets briefly in memory. Public configuration exposes switches/operation IDs only.
+
+## Account type and lifecycle
+
+Users default to `accountType: 'permanent'` and `accountStatus: 'active'`. Administrative code can create a `temporary` account with `accountExpiresAt`, or use `updateUser` to set `dormant` or `closed`. State and credential generation change in one transaction. Expired or inactive accounts are rejected by every login method, access verification, and refresh. Explicit reactivation requires a new login; old tokens do not revive. `enabled` remains an independent administrative switch. `closed` retains the record; `deleteUser` still physically removes it, while the application owns personal-data retention and cancellation workflows.
+
+`accounts.dormantAfterDays` defaults to `0`, disabling automatic dormancy. With `90`, IAM scans active accounts with no successful login in 90 days at `accounts.scanIntervalSeconds` intervals (3600 seconds by default); accounts never used start at creation. Only successful authentication updates `lastLoginAt`. Conditional database updates make repeated scans across nodes idempotent. Trusted code or an existing scheduler may also call `iam.user.scanInactiveAccounts()`. `close()` stops the timer and waits for its in-flight scan. Public registration must not expose administrative lifecycle fields.
+
+## Optional session security policies
+
+Set `session.idleTimeout: 1800` to require a new login after 30 minutes without a successful authenticated request; `0` disables it. Access reads, activity commits, and refresh rotation all enforce this limit. A long-lived refresh token cannot revive an idle session. Automatic refresh does not extend the idle deadline. Background business polling also counts as authenticated activity, so applications must choose polling behavior that matches their user activity policy.
+
+`absoluteTimeout` limits seconds since the original login and does not restart on refresh; `0` disables it. `maxSessions` limits active sessions per user, including expired access tokens that can still refresh; `0` means unlimited. Concurrent logins check the quota in the same shared-state CAS. `singleDevice: true` replaces the previous session by default; `singleDeviceMode: 'reject'` instead keeps it and rejects a duplicate login. Explicit logout revokes both access and refresh; closing a browser cannot replace server-enforced expiry.
+
+When these deadlines are disabled, access and refresh retain their independent lifetimes. Every successful login creates new random credentials. `SESSION_LIMIT_EXCEEDED` reports the configured session quota.
+
 ## Schema and credential notifications
 
 After RelDB initialization, `migrateIam({ dryRun: true })` previews changes without writes. iam.init upgrades supported credential/reset columns, retaining users/passwords and permissions. Back up and stop old writers first. Legacy sessions without credential versions must sign in again; never roll back credential generations to restore authorization. Default Reach notifications use sensitive/expiresAt/idempotencyKey without plaintext persistence or delayed replay. Custom callbacks must enforce the same expiry and credential protection.
+
+When audit is initialized and capture.enabled is on, IAM records important account, authentication, password, authorization, API Key and session events, including failed/denied outcomes and safe reason codes. Initialize audit before IAM and close in reverse order. Passwords, one-time proofs and tokens are never copied into events. Only successful login establishes an actor; trusted service/CLI callers supply actor/correlation through audit.withContext. Events inside an external authorization transaction commit or roll back with that transaction; record failed attempts after rollback at the caller boundary. Audit failures emit diagnostics without converting an applied business result into an unsafe retry.
+
+## Page exit session policy
+
+`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
 
 ## Development and testing
 

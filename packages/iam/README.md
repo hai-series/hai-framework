@@ -401,7 +401,7 @@ async function forceSignOut(userId: string) {
 
 `create({ maxAge })` 可覆盖配置默认时长（正安全整数秒），该值持久化为 `Session.maxAge`；签发和刷新返回的 `expiresIn` 均使用它。滑动续期按该时长延长 access，返回已成功提交的 `lastActiveAt/expiresAt`；迟到请求只延长时间，不缩短较新续期。显式 `update` 的有效日期补丁完整生效并产生新内容版本。客户端根据本次返回的 `expiresIn` 安排刷新，不能硬编码配置默认值。
 
-access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证只检查自己的 `expiresAt`。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
+未启用额外闲置/绝对期限时，access 与 refresh 独立到期：用户分区保留至所有 access/refresh 的最晚有效期，但 access 认证检查自己的 `expiresAt`。启用额外会话策略时，access/refresh 还必须满足相同的闲置与绝对期限。access 过期仍可凭未过期、未撤销的 refresh 轮换；每次轮换从新签发时刻重新计算 `refreshTokenMaxAge`，旧 access/refresh 同时失效。删除 access、logoutAll、单设备替换均撤销待刷新记录；仅 revokeRefresh 保留仍有效的 access。刷新路由只校验 refresh，不能先要求旧 access 认证成功。
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
 
@@ -891,9 +891,51 @@ if (!result.success) {
 
 `iam.session.update(token, patch, expectedVersion)` 必须传入读取到的 Session.version。旧版本返回 CONFLICT，已撤销 token 返回 SESSION_NOT_FOUND；不会将旧内容重新写回或覆盖新会话。仅滑动时间戳更新不改变内容版本，允许正常并行请求。批量权限更新绑定首次读取的 token/版本集合，不将迟到数据应用到后续登录；遇到较新内容版本失败，调用方重新查询授权后再提交。
 
+## 自托管交互挑战
+
+`captcha.enabled` 默认关闭。开启后使用 ALTCHA 自托管计算挑战，配置 `ttlSeconds`（默认120，1–600秒）、`cost`（默认5000，100–50000）和 `maxCounter`（默认100，1–2000）控制期限与工作量。不需要外部验证码账号，HMAC 秘密与单次消费状态只保存在既有共享 Cache；生产仍须使用共享后端。计算挑战增加自动化尝试成本，不保证请求来自真人。
+
+`iam.auth.createCaptcha({operation})` 返回 `{id,challenge}`；operation 为 login/register/sendOtp/passwordReset/renewPassword。调用者用官方 `altcha/lib` 的 solveChallenge/pbkdf2 求解，将 `JSON.stringify({id,solution})` 作为 captcha 字段交给对应操作。密码/OTP/LDAP 登录、公开注册、匿名原密码续期都在服务端强制检查；sendOtp(identifier,{captcha}) 和 requestPasswordReset(identifier,{captcha}) 接收可选第二参数。证明用途绑定、短期单用，验证成功后原子删除；密码错误也会消费证明，重试需要新挑战。Cache 故障不降级放行；有效期由 Cache TTL 决定，重初始化不续期。管理员创建/邀请、已登录改密和 API Key 机器鉴别沿用各自授权与凭据，不额外加入交互挑战。
+
+标准 Kit/Serv 暴露 POST /auth/captcha（Kit 同源前缀为 /api），并保留 captcha 字段。`iam.publicConfig.captcha` 只公开 enabled。框架 AuthPanel 与 createAuthActions 在启用后提交时自动生成、异步求解并提交新证明，关闭时不加载求解器；自定义表单可复用同一协议。UI 配置启用但缺少 createCaptcha 动作时拒绝提交，取消/卸载会停止尚未提交的鉴别请求。captcha 证明按凭据规则始终脱敏，不写浏览器持久存储。030/031/032/033 分别表示需要验证、证明无效/已用/过期、未启用、服务不可用。
+
+## 可选密码与登录保护
+
+`password.minLength/maxLength` 控制长度，各 `require*` 指定必需类别；`minCharacterClasses` 支持大小写、数字、特殊字符中任意 N 类，0不额外限制。CLI/admin 示例默认8位、任意3类。所有服务端创建、改密和重置入口共用校验。
+
+`expirationDays: 0` 关闭定期改密，正数为天数；`preventSamePassword` 可独立开启。启用期限或首次强改时，新旧密码必须不同。`requireInitialChange` 作用于管理端创建/重置的密码，自助注册设密不重复强改。首次/过期密码不能授权普通会话或刷新旧会话；用户通过 `iam.user.renewPassword({ identifier, password, newPassword })` 验证原密码并更换后重新登录，Kit/Serv 与 AuthPanel 提供完成流程。
+
+`security.lockoutEnabled` 默认开启；`failureWindow` 默认86400秒，从首次失败起按固定窗口计数，`maxLoginAttempts` 为阈值，`lockoutDuration` 为锁定秒数。示例锁定1200秒。关闭时忽略历史锁；计数与阈值在共享数据库中原子处理。
+
+`initialCredentials.enabled` 开启管理端 `iam.user.inviteUser()`：内部生成独立随机秘密，仅发送短期单次设密邀请，不返回/发送初始秘密。沿用 `passwordReset` 的模式、期限、尝试次数和敏感通知通道，接收人通过重置页面设密。关闭重置或缺少通道时不创建账号。投递未知返回失败并保留已创建账号及邀请，核对后再请求重置通知，不自动回滚或重发。
+
+`loginAccess.enabled` 开启登录限制；`allowIps/denyIps` 支持 IPv4/IPv6/CIDR，拒绝优先，空列表不限制对应维度。`windows` 用 `days`（周一1至周日7）、`start/end`（HH:mm，含起点不含终点，支持跨午夜）和 IANA `timezone`。登录方法第二参为可信 `AuthRequestContext`：Kit 使用平台 `getClientAddress()`，Serv 使用可信代理策略解析的 `context.ip`。不得复制任意转发头或凭据 JSON 的 IP；地址限制启用但无可信地址时拒绝。注册后自动登录、API Key 登录同样执行。
+
+`reauthentication.enabled/operations` 选择敏感操作，`ttlSeconds` 为证明期限。`iam.auth.reauthenticate(token, password, operation)` 验证原密码并签发单次票据；操作入口完成权限/资源检查后用 `checkSensitiveOperation(token, operation, ticket)` 消费。证明绑定主体、当前会话和操作，不提升权限。Serv 标准 IAM 写操作与 admin 守卫读取 `x-hai-reauthentication`；Kit 业务入口用 `kit.guard.requireSensitive(iam, event, operation)`，业务操作 ID 由项目定义。票据只短暂保存在内存，公开配置仅暴露开关/操作清单。
+
+## 账号类型和生命周期
+
+用户默认是 `accountType: 'permanent'`、`accountStatus: 'active'`。管理入口可创建 `temporary` 账号并提供 `accountExpiresAt`，或通过 `updateUser` 将账号转为 `dormant`、`closed`。状态与凭据代际在同一事务更新；账号到期或非激活时，所有登录方式、旧 access 和 refresh 均被拒绝。管理员明确恢复为 `active` 时仍需重新登录，原 token 不会复活；`enabled` 是独立的管理员启停开关。`closed` 保留账号记录，物理删除仍由 `deleteUser` 完成，项目决定个人数据的保留与注销流程。
+
+`accounts.dormantAfterDays` 默认 `0`，关闭自动休眠。设为 `90` 时，IAM 每隔 `accounts.scanIntervalSeconds`（默认3600秒）扫描最近90天没有成功登录的激活账号，未登录账号从创建时间起算。`lastLoginAt` 只在成功鉴别时更新。扫描是数据库条件更新，多节点重复执行不会重复变更；`iam.user.scanInactiveAccounts()` 也可由可信后台或既有调度器调用。`close()` 停止定时器并等待本轮扫描完成。公开注册接口不应允许用户自行设置这些管理字段。
+
+## 可选会话安全策略
+
+在 `session` 中设置 `idleTimeout: 1800` 可要求30分钟没有成功认证请求后重新登录；`0` 关闭。该策略在 access 读取、活动提交和 refresh 轮换时检查，不能通过长期 refresh 恢复已闲置的会话。自动 refresh 只换票，不延长闲置期限；后台业务轮询仍会产生认证活动，应用应按实际用户操作设计轮询行为。
+
+`absoluteTimeout` 是从首次登录起的秒数上限，刷新不重置起点，`0` 关闭。`maxSessions` 限制每个用户的有效会话数，包含 access 已过期但仍可刷新的记录，`0` 不限制；并发登录在同一共享状态 CAS 中检查配额。`singleDevice: true` 默认顶旧保新；配合 `singleDeviceMode: 'reject'` 可保留旧会话并拒绝重复登录。显式退出撤销 access 和 refresh，关闭浏览器不能替代服务端期限。
+
+未启用上述期限时，保留 access 与 refresh 独立到期的行为。每次成功登录始终生成新随机凭据，不复用客户端会话ID。新增的 `SESSION_LIMIT_EXCEEDED` 表示登录达到已配置的会话上限。
+
 ## 持久结构与凭据通知
 
 `migrateIam({ dryRun: true })` 在 RelDB 初始化后只读预检；iam.init 自动补齐支持版本的凭据/重置字段，保留用户与密码，不修改业务权限。升级前备份停旧写入；没有安全代次的旧会话需重新登录，不能回退数据库安全代次来恢复授权。默认 Reach 通知使用 sensitive/expiresAt/idempotencyKey，不落明文、不延迟重投；自定义回调同样须遵守有效期与凭据保护。
+
+审计模块已初始化且 capture.enabled 开启时，IAM 自动记录关键账号、鉴别、密码、授权、API Key 和会话事件，包含失败/拒绝与安全原因码。先初始化 audit 再初始化 IAM，关闭时反序。不会记录密码、一次性票据或令牌；成功登录才确认主体，可信服务/CLI 调用应以 audit.withContext 提供操作者和关联信息。外部授权事务的事件随该事务提交或回滚，回滚失败尝试由调用入口在事务结束后记录。审计写失败输出诊断，不把已生效业务改成可盲目重试的失败。
+
+## 页面离开会话策略
+
+`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
 
 ## 开发测试
 

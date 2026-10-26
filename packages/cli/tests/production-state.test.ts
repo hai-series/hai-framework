@@ -47,6 +47,12 @@ function runtimeHarness(source: string) {
     require: (name: string) => {
       if (name.startsWith('node:'))
         return nativeRequire(name)
+      if (name === './business-settings.js')
+        return { initBusinessSettings: async () => ({ success: true, data: undefined }) }
+      if (name === './security-roles.js')
+        return { seedAppDuties: async () => ({ success: true, data: undefined }), bootstrapDutyAccount: async () => ({ success: true, data: undefined }) }
+      if (name === './audit-jobs.js')
+        return { startAuditJobs: async () => ({ success: true, data: undefined }) }
       if (name === './messages.js')
         return { serverM: () => 'test' }
       if (name === '@h-ai/core')
@@ -170,6 +176,7 @@ describe('shared production configuration', () => {
       types: ['node'],
       typeRoots: [path.join(workspace, 'node_modules', '@types')],
       paths: {
+        'zod': [path.join(workspace, 'node_modules/zod/index.d.ts')],
         '@h-ai/core': [path.join(workspace, 'packages/core/dist/node.d.ts')],
         '@h-ai/storage': [path.join(workspace, 'packages/storage/dist/node.d.ts')],
         '@h-ai/*': [path.join(workspace, 'packages', '*', 'dist', 'index.d.ts')],

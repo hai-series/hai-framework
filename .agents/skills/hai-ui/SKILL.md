@@ -18,6 +18,11 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
 
+
+敏感操作使用 ReauthenticationDialog（open/loading/error/onsubmit/onclose），网络与动作编排放服务层。服务通过 reauthenticate(password, operation) 获取短期单次用途凭据，只给本次请求；typed client 使用 options.context.reauthentication，不放全局 header/持久存储。Input 的 datetime-local 值需按本地时区转换为明确时间戳。
+
+AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供的 createCaptcha 自动完成自托管计算挑战。自定义认证动作保留 captcha 字段及 sendOtp/resetrequest 的可选 options；不要只在界面验证或持久化证明。关闭时不加载求解器，取消/卸载停止后续鉴别。
+
 ## 使用路径
 
 读取 [完整工作流程与按需参考](../../../packages/cli/templates/skills/hai-ui/SKILL.md)，共享契约只在该位置维护。仓库开发先按 [工作规范](../../instructions/workspace.md) 选择模块、应用与测试规范；框架 API 以本仓库真实公开导出与类型核验，发布包消费者以安装版本核验。

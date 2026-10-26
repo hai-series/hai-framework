@@ -23,10 +23,31 @@ password:
   requireLowercase: ${HAI_IAM_PASSWORD_REQUIRELOWERCASE:false}
   requireNumber: ${HAI_IAM_PASSWORD_REQUIRENUMBER:false}
   requireSpecialChar: ${HAI_IAM_PASSWORD_REQUIRESPECIALCHAR:false}
+  minCharacterClasses: ${HAI_IAM_PASSWORD_MINCHARACTERCLASSES:3}
+  expirationDays: ${HAI_IAM_PASSWORD_EXPIRATIONDAYS:0}
+  preventSamePassword: ${HAI_IAM_PASSWORD_PREVENTSAMEPASSWORD:false}
+  requireInitialChange: ${HAI_IAM_PASSWORD_REQUIREINITIALCHANGE:false}
+
+initialCredentials:
+  enabled: ${HAI_IAM_INITIALCREDENTIALS_ENABLED:false} # 单次邀请；需重置通知通道
+
+reauthentication:
+  enabled: ${HAI_IAM_REAUTHENTICATION_ENABLED:false}
+  ttlSeconds: ${HAI_IAM_REAUTHENTICATION_TTLSECONDS:300}
+  operations: [] # 例如 iam.users.delete、iam.roles.update；由操作入口执行
+
+loginAccess:
+  enabled: ${HAI_IAM_LOGINACCESS_ENABLED:false}
+  timezone: ${HAI_IAM_LOGINACCESS_TIMEZONE:Asia/Shanghai}
+  allowIps: [] # 空列表不限制；支持 IPv4、IPv6 与 CIDR
+  denyIps: [] # 拒绝优先于允许
+  windows: [] # days 为周一1至周日7；start/end 为 HH:mm，支持跨午夜
 
 # 会话配置
 session:
-  # 会话超时时间（秒，默认 86400 = 24小时）
+  # 页面关闭/整页导航时尽力撤销；浏览器事件不保证送达，配合服务端超时。
+  endOnPageHide: ${HAI_IAM_SESSION_ENDONPAGEHIDE:false}
+  # accessToken 有效期（秒，示例默认 900 = 15分钟）；严格闲置策略见 idleTimeout。
   maxAge: ${HAI_IAM_SESSION_MAXAGE:900}
   # refreshToken 过期时间（秒，默认 604800 = 7天）
   refreshTokenMaxAge: ${HAI_IAM_SESSION_REFRESHTOKENMAXAGE:604800}
@@ -34,6 +55,17 @@ session:
   sliding: ${HAI_IAM_SESSION_SLIDING:true}
   # 单设备登录（踢掉其他设备）
   singleDevice: ${HAI_IAM_SESSION_SINGLEDEVICE:false}
+  # replace 顶旧保新；reject 拒绝重复登录并保留旧会话
+  singleDeviceMode: ${HAI_IAM_SESSION_SINGLEDEVICEMODE:replace}
+  # 0 关闭对应策略；闲置/绝对期限也约束 refresh
+  maxSessions: ${HAI_IAM_SESSION_MAXSESSIONS:0}
+  idleTimeout: ${HAI_IAM_SESSION_IDLETIMEOUT:0}
+  absoluteTimeout: ${HAI_IAM_SESSION_ABSOLUTETIMEOUT:0}
+
+# 自动休眠：0天关闭；启用后按周期扫描最后成功登录/创建时间
+accounts:
+  dormantAfterDays: ${HAI_IAM_ACCOUNTS_DORMANTAFTERDAYS:0}
+  scanIntervalSeconds: ${HAI_IAM_ACCOUNTS_SCANINTERVALSECONDS:3600}
 
 # RBAC 配置
 rbac:
@@ -47,8 +79,10 @@ register:
   enabled: ${HAI_IAM_REGISTER_ENABLED:true}
   defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
 security:
+  lockoutEnabled: ${HAI_IAM_SECURITY_LOCKOUTENABLED:true}
+  failureWindow: ${HAI_IAM_SECURITY_FAILUREWINDOW:86400}
   maxLoginAttempts: ${HAI_IAM_SECURITY_MAXLOGINATTEMPTS:5}
-  lockoutDuration: ${HAI_IAM_SECURITY_LOCKOUTDURATION:900}
+  lockoutDuration: ${HAI_IAM_SECURITY_LOCKOUTDURATION:1200}
 
 # OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
 otp:
@@ -89,3 +123,10 @@ ui:
   # brandText: Sign in securely
   # logoUrl: /logo.svg
   # illustrationUrl: /auth-illustration.svg
+
+# 可选的自托管计算挑战；默认关闭，无外部验证码服务账号。
+captcha:
+  enabled: ${HAI_IAM_CAPTCHA_ENABLED:false}
+  ttlSeconds: ${HAI_IAM_CAPTCHA_TTLSECONDS:120}
+  cost: ${HAI_IAM_CAPTCHA_COST:5000}
+  maxCounter: ${HAI_IAM_CAPTCHA_MAXCOUNTER:100}

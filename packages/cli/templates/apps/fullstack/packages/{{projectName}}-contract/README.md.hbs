@@ -16,7 +16,7 @@
 
 - `src/app-schemas.ts`：跨接口、跨层复用的输入/数据 Schema 与类型。
 - `src/app-contract.ts`：app 领域 contract；每个业务 path 直接写在对应接口定义中。
-- `src/admin-schemas.ts` / `src/admin-contract.ts`：示例管理员用户、初始 admin/user 角色、分页审计、个人设置、加密 JSON 头像上传 Schema/类型/路由；认证复用框架的 IAM auth contract，通过服务端配置启用注册、密码/LDAP/验证码登录及密码重置。
+- `src/admin-schemas.ts` / `src/admin-contract.ts`：示例管理员用户、系统/审计/配置/业务操作员及基础成员角色、账号生命周期、邀请、审计分类/排序/统计/备份、业务公告和个人设置、加密 JSON 头像上传 Schema/类型/路由；认证复用框架的 IAM auth contract，通过服务端配置启用注册、密码/LDAP/验证码登录及密码重置。
 - `src/{{projectName}}-contract.ts`：工程级 contract，供 `@h-ai/serv` 与 `@h-ai/api-client` 共用。
 
 只使用一次的输出 Schema 直接内联到 `.output(...)`；同一 contract 文件内重复使用时才保留私有常量。

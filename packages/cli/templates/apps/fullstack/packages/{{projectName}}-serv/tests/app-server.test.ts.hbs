@@ -277,16 +277,26 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     }
   })
 
-  it('lists two roles, updates descriptions and queries audit records without credentials or file content', async () => {
+  it('lists separate duty roles, updates descriptions and lets only the auditor query redacted records', async () => {
     const roles = await call<{ items: { id: string, code: string, userCount: number }[] }>('/admin/roles/list', undefined, adminToken)
     expect(roles.success).toBe(true)
     if (roles.success) {
-      expect(roles.data.items.map(item => item.code).sort()).toEqual(['admin', 'user'])
+      expect(roles.data.items.map(item => item.code).sort()).toEqual(['admin', 'audit_admin', 'business_operator', 'config_admin', 'user'])
       const role = roles.data.items.find(item => item.code === 'user')!
       expect(role.userCount).toBe(1)
       expect((await call('/admin/roles/update', { id: role.id, description: 'Updated description' }, adminToken)).success).toBe(true)
     }
-    const logs = await call<{ items: { action: string, details: string | null }[], total: number }>('/admin/audit/list', { page: 1, pageSize: 100 }, adminToken)
+    const denied = await call('/admin/audit/list', { page: 1, pageSize: 100 }, adminToken)
+    expect(denied.success).toBe(false)
+    const auditor = await iam.user.createUser({ username: 'independent-auditor', password: TEST_PASSWORD })
+    const auditRole = await iam.authz.getRoleByCode('audit_admin')
+    if (!auditor.success || !auditRole.success || !auditRole.data)
+      throw new Error('Auditor fixture failed')
+    expect((await iam.authz.syncRoles(auditor.data.user.id, [auditRole.data.id])).success).toBe(true)
+    const login = await iam.auth.login({ identifier: 'independent-auditor', password: TEST_PASSWORD })
+    if (!login.success)
+      throw new Error(login.error.message)
+    const logs = await call<{ items: { action: string, details: string | null }[], total: number }>('/admin/audit/list', { page: 1, pageSize: 100 }, login.data.tokens.accessToken)
     expect(logs.success).toBe(true)
     if (logs.success) {
       expect(logs.data.total).toBeGreaterThan(0)
@@ -309,7 +319,10 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('keeps an already committed profile update successful when best-effort audit fails', async () => {
-    const log = vi.spyOn(audit, 'log').mockResolvedValueOnce(err(HaiCommonError.API_ERROR, 'Injected audit persistence failure'))
+    const originalLog = audit.log.bind(audit)
+    const log = vi.spyOn(audit, 'log').mockImplementation((input, tx) => input.action === 'update' && input.resource === 'profile'
+      ? Promise.resolve(err(HaiCommonError.API_ERROR, 'Injected audit persistence failure'))
+      : originalLog(input, tx))
     const logger = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
     try {
       const result = await call<AdminUser>('/profile/update', { displayName: 'Committed profile' }, userToken)

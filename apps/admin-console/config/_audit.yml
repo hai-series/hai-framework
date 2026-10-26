@@ -1,0 +1,47 @@
+# 审计日志与事件时身份快照
+userTable: hai_iam_users
+userIdColumn: id
+userNameColumn: username
+
+# 自动框架事件采集；显式业务 audit.log 不受此开关影响
+capture:
+  enabled: ${HAI_AUDIT_CAPTURE_ENABLED:true}
+  includeReads: ${HAI_AUDIT_CAPTURE_INCLUDEREADS:false}
+
+# 只由可信启动配置更改共享保留策略；未传时沿用数据库设置
+retention:
+  enabled: ${HAI_AUDIT_RETENTION_ENABLED:true}
+  minDays: ${HAI_AUDIT_RETENTION_MINDAYS:90}
+
+# 凭据始终隐藏；业务隐私字段可配置
+privacy:
+  enabled: ${HAI_AUDIT_PRIVACY_ENABLED:true}
+  fields: []
+
+# 私有流式归档；手动备份与定时计划分别启用。公开文件入口始终拒绝归档前缀。
+backup:
+  enabled: ${HAI_AUDIT_BACKUP_ENABLED:false}
+  batchSize: ${HAI_AUDIT_BACKUP_BATCHSIZE:200}
+  maxRecordBytes: ${HAI_AUDIT_BACKUP_MAXRECORDBYTES:1048576}
+  schedule:
+    enabled: ${HAI_AUDIT_BACKUP_SCHEDULE_ENABLED:false}
+    cron: '${HAI_AUDIT_BACKUP_SCHEDULE_CRON:0 2 * * *}'
+    timezone: ${HAI_AUDIT_BACKUP_SCHEDULE_TIMEZONE:UTC}
+
+# 告警统计已提交事件；人员/渠道由应用配置，默认关闭。
+alerts:
+  enabled: ${HAI_AUDIT_ALERTS_ENABLED:false}
+  maxNotificationsPerCheck: ${HAI_AUDIT_ALERTS_MAXNOTIFICATIONSPERCHECK:100}
+  rules: []
+  # 启用前配置规则及 Reach 中已注册的 provider，例如：
+  # - id: login-failures
+  #   actions: [auth.login]
+  #   outcomes: [failure, denied]
+  #   threshold: 10
+  #   windowSeconds: 300
+  #   severity: warning
+  #   targets: [{ id: security-team, provider: email, to: security@example.com }]
+  schedule:
+    enabled: ${HAI_AUDIT_ALERTS_SCHEDULE_ENABLED:false}
+    cron: '${HAI_AUDIT_ALERTS_SCHEDULE_CRON:* * * * *}'
+    timezone: ${HAI_AUDIT_ALERTS_SCHEDULE_TIMEZONE:UTC}

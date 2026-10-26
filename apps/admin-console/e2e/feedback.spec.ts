@@ -7,7 +7,7 @@ import process from 'node:process'
 import { readFeedbackBundle } from '@h-ai/feedback/bundle'
 import { expect, test } from '@playwright/test'
 import { readAdminBuildFacts } from './build-metadata'
-import { loginOnPage, registerViaApi, uniqueUser, waitForHydration } from './helpers'
+import { dutyAccounts, loginOnPage, registerViaApi, uniqueUser, waitForHydration } from './helpers'
 
 let buildFacts: ReturnType<typeof readAdminBuildFacts>
 
@@ -122,7 +122,7 @@ async function storedPng(page: Page, number: string, name: string): Promise<Buff
 
 test('无说明反馈受理，分页管理详情可处理和撤销且保留历史', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await capture(page, 'native-before-feedback.png', testInfo)
   await openFeedback(page)
@@ -170,7 +170,7 @@ test('无说明反馈受理，分页管理详情可处理和撤销且保留历�
 
 test('当前截图、换页补图、材料内容、真实编码录屏和页面回放完成同一反馈流程', async ({ page }, testInfo) => {
   test.setTimeout(120_000)
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   await page.setViewportSize({ width: 1440, height: 1000 })
   const description = `capture-${uniqueUser('flow').username}`
   // 在真实当前页面放置颜色探针，检查采集的PNG内容，避免只验证文件存在。
@@ -204,8 +204,10 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   await capture(page, 'feedback-material-contents.png', testInfo)
   await form.getByRole('button', { name: '添加页面截图', exact: true }).click()
   await expect(form).toBeHidden()
-  await page.locator('a[href="/admin/modules"]').first().click()
-  await expect(page).toHaveURL(/\/admin\/modules/)
+  await page.locator('.user-menu-container > button').first().click()
+  await page.locator('.user-menu-container a[href="/admin/profile"]').click()
+  await expect(page).toHaveURL(/\/admin\/profile$/)
+  await expect(page.getByTestId('profile-username')).toHaveText(dutyAccounts.operator.username)
   await page.getByRole('button', { name: '截取当前页面', exact: true }).click()
   await expect(form).toBeVisible()
   await expect(form.locator('section img')).toHaveCount(2)
@@ -315,7 +317,7 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
 
 test('列表通过服务端分页与筛选取得不同记录', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   const search = uniqueUser('fbpages').username
   const first = await submitFeedback(page, `${search} first`)
   const second = await submitFeedback(page, `${search} second`)
@@ -338,13 +340,15 @@ test('列表通过服务端分页与筛选取得不同记录', async ({ page }, 
 })
 
 test('无反馈管理权限的用户不能读取列表或修改已有反馈', async ({ page, playwright, baseURL }) => {
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   const accepted = await page.request.post('/api/feedback/reports', { data: { submissionId: uniqueUser('fbdeny').username, appId: 'admin-console' } })
   expect(accepted.ok()).toBe(true)
   const acceptedBody: { success: boolean, data?: { id: string, version: number } } = await accepted.json()
   expect(acceptedBody.success).toBe(true)
   const report = acceptedBody.data!
   const user = uniqueUser('fblimit')
+  await page.request.post('/api/auth/logout')
+  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
   const created = await page.request.post('/api/iam/users', { data: { ...user, roles: [] } })
   expect(created.ok()).toBe(true)
   const createdBody: { success: boolean, data: { id: string } } = await created.json()
@@ -367,7 +371,7 @@ test('无反馈管理权限的用户不能读取列表或修改已有反馈', as
 
 test('受理网络故障保留现场与输入，可下载自包含离线包', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   const secret = `secret-${uniqueUser('cookie').username}`
   await page.context().addCookies([{ name: 'private_session_token', value: secret, url: new URL(page.url()).origin }])
   await openFeedback(page)
@@ -413,7 +417,7 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
 
 test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   await openFeedback(page)
   const jpeg = await page.evaluate(() => {
     const canvas = document.createElement('canvas')
@@ -495,7 +499,7 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
 })
 
 test('邮件反馈链接直接定位详情，关闭后恢复列表查询', async ({ page }, testInfo) => {
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   const created = await page.request.post('/api/feedback/reports', { data: { submissionId: uniqueUser('fbmail').username, appId: 'admin-console', description: 'notification deep link' } })
   const body: HaiResult<FeedbackReport> = await created.json()
   expect(body.success).toBe(true)
@@ -515,7 +519,7 @@ test('邮件反馈链接直接定位详情，关闭后恢复列表查询', async
 
 test('默认反馈入口向普通用户开放，管理页面和操作仍受管理员权限控制', async ({ page, browser, baseURL }, testInfo) => {
   test.setTimeout(60_000)
-  await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
+  await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await expect(page.getByTestId('feedback-open')).toBeVisible()
   await expect(page.locator('a[href="/admin/feedback"]')).toBeVisible()
@@ -532,7 +536,9 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     if (!registeredBody.success)
       throw new Error(registeredBody.error.message)
     userId = registeredBody.data.user.id
-    // 通用 E2E fixture 默认注册 admin；通过宿主公开 API 分配既有普通 user 角色，再重新登录。
+    // 系统管理员配置基础成员，业务操作员随后处理该成员的反馈。
+    await page.request.post('/api/auth/logout')
+    await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
     const rolesResponse = await page.request.get('/api/iam/roles')
     expect(rolesResponse.ok()).toBe(true)
     const rolesBody: HaiResult<{ id: string, code: string }[]> = await rolesResponse.json()
@@ -557,6 +563,8 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
       throw new Error(userBody.error.message)
     expect(userBody.data.roles).toContain('user')
     expect(userBody.data.roles).not.toContain('admin')
+    await page.request.post('/api/auth/logout')
+    await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
     await loginOnPage(memberPage, user.username, user.password)
     await expect(memberPage.getByTestId('feedback-open')).toBeVisible()
     await expect(memberPage.locator('a[href="/admin/feedback"]')).toHaveCount(0)
@@ -636,7 +644,10 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
   }
   finally {
     await context.close()
-    if (userId)
+    if (userId) {
+      await page.request.post('/api/auth/logout')
+      await loginOnPage(page, 'admin', process.env.E2E_ADMIN_PASSWORD || 'admin123456')
       expect((await page.request.delete(`/api/iam/users/${userId}`)).ok()).toBe(true)
+    }
   }
 })

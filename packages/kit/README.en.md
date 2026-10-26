@@ -294,7 +294,7 @@ Export standard handlers from kit.auth.createApi(iam), use kit.auth.publicPaths 
 ### Error handling
 
 - Wrap API endpoints with `kit.handler()`.
-- `kit.validate.body` / `kit.guard.require` throw `Response` for SvelteKit control flow.
+- `kit.validate.body` / `kit.guard.require` throw `Response`, handled by `kit.handler` as API control flow. Page `load` uses `kit.guard.check` with SvelteKit `error`; parse query schemas with `safeParse` and raise native page errors instead of throwing API responses.
 - `kit.handler()` converts non-control-flow exceptions into `500 INTERNAL_ERROR` responses.
 
 ### CRUD fields
@@ -345,6 +345,18 @@ export const PATCH = handler
 HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+
+When audit is initialized, createHandle binds verified session identity/roles, the platform getClientAddress result and request ID for domain audit.log calls. Automatic request.execute events contain the route template, method, status and success/failure/denial, including guard redirects and SvelteKit HTTP control flow. Bodies and error details are not copied. capture.enabled controls automatic capture; capture.includeReads enables successful reads. Failed reads remain recorded by default. Applications still explicitly record domain completion/failure events; disabling automatic capture does not disable domain logs.
+
+## Optional interactive challenges
+
+Export kit.auth.createApi(iam).createCaptcha as POST /api/auth/captcha; kit.auth.publicPaths includes it. kit.client.createAuthActions preserves captcha and supplies createCaptcha for automatic AuthPanel solving. Export /api/auth/password/renew for initial/expired password changes. IAM enforces proofs server-side.
+
+See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
+
+## Page exit session policy
+
+`session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
 
 ## Development and testing
 

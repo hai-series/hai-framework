@@ -172,6 +172,20 @@ HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` 
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 
+## 任意の対話チャレンジ
+
+createAuthActions(client) は createCaptcha({operation}) を提供し、ログイン・更新・登録で captcha を保持します。sendOtp(identifier,{captcha}) と requestPasswordReset(identifier,{captcha}) は任意の第2引数に対応します。AuthPanel は自動求解し、独自フォームも ALTCHA 手順を使い、証明を TokenStorage に保存しません。
+
+方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
+
+## 機密操作の再認証
+
+`reauthenticate` が返す用途限定証明を、個別呼び出しの `options.context.reauthentication` に渡すと `X-Hai-Reauthentication` が付きます。グローバルヘッダー、永続保存、ログには入れません。サーバーは現在の権限、対象範囲、用途を確認して原子的に消費し、並行する通常リクエストには引き継ぎません。クロスオリジン環境ではヘッダーを許可してください。Serv/Kit の既定設定には含まれます。
+
+## ページ離脱時のセッション方針
+
+`session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
+
 ## 開発とテスト
 
 ```bash

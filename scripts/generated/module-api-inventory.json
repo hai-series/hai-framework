@@ -10810,6 +10810,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamCaptchaChallengeSchema",
+              "kind": "value",
+              "declaration": "IamCaptchaChallengeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamChangePasswordInput",
               "kind": "type",
               "declaration": "IamChangePasswordInput",
@@ -10832,6 +10838,12 @@
               "kind": "type",
               "declaration": "IamContract",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamCreateCaptchaInputSchema",
+              "kind": "value",
+              "declaration": "IamCreateCaptchaInputSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "IamCreatePermissionInput",
@@ -10873,6 +10885,18 @@
               "name": "IamCurrentUserSchema",
               "kind": "value",
               "declaration": "IamCurrentUserSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamInviteUserInput",
+              "kind": "type",
+              "declaration": "IamInviteUserInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamInviteUserInputSchema",
+              "kind": "value",
+              "declaration": "IamInviteUserInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -10972,6 +10996,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamReauthenticateInputSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticateInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamReauthenticationProofSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticationProofSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamRefreshTokenDataSchema",
               "kind": "value",
               "declaration": "IamRefreshTokenDataSchema",
@@ -11005,6 +11041,12 @@
               "name": "IamRegisterInputSchema",
               "kind": "value",
               "declaration": "IamRegisterInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamRenewPasswordInputSchema",
+              "kind": "value",
+              "declaration": "IamRenewPasswordInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -11960,6 +12002,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamCaptchaChallengeSchema",
+              "kind": "value",
+              "declaration": "IamCaptchaChallengeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamChangePasswordInput",
               "kind": "type",
               "declaration": "IamChangePasswordInput",
@@ -11982,6 +12030,12 @@
               "kind": "type",
               "declaration": "IamContract",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamCreateCaptchaInputSchema",
+              "kind": "value",
+              "declaration": "IamCreateCaptchaInputSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "IamCreatePermissionInput",
@@ -12023,6 +12077,18 @@
               "name": "IamCurrentUserSchema",
               "kind": "value",
               "declaration": "IamCurrentUserSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamInviteUserInput",
+              "kind": "type",
+              "declaration": "IamInviteUserInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamInviteUserInputSchema",
+              "kind": "value",
+              "declaration": "IamInviteUserInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -12122,6 +12188,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamReauthenticateInputSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticateInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamReauthenticationProofSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticationProofSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamRefreshTokenDataSchema",
               "kind": "value",
               "declaration": "IamRefreshTokenDataSchema",
@@ -12155,6 +12233,12 @@
               "name": "IamRegisterInputSchema",
               "kind": "value",
               "declaration": "IamRegisterInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamRenewPasswordInputSchema",
+              "kind": "value",
+              "declaration": "IamRenewPasswordInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -13110,6 +13194,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamCaptchaChallengeSchema",
+              "kind": "value",
+              "declaration": "IamCaptchaChallengeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamChangePasswordInput",
               "kind": "type",
               "declaration": "IamChangePasswordInput",
@@ -13132,6 +13222,12 @@
               "kind": "type",
               "declaration": "IamContract",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamCreateCaptchaInputSchema",
+              "kind": "value",
+              "declaration": "IamCreateCaptchaInputSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "IamCreatePermissionInput",
@@ -13173,6 +13269,18 @@
               "name": "IamCurrentUserSchema",
               "kind": "value",
               "declaration": "IamCurrentUserSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamInviteUserInput",
+              "kind": "type",
+              "declaration": "IamInviteUserInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamInviteUserInputSchema",
+              "kind": "value",
+              "declaration": "IamInviteUserInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -13272,6 +13380,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamReauthenticateInputSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticateInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamReauthenticationProofSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticationProofSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamRefreshTokenDataSchema",
               "kind": "value",
               "declaration": "IamRefreshTokenDataSchema",
@@ -13305,6 +13425,12 @@
               "name": "IamRegisterInputSchema",
               "kind": "value",
               "declaration": "IamRegisterInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamRenewPasswordInputSchema",
+              "kind": "value",
+              "declaration": "IamRenewPasswordInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -14864,6 +14990,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamCaptchaChallengeSchema",
+              "kind": "value",
+              "declaration": "IamCaptchaChallengeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamChangePasswordInput",
               "kind": "type",
               "declaration": "IamChangePasswordInput",
@@ -14892,6 +15024,12 @@
               "kind": "type",
               "declaration": "IamContract",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamCreateCaptchaInputSchema",
+              "kind": "value",
+              "declaration": "IamCreateCaptchaInputSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "IamCreatePermissionInput",
@@ -14933,6 +15071,18 @@
               "name": "IamCurrentUserSchema",
               "kind": "value",
               "declaration": "IamCurrentUserSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamInviteUserInput",
+              "kind": "type",
+              "declaration": "IamInviteUserInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamInviteUserInputSchema",
+              "kind": "value",
+              "declaration": "IamInviteUserInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15032,6 +15182,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamReauthenticateInputSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticateInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamReauthenticationProofSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticationProofSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamRefreshTokenDataSchema",
               "kind": "value",
               "declaration": "IamRefreshTokenDataSchema",
@@ -15065,6 +15227,12 @@
               "name": "IamRegisterInputSchema",
               "kind": "value",
               "declaration": "IamRegisterInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamRenewPasswordInputSchema",
+              "kind": "value",
+              "declaration": "IamRenewPasswordInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15210,6 +15378,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamCaptchaChallengeSchema",
+              "kind": "value",
+              "declaration": "IamCaptchaChallengeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamChangePasswordInput",
               "kind": "type",
               "declaration": "IamChangePasswordInput",
@@ -15238,6 +15412,12 @@
               "kind": "type",
               "declaration": "IamContract",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamCreateCaptchaInputSchema",
+              "kind": "value",
+              "declaration": "IamCreateCaptchaInputSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "IamCreatePermissionInput",
@@ -15279,6 +15459,18 @@
               "name": "IamCurrentUserSchema",
               "kind": "value",
               "declaration": "IamCurrentUserSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamInviteUserInput",
+              "kind": "type",
+              "declaration": "IamInviteUserInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IamInviteUserInputSchema",
+              "kind": "value",
+              "declaration": "IamInviteUserInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15378,6 +15570,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamReauthenticateInputSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticateInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamReauthenticationProofSchema",
+              "kind": "value",
+              "declaration": "IamReauthenticationProofSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamRefreshTokenDataSchema",
               "kind": "value",
               "declaration": "IamRefreshTokenDataSchema",
@@ -15411,6 +15615,12 @@
               "name": "IamRegisterInputSchema",
               "kind": "value",
               "declaration": "IamRegisterInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamRenewPasswordInputSchema",
+              "kind": "value",
+              "declaration": "IamRenewPasswordInputSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15937,6 +16147,54 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "AUDIT_BACKUP_PREFIX",
+              "kind": "value",
+              "declaration": "AUDIT_BACKUP_PREFIX",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AuditActorSnapshot",
+              "kind": "type",
+              "declaration": "AuditActorSnapshot",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditAlertReport",
+              "kind": "type",
+              "declaration": "AuditAlertReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupInfo",
+              "kind": "type",
+              "declaration": "AuditBackupInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupOperations",
+              "kind": "type",
+              "declaration": "AuditBackupOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupOptions",
+              "kind": "type",
+              "declaration": "AuditBackupOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditContext",
+              "kind": "type",
+              "declaration": "AuditContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditEventFields",
+              "kind": "type",
+              "declaration": "AuditEventFields",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuditFunctions",
               "kind": "type",
               "declaration": "AuditFunctions",
@@ -16007,6 +16265,12 @@
               "kind": "type",
               "declaration": "ListAuditLogsOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "migrateAudit",
+              "kind": "value",
+              "declaration": "migrateAudit",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -16025,6 +16289,54 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "AUDIT_BACKUP_PREFIX",
+              "kind": "value",
+              "declaration": "AUDIT_BACKUP_PREFIX",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AuditActorSnapshot",
+              "kind": "type",
+              "declaration": "AuditActorSnapshot",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditAlertReport",
+              "kind": "type",
+              "declaration": "AuditAlertReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupInfo",
+              "kind": "type",
+              "declaration": "AuditBackupInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupOperations",
+              "kind": "type",
+              "declaration": "AuditBackupOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupOptions",
+              "kind": "type",
+              "declaration": "AuditBackupOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditContext",
+              "kind": "type",
+              "declaration": "AuditContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditEventFields",
+              "kind": "type",
+              "declaration": "AuditEventFields",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuditFunctions",
               "kind": "type",
               "declaration": "AuditFunctions",
@@ -16095,6 +16407,12 @@
               "kind": "type",
               "declaration": "ListAuditLogsOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "migrateAudit",
+              "kind": "value",
+              "declaration": "migrateAudit",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -16113,6 +16431,54 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "AUDIT_BACKUP_PREFIX",
+              "kind": "value",
+              "declaration": "AUDIT_BACKUP_PREFIX",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AuditActorSnapshot",
+              "kind": "type",
+              "declaration": "AuditActorSnapshot",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditAlertReport",
+              "kind": "type",
+              "declaration": "AuditAlertReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupInfo",
+              "kind": "type",
+              "declaration": "AuditBackupInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupOperations",
+              "kind": "type",
+              "declaration": "AuditBackupOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditBackupOptions",
+              "kind": "type",
+              "declaration": "AuditBackupOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditContext",
+              "kind": "type",
+              "declaration": "AuditContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AuditEventFields",
+              "kind": "type",
+              "declaration": "AuditEventFields",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuditFunctions",
               "kind": "type",
               "declaration": "AuditFunctions",
@@ -16183,6 +16549,12 @@
               "kind": "type",
               "declaration": "ListAuditLogsOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "migrateAudit",
+              "kind": "value",
+              "declaration": "migrateAudit",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         }
@@ -21125,6 +21497,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccountConfigSchema",
+              "kind": "value",
+              "declaration": "AccountConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgreementConfig",
               "kind": "type",
               "declaration": "AgreementConfig",
@@ -21191,6 +21569,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthRequestContext",
+              "kind": "type",
+              "declaration": "AuthRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthResult",
               "kind": "type",
               "declaration": "AuthResult",
@@ -21233,6 +21617,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CaptchaConfigSchema",
+              "kind": "value",
+              "declaration": "CaptchaConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CaptchaOperation",
+              "kind": "type",
+              "declaration": "CaptchaOperation",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ConsumedTicket",
               "kind": "type",
               "declaration": "ConsumedTicket",
@@ -21273,6 +21669,12 @@
               "kind": "value",
               "declaration": "HaiIamError",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamCaptchaChallenge",
+              "kind": "type",
+              "declaration": "IamCaptchaChallenge",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "IamConfig",
@@ -21363,6 +21765,12 @@
               "kind": "type",
               "declaration": "ListUsersOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "LoginAccessConfigSchema",
+              "kind": "value",
+              "declaration": "LoginAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "LoginConfig",
@@ -21598,6 +22006,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccountConfigSchema",
+              "kind": "value",
+              "declaration": "AccountConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgreementConfig",
               "kind": "type",
               "declaration": "AgreementConfig",
@@ -21664,6 +22078,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthRequestContext",
+              "kind": "type",
+              "declaration": "AuthRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthResult",
               "kind": "type",
               "declaration": "AuthResult",
@@ -21706,6 +22126,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CaptchaConfigSchema",
+              "kind": "value",
+              "declaration": "CaptchaConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CaptchaOperation",
+              "kind": "type",
+              "declaration": "CaptchaOperation",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ConsumedTicket",
               "kind": "type",
               "declaration": "ConsumedTicket",
@@ -21746,6 +22178,12 @@
               "kind": "value",
               "declaration": "HaiIamError",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamCaptchaChallenge",
+              "kind": "type",
+              "declaration": "IamCaptchaChallenge",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "IamConfig",
@@ -21836,6 +22274,12 @@
               "kind": "type",
               "declaration": "ListUsersOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "LoginAccessConfigSchema",
+              "kind": "value",
+              "declaration": "LoginAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "LoginConfig",
@@ -22070,6 +22514,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccountConfigSchema",
+              "kind": "value",
+              "declaration": "AccountConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgreementConfig",
               "kind": "type",
               "declaration": "AgreementConfig",
@@ -22136,6 +22586,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthRequestContext",
+              "kind": "type",
+              "declaration": "AuthRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthResult",
               "kind": "type",
               "declaration": "AuthResult",
@@ -22176,6 +22632,18 @@
               "kind": "type",
               "declaration": "AuthzOperations",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CaptchaConfigSchema",
+              "kind": "value",
+              "declaration": "CaptchaConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CaptchaOperation",
+              "kind": "type",
+              "declaration": "CaptchaOperation",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ConsumedTicket",
@@ -22224,6 +22692,12 @@
               "kind": "value",
               "declaration": "iam",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamCaptchaChallenge",
+              "kind": "type",
+              "declaration": "IamCaptchaChallenge",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "IamConfig",
@@ -22314,6 +22788,12 @@
               "kind": "type",
               "declaration": "ListUsersOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "LoginAccessConfigSchema",
+              "kind": "value",
+              "declaration": "LoginAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "LoginConfig",
@@ -22554,6 +23034,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccountConfigSchema",
+              "kind": "value",
+              "declaration": "AccountConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgreementConfig",
               "kind": "type",
               "declaration": "AgreementConfig",
@@ -22620,6 +23106,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthRequestContext",
+              "kind": "type",
+              "declaration": "AuthRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthResult",
               "kind": "type",
               "declaration": "AuthResult",
@@ -22660,6 +23152,18 @@
               "kind": "type",
               "declaration": "AuthzOperations",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CaptchaConfigSchema",
+              "kind": "value",
+              "declaration": "CaptchaConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CaptchaOperation",
+              "kind": "type",
+              "declaration": "CaptchaOperation",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ConsumedTicket",
@@ -22708,6 +23212,12 @@
               "kind": "value",
               "declaration": "iam",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamCaptchaChallenge",
+              "kind": "type",
+              "declaration": "IamCaptchaChallenge",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "IamConfig",
@@ -22798,6 +23308,12 @@
               "kind": "type",
               "declaration": "ListUsersOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "LoginAccessConfigSchema",
+              "kind": "value",
+              "declaration": "LoginAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "LoginConfig",
@@ -23038,6 +23554,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccountConfigSchema",
+              "kind": "value",
+              "declaration": "AccountConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgreementConfig",
               "kind": "type",
               "declaration": "AgreementConfig",
@@ -23104,6 +23626,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "AuthRequestContext",
+              "kind": "type",
+              "declaration": "AuthRequestContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "AuthResult",
               "kind": "type",
               "declaration": "AuthResult",
@@ -23144,6 +23672,18 @@
               "kind": "type",
               "declaration": "AuthzOperations",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CaptchaConfigSchema",
+              "kind": "value",
+              "declaration": "CaptchaConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "CaptchaOperation",
+              "kind": "type",
+              "declaration": "CaptchaOperation",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ConsumedTicket",
@@ -23192,6 +23732,12 @@
               "kind": "value",
               "declaration": "iam",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamCaptchaChallenge",
+              "kind": "type",
+              "declaration": "IamCaptchaChallenge",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "IamConfig",
@@ -23282,6 +23828,12 @@
               "kind": "type",
               "declaration": "ListUsersOptions",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "LoginAccessConfigSchema",
+              "kind": "value",
+              "declaration": "LoginAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "LoginConfig",
@@ -33004,6 +33556,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "registerClipboardHostWriter",
               "kind": "value",
               "declaration": "registerClipboardHostWriter",
@@ -35204,6 +35768,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "registerClipboardHostWriter",
               "kind": "value",
               "declaration": "registerClipboardHostWriter",
@@ -37402,6 +37978,18 @@
               "kind": "value+type",
               "declaration": "Rating",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "registerClipboardHostWriter",
@@ -39864,6 +40452,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "RegisterField",
               "kind": "type",
               "declaration": "RegisterField",
@@ -41254,6 +41854,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "RegisterField",
               "kind": "type",
               "declaration": "RegisterField",
@@ -42642,6 +43254,18 @@
               "kind": "value+type",
               "declaration": "Rating",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "RegisterField",
@@ -45630,6 +46254,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RegisterForm",
               "kind": "value+type",
               "declaration": "RegisterForm",
@@ -45724,6 +46354,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RegisterForm",
               "kind": "value+type",
               "declaration": "RegisterForm",
@@ -45816,6 +46452,12 @@
               "kind": "type",
               "declaration": "PermissionContext",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "RegisterForm",
@@ -46677,6 +47319,18 @@
               "name": "PermissionContext",
               "kind": "type",
               "declaration": "PermissionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -47689,6 +48343,18 @@
               "name": "PermissionContext",
               "kind": "type",
               "declaration": "PermissionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -48701,6 +49367,18 @@
               "name": "PermissionContext",
               "kind": "type",
               "declaration": "PermissionContext",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialog",
+              "kind": "value+type",
+              "declaration": "ReauthenticationDialog",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReauthenticationDialogProps",
+              "kind": "type",
+              "declaration": "ReauthenticationDialogProps",
               "declarationKind": "InterfaceDeclaration"
             },
             {

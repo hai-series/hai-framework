@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin, waitForHydration } from './helpers'
+import { dutyAccounts, loginOnPage, waitForHydration } from './helpers'
 
 test.describe('Settings UI', () => {
-  test('主题选择、刷新持久化和关于分区可连续操作', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'theme')
+  test('主题选择、刷新持久化和关于分区可连续操作', async ({ page }) => {
+    await loginOnPage(page, dutyAccounts.config.username, dutyAccounts.config.password)
     await page.goto('/admin/settings')
     await waitForHydration(page)
+    await page.getByRole('button', { name: '外观', exact: true }).click()
     await page.getByRole('button', { name: '选择主题', exact: true }).last().click()
     await page.getByRole('button', { name: 'Dark', exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
@@ -15,8 +16,8 @@ test.describe('Settings UI', () => {
     await expect(page.locator('main dl dd').first()).toHaveText('hai 管理控制台')
   })
 
-  test('日语切换后页面和组件文案同步并在刷新后保留', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'setja')
+  test('日语切换后页面和组件文案同步并在刷新后保留', async ({ page }) => {
+    await loginOnPage(page, dutyAccounts.config.username, dutyAccounts.config.password)
     await page.goto('/admin/settings')
     await waitForHydration(page)
     await page.getByRole('button', { name: /区域|Region/ }).click()

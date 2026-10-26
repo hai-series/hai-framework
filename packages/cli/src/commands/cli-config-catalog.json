@@ -1368,6 +1368,342 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_AUDIT_ALERTS",
+    "module": "audit",
+    "path": "audit.alerts",
+    "description": "以固定时间窗口统计已提交事件；目标和事件由应用配置，不内置业务角色。",
+    "value": "{\"enabled\":false,\"maxNotificationsPerCheck\":100,\"rules\":[],\"schedule\":{\"enabled\":false,\"cron\":\"* * * * *\",\"timezone\":\"UTC\"}}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_ENABLED",
+    "module": "audit",
+    "path": "audit.alerts.enabled",
+    "description": "audit.alerts.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_MAXNOTIFICATIONSPERCHECK",
+    "module": "audit",
+    "path": "audit.alerts.maxNotificationsPerCheck",
+    "description": "audit.alerts.maxNotificationsPerCheck 配置项",
+    "value": "100",
+    "constraint": "整数；>= 1；<= 1000"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES",
+    "module": "audit",
+    "path": "audit.alerts.rules",
+    "description": "audit.alerts.rules 配置项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 20"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0",
+    "module": "audit",
+    "path": "audit.alerts.rules.0",
+    "description": "audit.alerts.rules.0 配置项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_ACTIONS",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.actions",
+    "description": "audit.alerts.rules.0.actions 配置项",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 50"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_ACTIONS_0",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.actions.0",
+    "description": "audit.alerts.rules.0.actions.0 配置项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_ID",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.id",
+    "description": "audit.alerts.rules.0.id 配置项",
+    "value": "",
+    "constraint": "字符串；正则 ^[\\w-]{1,64}$"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_MINIMUMSEVERITY",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.minimumSeverity",
+    "description": "audit.alerts.rules.0.minimumSeverity 配置项",
+    "value": "info",
+    "constraint": "字符串；取值：info | warning | error | critical"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_OUTCOMES",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.outcomes",
+    "description": "audit.alerts.rules.0.outcomes 配置项",
+    "value": "[\"failure\",\"denied\"]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 3"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_OUTCOMES_0",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.outcomes.0",
+    "description": "audit.alerts.rules.0.outcomes.0 配置项",
+    "value": "success",
+    "constraint": "字符串；取值：success | failure | denied"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_RESOURCE",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.resource",
+    "description": "audit.alerts.rules.0.resource 配置项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 256"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_SEVERITY",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.severity",
+    "description": "audit.alerts.rules.0.severity 配置项",
+    "value": "warning",
+    "constraint": "字符串；取值：warning | error | critical"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_TARGETS",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.targets",
+    "description": "audit.alerts.rules.0.targets 配置项",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 20"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_TARGETS_0",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.targets.0",
+    "description": "audit.alerts.rules.0.targets.0 配置项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_TARGETS_0_ID",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.targets.0.id",
+    "description": "audit.alerts.rules.0.targets.0.id 配置项",
+    "value": "",
+    "constraint": "字符串；正则 ^[\\w-]{1,64}$"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_TARGETS_0_PROVIDER",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.targets.0.provider",
+    "description": "所选后端的连接参数，按 type 选择对应字段",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_TARGETS_0_TO",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.targets.0.to",
+    "description": "audit.alerts.rules.0.targets.0.to 配置项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 1000"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_THRESHOLD",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.threshold",
+    "description": "audit.alerts.rules.0.threshold 配置项",
+    "value": "1",
+    "constraint": "整数；>= 1；<= 1000000000"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_RULES_0_WINDOWSECONDS",
+    "module": "audit",
+    "path": "audit.alerts.rules.0.windowSeconds",
+    "description": "audit.alerts.rules.0.windowSeconds 配置项",
+    "value": "300",
+    "constraint": "整数；>= 60；<= 86400"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_SCHEDULE",
+    "module": "audit",
+    "path": "audit.alerts.schedule",
+    "description": "audit.alerts.schedule 配置项",
+    "value": "{\"enabled\":false,\"cron\":\"* * * * *\",\"timezone\":\"UTC\"}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_SCHEDULE_CRON",
+    "module": "audit",
+    "path": "audit.alerts.schedule.cron",
+    "description": "audit.alerts.schedule.cron 配置项",
+    "value": "* * * * *",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_SCHEDULE_ENABLED",
+    "module": "audit",
+    "path": "audit.alerts.schedule.enabled",
+    "description": "audit.alerts.schedule.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_ALERTS_SCHEDULE_TIMEZONE",
+    "module": "audit",
+    "path": "audit.alerts.schedule.timezone",
+    "description": "audit.alerts.schedule.timezone 配置项",
+    "value": "UTC",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP",
+    "module": "audit",
+    "path": "audit.backup",
+    "description": "可选的流式归档；自动执行由宿主现有 Scheduler 装配。",
+    "value": "{\"enabled\":false,\"batchSize\":200,\"maxRecordBytes\":1048576,\"schedule\":{\"enabled\":false,\"cron\":\"0 2 * * *\",\"timezone\":\"UTC\"}}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_BATCHSIZE",
+    "module": "audit",
+    "path": "audit.backup.batchSize",
+    "description": "audit.backup.batchSize 配置项",
+    "value": "200",
+    "constraint": "整数；>= 1；<= 1000"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_ENABLED",
+    "module": "audit",
+    "path": "audit.backup.enabled",
+    "description": "audit.backup.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_MAXRECORDBYTES",
+    "module": "audit",
+    "path": "audit.backup.maxRecordBytes",
+    "description": "audit.backup.maxRecordBytes 配置项",
+    "value": "1048576",
+    "constraint": "整数；>= 1024；<= 67108864"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_SCHEDULE",
+    "module": "audit",
+    "path": "audit.backup.schedule",
+    "description": "audit.backup.schedule 配置项",
+    "value": "{\"enabled\":false,\"cron\":\"0 2 * * *\",\"timezone\":\"UTC\"}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_SCHEDULE_CRON",
+    "module": "audit",
+    "path": "audit.backup.schedule.cron",
+    "description": "audit.backup.schedule.cron 配置项",
+    "value": "0 2 * * *",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_SCHEDULE_ENABLED",
+    "module": "audit",
+    "path": "audit.backup.schedule.enabled",
+    "description": "audit.backup.schedule.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_BACKUP_SCHEDULE_TIMEZONE",
+    "module": "audit",
+    "path": "audit.backup.schedule.timezone",
+    "description": "audit.backup.schedule.timezone 配置项",
+    "value": "UTC",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_AUDIT_CAPTURE",
+    "module": "audit",
+    "path": "audit.capture",
+    "description": "框架入口自动采集；显式 audit.log 不受此开关影响。",
+    "value": "{\"enabled\":true,\"includeReads\":false}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_CAPTURE_ENABLED",
+    "module": "audit",
+    "path": "audit.capture.enabled",
+    "description": "audit.capture.enabled 配置项",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_CAPTURE_INCLUDEREADS",
+    "module": "audit",
+    "path": "audit.capture.includeReads",
+    "description": "audit.capture.includeReads 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_PRIVACY",
+    "module": "audit",
+    "path": "audit.privacy",
+    "description": "凭据始终脱敏；此开关仅控制业务隐私字段。",
+    "value": "{\"enabled\":true,\"fields\":[]}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_PRIVACY_ENABLED",
+    "module": "audit",
+    "path": "audit.privacy.enabled",
+    "description": "audit.privacy.enabled 配置项",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_PRIVACY_FIELDS",
+    "module": "audit",
+    "path": "audit.privacy.fields",
+    "description": "audit.privacy.fields 配置项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_AUDIT_PRIVACY_FIELDS_0",
+    "module": "audit",
+    "path": "audit.privacy.fields.0",
+    "description": "audit.privacy.fields.0 配置项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 256"
+  },
+  {
+    "name": "HAI_AUDIT_RETENTION",
+    "module": "audit",
+    "path": "audit.retention",
+    "description": "未传时沿用数据库保留设置；显式关闭才解除保护。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AUDIT_RETENTION_ENABLED",
+    "module": "audit",
+    "path": "audit.retention.enabled",
+    "description": "audit.retention.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AUDIT_RETENTION_MINDAYS",
+    "module": "audit",
+    "path": "audit.retention.minDays",
+    "description": "audit.retention.minDays 配置项",
+    "value": "90",
+    "constraint": "整数；>= 1；<= 36500"
+  },
+  {
     "name": "HAI_AUDIT_USERIDCOLUMN",
     "module": "audit",
     "path": "audit.userIdColumn",
@@ -2616,6 +2952,30 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_IAM_ACCOUNTS",
+    "module": "iam",
+    "path": "iam.accounts",
+    "description": "账号自动休眠策略；未配置时不启动扫描。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_ACCOUNTS_DORMANTAFTERDAYS",
+    "module": "iam",
+    "path": "iam.accounts.dormantAfterDays",
+    "description": "连续未成功登录多少天后休眠，0 关闭。未登录账号从创建时间起算。",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 36500"
+  },
+  {
+    "name": "HAI_IAM_ACCOUNTS_SCANINTERVALSECONDS",
+    "module": "iam",
+    "path": "iam.accounts.scanIntervalSeconds",
+    "description": "自动扫描间隔（秒）；开启自动休眠时执行，默认每小时。",
+    "value": "3600",
+    "constraint": "整数；>= 60；<= 86400"
+  },
+  {
     "name": "HAI_IAM_AGREEMENTS",
     "module": "iam",
     "path": "iam.agreements",
@@ -2702,6 +3062,62 @@
     "description": "API Key 前缀（默认 'hai_'）",
     "value": "hai_",
     "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_CAPTCHA",
+    "module": "iam",
+    "path": "iam.captcha",
+    "description": "可选的自托管交互挑战。",
+    "value": "{\"enabled\":false,\"ttlSeconds\":120,\"cost\":5000,\"maxCounter\":100}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_CAPTCHA_COST",
+    "module": "iam",
+    "path": "iam.captcha.cost",
+    "description": "iam.captcha.cost 配置项",
+    "value": "5000",
+    "constraint": "整数；>= 100；<= 50000"
+  },
+  {
+    "name": "HAI_IAM_CAPTCHA_ENABLED",
+    "module": "iam",
+    "path": "iam.captcha.enabled",
+    "description": "iam.captcha.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_CAPTCHA_MAXCOUNTER",
+    "module": "iam",
+    "path": "iam.captcha.maxCounter",
+    "description": "iam.captcha.maxCounter 配置项",
+    "value": "100",
+    "constraint": "整数；>= 1；<= 2000"
+  },
+  {
+    "name": "HAI_IAM_CAPTCHA_TTLSECONDS",
+    "module": "iam",
+    "path": "iam.captcha.ttlSeconds",
+    "description": "iam.captcha.ttlSeconds 配置项",
+    "value": "120",
+    "constraint": "整数；>= 1；<= 600"
+  },
+  {
+    "name": "HAI_IAM_INITIALCREDENTIALS",
+    "module": "iam",
+    "path": "iam.initialCredentials",
+    "description": "管理端可用单次邀请代替共享初始密码；需要已配置的密码重置通知通道。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_INITIALCREDENTIALS_ENABLED",
+    "module": "iam",
+    "path": "iam.initialCredentials.enabled",
+    "description": "iam.initialCredentials.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_IAM_LDAP",
@@ -2832,6 +3248,110 @@
     "constraint": "true | false"
   },
   {
+    "name": "HAI_IAM_LOGINACCESS",
+    "module": "iam",
+    "path": "iam.loginAccess",
+    "description": "宿主提供可信客户端地址；绝不从凭据 JSON 或任意转发头取得 IP。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_ALLOWIPS",
+    "module": "iam",
+    "path": "iam.loginAccess.allowIps",
+    "description": "iam.loginAccess.allowIps 配置项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_ALLOWIPS_0",
+    "module": "iam",
+    "path": "iam.loginAccess.allowIps.0",
+    "description": "iam.loginAccess.allowIps.0 配置项",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_DENYIPS",
+    "module": "iam",
+    "path": "iam.loginAccess.denyIps",
+    "description": "iam.loginAccess.denyIps 配置项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_DENYIPS_0",
+    "module": "iam",
+    "path": "iam.loginAccess.denyIps.0",
+    "description": "iam.loginAccess.denyIps.0 配置项",
+    "value": "",
+    "constraint": "字符串；格式 ipv4；正则 ^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$；格式 ipv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$；格式 cidrv4；正则 ^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$；格式 cidrv6；正则 ^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_ENABLED",
+    "module": "iam",
+    "path": "iam.loginAccess.enabled",
+    "description": "iam.loginAccess.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_TIMEZONE",
+    "module": "iam",
+    "path": "iam.loginAccess.timezone",
+    "description": "iam.loginAccess.timezone 配置项",
+    "value": "UTC",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_WINDOWS",
+    "module": "iam",
+    "path": "iam.loginAccess.windows",
+    "description": "iam.loginAccess.windows 配置项",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 100"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_WINDOWS_0",
+    "module": "iam",
+    "path": "iam.loginAccess.windows.0",
+    "description": "iam.loginAccess.windows.0 配置项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_WINDOWS_0_DAYS",
+    "module": "iam",
+    "path": "iam.loginAccess.windows.0.days",
+    "description": "iam.loginAccess.windows.0.days 配置项",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1；最多项数 7"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_WINDOWS_0_DAYS_0",
+    "module": "iam",
+    "path": "iam.loginAccess.windows.0.days.0",
+    "description": "iam.loginAccess.windows.0.days.0 配置项",
+    "value": "",
+    "constraint": "整数；>= 1；<= 7"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_WINDOWS_0_END",
+    "module": "iam",
+    "path": "iam.loginAccess.windows.0.end",
+    "description": "iam.loginAccess.windows.0.end 配置项",
+    "value": "",
+    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
+    "name": "HAI_IAM_LOGINACCESS_WINDOWS_0_START",
+    "module": "iam",
+    "path": "iam.loginAccess.windows.0.start",
+    "description": "iam.loginAccess.windows.0.start 配置项",
+    "value": "",
+    "constraint": "字符串；正则 ^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+  },
+  {
     "name": "HAI_IAM_OTP",
     "module": "iam",
     "path": "iam.otp",
@@ -2912,12 +3432,36 @@
     "constraint": "整数；>= 1；<= 256"
   },
   {
+    "name": "HAI_IAM_PASSWORD_MINCHARACTERCLASSES",
+    "module": "iam",
+    "path": "iam.password.minCharacterClasses",
+    "description": "至少包含的字符类别数（大小写、数字、特殊字符），0 不额外限制。",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 4"
+  },
+  {
     "name": "HAI_IAM_PASSWORD_MINLENGTH",
     "module": "iam",
     "path": "iam.password.minLength",
     "description": "最小长度（默认 8）",
     "value": "8",
     "constraint": "整数；>= 1；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_PREVENTSAMEPASSWORD",
+    "module": "iam",
+    "path": "iam.password.preventSamePassword",
+    "description": "拒绝新旧密码相同；启用口令期限或首次强改时也始终拒绝相同密码。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_PASSWORD_REQUIREINITIALCHANGE",
+    "module": "iam",
+    "path": "iam.password.requireInitialChange",
+    "description": "管理员创建或重置的初始密码必须先更换；不影响用户自行注册设密。",
+    "value": "false",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_IAM_PASSWORD_REQUIRELOWERCASE",
@@ -3032,6 +3576,46 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_IAM_REAUTHENTICATION",
+    "module": "iam",
+    "path": "iam.reauthentication",
+    "description": "指定敏感操作额外验证原密码；凭据短期且单次使用。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_REAUTHENTICATION_ENABLED",
+    "module": "iam",
+    "path": "iam.reauthentication.enabled",
+    "description": "iam.reauthentication.enabled 配置项",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_REAUTHENTICATION_OPERATIONS",
+    "module": "iam",
+    "path": "iam.reauthentication.operations",
+    "description": "音频模型支持的操作",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最多项数 1000"
+  },
+  {
+    "name": "HAI_IAM_REAUTHENTICATION_OPERATIONS_0",
+    "module": "iam",
+    "path": "iam.reauthentication.operations.0",
+    "description": "音频模型支持的操作",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 128"
+  },
+  {
+    "name": "HAI_IAM_REAUTHENTICATION_TTLSECONDS",
+    "module": "iam",
+    "path": "iam.reauthentication.ttlSeconds",
+    "description": "iam.reauthentication.ttlSeconds 配置项",
+    "value": "300",
+    "constraint": "整数；>= 1；<= 900"
+  },
+  {
     "name": "HAI_IAM_REGISTER",
     "module": "iam",
     "path": "iam.register",
@@ -3060,8 +3644,16 @@
     "module": "iam",
     "path": "iam.security",
     "description": "安全策略配置",
-    "value": "{\"maxLoginAttempts\":5,\"lockoutDuration\":900}",
+    "value": "{\"lockoutEnabled\":true,\"failureWindow\":86400,\"maxLoginAttempts\":5,\"lockoutDuration\":900}",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_IAM_SECURITY_FAILUREWINDOW",
+    "module": "iam",
+    "path": "iam.security.failureWindow",
+    "description": "从首次失败起的固定计数窗口（秒）。",
+    "value": "86400",
+    "constraint": "整数；>= 1；<= 31536000"
   },
   {
     "name": "HAI_IAM_SECURITY_LOCKOUTDURATION",
@@ -3070,6 +3662,14 @@
     "description": "锁定时长（秒，默认 900）",
     "value": "900",
     "constraint": "整数；>= 60；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_SECURITY_LOCKOUTENABLED",
+    "module": "iam",
+    "path": "iam.security.lockoutEnabled",
+    "description": "是否启用失败计数锁定；关闭时忽略历史锁。",
+    "value": "true",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_IAM_SECURITY_MAXLOGINATTEMPTS",
@@ -3096,12 +3696,44 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_IAM_SESSION_ABSOLUTETIMEOUT",
+    "module": "iam",
+    "path": "iam.session.absoluteTimeout",
+    "description": "从首次登录起的绝对期限（秒），0 关闭；刷新不能重新起算。",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 31536000"
+  },
+  {
+    "name": "HAI_IAM_SESSION_ENDONPAGEHIDE",
+    "module": "iam",
+    "path": "iam.session.endOnPageHide",
+    "description": "页面离开时尽力撤销会话；浏览器关闭不可保证，仍应配置服务端闲置/绝对期限。",
+    "value": "false",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_SESSION_IDLETIMEOUT",
+    "module": "iam",
+    "path": "iam.session.idleTimeout",
+    "description": "闲置期限（秒），0 关闭；真实访问记录活动，自动刷新不延长闲置；access/refresh 均执行。",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 31536000"
+  },
+  {
     "name": "HAI_IAM_SESSION_MAXAGE",
     "module": "iam",
     "path": "iam.session.maxAge",
     "description": "新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。",
     "value": "86400",
     "constraint": "整数；>= 60；<= 9007199254740991"
+  },
+  {
+    "name": "HAI_IAM_SESSION_MAXSESSIONS",
+    "module": "iam",
+    "path": "iam.session.maxSessions",
+    "description": "每个用户的最大有效会话数，0 不限制；包含 access 到期但仍可刷新的会话。",
+    "value": "0",
+    "constraint": "整数；>= 0；<= 10000"
   },
   {
     "name": "HAI_IAM_SESSION_REFRESHTOKENMAXAGE",
@@ -3118,6 +3750,14 @@
     "description": "单设备登录（踢掉其他设备）",
     "value": "false",
     "constraint": "true | false"
+  },
+  {
+    "name": "HAI_IAM_SESSION_SINGLEDEVICEMODE",
+    "module": "iam",
+    "path": "iam.session.singleDeviceMode",
+    "description": "单设备超限策略：replace 顶旧保新，reject 保留旧会话并拒绝新登录。",
+    "value": "replace",
+    "constraint": "字符串；取值：replace | reject"
   },
   {
     "name": "HAI_IAM_SESSION_SLIDING",
@@ -3840,6 +4480,14 @@
     "constraint": "字符串"
   },
   {
+    "name": "ADMIN_E2E_BASE_URL",
+    "module": "runtime",
+    "path": "ADMIN_E2E_BASE_URL",
+    "description": "管理台独立 E2E 服务地址，可由根验收透传以避开其它工作区端口",
+    "value": "",
+    "constraint": "本机 HTTP(S) URL；直接运行时 BASE_URL 优先"
+  },
+  {
     "name": "ANTHROPIC_API_KEY",
     "module": "runtime",
     "path": "ANTHROPIC_API_KEY",
@@ -3992,6 +4640,30 @@
     "constraint": "敏感字符串；权限由目标仓库与工作流决定"
   },
   {
+    "name": "HAI_AUDIT_ADMIN_PASSWORD",
+    "module": "runtime",
+    "path": "HAI_AUDIT_ADMIN_PASSWORD",
+    "description": "首次创建审计管理员的独立密码",
+    "value": "",
+    "constraint": "满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密"
+  },
+  {
+    "name": "HAI_BUSINESS_OPERATOR_PASSWORD",
+    "module": "runtime",
+    "path": "HAI_BUSINESS_OPERATOR_PASSWORD",
+    "description": "首次创建业务操作员的独立密码",
+    "value": "",
+    "constraint": "满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密"
+  },
+  {
+    "name": "HAI_CONFIG_ADMIN_PASSWORD",
+    "module": "runtime",
+    "path": "HAI_CONFIG_ADMIN_PASSWORD",
+    "description": "首次创建业务配置员的独立密码",
+    "value": "",
+    "constraint": "满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密"
+  },
+  {
     "name": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
     "module": "runtime",
     "path": "HAI_CRYPTO_TRANSPORT_SERVERKEYRING",
@@ -4086,6 +4758,14 @@
     "description": "MIMO 厂商凭据回退；优先在模型项配置 apiKey",
     "value": "",
     "constraint": "敏感字符串，启用对应厂商时注入"
+  },
+  {
+    "name": "MOBILE_E2E_PORT",
+    "module": "runtime",
+    "path": "MOBILE_E2E_PORT",
+    "description": "移动示例独立 E2E 预览端口，可由根验收透传",
+    "value": "",
+    "constraint": "整数 1–65535；默认 5175，直接运行时 E2E_PORT 优先"
   },
   {
     "name": "MODEL_PATH",
@@ -4348,7 +5028,7 @@
     "module": "serv",
     "path": "serv.cors.allowedHeaders",
     "description": "CORS 允许客户端发送的请求头",
-    "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\"]",
+    "value": "[\"Authorization\",\"Content-Type\",\"X-Requested-With\",\"X-Hai-Reauthentication\"]",
     "constraint": "JSON 数组；索引可按 0、1、2 扩展"
   },
   {
@@ -4413,6 +5093,14 @@
     "path": "HAI_SERV_CORS_ALLOWEDHEADERS_7",
     "description": "CORS 允许客户端发送的请求头",
     "value": "X-Hai-Transport",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_SERV_CORS_ALLOWEDHEADERS_8",
+    "module": "serv",
+    "path": "HAI_SERV_CORS_ALLOWEDHEADERS_8",
+    "description": "CORS 允许客户端发送的请求头",
+    "value": "X-Hai-Reauthentication",
     "constraint": "字符串"
   },
   {

@@ -252,10 +252,10 @@ pnpm add @h-ai/ui                   # UI 组件库
 
 多くのプロジェクトは次の依存順で初期化でき、AI 支援にも理解しやすい構成になります：
 
-`core → reldb / cache / storage / vecdb → iam / audit / scheduler / reach → ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
+`core → reldb / cache / storage / vecdb → crypto / reach → audit → iam → scheduler / ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
 
 - `iam` は初期化済みの `reldb` と `cache` に依存。
-- `audit` は初期化済みの `reldb` に依存。
+- `audit` は初期化済みの `reldb` に依存。セキュリティ監査では `iam` より先に初期化し、通知で使う `reach` はさらに先に初期化します。終了時は最初に `scheduler` を停止し、その後は逆順で閉じます。
 - DB 永続化の `scheduler` は `reldb` を先に初期化します。`cache` が初期化済みなら分散ロックを自動有効化。
 - `reach`・`payment`・`ai` は用途に応じてほかの機能を再利用します。詳細は各 README を参照。
 - `api-contract` は初期化不要で、公開 HTTP schema・oRPC contract のみを定義。
@@ -455,6 +455,14 @@ const loginResult = await iam.auth.login({ identifier: 'alice', password: 'Stron
 await iam.authz.assignRole(userId, 'admin')
 const allowed = await iam.authz.checkPermission(userId, 'users:read')
 ```
+
+### 設定可能なセキュリティポリシー
+
+[IAM](packages/iam/README.ja.md) は常設/一時アカウント、有効/休眠/終了状態、未使用スキャン、パスワード長/文字種/有効期限、軽量 ALTCHA チャレンジ、共有失敗ウィンドウとロック、一回限りの招待、初回パスワード変更、用途限定の再認証、ログイン時間/IP 制御を提供します。業務ごとに有効化・設定し、サーバーで適用します。期限切れ・初期パスワードには専用変更フローがあります。ログインごとに独立したセッションを作成し、厳密なアイドル/絶対期限、同時数上限、新規拒否/既存置換を選べます。ページ離脱時の失効は既定で無効で、有効時も最善努力のためサーバー期限と併用します。
+
+[Audit](packages/audit/README.ja.md) はシステム/業務分類、イベント時の本人情報、失敗/拒否イベント、マスキング、絞り込み、並び替え、統計を統合します。保持保護、非公開の手動/定期バックアップ、Reach による軽量通知を設定できます。バックアップは検証用受領情報を返しますが、データベースの原子的スナップショットではなく、復元は独立環境で実施します。既定値だけで不変ストレージや導入環境の適合性を保証するものではありません。
+
+[管理画面](apps/admin-console/README.md) と fullstack テンプレートはシステム管理、監査管理、業務設定、業務操作と一般会員の権限を分離し、サーバーでも他職務への権限付与・アカウント奪取を拒否します。これらはアプリケーションが管理・変更できる例であり、IAM は具体的なロール名を固定しません。
 
 ### 公開 API：契約 → サービス → クライアント
 

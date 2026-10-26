@@ -50,7 +50,7 @@ async function login(page: Page, username: string, password: string, keepGuide =
 async function userEditor(page: Page, username: string) {
   await page.getByTestId('users-search').locator('input').fill(username)
   await page.getByTestId('users-page').getByRole('button', { name: /查询|Search/ }).click()
-  const row = page.getByRole('row').filter({ hasText: username })
+  const row = page.getByRole('row').filter({ has: page.getByText(`@${username}`, { exact: true }) })
   await expect(row).toBeVisible()
   await row.getByRole('button', { name: /编辑|Edit/, exact: true }).click()
   return row
@@ -355,7 +355,8 @@ test('frontend displays configured core metadata and restores the administrator 
   await page.reload()
   await expect(page.getByTestId('users-page')).toBeVisible()
   await expect(page.getByTestId('nav-roles')).toBeVisible()
-  await expect(page.getByTestId('nav-audit')).toBeVisible()
+  await expect(page.getByTestId('nav-audit')).toHaveCount(0)
+  await expect(page.getByTestId('nav-configuration')).toHaveCount(0)
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR
   if (evidence)
     await mkdir(evidence, { recursive: true })
@@ -364,9 +365,82 @@ test('frontend displays configured core metadata and restores the administrator 
   await expect(page.getByTestId('login-form')).toBeVisible()
 })
 
-test('audit filters align and fit desktop, tablet and narrow mobile screens', async ({ page }, testInfo) => {
+test('auditor reauthentication produces a verifiable private archive', async ({ page }) => {
+  await page.goto('/')
+  await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
+  await expect(page.getByTestId('nav-users')).toHaveCount(0)
+  await expect(page.getByTestId('nav-configuration')).toHaveCount(0)
+  await page.getByTestId('nav-audit').click()
+  await page.getByTestId('audit-backup').click()
+  const confirmation = page.getByTestId('reauthentication-form')
+  await expect(confirmation).toBeVisible()
+  await page.getByTestId('reauthentication-password').locator('input').fill('Scaffold-test-Audit123!')
+  await confirmation.locator('button[type=submit]').click()
+  const receipt = page.getByTestId('audit-backup-receipt')
+  await expect(receipt).toBeVisible()
+  await expect(receipt).toContainText(/SHA-256: [a-f0-9]{64}/)
+  const key = (await receipt.textContent())?.match(/hai-private\/audit-backups\/[\w-]+\.jsonl/)?.[0]
+  expect(key).toBeTruthy()
+  const exposed = await page.request.get(`${apiBaseUrl}${apiPrefix}/assets/${key}`)
+  expect(exposed.status()).toBe(404)
+})
+
+test('one-time invitation completes password setup through the configured notification', async ({ page, browser }) => {
+  test.skip(!process.env.IAM_NOTIFICATION_URL, 'Requires the owned notification fixture')
+  test.setTimeout(90000)
+  const username = `invited-${randomUUID().slice(0, 8)}`
+  const email = `${username}@example.test`
   await page.goto('/')
   await login(page, 'admin', adminPassword)
+  await page.getByTestId('invite-user').click()
+  await page.getByTestId('user-username').locator('input').fill(username)
+  await page.getByTestId('user-email').locator('input').fill(email)
+  await page.getByTestId('user-save').click()
+  const confirmation = page.getByTestId('reauthentication-form')
+  await expect(confirmation).toBeVisible()
+  await page.getByTestId('reauthentication-password').locator('input').fill(adminPassword)
+  await confirmation.locator('button[type=submit]').click()
+  await expect(page.getByTestId('user-editor')).not.toBeVisible()
+  const notified = await page.request.get(`${process.env.IAM_NOTIFICATION_URL}/messages?to=${encodeURIComponent(email)}`)
+  const messages = await notified.json() as { template: string, vars: Record<string, string> }[]
+  const token = messages.findLast(item => item.template === 'password_reset')?.vars.token
+  expect(token).toBeTruthy()
+  const context = await browser.newContext()
+  try {
+    const receiver = await context.newPage()
+    await receiver.goto(`/?token=${encodeURIComponent(token ?? '')}`)
+    const passwords = receiver.locator('input[type=password]')
+    await passwords.nth(0).fill('Invited-Setup-123!')
+    await passwords.nth(1).fill('Invited-Setup-123!')
+    await receiver.locator('button[type=submit]').click()
+    await expect(receiver.locator('.alert-success')).toBeVisible()
+    await receiver.getByRole('button', { name: /^(登录|Sign in|Login)$/i }).click()
+    await login(receiver, username, 'Invited-Setup-123!')
+    await expect(receiver.getByTestId('settings-page')).toBeVisible()
+    await expect(receiver.getByTestId('nav-users')).toHaveCount(0)
+  }
+  finally { await context.close() }
+})
+
+test('business configuration is isolated and the public notice reaches other duties', async ({ page }) => {
+  await page.goto('/')
+  await login(page, 'config_admin', 'Scaffold-test-Config123!')
+  await expect(page.getByTestId('nav-users')).toHaveCount(0)
+  await expect(page.getByTestId('nav-audit')).toHaveCount(0)
+  await page.getByTestId('nav-configuration').click()
+  await expect(page.getByTestId('configuration-page')).toBeVisible()
+  await page.getByTestId('business-notice-input').locator('textarea').fill('Configured business notice')
+  await page.getByTestId('configuration-page').getByRole('button', { name: /保存|Save/, exact: true }).click()
+  await expect(page.getByTestId('business-notice')).toHaveText('Configured business notice')
+  await page.getByTestId('logout').click()
+  await login(page, 'admin', adminPassword)
+  await expect(page.getByTestId('nav-configuration')).toHaveCount(0)
+  await expect(page.getByTestId('business-notice')).toHaveText('Configured business notice')
+})
+
+test('audit filters align and fit desktop, tablet and narrow mobile screens', async ({ page }, testInfo) => {
+  await page.goto('/')
+  await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
   await page.getByTestId('nav-audit').click()
   await expect(page.getByTestId('audit-page')).toBeVisible()
   for (const width of [1440, 960, 390, 320]) {
@@ -405,6 +479,26 @@ test('audit filters align and fit desktop, tablet and narrow mobile screens', as
       await page.screenshot({ path: evidence ? path.join(evidence, file) : testInfo.outputPath(file), fullPage: true, animations: 'disabled' })
     }
   }
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const advanced = page.getByTestId('audit-advanced')
+  await advanced.locator('summary').click()
+  await page.getByTestId('audit-category').getByRole('combobox').click()
+  await page.getByRole('option', { name: /系统|System|システム/ }).click()
+  const filtered = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/admin/audit/list')).then(async (response) => {
+    expect(response.status()).toBe(200)
+    await response.body()
+  })
+  await advanced.getByRole('button', { name: /查询|Search/ }).click()
+  await filtered
+  await expect(advanced.getByRole('button', { name: /查询|Search/ })).toBeEnabled()
+  await expect(page.getByTestId('audit-page').getByRole('cell', { name: 'system', exact: true }).first()).toBeVisible()
+  const categories = await page.getByTestId('audit-page').locator('tbody tr').evaluateAll(rows => rows.map(row => row.querySelectorAll('td')[3]?.textContent?.trim()))
+  expect(categories.length).toBeGreaterThan(0)
+  expect(new Set(categories)).toEqual(new Set(['system']))
+  await advanced.locator('summary').click()
+  await page.getByTestId('audit-page').getByRole('button', { name: /详情|Details/ }).first().click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('audit-short-table-details.png'), fullPage: true, animations: 'disabled' })
 })
 
 test('administrator and user complete account, avatar, preference, password and audit workflows', async ({ page, browser }) => {
@@ -509,7 +603,7 @@ test('administrator and user complete account, avatar, preference, password and 
     await passwordInputs.nth(2).fill(password)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
-    await expect(userPage.getByTestId('error')).toContainText(/检查|check/i)
+    await expect(userPage.getByTestId('error')).toContainText(/相同|must differ from|異なる/i)
     await passwordInputs.nth(1).fill(newPassword)
     await passwordInputs.nth(2).fill(newPassword)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
@@ -521,7 +615,7 @@ test('administrator and user complete account, avatar, preference, password and 
 
     await page.getByTestId('nav-users').click()
     await userEditor(page, username)
-    await page.getByTestId('user-editor').locator('input[type="checkbox"]').uncheck()
+    await page.getByTestId('account-enabled').locator('input').uncheck()
     await page.getByTestId('user-save').click()
     await expect(page.getByTestId('user-editor')).not.toBeVisible()
     await userPage.getByTestId('profile-form').getByRole('button', { name: 'Save', exact: true }).click()
@@ -535,9 +629,11 @@ test('administrator and user complete account, avatar, preference, password and 
   await page.getByRole('row').filter({ hasText: username }).getByRole('button', { name: /删除|Delete/, exact: true }).click()
   await page.getByTestId('confirm-delete-user').click()
   await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(0)
+  await page.getByTestId('logout').click()
+  await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
   await page.getByTestId('nav-audit').click()
   await page.getByTestId('audit-resource').locator('input').fill('users')
-  await page.getByTestId('audit-page').getByRole('button', { name: /查询|Search/ }).click()
+  await page.getByTestId('audit-page').locator('form').getByRole('button', { name: /查询|Search/ }).click()
   await expect(page.getByTestId('audit-page')).toContainText('delete')
   await page.getByTestId('audit-page').getByRole('button', { name: /详情|Details/ }).first().click()
   await expect(page.getByRole('dialog')).toContainText(/users/)
@@ -548,9 +644,9 @@ test('administrator and user complete account, avatar, preference, password and 
 {{#if features.feedback}}
 {{#if fullstack.e2eFrontend}}
 
-test('feedback submits an empty description and administrator can process and reopen it', async ({ page }, testInfo) => {
+test('feedback submits an empty description and business operator can process and reopen it', async ({ page }, testInfo) => {
   await page.goto('/')
-  await login(page, 'admin', adminPassword)
+  await login(page, 'business_operator', 'Scaffold-test-Operator123!')
   const feedbackImage = Buffer.from(await page.evaluate(() => {
     const canvas = document.createElement('canvas')
     canvas.width = canvas.height = 64

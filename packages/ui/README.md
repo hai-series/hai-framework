@@ -292,7 +292,7 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-#### 场景组件 Scenes（40 个）
+#### 场景组件 Scenes（41 个）
 
 ##### Guide 引导与帮助（2 个）
 
@@ -319,7 +319,7 @@ components/
 
 反馈说明可为空；宿主先用 `@h-ai/feedback/client` 的 `prepare()` 固定现场，再打开弹窗。表单通过 `onfileschange` 准备主动附件、通过 `onannotate` 将标注烧录到图片；受理失败保留输入并可本地导出。列表展示说明或服务端事实摘要，以 `onquerychange` 取得分页数据；界面权限不代替服务端授权。完整接入与离线工具见 [feedback 模块](../feedback/README.md)。
 
-##### IAM 身份认证（10 个）
+##### IAM 身份认证（11 个）
 
 | 组件                 | 描述       | 主要属性                                              |
 | -------------------- | ---------- | ----------------------------------------------------- |
@@ -331,6 +331,7 @@ components/
 | `ResetPasswordForm`  | 重置密码   | `loading`, `errors`, `showCode`, `onsubmit`           |
 | `ChangePasswordForm` | 修改密码   | `loading`, `errors`, `requireOldPassword`, `onsubmit` |
 | `PasswordInput`      | 密码输入框 | `value`, `showToggle`, `showStrength`, `minLength`    |
+| `ReauthenticationDialog` | 敏感操作再认证 | `open`, `loading`, `error`, `onsubmit`, `onclose` |
 | `PermGuard`          | 权限守卫   | `permissions`, `mode`, `fallback`                     |
 | `UserProfile`        | 用户资料   | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
 
@@ -838,6 +839,8 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 认证链接指向当前完整 URL 时，AuthPanel 只切换场景并阻止重复导航，返回登录后可立即输入。路径、查询串或 hash 不同时交给应用路由处理；Ctrl/Cmd 等修改键点击保留浏览器行为。
 
+`ReauthenticationDialog` 只展示密码确认框，通过 `open/loading/error/onsubmit/onclose` 接入服务层。服务调用 `actions.reauthenticate(password, operation)`，拿到短期单次凭据后仅传给本次敏感请求；取消、关闭和提交会清除输入，凭据不提升原有权限。`Input` 支持 `datetime-local`，其值为浏览器本地时间，服务层转换为明确时间戳后提交。
+
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 
 ### 新手引导与帮助中心
@@ -934,6 +937,12 @@ Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提�
 HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
+
+## 可选交互挑战
+
+AuthPanel 在 config.captcha.enabled 时通过 actions.createCaptcha 自动生成并异步求解自托管 ALTCHA，按 login/register/sendOtp/passwordReset/renewPassword 用途提交单用证明；关闭时不加载求解器。createAuthActions 已提供动作，自定义动作须保留 captcha，缺少动作时不放行。证明仅存在当前请求内存，服务端始终校验与消费。
+
+策略、默认值和恢复边界见 [IAM](../iam/README.md)。
 
 ## 开发测试
 

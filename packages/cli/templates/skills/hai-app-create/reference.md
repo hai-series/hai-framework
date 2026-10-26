@@ -187,7 +187,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ### 要点
 
 - 使用 kit.guard.require / kit.validate.body 的 SvelteKit 端点用 `kit.handler(async ({ locals, request, ... }) => { ... })` 包裹，由 handler 统一处理 throw 的 Response；其它架构用对应运行时
-- 权限守卫使用 `kit.guard.require(locals.session, 'xxx:yyy')`，它本身就是 throw 模式（未登录 throw 401、无权限 throw 403 Response），**无需**检查返回值
+- API 权限守卫使用 `kit.guard.require(locals.session, 'xxx:yyy')`，未登录/无权限抛出 401/403 Response，由 `kit.handler` 处理，**无需**检查返回值。页面 load 使用 `kit.guard.check` 并调用 SvelteKit `error`，查询 Schema 用 safeParse 后抛原生页面错误；不能直接抛 API Response 导致页面 500。
 - 输入校验使用 `await kit.validate.body(request, Schema)`，校验失败时 throw 400 Response，**无需**手动判断 valid
 - 返回统一使用 `kit.response.*`
 - 服务层保留上游 HaiResult 错误；本例 SvelteKit HTTP 边界按安全消息和状态转换，不能把数据库失败作为 400 或空列表成功。serv/oRPC 普通 procedure 按真实 HaiResult 包络契约验收，不照搬本例状态映射

@@ -172,6 +172,20 @@ HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: 
 
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
 
+## 可选交互挑战
+
+createAuthActions(client) 提供 createCaptcha({operation})，所有登录映射与续期/注册会保留 captcha；sendOtp(identifier,{captcha})、requestPasswordReset(identifier,{captcha}) 接收可选第二参数。框架 AuthPanel 自动求解，自定义表单复用 ALTCHA 协议，证明不进入安全 TokenStorage。
+
+策略、默认值和恢复边界见 [IAM](../iam/README.md)。
+
+## 敏感请求再认证
+
+客户端单次调用的 `options.context.reauthentication` 携带 `reauthenticate` 返回的用途凭据，由请求管线生成 `X-Hai-Reauthentication`。不要写入客户端全局 header、持久存储或日志。服务端同时检查当前权限、资源范围和凭据用途，并原子消费；并发普通请求不会继承该 header。跨域宿主须允许此 header，默认 Serv/Kit 已包含。
+
+## 页面离开会话策略
+
+`session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+
 ## 开发测试
 
 ```bash

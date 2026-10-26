@@ -50,7 +50,7 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                         |
 | `fullstack`                | contract、API、共享界面与所选 Web/App/Desktop；miniapp 仅预留说明 |
 
-`--template minimal|default|full|custom` 选择模块预设，`--features iam,db,...` 选择业务模块。Fullstack 始终保留默认管理界面所需的 IAM、数据库、缓存、加密、存储和审计；未指定 `--features` 时默认开启 feedback 并补齐 Reach。显式功能列表保留可选模块选择，其它应用类型仍需显式启用反馈。默认不安装 AI/ONNX/CUDA。
+`--template minimal|default|full|custom` 选择模块预设，`--features iam,db,...` 选择业务模块。Fullstack 始终保留默认管理界面所需的 IAM、数据库、缓存、加密、存储、审计和用于可选备份/告警的调度器；未指定 `--features` 时默认开启 feedback 并补齐 Reach。显式功能列表保留可选模块选择，其它应用类型仍需显式启用反馈。默认不安装 AI/ONNX/CUDA。
 
 独立 `mobile-app` 选择 IAM 或 crypto 时会安装前端 crypto 并默认启用 typed client 加密传输；未选择 crypto 时可连接明确的明文 API。`PUBLIC_API_TRANSPORT=off` 只用于匹配的明文服务，`PUBLIC_API_KEY_EXCHANGE_PATH` 仅覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
 
@@ -130,9 +130,11 @@ Skill 入口保存任务边界，相邻参考按需读取。`hai init` / `hai ad
 
 UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui 与 [hai-ui-review](templates/skills/hai-ui-review/SKILL.md)；纯 API 模板排除这些前端技能。init/add 保留已有私有入口并补齐缺失参考资源。仓库同职责技能采用同名入口。
 
+fullstack 示例按应用配置分离 `admin`、`audit_admin`、`config_admin`、`business_operator` 与基础 `user`，系统管理员不能接管其他职责账号。CLI 在忽略的 `.env.local` 中为四类账号分别生成随机初始密码，生产须独立注入；已有账号不改密、不重新分配职责。`_iam.yml` 和 `_audit.yml` 按业务启用安全增强，详见生成项目 README。
+
 ### 问题反馈与离线分析
 
-使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。登录用户可提交反馈，管理员才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
+使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。普通成员及业务操作员可提交反馈，business_operator 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口，`config/_feedback.yml` 配置管理员收件人及后台地址。开发 Console 不代表真实邮件；生产设置共享 DB、S3 私有桶和真实 SMTP。
 
 离线工具：`hai feedback summary <包.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view`。查看器仅本机监听，Ctrl+C 关闭，无需生产连接。
 

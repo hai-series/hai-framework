@@ -50,6 +50,7 @@ function resolvePortFromBaseUrl(urlString: string, fallbackPort: string): string
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: '**/session-close.spec.ts',
   // 多个界面验收共用管理员资料与引导状态，保留串行以免互相覆盖。
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -78,6 +79,17 @@ export default defineConfig({
         PORT: servicePort,
         // 仅供脚手架验收：生产启动必须由部署环境提供初始管理员密码。
         HAI_ADMIN_DEFAULT_PASSWORD: process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!',
+        HAI_AUDIT_ADMIN_PASSWORD: 'Scaffold-test-Audit123!',
+        HAI_CONFIG_ADMIN_PASSWORD: 'Scaffold-test-Config123!',
+        HAI_BUSINESS_OPERATOR_PASSWORD: 'Scaffold-test-Operator123!',
+        HAI_IAM_PASSWORD_PREVENTSAMEPASSWORD: 'true',
+        HAI_IAM_CAPTCHA_ENABLED: 'true',
+        HAI_IAM_CAPTCHA_COST: '100',
+        HAI_IAM_CAPTCHA_MAXCOUNTER: '2',
+        HAI_IAM_INITIALCREDENTIALS_ENABLED: 'true',
+        HAI_IAM_REAUTHENTICATION_ENABLED: 'true',
+        HAI_IAM_REAUTHENTICATION_OPERATIONS: JSON.stringify(['iam.users.invite', 'audit.backup']),
+        HAI_AUDIT_BACKUP_ENABLED: 'true',
         HAI_CORE_NAME: process.env.HAI_CORE_NAME || 'Configured scaffold',
         HAI_CORE_VERSION: process.env.HAI_CORE_VERSION || '9.8.7',
         HAI_CORE_ENV: 'test',

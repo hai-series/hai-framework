@@ -1,0 +1,163 @@
+/** 真实 HTTP、IAM 与持久化验证示例职责及可选再鉴别，不替代浏览器加密验收。 */
+import { once } from 'node:events'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { apiContract } from '@h-ai/api-contract'
+import { audit } from '@h-ai/audit'
+import { cache } from '@h-ai/cache'
+import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
+import { serv } from '@h-ai/serv'
+import { storage } from '@h-ai/storage'
+import { AdminUserSchema, {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
+import { afterAll, beforeAll, expect, it } from 'vitest'
+import { initBusinessSettings } from '../src/server/business-settings.js'
+import { createServerProcedures } from '../src/server/procedures/index.js'
+import { APP_DUTIES, seedAppDuties } from '../src/server/security-roles.js'
+
+type Duty = keyof typeof APP_DUTIES
+const actors = new Map<Duty, { token: string, password: string }>()
+const invitations = new Map<string, string>()
+let deliveryUnknown = false
+let directory = ''
+let server: ReturnType<typeof serv.listen> | undefined
+let base = ''
+
+beforeAll(async () => {
+  directory = await mkdtemp(path.join(tmpdir(), 'hai-app-security-'))
+  expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
+  expect((await cache.init({ type: 'memory' })).success).toBe(true)
+  expect((await storage.init({ type: 'local', root: directory })).success).toBe(true)
+  expect((await audit.init({ storage, backup: { enabled: true } })).success).toBe(true)
+  expect((await iam.init({
+    initialCredentials: { enabled: true },
+    passwordReset: { enabled: true, mode: 'email' },
+    reauthentication: { enabled: true, operations: ['iam.users.create', 'iam.users.invite', 'audit.backup', 'business.settings.update'] },
+    onPasswordResetRequest: async (user, token) => {
+      invitations.set(user.username, token)
+      if (deliveryUnknown)
+        throw new Error('Notification delivery outcome is unknown')
+    },
+  })).success).toBe(true)
+  expect((await seedAppDuties()).success).toBe(true)
+  expect((await initBusinessSettings()).success).toBe(true)
+  for (const code of Object.keys(APP_DUTIES) as Duty[]) {
+    const password = `Example-${code}-123!`
+    const user = await iam.user.createUser({ username: code, password })
+    const role = await iam.authz.getRoleByCode(code)
+    if (!user.success || !role.success || !role.data)
+      throw new Error('Missing security actor fixture')
+    expect((await iam.authz.syncRoles(user.data.user.id, [role.data.id])).success).toBe(true)
+    const signedIn = await iam.auth.login({ identifier: code, password })
+    if (!signedIn.success)
+      throw new Error(signedIn.error.message)
+    actors.set(code, { token: signedIn.data.tokens.accessToken, password })
+  }
+  const app = serv.createApp({
+    contract: {{fullstack.contractExportName}},
+    procedures: createServerProcedures({ app: { name: 'Security fixture', version: 'test', env: 'test', defaultLocale: 'en-US', supportedLocales: ['en-US'], startedAt: new Date().toISOString(), frontends: ['web'] } }),
+    iam,
+    http: { openapi: false, docs: false, rpc: false },
+  })
+  server = serv.listen(app, { host: '127.0.0.1', port: 0 })
+  if (!server.server.listening)
+    await once(server.server, 'listening')
+  const address = server.server.address()
+  if (!address || typeof address === 'string')
+    throw new Error('Missing security server address')
+  base = `http://127.0.0.1:${address.port}/api/v1`
+}, 30000)
+
+afterAll(async () => {
+  try {
+    await server?.close()
+    await iam.close()
+    await audit.close()
+    await storage.close()
+    await cache.close()
+    await reldb.close()
+  }
+  finally {
+    if (directory)
+      await rm(directory, { recursive: true, force: true })
+  }
+})
+
+function actor(code: Duty) {
+  const value = actors.get(code)
+  if (!value)
+    throw new Error('Missing security actor')
+  return value
+}
+
+async function proof(code: Duty, operation: string) {
+  const value = actor(code)
+  const result = await iam.auth.reauthenticate(value.token, value.password, operation)
+  if (!result.success)
+    throw new Error(result.error.message)
+  return result.data.ticket
+}
+
+function post(code: Duty, route: string, input: object = {}, ticket?: string) {
+  return fetch(`${base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json', 'authorization': `Bearer ${actor(code).token}`, ...(ticket ? { 'x-hai-reauthentication': ticket } : {}) }, body: JSON.stringify(input) })
+}
+
+it('系统、审计、配置与业务职责的直接 HTTP 请求各有边界', async () => {
+  expect(await (await post('audit_admin', '/admin/users/list')).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  expect(await (await post('admin', '/admin/audit/list')).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  expect(await (await post('admin', '/admin/configuration/update', { notice: 'Rejected' })).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  expect(await (await post('business_operator', '/admin/users/list')).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  const ticket = await proof('config_admin', 'business.settings.update')
+  expect(await (await post('config_admin', '/admin/configuration/update', { notice: 'Authorized public notice' }, ticket)).json()).toMatchObject({ success: true })
+  const info = await fetch(`${base}/app/info`, { method: 'POST' })
+  expect(await info.json()).toMatchObject({ success: true, data: { notice: 'Authorized public notice' } })
+})
+
+it('再鉴别按用途单次使用，临时账号状态变化立即阻止旧会话', async () => {
+  const input = { username: 'temporary-member', password: 'Temporary-example-123!', role: 'user', accountType: 'temporary', accountExpiresAt: new Date(Date.now() + 3600000).toISOString() }
+  expect(await (await post('admin', '/admin/users/create', input)).json()).toMatchObject({ success: false, error: { code: 'hai:iam:027' } })
+  const ticket = await proof('admin', 'iam.users.create')
+  const response = await post('admin', '/admin/users/create', input, ticket)
+  const created = apiContract.haiResultSchema(AdminUserSchema).parse(await response.json())
+  expect(created.success).toBe(true)
+  if (!created.success)
+    return
+  expect(created.data.accountType).toBe('temporary')
+  expect(await (await post('admin', '/admin/users/create', { ...input, username: 'replayed-member' }, ticket)).json()).toMatchObject({ success: false })
+  const login = await iam.auth.login({ identifier: input.username, password: input.password })
+  if (!login.success)
+    throw new Error(login.error.message)
+  expect(await (await post('admin', '/admin/users/update', { id: created.data.id, accountStatus: 'dormant' })).json()).toMatchObject({ success: true })
+  expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
+  expect((await iam.session.refresh(login.data.tokens.refreshToken)).success).toBe(false)
+})
+
+it('设密邀请可完成，投递未知时保留账号；系统账号不能授予另一职责', async () => {
+  const forbidden = await post('admin', '/admin/users/create', { username: 'audit-escalation', password: 'Example-123!', role: 'audit_admin' }, await proof('admin', 'iam.users.create'))
+  expect(await forbidden.json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  const invite = await post('admin', '/admin/users/invite', { username: 'invited-member', email: 'member@example.test' }, await proof('admin', 'iam.users.invite'))
+  expect(await invite.json()).toMatchObject({ success: true })
+  const token = invitations.get('invited-member')
+  expect(token).toBeTruthy()
+  expect((await iam.user.confirmPasswordReset(token!, 'Invited-example-123!')).success).toBe(true)
+  expect((await iam.auth.login({ identifier: 'invited-member', password: 'Invited-example-123!' })).success).toBe(true)
+  deliveryUnknown = true
+  try {
+    const unknown = await post('admin', '/admin/users/invite', { username: 'delivery-unknown-member', email: 'unknown@example.test' }, await proof('admin', 'iam.users.invite'))
+    expect(await unknown.json()).toMatchObject({ success: false, error: { code: 'hai:iam:028' } })
+    const found = await iam.user.listUsers({ search: 'delivery-unknown-member' })
+    expect(found).toMatchObject({ success: true, data: { total: 1 } })
+  }
+  finally { deliveryUnknown = false }
+})
+
+it('只有审计职责可手动备份且私有归档可验证', async () => {
+  const id = crypto.randomUUID()
+  expect(await (await post('admin', '/admin/audit/backup', { id })).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+  const result = await post('audit_admin', '/admin/audit/backup', { id }, await proof('audit_admin', 'audit.backup'))
+  const body: unknown = await result.json()
+  expect(body).toMatchObject({ success: true, data: { id, key: expect.stringContaining('hai-private/audit-backups/'), sha256: expect.stringMatching(/^[a-f\d]{64}$/) } })
+  const verified = await audit.backup.verify(`hai-private/audit-backups/${id}.jsonl`)
+  expect(verified.success).toBe(true)
+})
