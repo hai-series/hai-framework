@@ -414,10 +414,20 @@ export type AuthUiConfig = z.infer<typeof AuthUiConfigSchema>
 export const SessionConfigSchema = z.object({
   /** 新会话的默认 access 时长（秒）；创建时可用 maxAge 覆盖，滑动/刷新沿用会话固有时长。 */
   maxAge: z.number().int().min(60).default(86400),
+  /** 页面离开时尽力撤销会话；浏览器关闭不可保证，仍应配置服务端闲置/绝对期限。 */
+  endOnPageHide: z.boolean().default(false),
   /** 是否滑动窗口（每次访问刷新过期时间） */
   sliding: z.boolean().default(true),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
+  /** 单设备超限策略：replace 顶旧保新，reject 保留旧会话并拒绝新登录。 */
+  singleDeviceMode: z.enum(['replace', 'reject']).default('replace'),
+  /** 每个用户的最大有效会话数，0 不限制；包含 access 到期但仍可刷新的会话。 */
+  maxSessions: z.number().int().min(0).max(10000).default(0),
+  /** 闲置期限（秒），0 关闭；真实访问记录活动，自动刷新不延长闲置；access/refresh 均执行。 */
+  idleTimeout: z.number().int().min(0).max(31536000).default(0),
+  /** 从首次登录起的绝对期限（秒），0 关闭；刷新不能重新起算。 */
+  absoluteTimeout: z.number().int().min(0).max(31536000).default(0),
   /** refreshToken 独立有效期（秒，默认 604800 = 7天）；从签发时刻起算，access 到期仍可刷新。 */
   refreshTokenMaxAge: z.number().int().min(3600).default(604800),
 })

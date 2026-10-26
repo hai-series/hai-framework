@@ -45,6 +45,11 @@ export function createAuthApi(iam: IamFunctions) {
     return result.success ? ok(result.data) : fromError(result.error)
   }
   return {
+    closeSession: handler(async ({ request, cookies }) => {
+      const input = await validateFormOrFail(request, IamLogoutInputSchema)
+      // 此入口不能清除 Cookie：页面离开响应可能晚于下一文档的新登录。
+      return response(await iam.auth.logout(input.accessToken ?? getAccessToken(request, cookies) ?? ''))
+    }),
     publicConfig: handler(() => ok(iam.publicConfig)),
     renewPassword: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamRenewPasswordInputSchema)

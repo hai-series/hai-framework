@@ -22,6 +22,7 @@ import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.
 import { createAuthzOperations } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
+import { observeApiKeys, observeAuth, observeAuthorization, observeSessions, observeUsers } from './iam-audit.js'
 import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { migrateIam } from './iam-migration.js'
@@ -187,8 +188,9 @@ export const iam: IamFunctions = {
       if (!sessionResult.success) {
         return sessionResult
       }
+      const sessions = observeSessions(sessionResult.data)
 
-      const authzResult = await createAuthzOperations({ config: parsed, session: sessionResult.data })
+      const authzResult = await createAuthzOperations({ config: parsed, session: sessions })
       if (!authzResult.success) {
         return authzResult
       }
@@ -196,8 +198,8 @@ export const iam: IamFunctions = {
 
       const authnResult = await createAuthnOperations({
         config: parsed,
-        sessionFunctions: sessionResult.data,
-        authzFunctions: authzResult.data,
+        sessionFunctions: sessions,
+        authzFunctions: authorization,
         ldapClientFactory,
         ldapSyncUser,
         onOtpSendEmail,
@@ -210,8 +212,8 @@ export const iam: IamFunctions = {
       const userResult = await createUserOperations({
         config: parsed,
         passwordStrategyResult: authnResult.data.passwordStrategyResult,
-        sessionFunctions: sessionResult.data,
-        authzFunctions: authzResult.data,
+        sessionFunctions: sessions,
+        authzFunctions: authorization,
         onPasswordResetRequest,
       })
       if (!userResult.success) {
@@ -228,9 +230,9 @@ export const iam: IamFunctions = {
       }
 
       // 所有子功能创建成功，原子性赋值到模块状态
-      currentSession = sessionResult.data
-      currentAuthz = authzResult.data
-      currentUser = userResult.data
+      currentSession = sessions
+      currentAuthz = authorization
+      currentUser = users
       currentConfig = parsed
       currentPublicConfig = buildIamPublicConfig(parsed, { ...config, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms })
       currentApiKey = authnResult.data.apiKeyFunctions ? observeApiKeys(authnResult.data.apiKeyFunctions) : null

@@ -78,6 +78,14 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       return iam.auth.logout(token)
     })
 
+    .route('auth.closeSession', ({ input, context }) => {
+      // 页面离开只撤销持有的会话，不清 Cookie，避免迟到响应覆盖下一文档的新登录。
+      const token = input.accessToken ?? context.accessToken
+      if (!token)
+        return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
+      return iam.auth.logout(token)
+    })
+
     .route('auth.currentUser')
     .auth()
     .handle(async ({ context }) => {

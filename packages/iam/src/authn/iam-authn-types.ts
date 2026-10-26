@@ -8,6 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { AuthStrategyType } from '../iam-config.js'
 import type { AuthResult, Session } from '../session/iam-session-types.js'
+import type { IssuedTicket } from '../ticket/iam-ticket-types.js'
 import type { RegisterOptions, User } from '../user/iam-user-types.js'
 
 // ─── 凭证类型 ───

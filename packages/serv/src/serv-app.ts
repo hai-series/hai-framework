@@ -412,8 +412,11 @@ export function createApp<
     ?? (iamRef ? (token: string) => iamRef.auth.verifyToken(token) : undefined)
   const contextFactory: CreateServContext = options.createContext
     ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
-  const resolveIp = createClientIpResolver(http.trustedProxies)
-  const createContext: CreateServContext = input => contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
+  const createContext: CreateServContext = async (input) => {
+    const context = await contextFactory({ ...input, ip: resolveIp(input.request, input.remoteAddress) })
+    requestAuditContexts.set(input.request, { actor: context.session ? { id: context.session.userId, username: context.session.username, roles: [...context.session.roles] } : null, scopeId: context.scopeId })
+    return context
+  }
 
   // Step 4：准备文档 spec 的懒缓存。只有真正访问 openapi/docs 时才生成，避免启动时做重活。
   // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。

@@ -87,6 +87,9 @@ export const iamContract = {
     logout: route({ method: 'POST', path: '/auth/logout', operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
       .input(IamLogoutInputSchema)
       .output(HaiVoidResultSchema),
+    closeSession: route({ method: 'POST', path: '/auth/session/close', operationId: 'iam.auth.closeSession', summary: 'Revoke departing client session without clearing newer cookies', tags: ['iam', 'auth'] })
+      .input(IamLogoutInputSchema)
+      .output(HaiVoidResultSchema),
     currentUser: route({ method: 'GET', path: '/auth/me', operationId: 'iam.auth.currentUser', summary: 'Get current user and access scope', tags: ['iam', 'auth'] })
       .output(haiResultSchema(IamCurrentUserSchema)),
     refresh: route({ method: 'POST', path: '/auth/refresh', operationId: 'iam.auth.refresh', summary: 'Refresh access token', tags: ['iam', 'auth'] })

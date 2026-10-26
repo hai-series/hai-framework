@@ -4,6 +4,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { ApiClient } from './api-client-types.js'
 import { core } from '@h-ai/core'
 
+// 仅持有本机 DOM 监听器；业务会话真值仍由服务端撤销与超时决定。
 const pageExitBindings = new WeakMap<object, Set<() => void>>()
 
 /**
@@ -82,8 +83,20 @@ export function createIamAuthActions(client: {
         return () => {}
       const target = window
       let sent = false
+      const onPageHide = (event: PageTransitionEvent) => {
+        if (event.persisted || sent)
+          return
+        sent = true
+        // 不清理 Cookie/本地存储，避免迟到响应覆盖下一文档刚建立的新身份。
+        void client.iam.auth.closeSession({}, { context: { keepalive: true, autoRefresh: false } }).then((result) => {
+          if (!result.success)
+            core.logger.warn('Page exit session revocation failed', { errorCode: result.error.code })
+        }).catch(() => core.logger.warn('Page exit session request did not complete'))
+      }
+      target.addEventListener('pagehide', onPageHide)
       const bindings = pageExitBindings.get(client.auth) ?? new Set<() => void>()
       const stop = () => {
+        target.removeEventListener('pagehide', onPageHide)
         bindings.delete(stop)
         if (!bindings.size)
           pageExitBindings.delete(client.auth)

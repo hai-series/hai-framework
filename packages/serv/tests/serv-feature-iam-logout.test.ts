@@ -65,7 +65,7 @@ beforeAll(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
   expect((await cache.init({ type: 'redis', host: redis.getHost(), port: redis.getMappedPort(6379) })).success).toBe(true)
   expect((await iam.init({ seedDefaultData: false, rbac: { enabled: false }, session: { sliding: false } })).success).toBe(true)
-  const app = serv.createApp({ contract, procedures: { iam: createIamProcedures({ iam }) }, iam })
+  const app = serv.createApp({ contract, procedures: { iam: createIamProcedures({ iam }) }, iam, refreshCookie: { secure: false } })
   node = serv.listen(app, { host: '127.0.0.1', port: 0 })
   await once(node.server, 'listening')
   const address = node.server.address()
@@ -137,4 +137,26 @@ it('不能仅凭userId撤销他人会话；无令牌返回失败，持有未知�
   expect((await iam.auth.verifyToken(authenticated.tokens.accessToken)).success).toBe(true)
   expect((await client.iam.auth.logout({ accessToken: 'not-a-session-token' })).success).toBe(true)
   expect((await iam.auth.verifyToken(authenticated.tokens.accessToken)).success).toBe(true)
+})
+
+it('页面离开撤销旧会话和refresh但不清除Cookie，迟到请求不影响同账号的新登录', async () => {
+  const { user, tokens } = await login('http-page-close')
+  const next = await iam.auth.login({ identifier: user.username, password: 'ExampleOnly123!' })
+  if (!next.success)
+    throw new Error(next.error.message)
+  const found = await iam.session.get(tokens.accessToken)
+  if (!found.success || !found.data)
+    throw new Error('Missing old session')
+  expect((await iam.session.update(tokens.accessToken, { expiresAt: new Date(Date.now() - 1) }, found.data.version)).success).toBe(true)
+  const response = await fetch(`${baseUrl}/auth/session/close`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'authorization': `Bearer ${tokens.accessToken}` },
+    body: '{}',
+  })
+  expect(response.status).toBe(200)
+  expect(await response.json()).toMatchObject({ success: true })
+  expect(response.headers.getSetCookie()).toEqual([])
+  expect((await iam.session.refresh(tokens.refreshToken)).success).toBe(false)
+  expect((await iam.auth.verifyToken(next.data.tokens.accessToken)).success).toBe(true)
+  expect((await iam.session.refresh(next.data.tokens.refreshToken)).success).toBe(true)
 })

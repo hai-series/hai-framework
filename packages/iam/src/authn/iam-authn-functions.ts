@@ -328,7 +328,11 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
   async function buildAuthResult(user: AuthenticatedUser, apiKey?: ApiKey): Promise<HaiResult<AuthResult>> {
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    const stored = await userRepository.findById(user.id)
+    if (!stored.success)
+      return stored
     if (!stored.data || !isUserActive(stored.data))
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     const passwordState = checkPasswordState(stored.data, config.password)
     if (!passwordState.success)
       return passwordState
@@ -361,6 +365,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     }
 
     // 只有真正签发会话的登录才刷新最近使用时间；配额/重复登录拒绝不能延缓休眠。
+    const recorded = await userRepository.recordSuccessfulLogin(user.id)
+    if (!recorded.success) {
+      const revoked = await sessionFunctions.delete(session.accessToken)
+      if (!revoked.success)
+        logger.error('Failed to revoke session after login timestamp write failure', { userId: user.id, error: revoked.error })
+      return recorded
+    }
+
     const { credentialVersion, ...publicUser } = user
     void credentialVersion
     return ok({
@@ -404,11 +416,31 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return authResult as HaiResult<AuthResult>
     }
 
-    const result = await buildAuthResult(authResult.data)
+    const result = await buildAuthResult(authResult.data, undefined, context)
     if (result.success) {
       logger.info('Login succeeded', { type, userId: authResult.data.id })
     }
     return result
+  }
+
+  async function verifyCurrentSession(accessToken: string): Promise<HaiResult<Session>> {
+    const session = await sessionFunctions.verifyToken(accessToken)
+    if (!session.success)
+      return session
+    const [user, authorization] = await Promise.all([
+      userRepository.findById(session.data.userId),
+      authzFunctions.getUserAuthorization(session.data.userId),
+    ])
+    if (!user.success)
+      return user
+    if (!user.data?.enabled)
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
+      return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+    if (!authorization.success)
+      return authorization
+    const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }
+    return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
   }
 
   return { loginRegisteredUser: async (user) => {
@@ -440,7 +472,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       const authenticated = await apiKeyStrategy.authenticate({ type: 'apikey', ...credentials })
       if (!authenticated.success)
         return authenticated
-      return buildAuthResult(authenticated.data.user, authenticated.data.apiKey)
+      return buildAuthResult(authenticated.data.user, authenticated.data.apiKey, context)
     },
 
     async logout(accessToken: string): Promise<HaiResult<void>> {

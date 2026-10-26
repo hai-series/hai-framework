@@ -279,7 +279,7 @@ export const IamPublicConfigSchema = z.object({
   otp: z.object({ length: z.number(), resendInterval: z.number() }),
   agreements: IamAgreementDisplaySchema,
   ui: z.object({ variant: z.enum(['card', 'split']), title: z.string().optional(), subtitle: z.string().optional(), brandTitle: z.string().optional(), brandText: z.string().optional(), logoUrl: z.string().optional(), illustrationUrl: z.string().optional() }),
-  session: z.object({ maxAge: z.number() }),
+  session: z.object({ maxAge: z.number(), endOnPageHide: z.boolean().default(false) }),
 })
 
 /**
