@@ -148,6 +148,8 @@ pnpm build --target docker
 # .env.prod と接続先を設定し、既存の API/Web イメージを公開
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
+# 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
+pnpm run deploy --env prod --build --services "app,web"
 # 接続できない場合はパッケージを手で移動し、同梱 README に従って起動
 pnpm run deploy --env prod --build --bundle-only
 ```

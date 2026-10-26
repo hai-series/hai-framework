@@ -56,11 +56,13 @@ pnpm dev
 
 ### Fullstack mini 管理后台
 
-提供用户管理、角色、审计日志、头像和个人设置，以及主题、语言、引导和帮助中心。首次登录使用 `admin`，随机密码在根 `.env.local` 的 `HAI_ADMIN_DEFAULT_PASSWORD`；已有用户时不会重设密码。模板业务可按需求修改，权限检查始终在服务端执行。
+提供用户管理、角色、审计日志、头像和个人设置，以及主题、语言、引导和帮助中心。首次登录使用 `admin`，随机密码在当前环境 `.env.dev/.env.test/.env.prod` 的 `HAI_ADMIN_DEFAULT_PASSWORD`；已有用户时不会重设密码。模板业务可按需求修改，权限检查始终在服务端执行。
 
-生成的 fullstack 项目将初始管理员密码和开发传输密钥环保存在被忽略的 `.env.local`；部署环境可在 `.env.<mode>.local` 覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；应从 Secret Manager 分发同一有效密钥环，不能为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点复用同一有效密钥环，可直接加载环境文件，也可通过 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
 
 ### 应用配置与显示
+
+模板默认使用 `pretty` 日志并安装运行依赖 `pino-pretty`；`HAI_CORE_LOGGING_FORMAT=json` 可切换为结构化输出。启动失败保留模块、错误码与缺失配置字段；端口冲突显示 `EADDRINUSE`、地址和端口。
 
 运行参数见 `.env.example`。公共基础 `.env` 与 `.env.dev/.env.test/.env.prod` 提交 Git，私有值放 `.env.local`。覆盖顺序为进程环境 > 本机私有文件 > 所选环境 > 公共基础。API 模板在服务目录放环境文件，fullstack 在工程根。模块 YAML、环境覆盖和显示信息说明见[使用指南](../../docs/usage/README.md#3-配置环境再开始开发)。
 
@@ -101,12 +103,16 @@ CLI 在过滤调用者的 `HAI_/PUBLIC_/VITE_` 后，只注入内部生成的 `H
 pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
+# 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
+pnpm run deploy --env prod --build --services "app,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时取工程根目录名，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、凭据缓存文件名及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时取工程根目录名，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-部署名属于资源身份。旧版已部署项目若需沿用原目录、数据卷、凭据和增量基线，在项目 deploy 脚本保留 `--project-name hai-delivery-serv`，环境仍由 `--env test` 追加，并保留原凭据缓存。只修改 `deploy-target.json.directory` 不能迁移 Compose 资源；更名需另行迁移数据及建立新基线，工具不自动搬移或删除旧资源。已有离线包须重新生成。
+部署名属于资源身份。旧版已部署项目若需沿用原目录、数据卷、凭据和增量基线，在项目 deploy 脚本保留 `--project-name hai-delivery-serv`，环境仍由 `--env test` 追加，并保留服务器凭据状态。只修改 `deploy-target.json.directory` 不能迁移 Compose 资源；更名需另行迁移数据及建立新基线，工具不自动搬移或删除旧资源。已有离线包须重新生成。
+
+自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。不提供旧版本密码状态迁移。
 
 完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。交互式仅打包在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存到 `.env.<环境>.local` 并用于本次和后续 target；`--yes` 或跳过时复用已有连接。交付目录仅含 tar、deploy-local.sh、read-target.awk、README.txt、带逐项说明的 `deploy-target.json` 与 Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh`。上传前核对 target 并补齐缺项，两个脚本均读取此文件，支持 key/agent 和 password，均无需 Node/pnpm。target 只引用 `passwordEnv`（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）；密码取自操作机环境，仅进入本次 SSH/SCP 子进程，不进入应用环境或包内。修改 target 仅影响本包，不回写工程。完全隔离的 Linux 服务器复制整个目录后运行 `sh deploy-local.sh`，自动解包部署。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
 

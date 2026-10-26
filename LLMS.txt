@@ -89,7 +89,7 @@ return result
 | 需求/设计文档与 AI 生成准备审查 | [hai-spec-review](packages/cli/templates/skills/hai-spec-review/SKILL.md)，以用户指定业务文档为基线检查完备性、歧义、技术正确性与命名一致性；模板差异列为适配项，真实问题未解决不判定可生成 |
 | 文档驱动的任务规划、实施、返修与变更同步 | [hai-spec-implement](packages/cli/templates/skills/hai-spec-implement/SKILL.md)，维护任务与已验收 Git 基线；文档提交后比较固定快照，更新/新增任务，独立分支 TDD、验证、合并，整体验收后推进基线；返修保留原任务与历史 |
 | 生成应用新增/修改/修复功能 | [hai-app-create](packages/cli/templates/skills/hai-app-create/SKILL.md)，先读 [能力选择与安全质量规则](packages/cli/templates/skills/hai-app-create/development.md)；按实际版本/目标端复用适用功能和配置 |
-| Fullstack 默认管理后台与验证 | [CLI 用法](packages/cli/README.md#fullstack-mini-管理后台)；生成含随机初始管理员密码的私有 `.env`；Web/App/Desktop 共享管理界面、typed client，使用 IAM 默认认证 procedures 和 UI 公开主题子路径，保留应用业务守卫 |
+| Fullstack 默认管理后台与验证 | [CLI 用法](packages/cli/README.md#fullstack-mini-管理后台)；创建时分别在 `.env.dev/.env.test/.env.prod` 生成不同随机初始管理员密码及 transport ring，克隆共享环境配置；默认 pretty 日志并安装 pino-pretty；Web/App/Desktop 共享管理界面、typed client，使用 IAM 默认认证 procedures 和 UI 公开主题子路径，保留应用业务守卫 |
 | 生成应用审查/测试 | [hai-app-review](packages/cli/templates/skills/hai-app-review/SKILL.md) / [hai-app-tests](packages/cli/templates/skills/hai-app-tests/SKILL.md) |
 | CI / PR 审查 | [hai-ci](packages/cli/templates/skills/hai-ci/SKILL.md) / [hai-pr-review](packages/cli/templates/skills/hai-pr-review/SKILL.md) |
 | 框架升级到最新/指定版本、差异分析与 skills 同步 | [hai-framework-sync](packages/cli/templates/skills/hai-framework-sync/SKILL.md)，发现发布版本，处理用户选择/阻塞，迁移并验证 |

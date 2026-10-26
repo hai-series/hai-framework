@@ -206,6 +206,12 @@ export async function checkPackages(packages, { examples = true } = {}) {
       // 内部示例保留项目别名；它们的目的为解释实现，不冒充公开入口的可消费性证明。
       const config = ts.readConfigFile(join(root, 'tsconfig.json'), ts.sys.readFile)
       const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, root)
+      // 内部源码沿用所属包的环境声明；定向检查 UI 时也应识别其 CSS 模块导入。
+      for (const pkg of packages) {
+        const ambient = join(root, 'packages', pkg, 'ambient.d.ts')
+        if (existsSync(ambient))
+          internalEdits.set(ambient, readFileSync(ambient, 'utf8'))
+      }
       for (const [file, source] of svelteShims)
         internalEdits.set(file, source)
       failures.push(...typecheckVirtualFiles(internalEdits, { ...parsed.options, noEmit: true, noUnusedLocals: false, noUnusedParameters: false, jsx: ts.JsxEmit.Preserve }).map(diagnosticText))

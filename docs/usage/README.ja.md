@@ -83,7 +83,7 @@ fullstack では `packages/my-app-contract` が API 契約、`packages/my-app-se
 | `.env.prod` | 本番環境の公開設定 | する |
 | `.env.local` | このマシンの非公開設定、認証情報、SSH パスなど | しない |
 
-優先順位は **既存のプロセス変数 > `.env.local` > `.env.<環境>` > `.env`** です。環境を切り替えるときは `.env.local` も確認してください。そこにある接続先は別環境を指したままかもしれません。JSON でオブジェクト全体を指定した場合は、個別の子フィールドより優先されます。利用できる変数と値は生成プロジェクトの `.env.example`、フレームワーク全体の一覧は[ルート `.env.example`](../../.env.example)を参照してください。コミットするファイルには公開設定だけを入れ、実際の認証情報は非公開ファイルかデプロイ用プロセス変数で管理します。
+優先順位は **既存のプロセス変数 > `.env.local` > `.env.<環境>` > `.env`** です。環境を切り替えるときは `.env.local` も確認してください。そこにある接続先は別環境を指したままかもしれません。JSON でオブジェクト全体を指定した場合は、個別の子フィールドより優先されます。利用できる変数と値は生成プロジェクトの `.env.example`、フレームワーク全体の一覧は[ルート `.env.example`](../../.env.example)を参照してください。CLI が環境ごとに生成する共有初期パスワードと転送鍵リングを除き、実際の認証情報は非公開ファイルかデプロイ用プロセス変数で管理します。
 
 ```sh
 pnpm dev
@@ -186,9 +186,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 環境と接続先を用意する
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定ならルートディレクトリ名を使います。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、認証キャッシュのファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定ならルートディレクトリ名を使います。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、元の認証キャッシュも保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
+名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、サーバー認証状態も保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
 
 `.env.<環境>` とプロジェクトルートの `hai.json` を用意します。`build` にイメージ・ネイティブ構築、`deploy` にアプリ全体の配置設定を保存します。fullstack は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-service を実行依存とモジュール YAML の走査入口として使います。フロントとバックエンドは同じ設定を共有します。
 
@@ -198,11 +198,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 直接配置では不足する SSH 設定を初回に入力し、鍵/agent とパスワードに対応します。SSH は `.env.<環境>.local` に保存し、パスワードは非表示入力、秘密鍵はパスのみです。ミドルウェア公開設定は `.env.<環境>`、秘密値は `.env.<環境>.local` に保存します。設定後は `--yes` で質問を省略でき、ミドルウェアを保持する場合は `--skip-middleware` を追加します。bundle-only は SSH を質問せず、既存接続を `deploy-target.json` に含めます。この編集は現在の配布物だけに適用されます。離線パスワードは target が参照する操作機の環境変数（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）から読み、配布物には含めません。
 
-配布ごとに `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。`--env test` は既定で `NODE_ENV=test`、dev は development、prod とその他は production です。明示設定が優先されます。この生成物は次回設定の保存元ではなく、構築の最適化モードとも別です。旧パッケージは再生成してください。既存ボリュームを使う際は、走査対象サービスの `.hai/deploy/runtime/<プロジェクト>-<環境>.secrets.json` の固定認証情報を保持します。
+配布ごとに `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。`--env test` は既定で `NODE_ENV=test`、dev は development、prod とその他は production です。明示設定が優先されます。この生成物は次回設定の保存元ではなく、構築の最適化モードとも別です。旧パッケージは再生成してください。
+
+自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧版の認証状態移行は提供しません。
 
 サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、app/Web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
 
-生成 fullstack の初期管理者パスワードと開発用転送鍵リングは、Git 対象外の `.env.local` に保存され、`.env.<mode>.local` で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。Secret Manager で全ノードに同じ有効リングを配布し、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
+作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
 
 #### 本当に必要なミドルウェアだけを設定する
 
@@ -220,6 +222,8 @@ pnpm build --target desktop --platform windows --arch x64
 pnpm run deploy --env prod --build
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
+# 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
+pnpm run deploy --env prod --build --services "app,web"
 ```
 
 部分更新には成功済みの完全インストールと一致するポート・構成が必要です。Compose 標準の設定合成で未選択サービス、設定、ボリュームを保持します。スクリプトはプロジェクト名とサービス名で選択した旧コンテナーだけを削除し、ボリュームを保持します。その後 `compose up -d --no-deps --no-build --pull never --no-recreate web` で新しいコンテナーを作成します。他のコンテナーは稼働したままで、全体の down は実行しません。自前 S3 のバケットはアプリの `storage.init()` が任意設定 `createBucket` に従って初期化します。

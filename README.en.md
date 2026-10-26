@@ -148,6 +148,8 @@ pnpm build --target docker
 # Configure .env.prod and the destination, then publish existing API/Web images
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
+# Use one --services with comma-separated names; quote the value for PowerShell
+pnpm run deploy --env prod --build --services "app,web"
 # Without connectivity between machines, transfer and start the bundle manually
 pnpm run deploy --env prod --build --bundle-only
 ```

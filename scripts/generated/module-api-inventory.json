@@ -32506,6 +32506,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "IconButton",
               "kind": "value+type",
               "declaration": "IconButton",
@@ -32566,6 +32572,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "isLocaleSupported",
               "kind": "value",
               "declaration": "isLocaleSupported",
@@ -32582,6 +32594,18 @@
               "kind": "value",
               "declaration": "isNativeApp",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "JsonViewerProps",
+              "kind": "type",
+              "declaration": "JsonViewerProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "LanguageSwitch",
@@ -34706,6 +34730,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "IconButton",
               "kind": "value+type",
               "declaration": "IconButton",
@@ -34766,6 +34796,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "isLocaleSupported",
               "kind": "value",
               "declaration": "isLocaleSupported",
@@ -34782,6 +34818,18 @@
               "kind": "value",
               "declaration": "isNativeApp",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "JsonViewerProps",
+              "kind": "type",
+              "declaration": "JsonViewerProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "LanguageSwitch",
@@ -36906,6 +36954,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "IconButton",
               "kind": "value+type",
               "declaration": "IconButton",
@@ -36966,6 +37020,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "isLocaleSupported",
               "kind": "value",
               "declaration": "isLocaleSupported",
@@ -36982,6 +37042,18 @@
               "kind": "value",
               "declaration": "isNativeApp",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "JsonViewerProps",
+              "kind": "type",
+              "declaration": "JsonViewerProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "LanguageSwitch",
@@ -38118,6 +38190,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "MessageBoxContainer",
               "kind": "value+type",
               "declaration": "MessageBoxContainer",
@@ -38386,6 +38464,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "MessageBoxContainer",
               "kind": "value+type",
               "declaration": "MessageBoxContainer",
@@ -38651,6 +38735,12 @@
               "name": "InfiniteScroll",
               "kind": "value+type",
               "declaration": "InfiniteScroll",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -39564,6 +39654,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "IconButton",
               "kind": "value+type",
               "declaration": "IconButton",
@@ -39591,6 +39687,18 @@
               "name": "Input",
               "kind": "value+type",
               "declaration": "Input",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -40954,6 +41062,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "IconButton",
               "kind": "value+type",
               "declaration": "IconButton",
@@ -40981,6 +41095,18 @@
               "name": "Input",
               "kind": "value+type",
               "declaration": "Input",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -42344,6 +42470,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "IconButton",
               "kind": "value+type",
               "declaration": "IconButton",
@@ -42371,6 +42503,18 @@
               "name": "Input",
               "kind": "value+type",
               "declaration": "Input",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "JsonViewer",
+              "kind": "value+type",
+              "declaration": "JsonViewer",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -43452,6 +43596,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MarkdownBlockFormatKind",
               "kind": "type",
               "declaration": "MarkdownBlockFormatKind",
@@ -43702,6 +43858,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "MarkdownBlockFormatKind",
               "kind": "type",
               "declaration": "MarkdownBlockFormatKind",
@@ -43949,6 +44117,18 @@
               "name": "downloadAiDocument",
               "kind": "value",
               "declaration": "downloadAiDocument",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -46470,6 +46650,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ImageUpload",
               "kind": "value+type",
               "declaration": "ImageUpload",
@@ -46480,6 +46666,12 @@
               "kind": "type",
               "declaration": "ImageUploadProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "LanguageSwitch",
@@ -47482,6 +47674,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ImageUpload",
               "kind": "value+type",
               "declaration": "ImageUpload",
@@ -47492,6 +47690,12 @@
               "kind": "type",
               "declaration": "ImageUploadProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "LanguageSwitch",
@@ -48494,6 +48698,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "highlightCode",
+              "kind": "value",
+              "declaration": "highlightCode",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ImageUpload",
               "kind": "value+type",
               "declaration": "ImageUpload",
@@ -48504,6 +48714,12 @@
               "kind": "type",
               "declaration": "ImageUploadProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "isLanguageSupported",
+              "kind": "value",
+              "declaration": "isLanguageSupported",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "LanguageSwitch",

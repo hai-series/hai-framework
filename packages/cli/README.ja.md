@@ -56,11 +56,13 @@ pnpm dev
 
 ### Fullstack mini 管理画面
 
-ユーザー、ロール、監査ログ、アバター、個人設定、テーマ、言語、操作ガイドとヘルプを提供します。初回は `admin` と、ルート `.env.local` のランダムな `HAI_ADMIN_DEFAULT_PASSWORD` でログインします。既存ユーザーのパスワードは変更しません。例の業務ルールは変更できますが、認可はサーバーで行います。
+ユーザー、ロール、監査ログ、アバター、個人設定、テーマ、言語、操作ガイドとヘルプを提供します。初回は `admin` と、選択環境の `.env.dev/.env.test/.env.prod` のランダムな `HAI_ADMIN_DEFAULT_PASSWORD` でログインします。既存ユーザーのパスワードは変更しません。例の業務ルールは変更できますが、認可はサーバーで行います。
 
-生成 fullstack の初期管理者パスワードと開発用転送鍵リングは、Git 対象外の `.env.local` に保存され、`.env.<mode>.local` で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。Secret Manager で全ノードに同じ有効リングを配布し、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
+作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
 
 ### アプリ設定と表示
+
+テンプレートは `pretty` ログを既定とし、実行依存に `pino-pretty` を追加します。`HAI_CORE_LOGGING_FORMAT=json` で JSON に切り替えます。起動失敗はモジュール・エラーコード・設定項目、ポート競合は `EADDRINUSE`・アドレス・ポートを表示します。
 
 設定項目は `.env.example` を参照します。共通 `.env` と `.env.dev/.env.test/.env.prod` は Git に保存し、秘密値は `.env.local` に置きます。優先順はプロセス環境 > ローカル秘密ファイル > 選択環境 > 共通値です。API 工程はサービスディレクトリ、fullstack はルートに配置します。YAML・環境上書き・表示情報は[利用ガイド](../../docs/usage/README.ja.md)を参照してください。
 
@@ -101,12 +103,16 @@ CLI は呼び出し元の `HAI_/PUBLIC_/VITE_` を除外し、内部で生成し
 pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
+# 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
+pnpm run deploy --env prod --build --services "app,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定ならルートディレクトリ名を使います。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、認証キャッシュのファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定ならルートディレクトリ名を使います。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、元の認証キャッシュも保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
+名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、サーバー認証状態も保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
+
+自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧版の認証状態移行は提供しません。
 
 完全配布にはアプリと自前ミドルウェアのイメージが入ります。デプロイキャッシュ、tar と操作ディレクトリは既定でプロジェクトルートの `.hai/deploy/<環境>/` に置きます。`--output` でコマンドの作業ディレクトリを基準とする tar 出力先を指定できます。対話式の梱包では構築・ミドルウェア設定後、梱包前に SSH 設定の追加・変更を確認します。`.env.<環境>.local` に保存し、今回と次回以降の target に反映します。`--yes` またはスキップ時は既存設定を使います。配布ディレクトリには tar、deploy-local.sh、read-target.awk、README.txt、項目説明付き `deploy-target.json`、Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh` を生成します。アップロード前に target を確認して不足項目を補います。両スクリプトともこのファイルを読み、key/agent と password に対応し、Node/pnpm は不要です。target は `passwordEnv`（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）だけを参照し、パスワードは操作 PC の環境から今回の SSH/SCP 子プロセスだけに渡します。アプリ環境や配布物には含めません。target の変更はその配布物だけに適用し、プロジェクトには書き戻しません。隔離 Linux サーバーにはディレクトリ全体をコピーし、`sh deploy-local.sh` で自動展開・配置します。初回は完全配布が必要で、部分更新は他サービスとボリュームを維持します。各手順の結果を表示し、失敗は非ゼロで終了して復元を試みます。前提・キャッシュ・版管理・復元は[デプロイ説明](../deploy/README.ja.md)を参照してください。
 

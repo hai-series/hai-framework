@@ -82,7 +82,13 @@
     }
   }
 
-  /** 节点自描述：标量直接渲染，容器交给递归片段。 */
+  /**
+   * 节点自描述：标量直接渲染，容器交给递归片段。
+   * @example 模块内部上下文
+   * ```ts
+   * const node: NodeModel = { key: 'enabled', value: true, depth: 1 }
+   * ```
+   */
   interface NodeModel {
     key: string | null
     value: unknown

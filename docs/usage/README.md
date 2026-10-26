@@ -83,7 +83,7 @@ fullstack 中，`packages/my-app-contract` 定义接口，`packages/my-app-serv`
 | `.env.prod` | 生产环境的公共覆盖 | 是 |
 | `.env.local` | 当前机器的私有配置、连接凭据、SSH 路径等 | 否 |
 
-同名变量优先级为：**已有进程变量 > `.env.local` > `.env.<环境>` > `.env`**。因此切换环境前也要检查本机覆盖，避免 `.env.local` 中的连接仍指向另一环境。复杂对象可用 JSON 整体覆盖，整体节点优先于子字段；变量含义和可用值以生成工程的 `.env.example` 为准，框架完整目录见[根 `.env.example`](../../.env.example)。提交的环境文件只放公共配置，真实凭据留在本机文件或部署进程中。
+同名变量优先级为：**已有进程变量 > `.env.local` > `.env.<环境>` > `.env`**。因此切换环境前也要检查本机覆盖，避免 `.env.local` 中的连接仍指向另一环境。复杂对象可用 JSON 整体覆盖，整体节点优先于子字段；变量含义和可用值以生成工程的 `.env.example` 为准，框架完整目录见[根 `.env.example`](../../.env.example)。除 CLI 随机生成、按环境共享的初始管理员密码和传输密钥环外，其他真实凭据留在本机文件或部署进程中。
 
 ```sh
 pnpm dev
@@ -199,9 +199,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### 先准备环境与部署目标
 
-默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时取工程根目录名，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、凭据缓存文件名及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时取工程根目录名，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-部署名属于资源身份。旧版已部署项目若需沿用原目录、数据卷、凭据和增量基线，在项目 deploy 脚本保留 `--project-name hai-delivery-serv`，环境仍由 `--env test` 追加，并保留原凭据缓存。只修改 `deploy-target.json.directory` 不能迁移 Compose 资源；更名需另行迁移数据及建立新基线，工具不自动搬移或删除旧资源。已有离线包须重新生成。
+部署名属于资源身份。旧版已部署项目若需沿用原目录、数据卷、凭据和增量基线，在项目 deploy 脚本保留 `--project-name hai-delivery-serv`，环境仍由 `--env test` 追加，并保留服务器凭据状态。只修改 `deploy-target.json.directory` 不能迁移 Compose 资源；更名需另行迁移数据及建立新基线，工具不自动搬移或删除旧资源。已有离线包须重新生成。
 
 准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-service`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
@@ -211,11 +211,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 直接部署首次补齐 SSH 连接和认证方式，支持私钥/agent 和密码；SSH 参数保存在 `.env.<环境>.local`，密码隐藏输入、私钥只保存路径。中间件公共配置写 `.env.<环境>`，秘密值写 `.env.<环境>.local`。完整配置后使用 `--yes` 无交互复用，需要保持中间件时追加 `--skip-middleware`。`--bundle-only` 不询问 SSH，已有连接会写入 `deploy-target.json`；修改该文件只影响当前包，不回写工程。离线密码从操作机的 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD` 等 target 引用变量读取，不写入交付包。
 
-每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`。`--env test` 默认写 `NODE_ENV=test`，dev 为 development，prod 及其他模式为 production；显式环境配置可以覆盖。该文件是运行产物，下次配置来自工程环境文件。`--build` 的正式优化模式不改变此运行默认值；旧包需重新打包。自建中间件随机凭据缓存位于扫描服务目录的 `.hai/deploy/runtime/<项目>-<环境>.secrets.json`，复用已有数据卷时应保留。
+每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`。`--env test` 默认写 `NODE_ENV=test`，dev 为 development，prod 及其他模式为 production；显式环境配置可以覆盖。该文件是运行产物，下次配置来自工程环境文件。`--build` 的正式优化模式不改变此运行默认值；旧包需重新打包。
+
+自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。不提供旧版本密码状态迁移。
 
 自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 app/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
 
-生成的 fullstack 项目将初始管理员密码和开发传输密钥环保存在被忽略的 `.env.local`；部署环境可在 `.env.<mode>.local` 覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；应从 Secret Manager 分发同一有效密钥环，不能为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点复用同一有效密钥环，可直接加载环境文件，也可通过 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
 
 #### 按应用真正需要的中间件处理
 
@@ -243,6 +245,8 @@ pnpm build --target desktop --platform windows --arch x64
 pnpm run deploy --env prod --build
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
+# 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
+pnpm run deploy --env prod --build --services "app,web"
 ```
 
 部分更新需要服务器已有成功的完整安装，并且端口、应用布局相同。以服务器成功状态为基线，只替换选中的镜像和配置，保留其他服务、连接与卷。部署脚本先按项目和服务名移除选中的旧容器（保留数据卷），再执行 `compose up -d --no-deps --no-build --pull never --no-recreate web` 创建新容器；其他容器保持运行，不执行整个项目 down。首次安装使用完整包。自建 S3 的桶由应用的 `storage.init()` 按可选 `createBucket` 初始化。
