@@ -236,18 +236,19 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(sidecar.services).toHaveLength(0)
   })
 
-  it('重复调用复用稳定的 sidecar 凭据', () => {
+  it('不同打包次数生成独立候选，不依赖打包机长期缓存', () => {
     const first = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
     const second = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
-    expect(first.sidecar.containerEnv.POSTGRES_PASSWORD).toBe(second.sidecar.containerEnv.POSTGRES_PASSWORD)
+    expect(first.sidecar.containerEnv.POSTGRES_PASSWORD).toMatch(/^[\w-]{32}$/)
+    expect(first.sidecar.containerEnv.POSTGRES_PASSWORD === second.sidecar.containerEnv.POSTGRES_PASSWORD).toBe(false)
+    expect(fs.existsSync(path.join(tmpDir, '.hai/deploy/runtime'))).toBe(false)
   })
 
-  it('凭据损坏时停止部署并保留原文件，避免自动改密码', () => {
-    buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)
-    const file = path.join(tmpDir, '.hai/deploy/runtime/demo.secrets.json')
-    fs.writeFileSync(file, '{invalid')
-    expect(() => buildRuntimeEnv(tmpDir, 'demo', makeScan(['db']), {}, 3000)).toThrow(file)
-    expect(fs.readFileSync(file, 'utf8')).toBe('{invalid')
+  it('应用目录不存在时也能规划候选，不创建本地凭据状态', () => {
+    const otherComputer = path.join(tmpDir, 'uncreated-computer')
+    const result = buildRuntimeEnv(otherComputer, 'demo', makeScan(['db']), {}, 3000)
+    expect(result.sidecar.containerEnv.POSTGRES_PASSWORD).toMatch(/^[\w-]{32}$/)
+    expect(fs.existsSync(otherComputer)).toBe(false)
   })
 })
 

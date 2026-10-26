@@ -7,6 +7,7 @@ import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
 import { deployM } from '../deploy-i18n.js'
 import { runCommand } from './deploy-command.js'
+import { createManagedSecretAssets } from './deploy-managed-secrets.js'
 import { createApplyScript, createLocalInstallScript, createUploadScripts } from './deploy-scripts.js'
 import { usesSshPassword } from './deploy-ssh.js'
 
@@ -138,7 +139,10 @@ export async function createDeploymentBundle(options: {
     put('.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
     put('middleware.env', options.middlewareEnv)
     const middlewareRuntime = join(directory, 'middleware-runtime.env')
-    put('middleware-runtime.env', existsSync(middlewareRuntime) ? readFileSync(middlewareRuntime, 'utf8') : '')
+    const nativeEnvironment = existsSync(middlewareRuntime) ? readFileSync(middlewareRuntime, 'utf8') : ''
+    put('middleware-runtime.env', nativeEnvironment)
+    for (const [file, content] of Object.entries(createManagedSecretAssets(projectName, nativeEnvironment, compose)))
+      put(file, content)
     if (options.hasWeb)
       put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)

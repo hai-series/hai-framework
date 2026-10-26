@@ -118,7 +118,10 @@ it.each([
     expect(compose.services[part].container_name).toBe(`hai-${expected}-test-${part}`)
   expect(compose.volumes).toHaveProperty(`${expected}-test-db-data`)
   const secretFile = join(service, '.hai/deploy/runtime', `${expected}-test.secrets.json`)
-  const secrets = readFileSync(secretFile, 'utf8')
+  expect(existsSync(secretFile)).toBe(false)
+  const candidates = parseEnv(readBundleFile(directory, 'managed-candidates.env'))
+  expect(candidates.DB_PASSWORD).toMatch(/^[\w-]{32}$/)
+  expect(readBundleFile(directory, 'managed-volumes')).toContain(`DB_PASSWORD hai-${expected}-test_${expected}-test-db-data`)
   const unpacked = join(root, 'identity-proof')
   mkdirSync(unpacked)
   execFileSync('tar', ['-xf', join(directory, target.bundle), '-C', unpacked])
@@ -128,7 +131,8 @@ it.each([
   const updated = await deploy.deployApp(service, { environment: 'test', projectName, bundleOnly: true, selectedServices: ['web'] })
   const updatedTarget = JSON.parse(readFileSync(join(deliveryDirectory(updated), 'deploy-target.json'), 'utf8'))
   expect(updatedTarget.directory).toBe(target.directory)
-  expect(readFileSync(secretFile, 'utf8')).toBe(secrets)
+  expect(existsSync(secretFile)).toBe(false)
+  expect(parseEnv(readBundleFile(deliveryDirectory(updated), 'managed-candidates.env')).DB_PASSWORD === candidates.DB_PASSWORD).toBe(false)
 })
 
 it('中间件原生变量与应用、持久配置和离线服务环境隔离', async () => {

@@ -9,13 +9,10 @@
 
 import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
-import { deployM } from '../deploy-i18n.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
 const IMAGES = {
@@ -112,36 +109,16 @@ function generatePassword(): string {
 }
 
 /**
- * 读取或创建稳定的 sidecar 凭据。
- *
- * 为保证重复部署的幂等性（密码不变，避免已存在数据卷认证失败），
- * 凭据持久化到本地 gitignore 的 `.hai/deploy/runtime/<project>.secrets.json`。
- *
- * @param appDir - 应用根目录
- * @param projectName - 项目名
- * @returns 稳定的凭据键值对
+ * 生成首次部署的候选值，不读取或创建打包机长期凭据缓存。
+ * 服务器 apply 阶段以项目自己的私有状态定稿，后续电脑生成的候选不会改密码。
+ * @returns 本包的私有候选值。
  */
-function resolveSidecarSecrets(appDir: string, projectName: string): Record<string, string> {
-  const secretFile = join(appDir, '.hai', 'deploy', 'runtime', `${projectName}.secrets.json`)
-  if (existsSync(secretFile)) {
-    try {
-      const saved = JSON.parse(readFileSync(secretFile, 'utf-8')) as Record<string, string>
-      if (!saved || !['dbPassword', 'storagePassword', 'ldapPassword'].every(key => typeof saved[key] === 'string' && saved[key].length > 0))
-        throw new Error('Invalid credentials')
-      return saved
-    }
-    catch {
-      throw new Error(deployM('deploy_secretsInvalid', { params: { path: secretFile } }))
-    }
-  }
-  const secrets = {
+function createSidecarCandidates(): Record<string, string> {
+  return {
     dbPassword: generatePassword(),
     storagePassword: generatePassword(),
     ldapPassword: generatePassword(),
   }
-  mkdirSync(dirname(secretFile), { recursive: true })
-  writeFileSync(secretFile, JSON.stringify(secrets), { mode: 0o600 })
-  return secrets
 }
 
 /** 为 app 追加本地数据卷（sqlite / lancedb 等文件型后端持久化）。 */
@@ -337,9 +314,9 @@ export function resolveSidecarOptions(scan: ScanResult, options?: DeployAppOptio
 }
 
 /**
- * 复用实际编排规则生成 sidecar；secretValues 仅供只读计划提供空占位值，默认执行仍读取稳定凭据。
+ * 复用实际编排规则生成 sidecar；secretValues 仅供只读计划提供空占位值，执行时生成私有候选。
  * 仅为 requiredServices 中采用 default 且无 Provisioner 配置的服务规划匹配后端；文件后端共用 app 数据卷。
- * @param appDir - 应用目录。
+ * @param _appDir - 调用方应用目录上下文；凭据不在此落盘。
  * @param projectName - 部署项目身份。
  * @param scan - 实际依赖与配置扫描结果。
  * @param provisionEnv - 已开通服务的环境变量。
@@ -356,7 +333,7 @@ export function resolveSidecarOptions(scan: ScanResult, options?: DeployAppOptio
  * ```
  */
 export function planSidecars(
-  appDir: string,
+  _appDir: string,
   projectName: string,
   scan: ScanResult,
   provisionEnv: Record<string, string>,
@@ -375,10 +352,10 @@ export function planSidecars(
     dependsOn: [],
     secrets: [],
   }
-  // 全部保持不变时，连默认中间件凭据文件也不读取或创建。
+  // 全部保持不变时，不生成自建中间件候选。
   if (!scan.requiredServices.some(service => usesDefaultMiddleware(scan, service, options)))
     return plan
-  const secrets = secretValues ?? resolveSidecarSecrets(appDir, projectName)
+  const secrets = secretValues ?? createSidecarCandidates()
   const net = ['hai-app']
   const backends = scan.serviceBackends
 

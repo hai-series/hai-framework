@@ -299,6 +299,8 @@ if [ "$partial" = true ]; then
     grep -qx "$service" "$root/releases/$previous/services" || { printf 'Service %s has no installed baseline. Use a full deployment.\n' "$service" >&2; exit 1; }
   done
 fi
+step credentials 'Resolving server-managed middleware credentials'
+sh "$release/resolve-managed-secrets.sh" "$root" "$release" "$runtime"
 printf '%s\n' "$release/compose-entry.json" >> "$release/compose-files"
 if [ "$proxy_update" = true ]; then
   printf '%s\n' "$release/proxy-entry.json" >> "$release/compose-files"

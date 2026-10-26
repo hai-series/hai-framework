@@ -94,5 +94,5 @@
   "deploy_uploadPasswordUnavailable": "対話入力を利用できません。この操作端末の環境変数を設定してから配置スクリプトを再実行してください。",
   "deploy_uploadPasswordCancelled": "パスワード入力を中止しました。サーバーには未接続です。",
   "deploy_uploadPasswordInvalid": "SSH パスワードは改行を含まない 1–1023 UTF-8 バイトにしてください。",
-  "deploy_secretsInvalid": "ミドルウェアの認証情報が破損しているか、不完全です：{path}。バックアップを復元してください。既存データにアクセスできなくなる可能性があるため、パスワードは再生成しません。"
+  "deploy_managedSecretsInvalid": "自建ミドルウェアの候補認証情報が無効です。配置パッケージを再生成してください。サーバーの認証情報は自動変更されません。"
 }

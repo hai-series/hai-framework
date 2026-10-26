@@ -94,5 +94,5 @@
   "deploy_uploadPasswordUnavailable": "Interactive password input is unavailable. Set this operator environment variable before running the deployment script again.",
   "deploy_uploadPasswordCancelled": "Password input cancelled; no server connection was made.",
   "deploy_uploadPasswordInvalid": "SSH passwords must contain 1–1023 UTF-8 bytes without line breaks.",
-  "deploy_secretsInvalid": "Middleware credentials are damaged or incomplete: {path}. Restore a backup; passwords are not regenerated because existing data may become inaccessible."
+  "deploy_managedSecretsInvalid": "Invalid generated middleware credential candidates. Rebuild the deployment bundle; server credentials will not be rotated automatically."
 }
