@@ -11,5 +11,5 @@ export default defineConfig({
     'src/modules/a2a/index.ts',
     'src/adapter/index.ts',
   ],
-  external: ['@sveltejs/kit', '@sveltejs/adapter-node', '@sveltejs/adapter-static', '@h-ai/core', '@h-ai/crypto', '@h-ai/api-contract', 'zod', '$app/navigation', '$app/state'],
+  external: ['@sveltejs/kit', '@sveltejs/adapter-node', '@sveltejs/adapter-static', '@h-ai/audit', '@h-ai/core', '@h-ai/crypto', '@h-ai/api-contract', 'zod', '$app/navigation', '$app/state'],
 })

@@ -97,7 +97,7 @@ describe('audit.helper', () => {
 
   // ─── passwordResetRequest ───
 
-  it('passwordResetRequest 应记录密码重置请求（邮箱保留原值）', async () => {
+  it('passwordResetRequest 应记录密码重置请求并默认隐藏邮箱', async () => {
     const result = await audit.helper.passwordResetRequest('test@example.com', '127.0.0.1')
     expect(result.success).toBe(true)
 
@@ -107,7 +107,7 @@ describe('audit.helper', () => {
       expect(logs.data.items.length).toBe(1)
       expect(logs.data.items[0].userId).toBeNull()
       const details = JSON.parse(logs.data.items[0].details!)
-      expect(details.email).toBe('test@example.com')
+      expect(details.email).toBe('[REDACTED]')
       expect(details.emailMasked).toBeUndefined()
     }
   })

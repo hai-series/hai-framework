@@ -20,7 +20,6 @@ import type {
   Role,
 } from './iam-authz-types.js'
 
-import { audit } from '@h-ai/audit'
 import { core, err, ok } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
@@ -435,7 +434,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       const result = await userRoleRepository.assign(userId, roleId, tx)
       if (result.success) {
         logger.info('Role assigned to user', { userId, roleId })
-        void audit.log({ action: 'role.assign', resource: 'iam_user_role', resourceId: userId, details: { roleId } })
         // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
         if (!tx) {
           await syncUserSessionAfterRoleChange(userId)
@@ -448,7 +446,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       const result = await userRoleRepository.remove(userId, roleId, tx)
       if (result.success) {
         logger.info('Role removed from user', { userId, roleId })
-        void audit.log({ action: 'role.remove', resource: 'iam_user_role', resourceId: userId, details: { roleId } })
         // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
         if (!tx) {
           await syncUserSessionAfterRoleChange(userId)
@@ -534,7 +531,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       logger.info('Roles synced for user', { userId, added: toAdd.length, removed: toRemove.length })
-      void audit.log({ action: 'roles.sync', resource: 'iam_user_role', resourceId: userId, details: { added: toAdd, removed: toRemove } })
 
       // 事务提交后统一同步会话角色和权限
       if (ownTx) {
@@ -598,7 +594,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         }
 
         logger.info('Role created', { roleId: createdResult.data.id, code: role.code })
-        void audit.helper.crud({ action: 'create', resource: 'iam_role', resourceId: createdResult.data.id, details: { code: role.code } })
 
         // 创建的角色可能是超管角色，强制下次 checkPermission 重新解析
         if (role.code === rbacConfig.superAdminRole) {
@@ -720,8 +715,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           }
         }
 
-        void audit.helper.crud({ action: 'update', resource: 'iam_role', resourceId: roleId, details: data as Record<string, unknown> })
-
         return ok(updatedResult.data)
       }
       catch (error) {
@@ -813,7 +806,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       superAdminRoleId = undefined
 
       logger.info('Role deleted', { roleId })
-      void audit.helper.crud({ action: 'delete', resource: 'iam_role', resourceId: roleId })
       return ok(undefined)
     },
 
@@ -861,7 +853,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         }
 
         logger.info('Permission created', { permissionId: createdResult.data.id, code: permission.code })
-        void audit.helper.crud({ action: 'create', resource: 'iam_permission', resourceId: createdResult.data.id, details: { code: permission.code } })
         return ok(createdResult.data)
       }
       catch (error) {
@@ -987,7 +978,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       logger.info('Permission deleted', { permissionId })
-      void audit.helper.crud({ action: 'delete', resource: 'iam_permission', resourceId: permissionId })
       return ok(undefined)
     },
 
@@ -1015,7 +1005,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       const assignResult = await rolePermissionRepository.assign(roleId, permissionId, tx)
       if (assignResult.success) {
         logger.info('Permission assigned to role', { roleId, permissionId })
-        void audit.log({ action: 'permission.assign', resource: 'iam_role_permission', resourceId: roleId, details: { permissionId } })
         // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
         if (!tx) {
           await syncSessionPermissionsForRole(roleId)
@@ -1051,7 +1040,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       const removeResult = await rolePermissionRepository.remove(roleId, permissionId, tx)
       if (removeResult.success) {
         logger.info('Permission removed from role', { roleId, permissionId })
-        void audit.log({ action: 'permission.remove', resource: 'iam_role_permission', resourceId: roleId, details: { permissionId } })
         // 仅在非外部事务时同步会话（外部事务由调用方在 commit 后同步）
         if (!tx) {
           await syncSessionPermissionsForRole(roleId)

@@ -6,8 +6,10 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type { AuditInitConfigInput } from './audit-config.js'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
+import type { AuditInitConfig, AuditInitConfigInput } from './audit-config.js'
 import type {
+  AuditBackupOperations,
   AuditFunctions,
   AuditHelper,
   AuditLog,
@@ -18,10 +20,15 @@ import type {
 } from './audit-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { validateIdentifiers } from '@h-ai/reldb'
+import { createAuditAlerts } from './audit-alert-functions.js'
+import { createAuditBackup } from './audit-backup-functions.js'
 import { AuditInitConfigSchema } from './audit-config.js'
+import { withAuditContext } from './audit-context.js'
 import { createHelper } from './audit-helper.js'
-
 import { auditM } from './audit-i18n.js'
+import { createAuditWriter, validAuditQuery } from './audit-log-functions.js'
+
+import { configureAuditRetention, migrateAudit } from './audit-migration.js'
 import { AuditLogRepository } from './audit-repository-log.js'
 import {
   HaiAuditError,
@@ -30,12 +37,6 @@ import {
 const logger = core.logger.child({ module: 'audit', scope: 'main' })
 
 // ─── 输入校验 ───
-
-/** 字符串字段最大长度（防止异常大输入） */
-const MAX_TEXT_LENGTH = 256
-
-/** 审计详情中的敏感字段统一脱敏为此占位值 */
-const REDACTED_AUDIT_DETAIL_VALUE = '[REDACTED]'
 
 /**
  * 判断值是否为非空字符串
@@ -46,36 +47,16 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-/**
- * 校验字符串长度是否在限制内
- *
- * @param value - 待校验字符串
- * @param maxLength - 允许最大长度
- */
-function isValidTextLength(value: string, maxLength = MAX_TEXT_LENGTH): boolean {
-  return value.length <= maxLength
-}
-
-/**
- * 对审计详情执行统一脱敏
- *
- * @param details - 原始详情对象
- */
-function sanitizeAuditDetails(details?: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!details) {
-    return details ?? null
-  }
-
-  return core.sanitize.sanitizeSensitiveFields(details, {
-    matcher: core.sanitize.defaultSensitiveKeyRegex,
-    replacement: REDACTED_AUDIT_DETAIL_VALUE,
-  }) as Record<string, unknown>
-}
-
 // ─── 内部状态 ───
 
 /** 当前审计日志仓库实例；init 后赋值，close 后置 null */
 let currentRepo: AuditLogRepository | null = null
+let currentWriter: AuditFunctions['log'] | null = null
+let capturePolicy: AuditInitConfig['capture'] | null = null
+let currentBackup: ReturnType<typeof createAuditBackup> | null = null
+let currentAlerts: ReturnType<typeof createAuditAlerts> | null = null
+/** 只追踪当前进程在途操作，安全记录真值仍在共享数据库。 */
+const inFlightWrites = new Set<Promise<HaiResult<AuditLog>>>()
 
 /** 缓存的便捷记录器实例；init 时创建，close 时置 null */
 let currentHelper: AuditHelper | null = null
@@ -103,6 +84,7 @@ const notInitialized = core.module.createNotInitializedKit(
 
 /** 未初始化时的便捷记录器占位 */
 const notInitializedHelper = notInitialized.proxy<AuditHelper>()
+const notInitializedBackup = notInitialized.proxy<AuditBackupOperations>()
 
 // ─── 审计服务对象 ───
 
@@ -143,6 +125,7 @@ const notInitializedHelper = notInitialized.proxy<AuditHelper>()
  * ```
  */
 export const audit: AuditFunctions = {
+  withContext: withAuditContext,
   /**
    * 初始化审计模块
    *
@@ -177,7 +160,16 @@ export const audit: AuditFunctions = {
       if (currentRepo) {
         logger.warn('Audit module is already initialized, reinitializing')
         currentRepo = null
+        currentWriter = null
+        capturePolicy = null
         currentHelper = null
+        const closingBackup = currentBackup
+        currentBackup = null
+        const closingAlerts = currentAlerts
+        currentAlerts = null
+        await closingAlerts?.close()
+        await closingBackup?.close()
+        await Promise.allSettled([...inFlightWrites])
       }
 
       logger.info('Initializing audit module')
@@ -192,6 +184,12 @@ export const audit: AuditFunctions = {
         )
       }
       const parsed = parseResult.data
+      if (parsed.alerts.enabled && (!config?.reach?.isInitialized || parsed.alerts.rules.some(rule => rule.targets.some(target => !config.reach?.config?.providers.some(provider => provider.name === target.provider)))))
+        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_alertReachRequired'))
+      if (parsed.backup.enabled && !config?.storage?.isInitialized)
+        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_backupStorageRequired'))
+      if (parsed.backup.enabled && config?.storage?.config?.type === 's3' && config.storage.config.publicUrl)
+        return err(HaiAuditError.CONFIG_ERROR, auditM('audit_backupPrivateStorageRequired'))
 
       const identifierResult = validateIdentifiers([parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
       if (!identifierResult.success) {
@@ -203,6 +201,9 @@ export const audit: AuditFunctions = {
         )
       }
 
+      const migrated = await migrateAudit()
+      if (!migrated.success)
+        return migrated
       const candidate = new AuditLogRepository({
         userTable: parsed.userTable,
         userIdColumn: parsed.userIdColumn,
@@ -212,11 +213,21 @@ export const audit: AuditFunctions = {
       if (!ready.success) {
         return err(HaiAuditError.CONFIG_ERROR, auditM('audit_initFailed', { params: { error: ready.error.message } }), ready.error)
       }
+      const protection = await migrateAudit()
+      if (!protection.success)
+        return protection
+      const configured = await configureAuditRetention(parsed.retention)
+      if (!configured.success)
+        return configured
       if (generation !== lifecycleGeneration)
         return err(HaiAuditError.NOT_INITIALIZED, auditM('audit_notInitialized'))
       // 候选仓库只拥有schema就绪Promise，不拥有共享reldb连接；成功屏障后才发布。
       currentRepo = candidate
+      currentWriter = createAuditWriter(candidate, parsed)
+      capturePolicy = parsed.capture
       currentHelper = createHelper(input => audit.log(input))
+      currentBackup = createAuditBackup({ repository: candidate, config: parsed.backup, storage: config?.storage, capture: (input, options) => audit.capture(input, options) })
+      currentAlerts = createAuditAlerts({ config: parsed.alerts, reach: config?.reach, log: currentWriter })
 
       logger.info('Audit module initialized')
       return ok(undefined)
@@ -245,31 +256,24 @@ export const audit: AuditFunctions = {
    * @param input - 日志内容（action 和 resource 为必填）
    * @returns 成功时返回创建的 AuditLog；未初始化时返回 NOT_INITIALIZED
    */
-  log(input: CreateAuditLogInput): Promise<HaiResult<AuditLog>> {
+  log(input: CreateAuditLogInput, tx?: DmlWithTxOperations): Promise<HaiResult<AuditLog>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
 
-    const sanitizedInput: CreateAuditLogInput = {
-      ...input,
-      details: sanitizeAuditDetails(input.details),
-    }
+    const operation = currentWriter!(input, tx)
+    inFlightWrites.add(operation)
+    void operation.then(() => inFlightWrites.delete(operation), () => inFlightWrites.delete(operation))
+    return operation
+  },
 
-    if (!isNonEmptyString(sanitizedInput.action) || !isNonEmptyString(sanitizedInput.resource)) {
-      return Promise.resolve(err(
-        HaiAuditError.LOG_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'action/resource', reason: 'must be non-empty string' } }),
-      ))
-    }
-
-    if (!isValidTextLength(sanitizedInput.action) || !isValidTextLength(sanitizedInput.resource)) {
-      return Promise.resolve(err(
-        HaiAuditError.LOG_FAILED,
-        auditM('audit_invalidInput', { params: { field: 'action/resource', reason: 'exceeds max length' } }),
-      ))
-    }
-
-    return currentRepo.log(sanitizedInput)
+  async capture(input, options): Promise<HaiResult<void>> {
+    if (!currentRepo)
+      return notInitialized.result()
+    if (!capturePolicy?.enabled || (options?.read && !capturePolicy.includeReads && (!input.outcome || input.outcome === 'success')))
+      return ok(undefined)
+    const written = await audit.log(input, options?.tx)
+    return written.success ? ok(undefined) : written
   },
 
   /**
@@ -282,6 +286,8 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+    if (!validAuditQuery(options))
+      return Promise.resolve(err(HaiAuditError.QUERY_FAILED, auditM('audit_invalidInput', { params: { field: 'query', reason: auditM('audit_queryInvalid') } })))
 
     if (options?.startDate && options?.endDate && options.startDate > options.endDate) {
       return Promise.resolve(err(
@@ -349,10 +355,12 @@ export const audit: AuditFunctions = {
    * @param days - 统计天数，默认 7
    * @returns 成功时返回 AuditStatItem 数组；未初始化时返回 NOT_INITIALIZED
    */
-  getStats(days?: number): Promise<HaiResult<AuditStatItem[]>> {
+  getStats(days?: number, filters?: Pick<ListAuditLogsOptions, 'category' | 'outcome' | 'severity' | 'scopeId' | 'userId' | 'resource'>): Promise<HaiResult<AuditStatItem[]>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+    if (!validAuditQuery(filters))
+      return Promise.resolve(err(HaiAuditError.STATS_FAILED, auditM('audit_invalidInput', { params: { field: 'query', reason: auditM('audit_queryInvalid') } })))
 
     if (typeof days === 'number' && (!Number.isInteger(days) || days < 0)) {
       return Promise.resolve(err(
@@ -361,7 +369,7 @@ export const audit: AuditFunctions = {
       ))
     }
 
-    return currentRepo.getStats(days)
+    return currentRepo.getStats(days, filters)
   },
 
   /**
@@ -376,19 +384,48 @@ export const audit: AuditFunctions = {
     return currentHelper
   },
 
+  get backup(): AuditBackupOperations {
+    return currentBackup?.operations ?? notInitializedBackup
+  },
+
+  checkAlerts(options) {
+    return currentAlerts ? currentAlerts.check(options) : Promise.resolve(notInitialized.result())
+  },
+
+  get schedulerPlan(): AuditFunctions['schedulerPlan'] {
+    const backup = currentBackup?.schedule
+    const alerts = currentAlerts?.schedule
+    if (!backup && !alerts)
+      return null
+    return {
+      tasks: [...(backup?.tasks ?? []), ...(alerts?.tasks ?? [])].map(task => ({ ...task })),
+      hooks: { onTaskExecute: async (input) => {
+        if (input.context.taskId === 'hai-audit-backup' && backup)
+          return backup.hooks.onTaskExecute!(input)
+        if (input.context.taskId === 'hai-audit-alerts' && alerts)
+          return alerts.hooks.onTaskExecute!(input)
+        throw core.error.buildHaiErrorInst(HaiAuditError.CONFIG_ERROR, auditM('audit_unknownTask'))
+      } },
+    }
+  },
+
   /**
    * 关闭审计模块，释放内部状态
    */
   async close(): Promise<HaiResult<void>> {
     lifecycleGeneration++
-    if (!currentRepo) {
-      logger.info('Audit module already closed, skipping')
-      return ok(undefined)
-    }
-
     logger.info('Closing audit module')
     currentRepo = null
+    currentWriter = null
+    capturePolicy = null
     currentHelper = null
+    const closingBackup = currentBackup
+    currentBackup = null
+    const closingAlerts = currentAlerts
+    currentAlerts = null
+    await closingAlerts?.close()
+    await closingBackup?.close()
+    await Promise.allSettled([...inFlightWrites])
     logger.info('Audit module closed')
     return ok(undefined)
   },

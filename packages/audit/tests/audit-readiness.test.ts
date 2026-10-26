@@ -3,7 +3,7 @@ import { err } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuditLogRepository } from '../src/audit-repository-log.js'
-import { audit } from '../src/index.js'
+import { audit, migrateAudit } from '../src/index.js'
 
 beforeEach(async () => {
   expect((await reldb.init({ type: 'sqlite', database: ':memory:' })).success).toBe(true)
@@ -13,6 +13,44 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await audit.close()
   await reldb.close()
+})
+
+it('close等待已开始的审计写入，并拒绝关闭后的新写入', async () => {
+  expect((await audit.init()).success).toBe(true)
+  const execute = reldb.sql.execute.bind(reldb.sql)
+  let release!: () => void
+  let entered = false
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  vi.spyOn(reldb.sql, 'execute').mockImplementation(async (sql, params) => {
+    if (sql.startsWith('INSERT INTO hai_audit_logs')) {
+      entered = true
+      await gate
+    }
+    return execute(sql, params)
+  })
+  const pending = audit.log({ action: 'shutdown-write', resource: 'orders' })
+  let closed = false
+  let closing: ReturnType<typeof audit.close> | undefined
+  try {
+    await vi.waitFor(() => expect(entered).toBe(true))
+    closing = audit.close().then((result) => {
+      closed = true
+      return result
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(closed).toBe(false)
+    expect((await audit.log({ action: 'late-write', resource: 'orders' })).success).toBe(false)
+  }
+  finally {
+    release()
+    expect((await pending).success).toBe(true)
+    await closing
+  }
+  expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_audit_logs')).toMatchObject({ success: true, data: { count: 1 } })
+  expect((await audit.capture({ action: 'closed-module-capture', resource: 'orders' })).success).toBe(false)
 })
 
 /** 可控DDL门闩；底层仍执行真实SQLite建表。 */
@@ -46,6 +84,8 @@ it('init在DDL完成前不发布，完成后立即查询可用', async () => {
 })
 
 it('自定义查询全部等待基类DDL，失败不会提前执行SQL', async () => {
+  // 内部仓库夹具先准备模块元数据，审计表本身仍由下方受门闩控制的基类创建。
+  expect((await migrateAudit()).success).toBe(true)
   const release = delayDdl()
   const repo = new AuditLogRepository({ userTable: 'hai_iam_users', userIdColumn: 'id', userNameColumn: 'username' })
   let finished = 0

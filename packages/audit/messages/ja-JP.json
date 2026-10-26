@@ -1,4 +1,10 @@
 {
+  "audit_eventFieldsInvalid": "イベント項目が無効です",
+  "audit_identityMismatch": "身元スナップショットと操作者が一致しません",
+  "audit_queryInvalid": "検索条件または日付が無効です",
+  "audit_eventProcessingFailed": "イベント処理に失敗しました",
+  "audit_sortInvalid": "並べ替え項目または方向が無効です",
+  "audit_retentionPolicyFailed": "監査の最低保持ポリシーを読み取りまたは更新できません",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "audit_notInitialized": "監査モジュールが初期化されていません。先にaudit.init()を呼び出してください",
   "audit_initFailed": "監査モジュールの初期化に失敗しました: {error}",
@@ -9,5 +15,20 @@
   "audit_invalidStatCount": "監査件数が有効範囲を超えているため、安全に表示できません",
   "audit_configError": "監査設定の検証に失敗しました: {error}",
   "audit_initInProgress": "監査モジュールの初期化は既に実行中です",
-  "audit_invalidInput": "{field}の監査入力が無効です: {reason}"
+  "audit_invalidInput": "{field}の監査入力が無効です: {reason}",
+  "audit_backupDisabled": "監査バックアップは無効です",
+  "audit_backupFailed": "監査バックアップ操作に失敗しました",
+  "audit_backupInvalid": "監査バックアップの入力が無効です",
+  "audit_backupConflict": "このバックアップ ID は異なるエクスポート条件で使用されています",
+  "audit_backupStorageRequired": "監査バックアップには初期化済みストレージが必要です",
+  "audit_backupPrivateStorageRequired": "監査バックアップには非公開ストレージが必要です。公開 URL を削除し、アーカイブの読取を制限してください",
+  "audit_backupVerificationFailed": "監査アーカイブの検証を完了できませんでした",
+  "audit_backupTaskName": "監査ログのバックアップ",
+  "audit_alertsDisabled": "監査アラートは無効です",
+  "audit_alertsFailed": "監査アラートの確認または通知に失敗しました",
+  "audit_alertReachRequired": "初期化済みの Reach と有効な通知チャネルが必要です",
+  "audit_alertSubject": "[{severity}] セキュリティアラート：{rule}",
+  "audit_alertTaskName": "監査異常アラート確認",
+  "audit_unknownTask": "不明な監査定期タスクです",
+  "audit_eventTimeUnavailable": "有効な監査用 DB 時刻を取得できません"
 }
