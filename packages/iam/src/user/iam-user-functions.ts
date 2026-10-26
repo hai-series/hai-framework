@@ -244,8 +244,8 @@ interface UserFnContext {
   config: IamConfig
   registerConfig: { enabled: boolean, defaultEnabled: boolean }
   agreementConfig: IamConfig['agreements']
-  resetConfig: { enabled: boolean, tokenExpiresIn: number, maxAttempts: number }
-  loginConfig: { maxLoginAttempts: number, lockoutDuration: number }
+  resetConfig: PasswordResetConfig
+  loginConfig: SecurityConfig
   onPasswordResetRequest?: (user: User, token: string, context: IamNotificationContext) => Promise<void>
 }
 

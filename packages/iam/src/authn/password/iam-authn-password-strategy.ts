@@ -36,6 +36,8 @@ export interface PasswordStrategyConfig {
   /** 用户存储 */
   userRepository: UserRepository
   /** 最大登录失败次数（默认 5） */
+  lockoutEnabled?: boolean
+  failureWindow?: number
   maxLoginAttempts?: number
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
@@ -91,6 +93,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
+  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
   const passwordOps = haiCrypto.password
 
   function mapPasswordError(message: string): HaiResult<never> {

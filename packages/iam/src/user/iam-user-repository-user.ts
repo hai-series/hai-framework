@@ -7,6 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
+import type { LoginFailurePolicy } from '../authn/iam-authn-utils.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
@@ -44,9 +45,9 @@ export interface UserRepository extends ReldbCrudRepository<StoredUser> {
   /** 最终一条 SQL 同时验证授权代际、有效期、启用状态、消费令牌并改密。 */
   commitPasswordReset: (input: { user: StoredUser, tokenHash: string, passwordHash: string }) => Promise<HaiResult<boolean>>
   /** 在数据库中原子累加失败次数并执行锁定策略。 */
-  recordLoginFailure: (userId: string, policy: { maxLoginAttempts: number, lockoutDuration: number }) => Promise<HaiResult<void>>
+  recordLoginFailure: (userId: string, policy: LoginFailurePolicy) => Promise<HaiResult<void>>
   /** 仅未锁定且启用的账户可以清除失败计数。 */
-  resetLoginFailures: (userId: string, expectedCredentialVersion: string) => Promise<HaiResult<void>>
+  resetLoginFailures: (userId: string, expectedCredentialVersion: string, lockoutEnabled?: boolean) => Promise<HaiResult<void>>
   /**
    * 根据用户名获取用户
    */
@@ -386,13 +387,18 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
   }
 
-  async recordLoginFailure(userId: string, policy: { maxLoginAttempts: number, lockoutDuration: number }): Promise<HaiResult<void>> {
+  async recordLoginFailure(userId: string, policy: LoginFailurePolicy): Promise<HaiResult<void>> {
+    if (policy.lockoutEnabled === false)
+      return ok(undefined)
     const sqlite = reldb.config?.type === 'sqlite'
-    const now = sqlite ? Date.now() : new Date()
-    const deadline = Date.now() + policy.lockoutDuration * 1000
+    const timestamp = Date.now()
+    const now = sqlite ? timestamp : new Date(timestamp)
+    const cutoff = timestamp - (policy.failureWindow ?? 86400) * 1000
+    const windowStart = sqlite ? cutoff : new Date(cutoff)
+    const deadline = timestamp + policy.lockoutDuration * 1000
     const lockedUntil = sqlite ? deadline : new Date(deadline)
     // 到期解锁是条件更新；后续原子递增不读取进程中的旧计数。
-    const expired = await reldb.sql.execute(`UPDATE ${TABLE_NAME} SET login_failed_count = 0, locked_until = NULL, last_login_failed_at = NULL WHERE id = ? AND locked_until <= ?`, [userId, now])
+    const expired = await reldb.sql.execute(`UPDATE ${TABLE_NAME} SET login_failed_count = 0, locked_until = NULL, first_login_failed_at = ?, last_login_failed_at = NULL WHERE id = ? AND (locked_until <= ? OR (locked_until IS NULL AND (first_login_failed_at IS NULL OR first_login_failed_at <= ?)))`, [now, userId, now, windowStart])
     if (!expired.success)
       return this.buildQueryError(expired.error, expired.error)
     // 先计算锁定期限再递增次数，避免 MySQL 按 SET 顺序读取已更新的计数而提前锁定。
@@ -405,10 +411,13 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     return ok(undefined)
   }
 
-  async resetLoginFailures(userId: string, expectedCredentialVersion: string): Promise<HaiResult<void>> {
+  async resetLoginFailures(userId: string, expectedCredentialVersion: string, lockoutEnabled = true): Promise<HaiResult<void>> {
+    const params: unknown[] = [userId, expectedCredentialVersion, reldb.config?.type === 'postgresql' ? true : 1]
+    if (lockoutEnabled)
+      params.push(reldb.config?.type === 'sqlite' ? Date.now() : new Date())
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND credential_version = ? AND enabled = ? AND (locked_until IS NULL OR locked_until <= ?)`,
-      [userId, expectedCredentialVersion, reldb.config?.type === 'postgresql' ? true : 1, reldb.config?.type === 'sqlite' ? Date.now() : new Date()],
+      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, first_login_failed_at = NULL, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND credential_version = ? AND enabled = ? ${lockoutEnabled ? 'AND (locked_until IS NULL OR locked_until <= ?)' : ''}`,
+      params,
     )
     if (!result.success)
       return this.buildQueryError(result.error, result.error)
@@ -420,7 +429,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       if ((user.data.credentialVersion ?? '') !== expectedCredentialVersion)
         return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      if (user.data.lockedUntil && user.data.lockedUntil > new Date())
+      if (lockoutEnabled && user.data.lockedUntil && user.data.lockedUntil > new Date())
         return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }
     return ok(undefined)

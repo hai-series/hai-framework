@@ -155,6 +155,7 @@ export interface StoredUser extends User {
   passwordUpdatedAt?: Date
   /** 登录失败次数 */
   loginFailedCount?: number
+  /** 当前固定失败计数窗口的起点。 */
   firstLoginFailedAt?: Date
   /** 最后登录失败时间 */
   lastLoginFailedAt?: Date

@@ -136,6 +136,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
       passwordConfig: config.password,
       userRepository,
       maxLoginAttempts: securityConfig.maxLoginAttempts,
+      lockoutEnabled: securityConfig.lockoutEnabled,
+      failureWindow: securityConfig.failureWindow,
       lockoutDuration: securityConfig.lockoutDuration,
     })
 
@@ -151,6 +153,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         autoRegister: true,
         registerConfig: config.register,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
+        lockoutEnabled: securityConfig.lockoutEnabled,
+        failureWindow: securityConfig.failureWindow,
         lockoutDuration: securityConfig.lockoutDuration,
         onUserAutoRegistered,
         onOtpSendEmail,
@@ -170,6 +174,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         syncUser: ldapSyncUser ?? true,
         defaultEnabled: config.register.defaultEnabled,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
+        lockoutEnabled: securityConfig.lockoutEnabled,
+        failureWindow: securityConfig.failureWindow,
         lockoutDuration: securityConfig.lockoutDuration,
         onUserAutoRegistered,
       })

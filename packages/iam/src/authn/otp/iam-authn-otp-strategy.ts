@@ -52,6 +52,8 @@ export interface OtpStrategyConfig {
   /** 注册配置（用于自动注册场景） */
   registerConfig?: RegisterConfig
   /** 最大登录失败次数（默认 5） */
+  lockoutEnabled?: boolean
+  failureWindow?: number
   maxLoginAttempts?: number
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
@@ -155,6 +157,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
     : OtpConfigSchema.parse({})
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
+  const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
   const registerConfig = config.registerConfig
   const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
   const defaultEnabled = registerConfig?.defaultEnabled ?? true
@@ -188,7 +191,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
           return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
         }
 
-        if (isAccountLocked(storedUser)) {
+        if (isAccountLocked(storedUser, failurePolicy)) {
           return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
         }
       }
@@ -197,7 +200,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       const consumed = await config.otpRepository.consumeOtp(identifier, code, otpConfig.maxAttempts)
       if (!consumed.success) {
         if (storedUser && consumed.error.code === HaiIamError.OTP_INVALID.code) {
-          const failed = await recordLoginFailure(config.userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
+          const failed = await recordLoginFailure(config.userRepository, storedUser, failurePolicy)
           if (!failed.success)
             return failed
         }
@@ -251,7 +254,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       // 登录成功，重置失败计数
       if (!isUserActive(storedUser))
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-      const resetResult = await resetLoginFailures(config.userRepository, storedUser)
+      const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult
       logger.info('OTP authentication succeeded', { userId: storedUser.id })

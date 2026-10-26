@@ -308,6 +308,10 @@ export type RegisterConfig = z.infer<typeof RegisterConfigSchema>
  * ```
  */
 export const SecurityConfigSchema = z.object({
+  /** 是否启用失败计数锁定；关闭时忽略历史锁。 */
+  lockoutEnabled: z.boolean().default(true),
+  /** 从首次失败起的固定计数窗口（秒）。 */
+  failureWindow: z.number().int().min(1).max(31536000).default(86400),
   /** 最大登录失败次数（默认 5） */
   maxLoginAttempts: z.number().int().min(1).default(5),
   /** 锁定时长（秒，默认 900） */
@@ -535,6 +539,8 @@ export const IamConfigSchema = z.object({
 
   /** 安全策略配置 */
   security: SecurityConfigSchema.default({
+    lockoutEnabled: true,
+    failureWindow: 86400,
     maxLoginAttempts: 5,
     lockoutDuration: 900,
   }),
