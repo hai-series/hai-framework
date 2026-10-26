@@ -24,6 +24,9 @@ function feedbackFileContentType(file: File): string | undefined {
     ['log', 'text/plain'],
     ['json', 'application/json'],
     ['pdf', 'application/pdf'],
+    ['zip', 'application/zip'],
+    ['gz', 'application/gzip'],
+    ['tgz', 'application/gzip'],
   ])
   if (!type || type === 'application/octet-stream')
     return extensions.get(file.name.split('.').at(-1)?.toLowerCase() ?? '')
@@ -34,6 +37,8 @@ function feedbackFileContentType(file: File): string | undefined {
     ['text/json', 'application/json'],
     ['text/x-log', 'text/plain'],
     ['application/x-pdf', 'application/pdf'],
+    ['application/x-zip-compressed', 'application/zip'],
+    ['application/x-gzip', 'application/gzip'],
   ])
   const normalized = aliases.get(type) ?? type
   return [...extensions.values()].includes(normalized) ? normalized : undefined

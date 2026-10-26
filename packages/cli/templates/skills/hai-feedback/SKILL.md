@@ -1,6 +1,6 @@
 ---
 name: hai-feedback
-description: "接入 @h-ai/feedback 用户反馈、前后端现场、管理员处理、独立通知与离线诊断包。"
+description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook、管理员处理、独立通知与离线诊断包。"
 ---
 
 # hai-feedback
@@ -17,7 +17,7 @@ description: "接入 @h-ai/feedback 用户反馈、前后端现场、管理员�
 
 ## 使用路径
 
-1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 可在生产输出安全摘要，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach 兼容旧配置，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init，关闭先于依赖。
+1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 可在生产输出安全摘要，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach 兼容旧配置，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init(config, { collectEvidence? })，关闭先于依赖。
 2. 挂载 apiContract.feedback 与 createFeedbackProcedures；resolveContext 从服务端确定 scopeId、userId、permissions，不能相信客户端的租户、requestId 或 S3 key。创建者可补自己的材料，管理操作另检查 read/process/reopen/export。
 3. createFeedbackClient 的 actions 接 typed API，policy 读取 reports.policy({})；prepare 后打开 FeedbackModal。getView() 提供附件 URL/证据/预算；annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图；首次包络冻结，重试编辑冲突保留输入。
 4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
@@ -46,7 +46,16 @@ captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非�
 
 自动截图从脱敏克隆 DOM 经 SVG foreignObject 重建可见页面；跨域图片、iframe/video、未就绪网络字体可能缺失。浏览器或 CSP 限制失败时标 missing 并保留手动附件入口。
 
-本地附件支持 PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF；空 MIME 或 application/octet-stream 按受支持扩展名识别，常见别名规范化，服务端仍校验实际字节/checksum。普通输入框截图保留底色与边框，内容替换为固定遮罩字符；密码框、data-feedback-private、rr-block/rr-mask 整块遮挡。原 DOM/输入值不变，页面回放仍 maskAllInputs。验证须覆盖本地选择、实际上传、离线导出及普通/私密控件的截图像素。
+本地附件支持 PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF、ZIP/GZ/TGZ；空 MIME 或 application/octet-stream 按受支持扩展名识别，常见别名规范化，服务端仍校验实际字节/checksum。普通输入框截图保留底色与边框，内容替换为固定遮罩字符；密码框、data-feedback-private、rr-block/rr-mask 整块遮挡。原 DOM/输入值不变，页面回放仍 maskAllInputs。验证须覆盖本地选择、实际上传、离线导出及普通/私密控件的截图像素。
+
+## 业务补采与 Webhook
+
+- 用 init 的第二参数 collectEvidence({ report, signal })，直接返回或 await `{ text?, data?, attachments?: [{ id, name, contentType, bytes: Uint8Array }] }`。持久 collect 任务在受理后执行，无须进程内事件总线或另建通知队列；所有同 appId 实例必须注册相同函数。按 report.id 幂等并将 signal 传给异步 I/O；businessCollectionTimeoutMs 默认 30000ms（1–300000），关闭/超时停止等待。
+- text/data 作为 server:business 来源的 business 证据，FeedbackDetail 的“业务信息”页签分页展示；成功标记入库后不重复采集；附件全部保存后在持有租约的同一事务关联，详情和离线包均可读取。失败按 maxAttempts 重试并显示 collecting/failed，管理员 retry target: collect。附件 ID 稳定且 1–100 字符，server:business: 前缀由框架保留；所有附件共用 20 项和容量预算。TXT 全文脱敏；ZIP/GZIP 不解压、执行或内部脱敏，业务须压缩前脱敏。
+- webhookUrl 默认空（禁用）；配置可信 HTTP(S) 目的地后独立持久 webhook 任务等待采集终态（包括失败），发送 feedback.created。notificationMode/Reach/DND 不控制 Webhook。webhookSecret 用服务端私有环境；webhookTimeoutMs 默认 10000ms（1–60000）。只接受 2xx，不跟随重定向，失败指数退避到 60s、最多 maxAttempts。
+- FeedbackWebhookEvent 包含 event/eventId/createdAt/report/evidence/detailUrl?；evidence 只有修订、业务采集成功和附件元数据，无正文、存储 key 或配置凭据。首次发送冻结载荷，重试/重启复用正文及 Idempotency-Key: eventId，接收方按此持久去重；至少一次投递。旧任务的 URL 与新配置不一致会失败，不自动转投。
+- 署名头 X-Hai-Feedback-Signature = sha256=HMAC-SHA256(secret, X-Hai-Feedback-Timestamp + '.' + 原始正文)，时间戳为 Unix 秒；接收方验证原始字节、恒定时间比较、时间偏差并防重放。get().jobs 提供 webhook 状态/attempts/安全 lastError；FeedbackDetail.webhook 传对应任务，管理员 retry target: webhook，需要 feedback:process 权限。
+- YAML/环境映射同步 HAI_FEEDBACK_BUSINESSCOLLECTIONTIMEOUTMS、HAI_FEEDBACK_WEBHOOKURL、HAI_FEEDBACK_WEBHOOKSECRET、HAI_FEEDBACK_WEBHOOKTIMEOUTMS。函数不放 YAML 或 PUBLIC_；示例见已安装模块 README 的业务证据与 Webhook 章节。
 
 Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capacitor，启动时 configureFeedbackSaving(saveTauriFeedbackFile/saveCapacitorFeedbackFile)，生成工程自动配置。平台适配拥有保存对话框、缓存与取消清理；业务仅调用 SDK。
 

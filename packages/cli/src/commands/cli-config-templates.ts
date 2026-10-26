@@ -918,6 +918,11 @@ recipients: []
 notificationProvider: email
 adminUrl: http://localhost:5173/#/feedback
 collectionTimeoutMs: 60000
+businessCollectionTimeoutMs: 30000
+# 采集结束后回调；地址空值禁用，密钥只放服务端私有环境，不进入 PUBLIC_ 配置。
+webhookUrl: ''
+webhookSecret: ''
+webhookTimeoutMs: 10000
 workerIntervalMs: 1000
 leaseMs: 30000
 maxAttempts: 5

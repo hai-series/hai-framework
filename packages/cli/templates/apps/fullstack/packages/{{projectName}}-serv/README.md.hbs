@@ -68,6 +68,8 @@ LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IA
 
 ## 反馈现场与交付检查
 
+feedback.init(config, { collectEvidence }) 支持等待业务 text/data 与文本/ZIP/GZIP 附件；_feedback.yml 提供业务采集超时和 Webhook URL/签名密钥/请求超时。密钥仅放服务端私有环境。Webhook 持久重试，详情展示状态并允许管理员重试。
+
 反馈的 console/disabled/reach 独立选择；SDK getView/ratio/saveDraft 与 createFeedbackReview 统一预览、标注、保存及轮询。退出身份清理草稿和观察器。宿主生命周期由 core.module.createRuntime 处理，框架表升级前备份停旧写入并运行各模块 dryRun 预检。
 
 ## 开发测试

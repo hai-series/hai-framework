@@ -123,7 +123,7 @@ return result
 - [界面设计约定与示例](.agents/instructions/ui-design.md)。技能目录与 name 一致；仓库和生成应用采用相同领域命名。
 
 - 宿主顺序与失败清理用 core.module.createRuntime；框架表迁移由模块 migrateIam/migrateReach/migrateScheduler 预检及初始化负责，先备份停旧写入，MySQL DDL 可重入、旧凭据会话重新登录。
-- 凭据 Reach 通知使用 sensitive/expiresAt/idempotencyKey，只留元数据回执，无明文/延迟重投。feedback.budget 为采集、附件总量、传输和离线包的共同来源；新工程通知默认 console。
+- 凭据 Reach 通知使用 sensitive/expiresAt/idempotencyKey，只留元数据回执，无明文/延迟重投。feedback.budget 为采集、附件总量、传输和离线包的共同来源；新工程通知默认 console。feedback.init(config, { collectEvidence }) 在持久采集任务中 await 业务 text/data/附件（含 ZIP/GZIP），遵守超时、脱敏和共享预算；webhookUrl 独立启用采集终态后的 feedback.created，持久重试、固定载荷、eventId 去重及可选 HMAC 签名，状态见 get().jobs，管理员 retry target: webhook。
 - hai upgrade <精确版本> 只读核对全发布与本地漂移；hai deploy --env prod --plan 只读部署计划，未检查远端基线不得声称成功；App 安装包使用 hai build --target app --platform android|ios，cap:sync 仅同步。
 
 错误提示与日志：core.error.toPublic/formatMessage 区分安全 i18n 消息与内部诊断，提示末尾 traceId 与前后端日志共用 requestId；README 许可证唯一且最后，运行 pnpm check:readme。

@@ -125,6 +125,8 @@ Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslash
 
 ## Feedback domain contract
 
+`FeedbackJob.type` and `FeedbackRetryInput.target` support independent `webhook` jobs. Details expose status, attempts and safe error codes in jobs. Business collectors and callback settings belong to trusted server initialization, not HTTP input. Read text and ZIP/GZIP through existing APIs; see [feedback](../feedback/README.en.md).
+
 `apiContract.feedback` exposes reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection and attachments.upload/get. A minimal submission needs only submissionId/appId, without a description or exception. Client inputs cannot supply identities, permissions, S3 keys, or email recipients. `@h-ai/api-contract/feedback` provides the same schemas and types through an optional subpath.
 
 Evidence append returns acknowledged/evidenceRevision; clients release only acknowledged blocks. setStatus requires expectedVersion. export pins the evidence revision, and getExport reads the completed bundle. Base64 attachments are limited to 5 MiB of original data; the server must still verify bytes, type, and SHA-256. Report.appVersion is the application version; Report.version is the concurrency counter.

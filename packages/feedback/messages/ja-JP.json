@@ -9,7 +9,7 @@
   "feedback_exportPending": "問題パッケージを生成しています。しばらくしてから再試行してください",
   "feedback_limitExceeded": "資料が許容容量を超えています",
   "feedback_invalidInput": "入力が無効です",
-  "feedback_unsupportedAttachmentType": "未対応の添付形式です。PNG、JPEG、WebP、WebM、MP4、TXT、LOG、JSON、PDF を選択してください",
+  "feedback_unsupportedAttachmentType": "未対応の添付形式です。PNG、JPEG、WebP、WebM、MP4、TXT、LOG、JSON、PDF、ZIP、GZIP を選択してください",
   "feedback_checksumMismatch": "添付ファイルの整合性を確認できません",
   "feedback_received": "新しいフィードバックを受信しました",
   "feedback_submittedAt": "報告日時（UTC）",

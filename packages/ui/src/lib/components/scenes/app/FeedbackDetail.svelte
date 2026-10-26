@@ -30,6 +30,7 @@
     evidence = { items: [], total: 0, page: 1, pageSize: 20 },
     attachments = [],
     history = [],
+    webhook,
     permissions = {},
     loading = false,
     error = '',
@@ -48,6 +49,8 @@
     evidence?: FeedbackPage<FeedbackEvidenceView>
     attachments?: FeedbackAttachmentView[]
     history?: FeedbackHistoryView[]
+    /** 持久 Webhook 任务的公开状态，由反馈详情 jobs 中的 webhook 项提供。 */
+    webhook?: { status: 'pending' | 'running' | 'succeeded' | 'failed', attempts: number, lastError?: string }
     permissions?: FeedbackPermissions
     loading?: boolean
     error?: string
@@ -79,6 +82,7 @@
     { key: 'scene', label: uiM('feedback_scene') },
     { key: 'replay', label: uiM('feedback_replay') },
     { key: 'logs', label: uiM('feedback_logs') },
+    { key: 'business', label: uiM('feedback_business') },
     { key: 'environment', label: uiM('feedback_environment') },
     { key: 'history', label: uiM('feedback_history') },
   ])
@@ -122,6 +126,8 @@
       void query({ page: 1, kind: 'interaction' })
     else if (tab === 'logs')
       void query({ page: 1, kind: undefined })
+    else if (tab === 'business')
+      void query({ page: 1, kind: 'business', requestId: undefined, errorId: undefined })
   }
 </script>
 
@@ -147,17 +153,21 @@
             <dl class='grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3'>
               <div><dt class='text-base-content/55'>{uiM('feedback_collection')}</dt><dd>{collectionLabel(report.collectionStatus)}</dd></div>
               <div><dt class='text-base-content/55'>{uiM('feedback_notification')}</dt><dd>{notificationLabel(report.notificationStatus)}</dd></div>
+              {#if webhook}
+                <div><dt class='text-base-content/55'>{uiM('feedback_webhook')}</dt><dd>{notificationLabel(webhook.status === 'succeeded' ? 'sent' : webhook.status === 'running' ? 'sending' : webhook.status)} · {uiM('feedback_attempts')}: {webhook.attempts}</dd>{#if webhook.lastError}<dd class='break-all text-error'>{webhook.lastError}</dd>{/if}</div>
+              {/if}
               <div><dt class='text-base-content/55'>{uiM('feedback_submitter')}</dt><dd class='break-all'>{report.userId || '—'}</dd></div>
               <div><dt class='text-base-content/55'>{uiM('feedback_revision')}</dt><dd>{report.evidenceRevision}</dd></div>
               {#if report.buildId}<div><dt class='text-base-content/55'>{uiM('feedback_build_id')}</dt><dd class='break-all'>{report.buildId}</dd></div>{/if}
               {#if report.commit}<div><dt class='text-base-content/55'>{uiM('feedback_commit')}</dt><dd class='break-all'>{report.commit}</dd></div>{/if}
             </dl>
+            {#if webhook?.status === 'failed' && permissions.retry && onretry}<Button size='sm' disabled={busy} onclick={() => run(() => onretry(report!))}>{uiM('feedback_retry')}</Button>{/if}
           </div>
         {:else if tab === 'replay'}
           <div class='py-4'>
             {#if onreplay}<FeedbackReplay load={onreplay} />{:else}<p class='text-sm'>{uiM('feedback_replay_empty')}</p>{/if}
           </div>
-        {:else if tab === 'scene' || tab === 'logs' || tab === 'environment'}
+        {:else if tab === 'scene' || tab === 'logs' || tab === 'environment' || tab === 'business'}
           <div class='space-y-4 py-4'>
             {#if tab === 'scene'}
               <div class='grid grid-cols-1 gap-3 xl:grid-cols-2'>

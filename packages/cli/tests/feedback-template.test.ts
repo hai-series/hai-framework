@@ -27,6 +27,10 @@ describe('feedback 生成工程', () => {
     expect(yaml).toContain('recipients:')
     expect(yaml).toContain('notificationProvider:')
     expect(yaml).toContain('adminUrl:')
+    expect(yaml).toContain('businessCollectionTimeoutMs:')
+    expect(yaml).toContain('webhookUrl:')
+    expect(yaml).toContain('webhookSecret:')
+    expect(yaml).toContain('webhookTimeoutMs:')
   })
 
   it.each([false, true])('原生反馈保存按功能开关隔离依赖和权限，启用=%s', async (enabled) => {

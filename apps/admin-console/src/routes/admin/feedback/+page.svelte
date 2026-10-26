@@ -99,9 +99,21 @@
 
   async function retry(report: FeedbackReportView) {
     await initFeedbackBrowser()
-    const result = await feedbackApi.feedback.reports.retry({ id: report.id, target: report.notificationStatus === 'failed' || report.notificationStatus === 'deferred' ? 'notify' : 'collect' })
-    if (!result.success)
-      throw new Error(result.error.message)
+    const loaded = await feedbackApi.feedback.reports.get({ id: report.id })
+    if (!loaded.success)
+      throw new Error(loaded.error.message)
+    const targets: Array<'collect' | 'notify' | 'webhook'> = []
+    if (['partial', 'failed'].includes(loaded.data.report.collectionStatus))
+      targets.push('collect')
+    for (const job of loaded.data.jobs) {
+      if (job.status === 'failed' && (job.type === 'notify' || job.type === 'webhook' || job.type === 'collect') && !targets.includes(job.type))
+        targets.push(job.type)
+    }
+    for (const target of targets) {
+      const result = await feedbackApi.feedback.reports.retry({ id: report.id, target })
+      if (!result.success)
+        throw new Error(result.error.message)
+    }
     await view(report)
     await invalidateAll()
   }
@@ -149,7 +161,7 @@
 <div class='flex h-full min-h-0 min-w-0 flex-col gap-4' data-testid='feedback-management'>
   {#if detail}
     <div class='min-h-0 overflow-y-auto rounded-xl bg-base-100 p-4 sm:p-6'>
-      <FeedbackDetail report={reportView(detail.report)} {evidence} {attachments} {history} {permissions} {loading} error={actionError} bind:evidenceQuery onevidencequery={loadEvidence} onreplay={() => loadFeedbackReplay(detail!.report.id)} onstatus={status} onretry={retry} onexport={report => exportFeedback(report.id)} onattachment={attachment} onclose={closeDetail} />
+      <FeedbackDetail report={reportView(detail.report)} webhook={detail.jobs.find(job => job.type === 'webhook')} {evidence} {attachments} {history} {permissions} {loading} error={actionError} bind:evidenceQuery onevidencequery={loadEvidence} onreplay={() => loadFeedbackReplay(detail!.report.id)} onstatus={status} onretry={retry} onexport={report => exportFeedback(report.id)} onattachment={attachment} onclose={closeDetail} />
     </div>
   {:else}
     <FeedbackList data={reportRows} {query} {permissions} {loading} error={actionError} onquerychange={changeQuery} onview={view} onstatus={status} onretry={retry} onexport={report => exportFeedback(report.id)} />

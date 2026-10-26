@@ -58,7 +58,7 @@ The complete client exposes `init(config)`, `prepare/captureScreenshot(attachmen
 
 `addFiles` adds each batch atomically: all files must pass validation before merging. Any failure preserves existing attachments and missing markers without saving a partial batch. Successful concurrent batches preserve each other's files, with at most 20 merged attachments. If the draft changes or the first envelope freezes during reading, it returns `CONFLICT` without adding hidden uploads outside that envelope.
 
-Local attachments support PNG/JPEG/WebP, WebM/MP4, TXT/LOG, JSON and PDF. Missing MIME types and `application/octet-stream` are inferred from supported extensions; common MIME aliases are normalized. The server still validates file bytes and checksums. Unsupported formats show a specific message. Screenshots preserve ordinary controls' backgrounds and borders while replacing their values with fixed mask characters. Passwords, `data-feedback-private`, `.rr-block` and `.rr-mask` remain fully covered. Only the capture clone changes; the original page and values remain intact.
+Local attachments support PNG/JPEG/WebP, WebM/MP4, TXT/LOG, JSON, PDF and ZIP/GZIP. Missing MIME types and `application/octet-stream` are inferred from supported extensions; common MIME aliases are normalized. The server still validates file bytes and checksums. Unsupported formats show a specific message. Screenshots preserve ordinary controls' backgrounds and borders while replacing their values with fixed mask characters. Passwords, `data-feedback-private`, `.rr-block` and `.rr-mask` remain fully covered. Only the capture clone changes; the original page and values remain intact.
 
 `annotate(id, { ...rect, mode, coordinateSpace: 'ratio' })` accepts UI 0–1 coordinates directly. The SDK converts decoded intrinsic dimensions, including fractional/tiny selections, reverse dragging, edges and CSS scaling. Omitting coordinateSpace retains pixel coordinates. `getView()` owns and reuses preview URLs, releasing them on replacement, removal and close. Hosts need no image decoding or object URL bookkeeping.
 
@@ -89,6 +89,57 @@ When server policy is unavailable, bounded local capture/export remain available
 Console/disabled do not require the Reach package. Reach mode explicitly installs and initializes the @h-ai/reach optional peer. Credential sends expose generated receiptId only; provider messageId is neither persisted nor returned.
 
 Web clients never resolve or install native plugins. Custom hosts import saveTauriFeedbackFile from @h-ai/feedback/tauri or saveCapacitorFeedbackFile from @h-ai/feedback/capacitor and call configureFeedbackSaving(saver) at startup. Generated hosts already configure this; business code does not handle native file lifecycles.
+
+### Business evidence extension
+
+Register a server callback with `feedback.init(config, { collectEvidence })`. A durable `collect` job invokes it after intake commits and awaits synchronous or asynchronous results without holding up submission. All instances handling the same appId must register the same callback so jobs can recover after restart or takeover.
+
+This example runs after dependencies initialize. The host supplies `FeedbackConfigInput` and prepares a sanitized `diagnostics/sanitized-logs.zip`; the callback can instead await the application's own diagnostic service:
+
+```ts
+import type { FeedbackConfigInput } from '@h-ai/feedback'
+import { readFile } from 'node:fs/promises'
+import { feedback } from '@h-ai/feedback'
+
+async function startFeedback(config: FeedbackConfigInput) {
+  const result = await feedback.init(config, {
+    collectEvidence: async ({ report, signal }) => ({
+      text: `Diagnostics for ${report.number}`,
+      data: { businessSystem: 'orders', scopeId: report.scopeId },
+      attachments: [{
+        id: 'business-logs',
+        name: 'business-logs.zip',
+        contentType: 'application/zip',
+        bytes: await readFile('diagnostics/sanitized-logs.zip', { signal }),
+      }],
+    }),
+  })
+  if (!result.success)
+    return result
+  return result
+}
+```
+
+Text and structured data become `source: server:business`, `kind: business` evidence, paginated in the Business evidence tab. Associated files are downloadable and included in offline exports. Existing sanitization, field truncation and evidence budgets apply; use `text/plain` attachments for complete logs with full-text redaction. ZIP/GZIP bytes are stored unchanged after signature, size and SHA-256 checks; archives are never unpacked, executed or internally redacted. The application must sanitize their contents before compression. Browser `addFiles` also accepts ZIP, GZ and TGZ.
+
+`businessCollectionTimeoutMs` defaults to 30000ms (1–300000). Timeout and shutdown abort the supplied signal and stop waiting; pass it into asynchronous work. Throws, invalid files, capacity limits and storage failures retry the collect job up to `maxAttempts`, then expose `collectionStatus: failed`; administrators can call `retry({ id, target: 'collect' }, context)`. Callbacks may run again, so use report.id for external idempotency. Files are stored first; evidence and attachment metadata publish in one leased transaction, and a committed success marker prevents recollection. Stable attachment IDs contain 1–100 characters and receive a `server:business:` prefix. All files share the existing 20-item, per-file and total byte budgets.
+
+### Webhook callback
+
+A trusted `webhookUrl` creates a separate durable webhook job in the intake transaction. It waits for collection to reach complete/partial/failed, then sends `POST application/json` with `feedback.created`, including when collection failed. It is independent of Reach, notificationMode and DND.
+
+```yaml
+businessCollectionTimeoutMs: 30000
+webhookUrl: ${HAI_FEEDBACK_WEBHOOKURL:}
+webhookSecret: ${HAI_FEEDBACK_WEBHOOKSECRET:}
+webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
+```
+
+An empty URL disables delivery. Only HTTP(S) URLs without user credentials or fragments are accepted, and redirects are not followed. Configure destinations through trusted server deployment settings; internal URLs support internal integrations. Keep secrets in private server environment settings, never PUBLIC_ variables. The request timeout defaults to 10000ms (1–60000). Non-2xx responses, redirects, network errors and timeouts retry with exponential backoff from 1s to 60s, up to maxAttempts (default 5).
+
+`FeedbackWebhookEvent` contains `event/eventId/createdAt/report/evidence/detailUrl?`. Evidence contains its revision, business collection success and attachment metadata, without file bytes, storage keys, configuration secrets or full logs. Read contents through authenticated APIs or an offline bundle. The first delivery freezes the payload; retries and restarts reuse its body and `Idempotency-Key: eventId`. Receivers should persist and deduplicate eventId before returning 2xx. Delivery is at least once: lost acknowledgements can cause duplicates. Changing the configured URL causes older jobs to fail rather than redirect to a different destination; drain them before switching.
+
+Requests include `X-Hai-Feedback-Event` and `X-Hai-Feedback-Timestamp` (Unix seconds). With a secret, `X-Hai-Feedback-Signature: sha256=<hex>` is HMAC-SHA256 of `timestamp + '.' + raw request body`. Verify raw bytes, compare in constant time and enforce timestamp tolerance plus eventId deduplication. `get().jobs` exposes status, attempts and safe lastError codes. Admin Console and Fullstack details show Webhook status and administrator retry; programmatic retry uses `retry({ id, target: 'webhook' }, context)`. It is tracked separately from notificationStatus; success means the endpoint returned 2xx.
 
 ### Reviewing and exporting
 

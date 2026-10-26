@@ -268,7 +268,7 @@
         {#if oncapture}<Button size='sm' variant='outline' disabled={loading || annotating || staging || exporting} onclick={() => oncapture()}>{uiM('feedback_capture_add')}</Button>{/if}
         <label class='btn btn-sm btn-ghost focus-within:outline focus-within:outline-primary'>
           {uiM('feedback_add_files')}
-          <BareInput id={`${instanceId}-files`} type='file' aria-label={uiM('feedback_add_files')} accept='.png,.jpg,.jpeg,.webp,.webm,.mp4,.txt,.log,.json,.pdf,image/png,image/jpeg,image/webp,video/webm,video/mp4,text/plain,application/json,application/pdf' multiple disabled={loading || staging || exporting} class='sr-only' onchange={selectFiles} />
+          <BareInput id={`${instanceId}-files`} type='file' aria-label={uiM('feedback_add_files')} accept='.png,.jpg,.jpeg,.webp,.webm,.mp4,.txt,.log,.json,.pdf,.zip,.gz,.tgz,image/png,image/jpeg,image/webp,video/webm,video/mp4,text/plain,application/json,application/pdf,application/zip,application/gzip' multiple disabled={loading || staging || exporting} class='sr-only' onchange={selectFiles} />
         </label>
         {#if onfileschange}<FeedbackRecorder maxBytes={recordingBytes} disabled={loading || annotating || staging || exporting || attachmentLimitReached} onactive={recordingChanged} onrecord={recorded} />{/if}
       </div>

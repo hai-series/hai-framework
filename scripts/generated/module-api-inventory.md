@@ -50,8 +50,8 @@
 | @h-ai/deploy | `. (default)` | 38 |
 | @h-ai/deploy | `. (import)` | 38 |
 | @h-ai/deploy | `. (types)` | 38 |
-| @h-ai/feedback | `. (import)` | 22 |
-| @h-ai/feedback | `. (types)` | 22 |
+| @h-ai/feedback | `. (import)` | 26 |
+| @h-ai/feedback | `. (types)` | 26 |
 | @h-ai/feedback | `./bundle (import)` | 14 |
 | @h-ai/feedback | `./bundle (types)` | 14 |
 | @h-ai/feedback | `./capacitor (import)` | 1 |

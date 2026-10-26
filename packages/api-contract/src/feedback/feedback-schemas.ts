@@ -240,7 +240,7 @@ export const FeedbackCompleteInputSchema = z.strictObject({ id, missing: z.array
  * FeedbackRetryInputSchema.parse({ id: 'report-1', target: 'notify' })
  * ```
  */
-export const FeedbackRetryInputSchema = z.strictObject({ id, target: z.enum(['collect', 'notify', 'export', 'attachment']), targetId: z.string().max(128).optional() })
+export const FeedbackRetryInputSchema = z.strictObject({ id, target: z.enum(['collect', 'notify', 'webhook', 'export', 'attachment']), targetId: z.string().max(128).optional() })
 /**
  * 固定证据修订的导出请求。
  * @example
@@ -271,7 +271,7 @@ export const FeedbackExportQuerySchema = z.strictObject({ id, jobId: id })
 export const FeedbackJobSchema = z.object({
   id,
   feedbackId: id,
-  type: z.enum(['collect', 'notify', 'export', 'cleanup']),
+  type: z.enum(['collect', 'notify', 'webhook', 'export', 'cleanup']),
   status: z.enum(['pending', 'running', 'succeeded', 'failed']),
   attempts: z.number().int().nonnegative(),
   createdAt: timestamp,

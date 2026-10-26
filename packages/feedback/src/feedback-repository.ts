@@ -109,7 +109,7 @@ export interface FeedbackJobRow {
   snapshot_version: number | null
   report_id: string
   scope_id: string
-  kind: 'collect' | 'notify' | 'export' | 'cleanup'
+  kind: 'collect' | 'notify' | 'webhook' | 'export' | 'cleanup'
   status: 'pending' | 'running' | 'succeeded' | 'failed'
   token: string | null
   lease_until: number

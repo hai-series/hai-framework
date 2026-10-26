@@ -2816,6 +2816,14 @@
     "constraint": "字符串；最大字符数 128"
   },
   {
+    "name": "HAI_FEEDBACK_BUSINESSCOLLECTIONTIMEOUTMS",
+    "module": "feedback",
+    "path": "feedback.businessCollectionTimeoutMs",
+    "description": "业务 collectEvidence 异步回调的等待上限，单位毫秒；超时后重试采集任务。",
+    "value": "30000",
+    "constraint": "整数；>= 1；<= 300000"
+  },
+  {
     "name": "HAI_FEEDBACK_COLLECTIONTIMEOUTMS",
     "module": "feedback",
     "path": "feedback.collectionTimeoutMs",
@@ -2867,7 +2875,7 @@
     "name": "HAI_FEEDBACK_MAXATTEMPTS",
     "module": "feedback",
     "path": "feedback.maxAttempts",
-    "description": "汇集、通知和导出任务最大尝试次数；到期清理持续重试。",
+    "description": "汇集、通知、Webhook 和导出任务最大尝试次数；到期清理持续重试。",
     "value": "5",
     "constraint": "整数；>= 1；<= 20"
   },
@@ -2934,6 +2942,30 @@
     "description": "已受理反馈及对象附件的保留天数。",
     "value": "30",
     "constraint": "整数；>= 1；<= 3650"
+  },
+  {
+    "name": "HAI_FEEDBACK_WEBHOOKSECRET",
+    "module": "feedback",
+    "path": "feedback.webhookSecret",
+    "description": "Webhook HMAC-SHA256 签名密钥；空字符串不签名，仅服务端私有环境配置。",
+    "value": "",
+    "constraint": "字符串；最大字符数 4096"
+  },
+  {
+    "name": "HAI_FEEDBACK_WEBHOOKTIMEOUTMS",
+    "module": "feedback",
+    "path": "feedback.webhookTimeoutMs",
+    "description": "单次 Webhook 请求超时，单位毫秒；非 2xx 或超时均进入持久重试。",
+    "value": "10000",
+    "constraint": "整数；>= 1；<= 60000"
+  },
+  {
+    "name": "HAI_FEEDBACK_WEBHOOKURL",
+    "module": "feedback",
+    "path": "feedback.webhookUrl",
+    "description": "反馈采集结束后的 Webhook 地址；空字符串禁用，只允许可信 HTTP(S) 地址且不跟随重定向。",
+    "value": "",
+    "constraint": "字符串；最大字符数 2048"
   },
   {
     "name": "HAI_FEEDBACK_WORKERINTERVALMS",

@@ -125,6 +125,8 @@ Contract は入出力構造のみを定義します。業務エラーは procedu
 
 ## フィードバック領域の契約
 
+FeedbackJob.type と FeedbackRetryInput.target は独立した webhook タスクに対応し、詳細 jobs に状態・試行回数・安全なエラーコードを含みます。業務収集関数と宛先は信頼するサーバーで設定し、HTTP 入力では指定できません。本文と ZIP/GZIP は既存 API で取得します。[feedback](../feedback/README.ja.md) を参照してください。
+
 `apiContract.feedback` は reports.submit/list/get/getEvidence/setStatus/retry/export/getExport/appendEvidence/completeCollection と attachments.upload/get を公開します。最小送信は submissionId/appId のみで、説明・例外は不要です。認証情報・権限・S3 key・メール受信者をクライアントから受け取りません。`@h-ai/api-contract/feedback` から同じ schema と型を個別に利用できます。
 
 証拠追加は acknowledged/evidenceRevision を返し、クライアントは確認済みの分割データのみ解放します。setStatus は expectedVersion が必要です。export は証拠改訂を固定し、getExport が完成したパッケージを読みます。base64 添付は元データ 5 MiB までとし、サーバー側で実際の容量・形式・SHA-256 を検証します。Report.appVersion はアプリ版、Report.version は同時更新制御用です。

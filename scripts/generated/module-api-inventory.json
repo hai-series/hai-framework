@@ -20755,6 +20755,18 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "FeedbackCollectedAttachment",
+              "kind": "type",
+              "declaration": "FeedbackCollectedAttachment",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackCollectedEvidence",
+              "kind": "type",
+              "declaration": "FeedbackCollectedEvidence",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackCompleteInput",
               "kind": "type",
               "declaration": "FeedbackCompleteInput",
@@ -20815,6 +20827,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "FeedbackInitOptions",
+              "kind": "type",
+              "declaration": "FeedbackInitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackJob",
               "kind": "type",
               "declaration": "FeedbackJob",
@@ -20855,6 +20873,12 @@
               "kind": "type",
               "declaration": "FeedbackUploadInput",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackWebhookEvent",
+              "kind": "type",
+              "declaration": "FeedbackWebhookEvent",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "HaiFeedbackError",
@@ -20897,6 +20921,18 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "FeedbackCollectedAttachment",
+              "kind": "type",
+              "declaration": "FeedbackCollectedAttachment",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FeedbackCollectedEvidence",
+              "kind": "type",
+              "declaration": "FeedbackCollectedEvidence",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackCompleteInput",
               "kind": "type",
               "declaration": "FeedbackCompleteInput",
@@ -20957,6 +20993,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "FeedbackInitOptions",
+              "kind": "type",
+              "declaration": "FeedbackInitOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "FeedbackJob",
               "kind": "type",
               "declaration": "FeedbackJob",
@@ -20997,6 +21039,12 @@
               "kind": "type",
               "declaration": "FeedbackUploadInput",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "FeedbackWebhookEvent",
+              "kind": "type",
+              "declaration": "FeedbackWebhookEvent",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "HaiFeedbackError",

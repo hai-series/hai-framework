@@ -49,6 +49,43 @@ const report: FeedbackReportView = {
   evidenceRevision: 2,
 }
 
+it('反馈详情展示 Webhook 失败与尝试次数，独立提供重试入口', async () => {
+  const target = document.createElement('div')
+  document.body.append(target)
+  const onretry = vi.fn(async () => {})
+  const component = mount(FeedbackDetail, { target, props: { report: { ...report, collectionStatus: 'complete', notificationStatus: 'disabled' }, webhook: { status: 'failed', attempts: 3, lastError: 'hai:feedback:020' }, permissions: { read: true, retry: true }, onretry } })
+  try {
+    flushSync()
+    expect(target.textContent).toContain('Webhook 回调')
+    expect(target.textContent).toContain('尝试次数: 3')
+    expect(target.textContent).toContain('hai:feedback:020')
+    button(target, '重试').click()
+    await vi.waitFor(() => expect(onretry).toHaveBeenCalledOnce())
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
+it('业务信息页签单独分页请求 business 证据并安全展示正文', async () => {
+  const target = document.createElement('div')
+  document.body.append(target)
+  const onevidencequery = vi.fn(async () => {})
+  const component = mount(FeedbackDetail, { target, props: { report, permissions: { read: true }, evidenceQuery: { page: 2, pageSize: 20, requestId: 'previous-request', errorId: 'previous-error' }, evidence: { items: [{ id: 'business', source: 'server:business', sequence: 0, timestamp: 1, kind: 'business', data: { text: '<script>diagnostics</script>' } }], total: 1, page: 1, pageSize: 20 }, onevidencequery } })
+  try {
+    flushSync()
+    button(target, '业务信息').click()
+    await vi.waitFor(() => expect(onevidencequery).toHaveBeenCalledWith(expect.objectContaining({ kind: 'business', page: 1, requestId: undefined, errorId: undefined })))
+    expect(target.textContent).toContain('<script>diagnostics</script>')
+    expect(target.querySelector('script')).toBeNull()
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
+})
+
 describe('feedback collection', () => {
   it.each([
     { name: '小数', bounds: [10, 20, 200, 100], start: [31, 41], end: [130, 80], rect: { x: 0.105, y: 0.21, width: 0.495, height: 0.39 } },

@@ -10,5 +10,10 @@ recipients: []
 notificationProvider: email
 adminUrl: ${HAI_FEEDBACK_ADMINURL:http://localhost:5173/admin/feedback}
 collectionTimeoutMs: ${HAI_FEEDBACK_COLLECTIONTIMEOUTMS:60000}
+businessCollectionTimeoutMs: ${HAI_FEEDBACK_BUSINESSCOLLECTIONTIMEOUTMS:30000}
+# 可信服务端 Webhook；空地址禁用。密钥仅放 .env.local 或部署私有环境。
+webhookUrl: ${HAI_FEEDBACK_WEBHOOKURL:}
+webhookSecret: ${HAI_FEEDBACK_WEBHOOKSECRET:}
+webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
 workerIntervalMs: ${HAI_FEEDBACK_WORKERINTERVALMS:1000}
 envAllowlist: [NODE_ENV, TZ]

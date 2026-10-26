@@ -28,11 +28,26 @@ export const FeedbackConfigSchema = z.strictObject({
   adminUrl: z.url().refine(value => ['http:', 'https:'].includes(new URL(value).protocol)).optional(),
   /** 补充材料收集超时，单位毫秒；超时后冻结为完整或部分材料。 */
   collectionTimeoutMs: z.number().int().min(0).max(300000).default(60000),
+  /** 业务 collectEvidence 异步回调的等待上限，单位毫秒；超时后重试采集任务。 */
+  businessCollectionTimeoutMs: z.number().int().min(1).max(300000).default(30000),
+  /** 反馈采集结束后的 Webhook 地址；空字符串禁用，只允许可信 HTTP(S) 地址且不跟随重定向。 */
+  webhookUrl: z.string().max(2048).refine((value) => {
+    if (!value)
+      return true
+    if (!URL.canParse(value))
+      return false
+    const url = new URL(value)
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.hash
+  }).default(''),
+  /** Webhook HMAC-SHA256 签名密钥；空字符串不签名，仅服务端私有环境配置。 */
+  webhookSecret: z.string().max(4096).default(''),
+  /** 单次 Webhook 请求超时，单位毫秒；非 2xx 或超时均进入持久重试。 */
+  webhookTimeoutMs: z.number().int().min(1).max(60000).default(10000),
   /** 持久任务扫描间隔，单位毫秒；零值由宿主手动运行任务。 */
   workerIntervalMs: z.number().int().min(0).max(60000).default(1000),
   /** 持久任务执行租约时长，单位毫秒；过期后允许其他实例接管。 */
   leaseMs: z.number().int().min(1000).max(300000).default(30000),
-  /** 汇集、通知和导出任务最大尝试次数；到期清理持续重试。 */
+  /** 汇集、通知、Webhook 和导出任务最大尝试次数；到期清理持续重试。 */
   maxAttempts: z.number().int().min(1).max(20).default(5),
   /** 已受理反馈及对象附件的保留天数。 */
   retentionDays: z.number().int().min(1).max(3650).default(30),

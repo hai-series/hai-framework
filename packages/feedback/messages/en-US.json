@@ -9,7 +9,7 @@
   "feedback_exportPending": "The feedback bundle is being generated. Please retry shortly",
   "feedback_limitExceeded": "Feedback evidence exceeds the allowed capacity",
   "feedback_invalidInput": "Invalid feedback input",
-  "feedback_unsupportedAttachmentType": "Unsupported attachment format. Choose a PNG, JPEG, WebP, WebM, MP4, TXT, LOG, JSON or PDF file",
+  "feedback_unsupportedAttachmentType": "Unsupported attachment format. Choose a PNG, JPEG, WebP, WebM, MP4, TXT, LOG, JSON, PDF, ZIP or GZIP file",
   "feedback_checksumMismatch": "Attachment integrity verification failed",
   "feedback_received": "New feedback received",
   "feedback_submittedAt": "Submitted at (UTC)",

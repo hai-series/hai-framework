@@ -309,7 +309,7 @@ components/
 | `FeedbackModal`    | フィードバックモーダル                      | `open`, `onsubmit`                                       |
 | `FeedbackForm` | 独立したフィードバックフォーム | `attachments`, `evidenceSummary`, `onsubmit`, `onfileschange` |
 | `FeedbackList` | サーバー側ページング・絞り込み・処理操作 | `data`, `query`, `permissions`, `onquerychange`, `onstatus` |
-| `FeedbackDetail` | 診断情報・処理履歴・エクスポート | `report`, `evidence`, `attachments`, `history`, `onexport` |
+| `FeedbackDetail` | 診断情報・処理履歴・エクスポート | `report`, `evidence`, `attachments`, `history`, `webhook`, `onretry`, `onexport` |
 | `FeedbackScreenshot` | 画像のプレビュー・強調・マスキング | `attachment`, `onannotate` |
 | `SettingsModal`    | 設定モーダル                                | `open`, `onclose`                                        |
 | `SettingsLayout`   | 設定レイアウト（区分ナビゲーション + 本文） | `title`, `description`, `sections`, `active`, `onselect` |
@@ -317,6 +317,8 @@ components/
 | `ThemeColorPicker` | テーマカラー選択                            | `value`, `presets`, `onchange`                           |
 | `ThemeSelector`    | テーマ選択パネル                            | プロパティ不要                                           |
 | `ThemeToggle`      | ライト・ダーク切り替え                      | プロパティ不要                                           |
+
+詳細 jobs の type: webhook を FeedbackDetail.webhook に渡すと状態・試行回数・安全なエラーコードを表示し、onretry から認可付き retry API を呼びます。「業務情報」タブは kind: business をページ取得し、圧縮添付は操作現場からダウンロードします。
 
 説明は任意です。モーダルを開く前に `@h-ai/feedback/client` の `prepare()` で現場を固定します。`onfileschange` で添付を準備し、`onannotate` で注釈を画像のピクセルに反映します。送信失敗時は入力を保持し、ローカルに出力できます。一覧は説明またはサーバーの要約を表示し、`onquerychange` でページを取得します。UI の権限表示とは別にサーバーの認可が必要です。接続方法とオフラインツールは [feedback モジュール](../feedback/README.ja.md) を参照してください。
 

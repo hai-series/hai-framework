@@ -62,6 +62,8 @@
 
 管理台提交的 config/_feedback.yml 默认启用问题反馈。启动时复用数据库、存储和 Reach，管理员通知使用配置的 email Provider；生产配置私有 S3、真实 SMTP 和通知地址。
 
+业务异步补采使用 feedback.init(config, { collectEvidence })，可返回 text/data 与文本或 ZIP/GZIP 附件；同 appId 的每个实例都要注册。_feedback.yml 可配置 HAI_FEEDBACK_WEBHOOKURL/WEBHOOKSECRET/WEBHOOKTIMEOUTMS 与 BUSINESSCOLLECTIONTIMEOUTMS；密钥保存在服务端私有环境。详情展示 Webhook 状态及尝试次数，管理员重试失败项。使用方式见 [feedback](../../packages/feedback/README.md)。
+
 普通 user 角色获得 feedback:create，可从顶栏直接提交空说明或附带图片；窄屏仍保留带可访问名称的入口。business_operator 角色获得 feedback:create/read/process/reopen/export，可打开 /admin/feedback，分页筛选、查看材料、处理或撤销并导出诊断包。创建者可读取自己的报告/续传材料；普通用户不能列出管理记录或执行管理操作。无角色且未授权的用户不显示提交入口，服务端仍拒绝请求。
 
 采集失败可再次点击入口；提交失败保留说明、附件与现场，可重试或保存本地包。受理回执分别提示采集状态，受理不代表邮件已投递。反馈权限由宿主应用显式分配。

@@ -4,11 +4,12 @@ import type { DmlOperations, DmlWithTxOperations } from '@h-ai/reldb'
 import type { FeedbackCapture } from './feedback-capture.js'
 import type { FeedbackConfig } from './feedback-config.js'
 import type { FeedbackAttachmentRow, FeedbackEvidenceRow, FeedbackJobRow, FeedbackReportRepository, FeedbackReportRow } from './feedback-repository.js'
-import type { FeedbackContext, FeedbackFunctions } from './feedback-types.js'
+import type { FeedbackCollectedEvidence, FeedbackContext, FeedbackFunctions, FeedbackInitOptions, FeedbackWebhookEvent } from './feedback-types.js'
 import { Buffer } from 'node:buffer'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID } from 'node:crypto'
 import {
   FeedbackAppendEvidenceInputSchema,
+  FeedbackAttachmentInputSchema,
   FeedbackAttachmentSchema,
   FeedbackCompleteInputSchema,
   FeedbackEvidenceInputSchema,
@@ -18,6 +19,7 @@ import {
   FeedbackHistorySchema,
   FeedbackJobSchema,
   FeedbackListInputSchema,
+  FeedbackRetryInputSchema,
   FeedbackSetStatusInputSchema,
   FeedbackSubmitInputSchema,
   FeedbackUploadInputSchema,
@@ -85,13 +87,15 @@ function escapeHtml(value: string) {
  * void createRuntime
  * ```
  */
-export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture): FeedbackRuntime {
+export function createFeedbackOperations(repo: FeedbackReportRepository, config: FeedbackConfig, capture: FeedbackCapture, options: FeedbackInitOptions = {}): FeedbackRuntime {
   const budget = resolveFeedbackBudget(config)
   const table = repo.tables
   const clock = feedbackClockSql()
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let running: Promise<HaiResult<{ processed: number }>> | null = null
+  const shutdown = new AbortController()
+  const collectEvidence = options.collectEvidence
 
   async function access(id: string, actor: FeedbackContext, permission?: string, sql: DmlOperations = reldb.sql): Promise<HaiResult<FeedbackReportRow>> {
     if (!validActor(actor))
@@ -248,6 +252,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     },
     async close() {
       stopped = true
+      shutdown.abort()
       if (timer)
         clearTimeout(timer)
       await running
@@ -308,7 +313,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if ((sanitized.attachments ?? []).reduce((total, file) => total + file.size, 0) > budget.maxAttachmentsBytes)
           return limited()
         for (const attachment of sanitized.attachments ?? []) {
-          if (attachment.size > budget.maxAttachmentBytes || !allowedContentType(attachment.contentType))
+          if (attachment.id.startsWith('server:') || attachment.size > budget.maxAttachmentBytes || !allowedContentType(attachment.contentType))
             return invalid()
           const attachmentId = hash(`${id}:${attachment.id}`)
           const data: FeedbackAttachment = { ...attachment, feedbackId: id, status: 'pending' }
@@ -321,7 +326,12 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           if (!saved.success)
             return saved
         }
-        const collected = await insertJob(tx, report, 'collect', 'initial', { anchor: sanitized.anchor?.timestamp ?? now }, row.collect_deadline)
+        if (config.webhookUrl) {
+          const webhook = await insertJob(tx, report, 'webhook', 'created', { url: config.webhookUrl }, row.collect_deadline)
+          if (!webhook.success)
+            return webhook
+        }
+        const collected = await insertJob(tx, report, 'collect', 'initial', { anchor: sanitized.anchor?.timestamp ?? now, businessEvidence: !!collectEvidence }, row.collect_deadline)
         if (!collected.success)
           return collected
         const cleanup = await insertJob(tx, report, 'cleanup', 'expiry', {}, row.expires_at)
@@ -518,7 +528,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!saved.success)
           return saved
       }
-      const next = await reldb.sql.execute(`UPDATE ${table.jobs} SET next_run_at = ${clock}, updated_at = ${clock} WHERE report_id = ? AND kind IN ('collect', 'notify') AND status = 'pending'`, [input.id])
+      const next = await reldb.sql.execute(`UPDATE ${table.jobs} SET next_run_at = ${clock}, updated_at = ${clock} WHERE report_id = ? AND kind IN ('collect', 'notify', 'webhook') AND status = 'pending'`, [input.id])
       return next.success ? ok(repo.report(row.data)) : next
     },
 
@@ -546,6 +556,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     },
 
     async retry(input, actor) {
+      const parsed = FeedbackRetryInputSchema.safeParse(input)
+      if (!parsed.success)
+        return invalid()
       const permission = input.target === 'export' ? 'feedback:export' : 'feedback:process'
       const row = await access(input.id, actor, permission)
       if (!row.success)
@@ -710,6 +723,114 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     return ok({ ...metadata, status: 'available' })
   }
 
+  /** 上传与最终关联分开；只有持有租约的事务能发布材料，孤立对象由反馈到期清理回收。 */
+  async function collectBusiness(job: FeedbackJobRow, report: FeedbackReport, actor: FeedbackContext): Promise<HaiResult<void>> {
+    const marker = hash(`${report.id}:server:business:0`)
+    const previous = await reldb.sql.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [marker])
+    if (!previous.success)
+      return previous
+    if (previous.data)
+      return ok(undefined)
+    if (!collectEvidence)
+      return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+    const controller = new AbortController()
+    const signal = AbortSignal.any([controller.signal, shutdown.signal])
+    const timeout = setTimeout(() => controller.abort(), config.businessCollectionTimeoutMs)
+    timeout.unref()
+    let collected: FeedbackCollectedEvidence
+    let onAbort: (() => void) | undefined
+    try {
+      collected = await Promise.race([
+        Promise.resolve().then(() => collectEvidence({ report: Object.freeze({ ...report }), signal })),
+        new Promise<never>((_resolve, reject) => {
+          onAbort = () => reject(new Error('Feedback business collection aborted'))
+          signal.addEventListener('abort', onAbort, { once: true })
+          if (signal.aborted)
+            onAbort()
+        }),
+      ])
+    }
+    catch {
+      return failed()
+    }
+    finally {
+      clearTimeout(timeout)
+      if (onAbort)
+        signal.removeEventListener('abort', onAbort)
+    }
+    if (!collected || typeof collected !== 'object' || (collected.text !== undefined && typeof collected.text !== 'string') || (collected.attachments !== undefined && !Array.isArray(collected.attachments)))
+      return invalid()
+    if ((collected.attachments?.length ?? 0) > budget.maxAttachmentCount)
+      return limited()
+    const files: Array<{ metadata: FeedbackAttachment, bytes: Buffer, key: string, rowId: string }> = []
+    for (const input of collected.attachments ?? []) {
+      if (!input || !(input.bytes instanceof Uint8Array) || typeof input.id !== 'string' || input.id.length > 100)
+        return invalid()
+      if (input.bytes.byteLength > budget.maxAttachmentBytes)
+        return limited()
+      let bytes = Buffer.from(input.bytes)
+      if (!matchesContentType(bytes, input.contentType))
+        return invalid()
+      // 文本附件全文脱敏；压缩包是宿主生成的原始材料，不在服务端解压或执行。
+      if (input.contentType === 'text/plain')
+        bytes = Buffer.from(redactFeedbackText(bytes.toString('utf8')))
+      if (input.contentType === 'application/json')
+        bytes = Buffer.from(JSON.stringify(sanitizeFeedbackValue(JSON.parse(bytes.toString('utf8')))))
+      if (bytes.length > budget.maxAttachmentBytes)
+        return limited()
+      const parsed = FeedbackAttachmentInputSchema.safeParse({ id: `server:business:${input.id}`, name: typeof input.name === 'string' ? redactFeedbackText(input.name) : input.name, contentType: input.contentType, size: bytes.length, checksum: hash(bytes) })
+      if (!parsed.success || !input.id || files.some(file => file.metadata.id === parsed.data.id))
+        return invalid()
+      const rowId = hash(`${report.id}:${parsed.data.id}`)
+      const key = `feedback/${hash(report.scopeId).slice(0, 16)}/${report.id}/business/${rowId}-${parsed.data.checksum}`
+      files.push({ metadata: { ...parsed.data, feedbackId: report.id, status: 'available' }, bytes, key, rowId })
+    }
+    const event = FeedbackEvidenceInputSchema.safeParse(sanitizeFeedbackValue({ id: `business-${report.id}`, source: 'server:business', sequence: 0, kind: 'business', timestamp: report.createdAt, data: { ...collected.data, ...(collected.text !== undefined ? { text: collected.text } : {}), attachmentIds: files.map(file => file.metadata.id) } }))
+    if (!event.success)
+      return invalid()
+    async function checkCapacity(sql: DmlOperations) {
+      const existing = await attachments(report.id, sql)
+      if (!existing.success)
+        return existing
+      if (existing.data.length + files.length > budget.maxAttachmentCount || existing.data.reduce((total, item) => total + Number(item.size), 0) + files.reduce((total, file) => total + file.bytes.length, 0) > budget.maxAttachmentsBytes)
+        return limited()
+      return ok(undefined)
+    }
+    const capacity = await checkCapacity(reldb.sql)
+    if (!capacity.success)
+      return capacity
+    for (const file of files) {
+      const stored = await storage.file.put(file.key, file.bytes, { contentType: file.metadata.contentType, ifNoneMatch: '*', signal: AbortSignal.any([shutdown.signal, AbortSignal.timeout(30000)]) })
+      if (!stored.success) {
+        const existing = await storage.file.get(file.key)
+        if (!existing.success || hash(existing.data) !== file.metadata.checksum)
+          return stored
+      }
+    }
+    return withLease(job, async (tx) => {
+      const fresh = await access(report.id, actor, undefined, tx)
+      if (!fresh.success)
+        return fresh
+      const completed = await tx.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [marker])
+      if (!completed.success)
+        return completed
+      if (completed.data)
+        return ok(undefined)
+      const capacity = await checkCapacity(tx)
+      if (!capacity.success)
+        return capacity
+      const appended = await appendInside(tx, fresh.data, [event.data], true)
+      if (!appended.success)
+        return appended
+      for (const file of files) {
+        const saved = await tx.execute(`INSERT INTO ${table.attachments} (id, client_id, report_id, scope_id, object_key, status, size, checksum, updated_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [file.rowId, file.metadata.id, report.id, actor.scopeId, file.key, 'available', file.bytes.length, file.metadata.checksum, Date.now(), JSON.stringify(file.metadata)])
+        if (!saved.success)
+          return saved
+      }
+      return ok(undefined)
+    })
+  }
+
   async function processJobs(): Promise<HaiResult<{ processed: number }>> {
     let processed = 0
     const candidateParams: unknown[] = []
@@ -806,6 +927,11 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       })
       if (!saved.success)
         return saved
+      if ('businessEvidence' in payload && payload.businessEvidence === true) {
+        const business = await collectBusiness(job, report, actor)
+        if (!business.success)
+          return business
+      }
       const files = await attachments(report.id)
       if (!files.success)
         return files
@@ -815,6 +941,52 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       const partial = Number(reasons.data?.count ?? 0) > 0 || files.data.some(item => item.status !== 'available')
       const updated = await withLease(job, tx => tx.execute(`UPDATE ${table.reports} SET collection_status = ?, updated_at = ${clock} WHERE id = ?`, [partial ? 'partial' : 'complete', report.id]))
       return updated.success ? ok({ collected: captured.length }) : updated
+    }
+    if (job.kind === 'webhook') {
+      if (!('url' in payload) || payload.url !== config.webhookUrl || !config.webhookUrl)
+        return err(HaiFeedbackError.CONFIG_ERROR, feedbackM('feedback_configError'))
+      // 材料仍在采集中时等待，不消耗发送尝试次数；终态失败也应通知接收方。
+      if (report.collectionStatus === 'collecting')
+        return ok({ pending: true })
+      const frozen = await withLease(job, async (tx) => {
+        const live = await access(report.id, actor, undefined, tx)
+        if (!live.success)
+          return live
+        if (live.data.collection_status === 'collecting')
+          return conflict()
+        const stored = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [job.id])
+        if (!stored.success || !stored.data)
+          return missing()
+        const snapshot = readFeedbackJson(stored.data.payload)
+        if (snapshot && typeof snapshot === 'object' && 'body' in snapshot && typeof snapshot.body === 'string')
+          return ok(snapshot.body)
+        const files = await attachments(report.id, tx)
+        if (!files.success)
+          return files
+        const business = await tx.get(`SELECT id FROM ${table.evidence} WHERE id = ?`, [hash(`${report.id}:server:business:0`)])
+        if (!business.success)
+          return business
+        const detailUrl = config.adminUrl ? new URL(config.adminUrl) : undefined
+        detailUrl?.searchParams.set('feedback', report.id)
+        const event: FeedbackWebhookEvent = { event: 'feedback.created', eventId: job.id, createdAt: report.createdAt, report: repo.report(live.data), evidence: { revision: Number(live.data.revision), business: !!business.data, attachments: files.data.map(attachmentData) }, ...(detailUrl ? { detailUrl: detailUrl.href } : {}) }
+        const body = JSON.stringify(event)
+        const saved = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [JSON.stringify({ url: config.webhookUrl, body }), job.id, job.token])
+        return saved.success ? ok(body) : saved
+      })
+      if (!frozen.success)
+        return frozen
+      const timestamp = String(Math.floor(Date.now() / 1000))
+      const headers: Record<string, string> = { 'content-type': 'application/json', 'idempotency-key': job.id, 'x-hai-feedback-event': 'feedback.created', 'x-hai-feedback-timestamp': timestamp }
+      if (config.webhookSecret)
+        headers['x-hai-feedback-signature'] = `sha256=${createHmac('sha256', config.webhookSecret).update(`${timestamp}.${frozen.data}`).digest('hex')}`
+      try {
+        const response = await fetch(config.webhookUrl, { method: 'POST', headers, body: frozen.data, redirect: 'manual', signal: AbortSignal.any([shutdown.signal, AbortSignal.timeout(config.webhookTimeoutMs)]) })
+        await response.body?.cancel()
+        return response.ok ? ok({ status: response.status }) : failed()
+      }
+      catch {
+        return failed()
+      }
     }
     if (job.kind === 'notify') {
       if (config.notificationMode === 'disabled')
@@ -931,9 +1103,13 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
 }
 
 function allowedContentType(type: string) {
-  return ['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json', 'application/pdf'].includes(type)
+  return ['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json', 'application/pdf', 'application/zip', 'application/gzip'].includes(type)
 }
 function matchesContentType(bytes: Buffer, type: string) {
+  if (type === 'application/zip')
+    return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4B && ((bytes[2] === 3 && bytes[3] === 4) || (bytes[2] === 5 && bytes[3] === 6))
+  if (type === 'application/gzip')
+    return bytes.length >= 10 && bytes[0] === 0x1F && bytes[1] === 0x8B && bytes[2] === 8
   if (type === 'image/png')
     return bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) && bytes.readUInt32BE(16) * bytes.readUInt32BE(20) <= 32 * 1024 * 1024
   if (type === 'image/jpeg')

@@ -309,7 +309,7 @@ components/
 | `FeedbackModal`  | 反馈模态框       | `open`, `onsubmit` |
 | `FeedbackForm` | 独立反馈表单 | `attachments`, `evidenceSummary`, `onsubmit`, `onfileschange` |
 | `FeedbackList` | 服务端分页、筛选与处理操作 | `data`, `query`, `permissions`, `onquerychange`, `onstatus` |
-| `FeedbackDetail` | 诊断材料、处理历史与导出 | `report`, `evidence`, `attachments`, `history`, `onexport` |
+| `FeedbackDetail` | 诊断材料、处理历史与导出 | `report`, `evidence`, `attachments`, `history`, `webhook`, `onretry`, `onexport` |
 | `FeedbackScreenshot` | 图片预览、圈选与遮挡 | `attachment`, `onannotate` |
 | `SettingsModal`  | 设置模态框       | `open`, `onclose`  |
 | `SettingsLayout` | 设置页布局（分区导航 + 内容区） | `title`, `description`, `sections`, `active`, `onselect` |
@@ -317,6 +317,8 @@ components/
 | `ThemeColorPicker` | 主题色选择器   | `value`, `presets`, `onchange` |
 | `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
 | `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
+
+将详情 jobs 中 type: webhook 的任务传给 FeedbackDetail.webhook，显示状态、尝试次数及安全错误码；onretry 负责调用受权 retry API。业务异步证据在“业务信息”页签分页查询 kind: business，压缩附件在“操作现场”下载。
 
 反馈说明可为空；宿主先用 `@h-ai/feedback/client` 的 `prepare()` 固定现场，再打开弹窗。表单通过 `onfileschange` 准备主动附件、通过 `onannotate` 将标注烧录到图片；受理失败保留输入并可本地导出。列表展示说明或服务端事实摘要，以 `onquerychange` 取得分页数据；界面权限不代替服务端授权。完整接入与离线工具见 [feedback 模块](../feedback/README.md)。
 

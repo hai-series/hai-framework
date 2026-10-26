@@ -88,6 +88,9 @@ describe('feedback browser collection', () => {
     ['capture.png', 'image/x-png', 'image/png', 'binary fixture'],
     ['facts.json', 'application/json; charset=utf-8', 'application/json', '{"enabled":true}'],
     ['document.pdf', '', 'application/pdf', '%PDF-1.7 fixture'],
+    ['logs.zip', '', 'application/zip', 'binary archive fixture'],
+    ['logs.zip', 'application/x-zip-compressed', 'application/zip', 'binary archive fixture'],
+    ['logs.tgz', 'application/x-gzip', 'application/gzip', 'binary archive fixture'],
   ])('选择本地附件规范化系统 MIME：%s (%s)', async (name, mime, contentType, content) => {
     const { client } = await setup()
     await client.prepare()

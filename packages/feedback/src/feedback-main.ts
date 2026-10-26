@@ -1,6 +1,6 @@
 import type { FeedbackConfigInput } from './feedback-config.js'
 import type { FeedbackRuntime } from './feedback-functions.js'
-import type { FeedbackFunctions } from './feedback-types.js'
+import type { FeedbackFunctions, FeedbackInitOptions } from './feedback-types.js'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -39,7 +39,7 @@ const inFlight = new Set<Promise<unknown>>()
  * ```
  */
 export const feedback: FeedbackFunctions = {
-  async init(config: FeedbackConfigInput) {
+  async init(config: FeedbackConfigInput, options: FeedbackInitOptions = {}) {
     if (initializing)
       return err(HaiFeedbackError.INIT_IN_PROGRESS, feedbackM('feedback_initInProgress'))
     initializing = true
@@ -49,6 +49,8 @@ export const feedback: FeedbackFunctions = {
       const parsed = FeedbackConfigSchema.safeParse(config)
       if (!parsed.success)
         return configFailure(parsed.error.issues.map(issue => issue.path.join('.')))
+      if (options.collectEvidence !== undefined && typeof options.collectEvidence !== 'function')
+        return configFailure(['collectEvidence'])
       if (!reldb.isInitialized || !storage.isInitialized)
         return configFailure([!reldb.isInitialized ? 'reldb' : 'storage'])
       if (parsed.data.notificationMode === 'reach') {
@@ -64,8 +66,9 @@ export const feedback: FeedbackFunctions = {
       if (current) {
         const previous = current
         current = null
+        const closing = previous.operations.close()
         await Promise.allSettled([...inFlight])
-        await previous.operations.close()
+        await closing
         await previous.capture.close()
       }
       const repository = new FeedbackReportRepository()
@@ -75,7 +78,7 @@ export const feedback: FeedbackFunctions = {
       if (epoch !== generation)
         return notInitialized.result()
       candidateCapture = createFeedbackCapture(parsed.data.appId, parsed.data.envAllowlist, { appVersion: parsed.data.appVersion, buildId: parsed.data.buildId, commit: parsed.data.commit })
-      const operations = createFeedbackOperations(repository, parsed.data, candidateCapture)
+      const operations = createFeedbackOperations(repository, parsed.data, candidateCapture, options)
       if (epoch !== generation) {
         await operations.close()
         await candidateCapture.close()
@@ -99,12 +102,11 @@ export const feedback: FeedbackFunctions = {
     generation++
     const previous = current
     current = null
-    await Promise.allSettled([...inFlight])
-    if (!previous)
-      return ok(undefined)
     try {
-      await previous.operations.close()
-      await previous.capture.close()
+      const closing = previous?.operations.close()
+      await Promise.allSettled([...inFlight])
+      await closing
+      await previous?.capture.close()
       return ok(undefined)
     }
     catch {

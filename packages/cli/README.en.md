@@ -144,6 +144,8 @@ The [fullstack security configuration guide template](templates/apps/fullstack/d
 
 A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Members and business operators can submit reports. Only business_operator sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Configure recipients and the administrator URL in `_feedback.yml`; production requires shared DB, private S3 and real SMTP. Console is a development provider.
 
+Register collectEvidence through feedback.init(config, { collectEvidence }) to await business text or archives. _feedback.yml includes businessCollectionTimeoutMs and webhookUrl/webhookSecret/webhookTimeoutMs. Webhook delivery retries durably and exposes status and administrator retry in details. Keep secrets in private server environment settings; see [feedback examples](../feedback/README.en.md).
+
 Offline commands: `hai feedback summary <bundle.zip>`, `inspect`, `evidence --request-id <ID> --page 1 --page-size 20`, and `view`. The viewer binds only to loopback and closes on Ctrl+C; no production connection is needed.
 
 ## Release inspection and native packaging

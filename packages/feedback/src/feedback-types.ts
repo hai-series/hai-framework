@@ -6,6 +6,7 @@ import type {
   FeedbackCompleteInput,
   FeedbackDetail,
   FeedbackEvidence,
+  FeedbackEvidenceInput,
   FeedbackEvidenceQuery,
   FeedbackExportInput,
   FeedbackJob,
@@ -60,6 +61,68 @@ export interface FeedbackContext {
 }
 
 /**
+ * 业务采集附件；ID 在同一反馈内稳定，正文由框架计算校验和并写入私有存储。
+ * @example
+ * ```ts
+ * import type { FeedbackCollectedAttachment } from '@h-ai/feedback'
+ * const file: FeedbackCollectedAttachment = { id: 'logs', name: 'logs.txt', contentType: 'text/plain', bytes: new TextEncoder().encode('diagnostics') }
+ * void file
+ * ```
+ */
+export interface FeedbackCollectedAttachment {
+  id: string
+  name: string
+  contentType: string
+  bytes: Uint8Array
+}
+
+/**
+ * 业务补充材料；短文本/结构化信息出现在 business 证据，完整日志使用附件。
+ * @example
+ * ```ts
+ * import type { FeedbackCollectedEvidence } from '@h-ai/feedback'
+ * const evidence: FeedbackCollectedEvidence = { text: 'Order diagnostics', data: { orderId: 'order-1' } }
+ * void evidence
+ * ```
+ */
+export interface FeedbackCollectedEvidence {
+  text?: string
+  data?: FeedbackEvidenceInput['data']
+  attachments?: FeedbackCollectedAttachment[]
+}
+
+/**
+ * 采集扩展在持久任务中执行并等待异步结果；可能重试，宿主应按 report.id 幂等并响应 signal。
+ * @example
+ * ```ts
+ * import type { FeedbackInitOptions } from '@h-ai/feedback'
+ * const options: FeedbackInitOptions = { collectEvidence: async ({ report, signal }) => { signal.throwIfAborted(); return { text: report.number } } }
+ * void options
+ * ```
+ */
+export interface FeedbackInitOptions {
+  collectEvidence?: (context: { report: Readonly<FeedbackReport>, signal: AbortSignal }) => FeedbackCollectedEvidence | Promise<FeedbackCollectedEvidence>
+}
+
+/**
+ * 采集结束后发送的 feedback.created 事件；eventId 跨重试稳定，附件正文通过受权 API 读取。
+ * @example
+ * ```ts
+ * import type { FeedbackWebhookEvent } from '@h-ai/feedback'
+ * function eventKey(event: FeedbackWebhookEvent) { return event.eventId }
+ * void eventKey
+ * ```
+ */
+export interface FeedbackWebhookEvent {
+  event: 'feedback.created'
+  eventId: string
+  createdAt: number
+  report: FeedbackReport
+  evidence: { revision: number, business: boolean, attachments: FeedbackAttachment[] }
+  detailUrl?: string
+}
+
+/**
  * 反馈服务对象；领域操作返回 HaiResult，close 不释放宿主依赖连接。
  * @example
  * ```ts
@@ -72,7 +135,7 @@ export interface FeedbackContext {
  * ```
  */
 export interface FeedbackFunctions {
-  init: (config: FeedbackConfigInput) => Promise<HaiResult<void>>
+  init: (config: FeedbackConfigInput, options?: FeedbackInitOptions) => Promise<HaiResult<void>>
   close: () => Promise<HaiResult<void>>
   readonly isInitialized: boolean
   readonly config: FeedbackConfig | null

@@ -58,7 +58,7 @@ return submitted
 
 `addFiles` は一括追加を原子的に行い、全ファイルの検証に成功してから統合します。一つでも失敗した場合、既存の添付と欠落マーカーを維持し、一部だけを保存しません。並行して成功した追加を上書きせず、統合後も最大 20 件です。読取中に下書きが変わるか初回送信内容が固定された場合は `CONFLICT` を返し、送信内容に含まれない添付を後から隠れてアップロードしません。
 
-ローカル添付は PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF に対応します。MIME が空または `application/octet-stream` の場合は対応する拡張子で補い、一般的な MIME 別名も正規化します。サーバーは実際のバイトとチェックサムを引き続き検証し、未対応形式には具体的な案内を表示します。通常の入力欄は背景と枠を保持し、値だけを固定マスク文字に置き換えます。パスワード、`data-feedback-private`、`.rr-block`、`.rr-mask` は全面を遮蔽します。撮影用クローンだけを変更し、元の画面と入力値は保持します。
+ローカル添付は PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF、ZIP/GZIP に対応します。MIME が空または `application/octet-stream` の場合は対応する拡張子で補い、一般的な MIME 別名も正規化します。サーバーは実際のバイトとチェックサムを引き続き検証し、未対応形式には具体的な案内を表示します。通常の入力欄は背景と枠を保持し、値だけを固定マスク文字に置き換えます。パスワード、`data-feedback-private`、`.rr-block`、`.rr-mask` は全面を遮蔽します。撮影用クローンだけを変更し、元の画面と入力値は保持します。
 
 `annotate(id, { ...rect, mode, coordinateSpace: 'ratio' })` は UI の 0–1 座標を直接受け取り、SDK がデコード後の元画像サイズで換算します。小数、1% 未満、逆方向、端や CSS 拡大縮小に対応します。省略時は従来のピクセル座標です。`getView()` がプレビュー URL を管理し、置換・削除・終了時に解放するため、ホストの画像デコードや URL 管理は不要です。
 
@@ -89,6 +89,57 @@ return submitted
 console/disabled は Reach パッケージ不要です。reach モードは optional peer の @h-ai/reach を明示導入・初期化します。認証通知は生成 receiptId のみを返し、Provider messageId を保存・返却しません。
 
 Web クライアントは原生プラグインを解決・導入しません。独自ホストは @h-ai/feedback/tauri の saveTauriFeedbackFile または @h-ai/feedback/capacitor の saveCapacitorFeedbackFile を読み込み、起動時に configureFeedbackSaving(saver) を呼びます。生成工程には接続済みで、業務コードはネイティブファイルの管理を行いません。
+
+### 業務証拠の拡張
+
+`feedback.init(config, { collectEvidence })` にサーバー側の収集関数を登録します。受付コミット後に永続 collect タスクが同期・非同期の戻り値を待機するため、送信リクエストは業務ログの生成を待ちません。同じ appId を処理する全インスタンスに同じ関数を登録し、再起動・引き継ぎ後も復旧できるようにします。
+
+以下は依存モジュール初期化後の例です。config はホストが読み込んだ FeedbackConfigInput、diagnostics/sanitized-logs.zip は業務側で事前に生成・秘匿化したファイルです。実際には関数内で独自のログ収集処理を await できます。
+
+```ts
+import type { FeedbackConfigInput } from '@h-ai/feedback'
+import { readFile } from 'node:fs/promises'
+import { feedback } from '@h-ai/feedback'
+
+async function startFeedback(config: FeedbackConfigInput) {
+  const result = await feedback.init(config, {
+    collectEvidence: async ({ report, signal }) => ({
+      text: `Diagnostics for ${report.number}`,
+      data: { businessSystem: 'orders', scopeId: report.scopeId },
+      attachments: [{
+        id: 'business-logs',
+        name: 'business-logs.zip',
+        contentType: 'application/zip',
+        bytes: await readFile('diagnostics/sanitized-logs.zip', { signal }),
+      }],
+    }),
+  })
+  if (!result.success)
+    return result
+  return result
+}
+```
+
+text/data は source: server:business、kind: business の証拠として詳細の「業務情報」タブにページ表示され、添付ファイルは認可付きダウンロードとオフライン出力に含まれます。短文・JSON は既存の秘匿化、切り詰め、証拠容量制限に従います。完全なログには全文を秘匿化する text/plain 添付を使用します。ZIP/GZIP は形式マーカー・サイズ・SHA-256 を確認してそのまま保存し、展開・実行・内部秘匿化は行いません。業務側で圧縮前に機密情報を除去してください。ブラウザーの addFiles も ZIP/GZ/TGZ に対応します。
+
+businessCollectionTimeoutMs は既定 30000ms（1–300000）。タイムアウトと終了時に signal を中止して待機を終了するため、非同期処理にも signal を渡します。例外、不正ファイル、容量超過、保存失敗は maxAttempts まで再試行し、最終失敗は collectionStatus: failed になります。管理者は retry({ id, target: 'collect' }, context) で再実行できます。関数は再実行される可能性があるため report.id で外部処理を冪等化します。全ファイル保存後、証拠と索引をリース付きの同一トランザクションで公開し、成功マーカー保存後は再収集しません。添付 ID は安定した 1–100 文字とし、server:business: が自動付加されます。全添付で既存の 20 件・単一/合計容量制限を共有します。
+
+### Webhook コールバック
+
+信頼するサーバー設定 webhookUrl を指定すると、受付トランザクションで独立した永続 webhook タスクを作成します。収集が complete/partial/failed になった後、feedback.created を POST application/json で送信します。収集失敗時も送信し、Reach、notificationMode、通知抑止とは独立します。
+
+```yaml
+businessCollectionTimeoutMs: 30000
+webhookUrl: ${HAI_FEEDBACK_WEBHOOKURL:}
+webhookSecret: ${HAI_FEEDBACK_WEBHOOKSECRET:}
+webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
+```
+
+URL の空文字は無効化です。HTTP(S) のみ許可し、URL のユーザー資格情報・fragment は禁止、リダイレクトは追従しません。宛先は信頼できる配布設定で管理し、内部連携には内部 URL も使用できます。署名鍵はサーバーの非公開環境に保存し、PUBLIC_ 変数に含めません。webhookTimeoutMs は既定 10000ms（1–60000）。非 2xx、リダイレクト、通信障害、タイムアウトは 1s から最大 60s の指数バックオフで maxAttempts（既定 5）まで再試行します。
+
+公開型 FeedbackWebhookEvent は event/eventId/createdAt/report/evidence/detailUrl? を含みます。evidence は修訂、業務証拠の収集成功、添付メタデータを持ち、本文・保存キー・設定秘密・全ログは送信しません。内容は認可付き API またはオフライン ZIP から取得します。初回送信前に本文を固定し、再試行・再起動でも本文と Idempotency-Key: eventId を維持します。受信側は eventId を永続化・重複排除した後に 2xx を返してください。配信は少なくとも 1 回で、応答消失による重複があります。URL 変更後の旧タスクは別の宛先に転送せず失敗するため、切替前に処理を完了します。
+
+X-Hai-Feedback-Event と X-Hai-Feedback-Timestamp（Unix 秒）を送信します。鍵設定時は X-Hai-Feedback-Signature: sha256=<hex> を付加し、HMAC-SHA256(secret, timestamp + '.' + 元の本文) を計算します。受信側は元のバイトで検証し、定数時間比較、時刻許容幅、eventId による重複排除を実装します。get().jobs で状態、試行回数、安全な lastError コードを確認でき、管理台/Fullstack の詳細にも状態と再試行を表示します。管理者は retry({ id, target: 'webhook' }, context) を使用できます。notificationStatus とは別管理で、成功は受信先が 2xx を返したことを示します。
 
 ### 一覧、処理、出力
 
