@@ -47,10 +47,13 @@ const steps: SchemaMigration[] = [{
   },
 }, {
   version: 3,
+  name: 'initial-password-state',
   async needed(sql) {
     const found = await schemaColumns(reldb, 'hai_iam_users', sql)
+    return found.success ? ok(found.data.length > 0 && !found.data.includes('must_change_password')) : found
   },
   async apply(sql) {
+    const added = await sql.execute('ALTER TABLE hai_iam_users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE')
     return added.success ? ok(undefined) : added
   },
 }, {

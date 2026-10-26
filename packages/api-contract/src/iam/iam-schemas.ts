@@ -10,6 +10,9 @@ import type { HaiResult } from '@h-ai/core'
 import { z } from 'zod'
 import { PaginationQuerySchema } from '../common/pagination-schemas.js'
 
+
+
+
 /**
  * 用户基础信息 Schema。
  * @example
@@ -38,6 +41,7 @@ export const IamUserSchema = z.object({
   accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
   accountExpiresAt: z.coerce.date().nullable().optional(),
   lastLoginAt: z.coerce.date().nullable().optional(),
+  mustChangePassword: z.boolean().optional(),
   emailVerified: z.boolean().optional(),
   phoneVerified: z.boolean().optional(),
   createdAt: z.coerce.date(),
@@ -206,6 +210,18 @@ export const IamRequestPasswordResetInputSchema = z.object({ identifier: z.strin
  * ```
  */
 export const IamConfirmPasswordResetInputSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(1) })
+
+/**
+ * 无普通会话的首次或过期改密；必须重新验证原密码。
+ * @example
+ * ```ts
+ * import { IamRenewPasswordInputSchema } from '@h-ai/api-contract'
+ * const input = IamRenewPasswordInputSchema.parse({ identifier: 'alice', password: 'Initial123!', newPassword: 'Chosen456!' })
+ * ```
+ */
+
+export const IamReauthenticateInputSchema = z.object({ password: z.string().min(1), operation: z.string().trim().min(1).max(128) })
+
 
 /**
  * 认证页面公开配置白名单，独立于服务端连接/凭据配置。
@@ -471,7 +487,26 @@ export const IamAdminCreateUserInputSchema = z.object({
   enabled: z.boolean().optional(),
 })
 
+/**
+ * 管理端单次邀请不接收共享初始密码；初始账号必须启用且激活。
+ * @example
+ * ```ts
+ * import { IamInviteUserInputSchema } from '@h-ai/api-contract'
+ * const input = IamInviteUserInputSchema.parse({ username: 'alice', email: 'alice@example.com' })
+ * ```
+ */
 export const IamInviteUserInputSchema = IamAdminCreateUserInputSchema.omit({ password: true }).extend({ enabled: z.literal(true).optional(), accountStatus: z.literal('active').optional() })
+
+/**
+ * 单次邀请的管理端输入。
+ * @example
+ * ```ts
+ * import type { IamInviteUserInput } from '@h-ai/api-contract'
+ * const input: IamInviteUserInput = { username: 'alice', email: 'alice@example.com' }
+ * ```
+ */
+export type IamInviteUserInput = z.infer<typeof IamInviteUserInputSchema>
+
 /**
  * Admin 更新用户入参 Schema。
  * @example

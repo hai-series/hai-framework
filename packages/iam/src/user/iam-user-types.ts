@@ -86,6 +86,8 @@ export interface User {
   accountExpiresAt?: Date | null
   /** 最近成功登录时间，失败尝试不更新。 */
   lastLoginAt?: Date | null
+  /** 初始凭据尚未更换；此时不能签发或使用普通业务会话。 */
+  mustChangePassword?: boolean
   /** 是否邮箱验证 */
   emailVerified?: boolean
   /** 是否手机验证 */
@@ -256,6 +258,14 @@ export interface UpdateCurrentUserInput {
  * ```
  */
 export interface UserOperations {
+  /**
+   * 创建独立随机初始凭据并发送短期单次邀请；不返回或通知原始初始密码。
+   * initialCredentials.enabled、passwordReset 与通知通道必须就绪；接收人使用现有重置页面设密。
+   * 投递未知时保留已创建账号并返回失败；核对后可通过重置通知流程恢复。
+   * @param options - 可信管理端输入，必须包含通知通道对应的邮箱/手机号。
+   * @returns 创建结果或失败；不能把通知结果未知当作未创建账号。
+   */
+  inviteUser: (options: Omit<RegisterOptions, 'password'>) => Promise<HaiResult<RegisterResult>>
 
   /** 批量查询最多 1000 个用户 ID，去重并保持输入顺序，忽略不存在的 ID；可批量包含角色。 */
   getUsers: (userIds: readonly string[], options?: { include?: ('roles')[] }) => Promise<HaiResult<User[]>>
@@ -354,6 +364,16 @@ export interface UserOperations {
    * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND，密码不合规返回 PASSWORD_POLICY_VIOLATION
    */
   adminResetPassword: (userId: string, newPassword: string) => Promise<HaiResult<void>>
+  /**
+   * 使用原凭据完成首次或过期改密，不需要先获得普通会话。
+   * 仍执行账号状态、旧密码校验、失败锁定及新密码策略；成功后需重新登录。
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * const changed = await iam.user.renewPassword({ identifier: 'alice', password: 'Temporary123!', newPassword: 'ChosenPassword456!' })
+   * if (!changed.success) throw new Error(changed.error.message)
+   * ```
+   */
 
   /**
    * 修改密码

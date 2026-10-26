@@ -65,8 +65,14 @@ export const PasswordConfigSchema = z.object({
   requireNumber: z.boolean().default(true),
   /** 需要特殊字符 */
   requireSpecialChar: z.boolean().default(false),
+  /** 至少包含的字符类别数（大小写、数字、特殊字符），0 不额外限制。 */
+  minCharacterClasses: z.number().int().min(0).max(4).default(0),
   /** 密码过期天数（0 表示不过期） */
   expirationDays: z.number().int().min(0).default(0),
+  /** 拒绝新旧密码相同；启用口令期限或首次强改时也始终拒绝相同密码。 */
+  preventSamePassword: z.boolean().default(false),
+  /** 管理员创建或重置的初始密码必须先更换；不影响用户自行注册设密。 */
+  requireInitialChange: z.boolean().default(false),
 }).refine(config => config.maxLength >= config.minLength, { message: 'maxLength must be >= minLength', path: ['maxLength'] })
 
 /**
@@ -483,6 +489,8 @@ export const AccountConfigSchema = z.object({
  * ```
  */
 export const IamConfigSchema = z.object({
+  /** 管理端可用单次邀请代替共享初始密码；需要已配置的密码重置通知通道。 */
+  initialCredentials: z.object({ enabled: z.boolean().default(false) }).optional(),
   /** 账号自动休眠策略；未配置时不启动扫描。 */
   accounts: AccountConfigSchema.optional(),
   /** 认证页外观 */

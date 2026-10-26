@@ -2,6 +2,22 @@
 import type { apiContract, IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ApiClient } from './api-client-types.js'
+import { core } from '@h-ai/core'
+
+const pageExitBindings = new WeakMap<object, Set<() => void>>()
+
+/**
+ * 客户端关闭时清理本实例安装的页面监听器，不清理其它实例。
+ * @example 模块内部上下文
+ * ```ts
+ * clearIamPageExitBindings({}) // 没有绑定时幂等。
+ * ```
+ */
+export function clearIamPageExitBindings(auth: object): void {
+  for (const stop of pageExitBindings.get(auth) ?? [])
+    stop()
+  pageExitBindings.delete(auth)
+}
 
 /**
  * 认证表单登录输入；默认 password，ldap 使用 identifier/password，email/sms 使用 identifier/code。
@@ -61,6 +77,21 @@ export function createIamAuthActions(client: {
     return result
   }
   return {
+    bindPageExit(options: { enabled?: boolean } = {}) {
+      if (!options.enabled || typeof window === 'undefined')
+        return () => {}
+      const target = window
+      let sent = false
+      const bindings = pageExitBindings.get(client.auth) ?? new Set<() => void>()
+      const stop = () => {
+        bindings.delete(stop)
+        if (!bindings.size)
+          pageExitBindings.delete(client.auth)
+      }
+      bindings.add(stop)
+      pageExitBindings.set(client.auth, bindings)
+      return stop
+    },
     publicConfig: () => client.iam.auth.publicConfig(),
     login: async (input: IamAuthLoginInput) => {
       const result = input.method === 'ldap'

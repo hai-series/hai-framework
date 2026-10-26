@@ -24,6 +24,7 @@ import {
   IamCreatePermissionInputSchema,
   IamCreateRoleInputSchema,
   IamCurrentUserSchema,
+  IamInviteUserInputSchema,
   IamLdapLoginInputSchema,
   IamListPermissionsInputSchema,
   IamListUsersInputSchema,
@@ -35,6 +36,7 @@ import {
   IamRefreshTokenDataSchema,
   IamRefreshTokenInputSchema,
   IamRegisterInputSchema,
+  IamRenewPasswordInputSchema,
   IamRequestPasswordResetInputSchema,
   IamRoleSchema,
   IamSendOtpDataSchema,
@@ -64,6 +66,9 @@ export const iamContract = {
   auth: {
     publicConfig: route({ method: 'GET', path: '/auth/config', operationId: 'iam.auth.publicConfig', summary: 'Public authentication configuration', tags: ['iam', 'auth'] })
       .output(haiResultSchema(IamPublicConfigSchema.nullable())),
+    renewPassword: route({ method: 'POST', path: '/auth/password/renew', operationId: 'iam.auth.renewPassword', summary: 'Change initial or expired password', tags: ['iam', 'auth'] })
+      .input(IamRenewPasswordInputSchema)
+      .output(HaiVoidResultSchema),
     loginWithLdap: route({ method: 'POST', path: '/auth/login/ldap', operationId: 'iam.auth.loginWithLdap', summary: 'LDAP login', tags: ['iam', 'auth'] })
       .input(IamLdapLoginInputSchema)
       .output(authResultOutputSchema),
@@ -101,6 +106,9 @@ export const iamContract = {
       .output(userOutputSchema),
   },
   users: {
+    invite: route({ method: 'POST', path: '/iam/users/invite', operationId: 'iam.users.invite', summary: 'Create account with one-time setup invitation', tags: ['iam', 'users'] })
+      .input(IamInviteUserInputSchema)
+      .output(userOutputSchema),
     list: route({ method: 'GET', path: '/iam/users', operationId: 'iam.users.list', summary: 'List users', tags: ['iam', 'users'] })
       .input(IamListUsersInputSchema)
       .output(haiResultSchema(paginatedSchema(IamUserSchema))),

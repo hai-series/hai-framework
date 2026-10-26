@@ -323,6 +323,9 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     if (!user.enabled)
       return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     if (!stored.data || !isUserActive(stored.data))
+    const passwordState = checkPasswordState(stored.data, config.password)
+    if (!passwordState.success)
+      return passwordState
     const authorization = await authzFunctions.getUserAuthorization(user.id)
     if (!authorization.success)
       return authorization
@@ -439,25 +442,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return sessionFunctions.delete(accessToken)
     },
 
-    async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
-      const session = await sessionFunctions.verifyToken(accessToken)
-      if (!session.success)
-        return session
-      const [user, authorization] = await Promise.all([
-        userRepository.findById(session.data.userId),
-        authzFunctions.getUserAuthorization(session.data.userId),
-      ])
-      if (!user.success)
-        return user
-      if (!user.data?.enabled)
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-      if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
-        return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      if (!authorization.success)
-        return authorization
-      const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }
-      return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
-    },
+    verifyToken: verifyCurrentSession,
 
     async sendOtp(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {
       const disabled = loginDisabled('otp')

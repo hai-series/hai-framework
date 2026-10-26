@@ -235,6 +235,7 @@ async function runAuthLogin<TCredentials>(
  *
  * @param cookies - SvelteKit cookies 对象
  * @param credentials - 密码凭证（identifier + password）
+ * @param context - 宿主提供的可信登录元数据，不从凭据输入复制 IP。
  * @returns 认证结果（成功时 Cookie 已自动写入）
  * @example 模块内部上下文
  * ```ts
@@ -249,7 +250,7 @@ export async function login(
   cookies: CookieWriter,
   credentials: PasswordCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return runAuthLogin(cookies, credentials, (ops, input) => ops.login(input))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.login(input, context))
 }
 
 /**
@@ -271,7 +272,7 @@ export async function loginWithOtp(
   cookies: CookieWriter,
   credentials: OtpCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithOtp(input))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithOtp(input, context))
 }
 
 /**
@@ -293,7 +294,7 @@ export async function loginWithLdap(
   cookies: CookieWriter,
   credentials: LdapCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithLdap(input))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithLdap(input, context))
 }
 
 /**
@@ -315,7 +316,7 @@ export async function loginWithApiKey(
   cookies: CookieWriter,
   credentials: ApiKeyCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithApiKey(input))
+  return runAuthLogin(cookies, credentials, (ops, input) => ops.loginWithApiKey(input, context))
 }
 
 /**

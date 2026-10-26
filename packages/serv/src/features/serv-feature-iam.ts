@@ -9,6 +9,7 @@ import type {
   IamAdminCreateUserInput,
   IamAdminUpdateUserInput,
   IamCurrentUser,
+  IamInviteUserInput,
 } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { IamFunctions, TokenPair, User } from '@h-ai/iam'
@@ -65,7 +66,8 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .route('auth.loginWithOtp', ({ input }) => iam.auth.loginWithOtp(input))
     .route('auth.loginWithLdap', ({ input }) => iam.auth.loginWithLdap(input))
     .route('auth.publicConfig', () => ok(iam.publicConfig))
-    .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier))
+    .route('auth.renewPassword', ({ input }) => iam.user.renewPassword(input))
+    .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier, input))
     .route('auth.confirmPasswordReset', ({ input }) => iam.user.confirmPasswordReset(input.token, input.newPassword))
 
     .route('auth.logout', ({ input, context }) => {
@@ -96,8 +98,8 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .route('auth.refresh', async ({ input }) => {
       return mapHaiResult(await iam.session.refresh(input.refreshToken), tokens => ({ tokens }))
     })
-    .route('auth.sendOtp', ({ input }) => iam.auth.sendOtp(input.identifier))
-    .route('auth.register', ({ input }) => iam.auth.registerAndLogin(input))
+    .route('auth.sendOtp', ({ input }) => iam.auth.sendOtp(input.identifier, input))
+    .route('auth.register', ({ input, context }) => iam.auth.registerAndLogin(input, context))
 
     .route('auth.changePassword')
     .auth()
@@ -160,7 +162,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('roles.update')
     .permission('iam.roles.write')
-    .handle(({ input }) => {
+    .handle(({ input, context }) => {
       const { id, ...data } = input
       return iam.authz.updateRole(id, data)
     })
@@ -188,8 +190,9 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .build()
 }
 
-async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Promise<HaiResult<User>> {
-  const registerResult = await iam.user.createUser(input)
+async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput | IamInviteUserInput): Promise<HaiResult<User>> {
+  const invited = !('password' in input)
+  const registerResult = 'password' in input ? await iam.user.createUser(input) : await iam.user.inviteUser(input)
   if (!registerResult.success)
     return registerResult
 
@@ -197,6 +200,11 @@ async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput): Pr
 
   // 任何后续步骤失败都需要回滚刚创建的用户，以避免重复用户名/邮箱错误阅存。
   async function rollback(reason: string): Promise<void> {
+    if (invited) {
+      // 邀请可能已经送达，不能回滚外部已发布凭据；保留账号供管理员补齐配置。
+      iamFeatureLogger.error('Invited account requires configuration repair', { userId, reason })
+      return
+    }
     const deleteResult = await iam.user.deleteUser(userId)
     if (!deleteResult.success)
       iamFeatureLogger.error('createUser rollback failed, orphan user may exist', { userId, reason, error: deleteResult.error })

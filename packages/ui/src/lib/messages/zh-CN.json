@@ -350,6 +350,7 @@
   "auth_unavailable": "此认证功能暂不可用",
   "auth_reset_sent": "如果账号存在，重置通知已发送，请查看邮箱或短信。",
   "auth_reset_done": "密码已重置，请使用新密码登录。",
+  "auth_renew_title": "更新登录密码",
   "auth_have_token": "已有重置令牌",
   "auth_brand": "账号中心",
   "password_policy_length": "密码长度为 {min}–{max} 个字符",
@@ -357,6 +358,7 @@
   "password_policy_lowercase": "包含小写字母",
   "password_policy_number": "包含数字",
   "password_policy_special": "包含特殊字符",
+  "password_policy_classes": "大写、小写、数字、特殊字符中至少满足 {count} 类",
   "guide_welcome": "欢迎使用",
   "guide_start": "开始引导",
   "guide_later": "稍后提醒",
@@ -476,5 +478,11 @@
   "feedback_record_empty": "未录制到画面，请重试。",
   "feedback_local_saved": "已开始下载反馈文件。",
   "feedback_notification_disabled": "未启用通知",
-  "feedback_capacity_hint": "附件 {used}/{total} MiB · 单个最多 {single} MiB · 最多 {count} 项"
+  "feedback_capacity_hint": "附件 {used}/{total} MiB · 单个最多 {single} MiB · 最多 {count} 项",
+  "auth_captcha_error": "安全验证未完成或暂不可用，请重试",
+  "auth_captcha_verifying": "正在进行安全验证",
+  "reauthentication_title": "确认敏感操作",
+  "reauthentication_hint": "请输入当前密码以继续本次操作。",
+  "reauthentication_password": "当前密码",
+  "reauthentication_confirm": "验证并继续"
 }

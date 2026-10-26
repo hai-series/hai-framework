@@ -146,19 +146,11 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       )
     }
 
-    return ok(undefined)
-  }
+    const classes = [PASSWORD_UPPERCASE_REGEX, PASSWORD_LOWERCASE_REGEX, PASSWORD_DIGIT_REGEX, PASSWORD_SPECIAL_CHAR_REGEX].filter(pattern => pattern.test(password)).length
+    if (classes < passwordConfig.minCharacterClasses)
+      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordCharacterClasses', { params: { count: passwordConfig.minCharacterClasses } }))
 
-  /**
-   * 检查密码是否过期
-   */
-  function isPasswordExpired(user: StoredUser): boolean {
-    if (passwordConfig.expirationDays <= 0 || !user.passwordUpdatedAt) {
-      return false
-    }
-    const expirationDate = new Date(user.passwordUpdatedAt)
-    expirationDate.setDate(expirationDate.getDate() + passwordConfig.expirationDays)
-    return new Date() > expirationDate
+    return ok(undefined)
   }
 
   /**
@@ -187,7 +179,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     }
 
     if (!verifyResult.data) {
-      const failureResult = await recordLoginFailure(config.userRepository, user, { maxLoginAttempts, lockoutDuration })
+      const failureResult = await recordLoginFailure(config.userRepository, user, failurePolicy)
       if (!failureResult.success)
         return failureResult
       logger.warn('Password verification failed', { userId: user.id })
@@ -232,12 +224,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
         return pwResult as HaiResult<AuthenticatedUser>
 
       // 检查密码是否过期
-      if (isPasswordExpired(storedUser)) {
-        return err(HaiIamError.PASSWORD_EXPIRED, iamM('iam_passwordExpired'))
-      }
+      const passwordState = checkPasswordState(storedUser, passwordConfig)
+      if (!passwordState.success)
+        return passwordState
 
       // 登录成功，重置失败计数
-      const resetResult = await resetLoginFailures(config.userRepository, storedUser)
+      const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult
       logger.info('Password authentication succeeded', { userId: storedUser.id })

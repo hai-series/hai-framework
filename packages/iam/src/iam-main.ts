@@ -176,7 +176,12 @@ export const iam: IamFunctions = {
           const found = await credentialUsers.findById(userId)
           if (!found.success)
             return found
-          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: found.data.enabled } : null)
+          if (found.data) {
+            const passwordState = checkPasswordState(found.data, parsed.password)
+            if (!passwordState.success)
+              return passwordState
+          }
+          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: isUserActive(found.data) } : null)
         },
       })
       if (!sessionResult.success) {

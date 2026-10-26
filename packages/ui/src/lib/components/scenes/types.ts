@@ -246,6 +246,7 @@ export interface ChangePasswordFormData {
   confirmPassword: string
 }
 
+
 /**
  * 修改密码表单属性
  *
@@ -421,6 +422,8 @@ export interface PasswordPolicy {
   requireLowercase: boolean
   requireNumber: boolean
   requireSpecialChar: boolean
+  /** 至少满足的字符类别数；0 或未提供时仅应用各项独立要求。 */
+  minCharacterClasses?: number
 }
 /**
  * 仅消费安全公开配置，不能将 iam.config 或连接密钥传入浏览器。
@@ -484,6 +487,7 @@ export interface AuthPanelActions {
   sendOtp: (identifier: string) => Promise<HaiResult<unknown>>
   requestPasswordReset: (identifier: string) => Promise<HaiResult<unknown>>
   confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<unknown>>
+  /** 首次或密码过期时，验证原密码并换新；完成后重新登录。 */
 }
 
 /**
@@ -495,7 +499,7 @@ export interface AuthPanelActions {
  * const example: AuthPanelMode = 'login'
  * ```
  */
-export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset'
+export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset' | 'renew'
 
 /**
  * 配置驱动认证场景；网络、通知和令牌存储由应用注入 actions。

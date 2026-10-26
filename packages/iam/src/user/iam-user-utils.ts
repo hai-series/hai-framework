@@ -6,11 +6,27 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
+import type { PasswordConfig } from '../iam-config.js'
 import type { StoredUser, User } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 
+/**
+ * 首次/过期口令不能授权普通业务；验证旧密码后的 renewPassword 不使用此门禁。
+ * @example 模块内部上下文
+ * ```ts
+ * function check(user: StoredUser, policy: PasswordConfig) { return checkPasswordState(user, policy) }
+ * ```
+ */
+export function checkPasswordState(user: StoredUser, policy?: PasswordConfig): HaiResult<void> {
+  if (policy?.requireInitialChange && user.mustChangePassword)
+    return err(HaiIamError.PASSWORD_CHANGE_REQUIRED, iamM('iam_passwordChangeRequired'))
+  const days = policy?.expirationDays ?? 0
+  if (days > 0 && user.passwordHash && (!user.passwordUpdatedAt || user.passwordUpdatedAt.getTime() + days * 86400_000 <= Date.now()))
+    return err(HaiIamError.PASSWORD_EXPIRED, iamM('iam_passwordExpired'))
+  return ok(undefined)
+}
 
 /**
  * 账号状态与到期时间在所有鉴别方式和持久凭据读取中共用。
@@ -71,6 +87,7 @@ export function toUser(storedUser: StoredUser): User {
     accountStatus: storedUser.accountStatus ?? 'active',
     accountExpiresAt: storedUser.accountExpiresAt ?? null,
     lastLoginAt: storedUser.lastLoginAt ?? null,
+    mustChangePassword: storedUser.mustChangePassword ?? false,
     emailVerified: storedUser.emailVerified,
     phoneVerified: storedUser.phoneVerified,
     createdAt: storedUser.createdAt,

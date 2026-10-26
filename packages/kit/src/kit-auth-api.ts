@@ -5,12 +5,14 @@ import {
   IamConfirmPasswordResetInputSchema,
   IamLdapLoginInputSchema,
   IamLoginInputSchema,
+  IamLogoutInputSchema,
   IamOtpLoginInputSchema,
   IamRegisterInputSchema,
+  IamRenewPasswordInputSchema,
   IamRequestPasswordResetInputSchema,
   IamSendOtpInputSchema,
 } from '@h-ai/api-contract'
-import { login, loginWithLdap, loginWithOtp, registerAndLogin } from './kit-auth.js'
+import { getAccessToken, login, loginWithLdap, loginWithOtp, registerAndLogin } from './kit-auth.js'
 import { handler } from './kit-handler.js'
 import { fromError, ok } from './kit-response.js'
 import { validateFormOrFail } from './kit-validation.js'
@@ -44,33 +46,41 @@ export function createAuthApi(iam: IamFunctions) {
   }
   return {
     publicConfig: handler(() => ok(iam.publicConfig)),
-    login: handler(async ({ request, cookies }) => {
+    renewPassword: handler(async ({ request }) => {
+      const input = await validateFormOrFail(request, IamRenewPasswordInputSchema)
+      return response(await iam.user.renewPassword(input))
+    }),
+    login: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLoginInputSchema)
-      const result = await login(cookies, input)
+      const result = await login(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
-    loginWithLdap: handler(async ({ request, cookies }) => {
+    loginWithLdap: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamLdapLoginInputSchema)
-      const result = await loginWithLdap(cookies, input)
+      const result = await loginWithLdap(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
-    loginWithOtp: handler(async ({ request, cookies }) => {
+    loginWithOtp: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamOtpLoginInputSchema)
-      const result = await loginWithOtp(cookies, input)
+      const result = await loginWithOtp(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
-    register: handler(async ({ request, cookies }) => {
+    register: handler(async (event) => {
+      const { request, cookies } = event
       const input = await validateFormOrFail(request, IamRegisterInputSchema)
-      const result = await registerAndLogin(cookies, input)
+      const result = await registerAndLogin(cookies, input, requestContext(event))
       return result.success ? ok({ user: result.data.user }) : fromError(result.error)
     }),
     sendOtp: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamSendOtpInputSchema)
-      return response(await iam.auth.sendOtp(input.identifier))
+      return response(await iam.auth.sendOtp(input.identifier, input))
     }),
     requestPasswordReset: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamRequestPasswordResetInputSchema)
-      return response(await iam.user.requestPasswordReset(input.identifier))
+      return response(await iam.user.requestPasswordReset(input.identifier, input))
     }),
     confirmPasswordReset: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamConfirmPasswordResetInputSchema)
