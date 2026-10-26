@@ -10,6 +10,35 @@ import { annotateFeedbackImage, captureFeedbackScreenshot } from './feedback-cli
 import { collectFeedbackCookies, feedbackPageUrl, sanitizeFeedbackData, sanitizeFeedbackReplay, sanitizeFeedbackText } from './feedback-client-sanitize.js'
 import { deleteFeedbackDraft, restoreFeedbackCheckpoint, restoreFeedbackDraft, saveFeedbackCheckpoint, saveFeedbackDraft } from './feedback-client-store.js'
 
+/** 系统文件关联可能不提供 MIME；只对空值和通用二进制类型按受支持扩展名补齐。 */
+function feedbackFileContentType(file: File): string | undefined {
+  const type = file.type.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+  const extensions = new Map([
+    ['png', 'image/png'],
+    ['jpg', 'image/jpeg'],
+    ['jpeg', 'image/jpeg'],
+    ['webp', 'image/webp'],
+    ['webm', 'video/webm'],
+    ['mp4', 'video/mp4'],
+    ['txt', 'text/plain'],
+    ['log', 'text/plain'],
+    ['json', 'application/json'],
+    ['pdf', 'application/pdf'],
+  ])
+  if (!type || type === 'application/octet-stream')
+    return extensions.get(file.name.split('.').at(-1)?.toLowerCase() ?? '')
+  const aliases = new Map([
+    ['image/x-png', 'image/png'],
+    ['image/jpg', 'image/jpeg'],
+    ['image/pjpeg', 'image/jpeg'],
+    ['text/json', 'application/json'],
+    ['text/x-log', 'text/plain'],
+    ['application/x-pdf', 'application/pdf'],
+  ])
+  const normalized = aliases.get(type) ?? type
+  return [...extensions.values()].includes(normalized) ? normalized : undefined
+}
+
 /**
  * 创建独立浏览器采集会话；默认不持久化、不录制页面回放，不采集请求正文。
  * @example
@@ -85,10 +114,10 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   const missing = new Set<string>()
   let replayChunks: FeedbackEvidenceInput[][] = []
 
-  function failure(code: keyof typeof HaiFeedbackError = 'OPERATION_FAILED', cause?: unknown) {
+  function failure(code: keyof typeof HaiFeedbackError = 'OPERATION_FAILED', cause?: unknown, message?: string) {
     const key = code === 'NOT_INITIALIZED' ? 'feedback_notInitialized' : code === 'LIMIT_EXCEEDED' ? 'feedback_limitExceeded' : code === 'INVALID_INPUT' ? 'feedback_invalidInput' : 'feedback_operationFailed'
     const traceId = core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
-    const error = { ...HaiFeedbackError[code], traceId, message: feedbackM(key), cause }
+    const error = { ...HaiFeedbackError[code], traceId, message: message ?? feedbackM(key), cause }
     core.logger[cause === undefined ? 'warn' : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
     return err({ ...error, message: core.error.formatMessage(error) })
   }
@@ -697,14 +726,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       for (const file of files) {
         if (items.length >= budget.maxAttachmentCount || file.size > budget.maxAttachmentBytes)
           return failure('LIMIT_EXCEEDED')
-        if (!['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json'].includes(file.type))
-          return failure('INVALID_INPUT')
+        const contentType = feedbackFileContentType(file)
+        if (!contentType)
+          return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
         let bytes: Uint8Array
-        if (file.type.startsWith('text/') || file.type === 'application/json') {
+        if (contentType.startsWith('text/') || contentType === 'application/json') {
           const raw = await file.text()
-          if (file.type === 'application/json' && raw.length > 8192)
+          if (contentType === 'application/json' && raw.length > 8192)
             newMissing.push(`attachment-text-truncated:${String(sanitizeFeedbackData({ text: file.name }).text).slice(0, 100)}`)
-          bytes = file.type === 'application/json'
+          bytes = contentType === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(raw))))
             : new TextEncoder().encode(sanitizeFeedbackText(raw))
         }
@@ -713,7 +743,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         }
         if (bytes.byteLength > budget.maxAttachmentBytes)
           return failure('LIMIT_EXCEEDED')
-        const item = await attachment(file.name, file.type, bytes)
+        const item = await attachment(file.name, contentType, bytes)
         if (!items.some(existing => existing.name === item.name && existing.checksum === item.checksum))
           items.push(item)
       }
@@ -757,14 +787,15 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         for (const file of input.files ?? []) {
           if (attachments.length >= budget.maxAttachmentCount || file.size > budget.maxAttachmentBytes)
             return failure('LIMIT_EXCEEDED')
-          if (!['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4', 'text/plain', 'application/json'].includes(file.type))
-            return failure('INVALID_INPUT')
-          const bytes = file.type === 'application/json'
+          const contentType = feedbackFileContentType(file)
+          if (!contentType)
+            return failure('INVALID_INPUT', undefined, feedbackM('feedback_unsupportedAttachmentType'))
+          const bytes = contentType === 'application/json'
             ? new TextEncoder().encode(JSON.stringify(sanitizeFeedbackData(JSON.parse(await file.text()))))
-            : file.type.startsWith('text/') ? new TextEncoder().encode(sanitizeFeedbackText(await file.text())) : new Uint8Array(await file.arrayBuffer())
+            : contentType.startsWith('text/') ? new TextEncoder().encode(sanitizeFeedbackText(await file.text())) : new Uint8Array(await file.arrayBuffer())
           if (bytes.byteLength > budget.maxAttachmentBytes)
             return failure('LIMIT_EXCEEDED')
-          const item = await attachment(file.name, file.type, bytes)
+          const item = await attachment(file.name, contentType, bytes)
           if (!attachments.some(existing => existing.name === item.name && existing.checksum === item.checksum))
             attachments.push(item)
         }

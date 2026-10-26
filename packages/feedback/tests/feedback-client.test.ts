@@ -81,6 +81,41 @@ afterEach(async () => {
 })
 
 describe('feedback browser collection', () => {
+  it.each([
+    ['browser.log', '', 'text/plain', 'safe log'],
+    ['browser.LOG', 'application/octet-stream', 'text/plain', 'safe log'],
+    ['capture.png', '', 'image/png', 'binary fixture'],
+    ['capture.png', 'image/x-png', 'image/png', 'binary fixture'],
+    ['facts.json', 'application/json; charset=utf-8', 'application/json', '{"enabled":true}'],
+    ['document.pdf', '', 'application/pdf', '%PDF-1.7 fixture'],
+  ])('选择本地附件规范化系统 MIME：%s (%s)', async (name, mime, contentType, content) => {
+    const { client } = await setup()
+    await client.prepare()
+    const file = new File([content], name, { type: mime })
+    Object.defineProperty(file, 'text', { value: async () => content })
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => new TextEncoder().encode(content).buffer })
+    expect((await client.addFiles([file])).success).toBe(true)
+    expect(client.getDraft()!.attachments[0]?.contentType).toBe(contentType)
+  })
+
+  it('失败提交后的离线导出也接受 MIME 为空的日志，并拒绝真正不支持的格式', async () => {
+    const transport = actions()
+    vi.mocked(transport.submit).mockRejectedValueOnce(new Error('Response lost'))
+    const { client } = await setup({ actions: transport })
+    expect((await client.submit()).success).toBe(false)
+    const file = new File(['safe log'], 'offline.log')
+    Object.defineProperty(file, 'text', { value: async () => 'safe log' })
+    const result = await client.exportDraft({ files: [file] })
+    expect(result.success).toBe(true)
+    const unsupported = await client.exportDraft({ files: [new File(['binary'], 'file.png', { type: 'application/x-msdownload' })] })
+    expect(unsupported.success).toBe(false)
+    if (!unsupported.success) {
+      expect(unsupported.error.message).toMatch(/PNG|格式|format/i)
+      expect(unsupported.error.message).toContain('traceId:')
+    }
+    expect(client.getDraft()!.attachments).toHaveLength(0)
+  })
+
   it('本地失败返回安全提示与关联标识，详细脱敏日志和本地 UI trace 可检索', async () => {
     const { client } = await setup({ captureScreenshot: async () => {
       throw new Error('Capture driver unavailable verificationCode=PRIVATE_DIAGNOSTIC_CODE')

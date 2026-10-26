@@ -179,6 +179,14 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
     marker.id = 'feedback-current-page-probe'
     marker.style.cssText = 'position:fixed;left:200px;top:180px;width:80px;height:80px;background:rgb(19,221,119);z-index:900'
     document.body.append(marker)
+    for (const [id, type, left] of [['ordinary', 'text', 320], ['secret', 'password', 500]] as const) {
+      const input = document.createElement('input')
+      input.id = `feedback-${id}-probe`
+      input.type = type
+      input.value = 'sensitive-value-must-be-hidden'
+      input.style.cssText = `position:fixed;left:${left}px;top:180px;width:140px;height:40px;background:rgb(255,255,255);color:#000;border:1px solid #aaa;z-index:900`
+      document.body.append(input)
+    }
   })
   await openFeedback(page)
   const form = page.locator('.feedback-form')
@@ -194,6 +202,24 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
     return Array.from(context.getImageData(240, 220, 1, 1).data)
   })
   expect(pixel.slice(0, 3)).toEqual([19, 221, 119])
+  const controlPixels = await form.locator('img[alt="screenshot.png"]').evaluate(async (image) => {
+    const source = image as HTMLImageElement
+    const canvas = document.createElement('canvas')
+    canvas.width = source.naturalWidth
+    canvas.height = source.naturalHeight
+    const context = canvas.getContext('2d')!
+    context.drawImage(source, 0, 0)
+    return { ordinary: [...context.getImageData(450, 200, 1, 1).data], secret: [...context.getImageData(630, 200, 1, 1).data] }
+  })
+  expect(controlPixels.ordinary).toEqual([255, 255, 255, 255])
+  expect(controlPixels.secret).toEqual([17, 17, 17, 255])
+  await expect(page.locator('#feedback-ordinary-probe')).toHaveValue('sensitive-value-must-be-hidden')
+  await form.locator('input[type="file"]').setInputFiles([
+    { name: 'browser-empty-mime.log', mimeType: '', buffer: Buffer.from('safe diagnostic line\npassword=private-log-sentinel') },
+    { name: 'local-generic-mime.png', mimeType: 'application/octet-stream', buffer: Buffer.from(await form.locator('img[alt="screenshot.png"]').evaluate(async image => [...new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())])) },
+  ])
+  await expect(form).toContainText('browser-empty-mime.log')
+  await expect(form.locator('img[alt="local-generic-mime.png"]')).toBeVisible()
   await form.locator('textarea[name="description"]').fill(description)
   const materials = form.locator('details').filter({ has: page.locator('summary', { hasText: /^收集材料$/ }) }).first()
   await materials.locator('summary').first().click()
@@ -201,6 +227,18 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   await environment.locator('summary').click()
   await expect(environment.locator('pre')).toContainText('admin-console')
   await expect(environment.locator('pre')).toContainText('1440')
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 600 }]) {
+    await page.setViewportSize(viewport)
+    const contentBox = await form.locator(':scope > div').first().boundingBox()
+    const actionsBox = await form.locator(':scope > div').last().boundingBox()
+    expect(contentBox).not.toBeNull()
+    expect(actionsBox).not.toBeNull()
+    expect(contentBox!.y + contentBox!.height).toBeLessThanOrEqual(actionsBox!.y)
+    await expect(form.getByRole('button', { name: '提交反馈', exact: true })).toBeInViewport({ ratio: 1 })
+    await form.locator(':scope > div').first().evaluate(element => element.scrollTop = element.scrollHeight)
+    await capture(page, `feedback-expanded-${viewport.width}.png`, testInfo)
+  }
+  await page.setViewportSize({ width: 1440, height: 900 })
   await capture(page, 'feedback-material-contents.png', testInfo)
   await form.getByRole('button', { name: '添加页面截图', exact: true }).click()
   await expect(form).toBeHidden()
@@ -208,12 +246,12 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   await expect(page).toHaveURL(/\/admin\/modules/)
   await page.getByRole('button', { name: '截取当前页面', exact: true }).click()
   await expect(form).toBeVisible()
-  await expect(form.locator('section img')).toHaveCount(2)
+  await expect(form.locator('section img')).toHaveCount(3)
   await expect(form.locator('textarea[name="description"]')).toHaveValue(description)
   await form.getByRole('button', { name: '重新截图', exact: true }).first().click()
   await page.getByRole('button', { name: '截取当前页面', exact: true }).click()
   await expect(form).toBeVisible()
-  await expect(form.locator('section img')).toHaveCount(2)
+  await expect(form.locator('section img')).toHaveCount(3)
   // 仅替代系统选屏授权，编码使用 Chrome 的真实 MediaRecorder 和视频轨。
   await page.evaluate(() => {
     Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => {
@@ -271,6 +309,11 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   if (!bundle.success)
     throw new Error(bundle.error.message)
   expect(bundle.data.report.description).toBe(description)
+  const localLog = bundle.data.manifest.files.find(item => item.name === 'browser-empty-mime.log')!
+  expect(localLog.contentType).toBe('text/plain')
+  const localText = new TextDecoder().decode(bundle.data.files[localLog.path])
+  expect(localText).toContain('safe diagnostic line')
+  expect(localText).not.toContain('private-log-sentinel')
   const recorded = bundle.data.manifest.files.find(item => item.contentType === 'video/webm')!
   expect(recorded).toBeDefined()
   expect(bundle.data.files[recorded.path]!.subarray(0, 4)).toEqual(new Uint8Array([0x1A, 0x45, 0xDF, 0xA3]))
@@ -288,8 +331,8 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   await expect.poll(async () => {
     const response = await page.request.get(`/api/feedback/reports/${submitted.data.id}`)
     const result: HaiResult<FeedbackDetail> = await response.json()
-    return result.success ? result.data.attachments.find(item => item.name === recorded.name)?.status : result.error.code
-  }).toBe('available')
+    return result.success ? result.data.attachments.filter(item => [recorded.name, 'browser-empty-mime.log', 'local-generic-mime.png'].includes(item.name)).map(item => item.status).sort() : result.error.code
+  }).toEqual(['available', 'available', 'available'])
   await form.getByRole('button', { name: '关闭', exact: true }).click()
   await page.goto(`/admin/feedback?search=${encodeURIComponent(number)}`)
   await waitForHydration(page)

@@ -17,7 +17,8 @@ export interface FeedbackImageAnnotation {
   mode: 'mask' | 'outline'
 }
 
-const PRIVATE_SELECTOR = 'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[data-feedback-private],.rr-block,.rr-mask'
+const PRIVATE_SELECTOR = 'input[type="password"],[data-feedback-private],.rr-block,.rr-mask'
+const CONTROL_SELECTOR = 'input,textarea,select,[contenteditable]:not([contenteditable="false"])'
 
 /**
  * 捕获当前可见页面；反馈 UI 必须由调用方在本操作完成之后打开。
@@ -81,10 +82,30 @@ export async function captureFeedbackScreenshot(): Promise<Uint8Array> {
           }
         }
       }
-      for (const element of clone.querySelectorAll<HTMLElement>(PRIVATE_SELECTOR)) {
+      for (const element of clone.querySelectorAll<HTMLElement>(`${PRIVATE_SELECTOR},${CONTROL_SELECTOR}`)) {
+        if (!clone.documentElement.contains(element))
+          continue
         const bounds = element.getBoundingClientRect()
         const replacement = clone.createElement('div')
-        replacement.style.cssText = `width:${bounds.width}px;height:${bounds.height}px;background:#111;color:transparent;overflow:hidden`
+        // 普通输入控件保留边框、底色和布局，只替换内容；显式私密区域继续不可逆遮挡。
+        const computed = clone.defaultView?.getComputedStyle(element)
+        if (computed) {
+          for (const property of Array.from(computed))
+            replacement.style.setProperty(property, computed.getPropertyValue(property), 'important')
+        }
+        replacement.style.setProperty('width', `${bounds.width}px`, 'important')
+        replacement.style.setProperty('height', `${bounds.height}px`, 'important')
+        replacement.style.setProperty('box-sizing', 'border-box', 'important')
+        replacement.style.setProperty('overflow', 'hidden', 'important')
+        if (element.matches(PRIVATE_SELECTOR)) {
+          replacement.style.setProperty('background', '#111', 'important')
+          replacement.style.setProperty('color', 'transparent', 'important')
+        }
+        else {
+          const control = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+          const value = 'value' in control ? control.value : element.textContent
+          replacement.textContent = value ? '••••' : element.getAttribute('placeholder') ?? ''
+        }
         replacement.setAttribute('aria-hidden', 'true')
         element.replaceWith(replacement)
       }

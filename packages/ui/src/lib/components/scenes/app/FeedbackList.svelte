@@ -112,7 +112,6 @@
     <p role='alert' class='alert alert-warning'>{uiM('feedback_permission_denied')}</p>
   {:else}
     <TableToolbar bind:searchValue={search} {filterFields} bind:filterValues sortableColumns={[{ key: 'createdAt', label: uiM('feedback_created_at') }]} sortBy='createdAt' bind:sortDirection searchPlaceholder={uiM('feedback_search')} onsearch={value => update({ page: 1, search: value || undefined })} onfilterchange={filter} onclearfilters={() => update({ page: 1, status: undefined, collectionStatus: undefined, appId: undefined, appVersion: undefined, from: undefined, to: undefined })} onsort={(_, direction) => update({ page: 1, sortDirection: direction })}>
-      {#snippet leading()}<h2 class='font-semibold text-lg'>{uiM('feedback_list_title')}</h2>{/snippet}
     </TableToolbar>
     {#if error || actionError}<p role='alert' class='alert alert-error break-words'>{error || actionError}</p>{/if}
     <div class='min-h-0 min-w-0 flex-1 overflow-hidden'>

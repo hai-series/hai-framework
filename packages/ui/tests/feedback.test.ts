@@ -412,6 +412,8 @@ describe('feedback management', () => {
       expect(row.textContent).toContain(serverSummary)
       expect(row.querySelector('[title]')?.getAttribute('title')).toBe(serverSummary)
       expect(row.textContent).not.toContain('无补充说明')
+      expect(target.querySelector('section')?.getAttribute('aria-label')).toBe('问题反馈')
+      expect(target.querySelector('h1, h2')).toBeNull()
     }
     finally {
       await unmount(component)

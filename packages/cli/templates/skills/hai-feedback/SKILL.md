@@ -20,7 +20,7 @@ description: "接入 @h-ai/feedback 用户反馈、前后端现场、管理员�
 1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 可在生产输出安全摘要，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach 兼容旧配置，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init，关闭先于依赖。
 2. 挂载 apiContract.feedback 与 createFeedbackProcedures；resolveContext 从服务端确定 scopeId、userId、permissions，不能相信客户端的租户、requestId 或 S3 key。创建者可补自己的材料，管理操作另检查 read/process/reopen/export。
 3. createFeedbackClient 的 actions 接 typed API，policy 读取 reports.policy({})；prepare 后打开 FeedbackModal。getView() 提供附件 URL/证据/预算；annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图；首次包络冻结，重试编辑冲突保留输入。
-4. 复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
+4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
 5. 同一 submissionId 和证据来源/序号重试，持久化 ACK 前不释放待传材料。附件取实际 checksum，不保存公开 URL；数据库、对象存储与外部通知通道无共同事务，依靠持久任务和补偿核对。
 6. 普通界面导出只传 id，由服务端当前事务固定证据快照；只有用户显式选择历史修订时才传 evidenceRevision，不沿用列表中的陈旧修订。导出固定证据修订；getExport 仅在有效快照 pending/running 时返回 CONFLICT/409，调用方只对此状态有界轮询；failed 为 OPERATION_FAILED/500，缺失/归属不符/未完成快照过期为 NOT_FOUND/404，缺少导出权限为 FORBIDDEN/403。当前修订快照过期可重新 export。离线包包含附件/查看器/索引/checksum，开发侧不持有生产凭据。用 hai feedback summary/inspect/evidence/view 或 /bundle 入口读取，不能执行导入包自带的任意脚本。
 7. 验证正常、越权、容量、崩溃、断线、重复提交、租约接管和离线查看；明确真实 S3/SMTP 与 mock 的不同证据。
@@ -45,6 +45,8 @@ addFiles 按批次原子加入附件：任一文件失败不改变原草稿的�
 captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非凭据用户/租户 persistenceKey。keyScreenshots 默认 true，受 screenshot 总开关控制，maxKeyScreenshots 默认3/上限5，keyScreenshotThrottleMs 默认10000ms。data-feedback-action 标记关键操作，data-feedback-private 遮挡敏感区域，data-feedback-ignore 排除反馈界面自身。回放、普通 Cookie 白名单和持久化由产品明确启用。
 
 自动截图从脱敏克隆 DOM 经 SVG foreignObject 重建可见页面；跨域图片、iframe/video、未就绪网络字体可能缺失。浏览器或 CSP 限制失败时标 missing 并保留手动附件入口。
+
+本地附件支持 PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF；空 MIME 或 application/octet-stream 按受支持扩展名识别，常见别名规范化，服务端仍校验实际字节/checksum。普通输入框截图保留底色与边框，内容替换为固定遮罩字符；密码框、data-feedback-private、rr-block/rr-mask 整块遮挡。原 DOM/输入值不变，页面回放仍 maskAllInputs。验证须覆盖本地选择、实际上传、离线导出及普通/私密控件的截图像素。
 
 Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capacitor，启动时 configureFeedbackSaving(saveTauriFeedbackFile/saveCapacitorFeedbackFile)，生成工程自动配置。平台适配拥有保存对话框、缓存与取消清理；业务仅调用 SDK。
 

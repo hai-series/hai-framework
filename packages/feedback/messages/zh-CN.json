@@ -9,6 +9,7 @@
   "feedback_exportPending": "问题包正在生成，请稍后重试",
   "feedback_limitExceeded": "反馈材料超过允许的容量",
   "feedback_invalidInput": "反馈参数无效",
+  "feedback_unsupportedAttachmentType": "不支持此附件格式，请选择 PNG、JPEG、WebP、WebM、MP4、TXT、LOG、JSON 或 PDF 文件",
   "feedback_checksumMismatch": "附件完整性校验失败",
   "feedback_received": "收到新的问题反馈",
   "feedback_submittedAt": "反馈时间（UTC）",

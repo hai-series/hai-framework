@@ -641,6 +641,8 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 
 Feedback `evidence` shows sanitized material contents. `oncapture(id?)` hides the modal for navigation and adds or replaces a screenshot. With `onfileschange`, native silent screen recording produces a previewable, removable WebM/MP4 attachment (up to 60 seconds / 5 MiB; video is not automatically masked). `FeedbackDetail.onreplay` loads complete page events on demand for playback and seeking; logs and environment remain paginated.
 
+Feedback materials scroll independently while action buttons remain visible, so expanded content never crosses the action bar. `FeedbackList` retains an accessible name; its host provides the page heading to avoid duplicate titles.
+
 ### Style dependencies
 
 Components use TailwindCSS v4 + DaisyUI. Configure application `app.css` as follows:

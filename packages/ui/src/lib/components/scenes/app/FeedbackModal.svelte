@@ -74,7 +74,7 @@
       </div>
     </aside>
   {/if}
-  <Modal {...dataAttributes} bind:open title={formProps.labels?.title ?? uiM('feedback_title')} size='lg' data-feedback-ui='true' data-feedback-ignore='true'>
+  <Modal {...dataAttributes} bind:open title={formProps.labels?.title ?? uiM('feedback_title')} size='lg' bodyOverflow='hidden' bodyClass='flex flex-col' data-feedback-ui='true' data-feedback-ignore='true'>
     <FeedbackForm {...formProps} onrecordingchange={recordingChanged} oncapture={formProps.oncapture ? selectPage : undefined} oncancel={() => {
       open = false
       formProps.oncancel?.()

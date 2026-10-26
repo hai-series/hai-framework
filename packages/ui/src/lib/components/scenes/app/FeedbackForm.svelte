@@ -245,90 +245,92 @@
   }
 </script>
 
-<form {...dataAttributes} class={`feedback-form min-w-0 space-y-4 ${className}`} onsubmit={submit} data-feedback-ui='true' data-feedback-ignore='true'>
-  {#if budget}
-    <p class='text-xs text-base-content/60'>{uiM('feedback_capacity_hint', { used: (attachments.filter(item => !removedAttachmentIds.includes(item.id)).reduce((sum, item) => sum + (item.size ?? 0), 0) / 1048576).toFixed(1), total: (budget.maxAttachmentsBytes / 1048576).toFixed(1), single: (budget.maxAttachmentBytes / 1048576).toFixed(1), count: budget.maxAttachmentCount })}</p>
-  {/if}
-  {#if error}<div class='alert alert-error break-words' role='alert'>{error}</div>{/if}
-  {#if receipt}
-    <div role='status' class='alert alert-success block space-y-2 break-words'>
-      <p class='font-medium'>{uiM('feedback_accepted', { number: receipt.number })}</p>
-      <p>{collectionLabel(receipt.collectionStatus)}</p>
-      <p class='text-sm'>{uiM('feedback_accepted_hint')}</p>
-    </div>
-  {:else}
-    <p class='text-sm text-base-content/65'>{labels.description ?? uiM('feedback_quick_hint')}</p>
-    <FormLayout {columns} {labelPosition} {labelWidth}>
-      <FormField for={`${instanceId}-description`} label={labels.contentLabel ?? uiM('feedback_optional_description')}>
-        <Textarea id={`${instanceId}-description`} name='description' class='h-28' maxlength={10000} placeholder={labels.contentPlaceholder ?? uiM('feedback_content_placeholder')} bind:value={description} disabled={loading} />
-      </FormField>
-    </FormLayout>
-    <div class='flex flex-wrap gap-2'>
-      {#if oncapture}<Button size='sm' variant='outline' disabled={loading || annotating || staging || exporting} onclick={() => oncapture()}>{uiM('feedback_capture_add')}</Button>{/if}
-      <label class='btn btn-sm btn-ghost focus-within:outline focus-within:outline-primary'>
-        {uiM('feedback_add_files')}
-        <BareInput id={`${instanceId}-files`} type='file' aria-label={uiM('feedback_add_files')} accept='.png,.jpg,.jpeg,.webp,.webm,.mp4,.txt,.log,.json,image/png,image/jpeg,image/webp,video/webm,video/mp4,text/plain,application/json' multiple disabled={loading || staging || exporting} class='sr-only' onchange={selectFiles} />
-      </label>
-      {#if onfileschange}<FeedbackRecorder maxBytes={recordingBytes} disabled={loading || annotating || staging || exporting || attachmentLimitReached} onactive={recordingChanged} onrecord={recorded} />{/if}
-    </div>
-    {#each files as file, index (`${file.name}:${file.lastModified}:${index}`)}
-      <div class='flex items-center gap-2 min-w-0 text-sm'><span class='min-w-0 flex-1 break-all'>{file.name}</span><Button size='xs' variant='ghost' disabled={loading || staging} ariaLabel={`${uiM('feedback_remove')} ${file.name}`} onclick={() => removeFile(index)}>{uiM('feedback_remove')}</Button></div>
-    {/each}
-    {#if onfileschange && filesError}<Button size='sm' loading={staging} onclick={stageFiles}>{uiM('feedback_retry')}</Button>{/if}
-    {#if visibleAttachments.length}
-      <section class='space-y-3' aria-label={uiM('feedback_screenshots')}>
-        {#each visibleAttachments as attachment (attachment.id)}
-          <div class='rounded-lg border border-base-content/10 p-3 min-w-0 space-y-2'>
-            <div class='flex items-center justify-between gap-3'>
-              <span class='min-w-0 text-sm break-all'>{attachment.name}</span>
-              <div class='flex shrink-0 gap-1'>
-                {#if oncapture && attachment.mimeType?.startsWith('image/')}<Button size='xs' variant='ghost' disabled={loading || annotating || staging || exporting} onclick={() => oncapture(attachment.id)}>{uiM('feedback_capture_replace')}</Button>{/if}
-                <Button size='xs' variant='ghost' disabled={loading || annotating || exporting} ariaLabel={`${uiM('feedback_remove')} ${attachment.name}`} onclick={() => removedAttachmentIds = [...removedAttachmentIds, attachment.id]}>{uiM('feedback_remove')}</Button>
-              </div>
-            </div>
-            {#if attachment.mimeType?.startsWith('image/') && attachment.url}<FeedbackScreenshot {attachment} onannotate={!loading && !exporting && !staging && onannotate ? annotate : undefined} />{/if}
-            {#if attachment.mimeType?.startsWith('video/') && attachment.url}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
-              <video src={attachment.url} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
-            {#if attachment.missingReason}<p class='text-warning text-sm break-words'>{uiM('feedback_missing')}: {attachment.missingReason}</p>{/if}
-          </div>
-        {/each}
-      </section>
+<form {...dataAttributes} class={`feedback-form flex min-h-0 min-w-0 flex-1 flex-col gap-4 ${className}`} onsubmit={submit} data-feedback-ui='true' data-feedback-ignore='true'>
+  <div class='min-h-0 flex-1 space-y-4 overflow-y-auto'>
+    {#if budget}
+      <p class='text-xs text-base-content/60'>{uiM('feedback_capacity_hint', { used: (attachments.filter(item => !removedAttachmentIds.includes(item.id)).reduce((sum, item) => sum + (item.size ?? 0), 0) / 1048576).toFixed(1), total: (budget.maxAttachmentsBytes / 1048576).toFixed(1), single: (budget.maxAttachmentBytes / 1048576).toFixed(1), count: budget.maxAttachmentCount })}</p>
     {/if}
-    <details class='rounded-lg border border-base-content/10 p-3'>
-      <summary class='cursor-pointer text-sm font-medium'>{uiM('feedback_more')}</summary>
-      <div class='pt-3 space-y-4'>
-        <FormLayout {columns} {labelPosition} {labelWidth}>
-          <FormField for={`${instanceId}-type`} label={labels.typeLabel ?? uiM('feedback_type_label')}><Select id={`${instanceId}-type`} options={typeOptions} bind:value={feedbackType} disabled={loading} /></FormField>
-          <FormField for={`${instanceId}-contact`} label={labels.contactLabel ?? uiM('feedback_contact_label')}><Input id={`${instanceId}-contact`} placeholder={labels.contactPlaceholder ?? uiM('feedback_contact_placeholder')} bind:value={contact} maxlength={254} autocomplete='email' disabled={loading} /></FormField>
-        </FormLayout>
+    {#if error}<div class='alert alert-error break-words' role='alert'>{error}</div>{/if}
+    {#if receipt}
+      <div role='status' class='alert alert-success block space-y-2 break-words'>
+        <p class='font-medium'>{uiM('feedback_accepted', { number: receipt.number })}</p>
+        <p>{collectionLabel(receipt.collectionStatus)}</p>
+        <p class='text-sm'>{uiM('feedback_accepted_hint')}</p>
       </div>
-    </details>
-    {#if evidenceSummary.length || evidence.length}
-      <details class='rounded-lg border border-base-content/10 p-3'>
-        <summary class='cursor-pointer text-sm font-medium'>{uiM('feedback_materials')}</summary>
-        <dl class='space-y-2 pt-3 text-sm'>
-          {#each materialGroups as group (group.label)}
-            <div class='min-w-0'>
-              <dt class='font-medium'>{group.label} · {group.items.length}</dt>
-              <dd class='space-y-2 pt-2'>
-                {#each group.items as item (item.id)}
-                  <details class='rounded bg-base-200 p-2' ontoggle={event => expandedMaterials = event.currentTarget.open ? [...expandedMaterials, item.id] : expandedMaterials.filter(id => id !== item.id)}>
-                    <summary class='cursor-pointer break-all text-xs'>{feedbackTime(item.timestamp)} · {item.kind} · {item.source} #{item.sequence}</summary>
-                    {#if expandedMaterials.includes(item.id)}<pre class='mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-all text-xs'>{evidenceText(item.data)}</pre>{/if}
-                  </details>
-                {/each}
-              </dd>
+    {:else}
+      <p class='text-sm text-base-content/65'>{labels.description ?? uiM('feedback_quick_hint')}</p>
+      <FormLayout {columns} {labelPosition} {labelWidth}>
+        <FormField for={`${instanceId}-description`} label={labels.contentLabel ?? uiM('feedback_optional_description')}>
+          <Textarea id={`${instanceId}-description`} name='description' class='h-28' maxlength={10000} placeholder={labels.contentPlaceholder ?? uiM('feedback_content_placeholder')} bind:value={description} disabled={loading} />
+        </FormField>
+      </FormLayout>
+      <div class='flex flex-wrap gap-2'>
+        {#if oncapture}<Button size='sm' variant='outline' disabled={loading || annotating || staging || exporting} onclick={() => oncapture()}>{uiM('feedback_capture_add')}</Button>{/if}
+        <label class='btn btn-sm btn-ghost focus-within:outline focus-within:outline-primary'>
+          {uiM('feedback_add_files')}
+          <BareInput id={`${instanceId}-files`} type='file' aria-label={uiM('feedback_add_files')} accept='.png,.jpg,.jpeg,.webp,.webm,.mp4,.txt,.log,.json,.pdf,image/png,image/jpeg,image/webp,video/webm,video/mp4,text/plain,application/json,application/pdf' multiple disabled={loading || staging || exporting} class='sr-only' onchange={selectFiles} />
+        </label>
+        {#if onfileschange}<FeedbackRecorder maxBytes={recordingBytes} disabled={loading || annotating || staging || exporting || attachmentLimitReached} onactive={recordingChanged} onrecord={recorded} />{/if}
+      </div>
+      {#each files as file, index (`${file.name}:${file.lastModified}:${index}`)}
+        <div class='flex items-center gap-2 min-w-0 text-sm'><span class='min-w-0 flex-1 break-all'>{file.name}</span><Button size='xs' variant='ghost' disabled={loading || staging} ariaLabel={`${uiM('feedback_remove')} ${file.name}`} onclick={() => removeFile(index)}>{uiM('feedback_remove')}</Button></div>
+      {/each}
+      {#if onfileschange && filesError}<Button size='sm' loading={staging} onclick={stageFiles}>{uiM('feedback_retry')}</Button>{/if}
+      {#if visibleAttachments.length}
+        <section class='space-y-3' aria-label={uiM('feedback_screenshots')}>
+          {#each visibleAttachments as attachment (attachment.id)}
+            <div class='rounded-lg border border-base-content/10 p-3 min-w-0 space-y-2'>
+              <div class='flex items-center justify-between gap-3'>
+                <span class='min-w-0 text-sm break-all'>{attachment.name}</span>
+                <div class='flex shrink-0 gap-1'>
+                  {#if oncapture && attachment.mimeType?.startsWith('image/')}<Button size='xs' variant='ghost' disabled={loading || annotating || staging || exporting} onclick={() => oncapture(attachment.id)}>{uiM('feedback_capture_replace')}</Button>{/if}
+                  <Button size='xs' variant='ghost' disabled={loading || annotating || exporting} ariaLabel={`${uiM('feedback_remove')} ${attachment.name}`} onclick={() => removedAttachmentIds = [...removedAttachmentIds, attachment.id]}>{uiM('feedback_remove')}</Button>
+                </div>
+              </div>
+              {#if attachment.mimeType?.startsWith('image/') && attachment.url}<FeedbackScreenshot {attachment} onannotate={!loading && !exporting && !staging && onannotate ? annotate : undefined} />{/if}
+              {#if attachment.mimeType?.startsWith('video/') && attachment.url}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
+                <video src={attachment.url} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
+              {#if attachment.missingReason}<p class='text-warning text-sm break-words'>{uiM('feedback_missing')}: {attachment.missingReason}</p>{/if}
             </div>
           {/each}
-          {#each evidenceSummary as item, index (`${item.label}:${index}`)}
-            <div class='min-w-0'><dt class='font-medium'>{item.label}{item.count === undefined ? '' : ` · ${item.count}`}</dt><dd class='text-base-content/65 break-words'>{item.status === 'missing' ? uiM('feedback_missing') : item.status === 'not-applicable' ? uiM('feedback_not_applicable') : item.status === 'partial' ? uiM('feedback_partial') : uiM('feedback_complete')}{item.detail ? ` · ${item.detail}` : ''}</dd></div>
-          {/each}
-        </dl>
+        </section>
+      {/if}
+      <details class='rounded-lg border border-base-content/10 p-3'>
+        <summary class='cursor-pointer text-sm font-medium'>{uiM('feedback_more')}</summary>
+        <div class='pt-3 space-y-4'>
+          <FormLayout {columns} {labelPosition} {labelWidth}>
+            <FormField for={`${instanceId}-type`} label={labels.typeLabel ?? uiM('feedback_type_label')}><Select id={`${instanceId}-type`} options={typeOptions} bind:value={feedbackType} disabled={loading} /></FormField>
+            <FormField for={`${instanceId}-contact`} label={labels.contactLabel ?? uiM('feedback_contact_label')}><Input id={`${instanceId}-contact`} placeholder={labels.contactPlaceholder ?? uiM('feedback_contact_placeholder')} bind:value={contact} maxlength={254} autocomplete='email' disabled={loading} /></FormField>
+          </FormLayout>
+        </div>
       </details>
+      {#if evidenceSummary.length || evidence.length}
+        <details class='rounded-lg border border-base-content/10 p-3'>
+          <summary class='cursor-pointer text-sm font-medium'>{uiM('feedback_materials')}</summary>
+          <dl class='space-y-2 pt-3 text-sm'>
+            {#each materialGroups as group (group.label)}
+              <div class='min-w-0'>
+                <dt class='font-medium'>{group.label} · {group.items.length}</dt>
+                <dd class='space-y-2 pt-2'>
+                  {#each group.items as item (item.id)}
+                    <details class='rounded bg-base-200 p-2' ontoggle={event => expandedMaterials = event.currentTarget.open ? [...expandedMaterials, item.id] : expandedMaterials.filter(id => id !== item.id)}>
+                      <summary class='cursor-pointer break-all text-xs'>{feedbackTime(item.timestamp)} · {item.kind} · {item.source} #{item.sequence}</summary>
+                      {#if expandedMaterials.includes(item.id)}<pre class='mt-2 max-h-64 max-w-full overflow-auto whitespace-pre-wrap break-all text-xs'>{evidenceText(item.data)}</pre>{/if}
+                    </details>
+                  {/each}
+                </dd>
+              </div>
+            {/each}
+            {#each evidenceSummary as item, index (`${item.label}:${index}`)}
+              <div class='min-w-0'><dt class='font-medium'>{item.label}{item.count === undefined ? '' : ` · ${item.count}`}</dt><dd class='text-base-content/65 break-words'>{item.status === 'missing' ? uiM('feedback_missing') : item.status === 'not-applicable' ? uiM('feedback_not_applicable') : item.status === 'partial' ? uiM('feedback_partial') : uiM('feedback_complete')}{item.detail ? ` · ${item.detail}` : ''}</dd></div>
+            {/each}
+          </dl>
+        </details>
+      {/if}
     {/if}
-  {/if}
-  {#if exported}<p class='text-sm text-success' role='status'>{uiM('feedback_local_saved')}</p>{/if}
-  <div class='sticky bottom-0 z-10 flex flex-wrap justify-end gap-2 border-t border-base-content/10 bg-base-100 pt-4 pb-2'>
+    {#if exported}<p class='text-sm text-success' role='status'>{uiM('feedback_local_saved')}</p>{/if}
+  </div>
+  <div class='shrink-0 flex flex-wrap justify-end gap-2 border-t border-base-content/10 bg-base-100 pt-4 pb-2'>
     {#if onexport}<Button variant='ghost' loading={exporting} disabled={annotating || staging} onclick={saveLocal}>{uiM('feedback_local_export')}</Button>{/if}
     {#if oncancel}<Button variant='ghost' onclick={oncancel}>{receipt ? uiM('feedback_close') : labels.cancel ?? uiM('feedback_cancel')}</Button>{/if}
     {#if !receipt}<Button type='submit' variant='primary' loading={loading || staging} disabled={annotating || exporting || recording || Boolean(onfileschange && filesError)}>{labels.submit ?? uiM('feedback_submit')}</Button>{/if}

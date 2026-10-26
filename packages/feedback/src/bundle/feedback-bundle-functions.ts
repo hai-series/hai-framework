@@ -184,7 +184,7 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
       if (typeof attachment.id !== 'string' || attachment.id.length < 1 || attachment.id.length > 128 || ids.has(attachment.id) || attachment.bytes.byteLength > MAX_FILE_BYTES)
         throw new Error('Invalid attachment')
       ids.add(attachment.id)
-      const suffix = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/webm': 'webm', 'video/mp4': 'mp4', 'text/plain': 'txt', 'application/json': 'json' } as Record<string, string>)[attachment.contentType] ?? 'bin'
+      const suffix = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/webm': 'webm', 'video/mp4': 'mp4', 'text/plain': 'txt', 'application/json': 'json', 'application/pdf': 'pdf' } as Record<string, string>)[attachment.contentType] ?? 'bin'
       // 原始标识仅保存在清单，使用区分大小写且保留字符串编码的摘要构造安全路径。
       const path = `attachments/${await checksum(strToU8(JSON.stringify(attachment.id)))}.${suffix}`
       const hash = await checksum(attachment.bytes)
