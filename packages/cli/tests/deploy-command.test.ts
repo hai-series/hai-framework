@@ -6,7 +6,7 @@
  * 验证 hai deploy 在失败/异常路径中也会关闭 deploy 模块，避免进程内状态泄漏。
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { core } from '@h-ai/core'
@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   deployApp: vi.fn(),
   close: vi.fn(),
   writeMessage: vi.fn(),
+  plan: vi.fn(),
 }))
 
 vi.mock('../src/cli-utils.js', async importOriginal => ({
@@ -29,6 +30,7 @@ vi.mock('../src/cli-utils.js', async importOriginal => ({
 
 vi.mock('@h-ai/deploy', async importOriginal => ({
   ...await importOriginal<typeof import('@h-ai/deploy')>(),
+  createDeploymentPlan: mocks.plan,
   deploy: {
     credentials: { load: mocks.loadCredentials },
     init: mocks.init,
@@ -69,6 +71,7 @@ beforeEach(() => {
   })
   mocks.init.mockResolvedValue({ success: true, data: undefined })
   mocks.close.mockResolvedValue(undefined)
+  mocks.plan.mockResolvedValue({ success: true, data: { baseline: { state: 'not-inspected' } } })
 })
 
 afterEach(() => {
@@ -76,6 +79,28 @@ afterEach(() => {
 })
 
 describe('deployCommand', () => {
+  it.each([false, true])('计划模式只读且不加载/保存凭据、不初始化或部署，远端检查=%s', async (inspectRemote) => {
+    const appDir = createDeployApp()
+    const before = readdirSync(tmpRoot, { recursive: true })
+    const envBefore = readFileSync(join(appDir, '.env.prod'), 'utf8')
+    const processBefore = { ...process.env }
+    await deployCommand({ cwd: tmpRoot, appDir, env: 'prod', plan: true, inspectRemote, yes: true })
+    expect(mocks.plan).toHaveBeenCalledWith(appDir, expect.anything(), expect.objectContaining({ inspectRemote }))
+    expect(mocks.loadCredentials).not.toHaveBeenCalled()
+    expect(mocks.init).not.toHaveBeenCalled()
+    expect(mocks.deployApp).not.toHaveBeenCalled()
+    expect(readdirSync(tmpRoot, { recursive: true })).toEqual(before)
+    expect(readFileSync(join(appDir, '.env.prod'), 'utf8')).toBe(envBefore)
+    expect(process.env).toEqual(processBefore)
+  })
+
+  it.each([{ inspectRemote: true }, { plan: true, build: true }, { plan: true, bundleOnly: true }, { plan: true, output: 'bundle.tar' }])('拒绝只读模式的冲突参数 %j', async (options) => {
+    const appDir = createDeployApp()
+    await expect(deployCommand({ cwd: tmpRoot, appDir, env: 'prod', yes: true, ...options })).rejects.toThrow()
+    expect(mocks.loadCredentials).not.toHaveBeenCalled()
+    expect(mocks.init).not.toHaveBeenCalled()
+    expect(mocks.deployApp).not.toHaveBeenCalled()
+  })
   it.each(['en-US', 'zh-CN'])('未知或已结束的远端状态与本地终止结论分别展示 (%s)', async (locale) => {
     core.i18n.setGlobalLocale(locale)
     for (const remoteExecution of ['unknown', 'finished']) {

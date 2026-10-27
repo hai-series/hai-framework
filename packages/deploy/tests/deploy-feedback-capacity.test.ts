@@ -7,7 +7,7 @@ import { parseEnv } from 'node:util'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
-import { deploy } from '@h-ai/deploy'
+import { createDeploymentPlan, deploy } from '@h-ai/deploy'
 import { afterEach, expect, it, vi } from 'vitest'
 
 vi.mock('../src/container/deploy-command.js', async (importOriginal) => {
@@ -80,4 +80,10 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
     const env = parseEnv(execFileSync('tar', ['-xOf', result.data.bundlePath, './.env.runtime'], { encoding: 'utf8', windowsHide: true }))
     expect(env.BODY_SIZE_LIMIT).toBe('50364416')
   }
+})
+
+it('计划保持远端 Docker，与本地打包 Podman 分离', async () => {
+  const { root, artifactDir } = fixture()
+  const plan = await createDeploymentPlan(root, { provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } }, { environment: 'test', envDir: root, artifactDir, runtime: 'podman' })
+  expect(plan).toMatchObject({ success: true, data: { target: { runtime: 'docker' } } })
 })

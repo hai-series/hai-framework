@@ -99,7 +99,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       root,
       appDir: directory,
       environment: environment.data.environment,
-      target: provider.type === 'docker-ssh' ? { provider: provider.type, host: provider.ssh?.host, port: provider.ssh?.port, directory: remoteDirectory, runtime: options.runtime ?? provider.remote.runtime, hostPort: provider.expose.hostPort } : { provider: provider.type },
+      target: provider.type === 'docker-ssh' ? { provider: provider.type, host: provider.ssh?.host, port: provider.ssh?.port, directory: remoteDirectory, runtime: provider.remote.runtime, hostPort: provider.expose.hostPort } : { provider: provider.type },
       artifact: artifact ? { directory: artifactDir, version: artifact.appVersion, buildId: artifact.buildId, verified: true, images: artifact.images.map(image => ({ name: image.name, reference: image.imageRef, sha256: image.sha256 })) } : undefined,
       selected,
       retained: available.filter(name => !selected.includes(name)),

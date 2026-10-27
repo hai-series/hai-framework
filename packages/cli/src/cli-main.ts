@@ -185,6 +185,8 @@ cli
     try {
       await deployCommand({
         appDir,
+        plan: options.plan as boolean,
+        inspectRemote: options.inspectRemote as boolean,
         env: options.env as string,
         envDir: options.envDir as string,
         yes: options.yes as boolean,
