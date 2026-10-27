@@ -191,7 +191,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @returns 成功时返回创建的 AuditLog；失败时返回 LOG_FAILED
    */
   async log(input: CreateAuditLogInput, tx?: DmlWithTxOperations): Promise<HaiResult<AuditLog>> {
-    logger.debug('Recording audit log', { action: input.action, resource: input.resource })
+    logger.trace('Recording audit log', { action: input.action, resource: input.resource })
 
     const id = core.id.withPrefix('audit_')
     const time = await readAuditTime(this.sql(tx))
@@ -236,7 +236,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         createdAt: now,
       }
 
-      logger.info('Audit log recorded', { id, action: input.action, resource: input.resource })
+      logger.trace('Audit log recorded', { id, action: input.action, resource: input.resource })
       return ok(auditLog)
     }
     catch (error) {
@@ -428,7 +428,10 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       }
 
       const deleted = result.data.changes
-      logger.info('Audit logs cleaned up', { olderThanDays, deleted })
+      if (deleted > 0)
+        logger.info('Audit logs cleaned up', { olderThanDays, deleted })
+      else
+        logger.trace('Audit cleanup found no expired records', { olderThanDays, deleted })
       return ok(deleted)
     }
     catch (error) {
