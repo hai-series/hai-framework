@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/feedback",
   "type": "module",
-  "version": "0.1.0-alpha.73",
+  "version": "0.1.0-alpha.74",
   "description": "Hai Framework feedback collection, evidence, notifications and offline diagnostic bundles.",
   "license": "Apache-2.0",
   "exports": {
