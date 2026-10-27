@@ -27,7 +27,7 @@ import { fromError } from '../kit-response.js'
  */
 export async function requireSensitiveOperation(iam: IamFunctions, event: Pick<RequestEvent, 'request' | 'cookies'>, operation: string): Promise<void> {
   const policy = iam.publicConfig?.reauthentication
-  if (!policy?.enabled || !policy.operations.includes(operation))
+  if (!policy?.enabled)
     return
   const checked = await iam.auth.checkSensitiveOperation(getAccessToken(event.request, event.cookies) ?? '', operation, event.request.headers.get('x-hai-reauthentication') ?? undefined)
   if (!checked.success)

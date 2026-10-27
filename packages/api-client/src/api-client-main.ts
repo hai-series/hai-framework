@@ -60,7 +60,7 @@ import type {
   ApiRequestObserver,
   ApiRequestRecord,
 } from './api-client-types.js'
-import { apiContract } from '@h-ai/api-contract'
+import { apiContract, IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
@@ -483,7 +483,7 @@ function buildTokenManager(config: ApiClientConfig, transport: TransportClient |
     new Headers(init?.headers).forEach((value, name) => headers.set(name, value))
     return fetchFn(input, { ...init, headers })
   }
-  const manager = createTokenManager(storage, refreshUrl, refreshFetch, config.auth.onRefreshFailed, config.auth.refreshTimeoutMs)
+  const manager = createTokenManager(storage, refreshUrl, refreshFetch, config.auth.recoverSession ? undefined : config.auth.onRefreshFailed, config.auth.refreshTimeoutMs)
   if (config.auth.onTokenRefreshed) {
     manager.onTokenRefreshed(config.auth.onTokenRefreshed)
   }
@@ -590,6 +590,7 @@ async function buildHeaders(
 ): Promise<Record<string, string>> {
   const configured = typeof config.headers === 'function' ? await config.headers() : config.headers ?? {}
   const headers = new Headers(configured)
+  headers.set('x-hai-terminal', config.auth?.terminalType ?? 'web')
   if (!headers.has('accept-language'))
     headers.set('accept-language', core.i18n.getGlobalLocale())
   const accessToken = await tokenManager?.storage.getAccessToken()
@@ -631,6 +632,7 @@ async function fetchWithRefresh(
   // Fetch Request 的 body 是一次性可读流；为了支持 401 后重发 POST/PUT 等带 body 的请求，
   // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
   const retryRequest = tokenManager ? request.clone() : undefined
+  const identityGeneration = tokenManager?.generation
   if (observation)
     observation.attempts++
   const response = await fetchWithTimeout(request, init, config, transport)
@@ -645,13 +647,32 @@ async function fetchWithRefresh(
     return response
   if (response.status !== 401 && !await isUnauthorizedResult(response))
     return response
+  const failure: unknown = await response.clone().json().catch(() => undefined)
+  if (failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
+    && typeof failure.error.code === 'string' && failure.error.code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(failure.error.code).success) {
+    return response
+  }
+  if (tokenManager.generation !== identityGeneration)
+    return response
 
   const tokens = await tokenManager.refresh()
-  if (!tokens)
+  if (tokenManager.generation !== identityGeneration)
+    return response
+  let accessToken = tokens?.accessToken
+  // refresh网络/上游故障会保留凭据，不能误判为会话失效弹窗，更不能重放结果不明的写入。
+  if (!accessToken && config.auth?.recoverSession && tokenManager.sessionInvalid) {
+    if (await config.auth.recoverSession()) {
+      const restoredGeneration = tokenManager.generation
+      accessToken = await tokenManager.storage.getAccessToken() ?? undefined
+      if (tokenManager.generation !== restoredGeneration)
+        return response
+    }
+  }
+  if (!accessToken)
     return response
 
   const headers = new Headers(retryRequest.headers)
-  headers.set('authorization', `Bearer ${tokens.accessToken}`)
+  headers.set('authorization', `Bearer ${accessToken}`)
   if (observation)
     observation.attempts++
   return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)

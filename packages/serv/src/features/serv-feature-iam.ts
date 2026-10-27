@@ -62,7 +62,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
   // 权限守卫先执行；额外鉴别只绑定已授权操作，不提升原有权限。
   async function sensitive<T>(context: ServContext, operation: string, run: () => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
     const policy = iam.publicConfig?.reauthentication
-    if (policy?.enabled && policy.operations.includes(operation)) {
+    if (policy?.enabled) {
       const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', operation, context.request.headers.get('x-hai-reauthentication') ?? undefined)
       if (!checked.success)
         return checked
@@ -81,7 +81,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .route('auth.createCaptcha', ({ input }) => iam.auth.createCaptcha(input))
     .route('auth.loginWithOtp', ({ input, context }) => iam.auth.loginWithOtp(input, context))
     .route('auth.loginWithLdap', ({ input, context }) => iam.auth.loginWithLdap(input, context))
-    .route('auth.publicConfig', () => ok(iam.publicConfig))
+    .route('auth.publicConfig', () => iam.getPublicConfig())
     .route('auth.renewPassword', ({ input }) => iam.user.renewPassword(input))
     .route('auth.requestPasswordReset', ({ input }) => iam.user.requestPasswordReset(input.identifier, input))
     .route('auth.confirmPasswordReset', ({ input }) => iam.user.confirmPasswordReset(input.token, input.newPassword))
@@ -210,6 +210,10 @@ export function createIamProcedures(deps: IamProcedureDeps) {
     .route('permissions.create')
     .permission('iam.permissions.write')
     .handle(({ input, context }) => sensitive(context, 'iam.permissions.create', () => iam.authz.createPermission(input)))
+
+    .route('permissions.setSensitiveOperations')
+    .permission('iam.permissions.write')
+    .handle(({ input, context }) => sensitive(context, 'iam.permissions.sensitiveOperations', () => iam.authz.setPermissionSensitiveOperations(input.id, input.sensitiveOperations)))
 
     .route('permissions.delete')
     .permission('iam.permissions.write')

@@ -25,7 +25,7 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
   const apiFetch = options.apiFetch ?? createKitClient().apiFetch
   const base = options.basePath ?? '/api/auth'
   async function post(path: string, input: object, init: Pick<RequestInit, 'keepalive'> = {}): Promise<HaiResult<unknown>> {
-    const response = await apiFetch(`${base}/${path}`, { ...init, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+    const response = await apiFetch(`${base}/${path}`, { ...init, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }, { recoverSession: false })
     // void 成功响应在 JSON 中省略 data，统一还原为 HaiResult 的 data: undefined。
     const result = apiContract.haiResultSchema(z.unknown().optional()).parse(await response.json())
     return result.success ? ok(result.data) : result
@@ -53,15 +53,15 @@ export function createKitAuthActions(options: { apiFetch?: KitClient['apiFetch']
       return result.success ? ok(IamCaptchaChallengeSchema.parse(result.data)) : result
     },
     async publicConfig(): Promise<HaiResult<IamPublicConfig | null>> {
-      const response = await apiFetch(`${base}/config`)
+      const response = await apiFetch(`${base}/config`, undefined, { recoverSession: false })
       return apiContract.haiResultSchema(IamPublicConfigSchema.nullable()).parse(await response.json())
     },
     login(input: IamLoginInput & { method?: 'password' | 'ldap' | 'email' | 'sms', code?: string }) {
       if (input.method === 'ldap')
-        return post('login/ldap', { username: input.identifier, password: input.password, captcha: input.captcha })
+        return post('login/ldap', { username: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
       if (input.method === 'email' || input.method === 'sms')
-        return post('login/otp', { identifier: input.identifier, code: input.code, captcha: input.captcha })
-      return post('login', { identifier: input.identifier, password: input.password, captcha: input.captcha })
+        return post('login/otp', { identifier: input.identifier, code: input.code, captcha: input.captcha, expectedUserId: input.expectedUserId })
+      return post('login', { identifier: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
     },
     register: (input: IamRegisterInput) => post('register', { ...input, confirmPassword: input.password }),
     sendOtp: (identifier: string, options?: { captcha?: string }) => post('otp/send', { identifier, ...options }),

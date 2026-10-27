@@ -35,7 +35,7 @@ export interface ServCorsConfig {
 }
 
 const DEFAULT_CORS_METHODS = ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS']
-const DEFAULT_CORS_ALLOWED_HEADERS = ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication']
+const DEFAULT_CORS_ALLOWED_HEADERS = ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication', 'X-Hai-Terminal']
 const DEFAULT_CORS_MAX_AGE = 86_400
 
 /**

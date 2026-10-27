@@ -174,6 +174,7 @@ export function createTokenManager(
   let refreshPromise: Promise<TokenPair | null> | null = null
   let refreshController: AbortController | null = null
   let generation = 0
+  let sessionInvalid = false
   let storageMutation: Promise<void> = Promise.resolve()
 
   /**
@@ -229,8 +230,10 @@ export function createTokenManager(
       if (refreshGeneration !== generation)
         return
       await storage.clear()
-      if (refreshGeneration === generation)
+      if (refreshGeneration === generation) {
+        sessionInvalid = true
         onRefreshFailed?.()
+      }
     })
   }
 
@@ -287,7 +290,8 @@ export function createTokenManager(
     if (refreshGeneration !== generation)
       return null
     if (!refreshToken) {
-      logger.warn('Token refresh skipped, no refresh token available')
+      sessionInvalid = true
+      logger.debug('Token refresh skipped, no refresh token available')
       onRefreshFailed?.()
       return null
     }
@@ -358,7 +362,8 @@ export function createTokenManager(
       })
       if (!committed || refreshGeneration !== generation)
         return null
-      logger.info('Token refreshed successfully')
+      sessionInvalid = false
+      logger.debug('Token refreshed successfully')
       for (const cb of callbacks) {
         if (refreshGeneration !== generation)
           return null
@@ -381,9 +386,12 @@ export function createTokenManager(
 
   return {
     storage,
+    get generation() { return generation },
+    get sessionInvalid() { return sessionInvalid },
     refresh,
     async setTokens(tokens: TokenPair) {
       const previousController = invalidateRefresh()
+      sessionInvalid = false
       const mutationGeneration = generation
       const pending = mutateStorage(async () => {
         if (mutationGeneration !== generation)

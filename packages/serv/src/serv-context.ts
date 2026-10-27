@@ -93,6 +93,8 @@ export interface ServContext {
   readonly locale: string
   readonly ip?: string
   readonly userAgent?: string
+  /** 客户端终端类别；仅作服务端允许的会话分组，不是硬件身份认证。 */
+  readonly terminalType?: 'web' | 'app' | 'desktop' | 'api'
   readonly accessToken?: string
   readonly session?: ServSession
   readonly request: Request
@@ -219,12 +221,14 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
   const ip = normalizeClientIp(Object.hasOwn(input, 'ip') ? input.ip : input.remoteAddress)
   const locale = resolveRequestLocale(headers)
   const accessToken = extractBearerToken(headers.get(HEADER_AUTHORIZATION))
+  const terminal = headers.get('x-hai-terminal')
 
   return {
     requestId,
     locale,
     ip,
     userAgent: headers.get(HEADER_USER_AGENT) ?? undefined,
+    terminalType: terminal === 'app' || terminal === 'desktop' || terminal === 'api' ? terminal : 'web',
     accessToken,
     request: input.request,
     logger: core.logger.child({ module: 'serv', requestId }),

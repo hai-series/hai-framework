@@ -38,7 +38,8 @@ function requestContext(event: Pick<RequestEvent, 'request' | 'getClientAddress'
     ip = event.getClientAddress()
   }
   catch { /* 未配置可信连接地址时保持未知，启用 IP 限制将拒绝登录。 */ }
-  return { ip, userAgent: event.request.headers.get('user-agent') ?? undefined }
+  const terminal = event.request.headers.get('x-hai-terminal')
+  return { ip, userAgent: event.request.headers.get('user-agent') ?? undefined, terminalType: terminal === 'app' || terminal === 'desktop' || terminal === 'api' ? terminal : 'web' }
 }
 
 /**
@@ -70,7 +71,7 @@ export function createAuthApi(iam: IamFunctions) {
       const input = await validateFormOrFail(request, IamReauthenticateInputSchema)
       return response(await iam.auth.reauthenticate(getAccessToken(request, cookies) ?? '', input.password, input.operation))
     }),
-    publicConfig: handler(() => ok(iam.publicConfig)),
+    publicConfig: handler(async () => response(await iam.getPublicConfig())),
     renewPassword: handler(async ({ request }) => {
       const input = await validateFormOrFail(request, IamRenewPasswordInputSchema)
       return response(await iam.user.renewPassword(input))
