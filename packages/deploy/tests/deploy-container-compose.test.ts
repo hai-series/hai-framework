@@ -72,7 +72,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(env.APP_LABEL).toBe('retained')
     expect(Object.keys(sidecar.env).every(name => name.startsWith('HAI_'))).toBe(true)
     const compose = parse(generateComposeFile({ projectName: 'isolated', appVersion: '1.0.0', imageRef: 'app:1', hostPort: 3000, containerPort: 3000, sidecar }))
-    expect(compose.services.app.env_file).toEqual(['.env.runtime'])
+    expect(compose.services.serv.env_file).toEqual(['.env.runtime'])
     for (const service of ['db', 'storage', 'ldap'])
       expect(compose.services[service].env_file).toEqual(['middleware-runtime.env'])
     expect(compose).not.toHaveProperty('services.db.environment.POSTGRES_PASSWORD')
@@ -269,13 +269,13 @@ describe('generateComposeFile', () => {
   it('web 仅公开一个同源端口，不挂载 API 私有环境，代理保持自定义前缀及 SPA 刷新', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3001)
     const compose = parse(generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'api:v1', hostPort: 18080, containerPort: 3001, sidecar, web: { imageRef: 'web:v1', containerPort: 8081 } }))
-    expect(compose.services.app.ports).toBeUndefined()
+    expect(compose.services.serv.ports).toBeUndefined()
     expect(compose.services.web.ports).toEqual(['18080:8081'])
     expect(compose.services.web.env_file).toBeUndefined()
     const proxy = generateWebProxyConfig(3001, '/backend/v2', { webPort: 8081 })
     expect(proxy).toContain('listen 8081;')
     expect(proxy).toContain('location /backend/v2/')
-    expect(proxy).toContain('proxy_pass http://app:3001;')
+    expect(proxy).toContain('proxy_pass http://serv:3001;')
     expect(proxy).toContain('client_max_body_size 2129920;')
     expect(proxy).toContain('large_client_header_buffers 4 32k;')
     expect(proxy).toContain('proxy_buffer_size 32k;')
@@ -284,7 +284,7 @@ describe('generateComposeFile', () => {
     expect(proxy).toContain('try_files $uri $uri/ /index.html;')
     expect(() => generateWebProxyConfig(3001, '/api; injected')).toThrow()
   })
-  it('生成 app 服务并映射端口', () => {
+  it('生成 serv 服务并映射端口', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan([]), {}, 3000)
     const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:20260922-abc', hostPort: 18080, containerPort: 3000, sidecar })
     expect(compose).toContain('image: hai-demo:20260922-abc')
@@ -292,7 +292,7 @@ describe('generateComposeFile', () => {
     expect(parse(compose).networks).toEqual({ 'hai-app': {} })
   })
 
-  it('app 服务 depends_on 包含已启用 sidecar', () => {
+  it('serv 服务 depends_on 包含已启用 sidecar', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'cache']), {}, 3000)
     const compose = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'hai-demo:tag', hostPort: 18080, containerPort: 3000, sidecar })
     expect(compose).toContain('depends_on')

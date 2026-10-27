@@ -51,7 +51,7 @@ describe('generated environment profiles', () => {
     const name = `env-${appType}`
     await createProject({ cwd: root, name, appType, features: [], yes: true, install: false, git: false, deploy: false, examples: false, frontends: ['web'], packageManager: 'pnpm' })
     const project = path.join(root, name)
-    const service = appType === 'api' ? path.join(project, 'apps', `${name}-service`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
+    const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
     await expectProfiles(appType === 'api' ? service : project, service)
   })
 })
@@ -62,7 +62,7 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
     const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--yes', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
     expect(created.error).toBeUndefined()
     expect(created.status, created.stderr).toBe(0)
-    const service = path.join(root, 'env-binary/apps/env-binary-service')
+    const service = path.join(root, 'env-binary/apps/env-binary-serv')
     await expectProfiles(service, service)
   })
 })

@@ -78,8 +78,8 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
   it('真实创建 API 工程并本地化完成提示，目标语言配置独立保留', async () => {
     const root = await fixture()
     await createProject({ cwd: root, name: 'shop', appType: 'api', features: ['db'], yes: true, install: false, git: false, deploy: false, moduleConfigs: { core: { defaultLocale: 'zh-CN' } } })
-    expect(await fse.pathExists(path.join(root, 'shop/apps/shop-service/src/index.ts'))).toBe(true)
-    expect(await readFile(path.join(root, 'shop/apps/shop-service/config/_core.yml'), 'utf8')).toContain('zh-CN')
+    expect(await fse.pathExists(path.join(root, 'shop/apps/shop-serv/src/index.ts'))).toBe(true)
+    expect(await readFile(path.join(root, 'shop/apps/shop-serv/config/_core.yml'), 'utf8')).toContain('zh-CN')
     if (locale === 'en-US') {
       expect(output()).not.toMatch(/\p{Script=Han}/u)
       expect(output()).toContain('Project created')
@@ -214,7 +214,7 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     const created = run(root, ['create', 'shop', '--type', 'api', '--features', 'db', '--yes', '--no-install', '--no-git', '--no-deploy'])
     expect(created.status).toBe(0)
     const target = path.join(root, 'shop')
-    const service = path.join(target, 'apps/shop-service')
+    const service = path.join(target, 'apps/shop-serv')
     const added = run(service, ['add', 'cache', '--no-install'])
     expect(added.status).toBe(0)
     const initialized = run(service, ['init', '--force'])
@@ -224,7 +224,7 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     expect(invalidName.status).toBe(1)
     expect(await fse.pathExists(path.join(root, 'BAD_NAME'))).toBe(false)
     const diagnostics = [created, added, initialized, failed].map(r => r.stdout + r.stderr).join('\n')
-    expect(await fse.pathExists(path.join(target, 'apps/shop-service/src/index.ts'))).toBe(true)
+    expect(await fse.pathExists(path.join(target, 'apps/shop-serv/src/index.ts'))).toBe(true)
     expect(await fse.pathExists(path.join(service, 'config/_cache.yml'))).toBe(true)
     if (locale === 'en-US') {
       expect(diagnostics).not.toMatch(/\p{Script=Han}/u)

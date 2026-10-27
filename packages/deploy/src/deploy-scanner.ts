@@ -2,7 +2,7 @@
 import type { HaiResult } from '@h-ai/core'
 import type { DeployScanOptions, MiddlewareRequirement, ScanResult, ServiceType } from './deploy-types.js'
 import { existsSync, readFileSync } from 'node:fs'
-import { basename, dirname, join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { parseAllDocuments } from 'yaml'
 import { loadDeploymentConfig, loadDeploymentEnvironment } from './deploy-environment.js'
@@ -100,7 +100,11 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
     const projectDir = resolveProjectDirectory(appDir)
     const packageFile = join(projectDir, 'package.json')
     const project = existsSync(packageFile) ? record(JSON.parse(readFileSync(packageFile, 'utf8'))) : {}
-    const appName = typeof project.name === 'string' && project.name.trim() ? project.name.trim() : basename(projectDir)
+    if (typeof project.name !== 'string' || !project.name.trim())
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
+    const appName = project.name.trim()
+    if (!appName.replace(/^@[^/]+\//, '').replace(/[^a-z0-9]/gi, ''))
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameRequired'))
     const envDir = options?.envDir ? resolve(options.envDir) : existsSync(join(appDir, '.env')) ? appDir : graph.root
     const loaded = loadDeploymentEnvironment({ environment: options?.environment ?? 'prod', envDir, requireFile: options?.environment !== undefined })
     if (!loaded.success)

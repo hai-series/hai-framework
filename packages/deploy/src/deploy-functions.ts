@@ -8,16 +8,24 @@
 import type { DeployAppOptions, ScanResult, ServiceType } from './deploy-types.js'
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { deployM } from './deploy-i18n.js'
 
 /**
- * 资源身份与执行、计划共用同一归一化规则。
- * @example 模块内部上下文
+ * 将工程根 package.json.name 归一化为镜像与部署资源共用的身份；移除 scope、转小写并合并非法字符。
+ * @throws Error - 名称为空或归一化后不含字母数字。
+ * @param name - 工程根 package.json.name。
+ * @returns 可用于 OCI 镜像和 Compose 资源的工程名。
+ * @example
  * ```ts
+ * import { normalizeProjectName } from '@h-ai/deploy'
  * const name = normalizeProjectName('@shop/orders')
  * ```
  */
 export function normalizeProjectName(name: string): string {
-  return name.replace(/^@[^/]+\//, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'app'
+  const normalized = name.trim().replace(/^@[^/]+\//, '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+  if (!normalized)
+    throw new Error(deployM('deploy_projectNameRequired'))
+  return normalized
 }
 
 /**
@@ -28,7 +36,7 @@ export function normalizeProjectName(name: string): string {
  * @returns 最近的工程入口目录；未找到入口时返回应用目录的绝对路径。
  * @example 模块内部上下文
  * ```ts
- * const project = resolveProjectDirectory('/workspace/shop/apps/shop-service')
+ * const project = resolveProjectDirectory('/workspace/shop/apps/shop-serv')
  * ```
  */
 export function resolveProjectDirectory(appDir: string): string {
@@ -49,7 +57,7 @@ export function resolveProjectDirectory(appDir: string): string {
  * @returns 约定的 .hai/build/docker 目录；不保证其中制品存在或通过校验。
  * @example 模块内部上下文
  * ```ts
- * const directory = resolveArtifactDirectory('/workspace/shop/apps/shop-service')
+ * const directory = resolveArtifactDirectory('/workspace/shop/apps/shop-serv')
  * ```
  */
 export function resolveArtifactDirectory(appDir: string): string {

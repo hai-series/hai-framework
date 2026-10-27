@@ -1,6 +1,6 @@
 /** Capacitor 同步与真正原生产物打包分开；只接受受控工程内路径。 */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { cliM } from '../cli-i18n.js'
 
@@ -20,7 +20,8 @@ export async function buildMobileApp(root: string, directories: readonly string[
   for (const item of directories) {
     const directory = resolve(root, item)
     const rel = relative(root, directory)
-    if (!rel || rel.startsWith('..') || !existsSync(join(directory, platform)) || !existsSync(join(directory, 'capacitor.config.ts')))
+    // 独立手机工程可直接使用根目录；跨盘绝对路径和父目录仍不能越过工程边界。
+    if (isAbsolute(rel) || rel.startsWith('..') || !existsSync(join(directory, platform)) || !existsSync(join(directory, 'capacitor.config.ts')))
       throw new Error(cliM('cli_build_app_missing', { params: { platform } }))
     const before = Date.now()
     await run(['run', 'build'], directory)

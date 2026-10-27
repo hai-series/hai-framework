@@ -26,9 +26,9 @@ let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-build-command-'))
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'sample-app', version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 }], desktop: ['apps/desktop'] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 }], desktop: ['apps/desktop'] } }))
   mkdirSync(join(root, 'images'), { recursive: true })
-  writeFileSync(join(root, 'images/app.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
+  writeFileSync(join(root, 'images/serv.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
   writeFileSync(join(root, 'images/web.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
   state.calls = []
   state.failPodman = false
@@ -47,6 +47,37 @@ it('reports malformed project JSON without exposing configuration values', async
 afterEach(() => {
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
+})
+
+it.each([{ names: ['serv'] }, { names: ['web'] }, { names: ['serv', 'web'] }])('按交付职责构建，镜像身份来自根包名而非目录：$names', async ({ names }) => {
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@example/Order_Portal', version: '1.2.3' }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: names.map(name => ({ name, dockerfile: `images/${name}.Dockerfile`, containerPort: name === 'serv' ? 3000 : 8080 })) } }))
+  writeFileSync(join(root, 'images/serv.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
+  await buildCommand({ cwd: root, target: 'docker', runtime: 'docker' })
+  const parent = join(root, '.hai/build/docker')
+  const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
+  expect(manifest).toMatchObject({ version: 4, primaryService: names.includes('serv') ? 'serv' : 'web', hasWeb: names.includes('web'), partial: false })
+  expect(manifest.images.map((image: { name: string }) => image.name)).toEqual(names)
+  for (const image of manifest.images)
+    expect(image.imageRef).toBe(`localhost/hai-order-portal-${image.name}:${manifest.buildId}`)
+})
+
+it.each([undefined, '', '   ', '@@'])('镜像构建拒绝缺失或无法归一化的根包名：%s', async (name) => {
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name, version: '1.2.3' }))
+  await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.toThrow()
+  expect(state.calls).toEqual([])
+})
+
+it('从 workspace 构建仍使用工程根名称、配置与产物目录', async () => {
+  const service = join(root, 'packages/different-serv')
+  mkdirSync(service, { recursive: true })
+  writeFileSync(join(service, 'package.json'), JSON.stringify({ name: 'different-serv', version: '9.9.9' }))
+  await buildCommand({ cwd: service, target: 'docker', images: 'serv', runtime: 'docker' })
+  const parent = join(root, '.hai/build/docker')
+  const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
+  expect(manifest.appVersion).toBe('1.2.3')
+  expect(manifest.images[0].imageRef).toMatch(/^localhost\/hai-sample-app-serv:1\.2\.3-/)
+  expect(existsSync(join(service, '.hai'))).toBe(false)
 })
 
 it.each(['podman', 'docker'] as const)('托管 %s 测试构建登记 tag，Podman 同时标记中间层', async (runtime) => {
@@ -140,7 +171,7 @@ it('优先 Podman，全部镜像构建成功才发布清单，清单不含环境
   expect(manifest.images[0].sha256).toMatch(/^[a-f0-9]{64}$/)
   expect(manifest.images[0].imageRef.split(':').at(-1)).toBe(manifest.images[1].imageRef.split(':').at(-1))
   expect(manifest.images[0].imageRef).toContain(':1.2.3-')
-  expect(existsSync(join(parent, latest, 'app-1.2.3.tar'))).toBe(true)
+  expect(existsSync(join(parent, latest, 'serv-1.2.3.tar'))).toBe(true)
   expect(existsSync(join(parent, latest, 'web-1.2.3.tar'))).toBe(true)
   expect(readdirSync(parent).some(name => name.startsWith('.building-'))).toBe(false)
 })
@@ -152,20 +183,20 @@ it('只构建 Web 并记录部分制品，未知镜像名在启动引擎前失�
   expect(calls[0]!.args).not.toContain('--target')
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
-  expect(manifest).toMatchObject({ version: 3, partial: true, hasWeb: true, images: [{ name: 'web' }] })
-  expect(manifest.appContainerPort).toBeUndefined()
+  expect(manifest).toMatchObject({ version: 4, primaryService: 'serv', partial: true, hasWeb: true, images: [{ name: 'web' }] })
+  expect(manifest.servContainerPort).toBeUndefined()
   expect(manifest.webContainerPort).toBe(8080)
   state.calls = []
   await expect(buildCommand({ cwd: root, target: 'docker', images: 'unknown' })).rejects.toThrow()
   expect(state.calls).toEqual([])
 })
 
-it.each(['app', 'web'])('部分构建保留未选镜像的显式容器端口：%s', async (selected) => {
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app', dockerfile: 'images/app.Dockerfile', containerPort: 4100 }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8181 }] } }))
+it.each(['serv', 'web'])('部分构建保留未选镜像的显式容器端口：%s', async (selected) => {
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile', containerPort: 4100 }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8181 }] } }))
   await buildCommand({ cwd: root, target: 'docker', images: selected })
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
-  expect(manifest).toMatchObject({ partial: true, hasWeb: true, appContainerPort: 4100, webContainerPort: 8181, images: [{ name: selected }] })
+  expect(manifest).toMatchObject({ partial: true, hasWeb: true, servContainerPort: 4100, webContainerPort: 8181, images: [{ name: selected }] })
   expect(manifest.images).toHaveLength(1)
 })
 
@@ -181,18 +212,18 @@ it('依赖输入保留真实本地归档并忽略缓存，未变时保留时间�
     writeFileSync(join(root, directory, 'cached.tgz'), 'cached download')
   }
   writeFileSync(join(root, '.env.local'), 'PRIVATE_TEST=secret')
-  await buildCommand({ cwd: root, target: 'docker', images: 'app' })
+  await buildCommand({ cwd: root, target: 'docker', images: 'serv' })
   const cached = join(root, 'images/dependencies/packages/shared/package.json')
   const date = new Date('2020-01-01T00:00:00Z')
   utimesSync(cached, date, date)
-  await buildCommand({ cwd: root, target: 'docker', images: 'app' })
+  await buildCommand({ cwd: root, target: 'docker', images: 'serv' })
   expect(statSync(cached).mtimeMs).toBe(date.getTime())
   expect(existsSync(join(root, 'images/dependencies/.env.local'))).toBe(false)
   expect(readFileSync(join(root, 'images/dependencies/dependencies/shared.tgz'), 'utf8')).toBe('local dependency')
   expect(existsSync(join(root, 'images/dependencies/.pnpm-store/package.json'))).toBe(false)
   expect(existsSync(join(root, 'images/dependencies/packages/shared/.cache/cached.tgz'))).toBe(false)
   unlinkSync(manifest)
-  await buildCommand({ cwd: root, target: 'docker', images: 'app' })
+  await buildCommand({ cwd: root, target: 'docker', images: 'serv' })
   expect(existsSync(cached)).toBe(false)
 })
 
@@ -262,7 +293,7 @@ it('错误版本、容器端口或不适用的构建参数在启动工具前失�
     await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.toThrow()
   }
   writeFileSync(join(root, 'package.json'), JSON.stringify({ version: '1.2.3' }))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app', containerPort: 70000 }] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', containerPort: 70000 }] } }))
   await expect(buildCommand({ cwd: root, target: 'docker' })).rejects.toThrow()
   await expect(buildCommand({ cwd: root, target: 'compile', runtime: 'docker' })).rejects.toThrow()
   await expect(buildCommand({ cwd: root, target: 'compile', network: 'pasta' })).rejects.toThrow()
@@ -274,7 +305,7 @@ it('错误版本、容器端口或不适用的构建参数在启动工具前失�
 it('dockerfile 阶段与 SQLite 镜像参数传给所选引擎，非法镜像地址不会启动构建', async () => {
   await buildCommand({ cwd: root, target: 'docker', runtime: 'docker', sqlitePrebuildMirror: 'http://mirror.internal/better-sqlite3' })
   expect(state.calls.filter(call => call.args[0] === 'build').map(call => call.args)).toEqual([
-    expect.arrayContaining(['-f', join(root, 'images/app.Dockerfile'), '--build-arg', 'SQLITE_PREBUILD_MIRROR=http://mirror.internal/better-sqlite3']),
+    expect.arrayContaining(['-f', join(root, 'images/serv.Dockerfile'), '--build-arg', 'SQLITE_PREBUILD_MIRROR=http://mirror.internal/better-sqlite3']),
     expect.arrayContaining(['-f', join(root, 'images/web.Dockerfile')]),
   ])
   state.calls = []

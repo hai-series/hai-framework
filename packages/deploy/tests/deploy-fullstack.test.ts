@@ -51,6 +51,7 @@ it.each(['missing', 'malformed', 'valid'])('部署启用 transport 的应用时�
 })
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'hai-fullstack-deploy-'))
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: basename(root) }))
   artifacts = join(root, '.hai/build/docker/release-1')
   mkdirSync(artifacts, { recursive: true })
   mkdirSync(join(root, 'config'))
@@ -75,34 +76,53 @@ afterEach(async () => {
 
 /** 模拟已经完成的构建产物，不提供任何源码或构建工具。 */
 function writeArtifact(web = true, appVersion = '1.2.3'): void {
-  const images = (web ? ['app', 'web'] : ['app']).map((name) => {
+  const images = (web ? ['serv', 'web'] : ['serv']).map((name) => {
     const file = `${name}-${appVersion}.tar`
     writeFileSync(join(artifacts, file), `prebuilt-${name}`)
     return { name, file, imageRef: `localhost/example-${name}:release-1`, sha256: createHash('sha256').update(`prebuilt-${name}`).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
   })
-  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion, buildId: 'release-1', images }))
+  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', hasWeb: web, appVersion, buildId: 'release-1', images }))
 }
+
+it('独立 Web 直接公开主容器，保留运行环境且不生成 API 代理', async () => {
+  writeArtifact(true)
+  const file = join(artifacts, 'manifest.json')
+  const manifest = JSON.parse(readFileSync(file, 'utf8'))
+  writeFileSync(file, JSON.stringify({ ...manifest, primaryService: 'web', images: manifest.images.filter((image: { name: string }) => image.name === 'web') }))
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result.success).toBe(true)
+  const directory = deliveryDirectory(result)
+  const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
+  expect(Object.keys(compose.services)).toEqual(['web'])
+  expect(compose.services.web.container_name).toBe(`hai-${basename(root).toLowerCase()}-test-web`)
+  expect(compose.services.web.ports).toEqual(['18080:8080'])
+  expect(compose.services.web.env_file).toEqual(expect.arrayContaining([expect.stringMatching(/\/\.env.runtime$/)]))
+  expect(readBundleFile(directory, 'layout')).toContain(':false:web:')
+  const listing = execFileSync('tar', ['-tf', result.success ? result.data.bundlePath! : ''], { encoding: 'utf8' })
+  expect(listing).not.toContain('web.conf')
+  expect(listing).not.toContain('proxy-entry.json')
+})
 async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
 
 it.each([
-  { name: 'hai-delivery', projectName: undefined, expected: 'hai-delivery', online: true },
-  { name: '@example/hai-delivery', projectName: undefined, expected: 'hai-delivery', online: false },
-  { name: 'hai-delivery', projectName: 'hai-delivery-serv', expected: 'hai-delivery-serv', online: false },
-])('fullstack 使用工程名称统一交付包、远端、容器、卷与基线 ($expected)', async ({ name, projectName, expected, online }) => {
+  { name: 'hai-delivery', expected: 'hai-delivery', online: true },
+  { name: '@example/hai-delivery', expected: 'hai-delivery', online: false },
+])('fullstack 使用工程名称统一交付包、远端、容器、卷与基线 ($expected)', async ({ name, expected, online }) => {
   const service = join(root, 'packages/hai-delivery-serv')
   mkdirSync(join(service, 'config'), { recursive: true })
   writeFileSync(join(service, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n')
   writeFileSync(join(service, 'config/_db.yml'), 'type: postgresql\n')
   writeFileSync(join(service, 'package.json'), JSON.stringify({ name: 'hai-delivery-serv' }))
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name }))
-  writeFileSync(join(root, 'hai.json'), '{"build":{"images":[{"name":"app"},{"name":"web"}]}}')
+  writeFileSync(join(root, 'hai.json'), '{"build":{"images":[{"name":"serv"},{"name":"web"}]}}')
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': {}, 'packages/hai-delivery-serv': { dependencies: { '@h-ai/reldb': { version: '1' } } } }, packages: { '@h-ai/reldb@1': {} }, snapshots: { '@h-ai/reldb@1': {} } }))
   await initialize(online)
   const scanned = await deploy.scan(service, { environment: 'test' })
   expect(scanned).toMatchObject({ success: true, data: { appName: name, appDir: service, requiredServices: ['db'] } })
-  const result = await deploy.deployApp(service, { environment: 'test', projectName, bundleOnly: !online })
+  const result = await deploy.deployApp(service, { environment: 'test', bundleOnly: !online })
   const directory = deliveryDirectory(result)
   const target = JSON.parse(readFileSync(join(directory, 'deploy-target.json'), 'utf8'))
   expect(target.directory).toBe(`/opt/hai/apps/${expected}-test`)
@@ -114,7 +134,7 @@ it.each([
   expect(basename(directory)).toBe(target.bundle.slice(0, -4))
   expect(dirname(directory)).toBe(join(root, '.hai/deploy/test'))
   const compose = parse(readBundleFile(directory, 'compose.json'))
-  for (const part of ['app', 'web', 'db'])
+  for (const part of ['serv', 'web', 'db'])
     expect(compose.services[part].container_name).toBe(`hai-${expected}-test-${part}`)
   expect(compose.volumes).toHaveProperty(`${expected}-test-db-data`)
   const secretFile = join(service, '.hai/deploy/runtime', `${expected}-test.secrets.json`)
@@ -128,7 +148,7 @@ it.each([
   const script = readFileSync(join(unpacked, 'apply.sh'), 'utf8')
   expect(script).toContain(`project='hai-${expected}-test'`)
   expect(script).toContain(`/opt/hai/apps/${expected}-test`)
-  const updated = await deploy.deployApp(service, { environment: 'test', projectName, bundleOnly: true, selectedServices: ['web'] })
+  const updated = await deploy.deployApp(service, { environment: 'test', bundleOnly: true, selectedServices: ['web'] })
   const updatedTarget = JSON.parse(readFileSync(join(deliveryDirectory(updated), 'deploy-target.json'), 'utf8'))
   expect(updatedTarget.directory).toBe(target.directory)
   expect(existsSync(secretFile)).toBe(false)
@@ -164,7 +184,7 @@ it('中间件原生变量与应用、持久配置和离线服务环境隔离', a
   execFileSync('tar', ['-xf', result.data.bundlePath, '-C', unpacked])
   expect(parseEnv(readFileSync(join(unpacked, 'middleware-runtime.env'), 'utf8'))).toEqual(native)
   const bundled = JSON.parse(readFileSync(join(unpacked, 'compose.json'), 'utf8'))
-  expect(bundled.services.app.env_file.map((file: string) => file.split('/').at(-1))).toEqual(['.env.runtime', 'middleware.env'])
+  expect(bundled.services.serv.env_file.map((file: string) => file.split('/').at(-1))).toEqual(['.env.runtime', 'middleware.env'])
   for (const service of ['db', 'storage'])
     expect(bundled.services[service].env_file.map((file: string) => file.split('/').at(-1))).toEqual(['middleware-runtime.env'])
   const inherited = parseEnv(readFileSync(join(unpacked, 'middleware.env'), 'utf8'))
@@ -226,7 +246,7 @@ it.each([false, true])('完整与增量模式 %s 从正式配置生成一致密�
   writeFileSync(join(root, 'config/_serv.yml'), `http:\n  apiPrefix: /custom-api/v2\ntransport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
   writeFileSync(join(root, '.env.test'), 'HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=8388608\n')
   await initialize(false)
-  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: partial ? ['app'] : undefined })
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: partial ? ['serv'] : undefined })
   if (!result.success || !result.data.bundlePath)
     throw new Error('Expected a deployment bundle')
   const directory = dirname(result.data.bundlePath)
@@ -279,12 +299,12 @@ it('部署只上传一个完整 tar，API/Web 使用已有构建且私有配置�
   const directory = deliveryDirectory(result)
   const compose = parse(readBundleFile(directory, 'compose.json'))
   expect(compose['x-hai-version']).toBe('1.2.3')
-  expect(compose.services.app.labels['org.opencontainers.image.version']).toBe('1.2.3')
+  expect(compose.services.serv.labels['org.opencontainers.image.version']).toBe('1.2.3')
   expect(result.success && result.data.bundlePath).toMatch(/-1\.2\.3\.tar$/)
-  expect(compose.services.app.ports).toBeUndefined()
-  expect(compose.services.app.env_file.map((file: string) => file.split('/').at(-1))).toEqual(['.env.runtime', 'middleware.env'])
-  expect(compose.services.app.image).toBe('localhost/example-app:release-1')
-  expect(compose.services.web).toMatchObject({ image: 'localhost/example-web:release-1', ports: ['18080:8080'], depends_on: ['app'], pull_policy: 'never' })
+  expect(compose.services.serv.ports).toBeUndefined()
+  expect(compose.services.serv.env_file.map((file: string) => file.split('/').at(-1))).toEqual(['.env.runtime', 'middleware.env'])
+  expect(compose.services.serv.image).toBe('localhost/example-serv:release-1')
+  expect(compose.services.web).toMatchObject({ image: 'localhost/example-web:release-1', ports: ['18080:8080'], depends_on: ['serv'], pull_policy: 'never' })
   expect(compose.services.web.env_file).toBeUndefined()
   expect(readBundleFile(directory, 'web.conf')).toContain('location /custom-api/v2/')
   expect(readBundleFile(directory, '.env.runtime')).toContain('test-private-password')
@@ -315,7 +335,7 @@ it('仅打包不需要 SSH 或本地容器引擎，tar 可搬运且暂存目录�
   expect(Object.values(target._comments).every(description => typeof description === 'string' && description.length > 0)).toBe(true)
   expect(existsSync(join(scripts, 'read-target.awk'))).toBe(true)
   const files = execFileSync('tar', ['-tf', result.data.bundlePath!], { encoding: 'utf8' })
-  for (const file of ['compose.json', 'manifest.json', '.env.runtime', 'images/app-1.2.3.tar', 'images/web-1.2.3.tar', 'web.conf', 'SHA256SUMS', 'README.txt', 'apply.sh'])
+  for (const file of ['compose.json', 'manifest.json', '.env.runtime', 'images/serv-1.2.3.tar', 'images/web-1.2.3.tar', 'web.conf', 'SHA256SUMS', 'README.txt', 'apply.sh'])
     expect(files).toContain(file)
   expect(result.data.instructions).toContain('deploy-local.sh')
   const extracted = join(root, 'extracted')
@@ -355,7 +375,7 @@ it('前端增量包只携带 Web，生成可执行脚本且不改写服务器成
     return
   const files = execFileSync('tar', ['-tf', result.data.bundlePath!], { encoding: 'utf8' })
   expect(files).toContain('images/web-1.2.3.tar')
-  expect(files).not.toContain('images/app-1.2.3.tar')
+  expect(files).not.toContain('images/serv-1.2.3.tar')
   expect(files).not.toMatch(/images\/middleware-[^\r\n]*\.tar/)
   expect(existsSync(join(root, '.hai/deploy/runtime'))).toBe(false)
   expect(files).toContain('compose.json')
@@ -366,17 +386,17 @@ it('前端增量包只携带 Web，生成可执行脚本且不改写服务器成
 })
 
 it.each([
-  { selected: 'web', appContainerPort: 4100, webContainerPort: 8181 },
-  { selected: 'app', appContainerPort: 4100, webContainerPort: 8181 },
-  { selected: 'web', appContainerPort: undefined, webContainerPort: undefined },
-])('部分交付保持完整布局端口；未显式指定时使用部署默认值（$selected/$appContainerPort/$webContainerPort）', async ({ selected, appContainerPort, webContainerPort }) => {
+  { selected: 'web', servContainerPort: 4100, webContainerPort: 8181 },
+  { selected: 'serv', servContainerPort: 4100, webContainerPort: 8181 },
+  { selected: 'web', servContainerPort: undefined, webContainerPort: undefined },
+])('部分交付保持完整布局端口；未显式指定时使用部署默认值（$selected/$servContainerPort/$webContainerPort）', async ({ selected, servContainerPort, webContainerPort }) => {
   await initialize(false, 4300)
   const manifestPath = join(artifacts, 'manifest.json')
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
   manifest.hasWeb = true
-  manifest.appContainerPort = appContainerPort
+  manifest.servContainerPort = servContainerPort
   manifest.webContainerPort = webContainerPort
-  manifest.images = manifest.images.map((image: { name: string }) => ({ ...image, containerPort: image.name === 'app' ? appContainerPort : webContainerPort }))
+  manifest.images = manifest.images.map((image: { name: string }) => ({ ...image, containerPort: image.name === 'serv' ? servContainerPort : webContainerPort }))
   writeFileSync(manifestPath, JSON.stringify(manifest))
   const full = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
   expect(full.success).toBe(true)
@@ -392,12 +412,12 @@ it.each([
   expect(execFileSync('tar', ['-xOf', partial.data.bundlePath!, './layout'], { encoding: 'utf8' })).toBe(layout)
   const directory = deliveryDirectory(partial)
   const proxy = readBundleFile(directory, 'web.conf')
-  expect(proxy).toContain(`proxy_pass http://app:${appContainerPort ?? 4300};`)
+  expect(proxy).toContain(`proxy_pass http://serv:${servContainerPort ?? 4300};`)
   expect(proxy).toContain(`listen ${webContainerPort ?? 8080};`)
   const compose = parse(readBundleFile(deliveryDirectory(full), 'compose.json'))
   expect(compose.services.web.ports).toEqual([`18080:${webContainerPort ?? 8080}`])
   expect(Object.keys(parse(readBundleFile(directory, 'compose.json')).services)).toEqual([selected])
-  expect(parseEnv(readBundleFile(directory, '.env.runtime')).PORT).toBe(String(appContainerPort ?? 4300))
+  expect(parseEnv(readBundleFile(directory, '.env.runtime')).PORT).toBe(String(servContainerPort ?? 4300))
 })
 
 it('完整离线包自动携带自建数据库镜像，不依赖目标服务器拉取', async () => {
@@ -443,9 +463,9 @@ it.skipIf(process.platform === 'win32')('实际执行交付脚本：拒绝首次
 printf '%s\\n' "$*" >> "$HAI_TEST_COMMANDS"
 case "$*" in
   *'up --help'*) printf 'never\\n';;
-  *'config --services'*) printf 'app\\n';;
+  *'config --services'*) printf 'serv\\n';;
   *'image inspect --format'*) printf 'amd64\\n';;
-  *'{{.Image}} {{.Config.Image}}'*) printf 'previous-image localhost/example-app:release-1\\n';;
+  *'{{.Image}} {{.Config.Image}}'*) printf 'previous-image localhost/example-serv:release-1\\n';;
   *'inspect --format'*) printf 'true\\n';;
   *'ps -aq'*) printf 'previous-container\\n';;
   *'ps -q'*) printf 'running-container\\n';;
@@ -467,30 +487,30 @@ esac
     execFileSync('tar', ['-xf', result.data.bundlePath!, '-C', extracted])
     return { id: result.data.deploymentId, script: join(extracted, 'apply.sh').replaceAll('\\', '/') }
   }
-  const firstPartial = await pack(['app'])
+  const firstPartial = await pack(['serv'])
   expect(() => execFileSync(shell, [firstPartial.script, destination], { env, stdio: 'pipe' })).toThrow()
   expect(existsSync(join(destination, 'current'))).toBe(false)
   const full = await pack()
   execFileSync(shell, [full.script, destination], { env, stdio: 'pipe' })
   expect(readFileSync(join(destination, 'current'), 'utf8').trim()).toBe(full.id)
-  const partial = await pack(['app'])
+  const partial = await pack(['serv'])
   execFileSync(shell, [partial.script, destination], { env, stdio: 'pipe' })
   expect(readFileSync(join(destination, 'current'), 'utf8').trim()).toBe(partial.id)
-  const failed = await pack(['app'])
+  const failed = await pack(['serv'])
   expect(() => execFileSync(shell, [failed.script, destination], { env: { ...env, HAI_TEST_HTTP_FAIL: '1' }, stdio: 'pipe' })).toThrow()
   expect(readFileSync(join(destination, 'current'), 'utf8').trim()).toBe(partial.id)
   expect(JSON.parse(readFileSync(join(destination, `result-${failed.id}.json`), 'utf8'))).toMatchObject({ stage: 'health', exitCode: 1 })
   expect(existsSync(join(destination, `diagnostics-${failed.id}.log`))).toBe(true)
   const calls = readFileSync(commands, 'utf8')
   expect(calls).not.toMatch(/\bdown\b|\bpull\s+(?!never)/)
-  expect(calls).toContain('--no-deps --no-build --pull never --force-recreate --remove-orphans app')
+  expect(calls).toContain('--no-deps --no-build --pull never --force-recreate --remove-orphans serv')
   expect(calls).toContain('rm -f previous-container')
-  expect(calls).toContain('--no-deps --no-build --pull never --no-recreate app')
-  expect(calls).toContain('tag previous-image localhost/example-app:release-1')
+  expect(calls).toContain('--no-deps --no-build --pull never --no-recreate serv')
+  expect(calls).toContain('tag previous-image localhost/example-serv:release-1')
   expect(calls).toContain('logs --tail 80 previous-container')
 }, 30_000)
 
-it('aPI workspace 服务包的环境目录独立时，默认消费工程根的构建产物', async () => {
+it('服务包的环境目录独立时，API workspace 默认消费工程根的构建产物', async () => {
   writeArtifact(false)
   const service = join(root, 'apps/service')
   mkdirSync(service, { recursive: true })
@@ -499,7 +519,7 @@ it('aPI workspace 服务包的环境目录独立时，默认消费工程根的�
   await initialize(false)
   const initial = await deploy.deployApp(service, { environment: 'test', bundleOnly: true })
   expect(initial).toMatchObject({ success: true, data: { status: 'packaged' } })
-  expect(readBundleFile(deliveryDirectory(initial), 'compose.json')).toContain('localhost/example-app:release-1')
+  expect(readBundleFile(deliveryDirectory(initial), 'compose.json')).toContain('localhost/example-serv:release-1')
   expect(existsSync(join(service, '.hai/deploy'))).toBe(false)
   const packaged = await deploy.deployApp(service, { environment: 'test', bundleOnly: true })
   expect(packaged.success).toBe(true)
@@ -557,7 +577,7 @@ it('单服务制品仅部署 API；未提供 SSH 时提示仅打包选项', asyn
   const result = await deploy.deployApp(root, { environment: 'test' })
   expect(result).toMatchObject({ success: true })
   const compose = parse(readBundleFile(deliveryDirectory(result), 'compose.json'))
-  expect(compose.services.app.ports).toEqual(['18080:3000'])
+  expect(compose.services.serv.ports).toEqual(['18080:3000'])
   expect(compose.services.web).toBeUndefined()
   await initialize(false)
   expect(await deploy.deployApp(root, { environment: 'test' })).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code } })
@@ -598,7 +618,7 @@ it('缺少应用版本、路径伪装或镜像 tar 版本不一致的清单被�
   for (const appVersion of [undefined, '../outside', '1.2.4'])
     expect(DeploymentArtifactSchema.safeParse({ ...artifact, appVersion }).success).toBe(false)
   expect(DeploymentArtifactSchema.safeParse({ ...artifact, version: 1 }).success).toBe(false)
-  for (const name of ['appContainerPort', 'webContainerPort']) {
+  for (const name of ['servContainerPort', 'webContainerPort']) {
     for (const port of [0, 65536, 1.5, '3000'])
       expect(DeploymentArtifactSchema.safeParse({ ...artifact, [name]: port }).success).toBe(false)
   }
@@ -617,7 +637,7 @@ it('每次部署的归档、配置和入口均位于唯一交付目录中', asyn
   expect(result.data.bundlePath).toBe(join(directory, `${entries[0]}.tar`))
   expect(readdirSync(directory).sort()).toEqual([basename(result.data.bundlePath!), 'deploy.sh', 'deploy.ps1', 'deploy-target.json', 'deploy-local.sh', 'read-target.awk', 'README.txt'].sort())
   const saved = execFileSync('tar', ['-xOf', result.data.bundlePath!, './manifest.json'], { encoding: 'utf8' })
-  expect(JSON.parse(saved)).toMatchObject({ partial: false, selectedServices: ['app', 'web'] })
+  expect(JSON.parse(saved)).toMatchObject({ partial: false, selectedServices: ['serv', 'web'] })
   expect(readFileSync(join(directory, 'README.txt'), 'utf8')).toContain(result.data.deploymentId)
   expect(existsSync(join(directory, 'images'))).toBe(false)
   expect(readFileSync(join(directory, 'README.txt'), 'utf8')).toContain('deploy-local.sh')
@@ -649,6 +669,7 @@ it('只更新 storage 无需应用镜像或初始化服务', async () => {
     return
   const files = execFileSync('tar', ['-tf', result.data.bundlePath!], { encoding: 'utf8' })
   expect(files).toContain('images/middleware-1.tar')
-  expect(files).not.toContain('images/app-')
+  expect(files).not.toContain('images/serv-')
+  expect(files).not.toContain('images/web-')
   expect(files).not.toContain('initialize-storage')
 })

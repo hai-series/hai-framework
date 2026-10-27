@@ -200,6 +200,12 @@ describe('deploy singleton', () => {
   })
 
   describe('deployApp', () => {
+    it('拒绝旧 projectName 覆盖参数，提示以根包名维护身份', async () => {
+      expect(await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } })).toMatchObject({ success: true })
+      const legacyOptions = { environment: 'test', bundleOnly: true, projectName: 'legacy-override' }
+      expect(await deploy.deployApp('/not-read-before-option-validation', legacyOptions)).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code, message: expect.stringContaining('projectName') } })
+    })
+
     it('平台 Provider 同样使用工程名，并去除 npm scope', async () => {
       const root = mkdtempSync(join(tmpdir(), 'hai-deploy-platform-name-'))
       try {

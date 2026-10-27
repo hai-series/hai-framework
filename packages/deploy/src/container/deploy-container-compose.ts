@@ -76,13 +76,13 @@ export interface SidecarPlan {
   composeServices: Record<string, ComposeService>
   /** 命名卷 */
   volumes: Record<string, unknown>
-  /** 挂载到 app 容器的卷（如 sqlite/lancedb 的本地数据目录持久化） */
+  /** 挂载到 主应用容器的卷（如 sqlite/lancedb 的本地数据目录持久化） */
   appVolumes: string[]
   /** 框架 HAI_* 配置，允许保存到工程环境并注入应用。 */
   env: Record<string, string>
   /** 镜像要求的原生变量，仅写 middleware-runtime.env 并注入中间件。 */
   containerEnv: Record<string, string>
-  /** app 服务的 depends_on 列表 */
+  /** serv 服务的 depends_on 列表 */
   dependsOn: string[]
   /** 需要在日志中脱敏的敏感值 */
   secrets: string[]
@@ -475,6 +475,7 @@ export function buildRuntimeEnv(
  * @param options.appVersion - 应用发布版本，例如 1.2.3；不改变持久化卷身份
  * @param options.hostPort - 宿主机映射端口
  * @param options.containerPort - 容器内端口
+ * @param options.primaryService - 主运行服务角色，独立 API 为 serv，浏览器站点为 web。
  * @param options.sidecar - sidecar 规划
  * @param options.web - 同一编排中的 Web 镜像与监听端口，独立于私有应用环境
  * @param options.web.imageRef - Web 镜像引用
@@ -492,16 +493,19 @@ export function generateComposeFile(options: {
   imageRef: string
   hostPort: number
   containerPort: number
+  /** 独立 API 为 serv，独立静态或 SSR 站点为 web。 */
+  primaryService?: 'serv' | 'web'
   sidecar: SidecarPlan
   /** Web 公开入口；私有运行环境仅属于 API 服务。 */
   web?: { imageRef: string, containerPort: number }
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
+  const primaryService = options.primaryService ?? 'serv'
 
   const app: ComposeService = {
     image: imageRef,
     labels: { 'org.opencontainers.image.version': options.appVersion },
-    container_name: `hai-${projectName}-app`,
+    container_name: `hai-${projectName}-${primaryService}`,
     restart: 'unless-stopped',
     // 镜像已由 load 注入本地，禁止 compose 再从 registry 拉取
     pull_policy: 'never',
@@ -514,7 +518,7 @@ export function generateComposeFile(options: {
   if (sidecar.dependsOn.length > 0)
     app.depends_on = Object.fromEntries(sidecar.dependsOn.map(name => [name, { condition: sidecar.composeServices[name]?.healthcheck ? 'service_healthy' : 'service_started' }]))
 
-  const services: Record<string, ComposeService> = { app, ...sidecar.composeServices }
+  const services: Record<string, ComposeService> = { [primaryService]: app, ...sidecar.composeServices }
   if (options.web) {
     delete app.ports
     services.web = {
@@ -527,7 +531,7 @@ export function generateComposeFile(options: {
       environment: { PUBLIC_API_BASE: '' },
       healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', `http://127.0.0.1:${options.web.containerPort}/_hai/web-health`], interval: '30s', timeout: '5s', retries: 3 },
       volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
-      depends_on: ['app'],
+      depends_on: ['serv'],
       networks: ['hai-app'],
     }
   }
@@ -558,7 +562,7 @@ export function generateComposeFile(options: {
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
- * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 app 服务。
+ * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  * ```
  */
 export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number } = {}): string {
@@ -584,12 +588,12 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     return 200 'ok';
   }
   location = /health {
-    proxy_pass http://app:${port};
+    proxy_pass http://serv:${port};
     proxy_set_header Host $http_host;
   }
   location ${apiPrefix.replace(/\/$/, '')}/ {
     client_max_body_size ${bodyLimits.encryptedPayloadBytes};
-    proxy_pass http://app:${port};
+    proxy_pass http://serv:${port};
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;

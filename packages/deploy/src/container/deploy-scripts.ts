@@ -29,10 +29,11 @@ export function shellArgument(value: string): string {
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.hostPort - 宿主公开端口。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
+ * @param options.primaryService - 主运行服务角色，用于定位私有运行环境与启动提示。
  * @returns 待在 Linux 远端运行的 apply 脚本文本。
  * @example 模块内部上下文
  * ```ts
- * const script = createApplyScript({ deploymentId: 'shop-prod-001', projectName: 'shop-prod', environment: 'prod', directory: '/opt/hai/apps/shop-prod', runtime: 'auto', partial: false, selected: ['app'], hostPort: 8080, healthPaths: ['/health'] })
+ * const script = createApplyScript({ deploymentId: 'shop-prod-001', projectName: 'shop-prod', environment: 'prod', directory: '/opt/hai/apps/shop-prod', runtime: 'auto', partial: false, selected: ['serv'], hostPort: 8080, healthPaths: ['/health'] })
  * ```
  */
 export function createApplyScript(options: {
@@ -45,6 +46,7 @@ export function createApplyScript(options: {
   selected: string[]
   hostPort: number
   healthPaths: string[]
+  primaryService?: 'serv' | 'web'
 }): string {
   const values: Record<string, string> = {
     ID: shellArgument(options.deploymentId),
@@ -56,6 +58,7 @@ export function createApplyScript(options: {
     ROOT: shellArgument(options.directory),
     PORT: String(options.hostPort),
     HEALTH: options.healthPaths.map(shellArgument).join(' '),
+    PRIMARY: options.primaryService ?? 'serv',
   }
   return String.raw`#!/bin/sh
 # 服务器部署流程：由 deploy-local.sh 或 SSH 入口自动解包后调用，无需手工解包。
@@ -159,7 +162,7 @@ start_services() {
   application_services=''
   application_orphan_option=$orphan_option
   for service in "$@"; do
-    case "$service" in app|web) ;; *) middleware_services="$middleware_services $service";; esac
+    case "$service" in serv|web) ;; *) middleware_services="$middleware_services $service";; esac
   done
   if [ -n "$middleware_services" ]; then
     compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $middleware_services || return 1
@@ -168,7 +171,7 @@ start_services() {
     application_orphan_option=''
   fi
   # --no-deps 保留未选容器；先等本次中间件就绪，再启动应用和依赖它的 Web。
-  case " $* " in *' app '*) application_services=app;; esac
+  case " $* " in *' serv '*) application_services=serv;; esac
   case " $* " in *' web '*) application_services="$application_services web";; esac
   if [ -n "$application_services" ]; then
     compose up -d --no-deps --no-build --pull never "$recreate_option" $application_orphan_option $application_services || return 1
@@ -203,7 +206,7 @@ finish() {
       if [ "$partial" = false ]; then recover_selected=$(cat "$root/releases/$previous/services"); fi
       restore="$previous"
       if remove_selected $recover_selected && start_services $recover_selected; then
-        case " $selected " in *' app '*)
+        case " $selected " in *' serv '*)
           if grep -qx web "$root/releases/$previous/services"; then compose exec -T web nginx -s reload || true; fi
           ;;
         esac
@@ -270,7 +273,7 @@ if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
   if ! cmp -s layout "$root/releases/$previous/layout"; then
     # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
-    test "$(awk -F: '{print $1 ":" $2 ":" $3}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3}' "$root/releases/$previous/layout")" || { printf 'Ports or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
+    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' "$root/releases/$previous/layout")" || { printf 'Ports or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
     test -f web.conf && test -f proxy-entry.json || { printf 'Proxy configuration missing. Create a full deployment bundle.\n' >&2; exit 1; }
     previous_proxy=
     while IFS= read -r compose_file; do
@@ -281,7 +284,7 @@ if [ "$partial" = true ]; then
     previous_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' "$previous_proxy" | sha256sum)
     current_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' web.conf | sha256sum)
     test "$previous_shape" = "$current_shape" || { printf 'API routes or proxy policy changed. Create a full deployment bundle.\n' >&2; exit 1; }
-    case " $selected " in *' app '*) ;; *) printf 'Transport capacity changes require the app service. Include app in the partial deployment.\n' >&2; exit 1;; esac
+    case " $selected " in *' serv '*) ;; *) printf 'Transport capacity changes require the serv service. Include serv in the partial deployment.\n' >&2; exit 1;; esac
     case " $selected " in *' web '*) ;; *) selected="$selected web"; proxy_update=true;; esac
   fi
 fi
@@ -352,7 +355,7 @@ changed=true
 remove_selected $selected
 start_services $selected
 case " $selected " in
-  *' app '*)
+  *' serv '*)
     case " $selected " in *' web '*) ;; *)
       if grep -qx web "$release/services"; then compose exec -T web nginx -s reload; fi
     esac
@@ -372,7 +375,7 @@ done
 step complete 'Deployment passed all checks'
 printf '%s\n' "$id" > "$root/current.next"
 mv "$root/current.next" "$root/current"
-case " $selected " in *' app '*)
+case " $selected " in *' @@PRIMARY@@ '*)
   if grep -q '^HAI_ADMIN_DEFAULT_PASSWORD=' "$release/.env.runtime"; then
     printf '[INFO] Initial administrator password source: %s/.env.runtime (HAI_ADMIN_DEFAULT_PASSWORD). Existing users keep their passwords.\n' "$release"
   fi

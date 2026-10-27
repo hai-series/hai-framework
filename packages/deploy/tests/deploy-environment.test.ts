@@ -19,7 +19,7 @@ function fixture(): string {
 
 it('loads only the named hai.json section and preserves deployment environment overrides', () => {
   const file = join(fixture(), 'hai.json')
-  writeFileSync(file, JSON.stringify({ build: { images: [{ name: 'app' }] }, deploy: { provider: { type: 'docker-ssh', expose: { hostPort: `\${APP_PORT:18080}` } }, container: { s3Engine: 'rustfs' } } }))
+  writeFileSync(file, JSON.stringify({ build: { images: [{ name: 'serv' }] }, deploy: { provider: { type: 'docker-ssh', expose: { hostPort: `\${APP_PORT:18080}` } }, container: { s3Engine: 'rustfs' } } }))
   expect(loadDeploymentConfig('deploy', file, { APP_PORT: '8088', HAI_DEPLOY_CONTAINER_S3ENGINE: 'minio' })).toEqual({ success: true, data: { provider: { type: 'docker-ssh', expose: { hostPort: 8088 } }, container: { s3Engine: 'minio' } } })
   expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"vercel","token":"test: key#value$&"}' })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token: 'test: key#value$&' } } })
   expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY: '{"provider":{"type":"vercel","token":"test"}}' })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token: 'test' } } })

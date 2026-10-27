@@ -228,17 +228,15 @@ describe('cli-main', () => {
   })
 
   it('wires deploy command to deployCommand', async () => {
-    await getCommandAction('deploy [appDir]')('apps/demo-service', {
+    await getCommandAction('deploy [appDir]')('apps/demo-serv', {
       cwd: 'C:/workspace',
-      projectName: 'demo-service',
       skipMiddleware: true,
       verbose: false,
     })
 
     expect(commandMocks.deployCommand).toHaveBeenCalledWith({
-      appDir: 'apps/demo-service',
+      appDir: 'apps/demo-serv',
       cwd: 'C:/workspace',
-      projectName: 'demo-service',
       skipMiddleware: true,
       verbose: false,
     })

@@ -72,13 +72,13 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
     writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /backend/v2\n')
-    const images = ['app', 'web'].map((name) => {
+    const images = ['serv', 'web'].map((name) => {
       const content = `prebuilt-${name}`
       const file = `${name}-1.2.3.tar`
       writeFileSync(path.join(artifacts, file), content)
       return { name, file, imageRef: `localhost/nginx-check-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
     })
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
     expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts, output: path.join(root, 'proxy.tar') })
     expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
@@ -86,8 +86,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       throw new Error('Expected an owned Nginx fixture and public deployment bundle')
     const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
     expect(proxy).toContain('location /backend/v2/')
-    // 仅替换夹具不存在的 app DNS；实际代理指令及缓冲区保持发布包原文，由 Nginx 解析器校验。
-    const config = `pid /tmp/nginx-test.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://app:', 'http://127.0.0.1:')}\n}\n`
+    // 仅替换夹具不存在的 serv DNS；实际代理指令及缓冲区保持发布包原文，由 Nginx 解析器校验。
+    const config = `pid /tmp/nginx-test.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:')}\n}\n`
     const source = path.join(root, 'nginx.conf')
     writeFileSync(source, config)
     execFileSync(runtime, ['cp', source, `${fixture.containerId}:/tmp/nginx-test.conf`], { windowsHide: true, timeout: 20_000 })
@@ -124,12 +124,12 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         const ring = JSON.stringify({ activeKeyId: 'fixture', keys: { fixture: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } })
         writeFileSync(path.join(project, '.env.test.local'), `HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${ring}'\n`, { mode: 0o600 })
       }
-      const images = ['app', 'web'].map((name) => {
+      const images = ['serv', 'web'].map((name) => {
         const file = `${name}-1.2.3.tar`
         writeFileSync(path.join(artifacts, file), name)
         return { name, file, imageRef: `localhost/proxy-capacity-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 18080 : 3000 }
       })
-      writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'capacity', hasWeb: true, images }))
+      writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'capacity', hasWeb: true, images }))
       await deploy.close()
       expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
       const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
@@ -140,7 +140,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
       expect(proxy).toContain(`client_max_body_size ${limits.encryptedPayloadBytes};`)
       const source = path.join(root, 'capacity-nginx.conf')
-      writeFileSync(source, `pid /tmp/capacity-nginx-${maxPlaintextBytes}.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://app:', 'http://127.0.0.1:')}\n}\n`)
+      writeFileSync(source, `pid /tmp/capacity-nginx-${maxPlaintextBytes}.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:')}\n}\n`)
       execFileSync(runtime, ['cp', source, `${fixture.containerId}:${remoteConfig}`], { windowsHide: true })
       await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', remoteConfig], { timeoutMs: 15_000 })
       nginxStarted = true

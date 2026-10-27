@@ -8,11 +8,12 @@ import { deploy } from '../src/deploy-main.js'
 describe('deploy.scan', () => {
   it.each([
     { entry: '.', name: 'orders-serv', expected: 'orders-serv' },
-    { entry: 'apps/orders-service', name: 'orders', expected: 'orders' },
+    { entry: 'apps/orders-serv', name: 'orders', expected: 'orders' },
     { entry: 'packages/orders-serv', name: undefined, expected: undefined },
     { entry: 'packages/orders-serv', name: '   ', expected: undefined },
-  ])('工程命名独立于扫描入口，缺少名称回退工程根目录 ($entry, $name)', async ({ entry, name, expected }) => {
+  ])('工程命名独立于扫描入口，缺少名称拒绝部署 ($entry, $name)', async ({ entry, name, expected }) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-project-name-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       const app = path.join(root, entry)
       fs.mkdirSync(app, { recursive: true })
@@ -20,13 +21,14 @@ describe('deploy.scan', () => {
       fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name }))
       if (entry !== '.')
         fs.writeFileSync(path.join(app, 'package.json'), '{"name":"irrelevant-service-name"}')
-      expect(await deploy.scan(app)).toMatchObject({ success: true, data: { appName: expected ?? path.basename(root), appDir: app } })
+      expect(await deploy.scan(app)).toMatchObject(expected ? { success: true, data: { appName: expected, appDir: app } } : { success: false })
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
   it.each(['console', 'api'])('keeps email and SMS %s providers distinct without dropping repeated email backends', async (type) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-reach-channels-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       fs.mkdirSync(path.join(root, 'config'))
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/reach': { version: '1' } } } }, packages: { '@h-ai/reach@1': {} }, snapshots: { '@h-ai/reach@1': {} } }))
@@ -51,6 +53,7 @@ describe('deploy.scan', () => {
 
   it('follows every Hai component runtime edge, including indirect AI/payment/scheduler dependencies', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-components-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       const edges: Record<string, string[]> = {
         'ai': ['api-contract', 'core', 'datapipe', 'reldb', 'vecdb'],
@@ -80,8 +83,9 @@ describe('deploy.scan', () => {
     finally { fs.rmSync(root, { recursive: true, force: true }) }
   })
 
-  it('requires a lockfile and reads build adapters from its importer without project metadata', async () => {
+  it('requires a lockfile and reads build adapters from its importer with root project identity', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-lock-only-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       expect((await deploy.scan(root)).success).toBe(false)
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { devDependencies: { '@sveltejs/kit': { version: '2' }, '@sveltejs/adapter-node': { version: '5' } } } }, packages: {}, snapshots: {} }))
@@ -92,6 +96,7 @@ describe('deploy.scan', () => {
 
   it('walks only the selected importer runtime graph, excluding peers, dev dependencies and other workspaces', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-lock-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     const app = path.join(root, 'apps/service')
     try {
       fs.mkdirSync(path.join(app, 'config'), { recursive: true })
@@ -138,6 +143,7 @@ describe('deploy.scan', () => {
 
   it('fails on an existing lockfile without the target importer instead of guessing dependencies', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-stale-lock-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  apps/other: {}\n')
       expect((await deploy.scan(root)).success).toBe(false)
@@ -147,6 +153,7 @@ describe('deploy.scan', () => {
 
   it('uses the application document when pnpm 12 has two root importers', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-root-lock-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       const tools = { lockfileVersion: '9.0', importers: { '.': { packageManagerDependencies: { pnpm: { version: '12' } } } } }
       const app = { lockfileVersion: '9.0', importers: { '.': { dependencies: { 'db-alias': { version: '@h-ai/reldb@1' } } } }, packages: { '@h-ai/reldb@1': {} }, snapshots: { '@h-ai/reldb@1': {} } }
@@ -162,6 +169,7 @@ describe('deploy.scan', () => {
 
   it('resolves backend placeholders and optional IAM LDAP using the selected environment', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-selected-env-'))
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: path.basename(root) }))
     try {
       fs.mkdirSync(path.join(root, 'config'))
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/iam': { version: '1' }, '@h-ai/reldb': { version: '1' }, '@h-ai/cache': { version: '1' } } } }, packages: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} }, snapshots: { '@h-ai/iam@1': {}, '@h-ai/reldb@1': {}, '@h-ai/cache@1': {} } }))

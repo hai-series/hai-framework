@@ -7,16 +7,16 @@
   "packageManager": "pnpm@12.11.2",
   "description": "Typed hai API workspace with separated contract and service packages.",
   "scripts": {
-    "dev": "pnpm --filter {{api.servicePackageName}} dev",
-    "start": "pnpm --filter {{api.servicePackageName}} start",
-    "start:test": "pnpm --filter {{api.servicePackageName}} start:test",
-    "start:prod": "pnpm --filter {{api.servicePackageName}} start:prod",
-    "dev:test": "pnpm --filter {{api.servicePackageName}} dev:test",
-    "dev:prod": "pnpm --filter {{api.servicePackageName}} dev:prod",
+    "dev": "pnpm --filter {{api.servPackageName}} dev",
+    "start": "pnpm --filter {{api.servPackageName}} start",
+    "start:test": "pnpm --filter {{api.servPackageName}} start:test",
+    "start:prod": "pnpm --filter {{api.servPackageName}} start:prod",
+    "dev:test": "pnpm --filter {{api.servPackageName}} dev:test",
+    "dev:prod": "pnpm --filter {{api.servPackageName}} dev:prod",
     "compile": "pnpm -r --if-present build",
     "build": "hai build",
 {{#if features.deploy}}
-    "deploy": "hai deploy apps/{{projectName}}-service",
+    "deploy": "hai deploy apps/{{projectName}}-serv",
 {{/if}}
     "check": "pnpm typecheck",
     "typecheck": "pnpm --filter {{api.contractPackageName}} build && pnpm -r --if-present typecheck",

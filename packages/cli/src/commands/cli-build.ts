@@ -6,21 +6,22 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
+import { normalizeProjectName } from '@h-ai/deploy'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { buildMobileApp } from './cli-build-app.js'
-import { readProjectConfig } from './cli-project-config.js'
+import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
  * 构建参数，不接受部署环境。
- * 对应 hai build --target docker --images app,web --runtime podman --no-http-proxy；镜像参数仅用于 docker，platform/arch 仅用于 desktop。
+ * 对应 hai build --target docker --images serv,web --runtime podman --no-http-proxy；镜像参数仅用于 docker。
  * @example 模块内部上下文
  * ```ts
- * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'docker', images: 'app,web', runtime: 'podman', httpProxy: false }
+ * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'docker', images: 'serv,web', runtime: 'podman', httpProxy: false }
  * ```
  */
 export interface BuildCommandOptions extends GlobalOptions {
-  /** compile 编译源码，docker 导出镜像，desktop 调用 Tauri。 */
+  /** compile 编译源码，docker 导出 serv/web 镜像，app 调用 Capacitor，desktop 调用 Tauri。 */
   target?: 'compile' | 'docker' | 'desktop' | 'app'
   /** 逗号分隔的应用镜像名；省略时构建全部。 */
   images?: string
@@ -28,7 +29,7 @@ export interface BuildCommandOptions extends GlobalOptions {
   runtime?: 'auto' | 'podman' | 'docker'
   /** 容器构建网络，默认采用引擎设置；例如 rootless Podman 的 pasta。 */
   network?: string
-  /** 原生安装包的目标系统，必须与构建主机相同。 */
+  /** 原生目标平台；desktop 须与主机一致，iOS 须使用 macOS，Android 须具备对应 SDK。 */
   platform?: 'windows' | 'linux' | 'macos' | 'android' | 'ios'
   /** Rust 目标架构，默认当前主机架构。 */
   arch?: 'x64' | 'arm64'
@@ -39,15 +40,15 @@ export interface BuildCommandOptions extends GlobalOptions {
 }
 
 /**
- * 项目构建描述；app/web 共用 buildId。
- * 从 hai.json 的 build 分区读取；镜像名称为 app/web，构建命令还会校验唯一性与路径边界。
+ * 项目构建描述；serv/web 共用 buildId，app/desktop 单独生成原生安装包。
+ * 从 hai.json 的 build 分区读取；镜像名称为 serv/web，构建命令还会校验唯一性与路径边界。
  * @example 模块内部上下文
  * ```ts
- * const config: BuildConfig = { images: [{ name: 'app', context: '.', dockerfile: 'images/app.Dockerfile', containerPort: 3000 }], desktop: ['apps/shop-desktop'] }
+ * const config: BuildConfig = { images: [{ name: 'serv', context: '.', dockerfile: 'images/serv.Dockerfile', containerPort: 3000 }], desktop: ['apps/shop-desktop'] }
  * ```
  */
 interface BuildConfig {
-  images?: Array<{ name: 'app' | 'web', context?: string, dockerfile: string, containerPort?: number }>
+  images?: Array<{ name: 'serv' | 'web', context?: string, dockerfile: string, containerPort?: number }>
   desktop?: string[]
   app?: string[]
 }
@@ -126,8 +127,9 @@ function sourceCommit(cwd: string): string {
  * ```
  */
 export async function buildCommand(options: BuildCommandOptions): Promise<void> {
-  const cwd = resolve(options.cwd ?? process.cwd())
+  const directory = resolve(options.cwd ?? process.cwd())
   const target = options.target ?? 'compile'
+  const cwd = target === 'compile' ? directory : dirname(projectConfigPath(directory))
   if (!['compile', 'docker', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
   if ((target !== 'docker' && (options.images !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
@@ -138,7 +140,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     await pnpm(['run', 'compile'], cwd, { buildId: randomUUID(), commit: sourceCommit(cwd) })
     return
   }
-  const metadata: { version?: unknown } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+  const metadata: { name?: unknown, version?: unknown } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
   // 版本同时进入文件名和镜像标签；拒绝路径字符，保留预发布和构建元数据。
   const appVersion = metadata.version
   if (typeof appVersion !== 'string' || appVersion.length > 80 || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9a-z-]+(?:\.[0-9a-z-]+)*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i.test(appVersion))
@@ -170,8 +172,11 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     writeCliMessage(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
     return
   }
-  if (!Array.isArray(config.images) || !config.images.length || config.images.some(image => !image || typeof image !== 'object') || config.images.filter(image => image.name === 'app').length !== 1 || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length
-    || config.images.some(image => !['app', 'web'].includes(image.name) || typeof image.dockerfile !== 'string' || !image.dockerfile || 'target' in image || (image.containerPort !== undefined && (!Number.isInteger(image.containerPort) || image.containerPort < 1 || image.containerPort > 65535)))) {
+  if (typeof metadata.name !== 'string' || !metadata.name.trim())
+    throw new Error(cliM('cli_build_project_name_required'))
+  const projectName = normalizeProjectName(metadata.name)
+  if (!Array.isArray(config.images) || !config.images.length || config.images.some(image => !image || typeof image !== 'object') || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length
+    || config.images.some(image => !['serv', 'web'].includes(image.name) || typeof image.dockerfile !== 'string' || !image.dockerfile || 'target' in image || (image.containerPort !== undefined && (!Number.isInteger(image.containerPort) || image.containerPort < 1 || image.containerPort > 65535)))) {
     throw new Error(cliM('cli_build_images_missing'))
   }
   const selected = options.images?.split(',').map(name => name.trim())
@@ -203,11 +208,11 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   }
   const buildId = `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`
   const commit = sourceCommit(cwd)
-  const artifact: DeploymentArtifact = { version: 3, appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
+  const artifact: DeploymentArtifact = { version: 4, primaryService: config.images.some(image => image.name === 'serv') ? 'serv' : 'web', appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
   // 部分构建仍保留工程显式声明的端口，不用构建默认值覆盖部署配置。
   for (const image of config.images) {
     if (image.containerPort !== undefined)
-      artifact[image.name === 'app' ? 'appContainerPort' : 'webContainerPort'] = image.containerPort
+      artifact[image.name === 'serv' ? 'servContainerPort' : 'webContainerPort'] = image.containerPort
   }
   const parent = join(cwd, '.hai/build/docker')
   mkdirSync(parent, { recursive: true })
@@ -217,10 +222,10 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     for (const context of new Set(images.map(image => resolve(cwd, image.context ?? '.'))))
       prepareDependencyInputs(context)
     for (const image of images) {
-      if (!['app', 'web'].includes(image.name))
+      if (!['serv', 'web'].includes(image.name))
         throw new Error(cliM('cli_build_images_missing'))
       const context = resolve(cwd, image.context ?? '.')
-      const imageRef = `localhost/hai-${basenameSafe(cwd)}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
+      const imageRef = `localhost/hai-${projectName}-${image.name}:${buildId.toLowerCase().replaceAll('+', '_')}`
       const args = ['build', '-f', resolve(cwd, image.dockerfile), '-t', imageRef]
       // 仅仓库 Vitest 托管构建使用这对内部变量；正常构建保留缓存与镜像。
       const testRun = process.env.HAI_TEST_IMAGE_RUN
@@ -318,9 +323,4 @@ function prepareDependencyInputs(cwd: string): void {
   const content = `${JSON.stringify(files)}\n`
   if (!existsSync(tracking) || readFileSync(tracking, 'utf8') !== content)
     writeFileSync(tracking, content)
-}
-
-/** 将当前目录名转为安全镜像名称。 */
-function basenameSafe(directory: string): string {
-  return directory.slice(dirname(directory).length + 1).toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, '') || 'app'
 }

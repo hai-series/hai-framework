@@ -20198,6 +20198,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "normalizeProjectName",
+              "kind": "value",
+              "declaration": "normalizeProjectName",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "PortExposeConfig",
               "kind": "type",
               "declaration": "PortExposeConfig",
@@ -20442,6 +20448,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "normalizeProjectName",
+              "kind": "value",
+              "declaration": "normalizeProjectName",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "PortExposeConfig",
               "kind": "type",
               "declaration": "PortExposeConfig",
@@ -20684,6 +20696,12 @@
               "kind": "type",
               "declaration": "MiddlewareRequirement",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "normalizeProjectName",
+              "kind": "value",
+              "declaration": "normalizeProjectName",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "PortExposeConfig",

@@ -18,6 +18,8 @@
 
 创建项目默认安装部署工具，可用 `hai create my-app --no-deploy` 关闭。部署 SDK 属于开发依赖，不进入应用运行镜像。
 
+交付角色统一为 `serv`（独立 API 后端）、`web`（静态或 SSR 浏览器站点）、`app`（Android/iOS 手机安装包）、`desktop`（桌面安装包）。Fullstack 容器为 serv + 可选 web，API 为 serv，admin/website/h5/mobile-app 的浏览器镜像为 web；原生 app/desktop 不作为服务器 Compose 服务。`--images` 与 `--services` 使用 serv/web，`--target app` 与 `--target desktop` 生成原生包。API workspace 的服务目录为 `apps/<项目>-serv`。镜像与容器共用工程根 `package.json.name` 的归一化身份（去 scope、转小写、非法字符合并为连字符）；名称缺失或无效时报错，不回退目录名。镜像为 `localhost/hai-<项目>-<角色>:<buildId>`，容器为 `hai-<项目>-<环境>-<角色>`，镜像可跨环境复用。
+
 ```sh
 pnpm build
 pnpm build --target docker
@@ -29,15 +31,15 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build 的可选参数
 
-| 参数                       | 用途                                    |
-| -------------------------- | --------------------------------------- |
-| `--target`                 | compile（默认）、docker、desktop        |
-| `--images`                 | app、web 或 app,web；只构建导出所选镜像 |
-| `--runtime`                | auto（优先 Podman）、podman、docker     |
-| `--network`                | 容器构建网络，默认引擎设置              |
-| `--no-http-proxy`          | Podman 构建不继承本机代理               |
-| `--sqlite-prebuild-mirror` | SQLite 预编译包的可信 HTTP(S) 根地址    |
-| `--platform` / `--arch`    | 原生安装包的系统与架构                  |
+| 参数                       | 用途                                      |
+| -------------------------- | ----------------------------------------- |
+| `--target`                 | compile（默认）、docker、desktop          |
+| `--images`                 | serv、web 或 serv,web；只构建导出所选镜像 |
+| `--runtime`                | auto（优先 Podman）、podman、docker       |
+| `--network`                | 容器构建网络，默认引擎设置                |
+| `--no-http-proxy`          | Podman 构建不继承本机代理                 |
+| `--sqlite-prebuild-mirror` | SQLite 预编译包的可信 HTTP(S) 根地址      |
+| `--platform` / `--arch`    | 原生安装包的系统与架构                    |
 
 #### 用 hai.json 描述要打什么包
 
@@ -46,9 +48,9 @@ pnpm build --target desktop --platform windows --arch x64
   "build": {
     "images": [
       {
-        "name": "app",
+        "name": "serv",
         "context": ".",
-        "dockerfile": "images/app.Dockerfile",
+        "dockerfile": "images/serv.Dockerfile",
         "containerPort": 3000
       },
       {
@@ -84,17 +86,21 @@ pnpm build --target desktop --platform windows --arch x64
 
 构建器将锁文件、包配置、本地归档和补丁准备为 `images/dependencies/` 输入，结合 pnpm store 缓存与 Docker 分层复用下载。源码修改不应重新下载全部依赖；缓存为空仍能联网构建。Windows node_modules 不用于 Linux 镜像。完全离线构建还需预先准备基础镜像、工具链和匹配 ABI/架构/libc 的原生预编译包。
 
-版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括格式版本 3 的 manifest.json、所选镜像 tar 和 SHA-256；partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 app/web 容器端口（appContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
+版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括格式版本 4 的 manifest.json、所选镜像 tar 和 SHA-256；partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
 
 ### 部署到环境
 
 #### 先准备环境与部署目标
 
-默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时取工程根目录名，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-部署名属于资源身份。旧版已部署项目若需沿用原目录、数据卷、凭据和增量基线，在项目 deploy 脚本保留 `--project-name hai-delivery-serv`，环境仍由 `--env test` 追加，并保留服务器凭据状态。只修改 `deploy-target.json.directory` 不能迁移 Compose 资源；更名需另行迁移数据及建立新基线，工具不自动搬移或删除旧资源。已有离线包须重新生成。
+命名与拓扑契约使用制品格式 4，新增 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；只有 serv + web 才生成同源 API 代理。旧格式制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
 
-准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-service`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
+迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。
+
+CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已移除；旧参数会明确报错，请在工程根 package.json.name 维护资源身份。
+
+准备 `.env.<环境>`（例如 `.env.prod`）和项目根 `hai.json`，其中 `build` 描述镜像与桌面构建，`deploy` 描述整个应用的部署。fullstack 的 deploy 参数仍指向 `packages/<项目>-serv`，API workspace 指向 `apps/<项目>-serv`，仅用于扫描运行依赖和模块 YAML；前后端构建与部署配置统一在项目根。
 
 `deploy` 支持 `${变量:回退值}` 与 `HAI_DEPLOY_*` 分层覆盖（例如 `HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT`）；父对象可用 JSON 整体覆盖，缺省的 SSH 节点也可由 Schema 已知的叶级变量补齐。高优先级来源的父对象覆盖低层叶字段，同一来源中叶字段优先。SSH 文本保留原值，不把数字密码或前后空格转换成其他类型。
 
@@ -117,17 +123,17 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 #### deploy 的可选参数
 
-| 参数                  | 用途                                                      |
-| --------------------- | --------------------------------------------------------- |
-| `--env` / `--env-dir` | 环境和环境文件目录                                        |
-| `--build`             | 先构建选中应用镜像，再打包部署；可结合 bundle-only        |
-| `--services`          | 只更新指定 Compose 服务，例如 web、app、app,web、storage  |
-| `--artifact-dir`      | 精确选择已构建制品                                        |
-| `--bundle-only`       | 只生成 tar 和跨平台脚本，不连接服务器                     |
-| `--runtime`           | 本地构建及中间件镜像导出引擎                              |
-| `--output`            | 自定义部署 tar 路径，相对命令执行目录解析，自动补版本后缀 |
-| `--skip-middleware`   | 跳过中间件配置与开通                                      |
-| `--yes`               | 无交互使用有效配置；缺必要值明确报错                      |
+| 参数                  | 用途                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| `--env` / `--env-dir` | 环境和环境文件目录                                         |
+| `--build`             | 先构建选中应用镜像，再打包部署；可结合 bundle-only         |
+| `--services`          | 只更新指定 Compose 服务，例如 web、serv、serv,web、storage |
+| `--artifact-dir`      | 精确选择已构建制品                                         |
+| `--bundle-only`       | 只生成 tar 和跨平台脚本，不连接服务器                      |
+| `--runtime`           | 本地构建及中间件镜像导出引擎                               |
+| `--output`            | 自定义部署 tar 路径，相对命令执行目录解析，自动补版本后缀  |
+| `--skip-middleware`   | 跳过中间件配置与开通                                       |
+| `--yes`               | 无交互使用有效配置；缺必要值明确报错                       |
 
 #### 两机连通：直接部署
 
@@ -136,7 +142,7 @@ pnpm run deploy --env prod --build
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
 # 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 ```
 
 部分更新需要服务器已有成功的完整安装，并且端口、应用布局相同。以服务器成功状态为基线，只替换选中的镜像和配置，保留其他服务、连接与卷。部署脚本先按项目和服务名移除选中的旧容器（保留数据卷），再执行 `compose up -d --no-deps --no-build --pull never --no-recreate web` 创建新容器；其他容器保持运行，不执行整个项目 down。首次安装使用完整包。自建 S3 的桶由应用的 `storage.init()` 按可选 `createBucket` 初始化。
@@ -209,11 +215,11 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 
 框架持久配置使用 `HAI_*` 命名。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` 是中间件镜像的原生协议，必须保留原名，但只生成到私有的 `middleware-runtime.env` 并由中间件容器加载；不再写入工程环境文件或应用的 `.env.runtime`。应用增量部署沿用的 `middleware.env` 仅保存框架 `HAI_*` 配置。旧工程已保存的这些原生字段不会被自动删除，新应用环境会忽略它们；新包与旧成功基线可共存，旧服务仍读取其原交付文件。
 
-自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 app/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
+自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 serv/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
 
 Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，不依赖 systemd 自动调度；当前探测失败时，即使旧状态为 `healthy` 也不能放行 app 启动。
 
-分批启动仅在首批清理孤立容器，后续 app/Web 启动保留已经就绪的中间件。
+分批启动仅在首批清理孤立容器，后续 serv/Web 启动保留已经就绪的中间件。
 
 生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点复用同一有效密钥环，可直接加载环境文件，也可通过 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
 

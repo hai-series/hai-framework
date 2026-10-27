@@ -21,7 +21,7 @@
 | 架构 | 接口/服务 | UI 与客户端 | 常见位置（以当前项目为准） |
 | --- | --- | --- | --- |
 | SvelteKit | `@h-ai/kit`、文件路由与 server services | Svelte 组件与既有数据加载 | `src/routes/`、`src/lib/server/` |
-| API workspace | `@h-ai/api-contract` + `@h-ai/serv` | 无需页面 | `apps/*-contract`、`apps/*-service` |
+| API workspace | `@h-ai/api-contract` + `@h-ai/serv` | 无需页面 | `apps/*-contract`、`apps/*-serv` |
 | fullstack | contract + serv，共享业务结构 | Vite Svelte Web/所选原生前端，typed client | `packages/*-contract`、`packages/*-serv`、`packages/*-shared`、`apps/*` |
 | Vite SPA/原生 | 远端服务 contract | `@h-ai/api-client` 与适用平台适配 | `src/App.svelte`、`src/lib/api.ts` 或 shared 客户端 |
 

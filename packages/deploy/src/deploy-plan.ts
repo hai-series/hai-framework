@@ -4,10 +4,11 @@ import type { DeployAppOptions } from './deploy-types.js'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { err, ok } from '@h-ai/core'
+import { z } from 'zod'
 import { planSidecars, resolveSidecarOptions } from './container/deploy-container-compose.js'
 import { shellArgument } from './container/deploy-scripts.js'
 import { createSshExecutor } from './container/deploy-ssh.js'
-import { readDeploymentArtifact } from './deploy-artifact.js'
+import { DeploymentArtifactSchema, readDeploymentArtifact } from './deploy-artifact.js'
 import { DeployConfigSchema } from './deploy-config.js'
 import { loadDeploymentEnvironment } from './deploy-environment.js'
 import { normalizeProjectName, resolveArtifactDirectory, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
@@ -24,6 +25,8 @@ import { HaiDeployError } from './deploy-types.js'
  * ```
  */
 export async function createDeploymentPlan(appDir: string, input: DeployConfigInput, options: DeployAppOptions & { inspectRemote?: boolean } = {}) {
+  if ('projectName' in options && options.projectName !== undefined)
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameOverrideRemoved'))
   const parsed = DeployConfigSchema.safeParse(input)
   if (!parsed.success)
     return err({ ...HaiDeployError.CONFIG_ERROR, message: deployM('deploy_artifactInvalid'), ext: { fields: parsed.error.issues.map(issue => issue.path.join('.')) } })
@@ -37,7 +40,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
   if (!environment.success)
     return environment
   const root = resolveProjectDirectory(directory)
-  const projectName = normalizeProjectName(`${options.projectName ?? normalizeProjectName(app.appName)}${options.environment ?? config.environment ? `-${environment.data.environment}` : ''}`)
+  const projectName = normalizeProjectName(`${normalizeProjectName(app.appName)}${options.environment ?? config.environment ? `-${environment.data.environment}` : ''}`)
   const provider = config.provider
   try {
     let artifactDir = options.artifactDir ?? resolveArtifactDirectory(directory)
@@ -48,7 +51,18 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       artifactDir = join(artifactDir, latest)
     }
     const artifact = provider.type === 'docker-ssh' ? await readDeploymentArtifact(artifactDir) : undefined
-    const images = artifact ? [...new Set(['app', ...(artifact.hasWeb ? ['web'] : [])])] : ['app']
+    let images: string[]
+    if (artifact) {
+      images = [...new Set([artifact.primaryService, ...(artifact.hasWeb ? ['web'] : [])])]
+    }
+    else {
+      // 平台部署没有 OCI 制品时，仍使用工程显式声明的角色，不能把静态或 SSR 站点改叫后端。
+      const file = join(root, 'hai.json')
+      const project = existsSync(file)
+        ? z.object({ build: z.object({ images: z.array(z.object({ name: DeploymentArtifactSchema.shape.primaryService })).min(1).max(2).refine(items => new Set(items.map(item => item.name)).size === items.length).optional() }).optional() }).parse(JSON.parse(readFileSync(file, 'utf8')))
+        : undefined
+      images = project?.build?.images?.map(image => image.name) ?? [app.isSvelteKit ? 'web' : 'serv']
+    }
     const middlewares = (app.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend))
     const available = [...new Set([...images, ...app.requiredServices])]
     const selected = options.selectedServices ?? (artifact?.partial ? artifact.images.map(image => image.name) : available)

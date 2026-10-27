@@ -581,7 +581,7 @@ export interface ApiWorkspaceTemplateContext {
   /** 共享 contract 导出变量名 */
   contractExportName: string
   /** 后端 service 包名 */
-  servicePackageName: string
+  servPackageName: string
   /** Service App 工厂函数名 */
   serviceAppFactoryName: string
   /** procedures 聚合函数名 */
@@ -962,7 +962,7 @@ function buildApiWorkspaceTemplateContext(
     packageSpecifiers: buildFullstackPackageSpecifiers(useCatalogProtocol),
     contractPackageName: `${projectName}-contract`,
     contractExportName: `${identifier}Contract`,
-    servicePackageName: `${projectName}-service`,
+    servPackageName: `${projectName}-serv`,
     serviceAppFactoryName: `create${pascalName}App`,
     serviceProceduresFactoryName: `create${pascalName}Procedures`,
   }

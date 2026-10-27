@@ -17,7 +17,7 @@ it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物�
     const targets = appType === 'admin'
       ? ['vite.config.ts']
       : appType === 'api'
-        ? ['apps/metadata-sample-service/tsup.config.ts']
+        ? ['apps/metadata-sample-serv/tsup.config.ts']
         : ['packages/metadata-sample-serv/tsup.config.ts', ...['web', 'app', 'desktop'].map(target => `apps/metadata-sample-${target}/vite.config.ts`)]
     for (const target of targets) {
       const config = await read(target)
@@ -26,9 +26,9 @@ it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物�
       expect(config).toContain('import.meta.url')
       await verifyMetadataOutput(config, path.join(directory, target))
     }
-    const runtime = appType === 'admin' ? 'src/lib/server/init.ts' : appType === 'api' ? 'apps/metadata-sample-service/src/lib/server/init.ts' : 'packages/metadata-sample-serv/src/server/runtime.ts'
+    const runtime = appType === 'admin' ? 'src/lib/server/init.ts' : appType === 'api' ? 'apps/metadata-sample-serv/src/lib/server/init.ts' : 'packages/metadata-sample-serv/src/server/runtime.ts'
     expect(await read(runtime)).toContain('...buildMetadata')
-    const dockerfiles = appType === 'fullstack' ? ['images/app.Dockerfile', 'images/web.Dockerfile'] : ['images/app.Dockerfile']
+    const dockerfiles = appType === 'fullstack' ? ['images/serv.Dockerfile', 'images/web.Dockerfile'] : [appType === 'api' ? 'images/serv.Dockerfile' : 'images/web.Dockerfile']
     for (const file of dockerfiles) {
       const dockerfile = await read(file)
       expect(dockerfile).toContain('ARG HAI_BUILD_ID=')

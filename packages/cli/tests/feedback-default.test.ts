@@ -75,7 +75,7 @@ describe('fullstack 默认反馈生成', () => {
     const name = 'default-api'
     await createProject({ name, appType: 'api', yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })
     const directory = path.join(root, name)
-    const service = `apps/${name}-service`
+    const service = `apps/${name}-serv`
     const manifest: { dependencies: Record<string, string> } = JSON.parse(await readFile(path.join(directory, service, 'package.json'), 'utf8'))
     expect(manifest.dependencies['@h-ai/feedback']).toBeUndefined()
     expect(parseEnv(await readFile(path.join(directory, service, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('1048576')

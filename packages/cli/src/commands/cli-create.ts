@@ -451,12 +451,12 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const isApiWorkspace = resolvedOptions.appType === 'api'
       const isFullstack = resolvedOptions.appType === 'fullstack'
       const configDir = isApiWorkspace
-        ? path.join(projectPath, 'apps', `${resolvedOptions.name}-service`, 'config')
+        ? path.join(projectPath, 'apps', `${resolvedOptions.name}-serv`, 'config')
         : isFullstack
           ? path.join(projectPath, 'packages', `${resolvedOptions.name}-serv`, 'config')
           : path.join(projectPath, 'config')
       const envExamplePath = isApiWorkspace
-        ? path.join(projectPath, 'apps', `${resolvedOptions.name}-service`, '.env.example')
+        ? path.join(projectPath, 'apps', `${resolvedOptions.name}-serv`, '.env.example')
         : path.join(projectPath, '.env.example')
 
       for (const featureId of resolvedOptions.features) {
@@ -1291,7 +1291,7 @@ function generateEnvironmentReadme(): string {
 | 单元测试 / 监听 / 浏览器验收 | \`pnpm test\` / \`test:watch\` / \`test:e2e\` |
 | Node 服务按环境启动（构建后） | \`pnpm start\` / \`start:test\` / \`start:prod\` |
 
-Vite 客户端使用 \`preview\` 预览静态产物，Node 服务使用 \`start\`；纯 contract/shared 库只提供适用的构建和质量命令。API workspace 的环境文件位于 \`apps/<name>-service\`，fullstack 位于工程根。`
+Vite 客户端使用 \`preview\` 预览静态产物，Node 服务使用 \`start\`；纯 contract/shared 库只提供适用的构建和质量命令。API workspace 的环境文件位于 \`apps/<name>-serv\`，fullstack 位于工程根。`
 }
 
 /** 生成与项目脚本一致的构建、离线交付和增量更新说明。 */
@@ -1299,6 +1299,7 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
   return `### 构建与部署
 
 创建时默认包含部署工具；不需要时使用 hai create --no-deploy。
+后端 serv、浏览器站点 web（静态或 SSR）、手机原生包 app、桌面原生包 desktop。--images/--services 使用 serv/web，--target app/desktop 用于原生交付。镜像和容器的项目名统一取工程根 package.json.name，去 scope、转小写并归一化字符；缺失或无效时报错，不使用目录名。制品格式4记录 primaryService 与 hasWeb，只有 serv + web 生成同源 API 代理；旧工程先同步 build.images、Dockerfile 和 API workspace 的 -serv 包名及引用，重新安装依赖并重建完整制品；旧部署须先备份并核对项目名、数据卷与受管凭据，再建立完整基线；完整部署会按 Compose 规则清理同项目的旧服务容器，不自动跨项目迁移数据。
 每个镜像对应 images/ 中一个 Dockerfile，根 hai.json 的 build 分区指定文件，deploy 分区保存整个项目的部署配置。
 下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
@@ -1405,7 +1406,7 @@ function generateApiWorkspaceReadme(name: string, pm: 'pnpm' | 'npm' | 'yarn'): 
 ### 工程结构
 
 - \`apps/${name}-contract\`：共享 API contract、Zod schema 与类型
-- \`apps/${name}-service\`：后端 API service，基于 \`@h-ai/serv\` 暴露 HTTP 应用
+- \`apps/${name}-serv\`：后端 API service，基于 \`@h-ai/serv\` 暴露 HTTP 应用
 
 ### 开发
 
@@ -1417,12 +1418,12 @@ ${pm} dev
 ${generateEnvironmentReadme()}
 
 
-${generateBuildDeploymentReadme(pm, `apps/${name}-service`)}
+${generateBuildDeploymentReadme(pm, `apps/${name}-serv`)}
 
 ### 扩展建议
 
 - 在 \`${name}-contract\` 中维护应用级 contract，前后端共用同一份类型与路径定义。
-- 在 \`${name}-service\` 中扩展 procedures、模块初始化与配置。
+- 在 \`${name}-serv\` 中扩展 procedures、模块初始化与配置。
 - 需要 IAM / storage / ai 时，优先复用 \`@h-ai/api-contract\` 与 \`@h-ai/serv/features/*\`。
 
 ${generateAiDevelopmentReadme()}### 文档

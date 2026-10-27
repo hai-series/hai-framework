@@ -1,6 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { buildMobileApp } from '../src/commands/cli-build-app.js'
 
@@ -42,4 +43,44 @@ it('发布工程含热更新 URL 时拒绝原生打包；有效新 APK 返回实
     }
   })
   expect(await buildMobileApp(root!, ['apps/app'], 'android', run)).toEqual([output])
+})
+
+it('独立手机工程允许 build.app 指向工程根，拒绝越过工程根的路径', async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'hai-build-app-'))
+  const root = join(fixture, 'mobile')
+  if (dirname(resolve(fixture)) !== resolve(tmpdir()) || !basename(fixture).startsWith('hai-build-app-'))
+    throw new Error('Unexpected native build fixture path')
+  try {
+    const assets = join(root, 'android/app/src/main/assets')
+    mkdirSync(assets, { recursive: true })
+    writeFileSync(join(root, 'capacitor.config.ts'), 'export default {}')
+    writeFileSync(join(assets, 'capacitor.config.json'), '{}')
+    const apk = join(root, 'android/app/build/outputs/apk/release/app.apk')
+    const calls: Array<{ args: string[], directory: string }> = []
+    const run = async (args: string[], directory: string) => {
+      calls.push({ args, directory })
+      if (args.includes('cap') && args.includes('build')) {
+        mkdirSync(dirname(apk), { recursive: true })
+        writeFileSync(apk, 'PK-unit-apk')
+      }
+    }
+    expect(await buildMobileApp(root, ['.'], 'android', run)).toEqual([apk])
+    expect(calls.map(call => call.directory)).toEqual([root, root, root])
+    expect(calls.map(call => call.args)).toEqual([
+      ['run', 'build'],
+      ['exec', 'cap', 'sync', 'android'],
+      ['exec', 'cap', 'build', 'android', '--androidreleasetype', 'APK'],
+    ])
+    calls.length = 0
+    const outside = join(fixture, 'outside')
+    const outsideAssets = join(outside, 'android/app/src/main/assets')
+    mkdirSync(outsideAssets, { recursive: true })
+    writeFileSync(join(outside, 'capacitor.config.ts'), 'export default {}')
+    writeFileSync(join(outsideAssets, 'capacitor.config.json'), '{}')
+    await expect(buildMobileApp(root, ['../outside'], 'android', run)).rejects.toThrow()
+    expect(calls).toEqual([])
+  }
+  finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
 })

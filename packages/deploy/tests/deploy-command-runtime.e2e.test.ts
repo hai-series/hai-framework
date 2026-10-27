@@ -63,15 +63,16 @@ function copyDependency(name: string, from: string, copied: Set<string>): void {
 }
 
 /** 最小预构建制品由公开 deploy API 校验、打包和上传，不提供构建器替身。 */
-function application(name: string): string {
+function application(name: string, projectName = name): string {
   const app = path.join(root, name)
   const artifacts = path.join(app, '.hai/build/docker/release-1')
   mkdirSync(artifacts, { recursive: true })
+  writeFileSync(path.join(app, 'package.json'), JSON.stringify({ name: projectName }))
   writeFileSync(path.join(app, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
   writeFileSync(path.join(app, '.env.test'), 'HAI_CORE_ENV=test\n')
   writeFileSync(path.join(app, '.hai/build/docker/latest'), 'release-1\n')
-  writeFileSync(path.join(artifacts, 'app-1.2.3.tar'), 'prebuilt-image')
-  writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'app', file: 'app-1.2.3.tar', imageRef: 'localhost/command-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
+  writeFileSync(path.join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
+  writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/command-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
   return app
 }
 
@@ -265,7 +266,7 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     writeFileSync(docker, `#!/bin/sh
 case "$*" in
   *'up --help'*) printf 'never\\n';;
-  *'config --services'*) printf 'app\\n';;
+  *'config --services'*) printf 'serv\\n';;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
 if [ "$1" = load ] && [ -f /fixture/block-load ]; then
@@ -322,10 +323,10 @@ fi
   }, 60_000)
 
   it('从实际 dist 公开入口打包，内嵌 Windows helper 无需源码或 ps1 资源', () => {
-    const app = application('发布 空格')
+    const app = application('发布 空格', 'dist-consumer')
     const entry = path.join(root, 'dist-consumer.mjs')
     const published = pathToFileURL(path.join(repository, 'packages/deploy/dist/index.js')).href
-    writeFileSync(entry, `import {deploy,getDeployCommandState} from ${JSON.stringify(published)};try{const init=await deploy.init({provider:{type:'docker-ssh',expose:{hostPort:18080}}});if(!init.success)throw new Error(init.error.message);const result=await deploy.deployApp(process.argv[2],{projectName:'dist-consumer',environment:'test',bundleOnly:true});if(!result.success)throw new Error(result.error.message);process.stdout.write('DIST:'+JSON.stringify({bundle:result.data.bundlePath,stateReader:typeof getDeployCommandState})+'\\n');}finally{await deploy.close()}`)
+    writeFileSync(entry, `import {deploy,getDeployCommandState} from ${JSON.stringify(published)};try{const init=await deploy.init({provider:{type:'docker-ssh',expose:{hostPort:18080}}});if(!init.success)throw new Error(init.error.message);const result=await deploy.deployApp(process.argv[2],{environment:'test',bundleOnly:true});if(!result.success)throw new Error(result.error.message);process.stdout.write('DIST:'+JSON.stringify({bundle:result.data.bundlePath,stateReader:typeof getDeployCommandState})+'\\n');}finally{await deploy.close()}`)
     const output = execFileSync(process.execPath, [entry, app], { encoding: 'utf8', timeout: 30_000, windowsHide: true })
     const evidence = JSON.parse(output.split('\n').find(line => line.startsWith('DIST:'))!.slice(5))
     expect(evidence.stateReader).toBe('function')

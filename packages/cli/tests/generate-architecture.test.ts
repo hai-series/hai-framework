@@ -45,7 +45,7 @@ describe('architecture-aware generation', () => {
   it.each(['api', 'fullstack'] as const)('%s 根目录自动选择后端，真实 contract/procedure 入口均注册新领域', async (type) => {
     const project = await create(type)
     const parent = type === 'api' ? 'apps' : 'packages'
-    const service = path.join(project, parent, `generated-${type === 'api' ? 'service' : 'serv'}`)
+    const service = path.join(project, parent, 'generated-serv')
     const contract = path.join(project, parent, 'generated-contract')
     await generate({ type: 'api', name: 'purchase-orders', cwd: project })
     expect(await readFile(path.join(contract, 'src/generated-contract.ts'), 'utf8')).toContain('purchaseOrders: purchaseOrdersContract')
@@ -83,7 +83,7 @@ describe('architecture-aware generation', () => {
 
   it('未知聚合入口不写半套路由，保留全部原始业务文件', async () => {
     const project = await create('api')
-    const index = path.join(project, 'apps/generated-service/src/server/procedures/index.ts')
+    const index = path.join(project, 'apps/generated-serv/src/server/procedures/index.ts')
     const original = (await readFile(index, 'utf8')).replace('// @hai-generator:procedures:entries', '// custom aggregation')
     await fse.writeFile(index, original)
     await expect(generate({ type: 'api', name: 'blocked', cwd: project })).rejects.toThrow()
@@ -128,7 +128,7 @@ describe('architecture-aware generation', () => {
     await expect(generate({ type: 'api', name: 'rollback', cwd: project })).rejects.toThrow('Injected write failure')
     expect(await readFile(index, 'utf8')).toBe(original)
     expect(await fse.pathExists(path.join(project, 'apps/generated-contract/src/rollback-contract.ts'))).toBe(false)
-    expect(await fse.pathExists(path.join(project, 'apps/generated-service/src/server/procedures/rollback-procedures.ts'))).toBe(false)
+    expect(await fse.pathExists(path.join(project, 'apps/generated-serv/src/server/procedures/rollback-procedures.ts'))).toBe(false)
   })
 
   it('保留原始提交错误并收集多个stage清理失败，继续清理其余stage', async () => {

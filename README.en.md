@@ -149,7 +149,7 @@ pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # Use one --services with comma-separated names; quote the value for PowerShell
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 # Without connectivity between machines, transfer and start the bundle manually
 pnpm run deploy --env prod --build --bundle-only
 ```

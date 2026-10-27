@@ -18,6 +18,8 @@ Deploy existing images or Vercel prebuilt output, including complete offline bun
 
 Projects include deployment tooling by default; use `hai create my-app --no-deploy` to opt out. The deployment SDK is a development dependency and is excluded from runtime images.
 
+Delivery roles are `serv` for a separate API backend, `web` for a static or SSR browser site, `app` for Android/iOS installers, and `desktop` for desktop installers. Fullstack containers use serv plus optional web; API uses serv; browser images for admin/website/h5/mobile-app use web. Native app/desktop outputs are not server Compose services. Use serv/web with `--images` and `--services`, and `--target app` or `--target desktop` for native packages. API service directories are `apps/<project>-serv`. Images and containers share the normalized root `package.json.name`: remove scope, lowercase, and replace invalid character runs with a hyphen. Missing or invalid names fail without falling back to directory names. Images use `localhost/hai-<project>-<role>:<buildId>`; containers use `hai-<project>-<environment>-<role>`. Images remain reusable across environments.
+
 ```sh
 pnpm build
 pnpm build --target docker
@@ -27,7 +29,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### Build options
 
-`--target` selects compile (default), docker or desktop. `--images app|web|app,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
+`--target` selects compile (default), docker, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
 #### Describe packaging in hai.json
 
@@ -36,9 +38,9 @@ pnpm build --target desktop --platform windows --arch x64
   "build": {
     "images": [
       {
-        "name": "app",
+        "name": "serv",
         "context": ".",
-        "dockerfile": "images/app.Dockerfile",
+        "dockerfile": "images/serv.Dockerfile",
         "containerPort": 3000
       },
       {
@@ -65,23 +67,27 @@ pnpm build --target desktop --platform windows --arch x64
 
 Each image has its own Dockerfile. Web runtime assets live in images/web/. Dockerfiles retain internal build/runtime stages; configuration does not select stages. Omit absent images and add desktop directories only for native projects.
 
-Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. Full and app-only incremental deployments derive the proxy limit from resolved `_serv.yml`. Capacity changes recreate the proxy using its installed Web image and restore the prior configuration on health failure. SvelteKit deployments also derive adapter-node `BODY_SIZE_LIMIT` from `_kit.yml`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
+Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. Full and serv-only incremental deployments derive the proxy limit from resolved `_serv.yml`. Capacity changes recreate the proxy using its installed Web image and restore the prior configuration on health failure. SvelteKit deployments also derive adapter-node `BODY_SIZE_LIMIT` from `_kit.yml`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
 Bodyless authenticated envelopes use X-Hai-Transport. Generated proxies set large_client_header_buffers 4 32k and proxy_buffer_size 32k to admit these headers; custom proxies must preserve and admit them.
 
 Dependency inputs are prepared under images/dependencies/ from package manifests, local archives and patches. Combine pnpm store caching with stable dependency layers. Source changes should reuse downloaded packages. Empty caches still permit online builds. Windows node_modules cannot supply Linux native dependencies. Offline builds additionally require base images, tools and matching ABI/architecture/libc binaries.
 
-The root package.json.version identifies the application. `.hai/build/docker/<buildId>/` contains manifest format 3, selected image archives and SHA-256. partial marks incremental builds and hasWeb records topology. appContainerPort and webContainerPort retain explicitly configured app/web listening ports, including the image left out of a partial build. Omitted ports keep the deployment defaults. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
+The root package.json.version identifies the application. `.hai/build/docker/<buildId>/` contains manifest format 4, selected image archives and SHA-256. partial marks incremental builds and hasWeb records topology. servContainerPort and webContainerPort retain explicitly configured serv/web listening ports, including the image left out of a partial build. Omitted ports keep the deployment defaults. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
 
 ### Deploy artifacts
 
 #### Prepare the environment and destination
 
-The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), falling back to the root directory name, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
+The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
 
-Names identify resources. For existing deployments, retain `--project-name hai-delivery-serv` in the project deploy script (`--env test` still adds the environment) and keep the server credential state to reuse the original directory, volumes and baseline. Editing `deploy-target.json.directory` does not migrate Compose resources. Renaming requires a separate data migration and new baseline; old resources are never moved or deleted automatically. Regenerate existing offline bundles.
+Artifact format 4 records primaryService (serv/web); hasWeb describes the complete browser topology. Only serv + web generates a same-origin API proxy. Rebuild older artifacts. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
 
-Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-service, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
+For existing projects, update build.images names in hai.json, Dockerfile filenames and references first. Rename API service directories/packages and dependent references to -serv, then reinstall dependencies and build a complete artifact. Renaming archives or editing manifest files does not replace a new build.
+
+The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
+
+Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-serv, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
 
 `deploy` supports `${VARIABLE:fallback}` and hierarchical `HAI_DEPLOY_*` overrides, including whole JSON objects. Known SSH leaf fields can also create an omitted SSH node. A parent object from a higher-priority source overrides lower-source leaves; leaves take precedence within the same source. SSH text stays verbatim, including numeric passwords, leading zeros and surrounding spaces.
 
@@ -93,6 +99,8 @@ The deployment SDK uses these priorities, highest first:
 New connection settings and middleware secrets go to the Git-ignored `.env.<environment>.local`; public backends and addresses stay in `.env.<environment>`. Legacy `.env.local` remains a shared fallback and is never migrated or deleted automatically. Explicit deployment targets for the selected environment take precedence. Only the deployment SDK loads the environment-specific private file; ordinary Core application loading is unchanged. Builds do not load deployment environments or secrets.
 
 For existing projects, move the previous build object into `hai.json.build`, convert deployment YAML into `hai.json.deploy`, remove the old files and retain `HAI_DEPLOY_*` variables. Existing self-hosted S3 installations must use a full deployment for this upgrade: their old baseline contains an exited initialization service, which fails the dependency checks of new incremental packages. The full deployment also refreshes the `createBucket` middleware setting; subsequent incremental updates work normally.
+
+The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
 
 For direct deployment, the wizard asks for missing server, SSH user, authentication and port settings using readable labels. Complete valid settings are reused, including with `--yes`. SSH accepts `auth: key` (private key/agent) or `auth: password`. Without `auth`, only a nonempty `password` selects password authentication; otherwise key/agent remains in use. Explicit `key` ignores a leftover password. Password input is hidden and preserves surrounding spaces and leading zeros. Effective passwords must not contain CR/LF/NUL and must fit within 1023 UTF-8 bytes. Private keys are referenced by path; their contents are never read or copied.
 
@@ -113,7 +121,7 @@ pnpm run deploy --env prod --build
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
 # Use one --services with comma-separated names; quote the value for PowerShell
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 ```
 
 Partial updates require a successful full server installation and matching ports/layout. Merge selected services into the server's successful baseline; preserve unselected services, settings and volumes. The deployment script first removes only the selected old containers by project and service labels, retaining their volumes. It then runs `compose up -d --no-deps --no-build --pull never --no-recreate web` to create replacements while other containers keep running, without project-wide down. The application initializes self-hosted S3 buckets through the optional `storage.init()` setting `createBucket`.
@@ -183,11 +191,11 @@ SSH interruptions initially report `remoteExecution: 'unknown'`. The docker-ssh 
 
 Persisted framework configuration uses `HAI_*` names. Native `POSTGRES_*`, `MYSQL_*`, `RUSTFS_*`, `MINIO_*`, and `LDAP_*` variables keep the names required by middleware images, but are generated only in private `middleware-runtime.env`, loaded by middleware containers. They are no longer saved to project environment files or the application's `.env.runtime`. The `middleware.env` retained for incremental application updates contains framework `HAI_*` settings only. Previously saved native entries are not deleted automatically and are excluded from new application environments. Existing services keep their original release files when a new bundle is deployed incrementally.
 
-Whole `HAI_*` configuration supplied by sidecars or provisioners clears superseded leaf variables: Redis overrides no longer leave `HAI_CACHE_TYPE=memory`. Global `~/.hai/credentials.yml` fills missing settings only, respecting existing environment/process keys and parent objects. Deployment starts selected middleware and waits for PostgreSQL/MySQL/Redis/S3 health before app/Web; incremental deployment and recovery use the same order and preserve unselected containers.
+Whole `HAI_*` configuration supplied by sidecars or provisioners clears superseded leaf variables: Redis overrides no longer leave `HAI_CACHE_TYPE=memory`. Global `~/.hai/credentials.yml` fills missing settings only, respecting existing environment/process keys and parent objects. Deployment starts selected middleware and waits for PostgreSQL/MySQL/Redis/S3 health before serv/Web; incremental deployment and recovery use the same order and preserve unselected containers.
 
 On Podman, deployment actively runs each configured container healthcheck and rereads its status, independent of automatic systemd scheduling. A failed current probe cannot authorize app startup even if the stored status is still `healthy`.
 
-Only the first startup batch removes orphan containers; later app/Web startup preserves the middleware that is already ready.
+Only the first startup batch removes orphan containers; later serv/Web startup preserves the middleware that is already ready.
 
 Generated fullstack projects create different administrator passwords and transport key rings in `.env.dev/.env.test/.env.prod`. Commit these environment files to share them after cloning; local private files and process variables can override them. Before upload, deployment identifies missing or malformed `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` for transport-enabled applications. All nodes in an environment use the same valid ring from its environment file or a Secret Manager override; never generate one per node. CLI completion identifies the actual source of `HAI_ADMIN_DEFAULT_PASSWORD` without printing it, independently of log level. It applies only when initially creating the administrator. Offline scripts also identify the password variable in the server's private `.env.runtime`.
 

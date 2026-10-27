@@ -134,25 +134,26 @@ export function createDockerSshProvider(
     const resolvedBuildDir = context.artifactDir
     const images = artifact.images
     const web = images.find(image => image.name === 'web')
-    const app = images.find(image => image.name === 'app')
+    const primaryService = artifact.primaryService
+    const app = images.find(image => image.name === primaryService)
     if (options?.selectedServices) {
       const available: string[] = [...images.map(image => image.name), ...scan.requiredServices]
       const invalid = options.selectedServices.find(name => !available.includes(name))
       if (!options.selectedServices.length || new Set(options.selectedServices).size !== options.selectedServices.length || invalid)
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: invalid ?? options.selectedServices.join(', ') } }))
     }
-    const hasWeb = artifact.hasWeb || !!web
+    const hasWebProxy = primaryService === 'serv' && artifact.hasWeb
     const partial = artifact.partial || options?.selectedServices !== undefined
-    const containerPort = app?.containerPort ?? artifact.appContainerPort ?? config.expose.containerPort
+    const containerPort = app?.containerPort ?? (primaryService === 'serv' ? artifact.servContainerPort : artifact.webContainerPort) ?? config.expose.containerPort
     const webContainerPort = web?.containerPort ?? artifact.webContainerPort ?? 8080
     const host = config.ssh?.host
     const url = host ? `http://${host.includes(':') ? `[${host}]` : host}:${hostPort}` : `http://SERVER_HOST:${hostPort}`
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
-    const updatesApp = options?.selectedServices ? options.selectedServices.includes('app') : !!app
+    const updatesApp = options?.selectedServices ? options.selectedServices.includes(primaryService) : !!app
     const serverPath = join(appDir, 'config', '_serv.yml')
-    const server = existsSync(serverPath) || hasWeb ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
+    const server = existsSync(serverPath) || hasWebProxy ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
     if (!server.success)
       return server
     let feedbackTransportBytes: number | undefined
@@ -190,7 +191,7 @@ export function createDockerSshProvider(
     if (updatesApp && protectedTransport && scan.haiModules?.includes('@h-ai/crypto') && !parseTransportServerKeyRing(env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).success)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportKeyRingInvalid', { params: { path: join(scan.envDir ?? appDir, `.env.${options?.environment ?? 'prod'}.local`) } }))
     let webProxy: string | undefined
-    if (hasWeb) {
+    if (hasWebProxy) {
       // 路由取当前服务的真实配置，不扫描相邻应用或猜测 fullstack 布局。
       const http = server.data.http as { apiPrefix?: string } | undefined
       const cors = server.data.cors as { origin?: string } | undefined
@@ -241,8 +242,9 @@ export function createDockerSshProvider(
       imageRef: app?.imageRef ?? 'localhost/hai-unselected:0',
       hostPort,
       containerPort,
+      primaryService,
       sidecar,
-      web: hasWeb ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
+      web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
     })
     const composePath = join(artifactDir, composeName)
     writeFileSync(composePath, composeContent)
@@ -252,7 +254,7 @@ export function createDockerSshProvider(
     if (!selected.length || selected.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selected).size !== selected.length)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: selected.join(', ') } }))
     for (const name of selected) {
-      if (['app', 'web'].includes(name) && !images.some(image => image.name === name))
+      if (['serv', 'web'].includes(name) && !images.some(image => image.name === name))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: name } }))
     }
     options?.onProgress?.('packaging')
@@ -267,10 +269,10 @@ export function createDockerSshProvider(
       runtime: options?.runtime ?? 'auto',
       selected,
       partial,
-      hasWeb,
+      hasWebProxy,
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env),
-      healthPaths: hasWeb ? ['/health', '/_hai/web-health', '/'] : [scan.isSvelteKit ? '/' : '/health'],
+      healthPaths: hasWebProxy ? ['/health', '/_hai/web-health', '/'] : [scan.isSvelteKit ? '/' : '/health'],
       output: join(artifactDir, `${name}.tar`),
     })
     if (options?.bundleOnly)
@@ -338,8 +340,8 @@ export function createDockerSshProvider(
 
     // 在线部署完成后检查实际公开入口。
     logger.info('Running health check', { url })
-    const healthy = await healthCheck(`${url}${!hasWeb && scan.isSvelteKit ? '/' : '/health'}`)
-      && (!hasWeb || (await healthCheck(`${url}/_hai/web-health`) && await healthCheck(`${url}/`)))
+    const healthy = await healthCheck(`${url}${!hasWebProxy && scan.isSvelteKit ? '/' : '/health'}`)
+      && (!hasWebProxy || (await healthCheck(`${url}/_hai/web-health`) && await healthCheck(`${url}/`)))
     if (!healthy) {
       return err(
         HaiDeployError.HEALTH_CHECK_FAILED,

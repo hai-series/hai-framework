@@ -64,7 +64,7 @@ describe('feedback 生成工程', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'hai-feedback-context-'))
     try {
       await generateFromTemplates(directory, buildTemplateContext({ name: 'feedback-sample', appType, frontends: ['web'], features: ['feedback'], packageManager: 'pnpm' }))
-      const file = appType === 'api' ? 'apps/feedback-sample-service/src/app.ts' : 'packages/feedback-sample-serv/src/app-server.ts'
+      const file = appType === 'api' ? 'apps/feedback-sample-serv/src/app.ts' : 'packages/feedback-sample-serv/src/app-server.ts'
       const source = await readFile(path.join(directory, file), 'utf8')
       const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
       const declarations: string[] = []
@@ -133,7 +133,7 @@ describe('feedback 生成工程', () => {
       await generateFromTemplates(directory, buildTemplateContext({ name: 'feedback-sample', appType, frontends: ['web'], features: ['feedback'], packageManager: 'pnpm' }))
       const eslint = new ESLint({ cwd: directory, overrideConfigFile: path.join(directory, 'eslint.config.js') })
       const paths = appType === 'api'
-        ? ['e2e', 'apps/feedback-sample-service/src/app.ts', 'apps/feedback-sample-service/src/lib/server/init.ts', 'apps/feedback-sample-service/src/server/procedures/index.ts', 'apps/feedback-sample-contract/src/feedback-sample-contract.ts']
+        ? ['e2e', 'apps/feedback-sample-serv/src/app.ts', 'apps/feedback-sample-serv/src/lib/server/init.ts', 'apps/feedback-sample-serv/src/server/procedures/index.ts', 'apps/feedback-sample-contract/src/feedback-sample-contract.ts']
         : ['e2e', 'packages/feedback-sample-serv/src/app-server.ts', 'packages/feedback-sample-serv/src/server/runtime.ts', 'packages/feedback-sample-serv/src/server/procedures/index.ts', 'packages/feedback-sample-contract/src/feedback-sample-contract.ts', 'packages/feedback-sample-shared/src/lib/api/feedback-client.ts', 'packages/feedback-sample-shared/src/lib/components/FeedbackEntry.svelte', 'packages/feedback-sample-shared/src/lib/components/AdminWorkspace.svelte', 'packages/feedback-sample-shared/src/lib/components/AppShell.svelte', 'packages/feedback-sample-shared/src/lib/pages/feedback.svelte']
       const results = await eslint.lintFiles(paths)
       expect(results.flatMap(result => result.messages.filter(message => message.severity === 2).map(message => `${path.relative(directory, result.filePath)}:${message.line} ${message.ruleId} ${message.message}`))).toEqual([])

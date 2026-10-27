@@ -99,18 +99,24 @@ The default container supports CPU workloads or remote AI services without downl
 
 After filtering caller `HAI_/PUBLIC_/VITE_` values, CLI injects only internally generated `HAI_BUILD_ID/HAI_BUILD_COMMIT`; Docker passes the image batch identity to compilation. Feedback reads each browser/server artifact's own `appVersion/buildId/commit`, with its own manifest version and a shared ID within one SSR build. Missing owning Git commits are explicitly `unknown`. The three-field `build-metadata.json` matches inlined code and supports comparison with actual API/ZIP evidence.
 
+Delivery roles are `serv` for a separate API backend, `web` for a static or SSR browser site, `app` for Android/iOS installers, and `desktop` for desktop installers. Fullstack containers use serv plus optional web; API uses serv; browser images for admin/website/h5/mobile-app use web. Native app/desktop outputs are not server Compose services. Use serv/web with `--images` and `--services`, and `--target app` or `--target desktop` for native packages. API service directories are `apps/<project>-serv`. Images and containers share the normalized root `package.json.name`: remove scope, lowercase, and replace invalid character runs with a hyphen. Missing or invalid names fail without falling back to directory names. Images use `localhost/hai-<project>-<role>:<buildId>`; containers use `hai-<project>-<environment>-<role>`. Images remain reusable across environments.
+
 ```sh
 pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # Use one --services with comma-separated names; quote the value for PowerShell
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), falling back to the root directory name, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
+The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
 
-Names identify resources. For existing deployments, retain `--project-name hai-delivery-serv` in the project deploy script (`--env test` still adds the environment) and keep the server credential state to reuse the original directory, volumes and baseline. Editing `deploy-target.json.directory` does not migrate Compose resources. Renaming requires a separate data migration and new baseline; old resources are never moved or deleted automatically. Regenerate existing offline bundles.
+Artifact format 4 records primaryService (serv/web); hasWeb describes the complete browser topology. Only serv + web generates a same-origin API proxy. Rebuild older artifacts. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
+
+For existing projects, update build.images names in hai.json, Dockerfile filenames and references first. Rename API service directories/packages and dependent references to -serv, then reinstall dependencies and build a complete artifact. Renaming archives or editing manifest files does not replace a new build.
+
+The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
 
 The server persists managed middleware passwords in `<remoteDir>/managed-secrets.env` (mode 0600); back it up with data volumes. Each package supplies random first-use candidates without a build-machine cache. The online SDK, deploy.sh, deploy.ps1 and deploy-local.sh resolve server values under the deployment lock and update both application connections and native middleware variables. The delivery tar stays immutable; only private server runtime files receive resolved values. Missing state with an existing corresponding volume stops deployment before services change: restore the server credential backup. Deployment never silently rotates passwords or deletes data. Legacy credentials can be explicitly verified and imported using the procedure below.
 

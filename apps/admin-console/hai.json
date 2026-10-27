@@ -2,9 +2,9 @@
   "build": {
     "images": [
       {
-        "name": "app",
+        "name": "web",
         "context": "../..",
-        "dockerfile": "images/app.Dockerfile",
+        "dockerfile": "images/web.Dockerfile",
         "containerPort": 3000
       }
     ]

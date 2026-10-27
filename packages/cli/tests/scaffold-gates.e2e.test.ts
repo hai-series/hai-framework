@@ -44,7 +44,7 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
     title: 'api-feedback',
     projectName: 'sample-api-feedback',
     createArgs: ['--type', 'api', '--template', 'custom', '--features', 'feedback', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
-    expectedFiles: ['apps/sample-api-feedback-service/config/_feedback.yml', 'e2e/api-service.spec.ts'],
+    expectedFiles: ['apps/sample-api-feedback-serv/config/_feedback.yml', 'e2e/api-serv.spec.ts'],
   },
   {
     title: 'fullstack-feedback',
@@ -56,13 +56,13 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
     title: 'api-transport',
     projectName: 'sample-api-transport',
     createArgs: ['--type', 'api', '--template', 'custom', '--features', 'crypto,db', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
-    expectedFiles: ['apps/sample-api-transport-service/config/_serv.yml', 'e2e/api-service.spec.ts'],
+    expectedFiles: ['apps/sample-api-transport-serv/config/_serv.yml', 'e2e/api-serv.spec.ts'],
   },
   {
     title: 'api',
     projectName: 'sample-api',
     createArgs: ['--type', 'api', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
-    expectedFiles: ['e2e/api-service.spec.ts', 'apps/sample-api-service/package.json'],
+    expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-serv/package.json'],
   },
   {
     title: 'admin',
@@ -74,13 +74,13 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
     title: 'api-iam',
     projectName: 'sample-api-iam',
     createArgs: ['--type', 'api', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
-    expectedFiles: ['e2e/api-service.spec.ts', 'apps/sample-api-iam-service/config/_iam.yml'],
+    expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-iam-serv/config/_iam.yml'],
   },
   {
     title: 'api-iam-basic',
     projectName: 'sample-api-iam-basic',
     createArgs: ['--type', 'api', '--template', 'custom', '--features', 'iam,db,cache', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
-    expectedFiles: ['e2e/api-service.spec.ts', 'apps/sample-api-iam-basic-service/config/_iam.yml'],
+    expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-iam-basic-serv/config/_iam.yml'],
   },
   {
     title: 'website',
@@ -226,7 +226,7 @@ it('generated migration executes up and down with HaiResult', async () => {
       }
       if (scenario.title === 'fullstack-feedback') {
         // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
-        for (const [target, version] of [['apps/sample-fullstack-feedback-web', '2.4.6-frontend'], ['packages/sample-fullstack-feedback-serv', '7.8.9-service']]) {
+        for (const [target, version] of [['apps/sample-fullstack-feedback-web', '2.4.6-frontend'], ['packages/sample-fullstack-feedback-serv', '7.8.9-serv']]) {
           const manifestPath = path.join(projectPath, target, 'package.json')
           const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
           await writeFile(manifestPath, `${JSON.stringify({ ...manifest, version }, null, 2)}\n`)
@@ -280,7 +280,7 @@ it('generated migration executes up and down with HaiResult', async () => {
       }
       if (scenario.title === 'api-iam-basic') {
         // 生成项目实际安装和运行基础认证，且没有强制添加可选通知模块或 LDAP SDK。
-        const servicePath = path.join(projectPath, 'apps/sample-api-iam-basic-service')
+        const servicePath = path.join(projectPath, 'apps/sample-api-iam-basic-serv')
         const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
         expect(manifest.dependencies).not.toHaveProperty('@h-ai/reach')
         expect(manifest.dependencies).not.toHaveProperty('ldapts')

@@ -43,7 +43,7 @@ vi.mock('@h-ai/deploy', async importOriginal => ({
 let tmpRoot: string
 
 function createDeployApp(): string {
-  const appDir = join(tmpRoot, 'app')
+  const appDir = join(tmpRoot, 'serv')
   mkdirSync(join(appDir, 'config'), { recursive: true })
   writeFileSync(
     join(appDir, 'hai.json'),
@@ -63,7 +63,7 @@ beforeEach(() => {
   mocks.scan.mockResolvedValue({
     success: true,
     data: {
-      appName: 'app',
+      appName: 'serv',
       isSvelteKit: true,
       adapterInstalled: true,
       requiredServices: [],
@@ -151,10 +151,9 @@ describe('deployCommand', () => {
       },
     })
 
-    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, projectName: 'my-api', skipMiddleware: true, verbose: false })
+    await deployCommand({ env: 'prod', yes: true, appDir, cwd: tmpRoot, skipMiddleware: true, verbose: false })
 
     expect(mocks.deployApp).toHaveBeenCalledWith(appDir, expect.objectContaining({
-      projectName: 'my-api',
       skipMiddleware: true,
       environment: 'prod',
       envDir: appDir,

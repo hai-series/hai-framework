@@ -170,7 +170,6 @@ cli
   .option('--env <environment>', cliM('cli_help_environment'))
   .option('--env-dir <path>', cliM('cli_help_envDir'))
   .option('-y, --yes', cliM('cli_help_deployYes'))
-  .option('--project-name <name>', cliM('cli_help_projectName'))
   .option('--skip-middleware', cliM('cli_help_skipMiddleware'))
   .option('--artifact-dir <path>', cliM('cli_help_artifactDir'))
   .option('--services <names>', cliM('cli_help_services'))
@@ -190,7 +189,6 @@ cli
         env: options.env as string,
         envDir: options.envDir as string,
         yes: options.yes as boolean,
-        projectName: options.projectName as string,
         skipMiddleware: options.skipMiddleware as boolean,
         artifactDir: options.artifactDir as string,
         services: options.services as string,

@@ -95,5 +95,7 @@
   "deploy_uploadPasswordCancelled": "已取消密码输入，尚未连接服务器。",
   "deploy_uploadPasswordInvalid": "SSH 密码须为 1–1023 个 UTF-8 字节，且不能包含换行。",
   "deploy_managedSecretsInvalid": "自建中间件候选凭据无效，请重新生成部署包；服务器凭据不会自动更换。",
-  "deploy_secretImportFailed": "旧凭据导入在 {phase} 阶段被拒绝；请核对私有输入权限、项目/卷身份、实际服务凭据及部署锁，未执行服务更新；提交结果不明时请核对受保护的状态文件"
+  "deploy_secretImportFailed": "旧凭据导入在 {phase} 阶段被拒绝；请核对私有输入权限、项目/卷身份、实际服务凭据及部署锁，未执行服务更新；提交结果不明时请核对受保护的状态文件",
+  "deploy_projectNameRequired": "工程根 package.json.name 缺失或无法归一化，不能生成镜像与部署资源身份。",
+  "deploy_projectNameOverrideRemoved": "部署项目名统一来自工程根 package.json.name；请移除旧 projectName 覆盖参数。"
 }

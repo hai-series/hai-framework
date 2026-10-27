@@ -116,7 +116,7 @@ afterAll(async () => {
 {{/if}}  rmSync(tempRoot, { recursive: true, force: true })
 })
 
-describe('{{api.servicePackageName}}', () => {
+describe('{{api.servPackageName}}', () => {
   it('returns health status', async () => {
     if (servConfig.http.health === false)
       throw new Error('service test requires health endpoint')

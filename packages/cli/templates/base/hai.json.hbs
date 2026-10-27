@@ -1,4 +1,4 @@
 {
-  "build": { "images": [{ "name": "app", "dockerfile": "images/app.Dockerfile", "containerPort": {{#if isSvelteOnlyApp}}8080{{else}}3000{{/if}} }] }{{#if features.deploy}},
+  "build": { "images": [{ "name": "web", "dockerfile": "images/web.Dockerfile", "containerPort": {{#if isSvelteOnlyApp}}8080{{else}}3000{{/if}} }]{{#if isCapacitorApp}}, "app": ["."]{{/if}} }{{#if features.deploy}},
   "deploy": {{{deploymentConfig}}}{{/if}}
 }

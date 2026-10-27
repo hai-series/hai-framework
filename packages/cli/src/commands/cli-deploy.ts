@@ -44,8 +44,6 @@ export interface DeployCommandOptions extends GlobalOptions {
   yes?: boolean
   /** 应用目录 */
   appDir?: string
-  /** 项目名称（覆盖自动检测） */
-  projectName?: string
   /** 已配置完备，跳过全部中间件处理并直接部署。 */
   skipMiddleware?: boolean
   /** 已构建镜像目录。 */
@@ -276,7 +274,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
           const name = configObject(image).name
           return typeof name === 'string' ? [name] : []
         })
-      : ['app', 'web']
+      : ['serv', 'web']
     const names = [...imageNames, ...(scan.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend)).map(item => item.service)]
     const available = [...new Set(names)]
     if (selectedServices?.some(name => !available.includes(name)))
@@ -293,7 +291,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       const validated = deployModule.DeployConfigSchema.safeParse(loaded.data)
       if (!validated.success)
         throw new Error(cliM('cli_deploy_config_invalid', { params: { path: buildFile, fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
-      const plan = await deployModule.createDeploymentPlan(appDir, validated.data, { inspectRemote: options.inspectRemote, environment: environmentName, envDir: environment.data.envDir, projectName: options.projectName, selectedServices, skipMiddleware: options.skipMiddleware, artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined, runtime: options.runtime })
+      const plan = await deployModule.createDeploymentPlan(appDir, validated.data, { inspectRemote: options.inspectRemote, environment: environmentName, envDir: environment.data.envDir, selectedServices, skipMiddleware: options.skipMiddleware, artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined, runtime: options.runtime })
       if (!plan.success)
         throw new Error(plan.error.message)
       writeCliMessage(JSON.stringify(plan.data, null, 2))
@@ -371,7 +369,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (options.build) {
       if (!existsSync(buildFile))
         throw new Error(cliM('cli_build_images_missing'))
-      const imageNames = selectedServices?.filter(name => ['app', 'web'].includes(name))
+      const imageNames = selectedServices?.filter(name => ['serv', 'web'].includes(name))
       if (!selectedServices || imageNames?.length) {
         writeCliMessage(cliM('cli_deploy_build_started'))
         await buildCommand({ cwd: buildRoot, target: 'docker', images: imageNames?.join(','), runtime: options.runtime, network: options.network, sqlitePrebuildMirror: options.sqlitePrebuildMirror, httpProxy: options.httpProxy })
@@ -379,7 +377,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     }
     if (selectedServices)
       writeCliMessage(cliM('cli_deploy_services', { params: { services: selectedServices.join(', ') } }))
-    let skipMiddleware = options.skipMiddleware || selectedServices?.every(name => ['app', 'web'].includes(name))
+    let skipMiddleware = options.skipMiddleware || selectedServices?.every(name => ['serv', 'web'].includes(name))
     if (!skipMiddleware && !options.yes && scan.requiredServices.length) {
       const action = await prompts({
         type: 'select',
@@ -427,7 +425,6 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     // 5. 执行部署
     spinner.start(cliM('cli_deploy_deploying'))
     const deployResult = await deploy.deployApp(appDir, {
-      projectName: options.projectName,
       selectedServices,
       runtime: options.runtime,
       onProgress: stage => writeCliMessage(cliM(`cli_deploy_stage_${stage}`)),
@@ -465,7 +462,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     else
       writeCliMessage(chalk.cyan(cliM('cli_deploy_url', { params: { url: deployResult.data.url } })))
     writeCliMessage(chalk.gray(cliM('cli_deploy_id', { params: { id: deployResult.data.deploymentId } })))
-    if (refreshed.data.values.HAI_ADMIN_DEFAULT_PASSWORD && (!selectedServices || selectedServices.includes('app'))) {
+    if (refreshed.data.values.HAI_ADMIN_DEFAULT_PASSWORD && (!selectedServices || selectedServices.includes(imageNames.includes('serv') ? 'serv' : 'web'))) {
       const passwordKey = 'HAI_ADMIN_DEFAULT_PASSWORD'
       const source = originalEnv[passwordKey] !== undefined
         ? cliM('cli_deploy_processEnvironment')

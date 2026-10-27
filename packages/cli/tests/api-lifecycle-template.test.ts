@@ -11,7 +11,7 @@ interface ApplicationLifecycle {
   closeApp: () => Promise<void>
 }
 
-const template = readFileSync(new URL('../templates/apps/api/apps/{{projectName}}-service/src/lib/server/init.ts.hbs', import.meta.url), 'utf8')
+const template = readFileSync(new URL('../templates/apps/api/apps/{{projectName}}-serv/src/lib/server/init.ts.hbs', import.meta.url), 'utf8')
 
 /** 执行实际生成代码；仅框架依赖替换为可控结果，不替换应用生命周期实现。 */
 function instantiate(features: Record<string, boolean>) {

@@ -10,6 +10,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock)
   fetchMock.mockReset()
   directory = mkdtempSync(join(tmpdir(), 'hai-recovery-'))
+  writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: 'same-project' }))
   writeFileSync(join(directory, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\npackages: {}\nsnapshots: {}\n')
 })
 afterEach(async () => {

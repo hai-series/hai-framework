@@ -1,7 +1,7 @@
 {
   "build": {
   "images": [
-    { "name": "app", "dockerfile": "images/app.Dockerfile", "containerPort": 3000 }{{#if fullstack.frontends.web}},
+    { "name": "serv", "dockerfile": "images/serv.Dockerfile", "containerPort": 3000 }{{#if fullstack.frontends.web}},
     { "name": "web", "dockerfile": "images/web.Dockerfile", "containerPort": 8080 }{{/if}}
   ]{{#if fullstack.frontends.app}},
   "app": ["apps/{{projectName}}-app"]{{/if}}{{#if fullstack.frontends.desktop}},

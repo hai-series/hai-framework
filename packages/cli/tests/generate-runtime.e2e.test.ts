@@ -196,7 +196,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     else {
       const parent = appType === 'api' ? 'apps' : 'packages'
       const contract = path.join(project, parent, 'runtime-route-contract')
-      const service = path.join(project, parent, `runtime-route-${appType === 'api' ? 'service' : 'serv'}`)
+      const service = path.join(project, parent, 'runtime-route-serv')
       await mkdir(path.join(service, 'node_modules'), { recursive: true })
       await symlink(contract, path.join(service, 'node_modules/runtime-route-contract'), 'junction')
       await tool('tsup', [], contract)

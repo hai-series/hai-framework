@@ -153,7 +153,7 @@ describe('shared production configuration', () => {
     const name = `production-${appType}`
     await createProject({ name, appType, features: ['ai'], yes: true, install: false, git: false, deploy: false, examples: false, packageManager: 'pnpm', frontends: ['web'], cwd: root })
     const project = path.join(root, name)
-    const service = appType === 'api' ? path.join(project, 'apps', `${name}-service`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
+    const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
     const pkg = JSON.parse(await readFile(path.join(service, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies).toHaveProperty('@h-ai/ai')
     expect(pkg.dependencies).toHaveProperty('@h-ai/reldb')
@@ -227,7 +227,7 @@ describe('shared production configuration', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-crypto-'))
     roots.push(root)
     await createProject({ name: 'crypto-api', appType: 'api', features: ['crypto'], yes: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd: root })
-    const service = path.join(root, 'crypto-api', 'apps', 'crypto-api-service')
+    const service = path.join(root, 'crypto-api', 'apps', 'crypto-api-serv')
     const app = await readFile(path.join(service, 'src', 'app.ts'), 'utf8')
     expect(app).toContain('createReldbTransportKeyStore')
     expect(app).not.toContain('createInMemoryKeyStore')

@@ -34,6 +34,16 @@ import { loadConfigText } from './helpers/config.js'
 /** 每次运行使用独立临时目录，避免并发测试互删生成项目。 */
 let tmpRoot = ''
 
+it.each(['api', 'admin', 'website', 'h5', 'mobile-app'] as const)('单独 %s 工程按职责命名镜像，手机原生目标独立配置', async (appType) => {
+  const project = path.join(tmpRoot, `role-${appType}`)
+  await generateFromTemplates(project, buildTemplateContext({ name: `role-${appType}`, appType, features: [], packageManager: 'pnpm' }))
+  const { build } = JSON.parse(await readGenerated(project, 'hai.json'))
+  const role = appType === 'api' ? 'serv' : 'web'
+  expect(build.images).toEqual([{ name: role, dockerfile: `images/${role}.Dockerfile`, containerPort: appType === 'mobile-app' ? 8080 : 3000 }])
+  expect(await fileExists(project, `images/${role}.Dockerfile`)).toBe(true)
+  expect(build.app).toEqual(appType === 'mobile-app' ? ['.'] : undefined)
+})
+
 it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
   const project = path.join(tmpRoot, `deploy-${target}`)
   await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: [], packageManager: 'pnpm' }))
@@ -44,14 +54,14 @@ it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，�
   expect(loaded.data.container).toEqual({ s3Engine: 'rustfs' })
   const build = (JSON.parse(await readGenerated(project, 'hai.json')) as { build: { images: Array<{ name: string, dockerfile: string }> } }).build
   expect(await fileExists(project, 'scripts/run-e2e.mjs')).toBe(true)
-  expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['app', 'web'] : ['app'])
+  expect(build.images.map(image => image.name)).toEqual(target === 'web' ? ['serv', 'web'] : ['serv'])
 })
 
 it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中由同一环境值解析', async (appType) => {
   const name = `capacity-${appType}`
   const project = path.join(tmpRoot, name)
   await generateFromTemplates(project, buildTemplateContext({ name, appType, frontends: ['web'], features: ['crypto', 'db'], packageManager: 'pnpm' }))
-  const service = appType === 'api' ? `apps/${name}-service` : `packages/${name}-serv`
+  const service = appType === 'api' ? `apps/${name}-serv` : `packages/${name}-serv`
   const loaded = loadDeploymentConfig('serv', path.join(project, service, 'config/_serv.yml'), { HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES: '8388608' })
   expect(loaded).toMatchObject({ success: true, data: { transport: { maxPlaintextBytes: 8388608 } } })
 })
@@ -131,7 +141,7 @@ it.each<AppType>(['admin', 'website', 'h5', 'api', 'mobile-app', 'fullstack'])('
     encoding: 'utf-8',
   }).trim().split(/\r?\n/)
   expect(ignored).toEqual(dataPaths)
-  const containerFiles = ['.dockerignore', 'images/app.Dockerfile', 'images/web.Dockerfile', 'images/web/19-runtime-config.envsh', 'images/web/19-runtime-config.sh']
+  const containerFiles = ['.dockerignore', 'images/serv.Dockerfile', 'images/web.Dockerfile', 'images/web/19-runtime-config.envsh', 'images/web/19-runtime-config.sh']
   for (const file of containerFiles) {
     if (!await fileExists(projectPath, file))
       continue
@@ -733,7 +743,7 @@ describe('api 应用类型生成', () => {
     it('应生成 API workspace 根文件', async () => {
       expect(await fileExists(projectPath, 'pnpm-workspace.yaml')).toBe(true)
       expect(await fileExists(projectPath, 'tsconfig.base.json')).toBe(true)
-      expect(await fileExists(projectPath, 'e2e/api-service.spec.ts')).toBe(true)
+      expect(await fileExists(projectPath, 'e2e/api-serv.spec.ts')).toBe(true)
     })
   })
 
@@ -755,7 +765,7 @@ describe('api 应用类型生成', () => {
   describe('workspace 结构', () => {
     it('应生成 contract 与 service 子工程', async () => {
       expect(await fileExists(projectPath, 'apps/test-api-contract/package.json')).toBe(true)
-      expect(await fileExists(projectPath, 'apps/test-api-service/package.json')).toBe(true)
+      expect(await fileExists(projectPath, 'apps/test-api-serv/package.json')).toBe(true)
     })
 
     it('contract 包应组合 app contract', async () => {
@@ -765,18 +775,18 @@ describe('api 应用类型生成', () => {
     })
 
     it('service 包应包含 db / cache 初始化与 procedure 装配', async () => {
-      const content = await readGenerated(projectPath, 'apps/test-api-service/src/lib/server/init.ts')
+      const content = await readGenerated(projectPath, 'apps/test-api-serv/src/lib/server/init.ts')
       expect(content).toContain('from \'@h-ai/reldb\'')
       expect(content).toContain('from \'@h-ai/cache\'')
       expect(content).not.toContain('from \'@h-ai/iam\'')
 
-      const procedures = await readGenerated(projectPath, 'apps/test-api-service/src/server/procedures/index.ts')
+      const procedures = await readGenerated(projectPath, 'apps/test-api-serv/src/server/procedures/index.ts')
       expect(procedures).toContain('createAppProcedures')
     })
 
     it('service 配置模板应包含 _core.yml 与 _serv.yml', async () => {
-      expect(await fileExists(projectPath, 'apps/test-api-service/config/_core.yml')).toBe(true)
-      expect(await fileExists(projectPath, 'apps/test-api-service/config/_serv.yml')).toBe(true)
+      expect(await fileExists(projectPath, 'apps/test-api-serv/config/_core.yml')).toBe(true)
+      expect(await fileExists(projectPath, 'apps/test-api-serv/config/_serv.yml')).toBe(true)
     })
   })
 })
@@ -870,7 +880,7 @@ describe('buildTemplateContext', () => {
     expect(ctx.hasI18n).toBe(false)
     expect(ctx.isApiWorkspace).toBe(true)
     expect(ctx.api?.contractPackageName).toBe('test-contract')
-    expect(ctx.api?.servicePackageName).toBe('test-service')
+    expect(ctx.api?.servPackageName).toBe('test-serv')
   })
 
   it('应正确映射 features', () => {
@@ -924,12 +934,12 @@ describe('生成产物结构完整性', () => {
     'tsconfig.base.json',
     'eslint.config.js',
     'playwright.config.ts',
-    'e2e/api-service.spec.ts',
+    'e2e/api-serv.spec.ts',
     'apps/smoke-api-contract/package.json',
     'apps/smoke-api-contract/src/smoke-api-contract.ts',
-    'apps/smoke-api-service/package.json',
-    'apps/smoke-api-service/src/app.ts',
-    'apps/smoke-api-service/src/lib/server/init.ts',
+    'apps/smoke-api-serv/package.json',
+    'apps/smoke-api-serv/src/app.ts',
+    'apps/smoke-api-serv/src/lib/server/init.ts',
   ]
 
   for (const appType of ['admin', 'website', 'h5'] as AppType[]) {
@@ -1028,7 +1038,7 @@ describe('japanese scaffolds', () => {
       packageManager: 'pnpm',
       moduleConfigs: { core: { defaultLocale: 'ja-JP' } },
     }))
-    const config = loadConfigText<{ defaultLocale: string }>('core', await readGenerated(project, 'apps/japanese-api-service/config/_core.yml'))
+    const config = loadConfigText<{ defaultLocale: string }>('core', await readGenerated(project, 'apps/japanese-api-serv/config/_core.yml'))
     expect(config.defaultLocale).toBe('ja-JP')
     expect(config).not.toHaveProperty('supportedLocales')
   })

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import capacitorConfig from '../capacitor.config.js'
 import config from '../svelte.config.js'
 
-const dockerfile = readFileSync(new URL('../images/app.Dockerfile', import.meta.url), 'utf-8')
+const dockerfile = readFileSync(new URL('../images/web.Dockerfile', import.meta.url), 'utf-8')
 
 describe('svelte.config.js', () => {
   it('uses the same static assets for native packaging and the container', () => {

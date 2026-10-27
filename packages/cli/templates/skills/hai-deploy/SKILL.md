@@ -1,4 +1,6 @@
 ---
+
+交付角色统一为 `serv`（独立 API 后端）、`web`（静态或 SSR 浏览器站点）、`app`（Android/iOS 手机安装包）、`desktop`（桌面安装包）。Fullstack 容器为 serv + 可选 web，API 为 serv，admin/website/h5/mobile-app 的浏览器镜像为 web；原生 app/desktop 不作为服务器 Compose 服务。`--images` 与 `--services` 使用 serv/web，`--target app` 与 `--target desktop` 生成原生包。API workspace 的服务目录为 `apps/<项目>-serv`。镜像与容器共用工程根 `package.json.name` 的归一化身份（去 scope、转小写、非法字符合并为连字符）；名称缺失或无效时报错，不回退目录名。镜像为 `localhost/hai-<项目>-<角色>:<buildId>`，容器为 `hai-<项目>-<环境>-<角色>`，镜像可跨环境复用。
 name: hai-deploy
 description: "构建并发布或交付已有镜像：完整离线包、按服务更新、SSH 密钥/密码与跨平台手工部署、失败恢复；也支持 Vercel prebuilt。"
 ---
@@ -21,9 +23,9 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 1. 读取项目 scripts、images/ 中的 Dockerfile、项目根 hai.json 的 build/deploy 与服务目录运行配置。构建与部署属于整个项目；服务目录只用于扫描运行依赖。创建默认带开发期部署工具；用户明确 --no-deploy 时不生成部署入口。构建细节见 [hai-build](../hai-build/SKILL.md)。
 2. 选择环境，验证 .env.<mode> 存在，再处理部署目标与必要中间件。SSH 支持 key/agent 或 password，缺项按说明补齐，有效完整配置直接复用；--bundle-only 在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存并用于本次和后续 target；--yes 或跳过时复用已有配置。新私有参数写 .env.<mode>.local，旧 .env.local 保留兼容回退；私钥仅引用路径，密码隐藏输入并保留原值。该按环境私有层仅由部署 SDK 加载，不改变 Core 运行规则。优先级与认证边界见 [middleware.md](middleware.md)。
-3. 先校验所选制品、版本、服务和 SHA-256。--build 只构建所选应用镜像；不带它时缺产物明确失败，不隐式补构建。格式版本 3 记录 appVersion、buildId、partial、hasWeb、镜像归档及显式配置的 appContainerPort/webContainerPort；部分构建也保留未选镜像端口，缺省使用部署默认值。同一应用版本可重建，镜像引用区分实际内容；禁止 latest 与无版本镜像。
+3. 先校验所选制品、版本、服务和 SHA-256。--build 只构建所选应用镜像；不带它时缺产物明确失败，不隐式补构建。格式版本 4 记录 appVersion、buildId、partial、hasWeb、镜像归档及显式配置的 servContainerPort/webContainerPort；部分构建也保留未选镜像端口，缺省使用部署默认值。同一应用版本可重建，镜像引用区分实际内容；禁止 latest 与无版本镜像。
 4. 完整包自动导出实际自建中间件镜像并去重；只更新 Web 不重新打包 API/中间件。打包机需容器引擎导出中间件，服务器仅 load，禁止 pull/build。外部连接及云开通不能伪称为离线自包含服务。
-5. --services 使用目标服务器最后成功状态为基线，检查端口/拓扑及未选依赖，保留未选配置、凭据、网络和卷。脚本先按项目/服务标签仅删除选中旧容器（保留卷），再 up -d --no-deps --no-build --pull never --no-recreate 创建新容器并保留其他容器；先等待选中中间件健康，再启动 app/Web，失败恢复同序，避免 Compose Provider 连带重建反向依赖，禁止整个项目 down。S3 可选 createBucket 在 storage.init 中检查并创建缺失桶，自建 S3 注入 HAI_STORAGE_CREATEBUCKET=true；仅更新 storage 无须应用镜像，新桶在下次应用初始化时创建。Compose 网络统一 hai-app，序列化不使用 YAML 锚点。
+5. --services 使用目标服务器最后成功状态为基线，检查端口/拓扑及未选依赖，保留未选配置、凭据、网络和卷。脚本先按项目/服务标签仅删除选中旧容器（保留卷），再 up -d --no-deps --no-build --pull never --no-recreate 创建新容器并保留其他容器；先等待选中中间件健康，再启动 serv/Web，失败恢复同序，避免 Compose Provider 连带重建反向依赖，禁止整个项目 down。S3 可选 createBucket 在 storage.init 中检查并创建缺失桶，自建 S3 注入 HAI_STORAGE_CREATEBUCKET=true；仅更新 storage 无须应用镜像，新桶在下次应用初始化时创建。Compose 网络统一 hai-app，序列化不使用 YAML 锚点。
 6. 每次交付只生成工程根 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 一个目录，外层仅含 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest 仅在 tar 内，README 记录部署 ID。--output release.tar 生成同目录的 release-<版本>/release-<版本>.tar，不能覆盖已有交付。--bundle-only 不连接 SSH，生成带逐项说明的 deploy-target.json，只引用 passwordEnv 而不含 SSH 密码值；修改 target 仅影响本包。Windows PowerShell 5+ deploy.ps1、Linux/macOS deploy.sh 读取该文件，上传并自动解包部署；隔离服务器复制整个目录后执行 sh deploy-local.sh，自动解包再执行 apply.sh。脚本不依赖源码、Node 或 pnpm；本机运行 deploy.sh 需 sh、awk、ssh、scp。manifest.partial/selectedServices 固化模式：完整构建且无 --services 为全量；部分构建或显式 --services 为增量，必须匹配服务器成功基线。
 7. 工具预检、基线、上传、校验、镜像导入、服务更新和 HTTP 检查分别报告。失败返回非零退出码，结果文件保留失败阶段；只有检查成功才更新服务器 current。已有部署失败尝试恢复所选服务的旧容器和配置；数据卷保留，已写业务数据不回退，恢复后仍需验证健康。禁止把本地打包记录当服务器成功状态。
 8. 部署及恢复全程用 Linux flock 持有固定 `.deploy.lock`；不得删除/替换文件或按时间抢锁。父进程强杀后，继承 FD 的活跃子命令仍持锁；所有持有进程退出或重启后自动释放。旧 `.deploy-lock` 目录保持原样，升级前结束旧版部署进程。强杀/断电不执行恢复 trap，缺结果文件须人工核对容器、镜像和 current 后用新包恢复，锁释放不代表副作用已回退。
@@ -39,7 +41,7 @@ pnpm build --target docker --images web
 pnpm run deploy --env prod --services web
 ```
 
-使用 pnpm run deploy，避免与 pnpm 自带 deploy 混淆。fullstack 指向 packages/<项目>-serv，API workspace 指向 apps/<项目>-service；这是扫描入口，不是镜像选择。默认资源名取工程根 package.json.name（缺失用工程根目录名）并附加显式环境，统一交付包、远端目录、容器、卷及基线；旧部署用 --project-name 保留原资源身份，不能只改 target.directory 迁移。--services 负责选择；--skip-middleware 只跳过配置及开通。--yes 复用有效配置，缺值时不盲目继续。
+命名与拓扑契约使用制品格式 4，新增 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；只有 serv + web 才生成同源 API 代理。旧格式制品须重新构建。CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已移除；旧参数会明确报错，请在工程根 package.json.name 维护资源身份。迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
 
 上传脚本先复用操作机密码；缺失或为空时直接隐藏输入并继续本次部署，输入不落盘；非交互调用明确失败且不等待。无效输入显示变量名和约束；SCP 上传期间通过 SSH 查询远端归档大小，显示已接收/总字节与百分比，成功后才显示 100%。增量部署先恢复已停止或 Compose down 的既有完整基线，复用本地镜像且不重建正在运行的容器，再检查依赖和更新选中服务；恢复失败须检查诊断，不能推进 current。
 

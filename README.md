@@ -149,7 +149,7 @@ pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 # 两机不通时只生成包，按包内 README 手工搬运启动
 pnpm run deploy --env prod --build --bundle-only
 ```

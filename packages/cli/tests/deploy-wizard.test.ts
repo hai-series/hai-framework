@@ -107,13 +107,15 @@ it('infers Web selection from a partial artifact before configuring middleware',
   writeFileSync(join(app, '.hai/build/docker/latest'), 'partial\n')
   const file = 'web-1.2.3.tar'
   writeFileSync(join(artifacts, file), 'prebuilt-web')
-  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'partial', partial: true, hasWeb: true, images: [{ name: 'web', file, imageRef: 'localhost/test-web:1.2.3', sha256: await deployModule.artifactChecksum(join(artifacts, file)) }] }))
-  writeFileSync(join(app, '.env.test'), '\n')
+  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'partial', partial: true, hasWeb: true, images: [{ name: 'web', file, imageRef: 'localhost/test-web:1.2.3', sha256: await deployModule.artifactChecksum(join(artifacts, file)) }] }))
+  writeFileSync(join(app, '.env.test'), 'HAI_ADMIN_DEFAULT_PASSWORD=fixture-password\n')
+  const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://example.test:18080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   await deployCommand({ appDir: service, env: 'test', yes: true })
   expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ selectedServices: ['web'], skipMiddleware: true }))
   expect(mocked.prompt).not.toHaveBeenCalled()
-  expect(readFileSync(join(app, '.env.test'), 'utf8')).toBe('\n')
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).toBe('HAI_ADMIN_DEFAULT_PASSWORD=fixture-password\n')
+  expect(output.mock.calls.flat().join('\n')).not.toContain('HAI_ADMIN_DEFAULT_PASSWORD')
 }, 30_000)
 
 it('guides SSH setup once, saves parameters privately and reuses them without prompts', async () => {
@@ -221,8 +223,8 @@ it.each(['missing', 'partial', 'saved', 'password'])('离线打包最后确认 S
   const artifacts = join(app, '.hai/build/docker/release')
   mkdirSync(artifacts, { recursive: true })
   writeFileSync(join(app, '.hai/build/docker/latest'), 'release\n')
-  writeFileSync(join(artifacts, 'app-1.2.3.tar'), 'synthetic app image')
-  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release', images: [{ name: 'app', file: 'app-1.2.3.tar', imageRef: 'localhost/wizard:1.2.3', sha256: await deployModule.artifactChecksum(join(artifacts, 'app-1.2.3.tar')) }] }))
+  writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'synthetic app image')
+  writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/wizard:1.2.3', sha256: await deployModule.artifactChecksum(join(artifacts, 'serv-1.2.3.tar')) }] }))
   const inputs: Record<string, string> = { HOST: 'new.internal', PORT: '2202', USERNAME: 'new-user', IDENTITYFILE: 'C:/keys/deploy', KNOWNHOSTSFILE: '', BASEDIR: '/srv/apps', HOSTPORT: '8080', CONTAINERPORT: '3000' }
   mocked.prompt.mockImplementation(async (question) => {
     if (question.type === 'confirm')
@@ -241,7 +243,7 @@ it.each(['missing', 'partial', 'saved', 'password'])('离线打包最后确认 S
   const publicBefore = readFileSync(join(app, '.env.test'), 'utf8')
   const deploymentBefore = readFileSync(join(app, 'hai.json'), 'utf8')
   const run = vi.spyOn(deploy, 'deployApp')
-  await deployCommand({ appDir: service, env: 'test', bundleOnly: true, services: 'app', skipMiddleware: true })
+  await deployCommand({ appDir: service, env: 'test', bundleOnly: true, services: 'serv', skipMiddleware: true })
   expect(mocked.prompt.mock.calls[0]?.[0].type).toBe('confirm')
   const environment = loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(environment.success).toBe(true)
@@ -254,7 +256,7 @@ it.each(['missing', 'partial', 'saved', 'password'])('离线打包最后确认 S
   expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('new.internal')
   expect(readFileSync(join(app, 'hai.json'), 'utf8')).toBe(deploymentBefore)
   mocked.prompt.mockClear()
-  await deployCommand({ appDir: service, env: 'test', yes: true, bundleOnly: true, services: 'app', skipMiddleware: true })
+  await deployCommand({ appDir: service, env: 'test', yes: true, bundleOnly: true, services: 'serv', skipMiddleware: true })
   expect(mocked.prompt).not.toHaveBeenCalled()
   for (const promise of run.mock.results.map(result => result.value)) {
     const result = await promise
@@ -273,7 +275,7 @@ it.each([false, undefined])('离线 SSH 提示允许跳过，取消时不继续�
   mocked.prompt.mockResolvedValue({ value: answer })
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: '', deploymentId: 'offline', status: 'packaged', envVarsSet: [] } })
   const init = vi.spyOn(deploy, 'init')
-  const command = deployCommand({ appDir: service, env: 'test', bundleOnly: true, services: 'app', skipMiddleware: true })
+  const command = deployCommand({ appDir: service, env: 'test', bundleOnly: true, services: 'serv', skipMiddleware: true })
   if (answer === undefined) {
     await expect(command).rejects.toThrow(cliM('cli_deploy_cancelled'))
     expect(run).not.toHaveBeenCalled()

@@ -37,7 +37,7 @@ function fixture(kit = false) {
   roots.push(root)
   mkdirSync(join(root, 'config'))
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'review', version: '1.0.0' }))
-  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'app' }, { name: 'web' }] } }))
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv' }, { name: 'web' }] } }))
   const names = ['@h-ai/crypto', '@h-ai/feedback', ...(kit ? ['@sveltejs/kit'] : [])]
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: Object.fromEntries(names.map(name => [name, { version: '1' }])) } }, packages: Object.fromEntries(names.map(name => [`${name}@1`, {}])), snapshots: Object.fromEntries(names.map(name => [`${name}@1`, {}])) }))
   if (kit)
@@ -52,13 +52,13 @@ function fixture(kit = false) {
   writeFileSync(join(root, 'config/_feedback.yml'), 'appId: review\nnotificationMode: disabled\nmaxTotalBytes: 8388608\nmaxEvidenceBytes: 2097152\n')
   const artifactDir = join(root, 'artifacts')
   mkdirSync(artifactDir)
-  const images = ['app', 'web'].map((name) => {
+  const images = ['serv', 'web'].map((name) => {
     const bytes = `synthetic-${name}-archive`
     const file = `${name}-1.0.0.tar`
     writeFileSync(join(artifactDir, file), bytes)
     return { name, file, imageRef: `localhost/review-${name}:build-review`, sha256: createHash('sha256').update(bytes).digest('hex') }
   })
-  writeFileSync(join(artifactDir, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.0.0', buildId: 'build-review', hasWeb: true, images }))
+  writeFileSync(join(artifactDir, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.0.0', buildId: 'build-review', hasWeb: true, images }))
   return { root, artifactDir }
 }
 

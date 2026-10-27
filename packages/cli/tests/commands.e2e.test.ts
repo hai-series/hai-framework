@@ -213,7 +213,7 @@ describe('createProject — api 类型', () => {
     const name = 'proj-api-crypto-only'
     const directory = path.join(tmpRoot, name)
     await createProject({ name, appType: 'api', template: 'custom', features: ['crypto'], moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
-    const prefix = `apps/${name}-service`
+    const prefix = `apps/${name}-serv`
     const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
     if (!ring.success)
@@ -234,14 +234,14 @@ describe('createProject — api 类型', () => {
 
   it('应生成 contract 与 service 子工程并写入 catalog/workspace 依赖', async () => {
     const contractPkg = await readJson(projectPath, 'apps/proj-api-contract/package.json')
-    const servicePkg = await readJson(projectPath, 'apps/proj-api-service/package.json')
+    const servicePkg = await readJson(projectPath, 'apps/proj-api-serv/package.json')
 
     expect(contractPkg.name).toBe('proj-api-contract')
     expect(contractPkg.dependencies['@h-ai/api-contract']).toBe(HAI_DEP_SPECIFIER)
     expect(contractPkg.dependencies.zod).toBe(CATALOG_DEP_SPECIFIER)
     expectNonWorkspaceDepsUseCatalog(contractPkg)
 
-    expect(servicePkg.name).toBe('proj-api-service')
+    expect(servicePkg.name).toBe('proj-api-serv')
     expect(servicePkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
     expect(servicePkg.dependencies['@h-ai/serv']).toBe(HAI_DEP_SPECIFIER)
     expect(servicePkg.dependencies['@h-ai/reldb']).toBe(HAI_DEP_SPECIFIER)
@@ -261,12 +261,12 @@ describe('createProject — api 类型', () => {
   })
 
   it('应生成 config/_core.yml', async () => {
-    const content = await readText(projectPath, 'apps/proj-api-service/config/_core.yml')
+    const content = await readText(projectPath, 'apps/proj-api-serv/config/_core.yml')
     expect(content).toContain('proj-api')
   })
 
   it('应生成 config/_serv.yml', async () => {
-    const content = await readText(projectPath, 'apps/proj-api-service/config/_serv.yml')
+    const content = await readText(projectPath, 'apps/proj-api-serv/config/_serv.yml')
     expect(content).toContain('transport: $' + '{HAI_SERV_TRANSPORT:false}')
     expect(content).toContain('apiPrefix: $' + '{HAI_SERV_HTTP_APIPREFIX:/api/v1}')
     expect(content).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
@@ -279,36 +279,36 @@ describe('createProject — api 类型', () => {
   })
 
   it('应生成 config/_db.yml', async () => {
-    const content = await readText(projectPath, 'apps/proj-api-service/config/_db.yml')
+    const content = await readText(projectPath, 'apps/proj-api-serv/config/_db.yml')
     expect(content).toContain('sqlite')
   })
 
   it('应生成 config/_cache.yml', async () => {
-    expect(await exists(projectPath, 'apps/proj-api-service/config/_cache.yml')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-serv/config/_cache.yml')).toBe(true)
   })
 
   it('应生成 .env.example', async () => {
-    expect(await exists(projectPath, 'apps/proj-api-service/.env.example')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-serv/.env.example')).toBe(true)
   })
 
   it('应生成 README.md', async () => {
     const content = await readText(projectPath, 'README.md')
     expect(content).toContain('apps/proj-api-contract')
-    expect(content).toContain('apps/proj-api-service')
+    expect(content).toContain('apps/proj-api-serv')
     expect(content).toContain('## 构建与部署')
     expect(content).toContain('pnpm build --target docker')
   })
 
   it('应生成可传入配置与嵌入数据的 API 镜像入口', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    const servicePkg = await readJson(projectPath, 'apps/proj-api-service/package.json')
-    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
+    const servicePkg = await readJson(projectPath, 'apps/proj-api-serv/package.json')
+    const dockerfile = await readText(projectPath, 'images/serv.Dockerfile')
 
     expect(pkg.scripts.build).toBe('hai build')
     expect(pkg.scripts.compile).toBe('pnpm -r --if-present build')
     expect(servicePkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
-    expect(await exists(projectPath, 'apps/proj-api-service/data/.gitkeep')).toBe(true)
-    expect(dockerfile).toContain('pnpm pm deploy --filter proj-api-service --prod')
+    expect(await exists(projectPath, 'apps/proj-api-serv/data/.gitkeep')).toBe(true)
+    expect(dockerfile).toContain('pnpm pm deploy --filter proj-api-serv --prod')
     expect(dockerfile).not.toContain('embedded-data')
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
@@ -332,7 +332,7 @@ describe('createProject — api 类型', () => {
   })
 
   it('应生成 service init.ts 含 db/cache 初始化', async () => {
-    const content = await readText(projectPath, 'apps/proj-api-service/src/lib/server/init.ts')
+    const content = await readText(projectPath, 'apps/proj-api-serv/src/lib/server/init.ts')
     expect(content).toContain('@h-ai/reldb')
     expect(content).toContain('@h-ai/cache')
   })
@@ -340,10 +340,10 @@ describe('createProject — api 类型', () => {
   it('应生成 contract 与 service 关键源文件', async () => {
     expect(await exists(projectPath, 'apps/proj-api-contract/src/proj-api-contract.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-api-contract/src/http-transport.ts')).toBe(false)
-    expect(await exists(projectPath, 'apps/proj-api-service/src/app.ts')).toBe(true)
-    expect(await exists(projectPath, 'apps/proj-api-service/src/server/procedures/app-procedures.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-serv/src/app.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-serv/src/server/procedures/app-procedures.ts')).toBe(true)
 
-    const procedures = await readText(projectPath, 'apps/proj-api-service/src/server/procedures/app-procedures.ts')
+    const procedures = await readText(projectPath, 'apps/proj-api-serv/src/server/procedures/app-procedures.ts')
     expect(procedures).toContain('.implement(appContract)')
     expect(procedures).toContain('.context<ServContext>()')
     expect(procedures).toContain('.route(\'info\'')
@@ -378,7 +378,7 @@ describe('createProject — api 类型', () => {
 
     const procedures = await readText(
       iamProjectPath,
-      'apps/proj-api-iam-service/src/server/procedures/app-procedures.ts',
+      'apps/proj-api-iam-serv/src/server/procedures/app-procedures.ts',
     )
     expect(procedures).toContain('from \'proj-api-iam-contract\'')
     expect(procedures).toContain('.route(\'echo\')')
@@ -389,13 +389,13 @@ describe('createProject — api 类型', () => {
   })
 
   it('应生成 service 级 E2E 测试', async () => {
-    const spec = await readText(projectPath, 'e2e/api-service.spec.ts')
+    const spec = await readText(projectPath, 'e2e/api-serv.spec.ts')
     expect(spec).toContain('service health endpoint returns ok')
     expect(spec).not.toContain('page.goto')
 
     const config = await readText(projectPath, 'playwright.config.ts')
     expect(config).toMatch(/channel:\s+'chrome'/)
-    expect(config).toContain('proj-api-service')
+    expect(config).toContain('proj-api-serv')
   })
 
   it('应生成 api 兼容的全量 skills', async () => {
@@ -406,7 +406,7 @@ describe('createProject — api 类型', () => {
     const agents = await readText(projectPath, 'AGENTS.md')
 
     expect(agents).toContain('API 服务')
-    expect(agents).toContain('apps/<project>-service')
+    expect(agents).toContain('apps/<project>-serv')
     // 核对默认技术栈，不把模板架构锁成禁止迁移的措辞。
     expect(agents).toContain('@h-ai/serv')
     expect(agents).toContain('@h-ai/api-contract')
@@ -434,9 +434,9 @@ describe('createProject — --yes 非交互默认配置', () => {
   })
 
   it('应使用默认模块配置生成可用 API 样板', async () => {
-    const coreConfig = await readText(projectPath, 'apps/proj-api-yes-service/config/_core.yml')
-    const dbConfig = await readText(projectPath, 'apps/proj-api-yes-service/config/_db.yml')
-    const cacheConfig = await readText(projectPath, 'apps/proj-api-yes-service/config/_cache.yml')
+    const coreConfig = await readText(projectPath, 'apps/proj-api-yes-serv/config/_core.yml')
+    const dbConfig = await readText(projectPath, 'apps/proj-api-yes-serv/config/_db.yml')
+    const cacheConfig = await readText(projectPath, 'apps/proj-api-yes-serv/config/_cache.yml')
     const pkg = await readJson(projectPath, 'package.json')
 
     expect(coreConfig).toContain('proj-api-yes')
@@ -631,7 +631,7 @@ describe('createProject — 基础配置文件', () => {
   it('api 项目应为 contract/service 生成 vitest.config.ts', async () => {
     const projectPath = path.join(tmpRoot, 'proj-api')
     expect(await exists(projectPath, 'apps/proj-api-contract/vitest.config.ts')).toBe(true)
-    expect(await exists(projectPath, 'apps/proj-api-service/vitest.config.ts')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-api-serv/vitest.config.ts')).toBe(true)
   })
 
   it('admin 项目应包含 eslint.config.js', async () => {
@@ -701,7 +701,7 @@ describe('createProject — website 类型', () => {
   it('应生成 SvelteKit Node 容器交付文件', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     const svelteConfig = await readText(projectPath, 'svelte.config.js')
-    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
+    const dockerfile = await readText(projectPath, 'images/web.Dockerfile')
 
     expect(pkg.devDependencies['@sveltejs/adapter-node']).toBe('5.5.7')
     expect(pkg.devDependencies['@sveltejs/adapter-auto']).toBeUndefined()
@@ -833,7 +833,7 @@ describe('createProject — mobile-app 类型', () => {
 
   it('应生成带 SPA fallback 的静态镜像', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
+    const dockerfile = await readText(projectPath, 'images/web.Dockerfile')
     const nginxConfig = await readText(projectPath, 'images/web/nginx.conf')
 
     expect(pkg.scripts.build).toBe('hai build')
@@ -1095,7 +1095,7 @@ describe('createProject — fullstack 类型', () => {
   })
 
   it('应生成由 Service 直接监听的默认镜像与独立 Web 镜像', async () => {
-    const dockerfile = await readText(projectPath, 'images/app.Dockerfile')
+    const dockerfile = await readText(projectPath, 'images/serv.Dockerfile')
     const nginxConfig = await readText(projectPath, 'images/web/nginx.conf')
     const runtimeConfig = await readText(projectPath, 'images/web/runtime-config.js.template')
     const runtimeConfigEnv = await readText(projectPath, 'images/web/19-runtime-config.envsh')
@@ -1589,7 +1589,7 @@ describe('addModule', () => {
     const dir = path.join(tmpRoot, 'add-deploy-config')
     await fse.ensureDir(dir)
     await fse.writeJson(path.join(dir, 'package.json'), { name: 'add-deploy-config', version: '0.1.0', dependencies: { '@h-ai/core': 'workspace:*' } })
-    const build = { images: [{ name: 'app', dockerfile: 'images/app.Dockerfile' }] }
+    const build = { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }] }
     await fse.writeJson(path.join(dir, 'hai.json'), { build, custom: { enabled: true } })
     await addModule({ module: 'deploy', install: false, cwd: dir, verbose: false })
     const project = await fse.readJson(path.join(dir, 'hai.json'))

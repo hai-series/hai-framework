@@ -18,6 +18,8 @@
 
 デプロイツールは作成時に既定で含まれます。不要な場合は `hai create my-app --no-deploy` を指定します。SDK は開発依存に配置し、実行イメージには含めません。
 
+配布ロールは、独立 API バックエンドが `serv`、静的または SSR のブラウザーサイトが `web`、Android/iOS インストーラーが `app`、デスクトップインストーラーが `desktop` です。Fullstack は serv と任意の web、API は serv、admin/website/h5/mobile-app のブラウザーイメージは web を使用します。ネイティブ app/desktop はサーバーの Compose サービスではありません。`--images` と `--services` には serv/web、ネイティブ配布には `--target app` または `--target desktop` を指定します。API サービスのディレクトリは `apps/<project>-serv` です。イメージとコンテナーはルート `package.json.name` を共通の識別名として正規化します（scope 除去、小文字化、無効文字の連続をハイフンに変換）。名前がないか無効な場合は失敗し、ディレクトリ名へフォールバックしません。イメージは `localhost/hai-<project>-<role>:<buildId>`、コンテナーは `hai-<project>-<environment>-<role>` となり、イメージは環境間で再利用できます。
+
 ```sh
 pnpm build
 pnpm build --target docker
@@ -27,7 +29,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build のオプション
 
-`--target` は compile（既定）、docker、desktop を選択します。`--images app|web|app,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、docker、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
 #### hai.json でパッケージの構成を指定する
 
@@ -36,9 +38,9 @@ pnpm build --target desktop --platform windows --arch x64
   "build": {
     "images": [
       {
-        "name": "app",
+        "name": "serv",
         "context": ".",
-        "dockerfile": "images/app.Dockerfile",
+        "dockerfile": "images/serv.Dockerfile",
         "containerPort": 3000
       },
       {
@@ -71,17 +73,21 @@ pnpm build --target desktop --platform windows --arch x64
 
 構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備し、pnpm store と依存レイヤーをキャッシュします。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
 
-アプリの版はルート package.json.version で管理します。`.hai/build/docker/<buildId>/` に形式 3 の manifest.json、選択イメージの tar と SHA-256 を出力します。partial は部分構築、hasWeb は構成を記録します。appContainerPort と webContainerPort は明示した app/web の待受ポートを保持し、部分構築で選ばなかったイメージのポートも失いません。未指定のポートにはデプロイ時の既定値を使います。同じアプリ版でも再構築可能で、構築 ID とイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latest を使いません。
+アプリの版はルート package.json.version で管理します。`.hai/build/docker/<buildId>/` に形式 4 の manifest.json、選択イメージの tar と SHA-256 を出力します。partial は部分構築、hasWeb は構成を記録します。servContainerPort と webContainerPort は明示した serv/web の待受ポートを保持し、部分構築で選ばなかったイメージのポートも失いません。未指定のポートにはデプロイ時の既定値を使います。同じアプリ版でも再構築可能で、構築 ID とイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latest を使いません。
 
 ### 5. 成果物を対象環境へデプロイする
 
 #### 環境と接続先を用意する
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定ならルートディレクトリ名を使います。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、サーバー認証状態も保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
+成果物形式 4 は primaryService（serv/web）と、工程全体のブラウザー構成を示す hasWeb を記録します。同一オリジン API プロキシは serv + web の場合だけ生成します。旧形式は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じ Compose プロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directory の変更だけでは移行できません。
 
-`.env.<環境>` とプロジェクトルートの `hai.json` を用意します。`build` にイメージ・ネイティブ構築、`deploy` にアプリ全体の配置設定を保存します。fullstack は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-service を実行依存とモジュール YAML の走査入口として使います。フロントとバックエンドは同じ設定を共有します。
+既存工程では、hai.json の build.images 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
+
+CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃止しました。旧引数は明示的に失敗します。工程ルートの package.json.name で識別名を管理してください。
+
+`.env.<環境>` とプロジェクトルートの `hai.json` を用意します。`build` にイメージ・ネイティブ構築、`deploy` にアプリ全体の配置設定を保存します。fullstack は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-serv を実行依存とモジュール YAML の走査入口として使います。フロントとバックエンドは同じ設定を共有します。
 
 `deploy` は `${変数:既定値}` と `HAI_DEPLOY_*` による階層的な上書き（JSON オブジェクト全体も可）をサポートします。省略された SSH ノードも Schema で定義済みの末端フィールドから補えます。優先度の高いソースの親オブジェクトは下位ソースの末端値より優先され、同一ソースでは末端値が優先されます。SSH の文字列は数値パスワード、先頭のゼロ、前後の空白もそのまま保持します。
 
@@ -113,7 +119,7 @@ pnpm run deploy --env prod --build
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
 # 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 ```
 
 部分更新には成功済みの完全インストールと一致するポート・構成が必要です。Compose 標準の設定合成で未選択サービス、設定、ボリュームを保持します。スクリプトはプロジェクト名とサービス名で選択した旧コンテナーだけを削除し、ボリュームを保持します。その後 `compose up -d --no-deps --no-build --pull never --no-recreate web` で新しいコンテナーを作成します。他のコンテナーは稼働したままで、全体の down は実行しません。自前 S3 のバケットはアプリの `storage.init()` が任意設定 `createBucket` に従って初期化します。
@@ -183,11 +189,11 @@ SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は�
 
 フレームワークの永続設定は `HAI_*` を使います。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` はミドルウェアイメージ必須の名前を維持し、非公開の `middleware-runtime.env` にだけ生成してミドルウェアに渡します。プロジェクト環境ファイルやアプリの `.env.runtime` には新規保存しません。増分アプリ更新用の `middleware.env` は `HAI_*` 設定のみです。既存の原生変数は自動削除せず、新しいアプリ環境から除外します。未更新サービスは以前の配布ファイルを使い続けます。
 
-サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、app/Web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
+サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、serv/Web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
 
 Podman では設定済みの healthcheck を明示的に実行して状態を再確認し、systemd の自動実行に依存しません。今回の検査が失敗した場合、保存状態が `healthy` でも app の起動を許可しません。
 
-孤立コンテナーの削除は最初の起動バッチのみで行い、後続の app/Web 起動では準備済みのミドルウェアを維持します。
+孤立コンテナーの削除は最初の起動バッチのみで行い、後続の serv/Web 起動では準備済みのミドルウェアを維持します。
 
 作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
 

@@ -1,6 +1,6 @@
 /** README 结构门禁：许可证只能出现一次、位于最后，功能内容不能追加到许可证正文。 */
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -50,7 +50,7 @@ export function readmeIssues(content) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const paths = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' }).split(/\r?\n/))]
-    .filter(path => /(?:^|\/)README(?:\.[\w-]+)?\.md(?:\.hbs)?$/i.test(path))
+    .filter(path => /(?:^|\/)README(?:\.[\w-]+)?\.md(?:\.hbs)?$/i.test(path) && existsSync(path))
   const failures = paths.flatMap(path => readmeIssues(readFileSync(path, 'utf8')).map(issue => `${path}: ${issue}`))
   process.stdout.write(failures.length ? `${failures.join('\n')}\n` : `README structure valid: ${paths.length} files\n`)
   process.exitCode = failures.length ? 1 : 0

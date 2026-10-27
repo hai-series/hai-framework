@@ -99,18 +99,24 @@ DB 接続は保存前に選択したバックエンドの公開 Schema で検証
 
 CLI は呼び出し元の `HAI_/PUBLIC_/VITE_` を除外し、内部で生成した `HAI_BUILD_ID/HAI_BUILD_COMMIT` のみを注入します。Docker は同じイメージバッチの識別情報をコンパイルに渡します。フィードバックはブラウザーとサーバー各自の `appVersion/buildId/commit` を使用し、バージョンは各 manifest、同じ SSR ビルドの ID は共通です。所属する Git コミットがなければ `unknown` を記録します。三項目の `build-metadata.json` とコード内の値を一致させ、API/ZIP の実際の証拠と照合します。
 
+配布ロールは、独立 API バックエンドが `serv`、静的または SSR のブラウザーサイトが `web`、Android/iOS インストーラーが `app`、デスクトップインストーラーが `desktop` です。Fullstack は serv と任意の web、API は serv、admin/website/h5/mobile-app のブラウザーイメージは web を使用します。ネイティブ app/desktop はサーバーの Compose サービスではありません。`--images` と `--services` には serv/web、ネイティブ配布には `--target app` または `--target desktop` を指定します。API サービスのディレクトリは `apps/<project>-serv` です。イメージとコンテナーはルート `package.json.name` を共通の識別名として正規化します（scope 除去、小文字化、無効文字の連続をハイフンに変換）。名前がないか無効な場合は失敗し、ディレクトリ名へフォールバックしません。イメージは `localhost/hai-<project>-<role>:<buildId>`、コンテナーは `hai-<project>-<environment>-<role>` となり、イメージは環境間で再利用できます。
+
 ```sh
 pnpm build --target docker
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
-pnpm run deploy --env prod --build --services "app,web"
+pnpm run deploy --env prod --build --services "serv,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定ならルートディレクトリ名を使います。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、サーバー認証状態も保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
+成果物形式 4 は primaryService（serv/web）と、工程全体のブラウザー構成を示す hasWeb を記録します。同一オリジン API プロキシは serv + web の場合だけ生成します。旧形式は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じ Compose プロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directory の変更だけでは移行できません。
+
+既存工程では、hai.json の build.images 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
+
+CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃止しました。旧引数は明示的に失敗します。工程ルートの package.json.name で識別名を管理してください。
 
 自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧認証情報は下記の明示的な検証・導入手順で移行できます。
 

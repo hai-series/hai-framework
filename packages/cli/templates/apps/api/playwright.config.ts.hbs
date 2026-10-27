@@ -47,8 +47,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: [{
-    name: '{{api.servicePackageName}}',
-    command: 'pnpm --filter {{api.servicePackageName}} exec node dist/index.js',
+    name: '{{api.servPackageName}}',
+    command: 'pnpm --filter {{api.servPackageName}} exec node dist/index.js',
     env: createE2eServerEnv({
       ...createE2eNotificationEnv(),
       HAI_CORE_ENV: 'test',

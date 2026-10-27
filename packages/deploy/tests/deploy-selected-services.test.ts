@@ -43,7 +43,7 @@ it('creates the selected cloud database, skips a kept cache and persists actual 
     return Response.json({})
   }))
   expect(await deploy.init({ environment: 'test', provider: { type: 'vercel', token: 'test-platform-token' }, services: { db: { provisioner: 'neon', apiKey: 'test-neon-key' } } })).toMatchObject({ success: true })
-  const result = await deploy.deployApp(root, { projectName: 'selected', serviceModes: { db: 'default', cache: 'keep' } })
+  const result = await deploy.deployApp(root, { serviceModes: { db: 'default', cache: 'keep' } })
   expect(result.success).toBe(true)
   expect(requests.some(request => request.url.includes('console.neon.tech') && request.method === 'POST')).toBe(true)
   expect(requests.some(request => request.url.includes('upstash'))).toBe(false)

@@ -57,6 +57,7 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
       throw new Error('Deployment lock gate requires a reachable Podman or Docker engine')
     runtime = candidate
     root = mkdtempSync(join(tmpdir(), 'hai-deploy-lock-'))
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ name: basename(root) }))
     const containerName = `hai-deploy-lock-${randomUUID()}`
     container = ''
     const artifacts = join(root, '.hai/build/docker/release-1')
@@ -65,8 +66,8 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
     writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(join(root, '.env.test'), 'HAI_CORE_ENV=test\n')
     writeFileSync(join(root, '.hai/build/docker/latest'), 'release-1\n')
-    writeFileSync(join(artifacts, 'app-1.2.3.tar'), 'prebuilt-image')
-    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'app', file: 'app-1.2.3.tar', imageRef: 'localhost/lock-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
+    writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/lock-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
     writeFileSync(join(root, 'bin/docker'), `#!/bin/sh
 printf '%s\\n' "$*" >> /fixture/commands.log
 case "$*" in
@@ -87,14 +88,14 @@ case "$*" in
     if [ "$count" -lt 3 ]; then printf 'starting\\n'; else printf 'healthy\\n'; fi;;
   *'ps -q'*) if [ -f /fixture/services-stopped ]; then exit 0; fi; printf 'fixture-container\\n';;
   *'config --services'*)
-    if [ -f /fixture/has-web ]; then printf 'app\\nweb\\n'; else printf 'app\\n'; fi
+    if [ -f /fixture/has-web ]; then printf 'serv\\nweb\\n'; else printf 'serv\\n'; fi
     if [ -f /fixture/has-db ]; then printf 'db\\n'; fi;;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
 case " $* " in *' up -d '*) rm -f /fixture/services-stopped;; esac
 if [ -f /fixture/manual-health ]; then
   # Podman Compose 按本次服务集清理孤立容器；第二批不能再移除已经就绪的依赖。
-  case " $* " in *' up -d '*--remove-orphans*' app '*) touch /fixture/dependency-removed;; esac
+  case " $* " in *' up -d '*--remove-orphans*' serv '*) touch /fixture/dependency-removed;; esac
 fi
 if [ "$1" = load ] && [ -f /fixture/block-load ]; then
   printf '%s\\n' "$$" > /fixture/runtime.pid
@@ -141,7 +142,7 @@ fi
     const legacyFile = join(root, 'legacy-middleware.env')
     writeFileSync(legacyFile, legacyContent)
     execFileSync(runtime, ['cp', legacyFile, `${container}:/fixture/server/releases/${full.id}/middleware.env`], { windowsHide: true })
-    const incremental = await pack(['app'])
+    const incremental = await pack(['serv'])
     const applied = apply(incremental)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
     const inherited = parseEnv(execute(`cat /fixture/server/releases/${incremental.id}/middleware.env`))
@@ -149,17 +150,17 @@ fi
     expect(execute(`cat /fixture/server/releases/${full.id}/middleware.env`)).toBe(legacyContent.trim())
   }, 60_000)
 
-  it.each([{ selected: ['app'] }, { selected: ['app', 'web'] }, { selected: ['web', 'app'] }])('真实 Linux 执行 $selected 增量容量更新并恢复失败配置', async ({ selected }) => {
+  it.each([{ selected: ['serv'] }, { selected: ['serv', 'web'] }, { selected: ['web', 'serv'] }])('真实 Linux 执行 $selected 增量容量更新并恢复失败配置', async ({ selected }) => {
     const artifacts = join(root, '.hai/build/docker/release-1')
     mkdirSync(join(root, 'config'))
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
-    const images = ['app', 'web'].map((name) => {
+    const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.2.3.tar`
       const content = `prebuilt-${name}`
       writeFileSync(join(artifacts, file), content)
       return { name, file, imageRef: `localhost/capacity-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
     })
-    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
     execute('touch /fixture/has-web')
     const full = await pack()
     expect(apply(full).status).toBe(0)
@@ -170,10 +171,10 @@ fi
     expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
     const composeFiles = execute(`cat /fixture/server/releases/${incremental.id}/compose-files`)
     expect(composeFiles.includes('proxy-entry.json')).toBe(!selected.includes('web'))
-    expect(execute('cat /fixture/commands.log')).toContain('--no-recreate app web')
+    expect(execute('cat /fixture/commands.log')).toContain('--no-recreate serv web')
     expect(execute('cat /fixture/commands.log').includes(`load -i /fixture/server/releases/${incremental.id}/images/web-`)).toBe(selected.includes('web'))
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 4194304\n')
-    const failed = await pack(['app'])
+    const failed = await pack(['serv'])
     execute('touch /fixture/fail-health; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
     expect(apply(failed).status).toBe(1)
     expect(execute('cat /fixture/server/current')).toBe(incremental.id)
@@ -181,7 +182,7 @@ fi
     expect(execute('cat /fixture/commands.log')).toContain(`/releases/${incremental.id}/compose-entry.json`)
   }, 60_000)
 
-  it.each(['docker', 'podman'] as const)('真实 shell 在 %s 中等待中间件健康后才启动 app，不健康时不启动 app', async (remoteRuntime) => {
+  it.each(['docker', 'podman'] as const)('真实 shell 在 %s 中等待中间件健康后才启动 serv，不健康时不启动 serv', async (remoteRuntime) => {
     execute('touch /fixture/has-db')
     if (remoteRuntime === 'podman') {
       // 模拟没有 systemd 自动调度的独立 Podman；只有实际执行探测才会更新状态。
@@ -192,7 +193,7 @@ fi
     async function readinessBundle(selectedServices?: string[]) {
       const bundle = await pack(selectedServices)
       const file = join(root, 'readiness.sh')
-      writeFileSync(file, createApplyScript({ deploymentId: bundle.id, projectName: 'readiness-test', environment: 'test', directory: '/fixture/server', runtime: remoteRuntime, partial: !!selectedServices, selected: selectedServices ?? ['app', 'db'], hostPort: 18080, healthPaths: ['/health'] }))
+      writeFileSync(file, createApplyScript({ deploymentId: bundle.id, projectName: 'readiness-test', environment: 'test', directory: '/fixture/server', runtime: remoteRuntime, partial: !!selectedServices, selected: selectedServices ?? ['serv', 'db'], hostPort: 18080, healthPaths: ['/health'] }))
       execFileSync(runtime, ['cp', file, `${container}:/fixture/${bundle.directory}/apply.sh`], { windowsHide: true })
       execute(`cd /fixture/${bundle.directory}; sed '/  apply.sh$/d' SHA256SUMS > SHA256SUMS.next; sha256sum apply.sh >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
       return bundle
@@ -204,7 +205,7 @@ fi
     expect(applied.stdout).toContain('HAI_ADMIN_DEFAULT_PASSWORD')
     expect(applied.stdout).not.toContain(password)
     const commands = execute('cat /fixture/commands.log')
-    const applicationStart = / up -d [^\n]* app(?: |$)/m
+    const applicationStart = / up -d [^\n]* serv(?: |$)/m
     const applicationCommand = commands.match(applicationStart)?.[0] ?? ''
     expect(applicationCommand).toBeTruthy()
     expect(applicationCommand).not.toContain('--remove-orphans')
@@ -220,9 +221,9 @@ fi
     expect(execute('cat /fixture/commands.log')).not.toMatch(applicationStart)
     expect(execute('cat /fixture/server/current')).toBe(full.id)
     if (remoteRuntime === 'podman') {
-      // 未选依赖保留旧 healthy 状态，当前探测故障时仍不能更新 app。
+      // 未选依赖保留旧 healthy 状态，当前探测故障时仍不能更新 serv。
       execute('rm -f /fixture/unhealthy; touch /fixture/probe-error; : > /fixture/commands.log')
-      const brokenProbe = await readinessBundle(['app'])
+      const brokenProbe = await readinessBundle(['serv'])
       expect(apply(brokenProbe).status).toBe(1)
       expect(execute('cat /fixture/commands.log')).not.toMatch(applicationStart)
       expect(execute('cat /fixture/server/current')).toBe(full.id)
@@ -308,13 +309,13 @@ fi
   }, 60_000)
 
   it('真实 Linux 脚本拒绝首次增量，允许同版本更新，健康失败保持成功基线并保留恢复结果', async () => {
-    const firstPartial = await pack(['app'])
+    const firstPartial = await pack(['serv'])
     expect(apply(firstPartial).status).toBe(1)
     const full = await pack()
     expect(apply(full).status).toBe(0)
-    const partial = await pack(['app'])
+    const partial = await pack(['serv'])
     expect(apply(partial).status).toBe(0)
-    const failed = await pack(['app'])
+    const failed = await pack(['serv'])
     // 将健康轮询的等待缩短，不替换 flock 或进程行为。
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/fail-health')
     expect(apply(failed).status).toBe(1)
@@ -327,13 +328,13 @@ fi
     const artifacts = join(root, '.hai/build/docker/release-1')
     mkdirSync(join(root, 'config'))
     writeFileSync(join(root, 'config/_serv.yml'), 'transport:\n  maxPlaintextBytes: 1048576\n')
-    const images = ['app', 'web'].map((name) => {
+    const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.2.3.tar`
       const content = `prebuilt-${name}`
       writeFileSync(join(artifacts, file), content)
       return { name, file, imageRef: `localhost/recovery-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
     })
-    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 3, appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
     execute('touch /fixture/has-web')
     const full = await pack()
     expect(apply(full).status).toBe(0)
@@ -343,7 +344,7 @@ fi
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
     expect(applied.stdout).toContain('[recover] Starting stopped services')
     expect(applied.stdout.indexOf('[recover]')).toBeLessThan(applied.stdout.indexOf('[dependencies]'))
-    expect(execute('cat /fixture/commands.log')).toContain('--no-recreate app web')
+    expect(execute('cat /fixture/commands.log')).toContain('--no-recreate serv web')
     expect(execute('cat /fixture/server/current')).toBe(incremental.id)
   }, 60_000)
 

@@ -375,7 +375,10 @@ export const deploy: DeployFunctions = {
       return notInitialized.result()
     }
 
-    logger.info('Starting deployment', { appDir, environment: options?.environment, projectName: options?.projectName })
+    if (options && 'projectName' in options && options.projectName !== undefined)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_projectNameOverrideRemoved'))
+
+    logger.info('Starting deployment', { appDir, environment: options?.environment })
 
     // 1. 扫描应用
     const scanOptions = { ...options, environment: options?.environment ?? currentConfig?.environment }
@@ -405,7 +408,7 @@ export const deploy: DeployFunctions = {
       }
     }
     const appEnv = Object.fromEntries(Object.entries(environment.data.values).filter(([key]) => key !== 'HAI_DEPLOY' && !connectionVariables.has(key) && !key.startsWith('HAI_CLI_') && (!key.startsWith('HAI_DEPLOY_') || key === 'HAI_DEPLOY_ENVIRONMENT')))
-    const projectName = `${options?.projectName ?? normalizeProjectName(scan.appName)}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
+    const projectName = `${normalizeProjectName(scan.appName)}${scanOptions.environment ? `-${environment.data.environment}` : ''}`
     options = {
       ...options,
       ...(scanOptions.environment ? { environment: environment.data.environment } : {}),

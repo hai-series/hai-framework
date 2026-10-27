@@ -16,7 +16,7 @@
 | `h5-app` | 移动端 H5 | 触屏优化，PullRefresh/InfiniteScroll，简化认证 |
 | `mobile-app` | 移动端原生壳 | Capacitor + Svelte 5 + Vite，支持 Android/iOS |
 | `desktop-app` | 桌面应用 | Tauri 封装，本地文件系统访问 |
-| `api-service` | API 服务 | 纯后端，无页面渲染 |
+| `api-serv` | API 服务 | 纯后端，无页面渲染 |
 | `corporate-website` | 企业官网 | SSG 为主，SEO 优化 |
 
 ### 新应用决策

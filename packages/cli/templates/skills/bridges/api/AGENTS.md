@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> API 服务项目 AI 编程助手入口。优先结合 `README.md`、`.agents/skills/`、`apps/*-contract/src/**`、`apps/*-service/src/**` 与测试工作。
+> API 服务项目 AI 编程助手入口。优先结合 `README.md`、`.agents/skills/`、`apps/*-contract/src/**`、`apps/*-serv/src/**` 与测试工作。
 
 ## 需求与模板
 
@@ -27,12 +27,12 @@
 
 先读 README、package.json、相关实现/测试和所需 .agents/skills；不要加载整个 skill 树。新增抽象前确认复用路径与真实需求；保留用户改动。跨文件任务简述影响和验证计划，无须固定规模标签或重复问卷。
 
-- 直接影响：哪些 `apps/*-contract`、`apps/*-service`、config、README、测试会变。
+- 直接影响：哪些 `apps/*-contract`、`apps/*-serv`、config、README、测试会变。
 - 间接影响：哪些 typed client、部署脚本、环境变量说明和断言需要同步。
 
 ## 项目定位
 
-本项目是 hai-framework API workspace：`apps/<project>-contract` 提供 typed contract，`apps/<project>-service` 提供 `@h-ai/serv` 实现，无 UI 页面和前端 i18n。
+本项目是 hai-framework API workspace：`apps/<project>-contract` 提供 typed contract，`apps/<project>-serv` 提供 `@h-ai/serv` 实现，无 UI 页面和前端 i18n。
 
 ## 架构边界
 
@@ -40,7 +40,7 @@
 - 当前 Service 通过 `@h-ai/serv` + `@h-ai/api-contract` 装配 HTTP App；保留此架构时不混入 SvelteKit API routes，需求要求迁移时同步入口、contract、调用方与脚本。
 - Typed client / contract / service 三者保持同一份路径与类型定义，不要复制粘贴接口。
 - 纯 API 需求不生成用户页面或引入 UI 专属依赖；需求增加前端时，按实际架构补充应用及其文案和验证。
-- 配置和密钥来自 `apps/*-service/config/` 与环境变量，禁止硬编码。
+- 配置和密钥来自 `apps/*-serv/config/` 与环境变量，禁止硬编码。
 
 ## 工作流程
 
