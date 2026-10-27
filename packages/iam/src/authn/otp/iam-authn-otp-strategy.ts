@@ -257,7 +257,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult
-      logger.info('OTP authentication succeeded', { userId: storedUser.id })
+      logger.debug('OTP authentication succeeded', { userId: storedUser.id })
 
       return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
     },

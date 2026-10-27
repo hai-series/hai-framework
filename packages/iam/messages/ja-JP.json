@@ -200,5 +200,7 @@
   "iam_captchaRequired": "先にセキュリティ確認を完了してください",
   "iam_captchaInvalid": "セキュリティ確認が無効または期限切れです。再試行してください",
   "iam_captchaDisabled": "セキュリティ確認は無効です",
-  "iam_captchaUnavailable": "セキュリティ確認を一時的に利用できません"
+  "iam_captchaUnavailable": "セキュリティ確認を一時的に利用できません",
+  "iam_sensitiveOperationsInvalid": "重要操作 ID は最大1000件、各1～128文字で指定してください。",
+  "iam_terminalTypeInvalid": "端末種別は web、app、desktop、api のいずれかを指定してください。"
 }

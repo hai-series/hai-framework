@@ -14,6 +14,54 @@ function tests() {
     return { iam, username }
   }
 
+  it('web与App分别限制且共享全局额度，刷新保留终端分组', async () => {
+    const { iam, username } = await account({ maxSessions: 3, terminalLimits: { web: 2, app: 1 } })
+    const login = (terminalType: 'web' | 'app' | 'desktop') => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType })
+    const first = await login('web')
+    const second = await login('web')
+    const app = await login('app')
+    expect(first.success && second.success && app.success).toBe(true)
+    expect((await login('web')).success).toBe(false)
+    expect((await login('app')).success).toBe(false)
+    expect((await login('desktop')).success).toBe(false)
+    if (!app.success)
+      throw new Error(app.error.message)
+    const refreshed = await iam.session.refresh(app.data.tokens.refreshToken)
+    if (!refreshed.success)
+      throw new Error(refreshed.error.message)
+    const current = await iam.auth.verifyToken(refreshed.data.accessToken)
+    expect(current.success && current.data.terminalType).toBe('app')
+    if (!current.success)
+      throw new Error(current.error.message)
+    expect((await iam.session.update(refreshed.data.accessToken, { terminalType: 'web' }, current.data.version)).success).toBe(false)
+  })
+
+  it('同类终端替换不踢掉其他终端，全局单会话仍优先', async () => {
+    const { iam, username } = await account({ terminalLimits: { web: 2, app: 1 }, terminalLimitMode: 'replace' })
+    const login = (terminalType: 'web' | 'app') => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType })
+    const web = await login('web')
+    const old = await login('app')
+    const next = await login('app')
+    expect(web.success && old.success && next.success).toBe(true)
+    if (!web.success || !old.success || !next.success)
+      throw new Error('Terminal setup failed')
+    expect((await iam.auth.verifyToken(web.data.tokens.accessToken)).success).toBe(true)
+    expect((await iam.auth.verifyToken(old.data.tokens.accessToken)).success).toBe(false)
+    expect((await iam.session.refresh(old.data.tokens.refreshToken)).success).toBe(false)
+    const only = await account({ maxSessions: 1, terminalLimits: { web: 2, app: 1 }, terminalLimitMode: 'replace' })
+    expect((await only.iam.auth.login({ identifier: only.username, password: TEST_PASSWORD }, { terminalType: 'web' })).success).toBe(true)
+    expect((await only.iam.auth.login({ identifier: only.username, password: TEST_PASSWORD }, { terminalType: 'app' })).success).toBe(false)
+  })
+
+  it('多并发签发不能突破各终端及全局上限', async () => {
+    const { iam, username } = await account({ maxSessions: 3, terminalLimits: { web: 2, app: 1 } })
+    const logins = await Promise.all(Array.from({ length: 12 }, (_, index) => iam.auth.login({ identifier: username, password: TEST_PASSWORD }, { terminalType: index % 2 ? 'app' : 'web' })))
+    expect(logins.filter(result => result.success)).toHaveLength(3)
+    const active = await Promise.all(logins.flatMap(result => result.success ? [iam.auth.verifyToken(result.data.tokens.accessToken)] : []))
+    expect(active.filter(result => result.success && result.data.terminalType === 'web')).toHaveLength(2)
+    expect(active.filter(result => result.success && result.data.terminalType === 'app')).toHaveLength(1)
+  })
+
   it('关闭闲置策略时保留 access 到期后 refresh 的既有行为', async () => {
     const { iam, username } = await account({ maxAge: 60, sliding: false, idleTimeout: 0 })
     const login = await iam.auth.login({ identifier: username, password: TEST_PASSWORD })

@@ -200,5 +200,7 @@
   "iam_captchaRequired": "请先完成安全验证",
   "iam_captchaInvalid": "安全验证无效或已过期，请重试",
   "iam_captchaDisabled": "安全验证未启用",
-  "iam_captchaUnavailable": "安全验证暂不可用，请稍后重试"
+  "iam_captchaUnavailable": "安全验证暂不可用，请稍后重试",
+  "iam_sensitiveOperationsInvalid": "敏感操作 ID 列表无效：最多 1000 项，每项为 1–128 字符。",
+  "iam_terminalTypeInvalid": "终端类型无效，请使用 web、app、desktop 或 api。"
 }

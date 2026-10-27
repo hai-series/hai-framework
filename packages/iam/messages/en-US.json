@@ -200,5 +200,7 @@
   "iam_captchaRequired": "Complete the security check first",
   "iam_captchaInvalid": "Security check is invalid or expired; try again",
   "iam_captchaDisabled": "Security challenges are disabled",
-  "iam_captchaUnavailable": "Security check is temporarily unavailable"
+  "iam_captchaUnavailable": "Security check is temporarily unavailable",
+  "iam_sensitiveOperationsInvalid": "Invalid sensitive operation IDs: use at most 1000 entries of 1–128 characters each.",
+  "iam_terminalTypeInvalid": "Invalid terminal type: use web, app, desktop or api."
 }

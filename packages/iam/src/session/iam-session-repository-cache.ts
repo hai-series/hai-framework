@@ -51,7 +51,7 @@ interface SessionState {
 /** 恢复私有 JSON 日期，拒绝损坏的授权数据；错误不包含认证快照。 */
 function restoreSession(session: Session): Session {
   const result = { ...session, createdAt: new Date(session.createdAt), startedAt: new Date(session.startedAt ?? session.createdAt), lastActiveAt: new Date(session.lastActiveAt), expiresAt: new Date(session.expiresAt) }
-  if (typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
+  if ((result.terminalType !== undefined && !['web', 'app', 'desktop', 'api'].includes(result.terminalType)) || typeof result.credentialVersion !== 'string' || !result.version || !Number.isSafeInteger(result.maxAge) || result.maxAge <= 0 || !Array.isArray(result.roles) || !result.roles.every(role => typeof role === 'string')
     || !Array.isArray(result.permissions) || !result.permissions.every(permission => typeof permission === 'string')
     || ![result.createdAt, result.startedAt, result.lastActiveAt, result.expiresAt].every(date => Number.isFinite(date.getTime()))) {
     throw new TypeError('Invalid session state')
@@ -120,7 +120,7 @@ export interface SessionRepository {
  */
 export function createCacheSessionRepository(
   refreshTokenMaxAge: number,
-  policy: Partial<Pick<SessionConfig, 'idleTimeout' | 'absoluteTimeout' | 'maxSessions' | 'singleDeviceMode' | 'sliding'>> = {},
+  policy: Partial<Pick<SessionConfig, 'idleTimeout' | 'absoluteTimeout' | 'maxSessions' | 'singleDeviceMode' | 'sliding' | 'terminalLimits' | 'terminalLimitMode'>> = {},
 ): SessionRepository {
   const idleTimeout = policy.idleTimeout ?? 0
   const absoluteTimeout = policy.absoluteTimeout ?? 0
@@ -216,13 +216,32 @@ export function createCacheSessionRepository(
   return {
     save: (session, tokens, singleDevice = false) => mutate(getUserSessionScope(session.userId), (state) => {
       // 已被数据库凭据代际撤销的旧记录不占用有效会话配额。
-      const count = Object.values(state.sessions).filter(entry => entry.session.credentialVersion === session.credentialVersion).length
-      if (singleDevice && policy.singleDeviceMode !== 'reject') {
-        state.sessions = {}
-      }
-      else if ((singleDevice && count > 0) || (maxSessions > 0 && count >= maxSessions)) {
+      const active = Object.entries(state.sessions).filter(([, entry]) => entry.session.credentialVersion === session.credentialVersion)
+      const terminal = session.terminalType ?? 'web'
+      const limits = policy.terminalLimits ?? {}
+      const cap = limits[terminal]
+      if (Object.keys(limits).length && cap === undefined)
         return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+      const removed = new Set<string>()
+      if (singleDevice) {
+        if (policy.singleDeviceMode === 'reject' && active.length)
+          return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+        if (policy.singleDeviceMode !== 'reject')
+          Object.keys(state.sessions).forEach(token => removed.add(token))
       }
+      else if (cap) {
+        const same = active.filter(([, entry]) => (entry.session.terminalType ?? 'web') === terminal)
+          .sort(([firstToken, first], [secondToken, second]) => new Date(first.session.startedAt ?? first.session.createdAt).getTime() - new Date(second.session.startedAt ?? second.session.createdAt).getTime() || firstToken.localeCompare(secondToken))
+        if (same.length >= cap) {
+          if (policy.terminalLimitMode !== 'replace')
+            return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+          same.slice(0, same.length - cap + 1).forEach(([token]) => removed.add(token))
+        }
+      }
+      if (maxSessions > 0 && active.filter(([token]) => !removed.has(token)).length >= maxSessions)
+        return err(HaiIamError.SESSION_LIMIT_EXCEEDED, iamM('iam_sessionLimitExceeded'))
+      // 所有配额确认后再改候选状态；失败不能撤销已存在的任何终端会话。
+      removed.forEach(token => delete state.sessions[token])
       return storeSession(state, session, tokens)
     }),
     rotate: (previous, refreshToken, session, tokens) => mutate(getUserSessionScope(previous.userId), (state) => {
@@ -274,6 +293,8 @@ export function createCacheSessionRepository(
         if (!entry || new Date(entry.session.expiresAt).getTime() <= Date.now() || policyExpired(entry.session))
           return err(HaiIamError.SESSION_NOT_FOUND, iamM('iam_sessionNotExist'))
         if (!expectedVersion || entry.session.version !== expectedVersion)
+          return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
+        if (patch.terminalType !== undefined && patch.terminalType !== (entry.session.terminalType ?? 'web'))
           return err(HaiIamError.CONFLICT, iamM('iam_sessionStateConflict'))
         const updated = applySessionPatch(restoreSession(entry.session), patch)
         if (![updated.expiresAt, updated.lastActiveAt].every(date => Number.isFinite(date.getTime())))

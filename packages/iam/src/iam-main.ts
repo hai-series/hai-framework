@@ -283,6 +283,18 @@ export const iam: IamFunctions = {
   get auth(): AuthnOperations {
     return currentAuth ?? notInitializedAuth
   },
+  async getPublicConfig() {
+    const snapshot = currentPublicConfig ? structuredClone(currentPublicConfig) : null
+    const authz = currentAuthz
+    if (!snapshot || !authz)
+      return notInitialized.result<IamPublicConfig>()
+    if (!snapshot.reauthentication.enabled)
+      return ok(snapshot)
+    const configured = await authz.getSensitiveOperations()
+    if (!configured.success)
+      return configured
+    return ok({ ...snapshot, reauthentication: { ...snapshot.reauthentication, operations: [...new Set([...snapshot.reauthentication.operations, ...configured.data])].sort() } })
+  },
   get user(): UserOperations {
     return currentUser ?? notInitializedUser
   },

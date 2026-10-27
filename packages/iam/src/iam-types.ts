@@ -241,8 +241,19 @@ export interface IamFunctions {
 
   /** 当前脱敏后的配置快照（未初始化时为 null） */
   readonly config: IamConfig | null
-  /** 安全且反映实际可用能力的认证页面配置。 */
+  /** 安全的文件配置快照；含数据库敏感规则的有效配置使用 getPublicConfig()。 */
   readonly publicConfig: IamPublicConfig | null
+  /**
+   * 读取包含文件与当前RBAC数据库敏感操作并集的公开配置；数据库读取失败返回失败。
+   * @returns 独立公开快照；未初始化或启用策略时数据库故障返回 HaiResult 失败。
+   * @example
+   * ```ts
+   * import { iam } from '@h-ai/iam'
+   * const config = await iam.getPublicConfig()
+   * if (config.success) config.data.reauthentication.operations
+   * ```
+   */
+  getPublicConfig: () => Promise<HaiResult<IamPublicConfig>>
   /** 是否已初始化 */
   readonly isInitialized: boolean
   /** 注册功能是否启用（未初始化或未配置时默认启用） */

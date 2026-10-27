@@ -17,7 +17,19 @@ for (const [name, setup] of [['sqlite', sqliteMemoryEnv], ['postgresql', postgre
       expect((await migrateIam()).success).toBe(true)
       expect(await reldb.sql.get('SELECT * FROM hai_iam_users')).toMatchObject({ success: true, data: { id: 'existing-user', password_hash: 'existing-password-hash', credential_version: '', reset_version: '', reset_hash: null, reset_attempts: 0 } })
       expect(await reldb.sql.get('SELECT account_type, account_status, last_login_at FROM hai_iam_users')).toMatchObject({ success: true, data: { account_type: 'permanent', account_status: 'active', last_login_at: null } })
-      expect(await migrateIam({ dryRun: true })).toMatchObject({ success: true, data: { currentVersion: 4, changes: [] } })
+      expect(await migrateIam({ dryRun: true })).toMatchObject({ success: true, data: { currentVersion: 5, changes: [] } })
+    })
+
+    it('升级旧权限表保留授权数据，敏感操作空值不自动添加限制', async () => {
+      expect((await reldb.ddl.dropTable('hai_iam_permissions')).success).toBe(true)
+      expect((await reldb.ddl.createTable('hai_iam_permissions', { id: { type: 'TEXT', primaryKey: true }, code: { type: 'TEXT' } })).success).toBe(true)
+      expect((await reldb.sql.execute('INSERT INTO hai_iam_permissions (id,code) VALUES (?,?)', ['existing-permission', 'orders:approve'])).success).toBe(true)
+      const plan = await migrateIam({ dryRun: true })
+      expect(plan.success && plan.data.changes).toContain('permission-sensitive-operations')
+      expect((await schemaColumns(reldb, 'hai_iam_permissions')).success).toBe(true)
+      expect((await migrateIam()).success).toBe(true)
+      expect((await migrateIam()).success).toBe(true)
+      expect(await reldb.sql.get('SELECT id,code,sensitive_operations FROM hai_iam_permissions')).toMatchObject({ success: true, data: { id: 'existing-permission', code: 'orders:approve', sensitive_operations: null } })
     })
   }, { database: reldb })
 }

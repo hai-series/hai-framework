@@ -202,7 +202,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       }
 
-      logger.info('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
+      logger.debug('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
       return ok({ user: { ...toUser(userResult.data), credentialVersion: userResult.data.credentialVersion ?? '' }, apiKey })
     },
   }

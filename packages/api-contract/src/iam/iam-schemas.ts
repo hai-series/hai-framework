@@ -199,10 +199,21 @@ export const IamCurrentUserSchema = IamUserSchema.extend({
  * ```
  */
 export const IamLoginInputSchema = z.object({
+  expectedUserId: z.string().min(1).max(200).optional(),
   captcha: captchaProofSchema,
   identifier: z.string().min(1),
   password: z.string().min(1),
 })
+
+/**
+ * 可以尝试刷新或恢复登录的IAM会话错误码；密码错误、初始/过期改密与操作二次认证不属于会话恢复。
+ * @example
+ * ```ts
+ * import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
+ * const expired = IamSessionErrorCodeSchema.safeParse('hai:iam:103').success
+ * ```
+ */
+export const IamSessionErrorCodeSchema = z.enum(['hai:iam:101', 'hai:iam:102', 'hai:iam:103', 'hai:iam:105', 'hai:iam:106', 'hai:iam:107'])
 
 /**
  * LDAP 登录与密码找回入参。
@@ -217,7 +228,7 @@ export const IamLoginInputSchema = z.object({
  * void value
  * ```
  */
-export const IamLdapLoginInputSchema = z.object({ username: z.string().trim().min(1), password: z.string().min(1), captcha: captchaProofSchema })
+export const IamLdapLoginInputSchema = z.object({ username: z.string().trim().min(1), password: z.string().min(1), captcha: captchaProofSchema, expectedUserId: z.string().min(1).max(200).optional() })
 /**
  * IamRequestPasswordResetInput 数据的运行时 Zod 校验约束。
  * @example
@@ -352,6 +363,7 @@ export const IamPublicConfigSchema = z.object({
  * ```
  */
 export const IamOtpLoginInputSchema = z.object({
+  expectedUserId: z.string().min(1).max(200).optional(),
   captcha: captchaProofSchema,
   identifier: z.string().min(1),
   code: z.string().min(1),
@@ -720,6 +732,7 @@ export const IamPermissionTypeSchema = z.enum(['menu', 'api', 'button'])
  * ```
  */
 export const IamPermissionSchema = z.object({
+  sensitiveOperations: z.array(z.string().trim().min(1).max(128)).max(1000).nullish().transform(value => value ?? []),
   id: z.string(),
   code: z.string(),
   name: z.string(),
@@ -760,6 +773,7 @@ export const IamListPermissionsInputSchema = PaginationQuerySchema.extend({
  * ```
  */
 export const IamCreatePermissionInputSchema = z.object({
+  sensitiveOperations: z.array(z.string().trim().min(1).max(128)).max(1000).default([]),
   code: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),

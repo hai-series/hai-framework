@@ -101,3 +101,29 @@ it('真实Redis双进程refresh唯一后继，singleDevice最终仅一个会话�
     await redis.release()
   }
 }, 120000)
+
+it('真实redis双进程竞争app单会话额度，不突破配额且保留两个web会话', async () => {
+  const redis = await acquireRedisContainer()
+  const config = { type: 'redis' as const, host: redis.host, port: redis.port }
+  const session = { maxSessions: 3, terminalLimits: { web: 2, app: 1 }, sliding: false }
+  try {
+    expect((await cache.init(config)).success).toBe(true)
+    const created = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', enabled: true } }), config: IamConfigSchema.parse({ session }) })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const userId = 'two-process-terminal-quota'
+    const first = await created.data.create({ userId, terminalType: 'web' })
+    const second = await created.data.create({ userId, terminalType: 'web' })
+    if (!first.success || !second.success)
+      throw new Error('Web test sessions could not be created')
+    const results = await race<Session>({ cache: config, operation: 'create', userId, session, terminalType: 'app' })
+    expect(results.filter(result => result.success)).toHaveLength(1)
+    expect((await created.data.verifyToken(first.data.accessToken)).success).toBe(true)
+    expect((await created.data.verifyToken(second.data.accessToken)).success).toBe(true)
+    expect((await created.data.create({ userId, terminalType: 'app' })).success).toBe(false)
+  }
+  finally {
+    await cache.close()
+    await redis.release()
+  }
+}, 120000)

@@ -13,7 +13,7 @@ async function main() {
     for (const initialize of [
       () => reldb.init({ type: 'sqlite', database: ':memory:' }),
       () => cache.init(input.cache),
-      () => iam.init({ seedDefaultData: false, session: { singleDevice: input.singleDevice, sliding: false } }),
+      () => iam.init({ seedDefaultData: false, session: { ...input.session, singleDevice: input.singleDevice ?? input.session?.singleDevice, sliding: false } }),
     ]) {
       const initialized = await initialize()
       if (!initialized.success)
@@ -38,7 +38,7 @@ async function main() {
     }
     const result = input.operation === 'refresh'
       ? await iam.session.refresh(input.refreshToken)
-      : await iam.session.create({ userId: input.userId })
+      : await iam.session.create({ userId: input.userId, terminalType: input.terminalType })
     process.stdout.write(JSON.stringify(result))
   }
   catch (error) {
