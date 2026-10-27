@@ -3,7 +3,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
-import { configEnvironmentVariables, moduleEnvironmentVariables, renderEnvironment, runtimeEnvironmentVariables } from '../packages/cli/src/commands/cli-config-environment.ts'
+import { configEnvironmentVariables, documentConfig, moduleEnvironmentVariables, renderEnvironment, runtimeEnvironmentVariables } from '../packages/cli/src/commands/cli-config-environment.ts'
 import { environmentReferenceSource } from './env-reference-source.mjs'
 
 const catalog = JSON.parse(await readFile('packages/cli/src/commands/cli-config-catalog.json', 'utf8'))
@@ -46,7 +46,15 @@ for (const app of await readdir('apps')) {
       continue
     const module = configFile.replace(/^_/, '').replace(/\.yml$/, '')
     modules.add(module)
-    for (const variable of configEnvironmentVariables(module, await readFile(path.join(directory, 'config', configFile), 'utf8')))
+    const configPath = path.join(directory, 'config', configFile)
+    const original = (await readFile(configPath, 'utf8')).replaceAll('\r\n', '\n')
+    const documented = documentConfig(module, original)
+    if (documented !== original) {
+      if (check)
+        throw new Error(`${configPath} field documentation is stale; run pnpm generate:env`)
+      await writeFile(configPath, documented)
+    }
+    for (const variable of configEnvironmentVariables(module, documented))
       active.set(variable.name, variable)
   }
   // 部署属于项目级配置；迁移到 JSON 后仍保留显式变量、路径及可选部署字段。

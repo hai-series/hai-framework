@@ -1,44 +1,78 @@
 # AI Playground 完整示例配置。
 # 模型、端点和行为参数提供 YAML 默认值；约定环境变量可覆盖任意叶子项。
+# 用途：LLM 配置（可选，所有字段有默认值）
 llm:
+  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
   apiKey: ${HAI_AI_LLM_APIKEY:}
+  # 用途：全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）
   baseUrl: ${HAI_AI_LLM_BASEURL:https://api.xiaomimimo.com/v1}
+  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
   model: ${HAI_AI_LLM_MODEL:mimo-v2.5}
+  # 用途：全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`）
   api: ${HAI_AI_LLM_API:chat}
+  # 用途：全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`）
   temperature: ${HAI_AI_LLM_TEMPERATURE:0.7}
+  # 用途：全局最大 Token 数（各模型 fallback，默认 `4096`）
   maxTokens: ${HAI_AI_LLM_MAXTOKENS:4096}
+  # 用途：全局请求超时时间（各模型 fallback，毫秒，默认 `60000`）
   timeout: ${HAI_AI_LLM_TIMEOUT:120000}
 
+# 用途：Audio 配置（语音识别 / 语音合成）
 audio:
   # MiMo 的 LLM/ASR/TTS 共用同一密钥；跨供应商时不要启用继承。
+  # 用途：是否允许未单独配置密钥的语音模型继承 LLM 全局密钥；跨供应商部署应保持关闭。
   inheritLlmApiKey: ${HAI_AI_AUDIO_INHERITLLMAPIKEY:true}
+  # 用途：注册的语音模型列表
   models:
+    # 用途：模型唯一标识（用于场景解析与请求显式指定）
     - id: asr
+      # 用途：所属语音平台
       provider: ${HAI_AI_AUDIO_MODELS_0_PROVIDER:mimo}
+      # 用途：厂商模型名（传给厂商 API 的实际模型名）
       model: ${HAI_AI_AUDIO_MODELS_0_MODEL:mimo-v2.5-asr}
+      # 用途：模型允许执行的操作；解析模型时会在调用厂商前校验
       operations: [ transcribe ]
+      # 用途：HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）
       baseUrl: ${HAI_AI_AUDIO_MODELS_0_BASEURL:https://api.xiaomimimo.com/v1}
+      # 用途：请求超时（毫秒，默认 60000）
       timeout: ${HAI_AI_AUDIO_MODELS_0_TIMEOUT:120000}
+    # 用途：模型唯一标识（用于场景解析与请求显式指定）
     - id: tts
+      # 用途：所属语音平台
       provider: ${HAI_AI_AUDIO_MODELS_1_PROVIDER:mimo}
+      # 用途：厂商模型名（传给厂商 API 的实际模型名）
       model: ${HAI_AI_AUDIO_MODELS_1_MODEL:mimo-v2.5-tts}
+      # 用途：模型允许执行的操作；解析模型时会在调用厂商前校验
       operations: [ synthesize ]
+      # 用途：HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）
       baseUrl: ${HAI_AI_AUDIO_MODELS_1_BASEURL:https://api.xiaomimimo.com/v1}
+      # 用途：请求超时（毫秒，默认 60000）
       timeout: ${HAI_AI_AUDIO_MODELS_1_TIMEOUT:120000}
+  # 用途：默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用）
   transcribeModel: ${HAI_AI_AUDIO_TRANSCRIBEMODEL:asr}
+  # 用途：默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用）
   synthesizeModel: ${HAI_AI_AUDIO_SYNTHESIZEMODEL:tts}
 
+# 用途：Image 配置（文生图）
 image:
+  # 用途：单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。
   maxImageBytes: ${HAI_AI_IMAGE_MAXIMAGEBYTES:20971520}
+  # 用途：单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。
   maxImages: ${HAI_AI_IMAGE_MAXIMAGES:4}
+  # 用途：注册的文生图模型
   models:
     # 默认示例使用 Pollinations。402 表示账户余额或该 Key 的预算耗尽；
     # 可在 https://enter.pollinations.ai/ 创建/调整 Key 与预算。
+    # 用途：模型唯一标识（供请求选择）
     - id: image
+      # 用途：所属文生图平台
       provider: ${HAI_AI_IMAGE_MODELS_0_PROVIDER:pollinations}
+      # 用途：厂商模型名
       model: ${HAI_AI_IMAGE_MODELS_0_MODEL:zimage}
       # 数组项通常用索引生成变量名；这里显式指定更稳定的厂商密钥名。
+      # 用途：API Key 覆盖；未提供时回退厂商环境变量
       apiKey: ${HAI_AI_IMAGE_POLLINATIONS_APIKEY:}
+      # 用途：整次图片生成与下载超时（毫秒，1–2147483647，默认 120000）
       timeout: ${HAI_AI_IMAGE_MODELS_0_TIMEOUT:120000}
     # 切换厂商时，取消对应块的注释，并把 generateModel 改为相应 id。
     # - id: openai-image
@@ -58,9 +92,14 @@ image:
     #   provider: seedream
     #   model: doubao-seedream-5-0-lite
     #   apiKey: ${ARK_API_KEY:}
+  # 用途：默认文生图模型 ID
   generateModel: ${HAI_AI_IMAGE_GENERATEMODEL:image}
 
+# 用途：Memory 配置
 memory:
+  # 用途：记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端
   provider: ${HAI_AI_MEMORY_PROVIDER:native}
+  # 用途：是否启用向量检索（默认 true，关闭则仅使用关键词匹配）
   embeddingEnabled: ${HAI_AI_MEMORY_EMBEDDINGENABLED:false}
+  # 用途：检索时默认返回数量（默认 10）
   defaultTopK: ${HAI_AI_MEMORY_DEFAULTTOPK:8}

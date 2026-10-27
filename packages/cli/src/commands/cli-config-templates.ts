@@ -7,7 +7,7 @@
 
 import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfig, FeatureId, IamModuleConfig, ModuleConfigs, StorageModuleConfig } from '../cli-types.js'
 import { stringify } from 'yaml'
-import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment } from './cli-config-environment.js'
+import { configEnvironmentVariables, documentConfig, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment } from './cli-config-environment.js'
 
 /**
  * 生成模块配置文件内容
@@ -22,7 +22,7 @@ import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeCon
  * ```
  */
 export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
-  return parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs))
+  return documentConfig(moduleKey, parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs)))
 }
 
 function generateLiteralConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
@@ -233,7 +233,7 @@ register:
   enabled: true
   defaultEnabled: true
 security:
-  lockoutEnabled: true # 可关闭；关闭后历史锁不阻止登录/旧密码验证
+  lockoutEnabled: false # 按需开启；关闭后历史锁不阻止登录/旧密码验证
   failureWindow: 86400 # 从首次失败起计数的固定窗口（秒）
   maxLoginAttempts: 5
   lockoutDuration: 1200
@@ -307,7 +307,7 @@ password:
   requireLowercase: false
   requireNumber: false
   requireSpecialChar: false
-  minCharacterClasses: 3 # 大写、小写、数字、特殊字符中至少满足的类别数；0 关闭
+  minCharacterClasses: 0 # 大写、小写、数字、特殊字符中至少满足的类别数；0 关闭
   expirationDays: 0 # 0 表示不限制密码有效期
   preventSamePassword: false # 启用后新旧密码必须不同；有效期策略也强制不同
   requireInitialChange: false # 管理员创建/重置后首次登录先改密
@@ -335,6 +335,9 @@ session:
   singleDevice: false # 单设备登录
   singleDeviceMode: replace # replace 顶旧保新；reject 拒绝重复登录
   maxSessions: 0 # 每用户有效会话上限，0 不限制
+  # 按终端分别限制；非空时仅允许列出的类型，仍受全局最大会话数约束。
+  terminalLimits: {}
+  terminalLimitMode: reject
   idleTimeout: 0 # 闲置期限（秒），0 关闭；access/refresh 均执行
   absoluteTimeout: 0 # 从首次登录起的绝对期限（秒），0 关闭
   refreshTokenMaxAge: 604800 # refreshToken 过期（秒），默认 7 天
@@ -833,7 +836,7 @@ capture:
 
 # 应用示例保护近期日志；框架未配置时不强制启用。0天清理不能绕过已启用保护。
 retention:
-  enabled: true
+  enabled: false
   minDays: 90
 
 # 凭据始终脱敏；仅业务隐私可关闭，可补充项目字段名

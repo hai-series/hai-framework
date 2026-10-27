@@ -2,10 +2,17 @@
 # H5 App - AI 配置
 # =============================================================================
 
+# 用途：LLM 配置（可选，所有字段有默认值）
 llm:
+  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
   apiKey: ${HAI_AI_LLM_APIKEY:}
+  # 用途：全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）
   baseUrl: ${HAI_AI_LLM_BASEURL:https://api.openai.com/v1}
+  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  # 用途：全局请求超时时间（各模型 fallback，毫秒，默认 `60000`）
   timeout: ${HAI_AI_LLM_TIMEOUT:60000}
+  # 用途：全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`）
   temperature: ${HAI_AI_LLM_TEMPERATURE:0.2}
+  # 用途：全局最大 Token 数（各模型 fallback，默认 `4096`）
   maxTokens: ${HAI_AI_LLM_MAXTOKENS:1024}

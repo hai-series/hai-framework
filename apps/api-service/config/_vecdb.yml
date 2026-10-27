@@ -2,8 +2,12 @@
 # API Service - VecDB 配置
 # =============================================================================
 
+# 用途：后端或功能类型，按枚举选择
 type: ${HAI_VECDB_TYPE:lancedb}
+# 用途：本地持久化路径（嵌入式模式：提供且无 url 时自动拉起本地服务）
 path: ${HAI_VECDB_PATH:./data/vecdb}
 
+# 用途：pgvector：连接串；Qdrant：HTTP(S) 服务地址；Chroma：HTTP(S) 根端点，优先于 host/port，不允许凭据、路径前缀、query 或 fragment
 url: ${HAI_VECDB_URL:http://localhost:6333}
+# 用途：Qdrant：API key；Chroma：Authorization Bearer token，用于同协议的自托管服务/网关，不提供 Chroma Cloud 契约
 apiKey: ${HAI_VECDB_APIKEY:}

@@ -1,11 +1,18 @@
+# 用途：HTTP 服务监听地址与端口
 server:
+  # 用途：HTTP 监听主机名或 IP
   host: ${HAI_KIT_SERVER_HOST:127.0.0.1}
+  # 用途：HTTP 监听端口
   port: ${HAI_KIT_SERVER_PORT:3000}
 
+# 用途：传输加密开关或密钥协商配置
 transport:
   # 本反馈宿主使用 8 MiB 明文预算，容纳 5 MiB 附件的 Base64 与 JSON；框架默认仍为 1 MiB。
+  # 用途：双向业务明文 UTF-8 字节上限；默认 1 MiB，密文与代理预算自动推导
   maxPlaintextBytes: ${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:8388608}
+  # 用途：客户端与服务端约定的密钥交换端点
   keyExchangePath: ${HAI_KIT_TRANSPORT_KEYEXCHANGEPATH:/api/_hai/key-exchange}
+  # 用途：不进入传输加密管道的路径
   excludePaths:
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_0:/api/storage}
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_1:/api/public}

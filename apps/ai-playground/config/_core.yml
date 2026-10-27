@@ -1,7 +1,12 @@
 # 应用信息
+# 用途：应用名称（默认 'hai Admin'）
 name: ${HAI_CORE_NAME:hai ai playground}
+# 用途：应用版本（默认 '0.1.0'）
 version: ${HAI_CORE_VERSION:0.1.0}
+# 用途：运行环境（默认 'development'）
 env: ${HAI_CORE_ENV:development}
 
+# 用途：日志配置（可选）
 logging:
+  # 用途：日志级别（默认 'info'）
   level: ${HAI_CORE_LOGGING_LEVEL:debug}

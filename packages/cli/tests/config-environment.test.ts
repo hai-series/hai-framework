@@ -1,16 +1,32 @@
+import { readFile } from 'node:fs/promises'
 import { parseEnv } from 'node:util'
 import { CacheConfigSchema } from '@h-ai/cache'
 import { AlipayConfigSchema } from '@h-ai/payment'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { configEnvironmentVariables, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment, runtimeEnvironmentVariables } from '../src/commands/cli-config-environment.js'
+import { configEnvironmentVariables, documentConfig, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment, runtimeEnvironmentVariables } from '../src/commands/cli-config-environment.js'
 import { generateConfigFile, generateEnvExample } from '../src/commands/cli-config-templates.js'
 import { loadConfigText } from './helpers/config.js'
 
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
+  it.each(['iam', 'reach'])('真实应用 %s 配置的说明可重复更新，数组与段尾注释不累加', async (module) => {
+    const original = await readFile(new URL(`../../../apps/admin-console/config/_${module}.yml`, import.meta.url), 'utf8')
+    const first = documentConfig(module, original)
+    expect(loadConfigText(module, first)).toEqual(loadConfigText(module, original))
+    expect(documentConfig(module, first)).toBe(first)
+    expect(first).not.toMatch(/- # 用途：/)
+  })
+  it('字段文档生成保留标量、数组、正文和已有注释，且重复执行不累加', () => {
+    const original = '# 业务保留的说明\nregister:\n  enabled: false\n  defaultEnabled: true\nloginAccess:\n  allowIps: [127.0.0.1]\nagreements:\n  userAgreementMarkdown: |\n    # 正文标题\n    用户协议正文。\n'
+    const documented = documentConfig('iam', original)
+    expect(loadConfigText('iam', documented)).toEqual(loadConfigText('iam', original))
+    expect(documented).toContain('# 业务保留的说明')
+    expect(documented).toContain('自助注册')
+    expect(documentConfig('iam', documented)).toBe(documented)
+  })
   it('支付宝 H5 returnUrl 经生成 YAML 和真实环境插值后由渠道 Schema 校验', () => {
     const generated = generateConfigFile('payment')
     const alipayExample = generated.match(/^# alipay:\n(?:# {3}.*\n)+/m)?.[0]

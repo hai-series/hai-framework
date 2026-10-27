@@ -277,6 +277,7 @@ const FULLSTACK_SERV_CATALOG_PACKAGE_NAMES = [
   '@h-ai/iam',
   '@h-ai/reach',
   '@h-ai/reldb',
+  '@h-ai/scheduler',
   '@h-ai/serv',
   '@h-ai/storage',
   'zod',
