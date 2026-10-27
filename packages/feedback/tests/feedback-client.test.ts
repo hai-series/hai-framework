@@ -145,7 +145,7 @@ describe('feedback browser collection', () => {
 
   it('当前页面截图排在历史操作截图之前，换页重开草稿补充当前现场', async () => {
     const captureScreenshot = vi.fn(async () => pngFile().bytes)
-    const { client } = await setup({ screenshot: true, captureScreenshot })
+    const { client } = await setup({ screenshot: true, captureScreenshot, keyScreenshots: true })
     client.record({ kind: 'error', data: { message: 'Earlier page failed' } })
     await vi.waitFor(() => expect(captureScreenshot).toHaveBeenCalledOnce())
     await client.prepare()
@@ -638,7 +638,7 @@ describe('feedback browser collection', () => {
 
   it('稳定操作触发截图早于反馈出现，后续反馈携带有界关键截图', async () => {
     const captureScreenshot = vi.fn(async () => new Uint8Array([1, 2, 3]))
-    const { client } = await setup({ screenshot: true, captureScreenshot, keyScreenshotThrottleMs: 10000, maxKeyScreenshots: 1 })
+    const { client } = await setup({ screenshot: true, captureScreenshot, keyScreenshots: true, keyScreenshotThrottleMs: 10000, maxKeyScreenshots: 1 })
     const button = document.createElement('button')
     button.dataset.feedbackAction = 'order:save'
     document.body.append(button)

@@ -12,6 +12,7 @@ const EVIDENCE = 'hai_feedback_evidence'
 const ATTACHMENTS = 'hai_feedback_attachments'
 const HISTORY = 'hai_feedback_history'
 const JOBS = 'hai_feedback_jobs'
+const QUOTAS = 'hai_feedback_quotas'
 
 // 仅允许本模块静态身份列；不能把外部输入拼成 SQL 标识符。
 const identityColumns = ['id', 'report_id', 'scope_id', 'app_id', 'user_id', 'source', 'request_id', 'error_id', 'client_id'] as const
@@ -194,7 +195,7 @@ export function readFeedbackJson(value: unknown): unknown {
  * ```
  */
 export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackReportRow> {
-  readonly tables = { reports: REPORTS, evidence: EVIDENCE, attachments: ATTACHMENTS, history: HISTORY, jobs: JOBS }
+  readonly tables = { reports: REPORTS, evidence: EVIDENCE, attachments: ATTACHMENTS, history: HISTORY, jobs: JOBS, quotas: QUOTAS }
 
   constructor() {
     super(reldb, {
@@ -208,6 +209,18 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
     if (!report.success)
       return report
     const definitions: Array<[string, ReldbTableDef]> = [
+      [QUOTAS, {
+        id: { type: 'TEXT', primaryKey: true },
+        app_id: { type: 'TEXT', notNull: true },
+        scope_id: { type: 'TEXT', notNull: true },
+        user_id: { type: 'TEXT', notNull: true },
+        period: { type: 'BIGINT', notNull: true },
+        report_count: { type: 'BIGINT', notNull: true },
+        reserved_bytes: { type: 'BIGINT', notNull: true },
+        report_bytes: { type: 'BIGINT', notNull: true, defaultValue: 0 },
+        export_limit: { type: 'INTEGER', notNull: true, defaultValue: 0 },
+        updated_at: { type: 'BIGINT', notNull: true },
+      }],
       [EVIDENCE, {
         id: { type: 'TEXT', primaryKey: true },
         report_id: { type: 'TEXT' },
@@ -264,9 +277,11 @@ export class FeedbackReportRepository extends BaseReldbCrudRepository<FeedbackRe
         return created
     }
     const indexes = [
+      { table: QUOTAS, name: 'hai_feedback_quotas_expiry', columns: ['app_id', 'period'] },
       { table: REPORTS, name: 'hai_feedback_reports_scope_time', columns: ['scope_id', 'created_at'] },
       { table: REPORTS, name: 'hai_feedback_reports_scope_status', columns: ['scope_id', 'status', 'created_at'] },
       { table: EVIDENCE, name: 'hai_feedback_evidence_report_seq', columns: ['report_id', 'source', 'sequence'] },
+      { table: EVIDENCE, name: 'hai_feedback_evidence_temp_expiry', columns: ['app_id', 'report_id', 'expires_at'] },
       { table: EVIDENCE, name: 'hai_feedback_evidence_temp_scope', columns: ['scope_id', 'user_id', 'timestamp'] },
       { table: ATTACHMENTS, name: 'hai_feedback_attachments_report', columns: ['report_id'] },
       { table: HISTORY, name: 'hai_feedback_history_report', columns: ['report_id'] },

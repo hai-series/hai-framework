@@ -68,6 +68,33 @@ async function expectMissing(id: string, missingReason: string) {
 }
 
 describe.sequential('服务端现场有界采集', () => {
+  it('错误窗口分批持久化，201条现场不逐条往返数据库', async () => {
+    const reads = vi.spyOn(reldb.sql, 'get')
+    const writes = vi.spyOn(reldb.sql, 'execute')
+    const output = logger('batch-budget')
+    for (let index = 0; index < 100; index++) output.info(`Before ${index}`)
+    output.error('Bounded batch error')
+    for (let index = 0; index < 100; index++) output.info(`After ${index}`)
+    expect((await feedback.close()).success).toBe(true)
+    expect(reads.mock.calls.length).toBeLessThanOrEqual(8)
+    expect(writes.mock.calls.length).toBeLessThanOrEqual(8)
+    const saved = await reldb.sql.get<{ count: number }>('SELECT COUNT(*) AS count FROM hai_feedback_evidence WHERE report_id IS NULL')
+    expect(saved.success && Number(saved.data?.count)).toBe(201)
+  })
+
+  it('大日志错误风暴的待写字节有界，并保留明确的丢失标记', async () => {
+    for (let request = 0; request < 3; request++) {
+      const output = logger(`large-window-${request}`)
+      for (let index = 0; index < 100; index++) output.info(`${index}-${'x'.repeat(60000)}`)
+      output.error('Large bounded window')
+    }
+    expect((await feedback.close()).success).toBe(true)
+    const saved = await reldb.sql.get<{ bytes: number }>('SELECT SUM(bytes) AS bytes FROM hai_feedback_evidence WHERE report_id IS NULL')
+    expect(saved.success && Number(saved.data?.bytes)).toBeLessThanOrEqual(8 * 1024 * 1024)
+    const losses = await reldb.sql.query<{ payload: unknown }>('SELECT payload FROM hai_feedback_evidence WHERE report_id IS NULL AND kind = ?', ['missing'])
+    expect(losses.success && JSON.stringify(losses.data)).toContain('server_pending_evidence_bytes_exceeded')
+  }, 20_000)
+
   it('超过单条日志上限后明确记录缺失原因，而非悄悄丢弃', async () => {
     logger('large-log').error('x'.repeat(70000))
     await expectMissing(await collect('oversized-log'), 'server_log_record_too_large')
@@ -76,7 +103,7 @@ describe.sequential('服务端现场有界采集', () => {
   it('临时证据读取失败保留本地现场并明确标为partial', async () => {
     logger('read-failed').error('Correlated error remains available locally')
     const query = reldb.sql.query
-    vi.spyOn(reldb.sql, 'query').mockImplementation(<T = QueryRow>(sql: string, parameters?: unknown[]) => sql.includes('report_id IS NULL')
+    vi.spyOn(reldb.sql, 'query').mockImplementation(<T = QueryRow>(sql: string, parameters?: unknown[]) => sql.startsWith('SELECT payload FROM hai_feedback_evidence') && sql.includes('report_id IS NULL')
       ? Promise.resolve(err(HaiReldbError.QUERY_FAILED, 'fixture-internal-database-details'))
       : query<T>(sql, parameters))
     await expectMissing(await collect('temporary-read-failed'), 'server_temporary_evidence_read_failed')

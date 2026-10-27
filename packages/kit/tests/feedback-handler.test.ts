@@ -20,6 +20,13 @@ function fixture() {
 }
 
 describe('kit feedback catch-all', () => {
+  it('可选反馈未就绪时端点明确503，不把默认策略当作就绪', async () => {
+    const f = fixture()
+    Object.defineProperty(f.feedback, 'isInitialized', { value: false })
+    const response = await f.request('/reports', { appId: 'app', submissionId: 'unavailable' })
+    expect(response.status).toBe(503)
+  })
+
   it('forwards parsed evidence and trusted actor and returns durable acknowledgement', async () => {
     const f = fixture()
     const evidence = [{ id: 'event-1', source: 'browser', sequence: 1, kind: 'log', timestamp: 1, data: {} }]

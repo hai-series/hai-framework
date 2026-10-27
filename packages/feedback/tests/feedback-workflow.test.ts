@@ -15,7 +15,7 @@ import { feedback, HaiFeedbackError } from '../src/index.js'
 const actor: FeedbackContext = { scopeId: 'tenant-a', userId: 'user-a' }
 const admin: FeedbackContext = { ...actor, userId: 'administrator', permissions: ['feedback:*'] }
 const other: FeedbackContext = { scopeId: 'tenant-b', userId: 'user-b', permissions: ['feedback:*'] }
-const config = { appId: 'test-app', recipients: ['admin@example.test'], notificationProvider: 'email', adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, collectionTimeoutMs: 60000 }
+const config = { appId: 'test-app', recipients: ['admin@example.test'], notificationProvider: 'email', adminUrl: 'http://localhost/admin/feedback', workerIntervalMs: 0, collectionTimeoutMs: 60000, maxReportsPerUserDay: 1000, maxBytesPerUserDay: 1024 ** 4, maxStoredBytesPerScope: 1024 ** 4 }
 let root: string
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'hai-feedback-workflow-'))

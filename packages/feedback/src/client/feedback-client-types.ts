@@ -53,12 +53,16 @@ export interface FeedbackClientConfig {
   actions: FeedbackClientActions
   cookieAllowlist?: readonly string[]
   screenshot?: boolean
-  captureScreenshot?: () => Promise<Uint8Array>
+  /** 自定义截图可响应取消信号；忽略取消时仍等待实际任务退出后才释放单飞锁。 */
+  captureScreenshot?: (options?: { signal: AbortSignal }) => Promise<Uint8Array>
   screenshotTimeoutMs?: number
+  /** 自动关键截图显式开启；默认仅在用户准备反馈时截图。 */
   keyScreenshots?: boolean
   maxKeyScreenshots?: number
   keyScreenshotThrottleMs?: number
   replay?: boolean
+  /** 默认 prepare 时启动 DOM 回放；init 模式用于宿主明确需要全程回溯的场景。 */
+  replayStart?: 'init' | 'prepare'
   /** 原生 console 采集显式启用；不改变输出级别或默认采集全部 debug。 */
   captureConsole?: boolean
   persistDraft?: boolean
@@ -137,6 +141,8 @@ export interface FeedbackBrowserClient {
   /** URL 按附件修订复用，删除、替换和会话关闭时释放。 */
   getView: () => FeedbackDraftView
   releasePreviews: () => void
+  /** 关闭反馈界面时暂停 DOM 回放和截图；保留轻量日志、草稿及已受理上传。 */
+  pause: () => void
   /** 导出并使用当前平台的保存/分享入口。 */
   saveDraft: (input?: FeedbackClientSubmitInput) => Promise<HaiResult<FeedbackSaveResult>>
   /** 并发初始化返回 INIT_IN_PROGRESS；重初始化先等待旧会话关闭。 */

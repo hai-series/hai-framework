@@ -19,5 +19,6 @@
   "feedback_materialPartial": "部分缺失",
   "feedback_materialFailed": "采集失败",
   "feedback_defaultSummary": "用户提交的问题反馈",
-  "feedback_retryInputChanged": "首次提交已发出，重试需保持原说明和附件。请恢复原输入完成确认后，再发起新反馈。"
+  "feedback_retryInputChanged": "首次提交已发出，重试需保持原说明和附件。请恢复原输入完成确认后，再发起新反馈。",
+  "feedback_quotaExceeded": "反馈配额已用完，请稍后重试或联系管理员"
 }

@@ -32,6 +32,7 @@ const FeedbackErrorInfo = {
   LIMIT_EXCEEDED: '024:413',
   INVALID_INPUT: '025:400',
   CHECKSUM_MISMATCH: '026:422',
+  QUOTA_EXCEEDED: '027:429',
 } satisfies ErrorInfo
 
 /**

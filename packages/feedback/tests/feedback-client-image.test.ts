@@ -5,6 +5,17 @@ import { captureFeedbackScreenshot } from '../src/client/feedback-client-image.j
 const capture = vi.hoisted(() => vi.fn())
 vi.mock('html2canvas', () => ({ default: capture }))
 
+it('已取消或DOM超过预算时不进入昂贵的截图引擎', async () => {
+  capture.mockClear()
+  const controller = new AbortController()
+  controller.abort()
+  await expect(captureFeedbackScreenshot(controller.signal)).rejects.toBeDefined()
+  expect(capture).not.toHaveBeenCalled()
+  document.body.innerHTML = '<span></span>'.repeat(10001)
+  await expect(captureFeedbackScreenshot()).rejects.toThrow('Screenshot document budget exceeded')
+  expect(capture).not.toHaveBeenCalled()
+})
+
 afterEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()

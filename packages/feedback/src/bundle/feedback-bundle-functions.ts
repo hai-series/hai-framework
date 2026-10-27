@@ -159,6 +159,8 @@ function parseManifest(value: Record<string, unknown>): FeedbackBundleManifest {
  */
 export async function createFeedbackBundle<TReport extends { id: string }>(input: FeedbackBundleInput<TReport>): Promise<HaiResult<Uint8Array>> {
   try {
+    if (input.createdAt !== undefined && (!Number.isSafeInteger(input.createdAt) || input.createdAt < 0))
+      throw new Error('Invalid bundle creation time')
     const report = jsonObject(input.report)
     if (typeof report.id !== 'string' || !SAFE_ID.test(report.id))
       throw new Error('Invalid report')
@@ -193,7 +195,7 @@ export async function createFeedbackBundle<TReport extends { id: string }>(input
       files[path] = new Uint8Array(attachment.bytes)
       manifestFiles.push({ path, size: attachment.bytes.byteLength, sha256: hash, kind: 'attachment', attachmentId: attachment.id, name: attachment.name, contentType: attachment.contentType })
     }
-    const manifest: FeedbackBundleManifest = { format: 'hai-feedback', version: 1, reportId: report.id, evidenceRevision: typeof report.evidenceRevision === 'number' ? report.evidenceRevision : 0, createdAt: Date.now(), missing, files: manifestFiles }
+    const manifest: FeedbackBundleManifest = { format: 'hai-feedback', version: 1, reportId: report.id, evidenceRevision: typeof report.evidenceRevision === 'number' ? report.evidenceRevision : 0, createdAt: input.createdAt ?? Date.now(), missing, files: manifestFiles }
     const temporary: FeedbackBundle = { report: { ...report, id: report.id }, evidence, history, manifest, files }
     files['summary.md'] = strToU8(summarizeFeedbackBundle(temporary))
     for (const [path, bytes] of Object.entries(files)) {

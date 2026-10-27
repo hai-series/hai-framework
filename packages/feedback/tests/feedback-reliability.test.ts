@@ -39,6 +39,65 @@ afterEach(async () => {
 })
 
 describe.sequential('反馈可靠性边界', () => {
+  it('每日提交配额在事务中原子预留，重复提交不重复计数，拒绝不留下报告', async () => {
+    await feedback.close()
+    expect((await feedback.init({ ...config, maxReportsPerUserDay: 1 })).success).toBe(true)
+    const first = await feedback.submit({ appId: config.appId, submissionId: 'quota-once' }, actor)
+    expect(first.success).toBe(true)
+    expect((await feedback.submit({ appId: config.appId, submissionId: 'quota-once' }, actor)).success).toBe(true)
+    expect(await feedback.submit({ appId: config.appId, submissionId: 'quota-twice' }, actor)).toMatchObject({ success: false, error: { code: HaiFeedbackError.QUOTA_EXCEEDED.code } })
+    expect(await feedback.list({}, admin)).toMatchObject({ success: true, data: { total: 1 } })
+    expect((await feedback.submit({ appId: config.appId, submissionId: 'other-user' }, { ...actor, userId: 'another-user' })).success).toBe(true)
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_feedback_quotas WHERE period = -1')).toMatchObject({ success: true, data: { count: 2 } })
+  })
+
+  it('scope 存储预留包含历史 ZIP，超限在上传之前拒绝且隔离其它 scope', async () => {
+    await feedback.close()
+    expect((await feedback.init({ ...config, maxExportsPerReport: 1, maxStoredBytesPerScope: 64 * 1024 * 1024 })).success).toBe(true)
+    expect((await feedback.submit({ appId: config.appId, submissionId: 'storage-first' }, actor)).success).toBe(true)
+    expect(await feedback.submit({ appId: config.appId, submissionId: 'storage-second' }, { ...actor, userId: 'other' })).toMatchObject({ success: false, error: { code: HaiFeedbackError.QUOTA_EXCEEDED.code } })
+    expect((await feedback.submit({ appId: config.appId, submissionId: 'storage-second' }, { ...actor, scopeId: 'tenant-b' })).success).toBe(true)
+  })
+
+  it('到期临时证据按应用限批清理，保留其它应用数据', async () => {
+    const now = Date.now()
+    for (let index = 0; index < 202; index++) {
+      const saved = await reldb.sql.execute('INSERT INTO hai_feedback_evidence (id, report_id, scope_id, user_id, app_id, source, sequence, kind, timestamp, revision, bytes, expires_at, payload) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [`expired-${index}`, actor.scopeId, actor.userId, index === 201 ? 'other-app' : config.appId, 'server:log', index, 'log', now - 1000, 0, 2, now - 1, '{}'])
+      expect(saved.success).toBe(true)
+    }
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_feedback_evidence WHERE app_id = ?', [config.appId])).toMatchObject({ success: true, data: { count: 101 } })
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    expect(await reldb.sql.get('SELECT COUNT(*) AS count FROM hai_feedback_evidence')).toMatchObject({ success: true, data: { count: 1 } })
+  })
+
+  it('服务端环境证据写入失败时不留下伪完整受理，恢复后相同提交可安全重试', async () => {
+    const begin = reldb.tx.begin
+    const failing = vi.spyOn(reldb.tx, 'begin').mockImplementation(async () => {
+      const started = await begin()
+      if (!started.success)
+        return started
+      const execute = started.data.execute
+      started.data.execute = async (sql, params) => sql.startsWith('INSERT INTO hai_feedback_evidence') && params?.includes('environment')
+        ? err(HaiFeedbackError.OPERATION_FAILED, 'Environment fixture write unavailable')
+        : execute(sql, params)
+      return started
+    })
+    const input = { submissionId: 'atomic-environment', appId: config.appId }
+    try {
+      expect((await feedback.submit(input, actor)).success).toBe(false)
+      expect(await feedback.list({}, admin)).toMatchObject({ success: true, data: { total: 0 } })
+    }
+    finally { failing.mockRestore() }
+    const report = await feedback.submit(input, actor)
+    expect(report.success).toBe(true)
+    if (!report.success)
+      return
+    expect((await feedback.submit(input, actor)).success).toBe(true)
+    expect(await feedback.getEvidence({ id: report.data.id, kind: 'environment' }, admin)).toMatchObject({ success: true, data: { total: 1 } })
+  })
+
   it('同租户只读管理员不能借read权限为他人的反馈追加或结束采集', async () => {
     const report = await feedback.submit({ submissionId: 'read-is-not-write', appId: config.appId }, actor)
     expect(report.success).toBe(true)

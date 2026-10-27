@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest'
 import { createFeedbackBundle, getFeedbackBundleViewerFiles, queryFeedbackBundle, readFeedbackBundle, summarizeFeedbackBundle } from '../src/bundle/index.js'
 
 describe('feedback 离线问题包', () => {
+  it('固定快照与创建时间生成确定性 ZIP，非法时间不进入归档', async () => {
+    const input = { report: { id: 'fb-deterministic', evidenceRevision: 1 }, evidence: [], createdAt: 1000 }
+    const first = await createFeedbackBundle(input)
+    const second = await createFeedbackBundle(input)
+    expect(first.success && second.success).toBe(true)
+    if (first.success && second.success)
+      expect(second.data).toEqual(first.data)
+    expect((await createFeedbackBundle({ ...input, createdAt: Number.NaN })).success).toBe(false)
+  })
+
   it('构建身份在诊断包中同样限制为 128 字符', async () => {
     const accepted = await createFeedbackBundle({ report: { id: 'fb-build', buildId: 'b'.repeat(128) }, evidence: [] })
     expect(accepted.success).toBe(true)

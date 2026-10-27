@@ -94,8 +94,74 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let running: Promise<HaiResult<{ processed: number }>> | null = null
+  let idleRounds = 0
+  let cleanupBacklog = false
+  let cleanupAfter = 0
+  let wakePending = false
   const shutdown = new AbortController()
+
+  function schedule(delay: number) {
+    if (stopped || !config.workerIntervalMs)
+      return
+    if (timer)
+      clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = undefined
+      void tick()
+    }, delay)
+    timer.unref()
+  }
+  function wakeWorker() {
+    idleRounds = 0
+    if (running)
+      wakePending = true
+    else
+      schedule(config.workerIntervalMs)
+  }
+  async function tick() {
+    if (stopped)
+      return
+    const result = await runJobs()
+    idleRounds = result.success && (result.data.processed > 0 || cleanupBacklog || wakePending) ? 0 : Math.min(idleRounds + 1, 10)
+    wakePending = false
+    schedule(Math.min(30000, config.workerIntervalMs * 2 ** idleRounds))
+  }
   const collectEvidence = options.collectEvidence
+
+  function quotaExceeded() {
+    return err(HaiFeedbackError.QUOTA_EXCEEDED, feedbackM('feedback_quotaExceeded'))
+  }
+  function scopeQuotaId(scopeId: string) {
+    return hash(JSON.stringify([config.appId, scopeId, 'storage']))
+  }
+
+  /** 同一数据库事务先预留最大材料及导出容量，避免多节点先检查后写穿透。 */
+  async function reserveQuota(tx: DmlWithTxOperations, actor: FeedbackContext, reportId: string) {
+    const time = await tx.get<{ now: number }>(`SELECT ${clock} AS now`)
+    if (!time.success)
+      return time
+    const now = Number(time.data?.now)
+    if (!Number.isFinite(now))
+      return failed()
+    const day = Math.floor(now / 86400000) * 86400000
+    const bytes = budget.maxTotalBytes * (config.maxExportsPerReport + 1)
+    const buckets = [
+      { id: scopeQuotaId(actor.scopeId), period: 0, maxReports: Number.MAX_SAFE_INTEGER, maxBytes: config.maxStoredBytesPerScope },
+      { id: hash(JSON.stringify([config.appId, actor.scopeId, actor.userId, day])), period: day, maxReports: config.maxReportsPerUserDay, maxBytes: config.maxBytesPerUserDay },
+    ]
+    for (const bucket of buckets) {
+      const suffix = reldb.config?.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE id = id' : 'ON CONFLICT (id) DO NOTHING'
+      const inserted = await tx.execute(`INSERT INTO ${table.quotas} (id, app_id, scope_id, user_id, period, report_count, reserved_bytes, updated_at) VALUES (?, ?, ?, ?, ?, 0, 0, ?) ${suffix}`, [bucket.id, config.appId, actor.scopeId, bucket.period === 0 ? '' : actor.userId, bucket.period, now])
+      if (!inserted.success)
+        return inserted
+      const reserved = await tx.execute(`UPDATE ${table.quotas} SET report_count = report_count + 1, reserved_bytes = reserved_bytes + ?, updated_at = ? WHERE id = ? AND report_count < ? AND reserved_bytes <= ?`, [bytes, now, bucket.id, bucket.maxReports, bucket.maxBytes - bytes])
+      if (!reserved.success)
+        return reserved
+      if (!reserved.data.changes)
+        return quotaExceeded()
+    }
+    return tx.execute(`INSERT INTO ${table.quotas} (id, app_id, scope_id, user_id, period, report_count, reserved_bytes, report_bytes, export_limit, updated_at) VALUES (?, ?, ?, ?, -1, 1, ?, ?, ?, ?)`, [reportId, config.appId, actor.scopeId, actor.userId, bytes, budget.maxTotalBytes, config.maxExportsPerReport, now])
+  }
 
   async function access(id: string, actor: FeedbackContext, permission?: string, sql: DmlOperations = reldb.sql): Promise<HaiResult<FeedbackReportRow>> {
     if (!validActor(actor))
@@ -230,25 +296,22 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     return result.success ? ok(result.data.map(row => FeedbackEvidenceSchema.parse({ ...FeedbackEvidenceInputSchema.parse(readFeedbackJson(row.payload)), feedbackId: id, revision: Number(row.revision) }))) : result
   }
 
+  async function runJobs(): Promise<HaiResult<{ processed: number }>> {
+    if (stopped)
+      return err(HaiFeedbackError.NOT_INITIALIZED, feedbackM('feedback_notInitialized'))
+    if (running)
+      return running
+    running = core.context.run({ suppressLogObservers: true }, processJobs).catch(failed).finally(() => {
+      running = null
+    })
+    return running
+  }
+
   const operations: FeedbackRuntime = {
     start() {
       if (!config.workerIntervalMs || stopped)
         return
-      const tick = async () => {
-        if (stopped)
-          return
-        await operations.runJobs()
-        if (!stopped) {
-          timer = setTimeout(() => {
-            void tick()
-          }, config.workerIntervalMs)
-          timer.unref()
-        }
-      }
-      timer = setTimeout(() => {
-        void tick()
-      }, config.workerIntervalMs)
-      timer.unref()
+      schedule(config.workerIntervalMs)
     },
     async close() {
       stopped = true
@@ -267,6 +330,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       if (!parsed.success || parsed.data.appId !== config.appId)
         return invalid()
       const sanitized = FeedbackSubmitInputSchema.parse(sanitizeFeedbackValue(parsed.data))
+      if (sanitized.evidence?.some(event => event.source.startsWith('server:')))
+        return invalid()
       const submissionKey = hash(JSON.stringify([actor.scopeId, actor.userId, config.appId, sanitized.submissionId]))
       const digest = hash(canonicalFeedbackJson(sanitized))
       const existing = await reldb.sql.get<FeedbackReportRow>(`SELECT * FROM ${table.reports} WHERE submission_key = ?`, [submissionKey])
@@ -307,7 +372,11 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const inserted = await repo.create({ ...row }, tx)
         if (!inserted.success)
           return inserted
-        const initial = await appendInside(tx, row, sanitized.evidence ?? [])
+        const reservation = await reserveQuota(tx, actor, id)
+        if (!reservation.success)
+          return reservation
+        // 受理与环境证据共同提交；环境写入失败时同一 submissionId 可安全重试。
+        const initial = await appendInside(tx, row, [...sanitized.evidence ?? [], capture.environment()], true)
         if (!initial.success)
           return initial
         if ((sanitized.attachments ?? []).reduce((total, file) => total + file.size, 0) > budget.maxAttachmentsBytes)
@@ -349,10 +418,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return missing()
         return duplicate.data.submission_hash === digest ? ok(repo.report(duplicate.data)) : conflict()
       }
-      const environment = await appendInternal(id, actor, [capture.environment()])
-      // 已可靠受理后补采失败不会伪装为未受理；后台任务继续补齐并标明状态。
-      if (!environment.success)
-        core.logger.warn('Feedback environment collection deferred', { module: 'feedback', feedbackId: id })
+      wakeWorker()
       const current = await repo.find(id, actor.scopeId)
       return current.success && current.data ? ok(repo.report(current.data)) : result
     },
@@ -575,6 +641,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!resumed.success)
           return resumed
       }
+      if (updated.success)
+        wakeWorker()
       return updated.success ? ok(undefined) : updated
     },
 
@@ -582,7 +650,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       const parsed = FeedbackExportInputSchema.safeParse(input)
       if (!parsed.success)
         return invalid()
-      return repo.transaction(async (tx) => {
+      const result = await repo.transaction(async (tx) => {
         const row = await access(input.id, actor, 'feedback:export', tx)
         if (!row.success)
           return row
@@ -596,12 +664,20 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (previous.data) {
           const snapshot = readFeedbackJson(previous.data.payload)
           const live = snapshot && typeof snapshot === 'object' && 'snapshotExpiresAt' in snapshot && typeof snapshot.snapshotExpiresAt === 'number' && snapshot.snapshotExpiresAt > Date.now()
-          if (previous.data.status === 'succeeded' || live)
+          if ((previous.data.status === 'succeeded' && Number(previous.data.created_at) + config.exportRetentionHours * 3600000 > Date.now()) || (previous.data.status !== 'succeeded' && live))
             return ok(jobData(previous.data))
         }
         if (revision < Number(row.data.revision)) {
           return missing()
         }
+        const exports = await tx.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table.jobs} WHERE report_id = ? AND kind = 'export'`, [input.id])
+        if (!exports.success)
+          return exports
+        const reservation = await tx.get<{ report_bytes: number, export_limit: number }>(`SELECT report_bytes, export_limit FROM ${table.quotas} WHERE id = ?`, [input.id])
+        if (!reservation.success)
+          return reservation
+        if (!reservation.data || Number(exports.data?.count ?? 0) >= Math.min(config.maxExportsPerReport, Number(reservation.data.export_limit)))
+          return quotaExceeded()
         const events = await evidence(input.id, revision, tx)
         if (!events.success)
           return events
@@ -612,12 +688,15 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         if (!changes.success)
           return changes
         const suffix = `${revision}:${row.data.version}${previous.data ? `:${previous.data.id}` : ''}`
-        const added = await insertJob(tx, repo.report(row.data), 'export', suffix, { report: repo.report(row.data), evidence: events.data, attachments: files.data, history: changes.data, snapshotExpiresAt: Date.now() + 3600000 }, Date.now())
+        const added = await insertJob(tx, repo.report(row.data), 'export', suffix, { report: repo.report(row.data), evidence: events.data, attachments: files.data, history: changes.data, maxBytes: Number(reservation.data.report_bytes), snapshotExpiresAt: Date.now() + 3600000 }, Date.now())
         if (!added.success)
           return added
         const job = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [added.data])
         return job.success && job.data ? ok(jobData(job.data)) : missing()
       })
+      if (result.success)
+        wakeWorker()
+      return result
     },
 
     async getExport(input, actor) {
@@ -639,6 +718,8 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           return missing()
         return err(HaiFeedbackError.CONFLICT, feedbackM('feedback_exportPending'))
       }
+      if (Number(job.data.created_at) + config.exportRetentionHours * 3600000 <= Date.now())
+        return missing()
       if (job.data.status === 'failed')
         return failed()
       const data = readFeedbackJson(job.data.result)
@@ -652,16 +733,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
       return ok({ name: `${repo.report(row.data).number}.zip`, contentType: 'application/zip', dataBase64: bytes.data.toString('base64') })
     },
 
-    async runJobs() {
-      if (stopped)
-        return err(HaiFeedbackError.NOT_INITIALIZED, feedbackM('feedback_notInitialized'))
-      if (running)
-        return running
-      running = core.context.run({ suppressLogObservers: true }, processJobs).catch(failed).finally(() => {
-        running = null
-      })
-      return running
-    },
+    runJobs,
   }
 
   // 附件和后台任务在同一运行时内共享受权查询与固定快照。
@@ -796,6 +868,22 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return limited()
       return ok(undefined)
     }
+    // 首次上传前冻结业务文件清单；失败重试不能通过变化 ID/内容制造无限孤立对象。
+    const frozenFiles = files.map(file => ({ id: file.rowId, size: file.bytes.length, checksum: file.metadata.checksum })).sort((left, right) => left.id.localeCompare(right.id))
+    const frozen = await withLease(job, async (tx) => {
+      const current = await tx.get<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE id = ?`, [job.id])
+      if (!current.success || !current.data)
+        return missing()
+      const payload = readFeedbackJson(current.data.payload)
+      if (!payload || typeof payload !== 'object')
+        return invalid()
+      if ('businessFiles' in payload)
+        return canonicalFeedbackJson(payload.businessFiles) === canonicalFeedbackJson(frozenFiles) ? ok(undefined) : conflict()
+      const updated = await tx.execute(`UPDATE ${table.jobs} SET payload = ? WHERE id = ? AND token = ?`, [JSON.stringify({ ...payload, businessFiles: frozenFiles }), job.id, job.token])
+      return updated.success ? ok(undefined) : updated
+    })
+    if (!frozen.success)
+      return frozen
     const capacity = await checkCapacity(reldb.sql)
     if (!capacity.success)
       return capacity
@@ -872,9 +960,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
           if (!terminal.success)
             return terminal
         }
-        // 丢失租约的导出结果不能成为有效成品，补偿删除本次独立对象。
-        if (!saved.data.changes && job.kind === 'export' && result.success && result.data && typeof result.data === 'object' && 'key' in result.data && typeof result.data.key === 'string')
-          await storage.file.delete(result.data.key)
+        // ZIP 按不可变任务快照复用同一个对象；只有最终租约提交能发布下载引用。
         if (job.kind === 'notify')
           await notificationSummary(job.report_id)
         processed++
@@ -888,8 +974,48 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         clearInterval(renewal)
       }
     }
-    const expired = await reldb.sql.execute(`DELETE FROM ${table.evidence} WHERE report_id IS NULL AND expires_at < ?`, [Date.now()])
-    return expired.success ? ok({ processed }) : expired
+    if (Date.now() >= cleanupAfter) {
+      const expiredExports = await reldb.sql.query<FeedbackJobRow>(`SELECT * FROM ${table.jobs} WHERE app_id = ? AND kind = 'export' AND status = 'succeeded' AND created_at <= ${clock} - ? ORDER BY created_at, id LIMIT 20`, [config.appId, config.exportRetentionHours * 3600000])
+      if (!expiredExports.success)
+        return expiredExports
+      for (const job of expiredExports.data) {
+        if (job.app_id !== config.appId)
+          continue
+        const result = readFeedbackJson(job.result)
+        if (result && typeof result === 'object' && 'key' in result && typeof result.key === 'string') {
+          const deleted = await storage.file.delete(result.key)
+          if (!deleted.success)
+            return deleted
+        }
+        const marked = await reldb.sql.execute(`UPDATE ${table.jobs} SET status = 'failed', result = NULL, payload = ?, last_error = ? WHERE id = ? AND status = 'succeeded'`, [JSON.stringify({ expired: true }), HaiFeedbackError.NOT_FOUND.code, job.id])
+        if (!marked.success)
+          return marked
+      }
+      const quotaRows = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.quotas} WHERE app_id = ? AND period > 0 AND period < ${clock} - 172800000 ORDER BY period, id LIMIT 100`, [config.appId])
+      if (!quotaRows.success)
+        return quotaRows
+      if (quotaRows.data.length) {
+        const removed = await reldb.sql.execute(`DELETE FROM ${table.quotas} WHERE id IN (${quotaRows.data.map(() => '?').join(',')})`, quotaRows.data.map(row => row.id))
+        if (!removed.success)
+          return removed
+      }
+    }
+    // 临时证据按应用限批清理；空闲节点不在每轮执行全表 DELETE。
+    if (Date.now() >= cleanupAfter) {
+      const params: unknown[] = []
+      const identity = feedbackTextEquals('app_id', config.appId, params)
+      const expired = await reldb.sql.query<{ id: string }>(`SELECT id FROM ${table.evidence} WHERE ${identity} AND report_id IS NULL AND expires_at < ? ORDER BY expires_at, id LIMIT 100`, [...params, Date.now()])
+      if (!expired.success)
+        return expired
+      if (expired.data.length) {
+        const removed = await reldb.sql.execute(`DELETE FROM ${table.evidence} WHERE ${identity} AND report_id IS NULL AND id IN (${expired.data.map(() => '?').join(',')})`, [...params, ...expired.data.map(row => row.id)])
+        if (!removed.success)
+          return removed
+      }
+      cleanupBacklog = expired.data.length === 100
+      cleanupAfter = cleanupBacklog ? 0 : Date.now() + 30000
+    }
+    return ok({ processed })
   }
 
   async function executeJob(job: FeedbackJobRow): Promise<HaiResult<unknown>> {
@@ -1030,7 +1156,9 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     if (job.kind === 'export') {
       if (!('report' in payload) || !('evidence' in payload) || !('attachments' in payload))
         return invalid()
-      const fixed = payload as { report: FeedbackReport, evidence: FeedbackEvidence[], history: FeedbackHistory[], attachments: FeedbackAttachmentRow[], snapshotExpiresAt: number }
+      const fixed = payload as { report: FeedbackReport, evidence: FeedbackEvidence[], history: FeedbackHistory[], attachments: FeedbackAttachmentRow[], maxBytes: number, snapshotExpiresAt: number }
+      if (!Number.isSafeInteger(fixed.maxBytes) || fixed.maxBytes < 4 * 1024 * 1024 || fixed.maxBytes > 40 * 1024 * 1024)
+        return invalid()
       if (fixed.snapshotExpiresAt < Date.now())
         return missing()
       const files: Array<{ id: string, name: string, contentType: string, checksum: string, bytes: Uint8Array }> = []
@@ -1050,12 +1178,17 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         const info = attachmentData(file)
         files.push({ id: info.id, name: info.name, contentType: info.contentType, checksum: info.checksum, bytes: stored.data })
       }
-      const bundle = await createFeedbackBundle({ maxBytes: budget.maxTotalBytes, report: fixed.report, evidence: fixed.evidence, history: fixed.history, attachments: files, missing: unavailable })
+      const bundle = await createFeedbackBundle({ maxBytes: fixed.maxBytes, createdAt: Number(job.created_at), report: fixed.report, evidence: fixed.evidence, history: fixed.history, attachments: files, missing: unavailable })
       if (!bundle.success)
         return bundle
-      const key = `feedback/${hash(report.scopeId).slice(0, 16)}/${report.id}/exports/${job.id}-${job.token}.zip`
+      const key = `feedback/${hash(report.scopeId).slice(0, 16)}/${report.id}/exports/${job.id}.zip`
       const stored = await storage.file.put(key, bundle.data, { contentType: 'application/zip', ifNoneMatch: '*' })
-      return stored.success ? ok({ key, checksum: hash(bundle.data), size: bundle.data.length }) : stored
+      if (!stored.success) {
+        const existing = await storage.file.get(key)
+        if (!existing.success || hash(existing.data) !== hash(bundle.data))
+          return stored
+      }
+      return ok({ key, checksum: hash(bundle.data), size: bundle.data.length })
     }
     const marked = await withLease(job, async (tx) => {
       const locked = await repo.find(report.id, report.scopeId, tx)
@@ -1081,6 +1214,17 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
     const deleted = await withLease(job, async (tx) => {
       for (const name of [table.evidence, table.attachments, table.history]) {
         const removed = await tx.execute(`DELETE FROM ${name} WHERE report_id = ?`, [report.id])
+        if (!removed.success)
+          return removed
+      }
+      const reservation = await tx.get<{ reserved_bytes: number }>(`SELECT reserved_bytes FROM ${table.quotas} WHERE id = ?`, [report.id])
+      if (!reservation.success)
+        return reservation
+      if (reservation.data) {
+        const released = await tx.execute(`UPDATE ${table.quotas} SET report_count = report_count - 1, reserved_bytes = reserved_bytes - ?, updated_at = ${clock} WHERE id = ? AND reserved_bytes >= ? AND report_count > 0`, [Number(reservation.data.reserved_bytes), scopeQuotaId(report.scopeId), Number(reservation.data.reserved_bytes)])
+        if (!released.success || !released.data.changes)
+          return released.success ? conflict() : released
+        const removed = await tx.execute(`DELETE FROM ${table.quotas} WHERE id = ?`, [report.id])
         if (!removed.success)
           return removed
       }

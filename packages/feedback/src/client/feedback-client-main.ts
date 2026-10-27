@@ -104,6 +104,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   let flushTimer: ReturnType<typeof setInterval> | undefined
   let stopReplay: (() => void) | undefined
   let screenshotCaptures = 0
+  let captureTask: { promise: Promise<Uint8Array>, controller: AbortController, config: FeedbackClientConfig } | undefined
+  let replayRequested = false
   let unsubscribeLogger: (() => void) | undefined
   let source = ''
   let keyScreenshots: Array<{ attachment: FeedbackClientAttachment, timestamp: number }> = []
@@ -123,7 +125,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     const key = code === 'NOT_INITIALIZED' ? 'feedback_notInitialized' : code === 'LIMIT_EXCEEDED' ? 'feedback_limitExceeded' : code === 'INVALID_INPUT' ? 'feedback_invalidInput' : 'feedback_operationFailed'
     const traceId = core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()
     const error = { ...HaiFeedbackError[code], traceId, message: message ?? feedbackM(key), cause }
-    core.logger[cause === undefined ? 'warn' : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
+    if (!(closing && code === 'NOT_INITIALIZED'))
+      core.logger[cause === undefined ? 'warn' : 'error']('Feedback client operation failed', { module: 'feedback', traceId, error })
     return err({ ...error, message: core.error.formatMessage(error) })
   }
 
@@ -199,9 +202,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     appendToDraft(item, size)
   }
 
-  function appendToDraft(item: FeedbackEvidenceInput, size: number) {
+  function appendToDraft(item: FeedbackEvidenceInput, size: number, snapshot = false) {
     const bounds = limits()
-    if (draft && !collectionFinished && !collectionSealed && ((Date.now() <= deadline && afterCount < bounds.after) || item.kind === 'environment') && draft.evidence.length < bounds.events && draftBytes + size <= bounds.bytes) {
+    if (draft && !collectionFinished && !collectionSealed && (snapshot || (Date.now() <= deadline && afterCount < bounds.after) || item.kind === 'environment') && draft.evidence.length < bounds.events && draftBytes + size <= bounds.bytes) {
       draft.evidence.push(item)
       draftBytes += size
       if (item.kind === 'log' || item.kind === 'error')
@@ -226,6 +229,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         return failure('INVALID_INPUT')
       const numeric = [input.maxEvents, input.maxBytes, input.maxAgeMs, input.beforeCount, input.afterCount, input.afterTimeoutMs, input.screenshotTimeoutMs, input.maxKeyScreenshots, input.keyScreenshotThrottleMs]
       if (numeric.some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0)) || (input.persistDraft && !input.persistenceKey))
+        return failure('INVALID_INPUT')
+      if (input.replayStart !== undefined && !['init', 'prepare'].includes(input.replayStart))
         return failure('INVALID_INPUT')
       if (!FeedbackSubmitInputSchema.pick({ appId: true, appVersion: true, buildId: true, commit: true }).safeParse({ appId: input.appId, appVersion: input.appVersion, buildId: input.buildId, commit: input.commit }).success)
         return failure('INVALID_INPUT')
@@ -318,11 +323,17 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           void saveFeedbackCheckpoint(storageKey, buffer).catch(() => missing.add('browser-persistence-unavailable'))
         void flush()
       })
-      if (input.replay)
+      replayRequested = input.replayStart === 'init'
+      if (input.replay && replayRequested)
         await startReplay(input)
       if (closing || config !== input)
         return failure('NOT_INITIALIZED')
       flushTimer = setInterval(() => {
+        if (draft && Date.now() > deadline && input.replayStart !== 'init') {
+          replayRequested = false
+          stopReplay?.()
+          stopReplay = undefined
+        }
         if (draft?.report)
           void flush()
       }, 1000)
@@ -340,8 +351,12 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   async function startReplay(activeConfig: FeedbackClientConfig) {
     try {
       const { record: start } = await import('@rrweb/record')
-      if (closing || config !== activeConfig || screenshotCaptures || stopReplay)
+      if (closing || config !== activeConfig || stopReplay)
         return
+      if (screenshotCaptures) {
+        missing.add('replay-deferred-by-capture')
+        return
+      }
       let firstEvent = true
       stopReplay = start({
         maskAllInputs: true,
@@ -368,7 +383,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           if (!safe.success)
             return
           replayChunks.at(-1)?.push(safe.data)
-          appendToDraft(safe.data, new TextEncoder().encode(JSON.stringify(safe.data)).byteLength)
+          // 按需启动的当前页面快照属于本次准备材料，即使错误的后采窗口已结束也保留。
+          appendToDraft(safe.data, new TextEncoder().encode(JSON.stringify(safe.data)).byteLength, event.type === 2 || event.type === 4)
           while (replayChunks.length > 2)
             replayChunks.shift()
           const count = replayChunks.reduce((total, chunk) => total + chunk.length, 0)
@@ -387,7 +403,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   function captureKeyScreenshot(): Promise<void> {
-    if (!config || config.screenshot === false || config.keyScreenshots === false || config.maxKeyScreenshots === 0 || keyScreenshotPromise || Date.now() - lastKeyScreenshot < (config.keyScreenshotThrottleMs ?? 10_000))
+    if (!config || config.screenshot === false || config.keyScreenshots !== true || config.maxKeyScreenshots === 0 || keyScreenshotPromise || captureTask || Date.now() - lastKeyScreenshot < (config.keyScreenshotThrottleMs ?? 10_000))
       return keyScreenshotPromise ?? Promise.resolve()
     const activeConfig = config
     lastKeyScreenshot = Date.now()
@@ -417,21 +433,34 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   function takeScreenshot(activeConfig: FeedbackClientConfig): Promise<Uint8Array> {
+    if (captureTask) {
+      // 旧身份或已取消的底层任务不能复用；超时不代表 DOM 渲染已经停止。
+      if (captureTask.config !== activeConfig || captureTask.controller.signal.aborted)
+        return Promise.reject(new Error('Screenshot task is still stopping'))
+      return bounded(captureTask.promise, activeConfig.screenshotTimeoutMs ?? 3000, captureTask.controller)
+    }
+    const controller = new AbortController()
     // rrweb 即使遮挡 iframe 也会观察其文档。暂停自己的记录器，避免采集 html2canvas 的克隆及样式变更。
     screenshotCaptures++
     stopReplay?.()
     stopReplay = undefined
     const captured = (async () => {
       try {
-        return await (activeConfig.captureScreenshot?.() ?? captureFeedbackScreenshot())
+        const bytes = await (activeConfig.captureScreenshot?.({ signal: controller.signal }) ?? captureFeedbackScreenshot(controller.signal))
+        controller.signal.throwIfAborted()
+        return bytes
       }
       finally {
+        // 等待句柄登记完成，覆盖宿主截图函数同步抛错的路径。
+        await Promise.resolve()
         screenshotCaptures--
-        if (!screenshotCaptures && !closing && config === activeConfig && activeConfig.replay)
-          await startReplay(activeConfig)
+        captureTask = undefined
+        if (!screenshotCaptures && !closing && config?.replay && replayRequested)
+          await startReplay(config)
       }
     })()
-    return bounded(captured, activeConfig.screenshotTimeoutMs ?? 3000)
+    captureTask = { promise: captured, controller, config: activeConfig }
+    return bounded(captured, activeConfig.screenshotTimeoutMs ?? 3000, controller)
   }
 
   async function doPrepare(): Promise<HaiResult<FeedbackDraft>> {
@@ -455,6 +484,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (!captured.success)
           return captured
       }
+      replayRequested = true
+      if (config.replay && !stopReplay)
+        await startReplay(config)
       return ok(draft)
     }
     collectionFinished = false
@@ -512,6 +544,9 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         draft.missing.push('key-screenshot-budget-exceeded')
       else draft.attachments.push(image)
     }
+    replayRequested = true
+    if (config.replay && !stopReplay)
+      await startReplay(config)
     schedulePersist()
     preparedPage = pageIdentity()
     return ok(draft)
@@ -672,6 +707,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (!result.success)
           return result
         collectionFinished = true
+        if (config.replayStart !== 'init')
+          pause()
         const updatedReport = FeedbackReportSchema.safeParse(result.data)
         if (updatedReport.success)
           draft.report = updatedReport.data
@@ -821,8 +858,16 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     return closePromise
   }
 
+  function pause(): void {
+    replayRequested = false
+    stopReplay?.()
+    stopReplay = undefined
+    captureTask?.controller.abort()
+  }
+
   async function doClose(): Promise<void> {
     closing = true
+    pause()
     saveController.abort()
     unsubscribeLogger?.()
     unsubscribeLogger = undefined
@@ -855,6 +900,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     lastError = undefined
     errorWindows = []
     replayChunks = []
+    replayRequested = false
     keyScreenshots = []
     lastKeyScreenshot = 0
     initialIds.clear()
@@ -865,7 +911,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     collectionSealed = false
   }
 
-  return { init, prepare, captureScreenshot, submit, flush, record, getDraft: () => draft, getView, releasePreviews, annotate, addFiles, exportDraft, async saveDraft(input) {
+  return { init, prepare, pause, captureScreenshot, submit, flush, record, getDraft: () => draft, getView, releasePreviews, annotate, addFiles, exportDraft, async saveDraft(input) {
     const session = config
     const exported = await exportDraft(input)
     if (!exported.success)
@@ -888,15 +934,25 @@ export function createFeedbackClient(): FeedbackBrowserClient {
  */
 export const feedbackClient = createFeedbackClient()
 
-async function bounded<T>(promise: Promise<T>, ms: number): Promise<T> {
+async function bounded<T>(promise: Promise<T>, ms: number, controller: AbortController): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let aborted: (() => void) | undefined
   try {
     return await Promise.race([promise, new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('Capture timed out')), ms)
+      aborted = () => reject(new Error('Capture cancelled'))
+      if (controller.signal.aborted)
+        aborted()
+      else controller.signal.addEventListener('abort', aborted, { once: true })
+      timer = setTimeout(() => {
+        reject(new Error('Capture timed out'))
+        controller.abort()
+      }, ms)
     })])
   }
   finally {
     clearTimeout(timer)
+    if (aborted)
+      controller.signal.removeEventListener('abort', aborted)
   }
 }
 

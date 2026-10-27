@@ -47,6 +47,8 @@ export interface FeedbackBundleAttachment {
 export interface FeedbackBundleInput<TReport extends { id: string } = { id: string }> {
   /** 有效总预算；不得高于通用离线格式的 64 MiB 防护上限。 */
   maxBytes?: number
+  /** 固定归档创建时间（Unix 毫秒），服务端幂等导出使用任务创建时间；默认当前时间。 */
+  createdAt?: number
   report: TReport
   evidence: readonly FeedbackBundleEvidence[]
   history?: readonly object[]

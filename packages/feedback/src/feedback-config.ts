@@ -53,6 +53,16 @@ export const FeedbackConfigSchema = z.strictObject({
   maxAttempts: z.number().int().min(1).max(20).default(5),
   /** 已受理反馈及对象附件的保留天数。 */
   retentionDays: z.number().int().min(1).max(3650).default(30),
+  /** 单个用户按数据库 UTC 日累计受理上限；幂等重试不重复计数。 */
+  maxReportsPerUserDay: z.number().int().min(1).max(10000).default(20),
+  /** 单个用户每日预留存储字节（报告与最多历史导出）；默认 2 GiB。 */
+  maxBytesPerUserDay: z.number().int().min(4 * 1024 * 1024).max(1024 ** 4).default(2 * 1024 ** 3),
+  /** 应用内单个 scope 的持久材料预留容量；到期清理成功后释放，默认 10 GiB。 */
+  maxStoredBytesPerScope: z.number().int().min(4 * 1024 * 1024).max(1024 ** 4).default(10 * 1024 ** 3),
+  /** 单份报告最多历史导出数；已有有效快照复用，不重复计数。 */
+  maxExportsPerReport: z.number().int().min(1).max(20).default(5),
+  /** 已完成导出的有效小时数；过期禁止下载，后台删除对象，默认 24 小时。 */
+  exportRetentionHours: z.number().int().min(1).max(720).default(24),
   /** 允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。 */
   envAllowlist: z.array(z.string().min(1).max(128)).max(100).default([]),
   /** 未压缩导出总预算；客户端、附件总量和传输预算由此派生。 */

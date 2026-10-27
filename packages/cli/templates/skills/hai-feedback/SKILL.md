@@ -15,11 +15,13 @@ description: "接入 @h-ai/feedback 用户反馈、业务异步证据、Webhook�
 | 输出 | HaiResult、受理编号、独立材料/通知状态、受权证据及离线 ZIP |
 | 限制 | 采集与 UI 解耦；默认不保存凭证或全量 Cookie/环境变量；页面回放不等同重新执行；不依赖通用 telemetry |
 
-consoleContent 默认 metadata，只输出白名单定位和采集状态；summary 显式开启通用脱敏摘要。日志不得展开 report、说明、证据、附件或接收方。容量通过 resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes }) 合并：省略/auto 才按模块需求推导，显式整数不足时报错，不得静默取大或覆盖。Serv/Kit auto 解析为 undefined；部署代理和 BODY_SIZE_LIMIT 与运行时复用同一结果，反馈业务预算独立。
+普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明由已校验反馈配置派生的 `maxTransportBytes`，不依赖反馈初始化/重试状态。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
+
+宿主启动时用 `@h-ai/api-contract/feedback` 的 `resolveFeedbackBudget(已校验反馈配置)` 预计算材料路由容量，不读取未就绪反馈模块的默认 `budget`；可选反馈失败/重试不改变普通业务上限或已配置材料容量。
 
 ## 使用路径
 
-1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 默认仅输出 metadata，摘要需 consoleContent: summary 显式启用，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach 兼容旧配置，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init(config, { collectEvidence? })，关闭先于依赖。
+1. 先初始化 core、reldb 和私有 storage。notificationMode 选择 disabled/console/reach；console 默认仅输出 metadata，摘要需 consoleContent: summary 显式启用，无邮箱或 Reach 依赖；reach 模式才要求已初始化 Provider/recipients。默认 reach，生成项目显式 console。DND 由 feedback 自己的 outbox 等待，不进入 Reach 延迟队列，也不改全局通知策略。最后 feedback.init(config, { collectEvidence? })，关闭先于依赖。
 2. 挂载 apiContract.feedback 与 createFeedbackProcedures；resolveContext 从服务端确定 scopeId、userId、permissions，不能相信客户端的租户、requestId 或 S3 key。创建者可补自己的材料，管理操作另检查 read/process/reopen/export。
 3. createFeedbackClient 的 actions 接 typed API，policy 读取 reports.policy({})；prepare 后打开 FeedbackModal。getView() 提供附件 URL/证据/预算；annotate 支持 coordinateSpace: ratio，saveDraft 负责跨端保存，业务不自行解码图片或管理 Blob URL。onfileschange 接 addFiles 后刷新视图；首次包络冻结，重试编辑冲突保留输入。
 4. FeedbackModal 内材料独立滚动、操作栏常驻；FeedbackList 不重复显示标题，由宿主提供页面标题。复用 FeedbackList/FeedbackDetail，服务端分页并按需加载材料；setStatus 带 expectedVersion。处理、材料、通知状态分别展示，上传或通知失败不抹掉已受理反馈。
@@ -42,8 +44,6 @@ addFiles 按批次原子加入附件：任一文件失败不改变原草稿的�
 
 并发 `init` 返回 `INIT_IN_PROGRESS`；`close` 等待有界截图退出后清理会话。截图期间关闭使 `prepare` 返回失败，不复活草稿。异步标注完成时若草稿已冻结、关闭、删除图片或被另一标注更新，则返回 `CONFLICT`，不改变已提交附件的字节或 checksum。
 
-总量只配置 maxTotalBytes（默认 32 MiB，范围 4–40 MiB），feedback.budget 派生单项/合计附件、双份证据和加密/Base64 传输预算。默认单项 5 MiB，附件合计 22 MiB，证据 4 MiB/2000 条，另留 2 MiB。服务端在受理前校验合计并限制历史；客户端从 reports.policy 获取有效策略并显示预算。管理台、API/fullstack 和部署用 resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }) 合并配置，将派生预算用于传输/代理/adapter-node；显式值不足拒绝，auto/缺省才推导；自定义宿主同样合并，hai add 保留已有配置。
-
 captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非凭据用户/租户 persistenceKey。keyScreenshots 默认 true，受 screenshot 总开关控制，maxKeyScreenshots 默认3/上限5，keyScreenshotThrottleMs 默认10000ms。data-feedback-action 标记关键操作，data-feedback-private 遮挡敏感区域，data-feedback-ignore 排除反馈界面自身。回放、普通 Cookie 白名单和持久化由产品明确启用。
 
 自动截图从脱敏克隆 DOM 经 SVG foreignObject 重建可见页面；跨域图片、iframe/video、未就绪网络字体可能缺失。浏览器或 CSP 限制失败时标 missing 并保留手动附件入口。
@@ -61,6 +61,11 @@ captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非�
 
 Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capacitor，启动时 configureFeedbackSaving(saveTauriFeedbackFile/saveCapacitorFeedbackFile)，生成工程自动配置。平台适配拥有保存对话框、缓存与取消清理；业务仅调用 SDK。
 
+## 资源与可用性约束
+
+- `keyScreenshots` 默认 false，需显式开启自动关键截图；手动 `prepare()` 仍可截图。截图超时会传递 AbortSignal，底层尚未结束时不允许重叠截图。默认渲染最多 10000 DOM 节点，继续受画布像素预算限制。`replay:true` 的默认 `replayStart` 为 `prepare`，打开反馈时才录制；明确需要预录时配置 `replayStart: init`。关闭反馈界面调用 `pause()` 停止 DOM 回放和截图，保留轻量日志、草稿及上传；退出身份仍调用 `close({ discard:true })`。自定义 `captureScreenshot({ signal })` 应尊重取消信号。
+- 反馈是可选辅助能力，启动失败须独立标记不可用/重试；不能回滚或拖垮业务模块。服务端默认按用户日累计及 scope 存储预留限制，超额为 QUOTA_EXCEEDED/429；默认值和保守预留公式见已安装 README。固定业务文件清单、ZIP 快照和创建时间，重试不能制造新对象；导出24小时过期、报告默认30天保留，专用 worker 必须持续执行清理。不要增加正常空闲或逐请求 info 日志。
+
 ## 按需参考
 
 - 已安装包的 README 和公开 /client、/bundle、api-contract/feedback、serv/features/feedback 类型。
@@ -71,7 +76,7 @@ Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capa
 
 参考管理台和 feedback fullstack 模板显式 replay:true；SDK 缺省仍为 false。FeedbackDetail.onreplay 必须按需取得 kind:replay 的全部分页，详情“页面回放”提供播放/定位与无记录提示；原始录屏在操作现场播放。保存反馈到本地后用 hai feedback view <zip> 查看；本地包标记尚未取得的服务端证据。环境只展示实际构建/页面与服务端 envAllowlist 非凭据键，不能臆造全量环境已采集。
 
-保存与退出：saveDraft 及 saveFeedbackFile 选择 Web 下载、Tauri 原生保存、Capacitor 缓存分享，取消返回 cancelled；生成原生工程配置 optional peer 插件及最小权限。createFeedbackReview(typedClient.feedback.reports) 负责全部回放分页和导出轮询；退出身份调用 review.close()、client.close({ discard: true }) 清理采集、草稿、预览和旧轮询。服务端环境只采实际 envAllowlist 非敏感值；verificationCode/otpCode 等默认脱敏，不把数目当材料正文。
+保存与退出：saveDraft 及 saveFeedbackFile 选择 Web 下载、Tauri 原生保存、Capacitor 缓存分享，取消返回 cancelled；生成原生工程配置 optional peer 插件及最小权限。createFeedbackReview(typedClient.feedback.reports) 负责全部回放分页、导出轮询及 retryReport(id) 失败任务重试；退出身份调用 review.close()、client.close({ discard: true }) 清理采集、草稿、预览和旧轮询。服务端环境只采实际 envAllowlist 非敏感值；verificationCode/otpCode 等默认脱敏，不把数目当材料正文。
 
 服务策略不可用时仍可本地准备/保存，明确 server-policy-unavailable；在线提交重新校验，不能以本地预算伪装服务端受理成功。onfileschange 的第二参数 removedAttachmentIds 透传 addFiles，删除与新增原子合并且按有效容量检查。
 

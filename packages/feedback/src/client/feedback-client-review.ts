@@ -1,5 +1,5 @@
 /** 详情接入统一处理导出轮询、回放分页和取消，不依赖 UI 或平台 SDK。 */
-import type { FeedbackAttachmentData, FeedbackDetail, FeedbackEvidence, FeedbackEvidenceQuery, FeedbackExportInput, FeedbackJob } from '@h-ai/api-contract/feedback'
+import type { FeedbackAttachmentData, FeedbackDetail, FeedbackEvidence, FeedbackEvidenceQuery, FeedbackExportInput, FeedbackJob, FeedbackRetryInput } from '@h-ai/api-contract/feedback'
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import { err, ok } from '@h-ai/core'
 import { feedbackM } from '../feedback-i18n.js'
@@ -19,6 +19,7 @@ export interface FeedbackReviewActions {
   getEvidence: (input: FeedbackEvidenceQuery) => Promise<HaiResult<PaginatedResult<FeedbackEvidence>>>
   export: (input: FeedbackExportInput) => Promise<HaiResult<FeedbackJob>>
   getExport: (input: { id: string, jobId: string }) => Promise<HaiResult<FeedbackAttachmentData>>
+  retry: (input: FeedbackRetryInput) => Promise<HaiResult<unknown>>
 }
 
 /**
@@ -41,6 +42,36 @@ export function createFeedbackReview(actions: FeedbackReviewActions) {
     close() {
       controller.abort()
       controller = new AbortController()
+    },
+    async retryReport(id: string): Promise<HaiResult<void>> {
+      const signal = controller.signal
+      try {
+        const loaded = await actions.get({ id })
+        if (signal.aborted)
+          return failed()
+        if (!loaded.success)
+          return loaded
+        const targets = new Set<'collect' | 'notify' | 'webhook'>()
+        if (['partial', 'failed'].includes(loaded.data.report.collectionStatus))
+          targets.add('collect')
+        for (const job of loaded.data.jobs) {
+          if (job.status === 'failed' && (job.type === 'collect' || job.type === 'notify' || job.type === 'webhook'))
+            targets.add(job.type)
+        }
+        for (const target of targets) {
+          if (signal.aborted)
+            return failed()
+          const retried = await actions.retry({ id, target })
+          if (signal.aborted)
+            return failed()
+          if (!retried.success)
+            return retried
+        }
+        return ok(undefined)
+      }
+      catch {
+        return failed()
+      }
     },
     async loadReplay(id: string): Promise<HaiResult<FeedbackEvidence[]>> {
       const signal = controller.signal

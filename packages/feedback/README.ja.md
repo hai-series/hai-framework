@@ -54,7 +54,7 @@ return submitted
 
 `text/plain` 添付は 5 MiB のファイル上限内で全文を秘匿処理し、安全な本文と末尾のログを保持します。構造化証拠のフィールド切り捨ては適用しません。上限を超える元ファイルは読取前に拒否し、秘匿処理後も同じ添付バイト上限を適用します。JSON 添付と構造化証拠には文字列長・深さ・件数の上限が残り、切り捨てられる場合があります。完全なログにはプレーンテキスト添付を使用してください。送信前の添付と、初回送信内容の固定後にローカル出力へ追加したファイルに同じ規則を適用します。
 
-クライアントの全操作は `init(config)`、`prepare/captureScreenshot(attachmentId?)/submit/flush/record/getDraft/getView/annotate/addFiles/exportDraft/saveDraft/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
+クライアントの全操作は `init(config)`、`prepare/captureScreenshot(attachmentId?)/submit/flush/record/getDraft/getView/annotate/addFiles/exportDraft/saveDraft/pause/close` です。フォームの `onfileschange` を `addFiles` に接続し、下書きの添付プレビューを更新すると、追加画像を送信前に注釈・遮蔽・削除できます。重要操作は `data-feedback-action`、機密部分は `data-feedback-private`、フィードバック画面自体の除外は `data-feedback-ignore` で指定します。初回送信後の内容は固定され、再試行中の入力変更は競合として入力を保持し、ローカル保存できます。
 
 `addFiles` は一括追加を原子的に行い、全ファイルの検証に成功してから統合します。一つでも失敗した場合、既存の添付と欠落マーカーを維持し、一部だけを保存しません。並行して成功した追加を上書きせず、統合後も最大 20 件です。読取中に下書きが変わるか初回送信内容が固定された場合は `CONFLICT` を返し、送信内容に含まれない添付を後から隠れてアップロードしません。
 
@@ -66,9 +66,11 @@ return submitted
 
 下書きは SDK が保持し、`annotate` や `addFiles` で更新します。Svelte 側では参照を `$state.raw<FeedbackDraft>()` に保持し、操作成功後に `getDraft()` から添付ビューを更新してください。深い `$state` プロキシに格納すると、SDK が元の下書きの画像バイトを置き換えても、キャッシュされた古いバイトが返る場合があります。
 
-`maxTotalBytes` の既定値は 32 MiB（4–40 MiB）です。`feedback.budget` から単一・合計添付、二重保存する証拠と Base64/暗号化転送の上限を導出します。既定は各 5 MiB、添付合計 22 MiB、証拠 4 MiB/2000 件、履歴・メタデータ・ビューアー用 2 MiB です。受理前に添付宣言の合計を検証し、証拠更新は原子的に制限、処理履歴は 256 KiB までです。認証済み `reports.policy({})` でクライアントとフォームに有効値を渡します。管理画面、API/fullstack テンプレートとデプロイは `resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })` で明示上限と必要量を合わせ、転送、adapter-node、プロキシに同じ導出値を適用します。明示上限不足はエラーとなり、省略/auto の場合のみ自動導出します。独自ホストでも初期化時に同じ処理を行ってください。`hai add` は既存設定を維持します。
+`maxTotalBytes` の既定値は 32 MiB（4–40 MiB）です。`feedback.budget` から単一・合計添付、二重保存する証拠と Base64/暗号化転送の上限を導出します。既定は各 5 MiB、添付合計 22 MiB、証拠 4 MiB/2000 件、履歴・メタデータ・ビューアー用 2 MiB です。受理前に添付宣言の合計を検証し、証拠更新は原子的に制限、処理履歴は 256 KiB までです。認証済み `reports.policy({})` でクライアントとフォームに有効値を渡します。
 
-`captureConsole` と `persistDraft` の既定値は false です。永続化にはホストが決定する非認証情報のユーザー/テナント `persistenceKey` が必要です。`keyScreenshots` は既定で true ですが `screenshot` 全体スイッチに従います。`maxKeyScreenshots` は既定 3、上限 5、`keyScreenshotThrottleMs` は既定 10000 ミリ秒です。
+通常業務は `transport.maxPlaintextBytes`（auto/省略は 1 MiB）を維持します。Feedback の受理・証拠・添付・ZIP ダウンロードは `routePlaintextBytes` で別途宣言します。起動時は `@h-ai/api-contract/feedback` の `resolveFeedbackBudget(検証済み設定).maxTransportBytes` を使い、任意の Feedback 初期化・再試行状態に依存しません。`*` は完全な1パス区間のみ一致し、ホストの明示値が優先です。ハンドシェイク、adapter-node、プロキシは経路の最大値を使用します。HTTP アダプターは個別宣言された 1 MiB 超の資料経路を最大2件、通常業務を別枠で16件まで許可し、応答完了・失敗時に解放します。混雑は503 / `hai:crypto:072` を返し、業務書込は自動再送しません。
+
+`keyScreenshots` の既定値は false で、自動撮影は明示的に有効化します。手動 `prepare()` は撮影可能です。タイムアウトは AbortSignal を伝え、実処理の終了まで重複撮影を禁止します。既定レンダラーは10000 DOMノードとキャンバス画素予算を制限します。`replay:true` の `replayStart` は既定 `prepare` です。事前記録には `replayStart: init` を明示します。画面を閉じる際の `pause()` はDOM記録と撮影を止め、軽量ログ・下書き・アップロードを維持します。ユーザー切替時は引き続き `close({ discard:true })` を呼び、独自撮影関数は `{ signal }` を尊重します。
 
 自動画像は機密部分を隠したクローン DOM から SVG foreignObject を通して可視ページを再構築します。クロスオリジン画像、iframe/video、未準備のネットワークフォントは欠落する場合があります。ブラウザーや CSP 制限による失敗は missing として記録され、画像の手動添付も利用できます。
 
@@ -166,11 +168,19 @@ hai feedback view feedback-FB-1.zip
 
 各業務結果の `success` を確認してください。`HaiFeedbackError` は初期化、設定、権限、存在しない記録、競合、容量、checksum エラーを表します。HTTP 200やSMTP受理だけでは、業務成功や受信箱への配信を証明できません。不確実な送信は重複する可能性があります。
 
+### リソース、クォータと補助機能の可用性
+
+サーバーエラー証拠の待機列は3000件・8 MiB・5分を上限とし、最大32件/256 KiBの冪等バッチで保存します。DB障害は最大30秒までバックオフし、欠落理由を保存します。空のworkerも最大30秒まで待機し、同じノードでの送信・再試行・出力が起動します。`workerIntervalMs:0` には専用実行元が必要です。仮証拠はappId・期限索引を使って最大100件ずつ削除します。
+
+既定値は `maxReportsPerUserDay=20`、`maxBytesPerUserDay=2 GiB`、`maxStoredBytesPerScope=10 GiB`、`maxExportsPerReport=5`、`exportRetentionHours=24` です。共有DBの同一トランザクションで、DBのUTC日とapp/scope/user別に `maxTotalBytes * (maxExportsPerReport + 1)` バイトを予約します。報告容量と出力数は受理時に固定し、設定を増やしても既存予約を超えません。これは保守的な予約量で実ディスク計測ではありません。冪等再送は再計上せず、超過は429 `QUOTA_EXCEEDED` とし報告・オブジェクトを作りません。報告の期限削除成功でscope予約を解放し、日次累計は戻しません。期限切れ出力はダウンロード不可で段階削除します。固定スナップショット・作成日時と条件付書込でZIPを再利用し、業務証拠のファイル一覧は最初のアップロード前に固定します。`hai_feedback_quotas` のperiod=0と期限cleanupの滞留を監視し。
+
+参考admin/fullstackはfeedback起動失敗を業務の起動失敗にせず、30秒ごとに個別再試行し、同じ警告を繰り返しません。未準備のpolicyも503です。必須のDB/cache/IAM/auditは従来の障害方針を維持します。runtime.start全体の失敗を握りつぶしてロールバック済みのモジュールを使わないでください。終了時はfeedbackと再試行を停止してから依存を解放します。
+
 ### console 通知のプライバシー境界
 
 `consoleContent` の既定は `metadata` で、報告番号、アプリ・バージョン・ビルド情報と収集状態だけを記録します。説明・概要・添付・証拠・通知本文・宛先は含みません。一般的なマスキング済み概要が必要な場合のみ `summary` を明示します。一般的なマスキングでは全業務機密を検出できません。Reach は不要で disabled/reach の意味は変わりません。更新後の既存 console 設定も既定でメタデータだけになります。
 
-`resolveTransportBodyLimits(configuredLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })` でホスト上限と統合し、直接上書きしません。明示上限の不足は設定競合、省略または Serv/Kit の auto では必要量を計算します。添付と証拠の業務上限は独立です。
+サーバー環境証拠は受付トランザクションで同時に保存します。環境保存失敗時は不完全な受付を残さず、同じ submissionId で再試行できます。管理画面は `createFeedbackReview(...).retryReport(id)` を使い、復旧可能な収集と通知/Webhook失敗を再試行します。対象を重複排除し失敗を伝播し、close後は後続処理を止めます。
 
 ## 開発とテスト
 

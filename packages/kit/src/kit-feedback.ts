@@ -61,6 +61,8 @@ export function createFeedbackHandler(options: FeedbackHandlerOptions): RequestH
     }
     if (!actor?.scopeId || !actor.userId)
       return fromError({ ...HaiCommonError.UNAUTHORIZED, message: kitM('kit_unauthorized') })
+    if (options.feedback.isInitialized === false)
+      return fromError({ ...HaiCommonError.SERVICE_UNAVAILABLE, message: kitM('kit_feedbackUnavailable') })
     const suffix = event.url.pathname.startsWith(`${basePath}/`) ? event.url.pathname.slice(basePath.length + 1) : ''
     let parts: string[]
     try {

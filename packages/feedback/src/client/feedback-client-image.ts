@@ -22,13 +22,21 @@ const CONTROL_SELECTOR = 'input,textarea,select,[contenteditable]:not([contented
 
 /**
  * 捕获当前可见页面；反馈 UI 必须由调用方在本操作完成之后打开。
+ * @param signal - 取消等待或克隆；底层渲染不可中断时由调用方保留实际任务的单飞约束。
  * @example 模块内部上下文
  * ```ts
  * const bytes = await captureFeedbackScreenshot()
  * const length = bytes.byteLength
  * ```
  */
-export async function captureFeedbackScreenshot(): Promise<Uint8Array> {
+export async function captureFeedbackScreenshot(signal?: AbortSignal): Promise<Uint8Array> {
+  signal?.throwIfAborted()
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT)
+  let nodes = 0
+  while (walker.nextNode()) {
+    if (++nodes > 10000)
+      throw new RangeError('Screenshot document budget exceeded')
+  }
   // 网络字体未就绪时最多等待半秒；采集总超时仍由客户端统一控制。
   if (document.fonts) {
     let timeout: ReturnType<typeof setTimeout> | undefined
@@ -40,6 +48,7 @@ export async function captureFeedbackScreenshot(): Promise<Uint8Array> {
     }
   }
   const { default: html2canvas } = await import('html2canvas')
+  signal?.throwIfAborted()
   const canvas = await html2canvas(document.body, {
     width: window.innerWidth,
     height: window.innerHeight,
@@ -56,6 +65,7 @@ export async function captureFeedbackScreenshot(): Promise<Uint8Array> {
     imageTimeout: 1000,
     ignoreElements: element => element.matches('[data-feedback-ignore],iframe,video'),
     onclone: (clone) => {
+      signal?.throwIfAborted()
       // html2canvas 仍会预解析根背景；现代颜色先转为浏览器实际像素色，原页面不变。
       const colorCanvas = clone.createElement('canvas')
       colorCanvas.width = 1
@@ -112,7 +122,10 @@ export async function captureFeedbackScreenshot(): Promise<Uint8Array> {
     },
   })
   try {
-    return await canvasBytes(canvas)
+    signal?.throwIfAborted()
+    const bytes = await canvasBytes(canvas)
+    signal?.throwIfAborted()
+    return bytes
   }
   finally {
     canvas.width = 0

@@ -19,5 +19,6 @@
   "feedback_materialPartial": "Partially missing",
   "feedback_materialFailed": "Collection failed",
   "feedback_defaultSummary": "User feedback",
-  "feedback_retryInputChanged": "The first submission has already been sent. Restore the original text and attachments to retry, then open a new feedback."
+  "feedback_retryInputChanged": "The first submission has already been sent. Restore the original text and attachments to retry, then open a new feedback.",
+  "feedback_quotaExceeded": "Feedback quota reached. Try later or contact an administrator."
 }
