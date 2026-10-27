@@ -374,9 +374,5 @@
   "cli_upgrade_registry": "Release inspection requires an HTTPS registry URL without embedded credentials.",
   "cli_help_inspectRemote": "With --plan, inspect the successful baseline over SSH without target writes",
   "cli_upgrade_lock_invalid": "Unable to read the lockfile. Fix its YAML and run pnpm install.",
-  "cli_help_deploySecrets": "Inspect or import legacy credentials on the target server",
-  "cli_help_secretImport": "Protected versioned credential JSON file",
-  "cli_help_secretApply": "Commit the import; omitted means read-only preflight",
-  "cli_deploy_secrets_options": "Use --import with a private JSON file; runtime must be docker/podman and committing requires --apply",
   "cli_build_project_name_required": "The root package.json.name must be a non-empty project name suitable for resource naming."
 }

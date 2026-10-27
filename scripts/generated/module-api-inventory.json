@@ -20150,12 +20150,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "importDeploymentSecrets",
-              "kind": "value",
-              "declaration": "importDeploymentSecrets",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "loadDeploymentConfig",
               "kind": "value",
               "declaration": "loadDeploymentConfig",
@@ -20400,12 +20394,6 @@
               "declarationKind": "VariableDeclaration"
             },
             {
-              "name": "importDeploymentSecrets",
-              "kind": "value",
-              "declaration": "importDeploymentSecrets",
-              "declarationKind": "FunctionDeclaration"
-            },
-            {
               "name": "loadDeploymentConfig",
               "kind": "value",
               "declaration": "loadDeploymentConfig",
@@ -20648,12 +20636,6 @@
               "kind": "value",
               "declaration": "HaiDeployError",
               "declarationKind": "VariableDeclaration"
-            },
-            {
-              "name": "importDeploymentSecrets",
-              "kind": "value",
-              "declaration": "importDeploymentSecrets",
-              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "loadDeploymentConfig",

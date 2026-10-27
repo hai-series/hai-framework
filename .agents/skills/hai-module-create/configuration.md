@@ -39,7 +39,6 @@
 - Serv/Kit 的 transport.maxPlaintextBytes 支持显式 1 KiB～64 MiB 整数或 auto；auto 解析为 undefined。宿主将反馈预算作为 requiredPlaintextBytes 交给 crypto.resolveTransportBodyLimits，显式上限不足必须报错，不能覆盖；运行时、握手、代理、adapter-node 使用同一派生预算。
 - Feedback consoleContent 默认 metadata，仅输出白名单标识与采集状态；summary 需显式选择，操作者自行评估摘要中的业务隐私。
 - Reach API 默认 redirect:error，敏感消息始终拒绝重定向；生产敏感消息默认要求 HTTPS。requireHttps:false 是可信内网的显式例外；requireHttps:true 不能与 follow 组合。空成功回执可接受，非空必须是有界 JSON 对象。
-- 旧部署凭据仅通过 importDeploymentSecrets / hai deploy-secrets 明确导入，默认预检。固定项目/服务/卷及实际密码认证通过后，共用部署锁原子提交 0600 v2 状态；不覆盖损坏状态、不改 current、不替自定义外部中间件迁移身份。参见[凭据导入](../../../packages/deploy/docs/credential-import.md)。
 
 ## 通过调用参数配置的模块
 

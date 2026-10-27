@@ -95,7 +95,6 @@
   "deploy_uploadPasswordCancelled": "パスワード入力を中止しました。サーバーには未接続です。",
   "deploy_uploadPasswordInvalid": "SSH パスワードは改行を含まない 1–1023 UTF-8 バイトにしてください。",
   "deploy_managedSecretsInvalid": "自建ミドルウェアの候補認証情報が無効です。配置パッケージを再生成してください。サーバーの認証情報は自動変更されません。",
-  "deploy_secretImportFailed": "旧認証情報のインポートは {phase} 段階で拒否されました。入力権限、プロジェクトとボリューム、実際の認証情報、デプロイロックを確認してください。サービスは更新されていません。確定が不明な場合は保護された状態ファイルを確認してください",
   "deploy_projectNameRequired": "工程ルートの package.json.name がないか正規化できないため、イメージとデプロイリソースの識別名を生成できません。",
   "deploy_projectNameOverrideRemoved": "デプロイ識別名は工程ルートの package.json.name から取得します。旧 projectName 上書き引数を削除してください。"
 }

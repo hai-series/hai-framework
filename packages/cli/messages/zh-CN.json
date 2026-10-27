@@ -374,9 +374,5 @@
   "cli_upgrade_registry": "发布检查需要不含凭据的 HTTPS Registry 地址。",
   "cli_help_inspectRemote": "配合 --plan，通过 SSH 只读检查成功基线，不改变目标",
   "cli_upgrade_lock_invalid": "无法读取锁文件，请先修复 YAML 并运行 pnpm install。",
-  "cli_help_deploySecrets": "在目标服务器预检或导入旧部署凭据",
-  "cli_help_secretImport": "受保护的版本化凭据 JSON 文件",
-  "cli_help_secretApply": "明确提交导入；省略时只读预检",
-  "cli_deploy_secrets_options": "请用 --import 指定私有 JSON；runtime 仅支持 docker/podman，提交需显式 --apply",
   "cli_build_project_name_required": "工程根 package.json.name 必须是非空、可用于资源命名的项目名。"
 }

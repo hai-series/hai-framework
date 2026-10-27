@@ -95,7 +95,6 @@
   "deploy_uploadPasswordCancelled": "Password input cancelled; no server connection was made.",
   "deploy_uploadPasswordInvalid": "SSH passwords must contain 1–1023 UTF-8 bytes without line breaks.",
   "deploy_managedSecretsInvalid": "Invalid generated middleware credential candidates. Rebuild the deployment bundle; server credentials will not be rotated automatically.",
-  "deploy_secretImportFailed": "Legacy credential import was rejected during {phase}; check private input permissions, project/volume identity, live credentials and the deployment lock. No services were updated; inspect the protected state file if commit is unconfirmed",
   "deploy_projectNameRequired": "The root package.json.name is missing or cannot be normalized into an image and deployment resource identity.",
   "deploy_projectNameOverrideRemoved": "Deployment identity comes from the root package.json.name; remove the obsolete projectName override."
 }

@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -113,19 +112,4 @@ it('声明实际原生凭据、应用范围和卷身份，不把外部配置加�
   const external = createManagedSecretAssets('demo-test', `POSTGRES_PASSWORD=${password}\n`, { services: { db: { image: 'external-only' } } })
   expect(external['managed-bindings']).not.toContain('HAI_DB')
   expect(external['managed-volumes']).toBe('')
-})
-
-it('导入的 v2 状态保留特殊字符和卷身份，连接 URL 正确编码，换打包机仍复用旧密码', () => {
-  const { root, server, bundle } = fixture()
-  const password = 'synthetic #$\'"\\:= @秘密'
-  writeFileSync(join(root, 'volume-exists'), 'owned fixture volume')
-  const state = `FORMAT_VERSION=2\nPROJECT=hai-demo-test\nDB_PASSWORD=${Buffer.from(password).toString('hex')}\nVOLUME_1=DB_PASSWORD:hai-demo-test_db-data\n`
-  writeFileSync(join(server, 'managed-secrets.env'), state, { mode: 0o600 })
-  const incoming = bundle('G'.repeat(32))
-  const result = incoming.run()
-  expect(result.status, result.stderr).toBe(0)
-  const connection = JSON.parse(parseEnv(readFileSync(join(incoming.directory, 'middleware.env'), 'utf8')).HAI_DB!)
-  expect(decodeURIComponent(new URL(connection.url).password)).toBe(password)
-  expect(readFileSync(join(server, 'managed-secrets.env'), 'utf8')).toBe(state)
-  expect(JSON.stringify({ stdout: result.stdout, stderr: result.stderr })).not.toContain(password)
 })
