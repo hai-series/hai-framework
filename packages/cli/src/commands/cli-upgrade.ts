@@ -1,10 +1,12 @@
 /** 精确版本升级诊断；只读本地工程和发布制品，不安装、不改文件、不覆盖业务 skill。 */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { glob } from 'node:fs/promises'
+import { findPackageJSON } from 'node:module'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import { gunzipSync } from 'node:zlib'
 import { parse, parseAllDocuments } from 'yaml'
 import { cliM } from '../cli-i18n.js'
@@ -12,6 +14,17 @@ import { writeCliMessage } from '../cli-utils.js'
 
 function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+/** 只识别发布声明的值导出；注释、字符串、私有声明和 type 导出不构成迁移能力。 */
+function declaresValueExport(source: string, name: string): boolean {
+  const declarations = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, ' ')
+  if (new RegExp(`\\bexport\\s+(?:declare\\s+)?(?:function|const|let|var)\\s+${name}\\b`).test(declarations))
+    return true
+  return [...declarations.matchAll(/\bexport\s*\{([^}]+)\}/g)].some(match => match[1]!.split(',').some((item) => {
+    const value = item.trim()
+    return !value.startsWith('type ') && (value.split(/\s+as\s+/).at(-1)?.trim() === name)
+  }))
 }
 
 /** 有界检查 npm tar 内容，仅读取，不解压到工程。 */
@@ -43,26 +56,20 @@ function tarFiles(bytes: Uint8Array): Map<string, Uint8Array> {
 export async function inspectFrameworkUpgrade(directory: string, version: string) {
   if (!/^\d+\.\d+\.\d+(?:-[\da-z.-]+)?(?:\+[\da-z.-]+)?$/i.test(version))
     throw new Error(cliM('cli_upgrade_exact_version'))
-  const root = resolve(directory)
+  const root = realpathSync(resolve(directory))
   const workspaceFile = join(root, 'pnpm-workspace.yaml')
   const workspace = existsSync(workspaceFile) ? object(parse(readFileSync(workspaceFile, 'utf8'))) : {}
   const rootManifest = object(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')))
-  const patterns = Array.isArray(workspace.packages) ? workspace.packages : Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : []
+  const patterns: unknown[] = Array.isArray(workspace.packages) ? workspace.packages : Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : Array.isArray(object(rootManifest.workspaces).packages) ? object(rootManifest.workspaces).packages as unknown[] : []
   const directories = new Set([root])
-  for (const pattern of patterns) {
-    if (typeof pattern !== 'string' || pattern.startsWith('!') || pattern.includes('..'))
-      continue
-    if (pattern.endsWith('/*')) {
-      const parent = join(root, pattern.slice(0, -2))
-      if (existsSync(parent)) {
-        for (const entry of readdirSync(parent, { withFileTypes: true })) {
-          if (entry.isDirectory() && !entry.isSymbolicLink() && existsSync(join(parent, entry.name, 'package.json')))
-            directories.add(join(parent, entry.name))
-        }
-      }
-    }
-    else if (existsSync(join(root, pattern, 'package.json'))) {
-      directories.add(join(root, pattern))
+  const safePatterns = patterns.filter((pattern): pattern is string => typeof pattern === 'string' && !isAbsolute(pattern.replace(/^!/, '')) && !pattern.split(/[\\/]/).includes('..'))
+  const exclude = ['**/node_modules/**', ...safePatterns.filter(pattern => pattern.startsWith('!')).map(pattern => `${pattern.slice(1)}/package.json`)]
+  for (const pattern of safePatterns.filter(pattern => !pattern.startsWith('!'))) {
+    for await (const manifest of glob(`${pattern}/package.json`, { cwd: root, exclude })) {
+      const location = realpathSync(dirname(join(root, manifest)))
+      const fromRoot = relative(root, location)
+      if (!isAbsolute(fromRoot) && fromRoot !== '..' && !fromRoot.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`))
+        directories.add(location)
     }
   }
   const packages = new Set(['@h-ai/cli', '@h-ai/deploy'])
@@ -91,18 +98,12 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
         issues.push('declared-version-drift')
       let installed: string | undefined
       try {
-        const local = createRequire(join(location, 'package.json'))
-        let entry = dirname(local.resolve(name))
-        while (dirname(entry) !== entry) {
-          const path = join(entry, 'package.json')
-          if (existsSync(path)) {
-            const candidate = object(JSON.parse(readFileSync(path, 'utf8')))
-            if (candidate.name === name) {
-              installed = String(candidate.version)
-              break
-            }
-          }
-          entry = dirname(entry)
+        // 使用消费者的 ESM 包解析，不执行入口，也不要求包公开 package.json 子路径。
+        const path = findPackageJSON(name, pathToFileURL(join(location, 'package.json')))
+        if (path) {
+          const candidate = object(JSON.parse(readFileSync(path, 'utf8')))
+          if (candidate.name === name && typeof candidate.version === 'string')
+            installed = candidate.version
         }
       }
       catch { /* 已安装版本缺失作为诊断输出，不触发安装。 */ }
@@ -145,7 +146,7 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
       const available = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(20000) })
       if (!available.ok)
         throw new Error('Artifact missing')
-      if (['@h-ai/cli', '@h-ai/deploy', '@h-ai/iam', '@h-ai/reach', '@h-ai/scheduler'].includes(name)) {
+      if (['@h-ai/cli', '@h-ai/deploy', '@h-ai/iam', '@h-ai/reach', '@h-ai/scheduler', '@h-ai/audit'].includes(name)) {
         const archive = await fetch(url, { signal: AbortSignal.timeout(30000) })
         if (!archive.ok || Number(archive.headers.get('content-length')) > 32 * 1024 * 1024)
           throw new Error('Artifact missing')
@@ -159,8 +160,8 @@ export async function inspectFrameworkUpgrade(directory: string, version: string
         const manifest = files.get('package/package.json')
         if (!manifest || object(JSON.parse(new TextDecoder().decode(manifest))).version !== version || !files.has('package/dist/index.js'))
           throw new Error('Incomplete artifact')
-        const migration = { '@h-ai/iam': 'migrateIam', '@h-ai/reach': 'migrateReach', '@h-ai/scheduler': 'migrateScheduler' }[name]
-        if (migration && new TextDecoder().decode(files.get('package/dist/index.d.ts')).includes(migration))
+        const migration = { '@h-ai/iam': 'migrateIam', '@h-ai/reach': 'migrateReach', '@h-ai/scheduler': 'migrateScheduler', '@h-ai/audit': 'migrateAudit' }[name]
+        if (migration && declaresValueExport(new TextDecoder().decode(files.get('package/dist/index.d.ts')), migration) && declaresValueExport(new TextDecoder().decode(files.get('package/dist/index.js')), migration))
           migrationPreflight.push(`${migration}({ dryRun: true })`)
         if (name === '@h-ai/cli') {
           if (!files.has('package/templates/skills/hai-feedback/SKILL.md'))
