@@ -42,5 +42,9 @@
   "reach_productionProviderRequired": "本番環境には配信プロバイダーが必要です。console は開発環境または明示的なテストモードでのみ使用できます",
   "reach_sensitivePolicyRequired": "認証情報の通知にはデータベースの受領記録、固定の冪等キーと有効期限が必要です",
   "reach_sensitiveDeliveryUnconfirmed": "認証情報の配信を確認できません。自動再送せず、受領記録の確認または認証情報の再発行が必要です。",
-  "reach_messageExpired": "認証情報の期限が切れたため配信しませんでした"
+  "reach_messageExpired": "認証情報の期限が切れたため配信しませんでした",
+  "reach_apiResponseTooLarge": "API 応答が 64 KiB の上限を超えています",
+  "reach_apiResponseInvalid": "API 応答は空か、省略可能な messageId 文字列を持つ JSON オブジェクトである必要があります",
+  "reach_apiRequestFailed": "API リクエストが失敗またはタイムアウトしました。配信結果は未確認です",
+  "reach_apiHttpsRequired": "この API ポリシーでは HTTPS が必要で、自動リダイレクトは禁止されています"
 }

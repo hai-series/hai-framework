@@ -102,6 +102,10 @@ export const ApiProviderConfigSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
   /** 请求超时毫秒数（默认 10000） */
   timeout: z.number().int().min(0).default(10000),
+  /** HTTP 重定向策略；默认拒绝。敏感发送始终拒绝，即使普通发送显式允许。 */
+  redirect: z.enum(['error', 'follow']).default('error'),
+  /** 强制 HTTPS；省略时生产敏感发送要求 HTTPS，显式 false 仅用于受信内网传输。 */
+  requireHttps: z.boolean().optional(),
   /** 接收端按 Idempotency-Key 原子持久去重，且覆盖所有重试与旧节点迟到请求时才启用；默认 false。 */
   idempotent: z.boolean().default(false),
 })

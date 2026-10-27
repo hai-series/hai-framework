@@ -15,6 +15,8 @@ description: "接入邮件、短信、API 通知与模板，处理发送结果�
 | 输出 | 发送和模板操作的 HaiResult |
 | 限制 | 仅服务端；模板绑定 Provider，遵守 DND。区分测试与真实发送，不记录验证码或收件人敏感内容。 |
 
+API 空 2xx 表示受理成功；非空 JSON 回执上限 64 KiB。redirect 默认 error，敏感消息始终拒绝跳转；requireHttps:true 与 follow 互斥，生产敏感消息省略时要求 HTTPS。未知副作用不自动重投，不输出接收端正文。
+
 ## 使用路径
 
 - 先配置并注册 Provider，再保存绑定 Provider 的模板；模板发送只传 template/to/vars 即可，显式 provider 可覆盖；直接发送须提供 provider。启用 DND delay 必须先初始化 reldb 并确保队列表可用；成功时 `deferred: true` 与 `queueId` 表示可靠入队，尚未投递；缺库、断连或插入失败须按 HaiResult 失败处理。即时投递与排队状态须区分。

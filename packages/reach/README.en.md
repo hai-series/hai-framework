@@ -217,6 +217,12 @@ Use `reach.send({ ..., sensitive: true, expiresAt, idempotencyKey })` for passwo
 
 `migrateReach({ dryRun: true })` previews supported migrations, applied during repository initialization. Statuses/identifiers remain; legacy in-flight work becomes unknown. Legacy payloads are retired once and pending old payloads discarded. Back up and stop old writers before upgrading; never replay old credentials.
 
+## API acknowledgements and destination boundaries
+
+An empty successful 2xx response, including 204/205, means receiver acceptance; messageId is optional and acceptance does not prove final delivery. Nonempty responses must be JSON objects with an optional messageId string of at most 255 characters. Responses are bounded to 64 KiB. Invalid responses, timeouts and network failures never become false success or expose receiver content.
+
+API `redirect` defaults to `error`; ordinary messages may explicitly use `follow`. Sensitive messages always reject redirects without forwarding payloads or private headers. `requireHttps:true` enforces initial HTTPS and cannot be combined with follow. When omitted, production sensitive messages require HTTPS; explicit false is only for an operator-approved trusted internal connection. Unknown source-side effects still require reconciliation and sensitive messages are never retried automatically. Application allowlists and network egress controls remain necessary.
+
 ## Development and testing
 
 ```bash

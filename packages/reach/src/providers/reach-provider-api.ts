@@ -1,3 +1,4 @@
+import type { HaiError, HaiResult } from '@h-ai/core'
 /**
  * @h-ai/reach — API 回调 Provider
  *
@@ -5,11 +6,11 @@
  * @module reach-provider-api
  */
 
-import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ApiProviderConfig, ProviderConfig } from '../reach-config.js'
-
 import type { ReachMessage, SendResult } from '../reach-types.js'
+
 import type { ReachProvider } from './reach-provider-types.js'
+import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
 import { reachM } from '../reach-i18n.js'
@@ -40,13 +41,53 @@ function getSafeEndpoint(url: string): string {
 /**
  * 将异常包装为 ReachError
  */
-function toReachError(error: unknown): HaiError {
+function toReachError(): HaiError {
   return {
     code: HaiReachError.SEND_FAILED.code,
     message: reachM('reach_apiSendFailed', {
-      params: { error: error instanceof Error ? error.message : String(error) },
+      params: { error: reachM('reach_apiRequestFailed') },
     }),
-    cause: error,
+  }
+}
+
+/** 成功回执仅包含可选消息编号；正文有界，解析失败不输出第三方内容。 */
+async function readAcknowledgement(response: Response): Promise<HaiResult<SendResult>> {
+  const reader = response.body?.getReader()
+  let complete = false
+  try {
+    let text = ''
+    let bytes = 0
+    const decoder = new TextDecoder('utf-8', { fatal: true })
+    if (reader) {
+      while (true) {
+        const chunk = await reader.read()
+        if (chunk.done)
+          break
+        bytes += chunk.value.byteLength
+        if (bytes > 65536)
+          return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseTooLarge'))
+        text += decoder.decode(chunk.value, { stream: true })
+      }
+      text += decoder.decode()
+    }
+    complete = true
+    if (text.length === 0)
+      return ok({ success: true })
+    const result: unknown = JSON.parse(text)
+    if (!result || typeof result !== 'object' || Array.isArray(result))
+      return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
+    const messageId = 'messageId' in result ? result.messageId : undefined
+    if (messageId !== undefined && (typeof messageId !== 'string' || messageId.length > 255))
+      return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
+    return ok({ success: true, ...(messageId === undefined ? {} : { messageId }) })
+  }
+  catch {
+    return err(HaiReachError.SEND_FAILED, reachM('reach_apiResponseInvalid'))
+  }
+  finally {
+    if (!complete)
+      await reader?.cancel().catch(() => undefined)
+    reader?.releaseLock()
   }
 }
 
@@ -84,6 +125,10 @@ export function createApiProvider(): ReachProvider {
       }
 
       apiConfig = config
+      if ((config.requireHttps && new URL(config.url).protocol !== 'https:') || (config.requireHttps && config.redirect === 'follow')) {
+        apiConfig = null
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
+      }
       logger.info('API provider connected', { endpoint: getSafeEndpoint(config.url), method: config.method })
       return ok(undefined)
     },
@@ -106,6 +151,10 @@ export function createApiProvider(): ReachProvider {
       }
 
       logger.debug('Sending via API callback', { endpoint: getSafeEndpoint(apiConfig.url) })
+
+      const requireHttps = apiConfig.requireHttps ?? (message.sensitive === true && core.module.requiresSharedState(process.env))
+      if (requireHttps && new URL(apiConfig.url).protocol !== 'https:')
+        return err(HaiReachError.CONFIG_ERROR, reachM('reach_apiHttpsRequired'))
 
       try {
         const payload = {
@@ -131,29 +180,32 @@ export function createApiProvider(): ReachProvider {
             headers,
             body: JSON.stringify(payload),
             signal: controller.signal,
+            redirect: message.sensitive || apiConfig.redirect !== 'follow' ? 'manual' : 'follow',
           })
 
           if (!response.ok) {
+            await response.body?.cancel()
             logger.warn('API callback returned non-OK status', { status: response.status })
             // 明确的客户端拒绝无需自动重试；超时、过早请求及限流仍属于暂时故障。
-            const rejected = response.status >= 400 && response.status < 500 && ![408, 425, 429].includes(response.status)
+            const rejected = (response.status >= 300 && response.status < 400) || (response.status >= 400 && response.status < 500 && ![408, 425, 429].includes(response.status))
             return err(
               rejected ? HaiReachError.DELIVERY_REJECTED : HaiReachError.SEND_FAILED,
               reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}` } }),
             )
           }
 
-          const result = await response.json() as { messageId?: string }
-          logger.info('API callback sent', { messageId: result.messageId })
-          return ok({ success: true, messageId: result.messageId })
+          const result = await readAcknowledgement(response)
+          if (result.success)
+            logger.info('API callback accepted', { hasMessageId: result.data.messageId !== undefined })
+          return result
         }
         finally {
           clearTimeout(timeoutId)
         }
       }
-      catch (error) {
-        logger.error('API callback send failed', { error })
-        return err(toReachError(error))
+      catch {
+        logger.error('API callback send failed', { errorCode: HaiReachError.SEND_FAILED.code })
+        return err(toReachError())
       }
     },
   }

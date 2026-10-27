@@ -42,5 +42,9 @@
   "reach_productionProviderRequired": "Production requires a delivery provider; console is available only in development or explicit test mode",
   "reach_sensitivePolicyRequired": "Credential notifications require a database receipt, stable idempotency key and expiry",
   "reach_sensitiveDeliveryUnconfirmed": "Credential delivery is unconfirmed and will not be retried automatically. Check the receipt or request new credentials.",
-  "reach_messageExpired": "The credentials expired before delivery"
+  "reach_messageExpired": "The credentials expired before delivery",
+  "reach_apiResponseTooLarge": "API acknowledgement exceeds the 64 KiB limit",
+  "reach_apiResponseInvalid": "API acknowledgement must be empty or a JSON object with an optional messageId string",
+  "reach_apiRequestFailed": "API request failed or timed out; delivery is unconfirmed",
+  "reach_apiHttpsRequired": "This API policy requires HTTPS and disallows automatic redirects"
 }

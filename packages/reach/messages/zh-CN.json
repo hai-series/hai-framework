@@ -42,5 +42,9 @@
   "reach_productionProviderRequired": "生产环境必须配置真实触达服务；console 仅可用于开发或显式测试模式",
   "reach_sensitivePolicyRequired": "凭据通知需要数据库回执、稳定幂等键和有效期",
   "reach_sensitiveDeliveryUnconfirmed": "凭据投递尚未确认；不会自动重复发送，请查询回执或申请新凭据",
-  "reach_messageExpired": "凭据已过期，未投递"
+  "reach_messageExpired": "凭据已过期，未投递",
+  "reach_apiResponseTooLarge": "API 回执超过 64 KiB 上限",
+  "reach_apiResponseInvalid": "API 回执必须为空或含可选 messageId 字符串的 JSON 对象",
+  "reach_apiRequestFailed": "API 请求失败或超时，投递结果未确认",
+  "reach_apiHttpsRequired": "此 API 策略要求 HTTPS 且禁止自动重定向"
 }

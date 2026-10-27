@@ -755,6 +755,8 @@ providers:
   #   headers:
   #     Authorization: 'Bearer \${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
   #   timeout: 10000
+  #   redirect: error # 普通消息才可显式 follow；敏感发送始终拒绝跳转。
+  #   requireHttps: true # 强制 HTTPS；省略时生产敏感发送仍要求 HTTPS。
 
 # IAM 标准模板：保留空数组以支持 HAI_REACH_TEMPLATES 整体覆盖。
 templates: []

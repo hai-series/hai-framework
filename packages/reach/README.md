@@ -217,6 +217,12 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 
 `migrateReach({ dryRun: true })` 预检；仓库初始化自动执行受支持步骤。升级保留发送状态与标识，旧在途转 unknown；旧正文/主题/模板变量/extra 一次性退役，待发旧载荷 discarded。生产需先备份停旧写入，不能恢复旧凭据重新投递。
 
+## API 回执与目标边界
+
+空正文的成功 2xx（含 204/205）表示接收端受理，messageId 可缺省，不代表最终送达。非空正文须为 JSON 对象，messageId 若存在须为不超过 255 字符的字符串；响应最多 64 KiB，非法响应、超时和网络失败不会假装成功或输出第三方正文。
+
+API Provider 的 `redirect` 默认为 `error`；只有普通消息可显式设为 `follow`。`sensitive:true` 始终拒绝跳转，不转发正文和私有头。`requireHttps:true` 强制初始 HTTPS 且与 follow 互斥；省略时生产敏感消息要求 HTTPS，显式 false 仅适用于操作者确认的受信内网。超时或源端已产生的未知副作用仍须核对，敏感消息不自动重投。域名授权、内网地址限制和出口策略由应用及部署环境负责。
+
 ## 开发测试
 
 ```bash
