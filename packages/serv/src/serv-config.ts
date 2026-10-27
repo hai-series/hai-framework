@@ -134,6 +134,8 @@ export interface ServRpcHttpConfig {
 export interface ServTransportRuntimeConfig {
   /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
   readonly maxPlaintextBytes?: number
+  /** 按完整路径段匹配的明文容量；* 匹配单段。 */
+  readonly routePlaintextBytes?: Readonly<Record<string, number>>
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }
@@ -226,6 +228,7 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  */
 export type ServTransportRuntimeConfigInput = Partial<{
   readonly maxPlaintextBytes: number | 'auto'
+  readonly routePlaintextBytes: Readonly<Record<string, number>>
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }>
@@ -306,7 +309,8 @@ const RpcHttpConfigInputSchema = z.union([
 const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
-    maxPlaintextBytes: z.union([z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max), z.literal('auto')]).transform(value => value === 'auto' ? undefined : value).optional().describe('双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求').meta({ default: 'auto' }),
+    maxPlaintextBytes: z.union([z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max), z.literal('auto')]).transform(value => value === 'auto' ? undefined : value).optional().describe('普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明').meta({ default: 'auto' }),
+    routePlaintextBytes: z.record(AbsolutePathSchema, z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max)).optional().describe('完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量'),
     keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
   }),

@@ -53,5 +53,6 @@
   "crypto_transportBodyLimitInvalid": "Transport plaintext limit must be an integer between 1024 and 67108864 bytes",
   "crypto_transportBodyTooLarge": "Encrypted transport payload exceeds the configured byte limit",
   "crypto_transportTimeInvalid": "Your device and server clocks may be out of sync, or the request has expired. Enable automatic time synchronization and refresh to retry. If this continues, ask an administrator to check the server clock.",
-  "crypto_transportBodyLimitConflict": "Explicit transport limit {limit} bytes is below the enabled module requirement of {required} bytes; adjust the module budget or explicit limit"
+  "crypto_transportBodyLimitConflict": "Explicit transport limit {limit} bytes is below the enabled module requirement of {required} bytes; adjust the module budget or explicit limit",
+  "crypto_transportBusy": "Material processing is busy. Please retry shortly."
 }

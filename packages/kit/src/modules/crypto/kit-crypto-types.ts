@@ -193,6 +193,8 @@ export type {
 export interface TransportEncryptionConfig {
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   maxPlaintextBytes?: number
+  /** 路由明文容量；* 匹配一个完整路径段。 */
+  routePlaintextBytes?: Readonly<Record<string, number>>
   /** 受管服务端密钥环，仅从服务端 Secret 注入，不放公开 kit 配置。 */
   serverKeyRing: TransportServerKeyRing
   /** 是否启用传输加密（默认 false） */

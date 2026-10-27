@@ -29,6 +29,7 @@ const CryptoErrorInfo = {
   INVALID_IV: '060:400',
   TRANSPORT_PAYLOAD_TOO_LARGE: '070:413',
   TRANSPORT_TIME_INVALID: '071:400',
+  TRANSPORT_BUSY: '072:503',
 } as const satisfies ErrorInfo
 
 /**

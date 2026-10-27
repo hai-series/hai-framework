@@ -30,5 +30,7 @@
   "serv_transportClientKeyNotFound": "客户端未注册或会话已过期，请重新完成密钥协商",
   "serv_transportDecryptFailed": "请求解密失败",
   "serv_transportEncryptFailed": "响应加密失败",
-  "serv_transportKeyExchangeFailed": "密钥协商失败"
+  "serv_transportKeyExchangeFailed": "密钥协商失败",
+  "serv_transportBusy": "材料处理繁忙，请稍后重试",
+  "serv_feedbackUnavailable": "问题反馈暂不可用，业务功能可继续使用"
 }

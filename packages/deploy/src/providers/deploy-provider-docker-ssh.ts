@@ -19,7 +19,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, ok } from '@h-ai/core'
-import { parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
+import { createTransportBodyPolicy, parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
 import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
@@ -179,7 +179,8 @@ export function createDockerSshProvider(
         protectedTransport = !('enabled' in transport) || transport.enabled !== false
         try {
           const configured = (transport as { maxPlaintextBytes?: number | 'auto' }).maxPlaintextBytes
-          const limits = resolveTransportBodyLimits(configured === 'auto' ? undefined : configured, { requiredPlaintextBytes: feedbackTransportBytes })
+          const routes = (transport as { routePlaintextBytes?: Record<string, number> }).routePlaintextBytes
+          const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, routes).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
           env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
         }
@@ -198,10 +199,10 @@ export function createDockerSshProvider(
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
       if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
-      const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto' } | false | undefined
+      const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
-        const limits = resolveTransportBodyLimits(configured === 'auto' ? undefined : configured, { requiredPlaintextBytes: feedbackTransportBytes })
+        const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
         webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes })
       }
       catch (error) {

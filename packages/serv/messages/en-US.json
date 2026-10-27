@@ -30,5 +30,7 @@
   "serv_transportClientKeyNotFound": "Client not registered or session expired; complete key exchange again",
   "serv_transportDecryptFailed": "Failed to decrypt request",
   "serv_transportEncryptFailed": "Failed to encrypt response",
-  "serv_transportKeyExchangeFailed": "Key exchange failed"
+  "serv_transportKeyExchangeFailed": "Key exchange failed",
+  "serv_transportBusy": "Material processing is busy. Please retry shortly.",
+  "serv_feedbackUnavailable": "Feedback is temporarily unavailable. Business features remain available."
 }

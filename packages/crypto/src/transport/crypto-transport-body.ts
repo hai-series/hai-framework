@@ -206,3 +206,56 @@ export async function readTransportBody(
     reader.releaseLock()
   }
 }
+
+/**
+ * 为真实 HTTP 适配器分离业务与大附件容量；* 只匹配一个完整路径段。
+ * 单独声明且超过 1 MiB 的材料路由最多两个，普通业务最多十六个，租约须在响应完成或失败时释放。
+ * @param maxPlaintextBytes - 普通业务容量；省略使用 1 MiB。
+ * @param routes - 受信任的绝对路径到 UTF-8 容量映射，最多 100 条。
+ * @returns 协商最大容量及每请求的限额和可释放并发准入。
+ * @throws RangeError 配置路径、数量或容量无效。
+ * @example
+ * ```ts
+ * import { createTransportBodyPolicy } from '@h-ai/crypto'
+ * const policy = createTransportBodyPolicy(undefined, { '/api/files/*': 8 * 1024 * 1024 })
+ * const lease = policy.acquire('/api/files/attachment')
+ * try { if (lease) lease.limits.plaintextBytes }
+ * finally { lease?.release() }
+ * ```
+ */
+export function createTransportBodyPolicy(maxPlaintextBytes?: number, routes: Readonly<Record<string, number>> = {}) {
+  const ordinary = resolveTransportBodyLimits(maxPlaintextBytes)
+  const entries = Object.entries(routes)
+  if (entries.length > 100 || entries.some(([path]) => !path.startsWith('/') || path.includes('?') || path.includes('#') || path.split('/').some(part => part.includes('*') && part !== '*')))
+    throw new RangeError(cryptoM('crypto_transportBodyLimitInvalid'))
+  const configured = entries.map(([path, bytes]) => ({ parts: path.split('/'), limits: resolveTransportBodyLimits(bytes) }))
+  const maximum = resolveTransportBodyLimits(Math.max(ordinary.plaintextBytes, ...configured.map(route => route.limits.plaintextBytes)))
+  let small = 0
+  let large = 0
+  return {
+    maximum,
+    acquire(pathname: string) {
+      const parts = pathname.split('/')
+      const matching = configured.filter(route => route.parts.length === parts.length && route.parts.every((part, index) => part === '*' || part === parts[index]))
+      // 重叠路由采用更严格容量；既定配置不会因记录顺序改变安全边界。
+      const limits = matching.length ? matching.reduce((left, right) => left.limits.plaintextBytes < right.limits.plaintextBytes ? left : right).limits : ordinary
+      const heavy = matching.length > 0 && limits.plaintextBytes > TRANSPORT_BODY_LIMITS.plaintextBytes
+      if (heavy ? large >= 2 : small >= 16)
+        return null
+      if (heavy)
+        large++
+      else
+        small++
+      let released = false
+      return { limits, release() {
+        if (released)
+          return
+        released = true
+        if (heavy)
+          large--
+        else
+          small--
+      } }
+    },
+  }
+}

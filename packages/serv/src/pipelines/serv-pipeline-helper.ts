@@ -81,6 +81,8 @@ export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInpu
   }, async () => {
     const resource = options.path.join('.') || 'procedure'
     const capture = async (status: number, reasonCode?: string | number) => {
+      if (!audit.isInitialized)
+        return
       const written = await audit.capture({
         action: 'request.execute',
         resource,

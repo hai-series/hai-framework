@@ -170,3 +170,24 @@ it('管理端邀请契约不接收密码，接收人可通过重置端点完成�
   expect((await client.iam.auth.confirmPasswordReset({ token: delivery.token, newPassword: 'InvitedPassword123!' })).success).toBe(true)
   expect((await client.iam.auth.login({ identifier: delivery.user.username, password: 'InvitedPassword123!' })).success).toBe(true)
 })
+
+it.each(['iam.profile.update', 'iam.profile.avatar'])('标准资料入口也执行 %s 再认证，不能绕过独立资料入口', async (operation) => {
+  await iam.close()
+  expect((await iam.init({ reauthentication: { enabled: true, operations: [operation] } })).success).toBe(true)
+  await signInAdmin()
+  const input = operation.endsWith('avatar') ? { avatarUrl: 'https://example.test/avatar.png' } : { displayName: 'Updated profile' }
+  const unprotected = operation.endsWith('avatar') ? { displayName: 'Unprotected profile' } : { avatarUrl: 'https://example.test/unprotected-avatar.png' }
+  expect((await client.iam.auth.updateCurrentUser(unprotected)).success).toBe(true)
+  expect(await client.iam.auth.updateCurrentUser({ displayName: 'Mixed update', avatarUrl: 'https://example.test/mixed-avatar.png' })).toMatchObject({ success: false, error: { code: HaiIamError.REAUTHENTICATION_REQUIRED.code } })
+  expect(await client.iam.auth.updateCurrentUser(input)).toMatchObject({ success: false, error: { code: HaiIamError.REAUTHENTICATION_REQUIRED.code } })
+  const issued = await client.iam.auth.reauthenticate({ password, operation })
+  expect(issued.success).toBe(true)
+  if (!issued.success)
+    return
+  proof = issued.data.ticket
+  try {
+    expect((await client.iam.auth.updateCurrentUser(input)).success).toBe(true)
+    expect((await client.iam.auth.updateCurrentUser(input)).success).toBe(false)
+  }
+  finally { proof = undefined }
+})

@@ -30,5 +30,7 @@
   "serv_transportClientKeyNotFound": "クライアントが未登録か、セッションの有効期限が切れています。再度鍵交換を行ってください",
   "serv_transportDecryptFailed": "リクエストの復号に失敗しました",
   "serv_transportEncryptFailed": "レスポンスの暗号化に失敗しました",
-  "serv_transportKeyExchangeFailed": "鍵交換に失敗しました"
+  "serv_transportKeyExchangeFailed": "鍵交換に失敗しました",
+  "serv_transportBusy": "資料の処理が混み合っています。しばらくしてから再試行してください。",
+  "serv_feedbackUnavailable": "フィードバックは一時的に利用できません。業務機能は引き続き利用できます。"
 }

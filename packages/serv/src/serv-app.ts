@@ -1,3 +1,4 @@
+import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
 /**
  * @h-ai/serv — HTTP app 装配
  *
@@ -16,7 +17,6 @@
  * @module serv-app
  */
 
-import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
 import type { AuditContext } from '@h-ai/audit'
 import type { HaiResult } from '@h-ai/core'
 import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
@@ -32,6 +32,7 @@ import type { ServValidationFailureBody } from './serv-validation.js'
 import { AUDIO_WS_PATH } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
+import { createTransportBodyPolicy } from '@h-ai/crypto'
 import { upgradeWebSocket } from '@hono/node-server'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { RPCHandler } from '@orpc/server/fetch'
@@ -372,7 +373,7 @@ export function createApp<
     }, async () => {
       await next()
       // 契约校验、协议或中间件拒绝不会进入 procedure；按 HTTP 状态补齐这些事件。
-      if (c.res.status >= 400) {
+      if (audit.isInitialized && c.res.status >= 400) {
         const trusted = requestAuditContexts.get(c.req.raw)
         const recorded = await audit.capture({
           action: 'http.reject',
@@ -440,10 +441,11 @@ export function createApp<
   // - 它需在 oRPC 读取 body 前完成解密
   // - 在下游响应返回后加密
   if (options.transport) {
+    const policy = createTransportBodyPolicy(options.transport.maxPlaintextBytes, options.transport.routePlaintextBytes)
     const mgr = options.transport.crypto.transport.createServer({
       serverKeyRing: options.transport.serverKeyRing,
       keyStore: options.transport.keyStore,
-      maxPlaintextBytes: options.transport.maxPlaintextBytes,
+      maxPlaintextBytes: policy.maximum.plaintextBytes,
     })
     if (!mgr.success) {
       // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到
@@ -455,7 +457,7 @@ export function createApp<
       )
     }
     const keyExchangePath = `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
-    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths))
+    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths, policy))
   }
 
   // Step 8：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。

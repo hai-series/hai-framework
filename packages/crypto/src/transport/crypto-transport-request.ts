@@ -1,8 +1,9 @@
+import type { HaiResult } from '@h-ai/core'
 /**
  * @h-ai/crypto — serv/kit 共用的实际 HTTP 请求认证入口。
  * @module crypto-transport-request
  */
-import type { HaiResult } from '@h-ai/core'
+import type { TransportBodyLimits } from './crypto-transport-body.js'
 import type { EncryptedRequestPayload, TransportEncryptionManager, TransportMessageContext } from './crypto-transport-types.js'
 import { ok } from '@h-ai/core'
 import { readTransportBody, TRANSPORT_BODY_LIMITS, TransportBodyTooLargeError } from './crypto-transport-body.js'
@@ -14,6 +15,7 @@ import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
  * 拒绝缺少认证及头/正文重复承载，空请求也认证；不会由payload自证HTTP上下文。
  * @param manager - 使用共享原子nonce registry的已创建管理器。
  * @param request - 未消费正文的真实Request。
+ * @param limits - HTTP 路由容量；默认管理器协商容量。
  * @returns 明文和响应关联上下文；认证失败无明文。
  * @throws RangeError超限；流读取/取消沿用原异常，HTTP适配器负责转响应。
  *
@@ -32,6 +34,7 @@ import { TRANSPORT_PROTOCOL } from './crypto-transport-types.js'
 export async function authenticateTransportRequest(
   manager: TransportEncryptionManager,
   request: Request,
+  limits: TransportBodyLimits = manager.bodyLimits,
 ): Promise<HaiResult<{ plaintext: string, context: TransportMessageContext }>> {
   const reject = () => {
     void request.body?.cancel().catch(() => {})
@@ -49,7 +52,7 @@ export async function authenticateTransportRequest(
   if (envelope && new TextEncoder().encode(envelope).byteLength > TRANSPORT_BODY_LIMITS.envelopeHeaderBytes)
     throw new TransportBodyTooLargeError(TRANSPORT_BODY_LIMITS.envelopeHeaderBytes, new TextEncoder().encode(envelope).byteLength, { stage: 'header' })
   const text = envelope ?? await readTransportBody(request.body, {
-    maxBytes: manager.bodyLimits.encryptedPayloadBytes,
+    maxBytes: limits.encryptedPayloadBytes,
     stage: 'encrypted',
     signal: request.signal,
   })
@@ -60,7 +63,7 @@ export async function authenticateTransportRequest(
   catch {
     return transportAuthenticationFailure()
   }
-  if (!isValidEncryptedPayload(payload, manager.bodyLimits) || payload.direction !== 'request' || payload.status !== 0)
+  if (!isValidEncryptedPayload(payload, limits) || payload.direction !== 'request' || payload.status !== 0)
     return transportAuthenticationFailure()
   const url = new URL(request.url)
   const decrypted = await manager.decryptRequest(payload as EncryptedRequestPayload, {
@@ -73,8 +76,8 @@ export async function authenticateTransportRequest(
       throw decrypted.error.cause
     return decrypted
   }
-  if (new TextEncoder().encode(decrypted.data).byteLength > manager.bodyLimits.plaintextBytes)
-    throw new TransportBodyTooLargeError(manager.bodyLimits.plaintextBytes, new TextEncoder().encode(decrypted.data).byteLength)
+  if (new TextEncoder().encode(decrypted.data).byteLength > limits.plaintextBytes)
+    throw new TransportBodyTooLargeError(limits.plaintextBytes, new TextEncoder().encode(decrypted.data).byteLength)
   if (bodyless && decrypted.data !== '')
     return transportAuthenticationFailure()
   return ok({ plaintext: decrypted.data, context: payload.context })

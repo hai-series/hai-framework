@@ -552,7 +552,14 @@ function buildRawClient<TContract extends AnyContractRouter>(
         record.url = core.sanitize.sanitizeUrl(url.toString())
       }
       const requestInit = options.context.keepalive === true ? { ...init, keepalive: true } : init
-      const response = await fetchWithRefresh(request, requestInit, config, options.context.autoRefresh === false ? undefined : tokenManager, transport, record)
+      const confirm = options.context.reauthorize
+      const reauthorize = typeof confirm === 'function'
+        ? async () => {
+          const value: unknown = await confirm()
+          return typeof value === 'string' || value === undefined ? value : null
+        }
+        : undefined
+      const response = await fetchWithRefresh(request, requestInit, config, options.context.autoRefresh === false ? undefined : tokenManager, transport, record, reauthorize)
       if (record) {
         record.status = response.status
         const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')
@@ -628,16 +635,42 @@ async function fetchWithRefresh(
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
   observation?: MutableRequestRecord,
+  reauthorize?: () => Promise<string | null | undefined>,
 ): Promise<Response> {
   // Fetch Request 的 body 是一次性可读流；为了支持 401 后重发 POST/PUT 等带 body 的请求，
   // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
-  const retryRequest = tokenManager ? request.clone() : undefined
+  const retryRequest = tokenManager || reauthorize ? request.clone() : undefined
   const identityGeneration = tokenManager?.generation
   if (observation)
     observation.attempts++
   const response = await fetchWithTimeout(request, init, config, transport)
-  if (!tokenManager || !retryRequest)
+  if (!retryRequest)
     return response
+
+  async function retryAuthorized(accessToken?: string): Promise<Response> {
+    if (!retryRequest || retryRequest.signal.aborted)
+      return response
+    const generation = tokenManager?.generation
+    const headers = new Headers(retryRequest.headers)
+    if (headers.has('x-hai-reauthentication') || reauthorize) {
+      if (!reauthorize)
+        return response
+      const ticket = await reauthorize()
+      if (ticket === null || retryRequest.signal.aborted || tokenManager?.generation !== generation)
+        return response
+      headers.delete('x-hai-reauthentication')
+      if (ticket)
+        headers.set('x-hai-reauthentication', ticket)
+    }
+    const currentToken = accessToken ?? await tokenManager?.storage.getAccessToken()
+    if (tokenManager?.generation !== generation)
+      return response
+    if (currentToken)
+      headers.set('authorization', `Bearer ${currentToken}`)
+    if (observation)
+      observation.attempts++
+    return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
+  }
 
   // 登录失败必须保留原始错误；refresh 本身也不能再次触发自动刷新。
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
@@ -645,9 +678,16 @@ async function fetchWithRefresh(
   const excludedPaths = [...AUTH_ENTRY_PATHS, refreshPath]
   if (excludedPaths.some(path => new URL(`${baseUrl}${path.startsWith('/') ? path : `/${path}`}`).pathname === new URL(request.url).pathname))
     return response
+  const failure: unknown = response.status === 401 || response.headers.get('content-type')?.includes('application/json')
+    ? await response.clone().json().catch(() => undefined)
+    : undefined
+  const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error ? failure.error.code : undefined
+  if (code === 'hai:iam:027' && reauthorize)
+    return retryAuthorized()
+  if (!tokenManager)
+    return response
   if (response.status !== 401 && !await isUnauthorizedResult(response))
     return response
-  const failure: unknown = await response.clone().json().catch(() => undefined)
   if (failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
     && typeof failure.error.code === 'string' && failure.error.code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(failure.error.code).success) {
     return response
@@ -671,11 +711,7 @@ async function fetchWithRefresh(
   if (!accessToken)
     return response
 
-  const headers = new Headers(retryRequest.headers)
-  headers.set('authorization', `Bearer ${accessToken}`)
-  if (observation)
-    observation.attempts++
-  return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
+  return retryAuthorized(accessToken)
 }
 
 /**

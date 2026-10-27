@@ -89,7 +89,7 @@ export interface KitClientConfig {
  */
 export interface KitClient {
   /** 统一 API fetch（写请求自动附加 CSRF，启用 transport 时自动加解密） */
-  apiFetch: (input: RequestInfo | URL, init?: RequestInit, options?: { recoverSession?: boolean }) => Promise<Response>
+  apiFetch: (input: RequestInfo | URL, init?: RequestInit, options?: { recoverSession?: boolean, reauthorize?: () => Promise<string | null | undefined> }) => Promise<Response>
   /** 传输加密是否就绪（未启用传输加密时始终为 true） */
   readonly ready: boolean
   /**
@@ -408,18 +408,33 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   return {
     async apiFetch(input, init = {}, options) {
       const enabled = config.recoverSession && options?.recoverSession !== false
-      const original = enabled ? new Request(input instanceof Request ? input : new URL(String(input), getCurrentOrigin()), init) : undefined
+      const original = enabled || options?.reauthorize ? new Request(input instanceof Request ? input : new URL(String(input), getCurrentOrigin()), init) : undefined
       const retry = original?.clone()
       const response = await performFetch(original ?? input, original ? {} : init)
-      if (!enabled || response.status !== 401 || !retry || retry.signal.aborted || new URL(retry.url).origin !== getCurrentOrigin())
+      if (!retry || retry.signal.aborted || new URL(retry.url).origin !== getCurrentOrigin())
+        return response
+      if (response.status !== 401 && !options?.reauthorize)
+        return response
+      if (response.status !== 401 && !response.headers.get('content-type')?.includes('application/json'))
         return response
       const failure: unknown = await response.clone().json().catch(() => undefined)
-      if (failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
-        && typeof failure.error.code === 'string' && failure.error.code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(failure.error.code).success) {
+      const code = failure && typeof failure === 'object' && 'success' in failure && failure.success === false && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error ? failure.error.code : undefined
+      const proofRejected = code === 'hai:iam:027' && options?.reauthorize
+      if (!proofRejected && (!enabled || response.status !== 401 || (typeof code === 'string' && code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(code).success)))
         return response
+      if (!proofRejected && !await config.recoverSession!())
+        return response
+      // 新会话不能复用旧用途证明；只在明确拒绝且宿主重新确认后重试一次。
+      if (retry.headers.has('x-hai-reauthentication') || options?.reauthorize) {
+        if (!options?.reauthorize)
+          return response
+        const ticket = await options.reauthorize()
+        if (ticket === null || retry.signal.aborted)
+          return response
+        retry.headers.delete('x-hai-reauthentication')
+        if (ticket)
+          retry.headers.set('x-hai-reauthentication', ticket)
       }
-      if (!await config.recoverSession!())
-        return response
       // 认证动作本身必须传 recoverSession:false，避免错误密码再次等待自己。
       return performFetch(retry)
     },

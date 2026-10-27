@@ -228,6 +228,8 @@ Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD c
 
 Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
+Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Declare Feedback report intake, evidence, attachments and ZIP download capacity separately using `routePlaintextBytes` and `feedback.budget.maxTransportBytes`; `*` matches one complete path segment and explicit host route values take precedence. Handshakes, adapter-node and proxies use the maximum route capacity. HTTP adapters admit at most 2 explicitly declared material requests above 1 MiB and a separate 16 ordinary business requests, releasing admission after the entire response or failure. Busy admission returns 503 / `hai:crypto:072`; business writes are not automatically replayed.
+
 serv/kit return an encrypted HTTP 400 time error for an out-of-window message only after request binding, signature and MAC verification. The client throws `TransportTimeError` (`hai:crypto:071`) with advice to synchronize device/server clocks and refresh. `api-client` maps it to `VALIDATION_FAILED` and preserves `cause.transportCode`. Requests are not replayed automatically and replay windows remain unchanged; tampered or unauthenticated messages retain the generic authentication failure.
 
 #### Token authentication (`iam` / `refreshCookie`)
@@ -745,8 +747,6 @@ See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
 `session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
 
 ## Transport capacity and module budgets
-
-Configuration transport.maxPlaintextBytes accepts an explicit integer from 1 KiB to 64 MiB or auto. Auto/omitted values normalize to undefined: the default remains 1 MiB without module requirements, while feedback hosts combine requirements through crypto.resolveTransportBodyLimits and requiredPlaintextBytes. Insufficient explicit limits fail startup/packaging instead of being overwritten. Proxy, adapter-node, handshake and runtime budgets must agree; attachment, decompression and row limits remain independent.
 
 ## Development and testing
 

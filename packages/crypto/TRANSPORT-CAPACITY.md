@@ -30,7 +30,7 @@ serv/kit 在密钥协商中返回 `maxPlaintextBytes`。crypto、api-client 和 
 
 ## 模块需求与显式配置
 
-Serv/Kit 配置另支持 auto，解析为 undefined；直接 crypto API 仍接受数字或 undefined。接入反馈时调用 resolveTransportBodyLimits(configuredLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })，只在未显式设置时按需要推导；无模块需要仍为 1 MiB。显式 24 MiB 不会被较小反馈预算覆盖，显式值低于反馈需要则启动/打包失败。反馈模板默认 auto；已有项目保留显式值，升级时处理冲突。
+普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明 `feedback.budget.maxTransportBytes`。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
 ## 文件、明文与密文
 

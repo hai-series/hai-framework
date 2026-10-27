@@ -348,6 +348,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     // 请求携带认证信息，响应同样必须验证；禁止删除标记后把明文冒充当前请求的响应。
     if (response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) !== TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE) {
       void response.body?.cancel().catch(() => {})
+      if (response.status === 503)
+        throw Object.assign(new Error(cryptoM('crypto_transportBusy')), { code: HaiCryptoError.TRANSPORT_BUSY.code, httpStatus: 503 })
       if (response.status === 413)
         throw new TransportBodyTooLargeError(bodyLimits.encryptedPayloadBytes, undefined, { stage: 'encrypted' })
       throw new Error(cryptoM('crypto_transportResponseDecryptFailed'))

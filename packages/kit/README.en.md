@@ -218,6 +218,8 @@ Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD c
 
 Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
+Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Declare Feedback report intake, evidence, attachments and ZIP download capacity separately using `routePlaintextBytes` and `feedback.budget.maxTransportBytes`; `*` matches one complete path segment and explicit host route values take precedence. Handshakes, adapter-node and proxies use the maximum route capacity. HTTP adapters admit at most 2 explicitly declared material requests above 1 MiB and a separate 16 ordinary business requests, releasing admission after the entire response or failure. Busy admission returns 503 / `hai:crypto:072`; business writes are not automatically replayed.
+
 serv/kit return an encrypted HTTP 400 time error for an out-of-window message only after request binding, signature and MAC verification. The client throws `TransportTimeError` (`hai:crypto:071`) with advice to synchronize device/server clocks and refresh. `api-client` maps it to `VALIDATION_FAILED` and preserves `cause.transportCode`. Requests are not replayed automatically and replay windows remain unchanged; tampered or unauthenticated messages retain the generic authentication failure.
 
 #### Shared transport configuration with `_kit.yml`
@@ -364,7 +366,7 @@ Set `kit.client.create({ recoverSession })` to sign in again without discarding 
 
 ## Transport capacity and module budgets
 
-Configuration transport.maxPlaintextBytes accepts an explicit integer from 1 KiB to 64 MiB or auto. Auto/omitted values normalize to undefined: the default remains 1 MiB without module requirements, while feedback hosts combine requirements through crypto.resolveTransportBodyLimits and requiredPlaintextBytes. Insufficient explicit limits fail startup/packaging instead of being overwritten. Proxy, adapter-node, handshake and runtime budgets must agree; attachment, decompression and row limits remain independent.
+For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(operation)` in the third Kit apiFetch argument or typed-client options.context. After session rotation/recovery or an explicit proof rejection, obtain a new purpose-bound proof before one retry. Cancellation sends no further write; without a callback, an old proof is never replayed.
 
 ## Development and testing
 

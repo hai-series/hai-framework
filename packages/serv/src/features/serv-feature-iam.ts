@@ -136,11 +136,20 @@ export function createIamProcedures(deps: IamProcedureDeps) {
 
     .route('auth.updateCurrentUser')
     .auth()
-    .handle(({ input, context }) => {
+    .handle(async ({ input, context }) => {
       const token = context.accessToken
       if (!token)
         return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale }))
-      return iam.user.updateCurrentUser(token, input)
+      const policy = await iam.getPublicConfig()
+      if (!policy.success)
+        return policy
+      // 标准资料入口与独立资料/头像入口共用策略；混合更新优先使用资料用途。
+      const operations = [
+        ...(Object.keys(input).some(key => key !== 'avatarUrl') ? ['iam.profile.update'] : []),
+        ...(input.avatarUrl !== undefined ? ['iam.profile.avatar'] : []),
+      ]
+      const operation = operations.find(value => policy.data.reauthentication.operations.includes(value)) ?? operations[0] ?? 'iam.profile.update'
+      return sensitive(context, operation, () => iam.user.updateCurrentUser(token, input))
     })
 
     .route('users.list')

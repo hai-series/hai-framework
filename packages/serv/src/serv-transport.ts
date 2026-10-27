@@ -19,7 +19,7 @@
 import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
 import { core } from '@h-ai/core'
-import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
@@ -46,6 +46,8 @@ export interface ServTransportConfig {
   /** 受管服务端密钥环，仅运行时从私有 Secret 注入。 */
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   readonly maxPlaintextBytes?: number
+  /** 路由明文容量；* 匹配一个完整路径段。 */
+  routePlaintextBytes?: Readonly<Record<string, number>>
   readonly serverKeyRing: TransportServerKeyRing
   /**
    * crypto 服务实例。serv 通过 `crypto.transport.createServer()` 创建
@@ -76,6 +78,7 @@ export interface ServTransportConfig {
  * @param manager - 由 `crypto.transport.createServer()` 创建的管理器
  * @param keyExchangePath - 密钥协商绝对路径（已与 apiPrefix 拼接）
  * @param excludePaths - 不参与加解密的路径
+ * @param policy - 共享容量准入，由 createApp 创建。
  *
  * @example
  * ```ts
@@ -90,6 +93,7 @@ export function createTransportMiddleware(
   manager: TransportEncryptionManager,
   keyExchangePath: string,
   excludePaths: readonly string[] = [],
+  policy = createTransportBodyPolicy(manager.bodyLimits.plaintextBytes),
 ): MiddlewareHandler {
   return async (c, next) => {
     const pathname = new URL(c.req.url).pathname
@@ -107,85 +111,91 @@ export function createTransportMiddleware(
     if (!clientId)
       return jsonError(servM('serv_transportClientIdRequired'), 400)
 
-    let requestContext: TransportMessageContext
+    const lease = policy.acquire(pathname)
+    if (!lease)
+      return jsonError(servM('serv_transportBusy'), 503)
     try {
-      const verified = await authenticateTransportRequest(manager, c.req.raw)
-      if (!verified.success) {
-        if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
-          return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
-        return jsonError(servM('serv_transportDecryptFailed'), 400)
+      let requestContext: TransportMessageContext
+      try {
+        const verified = await authenticateTransportRequest(manager, c.req.raw, lease.limits)
+        if (!verified.success) {
+          if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
+            return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
+          return jsonError(servM('serv_transportDecryptFailed'), 400)
+        }
+        requestContext = verified.data.context
+        if (c.req.method !== 'GET' && c.req.method !== 'HEAD')
+          replaceRequestBody(c, verified.data.plaintext)
       }
-      requestContext = verified.data.context
-      if (c.req.method !== 'GET' && c.req.method !== 'HEAD')
-        replaceRequestBody(c, verified.data.plaintext)
-    }
-    catch (error) {
-      if (error instanceof TransportBodyTooLargeError)
-        return createTransportErrorResponse(error)
-      return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
-    }
+      catch (error) {
+        if (error instanceof TransportBodyTooLargeError)
+          return createTransportErrorResponse(error)
+        return jsonError(servM('serv_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+      }
 
-    // Step 5：明文请求进入后续 Hono / oRPC 流程。
-    await next()
-    const response = c.res
-    if (!response)
-      return
-    // Step 6：受保护路由响应必须加密；无法加密时 fail-closed，禁止明文透传。
-    const contentType = response.headers.get('Content-Type') ?? ''
-    const bodyless = c.req.method === 'HEAD' || isEmptyResponse(response)
-    if (bodyless)
-      void response.body?.cancel().catch(() => {})
-    // Hono 的 res setter 会合并旧响应头，先清理其表征元数据，避免重新引入旧编码/长度。
-    c.header('Content-Length', undefined)
-    c.header('Content-Encoding', undefined)
-    c.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, undefined)
-    c.header(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, undefined)
-    if (!bodyless && !canEncryptResponseContentType(contentType)) {
-      void response.body?.cancel().catch(() => {})
-      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
-      return
-    }
-    let bodyText: string
-    try {
-      bodyText = bodyless
-        ? ''
-        : await readTransportBody(response.body, {
-            maxBytes: manager.bodyLimits.plaintextBytes,
-            direction: 'response',
-            signal: c.req.raw.signal,
-          })
-    }
-    catch (cause) {
-      if (cause instanceof TransportBodyTooLargeError) {
-        c.res = await createTransportErrorResponse(cause, { manager, context: requestContext })
+      // Step 5：明文请求进入后续 Hono / oRPC 流程。
+      await next()
+      const response = c.res
+      if (!response)
+        return
+      // Step 6：受保护路由响应必须加密；无法加密时 fail-closed，禁止明文透传。
+      const contentType = response.headers.get('Content-Type') ?? ''
+      const bodyless = c.req.method === 'HEAD' || isEmptyResponse(response)
+      if (bodyless)
+        void response.body?.cancel().catch(() => {})
+      // Hono 的 res setter 会合并旧响应头，先清理其表征元数据，避免重新引入旧编码/长度。
+      c.header('Content-Length', undefined)
+      c.header('Content-Encoding', undefined)
+      c.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, undefined)
+      c.header(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, undefined)
+      if (!bodyless && !canEncryptResponseContentType(contentType)) {
+        void response.body?.cancel().catch(() => {})
+        c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
         return
       }
-      logger.warn('Failed to read response body for encryption', { error: cause })
-      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
-      return
-    }
-    const headers = new Headers(response.headers)
-    headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
-    headers.delete('Content-Length')
-    headers.delete('Content-Encoding')
+      let bodyText: string
+      try {
+        bodyText = bodyless
+          ? ''
+          : await readTransportBody(response.body, {
+              maxBytes: lease.limits.plaintextBytes,
+              direction: 'response',
+              signal: c.req.raw.signal,
+            })
+      }
+      catch (cause) {
+        if (cause instanceof TransportBodyTooLargeError) {
+          c.res = await createTransportErrorResponse(cause, { manager, context: requestContext })
+          return
+        }
+        logger.warn('Failed to read response body for encryption', { error: cause })
+        c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
+        return
+      }
+      const headers = new Headers(response.headers)
+      headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+      headers.delete('Content-Length')
+      headers.delete('Content-Encoding')
 
-    // Step 7：把下游返回的明文 JSON 重新加密后替换回响应对象。
-    const encResult = await manager.encryptResponse(requestContext, bodyText, response.status)
-    if (!encResult.success) {
-      logger.warn('Failed to encrypt response', { error: encResult.error })
-      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
-      return
-    }
+      // Step 7：把下游返回的明文 JSON 重新加密后替换回响应对象。
+      const encResult = await manager.encryptResponse(requestContext, bodyText, response.status)
+      if (!encResult.success) {
+        logger.warn('Failed to encrypt response', { error: encResult.error })
+        c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
+        return
+      }
 
-    headers.set('Content-Type', 'application/json; charset=utf-8')
-    headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-    if (bodyless)
-      headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encResult.data))
-    c.res = new Response(bodyless ? null : JSON.stringify(encResult.data), {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    })
+      headers.set('Content-Type', 'application/json; charset=utf-8')
+      headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+      if (bodyless)
+        headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encResult.data))
+      c.res = new Response(bodyless ? null : JSON.stringify(encResult.data), {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      })
+    }
+    finally { lease.release() }
   }
 }
 

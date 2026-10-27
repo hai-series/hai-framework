@@ -1,7 +1,8 @@
 import type { ServProcedureHandler } from '../src/pipelines/serv-pipeline-types.js'
 import type { ServContext } from '../src/serv-context.js'
-import { core } from '@h-ai/core'
-import { describe, expect, it } from 'vitest'
+import { audit } from '@h-ai/audit'
+import { core, ok } from '@h-ai/core'
+import { describe, expect, it, vi } from 'vitest'
 import { mapHaiError } from '../src/pipelines/serv-pipeline-helper.js'
 
 const logger = core.logger.child({ module: 'serv-test' })
@@ -33,6 +34,15 @@ function callHandler<TInput, TOutput>(
 }
 
 describe('pipeline.orpc', () => {
+  it('未选用审计时业务正常执行且不调用未初始化的采集器', async () => {
+    expect(audit.isInitialized).toBe(false)
+    const capture = vi.spyOn(audit, 'capture')
+    try {
+      expect(await callHandler(mapHaiError(async () => ok('business')), undefined)).toEqual(ok('business'))
+      expect(capture).not.toHaveBeenCalled()
+    }
+    finally { capture.mockRestore() }
+  })
   it('mapHaiError converts thrown errors into HaiResult', async () => {
     const handler = mapHaiError<unknown, never>(async () => {
       throw new Error('boom')

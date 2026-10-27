@@ -27,6 +27,25 @@ describe('serv configurable transport capacity', () => {
   })
   afterAll(async () => crypto.close())
 
+  it('反馈大包路由仍支持加密，普通接口在解密前保留较小预算', async () => {
+    const contract = apiContract.create({})
+    const app = serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), transport: { crypto, serverKeyRing, keyStore: createInMemoryKeyStore(), maxPlaintextBytes: 1024, routePlaintextBytes: { '/api/v1/material/*': 8192 } } })
+    const client = crypto.transport.createClient({ keyExchangeUrl: `${origin}/api/v1/_hai/key-exchange`, fetch: (input, init) => app.fetch(new Request(input, init)) })
+    const business = vi.fn()
+    app.post('/api/v1/business', (c) => {
+      business()
+      return c.json({ ok: true })
+    })
+    app.post('/api/v1/material/file', async c => c.json(await c.req.json()))
+    const payload = JSON.stringify({ text: 'a'.repeat(4096) })
+    try {
+      expect(await (await client.encryptedFetch(`${origin}/api/v1/material/file`, { method: 'POST', body: payload })).json()).toEqual(JSON.parse(payload))
+      await expect(client.encryptedFetch(`${origin}/api/v1/business`, { method: 'POST', body: payload })).rejects.toMatchObject({ code: 'hai:crypto:070' })
+      expect(business).not.toHaveBeenCalled()
+    }
+    finally { client.destroy() }
+  })
+
   it('仅配置服务端即可完成 4 MiB XLSX base64 JSON 上传及大 JSON 响应', async () => {
     const { app, client } = fixture()
     const workbook = createTransportWorkbook(4 * 1024 * 1024)

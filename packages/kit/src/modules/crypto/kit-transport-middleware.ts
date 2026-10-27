@@ -8,7 +8,7 @@
 import type { TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
-import { authenticateTransportRequest, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
+import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
@@ -35,11 +35,13 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
   const keyExchangePath = config.keyExchangePath ?? DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
   const excludePaths = config.excludePaths ?? []
 
+  const policy = createTransportBodyPolicy(config.maxPlaintextBytes, config.routePlaintextBytes)
+
   // 初始化传输加密管理器
   const result = config.crypto.transport.createServer({
     serverKeyRing: config.serverKeyRing,
     keyStore: config.keyStore,
-    maxPlaintextBytes: config.maxPlaintextBytes,
+    maxPlaintextBytes: policy.maximum.plaintextBytes,
   })
   if (!result.success) {
     // 安全策略：transport 已启用但服务端管理器不可用时，受保护路由必须 fail-closed，禁止明文透传。
@@ -72,73 +74,79 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     if (!clientId)
       return jsonError(kitM('kit_transportClientIdRequired'), 400)
 
+    const lease = policy.acquire(pathname)
+    if (!lease)
+      return jsonError(kitM('kit_transportBusy'), 503)
+    try {
     // ── 解密请求 ──
     // 不依赖可伪造/省略的 Content-Length/Type 判空，非 null 流必须进入实际内容检查。
-    let requestContext: TransportMessageContext
-    try {
-      const verified = await authenticateTransportRequest(manager, event.request)
-      if (!verified.success) {
-        if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
-          return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
-        return jsonError(kitM('kit_transportDecryptFailed'), 400)
+      let requestContext: TransportMessageContext
+      try {
+        const verified = await authenticateTransportRequest(manager, event.request, lease.limits)
+        if (!verified.success) {
+          if (verified.error.cause instanceof TransportTimeError && verified.error.cause.context)
+            return createTransportErrorResponse(verified.error.cause, { manager, context: verified.error.cause.context })
+          return jsonError(kitM('kit_transportDecryptFailed'), 400)
+        }
+        requestContext = verified.data.context
+        if (event.request.method !== 'GET' && event.request.method !== 'HEAD')
+          replaceRequestBody(event, verified.data.plaintext)
       }
-      requestContext = verified.data.context
-      if (event.request.method !== 'GET' && event.request.method !== 'HEAD')
-        replaceRequestBody(event, verified.data.plaintext)
-    }
-    catch (error) {
-      if (error instanceof TransportBodyTooLargeError)
-        return createTransportErrorResponse(error)
-      return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
-    }
+      catch (error) {
+        if (error instanceof TransportBodyTooLargeError)
+          return createTransportErrorResponse(error)
+        return jsonError(kitM('kit_transportInvalidPayload'), error instanceof RangeError ? 413 : 400)
+      }
 
-    // ── 执行后续中间件/端点 ──
-    const response = await next()
+      // ── 执行后续中间件/端点 ──
+      const response = await next()
 
-    // ── 加密响应 ──
+      // ── 加密响应 ──
 
-    // 只允许可安全加密的响应体离开受保护路由；无法加密时 fail-closed，禁止明文泄露。
-    const bodyless = event.request.method === 'HEAD' || isEmptyResponse(response)
-    if (bodyless)
-      void response.body?.cancel().catch(() => {})
+      // 只允许可安全加密的响应体离开受保护路由；无法加密时 fail-closed，禁止明文泄露。
+      const bodyless = event.request.method === 'HEAD' || isEmptyResponse(response)
+      if (bodyless)
+        void response.body?.cancel().catch(() => {})
 
-    const contentType = response.headers.get('Content-Type') ?? ''
-    if (!bodyless && !canEncryptResponseContentType(contentType)) {
-      void response.body?.cancel().catch(() => {})
-      return jsonError(kitM('kit_transportEncryptFailed'), 500)
-    }
-    try {
-      const responseBody = bodyless
-        ? ''
-        : await readTransportBody(response.body, {
-            maxBytes: manager.bodyLimits.plaintextBytes,
-            direction: 'response',
-            signal: event.request.signal,
-          })
-      const headers = new Headers(response.headers)
-      headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
-      headers.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
-      headers.delete('Content-Length')
-      headers.delete('Content-Encoding')
-
-      const encryptedPayload = await manager.encryptResponse(requestContext, responseBody, response.status)
-      if (!encryptedPayload.success) {
+      const contentType = response.headers.get('Content-Type') ?? ''
+      if (!bodyless && !canEncryptResponseContentType(contentType)) {
+        void response.body?.cancel().catch(() => {})
         return jsonError(kitM('kit_transportEncryptFailed'), 500)
       }
-      headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
-      if (bodyless)
-        headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encryptedPayload.data))
-      return new Response(bodyless ? null : JSON.stringify(encryptedPayload.data), {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      })
+      try {
+        const responseBody = bodyless
+          ? ''
+          : await readTransportBody(response.body, {
+              maxBytes: lease.limits.plaintextBytes,
+              direction: 'response',
+              signal: event.request.signal,
+            })
+        const headers = new Headers(response.headers)
+        headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+        headers.delete(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)
+        headers.delete('Content-Length')
+        headers.delete('Content-Encoding')
+
+        const encryptedPayload = await manager.encryptResponse(requestContext, responseBody, response.status)
+        if (!encryptedPayload.success) {
+          return jsonError(kitM('kit_transportEncryptFailed'), 500)
+        }
+        headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+        if (bodyless)
+          headers.set(TRANSPORT_PROTOCOL.ENVELOPE_HEADER, JSON.stringify(encryptedPayload.data))
+        return new Response(bodyless ? null : JSON.stringify(encryptedPayload.data), {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        })
+      }
+      catch (error) {
+        if (error instanceof TransportBodyTooLargeError)
+          return createTransportErrorResponse(error, { manager, context: requestContext })
+        return jsonError(kitM('kit_transportEncryptFailed'), 500)
+      }
     }
-    catch (error) {
-      if (error instanceof TransportBodyTooLargeError)
-        return createTransportErrorResponse(error, { manager, context: requestContext })
-      return jsonError(kitM('kit_transportEncryptFailed'), 500)
-    }
+    finally { lease.release() }
   }
 }
 

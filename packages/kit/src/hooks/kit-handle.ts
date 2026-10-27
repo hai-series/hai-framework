@@ -414,6 +414,7 @@ function buildTransportMiddleware(
     excludePaths: transportOpts.excludePaths,
     keyStore: transportOpts.keyStore,
     maxPlaintextBytes: transportOpts.maxPlaintextBytes,
+    routePlaintextBytes: transportOpts.routePlaintextBytes,
   })
 }
 

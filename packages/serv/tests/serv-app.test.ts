@@ -1,13 +1,24 @@
 import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
+import { audit } from '@h-ai/audit'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
 const contract = apiContract.create({})
 const procedures = serv.implement(contract).context<ServContext>().build()
 
 describe('@h-ai/serv', () => {
+  it('未启用审计时 HTTP 拒绝保留正常响应且不调用采集器', async () => {
+    expect(audit.isInitialized).toBe(false)
+    const capture = vi.spyOn(audit, 'capture')
+    try {
+      const app = serv.createApp({ contract, procedures })
+      expect((await app.request('/missing')).status).toBe(404)
+      expect(capture).not.toHaveBeenCalled()
+    }
+    finally { capture.mockRestore() }
+  })
   it('returns a bounded correlation ID for health, missing routes and middleware responses', async () => {
     const app = serv.createApp({
       contract,

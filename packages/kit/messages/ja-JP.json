@@ -48,5 +48,7 @@
   "kit_requiredPermissions": "必要な権限: {permissions}",
   "kit_idRequired": "IDは必須です",
   "kit_rateLimitWindowInvalid": "レート制限の期間は1〜2147483647ミリ秒の整数で指定してください",
-  "kit_rateLimitMemoryCapacity": "開発用メモリーレート制限ストアが満杯です。共有バックエンドを使用してください"
+  "kit_rateLimitMemoryCapacity": "開発用メモリーレート制限ストアが満杯です。共有バックエンドを使用してください",
+  "kit_transportBusy": "資料の処理が混み合っています。しばらくしてから再試行してください。",
+  "kit_feedbackUnavailable": "フィードバックは一時的に利用できません。業務機能は引き続き利用できます。"
 }
