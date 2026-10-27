@@ -48,19 +48,31 @@
   const searchId = $props.id()
   let currentId = $derived(selectedId)
   // 显式依赖宿主语言，确保回调返回的业务翻译也重新求值。
-  const localized = $derived.by(() => {
+  const articleState = $derived.by(() => {
     void locale
-    return articles.filter(article => !article.enabled || article.enabled()).map(article => ({
-      ...article,
-      title: resolveGuideText(article.title),
-      description: resolveGuideText(article.description),
-      category: resolveGuideText(article.category),
-      content: resolveGuideText(article.content),
-    }))
+    let failed = false
+    const localized = articles.flatMap((article) => {
+      try {
+        if (article.enabled && !article.enabled())
+          return []
+        return [{ ...article, title: resolveGuideText(article.title), description: resolveGuideText(article.description), category: resolveGuideText(article.category), content: resolveGuideText(article.content) }]
+      }
+      catch {
+        failed = true
+        return []
+      }
+    })
+    return { localized, failed }
   })
+  const localized = $derived(articleState.localized)
   const availableTours = $derived.by(() => {
     void locale
-    return tours.filter(tour => !tour.enabled || tour.enabled()).map(tour => ({ id: tour.id, title: resolveGuideText(tour.title) }))
+    return tours.flatMap((tour) => {
+      try {
+        return !tour.enabled || tour.enabled() ? [{ id: tour.id, title: resolveGuideText(tour.title) }] : []
+      }
+      catch { return [] }
+    })
   })
   const visible = $derived(localized.filter(article => (`${article.title} ${article.description} ${article.category} ${article.content}`).toLowerCase().includes(search.trim().toLowerCase())))
   const selected = $derived(visible.find(article => article.id === currentId) ?? visible[0])
@@ -97,6 +109,7 @@
     {/if}
   </nav>
   <article class='min-w-0 flex-1 p-5 md:p-7' data-testid='guide-article-content'>
+    {#if articleState.failed}<p class='text-sm text-error' role='alert'>{text.failed}</p>{/if}
     {#if selected}
       <h2 class='text-xl font-semibold'>{selected.title}</h2>
       {#if selected.description}<p class='mt-2 text-sm text-base-content/60'>{selected.description}</p>{/if}

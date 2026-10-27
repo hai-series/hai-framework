@@ -66,6 +66,8 @@ declare global {
   const MessageBoxDialog: typeof import('@h-ai/ui')['MessageBoxDialog']
   const Modal: typeof import('@h-ai/ui')['Modal']
   const PageHeader: typeof import('@h-ai/ui')['PageHeader']
+  const FilterBar: typeof import('@h-ai/ui')['FilterBar']
+  const WorkspaceLayout: typeof import('@h-ai/ui')['WorkspaceLayout']
   const Pagination: typeof import('@h-ai/ui')['Pagination']
   const Popover: typeof import('@h-ai/ui')['Popover']
   const PullRefresh: typeof import('@h-ai/ui')['PullRefresh']

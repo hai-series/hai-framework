@@ -1,0 +1,55 @@
+/* 直角商务主题：语义色和圆角统一由共享主题控制。 */
+[data-theme='formal'] {
+  color-scheme: light;
+  color: #132238;
+  background-color: #ffffff;
+  --color-base-100: #ffffff;
+  --color-base-200: #f5f7fa;
+  --color-base-300: #e1e6ed;
+  --color-base-content: #132238;
+  --color-primary: #123d70;
+  --color-primary-content: #ffffff;
+  --color-secondary: #45556c;
+  --color-secondary-content: #ffffff;
+  --color-accent: #126342;
+  --color-accent-content: #ffffff;
+  --color-neutral: #25354a;
+  --color-neutral-content: #ffffff;
+  --color-info: #155d91;
+  --color-info-content: #ffffff;
+  --color-success: #126342;
+  --color-success-content: #ffffff;
+  --color-warning: #6b4b00;
+  --color-warning-content: #ffffff;
+  --color-error: #b42318;
+  --color-error-content: #ffffff;
+  --radius-selector: 0;
+  --radius-field: 0;
+  --radius-box: 0;
+  --hai-radius-sm: 0;
+  --hai-radius-md: 0;
+  --hai-radius-lg: 0;
+  --hai-radius-full: 0;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  --hai-focus-color: #123d70;
+}
+
+/* 覆盖组件中的显式 rounded 类；单选指示和加载图形保留其交互含义。 */
+[data-theme='formal'] :is([class*='rounded-'], .btn, .input, .select, .textarea, .card, .modal-box, .alert),
+[data-theme='formal'] :focus-visible {
+  border-radius: 0;
+}
+
+[data-theme='formal'] :is([class^='text-base-content/'], [class*=' text-base-content/']),
+[data-theme='formal'] .table th {
+  color: #4b5563;
+}
+
+[data-theme='formal'] :is(input, textarea)::placeholder {
+  color: #4b5563;
+  opacity: 1;
+}

@@ -15,6 +15,7 @@
 <script lang='ts'>
   import type { DataAttributes, ModalProps } from '../../types.js'
   import { setContext } from 'svelte'
+  import { focusDialog, handleDialogKeydown } from '../../internal/dialog-focus.js'
   import { FORM_VISIBILITY_CONTEXT } from '../../internal/form-context.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
@@ -109,51 +110,17 @@
     onclose?.()
   }
 
-  function focusableElements(): HTMLElement[] {
-    return [...(panel?.querySelectorAll<HTMLElement>('button, a[href], input:not([type="hidden"]), select, textarea, [tabindex]') ?? [])]
-      .filter(element => element.tabIndex >= 0 && !element.hasAttribute('disabled') && element.getClientRects().length > 0)
-  }
-
   // 打开时把焦点移入弹窗，关闭后恢复原操作位置。
   $effect(() => {
     if (!open || !panel)
       return
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const elements = focusableElements()
-    const input = elements.find(element => element.matches('input:not([readonly]), textarea, select'))
-    const target = input ?? elements[0] ?? panel
-    target.focus()
-    return () => {
-      if (previous?.isConnected)
-        previous.focus()
-    }
+    return focusDialog(panel)
   })
 
   function handleKeydown(event: KeyboardEvent) {
-    if (!open)
+    if (!open || !panel)
       return
-    if (event.key === 'Escape' && closeOnEscape) {
-      event.preventDefault()
-      event.stopPropagation()
-      handleClose()
-    }
-    else if (event.key === 'Tab') {
-      const elements = focusableElements()
-      const first = elements[0]
-      const last = elements.at(-1)
-      if (!first) {
-        event.preventDefault()
-        panel?.focus()
-      }
-      else if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
-        event.preventDefault()
-        last?.focus()
-      }
-      else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
+    handleDialogKeydown(event, panel, closeOnEscape ? handleClose : undefined)
   }
 
 </script>

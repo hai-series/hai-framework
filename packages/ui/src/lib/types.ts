@@ -111,6 +111,8 @@ export interface ButtonProps extends DataAttributes {
   circle?: boolean
   /** 按钮类型 */
   type?: 'button' | 'submit' | 'reset'
+  /** type=submit 时显示原生表单 Enter 提示；不注册全局快捷键。 */
+  submitHint?: boolean
   /** 点击事件 */
   onclick?: (e: MouseEvent) => void
   /** 子内容 */
@@ -709,6 +711,8 @@ export interface DrawerProps extends DataAttributes {
   widthStorageKey?: string
   /** 是否可通过点击遮罩关闭 */
   closeOnBackdrop?: boolean
+  /** 是否允许 Esc 关闭；提交期间可显式关闭。 */
+  closeOnEscape?: boolean
   /** 是否显示关闭按钮 */
   showClose?: boolean
   /** 自定义类名 */

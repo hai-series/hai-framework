@@ -20,6 +20,7 @@
   "settings_close": "閉じる",
   "settings_language": "言語",
   "settings_theme": "テーマ",
+  "theme_high_contrast": "ハイコントラスト",
   "combobox_no_match": "一致する項目がありません",
   "combobox_remove": "削除",
   "data_table_actions": "操作",
@@ -325,8 +326,9 @@
   "error_500_desc": "サーバー側で問題が発生しました。しばらくしてから再試行してください。",
   "error_503_title": "メンテナンス中",
   "error_503_desc": "現在システムのメンテナンスを行っています。しばらくしてからアクセスしてください。",
-  "login_method_password": "パスワード",
+  "login_method_password": "アカウントとパスワード",
   "login_method_ldap": "組織アカウント",
+  "login_method_ldap_hint": "会社や組織から提供されたアカウントとパスワードを使用します",
   "login_method_email": "メール認証コード",
   "login_method_sms": "SMS認証コード",
   "login_methods": "ログイン方法",
@@ -496,5 +498,10 @@
   "session_recovery_account_error": "元のアカウントでログインしてください。操作はまだ続行していません。",
   "sensitive_operations_label": "再認証が必要な操作 ID",
   "sensitive_operations_hint": "サーバーのガードと一致する操作 ID を1行ずつ入力します。DB とファイルの規則は和集合です。空欄はこの権限の規則だけを削除します。主スイッチが有効な場合に適用されます。",
-  "sensitive_operations_invalid": "操作 ID は最大1000件、各128文字以内です。"
+  "sensitive_operations_invalid": "操作 ID は最大1000件、各128文字以内です。",
+  "filter_bar_expand": "絞り込みを展開",
+  "filter_bar_collapse": "絞り込みを折りたたむ",
+  "filter_bar_active": "適用中の条件：{count}件",
+  "theme_formal": "ビジネス（角丸なし）",
+  "keyboard_submit_enter": "1行の入力欄で Enter を押して送信"
 }

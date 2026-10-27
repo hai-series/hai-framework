@@ -35,6 +35,7 @@ export { default as Drawer } from './Drawer.svelte'
 export { default as Dropdown } from './Dropdown.svelte'
 // 状态占位
 export { default as Empty } from './Empty.svelte'
+export { default as FilterBar } from './FilterBar.svelte'
 // 表单组合
 export { default as Form } from './Form.svelte'
 export { default as FormField } from './FormField.svelte'

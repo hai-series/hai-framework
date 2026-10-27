@@ -65,7 +65,7 @@ export interface ThemeGroup {
 }
 
 /**
- * DaisyUI 内置主题配置（精选）
+ * 精选 DaisyUI 主题及 UI 共享样式提供的高对比、直角商务主题。
  *
  * @example
  * ```ts
@@ -82,6 +82,7 @@ export const THEMES: ThemeInfo[] = [
   { id: 'lofi', name: 'Lo-Fi', dark: false, primaryColor: '#0d0d0d', bgColor: '#ffffff' },
   { id: 'winter', name: 'Winter', dark: false, primaryColor: '#047aff', bgColor: '#ffffff' },
   { id: 'nord', name: 'Nord', dark: false, primaryColor: '#5e81ac', bgColor: '#eceff4' },
+  { id: 'formal', name: 'Formal', dark: false, primaryColor: '#123d70', bgColor: '#ffffff' },
   // 暗色主题
   { id: 'dark', name: 'Dark', dark: true, primaryColor: '#661ae6', bgColor: '#1d232a' },
   { id: 'dracula', name: 'Dracula', dark: true, primaryColor: '#ff79c6', bgColor: '#282a36' },
@@ -91,6 +92,7 @@ export const THEMES: ThemeInfo[] = [
   { id: 'sunset', name: 'Sunset', dark: true, primaryColor: '#ff865b', bgColor: '#1a1919' },
   { id: 'luxury', name: 'Luxury', dark: true, primaryColor: '#c9a53d', bgColor: '#171618' },
   { id: 'coffee', name: 'Coffee', dark: true, primaryColor: '#db924b', bgColor: '#20161f' },
+  { id: 'high-contrast', name: 'High contrast', dark: true, primaryColor: '#ffe04d', bgColor: '#000000' },
 ]
 
 /**
@@ -416,7 +418,7 @@ export function getThemeInitScript(): string {
 }
 
 /**
- * 应用主题
+ * 应用主题，并同步原生表单控件配色；自定义主题由宿主 CSS 决定配色。
  * @param theme - 主题 ID
  * @param persist - 是否持久化到 localStorage
  * @returns {void} 无返回值；更新当前文档，并按 persist 决定是否保存偏好。
@@ -433,6 +435,7 @@ export function applyTheme(theme: string, persist = true): void {
     return
 
   document.documentElement.setAttribute('data-theme', theme)
+  document.documentElement.style.setProperty('color-scheme', getThemeInfo(theme) ? resolveThemeTone(theme) : '')
 
   if (persist) {
     writeStoredValue(THEME_STORAGE_KEY, theme)

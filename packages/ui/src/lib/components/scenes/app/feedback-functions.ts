@@ -52,6 +52,39 @@ export function feedbackTime(timestamp: number): string {
 }
 
 /**
+ * 按本地日历回填日期输入，避免 UTC 转换改变用户选择的日期。
+ * @example 模块内部上下文
+ * ```ts
+ * const value = feedbackDateValue(new Date(2026, 9, 27).getTime())
+ * ```
+ */
+export function feedbackDateValue(timestamp?: number): string {
+  if (timestamp === undefined || !Number.isFinite(timestamp))
+    return ''
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * 次日零时按本地日历计算，夏令时切换日不假定固定为 24 小时。
+ * @example 模块内部上下文
+ * ```ts
+ * const until = feedbackDayBoundary('2026-03-08', 'end')
+ * ```
+ */
+export function feedbackDayBoundary(value: unknown, boundary: 'start' | 'end'): number | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return undefined
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year!, month! - 1, day!)
+  if (feedbackDateValue(date.getTime()) !== value)
+    return undefined
+  if (boundary === 'end')
+    date.setDate(date.getDate() + 1)
+  return date.getTime() - (boundary === 'end' ? 1 : 0)
+}
+
+/**
  * 以文本显示 JSON，不将诊断材料解释为 HTML。
  * @example 模块内部上下文
  * ```ts

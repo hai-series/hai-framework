@@ -13,12 +13,12 @@
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
   import { authActions } from '$lib/services/auth'
-  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
+  import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, pauseFeedback, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
   import { sensitiveActions } from '$lib/services/sensitive-actions.svelte.js'
   import { sessionRecovery } from '$lib/services/session-recovery.svelte.js'
   import { apiFetch } from '$lib/utils/api'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission } from '@h-ai/ui'
+  import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission, WorkspaceLayout } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
@@ -76,6 +76,10 @@
   let mobileMenuOpen = $state(false)
   let userMenuOpen = $state(false)
   let feedbackOpen = $state(false)
+  $effect(() => {
+    if (!feedbackOpen)
+      pauseFeedback()
+  })
   let feedbackPreparing = $state(false)
   let feedbackError = $state('')
   let feedbackMaterials = $state<Partial<Awaited<ReturnType<typeof prepareFeedback>>>>({ attachments: [], evidence: [], evidenceSummary: [] })
@@ -174,6 +178,9 @@
 
   const expandedMenus = new SvelteSet<string>(['/admin/iam'])
   const currentPath = $derived(page.url.pathname)
+  const pageTitle = $derived(currentPath.startsWith('/admin/profile')
+    ? m.nav_profile()
+    : menuItems.flatMap(item => [...(item.children ?? []), item]).find(item => isActive(item.path))?.title ?? m.nav_page())
 
   function isActive(path: string): boolean {
     if (path === '/admin')
@@ -253,7 +260,7 @@
       {mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
   >
     <!-- Logo -->
-    <div class='h-14 flex items-center gap-2.5 px-4 shrink-0 border-b border-base-content/6'>
+    <div class='h-12 flex items-center gap-2.5 px-4 shrink-0 border-b border-base-content/6'>
       <div class='w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0'>
         <span class='text-primary-content font-bold text-sm'>h</span>
       </div>
@@ -341,127 +348,101 @@
     </div>
   </aside>
 
-  <!-- 主内容区 -->
-  <div class='flex-1 flex flex-col min-w-0 overflow-hidden'>
-    <!-- 顶栏 -->
-    <header class='h-14 bg-base-100 border-b border-base-content/6 shrink-0'>
-      <div class='h-full flex items-center justify-between px-4 lg:px-5'>
-        <div class='flex items-center gap-3'>
-          <BareButton
-            type='button'
-            class='p-1.5 rounded-lg text-base-content/50 hover:bg-base-content/4 lg:hidden'
-            onclick={() => mobileMenuOpen = !mobileMenuOpen}
-            ariaLabel={m.action_open()}
-          >
-            <span class='icon-[tabler--menu-2] size-5'></span>
-          </BareButton>
+  <WorkspaceLayout title={pageTitle} data-guide='admin-content'>
+    {#snippet leading()}
+      <BareButton type='button' class='rounded-lg p-1.5 text-base-content/50 hover:bg-base-content/4 lg:hidden' onclick={() => mobileMenuOpen = !mobileMenuOpen} ariaLabel={m.action_open()}><span class='icon-[tabler--menu-2] size-5'></span></BareButton>
+      <a href={adminHomePath} class='hidden whitespace-nowrap text-sm text-base-content/40 transition-colors hover:text-base-content/60 sm:inline'>{m.nav_home()}</a>
+      <span class='hidden text-base-content/20 sm:inline'>/</span>
+    {/snippet}
+    {#snippet actions()}
+      {#if data.feedbackEnabled && hasPerm('feedback:create')}
+        <Button variant='ghost' size='sm' loading={feedbackPreparing} ariaLabel={m.feedback_open()} onclick={openFeedback} data-feedback-ignore='true' data-testid='feedback-open'>
+          <span class='icon-[tabler--message-report] size-4'></span><span class='hidden sm:inline'>{m.feedback_open()}</span>
+        </Button>
+      {/if}
+      {#if data.appConfig?.env === 'development'}
+        <span data-testid='app-environment-badge' class='hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/15'>
+          {m.common_dev_env()}
+        </span>
+      {/if}
 
-          <nav class='hidden sm:flex items-center gap-1 text-sm'>
-            <a href={adminHomePath} class='text-base-content/40 hover:text-base-content/60 transition-colors'>{m.nav_home()}</a>
-            <span class='text-base-content/20 mx-0.5'>/</span>
-            <span class='text-base-content/80 font-medium'>
-              {menuItems.find(item => isActive(item.path))?.title ?? m.nav_page()}
-            </span>
-          </nav>
-        </div>
+      <!-- 主题快速切换 -->
+      <div data-guide='admin-theme'><ThemeSelector {currentTheme} onchange={handleThemeChange} compact /></div>
 
-        <div class='flex items-center gap-2'>
-          {#if data.feedbackEnabled && hasPerm('feedback:create')}
-            <Button variant='ghost' size='sm' loading={feedbackPreparing} ariaLabel={m.feedback_open()} onclick={openFeedback} data-feedback-ignore='true' data-testid='feedback-open'>
-              <span class='icon-[tabler--message-report] size-4'></span><span class='hidden sm:inline'>{m.feedback_open()}</span>
-            </Button>
-          {/if}
-          {#if data.appConfig?.env === 'development'}
-            <span data-testid='app-environment-badge' class='hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-2xs font-medium bg-amber-500/10 text-amber-600 border border-amber-500/15'>
-              {m.common_dev_env()}
-            </span>
-          {/if}
+      <Button variant='ghost' size='sm' ariaLabel={m.guide_help_title()} onclick={() => guide.openHelp()} data-guide='admin-help' data-testid='admin-help'>
+        <span class='icon-[tabler--help-circle] size-4'></span>
+        <span class='hidden sm:inline'>{m.guide_help_title()}</span>
+      </Button>
 
-          <!-- 主题快速切换 -->
-          <div data-guide='admin-theme'><ThemeToggle {currentTheme} onchange={handleThemeChange} /></div>
+      <!-- 用户菜单 -->
+      <div class='relative user-menu-container' data-guide='admin-profile'>
+        <BareButton
+          type='button'
+          class='flex items-center gap-2 px-2 py-1.5 -mr-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150'
+          onclick={toggleUserMenu}
+        >
+          <Avatar
+            name={data.user?.displayName || data.user?.username || 'Guest'}
+            src={data.user?.avatarUrl}
+            size='sm'
+          />
+          <span class='hidden sm:block text-[13px] font-medium text-base-content/80'>
+            {data.user?.displayName || data.user?.username || 'Guest'}
+          </span>
+          <span class='icon-[tabler--chevron-down] size-3.5 text-base-content/30 hidden sm:block'></span>
+        </BareButton>
 
-          <Button variant='ghost' size='sm' ariaLabel={m.guide_help_title()} onclick={() => guide.openHelp()} data-guide='admin-help' data-testid='admin-help'>
-            <span class='icon-[tabler--help-circle] size-4'></span>
-            <span class='hidden sm:inline'>{m.guide_help_title()}</span>
-          </Button>
-
-          <!-- 用户菜单 -->
-          <div class='relative user-menu-container' data-guide='admin-profile'>
-            <BareButton
-              type='button'
-              class='flex items-center gap-2 px-2 py-1.5 -mr-2 rounded-lg hover:bg-base-content/4 transition-colors duration-150'
-              onclick={toggleUserMenu}
-            >
-              <Avatar
-                name={data.user?.displayName || data.user?.username || 'Guest'}
-                src={data.user?.avatarUrl}
-                size='sm'
-              />
-              <span class='hidden sm:block text-[13px] font-medium text-base-content/80'>
-                {data.user?.displayName || data.user?.username || 'Guest'}
-              </span>
-              <span class='icon-[tabler--chevron-down] size-3.5 text-base-content/30 hidden sm:block'></span>
-            </BareButton>
-
-            {#if userMenuOpen}
-              <div class='absolute right-0 top-full mt-1.5 w-52 bg-base-100 rounded-xl border border-base-content/8 shadow-(--shadow-float) py-1 z-50 hai-scale-in origin-top-right'>
-                <div class='px-3.5 py-2.5 border-b border-base-content/6'>
-                  <p class='text-sm font-medium text-base-content leading-tight'>{data.user?.displayName || data.user?.username || 'Guest'}</p>
-                  <p class='text-2xs text-base-content/40 mt-0.5'>@{data.user?.username ?? 'guest'}</p>
-                  <p class='text-2xs text-base-content/40 mt-0.5'>{data.user?.roles?.join(', ') ?? m.common_guest()}</p>
-                </div>
-                <div class='py-0.5'>
-                  <a
-                    href={adminProfilePath}
-                    class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
-                    onclick={() => { userMenuOpen = false }}
-                  >
-                    <span class='icon-[tabler--user] size-4'></span>
-                    {m.nav_profile()}
-                  </a>
-                  {#if hasPerm('system:settings')}
-                    <a
-                      href={adminSettingsPath}
-                      class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
-                      onclick={() => { userMenuOpen = false }}
-                    >
-                      <span class='icon-[tabler--settings] size-4'></span>
-                      {m.nav_settings()}
-                    </a>
-                  {/if}
-                </div>
-                <div class='border-t border-base-content/6 py-0.5'>
-                  <Button
-                    variant='ghost'
-                    class='flex items-center gap-2.5 w-full justify-start text-error/70 hover:bg-error/6 hover:text-error text-[13px] px-3.5'
-                    onclick={handleLogout}
-                  >
-                    <span class='icon-[tabler--logout] size-4'></span>
-                    {m.nav_logout()}
-                  </Button>
-                </div>
-              </div>
-            {/if}
+        {#if userMenuOpen}
+          <div class='absolute right-0 top-full mt-1.5 w-52 bg-base-100 rounded-xl border border-base-content/8 shadow-(--shadow-float) py-1 z-50 hai-scale-in origin-top-right'>
+            <div class='px-3.5 py-2.5 border-b border-base-content/6'>
+              <p class='text-sm font-medium text-base-content leading-tight'>{data.user?.displayName || data.user?.username || 'Guest'}</p>
+              <p class='text-2xs text-base-content/40 mt-0.5'>@{data.user?.username ?? 'guest'}</p>
+              <p class='text-2xs text-base-content/40 mt-0.5'>{data.user?.roles?.join(', ') ?? m.common_guest()}</p>
+            </div>
+            <div class='py-0.5'>
+              <a
+                href={adminProfilePath}
+                class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
+                onclick={() => { userMenuOpen = false }}
+              >
+                <span class='icon-[tabler--user] size-4'></span>
+                {m.nav_profile()}
+              </a>
+              {#if hasPerm('system:settings')}
+                <a
+                  href={adminSettingsPath}
+                  class='flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-base-content/60 hover:bg-base-content/4 hover:text-base-content/80 transition-colors'
+                  onclick={() => { userMenuOpen = false }}
+                >
+                  <span class='icon-[tabler--settings] size-4'></span>
+                  {m.nav_settings()}
+                </a>
+              {/if}
+            </div>
+            <div class='border-t border-base-content/6 py-0.5'>
+              <Button
+                variant='ghost'
+                class='flex items-center gap-2.5 w-full justify-start text-error/70 hover:bg-error/6 hover:text-error text-[13px] px-3.5'
+                onclick={handleLogout}
+              >
+                <span class='icon-[tabler--logout] size-4'></span>
+                {m.nav_logout()}
+              </Button>
+            </div>
           </div>
-        </div>
+        {/if}
       </div>
-    </header>
-
-    <!-- 页面内容 -->
-    <main class='flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4 sm:p-5 lg:p-6' data-guide='admin-content'>
-      <div class='flex min-h-0 w-full min-w-0 flex-1 flex-col'>
-        {#if data.appConfig.notice}<p class='mb-4 rounded-lg bg-info/10 p-3 text-sm' data-testid='business-notice'>{data.appConfig.notice}</p>{/if}
-        {@render children()}
-      </div>
-    </main>
-
-    <!-- 页脚 -->
-    <footer class='h-10 border-t border-base-content/6 flex items-center justify-center px-6 shrink-0'>
+    {/snippet}
+    <div class='flex min-h-0 w-full min-w-0 flex-1 flex-col'>
+      {#if data.appConfig.notice}<p class='mb-4 rounded-lg bg-info/10 p-3 text-sm' data-testid='business-notice'>{data.appConfig.notice}</p>{/if}
+      {@render children()}
+    </div>
+    {#snippet footer()}
       <p class='text-2xs text-base-content/30 tracking-wide'>
         {appName} v{appVersion}
       </p>
-    </footer>
-  </div>
+    {/snippet}
+  </WorkspaceLayout>
 </div>
 
 {#if feedbackError}<div class='fixed bottom-4 right-4 z-50 max-w-sm break-words rounded-lg bg-error p-3 text-error-content' role='alert'>{feedbackError}</div>{/if}

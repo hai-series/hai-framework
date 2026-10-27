@@ -31,6 +31,7 @@
 
   const {
     methods = ['password'],
+    autoFocus = true,
     initialIdentifier = '',
     otpLength = 6,
     resendInterval = 60,
@@ -58,12 +59,33 @@
   }: LoginFormProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  let formElement = $state<HTMLFormElement>()
+  let focusedInitially = false
 
   let username = $state(untrack(() => initialIdentifier))
   let password = $state('')
   let selectedMethod = $state<AuthLoginMethod>('password')
   const method = $derived(methods.includes(selectedMethod) ? selectedMethod : methods[0])
   const isOtp = $derived(method === 'email' || method === 'sms')
+  $effect(() => {
+    if (!autoFocus || focusedInitially || disabled || loading || !method || !formElement)
+      return
+    const input = formElement.querySelector<HTMLInputElement>('input[autocomplete="username"]')
+    if (!input?.getClientRects().length)
+      return
+    if (globalThis.matchMedia?.('(pointer: coarse)').matches) {
+      focusedInitially = true
+      return
+    }
+    input.autofocus = true
+    // 首帧布局和宿主导航完成后设置默认焦点；尊重用户已经选择的其它控件。
+    const frame = requestAnimationFrame(() => {
+      focusedInitially = true
+      if (document.activeElement === document.body || document.activeElement === document.documentElement)
+        input.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  })
   let code = $state('')
   let sending = $state(false)
   let sendFailure = $state<Pick<HaiError, 'code' | 'message'> | 'network'>()
@@ -139,7 +161,7 @@
   }
 </script>
 
-<form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
+<form {...dataAttributes} bind:this={formElement} class={formClass} onsubmit={handleSubmit}>
   <FormLayout {columns} {labelPosition} {labelWidth}>
     <!-- 标题 -->
     {#if showTitle}
@@ -168,6 +190,7 @@
         {/each}
       </div>
     {/if}
+    {#if method === 'ldap'}<p class='text-sm text-base-content/70'>{uiM('login_method_ldap_hint')}</p>{/if}
     {#if !method}
       <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
     {:else}
@@ -244,6 +267,7 @@
     <!-- 提交按钮 -->
     <Button
       type='submit'
+      submitHint
       variant='primary'
       {loading}
       disabled={loading || disabled || !method}

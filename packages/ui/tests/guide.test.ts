@@ -327,3 +327,60 @@ describe('guide Svelte integration', () => {
     expect(guide.getProgress('intro')).toBeNull()
   })
 })
+
+it('坏文章回调仅禁用帮助内容，业务按钮仍可使用', async () => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const saved = vi.fn()
+  const button = document.body.appendChild(document.createElement('button'))
+  button.addEventListener('click', saved)
+  const component = mount(HelpCenter, { target, props: { articles: [{ id: 'broken', title: 'Broken', content: () => {
+    throw new Error('Article unavailable')
+  } }, { id: 'good', title: 'Still available', content: 'Help text' }] } })
+  try {
+    flushSync()
+    expect(target.querySelector('[role=alert]')).not.toBeNull()
+    expect(target.textContent).toContain('Still available')
+    button.click()
+    expect(saved).toHaveBeenCalledTimes(1)
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+    button.remove()
+  }
+})
+
+it('帮助宿主局部边界释放错误文章的遮罩，业务兄弟节点不卸载', async () => {
+  const guide = makeGuide({ articles: [{ id: 'bad', title: 'Bad', content: 'x', enabled: () => {
+    throw new Error('Unavailable help provider')
+  } }] })
+  const target = document.body.appendChild(document.createElement('div'))
+  const business = document.body.appendChild(document.createElement('button'))
+  const component = mount(GuideHost, { target, props: { guide } })
+  try {
+    await vi.waitFor(() => expect(guide.locale).toBeTruthy())
+    guide.openHelp()
+    flushSync()
+    expect(target.querySelector('[data-testid=guide-error]')).not.toBeNull()
+    expect(guide.helpOpen).toBe(false)
+    expect(business.isConnected).toBe(true)
+    expect(document.querySelector('.driver-overlay')).toBeNull()
+  }
+  finally {
+    await unmount(component)
+    target.remove()
+    business.remove()
+  }
+})
+
+it('导览启用/目标回调抛错不会产生未处理拒绝，业务仍可交互', async () => {
+  const disabled = makeGuide({ tours: [{ id: 'bad-enabled', title: 'Bad', enabled: () => {
+    throw new Error('Bad predicate')
+  }, steps: [{ target: 'first', title: 'First', description: '' }] }] })
+  await expect(disabled.start('bad-enabled')).resolves.toBe(false)
+  const missing = makeGuide({ waitTimeout: 1, tours: [{ id: 'bad-target', title: 'Bad', steps: [{ target: () => {
+    throw new Error('Bad target')
+  }, title: 'First', description: '' }] }] })
+  await expect(missing.start('bad-target')).resolves.toBe(false)
+  expect(document.querySelector('.driver-overlay')).toBeNull()
+})

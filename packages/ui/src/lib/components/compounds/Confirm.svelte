@@ -40,6 +40,8 @@
   }: ConfirmProps & DataAttributes = $props()
 
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const titleId = $props.id()
+  const messageId = `${titleId}-message`
   /** 响应式 i18n 显示值 */
   const displayTitle = $derived(title ?? uiM('confirm_title'))
   const displayMessage = $derived(message ?? uiM('confirm_message'))
@@ -63,6 +65,8 @@
   }
 
   function handleCancel() {
+    if (loading)
+      return
     oncancel?.()
     open = false
   }
@@ -78,10 +82,16 @@
         bind:this={modalElement}
         class={cn('modal', className)}
         onclick={handleBackdropClick}
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        oncancel={(event) => {
+          event.preventDefault()
+          handleCancel()
+        }}
 >
   <div class='modal-box'>
-    <h3 class='font-bold text-lg'>{displayTitle}</h3>
-    <p class='py-4'>{displayMessage}</p>
+    <h3 id={titleId} class='font-bold text-lg'>{displayTitle}</h3>
+    <p id={messageId} class='py-4'>{displayMessage}</p>
     <div class='modal-action'>
       <Button
         variant='ghost'

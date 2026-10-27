@@ -77,3 +77,5 @@
 fullstack 的 Web/App/Desktop 在共享 AdminWorkspace 中启用帮助入口、首次邀请和个人设置导览；Web 使用 Cookie，App/Desktop 使用 localStorage，按当前用户 ID 隔离。新增业务功能时，在共享 guide-store 和中英日文消息中补充文章、导览和稳定锚点。
 
 验证首次提示、完成后刷新、手动重看、跳转后等待、缺失目标、账号/版本隔离、语言与主题、移动宽度、键盘和卸载取消。
+
+帮助/导览是可选辅助区域。GuideHost 使用局部渲染边界，坏文章回调仅显示失败并释放遮罩/焦点，不能卸载业务兄弟区域；异步 before/target/引擎回调也须由控制器自行收敛。独立 HelpCenter 跳过失败文章并保留可用文章。

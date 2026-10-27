@@ -18,6 +18,7 @@ beforeEach(() => vi.stubGlobal('ResizeObserver', class {
 afterEach(() => {
   setUILocale('zh-CN')
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 function button(target: HTMLElement, name: string): HTMLButtonElement {
@@ -84,6 +85,38 @@ it('业务信息页签单独分页请求 business 证据并安全展示正文', 
     await unmount(component)
     target.remove()
   }
+})
+
+it.each([['环境', 'environment'], ['操作现场', 'interaction']])('从日志筛选切换到%s时清除请求和错误条件', async (label, kind) => {
+  const target = document.createElement('div')
+  const onevidencequery = vi.fn(async () => {})
+  const component = mount(FeedbackDetail, { target, props: { report, permissions: { read: true }, evidenceQuery: { page: 2, pageSize: 20, requestId: 'old-request', errorId: 'old-error' }, onevidencequery } })
+  try {
+    flushSync()
+    button(target, label).click()
+    await vi.waitFor(() => expect(onevidencequery).toHaveBeenCalledWith(expect.objectContaining({ page: 1, kind, requestId: undefined, errorId: undefined })))
+  }
+  finally { await unmount(component) }
+})
+
+it.each(['Asia/Shanghai', 'America/New_York'])('日期筛选按 %s 本地日历处理午夜和夏令时', async (timezone) => {
+  vi.stubEnv('TZ', timezone)
+  const target = document.createElement('div')
+  const onquerychange = vi.fn(async (_input: FeedbackListQuery) => {})
+  const component = mount(FeedbackList, { target, props: { data: { items: [report], total: 1, page: 1, pageSize: 20 }, query: { page: 1, pageSize: 20, from: new Date(2026, 2, 8).getTime() }, onquerychange } })
+  try {
+    flushSync()
+    target.querySelector<HTMLButtonElement>('[aria-label="筛选"]')!.click()
+    flushSync()
+    const from = target.querySelector<HTMLInputElement>('[aria-label="开始日期"]')!
+    const to = target.querySelector<HTMLInputElement>('[aria-label="结束日期"]')!
+    expect(from.value).toBe('2026-03-08')
+    to.value = '2026-03-08'
+    to.dispatchEvent(new Event('input', { bubbles: true }))
+    await vi.waitFor(() => expect(onquerychange).toHaveBeenCalled())
+    expect(onquerychange.mock.calls.at(-1)?.[0]).toMatchObject({ from: new Date(2026, 2, 8).getTime(), to: new Date(2026, 2, 9).getTime() - 1 })
+  }
+  finally { await unmount(component) }
 })
 
 describe('feedback collection', () => {

@@ -172,6 +172,10 @@ test('branded authentication, profile layout and blur validation work across scr
   const username = page.getByTestId('user-username').locator('input')
   await username.focus()
   await username.press('Tab')
+  await expect(username).not.toHaveAttribute('aria-invalid')
+  await username.fill('draft')
+  await username.fill('')
+  await username.press('Tab')
   await expect(username).toHaveAttribute('aria-invalid', 'true')
   await username.fill('a')
   await expect(username).toHaveAttribute('aria-invalid', 'true')
@@ -449,37 +453,39 @@ test('business configuration is isolated and the public notice reaches other dut
   await expect(page.getByTestId('business-notice')).toHaveText('Configured business notice')
 })
 
-test('audit filters align and fit desktop, tablet and narrow mobile screens', async ({ page }, testInfo) => {
+test('audit filters collapse without losing values and fit compact workspaces', async ({ page }, testInfo) => {
   await page.goto('/')
   await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
   await page.getByTestId('nav-audit').click()
   await expect(page.getByTestId('audit-page')).toBeVisible()
-  for (const width of [1440, 960, 390, 320]) {
+  const filters = page.getByTestId('audit-filters')
+  const toggle = filters.locator('button[aria-controls]')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByTestId('audit-resource')).toBeHidden()
+  await toggle.click()
+  const resource = page.getByTestId('audit-resource').locator('input')
+  await resource.fill('retained-filter')
+  await toggle.click()
+  await expect(resource).toBeHidden()
+  await toggle.press('Space')
+  await expect(resource).toHaveValue('retained-filter')
+  await expect(page.locator('header h1')).toHaveCount(1)
+  await expect(page.getByTestId('audit-page').locator('h1')).toHaveCount(0)
+  for (const width of [1440, 1920, 2560, 3840, 960, 390, 320]) {
     await page.setViewportSize({ width, height: 900 })
-    // 等待移动侧栏收起，避免过渡帧遮挡内容并污染截图。
     if (width < 1024)
       await expect.poll(() => page.locator('aside').evaluate(sidebar => sidebar.getBoundingClientRect().right)).toBeLessThanOrEqual(1)
-    const controls = await page.getByTestId('audit-page').locator('form').evaluate(form => [
-      form.querySelector('#audit-action')?.parentElement,
-      form.querySelector('#audit-resource')?.parentElement,
-      form.querySelector('#audit-start'),
-      form.querySelector('#audit-end'),
-      form.querySelector('button[type="submit"]'),
-    ].map((element) => {
-      if (!element)
-        throw new Error('Audit filter control is missing')
-      const rect = element.getBoundingClientRect()
-      return { top: rect.top, bottom: rect.bottom, height: rect.height }
+    const controls = await page.getByTestId('audit-advanced').evaluate(panel => [...panel.querySelectorAll('input')].map((element) => {
+      // 复合控件的点击框包含边框和留白，内部文字输入区不等于完整控件高度。
+      const control = element.closest('.fieldset') ? element.parentElement! : element
+      const rect = control.getBoundingClientRect()
+      return { left: rect.left, right: rect.right, height: rect.height }
     }))
-    for (const control of controls)
-      expect(control.height).toBeCloseTo(40, 0)
-    if (width >= 1280) {
-      expect(Math.max(...controls.map(control => control.top)) - Math.min(...controls.map(control => control.top))).toBeLessThan(1)
-      expect(Math.max(...controls.map(control => control.bottom)) - Math.min(...controls.map(control => control.bottom))).toBeLessThan(1)
-    }
-    else if (width >= 640) {
-      expect(controls[0]!.top).toBeCloseTo(controls[1]!.top, 0)
-      expect(controls[2]!.top).toBeCloseTo(controls[3]!.top, 0)
+    expect(controls.length).toBeGreaterThan(2)
+    for (const control of controls) {
+      expect(control.height).toBeGreaterThanOrEqual(28)
+      expect(control.left).toBeGreaterThanOrEqual(0)
+      expect(control.right).toBeLessThanOrEqual(width)
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     if (width === 1440 || width === 390) {
@@ -490,23 +496,22 @@ test('audit filters align and fit desktop, tablet and narrow mobile screens', as
       await page.screenshot({ path: evidence ? path.join(evidence, file) : testInfo.outputPath(file), fullPage: true, animations: 'disabled' })
     }
   }
-  await page.setViewportSize({ width: 1280, height: 720 })
-  const advanced = page.getByTestId('audit-advanced')
-  await advanced.locator('summary').click()
+  const reset = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/admin/audit/list'))
+  await filters.getByRole('button', { name: /重置|Reset|リセット/, exact: true }).click()
+  await reset
+  await expect(resource).toHaveValue('')
   await page.getByTestId('audit-category').getByRole('combobox').click()
   await page.getByRole('option', { name: /系统|System|システム/ }).click()
   const filtered = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/admin/audit/list')).then(async (response) => {
     expect(response.status()).toBe(200)
     await response.body()
   })
-  await advanced.getByRole('button', { name: /查询|Search/ }).click()
+  await page.getByTestId('audit-action').locator('input').press('Enter')
   await filtered
-  await expect(advanced.getByRole('button', { name: /查询|Search/ })).toBeEnabled()
   await expect(page.getByTestId('audit-page').getByRole('cell', { name: 'system', exact: true }).first()).toBeVisible()
   const categories = await page.getByTestId('audit-page').locator('tbody tr').evaluateAll(rows => rows.map(row => row.querySelectorAll('td')[3]?.textContent?.trim()))
-  expect(categories.length).toBeGreaterThan(0)
   expect(new Set(categories)).toEqual(new Set(['system']))
-  await advanced.locator('summary').click()
+  await toggle.click()
   await page.getByTestId('audit-page').getByRole('button', { name: /详情|Details/ }).first().click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('audit-short-table-details.png'), fullPage: true, animations: 'disabled' })
@@ -582,10 +587,12 @@ test('administrator and user complete account, avatar, preference, password and 
     await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
     await expect(userPage.locator('html')).toHaveAttribute('lang', 'en-US')
     const themes = [{{#each fullstack.theme.themes}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]
-    const selectedTheme = themes.find(theme => theme !== '{{fullstack.theme.defaultTheme}}') ?? themes[0]
+    const selectedTheme = themes.includes('formal') ? 'formal' : themes.includes('high-contrast') ? 'high-contrast' : themes.find(theme => theme !== '{{fullstack.theme.defaultTheme}}') ?? themes[0]
     await userPage.getByTestId('profile-theme').click()
     await userPage.getByRole('option').nth(themes.indexOf(selectedTheme)).click()
     await expect(userPage.locator('html')).toHaveAttribute('data-theme', selectedTheme)
+    if (selectedTheme === 'high-contrast')
+      await expect.poll(() => userPage.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark')
     await userPage.reload()
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
     await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
@@ -650,6 +657,7 @@ test('administrator and user complete account, avatar, preference, password and 
   await page.getByTestId('logout').click()
   await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
   await page.getByTestId('nav-audit').click()
+  await page.getByTestId('audit-filters').locator('button[aria-controls]').click()
   await page.getByTestId('audit-resource').locator('input').fill('users')
   await page.getByTestId('audit-page').locator('form').getByRole('button', { name: /查询|Search/ }).click()
   await expect(page.getByTestId('audit-page')).toContainText('delete')

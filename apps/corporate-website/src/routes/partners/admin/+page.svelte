@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { Alert, Badge, Button, Card, Empty, Input, PageHeader, Select } from '@h-ai/ui'
+  import { Alert, Badge, Button, Card, Empty, FilterBar, Input, PageHeader, Select } from '@h-ai/ui'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
 
   interface Props {
@@ -54,8 +54,8 @@
     }
   })
 
-  async function handleFilter(event: Event) {
-    event.preventDefault()
+  async function handleFilter(event?: Event) {
+    event?.preventDefault()
     const params = new SvelteURLSearchParams()
     params.set('page', '1')
     params.set('pageSize', String(data.pageSize))
@@ -92,8 +92,8 @@
   <title>{m.nav_partner_admin()} - {m.brand()}</title>
 </svelte:head>
 
-<section class='py-10 px-4 lg:px-8'>
-  <div class='w-full min-w-0 space-y-5'>
+<section class='px-4 py-4 lg:px-6'>
+  <div class='w-full min-w-0 space-y-3'>
     <div class='flex items-center justify-between gap-3'>
       <PageHeader title={m.nav_partner_admin()} description='{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}' />
       <Button variant='default' size='sm' outline onclick={handleLogout}>
@@ -103,10 +103,16 @@
     </div>
 
     <Card shadow='sm'>
-      <form class='grid gap-3 md:grid-cols-[1fr_220px_auto]' onsubmit={handleFilter}>
-        <Input placeholder={m.admin_search_placeholder()} bind:value={search} />
-        <Select options={statusOptions} bind:value={status} />
-        <Button type='submit' variant='primary'>{m.admin_search_button()}</Button>
+      <form onsubmit={handleFilter}>
+        <FilterBar activeCount={status ? 1 : 0} onreset={() => {
+          search = ''
+          status = ''
+          void handleFilter()
+        }} data-testid='partner-filters'>
+          {#snippet leading()}<Input size='sm' class='min-w-0 flex-1' placeholder={m.admin_search_placeholder()} bind:value={search} data-testid='partner-search' />{/snippet}
+          {#snippet actions()}<Button type='submit' submitHint size='sm' variant='primary'>{m.admin_search_button()}</Button>{/snippet}
+          <div class='w-full sm:w-56'><Select size='sm' options={statusOptions} bind:value={status} /></div>
+        </FilterBar>
       </form>
     </Card>
 

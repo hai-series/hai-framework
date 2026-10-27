@@ -438,7 +438,7 @@
           class='input input-sm w-full pl-9 bg-base-100 border-base-content/15'
           placeholder={searchPlaceholder || uiM('crud_search_placeholder')}
           onkeydown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.isComposing) {
               e.preventDefault()
               onsearch?.(searchValue)
             }

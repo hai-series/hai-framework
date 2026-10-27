@@ -103,6 +103,28 @@ test.describe('Corporate pages and partner flow', () => {
     await expect(page.locator('table')).toBeVisible()
     await expect(page.locator('table')).toContainText(companyName)
 
+    const filters = page.getByTestId('partner-filters')
+    const disclosure = filters.locator('button[aria-controls]')
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+    await disclosure.click()
+    const status = filters.getByRole('combobox')
+    await status.click()
+    const pending = page.getByRole('option').nth(1)
+    const selectedStatus = (await pending.textContent())?.trim() ?? ''
+    expect(selectedStatus).not.toBe('')
+    await pending.click()
+    await disclosure.click()
+    await expect(status).toBeHidden()
+    await disclosure.click()
+    await expect(status).toHaveValue(selectedStatus)
+    await filters.getByTestId('partner-search').locator('input').fill(companyName)
+    await filters.locator('button[type="submit"]').click()
+    await expect(page).toHaveURL(/status=pending/)
+    await expect(page.locator('table')).toContainText(companyName)
+    await filters.getByRole('button', { name: /重置|Reset|リセット/, exact: true }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.has('status')).toBe(false)
+    await expect.poll(() => new URL(page.url()).searchParams.has('search')).toBe(false)
+
     const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
     expect(recordsRes.ok()).toBeTruthy()
     const body = await recordsRes.json() as ApiResponse<{ items: Array<{ company_name: string }> }>

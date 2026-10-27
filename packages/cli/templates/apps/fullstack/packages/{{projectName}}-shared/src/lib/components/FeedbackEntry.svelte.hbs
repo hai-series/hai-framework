@@ -10,6 +10,10 @@
   import * as m from '../paraglide/messages.js'
 
   let open = $state(false)
+  $effect(() => {
+    if (!open)
+      browserFeedback.pause()
+  })
   let preparing = $state(false)
   let error = $state('')
   let draft = $state.raw<FeedbackDraft>()

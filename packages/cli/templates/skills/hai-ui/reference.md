@@ -2,7 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题、内置中英日文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
+> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务主题、内置中英日文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
 
 ## 运行环境
 
@@ -63,7 +63,7 @@
 
 | 任务 | 首选组件 | 使用要点 |
 | --- | --- | --- |
-| 后台列表页 | `PageHeader` + `Card` + `DataTable` + `Pagination` | 分页、筛选、批量操作优先复用 compounds |
+| 后台列表页 | `WorkspaceLayout` + `CrudPage`，自定义列表用 `FilterBar` / `TableToolbar` + `DataTable` + `Pagination` | 导航标题只出现一次；紧凑留白、条件可收起并保留值，分页固定在数据区外 |
 | 表单页/弹层表单 | `Form` + `FormField` + `Input/Select/...` | 表单字段布局统一交给 `FormField` |
 | 简单确认/详情弹层 | `Modal` / `Drawer` / `Confirm` | 根据桌面/移动端交互选择弹窗或抽屉 |
 | 完整 CRUD 页面 | `CrudPage` | 优先通过 `form` / `pagination` / `density` 配置，不要拆开重写；列头默认可排序、筛选栏自带「重置」 |
@@ -445,6 +445,8 @@ const p = usePlatform()
 | `CrudEditPanel`     | 编辑面板（抽屉/弹窗） |
 | `CrudDeleteConfirm` | 删除确认框 |
 
+`WorkspaceLayout` 的 title 为导航标题，leading/actions/footer 为 snippet；data-* 透传 main，没有页脚时不占位。PageHeader/SettingsLayout 自动省略同名标题；CrudPage 默认跟随工作区，showHeader 可覆盖，headerActions 不因隐藏标题而丢失。FilterBar 的 leading/actions 常驻、children 默认收起，支持 bind:expanded、activeCount 和 onreset；重置须由宿主清空所有查询条件。
+
 `CrudPage` 是首选入口；只有在你明确要自定义组合方式时，才直接使用 `CrudFilterBar` / `CrudDetailPanel` / `CrudEditPanel`。
 
 ### CrudPage 配置重点
@@ -541,7 +543,7 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 
 ## 主题系统
 
-支持 15 个精选 DaisyUI 主题。
+支持 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务主题。
 
 ```typescript
 import { applyTheme, getCurrentTheme, getSavedTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui/theme'

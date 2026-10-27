@@ -4,6 +4,7 @@
   import type { FeedbackDetail as Detail, FeedbackEvidenceInput, FeedbackReport } from '@h-ai/api-contract/feedback'
   import type { FeedbackEvidenceQuery, FeedbackListQuery, FeedbackReportView, FeedbackStatusChange } from '@h-ai/ui'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
+  import { PageHeader } from '@h-ai/ui/components/compounds/index'
   import { FeedbackDetail, FeedbackList } from '@h-ai/ui/components/scenes/app/index'
   import { onMount } from 'svelte'
   import { managementApi } from '../api/api-client.js'
@@ -91,21 +92,9 @@
     await load()
   }
   async function retry(report: FeedbackReportView) {
-    const loaded = await managementApi.feedback.reports.get({ id: report.id })
-    if (!loaded.success)
-      throw new Error(loaded.error.message)
-    const targets: Array<'collect' | 'notify' | 'webhook'> = []
-    if (['partial', 'failed'].includes(loaded.data.report.collectionStatus))
-      targets.push('collect')
-    for (const job of loaded.data.jobs) {
-      if (job.status === 'failed' && (job.type === 'notify' || job.type === 'webhook' || job.type === 'collect') && !targets.includes(job.type))
-        targets.push(job.type)
-    }
-    for (const target of targets) {
-      const result = await managementApi.feedback.reports.retry({ id: report.id, target })
-      if (!result.success)
-        throw new Error(result.error.message)
-    }
+    const retried = await feedbackReview.retryReport(report.id)
+    if (!retried.success)
+      throw new Error(retried.error.message)
     if (selected?.report.id === report.id)
       await select(report)
     await load()
@@ -153,8 +142,8 @@
   })
 </script>
 
-<section data-testid='feedback-page' class='flex min-h-0 flex-1 flex-col gap-5'>
-  <h1 class='text-xl font-semibold'>{m.nav_feedback()}</h1>
+<section data-testid='feedback-page' class='flex min-h-0 flex-1 flex-col gap-3'>
+  <PageHeader title={m.nav_feedback()} class='mb-0' />
   {#if selected}
     <FeedbackDetail report={view(selected.report)} webhook={selected.jobs.find(job => job.type === 'webhook')} {evidence} history={selected.history.map(item => ({ id: item.id, actorId: item.userId, fromStatus: item.from, toStatus: item.to, createdAt: item.timestamp, note: item.note }))} {permissions}
       attachments={selected.attachments.map(item => ({ ...item, mimeType: item.contentType, url: imageUrls[item.id] }))}

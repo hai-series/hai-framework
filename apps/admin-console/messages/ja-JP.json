@@ -475,7 +475,7 @@
   "guide_content_title": "ワークスペース",
   "guide_content_description": "現在のページがここに表示されます。ナビゲーションで機能を切り替えます。利用できる操作は権限に応じて変わります。",
   "guide_theme_title": "外観",
-  "guide_theme_description": "ライトとダークの表示を切り替えます。設定でさらに多くのテーマを選択できます。",
+  "guide_theme_description": "ライト、ダーク、ハイコントラストを選択できます。設定は再読み込み後も保持されます。",
   "guide_profile_title": "プロフィール",
   "guide_profile_description": "アバターからプロフィールや設定を開き、個人情報やパスワードを管理できます。",
   "guide_help_title": "ヘルプセンター",
@@ -582,5 +582,12 @@
   "audit_end": "終了日時",
   "security_auth_required": "ログインしてから操作してください。",
   "security_permission_denied": "このページへのアクセス権限がありません。",
-  "audit_query_invalid": "監査検索条件が無効です。絞り込みと並び順を確認してください。"
+  "audit_query_invalid": "監査検索条件が無効です。絞り込みと並び順を確認してください。",
+  "gallery_filter_title": "折りたたみ可能な絞り込み",
+  "gallery_filter_description": "検索と操作を常に表示します。条件を折りたたんでも入力を保持し、適用中の件数を表示します。",
+  "gallery_filter_placeholder": "名前で検索",
+  "gallery_filter_role": "ロール",
+  "gallery_filter_department": "部門",
+  "gallery_filter_status": "有効状態",
+  "gallery_filter_date": "作成日"
 }

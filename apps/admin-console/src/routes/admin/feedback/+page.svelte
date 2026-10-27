@@ -6,7 +6,7 @@
   import { goto, invalidateAll } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser, loadFeedbackReplay } from '$lib/services/feedback.js'
+  import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser, loadFeedbackReplay, retryFeedback } from '$lib/services/feedback.js'
   import { downloadFeedbackBytes, feedbackBase64Bytes, feedbackBlobUrl } from '$lib/utils/feedback-browser.js'
   import { FeedbackDetail, FeedbackList, usePermission } from '@h-ai/ui'
   import { onDestroy, untrack } from 'svelte'
@@ -99,21 +99,7 @@
 
   async function retry(report: FeedbackReportView) {
     await initFeedbackBrowser()
-    const loaded = await feedbackApi.feedback.reports.get({ id: report.id })
-    if (!loaded.success)
-      throw new Error(loaded.error.message)
-    const targets: Array<'collect' | 'notify' | 'webhook'> = []
-    if (['partial', 'failed'].includes(loaded.data.report.collectionStatus))
-      targets.push('collect')
-    for (const job of loaded.data.jobs) {
-      if (job.status === 'failed' && (job.type === 'notify' || job.type === 'webhook' || job.type === 'collect') && !targets.includes(job.type))
-        targets.push(job.type)
-    }
-    for (const target of targets) {
-      const result = await feedbackApi.feedback.reports.retry({ id: report.id, target })
-      if (!result.success)
-        throw new Error(result.error.message)
-    }
+    await retryFeedback(report.id)
     await view(report)
     await invalidateAll()
   }

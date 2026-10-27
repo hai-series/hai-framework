@@ -17,6 +17,16 @@
   import { CalendarDate } from '@internationalized/date'
 
   // === 状态 ===
+  let galleryFilterSearch = $state('')
+  let galleryFilterValues = $state<Record<string, unknown>>({})
+  const galleryFilterFields = $derived([
+    { id: 'role', label: m.gallery_filter_role(), type: 'text' },
+    { id: 'department', label: m.gallery_filter_department(), type: 'text' },
+    { id: 'enabled', label: m.gallery_filter_status(), type: 'boolean' },
+    { id: 'created', label: m.gallery_filter_date(), type: 'date-range' },
+  ])
+  const codeFilterBar = '<CrudFilterBar filterFields={filterFields} bind:searchValue bind:filterValues />'
+
   let comboboxVal = $state('')
   let comboboxMultiVal = $state<string[]>(['fe'])
   let calendarVal = $state<DateValue>(new CalendarDate(2026, 2, 26))
@@ -814,10 +824,14 @@
 
   <DemoSection
     title='布局组件'
-    subtitle='Card / PageHeader'
+    subtitle='Card / PageHeader / FilterBar'
     iconClass='icon-[tabler--layout-grid]'
     tone='secondary'
   >
+    <DemoCard title={m.gallery_filter_title()} description={m.gallery_filter_description()} code={codeFilterBar}>
+      <CrudFilterBar filterFields={galleryFilterFields} searchPlaceholder={m.gallery_filter_placeholder()} bind:searchValue={galleryFilterSearch} bind:filterValues={galleryFilterValues} data-testid='gallery-collapsible-filters' />
+    </DemoCard>
+
     <DemoCard title='Card 卡片' description='边框、阴影、内边距、header/footer 插槽' code={codeCardLayout}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
         <Card title='默认卡片'>

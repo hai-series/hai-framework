@@ -5,7 +5,7 @@
 -->
 <script lang='ts'>
   import type { Snippet } from 'svelte'
-  import { AppBar, Button, LanguageSwitch, ThemeToggle, toast } from '@h-ai/ui'
+  import { AppBar, Button, LanguageSwitch, ThemeToggle, toast, WorkspaceLayout } from '@h-ai/ui'
   import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
   import { localeStore, desktopM as m } from '../lib/messages.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
@@ -65,8 +65,8 @@
       {/each}
     </aside>
 
-    <main class='flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4 sm:p-6'>
+    <WorkspaceLayout>
       {@render children()}
-    </main>
+    </WorkspaceLayout>
   </div>
 </div>

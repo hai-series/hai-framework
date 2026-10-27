@@ -258,16 +258,14 @@
   <title>{m.nav_profile()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class='w-full min-w-0 space-y-6'>
-  <div class='flex items-end justify-between gap-4'>
-    <div>
-      <h1 class='text-xl font-semibold tracking-tight text-base-content'>{m.nav_profile()}</h1>
-      <p class='text-sm text-base-content/45 mt-0.5'>{m.settings_subtitle()}</p>
-    </div>
-    <div class='badge badge-outline h-7 px-2.5 text-xs' data-testid='profile-roles'>
-      {data.profile.roles.join(', ') || '-'}
-    </div>
-  </div>
+<div class='w-full min-w-0 space-y-4'>
+  <PageHeader title={m.nav_profile()} description={m.settings_subtitle()} class='mb-0'>
+    {#snippet actions()}
+      <div class='badge badge-outline h-7 px-2.5 text-xs' data-testid='profile-roles'>
+        {data.profile.roles.join(', ') || '-'}
+      </div>
+    {/snippet}
+  </PageHeader>
 
   <div class='grid grid-cols-1 items-start gap-5 xl:grid-cols-[16rem_minmax(0,1fr)]'>
     <aside class='card hidden bg-base-100 border border-base-content/6 rounded-xl xl:block'>

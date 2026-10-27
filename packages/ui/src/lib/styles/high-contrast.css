@@ -1,0 +1,64 @@
+/* 共享高对比主题随 theme.css 发布，不依赖 DaisyUI 的内置主题名单。 */
+[data-theme='high-contrast'] {
+  color-scheme: dark;
+  color: #ffffff;
+  background-color: #000000;
+  --color-base-100: #000000;
+  --color-base-200: #121212;
+  --color-base-300: #242424;
+  --color-base-content: #ffffff;
+  --color-primary: #ffe04d;
+  --color-primary-content: #111111;
+  --color-secondary: #80d4ff;
+  --color-secondary-content: #111111;
+  --color-accent: #9df3c4;
+  --color-accent-content: #111111;
+  --color-neutral: #dce5f0;
+  --color-neutral-content: #111111;
+  --color-info: #80d4ff;
+  --color-info-content: #111111;
+  --color-success: #9df3c4;
+  --color-success-content: #111111;
+  --color-warning: #ffe04d;
+  --color-warning-content: #111111;
+  --color-error: #ffb4ab;
+  --color-error-content: #111111;
+  --radius-selector: 0.375rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 2px;
+  --depth: 0;
+  --noise: 0;
+  --hai-focus-color: #ffe04d;
+}
+
+/* 低透明度的次要正文在此主题中保持可读，伪类和占位符类不误匹配。 */
+[data-theme='high-contrast'] :is([class^='text-base-content/'], [class*=' text-base-content/']),
+[data-theme='high-contrast'] .table th {
+  color: #e5e7eb;
+}
+
+[data-theme='high-contrast'] :is([class^='border-base-content/'], [class*=' border-base-content/']) {
+  border-color: #b5c1cf;
+}
+
+[data-theme='high-contrast'] :is(input, textarea)::placeholder {
+  color: #dce5f0;
+  opacity: 1;
+}
+
+[data-theme='high-contrast'] :focus-visible {
+  outline: 3px solid #ffe04d;
+  outline-offset: 3px;
+}
+
+[data-theme='high-contrast'] a:not(.btn) {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+[data-theme='high-contrast'] ::-webkit-scrollbar-thumb {
+  background: #b5c1cf;
+}

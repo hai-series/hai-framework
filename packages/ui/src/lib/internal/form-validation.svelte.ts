@@ -78,7 +78,7 @@ function readIssue(control: FormControl): FormValidationIssue | undefined {
  * 在组件初始化阶段创建原生约束校验状态；宿主关闭或表单 reset 时清除过期错误。
  * @param getOverride - 读取自定义校验提示的函数。
  * @param getValue - 读取当前控件值以跟踪程序回填的函数。
- * @returns 带响应式 message 和 validate/input/reset 方法的校验状态。
+ * @returns 带响应式 message 和 validate/blur/input/reset 方法的校验状态。
  *
  * @example 模块内部上下文
  * ```ts
@@ -94,8 +94,10 @@ export function createControlValidation(getOverride: () => FormText | undefined 
   const visibility = getFormVisibilityContext()
   let issue = $state<FormValidationIssue>()
   let currentControl = $state<FormControl>()
+  let edited = false
   function reset() {
     issue = undefined
+    edited = false
     currentControl?.setCustomValidity('')
   }
   $effect(() => {
@@ -130,7 +132,13 @@ export function createControlValidation(getOverride: () => FormText | undefined 
       issue = readIssue(control)
       control.setCustomValidity(issue ? resolveFormText(getOverride()) || uiM(issue.key, issue.params) : '')
     },
+    blur(control: FormControl) {
+      // 默认焦点离开未输入的空字段时不挤动按钮/链接；提交仍由原生 invalid 校验。
+      if (edited || control.value || issue)
+        this.validate(control)
+    },
     input(control: FormControl) {
+      edited = true
       currentControl = control
       control.setCustomValidity('')
       if (issue)

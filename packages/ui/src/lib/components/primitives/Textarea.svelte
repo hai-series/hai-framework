@@ -123,7 +123,7 @@
       class={textareaClass}
       bind:value
       oninput={handleInput}
-      onblur={e => validation.validate(e.currentTarget)}
+      onblur={e => validation.blur(e.currentTarget)}
       oninvalid={handleInvalid}
     ></textarea>
   </div>

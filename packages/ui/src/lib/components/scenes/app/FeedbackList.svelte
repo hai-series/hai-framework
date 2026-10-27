@@ -19,7 +19,7 @@
   import TableToolbar from '../../compounds/TableToolbar.svelte'
   import Badge from '../../primitives/Badge.svelte'
   import Button from '../../primitives/Button.svelte'
-  import { collectionLabel, feedbackTime, notificationLabel } from './feedback-functions.js'
+  import { collectionLabel, feedbackDateValue, feedbackDayBoundary, feedbackTime, notificationLabel } from './feedback-functions.js'
 
   let {
     data,
@@ -55,7 +55,7 @@
   let busyId = $state('')
   let search = $derived(effectiveQuery.search ?? '')
   let sortDirection = $derived(effectiveQuery.sortDirection ?? 'desc')
-  let filterValues = $derived<Record<string, unknown>>({ status: effectiveQuery.status ?? '', collectionStatus: effectiveQuery.collectionStatus ?? '', appId: effectiveQuery.appId ?? '', appVersion: effectiveQuery.appVersion ?? '', from: effectiveQuery.from ? new Date(effectiveQuery.from).toISOString().slice(0, 10) : '', to: effectiveQuery.to ? new Date(effectiveQuery.to).toISOString().slice(0, 10) : '' })
+  let filterValues = $derived<Record<string, unknown>>({ status: effectiveQuery.status ?? '', collectionStatus: effectiveQuery.collectionStatus ?? '', appId: effectiveQuery.appId ?? '', appVersion: effectiveQuery.appVersion ?? '', from: feedbackDateValue(effectiveQuery.from), to: feedbackDateValue(effectiveQuery.to) })
   const columns = $derived([
     { key: 'number', label: uiM('feedback_number') },
     { key: 'description', label: uiM('feedback_summary') },
@@ -86,8 +86,8 @@
     }
   }
   function filter(values: Record<string, unknown>) {
-    const from = values.from ? Date.parse(String(values.from)) : undefined
-    const to = values.to ? Date.parse(String(values.to)) + 86_400_000 - 1 : undefined
+    const from = feedbackDayBoundary(values.from, 'start')
+    const to = feedbackDayBoundary(values.to, 'end')
     void update({ page: 1, status: values.status === 'pending' || values.status === 'handled' ? values.status : undefined, collectionStatus: ['collecting', 'complete', 'partial', 'failed'].includes(String(values.collectionStatus)) ? values.collectionStatus as FeedbackReportView['collectionStatus'] : undefined, appId: String(values.appId ?? '') || undefined, appVersion: String(values.appVersion ?? '') || undefined, from: Number.isFinite(from) ? from : undefined, to: Number.isFinite(to) ? to : undefined })
   }
   async function run(report: FeedbackReportView, action: (() => void | Promise<void>) | undefined) {

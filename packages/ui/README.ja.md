@@ -8,7 +8,7 @@
 
 内蔵メッセージは `zh-CN`、`en-US`、`ja-JP` に対応し、言語セレクターは既定で3言語を表示します。
 
-Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US）、15 種類の厳選テーマを提供します。
+Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマ、ハイコントラストと直角のビジネステーマを提供します。
 
 ## 主な機能
 
@@ -201,7 +201,7 @@ components/
 
 `Input`、`Textarea`、`Select`、`PasswordInput` のネイティブ検証は中国語・英語・日本語に対応します。`validationMessage` は失敗時だけ適用され、有効な入力を無効にし続けません。UI の `setGlobalLocale` / `createLocaleStore` で言語を同期すると表示中のエラーも更新されます。`Textarea` は `minlength` / `maxlength`、`Select` は `name`・必須検証・FormData に対応します。
 
-初回のフォーカス離脱時にエラーを表示し、修正中も更新します。未操作の項目は送信時に検証します。CRUD の新規作成・編集も同じ動作とカスタムメッセージに対応し、再表示時に検証状態をリセットします。`Select` はトリガーと選択肢の両方からフォーカスが離れた時に検証します。`PasswordInput.minLength` は長さ制約と強度計算に使い、省略時はログイン用の長さ制限を設けず、強度のみ8文字を基準にします。
+テキスト入力後のフォーカス離脱時に検証し、修正中も更新します。未入力の空欄は送信時に検証し、初期フォーカスの移動で操作を押し下げません。CRUD も入力後のフォーカス離脱時または送信時に検証し、カスタムメッセージに対応して再表示時に検証状態をリセットします。`Select` はトリガーと選択肢の両方からフォーカスが離れた時に検証します。`PasswordInput.minLength` は長さ制約と強度計算に使い、省略時はログイン用の長さ制限を設けず、強度のみ8文字を基準にします。
 
 `UserProfile.fieldConstraints` は項目別に `required`、`minlength`、`maxlength`、`pattern`、`validationMessage` を受け取り、ユーザー名などの業務ルールをフォーカス離脱時に検証します。`pattern` は単一行の入力に適用し、`validationMessage` は翻訳関数にも対応します。
 
@@ -704,7 +704,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 #### テーマ切り替え
 
-内蔵ツールで 15 種類の厳選 DaisyUI テーマを管理します：
+内蔵ツールで 15 種類の厳選 DaisyUI テーマ、ハイコントラストと直角のビジネステーマを管理します：
+
+`high-contrast` は共有 theme.css に含まれます。暗い背景と明るい文字、明確な境界線・フォーカス、補助文字とプレースホルダーの強いコントラストを提供します。ThemeSelector は3言語に対応し、サンプルと既定の生成プロジェクトで選択できます。fullstack の明示的な themes はホスト設定を尊重します。通常文字の配色目標は7:1ですが、各業務コンテンツは別途アクセシビリティ確認が必要です。
+
+`formal` はボタン・入力欄・カード・ダイアログを直角にし、サンプルと既定テンプレートで選択できます。Button の submitHint は type=submit のネイティブ Enter 操作だけを表示します。LoginForm はデスクトップで準備完了時に既存のフォーカスがなければ識別子へ移動し、autoFocus=false で無効化できます。検索の Enter は IME 確定を除いて即時実行します。テーマは方向キー/Home/End、Enter/Space、Esc とフォーカス復帰に対応し、確認画面は取消を初期選択して Esc の状態を同期します。
 
 ```ts
 import {
@@ -717,7 +721,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 15 个精选主题元数据
+  THEMES, // ThemeInfo[] — 17 个主题元数据
 } from '@h-ai/ui/theme'
 ```
 
@@ -956,6 +960,34 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 ## 入力制約と HTTP 機能
 
 キーは UTF-8 で最大 1024 バイトで、絶対パス、バックスラッシュ、制御文字、ドットセグメントを拒否します。公開 HTTP 一括削除は一度に 1–1000 件です。共通規則はブラウザー対応の `@h-ai/storage/schemas` から参照できます。署名有効期限は整数 1–604800 秒（Node 既定 3600、HTTP 既定 900）。アップロード署名の入力は key/contentType/expiresIn のみで、contentLength/maxSize/metadata/checksum は未対応です。不正入力は HTTP 400、typed client では VALIDATION_FAILED です。FileUpload の制限は選択時の補助であり、実際のオブジェクトはサーバーで検証してください。Node のストリーム/checksum/条件付き書き込みには既定の HTTP エンドポイントがありません。[機能と認可の対応表（中国語）](../storage/README.md#存储输入约束与跨端能力)を参照してください。
+
+## コンパクトな作業領域と折りたたみ式の絞り込み
+
+`WorkspaceLayout` はコンパクトなナビゲーション、12/16px の余白を持つ本文、任意のフッターを統一します。フッターを省略すると高さを確保しません。title はナビゲーションのページ名、leading/actions/footer は snippet です。data-* は本文の main に渡します。親レイアウトから残りの高さと min-height: 0 を引き継いでください。
+
+同名の `PageHeader` は重複する見出しを省略し、説明と操作を保持します。`SettingsLayout` も同じ動作です。作業領域内の `CrudPage` は既定でナビゲーションの見出しだけを表示し、操作をツールバーに残します。単独利用時は見出しを表示し、showHeader で明示的に変更できます。
+
+`FilterBar` は leading と actions を常に表示し、children を既定で折りたたみます。bind:expanded は開閉、activeCount は適用中の件数、onreset は3言語対応のリセットボタンです。折りたたんでも入力を保持し、条件の初期化と問い合わせは業務側のコールバックが担当します。`CrudFilterBar` もこれを利用し、actions を追加でき、破棄時に未送信の遅延検索を取り消します。
+
+例の m、statusOptions、clearFilters、loadRows は業務アプリが提供します。リセット時は検索語と全条件を初期化してください。
+
+```svelte
+<script lang="ts">
+  import { Button, FilterBar, Input, Select, WorkspaceLayout } from '@h-ai/ui'
+  let search = $state('')
+  let status = $state('')
+</script>
+
+<div class="flex h-dvh min-h-0">
+  <WorkspaceLayout title={m.page_title()}>
+    <FilterBar activeCount={status ? 1 : 0} onreset={clearFilters}>
+      {#snippet leading()}<Input size="sm" bind:value={search} placeholder={m.search()} />{/snippet}
+      {#snippet actions()}<Button size="sm" onclick={loadRows}>{m.search()}</Button>{/snippet}
+      <div class="w-40"><Select size="sm" bind:value={status} options={statusOptions} /></div>
+    </FilterBar>
+  </WorkspaceLayout>
+</div>
+```
 
 ## デザインと操作の検証
 

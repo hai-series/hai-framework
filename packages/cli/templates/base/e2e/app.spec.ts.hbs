@@ -4,6 +4,25 @@ import path from 'node:path'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
+{{#if_eq appType 'admin'}}
+test('high contrast appearance is selectable and survives reload', async ({ page }) => {
+  await page.goto('/')
+  const header = page.locator('header').first()
+  await header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).click()
+  await header.getByRole('button', { name: /高对比|High contrast|ハイコントラスト/, exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark')
+  await header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).press('Enter')
+  await header.getByRole('button', { name: /简洁商务|Formal|ビジネス（角丸なし）/, exact: true }).press('Enter')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'formal')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'formal')
+  expect(await header.locator('button').first().evaluate(element => getComputedStyle(element).borderTopLeftRadius)).toBe('0px')
+})
+{{/if_eq}}
+
 {{#if_eq appType 'h5'}}
 test.use({ viewport: { width: 390, height: 844 } })
 {{/if_eq}}

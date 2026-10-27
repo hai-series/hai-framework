@@ -1,6 +1,6 @@
 <script lang='ts'>
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, FormField, FormLayout } from '@h-ai/ui/components/compounds/index'
+  import { Card, FormField, FormLayout, PageHeader } from '@h-ai/ui/components/compounds/index'
   import { Badge, Select } from '@h-ai/ui/components/primitives/index'
   import { ChangePasswordForm, UserProfile } from '@h-ai/ui/components/scenes/iam/index'
   import { getThemeInfo } from '@h-ai/ui/theme'
@@ -12,14 +12,11 @@
   interface Props { store: ManagementStore }
   const { store }: Props = $props()
   const languageOptions = $derived(locales.filter(locale => store.info?.supportedLocales.includes(locale)).map(locale => ({ value: locale, label: locale === 'zh-CN' ? '简体中文' : locale === 'ja-JP' ? '日本語' : 'English' })))
-  const themeOptions = AVAILABLE_THEMES.map(theme => ({ value: theme, label: getThemeInfo(theme)?.name ?? theme }))
+  const themeOptions = $derived(AVAILABLE_THEMES.map(theme => ({ value: theme, label: theme === 'high-contrast' ? m.theme_high_contrast() : theme === 'formal' ? m.theme_formal() : getThemeInfo(theme)?.name ?? theme })))
 </script>
 
-<section class='grid w-full min-w-0 gap-6 xl:grid-cols-2' data-testid='settings-page'>
-  <div class='xl:col-span-2'>
-    <h1 class='text-xl font-semibold tracking-tight'>{m.settings_title()}</h1>
-    <p class='mt-1 text-sm text-base-content/50'>{m.settings_description()}</p>
-  </div>
+<section class='grid w-full min-w-0 gap-4 xl:grid-cols-2' data-testid='settings-page'>
+  <PageHeader title={m.settings_title()} description={m.settings_description()} class='mb-0 xl:col-span-2' />
   {#if store.user}
     <Card class='xl:row-span-2' title={m.profile_title()} bordered shadow={false} data-guide='admin-profile-form'>
       <div class='mb-5 flex flex-wrap items-center gap-3 border-b border-base-content/8 pb-4'>

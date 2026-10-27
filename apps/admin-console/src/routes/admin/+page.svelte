@@ -6,7 +6,7 @@
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime'
-  import { Badge, usePermission } from '@h-ai/ui'
+  import { Badge, PageHeader, usePermission } from '@h-ai/ui'
 
   interface Props {
     data: PageData
@@ -123,12 +123,9 @@
   <title>{m.dashboard_title()} - {data.appConfig?.name ?? m.app_title()}</title>
 </svelte:head>
 
-<div class='space-y-5'>
+<div class='space-y-3'>
   <!-- 页面标题 -->
-  <div>
-    <h1 class='text-xl font-semibold text-base-content tracking-tight'>{m.dashboard_title()}</h1>
-    <p class='text-sm text-base-content/45 mt-0.5'>{m.dashboard_subtitle()}</p>
-  </div>
+  <PageHeader title={m.nav_dashboard()} description={m.dashboard_subtitle()} class='mb-0' />
 
   <!-- 统计卡片 -->
   <div class='grid gap-3 grid-cols-2 lg:grid-cols-4'>

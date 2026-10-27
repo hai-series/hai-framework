@@ -57,6 +57,8 @@ const UI_COMPONENTS = new Set([
   'MessageBoxDialog',
   'Modal',
   'PageHeader',
+  'FilterBar',
+  'WorkspaceLayout',
   'Pagination',
   'Popover',
   'PullRefresh',

@@ -7,7 +7,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 ## 能力契约
 
-主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`；默认主题取应用配置，选择范围与已编译 CSS 主题一致。
+主题 DOM 与安全缓存复用 `@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme(fallbackTheme?)`；默认主题取应用配置，选择范围与已编译 CSS 主题一致。共享 theme.css 已包含 high-contrast 高对比及 formal 直角商务主题；新应用默认提供该选项，显式主题白名单尊重宿主配置。不能通过淡化正文/占位符抵消其对比度，验收实际文字、边框、焦点、缩放及偏好持久化。
 
 | 项目 | 契约 |
 | --- | --- |
@@ -16,6 +16,11 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 | 输入 | 现有 Svelte 页面、组件 Props、Tailwind 扫描路径与主题 |
 | 输出 | 复用原子/组合/场景组件的界面及交互验证 |
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
+
+- 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
+- 多条件筛选使用 FilterBar 或 CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；提供 activeCount 和实际 onreset，收起不能丢值或隐式清空查询。复用组件状态及三语文案，不在页面复制折叠状态机。TableToolbar 已有弹层筛选可继续复用。
+
+- 查询/登录采用原生表单 Enter 提交；提示使用 Button submitHint（仅 submit），不注册占用浏览器按键的全局监听。输入法确认不得触发搜索；保留 Tab、Enter/Space、Esc、菜单方向键和清晰焦点。弹窗默认聚焦首个可编辑项，危险确认优先聚焦取消；关闭恢复触发控件，忙碌/禁用时不得继续提交。
 
 ## 使用路径
 
@@ -38,7 +43,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 - theme.css 自动引入 design-tokens.css；全局样式的焦点使用 --hai-focus-color（缺省跟随当前 primary），减少动态效果时保留最终状态并缩短动画。长内容在 Empty/Alert 中换行；业务自定义 snippet 也要能收缩。
 
 
-敏感操作复用 createSensitiveActions(Kit/API client 标准 actions) + ReauthenticationDialog，不在业务项目复制弹窗状态机。每个根布局创建一份，configure(公开策略)，卸载时 cancel()；authorize 返回 undefined 无需验证、null 取消/忙、有字符串才是本次证明。取消不发业务请求；typed client 只给本次 options.context.reauthentication，不放全局 header/持久存储。服务端仍检查授权并消费用途凭据。Input 的 datetime-local 值需按本地时区转换为明确时间戳。
+敏感操作复用 createSensitiveActions(Kit/API client 标准 actions) + ReauthenticationDialog，不在业务项目复制弹窗状态机。每个根布局创建一份，configure(公开策略)，卸载时 cancel()；authorize 返回 undefined 无需验证、null 取消/忙、有字符串才是本次证明。取消不发业务请求；会话恢复/证明失效后通过本次 reauthorize 回调重新 authorize，取消不续发；Kit 回调放 apiFetch 第三参数，typed client 放本次 options.context。typed client 只给本次 options.context.reauthentication，不放全局 header/持久存储。服务端仍检查授权并消费用途凭据。Input 的 datetime-local 值需按本地时区转换为明确时间戳。
 
 AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供的 createCaptcha 自动完成自托管计算挑战。自定义认证动作保留 captcha 字段及 sendOtp/resetrequest 的可选 options；不要只在界面验证或持久化证明。关闭时不加载求解器，取消/卸载停止后续鉴别。
 
@@ -65,7 +70,7 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 
 问题反馈使用 `FeedbackModal/FeedbackForm` 收集、`FeedbackList/FeedbackDetail` 管理、`FeedbackScreenshot` 标注。组件只负责交互，先固定现场再打开弹窗；跨页截图用 oncapture，实际脱敏材料用 evidence，短录屏随 onfileschange 接入，详情 onreplay 按需读取完整操作记录；可靠受理、上传、通知、权限和离线包按 [hai-feedback](../hai-feedback/SKILL.md) 接入，不把表单回调完成当作持久化成功。
 
-输入控件与 CRUD 新增/编辑默认在首次失焦后显示前端错误，修正输入时即时更新；未操作字段在提交时校验。Select 在焦点离开触发器及选项后校验。应用无需逐项绑定 blur；业务异步校验仍由应用提供。PasswordInput 的 minLength 提供时执行长度校验；登录现有密码时省略该属性。
+文本控件输入后失焦显示前端错误，修正输入时即时更新；未输入空字段留到提交校验，避免默认焦点离开时挤动操作。CRUD 新增/编辑同样在输入后失焦或提交时校验。Select 在焦点离开触发器及选项后校验。应用无需逐项绑定 blur；业务异步校验仍由应用提供。PasswordInput 的 minLength 提供时执行长度校验；登录现有密码时省略该属性。
 
 UserProfile 的 `fieldConstraints` 按字段声明 `required/minlength/maxlength/pattern/validationMessage`；单行控件支持 pattern，业务文案可用翻译函数。不要只在保存回调内放前端校验，服务端仍须执行 schema 校验。
 

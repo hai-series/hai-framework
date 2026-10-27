@@ -20,6 +20,7 @@
   "settings_close": "关闭",
   "settings_language": "语言",
   "settings_theme": "主题",
+  "theme_high_contrast": "高对比",
   "combobox_no_match": "无匹配结果",
   "combobox_remove": "移除",
   "data_table_actions": "操作",
@@ -325,8 +326,9 @@
   "error_500_desc": "服务器出现了一些问题。我们正在处理，请稍后重试。",
   "error_503_title": "服务维护中",
   "error_503_desc": "系统正在维护升级，请稍后再访问。",
-  "login_method_password": "密码",
+  "login_method_password": "账号密码",
   "login_method_ldap": "企业账号",
+  "login_method_ldap_hint": "使用公司或组织提供的账号和密码",
   "login_method_email": "邮件验证码",
   "login_method_sms": "短信验证码",
   "login_methods": "登录方式",
@@ -496,5 +498,10 @@
   "session_recovery_account_error": "请使用原账号完成登录，当前操作尚未继续。",
   "sensitive_operations_label": "需要重新认证的操作 ID",
   "sensitive_operations_hint": "每行一个操作 ID，与服务端守卫一致。数据库与文件配置取并集；清空只移除本权限的规则。主开关关闭时不要求二次认证。",
-  "sensitive_operations_invalid": "最多 1000 项，每个操作 ID 不超过 128 字符。"
+  "sensitive_operations_invalid": "最多 1000 项，每个操作 ID 不超过 128 字符。",
+  "filter_bar_expand": "展开筛选",
+  "filter_bar_collapse": "收起筛选",
+  "filter_bar_active": "已启用 {count} 项筛选",
+  "theme_formal": "简洁商务",
+  "keyboard_submit_enter": "在单行输入框中按 Enter 提交"
 }

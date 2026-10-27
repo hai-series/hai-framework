@@ -201,7 +201,7 @@
       ariaDescribedby={[field?.messageId, localError && !field?.error ? messageId : ''].filter(Boolean).join(' ') || undefined}
       oninput={handleInput}
       onchange={handleChange}
-      onblur={e => validation.validate(e.currentTarget)}
+      onblur={e => validation.blur(e.currentTarget)}
       oninvalid={(e) => {
         validation.validate(e.currentTarget)
         oninvalid?.(e)

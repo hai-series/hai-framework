@@ -110,6 +110,8 @@ export interface LoginFormData {
  * ```
  */
 export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
+  /** 默认在桌面首次就绪且页面尚无焦点时聚焦登录标识；触屏不主动弹出键盘。 */
+  autoFocus?: boolean
   /** 初始登录标识；原地恢复时预填原用户名，仍走正常鉴别。 */
   initialIdentifier?: string
   /** 实际可用的方式；空数组表示无可用登录方式。 */

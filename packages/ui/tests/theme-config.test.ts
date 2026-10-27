@@ -63,8 +63,8 @@ afterEach(() => {
 // =============================================================================
 
 describe('tHEMES - 主题数据完整性', () => {
-  it('应该包含 15 个 DaisyUI 精选主题', () => {
-    expect(THEMES.length).toBe(15)
+  it('包含 15 个 DaisyUI 精选主题、高对比及直角商务主题', () => {
+    expect(THEMES.length).toBe(17)
   })
 
   it('每个主题应该包含必要字段', () => {
@@ -430,6 +430,7 @@ describe('applyTheme - 主题应用', () => {
         documentElement: {
           setAttribute,
           getAttribute: vi.fn(() => null),
+          style: { setProperty: vi.fn() },
         },
       },
     })

@@ -12,6 +12,8 @@
  */
 
 @import './design-tokens.css';
+@import './high-contrast.css';
+@import './formal.css';
 
 :root {
   --hai-theme-color-default: #5765f0;

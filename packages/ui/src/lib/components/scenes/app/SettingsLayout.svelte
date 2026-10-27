@@ -21,6 +21,7 @@
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../../types.js'
   import { cn, getDataAttributes } from '../../../utils.js'
+  import PageHeader from '../../compounds/PageHeader.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
 
   /**
@@ -76,25 +77,13 @@
   }
 </script>
 
-<div {...dataAttributes} class={cn('space-y-5', className)}>
+<div {...dataAttributes} class={cn('space-y-4', className)}>
   <!-- 标题区 -->
   {#if title || description || headerActions}
-    <div class='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-      <div>
-        {#if title}
-          <h1 class='text-xl font-semibold tracking-tight'>{title}</h1>
-        {/if}
-        {#if description}
-          <p class='mt-0.5 text-sm text-base-content/45'>{description}</p>
-        {/if}
-      </div>
-      {#if headerActions}
-        <div class='flex items-center gap-2'>{@render headerActions()}</div>
-      {/if}
-    </div>
+    <PageHeader {title} {description} actions={headerActions} class='mb-0' />
   {/if}
 
-  <div class='grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]'>
+  <div class='grid gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]'>
     <!-- 左侧分区导航 -->
     {#if sections.length > 0}
       <aside class='lg:sticky lg:top-4 lg:self-start'>

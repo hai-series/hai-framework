@@ -475,7 +475,7 @@
   "guide_content_title": "工作区",
   "guide_content_description": "这里展示当前页面的内容。通过导航菜单切换功能，页面会根据你的权限提供可用操作。",
   "guide_theme_title": "外观切换",
-  "guide_theme_description": "点击这里快速切换亮色与暗色外观。更多主题可以在设置页面中选择。",
+  "guide_theme_description": "选择亮色、暗色或高对比外观；偏好会在刷新后保留。",
   "guide_profile_title": "个人资料",
   "guide_profile_description": "点击头像打开个人资料和设置入口，管理头像、个人信息与密码。",
   "guide_help_title": "帮助中心",
@@ -582,5 +582,12 @@
   "audit_end": "结束时间",
   "security_auth_required": "请先登录后继续操作。",
   "security_permission_denied": "没有访问此页面的权限。",
-  "audit_query_invalid": "审计查询条件无效，请检查筛选和排序。"
+  "audit_query_invalid": "审计查询条件无效，请检查筛选和排序。",
+  "gallery_filter_title": "可收起的筛选",
+  "gallery_filter_description": "搜索和操作保持可见；展开更多条件，收起后保留输入，并提示已启用的筛选。",
+  "gallery_filter_placeholder": "搜索名称",
+  "gallery_filter_role": "角色",
+  "gallery_filter_department": "部门",
+  "gallery_filter_status": "启用状态",
+  "gallery_filter_date": "创建日期"
 }

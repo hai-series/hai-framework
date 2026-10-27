@@ -99,7 +99,7 @@
   }
 
   function handleBlur(e: FocusEvent & { currentTarget: HTMLInputElement }) {
-    validation.validate(e.currentTarget)
+    validation.blur(e.currentTarget)
     onblur?.(e)
   }
 

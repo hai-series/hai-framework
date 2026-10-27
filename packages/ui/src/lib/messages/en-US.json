@@ -20,6 +20,7 @@
   "settings_close": "Close",
   "settings_language": "Language",
   "settings_theme": "Theme",
+  "theme_high_contrast": "High contrast",
   "combobox_no_match": "No match",
   "combobox_remove": "Remove",
   "data_table_actions": "Actions",
@@ -325,8 +326,9 @@
   "error_500_desc": "Something went wrong on our end. We're working on it, please try again later.",
   "error_503_title": "Under Maintenance",
   "error_503_desc": "The system is currently undergoing maintenance. Please check back soon.",
-  "login_method_password": "Password",
+  "login_method_password": "Account & password",
   "login_method_ldap": "Organization",
+  "login_method_ldap_hint": "Use the account and password provided by your company or organization",
   "login_method_email": "Email code",
   "login_method_sms": "SMS code",
   "login_methods": "Login method",
@@ -496,5 +498,10 @@
   "session_recovery_account_error": "Sign in to the original account. The pending action has not continued.",
   "sensitive_operations_label": "Operation IDs requiring reauthentication",
   "sensitive_operations_hint": "One operation ID per line, matching the server guard. Database and file rules are combined. Clearing removes only this permission’s rules. The master switch must be enabled.",
-  "sensitive_operations_invalid": "Use at most 1000 operation IDs, each no longer than 128 characters."
+  "sensitive_operations_invalid": "Use at most 1000 operation IDs, each no longer than 128 characters.",
+  "filter_bar_expand": "Expand filters",
+  "filter_bar_collapse": "Collapse filters",
+  "filter_bar_active": "Active filters: {count}",
+  "theme_formal": "Formal",
+  "keyboard_submit_enter": "Press Enter in a single-line field to submit"
 }

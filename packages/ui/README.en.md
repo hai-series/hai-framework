@@ -8,7 +8,7 @@
 
 Built-in messages support `zh-CN`, `en-US` and `ja-JP`; the language selector offers all three by default.
 
-A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US) and 15 curated DaisyUI themes.
+A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US / ja-JP) and 15 curated DaisyUI themes plus high contrast and square business themes.
 
 ## Core features
 
@@ -201,7 +201,7 @@ Labels connect to nested UI controls automatically; use `<FormField for="control
 
 `Input`, `Textarea`, `Select` and `PasswordInput` provide Chinese/English/Japanese native validation messages. `validationMessage` overrides failures without keeping valid input invalid. Sync locale with the UI `setGlobalLocale` / `createLocaleStore` to update visible validation errors immediately. `Textarea` supports `minlength` / `maxlength`; `Select` supports `name`, required validation and FormData serialization.
 
-Client validation appears on the first blur and updates as invalid input is corrected. Untouched fields are validated on submit. CRUD create/edit forms share this behavior, honor custom messages and reset validation when reopened. `Select` validates when focus leaves both its trigger and options. `PasswordInput.minLength` enforces length and informs strength; omitting it leaves login password length unrestricted while strength uses an eight-character baseline.
+Text controls validate on blur after input and update errors as input is corrected. Pristine empty fields validate on submit, so leaving default focus does not shift actions. CRUD create/edit forms also validate on blur after input or on submit, honor custom messages and reset validation when reopened. `Select` validates when focus leaves both its trigger and options. `PasswordInput.minLength` enforces length and informs strength; omitting it leaves login password length unrestricted while strength uses an eight-character baseline.
 
 `UserProfile.fieldConstraints` accepts per-field `required`, `minlength`, `maxlength`, `pattern` and `validationMessage` (`pattern` applies to single-line inputs), so application rules such as username formats share blur validation. `validationMessage` also accepts a deferred translation function.
 
@@ -704,7 +704,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 #### Theme switching
 
-Manage 15 curated DaisyUI themes through built-in utilities:
+Manage 15 curated DaisyUI themes plus high contrast and square business themes through built-in utilities:
+
+`high-contrast` ships in shared theme.css with bright text on dark surfaces, clear borders/focus, and stronger muted text/placeholders. ThemeSelector has localized labels; examples and default generated projects offer it. Explicit fullstack themes lists remain host controlled. Palette checks target 7:1 for normal text; arbitrary application content still needs accessibility review.
+
+`formal` provides square corners for business buttons, fields, cards and dialogs, with localized labels in examples and default templates. Button submitHint displays the native Enter action only for type=submit; it adds no global shortcut. LoginForm focuses its identifier on desktop when ready and no element has focus; autoFocus=false opts out. Search Enter submits immediately while respecting IME composition. Theme choices support arrows/Home/End, Enter/Space and Escape focus restoration. Confirmation dialogs initially focus Cancel and synchronize Escape cancellation.
 
 ```ts
 import {
@@ -717,7 +721,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 15 个精选主题元数据
+  THEMES, // ThemeInfo[] — 17 个主题元数据
 } from '@h-ai/ui/theme'
 ```
 
@@ -956,6 +960,34 @@ Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During 
 ## Input limits and HTTP capabilities
 
 Object keys are limited to 1024 UTF-8 bytes and reject absolute paths, backslashes, control characters and dot segments. Each public HTTP batch delete accepts 1–1000 entries. `@h-ai/storage/schemas` exposes the shared browser-safe rules. Presign expiry is an integer from 1 to 604800 seconds (Node default 3600, HTTP default 900). Upload signing accepts only key/contentType/expiresIn; contentLength/maxSize/metadata/checksum are unsupported. Invalid input returns HTTP 400 and the typed client maps it to VALIDATION_FAILED. FileUpload limits guide file selection; applications must validate actual objects on the server. Node streaming/checksum/conditional-write options have no default HTTP endpoints. See the [capability and authorization matrix (Chinese)](../storage/README.md#存储输入约束与跨端能力).
+
+## Compact workspaces and collapsible filters
+
+`WorkspaceLayout` shares a compact navigation header, a content area with 12/16px padding and an optional footer. An omitted footer reserves no space. title is the page title in navigation; leading/actions/footer are snippets. data-* attributes reach the content main. The host must pass down available height and min-height: 0.
+
+A matching `PageHeader` omits the repeated title and retains its description and actions; `SettingsLayout` shares this behavior. Inside a workspace, `CrudPage` defaults to one navigation title and keeps actions in its toolbar. Standalone usage retains its title; showHeader explicitly overrides the default.
+
+`FilterBar` keeps leading and actions visible, with children collapsed by default. bind:expanded controls disclosure, activeCount reports active conditions, and onreset supplies the built-in localized reset button. Collapsing preserves controls and values. The host resets state and performs queries. `CrudFilterBar` reuses it, supports custom actions and cancels pending debounce queries when destroyed.
+
+In this example, m, statusOptions, clearFilters and loadRows belong to the host application. The reset callback must clear search and all conditions.
+
+```svelte
+<script lang="ts">
+  import { Button, FilterBar, Input, Select, WorkspaceLayout } from '@h-ai/ui'
+  let search = $state('')
+  let status = $state('')
+</script>
+
+<div class="flex h-dvh min-h-0">
+  <WorkspaceLayout title={m.page_title()}>
+    <FilterBar activeCount={status ? 1 : 0} onreset={clearFilters}>
+      {#snippet leading()}<Input size="sm" bind:value={search} placeholder={m.search()} />{/snippet}
+      {#snippet actions()}<Button size="sm" onclick={loadRows}>{m.search()}</Button>{/snippet}
+      <div class="w-40"><Select size="sm" bind:value={status} options={statusOptions} /></div>
+    </FilterBar>
+  </WorkspaceLayout>
+</div>
+```
 
 ## Design and interaction acceptance
 

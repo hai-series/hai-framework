@@ -21,12 +21,15 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../../types.js'
+  import type { WorkspaceContext } from '../../../workspace-context.js'
   import type { CrudFieldDef } from './crud-controller.svelte.js'
   import type { CrudDensity, CrudFormConfig, CrudPaginationConfig, CrudToolbarStyle } from './crud-types.js'
   import type { NavAdapter } from './nav-adapter.js'
+  import { getContext } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
   import { getDataAttributes } from '../../../utils.js'
+  import { workspaceContextKey } from '../../../workspace-context.js'
   import Card from '../../compounds/Card.svelte'
   import DataTable from '../../compounds/DataTable.svelte'
   import PageHeader from '../../compounds/PageHeader.svelte'
@@ -134,7 +137,7 @@
     density = 'normal',
     rowClickDetail = true,
     detailColumns = [],
-    showHeader = true,
+    showHeader,
     listItemActions,
     tableCell,
     onrowclick,
@@ -176,7 +179,7 @@
     rowClickDetail?: boolean
     /** 点击后打开详情的列 key。 */
     detailColumns?: string[]
-    /** 是否显示默认页面标题栏；使用 toolbarLeading 承载标题时可设为 false。 */
+    /** 工作区导航已有标题时默认隐藏；可显式开启，独立使用时默认显示。 */
     showHeader?: boolean
     /** 每行额外操作按钮插槽。 */
     listItemActions?: Snippet<[Record<string, unknown>]>
@@ -236,6 +239,7 @@
 
   /** 透传到根节点的 data-* 属性。 */
   const dataAttributes = $derived(getDataAttributes(restProps))
+  const workspace = getContext<WorkspaceContext | undefined>(workspaceContextKey)
 
   // ─── 加载 / 空 / 错误展示态 ───
 
@@ -259,6 +263,8 @@
   const keyField = $derived(crud.resource.keyField ?? 'id')
   /** 当前资源的本地化标题。 */
   const resourceLabel = $derived(resolveText(crud.resource.label))
+  /** 同名导航已显示标题时，将页面操作并入筛选工具栏。 */
+  const effectiveShowHeader = $derived(showHeader ?? !workspace?.title)
   /** 根据权限和 API 能力判断是否显示新建入口。 */
   const canCreate = $derived(permissions.create !== false && Boolean(crud.api.create))
   /** 根据权限和 API 能力判断是否显示编辑入口。 */
@@ -270,7 +276,7 @@
   /** 是否使用紧凑列表密度。 */
   const isCompact = $derived(density === 'compact')
   /** 页面主体垂直间距；列表卡片会占满其余可用高度。 */
-  const pageGapClass = 'flex min-h-0 h-full min-w-0 flex-1 flex-col gap-5'
+  const pageGapClass = 'flex min-h-0 h-full min-w-0 flex-1 flex-col gap-3'
   /** 行内操作按钮尺寸。 */
   const actionButtonSize = $derived(isCompact ? 'xs' : 'sm')
   /** 行内操作图标尺寸。 */
@@ -287,7 +293,7 @@
       : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm [&>.card-body]:min-h-0 [&>.card-body]:flex-1',
   )
   /** 分页栏样式；shrink-0 保证它始终贴在卡片底部。 */
-  const paginationBarClass = 'mt-auto shrink-0 border-t border-base-content/5 px-4 py-3'
+  const paginationBarClass = 'mt-auto shrink-0 border-t border-base-content/5 px-3 py-2'
 
   // 表单展示配置（抽屉 / 弹窗）
   /** 编辑/新建面板类型。 */
@@ -666,7 +672,7 @@
 
 <div {...dataAttributes} class='{pageGapClass} {className}'>
   <!-- 页面标题；toolbarLeading 承载标题时由调用方关闭，避免重复占用垂直空间。 -->
-  {#if showHeader}
+  {#if effectiveShowHeader}
     <PageHeader title={resourceLabel} class='mb-0 shrink-0'>
       {#snippet actions()}
         {#if headerActions}
@@ -683,7 +689,7 @@
   {/if}
 
   <!-- 搜索 + 过滤栏 -->
-  {#if searchable || filterFields.length > 0 || toolbarLeading || toolbarActions}
+  {#if searchable || filterFields.length > 0 || toolbarLeading || toolbarActions || (toolbarStyle === 'toolbar' && canCreate) || (!effectiveShowHeader && (canCreate || headerActions))}
     {#if toolbarStyle === 'toolbar'}
       <TableToolbar
         {searchable}
@@ -705,6 +711,9 @@
         onsort={handleSort}
         onclearsort={handleClearSort}
       >
+        {#if !effectiveShowHeader && headerActions}
+          {@render headerActions()}
+        {/if}
         {#if toolbarActions}
           {@render toolbarActions()}
         {/if}
@@ -719,7 +728,18 @@
         onsearch={handleSearch}
         onfilterchange={handleFilterChange}
         onreset={handleResetFilters}
-      />
+      >
+        {#snippet actions()}
+          {#if !effectiveShowHeader}
+            {#if headerActions}{@render headerActions()}{/if}
+            {#if canCreate}
+              <Button variant='primary' size='sm' onclick={openCreate}>
+                <span class='icon-[tabler--plus] mr-1.5 size-4'></span>{uiM('crud_create')}
+              </Button>
+            {/if}
+          {/if}
+        {/snippet}
+      </CrudFilterBar>
     {/if}
   {/if}
 

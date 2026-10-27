@@ -8,7 +8,7 @@
 
 内置中英日文消息（`zh-CN` / `en-US` / `ja-JP`），语言选择器默认提供三种语言。
 
-基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），内置 15 个精选 DaisyUI 主题。
+基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US / ja-JP），内置 15 个精选 DaisyUI 主题、高对比及直角商务主题。
 
 ## 核心功能清单
 
@@ -201,7 +201,7 @@ components/
 
 `Input`、`Textarea`、`Select` 和 `PasswordInput` 的原生校验使用内置中英日文提示；`validationMessage` 只覆盖失败提示，不让有效输入一直无效。应用通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的校验错误即时更新。`Textarea` 支持 `minlength` / `maxlength`，`Select` 支持 `name`、必填校验和 FormData 序列化。
 
-字段首次失焦后显示前端校验错误，修正输入时即时更新；未访问的字段在提交时统一校验。CRUD 新增/编辑复用该行为，支持自定义校验文案，关闭重开清空校验状态。`Select` 在焦点离开触发器和选项后校验。`PasswordInput.minLength` 同时约束长度并用于强度计算；省略时不限制登录密码长度，强度计算仍以 8 位为基准。
+文本控件输入后失焦显示前端校验错误，修正输入时即时更新；未输入的空字段留到提交时校验，避免默认焦点离开时挤动操作。CRUD 新增/编辑同样在输入后失焦或提交时校验，支持自定义校验文案，关闭重开清空校验状态。`Select` 在焦点离开触发器和选项后校验。`PasswordInput.minLength` 同时约束长度并用于强度计算；省略时不限制登录密码长度，强度计算仍以 8 位为基准。
 
 `UserProfile.fieldConstraints` 按字段接收 `required`、`minlength`、`maxlength`、`pattern` 和 `validationMessage`（`pattern` 用于单行输入），让应用的用户名等业务规则复用失焦校验；`validationMessage` 支持延迟翻译函数。
 
@@ -703,7 +703,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 #### 主题切换
 
-使用内置的主题工具函数管理 15 个精选 DaisyUI 主题：
+使用内置的主题工具函数管理 15 个精选 DaisyUI 主题、高对比及直角商务主题：
+
+`high-contrast` 随共享 theme.css 提供：黑底亮字、清晰边框/焦点、增强次要文字及占位符对比度。ThemeSelector 提供三语名称；示例与默认生成工程可选择，fullstack 的显式 themes 列表仍由宿主决定。配色按普通文字 7:1 的目标验收，不代表任意业务内容已通过整站无障碍认证。
+
+`formal` 提供直角的商务外观，按钮、输入框、卡片与弹窗不使用装饰性圆角；主题选择器提供三语名称，示例和默认模板可选择。Button 的 submitHint 仅在 type=submit 时显示原生 Enter 提示，不绑定全局快捷键；LoginForm 默认在桌面首次就绪且页面无焦点时聚焦标识，autoFocus=false 可关闭。筛选 Enter 即时查询且忽略输入法确认；主题菜单支持方向键/Home/End、Enter/Space 及 Esc 恢复焦点；确认框默认聚焦取消，Esc 同步取消状态。
 
 ```ts
 import {
@@ -716,7 +720,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 15 个精选主题元数据
+  THEMES, // ThemeInfo[] — 17 个主题元数据
 } from '@h-ai/ui/theme'
 ```
 
@@ -959,6 +963,34 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 ## 输入约束与 HTTP 能力
 
 存储 key 按 UTF-8 最多 1024 字节，并拒绝绝对路径、反斜线、控制字符及点路径段；公开 HTTP 批量删除每次 1–1000 项。`@h-ai/storage/schemas` 提供浏览器安全的共同规则。预签名有效期为整数 1–604800 秒（Node 默认 3600，HTTP 默认 900）；HTTP 上传仅接受 key/contentType/expiresIn，不支持 contentLength/maxSize/metadata/checksum。无效输入返回 HTTP 400，typed client 映射 VALIDATION_FAILED。FileUpload 的大小/类型限制仅为前端体验，实际对象须由应用服务端复核。Node 流式读写/checksum/条件写等没有默认 HTTP 端点。完整映射与授权边界见 [存储 API 能力](../storage/README.md#存储输入约束与跨端能力)。
+
+## 紧凑工作区与可收起筛选
+
+`WorkspaceLayout` 统一导航、内容区和可选页脚：顶栏采用紧凑高度，主内容使用 12/16px 内边距；没有页脚时不预留高度。通过 `title` 提供导航中的页面标题，`leading/actions/footer` 为 snippet，`data-*` 透传内容 main。父布局需传递剩余高度及 min-height: 0。
+
+同名 `PageHeader` 自动省略重复标题，保留说明和操作；`SettingsLayout` 复用该行为。工作区中的 `CrudPage` 默认不重复显示页面标题，操作并入工具栏；独立使用仍显示标题，可用 `showHeader` 显式覆盖。
+
+`FilterBar` 的 leading 和 actions 保持可见，children 默认收起，`bind:expanded` 控制展开，`activeCount` 提示已启用条件，`onreset` 提供内置三语重置按钮。收起保留控件和值；重置和请求逻辑由宿主回调处理。`CrudFilterBar` 已复用它，支持自定义 actions，卸载时取消待发出的防抖查询。
+
+下例的 m、statusOptions、clearFilters 和 loadRows 由业务应用提供；清空回调须重置搜索及全部条件。
+
+```svelte
+<script lang="ts">
+  import { Button, FilterBar, Input, Select, WorkspaceLayout } from '@h-ai/ui'
+  let search = $state('')
+  let status = $state('')
+</script>
+
+<div class="flex h-dvh min-h-0">
+  <WorkspaceLayout title={m.page_title()}>
+    <FilterBar activeCount={status ? 1 : 0} onreset={clearFilters}>
+      {#snippet leading()}<Input size="sm" bind:value={search} placeholder={m.search()} />{/snippet}
+      {#snippet actions()}<Button size="sm" onclick={loadRows}>{m.search()}</Button>{/snippet}
+      <div class="w-40"><Select size="sm" bind:value={status} options={statusOptions} /></div>
+    </FilterBar>
+  </WorkspaceLayout>
+</div>
+```
 
 ## 设计与交互验收
 

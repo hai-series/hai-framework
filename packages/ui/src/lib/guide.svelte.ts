@@ -35,13 +35,16 @@ function escapeGuideText(text: GuideText): string {
 }
 
 function findTarget(step: GuideStep): Element | null {
-  const element = typeof step.target === 'function'
-    ? step.target()
-    : [...document.querySelectorAll('[data-guide]')].find(item => item.getAttribute('data-guide') === step.target)
-  if (!element?.isConnected || !element.getClientRects().length || element.closest('[hidden], [aria-hidden="true"]'))
-    return null
-  const style = getComputedStyle(element)
-  return style.visibility === 'hidden' || style.display === 'none' ? null : element
+  try {
+    const element = typeof step.target === 'function'
+      ? step.target()
+      : [...document.querySelectorAll('[data-guide]')].find(item => item.getAttribute('data-guide') === step.target)
+    if (!element?.isConnected || !element.getClientRects().length || element.closest('[hidden], [aria-hidden="true"]'))
+      return null
+    const style = getComputedStyle(element)
+    return style.visibility === 'hidden' || style.display === 'none' ? null : element
+  }
+  catch { return null }
 }
 
 /** 等待异步渲染、页签展开或布局变化，所有退出路径均清理监听和计时器。 */
@@ -65,17 +68,26 @@ function waitForTarget(step: GuideStep, signal: AbortSignal, timeout: number, re
         finish(null)
         return
       }
-      const element = ready() ? findTarget(step) : null
-      if (element)
-        finish(element)
+      try {
+        const element = ready() ? findTarget(step) : null
+        if (element)
+          finish(element)
+      }
+      catch { finish(null) }
     }
     if (signal.aborted) {
       finish(null)
       return
     }
-    const initial = ready() ? findTarget(step) : null
-    if (initial) {
-      finish(initial)
+    try {
+      const initial = ready() ? findTarget(step) : null
+      if (initial) {
+        finish(initial)
+        return
+      }
+    }
+    catch {
+      finish(null)
       return
     }
     observer = new MutationObserver(check)
@@ -124,7 +136,12 @@ export function createGuide(options: GuideOptions): GuideController {
   let targetObserver: MutationObserver | undefined
   const msg = (key: Parameters<typeof uiM>[0]) => uiM(key, undefined, locale)
   const progressKey = (id: string) => `${persistKey}:${scope}:${id}`
-  const tourFor = (id: string) => options.tours.find(tour => tour.id === id && (!tour.enabled || tour.enabled()))
+  const tourFor = (id: string) => {
+    try {
+      return options.tours.find(tour => tour.id === id && (!tour.enabled || tour.enabled()))
+    }
+    catch { return undefined }
+  }
 
   function clearPending(): void {
     try {
@@ -198,7 +215,7 @@ export function createGuide(options: GuideOptions): GuideController {
     helpOpen = false
     const tour = tourFor(id)
     if (!tour?.steps.length) {
-      error = 'guide_unavailable'
+      error ||= 'guide_unavailable'
       return false
     }
     const run = generation
@@ -356,6 +373,7 @@ export function createGuide(options: GuideOptions): GuideController {
           }
         },
         onPopoverRender: (popover) => {
+          try {
           // 第三方默认支持 HTML；业务翻译和插值统一按纯文本写入。
           const index = driver?.getActiveIndex() ?? 0
           const step = tour.steps[index]
@@ -366,6 +384,11 @@ export function createGuide(options: GuideOptions): GuideController {
           popover.progress.textContent = uiM('guide_progress', { current: index + 1, total: tour.steps.length }, locale)
           popover.nextButton.disabled = busy
           popover.previousButton.disabled = busy || !hasPreviousStep(index)
+          }
+          catch {
+            error = 'guide_startFailed'
+            stop()
+          }
         },
       })
       const started = await showStep(0)
@@ -443,8 +466,14 @@ export function createGuide(options: GuideOptions): GuideController {
       locale = value
       const tour = activeTourId ? tourFor(activeTourId) : undefined
       if (driver && tour) {
-        driver.setConfig({ ...driver.getConfig(), ...translatedConfig(tour) })
-        driver.drive(driver.getActiveIndex() ?? 0)
+        try {
+          driver.setConfig({ ...driver.getConfig(), ...translatedConfig(tour) })
+          driver.drive(driver.getActiveIndex() ?? 0)
+        }
+        catch {
+          error = 'guide_startFailed'
+          stop()
+        }
       }
     },
     setScope(value) {

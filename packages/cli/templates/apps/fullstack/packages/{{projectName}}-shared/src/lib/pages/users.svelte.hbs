@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AdminRoleCode, AdminUser } from '{{fullstack.contractPackageName}}'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, DataTable, FormField, FormLayout, Modal, Pagination, Skeleton } from '@h-ai/ui/components/compounds/index'
+  import { Card, DataTable, FilterBar, FormField, FormLayout, Modal, PageHeader, Pagination, Skeleton } from '@h-ai/ui/components/compounds/index'
   import { Avatar, Badge, BareInput, Button, Checkbox, Input, Select } from '@h-ai/ui/components/primitives/index'
   import { PasswordInput } from '@h-ai/ui/components/scenes/iam/index'
   import { roleLabel } from '../security/role-label.js'
@@ -76,27 +76,27 @@
   }
 </script>
 
-<section class="flex min-h-0 flex-1 flex-col gap-5" data-testid="users-page">
-  <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-xl font-semibold tracking-tight">{m.nav_users()}</h1>
-      <p class="mt-1 text-sm text-base-content/50">{m.users_description()}</p>
-    </div>
-    <div class='flex flex-wrap gap-2'>
-      {#if store.authConfig?.initialCredentials?.enabled}<Button variant='outline' onclick={() => openEditor(null, true)} data-testid='invite-user'>{m.invitation_title()}</Button>{/if}
-      <Button variant="primary" onclick={() => openEditor(null)} data-testid="create-user">{m.user_create()}</Button>
-    </div>
-  </div>
+<section class="flex min-h-0 flex-1 flex-col gap-3" data-testid="users-page">
+  <PageHeader title={m.nav_users()} description={m.users_description()} class='mb-0 shrink-0'>
+    {#snippet actions()}
+      {#if store.authConfig?.initialCredentials?.enabled}<Button variant='outline' size='sm' onclick={() => openEditor(null, true)} data-testid='invite-user'>{m.invitation_title()}</Button>{/if}
+      <Button variant="primary" size="sm" onclick={() => openEditor(null)} data-testid="create-user">{m.user_create()}</Button>
+    {/snippet}
+  </PageHeader>
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100">
-    <form class="flex shrink-0 flex-wrap items-center gap-3 border-b border-base-content/8 p-4" onsubmit={(event) => {
+    <form class='shrink-0 border-b border-base-content/8 p-3' onsubmit={(event) => {
       event.preventDefault()
       void store.loadUsers()
     }}>
-      <div class="min-w-52 flex-1">
-        <Input type="search" bind:value={store.usersSearch} placeholder={m.users_search()} data-testid="users-search" />
-      </div>
-      <div class="w-40"><Select bind:value={store.usersStatus} options={statusOptions} /></div>
-      <Button type="submit" variant="outline" disabled={store.loading}>{m.search()}</Button>
+      <FilterBar activeCount={store.usersStatus === 'all' ? 0 : 1} onreset={() => {
+        store.usersSearch = ''
+        store.usersStatus = 'all'
+        void store.loadUsers()
+      }} data-testid='users-filters'>
+        {#snippet leading()}<div class='min-w-0 flex-1'><Input type='search' size='sm' bind:value={store.usersSearch} placeholder={m.users_search()} data-testid='users-search' /></div>{/snippet}
+        {#snippet actions()}<Button type='submit' submitHint size='sm' variant='outline' disabled={store.loading}>{m.search()}</Button>{/snippet}
+        <div class='w-full sm:w-40'><Select size='sm' bind:value={store.usersStatus} options={statusOptions} /></div>
+      </FilterBar>
     </form>
     <div class="hidden min-h-0 flex-1 overflow-auto md:flex md:flex-col">
       <DataTable data={store.users} {columns} keyField="id" loading={store.loading} striped={false} class="min-h-0 flex-1 overflow-auto">
@@ -143,7 +143,7 @@
         {/each}
       {/if}
     </div>
-    <div class="mt-auto shrink-0 border-t border-base-content/8 p-4">
+    <div class="mt-auto shrink-0 border-t border-base-content/8 px-3 py-2">
       <Pagination page={store.usersPage} total={store.usersTotal} pageSize={store.pageSize} onchange={page => void store.loadUsers(page)} />
     </div>
   </div>

@@ -14,6 +14,7 @@
 -->
 <script lang='ts'>
   import type { ButtonProps, DataAttributes } from '../../types.js'
+  import { uiM } from '../../messages.js'
   import { cn, getDataAttributes, getSizeClass, getVariantClass } from '../../utils.js'
 
   const {
@@ -27,6 +28,7 @@
     circle = false,
     class: className = '',
     type = 'button',
+    submitHint = false,
     onclick,
     children,
     ...restProps
@@ -63,6 +65,8 @@
         class={buttonClass}
         disabled={disabled || loading}
         aria-label={ariaLabel || undefined}
+        aria-keyshortcuts={type === 'submit' && submitHint ? 'Enter' : undefined}
+        title={type === 'submit' && submitHint ? uiM('keyboard_submit_enter') : undefined}
         onclick={handleClick}
 >
   {#if loading}
@@ -70,5 +74,8 @@
   {/if}
   {#if children}
     {@render children()}
+  {/if}
+  {#if type === 'submit' && submitHint}
+    <kbd aria-hidden='true' class='ml-1 rounded border border-current/35 px-1 text-xs font-normal leading-tight'>↵</kbd>
   {/if}
 </button>

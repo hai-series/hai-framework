@@ -121,9 +121,9 @@
   }
   function changeTab(tab: string) {
     if (tab === 'environment')
-      void query({ page: 1, kind: 'environment' })
+      void query({ page: 1, kind: 'environment', requestId: undefined, errorId: undefined })
     else if (tab === 'scene')
-      void query({ page: 1, kind: 'interaction' })
+      void query({ page: 1, kind: 'interaction', requestId: undefined, errorId: undefined })
     else if (tab === 'logs')
       void query({ page: 1, kind: undefined })
     else if (tab === 'business')

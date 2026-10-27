@@ -15,10 +15,12 @@
   ```
 -->
 <script lang='ts'>
+  import type { Snippet } from 'svelte'
   import type { DataAttributes } from '../../../types.js'
+  import { onDestroy } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { cn, getDataAttributes } from '../../../utils.js'
-  import BareButton from '../../primitives/BareButton.svelte'
+  import { getDataAttributes } from '../../../utils.js'
+  import FilterBar from '../../compounds/FilterBar.svelte'
   import Input from '../../primitives/Input.svelte'
   import Select from '../../primitives/Select.svelte'
 
@@ -49,6 +51,8 @@
     searchValue = $bindable(''),
     filterFields = [],
     filterValues = $bindable<Record<string, unknown>>({}),
+    expanded = $bindable(false),
+    actions,
     onsearch,
     onfilterchange,
     onreset,
@@ -60,6 +64,8 @@
     searchValue?: string
     filterFields?: FilterFieldDef[]
     filterValues?: Record<string, unknown>
+    expanded?: boolean
+    actions?: Snippet
     onsearch?: (search: string) => void
     onfilterchange?: (filters: Record<string, unknown>) => void
     onreset?: () => void
@@ -68,10 +74,11 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   let searchTimer: ReturnType<typeof setTimeout> | undefined
+  onDestroy(() => clearTimeout(searchTimer))
 
   // 是否存在已激活的搜索/过滤条件（用于显示重置按钮）
-  const hasFilterValue = $derived(Object.values(filterValues).some(v => v !== undefined && v !== '' && v !== null))
-  const hasActiveFilters = $derived(searchValue.trim() !== '' || hasFilterValue)
+  const activeFilterCount = $derived(Object.values(filterValues).filter(v => v !== undefined && v !== '' && v !== null).length)
+  const hasActiveFilters = $derived(searchValue.trim() !== '' || activeFilterCount > 0)
 
   const dateLikeTypes = new Set(['date', 'datetime-local', 'datetime', 'month', 'week'])
   const numberLikeTypes = new Set(['number', 'integer'])
@@ -140,22 +147,29 @@
   }
 </script>
 
-<div {...dataAttributes} class={cn('flex flex-wrap items-center gap-2 [&_.fieldset]:m-0 [&_.fieldset]:min-w-0', className)}>
-  {#if searchable}
-    <div class='relative w-full sm:w-64 md:w-72'>
-      <span class='icon-[tabler--search] pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-base-content/35'></span>
-      <Input
-        type='text'
-        size='sm'
-        placeholder={searchPlaceholder || uiM('crud_search_placeholder')}
-        class='h-8 pl-9 shadow-none'
-        bind:value={searchValue}
-        oninput={handleSearchInput}
-        autocomplete='off'
-      />
-    </div>
-  {/if}
+{#snippet search()}
+  <div class='relative w-full max-w-full sm:w-64 md:w-72'>
+    <span class='icon-[tabler--search] pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-base-content/35'></span>
+    <Input
+      type='text'
+      size='sm'
+      placeholder={searchPlaceholder || uiM('crud_search_placeholder')}
+      class='h-8 pl-9 shadow-none'
+      bind:value={searchValue}
+      oninput={handleSearchInput}
+      onkeydown={(event) => {
+        if (event.key === 'Enter' && !event.isComposing) {
+          event.preventDefault()
+          clearTimeout(searchTimer)
+          onsearch?.(searchValue)
+        }
+      }}
+      autocomplete='off'
+    />
+  </div>
+{/snippet}
 
+{#snippet fields()}
   {#each filterFields as field (field.id)}
     {@const fieldPlaceholder = resolveText(field.placeholder)}
     {@const opts = resolveOptions(field.options)}
@@ -248,15 +262,10 @@
       </div>
     {/if}
   {/each}
+{/snippet}
 
-  {#if hasActiveFilters}
-    <BareButton
-      type='button'
-      class='inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-sm font-medium text-base-content/60 transition-colors hover:bg-base-content/5 hover:text-base-content'
-      onclick={handleReset}
-    >
-      {uiM('crud_reset')}
-      <span class='icon-[tabler--x] size-3.5'></span>
-    </BareButton>
-  {/if}
-</div>
+{#snippet buttons()}
+  {#if actions}{@render actions()}{/if}
+{/snippet}
+
+<FilterBar {...dataAttributes} class={className} bind:expanded activeCount={activeFilterCount} leading={searchable ? search : undefined} actions={buttons} onreset={hasActiveFilters ? handleReset : undefined} children={filterFields.length > 0 ? fields : undefined} />

@@ -193,7 +193,7 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
   rowClickDetail?: boolean
   /** 点击后打开详情的列 key；只让标题等主标识列可点击时使用 */
   detailColumns?: string[]
-  /** 是否显示默认页面标题栏；需要把标题放进工具栏左侧时设为 false。 */
+  /** 工作区导航已有标题时默认隐藏，独立使用时默认显示；true/false 显式覆盖，操作仍保留在工具栏。 */
   showHeader?: boolean
   /** 列表行操作按钮插槽 */
   listItemActions?: Snippet<[T]>

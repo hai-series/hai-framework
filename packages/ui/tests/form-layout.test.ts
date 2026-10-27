@@ -31,6 +31,8 @@ describe('form layout and accessible errors', () => {
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input[required]')!
+      input(control, 'draft')
+      input(control, '')
       control.dispatchEvent(new FocusEvent('blur'))
       flushSync()
       expect(control.getAttribute('aria-invalid')).toBe('true')
@@ -75,7 +77,7 @@ describe('form layout and accessible errors', () => {
     }
   })
 
-  it.each([Input, Textarea, PasswordInput])('控件失焦才显示必填错误，修正后立即清除', async (Control) => {
+  it.each([Input, Textarea, PasswordInput])('未输入空字段失焦不挤动操作，输入后失焦或提交仍校验必填', async (Control) => {
     setUILocale('en-US')
     const element = target()
     const component = mount(Control, { target: element, props: { required: true } })
@@ -83,6 +85,11 @@ describe('form layout and accessible errors', () => {
       flushSync()
       const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
       expect(control.hasAttribute('aria-invalid')).toBe(false)
+      control.dispatchEvent(new FocusEvent('blur'))
+      flushSync()
+      expect(control.hasAttribute('aria-invalid')).toBe(false)
+      input(control, 'draft')
+      input(control, '')
       control.dispatchEvent(new FocusEvent('blur'))
       flushSync()
       expect(control.getAttribute('aria-invalid')).toBe('true')
@@ -275,6 +282,9 @@ describe('crud create and edit validation', () => {
     try {
       flushSync()
       const control = element.querySelector<HTMLInputElement>('input[name="name"]')!
+      expect(element.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0)
+      control.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      flushSync()
       expect(element.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0)
       input(control, 'ab')
       expect(element.textContent).not.toContain('Name needs 3 characters')

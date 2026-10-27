@@ -23,11 +23,11 @@
   import type { DataAttributes, DrawerProps } from '../../types.js'
   import { onDestroy, onMount, setContext } from 'svelte'
   import { readStoredValue, writeStoredValue } from '../../internal/browser-safety.js'
+  import { focusDialog, handleDialogKeydown } from '../../internal/dialog-focus.js'
   import { FORM_VISIBILITY_CONTEXT } from '../../internal/form-context.js'
   import { uiM } from '../../messages.js'
-  import { cn, generateId, getDataAttributes } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
-  import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
 
   let {
     open = $bindable(false),
@@ -38,6 +38,7 @@
     resizable = false,
     widthStorageKey,
     closeOnBackdrop = true,
+    closeOnEscape = true,
     showClose = true,
     class: className = '',
     onclose,
@@ -49,7 +50,19 @@
   setContext(FORM_VISIBILITY_CONTEXT, {
     get open() { return open },
   })
-  const id = generateId('drawer')
+  const id = $props.id()
+  const titleId = `${id}-title`
+  let panel = $state<HTMLDivElement>()
+  let resizing = false
+  $effect(() => {
+    if (!open || !panel)
+      return
+    const restore = focusDialog(panel)
+    return () => {
+      finishResize()
+      restore()
+    }
+  })
   /** 用户拖动后的像素宽度；优先于 width 与 size。 */
   let resizedWidth = $state<number | null>(null)
   /** 与响应式渲染解耦的同步宽度，确保 mouseup 时持久化最后一次 mousemove 的值。 */
@@ -106,6 +119,7 @@
   )
 
   function handleClose() {
+    finishResize()
     open = false
     onclose?.()
   }
@@ -135,8 +149,9 @@
 
   /** 结束拖动并在配置了 key 时记忆最终宽度。 */
   function finishResize() {
-    if (typeof document === 'undefined')
+    if (typeof document === 'undefined' || !resizing)
       return
+    resizing = false
 
     globalThis.removeEventListener('mousemove', handleResizeMove)
     globalThis.removeEventListener('mouseup', finishResize)
@@ -162,6 +177,7 @@
     resizeStartWidth = drawer.getBoundingClientRect().width
     resizeWidthForStorage = resizeStartWidth
     previousUserSelect = document.documentElement.style.userSelect
+    resizing = true
     document.documentElement.style.userSelect = 'none'
     globalThis.addEventListener('mousemove', handleResizeMove)
     globalThis.addEventListener('mouseup', finishResize, { once: true })
@@ -203,20 +219,22 @@
   onDestroy(finishResize)
 </script>
 
-<div {...dataAttributes} class={drawerClass}>
-  <ToggleCheckbox {id} class='drawer-toggle' bind:checked={open} />
+<div {...dataAttributes} class={drawerClass} role='presentation' onkeydown={(event) => {
+  if (open && panel)
+    handleDialogKeydown(event, panel, closeOnEscape ? handleClose : undefined)
+}}>
+  <input {id} type='checkbox' class='drawer-toggle' tabindex='-1' aria-hidden='true' bind:checked={open} />
 
-  <div class={sideClass}>
-    <div
-      role='button'
-      tabindex='0'
+  <div class={sideClass} inert={!open}>
+    <button
+      type='button'
+      tabindex='-1'
       aria-label={uiM('drawer_close')}
       class='drawer-overlay'
       onclick={handleBackdropClick}
-      onkeydown={e => e.key === 'Enter' && handleBackdropClick()}
-    ></div>
+    ></button>
 
-    <div class={contentClass} style={widthStyle}>
+    <div bind:this={panel} class={contentClass} style={widthStyle} role='dialog' aria-modal={open ? 'true' : undefined} aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : uiM('common_dialog')} tabindex='-1'>
       {#if canResize}
         <button
           type='button'
@@ -230,7 +248,7 @@
 
       <div class='flex items-center justify-between mb-4'>
         {#if title}
-          <h3 class='text-lg font-bold'>{title}</h3>
+          <h3 id={titleId} class='text-lg font-bold'>{title}</h3>
         {:else}
           <div></div>
         {/if}

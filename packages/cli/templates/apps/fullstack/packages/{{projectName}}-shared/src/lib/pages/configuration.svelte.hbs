@@ -1,6 +1,6 @@
 <script lang='ts'>
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, FormField } from '@h-ai/ui/components/compounds/index'
+  import { Card, FormField, PageHeader } from '@h-ai/ui/components/compounds/index'
   import { Button, Textarea } from '@h-ai/ui/components/primitives/index'
   import * as m from '../paraglide/messages.js'
 
@@ -8,8 +8,8 @@
   const { store }: Props = $props()
 </script>
 
-<section class='max-w-2xl space-y-5' data-testid='configuration-page'>
-  <h1 class='text-xl font-semibold'>{m.business_settings_title()}</h1>
+<section class='max-w-2xl space-y-3' data-testid='configuration-page'>
+  <PageHeader title={m.business_settings_title()} class='mb-0' />
   <Card bordered shadow={false}>
     <form class='space-y-4' onsubmit={(event) => {
       event.preventDefault()

@@ -475,7 +475,7 @@
   "guide_content_title": "Workspace",
   "guide_content_description": "The current page appears here. Use navigation to switch features. Available actions depend on your permissions.",
   "guide_theme_title": "Appearance",
-  "guide_theme_description": "Switch between light and dark appearances here. More themes are available in settings.",
+  "guide_theme_description": "Choose a light, dark or high contrast appearance. Your preference survives reloads.",
   "guide_profile_title": "Your profile",
   "guide_profile_description": "Use your avatar to access your profile and settings, including personal information and passwords.",
   "guide_help_title": "Help center",
@@ -582,5 +582,12 @@
   "audit_end": "End time",
   "security_auth_required": "Sign in to continue.",
   "security_permission_denied": "You do not have permission to access this page.",
-  "audit_query_invalid": "Invalid audit query. Check the filters and sorting."
+  "audit_query_invalid": "Invalid audit query. Check the filters and sorting.",
+  "gallery_filter_title": "Collapsible filters",
+  "gallery_filter_description": "Keep search and actions visible. Expand more conditions; collapsing preserves values and shows the active filter count.",
+  "gallery_filter_placeholder": "Search names",
+  "gallery_filter_role": "Role",
+  "gallery_filter_department": "Department",
+  "gallery_filter_status": "Enabled",
+  "gallery_filter_date": "Created date"
 }

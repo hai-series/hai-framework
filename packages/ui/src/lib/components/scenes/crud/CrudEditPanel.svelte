@@ -90,10 +90,12 @@
   let formElement: HTMLFormElement | undefined = $state()
   let attempted = $state(false)
   let touched = $state<Record<string, boolean>>({})
+  let edited = $state<Record<string, boolean>>({})
   $effect(() => {
     if (!open) {
       attempted = false
       touched = {}
+      edited = {}
     }
   })
   function resolveOptions(options?: CrudFieldDef['options']): Array<{ label: string, value: string | number | boolean }> {
@@ -156,6 +158,7 @@
   }
 
   function updateField(fieldId: string, value: unknown) {
+    edited = { ...edited, [fieldId]: true }
     formData = { ...formData, [fieldId]: value }
   }
 
@@ -165,17 +168,22 @@
     const field = event.target.closest<HTMLElement>('[data-field]')
     if (!field?.dataset.field || (event.relatedTarget instanceof Node && field.contains(event.relatedTarget)))
       return
-    touched = { ...touched, [field.dataset.field]: true }
+    const fieldId = field.dataset.field
+    const value = formData[fieldId]
+    // 默认焦点离开未输入空字段时保持操作位置；提交仍统一验证全部字段。
+    if (!attempted && !edited[fieldId] && (value === undefined || value === null || value === '' || value === false || (Array.isArray(value) && value.length === 0)))
+      return
+    touched = { ...touched, [fieldId]: true }
   }
 
   function toggleMultiSelect(fieldId: string, optValue: string | number | boolean) {
     const current = (formData[fieldId] as Array<string | number | boolean>) ?? []
     const strVal = String(optValue)
     if (current.map(String).includes(strVal)) {
-      formData = { ...formData, [fieldId]: current.filter(v => String(v) !== strVal) }
+      updateField(fieldId, current.filter(v => String(v) !== strVal))
     }
     else {
-      formData = { ...formData, [fieldId]: [...current, optValue] }
+      updateField(fieldId, [...current, optValue])
     }
   }
 </script>
@@ -296,7 +304,7 @@
   <Button variant='ghost' size='sm' onclick={handleClose} disabled={submitting}>
     {uiM('crud_cancel')}
   </Button>
-  <Button variant='primary' size='sm' onclick={() => formElement?.requestSubmit()} disabled={submitting}>
+  <Button variant='primary' size='sm' type='submit' form={panelId} submitHint disabled={submitting}>
     {#if submitting}
       <span class='loading loading-spinner loading-xs mr-2'></span>
     {/if}
@@ -313,11 +321,11 @@
     width={modalWidth}
     height={modalHeight}
     closeOnBackdrop={false}
+    closeOnEscape={!submitting}
+    showClose={!submitting}
     onclose={handleClose}
   >
-    <form bind:this={formElement} novalidate onsubmit={handleSubmit} onfocusout={handleFieldBlur}>
-      <!-- 底部按钮在表单外；保留原生提交控件，使多字段表单支持回车提交。 -->
-      <input type='submit' class='hidden' tabindex='-1' aria-hidden='true' value={uiM('crud_save')} />
+    <form id={panelId} bind:this={formElement} novalidate onsubmit={handleSubmit} onfocusout={handleFieldBlur}>
       {@render formFields()}
     </form>
 
@@ -337,9 +345,10 @@
     widthStorageKey={drawerWidthStorageKey}
     onclose={handleClose}
     closeOnBackdrop={false}
+    closeOnEscape={!submitting}
+    showClose={!submitting}
   >
-    <form bind:this={formElement} novalidate onsubmit={handleSubmit} onfocusout={handleFieldBlur} class={drawerFormClass}>
-      <input type='submit' class='hidden' tabindex='-1' aria-hidden='true' value={uiM('crud_save')} />
+    <form id={panelId} bind:this={formElement} novalidate onsubmit={handleSubmit} onfocusout={handleFieldBlur} class={drawerFormClass}>
       {@render formFields()}
     </form>
 

@@ -4,9 +4,7 @@
    * 管理后台根布局
    */
   import type { Snippet } from 'svelte'
-{{#if hasI18n}}
   import { browser } from '$app/environment'
-{{/if}}
   import { page } from '$app/state'
 {{#if hasI18n}}
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
@@ -15,7 +13,9 @@
   import { kit } from '@h-ai/kit'
 {{/if}}
 {{#if hasI18n}}
-  import { LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
+  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector } from '@h-ai/ui'
+{{else}}
+  import { applyTheme, getSavedTheme, ThemeSelector } from '@h-ai/ui'
 {{/if}}
   import '../app.css'
 
@@ -24,6 +24,13 @@
   }
 
   const { children }: Props = $props()
+  let currentTheme = $state(browser ? getSavedTheme() : 'light')
+  if (browser)
+    applyTheme(currentTheme, false)
+  function handleThemeChange(theme: string) {
+    currentTheme = theme
+    applyTheme(theme)
+  }
 {{#if features.iam}}
   const authActions = kit.client.createAuthActions()
   $effect(() => authActions.bindPageExit({ enabled: page.data.iamPublicConfig?.session.endOnPageHide }))
@@ -47,12 +54,13 @@
 </svelte:head>
 
 <div class='h-dvh flex flex-col overflow-hidden bg-base-200'>
-  <header class='navbar shrink-0 border-b border-base-300 bg-base-100 px-6'>
+  <header class='navbar h-12 min-h-12 shrink-0 border-b border-base-300 bg-base-100 px-3 sm:px-4'>
     <span class='flex-1 text-lg font-semibold'>{page.data.appConfig.name}</span>
+    <ThemeSelector {currentTheme} onchange={handleThemeChange} compact />
 {{#if hasI18n}}
     <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} />
 {{/if}}
   </header>
   <div class='flex min-h-0 flex-1 flex-col overflow-auto'>{@render children()}</div>
-  <footer class='shrink-0 border-t border-base-300 bg-base-100 p-3 text-center text-xs text-base-content/60'>{page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}</footer>
+  <footer class='shrink-0 border-t border-base-300 bg-base-100 px-3 py-1 text-center text-xs text-base-content/60'>{page.data.appConfig.name} · {page.data.appConfig.version} · {page.data.appConfig.env}</footer>
 </div>

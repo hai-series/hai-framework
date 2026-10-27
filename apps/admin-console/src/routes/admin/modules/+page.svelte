@@ -155,7 +155,7 @@
 <ToastContainer />
 
 <div class='space-y-4'>
-  <PageHeader title={m.modules_title()} description={m.modules_desc()} />
+  <PageHeader title={m.nav_modules()} description={m.modules_desc()} />
 
   <div role='tablist' class='tabs tabs-box'>
     {#each tabs as tab (tab.key)}
