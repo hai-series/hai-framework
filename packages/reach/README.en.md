@@ -223,6 +223,8 @@ An empty successful 2xx response, including 204/205, means receiver acceptance; 
 
 API `redirect` defaults to `error`; ordinary messages may explicitly use `follow`. Sensitive messages always reject redirects without forwarding payloads or private headers. `requireHttps:true` enforces initial HTTPS and cannot be combined with follow. When omitted, production sensitive messages require HTTPS; explicit false is only for an operator-approved trusted internal connection. Unknown source-side effects still require reconciliation and sensitive messages are never retried automatically. Application allowlists and network egress controls remain necessary.
 
+PostgreSQL/MySQL queue claims, renewals and final acknowledgements use the database execution clock inside SQL; batch cutoffs also come from the database. Node clock skew and row-lock waits cannot revive an expired owner. Local SQLite remains a development/test backend with a controllable test clock.
+
 ## Development and testing
 
 ```bash

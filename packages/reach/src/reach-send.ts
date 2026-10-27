@@ -384,7 +384,12 @@ async function flushPendingMessages(
 
   try {
     // 固定本轮资格截止点，耗时发送期间到期的重试留到下一轮，避免毒消息重复占用预算。
-    const eligibleBefore = Date.now()
+    const clock = await repo.currentTime()
+    if (!clock.success) {
+      logger.warn('Failed to read queue clock', { errorCode: clock.error.code })
+      return
+    }
+    const eligibleBefore = clock.data
     for (let processed = 0; processed < FLUSH_BATCH_SIZE; processed += 1) {
       // 按实际执行逐条领取，避免后排消息排队等待时耗尽租约；单轮处理数量有界。
       const claimResult = await repo.claimPendingBatch(flushOwner, {

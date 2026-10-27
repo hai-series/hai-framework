@@ -223,6 +223,8 @@ if (state.data?.status === 'dead' && state.data.updatedAt !== undefined) {
 
 API の `redirect` は既定で `error`、通常通知のみ明示的に `follow` を選択できます。sensitive は常に転送を拒否し、本文や独自ヘッダーを転送しません。`requireHttps:true` は開始URLの HTTPS を必須とし follow と併用できません。省略時は本番の機密通知に HTTPS を要求し、明示 false は運用者が確認した信頼できる内部接続専用です。元の送信先での副作用が不明なら確認が必要で、機密通知は自動再送しません。アプリの許可リストとネットワーク出口制御は引き続き必要です。
 
+PostgreSQL/MySQLの取得・更新・最終確認はSQL実行時のDB時計を使い、走査期限もDBから取得します。ノード時差や行ロック待機で期限切れ所有者を復活させません。SQLiteの制御可能な時計は開発・テスト専用です。
+
 ## 開発とテスト
 
 ```bash

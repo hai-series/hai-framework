@@ -3,7 +3,7 @@ import type { StartedTestContainer } from 'testcontainers'
 import type { SendLogRepository } from '../src/repositories/reach-repository-send-log.js'
 import { reldb } from '@h-ai/reldb'
 import { GenericContainer, Wait } from 'testcontainers'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { HaiReachError } from '../src/index.js'
 import { createSendLogRepository, resetSendLogRepoSingleton } from '../src/repositories/reach-repository-send-log.js'
 
@@ -113,53 +113,51 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
 
     it('真实数据库的领取计数、退避边界、死信恢复和旧 owner 条件均持久生效', async () => {
       const id = await insertPending()
-      await reldb.sql.execute('UPDATE hai_reach_send_log SET max_attempts = 2, retry_delay_ms = 1234 WHERE id = ?', [id])
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(milliseconds)
-      try {
-        const first = await repository.claimPendingBatch('first', { now: milliseconds })
-        expect(first).toMatchObject({ success: true, data: [{ attemptCount: 1, maxAttempts: 2 }] })
-        if (!first.success)
-          throw new Error('First claim failed')
-        expect((await repository.failClaim(first.data[0], 'first', 'transient_failure')).success).toBe(true)
-        expect(await repository.claimPendingBatch('early', { now: milliseconds + 1233 })).toMatchObject({ success: true, data: [] })
-        clock.mockReturnValue(milliseconds + 1234)
-        const second = await repository.claimPendingBatch('second')
-        expect(second).toMatchObject({ success: true, data: [{ attemptCount: 2 }] })
-        if (!second.success)
-          throw new Error('Second claim failed')
-        expect((await repository.failClaim(first.data[0], 'first', 'transient_failure')).success).toBe(false)
-        expect((await repository.failClaim(second.data[0], 'second', 'transient_failure')).success).toBe(true)
-        const dead = await repository.getById(id)
-        expect(dead).toMatchObject({ success: true, data: { status: 'dead', attemptCount: 2, nextAttemptAt: 0 } })
-        expect(await repository.claimPendingBatch('exhausted')).toMatchObject({ success: true, data: [] })
-        if (!dead.success || !dead.data.queueId || !dead.data.updatedAt)
-          throw new Error('Dead state missing')
-        expect((await repository.requeueDead(dead.data.queueId, dead.data.updatedAt - 1)).success).toBe(false)
-        expect((await repository.requeueDead(dead.data.queueId, dead.data.updatedAt)).success).toBe(true)
-        expect((await repository.requeueDead(dead.data.queueId, dead.data.updatedAt)).success).toBe(false)
-        clock.mockReturnValue(milliseconds + 1235)
-        expect(await repository.claimPendingBatch('restored')).toMatchObject({ success: true, data: [{ queueId: dead.data.queueId, attemptCount: 1 }] })
-      }
-      finally {
-        clock.mockRestore()
-      }
+      expect((await reldb.sql.execute('UPDATE hai_reach_send_log SET max_attempts = 2, retry_delay_ms = 1234 WHERE id = ?', [id])).success).toBe(true)
+      const first = await repository.claimPendingBatch('first')
+      expect(first).toMatchObject({ success: true, data: [{ attemptCount: 1, maxAttempts: 2 }] })
+      if (!first.success)
+        throw new Error('First claim failed')
+      expect((await repository.failClaim(first.data[0], 'first', 'transient_failure')).success).toBe(true)
+      const backoff = await repository.getById(id)
+      expect(backoff.success).toBe(true)
+      if (backoff.success)
+        expect(Math.abs(backoff.data.nextAttemptAt - backoff.data.updatedAt - 1234)).toBeLessThanOrEqual(1)
+      expect(await repository.claimPendingBatch('early')).toMatchObject({ success: true, data: [] })
+      // 调整本套隔离数据库的到期状态，不以伪造节点时间代替数据库时钟。
+      expect((await reldb.sql.execute('UPDATE hai_reach_send_log SET next_attempt_at = 0 WHERE id = ?', [id])).success).toBe(true)
+      const second = await repository.claimPendingBatch('second')
+      expect(second).toMatchObject({ success: true, data: [{ attemptCount: 2 }] })
+      if (!second.success)
+        throw new Error('Second claim failed')
+      expect((await repository.failClaim(first.data[0], 'first', 'transient_failure')).success).toBe(false)
+      expect((await repository.failClaim(second.data[0], 'second', 'transient_failure')).success).toBe(true)
+      const dead = await repository.getById(id)
+      expect(dead).toMatchObject({ success: true, data: { status: 'dead', attemptCount: 2, nextAttemptAt: 0 } })
+      expect(await repository.claimPendingBatch('exhausted')).toMatchObject({ success: true, data: [] })
+      if (!dead.success || !dead.data.queueId)
+        throw new Error('Dead state missing')
+      expect((await repository.requeueDead(dead.data.queueId, dead.data.updatedAt - 1)).success).toBe(false)
+      expect((await repository.requeueDead(dead.data.queueId, dead.data.updatedAt)).success).toBe(true)
+      expect((await repository.requeueDead(dead.data.queueId, dead.data.updatedAt)).success).toBe(false)
+      expect(await repository.claimPendingBatch('restored')).toMatchObject({ success: true, data: [{ queueId: dead.data.queueId, attemptCount: 1 }] })
     })
 
     it('写入、领取与毫秒级过期接管在真实数据库保持精确值', async () => {
       const id = await insertPending()
-      const claimed = await repository.claimPendingBatch('node-a', { now: milliseconds, lockMs: leaseMs })
-      expect(claimed).toMatchObject({
-        success: true,
-        data: [{ id, createdAt: milliseconds, updatedAt: milliseconds, lockedUntil: milliseconds + leaseMs }],
-      })
-      const early = await repository.claimPendingBatch('node-b', { now: milliseconds + leaseMs - 1 })
-      expect(early).toMatchObject({ success: true, data: [] })
-      const recoveredAt = milliseconds + leaseMs + 1
-      const recovered = await repository.claimPendingBatch('node-b', { now: recoveredAt, lockMs: leaseMs })
-      expect(recovered).toMatchObject({
-        success: true,
-        data: [{ id, processingOwner: 'node-b', createdAt: milliseconds, updatedAt: recoveredAt, lockedUntil: recoveredAt + leaseMs }],
-      })
+      const claimed = await repository.claimPendingBatch('node-a', { lockMs: 10000 })
+      expect(claimed).toMatchObject({ success: true, data: [{ id, createdAt: milliseconds }] })
+      if (!claimed.success)
+        throw new Error('Claim failed')
+      const row = claimed.data[0]!
+      expect(Number.isSafeInteger(row.updatedAt)).toBe(true)
+      expect(Math.abs(row.lockedUntil! - row.updatedAt - 10000)).toBeLessThanOrEqual(1)
+      expect(await repository.claimPendingBatch('node-b')).toMatchObject({ success: true, data: [] })
+      expect((await reldb.sql.execute('UPDATE hai_reach_send_log SET locked_until = 0, updated_at = 0 WHERE id = ?', [id])).success).toBe(true)
+      const recovered = await repository.claimPendingBatch('node-b', { lockMs: leaseMs })
+      expect(recovered).toMatchObject({ success: true, data: [{ id, processingOwner: 'node-b', createdAt: milliseconds }] })
+      if (recovered.success)
+        expect(Math.abs(recovered.data[0]!.lockedUntil! - recovered.data[0]!.updatedAt - leaseMs)).toBeLessThanOrEqual(1)
     })
 
     it('各读取入口将驱动 BIGINT 转成 number，释放及投递状态更新时间仍保留毫秒', async () => {
@@ -168,35 +166,23 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
       expect(raw.success).toBe(true)
       if (raw.success && type === 'postgresql')
         expect(raw.data?.created_at).toBeTypeOf('string')
-      const reads = [await repository.findById(id), await repository.getById(id)]
-      for (const result of reads)
-        expect(result).toMatchObject({ success: true, data: { createdAt: milliseconds, updatedAt: milliseconds } })
-      const page = await repository.findPage({})
-      expect(page).toMatchObject({ success: true, data: { items: [{ createdAt: milliseconds, updatedAt: milliseconds }] } })
-      const claimed = await repository.claimPendingBatch('node-a', { now: milliseconds, lockMs: leaseMs })
-      expect(claimed.success).toBe(true)
-      const now = vi.spyOn(Date, 'now').mockReturnValue(milliseconds + 123)
-      try {
-        const released = await repository.releaseClaim(id, 'node-a')
-        expect(released.success).toBe(true)
-        const record = await repository.findById(id)
-        expect(record).toMatchObject({ success: true, data: { status: 'pending', updatedAt: milliseconds + 123 } })
-        const due = milliseconds + 123 + 60_000
-        now.mockReturnValue(due)
-        const reclaimed = await repository.claimPendingBatch('node-b', { now: due, lockMs: leaseMs })
-        expect(reclaimed.success).toBe(true)
-        expect((await repository.beginDelivery(id, 'node-b', true, leaseMs)).success).toBe(true)
-        now.mockReturnValue(due + 1)
-        const sent = await repository.markSent(id, 'node-b', 'delivered')
-        expect(sent.success).toBe(true)
-        expect(await repository.findById(id)).toMatchObject({
-          success: true,
-          data: { status: 'sent', messageId: 'delivered', createdAt: milliseconds, updatedAt: due + 1 },
-        })
-      }
-      finally {
-        now.mockRestore()
-      }
+      for (const read of [await repository.findById(id), await repository.getById(id)])
+        expect(read).toMatchObject({ success: true, data: { createdAt: milliseconds, updatedAt: milliseconds } })
+      expect(await repository.findPage({})).toMatchObject({ success: true, data: { items: [{ createdAt: milliseconds, updatedAt: milliseconds }] } })
+      expect((await repository.claimPendingBatch('node-a', { lockMs: 10000 })).success).toBe(true)
+      expect((await repository.releaseClaim(id, 'node-a')).success).toBe(true)
+      const released = await repository.getById(id)
+      expect(released).toMatchObject({ success: true, data: { status: 'pending' } })
+      if (released.success)
+        expect(Number.isSafeInteger(released.data.updatedAt)).toBe(true)
+      expect((await reldb.sql.execute('UPDATE hai_reach_send_log SET next_attempt_at = 0 WHERE id = ?', [id])).success).toBe(true)
+      expect((await repository.claimPendingBatch('node-b', { lockMs: 10000 })).success).toBe(true)
+      expect((await repository.beginDelivery(id, 'node-b', true, 10000)).success).toBe(true)
+      expect((await repository.markSent(id, 'node-b', 'delivered')).success).toBe(true)
+      const sent = await repository.getById(id)
+      expect(sent).toMatchObject({ success: true, data: { status: 'sent', messageId: 'delivered', createdAt: milliseconds } })
+      if (sent.success && released.success)
+        expect(sent.data.updatedAt).toBeGreaterThanOrEqual(released.data.updatedAt)
     })
 
     it.each(['created_at', 'updated_at', 'locked_until', 'next_attempt_at'] as const)('所有读取入口拒绝 %s 超过 JS 安全整数范围，而非静默舍入', async (column) => {
@@ -219,33 +205,25 @@ for (const type of ['sqlite', 'postgresql', 'mysql'] as const) {
 
     it.each([false, true])('在途记录过期按 retrySafe=%s 恢复，旧 owner 不能再次投递或确认', async (retrySafe) => {
       const id = await insertPending()
-      const now = vi.spyOn(Date, 'now').mockReturnValue(milliseconds)
-      try {
-        expect((await repository.claimPendingBatch('old', { lockMs: leaseMs })).success).toBe(true)
-        expect((await repository.beginDelivery(id, 'old', retrySafe, leaseMs)).success).toBe(true)
-        now.mockReturnValue(milliseconds + 500)
-        expect((await repository.renewClaim(id, 'old', leaseMs)).success).toBe(true)
-        now.mockReturnValue(milliseconds + leaseMs + 1)
-        expect(await repository.claimPendingBatch('other')).toMatchObject({ success: true, data: [] })
-        now.mockReturnValue(milliseconds + 500 + leaseMs + 1)
-        const recovered = await repository.claimPendingBatch('new', { lockMs: leaseMs })
-        expect(recovered.success).toBe(true)
-        if (recovered.success)
-          expect(recovered.data).toHaveLength(retrySafe ? 1 : 0)
-        expect((await repository.beginDelivery(id, 'old', retrySafe)).success).toBe(false)
-        expect((await repository.renewClaim(id, 'old')).success).toBe(false)
-        expect((await repository.markSent(id, 'old')).success).toBe(false)
-        expect((await repository.releaseClaim(id, 'old')).success).toBe(false)
-        if (retrySafe) {
-          expect((await repository.beginDelivery(id, 'new', true)).success).toBe(true)
-          expect((await repository.markSent(id, 'new', 'new-result')).success).toBe(true)
-        }
-        else {
-          expect(await repository.findById(id)).toMatchObject({ success: true, data: { status: 'unknown' } })
-        }
+      expect((await repository.claimPendingBatch('old', { lockMs: 10000 })).success).toBe(true)
+      expect((await repository.beginDelivery(id, 'old', retrySafe, 10000)).success).toBe(true)
+      expect((await repository.renewClaim(id, 'old', 10000)).success).toBe(true)
+      expect(await repository.claimPendingBatch('other')).toMatchObject({ success: true, data: [] })
+      expect((await reldb.sql.execute('UPDATE hai_reach_send_log SET locked_until = 0, updated_at = 0 WHERE id = ?', [id])).success).toBe(true)
+      const recovered = await repository.claimPendingBatch('new', { lockMs: 10000 })
+      expect(recovered.success).toBe(true)
+      if (recovered.success)
+        expect(recovered.data).toHaveLength(retrySafe ? 1 : 0)
+      expect((await repository.beginDelivery(id, 'old', retrySafe)).success).toBe(false)
+      expect((await repository.renewClaim(id, 'old')).success).toBe(false)
+      expect((await repository.markSent(id, 'old')).success).toBe(false)
+      expect((await repository.releaseClaim(id, 'old')).success).toBe(false)
+      if (retrySafe) {
+        expect((await repository.beginDelivery(id, 'new', true)).success).toBe(true)
+        expect((await repository.markSent(id, 'new', 'new-result')).success).toBe(true)
       }
-      finally {
-        now.mockRestore()
+      else {
+        expect(await repository.findById(id)).toMatchObject({ success: true, data: { status: 'unknown' } })
       }
     })
   })

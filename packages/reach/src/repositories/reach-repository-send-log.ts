@@ -38,7 +38,7 @@ export type SendLogStatus = ReachQueueStatus
 export interface SendLogClaimOptions {
   /** 单批最多 claim 的记录数 */
   limit?: number
-  /** 当前时间（测试时可注入） */
+  /** 仅本地 SQLite 测试可注入；共享数据库始终使用执行时钟。 */
   now?: number
   /** 本轮扫描截止时间；重试后 nextAttemptAt 超出本轮时不再重复领取。 */
   eligibleBefore?: number
@@ -161,6 +161,8 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
    * ```
    */
   findPending: (tx?: DmlWithTxOperations) => Promise<HaiResult<StoredSendLog[]>>
+  /** 只供扫描批次冻结资格截止点；租约授权仍在最终 SQL 内判断。 */
+  currentTime: () => Promise<HaiResult<number>>
 
   /**
    * 按创建时间顺序 claim 一批待发送记录。
@@ -333,22 +335,23 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
 const TABLE_NAME = 'hai_reach_send_log'
 const DEFAULT_CLAIM_BATCH_SIZE = 100
 const DEFAULT_CLAIM_LOCK_MS = 10 * 60 * 1000
-const CLAIMABLE_STATUS_WHERE = '(attempt_count < max_attempts AND ((status = ? AND next_attempt_at <= ?) OR (status = ? AND updated_at < ? AND (locked_until IS NULL OR locked_until <= ?)) OR (status = ? AND updated_at < ? AND retry_safe = TRUE AND locked_until <= ?)))'
+function claimableWhere(clock: string): string {
+  return `(attempt_count < max_attempts AND ((status = ? AND next_attempt_at <= ?) OR (status = ? AND updated_at < ? AND (locked_until IS NULL OR locked_until <= ${clock})) OR (status = ? AND updated_at < ? AND retry_safe = TRUE AND locked_until <= ${clock})))`
+}
 
 /**
  * 与固定领取SQL一一对应的参数，仅允许pending、过期processing或幂等sending重领。
- * @param now - 本轮节点Unix毫秒时间。
  * @param eligibleBefore - 固定资格截止，避免本轮新退避消息被立即重复领取。
  * @returns 参数数组，绝不拼接不可信SQL。
  *
  * @example 模块内部上下文
  * ```ts
  * const now = Date.now()
- * const params = claimableParams(now, now)
+ * const params = claimableParams(now)
  * ```
  */
-function claimableParams(now: number, eligibleBefore = now): unknown[] {
-  return ['pending', eligibleBefore, 'processing', eligibleBefore, now, 'sending', eligibleBefore, now]
+function claimableParams(eligibleBefore: number): unknown[] {
+  return ['pending', eligibleBefore, 'processing', eligibleBefore, 'sending', eligibleBefore]
 }
 
 function buildSendLogError<T>(detail: string, cause?: unknown): HaiResult<T> {
@@ -635,6 +638,22 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiRe
  * 基于数据库的发送日志存储实现
  */
 class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> implements SendLogRepository {
+  /** 共享后端取真正执行时钟；本地 SQLite 保留可控的单进程测试时钟。 */
+  private clockSql(localNow?: number): string {
+    if (this.db.config?.type === 'postgresql')
+      return 'CAST(FLOOR(EXTRACT(EPOCH FROM clock_timestamp()) * 1000) AS BIGINT)'
+    if (this.db.config?.type === 'mysql')
+      return 'CAST(UNIX_TIMESTAMP(SYSDATE(3)) * 1000 AS UNSIGNED)'
+    return String(localNow ?? Date.now())
+  }
+
+  async currentTime(): Promise<HaiResult<number>> {
+    const time = await this.sql().get<{ now: number | string }>(`SELECT ${this.clockSql()} AS now`)
+    return time.success && time.data && Number.isSafeInteger(Number(time.data.now))
+      ? ok(Number(time.data.now))
+      : buildSendLogError(reachM('reach_claimLost'))
+  }
+
   async settleSensitive(queueId: string, status: 'sent' | 'unknown' | 'discarded', messageId?: string): Promise<HaiResult<void>> {
     const settled = await this.sql().execute(
       `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, locked_until = NULL, updated_at = ? WHERE queue_id = ? AND status = 'sending' AND body IS NULL AND vars_json IS NULL AND retry_safe = FALSE`,
@@ -704,19 +723,19 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   private async claimPendingIdsWithRowLocks(
     tx: DmlWithTxOperations,
     owner: string,
-    now: number,
-    lockedUntil: number,
+    clock: string,
+    lockMs: number,
     limit: number,
     eligibleBefore: number,
   ): Promise<number[]> {
     const lockedRowsResult = await tx.query(
       `SELECT id
        FROM ${TABLE_NAME}
-       WHERE ${CLAIMABLE_STATUS_WHERE}
+       WHERE ${claimableWhere(clock)}
        ORDER BY created_at ASC
        LIMIT ?
        FOR UPDATE SKIP LOCKED`,
-      [...claimableParams(now, eligibleBefore), limit],
+      [...claimableParams(eligibleBefore), limit],
     )
     if (!lockedRowsResult.success) {
       throw lockedRowsResult.error
@@ -736,9 +755,9 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     const placeholders = claimedIds.map(() => '?').join(', ')
     const updateResult = await tx.execute(
       `UPDATE ${TABLE_NAME}
-       SET status = ?, processing_owner = ?, locked_until = ?, updated_at = ?, attempt_count = attempt_count + 1
+       SET status = ?, processing_owner = ?, locked_until = ${clock} + ?, updated_at = ${clock}, attempt_count = attempt_count + 1
        WHERE id IN (${placeholders})`,
-      ['processing', owner, lockedUntil, now, ...claimedIds],
+      ['processing', owner, lockMs, ...claimedIds],
     )
     if (!updateResult.success) {
       throw updateResult.error
@@ -757,14 +776,14 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   private async claimPendingIdsWithConditionalUpdates(
     tx: DmlWithTxOperations,
     owner: string,
-    now: number,
-    lockedUntil: number,
+    clock: string,
+    lockMs: number,
     limit: number,
     eligibleBefore: number,
   ): Promise<number[]> {
     const candidatesResult = await this.findAll({
-      where: CLAIMABLE_STATUS_WHERE,
-      params: claimableParams(now, eligibleBefore),
+      where: claimableWhere(clock),
+      params: claimableParams(eligibleBefore),
       orderBy: 'created_at ASC',
       limit,
     }, tx)
@@ -776,9 +795,9 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     for (const row of candidatesResult.data) {
       const updateResult = await tx.execute(
         `UPDATE ${TABLE_NAME}
-         SET status = ?, processing_owner = ?, locked_until = ?, updated_at = ?, attempt_count = attempt_count + 1
-         WHERE id = ? AND ${CLAIMABLE_STATUS_WHERE}`,
-        ['processing', owner, lockedUntil, now, row.id, ...claimableParams(now, eligibleBefore)],
+         SET status = ?, processing_owner = ?, locked_until = ${clock} + ?, updated_at = ${clock}, attempt_count = attempt_count + 1
+         WHERE id = ? AND ${claimableWhere(clock)}`,
+        ['processing', owner, lockMs, row.id, ...claimableParams(eligibleBefore)],
       )
       if (!updateResult.success) {
         throw updateResult.error
@@ -807,10 +826,13 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
   /** claim 一批待发送记录，避免多节点重复发送 */
   async claimPendingBatch(owner: string, options?: SendLogClaimOptions): Promise<HaiResult<StoredSendLog[]>> {
-    const now = options?.now ?? Date.now()
+    const time = await this.currentTime()
+    if (!time.success)
+      return time
+    const now = this.db.config?.type === 'sqlite' ? options?.now ?? time.data : time.data
+    const clock = this.clockSql(now)
     const limit = options?.limit ?? DEFAULT_CLAIM_BATCH_SIZE
     const lockMs = options?.lockMs ?? DEFAULT_CLAIM_LOCK_MS
-    const lockedUntil = now + lockMs
     const eligibleBefore = Math.min(now, options?.eligibleBefore ?? now)
     const dbType = this.db.config?.type
 
@@ -824,26 +846,26 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
     try {
       // 可能已产生不可去重的外部副作用：租约过期只能转 unknown，不能被新节点自动重发。
       const unknown = await tx.execute(
-        `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ?
-         WHERE status = ? AND retry_safe = FALSE AND (locked_until IS NULL OR locked_until <= ?)`,
-        ['unknown', now, 'sending', now],
+        `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
+         WHERE status = ? AND retry_safe = FALSE AND (locked_until IS NULL OR locked_until <= ${clock})`,
+        ['unknown', 'sending'],
       )
       if (!unknown.success)
         throw unknown.error
       // 最后一次领取后崩溃也不能无限接管；有效租约仍须等待到期，非幂等 sending 已先隔离。
       const exhausted = await tx.execute(
         `UPDATE ${TABLE_NAME}
-         SET status = ?, last_failure = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ?
+         SET status = ?, last_failure = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
          WHERE attempt_count >= max_attempts
-           AND (status = ? OR (status = ? AND (locked_until IS NULL OR locked_until <= ?))
-             OR (status = ? AND retry_safe = TRUE AND locked_until <= ?))`,
-        ['dead', 'attempts_exhausted', now, 'pending', 'processing', now, 'sending', now],
+           AND (status = ? OR (status = ? AND (locked_until IS NULL OR locked_until <= ${clock}))
+             OR (status = ? AND retry_safe = TRUE AND locked_until <= ${clock}))`,
+        ['dead', 'attempts_exhausted', 'pending', 'processing', 'sending'],
       )
       if (!exhausted.success)
         throw exhausted.error
       const claimedIds = dbType === 'postgresql' || dbType === 'mysql'
-        ? await this.claimPendingIdsWithRowLocks(tx, owner, now, lockedUntil, limit, eligibleBefore)
-        : await this.claimPendingIdsWithConditionalUpdates(tx, owner, now, lockedUntil, limit, eligibleBefore)
+        ? await this.claimPendingIdsWithRowLocks(tx, owner, clock, lockMs, limit, eligibleBefore)
+        : await this.claimPendingIdsWithConditionalUpdates(tx, owner, clock, lockMs, limit, eligibleBefore)
 
       if (claimedIds.length === 0) {
         const commitResult = await tx.commit()
@@ -878,15 +900,15 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
   /** 失败提交与 owner、次数和有效租约同时比较，旧 worker 不能更改新领取的退避策略。 */
   async failClaim(row: StoredSendLog, owner: string, reason: ReachQueueFailure, permanent = false, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.clockSql()
     const dead = permanent || row.attemptCount >= row.maxAttempts
     const delay = Math.min(row.maxRetryDelayMs, row.retryDelayMs * 2 ** Math.min(row.attemptCount - 1, 30))
     const result = await this.sql(tx).execute(
       `UPDATE ${TABLE_NAME}
-       SET status = ?, last_failure = ?, next_attempt_at = ?, processing_owner = NULL, locked_until = NULL, updated_at = ?
-       WHERE id = ? AND processing_owner = ? AND locked_until > ? AND attempt_count = ?
+       SET status = ?, last_failure = ?, next_attempt_at = ${dead ? '0' : `${clock} + ?`}, processing_owner = NULL, locked_until = NULL, updated_at = ${clock}
+       WHERE id = ? AND processing_owner = ? AND locked_until > ${clock} AND attempt_count = ?
          AND (status = ? OR (status = ? AND retry_safe = TRUE))`,
-      [dead ? 'dead' : 'pending', reason, dead ? 0 : now + delay, now, row.id, owner, now, row.attemptCount, 'processing', 'sending'],
+      [dead ? 'dead' : 'pending', reason, ...dead ? [] : [delay], row.id, owner, row.attemptCount, 'processing', 'sending'],
     )
     if (!result.success) {
       return buildSendLogError(result.error.message, result.error)
@@ -899,34 +921,34 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
 
   /** 仅当前 dead 版本可以恢复；保留 queueId，迟到的幂等 API 请求仍使用同一键。 */
   async requeueDead(queueId: string, expectedUpdatedAt: number): Promise<HaiResult<void>> {
-    const now = Math.max(Date.now(), expectedUpdatedAt + 1)
+    const clock = this.clockSql()
     const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET status = ?, attempt_count = 0, next_attempt_at = ?, last_failure = NULL, updated_at = ?
+      `UPDATE ${TABLE_NAME} SET status = ?, attempt_count = 0, next_attempt_at = ${clock}, last_failure = NULL, updated_at = CASE WHEN updated_at >= ${clock} THEN updated_at + 1 ELSE ${clock} END
        WHERE queue_id = ? AND status = ? AND updated_at = ?`,
-      ['pending', now, now, queueId, 'dead', expectedUpdatedAt],
+      ['pending', queueId, 'dead', expectedUpdatedAt],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_deadRequeueFailed'))
   }
 
   /** 发送前持久化门闩；仅有效租约可从 processing 进入 sending。 */
   async beginDelivery(id: number, owner: string, retrySafe: boolean, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.clockSql()
     const flag = this.db.config?.type === 'postgresql' ? retrySafe : Number(retrySafe)
     const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET status = ?, retry_safe = ?, locked_until = ?, updated_at = ?
-       WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ?`,
-      ['sending', flag, now + lockMs, now, id, 'processing', owner, now],
+      `UPDATE ${TABLE_NAME} SET status = ?, retry_safe = ?, locked_until = ${clock} + ?, updated_at = ${clock}
+       WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ${clock}`,
+      ['sending', flag, lockMs, id, 'processing', owner],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
   }
 
   /** 续租不接受已经过期的 owner，防止暂停的旧进程恢复后重新取得发送权。 */
   async renewClaim(id: number, owner: string, lockMs = DEFAULT_CLAIM_LOCK_MS): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.clockSql()
     const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET locked_until = ?, updated_at = ?
-       WHERE id = ? AND processing_owner = ? AND status IN (?, ?) AND locked_until > ?`,
-      [now + lockMs, now, id, owner, 'processing', 'sending', now],
+      `UPDATE ${TABLE_NAME} SET locked_until = ${clock} + ?, updated_at = ${clock}
+       WHERE id = ? AND processing_owner = ? AND status IN (?, ?) AND locked_until > ${clock}`,
+      [lockMs, id, owner, 'processing', 'sending'],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
   }
@@ -934,9 +956,9 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   /** 未知结果只能停止自动处理，不推断外部副作用已撤销。 */
   async markUnknown(id: number, owner: string): Promise<HaiResult<void>> {
     const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ?
+      `UPDATE ${TABLE_NAME} SET status = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${this.clockSql()}
        WHERE id = ? AND processing_owner = ? AND status IN (?, ?)`,
-      ['unknown', Date.now(), id, owner, 'processing', 'sending'],
+      ['unknown', id, owner, 'processing', 'sending'],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_claimLost'))
   }
@@ -944,20 +966,20 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   /** 人工裁定的条件提交，不提供重新排队或重新发送操作。 */
   async resolveUnknown(queueId: string, resolution: ReachUnknownResolution): Promise<HaiResult<void>> {
     const result = await this.sql().execute(
-      `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, next_attempt_at = 0, updated_at = ? WHERE queue_id = ? AND status = ?`,
-      [resolution.status, resolution.messageId ?? null, Date.now(), queueId, 'unknown'],
+      `UPDATE ${TABLE_NAME} SET status = ?, message_id = ?, next_attempt_at = 0, updated_at = ${this.clockSql()} WHERE queue_id = ? AND status = ?`,
+      [resolution.status, resolution.messageId ?? null, queueId, 'unknown'],
     )
     return result.success && result.data.changes === 1 ? ok(undefined) : buildSendLogError(reachM('reach_unknownResolutionFailed'))
   }
 
   /** 只有仍持有 sending 有效租约的 owner 可以确认投递。 */
   async markSent(id: number, owner: string, messageId?: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
-    const now = Date.now()
+    const clock = this.clockSql()
     const result = await this.sql(tx).execute(
       `UPDATE ${TABLE_NAME}
-       SET status = ?, message_id = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ?
-       WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ?`,
-      ['sent', messageId ?? null, now, id, 'sending', owner, now],
+       SET status = ?, message_id = ?, processing_owner = NULL, locked_until = NULL, next_attempt_at = 0, updated_at = ${clock}
+       WHERE id = ? AND status = ? AND processing_owner = ? AND locked_until > ${clock}`,
+      ['sent', messageId ?? null, id, 'sending', owner],
     )
     if (!result.success) {
       return buildSendLogError(result.error.message, result.error)
