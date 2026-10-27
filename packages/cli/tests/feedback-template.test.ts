@@ -114,7 +114,7 @@ describe('feedback 生成工程', () => {
       const runtime = await readFile(path.join(directory, service, 'src/server/runtime.ts'), 'utf8')
       expect(runtime).toContain('core.module.createRuntime')
       expect(runtime).toContain('name: \'feedback\'')
-      expect(runtime).toContain('close: () => feedback.close()')
+      expect(runtime).toContain('close: closeFeedback')
       expect(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8')).toContain('HAI_FEEDBACK_APPID:feedback-sample')
       const procedures = await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')
       expect(procedures).toContain('createFeedbackProcedures')

@@ -144,7 +144,7 @@ const FRONTEND_LABELS: Record<FrontendTarget, string> = {
 
 const IMPLEMENTED_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
 const DEFAULT_FULLSTACK_FRONTENDS: readonly FrontendTarget[] = ['web', 'app', 'desktop']
-const DEFAULT_THEMES = ['light', 'dark'] as const
+const DEFAULT_THEMES = ['light', 'dark', 'high-contrast', 'formal'] as const
 const DEFAULT_THEME_NAME = 'light'
 // 框架与模板同步发布；范围版本会把旧命名 alpha9 视为比 alpha.58 更新。
 const HAI_PACKAGE_VERSION = getCliVersion()
@@ -1044,7 +1044,7 @@ function resolveI18nContext(moduleConfigs?: ModuleConfigs): FullstackI18nContext
 }
 
 /**
- * 去重主题列表并确保默认主题可选；未配置时使用 light/dark，不验证主题名是否已安装。
+ * 去重主题列表并确保默认主题可选；未配置时提供亮/暗、高对比与直角商务主题。
  * @param moduleConfigs - 创建选项中的模块配置。
  * @returns 包含默认主题的最终主题数据。
  * @example 模块内部上下文

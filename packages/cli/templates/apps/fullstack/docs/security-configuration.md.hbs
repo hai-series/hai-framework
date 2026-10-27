@@ -321,7 +321,7 @@ alerts:
 
 ## 传输容量、通知隐私与升级预检
 
-传输 maxPlaintextBytes 可显式配置整数或 auto。生成宿主通过 resolveTransportBodyLimits 将此上限与 feedback.budget.maxTransportBytes 合并，显式上限不足会拒绝启动/打包；不能把反馈预算直接覆盖业务上限。代理与 adapter-node 必须使用相同派生预算，附件和证据限制另行检查。
+普通业务仍使用 `transport.maxPlaintextBytes`（auto/省略为 1 MiB）；Feedback 的报告受理、证据、附件及 ZIP 下载路由通过 `routePlaintextBytes` 单独声明从已校验反馈配置派生的 `maxTransportBytes`，不依赖可选反馈的初始化/重试状态。路径中的 `*` 仅匹配一个完整路径段；宿主显式路由值优先。握手、adapter-node 与代理使用各路由最大容量，普通业务不会随材料预算扩大。HTTP 适配器为单独声明且大于 1 MiB 的材料路由保留最多 2 个槽，普通业务另有 16 个槽，完整响应/失败后释放；忙碌返回 503 / `hai:crypto:072`，不自动重放业务写入。
 
 反馈 console 通知默认 consoleContent: metadata，只打印编号、应用版本等元数据；summary 是显式选项，可能包含业务信息。Reach API 默认拒绝重定向，敏感发送始终拒绝重定向，生产敏感发送默认要求 HTTPS；可信内网例外必须显式配置 requireHttps: false 并评估网络边界。
 

@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
   storageInit: vi.fn(),
   iamInit: vi.fn(),
+  feedbackInit: vi.fn(),
 }))
 vi.mock('$lib/paraglide/messages.js', () => ({
   security_role_system: () => 'System',
@@ -20,7 +21,7 @@ vi.mock('$lib/server/security-roles.js', () => ({ seedAdminDuties: vi.fn(async (
 vi.mock('$lib/server/audit-jobs.js', () => ({ startAuditJobs: vi.fn(async () => ({ success: true, data: undefined })) }))
 vi.mock('@h-ai/scheduler', () => ({ scheduler: { close: vi.fn() } }))
 vi.mock('@h-ai/feedback', () => ({
-  feedback: { init: vi.fn(async () => ({ success: true })) },
+  feedback: { init: state.feedbackInit, close: vi.fn(async () => ({ success: true })), isInitialized: false },
   FeedbackConfigSchema: { safeParse: vi.fn() },
 }))
 vi.mock('@h-ai/core', async (importOriginal) => {
@@ -55,6 +56,7 @@ beforeEach(() => {
   Object.assign(state.config, { db: { type: 'postgresql' }, cache: { type: 'redis' }, iam: {} })
   state.storageInit.mockResolvedValue({ success: false, error: { code: 'test:storage', message: 'S3 not ready' } })
   state.iamInit.mockResolvedValue({ success: true })
+  state.feedbackInit.mockResolvedValue({ success: true })
 })
 
 describe('admin-console storage startup', () => {
@@ -76,4 +78,17 @@ describe('admin-console storage startup', () => {
     expect(isAppInitialized()).toBe(true)
     expect(state.storageInit).not.toHaveBeenCalled()
   })
+})
+
+it('反馈初始化失败保留必需业务模块，独立重试任务可完整关闭', async () => {
+  state.config.feedback = { appId: 'optional-feedback' }
+  state.feedbackInit.mockResolvedValue({ success: false, error: { code: 'test:feedback', message: 'Auxiliary fixture unavailable' } })
+  const { initApp, closeApp, isAppInitialized } = await import('../src/lib/server/init.js')
+  try {
+    await initApp()
+    expect(isAppInitialized()).toBe(true)
+    expect(state.iamInit).toHaveBeenCalledTimes(1)
+    expect(state.feedbackInit).toHaveBeenCalledTimes(1)
+  }
+  finally { await closeApp() }
 })

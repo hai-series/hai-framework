@@ -14,5 +14,5 @@ export async function sensitiveFetch(operation: string, input: RequestInfo | URL
   const headers = new Headers(init?.headers)
   if (ticket)
     headers.set('x-hai-reauthentication', ticket)
-  return apiFetch(input, { ...init, headers })
+  return apiFetch(input, { ...init, headers }, { reauthorize: () => sensitiveActions.authorize(operation) })
 }

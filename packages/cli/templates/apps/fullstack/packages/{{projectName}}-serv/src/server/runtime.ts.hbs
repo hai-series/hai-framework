@@ -10,7 +10,7 @@ import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 {{#if features.feedback}}
-import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
+import { feedback } from '@h-ai/feedback'
 {{/if}}
 import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reach, ReachConfigSchema } from '@h-ai/reach'
@@ -29,6 +29,55 @@ import { initBusinessSettings } from './business-settings.js'
 import { serverM } from './messages.js'
 import { bootstrapDutyAccount, seedAppDuties } from './security-roles.js'
 
+{{#if features.feedback}}
+let feedbackRetry: ReturnType<typeof setTimeout> | undefined
+let feedbackStarting: Promise<void> | undefined
+let feedbackClosing = false
+let feedbackFailure: string | number | undefined
+
+/** 可选辅助能力独立重试；不能回滚已经就绪的 IAM 与业务模块。 */
+function startFeedback(): Promise<void> {
+  if (feedbackStarting)
+    return feedbackStarting
+  feedbackClosing = false
+  feedbackStarting = (async () => {
+    try {
+      const result = await feedback.init({ ...core.config.getOrThrow<import('@h-ai/feedback').FeedbackConfigInput>('feedback'), ...buildMetadata })
+      if (!result.success) {
+        if (feedbackFailure !== result.error.code)
+          core.logger.warn('Optional feedback unavailable; business runtime remains ready', { module: 'feedback', code: result.error.code })
+        feedbackFailure = result.error.code
+      }
+      else {
+        feedbackFailure = undefined
+      }
+    }
+    catch {
+      if (feedbackFailure !== 'configuration')
+        core.logger.warn('Optional feedback configuration unavailable; business runtime remains ready', { module: 'feedback' })
+      feedbackFailure = 'configuration'
+    }
+    if (feedbackFailure && !feedbackClosing) {
+      feedbackRetry = setTimeout(() => {
+        feedbackRetry = undefined
+        void startFeedback()
+      }, 30000)
+      feedbackRetry.unref()
+    }
+  })().finally(() => { feedbackStarting = undefined })
+  return feedbackStarting
+}
+
+async function closeFeedback() {
+  feedbackClosing = true
+  if (feedbackRetry)
+    clearTimeout(feedbackRetry)
+  feedbackRetry = undefined
+  await feedbackStarting
+  return feedback.close()
+}
+
+{{/if}}
 const runtime = core.module.createRuntime([
   { name: 'serv-config', start: () => core.config.validate('serv', ServConfigSchema), close: () => {} },
   { name: 'reldb', start: async () => {
@@ -48,7 +97,7 @@ const runtime = core.module.createRuntime([
   { name: 'iam', start: () => iam.init({ ...IamConfigSchema.parse(core.config.getOrThrow('iam')), reach }), close: () => iam.close() },
   { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: startAuditJobs, close: () => scheduler.close() },
 {{#if features.feedback}}
-  { name: 'feedback', start: () => feedback.init({ ...FeedbackConfigSchema.parse(core.config.getOrThrow('feedback')), ...buildMetadata }), close: () => feedback.close() },
+  { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: startFeedback, close: closeFeedback },
 {{/if}}
 {{#if features.ai}}
   { name: 'ai', start: () => ai.init(AIConfigSchema.parse(core.config.getOrThrow('ai'))), close: () => ai.close() },

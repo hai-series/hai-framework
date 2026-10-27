@@ -32,3 +32,14 @@ webhookTimeoutMs: ${HAI_FEEDBACK_WEBHOOKTIMEOUTMS:10000}
 workerIntervalMs: ${HAI_FEEDBACK_WORKERINTERVALMS:1000}
 # 用途：允许采集的服务端环境变量名；凭据类名称仍按敏感信息策略排除。
 envAllowlist: [ NODE_ENV, TZ ]
+
+# 用途：单个用户按数据库 UTC 日累计受理上限；幂等重试不重复计数。
+maxReportsPerUserDay: ${HAI_FEEDBACK_MAXREPORTSPERUSERDAY:20}
+# 用途：单个用户每日预留存储字节（报告与最多历史导出）；默认 2 GiB。
+maxBytesPerUserDay: ${HAI_FEEDBACK_MAXBYTESPERUSERDAY:2147483648}
+# 用途：应用内单个 scope 的持久材料预留容量；到期清理成功后释放，默认 10 GiB。
+maxStoredBytesPerScope: ${HAI_FEEDBACK_MAXSTOREDBYTESPERSCOPE:10737418240}
+# 用途：单份报告最多历史导出数；已有有效快照复用，不重复计数。
+maxExportsPerReport: ${HAI_FEEDBACK_MAXEXPORTSPERREPORT:5}
+# 用途：已完成导出的有效小时数；过期禁止下载，后台删除对象，默认 24 小时。
+exportRetentionHours: ${HAI_FEEDBACK_EXPORTRETENTIONHOURS:24}

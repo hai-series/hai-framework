@@ -99,6 +99,7 @@ async function createHaiHandle(): Promise<Handle> {
     : {
         keyExchangePath: kitTransportConfig.keyExchangePath,
         maxPlaintextBytes: kitTransportConfig.maxPlaintextBytes,
+        routePlaintextBytes: kitTransportConfig.routePlaintextBytes,
         excludePaths: [...kitTransportConfig.excludePaths],
       }
   const transportPublicPaths = kitTransportConfig === false ? [] : [kitTransportConfig.keyExchangePath]

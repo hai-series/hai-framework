@@ -3,8 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
-import { core } from '@h-ai/core'
+import { core{{#if features.feedback}}, err{{/if}} } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
+{{#if features.feedback}}
+import { feedback, HaiFeedbackError } from '@h-ai/feedback'
+{{/if}}
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
@@ -46,3 +49,17 @@ it.each([
     expect(users.data.items[0]?.username).toBe('admin')
   }
 })
+
+{{#if features.feedback}}
+it('optional feedback failure does not roll back authentication and business modules', async () => {
+  vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', 'Bootstrap-retry-Admin123!')
+  const unavailable = vi.spyOn(feedback, 'init').mockResolvedValue(err(HaiFeedbackError.CONFIG_ERROR, 'Feedback fixture unavailable'))
+  try {
+    await initializeModules()
+    expect(iam.isInitialized && reldb.isInitialized && cache.isInitialized).toBe(true)
+    expect((await iam.auth.login({ identifier: 'admin', password: 'Bootstrap-retry-Admin123!' })).success).toBe(true)
+    expect(feedback.isInitialized).toBe(false)
+  }
+  finally { unavailable.mockRestore() }
+})
+{{/if}}

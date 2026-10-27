@@ -2,9 +2,10 @@ import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServConfig{{#if features.crypto}}, ServTransportConfig{{/if}} } from '@h-ai/serv'
 {{#if features.crypto}}import process from 'node:process'
 {{/if}}
-import { core } from '@h-ai/core'
-{{#if features.crypto}}import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing{{#if features.feedback}}, resolveTransportBodyLimits{{/if}} } from '@h-ai/crypto'
-{{/if}}{{#if features.feedback}}import { feedback } from '@h-ai/feedback'
+{{#if features.feedback}}import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+{{/if}}import { core } from '@h-ai/core'
+{{#if features.crypto}}import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+{{/if}}{{#if features.feedback}}import { FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
 {{/if}}{{#if features.crypto}}{{#if features.db}}import { reldb } from '@h-ai/reldb'
 {{/if}}{{/if}}import { serv } from '@h-ai/serv'
@@ -36,14 +37,26 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
-    transport = {
+{{#if features.feedback}}    // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
+    const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
+    const feedbackBudget = resolveFeedbackBudget(feedbackSettings.success ? feedbackSettings.data : {})
+{{/if}}    transport = {
       crypto,
       serverKeyRing: ring.data,
 {{#if features.db}}      keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
 {{else}}      keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
 {{/if}}
       keyExchangePath: servConfig.transport.keyExchangePath,
-      maxPlaintextBytes: {{#if features.feedback}}resolveTransportBodyLimits(servConfig.transport.maxPlaintextBytes, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }).plaintextBytes{{else}}servConfig.transport.maxPlaintextBytes{{/if}},
+      maxPlaintextBytes: servConfig.transport.maxPlaintextBytes,
+{{#if features.feedback}}      routePlaintextBytes: {
+        [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
+        [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,
+        [`${servConfig.http.apiPrefix}/feedback/reports/*/attachments/*`]: feedbackBudget.maxTransportBytes,
+        [`${servConfig.http.apiPrefix}/feedback/reports/*/exports/*`]: feedbackBudget.maxTransportBytes,
+        ...servConfig.transport.routePlaintextBytes,
+      },
+{{else}}      routePlaintextBytes: servConfig.transport.routePlaintextBytes,
+{{/if}}
       excludePaths: [...servConfig.transport.excludePaths],
     }
   }

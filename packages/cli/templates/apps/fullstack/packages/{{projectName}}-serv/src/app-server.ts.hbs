@@ -1,10 +1,11 @@
 import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
-import { core } from '@h-ai/core'
-import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing{{#if features.feedback}}, resolveTransportBodyLimits{{/if}} } from '@h-ai/crypto'
+{{#if features.feedback}}import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
+{{/if}}import { core } from '@h-ai/core'
+import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
 {{#if features.feedback}}
-import { feedback } from '@h-ai/feedback'
+import { FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
@@ -22,7 +23,10 @@ export function createServerApp(): ServHttpApp {
     throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
   const coreConfig = core.config.getOrThrow<CoreConfig>('core')
   const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
-  const security = serv.createRuntimeSecurityPolicy({
+{{#if features.feedback}}  // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
+  const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
+  const feedbackBudget = resolveFeedbackBudget(feedbackSettings.success ? feedbackSettings.data : {})
+{{/if}}  const security = serv.createRuntimeSecurityPolicy({
     environment: coreConfig.env,
     corsOrigin: servConfig.cors.origin,
     nativeOrigins: servConfig.cors.nativeOrigins,
@@ -68,7 +72,13 @@ export function createServerApp(): ServHttpApp {
     transport: {
       ...(servConfig.transport || {}),
 {{#if features.feedback}}
-      maxPlaintextBytes: resolveTransportBodyLimits(servConfig.transport ? servConfig.transport.maxPlaintextBytes : undefined, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }).plaintextBytes,
+      routePlaintextBytes: {
+        [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
+        [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,
+        [`${servConfig.http.apiPrefix}/feedback/reports/*/attachments/*`]: feedbackBudget.maxTransportBytes,
+        [`${servConfig.http.apiPrefix}/feedback/reports/*/exports/*`]: feedbackBudget.maxTransportBytes,
+        ...(servConfig.transport ? servConfig.transport.routePlaintextBytes : {}),
+      },
 {{/if}}
       excludePaths: publicPaths,
       crypto,

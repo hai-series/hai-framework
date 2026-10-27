@@ -2864,6 +2864,14 @@
     "constraint": "字符串；最小字符数 1；最大字符数 128"
   },
   {
+    "name": "HAI_FEEDBACK_EXPORTRETENTIONHOURS",
+    "module": "feedback",
+    "path": "feedback.exportRetentionHours",
+    "description": "已完成导出的有效小时数；过期禁止下载，后台删除对象，默认 24 小时。",
+    "value": "24",
+    "constraint": "整数；>= 1；<= 720"
+  },
+  {
     "name": "HAI_FEEDBACK_LEASEMS",
     "module": "feedback",
     "path": "feedback.leaseMs",
@@ -2888,6 +2896,14 @@
     "constraint": "整数；>= 1；<= 20"
   },
   {
+    "name": "HAI_FEEDBACK_MAXBYTESPERUSERDAY",
+    "module": "feedback",
+    "path": "feedback.maxBytesPerUserDay",
+    "description": "单个用户每日预留存储字节（报告与最多历史导出）；默认 2 GiB。",
+    "value": "2147483648",
+    "constraint": "整数；>= 4194304；<= 1099511627776"
+  },
+  {
     "name": "HAI_FEEDBACK_MAXEVIDENCEBYTES",
     "module": "feedback",
     "path": "feedback.maxEvidenceBytes",
@@ -2902,6 +2918,30 @@
     "description": "单份反馈累计证据允许的最大条数。",
     "value": "2000",
     "constraint": "整数；>= 1；<= 10000"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXEXPORTSPERREPORT",
+    "module": "feedback",
+    "path": "feedback.maxExportsPerReport",
+    "description": "单份报告最多历史导出数；已有有效快照复用，不重复计数。",
+    "value": "5",
+    "constraint": "整数；>= 1；<= 20"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXREPORTSPERUSERDAY",
+    "module": "feedback",
+    "path": "feedback.maxReportsPerUserDay",
+    "description": "单个用户按数据库 UTC 日累计受理上限；幂等重试不重复计数。",
+    "value": "20",
+    "constraint": "整数；>= 1；<= 10000"
+  },
+  {
+    "name": "HAI_FEEDBACK_MAXSTOREDBYTESPERSCOPE",
+    "module": "feedback",
+    "path": "feedback.maxStoredBytesPerScope",
+    "description": "应用内单个 scope 的持久材料预留容量；到期清理成功后释放，默认 10 GiB。",
+    "value": "10737418240",
+    "constraint": "整数；>= 4194304；<= 1099511627776"
   },
   {
     "name": "HAI_FEEDBACK_MAXTOTALBYTES",
@@ -3979,9 +4019,17 @@
     "name": "HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES",
     "module": "kit",
     "path": "kit.transport.maxPlaintextBytes",
-    "description": "双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求",
+    "description": "普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明",
     "value": "auto",
     "constraint": "整数；>= 1024；<= 67108864；字符串；取值：auto"
+  },
+  {
+    "name": "HAI_KIT_TRANSPORT_ROUTEPLAINTEXTBYTES",
+    "module": "kit",
+    "path": "kit.transport.routePlaintextBytes",
+    "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_MODEL_API_KEY",
@@ -5459,9 +5507,17 @@
     "name": "HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES",
     "module": "serv",
     "path": "serv.transport.maxPlaintextBytes",
-    "description": "双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求",
+    "description": "普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明",
     "value": "1048576",
     "constraint": "整数；>= 1024；<= 67108864；字符串；取值：auto"
+  },
+  {
+    "name": "HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES",
+    "module": "serv",
+    "path": "serv.transport.routePlaintextBytes",
+    "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
     "name": "HAI_STORAGE",

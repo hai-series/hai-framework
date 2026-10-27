@@ -47,6 +47,10 @@ export async function prepareFeedback() {
   return feedbackDraftView()
 }
 
+export function pauseFeedback() {
+  capture.pause()
+}
+
 export function feedbackDraftView() {
   const draft = capture.getDraft()
   return {
@@ -99,6 +103,12 @@ export function feedbackListParameters(query: FeedbackListQuery): FeedbackListIn
 }
 
 export const feedbackApi = http
+
+export async function retryFeedback(id: string) {
+  const result = await review.retryReport(id)
+  if (!result.success)
+    throw new Error(result.error.message)
+}
 
 export async function loadFeedbackReplay(id: string): Promise<FeedbackEvidence[]> {
   const result = await review.loadReplay(id)

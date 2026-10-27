@@ -61,6 +61,54 @@ import { storage } from '@h-ai/storage'
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 
 /** 依赖顺序由应用声明；并发、回滚和关闭重试由 core 统一处理。 */
+let feedbackRetry: ReturnType<typeof setTimeout> | undefined
+let feedbackStarting: Promise<void> | undefined
+let feedbackClosing = false
+let feedbackFailure: string | number | undefined
+
+/** 可选辅助能力独立重试；不能回滚已经就绪的 IAM 与业务模块。 */
+function startFeedback(): Promise<void> {
+  if (feedbackStarting)
+    return feedbackStarting
+  feedbackClosing = false
+  feedbackStarting = (async () => {
+    try {
+      const result = await feedback.init({ ...core.config.getOrThrow<FeedbackConfigInput>('feedback'), ...adminBuildMetadata })
+      if (!result.success) {
+        if (feedbackFailure !== result.error.code)
+          core.logger.warn('Optional feedback unavailable; business runtime remains ready', { module: 'feedback', code: result.error.code })
+        feedbackFailure = result.error.code
+      }
+      else {
+        feedbackFailure = undefined
+        await seedFeedbackPermissions()
+      }
+    }
+    catch {
+      if (feedbackFailure !== 'configuration')
+        core.logger.warn('Optional feedback configuration unavailable; business runtime remains ready', { module: 'feedback' })
+      feedbackFailure = 'configuration'
+    }
+    if (feedbackFailure && !feedbackClosing) {
+      feedbackRetry = setTimeout(() => {
+        feedbackRetry = undefined
+        void startFeedback()
+      }, 30000)
+      feedbackRetry.unref()
+    }
+  })().finally(() => { feedbackStarting = undefined })
+  return feedbackStarting
+}
+
+async function closeFeedback() {
+  feedbackClosing = true
+  if (feedbackRetry)
+    clearTimeout(feedbackRetry)
+  feedbackRetry = undefined
+  await feedbackStarting
+  return feedback.close()
+}
+
 const runtime = core.module.createRuntime([
   { name: 'configuration', start: () => {
     core.init({ configDir: './config' })
@@ -78,7 +126,7 @@ const runtime = core.module.createRuntime([
   { name: 'audit', start: () => audit.init({ ...AuditInitConfigSchema.parse(core.config.get('audit') ?? {}), storage, reach }), close: () => audit.close() },
   { name: 'iam', start: () => iam.init({ ...core.config.getOrThrow<IamConfigSettingsInput>('iam'), reach }), close: () => iam.close() },
   { name: 'audit-jobs', enabled: () => Boolean(audit.schedulerPlan), start: startAuditJobs, close: () => scheduler.close() },
-  { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: () => feedback.init({ ...core.config.getOrThrow<FeedbackConfigInput>('feedback'), ...adminBuildMetadata }), close: () => feedback.close() },
+  { name: 'feedback', enabled: () => Boolean(core.config.get('feedback')), start: startFeedback, close: closeFeedback },
   { name: 'bootstrap', start: async () => {
     const businessSettings = await initBusinessSettings()
     if (!businessSettings.success)

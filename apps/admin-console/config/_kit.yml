@@ -7,7 +7,7 @@ server:
 
 # 用途：传输加密开关或密钥协商配置
 transport:
-  # 用途：双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求
+  # 用途：普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明
   maxPlaintextBytes: ${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:auto}
   # 用途：客户端与服务端约定的密钥交换端点
   keyExchangePath: ${HAI_KIT_TRANSPORT_KEYEXCHANGEPATH:/api/_hai/key-exchange}

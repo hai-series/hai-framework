@@ -1,8 +1,8 @@
 /** 服务端运行配置经 Schema 校验后，仅向浏览器提供公开的传输参数。 */
 import type { KitConfig } from '@h-ai/kit'
+import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core } from '@h-ai/core'
-import { resolveTransportBodyLimits } from '@h-ai/crypto'
-import { feedback } from '@h-ai/feedback'
+import { FeedbackConfigSchema } from '@h-ai/feedback'
 import { KitConfigSchema } from '@h-ai/kit'
 
 let current: Pick<KitConfig, 'transport'> | undefined
@@ -17,6 +17,18 @@ export function getAdminKitConfig(): Pick<KitConfig, 'transport'> {
   const result = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
   if (!result.success)
     throw new Error(result.error.message)
-  current = { transport: result.data.transport === false ? false : { ...result.data.transport, maxPlaintextBytes: resolveTransportBodyLimits(result.data.transport.maxPlaintextBytes, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }).plaintextBytes } }
+  const prefix = '/api/feedback/reports'
+  // 容量来自配置，不依赖可选反馈的初始化/重试结果。
+  const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
+  const material = resolveFeedbackBudget(feedbackSettings.success ? feedbackSettings.data : {}).maxTransportBytes
+  current = { transport: result.data.transport === false
+    ? false
+    : { ...result.data.transport, routePlaintextBytes: {
+        [prefix]: material,
+        [`${prefix}/*/evidence`]: material,
+        [`${prefix}/*/attachments/*`]: material,
+        [`${prefix}/*/exports/*`]: material,
+        ...result.data.transport.routePlaintextBytes,
+      } } }
   return current
 }

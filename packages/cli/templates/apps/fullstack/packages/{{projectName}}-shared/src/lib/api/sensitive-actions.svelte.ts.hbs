@@ -8,9 +8,9 @@ import { managementAuthActions as authActions } from './api-client.js'
 export const sensitiveActions = createSensitiveActions(authActions)
 
 /** 用途凭据只传给本次 typed client 调用，不使用共享 header。 */
-export async function requestSensitive<T>(operation: string, run: (options: { context: { reauthentication?: string } }) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+export async function requestSensitive<T>(operation: string, run: (options: { context: { reauthentication?: string, reauthorize: () => Promise<string | null | undefined> } }) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
   const ticket = await sensitiveActions.authorize(operation)
   if (ticket === null)
     return err({ code: 'app:cancelled', httpStatus: 400, message: m.security_action_cancelled() })
-  return run({ context: ticket ? { reauthentication: ticket } : {} })
+  return run({ context: { ...(ticket ? { reauthentication: ticket } : {}), reauthorize: () => sensitiveActions.authorize(operation) } })
 }
