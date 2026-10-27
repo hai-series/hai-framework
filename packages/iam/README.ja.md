@@ -33,7 +33,7 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb`：ユーザー・ロール・権限の永続化。**iam.init() より先に初期化**。
 - `@h-ai/cache`：セッション・OTP・一度限りのチケット。**iam.init() より先に初期化**。
 - `@h-ai/crypto`：内部で使用するパスワードハッシュ。自動初期化。
-- `@h-ai/audit`：主要な RBAC 操作の監査記録。
+- `@h-ai/audit`：ホストが初期化した場合に IAM の安全イベントを自動記録します。未使用時は収集せず、使用中の書込失敗は記録し、外部トランザクションはロールバックします。
 
 - `@h-ai/reach`：**任意**。アプリがインストール、初期化、注入して通知テンプレートを使用します。独自送信コールバックでは不要です。
 - `ldapts`：**任意**。LDAP を明示的に有効化し、`ldapClientFactory` がない場合だけ読み込みます。
@@ -221,7 +221,7 @@ IAM は `iam.init()` / `iam.close()` で状態を管理する**ライフサイ�
 
 ```
 iam.init()
-  ├─ session  （キャッシュによるセッション、DB 依存なし）
+  ├─ session  （キャッシュによるセッション、現在の資格情報は共有キャッシュ/DB参照）
   ├─ authz    （RBAC ロール・権限、DB 一括検索）
   ├─ authn    （認証、session + authz に依存）
   ├─ user     （ユーザー管理、session + authz + passwordStrategy に依存）
@@ -278,10 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → キャッシュ検索
-  → 永続ユーザーの有効状態とセッションに紐付く credentialVersion を検証
+  → 共有世代キャッシュから現在のユーザー/資格情報を読み、有効状態・期限・セッションの credentialVersion を検証。不確かな場合は DB を参照
   → 自動延長モードなら TTL を延長
-  → 現在のユーザーを再読込し、有効状態と credentialVersion を再確認して、ロール JOIN・権限一括検索（ロールなしなら権限検索を省略）
-  → 永続データの読取失敗、ユーザー不在・無効、資格情報の世代不一致は拒否し、API Key scope を再適用
+  → 上記のユーザー情報を再利用し、共有世代キャッシュから現在の認可を取得。コールド読込は単一 JOIN
+  → 必要な状態の読取失敗、ユーザー不在・無効・期限切れ、資格情報の世代不一致は拒否し、API Key scope を再適用
   → 現在の Session を返す（userId、roles、permissions）
 ```
 
@@ -427,9 +427,8 @@ Session.credentialVersion は作成時の DB 資格情報世代に結び付け�
 ```
 checkPermission(userId, permission)
   → RBAC 無効なら true
-  → ユーザーのロール一覧を DB から取得
-  → 最高管理者を確認（キャッシュの superAdminRoleId）、あれば true
-  → 各ロールの権限コードを DB で一括取得。読み取り失敗はエラーを返す
+  → 共有世代キャッシュから現在のロール・権限を取得。コールド読込は単一 JOIN
+  → 最高管理者なら true。必要な状態の読取失敗はエラーを返す
   → 厳密・ワイルドカード照合（`admin:*` は `admin:read` に一致）
   → true / false を返す
 ```
@@ -496,7 +495,7 @@ async function currentAuthorization(userId: string) {
 - **ワイルドカード**：`admin:*` は `admin:read`、`admin:write:detail` などに一致。1 つの `*` がコロン以降全体に一致します。
 - **最高管理者**：`rbac.superAdminRole`（既定 `super_admin`）はすべての権限を持ちます。
 - **トランザクション**：`deleteRole` / `deletePermission` は DB トランザクションで関連を削除してから本体を削除。
-- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` でセッションに紐付く永続資格情報の世代を検証し、現在のユーザー状態・資格情報の世代を再確認して最新の認可を読みます。いずれかの読取に失敗すれば拒否します。`iam.session.get/verifyToken` も永続ユーザーの有効状態と `credentialVersion` を検証しますが、ロール・権限はセッションのスナップショットであり、現在の認可を代替しません。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
+- **セッション同期**：キャッシュ更新は best-effort です。保護されたリクエストは `iam.auth.verifyToken` で共有世代キャッシュで現在のユーザー/資格情報と認可を検証し、不確かな場合は DB を参照します。必要な読取が失敗すれば拒否します。`iam.session.get/verifyToken` は同じユーザー/資格情報の読取を再利用し、有効状態・期限・`credentialVersion` を検証しますが、ロール・権限はセッションのスナップショットであり、現在の認可を代替しません。`iam.authz.getUserAuthorization(userId)` はロール JOIN と権限一括検索を共有します。
 - **初期データ**：`seedDefaultData: true` で admin/user/guest と基本権限を冪等に作成。
 
 ---
@@ -612,7 +611,7 @@ async function disableUser(userId: string) {
 
 #### API Key — `iam.apiKey`
 
-`scopes` は主体の権限との共通範囲を適用し、`*` と名前空間 `:*` に対応します。既定の空配列は本人確認のみで操作権限を付与しません。制限付き key のセッション `roles` は空で permission ガードを使用し、明示的な `*` も主体の権限を超えません。ログインは key ID に結び付き、get/verifyToken/refresh は永続状態を再確認し、失効・無効・期限切れ・DB エラーを拒否します。verifyApiKey 単独は鍵のメタデータ検証のみで、主体・操作の認可は別途必要です。
+`scopes` は主体の権限との共通範囲を適用し、`*` と名前空間 `:*` に対応します。既定の空配列は本人確認のみで操作権限を付与しません。制限付き key のセッション `roles` は空で permission ガードを使用し、明示的な `*` も主体の権限を超えません。ログインは key ID に結び付き、get/verifyToken/refresh は共有キャッシュまたは DB で現在の状態を確認し、失効・無効・期限切れ・必要な状態の読取失敗を拒否します。verifyApiKey 単独は鍵のメタデータ検証のみで、主体・操作の認可は別途必要です。
 
 ##### 主要な型
 
@@ -626,7 +625,8 @@ async function disableUser(userId: string) {
 
 ```
 verifyApiKey(rawKey)
-  → rawKey から接頭辞取得（prefix + 最初の 8 文字）
+  → SHA-256(rawKey) 指紋で共有世代キャッシュを参照し、ヒット時も期限を確認
+  → コールド読込では rawKey から接頭辞取得（prefix + 最初の 8 文字）
   → DB で接頭辞による候補検索
   → 各 hash を同期検証
   → 成功後に期限・無効化を確認
@@ -878,6 +878,12 @@ if (!result.success) {
 
 `iam.session.update(token, patch, expectedVersion)` は読み取った Session.version が必須です。旧版は CONFLICT、失効 Token は SESSION_NOT_FOUND を返し、新しい状態を上書きしません。自動延長の時刻だけの更新は内容版を変更せず、通常の並行リクエストを許容します。権限一括更新は最初の Token/版集合に限定し、後続ログインに古い値を適用しません。
 
+### 共有認可キャッシュ
+
+Redisは秘密を含まないアカウント/資格情報の状態、ロール・権限、機密操作、検証済みAPI Key DTOを60秒保存します。キャッシュ値にはDBのパスワード/Key検証ハッシュ、平文Key、再設定トークンを保存しません。API Keyのキャッシュアドレスには平文Keyの一方向SHA-256指紋を使います。期限は毎回現在時刻で検証し、認可のコールド読込は単一JOINです。IAM書込はDB更新前に共有dirtyマーカーを登録し、外部トランザクションもcommit/rollback完了後に世代を更新します。競合したコールド読込は古い値を公開しません。通常の高頻度チェックはPGを照会せず、更新中・無効化未確認・キャッシュ読込障害時はDBを参照します。セッションRedis自体の障害は認証を拒否します。
+
+無効化登録に失敗した書込はDB更新前に拒否します。commit後の無効化失敗は成功済み更新を取り消した扱いにせず、永続dirtyマーカーでDB参照を継続します。プロセスクラッシュやcommit結果不明をTTLで解除せず、IAM書込がない保守時間帯に確認して修復してください。全ノード同時更新とIAM API経由の書込が必要です。直接SQL、旧版ノード、外部テーブル更新は書込停止とIAMキャッシュ全体の無効化が必要です。平文Key検証のヒットは高負荷ハッシュを省略し、lastUsedAtはコールド検証時に記録するため最大約1分遅れます。
+
 ## 自己ホスト型の対話チャレンジ
 
 captcha.enabled は既定で false。ALTCHA の計算チャレンジを自己ホストし、ttlSeconds（既定120、1–600秒）、cost（既定5000、100–50000）、maxCounter（既定100、1–2000）で期限と計算量を指定します。外部 CAPTCHA アカウントは不要で、HMAC 秘密と一度限りの状態は既存の共有 Cache にのみ保存します。本番では共有バックエンドが必要です。計算量は自動化のコストを増やしますが、利用者が人間であることは保証しません。
@@ -929,6 +935,8 @@ audit が初期化済みで capture.enabled が有効なら、IAM はアカウ�
 ## ページ離脱時のセッション方針
 
 `session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
+
+標準 `/auth/me` も `iam.profile.update` / `iam.profile.avatar` を検査します。複合更新では有効な資料変更規則を優先し、それ以外は画像規則を使います。`authz.getSensitiveOperations(operation?)` は単一操作だけ照会でき、省略時はDB規則一覧を返します。超管理者の役割は共有DBから毎回取得し、種子の並行作成競合は再読込、権限割当失敗は上位へ返します。
 
 ## 開発とテスト
 

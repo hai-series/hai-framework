@@ -11,6 +11,7 @@ import type { LoginFailurePolicy } from '../authn/iam-authn-utils.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
+import { guardIamMutation } from '../iam-cache.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 
@@ -293,6 +294,12 @@ export async function createDbUserRepository(): Promise<UserRepository> {
   const repo = new DbUserRepository()
   // 确保底层表创建完成（BaseReldbCrudRepository 的表创建是异步的）
   await repo.count()
+  repo.create = guardIamMutation(repo.create.bind(repo), 1)
+  repo.updateById = guardIamMutation(repo.updateById.bind(repo), 2)
+  repo.deleteById = guardIamMutation(repo.deleteById.bind(repo), 1)
+  repo.suspendInactive = guardIamMutation(repo.suspendInactive.bind(repo))
+  repo.setPassword = guardIamMutation(repo.setPassword.bind(repo))
+  repo.commitPasswordReset = guardIamMutation(repo.commitPasswordReset.bind(repo))
   userRepoInstance = repo
   userRepoSqlOps = reldb.sql
   return repo

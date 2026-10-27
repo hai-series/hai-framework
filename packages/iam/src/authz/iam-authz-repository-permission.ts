@@ -29,7 +29,7 @@ import { HaiIamError } from '../iam-types.js'
  * ```
  */
 export interface PermissionRepository extends ReldbCrudRepository<Permission> {
-  getSensitiveOperations: () => Promise<HaiResult<string[]>>
+  getSensitiveOperations: (operation?: string) => Promise<HaiResult<string[]>>
   /**
    * 根据代码获取权限
    */
@@ -175,8 +175,16 @@ export async function createDbPermissionRepository(): Promise<PermissionReposito
  * 继承 BaseReldbCrudRepository，提供按 code 查找权限的能力。
  */
 class DbPermissionRepository extends BaseReldbCrudRepository<Permission> implements PermissionRepository {
-  async getSensitiveOperations(): Promise<HaiResult<string[]>> {
-    const result = await reldb.sql.query<{ sensitive_operations: unknown }>('SELECT sensitive_operations FROM hai_iam_permissions WHERE sensitive_operations IS NOT NULL')
+  async getSensitiveOperations(operation?: string): Promise<HaiResult<string[]>> {
+    if (operation !== undefined && (typeof operation !== 'string' || !operation.trim() || operation.length > 128))
+      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
+    const match = reldb.config?.type === 'postgresql'
+      ? 'sensitive_operations::jsonb @> CAST(? AS jsonb)'
+      : reldb.config?.type === 'mysql'
+        ? 'JSON_CONTAINS(sensitive_operations, JSON_QUOTE(?))'
+        : 'EXISTS (SELECT 1 FROM json_each(sensitive_operations) WHERE type = \'text\' AND value = ?)'
+    const params = operation === undefined ? [] : [reldb.config?.type === 'postgresql' ? JSON.stringify([operation]) : operation]
+    const result = await reldb.sql.query<{ sensitive_operations: unknown }>(`SELECT sensitive_operations FROM hai_iam_permissions WHERE sensitive_operations IS NOT NULL${operation === undefined ? '' : ` AND ${match} LIMIT 1`}`, params)
     if (!result.success)
       return result
     const operations = new Set<string>()
@@ -188,7 +196,8 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
         for (const value of values as unknown[]) {
           if (typeof value !== 'string' || !value.trim() || value.length > 128)
             return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
-          operations.add(value.trim())
+          if (operation === undefined || value.trim() === operation)
+            operations.add(value.trim())
         }
       }
       return ok([...operations].sort())

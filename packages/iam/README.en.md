@@ -33,7 +33,7 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb`: persistence for users/roles/permissions; **initialize before iam.init()**.
 - `@h-ai/cache`: sessions/OTP/one-time tickets; **initialize before iam.init()**.
 - `@h-ai/crypto`: password hashing, used internally and initialized automatically.
-- `@h-ai/audit`: audit records for key RBAC operations.
+- `@h-ai/audit`: automatic IAM security events after host initialization. An unused collector is not called; enabled audit failures remain observable and caller-owned transactions must roll back.
 
 - `@h-ai/reach`: **optional**, installed, initialized and injected by the application for standard notifications; custom callbacks do not require Reach.
 - `ldapts`: **optional**, loaded only when LDAP is explicitly enabled without an injected `ldapClientFactory`.
@@ -221,7 +221,7 @@ IAM is a **lifecycle singleton** managed through `iam.init()` / `iam.close()`. F
 
 ```
 iam.init()
-  ├─ session  (cached sessions; no DB dependency)
+  ├─ session  (cached sessions; current credential state uses shared cache/DB fallback)
   ├─ authz    (RBAC roles/permissions; batched DB reads)
   ├─ authn    (authentication; depends on session + authz)
   ├─ user     (users; depends on session + authz + passwordStrategy)
@@ -278,10 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → cache lookup
-  → Read the persistent user and validate enabled status and the session-bound credentialVersion
+  → Read current user/credential state from the shared epoch cache; check status, expiry and session-bound credentialVersion, falling back to DB when the cache is not trustworthy
   → Extend TTL automatically when sliding renewal is enabled
-  → Read the current user again, recheck enabled status and credentialVersion, then read the role JOIN and batched permissions (skip permissions for no roles)
-  → Reject any persistent read failure, missing/disabled user or credential-version mismatch; intersect API Key scopes again
+  → Reuse that user profile and read current roles/permissions from the shared epoch cache; cold authorization reads use one JOIN
+  → Reject required state read failures, missing/disabled/expired users or credential-version mismatch; intersect API Key scopes again
   → Return current Session (userId, roles, permissions)
 ```
 
@@ -427,9 +427,8 @@ Role lists use `iam.authz.getRoleUserCounts(roleIds)` to aggregate actual member
 ```
 checkPermission(userId, permission)
   → Return true if RBAC is disabled
-  → Query user roles (DB)
-  → Check super-admin role (cached superAdminRoleId); return true if present
-  → Read these roles' permission codes in one DB query; return errors on read failure
+  → Read current roles/permissions from the shared epoch cache; cold reads use one JOIN
+  → Return true for the super-admin role; return errors on required state read failure
   → Match each permission exactly or by wildcard (`admin:*` matches `admin:read`)
   → Return true / false
 ```
@@ -496,7 +495,7 @@ async function currentAuthorization(userId: string) {
 - **Wildcard matching**: `admin:*` matches `admin:read`, `admin:write:detail`, etc.; one `*` matches everything after the colon.
 - **Super-admin role**: `rbac.superAdminRole` (default `super_admin`) automatically grants all permissions.
 - **Transactions**: `deleteRole` / `deletePermission` clear associations before deleting entities in a DB transaction.
-- **Session synchronization**: cache updates are best-effort. Protected requests use `iam.auth.verifyToken` to validate the session-bound persistent credential version, then recheck current user status and credential version and read fresh authorization. Failure at either read rejects authentication. `iam.session.get/verifyToken` also checks persistent user enabled status and `credentialVersion`, but its role/permission fields remain a session snapshot and do not replace current authorization. `iam.authz.getUserAuthorization(userId)` shares the role JOIN and batched permission query.
+- **Session synchronization**: cache updates are best-effort. Protected requests use `iam.auth.verifyToken` to check current user/credential state and authorization through the shared epoch cache, with DB fallback when needed. Required state read failure rejects authentication. `iam.session.get/verifyToken` reuses the same current user/credential read and checks status, expiry and `credentialVersion`, but its role/permission fields remain a session snapshot and do not replace current authorization. `iam.authz.getUserAuthorization(userId)` uses a single JOIN cold read and shared cache.
 - **Seed data**: `seedDefaultData: true` idempotently creates admin/user/guest roles and basic permissions.
 
 ---
@@ -612,7 +611,7 @@ async function disableUser(userId: string) {
 
 #### API keys — `iam.apiKey`
 
-`scopes` intersect the subject's permissions and support `*` and namespace `:*`. The default empty array grants identity only, without operation permissions. Restricted keys have empty session `roles` and use permission guards; explicit `*` never exceeds subject authorization. API Key login binds the key ID: get/verifyToken/refresh recheck its persistent state and reject revoked, disabled, expired keys or DB failures. Standalone verifyApiKey returns verified key metadata and still requires subject/operation authorization.
+`scopes` intersect the subject's permissions and support `*` and namespace `:*`. The default empty array grants identity only, without operation permissions. Restricted keys have empty session `roles` and use permission guards; explicit `*` never exceeds subject authorization. API Key login binds the key ID: get/verifyToken/refresh recheck its persistent state and reject revoked, disabled, expired keys or required state read failures. Standalone verifyApiKey returns verified key metadata and still requires subject/operation authorization.
 
 ##### Key types
 
@@ -626,7 +625,8 @@ async function disableUser(userId: string) {
 
 ```
 verifyApiKey(rawKey)
-  → Extract prefix from rawKey (prefix + first 8 characters)
+  → Read the shared epoch cache by SHA-256(rawKey) fingerprint; check expiry on hits
+  → On a cold read, extract prefix from rawKey (prefix + first 8 characters)
   → Query candidate keys by prefix from DB
   → Verify each hash synchronously
   → If valid, check expiration/disabled state
@@ -830,7 +830,7 @@ SvelteKit routes export handlers from `kit.auth.createApi(iam)`; use `kit.auth.p
 
 Agreements open in a Modal without losing form input. URL pages must allow iframe embedding; scripts are disabled and a new-window fallback is available. LoginForm/RegisterForm expose `header/extraFields/footer` snippets. AuthPanel forwards `loginHeader/loginFields/loginFooter` and `registerHeader/registerFields/registerFooter`; application state and actions handle additional fields. See [UI usage](../ui/README.en.md#configuration-driven-authentication).
 
-All nodes share the same database and Redis; Memory is for single-process tests. OTP code, attempts and cooldown share one identity key with CAS publication and consumption. Conflicts reject stale generations and consumption preserves cooldown. Password reset hash, expiry, attempts and resetVersion live in the user database row. Policy failures count, and one conditional SQL statement changes the password, consumes the token and advances credentialVersion. New tokens, later attempts, disablement or expiry reject delayed commits. Requesting a reset only advances resetVersion; successful password changes advance credentialVersion. Authentication captures the verified credential generation; session creation, authentication and refresh check the current database generation, so failed cache cleanup cannot authorize old sessions. Notification callbacks run after publication and receive { expiresAt, idempotencyKey } as their third argument. Applications and Reach providers must durably deduplicate that key. Exceptions/timeouts mean delivery may have succeeded: the result is unknown, with no automatic resend or rollback. Exactly-once external effects require receiver-side idempotency.
+All nodes share the same database and Redis; Memory is for single-process tests. OTP code, attempts and cooldown share one identity key with CAS publication and consumption. Conflicts reject stale generations and consumption preserves cooldown. Password reset hash, expiry, attempts and resetVersion live in the user database row. Policy failures count, and one conditional SQL statement changes the password, consumes the token and advances credentialVersion. New tokens, later attempts, disablement or expiry reject delayed commits. Requesting a reset only advances resetVersion; successful password changes advance credentialVersion. Authentication captures the verified credential generation; session creation, authentication and refresh check current state via shared generation cache or safe DB fallback, so failed cache cleanup cannot authorize old sessions. Notification callbacks run after publication and receive { expiresAt, idempotencyKey } as their third argument. Applications and Reach providers must durably deduplicate that key. Exceptions/timeouts mean delivery may have succeeded: the result is unknown, with no automatic resend or rollback. Exactly-once external effects require receiver-side idempotency.
 
 Standard endpoints: `GET /auth/config`, `POST /auth/login/ldap`, `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm`. Security errors: `SECURITY_BUSY (hai:iam:023)` and `PASSWORD_RESET_DISABLED (hai:iam:024)`. Declare optional fields such as `ldap` in YAML before overriding them, or replace the module configuration with a JSON value in `HAI_IAM`. Existing fields support overrides such as `HAI_IAM_LOGIN_OTP`.
 
@@ -881,6 +881,12 @@ Role lists aggregate actual member counts for the current page with one `iam.aut
 Sessions and refresh consumption share one versioned `hai:iam:sessions:{SHA256(userId)}` document, replacing separate mappings/indexes. Bearer tokens contain an untrusted routing hint plus 256 random bits; clients must treat them as opaque strings. Rotation checks `Session.version` at commit. Memory is for single-process tests; production nodes share Redis, including Cluster. Conflicts retry from the latest state and return CONFLICT when exhausted; one refresh cannot publish two successors. An ambiguous lost response requires failing closed and signing in again, without assuming the old token remains valid. All records remain covered by the same user index.
 
 `iam.session.update(token, patch, expectedVersion)` requires the Session.version from the read. Stale versions return CONFLICT; revoked tokens return SESSION_NOT_FOUND. Timestamp-only sliding updates keep the content version, allowing normal parallel requests. Batch permission updates bind the initial token/version set and never apply delayed snapshots to later sign-ins; newer content versions require re-reading authorization before retry.
+
+### Shared authorization cache
+
+Redis caches nonsecret account/credential state, role/permission summaries, sensitive operations and verified API Key DTOs for 60 seconds. Cache values omit database password/Key verification hashes, raw keys and reset tokens; API Key cache addresses use a one-way SHA-256 fingerprint of the raw Key. Account/password/Key expiry is evaluated against current time on every check; authorization cold reads use one JOIN. IAM writers establish a shared dirty marker before DB mutation and advance the epoch after commit/rollback, including caller-owned transactions. A racing cold read cannot publish an obsolete cache entry. Normal hot checks avoid PG; writes, unconfirmed invalidation or cache read failure use the database. Failure of the session Redis store still rejects authentication.
+
+Failure to register invalidation rejects a write before mutation. Failed invalidation after commit preserves the successful mutation and persistent dirty marker, so later checks keep using DB. Crashed writers or unknown commit results never expire that marker by TTL; alert and repair cache state in a maintenance window after confirming no IAM write transaction remains. All nodes must upgrade together and write via IAM APIs. Raw SQL, old writers and independent table edits require quiesced writes and full IAM cache invalidation. Verified raw Key cache hits avoid repeated expensive hashes; lastUsedAt is sampled during cold verification, with up to about one minute lag.
 
 ## Self-hosted interactive challenges
 
@@ -933,6 +939,8 @@ For in-place recovery, use UI `createSessionRecovery` / `SessionRecoveryDialog` 
 ## Page exit session policy
 
 `session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.
+
+The standard `/auth/me` endpoint also checks `iam.profile.update` / `iam.profile.avatar`. Mixed updates prefer an enabled profile rule, otherwise the avatar rule. `authz.getSensitiveOperations(operation?)` can query one operation; omit it to list database rules. Super-administrator identity is read from shared roles on every check. Default seeding rereads concurrent unique conflicts and propagates permission-assignment failures.
 
 ## Development and testing
 

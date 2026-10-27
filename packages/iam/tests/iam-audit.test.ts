@@ -14,6 +14,28 @@ function tests() {
     await audit.close()
   })
 
+  it('未选用审计时外部事务可提交，且没有未初始化的采集错误', async () => {
+    await audit.close()
+    const iam = await initIam()
+    const capture = vi.spyOn(audit, 'capture')
+    const opened = await reldb.tx.begin()
+    if (!opened.success)
+      throw new Error(opened.error.message)
+    const code = `without-audit-${crypto.randomUUID()}`
+    let finished = false
+    try {
+      expect((await iam.authz.createRole({ code, name: 'Business role' }, opened.data)).success).toBe(true)
+      expect((await opened.data.commit()).success).toBe(true)
+      finished = true
+      expect(await iam.authz.getRoleByCode(code)).toMatchObject({ success: true, data: { code } })
+      expect(capture).not.toHaveBeenCalled()
+    }
+    finally {
+      if (!finished)
+        await opened.data.rollback()
+    }
+  })
+
   it('账号与改密事件使用操作者快照和目标 ID，失败只记录原因码', async () => {
     const iam = await initIam()
     const requestId = crypto.randomUUID()

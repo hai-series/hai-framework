@@ -19,7 +19,7 @@ import { HaiIamError } from '../iam-types.js'
  * function check(user: StoredUser, policy: PasswordConfig) { return checkPasswordState(user, policy) }
  * ```
  */
-export function checkPasswordState(user: StoredUser, policy?: PasswordConfig): HaiResult<void> {
+export function checkPasswordState(user: Pick<StoredUser, 'mustChangePassword' | 'passwordHash' | 'passwordUpdatedAt'>, policy?: PasswordConfig): HaiResult<void> {
   if (policy?.requireInitialChange && user.mustChangePassword)
     return err(HaiIamError.PASSWORD_CHANGE_REQUIRED, iamM('iam_passwordChangeRequired'))
   const days = policy?.expirationDays ?? 0
@@ -35,7 +35,7 @@ export function checkPasswordState(user: StoredUser, policy?: PasswordConfig): H
  * function allowed(user: User) { return isUserActive(user) }
  * ```
  */
-export function isUserActive(user: User): boolean {
+export function isUserActive(user: Pick<User, 'enabled' | 'accountType' | 'accountStatus' | 'accountExpiresAt'>): boolean {
   return user.enabled && (user.accountStatus ?? 'active') === 'active'
     && (user.accountType !== 'temporary' || !!user.accountExpiresAt)
     && (!user.accountExpiresAt || new Date(user.accountExpiresAt).getTime() > Date.now())

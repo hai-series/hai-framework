@@ -28,6 +28,7 @@ import { iamM } from './iam-i18n.js'
 import { migrateIam } from './iam-migration.js'
 import { resolveIamNotifications } from './iam-notifications.js'
 import { buildIamPublicConfig } from './iam-public-config.js'
+import { readIamUserSecurity } from './iam-security-cache.js'
 import { seedIamData } from './iam-seed.js'
 import {
 
@@ -174,7 +175,7 @@ export const iam: IamFunctions = {
       const sessionResult = await createSessionOperations({
         config: parsed,
         readCredential: async (userId) => {
-          const found = await credentialUsers.findById(userId)
+          const found = await readIamUserSecurity(credentialUsers, userId)
           if (!found.success)
             return found
           if (found.data) {
@@ -182,7 +183,7 @@ export const iam: IamFunctions = {
             if (!passwordState.success)
               return passwordState
           }
-          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: isUserActive(found.data) } : null)
+          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: isUserActive(found.data), profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl } } : null)
         },
       })
       if (!sessionResult.success) {

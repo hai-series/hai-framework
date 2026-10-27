@@ -11,6 +11,9 @@ const logger = core.logger.child({ module: 'iam', scope: 'audit' })
 /** 审计失败可观察，但不把已经生效的变更伪装成未执行，避免调用端重复提交。 */
 async function observe<T>(operation: () => Promise<HaiResult<T>>, event: CreateAuditLogInput | ((result: HaiResult<T>) => CreateAuditLogInput | undefined), tx?: DmlWithTxOperations): Promise<HaiResult<T>> {
   const result = await operation()
+  // 自动审计仅在宿主已启用该模块时装配；未选用的辅助能力不产生逐操作错误。
+  if (!audit.isInitialized)
+    return result
   const fields = typeof event === 'function' ? event(result) : event
   if (!fields)
     return result

@@ -33,7 +33,7 @@ pnpm add @h-ai/iam
 - `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
 - `@h-ai/cache` — 缓存（会话/OTP/一次性票据），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
-- `@h-ai/audit` — 审计日志（RBAC 关键操作记录）
+- `@h-ai/audit` — 宿主初始化后自动记录 IAM 安全事件；未选用时不调用采集器。启用后的审计写失败仍记录错误，外部事务应回滚。
 
 - `@h-ai/reach` — **可选**，应用安装、初始化并注入后可使用标准邮件/短信模板；自定义发送回调无需 Reach。
 - `ldapts` — **可选**，仅在显式启用 LDAP 且没有注入 `ldapClientFactory` 时加载。
@@ -221,7 +221,7 @@ IAM 是**生命周期单例**模块，通过 `iam.init()` / `iam.close()` 管理
 
 ```
 iam.init()
-  ├─ session  （缓存会话管理，无 DB 依赖）
+  ├─ session  （缓存会话管理，当前凭据状态共享缓存/DB 回源）
   ├─ authz    （RBAC 角色/权限，DB 批量读取）
   ├─ authn    （认证策略，依赖 session + authz）
   ├─ user     （用户管理，依赖 session + authz + passwordStrategy）
@@ -278,10 +278,10 @@ login(credentials)
 ```
 verifyToken(accessToken)
   → session.get(accessToken) → 缓存查询
-  → 读取持久用户，校验启用状态与会话绑定的 credentialVersion
+  → 读取共享缓存中的当前用户/凭据状态，检查启用状态、期限与会话绑定的 credentialVersion；不可信时回源 DB
   → 滑动续期模式下自动延长 TTL
-  → 再次读取当前用户，复核启用状态与 credentialVersion，并读取角色 JOIN + 批量权限（无角色时省略权限查询）
-  → 任一持久读取失败、用户缺失/停用或凭据代不匹配时拒绝；API Key 会话再次收敛 scope
+  → 复用上述用户资料，读取共享代际缓存中的当前角色/权限；冷读使用单条 JOIN
+  → 必要状态读取失败、用户缺失/停用/到期或凭据代不匹配时拒绝；API Key 会话再次收敛 scope
   → 返回当前 Session 对象（含 userId、roles、permissions）
 ```
 
@@ -427,9 +427,8 @@ Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessio
 ```
 checkPermission(userId, permission)
   → RBAC 未启用 → 直接返回 true
-  → 查询用户角色列表（DB）
-  → 检查是否包含超管角色（缓存 superAdminRoleId）→ 是则直接返回 true
-  → 一次批量查询这些角色的权限代码（DB）；读取失败返回错误
+  → 从共享代际缓存读取当前角色与权限，冷读使用单条 JOIN
+  → 包含超管角色则返回 true；必要状态读取失败返回错误
   → 逐权限匹配：精确匹配 或 通配符匹配（`admin:*` 匹配 `admin:read`）
   → 返回 true / false
 ```
@@ -496,7 +495,7 @@ async function currentAuthorization(userId: string) {
 - **通配符匹配**：`admin:*` 匹配 `admin:read`、`admin:write:detail` 等（单层 `*` 匹配冒号后全部）
 - **超管角色**：配置的 `rbac.superAdminRole`（默认 `super_admin`）自动拥有所有权限
 - **事务保护**：`deleteRole` / `deletePermission` 使用 DB 事务，先清关联再删实体
-- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，先验证会话绑定的持久凭据代，再复核当前用户状态与凭据代并读取最新授权，任一步读取失败即拒绝。`iam.session.get/verifyToken` 同样检查持久用户启用状态与 `credentialVersion`，但角色/权限字段仍是会话快照，不能替代当前授权。`iam.authz.getUserAuthorization(userId)` 复用角色 JOIN 与批量权限查询。
+- **会话同步**：缓存更新为 best-effort；受保护请求使用 `iam.auth.verifyToken`，使用共享代际缓存校验当前用户状态、期限及会话绑定的凭据代，再读取当前授权；缓存不可信时回源，必要读取失败即拒绝。`iam.session.get/verifyToken` 复用同一当前用户/凭据读取并检查启用状态与 `credentialVersion`，但角色/权限字段仍是会话快照，不能替代当前授权。`iam.authz.getUserAuthorization(userId)` 复用单次 JOIN 冷读与共享缓存。
 - **种子数据**：`seedDefaultData: true` 时自动创建 admin/user/guest 三个默认角色及基础权限，幂等执行
 
 ---
@@ -626,7 +625,8 @@ async function disableUser(userId: string) {
 
 ```
 verifyApiKey(rawKey)
-  → 从 rawKey 提取前缀（prefix + 前 8 字符）
+  → 以 SHA-256(rawKey) 指纹读取共享代际缓存，命中时校验有效期并返回
+  → 冷读从 rawKey 提取前缀（prefix + 前 8 字符）
   → 按前缀从 DB 检索候选 API Key 列表（缩小范围）
   → 逐候选项进行 hash 验证（同步操作）
   → 验证通过 → 检查是否过期/禁用
@@ -866,7 +866,7 @@ agreements:
 
 #### 分布式安全与边界
 
-所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验数据库当前代际；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
+所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验共享代际缓存或安全回源的当前状态；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
 
@@ -890,6 +890,12 @@ if (!result.success) {
 会话与 refresh 消费记录统一保存在 `hai:iam:sessions:{SHA256(userId)}` 版本化文档，不再使用独立 token 映射/索引。Bearer token 携带不可作为凭据的分区提示和 256 位随机值；客户端必须视为不透明字符串。`Session.version` 用于轮换提交校验。Memory 仅用于单进程测试，生产所有节点共享 Redis（含 Cluster）。并发冲突从最新文档重试，耗尽返回 CONFLICT；旧 refresh 不会产生第二个后继。若响应丢失后结果不明，调用方按失败关闭并重新登录，不假定旧凭据仍有效；全部会话仍受同一用户状态索引管理。
 
 `iam.session.update(token, patch, expectedVersion)` 必须传入读取到的 Session.version。旧版本返回 CONFLICT，已撤销 token 返回 SESSION_NOT_FOUND；不会将旧内容重新写回或覆盖新会话。仅滑动时间戳更新不改变内容版本，允许正常并行请求。批量权限更新绑定首次读取的 token/版本集合，不将迟到数据应用到后续登录；遇到较新内容版本失败，调用方重新查询授权后再提交。
+
+### 共享鉴权缓存
+
+验签所需账号/凭据状态、角色权限、敏感操作和已验证 API Key 使用 Redis 共享缓存（60 秒 DTO TTL），缓存值不保存数据库中的密码/API Key 验证哈希、明文密钥或重置令牌；API Key 缓存地址使用明文 Key 的单向 SHA-256 指纹；账号/密码/Key 到期时间每次按当前时间核验。权限冷读使用单次 JOIN。所有 IAM 写入口在数据库变更前建立共享脏标记，提交/回滚后推进代际，外部事务同样等到完成才允许回填；冷读与代际变化并发时不发布旧缓存。正常热路径不查 PG，写入中、失效未确认或缓存读失败时回源；会话 Redis 本身不可用仍拒绝验签。
+
+写前无法登记失效时拒绝变更；已提交后失效失败不会伪装回滚，持久脏标记使后续授权继续读数据库。进程崩溃或提交结果未知时不通过 TTL 擅自清除此标记；应告警并在确认没有 IAM 写事务的维护窗口修复缓存状态。多节点必须同时升级并通过 IAM API 写权限/账号；直接 SQL、旧版本写节点或独立系统改表不触发缓存失效，需停写并使 IAM 缓存整体失效后再恢复，不能与在线缓存写入混用。API Key 明文验证命中缓存后避免重复昂贵哈希，lastUsedAt 在冷验证时采样更新（最多约一分钟延迟）。
 
 ## 自托管交互挑战
 
@@ -942,6 +948,8 @@ Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 
 ## 页面离开会话策略
 
 `session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
+
+标准 `/auth/me` 也检查 `iam.profile.update` / `iam.profile.avatar`；混合修改优先选取已启用的资料用途，否则使用头像用途。`authz.getSensitiveOperations(operation?)` 可只查询一个操作；未传则列出全部有效数据库规则。超管身份每次从共享角色读取，默认种子允许并发创建冲突后重读，并传播权限分配失败。
 
 ## 开发测试
 

@@ -6,9 +6,11 @@ import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWO
 function tests() {
   it('文件与权限表组合，实时更新生效且清空数据库不能移除文件规则', async () => {
     const iam = await initIam({ reauthentication: { enabled: true, operations: ['file.operation'], ttlSeconds: 300 } })
-    const permission = await iam.authz.createPermission({ code: `policy-${crypto.randomUUID()}`, name: '业务资源', resource: 'orders', action: 'manage', sensitiveOperations: ['orders.approve', 'file.operation'] })
+    const permission = await iam.authz.createPermission({ code: `policy-${crypto.randomUUID()}`, name: '业务资源', resource: 'orders', action: 'manage', sensitiveOperations: ['\torders.approve \n', 'file.operation'] })
     if (!permission.success)
       throw new Error(permission.error.message)
+    expect(await iam.authz.getSensitiveOperations('orders.approve')).toEqual({ success: true, data: ['orders.approve'] })
+    expect(await iam.authz.getSensitiveOperations('unconfigured.operation')).toEqual({ success: true, data: [] })
     const config = await iam.getPublicConfig()
     expect(config.success && config.data.reauthentication.operations).toEqual(['file.operation', 'orders.approve'])
     const username = `sensitive-${crypto.randomUUID()}`

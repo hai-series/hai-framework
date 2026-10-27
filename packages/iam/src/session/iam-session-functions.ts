@@ -13,6 +13,7 @@ import type { CreateSessionOptions, Session, SessionOperations, TokenPair } from
 import { core, err, ok } from '@h-ai/core'
 import { createDbApiKeyRepository } from '../authn/apikey/iam-authn-apikey-repository.js'
 import { applyApiKeyScopes } from '../authn/apikey/iam-authn-apikey-scope.js'
+import { readIamCache } from '../iam-cache.js'
 import { SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -51,8 +52,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
  */
 export interface SessionOperationsDeps {
   config: IamConfig
-  /** 可信持久用户读取口；生产绑定RelDB，缺失/禁用/读失败均拒绝签发和认证。 */
-  readCredential: (userId: string) => Promise<HaiResult<{ version: string, enabled: boolean } | null>>
+  /** 可信用户状态读取口；共享代际缓存与安全回源，缺失/禁用/读失败均拒绝签发和认证。 */
+  readCredential: (userId: string) => Promise<HaiResult<{ version: string, enabled: boolean, profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'> } | null>>
 }
 
 /**
@@ -159,7 +160,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
    * 凭据代只能来自可信数据库；读取和签发跨库不能同事务，因此会话始终保留旧代，后续认证再次核对。
    * @example await credential('user-1', authenticated.credentialVersion)
    */
-  async function credential(userId: string, expected?: string): Promise<HaiResult<string>> {
+  async function credential(userId: string, expected?: string): Promise<HaiResult<{ version: string, profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'> }>> {
     try {
       const current = await config.readCredential(userId)
       if (!current.success)
@@ -168,7 +169,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       if (typeof current.data.version !== 'string' || (expected !== undefined && current.data.version !== expected))
         return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
-      return ok(current.data.version)
+      return ok(current.data)
     }
     catch {
       return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_sessionExpired'))
@@ -181,7 +182,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return ok(session)
     if (!config.apiKeyRepository)
       return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
-    const found = await config.apiKeyRepository.findOneById(session.apiKeyId)
+    const found = await readIamCache(`apikey:${session.apiKeyId}`, async () => {
+      const row = await config.apiKeyRepository!.findOneById(session.apiKeyId!)
+      return row.success ? ok(row.data ? { userId: row.data.userId, enabled: row.data.enabled, expiresAt: row.data.expiresAt?.getTime() ?? null, scopes: row.data.scopes } : null) : row
+    })
     if (!found.success)
       return found
     const key = found.data
@@ -189,7 +193,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
     if (!key.enabled)
       return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
-    if (key.expiresAt && new Date() >= key.expiresAt)
+    if (key.expiresAt && Date.now() >= key.expiresAt)
       return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
     return ok(applyApiKeyScopes({ ...session, apiKeyScopes: key.scopes }, key.scopes))
   }
@@ -200,7 +204,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         const bound = await credential(options.userId, options.expectedCredentialVersion)
         if (!bound.success)
           return bound
-        const built = candidate(options, bound.data)
+        const built = candidate(options, bound.data.version)
         if (!built.success)
           return built
         const { session, tokens } = built.data
@@ -245,7 +249,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       const bound = await credential(session.userId, session.credentialVersion)
       if (!bound.success)
         return bound
-      const validated = await validateApiKey(session)
+      const validated = await validateApiKey({ ...session, ...bound.data.profile })
       if (!validated.success)
         return validated
       let output = validated.data

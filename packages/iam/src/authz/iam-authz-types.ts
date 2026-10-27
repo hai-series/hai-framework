@@ -148,8 +148,8 @@ export interface UserRole {
  * ```
  */
 export interface AuthzOperations {
-  /** 实时读取RBAC中配置的敏感操作；RBAC关闭时为空，读取失败须拒绝受保护操作。 */
-  getSensitiveOperations: () => Promise<HaiResult<string[]>>
+  /** 实时读取RBAC敏感操作；可仅查询一个操作，未传则返回全部。RBAC关闭时为空，读取失败须拒绝。 */
+  getSensitiveOperations: (operation?: string) => Promise<HaiResult<string[]>>
   /** 设置资源权限的敏感操作清单；空数组清除数据库追加规则，不清除文件中的规则。 */
   setPermissionSensitiveOperations: (permissionId: string, operations: string[]) => Promise<HaiResult<void>>
   /** 查询当前角色与权限代码，一次读取角色并批量聚合权限，不依赖会话缓存。 */
@@ -160,7 +160,7 @@ export interface AuthzOperations {
    * 超级管理员角色自动拥有所有权限。
    * 支持通配符匹配（如 `user:*` 匹配 `user:read`）。
    *
-   * **数据来源**：角色列表和权限代码均从数据库实时查询。
+   * **数据来源**：共享缓存；IAM 写入口在提交前后推进代际，冷读与失效期间查询数据库。
    *
    * @param userId - 用户 ID
    * @param permission - 权限代码（如 `user:read`）

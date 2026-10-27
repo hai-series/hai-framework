@@ -23,6 +23,7 @@ import type {
 import { core, err, ok } from '@h-ai/core'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
+import { guardIamMutation, readIamCache } from '../iam-cache.js'
 import { RbacConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
@@ -94,7 +95,20 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
     })
 
     logger.info('Authz sub-feature initialized')
-    return ok(manager)
+    return ok({
+      ...manager,
+      assignRole: guardIamMutation(manager.assignRole, 2),
+      removeRole: guardIamMutation(manager.removeRole, 2),
+      syncRoles: guardIamMutation(manager.syncRoles, 2),
+      createRole: guardIamMutation(manager.createRole, 1),
+      updateRole: guardIamMutation(manager.updateRole, 2),
+      deleteRole: guardIamMutation(manager.deleteRole, 1),
+      createPermission: guardIamMutation(manager.createPermission, 1),
+      deletePermission: guardIamMutation(manager.deletePermission, 1),
+      assignPermissionToRole: guardIamMutation(manager.assignPermissionToRole, 2),
+      removePermissionFromRole: guardIamMutation(manager.removePermissionFromRole, 2),
+      setPermissionSensitiveOperations: guardIamMutation(manager.setPermissionSensitiveOperations),
+    })
   }
   catch (error) {
     logger.error('Authz sub-feature initialization failed', { error })
@@ -152,29 +166,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     session,
   } = config
 
-  let superAdminRoleId: string | null | undefined
-
-  /**
-   * 解析超级管理员角色 ID
-   *
-   * 首次调用时从数据库查询，之后缓存结果。
-   *
-   * @returns 超管角色 ID，或 null（未配置时）
-   */
-  async function resolveSuperAdminRoleId(): Promise<HaiResult<string | null>> {
-    if (superAdminRoleId !== undefined) {
-      return ok(superAdminRoleId)
-    }
-
-    const roleResult = await roleRepository.findByCode(rbacConfig.superAdminRole)
-    if (!roleResult.success) {
-      return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as HaiResult<string | null>
-    }
-
-    superAdminRoleId = roleResult.data?.id ?? null
-    return ok(superAdminRoleId)
-  }
-
   /**
    * 构建存储层错误响应
    *
@@ -208,22 +199,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     }
 
     return false
-  }
-
-  /**
-   * 批量查询多个角色的权限代码，并判断是否匹配指定权限
-   */
-  async function hasPermissionInRoles(roleIds: string[], permission: string): Promise<HaiResult<boolean>> {
-    const codesResult = await rolePermissionRepository.getPermissionCodesForRoles(roleIds)
-    if (!codesResult.success)
-      return codesResult as HaiResult<boolean>
-
-    for (const code of codesResult.data) {
-      if (matchesPermission(permission, code))
-        return ok(true)
-    }
-
-    return ok(false)
   }
 
   /**
@@ -372,8 +347,15 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     return ok(undefined)
   }
 
+  async function getUserAuthorization(userId: string): ReturnType<AuthzOperations['getUserAuthorization']> {
+    return readIamCache(`authorization:${userId}`, async () => {
+      const rows = await reldb.sql.query<{ role_code: string, permission_code: string | null }>('SELECT r.code AS role_code, p.code AS permission_code FROM hai_iam_user_roles ur JOIN hai_iam_roles r ON r.id = ur.role_id LEFT JOIN hai_iam_role_permissions rp ON rp.role_id = r.id LEFT JOIN hai_iam_permissions p ON p.id = rp.permission_id WHERE ur.user_id = ?', [userId])
+      return rows.success ? ok({ roles: [...new Set(rows.data.map(row => row.role_code))], permissions: [...new Set(rows.data.flatMap(row => row.permission_code ? [row.permission_code] : []))] }) : rows
+    })
+  }
+
   return {
-    getSensitiveOperations: () => rbacConfig.enabled ? permissionRepository.getSensitiveOperations() : Promise.resolve(ok([])),
+    getSensitiveOperations: operation => rbacConfig.enabled ? readIamCache(`sensitive:${operation ?? '*'}`, () => permissionRepository.getSensitiveOperations(operation)) : Promise.resolve(ok([])),
     async setPermissionSensitiveOperations(permissionId, operations) {
       if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
         return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
@@ -395,45 +377,17 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       if (!rbacConfig.enabled) {
         return ok(true)
       }
-      const roleIdsResult = await userRoleRepository.getRoleIds(userId)
-      if (!roleIdsResult.success)
-        return roleIdsResult as HaiResult<boolean>
-
-      const roleIds = roleIdsResult.data
-
-      // 无角色用户直接返回 false，跳过超管解析和权限查询
-      if (roleIds.length === 0) {
-        return ok(false)
-      }
-
-      const superAdminResult = await resolveSuperAdminRoleId()
-      if (!superAdminResult.success)
-        return superAdminResult as HaiResult<boolean>
-
-      // 超级管理员拥有所有权限
-      if (superAdminResult.data && roleIds.includes(superAdminResult.data)) {
-        return ok(true)
-      }
-
-      // 查询所有角色的权限并匹配
-      return hasPermissionInRoles(roleIds, permission)
+      const authorization = await getUserAuthorization(userId)
+      if (!authorization.success)
+        return authorization
+      return ok(authorization.data.roles.includes(rbacConfig.superAdminRole) || authorization.data.permissions.some(code => matchesPermission(permission, code)))
     },
 
     async getUserPermissions(userId: string): Promise<HaiResult<Permission[]>> {
       return getUserPermissionsInternal(userId)
     },
 
-    async getUserAuthorization(userId) {
-      const roles = await userRoleRepository.getRoleSummaries(userId)
-      if (!roles.success)
-        return roles
-      const permissions = roles.data.length
-        ? await rolePermissionRepository.getPermissionCodesForRoles(roles.data.map(role => role.id))
-        : ok<string[]>([])
-      if (!permissions.success)
-        return permissions
-      return ok({ roles: roles.data.map(role => role.code), permissions: permissions.data })
-    },
+    getUserAuthorization,
 
     async getUserRoles(userId: string): Promise<HaiResult<Role[]>> {
       return userRoleRepository.getRoles(userId)
@@ -612,11 +566,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
 
         logger.info('Role created', { roleId: createdResult.data.id, code: role.code })
 
-        // 创建的角色可能是超管角色，强制下次 checkPermission 重新解析
-        if (role.code === rbacConfig.superAdminRole) {
-          superAdminRoleId = undefined
-        }
-
         return ok(createdResult.data)
       }
       catch (error) {
@@ -715,9 +664,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
             return mapRepositoryError('iam_updateRoleFailed', commitResult.error.message) as HaiResult<Role>
           }
         }
-
-        // 角色代码可能变更，强制下次 checkPermission 重新解析超管角色
-        superAdminRoleId = undefined
 
         // 角色代码变更后同步受影响用户的会话（仅在自管事务时，外部事务由调用方在 commit 后同步）
         if (ownTx) {
@@ -818,9 +764,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
           affectedUserIds.map(userId => syncUserSessionAfterRoleChange(userId)),
         )
       }
-
-      // 强制下次 checkPermission 重新解析超管角色
-      superAdminRoleId = undefined
 
       logger.info('Role deleted', { roleId })
       return ok(undefined)

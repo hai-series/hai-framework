@@ -26,11 +26,11 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 - API Key 的配置、scope 交集示例表与创建→登录→操作授权→撤销代码见参考中的 API Key 小节。不要以 `checkPermission(userId)` 绕过请求 scope；ID/code/name 分别用于关联、守卫与展示。
 - API Key scopes 与主体权限取交集，默认空数组无操作权限；受限 key 无角色授权，使用 permission 守卫。显式 * 仍受主体限制，派生会话读取/刷新检查 key，撤销/禁用/到期立即拒绝。
 
-- 认证页面使用 iam.publicConfig + AuthPanel，协议用弹窗，表单通过 header/extraFields/footer 或 AuthPanel 的 login*/register* snippet 扩展；Kit 使用 kit.auth.createApi/publicPaths + kit.client.createAuthActions，HTTP 客户端使用 apiClient.createAuthActions。
+- 认证页面使用 await iam.getPublicConfig() + AuthPanel，先检查 success；同步 iam.publicConfig 仅为文件快照，协议用弹窗，表单通过 header/extraFields/footer 或 AuthPanel 的 login*/register* snippet 扩展；Kit 使用 kit.auth.createApi/publicPaths + kit.client.createAuthActions，HTTP 客户端使用 apiClient.createAuthActions。
 - LDAP/Reach 均可选：基础认证无需安装；默认 LDAP 关闭，选用默认客户端才安装 ldapts 并设置 login.ldap + ldap。OTP 邮件/短信由 otp.email/sms 控制，选择 Reach 标准模板或自定义发送回调；具体签名与失败处理见参考中的“可选 LDAP 与通知”。
 - 多节点共享 DB + Redis，Memory 只用于单进程。重置的策略失败计入 maxAttempts；OTP 消费不解除 resendInterval。管理员 createUser 不受自助注册开关限制。
 
-- 受保护请求使用 `iam.auth.verifyToken`：先核验会话绑定的持久凭据代，再复核当前用户启用状态与凭据代并读取当前角色/权限；任一持久读取失败即拒绝。`iam.session.get/verifyToken` 也读取持久用户并校验启用状态与 `credentialVersion`，但返回的角色/权限仍是会话快照，不能替代当前授权。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
+- 受保护请求使用 `iam.auth.verifyToken`：会话校验读取共享代际缓存中的当前用户/凭据状态，校验启用状态、期限与 `credentialVersion`，再读取共享缓存中的当前角色/权限；缓存不可信时回源，必要读取失败即拒绝。`iam.session.get/verifyToken` 复用同一当前用户/凭据状态读取，但返回的角色/权限仍是会话快照，不能替代当前授权。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
 - 用户批量读取用 `iam.user.getUsers(ids, { include: ['roles'] })`（最多 1000，去重保留输入顺序，缺失省略）；角色筛选用 `listUsers({ roleCode })`，在分页前执行，避免 N+1 和分页后过滤。
 
 
@@ -77,3 +77,7 @@ OTP 发布/消费用单身份 CAS；密码重置最终 SQL 同时核验 resetVer
 默认 Reach 通知自动使用 sensitive/expiresAt/idempotencyKey，不保存凭据正文或进入延迟队列；自定义回调同样遵守有效期与幂等。RelDB 初始化后可 migrateIam({dryRun:true})，iam.init 执行支持版本的字段升级，保留用户/密码。升级前停旧写入并备份；无安全代次的旧会话需重新登录，不能降级凭据安全代次。
 
 - 可选再认证规则为文件 operations 与权限 sensitiveOperations 的并集，主开关仍是 reauthentication.enabled；可信管理端使用 authz.setPermissionSensitiveOperations，异步 iam.getPublicConfig 返回含数据库的有效公开策略，读取失败拒绝放行。session.terminalLimits 按 web/app/desktop/api 限制，非空时未列类型拒绝；全局 maxSessions/singleDevice 同时生效，终端分组不是硬件真实性证明。原地登录使用标准 expectedUserId 限定原用户，凭据/验证码/锁定规则照常执行。
+
+- 自动审计由宿主初始化 audit 后启用；未选用时不采集。启用后的写入失败仍可观察，外部事务收到失败应回滚。
+
+- 高频验签/鉴权/敏感操作和 Key 验证复用 IAM 共享缓存，不能另建长寿命进程授权缓存。IAM 写入口在变更前后推进共享代际，外部事务等完成后再回填；不确定提交/失效保留 dirty 并安全回源。账号与口令/Key期限逐次检查，不缓存长期放行结论。多节点同时升级并通过 IAM API 写安全数据；直接 SQL 修改需停写后整体失效缓存。

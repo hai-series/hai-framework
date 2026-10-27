@@ -102,12 +102,11 @@ export async function seedIamData(
   try {
     // 查询现有角色，避免重复创建
     const existingRoles = await authz.getAllRoles({ page: 1, pageSize: 1000 })
+    if (!existingRoles.success)
+      return existingRoles
     const existingRoleMap = new Map<string, string>()
-    if (existingRoles.success) {
-      for (const role of existingRoles.data.items) {
-        existingRoleMap.set(role.code, role.id)
-      }
-    }
+    for (const role of existingRoles.data.items)
+      existingRoleMap.set(role.code, role.id)
 
     const roleMap = new Map<string, string>()
     for (const role of DEFAULT_ROLES) {
@@ -120,19 +119,27 @@ export async function seedIamData(
       if (result.success) {
         roleMap.set(role.code, result.data.id)
       }
+      else if (result.error.code === HaiIamError.ROLE_ALREADY_EXISTS.code) {
+        // 另一个节点已提交相同种子；只复用身份，不覆盖已有角色配置。
+        const concurrent = await authz.getRoleByCode(role.code)
+        if (!concurrent.success)
+          return concurrent
+        if (!concurrent.data)
+          return result
+        roleMap.set(role.code, concurrent.data.id)
+      }
       else {
-        return result as HaiResult<void>
+        return result
       }
     }
 
     // 查询现有权限，避免重复创建
     const existingPerms = await authz.getAllPermissions({ page: 1, pageSize: 1000 })
+    if (!existingPerms.success)
+      return existingPerms
     const existingPermMap = new Map<string, string>()
-    if (existingPerms.success) {
-      for (const perm of existingPerms.data.items) {
-        existingPermMap.set(perm.code, perm.id)
-      }
-    }
+    for (const perm of existingPerms.data.items)
+      existingPermMap.set(perm.code, perm.id)
 
     const permMap = new Map<string, string>()
     for (const perm of DEFAULT_PERMISSIONS) {
@@ -145,8 +152,16 @@ export async function seedIamData(
       if (result.success) {
         permMap.set(perm.code, result.data.id)
       }
+      else if (result.error.code === HaiIamError.PERMISSION_ALREADY_EXISTS.code) {
+        const concurrent = await authz.getPermissionByCode(perm.code)
+        if (!concurrent.success)
+          return concurrent
+        if (!concurrent.data)
+          return result
+        permMap.set(perm.code, concurrent.data.id)
+      }
       else {
-        return result as HaiResult<void>
+        return result
       }
     }
 
@@ -154,7 +169,9 @@ export async function seedIamData(
     const adminRoleId = roleMap.get('admin')
     if (adminRoleId) {
       for (const [, permId] of permMap) {
-        await authz.assignPermissionToRole(adminRoleId, permId)
+        const assigned = await authz.assignPermissionToRole(adminRoleId, permId)
+        if (!assigned.success)
+          return assigned
       }
     }
 
@@ -164,7 +181,9 @@ export async function seedIamData(
       for (const permCode of USER_ROLE_PERMISSIONS) {
         const permId = permMap.get(permCode)
         if (permId) {
-          await authz.assignPermissionToRole(userRoleId, permId)
+          const assigned = await authz.assignPermissionToRole(userRoleId, permId)
+          if (!assigned.success)
+            return assigned
         }
       }
     }

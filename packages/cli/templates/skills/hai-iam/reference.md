@@ -23,7 +23,7 @@
 | `@h-ai/reldb`  | 数据库（用户/角色/权限持久化） | **必需** | 需在 `iam.init()` 前初始化 |
 | `@h-ai/cache`  | 缓存（会话/OTP/一次性票据）    | **必需** | 需在 `iam.init()` 前初始化 |
 | `@h-ai/crypto` | 密码哈希                       | 内部使用 | 自动初始化                 |
-| `@h-ai/audit`  | 审计日志（账号、鉴别、密码、授权、API Key、会话关键事件）  | 内部使用 | 先于 IAM 初始化且 capture.enabled 开启时自动写入；失败可观察         |
+| `@h-ai/audit`  | 审计日志（账号、鉴别、密码、授权、API Key、会话关键事件）  | 内部使用 | 可选；宿主初始化且 capture.enabled 开启时自动写入；未选用不采集，启用后的失败可观察         |
 
 ## 适用场景
 
@@ -123,7 +123,7 @@ LDAP 默认关闭，Reach 不属于 IAM 的启动前置依赖。`ldapts` 和 `@h
 | `loginWithLdap`    | `({ username, password }) => Promise<HaiResult<AuthResult>>`   | LDAP 登录                                        |
 | `loginWithApiKey`  | `({ key }) => Promise<HaiResult<AuthResult>>`                  | API Key 登录                                     |
 | `sendOtp`          | `(identifier) => Promise<HaiResult<{ expiresAt }>>`            | 发送 OTP 验证码                                  |
-| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证会话并读取当前用户状态及授权；数据库失败拒绝 |
+| `verifyToken`      | `(token) => Promise<HaiResult<Session>>`                       | 验证会话并读取当前用户状态及授权；必要状态读取失败拒绝 |
 | `logout`           | `(token) => Promise<HaiResult<void>>`                          | 登出                                             |
 | `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>` | 注册并登录（一站式）                             |
 
@@ -206,7 +206,7 @@ const consumed = await iam.ticket.consume(ticket, { purpose: 'ai-audio' }) // �
 | 方法                        | 签名                                                                                    | 说明                                                         |
 | --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `checkPermission`           | `(userId, permission) => Promise<HaiResult<boolean>>`                                   | 检查权限（超管自动通过，支持通配符）                         |
-| `getUserAuthorization`      | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>`              | 当前角色及权限代码，角色 JOIN + 批量权限查询；失败不回退缓存 |
+| `getUserAuthorization`      | `(userId) => Promise<HaiResult<{roles: string[], permissions: string[]}>>`              | 当前角色及权限代码，单条 JOIN 冷读与共享代际缓存；失效不确定时安全回源 |
 | `getUserPermissions`        | `(userId) => Promise<HaiResult<Permission[]>>`                                          | 获取用户权限列表（通过角色聚合去重）                         |
 | `getUserRoles`              | `(userId) => Promise<HaiResult<Role[]>>`                                                | 获取用户角色列表                                             |
 | `getUserRolesForMany`       | `(userIds) => Promise<HaiResult<Map<string, Role[]>>>`                                  | 批量获取多用户角色（避免 N+1）                               |
@@ -313,7 +313,7 @@ async function revokeKey(keyId: string) {
 
 创建后只有 `rawKey` 能用于 Key 登录；`apiKey.id` 是管理 ID，`keyPrefix` 仅用于显示/检索，均不能代替 rawKey。`verifyApiKey(rawKey)` 仅验证 Key 并返回元数据，不能代替用户状态、scopes 与操作授权。
 
-Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及持久化读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
+Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不会丢失该绑定或扩大 scopes。撤销成功后，已有 accessToken 的 get/verify 以及 refreshToken 的 refresh 都会失败；过期、禁用及必要状态读取失败同样拒绝。角色撤权由 `iam.auth.verifyToken` 读取当前授权生效。改 scope 使用创建新 Key 后撤销旧 Key，当前 API 不提供 scope 更新操作。
 
 `expirationDays: 0` 表示不设过期时间，省略时使用 `apikey.defaultExpirationDays`；需要限时访问时显式设置。明文 Key 和 Token 不进入 URL、日志、公开配置或普通 localStorage。
 
@@ -467,7 +467,7 @@ agreements:
   # privacyPolicyUrl: https://example.com/privacy
 ```
 
-服务端通过 `iam.publicConfig` 提供白名单配置，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 为可选集成，见上方配置与安装说明。
+服务端通过 `await iam.getPublicConfig()` 提供包含数据库规则的白名单配置，先检查 `success`；失败不提供伪完整策略，同步 `iam.publicConfig` 只含文件快照，或通过客户端的 `client.iam.auth.publicConfig()` 标准 HTTP contract 获取。只展示已开启且具备依赖的登录方式；LDAP 为可选集成，见上方配置与安装说明。
 
 | 配置                                                                                 | 用途                                                  |
 | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
@@ -486,7 +486,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 ### 分布式安全与边界
 
-所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验数据库当前代际；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
+所有节点共享同一数据库和 Redis；Memory 仅用于单进程测试。OTP 的验证码、尝试次数和冷却期保存在同一身份 key，通过 CAS 发布和消费；冲突拒绝旧代，消费/耗尽保留冷却期。密码重置的摘要、有效期、尝试次数和 resetVersion 保存在用户数据库行，策略失败计次，最终一条条件 SQL 同时改密、消费令牌并推进 credentialVersion；新令牌、后续尝试、停用或到期都会阻止迟到提交。发送重置请求只推进 resetVersion，不撤销现有会话；成功改密才推进 credentialVersion。认证策略保存已验证的凭据代际，建立会话/认证/刷新均校验共享代际缓存或安全回源的当前状态；缓存批量清理失败也不能使旧会话有效。通知只在成功发布后调用，第三参数为 { expiresAt, idempotencyKey }，应用及 Reach Provider 必须用该稳定键持久化去重。异常/超时可能已送达，返回结果未知，不自动重发或回滚已发布凭据；没有接收端幂等保障时不能承诺外部副作用恰好一次。
 
 可选字段（如 `ldap`）若尚未写入 YAML，请先声明该字段，或通过 `HAI_IAM` 的 JSON 值整体覆盖模块配置；已有字段支持 `HAI_IAM_LOGIN_OTP` 等环境变量覆盖。
 

@@ -11,10 +11,11 @@ import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { AuthenticatedUser, AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { ApiKeyRepository } from './iam-authn-apikey-repository.js'
 import type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult, ListApiKeysOptions } from './iam-authn-apikey-types.js'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
+import { readIamCache } from '../../iam-cache.js'
 import { ApiKeyConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
@@ -130,7 +131,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
   /**
    * 内部：验证明文 API Key 并返回 ApiKey 实体
    */
-  async function verifyRawKey(rawKey: string): Promise<HaiResult<ApiKey>> {
+  async function loadRawKey(rawKey: string): Promise<HaiResult<ApiKey>> {
     const prefix = extractKeyPrefix(rawKey)
 
     // 根据前缀缩小候选范围
@@ -166,6 +167,21 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     }
 
     return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
+  }
+
+  async function verifyRawKey(rawKey: string): Promise<HaiResult<ApiKey>> {
+    const fingerprint = createHash('sha256').update(rawKey).digest('hex')
+    const result = await readIamCache(`verified_apikey:${fingerprint}`, async () => {
+      const verified = await loadRawKey(rawKey)
+      return verified.success ? ok({ ...verified.data, expiresAt: verified.data.expiresAt?.getTime() ?? null, createdAt: verified.data.createdAt.getTime(), lastUsedAt: verified.data.lastUsedAt?.getTime() ?? null }) : verified
+    })
+    if (!result.success)
+      return result
+    if (!result.data.enabled)
+      return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
+    if (result.data.expiresAt !== null && result.data.expiresAt <= Date.now())
+      return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
+    return ok({ ...result.data, expiresAt: result.data.expiresAt === null ? null : new Date(result.data.expiresAt), createdAt: new Date(result.data.createdAt), lastUsedAt: result.data.lastUsedAt === null ? null : new Date(result.data.lastUsedAt) })
   }
 
   // ─── AuthStrategy 实现 ───

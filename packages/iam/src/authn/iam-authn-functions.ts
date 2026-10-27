@@ -444,19 +444,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     const session = await sessionFunctions.verifyToken(accessToken)
     if (!session.success)
       return session
-    const [user, authorization] = await Promise.all([
-      userRepository.findById(session.data.userId),
-      authzFunctions.getUserAuthorization(session.data.userId),
-    ])
-    if (!user.success)
-      return user
-    if (!user.data?.enabled)
-      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
-    if (session.data.credentialVersion !== (user.data.credentialVersion ?? ''))
-      return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
+    const authorization = await authzFunctions.getUserAuthorization(session.data.userId)
     if (!authorization.success)
       return authorization
-    const current = { ...session.data, username: user.data.username, displayName: user.data.displayName, avatarUrl: user.data.avatarUrl, ...authorization.data }
+    const current = { ...session.data, ...authorization.data }
     return ok(current.apiKeyId ? applyApiKeyScopes(current, current.apiKeyScopes ?? []) : current)
   }
 
@@ -465,7 +456,9 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
   async function requiresProof(operation: string): Promise<HaiResult<boolean>> {
     if (!sensitive?.enabled)
       return ok(false)
-    const configured = await authzFunctions.getSensitiveOperations()
+    if (sensitive.operations.includes(operation))
+      return ok(true)
+    const configured = await authzFunctions.getSensitiveOperations(operation)
     if (!configured.success)
       return configured
     return ok(sensitive.operations.includes(operation) || configured.data.includes(operation))

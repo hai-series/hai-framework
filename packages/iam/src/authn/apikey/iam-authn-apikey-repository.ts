@@ -10,6 +10,7 @@ import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import type { ApiKeySortField, ListApiKeysOptions, StoredApiKey } from './iam-authn-apikey-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
+import { guardIamMutation } from '../../iam-cache.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 
@@ -181,6 +182,10 @@ export async function createDbApiKeyRepository(): Promise<ApiKeyRepository> {
 
   const repo = new DbApiKeyRepository()
   await repo.count()
+  repo.removeById = guardIamMutation(repo.removeById.bind(repo), 1)
+  const update = repo.updateFields.bind(repo)
+  const protectedUpdate = guardIamMutation(update, 2)
+  repo.updateFields = (id, data, tx) => Object.keys(data).every(key => key === 'lastUsedAt') ? update(id, data, tx) : protectedUpdate(id, data, tx)
   apiKeyRepoInstance = repo
   apiKeyRepoSqlOps = reldb.sql
   return repo
