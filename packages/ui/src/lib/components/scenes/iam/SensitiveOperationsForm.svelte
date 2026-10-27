@@ -11,16 +11,19 @@
 -->
 <script lang='ts'>
   import type { HaiResult } from '@h-ai/core'
+  import type { DataAttributes } from '../../../types.js'
   import { onDestroy, untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
 
-  const { operations, onsubmit, ondone }: {
+  const { operations, onsubmit, ondone, ...restProps }: {
     operations: readonly string[]
     onsubmit: (operations: string[]) => Promise<HaiResult<unknown>>
     ondone?: () => void
-  } = $props()
+  } & DataAttributes = $props()
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let value = $state(untrack(() => operations.join('\n')))
   let loading = $state(false)
   let error = $state('')
@@ -56,7 +59,7 @@
   }
 </script>
 
-<form class='space-y-4' onsubmit={save} data-testid='sensitive-operations-form'>
+<form data-testid='sensitive-operations-form' {...dataAttributes} class='space-y-4' onsubmit={save}>
   <label class='block space-y-2 text-sm font-medium'>
     <span>{uiM('sensitive_operations_label')}</span>
     <Textarea bind:value rows={6} disabled={loading} aria-label={uiM('sensitive_operations_label')} />

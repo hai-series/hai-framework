@@ -11,15 +11,18 @@
   ```
 -->
 <script lang='ts'>
+  import type { DataAttributes } from '../../../types.js'
   import type { AuthPanelActions } from '../types.js'
   import type { SessionRecovery } from './session-recovery.svelte.js'
   import { err, HaiCommonError } from '@h-ai/core'
   import { uiM } from '../../../messages.js'
+  import { getDataAttributes } from '../../../utils.js'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
   import AuthPanel from './AuthPanel.svelte'
 
-  const { recovery, actions }: { recovery: SessionRecovery, actions: AuthPanelActions } = $props()
+  const { recovery, actions, ...restProps }: { recovery: SessionRecovery, actions: AuthPanelActions } & DataAttributes = $props()
+  const dataAttributes = $derived(getDataAttributes(restProps))
   let authenticating = $state(false)
   let authenticatedId = ''
   let authenticatedVersion = 0
@@ -47,7 +50,7 @@
   })
 </script>
 
-<Modal open={recovery.open} title={uiM('session_recovery_title')} onclose={() => recovery.cancel()} closeOnBackdrop={!authenticating} closeOnEscape={!authenticating} showClose={!authenticating} size='md'>
+<Modal {...dataAttributes} open={recovery.open} title={uiM('session_recovery_title')} onclose={() => recovery.cancel()} closeOnBackdrop={!authenticating} closeOnEscape={!authenticating} showClose={!authenticating} size='md'>
   {#if recovery.open}
     <div data-testid='session-recovery-dialog'>
       <p class='mb-4 text-sm text-base-content/60'>{uiM('session_recovery_hint')}</p>

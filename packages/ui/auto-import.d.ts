@@ -104,6 +104,8 @@ declare global {
   const ReauthenticationDialog: typeof import('@h-ai/ui')['ReauthenticationDialog']
   const RegisterForm: typeof import('@h-ai/ui')['RegisterForm']
   const ResetPasswordForm: typeof import('@h-ai/ui')['ResetPasswordForm']
+  const SensitiveOperationsForm: typeof import('@h-ai/ui')['SensitiveOperationsForm']
+  const SessionRecoveryDialog: typeof import('@h-ai/ui')['SessionRecoveryDialog']
   const UserProfile: typeof import('@h-ai/ui')['UserProfile']
 
   // scenes - storage

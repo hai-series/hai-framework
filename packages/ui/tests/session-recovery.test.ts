@@ -3,7 +3,7 @@ import type { AuthPanelActions, AuthPanelConfig } from '../src/lib/components/sc
 import { err, ok } from '@h-ai/core'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, it, vi } from 'vitest'
-import { createSessionRecovery, SessionRecoveryDialog } from '../src/lib/components/scenes/iam/index.js'
+import { createSessionRecovery, SensitiveOperationsForm, SessionRecoveryDialog } from '../src/lib/components/scenes/iam/index.js'
 
 const config: AuthPanelConfig = {
   login: { password: true, ldap: false, email: false, sms: false },
@@ -14,6 +14,31 @@ const config: AuthPanelConfig = {
   agreements: { showOnLogin: false, showOnRegister: false },
   ui: { variant: 'card' },
 }
+
+it('安全场景组件将宿主的data属性传到实际弹窗和表单', async () => {
+  const recovery = createSessionRecovery()
+  recovery.configure(config, { id: 'original', username: 'alice' })
+  const pending = recovery.recover()
+  const target = document.createElement('div')
+  document.body.append(target)
+  const action = async () => ok(undefined)
+  const dialog = mount(SessionRecoveryDialog, { target, props: { recovery, 'actions': { login: action, register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action }, 'data-testid': 'recovery-host', 'data-business': 'orders' } })
+  const form = mount(SensitiveOperationsForm, { target, props: { 'operations': [], 'onsubmit': action, 'data-testid': 'sensitive-host', 'data-business': 'orders' } })
+  try {
+    flushSync()
+    expect(document.querySelector('[data-testid="recovery-host"]')?.getAttribute('data-business')).toBe('orders')
+    const formHost = target.querySelector('[data-testid="sensitive-host"]')
+    expect(formHost?.tagName).toBe('FORM')
+    expect(formHost?.getAttribute('data-business')).toBe('orders')
+  }
+  finally {
+    recovery.cancel()
+    expect(await pending).toBe(false)
+    await unmount(dialog)
+    await unmount(form)
+    target.remove()
+  }
+})
 
 it('匿名访问不弹窗；并发请求共用一次恢复，原主体和确认代际必须匹配', async () => {
   const recovery = createSessionRecovery()

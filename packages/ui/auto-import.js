@@ -95,6 +95,8 @@ const UI_COMPONENTS = new Set([
   'ReauthenticationDialog',
   'RegisterForm',
   'ResetPasswordForm',
+  'SensitiveOperationsForm',
+  'SessionRecoveryDialog',
   'UserProfile',
   // scenes - storage
   'AvatarUpload',
