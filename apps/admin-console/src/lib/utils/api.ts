@@ -8,7 +8,6 @@
  * =============================================================================
  */
 
-import { sessionRecovery } from '$lib/services/session-recovery.svelte.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
@@ -28,7 +27,13 @@ import { kit } from '@h-ai/kit'
  * })
  * ```
  */
-const client = kit.client.create({ recoverSession: sessionRecovery.recover })
+const client = kit.client.create({
+  // 只有会话失效才需要UI，普通请求观察器不应在导入时加载Svelte组件。
+  recoverSession: async () => {
+    const { sessionRecovery } = await import('$lib/services/session-recovery.svelte.js')
+    return sessionRecovery.recover()
+  },
+})
 
 const observers = new Set<(record: Record<string, unknown>) => void>()
 

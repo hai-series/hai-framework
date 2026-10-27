@@ -1,6 +1,7 @@
+import type { kit } from '@h-ai/kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { transport } = vi.hoisted(() => ({ transport: vi.fn<typeof fetch>() }))
+const { transport } = vi.hoisted(() => ({ transport: vi.fn<ReturnType<typeof kit.client.create>['apiFetch']>() }))
 vi.mock('@h-ai/kit', () => ({ kit: { client: { create: () => ({ apiFetch: transport }) } } }))
 
 const { apiFetch, observeAdminRequests } = await import('../src/lib/utils/api.js')
@@ -23,7 +24,16 @@ describe('feedback request evidence', () => {
     expect(observed).toHaveBeenCalledWith(expect.objectContaining({ status: 200, success: false, errorCode: 'app:order:001', url: 'http://localhost/api/orders' }))
     expect(JSON.stringify(observed.mock.calls)).not.toContain('secret response')
     expect(JSON.stringify(observed.mock.calls)).not.toContain('never-store')
-    expect(transport).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ headers: expect.any(Headers) }))
+    expect(transport).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ headers: expect.any(Headers) }), undefined)
+  })
+
+  it('恢复选项只传给本次请求，后续请求不继承禁用状态', async () => {
+    transport.mockResolvedValue(new Response('{}', { headers: { 'Content-Type': 'application/json' } }))
+    const options = { recoverSession: false }
+    await apiFetch('/api/auth/login', { method: 'POST' }, options)
+    expect(transport).toHaveBeenLastCalledWith('/api/auth/login', expect.objectContaining({ method: 'POST', headers: expect.any(Headers) }), options)
+    await apiFetch('/api/business')
+    expect(transport).toHaveBeenLastCalledWith('/api/business', expect.objectContaining({ headers: expect.any(Headers) }), undefined)
   })
 
   it('反馈通道不递归采集自己，观察异常不改变业务响应', async () => {
