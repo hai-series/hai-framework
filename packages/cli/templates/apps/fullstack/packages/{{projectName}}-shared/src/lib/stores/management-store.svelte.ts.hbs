@@ -1,7 +1,7 @@
 import type { IamPublicConfig } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
-import type { AdminAuditLog, AdminCreateUser, AdminInviteUser, AdminRole, AdminUpdateUser, AdminUser, AuditBackupReceipt, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
+import type { AdminAuditLog, AdminCreateUser, AdminInviteUser, AdminPermissionPolicy, AdminRole, AdminUpdateUser, AdminUser, AuditBackupReceipt, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
 import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import type { HashRouter } from '../navigation/hash-router.svelte.js'
 import { HaiApiClientError } from '@h-ai/api-client'
@@ -46,6 +46,9 @@ export class ManagementStore {
   usersSearch = $state('')
   usersStatus = $state('all')
   roles = $state<AdminRole[]>([])
+  permissionPolicies = $state<AdminPermissionPolicy[]>([])
+  permissionPolicyPage = $state(1)
+  permissionPolicyTotal = $state(0)
   audit = $state<AdminAuditLog[]>([])
   auditTotal = $state(0)
   auditPage = $state(1)
@@ -213,7 +216,33 @@ export class ManagementStore {
       const result = await this.request(() => managementApi.admin.roles.list(), version)
       if (result?.success && version === this.requestVersion)
         this.roles = result.data.items
+      if (this.authConfig?.reauthentication?.enabled)
+        await this.loadPermissionPolicies()
     })
+  }
+
+  async loadPermissionPolicies(page = 1): Promise<void> {
+    const result = await this.request(() => managementApi.admin.permissions.list({ page, pageSize: this.pageSize }))
+    if (result?.success) {
+      this.permissionPolicies = result.data.items
+      this.permissionPolicyPage = page
+      this.permissionPolicyTotal = result.data.total
+    }
+  }
+
+  async savePermissionPolicy(id: string, operations: string[]): Promise<boolean> {
+    let saved = false
+    await this.mutate(async () => {
+      const result = await this.request(() => requestSensitive('iam.permissions.sensitiveOperations', options => managementApi.admin.permissions.update({ id, sensitiveOperations: operations }, options)))
+      if (!result?.success)
+        return
+      saved = true
+      await this.loadPermissionPolicies(this.permissionPolicyPage)
+      const config = await this.request(() => managementApi.iam.auth.publicConfig())
+      if (config?.success)
+        this.authConfig = config.data
+    })
+    return saved
   }
 
   async loadAudit(page = 1): Promise<void> {
@@ -446,9 +475,8 @@ export class ManagementStore {
   private expireSession(): void {
     if (!this.user)
       return
-    this.clearSession()
+    // 原地登录取消时保留页面和输入；显式退出仍由logout清空会话与页面。
     this.error = m.session_expired()
-    void managementApi.auth.clear()
   }
 
   private async request<T>(task: () => Promise<HaiResult<T>>, version?: number): Promise<HaiResult<T> | undefined> {

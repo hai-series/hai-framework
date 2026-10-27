@@ -4,10 +4,13 @@
 <script lang='ts'>
   import type { CrudOperations } from '@h-ai/kit'
   import type { PageData } from './$types'
+  import { invalidateAll } from '$app/navigation'
   import { createPermissionCrud } from '$lib/crud/admin-crud'
   import * as m from '$lib/paraglide/messages'
+  import { sensitiveFetch } from '$lib/services/sensitive-actions.svelte'
+  import { err, HaiCommonError, ok } from '@h-ai/core'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { CrudPage, usePermission } from '@h-ai/ui'
+  import { Button, CrudPage, Modal, SensitiveOperationsForm, usePermission } from '@h-ai/ui'
 
   interface PermissionItem {
     id: string
@@ -18,6 +21,7 @@
     action?: string
     type?: 'menu' | 'api' | 'button'
     is_system: boolean
+    sensitiveOperations?: string[] | null
   }
 
   interface Props {
@@ -61,6 +65,17 @@
   }
 
   const nav = createSvelteKitNavAdapter()
+  let editing = $state<PermissionItem | null>(null)
+
+  async function saveOperations(operations: string[]) {
+    if (!editing)
+      return err(HaiCommonError.VALIDATION_ERROR)
+    const response = await sensitiveFetch('iam.permissions.sensitiveOperations', `/api/iam/permissions/${encodeURIComponent(editing.id)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sensitiveOperations: operations }) })
+    if (!response.ok)
+      return err(HaiCommonError.INTERNAL_ERROR)
+    await invalidateAll()
+    return ok(undefined)
+  }
 </script>
 
 <svelte:head>
@@ -95,4 +110,19 @@
   permissions={{ create: canCreate, update: false, delete: canDelete }}
   onbeforedelete={handleBeforeDelete}
   {nav}
-/>
+>
+  {#snippet listItemActions(item)}
+    {#if data.iamPublicConfig.reauthentication.enabled && hasPerm('permission:manage')}
+      <Button size='xs' variant='ghost' onclick={() => { editing = data.permissions.find(permission => permission.id === item.id) ?? null }}>{m.security_sensitive_operations()}</Button>
+    {/if}
+  {/snippet}
+</CrudPage>
+
+<Modal open={!!editing} title={m.security_sensitive_operations()} onclose={() => { editing = null }}>
+  {#if editing}
+    {#key editing.id}
+      <p class='mb-3 text-sm font-medium'>{editing.code}</p>
+      <SensitiveOperationsForm operations={editing.sensitiveOperations ?? []} onsubmit={saveOperations} ondone={() => { editing = null }} />
+    {/key}
+  {/if}
+</Modal>

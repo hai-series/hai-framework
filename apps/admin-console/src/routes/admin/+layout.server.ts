@@ -42,7 +42,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
       locale: coreConfig?.defaultLocale ?? 'zh-CN',
     },
     // 与认证页面共用 IAM 公开配置，session.maxAge 已包含在标准白名单中。
-    iamPublicConfig: iam.publicConfig!,
+    iamPublicConfig: requireAdminData(await iam.getPublicConfig()),
     feedbackEnabled: Boolean(core.config.get('feedback')),
   }
 }

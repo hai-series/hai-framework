@@ -536,6 +536,7 @@
   "business_settings_title": "Business configuration",
   "business_notice_label": "Public business notice",
   "business_notice_hint": "All users can read this notice. Do not include sensitive information.",
+  "security_sensitive_operations": "Sensitive operations",
   "security_action_cancelled": "Sensitive action cancelled.",
   "account_type": "Account type",
   "account_permanent": "Permanent",

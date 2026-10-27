@@ -12,6 +12,7 @@
   const native = '__TAURI_INTERNALS__' in globalThis
   const apiOptions: ManagementApiOptions = {
     clientName: '{{projectName}}-desktop',
+      terminalType: 'desktop',
     ...(native ? { requireApiBase: true, tokenStorage: apiClient.tokenStorage.memory(), headers: { 'X-HAI-Token-Transport': 'body' } } : {}),
   }
 

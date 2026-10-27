@@ -536,6 +536,7 @@
   "business_settings_title": "业务基础配置",
   "business_notice_label": "公共业务公告",
   "business_notice_hint": "公告对所有用户可见，请勿填写敏感信息。",
+  "security_sensitive_operations": "敏感操作",
   "security_action_cancelled": "已取消敏感操作。",
   "account_type": "账号类型",
   "account_permanent": "长期账号",

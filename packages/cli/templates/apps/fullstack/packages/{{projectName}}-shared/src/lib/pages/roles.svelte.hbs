@@ -1,7 +1,9 @@
 <script lang="ts">
-  import type { AdminRole } from '{{fullstack.contractPackageName}}'
+  import type { AdminPermissionPolicy, AdminRole } from '{{fullstack.contractPackageName}}'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { Card, Modal } from '@h-ai/ui/components/compounds/index'
+  import { err, HaiCommonError, ok } from '@h-ai/core'
+  import { SensitiveOperationsForm } from '@h-ai/ui/components/scenes/iam/index'
+  import { Card, Modal, Pagination } from '@h-ai/ui/components/compounds/index'
   import { Badge, Button, Textarea } from '@h-ai/ui/components/primitives/index'
   import { roleCapabilities, roleLabel } from '../security/role-label.js'
   import * as m from '../paraglide/messages.js'
@@ -10,6 +12,11 @@
   const { store }: Props = $props()
   let editing = $state<AdminRole | null>(null)
   let description = $state('')
+  let permission = $state<AdminPermissionPolicy | null>(null)
+  async function savePolicy(operations: string[]) {
+    const saved = permission && await store.savePermissionPolicy(permission.id, operations)
+    return saved ? ok(undefined) : err(HaiCommonError.INTERNAL_ERROR, store.error || m.home_error())
+  }
   function edit(role: AdminRole) {
     editing = role
     description = role.description ?? ''
@@ -38,6 +45,20 @@
       </Card>
     {/each}
   </div>
+  {#if store.authConfig?.reauthentication?.enabled}
+    <Card bordered shadow={false}>
+      <h2 class="mb-4 text-lg font-semibold">{m.security_sensitive_operations()}</h2>
+      <div class="divide-y divide-base-content/8">
+        {#each store.permissionPolicies as item (item.id)}
+          <div class="flex items-center justify-between gap-4 py-3">
+            <div class="min-w-0"><p class="break-all font-mono text-sm">{item.code}</p><p class="mt-1 break-all text-xs text-base-content/60">{item.sensitiveOperations.join(', ') || '—'}</p></div>
+            <Button size="sm" variant="outline" onclick={() => { permission = item }}>{m.security_sensitive_operations()}</Button>
+          </div>
+        {/each}
+      </div>
+      <Pagination page={store.permissionPolicyPage} total={store.permissionPolicyTotal} pageSize={store.pageSize} onchange={page => void store.loadPermissionPolicies(page)} />
+    </Card>
+  {/if}
 </section>
 
 <Modal open={!!editing} title={m.role_edit()} onclose={() => { editing = null }} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving}>
@@ -47,4 +68,13 @@
     {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}
     <div class="flex justify-end gap-2"><Button variant="ghost" disabled={store.saving} onclick={() => { editing = null }}>{m.cancel()}</Button><Button type="submit" variant="primary" loading={store.saving}>{m.save()}</Button></div>
   </form>
+</Modal>
+
+<Modal open={!!permission} title={m.security_sensitive_operations()} onclose={() => { permission = null }}>
+  {#if permission}
+    {#key permission.id}
+      <p class="mb-3 break-all font-mono text-sm">{permission.code}</p>
+      <SensitiveOperationsForm operations={permission.sensitiveOperations} onsubmit={savePolicy} ondone={() => { permission = null }} />
+    {/key}
+  {/if}
 </Modal>

@@ -8,8 +8,19 @@ import * as m from '$lib/paraglide/messages.js'
 import { deleteAdminPermission, getAdminPermission } from '$lib/server/iam-admin.js'
 import { IdParamSchema } from '$lib/server/schemas/index.js'
 import { requireManageablePermission } from '$lib/server/security-roles.js'
+import { IamPermissionSchema } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
+
+/** 系统管理人员可维护权限的再鉴别要求；不改变原有职责授权。 */
+export const PUT = kit.handler(async ({ params, locals, request, cookies }) => {
+  kit.guard.require(locals.session, 'permission:manage')
+  await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.permissions.sensitiveOperations')
+  const { id } = kit.validate.params(params, IdParamSchema)
+  const input = await kit.validate.body(request, IamPermissionSchema.pick({ sensitiveOperations: true }))
+  const result = await iam.authz.setPermissionSensitiveOperations(id, input.sensitiveOperations)
+  return result.success ? kit.response.ok(null) : kit.response.fromError(result.error)
+})
 
 /**
  * DELETE /api/iam/permissions/[id] - 删除权限

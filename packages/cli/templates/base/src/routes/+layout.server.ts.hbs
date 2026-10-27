@@ -4,14 +4,22 @@ import type { CoreConfig } from '@h-ai/core'
 import { core } from '@h-ai/core'
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
+import { error } from '@sveltejs/kit'
 {{/if}}
 
 /** 只向浏览器提供公开配置，避免暴露日志上下文、凭证或其它模块配置。 */
-export function load() {
+export async function load() {
   const config = core.config.getOrThrow<CoreConfig>('core')
+{{#if features.iam}}
+  const publicConfig = await iam.getPublicConfig()
+  if (!publicConfig.success) {
+    core.logger.error('Failed to load public authentication configuration', { error: publicConfig.error })
+    error(503, { message: core.error.toPublic(publicConfig.error).message })
+  }
+{{/if}}
   return {
 {{#if features.iam}}
-    iamPublicConfig: iam.publicConfig,
+    iamPublicConfig: publicConfig.data,
 {{/if}}
     appConfig: {
       name: config.name,

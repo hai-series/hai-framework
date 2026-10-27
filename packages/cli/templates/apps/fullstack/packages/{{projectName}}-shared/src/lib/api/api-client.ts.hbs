@@ -5,6 +5,8 @@ import { err } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { {{fullstack.contractExportName}} } from '{{fullstack.contractPackageName}}'
 
+import { sessionRecovery } from './session-recovery.svelte.js'
+
 export type AppInfo = AppInfoOutputData
 export const managementApi = apiClient.create({{fullstack.contractExportName}})
 
@@ -14,6 +16,7 @@ export interface ManagementApiOptions {
   fetchFn?: typeof fetch
   baseUrl?: string
   clientName?: string
+  terminalType?: 'web' | 'app' | 'desktop'
   tokenStorage?: TokenStorage
   headers?: Record<string, string>
   requireApiBase?: boolean
@@ -37,7 +40,7 @@ export async function initializeManagementApi(options: ManagementApiOptions = {}
     clientName: options.clientName ?? '{{fullstack.sharedPackageName}}',
     fetch: createCredentialedFetch(options.fetchFn),
     headers: options.headers,
-    auth: { storage: options.tokenStorage, onRefreshFailed: options.onSessionExpired },
+    auth: { recoverSession: sessionRecovery.recover, terminalType: options.terminalType ?? 'web', storage: options.tokenStorage, onRefreshFailed: options.onSessionExpired },
     transport: { crypto },
   })
 }

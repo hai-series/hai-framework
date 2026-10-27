@@ -8,6 +8,7 @@
  * =============================================================================
  */
 
+import { sessionRecovery } from '$lib/services/session-recovery.svelte.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
@@ -27,7 +28,7 @@ import { kit } from '@h-ai/kit'
  * })
  * ```
  */
-const client = kit.client.create()
+const client = kit.client.create({ recoverSession: sessionRecovery.recover })
 
 const observers = new Set<(record: Record<string, unknown>) => void>()
 
@@ -37,7 +38,7 @@ export function observeAdminRequests(observer: (record: Record<string, unknown>)
   return () => observers.delete(observer)
 }
 
-export const apiFetch: typeof fetch = async (input, init) => {
+export const apiFetch: ReturnType<typeof kit.client.create>['apiFetch'] = async (input, init, options) => {
   const rawUrl = input instanceof Request ? input.url : String(input)
   const requestId = core.id.uuid()
   const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
@@ -48,7 +49,7 @@ export const apiFetch: typeof fetch = async (input, init) => {
   const excluded = rawUrl.includes('/feedback/')
   const metadata = () => ({ requestId, url: rawUrl.split(/[?#]/)[0], method: init?.method ?? (input instanceof Request ? input.method : 'GET'), timestamp: started, duration: Date.now() - started, status: status ?? null })
   try {
-    const response = await client.apiFetch(input, { ...init, headers })
+    const response = await client.apiFetch(input, { ...init, headers }, options)
     status = response.status
     if (!excluded) {
       observingResponse = true

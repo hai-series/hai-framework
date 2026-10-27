@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { ManagementPage, ManagementStore } from '../stores/management-store.svelte.js'
-  import { ReauthenticationDialog } from '@h-ai/ui/components/scenes/iam/index'
+  import { ReauthenticationDialog, SessionRecoveryDialog } from '@h-ai/ui/components/scenes/iam/index'
+  import { sessionRecovery } from '../api/session-recovery.svelte.js'
   import { sensitiveActions } from '../api/sensitive-actions.svelte.js'
   import { managementAuthActions } from '../api/api-client.js'
   import { Avatar, Badge, BareButton, Button } from '@h-ai/ui/components/primitives/index'
@@ -17,6 +18,10 @@
     onhelp: () => void
   }
   const { platform, store, children, onhelp }: Props = $props()
+  $effect(() => {
+    sessionRecovery.configure(store.authConfig, store.user ?? undefined)
+    return () => sessionRecovery.cancel()
+  })
   $effect(() => managementAuthActions.bindPageExit({ enabled: Boolean(store.user) && store.authConfig?.session.endOnPageHide }))
   $effect(() => {
     sensitiveActions.configure(store.authConfig?.reauthentication ?? { enabled: false, operations: [] })
@@ -41,6 +46,7 @@
   }
 </script>
 
+<SessionRecoveryDialog recovery={sessionRecovery} actions={managementAuthActions} />
 <ReauthenticationDialog open={sensitiveActions.open} loading={sensitiveActions.loading} error={sensitiveActions.error} onsubmit={password => sensitiveActions.submit(password)} onclose={() => sensitiveActions.cancel()} />
 
 <div class="flex h-dvh overflow-hidden bg-base-200/50 text-base-content" class:hai-safe-area={platform === 'app'}>
