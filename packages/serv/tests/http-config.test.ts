@@ -89,7 +89,7 @@ describe('resolveServHttpConfig', () => {
     expect(config.http.docs).toEqual({ path: '/docs' })
     expect(config.http.health).toEqual({ path: '/health', readyPath: '/ready' })
     expect(config.cors).toEqual({
-      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication'],
+      allowedHeaders: ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication', 'X-Hai-Terminal'],
       exposedHeaders: [],
       credentials: false,
     })
