@@ -2,6 +2,7 @@
 appId: admin-console
 # appVersion/buildId/commit 由本次构建元数据注入，不使用静态示例值。
 notificationMode: ${HAI_FEEDBACK_NOTIFICATIONMODE:console}
+consoleContent: ${HAI_FEEDBACK_CONSOLECONTENT:metadata}
 maxTotalBytes: ${HAI_FEEDBACK_MAXTOTALBYTES:33554432}
 recipients: []
 # Reach 模式取消下面接收方配置的注释，并设置真实通知通道。

@@ -912,6 +912,7 @@ function generateFeedbackConfig(): string {
 appId: my-app
 appVersion: 0.1.0
 notificationMode: console
+consoleContent: metadata
 maxTotalBytes: 33554432
 recipients: []
 # Reach 模式设置真实 Provider 和接收方，不影响其它通知的免打扰策略。

@@ -12,7 +12,7 @@
 
 - ブラウザーとサーバーのログ、リクエスト、操作、バージョン、許可された環境情報を上限付きで収集します。既定ではエラーの前後それぞれ最大100件です。
 - トランザクションによる受理、提出と証拠の冪等性、checksum 検証、処理・収集・通知状態の分離、永続ジョブとリース回復。
-- `notificationMode` は独立して選択できます。`disabled` は通知ジョブなし、`console` は本番でも脱機密化した概要のみを出力し Reach/メール不要、`reach` は任意の Provider と宛先を使い、このモードのみ recipients が必要です。既定の `reach` は既存設定を維持し、生成プロジェクトは `console` を明示します。Reach DND 中は feedback 自身の outbox で待機し、二重の遅延キューや他通知の方針変更を行いません。本番 Reach Console の制限は維持します。sent はチャネル受付であり受信完了を意味しません。
+- `notificationMode` は独立して選択できます。`disabled` は通知ジョブなし、`console` は本番でも既定でメタデータだけを出力し Reach/メール不要（consoleContent: summary で一般的なマスキング済み概要を明示）、`reach` は任意の Provider と宛先を使い、このモードのみ recipients が必要です。既定の `reach` は既存設定を維持し、生成プロジェクトは `console` を明示します。Reach DND 中は feedback 自身の outbox で待機し、二重の遅延キューや他通知の方針変更を行いません。本番 Reach Console の制限は維持します。sent はチャネル受付であり受信完了を意味しません。
 - スクリーンショット、復元不能なマスク、注釈、任意の rrweb 記録、再試行とローカル出力。UI は `FeedbackModal`、`FeedbackList`、`FeedbackDetail` を提供します。
 - 自己完結 ZIP、SHA-256 検証、オフライン表示、証拠のページ検索。運用認証情報は含めません。
 
@@ -66,7 +66,7 @@ return submitted
 
 下書きは SDK が保持し、`annotate` や `addFiles` で更新します。Svelte 側では参照を `$state.raw<FeedbackDraft>()` に保持し、操作成功後に `getDraft()` から添付ビューを更新してください。深い `$state` プロキシに格納すると、SDK が元の下書きの画像バイトを置き換えても、キャッシュされた古いバイトが返る場合があります。
 
-`maxTotalBytes` の既定値は 32 MiB（4–40 MiB）です。`feedback.budget` から単一・合計添付、二重保存する証拠と Base64/暗号化転送の上限を導出します。既定は各 5 MiB、添付合計 22 MiB、証拠 4 MiB/2000 件、履歴・メタデータ・ビューアー用 2 MiB です。受理前に添付宣言の合計を検証し、証拠更新は原子的に制限、処理履歴は 256 KiB までです。認証済み `reports.policy({})` でクライアントとフォームに有効値を渡します。管理画面、API/fullstack テンプレートとデプロイは `feedback.budget.maxTransportBytes` を転送、adapter-node、プロキシに適用します。既存の独自ホストは初期化時に同じ値を接続します。`hai add` は既存設定を維持します。
+`maxTotalBytes` の既定値は 32 MiB（4–40 MiB）です。`feedback.budget` から単一・合計添付、二重保存する証拠と Base64/暗号化転送の上限を導出します。既定は各 5 MiB、添付合計 22 MiB、証拠 4 MiB/2000 件、履歴・メタデータ・ビューアー用 2 MiB です。受理前に添付宣言の合計を検証し、証拠更新は原子的に制限、処理履歴は 256 KiB までです。認証済み `reports.policy({})` でクライアントとフォームに有効値を渡します。管理画面、API/fullstack テンプレートとデプロイは `resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })` で明示上限と必要量を合わせ、転送、adapter-node、プロキシに同じ導出値を適用します。明示上限不足はエラーとなり、省略/auto の場合のみ自動導出します。独自ホストでも初期化時に同じ処理を行ってください。`hai add` は既存設定を維持します。
 
 `captureConsole` と `persistDraft` の既定値は false です。永続化にはホストが決定する非認証情報のユーザー/テナント `persistenceKey` が必要です。`keyScreenshots` は既定で true ですが `screenshot` 全体スイッチに従います。`maxKeyScreenshots` は既定 3、上限 5、`keyScreenshotThrottleMs` は既定 10000 ミリ秒です。
 
@@ -165,6 +165,12 @@ hai feedback view feedback-FB-1.zip
 `FeedbackConfigSchema` は appId、notificationMode、recipients、maxTotalBytes、notificationProvider、adminUrl、collectionTimeoutMs、workerIntervalMs、leaseMs、maxAttempts、retentionDays、envAllowlist と資料の容量を検証します。YAML の環境参照は `HAI_FEEDBACK_*` を使い、ブラウザーへ SMTP/S3 の秘密を公開しません。
 
 各業務結果の `success` を確認してください。`HaiFeedbackError` は初期化、設定、権限、存在しない記録、競合、容量、checksum エラーを表します。HTTP 200やSMTP受理だけでは、業務成功や受信箱への配信を証明できません。不確実な送信は重複する可能性があります。
+
+### console 通知のプライバシー境界
+
+`consoleContent` の既定は `metadata` で、報告番号、アプリ・バージョン・ビルド情報と収集状態だけを記録します。説明・概要・添付・証拠・通知本文・宛先は含みません。一般的なマスキング済み概要が必要な場合のみ `summary` を明示します。一般的なマスキングでは全業務機密を検出できません。Reach は不要で disabled/reach の意味は変わりません。更新後の既存 console 設定も既定でメタデータだけになります。
+
+`resolveTransportBodyLimits(configuredLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })` でホスト上限と統合し、直接上書きしません。明示上限の不足は設定競合、省略または Serv/Kit の auto では必要量を計算します。添付と証拠の業務上限は独立です。
 
 ## 開発とテスト
 

@@ -12,7 +12,7 @@
 
 - 有界采集前后端日志、请求、错误、操作、版本与白名单环境信息；默认错误前后各最多 100 条。
 - 数据库事务受理、提交/证据幂等、附件校验、独立的处理/采集/通知状态、持久化任务与租约恢复。
-- 通知由 `notificationMode` 独立选择：`disabled` 不创建通知任务；`console` 在生产也可输出已脱敏的反馈摘要，不依赖 Reach 或邮箱；`reach` 使用任意已配置 Provider 与接收方，仅此模式要求 recipients。默认 `reach` 保持旧配置兼容，新生成工程显式使用 `console`。Reach 免打扰期间由反馈自己的 outbox 等待，不进入 Reach 延迟队列，也不修改其他通知策略。Reach 的生产 Console Provider 限制保持不变；sent 仅表示选定通道受理，不能证明收信。
+- 通知由 `notificationMode` 独立选择：`disabled` 不创建通知任务；`console` 默认仅输出定位与采集状态元数据（consoleContent: metadata）；显式 consoleContent: summary 才加入通用脱敏摘要，不依赖 Reach 或邮箱；`reach` 使用任意已配置 Provider 与接收方，仅此模式要求 recipients。默认 `reach` 保持旧配置兼容，新生成工程显式使用 `console`。Reach 免打扰期间由反馈自己的 outbox 等待，不进入 Reach 延迟队列，也不修改其他通知策略。Reach 的生产 Console Provider 限制保持不变；sent 仅表示选定通道受理，不能证明收信。
 - 浏览器截图、遮挡/标注、可选 rrweb 回放、失败重试与本地导出；`@h-ai/ui` 提供 `FeedbackModal`、`FeedbackList` 和 `FeedbackDetail`。
 - 自包含 ZIP、SHA-256 校验、离线查看与按请求/错误/时间分页读取，不包含生产凭据。
 
@@ -68,7 +68,7 @@ return submitted
 
 草稿由 SDK 持有并通过 `annotate`、`addFiles` 等方法更新。Svelte 宿主保存该引用时使用 `$state.raw<FeedbackDraft>()`，操作成功后从 `getDraft()` 刷新附件视图；不要将 SDK 草稿放入深度 `$state` 代理，否则 SDK 替换图片字节后，代理可能继续返回已缓存的旧字节。
 
-`maxTotalBytes` 默认 32 MiB（4–40 MiB）。`feedback.budget` 从同一总量推导单附件、附件总量、双份证据与 Base64/加密传输预算；默认单附件 5 MiB、附件合计 22 MiB、证据 4 MiB/2000 条，并预留 2 MiB 给历史、元数据和查看器。受理前检查附件声明总量，补采原子检查证据预算，处理历史限制 256 KiB，避免成功受理后因容量永久无法导出。客户端通过受权 `reports.policy({})` 取得有效值，表单展示容量；管理台、API/fullstack 模板与框架部署分别将 `feedback.budget.maxTransportBytes` 用于服务传输、adapter-node 和代理。已有自定义宿主需在同一初始化位置接入此值；`hai add` 保留已有配置。
+`maxTotalBytes` 默认 32 MiB（4–40 MiB）。`feedback.budget` 从同一总量推导单附件、附件总量、双份证据与 Base64/加密传输预算；默认单附件 5 MiB、附件合计 22 MiB、证据 4 MiB/2000 条，并预留 2 MiB 给历史、元数据和查看器。受理前检查附件声明总量，补采原子检查证据预算，处理历史限制 256 KiB，避免成功受理后因容量永久无法导出。客户端通过受权 `reports.policy({})` 取得有效值，表单展示容量；管理台、API/fullstack 模板与框架部署通过 `resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })` 合并宿主上限与反馈需求，将同一派生值用于服务传输、adapter-node 和代理。显式值不足时报错，缺省/auto 才自动推导；已有自定义宿主需在初始化处同样合并；`hai add` 保留已有配置。
 
 `captureConsole` 和 `persistDraft` 默认关闭；持久化启用时必须提供由宿主确定的非凭据用户/租户 `persistenceKey`。`keyScreenshots` 默认开启，仍受 `screenshot` 总开关控制；`maxKeyScreenshots` 默认 3、硬上限 5，`keyScreenshotThrottleMs` 默认 10000 毫秒。
 
@@ -167,6 +167,12 @@ hai feedback view feedback-FB-1.zip
 `FeedbackConfigSchema` 校验所有输入；主要配置为 appId、notificationMode、recipients、maxTotalBytes、notificationProvider、adminUrl、collectionTimeoutMs、workerIntervalMs、leaseMs、maxAttempts、retentionDays、envAllowlist 及附件/证据容量。通过 `HAI_FEEDBACK_*` 显式映射 YAML；浏览器只取得允许公开的采集策略，不能拿到 SMTP/S3 密钥。
 
 领域错误使用 `HaiFeedbackError`，包括未初始化、配置、权限、找不到、冲突、容量及 checksum 失败。所有领域 API 先检查 `success`；HTTP 200 或 Promise 完成不代表反馈、上传或邮件成功。SMTP 受理不等于管理员收件箱已投递；不确定发送存在重发边界。
+
+### console 通知的隐私边界
+
+`consoleContent` 默认为 `metadata`：仅记录反馈编号、应用/版本/构建定位与采集状态，不输出说明、summary、附件、证据、通知正文或接收地址。需要通用脱敏摘要时显式设为 `summary`；通用脱敏不能识别所有业务秘密。该选项不需要 Reach，也不改变 disabled/reach 的通道语义。旧配置的 console 日志默认随本次升级收紧。
+
+反馈传输需求通过 `resolveTransportBodyLimits(configuredLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })` 与宿主上限合并，不能直接覆盖。显式值不足时报配置冲突；缺省或 Serv/Kit 的 auto 才自动推导。附件和证据的业务预算不随传输容量扩大。
 
 ## 开发测试
 

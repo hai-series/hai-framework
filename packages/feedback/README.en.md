@@ -12,7 +12,7 @@ Collect user feedback and diagnostic evidence, notify administrators, review rep
 
 - Bounded browser/server logs, requests, errors, interactions, versions and allowed environment fields; up to 100 log records before and after an error by default.
 - Transactional intake, stable submission/evidence identifiers, checksum validation, independent processing/collection/notification state and durable leased jobs.
-- `notificationMode` independently selects `disabled` (no notification jobs), `console` (sanitized summaries, including production, without Reach/email), or `reach` (any configured provider and destinations; only this mode requires recipients). The default remains `reach` for existing configurations; generated projects explicitly select `console`. During Reach DND, the feedback outbox waits without adding a second delayed queue or changing other notification policy. Production Reach Console restrictions remain enforced. Sent means channel acceptance, not inbox delivery.
+- `notificationMode` independently selects `disabled` (no notification jobs), `console` (metadata only by default, including production, without Reach/email; consoleContent: summary explicitly enables sanitized summaries), or `reach` (any configured provider and destinations; only this mode requires recipients). The default remains `reach` for existing configurations; generated projects explicitly select `console`. During Reach DND, the feedback outbox waits without adding a second delayed queue or changing other notification policy. Production Reach Console restrictions remain enforced. Sent means channel acceptance, not inbox delivery.
 - Browser screenshots, irreversible masking, annotations, optional rrweb recording, retries and local fallback export; `FeedbackModal`, `FeedbackList` and `FeedbackDetail` in `@h-ai/ui`.
 - Self-contained ZIP files, SHA-256 validation, an offline viewer and paginated evidence queries without production credentials.
 
@@ -66,7 +66,7 @@ Concurrent `init` returns `INIT_IN_PROGRESS`; `close` drains bounded screenshots
 
 The SDK owns the draft and updates it through methods such as `annotate` and `addFiles`. Svelte hosts should keep this reference in `$state.raw<FeedbackDraft>()` and refresh attachment views from `getDraft()` after successful operations. A deep `$state` proxy can retain cached image bytes after the SDK replaces them on the original draft.
 
-`maxTotalBytes` defaults to 32 MiB (4–40 MiB). `feedback.budget` derives individual/total attachment, duplicate evidence and Base64/encrypted transport budgets from it. Defaults are 5 MiB per file, 22 MiB for attachments, 4 MiB/2000 evidence records, plus 2 MiB for history, metadata and the viewer. Submission validates declared totals; evidence updates enforce quotas atomically; processing history is limited to 256 KiB. The authenticated `reports.policy({})` supplies effective limits to the client and form. The reference admin, API/fullstack templates and framework deployment use `feedback.budget.maxTransportBytes` for transport, adapter-node and proxies. Existing custom hosts wire this value during initialization; `hai add` preserves existing configuration.
+`maxTotalBytes` defaults to 32 MiB (4–40 MiB). `feedback.budget` derives individual/total attachment, duplicate evidence and Base64/encrypted transport budgets from it. Defaults are 5 MiB per file, 22 MiB for attachments, 4 MiB/2000 evidence records, plus 2 MiB for history, metadata and the viewer. Submission validates declared totals; evidence updates enforce quotas atomically; processing history is limited to 256 KiB. The authenticated `reports.policy({})` supplies effective limits to the client and form. The reference admin, API/fullstack templates and deployment combine explicit host limits and feedback requirements with `resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })`, using the derived budget for transport, adapter-node and proxies. Insufficient explicit limits fail; only omitted/auto values derive capacity. Custom hosts combine limits during initialization; `hai add` preserves existing configuration.
 
 `captureConsole` and `persistDraft` default to false. Persistence requires a host supplied, noncredential user/tenant `persistenceKey`. `keyScreenshots` defaults to true and follows the main `screenshot` switch; `maxKeyScreenshots` defaults to 3 with a hard limit of 5, and `keyScreenshotThrottleMs` defaults to 10000 milliseconds.
 
@@ -165,6 +165,12 @@ The viewer binds only to loopback, uses a random URL and trusted built-in viewer
 `FeedbackConfigSchema` validates appId, notificationMode, recipients, maxTotalBytes, notificationProvider, adminUrl, collectionTimeoutMs, workerIntervalMs, leaseMs, maxAttempts, retentionDays, envAllowlist and attachment/evidence quotas. Explicit YAML environment mappings use `HAI_FEEDBACK_*`. Browser policy must not expose SMTP or S3 secrets.
 
 Check `success` for every domain result. `HaiFeedbackError` covers initialization, configuration, scope, missing records, conflicts, quota and checksum failures. HTTP 200 and SMTP acceptance do not prove final business success or inbox delivery; uncertain sends can be repeated.
+
+### Privacy boundary of console notifications
+
+`consoleContent` defaults to `metadata`: report number, application/version/build identity and collection status only. Descriptions, summaries, attachments, evidence, notification bodies and destinations are excluded. Explicit `summary` enables a generically sanitized summary; generic redaction cannot identify every business secret. Reach is not required and disabled/reach channel semantics are unchanged. Existing console configurations become metadata-only by default on upgrade.
+
+Combine transport requirements with the host limit through `resolveTransportBodyLimits(configuredLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })`, instead of overwriting it. An insufficient explicit limit is a configuration conflict; omitted values or Serv/Kit auto derive capacity. Attachment and evidence limits remain independent.
 
 ## Development and testing
 

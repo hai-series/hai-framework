@@ -18,8 +18,10 @@ export const FeedbackConfigSchema = z.strictObject({
   buildId: z.string().max(128).optional(),
   /** 源码提交标识，帮助定位对应代码。 */
   commit: z.string().max(128).optional(),
-  /** disabled 不通知，console 输出安全摘要，reach 使用已有通知通道。 */
+  /** disabled 不通知，console 默认仅输出元数据，reach 使用已有通知通道。 */
   notificationMode: z.enum(['disabled', 'console', 'reach']).default('reach'),
+  /** console 通知内容；metadata 只输出定位和采集状态，summary 显式加入通用脱敏摘要。 */
+  consoleContent: z.enum(['metadata', 'summary']).default('metadata'),
   /** Reach 接收方，由实际 Provider 校验邮箱、手机号或业务目的地。 */
   recipients: z.array(z.string().min(1).max(320)).max(20).default([]),
   /** 已初始化 Reach Provider 的唯一名称，不限制为邮件。 */

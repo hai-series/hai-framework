@@ -26,6 +26,21 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 describe('反馈独立通知策略', () => {
+  it.each(['metadata', 'summary'] as const)('consoleContent=%s 只输出选择的字段，业务正文和 URL 不随日志外泄', async (consoleContent) => {
+    const output = vi.spyOn(core.logger, 'info')
+    expect((await feedback.init({ appId: 'privacy', notificationMode: 'console', consoleContent, workerIntervalMs: 0 })).success).toBe(true)
+    const accepted = await feedback.submit({ appId: 'privacy', submissionId: consoleContent, description: 'BUSINESS_SUMMARY_SENTINEL', url: 'https://example.invalid/PRIVATE_PATH_SENTINEL' }, actor)
+    expect(accepted.success).toBe(true)
+    if (!accepted.success)
+      return
+    expect((await feedback.completeCollection({ id: accepted.data.id }, actor)).success).toBe(true)
+    expect((await feedback.runJobs()).success).toBe(true)
+    const serialized = JSON.stringify(output.mock.calls)
+    expect(serialized.includes('BUSINESS_SUMMARY_SENTINEL')).toBe(consoleContent === 'summary')
+    expect(serialized).not.toContain('PRIVATE_PATH_SENTINEL')
+    expect(output).toHaveBeenCalledWith('Feedback notification', expect.objectContaining({ module: 'feedback', number: accepted.data.number, appId: 'privacy' }))
+  })
+
   it.each(['console', 'disabled'] as const)('%s不需要邮箱、Reach或改变其他通知策略', async (notificationMode) => {
     const output = vi.spyOn(core.logger, 'info')
     const send = vi.spyOn(reach, 'send')
@@ -48,7 +63,8 @@ describe('反馈独立通知策略', () => {
     expect(send).not.toHaveBeenCalled()
     expect(detail.data.jobs.filter(job => job.type === 'notify')).toHaveLength(notificationMode === 'disabled' ? 0 : 1)
     if (notificationMode === 'console')
-      expect(output).toHaveBeenCalledWith('Feedback notification', expect.objectContaining({ number: accepted.data.number, summary: 'A diagnostic summary' }))
+      expect(output).toHaveBeenCalledWith('Feedback notification', expect.objectContaining({ number: accepted.data.number }))
+    expect(JSON.stringify(output.mock.calls.filter(([message]) => message === 'Feedback notification'))).not.toContain('A diagnostic summary')
   })
 
   it('配置错误只报告模块和字段路径，不携带错误配置的私密值', async () => {

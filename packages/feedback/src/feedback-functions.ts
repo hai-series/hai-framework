@@ -1000,7 +1000,7 @@ export function createFeedbackOperations(repo: FeedbackReportRepository, config:
         return live
       const current = repo.report(live.data)
       if (config.notificationMode === 'console') {
-        core.logger.info('Feedback notification', { module: 'feedback', number: current.number, appId: current.appId, summary: current.summary, collectionStatus: current.collectionStatus })
+        core.logger.info('Feedback notification', { module: 'feedback', number: current.number, appId: current.appId, appVersion: current.appVersion, buildId: current.buildId, commit: current.commit, collectionStatus: current.collectionStatus, ...(config.consoleContent === 'summary' ? { summary: current.summary } : {}) })
         return ok({ channel: 'console' })
       }
       const { HaiReachError, reach } = await import('@h-ai/reach')
