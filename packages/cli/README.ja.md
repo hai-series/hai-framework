@@ -112,7 +112,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 名前はリソースの識別子です。既存配置のディレクトリ、ボリューム、認証情報と増分基準を継続利用する場合、プロジェクトの deploy スクリプトに `--project-name hai-delivery-serv` を保持し、サーバー認証状態も保管してください。環境名は引き続き `--env test` で付加します。`deploy-target.json.directory` だけの変更では Compose リソースを移行できません。改名には別途データ移行と新しい基準の確立が必要で、旧リソースは自動移動・削除しません。既存のオフライン配布物は再生成してください。
 
-自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧版の認証状態移行は提供しません。
+自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧認証情報は下記の明示的な検証・導入手順で移行できます。
 
 完全配布にはアプリと自前ミドルウェアのイメージが入ります。デプロイキャッシュ、tar と操作ディレクトリは既定でプロジェクトルートの `.hai/deploy/<環境>/` に置きます。`--output` でコマンドの作業ディレクトリを基準とする tar 出力先を指定できます。対話式の梱包では構築・ミドルウェア設定後、梱包前に SSH 設定の追加・変更を確認します。`.env.<環境>.local` に保存し、今回と次回以降の target に反映します。`--yes` またはスキップ時は既存設定を使います。配布ディレクトリには tar、deploy-local.sh、read-target.awk、README.txt、項目説明付き `deploy-target.json`、Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh` を生成します。アップロード前に target を確認して不足項目を補います。両スクリプトともこのファイルを読み、key/agent と password に対応し、Node/pnpm は不要です。target は `passwordEnv`（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）だけを参照し、パスワードは操作 PC の環境から今回の SSH/SCP 子プロセスだけに渡します。アプリ環境や配布物には含めません。target の変更はその配布物だけに適用し、プロジェクトには書き戻しません。隔離 Linux サーバーにはディレクトリ全体をコピーし、`sh deploy-local.sh` で自動展開・配置します。初回は完全配布が必要で、部分更新は他サービスとボリュームを維持します。各手順の結果を表示し、失敗は非ゼロで終了して復元を試みます。前提・キャッシュ・版管理・復元は[デプロイ説明](../deploy/README.ja.md)を参照してください。
 
@@ -144,11 +144,15 @@ fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`b
 
 feedback.init(config, { collectEvidence }) で業務の本文・ZIP を非同期収集できます。_feedback.yml は businessCollectionTimeoutMs と webhookUrl/webhookSecret/webhookTimeoutMs を提供します。Webhook は永続再試行と詳細画面での状態確認・再試行に対応し、秘密はサーバー非公開環境に保存します。[feedback の例](../feedback/README.ja.md) を参照してください。
 
-`hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは business_operator に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。`_feedback.yml` で管理者とURLを設定し、本番は共有DB、非公開S3、実際のSMTPを使います。Consoleは開発専用です。
+`hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは business_operator に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。本番では共有 DB と非公開 S3 を使用します。通知は disabled/console/reach を独立に選び、console の既定は metadata のみです。要約は consoleContent: summary を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
 
 `hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
 
 ## リリース確認とネイティブビルド
+
+upgrade は各利用側から ESM-only パッケージと pnpm リンクのマニフェストを読み、入口を実行せず、入れ子 workspace と除外規則に対応します。利用する Audit 制品が移行関数を公開する場合は `migrateAudit({ dryRun: true })` を提示しますが、移行自体は実行しません。計画の target.runtime はローカル梱包エンジンと独立した遠隔設定です。
+
+旧環境は Linux サーバーで `hai deploy-secrets <directory> --import <privateJSON> --runtime docker` により読取専用認証を行い、明示的な `--apply` でのみ取り込みます。通常のオフライン配布と異なり、このツールにはサーバー Node が必要です。パスワードをコマンド引数に渡しません。[認証情報の移行と復旧](../deploy/docs/credential-import.ja.md)を参照してください。
 
 `hai upgrade 0.1.0-alpha.71` は全消費パッケージと CLI/deploy の正確な版、tar の整合性、skills、catalog/lock/導入済み版と独自変更を読み取り専用で確認します。導入や上書きは行わず、不完全な公開は非ゼロ終了します。JSON は移行事前確認、バックアップと旧セッションの境界も示します。`hai deploy --env prod --plan` はローカル成果物、識別情報、設定元キー、更新・保持範囲、基準要件と復旧先を表示します。ビルド、認証情報作成、接続は行わず、未確認の遠隔状態は not-inspected です。
 
