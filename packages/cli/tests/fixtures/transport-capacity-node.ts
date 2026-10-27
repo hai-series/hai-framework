@@ -39,8 +39,11 @@ const backend = createServer(async (incoming, outgoing) => {
     const verified = await authenticateTransportRequest(manager, request)
     if (!verified.success)
       throw new Error(verified.error.message)
-    const input = JSON.parse(verified.data.plaintext) as { file: string }
-    assert.equal(Buffer.from(input.file, 'base64').equals(workbook), true)
+    const input = JSON.parse(verified.data.plaintext) as { file?: string, payload?: string }
+    if (input.file)
+      assert.equal(Buffer.from(input.file, 'base64').equals(workbook), true)
+    else
+      assert.ok([12 * 1048576 - 14, 24 * 1048576 - 14].includes(input.payload?.length ?? 0))
     const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ result }), 200)
     if (!encrypted.success)
       throw new Error(encrypted.error.message)
@@ -58,10 +61,21 @@ try {
   await new Promise<void>(resolve => backend.listen(3000, '127.0.0.1', resolve))
   const response = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body: JSON.stringify({ name: 'capacity.xlsx', file: workbook.toString('base64') }) })
   assert.deepEqual(await response.json(), { result })
+  let expectedRequests = 1
+  for (const bytes of [12 * 1048576, 24 * 1048576]) {
+    if (bytes > maxPlaintextBytes)
+      continue
+    const body = JSON.stringify({ payload: 'x'.repeat(bytes - 14) })
+    assert.equal(Buffer.byteLength(body), bytes)
+    const ordinary = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body })
+    assert.deepEqual(await ordinary.json(), { result })
+    process.stdout.write(`TRANSPORT_CAPACITY_BODY_PASS:${bytes}\n`)
+    expectedRequests++
+  }
   const rejected = await fetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body: Buffer.alloc(resolveTransportBodyLimits(maxPlaintextBytes).encryptedPayloadBytes + 1) })
   assert.equal(rejected.status, 413)
   assert.match(await rejected.text(), /nginx/)
-  assert.equal(businessRequests, 1)
+  assert.equal(businessRequests, expectedRequests)
   process.stdout.write('TRANSPORT_CAPACITY_PASS\n')
 }
 finally {

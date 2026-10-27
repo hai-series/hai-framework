@@ -3,7 +3,7 @@ import type { {{#if features.feedback}}CreateServContext, {{/if}}ServConfig{{#if
 {{#if features.crypto}}import process from 'node:process'
 {{/if}}
 import { core } from '@h-ai/core'
-{{#if features.crypto}}import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+{{#if features.crypto}}import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing{{#if features.feedback}}, resolveTransportBodyLimits{{/if}} } from '@h-ai/crypto'
 {{/if}}{{#if features.feedback}}import { feedback } from '@h-ai/feedback'
 {{/if}}{{#if features.iam}}import { iam } from '@h-ai/iam'
 {{/if}}{{#if features.crypto}}{{#if features.db}}import { reldb } from '@h-ai/reldb'
@@ -43,7 +43,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{else}}      keyStore: createInMemoryKeyStore(), // 无 db 的模板仅在 development/test 使用内存 registry。
 {{/if}}
       keyExchangePath: servConfig.transport.keyExchangePath,
-      maxPlaintextBytes: {{#if features.feedback}}feedback.budget.maxTransportBytes{{else}}servConfig.transport.maxPlaintextBytes{{/if}},
+      maxPlaintextBytes: {{#if features.feedback}}resolveTransportBodyLimits(servConfig.transport.maxPlaintextBytes, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }).plaintextBytes{{else}}servConfig.transport.maxPlaintextBytes{{/if}},
       excludePaths: [...servConfig.transport.excludePaths],
     }
   }

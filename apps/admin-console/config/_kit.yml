@@ -3,8 +3,8 @@ server:
   port: ${HAI_KIT_SERVER_PORT:3000}
 
 transport:
-  # 本反馈宿主使用 8 MiB 明文预算，容纳 5 MiB 附件的 Base64 与 JSON；框架默认仍为 1 MiB。
-  maxPlaintextBytes: ${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:8388608}
+  # auto 按反馈预算推导；显式整数为硬上限，不能小于模块所需容量。
+  maxPlaintextBytes: ${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:auto}
   keyExchangePath: ${HAI_KIT_TRANSPORT_KEYEXCHANGEPATH:/api/_hai/key-exchange}
   excludePaths:
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_0:/api/storage}

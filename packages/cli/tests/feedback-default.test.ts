@@ -22,7 +22,7 @@ afterEach(async () => {
 })
 
 describe('fullstack 默认反馈生成', () => {
-  it('未指定 features 的新工程包含反馈依赖、可信接口、界面和实际 8 MiB 环境默认值', async () => {
+  it('未指定 features 的新工程包含反馈依赖、可信接口、界面和自动容量环境默认值', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-default-'))
     temporaryRoots.push(root)
     const name = 'default-feedback'
@@ -35,8 +35,8 @@ describe('fullstack 默认反馈生成', () => {
       expect(manifest.dependencies[`@h-ai/${dependency}`], dependency).toBe('catalog:')
     const config = parse(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8'))
     expect(config).toMatchObject({ notificationMode: expect.stringContaining(':console'), recipients: [] })
-    expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('8388608')
-    expect(parseEnv(await readFile(path.join(directory, '.env'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('8388608')
+    expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
+    expect(parseEnv(await readFile(path.join(directory, '.env'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
     const procedures = await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')
     expect(procedures).toContain('createFeedbackProcedures')
     expect(procedures).toContain(`scopeId: '${name}'`)

@@ -19,6 +19,8 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 | 输出     | handle、Response、校验值和客户端请求结果                                                                |
 | 限制     | 无 init/close；保留 SvelteKit 控制流异常。跨端共享 HTTP contract 用 api-contract + serv，勿复制到 kit。 |
 
+容量通过 resolveTransportBodyLimits(explicitLimit, { requiredPlaintextBytes }) 合并：省略/auto 才按模块需求推导，显式整数不足时报错，不得静默取大或覆盖。Serv/Kit auto 解析为 undefined；部署代理和 BODY_SIZE_LIMIT 与运行时复用同一结果，反馈业务预算独立。
+
 ## 使用路径
 
 1. 仅在 SvelteKit 集成；先查现有 hooks、配置、守卫与路由，不将其套用于独立 serv 应用。

@@ -296,6 +296,17 @@ The admin console's online encryption demo calls the Crypto SM3/SM4 APIs directl
 
 Production transport registries must declare stateScope=shared and actually use Redis or PostgreSQL/MySQL. Memory, Redis factories over memory, and RelDB factories over SQLite are rejected. All nodes load the same managed versioned key ring. Initialization checks apply when NODE_ENV or HAI_CORE_ENV is production; only explicit HAI_E2E=1/HAI_E2E_MOCK=1 tests are exempt. [State, concurrency and recovery (Chinese)](../../.agents/instructions/distributed-state.md)。
 
+## Module requirements and explicit limits
+
+`resolveTransportBodyLimits(limit?, { requiredPlaintextBytes? })` derives capacity from enabled modules only when limit is omitted; without module requirements it remains 1 MiB. A smaller explicit limit throws RangeError instead of silently increasing or reducing capacity. All values remain bounded to 1 KiB–64 MiB; encrypted capacity is twice plaintext plus 32 KiB. Serv/Kit configuration accepts `auto`, normalized to undefined at runtime.
+
+```ts
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
+
+const limits = resolveTransportBodyLimits(24 * 1024 * 1024, { requiredPlaintextBytes: 11250348 })
+// plaintextBytes: 25165824; encryptedPayloadBytes: 50364416
+```
+
 ## Development and testing
 
 ```bash

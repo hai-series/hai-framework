@@ -1,7 +1,7 @@
 /** 用与生产镜像相同的 Nginx 校验公开部署包，普通单测不探测或启动引擎。 */
 import type { DeployFixtureCleanupFailure, DeployTestFixture } from './helpers/deploy-container-fixture.js'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createECDH, createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -98,16 +98,17 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     expect(checked).toContain('NGINX_EXIT:0')
   }, 60_000)
 
-  it('正式配置生成的真实 Nginx 允许 4 MiB XLSX 加密上传和大 JSON 响应，拒绝超限密文', async () => {
+  it.each([8 * 1048576, 24 * 1048576])('真实 Nginx 保留 %i 明文容量，反馈不缩容，普通 JSON 边界与超限均符合协议', async (maxPlaintextBytes) => {
     if (!fixture)
       throw new Error('Expected an owned proxy fixture')
-    const maxPlaintextBytes = 8 * 1024 * 1024
     const limits = resolveTransportBodyLimits(maxPlaintextBytes)
     const image = 'docker.io/library/node:24.22.1-bookworm-slim'
     ensureDeployTestBaseImage(runtime, image, 30_000)
     let nodeContainer: string | undefined
+    let nginxStarted = false
+    const remoteConfig = `/tmp/capacity-nginx-${maxPlaintextBytes}.conf`
     try {
-      const project = path.join(root, 'capacity-project')
+      const project = path.join(root, `capacity-project-${maxPlaintextBytes}`)
       const artifacts = path.join(project, '.hai/build/docker/capacity')
       mkdirSync(artifacts, { recursive: true })
       mkdirSync(path.join(project, 'config'))
@@ -115,6 +116,14 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
       writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=test\nHAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}\n`)
       writeFileSync(path.join(project, 'config/_serv.yml'), `transport:\n  maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}\n`)
+      if (maxPlaintextBytes === 24 * 1048576) {
+        writeFileSync(path.join(project, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/crypto': { version: '1' }, '@h-ai/feedback': { version: '1' } } } }, packages: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} }, snapshots: { '@h-ai/crypto@1': {}, '@h-ai/feedback@1': {} } }))
+        writeFileSync(path.join(project, 'config/_feedback.yml'), 'appId: capacity\nnotificationMode: disabled\nmaxTotalBytes: 8388608\nmaxEvidenceBytes: 2097152\n')
+        const key = createECDH('SM2')
+        key.generateKeys()
+        const ring = JSON.stringify({ activeKeyId: 'fixture', keys: { fixture: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } })
+        writeFileSync(path.join(project, '.env.test.local'), `HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${ring}'\n`, { mode: 0o600 })
+      }
       const images = ['app', 'web'].map((name) => {
         const file = `${name}-1.2.3.tar`
         writeFileSync(path.join(artifacts, file), name)
@@ -131,9 +140,10 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
       expect(proxy).toContain(`client_max_body_size ${limits.encryptedPayloadBytes};`)
       const source = path.join(root, 'capacity-nginx.conf')
-      writeFileSync(source, `pid /tmp/capacity-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://app:', 'http://127.0.0.1:')}\n}\n`)
-      execFileSync(runtime, ['cp', source, `${fixture.containerId}:/tmp/capacity-nginx.conf`], { windowsHide: true })
-      await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/capacity-nginx.conf'], { timeoutMs: 15_000 })
+      writeFileSync(source, `pid /tmp/capacity-nginx-${maxPlaintextBytes}.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://app:', 'http://127.0.0.1:')}\n}\n`)
+      execFileSync(runtime, ['cp', source, `${fixture.containerId}:${remoteConfig}`], { windowsHide: true })
+      await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', remoteConfig], { timeoutMs: 15_000 })
+      nginxStarted = true
       // Node 与真实 Nginx 共用本次容器网络，不依赖 Windows 宿主回连或外部网络。
       const require = createRequire(import.meta.url)
       const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
@@ -144,14 +154,21 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         throw new Error('Expected an owned Node container identity')
       nodeContainer = identity
       execFileSync(runtime, ['cp', flow, `${nodeContainer}:/tmp/transport-flow.mjs`], { windowsHide: true, timeout: 15_000 })
-      const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 60_000 })
+      // 24 MiB 场景包含三次真实加解密与代理往返，不能沿用单个 XLSX 的一分钟预算。
+      const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 240_000 })
       expect(output).toContain('TRANSPORT_CAPACITY_PASS')
     }
     finally {
-      if (nodeContainer) {
-        execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000 })
-        expect(spawnSync(runtime, ['inspect', nodeContainer], { windowsHide: true, stdio: 'ignore' }).status).not.toBe(0)
+      try {
+        if (nodeContainer) {
+          execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000 })
+          expect(spawnSync(runtime, ['inspect', nodeContainer], { windowsHide: true, stdio: 'ignore' }).status).not.toBe(0)
+        }
+      }
+      finally {
+        if (nginxStarted && fixture)
+          await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', remoteConfig, '-s', 'quit'], { timeoutMs: 15_000 })
       }
     }
-  }, 120_000)
+  }, 300_000)
 })

@@ -1,6 +1,7 @@
 /** 服务端运行配置经 Schema 校验后，仅向浏览器提供公开的传输参数。 */
 import type { KitConfig } from '@h-ai/kit'
 import { core } from '@h-ai/core'
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { feedback } from '@h-ai/feedback'
 import { KitConfigSchema } from '@h-ai/kit'
 
@@ -16,6 +17,6 @@ export function getAdminKitConfig(): Pick<KitConfig, 'transport'> {
   const result = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
   if (!result.success)
     throw new Error(result.error.message)
-  current = { transport: result.data.transport === false ? false : { ...result.data.transport, maxPlaintextBytes: feedback.budget.maxTransportBytes } }
+  current = { transport: result.data.transport === false ? false : { ...result.data.transport, maxPlaintextBytes: resolveTransportBodyLimits(result.data.transport.maxPlaintextBytes, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }).plaintextBytes } }
   return current
 }

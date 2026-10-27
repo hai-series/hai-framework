@@ -356,6 +356,10 @@ kit.auth.createApi(iam).createCaptcha を POST /api/auth/captcha として公開
 
 `session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。
 
+## 転送容量とモジュール予算
+
+設定 transport.maxPlaintextBytes は 1 KiB～64 MiB の明示整数または auto を受け付けます。auto/省略は undefined に正規化され、要件なしの既定は 1 MiB、フィードバックのホストでは crypto.resolveTransportBodyLimits の requiredPlaintextBytes で統合します。明示上限の不足は起動/梱包時の失敗とし、上書きしません。プロキシ・adapter-node・ハンドシェイク・実行時の予算を一致させ、添付・展開・行数の制限は独立して検証します。
+
 ## 開発とテスト
 
 ```bash

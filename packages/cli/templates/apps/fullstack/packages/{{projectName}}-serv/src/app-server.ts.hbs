@@ -2,7 +2,7 @@ import type { CoreConfig } from '@h-ai/core'
 import type { {{#if features.feedback}}CreateServContext, {{/if}}ServHttpApp } from '@h-ai/serv'
 import process from 'node:process'
 import { core } from '@h-ai/core'
-import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { createReldbTransportKeyStore, crypto, parseTransportServerKeyRing{{#if features.feedback}}, resolveTransportBodyLimits{{/if}} } from '@h-ai/crypto'
 {{#if features.feedback}}
 import { feedback } from '@h-ai/feedback'
 {{/if}}
@@ -68,7 +68,7 @@ export function createServerApp(): ServHttpApp {
     transport: {
       ...(servConfig.transport || {}),
 {{#if features.feedback}}
-      maxPlaintextBytes: feedback.budget.maxTransportBytes,
+      maxPlaintextBytes: resolveTransportBodyLimits(servConfig.transport ? servConfig.transport.maxPlaintextBytes : undefined, { requiredPlaintextBytes: feedback.budget.maxTransportBytes }).plaintextBytes,
 {{/if}}
       excludePaths: publicPaths,
       crypto,

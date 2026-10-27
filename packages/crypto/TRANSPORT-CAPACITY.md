@@ -28,6 +28,10 @@ const proxyBytes = resolveTransportBodyLimits(created.data.bodyLimits.plaintextB
 
 serv/kit 在密钥协商中返回 `maxPlaintextBytes`。crypto、api-client 和 kit 的新版客户端默认跟随服务端容量，无需额外维护客户端阈值；如显式配置客户端 `maxPlaintextBytes`，取它与服务端上限的较小值。自定义握手端点也应返回 `manager.bodyLimits.plaintextBytes`，并保持原来的 16 KiB 握手读取限制。
 
+## 模块需求与显式配置
+
+Serv/Kit 配置另支持 auto，解析为 undefined；直接 crypto API 仍接受数字或 undefined。接入反馈时调用 resolveTransportBodyLimits(configuredLimit, { requiredPlaintextBytes: feedback.budget.maxTransportBytes })，只在未显式设置时按需要推导；无模块需要仍为 1 MiB。显式 24 MiB 不会被较小反馈预算覆盖，显式值低于反馈需要则启动/打包失败。反馈模板默认 auto；已有项目保留显式值，升级时处理冲突。
+
 ## 文件、明文与密文
 
 按 `new TextEncoder().encode(JSON.stringify(payload)).byteLength` 判断明文大小，字符数不能代替字节数。文件 base64 字符数为 `4 * ceil(文件字节数 / 3)`，再加 JSON 字段、文件名、其他业务字段及转义的字节。4 MiB XLSX 本体为 `4194304` 字节，base64 为 `5592408` 字节；常见包装可用 8 MiB 明文预算。直接把任意二进制当 UTF-8 发送不受支持，文件仍使用应用已约定的 JSON/base64 格式。

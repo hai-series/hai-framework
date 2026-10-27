@@ -177,12 +177,13 @@ export function createDockerSshProvider(
       if (transport && typeof transport === 'object') {
         protectedTransport = !('enabled' in transport) || transport.enabled !== false
         try {
-          const limits = resolveTransportBodyLimits(feedbackTransportBytes ?? (transport as { maxPlaintextBytes?: number }).maxPlaintextBytes)
+          const configured = (transport as { maxPlaintextBytes?: number | 'auto' }).maxPlaintextBytes
+          const limits = resolveTransportBodyLimits(configured === 'auto' ? undefined : configured, { requiredPlaintextBytes: feedbackTransportBytes })
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
           env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
         }
-        catch {
-          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+        catch (error) {
+          return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM('deploy_transportBodyLimitInvalid'))
         }
       }
     }
@@ -196,13 +197,14 @@ export function createDockerSshProvider(
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
       if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
-      const transport = server.data.transport as { maxPlaintextBytes?: number } | false | undefined
+      const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto' } | false | undefined
       try {
-        const limits = resolveTransportBodyLimits(feedbackTransportBytes ?? (transport ? transport.maxPlaintextBytes : undefined))
+        const configured = transport ? transport.maxPlaintextBytes : undefined
+        const limits = resolveTransportBodyLimits(configured === 'auto' ? undefined : configured, { requiredPlaintextBytes: feedbackTransportBytes })
         webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes })
       }
-      catch {
-        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_transportBodyLimitInvalid'))
+      catch (error) {
+        return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM('deploy_transportBodyLimitInvalid'))
       }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
       env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && config.ssh ? url : cors?.origin ?? '*' } })

@@ -62,6 +62,8 @@ export const TRANSPORT_BODY_LIMITS: TransportBodyLimits = Object.freeze({
  * 校验单一业务明文容量并推导双向密文预算；返回不可变快照。
  * SM4-CBC 使用十六进制编码，预算为明文的两倍加 32 KiB（填充及认证封装）。
  * @param maxPlaintextBytes - UTF-8 字节数，默认 1 MiB，有效范围 1 KiB～64 MiB 的整数。
+ * @param options - 已启用模块所需的最小明文预算；只在宿主未显式设置上限时自动推导。
+ * @param options.requiredPlaintextBytes - 模块需要的最小 UTF-8 明文字节数，仍受 1 KiB～64 MiB 范围约束。
  * @returns 明文、密文及独立安全预算。
  * @throws RangeError - 配置无效；不接受字符串、null、无限制或静默回退。
  * @example
@@ -71,9 +73,16 @@ export const TRANSPORT_BODY_LIMITS: TransportBodyLimits = Object.freeze({
  * const nginxLimit = limits.encryptedPayloadBytes
  * ```
  */
-export function resolveTransportBodyLimits(maxPlaintextBytes = TRANSPORT_BODY_LIMITS.plaintextBytes): TransportBodyLimits {
+export function resolveTransportBodyLimits(maxPlaintextBytes?: number, options: { requiredPlaintextBytes?: number } = {}): TransportBodyLimits {
+  const required = options.requiredPlaintextBytes
+  if (required !== undefined && (!Number.isSafeInteger(required) || required < TRANSPORT_PLAINTEXT_RANGE.min || required > TRANSPORT_PLAINTEXT_RANGE.max))
+    throw new RangeError(cryptoM('crypto_transportBodyLimitInvalid'))
+  if (maxPlaintextBytes === undefined)
+    maxPlaintextBytes = required ?? TRANSPORT_BODY_LIMITS.plaintextBytes
   if (!Number.isSafeInteger(maxPlaintextBytes) || maxPlaintextBytes < TRANSPORT_PLAINTEXT_RANGE.min || maxPlaintextBytes > TRANSPORT_PLAINTEXT_RANGE.max)
     throw new RangeError(cryptoM('crypto_transportBodyLimitInvalid'))
+  if (required !== undefined && maxPlaintextBytes < required)
+    throw new RangeError(cryptoM('crypto_transportBodyLimitConflict', { params: { limit: maxPlaintextBytes, required } }))
   return Object.freeze({ ...TRANSPORT_BODY_LIMITS, plaintextBytes: maxPlaintextBytes, encryptedPayloadBytes: 2 * maxPlaintextBytes + 32_768 })
 }
 

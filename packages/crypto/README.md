@@ -296,6 +296,17 @@ if (!result.success) {
 
 生产传输 registry 必须声明 stateScope=shared 并实际使用 Redis 或 PostgreSQL/MySQL。memory、包装 memory 的 Redis 工厂、包装 SQLite 的 RelDB 工厂会被拒绝；各节点加载相同受管版本化密钥环。 NODE_ENV 或 HAI_CORE_ENV 为 production 时在初始化发布成功前校验；仅 HAI_E2E=1/HAI_E2E_MOCK=1 明确测试可豁免。 [状态、并发和恢复边界](../../.agents/instructions/distributed-state.md)。
 
+## 模块容量与显式上限
+
+`resolveTransportBodyLimits(limit?, { requiredPlaintextBytes? })` 只在 limit 未设置时按模块需求推导，无模块需求时仍为 1 MiB。显式上限小于模块需求时抛出 RangeError，不能静默扩大或缩小。所有值仍须在 1 KiB～64 MiB 范围；密文预算为明文两倍加 32 KiB。Serv/Kit 配置可用 `auto` 表示未显式限额，运行时将它规范化为 undefined。
+
+```ts
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
+
+const limits = resolveTransportBodyLimits(24 * 1024 * 1024, { requiredPlaintextBytes: 11250348 })
+// limits.plaintextBytes === 25165824；limits.encryptedPayloadBytes === 50364416
+```
+
 ## 开发测试
 
 ```bash

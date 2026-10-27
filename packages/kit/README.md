@@ -356,6 +356,10 @@ audit 已初始化时，createHandle 为业务 audit.log 绑定已验证会话�
 
 `session.endOnPageHide` 默认 `false`。启用后宿主调用 `actions.bindPageExit({ enabled: config.session.endOnPageHide })` 并在卸载时调用返回的清理函数；标准 admin/H5/fullstack 模板已经接入。非 BFCache 的 `pagehide`（也包括刷新、整页导航）通过 POST `/auth/session/close` 尽力撤销当前 access 及关联 refresh，沿用 CSRF/传输加密，使用 `keepalive` 且不自动刷新会话。该响应不清 Cookie/本地凭据，避免旧响应覆盖下一次登录。显式退出仍使用正常 logout，可靠撤销并清理当前凭据。浏览器可能不发送页面离开请求，因此必须按业务配合服务端 `idleTimeout`/`absoluteTimeout`；不能据此保证关闭即撤销。
 
+## 传输容量与模块预算
+
+配置 `transport.maxPlaintextBytes` 支持 1 KiB～64 MiB 的显式整数或 `auto`。auto/省略在解析后为 undefined：无模块需求时仍为 1 MiB，反馈宿主使用 crypto.resolveTransportBodyLimits 的 requiredPlaintextBytes 统一推导。显式上限不足时启动/打包失败，不能被反馈覆盖；代理、adapter-node、握手与运行时使用一致预算。业务附件、解压和数据行数上限继续独立校验。
+
 ## 开发测试
 
 ```bash

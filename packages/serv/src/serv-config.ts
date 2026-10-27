@@ -7,7 +7,7 @@
  */
 
 import process from 'node:process'
-import { TRANSPORT_BODY_LIMITS, TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
+import { TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
 import { z } from 'zod'
 import { isTrustedProxyEntry } from './serv-client-ip.js'
 
@@ -225,7 +225,7 @@ export type ServCorsRuntimeConfigInput = Partial<ServCorsRuntimeConfig>
  * ```
  */
 export type ServTransportRuntimeConfigInput = Partial<{
-  readonly maxPlaintextBytes: number
+  readonly maxPlaintextBytes: number | 'auto'
   readonly keyExchangePath: `/${string}`
   readonly excludePaths: readonly `/${string}`[]
 }>
@@ -306,7 +306,7 @@ const RpcHttpConfigInputSchema = z.union([
 const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
-    maxPlaintextBytes: z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max).optional().describe('双向业务明文 UTF-8 字节上限；默认 1 MiB，密文与代理预算自动推导').meta({ default: TRANSPORT_BODY_LIMITS.plaintextBytes }),
+    maxPlaintextBytes: z.union([z.number().int().min(TRANSPORT_PLAINTEXT_RANGE.min).max(TRANSPORT_PLAINTEXT_RANGE.max), z.literal('auto')]).transform(value => value === 'auto' ? undefined : value).optional().describe('双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求').meta({ default: 'auto' }),
     keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
     excludePaths: z.array(AbsolutePathSchema).default([]),
   }),

@@ -296,6 +296,17 @@ if (!result.success) {
 
 本番の伝送 registry は stateScope=shared と実際の Redis または PostgreSQL/MySQL が必須です。memory、および memory/SQLite を包む工場も拒否します。各ノードは同じ管理されたバージョン付き鍵セットを読み込みます。 NODE_ENV または HAI_CORE_ENV が production の場合、初期化成功前に検証します。明示的な HAI_E2E=1/HAI_E2E_MOCK=1 テストのみ除外します。 [状態・並行制御・復旧範囲（中国語）](../../.agents/instructions/distributed-state.md)。
 
+## モジュール要件と明示的な上限
+
+`resolveTransportBodyLimits(limit?, { requiredPlaintextBytes? })` は limit 省略時だけ有効なモジュールの必要量から計算し、要件がなければ 1 MiB です。明示上限が必要量未満なら RangeError とし、勝手に拡張・縮小しません。範囲は 1 KiB～64 MiB、暗号文は平文の2倍＋32 KiBです。Serv/Kit の `auto` は実行時に undefined へ正規化します。
+
+```ts
+import { resolveTransportBodyLimits } from '@h-ai/crypto'
+
+const limits = resolveTransportBodyLimits(24 * 1024 * 1024, { requiredPlaintextBytes: 11250348 })
+// plaintextBytes: 25165824; encryptedPayloadBytes: 50364416
+```
+
 ## 開発とテスト
 
 ```bash
