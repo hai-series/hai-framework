@@ -195,7 +195,7 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。対話式 bundle-only は最後に SSH 設定の保存・変更を確認します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。
 
-自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧版の認証状態移行は提供しません。
+自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行わず、旧認証情報は下記の明示的な検証・導入手順で移行できます。
 
 ## 読み取り専用デプロイ計画
 
@@ -204,6 +204,12 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 `--plan --inspect-remote`（SDK inspectRemote:true）で SSH 経由の current と成功ディレクトリーを読み取り、verified/missing/unavailable と復旧リリース ID を示します。対象への書込は行いません。
 
 リソースは実行側の sidecar 計画を共用します。`containers` は明示名のみ、Compose が命名する LDAP/SMTP は `composeManagedServices` に表示します。`logicalVolumes` は Compose の論理キーで、実際のエンジン名は Compose プロジェクトのスコープで決まります。内部接続の keep、スキップ、部分更新、クラウド開通も実行規則に従い、認証値を表示しません。
+
+## 容量の一貫性と旧認証情報のインポート
+
+明示された平文上限を保持し、フィードバックの必要量が超える場合は競合を示して梱包を拒否します。省略/auto だけ自動計算し、Web プロキシと Kit BODY_SIZE_LIMIT は同じ暗号文予算を使います。計画の target.runtime はリモートの provider.remote.runtime を示し、ローカル梱包 options.runtime とは別です。auto を検出済みと表示しません。
+
+`importDeploymentSecrets({ directory, inputFile, runtime })` またはサーバー上の `hai deploy-secrets <directory> --import <private.json>` で読み取り専用検査を行います。明示 `--apply` / dryRun:false のみ保存します。プロジェクト・コンテナ・ボリューム・実際の認証情報を検証し、古いパッケージからの推測、パスワード変更、サービス再作成はしません。特殊文字対応 v2 状態をデプロイ共通 flock 内で原子的に0600で保存します。通常のオフライン配布にサーバー Node は不要で、一度限りの移行ツールには対応 Node と CLI/deploy が必要です。[導入・復旧手順](docs/credential-import.ja.md)を参照してください。
 
 ## 開発とテスト
 

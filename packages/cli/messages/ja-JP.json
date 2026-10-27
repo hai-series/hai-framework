@@ -374,5 +374,9 @@
   "cli_upgrade_exact_version": "latest、タグ、範囲ではなく正確なバージョンを指定してください。",
   "cli_upgrade_registry": "リリース確認には認証情報を含まない HTTPS レジストリ URL が必要です。",
   "cli_help_inspectRemote": "--plan と併用し、SSH で成功基準を読み取り専用確認",
-  "cli_upgrade_lock_invalid": "ロックファイルを読めません。YAML を修正して pnpm install を実行してください。"
+  "cli_upgrade_lock_invalid": "ロックファイルを読めません。YAML を修正して pnpm install を実行してください。",
+  "cli_help_deploySecrets": "対象サーバーで旧デプロイ認証情報を検査またはインポート",
+  "cli_help_secretImport": "保護されたバージョン付き認証情報 JSON ファイル",
+  "cli_help_secretApply": "インポートを確定。省略時は読み取り専用検査",
+  "cli_deploy_secrets_options": "--import で非公開 JSON を指定してください。runtime は docker/podman、確定には --apply が必要です"
 }

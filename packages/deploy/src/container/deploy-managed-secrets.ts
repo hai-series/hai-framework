@@ -66,6 +66,7 @@ export function createManagedSecretAssets(projectName: string, nativeEnvironment
     }
   }
   return {
+    'managed-project': `hai-${projectName}\n`,
     'managed-candidates.env': candidates.length ? `${candidates.join('\n')}\n` : '',
     'managed-bindings': bindings.size ? `${[...bindings].join('\n')}\n` : '',
     'managed-volumes': volumes.size ? `${[...volumes].join('\n')}\n` : '',
@@ -87,6 +88,21 @@ candidate_file="$release/managed-candidates.env"
 test -s "$candidate_file" || exit 0
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 valid_values() {
+  version=$(awk -F= '$1=="FORMAT_VERSION" {print $2}' "$1")
+  if [ "$version" = 2 ]; then
+    LC_ALL=C awk -F= '
+      NF {
+        if(NF!=2 || seen[$1]++) exit 1
+        if($1=="FORMAT_VERSION") {if($2!="2") exit 1; next}
+        if($1=="PROJECT") {if($2!~/^[A-Za-z0-9][A-Za-z0-9_.-]*$/) exit 1; project=1; next}
+        if($1~/^VOLUME_[0-9]+$/) {if($2!~/^(DB_PASSWORD|STORAGE_PASSWORD|LDAP_PASSWORD):[A-Za-z0-9][A-Za-z0-9_.-]*$/) exit 1; next}
+        if($1!~/^(DB_PASSWORD|STORAGE_PASSWORD|LDAP_PASSWORD)$/ || $2!~/^[0-9a-f]+$/ || length($2)%2 || length($2)>8192) exit 1
+        for(i=1;i<=length($2);i+=2) {b=substr($2,i,2); if(b~/^[01]/ || b=="7f") exit 1}
+      }
+      END {if(!project) exit 1}
+    ' "$1"
+    return
+  fi
   LC_ALL=C awk -F= '
     NF {if(NF!=2 || $1!~/^(DB_PASSWORD|STORAGE_PASSWORD|LDAP_PASSWORD)$/ || $2!~/^[A-Za-z0-9_-]+$/ || length($2)!=32 || seen[$1]++) exit 1}
   ' "$1"
@@ -100,6 +116,22 @@ if [ -f "$state" ]; then
   cp "$state" "$next"
 else
   : > "$next"
+fi
+format=$(value_of "$next" FORMAT_VERSION)
+if [ "$format" = 2 ]; then
+  test "$(value_of "$next" PROJECT)" = "$(cat "$release/managed-project")" || fail 'Managed middleware credential project mismatch.'
+  known=$("$runtime" volume ls -q) || fail 'Cannot check persistent volumes; managed middleware credentials were not changed.'
+  while IFS=' ' read -r volume_group volume; do
+    test -n "$volume" || continue
+    binding="$volume_group:$volume"
+    if ! awk -F= -v binding="$binding" '$1~/^VOLUME_[0-9]+$/ && $2==binding {found=1} END {exit !found}' "$next"; then
+      if printf '%s\n' "$known" | grep -Fxq "$volume"; then
+        fail 'Existing persistent volume is not bound to the imported credential state. Import its verified identity first.'
+      fi
+      index=$(awk -F= '$1~/^VOLUME_[0-9]+$/ {n=substr($1,8)+0; if(n>max)max=n} END {print max+1}' "$next")
+      printf 'VOLUME_%s=%s\n' "$index" "$binding" >> "$next"
+    fi
+  done < "$release/managed-volumes"
 fi
 volumes_checked=false
 known_volumes=''
@@ -118,6 +150,7 @@ while IFS='=' read -r name candidate; do
       fi
     done < "$release/managed-volumes"
     value=$candidate
+    if [ "$format" = 2 ]; then value=$(printf '%s' "$candidate" | od -An -tx1 | tr -d ' \n'); fi
     printf '%s=%s\n' "$name" "$value" >> "$next"
   fi
 done < "$candidate_file"
@@ -125,17 +158,53 @@ while IFS='=' read -r name candidate; do
   test -n "$name" || continue
   value=$(value_of "$next" "$name")
   for file in .env.runtime middleware.env middleware-runtime.env; do
-    HAI_DEPLOY_SECRET_CANDIDATE="$candidate" HAI_DEPLOY_SECRET_VALUE="$value" LC_ALL=C awk -v group="$name" '
+    HAI_DEPLOY_SECRET_CANDIDATE="$candidate" HAI_DEPLOY_SECRET_VALUE="$value" LC_ALL=C awk -v group="$name" -v format="$format" '
       FILENAME==ARGV[1] {if($1==group) {keys[$2]=$3}; next}
       function replace_literal(line, needle, value, result, at) {
         result=""
         while((at=index(line,needle))>0) {result=result substr(line,1,at-1) value; line=substr(line,at+length(needle))}
         return result line
       }
+      function decode_hex(hex, result, i, high, low) {
+        for(i=1;i<=length(hex);i+=2) {high=index("0123456789abcdef",substr(hex,i,1))-1; low=index("0123456789abcdef",substr(hex,i+1,1))-1; result=result sprintf("%c",high*16+low)}
+        return result
+      }
+      function json_escape(value, apostrophe, result, i, ch) {
+        for(i=1;i<=length(value);i++) {
+          ch=substr(value,i,1)
+          if(ch=="\\") result=result "\\\\"
+          else if(ch=="\"") result=result "\\\""
+          else if(ch==sprintf("%c",39) && apostrophe) result=result "\\u0027"
+          else result=result ch
+        }
+        return result
+      }
+      function uri_escape(value, result, i, ch, j, ordinal) {
+        for(i=1;i<=length(value);i++) {
+          ch=substr(value,i,1)
+          if(ch~/[A-Za-z0-9_.~-]/) result=result ch
+          else {ordinal=0; for(j=1;j<=255;j++) if(sprintf("%c",j)==ch) {ordinal=j; break}; result=result sprintf("%%%02X",ordinal)}
+        }
+        return result
+      }
       {
         equal=index($0,"="); key=substr($0,1,equal-1); scoped=0
         for(prefix in keys) if(key==prefix || (keys[prefix]=="prefix" && index(key,prefix "_")==1)) scoped=1
-        if(scoped) print replace_literal($0,ENVIRON["HAI_DEPLOY_SECRET_CANDIDATE"],ENVIRON["HAI_DEPLOY_SECRET_VALUE"])
+        if(scoped && format==2 && index($0,ENVIRON["HAI_DEPLOY_SECRET_CANDIDATE"])>0) {
+          candidate=ENVIRON["HAI_DEPLOY_SECRET_CANDIDATE"]; value=decode_hex(ENVIRON["HAI_DEPLOY_SECRET_VALUE"])
+          literal=substr($0,equal+1); quote=sprintf("%c",39)
+          json=substr(literal,1,1)==quote && (substr(literal,2,1)=="{" || substr(literal,2,1)=="[")
+          if(json) literal=substr(literal,2,length(literal)-2)
+          literal=replace_literal(literal,":" candidate "@",":" uri_escape(value) "@")
+          if(json) {literal=replace_literal(literal,candidate,json_escape(value,1)); print key "=" quote literal quote}
+          else {
+            if(substr(literal,1,1)==quote || substr(literal,1,1)=="\"") literal=substr(literal,2,length(literal)-2)
+            literal=replace_literal(literal,candidate,value)
+            literal=json_escape(literal,0); literal=replace_literal(literal,"$","$$")
+            print key "=\"" literal "\""
+          }
+        }
+        else if(scoped) print replace_literal($0,ENVIRON["HAI_DEPLOY_SECRET_CANDIDATE"],ENVIRON["HAI_DEPLOY_SECRET_VALUE"])
         else print
       }
     ' "$release/managed-bindings" "$release/$file" > "$release/$file.next"

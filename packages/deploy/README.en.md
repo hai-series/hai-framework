@@ -195,7 +195,7 @@ Each delivery still generates `.hai/deploy/<environment>/bundle-.../.env.runtime
 
 Project-root `hai.json.deploy` stores deployment structure, `.env.<environment>` stores public settings, and `.env.<environment>.local` stores SSH settings and middleware secrets. Environment files default to the project/workspace root; override with `--env-dir`. After configuration, `pnpm run deploy --env test --build --bundle-only --yes` reuses complete settings without prompts; add `--skip-middleware` to retain middleware configuration. Interactive bundle-only mode offers to save or update SSH settings at the final configuration step; editing a delivery's `deploy-target.json` does not update the project.
 
-The server persists managed middleware passwords in `<remoteDir>/managed-secrets.env` (mode 0600); back it up with data volumes. Each package supplies random first-use candidates without a build-machine cache. The online SDK, deploy.sh, deploy.ps1 and deploy-local.sh resolve server values under the deployment lock and update both application connections and native middleware variables. The delivery tar stays immutable; only private server runtime files receive resolved values. Missing state with an existing corresponding volume stops deployment before services change: restore the server credential backup. Deployment never silently rotates passwords or deletes data. Legacy credential migration is not provided.
+The server persists managed middleware passwords in `<remoteDir>/managed-secrets.env` (mode 0600); back it up with data volumes. Each package supplies random first-use candidates without a build-machine cache. The online SDK, deploy.sh, deploy.ps1 and deploy-local.sh resolve server values under the deployment lock and update both application connections and native middleware variables. The delivery tar stays immutable; only private server runtime files receive resolved values. Missing state with an existing corresponding volume stops deployment before services change: restore the server credential backup. Deployment never silently rotates passwords or deletes data. Legacy credentials can be explicitly verified and imported using the procedure below.
 
 ## Read-only deployment plan
 
@@ -204,6 +204,12 @@ The server persists managed middleware passwords in `<remoteDir>/managed-secrets
 Use `--plan --inspect-remote` (SDK inspectRemote:true) to read current and the successful release directory over SSH. It reports verified/missing/unavailable and the actual recovery release ID without target writes.
 
 Resources use the execution sidecar planner: `containers` contains explicit names only; Compose-named LDAP/SMTP services appear in `composeManagedServices`. `logicalVolumes` contains Compose keys, with actual engine names scoped by the Compose project. Internal keep connections, skipped services, partial updates and cloud provisioning follow execution rules without exposing credential values.
+
+## Capacity consistency and legacy credential import
+
+Explicit plaintext limits are preserved. Packaging rejects feedback requirements above an explicit limit with a configuration conflict. Omitted/auto values derive capacity; the Web proxy and Kit BODY_SIZE_LIMIT use the same encrypted budget. Plan target.runtime reports remote provider.remote.runtime separately from local packaging options.runtime; auto is not a detected runtime.
+
+Use `importDeploymentSecrets({ directory, inputFile, runtime })` or run `hai deploy-secrets <directory> --import <private.json>` on the server for read-only verification. Only explicit `--apply` / dryRun:false imports state. The tool verifies projects, containers, volumes and live credentials; it never infers passwords from old bundles, rotates credentials or rebuilds services. V2 state supports special characters and is atomically written with mode 0600 under the deployment flock. Ordinary offline deployment still requires no server Node; this one-time import tool needs supported Node and installed CLI/deploy. See the [import and recovery procedure](docs/credential-import.en.md).
 
 ## Development and testing
 

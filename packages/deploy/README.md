@@ -221,7 +221,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 
-自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。不提供旧版本密码状态迁移。
+自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。旧版本可通过显式预检和凭据导入流程迁移，缺状态的普通部署仍拒绝。
 
 ## 只读部署计划
 
@@ -230,6 +230,12 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
 
 资源清单复用执行端的 sidecar 规划：`containers` 只列显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；`logicalVolumes` 是 Compose 逻辑卷键，实际引擎卷名由 Compose 项目作用域决定。keep 内部连接、跳过、局部更新和云开通配置均按实际执行规则计算，不展示凭据值。
+
+## 容量一致性与旧凭据导入
+
+传输明文上限保留显式设置；反馈需求超过显式值时拒绝打包并说明冲突。缺省/auto 才按模块预算推导，Web 代理和 Kit BODY_SIZE_LIMIT 使用同一密文预算。计划的 target.runtime 表示远端 provider.remote.runtime，与本地镜像打包 options.runtime 分离；auto 不冒充已探测事实。
+
+旧目标可用 `importDeploymentSecrets({ directory, inputFile, runtime })` 或在服务器执行 `hai deploy-secrets <directory> --import <private.json>` 只读核验；显式 `--apply` / dryRun:false 才导入。工具核验项目、容器、卷和实际服务凭据，不猜测旧包、不轮换密码、不重建服务。新 v2 状态支持特殊字符并与部署共用 flock，原子写入权限 0600。常规离线部署无需服务器 Node；一次性导入工具需要受支持的 Node 与已安装的 CLI/deploy。详见[导入与恢复流程](docs/credential-import.md)。
 
 ## 开发测试
 

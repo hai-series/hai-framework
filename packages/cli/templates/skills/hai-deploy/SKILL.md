@@ -15,6 +15,8 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 | 输出 | 含 tar、清单、配置和跨平台入口的单一交付目录与分步结果，或经过 HTTP 检查的部署结果 |
 | 限制 | SDK 只消费产物；CLI --build 显式先构建。首次安装必须完整交付，packaged 不代表服务器 ready。云资源需要外网。 |
 
+--plan 和 --inspect-remote 从 CLI 完整透传，只读失败不得退回部署。target.runtime 只表示远端配置。旧凭据用服务器本机 `hai deploy-secrets <directory> --import <private.json>` 预检，--apply 才导入；SDK importDeploymentSecrets 默认 dryRun:true，验证项目/卷/实际凭据、共享 flock、v2 状态特殊字符与原子 0600 写入，缺状态的普通部署仍拒绝。完整格式和恢复步骤见 [凭据导入](credentials.md)。
+
 ## 操作流程
 
 1. 读取项目 scripts、images/ 中的 Dockerfile、项目根 hai.json 的 build/deploy 与服务目录运行配置。构建与部署属于整个项目；服务目录只用于扫描运行依赖。创建默认带开发期部署工具；用户明确 --no-deploy 时不生成部署入口。构建细节见 [hai-build](../hai-build/SKILL.md)。

@@ -11,7 +11,7 @@ import { cac } from 'cac'
 import chalk from 'chalk'
 import { cliM } from './cli-i18n.js'
 import { getCliVersion, writeCliMessage } from './cli-utils.js'
-import { addModule, buildCommand, createProject, deployCommand, feedbackCommand, generate, initProject, upgradeCommand } from './commands/cli-commands.js'
+import { addModule, buildCommand, createProject, deployCommand, deploySecretsCommand, feedbackCommand, generate, initProject, upgradeCommand } from './commands/cli-commands.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
 const VERSION = getCliVersion()
@@ -206,6 +206,21 @@ cli
       })
     }
     catch {
+      process.exitCode = 1
+    }
+  })
+
+// 服务器本机凭据迁移，不复用普通部署的默认目标或配置保存逻辑。
+cli.command('deploy-secrets <directory>', cliM('cli_help_deploySecrets'))
+  .option('--import <file>', cliM('cli_help_secretImport'))
+  .option('--apply', cliM('cli_help_secretApply'))
+  .option('--runtime <runtime>', cliM('cli_help_deployRuntime'))
+  .action(async (directory: string, options: { import?: string, apply?: boolean, runtime?: string, cwd?: string }) => {
+    try {
+      await deploySecretsCommand(directory, options)
+    }
+    catch (error) {
+      writeCliMessage(error instanceof Error ? error.message : String(error))
       process.exitCode = 1
     }
   })
