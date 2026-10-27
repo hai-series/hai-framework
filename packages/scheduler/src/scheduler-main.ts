@@ -16,7 +16,7 @@ import { z } from 'zod'
 
 import { executionEntry, SchedulerExecutionRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { ExecutionResolutionSchema, SchedulerConfigSchema, TriggerTaskSchema } from './scheduler-config.js'
-import { clearHooks, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
+import { cancelTaskDefinitionReads, clearHooks, drainTaskDefinitions, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
 import { migrateScheduler } from './scheduler-migration.js'
@@ -227,13 +227,6 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    const config = currentConfig
-    const refreshed = await loadPersistedTasks(taskRepo)
-    if (!refreshed.success)
-      return refreshed
-    if (currentConfig !== config)
-      return notInitialized.result()
-
     const registerResult = await registerTask(task, taskRepo)
     if (registerResult.success) {
       logger.info('Task registered', { taskId: task.id, taskName: task.name, cron: task.cron })
@@ -245,13 +238,6 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    const config = currentConfig
-    const refreshed = await loadPersistedTasks(taskRepo)
-    if (!refreshed.success)
-      return refreshed
-    if (currentConfig !== config)
-      return notInitialized.result()
-
     const unregisterResult = await unregisterTask(taskId, taskRepo)
     if (unregisterResult.success)
       logger.info('Task unregistered', { taskId })
@@ -261,13 +247,6 @@ export const scheduler: SchedulerFunctions = {
 
   async updateTask(taskId: string, updates: TaskUpdateInput): Promise<HaiResult<void>> {
     if (!currentConfig)
-      return notInitialized.result()
-
-    const config = currentConfig
-    const refreshed = await loadPersistedTasks(taskRepo)
-    if (!refreshed.success)
-      return refreshed
-    if (currentConfig !== config)
       return notInitialized.result()
 
     const updateResult = await updateRegisteredTask(taskId, updates, taskRepo)
@@ -386,8 +365,10 @@ export const scheduler: SchedulerFunctions = {
     // 先拒绝新任务，再等待旧执行链完全退出，最后释放共享状态。
     currentConfig = null
     stopTimer()
+    cancelTaskDefinitionReads()
     closeInProgress = (async () => {
       await drainRunner()
+      await drainTaskDefinitions()
       clearJsTaskHandlerCache()
       resetTaskState()
       resetRunner()

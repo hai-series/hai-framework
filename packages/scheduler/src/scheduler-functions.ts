@@ -33,8 +33,40 @@ const taskRegistry = new Map<string, TaskDefinition>()
 const cronCache = new Map<string, Cron>()
 const persistedTaskIds = new Set<string>()
 let definitionEpoch = 0
-/** 同一快照的并发读取共用一次查询，避免互相推进 epoch 后误判写冲突。 */
-let activeRefresh: { repository: SchedulerTaskRepository, epoch: number, promise: Promise<HaiResult<void>> } | undefined
+/** 仅协调定义读写，不持有业务执行回调；失败不会阻断后续操作。 */
+let definitionTail: Promise<void> = Promise.resolve()
+let definitionLifetime = new AbortController()
+
+function withTaskDefinitions<T>(operation: (signal: AbortSignal) => Promise<HaiResult<T>>): Promise<HaiResult<T>> {
+  const signal = definitionLifetime.signal
+  const result = definitionTail.then(() => signal.aborted ? err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing')) : operation(signal))
+  definitionTail = result.then(() => undefined, () => undefined)
+  return result
+}
+
+/**
+ * 生命周期关闭先停止入口和执行链，再等待已接收的定义操作完成。
+ * @example 模块内部上下文
+ * ```ts
+ * await drainTaskDefinitions()
+ * resetTaskState()
+ * ```
+ */
+export async function drainTaskDefinitions(): Promise<void> {
+  await definitionTail
+}
+
+/**
+ * 关闭时取消只读快照等待；已经开始的持久写入仍由 drain 排空。
+ * @example 模块内部上下文
+ * ```ts
+ * cancelTaskDefinitionReads()
+ * await drainTaskDefinitions()
+ * ```
+ */
+export function cancelTaskDefinitionReads(): void {
+  definitionLifetime.abort()
+}
 
 /** 当前全局生命周期回调 */
 let currentHooks: SchedulerTaskHooks = {}
@@ -221,8 +253,8 @@ export function getHooks(): Readonly<SchedulerTaskHooks> {
  * ```
  */
 export function resetTaskState(): void {
+  definitionLifetime = new AbortController()
   definitionEpoch++
-  activeRefresh = undefined
   persistedTaskIds.clear()
   taskRegistry.clear()
   cronCache.clear()
@@ -264,7 +296,7 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
 // ─── 业务函数 ───
 
 /**
- * 合并同一任务仓库的在途刷新；配置写入或关闭后不复用旧快照。
+ * 在定义操作队列中刷新持久投影，不与合法本地写入竞争快照。
  *
  * @example
  * ```ts
@@ -277,29 +309,37 @@ function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<
  * ```
  */
 export async function loadPersistedTasks(taskRepo: SchedulerTaskRepository | null): Promise<HaiResult<void>> {
+  return withTaskDefinitions(signal => refreshTaskDefinitions(taskRepo, signal))
+}
+
+async function refreshTaskDefinitions(taskRepo: SchedulerTaskRepository | null, signal: AbortSignal): Promise<HaiResult<void>> {
   if (!taskRepo)
     return ok(undefined)
-
   const epoch = definitionEpoch
-  if (activeRefresh?.repository === taskRepo && activeRefresh.epoch === epoch)
-    return activeRefresh.promise
-  const refresh = { repository: taskRepo, epoch, promise: refreshPersistedTasks(taskRepo, epoch) }
-  activeRefresh = refresh
-  try {
-    return await refresh.promise
-  }
-  finally {
-    if (activeRefresh === refresh)
-      activeRefresh = undefined
-  }
+  return refreshPersistedTasks(taskRepo, epoch, signal)
 }
 
 /** 验证完整持久快照后替换内存投影；发生本地写入时拒绝覆盖更新。 */
-async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: number): Promise<HaiResult<void>> {
-  const loadResult = await taskRepo.loadTasks()
+async function refreshPersistedTasks(taskRepo: SchedulerTaskRepository, epoch: number, signal: AbortSignal): Promise<HaiResult<void>> {
+  let cancel: () => void = () => {}
+  const cancelled = new Promise<HaiResult<TaskDefinition[]>>((resolve) => {
+    cancel = () => resolve(err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing')))
+    signal.addEventListener('abort', cancel, { once: true })
+    if (signal.aborted)
+      cancel()
+  })
+  let loadResult: HaiResult<TaskDefinition[]>
+  try {
+    loadResult = await Promise.race([taskRepo.loadTasks(), cancelled])
+  }
+  finally {
+    signal.removeEventListener('abort', cancel)
+  }
   if (!loadResult.success)
     return loadResult
 
+  if (signal.aborted)
+    return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
   if (epoch !== definitionEpoch)
     return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_definitionsChanged'))
 
@@ -364,6 +404,20 @@ export async function loadConfigTasks(tasks: TaskDefinition[]): Promise<HaiResul
  * ```
  */
 export async function registerTask(
+  task: TaskDefinition,
+  taskRepo?: SchedulerTaskRepository | null,
+): Promise<HaiResult<void>> {
+  return withTaskDefinitions(async (signal) => {
+    const refreshed = await refreshTaskDefinitions(taskRepo ?? null, signal)
+    if (!refreshed.success)
+      return refreshed
+    if (signal.aborted)
+      return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+    return registerTaskDefinition(task, taskRepo)
+  })
+}
+
+async function registerTaskDefinition(
   task: TaskDefinition,
   taskRepo?: SchedulerTaskRepository | null,
 ): Promise<HaiResult<void>> {
@@ -442,6 +496,21 @@ export async function unregisterTask(
   taskRepo?: SchedulerTaskRepository | null,
   expected?: TaskDefinition,
 ): Promise<HaiResult<void>> {
+  return withTaskDefinitions(async (signal) => {
+    const refreshed = await refreshTaskDefinitions(taskRepo ?? null, signal)
+    if (!refreshed.success)
+      return refreshed
+    if (signal.aborted)
+      return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+    return unregisterTaskDefinition(taskId, taskRepo, expected)
+  })
+}
+
+async function unregisterTaskDefinition(
+  taskId: string,
+  taskRepo?: SchedulerTaskRepository | null,
+  expected?: TaskDefinition,
+): Promise<HaiResult<void>> {
   if (!hasTask(taskId)) {
     return err(
       HaiSchedulerError.TASK_NOT_FOUND,
@@ -485,6 +554,21 @@ export async function unregisterTask(
  * ```
  */
 export async function updateRegisteredTask(
+  taskId: string,
+  updates: TaskUpdateInput,
+  taskRepo?: SchedulerTaskRepository | null,
+): Promise<HaiResult<void>> {
+  return withTaskDefinitions(async (signal) => {
+    const refreshed = await refreshTaskDefinitions(taskRepo ?? null, signal)
+    if (!refreshed.success)
+      return refreshed
+    if (signal.aborted)
+      return err(HaiSchedulerError.EXECUTION_FAILED, schedulerM('scheduler_closing'))
+    return updateTaskDefinition(taskId, updates, taskRepo)
+  })
+}
+
+async function updateTaskDefinition(
   taskId: string,
   updates: TaskUpdateInput,
   taskRepo?: SchedulerTaskRepository | null,

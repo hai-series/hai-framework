@@ -15,6 +15,8 @@ description: "注册或排查 cron/API/JS/Hook 任务、手工触发、执行日
 | 输出 | 任务管理、触发和日志查询的 HaiResult |
 | 限制 | 仅服务端；vm 不是安全沙箱，JS 任务只执行可信代码。共享RelDB强制持久journal/租约；unknown保留槽直至可信人工裁定。 |
 
+定义刷新、注册、编辑与删除在节点内协调；业务回调不持有定义队列。close 拒绝新入口、取消只读等待与尚未写入的操作、排空执行与已开始的持久写入后清空投影；迟到快照不发布。仍须核验数据库唯一约束与多节点存储端授权。
+
 ## 使用路径
 
 1. 始终先初始化同一共享 reldb；enableDb 只能 true，跨主机生产使用 PostgreSQL/MySQL，不需要缓存。检查 scheduler.init 的 HaiResult。

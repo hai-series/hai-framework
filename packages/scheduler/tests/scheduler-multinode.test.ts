@@ -55,6 +55,7 @@ describe('scheduler across real processes', () => {
       expect(await call(child, 'init', {
         entry: pathToFileURL(path.join(directory, 'index.js')).href,
         database: path.join(directory, 'shared.db'),
+        dbConfig: process.env.HAI_SCHEDULER_TEST_POSTGRES ? { type: 'postgresql', url: process.env.HAI_SCHEDULER_TEST_POSTGRES, database: decodeURIComponent(new URL(process.env.HAI_SCHEDULER_TEST_POSTGRES).pathname.slice(1)), pool: { max: 8 } } : undefined,
       })).toMatchObject({ success: true })
       return child
     }

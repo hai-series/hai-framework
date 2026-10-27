@@ -256,6 +256,8 @@ When a scheduled task sends Reach notifications, a scheduler lock or task comple
 
 ## Legacy database upgrades
 
+Definition refresh, registration, update and deletion are coordinated in arrival order within each process, including a mutation's refresh and commit. Valid concurrent registrations no longer fail merely because snapshots interleave; actual database failures still return errors. close stops entry points and the runner, cancels read waits and operations that have not started writing, then drains active persistent writes. Late snapshots cannot publish or repopulate state afterward. Business callbacks do not hold this queue. Nodes still rely on the shared database, versions and leases; local coordination is not a distributed lock.
+
 After RelDB init, `migrateScheduler({ dryRun: true })` previews changes; scheduler.init applies supported migrations before repositories. Existing tasks retain data with idempotent=false. Legacy logs are archived as hai_scheduler_logs_alpha65 and copied with stable legacy:<id> keys, preserving complete snapshots without re-executing tasks or duplicating history after interruption. SQLite/PostgreSQL roll back transactions; MySQL resumes from actual structure with old writers stopped. Back up first and restore matching database/binaries for rollback.
 
 ## Development and testing
