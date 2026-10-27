@@ -50,7 +50,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   process.once('SIGINT', stop)
   process.once('SIGTERM', stop)
   try {
-    // 两组顺序启动，^build 不会在不同 Turbo 图中同时重写同一份 dist。
+    // 两组顺序启动，构建依赖不会在不同 Turbo 图中同时重写同一份 dist。
     for (const { names, concurrency } of testGroups(root)) {
       if (interrupted)
         break

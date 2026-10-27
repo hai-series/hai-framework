@@ -254,11 +254,12 @@ function main() {
   const errors = [...inventory.errors]
   for (const [path, content] of outputs) {
     const file = join(root, path)
+    const changed = !existsSync(file) || readFileSync(file, 'utf8').replaceAll('\r\n', '\n') !== content
     if (process.argv.includes('--check')) {
-      if (!existsSync(file) || readFileSync(file, 'utf8').replaceAll('\r\n', '\n') !== content)
+      if (changed)
         errors.push(`API inventory is stale: ${path}`)
     }
-    else {
+    else if (changed) {
       writeFileSync(file, content, 'utf8')
     }
   }

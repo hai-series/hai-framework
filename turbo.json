@@ -65,7 +65,7 @@
         "TESTCONTAINERS_*"
       ],
       "dependsOn": [
-        "^build"
+        "build"
       ],
       "cache": true
     },
@@ -91,7 +91,7 @@
     },
     "test:coverage": {
       "dependsOn": [
-        "^build"
+        "build"
       ],
       "cache": false
     },
