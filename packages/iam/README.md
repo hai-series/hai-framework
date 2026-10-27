@@ -901,17 +901,19 @@ if (!result.success) {
 
 ## 可选密码与登录保护
 
-`password.minLength/maxLength` 控制长度，各 `require*` 指定必需类别；`minCharacterClasses` 支持大小写、数字、特殊字符中任意 N 类，0不额外限制。CLI/admin 示例默认8位、任意3类。所有服务端创建、改密和重置入口共用校验。
+`password.minLength/maxLength` 控制长度，各 `require*` 指定必需类别；`minCharacterClasses` 支持大小写、数字、特殊字符中任意 N 类，0不额外限制。CLI/admin 示例默认8–128位、不额外要求字符类别；需要任意3类时显式设置 `minCharacterClasses: 3`。所有服务端创建、改密和重置入口共用校验。
 
 `expirationDays: 0` 关闭定期改密，正数为天数；`preventSamePassword` 可独立开启。启用期限或首次强改时，新旧密码必须不同。`requireInitialChange` 作用于管理端创建/重置的密码，自助注册设密不重复强改。首次/过期密码不能授权普通会话或刷新旧会话；用户通过 `iam.user.renewPassword({ identifier, password, newPassword })` 验证原密码并更换后重新登录，Kit/Serv 与 AuthPanel 提供完成流程。
 
-`security.lockoutEnabled` 默认开启；`failureWindow` 默认86400秒，从首次失败起按固定窗口计数，`maxLoginAttempts` 为阈值，`lockoutDuration` 为锁定秒数。示例锁定1200秒。关闭时忽略历史锁；计数与阈值在共享数据库中原子处理。
+`security.lockoutEnabled` 的框架 Schema 默认开启，CLI/admin 简化示例显式关闭，按需启用；`failureWindow` 默认86400秒，从首次失败起按固定窗口计数，`maxLoginAttempts` 为阈值，`lockoutDuration` 为锁定秒数。示例锁定1200秒。关闭时忽略历史锁；计数与阈值在共享数据库中原子处理。
 
 `initialCredentials.enabled` 开启管理端 `iam.user.inviteUser()`：内部生成独立随机秘密，仅发送短期单次设密邀请，不返回/发送初始秘密。沿用 `passwordReset` 的模式、期限、尝试次数和敏感通知通道，接收人通过重置页面设密。关闭重置或缺少通道时不创建账号。投递未知返回失败并保留已创建账号及邀请，核对后再请求重置通知，不自动回滚或重发。
 
 `loginAccess.enabled` 开启登录限制；`allowIps/denyIps` 支持 IPv4/IPv6/CIDR，拒绝优先，空列表不限制对应维度。`windows` 用 `days`（周一1至周日7）、`start/end`（HH:mm，含起点不含终点，支持跨午夜）和 IANA `timezone`。登录方法第二参为可信 `AuthRequestContext`：Kit 使用平台 `getClientAddress()`，Serv 使用可信代理策略解析的 `context.ip`。不得复制任意转发头或凭据 JSON 的 IP；地址限制启用但无可信地址时拒绝。注册后自动登录、API Key 登录同样执行。
 
-`reauthentication.enabled/operations` 选择敏感操作，`ttlSeconds` 为证明期限。`iam.auth.reauthenticate(token, password, operation)` 验证原密码并签发单次票据；操作入口完成权限/资源检查后用 `checkSensitiveOperation(token, operation, ticket)` 消费。证明绑定主体、当前会话和操作，不提升权限。Serv 标准 IAM 写操作与 admin 守卫读取 `x-hai-reauthentication`；Kit 业务入口用 `kit.guard.requireSensitive(iam, event, operation)`，业务操作 ID 由项目定义。票据只短暂保存在内存，公开配置仅暴露开关/操作清单。
+`reauthentication.enabled/operations` 选择敏感操作，`ttlSeconds` 为证明期限。`iam.auth.reauthenticate(token, password, operation)` 验证原密码并签发单次票据；操作入口完成权限/资源检查后用 `checkSensitiveOperation(token, operation, ticket)` 消费。证明绑定主体、当前会话和操作，不提升权限。Serv 标准 IAM 写操作与 admin 守卫读取 `x-hai-reauthentication`；Kit 业务入口用 `kit.guard.requireSensitive(iam, event, operation)`，业务操作 ID 由项目定义。票据只短暂保存在内存，公开配置仅暴露开关/操作清单。admin/fullstack 标准界面在已登录用户点击敏感动作时弹出当前账号密码验证窗口；取消不提交、密码错误不继续，正确后才执行原操作，不创建另一个登录会话。
+
+RBAC 权限支持 `sensitiveOperations: string[]`（持久字段 `sensitive_operations`）。可信管理端可调用 `iam.authz.setPermissionSensitiveOperations(permissionId, operations)`；检查结果的 `success`，空列表仅移除该权限的附加规则。开启 `reauthentication.enabled` 后，所有权限记录的规则与文件 `operations` 取并集，服务端实时执行。规则 ID 必须对应实际业务守卫，不能替代原权限检查。异步 `iam.getPublicConfig()` 返回合并后的公开策略，DB 读取失败返回失败；同步 `iam.publicConfig` 只保留文件快照。RBAC 关闭时忽略数据库规则。权限表迁移只添加可空 JSON 字段，保留既有角色/权限关联。
 
 ## 账号类型和生命周期
 
@@ -932,6 +934,10 @@ if (!result.success) {
 `migrateIam({ dryRun: true })` 在 RelDB 初始化后只读预检；iam.init 自动补齐支持版本的凭据/重置字段，保留用户与密码，不修改业务权限。升级前备份停旧写入；没有安全代次的旧会话需重新登录，不能回退数据库安全代次来恢复授权。默认 Reach 通知使用 sensitive/expiresAt/idempotencyKey，不落明文、不延迟重投；自定义回调同样须遵守有效期与凭据保护。
 
 审计模块已初始化且 capture.enabled 开启时，IAM 自动记录关键账号、鉴别、密码、授权、API Key 和会话事件，包含失败/拒绝与安全原因码。先初始化 audit 再初始化 IAM，关闭时反序。不会记录密码、一次性票据或令牌；成功登录才确认主体，可信服务/CLI 调用应以 audit.withContext 提供操作者和关联信息。外部授权事务的事件随该事务提交或回滚，回滚失败尝试由调用入口在事务结束后记录。审计写失败输出诊断，不把已生效业务改成可盲目重试的失败。
+
+`session.terminalLimits: { web: 2, app: 1 }` 设置分终端会话数，默认 `{}` 关闭。非空时未列出的 `desktop/api` 等类型不能新登录；旧会话按 `web` 处理。`terminalLimitMode: reject` 为默认，`replace` 仅替换同类最早会话。全局 `maxSessions` 和 `singleDevice` 继续约束所有终端，配额同一 CAS 原子提交。服务端登录上下文的 `terminalType` 和标准客户端 `auth.terminalType` 选择分组；类型不是硬件身份或授权凭据。
+
+Web 原地恢复使用 UI 的 `createSessionRecovery` / `SessionRecoveryDialog` 与 SDK 的 `recoverSession`，复用正常登录策略。`expectedUserId` 在密码、OTP、LDAP 登录签发会话前限制原主体；验证失败不签发恢复会话。仅重发明确未认证拒绝的一笔请求，网络结果不明时不重发。页面刷新/关闭后的内存草稿不在恢复范围内。
 
 ## 页面离开会话策略
 

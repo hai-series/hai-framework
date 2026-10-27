@@ -293,7 +293,7 @@ Client validation appears on the first blur and updates as invalid input is corr
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-#### Scenes (41)
+#### Scenes (43)
 
 ##### Guide (2)
 
@@ -337,6 +337,8 @@ Descriptions are optional. Call `prepare()` from `@h-ai/feedback/client` before 
 | `ReauthenticationDialog` | Sensitive action confirmation | `open`, `loading`, `error`, `onsubmit`, `onclose` |
 | `PermGuard`          | Permission guard                                 | `permissions`, `mode`, `fallback`                                                                      |
 | `UserProfile`        | User profile                                     | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
+| `SessionRecoveryDialog` | In-place session recovery | `recovery`, `actions` |
+| `SensitiveOperationsForm` | Permission operation editor | `operations`, `onsubmit`, `ondone` |
 
 ##### Storage (4)
 
@@ -828,7 +830,34 @@ AuthPanel disables native form controls during SSR and enables input after clien
 
 When an authentication link points to the current complete URL, AuthPanel switches scenes without navigating again, so input entered after returning to login is preserved. Links with a different path, query, or hash use application routing. Modified clicks such as Ctrl/Cmd retain browser behavior.
 
-`ReauthenticationDialog` renders password confirmation through `open/loading/error/onsubmit/onclose`. The service calls `actions.reauthenticate(password, operation)` and passes the short-lived single-use proof only to the intended request; cancellation, closing and submission clear input, and proofs never grant permissions. `Input` supports `datetime-local`: convert its browser-local value to an explicit timestamp in the service layer.
+`createSensitiveActions` can refresh database rules before an action through standard `actions.publicConfig()`. `SensitiveOperationsForm` shares line-based input, deduplication, validation and errors. Pass `operations`, async `onsubmit(operations)` returning HaiResult, and optional `ondone` for successful saves. Clearing database additions does not remove file rules.
+
+Use `createSessionRecovery()` with `SessionRecoveryDialog` for expired sessions. Configure it with the public config and original `{ id, username }`, pass `recovery.recover` as Kit/API client's `recoverSession`, and give the dialog the same controller and standard actions. Call `cancel()` on teardown. The UI stores no passwords or business requests. `expectedUserId` restricts server session issuance to the original principal; captcha, lockout, access and password-renewal policies remain active. Cancellation preserves input and stops continuation; ambiguous network writes are never replayed. Reloaded/closed documents cannot recover lost in-memory drafts.
+
+`createSensitiveActions(actions)` accepts Kit/API client authentication actions and shares confirmation, cancellation, retry, duplicate-submit and late-response handling. Create one per application root layout, update it with `configure(publicPolicy)`, and call `cancel()` on teardown. `authorize(operation)` returns undefined when confirmation is unnecessary, null when cancelled/busy, or the proof for that action. Do not send the business request on cancellation; pass a proof only to its intended request, never to global headers or persistent storage. Bind `ReauthenticationDialog` to the controller’s `open/loading/error/submit/cancel`; confirmation grants no permissions. `Input` supports `datetime-local`: convert its browser-local value to an explicit timestamp in the service layer.
+
+```svelte
+<!-- actions comes from Kit/API client; policy is the public IAM reauthentication policy. -->
+<script lang='ts'>
+  import type { SensitiveActionsOptions } from '@h-ai/ui'
+  import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
+
+  const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
+  const confirmation = createSensitiveActions(actions)
+  $effect(() => {
+    confirmation.configure(policy)
+    return () => confirmation.cancel()
+  })
+// Await confirmation.authorize(operation) in the business action; stop on null.
+</script>
+<ReauthenticationDialog
+  open={confirmation.open}
+  loading={confirmation.loading}
+  error={confirmation.error}
+  onsubmit={password => confirmation.submit(password)}
+  onclose={() => confirmation.cancel()}
+/>
+```
 
 [完整 IAM 配置 / IAM configuration](../iam/README.en.md)
 

@@ -38,7 +38,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 - theme.css 自动引入 design-tokens.css；全局样式的焦点使用 --hai-focus-color（缺省跟随当前 primary），减少动态效果时保留最终状态并缩短动画。长内容在 Empty/Alert 中换行；业务自定义 snippet 也要能收缩。
 
 
-敏感操作使用 ReauthenticationDialog（open/loading/error/onsubmit/onclose），网络与动作编排放服务层。服务通过 reauthenticate(password, operation) 获取短期单次用途凭据，只给本次请求；typed client 使用 options.context.reauthentication，不放全局 header/持久存储。Input 的 datetime-local 值需按本地时区转换为明确时间戳。
+敏感操作复用 createSensitiveActions(Kit/API client 标准 actions) + ReauthenticationDialog，不在业务项目复制弹窗状态机。每个根布局创建一份，configure(公开策略)，卸载时 cancel()；authorize 返回 undefined 无需验证、null 取消/忙、有字符串才是本次证明。取消不发业务请求；typed client 只给本次 options.context.reauthentication，不放全局 header/持久存储。服务端仍检查授权并消费用途凭据。Input 的 datetime-local 值需按本地时区转换为明确时间戳。
 
 AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供的 createCaptcha 自动完成自托管计算挑战。自定义认证动作保留 captcha 字段及 sendOtp/resetrequest 的可选 options；不要只在界面验证或持久化证明。关闭时不加载求解器，取消/卸载停止后续鉴别。
 
@@ -82,3 +82,5 @@ IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；
 Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
 
 `@h-ai/ui/i18n` 的 `createLocaleStore` 按“可解析的持久化值 → 完整 navigator.languages（再检查 navigator.language）→ defaultLocale → 支持列表首项”选择语言；首个不支持的候选不触发默认回退。匹配大小写、语言简写及逐级区域/脚本回退，返回 supportedLocales 中的配置代码；同语言多个变体按列表顺序选择。detectBrowserLocale 无实际命中返回 null，不插入框架默认值；空支持列表最终保留调用方默认值。SSR 不读取浏览器候选或修改全局语言。应用若使用 Paraglide，仍需用该项目的 setLocale 同步应用翻译；内置 UI 字典的覆盖范围不因自定义 store 列表而自动增加。
+
+会话失效时复用 createSessionRecovery + SessionRecoveryDialog，configure(公开配置, 原用户)，recover 传给 Kit/API client recoverSession；卸载 cancel。标准登录携带 expectedUserId 限制原主体，明确认证拒绝可续接一次，结果不明的写入不重放。SensitiveOperationsForm 编辑权限的 sensitiveOperations；文件和数据库取并集，可信 API 授权与操作守卫仍必须执行。

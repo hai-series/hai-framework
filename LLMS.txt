@@ -22,7 +22,7 @@ README 文档入口：[简体中文](README.md) · [English](README.en.md) · [�
 
 公开入口审查读取 [22 包实际 API 清单](scripts/generated/module-api-inventory.md)。package.exports、公开 barrel、内部文件分层；允许 selective/type-only/Svelte 默认组件及 client/server 条件入口。内置 Provider/Deps 不公开，PaymentProvider 与 AIStoreProvider 保留真实扩展契约；IAM 浏览器仅配置/类型/错误；UI 仅明确组件 barrel，Kit 无 vite 子路径。源码仓库构建后用 generate:api/check:api/test:api 验证，应用按已安装版本消费。
 
-配置化安全增强：IAM 的账号生命周期、密码/挑战/再认证、时段IP与会话策略见 [IAM参考](packages/cli/templates/skills/hai-iam/reference.md)；审计分类/脱敏/保留/私有备份/Reach告警见 [Audit](packages/audit/README.md)。admin-console/fullstack 的四类职责及基础成员由宿主配置，服务端限制跨职责授权；UI ReauthenticationDialog 只收集确认，SDK options.context.reauthentication 只给本次敏感请求。不要将示例角色变成框架通用固定规则。
+配置化安全增强：IAM 的账号生命周期、密码/挑战/再认证、时段IP与会话策略见 [IAM参考](packages/cli/templates/skills/hai-iam/reference.md)；审计分类/脱敏/保留/私有备份/Reach告警见 [Audit](packages/audit/README.md)。admin-console/fullstack 的四类职责及基础成员由宿主配置，服务端限制跨职责授权；UI createSensitiveActions + ReauthenticationDialog 复用确认状态与界面，Kit/API client 注入认证动作；SDK options.context.reauthentication 只给本次敏感请求。不要将示例角色变成框架通用固定规则。
 
 ## 生命周期与返回值
 
@@ -129,3 +129,5 @@ return result
 错误提示与日志：core.error.toPublic/formatMessage 区分安全 i18n 消息与内部诊断，提示末尾 traceId 与前后端日志共用 requestId；README 许可证唯一且最后，运行 pnpm check:readme。
 
 - 可选页面离开策略：`session.endOnPageHide` 默认 false；认证动作 `bindPageExit` 返回清理函数，关闭请求使用 `/auth/session/close`，不清除新登录 Cookie，浏览器仅尽力送达，配合服务端期限。
+
+- 安全交互复用 UI createSensitiveActions / SensitiveOperationsForm / createSessionRecovery / SessionRecoveryDialog；IAM getPublicConfig 合并文件与权限数据库的敏感操作，主体恢复限定 expectedUserId，终端配额 terminalLimits 与全局会话上限同一 CAS 执行。临时 fullstack+web+feedback 验证工程不属于框架模块，不提交 Git。
