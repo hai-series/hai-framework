@@ -150,7 +150,7 @@
     <Button
       type='submit'
       variant='primary'
-      class='w-full sm:w-auto sm:min-w-40'
+      class='disabled:text-base-content/70 w-full sm:w-auto sm:min-w-40'
       disabled={loading || disabled || !canSubmit || Boolean(policyError)}
       {loading}
     >

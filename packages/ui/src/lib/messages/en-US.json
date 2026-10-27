@@ -486,8 +486,15 @@
   "json_viewer_copied": "Copied",
   "auth_captcha_error": "Security check is incomplete or unavailable. Try again.",
   "auth_captcha_verifying": "Verifying security challenge",
-  "reauthentication_title": "Confirm sensitive action",
-  "reauthentication_hint": "Enter your current password to continue this action.",
+  "reauthentication_title": "Verify your identity again",
+  "reauthentication_hint": "You are signed in. Enter this account's password again to continue this sensitive action. Canceling will not submit it.",
   "reauthentication_password": "Current password",
-  "reauthentication_confirm": "Verify and continue"
+  "reauthentication_confirm": "Verify and continue",
+  "session_recovery_title": "Session expired — sign in again",
+  "session_recovery_hint": "Your page and input are preserved. Sign in to the same account using the normal controls to continue the rejected operation.",
+  "session_recovery_later": "Sign in later",
+  "session_recovery_account_error": "Sign in to the original account. The pending action has not continued.",
+  "sensitive_operations_label": "Operation IDs requiring reauthentication",
+  "sensitive_operations_hint": "One operation ID per line, matching the server guard. Database and file rules are combined. Clearing removes only this permission’s rules. The master switch must be enabled.",
+  "sensitive_operations_invalid": "Use at most 1000 operation IDs, each no longer than 128 characters."
 }

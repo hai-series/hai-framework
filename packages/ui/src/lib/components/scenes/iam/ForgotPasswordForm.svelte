@@ -156,7 +156,7 @@
       variant='primary'
       {loading}
       disabled={loading || disabled}
-      class='w-full'
+      class='disabled:text-base-content/70 w-full'
     >
       {submitText || uiM('forgot_password_submit')}
     </Button>
