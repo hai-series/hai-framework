@@ -16,6 +16,7 @@
   import type { HaiError } from '@h-ai/core'
   import type { DataAttributes } from '../../../types.js'
   import type { AuthLoginMethod, LoginFormData, LoginFormProps } from '../types.js'
+  import { untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
@@ -30,6 +31,7 @@
 
   const {
     methods = ['password'],
+    initialIdentifier = '',
     otpLength = 6,
     resendInterval = 60,
     onsendotp,
@@ -57,7 +59,7 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
 
-  let username = $state('')
+  let username = $state(untrack(() => initialIdentifier))
   let password = $state('')
   let selectedMethod = $state<AuthLoginMethod>('password')
   const method = $derived(methods.includes(selectedMethod) ? selectedMethod : methods[0])
@@ -245,7 +247,7 @@
       variant='primary'
       {loading}
       disabled={loading || disabled || !method}
-      class='w-full'
+      class='disabled:text-base-content/70 w-full'
     >
       {submitText || uiM('login_submit')}
     </Button>

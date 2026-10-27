@@ -32,7 +32,7 @@
   "cli_deploy_url": "  URL: {url}",
   "cli_deploy_id": "  ID: {id}",
   "cli_deploy_command_failed": "デプロイコマンドに失敗しました",
-  "cli_adminPasswordSaved": "  管理者: admin。環境ごとのランダムな初期 HAI_ADMIN_DEFAULT_PASSWORD は .env.dev / .env.test / .env.prod にあります",
+  "cli_adminPasswordSaved": "  初期アカウント：admin（システム）、audit_admin（監査）、config_admin（業務設定）、business_operator（業務操作）。アカウント・環境ごとに独立したパスワードを .env.dev / .env.test / .env.prod に保存：HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_CONFIG_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD。初回起動時に作成し、既存パスワードは変更しません。",
   "cli_deploy_environment": "デプロイ環境（test / prod / その他）",
   "cli_deploy_cancelled": "デプロイをキャンセルしました。",
   "cli_deploy_environment_hint": "--env <environment>を指定してください。非対話実行には--yesも必要です。ミドルウェアを選択する場合はターミナルを使用してください。",

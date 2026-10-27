@@ -536,6 +536,7 @@
   "business_settings_title": "業務基本設定",
   "business_notice_label": "公開業務のお知らせ",
   "business_notice_hint": "すべてのユーザーに表示されます。機密情報を入力しないでください。",
+  "security_sensitive_operations": "重要操作",
   "security_action_cancelled": "重要な操作をキャンセルしました。",
   "account_type": "アカウント種別",
   "account_permanent": "長期",

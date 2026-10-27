@@ -158,6 +158,9 @@ export const iamContract = {
       .output(HaiVoidResultSchema),
   },
   permissions: {
+    setSensitiveOperations: route({ method: 'PUT', path: '/iam/permissions/{id}/sensitive-operations', operationId: 'iam.permissions.sensitiveOperations', summary: 'Set permission sensitive operations', tags: ['iam', 'permissions'] })
+      .input(IamPermissionSchema.pick({ id: true, sensitiveOperations: true }))
+      .output(HaiVoidResultSchema),
     list: route({ method: 'GET', path: '/iam/permissions', operationId: 'iam.permissions.list', summary: 'List permissions', tags: ['iam', 'permissions'] })
       .input(IamListPermissionsInputSchema)
       .output(haiResultSchema(paginatedSchema(IamPermissionSchema))),

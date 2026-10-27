@@ -32,7 +32,7 @@
   "cli_deploy_url": "  地址：{url}",
   "cli_deploy_id": "  标识：{id}",
   "cli_deploy_command_failed": "部署命令失败",
-  "cli_adminPasswordSaved": "  管理员：admin；各环境的随机初始密码位于 .env.dev / .env.test / .env.prod 的 HAI_ADMIN_DEFAULT_PASSWORD",
+  "cli_adminPasswordSaved": "  初始账号：admin（系统）、audit_admin（审计）、config_admin（业务配置）、business_operator（业务操作）。各账号、各环境密码独立，位于 .env.dev / .env.test / .env.prod：HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_CONFIG_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD。首次启动创建；已有账号不重设密码。",
   "cli_deploy_environment": "请输入部署环境（test / prod 等）",
   "cli_deploy_cancelled": "部署已取消。",
   "cli_deploy_environment_hint": "请指定 --env <环境>；非交互调用还需 --yes，或在交互终端逐项选择中间件。",

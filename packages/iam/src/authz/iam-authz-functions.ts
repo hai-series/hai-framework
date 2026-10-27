@@ -373,6 +373,23 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
   }
 
   return {
+    getSensitiveOperations: () => rbacConfig.enabled ? permissionRepository.getSensitiveOperations() : Promise.resolve(ok([])),
+    async setPermissionSensitiveOperations(permissionId, operations) {
+      if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
+        return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
+      const updated = await permissionRepository.updateById(permissionId, { sensitiveOperations: [...new Set(operations.map(value => value.trim()))] })
+      if (!updated.success)
+        return updated
+      // MySQL 对相同值的幂等更新可能返回 0，需区分记录不存在与内容未变化。
+      if (updated.data.changes === 0) {
+        const existing = await permissionRepository.findById(permissionId)
+        if (!existing.success)
+          return existing
+        if (!existing.data)
+          return err(HaiIamError.PERMISSION_NOT_FOUND, iamM('iam_permissionNotExist'))
+      }
+      return ok(undefined)
+    },
     async checkPermission(userId: string, permission: string): Promise<HaiResult<boolean>> {
       // RBAC 未启用时，所有权限检查直接放行
       if (!rbacConfig.enabled) {
@@ -812,6 +829,10 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     // ─── 权限管理 ───
 
     async createPermission(permission, tx?: DmlWithTxOperations): Promise<HaiResult<Permission>> {
+      const operations = permission.sensitiveOperations ?? []
+      if (!Array.isArray(operations) || operations.length > 1000 || operations.some(value => typeof value !== 'string' || !value.trim() || value.length > 128))
+        return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_sensitiveOperationsInvalid'))
+      permission = { ...permission, sensitiveOperations: [...new Set(operations.map(value => value.trim()))] }
       // 使用调用方事务或创建新事务，保证 create+findByCode 原子性
       const ownTx = !tx
       if (!tx) {

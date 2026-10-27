@@ -25,6 +25,7 @@ async function login(page: Page, username = 'admin', initialPassword = process.e
   await expect(page.getByTestId('logout')).toBeVisible()
   if (await page.getByTestId('guide-later').isVisible())
     await page.getByTestId('guide-later').click()
+  return password
 }
 
 test('configured page exit revokes the actual server session, while BFCache keeps it', async ({ page, context }) => {
@@ -50,12 +51,34 @@ test('configured page exit revokes the actual server session, while BFCache keep
   await expect(reopened.getByTestId('logout')).toHaveCount(0)
 })
 
-test('server idle expiry rejects the next access and cookie refresh', async ({ page }) => {
-  await login(page, 'config_admin', 'Scaffold-test-Config123!')
+test('server idle expiry opens normal login in place and resumes one rejected save without losing the draft', async ({ page }) => {
+  const password = await login(page, 'config_admin', 'Scaffold-test-Config123!')
+  await page.getByTestId('nav-configuration').click()
+  const draft = 'Draft preserved across server idle expiry'
+  await page.getByTestId('business-notice-input').locator('textarea').fill(draft)
   // 此等待是被测的真实服务端闲置期限；期间不发业务保活请求。
   await page.waitForTimeout(6500)
-  await page.getByTestId('nav-configuration').click()
-  await expect(page.getByTestId('login-form')).toBeVisible()
-  await expect(page.getByTestId('logout')).toHaveCount(0)
+  const statuses: number[] = []
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname.endsWith('/admin/configuration/update'))
+      statuses.push(response.status())
+  })
+  await page.getByTestId('configuration-page').locator('button[type=submit]').click()
+  const dialog = page.getByTestId('session-recovery-dialog')
+  await expect(dialog).toBeVisible()
+  await expect(page.getByTestId('business-notice-input').locator('textarea')).toHaveValue(draft)
+  await page.screenshot({ path: test.info().outputPath('idle-session-recovery.png'), fullPage: true })
+  const form = dialog.locator('form.login-form')
+  await form.locator('input[type=password]').fill('Incorrect-test-password!')
+  await form.locator('button[type=submit]').click()
+  await expect(dialog.locator('.alert-error')).toBeVisible()
+  expect(statuses).toHaveLength(1)
+  await form.locator('input[type=password]').fill(password)
+  await form.locator('button[type=submit]').click()
+  await expect(dialog).toHaveCount(0)
+  await expect.poll(() => statuses.length).toBe(2)
+  await expect(page.getByTestId('notice')).toBeVisible()
+  await expect(page.getByTestId('business-notice-input').locator('textarea')).toHaveValue(draft)
+  await expect(page.getByTestId('logout')).toBeVisible()
 })
 {{/if~}}

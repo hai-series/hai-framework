@@ -352,6 +352,10 @@ kit.auth.createApi(iam).createCaptcha を POST /api/auth/captcha として公開
 
 方針・既定値・復旧範囲は次を参照： [IAM](../iam/README.ja.md)。
 
+## 期限切れセッションの画面内復帰
+
+`kit.client.create({ recoverSession })` によって現在の画面と入力を保持して再ログインできます。UI の `createSessionRecovery` / `SessionRecoveryDialog` を使い、ルートで公開方針と元の利用者を設定し、`recovery.recover` と標準認証 actions を渡して破棄時に cancel します。IAM は発行前に `expectedUserId` を確認し、通常の CAPTCHA・ロック・改密・アクセス規則を適用します。認証拒否が明確な要求だけ1回続行でき、取消・5xx・タイムアウト・結果不明の書込は再送しません。旧セッションの重要操作証明は再確認が必要な場合があります。標準認証 actions は自身の復帰再試行を無効にします。独自認証は apiFetch の第3引数 `{ recoverSession: false }` で再帰を防ぎます。terminalType（web/app/desktop/api、既定 web）は分類用で機器認証ではありません。
+
 ## ページ離脱時のセッション方針
 
 `session.endOnPageHide` の既定値は `false` です。ホストは `actions.bindPageExit({ enabled: config.session.endOnPageHide })` を呼び、破棄時に戻り値の解除関数を実行します。標準 admin/H5/fullstack テンプレートは接続済みです。BFCache 以外の `pagehide`（再読み込み、文書全体の移動を含む）で POST `/auth/session/close` を最善努力で送信し、保持する access と関連 refresh を失効します。既存の CSRF/暗号化転送を使用し、`keepalive` を付け、自動更新しません。古い応答が新しいログインを上書きしないよう Cookie/ローカル資格情報を消去しません。明示的ログアウトは通常どおり失効と消去を行います。ブラウザーが離脱要求を送らない場合もあるため、業務に応じてサーバーの `idleTimeout`/`absoluteTimeout` を併用してください。閉じた瞬間の失効は保証できません。

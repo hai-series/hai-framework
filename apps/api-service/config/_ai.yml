@@ -2,25 +2,44 @@
 # API Service - AI 配置
 # =============================================================================
 
+# 用途：LLM 配置（可选，所有字段有默认值）
 llm:
+  # 用途：全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`）
   api: ${HAI_AI_LLM_API:chat}
+  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
   apiKey: ${HAI_AI_LLM_APIKEY:sk-placeholder}
+  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
 
+# 用途：A2A 配置（Agent-to-Agent 协议）
 a2a:
+  # 用途：Agent Card 配置
   agentCard:
+    # 用途：Agent 名称
     name: ${HAI_AI_A2A_AGENTCARD_NAME:echo-agent}
+    # 用途：Agent 描述
     description: ${HAI_AI_A2A_AGENTCARD_DESCRIPTION:A simple echo agent that repeats your message (A2A demo)}
+    # 用途：Agent 对外 URL
     url: ${HAI_AI_A2A_AGENTCARD_URL:http://localhost:5173}
+    # 用途：Agent 版本
     version: ${HAI_AI_A2A_AGENTCARD_VERSION:0.1.0}
+    # 用途：Agent 技能列表
     skills:
+      # 用途：技能 ID
       - id: echo
+        # 用途：技能名称
         name: Echo
+        # 用途：技能描述
         description: ${HAI_AI_A2A_AGENTCARD_SKILLS_0_DESCRIPTION:Echoes back the user message}
+        # 用途：标签列表
         tags:
           - ${HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_0:demo}
           - ${HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_1:echo}
+  # 用途：A2A 安全认证配置
   security:
+    # 用途：API Key 认证（通过 IAM apiKey.verifyApiKey 验证）
     apiKey:
+      # 用途：API Key 的传递位置（默认 header）
       in: ${HAI_AI_A2A_SECURITY_APIKEY_IN:header}
+      # 用途：参数名（默认 x-api-key）
       name: ${HAI_AI_A2A_SECURITY_APIKEY_NAME:x-api-key}

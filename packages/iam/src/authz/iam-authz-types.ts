@@ -50,6 +50,8 @@ export interface PermissionQueryOptions extends PaginationOptionsInput {
  * ```
  */
 export interface Permission {
+  /** 此资源权限要求二次认证的操作ID；与文件清单取并集，空或null表示不追加。 */
+  sensitiveOperations?: string[] | null
   /** 权限 ID */
   id: string
   /** 权限代码（如 users:read, posts:write） */
@@ -146,6 +148,10 @@ export interface UserRole {
  * ```
  */
 export interface AuthzOperations {
+  /** 实时读取RBAC中配置的敏感操作；RBAC关闭时为空，读取失败须拒绝受保护操作。 */
+  getSensitiveOperations: () => Promise<HaiResult<string[]>>
+  /** 设置资源权限的敏感操作清单；空数组清除数据库追加规则，不清除文件中的规则。 */
+  setPermissionSensitiveOperations: (permissionId: string, operations: string[]) => Promise<HaiResult<void>>
   /** 查询当前角色与权限代码，一次读取角色并批量聚合权限，不依赖会话缓存。 */
   getUserAuthorization: (userId: string) => Promise<HaiResult<Pick<Session, 'roles' | 'permissions'>>>
   /**

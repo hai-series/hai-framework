@@ -6,6 +6,67 @@ import { isMap, isScalar, isSeq, parseDocument, Scalar } from 'yaml'
 import catalog from './cli-config-catalog.json' with { type: 'json' }
 
 const catalogByName = new Map(catalog.map(entry => [entry.name, entry]))
+const catalogByPath = new Map(catalog.map(entry => [entry.path, entry]))
+
+/**
+ * 将 Schema 的用途说明同步到真实 YAML 字段，保留既有注释和值；重复生成不追加副本。
+ * @param name - 模块配置名
+ * @param content - 已有 YAML 或已参数化的模板
+ * @returns 带字段用途说明的 YAML
+ * @example 模块内部上下文
+ * ```ts
+ * const yaml = documentConfig('iam', 'register:\n  enabled: false\n')
+ * // 保留 false，并说明关闭自助注册不会阻止已有账号登录。
+ * ```
+ */
+export function documentConfig(name: string, content: string): string {
+  const document = parseDocument(content)
+  if (document.errors.length)
+    throw new Error(`Invalid ${name} configuration documentation source`)
+  let changed = false
+  function clearGeneratedComments(node: unknown): void {
+    if (isMap(node) || isSeq(node) || isScalar(node)) {
+      for (const field of ['commentBefore', 'comment'] as const) {
+        const previous = node[field]
+        if (!previous)
+          continue
+        const kept = previous.split('\n').filter(line => !/^\s*用途：/.test(line)).join('\n') || null
+        if (kept !== previous) {
+          node[field] = kept
+          changed = true
+        }
+      }
+    }
+  }
+  function walk(node: unknown, segments: string[], sequenceItem = false): void {
+    // 首字段/段尾的注释可能附在容器或前一个值上；只清理元数据，不触碰 Markdown 正文。
+    clearGeneratedComments(node)
+    if (isMap(node)) {
+      for (const [index, pair] of node.items.entries()) {
+        if (!isScalar(pair.key))
+          continue
+        clearGeneratedComments(pair.key)
+        const field = [...segments, String(pair.key.value)]
+        const description = catalogByPath.get([name, ...field].join('.').replace(/\.\d+(?=\.|$)/g, '.0'))?.description
+        if (description) {
+          // 数组项的首字段说明放在短横线之前，避免生成 "- # 注释" 破坏既有排版规范。
+          const target = sequenceItem && index === 0 ? node : pair.key
+          const comment = [target.commentBefore, ` 用途：${description}`].filter(Boolean).join('\n')
+          if (target.commentBefore !== comment) {
+            target.commentBefore = comment
+            changed = true
+          }
+        }
+        walk(pair.value, field)
+      }
+    }
+    else if (isSeq(node)) {
+      node.items.forEach((item, index) => walk(item, [...segments, String(index)], true))
+    }
+  }
+  walk(document.contents, [])
+  return changed ? document.toString({ lineWidth: 0 }) : content
+}
 
 /**
  * 单个环境变量的配置位置、示例建议值和取值说明。

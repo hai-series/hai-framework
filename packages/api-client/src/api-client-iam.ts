@@ -109,10 +109,10 @@ export function createIamAuthActions(client: {
     createCaptcha: (input: Parameters<typeof client.iam.auth.createCaptcha>[0]) => client.iam.auth.createCaptcha(input),
     login: async (input: IamAuthLoginInput) => {
       const result = input.method === 'ldap'
-        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password, captcha: input.captcha })
+        ? await client.iam.auth.loginWithLdap({ username: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
         : input.method === 'email' || input.method === 'sms'
-          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '', captcha: input.captcha })
-          : await client.iam.auth.login({ identifier: input.identifier, password: input.password, captcha: input.captcha })
+          ? await client.iam.auth.loginWithOtp({ identifier: input.identifier, code: input.code ?? '', captcha: input.captcha, expectedUserId: input.expectedUserId })
+          : await client.iam.auth.login({ identifier: input.identifier, password: input.password, captcha: input.captcha, expectedUserId: input.expectedUserId })
       return save(result)
     },
     register: async (input: IamRegisterInput) => save(await client.iam.auth.register(input)),

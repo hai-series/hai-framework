@@ -44,6 +44,22 @@ it.each(['api', 'admin', 'website', 'h5', 'mobile-app'] as const)('单独 %s 工
   expect(build.app).toEqual(appType === 'mobile-app' ? ['.'] : undefined)
 })
 
+it.each([true, false])('fullstack 实际 workspace 的所有 catalog 依赖都能解析（feedback=%s）', async (feedback) => {
+  const name = `catalog-${feedback}`
+  const project = path.join(tmpRoot, name)
+  await generateFromTemplates(project, buildTemplateContext({ name, appType: 'fullstack', frontends: ['web'], features: feedback ? ['feedback'] : [], packageManager: 'pnpm' }))
+  const workspace = parse(await fse.readFile(path.join(project, 'pnpm-workspace.yaml'), 'utf8')) as { catalog: Record<string, string> }
+  const missing: string[] = []
+  for (const directory of ['.', `packages/${name}-serv`, `packages/${name}-shared`, `packages/${name}-contract`, `apps/${name}-web`]) {
+    const manifest = JSON.parse(await fse.readFile(path.join(project, directory, 'package.json'), 'utf8')) as { dependencies?: Record<string, string>, devDependencies?: Record<string, string> }
+    for (const [dependency, specifier] of Object.entries({ ...manifest.dependencies, ...manifest.devDependencies })) {
+      if (specifier === 'catalog:' && !workspace.catalog[dependency])
+        missing.push(`${directory}: ${dependency}`)
+    }
+  }
+  expect(missing).toEqual([])
+})
+
 it.each([['web'], ['app']] as const)('fullstack 部署显式描述所选 Web，原生端不生成 Web 服务（%s）', async (target) => {
   const project = path.join(tmpRoot, `deploy-${target}`)
   await generateFromTemplates(project, buildTemplateContext({ name: `deploy-${target}`, appType: 'fullstack', frontends: [target], features: [], packageManager: 'pnpm' }))

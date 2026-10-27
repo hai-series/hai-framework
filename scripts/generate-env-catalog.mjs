@@ -29,6 +29,26 @@ const explicit = new Map()
 
 /** 补充没有独立 JSDoc 的联合类型标记、动态场景及第三方嵌套字段。 */
 function fieldDescription(module, segments) {
+  if (segments.length === 0) {
+    return ({
+      core: '应用名称、环境、语言和日志的基础设置；整体覆盖会替换未提供的字段',
+      db: '关系数据库后端及连接池；按 type 选择 SQLite、PostgreSQL 或 MySQL 参数',
+      cache: '缓存后端与连接策略；多节点共享状态使用 Redis，memory 仅限单机',
+      storage: '文件和私有归档存储；按 type 选择本地目录或 S3，公开地址影响文件访问方式',
+      iam: '账号认证、密码、会话和访问策略；仅在服务端修改，重启后对对应入口生效',
+      audit: '事件采集、隐私脱敏、保留保护、私有备份及告警；通知和定时任务需另配通道',
+      ai: '模型、会话存储、知识检索和音视频能力；只启用已配置并可用的模型及后端',
+      vecdb: '向量检索后端及连接；生产多节点使用共享向量服务，不能用本地目录替代',
+      reach: '邮件、短信和 API 通知通道及模板；开发 Console 只输出日志，不实际投递',
+      feedback: '问题反馈采集、证据容量、私有归档和独立通知；不会自动启用其他业务通知',
+      payment: '支付渠道商户配置与通知验签；按所用渠道配置密钥和回调地址',
+      scheduler: '后台任务检查频率、共享租约与日志保留；业务任务仍由宿主注册',
+      deploy: '项目部署目标、服务与资源开通设置；由 CLI 部署入口读取，不是运行时业务开关',
+      serv: 'HTTP 服务、路由、跨域和加密传输；监听与访问策略改变后需重启服务',
+      kit: 'SvelteKit 服务端安全头、认证守卫及传输设置；仅适用于对应宿主集成',
+      crypto: '宿主应用声明的加密和传输参数；密钥只在服务端或受保护运行环境提供',
+    })[module]
+  }
   const key = segments.at(-1)
   const field = segments.join('.')
   if (key === 'operationLog')
@@ -176,14 +196,14 @@ function schemaDocumentation(sources, exported) {
 }
 
 /** 遍历 Schema 的对象/数组/联合类型；数组 0 表示可重复的任意索引。 */
-function walkSchema(node, segments, context, ancestors = new Set(), inheritedDefault) {
+function walkSchema(node, segments, context, ancestors = new Set(), inheritedDefault, inheritedDescription) {
   if (!node || typeof node !== 'object')
     return
   if (node.$ref) {
     if (ancestors.has(node.$ref))
       return
     const target = node.$ref.split('/').slice(1).reduce((value, key) => value?.[key.replaceAll('~1', '/').replaceAll('~0', '~')], context.schema)
-    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]), inheritedDefault === undefined ? node.default : inheritedDefault)
+    walkSchema(target, segments, context, new Set([...ancestors, node.$ref]), inheritedDefault === undefined ? node.default : inheritedDefault, node.description || inheritedDescription)
     return
   }
   // 父对象的显式默认值优先于复用 schema 的字段默认值，例如 AI Knowledge 的 overlap=200。
@@ -227,12 +247,15 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
       apiKey: 'Qdrant：API key；Chroma：Authorization Bearer token，用于同协议的自托管服务/网关，不提供 Chroma Cloud 契约',
       url: 'pgvector：连接串；Qdrant：HTTP(S) 服务地址；Chroma：HTTP(S) 根端点，优先于 host/port，不允许凭据、路径前缀、query 或 fragment',
     })[segments.join('.')]
-    const description = providerDescription || node.description || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments) || `${context.name}.${segments.join('.')} 配置${segments.length ? '项' : '对象'}`
+    const description = providerDescription || node.description || inheritedDescription || context.docs.get(segments.join('.')) || (parentDoc && `${parentDoc}；此变量整体替换单个数组项`) || fieldDescription(context.name, segments)
+    if (!description)
+      throw new Error(`Missing configuration purpose: ${context.name}.${segments.join('.')}; document the Schema field before generating examples`)
     const value = effectiveDefault === undefined ? '' : typeof effectiveDefault === 'object' ? JSON.stringify(effectiveDefault) : String(effectiveDefault)
     add(name, { module: context.name, path: [context.name, ...segments].join('.'), description, constraints, enums, value })
   }
+  // 联合分支仍表示同一个字段，应继承字段用途；对象子字段不得继承父节点的笼统说明。
   for (const branch of [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])])
-    walkSchema(branch, segments, context, ancestors, effectiveDefault)
+    walkSchema(branch, segments, context, ancestors, effectiveDefault, node.description || inheritedDescription)
   for (const [key, property] of Object.entries(node.properties ?? {}))
     walkSchema(property, [...segments, key], context, ancestors, effectiveDefault && typeof effectiveDefault === 'object' && !Array.isArray(effectiveDefault) ? effectiveDefault[key] : undefined)
   if (node.items)
@@ -278,7 +301,7 @@ async function scan(directory) {
       const configName = item.name.replace(/^_/, '').replace(/\.ya?ml(?:\.hbs)?$/, '')
       const name = `HAI_${configName.toUpperCase()}`
       if (!variables.has(name))
-        add(name, { module: configName, path: configName, description: `${configName} 配置对象`, constraints: ['JSON 对象；整体替换该配置'], enums: [], value: '' })
+        add(name, { module: configName, path: configName, description: fieldDescription(configName, []) ?? `应用自定义的 ${configName} 参数集合；字段由该应用配置声明，不会自动启用框架模块`, constraints: ['JSON 对象；整体替换该配置'], enums: [], value: '' })
     }
     for (const match of content.matchAll(/(?:process\.env|import\.meta\.env)(?:\?\.)?\.?(?:([A-Z][A-Z0-9_]+)|\[['"]([A-Z][A-Z0-9_]+)['"]\])|\$\{((?:HAI_|PUBLIC_|VITE_)[A-Z0-9_]+)(?::([^}]*))?\}/g)) {
       const name = match[1] ?? match[2] ?? match[3]

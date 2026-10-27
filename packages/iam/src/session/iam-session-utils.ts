@@ -107,6 +107,7 @@ export function buildSession(options: CreateSessionOptions, now: Date, sessionTt
     roles: options.roles ?? [],
     permissions: options.permissions ?? [],
     source: options.source,
+    terminalType: options.terminalType ?? 'web',
     accessToken,
     createdAt: now,
     startedAt: now,

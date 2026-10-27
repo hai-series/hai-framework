@@ -67,6 +67,17 @@ const steps: SchemaMigration[] = [{
     const added = await sql.execute('ALTER TABLE hai_iam_users ADD COLUMN first_login_failed_at TIMESTAMP')
     return added.success ? ok(undefined) : added
   },
+}, {
+  version: 5,
+  name: 'permission-sensitive-operations',
+  async needed(sql) {
+    const found = await schemaColumns(reldb, 'hai_iam_permissions', sql)
+    return found.success ? ok(found.data.length > 0 && !found.data.includes('sensitive_operations')) : found
+  },
+  async apply(sql) {
+    const added = await sql.execute('ALTER TABLE hai_iam_permissions ADD COLUMN sensitive_operations JSON')
+    return added.success ? ok(undefined) : added
+  },
 }]
 
 /**

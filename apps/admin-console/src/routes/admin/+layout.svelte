@@ -6,7 +6,7 @@
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
   import { browser } from '$app/environment'
-  import { goto } from '$app/navigation'
+  import { beforeNavigate, goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { createAdminGuide } from '$lib/guide/admin-guide'
@@ -15,9 +15,10 @@
   import { authActions } from '$lib/services/auth'
   import { addFeedbackFiles, annotateFeedback, captureFeedbackPage, closeFeedbackBrowser, exportLocalFeedback, feedbackDraftId, initFeedbackBrowser, prepareFeedback, submitFeedback } from '$lib/services/feedback.js'
   import { sensitiveActions } from '$lib/services/sensitive-actions.svelte.js'
+  import { sessionRecovery } from '$lib/services/session-recovery.svelte.js'
   import { apiFetch } from '$lib/utils/api'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, setPermissionContext, usePermission } from '@h-ai/ui'
+  import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
@@ -28,6 +29,34 @@
   }
 
   const { data, children }: Props = $props()
+  // 先确认会话再离开当前页面；失效时 API 客户端会原地登录，取消则保留草稿。
+  let approvedNavigation = ''
+  let checkingNavigation = false
+  beforeNavigate((navigation) => {
+    const target = navigation.to?.url
+    if (navigation.willUnload || !target?.pathname.startsWith('/admin'))
+      return
+    if (approvedNavigation === target.href) {
+      approvedNavigation = ''
+      return
+    }
+    navigation.cancel()
+    if (checkingNavigation)
+      return
+    checkingNavigation = true
+    void apiFetch('/api/auth/me').then(async (response) => {
+      if (response.ok) {
+        approvedNavigation = target.href
+        // target 来自 SvelteKit 导航目标，已包含部署 base，不能重复 resolve。
+        // eslint-disable-next-line svelte/no-navigation-without-resolve
+        await goto(target, { replaceState: navigation.type === 'popstate' })
+      }
+    }).catch(() => { /* 网络故障不离开当前页面，用户可再次导航。 */ }).finally(() => { checkingNavigation = false })
+  })
+  $effect(() => {
+    sessionRecovery.configure(data.iamPublicConfig, data.user)
+    return () => sessionRecovery.cancel()
+  })
   $effect(() => authActions.bindPageExit({ enabled: data.iamPublicConfig.session.endOnPageHide }))
   $effect(() => {
     sensitiveActions.configure(data.iamPublicConfig.reauthentication)
@@ -195,6 +224,7 @@
   }
 </script>
 
+<SessionRecoveryDialog recovery={sessionRecovery} actions={authActions} />
 <ReauthenticationDialog open={sensitiveActions.open} loading={sensitiveActions.loading} error={sensitiveActions.error} onsubmit={password => sensitiveActions.submit(password)} onclose={() => sensitiveActions.cancel()} />
 
 <svelte:document onclick={handleDocumentClick} />

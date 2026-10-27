@@ -261,7 +261,7 @@
     <Button
       type='submit'
       variant='primary'
-      class='w-full'
+      class='disabled:text-base-content/70 w-full'
       disabled={loading || disabled || !passwordsMatch || Boolean(policyError)}
       loading={loading}
     >

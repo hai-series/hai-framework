@@ -47,6 +47,8 @@ export interface IamCaptchaChallenge {
  * ```
  */
 export interface AuthRequestContext {
+  /** 宿主识别的接入终端分组；不是物理设备证明，省略时普通登录归为 web。 */
+  terminalType?: 'web' | 'app' | 'desktop' | 'api'
   /** socket/平台或受信代理解析后的地址；不能直接复制 X-Forwarded-For。 */
   ip?: string
   userAgent?: string
@@ -62,6 +64,8 @@ export interface AuthRequestContext {
  * ```
  */
 export interface PasswordCredentials {
+  /** 原地恢复会话时限定原主体；鉴别成功但不是此用户时也不签发新会话。 */
+  expectedUserId?: string
   captcha?: string
   /** 用户名/邮箱/手机号 */
   identifier: string
@@ -78,6 +82,8 @@ export interface PasswordCredentials {
  * ```
  */
 export interface OtpCredentials {
+  /** 会话恢复限定原主体，不能以其他账号的有效验证码恢复原业务动作。 */
+  expectedUserId?: string
   captcha?: string
   /** 邮箱/手机号 */
   identifier: string
@@ -94,6 +100,8 @@ export interface OtpCredentials {
  * ```
  */
 export interface LdapCredentials {
+  /** 会话恢复限定原主体；其他账号鉴别成功也不签发恢复会话。 */
+  expectedUserId?: string
   captcha?: string
   /** 用户名 */
   username: string

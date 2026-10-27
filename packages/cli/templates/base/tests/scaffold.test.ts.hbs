@@ -8,7 +8,14 @@ import process from 'node:process'
 {{/unless}}
 import { fileURLToPath } from 'node:url'
 {{#unless isSvelteOnlyApp}}
+{{#if features.iam}}
+import { cache } from '@h-ai/cache'
+{{/if}}
 import { core } from '@h-ai/core'
+{{#if features.iam}}
+import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
+{{/if}}
 {{/unless}}
 import { describe, expect, it } from 'vitest'
 {{#unless isSvelteOnlyApp}}
@@ -56,16 +63,37 @@ describe('generated scaffold', () => {
 {{/unless}}
 {{#unless isSvelteOnlyApp}}
 
-  it('publishes only public metadata from parsed core configuration', () => {
+  it('publishes only public metadata from parsed core configuration', async () => {
     core.init({ configDir: './config' })
     const config = core.config.getOrThrow<CoreConfig>('core')
     expect(core.logger.getLevel()).toBe(config.logging?.level ?? 'info')
-    expect(load()).toEqual({
 {{#if features.iam}}
-      iamPublicConfig: null,
-{{/if}}
+    // 动态公开策略依赖已初始化的 IAM，使用隔离内存后端，不能用未等待的 Promise 冒充数据。
+    try {
+      const db = await reldb.init({ type: 'sqlite', database: ':memory:' })
+      expect(db.success).toBe(true)
+      const cached = await cache.init({ type: 'memory' })
+      expect(cached.success).toBe(true)
+      const initialized = await iam.init({ seedDefaultData: false })
+      expect(initialized.success).toBe(true)
+      const publicConfig = await iam.getPublicConfig()
+      if (!publicConfig.success)
+        throw new Error(publicConfig.error.message)
+      expect(await load()).toEqual({
+        iamPublicConfig: publicConfig.data,
+        appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
+      })
+    }
+    finally {
+      await iam.close()
+      await cache.close()
+      await reldb.close()
+    }
+{{else}}
+    expect(await load()).toEqual({
       appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
     })
+{{/if}}
   })
 {{/unless}}
 })

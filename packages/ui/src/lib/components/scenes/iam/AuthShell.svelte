@@ -25,6 +25,7 @@
   const {
     variant = 'card',
     title = '',
+    embedded = false,
     subtitle = '',
     brandTitle = '',
     brandText = '',
@@ -42,6 +43,8 @@
   }: {
     /** 布局形态：'card'（居中卡片，默认）或 'split'（左右分栏） */
     variant?: 'card' | 'split'
+    /** 嵌入已有弹窗/布局，只渲染表单内容。 */
+    embedded?: boolean
     /** 表单区标题 */
     title?: string
     /** 表单区副标题 */
@@ -96,7 +99,9 @@
   </div>
 {/snippet}
 
-{#if isSplit}
+{#if embedded}
+  <div {...dataAttributes} class={className}>{#if children}{@render children()}{/if}</div>
+{:else if isSplit}
   <div class={cn('grid min-h-screen lg:grid-cols-2', className)}>
     <!-- 品牌区 -->
     <div class='relative hidden overflow-hidden bg-primary p-10 text-primary-content lg:flex'>

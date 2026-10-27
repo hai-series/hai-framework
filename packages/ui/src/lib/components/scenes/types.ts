@@ -110,6 +110,8 @@ export interface LoginFormData {
  * ```
  */
 export interface LoginFormProps extends FormLayoutOptions, DataAttributes {
+  /** 初始登录标识；原地恢复时预填原用户名，仍走正常鉴别。 */
+  initialIdentifier?: string
   /** 实际可用的方式；空数组表示无可用登录方式。 */
   methods?: AuthLoginMethod[]
   /** 验证码长度 */
@@ -500,7 +502,7 @@ export interface AuthPanelActions {
   /** 仅启用交互挑战时需要；动作返回可公开挑战，签名秘密保留在服务端。 */
   createCaptcha?: (input: { operation: 'login' | 'register' | 'sendOtp' | 'passwordReset' | 'renewPassword' }) => Promise<HaiResult<{ id: string, challenge: Challenge }>>
   /** password/ldap 使用 password，email/sms 使用 code；成功后由工厂保存凭证。 */
-  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string, captcha?: string }) => Promise<HaiResult<unknown>>
+  login: (input: { identifier: string, password: string, method?: AuthLoginMethod, code?: string, captcha?: string, expectedUserId?: string }) => Promise<HaiResult<unknown>>
   /** 注册并登录；禁用新账户的待启用状态由面板单独提示。 */
   register: (input: { username: string, password: string, email?: string, phone?: string, displayName?: string, captcha?: string }) => Promise<HaiResult<unknown>>
   sendOtp: (identifier: string, options?: { captcha?: string }) => Promise<HaiResult<unknown>>
@@ -543,6 +545,10 @@ export type AuthPanelMode = 'login' | 'register' | 'forgot' | 'reset' | 'renew'
  * ```
  */
 export interface AuthPanelProps extends FormLayoutOptions, DataAttributes {
+  /** 嵌入弹窗等已有布局，省略整页背景和重复标题。 */
+  embedded?: boolean
+  /** 登录标识初始值；不能替代服务端主体约束。 */
+  initialIdentifier?: string
   /** 未取得配置时显示加载状态，只消费 IAM 的公开配置。 */
   config: AuthPanelConfig | null
   /** 由 Kit 或 API client 提供标准动作，组件不处理底层传输。 */

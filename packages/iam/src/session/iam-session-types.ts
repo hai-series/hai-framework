@@ -82,6 +82,8 @@ export interface AuthResult {
  * ```
  */
 export interface Session {
+  /** 登录时固定的终端分组；旧记录未设置时归为 web，刷新不能切换分组。 */
+  terminalType?: 'web' | 'app' | 'desktop' | 'api'
   /** 会话内容版本；显式更新产生新版本，内部滑动续期保留版本。 */
   version: string
   /** 认证快照绑定的持久凭据代；改密后的旧会话即使缓存清理失败也拒绝。 */
@@ -144,6 +146,8 @@ export type SessionData = Record<string, unknown> & {
  * ```
  */
 export interface CreateSessionOptions {
+  /** 可信宿主提供的终端分组；会话签发后不可通过 update/refresh 改变。 */
+  terminalType?: 'web' | 'app' | 'desktop' | 'api'
   /** 策略已验证的凭据代；创建前须与当前数据库核对，省略时仅供可信服务端按当前用户签发。 */
   expectedCredentialVersion?: string
   /** 服务端已验证的 API Key 绑定；不得来自未验证客户端输入。 */

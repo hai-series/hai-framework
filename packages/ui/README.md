@@ -293,7 +293,7 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-#### 场景组件 Scenes（41 个）
+#### 场景组件 Scenes（43 个）
 
 ##### Guide 引导与帮助（2 个）
 
@@ -302,7 +302,7 @@ components/
 | `GuideHost` | 首次邀请、页面导览与帮助弹窗宿主 | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | 可独立使用的帮助中心 | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App 应用级（11 个）
+##### App 应用级（13 个）
 
 | 组件             | 描述             | 主要属性           |
 | ---------------- | ---------------- | ------------------ |
@@ -322,7 +322,7 @@ components/
 
 反馈说明可为空；宿主先用 `@h-ai/feedback/client` 的 `prepare()` 固定现场，再打开弹窗。表单通过 `onfileschange` 准备主动附件、通过 `onannotate` 将标注烧录到图片；受理失败保留输入并可本地导出。列表展示说明或服务端事实摘要，以 `onquerychange` 取得分页数据；界面权限不代替服务端授权。完整接入与离线工具见 [feedback 模块](../feedback/README.md)。
 
-##### IAM 身份认证（11 个）
+##### IAM 身份认证（13 个）
 
 | 组件                 | 描述       | 主要属性                                              |
 | -------------------- | ---------- | ----------------------------------------------------- |
@@ -337,6 +337,8 @@ components/
 | `ReauthenticationDialog` | 敏感操作再认证 | `open`, `loading`, `error`, `onsubmit`, `onclose` |
 | `PermGuard`          | 权限守卫   | `permissions`, `mode`, `fallback`                     |
 | `UserProfile`        | 用户资料   | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
+| `SessionRecoveryDialog` | 原地会话恢复 | `recovery`, `actions` |
+| `SensitiveOperationsForm` | 权限敏感操作编辑 | `operations`, `onsubmit`, `ondone` |
 
 ##### Storage 存储（4 个）
 
@@ -844,7 +846,34 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 认证链接指向当前完整 URL 时，AuthPanel 只切换场景并阻止重复导航，返回登录后可立即输入。路径、查询串或 hash 不同时交给应用路由处理；Ctrl/Cmd 等修改键点击保留浏览器行为。
 
-`ReauthenticationDialog` 只展示密码确认框，通过 `open/loading/error/onsubmit/onclose` 接入服务层。服务调用 `actions.reauthenticate(password, operation)`，拿到短期单次凭据后仅传给本次敏感请求；取消、关闭和提交会清除输入，凭据不提升原有权限。`Input` 支持 `datetime-local`，其值为浏览器本地时间，服务层转换为明确时间戳后提交。
+`createSensitiveActions` 可利用标准 actions 的 `publicConfig()` 在操作前更新数据库规则。`SensitiveOperationsForm` 复用逐行输入、去重、校验与错误状态；传入 `operations`、异步 `onsubmit(operations)`（返回 HaiResult），`ondone` 只在保存成功后调用。数据库规则与文件规则取并集，表单清空不能取消文件规则。
+
+会话过期后的重新登录使用 `createSessionRecovery()` + `SessionRecoveryDialog`。根布局通过 `configure(publicConfig, { id, username })` 绑定原用户，把 `recovery.recover` 传给 Kit/API client 的 `recoverSession`；弹窗传入同一份 controller 和标准 actions，布局卸载时 `cancel()`。UI 不保存密码或业务请求，不切换页面。登录携带 `expectedUserId`，服务端在发会话前限制原主体；验证码、锁定、登录限制和改密流程仍按正常登录执行。取消保留当前输入并结束本次续接；真实网络失败不重放写入。整页刷新/关闭后的内存输入无法恢复。
+
+`createSensitiveActions(actions)` 复用 Kit/API client 的认证动作，统一管理已登录用户的二次确认、取消、错误重试、重复提交与迟到响应。每个应用根布局创建一份，用 `configure(公开策略)` 更新清单；布局卸载时 `cancel()`。`authorize(operation)` 返回 undefined 表示不需确认、null 表示取消/忙、字符串为本次操作凭据；取消时不要发业务请求。有凭据时只传给本次请求，不放全局 header 或持久存储。`ReauthenticationDialog` 绑定控制器的 `open/loading/error/submit/cancel`，不会增加权限。`Input` 支持 `datetime-local`，其值为浏览器本地时间，服务层转换为明确时间戳后提交。
+
+```svelte
+<!-- actions 为 Kit/API client 的标准认证动作；policy 为 IAM 公开再认证策略。 -->
+<script lang='ts'>
+  import type { SensitiveActionsOptions } from '@h-ai/ui'
+  import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
+
+  const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
+  const confirmation = createSensitiveActions(actions)
+  $effect(() => {
+    confirmation.configure(policy)
+    return () => confirmation.cancel()
+  })
+// 业务动作 await confirmation.authorize(operation)；null 时中止该动作。
+</script>
+<ReauthenticationDialog
+  open={confirmation.open}
+  loading={confirmation.loading}
+  error={confirmation.error}
+  onsubmit={password => confirmation.submit(password)}
+  onclose={() => confirmation.cancel()}
+/>
+```
 
 [完整 IAM 配置 / IAM configuration](../iam/README.md)
 

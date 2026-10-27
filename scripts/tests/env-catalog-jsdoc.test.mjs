@@ -57,6 +57,11 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
     const result = spawnSync(process.execPath, [path.join(repository, 'scripts/generate-env-catalog.mjs')], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000 })
     expect(result.status, result.stdout + result.stderr).toBe(0)
     const catalog = JSON.parse(await readFile(path.join(root, 'packages/cli/src/commands/cli-config-catalog.json'), 'utf8'))
+    for (const module of ['kit', 'serv']) {
+      const transport = catalog.find(entry => entry.path === `${module}.transport.maxPlaintextBytes`)
+      expect(transport?.description).toContain('auto')
+      expect(transport?.value).toBe('auto')
+    }
     const variables = new Set(catalog.map(entry => entry.name))
     expect(variables.has('HAI_DOC02_PROJECT_ROOT')).toBe(true)
     for (const suffix of ['DOCUMENTATION', 'NESTED', 'EOF', 'SVELTE_DOC']) expect(variables.has(`HAI_DOC02_${suffix}`), suffix).toBe(false)
@@ -66,8 +71,8 @@ it('真实catalog排除JS/TS的JSDoc，保留运行入口、字符串生成代�
     const application = await readFile(path.join(root, 'apps/fixture/.env.example'), 'utf8')
     expect(application).toContain('PORT=')
     expect(application).not.toContain('HAI_CORE_NAME=')
-    expect(application).toContain("HAI_DOC02_PROJECT_ROOT='/srv/fixture'")
-    expect(application).toContain("HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT='18123'")
+    expect(application).toContain('HAI_DOC02_PROJECT_ROOT=\'/srv/fixture\'')
+    expect(application).toContain('HAI_DEPLOY_PROVIDER_EXPOSE_HOSTPORT=\'18123\'')
     expect(application).toContain('HAI_DEPLOY_CONTAINER_S3ENGINE=')
   }
   finally {

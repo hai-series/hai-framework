@@ -235,7 +235,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult
-      logger.info('Password authentication succeeded', { userId: storedUser.id })
+      logger.debug('Password authentication succeeded', { userId: storedUser.id })
 
       return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
     },

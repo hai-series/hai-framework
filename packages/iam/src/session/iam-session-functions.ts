@@ -142,6 +142,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
 
   /** 只构造候选值；旧凭据撤销与新凭据发布必须由仓库一次原子提交。 */
   function candidate(options: CreateSessionOptions, credentialVersion: string): HaiResult<{ session: Session, tokens: TokenPair }> {
+    if (options.terminalType !== undefined && !['web', 'app', 'desktop', 'api'].includes(options.terminalType))
+      return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_terminalTypeInvalid'))
     const now = new Date()
     const ttl = options.maxAge ?? maxAge
     if (!Number.isSafeInteger(ttl) || ttl <= 0 || !Number.isFinite(new Date(now.getTime() + ttl * 1000).getTime()))
@@ -333,6 +335,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
           apiKeyId: effectiveSession.apiKeyId,
           apiKeyScopes: effectiveSession.apiKeyScopes,
           source: oldSession.source,
+          terminalType: oldSession.terminalType ?? 'web',
           maxAge: oldSession.maxAge,
           data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
         }, oldSession.credentialVersion)

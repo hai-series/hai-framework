@@ -302,7 +302,7 @@ components/
 | `GuideHost` | 初回案内・ガイド・ヘルプダイアログ | `guide`, `locale`, `scope`, `autoStart` |
 | `HelpCenter` | 独立して使える検索付きヘルプ | `articles`, `tours`, `locale`, `selectedId`, `onstart` |
 
-##### App：アプリ全体（11）
+##### App：アプリ全体（13）
 
 | コンポーネント     | 説明                                        | 主なプロパティ                                           |
 | ------------------ | ------------------------------------------- | -------------------------------------------------------- |
@@ -322,7 +322,7 @@ components/
 
 説明は任意です。モーダルを開く前に `@h-ai/feedback/client` の `prepare()` で現場を固定します。`onfileschange` で添付を準備し、`onannotate` で注釈を画像のピクセルに反映します。送信失敗時は入力を保持し、ローカルに出力できます。一覧は説明またはサーバーの要約を表示し、`onquerychange` でページを取得します。UI の権限表示とは別にサーバーの認可が必要です。接続方法とオフラインツールは [feedback モジュール](../feedback/README.ja.md) を参照してください。
 
-##### IAM：認証（11）
+##### IAM：認証（13）
 
 | コンポーネント       | 説明                                    | 主なプロパティ                                                                                         |
 | -------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -337,6 +337,8 @@ components/
 | `ReauthenticationDialog` | 機密操作の確認 | `open`, `loading`, `error`, `onsubmit`, `onclose` |
 | `PermGuard`          | 権限ガード                              | `permissions`, `mode`, `fallback`                                                                      |
 | `UserProfile`        | ユーザープロフィール                    | `user`, `editable`, `fields`, `avatarAccept`, `avatarHint`, `onsubmit` |
+| `SessionRecoveryDialog` | 画面内のセッション復帰 | `recovery`, `actions` |
+| `SensitiveOperationsForm` | 権限の重要操作編集 | `operations`, `onsubmit`, `ondone` |
 
 ##### Storage：ストレージ（4）
 
@@ -828,7 +830,34 @@ AuthPanel は SSR 中のフォーム操作を無効にし、クライアント�
 
 認証リンクが現在の完全な URL を指す場合、AuthPanel は再ナビゲーションせずに画面だけを切り替え、ログインに戻った直後の入力を保持します。パス、クエリー、hash が異なる場合はアプリのルーターに任せます。Ctrl/Cmd などの修飾キーを使ったクリックはブラウザーの動作を維持します。
 
-`ReauthenticationDialog` は `open/loading/error/onsubmit/onclose` でパスワード確認を表示します。サービスが `actions.reauthenticate(password, operation)` を呼び、短期・一回限りの証明を対象リクエストだけに渡します。取消・終了・送信で入力を消去し、証明自体は権限を付与しません。`Input` の `datetime-local` はブラウザーのローカル時刻のため、サービスで明確なタイムスタンプへ変換して送信します。
+`createSensitiveActions` は標準 actions の `publicConfig()` で操作前に DB 規則を更新できます。`SensitiveOperationsForm` は行入力・重複除去・検証・エラー表示を共通化します。`operations` と HaiResult を返す非同期 `onsubmit(operations)` を渡し、成功時のみ `ondone` を呼びます。DB の追加を空にしてもファイルの規則は解除しません。
+
+期限切れの画面内復帰は `createSessionRecovery()` と `SessionRecoveryDialog` を使います。公開設定と元の `{ id, username }` を configure し、`recovery.recover` を Kit/API client の `recoverSession` に渡します。ダイアログに同じ controller と標準 actions を渡し、破棄時に `cancel()` します。UI にパスワードや業務要求を保存しません。`expectedUserId` は発行前に元の本人を検証し、通常の CAPTCHA・ロック・アクセス・改密方針を適用します。取消は入力を保持し、結果不明の通信障害では書込を再送しません。再読込や終了で失われたメモリの入力は復元できません。
+
+`createSensitiveActions(actions)` はKit/API clientの認証アクションを受け取り、ログイン済み利用者の確認・取消・再試行・重複送信・遅延応答を共通処理します。アプリのルートレイアウトごとに生成し、`configure(公開設定)` で更新、破棄時は `cancel()` を呼びます。`authorize(operation)` は確認不要ならundefined、取消/処理中ならnull、成功なら当該操作の証明を返します。取消時は業務リクエストを送らず、証明は対象リクエストにのみ渡します。共有ヘッダーや永続ストレージには保存しません。`ReauthenticationDialog` に `open/loading/error/submit/cancel` を接続します。確認は権限を増やしません。`Input` の `datetime-local` はブラウザーのローカル時刻のため、サービスで明確なタイムスタンプへ変換して送信します。
+
+```svelte
+<!-- actionsはKit/API clientの認証アクション、policyはIAMの公開再認証設定です。 -->
+<script lang='ts'>
+  import type { SensitiveActionsOptions } from '@h-ai/ui'
+  import { createSensitiveActions, ReauthenticationDialog } from '@h-ai/ui'
+
+  const { actions, policy }: { actions: SensitiveActionsOptions, policy: { enabled: boolean, operations: string[] } } = $props()
+  const confirmation = createSensitiveActions(actions)
+  $effect(() => {
+    confirmation.configure(policy)
+    return () => confirmation.cancel()
+  })
+// 業務操作でconfirmation.authorize(operation)を待ち、nullなら中止します。
+</script>
+<ReauthenticationDialog
+  open={confirmation.open}
+  loading={confirmation.loading}
+  error={confirmation.error}
+  onsubmit={password => confirmation.submit(password)}
+  onclose={() => confirmation.cancel()}
+/>
+```
 
 [完整 IAM 配置 / IAM configuration](../iam/README.ja.md)
 

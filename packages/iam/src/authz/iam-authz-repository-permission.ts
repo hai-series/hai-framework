@@ -29,6 +29,7 @@ import { HaiIamError } from '../iam-types.js'
  * ```
  */
 export interface PermissionRepository extends ReldbCrudRepository<Permission> {
+  getSensitiveOperations: () => Promise<HaiResult<string[]>>
   /**
    * 根据代码获取权限
    */
@@ -43,6 +44,7 @@ export interface PermissionRepository extends ReldbCrudRepository<Permission> {
 const TABLE_NAME = 'hai_iam_permissions'
 
 const PERMISSION_FIELDS: ReldbCrudFieldDefinition[] = [
+  { fieldName: 'sensitiveOperations', columnName: 'sensitive_operations', def: { type: 'JSON' }, select: true, create: true, update: true },
   {
     fieldName: 'id',
     columnName: 'id',
@@ -173,6 +175,29 @@ export async function createDbPermissionRepository(): Promise<PermissionReposito
  * 继承 BaseReldbCrudRepository，提供按 code 查找权限的能力。
  */
 class DbPermissionRepository extends BaseReldbCrudRepository<Permission> implements PermissionRepository {
+  async getSensitiveOperations(): Promise<HaiResult<string[]>> {
+    const result = await reldb.sql.query<{ sensitive_operations: unknown }>('SELECT sensitive_operations FROM hai_iam_permissions WHERE sensitive_operations IS NOT NULL')
+    if (!result.success)
+      return result
+    const operations = new Set<string>()
+    try {
+      for (const row of result.data) {
+        const values: unknown = typeof row.sensitive_operations === 'string' ? JSON.parse(row.sensitive_operations) : row.sensitive_operations
+        if (!Array.isArray(values) || values.length > 1000)
+          return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
+        for (const value of values as unknown[]) {
+          if (typeof value !== 'string' || !value.trim() || value.length > 128)
+            return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
+          operations.add(value.trim())
+        }
+      }
+      return ok([...operations].sort())
+    }
+    catch {
+      return err(HaiIamError.REPOSITORY_ERROR, iamM('iam_reauthenticationRequired'))
+    }
+  }
+
   constructor() {
     super(reldb, {
       table: TABLE_NAME,

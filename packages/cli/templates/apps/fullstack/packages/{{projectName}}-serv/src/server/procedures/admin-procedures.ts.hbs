@@ -27,7 +27,13 @@ export function createAuthProcedures() {
 }
 
 export function createAdminProcedures() {
-  return serv.implement(adminContract).context<ServContext>().route('configuration.get').permission('app.config.manage').handle(() => readBusinessSettings()).route('configuration.update').permission('app.config.manage').handle(async ({ input, context }) => {
+  return serv.implement(adminContract).context<ServContext>().route('permissions.list').permission('app.roles.manage').handle(async ({ input }) => {
+    const result = await iam.authz.getAllPermissions(input)
+    return result.success ? ok({ total: result.data.total, items: result.data.items.map(item => ({ id: item.id, code: item.code, name: item.name, sensitiveOperations: item.sensitiveOperations ?? [] })) }) : result
+  }).route('permissions.update').permission('app.roles.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.permissions.sensitiveOperations', async () => {
+    const result = await iam.authz.setPermissionSensitiveOperations(input.id, input.sensitiveOperations)
+    return result.success ? ok({ saved: true as const }) : result
+  })).route('configuration.get').permission('app.config.manage').handle(() => readBusinessSettings()).route('configuration.update').permission('app.config.manage').handle(async ({ input, context }) => {
     const checked = await iam.auth.checkSensitiveOperation(context.accessToken ?? '', 'business.settings.update', context.request.headers.get('x-hai-reauthentication') ?? undefined)
     return checked.success ? saveBusinessSettings(input) : checked
   }).route('users.list').permission('app.users.manage').handle(async ({ input }) => {

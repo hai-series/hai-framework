@@ -2,25 +2,43 @@
 # API Service - Serv / HTTP 入口配置
 # =============================================================================
 
+# 用途：HTTP 服务监听地址与端口
 server:
+  # 用途：HTTP 监听主机名或 IP
   host: ${HAI_SERV_SERVER_HOST:127.0.0.1}
+  # 用途：HTTP 监听端口
   port: ${HAI_SERV_SERVER_PORT:3000}
 
+# 用途：HTTP 基础路径、请求体大小及访问配置
 http:
+  # 用途：业务 HTTP API 的基础路径前缀
   apiPrefix: ${HAI_SERV_HTTP_APIPREFIX:/api/v1}
+  # 用途：OpenAPI 端点开关或端点配置
   openapi:
+    # 用途：当前 HTTP 功能的端点路径
     path: ${HAI_SERV_HTTP_OPENAPI_PATH:/openapi.json}
+  # 用途：HTTP API 文档功能开关或文档访问配置
   docs:
+    # 用途：当前 HTTP 功能的端点路径
     path: ${HAI_SERV_HTTP_DOCS_PATH:/docs}
+  # 用途：HTTP 健康检查开关或检查配置
   health:
+    # 用途：当前 HTTP 功能的端点路径
     path: ${HAI_SERV_HTTP_HEALTH_PATH:/health}
+    # 用途：服务就绪检查的端点路径
     readyPath: ${HAI_SERV_HTTP_HEALTH_READYPATH:/ready}
+  # 用途：RPC 端点开关或访问配置
   rpc: ${HAI_SERV_HTTP_RPC:false}
 
+# 用途：跨域访问的来源、请求头与凭据策略
 cors:
+  # 用途：CORS 允许的 Origin，星号表示任意来源
   origin: ${HAI_SERV_CORS_ORIGIN:*}
+  # 用途：允许使用原生凭据通道的完整 Origin 列表
   nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  # 用途：是否允许跨域请求携带凭据
   credentials: ${HAI_SERV_CORS_CREDENTIALS:true}
+  # 用途：CORS 允许客户端发送的请求头
   allowedHeaders:
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_0:Authorization}
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_1:Content-Type}
@@ -31,15 +49,20 @@ cors:
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_6:X-Requested-With}
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_7:X-Hai-Transport}
     - ${HAI_SERV_CORS_ALLOWEDHEADERS_8:X-Hai-Reauthentication}
+  # 用途：CORS 允许客户端读取的响应头
   exposedHeaders:
     - ${HAI_SERV_CORS_EXPOSEDHEADERS_0:X-Encrypted}
     - ${HAI_SERV_CORS_EXPOSEDHEADERS_1:X-Request-Id}
     - ${HAI_SERV_CORS_EXPOSEDHEADERS_2:X-Hai-Transport}
 
+# 用途：传输加密开关或密钥协商配置
 transport:
   # 双向业务明文 UTF-8 字节；默认 1 MiB，范围 1 KiB～64 MiB，密文容量自动推导。
+  # 用途：双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求
   maxPlaintextBytes: ${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}
+  # 用途：客户端与服务端约定的密钥交换端点
   keyExchangePath: ${HAI_SERV_TRANSPORT_KEYEXCHANGEPATH:/_hai/key-exchange}
+  # 用途：不进入传输加密管道的路径
   excludePaths:
     - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_0:/health}
     - ${HAI_SERV_TRANSPORT_EXCLUDEPATHS_1:/ready}

@@ -354,6 +354,10 @@ Export kit.auth.createApi(iam).createCaptcha as POST /api/auth/captcha; kit.auth
 
 See policy, defaults and recovery boundaries in [IAM](../iam/README.en.md).
 
+## Recovering an expired session in place
+
+Set `kit.client.create({ recoverSession })` to sign in again without discarding the current page. Use UI `createSessionRecovery` / `SessionRecoveryDialog`: configure the public policy and original user in the root layout, pass `recovery.recover` as the callback, provide standard authentication actions, and cancel on teardown. IAM checks login `expectedUserId` before issuing a session; captcha, lockout, password renewal and access rules remain active. Only an explicitly authentication-rejected request is retried once. Cancellation, 5xx, timeouts and ambiguous writes are not replayed. Sensitive-operation proofs from an old session may need a new confirmation. Standard authentication actions disable recovery for their own calls. Custom authentication requests should pass `{ recoverSession: false }` as the third apiFetch argument to avoid recursive dialogs. terminalType (web/app/desktop/api; default web) selects a session group and does not attest hardware identity.
+
 ## Page exit session policy
 
 `session.endOnPageHide` defaults to `false`. Hosts call `actions.bindPageExit({ enabled: config.session.endOnPageHide })` and invoke its returned cleanup on unmount; standard admin/H5/fullstack templates already bind it. A non-BFCache `pagehide` (including reload and full document navigation) makes a best effort POST to `/auth/session/close`, revoking the held access and related refresh through the existing CSRF/encrypted transport with `keepalive` and no automatic refresh. This response does not clear cookies/local credentials, avoiding a late old response overwriting a new login. Explicit logout still revokes and clears current credentials normally. Browsers may omit page exit requests; configure server `idleTimeout`/`absoluteTimeout` as appropriate. Immediate revocation on browser close is not guaranteed.

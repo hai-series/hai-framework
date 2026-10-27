@@ -32,7 +32,7 @@
   "cli_deploy_url": "  URL: {url}",
   "cli_deploy_id": "  ID: {id}",
   "cli_deploy_command_failed": "Deploy command failed",
-  "cli_adminPasswordSaved": "  Administrator: admin; each environment has its own random HAI_ADMIN_DEFAULT_PASSWORD in .env.dev / .env.test / .env.prod",
+  "cli_adminPasswordSaved": "  Initial accounts: admin (system), audit_admin (audit), config_admin (business configuration), business_operator (business operations). Independent passwords per account/environment are saved in .env.dev / .env.test / .env.prod: HAI_ADMIN_DEFAULT_PASSWORD, HAI_AUDIT_ADMIN_PASSWORD, HAI_CONFIG_ADMIN_PASSWORD, HAI_BUSINESS_OPERATOR_PASSWORD. Created on first startup; existing passwords are preserved.",
   "cli_deploy_environment": "Deployment environment (test / prod / other)",
   "cli_deploy_cancelled": "Deployment cancelled.",
   "cli_deploy_environment_hint": "Specify --env <environment>; non-interactive calls also require --yes, or use a terminal to select middleware.",

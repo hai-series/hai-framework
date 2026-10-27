@@ -177,6 +177,10 @@ export interface TokenStorage {
  * ```
  */
 export interface AuthConfig {
+  /** refresh明确失效后原地恢复同一用户会话，成功时只重试原请求一次；取消/结果不明不得返回true。 */
+  readonly recoverSession?: () => Promise<boolean>
+  /** 登录会话终端分组；默认web，可选app/desktop/api。服务端必须允许该类；不代表物理设备证明。 */
+  readonly terminalType?: 'web' | 'app' | 'desktop' | 'api'
   /**
    * Token 存储适配器；默认 `apiClient.tokenStorage.httpOnlyCookie()`（refresh token 由服务端管理，防 XSS）。
    *

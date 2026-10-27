@@ -9,6 +9,7 @@
 import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
 import type { KitConfig } from '../kit-config.js'
+import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { getDefaultBrowserTokenStore } from '../kit-auth.js'
@@ -50,6 +51,10 @@ export interface ClientTransportConfig {
  * ```
  */
 export interface KitClientConfig {
+  /** 标准鉴别明确失效时原地登录原用户；成功才对被拒绝的请求重试一次。 */
+  recoverSession?: () => Promise<boolean>
+  /** 会话终端分组，默认web；服务端按终端与全局配额共同限制。 */
+  terminalType?: 'web' | 'app' | 'desktop' | 'api'
   /**
    * 传输加密配置。
    * - 不提供 / undefined：不启用传输加密，仅 CSRF
@@ -84,7 +89,7 @@ export interface KitClientConfig {
  */
 export interface KitClient {
   /** 统一 API fetch（写请求自动附加 CSRF，启用 transport 时自动加解密） */
-  apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  apiFetch: (input: RequestInfo | URL, init?: RequestInit, options?: { recoverSession?: boolean }) => Promise<Response>
   /** 传输加密是否就绪（未启用传输加密时始终为 true） */
   readonly ready: boolean
   /**
@@ -340,11 +345,12 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   /**
    * 统一 API fetch
    */
-  async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  async function performFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
     const request = input instanceof Request ? input : undefined
     const method = (init.method ?? request?.method ?? 'GET').toUpperCase()
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method)
     const headers = new Headers(init.headers ?? request?.headers)
+    headers.set('x-hai-terminal', config.terminalType ?? 'web')
     const suppliedId = headers.get('x-request-id')
     const traceId = suppliedId && /^[\w.:-]{1,128}$/.test(suppliedId) ? suppliedId : core.id.uuid()
     headers.set('x-request-id', traceId)
@@ -400,7 +406,23 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   }
 
   return {
-    apiFetch,
+    async apiFetch(input, init = {}, options) {
+      const enabled = config.recoverSession && options?.recoverSession !== false
+      const original = enabled ? new Request(input instanceof Request ? input : new URL(String(input), getCurrentOrigin()), init) : undefined
+      const retry = original?.clone()
+      const response = await performFetch(original ?? input, original ? {} : init)
+      if (!enabled || response.status !== 401 || !retry || retry.signal.aborted || new URL(retry.url).origin !== getCurrentOrigin())
+        return response
+      const failure: unknown = await response.clone().json().catch(() => undefined)
+      if (failure && typeof failure === 'object' && 'error' in failure && failure.error && typeof failure.error === 'object' && 'code' in failure.error
+        && typeof failure.error.code === 'string' && failure.error.code.startsWith('hai:iam:') && !IamSessionErrorCodeSchema.safeParse(failure.error.code).success) {
+        return response
+      }
+      if (!await config.recoverSession!())
+        return response
+      // 认证动作本身必须传 recoverSession:false，避免错误密码再次等待自己。
+      return performFetch(retry)
+    },
     get ready() { return !transportClient || transportClient.ready() },
     async init() {
       if (!transportClient)

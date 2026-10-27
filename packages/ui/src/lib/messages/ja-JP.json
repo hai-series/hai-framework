@@ -486,8 +486,15 @@
   "json_viewer_copied": "コピーしました",
   "auth_captcha_error": "セキュリティ確認が未完了または利用できません。再試行してください",
   "auth_captcha_verifying": "セキュリティ確認中",
-  "reauthentication_title": "重要な操作の確認",
-  "reauthentication_hint": "この操作を続けるには現在のパスワードを入力してください。",
+  "reauthentication_title": "本人確認を再実行",
+  "reauthentication_hint": "現在のアカウントでログイン済みです。この重要な操作を続けるには、同じアカウントのパスワードを再入力してください。キャンセルすると操作は送信されません。",
   "reauthentication_password": "現在のパスワード",
-  "reauthentication_confirm": "認証して続行"
+  "reauthentication_confirm": "認証して続行",
+  "session_recovery_title": "セッションの期限切れ・再ログイン",
+  "session_recovery_hint": "ページと入力内容を保持しています。通常の認証で元のアカウントにログインすると、拒否された操作を続けます。",
+  "session_recovery_later": "後でログイン",
+  "session_recovery_account_error": "元のアカウントでログインしてください。操作はまだ続行していません。",
+  "sensitive_operations_label": "再認証が必要な操作 ID",
+  "sensitive_operations_hint": "サーバーのガードと一致する操作 ID を1行ずつ入力します。DB とファイルの規則は和集合です。空欄はこの権限の規則だけを削除します。主スイッチが有効な場合に適用されます。",
+  "sensitive_operations_invalid": "操作 ID は最大1000件、各128文字以内です。"
 }

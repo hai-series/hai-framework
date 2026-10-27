@@ -486,8 +486,15 @@
   "json_viewer_copied": "已复制",
   "auth_captcha_error": "安全验证未完成或暂不可用，请重试",
   "auth_captcha_verifying": "正在进行安全验证",
-  "reauthentication_title": "确认敏感操作",
-  "reauthentication_hint": "请输入当前密码以继续本次操作。",
+  "reauthentication_title": "二次身份验证",
+  "reauthentication_hint": "当前账号已登录。请再次输入当前账号的密码，验证后继续本次敏感操作；取消不会提交操作。",
   "reauthentication_password": "当前密码",
-  "reauthentication_confirm": "验证并继续"
+  "reauthentication_confirm": "验证并继续",
+  "session_recovery_title": "会话已过期，请重新登录",
+  "session_recovery_hint": "当前页面和输入已保留。请按正常登录流程验证原账号，成功后继续刚才未提交的操作。",
+  "session_recovery_later": "稍后登录",
+  "session_recovery_account_error": "请使用原账号完成登录，当前操作尚未继续。",
+  "sensitive_operations_label": "需要重新认证的操作 ID",
+  "sensitive_operations_hint": "每行一个操作 ID，与服务端守卫一致。数据库与文件配置取并集；清空只移除本权限的规则。主开关关闭时不要求二次认证。",
+  "sensitive_operations_invalid": "最多 1000 项，每个操作 ID 不超过 128 字符。"
 }

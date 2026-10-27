@@ -365,7 +365,7 @@ test('frontend displays configured core metadata and restores the administrator 
   await expect(page.getByTestId('login-form')).toBeVisible()
 })
 
-test('auditor reauthentication produces a verifiable private archive', async ({ page }) => {
+test('auditor reauthentication produces a verifiable private archive', async ({ page }, testInfo) => {
   await page.goto('/')
   await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
   await expect(page.getByTestId('nav-users')).toHaveCount(0)
@@ -374,11 +374,22 @@ test('auditor reauthentication produces a verifiable private archive', async ({ 
   await page.getByTestId('audit-backup').click()
   const confirmation = page.getByTestId('reauthentication-form')
   await expect(confirmation).toBeVisible()
+  await capture(page, '{{projectName}}-reauthentication-dialog.png', testInfo.outputPath('reauthentication-dialog.png'))
+  await confirmation.getByRole('button', { name: /取消|Cancel|キャンセル/ }).click()
+  await expect(confirmation).not.toBeVisible()
+  await expect(page.getByTestId('audit-backup-receipt')).not.toBeVisible()
+  await page.getByTestId('audit-backup').click()
+  await page.getByTestId('reauthentication-password').locator('input').fill('Incorrect-test-password!')
+  await confirmation.locator('button[type=submit]').click()
+  await expect(confirmation.locator('.alert-error')).toBeVisible()
+  await expect(page.getByTestId('audit-backup-receipt')).not.toBeVisible()
+  await capture(page, '{{projectName}}-reauthentication-error.png', testInfo.outputPath('reauthentication-error.png'))
   await page.getByTestId('reauthentication-password').locator('input').fill('Scaffold-test-Audit123!')
   await confirmation.locator('button[type=submit]').click()
   const receipt = page.getByTestId('audit-backup-receipt')
   await expect(receipt).toBeVisible()
   await expect(receipt).toContainText(/SHA-256: [a-f0-9]{64}/)
+  await capture(page, '{{projectName}}-audit-backup-receipt.png', testInfo.outputPath('audit-backup-receipt.png'))
   const key = (await receipt.textContent())?.match(/hai-private\/audit-backups\/[\w-]+\.jsonl/)?.[0]
   expect(key).toBeTruthy()
   const exposed = await page.request.get(`${apiBaseUrl}${apiPrefix}/assets/${key}`)
@@ -619,8 +630,15 @@ test('administrator and user complete account, avatar, preference, password and 
     await page.getByTestId('user-save').click()
     await expect(page.getByTestId('user-editor')).not.toBeVisible()
     await userPage.getByTestId('profile-form').getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(userPage.getByTestId('login-form')).toBeVisible()
-    await expect(userPage.getByTestId('login-form')).toContainText(/expired|过期/)
+    const recovery = userPage.getByTestId('session-recovery-dialog')
+    await expect(recovery).toBeVisible()
+    // 已停用主体不能以正确密码恢复旧操作；原地登录不放松账号状态控制。
+    const recoveryLogin = recovery.locator('form.login-form')
+    await recoveryLogin.locator('input[type=password]').fill(newPassword)
+    await recoveryLogin.locator('button[type=submit]').click()
+    await expect(recovery.locator('.alert-error')).toBeVisible()
+    await expect(recovery).toBeVisible()
+    await recovery.getByRole('button', { name: /Sign in later|稍后登录/ }).click()
   }
   finally {
     await userContext.close()

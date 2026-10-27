@@ -28,6 +28,7 @@
     }
     apiOptions = {
       clientName: '{{projectName}}-app',
+      terminalType: 'app',
       ...(capacitor.isNative() ? { requireApiBase: true, tokenStorage: createCapacitorTokenStorage(), headers: { 'X-HAI-Token-Transport': 'body' } } : {}),
     }
   }

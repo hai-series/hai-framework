@@ -1,4 +1,10 @@
+import { IamPermissionSchema } from '@h-ai/api-contract'
 import { z } from 'zod'
+
+/** 权限的敏感操作配置复用框架字段；职责授权仍由应用控制。 */
+export const AdminPermissionPolicySchema = IamPermissionSchema.pick({ id: true, code: true, name: true, sensitiveOperations: true })
+export const AdminPermissionPolicyInputSchema = AdminPermissionPolicySchema.pick({ id: true, sensitiveOperations: true })
+export type AdminPermissionPolicy = z.infer<typeof AdminPermissionPolicySchema>
 
 export const BusinessSettingsSchema = z.object({ notice: z.string().trim().max(200) }).strict()
 

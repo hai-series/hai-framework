@@ -3,7 +3,11 @@
 # =============================================================================
 # AI 助手配置，用于网站智能客服
 
+# 用途：LLM 配置（可选，所有字段有默认值）
 llm:
+  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
   apiKey: ${HAI_AI_LLM_APIKEY:}
+  # 用途：全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）
   baseUrl: ${HAI_AI_LLM_BASEURL:}

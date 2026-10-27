@@ -357,6 +357,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       ...effective,
       apiKeyId: apiKey?.id,
       apiKeyScopes: apiKey?.scopes,
+      terminalType: context?.terminalType ?? (apiKey ? 'api' : 'web'),
     })
 
     if (!sessionResult.success) {
@@ -430,6 +431,8 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       return authResult as HaiResult<AuthResult>
     }
 
+    if (credentials.expectedUserId && credentials.expectedUserId !== authResult.data.id)
+      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     const result = await buildAuthResult(authResult.data, undefined, context)
     if (result.success) {
       logger.info('Login succeeded', { type, userId: authResult.data.id })
@@ -459,7 +462,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
   const tickets = createTicketOperations()
   const sensitive = config.reauthentication
-  const requiresProof = (operation: string) => sensitive?.enabled && sensitive.operations.includes(operation)
+  async function requiresProof(operation: string): Promise<HaiResult<boolean>> {
+    if (!sensitive?.enabled)
+      return ok(false)
+    const configured = await authzFunctions.getSensitiveOperations()
+    if (!configured.success)
+      return configured
+    return ok(sensitive.operations.includes(operation) || configured.data.includes(operation))
+  }
 
   return { loginRegisteredUser: async (user, context) => {
     const stored = await userRepository.findById(user.id)
@@ -471,7 +481,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
   }, authn: {
     createCaptcha: input => createIamCaptcha(config.captcha, input),
     async reauthenticate(accessToken, password, operation) {
-      if (!requiresProof(operation))
+      const required = await requiresProof(operation)
+      if (!required.success)
+        return required
+      if (!required.data)
         return err(HaiIamError.PERMISSION_DENIED, iamM('iam_reauthenticationRequired'))
       const current = await verifyCurrentSession(accessToken)
       if (!current.success)
@@ -493,7 +506,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
       const current = await verifyCurrentSession(accessToken)
       if (!current.success)
         return current
-      if (!requiresProof(operation))
+      const required = await requiresProof(operation)
+      if (!required.success)
+        return required
+      if (!required.data)
         return ok(undefined)
       if (!ticket)
         return err(HaiIamError.REAUTHENTICATION_REQUIRED, iamM('iam_reauthenticationRequired'))

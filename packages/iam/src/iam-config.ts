@@ -53,17 +53,17 @@ export type AuthStrategyType = z.infer<typeof AuthStrategyTypeSchema>
  * ```
  */
 export const PasswordConfigSchema = z.object({
-  /** 最小长度（默认 8） */
+  /** 新设密码的最少字符数；提高后只约束新建、重置和改密，不会反查已有密码的散列。 */
   minLength: z.number().int().min(1).default(8),
-  /** 最大长度（默认 128） */
+  /** 新设密码的最多字符数，须不小于 minLength；避免超长输入消耗鉴别资源。 */
   maxLength: z.number().int().min(1).max(256).default(128),
-  /** 需要大写字母 */
+  /** 是否必须包含大写字母；与 minCharacterClasses 同时执行，false 仅取消这一项强制要求。 */
   requireUppercase: z.boolean().default(true),
-  /** 需要小写字母 */
+  /** 是否必须包含小写字母；false 不代表取消长度或其他字符类别条件。 */
   requireLowercase: z.boolean().default(true),
-  /** 需要数字 */
+  /** 是否必须包含数字；开启后所有服务端设密入口统一拒绝缺少数字的新密码。 */
   requireNumber: z.boolean().default(true),
-  /** 需要特殊字符 */
+  /** 是否必须包含特殊字符；开启会增加密码输入要求，不影响已经保存的密码散列。 */
   requireSpecialChar: z.boolean().default(false),
   /** 至少包含的字符类别数（大小写、数字、特殊字符），0 不额外限制。 */
   minCharacterClasses: z.number().int().min(0).max(4).default(0),
@@ -280,9 +280,9 @@ export type LoginConfig = z.infer<typeof LoginConfigSchema>
  * ```
  */
 export const RegisterConfigSchema = z.object({
-  /** 是否启用注册 */
+  /** 是否允许访客自助注册；关闭后隐藏注册入口并由服务端拒绝注册，不影响已有账号登录或管理员创建账号。 */
   enabled: z.boolean().default(true),
-  /** 新注册用户是否默认启用 */
+  /** 自助注册的新账号是否立即启用；false 时账号已创建但不能登录，须由管理员审核启用，不改变已有账号。 */
   defaultEnabled: z.boolean().default(true),
 })
 
@@ -308,13 +308,13 @@ export type RegisterConfig = z.infer<typeof RegisterConfigSchema>
  * ```
  */
 export const SecurityConfigSchema = z.object({
-  /** 是否启用失败计数锁定；关闭时忽略历史锁。 */
+  /** 是否累计失败并暂时锁定密码鉴别；关闭忽略历史锁，成功密码验证会重置计数。 */
   lockoutEnabled: z.boolean().default(true),
-  /** 从首次失败起的固定计数窗口（秒）。 */
+  /** 从首次失败开始的固定计数窗口，单位秒；86400 为24小时，不是滚动窗口。 */
   failureWindow: z.number().int().min(1).max(31536000).default(86400),
-  /** 最大登录失败次数（默认 5） */
+  /** 固定窗口内达到此失败次数后锁定密码鉴别；验证码失败等独立入口按各自策略处理。 */
   maxLoginAttempts: z.number().int().min(1).default(5),
-  /** 锁定时长（秒，默认 900） */
+  /** 达到失败阈值后禁止密码鉴别的秒数；至少60秒，1200表示20分钟，锁定期间正确密码也不能登录。 */
   lockoutDuration: z.number().int().min(60).default(900),
 })
 
@@ -327,9 +327,13 @@ export const SecurityConfigSchema = z.object({
  * ```
  */
 export const CaptchaConfigSchema = z.object({
+  /** 是否在认证提交前校验自托管计算挑战；开启会有验证等待，关闭时不加载浏览器求解器。 */
   enabled: z.boolean().default(false),
+  /** 挑战证明有效期，单位秒；到期或重复使用需重新计算，不是登录会话期限。 */
   ttlSeconds: z.number().int().min(1).max(600).default(120),
+  /** 单次挑战的计算工作量；越高越难自动滥用，但低性能客户端等待也越久。 */
   cost: z.number().int().min(100).max(50000).default(5000),
+  /** 求解随机计数范围；与 cost 共同决定客户端计算负担，不是密码失败次数。 */
   maxCounter: z.number().int().min(1).max(2000).default(100),
 })
 
@@ -352,9 +356,13 @@ export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
  * ```
  */
 export const LoginAccessConfigSchema = z.object({
+  /** 是否限制新建登录会话的时段和可信客户端地址；不在窗口结束时自动踢掉已登录用户。 */
   enabled: z.boolean().default(false),
+  /** 允许登录的 IP/CIDR 列表，支持 IPv4/IPv6；空数组不限制地址，配置后须提供可信客户端 IP。 */
   allowIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
+  /** 拒绝登录的 IP/CIDR 列表；与允许列表同时匹配时拒绝优先。 */
   denyIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
+  /** 登录时段使用的 IANA 时区；Asia/Shanghai 为北京时间，默认 UTC。 */
   timezone: z.string().default('UTC').refine((value) => {
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: value }).format()
@@ -362,9 +370,13 @@ export const LoginAccessConfigSchema = z.object({
     }
     catch { return false }
   }, 'Invalid IANA timezone'),
+  /** 允许新登录的时间窗口；空数组不限制时间，跨午夜窗口按开始日归属。 */
   windows: z.array(z.object({
+    /** 允许的星期，周一为 1、周日为 7；跨午夜时填写开始日。 */
     days: z.array(z.number().int().min(1).max(7)).min(1).max(7),
+    /** 窗口开始时间，HH:mm，包含此时刻；按上方 timezone 解释。 */
     start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
+    /** 窗口结束时间，HH:mm，不包含此时刻；小于开始值表示跨午夜。 */
     end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   }).refine(value => value.start !== value.end, 'Time window start and end must differ')).max(100).default([]),
 })
@@ -463,6 +475,10 @@ export const SessionConfigSchema = z.object({
   singleDeviceMode: z.enum(['replace', 'reject']).default('replace'),
   /** 每个用户的最大有效会话数，0 不限制；包含 access 到期但仍可刷新的会话。 */
   maxSessions: z.number().int().min(0).max(10000).default(0),
+  /** 各终端类型的最大会话数，例如 {web:2,app:1}；空对象关闭。启用后未列终端不能新登录，旧会话归为 web；仍受全局上限约束。 */
+  terminalLimits: z.partialRecord(z.enum(['web', 'app', 'desktop', 'api']), z.number().int().min(1).max(10000)).default({}),
+  /** 终端配额超限时 reject 拒绝新登录；replace 仅替换同类最早会话，不影响其他终端。 */
+  terminalLimitMode: z.enum(['reject', 'replace']).default('reject'),
   /** 闲置期限（秒），0 关闭；真实访问记录活动，自动刷新不延长闲置；access/refresh 均执行。 */
   idleTimeout: z.number().int().min(0).max(31536000).default(0),
   /** 从首次登录起的绝对期限（秒），0 关闭；刷新不能重新起算。 */
@@ -543,11 +559,17 @@ export const AccountConfigSchema = z.object({
  */
 export const IamConfigSchema = z.object({
   /** 管理端可用单次邀请代替共享初始密码；需要已配置的密码重置通知通道。 */
-  initialCredentials: z.object({ enabled: z.boolean().default(false) }).optional(),
+  initialCredentials: z.object({
+    /** 是否通过一次性邀请设密；开启前配置密码重置入口、用户联系方式与真实通知通道，不显示共享初始密码。 */
+    enabled: z.boolean().default(false),
+  }).optional(),
   /** 指定敏感操作额外验证原密码；凭据短期且单次使用。 */
   reauthentication: z.object({
+    /** 是否让已登录用户在敏感动作前弹窗验证当前密码；不创建另一个账号的登录，也不授予额外权限。 */
     enabled: z.boolean().default(false),
+    /** 需要二次认证的操作 ID 清单，例如 iam.users.delete；两端须已接入同名守卫，仅添加名字不会保护自定义接口。 */
     operations: z.array(z.string().trim().min(1).max(128)).max(1000).default([]),
+    /** 二次认证凭据的有效秒数；仅供当前用户/会话的指定操作单次使用，取消不发送敏感业务请求。 */
     ttlSeconds: z.number().int().min(1).max(900).default(300),
   }).optional(),
   /** 宿主提供可信客户端地址；绝不从凭据 JSON 或任意转发头取得 IP。 */

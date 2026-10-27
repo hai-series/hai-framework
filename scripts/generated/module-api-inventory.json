@@ -11080,6 +11080,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamSessionErrorCodeSchema",
+              "kind": "value",
+              "declaration": "IamSessionErrorCodeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamTokenPairSchema",
               "kind": "value",
               "declaration": "IamTokenPairSchema",
@@ -12272,6 +12278,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamSessionErrorCodeSchema",
+              "kind": "value",
+              "declaration": "IamSessionErrorCodeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamTokenPairSchema",
               "kind": "value",
               "declaration": "IamTokenPairSchema",
@@ -13461,6 +13473,12 @@
               "name": "IamSendOtpInputSchema",
               "kind": "value",
               "declaration": "IamSendOtpInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamSessionErrorCodeSchema",
+              "kind": "value",
+              "declaration": "IamSessionErrorCodeSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -15266,6 +15284,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "IamSessionErrorCodeSchema",
+              "kind": "value",
+              "declaration": "IamSessionErrorCodeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "IamTokenPairSchema",
               "kind": "value",
               "declaration": "IamTokenPairSchema",
@@ -15651,6 +15675,12 @@
               "name": "IamSendOtpInputSchema",
               "kind": "value",
               "declaration": "IamSendOtpInputSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "IamSessionErrorCodeSchema",
+              "kind": "value",
+              "declaration": "IamSessionErrorCodeSchema",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -32440,6 +32470,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createThemeBootstrapScript",
               "kind": "value",
               "declaration": "createThemeBootstrapScript",
@@ -33800,6 +33842,36 @@
               "kind": "type",
               "declaration": "SelectProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "setGlobalLocale",
@@ -34676,6 +34748,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createThemeBootstrapScript",
               "kind": "value",
               "declaration": "createThemeBootstrapScript",
@@ -36036,6 +36120,36 @@
               "kind": "type",
               "declaration": "SelectProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "setGlobalLocale",
@@ -36912,6 +37026,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createThemeBootstrapScript",
               "kind": "value",
               "declaration": "createThemeBootstrapScript",
@@ -38272,6 +38398,36 @@
               "kind": "type",
               "declaration": "SelectProps",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "setGlobalLocale",
@@ -39900,6 +40056,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CrudApi",
               "kind": "type",
               "declaration": "CrudApi",
@@ -40737,6 +40905,36 @@
               "name": "Select",
               "kind": "value+type",
               "declaration": "Select",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -41320,6 +41518,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CrudApi",
               "kind": "type",
               "declaration": "CrudApi",
@@ -42157,6 +42367,36 @@
               "name": "Select",
               "kind": "value+type",
               "declaration": "Select",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -42740,6 +42980,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CrudApi",
               "kind": "type",
               "declaration": "CrudApi",
@@ -43577,6 +43829,36 @@
               "name": "Select",
               "kind": "value+type",
               "declaration": "Select",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -46482,6 +46764,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ForgotPasswordForm",
               "kind": "value+type",
               "declaration": "ForgotPasswordForm",
@@ -46533,6 +46827,36 @@
               "name": "ResetPasswordForm",
               "kind": "value+type",
               "declaration": "ResetPasswordForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -46582,6 +46906,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ForgotPasswordForm",
               "kind": "value+type",
               "declaration": "ForgotPasswordForm",
@@ -46633,6 +46969,36 @@
               "name": "ResetPasswordForm",
               "kind": "value+type",
               "declaration": "ResetPasswordForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -46682,6 +47048,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ForgotPasswordForm",
               "kind": "value+type",
               "declaration": "ForgotPasswordForm",
@@ -46733,6 +47111,36 @@
               "name": "ResetPasswordForm",
               "kind": "value+type",
               "declaration": "ResetPasswordForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
               "declarationKind": "VariableDeclaration"
             },
             {
@@ -46995,6 +47403,18 @@
               "name": "createCrudController",
               "kind": "value",
               "declaration": "createCrudController",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -47674,6 +48094,36 @@
               "kind": "value",
               "declaration": "resolveErrorPreset",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "setPermissionContext",
@@ -48034,6 +48484,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CrudApi",
               "kind": "type",
               "declaration": "CrudApi",
@@ -48710,6 +49172,36 @@
               "kind": "value",
               "declaration": "resolveErrorPreset",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "setPermissionContext",
@@ -49070,6 +49562,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "createSensitiveActions",
+              "kind": "value",
+              "declaration": "createSensitiveActions",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "createSessionRecovery",
+              "kind": "value",
+              "declaration": "createSessionRecovery",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "CrudApi",
               "kind": "type",
               "declaration": "CrudApi",
@@ -49746,6 +50250,36 @@
               "kind": "value",
               "declaration": "resolveErrorPreset",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "SensitiveActions",
+              "kind": "type",
+              "declaration": "SensitiveActions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveActionsOptions",
+              "kind": "type",
+              "declaration": "SensitiveActionsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveOperationsForm",
+              "kind": "value+type",
+              "declaration": "SensitiveOperationsForm",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "SessionRecovery",
+              "kind": "type",
+              "declaration": "SessionRecovery",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SessionRecoveryDialog",
+              "kind": "value+type",
+              "declaration": "SessionRecoveryDialog",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "setPermissionContext",

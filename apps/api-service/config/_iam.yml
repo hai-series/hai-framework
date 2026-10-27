@@ -2,9 +2,13 @@
 # API Service - IAM 配置
 # =============================================================================
 
+# 用途：登录启用配置
 login:
+  # 用途：是否启用密码登录
   password: ${HAI_IAM_LOGIN_PASSWORD:true}
+  # 用途：是否启用 OTP 登录
   otp: ${HAI_IAM_LOGIN_OTP:false}
+  # 用途：是否启用 LDAP 登录；需要显式开启并提供 ldap 配置。
   ldap: ${HAI_IAM_LOGIN_LDAP:false}
 
   # LDAP 可选：安装 ldapts 后开启 login.ldap，并声明连接配置或注入工厂。
@@ -13,53 +17,84 @@ login:
   #   bindDn: cn=service,dc=example,dc=com
   #   bindPassword: '${HAI_IAM_LDAP_BINDPASSWORD}'
   #   searchBase: ou=users,dc=example,dc=com
+  # 用途：是否启用 API Key 登录
   apikey: ${HAI_IAM_LOGIN_APIKEY:false}
 
+# 用途：注册配置
 register:
+  # 用途：是否允许访客自助注册；关闭后隐藏注册入口并由服务端拒绝注册，不影响已有账号登录或管理员创建账号。
   enabled: ${HAI_IAM_REGISTER_ENABLED:true}
+  # 用途：自助注册的新账号是否立即启用；false 时账号已创建但不能登录，须由管理员审核启用，不改变已有账号。
   defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
 
+# 用途：RBAC 配置
 rbac:
+  # 用途：是否启用 RBAC
   enabled: true
+  # 用途：超级管理员角色代码
   superAdminRole: super_admin
+  # 用途：默认用户角色
   defaultRole: user
 
+# 用途：是否初始化默认角色和权限（默认 true）
 seedDefaultData: ${HAI_IAM_SEEDDEFAULTDATA:true}
 
 # 注册与登录安全
+# 用途：安全策略配置
 security:
+  # 用途：固定窗口内达到此失败次数后锁定密码鉴别；验证码失败等独立入口按各自策略处理。
   maxLoginAttempts: ${HAI_IAM_SECURITY_MAXLOGINATTEMPTS:5}
+  # 用途：达到失败阈值后禁止密码鉴别的秒数；至少60秒，1200表示20分钟，锁定期间正确密码也不能登录。
   lockoutDuration: ${HAI_IAM_SECURITY_LOCKOUTDURATION:900}
 
 # OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
+# 用途：OTP 配置
 otp:
+  # 用途：分别启用邮件、短信验证码
   email: ${HAI_IAM_OTP_EMAIL:true}
+  # 用途：是否允许短信验证码
   sms: ${HAI_IAM_OTP_SMS:true}
+  # 用途：验证码长度（默认 6）
   length: ${HAI_IAM_OTP_LENGTH:6}
+  # 用途：验证码过期时间（秒，默认 300）
   expiresIn: ${HAI_IAM_OTP_EXPIRESIN:300}
+  # 用途：最大重试次数（默认 3）
   maxAttempts: ${HAI_IAM_OTP_MAXATTEMPTS:3}
+  # 用途：发送间隔（秒，默认 60）
   resendInterval: ${HAI_IAM_OTP_RESENDINTERVAL:60}
+# 用途：密码重置配置
 passwordReset:
+  # 用途：是否启用密码重置
   enabled: ${HAI_IAM_PASSWORDRESET_ENABLED:true}
+  # 用途：重置通知渠道，phone 使用 password_reset_sms 模板。
   mode: ${HAI_IAM_PASSWORDRESET_MODE:email} # phone 使用 password_reset_sms 模板
+  # 用途：重置令牌有效期（秒，默认 3600 = 1小时）
   tokenExpiresIn: ${HAI_IAM_PASSWORDRESET_TOKENEXPIRESIN:3600}
+  # 用途：最大验证尝试次数（默认 3）
   maxAttempts: ${HAI_IAM_PASSWORDRESET_MAXATTEMPTS:3}
   # resetUrl: https://example.com/auth/reset-password
+# 用途：协议展示配置
 agreements:
+  # 用途：注册时展示协议
   showOnRegister: true
+  # 用途：登录时展示协议
   showOnLogin: false
   # 正文通过公开配置传给移动/桌面应用，在协议弹窗内安全渲染。
+  # 用途：用户协议 Markdown 正文；同时配置 URL 时优先显示正文。
   userAgreementMarkdown: |
     # 用户协议示例
 
     请妥善保管账户凭据，并按应用提供的功能使用服务。
+  # 用途：隐私协议 Markdown 正文；YAML 使用 | 保留段落和换行。
   privacyPolicyMarkdown: |
     # 隐私政策示例
 
     注册资料用于账户管理，会话信息用于身份认证。
   # userAgreementUrl: https://example.com/terms
   # privacyPolicyUrl: https://example.com/privacy
+# 用途：认证页外观
 ui:
+  # 用途：认证页布局样式
   variant: card
   # title: Account center
   # subtitle: Welcome back

@@ -2,8 +2,12 @@
 # H5 App - 应用配置
 # =============================================================================
 
+# 用途：应用名称（默认 'hai Admin'）
 name: ${HAI_CORE_NAME:hai H5 App}
+# 用途：应用版本（默认 '0.1.0'）
 version: ${HAI_CORE_VERSION:0.1.0}
+# 用途：运行环境（默认 'development'）
 env: ${HAI_CORE_ENV:development}
 
+# 用途：默认语言（默认 'zh-CN'）
 defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}

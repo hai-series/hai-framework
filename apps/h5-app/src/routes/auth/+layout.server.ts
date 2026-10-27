@@ -1,5 +1,5 @@
-import { iam } from '@h-ai/iam'
+import type { LayoutServerLoad } from './$types'
 
-export function load() {
-  return { iamPublicConfig: iam.publicConfig }
+export const load: LayoutServerLoad = async ({ parent }) => {
+  return { iamPublicConfig: (await parent()).iamPublicConfig }
 }

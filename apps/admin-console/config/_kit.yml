@@ -1,11 +1,17 @@
+# 用途：HTTP 服务监听地址与端口
 server:
+  # 用途：HTTP 监听主机名或 IP
   host: ${HAI_KIT_SERVER_HOST:127.0.0.1}
+  # 用途：HTTP 监听端口
   port: ${HAI_KIT_SERVER_PORT:3000}
 
+# 用途：传输加密开关或密钥协商配置
 transport:
-  # auto 按反馈预算推导；显式整数为硬上限，不能小于模块所需容量。
+  # 用途：双向明文上限；auto 按已启用模块推导，无模块需求时 1 MiB；显式整数不得小于模块需求
   maxPlaintextBytes: ${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:auto}
+  # 用途：客户端与服务端约定的密钥交换端点
   keyExchangePath: ${HAI_KIT_TRANSPORT_KEYEXCHANGEPATH:/api/_hai/key-exchange}
+  # 用途：不进入传输加密管道的路径
   excludePaths:
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_0:/api/storage}
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_1:/api/public}

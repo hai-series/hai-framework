@@ -75,3 +75,5 @@ OTP 发布/消费用单身份 CAS；密码重置最终 SQL 同时核验 resetVer
 配置示例用 `IamConfigInput` 表达可省略默认值的输入；需要完整策略快照时用对应 Schema.parse 得到输出类型。应用仅从 `@h-ai/iam` 取公开函数/类型，不深导内部策略与仓储。源码内部示例明确标注上下文，文档示例类型检查不替代真实共享存储和通知集成验证。
 
 默认 Reach 通知自动使用 sensitive/expiresAt/idempotencyKey，不保存凭据正文或进入延迟队列；自定义回调同样遵守有效期与幂等。RelDB 初始化后可 migrateIam({dryRun:true})，iam.init 执行支持版本的字段升级，保留用户/密码。升级前停旧写入并备份；无安全代次的旧会话需重新登录，不能降级凭据安全代次。
+
+- 可选再认证规则为文件 operations 与权限 sensitiveOperations 的并集，主开关仍是 reauthentication.enabled；可信管理端使用 authz.setPermissionSensitiveOperations，异步 iam.getPublicConfig 返回含数据库的有效公开策略，读取失败拒绝放行。session.terminalLimits 按 web/app/desktop/api 限制，非空时未列类型拒绝；全局 maxSessions/singleDevice 同时生效，终端分组不是硬件真实性证明。原地登录使用标准 expectedUserId 限定原用户，凭据/验证码/锁定规则照常执行。

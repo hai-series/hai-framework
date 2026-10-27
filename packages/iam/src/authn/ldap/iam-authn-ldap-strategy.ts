@@ -362,7 +362,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         const resetResult = await resetLoginFailures(userRepository, storedUser, failurePolicy)
         if (!resetResult.success)
           return resetResult
-        logger.info('LDAP authentication succeeded', { userId: storedUser.id })
+        logger.debug('LDAP authentication succeeded', { userId: storedUser.id })
 
         return ok({ ...toUser(storedUser), credentialVersion: storedUser.credentialVersion ?? '' })
       }

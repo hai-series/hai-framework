@@ -5,6 +5,8 @@ import {
   AdminAuditSchema,
   AdminCreateUserSchema,
   AdminInviteUserSchema,
+  AdminPermissionPolicyInputSchema,
+  AdminPermissionPolicySchema,
   AdminRoleSchema,
   AdminUpdateUserSchema,
   AdminUserSchema,
@@ -19,6 +21,10 @@ import {
 
 /** mini 管理示例的业务路径；四类职责与权限由应用配置，可按项目需求调整。 */
 export const adminContract = {
+  permissions: {
+    list: apiContract.route({ method: 'POST', path: '/admin/permissions/list', tags: ['admin'] }).input(z.object({ page: z.number().int().min(1).default(1), pageSize: z.number().int().min(1).max(100).default(20) })).output(apiContract.haiResultSchema(z.object({ items: z.array(AdminPermissionPolicySchema), total: z.number() }))),
+    update: apiContract.route({ method: 'POST', path: '/admin/permissions/update', tags: ['admin'] }).input(AdminPermissionPolicyInputSchema).output(apiContract.haiResultSchema(z.object({ saved: z.literal(true) }))),
+  },
   configuration: {
     get: apiContract.route({ method: 'POST', path: '/admin/configuration/get', tags: ['admin'] }).output(apiContract.haiResultSchema(BusinessSettingsSchema)),
     update: apiContract.route({ method: 'POST', path: '/admin/configuration/update', tags: ['admin'] }).input(BusinessSettingsSchema).output(apiContract.haiResultSchema(BusinessSettingsSchema)),

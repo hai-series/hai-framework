@@ -46,7 +46,7 @@
   import RegisterForm from './RegisterForm.svelte'
   import ResetPasswordForm from './ResetPasswordForm.svelte'
 
-  const { config, actions, columns = 1, labelPosition = 'top', labelWidth = '8rem', initialMode = 'login', resetToken = '', loginUrl, registerUrl, forgotPasswordUrl, onauthenticated, error = '', onretry, loginHeader, loginFields, loginFooter, registerHeader, registerFields, registerFooter, ...restProps }: AuthPanelProps = $props()
+  const { config, actions, embedded = false, initialIdentifier = '', columns = 1, labelPosition = 'top', labelWidth = '8rem', initialMode = 'login', resetToken = '', loginUrl, registerUrl, forgotPasswordUrl, onauthenticated, error = '', onretry, loginHeader, loginFields, loginFooter, registerHeader, registerFields, registerFooter, ...restProps }: AuthPanelProps = $props()
   const dataAttributes = $derived(getDataAttributes(restProps))
   let mode = $state<AuthPanelMode>(untrack(() => initialMode))
   let loading = $state(false)
@@ -164,7 +164,7 @@
   {:else}<BareButton type='button' class='link link-primary text-sm' disabled={loading} onclick={() => switchMode(next)}>{label}</BareButton>{/if}
 {/snippet}
 
-<AuthShell {...dataAttributes} {...config?.ui} title={config?.ui.title || title} brandTitle={config?.ui.brandTitle || uiM('auth_brand')}>
+<AuthShell {embedded} {...dataAttributes} {...config?.ui} title={config?.ui.title || title} brandTitle={config?.ui.brandTitle || uiM('auth_brand')}>
   <fieldset class='m-0 min-w-0 border-0 p-0' disabled={!interactive}>
     <!-- 固定内容包装节点，避免 fieldset 插入通知时丢失容器查询子树的布局。 -->
     <div class='min-w-0'>
@@ -178,9 +178,9 @@
         <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
       {:else}
         {#if notice}<Alert variant='success' class='mb-4'>{uiM(notice)}</Alert>{/if}
-        {#if verifying}<p role='status' class='mb-4 flex items-center gap-2 text-sm'><Spinner size='sm' />{uiM('auth_captcha_verifying')}</p>{/if}
+        <span role='status' class='sr-only'>{verifying ? uiM('auth_captcha_verifying') : ''}</span>
         {#if mode === 'login'}
-          <LoginForm {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
+          <LoginForm {initialIdentifier} submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}
                      onforgotpassword={forgotPasswordUrl ? undefined : () => switchMode('forgot')}
                      otpLength={config.otp.length} resendInterval={config.otp.resendInterval} onsendotp={identifier => withCaptcha('sendOtp', captcha => actions.sendOtp(identifier, { captcha }))}
                      agreements={config.agreements.showOnLogin ? config.agreements : undefined}
@@ -194,7 +194,7 @@
             {/snippet}
           </LoginForm>
         {:else if mode === 'register'}
-          <RegisterForm {columns} {labelPosition} {labelWidth} {loading} {errors} header={registerHeader} extraFields={registerFields} fields={config.passwordReset.mode === 'phone' ? ['username', 'phone', 'password'] : ['username', 'email', 'password']} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
+          <RegisterForm submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} header={registerHeader} extraFields={registerFields} fields={config.passwordReset.mode === 'phone' ? ['username', 'phone', 'password'] : ['username', 'email', 'password']} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
                         agreements={config.agreements.showOnRegister ? config.agreements : undefined} onsubmit={data => run(() => withCaptcha('register', captcha => actions.register({ username: data.username || '', password: data.password, email: data.email, phone: data.phone, displayName: data.nickname, captcha })), true)}>
             {#snippet footer()}
               {#if registerFooter}{@render registerFooter()}{/if}
@@ -202,7 +202,7 @@
             {/snippet}
           </RegisterForm>
         {:else if mode === 'forgot'}
-          <ForgotPasswordForm {columns} {labelPosition} {labelWidth} {loading} {errors} mode={config.passwordReset.mode ?? 'email'} onsubmit={data => run(() => withCaptcha('passwordReset', captcha => actions.requestPasswordReset(data.email || data.phone || '', { captcha })), false, 'auth_reset_sent')}>
+          <ForgotPasswordForm submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} mode={config.passwordReset.mode ?? 'email'} onsubmit={data => run(() => withCaptcha('passwordReset', captcha => actions.requestPasswordReset(data.email || data.phone || '', { captcha })), false, 'auth_reset_sent')}>
             {#snippet footer()}<div class='flex justify-between gap-3'>{@render link('login', uiM('login_submit'), loginUrl)}{@render link('reset', uiM('auth_have_token'))}</div>{/snippet}
           </ForgotPasswordForm>
         {:else if mode === 'renew'}
@@ -211,7 +211,7 @@
               <Input id='renew-identifier' autocomplete='username' bind:value={renewalIdentifier} disabled={loading} required />
             </FormField>
           </div>
-          <ChangePasswordForm {columns} {labelPosition} {labelWidth} {loading} {errors} disabled={!renewalIdentifier.trim()} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
+          <ChangePasswordForm submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {loading} {errors} disabled={!renewalIdentifier.trim()} passwordPolicy={config.password} minPasswordLength={config.password.minLength}
                               onsubmit={data => renewPassword(data.oldPassword || '', data.newPassword)} />
           <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
         {:else}

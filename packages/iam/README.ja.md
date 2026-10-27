@@ -888,17 +888,19 @@ Kit/Serv の標準入口は POST /auth/captcha（Kit は同一生成元の /api 
 
 ## 任意のパスワード・ログイン保護
 
-`password.minLength/maxLength` と各 `require*` は強度を指定します。`minCharacterClasses` は大文字、小文字、数字、特殊文字の任意 N 種類を要求し、0は追加制約なしです。CLI/admin 例は8文字・任意3種類です。作成・変更・リセットで同じ検証を使います。
+`password.minLength/maxLength` と各 `require*` は強度を指定します。`minCharacterClasses` は大文字、小文字、数字、特殊文字の任意 N 種類を要求し、0は追加制約なしです。CLI/admin 例の既定は8–128文字で、追加の文字種数制限はありません。任意3種類を要求する場合は `minCharacterClasses: 3` を明示します。作成・変更・リセットで同じ検証を使います。
 
 `expirationDays: 0` は定期変更を無効にし、正数は日数です。`preventSamePassword` は単独でも有効化でき、有効期限制約・初回変更時は旧パスワードを拒否します。`requireInitialChange` は管理者作成・リセットの認証情報に適用され、自分で登録時に設定したパスワードは再変更不要です。初期・期限切れパスワードでは通常セッションを取得・更新できません。`iam.user.renewPassword({ identifier, password, newPassword })` で旧パスワードを確認し、変更後に再ログインします。Kit/Serv と AuthPanel はこの完了経路を提供します。
 
-`security.lockoutEnabled` は既定で有効です。`failureWindow` は最初の失敗からの固定期間（既定86400秒）、`maxLoginAttempts` は閾値、`lockoutDuration` はロック秒数です。例は1200秒です。無効時は既存ロックも無視します。共有DBで計数・閾値を原子的に処理します。
+`security.lockoutEnabled` はフレームワークSchemaでは既定で有効ですが、簡易CLI/admin例では明示的に無効にし、必要に応じて有効化します。`failureWindow` は最初の失敗からの固定期間（既定86400秒）、`maxLoginAttempts` は閾値、`lockoutDuration` はロック秒数です。例は1200秒です。無効時は既存ロックも無視します。共有DBで計数・閾値を原子的に処理します。
 
 `initialCredentials.enabled` は `iam.user.inviteUser()` を有効にします。利用者ごとに非公開のランダム秘密を作り、短期・単回の設定招待だけ送ります。初期秘密は返却・送信しません。passwordReset の通知・期限・試行回数を再利用し、受信者は再設定画面でパスワードを選びます。通知未設定・リセット無効なら作成しません。配送未確認時は失敗とし、作成済みアカウント・招待を保持します。配送を確認後に再設定通知を要求してください。
 
 `loginAccess.enabled` は制限を有効にします。`allowIps/denyIps` は IPv4/IPv6/CIDR を受け付け、拒否を優先します。空リストは対象を制限しません。`windows` は `days`（月曜1〜日曜7）、`start/end`（HH:mm、開始を含み終了を含まず、日跨ぎ対応）、IANA `timezone` を指定します。ログインの第2引数は信頼できる `AuthRequestContext` です。Kit はプラットフォーム getClientAddress()、Serv は信頼プロキシで解決した context.ip を使います。任意の転送ヘッダー・入力 JSON の IP を信用してはいけません。アドレス制限時に信頼できるアドレスがなければ拒否し、自動ログイン・API Key にも適用します。
 
-`reauthentication.enabled/operations` で対象操作、`ttlSeconds` で証明期限を選びます。`reauthenticate(token, password, operation)` は単回証明を発行し、入口は権限・資源検証後に `checkSensitiveOperation(token, operation, ticket)` を呼びます。主体・現在セッション・操作に結びつけ、権限を増やしません。Serv IAM 更新操作と admin 守衛は `x-hai-reauthentication`、Kit は固有 ID と `kit.guard.requireSensitive(iam, event, operation)` を使います。証明は短時間メモリに保持し、公開設定は開閉・操作リストのみです。
+`reauthentication.enabled/operations` で対象操作、`ttlSeconds` で証明期限を選びます。`reauthenticate(token, password, operation)` は単回証明を発行し、入口は権限・資源検証後に `checkSensitiveOperation(token, operation, ticket)` を呼びます。主体・現在セッション・操作に結びつけ、権限を増やしません。Serv IAM 更新操作と admin 守衛は `x-hai-reauthentication`、Kit は固有 ID と `kit.guard.requireSensitive(iam, event, operation)` を使います。証明は短時間メモリに保持し、公開設定は開閉・操作リストのみです。admin/fullstack標準UIでは、ログイン済み利用者が機密操作を選ぶと、現在のアカウントのパスワード確認ダイアログを表示します。取消時は送信せず、誤りなら操作を止め、成功時だけ元の操作を続けます。別のログインセッションは作成しません。
+
+RBAC 権限は `sensitiveOperations: string[]` を持ち、可空 JSON 列 `sensitive_operations` に保存します。管理側は `iam.authz.setPermissionSensitiveOperations(permissionId, operations)` の `success` を確認します。空配列はその権限の追加規則だけを削除します。`reauthentication.enabled` が有効なら全権限の規則とファイルの `operations` を和集合にして即時検証します。ID は実際の業務ガードと一致させ、既存の認可を省略しません。非同期 `iam.getPublicConfig()` は統合した公開方針を返し、DB 読取障害時は失敗します。同期 `iam.publicConfig` はファイルのスナップショットのみです。RBAC 無効時は DB 規則を無視し、移行は既存の認可関係を保持します。
 
 ## アカウント種別とライフサイクル
 
@@ -919,6 +921,10 @@ Kit/Serv の標準入口は POST /auth/captcha（Kit は同一生成元の /api 
 RelDB 初期化後の `migrateIam({ dryRun: true })` は読み取り専用です。iam.init は対応する認証・リセット列を補い、ユーザー、パスワードと権限を保持します。事前に旧書込を停止しバックアップしてください。安全世代のない旧セッションは再ログインが必要で、認可復元のため世代を戻してはいけません。既定 Reach 通知は sensitive/expiresAt/idempotencyKey で平文保存や遅延再送を防ぎます。独自コールバックも同じ期限と保護を守ってください。
 
 audit が初期化済みで capture.enabled が有効なら、IAM はアカウント・認証・パスワード・権限・API Key・セッションの重要イベントと失敗/拒否の安全な理由コードを記録します。audit を IAM より先に初期化し、逆順に終了してください。パスワード・単回証明・トークンは記録しません。ログイン成功後に主体を確定し、信頼できるサービス/CLI は audit.withContext で操作者と関連文脈を設定します。外部権限トランザクション内のイベントは一緒にコミット/ロールバックされ、失敗試行はロールバック後に呼出境界で記録します。監査失敗は診断を出し、反映済み業務を危険な再試行に変えません。
+
+`session.terminalLimits: { web: 2, app: 1 }` は端末種別ごとの上限で、既定 `{}` は無効です。有効時は未記載の種別を拒否し、旧セッションは `web` とします。`terminalLimitMode` の既定 `reject` は新規ログインを拒否し、`replace` は同種の古いセッションだけを置換します。全体の `maxSessions` と `singleDevice` も同じ CAS 内で適用します。ログインコンテキスト `terminalType` / 標準クライアント `auth.terminalType` は分類用であり、機器の真正性や認可を保証しません。
+
+画面内の復帰は UI の `createSessionRecovery` / `SessionRecoveryDialog` と SDK `recoverSession` を組み合わせます。通常のパスワード・OTP・LDAP 方針を適用し、`expectedUserId` で元の本人に限定してからセッションを発行します。認証拒否が明確な要求だけ1回再送でき、結果不明のネットワーク障害は再送しません。画面再読込や終了で失われたメモリの入力は復元できません。
 
 ## ページ離脱時のセッション方針
 
