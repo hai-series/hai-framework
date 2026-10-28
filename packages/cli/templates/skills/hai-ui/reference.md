@@ -498,9 +498,10 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 
 - 无 SvelteKit SSR 时用 `defineCrud` + `createCrudController` 托管 `data` / `nav`：latest-wins（seq + AbortSignal）、失败保留旧数据、并发去重、查询串回填地址栏。`<CrudPage data={c.data} nav={c.nav} loading={c.loading} loaded={c.loaded} error={c.error} onRetry={c.reload} />`。
 - `Tabs` 传 `lazy` 后未激活页签不渲染（`children` 提供 `isActivated(key)`），`onactivate(key)` 首次激活触发一次；配合 `createCrudController({ autoLoad: false })` 在页签首次可见时才 `load()`。
-- Toast 默认右下角浮动，由 UI 模块统一用主题语义色区分提示、成功、警告、错误，使用浅色底、细色边及类型图标，不占布局且可关闭，FIFO 队列逐条展示并从展示时计时；根布局只挂载一次 ToastContainer。六方位通过 toast.add 的 position 指定；保存/复制结果不使用行内 Alert。
-- 状态层从轻量 @h-ai/ui/toast 入口导入 toast/notify*/errorMessage，不加载组件及引导 CSS；ToastContainer 在根布局单次挂载。
+- Toast 默认右下角浮动，由 UI 模块统一用主题语义色区分提示、成功、警告、错误，使用浅色底、细色边及类型图标，不占布局且可关闭，FIFO 队列逐条展示并从展示时计时；根布局只挂载一次 ToastContainer。六方位通过 toast.add 的 position 指定；登录、改密、保存、删除和上传等成功或失败结果均不使用行内 Alert。
+- 状态层从轻量 @h-ai/ui/toast 入口导入 toast/notify*/errorMessage/useToastFeedback，不加载组件及引导 CSS；ToastContainer 在根布局单次挂载。
 - Toast 已内置 `notifySuccess` / `notifyError(err, fallback?)` / `notifyInfo` / `notifyWarning`，业务应用无需自建 toast 工具文件。
+- `message` API 也使用 Toast 的队列和样式，`MessageContainer` 复用 `ToastContainer`，根布局只能选一个。响应式组件初始化时可用 `useToastFeedback(() => error)` 发送安全本地化消息，同类型、同内容的队列项合并。底层 `Error` 即使自带 traceId 也只保留编号并显示兜底文案，不能将 traceId 当成原文可展示的证明。
 
 ## Design Token 系统
 

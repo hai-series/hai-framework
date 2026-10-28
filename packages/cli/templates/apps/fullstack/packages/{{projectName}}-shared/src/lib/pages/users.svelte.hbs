@@ -169,7 +169,6 @@
       <FormField label={m.account_expires()} required={accountType === 'temporary'}><Input type='datetime-local' bind:value={expiresAt} required={accountType === 'temporary'} data-testid='account-expires' /></FormField>
       <FormField label={m.user_role()}><Select bind:value={role} options={roleOptions} disabled={editing?.id === store.user?.id} data-testid="user-role" /></FormField>
       <Checkbox bind:checked={enabled} label={m.account_enabled()} disabled={invitation || editing?.id === store.user?.id} data-testid='account-enabled' />
-      {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}
       <div class="flex justify-end gap-2 border-t border-base-content/8 pt-4">
         <Button variant="ghost" disabled={store.saving} onclick={() => { editorOpen = false }}>{m.cancel()}</Button>
         <Button type="submit" variant="primary" loading={store.saving} disabled={!editing && !invitation && password.length < (store.authConfig?.password.minLength ?? 8)} data-testid="user-save">{m.save()}</Button>
@@ -191,7 +190,6 @@
 
 <Modal open={!!deleting} title={m.user_delete_title()} onclose={() => { deleting = null }} closeOnBackdrop={!store.saving} closeOnEscape={!store.saving}>
   <p class="text-sm leading-6 text-base-content/70">{m.user_delete_confirm({ name: deleting?.displayName || deleting?.username || '' })}</p>
-  {#if store.error}<p class="mt-3 text-sm text-error" role="alert">{store.error}</p>{/if}
   {#snippet footer()}
     <Button variant="ghost" disabled={store.saving} onclick={() => { deleting = null }}>{m.cancel()}</Button>
     <Button variant="error" loading={store.saving} onclick={confirmDelete} data-testid="confirm-delete-user">{m.delete()}</Button>

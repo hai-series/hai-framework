@@ -1,6 +1,7 @@
 {{! @skipIfEmpty }}
 {{#if features.feedback}}
 <script lang='ts'>
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import type { FeedbackDraft } from '@h-ai/feedback/client'
   import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackFormData } from '@h-ai/ui'
   import { FeedbackModal } from '@h-ai/ui/components/scenes/app/index'
@@ -33,7 +34,7 @@
       open = true
     }
     catch (cause) {
-      error = cause instanceof Error ? cause.message : m.operation_failed()
+      error = errorMessage(cause, m.operation_failed())
     }
     finally {
       preparing = false
@@ -75,10 +76,10 @@
     return result.data.status !== 'cancelled'
   }
   onDestroy(browserFeedback.releasePreviews)
+  useToastFeedback(() => error)
 </script>
 
 <Button variant='ghost' size='sm' loading={preparing} onclick={() => void prepare()} data-testid='feedback-open'>{m.nav_feedback()}</Button>
-{#if error}<span role='alert' class='text-xs text-error'>{error}</span>{/if}
 <FeedbackModal bind:open {attachments} budget={browserFeedback.budget} resetKey={draft?.submissionId} onsubmit={submit} oncapture={capturePage} onannotate={annotate} onexport={exportLocal} onfileschange={addFiles}
   evidence={draft?.evidence ?? []}
   evidenceSummary={draft?.missing.length ? [{ label: m.feedback_logs(), status: 'partial', detail: draft.missing.join(', ') }] : []} />

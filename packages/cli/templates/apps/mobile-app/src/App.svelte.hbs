@@ -11,6 +11,7 @@
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
   import { authErrorMessage } from '@h-ai/ui/i18n'
 {{/if}}
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
 
   import { closeApi, initApi, usesNativeTokenStorage } from './lib/api.js'
@@ -53,6 +54,7 @@
   ])
 
   async function bootstrap(): Promise<void> {
+    bootError = null
     try {
       initClientCore()
       document.title = appConfig.name
@@ -63,8 +65,10 @@
       await initApi()
 {{#if features.iam}}
       const config = await authActions.publicConfig()
-      if (!config.success)
-        throw new Error(authErrorMessage(config.error))
+      if (!config.success) {
+        bootError = authErrorMessage(config.error)
+        return
+      }
       authConfig = config.data
       if (!authConfig)
         throw new Error(m.boot_failed_title())
@@ -75,7 +79,7 @@
       nativeTokenStorage = await usesNativeTokenStorage()
     }
     catch (error) {
-      bootError = error instanceof Error ? error.message : String(error)
+      bootError = errorMessage(error, m.boot_failed_title())
     }
     finally {
       booting = false
@@ -104,6 +108,7 @@
       void closeApi()
     }
   })
+  useToastFeedback(() => bootError)
 </script>
 
 <div class='hai-mobile-viewport'>
@@ -119,7 +124,6 @@
       {:else if bootError}
         <section class='flex min-h-64 flex-col items-center justify-center gap-3 p-6 text-center'>
           <h1 class='text-lg font-bold'>{m.boot_failed_title()}</h1>
-          <p class='text-base-content/60 text-sm'>{bootError}</p>
           <Button variant='primary' size='sm' onclick={() => location.reload()}>{m.common_retry()}</Button>
         </section>
 {{#if features.iam}}

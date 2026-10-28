@@ -18,7 +18,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
 
-操作完成反馈统一使用 `toast` / `notifySuccess` 等，根布局只挂载一次 `ToastContainer`；默认右下角，由 UI 模块通过提示蓝/成功绿/警告黄/错误红等主题语义色统一提供浅色底、细色边及类型图标，可手工关闭且默认 3 秒消失。多个提示共用 FIFO 队列逐条展示，等待期间不计时；`toast.add({ message, position })` 可选六个方位，`duration: 0` 需手动移除。状态层使用轻量入口 `@h-ai/ui/toast`，避免总入口连带加载组件和引导 CSS。不要用行内 Alert 显示保存/复制成功；字段校验、持续业务状态与恢复操作保留行内，Alert 使用柔和背景。
+操作成功、失败及需要用户注意的即时反馈统一使用 `toast` / `notifySuccess` 等，根布局只挂载一次 `ToastContainer`；默认右下角，由 UI 模块通过提示蓝/成功绿/警告黄/错误红等主题语义色统一提供浅色底、细色边及类型图标，可手工关闭且默认 3 秒消失。多个提示共用 FIFO 队列逐条展示，等待期间不计时；`toast.add({ message, position })` 可选六个方位，`duration: 0` 需手动移除。状态层使用轻量入口 `@h-ai/ui/toast`，避免总入口连带加载组件和引导 CSS。不要用行内 Alert、红色段落或页面私有浮层显示登录、改密、保存、删除、上传等操作结果；响应式组件的安全本地化消息可用 `useToastFeedback(() => error)`，同一消息在队列中时合并，组件卸载不影响通知；字段校验、持续业务状态与恢复操作保留行内，Alert 使用柔和背景。
 
 - 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
 - 列表统一使用卡片内查询栏、独立滚动表格和底部分页。多条件筛选使用 FilterBar / TableToolbar / CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；Query 或 Enter 一次提交搜索和全部条件，草稿变化不自动请求，折叠保留值。翻页和排序沿用已提交条件，重置清空条件并回第一页。TableToolbar 与 CrudFilterBar 共用原生查询表单，onfilterchange 仅通知草稿变化，onsearch 读取绑定草稿并提交；实际 onreset/onclearfilters 必须重新查询。排序只在后端支持的 DataTable 列头提供，不新增图标筛选/排序弹层或页面私有折叠状态机。 扩展筛选使用自适应网格，字段横向间距 20px、纵向间距 16px，标签与控件分别对齐且控件等高；窄屏改为单列，避免定宽输入框贴边挤压。
@@ -29,7 +29,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 状态层可从轻量 `@h-ai/ui/i18n` 导入同一个 `authErrorMessage`，避免加载场景组件；管理台、移动/桌面示例与模板保持一致。
 
-认证错误复用公开 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：凭据错误统一，不显示未知原文，保留有效 traceId；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误行内展示，认证错误使用柔和 Alert，成功使用统一浮动通知。
+认证错误复用公开 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：凭据错误统一，不显示未知原文，保留有效 traceId；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误行内展示，操作成功和认证错误均使用统一 Toast。
 
 新页面或较大改版先使用 [hai-ui-design](../hai-ui-design/SKILL.md) 确定任务、布局、状态和组件映射；本 skill 负责正确实现。完成后按 [hai-ui-review](../hai-ui-review/SKILL.md) 查看真实页面，小范围修复沿用已有设计。
 

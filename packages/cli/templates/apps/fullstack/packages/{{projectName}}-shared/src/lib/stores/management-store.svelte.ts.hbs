@@ -6,6 +6,7 @@ import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import type { HashRouter } from '../navigation/hash-router.svelte.js'
 import { HaiApiClientError } from '@h-ai/api-client'
 import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
+import { err, HaiCommonError, ok } from '@h-ai/core'
 import { authErrorMessage, matchPermission } from '@h-ai/ui/components/scenes/iam/index'
 import { setGlobalLocale } from '@h-ai/ui/i18n'
 import { toast } from '@h-ai/ui/toast'
@@ -249,19 +250,28 @@ export class ManagementStore {
     }
   }
 
-  async savePermissionPolicy(id: string, operations: string[]): Promise<boolean> {
-    let saved = false
-    await this.mutate(async () => {
-      const result = await this.request(() => requestSensitive('iam.permissions.sensitiveOperations', options => managementApi.admin.permissions.update({ id, sensitiveOperations: operations }, options)))
-      if (!result?.success)
-        return
-      saved = true
+  async savePermissionPolicy(id: string, operations: string[]): Promise<HaiResult<void>> {
+    if (this.saving)
+      return err(HaiCommonError.CONFLICT, m.operation_failed())
+    this.saving = true
+    this.error = ''
+    try {
+      // 表单持有本次保存失败；根布局只报告列表和配置刷新的独立失败，避免重复通知。
+      const result = await requestSensitive('iam.permissions.sensitiveOperations', options => managementApi.admin.permissions.update({ id, sensitiveOperations: operations }, options))
+      if (!result.success)
+        return result
       await this.loadPermissionPolicies(this.permissionPolicyPage)
       const config = await this.request(() => managementApi.iam.auth.publicConfig())
       if (config?.success)
         this.authConfig = config.data
-    })
-    return saved
+      return ok(undefined)
+    }
+    catch {
+      return err(HaiCommonError.SERVICE_UNAVAILABLE, m.network_error())
+    }
+    finally {
+      this.saving = false
+    }
   }
 
   async queryAudit(): Promise<void> {

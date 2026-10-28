@@ -33,7 +33,14 @@ async function capture(page: Page, name: string, fallback: string) {
   await page.screenshot({ path: evidence ? path.join(evidence, name) : fallback, fullPage: true, animations: 'disabled' })
 }
 
+async function dismissToasts(page: Page) {
+  const dismiss = page.locator('.hai-toast-layer button')
+  for (let count = 0; count < 10 && await dismiss.count(); count++)
+    await dismiss.click()
+}
+
 async function submitLogin(page: Page, username: string, password: string) {
+  await dismissToasts(page)
   await expect(page.getByTestId('login-form')).toBeVisible()
   await page.locator('#login-username').fill(username)
   await page.getByTestId('login-form').locator('input[type="password"]').fill(password)
@@ -405,12 +412,21 @@ test('auditor reauthentication produces a verifiable private archive', async ({ 
   await confirmation.getByRole('button', { name: /取消|Cancel|キャンセル/ }).click()
   await expect(confirmation).not.toBeVisible()
   await expect(page.getByTestId('audit-backup-receipt')).not.toBeVisible()
+  await dismissToasts(page)
   await page.getByTestId('audit-backup').click()
   await page.getByTestId('reauthentication-password').locator('input').fill('Incorrect-test-password!')
   await confirmation.locator('button[type=submit]').click()
-  await expect(confirmation.locator('.alert-error')).toBeVisible()
+  await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeVisible()
+  await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText(/用户名或密码不正确|Username or password is incorrect|ユーザー名またはパスワード/)
+  await expect(confirmation.locator('.alert-error')).toHaveCount(0)
+  await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeInViewport({ ratio: 1 })
   await expect(page.getByTestId('audit-backup-receipt')).not.toBeVisible()
   await capture(page, '{{projectName}}-reauthentication-error.png', testInfo.outputPath('reauthentication-error.png'))
+  await page.setViewportSize({ width: 390, height: 960 })
+  await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeInViewport({ ratio: 1 })
+  await capture(page, '{{projectName}}-reauthentication-error-390.png', testInfo.outputPath('reauthentication-error-390.png'))
+  await dismissToasts(page)
+  await page.setViewportSize({ width: 1440, height: 960 })
   await page.getByTestId('reauthentication-password').locator('input').fill('Scaffold-test-Audit123!')
   await confirmation.locator('button[type=submit]').click()
   const receipt = page.getByTestId('audit-backup-receipt')
@@ -645,15 +661,17 @@ test('administrator and user complete account, avatar, preference, password and 
     await passwordInputs.nth(0).fill(password)
     await passwordInputs.nth(1).fill(password)
     await passwordInputs.nth(2).fill(password)
+    await dismissToasts(userPage)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
-    await expect(userPage.getByTestId('error')).toContainText(/相同|different from|異なる/i)
+    await expect(userPage.locator('.hai-toast-item[data-variant=error]')).toContainText(/相同|different from|異なる/i)
+    await dismissToasts(userPage)
     await passwordInputs.nth(1).fill(newPassword)
     await passwordInputs.nth(2).fill(newPassword)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
     await expect(userPage.getByTestId('login-form')).toBeVisible()
     await submitLogin(userPage, username, password)
-    await expect(userPage.getByTestId('login-form')).toContainText(/不正确|incorrect/i)
+    await expect(userPage.locator('.hai-toast-item[data-variant=error]')).toContainText(/不正确|incorrect/i)
     await login(userPage, username, newPassword)
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
 
@@ -667,9 +685,10 @@ test('administrator and user complete account, avatar, preference, password and 
     await expect(recovery).toBeVisible()
     // 已停用主体不能以正确密码恢复旧操作；原地登录不放松账号状态控制。
     const recoveryLogin = recovery.locator('form.login-form')
+    await dismissToasts(userPage)
     await recoveryLogin.locator('input[type=password]').fill(newPassword)
     await recoveryLogin.locator('button[type=submit]').click()
-    await expect(recovery.locator('.alert-error')).toBeVisible()
+    await expect(userPage.locator('.hai-toast-item[data-variant=error]')).toBeVisible()
     await expect(recovery).toBeVisible()
     await recovery.getByRole('button', { name: /Sign in later|稍后登录/ }).click()
   }
@@ -780,8 +799,8 @@ test('feedback submits an empty description and business operator can process an
   await capture(page, 'feedback-preview.png', testInfo.outputPath('feedback-preview.png'))
   await uploaded.screenshot({ path: testInfo.outputPath('feedback-image-after-mask-detail.png'), animations: 'disabled' })
   await dialog.getByRole('button', { name: /提交反馈|Submit Feedback|フィードバックを送信/ }).click()
-  await expect(dialog.getByRole('status')).toContainText(/FB-/)
-  const number = (await dialog.getByRole('status').textContent())?.match(/FB-[A-Za-z0-9-]+/)?.[0]
+  await expect(dialog.getByTestId('feedback-receipt')).toContainText(/FB-/)
+  const number = (await dialog.getByTestId('feedback-receipt').textContent())?.match(/FB-[A-Za-z0-9-]+/)?.[0]
   expect(number).toBeTruthy()
   if (!number)
     throw new Error('Feedback receipt number is missing')

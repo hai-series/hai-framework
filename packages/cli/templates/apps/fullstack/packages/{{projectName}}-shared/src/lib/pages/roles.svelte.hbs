@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AdminPermissionPolicy, AdminRole } from '{{fullstack.contractPackageName}}'
   import type { ManagementStore } from '../stores/management-store.svelte.js'
-  import { err, HaiCommonError, ok } from '@h-ai/core'
+  import { err, HaiCommonError } from '@h-ai/core'
   import { SensitiveOperationsForm } from '@h-ai/ui/components/scenes/iam/index'
   import { Card, Modal, PageHeader, Pagination } from '@h-ai/ui/components/compounds/index'
   import { Badge, Button, Textarea } from '@h-ai/ui/components/primitives/index'
@@ -14,8 +14,7 @@
   let description = $state('')
   let permission = $state<AdminPermissionPolicy | null>(null)
   async function savePolicy(operations: string[]) {
-    const saved = permission && await store.savePermissionPolicy(permission.id, operations)
-    return saved ? ok(undefined) : err(HaiCommonError.INTERNAL_ERROR, store.error || m.home_error())
+    return permission ? store.savePermissionPolicy(permission.id, operations) : err(HaiCommonError.CONFLICT, m.home_error())
   }
   function edit(role: AdminRole) {
     editing = role
@@ -64,7 +63,6 @@
   <form class="space-y-4" onsubmit={save}>
     <label class="block text-sm font-medium" for="role-description">{m.role_description()}</label>
     <Textarea id="role-description" bind:value={description} rows={4} data-testid="role-description" />
-    {#if store.error}<p class="text-sm text-error" role="alert">{store.error}</p>{/if}
     <div class="flex justify-end gap-2"><Button variant="ghost" disabled={store.saving} onclick={() => { editing = null }}>{m.cancel()}</Button><Button type="submit" variant="primary" loading={store.saving}>{m.save()}</Button></div>
   </form>
 </Modal>

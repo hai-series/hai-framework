@@ -1,10 +1,11 @@
 {{! @skipIfEmpty }}
 {{#if fullstack.frontends.app}}
 <script lang="ts">
+  import { useToastFeedback } from '@h-ai/ui/toast'
   import type { ManagementApiOptions } from '{{fullstack.sharedPackageName}}'
   import { capacitor, createCapacitorTokenStorage } from '@h-ai/capacitor'
   import { core } from '@h-ai/core'
-  import { Alert } from '@h-ai/ui/components/compounds/index'
+  import { ToastContainer } from '@h-ai/ui/components/compounds/index'
   import { Button, Spinner } from '@h-ai/ui/components/primitives/index'
   import { onMount } from 'svelte'
   import { AdminWorkspace, messages } from '{{fullstack.sharedPackageName}}'
@@ -41,11 +42,13 @@
       })
     }
   })
+  useToastFeedback(() => startupFailed ? messages.operation_failed() : '')
 </script>
 
 {#if startupFailed}
   <div class="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 p-6">
-    <Alert variant="error">{messages.operation_failed()}</Alert>
+    <p class="text-sm text-base-content/60">{messages.operation_failed()}</p>
+    <ToastContainer />
     <Button onclick={() => void initialize()}>{messages.home_refresh()}</Button>
   </div>
 {:else if apiOptions}

@@ -6,6 +6,7 @@
   import type { ManagementStore } from '../stores/management-store.svelte.js'
   import { PageHeader } from '@h-ai/ui/components/compounds/index'
   import { FeedbackDetail, FeedbackList } from '@h-ai/ui/components/scenes/app/index'
+  import { errorMessage } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import { managementApi } from '../api/api-client.js'
   import { downloadFeedback, feedbackDataBytes, feedbackReview } from '../api/feedback-client.js'
@@ -39,7 +40,7 @@
     }
     catch (cause) {
       if (version === requestVersion)
-        error = cause instanceof Error ? cause.message : m.operation_failed()
+        error = errorMessage(cause, m.operation_failed())
     }
     finally {
       if (version === requestVersion)
@@ -129,7 +130,7 @@
         await selectId(id)
     }).catch((cause) => {
       if (active)
-        error = cause instanceof Error ? cause.message : m.operation_failed()
+        error = errorMessage(cause, m.operation_failed())
     })
     return () => {
       active = false
