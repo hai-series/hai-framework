@@ -16,8 +16,8 @@
   import type { DataAttributes } from '../../../types.js'
   import type { ResetPasswordFormData, ResetPasswordFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -84,6 +84,7 @@
 
     await onsubmit?.(data)
   }
+  useToastFeedback(() => errors.general)
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
@@ -140,11 +141,6 @@
     </FormField>
 
     <!-- 通用错误 -->
-    {#if errors.general}
-      <Alert variant='error'>
-        {errors.general}
-      </Alert>
-    {/if}
 
     {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
     {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}

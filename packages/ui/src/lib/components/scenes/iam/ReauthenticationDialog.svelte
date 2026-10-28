@@ -13,8 +13,8 @@
   import type { DataAttributes } from '../../../types.js'
   import type { ReauthenticationDialogProps } from '../types.js'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -41,6 +41,7 @@
     password = ''
     onclose()
   }
+  useToastFeedback(() => open ? error : '')
 </script>
 
 <div {...dataAttributes} class='reauthentication-layer'>
@@ -50,7 +51,6 @@
       <FormField label={uiM('reauthentication_password')} for={fieldId}>
         <PasswordInput id={fieldId} bind:value={password} autocomplete='current-password' disabled={loading} required data-testid='reauthentication-password' />
       </FormField>
-      {#if error}<Alert variant='error'>{error}</Alert>{/if}
       <div class='flex justify-end gap-2'>
         <Button variant='ghost' disabled={loading} onclick={close}>{uiM('confirm_cancel')}</Button>
         <Button type='submit' variant='primary' {loading} disabled={!password}>{uiM('reauthentication_confirm')}</Button>

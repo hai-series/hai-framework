@@ -338,7 +338,7 @@ describe('feedback collection', () => {
       upload.dispatchEvent(new Event('change', { bubbles: true }))
       flushSync()
       button(target, '提交反馈').click()
-      await vi.waitFor(() => expect(target.textContent).toContain('提交失败，请重试 (traceId:'))
+      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toContain('提交失败，请重试 (traceId:'))
       expect(target.querySelector('textarea')?.value).toBe('The save button did nothing')
       expect(target.textContent).toContain('evidence.txt')
       expect(target.textContent).toContain('Logs · 12')
@@ -346,7 +346,7 @@ describe('feedback collection', () => {
       button(target, '保存反馈到本地').click()
       await vi.waitFor(() => expect(onexport).toHaveBeenCalledOnce())
       expect(onexport.mock.calls[0]?.[0]).toMatchObject({ description: 'The save button did nothing', files: [file] })
-      await vi.waitFor(() => expect(toast.items[0]?.message).toBe('已开始下载反馈文件。'))
+      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe('已开始下载反馈文件。'))
       expect(target.textContent).not.toContain('已开始下载反馈文件。')
     }
     finally {
@@ -459,7 +459,7 @@ describe('feedback collection', () => {
       const upload = target.querySelector<HTMLInputElement>('input[type="file"]')!
       Object.defineProperty(upload, 'files', { value: [file] })
       upload.dispatchEvent(new Event('change', { bubbles: true }))
-      await vi.waitFor(() => expect(target.textContent).toContain('操作失败，请重试 (traceId:'))
+      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toContain('操作失败，请重试 (traceId:'))
       expect(target.textContent).toContain('retry-image.png')
       expect(target.querySelector('textarea')?.value).toBe('Keep this description')
       expect(button(target, '提交反馈').disabled).toBe(true)
@@ -545,7 +545,7 @@ describe('feedback management', () => {
       button(target, '标记已处理').click()
       await vi.waitFor(() => expect(onstatus).toHaveBeenCalledOnce())
       expect(onstatus.mock.calls[0]?.[0]).toEqual({ id: report.id, status: 'handled', expectedVersion: 7 })
-      await vi.waitFor(() => expect(target.textContent).toContain('操作失败，请重试 (traceId:'))
+      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toContain('操作失败，请重试 (traceId:'))
       expect(target.textContent).toContain('未处理')
     }
     finally {

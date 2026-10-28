@@ -14,6 +14,7 @@
   import type { DataAttributes } from '../../../types.js'
   import { onDestroy, untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
+  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
@@ -27,6 +28,7 @@
   let value = $state(untrack(() => operations.join('\n')))
   let loading = $state(false)
   let error = $state('')
+  let fieldError = $state('')
   let disposed = false
   onDestroy(() => {
     disposed = true
@@ -37,18 +39,22 @@
     if (loading)
       return
     const items = [...new Set(value.split(/\r?\n/).map(item => item.trim()).filter(Boolean))]
+    fieldError = ''
     if (items.length > 1000 || items.some(item => item.length > 128)) {
-      error = uiM('sensitive_operations_invalid')
+      fieldError = uiM('sensitive_operations_invalid')
       return
     }
     loading = true
     error = ''
     try {
       const result = await onsubmit(items)
-      if (!result.success)
-        error = result.error.message
-      else if (!disposed)
+      if (!result.success) {
+        error = errorMessage(result.error, uiM('crud_submit_failed'))
+      }
+      else if (!disposed) {
+        toast.success(uiM('crud_submit_success'))
         ondone?.()
+      }
     }
     catch {
       error = uiM('auth_network_error')
@@ -57,14 +63,14 @@
       loading = false
     }
   }
+  useToastFeedback(() => error)
 </script>
 
 <form data-testid='sensitive-operations-form' {...dataAttributes} class='space-y-4' onsubmit={save}>
   <label class='block space-y-2 text-sm font-medium'>
     <span>{uiM('sensitive_operations_label')}</span>
-    <Textarea bind:value rows={6} disabled={loading} />
+    <Textarea bind:value rows={6} disabled={loading} error={fieldError} />
   </label>
   <p class='text-sm text-base-content/60'>{uiM('sensitive_operations_hint')}</p>
-  {#if error}<p role='alert' class='text-sm text-error'>{error}</p>{/if}
   <div class='flex justify-end'><Button type='submit' variant='primary' {loading}>{uiM('crud_save')}</Button></div>
 </form>

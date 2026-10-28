@@ -13,7 +13,7 @@
   import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackEvidenceSummary, FeedbackEvidenceView, FeedbackFormData, FeedbackReceipt } from './feedback-types.js'
   import { untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { errorMessage, toast } from '../../../toast.svelte.js'
+  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -242,6 +242,8 @@
     files = [...files, file]
     await stageFiles()
   }
+  useToastFeedback(() => error)
+  useToastFeedback(() => receipt ? uiM('feedback_accepted', { number: receipt.number }) : '', 'success')
 </script>
 
 <form {...dataAttributes} class={`feedback-form flex min-h-0 min-w-0 flex-1 flex-col gap-4 ${className}`} onsubmit={submit} data-feedback-ui='true' data-feedback-ignore='true'>
@@ -249,9 +251,8 @@
     {#if budget}
       <p class='text-xs text-base-content/60'>{uiM('feedback_capacity_hint', { used: (attachments.filter(item => !removedAttachmentIds.includes(item.id)).reduce((sum, item) => sum + (item.size ?? 0), 0) / 1048576).toFixed(1), total: (budget.maxAttachmentsBytes / 1048576).toFixed(1), single: (budget.maxAttachmentBytes / 1048576).toFixed(1), count: budget.maxAttachmentCount })}</p>
     {/if}
-    {#if error}<div class='alert alert-error break-words' role='alert'>{error}</div>{/if}
     {#if receipt}
-      <div role='status' class='alert alert-soft alert-success shadow-none block space-y-2 break-words'>
+      <div data-testid='feedback-receipt' class='rounded-lg border border-base-content/10 bg-base-200/50 p-4 space-y-2 break-words'>
         <p class='font-medium'>{uiM('feedback_accepted', { number: receipt.number })}</p>
         <p>{collectionLabel(receipt.collectionStatus)}</p>
         <p class='text-sm'>{uiM('feedback_accepted_hint')}</p>

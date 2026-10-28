@@ -23,6 +23,7 @@
   import { tick } from 'svelte'
   import { resolveFormText as resolveText } from '../../../internal/form-validation.svelte.js'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import Drawer from '../../compounds/Drawer.svelte'
   import FormField from '../../compounds/FormField.svelte'
@@ -186,17 +187,11 @@
       updateField(fieldId, [...current, optValue])
     }
   }
+  useToastFeedback(() => open ? error : '')
 </script>
 
 {#snippet formFields()}
   <FormLayout {columns} {labelPosition} {labelWidth} class={isCompact ? '[--hai-form-gap:0.75rem]' : ''}>
-    {#if error}
-      <div {...dataAttributes} role='alert' class='p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2'>
-        <span class='icon-[tabler--alert-circle] size-4 shrink-0'></span>
-        <span>{error}</span>
-      </div>
-    {/if}
-
     {#each sortedFields as field (field.id)}
       {@const isReadonly = field.readonly && mode === 'edit'}
       {@const isRequired = field.validation?.required}
@@ -314,6 +309,7 @@
 
 {#if variant === 'modal'}
   <Modal
+    {...dataAttributes}
     bind:open
     class={className}
     {title}
@@ -335,6 +331,7 @@
   </Modal>
 {:else}
   <Drawer
+    {...dataAttributes}
     bind:open
     {title}
     class={className}

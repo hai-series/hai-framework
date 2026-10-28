@@ -16,8 +16,8 @@
   import type { DataAttributes, InputProps } from '../../../types.js'
   import type { RegisterField, RegisterFormData, RegisterFormProps } from '../types.js'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -177,6 +177,7 @@
         break
     }
   }
+  useToastFeedback(() => errors.general)
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
@@ -250,11 +251,6 @@
     <!-- 通用错误 -->
     {#if extraFields}
       <div class='register-form-extra-fields'>{@render extraFields()}</div>
-    {/if}
-    {#if errors.general}
-      <Alert variant='error'>
-        {errors.general}
-      </Alert>
     {/if}
 
     <!-- 提交按钮 -->

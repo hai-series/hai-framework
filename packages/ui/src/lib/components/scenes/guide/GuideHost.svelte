@@ -16,7 +16,7 @@
   import type { GuideController } from '../../../guide-types.js'
   import type { DataAttributes } from '../../../types.js'
   import { getUILocale, uiM } from '../../../messages.js'
-  import Alert from '../../compounds/Alert.svelte'
+  import { toast } from '../../../toast.svelte.js'
   import Button from '../../primitives/Button.svelte'
   import GuideHostContent from './GuideHostContent.svelte'
 
@@ -39,6 +39,7 @@
   function release() {
     guide.stop()
     guide.closeHelp()
+    toast.warning(uiM('guide_startFailed', undefined, locale))
   }
 </script>
 
@@ -46,13 +47,10 @@
   <GuideHostContent {guide} {locale} {...rest} />
   {#snippet failed(_error, reset)}
     <div class='fixed bottom-4 right-4 z-[1150] max-w-[calc(100vw-2rem)]' data-testid='guide-error'>
-      <Alert variant='warning'>
-        <span>{uiM('guide_startFailed', undefined, locale)}</span>
-        <Button variant='ghost' size='sm' onclick={() => {
-          guide.defer()
-          reset()
-        }}>{uiM('guide_close', undefined, locale)}</Button>
-      </Alert>
+      <Button variant='ghost' size='sm' onclick={() => {
+        guide.defer()
+        reset()
+      }}>{uiM('guide_close', undefined, locale)}</Button>
     </div>
   {/snippet}
 </svelte:boundary>

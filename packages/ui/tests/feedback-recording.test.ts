@@ -2,8 +2,10 @@
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import FeedbackRecorder from '../src/lib/components/scenes/app/FeedbackRecorder.svelte'
+import { toast } from '../src/lib/toast.svelte.js'
 
 afterEach(() => {
+  toast.clear()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -119,7 +121,8 @@ describe('反馈短录屏', () => {
       button(target, '录屏').click()
       flushSync()
       button(target, '开始录屏').click()
-      await vi.waitFor(() => expect(target.querySelector('[role="alert"]')?.textContent).toContain('录屏未完成'))
+      await vi.waitFor(() => expect(toast.items.at(-1)?.message).toContain('录屏未完成'))
+      expect(target.querySelector('[role="alert"]')).toBeNull()
       expect(onactive).not.toHaveBeenCalled()
       expect(button(target, '开始录屏').disabled).toBe(false)
     }

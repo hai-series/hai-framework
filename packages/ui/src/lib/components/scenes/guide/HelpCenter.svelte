@@ -17,6 +17,7 @@
   import type { DataAttributes } from '../../../types.js'
   import { resolveGuideText } from '../../../guide.svelte.js'
   import { getUILocale, uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -85,6 +86,7 @@
     loading: uiM('guide_loading', undefined, locale),
     failed: uiM('guide_startFailed', undefined, locale),
   }))
+  useToastFeedback(() => articleState.failed ? text.failed : '', 'warning')
 </script>
 
 <div data-testid='help-center' {...dataAttributes} class='flex min-h-0 flex-col text-base-content md:flex-row'>
@@ -109,7 +111,6 @@
     {/if}
   </nav>
   <article class='min-w-0 flex-1 p-5 md:p-7' data-testid='guide-article-content'>
-    {#if articleState.failed}<p class='text-sm text-error' role='alert'>{text.failed}</p>{/if}
     {#if selected}
       <h2 class='text-xl font-semibold'>{selected.title}</h2>
       {#if selected.description}<p class='mt-2 text-sm text-base-content/60'>{selected.description}</p>{/if}
@@ -124,7 +125,7 @@
             <component.default content={selected.content} allowHtmlTags={false} showCopyButton={false} />
           {/if}
         {:catch}
-          <p class='text-sm text-error' role='alert'>{text.failed}</p>
+          <p class='text-sm text-base-content/60'>{text.failed}</p>
         {/await}
       </div>
     {:else}

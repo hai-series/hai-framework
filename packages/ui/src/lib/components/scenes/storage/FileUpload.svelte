@@ -24,6 +24,7 @@
   import type { FileUploadProps, UploadFile } from '../types.js'
   import { SvelteMap } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
+  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { cn, generateId, getDataAttributes } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
@@ -49,6 +50,7 @@
     ...restProps
   }: FileUploadProps & DataAttributes = $props()
 
+  let operationError = $state('')
   const dataAttributes = $derived(getDataAttributes(restProps))
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
@@ -171,11 +173,17 @@
 
     for (const file of Array.from(fileList)) {
       if (files.length + newFiles.length >= maxFiles) {
-        onerror?.(`${uiM('file_upload_max_files_exceeded')} ${maxFiles} ${uiM('file_upload_files_unit')}`)
+        const message = `${uiM('file_upload_max_files_exceeded')} ${maxFiles} ${uiM('file_upload_files_unit')}`
+        toast.error(message)
+        onerror?.(message)
         break
       }
 
       const error = validateFile(file)
+      if (error) {
+        toast.error(error)
+        onerror?.(error)
+      }
 
       const uploadFile: UploadFile = {
         id: generateId('file'),
@@ -196,7 +204,9 @@
 
     // 自动上传
     if (autoUpload) {
-      await uploadPendingFiles(newFiles.filter(f => f.state === 'pending'))
+      // 使用状态数组中的代理记录，避免原始对象变更后列表仍停留在旧状态。
+      const pendingIds = new Set(newFiles.filter(file => file.state === 'pending').map(file => file.id))
+      await uploadPendingFiles(files.filter(file => pendingIds.has(file.id)))
     }
   }
 
@@ -206,6 +216,7 @@
       return
     }
 
+    operationError = ''
     uploadFile.state = 'uploading'
     files = [...files]
 
@@ -231,12 +242,13 @@
       onupload?.(uploadFile)
     }
     catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
         return
       }
 
       uploadFile.state = 'error'
-      uploadFile.error = error instanceof Error ? error.message : uiM('file_upload_failed')
+      uploadFile.error = errorMessage(error, uiM('file_upload_failed'))
+      operationError = uploadFile.error
       onerror?.(uploadFile.error)
     }
     finally {
@@ -333,6 +345,7 @@
     files = []
     onchange?.(files)
   }
+  useToastFeedback(() => operationError)
 </script>
 
 <div {...dataAttributes} class={containerClass} data-form-wide>
@@ -404,7 +417,7 @@
                 <span class='text-xs text-base-content/50'>{file.progress}%</span>
               </div>
             {:else if file.state === 'error'}
-              <div class='text-xs text-error mt-1'>{file.error}</div>
+              <div class='text-xs text-base-content/60 mt-1'>{uiM('file_upload_failed')}</div>
             {:else if file.state === 'success'}
               <div class='text-xs text-success mt-1'>{uiM('file_upload_success')}</div>
             {/if}

@@ -2,7 +2,7 @@
 <script lang='ts'>
   import type { FeedbackAnnotation, FeedbackAttachmentView } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import Button from '../../primitives/Button.svelte'
   import { imagePreviewUrl } from './feedback-functions.js'
 
@@ -83,6 +83,7 @@
       loading = false
     }
   }
+  useToastFeedback(() => error)
 </script>
 
 {#if url}
@@ -111,7 +112,6 @@
         <Button size='sm' variant='ghost' onclick={() => selected = false}>{uiM('feedback_mark_clear')}</Button>
       </div>
     {/if}
-    {#if error}<p class='text-error text-sm break-words' role='alert'>{error}</p>{/if}
   </div>
 {/if}
 

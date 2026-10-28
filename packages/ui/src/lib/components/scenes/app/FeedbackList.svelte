@@ -12,7 +12,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { FeedbackListQuery, FeedbackPage, FeedbackPermissions, FeedbackReportView, FeedbackStatusChange } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import DataTable from '../../compounds/DataTable.svelte'
   import Pagination from '../../compounds/Pagination.svelte'
@@ -108,6 +108,7 @@
       busyId = ''
     }
   }
+  useToastFeedback(() => error || actionError)
 </script>
 
 <section {...dataAttributes} class={`feedback-list flex min-h-0 min-w-0 flex-1 flex-col gap-3 ${className}`} aria-label={uiM('feedback_list_title')}>
@@ -116,7 +117,6 @@
   {:else}
     <div class='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100'>
       <TableToolbar class='shrink-0 border-b border-base-content/8 p-3' bind:searchValue={search} {filterFields} bind:filterValues searchPlaceholder={uiM('feedback_search')} onsearch={() => filter(filterValues)} onclearfilters={() => applyQuery({ page: 1, pageSize: data.pageSize })} />
-      {#if error || actionError}<p role='alert' class='alert alert-error break-words'>{error || actionError}</p>{/if}
       <div class='min-h-0 min-w-0 flex-1 overflow-hidden'>
         <DataTable data={data.items} {columns} keyField='id' density='compact' striped={false} {loading} sortKey='createdAt' sortDir={sortDirection} onsort={(_, direction) => update({ page: 1, sortDirection: direction })} class='h-full'>
           {#snippet cell(item, key)}

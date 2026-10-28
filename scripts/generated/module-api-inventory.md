@@ -112,9 +112,9 @@
 | @h-ai/storage | `./client (types)` | 9 |
 | @h-ai/storage | `./schemas (import)` | 8 |
 | @h-ai/storage | `./schemas (types)` | 8 |
-| @h-ai/ui | `. (import)` | 380 |
-| @h-ai/ui | `. (svelte)` | 380 |
-| @h-ai/ui | `. (types)` | 380 |
+| @h-ai/ui | `. (import)` | 381 |
+| @h-ai/ui | `. (svelte)` | 381 |
+| @h-ai/ui | `. (types)` | 381 |
 | @h-ai/ui | `./auto-import (import)` | 1 |
 | @h-ai/ui | `./auto-import (types)` | 1 |
 | @h-ai/ui | `./guide (import)` | 11 |
@@ -125,9 +125,9 @@
 | @h-ai/ui | `./i18n (types)` | 13 |
 | @h-ai/ui | `./theme (import)` | 25 |
 | @h-ai/ui | `./theme (types)` | 25 |
-| @h-ai/ui | `./toast (import)` | 7 |
-| @h-ai/ui | `./toast (svelte)` | 7 |
-| @h-ai/ui | `./toast (types)` | 7 |
+| @h-ai/ui | `./toast (import)` | 8 |
+| @h-ai/ui | `./toast (svelte)` | 8 |
+| @h-ai/ui | `./toast (types)` | 8 |
 | @h-ai/ui | `./vite (import)` | 2 |
 | @h-ai/ui | `./vite (types)` | 2 |
 | @h-ai/ui | `./components/ 下的显式入口（13 个真实子路径，见 JSON）` | 逐项记录 |

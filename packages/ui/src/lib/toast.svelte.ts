@@ -7,6 +7,7 @@
 
 import type { ToastProps } from './types.js'
 import { core } from '@h-ai/core'
+import { untrack } from 'svelte'
 
 /**
  * Toast 项
@@ -189,6 +190,34 @@ class ToastState {
  */
 export const toast = new ToastState()
 
+/**
+ * 在组件初始化时订阅操作提示，统一交给根布局的 ToastContainer 展示。
+ * 只跟踪消息来源，不订阅 Toast 队列；同一消息已在队列中时合并，避免父子组件重复提示。
+ * 字段校验仍由控件定位，传入此函数的文案应已经完成安全映射和本地化。
+ * 订阅随组件销毁结束，已发出的通知继续由根容器管理。
+ * @param message - 响应式消息读取函数；空值表示没有待提示的操作结果。
+ * @param variant - 通知类型，默认 error。
+ * @example
+ * ```svelte
+ * <script lang="ts">
+ *   import { useToastFeedback } from '@h-ai/ui/toast'
+ *   let error = $state('')
+ *   useToastFeedback(() => error)
+ * </script>
+ * ```
+ */
+export function useToastFeedback(message: () => string | undefined | null, variant: NonNullable<ToastProps['variant']> = 'error'): void {
+  $effect(() => {
+    const value = message()
+    if (!value)
+      return
+    untrack(() => {
+      if (!toast.items.some(item => item.message === value && item.variant === variant))
+        toast.add({ message: value, variant })
+    })
+  })
+}
+
 /** 成功提示默认停留时长（毫秒）。 */
 const SUCCESS_DURATION = 3000
 /** 失败提示默认停留时长（毫秒），比成功略长便于阅读错误信息。 */
@@ -255,7 +284,7 @@ export function errorMessage(error: unknown, fallback = ''): string {
   let message = fallback || core.i18n.coreM('core_errorInternal')
   if (known)
     message = core.error.toPublic(known, traceId).message
-  else if (typeof error === 'string' || embeddedTraceId)
+  else if (typeof error === 'string')
     message = receivedMessage
   return core.error.formatMessage({ message, traceId: /\(traceId: [\w.:-]{1,128}\)$/.test(message) ? undefined : traceId })
 }

@@ -2,8 +2,11 @@
 import type { AuthPanelActions, AuthPanelConfig } from '../src/lib/components/scenes/types.js'
 import { err, ok } from '@h-ai/core'
 import { flushSync, mount, unmount } from 'svelte'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { createSessionRecovery, SensitiveOperationsForm, SessionRecoveryDialog } from '../src/lib/components/scenes/iam/index.js'
+import { toast } from '../src/lib/toast.svelte.js'
+
+afterEach(() => toast.clear())
 
 const config: AuthPanelConfig = {
   login: { password: true, ldap: false, email: false, sms: false },
@@ -102,7 +105,8 @@ it('原地登录复用正常表单，验证错误保留弹窗和页面输入，�
     await submit('Wrong-password!')
     await vi.waitFor(() => {
       flushSync()
-      expect(document.querySelector('[data-testid="session-recovery-dialog"] .alert-error')).not.toBeNull()
+      expect(toast.items.at(-1)?.message).toContain('用户名或密码不正确')
+      expect(document.querySelector('[data-testid="session-recovery-dialog"] .alert-error')).toBeNull()
     })
     expect(recovery.open).toBe(true)
     expect(draft.value).toBe('Unsaved business draft')

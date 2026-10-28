@@ -15,7 +15,7 @@
 <script lang='ts'>
   import type { ComponentProps } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes, portal } from '../../../utils.js'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -60,6 +60,7 @@
       capturing = false
     }
   }
+  useToastFeedback(() => captureError)
 </script>
 
 <!-- 脱离顶栏的 fixed 包含块与层叠上下文；包装层不参与布局，卸载由 portal 清理。 -->
@@ -67,7 +68,6 @@
   {#if selectingPage && !open}
     <aside class='fixed inset-x-4 bottom-4 z-[1200] mx-auto max-w-xl rounded-xl border border-base-content/15 bg-base-100 p-4 shadow-xl space-y-3' data-feedback-ignore='true' aria-label={uiM('feedback_capture_add')}>
       <p class='text-sm' role='status'>{uiM('feedback_capture_hint')}</p>
-      {#if captureError}<p class='text-error text-sm break-words' role='alert'>{captureError}</p>{/if}
       <div class='flex flex-wrap justify-end gap-2'>
         <Button size='sm' variant='ghost' disabled={capturing} onclick={returnToFeedback}>{uiM('feedback_capture_return')}</Button>
         <Button size='sm' variant='primary' loading={capturing} onclick={capture}>{uiM('feedback_capture_now')}</Button>

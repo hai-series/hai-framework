@@ -28,6 +28,7 @@
   import { getContext } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
   import { uiM } from '../../../messages.js'
+  import { errorMessage as operationErrorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import { workspaceContextKey } from '../../../workspace-context.js'
   import Card from '../../compounds/Card.svelte'
@@ -239,8 +240,6 @@
 
   // ─── 加载 / 空 / 错误展示态 ───
 
-  /** 归一化错误文案；error 允许是 Error 或字符串。 */
-  const errorMessage = $derived(error ? (typeof error === 'string' ? error : error.message) : '')
   /** 是否已有可展示的数据行。 */
   const hasItems = $derived(data.items.length > 0)
   /** 加载失败且无可保留数据：整块替换为错误信息 + 重试。 */
@@ -340,6 +339,7 @@
   let deletingItem = $state<Record<string, unknown> | null>(null)
   /** 删除请求是否进行中。 */
   let deleting = $state(false)
+  let deleteError = $state('')
 
   // 过滤状态
   /** 搜索框当前值；提交时才同步到路由。 */
@@ -509,6 +509,7 @@
         const result = await crud.api.create(submitData)
         const submitted = (result ?? {}) as Record<string, unknown>
         closePanel()
+        toast.success(uiM('crud_submit_success'))
         onaftersubmit?.(submitted, 'create')
         await nav.refresh?.()
       }
@@ -519,13 +520,14 @@
         const result = await crud.api.update(id, submitData)
         const submitted = (result ?? {}) as Record<string, unknown>
         closePanel()
+        toast.success(uiM('crud_submit_success'))
         onaftersubmit?.(submitted, 'edit')
         await nav.refresh?.()
       }
     }
     catch (e) {
-      /** 优先展示 API Error 文案，未知异常回退到内置 i18n。 */
-      const msg = e instanceof Error ? e.message : uiM('crud_submit_failed')
+      /** 未知异常只显示本地化操作提示与关联编号。 */
+      const msg = operationErrorMessage(e, uiM('crud_submit_failed'))
       formError = msg
       onerror?.(msg)
     }
@@ -558,6 +560,7 @@
     }
 
     deleting = true
+    deleteError = ''
     try {
       /** 待删除记录的稳定主键。 */
       const id = String(deletingItem[keyField])
@@ -570,13 +573,14 @@
       if (selectedItem && String(selectedItem[keyField]) === id) {
         closePanel()
       }
+      toast.success(uiM('crud_delete_success'))
       onafterdelete?.(deleted)
       await nav.refresh?.()
     }
     catch (e) {
       /** 删除失败提示。 */
-      const msg = e instanceof Error ? e.message : uiM('crud_delete_failed')
-      onerror?.(msg)
+      deleteError = operationErrorMessage(e, uiM('crud_delete_failed'))
+      onerror?.(deleteError)
     }
     finally {
       deleting = false
@@ -640,6 +644,8 @@
         : undefined,
     })),
   )
+  useToastFeedback(() => error ? typeof error === 'string' ? error : uiM('crud_load_failed') : '')
+  useToastFeedback(() => deleteError)
 </script>
 
 <div {...dataAttributes} class='{pageGapClass} {className}'>
@@ -683,10 +689,10 @@
         <span>{uiM('crud_loading')}</span>
       </div>
     {:else if showErrorState}
-      <!-- 加载失败且无可保留数据：错误信息 + 重试 -->
+      <!-- 空数据区域保留可恢复状态，具体失败原因由 Toast 展示。 -->
       <div class='flex min-h-40 flex-1 flex-col items-center justify-center gap-3 px-4 py-10 text-sm'>
         <span class='icon-[tabler--alert-triangle] size-8 text-error/70'></span>
-        <p class='max-w-md text-center text-base-content/70'>{errorMessage || uiM('crud_load_failed')}</p>
+        <p class='max-w-md text-center text-base-content/70'>{uiM('crud_load_failed')}</p>
         {#if onRetry}
           <Button size={actionButtonSize} onclick={() => onRetry?.()}>
             <span class='icon-[tabler--refresh] mr-1 size-4'></span>
@@ -696,10 +702,8 @@
       </div>
     {:else}
       {#if showErrorBanner}
-        <!-- 保留旧数据时的错误细条：不打断浏览，仍提供重试 -->
-        <div role='alert' class='flex items-center gap-2 border-b border-error/20 bg-error/10 px-3 py-2 text-xs text-error'>
-          <span class='icon-[tabler--alert-triangle] size-4 shrink-0'></span>
-          <span class='min-w-0 flex-1 truncate'>{errorMessage || uiM('crud_load_failed')}</span>
+        <!-- 保留旧数据时仍提供原地重试入口。 -->
+        <div class='flex justify-end border-b border-base-content/8 px-3 py-2 text-xs'>
           {#if onRetry}
             <button type='button' class='shrink-0 font-medium underline underline-offset-2' onclick={() => onRetry?.()}>{uiM('crud_retry')}</button>
           {/if}

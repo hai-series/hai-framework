@@ -483,11 +483,13 @@ components/
 <ToastContainer />
 ```
 
-通知は既定で右下に浮かび、ページのレイアウトを変えません。UI モジュールのテーマ色でお知らせ・成功・警告・エラーを区別し、淡い背景、細い色枠、種類別アイコンと控えめな影を使用し、手動で閉じられます。複数の通知は共通の FIFO キューから 1 件ずつ表示され、表示開始から計時します（既定 3 秒、`duration: 0` は手動で閉じるまで保持）。ルートに `<ToastContainer />` を 1 回だけ配置します。`toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` で位置を指定できます。`m.saved()` はアプリの翻訳関数です。位置は `bottom-right`（既定）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。保存やコピーの結果は Toast、フィールド検証や継続的な業務状態、復旧操作はインラインで表示します。`Alert` は淡い背景を使用します。
+通知は既定で右下に浮かび、ページのレイアウトを変えません。UI モジュールのテーマ色でお知らせ・成功・警告・エラーを区別し、淡い背景、細い色枠、種類別アイコンと控えめな影を使用し、手動で閉じられます。複数の通知は共通の FIFO キューから 1 件ずつ表示され、表示開始から計時します（既定 3 秒、`duration: 0` は手動で閉じるまで保持）。ルートに `<ToastContainer />` を 1 回だけ配置します。`toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` で位置を指定できます。`m.saved()` はアプリの翻訳関数です。位置は `bottom-right`（既定）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。ログイン・パスワード変更・保存・削除・アップロードの成功と失敗は Toast、フィールド検証や継続的な業務状態、復旧操作はインラインで表示します。`Alert` は淡い背景を使用します。
 
 > `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` を内蔵し、アプリ独自の toast ツールは不要です。`notifyError(err, fallback?)` は `Error`・文字列と代替文言を受け付け、既定は成功 3 秒・失敗 5 秒です。
 
-状態層は軽量な `@h-ai/ui/toast` から `toast`、`notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning`、`errorMessage` を読み込めます。コンポーネントやガイド CSS は読み込みません。`ToastContainer` はコンポーネントの入口から読み込み、ルートに配置します。
+コンポーネントの初期化時に `useToastFeedback(() => error)` へ安全に翻訳された操作メッセージを渡せます。同じ種類・内容の通知はキュー内で統合され、コンポーネントを破棄しても通知は表示されます。`message` API も同じキュー・外観・閉じる動作を共有します。`MessageContainer` は `ToastContainer` を表示するため、ルートには片方だけ配置します。
+
+状態層は軽量な `@h-ai/ui/toast` から `toast`、`useToastFeedback`、`notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning`、`errorMessage` を読み込めます。コンポーネントやガイド CSS は読み込みません。`ToastContainer` はコンポーネントの入口から読み込み、ルートに配置します。
 
 #### 通知の位置を指定する
 
@@ -829,7 +831,7 @@ agreements:
 
 AuthPanel に IAM 公開設定と actions を渡すと、複数方式のログイン、登録、復旧、規約を利用できます。config.ui でレイアウトとブランド画像を指定し、パスワードフォームは passwordPolicy を受け取ります。通信と Token 保存は actions の責務です。
 
-認証エラーには `@h-ai/ui/components/scenes/iam/index` の `authErrorMessage(error)` を使用します。公開コードを現在の UI 言語に変換し、ユーザー名とパスワードの誤りを区別せず、未知・サーバーエラーの原文を隠し、有効な `traceId` を保持します。AuthPanel、OTP 送信、重要操作の再認証、fullstack のパスワード変更で共用します。初期・期限切れパスワード、現在のパスワードの再使用（`hai:iam:034`）、セッション数上限には操作案内を表示します。エラーは柔らかい背景の行内 Alert、成功はフローティング通知を使います。確認パスワードはサーバーと同じく Unicode 正規化や空白除去をせず厳密に比較し、不一致をフィールドに表示します。
+認証エラーには `@h-ai/ui/components/scenes/iam/index` の `authErrorMessage(error)` を使用します。公開コードを現在の UI 言語に変換し、ユーザー名とパスワードの誤りを区別せず、未知・サーバーエラーの原文を隠し、有効な `traceId` を保持します。AuthPanel、OTP 送信、重要操作の再認証、fullstack のパスワード変更で共用します。初期・期限切れパスワード、現在のパスワードの再使用（`hai:iam:034`）、セッション数上限には操作案内を表示します。認証エラーと操作成功は統一 Toast を使用します。確認パスワードはサーバーと同じく Unicode 正規化や空白除去をせず厳密に比較し、不一致をフィールドに表示します。
 
 AuthPanel は SSR 中のフォーム操作を無効にし、クライアントのマウントとイベント登録が完了してから入力を有効にします。ハイドレーションによる入力の消失を防ぎ、アプリ側の追加の準備処理は不要です。E2E では入力可能な状態を待ち、クライアントスクリプトの読み込みが遅れる場合も検証します。
 

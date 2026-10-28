@@ -23,8 +23,8 @@
   import type { DataAttributes } from '../../../types.js'
   import type { UserProfileField, UserProfileProps, UserProfileSubmitData } from '../types.js'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
   import Avatar from '../../primitives/Avatar.svelte'
@@ -170,6 +170,7 @@
       e.currentTarget.value = ''
     }
   }
+  useToastFeedback(() => errors.general)
 </script>
 
 <div {...dataAttributes} class={containerClass}>
@@ -239,11 +240,6 @@
       {/each}
 
       <!-- 通用错误 -->
-      {#if errors.general}
-        <Alert variant='error'>
-          {errors.general}
-        </Alert>
-      {/if}
 
       <!-- 操作按钮 -->
       {#if editable}

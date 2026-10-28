@@ -30,9 +30,8 @@
   import { err, HaiCommonError } from '@h-ai/core'
   import { onMount, untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { toast } from '../../../toast.svelte.js'
+  import { toast, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
   import Button from '../../primitives/Button.svelte'
@@ -146,6 +145,8 @@
     if (!actionError && !networkFailed)
       mode = 'login'
   }
+  useToastFeedback(() => error)
+  useToastFeedback(() => notice ? uiM(notice) : '', 'info')
 </script>
 
 {#snippet link(next: AuthPanelMode, label: string, href?: string)}
@@ -171,15 +172,14 @@
     <!-- 固定内容包装节点，避免 fieldset 插入通知时丢失容器查询子树的布局。 -->
     <div class='min-w-0'>
       {#if error}
-        <Alert variant='error'>{error}</Alert>
+        <p class='text-sm text-base-content/60'>{uiM('auth_error_service')}</p>
         {#if onretry}<Button class='mt-4 w-full' onclick={onretry}>{uiM('crud_retry')}</Button>{/if}
       {:else if !config}
         <div class='flex justify-center' role='status'><Spinner /></div>
       {:else if !available}
-        <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
+        <p class='text-sm text-base-content/60'>{uiM('auth_unavailable')}</p>
         <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
       {:else}
-        {#if notice}<p role='status' class='mb-4 text-sm text-base-content/70'>{uiM(notice)}</p>{/if}
         <span role='status' class='sr-only'>{verifying ? uiM('auth_captcha_verifying') : ''}</span>
         {#if mode === 'login'}
           <LoginForm {initialIdentifier} submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}

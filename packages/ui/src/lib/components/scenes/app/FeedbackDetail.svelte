@@ -12,7 +12,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { FeedbackAttachmentView, FeedbackEvidenceQuery, FeedbackEvidenceView, FeedbackHistoryView, FeedbackPage, FeedbackPermissions, FeedbackReportView, FeedbackStatusChange } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -129,6 +129,7 @@
     else if (tab === 'business')
       void query({ page: 1, kind: 'business', requestId: undefined, errorId: undefined })
   }
+  useToastFeedback(() => error || actionError)
 </script>
 
 <section {...dataAttributes} class={`feedback-detail min-w-0 space-y-4 ${className}`} aria-label={uiM('feedback_details')}>
@@ -143,7 +144,6 @@
         {#if onclose}<Button size='sm' variant='ghost' onclick={onclose}>{uiM('feedback_close')}</Button>{/if}
       </div>
     </header>
-    {#if error || actionError}<p class='alert alert-error break-words' role='alert'>{error || actionError}</p>{/if}
     {#if loading || querying}<p class='text-sm text-base-content/60' role='status'>{uiM('feedback_loading')}</p>{/if}
     <Tabs items={tabs} bind:active onchange={changeTab}>
       {#snippet children({ active: tab })}

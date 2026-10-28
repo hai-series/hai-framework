@@ -18,8 +18,8 @@
   import { onMount, untrack } from 'svelte'
   import { resolveGuideText } from '../../../guide.svelte.js'
   import { getUILocale, uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import Modal from '../../compounds/Modal.svelte'
   import Button from '../../primitives/Button.svelte'
   import HelpCenter from './HelpCenter.svelte'
@@ -103,6 +103,7 @@
       guide.stop()
     }
   })
+  useToastFeedback(() => guide.error, 'warning')
 </script>
 
 <div {...dataAttributes} class='contents'>
@@ -124,14 +125,6 @@
     <div class='hai-guide-loading fixed bottom-4 left-1/2 z-[1000000001] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border border-base-content/10 bg-base-100 px-4 py-2 text-sm text-base-content shadow-lg' role='status' data-testid='guide-loading'>
       <span class='loading loading-spinner loading-xs'></span>{text.loading}
       <Button size='sm' variant='ghost' onclick={() => guide.stop()} data-testid='guide-cancel'>{text.close}</Button>
-    </div>
-  {/if}
-
-  {#if guide.error}
-    <div class='fixed bottom-4 right-4 z-[1500] max-w-[calc(100vw-2rem)]' data-testid='guide-error'>
-      <Alert variant='warning'>
-        <div class='flex items-center gap-3'><span>{guide.error}</span><Button size='sm' variant='ghost' onclick={() => guide.clearError()}>{text.close}</Button></div>
-      </Alert>
     </div>
   {/if}
 

@@ -3,7 +3,7 @@
   import type { Replayer } from '@rrweb/replay'
   import type { FeedbackEvidenceView } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import Button from '../../primitives/Button.svelte'
 
   const { load }: { load: () => Promise<FeedbackEvidenceView[]> } = $props()
@@ -121,11 +121,11 @@
       player = undefined
     }
   })
+  useToastFeedback(() => error)
 </script>
 
 <div class='space-y-3 min-w-0'>
   <p class='text-sm text-base-content/65'>{uiM('feedback_replay_hint')}</p>
-  {#if error}<p class='text-error text-sm break-words' role='alert'>{error}</p>{/if}
   {#if loading}<p role='status'>{uiM('feedback_loading')}</p>
   {:else if !player}<p class='rounded bg-base-200 p-4 text-sm'>{uiM('feedback_replay_empty')}</p>{/if}
   <div bind:this={viewport} class='relative w-full overflow-hidden rounded-lg bg-base-200' style:height={player ? `${height}px` : '0'}>

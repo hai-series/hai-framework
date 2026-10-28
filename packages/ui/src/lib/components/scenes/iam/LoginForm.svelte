@@ -18,6 +18,7 @@
   import type { AuthLoginMethod, LoginFormData, LoginFormProps } from '../types.js'
   import { untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
@@ -159,6 +160,8 @@
   function handleForgotPassword() {
     onforgotpassword?.()
   }
+  useToastFeedback(() => sendError)
+  useToastFeedback(() => errors.general)
 </script>
 
 <form {...dataAttributes} bind:this={formElement} class={formClass} onsubmit={handleSubmit}>
@@ -217,7 +220,6 @@
               {remaining ? uiM('login_resend_wait', { seconds: remaining }) : uiM('login_send_code')}
             </Button>
           </div>
-          {#if sendError}<p role='alert' class='text-sm text-error'>{sendError}</p>{/if}
         </FormField>
       {:else}
         <FormField for='login-password' label={uiM('login_password')}>
@@ -257,11 +259,6 @@
     <!-- 通用错误 -->
     {#if extraFields}
       <div class='login-form-extra-fields'>{@render extraFields()}</div>
-    {/if}
-    {#if errors.general}
-      <Alert variant='error'>
-        {errors.general}
-      </Alert>
     {/if}
 
     <!-- 提交按钮 -->

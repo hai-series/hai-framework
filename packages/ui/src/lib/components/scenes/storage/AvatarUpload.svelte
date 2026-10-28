@@ -22,6 +22,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { AvatarUploadProps } from '../types.js'
   import { uiM } from '../../../messages.js'
+  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
 
@@ -42,6 +43,7 @@
     ...restProps
   }: AvatarUploadProps & DataAttributes = $props()
 
+  let operationError = $state('')
   const dataAttributes = $derived(getDataAttributes(restProps))
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
@@ -123,6 +125,7 @@
   // 上传文件
   async function uploadFile(file: File) {
     activeUpload?.abort()
+    operationError = ''
     const controller = new AbortController()
     activeUpload = controller
     loading = true
@@ -149,8 +152,8 @@
       if (activeUpload !== controller) {
         return
       }
-      const message = error instanceof Error ? error.message : uiM('avatar_upload_failed')
-      onerror?.(message)
+      operationError = errorMessage(error, uiM('avatar_upload_failed'))
+      onerror?.(operationError)
     }
     finally {
       if (activeUpload === controller) {
@@ -171,6 +174,7 @@
     if (file) {
       const error = validateFile(file)
       if (error) {
+        toast.error(error)
         onerror?.(error)
         return
       }
@@ -178,6 +182,7 @@
     }
     e.currentTarget.value = ''
   }
+  useToastFeedback(() => operationError)
 </script>
 
 <div {...dataAttributes}

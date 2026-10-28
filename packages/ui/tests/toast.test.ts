@@ -191,8 +191,13 @@ describe('toast notify helpers', () => {
     expect(mod.toast.items[0].message).toMatch(/^直接文案 \(traceId: [\w.:-]+\)$/)
   })
 
-  it('notifyError 保留 API 返回的 traceId 且不重复追加', () => {
-    mod.notifyError(new Error('请求失败 (traceId: req-api)'), '兜底')
+  it('异常即使携带 traceId 仍隐藏原文，只保留关联编号', () => {
+    mod.notifyError(new Error('SQL private details (traceId: req-api)'), '保存失败')
+    expect(mod.toast.items[0].message).toBe('保存失败 (traceId: req-api)')
+  })
+
+  it('安全的本地化字符串保留 traceId 且不重复追加', () => {
+    mod.notifyError('请求失败 (traceId: req-api)', '兜底')
     expect(mod.toast.items[0].message).toBe('请求失败 (traceId: req-api)')
   })
 

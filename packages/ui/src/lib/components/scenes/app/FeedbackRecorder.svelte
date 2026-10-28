@@ -2,7 +2,7 @@
 <script lang='ts'>
   import { onMount } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
   import { portal } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
 
@@ -133,6 +133,7 @@
       stop(true)
     }
   })
+  useToastFeedback(() => error)
 </script>
 
 <div class='space-y-2 min-w-0'>
@@ -141,7 +142,6 @@
     <p class='text-xs text-base-content/65'>{supported ? uiM('feedback_record_hint', { size: (maxBytes / 1048576).toFixed(1) }) : uiM('feedback_record_unsupported')}</p>
     {#if supported}<Button size='sm' loading={busy} disabled={disabled || active} onclick={start}>{uiM('feedback_record_start')}</Button>{/if}
   {/if}
-  {#if error}<p class='text-error text-sm break-words' role='alert'>{error}</p>{/if}
 </div>
 {#if active}
   <div use:portal class='fixed bottom-4 inset-x-4 z-[1200] mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-xl border border-error/25 bg-base-100 p-4 shadow-xl' data-feedback-ignore='true'>

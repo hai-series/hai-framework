@@ -23,6 +23,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { ImageUploadProps } from '../types.js'
   import { uiM } from '../../../messages.js'
+  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
@@ -47,6 +48,7 @@
     ...restProps
   }: ImageUploadProps & DataAttributes = $props()
 
+  let operationError = $state('')
   const dataAttributes = $derived(getDataAttributes(restProps))
   let loading = $state(false)
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
@@ -111,6 +113,7 @@
   // 上传文件
   async function uploadFile(file: File) {
     activeUpload?.abort()
+    operationError = ''
     const controller = new AbortController()
     activeUpload = controller
     loading = true
@@ -155,8 +158,8 @@
       if (activeUpload !== controller) {
         return
       }
-      const message = error instanceof Error ? error.message : uiM('image_upload_failed')
-      onerror?.(message)
+      operationError = errorMessage(error, uiM('image_upload_failed'))
+      onerror?.(operationError)
       // 清除预览
       if (localPreviewUrl) {
         URL.revokeObjectURL(localPreviewUrl)
@@ -184,6 +187,7 @@
     if (file) {
       const error = validateFile(file)
       if (error) {
+        toast.error(error)
         onerror?.(error)
         return
       }
@@ -203,6 +207,7 @@
     previewUrl = ''
     onchange?.('')
   }
+  useToastFeedback(() => operationError)
 </script>
 
 <div {...dataAttributes}

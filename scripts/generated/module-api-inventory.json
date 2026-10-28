@@ -34300,6 +34300,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "useToastFeedback",
+              "kind": "value",
+              "declaration": "useToastFeedback",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "Variant",
               "kind": "type",
               "declaration": "Variant",
@@ -36590,6 +36596,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "useToastFeedback",
+              "kind": "value",
+              "declaration": "useToastFeedback",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "Variant",
               "kind": "type",
               "declaration": "Variant",
@@ -38878,6 +38890,12 @@
               "kind": "type",
               "declaration": "UserProfileSubmitData",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "useToastFeedback",
+              "kind": "value",
+              "declaration": "useToastFeedback",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "Variant",
@@ -51553,6 +51571,12 @@
               "kind": "type",
               "declaration": "ToastItem",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "useToastFeedback",
+              "kind": "value",
+              "declaration": "useToastFeedback",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -51605,6 +51629,12 @@
               "kind": "type",
               "declaration": "ToastItem",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "useToastFeedback",
+              "kind": "value",
+              "declaration": "useToastFeedback",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -51657,6 +51687,12 @@
               "kind": "type",
               "declaration": "ToastItem",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "useToastFeedback",
+              "kind": "value",
+              "declaration": "useToastFeedback",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },

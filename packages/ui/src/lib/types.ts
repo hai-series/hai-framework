@@ -1698,6 +1698,6 @@ export interface MessageOptions {
   type?: 'info' | 'success' | 'warning' | 'error'
   /** 显示时长（毫秒），0 表示不自动关闭 */
   duration?: number
-  /** 是否可手动关闭 */
+  /** 是否可手动关闭，默认 true；与 Toast 共用队列。 */
   closable?: boolean
 }

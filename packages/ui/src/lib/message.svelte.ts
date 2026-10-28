@@ -1,12 +1,12 @@
 /**
  * @h-ai/ui — Message 状态管理
  *
- * 命令式轻量消息提示 API，类似 ElementUI Message。
- * 与 Toast 类似但视觉风格不同：顶部居中滑入、带类型图标、可自动关闭。
+ * 命令式消息入口，复用 Toast 的显示风格、队列和生命周期。
  * @module message.svelte
  */
 
 import type { MessageOptions } from './types.js'
+import { toast } from './toast.svelte.js'
 
 /**
  * 内部消息条目
@@ -29,8 +29,16 @@ export interface MessageItem {
  * Message 状态
  */
 class MessageState {
-  items = $state<MessageItem[]>([])
-  private timers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** 当前统一通知队列的消息视图。 */
+  get items(): MessageItem[] {
+    return toast.items.map(item => ({
+      id: item.id,
+      message: item.message,
+      type: item.variant === 'success' || item.variant === 'warning' || item.variant === 'error' ? item.variant : 'info',
+      duration: item.duration ?? 3000,
+      closable: item.dismissible ?? true,
+    }))
+  }
 
   /**
    * 添加消息
@@ -46,26 +54,12 @@ class MessageState {
    */
   add(options: MessageOptions | string): string {
     const opts = typeof options === 'string' ? { message: options } : options
-    const id = Math.random().toString(36).slice(2, 9)
-    const item: MessageItem = {
-      id,
+    return toast.add({
       message: opts.message,
-      type: opts.type ?? 'info',
+      variant: opts.type ?? 'info',
       duration: opts.duration ?? 3000,
-      closable: opts.closable ?? false,
-    }
-
-    this.items = [...this.items, item]
-
-    if (item.duration > 0) {
-      const timer = setTimeout(() => {
-        this.timers.delete(id)
-        this.remove(id)
-      }, item.duration)
-      this.timers.set(id, timer)
-    }
-
-    return id
+      dismissible: opts.closable ?? true,
+    })
   }
 
   /**
@@ -81,12 +75,7 @@ class MessageState {
    * ```
    */
   remove(id: string): void {
-    const timer = this.timers.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      this.timers.delete(id)
-    }
-    this.items = this.items.filter(i => i.id !== id)
+    toast.remove(id)
   }
 
   /**
@@ -101,11 +90,7 @@ class MessageState {
    * ```
    */
   clear(): void {
-    for (const timer of this.timers.values()) {
-      clearTimeout(timer)
-    }
-    this.timers.clear()
-    this.items = []
+    toast.clear()
   }
 
   /**
