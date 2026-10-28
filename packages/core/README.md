@@ -602,7 +602,9 @@ unsubscribe()
 
 ## 应用生命周期编排
 
-`core.module.createRuntime([{ name, enabled?, start, close }])` 按声明启动、反序关闭，合并并发调用。启动前登记部分资源的清理义务；失败回滚。关闭失败停在该模块并保留依赖，下次 close/start 重试，避免先关闭仍被使用的数据库。错误仅保留模块、阶段、错误码和配置字段路径；不转发配置值或 SDK 原始异常。base/API/fullstack 和管理台均使用此入口。 简短错误消息也包含错误码与字段路径，便于定位缺失的环境变量。
+`core.module.createRuntime([{ name, enabled?, start, close }])` 按声明启动、反序关闭，合并并发调用。启动前登记部分资源的清理义务；失败回滚。关闭失败停在该模块并保留依赖，下次 close/start 重试，避免先关闭仍被使用的数据库。错误仅保留模块、阶段、错误码和配置字段路径；不转发配置值或 SDK 原始异常。base/API/fullstack 和管理台均使用此入口。
+
+启动错误包含配置原因和处理建议：提供 `ext.fields` 时，`HaiConfigError.CONFIG_ENV_VAR_MISSING` 提示环境变量未设置，`CONFIG_VALIDATION_ERROR` 或 Schema 校验异常提示校验未通过；只有字段路径时提示“配置项缺失或无效”，不猜测具体原因。即使启动边界只打印 `error.message`，也能看到字段、处理建议和底层错误码。自定义初始化钩子可在缺少必需环境变量时抛出带 `code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code` 和 `ext: { fields: ['变量名'] }` 的异常；fullstack 模板的初始管理员密码检查采用此方式。
 
 ## 错误提示与关联日志
 

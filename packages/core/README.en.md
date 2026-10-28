@@ -602,7 +602,9 @@ unsubscribe()
 
 ## Application lifecycle
 
-`core.module.createRuntime([{ name, enabled?, start, close }])` starts in declaration order, closes in reverse order and merges concurrent calls. It registers cleanup before partial initialization. Failed close retains that module and dependencies for the next close/start retry. Errors expose module, phase, code and configuration paths, never raw configuration or SDK exceptions. Base/API/fullstack and the admin use this helper. The short error message also includes the error code and field paths to identify missing environment variables.
+`core.module.createRuntime([{ name, enabled?, start, close }])` starts in declaration order, closes in reverse order and merges concurrent calls. It registers cleanup before partial initialization. Failed close retains that module and dependencies for the next close/start retry. Errors expose module, phase, code and configuration paths, never raw configuration or SDK exceptions. Base/API/fullstack and the admin use this helper.
+
+Startup errors explain configuration failures and suggest a fix. With `ext.fields`, `HaiConfigError.CONFIG_ENV_VAR_MISSING` identifies unset environment variables; `CONFIG_VALIDATION_ERROR` or Schema errors identify failed validation. Field paths alone produce a “missing or invalid configuration” hint without guessing the cause. Even when the startup boundary prints only `error.message`, it includes the fields, next steps and underlying error code. A custom initialization hook can report missing required environment variables by throwing an error with `code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code` and `ext: { fields: ['VARIABLE_NAME'] }`; the fullstack template uses this for the initial administrator password.
 
 ## Error messages and correlated logs
 

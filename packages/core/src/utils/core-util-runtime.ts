@@ -1,6 +1,6 @@
 /** 顺序启动、反序关闭的薄编排，不持有模块配置、依赖容器或业务服务。 */
 import type { HaiError, HaiResult } from '../core-types.js'
-import { HaiCommonError } from '../core-types.js'
+import { HaiCommonError, HaiConfigError } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 
 /**
@@ -46,17 +46,30 @@ function failure(module: string, phase: 'start' | 'close', detail?: unknown): { 
     }
   }
   const code = detail && typeof detail === 'object' && 'code' in detail && (typeof detail.code === 'number' || typeof detail.code === 'string') ? detail.code : undefined
-  const message = i18n.coreM(phase === 'start' ? 'core_runtimeStartFailed' : 'core_runtimeCloseFailed', { params: { module } })
-  // 启动边界即使只打印 message，也保留可操作的错误码和字段名，不回显底层异常中的配置值。
-  const diagnostics = [code, ...new Set(fields)].filter(value => value !== undefined).join(', ')
-  return { success: false, error: { ...HaiCommonError.INIT_FAILED, message: diagnostics ? `${message} (${diagnostics})` : message, ext: { module, phase, ...(code !== undefined ? { code } : {}), ...(fields.length ? { fields } : {}) } } }
+  const uniqueFields = [...new Set(fields)]
+  let message = i18n.coreM(phase === 'start' ? 'core_runtimeStartFailed' : 'core_runtimeCloseFailed', { params: { module } })
+  // 仅依据结构化错误码和 Schema 路径说明原因，不猜测字段缺失，也不回显原始异常或配置值。
+  if (phase === 'start' && uniqueFields.length) {
+    const configMessage = code === HaiConfigError.CONFIG_ENV_VAR_MISSING.code
+      ? 'core_runtimeEnvMissing'
+      : code === HaiConfigError.CONFIG_VALIDATION_ERROR.code || (detail && typeof detail === 'object' && 'issues' in detail && Array.isArray(detail.issues))
+        ? 'core_runtimeConfigInvalid'
+        : 'core_runtimeConfigProblem'
+    message = i18n.coreM(configMessage, { params: { message, fields: uniqueFields.join(', ') } })
+  }
+  // 启动边界即使只打印 message，也能看到原因、处理建议和错误码；关闭失败保留字段诊断。
+  const diagnostics = [
+    ...(code !== undefined ? [i18n.coreM('core_runtimeErrorCode', { params: { code } })] : []),
+    ...(phase === 'close' ? uniqueFields : []),
+  ].join(', ')
+  return { success: false, error: { ...HaiCommonError.INIT_FAILED, message: diagnostics ? `${message} (${diagnostics})` : message, ext: { module, phase, ...(code !== undefined ? { code } : {}), ...(uniqueFields.length ? { fields: uniqueFields } : {}) } } }
 }
 
 /**
  * 编排宿主明确拥有的模块和业务钩子，不推断模块类型或初始化参数。
  * start/close 合并并发；启动失败反序回滚；关闭失败保留依赖和清理义务，下次 close/start 会重试。
  * @param definitions - 按真实依赖顺序声明的初始化和关闭动作。
- * @returns 不抛业务异常的生命周期控制器；异常只报告模块、阶段、错误码和配置字段路径。
+ * @returns 不抛业务异常的生命周期控制器；仅报告安全诊断，配置失败附带原因和处理建议。
  * @example
  * ```ts
  * import { core, ok } from '@h-ai/core'

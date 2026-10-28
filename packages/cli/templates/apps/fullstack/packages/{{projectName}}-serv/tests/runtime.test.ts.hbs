@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
-import { core{{#if features.feedback}}, err{{/if}} } from '@h-ai/core'
+import { core{{#if features.feedback}}, err{{/if}}, HaiConfigError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 {{#if features.feedback}}
 import { feedback, HaiFeedbackError } from '@h-ai/feedback'
@@ -48,6 +48,13 @@ it.each([
     expect(users.data.total).toBe(1)
     expect(users.data.items[0]?.username).toBe('admin')
   }
+})
+
+it.each(['', '   '])('startup identifies an unset administrator password without exposing its value', async (password) => {
+  vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', password)
+  await expect(initializeModules()).rejects.toMatchObject({ cause: { ext: { module: 'bootstrap', code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code, fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } } })
+  for (const module of [audit, iam, storage, crypto, cache, reldb])
+    expect(module.isInitialized).toBe(false)
 })
 
 {{#if features.feedback}}

@@ -52,5 +52,9 @@
   "core_configUnsupportedInBrowser": "Browser does not support file-based config; use core.config on the server or pass browser options through core.init({ logging })",
   "core_cryptoRandomUnavailable": "Cryptographic random source is unavailable",
   "core_runtimeStartFailed": "Module {module} failed to start",
-  "core_runtimeCloseFailed": "Module {module} failed to close; retry cleanup"
+  "core_runtimeCloseFailed": "Module {module} failed to close; retry cleanup",
+  "core_runtimeEnvMissing": "{message}: Required environment variables are not set: {fields}. Please set valid values in the current environment's .env files or process environment, then restart the application.",
+  "core_runtimeConfigInvalid": "{message}: Configuration validation failed for {fields}. Please check the configuration requirements, correct the values, then restart the application.",
+  "core_runtimeConfigProblem": "{message}: Configuration is missing or invalid: {fields}. Please check the configuration files or environment variables, supply or correct the values, then restart the application.",
+  "core_runtimeErrorCode": "Error code: {code}"
 }

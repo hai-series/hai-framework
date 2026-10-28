@@ -124,7 +124,7 @@ return result
 - [工作交接](packages/cli/templates/skills/hai-spec-implement/handoff.md)、[差异审查](packages/cli/templates/skills/hai-app-review/differential.md)、[行为回放](packages/cli/templates/skills/hai-spec-implement/evaluation.md)。
 - [界面设计约定与示例](.agents/instructions/ui-design.md)。技能目录与 name 一致；仓库和生成应用采用相同领域命名。
 
-- 宿主顺序与失败清理用 core.module.createRuntime；框架表迁移由模块 migrateIam/migrateReach/migrateScheduler/migrateAudit 预检及初始化负责，先备份停旧写入，MySQL DDL 可重入、旧凭据会话重新登录。
+- 宿主顺序与失败清理用 core.module.createRuntime；配置失败保留字段、底层错误码和处理建议，必需环境变量缺失用 HaiConfigError.CONFIG_ENV_VAR_MISSING + ext.fields 标识。框架表迁移由模块 migrateIam/migrateReach/migrateScheduler/migrateAudit 预检及初始化负责，先备份停旧写入，MySQL DDL 可重入、旧凭据会话重新登录。
 - 凭据 Reach 通知使用 sensitive/expiresAt/idempotencyKey，只留元数据回执，无明文/延迟重投。feedback.budget 为采集、附件总量、传输和离线包的共同来源；新工程通知默认 console 且 consoleContent 默认 metadata；摘要需显式开启。feedback.init(config, { collectEvidence }) 在持久采集任务中 await 业务 text/data/附件（含 ZIP/GZIP），遵守超时、脱敏和共享预算；webhookUrl 独立启用采集终态后的 feedback.created，持久重试、固定载荷、eventId 去重及可选 HMAC 签名，状态见 get().jobs，管理员 retry target: webhook。
 - hai upgrade <精确版本> 只读核对全发布与本地漂移；hai deploy --env prod --plan 只读部署计划，未检查远端基线不得声称成功；App 安装包使用 hai build --target app --platform android|ios，cap:sync 仅同步。
 

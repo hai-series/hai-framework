@@ -43,7 +43,7 @@ core.init({ configDir: './config', watchConfig: true })
 
 项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取；Core 自动加载和监听配置目录内所有 YAML，不设置保留文件名。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
 
-生命周期宿主可用 `core.module.createRuntime` 编排真实模块；失败消息保留模块、错误码与配置字段路径（包括缺失环境变量名），不回显配置值或 SDK 原始异常。即使启动边界只打印 `error.message`，也能定位配置项。
+生命周期宿主可用 `core.module.createRuntime` 编排真实模块；失败消息保留模块、错误码与配置字段路径，不回显配置值或 SDK 原始异常。启动配置错误附带原因和处理建议：`ext.fields` 配合 `HaiConfigError.CONFIG_ENV_VAR_MISSING.code` 明确提示环境变量未设置，`CONFIG_VALIDATION_ERROR.code` 或 Schema 异常提示校验未通过；只有字段路径时提示配置缺失或无效，不推断缺失。自定义启动钩子缺少必需变量时可抛出带上述错误码和 `ext: { fields: ['变量名'] }` 的异常。即使只打印 `error.message`，也能定位配置项并看到处理方式。
 
 ### 2. 使用功能
 

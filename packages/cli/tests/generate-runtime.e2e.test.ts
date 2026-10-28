@@ -247,7 +247,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
         }
       }
       if (appType === 'fullstack')
-        await expectMissing('HAI_ADMIN_DEFAULT_PASSWORD', ['bootstrap'])
+        await expectMissing('HAI_ADMIN_DEFAULT_PASSWORD', ['bootstrap', 'hai:core:013', '未设置必需的环境变量', '.env'])
       base = await start(service, entryArgs, selectedPort)
       await expectFailure({}, ['EADDRINUSE', String(selectedPort)])
       if (appType === 'fullstack') {

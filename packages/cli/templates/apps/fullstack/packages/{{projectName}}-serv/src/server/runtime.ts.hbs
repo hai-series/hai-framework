@@ -7,7 +7,7 @@ import { ai, AIConfigSchema } from '@h-ai/ai'
 {{/if}}
 import { audit, AuditInitConfigSchema } from '@h-ai/audit'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
-import { core } from '@h-ai/core'
+import { core, HaiConfigError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 {{#if features.feedback}}
 import { feedback } from '@h-ai/feedback'
@@ -143,7 +143,7 @@ async function ensureInitialSystemAdmin(): Promise<void> {
     return
   const password = process.env.HAI_ADMIN_DEFAULT_PASSWORD?.trim()
   if (!password)
-    throw Object.assign(new Error('Administrator bootstrap configuration required'), { ext: { fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } })
+    throw Object.assign(new Error('Administrator bootstrap configuration required'), { code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code, ext: { fields: ['HAI_ADMIN_DEFAULT_PASSWORD'] } })
   const registered = requireInitialized(await iam.user.createUser({ username: 'admin', password, displayName: serverM('admin') }), 'iam-bootstrap')
   const adminRole = requireInitialized(await iam.authz.getRoleByCode('admin'), 'iam-role')
   if (!adminRole)

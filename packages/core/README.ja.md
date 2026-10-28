@@ -602,7 +602,9 @@ unsubscribe()
 
 ## アプリケーションのライフサイクル
 
-`core.module.createRuntime([{ name, enabled?, start, close }])` は宣言順で起動し、逆順で終了して並行呼出しを統合します。部分初期化前に清理義務を登録し、終了失敗時はモジュールと依存を保持して次回 close/start で再試行します。エラーはモジュール・段階・コード・設定パスのみを示し、値や SDK 例外を公開しません。base/API/fullstack と管理画面が利用します。 短いエラーメッセージにもコードと設定パスを含め、不足する環境変数を特定できます。
+`core.module.createRuntime([{ name, enabled?, start, close }])` は宣言順で起動し、逆順で終了して並行呼出しを統合します。部分初期化前に清理義務を登録し、終了失敗時はモジュールと依存を保持して次回 close/start で再試行します。エラーはモジュール・段階・コード・設定パスのみを示し、値や SDK 例外を公開しません。base/API/fullstack と管理画面が利用します。
+
+起動エラーには設定の原因と対処方法を含めます。`ext.fields` がある場合、`HaiConfigError.CONFIG_ENV_VAR_MISSING` は環境変数の未設定、`CONFIG_VALIDATION_ERROR` または Schema エラーは検証失敗を示します。設定パスだけの場合は原因を推測せず「設定が不足しているか無効」と案内します。起動境界が `error.message` だけを表示しても、設定項目・対処方法・元のエラーコードを確認できます。独自の初期化フックで必須環境変数が不足した場合は、`code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code` と `ext: { fields: ['VARIABLE_NAME'] }` を持つ例外を使用できます。fullstack テンプレートの初期管理者パスワード検査もこの方式を使用します。
 
 ## エラー表示とログの関連付け
 
