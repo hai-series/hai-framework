@@ -483,24 +483,21 @@ components/
 <ToastContainer />
 ```
 
+通知は既定で右下に浮かび、ページのレイアウトを変えません。UI モジュールのテーマ色でお知らせ・成功・警告・エラーを区別し、淡い背景、細い色枠、種類別アイコンと控えめな影を使用し、手動で閉じられます。複数の通知は共通の FIFO キューから 1 件ずつ表示され、表示開始から計時します（既定 3 秒、`duration: 0` は手動で閉じるまで保持）。ルートに `<ToastContainer />` を 1 回だけ配置します。`toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` で位置を指定できます。`m.saved()` はアプリの翻訳関数です。位置は `bottom-right`（既定）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。保存やコピーの結果は Toast、フィールド検証や継続的な業務状態、復旧操作はインラインで表示します。`Alert` は淡い背景を使用します。
+
 > `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` を内蔵し、アプリ独自の toast ツールは不要です。`notifyError(err, fallback?)` は `Error`・文字列と代替文言を受け付け、既定は成功 3 秒・失敗 5 秒です。
 
-#### Message 表示
+状態層は軽量な `@h-ai/ui/toast` から `toast`、`notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning`、`errorMessage` を読み込めます。コンポーネントやガイド CSS は読み込みません。`ToastContainer` はコンポーネントの入口から読み込み、ルートに配置します。
 
-```svelte
-<script>
-  import { message, MessageContainer } from '@h-ai/ui'
+#### 通知の位置を指定する
 
-  function showMessage() {
-    message.success('操作成功')
-    message.error('操作失败')
-    message.warning('请注意')
-    message.info('提示信息', 5000)
-  }
-</script>
+以下の `m.saved()` はアプリの翻訳関数です。異なる位置の通知も共通のキューから順番に表示されます。
 
-<button onclick={showMessage}>消息</button>
-<MessageContainer />
+```ts
+import { toast } from '@h-ai/ui/toast'
+
+toast.add({ message: m.saved(), variant: 'success', position: 'top-right' })
+toast.add({ message: m.saved(), position: 'bottom-center' })
 ```
 
 #### 標準的な CRUD ページ

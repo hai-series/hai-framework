@@ -855,9 +855,9 @@ export interface ToastProps extends DataAttributes {
   message: string
   /** 变体 */
   variant?: Variant
-  /** 持续时间 (ms)，0 为不自动关闭 */
+  /** 展示后的持续时间 (ms)，默认 3000；排队等待不计时，0 为不自动关闭 */
   duration?: number
-  /** 位置 */
+  /** 浮动位置，默认 bottom-right；多个提示按加入顺序逐条显示 */
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center'
   /** 是否可关闭 */
   dismissible?: boolean

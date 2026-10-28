@@ -51487,6 +51487,162 @@
           ]
         },
         {
+          "subpath": "./toast",
+          "conditions": [
+            "import"
+          ],
+          "target": "./dist/toast.svelte.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "errorMessage",
+              "kind": "value",
+              "declaration": "errorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyError",
+              "kind": "value",
+              "declaration": "notifyError",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyInfo",
+              "kind": "value",
+              "declaration": "notifyInfo",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifySuccess",
+              "kind": "value",
+              "declaration": "notifySuccess",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyWarning",
+              "kind": "value",
+              "declaration": "notifyWarning",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "toast",
+              "kind": "value",
+              "declaration": "toast",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToastItem",
+              "kind": "type",
+              "declaration": "ToastItem",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./toast",
+          "conditions": [
+            "svelte"
+          ],
+          "target": "./dist/toast.svelte.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "errorMessage",
+              "kind": "value",
+              "declaration": "errorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyError",
+              "kind": "value",
+              "declaration": "notifyError",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyInfo",
+              "kind": "value",
+              "declaration": "notifyInfo",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifySuccess",
+              "kind": "value",
+              "declaration": "notifySuccess",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyWarning",
+              "kind": "value",
+              "declaration": "notifyWarning",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "toast",
+              "kind": "value",
+              "declaration": "toast",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToastItem",
+              "kind": "type",
+              "declaration": "ToastItem",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": "./toast",
+          "conditions": [
+            "types"
+          ],
+          "target": "./dist/toast.svelte.d.ts",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "errorMessage",
+              "kind": "value",
+              "declaration": "errorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyError",
+              "kind": "value",
+              "declaration": "notifyError",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyInfo",
+              "kind": "value",
+              "declaration": "notifyInfo",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifySuccess",
+              "kind": "value",
+              "declaration": "notifySuccess",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "notifyWarning",
+              "kind": "value",
+              "declaration": "notifyWarning",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "toast",
+              "kind": "value",
+              "declaration": "toast",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ToastItem",
+              "kind": "type",
+              "declaration": "ToastItem",
+              "declarationKind": "InterfaceDeclaration"
+            }
+          ]
+        },
+        {
           "subpath": "./vite",
           "conditions": [
             "import"

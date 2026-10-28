@@ -17,6 +17,9 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 | 输出 | 复用原子/组合/场景组件的界面及交互验证 |
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
+
+操作完成反馈统一使用 `toast` / `notifySuccess` 等，根布局只挂载一次 `ToastContainer`；默认右下角，由 UI 模块通过提示蓝/成功绿/警告黄/错误红等主题语义色统一提供浅色底、细色边及类型图标，可手工关闭且默认 3 秒消失。多个提示共用 FIFO 队列逐条展示，等待期间不计时；`toast.add({ message, position })` 可选六个方位，`duration: 0` 需手动移除。状态层使用轻量入口 `@h-ai/ui/toast`，避免总入口连带加载组件和引导 CSS。不要用行内 Alert 显示保存/复制成功；字段校验、持续业务状态与恢复操作保留行内，Alert 使用柔和背景。
+
 - 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
 - 多条件筛选使用 FilterBar 或 CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；提供 activeCount 和实际 onreset，收起不能丢值或隐式清空查询。复用组件状态及三语文案，不在页面复制折叠状态机。TableToolbar 已有弹层筛选可继续复用。
 

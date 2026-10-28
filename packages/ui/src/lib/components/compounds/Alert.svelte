@@ -7,7 +7,7 @@
   import { mount, unmount, createRawSnippet } from 'svelte'
   import type { ComponentProps } from 'svelte'
   import { Alert } from '@h-ai/ui'
-  const props: ComponentProps<typeof Alert> = { title: '保存成功', variant: 'success', children: createRawSnippet(() => ({ render: () => "<span>操作已经完成。</span>" })) }
+  const props: ComponentProps<typeof Alert> = { title: '服务状态', variant: 'info', children: createRawSnippet(() => ({ render: () => "<span>系统将于今晚进行维护。</span>" })) }
   const component = mount(Alert, { target: document.body, props })
   await unmount(component)
   ```
@@ -33,7 +33,7 @@
 
   const alertClass = $derived(
     cn(
-      'alert',
+      'alert alert-soft shadow-none',
       'flex items-start gap-3',
       getAlertVariantClass(variant),
       className,

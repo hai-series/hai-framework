@@ -24,6 +24,11 @@
       "svelte": "./dist/i18n.svelte.js",
       "import": "./dist/i18n.svelte.js"
     },
+    "./toast": {
+      "types": "./dist/toast.svelte.d.ts",
+      "svelte": "./dist/toast.svelte.js",
+      "import": "./dist/toast.svelte.js"
+    },
     "./theme": {
       "types": "./dist/theme-config.d.ts",
       "import": "./dist/theme-config.js"

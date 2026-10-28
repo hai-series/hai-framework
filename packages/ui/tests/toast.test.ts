@@ -4,25 +4,13 @@
  * =============================================================================
  */
 
-import type { ToastItem } from '../src/lib/toast.svelte.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // 由于 toast 使用 Svelte 5 Runes，需要模拟环境
 // 这里测试 toast 的核心逻辑
 
 /** Toast 模块类型 */
-interface ToastModule {
-  toast: {
-    items: ToastItem[]
-    add: (props: { message: string, variant: string, duration?: number, position?: string, dismissible?: boolean }) => string
-    remove: (id: string) => void
-    clear: () => void
-    success: (message: string, duration?: number) => string
-    error: (message: string, duration?: number) => string
-    warning: (message: string, duration?: number) => string
-    info: (message: string, duration?: number) => string
-  }
-}
+type ToastModule = typeof import('../src/lib/toast.svelte.js')
 
 describe('toastState', () => {
   let toast: ToastModule['toast']
@@ -112,7 +100,7 @@ describe('toastState', () => {
 
   it('应该设置默认位置', () => {
     toast.add({ message: '测试', variant: 'info' })
-    expect(toast.items[0].position).toBe('top-right')
+    expect(toast.items[0].position).toBe('bottom-right')
   })
 
   it('应该设置默认 dismissible', () => {
@@ -126,6 +114,43 @@ describe('toastState', () => {
 
     vi.advanceTimersByTime(10000)
     expect(toast.items.length).toBe(1) // 仍然存在
+  })
+
+  it('多个提示按顺序计时，等待中的提示不会提前过期', () => {
+    toast.success('第一条', 1000)
+    toast.info('第二条', 2000)
+    vi.advanceTimersByTime(1000)
+    expect(toast.items.map(item => item.message)).toEqual(['第二条'])
+    vi.advanceTimersByTime(1999)
+    expect(toast.items[0].message).toBe('第二条')
+    vi.advanceTimersByTime(1)
+    expect(toast.items).toEqual([])
+  })
+
+  it('关闭当前提示立即展示下一条，移除等待项不重置当前计时', () => {
+    const first = toast.info('第一条', 0)
+    const second = toast.info('第二条', 2000)
+    const third = toast.info('第三条', 500)
+    vi.advanceTimersByTime(10000)
+    expect(toast.items).toHaveLength(3)
+    toast.remove(first)
+    vi.advanceTimersByTime(1500)
+    toast.remove(third)
+    vi.advanceTimersByTime(500)
+    expect(toast.items.find(item => item.id === second)).toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('清空时同时取消队列和计时器，新提示可正常计时', () => {
+    toast.success('第一条', 1000)
+    toast.info('第二条', 1000)
+    toast.clear()
+    expect(vi.getTimerCount()).toBe(0)
+    toast.info('新提示', 2000)
+    vi.advanceTimersByTime(1000)
+    expect(toast.items[0].message).toBe('新提示')
+    vi.advanceTimersByTime(1000)
+    expect(toast.items).toEqual([])
   })
 })
 

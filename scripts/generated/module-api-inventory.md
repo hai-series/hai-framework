@@ -125,6 +125,9 @@
 | @h-ai/ui | `./i18n (types)` | 12 |
 | @h-ai/ui | `./theme (import)` | 25 |
 | @h-ai/ui | `./theme (types)` | 25 |
+| @h-ai/ui | `./toast (import)` | 7 |
+| @h-ai/ui | `./toast (svelte)` | 7 |
+| @h-ai/ui | `./toast (types)` | 7 |
 | @h-ai/ui | `./vite (import)` | 2 |
 | @h-ai/ui | `./vite (types)` | 2 |
 | @h-ai/ui | `./components/ 下的显式入口（13 个真实子路径，见 JSON）` | 逐项记录 |

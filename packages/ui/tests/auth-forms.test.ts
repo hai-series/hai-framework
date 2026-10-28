@@ -2,9 +2,12 @@
 import type { AuthPanelConfig, LoginFormData, LoginFormProps } from '../src/lib/components/scenes/types.js'
 import { err, ok } from '@h-ai/core'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
-import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { AuthPanel, LoginForm, RegisterForm } from '../src/lib/components/scenes/iam/index.js'
 import { setUILocale } from '../src/lib/messages.js'
+import { toast } from '../src/lib/toast.svelte.js'
+
+afterEach(() => toast.clear())
 
 const config: AuthPanelConfig = {
   login: { password: true, ldap: false, email: false, sms: false },
@@ -94,7 +97,7 @@ describe('authentication form extensions and agreements', () => {
     }
   })
 
-  it('找回密码通知保留表单与重置入口，并随语言更新', async () => {
+  it('找回密码成功使用浮动通知，表单保留重置入口且支持切换语言', async () => {
     setUILocale('zh-CN')
     const target = document.createElement('div')
     document.body.append(target)
@@ -107,11 +110,11 @@ describe('authentication form extensions and agreements', () => {
     try {
       flushSync()
       target.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))
-      await vi.waitFor(() => expect(target.textContent).toContain('重置通知已发送'))
+      await vi.waitFor(() => expect(toast.items[0]?.message).toContain('重置通知已发送'))
+      expect(target.querySelector('.alert-success')).toBeNull()
       expect(target.querySelector('.forgot-password-form')).not.toBeNull()
       setUILocale('en-US')
       flushSync()
-      expect(target.textContent).toContain('If the account exists')
       const reset = [...target.querySelectorAll('button')].find(button => button.textContent === 'I have a reset token')!
       expect(reset).toBeDefined()
       reset.click()
@@ -119,6 +122,7 @@ describe('authentication form extensions and agreements', () => {
       expect(target.querySelector('.reset-password-form')).not.toBeNull()
     }
     finally {
+      toast.clear()
       setUILocale('zh-CN')
       await unmount(component)
       target.remove()

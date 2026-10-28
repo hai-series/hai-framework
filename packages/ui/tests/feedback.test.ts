@@ -8,6 +8,7 @@ import FeedbackForm from '../src/lib/components/scenes/app/FeedbackForm.svelte'
 import FeedbackList from '../src/lib/components/scenes/app/FeedbackList.svelte'
 import FeedbackModal from '../src/lib/components/scenes/app/FeedbackModal.svelte'
 import { setUILocale } from '../src/lib/messages.js'
+import { toast } from '../src/lib/toast.svelte.js'
 import FeedbackFilesHarness from './fixtures/FeedbackFilesHarness.svelte'
 
 beforeEach(() => vi.stubGlobal('ResizeObserver', class {
@@ -16,6 +17,7 @@ beforeEach(() => vi.stubGlobal('ResizeObserver', class {
   disconnect() {}
 }))
 afterEach(() => {
+  toast.clear()
   setUILocale('zh-CN')
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
@@ -341,6 +343,8 @@ describe('feedback collection', () => {
       button(target, '保存反馈到本地').click()
       await vi.waitFor(() => expect(onexport).toHaveBeenCalledOnce())
       expect(onexport.mock.calls[0]?.[0]).toMatchObject({ description: 'The save button did nothing', files: [file] })
+      await vi.waitFor(() => expect(toast.items[0]?.message).toBe('已开始下载反馈文件。'))
+      expect(target.textContent).not.toContain('已开始下载反馈文件。')
     }
     finally {
       await unmount(component)

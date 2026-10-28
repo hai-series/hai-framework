@@ -483,24 +483,21 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 <ToastContainer />
 ```
 
+Toasts float at the bottom right by default without shifting layout, using UI-owned semantic colors for information, success, warning and error, with a soft tinted background, a narrow color border, a distinct icon and a subtle shadow. They can be dismissed manually. Notifications share one FIFO queue and appear one at a time; each timer starts when its notification is shown (3 seconds by default, `duration: 0` waits for dismissal). Mount `<ToastContainer />` once in the root layout. Set a position with `toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })`, where `m.saved()` is an application translation. Positions: `bottom-right` (default), `top-right`, `bottom-center`, `top-center`, `bottom-left`, `top-left`. Use Toast for save/copy results. Keep field validation, persistent business status and recovery actions inline; `Alert` uses a soft background.
+
 > Built-in `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` remove the need for application toast wrappers. `notifyError(err, fallback?)` accepts `Error` or strings with a fallback message. Success lasts 3s and errors 5s by default.
 
-#### Message feedback
+State modules can import `toast`, `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` and `errorMessage` from the lightweight `@h-ai/ui/toast` entry without loading components or tour CSS. Import `ToastContainer` from a component entry and mount it in the root layout.
 
-```svelte
-<script>
-  import { message, MessageContainer } from '@h-ai/ui'
+#### Choosing a Toast position
 
-  function showMessage() {
-    message.success('操作成功')
-    message.error('操作失败')
-    message.warning('请注意')
-    message.info('提示信息', 5000)
-  }
-</script>
+The application provides the `m.saved()` translation below. Notifications at different positions still share one queue and appear in order.
 
-<button onclick={showMessage}>消息</button>
-<MessageContainer />
+```ts
+import { toast } from '@h-ai/ui/toast'
+
+toast.add({ message: m.saved(), variant: 'success', position: 'top-right' })
+toast.add({ message: m.saved(), position: 'bottom-center' })
 ```
 
 #### Typical CRUD page

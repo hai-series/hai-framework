@@ -26,8 +26,15 @@ export interface ToastItem extends ToastProps {
  */
 class ToastState {
   items = $state<ToastItem[]>([])
-  /** 自动关闭定时器 */
-  private timers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** 仅队首计时，等待项在展示后才开始计算停留时间。 */
+  private timer: ReturnType<typeof setTimeout> | undefined
+
+  private startTimer(): void {
+    const item = this.items[0]
+    if (item && (item.duration ?? 0) > 0) {
+      this.timer = setTimeout(() => this.remove(item.id), item.duration)
+    }
+  }
 
   /**
    * 添加 Toast
@@ -47,20 +54,14 @@ class ToastState {
       ...props,
       id,
       duration: props.duration ?? 3000,
-      position: props.position ?? 'top-right',
+      position: props.position ?? 'bottom-right',
       dismissible: props.dismissible ?? true,
     }
 
     this.items = [...this.items, item]
 
-    // 自动关闭
-    if ((item.duration ?? 0) > 0) {
-      const timer = setTimeout(() => {
-        this.timers.delete(id)
-        this.remove(id)
-      }, item.duration)
-      this.timers.set(id, timer)
-    }
+    if (this.items.length === 1)
+      this.startTimer()
 
     return id
   }
@@ -78,12 +79,14 @@ class ToastState {
    * ```
    */
   remove(id: string): void {
-    const timer = this.timers.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      this.timers.delete(id)
+    const isCurrent = this.items[0]?.id === id
+    if (isCurrent) {
+      clearTimeout(this.timer)
+      this.timer = undefined
     }
     this.items = this.items.filter(item => item.id !== id)
+    if (isCurrent)
+      this.startTimer()
   }
 
   /**
@@ -98,10 +101,8 @@ class ToastState {
    * ```
    */
   clear(): void {
-    for (const timer of this.timers.values()) {
-      clearTimeout(timer)
-    }
-    this.timers.clear()
+    clearTimeout(this.timer)
+    this.timer = undefined
     this.items = []
   }
 
@@ -194,7 +195,7 @@ const SUCCESS_DURATION = 3000
 const ERROR_DURATION = 5000
 
 /**
- * 弹出操作成功提示（右上角）。
+ * 弹出操作成功提示（默认右下角）。
  *
  * @description 统一封装 toast 单例，业务应用无需自建 toast 工具文件即可获得一致的成功反馈。
  *
@@ -214,7 +215,7 @@ export function notifySuccess(message: string, duration: number = SUCCESS_DURATI
 }
 
 /**
- * 弹出操作失败提示（右上角）。
+ * 弹出操作失败提示（默认右下角）。
  *
  * @description 接受 `Error` 或字符串；`Error` 取其 message，其余回退到 fallback，
  *   避免各业务页面重复实现错误文案兜底逻辑。
@@ -260,7 +261,7 @@ export function errorMessage(error: unknown, fallback = ''): string {
 }
 
 /**
- * 弹出信息提示（右上角）。
+ * 弹出信息提示（默认右下角）。
  *
  * @param message - 用户可见文案（已本地化）。
  * @param duration - 可选停留时长（毫秒），默认 3000。
@@ -278,7 +279,7 @@ export function notifyInfo(message: string, duration: number = SUCCESS_DURATION)
 }
 
 /**
- * 弹出警告提示（右上角）。
+ * 弹出警告提示（默认右下角）。
  *
  * @param message - 用户可见文案（已本地化）。
  * @param duration - 可选停留时长（毫秒），默认 5000。

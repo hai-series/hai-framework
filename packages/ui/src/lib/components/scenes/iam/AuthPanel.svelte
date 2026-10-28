@@ -30,6 +30,7 @@
   import { err, HaiCommonError } from '@h-ai/core'
   import { onMount, untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
+  import { toast } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
@@ -120,7 +121,7 @@
           notice = 'auth_registration_pending'
         }
         else {
-          if (authenticate && actions.renewPassword && ['hai:iam:007', 'hai:iam:025'].includes(result.error.code))
+          if (authenticate && actions.renewPassword && (result.error.code === 'hai:iam:007' || result.error.code === 'hai:iam:025'))
             mode = 'renew'
           actionError = result.error
         }
@@ -129,7 +130,8 @@
         await onauthenticated?.()
       }
       else {
-        notice = successNotice
+        if (successNotice)
+          toast.success(uiM(successNotice))
       }
     }
     catch { networkFailed = true }
@@ -177,7 +179,7 @@
         <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
         <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
       {:else}
-        {#if notice}<Alert variant='success' class='mb-4'>{uiM(notice)}</Alert>{/if}
+        {#if notice}<p role='status' class='mb-4 text-sm text-base-content/70'>{uiM(notice)}</p>{/if}
         <span role='status' class='sr-only'>{verifying ? uiM('auth_captcha_verifying') : ''}</span>
         {#if mode === 'login'}
           <LoginForm {initialIdentifier} submitText={verifying ? uiM('auth_captcha_verifying') : undefined} {columns} {labelPosition} {labelWidth} {methods} {loading} {errors} header={loginHeader} extraFields={loginFields} showForgotPassword={config.passwordReset.enabled} {forgotPasswordUrl}

@@ -3,7 +3,7 @@
   =============================================================================
   @h-ai/ui - ToastContainer 组件
   =============================================================================
-  Toast 容器组件，显示所有 Toast 通知
+  浮动操作提示容器，按先后顺序逐条显示，不占用页面布局。
 
   使用 Svelte 5 Runes ($derived / $effect)
 
@@ -29,19 +29,17 @@
   import { onMount } from 'svelte'
   import { uiM } from '../../messages.js'
   import { toast } from '../../toast.svelte.js'
-  import { cn, getAlertVariantClass, getDataAttributes } from '../../utils.js'
+  import { cn, getDataAttributes } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
 
   const { ...restProps }: DataAttributes = $props()
   const dataAttributes = $derived(getDataAttributes(restProps))
 
-  const positionMap = {
-    'top-right': 'toast-top toast-end',
-    'top-left': 'toast-top toast-start',
-    'bottom-right': 'toast-bottom toast-end',
-    'bottom-left': 'toast-bottom toast-start',
-    'top-center': 'toast-top toast-center',
-    'bottom-center': 'toast-bottom toast-center',
+  const iconMap = {
+    info: 'icon-[tabler--info-circle] text-info',
+    success: 'icon-[tabler--circle-check] text-success',
+    warning: 'icon-[tabler--alert-triangle] text-warning',
+    error: 'icon-[tabler--circle-x] text-error',
   }
 
   // 容器根元素引用。
@@ -49,20 +47,7 @@
 
   const hasItems = $derived(toast.items.length > 0)
 
-  // 按位置分组
-  const groupedItems = $derived(() => {
-    const groups: Record<string, typeof toast.items> = {}
-
-    for (const item of toast.items) {
-      const position = item.position ?? 'top-right'
-      if (!groups[position]) {
-        groups[position] = []
-      }
-      groups[position].push(item)
-    }
-
-    return groups
-  })
+  const currentItems = $derived(toast.items.slice(0, 1))
 
   /** 找到最顶层处于打开状态的原生 modal dialog（位于浏览器 top layer）。 */
   function findTopModalDialog(): HTMLDialogElement | null {
@@ -166,23 +151,23 @@
 </script>
 
 <div {...dataAttributes} bind:this={layerElement} popover='manual' class='hai-toast-layer'>
-  {#each Object.entries(groupedItems()) as [position, items] (position)}
-    <div class={cn('toast', positionMap[position as keyof typeof positionMap])}>
-      {#each items as item (item.id)}
-        <div class={cn('alert', getAlertVariantClass(item.variant ?? 'info'))}>
-          <span>{item.message}</span>
-          {#if item.dismissible}
-            <IconButton
-              variant='ghost'
-              size='sm'
-              onclick={() => toast.remove(item.id)}
-              ariaLabel={uiM('toast_dismiss')}
-            >
-              ✕
-            </IconButton>
-          {/if}
-        </div>
-      {/each}
+  {#each currentItems as item (item.id)}
+    <div class='hai-toast-position' data-position={item.position ?? 'bottom-right'}>
+      <div {...getDataAttributes(item)} class='hai-toast-item text-base-content' role={item.variant === 'error' ? 'alert' : 'status'} aria-live={item.variant === 'error' ? 'assertive' : 'polite'} aria-atomic='true' data-variant={item.variant ?? 'info'}>
+        <span aria-hidden='true' class={cn('size-5 shrink-0', iconMap[item.variant as keyof typeof iconMap] ?? iconMap.info)}></span>
+        <span class='hai-toast-message'>{item.message}</span>
+        {#if item.dismissible}
+          <IconButton
+            variant='ghost'
+            size='sm'
+            class='shrink-0 text-base-content/45'
+            onclick={() => toast.remove(item.id)}
+            ariaLabel={uiM('toast_dismiss')}
+          >
+            ✕
+          </IconButton>
+        {/if}
+      </div>
     </div>
   {/each}
 </div>
@@ -202,12 +187,81 @@
     background: transparent;
     overflow: visible;
     pointer-events: none;
+    z-index: var(--hai-z-toast, 1200);
   }
 
-  /* 未支持 Popover API 的浏览器忽略 popover 属性，容器常驻文档流；
+  /* 未支持 Popover API 的浏览器忽略 popover 属性，容器仍保持固定定位；
      此时无 toast 项则内部不渲染任何内容，容器透明且不拦截交互。 */
 
-  .hai-toast-layer :global(.toast) {
+  .hai-toast-position {
+    position: absolute;
+    width: min(24rem, calc(100% - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+    right: max(1rem, env(safe-area-inset-right, 0px));
+    bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .hai-toast-position[data-position^='top-'] {
+    top: max(1rem, env(safe-area-inset-top, 0px));
+    bottom: auto;
+  }
+
+  .hai-toast-position[data-position$='-left'] {
+    left: max(1rem, env(safe-area-inset-left, 0px));
+    right: auto;
+  }
+
+  .hai-toast-position[data-position$='-center'] {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+
+  .hai-toast-item {
+    --hai-toast-accent: var(--color-info);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-width: 1px;
+    border-style: solid;
+    border-color: color-mix(in oklab, var(--hai-toast-accent) 20%, var(--color-base-100));
+    border-inline-start: 3px solid var(--hai-toast-accent);
+    background: color-mix(in oklab, var(--hai-toast-accent) 5%, var(--color-base-100));
+    border-radius: var(--hai-radius-md, 8px);
+    box-shadow: 0 4px 18px oklch(0 0 0 / 0.08);
     pointer-events: auto;
+    animation: hai-toast-enter 150ms ease-out;
+  }
+
+  .hai-toast-item[data-variant='success'] {
+    --hai-toast-accent: var(--color-success);
+  }
+
+  .hai-toast-item[data-variant='warning'] {
+    --hai-toast-accent: var(--color-warning);
+  }
+
+  .hai-toast-item[data-variant='error'] {
+    --hai-toast-accent: var(--color-error);
+  }
+
+  .hai-toast-message {
+    flex: 1;
+    min-width: 0;
+    max-height: min(20rem, 60dvh);
+    overflow: auto;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  @keyframes hai-toast-enter {
+    from { opacity: 0; transform: translateY(0.25rem); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hai-toast-item { animation: none; }
   }
 </style>

@@ -62,7 +62,7 @@
 <form data-testid='sensitive-operations-form' {...dataAttributes} class='space-y-4' onsubmit={save}>
   <label class='block space-y-2 text-sm font-medium'>
     <span>{uiM('sensitive_operations_label')}</span>
-    <Textarea bind:value rows={6} disabled={loading} aria-label={uiM('sensitive_operations_label')} />
+    <Textarea bind:value rows={6} disabled={loading} />
   </label>
   <p class='text-sm text-base-content/60'>{uiM('sensitive_operations_hint')}</p>
   {#if error}<p role='alert' class='text-sm text-error'>{error}</p>{/if}

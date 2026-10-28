@@ -482,24 +482,21 @@ components/
 <ToastContainer />
 ```
 
+默认在右下角浮动显示，不占页面布局；由 UI 模块统一使用提示蓝、成功绿、警告黄、错误红等主题语义色，以浅色底、细色边和对应图标区分，并保留轻阴影，支持手工关闭。多个提示进入同一 FIFO 队列，逐条展示，每条从展示时开始计时（默认 3 秒，`duration: 0` 等待手工关闭）。根布局只挂载一次 `<ToastContainer />`。用 `toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` 指定方位；`m.saved()` 是应用自身的翻译函数。可选 `bottom-right`（默认）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。保存、复制等操作结果使用 Toast；字段校验、持续业务状态和恢复操作保留行内，`Alert` 使用柔和背景。
+
 > 已内置 `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` 封装，业务应用无需自建 toast 工具文件：`notifyError(err, fallback?)` 接受 `Error` 或字符串并内置兑底文案，默认成功 3s / 失败 5s。
 
-#### Message 消息提示
+状态层可从轻量入口 `@h-ai/ui/toast` 导入 `toast`、`notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` 和 `errorMessage`，不会连带加载组件及引导 CSS；`ToastContainer` 仍从组件入口导入并在根布局挂载。
 
-```svelte
-<script>
-  import { message, MessageContainer } from '@h-ai/ui'
+#### 指定提示方位
 
-  function showMessage() {
-    message.success('操作成功')
-    message.error('操作失败')
-    message.warning('请注意')
-    message.info('提示信息', 5000)
-  }
-</script>
+下例 `m.saved()` 由应用自己的 i18n 提供；不同方位也共用同一个队列，按顺序展示。
 
-<button onclick={showMessage}>消息</button>
-<MessageContainer />
+```ts
+import { toast } from '@h-ai/ui/toast'
+
+toast.add({ message: m.saved(), variant: 'success', position: 'top-right' })
+toast.add({ message: m.saved(), position: 'bottom-center' })
 ```
 
 #### 典型 CRUD 页面

@@ -13,7 +13,7 @@
   import type { FeedbackAnnotation, FeedbackAttachmentView, FeedbackEvidenceSummary, FeedbackEvidenceView, FeedbackFormData, FeedbackReceipt } from './feedback-types.js'
   import { untrack } from 'svelte'
   import { uiM } from '../../../messages.js'
-  import { errorMessage } from '../../../toast.svelte.js'
+  import { errorMessage, toast } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -110,7 +110,6 @@
   let filesError = $state(false)
   let exporting = $state(false)
   let recording = $state(false)
-  let exported = $state(false)
   let expandedMaterials = $state<string[]>([])
   let error = $state('')
   let previousKey = $state(untrack(() => resetKey))
@@ -141,7 +140,6 @@
       filesError = false
       removedAttachmentIds = []
       receipt = undefined
-      exported = false
       error = ''
     }
   })
@@ -181,7 +179,8 @@
     exporting = true
     error = ''
     try {
-      exported = await onexport(values()) !== false
+      if (await onexport(values()) !== false)
+        toast.info(uiM('feedback_local_saved'))
     }
     catch (cause) {
       error = errorMessage(cause, uiM('feedback_action_failed'))
@@ -252,7 +251,7 @@
     {/if}
     {#if error}<div class='alert alert-error break-words' role='alert'>{error}</div>{/if}
     {#if receipt}
-      <div role='status' class='alert alert-success block space-y-2 break-words'>
+      <div role='status' class='alert alert-soft alert-success shadow-none block space-y-2 break-words'>
         <p class='font-medium'>{uiM('feedback_accepted', { number: receipt.number })}</p>
         <p>{collectionLabel(receipt.collectionStatus)}</p>
         <p class='text-sm'>{uiM('feedback_accepted_hint')}</p>
@@ -268,7 +267,7 @@
         {#if oncapture}<Button size='sm' variant='outline' disabled={loading || annotating || staging || exporting} onclick={() => oncapture()}>{uiM('feedback_capture_add')}</Button>{/if}
         <label class='btn btn-sm btn-ghost focus-within:outline focus-within:outline-primary'>
           {uiM('feedback_add_files')}
-          <BareInput id={`${instanceId}-files`} type='file' aria-label={uiM('feedback_add_files')} accept='.png,.jpg,.jpeg,.webp,.webm,.mp4,.txt,.log,.json,.pdf,.zip,.gz,.tgz,image/png,image/jpeg,image/webp,video/webm,video/mp4,text/plain,application/json,application/pdf,application/zip,application/gzip' multiple disabled={loading || staging || exporting} class='sr-only' onchange={selectFiles} />
+          <BareInput id={`${instanceId}-files`} type='file' accept='.png,.jpg,.jpeg,.webp,.webm,.mp4,.txt,.log,.json,.pdf,.zip,.gz,.tgz,image/png,image/jpeg,image/webp,video/webm,video/mp4,text/plain,application/json,application/pdf,application/zip,application/gzip' multiple disabled={loading || staging || exporting} class='sr-only' onchange={selectFiles} />
         </label>
         {#if onfileschange}<FeedbackRecorder maxBytes={recordingBytes} disabled={loading || annotating || staging || exporting || attachmentLimitReached} onactive={recordingChanged} onrecord={recorded} />{/if}
       </div>
@@ -328,7 +327,6 @@
         </details>
       {/if}
     {/if}
-    {#if exported}<p class='text-sm text-success' role='status'>{uiM('feedback_local_saved')}</p>{/if}
   </div>
   <div class='shrink-0 flex flex-wrap justify-end gap-2 border-t border-base-content/10 bg-base-100 pt-4 pb-2'>
     {#if onexport}<Button variant='ghost' loading={exporting} disabled={annotating || staging} onclick={saveLocal}>{uiM('feedback_local_export')}</Button>{/if}
