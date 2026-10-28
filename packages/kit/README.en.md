@@ -267,6 +267,10 @@ Because the browser may read this configuration, `_kit.yml` must contain only pu
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A integration (Agent Card + JSON-RPC)                                |
 | `onError`    | `function`                               | Custom error handling                                                  |
 
+Request/response summaries use the `trace` level. Logging is enabled by default and `logBody` defaults to false. Query values come from the original `request.url`, while the path remains SvelteKit's current `event.url.pathname`. Logging does not access the tracked `event.url.search/searchParams`, so static pages can prerender with logging enabled. Password/token/secret, authorization and API-key fields are redacted in queries and optional JSON-body logs. The body is read from a clone and remains available to application code.
+
+Automatic request auditing runs only when `audit.isInitialized`. Static sites and applications without Audit need not initialize it for this handle. State is checked per request, so modules may initialize after the handle is created. Applications selecting Audit must still check `audit.init()` and stop startup on failure. Explicit `audit.log/capture` calls retain their uninitialized errors, and initialized modules still report actual write failures as `Request audit failed`. Mandatory business auditing must check explicit results and enforce the application's transaction rules.
+
 With `crypto.encryptedCookies`, also provide `crypto.cookieEncryptionKey` or `HAI_KIT_COOKIE_KEY`. Missing keys fail immediately in `createHandle()`. Plaintext, damaged ciphertext, or decryption failures for protected cookies are treated as absent; encryption failures never fall back to writing plaintext.
 
 Authentication cookies default to `Secure` when either `NODE_ENV` or `HAI_CORE_ENV` is `production`; `HAI_E2E` / `HAI_E2E_MOCK` do not relax cookie security. Production rate limiting recognizes both flags; only explicit test switches permit memory counters.
@@ -344,7 +348,7 @@ export const PATCH = handler
 
 ## Error messages and correlated logs
 
-HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+HTTP errors carry safe localized messages and a reference ID. ToastContainer hides the ID by default and reveals it through its diagnostic icon. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
 

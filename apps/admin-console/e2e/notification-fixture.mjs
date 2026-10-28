@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 /** 仅 E2E 使用的通知收件箱；真实 HTTP 往返，不输出或持久化验证码/令牌。 */
 import { createServer } from 'node:http'
 import process from 'node:process'
+import { core } from '@h-ai/core'
 import { GenericContainer, Wait } from 'testcontainers'
 
 const messages = new Map()
@@ -71,7 +72,14 @@ async function start() {
     })
   }
 }
-void start().catch(() => {
+void start().catch(async (error) => {
   process.exitCode = 1
-  process.stderr.write('Notification fixture failed to start')
+  core.logger.error('Notification fixture failed to start', { error })
+  try {
+    await ldap?.stop()
+    ldap = undefined
+  }
+  catch (cleanupError) {
+    core.logger.error('Notification fixture cleanup failed', { error: cleanupError })
+  }
 })

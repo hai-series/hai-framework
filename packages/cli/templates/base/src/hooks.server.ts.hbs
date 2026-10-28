@@ -111,10 +111,7 @@ const haiHandle = kit.createHandle({
     return new Response(
       JSON.stringify({
         success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        },
+        error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
       }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     )

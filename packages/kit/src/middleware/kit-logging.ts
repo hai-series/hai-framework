@@ -24,7 +24,7 @@ export interface LoggingMiddlewareConfig {
   logBody?: boolean
   /** 为 `true` 时记录响应头 */
   logResponse?: boolean
-  /** 指定需要脱敏的字段名（默认 `['password', 'token', 'secret']`） */
+  /** 查询参数和 JSON 正文的脱敏字段；默认包含 password/token/secret、授权/API Key 和银行卡字段。 */
   redactFields?: string[]
 }
 
@@ -65,7 +65,8 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       requestId,
       method: event.request.method,
       path: event.url.pathname,
-      query: Object.fromEntries(event.url.searchParams),
+      // SvelteKit 预渲染禁止读取追踪 URL 的查询；日志只读原请求，不建立页面路由依赖。
+      query: redactObject(Object.fromEntries(new URL(event.request.url).searchParams), redactFields),
       userAgent: event.request.headers.get('user-agent'),
       ip: clientIp,
     }

@@ -273,6 +273,10 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A 統合（Agent Card + JSON-RPC）                               |
 | `onError`    | `function`                               | 独自のエラー処理                                                |
 
+リクエスト/レスポンス概要は `trace` レベルで記録します。ログは既定で有効、`logBody` は既定で無効です。クエリーは元の `request.url`、パスは SvelteKit の現在の `event.url.pathname` を使用します。追跡付き `event.url.search/searchParams` を読まないため、ログを有効にした静的ページも事前生成できます。クエリーと任意の JSON 本文ログでは password/token/secret、認証、API キーなどを秘匿します。本文は複製から読み、アプリ側で引き続き利用できます。
+
+リクエストの自動監査は `audit.isInitialized` の場合だけ実行します。静的サイトや Audit を選択しないアプリは handle のために初期化する必要がありません。各リクエストで確認するため、handle 作成後のモジュール初期化にも対応します。Audit を選択したアプリは `audit.init()` の結果を確認し、失敗時は起動を止めます。明示的な `audit.log/capture` の未初期化エラーは維持し、初期化済みモジュールの実際の書込み失敗は `Request audit failed` として記録します。必須の業務監査では明示的な結果を確認し、業務トランザクションの規則を適用してください。
+
 `crypto.encryptedCookies` を設定する場合、`crypto.cookieEncryptionKey` または `HAI_KIT_COOKIE_KEY` が必要です。鍵がなければ `createHandle()` ですぐエラーになります。保護対象 Cookie の平文・破損暗号文・復号失敗は未存在として扱い、暗号化失敗時も平文保存に切り替えません。
 
 認証 Cookie は `NODE_ENV` または `HAI_CORE_ENV` が `production` の場合に `Secure` を既定で有効にします。`HAI_E2E` / `HAI_E2E_MOCK` は Cookie の安全要件を緩和しません。本番のレート制限も両方の環境変数を認識し、明示的なテストフラグだけがメモリカウンターを許可します。
@@ -342,7 +346,7 @@ export const PATCH = handler
 
 ## エラー表示とログの関連付け
 
-HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 

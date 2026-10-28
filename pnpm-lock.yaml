@@ -1918,6 +1918,9 @@ importers:
       svelte:
         specifier: 'catalog:'
         version: 5.57.2(@typescript-eslint/types@8.71.1)
+      testcontainers:
+        specifier: 'catalog:'
+        version: 12.2.0(supports-color@7.2.0)
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.29)(supports-color@7.2.0)(typescript@6.0.3)(yaml@2.9.1)

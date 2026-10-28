@@ -273,6 +273,10 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A 协议集成（Agent Card + JSON-RPC）                             |
 | `onError`    | `function`                               | 自定义错误处理                                                    |
 
+请求/响应摘要使用 `trace` 日志级别；`logging` 默认开启，`logBody` 默认关闭。日志查询从原始 `request.url` 读取，路径保留 SvelteKit 当前路由的 `event.url.pathname`，不会读取预渲染受限的 `event.url.search/searchParams`；静态页无需为构建关闭日志。查询和启用后的 JSON 正文在日志入口对 password/token/secret、授权/API Key 等字段脱敏，正文使用请求副本读取，不影响业务处理。
+
+请求自动审计仅在 `audit.isInitialized` 时执行，纯静态站点或未选 Audit 的应用无需为 handle 初始化它。该状态在每个请求中判断，因此 handle 可先创建、模块随后初始化。选择了 Audit 的应用仍必须检查 `audit.init()` 结果并在失败时停止启动；业务显式 `audit.log/capture` 的未初始化错误不变，已初始化模块的真实写入失败仍记录 `Request audit failed`。需要强制审计的业务应检查显式审计结果，并按业务事务约束提交。
+
 配置 `crypto.encryptedCookies` 时必须同时提供 `crypto.cookieEncryptionKey`，或设置 `HAI_KIT_COOKIE_KEY`。缺少密钥会在 `createHandle()` 时立即报错；受保护 Cookie 的明文、损坏密文或解密失败都按不存在处理，加密失败也不会回退写入明文。
 
 认证 Cookie 的 `Secure` 默认值在 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 时开启，`HAI_E2E` / `HAI_E2E_MOCK` 不降低 Cookie 安全要求。生产限流同样识别这两个环境标志；仅显式测试开关可放宽内存计数器限制。
@@ -342,7 +346,7 @@ export const PATCH = handler
 
 ## 错误提示与关联日志
 
-HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
 

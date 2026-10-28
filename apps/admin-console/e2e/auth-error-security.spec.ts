@@ -15,7 +15,7 @@ async function capture(page: Page, name: string) {
 }
 
 async function dismissToasts(page: Page) {
-  const dismiss = page.locator('.hai-toast-layer button')
+  const dismiss = page.locator('.hai-toast-layer').getByRole('button', { name: '关闭', exact: true })
   for (let count = 0; count < 10 && await dismiss.count(); count++)
     await dismiss.click()
 }
@@ -39,7 +39,8 @@ test('登录、首次改密和个人改密共用友好安全提示，完成改�
   await reset.locator('input[type=password]').nth(1).fill('Recovery-example123!')
   await reset.locator('button[type=submit]').click()
   await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText(/无效或已过期/)
-  await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText('traceId:')
+  await expect(page.locator('.hai-toast-item[data-variant=error]')).not.toContainText('traceId:')
+  await expect(page.getByRole('button', { name: '查看排查信息', exact: true })).toBeVisible()
   await capture(page, 'admin-reset-invalid-link-1440')
   await page.goto('/auth/login')
   await waitForHydration(page)
@@ -48,7 +49,8 @@ test('登录、首次改密和个人改密共用友好安全提示，完成改�
     await submitLogin(page, username, 'Incorrect-example123!')
     const error = page.locator('.hai-toast-item[data-variant=error]')
     await expect(error).toContainText('用户名或密码不正确')
-    await expect(error).toContainText('traceId:')
+    await expect(error).not.toContainText('traceId:')
+    await expect(error.getByRole('button', { name: '查看排查信息', exact: true })).toBeVisible()
     await expect(error).not.toContainText(/用户不存在|原密码错误|账户未设置密码/)
   }
   await capture(page, 'admin-login-credentials-1440')
@@ -62,7 +64,8 @@ test('登录、首次改密和个人改密共用友好安全提示，完成改�
   await renew.locator('#confirm-password').fill(initial)
   await renew.locator('button[type=submit]').click()
   await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText('新密码不能与当前密码相同')
-  await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText('traceId:')
+  await expect(page.locator('.hai-toast-item[data-variant=error]')).not.toContainText('traceId:')
+  await expect(page.getByRole('button', { name: '查看排查信息', exact: true })).toBeVisible()
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 960 })
     await capture(page, `admin-initial-password-same-${width}`)

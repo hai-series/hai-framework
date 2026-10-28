@@ -87,6 +87,7 @@
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "svelte": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

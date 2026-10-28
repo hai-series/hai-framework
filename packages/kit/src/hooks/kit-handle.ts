@@ -138,6 +138,9 @@ export function createHandle(config: HandleConfig = {}): Handle {
       let guardDenied = false
       let requestFailed = false
       const captureRequest = async (status: number) => {
+        // 与 Serv 自动审计边界一致：纯站点可不装配 Audit；已就绪模块的写入失败仍须报告。
+        if (!audit.isInitialized)
+          return
         const resource = event.route.id ?? 'unmatched'
         const written = await audit.capture({
           action: 'request.execute',
