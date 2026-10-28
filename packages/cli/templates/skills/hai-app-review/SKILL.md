@@ -17,6 +17,8 @@ description: "审查 hai 应用的框架复用、安全边界、返回契约、�
 
 ## 审查路径
 
+发现表达、状态区分与同步检查遵循[沟通与同步维护](../hai-app-create/collaboration.md)。审查范围内核对使用文档、配置示例、截图、测试、模板和调用方是否需要更新。
+
 对代码差异读取 [差异审查](differential.md)：固定 base/head，先核对需求符合性，再按真实风险检查历史约束、直接与关键间接调用方。完整应用审查使用同样的需求追踪与发现复核，说明实际覆盖范围。发现、修复和验收沿 [工作交接契约](../hai-spec-implement/handoff.md) 记录。
 
 1. 读取当前项目入口规则、用户指定需求、package scripts、lockfile 与差异，确认 SvelteKit、API workspace、fullstack 或 Vite/原生架构。业务以当前明确需求为准；模板角色、流程、限额和生成代码是初始实现，不能据此否定新需求或要求恢复已被替代的行为。

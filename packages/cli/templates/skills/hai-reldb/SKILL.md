@@ -23,7 +23,7 @@ description: "使用 @h-ai/reldb 访问 SQLite/PostgreSQL/MySQL，编写 SQL、C
 - SQL 值参数化；where/orderBy/json 列名不是任意用户输入。分页使用 PaginatedResult。
 - MySQL 的 pool 仅 max/acquireTimeout/queueLimit；超时返回 TIMEOUT 并移除排队项，队列满返回 POOL_EXHAUSTED，迟到建连结算前仍占槽位。min/idleTimeout/timezone 不支持。URL 优先于分字段且禁止 query/fragment；TLS 仅 false 或严格对象，默认验证证书和 DNS 身份，验证开启的 IP 目标拒绝，cert/key 成对。详见 reference 的配置章节。
 
-错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId，提示末尾显示 traceId；重新翻译后用 core.error.formatMessage 保留标识。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
+错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId；重新翻译后用 core.error.formatMessage 保留关联。ToastContainer 默认只显示可读说明，自动将编号移入排查信息图标，展开后可查看、复制并提供给客户支持或开发人员。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
 
 ## 按需参考
 

@@ -35,6 +35,23 @@ async function createSkill() {
 }
 
 describe('skill reference delivery contract', () => {
+  it.each([
+    ['invalid YAML', contract.replace('name: hai-sample', 'An instruction accidentally inserted here.\nname: hai-sample')],
+    ['duplicate keys', contract.replace('name: hai-sample', 'name: hai-other\nname: hai-sample')],
+    ['non-string description', contract.replace('description: Exercise a local skill resource.', 'description: [not, a, description]')],
+    ['invalid name', contract.replace('name: hai-sample', 'name: HAI_SAMPLE')],
+  ])('rejects %s frontmatter that skill loaders cannot consume', async (_, content) => {
+    const { root, skillsRoot, skillPath } = await createSkill()
+    await writeFile(path.join(skillPath, 'SKILL.md'), content)
+    expect((await checkSkillContracts(root, [skillsRoot])).failures.length).toBeGreaterThan(0)
+  })
+
+  it('accepts a folded multiline YAML description', async () => {
+    const { root, skillsRoot, skillPath } = await createSkill()
+    await writeFile(path.join(skillPath, 'SKILL.md'), contract.replace('description: Exercise a local skill resource.', 'description: >\n  Exercise a local\n  skill resource.'))
+    expect((await checkSkillContracts(root, [skillsRoot])).failures).toEqual([])
+  })
+
   it('rejects a skill whose declared name differs from its discoverable directory', async () => {
     const { root, skillsRoot, skillPath } = await createSkill()
     await writeFile(path.join(skillPath, 'SKILL.md'), contract.replace('name: hai-sample', 'name: hai-other'))

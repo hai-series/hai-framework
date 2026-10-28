@@ -23,10 +23,10 @@ description: "配置 hai 应用启动、YAML/环境变量、日志、i18n 与 Ha
 - `HAI_<配置名>_<路径>` 可整体覆盖根/对象/数组；父节点优先，未覆盖时才遍历已有叶子。camelCase 不拆词，约定变量优先于显式插值。
 - 环境文件采用六类：`.env.example` 完整列出字段用途、默认值、枚举和范围；`.env` 为公共基础；`.env.dev`、`.env.test`、`.env.prod` 为公共环境覆盖，这五类均提交 Git。`.env.local` 为本机私有配置，不提交 Git。优先级为进程环境 > `.env.local` > 环境文件 > `.env`；Vite 在 Node 配置阶段调用 `core.config.loadEnvFiles({ mode, envDir })` 并检查 success 后注入进程，Node 脚本按相同顺序传入 `--env-file`。`core.init` 不自行读取 dotenv。
 - 配置 getter 与 ID/logger 方法不是 HaiResult；validate/load 等须检查 success。
-- 日志可用 `{ error }` 记录原生 Error；两端先规范化诊断再字段/URL 脱敏，配置 redact 路径仍生效。原异常不变，错误子图循环/深度用固定标记；message/stack 自由文本中的秘密需调用方先清理或遮蔽整条路径。
+- 日志可用 `{ error }` 记录原生 Error；两端先规范化诊断再字段/URL 脱敏，配置 redact 路径仍生效。默认包含 passwordHash、passwd、secretKey 等实际凭据字段；异常文本清理显式凭据标签和 URL，不保证识别无标签秘密。原异常不变，错误子图循环/深度用固定标记；业务隐私仍由调用方清理或遮蔽整条路径。
 - 初始化前创建的默认、模块与嵌套 child Logger 在后续输出中应用当前全局 logging；configure/setLevel 也作用于已有实例。create 的显式 level/format/context 优先，未指定项动态继承。浏览器 json/pretty 与附加 redact 路径实际生效，消息文本仍由调用方脱敏。
 
-错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId，提示末尾显示 traceId；重新翻译后用 core.error.formatMessage 保留标识。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
+错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId；重新翻译后用 core.error.formatMessage 保留关联。ToastContainer 默认只显示可读说明，自动将编号移入排查信息图标，展开后可查看、复制并提供给客户支持或开发人员。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
 
 ## 按需参考
 

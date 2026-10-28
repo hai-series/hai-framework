@@ -200,7 +200,7 @@ await reldb.init({
 })
 ```
 
-操作ログには固定の操作名とSQL長・パラメータ数・バッチ数のみを記録します。SQL本文、値、ドライバーのエラー内容は失敗時も出力しません。
+操作ログには固定の操作名、SQL 長、パラメーター数、バッチ件数を記録します。失敗時は、エラーコード、traceId、許可リストに含まれるマスキング済みのドライバーメッセージとスタックも保持します。SQL 全文、バインド値、接続設定をそのまま記録することはありません。
 
 ### トランザクション
 
@@ -208,10 +208,15 @@ await reldb.init({
 
 #### wrap（自動コミット/ロールバック）
 
+コールバックが正常に戻ると、失敗した HaiResult を返した場合もコミットされます。各操作の結果を確認し、失敗時は例外を投げてロールバックしてください。wrap は TRANSACTION_FAILED を返します。元の業務エラーを保つ場合は下記の手動トランザクションを使用します。各例は初期化が成功し、users テーブルが作成済みであることを前提とします。
+
 ```ts
 const result = await reldb.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
+  for (const name of ['Alice', 'Bob']) {
+    const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
+    if (!inserted.success)
+      throw new Error(inserted.error.message, { cause: inserted.error })
+  }
   return 'ok'
 })
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
@@ -220,40 +225,66 @@ const result = await reldb.tx.wrap(async (tx) => {
 #### begin + commit（手動コミット）
 
 ```ts
+// 放在 async 业务函数内，失败时向调用方返回 HaiResult。
 const txResult = await reldb.tx.begin()
-if (!txResult.success) { /* 处理错误 */ }
+if (!txResult.success)
+  return txResult
 const tx = txResult.data
-
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
-await tx.commit()
+try {
+  for (const name of ['Alice', 'Bob']) {
+    const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
+    if (!inserted.success) {
+      const rolledBack = await tx.rollback()
+      return rolledBack.success ? inserted : rolledBack
+    }
+  }
+  return await tx.commit()
+}
+catch (error) {
+  const rolledBack = await tx.rollback()
+  if (!rolledBack.success)
+    return rolledBack
+  throw error // 只传播非业务异常，由宿主边界处理。
+}
 ```
 
 #### begin + rollback（手動ロールバック）
 
 ```ts
+// 独立脚本：试写后回滚，不保留用户数据。
 const txResult = await reldb.tx.begin()
-if (!txResult.success) { /* 处理错误 */ }
+if (!txResult.success)
+  throw new Error(txResult.error.message, { cause: txResult.error })
 const tx = txResult.data
-
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-// 业务检查失败，手动回滚
-await tx.rollback()
+// 两个 API 均返回 HaiResult；同时失败时保留执行和回滚两份原因。
+const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', ['Alice'])
+const rolledBack = await tx.rollback()
+if (!inserted.success && !rolledBack.success)
+  throw new AggregateError([inserted.error, rolledBack.error], rolledBack.error.message)
+if (!inserted.success)
+  throw new Error(inserted.error.message, { cause: inserted.error })
+if (!rolledBack.success)
+  throw new Error(rolledBack.error.message, { cause: rolledBack.error })
 ```
 
 #### トランザクション内での batch / queryPage
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
-  await tx.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+  const inserted = await tx.batch([
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Alice'] },
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Bob'] },
   ])
+  if (!inserted.success)
+    throw new Error(inserted.error.message, { cause: inserted.error })
 
   const page = await tx.queryPage<{ id: number, name: string }>({
     sql: 'SELECT id, name FROM users ORDER BY id',
     pagination: { page: 1, pageSize: 10 },
   })
+  if (!page.success)
+    throw new Error(page.error.message, { cause: page.error })
+  return page.data
 })
 ```
 
@@ -361,9 +392,18 @@ const found = await userCrud.existsById(1)
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
-  await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
-  await userCrud.updateById(1, { name: '新名字' }, tx)
-  const user = await userCrud.findById(1, tx)
+  const created = await userCrud.create({ name: 'Alice', email: 'alice@example.com' }, tx)
+  if (!created.success)
+    throw new Error(created.error.message, { cause: created.error })
+  if (created.data.lastInsertRowid === undefined)
+    throw new Error('Insert did not return an ID')
+  const updated = await userCrud.updateById(created.data.lastInsertRowid, { name: 'Alice Smith' }, tx)
+  if (!updated.success)
+    throw new Error(updated.error.message, { cause: updated.error })
+  const user = await userCrud.findById(created.data.lastInsertRowid, tx)
+  if (!user.success)
+    throw new Error(user.error.message, { cause: user.error })
+  return user.data
 })
 ```
 
@@ -602,7 +642,7 @@ if (!result.success) {
 
 一意制約違反は `HaiReldbError.DUPLICATE_ENTRY`（409）に統一し、タイムアウトや待機列満杯など既存のコードは保持します。翻訳済みメッセージやドライバー文字列ではなくコードで分岐してください。ログには code/schema/routine/constraint とスタック行番号を残し、数値のバインド値でこれらの診断識別子を隠しません。
 
-HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 

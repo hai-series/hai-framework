@@ -730,7 +730,7 @@ const app = serv.createApp({
 
 Native Audio WebSocket uses the same safe error boundary: internal Provider/SDK messages and stacks remain in sanitized logs, while clients receive stable codes, safe messages and traceId. Custom cross-origin configuration must preserve X-Hai-Reauthentication for sensitive actions; Serv/Kit defaults allow it.
 
-HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+HTTP errors carry safe localized messages and a reference ID. ToastContainer hides the ID by default and reveals it through its diagnostic icon. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
 

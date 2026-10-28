@@ -5,6 +5,8 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 # hai-module-create — 模块创建决策手册
 
+开发沟通和交付前同步检查遵循[沟通与同步维护](../../../packages/cli/templates/skills/hai-app-create/collaboration.md)，按实际影响维护使用文档、配置示例、截图、测试、CLI 模板和调用方。
+
 ## 能力契约
 
 | 项目     | 契约                                                                                         |

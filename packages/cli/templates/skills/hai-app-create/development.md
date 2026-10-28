@@ -22,6 +22,8 @@ README 编辑先读章节，把功能说明与示例合并到对应章节；新�
 
 ### 页面与布局
 
+纯展示官网可用website模板加`--features none`明确空选择，默认模板行为不变；none不能与其他模块/空项混用。静态发布使用`HAI_BUILD_STATIC=1`及公开`PUBLIC_BASE_PATH`（如/hai-framework，无末尾/），先确认没有服务端业务模块/API/actions。它不启用数据库/IAM、不放宽生产守卫，也不赋予静态联系表单发送能力；构建和实际子路径验证按[hai-build](../hai-build/SKILL.md)。
+
 页面共用根布局的 header/footer。独立移动应用的页面放在 `src/lib/pages/**/*.svelte`，Fullstack 放在 `packages/<name>-shared/src/lib/pages/**/*.svelte`，由 `HashRouter` 和 `import.meta.glob` 自动发现；新增页面无需修改路由表，菜单按业务配置入口。SvelteKit 保留 `src/routes/**/+page.svelte` 自动文件路由、服务端鉴权和刷新定位。
 
 ### 环境配置

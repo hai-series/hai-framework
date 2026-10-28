@@ -23,7 +23,9 @@ description: "接入或排查 @h-ai/api-client typed API、登录 Token、自动
 4. 同步服务端与客户端的刷新、加密和错误处理；切换配置前 close，任务结束释放客户端。
 5. 验证登录、刷新重试、失败、退出与会话恢复。
 
-错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId，提示末尾显示 traceId；重新翻译后用 core.error.formatMessage 保留标识。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
+错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId；重新翻译后用 core.error.formatMessage 保留关联。ToastContainer 默认只显示可读说明，自动将编号移入排查信息图标，展开后可查看、复制并提供给客户支持或开发人员。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
+
+非 2xx HTTP 响应中的合法失败 HaiResult 保留服务端业务码、消息与 traceId，以真实 HTTP 状态执行脱敏。验证 409 冲突、422 输入错误、429 限流和 5xx，不只测试 HTTP 200 业务失败；UI 包装 Error 时通过 cause 保留 HaiError。
 
 ## 按需参考
 

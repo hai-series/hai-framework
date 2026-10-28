@@ -37,7 +37,8 @@
     "generate:api": "node scripts/module-api-inventory.mjs",
     "check:api": "node scripts/module-api-inventory.mjs --check",
     "test:api": "node scripts/module-api-smoke.mjs",
-    "check:jsdoc": "node scripts/check-module-jsdoc.mjs"
+    "check:jsdoc": "node scripts/check-module-jsdoc.mjs",
+    "check:usage-examples": "node scripts/check-usage-examples.mjs"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
@@ -51,7 +52,8 @@
     "svelte-eslint-parser": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "yaml": "catalog:"
   },
   "overrides": {
     "eslint-plugin-yml": "3.9.0"

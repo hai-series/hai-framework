@@ -4,9 +4,9 @@
 
 Framework modules, `apps/` examples and CLI templates include Simplified Chinese (`zh-CN`), English (`en-US`) and Japanese (`ja-JP`). `core.i18n.setGlobalLocale('ja')` normalizes to `ja-JP`; applications expose a language menu.
 
-> Currently in the `0.1.0-alpha` stage: public contracts are still evolving. Pin versions and validate security and capacity for your own use cases before production adoption.
+> The current development version is `1.0.0-beta.1`. The source version does not establish npm availability; check the registry before installing and validate security, capacity and recovery for your use cases.
 
-For production deployments with multiple instances, review the [22-package shared-state and recovery matrix (Chinese)](.agents/instructions/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
+For production deployments using stateful backends, including a single instance, review the [22-package shared-state and recovery matrix (Chinese)](.agents/instructions/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. A purely static website needs no database or cache and contains none of their business APIs. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
 
 <p align="center">
   <strong>AI Runtime · Enterprise full-stack modules · Agent Skills · End-to-end type safety</strong>
@@ -40,13 +40,15 @@ A consistent API style brings together four capability groups, helping AI assist
 
 ## Start here
 
-| Your task                               | Entry point                                                                 |
-| --------------------------------------- | --------------------------------------------------------------------------- |
-| Create an application                   | [Create, develop and deliver](docs/usage/README.en.md)                      |
-| Use a capability in an existing project | [Module catalog](#module-catalog), then the package getting started section |
-| Develop with an AI assistant            | [AI index](LLMS.txt) and the generated project AGENTS.md                    |
-| Build images or deploy offline          | [Build and deployment](packages/deploy/README.en.md)                        |
-| Contribute to the framework             | [Development](#development) and [workspace rules](AGENTS.md)                |
+| Your task                                     | Entry point                                                                                                                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create an application                         | [Create, develop and deliver](docs/usage/README.en.md)                                                                                                                                 |
+| Create a static website or publish to Pages   | [Static website configuration and limits (Chinese)](docs/usage/configuration/delivery.md#静态website与github-pages); [framework website application](apps/framework-website/README.md) |
+| Configure environments, defaults and behavior | [Application configuration handbook (Chinese)](docs/usage/configuration/README.md)                                                                                                     |
+| Use a capability in an existing project       | [Module catalog](#module-catalog), then the package getting started section                                                                                                            |
+| Develop with an AI assistant                  | [AI index](LLMS.txt) and the generated project AGENTS.md                                                                                                                               |
+| Build images or deploy offline                | [Build and deployment](packages/deploy/README.en.md)                                                                                                                                   |
+| Contribute to the framework                   | [Development](#development) and [workspace rules](AGENTS.md)                                                                                                                           |
 
 ## Highlights
 
@@ -114,9 +116,13 @@ These minimum versions follow the [official Node.js security release on 2026-10-
 
 ### Create a project
 
+The example uses `1.0.0-beta.1`. Confirm that npm has this version before installing. An unversioned install selects `latest`, which does not automatically select beta.
+
 ```bash
-# Install the CLI
-pnpm add -g @h-ai/cli
+# Check the published channel and version, then install the CLI
+pnpm view @h-ai/cli dist-tags
+pnpm view @h-ai/cli@1.0.0-beta.1 version
+pnpm add -g @h-ai/cli@1.0.0-beta.1
 
 # Create Web + API with deployment support; omit options for prompts
 hai create my-app --type fullstack --frontends web --yes

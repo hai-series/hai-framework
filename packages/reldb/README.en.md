@@ -200,7 +200,7 @@ await reldb.init({
 })
 ```
 
-Operation logs contain only fixed operation names and numeric SQL/parameter/batch counts. SQL text, values and driver error content are excluded, including failure paths.
+Operation logs contain fixed operation names and SQL length, parameter count, and batch count. Failure logs also retain error codes, traceId, and allowlisted, sanitized driver messages and stacks for diagnosis. Full SQL, bound parameters, and connection configuration are not logged directly.
 
 ### Transactions
 
@@ -208,10 +208,15 @@ Three approaches:
 
 #### wrap (automatic commit/rollback)
 
+A normally returned transaction callback commits, even if it returns a failed HaiResult. Check every operation and throw on failure to trigger rollback; wrap returns TRANSACTION_FAILED. Use an explicit transaction below to preserve the original domain error. The examples assume successful initialization and an existing users table.
+
 ```ts
 const result = await reldb.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
+  for (const name of ['Alice', 'Bob']) {
+    const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
+    if (!inserted.success)
+      throw new Error(inserted.error.message, { cause: inserted.error })
+  }
   return 'ok'
 })
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
@@ -220,40 +225,66 @@ const result = await reldb.tx.wrap(async (tx) => {
 #### begin + commit (explicit commit)
 
 ```ts
+// 放在 async 业务函数内，失败时向调用方返回 HaiResult。
 const txResult = await reldb.tx.begin()
-if (!txResult.success) { /* 处理错误 */ }
+if (!txResult.success)
+  return txResult
 const tx = txResult.data
-
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
-await tx.commit()
+try {
+  for (const name of ['Alice', 'Bob']) {
+    const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
+    if (!inserted.success) {
+      const rolledBack = await tx.rollback()
+      return rolledBack.success ? inserted : rolledBack
+    }
+  }
+  return await tx.commit()
+}
+catch (error) {
+  const rolledBack = await tx.rollback()
+  if (!rolledBack.success)
+    return rolledBack
+  throw error // 只传播非业务异常，由宿主边界处理。
+}
 ```
 
 #### begin + rollback (explicit rollback)
 
 ```ts
+// 独立脚本：试写后回滚，不保留用户数据。
 const txResult = await reldb.tx.begin()
-if (!txResult.success) { /* 处理错误 */ }
+if (!txResult.success)
+  throw new Error(txResult.error.message, { cause: txResult.error })
 const tx = txResult.data
-
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-// 业务检查失败，手动回滚
-await tx.rollback()
+// 两个 API 均返回 HaiResult；同时失败时保留执行和回滚两份原因。
+const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', ['Alice'])
+const rolledBack = await tx.rollback()
+if (!inserted.success && !rolledBack.success)
+  throw new AggregateError([inserted.error, rolledBack.error], rolledBack.error.message)
+if (!inserted.success)
+  throw new Error(inserted.error.message, { cause: inserted.error })
+if (!rolledBack.success)
+  throw new Error(rolledBack.error.message, { cause: rolledBack.error })
 ```
 
 #### batch / queryPage inside transactions
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
-  await tx.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+  const inserted = await tx.batch([
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Alice'] },
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Bob'] },
   ])
+  if (!inserted.success)
+    throw new Error(inserted.error.message, { cause: inserted.error })
 
   const page = await tx.queryPage<{ id: number, name: string }>({
     sql: 'SELECT id, name FROM users ORDER BY id',
     pagination: { page: 1, pageSize: 10 },
   })
+  if (!page.success)
+    throw new Error(page.error.message, { cause: page.error })
+  return page.data
 })
 ```
 
@@ -361,9 +392,18 @@ All methods accept `tx` and automatically route operations to that transaction c
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
-  await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
-  await userCrud.updateById(1, { name: '新名字' }, tx)
-  const user = await userCrud.findById(1, tx)
+  const created = await userCrud.create({ name: 'Alice', email: 'alice@example.com' }, tx)
+  if (!created.success)
+    throw new Error(created.error.message, { cause: created.error })
+  if (created.data.lastInsertRowid === undefined)
+    throw new Error('Insert did not return an ID')
+  const updated = await userCrud.updateById(created.data.lastInsertRowid, { name: 'Alice Smith' }, tx)
+  if (!updated.success)
+    throw new Error(updated.error.message, { cause: updated.error })
+  const user = await userCrud.findById(created.data.lastInsertRowid, tx)
+  if (!user.success)
+    throw new Error(user.error.message, { cause: user.error })
+  return user.data
 })
 ```
 
@@ -602,7 +642,7 @@ Production requires PostgreSQL/MySQL. SQLite, including disk files, is for devel
 
 Unique constraint violations return `HaiReldbError.DUPLICATE_ENTRY` (409); timeout, pool exhaustion and other existing error codes remain intact. Branch on error codes rather than localized messages or driver text. Logs preserve driver code/schema/routine/constraint and stack line numbers; numeric bound values do not obscure these diagnostic identifiers.
 
-HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+HTTP errors carry safe localized messages and a reference ID. ToastContainer hides the ID by default and reveals it through its diagnostic icon. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
 

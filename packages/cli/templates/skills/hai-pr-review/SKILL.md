@@ -17,6 +17,8 @@ description: "审查 PR、提交或分支的实际差异、调用影响、需求
 
 ## 审查路径
 
+按[沟通与同步维护](../hai-app-create/collaboration.md)核对使用文档、配置示例、截图、测试、模板及调用方，结论区分已确认问题与待验证事项。
+
 1. 读取仓库入口和 PR/任务目标，确认比较对象。按 [差异审查](../hai-app-review/differential.md) 固定 base/head、列全文件与重命名，说明 staged/unstaged 和截断限制。
 2. 先将需求、验收与实际 diff 对照，检查遗漏、范围扩张和陈旧模板断言。代码符合性、安全、框架复用和生命周期沿 [hai-app-review](../hai-app-review/SKILL.md)；界面涉及交互或布局时调用已交付的 hai-ui-review，纯 API 不需要它。
 3. 按风险读取调用方、类型、配置、迁移、历史和测试；删除校验、事务、资源归属检查时核验真实替代约束。两行权限改动仍可能需要深入分析。

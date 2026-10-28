@@ -200,7 +200,7 @@ await reldb.init({
 })
 ```
 
-操作日志仅包含固定操作名和SQL长度、参数数量、批量数量等安全摘要；失败路径也不记录SQL原文、值或驱动错误内容。
+操作日志记录固定操作名、SQL 长度、参数数量和批量数量等摘要。失败日志额外保留错误码、traceId 以及白名单内的脱敏驱动消息和堆栈，便于定位；不会直接记录整份 SQL、绑定参数或连接配置。
 
 ### 事务
 
@@ -208,10 +208,15 @@ await reldb.init({
 
 #### wrap（自动提交/回滚）
 
+事务回调正常返回就会提交，返回失败 HaiResult 也不例外。必须检查每一步结果，并在失败时抛出异常触发回滚；wrap 会把异常转为 TRANSACTION_FAILED。需要保留原领域错误时，使用下方手动事务。各片段假定数据库已成功初始化且 users 表已经创建。
+
 ```ts
 const result = await reldb.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
+  for (const name of ['Alice', 'Bob']) {
+    const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
+    if (!inserted.success)
+      throw new Error(inserted.error.message, { cause: inserted.error })
+  }
   return 'ok'
 })
 // 回调正常返回 → 自动提交；抛异常 → 自动回滚
@@ -220,40 +225,66 @@ const result = await reldb.tx.wrap(async (tx) => {
 #### begin + commit（分步提交）
 
 ```ts
+// 放在 async 业务函数内，失败时向调用方返回 HaiResult。
 const txResult = await reldb.tx.begin()
-if (!txResult.success) { /* 处理错误 */ }
+if (!txResult.success)
+  return txResult
 const tx = txResult.data
-
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
-await tx.commit()
+try {
+  for (const name of ['Alice', 'Bob']) {
+    const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', [name])
+    if (!inserted.success) {
+      const rolledBack = await tx.rollback()
+      return rolledBack.success ? inserted : rolledBack
+    }
+  }
+  return await tx.commit()
+}
+catch (error) {
+  const rolledBack = await tx.rollback()
+  if (!rolledBack.success)
+    return rolledBack
+  throw error // 只传播非业务异常，由宿主边界处理。
+}
 ```
 
 #### begin + rollback（分步回滚）
 
 ```ts
+// 独立脚本：试写后回滚，不保留用户数据。
 const txResult = await reldb.tx.begin()
-if (!txResult.success) { /* 处理错误 */ }
+if (!txResult.success)
+  throw new Error(txResult.error.message, { cause: txResult.error })
 const tx = txResult.data
-
-await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-// 业务检查失败，手动回滚
-await tx.rollback()
+// 两个 API 均返回 HaiResult；同时失败时保留执行和回滚两份原因。
+const inserted = await tx.execute('INSERT INTO users (name) VALUES (?)', ['Alice'])
+const rolledBack = await tx.rollback()
+if (!inserted.success && !rolledBack.success)
+  throw new AggregateError([inserted.error, rolledBack.error], rolledBack.error.message)
+if (!inserted.success)
+  throw new Error(inserted.error.message, { cause: inserted.error })
+if (!rolledBack.success)
+  throw new Error(rolledBack.error.message, { cause: rolledBack.error })
 ```
 
 #### 事务内使用 batch / queryPage
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
-  await tx.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+  const inserted = await tx.batch([
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Alice'] },
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['Bob'] },
   ])
+  if (!inserted.success)
+    throw new Error(inserted.error.message, { cause: inserted.error })
 
   const page = await tx.queryPage<{ id: number, name: string }>({
     sql: 'SELECT id, name FROM users ORDER BY id',
     pagination: { page: 1, pageSize: 10 },
   })
+  if (!page.success)
+    throw new Error(page.error.message, { cause: page.error })
+  return page.data
 })
 ```
 
@@ -361,9 +392,18 @@ const found = await userCrud.existsById(1)
 
 ```ts
 await reldb.tx.wrap(async (tx) => {
-  await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
-  await userCrud.updateById(1, { name: '新名字' }, tx)
-  const user = await userCrud.findById(1, tx)
+  const created = await userCrud.create({ name: 'Alice', email: 'alice@example.com' }, tx)
+  if (!created.success)
+    throw new Error(created.error.message, { cause: created.error })
+  if (created.data.lastInsertRowid === undefined)
+    throw new Error('Insert did not return an ID')
+  const updated = await userCrud.updateById(created.data.lastInsertRowid, { name: 'Alice Smith' }, tx)
+  if (!updated.success)
+    throw new Error(updated.error.message, { cause: updated.error })
+  const user = await userCrud.findById(created.data.lastInsertRowid, tx)
+  if (!user.success)
+    throw new Error(user.error.message, { cause: user.error })
+  return user.data
 })
 ```
 
@@ -602,7 +642,7 @@ if (!result.success) {
 
 唯一约束冲突统一返回 `HaiReldbError.DUPLICATE_ENTRY`（409）；超时、队列已满等已有错误码保持不变。业务按错误码分支，不解析本地化消息或驱动错误文本。日志保留驱动 code/schema/routine/constraint 和堆栈行号；数字绑定值不会误遮蔽这些诊断标识。
 
-HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
 

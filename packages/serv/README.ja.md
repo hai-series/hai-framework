@@ -730,7 +730,7 @@ const app = serv.createApp({
 
 ネイティブ Audio WebSocket も安全なエラー境界を使います。Provider/SDK の内部情報やスタックはマスク済みログだけに残し、クライアントには安定コード、安全な表示、traceId を返します。独自 CORS 設定でも機密操作の X-Hai-Reauthentication を許可してください。Serv/Kit の既定設定には含まれます。
 
-HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 

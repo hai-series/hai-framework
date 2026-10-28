@@ -2,6 +2,7 @@ import { access, readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { isMap, parseDocument } from 'yaml'
 
 const ROOT = process.cwd()
 const SKILL_ROOTS = [
@@ -33,15 +34,20 @@ async function findSkillDirectories(directory) {
 function validateSkill(root, path, content) {
   const failures = []
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/u)?.[1] ?? ''
-  const name = frontmatter.match(/^name:\s*['"]?([a-z\d-]+)['"]?\s*$/mu)?.[1]
+  const document = parseDocument(frontmatter)
+  if (document.errors.length > 0)
+    failures.push(`frontmatter YAML 无效: ${document.errors.map(error => error.message.split('\n')[0]).join('; ')}`)
+  const metadata = isMap(document.contents) ? document.contents : undefined
+  const name = metadata?.get('name')
+  const description = metadata?.get('description')
 
-  if (name && name !== basename(dirname(path)))
+  if (typeof name === 'string' && name !== basename(dirname(path)))
     failures.push(`skill name 与目录名不一致: ${name} / ${basename(dirname(path))}`)
 
-  if (!/^name:\s*\S+/mu.test(frontmatter))
-    failures.push('frontmatter 缺少 name')
-  if (!/^description:\s*\S+/mu.test(frontmatter))
-    failures.push('frontmatter 缺少 description')
+  if (typeof name !== 'string' || !/^[a-z\d]+(?:-[a-z\d]+)*$/u.test(name))
+    failures.push('frontmatter name 必须是小写字母、数字及连字符组成的名称')
+  if (typeof description !== 'string' || !description.trim())
+    failures.push('frontmatter description 必须是非空字符串')
   if (!/^## 能力契约\s*$/mu.test(content))
     failures.push('缺少“## 能力契约”章节')
 

@@ -35,7 +35,7 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 
 状态层可从轻量 `@h-ai/ui/i18n` 导入同一个 `authErrorMessage`，避免加载场景组件；管理台、移动/桌面示例与模板保持一致。
 
-认证错误复用公开 `authErrorMessage(error)`（IAM 组件入口）：凭据错误统一，不显示未知原文，保留有效 traceId；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误行内展示，操作成功和认证错误均使用统一 Toast。
+认证错误复用公开 `authErrorMessage(error)`（IAM 组件入口）：凭据错误统一，不显示未知原文，traceId 默认隐藏、由排查图标展开；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；所有警告、字段错误、操作成功和认证错误均使用统一 Toast，字段保留定位与读屏关联。
 
 读取 [完整工作流程与按需参考](../../../packages/cli/templates/skills/hai-ui/SKILL.md)，共享契约只在该位置维护。仓库开发先按 [工作规范](../../instructions/workspace.md) 选择模块、应用与测试规范；框架 API 以本仓库真实公开导出与类型核验，发布包消费者以安装版本核验。
 

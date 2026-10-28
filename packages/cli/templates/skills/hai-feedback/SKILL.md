@@ -44,9 +44,9 @@ addFiles 按批次原子加入附件：任一文件失败不改变原草稿的�
 
 并发 `init` 返回 `INIT_IN_PROGRESS`；`close` 等待有界截图退出后清理会话。截图期间关闭使 `prepare` 返回失败，不复活草稿。异步标注完成时若草稿已冻结、关闭、删除图片或被另一标注更新，则返回 `CONFLICT`，不改变已提交附件的字节或 checksum。
 
-captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非凭据用户/租户 persistenceKey。keyScreenshots 默认 true，受 screenshot 总开关控制，maxKeyScreenshots 默认3/上限5，keyScreenshotThrottleMs 默认10000ms。data-feedback-action 标记关键操作，data-feedback-private 遮挡敏感区域，data-feedback-ignore 排除反馈界面自身。回放、普通 Cookie 白名单和持久化由产品明确启用。
+captureConsole/persistDraft/keyScreenshots 默认 false；持久化启用时由宿主提供非凭据用户/租户 persistenceKey。关键截图受 screenshot 总开关控制，maxKeyScreenshots 默认3/上限5，keyScreenshotThrottleMs 默认10000ms。data-feedback-action 标记关键操作，data-feedback-private 遮挡敏感区域，data-feedback-ignore 排除反馈界面自身。回放、普通 Cookie 白名单和持久化由产品明确启用。
 
-自动截图从脱敏克隆 DOM 经 SVG foreignObject 重建可见页面；跨域图片、iframe/video、未就绪网络字体可能缺失。浏览器或 CSP 限制失败时标 missing 并保留手动附件入口。
+自动截图使用 html2canvas 渲染遮挡后的克隆 DOM；跨域图片、iframe/video、未就绪网络字体可能缺失。浏览器或 CSP 限制失败时标 missing 并保留手动附件入口。
 
 本地附件支持 PNG/JPEG/WebP、WebM/MP4、TXT/LOG、JSON、PDF、ZIP/GZ/TGZ；空 MIME 或 application/octet-stream 按受支持扩展名识别，常见别名规范化，服务端仍校验实际字节/checksum。普通输入框截图保留底色与边框，内容替换为固定遮罩字符；密码框、data-feedback-private、rr-block/rr-mask 整块遮挡。原 DOM/输入值不变，页面回放仍 maskAllInputs。验证须覆盖本地选择、实际上传、离线导出及普通/私密控件的截图像素。
 
@@ -62,6 +62,8 @@ captureConsole/persistDraft 默认 false；持久化启用时由宿主提供非�
 Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capacitor，启动时 configureFeedbackSaving(saveTauriFeedbackFile/saveCapacitorFeedbackFile)，生成工程自动配置。平台适配拥有保存对话框、缓存与取消清理；业务仅调用 SDK。
 
 ## 资源与可用性约束
+
+- 未提交或采集完成后不进行后台补传；临时故障（网络、5xx、408、429）按 1/2/4/8/16 秒退避，连续六次失败暂停，其他 4xx 立即暂停。材料保持不变，显式 flush/prepare 恢复；禁止在页面每秒调用 flush 绕过退避。退出身份必须 await close({ discard:true })，只等待在途请求、不再补传旧材料。验收空闲、持续故障、恢复和退出期间的请求次数与身份隔离。
 
 - `keyScreenshots` 默认 false，需显式开启自动关键截图；手动 `prepare()` 仍可截图。截图超时会传递 AbortSignal，底层尚未结束时不允许重叠截图。默认渲染最多 10000 DOM 节点，继续受画布像素预算限制。`replay:true` 的默认 `replayStart` 为 `prepare`，打开反馈时才录制；明确需要预录时配置 `replayStart: init`。关闭反馈界面调用 `pause()` 停止 DOM 回放和截图，保留轻量日志、草稿及上传；退出身份仍调用 `close({ discard:true })`。自定义 `captureScreenshot({ signal })` 应尊重取消信号。
 - 反馈是可选辅助能力，启动失败须独立标记不可用/重试；不能回滚或拖垮业务模块。服务端默认按用户日累计及 scope 存储预留限制，超额为 QUOTA_EXCEEDED/429；默认值和保守预留公式见已安装 README。固定业务文件清单、ZIP 快照和创建时间，重试不能制造新对象；导出24小时过期、报告默认30天保留，专用 worker 必须持续执行清理。不要增加正常空闲或逐请求 info 日志。

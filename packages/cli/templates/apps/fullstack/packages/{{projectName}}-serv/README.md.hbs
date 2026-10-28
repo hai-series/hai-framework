@@ -31,7 +31,7 @@
 
 CLI 已在根目录 `.env.dev/.env.test/.env.prod` 为每个环境的 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 `HAI_ADMIN_DEFAULT_PASSWORD`、`HAI_AUDIT_ADMIN_PASSWORD`、`HAI_CONFIG_ADMIN_PASSWORD`、`HAI_BUSINESS_OPERATOR_PASSWORD`。已有账号不改密或重新分配职责；未配置密码的独立职责账号不创建；`dev`/`start` 自动读取，首次登录使用用户名 `admin` 和该密码。仅在没有用户时创建管理员，不重设已有用户密码。密码不符合 `_iam.yml` 策略时，启动日志显示具体原因及错误码。环境文件随项目提交供克隆后共享；私有文件或进程变量可覆盖，`.env.example` 不含真实密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。
 
-默认 SQLite + 本地 storage + memory cache 适合单实例，管理写入仅支持单写实例：进程内保护无过期时间，共享 cache 锁定期续租，丢失锁或释放失败会记录错误。多实例读取可使用共享数据库、Redis cache 和 S3 storage，但管理写请求必须统一路由到同一写实例；仅更换 Redis 不提供任意多写副本的最后管理员原子保证。传输在所有节点共享受管版本化密钥环与 registry，不依赖会话粘性；重启加载原 ring，轮换先分发新旧版本再切 activeKeyId。Web 使用 HttpOnly refresh Cookie + 内存 access token；仅同时满足客户端标识、body 通道头与受信原生 Origin 的 App/Desktop 请求返回 refresh token body。
+默认 SQLite + 本地 storage + memory cache 仅适合本地开发与显式测试，管理写入仅支持单写实例：进程内保护无过期时间，共享 cache 锁定期续租，丢失锁或释放失败会记录错误。多实例读取可使用共享数据库、Redis cache 和 S3 storage，但管理写请求必须统一路由到同一写实例；仅更换 Redis 不提供任意多写副本的最后管理员原子保证。传输在所有节点共享受管版本化密钥环与 registry，不依赖会话粘性；重启加载原 ring，轮换先分发新旧版本再切 activeKeyId。Web 使用 HttpOnly refresh Cookie + 内存 access token；仅同时满足客户端标识、body 通道头与受信原生 Origin 的 App/Desktop 请求返回 refresh token body。
 
 业务公告配置与审计在同一事务提交，失败回滚。其他已经提交的管理修改，其补充审计记录采用最大努力策略：写入失败输出包含操作及资源的结构化错误日志，业务仍返回原操作结果，避免将已经完成的变更误报为失败；应用启动时 audit 初始化失败则停止启动。
 
@@ -56,7 +56,7 @@ CLI 同时在根 `.env.dev/.env.test/.env.prod` 分别生成独立的 `HAI_CRYPT
 
 ### IAM 认证配置
 
-服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。单实例可使用 Memory；多实例需共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
+服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。Memory 仅用于本地开发和显式测试；生产环境即使只有一个实例，也须使用框架支持的共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。
 
 LDAP/Reach 均可选：基础认证无需安装。默认 LDAP 客户端需在 IAM 服务端 workspace 安装 ldapts，再配置 login.ldap 与连接信息。自定义 onOtpSendEmail/onOtpSendSms/onPasswordResetRequest 回调可独立于 Reach 使用，投递失败须拒绝 Promise；回调第三参数 context 提供 expiresAt/idempotencyKey，发送服务按稳定键持久化去重，异常/超时为结果未知且不自动重发。协议在 Modal 显示；LoginForm/RegisterForm 提供 header/extraFields/footer，AuthPanel 透传 loginHeader/loginFields/loginFooter 和 registerHeader/registerFields/registerFooter。配置及例子见生成项目的 hai-iam/hai-ui skills。
 

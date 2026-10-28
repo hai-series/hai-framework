@@ -32,7 +32,7 @@
 
 - 正确性 > 简单性 > 可读性 > 可扩展性。
 - 主流程应可顺读，优先 early return；复杂度、函数长度与嵌套限制以当前 ESLint 规则为准。
-- 命名直白，禁止 `data` / `info` / `handle` / `process` / `manager` 等含糊名。
+- 命名应能从上下文识别职责；仅在真实歧义时改名。HaiResult.data、日志 info、框架 handle、Node process 及 SDK 既有字段保持原契约，不因命中单词就判为缺陷。
 
 ## §3 架构与最小知识审查
 
@@ -76,7 +76,7 @@
 - [ ] 独立查询优先批量或有界并发；事务、顺序依赖与限流任务允许串行，不把循环 await 一律判为 N+1
 - [ ] 大数据集按实际内存和延迟要求分页/流式处理，不套用固定条数阈值
 - [ ] 热路径不重复创建 Provider / Client / 连接池
-- [ ] 运行时无同步 I/O；`readFileSync` / `writeFileSync` 仅限 CLI 或 init 一次性路径
+- [ ] 请求/任务热路径避免阻塞文件 I/O；CLI、初始化及采用同步驱动的 SQLite 按实际负载和接口契约评估，不能只凭 Sync 后缀判错
 - [ ] DB/HTTP/Redis/event listener/timer 在 `close()` 和异常路径释放
 - [ ] 模块级 Map/Set 不缓存跨节点一致业务数据；允许 SDK client、不可变配置、连接池、单节点 provider 内部状态
 - [ ] 写操作幂等，失败重试不会重复写入；事务中途失败能回滚
@@ -154,6 +154,6 @@
 - Provider helper throw：仅当所有调用点被外层 catch 转 HaiResult，且公共 API 不泄漏异常时合规。
 - `createProvider` default throw：配置 schema 已枚举所有合法类型且位于 init 内部时合规。
 - 模块级 Map/Set：SDK client、不可变配置、连接池、单节点 memory provider 内部状态合规；跨节点业务数据不合规。
-- 同步 I/O：仅 CLI 或 init 一次性路径合规；请求/任务热路径不合规。
+- 同步 I/O：检查是否阻塞高并发热路径、是否存在已支持的异步替代；CLI、初始化和同步 SQLite 驱动是合理差异。只有实际使用风险才构成整改依据。
 
 模块注释与示例按 [JSDoc 验证约定](../../instructions/module-conventions.md#jsdoc-与示例验证) 检查；使用真实公共入口和数据，内部类型示例标明词法上下文。受影响包构建后执行 `node scripts/check-module-jsdoc.mjs --package <模块>`；该仓库命令不复制到应用模板。

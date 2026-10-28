@@ -18,7 +18,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 | 限制 | 无 init/close；按公开导出使用组件。复用内置翻译；SSR 不直接访问浏览器全局，高风险代码预览须显式启用。 |
 
 
-操作成功、失败及需要用户注意的即时反馈统一使用 `toast` / `notifySuccess` 等，根布局只挂载一次 `ToastContainer`；默认右下角，由 UI 模块通过提示蓝/成功绿/警告黄/错误红等主题语义色统一提供浅色底、细色边及类型图标，可手工关闭且默认 3 秒消失。多个提示共用 FIFO 队列逐条展示，等待期间不计时；`toast.add({ message, position })` 可选六个方位，`duration: 0` 需手动移除。状态层使用轻量入口 `@h-ai/ui/toast`，避免总入口连带加载组件和引导 CSS。不要用行内 Alert、红色段落或页面私有浮层显示登录、改密、保存、删除、上传等操作结果；响应式组件的安全本地化消息可用 `useToastFeedback(() => error)`，同一消息在队列中时合并，组件卸载不影响通知；字段校验、持续业务状态与恢复操作保留行内，Alert 使用柔和背景。
+所有警告、错误和即时操作结果统一使用 `toast` / `notifyError` 等，根布局只挂载一次 `ToastContainer`；默认右下角，使用主题语义色、浅色底、细色边及类型图标，可手工关闭，默认 3 秒消失（notifyError/notifyWarning 默认 5 秒）。FIFO 队列逐条展示，等待期间不计时；`toast.add({ message, position, traceId })` 支持六个方位，`duration: 0` 需手动移除。traceId 无默认，正文不显示编号，容器自动分离已有格式；有编号才显示排查图标，展开可查看和复制。悬停、聚焦和展开时暂停，结束后继续剩余时间。状态层使用轻量 `@h-ai/ui/toast`。响应式安全文案使用 `useToastFeedback`，同类、同文案、同编号合并，来源更新/清空时替换/移除其旧提示，卸载不撤销已发通知。字段保留错误标记与读屏关联，恢复动作留在原位；Alert 仅支持 info/success 持续信息。迁移旧 warning/error Alert 时改用 Toast，不新增行内错误段落。
 
 - 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
 - 列表统一使用卡片内查询栏、独立滚动表格和底部分页。多条件筛选使用 FilterBar / TableToolbar / CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；Query 或 Enter 一次提交搜索和全部条件，草稿变化不自动请求，折叠保留值。翻页和排序沿用已提交条件，重置清空条件并回第一页。TableToolbar 与 CrudFilterBar 共用原生查询表单，onfilterchange 仅通知草稿变化，onsearch 读取绑定草稿并提交；实际 onreset/onclearfilters 必须重新查询。排序只在后端支持的 DataTable 列头提供，不新增图标筛选/排序弹层或页面私有折叠状态机。 扩展筛选使用自适应网格，字段横向间距 20px、纵向间距 16px，标签与控件分别对齐且控件等高；窄屏改为单列，避免定宽输入框贴边挤压。
@@ -27,9 +27,11 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 
 ## 使用路径
 
+Toast 支持 F8 聚焦/返回、Escape 关闭可关闭提示并恢复焦点；Modal 内也要验证键盘路径。`notifyError` 接收完整错误对象或安全本地化字符串；Promise 组件需抛异常时用 `new Error(result.error.message, { cause: result.error })` 保留安全业务原因和 traceId。普通 Error 和 5xx 使用兜底，不传未知 `err.message`。修改及交付遵循[沟通与同步维护](../hai-app-create/collaboration.md)。
+
 状态层可从轻量 `@h-ai/ui/i18n` 导入同一个 `authErrorMessage`，避免加载场景组件；管理台、移动/桌面示例与模板保持一致。
 
-认证错误复用公开 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：凭据错误统一，不显示未知原文，保留有效 traceId；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误行内展示，操作成功和认证错误均使用统一 Toast。
+认证错误复用公开 `authErrorMessage(error)`（从 `@h-ai/ui/components/scenes/iam/index` 导入）：凭据错误统一，不显示未知原文，保留有效 traceId 供排查图标展开；首次/到期改密、密码复用 034 和会话上限有明确指引。AuthPanel 与敏感操作确认已内置；自定义改密复用此映射。确认密码按原始字符串比较，不裁剪或 Unicode 归一化；字段错误、操作成功和认证错误均使用统一 Toast，字段保留定位与无障碍关联。
 
 新页面或较大改版先使用 [hai-ui-design](../hai-ui-design/SKILL.md) 确定任务、布局、状态和组件映射；本 skill 负责正确实现。完成后按 [hai-ui-review](../hai-ui-review/SKILL.md) 查看真实页面，小范围修复沿用已有设计。
 
@@ -87,9 +89,9 @@ UserProfile 的 `fieldConstraints` 按字段声明 `required/minlength/maxlength
 
 数据新增/修改统一使用 `Form`（托管提交）或原生 `<form>` + `FormLayout`，不要在应用复制字段 grid。两者支持 `columns={1 | 2}`、`labelPosition='top' | 'left'`、`labelWidth`；默认单列/标签在上，窄容器自动收拢。`FormField.colSpan='auto'` 自动让多行文本、上传和多选占两列，`1` / `2` 可覆盖；自定义宽控件标注 `data-form-wide`。已有控件 ID 或原生控件给 FormField 配 `for`，避免重复或失效的标签。
 
-IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。字段错误只在 FormField 或控件其中一处展示。
+IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。FormField 或控件将字段名与错误发送到 Toast，避免父子重复；修正或关闭宿主后清除过期通知，读屏关联说明仍保留在控件旁。
 
-验证一列/双列与两种标签位置、自动/显式跨列、窄抽屉/手机、无效提交与修正、切换语言后的错误、按钮和回车提交，以及关闭重开后的状态。
+验证一列/双列与两种标签位置、自动/显式跨列、窄抽屉/手机、无效提交与修正、切换语言后的错误、按钮和回车提交，以及关闭重开后的状态。字段 Toast 关闭或超时后，再次提交相同无效输入仍须显示提示，修正后清除旧通知。
 
 Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同名方法）包裹实际异步 resolve；serv 自动建立请求语言上下文。浏览器 setGlobalLocale/createLocaleStore 继续管理应用语言，SSR 的 UI setter/store 不写全局值。显式 MessageOptions.locale 优先；进程默认语言仅在启动时设置。
 

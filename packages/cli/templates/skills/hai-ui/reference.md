@@ -402,6 +402,7 @@ const p = usePlatform()
 > 展示层还支持：
 > - `fontSize`：支持 `number`（按 px）或 CSS 长度字符串（如 `1.125rem`）
 > - `allowHtmlTags`：默认关闭；开启后按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等标签，危险标签与属性仍会被消毒
+> - 原始 `<img>` 的 `width` / `height` 仅接受 1–99999 的正整数像素值；为延迟加载图片预留空间，避免文档锚点和布局跳变。百分比、负数、小数、事件属性及任意 `style` 仍被移除。
 
 ```svelte
 <MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
@@ -501,7 +502,7 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 - Toast 默认右下角浮动，由 UI 模块统一用主题语义色区分提示、成功、警告、错误，使用浅色底、细色边及类型图标，不占布局且可关闭，FIFO 队列逐条展示并从展示时计时；根布局只挂载一次 ToastContainer。六方位通过 toast.add 的 position 指定；登录、改密、保存、删除和上传等成功或失败结果均不使用行内 Alert。
 - 状态层从轻量 @h-ai/ui/toast 入口导入 toast/notify*/errorMessage/useToastFeedback，不加载组件及引导 CSS；ToastContainer 在根布局单次挂载。
 - Toast 已内置 `notifySuccess` / `notifyError(err, fallback?)` / `notifyInfo` / `notifyWarning`，业务应用无需自建 toast 工具文件。
-- `message` API 也使用 Toast 的队列和样式，`MessageContainer` 复用 `ToastContainer`，根布局只能选一个。响应式组件初始化时可用 `useToastFeedback(() => error)` 发送安全本地化消息，同类型、同内容的队列项合并。底层 `Error` 即使自带 traceId 也只保留编号并显示兜底文案，不能将 traceId 当成原文可展示的证明。
+- `message` API 也使用 Toast 的队列和样式，`MessageContainer` 复用 `ToastContainer`，根布局只能选一个。响应式组件使用 `useToastFeedback`，同类型、同内容、同编号合并；更新/清空时替换/移除该来源旧通知。所有警告和错误均交给 ToastContainer，字段只保留错误标记、读屏关联与恢复操作。默认隐藏 traceId，排查图标展开后显示编号、复制和联系支持的说明；悬停、聚焦或展开时暂停计时。普通 Error 即使自带 traceId 也使用兜底文案，编号不能证明原文可公开。
 
 ## Design Token 系统
 
@@ -675,7 +676,7 @@ AuthPanel 在 SSR 阶段禁用原生表单控件，客户端挂载并绑定事�
 
 数据新增/修改统一使用 `Form`（托管提交）或原生 `<form>` + `FormLayout`，不要在应用复制字段 grid。两者支持 `columns={1 | 2}`、`labelPosition='top' | 'left'`、`labelWidth`；默认单列/标签在上，窄容器自动收拢。`FormField.colSpan='auto'` 自动让多行文本、上传和多选占两列，`1` / `2` 可覆盖；自定义宽控件标注 `data-form-wide`。已有控件 ID 或原生控件给 FormField 配 `for`，避免重复或失效的标签。
 
-IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。字段错误只在 FormField 或控件其中一处展示。
+IAM 表单、AuthPanel、UserProfile、FeedbackModal 直接接收同组参数；CRUD 使用 `form={{ columns: 2, labelPosition: 'left', labelWidth: '6rem' }}`，字段支持 `colSpan` 和延迟翻译的 `validation.message: () => m.required()`。通用字段的 `label/error/hint`、Input/Textarea/Select 的 `validationMessage` 支持翻译函数。内置必填、类型、长度和范围错误由 UI 提供；应用只提供业务文案。通过 UI 的 `setGlobalLocale` / `createLocaleStore` 同步语言，已显示的错误随之更新；自定义提示只用于失败，不能把固定提示直接设成持续的 customValidity。FormField 或控件发送含字段名的 Toast，避免父子重复；修正后移除旧通知，关联说明以读屏可读文本保留。
 
 验证一列/双列与两种标签位置、自动/显式跨列、窄抽屉/手机、无效提交与修正、切换语言后的错误、按钮和回车提交，以及关闭重开后的状态。
 

@@ -23,8 +23,12 @@ Use `hai` to create applications, add modules, generate starter code, build and 
 
 Use Node.js matching `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.11.2. In PowerShell use `pnpm.cmd`.
 
+The following uses the target beta version. Check the published channel and availability of `1.0.0-beta.1` before installing. The acceptance target does not mean it has been published; an unversioned install selects latest rather than beta.
+
 ```sh
-pnpm add -g @h-ai/cli
+pnpm view @h-ai/cli dist-tags
+pnpm view @h-ai/cli@1.0.0-beta.1 version
+pnpm add -g @h-ai/cli@1.0.0-beta.1
 hai --version
 hai --help
 ```
@@ -53,6 +57,16 @@ Omit options for interactive choices, or use `--yes` for defaults. Installation 
 Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage, audit and the scheduler for optional backups/alerts for its management UI. When `--features` is omitted, it also enables feedback and reach. An explicit feature list keeps optional modules under your control; other application types still require feedback to be selected. AI/ONNX/CUDA are not installed by default.
 
 A standalone `mobile-app` with IAM or crypto installs frontend crypto and enables encrypted typed-client transport by default. Without crypto, a deliberate plaintext API remains supported. Use `PUBLIC_API_TRANSPORT=off` only with a matching plaintext service; `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. A failed handshake never falls back to plaintext, and server private keys never enter the client. Cleanup closes client transport before crypto initialized by that client.
+
+### Static websites and GitHub Pages
+
+`hai create docs-site --type website --features none --yes` explicitly selects no optional business modules while retaining Core/Kit/UI and the default deployment development tools. No deploy/no-deploy workaround is needed. `none` cannot be combined with another value, comma or empty item. Omitting features preserves existing defaults; fullstack retains its required architecture modules.
+
+Website defaults to Node SSR. Set `HAI_BUILD_STATIC=1` and `PUBLIC_BASE_PATH=/docs-site` (replace docs-site with the repository name; segments allow only ASCII letters, digits, _, . and -; no trailing slash, empty for a root site) for `pnpm build` to generate the static build directory. The flag accepts 0/1; these two public values are forwarded only to compile, and cannot be mixed with docker/app/desktop. Static builds reject server-side business modules, custom APIs/actions and pages that were not prerendered, preserve production guards and use no SPA fallback. The default health API is excluded.
+
+Builds do not read root dotenv files, and Kit uses an isolated env directory. The static directory is public: ordinary images, fonts and other assets are copied as supplied. Keep private content out of it; static builds reject .env/.env.* files and symbolic links. Upload only build with include-hidden-files:true, then verify the repository base path, deep-link refresh, assets and absence of private sentinel values. See the [static website guide (Chinese)](../../docs/usage/configuration/delivery.md#静态website与github-pages).
+
+The website contact form is a UI example without a message service. Submission shows a Toast explaining this and keeps the input. Connect a real service and verify loading, success and failure states before using it for enquiries.
 
 ### Fullstack mini administration
 

@@ -31,7 +31,7 @@
 | 填写与修改数据 | Form/FormLayout + FormField + 原有输入组件 | 输入后失焦/提交、修正、中文输入法、窄容器、语言变化、失败保留输入 |
 | 详情与确认 | Modal、Drawer、Confirm、Steps | 进入/关闭焦点、正文滚动、操作区域、长内容和危险操作 |
 | 导航与移动 | Tabs、Breadcrumb、AppBar、BottomNav、SafeArea | 禁用项、方向键/Home/End、返回、深链、安全区域与触摸 |
-| 提示与恢复 | Alert、Empty、Skeleton、Result、已有消息容器 | 区分无数据、无匹配、失败、无权限；给出适当下一动作 |
+| 提示与恢复 | ToastContainer（警告/错误）、Empty、Skeleton、Result、Alert（info/success） | 区分无数据、无匹配、失败、无权限；失败经Toast提示，原区域保留恢复操作，不新增行内警告/错误框 |
 | 文件、AI、图表、引导 | 现有 storage/AI/charts/guide 场景组件 | 进度、取消/重试、真实完成状态、不可信内容、内部滚动、图例/单位和帮助入口 |
 
 通用组件负责展示与交互，应用服务负责数据、授权和外部副作用。控件前端限制不能替代服务端校验；成功提示必须对应真实结果。

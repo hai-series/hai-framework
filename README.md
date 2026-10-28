@@ -4,9 +4,9 @@
 
 框架模块、`apps/` 示例和 CLI 模板均内置简体中文（`zh-CN`）、英文（`en-US`）和日语（`ja-JP`）。`core.i18n.setGlobalLocale('ja')` 会规范化为 `ja-JP`；应用通过语言菜单切换。
 
-> 当前处于 `0.1.0-alpha` 阶段：公共契约仍在演进。生产采用前请锁定版本，并针对自身场景完成安全与容量验证。
+> 当前开发版本为 `1.0.0-beta.1`。源码版本不等于 npm 发布状态；安装前请核实 registry，并针对自身场景完成安全、容量与恢复验证。
 
-生产多实例部署请先核对[22 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
+使用有状态后端的生产部署（包括单实例）请先核对[22 包共享状态与恢复能力表](.agents/instructions/distributed-state.md)：数据库使用 PostgreSQL/MySQL，缓存使用 Redis，对象与向量使用共享服务；模块启动会拒绝本机后端。纯静态网站不需要数据库或缓存，也不包含这些模块的业务 API。文档分别说明 CAS/租约、幂等、未知外部效果及已验证边界。
 
 <p align="center">
   <strong>AI Runtime · 企业级全栈模块 · Agent Skills · 端到端类型安全</strong>
@@ -40,13 +40,15 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 ## 从这里开始
 
-| 你想做什么             | 建议入口                                       |
-| ---------------------- | ---------------------------------------------- |
-| 创建完整应用           | [创建、开发和交付指南](docs/usage/README.md)   |
-| 在现有工程使用某个能力 | [模块清单](#功能清单)，再读对应包的使用入门    |
-| 让 AI 按需求实现功能   | [AI 使用索引](LLMS.txt)和生成工程的 AGENTS.md  |
-| 构建镜像或离线部署     | [构建与部署](packages/deploy/README.md)        |
-| 参与框架开发           | [开发与测试](#二次开发)和[工作规范](AGENTS.md) |
+| 你想做什么                 | 建议入口                                                                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 创建完整应用               | [创建、开发和交付指南](docs/usage/README.md)                                                                                           |
+| 创建静态官网或发布到 Pages | [静态网站配置与边界](docs/usage/configuration/delivery.md#静态website与github-pages)；[框架官网应用](apps/framework-website/README.md) |
+| 配置环境、默认值与生效影响 | [按领域的应用配置手册](docs/usage/configuration/README.md)                                                                             |
+| 在现有工程使用某个能力     | [模块清单](#功能清单)，再读对应包的使用入门                                                                                            |
+| 让 AI 按需求实现功能       | [AI 使用索引](LLMS.txt)和生成工程的 AGENTS.md                                                                                          |
+| 构建镜像或离线部署         | [构建与部署](packages/deploy/README.md)                                                                                                |
+| 参与框架开发               | [开发与测试](#二次开发)和[工作规范](AGENTS.md)                                                                                         |
 
 ## 核心特色
 
@@ -114,9 +116,13 @@ hai Framework 是一个以 **AI Runtime 为核心、企业能力按需组合、�
 
 ### 创建新项目
 
+下面以 `1.0.0-beta.1` 为例。先确认 npm 已有该版本再安装；不带版本的安装会选择 `latest`，不会自动选择 Beta。
+
 ```bash
-# 全局安装 CLI
-pnpm add -g @h-ai/cli
+# 确认已发布渠道与目标版本，再全局安装 CLI
+pnpm view @h-ai/cli dist-tags
+pnpm view @h-ai/cli@1.0.0-beta.1 version
+pnpm add -g @h-ai/cli@1.0.0-beta.1
 
 # 创建带部署能力的 Web + API；省略选项可交互选择
 hai create my-app --type fullstack --frontends web --yes

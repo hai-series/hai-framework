@@ -1084,7 +1084,7 @@ describe('createProject — fullstack 类型', () => {
     expect(iamConfig).toContain('seedDefaultData: $' + '{HAI_IAM_SEEDDEFAULTDATA:false}')
     expect(iamConfig).toContain('variant: split')
     const envExample = await readText(projectPath, '.env.example')
-    for (const name of ['BASE_URL', 'HAI_E2E_WEB_URL', 'HAI_E2E_APP_URL', 'HAI_E2E_DESKTOP_URL', 'E2E_ADMIN_PASSWORD'])
+    for (const name of ['BASE_URL', 'HAI_E2E_WEB_URL', 'HAI_E2E_APP_URL', 'HAI_E2E_DESKTOP_URL', 'E2E_ADMIN_PASSWORD', 'E2E_AUDIT_ADMIN_PASSWORD', 'E2E_CONFIG_ADMIN_PASSWORD', 'E2E_BUSINESS_OPERATOR_PASSWORD'])
       expect(envExample).toContain(`# ${name}=`)
     expect(envExample).toContain('HAI_ADMIN_DEFAULT_PASSWORD=')
     expect(envExample).toContain('PUBLIC_API_BASE=http://127.0.0.1:3000')
@@ -1512,6 +1512,9 @@ describe('ai 支持交付与回填', () => {
     expect(await readText(dir, '.agents/skills/hai-app-create/SKILL.md')).toBe(customSkill)
     expect(await readText(dir, '.agents/skills/hai-app-create/development.md'))
       .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/development.md'), 'utf8'))
+    expect(copied).toContain('.agents/skills/hai-app-create/collaboration.md')
+    expect(await readText(dir, '.agents/skills/hai-app-create/collaboration.md'))
+      .toBe(await fse.readFile(path.join(skillTemplatesDir, 'hai-app-create/collaboration.md'), 'utf8'))
     for (const skillName of ['hai-build', 'hai-spec-review', 'hai-spec-implement', 'hai-app-review', 'hai-app-tests', 'hai-ai']) {
       expect(await exists(dir, `.agents/skills/${skillName}/SKILL.md`)).toBe(true)
     }

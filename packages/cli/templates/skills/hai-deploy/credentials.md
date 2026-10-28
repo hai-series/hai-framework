@@ -12,6 +12,8 @@ hai deploy-secrets /opt/hai/apps/shop-test --import /private/shop-import.json --
 hai deploy-secrets /opt/hai/apps/shop-test --import /private/shop-import.json --runtime docker --apply
 ```
 
-SDK `importDeploymentSecrets({ directory, inputFile, runtime })` 默认 dryRun:true；只有显式 false 提交。提交在固定部署 flock 内由持锁进程原子写入 v2 状态，权限0600。密码保留特殊字符和 Unicode，但拒绝空值/控制字符；十六进制只是编码，状态和备份仍须作为秘密保护。工具不停止服务、不轮换密码、不推进 current，不接受不同项目/卷或损坏状态。
+SDK `importDeploymentSecrets({ directory, inputFile, runtime })` 默认 dryRun:true；只有显式 false 提交。提交在固定部署 flock 内由持锁进程原子写入 v2 状态，权限0600。密码保留特殊字符和 Unicode，但拒绝空值/控制字符；十六进制只是编码，状态和备份仍须作为秘密保护。工具不停止服务、不轮换密码、不推进 current、不创建成功基线，不接受不同项目/卷或损坏状态。
 
-失败时检查 error.ext.phase/state；unknown 先核对服务器状态，不能据此自动重复部署。相同输入可重复核验。中断 next 文件不作为已提交状态；确认无相关进程后只清理本次文件。状态丢失优先恢复受保护备份，或用可信旧凭据重新验证导入。保留原项目/卷身份重新生成完整包，核对旧 DB/S3 数据后再恢复写入；轮换另行计划。
+后续用当前 CLI、原项目/卷身份生成新 ID 完整包；无 current 的首次接管必须全量，不带 --services，不用部分制品，完整成功后才可增量。对于账本未认领的 db/storage/vecdb 卷，合法 v2 的项目、组、精确卷绑定须与唯一运行原容器的真实角色标签（Docker/Podman namespace均不得冲突）、Mounts、Config.Image 家族全部吻合；db/vecdb 共组不等于同角色。FORMAT1、停止容器或任一证据缺失均拒绝，已知 ledger/context/daemon 身份冲突不能用导入覆盖。
+
+失败时检查 error.ext.phase/state；unknown 先核对服务器状态，不能据此自动重复部署。相同输入可重复核验。中断 next 文件不作为已提交状态；确认无相关进程后只清理本次文件。状态丢失优先恢复受保护备份，或用可信旧凭据重新验证导入。核对旧 DB/S3 数据后再恢复写入；导入不恢复数据或执行格式迁移，轮换另行计划。

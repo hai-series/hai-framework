@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "locales": {
+    "zh-CN": { "title": "使用指南", "path": "README.md" },
+    "en-US": { "title": "Usage guide", "path": "README.en.md" },
+    "ja-JP": { "title": "利用ガイド", "path": "README.ja.md" }
+  },
+  "sections": [
+    {
+      "id": "overview",
+      "title": "1. 认识框架与选择路线",
+      "path": "overview/README.md",
+      "children": [
+        { "id": "overview-framework", "title": "能力、边界与应用结构", "path": "overview/framework.md" },
+        { "id": "overview-reading-paths", "title": "按你的工作选择阅读顺序", "path": "overview/reading-paths.md" },
+        { "id": "overview-environment", "title": "开发、部署和原生环境准备", "path": "overview/environment.md" }
+      ]
+    },
+    {
+      "id": "getting-started",
+      "title": "2. 从创建到首次交付",
+      "path": "getting-started/README.md",
+      "children": [
+        { "id": "getting-started-create", "title": "创建项目并首次运行", "path": "getting-started/create.md" },
+        { "id": "getting-started-develop", "title": "配置环境与实现功能", "path": "getting-started/develop.md" },
+        { "id": "getting-started-build", "title": "编译、镜像与原生打包", "path": "getting-started/build.md" },
+        { "id": "getting-started-upgrade", "title": "升级框架与验证迁移", "path": "getting-started/upgrade.md" }
+      ]
+    },
+    {
+      "id": "development",
+      "title": "3. 按业务能力开发",
+      "path": "development/README.md",
+      "children": [
+        { "id": "development-http", "title": "前后端与接口授权", "path": "development/frontend-backend.md" },
+        { "id": "development-data", "title": "数据、事务和附件", "path": "development/data.md" },
+        { "id": "development-identity", "title": "登录、改密与退出", "path": "development/authentication.md" },
+        { "id": "development-ai", "title": "AI内容、模型与检索", "path": "development/ai.md" },
+        { "id": "development-ui", "title": "页面布局、交互与提示", "path": "development/ui.md" },
+        { "id": "development-integrations", "title": "支付与原生能力", "path": "development/integrations.md" }
+      ]
+    },
+    {
+      "id": "configuration",
+      "title": "4. 按领域管理配置",
+      "path": "configuration/README.md",
+      "children": [
+        { "id": "configuration-runtime", "title": "基础、覆盖与生命周期", "path": "configuration/runtime.md" },
+        { "id": "configuration-data", "title": "数据库、缓存、文件与文本", "path": "configuration/data.md" },
+        { "id": "configuration-identity", "title": "身份、会话与安全策略", "path": "configuration/identity.md" },
+        { "id": "configuration-http", "title": "HTTP、客户端与传输", "path": "configuration/http.md" },
+        { "id": "configuration-ai", "title": "模型、知识与向量", "path": "configuration/ai.md" },
+        { "id": "configuration-operations", "title": "反馈、通知、审计与任务", "path": "configuration/operations.md" },
+        { "id": "configuration-experience", "title": "页面、支付与设备", "path": "configuration/experience.md" },
+        { "id": "configuration-delivery", "title": "构建、部署与恢复", "path": "configuration/delivery.md" }
+      ]
+    },
+    {
+      "id": "operations",
+      "title": "5. 发布与日常运行",
+      "path": "operations/README.md",
+      "children": [
+        { "id": "operations-deployment", "title": "全量、增量与发布后回退", "path": "operations/deployment.md" },
+        { "id": "operations-feedback", "title": "用户反馈、任务与故障排查", "path": "operations/feedback.md" }
+      ]
+    },
+    {
+      "id": "governance",
+      "title": "6. 维护、安全与验收",
+      "path": "governance/README.md",
+      "children": [
+        { "id": "governance-maintenance", "title": "维护框架与同步资料", "path": "governance/framework-maintenance.md" },
+        { "id": "governance-security", "title": "安全审查与恢复条件", "path": "governance/security-review.md" },
+        { "id": "governance-verification", "title": "验证、截图与适用边界", "path": "governance/verification.md" }
+      ]
+    }
+  ]
+}

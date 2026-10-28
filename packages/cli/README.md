@@ -23,8 +23,12 @@
 
 需要符合项目 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
 
+以下使用目标 Beta 版；先核对实际发布渠道与 `1.0.0-beta.1` 是否可用，再安装。当前验收目标不代表已经发布；不带版本会选择 latest，不会自动选择 Beta。
+
 ```sh
-pnpm add -g @h-ai/cli
+pnpm view @h-ai/cli dist-tags
+pnpm view @h-ai/cli@1.0.0-beta.1 version
+pnpm add -g @h-ai/cli@1.0.0-beta.1
 hai --version
 hai --help
 ```
@@ -53,6 +57,16 @@ pnpm dev
 `--template minimal|default|full|custom` 选择模块预设，`--features iam,db,...` 选择业务模块。Fullstack 始终保留默认管理界面所需的 IAM、数据库、缓存、加密、存储、审计和用于可选备份/告警的调度器；未指定 `--features` 时默认开启 feedback 并补齐 Reach。显式功能列表保留可选模块选择，其它应用类型仍需显式启用反馈。默认不安装 AI/ONNX/CUDA。
 
 独立 `mobile-app` 选择 IAM 或 crypto 时会安装前端 crypto 并默认启用 typed client 加密传输；未选择 crypto 时可连接明确的明文 API。`PUBLIC_API_TRANSPORT=off` 只用于匹配的明文服务，`PUBLIC_API_KEY_EXCHANGE_PATH` 仅覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
+
+### 纯静态 website 与 GitHub Pages
+
+`hai create docs-site --type website --features none --yes`明确不选择可选业务模块，保留Core/Kit/UI和默认部署开发工具；无需用deploy模块再no-deploy绕行。none不能与其他值、逗号或空项混用。省略features仍沿用原默认；fullstack始终保留架构必需模块。
+
+website默认Node SSR。仅构建时设置`HAI_BUILD_STATIC=1`与`PUBLIC_BASE_PATH=/docs-site`（docs-site替换为实际仓库名；各目录段仅ASCII字母、数字、_、.、-，无末尾/，根站留空）后执行`pnpm build`，输出build静态目录。标志只接受0/1，两个公开值仅compile透传，不能与docker/app/desktop混用。静态拒绝服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产守卫，不生成SPA回退；默认健康API不进入静态产物。
+
+根.env不参与构建，Kit也不读取根私有文件。static是公开资产目录，图片、字体等正常资源会原样发布，不能放入任何私密内容；检测到.env/.env.*或符号链接时会停止构建。发布只上传build，显式include-hidden-files:true保留.nojekyll；实际验证子路径首页、每个深链刷新、资产和无敏感哨兵。详细命令见[静态网站配置](../../docs/usage/configuration/delivery.md#静态website与github-pages)。
+
+website联系表单是界面示例，尚未接入留言服务。提交后通过Toast说明尚未开通并保留输入；投入使用前应连接实际服务并验证加载、成功和失败状态。
 
 ### Fullstack mini 管理后台
 

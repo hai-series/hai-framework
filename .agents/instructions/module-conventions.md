@@ -99,7 +99,7 @@ function register(tool: Tool): HaiResult<void> {
 - 类名、文件名、变量名三者一致
 - 接口名与实现工厂对应（例如 `StorageProvider` ↔ `createS3Provider`）
 - 重命名必须同步更新：引用点、测试、注释、文档
-- 禁止含糊命名（如 data / info / handle / process）
+- 名称应说明职责；避免在缺少上下文时使用 data / info / handle / process 等泛称。保留 HaiResult.data、日志 info、框架 handle 回调及 SDK 原生字段等既有契约，不为改名而破坏公共接口。
 - 服务对象：小写模块名（`export const storage`）
 - 函数接口：`{Module}Functions`；子操作接口：`{Domain}Operations`
 - 错误定义：`Hai{Module}Error`（通过 `buildHaiErrorsDef` 生成，键名 UPPER_SNAKE）；错误类型：统一 `HaiError`

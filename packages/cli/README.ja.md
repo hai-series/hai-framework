@@ -23,8 +23,12 @@
 
 Node.js は `engines`（`^22.23.4 || ^24.22.1 || ^26.12.1`）に合わせ、pnpm 12.11.2 を使用します。PowerShell では `pnpm.cmd` を使用してください。
 
+以下は目標Beta版です。公開チャネルと `1.0.0-beta.1` の提供状況を確認してからインストールしてください。検証対象であることは公開済みの意味ではありません。版を省略するとlatestとなり、Betaを自動選択しません。
+
 ```sh
-pnpm add -g @h-ai/cli
+pnpm view @h-ai/cli dist-tags
+pnpm view @h-ai/cli@1.0.0-beta.1 version
+pnpm add -g @h-ai/cli@1.0.0-beta.1
 hai --version
 hai --help
 ```
@@ -53,6 +57,16 @@ pnpm dev
 `--template minimal|default|full|custom` で構成を選び、`--features iam,db,...` で業務モジュールを指定します。Fullstack は管理 UI に必要な IAM・DB・cache・crypto・storage・audit・任意バックアップ/アラート用 scheduler を保持します。`--features` を省略すると feedback と reach も有効になります。明示した機能一覧では任意モジュールの選択を保持し、他のアプリ種別では問題報告を明示的に選択します。AI/ONNX/CUDA は既定で入りません。
 
 独立した `mobile-app` で IAM または crypto を選択すると、フロント用 crypto を導入し、typed client の暗号化 transport を既定で有効にします。crypto を選択しない明示的な平文 API も利用できます。`PUBLIC_API_TRANSPORT=off` は対応する平文サービスにのみ使用し、`PUBLIC_API_KEY_EXCHANGE_PATH` は公開された鍵交換パスだけを変更します。鍵交換失敗時に平文へ切り替えず、サーバー秘密鍵をクライアントへ渡しません。終了時は client transport の後に自身が初期化した crypto を解放します。
+
+### 静的websiteとGitHub Pages
+
+`hai create docs-site --type website --features none --yes`で任意業務モジュールを選択しないことを明示し、Core/Kit/UIと既定のデプロイ開発ツールは保持します。deployを選んでからno-deployで回避する必要はありません。noneは他の値、カンマ、空項目と併用できません。省略時の既定値とfullstackの必須構成は変わりません。
+
+websiteの既定はNode SSRです。ビルド時に`HAI_BUILD_STATIC=1`と`PUBLIC_BASE_PATH=/docs-site`（docs-siteを実際のリポジトリー名に置換。各区間はASCII英数字・_・.・-のみ、末尾/なし、ルートは空）を指定してpnpm buildを実行すると静的buildを生成します。フラグは0/1のみ、二つの公開値はcompile専用でdocker/app/desktopと併用できません。静的構築はサーバー業務モジュール、独自API/actions、事前描画されないページを拒否し、本番ガードを緩和せずSPAフォールバックも生成しません。既定のhealth APIは含めません。
+
+ルートdotenvを読まず、Kitのenvも分離します。staticは公開資産用のディレクトリで、画像やフォントなどをそのまま配信します。秘密情報は置かず、.env/.env.*またはシンボリックリンクがある場合は静的ビルドを停止します。buildだけをinclude-hidden-files:trueで公開し、子パス、深いURLの再読込、資産、秘密の不在を確認します。[静的サイト設定（中国語）](../../docs/usage/configuration/delivery.md#静态website与github-pages)を参照してください。
+
+websiteのお問い合わせフォームは送信サービス未接続のUI例です。送信時には未対応であることをToastで知らせ、入力を保持します。実運用前にサービスへ接続し、処理中・成功・失敗を確認してください。
 
 ### Fullstack mini 管理画面
 

@@ -46,6 +46,8 @@ pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与�
 
 ### SvelteKit Adapter 模式
 
+CLI website 模板默认 Node SSR。纯展示站点通过 `--features none` 创建，在 compile 时使用 `HAI_BUILD_STATIC=1` 与可选 `PUBLIC_BASE_PATH` 切换完整静态预渲染，具体边界见本 skill 的静态网站说明；该模板没有使用下方 `VITE_ADAPTER` 工厂。静态产物用 `preview` 本机检查，上传 `build` 到 Pages/CDN；生成的 `start`/Docker 配置属于普通 SSR 模式，不能用于运行静态 HTML，切回 SSR 需清除静态开关并重新构建。
+
 仅在项目实际使用 SvelteKit 和 `@h-ai/kit/adapter` 时使用；Vite SPA 不配置 SvelteKit adapter，fullstack 各前端按自身 scripts 构建。
 
 | 模式    | Adapter        | 认证方式              | 部署目标                |
@@ -63,7 +65,7 @@ import { createAdapter } from '@h-ai/kit/adapter'
 
 const config = {
   kit: {
-    adapter: createAdapter(), // 根据 VITE_ADAPTER 环境变量自动选择
+    adapter: await createAdapter(), // 异步加载对应适配器，必须等待完成
   },
 }
 ```

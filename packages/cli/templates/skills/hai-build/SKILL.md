@@ -1,6 +1,6 @@
 ---
 name: hai-build
-description: "构建或排查 hai 应用的源码、容器镜像和桌面产物；识别工程架构、依赖与对应构建入口。"
+description: "构建或排查 hai 应用的源码、静态网站、容器镜像和桌面产物；识别工程架构、依赖与对应构建入口。"
 ---
 
 # hai-build
@@ -26,12 +26,14 @@ description: "构建或排查 hai 应用的源码、容器镜像和桌面产物�
 
 ## 构建与部署
 
+- website默认Node SSR；纯展示站点用`hai create <name> --type website --features none`明确不选可选业务模块，Core/Kit/UI与默认部署开发工具保留，fullstack仍保留架构必需模块。`HAI_BUILD_STATIC=1 PUBLIC_BASE_PATH=/docs-site`只用于compile，docs-site替换为实际仓库名，各路径段仅ASCII字母、数字、_、.、-，不含末尾/、查询/片段或逃逸；省略/0保持SSR，根站路径留空。静态拒绝已选服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产依赖守卫，不用SPA fallback；唯一默认健康端点不发布。构建不读根.env；static是公开目录，正常图片/字体等原样发布，禁止放私密内容，检测到.env/.env.*或符号链接会停止构建。上传build时include-hidden-files:true保留.nojekyll，验根/深链/刷新/资产与敏感哨兵。普通SSR仍支持动态功能；不要把静态参数混用docker/app/desktop。
+
 - 创建默认包含开发期部署工具，可用 --no-deploy 关闭。每个镜像使用 images/ 中独立 Dockerfile，Web 配置位于 images/web/，不使用镜像阶段 target 配置。
 - 构建器生成 images/dependencies/ 安装输入；fetch、安装和生产依赖整理共用 pnpm store，安装与生产依赖整理共用 SQLite 驱动缓存，并复用依赖层。file: 归档、补丁、workspace 元数据必须进入下载上下文；原生依赖缓存按系统/架构/ABI 区分。基础镜像、中间件及工具指定版本，禁止 latest。
 - 默认容器面向 CPU 运行或远程 AI 服务，Dockerfile 设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，跳过额外 CUDA/TensorRT 下载；使用宿主机 GPU 时定制镜像和运行参数，不修改本机 npm 或全局 AI/GPU 配置。
 - pnpm run deploy --build 显式串联构建、打包和发布；--bundle-only 只交付完整离线包与跨平台脚本；--services 以服务器成功状态为基线只更新选中服务。完整包自动包含自建中间件镜像，服务器禁止联网拉取。
 - `pnpm build` 默认仅编译源码（调用 compile）；`pnpm build --target docker` 根据 hai.json.build.images 的 dockerfile 构建并导出 serv/web 镜像（可单独或组合），可用 --images web 只构建前端，auto 优先可达 Podman、其次 Docker，可用 --runtime 显式指定。
-- compile 交付源码编译结果，docker 交付镜像归档，desktop 交付 Tauri 系统安装包；每次只选一种。hai.json 的 build.images[].dockerfile 指向独立镜像文件，build.desktop 声明桌面工程目录，deploy 保存整个项目的部署配置，最终阶段作为交付镜像；参数默认值和示例必须与真实入口同步。
+- compile 交付源码编译结果，docker 交付镜像归档，desktop 交付 Tauri 系统安装包，app 交付 Capacitor 原生制品；每次选择一个 target。hai.json 的 build.images[].dockerfile 指向独立镜像文件，build.desktop/build.app 声明原生工程目录，deploy 保存整个项目的部署配置；参数和平台前置以当前 CLI 类型与工程 scripts 为准。cap:sync 只同步工程，不能作为已打包或已安装的证据。
 - Podman 的客户端代理通过预定义构建参数传递，覆盖 Windows/macOS 远程引擎的服务端默认值；代理地址必须能从构建容器访问，--no-http-proxy 禁止此传递。不要把代理写成 Dockerfile ENV 或固化进交付镜像。
 - --network 默认沿用引擎网络；只有实际构建网络无法访问依赖/代理时才显式选择网络，pasta 仅适用于 rootless Podman。build 与 run 的主机名解析可能不同，须验证构建网络中的可达性，不默认改成 host 网络。
 - 从运行 build 的应用根 package.json.version 读取版本，不能使用 CLI/框架版本或服务子包版本代替。清单格式 version=4，appVersion 为应用版本；servContainerPort/webContainerPort 仅记录 images 配置显式填写的端口，部分构建也保留未选镜像端口，未填写时沿用部署默认值。镜像 tar 名含版本、buildId 区分同版本构建，Tauri 也接收根版本。不要手改清单或保留无版本的交付归档。
