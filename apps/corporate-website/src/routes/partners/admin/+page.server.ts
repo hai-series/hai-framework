@@ -10,6 +10,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       pageSize: 20,
       search: '',
       status: '',
+      sortBy: 'created_at' as const,
+      sortDirection: 'desc' as const,
       loadError: 'Unauthorized',
     }
   }
@@ -19,6 +21,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     pageSize: url.searchParams.get('pageSize') ?? '20',
     search: url.searchParams.get('search') ?? undefined,
     status: url.searchParams.get('status') ?? undefined,
+    sortBy: url.searchParams.get('sortBy') ?? undefined,
+    sortDirection: url.searchParams.get('sortDirection') ?? undefined,
   })
 
   const result = await listPartnerLeads(query)
@@ -30,6 +34,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       pageSize: query.pageSize,
       search: query.search ?? '',
       status: query.status ?? '',
+      sortBy: query.sortBy,
+      sortDirection: query.sortDirection,
       loadError: result.error.message,
     }
   }
@@ -41,6 +47,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     pageSize: query.pageSize,
     search: query.search ?? '',
     status: query.status ?? '',
+    sortBy: query.sortBy,
+    sortDirection: query.sortDirection,
     loadError: '',
   }
 }

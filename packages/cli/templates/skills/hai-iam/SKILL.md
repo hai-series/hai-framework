@@ -15,6 +15,8 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 | 输出     | 认证、会话与授权操作的 HaiResult                                                                                                                                        |
 | 限制     | 仅服务端，先初始化 reldb/cache（crypto 未初始化时由 IAM 初始化）；公开认证入口是 iam.auth。客户端经 contract/API 调用，凭证只用于认证和安全存储，不进入日志或公开配置。 |
 
+用户列表列头排序通过公开 IAM HTTP 查询的 sortBy（username/email/displayName/enabled/createdAt）与 sortDirection（asc/desc）提交，服务端在分页前排序；角色等关联列不伪装为当前页排序。
+
 ## 使用路径
 
 - 密码登录接收 identifier/password，以及启用时的单用 captcha 证明；AuthPanel 将 LoginForm 的 username 映射为 identifier。会话期限来自服务端 session.maxAge/refreshTokenMaxAge，不增加未实现的登录偏好字段或持久会话选择框。

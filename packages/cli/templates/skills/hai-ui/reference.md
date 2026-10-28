@@ -66,7 +66,7 @@
 | 后台列表页 | `WorkspaceLayout` + `CrudPage`，自定义列表用 `FilterBar` / `TableToolbar` + `DataTable` + `Pagination` | 导航标题只出现一次；紧凑留白、条件可收起并保留值，分页固定在数据区外 |
 | 表单页/弹层表单 | `Form` + `FormField` + `Input/Select/...` | 表单字段布局统一交给 `FormField` |
 | 简单确认/详情弹层 | `Modal` / `Drawer` / `Confirm` | 根据桌面/移动端交互选择弹窗或抽屉 |
-| 完整 CRUD 页面 | `CrudPage` | 优先通过 `form` / `pagination` / `density` 配置，不要拆开重写；列头默认可排序、筛选栏自带「重置」 |
+| 完整 CRUD 页面 | `CrudPage` | 优先通过 `form` / `pagination` / `density` 配置，不要拆开重写；仅显式配置后端支持的排序列、筛选栏自带「重置」 |
 | 错误页（401/403/404/500/503） | `ErrorPage` | SvelteKit `+error.svelte` 中按 `page.status` 使用，`onhome`/`onback` 接管跳转 |
 | 设置页 | `SettingsLayout` | 分区导航 + 内容区；`sections` + `active` + `onselect`，内容放入 children |
 | 登录/注册页布局 | `AuthShell` + `LoginForm` / `RegisterForm` | `variant='card'` 或 `'split'`；split 可通过 `illustration`/`description`/`highlights` 放大图与重点说明 |
@@ -445,7 +445,7 @@ const p = usePlatform()
 | `CrudEditPanel`     | 编辑面板（抽屉/弹窗） |
 | `CrudDeleteConfirm` | 删除确认框 |
 
-`WorkspaceLayout` 的 title 为导航标题，leading/actions/footer 为 snippet；data-* 透传 main，没有页脚时不占位。PageHeader/SettingsLayout 自动省略同名标题；CrudPage 默认跟随工作区，showHeader 可覆盖，headerActions 不因隐藏标题而丢失。FilterBar 的 leading/actions 常驻、children 默认收起，支持 bind:expanded、activeCount 和 onreset；重置须由宿主清空所有查询条件。
+`WorkspaceLayout` 的 title 为导航标题，leading/actions/footer 为 snippet；data-* 透传 main，没有页脚时不占位。PageHeader/SettingsLayout 自动省略同名标题；CrudPage 默认跟随工作区，showHeader 可覆盖，headerActions 不因隐藏标题而丢失。FilterBar 的 leading/actions 常驻、children 默认收起，支持 bind:expanded、activeCount 和 onreset；重置须由宿主清空所有查询条件并重新查询。TableToolbar / CrudFilterBar 修改草稿不自动请求，Query 或 Enter 一次提交当前绑定搜索与全部条件；onfilterchange 仅通知草稿变化。CrudPage 与 FeedbackList 将查询栏、数据区、底部分页放入同一卡片；排序通过支持的 DataTable 列头触发，翻页/排序不提交未查询草稿。扩展筛选横向间距 20px、纵向间距 16px，标签和等高控件分别对齐；根据容器宽度切换列数，窄屏单列。
 
 `CrudPage` 是首选入口；只有在你明确要自定义组合方式时，才直接使用 `CrudFilterBar` / `CrudDetailPanel` / `CrudEditPanel`。
 
@@ -461,8 +461,7 @@ const p = usePlatform()
 | `pagination.showJumper` / `pagination.showTotal` | 跳页输入 / 总数（默认开启） |
 | `pagination.showPageInfo` / `pagination.showFirstLast` | 页码文案 / 首页末页按钮（默认开启；紧凑视图可关闭） |
 | `density` | 列表密度：`'normal'`（默认）或 `'compact'`；仅影响列表行、行内操作、分页与创建/编辑/详情表单 |
-| `toolbarStyle` | `'toolbar'`（图标弹层，默认）或 `'filter-bar'`（平铺筛选栏） |
-| `showHeader` / `toolbarLeading` | 关闭默认页头并在工具栏左侧放置标题或说明 |
+| `showHeader` / `toolbarLeading` | 关闭默认页头并在卡片上方放置标题或说明 |
 | `toolbarActions` | 工具栏业务操作 snippet |
 | `card` | 卡片列表项渲染 snippet；仍复用分页和独立滚动容器 |
 | `detailColumns` | 点击后打开详情抽屉的列 key，例如 `['title']` |
@@ -701,4 +700,4 @@ Node 请求/SSR 必须用 `core.i18n.runWithLocale(locale, callback)`（kit 同�
 
 新页面/较大改版由 [hai-ui-design](../hai-ui-design/SKILL.md) 记录任务、信息结构、状态与组件映射；本参考负责公开用法；[hai-ui-review](../hai-ui-review/SKILL.md) 查看真实页面。theme.css 已引入 design-tokens.css；--hai-focus-color 缺省跟随主题 primary。
 
-Tabs 提供单一 Tab 入口、方向键/Home/End、跳过禁用项和 children 内容关联。DataTable 提供 aria-sort、aria-busy、加载文字及行键盘激活。Pagination 导航与输入名称走 UI i18n，外部 page 同步跳页草稿，触摸设备扩大按钮。TableToolbar 进入弹层后聚焦，Escape 返回触发点，视图按钮带 aria-pressed；业务回调仍须实际更新对应数据和视图。Empty/Alert 可容纳长内容与恢复操作；全局样式响应减少动态效果。
+Tabs 提供单一 Tab 入口、方向键/Home/End、跳过禁用项和 children 内容关联。DataTable 提供 aria-sort、aria-busy、加载文字及行键盘激活。Pagination 导航与输入名称走 UI i18n，外部 page 同步跳页草稿，触摸设备扩大按钮。TableToolbar 与 CrudFilterBar 共用原生查询表单，查询/重置常驻，展开条件遵循文档焦点顺序，视图按钮带 aria-pressed；业务回调仍须实际更新对应数据和视图。Empty/Alert 可容纳长内容与恢复操作；全局样式响应减少动态效果。

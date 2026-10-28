@@ -22,7 +22,7 @@ it.each(['submit', 'button', 'reset'] as const)('%s 按钮仅在原生提交时�
   }
 })
 
-it('搜索 Enter 立即查询一次，取消防抖；输入法确认不触发查询', async () => {
+it('搜索原生提交只查询一次；输入法确认阻止隐式提交', async () => {
   vi.useFakeTimers()
   const target = document.body.appendChild(document.createElement('div'))
   const onsearch = vi.fn()
@@ -31,9 +31,11 @@ it('搜索 Enter 立即查询一次，取消防抖；输入法确认不触发查
     flushSync()
     const input = target.querySelector('input')!
     input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true }))
+    const composing = new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true })
+    input.dispatchEvent(composing)
+    expect(composing.defaultPrevented).toBe(true)
     expect(onsearch).not.toHaveBeenCalled()
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    target.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     expect(onsearch).toHaveBeenCalledExactlyOnceWith('needle')
     vi.advanceTimersByTime(500)
     expect(onsearch).toHaveBeenCalledTimes(1)

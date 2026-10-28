@@ -95,6 +95,8 @@ apps/desktop-app/
 
 ### 设计要点
 
+用户列表使用卡片内查询栏、独立滚动表格与底部分页。查询/Enter 一次提交草稿，重置清空条件；用户名、邮箱和状态的列头排序交由服务端在分页前执行，翻页与排序保留已提交搜索条件。
+
 - **Token 默认仅存内存**：Tauri webview 与 api-service 跨域时无法直接复用 httpOnly cookie；示例选择安全的内存存储，应用重启后需重新登录。生产应用如需持久会话，应实现基于操作系统密钥库（如 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/)）的 `TokenStorage`，禁止把 access/refresh token 写入 localStorage。
 - **权限由服务端刷新**：`iam.auth.currentUser()` 同时返回当前用户、角色与权限；客户端不持久化权限快照，UI 状态始终来自已校验会话。
 - **业务 API 默认走 transport 加密**：`src/lib/api.ts` 启动时会读取 `config/_crypto.yml`，启用 `@h-ai/crypto` + `@h-ai/api-client` 的密钥协商与请求/响应加解密。

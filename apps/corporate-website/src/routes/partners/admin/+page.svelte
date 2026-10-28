@@ -1,27 +1,15 @@
 <script lang='ts'>
+  import type { PageData } from './$types'
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { Alert, Badge, Button, Card, Empty, FilterBar, Input, PageHeader, Select } from '@h-ai/ui'
+  import { Alert, Badge, Button, Card, DataTable, FilterBar, Input, PageHeader, Pagination, Select } from '@h-ai/ui'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
 
-  interface Props {
-    data: {
-      records: Array<Record<string, unknown>>
-      total: number
-      page: number
-      pageSize: number
-      search: string
-      status: string
-      loadError: string
-    }
-  }
-
-  const { data }: Props = $props()
+  const { data }: { data: PageData } = $props()
 
   let search = $state('')
   let status = $state('')
-  const totalPages = $derived(Math.max(1, Math.ceil(data.total / data.pageSize)))
 
   const statusOptions = $derived([
     { value: '', label: m.admin_status_all() },
@@ -38,10 +26,6 @@
 
   const emptyRouteParams = {}
 
-  function getRecordKey(item: Record<string, unknown>, index: number): string {
-    return String(item.id ?? item.created_at ?? item.email ?? item.company_name ?? index)
-  }
-
   $effect(() => {
     search = data.search
     status = data.status
@@ -54,18 +38,35 @@
     }
   })
 
-  async function handleFilter(event?: Event) {
-    event?.preventDefault()
-    const params = new SvelteURLSearchParams()
-    params.set('page', '1')
-    params.set('pageSize', String(data.pageSize))
-    if (search.trim())
-      params.set('search', search.trim())
-    if (status)
-      params.set('status', status)
+  const columns = $derived([
+    { key: 'created_at', label: m.admin_col_time(), sortable: true },
+    { key: 'company_name', label: m.admin_col_company(), sortable: true },
+    { key: 'contact_name', label: m.admin_col_contact(), sortable: true },
+    { key: 'contact_info', label: m.admin_col_contact_info() },
+    { key: 'cooperation_type', label: m.admin_col_type(), sortable: true },
+    { key: 'budget_range', label: m.admin_col_budget(), sortable: true },
+    { key: 'status', label: m.admin_col_status(), sortable: true },
+  ])
 
-    const adminHref = resolve(`/partners/admin?${params.toString()}`, emptyRouteParams)
-    await goto(adminHref)
+  function navigate(overrides: Partial<Pick<PageData, 'page' | 'pageSize' | 'search' | 'status' | 'sortBy' | 'sortDirection'>>) {
+    const values = { page: data.page, pageSize: data.pageSize, search: data.search, status: data.status, sortBy: data.sortBy, sortDirection: data.sortDirection, ...overrides }
+    const params = new SvelteURLSearchParams()
+    for (const [key, value] of Object.entries(values)) {
+      if (value !== '')
+        params.set(key, String(value))
+    }
+    void goto(resolve(`/partners/admin?${params}`, emptyRouteParams), { keepFocus: true, noScroll: true, invalidateAll: true })
+  }
+
+  function handleFilter(event: SubmitEvent) {
+    event.preventDefault()
+    navigate({ page: 1, search: search.trim(), status })
+  }
+
+  function sort(key: string, direction: 'asc' | 'desc') {
+    const field = (['created_at', 'company_name', 'contact_name', 'cooperation_type', 'budget_range', 'status'] as const).find(field => field === key)
+    if (field)
+      navigate({ page: 1, sortBy: field, sortDirection: direction })
   }
 
   async function handleLogout() {
@@ -74,108 +75,37 @@
     await goto(loginHref)
   }
 
-  function navigatePage(nextPage: number) {
-    const params = new SvelteURLSearchParams()
-    params.set('page', String(nextPage))
-    params.set('pageSize', String(data.pageSize))
-    if (search.trim())
-      params.set('search', search.trim())
-    if (status)
-      params.set('status', status)
-
-    const adminHref = resolve(`/partners/admin?${params.toString()}`, emptyRouteParams)
-    void goto(adminHref)
-  }
 </script>
 
 <svelte:head>
   <title>{m.nav_partner_admin()} - {m.brand()}</title>
 </svelte:head>
 
-<section class='px-4 py-4 lg:px-6'>
-  <div class='w-full min-w-0 space-y-3'>
-    <div class='flex items-center justify-between gap-3'>
-      <PageHeader title={m.nav_partner_admin()} description='{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}' />
-      <Button variant='default' size='sm' outline onclick={handleLogout}>
-        <span class='icon-[tabler--logout] size-4'></span>
-        {m.admin_logout()}
-      </Button>
-    </div>
-
-    <Card shadow='sm'>
-      <form onsubmit={handleFilter}>
-        <FilterBar activeCount={status ? 1 : 0} onreset={() => {
-          search = ''
-          status = ''
-          void handleFilter()
-        }} data-testid='partner-filters'>
-          {#snippet leading()}<Input size='sm' class='min-w-0 flex-1' placeholder={m.admin_search_placeholder()} bind:value={search} data-testid='partner-search' />{/snippet}
-          {#snippet actions()}<Button type='submit' submitHint size='sm' variant='primary'>{m.admin_search_button()}</Button>{/snippet}
-          <div class='w-full sm:w-56'><Select size='sm' options={statusOptions} bind:value={status} /></div>
-        </FilterBar>
-      </form>
-    </Card>
-
-    {#if data.loadError}
-      <Alert variant='error'>{data.loadError}</Alert>
-    {/if}
-
-    <Card shadow='sm' class='overflow-x-auto'>
-      <table class='table table-zebra w-full'>
-        <thead>
-          <tr>
-            <th class='text-base-content/70'>{m.admin_col_time()}</th>
-            <th class='text-base-content/70'>{m.admin_col_company()}</th>
-            <th class='text-base-content/70'>{m.admin_col_contact()}</th>
-            <th class='text-base-content/70'>{m.admin_col_contact_info()}</th>
-            <th class='text-base-content/70'>{m.admin_col_type()}</th>
-            <th class='text-base-content/70'>{m.admin_col_budget()}</th>
-            <th class='text-base-content/70'>{m.admin_col_status()}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#if data.records.length === 0}
-            <tr>
-              <td colspan='7'>
-                <Empty description={m.admin_empty()} />
-              </td>
-            </tr>
-          {:else}
-            {#each data.records as item, index (getRecordKey(item, index))}
-              <tr class='hover:bg-base-200/50 transition-colors'>
-                <td class='whitespace-nowrap tabular-nums'>{String(item.created_at ?? '')}</td>
-                <td class='font-medium'>{String(item.company_name ?? '')}</td>
-                <td>{String(item.contact_name ?? '')}</td>
-                <td>
-                  <div class='text-xs leading-5'>
-                    <div>{String(item.phone ?? '')}</div>
-                    <div class='text-base-content/50'>{String(item.email ?? '')}</div>
-                  </div>
-                </td>
-                <td>{String(item.cooperation_type ?? '')}</td>
-                <td>{String(item.budget_range ?? '')}</td>
-                <td>
-                  <Badge variant={statusVariantMap[String(item.status ?? '')] ?? 'default'} outline>
-                    {String(item.status ?? '')}
-                  </Badge>
-                </td>
-              </tr>
-            {/each}
-          {/if}
-        </tbody>
-      </table>
-    </Card>
-
-    <div class='flex items-center justify-end gap-2'>
-      <Button size='sm' variant='default' disabled={data.page <= 1} onclick={() => navigatePage(data.page - 1)}>
-        <span class='icon-[tabler--chevron-left] size-4'></span>
-        {m.admin_page_prev()}
-      </Button>
-      <span class='text-sm text-base-content/60 tabular-nums'>{data.page} / {totalPages}</span>
-      <Button size='sm' variant='default' disabled={data.page >= totalPages} onclick={() => navigatePage(data.page + 1)}>
-        {m.admin_page_next()}
-        <span class='icon-[tabler--chevron-right] size-4'></span>
-      </Button>
-    </div>
+<section class='flex h-[calc(100dvh-4rem)] min-h-0 min-w-0 flex-col gap-3 px-4 py-4 lg:px-6'>
+  <div class='flex shrink-0 items-center justify-between gap-3'>
+    <PageHeader title={m.nav_partner_admin()} description={m.admin_records_total({ total: String(data.total) })} class='mb-0' />
+    <Button variant='default' size='sm' outline onclick={handleLogout}><span class='icon-[tabler--logout] size-4'></span>{m.admin_logout()}</Button>
   </div>
+  <Card padding='none' shadow={false} class='flex min-h-0 flex-1 flex-col overflow-hidden [&>.card-body]:min-h-0 [&>.card-body]:flex-1 [&>.card-body]:gap-0'>
+    <form class='shrink-0 border-b border-base-content/8 p-3' onsubmit={handleFilter}>
+      <FilterBar activeCount={status ? 1 : 0} onreset={() => {
+        search = ''
+        status = ''
+        navigate({ page: 1, search: '', status: '', sortBy: 'created_at', sortDirection: 'desc' })
+      }} data-testid='partner-filters'>
+        {#snippet leading()}<Input type='search' size='sm' placeholder={m.admin_search_placeholder()} bind:value={search} data-testid='partner-search' />{/snippet}
+        {#snippet actions()}<Button type='submit' submitHint size='sm' variant='outline'>{m.admin_search_button()}</Button>{/snippet}
+        <div class='w-full sm:w-56'><Select size='sm' options={statusOptions} bind:value={status} /></div>
+      </FilterBar>
+    </form>
+    {#if data.loadError}<Alert variant='error'>{data.loadError}</Alert>{/if}
+    <DataTable data={data.records} {columns} keyField='id' striped={false} sortKey={data.sortBy} sortDir={data.sortDirection} onsort={sort} class='min-h-0 min-w-0 flex-1 overflow-auto'>
+      {#snippet cell(item, key)}
+        {#if key === 'contact_info'}<div class='text-xs leading-5'><div>{String(item.phone ?? '')}</div><div class='text-base-content/60'>{String(item.email ?? '')}</div></div>
+        {:else if key === 'status'}<Badge variant={statusVariantMap[String(item.status ?? '')] ?? 'default'} outline>{String(item.status ?? '')}</Badge>
+        {:else}{String(item[key] ?? '')}{/if}
+      {/snippet}
+    </DataTable>
+    <div class='mt-auto shrink-0 border-t border-base-content/8 px-3 py-2'><Pagination page={data.page} total={data.total} pageSize={data.pageSize} showSizeChanger showJumper onchange={page => navigate({ page })} onpagesizechange={pageSize => navigate({ page: 1, pageSize })} /></div>
+  </Card>
 </section>

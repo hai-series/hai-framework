@@ -80,7 +80,7 @@ test('高对比主题可从导航选择，刷新保留，真实控件对比度�
   await waitForHydration(page)
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark')
-  const controls = [page.locator('.hai-workspace button.btn-primary').first(), page.locator('.hai-workspace > footer'), page.locator('.hai-workspace input[type="text"]:visible').first()]
+  const controls = [page.locator('.hai-workspace button.btn-primary').first(), page.locator('.hai-workspace > footer'), page.locator('.hai-workspace input[type="search"]:visible').first()]
   for (const control of controls) {
     await expect(control).toBeVisible()
     const ratios = await control.evaluate((element) => {

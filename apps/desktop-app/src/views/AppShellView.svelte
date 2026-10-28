@@ -40,24 +40,24 @@
 <div class='flex h-screen flex-col'>
   <AppBar title={m('app_title')} fixed={false} safeArea={false}>
     {#snippet trailing()}
-      <div class='flex items-center gap-2'>
-        <LanguageSwitch currentLanguage={localeStore.current} onchange={language => localeStore.set(language)} />
+      <div class='flex min-w-0 max-w-full items-center gap-2'>
+        <LanguageSwitch compact currentLanguage={localeStore.current} onchange={language => localeStore.set(language)} />
         <ThemeToggle />
         {#if currentUser()}
-          <span class='text-sm opacity-70'>{currentUser()?.username}</span>
+          <span class='hidden max-w-40 truncate text-sm opacity-70 md:inline'>{currentUser()?.username}</span>
         {/if}
         <Button variant='ghost' size='sm' onclick={handleLogout}>{m('action_logout')}</Button>
       </div>
     {/snippet}
   </AppBar>
 
-  <div class='flex min-h-0 flex-1 overflow-hidden'>
-    <aside class='bg-base-200 border-base-300 flex w-56 shrink-0 flex-col gap-1 border-r p-3'>
+  <div class='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:flex-row'>
+    <aside class='bg-base-200 border-base-300 flex w-full shrink-0 flex-row gap-1 overflow-x-auto border-b p-2 sm:w-56 sm:flex-col sm:border-r sm:border-b-0 sm:p-3'>
       {#each navItems as item (item.path)}
         <Button
           variant={currentPathname() === item.path ? 'primary' : 'ghost'}
           size='sm'
-          class='justify-start'
+          class='shrink-0 justify-start'
           onclick={() => navigate(item.path)}
         >
           {item.label}

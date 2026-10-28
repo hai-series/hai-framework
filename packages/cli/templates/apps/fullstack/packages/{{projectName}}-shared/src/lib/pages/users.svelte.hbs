@@ -25,11 +25,11 @@
   let accountStatus = $state<'active' | 'dormant' | 'closed'>('active')
   let expiresAt = $state('')
   const columns = $derived([
-    { key: 'username', label: m.user_account() },
-    { key: 'email', label: m.user_email() },
+    { key: 'username', sortable: true, label: m.user_account() },
+    { key: 'email', sortable: true, label: m.user_email() },
     { key: 'roles', label: m.user_role() },
-    { key: 'enabled', label: m.user_status() },
-    { key: 'createdAt', label: m.created_at() },
+    { key: 'enabled', sortable: true, label: m.user_status() },
+    { key: 'createdAt', sortable: true, label: m.created_at() },
   ])
   const roleOptions = $derived([{ value: 'admin' as const, label: m.role_admin() }, { value: 'user' as const, label: m.role_user() }])
   const statusOptions = $derived([{ value: 'all', label: m.all_statuses() }, { value: 'enabled', label: m.enabled() }, { value: 'disabled', label: m.disabled() }])
@@ -86,12 +86,14 @@
   <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100">
     <form class='shrink-0 border-b border-base-content/8 p-3' onsubmit={(event) => {
       event.preventDefault()
-      void store.loadUsers()
+      void store.queryUsers()
     }}>
       <FilterBar activeCount={store.usersStatus === 'all' ? 0 : 1} onreset={() => {
         store.usersSearch = ''
         store.usersStatus = 'all'
-        void store.loadUsers()
+        store.usersSortBy = 'createdAt'
+        store.usersSortDirection = 'desc'
+        void store.queryUsers()
       }} data-testid='users-filters'>
         {#snippet leading()}<div class='min-w-0 flex-1'><Input type='search' size='sm' bind:value={store.usersSearch} placeholder={m.users_search()} data-testid='users-search' /></div>{/snippet}
         {#snippet actions()}<Button type='submit' submitHint size='sm' variant='outline' disabled={store.loading}>{m.search()}</Button>{/snippet}
@@ -99,7 +101,7 @@
       </FilterBar>
     </form>
     <div class="hidden min-h-0 flex-1 overflow-auto md:flex md:flex-col">
-      <DataTable data={store.users} {columns} keyField="id" loading={store.loading} striped={false} class="min-h-0 flex-1 overflow-auto">
+      <DataTable data={store.users} {columns} keyField="id" loading={store.loading} striped={false} sortKey={store.usersSortBy} sortDir={store.usersSortDirection} onsort={(key, direction) => void store.sortUsers(key, direction)} class="min-h-0 flex-1 overflow-auto">
         {#snippet cell(user, key)}
           {#if key === 'username'}
             <div class="flex items-center gap-3">

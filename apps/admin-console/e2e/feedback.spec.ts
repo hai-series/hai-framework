@@ -360,6 +360,7 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
 
 test('列表通过服务端分页与筛选取得不同记录', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
+  await page.setViewportSize({ width: 1440, height: 900 })
   await loginOnPage(page, dutyAccounts.operator.username, dutyAccounts.operator.password)
   const search = uniqueUser('fbpages').username
   const first = await submitFeedback(page, `${search} first`)
@@ -375,11 +376,58 @@ test('列表通过服务端分页与筛选取得不同记录', async ({ page }, 
   await expect(page.locator('tbody tr')).toHaveCount(1)
   await expect(page.locator('tbody tr')).not.toHaveText(firstPage)
   await capture(page, 'feedback-page-2.png', testInfo)
-  await page.getByRole('button', { name: '筛选', exact: true }).click()
+  await page.getByRole('button', { name: '展开筛选', exact: true }).click()
+  const layout = await page.locator('.feedback-list .hai-table-toolbar__filters').evaluate((element) => {
+    const grid = element.querySelector<HTMLElement>('.hai-form-grid')!
+    return {
+      gap: Number.parseFloat(getComputedStyle(grid).columnGap),
+      fields: [...grid.querySelectorAll<HTMLElement>(':scope > .hai-form-field')].map((field) => {
+        const label = field.querySelector('label')!
+        const control = field.querySelector<HTMLElement>('.field-content > .fieldset > div') ?? field.querySelector<HTMLElement>('select, input')!
+        const box = field.getBoundingClientRect()
+        const controlBox = control.getBoundingClientRect()
+        return { left: box.left, right: box.right, controlRight: controlBox.right, controlLeft: controlBox.left, labelTop: label.getBoundingClientRect().top, controlTop: controlBox.top, height: controlBox.height }
+      }),
+    }
+  })
+  expect(layout.gap).toBeGreaterThanOrEqual(16)
+  for (const [index, field] of layout.fields.entries()) {
+    expect(Math.abs(field.labelTop - layout.fields[0]!.labelTop)).toBeLessThanOrEqual(1)
+    expect(Math.abs(field.controlTop - layout.fields[0]!.controlTop)).toBeLessThanOrEqual(1)
+    expect(Math.abs(field.height - layout.fields[0]!.height)).toBeLessThanOrEqual(1)
+    expect(field.controlRight).toBeLessThanOrEqual(field.right + 1)
+    if (index > 0)
+      expect(field.controlLeft - layout.fields[index - 1]!.controlRight).toBeGreaterThanOrEqual(16)
+  }
   await page.getByRole('combobox', { name: '处理状态', exact: true }).selectOption('handled')
+  await expect(page).not.toHaveURL(/status=handled/)
+  await page.getByRole('button', { name: '查询', exact: true }).click()
   await expect(page).toHaveURL(/status=handled/)
   await expect(page.locator('tbody td')).toContainText(['暂无数据'])
   await capture(page, 'feedback-filter-empty.png', testInfo)
+  await page.getByRole('button', { name: '重置', exact: true }).click()
+  await expect(page).not.toHaveURL(/status=handled/)
+  const searchInput = page.getByPlaceholder('搜索编号或说明')
+  await searchInput.fill(search)
+  await searchInput.press('Enter')
+  const header = page.getByRole('columnheader', { name: '提交时间' })
+  await header.getByRole('button').click()
+  await expect(header).toHaveAttribute('aria-sort', 'ascending')
+  await expect(page.locator('tbody tr').first()).toContainText(first)
+  await header.getByRole('button').click()
+  await expect(header).toHaveAttribute('aria-sort', 'descending')
+  await expect(page.locator('tbody tr').first()).toContainText(second)
+  for (const width of [390, 1440, 1920, 2560, 3840]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const pagination = page.locator('.feedback-list .hai-pagination__navigation')
+    await expect(pagination).toBeVisible()
+    expect((await pagination.boundingBox())!.y).toBeLessThan(900)
+    await page.locator('.feedback-list table').evaluate((table) => {
+      table.parentElement!.scrollLeft = 0
+    })
+    await capture(page, `feedback-unified-${width}.png`, testInfo)
+  }
 })
 
 test('无反馈管理权限的用户不能读取列表或修改已有反馈', async ({ page, playwright, baseURL }) => {

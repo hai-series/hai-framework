@@ -32650,12 +32650,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "DAISYUI_THEMES_CONFIG",
               "kind": "value",
               "declaration": "DAISYUI_THEMES_CONFIG",
@@ -34940,12 +34934,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "DAISYUI_THEMES_CONFIG",
               "kind": "value",
               "declaration": "DAISYUI_THEMES_CONFIG",
@@ -37227,12 +37215,6 @@
               "name": "CrudText",
               "kind": "type",
               "declaration": "CrudText",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -40284,12 +40266,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "DataTable",
               "kind": "value+type",
               "declaration": "DataTable",
@@ -41758,12 +41734,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "DataTable",
               "kind": "value+type",
               "declaration": "DataTable",
@@ -43229,12 +43199,6 @@
               "name": "CrudText",
               "kind": "type",
               "declaration": "CrudText",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -46188,12 +46152,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "defineCrud",
               "kind": "value",
               "declaration": "defineCrud",
@@ -46378,12 +46336,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "defineCrud",
               "kind": "value",
               "declaration": "defineCrud",
@@ -46565,12 +46517,6 @@
               "name": "CrudText",
               "kind": "type",
               "declaration": "CrudText",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -47688,12 +47634,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "defineCrud",
               "kind": "value",
               "declaration": "defineCrud",
@@ -48772,12 +48712,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
               "name": "defineCrud",
               "kind": "value",
               "declaration": "defineCrud",
@@ -49853,12 +49787,6 @@
               "name": "CrudText",
               "kind": "type",
               "declaration": "CrudText",
-              "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "CrudToolbarStyle",
-              "kind": "type",
-              "declaration": "CrudToolbarStyle",
               "declarationKind": "TypeAliasDeclaration"
             },
             {

@@ -102,17 +102,6 @@ export interface CrudPaginationConfig {
 }
 
 /**
- * CrudPage 工具栏风格；toolbar 是默认的图标弹层布局。
- *
- * @example
- * ```ts
- * import type { CrudToolbarStyle } from '@h-ai/ui'
- * const example: CrudToolbarStyle = 'toolbar'
- * ```
- */
-export type CrudToolbarStyle = 'filter-bar' | 'toolbar'
-
-/**
  * CrudPage 初始列表数据（由 +page.server.ts load 返回）
  * @typeParam T - 字段值或资源条目的数据类型。
  *
@@ -207,15 +196,13 @@ export interface CrudPageProps<T = Record<string, unknown>> extends DataAttribut
   detailExtra?: Snippet<[T]>
   /** 页面头部额外操作区插槽 */
   headerActions?: Snippet
-  /** 工具栏风格；toolbar 使用图标弹层，filter-bar 使用平铺筛选栏。 */
-  toolbarStyle?: CrudToolbarStyle
-  /** toolbar 风格下工具栏左侧内容插槽，可放置页面标题或说明。 */
+  /** 查询栏上方左侧内容插槽，可放置页面标题或说明。 */
   toolbarLeading?: Snippet
   /** 工具栏右侧自定义操作插槽。 */
   toolbarActions?: Snippet
   /** 卡片列表项渲染插槽；存在时替代数据表格，分页和滚动容器保持一致。 */
   card?: Snippet<[T]>
-  /** 可排序列；为空时默认使用全部列表列。 */
+  /** 后端支持的可排序列；为空时不显示排序按钮。 */
   sortableColumns?: Array<{ key: string, label: string }>
   /** 删除前钩子（返回 false 取消） */
   onbeforedelete?: (item: T) => Promise<boolean> | boolean

@@ -419,13 +419,13 @@ components/
 
 | コンポーネント      | 説明                                                   | 主なプロパティ・機能                                                                                                                                                                                                                                                        |
 | ------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CrudPage`          | CRUD ページ                                            | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarStyle`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav`, `loading`, `loaded`, `error`, `onRetry`, `keepPreviousData` |
+| `CrudPage`          | CRUD ページ                                            | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav`, `loading`, `loaded`, `error`, `onRetry`, `keepPreviousData` |
 | `CrudFilterBar`     | 絞り込みツールバー（検索 + 各種フィルター + リセット） | `filterFields`, `searchValue`, `onsearch`, `onfilterchange`, `onreset`                                                                                                                                                                                                      |
 | `CrudDetailPanel`   | 詳細パネル（ドロワー・モーダル）                       | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize`                                                                                                                                                                                                             |
 | `CrudEditPanel`     | 編集パネル（ドロワー・モーダル）                       | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit`                                                                                                                                                                                                         |
 | `CrudDeleteConfirm` | 削除確認                                               | `open`, `loading`, `onconfirm`                                                                                                                                                                                                                                              |
 
-> `CrudPage` は既定で `TableToolbar` のアイコン・ポップアップ形式を使い、`toolbarStyle='filter-bar'` で平置きにできます。`detailColumns={['title']}` は指定列を詳細入口にします。`toolbarLeading` は左のタイトル・説明、`showHeader={false}` はタイトル重複の防止、`toolbarActions` は右の操作に使います。`card` は行をカード化、`tableCell` は行・列 key で Tooltip などの操作要素を描画、`sortableColumns` はサーバーのソート項目を制御します。フィルターは `select`、`boolean`、`number`、`date`、`date-range`、`text` に対応します。
+> `CrudPage` と `FeedbackList` はカード内の検索欄、独立してスクロールする表、下端のページ切り替えを共有します。検索・実行・リセットは常に表示し、追加条件は入力を保持して折りたたみます。検索ボタンまたは Enter で全条件を一度だけ送信し、編集中は検索しません。ページ移動と並べ替えは適用済み条件を使用します。リセットは検索・条件・並べ替えを初期化して先頭ページに戻します。並べ替えボタンは列見出しに表示し、`sortableColumns` にはサーバーが対応する列だけを指定します。`detailColumns` は詳細入口、`toolbarLeading` / `toolbarActions` はカード上の説明・操作、`card` / `tableCell` は独自内容に利用します。条件は `select`、`boolean`、`number`、`date`、`date-range`、`text` に対応します。 `sortableColumns` を省略すると並べ替えボタンは表示せず、サーバー対応列を明示します。
 >
 > ページは親の利用可能な高さを満たします。データの有無にかかわらずテーブルが残りの領域を使い、データ部分のみがスクロールします。見出しはデータ領域の上、ページ分割は一覧カードの下に固定します。
 > ビューポートの外枠からコンテンツまで、各親要素に `flex flex-1 min-h-0 flex-col` などで残りの高さを渡します。中間のラッパーを内容だけの高さにしないでください。空・少数・スクロールする一覧でもページ分割は下部に配置されます。
@@ -438,7 +438,7 @@ components/
 | -------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
 | `ErrorPage`    | 401/403/404/500/503 の既定表示付き汎用エラーページ | `status`, `code`, `title`, `description`, `homeUrl`, `onhome`, `onback` |
 
-> `CrudPage` の作成・編集の表示は `form` で設定します：
+> `CrudPage` の作成・編集の表示は `form` で設定します： `sortableColumns` を省略すると並べ替えボタンは表示せず、サーバー対応列を明示します。
 >
 > - `form.variant`：`'drawer'`（既定）または `'modal'`。
 > - ドロワー：`form.drawerSize` は既定サイズ、`form.drawerWidth` は任意の CSS 幅で優先されます。既定で左端をドラッグでき、リソースごとに幅を記憶します。`form.drawerResizable=false` で無効化。
@@ -964,7 +964,7 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 同名の `PageHeader` は重複する見出しを省略し、説明と操作を保持します。`SettingsLayout` も同じ動作です。作業領域内の `CrudPage` は既定でナビゲーションの見出しだけを表示し、操作をツールバーに残します。単独利用時は見出しを表示し、showHeader で明示的に変更できます。
 
-`FilterBar` は leading と actions を常に表示し、children を既定で折りたたみます。bind:expanded は開閉、activeCount は適用中の件数、onreset は3言語対応のリセットボタンです。折りたたんでも入力を保持し、条件の初期化と問い合わせは業務側のコールバックが担当します。`CrudFilterBar` もこれを利用し、actions を追加でき、破棄時に未送信の遅延検索を取り消します。
+`FilterBar` は leading と actions を常に表示し、children を既定で折りたたみます。bind:expanded は開閉、activeCount は適用中の件数、onreset は3言語対応のリセットボタンです。折りたたんでも入力を保持し、条件の初期化と問い合わせは業務側のコールバックが担当します。`TableToolbar` は同じレイアウトとネイティブ検索フォームを提供し、`CrudFilterBar` もその実装を共有します。`onsearch` は現在の検索・条件を送信し、`onfilterchange` は編集中の変更だけを通知します。`onreset`（TableToolbar は `onclearfilters`）で適用済み条件を初期化して再検索します。旧 `toolbarStyle` と並べ替えポップアップ・属性は削除され、DataTable の `sortKey`、`sortDir`、`onsort` を使用します。 展開した条件はコンテナ幅に応じて1/2/4/6列となり、横20px・縦16pxの間隔でラベルと同じ高さの入力欄を揃えます。日付範囲は2列を占め、狭い画面では行全体に配置します。
 
 例の m、statusOptions、clearFilters、loadRows は業務アプリが提供します。リセット時は検索語と全条件を初期化してください。
 
@@ -990,7 +990,7 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 画面設計は [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)、実装は [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)、実画面の確認は [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md) を参照してください。[共通設計指針](../../.agents/instructions/ui-design.md) も利用できます。
 
-Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab 入口に対応します。表は並べ替え・読み込み状態と行のキーボード操作を提供します。ページ切り替えのラベルは言語に従い、外部ページ変更を入力欄に同期します。ツールバーはフォーカスと表示切り替え状態を管理します。Empty/Alert は長文を折り返します。theme.css は共通 tokens を読み込み、global.css は動きを減らす設定に対応します。業務側で検索、並べ替え、ページ切り替えと復旧処理を接続してください。
+Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab 入口に対応します。表は並べ替え・読み込み状態と行のキーボード操作を提供します。ページ切り替えのラベルは言語に従い、外部ページ変更を入力欄に同期します。展開した条件は文書のフォーカス順序に従い、表示切り替えの選択状態を提供します。Empty/Alert は長文を折り返します。theme.css は共通 tokens を読み込み、global.css は動きを減らす設定に対応します。業務側で検索、並べ替え、ページ切り替えと復旧処理を接続してください。
 
 ## エラー表示とログの関連付け
 

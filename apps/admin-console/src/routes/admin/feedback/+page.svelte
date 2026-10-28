@@ -45,7 +45,7 @@
       if (value !== undefined && value !== '')
         search.set(key, String(value))
     }
-    await goto(resolve(`/admin/feedback?${search}`, {}), { keepFocus: true, noScroll: true })
+    await goto(resolve(`/admin/feedback?${search}`, {}), { keepFocus: true, noScroll: true, invalidateAll: true })
   }
 
   async function view(report: Pick<FeedbackReportView, 'id'>) {

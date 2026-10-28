@@ -112,9 +112,9 @@
 | @h-ai/storage | `./client (types)` | 9 |
 | @h-ai/storage | `./schemas (import)` | 8 |
 | @h-ai/storage | `./schemas (types)` | 8 |
-| @h-ai/ui | `. (import)` | 380 |
-| @h-ai/ui | `. (svelte)` | 380 |
-| @h-ai/ui | `. (types)` | 380 |
+| @h-ai/ui | `. (import)` | 379 |
+| @h-ai/ui | `. (svelte)` | 379 |
+| @h-ai/ui | `. (types)` | 379 |
 | @h-ai/ui | `./auto-import (import)` | 1 |
 | @h-ai/ui | `./auto-import (types)` | 1 |
 | @h-ai/ui | `./guide (import)` | 11 |

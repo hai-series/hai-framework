@@ -118,6 +118,29 @@ test('hash routing and responsive workspace preserve usable content width', asyn
   await page.goto('/#/unknown-page')
   await expect(page).toHaveURL(/#\/users$/)
   await expect(page.getByTestId('users-page')).toBeVisible()
+  const usersPage = page.getByTestId('users-page')
+  const accountHeader = usersPage.locator('th').first()
+  await accountHeader.getByRole('button').click()
+  await expect(accountHeader).toHaveAttribute('aria-sort', 'ascending')
+  const search = usersPage.getByTestId('users-search').locator('input')
+  await search.fill('unsubmitted-query-draft')
+  const sorted = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/admin/users/list'))
+  await accountHeader.getByRole('button').click()
+  await sorted
+  await expect(usersPage.locator('tbody')).toContainText('admin')
+  await search.press('Enter')
+  await expect(usersPage.locator('tbody')).not.toContainText('admin')
+  const reset = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/admin/users/list'))
+  await usersPage.getByRole('button', { name: /重置|Reset|リセット/, exact: true }).click()
+  await reset
+  await expect(search).toHaveValue('')
+  await expect(usersPage.locator('tbody')).toContainText('admin')
+  for (const width of [390, 1440, 1920, 2560, 3840]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await expect(usersPage.locator('.hai-pagination__navigation')).toBeVisible()
+    await capture(page, `users-unified-${width}.png`, testInfo.outputPath(`users-unified-${width}.png`))
+  }
 })
 
 test('branded authentication, profile layout and blur validation work across screen sizes', async ({ page }, testInfo) => {
@@ -458,6 +481,9 @@ test('audit filters collapse without losing values and fit compact workspaces', 
   await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
   await page.getByTestId('nav-audit').click()
   await expect(page.getByTestId('audit-page')).toBeVisible()
+  const timeHeader = page.getByTestId('audit-page').locator('th').first()
+  await timeHeader.getByRole('button').click()
+  await expect(timeHeader).toHaveAttribute('aria-sort', 'ascending')
   const filters = page.getByTestId('audit-filters')
   const toggle = filters.locator('button[aria-controls]')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
@@ -773,6 +799,24 @@ test('feedback submits an empty description and business operator can process an
   await row.getByRole('button', { name: /撤销处理|Reopen|処理を取り消す/ }).click()
   await expect(row).toContainText(/未处理|Pending|未処理/)
   await capture(page, 'feedback-list.png', testInfo.outputPath('feedback-list.png'))
+  const feedbackList = page.locator('.feedback-list')
+  await expect(feedbackList.locator('.hai-filter-bar')).toBeVisible()
+  await expect(feedbackList.locator('button[type="submit"]')).toBeVisible()
+  const submittedHeader = feedbackList.getByRole('columnheader', { name: /提交时间|Submitted|投稿日時/ })
+  await submittedHeader.getByRole('button').click()
+  await expect(submittedHeader).toHaveAttribute('aria-sort', 'ascending')
+  await feedbackList.locator('button[aria-controls]').click()
+  for (const width of [390, 1440, 1920, 2560, 3840]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await expect(feedbackList.locator('.hai-pagination__navigation')).toBeVisible()
+    await feedbackList.locator('table').evaluate((table) => {
+      table.parentElement!.scrollLeft = 0
+    })
+    await capture(page, `feedback-unified-${width}.png`, testInfo.outputPath(`feedback-unified-${width}.png`))
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
   const downloadEvent = page.waitForEvent('download')
   await row.getByRole('button', { name: /导出问题包|Export diagnostic bundle|診断パッケージをエクスポート/ }).click()
   const download = await downloadEvent

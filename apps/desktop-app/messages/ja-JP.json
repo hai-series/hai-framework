@@ -2,6 +2,7 @@
   "app_title": "hai Desktop",
   "nav_dashboard": "ダッシュボード",
   "nav_profile": "プロフィール",
+  "users_search": "ユーザー名、氏名、メールで検索",
   "nav_users": "ユーザー",
   "action_logout": "ログアウト",
   "unknown_route": "不明なページ: {path}",

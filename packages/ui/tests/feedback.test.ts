@@ -108,13 +108,16 @@ it.each(['Asia/Shanghai', 'America/New_York'])('日期筛选按 %s 本地日历�
   const component = mount(FeedbackList, { target, props: { data: { items: [report], total: 1, page: 1, pageSize: 20 }, query: { page: 1, pageSize: 20, from: new Date(2026, 2, 8).getTime() }, onquerychange } })
   try {
     flushSync()
-    target.querySelector<HTMLButtonElement>('[aria-label="筛选"]')!.click()
+    target.querySelector<HTMLButtonElement>('[aria-controls]')!.click()
     flushSync()
     const from = target.querySelector<HTMLInputElement>('[aria-label="开始日期"]')!
     const to = target.querySelector<HTMLInputElement>('[aria-label="结束日期"]')!
     expect(from.value).toBe('2026-03-08')
     to.value = '2026-03-08'
-    to.dispatchEvent(new Event('input', { bubbles: true }))
+    to.dispatchEvent(new Event('change', { bubbles: true }))
+    flushSync()
+    expect(onquerychange).not.toHaveBeenCalled()
+    target.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await vi.waitFor(() => expect(onquerychange).toHaveBeenCalled())
     expect(onquerychange.mock.calls.at(-1)?.[0]).toMatchObject({ from: new Date(2026, 2, 8).getTime(), to: new Date(2026, 2, 9).getTime() - 1 })
   }

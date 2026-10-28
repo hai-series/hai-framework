@@ -24,12 +24,18 @@ test('列表示例的键盘、排序、分页、筛选和错误恢复可连续�
   await expect(nameHeader).toHaveAttribute('aria-sort', 'descending')
   await demo.getByRole('button', { name: '下一页', exact: true }).click()
   await expect(demo.getByLabel('跳转到页')).toHaveValue('2')
-  const filter = demo.getByRole('button', { name: '筛选', exact: true })
+  const filter = demo.locator('.hai-filter-bar button[aria-controls]')
   await filter.click()
-  await expect(demo.getByRole('dialog').locator('select')).toBeFocused()
-  await demo.getByRole('dialog').locator('select').press('Escape')
   await expect(filter).toBeFocused()
-  await expect(demo.getByRole('dialog')).toHaveCount(0)
+  await filter.press('Tab')
+  const select = demo.locator('select')
+  await expect(select).toBeFocused()
+  await select.selectOption('true')
+  await expect(demo.getByLabel('跳转到页')).toHaveValue('2')
+  await demo.getByRole('button', { name: '查询', exact: true }).click()
+  await expect(demo.getByLabel('跳转到页')).toHaveValue('1')
+  await filter.click()
+  await expect(select).toBeHidden()
   await demo.getByRole('button', { name: '卡片视图', exact: true }).click()
   await expect(demo.getByRole('button', { name: '卡片视图', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(demo.getByRole('table')).toHaveCount(0)
@@ -47,9 +53,9 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
   test.use({ hasTouch: true })
 
   for (const locale of [
-    { id: 'zh', choice: '', ready: '正常', empty: '空态', filter: '筛选', next: '下一页' },
-    { id: 'en', choice: 'English', ready: 'Ready', empty: 'Empty', filter: 'Filter', next: 'Next page' },
-    { id: 'ja', choice: '日本語', ready: '通常', empty: '空の結果', filter: '絞り込み', next: '次のページ' },
+    { id: 'zh', choice: '', ready: '正常', empty: '空态', filter: '展开筛选', next: '下一页' },
+    { id: 'en', choice: 'English', ready: 'Ready', empty: 'Empty', filter: 'Expand filters', next: 'Next page' },
+    { id: 'ja', choice: '日本語', ready: '通常', empty: '空の結果', filter: '絞り込みを展開', next: '次のページ' },
   ]) {
     // 主题各自保留完整宽度矩阵，避免全部高分辨率截图挤在一个用例的总时限内。
     for (const theme of ['light', 'dark']) {
@@ -75,18 +81,21 @@ test.describe('触摸、主题、语言和减少动态效果', () => {
             expect((await demo.boundingBox())!.width).toBeGreaterThan(width - 400)
           await demo.screenshot({ path: testInfo.outputPath(`interaction-${locale.id}-${theme}-${width}.png`), animations: 'disabled' })
           await demo.getByRole('tab', { name: locale.ready, exact: true }).click()
-          await demo.getByRole('button', { name: locale.filter, exact: true }).click()
-          const select = demo.getByRole('dialog').locator('select')
+          const toggle = demo.locator('.hai-filter-bar button[aria-controls]')
+          await expect(toggle).toHaveText(locale.filter)
+          await toggle.click()
+          await toggle.press('Tab')
+          const select = demo.locator('select')
           await expect(select).toBeFocused()
           const focus = await select.evaluate(element => ({ width: getComputedStyle(element).outlineWidth, style: getComputedStyle(element).outlineStyle, color: getComputedStyle(element).outlineColor }))
           expect(Number.parseFloat(focus.width)).toBeGreaterThanOrEqual(2)
           expect(focus.style).toBe('solid')
           expect(focus.color).not.toBe('rgba(0, 0, 0, 0)')
-          const panel = await demo.getByRole('dialog').boundingBox()
+          const panel = await select.boundingBox()
           expect(panel!.x).toBeGreaterThanOrEqual(0)
           expect(panel!.x + panel!.width).toBeLessThanOrEqual(width)
           await demo.screenshot({ path: testInfo.outputPath(`interaction-filter-${locale.id}-${theme}-${width}.png`), animations: 'disabled' })
-          await select.press('Escape')
+          await demo.locator('.hai-filter-bar button[aria-controls]').click()
           const next = demo.getByRole('button', { name: locale.next, exact: true })
           const box = await next.boundingBox()
           expect(box!.height).toBeGreaterThanOrEqual(44)

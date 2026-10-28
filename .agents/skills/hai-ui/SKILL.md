@@ -27,7 +27,7 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 操作通知的 UI 控件、类型配色、方位、队列和状态层导入统一遵循[共享 UI 契约](../../../packages/cli/templates/skills/hai-ui/SKILL.md#能力契约)。
 
 - 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
-- 多条件筛选使用 FilterBar 或 CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；提供 activeCount 和实际 onreset，收起不能丢值或隐式清空查询。复用组件状态及三语文案，不在页面复制折叠状态机。TableToolbar 已有弹层筛选可继续复用。
+- 列表统一使用卡片内查询栏、独立滚动表格和底部分页。多条件筛选使用 FilterBar / TableToolbar / CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；Query 或 Enter 一次提交搜索和全部条件，草稿变化不自动请求，折叠保留值。翻页和排序沿用已提交条件，重置清空条件并回第一页。TableToolbar 与 CrudFilterBar 共用原生查询表单，onfilterchange 仅通知草稿变化，onsearch 读取绑定草稿并提交；实际 onreset/onclearfilters 必须重新查询。排序只在后端支持的 DataTable 列头提供，不新增图标筛选/排序弹层或页面私有折叠状态机。 扩展筛选使用自适应网格，字段横向间距 20px、纵向间距 16px，标签与控件分别对齐且控件等高；窄屏改为单列，避免定宽输入框贴边挤压。
 
 - 查询/登录采用原生表单 Enter 提交；提示使用 Button submitHint（仅 submit），不注册占用浏览器按键的全局监听。输入法确认不得触发搜索；保留 Tab、Enter/Space、Esc、菜单方向键和清晰焦点。弹窗默认聚焦首个可编辑项，危险确认优先聚焦取消；关闭恢复触发控件，忙碌/禁用时不得继续提交。
 

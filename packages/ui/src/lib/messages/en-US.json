@@ -278,6 +278,7 @@
   "crud_save": "Save",
   "crud_cancel": "Cancel",
   "crud_close": "Close",
+  "crud_query": "Query",
   "crud_search_placeholder": "Search...",
   "crud_no_data": "No data",
   "crud_loading": "Querying…",

@@ -21,6 +21,8 @@ Public HTTP API contracts for hai-framework, with oRPC contract + Zod as the sin
 
 Payment creation inputs and outputs accept WeChat `jsapi`, Alipay `h5`, and Stripe `h5` only; WeChat requires `userId` (openid). App, Native, mini-program, and other combinations fail validation. Alipay returns `{ gateway, fields }` page parameters; creation success does not establish payment. See [Payment](../payment/README.en.md) for client handling.
 
+User listing accepts `sortBy` (username/email/displayName/enabled/createdAt) and `sortDirection` (asc/desc) for header sorting before pagination.
+
 ## Getting started
 
 ### Quick start

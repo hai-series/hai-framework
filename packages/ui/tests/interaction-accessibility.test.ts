@@ -116,7 +116,7 @@ describe('shared interaction accessibility', () => {
     }
   })
 
-  it('筛选打开后聚焦控件，Escape 返回触发点，视图切换反映当前状态', async () => {
+  it('筛选按文档顺序展开、收起保留草稿，视图切换反映当前状态', async () => {
     const target = host()
     const component = mount(TableToolbar, { target, props: {
       filterFields: [{ id: 'active', label: '状态', type: 'boolean' }],
@@ -124,16 +124,24 @@ describe('shared interaction accessibility', () => {
     } })
     try {
       flushSync()
-      const trigger = target.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')!
+      const trigger = target.querySelector<HTMLButtonElement>('[aria-controls]')!
       trigger.focus()
       trigger.click()
       flushSync()
-      const dialog = target.querySelector('[role="dialog"]')!
-      expect(dialog.contains(document.activeElement)).toBe(true)
-      document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
-      flushSync()
-      expect(target.querySelector('[role="dialog"]')).toBeNull()
+      const panel = target.querySelector<HTMLElement>(`[id="${trigger.getAttribute('aria-controls')}"]`)!
+      expect(panel.hidden).toBe(false)
       expect(document.activeElement).toBe(trigger)
+      const select = panel.querySelector('select')!
+      select.value = 'false'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      flushSync()
+      trigger.click()
+      flushSync()
+      expect(panel.hidden).toBe(true)
+      trigger.click()
+      flushSync()
+      expect(select.value).toBe('false')
+      expect(select.labels?.[0]?.textContent?.trim()).toBe('状态')
       const viewButtons = target.querySelectorAll<HTMLButtonElement>('[role="group"] button')
       expect(viewButtons[0].getAttribute('aria-pressed')).toBe('true')
       viewButtons[1].click()

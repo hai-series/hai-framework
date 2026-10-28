@@ -33,6 +33,8 @@
 - 🤝 合作登记：公开合作申请表单（`/partners`）
 - 🔐 合作管理后台：登录后查看与管理登记记录（`/partners/admin`）
 
+合作管理列表统一使用卡片内查询栏、独立滚动 DataTable 和底部分页；查询/Enter 提交条件，翻页和排序沿用已提交值。记录接口支持 sortBy（created_at/company_name/contact_name/cooperation_type/budget_range/status）及 sortDirection（asc/desc），排序字段通过白名单校验，缓存键包含排序条件。
+
 #### 合作管理后台账号
 
 用户名默认是 `partner-admin`，密码必须通过 `HAI_PARTNER_PASSWORD` 注入。应用不会提供默认密码，也不会把凭据写入日志；缺少密码时启动阶段会返回明确的配置错误。

@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   app: { info: vi.fn() },
   auth: { clear: vi.fn() },
   iam: { auth: { logout: vi.fn(), currentUser: vi.fn(), reauthenticate: vi.fn() } },
-  admin: { users: { list: vi.fn() } },
+  admin: { users: { list: vi.fn() }, audit: { list: vi.fn() } },
 }))
 vi.mock('../src/lib/api/api-client.js', () => ({
   managementApi: api,
@@ -143,4 +143,36 @@ describe('management session and request ownership', () => {
     expect(store.saving).toBe(false)
     expect(api.iam.auth.currentUser).toHaveBeenCalledTimes(1)
   })
+})
+
+it('user paging and header sorting keep applied filters until Query submits drafts', async () => {
+  api.admin.users.list.mockResolvedValue({ success: true, data: { items: [], total: 60, page: 1, pageSize: 20 } })
+  const store = createStore()
+  store.user = administrator
+  store.usersSearch = 'applied'
+  store.usersStatus = 'enabled'
+  await store.queryUsers()
+  store.usersSearch = 'draft'
+  store.usersStatus = 'disabled'
+  await store.loadUsers(2)
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, search: 'applied', enabled: true }))
+  await store.sortUsers('username', 'asc')
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, search: 'applied', enabled: true, sortBy: 'username', sortDirection: 'asc' }))
+  await store.queryUsers()
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'draft', enabled: false }))
+})
+
+it('audit paging and header sorting do not submit unfinished filter drafts', async () => {
+  api.admin.audit.list.mockResolvedValue({ success: true, data: { items: [], stats: [], backupEnabled: false, total: 60, page: 1, pageSize: 20 } })
+  const store = createStore()
+  store.user = administrator
+  store.auditResource = 'applied'
+  await store.queryAudit()
+  store.auditResource = 'draft'
+  await store.loadAudit(2)
+  expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, resource: 'applied' }))
+  await store.sortAudit('action', 'asc')
+  expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, resource: 'applied', sortBy: 'action', sortDirection: 'asc' }))
+  await store.queryAudit()
+  expect(api.admin.audit.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, resource: 'draft' }))
 })

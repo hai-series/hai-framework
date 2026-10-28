@@ -21,6 +21,8 @@ hai-framework の公開 HTTP API 契約パッケージ。oRPC contract + Zod を
 
 支払い作成の入出力は WeChat `jsapi`・Alipay `h5`・Stripe `h5` のみ受け付け、WeChat は `userId`（openid）が必須です。App・Native・ミニプログラムなどは検証で拒否します。Alipay は `{ gateway, fields }` のページパラメーターを返し、作成成功は支払い完了を意味しません。クライアント処理は [Payment](../payment/README.ja.md) を参照してください。
 
+ユーザー一覧は `sortBy`（username/email/displayName/enabled/createdAt）と `sortDirection`（asc/desc）でページ分割前に並べ替えます。
+
 ## 使い始める
 
 ### クイックスタート

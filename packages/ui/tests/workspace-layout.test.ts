@@ -99,7 +99,7 @@ it('筛选收起不卸载或丢值，常驻搜索、重置和已选提示可用'
   }
 })
 
-it('离开筛选栏后取消尚未发出的防抖查询', async () => {
+it('搜索草稿输入后等待也不自动查询，显式提交才查询', async () => {
   vi.useFakeTimers()
   const target = document.createElement('div')
   document.body.append(target)
@@ -111,11 +111,15 @@ it('离开筛选栏后取消尚未发出的防抖查询', async () => {
     input.value = 'Pending search'
     input.dispatchEvent(new Event('input', { bubbles: true }))
     flushSync()
-    await unmount(component)
     await vi.advanceTimersByTimeAsync(500)
     expect(onsearch).not.toHaveBeenCalled()
+    target.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    expect(onsearch).toHaveBeenCalledExactlyOnceWith('Pending search')
   }
-  finally { target.remove() }
+  finally {
+    await unmount(component)
+    target.remove()
+  }
 })
 
 it('声明式筛选默认可收起，已有条件在收起时仍保留', async () => {

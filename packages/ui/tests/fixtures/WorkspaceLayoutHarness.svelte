@@ -17,7 +17,7 @@
   {:else if mode === 'settings'}
     <SettingsLayout title='Records' description='Record details'><button type='button'>Export</button></SettingsLayout>
   {:else}
-    <CrudPage {crud} data={{ items: [], total: 0, page: 1, pageSize: 20 }} toolbarStyle='filter-bar'>
+    <CrudPage {crud} data={{ items: [], total: 0, page: 1, pageSize: 20 }}>
       {#snippet headerActions()}<button type='button'>Import</button>{/snippet}
     </CrudPage>
   {/if}

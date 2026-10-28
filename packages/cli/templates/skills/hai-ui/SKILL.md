@@ -21,7 +21,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 操作完成反馈统一使用 `toast` / `notifySuccess` 等，根布局只挂载一次 `ToastContainer`；默认右下角，由 UI 模块通过提示蓝/成功绿/警告黄/错误红等主题语义色统一提供浅色底、细色边及类型图标，可手工关闭且默认 3 秒消失。多个提示共用 FIFO 队列逐条展示，等待期间不计时；`toast.add({ message, position })` 可选六个方位，`duration: 0` 需手动移除。状态层使用轻量入口 `@h-ai/ui/toast`，避免总入口连带加载组件和引导 CSS。不要用行内 Alert 显示保存/复制成功；字段校验、持续业务状态与恢复操作保留行内，Alert 使用柔和背景。
 
 - 后台与工作台优先使用 WorkspaceLayout 统一紧凑顶栏、内容内边距和可选页脚，不叠加大段上下 padding。导航已显示页面标题时，内容区不再重复；PageHeader 与 SettingsLayout 保留说明/操作，CrudPage 将操作放入工具栏。独立页面或真实子区域保留必要标题。
-- 多条件筛选使用 FilterBar 或 CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；提供 activeCount 和实际 onreset，收起不能丢值或隐式清空查询。复用组件状态及三语文案，不在页面复制折叠状态机。TableToolbar 已有弹层筛选可继续复用。
+- 列表统一使用卡片内查询栏、独立滚动表格和底部分页。多条件筛选使用 FilterBar / TableToolbar / CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；Query 或 Enter 一次提交搜索和全部条件，草稿变化不自动请求，折叠保留值。翻页和排序沿用已提交条件，重置清空条件并回第一页。TableToolbar 与 CrudFilterBar 共用原生查询表单，onfilterchange 仅通知草稿变化，onsearch 读取绑定草稿并提交；实际 onreset/onclearfilters 必须重新查询。排序只在后端支持的 DataTable 列头提供，不新增图标筛选/排序弹层或页面私有折叠状态机。 扩展筛选使用自适应网格，字段横向间距 20px、纵向间距 16px，标签与控件分别对齐且控件等高；窄屏改为单列，避免定宽输入框贴边挤压。
 
 - 查询/登录采用原生表单 Enter 提交；提示使用 Button submitHint（仅 submit），不注册占用浏览器按键的全局监听。输入法确认不得触发搜索；保留 Tab、Enter/Space、Esc、菜单方向键和清晰焦点。弹窗默认聚焦首个可编辑项，危险确认优先聚焦取消；关闭恢复触发控件，忙碌/禁用时不得继续提交。
 
@@ -41,7 +41,7 @@ description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手�
 - AI 文本视为不可信；Markdown/Mermaid 预览与允许执行 HTML/JS 的预览有不同边界。
 
 - Tabs 支持方向键、Home/End、跳过禁用项与单一 Tab 入口，children 内容关联当前页签；DataTable 通过 aria-sort/aria-busy 和加载文字提供状态，有 onrowclick 时支持行 Enter/Space，单元格操作不重复触发行操作。
-- Pagination 导航和输入名称跟随 UI locale，外部 page 变化同步跳页草稿，触摸设备扩大导航按钮；TableToolbar 打开后进入控件，Escape 返回触发点，视图按钮带选中状态。应用仍需接入排序、筛选、分页和视图对应的数据行为。
+- Pagination 导航和输入名称跟随 UI locale，外部 page 变化同步跳页草稿，触摸设备扩大导航按钮；TableToolbar 展开筛选遵循文档焦点顺序，视图按钮带选中状态。应用仍需接入排序、筛选、分页和视图对应的数据行为。
 - CrudPage 占满宿主剩余高度，空数据和少量数据时分页保留在底部；宿主从视口外壳到内容区逐层使用 flex/grid 的剩余空间约束与 min-height: 0，避免自动高度包装层截断布局。数据区独立滚动，分页不覆盖数据。
 - theme.css 自动引入 design-tokens.css；全局样式的焦点使用 --hai-focus-color（缺省跟随当前 primary），减少动态效果时保留最终状态并缩短动画。长内容在 Empty/Alert 中换行；业务自定义 snippet 也要能收缩。
 

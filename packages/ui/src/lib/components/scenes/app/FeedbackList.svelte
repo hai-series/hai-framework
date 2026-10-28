@@ -54,7 +54,7 @@
   let actionError = $state('')
   let busyId = $state('')
   let search = $derived(effectiveQuery.search ?? '')
-  let sortDirection = $derived(effectiveQuery.sortDirection ?? 'desc')
+  const sortDirection = $derived(effectiveQuery.sortDirection ?? 'desc')
   let filterValues = $derived<Record<string, unknown>>({ status: effectiveQuery.status ?? '', collectionStatus: effectiveQuery.collectionStatus ?? '', appId: effectiveQuery.appId ?? '', appVersion: effectiveQuery.appVersion ?? '', from: feedbackDateValue(effectiveQuery.from), to: feedbackDateValue(effectiveQuery.to) })
   const columns = $derived([
     { key: 'number', label: uiM('feedback_number') },
@@ -75,11 +75,14 @@
     { id: 'createdAt', label: uiM('feedback_date_range'), type: 'date-range', startKey: 'from', endKey: 'to' },
   ])
 
-  async function update(next: Partial<FeedbackListQuery>) {
-    query = { ...effectiveQuery, ...next }
+  function update(next: Partial<FeedbackListQuery>) {
+    return applyQuery({ ...effectiveQuery, ...next })
+  }
+  async function applyQuery(next: FeedbackListQuery) {
+    query = next
     actionError = ''
     try {
-      await onquerychange?.(query)
+      await onquerychange?.(next)
     }
     catch (cause) {
       actionError = errorMessage(cause, uiM('feedback_action_failed'))
@@ -88,7 +91,7 @@
   function filter(values: Record<string, unknown>) {
     const from = feedbackDayBoundary(values.from, 'start')
     const to = feedbackDayBoundary(values.to, 'end')
-    void update({ page: 1, status: values.status === 'pending' || values.status === 'handled' ? values.status : undefined, collectionStatus: ['collecting', 'complete', 'partial', 'failed'].includes(String(values.collectionStatus)) ? values.collectionStatus as FeedbackReportView['collectionStatus'] : undefined, appId: String(values.appId ?? '') || undefined, appVersion: String(values.appVersion ?? '') || undefined, from: Number.isFinite(from) ? from : undefined, to: Number.isFinite(to) ? to : undefined })
+    void update({ page: 1, search: search.trim() || undefined, status: values.status === 'pending' || values.status === 'handled' ? values.status : undefined, collectionStatus: ['collecting', 'complete', 'partial', 'failed'].includes(String(values.collectionStatus)) ? values.collectionStatus as FeedbackReportView['collectionStatus'] : undefined, appId: String(values.appId ?? '') || undefined, appVersion: String(values.appVersion ?? '') || undefined, from: Number.isFinite(from) ? from : undefined, to: Number.isFinite(to) ? to : undefined })
   }
   async function run(report: FeedbackReportView, action: (() => void | Promise<void>) | undefined) {
     if (!action || busyId)
@@ -111,37 +114,38 @@
   {#if permissions.read === false}
     <p role='alert' class='alert alert-warning'>{uiM('feedback_permission_denied')}</p>
   {:else}
-    <TableToolbar bind:searchValue={search} {filterFields} bind:filterValues sortableColumns={[{ key: 'createdAt', label: uiM('feedback_created_at') }]} sortBy='createdAt' bind:sortDirection searchPlaceholder={uiM('feedback_search')} onsearch={value => update({ page: 1, search: value || undefined })} onfilterchange={filter} onclearfilters={() => update({ page: 1, status: undefined, collectionStatus: undefined, appId: undefined, appVersion: undefined, from: undefined, to: undefined })} onsort={(_, direction) => update({ page: 1, sortDirection: direction })}>
-    </TableToolbar>
-    {#if error || actionError}<p role='alert' class='alert alert-error break-words'>{error || actionError}</p>{/if}
-    <div class='min-h-0 min-w-0 flex-1 overflow-hidden'>
-      <DataTable data={data.items} {columns} keyField='id' density='compact' {loading} sortKey='createdAt' sortDir={sortDirection} onsort={(_, direction) => update({ page: 1, sortDirection: direction })} class='h-full'>
-        {#snippet cell(item, key)}
-          {#if key === 'number'}
-            {#if onview}<Button size='xs' variant='ghost' onclick={() => run(item, () => onview(item))}>{item.number}</Button>{:else}{item.number}{/if}
-          {:else if key === 'description'}<span class='block max-w-sm truncate' title={item.description || item.summary || uiM('feedback_no_description')}>{item.description || item.summary || uiM('feedback_no_description')}</span>
-          {:else if key === 'appId'}{item.appId}
-          {:else if key === 'appVersion'}{item.appVersion || '—'}
-          {:else if key === 'userId'}{item.userId || '—'}
-          {:else if key === 'createdAt'}{feedbackTime(item.createdAt)}
-          {:else if key === 'status'}<Badge size='sm' variant={item.status === 'handled' ? 'success' : 'ghost'}>{uiM(item.status === 'handled' ? 'feedback_handled' : 'feedback_pending')}</Badge>
-          {:else if key === 'collectionStatus'}<span class:text-warning={item.collectionStatus === 'failed' || item.collectionStatus === 'partial'}>{collectionLabel(item.collectionStatus)}</span>
-          {:else if key === 'notificationStatus'}{notificationLabel(item.notificationStatus)}{/if}
-        {/snippet}
-        {#snippet actions(item)}
-          <div class='flex flex-wrap items-center gap-1'>
-            {#if onview}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onview(item))}>{uiM('feedback_details')}</Button>{/if}
-            {#if onstatus && ((item.status === 'pending' && permissions.process) || (item.status === 'handled' && permissions.reopen))}
-              <Button size='xs' variant='ghost' loading={busyId === item.id} disabled={Boolean(busyId)} onclick={() => run(item, () => onstatus({ id: item.id, status: item.status === 'pending' ? 'handled' : 'pending', expectedVersion: item.version }))}>{uiM(item.status === 'pending' ? 'feedback_handle' : 'feedback_reopen')}</Button>
-            {/if}
-            {#if permissions.export && onexport}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onexport(item))}>{uiM('feedback_export')}</Button>{/if}
-            {#if permissions.retry && onretry && (item.collectionStatus === 'partial' || item.collectionStatus === 'failed' || item.notificationStatus === 'failed')}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onretry(item))}>{uiM('feedback_retry')}</Button>{/if}
-          </div>
-        {/snippet}
-      </DataTable>
-    </div>
-    <div class='shrink-0 rounded-lg border border-base-content/10 bg-base-100 px-3 py-2 overflow-x-auto'>
-      <Pagination page={data.page} total={data.total} pageSize={data.pageSize} {pageSizeOptions} showSizeChanger showJumper onchange={page => update({ page })} onpagesizechange={pageSize => update({ page: 1, pageSize })} />
+    <div class='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100'>
+      <TableToolbar class='shrink-0 border-b border-base-content/8 p-3' bind:searchValue={search} {filterFields} bind:filterValues searchPlaceholder={uiM('feedback_search')} onsearch={() => filter(filterValues)} onclearfilters={() => applyQuery({ page: 1, pageSize: data.pageSize })} />
+      {#if error || actionError}<p role='alert' class='alert alert-error break-words'>{error || actionError}</p>{/if}
+      <div class='min-h-0 min-w-0 flex-1 overflow-hidden'>
+        <DataTable data={data.items} {columns} keyField='id' density='compact' striped={false} {loading} sortKey='createdAt' sortDir={sortDirection} onsort={(_, direction) => update({ page: 1, sortDirection: direction })} class='h-full'>
+          {#snippet cell(item, key)}
+            {#if key === 'number'}
+              {#if onview}<Button size='xs' variant='ghost' class='whitespace-nowrap' onclick={() => run(item, () => onview(item))}>{item.number}</Button>{:else}{item.number}{/if}
+            {:else if key === 'description'}<span class='block max-w-sm truncate' title={item.description || item.summary || uiM('feedback_no_description')}>{item.description || item.summary || uiM('feedback_no_description')}</span>
+            {:else if key === 'appId'}{item.appId}
+            {:else if key === 'appVersion'}{item.appVersion || '—'}
+            {:else if key === 'userId'}<span class='block max-w-36 truncate' title={item.userId}>{item.userId || '—'}</span>
+            {:else if key === 'createdAt'}{feedbackTime(item.createdAt)}
+            {:else if key === 'status'}<Badge size='sm' variant={item.status === 'handled' ? 'success' : 'ghost'}>{uiM(item.status === 'handled' ? 'feedback_handled' : 'feedback_pending')}</Badge>
+            {:else if key === 'collectionStatus'}<span class:text-warning={item.collectionStatus === 'failed' || item.collectionStatus === 'partial'}>{collectionLabel(item.collectionStatus)}</span>
+            {:else if key === 'notificationStatus'}{notificationLabel(item.notificationStatus)}{/if}
+          {/snippet}
+          {#snippet actions(item)}
+            <div class='inline-flex flex-nowrap items-center gap-1'>
+              {#if onview}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onview(item))}>{uiM('feedback_details')}</Button>{/if}
+              {#if onstatus && ((item.status === 'pending' && permissions.process) || (item.status === 'handled' && permissions.reopen))}
+                <Button size='xs' variant='ghost' loading={busyId === item.id} disabled={Boolean(busyId)} onclick={() => run(item, () => onstatus({ id: item.id, status: item.status === 'pending' ? 'handled' : 'pending', expectedVersion: item.version }))}>{uiM(item.status === 'pending' ? 'feedback_handle' : 'feedback_reopen')}</Button>
+              {/if}
+              {#if permissions.export && onexport}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onexport(item))}>{uiM('feedback_export')}</Button>{/if}
+              {#if permissions.retry && onretry && (item.collectionStatus === 'partial' || item.collectionStatus === 'failed' || item.notificationStatus === 'failed')}<Button size='xs' variant='ghost' disabled={Boolean(busyId)} onclick={() => run(item, () => onretry(item))}>{uiM('feedback_retry')}</Button>{/if}
+            </div>
+          {/snippet}
+        </DataTable>
+      </div>
+      <div class='mt-auto shrink-0 border-t border-base-content/8 px-3 py-2 overflow-x-auto'>
+        <Pagination page={data.page} total={data.total} pageSize={data.pageSize} {pageSizeOptions} showSizeChanger showJumper onchange={page => update({ page })} onpagesizechange={pageSize => update({ page: 1, pageSize })} />
+      </div>
     </div>
   {/if}
 </section>

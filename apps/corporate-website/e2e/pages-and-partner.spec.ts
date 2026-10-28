@@ -61,7 +61,8 @@ test.describe('Corporate pages and partner flow', () => {
     await expect(page.getByRole('link', { name: 'About' }).first()).toBeVisible()
   })
 
-  test('partner register and admin records flow works', async ({ page }) => {
+  test('partner register and admin records flow works', async ({ page }, testInfo) => {
+    test.setTimeout(60_000)
     await page.goto('/partners')
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/合作登记|Partner Registration/)
 
@@ -83,6 +84,8 @@ test.describe('Corporate pages and partner flow', () => {
     const registerBody = await registerRes.json() as ApiResponse<{ id: string }>
     expect(registerBody.success).toBe(true)
     expect(registerBody.data?.id).toBeTruthy()
+    const another = await page.request.post('/api/partners/register', { data: { companyName: `${companyName} Z`, contactName: 'Second Tester', email: 'second@example.com', phone: '13800138001', cooperationType: 'solution', budgetRange: '100k-500k', message: 'Second partnership request for sorting acceptance.', source: 'e2e' } })
+    expect(another.status()).toBe(201)
 
     const unauthorized = await page.request.get('/api/partners/admin/records')
     expect([401, 403]).toContain(unauthorized.status())
@@ -125,6 +128,24 @@ test.describe('Corporate pages and partner flow', () => {
     await expect.poll(() => new URL(page.url()).searchParams.has('status')).toBe(false)
     await expect.poll(() => new URL(page.url()).searchParams.has('search')).toBe(false)
 
+    const companyHeader = page.getByRole('columnheader', { name: /公司|Company/ })
+    await companyHeader.getByRole('button').click()
+    await expect(companyHeader).toHaveAttribute('aria-sort', 'ascending')
+    await expect(page.locator('tbody tr').first()).toContainText(companyName)
+    await companyHeader.getByRole('button').click()
+    await expect(companyHeader).toHaveAttribute('aria-sort', 'descending')
+    await expect(page.locator('tbody tr').first()).toContainText(`${companyName} Z`)
+    const ascending = await page.request.get('/api/partners/admin/records?page=1&pageSize=20&sortBy=company_name&sortDirection=asc')
+    const ascendingData = await ascending.json() as ApiResponse<{ items: Array<{ company_name: string }> }>
+    expect(ascendingData.data?.items[0]?.company_name).toBe(companyName)
+    const invalidSort = await page.request.get('/api/partners/admin/records?sortBy=company_name%3BDROP&sortDirection=asc')
+    expect(invalidSort.status()).toBe(400)
+    for (const width of [390, 1440, 1920, 2560, 3840]) {
+      await page.setViewportSize({ width, height: 900 })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await expect(page.locator('.hai-pagination__navigation')).toBeVisible()
+      await page.screenshot({ path: testInfo.outputPath(`partners-unified-${width}.png`), animations: 'disabled' })
+    }
     const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
     expect(recordsRes.ok()).toBeTruthy()
     const body = await recordsRes.json() as ApiResponse<{ items: Array<{ company_name: string }> }>

@@ -418,13 +418,13 @@ components/
 
 | 组件                 | 描述         | 主要属性 / 能力 |
 | -------------------- | ------------ | ---------------- |
-| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarStyle`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav`, `loading`, `loaded`, `error`, `onRetry`, `keepPreviousData` |
+| `CrudPage`           | CRUD 主页面  | `crud`, `data`, `permissions`, `form`, `pagination`, `density`, `detailColumns`, `showHeader`, `toolbarLeading`, `toolbarActions`, `card`, `tableCell`, `onrowclick`, `sortableColumns`, `nav`, `loading`, `loaded`, `error`, `onRetry`, `keepPreviousData` |
 | `CrudFilterBar`      | 过滤工具栏（搜索 + 多类型过滤 + 重置） | `filterFields`, `searchValue`, `onsearch`, `onfilterchange`, `onreset` |
 | `CrudDetailPanel`    | 详情面板（抽屉/弹窗） | `open`, `item`, `fields`, `variant`, `drawerWidth`, `modalSize` |
 | `CrudEditPanel`      | 编辑面板（抽屉/弹窗） | `open`, `fields`, `variant`, `drawerWidth`, `modalSize`, `onsubmit` |
 | `CrudDeleteConfirm`  | 删除确认框   | `open`, `loading`, `onconfirm` |
 
-> `CrudPage` 默认使用 `TableToolbar` 图标弹层工具栏，也可通过 `toolbarStyle='filter-bar'` 切回平铺筛选栏；`detailColumns={['title']}` 可把标题等指定列绑定为详情入口；`toolbarLeading` 用于注入左侧标题或说明，配合 `showHeader={false}` 可避免重复标题；`toolbarActions` 注入右侧业务操作，`card` 插槽可将列表项替换为卡片视图，`tableCell` 可按行和列 key 渲染交互式单元格内容（例如 Tooltip），`sortableColumns` 控制服务端排序字段。过滤工具栏支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。
+> `CrudPage`、`FeedbackList` 统一使用卡片内的查询栏、独立滚动表格和底部分页。搜索、查询、重置始终可见，扩展筛选默认收起且保留输入；点击查询或 Enter 一次提交全部条件，修改字段不自动查询。翻页和排序沿用已提交条件；重置清空搜索、筛选和排序并回到第一页。排序按钮只在支持排序的列头显示，`sortableColumns` 应只列出后端支持的字段。`detailColumns` 配置详情入口，`toolbarLeading` / `toolbarActions` 配置卡片上方的说明和业务操作；`card` 与 `tableCell` 保留自定义内容。过滤字段支持 `select`、`boolean`、`number`、`date`、`date-range`、`text`。 未提供 `sortableColumns` 时不显示排序按钮，避免把当前页排序当成服务端排序。
 >
 > 页面根容器会占满父级可用高度。表格无论是否有数据都会撑满剩余空间，仅数据区域滚动；表头固定在数据区顶部，分页栏固定在列表卡片底部。
 > 宿主从视口外壳到内容区须逐层传递剩余高度（例如 `flex flex-1 min-h-0 flex-col`），中间包装层不能仅按内容自动计算高度。空表、少量数据和长列表均沿用底部分页。
@@ -437,7 +437,7 @@ components/
 | ----------- | ------------ | ---------------- |
 | `ErrorPage` | 通用错误页（内置 401/403/404/500/503 预设） | `status`, `code`, `title`, `description`, `homeUrl`, `onhome`, `onback` |
 
-> `CrudPage` 通过 `form` 配置新建/编辑的展示形式：
+> `CrudPage` 通过 `form` 配置新建/编辑的展示形式： 未提供 `sortableColumns` 时不显示排序按钮，避免把当前页排序当成服务端排序。
 >
 > - `form.variant`：`'drawer'`（抽屉，默认）或 `'modal'`（弹出窗口）。
 > - 抽屉：`form.drawerSize` 选预设尺寸，`form.drawerWidth` 传任意 CSS 宽度（优先级更高）；默认可拖动左侧边缘调整宽度，并按资源记忆，`form.drawerResizable=false` 可关闭。
@@ -447,7 +447,7 @@ components/
 >
 > `density` 配置列表密度：`'normal'`（默认）或 `'compact'`（紧凑）。它只影响列表行、行内操作、分页与创建/编辑/详情表单元素，不影响页头与筛选栏。
 >
-> `CrudPage` 受控加载态：`loading` / `loaded` / `error` / `onRetry` / `keepPreviousData`。仅当 `loaded && total === 0` 时才展示空状态（避免首次请求未回时误显“暂无数据”）；首次查询展示“查询中”；失败且无可用数据时展示错误与重试（`onRetry`）；`keepPreviousData`（默认 true）在刷新/失败时保留旧数据。
+> `CrudPage` 受控加载态：`loading` / `loaded` / `error` / `onRetry` / `keepPreviousData`。仅当 `loaded && total === 0` 时才展示空状态（避免首次请求未回时误显“暂无数据”）；首次查询展示“查询中”；失败且无可用数据时展示错误与重试（`onRetry`）；`keepPreviousData`（默认 true）在刷新/失败时保留旧数据。 未提供 `sortableColumns` 时不显示排序按钮，避免把当前页排序当成服务端排序。
 >
 > 纯客户端（无 SvelteKit SSR）可用框架级 `defineCrud` + `createCrudController` 托管 `data` 与 `nav`，自带 latest-wins（seq + AbortSignal）、失败保留旧数据、惰性加载与并发去重：
 >
@@ -967,7 +967,7 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 同名 `PageHeader` 自动省略重复标题，保留说明和操作；`SettingsLayout` 复用该行为。工作区中的 `CrudPage` 默认不重复显示页面标题，操作并入工具栏；独立使用仍显示标题，可用 `showHeader` 显式覆盖。
 
-`FilterBar` 的 leading 和 actions 保持可见，children 默认收起，`bind:expanded` 控制展开，`activeCount` 提示已启用条件，`onreset` 提供内置三语重置按钮。收起保留控件和值；重置和请求逻辑由宿主回调处理。`CrudFilterBar` 已复用它，支持自定义 actions，卸载时取消待发出的防抖查询。
+`FilterBar` 的 leading 和 actions 保持可见，children 默认收起，`bind:expanded` 控制展开，`activeCount` 提示已启用条件，`onreset` 提供内置三语重置按钮。收起保留控件和值；重置和请求逻辑由宿主回调处理。`TableToolbar` 复用该布局并提供原生查询表单，`CrudFilterBar` 复用相同实现；`onsearch` 在提交时读取当前绑定的搜索和筛选草稿，`onfilterchange` 只通知草稿变化。`onreset`（TableToolbar 使用 `onclearfilters`）必须同步清空宿主已提交条件并重新查询。旧 `toolbarStyle`、排序弹层及 TableToolbar 的排序属性已移除；请使用 DataTable 的 `sortKey`、`sortDir`、`onsort`。 扩展筛选按容器宽度自适应为 1/2/4/6 列，字段横向间距 20px、纵向间距 16px，标签和控件分别对齐；日期范围占两列，窄屏占整行。
 
 下例的 m、statusOptions、clearFilters 和 loadRows 由业务应用提供；清空回调须重置搜索及全部条件。
 
@@ -993,7 +993,7 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 页面设计使用 [hai-ui-design](../cli/templates/skills/hai-ui-design/SKILL.md)，组件实现使用 [hai-ui](../cli/templates/skills/hai-ui/SKILL.md)，真实界面走查使用 [hai-ui-review](../cli/templates/skills/hai-ui-review/SKILL.md)。[设计约定](../../.agents/instructions/ui-design.md) 说明布局、状态和示例。
 
-Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提供排序与加载状态和行键盘操作；分页导航/输入名称跟随语言，外部页码同步跳页输入；工具栏弹层管理焦点，视图按钮提供选中状态。Empty/Alert 支持长内容换行。theme.css 引入共享 tokens，焦点跟随当前主题，global.css 响应减少动态效果。应用仍需接入实际筛选、排序、分页与失败恢复。
+Tabs 支持方向键/Home/End、禁用项跳过和单一 Tab 入口；表格提供排序与加载状态和行键盘操作；分页导航/输入名称跟随语言，外部页码同步跳页输入；筛选展开遵循文档焦点顺序，视图按钮提供选中状态。Empty/Alert 支持长内容换行。theme.css 引入共享 tokens，焦点跟随当前主题，global.css 响应减少动态效果。应用仍需接入实际筛选、排序、分页与失败恢复。
 
 ## 错误提示与关联日志
 

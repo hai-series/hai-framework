@@ -278,6 +278,7 @@
   "crud_save": "保存",
   "crud_cancel": "キャンセル",
   "crud_close": "閉じる",
+  "crud_query": "検索",
   "crud_search_placeholder": "検索...",
   "crud_no_data": "データがありません",
   "crud_loading": "検索中…",

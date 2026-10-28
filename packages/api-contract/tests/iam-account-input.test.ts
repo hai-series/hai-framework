@@ -1,6 +1,6 @@
 /** 生命周期字段仅允许管理入口，输出和日期转换保持端到端语义。 */
 import { expect, it } from 'vitest'
-import { IamAdminCreateUserInputSchema, IamAdminUpdateUserInputSchema, IamRegisterInputSchema, IamUserSchema } from '../src/index.js'
+import { IamAdminCreateUserInputSchema, IamAdminUpdateUserInputSchema, IamListUsersInputSchema, IamRegisterInputSchema, IamUserSchema } from '../src/index.js'
 
 it('管理接口保留临时账号日期与状态，用户响应不剥离生命周期', () => {
   const date = '2027-01-01T00:00:00.000Z'
@@ -23,4 +23,11 @@ it('公开注册不能自行设置账号状态、期限或管理员启用标记'
 it('管理更新拒绝非法状态或无效时间，不能静默改变语义', () => {
   expect(IamAdminUpdateUserInputSchema.safeParse({ id: 'user-1', accountStatus: 'administrator' }).success).toBe(false)
   expect(IamAdminUpdateUserInputSchema.safeParse({ id: 'user-1', accountExpiresAt: 'invalid' }).success).toBe(false)
+})
+
+it('用户列表保留服务端排序白名单并拒绝未知字段和方向', () => {
+  expect(IamListUsersInputSchema.parse({ sortBy: 'username', sortDirection: 'asc' })).toMatchObject({ sortBy: 'username', sortDirection: 'asc' })
+  expect(IamListUsersInputSchema.safeParse({ sortBy: 'roles' }).success).toBe(false)
+  expect(IamListUsersInputSchema.safeParse({ sortBy: 'username; DROP TABLE users' }).success).toBe(false)
+  expect(IamListUsersInputSchema.safeParse({ sortDirection: 'up' }).success).toBe(false)
 })

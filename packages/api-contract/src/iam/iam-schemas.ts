@@ -525,6 +525,8 @@ export const IamUpdateCurrentUserInputSchema = z.object({
  * ```
  */
 export const IamListUsersInputSchema = PaginationQuerySchema.extend({
+  sortBy: z.enum(['username', 'email', 'displayName', 'enabled', 'createdAt']).optional(),
+  sortDirection: z.enum(['asc', 'desc']).optional(),
   roleCode: z.string().trim().min(1).max(100).optional(),
   search: z.string().optional(),
   // 注意：HTTP query 是字符串，使用枚举 + transform 避免 z.coerce.boolean 的 'false' → true 陷阱。

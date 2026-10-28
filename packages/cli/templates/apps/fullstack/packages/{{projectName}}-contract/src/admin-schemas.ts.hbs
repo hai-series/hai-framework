@@ -1,4 +1,4 @@
-import { IamPermissionSchema } from '@h-ai/api-contract'
+import { IamListUsersInputSchema, IamPermissionSchema } from '@h-ai/api-contract'
 import { z } from 'zod'
 
 /** 权限的敏感操作配置复用框架字段；职责授权仍由应用控制。 */
@@ -29,6 +29,8 @@ export const AdminUserSchema = z.object({
   updatedAt: z.string().datetime(),
 })
 export const AdminUsersInputSchema = AdminPageInputSchema.extend({
+  sortBy: IamListUsersInputSchema.shape.sortBy,
+  sortDirection: IamListUsersInputSchema.shape.sortDirection,
   search: z.string().max(100).optional(),
   enabled: z.boolean().optional(),
 })

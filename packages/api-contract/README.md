@@ -21,6 +21,8 @@ hai-framework 的公共 HTTP API 契约包，用 oRPC contract 和 Zod 让前后
 
 支付创建输入和输出仅接受微信 `jsapi`、支付宝 `h5`、Stripe `h5`；微信输入必填 `userId`（openid）。App、Native、小程序与其它组合会在输入校验时失败。支付宝输出是 `{ gateway, fields }` 页面参数，创建成功不代表支付完成；客户端处理见 [Payment](../payment/README.md)。
 
+用户列表支持 `sortBy`（username/email/displayName/enabled/createdAt）和 `sortDirection`（asc/desc），供列头排序在分页前执行。
+
 ## 使用入门
 
 ### 快速开始

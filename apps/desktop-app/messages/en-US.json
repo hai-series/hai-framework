@@ -2,6 +2,7 @@
   "app_title": "hai Desktop",
   "nav_dashboard": "Dashboard",
   "nav_profile": "Profile",
+  "users_search": "Search username, name or email",
   "nav_users": "Users",
   "action_logout": "Logout",
   "unknown_route": "Unknown route: {path}",

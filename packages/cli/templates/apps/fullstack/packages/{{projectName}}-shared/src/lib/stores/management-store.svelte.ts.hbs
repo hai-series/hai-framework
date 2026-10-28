@@ -1,4 +1,4 @@
-import type { IamPublicConfig } from '@h-ai/api-contract'
+import type { IamListUsersInput, IamPublicConfig } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
 import type { AdminAuditLog, AdminCreateUser, AdminInviteUser, AdminPermissionPolicy, AdminRole, AdminUpdateUser, AdminUser, AuditBackupReceipt, AvatarUpload, ProfileUpdate } from '{{fullstack.contractPackageName}}'
@@ -45,6 +45,10 @@ export class ManagementStore {
   usersPage = $state(1)
   usersSearch = $state('')
   usersStatus = $state('all')
+  usersSortBy = $state<NonNullable<IamListUsersInput['sortBy']>>('createdAt')
+  usersSortDirection = $state<'asc' | 'desc'>('desc')
+  private appliedUsersQuery: Partial<Pick<Parameters<typeof managementApi.admin.users.list>[0], 'search' | 'enabled'>> = {}
+  private appliedAuditQuery: Partial<Parameters<typeof managementApi.admin.audit.list>[0]> = {}
   roles = $state<AdminRole[]>([])
   permissionPolicies = $state<AdminPermissionPolicy[]>([])
   permissionPolicyPage = $state(1)
@@ -194,13 +198,28 @@ export class ManagementStore {
     })
   }
 
+  async queryUsers(): Promise<void> {
+    this.appliedUsersQuery = { search: this.usersSearch.trim() || undefined, enabled: this.usersStatus === 'all' ? undefined : this.usersStatus === 'enabled' }
+    await this.loadUsers()
+  }
+
+  async sortUsers(key: string, direction: 'asc' | 'desc'): Promise<void> {
+    const field = (['username', 'email', 'enabled', 'createdAt'] as const).find(field => field === key)
+    if (!field)
+      return
+    this.usersSortBy = field
+    this.usersSortDirection = direction
+    await this.loadUsers()
+  }
+
   async loadUsers(page = 1): Promise<void> {
     await this.load(async (version) => {
       const result = await this.request(() => managementApi.admin.users.list({
         page,
         pageSize: this.pageSize,
-        search: this.usersSearch.trim() || undefined,
-        enabled: this.usersStatus === 'all' ? undefined : this.usersStatus === 'enabled',
+        ...this.appliedUsersQuery,
+        sortBy: this.usersSortBy,
+        sortDirection: this.usersSortDirection,
       }), version)
       if (result?.success && version === this.requestVersion) {
         this.users = result.data.items.map(user => ({ ...user, avatarUrl: resolveAvatarUrl(user.avatarUrl) }))
@@ -244,24 +263,40 @@ export class ManagementStore {
     return saved
   }
 
-  async loadAudit(page = 1): Promise<void> {
+  async queryAudit(): Promise<void> {
     if (this.auditStartDate && this.auditEndDate && this.auditStartDate > this.auditEndDate) {
       this.error = m.audit_date_invalid()
       return
     }
+    this.appliedAuditQuery = {
+      category: this.auditCategory || undefined,
+      outcome: this.auditOutcome || undefined,
+      severity: this.auditSeverity || undefined,
+      action: this.auditAction.trim() || undefined,
+      resource: this.auditResource.trim() || undefined,
+      startDate: this.auditStartDate ? new SvelteDate(`${this.auditStartDate}T00:00:00`).toISOString() : undefined,
+      endDate: this.auditEndDate ? new SvelteDate(`${this.auditEndDate}T23:59:59.999`).toISOString() : undefined,
+    }
+    await this.loadAudit()
+  }
+
+  async sortAudit(key: string, direction: 'asc' | 'desc'): Promise<void> {
+    const field = (['createdAt', 'action', 'resource', 'category', 'outcome', 'severity'] as const).find(field => field === key)
+    if (!field)
+      return
+    this.auditSortBy = field
+    this.auditSortDirection = direction
+    await this.loadAudit()
+  }
+
+  async loadAudit(page = 1): Promise<void> {
     await this.load(async (version) => {
       const result = await this.request(() => managementApi.admin.audit.list({
+        ...this.appliedAuditQuery,
         page,
         pageSize: this.pageSize,
-        category: this.auditCategory || undefined,
-        outcome: this.auditOutcome || undefined,
-        severity: this.auditSeverity || undefined,
         sortBy: this.auditSortBy,
         sortDirection: this.auditSortDirection,
-        action: this.auditAction.trim() || undefined,
-        resource: this.auditResource.trim() || undefined,
-        startDate: this.auditStartDate ? new SvelteDate(`${this.auditStartDate}T00:00:00`).toISOString() : undefined,
-        endDate: this.auditEndDate ? new SvelteDate(`${this.auditEndDate}T23:59:59.999`).toISOString() : undefined,
       }), version)
       if (result?.success && version === this.requestVersion) {
         this.auditStats = result.data.stats
@@ -423,6 +458,7 @@ export class ManagementStore {
       this.users = []
       this.usersTotal = 0
       this.usersPage = 1
+      this.appliedUsersQuery = {}
     }
     if (!this.hasPermission('app.roles.manage'))
       this.roles = []
@@ -430,6 +466,7 @@ export class ManagementStore {
       this.audit = []
       this.auditTotal = 0
       this.auditPage = 1
+      this.appliedAuditQuery = {}
       this.auditStats = []
       this.auditBackupEnabled = false
     }

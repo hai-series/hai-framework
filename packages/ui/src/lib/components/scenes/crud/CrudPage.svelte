@@ -23,7 +23,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { WorkspaceContext } from '../../../workspace-context.js'
   import type { CrudFieldDef } from './crud-controller.svelte.js'
-  import type { CrudDensity, CrudFormConfig, CrudPaginationConfig, CrudToolbarStyle } from './crud-types.js'
+  import type { CrudDensity, CrudFormConfig, CrudPaginationConfig } from './crud-types.js'
   import type { NavAdapter } from './nav-adapter.js'
   import { getContext } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
@@ -34,7 +34,6 @@
   import DataTable from '../../compounds/DataTable.svelte'
   import PageHeader from '../../compounds/PageHeader.svelte'
   import Pagination from '../../compounds/Pagination.svelte'
-  import TableToolbar from '../../compounds/TableToolbar.svelte'
   import Button from '../../primitives/Button.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   import CrudDeleteConfirm from './CrudDeleteConfirm.svelte'
@@ -144,7 +143,6 @@
     editFormExtra,
     detailExtra,
     headerActions,
-    toolbarStyle = 'toolbar',
     toolbarLeading,
     toolbarActions,
     card,
@@ -193,15 +191,13 @@
     detailExtra?: Snippet<[Record<string, unknown>]>
     /** 页面标题右侧额外操作插槽。 */
     headerActions?: Snippet
-    /** 工具栏风格：`toolbar` 使用图标弹层工具栏（默认），`filter-bar` 使用平铺筛选栏。 */
-    toolbarStyle?: CrudToolbarStyle
-    /** toolbar 风格下工具栏左侧内容插槽，可用于放置页面标题或说明。 */
+    /** 查询栏上方左侧内容插槽，可用于放置页面标题或说明。 */
     toolbarLeading?: Snippet
-    /** TableToolbar 风格下工具栏右侧自定义操作插槽。 */
+    /** 页面右侧自定义操作插槽。 */
     toolbarActions?: Snippet
     /** 卡片列表项渲染插槽；存在时替代 DataTable，仍复用工具栏、分页和独立滚动容器。 */
     card?: Snippet<[Record<string, unknown>]>
-    /** 可排序列配置；为空时默认使用全部列表列。 */
+    /** 后端支持的可排序列；为空时不显示排序按钮。 */
     sortableColumns?: Array<{ key: string, label: string }>
     /** 删除前钩子，返回 false 时取消删除。 */
     onbeforedelete?: (item: Record<string, unknown>) => Promise<boolean> | boolean
@@ -290,10 +286,10 @@
   const listCardClass = $derived(
     card
       ? 'flex min-h-0 flex-1 flex-col overflow-hidden !rounded-none !border-0 !bg-transparent !shadow-none [&>.card-body]:min-h-0 [&>.card-body]:flex-1'
-      : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.25rem] border-base-content/7 shadow-sm [&>.card-body]:min-h-0 [&>.card-body]:flex-1',
+      : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-base-content/8 !shadow-none [&>.card-body]:min-h-0 [&>.card-body]:flex-1 [&>.card-body]:gap-0',
   )
   /** 分页栏样式；shrink-0 保证它始终贴在卡片底部。 */
-  const paginationBarClass = 'mt-auto shrink-0 border-t border-base-content/5 px-3 py-2'
+  const paginationBarClass = 'mt-auto shrink-0 border-t border-base-content/8 px-3 py-2'
 
   // 表单展示配置（抽屉 / 弹窗）
   /** 编辑/新建面板类型。 */
@@ -348,10 +344,10 @@
   // 过滤状态
   /** 搜索框当前值；提交时才同步到路由。 */
   let searchValue = $state('')
-  /** 当前已提交的筛选值。 */
+  /** 筛选字段的当前草稿；查询时才提交。 */
   let filterValues = $state<Record<string, unknown>>({})
 
-  // 排序状态（toolbarStyle='toolbar' 时使用）
+  // 服务端排序状态由列头承接。
   /** 当前服务端排序字段。 */
   let sortBy = $state('')
   /** 当前服务端排序方向。 */
@@ -395,28 +391,21 @@
 
   /** 资源定义生成的基础列表列。 */
   const tableColumns = $derived(crud.toTableColumns())
-  /** 供排序弹层显示的列；未传时默认允许所有列表列排序。 */
-  const effectiveSortableColumns = $derived(
-    sortableColumns.length > 0
-      ? sortableColumns
-      : tableColumns.map(column => ({ key: column.key, label: column.label })),
-  )
-
   // ─── 导航 ───
 
   /** 合并搜索、筛选、排序和分页状态，并交给宿主导航器刷新列表。 */
-  function navigateWithParams(overrides: Record<string, string | number>) {
+  function navigateWithParams(overrides: Record<string, string | number>, conditions: Record<string, unknown> = data.filters ?? {}) {
     /** 只包含有效值的查询参数容器。 */
     const params = new SvelteURLSearchParams()
     /** 当前状态与本次覆盖值合并后的完整查询对象。 */
     const merged: Record<string, string | number> = {
-      search: searchValue,
+      search: String(data.filters?.search ?? ''),
       page: data.page,
       pageSize: data.pageSize,
       sortBy,
       sortDirection,
       ...Object.fromEntries(
-        Object.entries(filterValues)
+        Object.entries(conditions).filter(([key]) => !['search', 'sortBy', 'sortDirection', 'page', 'pageSize'].includes(key))
           .filter(([, v]) => v !== undefined && v !== '')
           .map(([k, v]) => [k, String(v)]),
       ),
@@ -440,17 +429,7 @@
 
   /** 提交关键字搜索并回到第一页。 */
   function handleSearch(search: string) {
-    navigateWithParams({ search, page: 1 })
-  }
-
-  /** 提交筛选条件并回到第一页。 */
-  function handleFilterChange(filters: Record<string, unknown>) {
-    /** 筛选变化时的 URL 覆盖项。 */
-    const overrides: Record<string, string | number> = { page: 1 }
-    for (const [k, v] of Object.entries(filters)) {
-      overrides[k] = String(v ?? '')
-    }
-    navigateWithParams(overrides)
+    navigateWithParams({ search, page: 1 }, filterValues)
   }
 
   /** 切换页码。 */
@@ -477,13 +456,6 @@
     sortBy = key
     sortDirection = direction
     navigateWithParams({ sortBy: key, sortDirection: direction, page: 1 })
-  }
-
-  /** 清空服务端排序条件。 */
-  function handleClearSort() {
-    sortBy = ''
-    sortDirection = 'desc'
-    navigateWithParams({ sortBy: '', sortDirection: '', page: 1 })
   }
 
   // ─── 打开/关闭抽屉 ───
@@ -659,7 +631,7 @@
       label: col.label,
       width: col.width,
       align: col.align as 'left' | 'center' | 'right' | undefined,
-      sortable: effectiveSortableColumns.some(column => column.key === col.key),
+      sortable: sortableColumns.some(column => column.key === col.key),
       render: col.render
         ? (item: Record<string, unknown>) => col.render!(item)
         : undefined,
@@ -678,7 +650,7 @@
         {#if headerActions}
           {@render headerActions()}
         {/if}
-        {#if canCreate && toolbarStyle === 'filter-bar'}
+        {#if canCreate}
           <Button variant='primary' size='sm' onclick={openCreate} class='shadow-sm'>
             <span class='icon-[tabler--plus] size-4.5 mr-1.5'></span>
             {uiM('crud_create')}
@@ -688,63 +660,22 @@
     </PageHeader>
   {/if}
 
-  <!-- 搜索 + 过滤栏 -->
-  {#if searchable || filterFields.length > 0 || toolbarLeading || toolbarActions || (toolbarStyle === 'toolbar' && canCreate) || (!effectiveShowHeader && (canCreate || headerActions))}
-    {#if toolbarStyle === 'toolbar'}
-      <TableToolbar
-        {searchable}
-        searchPlaceholder={searchPlaceholderText}
-        searchLabel={searchPlaceholderText}
-        bind:searchValue
-        {filterFields}
-        bind:filterValues
-        sortableColumns={effectiveSortableColumns}
-        bind:sortBy
-        bind:sortDirection
-        showViewSwitch={false}
-        leading={toolbarLeading}
-        primaryActionLabel={canCreate ? uiM('crud_create') : ''}
-        onPrimaryAction={canCreate ? openCreate : undefined}
-        onsearch={handleSearch}
-        onfilterchange={handleFilterChange}
-        onclearfilters={handleResetFilters}
-        onsort={handleSort}
-        onclearsort={handleClearSort}
-      >
-        {#if !effectiveShowHeader && headerActions}
-          {@render headerActions()}
-        {/if}
-        {#if toolbarActions}
-          {@render toolbarActions()}
-        {/if}
-      </TableToolbar>
-    {:else}
-      <CrudFilterBar
-        {searchable}
-        searchPlaceholder={searchPlaceholderText}
-        bind:searchValue
-        {filterFields}
-        bind:filterValues
-        onsearch={handleSearch}
-        onfilterchange={handleFilterChange}
-        onreset={handleResetFilters}
-      >
-        {#snippet actions()}
-          {#if !effectiveShowHeader}
-            {#if headerActions}{@render headerActions()}{/if}
-            {#if canCreate}
-              <Button variant='primary' size='sm' onclick={openCreate}>
-                <span class='icon-[tabler--plus] mr-1.5 size-4'></span>{uiM('crud_create')}
-              </Button>
-            {/if}
-          {/if}
-        {/snippet}
-      </CrudFilterBar>
-    {/if}
+  {#if toolbarLeading || toolbarActions || (!effectiveShowHeader && (canCreate || headerActions))}
+    <div class='flex shrink-0 min-w-0 flex-wrap items-center justify-between gap-2'>
+      <div class='min-w-0 flex-1'>{#if toolbarLeading}{@render toolbarLeading()}{/if}</div>
+      <div class='flex max-w-full flex-wrap items-center gap-2'>
+        {#if !effectiveShowHeader && headerActions}{@render headerActions()}{/if}
+        {#if toolbarActions}{@render toolbarActions()}{/if}
+        {#if !effectiveShowHeader && canCreate}<Button variant='primary' size='sm' onclick={openCreate}><span class='icon-[tabler--plus] size-4' aria-hidden='true'></span>{uiM('crud_create')}</Button>{/if}
+      </div>
+    </div>
   {/if}
 
-  <!-- 数据列表 -->
+  <!-- 查询、数据区与分页共用卡片；数据区独立滚动。 -->
   <Card padding='none' class={listCardClass}>
+    {#if searchable || filterFields.length > 0}
+      <CrudFilterBar class='shrink-0 border-b border-base-content/8 p-3' {searchable} searchPlaceholder={searchPlaceholderText} bind:searchValue {filterFields} bind:filterValues onsearch={handleSearch} onreset={handleResetFilters} />
+    {/if}
     {#if showQuerying}
       <!-- 首次查询：展示查询中占位，避免请求未回时误显示“暂无数据” -->
       <div class='flex min-h-40 flex-1 flex-col items-center justify-center gap-2 px-4 py-10 text-sm text-base-content/55'>
@@ -805,6 +736,7 @@
           columns={dtColumns}
           keyField={keyField}
           loading={false}
+          striped={false}
           sortKey={sortBy || undefined}
           sortDir={sortBy ? sortDirection : null}
           onsort={handleSort}

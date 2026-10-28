@@ -45,7 +45,7 @@
   const toggleLabel = $derived(uiM(expanded ? 'filter_bar_collapse' : 'filter_bar_expand'))
 </script>
 
-<div {...dataAttributes} class={cn('hai-filter-bar min-w-0 space-y-2 [&_.fieldset]:m-0 [&_.fieldset]:min-w-0', className)}>
+<div {...dataAttributes} class={cn('hai-filter-bar min-w-0 space-y-3 [&_.fieldset]:m-0 [&_.fieldset]:p-0 [&_.fieldset]:min-w-0', className)}>
   <div class='flex min-w-0 flex-wrap items-center gap-2'>
     {#if leading}<div class='flex min-w-0 max-w-full flex-[1_1_14rem] flex-wrap items-center gap-2'>{@render leading()}</div>{/if}
     <div class='ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-2'>
@@ -61,13 +61,18 @@
     </div>
   </div>
   {#if children}
-    <div id={panelId} hidden={!expanded} class={expanded ? 'flex min-w-0 flex-wrap items-end gap-2 border-t border-base-content/8 pt-2' : 'hidden'}>
+    <div id={panelId} hidden={!expanded} class={expanded ? 'hai-filter-bar__panel flex min-w-0 flex-wrap items-start gap-4 border-t border-base-content/8 pt-3 pb-1' : 'hidden'}>
       {@render children()}
     </div>
   {/if}
 </div>
 
 <style>
+  .hai-filter-bar__panel {
+    max-height: min(26rem, 50dvh);
+    overflow-y: auto;
+  }
+
   @media (pointer: coarse) {
     .hai-filter-bar__toggle {
       min-height: var(--hai-touch-target-min, 44px);

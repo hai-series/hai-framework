@@ -2,6 +2,7 @@
   "app_title": "hai Desktop",
   "nav_dashboard": "仪表盘",
   "nav_profile": "个人资料",
+  "users_search": "搜索用户名、姓名或邮箱",
   "nav_users": "用户",
   "action_logout": "退出登录",
   "unknown_route": "未知页面：{path}",

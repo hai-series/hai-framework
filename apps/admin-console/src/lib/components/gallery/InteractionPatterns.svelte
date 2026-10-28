@@ -8,6 +8,7 @@
   let search = $state('')
   let searchDraft = $state('')
   let filters = $state<Record<string, unknown>>({})
+  let filterDraft = $state<Record<string, unknown>>({})
   let sortBy = $state('name')
   let sortDirection = $state<'asc' | 'desc'>('asc')
   let viewMode = $state<'table' | 'card'>('table')
@@ -22,6 +23,7 @@
 
   function searchRecords(value: string) {
     search = value
+    filters = { ...filterDraft }
     page = 1
   }
 
@@ -34,6 +36,7 @@
     search = ''
     searchDraft = ''
     filters = {}
+    filterDraft = {}
     page = 1
     viewState = 'ready'
   }
@@ -52,7 +55,7 @@
     { key: 'error', label: m.gallery_interaction_error() },
   ]}>
     <div class='min-w-0 space-y-4'>
-      <TableToolbar bind:searchValue={searchDraft} bind:filterValues={filters} bind:sortBy bind:sortDirection bind:viewMode searchLabel={m.gallery_interaction_search()} searchPlaceholder={m.gallery_interaction_search()} filterFields={[{ id: 'active', label: m.gallery_interaction_status(), type: 'boolean' }]} sortableColumns={[{ key: 'name', label: m.gallery_interaction_name() }]} showViewSwitch onsearch={searchRecords} onfilterchange={() => page = 1} />
+      <TableToolbar bind:searchValue={searchDraft} bind:filterValues={filterDraft} bind:viewMode searchLabel={m.gallery_interaction_search()} searchPlaceholder={m.gallery_interaction_search()} filterFields={[{ id: 'active', label: m.gallery_interaction_status(), type: 'boolean' }]} showViewSwitch onsearch={searchRecords} onclearfilters={resetRecords} />
       {#if viewState === 'error'}
         <Alert variant='error' title={m.gallery_interaction_error_title()}>
           {m.gallery_interaction_error_description()}
