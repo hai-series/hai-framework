@@ -364,7 +364,7 @@ test.describe('Articles Page', () => {
     await page.click('button[type="submit"]')
 
     // 验证跳转或成功提示
-    await expect(page.locator('.alert-success, .toast')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible({ timeout: 5000 })
   })
 })
 ```
@@ -430,7 +430,7 @@ const body = await response.json()
 expect(body.success).toBe(true)
 
 // ✅ E2E UI 断言
-await expect(page.locator('.alert-success')).toBeVisible()
+await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible()
 await expect(page).toHaveURL('/admin/articles')
 ```
 

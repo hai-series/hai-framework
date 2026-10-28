@@ -1,7 +1,7 @@
 <script lang='ts'>
   import type { Component } from 'svelte'
   import type { ManagementApiOptions } from '../api/api-client.js'
-  import { Alert, Skeleton } from '@h-ai/ui/components/compounds/index'
+  import { Alert, Skeleton, ToastContainer } from '@h-ai/ui/components/compounds/index'
   import { Button } from '@h-ai/ui/components/primitives/index'
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
   import { GuideHost } from '@h-ai/ui/guide'
@@ -105,7 +105,6 @@
     <AppShell {platform} {store} onhelp={() => guide.openHelp()}>
       <div class='flex min-h-0 flex-1 flex-col gap-3'>
         {#if store.error}<Alert variant='error' data-testid='error'>{store.error}</Alert>{/if}
-        {#if store.notice}<Alert variant='success' data-testid='notice'>{store.notice}</Alert>{/if}
         {#await pageComponent}
           <div role='status' aria-label={m.home_loading()} class='space-y-4'><Skeleton variant='title' /><Skeleton count={3} /></div>
         {:then { default: Page }}
@@ -116,3 +115,4 @@
     <GuideHost {guide} locale={store.locale} scope={store.user.id} autoStart='overview' />
   {/if}
 {/key}
+<ToastContainer />

@@ -7,6 +7,7 @@ import type { HashRouter } from '../navigation/hash-router.svelte.js'
 import { HaiApiClientError } from '@h-ai/api-client'
 import { matchPermission } from '@h-ai/ui/components/scenes/iam/index'
 import { setGlobalLocale } from '@h-ai/ui/i18n'
+import { toast } from '@h-ai/ui/toast'
 import { SvelteDate } from 'svelte/reactivity'
 import { initializeManagementApi, managementApi, resolveAvatarUrl } from '../api/api-client.js'
 import { requestSensitive } from '../api/sensitive-actions.svelte.js'
@@ -39,7 +40,6 @@ export class ManagementStore {
   loading = $state(false)
   saving = $state(false)
   error = $state('')
-  notice = $state('')
   users = $state<AdminUser[]>([])
   usersTotal = $state(0)
   usersPage = $state(1)
@@ -166,7 +166,6 @@ export class ManagementStore {
       this.router.navigate(`/${this.page}`)
     this.page = this.router.path.slice(1)
     this.error = ''
-    this.notice = ''
     if (this.page === 'users')
       await this.loadUsers()
     else if (this.page === 'roles')
@@ -190,7 +189,7 @@ export class ManagementStore {
       const result = await this.request(() => requestSensitive('business.settings.update', options => managementApi.admin.configuration.update({ notice: this.businessNotice }, options)))
       if (result?.success && this.info) {
         this.info = { ...this.info, notice: result.data.notice }
-        this.notice = m.saved()
+        toast.add({ 'message': m.saved(), 'variant': 'success', 'data-testid': 'notice' })
       }
     })
   }
@@ -285,7 +284,7 @@ export class ManagementStore {
       }
       this.auditBackupReceipt = result.data
       this.auditBackupId = ''
-      this.notice = m.audit_backup_private_hint()
+      toast.add({ 'message': m.audit_backup_private_hint(), 'variant': 'success', 'data-testid': 'notice' })
     })
   }
 
@@ -299,7 +298,7 @@ export class ManagementStore {
         return
       saved = true
       await this.loadUsers(this.usersPage)
-      this.notice = m.saved()
+      toast.add({ 'message': m.saved(), 'variant': 'success', 'data-testid': 'notice' })
     })
     return saved
   }
@@ -315,7 +314,7 @@ export class ManagementStore {
         return
       }
       invited = true
-      this.notice = m.saved()
+      toast.add({ 'message': m.saved(), 'variant': 'success', 'data-testid': 'notice' })
     })
     return invited
   }
@@ -329,7 +328,7 @@ export class ManagementStore {
       deleted = true
       const page = this.users.length === 1 ? Math.max(1, this.usersPage - 1) : this.usersPage
       await this.loadUsers(page)
-      this.notice = m.user_deleted()
+      toast.add({ 'message': m.user_deleted(), 'variant': 'success', 'data-testid': 'notice' })
     })
     return deleted
   }
@@ -342,7 +341,7 @@ export class ManagementStore {
         return
       saved = true
       await this.loadRoles()
-      this.notice = m.saved()
+      toast.add({ 'message': m.saved(), 'variant': 'success', 'data-testid': 'notice' })
     })
     return saved
   }
@@ -359,7 +358,7 @@ export class ManagementStore {
       const me = await this.request(() => managementApi.iam.auth.currentUser())
       if (me?.success)
         this.setUser(me.data)
-      this.notice = m.saved()
+      toast.add({ 'message': m.saved(), 'variant': 'success', 'data-testid': 'notice' })
     })
   }
 
@@ -375,7 +374,7 @@ export class ManagementStore {
         return
       await managementApi.auth.clear()
       this.clearSession()
-      this.notice = m.password_changed()
+      toast.add({ 'message': m.password_changed(), 'variant': 'success', 'data-testid': 'notice' })
     })
   }
 
@@ -396,7 +395,7 @@ export class ManagementStore {
       }
       if (userId)
         await this.loadUsers(this.usersPage)
-      this.notice = m.avatar_saved()
+      toast.add({ 'message': m.avatar_saved(), 'variant': 'success', 'data-testid': 'notice' })
     })
   }
 
@@ -531,7 +530,6 @@ export class ManagementStore {
       return
     this.saving = true
     this.error = ''
-    this.notice = ''
     try {
       await task()
     }
