@@ -24,6 +24,7 @@ const CommandStateSchema = z.object({
   resultFile: z.string().optional(),
   remoteExitCode: z.number().int().optional(),
   remoteStage: z.string().optional(),
+  remoteRecovery: z.enum(['not-needed', 'passed', 'failed', 'stopped']).optional(),
 })
 
 /**

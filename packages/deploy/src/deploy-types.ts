@@ -271,6 +271,8 @@ export interface DeployCommandState {
   remoteExitCode?: number
   /** 匹配终态结果中的最后阶段。 */
   remoteStage?: string
+  /** 匹配终态中的恢复结果；passed 表示旧服务和 HTTP 验证通过，不包含业务数据回退。 */
+  remoteRecovery?: 'not-needed' | 'passed' | 'failed' | 'stopped'
 }
 
 // ─── 部署选项 ───

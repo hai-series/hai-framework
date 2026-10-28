@@ -432,6 +432,12 @@ it('完整离线包自动携带自建数据库镜像，不依赖目标服务器�
   const files = execFileSync('tar', ['-tf', result.data.bundlePath!], { encoding: 'utf8' })
   expect(files).toContain('images/middleware-2.tar')
   expect(files).toContain('compose.json')
+  const directory = deliveryDirectory(result)
+  const volumes = readBundleFile(directory, 'managed-volumes')
+  expect(volumes).toMatch(/^DB_PASSWORD [\w.-]+\n$/)
+  const actualVolume = volumes.trim().split(' ')[1]!
+  expect(readBundleFile(directory, 'state-backends')).toBe(`db postgresql ${actualVolume}\n`)
+  expect(files).toContain('resolve-backend-state.sh')
 })
 
 it('跳过中间件配置时，完整包仍携带已保存的自建 Redis', async () => {
@@ -461,10 +467,19 @@ it.skipIf(process.platform === 'win32')('实际执行交付脚本：拒绝首次
   mkdirSync(bin)
   const engine = `#!/bin/sh
 printf '%s\\n' "$*" >> "$HAI_TEST_COMMANDS"
+for argument in "$@"; do
+  case "$argument" in
+    label=*.project=*) printf '%s' "$argument" | sed 's/^label=[^=]*=//' > "$HAI_TEST_COMMANDS.project";;
+    label=*.service=*) printf '%s' "$argument" | sed 's/^label=[^=]*=//' > "$HAI_TEST_COMMANDS.service";;
+  esac
+done
 case "$*" in
   *'up --help'*) printf 'never\\n';;
+  'context show') printf 'default\\n';;
+  'info --format '*) printf 'fixture-daemon|/fixture/docker-store|overlay\\n';;
   *'config --services'*) printf 'serv\\n';;
   *'image inspect --format'*) printf 'amd64\\n';;
+  *'inspect --format'*'.Config.Labels'*) printf '%s|%s|%s|%s\\n' "$(cat "$HAI_TEST_COMMANDS.project")" "$(cat "$HAI_TEST_COMMANDS.service")" "$(cat "$HAI_TEST_COMMANDS.project")" "$(cat "$HAI_TEST_COMMANDS.service")";;
   *'{{.Image}} {{.Config.Image}}'*) printf 'previous-image localhost/example-serv:release-1\\n';;
   *'inspect --format'*) printf 'true\\n';;
   *'ps -aq'*) printf 'previous-container\\n';;
@@ -475,7 +490,10 @@ esac
   writeFileSync(join(bin, 'curl'), '#!/bin/sh\nif [ "$HAI_TEST_HTTP_FAIL" = 1 ]; then exit 22; fi\n', { mode: 0o700 })
   writeFileSync(join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o700 })
   const commands = join(root, 'commands.txt')
-  const env = { ...process.env, PATH: `${bin}${process.platform === 'win32' ? ';C:/Program Files/Git/usr/bin;' : ':'}${process.env.PATH}`, HAI_TEST_COMMANDS: commands.replaceAll('\\', '/'), HAI_TEST_HTTP_FAIL: '0' }
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${process.platform === 'win32' ? ';C:/Program Files/Git/usr/bin;' : ':'}${process.env.PATH}`, HAI_TEST_COMMANDS: commands.replaceAll('\\', '/'), HAI_TEST_HTTP_FAIL: '0' }
+  // 假引擎只使用本例声明的本地身份，不继承操作机的真实 Docker/Podman 端点。
+  for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'CONTAINER_HOST', 'CONTAINER_CONNECTION', 'CONTAINERS_CONF', 'CONTAINERS_STORAGE_CONF', 'STORAGE_DRIVER', 'STORAGE_OPTS'])
+    delete env[key]
   const shell = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/bash.exe' : '/bin/sh'
   const pack = async (selectedServices?: string[]) => {
     const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices })
@@ -535,7 +553,7 @@ it('完整 tar 上传失败不启动半份部署', async () => {
   expect(ssh.exec.mock.calls.some(([command]) => String(command).includes('start-test.sh'))).toBe(false)
 })
 
-it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-success'])('ssh 失败只读核对匹配终态结果，保留准确执行状态且不重跑 (%s)', async (mode) => {
+it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-success', 'finished-credentials', 'finished-recover', 'finished-rollback'])('ssh 失败只读核对匹配终态结果，保留准确执行状态且不重跑 (%s)', async (mode) => {
   await initialize()
   let applyCalls = 0
   ssh.exec.mockImplementation(async (command: string) => {
@@ -546,7 +564,7 @@ it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-succe
     }
     if (command.includes('result-')) {
       const id = /result-([a-z0-9-]+)\.json/.exec(command)?.[1]
-      data.stdout = mode === 'missing' ? '' : JSON.stringify({ deploymentId: mode === 'mismatch' ? 'older-deployment' : id, stage: 'health', exitCode: mode === 'finished-success' ? 0 : 1, durationSeconds: 1 })
+      data.stdout = mode === 'missing' ? '' : JSON.stringify({ deploymentId: mode === 'mismatch' ? 'older-deployment' : id, stage: mode === 'finished-credentials' ? 'credentials' : mode === 'finished-recover' ? 'recover' : 'health', exitCode: mode === 'finished-success' ? 0 : 1, durationSeconds: 1, ...(mode === 'finished-rollback' ? { recoveryStatus: 'passed' } : {}) })
       data.stdoutTruncated = mode === 'truncated'
     }
     return { success: true, data }
@@ -560,6 +578,8 @@ it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-succe
   expect(state?.resultFile).toContain(`result-${state?.deploymentId}.json`)
   if (mode.startsWith('finished'))
     expect(state?.remoteExitCode).toBe(mode === 'finished-success' ? 0 : 1)
+  if (mode === 'finished-rollback')
+    expect(state).toHaveProperty('remoteRecovery', 'passed')
   expect(applyCalls).toBe(1)
 })
 it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
@@ -569,7 +589,10 @@ it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {
   const pending = deploy.deployApp(root, { environment: 'test' })
   await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled(), { timeout: 5000 })
   await vi.runAllTimersAsync()
-  expect(await pending).toMatchObject({ success: false, error: { code: HaiDeployError.HEALTH_CHECK_FAILED.code } })
+  const result = await pending
+  expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.HEALTH_CHECK_FAILED.code } })
+  if (!result.success)
+    expect(getDeployCommandState(result.error)).toMatchObject({ remoteExecution: 'finished', remoteExitCode: 0, remoteStage: 'complete', remoteRecovery: 'not-needed' })
 })
 it('单服务制品仅部署 API；未提供 SSH 时提示仅打包选项', async () => {
   writeArtifact(false)

@@ -4,11 +4,38 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { Worker } from 'node:worker_threads'
 
 export const TEST_IMAGE_OWNER_LABEL = 'org.h-ai.test.image-run'
 
 function command(runtime, args) {
   return execFileSync(runtime, args, { encoding: 'utf8', windowsHide: true, timeout: 120_000, maxBuffer: 32 * 1024 ** 2, stdio: ['ignore', 'pipe', 'pipe'] })
+}
+
+/** 全局 teardown 不能阻塞 Vitest 主循环；保持原同步算法，在独立 Worker 中执行并等待退出。 */
+export function cleanupTestImagesAsync(options) {
+  return new Promise((resolveResult, reject) => {
+    let outcome
+    let failure
+    // 文件 Worker 自行按 .mjs 加载，不能继承 eval/STDIN 宿主的 input-type 等入口专用参数。
+    const worker = new Worker(new URL('./test-image-cleanup-worker.mjs', import.meta.url), { workerData: options, execArgv: [] })
+    worker.once('message', (message) => {
+      outcome = message
+    })
+    worker.once('error', (error) => {
+      failure = error
+    })
+    worker.once('exit', (code) => {
+      if (failure)
+        reject(failure)
+      else if (code !== 0 || !outcome)
+        reject(new Error('Test image cleanup worker exited without a complete result'))
+      else if (!outcome.success)
+        reject(new Error(outcome.error))
+      else
+        resolveResult(outcome.report)
+    })
+  })
 }
 
 /** 使用 inspect 的真实 tag；Podman ls 的 RepoTags 可能为空，且每个 alias 会重复一行。 */

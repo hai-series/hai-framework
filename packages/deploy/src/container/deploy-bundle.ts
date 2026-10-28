@@ -6,6 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
 import { deployM } from '../deploy-i18n.js'
+import { createBackendStateAssets } from './deploy-backend-state.js'
 import { runCommand } from './deploy-command.js'
 import { createManagedSecretAssets } from './deploy-managed-secrets.js'
 import { createApplyScript, createLocalInstallScript, createUploadScripts } from './deploy-scripts.js'
@@ -151,8 +152,13 @@ export async function createDeploymentBundle(options: {
       put('proxy-entry.json', JSON.stringify({ services: { web: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
     }
     put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebProxy}:${artifact.primaryService}:${options.hasWebProxy ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
+    put('health-port', `${config.expose.hostPort}\n`)
+    put('health-paths', `${options.healthPaths.join('\n')}\n`)
     put('image-list', `${imageList.join('\n')}\n`)
     put('dependencies', `${[...dependencies].join('\n')}\n`)
+    // 卷身份和引擎随校验和交付；服务器持久账本不会随暂时移除服务而删除。
+    for (const [file, content] of Object.entries(createBackendStateAssets(projectName, compose, selected)))
+      put(file, content)
     put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: `${config.remote.baseDir}/${projectName}`, runtime: config.remote.runtime, partial: options.partial, selected, primaryService: artifact.primaryService, hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
     const instructionParams = { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: 'compose.json' }
     const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')

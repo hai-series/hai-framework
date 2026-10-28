@@ -1591,6 +1591,9 @@ importers:
       '@h-ai/feedback':
         specifier: workspace:*
         version: link:../feedback
+      '@h-ai/iam':
+        specifier: workspace:*
+        version: link:../iam
       '@h-ai/reach':
         specifier: workspace:*
         version: link:../reach
@@ -1609,6 +1612,9 @@ importers:
       '@types/prompts':
         specifier: 'catalog:'
         version: 2.4.9
+      altcha:
+        specifier: 'catalog:'
+        version: 3.5.0
       fast-string-width:
         specifier: 'catalog:'
         version: 3.0.2

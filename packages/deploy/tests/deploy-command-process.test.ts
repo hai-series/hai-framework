@@ -1,12 +1,11 @@
 /** 本机真实命令树、父进程早退和输出失败；用 PID 与持续心跳核对退出事实。 */
-import { Buffer } from 'node:buffer'
-import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readWindowsFixtureProcesses, windowsFixtureProcessesStopped, windowsTreeFixture } from '../../../scripts/test-process-identity.js'
 import { runCommand } from '../src/container/deploy-command.js'
 import { getDeployCommandState } from '../src/index.js'
 
@@ -26,7 +25,8 @@ function exited(pid: number): boolean {
 
 /** 子进程先写 PID，再周期性落盘心跳；输出足够长，越过秘密匹配的保留尾部。 */
 function childCode(): string {
-  return `const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(path.join(root, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));process.stdout.write('tree ready ready ready ready ready\\n');setInterval(()=>fs.appendFileSync(${JSON.stringify(path.join(root, 'heartbeat'))},'x'),30)`
+  const record = process.platform === 'win32' ? '' : `fs.writeFileSync(${JSON.stringify(path.join(root, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));`
+  return `const fs=require('node:fs');${record}process.stdout.write('tree ready ready ready ready ready\\n');setInterval(()=>fs.appendFileSync(${JSON.stringify(path.join(root, 'heartbeat'))},'x'),30)`
 }
 
 /** 创建两层命令树；父进程早退时先等待子进程已真正开始，而非依赖调度速度。 */
@@ -34,8 +34,24 @@ function tree(earlyParentExit = false): string {
   return `const {spawn}=require('node:child_process');spawn(process.execPath,['-e',${JSON.stringify(childCode())}],{stdio:${JSON.stringify(earlyParentExit ? 'ignore' : 'inherit')}});${earlyParentExit ? `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(root, 'pids.json'))}))process.exit(0)},10)` : 'setInterval(()=>{},1000)'}`
 }
 
+/** Windows 显式创建和记录父/子实例；原生父进程不会由 Node 自带 Job 提前清空测试后代。 */
+async function treeInput(earlyParentExit = false): Promise<{ command: string, args: string[] }> {
+  if (process.platform !== 'win32')
+    return { command: process.execPath, args: ['-e', tree(earlyParentExit)] }
+  const childFile = path.join(root, 'child.cjs')
+  await writeFile(childFile, childCode())
+  return windowsTreeFixture(childFile, path.join(root, 'pids.json'), path.join(root, 'heartbeat'), earlyParentExit ? 0 : undefined)
+}
+
 /** 实际 PID 来自夹具写入文件，不以 kill 请求已发送代替确认。 */
 async function assertStopped(): Promise<void> {
+  if (process.platform === 'win32') {
+    expect(await windowsFixtureProcessesStopped(await readWindowsFixtureProcesses(path.join(root, 'pids.json')))).toBe(true)
+    const before = await readFile(path.join(root, 'heartbeat'), 'utf8').catch(() => '')
+    await setTimeout(100)
+    expect(await readFile(path.join(root, 'heartbeat'), 'utf8').catch(() => '')).toBe(before)
+    return
+  }
   const recorded: unknown = JSON.parse(await readFile(path.join(root, 'pids.json'), 'utf8'))
   if (!recorded || typeof recorded !== 'object' || !('parent' in recorded) || !('child' in recorded))
     throw new Error('Missing tree fixture PIDs')
@@ -55,8 +71,16 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  if (process.platform === 'win32') {
+    const identities = await readWindowsFixtureProcesses(path.join(root, 'pids.json')).catch((error: unknown) => {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+        return []
+      throw error
+    })
+    expect(await windowsFixtureProcessesStopped(identities, true)).toBe(true)
+  }
   // 测试异常时仍只清理本轮记录的子进程，不依赖下一次运行回收。
-  const recorded = await readFile(path.join(root, 'pids.json'), 'utf8').catch(() => '')
+  const recorded = process.platform === 'win32' ? '' : await readFile(path.join(root, 'pids.json'), 'utf8').catch(() => '')
   if (recorded) {
     const value: unknown = JSON.parse(recorded)
     if (value && typeof value === 'object') {
@@ -70,10 +94,7 @@ afterEach(async () => {
   for (const pid of pids) {
     if (exited(pid))
       continue
-    if (process.platform === 'win32')
-      spawnSync('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' })
-    else
-      process.kill(pid, 'SIGKILL')
+    process.kill(pid, 'SIGKILL')
   }
   pids.clear()
   if (path.dirname(root) !== tmpdir() || !path.basename(root).startsWith('hai-command-树 '))
@@ -83,7 +104,8 @@ afterEach(async () => {
 
 describe('managed local command trees', () => {
   it('超时在本地父/子真实退出后才返回 confirmed，持续心跳停止', async () => {
-    const result = await runCommand(process.execPath, ['-e', tree()], { timeoutMs: 2500 })
+    const input = await treeInput()
+    const result = await runCommand(input.command, input.args, { timeoutMs: 2500 })
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected a timeout')
@@ -92,18 +114,8 @@ describe('managed local command trees', () => {
   }, 20_000)
 
   it('父命令提前正常退出仍收回断链后代；不会把父退出当作整树完成', async () => {
-    let command = process.execPath
-    let args = ['-e', tree(true)]
-    if (process.platform === 'win32') {
-      // Node 自带的 libuv Job 会在父退出时杀普通子进程；使用原生 PowerShell 父进程证明断链情形。
-      const childFile = path.join(root, 'child.cjs')
-      await writeFile(childFile, childCode())
-      const quote = (value: string): string => `'${value.replaceAll('\'', '\'\'')}'`
-      const script = `$ErrorActionPreference='Stop'; Start-Process -FilePath ${quote(process.execPath)} -ArgumentList ${quote(`"${childFile}"`)} -WindowStyle Hidden; while(!(Test-Path -LiteralPath ${quote(path.join(root, 'pids.json'))})){Start-Sleep -Milliseconds 10}; exit 0`
-      command = 'powershell.exe'
-      args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]
-    }
-    const result = await runCommand(command, args, { timeoutMs: 3500 })
+    const input = await treeInput(true)
+    const result = await runCommand(input.command, input.args, { timeoutMs: 3500 })
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected unfinished descendants to fail')
@@ -112,7 +124,8 @@ describe('managed local command trees', () => {
   }, 20_000)
 
   it('回调失败同样等待整树退出且不泄漏原始回调异常', async () => {
-    const result = await runCommand(process.execPath, ['-e', tree()], { onOutput: () => {
+    const input = await treeInput()
+    const result = await runCommand(input.command, input.args, { onOutput: () => {
       throw new Error('private-callback-value')
     }, secrets: ['private-callback-value'] })
     expect(result.success).toBe(false)
@@ -167,7 +180,8 @@ describe('managed local command trees', () => {
     const pending = new Promise<void>((resolve) => {
       release = resolve
     })
-    const result = await runCommand(process.execPath, ['-e', tree()], { timeoutMs: 2500, onOutput: async () => {
+    const input = await treeInput()
+    const result = await runCommand(input.command, input.args, { timeoutMs: 2500, onOutput: async () => {
       calls++
       await pending
     } })
@@ -180,7 +194,8 @@ describe('managed local command trees', () => {
   }, 20_000)
 
   it.skipIf(process.platform !== 'win32')('核验等待耗尽时如实返回 unknown，不能以 kill 请求替代确认', async () => {
-    const result = await runCommand(process.execPath, ['-e', tree()], { timeoutMs: 2500, terminationTimeoutMs: 1 })
+    const input = await treeInput()
+    const result = await runCommand(input.command, input.args, { timeoutMs: 2500, terminationTimeoutMs: 1 })
     expect(result.success).toBe(false)
     if (result.success)
       throw new Error('Expected a timeout')

@@ -4,8 +4,10 @@ import type { Page } from '@playwright/test'
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
+const configAdminPassword = process.env.E2E_CONFIG_ADMIN_PASSWORD || 'Scaffold-test-Config123!'
+
 async function dismissToasts(page: Page) {
-  const dismiss = page.locator('.hai-toast-layer button')
+  const dismiss = page.locator('.hai-toast-layer').getByRole('button', { name: /^(关闭|Dismiss|閉じる)$/ })
   for (let count = 0; count < 10 && await dismiss.count(); count++)
     await dismiss.click()
 }
@@ -28,7 +30,9 @@ async function login(page: Page, username = 'admin', initialPassword = process.e
   await page.locator('#confirm-password').fill(initialPassword)
   await form.locator('button[type=submit]').click()
   await expect(error).toContainText(/新密码不能与当前密码相同|different from your current password/)
-  await expect(error).toContainText('traceId:')
+  await expect(error).not.toContainText('traceId:')
+  await error.getByRole('button', { name: /^(查看排查信息|View diagnostic details|調査情報を表示)$/ }).click()
+  await expect(error.locator('code')).toHaveText(/^[\w.:-]{1,128}$/)
   await expect(page.getByTestId('logout')).toHaveCount(0)
   await page.screenshot({ path: test.info().outputPath('initial-password-same.png'), fullPage: true })
   await expect(form.locator('.alert-error')).toHaveCount(0)
@@ -81,7 +85,7 @@ test('configured page exit revokes the actual server session, while BFCache keep
 })
 
 test('server idle expiry opens normal login in place and resumes one rejected save without losing the draft', async ({ page }) => {
-  const password = await login(page, 'config_admin', 'Scaffold-test-Config123!')
+  const password = await login(page, 'config_admin', configAdminPassword)
   await page.getByTestId('nav-configuration').click()
   const draft = 'Draft preserved across server idle expiry'
   await page.getByTestId('business-notice-input').locator('textarea').fill(draft)

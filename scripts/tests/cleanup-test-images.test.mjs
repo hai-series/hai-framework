@@ -1,5 +1,7 @@
+import { spawnSync } from 'node:child_process'
+import process from 'node:process'
 import { expect, it, vi } from 'vitest'
-import { cleanupTestImages, TEST_IMAGE_OWNER_LABEL } from '../cleanup-test-images.mjs'
+import { cleanupTestImages, cleanupTestImagesAsync, TEST_IMAGE_OWNER_LABEL } from '../cleanup-test-images.mjs'
 
 const owner = 'a1111111-1111-1111-1111-111111111111'
 const ref = 'localhost/hai-test-app:run-1'
@@ -97,4 +99,17 @@ it('未提供本轮 owner 时拒绝自动清理，历史模式必须显式选择
   const run = vi.fn()
   expect(() => cleanupTestImages({ run, apply: true })).toThrow('run ID')
   expect(run).not.toHaveBeenCalled()
+})
+
+it('异步 Worker 的原算法错误等待真实退出后传回调用方，不触达引擎', async () => {
+  await expect(cleanupTestImagesAsync({ runtime: 'unavailable-engine', owner, apply: true })).rejects.toThrow('Unsupported container runtime')
+})
+
+it('从 input-type eval 宿主启动文件 Worker 时不会继承入口专用参数', () => {
+  const module = new URL('../cleanup-test-images.mjs', import.meta.url).href
+  const source = `import assert from 'node:assert/strict'; import { cleanupTestImagesAsync } from ${JSON.stringify(module)}; await assert.rejects(cleanupTestImagesAsync({ runtime: 'unavailable-engine', owner: ${JSON.stringify(owner)}, apply: true }), /Unsupported container runtime/); process.stdout.write('EVAL_WORKER_PASS')`
+  const child = spawnSync(process.execPath, ['--input-type=module', '--eval', source], { encoding: 'utf8', timeout: 10_000, windowsHide: true })
+  expect(child.error, child.stderr).toBeUndefined()
+  expect(child.status, child.stdout + child.stderr).toBe(0)
+  expect(child.stdout).toBe('EVAL_WORKER_PASS')
 })

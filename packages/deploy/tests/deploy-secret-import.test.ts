@@ -67,6 +67,58 @@ it.each(['password', 'volume', 'project', 'missing'])('预检拒绝 %s，不生�
   expect(existsSync(join(directory, 'managed-secrets.env'))).toBe(false)
 })
 
+it.each(['matching', 'io-only', 'empty-docker', 'conflicting-project', 'conflicting-service'] as const)('两种Compose身份标签必须同源且不互相矛盾：%s', async (labelsMode) => {
+  const { directory, inputFile } = fixture()
+  const original = command.getMockImplementation()!
+  command.mockImplementation(async (runtime: string, args: string[], options: { input?: string }) => {
+    const result = await original(runtime, args, options)
+    if (args[0] === 'inspect' && result.success) {
+      const labels: Record<string, string> = { 'io.podman.compose.project': 'hai-demo-test', 'io.podman.compose.service': 'db' }
+      if (labelsMode !== 'io-only') {
+        labels['com.docker.compose.project'] = labelsMode === 'empty-docker' ? '' : 'hai-demo-test'
+        labels['com.docker.compose.service'] = labelsMode === 'empty-docker' ? '' : 'db'
+      }
+      if (labelsMode === 'conflicting-project')
+        labels['io.podman.compose.project'] = 'hai-foreign-test'
+      if (labelsMode === 'conflicting-service')
+        labels['io.podman.compose.service'] = 'vecdb'
+      result.data.stdout = `${JSON.stringify(labels)}\n${result.data.stdout.split('\n').slice(1).join('\n')}`
+    }
+    return result
+  })
+  const result = await importDeploymentSecrets({ directory, inputFile, runtime: 'podman' })
+  expect(result.success).toBe(!labelsMode.startsWith('conflicting'))
+  expect(existsSync(join(directory, 'managed-secrets.env'))).toBe(false)
+})
+
+it.each([
+  {
+    scenario: '跨命名空间拼接项目与服务',
+    labels: { 'com.docker.compose.project': 'hai-demo-test', 'io.podman.compose.service': 'db' },
+  },
+  {
+    scenario: '完整Docker身份伴随残缺Podman身份',
+    labels: { 'com.docker.compose.project': 'hai-demo-test', 'com.docker.compose.service': 'db', 'io.podman.compose.project': 'hai-demo-test' },
+  },
+])('残缺身份标签拒绝导入：$scenario', async ({ labels }) => {
+  const { directory, inputFile, password } = fixture()
+  const before = readdirSync(directory)
+  const original = command.getMockImplementation()!
+  command.mockImplementation(async (runtime: string, args: string[], options: { input?: string }) => {
+    const result = await original(runtime, args, options)
+    if (args[0] === 'inspect' && result.success)
+      result.data.stdout = `${JSON.stringify(labels)}\n${result.data.stdout.split('\n').slice(1).join('\n')}`
+    return result
+  })
+  const result = await importDeploymentSecrets({ directory, inputFile, runtime: 'podman' })
+  expect(result.success).toBe(false)
+  if (!result.success)
+    expect(result.error.ext).toMatchObject({ phase: 'identity', state: 'unchanged' })
+  expect(command.mock.calls.some(([, args]) => args[0] === 'exec')).toBe(false)
+  expect(readdirSync(directory)).toEqual(before)
+  expect(JSON.stringify(result)).not.toContain(password)
+})
+
 it('损坏或冲突状态保持原样；相同版本化状态可重复预检', async () => {
   const { directory, inputFile, password } = fixture()
   const path = join(directory, 'managed-secrets.env')

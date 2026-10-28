@@ -79,6 +79,21 @@ afterEach(() => {
 })
 
 describe('deployCommand', () => {
+  it.each(['en-US', 'zh-CN', 'ja-JP'])('清楚区分恢复验证结果并说明数据边界 (%s)', async (locale) => {
+    core.i18n.setGlobalLocale(locale)
+    const expected = {
+      'en-US': ['not required', 'Business data was not reverted', 'failed recovery verification', 'newly deployed services were stopped'],
+      'zh-CN': ['无需恢复', '业务数据未回退', '未通过恢复验证', '已停止本次新服务'],
+      'ja-JP': ['復旧は不要', '業務データは元に戻していません', '復旧確認に失敗', '新しいサービスを停止'],
+    }
+    for (const [index, remoteRecovery] of ['not-needed', 'passed', 'failed', 'stopped'].entries()) {
+      mocks.writeMessage.mockClear()
+      mocks.deployApp.mockResolvedValue({ success: false, error: { message: 'deployment failed', ext: { commandExecution: { reason: 'timeout', localTermination: 'confirmed', remoteExecution: 'finished', remoteRecovery } } } })
+      await expect(deployCommand({ env: 'prod', yes: true, appDir: createDeployApp(), cwd: tmpRoot })).rejects.toThrow('deployment failed')
+      expect(mocks.writeMessage.mock.calls.map(([message]) => String(message)).join('\n')).toContain(expected[locale as keyof typeof expected][index])
+    }
+  })
+
   it.each([false, true])('计划模式只读且不加载/保存凭据、不初始化或部署，远端检查=%s', async (inspectRemote) => {
     const appDir = createDeployApp()
     const before = readdirSync(tmpRoot, { recursive: true })

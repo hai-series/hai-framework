@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import setup from '../test-image-cleanup-setup.mjs'
 
 const state = vi.hoisted(() => ({ clean: vi.fn() }))
-vi.mock('../cleanup-test-images.mjs', () => ({ cleanupTestImages: state.clean }))
+vi.mock('../cleanup-test-images.mjs', () => ({ cleanupTestImagesAsync: state.clean }))
 const directories = []
 let originalExitCode
 beforeEach(() => {
@@ -25,26 +25,26 @@ function project() {
   return { config: { root } }
 }
 
-it('未构建镜像的测试不依赖 Podman 或 Docker，临时目录自动删除', () => {
+it('未构建镜像的测试不依赖 Podman 或 Docker，临时目录自动删除', async () => {
   const target = project()
   const teardown = setup(target)
   expect(target.config.env.HAI_TEST_IMAGE_RUN).toMatch(/^[a-f0-9-]{36}$/)
   const ledger = target.config.env.HAI_TEST_IMAGE_LEDGER
-  teardown()
+  await teardown()
   expect(existsSync(ledger)).toBe(false)
   expect(state.clean).not.toHaveBeenCalled()
 })
 
-it.each([false, true])('回收失败=%s 时也按引擎汇总本轮账本并保留报告', (failed) => {
+it.each([false, true])('回收失败=%s 时也按引擎汇总本轮账本并保留报告', async (failed) => {
   const target = project()
   const teardown = setup(target)
   const env = target.config.env
   writeFileSync(env.HAI_TEST_IMAGE_LEDGER, `${JSON.stringify({ runtime: 'podman', imageRef: 'localhost/hai-test:1' })}\n`)
   state.clean.mockReturnValue({ failures: failed ? [{ error: 'injected cleanup failure' }] : [] })
   if (failed)
-    expect(teardown).toThrow('Test image cleanup failed')
+    await expect(teardown()).rejects.toThrow('Test image cleanup failed')
   else
-    teardown()
+    await teardown()
   expect(state.clean).toHaveBeenCalledWith({ runtime: 'podman', owner: env.HAI_TEST_IMAGE_RUN, imageRefs: ['localhost/hai-test:1'], apply: true })
   const report = JSON.parse(readFileSync(join(target.config.root, 'test-results', `image-cleanup-${env.HAI_TEST_IMAGE_RUN}.json`), 'utf8'))
   expect(report.builds).toEqual([{ runtime: 'podman', imageRef: 'localhost/hai-test:1' }])
@@ -54,7 +54,7 @@ it.each([false, true])('回收失败=%s 时也按引擎汇总本轮账本并保�
     expect(process.exitCode).toBe(1)
 })
 
-it('引擎失联保留资源身份与错误，不阻止另一引擎回收，也不假报成功', () => {
+it('引擎失联保留资源身份与错误，不阻止另一引擎回收，也不假报成功', async () => {
   const target = project()
   const teardown = setup(target)
   const env = target.config.env
@@ -64,19 +64,38 @@ it('引擎失联保留资源身份与错误，不阻止另一引擎回收，也�
       throw new Error('Engine disconnected')
     return { failures: [] }
   })
-  expect(teardown).toThrow('Test image cleanup failed')
+  await expect(teardown()).rejects.toThrow('Test image cleanup failed')
   expect(state.clean).toHaveBeenCalledTimes(2)
   const report = readFileSync(join(target.config.root, 'test-results', `image-cleanup-${env.HAI_TEST_IMAGE_RUN}.json`), 'utf8')
   expect(report).toContain('Engine disconnected')
   expect(report).toContain('localhost/hai-test:docker')
 })
 
-it('回收失败时保留测试原有的非零退出码', () => {
+it('回收失败时保留测试原有的非零退出码', async () => {
   const target = project()
   const teardown = setup(target)
   writeFileSync(target.config.env.HAI_TEST_IMAGE_LEDGER, JSON.stringify({ runtime: 'podman', imageRef: 'localhost/hai-test:1' }))
   state.clean.mockReturnValue({ failures: [{ error: 'cleanup failure' }] })
   process.exitCode = 7
-  expect(teardown).toThrow('Test image cleanup failed')
+  await expect(teardown()).rejects.toThrow('Test image cleanup failed')
   expect(process.exitCode).toBe(7)
+})
+
+it('并发重复 teardown 共享同一清理与终态 Promise', async () => {
+  const target = project()
+  const teardown = setup(target)
+  const env = target.config.env
+  writeFileSync(env.HAI_TEST_IMAGE_LEDGER, JSON.stringify({ runtime: 'podman', imageRef: 'localhost/hai-test:1' }))
+  let finish
+  state.clean.mockImplementation(() => new Promise((resolve) => {
+    finish = resolve
+  }))
+  const first = teardown()
+  const repeated = teardown()
+  expect(repeated).toBe(first)
+  expect(state.clean).toHaveBeenCalledTimes(1)
+  expect(existsSync(env.HAI_TEST_IMAGE_LEDGER)).toBe(true)
+  finish({ failures: [] })
+  await Promise.all([first, repeated])
+  expect(existsSync(env.HAI_TEST_IMAGE_LEDGER)).toBe(false)
 })

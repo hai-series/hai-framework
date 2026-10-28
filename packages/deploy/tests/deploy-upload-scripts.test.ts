@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
+import { windowsTestCommand } from '../../../scripts/test-command-windows.js'
 import { createUploadScripts, shellArgument } from '../src/container/deploy-scripts.js'
 import { deployM } from '../src/deploy-i18n.js'
 
@@ -177,11 +178,16 @@ if ((Test-Path -LiteralPath Env:SystemRoot) -ne $previousSystemRootExists) { thr
     HAI_TEST_COMMAND_EXIT: '0',
     ...overrides,
   })
-  const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[], powershell?: string } = {}) => {
+  const execute = (script: Script, options: { env?: NodeJS.ProcessEnv, args?: string[], powershell?: string, timeoutMs?: number } = {}) => {
     const env = environment(script, options.env)
+    if (process.platform === 'win32' && script === 'ps1' && options.timeoutMs !== undefined) {
+      // 期限终止本次 Job owner，其关闭同时回收编译、SSH 与 askpass 后代，避免只杀脚本父进程。
+      const job = windowsTestCommand(options.powershell ?? powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', wrapper])
+      return spawnSync('powershell.exe', job.args, { cwd: unrelated, env: { ...env, ...job.env }, encoding: 'utf8', windowsHide: true, timeout: options.timeoutMs, killSignal: 'SIGKILL' })
+    }
     return script === 'sh'
-      ? spawnSync(shell, [join(directory, 'deploy.sh'), ...options.args ?? []], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
-      : spawnSync(options.powershell ?? powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', wrapper], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true })
+      ? spawnSync(shell, [join(directory, 'deploy.sh'), ...options.args ?? []], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true, timeout: options.timeoutMs, killSignal: 'SIGKILL' })
+      : spawnSync(options.powershell ?? powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', wrapper], { cwd: unrelated, env, encoding: 'utf8', windowsHide: true, timeout: options.timeoutMs, killSignal: 'SIGKILL' })
   }
   const commands = (script: Script): string[][] => {
     if (!existsSync(log))
@@ -403,7 +409,7 @@ it.skipIf(process.platform !== 'win32' || !hasPwsh)('pwsh password模式执行he
   const { directory, target, execute, commands } = fixture()
   const password = ' 0019 中 "$value" '
   writeFileSync(join(directory, 'deploy-target.json'), JSON.stringify({ ...target, auth: 'password' }))
-  const result = execute('ps1', { powershell: 'pwsh', env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
+  const result = execute('ps1', { powershell: 'pwsh', timeoutMs: 12_000, env: { HAI_DEPLOY_PROVIDER_SSH_PASSWORD: password, HAI_TEST_EXPECTED_PASSWORD: password } })
   expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
   expect(`${result.stdout}\n${result.stderr}`).not.toContain(password)
   const calls = commands('ps1')
@@ -413,7 +419,7 @@ it.skipIf(process.platform !== 'win32' || !hasPwsh)('pwsh password模式执行he
     expect(call).toContain('BatchMode=no')
     expect(call).not.toContain('-i')
   }
-})
+}, 15_000)
 
 describe('powershell SystemRoot restoration', () => {
   it.skipIf(!hasPowerShell && !hasPwsh).each(['absent', 'empty', 'value'])('保留 SystemRoot 的 %s 状态及原值', (state) => {

@@ -1,12 +1,11 @@
 /** 使用真实父/子进程和持续心跳验证部署门禁命令超时及取消回收。 */
-import { Buffer } from 'node:buffer'
-import { spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { readWindowsFixtureProcesses, windowsFixtureProcessesStopped, windowsTreeFixture } from '../../../scripts/test-process-identity.js'
 import { createDeployTestCommands, runDeployTestCommand } from './helpers/deploy-test-command.js'
 
 let directory: string
@@ -33,21 +32,22 @@ async function recordedPids(): Promise<number[]> {
 
 async function tree(earlyExit?: number): Promise<{ command: string, args: string[] }> {
   const filename = path.join(directory, 'child.cjs')
-  await writeFile(filename, `const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(path.join(directory, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));setInterval(()=>fs.appendFileSync(${JSON.stringify(path.join(directory, 'heartbeat'))},'x'),25)`)
+  const record = process.platform === 'win32' ? '' : `fs.writeFileSync(${JSON.stringify(path.join(directory, 'pids.json'))},JSON.stringify({parent:process.ppid,child:process.pid}));`
+  await writeFile(filename, `const fs=require('node:fs');${record}setInterval(()=>fs.appendFileSync(${JSON.stringify(path.join(directory, 'heartbeat'))},'x'),25)`)
   if (process.platform === 'win32') {
-    const quote = (value: string) => `'${value.replaceAll('\'', '\'\'')}'`
-    // 原生父进程避免 Node 的 libuv Job 提前代替被测 helper 清理后代，隐藏窗口不影响实际执行。
-    const wait = earlyExit === undefined ? 'while($true){Start-Sleep -Milliseconds 50}' : `while(!(Test-Path -LiteralPath ${quote(path.join(directory, 'pids.json'))})){Start-Sleep -Milliseconds 10}; exit ${earlyExit}`
-    const script = `$ErrorActionPreference='Stop'; Start-Process -FilePath ${quote(process.execPath)} -ArgumentList ${quote(`"${filename}"`)} -WindowStyle Hidden; ${wait}`
-    return { command: 'powershell.exe', args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')] }
+    return windowsTreeFixture(filename, path.join(directory, 'pids.json'), path.join(directory, 'heartbeat'), earlyExit)
   }
   const wait = earlyExit === undefined ? 'setInterval(()=>{},1000)' : `setInterval(()=>{if(require('node:fs').existsSync(${JSON.stringify(path.join(directory, 'pids.json'))}))process.exit(${earlyExit})},10)`
   return { command: process.execPath, args: ['-e', `require('node:child_process').spawn(process.execPath,[${JSON.stringify(filename)}],{stdio:'ignore'});${wait}`] }
 }
 
 async function assertStopped(): Promise<void> {
-  for (const pid of await recordedPids())
-    expect(exited(pid), `Owned process ${pid} must have exited`).toBe(true)
+  if (process.platform === 'win32') {
+    expect(await windowsFixtureProcessesStopped(await readWindowsFixtureProcesses(path.join(directory, 'pids.json')))).toBe(true)
+  }
+  else {
+    for (const pid of await recordedPids()) expect(exited(pid), `Owned process ${pid} must have exited`).toBe(true)
+  }
   const before = await readFile(path.join(directory, 'heartbeat'), 'utf8').catch(() => '')
   await delay(100)
   expect(await readFile(path.join(directory, 'heartbeat'), 'utf8').catch(() => '')).toBe(before)
@@ -58,14 +58,19 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  const pids = await recordedPids().catch(() => [])
+  if (process.platform === 'win32') {
+    const identities = await readWindowsFixtureProcesses(path.join(directory, 'pids.json')).catch((error: unknown) => {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+        return []
+      throw error
+    })
+    expect(await windowsFixtureProcessesStopped(identities, true)).toBe(true)
+  }
+  const pids = process.platform === 'win32' ? [] : await recordedPids().catch(() => [])
   for (const pid of pids) {
     if (exited(pid))
       continue
-    if (process.platform === 'win32')
-      spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore', timeout: 5000 })
-    else
-      process.kill(pid, 'SIGKILL')
+    process.kill(pid, 'SIGKILL')
   }
   if (path.dirname(directory) !== tmpdir() || !path.basename(directory).startsWith('hai-deploy-command-'))
     throw new Error('Unexpected command fixture cleanup directory')
@@ -88,14 +93,30 @@ it('普通成功保留工作目录、环境与输出；非零退出保留原始�
 it('取消先杀树再返回；已经取消时不启动新命令', async () => {
   const input = await tree()
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(new Error('Controlled caller cancellation')), 2500)
+  const pending = runDeployTestCommand(input.command, input.args, { signal: controller.signal, timeoutMs: 12_000 })
+  const interrupted = expect(pending).rejects.toMatchObject({ reason: 'abort', localTermination: 'confirmed' })
   try {
-    await expect(runDeployTestCommand(input.command, input.args, { signal: controller.signal })).rejects.toMatchObject({ reason: 'abort', localTermination: 'confirmed' })
+    await vi.waitFor(async () => {
+      if (process.platform === 'win32')
+        await readWindowsFixtureProcesses(path.join(directory, 'pids.json'))
+      else await recordedPids()
+      expect(await readFile(path.join(directory, 'heartbeat'), 'utf8')).not.toBe('')
+    }, { timeout: 6000, interval: 25 })
+    if (process.platform === 'win32') {
+      const identities = await readWindowsFixtureProcesses(path.join(directory, 'pids.json'))
+      const before = await readFile(path.join(directory, 'heartbeat'), 'utf8')
+      // 同 PID 不同创建时间不是本次实例；清理必须拒绝终止，心跳继续。
+      expect(await windowsFixtureProcessesStopped(identities.map(identity => ({ ...identity, creationTime: `${identity.creationTime}1` })), true)).toBe(true)
+      expect((await readFile(path.join(directory, 'heartbeat'), 'utf8')).length).toBeGreaterThan(before.length)
+    }
+    controller.abort(new Error('Controlled caller cancellation'))
+    await interrupted
     await assertStopped()
     await expect(runDeployTestCommand(process.execPath, ['-e', 'process.exit(0)'], { signal: controller.signal })).rejects.toMatchObject({ reason: 'abort', localTermination: 'not-started' })
   }
   finally {
-    clearTimeout(timer)
+    controller.abort(new Error('Fixture cleanup'))
+    await Promise.allSettled([pending, interrupted])
   }
 }, 20_000)
 

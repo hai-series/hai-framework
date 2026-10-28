@@ -444,6 +444,15 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         writeCliMessage(cliM(localKey))
         if (execution.remoteExecution)
           writeCliMessage(cliM(execution.remoteExecution === 'finished' ? 'cli_deploy_remote_finished' : 'cli_deploy_remote_unknown'))
+        if (execution.remoteRecovery) {
+          const recoveryKeys = {
+            'not-needed': 'cli_deploy_recovery_not_needed',
+            'passed': 'cli_deploy_recovery_passed',
+            'failed': 'cli_deploy_recovery_failed',
+            'stopped': 'cli_deploy_recovery_stopped',
+          } as const
+          writeCliMessage(cliM(recoveryKeys[execution.remoteRecovery]))
+        }
         if (execution.deploymentId && execution.resultFile)
           writeCliMessage(cliM('cli_deploy_result_check', { params: { id: execution.deploymentId, path: execution.resultFile } }))
       }

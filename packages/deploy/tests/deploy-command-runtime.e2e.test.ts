@@ -129,7 +129,8 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
       signal: setupSignal,
       prepare: async (fixture, signal) => {
         // 网络安装在已登记 ID 的私有 PID namespace 内执行；失败不会留下 host builder。
-        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh`], { timeoutMs: remaining(180_000), signal, stage: 'apt-install' })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update`], { timeoutMs: remaining(180_000), signal, stage: 'apt-update' })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh'], { timeoutMs: remaining(180_000), signal, stage: 'apt-install' })
         execFileSync(runtime, ['cp', `${key}.pub`, `${fixture.containerId}:/root/.ssh/authorized_keys`], { windowsHide: true, timeout: remaining(20_000), stdio: 'ignore' })
         // 合成密码仅从标准输入交给本夹具 chpasswd，不进入 runtime 参数或镜像层。
         execFileSync(runtime, ['exec', '-i', fixture.containerId, 'chpasswd'], { input: `root:${sshPassword}\n`, windowsHide: true, timeout: remaining(10_000), stdio: ['pipe', 'pipe', 'pipe'] })
@@ -266,6 +267,8 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     writeFileSync(docker, `#!/bin/sh
 case "$*" in
   *'up --help'*) printf 'never\\n';;
+  'context show') printf 'default\\n';;
+  'info --format '*) printf 'fixture-daemon|/fixture/docker-store|overlay\\n';;
   *'config --services'*) printf 'serv\\n';;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac

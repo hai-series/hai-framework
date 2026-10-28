@@ -233,12 +233,36 @@ export async function executeDeployTestFixture(runtime: DeployFixtureRuntime, fi
         const nativeCode = 'code' in outcome.error ? outcome.error.code : undefined
         const reason = options.signal?.aborted ? options.signal.reason instanceof Error && options.signal.reason.name === 'TimeoutError' ? 'timeout' : 'aborted' : nativeCode === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'output-limit' : signal === 'SIGKILL' ? 'timeout' : 'failed'
         // 安装工具可能输出代理认证信息；失败时连 stdio 尾部也不交给 Vitest 序列化。
-        reject(new Error(`Deployment fixture preparation ${options.stage ?? 'command'} ${reason}; exit=${code ?? 'none'}; signal=${signal ?? 'none'}`))
+        const diagnostic = classifyDeployFixturePreparation(`${outcome.stdout}\n${outcome.stderr}`)
+        reject(new Error(`Deployment fixture preparation ${options.stage ?? 'command'} ${reason}; exit=${code ?? 'none'}; signal=${signal ?? 'none'}; diagnostic=${diagnostic}`))
         return
       }
       resolve(outcome.stdout)
     })
   })
+}
+
+/** 只返回固定类别，既定位安装阶段，也不把代理凭据、仓库 URL 或原始输出带到报告中。 */
+export function classifyDeployFixturePreparation(output: string): 'proxy' | 'tls' | 'dns' | 'repository' | 'package-lock' | 'network' | 'package-configure' | 'package-index' | 'download' | 'unknown' {
+  if (/407\s|proxy authentication|proxy.*(?:refused|failed|unreachable)/i.test(output))
+    return 'proxy'
+  if (/certificate verification failed|certificate.*not trusted|tls.*(?:handshake|certificate)|ssl certificate/i.test(output))
+    return 'tls'
+  if (/could not resolve|temporary failure resolving|name or service not known/i.test(output))
+    return 'dns'
+  if (/hash sum mismatch|404\s+not found|does not have a release file|no_pubkey|repository.*not signed/i.test(output))
+    return 'repository'
+  if (/could not get lock|unable to acquire.*lock/i.test(output))
+    return 'package-lock'
+  if (/failed to fetch|connection timed out|could not connect|connection failed|network is unreachable/i.test(output))
+    return 'network'
+  if (/setting up |processing triggers /i.test(output))
+    return 'package-configure'
+  if (/reading package lists/i.test(output))
+    return 'package-index'
+  if (/get:\d+\s|downloading /i.test(output))
+    return 'download'
+  return 'unknown'
 }
 
 /**

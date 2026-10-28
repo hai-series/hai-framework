@@ -48,9 +48,10 @@ const HEALTH_MAX_ATTEMPTS = 40
 /** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
 const ServerResultSchema = z.object({
   deploymentId: z.string(),
-  stage: z.enum(['preflight', 'images', 'dependencies', 'start', 'health', 'complete']),
+  stage: z.enum(['preflight', 'credentials', 'recover', 'images', 'dependencies', 'start', 'health', 'complete']),
   exitCode: z.number().int().min(0).max(255),
   durationSeconds: z.number().int().nonnegative(),
+  recoveryStatus: z.enum(['not-needed', 'passed', 'failed', 'stopped']).optional(),
 })
 
 /** 生成不可变部署 ID：`YYYYMMDD-HHmmss-<random>`。 */
@@ -114,6 +115,8 @@ export function createDockerSshProvider(
     for (let attempt = 0; attempt < HEALTH_MAX_ATTEMPTS; attempt++) {
       try {
         const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+        // 健康检查只消费状态码，主动释放响应体和连接，避免失败轮询积压未读数据。
+        await response.body?.cancel()
         if (response.ok)
           return true
       }
@@ -335,7 +338,7 @@ export function createDockerSshProvider(
         remoteExecution: terminal ? 'finished' : 'unknown',
         deploymentId,
         resultFile,
-        ...(terminal ? { remoteExitCode: terminal.exitCode, remoteStage: terminal.stage } : {}),
+        ...(terminal ? { remoteExitCode: terminal.exitCode, remoteStage: terminal.stage, remoteRecovery: terminal.recoveryStatus } : {}),
       } } })
     }
 
@@ -345,8 +348,16 @@ export function createDockerSshProvider(
       && (!hasWebProxy || (await healthCheck(`${url}/_hai/web-health`) && await healthCheck(`${url}/`)))
     if (!healthy) {
       return err(
-        HaiDeployError.HEALTH_CHECK_FAILED,
-        deployM('deploy_healthCheckFailed', { params: { url } }),
+        { ...HaiDeployError.HEALTH_CHECK_FAILED, message: deployM('deploy_healthCheckFailed', { params: { url } }), ext: { commandExecution: {
+          reason: 'exit',
+          localTermination: 'confirmed',
+          remoteExecution: 'finished',
+          deploymentId,
+          resultFile: `${remoteDir}/result-${deploymentId}.json`,
+          remoteExitCode: 0,
+          remoteStage: 'complete',
+          remoteRecovery: 'not-needed',
+        } } },
       )
     }
 

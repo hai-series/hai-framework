@@ -17,6 +17,11 @@ import { {{fullstack.contractExportName}} } from '{{fullstack.contractPackageNam
 const apiBaseUrl = process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000'
 const apiPrefix = '/api/v1'
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!'
+const auditAdminPassword = process.env.E2E_AUDIT_ADMIN_PASSWORD || 'Scaffold-test-Audit123!'
+const configAdminPassword = process.env.E2E_CONFIG_ADMIN_PASSWORD || 'Scaffold-test-Config123!'
+{{#if features.feedback}}
+const businessOperatorPassword = process.env.E2E_BUSINESS_OPERATOR_PASSWORD || 'Scaffold-test-Operator123!'
+{{/if}}
 const configuredName = process.env.HAI_CORE_NAME || 'Configured scaffold'
 const configuredVersion = process.env.HAI_CORE_VERSION || '9.8.7'
 const configuredEnv = 'test'
@@ -34,7 +39,7 @@ async function capture(page: Page, name: string, fallback: string) {
 }
 
 async function dismissToasts(page: Page) {
-  const dismiss = page.locator('.hai-toast-layer button')
+  const dismiss = page.locator('.hai-toast-layer').getByRole('button', { name: /^(关闭|Dismiss|閉じる)$/ })
   for (let count = 0; count < 10 && await dismiss.count(); count++)
     await dismiss.click()
 }
@@ -401,7 +406,7 @@ test('frontend displays configured core metadata and restores the administrator 
 
 test('auditor reauthentication produces a verifiable private archive', async ({ page }, testInfo) => {
   await page.goto('/')
-  await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
+  await login(page, 'audit_admin', auditAdminPassword)
   await expect(page.getByTestId('nav-users')).toHaveCount(0)
   await expect(page.getByTestId('nav-configuration')).toHaveCount(0)
   await page.getByTestId('nav-audit').click()
@@ -427,7 +432,7 @@ test('auditor reauthentication produces a verifiable private archive', async ({ 
   await capture(page, '{{projectName}}-reauthentication-error-390.png', testInfo.outputPath('reauthentication-error-390.png'))
   await dismissToasts(page)
   await page.setViewportSize({ width: 1440, height: 960 })
-  await page.getByTestId('reauthentication-password').locator('input').fill('Scaffold-test-Audit123!')
+  await page.getByTestId('reauthentication-password').locator('input').fill(auditAdminPassword)
   await confirmation.locator('button[type=submit]').click()
   const receipt = page.getByTestId('audit-backup-receipt')
   await expect(receipt).toBeVisible()
@@ -478,7 +483,7 @@ test('one-time invitation completes password setup through the configured notifi
 
 test('business configuration is isolated and the public notice reaches other duties', async ({ page }) => {
   await page.goto('/')
-  await login(page, 'config_admin', 'Scaffold-test-Config123!')
+  await login(page, 'config_admin', configAdminPassword)
   await expect(page.getByTestId('nav-users')).toHaveCount(0)
   await expect(page.getByTestId('nav-audit')).toHaveCount(0)
   await page.getByTestId('nav-configuration').click()
@@ -494,7 +499,7 @@ test('business configuration is isolated and the public notice reaches other dut
 
 test('audit filters collapse without losing values and fit compact workspaces', async ({ page }, testInfo) => {
   await page.goto('/')
-  await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
+  await login(page, 'audit_admin', auditAdminPassword)
   await page.getByTestId('nav-audit').click()
   await expect(page.getByTestId('audit-page')).toBeVisible()
   const timeHeader = page.getByTestId('audit-page').locator('th').first()
@@ -700,7 +705,7 @@ test('administrator and user complete account, avatar, preference, password and 
   await page.getByTestId('confirm-delete-user').click()
   await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(0)
   await page.getByTestId('logout').click()
-  await login(page, 'audit_admin', 'Scaffold-test-Audit123!')
+  await login(page, 'audit_admin', auditAdminPassword)
   await page.getByTestId('nav-audit').click()
   await page.getByTestId('audit-filters').locator('button[aria-controls]').click()
   await page.getByTestId('audit-resource').locator('input').fill('users')
@@ -717,7 +722,7 @@ test('administrator and user complete account, avatar, preference, password and 
 
 test('feedback submits an empty description and business operator can process and reopen it', async ({ page }, testInfo) => {
   await page.goto('/')
-  await login(page, 'business_operator', 'Scaffold-test-Operator123!')
+  await login(page, 'business_operator', businessOperatorPassword)
   const feedbackImage = Buffer.from(await page.evaluate(() => {
     const canvas = document.createElement('canvas')
     canvas.width = canvas.height = 64

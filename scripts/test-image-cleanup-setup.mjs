@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { cleanupTestImages } from './cleanup-test-images.mjs'
+import { cleanupTestImagesAsync } from './cleanup-test-images.mjs'
 
 export default function setup(project) {
   const owner = randomUUID()
@@ -14,43 +14,43 @@ export default function setup(project) {
   // 显式设置 worker 环境，CLI 子进程继承；不依赖全局 setup 与 worker 共享内存。
   project.config.env = { ...project.config.env, ...env }
   const restoreSignals = manageCancellation(project)
-  let closed = false
+  let teardownPromise
   return () => {
-    if (closed)
-      return
-    closed = true
-    const reports = []
-    try {
-      if (!existsSync(ledger))
-        return
-      const builds = readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
-      for (const runtime of new Set(builds.map(build => build.runtime))) {
-        try {
-          reports.push(cleanupTestImages({ runtime, owner, imageRefs: builds.filter(build => build.runtime === runtime).map(build => build.imageRef), apply: true }))
+    teardownPromise ??= (async () => {
+      const reports = []
+      try {
+        if (!existsSync(ledger))
+          return
+        const builds = readFileSync(ledger, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+        for (const runtime of new Set(builds.map(build => build.runtime))) {
+          try {
+            reports.push(await cleanupTestImagesAsync({ runtime, owner, imageRefs: builds.filter(build => build.runtime === runtime).map(build => build.imageRef), apply: true }))
+          }
+          catch (error) {
+            reports.push({ runtime, failures: [{ error: error.message }] })
+          }
         }
-        catch (error) {
-          reports.push({ runtime, failures: [{ error: error.message }] })
-        }
+        const output = resolve(project.config.root, 'test-results')
+        mkdirSync(output, { recursive: true })
+        // 沿用测试证据目录，保留成功与失败的资源账本，便于定位强杀后遗留。
+        const report = join(output, `image-cleanup-${owner}.json`)
+        // 只有实际构建镜像的测试才会产生报告。
+        writeFileSync(report, `${JSON.stringify({ owner, builds, reports }, null, 2)}\n`)
+        process.stdout.write(`Test image cleanup report: ${report}\n`)
+        if (reports.some(result => result.failures.length))
+          throw new Error(`Test image cleanup failed; see ${report}`)
       }
-      const output = resolve(project.config.root, 'test-results')
-      mkdirSync(output, { recursive: true })
-      // 沿用测试证据目录，保留成功与失败的资源账本，便于定位强杀后遗留。
-      const report = join(output, `image-cleanup-${owner}.json`)
-      // 只有实际构建镜像的测试才会产生报告。
-      writeFileSync(report, `${JSON.stringify({ owner, builds, reports }, null, 2)}\n`)
-      process.stdout.write(`Test image cleanup report: ${report}\n`)
-      if (reports.some(result => result.failures.length))
-        throw new Error(`Test image cleanup failed; see ${report}`)
-    }
-    catch (error) {
-      // Vitest 4 只打印 global teardown 错误；显式保留非零门禁状态。
-      process.exitCode ||= 1
-      throw error
-    }
-    finally {
-      rmSync(directory, { recursive: true, force: true })
-      restoreSignals()
-    }
+      catch (error) {
+        // Vitest 4 只打印 global teardown 错误；显式保留非零门禁状态。
+        process.exitCode ||= 1
+        throw error
+      }
+      finally {
+        rmSync(directory, { recursive: true, force: true })
+        restoreSignals()
+      }
+    })()
+    return teardownPromise
   }
 }
 

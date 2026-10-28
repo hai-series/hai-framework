@@ -243,7 +243,16 @@ async function inspectContainer(runtime: string, container: string, secrets: str
   const mounts = z.array(z.object({ Type: z.string(), Name: z.string().optional() })).parse(JSON.parse(mountsText!))
   // Podman 的默认 pasta/slirp 网络可返回 null；原生 DB/LDAP 验证不要求命名网络。
   const networks = z.record(z.string(), z.object({ NetworkID: z.string() })).parse(JSON.parse(networksText!) ?? {})
-  return { project: labels['com.docker.compose.project'] ?? labels['io.podman.compose.project'], service: labels['com.docker.compose.service'] ?? labels['io.podman.compose.service'], running: runningText === 'true', volumes: mounts.flatMap(mount => mount.Type === 'volume' && mount.Name ? [mount.Name] : []), networks: Object.values(networks).map(network => network.NetworkID) }
+  // 每种已声明的标准标签必须完整，两个命名空间同时声明时保持一致，禁止混拼身份。
+  const dockerProject = labels['com.docker.compose.project'] || undefined
+  const podmanProject = labels['io.podman.compose.project'] || undefined
+  const dockerService = labels['com.docker.compose.service'] || undefined
+  const podmanService = labels['io.podman.compose.service'] || undefined
+  if (Boolean(dockerProject) !== Boolean(dockerService) || Boolean(podmanProject) !== Boolean(podmanService)
+    || (dockerProject && podmanProject && dockerProject !== podmanProject) || (dockerService && podmanService && dockerService !== podmanService)) {
+    throw new Error('identity')
+  }
+  return { project: dockerProject ?? podmanProject, service: dockerService ?? podmanService, running: runningText === 'true', volumes: mounts.flatMap(mount => mount.Type === 'volume' && mount.Name ? [mount.Name] : []), networks: Object.values(networks).map(network => network.NetworkID) }
 }
 
 /** flock 子进程持有同一个固定锁文件；父进程消失后 stdin 关闭，自然释放锁。 */

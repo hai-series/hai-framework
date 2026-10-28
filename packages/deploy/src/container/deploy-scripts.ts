@@ -1,5 +1,6 @@
 /** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
 import { deployM } from '../deploy-i18n.js'
+import { createComposeContainerLookupScript } from './deploy-compose-identity.js'
 import { windowsAskpassSource } from './deploy-ssh-askpass.js'
 import { createTargetReader } from './deploy-target.js'
 
@@ -59,6 +60,7 @@ export function createApplyScript(options: {
     PORT: String(options.hostPort),
     HEALTH: options.healthPaths.map(shellArgument).join(' '),
     PRIMARY: options.primaryService ?? 'serv',
+    LOOKUP: createComposeContainerLookupScript(),
   }
   return String.raw`#!/bin/sh
 # 服务器部署流程：由 deploy-local.sh 或 SSH 入口自动解包后调用，无需手工解包。
@@ -88,12 +90,16 @@ stage=''
 previous=''
 restore=''
 changed=false
+images_changed=false
+recovery_status=not-needed
 locked=false
+result_owned=false
 interrupted=false
 started=$(date +%s)
 step_started=$started
+@@LOOKUP@@
 step() {
-  if [ -n "$stage" ]; then
+  if [ -n "$stage" ] && [ "$result_owned" = true ]; then
     duration=$(( $(date +%s) - step_started ))
     printf '[PASS] %s (%ss)\n' "$stage" "$duration"
     printf '{"stage":"%s","status":"passed","durationSeconds":%s}\n' "$stage" "$duration" >> "$root/steps-$id.jsonl"
@@ -116,7 +122,7 @@ remove_selected() {
   test "$partial" = true || return 0
   # 直接替换选中容器，避免 Compose Provider 连带重建依赖它的未选服务；不删除卷。
   for service in "$@"; do
-    containers=$("$runtime" ps -aq --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$service") || return 1
+    containers=$(compose_container_ids "$runtime" "$project" "$service" -aq) || return 1
     for container in $containers; do
       "$runtime" rm -f "$container" || return 1
     done
@@ -127,7 +133,7 @@ wait_services() {
     ready=false
     attempt=0
     while [ "$attempt" -lt 60 ]; do
-      containers=$("$runtime" ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$waiting_service") || return 1
+      containers=$(compose_container_ids "$runtime" "$project" "$waiting_service" -q) || return 1
       test -n "$containers" || { printf 'Service %s is not running. Inspect its startup diagnostics.\n' "$waiting_service" >&2; return 1; }
       ready=true
       for container in $containers; do
@@ -177,6 +183,44 @@ start_services() {
     compose up -d --no-deps --no-build --pull never "$recreate_option" $application_orphan_option $application_services || return 1
   fi
 }
+wait_http() {
+  http_port=$1
+  shift
+  for http_path in "$@"; do
+    http_ready=false
+    http_attempt=0
+    while [ "$http_attempt" -lt 40 ]; do
+      if curl --noproxy '*' -fsS --max-time 5 "http://127.0.0.1:$http_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
+      http_attempt=$((http_attempt + 1))
+      sleep 3
+    done
+    test "$http_ready" = true || { printf 'HTTP check failed: %s. Inspect compose logs for selected services.\n' "$http_path" >&2; return 1; }
+  done
+}
+verify_recovery() {
+  # 回滚使用旧发布的端口与探测路径，不能用失败新包的地址证明旧服务健康。
+  recovery_release="$root/releases/$previous"
+  recovery_port=$(awk -F: 'NR == 1 { print $1 }' "$recovery_release/layout") || return 1
+  recovery_paths=''
+  if [ -f "$recovery_release/health-paths" ]; then
+    recovery_port=$(cat "$recovery_release/health-port") || return 1
+    recovery_paths=$(cat "$recovery_release/health-paths") || return 1
+  else
+    # 旧格式发布没有独立健康文件；按已存拓扑恢复最小 HTTP 检查。
+    recovery_proxy=$(awk -F: 'NR == 1 { print $3 }' "$recovery_release/layout") || return 1
+    recovery_primary=$(awk -F: 'NR == 1 { print $4 }' "$recovery_release/layout") || return 1
+    if [ "$recovery_proxy" = true ]; then recovery_paths='/health /_hai/web-health /';
+    elif [ "$recovery_primary" = web ]; then recovery_paths='/'; else recovery_paths='/health'; fi
+  fi
+  case "$recovery_port" in ''|*[!0-9]*) return 1;; esac
+  test -n "$recovery_paths" || return 1
+  wait_services $recover_selected || return 1
+  case " $selected " in *' serv '*)
+    if grep -qx web "$recovery_release/services"; then compose exec -T web nginx -s reload || return 1; fi
+    ;;
+  esac
+  wait_http "$recovery_port" $recovery_paths
+}
 finish() {
   code=$?
   trap - EXIT HUP INT TERM
@@ -186,7 +230,7 @@ finish() {
       diagnostics="$root/diagnostics-$id.log"
       : > "$diagnostics"
       for service in $selected; do
-        containers=$("$runtime" ps -aq --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$service" || true)
+        containers=$(compose_container_ids "$runtime" "$project" "$service" -aq || true)
         for container in $containers; do
           "$runtime" inspect --format '{{.Name}} {{.State.Status}} exit={{.State.ExitCode}}' "$container" >> "$diagnostics" 2>&1 || true
           "$runtime" logs --tail 80 "$container" >> "$diagnostics" 2>&1 || true
@@ -194,10 +238,14 @@ finish() {
       done
       printf 'Startup diagnostics saved to %s (private server file).\n' "$diagnostics" >&2
     fi
-    if [ -f "$release/rollback-images" ]; then
+    # 只有本次实际开始导入镜像才能恢复标签；重复 ID/校验失败不能重放历史恢复记录。
+    if [ "$images_changed" = true ] && [ -f "$release/rollback-images" ]; then
       while IFS=' ' read -r image reference; do
         test -n "$reference" || continue
-        "$runtime" tag "$image" "$reference" || printf '[FAIL] Cannot restore image %s\n' "$reference" >&2
+        if ! "$runtime" tag "$image" "$reference"; then
+          recovery_status=failed
+          printf '[FAIL] Cannot restore image %s\n' "$reference" >&2
+        fi
       done < "$release/rollback-images"
     fi
     if [ "$changed" = true ] && [ -n "$previous" ]; then
@@ -205,28 +253,33 @@ finish() {
       recover_selected=$selected
       if [ "$partial" = false ]; then recover_selected=$(cat "$root/releases/$previous/services"); fi
       restore="$previous"
-      if remove_selected $recover_selected && start_services $recover_selected; then
-        case " $selected " in *' serv '*)
-          if grep -qx web "$root/releases/$previous/services"; then compose exec -T web nginx -s reload || true; fi
-          ;;
-        esac
-        printf '[RECOVER] Previous containers restored; verify application health\n' >&2
+      if sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" recover && remove_selected $recover_selected && start_services $recover_selected && verify_recovery && [ "$recovery_status" != failed ]; then
+        recovery_status=passed
+        printf '[RECOVER] Previous release passed recovery health checks\n' >&2
       else
+        recovery_status=failed
         printf '[FAIL] Recovery failed. Use the previous release and inspect container logs.\n' >&2
       fi
     elif [ "$changed" = true ]; then
-      compose stop $selected || true
-      printf '[RECOVER] Failed first installation stopped; data volumes retained\n' >&2
+      if compose stop $selected; then
+        recovery_status=stopped
+        printf '[RECOVER] Failed first installation stopped; data volumes retained\n' >&2
+      else
+        recovery_status=failed
+        printf '[FAIL] Could not stop failed first installation; inspect containers.\n' >&2
+      fi
     fi
   fi
   if [ "$locked" = true ]; then
-    elapsed=$(( $(date +%s) - started ))
-    outcome=passed
-    if [ "$code" -ne 0 ]; then outcome=failed; fi
-    printf '{"stage":"%s","status":"%s","durationSeconds":%s}\n' "$stage" "$outcome" "$(( $(date +%s) - step_started ))" >> "$root/steps-$id.jsonl"
-    # 先完整写入再同目录原子发布，SSH 重连核对不能读取到半份终态结果。
-    printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s}\n' "$id" "$stage" "$code" "$elapsed" > "$root/result-$id.json.next"
-    mv "$root/result-$id.json.next" "$root/result-$id.json"
+    if [ "$result_owned" = true ]; then
+      elapsed=$(( $(date +%s) - started ))
+      outcome=passed
+      if [ "$code" -ne 0 ]; then outcome=failed; fi
+      printf '{"stage":"%s","status":"%s","durationSeconds":%s}\n' "$stage" "$outcome" "$(( $(date +%s) - step_started ))" >> "$root/steps-$id.jsonl"
+      # 先完整写入再同目录原子发布，SSH 重连核对不能读取到半份终态结果。
+      printf '{"deploymentId":"%s","stage":"%s","exitCode":%s,"durationSeconds":%s,"recoveryStatus":"%s"}\n' "$id" "$stage" "$code" "$elapsed" "$recovery_status" > "$root/result-$id.json.next"
+      mv "$root/result-$id.json.next" "$root/result-$id.json"
+    fi
     # 前台命令及同步恢复已结束；后台服务可继续运行，但不能使成功终态永久占锁。
     # 中断时仍可能有活跃子命令，必须由全部描述符持有者退出后释放。
     if [ "$interrupted" = false ]; then
@@ -262,6 +315,12 @@ else
   exit "$lock_code"
 fi
 locked=true
+# 已使用或中断留下的 ID 不能重新认领，尤其不能覆盖原终态和步骤证据。
+if [ -e "$release" ] || [ -L "$release" ] || [ -e "$root/result-$id.json" ] || [ -L "$root/result-$id.json" ] || [ -e "$root/steps-$id.jsonl" ] || [ -L "$root/steps-$id.jsonl" ] || [ -e "$root/result-$id.json.next" ] || [ -L "$root/result-$id.json.next" ]; then
+  printf 'This deployment ID was already used. Create a new deployment bundle.\n' >&2
+  exit 1
+fi
+result_owned=true
 cd "$source_dir"
 sha256sum -c SHA256SUMS
 if [ -f "$root/current" ]; then
@@ -269,6 +328,8 @@ if [ -f "$root/current" ]; then
   case "$previous" in ''|*[!a-zA-Z0-9._-]*) printf 'Invalid deployment state\n' >&2; exit 1;; esac
   test -f "$root/releases/$previous/compose-files"
 fi
+# 独立持久账本覆盖暂时移除的服务和首次失败留下的卷，预检不写状态。
+sh "$source_dir/resolve-backend-state.sh" "$root" "$source_dir" "$runtime" "$previous" check
 if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
   if ! cmp -s layout "$root/releases/$previous/layout"; then
@@ -288,7 +349,6 @@ if [ "$partial" = true ]; then
     case " $selected " in *' web '*) ;; *) selected="$selected web"; proxy_update=true;; esac
   fi
 fi
-test ! -e "$release" || { printf 'This deployment ID was already used. Create a new deployment bundle.\n' >&2; exit 1; }
 mkdir -p "$release"
 cp -R "$source_dir/." "$release/"
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
@@ -304,6 +364,8 @@ if [ "$partial" = true ]; then
 fi
 step credentials 'Resolving server-managed middleware credentials'
 sh "$release/resolve-managed-secrets.sh" "$root" "$release" "$runtime"
+# 在任何可能启动服务（包括增量恢复旧拓扑）之前定稿，失败回滚不删除卷的引擎身份。
+sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" commit
 printf '%s\n' "$release/compose-entry.json" >> "$release/compose-files"
 if [ "$proxy_update" = true ]; then
   printf '%s\n' "$release/proxy-entry.json" >> "$release/compose-files"
@@ -315,12 +377,13 @@ if [ "$partial" = true ]; then
   recover=false
   while IFS= read -r service; do
     case " $selected " in *" $service "*) continue;; esac
-    containers=$("$runtime" ps -q --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$service")
+    containers=$(compose_container_ids "$runtime" "$project" "$service" -q)
     if [ -z "$containers" ]; then recover=true; fi
   done < "$release/services"
   if [ "$recover" = true ]; then
     step recover 'Starting stopped services from the installed baseline'
     restore=$previous
+    sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" recover
     start_services $(cat "$root/releases/$previous/services")
     restore=''
   fi
@@ -328,7 +391,7 @@ fi
 : > "$release/rollback-images"
 if [ -n "$previous" ]; then
   for service in $selected; do
-    containers=$("$runtime" ps -aq --filter "label=com.docker.compose.project=$project" --filter "label=com.docker.compose.service=$service")
+    containers=$(compose_container_ids "$runtime" "$project" "$service" -aq)
     for container in $containers; do
       "$runtime" inspect --format '{{.Image}} {{.Config.Image}}' "$container" >> "$release/rollback-images"
     done
@@ -337,6 +400,7 @@ fi
 step images 'Loading packaged images (no registry access)'
 while IFS=' ' read -r archive reference; do
   test -n "$archive" || continue
+  images_changed=true
   "$runtime" load -i "$release/images/$archive"
   "$runtime" image inspect "$reference" >/dev/null
   architecture=$("$runtime" image inspect --format '{{.Architecture}}' "$reference")
@@ -362,16 +426,7 @@ case " $selected " in
     ;;
 esac
 step health 'Checking HTTP access'
-for path in @@HEALTH@@; do
-  ready=false
-  attempt=0
-  while [ "$attempt" -lt 40 ]; do
-    if curl --noproxy '*' -fsS --max-time 5 "http://127.0.0.1:@@PORT@@$path" >/dev/null 2>&1; then ready=true; break; fi
-    attempt=$((attempt + 1))
-    sleep 3
-  done
-  test "$ready" = true || { printf 'HTTP check failed: %s. Inspect compose logs for selected services.\n' "$path" >&2; exit 1; }
-done
+wait_http @@PORT@@ @@HEALTH@@
 step complete 'Deployment passed all checks'
 printf '%s\n' "$id" > "$root/current.next"
 mv "$root/current.next" "$root/current"

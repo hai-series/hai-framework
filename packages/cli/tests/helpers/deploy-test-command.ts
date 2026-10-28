@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { readdir, readFile } from 'node:fs/promises'
 import process from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
-import { windowsTestCommand, windowsTestJobProbe } from './deploy-test-command-windows.js'
+import { windowsTestCommand, windowsTestJobProbe } from '../../../../scripts/test-command-windows.js'
 
 export interface DeployTestCommandOptions {
   cwd?: string
@@ -131,12 +131,10 @@ export async function runDeployTestCommand(command: string, args: string[], opti
         return 'confirmed'
       let verified = true
       if (job) {
-        // Job owner 等待全部成员；payload 即使早退，祖先仍活着，可先 /T 再关闭 Job。
-        const killed = await tool('taskkill', ['/PID', String(pid), '/T', '/F'], deadline)
-        verified = killed.success || child.exitCode !== null
-        // taskkill 完成后才兜底结束直接父进程；失败仍保留 unknown。
+        // 使用本次 spawn 持有的原生进程句柄结束 Job owner，不按可复用 PID 查找或杀树。
+        // owner 是唯一 Job 句柄持有者；关闭后由 KILL_ON_JOB_CLOSE 清空不可 breakaway 的成员。
         if (!closed)
-          child.kill('SIGKILL')
+          verified = child.kill('SIGKILL') || child.exitCode !== null
       }
       else {
         try {

@@ -3,9 +3,10 @@
  * flock/文件描述符/进程与容器重启均为真实行为；仅 Compose/HTTP 用确定性夹具阻塞或失败。
  * 运行：HAI_DEPLOY_E2E=1 pnpm --filter @h-ai/deploy exec vitest run tests/deploy-lock.e2e.test.ts
  */
+import { Buffer } from 'node:buffer'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import process from 'node:process'
@@ -31,6 +32,30 @@ function apply(bundle: { directory: string }) {
   return spawnSync(runtime, ['exec', container, 'sh', '-c', `export PATH=/fixture/bin:$PATH; sh /fixture/${bundle.directory}/apply.sh /fixture/server`], { encoding: 'utf8', timeout: 20_000, windowsHide: true })
 }
 
+/** 只在故障夹具中替换已校验的卷/引擎元数据，重新生成真实 SHA-256。 */
+function declareDatabaseBackend(bundle: { directory: string }, backend: 'postgresql' | 'mysql'): string {
+  const project = execute(`cat /fixture/${bundle.directory}/managed-project`)
+  const volume = `${project}_${project.slice('hai-'.length)}-db-data`
+  execute(`printf 'db ${backend} ${volume}\\n' > /fixture/${bundle.directory}/state-backends; cd /fixture/${bundle.directory}; sed '/  state-backends$/d' SHA256SUMS > SHA256SUMS.next; sha256sum state-backends >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS; printf '${volume}\\n' > /fixture/volume-to-create`)
+  return volume
+}
+
+/** 只写入公开导入工具会生成的受控 v2 状态；实际容器身份仍由脚本重新核对。 */
+function seedImportedDatabase(bundle: { directory: string }, volume: string, projectOverride?: string): string {
+  const project = execute(`cat /fixture/${bundle.directory}/managed-project`)
+  const imported = join(root, 'imported-managed-secrets.env')
+  writeFileSync(imported, `FORMAT_VERSION=2\nPROJECT=${projectOverride ?? project}\nDB_PASSWORD=${Buffer.from('fixture-import-password').toString('hex')}\nVOLUME_1=DB_PASSWORD:${volume}\n`)
+  execFileSync(runtime, ['cp', imported, `${container}:/fixture/server/managed-secrets.env`], { windowsHide: true })
+  execute('chmod 600 /fixture/server/managed-secrets.env')
+  return project
+}
+/** 失败必须停在预检；不能由启动失败或历史回滚副作用凑成拒绝。 */
+function expectPreflightRefusal(bundle: { id: string }, outcome: ReturnType<typeof apply>): void {
+  expect(outcome.status, `${outcome.stdout}\n${outcome.stderr}`).toBe(1)
+  expect(JSON.parse(execute(`cat /fixture/server/result-${bundle.id}.json`))).toMatchObject({ stage: 'preflight', exitCode: 1 })
+  expect(execute('cat /fixture/commands.log')).not.toMatch(/load -i|rm -f| up -d /)
+}
+
 /** 后台启动真实 shell，并将日志与 PID 保留在本次容器中。 */
 function start(bundle: { directory: string }): number {
   return Number(execute(`export PATH=/fixture/bin:$PATH; sh /fixture/${bundle.directory}/apply.sh /fixture/server >/fixture/${bundle.directory}.log 2>&1 & echo $!`))
@@ -47,7 +72,10 @@ async function pack(selectedServices?: string[]): Promise<{ id: string, director
   mkdirSync(extracted)
   execFileSync('tar', ['-xf', result.data.bundlePath, '-C', extracted], { windowsHide: true })
   execFileSync(runtime, ['cp', extracted, `${container}:/fixture/${directory}`], { windowsHide: true })
-  return { id: result.data.deploymentId, directory }
+  const packed = { id: result.data.deploymentId, directory }
+  if (execute('if [ -f /fixture/has-db ]; then printf yes; fi') === 'yes')
+    declareDatabaseBackend(packed, 'postgresql')
+  return packed
 }
 
 describe.skipIf(!enabled)('linux deployment process locks', () => {
@@ -70,12 +98,43 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
     writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/lock-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
     writeFileSync(join(root, 'bin/docker'), `#!/bin/sh
 printf '%s\\n' "$*" >> /fixture/commands.log
+query_project=''
+query_role=''
+query_column=1
+for argument in "$@"; do
+  case "$argument" in
+    label=*.project=*) query_project=$(printf '%s' "$argument" | sed 's/^label=[^=]*=//');;
+    label=*.service=*) query_role=$(printf '%s' "$argument" | sed 's/^label=[^=]*=//');;
+  esac
+  case "$argument" in label=io.podman.compose.project=*) query_column=3;; esac
+done
+if [ -n "$query_project" ] && [ -n "$query_role" ]; then
+  printf '%s' "$query_project" > /fixture/query-project
+  printf '%s' "$query_role" > /fixture/query-role
+  if [ -f /fixture/io-only ] && [ "$query_column" = 1 ]; then exit 0; fi
+  if [ "$query_role" = db ] && [ -f /fixture/container-labels ]; then
+    awk -F'|' -v project="$query_project" -v service="$query_role" -v column="$query_column" '{exit !($column==project && $(column+1)==service)}' /fixture/container-labels || exit 0
+  fi
+fi
 case "$*" in
   *'up --help'*) printf 'never\\n';;
+  'context show') if [ -f /fixture/docker-context ]; then cat /fixture/docker-context; else printf 'default\\n'; fi;;
+  'info --format '*Host.ServiceIsRemote*) if [ -f /fixture/remote-podman ]; then printf 'true\\n'; else printf 'false\\n'; fi;;
+  'info --format '*Host.Hostname*) printf 'fixture-host|/fixture/podman-store|overlay\\n';;
+  'info --format '*) if [ -f /fixture/daemon-identity ]; then cat /fixture/daemon-identity; else printf 'fixture-daemon|/fixture/docker-store|overlay\\n'; fi;;
+  'volume ls -q') if [ -f /fixture/persistent-volumes ]; then cat /fixture/persistent-volumes; fi;;
+  *'inspect --format'*'.Config.Labels'*)
+    if [ "$(cat /fixture/query-role)" = db ] && [ -f /fixture/container-labels ]; then cat /fixture/container-labels;
+    elif [ -f /fixture/io-only ]; then printf '<no value>|<no value>|%s|%s\\n' "$(cat /fixture/query-project)" "$(cat /fixture/query-role)";
+    else printf '%s|%s|%s|%s\\n' "$(cat /fixture/query-project)" "$(cat /fixture/query-role)" "$(cat /fixture/query-project)" "$(cat /fixture/query-role)"; fi;;
+  *'inspect --format {{.Config.Image}} '*) if [ -f /fixture/active-image ]; then cat /fixture/active-image; else printf 'docker.io/library/postgres:16.15-alpine\\n'; fi;;
+  *'inspect --format'*'.Mounts'*) if [ -f /fixture/active-mounts ]; then cat /fixture/active-mounts; elif [ -f /fixture/persistent-volumes ]; then cat /fixture/persistent-volumes; fi;;
+  *'ps -aq --filter volume='*) if [ -f /fixture/orphan-volume-reference ]; then printf '0123456789ab\\n'; fi;;
+  *'ps -aq'*) if [ -f /fixture/has-db ]; then printf '0123456789ab\\n'; fi;;
   'healthcheck run '*)
     if [ -f /fixture/probe-error ]; then exit 125; fi
     touch /fixture/health-probed;;
-  *'inspect --format'*'State.Running'*) printf 'true\\n';;
+  *'inspect --format'*'State.Running'*) if [ -f /fixture/services-stopped ]; then printf 'false\\n'; else printf 'true\\n'; fi;;
   *'inspect --format'*'State.Health'*)
     if [ -f /fixture/unhealthy ]; then printf 'unhealthy\\n'; exit 0; fi
     if [ -f /fixture/manual-health ]; then
@@ -89,10 +148,14 @@ case "$*" in
   *'ps -q'*) if [ -f /fixture/services-stopped ]; then exit 0; fi; printf 'fixture-container\\n';;
   *'config --services'*)
     if [ -f /fixture/has-web ]; then printf 'serv\\nweb\\n'; else printf 'serv\\n'; fi
-    if [ -f /fixture/has-db ]; then printf 'db\\n'; fi;;
+    if [ -f /fixture/has-db ]; then printf 'db\\n'; fi
+    if [ -f /fixture/invalidate-backend-snapshot ]; then printf 'invalid-snapshot\\n' > "$(cat /fixture/invalidate-backend-snapshot)"; fi;;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
-case " $* " in *' up -d '*) rm -f /fixture/services-stopped;; esac
+case " $* " in *' up -d '*) rm -f /fixture/services-stopped; printf '%s' "$*" > /fixture/active-command;; esac
+if [ -f /fixture/volume-to-create ] && [ -f /fixture/has-db ]; then
+  case " $* " in *' up -d '*) cp /fixture/volume-to-create /fixture/persistent-volumes;; esac
+fi
 if [ -f /fixture/manual-health ]; then
   # Podman Compose 按本次服务集清理孤立容器；第二批不能再移除已经就绪的依赖。
   case " $* " in *' up -d '*--remove-orphans*' serv '*) touch /fixture/dependency-removed;; esac
@@ -119,6 +182,323 @@ fi
     execFileSync(runtime, ['cp', root, `${container}:/fixture`], { windowsHide: true })
     execute('chmod 700 /fixture/bin/*; command -v flock; mkdir -p /fixture/server/.deploy-lock')
     expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+  }, 60_000)
+
+  it.each([false, true])('失败回滚验证旧端口与 HTTP，并保留真实恢复状态（恢复失败：%s）', async (recoveryFails) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
+    const full = await pack()
+    expect(apply(full).status).toBe(0)
+    const curl = join(root, 'rollback-curl')
+    writeFileSync(curl, `#!/bin/sh
+printf '%s\\n' "$*" >> /fixture/http-requests
+test ! -f /fixture/fail-health && exit 0
+${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-command`}
+`)
+    execFileSync(runtime, ['cp', curl, `${container}:/fixture/bin/curl`], { windowsHide: true })
+    execute('chmod 700 /fixture/bin/curl; touch /fixture/fail-health')
+    await deploy.close()
+    expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18081 } } })).toMatchObject({ success: true })
+    const failed = await pack()
+    const applied = apply(failed)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(1)
+    expect(execute('cat /fixture/server/current')).toBe(full.id)
+    expect(JSON.parse(execute(`cat /fixture/server/result-${failed.id}.json`))).toMatchObject({ stage: 'health', exitCode: 1, recoveryStatus: recoveryFails ? 'failed' : 'passed' })
+    const requests = execute('cat /fixture/http-requests')
+    expect(requests).toContain('http://127.0.0.1:18081/health')
+    expect(requests).toContain('http://127.0.0.1:18080/health')
+    expect(applied.stderr).toContain(recoveryFails ? 'Recovery failed' : 'Previous release passed recovery health checks')
+  }, 60_000)
+
+  it('成功发布后使用旧制品重新创建全量交付包，生成新 ID 并验证旧镜像恢复', async () => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
+    const artifacts = join(root, '.hai/build/docker/release-1')
+    const manifestFile = join(artifacts, 'manifest.json')
+    const previousManifest = readFileSync(manifestFile, 'utf8')
+    const first = await pack()
+    expect(apply(first).status).toBe(0)
+    const nextManifest = JSON.parse(previousManifest)
+    const nextContent = 'next-release-image'
+    writeFileSync(join(artifacts, nextManifest.images[0].file), nextContent)
+    nextManifest.buildId = 'release-2'
+    nextManifest.images[0].imageRef = 'localhost/lock-test:2'
+    nextManifest.images[0].sha256 = createHash('sha256').update(nextContent).digest('hex')
+    writeFileSync(manifestFile, JSON.stringify(nextManifest))
+    const second = await pack()
+    expect(apply(second).status).toBe(0)
+    writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
+    writeFileSync(manifestFile, previousManifest)
+    const rollback = await pack()
+    expect(new Set([first.id, second.id, rollback.id]).size).toBe(3)
+    expect(apply(rollback).status).toBe(0)
+    expect(execute('cat /fixture/server/current')).toBe(rollback.id)
+    const restoredCompose = JSON.parse(execute(`cat /fixture/server/releases/${rollback.id}/compose.json`))
+    expect(restoredCompose.services.serv.image).toBe('localhost/lock-test:1')
+    expect(JSON.parse(execute(`cat /fixture/server/result-${rollback.id}.json`))).toMatchObject({ stage: 'complete', exitCode: 0 })
+    expect(execute('cat /fixture/commands.log')).not.toMatch(/\bdown\b|\bpull\s+(?!never)/)
+  }, 60_000)
+
+  it.each([false, true])('真实 shell 拒绝复用持久卷切换数据库后端（增量：%s）', async (partial) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const full = await pack()
+    expect(apply(full).status).toBe(0)
+    execute(`printf 'db postgresql\\n' > /fixture/server/releases/${full.id}/state-backends`)
+    const candidate = await pack(partial ? ['serv'] : undefined)
+    declareDatabaseBackend(candidate, 'mysql')
+    execute(': > /fixture/commands.log')
+    const result = apply(candidate)
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1)
+    expect(result.stderr).toContain('Persistent backend db changed')
+    expect(execute('cat /fixture/server/current')).toBe(full.id)
+    expect(execute('cat /fixture/commands.log')).not.toMatch(/load -i|rm -f| up -d /)
+  }, 60_000)
+
+  it.each(['postgresql', 'mysql'] as const)('全量暂时移除 db 保留卷后，重新加入 %s 仍核对原卷引擎', async (backend) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    const volume = declareDatabaseBackend(first, 'postgresql')
+    expect(apply(first).status).toBe(0)
+    expect(execute('cat /fixture/persistent-volumes')).toBe(volume)
+    execute('rm /fixture/has-db')
+    const withoutDatabase = await pack()
+    expect(apply(withoutDatabase).status).toBe(0)
+    expect(execute(`cat /fixture/server/releases/${withoutDatabase.id}/services`)).not.toMatch(/^db$/m)
+    expect(execute('cat /fixture/persistent-volumes')).toBe(volume)
+    execute('touch /fixture/has-db')
+    const next = await pack()
+    expect(declareDatabaseBackend(next, backend)).toBe(volume)
+    execute(': > /fixture/commands.log')
+    const applied = apply(next)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(backend === 'postgresql' ? 0 : 1)
+    if (backend === 'mysql') {
+      expect(applied.stderr).toMatch(/backend.*changed|incompatible backend/i)
+      expect(execute('cat /fixture/server/current')).toBe(withoutDatabase.id)
+      expect(execute('cat /fixture/commands.log')).not.toMatch(/load -i|rm -f| up -d /)
+    }
+  }, 60_000)
+
+  it.each([true, false])('首次失败后无成功 current 时，按真实卷存在状态保护引擎绑定（卷存在：%s）', async (volumeExists) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db /fixture/fail-health')
+    const failed = await pack()
+    const volume = declareDatabaseBackend(failed, 'postgresql')
+    expect(apply(failed).status).toBe(1)
+    expect(execute('test ! -f /fixture/server/current && echo no-current')).toBe('no-current')
+    expect(execute('cat /fixture/persistent-volumes')).toBe(volume)
+    execute('rm /fixture/fail-health')
+    if (!volumeExists)
+      execute('rm /fixture/persistent-volumes')
+    const retry = await pack()
+    expect(declareDatabaseBackend(retry, 'mysql')).toBe(volume)
+    execute(': > /fixture/commands.log')
+    const applied = apply(retry)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(volumeExists ? 1 : 0)
+    if (volumeExists) {
+      expect(applied.stderr).toMatch(/backend.*changed|incompatible backend/i)
+      expect(execute('cat /fixture/commands.log')).not.toMatch(/load -i|rm -f| up -d /)
+    }
+  }, 60_000)
+
+  it('重复应用已使用部署 ID 在预检停止，不执行历史记录的镜像恢复', async () => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
+    const full = await pack()
+    expect(apply(full).status).toBe(0)
+    const originalResult = execute(`cat /fixture/server/result-${full.id}.json`)
+    const originalSteps = execute(`cat /fixture/server/steps-${full.id}.jsonl`)
+    execute(`printf 'previous-image localhost/previous-release:1\\n' > /fixture/server/releases/${full.id}/rollback-images; : > /fixture/commands.log`)
+    const replay = apply(full)
+    expect(replay.status).toBe(1)
+    expect(replay.stderr).toContain('already used')
+    expect(execute('cat /fixture/server/current')).toBe(full.id)
+    expect(execute(`cat /fixture/server/result-${full.id}.json`)).toBe(originalResult)
+    expect(execute(`cat /fixture/server/steps-${full.id}.jsonl`)).toBe(originalSteps)
+    expect(execute('cat /fixture/commands.log')).not.toMatch(/tag |load -i|rm -f| up -d /)
+  }, 60_000)
+
+  it('持久账本拒绝活动基线卷缺失，避免普通发布创建空库', async () => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    expect(apply(first).status).toBe(0)
+    execute('rm /fixture/persistent-volumes')
+    const next = await pack()
+    execute(': > /fixture/commands.log')
+    expectPreflightRefusal(next, apply(next))
+    expect(execute('cat /fixture/server/current')).toBe(first.id)
+  }, 60_000)
+
+  it.each(['runtime', 'daemon'] as const)('持久账本拒绝更换已绑定的 %s', async (identity) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    expect(apply(first).status).toBe(0)
+    if (identity === 'runtime') {
+      execute('cp /fixture/bin/docker /fixture/bin/podman')
+      await deploy.close()
+      expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'podman' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+    }
+    else {
+      execute('printf \'different-daemon|/fixture/docker-store|overlay\\n\' > /fixture/daemon-identity')
+    }
+    const next = await pack()
+    execute(': > /fixture/commands.log')
+    expectPreflightRefusal(next, apply(next))
+    expect(execute('cat /fixture/server/current')).toBe(first.id)
+  }, 60_000)
+
+  it.each(['remote-podman', 'docker-context'] as const)('持久账本在首次发布前拒绝非默认本地引擎：%s', async (endpoint) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    if (endpoint === 'remote-podman') {
+      execute('cp /fixture/bin/docker /fixture/bin/podman; touch /fixture/remote-podman')
+      await deploy.close()
+      expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'podman' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
+    }
+    else {
+      execute('printf \'other-context\\n\' > /fixture/docker-context')
+    }
+    const first = await pack()
+    execute(': > /fixture/commands.log')
+    expectPreflightRefusal(first, apply(first))
+    expect(execute('test ! -e /fixture/server/current && echo no-current')).toBe('no-current')
+  }, 60_000)
+
+  it.each(['matching', 'different-mount', 'different-image', 'removed'] as const)('持久账本处理无账本旧发布时必须证明实际卷与引擎：%s', async (legacy) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    const volume = declareDatabaseBackend(first, 'postgresql')
+    expect(apply(first).status).toBe(0)
+    if (legacy !== 'removed')
+      execute(`printf 'db postgresql\\n' > /fixture/server/releases/${first.id}/state-backends`)
+    let previous = first.id
+    if (legacy === 'removed') {
+      execute('rm /fixture/has-db')
+      const withoutDatabase = await pack()
+      expect(apply(withoutDatabase).status).toBe(0)
+      previous = withoutDatabase.id
+      execute('touch /fixture/has-db')
+    }
+    execute('rm /fixture/server/persistent-backends')
+    if (legacy === 'different-mount')
+      execute(`printf '${volume}-other\\n' >> /fixture/persistent-volumes; printf '${volume}-other\\n' > /fixture/active-mounts`)
+    if (legacy === 'different-image')
+      execute('printf \'docker.io/library/mysql:8.4\\n\' > /fixture/active-image')
+    const next = await pack()
+    execute(': > /fixture/commands.log')
+    const applied = apply(next)
+    if (legacy === 'matching') {
+      expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
+      expect(execute('cat /fixture/server/current')).toBe(next.id)
+      expect(execute('test -f /fixture/server/persistent-backends && echo recorded')).toBe('recorded')
+    }
+    else {
+      expectPreflightRefusal(next, applied)
+      expect(execute('cat /fixture/server/current')).toBe(previous)
+      expect(execute('test ! -e /fixture/server/persistent-backends && echo untouched')).toBe('untouched')
+    }
+  }, 60_000)
+
+  it.each(['matching', 'io-only', 'wrong-project', 'wrong-volume', 'wrong-image', 'stopped', 'conflicting-labels'] as const)('受控导入无 current 时用实际运行原容器补证首次全量：%s', async (scenario) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const full = await pack()
+    const volume = declareDatabaseBackend(full, 'postgresql')
+    execute(`printf '${volume}\\n' > /fixture/persistent-volumes`)
+    const project = seedImportedDatabase(full, scenario === 'wrong-volume' ? `${volume}-other` : volume, scenario === 'wrong-project' ? 'hai-other' : undefined)
+    if (scenario === 'io-only')
+      execute(`printf '<no value>|<no value>|${project}|db\\n' > /fixture/container-labels; touch /fixture/io-only`)
+    if (scenario === 'conflicting-labels')
+      execute(`printf '${project}|db|hai-other|db\\n' > /fixture/container-labels`)
+    if (scenario === 'wrong-image')
+      execute('printf \'docker.io/library/mysql:8.4\\n\' > /fixture/active-image')
+    if (scenario === 'stopped')
+      execute('touch /fixture/services-stopped')
+    execute(': > /fixture/commands.log')
+    const outcome = apply(full)
+    if (scenario === 'matching' || scenario === 'io-only') {
+      expect(outcome.status, `${outcome.stdout}\n${outcome.stderr}`).toBe(0)
+      expect(execute('cat /fixture/server/current')).toBe(full.id)
+      expect(execute('cat /fixture/server/persistent-backends')).toContain(`db postgresql ${volume}`)
+      if (scenario === 'io-only') {
+        // 后续增量的原容器也必须被定位并移除，不能只让导入预检支持原生标签。
+        const incremental = await pack(['serv'])
+        execute(': > /fixture/commands.log')
+        const updated = apply(incremental)
+        expect(updated.status, `${updated.stdout}\n${updated.stderr}`).toBe(0)
+        expect(execute('cat /fixture/server/current')).toBe(incremental.id)
+        expect(execute('cat /fixture/commands.log')).toContain('rm -f 0123456789ab')
+      }
+    }
+    else {
+      expectPreflightRefusal(full, outcome)
+      expect(execute('test ! -e /fixture/server/current && test ! -e /fixture/server/persistent-backends && echo untouched')).toBe('untouched')
+    }
+  }, 60_000)
+
+  it.each(['backend', 'daemon'] as const)('受控导入不能覆盖已存在账本的 %s 冲突', async (conflict) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    const volume = declareDatabaseBackend(first, 'postgresql')
+    expect(apply(first).status).toBe(0)
+    const ledger = execute('cat /fixture/server/persistent-backends')
+    const next = await pack()
+    seedImportedDatabase(next, volume)
+    if (conflict === 'backend')
+      declareDatabaseBackend(next, 'mysql')
+    else
+      execute('printf \'different-daemon|/fixture/docker-store|overlay\\n\' > /fixture/daemon-identity')
+    execute(': > /fixture/commands.log')
+    expectPreflightRefusal(next, apply(next))
+    expect(execute('cat /fixture/server/current')).toBe(first.id)
+    expect(execute('cat /fixture/server/persistent-backends')).toBe(ledger)
+  }, 60_000)
+  it.each(['symlink', 'duplicate-volume', 'stale-next'] as const)('持久账本拒绝不可信状态文件且不覆盖目标：%s', async (invalid) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    const volume = declareDatabaseBackend(first, 'postgresql')
+    expect(apply(first).status).toBe(0)
+    execute('printf \'retain-sentinel-data\\n\' > /fixture/sentinel')
+    if (invalid === 'symlink')
+      execute('rm /fixture/server/persistent-backends; ln -s /fixture/sentinel /fixture/server/persistent-backends')
+    else if (invalid === 'duplicate-volume')
+      execute(`printf 'db postgresql ${volume}\\n' >> /fixture/server/persistent-backends`)
+    else
+      execute('ln -s /fixture/sentinel /fixture/server/persistent-backends.next')
+    const next = await pack()
+    execute(': > /fixture/commands.log')
+    expectPreflightRefusal(next, apply(next))
+    expect(execute('cat /fixture/server/current')).toBe(first.id)
+    expect(execute('cat /fixture/sentinel')).toBe('retain-sentinel-data')
+  }, 60_000)
+
+  it.each(['missing-volume', 'invalid-snapshot'] as const)('持久账本在失败恢复时重新校验旧状态并短路容器变更：%s', async (fault) => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    expect(apply(first).status).toBe(0)
+    const ledger = execute('cat /fixture/server/persistent-backends')
+    const next = await pack()
+    const curl = join(root, 'guard-recovery-curl')
+    const operation = fault === 'missing-volume'
+      ? 'rm /fixture/persistent-volumes'
+      : `printf 'invalid-snapshot\\n' > /fixture/server/releases/${next.id}/previous-state-backends`
+    writeFileSync(curl, `#!/bin/sh\nif [ ! -f /fixture/backend-fault-applied ]; then\n  touch /fixture/backend-fault-applied\n  : > /fixture/commands.log\n  ${operation}\nfi\nexit 22\n`)
+    execFileSync(runtime, ['cp', curl, `${container}:/fixture/bin/curl`], { windowsHide: true })
+    execute('chmod 700 /fixture/bin/curl')
+    const applied = apply(next)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(1)
+    expect(JSON.parse(execute(`cat /fixture/server/result-${next.id}.json`))).toMatchObject({ stage: 'health', exitCode: 1, recoveryStatus: 'failed' })
+    expect(execute('cat /fixture/server/current')).toBe(first.id)
+    expect(execute('cat /fixture/server/persistent-backends')).toBe(ledger)
+    expect(execute('cat /fixture/commands.log')).not.toMatch(/rm -f| up -d /)
+  }, 60_000)
+
+  it('持久账本在增量提前恢复旧拓扑时先验证快照，失败不加载或启动服务', async () => {
+    execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
+    const first = await pack()
+    expect(apply(first).status).toBe(0)
+    const ledger = execute('cat /fixture/server/persistent-backends')
+    const next = await pack(['serv'])
+    execute(`touch /fixture/services-stopped; printf '/fixture/server/releases/${next.id}/previous-state-backends' > /fixture/invalidate-backend-snapshot; : > /fixture/commands.log`)
+    const applied = apply(next)
+    expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(1)
+    expect(JSON.parse(execute(`cat /fixture/server/result-${next.id}.json`))).toMatchObject({ stage: 'recover', exitCode: 1, recoveryStatus: 'not-needed' })
+    expect(execute('cat /fixture/server/current')).toBe(first.id)
+    expect(execute('cat /fixture/server/persistent-backends')).toBe(ledger)
+    expect(execute('cat /fixture/commands.log')).not.toMatch(/load -i|rm -f| up -d /)
   }, 60_000)
 
   afterEach(async () => {

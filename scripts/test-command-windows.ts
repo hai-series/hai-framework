@@ -1,4 +1,4 @@
-/** 部署测试专用 Windows Job：沿用已验证的挂起创建→入不可 breakaway Job→恢复语义；不改变运行时 API。 */
+/** 测试专用 Windows Job：挂起创建、入不可 breakaway Job 后恢复，供 CLI 命令和上传入口测试共用。 */
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 

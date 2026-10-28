@@ -77,11 +77,11 @@ export default defineConfig({
         HAI_CRYPTO_TRANSPORT_SERVERKEYRING: createE2eTransportRing(),
         HOST: serviceHost,
         PORT: servicePort,
-        // 仅供脚手架验收：生产启动必须由部署环境提供初始管理员密码。
+        // 仅供脚手架验收；验收已部署环境时，E2E_*_PASSWORD须与该环境初始凭据一致，不记录密码。
         HAI_ADMIN_DEFAULT_PASSWORD: process.env.E2E_ADMIN_PASSWORD || 'Scaffold-test-Admin123!',
-        HAI_AUDIT_ADMIN_PASSWORD: 'Scaffold-test-Audit123!',
-        HAI_CONFIG_ADMIN_PASSWORD: 'Scaffold-test-Config123!',
-        HAI_BUSINESS_OPERATOR_PASSWORD: 'Scaffold-test-Operator123!',
+        HAI_AUDIT_ADMIN_PASSWORD: process.env.E2E_AUDIT_ADMIN_PASSWORD || 'Scaffold-test-Audit123!',
+        HAI_CONFIG_ADMIN_PASSWORD: process.env.E2E_CONFIG_ADMIN_PASSWORD || 'Scaffold-test-Config123!',
+        HAI_BUSINESS_OPERATOR_PASSWORD: process.env.E2E_BUSINESS_OPERATOR_PASSWORD || 'Scaffold-test-Operator123!',
         HAI_IAM_PASSWORD_PREVENTSAMEPASSWORD: 'true',
         HAI_IAM_CAPTCHA_ENABLED: 'true',
         HAI_IAM_CAPTCHA_COST: '100',

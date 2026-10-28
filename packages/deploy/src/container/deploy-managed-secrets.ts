@@ -10,6 +10,40 @@ const groups = [
 const appPrefixes: Record<string, string> = { db: 'HAI_DB', vecdb: 'HAI_VECDB', storage: 'HAI_STORAGE', ldap: 'HAI_IAM_LDAP' }
 
 /**
+ * 按实际 Compose 声明解析命名卷，供凭据与后端身份清单共用。
+ * @param projectName - 含环境的部署身份，不含 hai- 前缀。
+ * @param mounts - 服务的 Compose volumes 字段。
+ * @param declarations - Compose 顶层命名卷声明。
+ * @returns 去重后的容器引擎实际卷名；忽略 bind mount。
+ * @throws Error - 实际卷名不能安全写入部署清单。
+ * @example 模块内部上下文
+ * ```ts
+ * const volumes = resolveComposeNamedVolumes('shop-prod', ['data:/data'], { data: null })
+ * ```
+ */
+export function resolveComposeNamedVolumes(projectName: string, mounts: unknown, declarations: Record<string, unknown> = {}): string[] {
+  if (!Array.isArray(mounts))
+    return []
+  const volumes = new Set<string>()
+  for (const mount of mounts) {
+    if (typeof mount !== 'string')
+      continue
+    const source = mount.split(':')[0]!
+    if (!Object.hasOwn(declarations, source))
+      continue
+    const declaration = declarations[source]
+    const details = declaration && typeof declaration === 'object' ? declaration : {}
+    const volume = 'name' in details && typeof details.name === 'string'
+      ? details.name
+      : 'external' in details && details.external === true ? source : `hai-${projectName}_${source}`
+    if (!/^\w[\w.-]*$/.test(volume))
+      throw new Error(deployM('deploy_managedSecretsInvalid'))
+    volumes.add(volume)
+  }
+  return [...volumes]
+}
+
+/**
  * 生成候选和卷身份清单；服务器以自己保存的状态覆盖候选，不把本机缓存当作长期凭据。
  * @param projectName - 含环境的部署身份，与 Compose project 参数一致。
  * @param nativeEnvironment - 仅供中间件使用的 dotenv。
@@ -46,23 +80,8 @@ export function createManagedSecretAssets(projectName: string, nativeEnvironment
       if (!service?.env_file)
         continue
       bindings.add(`${group.name} ${appPrefixes[name]} prefix`)
-      if (!Array.isArray(service.volumes))
-        continue
-      for (const mount of service.volumes) {
-        if (typeof mount !== 'string')
-          continue
-        const source = mount.split(':')[0]!
-        if (!Object.hasOwn(compose.volumes ?? {}, source))
-          continue
-        const declaration = compose.volumes![source]
-        const details = declaration && typeof declaration === 'object' ? declaration : {}
-        const volume = 'name' in details && typeof details.name === 'string'
-          ? details.name
-          : 'external' in details && details.external === true ? source : `hai-${projectName}_${source}`
-        if (!/^\w[\w.-]*$/.test(volume))
-          throw new Error(deployM('deploy_managedSecretsInvalid'))
+      for (const volume of resolveComposeNamedVolumes(projectName, service.volumes, compose.volumes))
         volumes.add(`${group.name} ${volume}`)
-      }
     }
   }
   return {
@@ -74,20 +93,19 @@ export function createManagedSecretAssets(projectName: string, nativeEnvironment
   }
 }
 
-/** 由 apply.sh 持有项目部署锁时调用，不输出密码值。 */
-function createManagedSecretScript(): string {
-  return String.raw`#!/bin/sh
-# 由 apply.sh 在项目部署锁内调用；长期凭据只保存在服务器，不依赖打包机。
-set -eu
-umask 077
-root=$1
-release=$2
-runtime=$3
-state="$root/managed-secrets.env"
-candidate_file="$release/managed-candidates.env"
-test -s "$candidate_file" || exit 0
-fail() { printf '%s\n' "$*" >&2; exit 1; }
-valid_values() {
+/**
+ * 复用现有服务器凭据格式校验，不解码或输出任何凭据值。
+ * @returns 定义 valid_values 的纯 Shell 片段，兼容首次候选与受控导入 v2。
+ * @example 模块内部上下文
+ * ```ts
+ * const validation = createManagedSecretValidationScript()
+ * const script = [validation, 'valid_values "$credential_file"'].join('\n')
+ * // 仅在部署包内校验可信路径，不将凭据内容写入日志或返回给浏览器。
+ * void script
+ * ```
+ */
+export function createManagedSecretValidationScript(): string {
+  return String.raw`valid_values() {
   version=$(awk -F= '$1=="FORMAT_VERSION" {print $2}' "$1")
   if [ "$version" = 2 ]; then
     LC_ALL=C awk -F= '
@@ -107,6 +125,23 @@ valid_values() {
     NF {if(NF!=2 || $1!~/^(DB_PASSWORD|STORAGE_PASSWORD|LDAP_PASSWORD)$/ || $2!~/^[A-Za-z0-9_-]+$/ || length($2)!=32 || seen[$1]++) exit 1}
   ' "$1"
 }
+`
+}
+
+/** 由 apply.sh 持有项目部署锁时调用，不输出密码值。 */
+function createManagedSecretScript(): string {
+  return String.raw`#!/bin/sh
+# 由 apply.sh 在项目部署锁内调用；长期凭据只保存在服务器，不依赖打包机。
+set -eu
+umask 077
+root=$1
+release=$2
+runtime=$3
+state="$root/managed-secrets.env"
+candidate_file="$release/managed-candidates.env"
+test -s "$candidate_file" || exit 0
+fail() { printf '%s\n' "$*" >&2; exit 1; }
+@@MANAGED_VALUES_VALIDATOR@@
 value_of() { awk -F= -v key="$2" '$1==key {print $2}' "$1"; }
 test ! -L "$state" || fail "Invalid managed middleware credential state: $state"
 valid_values "$candidate_file" || fail 'Invalid managed middleware credential candidates; rebuild the deployment bundle.'
@@ -214,5 +249,5 @@ done < "$candidate_file"
 chmod 600 "$next"
 mv "$next" "$state"
 printf '[INFO] Managed middleware credential source: %s (server state; values hidden).\n' "$state"
-`
+`.replace('@@MANAGED_VALUES_VALIDATOR@@', createManagedSecretValidationScript())
 }

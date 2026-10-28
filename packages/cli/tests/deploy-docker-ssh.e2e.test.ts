@@ -11,7 +11,9 @@
  *   pnpm --filter @h-ai/cli test:deploy-gates
  */
 
+import type { HaiResult } from '@h-ai/core'
 import type { DeployConfigInput, DeploymentArtifact } from '@h-ai/deploy'
+import type { IamCaptchaChallenge } from '@h-ai/iam'
 import type { TestContext } from 'vitest'
 import type { AppType } from '../src/cli-types.js'
 import type { DeployFixtureCleanupFailure, DeployTestFixture, DeployTestImage } from './helpers/deploy-container-fixture.js'
@@ -26,6 +28,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { parseEnv } from 'node:util'
 import { crypto } from '@h-ai/crypto'
+import { pbkdf2, solveChallenge } from 'altcha/lib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
@@ -299,6 +302,9 @@ async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { n
     HAI_CORE_VERSION: metadata.version,
     HAI_CORE_ENV: metadata.env,
     E2E_ADMIN_PASSWORD: local.HAI_ADMIN_DEFAULT_PASSWORD,
+    E2E_AUDIT_ADMIN_PASSWORD: local.HAI_AUDIT_ADMIN_PASSWORD,
+    E2E_CONFIG_ADMIN_PASSWORD: local.HAI_CONFIG_ADMIN_PASSWORD,
+    E2E_BUSINESS_OPERATOR_PASSWORD: local.HAI_BUSINESS_OPERATOR_PASSWORD,
     SERVICE_BASE_URL: `http://127.0.0.1:${fixture().webHostPort}`,
     PUBLIC_API_BASE: '',
     BASE_URL: `http://127.0.0.1:${fixture().webHostPort}`,
@@ -456,7 +462,18 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
 
     // 4. 等待 sshd 就绪
     await waitForSsh(deadline + 120_000)
-    await executeDeployTestFixture(rt, fixture(), ['sh', '-c', 'mkdir -p /etc/containers/registries.conf.d && printf \'[[registry]]\\nprefix = "docker.io"\\nblocked = true\\n[[registry]]\\nprefix = "ghcr.io"\\nblocked = true\\n\' > /etc/containers/registries.conf.d/offline.conf'], { timeoutMs: 10_000, signal: AbortSignal.timeout(Math.max(1, deadline + 120_000 - Date.now())) })
+    // 离线策略本身先通过原生解析与拒绝拉取验证，不能把配置错误误当作部署失败。
+    const offlinePolicy = String.raw`mkdir -p /etc/containers/registries.conf.d
+printf '%s\n' '[[registry]]' 'prefix = "docker.io"' 'location = "docker.io"' 'blocked = true' '[[registry]]' 'prefix = "ghcr.io"' 'location = "ghcr.io"' 'blocked = true' > /etc/containers/registries.conf.d/offline.conf
+podman info --format '{{.Host.ServiceIsRemote}}' >/dev/null
+for registry in docker.io ghcr.io; do
+  if rejection=$(HTTP_PROXY=http://127.0.0.1:1 HTTPS_PROXY=http://127.0.0.1:1 http_proxy=http://127.0.0.1:1 https_proxy=http://127.0.0.1:1 NO_PROXY= no_proxy= LC_ALL=C podman pull --retry=0 "$registry/hai-deploy-e2e/offline-policy:never" 2>&1); then
+    printf 'Offline policy unexpectedly allowed an image pull.\n' >&2
+    exit 1
+  fi
+  case "$rejection" in *' is blocked in '*) ;; *) printf 'Offline registry policy did not explicitly reject the image.\n' >&2; exit 1;; esac
+done`
+    await executeDeployTestFixture(rt, fixture(), ['sh', '-ec', offlinePolicy], { timeoutMs: 10_000, signal: AbortSignal.timeout(Math.max(1, deadline + 120_000 - Date.now())), stage: 'nested-runtime' })
   }, 900_000)
 
   afterAll(async () => {
@@ -579,7 +596,18 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
       const serviceDir = path.join(appDir, 'packages/e2e-fullstack-serv')
       writeFileSync(path.join(serviceDir, 'config/_cache.yml'), 'type: redis\n')
       writeFileSync(path.join(serviceDir, 'config/_storage.yml'), 'type: s3\n')
-      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\nHAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=memory\nHAI_STORAGE_TYPE=local\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
+      // 部署后浏览器复用 managed Playwright 的安全场景；显式启用相同前置，不改变生产默认。
+      const browserSecurityProfile = [
+        'HAI_IAM_PASSWORD_PREVENTSAMEPASSWORD=true',
+        'HAI_IAM_CAPTCHA_ENABLED=true',
+        'HAI_IAM_CAPTCHA_COST=100',
+        'HAI_IAM_CAPTCHA_MAXCOUNTER=2',
+        'HAI_IAM_INITIALCREDENTIALS_ENABLED=true',
+        'HAI_IAM_REAUTHENTICATION_ENABLED=true',
+        'HAI_IAM_REAUTHENTICATION_OPERATIONS=["iam.users.invite","audit.backup"]',
+        'HAI_AUDIT_BACKUP_ENABLED=true',
+      ].join('\n')
+      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\n${browserSecurityProfile}\nHAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=memory\nHAI_STORAGE_TYPE=local\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
       const deployConfig = {
         provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: remoteWebPort } },
         container: { s3Engine: 'rustfs' },
@@ -644,44 +672,78 @@ describe.skipIf(!enabled)('docker-ssh 端到端部署（需 HAI_DEPLOY_E2E=1 + �
         expect(await web.text()).toContain('runtime-config.js')
         expect((await commands.fetch(`http://127.0.0.1:${fixture().webHostPort}/_hai/web-health`)).ok).toBe(true)
         const client = crypto.transport.createClient({ keyExchangeUrl: `http://127.0.0.1:${fixture().webHostPort}/api/v1/_hai/key-exchange`, fetch: (input, init) => commands.fetch(input, { ...init, signal: AbortSignal.timeout(10_000) }) })
-        const info = await client.encryptedFetch(`http://127.0.0.1:${fixture().webHostPort}/api/v1/app/info`, { method: 'POST' })
-        const details = await info.json() as { success: boolean, data: { name: string, version: string, env: string } }
-        expect(details).toMatchObject({ success: true, data: { env: 'test' } })
-        metadata = details.data
-        const local = parseEnv(readFileSync(path.join(appDir, '.env.test'), 'utf8'))
-        const runtimeEnv = parseEnv(readDeliveryFile(deliveryDirectory, '.env.runtime'))
-        // 每次打包都没有本机稳定密码缓存，模拟换电脑；服务器状态与数据库数据必须保持。
-        const candidateDigest = createHash('sha256').update(readDeliveryFile(deliveryDirectory, 'managed-candidates.env')).digest('hex')
-        expect(candidateDigests.has(candidateDigest)).toBe(false)
-        candidateDigests.add(candidateDigest)
-        const digest = (await commands.run(runtime!, ['exec', fixture().containerId, 'sha256sum', '/opt/hai/apps with spaces/e2e-fullstack-test/managed-secrets.env'])).split(' ')[0]!
-        if (serverStateDigest)
-          expect(digest).toBe(serverStateDigest)
-        serverStateDigest = digest
-        const sql = attempt === 0
-          ? 'CREATE TABLE deployment_password_probe (note text); INSERT INTO deployment_password_probe VALUES (\'retained-across-packagers\'); SELECT note FROM deployment_password_probe;'
-          : 'SELECT note FROM deployment_password_probe;'
-        const persisted = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', 'hai-e2e-fullstack-test-db', 'sh', '-ec', 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U hai -d hai -Atc "$1"', 'probe', sql])
-        expect(persisted).toContain('retained-across-packagers')
-        expect(runtimeEnv.HAI_CACHE_TYPE).toBeUndefined()
-        expect(runtimeEnv.HAI_STORAGE_TYPE).toBeUndefined()
-        expect(JSON.parse(runtimeEnv.HAI_DB!).type).toBe('postgresql')
-        expect(JSON.parse(runtimeEnv.HAI_CACHE!).type).toBe('redis')
-        expect(JSON.parse(runtimeEnv.HAI_STORAGE!).type).toBe('s3')
-        expect(runtimeEnv.HAI_CRYPTO_TRANSPORT_SERVERKEYRING === local.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).toBe(true)
-        expect(runtimeEnv.HAI_ADMIN_DEFAULT_PASSWORD === local.HAI_ADMIN_DEFAULT_PASSWORD).toBe(true)
-        for (const service of ['db', 'cache', 'storage'])
-          expect((await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.State.Health.Status}}', `hai-e2e-fullstack-test-${service}`])).trim()).toBe('healthy')
-        expect((await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.RestartCount}}', 'hai-e2e-fullstack-test-serv'])).trim()).toBe('0')
-        const login = await client.encryptedFetch(`http://127.0.0.1:${fixture().webHostPort}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD }) })
-        expect(await login.json()).toMatchObject({ success: true })
-        client.destroy()
-        const compose = JSON.parse(readDeliveryFile(deliveryDirectory, 'compose.json'))
-        expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
-        expect(compose.services.serv.ports).toBeUndefined()
-        expect(compose.services.web.ports).toEqual([`${remoteWebPort}:8080`])
-        expect(compose.services.web.env_file).toBeUndefined()
-        expect(readFileSync(path.join(appDir, '.env.local'), 'utf8')).not.toContain(String(local.HAI_ADMIN_DEFAULT_PASSWORD))
+        try {
+          const info = await client.encryptedFetch(`http://127.0.0.1:${fixture().webHostPort}/api/v1/app/info`, { method: 'POST' })
+          const details = await info.json() as { success: boolean, data: { name: string, version: string, env: string } }
+          expect(details).toMatchObject({ success: true, data: { env: 'test' } })
+          metadata = details.data
+          const local = parseEnv(readFileSync(path.join(appDir, '.env.test'), 'utf8'))
+          const runtimeEnv = parseEnv(readDeliveryFile(deliveryDirectory, '.env.runtime'))
+          // 每次打包都没有本机稳定密码缓存，模拟换电脑；服务器状态与数据库数据必须保持。
+          const candidateDigest = createHash('sha256').update(readDeliveryFile(deliveryDirectory, 'managed-candidates.env')).digest('hex')
+          expect(candidateDigests.has(candidateDigest)).toBe(false)
+          candidateDigests.add(candidateDigest)
+          const digest = (await commands.run(runtime!, ['exec', fixture().containerId, 'sha256sum', '/opt/hai/apps with spaces/e2e-fullstack-test/managed-secrets.env'])).split(' ')[0]!
+          if (serverStateDigest)
+            expect(digest).toBe(serverStateDigest)
+          serverStateDigest = digest
+          const sql = attempt === 0
+            ? 'CREATE TABLE deployment_password_probe (note text); INSERT INTO deployment_password_probe VALUES (\'retained-across-packagers\'); SELECT note FROM deployment_password_probe;'
+            : 'SELECT note FROM deployment_password_probe;'
+          const persisted = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', 'hai-e2e-fullstack-test-db', 'sh', '-ec', 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U hai -d hai -Atc "$1"', 'probe', sql])
+          expect(persisted).toContain('retained-across-packagers')
+          expect(runtimeEnv.HAI_CACHE_TYPE).toBeUndefined()
+          expect(runtimeEnv.HAI_STORAGE_TYPE).toBeUndefined()
+          expect(JSON.parse(runtimeEnv.HAI_DB!).type).toBe('postgresql')
+          expect(JSON.parse(runtimeEnv.HAI_CACHE!).type).toBe('redis')
+          expect(JSON.parse(runtimeEnv.HAI_STORAGE!).type).toBe('s3')
+          expect(runtimeEnv.HAI_CRYPTO_TRANSPORT_SERVERKEYRING === local.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).toBe(true)
+          expect(runtimeEnv.HAI_ADMIN_DEFAULT_PASSWORD === local.HAI_ADMIN_DEFAULT_PASSWORD).toBe(true)
+          for (const service of ['db', 'cache', 'storage'])
+            expect((await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.State.Health.Status}}', `hai-e2e-fullstack-test-${service}`])).trim()).toBe('healthy')
+          expect((await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.RestartCount}}', 'hai-e2e-fullstack-test-serv'])).trim()).toBe('0')
+          const loginUrl = `http://127.0.0.1:${fixture().webHostPort}/api/v1/auth/login`
+          const noProof = await client.encryptedFetch(loginUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD }) })
+          const rejected = await noProof.json() as HaiResult<unknown>
+          expect(rejected.success).toBe(false)
+          if (!rejected.success)
+            expect(rejected.error.code).toBe('hai:iam:030')
+          const captchaResponse = await client.encryptedFetch(`http://127.0.0.1:${fixture().webHostPort}/api/v1/auth/captcha`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ operation: 'login' }) })
+          const challenge = await captchaResponse.json() as HaiResult<IamCaptchaChallenge>
+          expect(challenge.success).toBe(true)
+          if (!challenge.success)
+            throw new Error('Deployed login captcha challenge was not created')
+          // 官方求解器接收 controller；同时绑定本轮取消和独立求解期限，结束后释放监听器。
+          const captchaController = new AbortController()
+          const abortCaptcha = () => captchaController.abort(commands.signal.reason)
+          commands.signal.addEventListener('abort', abortCaptcha, { once: true })
+          const captchaDeadline = setTimeout(() => captchaController.abort(new Error('Login captcha solver deadline exceeded')), 5000)
+          let captcha: string
+          try {
+            commands.signal.throwIfAborted()
+            const solution = await solveChallenge({ challenge: challenge.data.challenge, deriveKey: pbkdf2.deriveKey, controller: captchaController, timeout: 5000 })
+            captchaController.signal.throwIfAborted()
+            expect(solution).not.toBeNull()
+            if (!solution)
+              throw new Error('Deployed login captcha challenge was not solved')
+            captcha = JSON.stringify({ id: challenge.data.id, solution })
+          }
+          finally {
+            clearTimeout(captchaDeadline)
+            commands.signal.removeEventListener('abort', abortCaptcha)
+          }
+          const login = await client.encryptedFetch(loginUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD, captcha }) })
+          expect(await login.json()).toMatchObject({ success: true })
+          const compose = JSON.parse(readDeliveryFile(deliveryDirectory, 'compose.json'))
+          expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
+          expect(compose.services.serv.ports).toBeUndefined()
+          expect(compose.services.web.ports).toEqual([`${remoteWebPort}:8080`])
+          expect(compose.services.web.env_file).toBeUndefined()
+          expect(readFileSync(path.join(appDir, '.env.local'), 'utf8')).not.toContain(String(local.HAI_ADMIN_DEFAULT_PASSWORD))
+        }
+        finally {
+          client.destroy()
+        }
       }
       expect(metadata).toBeDefined()
       if (metadata)
