@@ -2,6 +2,14 @@
   模块功能示例页面 - 展示 hai-framework 各后端模块的使用方式
 -->
 <script lang='ts'>
+  import aiExample from '$lib/examples/modules/ai.ts?raw'
+  import cacheExample from '$lib/examples/modules/cache.ts?raw'
+  import coreExample from '$lib/examples/modules/core.ts?raw'
+  import cryptoExample from '$lib/examples/modules/crypto.ts?raw'
+  import datapipeExample from '$lib/examples/modules/datapipe.ts?raw'
+  import reldbExample from '$lib/examples/modules/reldb.ts?raw'
+  import storageExample from '$lib/examples/modules/storage.ts?raw'
+  import vecdbExample from '$lib/examples/modules/vecdb.ts?raw'
   import * as m from '$lib/paraglide/messages'
   import { crypto } from '@h-ai/crypto'
   import { toast } from '@h-ai/ui'
@@ -31,7 +39,7 @@
     { op: 'CREATE TABLE', sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)', desc: m.modules_db_op_create_desc() },
     { op: 'INSERT', sql: 'INSERT INTO users (name, email)\nVALUES (\'张三\', \'zhang@example.com\')', desc: m.modules_db_op_insert_desc() },
     { op: 'SELECT', sql: 'SELECT * FROM users WHERE name LIKE \'%张%\'', desc: m.modules_db_op_select_desc() },
-    { op: 'TRANSACTION', sql: 'await reldb.tx.wrap(async (tx) => {\n  await tx.execute(\'INSERT INTO users (name, email) VALUES (?, ?)\', [\'张三\', \'zhang@example.com\'])\n  return await tx.get(\'SELECT * FROM users WHERE email = ?\', [\'zhang@example.com\'])\n})', desc: m.modules_db_op_tx_desc() },
+    { op: 'TRANSACTION', sql: 'await reldb.tx.wrap(async (tx) => {\n  const saved = await tx.execute(\'INSERT INTO users (name, email) VALUES (?, ?)\', [\'Alice\', \'alice@example.com\'])\n  if (!saved.success) throw new Error(saved.error.message, { cause: saved.error })\n  const found = await tx.get(\'SELECT * FROM users WHERE email = ?\', [\'alice@example.com\'])\n  if (!found.success) throw new Error(found.error.message, { cause: found.error })\n  return found.data\n})', desc: m.modules_db_op_tx_desc() },
   ])
 
   // Cache 示例
@@ -39,7 +47,7 @@
     { op: 'SET', code: 'await cache.kv.set(\'user:1\', userData, { ex: 3600 })', desc: m.modules_cache_op_set_desc() },
     { op: 'GET', code: 'const user = await cache.kv.get<User>(\'user:1\')', desc: m.modules_cache_op_get_desc() },
     { op: 'DELETE', code: 'await cache.kv.del(\'user:1\')', desc: m.modules_cache_op_delete_desc() },
-    { op: 'SCAN', code: 'const [cursor, keys] = (await cache.kv.scan(\'0\', { match: \'user:*\', count: 100 })).data', desc: m.modules_cache_op_clear_desc() },
+    { op: 'SCAN', code: 'const page = await cache.kv.scan(\'0\', { match: \'user:*\', count: 100 })\nif (!page.success) return page\nconst [cursor, keys] = page.data', desc: m.modules_cache_op_clear_desc() },
   ])
 
   // Storage 示例
@@ -53,8 +61,8 @@
   // AI 示例
   const aiFeatures = $derived([
     { name: m.modules_ai_feat_chat_name(), desc: m.modules_ai_feat_chat_desc(), api: 'ai.llm.chat({ messages: [...] })' },
-    { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embedding.embed({ input: text })' },
-    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { provider, model } })' },
+    { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embedding.embedText(text)' },
+    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { api, model } })' },
     { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.llm.chatStream({ messages: [...] })' },
     { name: m.modules_ai_feat_image_name(), desc: m.modules_ai_feat_image_desc(), api: 'ai.image.generate({ prompt, size })' },
   ])
@@ -194,25 +202,7 @@
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_core_init_example()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { core } from '@h-ai/core'
-
-// 加载 YAML 配置并初始化
-await core.init({
-  configDir: './config',  // 配置文件目录
-  env: 'development',     // 运行环境
-})
-
-// 使用配置
-const dbConfig = core.config.get('db')
-
-// 使用日志
-core.logger.info('Application started', { port: 3000 })
-
-// 切换语言
-core.i18n.setGlobalLocale('en-US')
-
-// 关闭时清理资源
-await core.close()`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{coreExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -247,33 +237,7 @@ await core.close()`}</code></pre>
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_db_crud_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { reldb } from '@h-ai/reldb'
-
-await reldb.init({ type: 'sqlite', database: './data/app.db' })
-
-await reldb.ddl.createTable('users', {
-  id: { type: 'TEXT', primaryKey: true },
-  name: { type: 'TEXT', notNull: true },
-  email: { type: 'TEXT', unique: true },
-  created_at: { type: 'TIMESTAMP' },
-})
-
-const users = reldb.crud.table({
-  table: 'users',
-  idColumn: 'id',
-  dbType: reldb.config?.type ?? 'sqlite',
-})
-
-await users.create({ id: 'u1', name: '张三', email: 'z@test.com' })
-const allUsers = await users.findAll({ where: 'name LIKE ?', params: ['%张%'] })
-await users.updateById('u1', { name: '李四' })
-await users.deleteById('u1')
-
-// 分页查询
-const page = await reldb.sql.queryPage({
-  sql: 'SELECT * FROM users ORDER BY created_at DESC',
-  pagination: { page: 1, pageSize: 10 },
-})`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{reldbExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -307,32 +271,7 @@ const page = await reldb.sql.queryPage({
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_cache_init_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { cache } from '@h-ai/cache'
-
-// 初始化 (内存缓存)
-await cache.init({ type: 'memory' })
-
-// 初始化 (Redis)
-await cache.init({
-  type: 'redis',
-  url: 'redis://localhost:6379/0',
-})
-
-// KV + TTL
-await cache.kv.set('users:profile:1', userData, { ex: 3600 })
-const profile = await cache.kv.get('users:profile:1')
-
-// Hash / List / Set / SortedSet
-await cache.hash.hset('users:1', { name: '张三', age: 18 })
-await cache.list.rpush('jobs', { id: 'job-1' })
-await cache.set_.sadd('tags', 'ai', 'svelte')
-await cache.zset.zadd('rank', { member: 'player-1', score: 100 })
-
-// 批量操作
-await cache.kv.mset([['a', 1], ['b', 2]])
-
-// 关闭
-await cache.close()`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{cacheExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -368,31 +307,7 @@ await cache.close()`}</code></pre>
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_storage_init_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { storage } from '@h-ai/storage'
-
-// 本地存储
-await storage.init({
-  type: 'local',
-  root: './uploads',
-})
-
-// S3 存储
-await storage.init({
-  type: 's3',
-  bucket: 'my-bucket',
-  region: 'us-east-1',
-  accessKeyId: process.env.HAI_STORAGE_ACCESSKEYID,
-  secretAccessKey: process.env.HAI_STORAGE_SECRETACCESSKEY,
-})
-
-// 上传与预签名（仅 S3 支持预签名；本地文件由应用鉴权接口访问）
-const meta = await storage.file.put('avatars/user1.jpg', buffer, { contentType: 'image/jpeg' })
-if (meta.success) {
-  const url = await storage.presign.getUrl(meta.data.key, { expiresIn: 3600 })
-  if (!url.success) {
-    throw new Error(url.error.message)
-  }
-}`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{storageExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -426,50 +341,7 @@ if (meta.success) {
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_ai_example_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { ai } from '@h-ai/ai'
-
-// 初始化
-ai.init({
-  llm: {
-    provider: 'openai',
-    apiKey: process.env.HAI_AI_LLM_APIKEY,
-    model: 'gpt-4o-mini',
-  },
-  image: {
-    models: [{
-      id: 'image',
-      provider: 'pollinations',
-      model: 'zimage',
-      apiKey: process.env.POLLINATIONS_API_KEY,
-    }],
-    generateModel: 'image',
-  },
-})
-
-// 对话
-const response = await ai.llm.chat({
-  messages: [
-    { role: 'system', content: '你是一个有帮助的助手' },
-    { role: 'user', content: '你好！' },
-  ],
-})
-if (!response.success) throw new Error(response.error.message)
-
-// 流式输出
-for await (const chunk of ai.llm.chatStream({
-  messages: [{ role: 'user', content: '写一首诗' }],
-})) {
-  process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
-}
-
-// 文生图（返回标准化图片字节）
-const image = await ai.image.generate({
-  prompt: '一个正在构建开源框架的机器人',
-  size: { width: 1024, height: 1024 },
-})
-
-// 文本嵌入
-const embedding = await ai.embedding.embedText('搜索查询文本')`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{aiExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -516,41 +388,7 @@ const embedding = await ai.embedding.embedText('搜索查询文本')`}</code></p
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_vecdb_rag_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { vecdb } from '@h-ai/vecdb'
-import { ai } from '@h-ai/ai'
-
-// 初始化（LanceDB 嵌入式）
-await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-
-// 创建集合
-await vecdb.collection.create('knowledge', { dimension: 1536 })
-
-// 文档入库: 嵌入 + 存储
-const embedding = await ai.embedding.embedText('hai-framework 是一个 AI 优先的全栈框架')
-await vecdb.vector.insert('knowledge', [{
-  id: 'doc-1',
-  vector: embedding.success ? embedding.data : [],
-  content: 'hai-framework 是一个 AI 优先的全栈框架',
-  metadata: { title: '框架介绍', source: 'docs' },
-}])
-
-// RAG 检索: 查询 → 嵌入 → 搜索
-const queryEmbedding = await ai.embedding.embedText('什么是 hai-framework？')
-if (!queryEmbedding.success) throw new Error(queryEmbedding.error.message)
-const searchResult = await vecdb.vector.search('knowledge', queryEmbedding.data, { topK: 3 })
-if (!searchResult.success) throw new Error(searchResult.error.message)
-
-// 将检索结果作为 context 传给 LLM
-const context = searchResult.data.map(r => r.content ?? '').join('\\n')
-const answer = await ai.llm.chat({
-  messages: [
-    { role: 'system', content: \`基于以下知识回答:\\n\${context}\` },
-    { role: 'user', content: '什么是 hai-framework？' },
-  ],
-})
-
-// 关闭
-await vecdb.close()`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{vecdbExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -598,42 +436,7 @@ await vecdb.close()`}</code></pre>
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_datapipe_rag_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { datapipe } from '@h-ai/datapipe'
-import { ai } from '@h-ai/ai'
-import { vecdb } from '@h-ai/vecdb'
-
-// 1. 清洗原始 HTML 内容
-const cleaned = datapipe.clean(rawHtml, {
-  removeHtml: true,
-  normalizeWhitespace: true,
-  removeUrls: true,
-})
-if (!cleaned.success) throw new Error(cleaned.error.message)
-
-// 2. 分块（段落策略）
-const chunks = datapipe.chunk(cleaned.data, {
-  mode: 'paragraph',
-  maxSize: 1000,
-  overlap: 200,
-})
-if (!chunks.success) throw new Error(chunks.error.message)
-
-// 3. 嵌入并存入向量库
-const embeddings = await ai.embedding.embedBatch(chunks.data.map(chunk => chunk.content))
-if (!embeddings.success) throw new Error(embeddings.error.message)
-
-await vecdb.vector.insert('knowledge', chunks.data.map((chunk, index) => ({
-  id: 'doc-' + chunk.index,
-  vector: embeddings.data[index],
-  content: chunk.content,
-  metadata: { index: chunk.index },
-})))
-
-// 也可以使用管道编排
-const pipeline = datapipe.pipeline()
-  .clean({ removeHtml: true })
-  .chunk({ mode: 'sentence', maxSize: 500 })
-const result = await pipeline.run(rawContent)`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{datapipeExample}</code></pre>
       </Card>
     </div>
   {/if}
@@ -681,40 +484,7 @@ const result = await pipeline.run(rawContent)`}</code></pre>
       </Card>
       <Card>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_crypto_example_title()}</h3>
-        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { crypto } from '@h-ai/crypto'
-
-// 初始化
-await crypto.init()
-
-// 哈希 / HMAC
-const hash = crypto.hash.hash('Hello World')
-if (!hash.success) throw new Error(hash.error.message)
-const hmac = crypto.hash.hmac('Hello World', 'secret')
-if (!hmac.success) throw new Error(hmac.error.message)
-
-// 对称加密
-const key = crypto.symmetric.generateKey()
-const encrypted = crypto.symmetric.encryptWithIV('敏感数据', key)
-if (!encrypted.success) throw new Error(encrypted.error.message)
-const decrypted = crypto.symmetric.decryptWithIV(
-  encrypted.data.ciphertext,
-  key,
-  encrypted.data.iv,
-)
-
-// 非对称加密
-const keypair = crypto.asymmetric.generateKeyPair()
-if (!keypair.success) throw new Error(keypair.error.message)
-const ciphertext = crypto.asymmetric.encrypt('数据', keypair.data.publicKey)
-const plaintext = ciphertext.success
-  ? crypto.asymmetric.decrypt(ciphertext.data, keypair.data.privateKey)
-  : ciphertext
-
-// 数字签名
-const signature = crypto.asymmetric.sign('数据', keypair.data.privateKey)
-const isValid = signature.success
-  ? crypto.asymmetric.verify('数据', signature.data, keypair.data.publicKey)
-  : signature`}</code></pre>
+        <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{cryptoExample}</code></pre>
       </Card>
     </div>
   {/if}

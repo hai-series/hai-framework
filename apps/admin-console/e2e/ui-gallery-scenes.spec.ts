@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('UI Gallery Scenes', () => {
-  test('AiDocumentEditor 的 Mermaid 文档与代码示例可正常渲染', async ({ page, request }) => {
+  test('AiDocumentEditor 的 Mermaid 文档与代码示例可正常渲染', async ({ page, request, context }, testInfo) => {
     await registerAndLogin(page, request, 'sceneui')
     await page.goto('/admin/ui-gallery/scenes')
     await page.waitForLoadState('domcontentloaded')
@@ -19,6 +19,20 @@ test.describe('UI Gallery Scenes', () => {
     const documentDemo = page.getByTestId('mermaid-document-demo')
     await expect(documentDemo).toBeVisible()
     await expect(documentDemo.locator('.hai-md-mermaid svg').first()).toBeVisible({ timeout: 15_000 })
+    const nodeShape = documentDemo.locator('.hai-md-mermaid svg .node rect').first()
+    await expect(nodeShape).toBeVisible()
+    // 仅判断 SVG 存在无法发现样式丢失后黑色文字叠在黑色节点上的问题。
+    const fill = await nodeShape.evaluate(element => getComputedStyle(element).fill)
+    expect(fill).not.toBe('rgb(0, 0, 0)')
+    await expect(documentDemo.locator('.hai-md-mermaid svg style').first()).toBeHidden()
+    // 导出当前浏览器已渲染的 SVG 单独截图，避免固定高度阅读区裁掉长流程图。
+    const diagram = await context.newPage()
+    try {
+      const svg = await documentDemo.locator('.hai-md-mermaid svg').first().evaluate(element => element.outerHTML)
+      await diagram.setContent(`<html lang="zh-CN"><body style="margin:24px;background:white">${svg}</body></html>`)
+      await diagram.locator('svg').screenshot({ path: testInfo.outputPath('ai-mermaid-diagram.png') })
+    }
+    finally { await diagram.close() }
 
     const codeDemo = page.getByTestId('mermaid-code-demo')
     await expect(codeDemo).toBeVisible()
@@ -53,5 +67,27 @@ test.describe('UI Gallery Scenes', () => {
     const aiDocumentHtmlOnDemo = page.getByTestId('ai-document-html-on-demo')
     await expect(aiDocumentHtmlOffDemo.locator('article b')).toHaveCount(0)
     await expect(aiDocumentHtmlOnDemo.locator('article b').first()).toHaveText('重点')
+
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
+    const copy = documentDemo.getByRole('button', { name: '复制全文', exact: true })
+    const contrast = await copy.evaluate((element) => {
+      const context = document.createElement('canvas').getContext('2d')!
+      const luminance = (value: string) => {
+        context.clearRect(0, 0, 1, 1)
+        context.fillStyle = value
+        context.fillRect(0, 0, 1, 1)
+        const rgb = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3).map((channel) => {
+          const unit = channel / 255
+          return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4
+        })
+        return rgb[0]! * 0.2126 + rgb[1]! * 0.7152 + rgb[2]! * 0.0722
+      }
+      const style = getComputedStyle(element)
+      const a = luminance(style.color)
+      const b = luminance(style.backgroundColor)
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+    })
+    await documentDemo.screenshot({ path: testInfo.outputPath('ai-document-dark.png') })
+    expect(contrast).toBeGreaterThanOrEqual(4.5)
   })
 })

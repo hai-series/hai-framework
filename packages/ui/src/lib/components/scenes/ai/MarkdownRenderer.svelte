@@ -144,13 +144,13 @@
   .hai-markdown :global(h1) {
     font-size: 2em;
     padding-bottom: 0.3em;
-    border-bottom: 1px solid oklch(var(--bc) / 0.15);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 15%, transparent);
   }
 
   .hai-markdown :global(h2) {
     font-size: 1.5em;
     padding-bottom: 0.25em;
-    border-bottom: 1px solid oklch(var(--bc) / 0.1);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   .hai-markdown :global(h3) {
@@ -167,7 +167,7 @@
 
   .hai-markdown :global(h6) {
     font-size: 0.875em;
-    color: oklch(var(--bc) / 0.7);
+    color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
   }
 
   /* 第一个标题不需要上边距 */
@@ -185,14 +185,14 @@
   /* ─── 链接 ─── */
 
   .hai-markdown :global(a) {
-    color: oklch(var(--p));
+    color: var(--color-primary);
     text-decoration: none;
     font-weight: 500;
     transition: color 0.15s ease;
   }
 
   .hai-markdown :global(a:hover) {
-    color: oklch(var(--p) / 0.8);
+    color: color-mix(in oklab, var(--color-primary) 80%, transparent);
     text-decoration: underline;
   }
 
@@ -208,7 +208,7 @@
 
   .hai-markdown :global(del) {
     text-decoration: line-through;
-    color: oklch(var(--bc) / 0.55);
+    color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
   }
 
   .hai-markdown :global(u) {
@@ -219,7 +219,7 @@
   .hai-markdown :global(mark) {
     padding: 0 0.12em;
     border-radius: 0.25rem;
-    background: oklch(var(--wa, 0.9 0.14 90) / 0.34);
+    background: color-mix(in oklab, var(--color-warning, oklch(0.9 0.14 90)) 34%, transparent);
     color: inherit;
   }
 
@@ -230,7 +230,7 @@
     margin: 0 0.1em;
     font-size: 0.875em;
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-    background: oklch(var(--bc) / 0.08);
+    background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
     border-radius: 0.375rem;
     word-break: break-word;
   }
@@ -242,8 +242,8 @@
     margin: 1em 0;
     border-radius: 0.75rem;
     overflow: hidden;
-    background: oklch(var(--n));
-    color: oklch(var(--nc));
+    background: var(--color-neutral);
+    color: var(--color-neutral-content);
   }
 
   .hai-markdown :global(.hai-md-code-header) {
@@ -252,8 +252,8 @@
     justify-content: space-between;
     padding: 0.5rem 1rem;
     min-height: 2.25rem;
-    background: oklch(var(--n) / 0.9);
-    border-bottom: 1px solid oklch(var(--nc) / 0.1);
+    background: color-mix(in oklab, var(--color-neutral) 90%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-neutral-content) 10%, transparent);
   }
 
   .hai-markdown :global(.hai-md-code-lang) {
@@ -261,7 +261,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: oklch(var(--nc) / 0.6);
+    color: color-mix(in oklab, var(--color-neutral-content) 60%, transparent);
     user-select: none;
   }
 
@@ -274,18 +274,18 @@
     border: none;
     border-radius: 0.375rem;
     background: transparent;
-    color: oklch(var(--nc) / 0.5);
+    color: color-mix(in oklab, var(--color-neutral-content) 50%, transparent);
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .hai-markdown :global(.hai-md-copy-btn:hover) {
-    background: oklch(var(--nc) / 0.1);
-    color: oklch(var(--nc) / 0.9);
+    background: color-mix(in oklab, var(--color-neutral-content) 10%, transparent);
+    color: color-mix(in oklab, var(--color-neutral-content) 90%, transparent);
   }
 
   .hai-markdown :global(.hai-md-copy-btn.hai-md-copied) {
-    color: oklch(var(--su, 0.7 0.15 160));
+    color: var(--color-success, oklch(0.7 0.15 160));
   }
 
   .hai-markdown :global(.hai-md-code-block pre) {
@@ -307,10 +307,10 @@
   .hai-markdown :global(blockquote) {
     margin: 1em 0;
     padding: 0.5em 1em;
-    border-left: 4px solid oklch(var(--p) / 0.4);
-    background: oklch(var(--bc) / 0.03);
+    border-left: 4px solid color-mix(in oklab, var(--color-primary) 40%, transparent);
+    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
     border-radius: 0 0.5rem 0.5rem 0;
-    color: oklch(var(--bc) / 0.85);
+    color: color-mix(in oklab, var(--color-base-content) 85%, transparent);
   }
 
   .hai-markdown :global(blockquote p:last-child) {
@@ -365,7 +365,7 @@
   .hai-markdown :global(li > input[type="checkbox"]) {
     margin-right: 0.5em;
     vertical-align: middle;
-    accent-color: oklch(var(--p));
+    accent-color: var(--color-primary);
   }
 
   /* ─── 表格 ─── */
@@ -374,7 +374,7 @@
     margin: 1em 0;
     overflow-x: auto;
     border-radius: 0.5rem;
-    border: 1px solid oklch(var(--bc) / 0.1);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   .hai-markdown :global(table) {
@@ -384,19 +384,19 @@
   }
 
   .hai-markdown :global(thead) {
-    background: oklch(var(--bc) / 0.04);
+    background: color-mix(in oklab, var(--color-base-content) 4%, transparent);
   }
 
   .hai-markdown :global(th) {
     font-weight: 600;
     text-align: left;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid oklch(var(--bc) / 0.12);
+    border-bottom: 2px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   }
 
   .hai-markdown :global(td) {
     padding: 0.625rem 1rem;
-    border-bottom: 1px solid oklch(var(--bc) / 0.06);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 6%, transparent);
   }
 
   .hai-markdown :global(tr:last-child td) {
@@ -404,7 +404,7 @@
   }
 
   .hai-markdown :global(tbody tr:hover) {
-    background: oklch(var(--bc) / 0.02);
+    background: color-mix(in oklab, var(--color-base-content) 2%, transparent);
   }
 
   /* ─── 水平线 ─── */
@@ -413,7 +413,7 @@
     height: 0;
     margin: 2em 0;
     border: 0;
-    border-top: 1px solid oklch(var(--bc) / 0.12);
+    border-top: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   }
 
   /* ─── 图片 ─── */
@@ -431,10 +431,10 @@
     padding: 0.15em 0.4em;
     font-size: 0.85em;
     font-family: ui-monospace, SFMono-Regular, monospace;
-    background: oklch(var(--bc) / 0.06);
-    border: 1px solid oklch(var(--bc) / 0.15);
+    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 15%, transparent);
     border-radius: 0.25rem;
-    box-shadow: inset 0 -1px 0 oklch(var(--bc) / 0.1);
+    box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   /* =========================================================================
@@ -446,7 +446,7 @@
 
   .hai-markdown :global(.hai-md-code-block code) {
     /* ─── 基础色 ─── */
-    --hai-hl-foreground: oklch(var(--nc));
+    --hai-hl-foreground: var(--color-neutral-content);
     --hai-hl-background: transparent;
 
     /* ─── Token 颜色（DaisyUI oklch 自适应） ─── */
@@ -454,10 +454,10 @@
     --hai-hl-token-string: oklch(0.75 0.12 150);
     --hai-hl-token-string-expression: oklch(0.75 0.12 150);
     --hai-hl-token-constant: oklch(0.78 0.12 70);
-    --hai-hl-token-comment: oklch(var(--nc) / 0.45);
+    --hai-hl-token-comment: color-mix(in oklab, var(--color-neutral-content) 45%, transparent);
     --hai-hl-token-function: oklch(0.72 0.14 220);
     --hai-hl-token-parameter: oklch(0.72 0.12 35);
-    --hai-hl-token-punctuation: oklch(var(--nc) / 0.7);
+    --hai-hl-token-punctuation: color-mix(in oklab, var(--color-neutral-content) 70%, transparent);
     --hai-hl-token-link: oklch(0.7 0.15 280);
   }
 </style>

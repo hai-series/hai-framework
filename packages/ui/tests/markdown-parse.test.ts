@@ -106,6 +106,18 @@ describe('parseMarkdown - 基础渲染', () => {
     expect(html).toContain('target="_blank"')
     expect(html).not.toContain('onclick=')
   })
+
+  it('原始图片保留安全尺寸以避免布局跳变，拒绝非法尺寸和脚本属性', () => {
+    const html = parseMarkdown('<img src="/guide.png" width="1280" height="720" onerror="evil()" style="position:fixed">', { allowHtmlTags: true })
+    expect(html).toContain('width="1280"')
+    expect(html).toContain('height="720"')
+    expect(html).toContain('loading="lazy"')
+    expect(html).not.toMatch(/onerror|position:fixed/)
+    for (const invalid of ['0', '-1', '100%', '12.5', '100000', '1e3', '1 onload=evil()']) {
+      const rejected = parseMarkdown(`<img src="/guide.png" width="${invalid}" height="${invalid}">`, { allowHtmlTags: true })
+      expect(rejected, invalid).not.toMatch(/\b(?:width|height)=/)
+    }
+  })
 })
 
 // =============================================================================

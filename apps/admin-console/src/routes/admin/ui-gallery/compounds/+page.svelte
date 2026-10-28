@@ -28,6 +28,8 @@
   const codeFilterBar = '<CrudFilterBar filterFields={filterFields} bind:searchValue bind:filterValues />'
 
   let comboboxVal = $state('')
+  let showComboboxError = $state(false)
+  let showDatePickerError = $state(false)
   let comboboxMultiVal = $state<string[]>(['fe'])
   let calendarVal = $state<DateValue>(new CalendarDate(2026, 2, 26))
   let datePickerVal = $state<DateValue>(new CalendarDate(2026, 2, 26))
@@ -46,97 +48,97 @@
   let refreshCount = $state(0)
   let mobileFeedHasMore = $state(true)
   let mobileFeedItems = $state([
-    { id: 'm1', title: '订单异常提醒', desc: '3 笔订单需要人工复核' },
-    { id: 'm2', title: '库存补货建议', desc: '热销 SKU 库存低于安全水位' },
-    { id: 'm3', title: '客服会话摘要', desc: 'AI 已生成本日高频问题' },
+    { id: 'm1', title: m.gallery_demo_order_issue_alerts(), desc: m.gallery_demo_3_orders_need_manual_review() },
+    { id: 'm2', title: m.gallery_demo_restock_recommendations(), desc: m.gallery_demo_a_popular_sku_is_below_its_safety_stock() },
+    { id: 'm3', title: m.gallery_demo_support_conversation_summary(), desc: m.gallery_demo_ai_has_summarized_today_s_common_questions() },
   ])
 
   // === 示例数据 ===
   const breadcrumbItems = [
-    { label: '首页', href: '/' },
-    { label: '管理', href: '/admin' },
-    { label: 'UI 组件库' },
+    { label: m.nav_home(), href: '/' },
+    { label: m.gallery_demo_manage(), href: '/admin' },
+    { label: m.gallery_title() },
   ]
 
   const tableData = [
-    { id: 1, name: '张三', role: '管理员', status: '活跃' },
-    { id: 2, name: '李四', role: '编辑', status: '活跃' },
-    { id: 3, name: '王五', role: '访客', status: '停用' },
+    { id: 1, name: m.gallery_demo_zhang_san(), role: m.gallery_form_admin(), status: m.gallery_demo_active() },
+    { id: 2, name: m.gallery_demo_li_si(), role: m.action_edit(), status: m.gallery_demo_active() },
+    { id: 3, name: m.gallery_demo_wang_wu(), role: m.common_guest(), status: m.gallery_demo_inactive() },
   ]
 
   const timelineItems = [
-    { id: '1', title: '创建项目', description: '项目初始化、环境配置完成', time: '2026-01-01', color: 'primary' as const, completed: true },
-    { id: '2', title: '核心开发', description: '完成核心模块开发与单测', time: '2026-02-15', color: 'info' as const, completed: true },
-    { id: '3', title: '集成测试', description: '进行端到端测试与性能优化', time: '2026-03-20', color: 'warning' as const },
-    { id: '4', title: '正式发布', description: '版本发布与文档上线', time: '2026-04-01', color: 'success' as const },
+    { id: '1', title: m.gallery_demo_create_project(), description: m.gallery_demo_project_and_environment_setup_complete(), time: '2026-01-01', color: 'primary' as const, completed: true },
+    { id: '2', title: m.gallery_demo_core_development(), description: m.gallery_demo_complete_core_modules_and_unit_tests(), time: '2026-02-15', color: 'info' as const, completed: true },
+    { id: '3', title: m.gallery_demo_integration_testing(), description: m.gallery_demo_run_end_to_end_tests_and_optimize_performance(), time: '2026-03-20', color: 'warning' as const },
+    { id: '4', title: m.gallery_demo_release(), description: m.gallery_demo_release_and_publish_documentation(), time: '2026-04-01', color: 'success' as const },
   ]
 
   const stepsItems = [
-    { title: '填写信息', description: '输入基本资料' },
-    { title: '身份验证', description: '邮箱确认' },
-    { title: '设置密码', description: '创建安全密码' },
-    { title: '完成注册' },
+    { title: m.gallery_demo_enter_information(), description: m.gallery_demo_enter_basic_information() },
+    { title: m.gallery_demo_authentication(), description: m.gallery_demo_email_verification() },
+    { title: m.gallery_demo_set_password(), description: m.gallery_demo_create_a_strong_password() },
+    { title: m.gallery_demo_complete_registration() },
   ]
 
   const accordionItems = [
-    { id: 'q1', title: '如何创建账户？', content: '点击页面右上角的"注册"按钮，填写用户名、邮箱和密码即可创建账户。' },
-    { id: 'q2', title: '如何重置密码？', content: '在登录页面点击"忘记密码"链接，输入注册邮箱后按照邮件提示操作即可重置密码。' },
-    { id: 'q3', title: '支持哪些浏览器？', content: '支持 Chrome 90+、Firefox 88+、Safari 14+、Edge 90+ 等现代浏览器。' },
-    { id: 'q4', title: '如何联系客服？', content: '发送邮件至 support@example.com，或在工作日 9:00-18:00 拨打热线 400-000-0000。' },
+    { id: 'q1', title: m.gallery_demo_how_do_i_create_an_account(), content: m.gallery_demo_select_register_at_the_top_right_then_enter() },
+    { id: 'q2', title: m.gallery_demo_how_do_i_reset_my_password(), content: m.gallery_demo_select_forgot_password_on_the_login_page_enter() },
+    { id: 'q3', title: m.gallery_demo_which_browsers_are_supported(), content: m.gallery_demo_use_a_current_browser_confirm_compatibility_against_your() },
+    { id: 'q4', title: m.gallery_demo_how_do_i_contact_support(), content: m.gallery_demo_for_this_example_contact_support_example_com_on() },
   ]
 
   const dropdownItems = [
-    { label: '编辑', key: 'edit' },
-    { label: '复制', key: 'copy' },
-    { label: '移动', key: 'move' },
+    { label: m.action_edit(), key: 'edit' },
+    { label: m.gallery_demo_copy(), key: 'copy' },
+    { label: m.gallery_demo_move(), key: 'move' },
     { divider: true, key: 'divider-1', label: '' },
-    { label: '删除', key: 'delete' },
+    { label: m.modules_vecdb_op_delete(), key: 'delete' },
   ]
 
   const comboboxOpts = [
-    { value: 'svelte', label: 'Svelte', description: '编译时框架' },
-    { value: 'react', label: 'React', description: 'Meta 出品' },
-    { value: 'vue', label: 'Vue', description: '渐进式框架' },
-    { value: 'angular', label: 'Angular', description: 'Google 出品' },
-    { value: 'solid', label: 'SolidJS', description: '细粒度响应式' },
-    { value: 'qwik', label: 'Qwik', description: '可恢复性框架' },
+    { value: 'svelte', label: 'Svelte', description: m.gallery_demo_compile_time_framework() },
+    { value: 'react', label: 'React', description: m.gallery_demo_by_meta() },
+    { value: 'vue', label: 'Vue', description: m.gallery_demo_progressive_framework() },
+    { value: 'angular', label: 'Angular', description: m.gallery_demo_by_google() },
+    { value: 'solid', label: 'SolidJS', description: m.gallery_demo_fine_grained_reactivity() },
+    { value: 'qwik', label: 'Qwik', description: m.gallery_demo_resumable_framework() },
   ]
 
   const multiOpts = [
-    { value: 'fe', label: '前端开发' },
-    { value: 'be', label: '后端开发' },
+    { value: 'fe', label: m.gallery_demo_frontend_developer() },
+    { value: 'be', label: m.gallery_demo_backend_developer() },
     { value: 'devops', label: 'DevOps' },
-    { value: 'design', label: '设计' },
-    { value: 'pm', label: '产品管理' },
-    { value: 'qa', label: '质量保障' },
+    { value: 'design', label: m.gallery_demo_design() },
+    { value: 'pm', label: m.gallery_demo_product_management() },
+    { value: 'qa', label: m.gallery_demo_quality_assurance() },
   ]
 
   const alignedControlSizes = ['xs', 'sm', 'md', 'lg', 'xl'] as const
 
   const actionSheetItems = [
-    { id: 'share', label: '分享报表' },
-    { id: 'archive', label: '归档通知' },
-    { id: 'delete', label: '删除记录', destructive: true },
+    { id: 'share', label: m.gallery_demo_share_report() },
+    { id: 'archive', label: m.gallery_demo_archive_notification() },
+    { id: 'delete', label: m.gallery_demo_delete_record(), destructive: true },
   ]
 
   const bottomNavItems = [
-    { id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' },
-    { id: 'tasks', label: '任务', iconClass: 'icon-[tabler--checklist]', badge: 3 },
-    { id: 'profile', label: '我的', iconClass: 'icon-[tabler--user]' },
+    { id: 'home', label: m.nav_home(), iconClass: 'icon-[tabler--home]' },
+    { id: 'tasks', label: m.gallery_demo_tasks(), iconClass: 'icon-[tabler--checklist]', badge: 3 },
+    { id: 'profile', label: m.gallery_demo_my_account(), iconClass: 'icon-[tabler--user]' },
   ]
 
   const swipeActions = [
-    { id: 'done', label: '完成', variant: 'primary' as const },
-    { id: 'delete', label: '删除', variant: 'error' as const },
+    { id: 'done', label: m.gallery_demo_complete(), variant: 'primary' as const },
+    { id: 'delete', label: m.modules_vecdb_op_delete(), variant: 'error' as const },
   ]
 
   async function refreshMobileDemo() {
     refreshCount += 1
     mobileFeedItems = [
-      { id: `refresh-${refreshCount}`, title: '刷新成功', desc: `第 ${refreshCount + 1} 次拉取移动端数据` },
+      { id: `refresh-${refreshCount}`, title: m.gallery_demo_refreshed(), desc: m.gallery_demo_refresh_count({ value: refreshCount + 1 }) },
       ...mobileFeedItems.slice(0, 4),
     ]
-    toast.success('移动列表已刷新')
+    toast.success(m.gallery_demo_mobile_list_refreshed())
   }
 
   async function loadMoreMobileItems() {
@@ -146,7 +148,7 @@
     const nextIndex = mobileFeedItems.length + 1
     mobileFeedItems = [
       ...mobileFeedItems,
-      { id: `m${nextIndex}`, title: `更多移动事项 ${nextIndex}`, desc: '滚动到底部后自动追加的列表项' },
+      { id: `m${nextIndex}`, title: m.gallery_demo_more_item({ value: nextIndex }), desc: m.gallery_demo_items_are_added_automatically_when_you_reach_the() },
     ]
     mobileFeedHasMore = mobileFeedItems.length < 6
   }
@@ -198,8 +200,8 @@
 
   const codeAlert = `<Alert variant='info'>信息提示</Alert>
 <Alert variant='success'>服务运行正常</Alert>
-<Alert variant='warning' dismissible>可关闭警告</Alert>
-<Alert variant='error'>错误提示</Alert>
+<Button onclick={() => toast.warning(m.gallery_demo_storage_is_90_full_remove_unneeded_files_to())}>...</Button>
+<Button onclick={() => toast.error(m.gallery_demo_the_connection_timed_out_check_your_network_and())}>...</Button>
 <Alert variant='info' title='带标题的提示'>带标题正文</Alert>`
 
   const codeEmptyResult = `<Empty title='暂无数据' description='当前列表为空' icon='inbox' />
@@ -239,7 +241,8 @@
 </Form>`
 
   const codeCombobox = `<Combobox options={comboboxOpts} bind:value placeholder='搜索框架...' />
-<Combobox options={comboboxOpts} placeholder='...' error='请选择一个框架' />
+<Button onclick={() => showError = !showError}>切换校验提示</Button>
+<Combobox options={comboboxOpts} placeholder='...' error={showError ? '请选择一个框架' : undefined} />
 <Combobox options={multiOpts} bind:value multiple placeholder='搜索技能...' />`
 
   const codeControlAlignment = `<Input size='sm' placeholder='Input' />
@@ -255,7 +258,8 @@
   const codeCalendar = `<Calendar bind:value weekStartsOn={1} />
 
 <DatePicker bind:value />
-<DatePicker error='请选择有效日期' />
+<Button onclick={() => showError = !showError}>切换校验提示</Button>
+<DatePicker error={showError ? '请选择有效日期' : undefined} />
 <DatePicker disabled />`
 
   const codeCardLayout = `<Card title='默认卡片'>内容</Card>
@@ -277,69 +281,69 @@
 
 <div class='space-y-10'>
   <DemoSection
-    title='导航与流程'
+    title={m.gallery_demo_navigation_and_workflows()}
     subtitle='Breadcrumb / Tabs / Pagination / Steps'
     iconClass='icon-[tabler--chevron-right]'
     tone='primary'
   >
-    <DemoCard title='Breadcrumb 面包屑' description='默认与自定义分隔符' code={codeBreadcrumb}>
+    <DemoCard title={m.gallery_demo_breadcrumb()} description={m.gallery_demo_default_and_custom_separators()} code={codeBreadcrumb}>
       <div class='space-y-4'>
         <div>
-          <p class='text-sm font-medium mb-2'>默认分隔符</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_default_separator()}</p>
           <Breadcrumb items={breadcrumbItems} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>自定义分隔符</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_custom_separator()}</p>
           <Breadcrumb items={breadcrumbItems} separator='›' />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>长路径</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_long_path()}</p>
           <Breadcrumb items={[
-            { label: '首页', href: '/' },
-            { label: '系统管理', href: '/admin' },
-            { label: '用户管理', href: '/admin/users' },
-            { label: '用户详情', href: '/admin/users/1' },
-            { label: '编辑' },
+            { label: m.nav_home(), href: '/' },
+            { label: m.gallery_demo_system_management(), href: '/admin' },
+            { label: m.iam_users_title(), href: '/admin/users' },
+            { label: m.gallery_demo_user_details(), href: '/admin/users/1' },
+            { label: m.action_edit() },
           ]} />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Tabs 标签页' description='line / card / pills 三种样式' code={codeTabs}>
+    <DemoCard title={m.gallery_demo_tabs()} description={m.gallery_demo_line_card_pills_styles()} code={codeTabs}>
       <div class='space-y-4'>
         <div>
-          <p class='text-sm font-medium mb-2'>线条样式（line）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_line_style_line()}</p>
           <Tabs
             items={[
-              { key: 'info', label: '基本信息' },
-              { key: 'security', label: '安全设置' },
-              { key: 'notify', label: '通知偏好' },
+              { key: 'info', label: m.gallery_demo_basic_information() },
+              { key: 'security', label: m.gallery_demo_security_settings() },
+              { key: 'notify', label: m.gallery_demo_notification_preferences() },
             ]}
             bind:active={subTab}
             type='line'
           />
-          <p class='mt-2 p-3 bg-base-200 rounded-lg text-sm'>当前: {subTab}</p>
+          <p class='mt-2 p-3 bg-base-200 rounded-lg text-sm'>{m.gallery_demo_current()} {subTab}</p>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>卡片样式（card）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_card_style_card()}</p>
           <Tabs
             items={[
-              { key: 'all', label: '全部' },
-              { key: 'active', label: '进行中' },
-              { key: 'done', label: '已完成' },
+              { key: 'all', label: m.audit_all() },
+              { key: 'active', label: m.gallery_demo_in_progress() },
+              { key: 'done', label: m.gallery_demo_completed() },
             ]}
             active='all'
             type='card'
           />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>药丸样式（pills）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_pill_style_pills()}</p>
           <Tabs
             items={[
-              { key: 'day', label: '日' },
-              { key: 'week', label: '周' },
-              { key: 'month', label: '月' },
-              { key: 'year', label: '年' },
+              { key: 'day', label: m.gallery_demo_days() },
+              { key: 'week', label: m.gallery_demo_weeks() },
+              { key: 'month', label: m.gallery_demo_months() },
+              { key: 'year', label: m.gallery_demo_years() },
             ]}
             active='month'
             type='pills'
@@ -348,22 +352,22 @@
       </div>
     </DemoCard>
 
-    <DemoCard title='Pagination 分页 / Steps 步骤条' description='分页与步骤条' code={codePaginationSteps}>
+    <DemoCard title={m.gallery_demo_pagination_steps()} description={m.gallery_demo_pagination_and_steps()} code={codePaginationSteps}>
       <div class='space-y-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>分页（第 {paginationPage} 页，共 5 页）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_pagination_page()} {paginationPage} {m.gallery_demo_of_5()}</p>
           <Pagination total={50} bind:page={paginationPage} pageSize={10} onchange={(p: number) => paginationPage = p} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>分页 - 显示跳转 + 自定义大小</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_pagination_with_page_jump_and_page_size()}</p>
           <Pagination total={200} bind:page={paginationPage2} pageSize={20} showJumper size='sm' onchange={(p: number) => paginationPage2 = p} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>步骤条（水平）- 当前第 {stepsIndex + 1} 步</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_horizontal_steps_current()} {stepsIndex + 1} {m.gallery_demo_step()}</p>
           <Steps items={stepsItems} current={stepsIndex} clickable onchange={(i: number) => stepsIndex = i} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>步骤条（垂直）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_vertical_steps()}</p>
           <Steps items={stepsItems} current={2} direction='vertical' size='sm' />
         </div>
       </div>
@@ -373,17 +377,17 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='移动端应用模式'
+    title={m.gallery_demo_mobile_application_mode()}
     subtitle='AppBar / BottomNav / SafeArea / ActionSheet / PullRefresh / InfiniteScroll / SwipeCell'
     iconClass='icon-[tabler--device-mobile]'
     tone='primary'
   >
-    <DemoCard title='移动端结构与手势' description='手机外壳预览：导航、安全区、下拉刷新、滑动单元格、上拉加载' code={codeMobile}>
+    <DemoCard title={m.gallery_demo_mobile_layout_and_gestures()} description={m.gallery_demo_mobile_shell_preview_navigation_safe_areas_pull_to()} code={codeMobile}>
       <div class='grid grid-cols-1 xl:grid-cols-[24rem_1fr] gap-6 items-start'>
         <div class='mx-auto w-full max-w-sm rounded-4xl border border-base-300 bg-base-200 p-2 shadow-sm'>
           <div class='relative overflow-hidden rounded-3xl bg-base-100 min-h-136'>
             <SafeArea position='top'>
-              <AppBar title='移动工作台' fixed={false} safeArea={false}>
+              <AppBar title={m.gallery_demo_mobile_workspace()} fixed={false} safeArea={false}>
                 {#snippet leading()}
                   <span class='icon-[tabler--menu-2] size-5 text-base-content/60'></span>
                 {/snippet}
@@ -395,7 +399,7 @@
 
             <PullRefresh class='h-108 overflow-y-auto px-4 pb-20' onrefresh={refreshMobileDemo}>
               <div class='space-y-3 py-4'>
-                <Alert variant='info'>在真机或触控板环境下下拉可触发 PullRefresh。</Alert>
+                <Alert variant='info'>{m.gallery_demo_pull_down_on_a_touch_device_or_trackpad()}</Alert>
                 {#each mobileFeedItems as item (item.id)}
                   <SwipeCell
                     actions={swipeActions}
@@ -423,22 +427,22 @@
 
         <div class='space-y-6'>
           <div>
-            <h3 class='text-lg font-semibold mb-2'>移动端导航与安全区</h3>
-            <p class='text-sm text-base-content/60'>AppBar 和 BottomNav 负责常见 App 顶部/底部结构，SafeArea 用于适配刘海屏与底部手势区域。</p>
+            <h3 class='text-lg font-semibold mb-2'>{m.gallery_demo_mobile_navigation_and_safe_areas()}</h3>
+            <p class='text-sm text-base-content/60'>{m.gallery_demo_appbar_and_bottomnav_provide_top_and_bottom_navigation()}</p>
           </div>
           <div class='grid grid-cols-1 lg:grid-cols-2 gap-4'>
             <Card bordered>
-              <h4 class='font-semibold mb-3'>ActionSheet 底部操作菜单</h4>
-              <p class='text-sm text-base-content/60 mb-4'>适合移动端“更多操作”“分享”“危险操作确认前置”等入口。</p>
-              <Button variant='primary' onclick={() => actionSheetOpen = true}>打开 ActionSheet</Button>
+              <h4 class='font-semibold mb-3'>{m.gallery_demo_actionsheet_bottom_actions()}</h4>
+              <p class='text-sm text-base-content/60 mb-4'>{m.gallery_demo_use_for_mobile_actions_sharing_and_entry_points()}</p>
+              <Button variant='primary' onclick={() => actionSheetOpen = true}>{m.gallery_demo_open_action_sheet()}</Button>
             </Card>
             <Card bordered>
-              <h4 class='font-semibold mb-3'>InfiniteScroll 上拉加载</h4>
+              <h4 class='font-semibold mb-3'>{m.gallery_demo_infinitescroll()}</h4>
               <InfiniteScroll
                 class='h-52 rounded-xl border border-base-200 bg-base-100 px-3'
                 hasMore={mobileFeedHasMore}
-                loadingText='加载更多...'
-                noMoreText='没有更多数据'
+                loadingText={m.gallery_demo_load_more()}
+                noMoreText={m.gallery_demo_no_more_items()}
                 onloadmore={loadMoreMobileItems}
               >
                 <div class='space-y-2 py-3'>
@@ -458,10 +462,10 @@
 
     <ActionSheet
       open={actionSheetOpen}
-      title='选择操作'
-      cancelText='取消'
+      title={m.gallery_demo_choose_an_action()}
+      cancelText={m.action_cancel()}
       items={actionSheetItems}
-      onselect={(id: string) => toast.info(`选择: ${id}`)}
+      onselect={(id: string) => toast.info(m.gallery_demo_selected_value({ value: id }))}
       onclose={() => actionSheetOpen = false}
     />
   </DemoSection>
@@ -469,48 +473,48 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='数据展示'
+    title={m.gallery_demo_data_display()}
     subtitle='DataTable / Accordion / Timeline / Alert / Empty / Result / Skeleton'
     iconClass='icon-[tabler--table]'
     tone='info'
   >
-    <DemoCard title='DataTable 数据表格' description='操作列、空状态、加载态' code={codeDataTable}>
+    <DemoCard title={m.gallery_demo_datatable()} description={m.gallery_demo_row_actions_empty_states_and_loading()} code={codeDataTable}>
       <div class='space-y-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>带操作列</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_with_row_actions()}</p>
           <DataTable
             data={tableData}
             columns={[
-              { key: 'name', label: '姓名' },
-              { key: 'role', label: '角色' },
-              { key: 'status', label: '状态' },
+              { key: 'name', label: m.gallery_form_name() },
+              { key: 'role', label: m.gallery_filter_role() },
+              { key: 'status', label: m.iam_users_form_status() },
             ]}
             keyField='id'
           >
             {#snippet actions(item: typeof tableData[0])}
-              <Button size='xs' variant='ghost' onclick={() => toast.info(`编辑: ${item.name}`)}>编辑</Button>
-              <Button size='xs' variant='error' onclick={() => toast.info(`删除: ${item.name}`)}>删除</Button>
+              <Button size='xs' variant='ghost' onclick={() => toast.info(m.gallery_demo_edit_value({ value: item.name }))}>{m.action_edit()}</Button>
+              <Button size='xs' variant='error' onclick={() => toast.info(m.gallery_demo_delete_value({ value: item.name }))}>{m.modules_vecdb_op_delete()}</Button>
             {/snippet}
           </DataTable>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>无数据状态</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_empty_state()}</p>
           <DataTable
             data={[]}
             columns={[
-              { key: 'name', label: '姓名' },
-              { key: 'role', label: '角色' },
+              { key: 'name', label: m.gallery_form_name() },
+              { key: 'role', label: m.gallery_filter_role() },
             ]}
             keyField='id'
           />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>加载中</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_loading()}</p>
           <DataTable
             data={[]}
             columns={[
-              { key: 'name', label: '姓名' },
-              { key: 'role', label: '角色' },
+              { key: 'name', label: m.gallery_form_name() },
+              { key: 'role', label: m.gallery_filter_role() },
             ]}
             keyField='id'
             loading
@@ -519,66 +523,66 @@
       </div>
     </DemoCard>
 
-    <DemoCard title='Accordion 手风琴' description='bordered / shadow / joined 多选' code={codeAccordion}>
+    <DemoCard title={m.gallery_demo_accordion()} description={m.gallery_demo_bordered_shadow_joined_with_multiple_selection()} code={codeAccordion}>
       <div class='space-y-4'>
         <div>
-          <p class='text-sm font-medium mb-2'>边框样式（bordered）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_bordered_style()}</p>
           <Accordion items={accordionItems} variant='bordered' />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>阴影样式（shadow）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_shadow_style_shadow()}</p>
           <Accordion items={accordionItems.slice(0, 2)} variant='shadow' />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>连接样式（joined）+ 多选</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_joined_style_with_multiple_selection()}</p>
           <Accordion items={accordionItems} variant='joined' multiple bind:value={accordionVal} icon='plus' />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Timeline 时间线' description='默认与紧凑模式' code={codeTimeline}>
+    <DemoCard title={m.gallery_demo_timeline()} description={m.gallery_demo_default_and_compact_modes()} code={codeTimeline}>
       <div class='space-y-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>默认（垂直）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_default_vertical()}</p>
           <Timeline items={timelineItems} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>紧凑模式</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_compact_mode()}</p>
           <Timeline items={timelineItems} compact />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Alert 警告提示' description='信息/成功/警告/错误/带标题' code={codeAlert}>
+    <DemoCard title={m.gallery_demo_alert()} description={m.gallery_demo_info_success_warning_error_and_titled_alerts()} code={codeAlert}>
       <div class='space-y-3'>
-        <Alert variant='info'>信息提示：系统将于今晚 22:00 进行例行维护，预计持续 2 小时。</Alert>
+        <Alert variant='info'>{m.gallery_demo_scheduled_maintenance_starts_tonight_at_22_00_and()}</Alert>
         <Alert variant='success'>{m.gallery_alert_service_healthy()}</Alert>
-        <Alert variant='warning' dismissible>警告：存储空间已使用 90%，请及时清理。</Alert>
-        <Alert variant='error'>错误：网络连接超时，请检查网络设置后重试。</Alert>
-        <Alert variant='info' title='带标题的提示'>这是一条带有标题的信息提示，标题会以粗体显示。</Alert>
+        <Button variant='outline' onclick={() => toast.warning(m.gallery_demo_storage_is_90_full_remove_unneeded_files_to())}>{m.gallery_demo_storage_is_90_full_remove_unneeded_files_to()}</Button>
+        <Button variant='outline' onclick={() => toast.error(m.gallery_demo_the_connection_timed_out_check_your_network_and())}>{m.gallery_demo_the_connection_timed_out_check_your_network_and()}</Button>
+        <Alert variant='info' title={m.gallery_demo_alert_with_title()}>{m.gallery_demo_this_alert_has_a_title_shown_in_bold()}</Alert>
       </div>
     </DemoCard>
 
-    <DemoCard title='Empty 空状态 / Result 结果页' description='空状态与结果页' code={codeEmptyResult}>
+    <DemoCard title={m.gallery_demo_empty_result()} description={m.gallery_demo_empty_states_and_result_pages()} code={codeEmptyResult}>
       <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-        <Empty title='暂无数据' description='当前列表为空' icon='inbox' />
-        <Empty title='未找到结果' description='尝试修改搜索条件' icon='search' />
-        <Empty title='无文件' description='拖拽文件到此处上传' icon='file' size='sm' />
+        <Empty title={m.common_no_data()} description={m.gallery_demo_no_items_to_display()} icon='inbox' />
+        <Empty title={m.gallery_demo_no_results_found()} description={m.gallery_demo_try_different_search_criteria()} icon='search' />
+        <Empty title={m.gallery_demo_no_files()} description={m.gallery_demo_drop_files_here_to_upload()} icon='file' size='sm' />
       </div>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6 mt-6'>
-        <Result status='success' title='提交成功' description='您的申请已成功提交，审核结果将在 3 个工作日内通知。' />
-        <Result status='error' title='操作失败' description='权限不足，请联系管理员处理。' />
+        <Result status='success' title={m.gallery_demo_submitted()} description={m.gallery_demo_application_submitted_you_will_receive_a_decision_within()} />
+        <Result status='error' title={m.iam_roles_operation_failed()} description={m.gallery_demo_you_do_not_have_permission_contact_your_administrator()} />
       </div>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6 mt-4'>
-        <Result status='warning' title='需要注意' description='部分数据已过期，请检查更新。' />
-        <Result status='info' title='处理中' description='您的请求正在排队处理，请稍候。' />
+        <Result status='warning' title={m.gallery_demo_attention_needed()} description={m.gallery_demo_some_data_is_out_of_date_check_for()} />
+        <Result status='info' title={m.gallery_demo_processing()} description={m.gallery_demo_your_request_is_queued_please_wait()} />
       </div>
     </DemoCard>
 
-    <DemoCard title='Skeleton 骨架屏' description='卡片、表单、多行、缩略图加载态' code={codeSkeleton}>
+    <DemoCard title={m.gallery_demo_skeleton()} description={m.gallery_demo_skeletons_for_cards_forms_text_and_thumbnails()} code={codeSkeleton}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>卡片加载态</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_card_skeleton()}</p>
           <div class='flex items-start gap-4'>
             <Skeleton variant='avatar' />
             <div class='flex-1 space-y-2'>
@@ -589,7 +593,7 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>表单加载态</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_loading_form()}</p>
           <div class='space-y-3'>
             <Skeleton variant='input' />
             <Skeleton variant='input' />
@@ -597,11 +601,11 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>多行文本</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_multiline_text()}</p>
           <Skeleton variant='text' count={4} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>缩略图</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_thumbnail()}</p>
           <div class='flex gap-3'>
             <Skeleton variant='thumbnail' />
             <Skeleton variant='thumbnail' />
@@ -615,27 +619,27 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='浮层与交互'
+    title={m.gallery_demo_overlays_and_interactions()}
     subtitle='Tooltip / Popover / Dropdown'
     iconClass='icon-[tabler--message-circle]'
     tone='warning'
   >
-    <DemoCard title='Tooltip / Popover / Dropdown' description='提示、弹出层与下拉菜单' code={codeOverlayMenus}>
+    <DemoCard title='Tooltip / Popover / Dropdown' description={m.gallery_demo_tooltips_popovers_and_dropdown_menus()} code={codeOverlayMenus}>
       <div class='space-y-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>Tooltip 位置</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_tooltip_positions()}</p>
           <div class='flex flex-wrap items-center gap-4'>
-            <Tooltip content='顶部提示' position='top'>
-              <Button variant='primary' outline>上</Button>
+            <Tooltip content={m.gallery_demo_top_tooltip()} position='top'>
+              <Button variant='primary' outline>{m.gallery_demo_top()}</Button>
             </Tooltip>
-            <Tooltip content='底部提示' position='bottom'>
-              <Button variant='primary' outline>下</Button>
+            <Tooltip content={m.gallery_demo_bottom_tooltip()} position='bottom'>
+              <Button variant='primary' outline>{m.gallery_demo_bottom()}</Button>
             </Tooltip>
-            <Tooltip content='左侧提示' position='left'>
-              <Button variant='primary' outline>左</Button>
+            <Tooltip content={m.gallery_demo_left_tooltip()} position='left'>
+              <Button variant='primary' outline>{m.gallery_demo_left()}</Button>
             </Tooltip>
-            <Tooltip content='右侧提示' position='right'>
-              <Button variant='primary' outline>右</Button>
+            <Tooltip content={m.gallery_demo_right_tooltip()} position='right'>
+              <Button variant='primary' outline>{m.gallery_demo_right()}</Button>
             </Tooltip>
           </div>
         </div>
@@ -644,31 +648,31 @@
           <div class='flex flex-wrap items-center gap-4'>
             <Popover position='bottom' trigger='click'>
               {#snippet triggerContent()}
-                <Button variant='secondary' outline>点击弹出</Button>
+                <Button variant='secondary' outline>{m.gallery_demo_open_popover()}</Button>
               {/snippet}
               <div class='p-3 text-sm space-y-2'>
-                <p class='font-medium'>弹出面板</p>
-                <p class='text-base-content/70'>支持任意内容，适合放置表单、信息卡片等。</p>
+                <p class='font-medium'>{m.gallery_demo_popover_panel()}</p>
+                <p class='text-base-content/70'>{m.gallery_demo_supports_custom_content_such_as_forms_and_information()}</p>
               </div>
             </Popover>
             <Popover position='right' trigger='hover'>
               {#snippet triggerContent()}
-                <Button variant='info' outline>悬停弹出</Button>
+                <Button variant='info' outline>{m.gallery_demo_hover_popover()}</Button>
               {/snippet}
               <div class='p-3 text-sm'>
-                <p>鼠标悬停时自动弹出</p>
+                <p>{m.gallery_demo_opens_on_hover()}</p>
               </div>
             </Popover>
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Dropdown 下拉菜单</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_dropdown_menu()}</p>
           <div class='flex flex-wrap items-center gap-4'>
-            <Dropdown items={dropdownItems} triggerClass='btn no-animation' onselect={(k: string) => toast.info(`选择: ${k}`)}>
-              操作菜单 ▾
+            <Dropdown items={dropdownItems} triggerClass='btn no-animation' onselect={(k: string) => toast.info(m.gallery_demo_selected_value({ value: k }))}>
+              {m.gallery_demo_actions()}
             </Dropdown>
-            <Dropdown items={dropdownItems} triggerClass='btn btn-secondary no-animation' position='right' onselect={(k: string) => toast.info(`选择: ${k}`)}>
-              右侧展开 ▸
+            <Dropdown items={dropdownItems} triggerClass='btn btn-secondary no-animation' position='right' onselect={(k: string) => toast.info(m.gallery_demo_selected_value({ value: k }))}>
+              {m.gallery_demo_open_right()}
             </Dropdown>
           </div>
         </div>
@@ -679,7 +683,7 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='表单组件'
+    title={m.gallery_demo_form_components()}
     subtitle='Form / Combobox / TagInput / Calendar / DatePicker'
     iconClass='icon-[tabler--forms]'
     tone='success'
@@ -720,38 +724,39 @@
       </Form>
     </DemoCard>
 
-    <DemoCard title='Combobox 可搜索选择（Bits UI）' description='单选、多选、错误态' code={codeCombobox}>
+    <DemoCard title={m.gallery_demo_combobox_searchable_select_bits_ui()} description={m.gallery_demo_single_selection_multiple_selection_and_errors()} code={codeCombobox}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>单选（当前: {comboboxVal || '未选择'}）</p>
-          <Combobox options={comboboxOpts} bind:value={comboboxVal} placeholder='搜索框架...' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_single_selection_current()} {comboboxVal || m.gallery_demo_not_selected()}）</p>
+          <Combobox options={comboboxOpts} bind:value={comboboxVal} placeholder={m.gallery_demo_search_frameworks()} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>单选 - 错误状态</p>
-          <Combobox options={comboboxOpts} placeholder='搜索框架...' error='请选择一个框架' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_radio_error_state()}</p>
+          <Button size='sm' class='mb-2' data-testid='combobox-error-demo' onclick={() => showComboboxError = !showComboboxError}>{showComboboxError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
+          <Combobox options={comboboxOpts} placeholder={m.gallery_demo_search_frameworks()} error={showComboboxError ? m.gallery_demo_select_a_framework_2() : undefined} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>单选 - 禁用</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_disabled_radio()}</p>
           <Combobox options={comboboxOpts} value='svelte' disabled />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>单选 - 带标签</p>
-          <Combobox options={comboboxOpts} placeholder='搜索...' label='技术栈' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_radio_with_label()}</p>
+          <Combobox options={comboboxOpts} placeholder={m.gallery_demo_search()} label={m.home_tech_stack_title()} />
         </div>
       </div>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6 mt-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>多选（已选: {comboboxMultiVal.length} 项）</p>
-          <Combobox options={multiOpts} bind:value={comboboxMultiVal} multiple placeholder='搜索技能...' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_multiple_selection_selected()} {comboboxMultiVal.length} {m.gallery_demo_items()}</p>
+          <Combobox options={multiOpts} bind:value={comboboxMultiVal} multiple placeholder={m.gallery_demo_search_skills()} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>多选 - 带标签</p>
-          <Combobox options={multiOpts} value={[]} multiple placeholder='选择...' label='技能标签' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_multiple_selection_with_tags()}</p>
+          <Combobox options={multiOpts} value={[]} multiple placeholder={m.gallery_demo_select_3()} label={m.gallery_demo_skill_tags()} />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='输入类控件尺寸对齐' description='Input / Select / Combobox / DatePicker / TagInput 共享 xs 到 xl 的高度与字号基准' code={codeControlAlignment}>
+    <DemoCard title={m.gallery_demo_aligned_input_sizes()} description={m.gallery_demo_input_select_combobox_datepicker_and_taginput_share_height()} code={codeControlAlignment}>
       <div class='overflow-x-auto'>
         <div class='grid min-w-184 grid-cols-[3rem_repeat(5,minmax(8rem,1fr))] items-center gap-x-3 gap-y-2'>
           <span></span>
@@ -763,56 +768,57 @@
 
           {#each alignedControlSizes as controlSize (controlSize)}
             <span class='text-xs font-semibold uppercase text-base-content/45'>{controlSize}</span>
-            <Input data-testid='aligned-input-{controlSize}' size={controlSize} placeholder='文本' />
-            <Select data-testid='aligned-select-{controlSize}' size={controlSize} options={comboboxOpts} placeholder='选择' />
-            <Combobox data-testid='aligned-combobox-{controlSize}' size={controlSize} options={comboboxOpts} placeholder='搜索' />
+            <Input data-testid='aligned-input-{controlSize}' size={controlSize} placeholder={m.gallery_demo_text()} />
+            <Select data-testid='aligned-select-{controlSize}' size={controlSize} options={comboboxOpts} placeholder={m.gallery_demo_select_2()} />
+            <Combobox data-testid='aligned-combobox-{controlSize}' size={controlSize} options={comboboxOpts} placeholder={m.modules_vecdb_op_search()} />
             <DatePicker data-testid='aligned-datepicker-{controlSize}' size={controlSize} />
-            <TagInput data-testid='aligned-taginput-{controlSize}' size={controlSize} tags={[]} placeholder='标签' />
+            <TagInput data-testid='aligned-taginput-{controlSize}' size={controlSize} tags={[]} placeholder={m.gallery_demo_tags()} />
           {/each}
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='TagInput 标签输入' description='基础、上限、允许重复、禁用' code={codeTagInput}>
+    <DemoCard title={m.gallery_demo_taginput()} description={m.gallery_demo_basic_maximum_count_duplicates_and_disabled()} code={codeTagInput}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>基础用法（当前 {tagInputVal.length} 个）</p>
-          <TagInput bind:tags={tagInputVal} placeholder='输入后回车添加' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_basic_usage_current()} {tagInputVal.length} {m.gallery_demo_selected()}</p>
+          <TagInput bind:tags={tagInputVal} placeholder={m.gallery_demo_type_and_press_enter_to_add()} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>最多 5 个标签</p>
-          <TagInput tags={['标签A', '标签B']} maxTags={5} placeholder='最多 5 个' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_up_to_5_tags()}</p>
+          <TagInput tags={[m.gallery_demo_tag_a(), m.gallery_demo_tag_b()]} maxTags={5} placeholder={m.gallery_demo_up_to_5()} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>允许重复</p>
-          <TagInput tags={[]} allowDuplicates placeholder='可重复输入' />
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_allow_duplicates()}</p>
+          <TagInput tags={[]} allowDuplicates placeholder={m.gallery_demo_duplicates_allowed()} />
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>禁用状态</p>
-          <TagInput tags={['只读A', '只读B']} disabled />
+          <p class='text-sm font-medium mb-2'>{m.gallery_crypto_disabled()}</p>
+          <TagInput tags={[m.gallery_demo_read_only_a(), m.gallery_demo_read_only_b()]} disabled />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Calendar 日历 / DatePicker 日期选择（Bits UI）' description='独立日历与日期选择器' code={codeCalendar}>
+    <DemoCard title={m.gallery_demo_calendar_datepicker_bits_ui()} description={m.gallery_demo_calendar_and_date_picker()} code={codeCalendar}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>独立日历</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_standalone_calendar()}</p>
           <Calendar bind:value={calendarVal} weekStartsOn={1} />
-          <p class='text-xs text-base-content/50 mt-2'>选中: {calendarVal?.toString() ?? '无'}</p>
+          <p class='text-xs text-base-content/50 mt-2'>{m.gallery_demo_selected_2()} {calendarVal?.toString() ?? m.gallery_demo_none_2()}</p>
         </div>
         <div class='space-y-4'>
           <div>
-            <p class='text-sm font-medium mb-2'>日期选择器</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_date_picker()}</p>
             <DatePicker bind:value={datePickerVal} />
-            <p class='text-xs text-base-content/50 mt-2'>选中: {datePickerVal?.toString() ?? '无'}</p>
+            <p class='text-xs text-base-content/50 mt-2'>{m.gallery_demo_selected_2()} {datePickerVal?.toString() ?? m.gallery_demo_none_2()}</p>
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>错误状态</p>
-            <DatePicker error='请选择有效日期' />
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_error_state()}</p>
+            <Button size='sm' class='mb-2' data-testid='datepicker-error-demo' onclick={() => showDatePickerError = !showDatePickerError}>{showDatePickerError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
+            <DatePicker error={showDatePickerError ? m.gallery_demo_select_a_valid_date() : undefined} />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>禁用状态</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_crypto_disabled()}</p>
             <DatePicker disabled />
           </div>
         </div>
@@ -823,7 +829,7 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='布局组件'
+    title={m.gallery_demo_layout_components()}
     subtitle='Card / PageHeader / FilterBar'
     iconClass='icon-[tabler--layout-grid]'
     tone='secondary'
@@ -832,57 +838,57 @@
       <CrudFilterBar filterFields={galleryFilterFields} searchPlaceholder={m.gallery_filter_placeholder()} bind:searchValue={galleryFilterSearch} bind:filterValues={galleryFilterValues} data-testid='gallery-collapsible-filters' />
     </DemoCard>
 
-    <DemoCard title='Card 卡片' description='边框、阴影、内边距、header/footer 插槽' code={codeCardLayout}>
+    <DemoCard title={m.gallery_demo_card()} description={m.gallery_demo_borders_shadows_padding_and_header_footer_slots()} code={codeCardLayout}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
-        <Card title='默认卡片'>
-          <p class='text-sm text-base-content/70'>这是默认样式的卡片内容。</p>
+        <Card title={m.gallery_demo_default_card()}>
+          <p class='text-sm text-base-content/70'>{m.gallery_demo_this_is_the_default_card_style()}</p>
         </Card>
-        <Card title='带边框' bordered>
-          <p class='text-sm text-base-content/70'>bordered 属性添加边框。</p>
+        <Card title={m.gallery_demo_with_border()} bordered>
+          <p class='text-sm text-base-content/70'>{m.gallery_demo_the_bordered_property_adds_a_border()}</p>
         </Card>
-        <Card title='大阴影' shadow='lg'>
-          <p class='text-sm text-base-content/70'>shadow="lg" 更大的阴影。</p>
+        <Card title={m.gallery_demo_large_shadow()} shadow='lg'>
+          <p class='text-sm text-base-content/70'>{m.gallery_demo_shadow_lg_adds_a_larger_shadow()}</p>
         </Card>
       </div>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-4 mt-4'>
         <Card padding='lg' bordered>
           {#snippet header()}
             <div class='flex items-center justify-between'>
-              <h4 class='font-semibold'>自定义 Header</h4>
-              <Badge variant='success'>在线</Badge>
+              <h4 class='font-semibold'>{m.gallery_demo_custom_header()}</h4>
+              <Badge variant='success'>{m.gallery_demo_online()}</Badge>
             </div>
           {/snippet}
-          <p class='text-sm text-base-content/70'>使用 header / footer 插槽自定义卡片的头部和底部。</p>
+          <p class='text-sm text-base-content/70'>{m.gallery_demo_use_the_header_and_footer_slots_to_customize()}</p>
           {#snippet footer()}
             <div class='flex justify-end gap-2'>
-              <Button size='sm'>取消</Button>
-              <Button size='sm' variant='primary'>确认</Button>
+              <Button size='sm'>{m.action_cancel()}</Button>
+              <Button size='sm' variant='primary'>{m.action_confirm()}</Button>
             </div>
           {/snippet}
         </Card>
         <Card padding='none' bordered>
           <div class='p-4'>
-            <h4 class='font-semibold mb-2'>无内边距</h4>
-            <p class='text-sm text-base-content/70'>padding="none" 适合需要自定义布局的场景。</p>
+            <h4 class='font-semibold mb-2'>{m.gallery_demo_no_padding()}</h4>
+            <p class='text-sm text-base-content/70'>{m.gallery_demo_use_padding_none_for_a_custom_layout()}</p>
           </div>
           <div class='bg-base-200 p-4'>
-            <p class='text-xs text-base-content/50'>底部区域</p>
+            <p class='text-xs text-base-content/50'>{m.gallery_demo_footer_area()}</p>
           </div>
         </Card>
       </div>
     </DemoCard>
 
-    <DemoCard title='PageHeader 页面头部' description='标题、描述与操作区' code={codePageHeader}>
+    <DemoCard title={m.gallery_demo_pageheader()} description={m.gallery_demo_title_description_and_actions()} code={codePageHeader}>
       <div class='space-y-4'>
         <div class='bg-base-200/50 rounded-lg p-4'>
-          <PageHeader title='用户管理' description='管理系统中的所有用户账号'>
+          <PageHeader title={m.iam_users_title()} description={m.gallery_demo_manage_all_user_accounts()}>
             {#snippet actions()}
-              <Button variant='primary' size='sm'>新建用户</Button>
+              <Button variant='primary' size='sm'>{m.gallery_demo_create_user()}</Button>
             {/snippet}
           </PageHeader>
         </div>
         <div class='bg-base-200/50 rounded-lg p-4'>
-          <PageHeader title='数据分析' description='查看系统运行数据与统计报表' />
+          <PageHeader title={m.gallery_demo_data_analysis()} description={m.gallery_demo_view_system_activity_and_reports()} />
         </div>
       </div>
     </DemoCard>

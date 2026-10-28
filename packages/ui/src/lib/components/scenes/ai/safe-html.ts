@@ -10,6 +10,7 @@ const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
 const SAFE_IMAGE_SRC_REGEX = /^(?:https?:\/\/|\/|data:image\/)/i
 const SAFE_ALIGN_VALUE_REGEX = /^(?:left|center|right|justify)$/i
 const SAFE_TABLE_SPAN_REGEX = /^[1-9]\d{0,2}$/
+const SAFE_IMAGE_DIMENSION_REGEX = /^[1-9]\d{0,4}$/
 const HTML_ATTR_REGEX = /([^\s"'=<>`/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
 
 const ALLOWED_HTML_TAGS = new Set([
@@ -80,6 +81,8 @@ interface ParsedHtmlAttributes {
   src?: string
   title?: string
   alt?: string
+  width?: string
+  height?: string
   align?: string
   colspan?: string
   rowspan?: string
@@ -264,6 +267,11 @@ function readSanitizedAttributes(
         sanitized.alt = attrValue
       }
 
+      // 保留有限的正整数像素尺寸，让延迟加载图片提前占位，仍拒绝style和事件属性。
+      if ((attrName === 'width' || attrName === 'height') && SAFE_IMAGE_DIMENSION_REGEX.test(attrValue.trim())) {
+        sanitized[attrName] = attrValue.trim()
+      }
+
       if (attrName === 'title' && attrValue.trim()) {
         sanitized.title = attrValue.trim()
       }
@@ -358,6 +366,10 @@ function sanitizeHtmlTag(rawTag: string): string {
 
   if (attributes.alt !== undefined) {
     renderedAttributes.push(`alt="${escapeHtml(attributes.alt)}"`)
+  }
+  for (const dimension of ['width', 'height'] as const) {
+    if (attributes[dimension])
+      renderedAttributes.push(`${dimension}="${attributes[dimension]}"`)
   }
 
   if (attributes.align) {

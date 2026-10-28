@@ -8,9 +8,13 @@
 -->
 <script lang='ts'>
   import { resolve } from '$app/paths'
+  import markdownEn from '$lib/components/gallery/content/markdown.en-US.md?raw'
+  import markdownJa from '$lib/components/gallery/content/markdown.ja-JP.md?raw'
+  import markdownZh from '$lib/components/gallery/content/markdown.zh-CN.md?raw'
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
   import * as m from '$lib/paraglide/messages.js'
+  import { getLocale } from '$lib/paraglide/runtime.js'
   // FileList 与 DOM 全局类型同名，必须显式导入
   import { AiDocumentEditor, AiTableEditor, ErrorPage, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
 
@@ -21,290 +25,120 @@
   // === 状态 ===
   let pwdVal = $state('')
   let encVal = $state('')
+  let showPasswordError = $state(false)
+  let showUnconfiguredEncryption = $state(false)
 
   // 错误页预设演示
   const errorPresets = ['401', '403', '404', '500', '503'] as const
   let errorStatus = $state<(typeof errorPresets)[number]>('404')
 
   // === Markdown 示例内容 ===
-  const demoMarkdown = `# Markdown 渲染器演示
-
-这是一个**全功能的 Markdown 渲染器**，专为 AI 输出显示而设计。支持 [GitHub Flavored Markdown](https://github.github.com/gfm/) 全量语法。
-
-## 文本格式化
-
-这段文字包含 **粗体**、*斜体*、~~删除线~~、以及 \`行内代码\` 等格式。\
-还可以组合使用：***粗斜体***、**\`粗体代码\`**。
-
-## 列表
-
-### 无序列表
-
-- 第一项内容
-- 第二项内容
-  - 嵌套子项
-  - 另一个子项
-    - 更深层嵌套
-- 第三项
-
-### 有序列表
-
-1. 安装依赖
-2. 配置项目
-3. 启动开发服务器
-4. 开始编码
-
-### 任务列表
-
-- [x] 项目初始化
-- [x] 组件开发
-- [ ] 单元测试
-- [ ] 文档编写
-
-## 引用
-
-> "好的代码就是最好的文档。当你要为代码写注释的时候，先想想是不是可以改善代码使其不需要注释。"
->
-> — Steve McConnell
-
-> **提示：** 这是一个多行引用块。
-> 它可以包含 **富文本格式**、\`代码\` 和其他元素。
->
-> > 还可以嵌套引用。
-
-## 代码块
-
-### TypeScript
-
-\`\`\`typescript
-interface User {
-  id: string
-  name: string
-  email: string
-  roles: string[]
-}
-
-async function fetchUser(id: string): Promise<User> {
-  const response = await fetch(\\\`/api/users/\\\${id}\\\`)
-  if (!response.ok) {
-    throw new Error(\\\`Failed to fetch user: \\\${response.status}\\\`)
-  }
-  return response.json()
-}
-\`\`\`
-
-### Python
-
-\`\`\`python
-from dataclasses import dataclass
-from typing import Optional
-
-@dataclass
-class Config:
-    """应用配置"""
-    host: str = "localhost"
-    port: int = 8080
-    debug: bool = False
-    secret: Optional[str] = None
-
-def create_app(config: Config) -> "App":
-    app = App(config)
-    app.register_middleware(auth_middleware)
-    app.register_routes(api_routes)
-    return app
-\`\`\`
-
-### Bash
-
-\`\`\`bash
-#!/bin/bash
-# 部署脚本
-echo "开始部署..."
-pnpm install --frozen-lockfile
-pnpm build
-docker build -t myapp:1.0.0 .
-docker push myapp:1.0.0
-echo "部署完成 ✅"
-\`\`\`
-
-### JSON
-
-\`\`\`json
-{
-  "name": "@h-ai/ui",
-  "version": "0.1.0",
-  "dependencies": {
-    "marked": "^17.0.0",
-    "shiki": "^3.2.0"
-  }
-}
-\`\`\`
-
-### SQL
-
-\`\`\`sql
-SELECT u.id, u.name, COUNT(o.id) AS order_count
-FROM users u
-LEFT JOIN orders o ON u.id = o.user_id
-WHERE u.created_at >= '2024-01-01'
-GROUP BY u.id, u.name
-HAVING COUNT(o.id) > 5
-ORDER BY order_count DESC
-LIMIT 10;
-\`\`\`
-
-## 表格
-
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| 标题渲染 | ✅ 已完成 | h1 ~ h6 全支持 |
-| 代码高亮 | ✅ 已完成 | 30+ 编程语言 |
-| 表格显示 | ✅ 已完成 | 响应式滚动容器 |
-| 任务列表 | ✅ 已完成 | GFM 规范 |
-| 一键复制 | ✅ 已完成 | 代码块复制按钮 |
-| 主题适配 | ✅ 已完成 | DaisyUI 主题 |
-
-## 水平线
-
-上方内容
-
----
-
-下方内容
-
-## 图片
-
-> 注意：以下为占位图片示例链接
-
-![示例图片](https://placehold.co/600x200/EEE/999?text=Markdown+Image+Demo)
-
-## 综合示例
-
-下面是一个混合了**多种元素**的段落：
-
-在 \`packages/ui\` 模块中，我们使用 [Svelte 5](https://svelte.dev) 的 Runes 语法构建组件。核心依赖包括：
-
-1. **marked** — Markdown 解析引擎
-2. **Shiki** — 语法高亮
-3. **DaisyUI** — 主题系统
-
-> 所有组件均通过 \`@h-ai/ui\` 统一导出，使用 \`export *\` 聚合模式。
-`
+  const markdownByLocale = { 'zh-CN': markdownZh, 'en-US': markdownEn, 'ja-JP': markdownJa }
+  const demoMarkdown = $derived(markdownByLocale[getLocale() as keyof typeof markdownByLocale] ?? markdownZh)
 
   // === 简短 AI 对话示例 ===
-  const aiResponseMarkdown = `当然可以！下面是一个使用 TypeScript 创建简单 HTTP 服务器的示例：
-
-\`\`\`typescript
-import { createServer } from 'node:http'
-
-const server = createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify({ message: 'Hello, World!' }))
-})
-
-server.listen(3000, () => {
-  console.log('Server running at http://localhost:3000')
-})
-\`\`\`
-
-**关键要点：**
-- 使用 \`node:http\` 内置模块，无需安装第三方依赖
-- \`createServer\` 接受一个回调函数处理每个请求
-- 通过 \`writeHead\` 设置响应状态码和头部
-- 调用 \`listen\` 启动服务器
-
-你还可以使用 **Express** 或 **Fastify** 来构建更复杂的应用。`
+  const aiResponseMarkdown = $derived(`${m.gallery_demo_ai_response_intro()}\n\n${[
+    '```typescript',
+    'import { createServer } from \'node:http\'',
+    '',
+    'const server = createServer((_request, response) => {',
+    '  response.writeHead(200, { \'Content-Type\': \'application/json\' })',
+    '  response.end(JSON.stringify({ message: \'Hello, World!\' }))',
+    '})',
+    'server.listen(3000)',
+    '```',
+  ].join('\n')}`)
 
   const aiDocumentContent = [
-    '# 订单智能分析方案',
+    m.gallery_demo_order_analysis_proposal(),
     '',
-    '## 目标',
+    m.gallery_demo_goals(),
     '',
-    '- 自动汇总订单异常',
-    '- 输出可执行建议',
+    m.gallery_demo_summarize_order_exceptions(),
+    m.gallery_demo_suggest_actionable_next_steps(),
     '',
     '```typescript',
     'const score = order.risk * 0.7 + order.delay * 0.3',
     '```',
     '',
-    '> 选中文本后可接入改写、批注等 AI 操作。',
+    m.gallery_demo_select_text_to_connect_rewriting_annotation_or_other(),
   ].join('\n')
 
   // === 含 Mermaid 图表的文档示例 ===
   const aiMermaidDocumentContent = [
-    '# 订单履约流程设计',
+    m.gallery_demo_order_fulfillment_workflow(),
     '',
-    '## 流程总览',
+    m.gallery_demo_workflow_overview(),
     '',
-    '下面的流程图展示了订单从创建到履约的关键节点：',
+    m.gallery_demo_this_flowchart_shows_the_key_steps_from_order(),
     '',
     '```mermaid',
     'flowchart TD',
-    '  A[用户下单] --> B{库存校验}',
-    '  B -->|充足| C[锁定库存]',
-    '  B -->|不足| D[触发补货]',
-    '  C --> E[创建履约单]',
-    '  E --> F[仓库拣货]',
-    '  F --> G[物流配送]',
-    '  G --> H[确认收货]',
+    `  ` + `A[${m.gallery_demo_place_order()}] --> B{${m.gallery_demo_check_stock()}}` + ``,
+    `  ${m.gallery_demo_b_available_c_reserve_stock()}`,
+    `  ${m.gallery_demo_b_insufficient_d_request_restock()}`,
+    `  ${m.gallery_demo_c_e_create_fulfillment_order()}`,
+    `  ${m.gallery_demo_e_f_pick_items()}`,
+    `  ${m.gallery_demo_f_g_ship_order()}`,
+    `  ${m.gallery_demo_g_h_confirm_receipt()}`,
     '```',
     '',
-    '## 服务交互时序',
+    m.gallery_demo_service_interaction_sequence(),
     '',
-    '核心服务之间的调用顺序如下：',
+    m.gallery_demo_core_services_are_called_in_the_following_order(),
     '',
     '```mermaid',
     'sequenceDiagram',
-    '  participant U as 用户',
-    '  participant O as 订单服务',
-    '  participant I as 库存服务',
-    '  participant P as 支付服务',
-    '  U->>O: 提交订单',
-    '  O->>I: 校验并锁定库存',
-    '  I-->>O: 锁定成功',
-    '  O->>P: 发起支付',
-    '  P-->>O: 支付完成',
-    '  O-->>U: 返回下单结果',
+    `  ${m.gallery_demo_participant_u_as_user()}`,
+    `  ${m.gallery_demo_participant_o_as_order_service()}`,
+    `  ${m.gallery_demo_participant_i_as_inventory_service()}`,
+    `  ${m.gallery_demo_participant_p_as_payment_service()}`,
+    `  ${m.gallery_demo_u_o_submit_order()}`,
+    `  ${m.gallery_demo_o_i_check_and_reserve_stock()}`,
+    `  ${m.gallery_demo_i_o_stock_reserved()}`,
+    `  ${m.gallery_demo_o_p_start_payment()}`,
+    `  ${m.gallery_demo_p_o_payment_complete()}`,
+    `  ${m.gallery_demo_o_u_return_order_result()}`,
     '```',
     '',
-    '> Mermaid 代码块会在阅读态自动渲染为图表。',
+    m.gallery_demo_mermaid_code_blocks_render_as_diagrams_in_reading(),
   ].join('\n')
 
   // === Mermaid 代码产物示例（code 模式，支持代码/预览切换） ===
   const aiMermaidCodeContent = [
     'stateDiagram-v2',
-    '  [*] --> 待支付',
-    '  待支付 --> 已支付: 支付成功',
-    '  待支付 --> 已取消: 超时或取消',
-    '  已支付 --> 履约中: 仓库接单',
-    '  履约中 --> 已完成: 确认收货',
-    '  已完成 --> [*]',
-    '  已取消 --> [*]',
+    `  ${m.gallery_demo_awaitingpayment()}`,
+    `  ${m.gallery_demo_awaitingpayment_paid_payment_received()}`,
+    `  ${m.gallery_demo_awaitingpayment_cancelled_timeout_or_cancellation()}`,
+    `  ${m.gallery_demo_paid_fulfilling_warehouse_accepts()}`,
+    `  ${m.gallery_demo_fulfilling_completed_confirm_receipt()}`,
+    `  ${m.gallery_demo_completed_2()}`,
+    `  ${m.gallery_demo_canceled_2()}`,
   ].join('\n')
 
   const htmlTagMarkdownDemo = [
-    '## HTML 标签配置演示',
+    m.gallery_demo_html_tag_settings(),
     '',
-    '默认情况下，原始 HTML 会按普通文本显示：',
+    m.gallery_demo_by_default_raw_html_is_displayed_as_plain(),
     '',
-    '- <b>粗体强调</b>',
-    '- <i>斜体强调</i>',
-    '- <u>下划线提示</u>',
-    '- <mark>高亮标记</mark>',
+    m.gallery_demo_b_bold_emphasis_b(),
+    m.gallery_demo_i_italic_emphasis_i(),
+    m.gallery_demo_u_underlined_text_u(),
+    m.gallery_demo_mark_highlighted_text_mark(),
     '',
-    '开启 `allowHtmlTags` 后，上述标签会按安全白名单解析。',
+    m.gallery_demo_with_allowhtmltags_enabled_the_tags_above_are_rendered(),
   ].join('\n')
 
   const aiHtmlTagDocumentContent = [
-    '# 文档展示设置',
+    m.gallery_demo_document_display_settings(),
     '',
-    '这个示例用来演示 `fontSize` 和 `allowHtmlTags`。',
+    m.gallery_demo_this_example_demonstrates_fontsize_and_allowhtmltags(),
     '',
-    '## 支持的内联 HTML',
+    m.gallery_demo_supported_inline_html(),
     '',
-    '启用后可解析：<b>重点</b>、<i>强调</i>、<u>下划线</u>、<mark>高亮</mark>。',
+    m.gallery_demo_when_enabled_b_bold_b_i_emphasis_i(),
     '',
-    '> 不安全或不受支持的标签仍会被安全处理。',
+    m.gallery_demo_unsafe_or_unsupported_tags_are_still_sanitized(),
   ].join('\n')
 
   // === 示例数据 ===
@@ -312,17 +146,17 @@ server.listen(3000, () => {
     id: '1',
     username: 'zhangsan',
     email: 'zhangsan@example.com',
-    nickname: '张三',
+    nickname: m.gallery_demo_zhang_san(),
     phone: '13800138000',
     avatar: '',
-    bio: '全栈开发工程师，专注于 TypeScript 与 Svelte 生态。',
+    bio: m.gallery_demo_full_stack_developer_working_with_typescript_and_svelte(),
   }
 
   const demoFiles = [
-    { id: '1', name: '设计稿-v3.png', size: 2048000, type: 'image/png', url: '#' },
-    { id: '2', name: '需求文档.pdf', size: 512000, type: 'application/pdf', url: '#' },
-    { id: '3', name: '数据报表.xlsx', size: 1024000, type: 'application/vnd.ms-excel', url: '#' },
-    { id: '4', name: '会议纪要.docx', size: 256000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#' },
+    { id: '1', name: m.gallery_demo_design_v3_png(), size: 2048000, type: 'image/png', url: '#' },
+    { id: '2', name: m.gallery_demo_requirements_pdf(), size: 512000, type: 'application/pdf', url: '#' },
+    { id: '3', name: m.gallery_demo_data_report_xlsx(), size: 1024000, type: 'application/vnd.ms-excel', url: '#' },
+    { id: '4', name: m.gallery_demo_meeting_notes_docx(), size: 256000, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', url: '#' },
   ]
 
   // === 示例源码 ===
@@ -405,7 +239,8 @@ server.listen(3000, () => {
 
   const codePasswordInput = `<PasswordInput bind:value showToggle showStrength placeholder='请输入密码' />
 <PasswordInput placeholder='仅密码可见性切换' showToggle />
-<PasswordInput value='short' error='密码长度不足 8 位' showToggle />`
+<Button onclick={() => showError = !showError}>切换校验提示</Button>
+<PasswordInput value='short' error={showError ? '密码长度不足 8 位' : undefined} showToggle />`
 
   const codeUserProfile = `<UserProfile user={demoUser} editable onsubmit={async () => { /* 保存资料 */ }} />`
 
@@ -438,12 +273,12 @@ server.listen(3000, () => {
 
 <div class='space-y-10'>
   <DemoSection
-    title='AI 场景组件'
+    title={m.gallery_demo_ai_components()}
     subtitle='MarkdownRenderer / AiDocumentEditor / AiTableEditor'
     iconClass='icon-[tabler--sparkles]'
     tone='primary'
   >
-    <DemoCard title='MarkdownRenderer · AI 对话回复' description='AI 对话回复的 Markdown 渲染' code={codeMarkdownChat}>
+    <DemoCard title={m.gallery_demo_markdownrenderer_ai_response()} description={m.gallery_demo_markdown_rendering_for_ai_responses()} code={codeMarkdownChat}>
       <div class='bg-base-200/30 rounded-xl p-6'>
         <div class='flex gap-3'>
           <div class='shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-content text-sm font-bold'>AI</div>
@@ -454,27 +289,27 @@ server.listen(3000, () => {
       </div>
     </DemoCard>
 
-    <DemoCard title='MarkdownRenderer · 全功能演示' description='标题 / 列表 / 任务 / 引用 / 代码高亮 / 表格 / 图片等 GFM 语法' code={codeMarkdownFull} open={false}>
+    <DemoCard title={m.gallery_demo_markdownrenderer_full_example()} description={m.gallery_demo_gfm_headings_lists_tasks_quotes_code_tables_and()} code={codeMarkdownFull} open={false}>
       <MarkdownRenderer content={demoMarkdown} />
     </DemoCard>
 
-    <DemoCard title='MarkdownRenderer · 字号与 HTML 标签' description='通过 fontSize 调整阅读字号；开启 allowHtmlTags 后按安全白名单解析 <b> 等标签' code={codeMarkdownPresentation}>
+    <DemoCard title={m.gallery_demo_markdownrenderer_text_size_and_html_tags()} description={m.gallery_demo_use_fontsize_to_change_text_size_and_allowhtmltags()} code={codeMarkdownPresentation}>
       <div class='grid grid-cols-1 xl:grid-cols-2 gap-4'>
         <div class='rounded-xl border border-base-300 bg-base-200/30 p-4' data-testid='markdown-html-off-demo'>
-          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>默认安全模式（fontSize=14 / allowHtmlTags=false）</p>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>{m.gallery_demo_default_safe_mode_fontsize_14_allowhtmltags_false()}</p>
           <MarkdownRenderer content={htmlTagMarkdownDemo} fontSize={14} />
         </div>
         <div class='rounded-xl border border-base-300 bg-base-200/30 p-4' data-testid='markdown-html-on-demo'>
-          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>开启解析（fontSize=18 / allowHtmlTags=true）</p>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>{m.gallery_demo_html_enabled_fontsize_18_allowhtmltags_true()}</p>
           <MarkdownRenderer content={htmlTagMarkdownDemo} fontSize={18} allowHtmlTags />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='AiDocumentEditor' description='AI 生成文档预览、目录、代码块与下载工具栏' code={codeAiDocEditor}>
+    <DemoCard title='AiDocumentEditor' description={m.gallery_demo_ai_document_preview_contents_code_blocks_and_download()} code={codeAiDocEditor}>
       <div class='h-104 min-h-0'>
         <AiDocumentEditor
-          title='AI 生成方案文档'
+          title={m.gallery_demo_ai_generated_proposal()}
           content={aiDocumentContent}
           showToolbar
           showOutline
@@ -484,11 +319,11 @@ server.listen(3000, () => {
       </div>
     </DemoCard>
 
-    <DemoCard title='AiDocumentEditor · 字号与 HTML 标签' description='文档模式同样支持 fontSize 与 allowHtmlTags，适合 AI 文档阅读面板' code={codeAiDocPresentation}>
+    <DemoCard title={m.gallery_demo_aidocumenteditor_text_size_and_html_tags()} description={m.gallery_demo_document_mode_also_supports_fontsize_and_allowhtmltags_for()} code={codeAiDocPresentation}>
       <div class='grid grid-cols-1 xl:grid-cols-2 gap-4'>
         <div class='h-104 min-h-0' data-testid='ai-document-html-off-demo'>
           <AiDocumentEditor
-            title='默认安全模式'
+            title={m.gallery_demo_default_safe_mode()}
             content={aiHtmlTagDocumentContent}
             fontSize={14}
             showToolbar
@@ -499,7 +334,7 @@ server.listen(3000, () => {
         </div>
         <div class='h-104 min-h-0' data-testid='ai-document-html-on-demo'>
           <AiDocumentEditor
-            title='开启安全 HTML 标签'
+            title={m.gallery_demo_enable_safe_html_tags()}
             content={aiHtmlTagDocumentContent}
             fontSize={18}
             allowHtmlTags
@@ -512,34 +347,34 @@ server.listen(3000, () => {
       </div>
     </DemoCard>
 
-    <DemoCard title='AiTableEditor' description='AI 结构化表格预览、单元格编辑、复制与 CSV 下载' code={codeAiTableEditor}>
+    <DemoCard title='AiTableEditor' description={m.gallery_demo_ai_table_preview_cell_editing_copy_and_csv()} code={codeAiTableEditor}>
       <div class='h-104 min-h-0'>
         <AiTableEditor
-          title='AI 销售摘要'
-          statusText='示例数据'
+          title={m.gallery_demo_ai_sales_summary()}
+          statusText={m.gallery_demo_sample_data()}
           metaText='table/v1'
-          saveState='只读预览'
+          saveState={m.gallery_demo_read_only_preview()}
           editable={false}
           tableData={{
             table_columns: [
-              { key: 'metric', label: '指标', type: 'text' },
-              { key: 'value', label: '数值', type: 'number' },
-              { key: 'trend', label: '趋势', type: 'tag' },
+              { key: 'metric', label: m.gallery_demo_metric(), type: 'text' },
+              { key: 'value', label: m.gallery_demo_value(), type: 'number' },
+              { key: 'trend', label: m.gallery_demo_trends(), type: 'tag' },
             ],
             table_rows: [
-              { row_id: 'r1', metric: '新增客户', value: 128, trend: '增长' },
-              { row_id: 'r2', metric: '成交订单', value: 42, trend: '稳定' },
-              { row_id: 'r3', metric: '退款率', value: 1.8, trend: '下降' },
+              { row_id: 'r1', metric: m.gallery_demo_new_customers(), value: 128, trend: m.gallery_demo_increase() },
+              { row_id: 'r2', metric: m.gallery_demo_completed_orders(), value: 42, trend: m.gallery_demo_stable() },
+              { row_id: 'r3', metric: m.gallery_demo_refund_rate(), value: 1.8, trend: m.gallery_demo_decrease() },
             ],
           }}
         />
       </div>
     </DemoCard>
 
-    <DemoCard title='AiDocumentEditor · Mermaid 文档' description='文档中的 Mermaid 代码块在阅读态自动渲染为图表' code={codeMermaidDoc}>
+    <DemoCard title={m.gallery_demo_aidocumenteditor_mermaid_document()} description={m.gallery_demo_mermaid_code_blocks_render_as_diagrams_in_reading_2()} code={codeMermaidDoc}>
       <div class='h-104 min-h-0' data-testid='mermaid-document-demo'>
         <AiDocumentEditor
-          title='订单履约流程设计'
+          title={m.gallery_demo_order_fulfillment_workflow_2()}
           content={aiMermaidDocumentContent}
           sourceKind='document'
           showToolbar
@@ -550,17 +385,17 @@ server.listen(3000, () => {
       </div>
     </DemoCard>
 
-    <DemoCard title='AiDocumentEditor · Mermaid 代码' description='code 模式下切换“代码 / 预览”查看图表渲染结果' code={codeMermaidCode}>
+    <DemoCard title={m.gallery_demo_aidocumenteditor_mermaid_code()} description={m.gallery_demo_switch_between_code_and_preview_to_inspect_the()} code={codeMermaidCode}>
       <div class='h-104 min-h-0' data-testid='mermaid-code-demo'>
         <AiDocumentEditor
-          title='订单状态机'
+          title={m.gallery_demo_order_state_transitions()}
           content={aiMermaidCodeContent}
           sourceKind='code'
           codeLanguage='mermaid'
           showCodePreviewToggle
           showCopyButton
           showOutline={false}
-          codePreviewHint='切换查看图表'
+          codePreviewHint={m.gallery_demo_switch_to_another_chart()}
           class='h-full'
         />
       </div>
@@ -570,20 +405,20 @@ server.listen(3000, () => {
   <div class='divider'></div>
 
   <DemoSection
-    title='CRUD 业务页面'
+    title={m.gallery_demo_crud_pages()}
     subtitle='CrudPage / CrudFilterBar / CrudEditPanel / CrudDetailPanel / CrudDeleteConfirm'
     iconClass='icon-[tabler--list-details]'
     tone='info'
   >
-    <DemoCard title='CRUD 场景组件' description='已在 IAM 用户 / 角色 / 权限页真实接入' code={codeCrud}>
+    <DemoCard title={m.gallery_demo_crud_components()} description={m.gallery_demo_used_in_the_iam_user_role_and_permission()} code={codeCrud}>
       <div class='grid grid-cols-1 lg:grid-cols-3 gap-4'>
         <Alert variant='info' class='lg:col-span-2'>
-          CRUD 场景组件已经在 IAM 用户、角色、权限页面中真实接入，使用 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与 invalidateAll 刷新。
+          {m.gallery_demo_iam_user_role_and_permission_pages_use_these()}
         </Alert>
         <div class='flex flex-col gap-2'>
-          <a class='btn btn-primary no-animation font-medium' href={adminUsersPath}>查看用户 CRUD</a>
-          <a class='btn btn-secondary btn-outline no-animation font-medium' href={adminRolesPath}>查看角色 CRUD</a>
-          <a class='btn btn-info btn-outline no-animation font-medium' href={adminPermissionsPath}>查看权限 CRUD</a>
+          <a class='btn btn-primary no-animation font-medium' href={adminUsersPath}>{m.gallery_demo_view_user_management()}</a>
+          <a class='btn btn-secondary btn-outline no-animation font-medium' href={adminRolesPath}>{m.gallery_demo_view_role_management()}</a>
+          <a class='btn btn-info btn-outline no-animation font-medium' href={adminPermissionsPath}>{m.gallery_demo_view_permission_management()}</a>
         </div>
       </div>
     </DemoCard>
@@ -592,12 +427,12 @@ server.listen(3000, () => {
   <div class='divider'></div>
 
   <DemoSection
-    title='Error 错误页'
-    subtitle='ErrorPage（内置 401 / 403 / 404 / 500 / 503 预设）'
+    title={m.gallery_demo_error_page()}
+    subtitle={m.gallery_demo_errorpage_401_403_404_500_503_presets()}
     iconClass='icon-[tabler--alert-triangle]'
     tone='error'
   >
-    <DemoCard title='ErrorPage' description='切换状态码查看不同错误页' code={codeErrorPage}>
+    <DemoCard title='ErrorPage' description={m.gallery_demo_select_a_status_code_to_preview_its_error()} code={codeErrorPage}>
       <div class='flex flex-wrap gap-2 border-b border-base-content/8 pb-4 mb-4'>
         {#each errorPresets as preset (preset)}
           <button
@@ -618,38 +453,38 @@ server.listen(3000, () => {
   <div class='divider'></div>
 
   <DemoSection
-    title='IAM 身份认证'
-    subtitle='LoginForm / RegisterForm / 密码管理 / PasswordInput / UserProfile'
+    title={m.gallery_demo_iam_authentication()}
+    subtitle={m.gallery_demo_loginform_registerform_password_management_passwordinput_userprofile()}
     iconClass='icon-[tabler--shield-lock]'
     tone='primary'
   >
-    <DemoCard title='LoginForm' description='用户登录表单' code={codeLoginForm}>
+    <DemoCard title='LoginForm' description={m.gallery_demo_login_form()} code={codeLoginForm}>
       <div class='flex justify-center'>
         <div class='w-full max-w-sm'>
           <LoginForm
             showTitle
             showForgotPassword
             showRegisterLink
-            onsubmit={async (data) => { toast.success(`登录: ${data.username}`) }}
+            onsubmit={async (data) => { toast.success(m.gallery_demo_login_value({ value: data.username })) }}
           />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='RegisterForm' description='用户注册表单' code={codeRegisterForm}>
+    <DemoCard title='RegisterForm' description={m.gallery_demo_registration_form()} code={codeRegisterForm}>
       <div class='flex justify-center'>
         <div class='w-full max-w-sm'>
           <RegisterForm
             showTitle
             showLoginLink
             showPasswordStrength
-            onsubmit={async (data) => { toast.success(`注册: ${data.username ?? data.email ?? ''}`) }}
+            onsubmit={async (data) => { toast.success(m.gallery_demo_register_value({ value: data.username ?? data.email ?? '' })) }}
           />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='密码管理' description='ForgotPasswordForm / ResetPasswordForm / ChangePasswordForm' code={codePasswordMgmt}>
+    <DemoCard title={m.gallery_demo_password_management()} description='ForgotPasswordForm / ResetPasswordForm / ChangePasswordForm' code={codePasswordMgmt}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-6'>
         <div class='p-4 rounded-xl bg-base-200/50 border border-base-300'>
           <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>ForgotPasswordForm</p>
@@ -657,7 +492,7 @@ server.listen(3000, () => {
             showTitle
             showDescription
             showBackLink
-            onsubmit={async () => { toast.info('重置邮件已发送') }}
+            onsubmit={async () => { toast.info(m.gallery_demo_reset_email_sent()) }}
           />
         </div>
         <div class='p-4 rounded-xl bg-base-200/50 border border-base-300'>
@@ -667,7 +502,7 @@ server.listen(3000, () => {
             showDescription
             showCode
             showPasswordStrength
-            onsubmit={async () => { toast.success('密码已重置') }}
+            onsubmit={async () => { toast.success(m.gallery_demo_password_reset()) }}
           />
         </div>
         <div class='p-4 rounded-xl bg-base-200/50 border border-base-300'>
@@ -675,41 +510,42 @@ server.listen(3000, () => {
           <ChangePasswordForm
             requireOldPassword
             showPasswordStrength
-            onsubmit={async () => { toast.success('密码已修改') }}
+            onsubmit={async () => { toast.success(m.gallery_demo_password_changed()) }}
           />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='PasswordInput' description='密码输入框组件' code={codePasswordInput}>
+    <DemoCard title='PasswordInput' description={m.gallery_demo_password_input_component()} code={codePasswordInput}>
       <div class='space-y-5'>
         <div class='p-4 rounded-lg bg-base-200/30'>
-          <p class='text-xs font-medium text-base-content/50 mb-2'>含强度指示器</p>
-          <PasswordInput bind:value={pwdVal} showToggle showStrength placeholder='请输入密码' />
-          <p class='text-xs text-base-content/40 mt-2'>已输入 {pwdVal.length} 字符</p>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_demo_with_strength_indicator()}</p>
+          <PasswordInput bind:value={pwdVal} showToggle showStrength placeholder={m.gallery_demo_enter_a_password()} />
+          <p class='text-xs text-base-content/40 mt-2'>{m.gallery_demo_entered()} {pwdVal.length} {m.gallery_demo_characters_2()}</p>
         </div>
         <div class='p-4 rounded-lg bg-base-200/30'>
-          <p class='text-xs font-medium text-base-content/50 mb-2'>基础模式</p>
-          <PasswordInput placeholder='仅密码可见性切换' showToggle />
+          <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_demo_basic_mode()}</p>
+          <PasswordInput placeholder={m.gallery_demo_password_visibility_toggle_only()} showToggle />
         </div>
         <div class='grid grid-cols-2 gap-3'>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>禁用状态</p>
+            <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_crypto_disabled()}</p>
             <PasswordInput value='disabled' disabled />
           </div>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>错误状态</p>
-            <PasswordInput value='short' error='密码长度不足 8 位' showToggle />
+            <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_demo_error_state()}</p>
+            <Button size='sm' class='mb-2' data-testid='password-error-demo' onclick={() => showPasswordError = !showPasswordError}>{showPasswordError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
+            <PasswordInput value='short' error={showPasswordError ? m.gallery_demo_use_at_least_8_characters_for_the_password() : undefined} showToggle />
           </div>
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='UserProfile' description='用户资料编辑' code={codeUserProfile}>
+    <DemoCard title='UserProfile' description={m.gallery_demo_edit_user_profile()} code={codeUserProfile}>
       <UserProfile
         user={demoUser}
         editable
-        onsubmit={async () => { toast.success('资料已更新') }}
+        onsubmit={async () => { toast.success(m.gallery_demo_profile_updated()) }}
       />
     </DemoCard>
   </DemoSection>
@@ -717,15 +553,15 @@ server.listen(3000, () => {
   <div class='divider'></div>
 
   <DemoSection
-    title='Storage 文件存储'
+    title={m.gallery_demo_storage_files()}
     subtitle='FileUpload / FileList / ImageUpload / AvatarUpload'
     iconClass='icon-[tabler--folder]'
     tone='success'
   >
-    <DemoCard title='FileUpload' description='多文件拖拽上传 / 单文件上传' code={codeFileUpload}>
+    <DemoCard title='FileUpload' description={m.gallery_demo_multiple_file_drop_zone_single_file_upload()} code={codeFileUpload}>
       <div class='grid grid-cols-1 lg:grid-cols-2 gap-6'>
         <div>
-          <p class='text-xs font-medium text-base-content/50 mb-2'>多文件拖拽上传</p>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_demo_drag_and_drop_multiple_files()}</p>
           <FileUpload
             accept='image/*,.pdf,.doc,.docx'
             maxFiles={5}
@@ -735,7 +571,7 @@ server.listen(3000, () => {
           />
         </div>
         <div>
-          <p class='text-xs font-medium text-base-content/50 mb-2'>单文件上传</p>
+          <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_demo_single_file_upload()}</p>
           <FileUpload
             accept='image/*'
             maxFiles={1}
@@ -746,10 +582,10 @@ server.listen(3000, () => {
       </div>
     </DemoCard>
 
-    <DemoCard title='FileList' description='文件列表展示与操作（列表 / 网格 / 加载态）' code={codeFileList}>
+    <DemoCard title='FileList' description={m.gallery_demo_file_display_and_actions_list_grid_and_loading()} code={codeFileList}>
       <div class='space-y-6'>
         <div>
-          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>列表布局</p>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>{m.gallery_demo_list_layout()}</p>
           <FileList
             files={demoFiles}
             showPreview
@@ -757,48 +593,48 @@ server.listen(3000, () => {
             showDelete
             showSize
             layout='list'
-            ondownload={f => toast.info(`下载: ${f.name}`)}
-            ondelete={f => toast.warning(`删除: ${f.name}`)}
+            ondownload={f => toast.info(m.gallery_demo_download_value({ value: f.name }))}
+            ondelete={f => toast.warning(m.gallery_demo_delete_value({ value: f.name }))}
           />
         </div>
         <div class='divider my-2'></div>
         <div>
-          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>网格布局</p>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>{m.gallery_demo_grid_layout()}</p>
           <FileList
             files={demoFiles.slice(0, 3)}
             showPreview
             showDownload
             showDelete
             layout='grid'
-            ondownload={f => toast.info(`下载: ${f.name}`)}
-            ondelete={f => toast.warning(`删除: ${f.name}`)}
+            ondownload={f => toast.info(m.gallery_demo_download_value({ value: f.name }))}
+            ondelete={f => toast.warning(m.gallery_demo_delete_value({ value: f.name }))}
           />
         </div>
         <div class='divider my-2'></div>
         <div>
-          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>加载状态</p>
+          <p class='text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-3'>{m.gallery_demo_loading_state()}</p>
           <FileList files={[]} loading layout='list' />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='ImageUpload / AvatarUpload' description='图片与头像上传' code={codeImageAvatar}>
+    <DemoCard title='ImageUpload / AvatarUpload' description={m.gallery_demo_image_and_avatar_upload()} code={codeImageAvatar}>
       <div class='grid grid-cols-2 lg:grid-cols-4 gap-6'>
         <div class='flex flex-col items-center gap-3'>
           <ImageUpload accept='image/*' width='180px' height='180px' />
-          <p class='text-xs text-base-content/50'>正方形图片</p>
+          <p class='text-xs text-base-content/50'>{m.gallery_demo_square_image()}</p>
         </div>
         <div class='flex flex-col items-center gap-3'>
           <ImageUpload accept='image/*' width='280px' height='158px' aspectRatio='16:9' />
-          <p class='text-xs text-base-content/50'>16:9 比例</p>
+          <p class='text-xs text-base-content/50'>{m.gallery_demo_16_9_aspect_ratio()}</p>
         </div>
         <div class='flex flex-col items-center gap-3'>
-          <AvatarUpload size='lg' fallback='张' />
-          <p class='text-xs text-base-content/50'>头像（大）</p>
+          <AvatarUpload size='lg' fallback={m.gallery_demo_z()} />
+          <p class='text-xs text-base-content/50'>{m.gallery_demo_avatar_large()}</p>
         </div>
         <div class='flex flex-col items-center gap-3'>
-          <AvatarUpload size='md' fallback='李' />
-          <p class='text-xs text-base-content/50'>头像（中）</p>
+          <AvatarUpload size='md' fallback={m.gallery_demo_l()} />
+          <p class='text-xs text-base-content/50'>{m.gallery_demo_avatar_medium()}</p>
         </div>
       </div>
     </DemoCard>
@@ -813,16 +649,19 @@ server.listen(3000, () => {
     tone='error'
   >
     <DemoCard title='EncryptedInput' description={m.gallery_crypto_input()} code={codeEncryptedInput}>
-      <div class='space-y-4'>
-        <div class='p-4 rounded-lg bg-base-200/30'>
-          <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_crypto_sm4()}</p>
-          <EncryptedInput bind:value={encVal} algorithm='SM4' placeholder={m.gallery_crypto_sensitive()} />
+      <Button data-testid='encryption-unconfigured-demo' onclick={() => showUnconfiguredEncryption = !showUnconfiguredEncryption}>{m.gallery_demo_show_unconfigured_encryption()}</Button>
+      {#if showUnconfiguredEncryption}
+        <div class='space-y-4 mt-4'>
+          <div class='p-4 rounded-lg bg-base-200/30'>
+            <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_crypto_sm4()}</p>
+            <EncryptedInput bind:value={encVal} algorithm='SM4' placeholder={m.gallery_crypto_sensitive()} />
+          </div>
+          <div class='p-4 rounded-lg bg-base-200/30'>
+            <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_crypto_disabled()}</p>
+            <EncryptedInput placeholder={m.gallery_crypto_readonly()} algorithm='SM4' disabled />
+          </div>
         </div>
-        <div class='p-4 rounded-lg bg-base-200/30'>
-          <p class='text-xs font-medium text-base-content/50 mb-2'>{m.gallery_crypto_disabled()}</p>
-          <EncryptedInput placeholder={m.gallery_crypto_readonly()} algorithm='SM4' disabled />
-        </div>
-      </div>
+      {/if}
     </DemoCard>
 
     <DemoCard title='HashDisplay' description={m.gallery_crypto_hash()} code={codeHashDisplay}>

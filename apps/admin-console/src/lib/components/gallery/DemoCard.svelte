@@ -55,9 +55,9 @@
     onclick={() => (expanded = !expanded)}
   >
     <div class='min-w-0'>
-      <h3 class='truncate text-base font-semibold'>{title}</h3>
+      <h3 class='text-base font-semibold [overflow-wrap:anywhere]'>{title}</h3>
       {#if description}
-        <p class='truncate text-sm text-base-content/60'>{description}</p>
+        <p class='mt-1 text-sm leading-relaxed text-base-content/60 [overflow-wrap:anywhere]'>{description}</p>
       {/if}
     </div>
     <span

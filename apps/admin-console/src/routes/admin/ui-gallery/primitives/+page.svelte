@@ -10,10 +10,13 @@
   // Range 与 DOM 全局类型同名，必须显式导入
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
+  import * as m from '$lib/paraglide/messages.js'
   import { Range, toast } from '@h-ai/ui'
 
   // === 表单状态 ===
   let inputVal = $state('')
+  let showInputError = $state(false)
+  let showSelectError = $state(false)
   let textareaVal = $state('')
   let selectVal = $state('')
   let selectClearVal = $state('')
@@ -60,7 +63,8 @@
 
   const codeInput = `<Input bind:value placeholder='请输入内容' />
 <BareInput placeholder='无边框、无样式' />
-<Input value='无效内容' error='请输入有效内容' />
+<Button onclick={() => showError = !showError}>切换校验提示</Button>
+<Input value='无效内容' error={showError ? '请输入有效内容' : undefined} />
 <Input value='不可编辑' disabled />
 <Input type='password' placeholder='输入密码' />
 
@@ -79,7 +83,8 @@
   const codeSelectSize = `<Select options={selectOpts} placeholder='超小' size='xs' />
 <Select options={selectOpts} placeholder='小号' size='sm' />
 <Select options={selectOpts} placeholder='大号' size='lg' />
-<Select options={selectOpts} placeholder='请选择' error='请选择一项' />`
+<Button onclick={() => showError = !showError}>切换校验提示</Button>
+<Select options={selectOpts} placeholder='请选择' error={showError ? '请选择一项' : undefined} />`
 
   const codeSelectClearFilter = `<Select bind:value options={selectOpts} placeholder='可清空' clearable />
 <Select bind:value options={selectOpts} placeholder='可筛选' filterable />
@@ -124,15 +129,15 @@
 
 <div class='space-y-10'>
   <DemoSection
-    title='按钮与交互'
+    title={m.gallery_demo_buttons_and_actions()}
     subtitle='Button / BareButton / IconButton'
     iconClass='icon-[tabler--click]'
     tone='primary'
   >
-    <DemoCard title='Button 按钮' description='变体 / 轮廓 / 尺寸 / 状态' code={codeButton}>
+    <DemoCard title={m.gallery_demo_button()} description={m.gallery_demo_variants_outlines_sizes_and_states()} code={codeButton}>
       <div class='space-y-4'>
         <div>
-          <p class='text-sm font-medium mb-2'>变体（variant）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_variants()}</p>
           <div class='flex flex-wrap items-center gap-3'>
             <Button variant='primary' onclick={() => toast.success('primary')}>primary</Button>
             <Button variant='secondary'>secondary</Button>
@@ -146,7 +151,7 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>轮廓模式（outline）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_outline_style_outline()}</p>
           <div class='flex flex-wrap items-center gap-3'>
             <Button variant='primary' outline>primary</Button>
             <Button variant='secondary' outline>secondary</Button>
@@ -157,43 +162,43 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>尺寸（size）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_size_options()}</p>
           <div class='flex flex-wrap items-end gap-3'>
-            <Button variant='primary' size='xs'>xs 超小</Button>
-            <Button variant='primary' size='sm'>sm 小</Button>
-            <Button variant='primary' size='md'>md 中（默认）</Button>
-            <Button variant='primary' size='lg'>lg 大</Button>
-            <Button variant='primary' size='xl'>xl 超大</Button>
+            <Button variant='primary' size='xs'>{m.gallery_demo_xs_extra_small()}</Button>
+            <Button variant='primary' size='sm'>{m.gallery_demo_sm_small()}</Button>
+            <Button variant='primary' size='md'>{m.gallery_demo_md_medium_default()}</Button>
+            <Button variant='primary' size='lg'>{m.gallery_demo_lg_large()}</Button>
+            <Button variant='primary' size='xl'>{m.gallery_demo_xl_extra_large()}</Button>
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>特殊状态</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_additional_states()}</p>
           <div class='flex flex-wrap items-center gap-3'>
-            <Button variant='primary' loading>加载中</Button>
-            <Button variant='primary' disabled>禁用</Button>
+            <Button variant='primary' loading>{m.gallery_demo_loading()}</Button>
+            <Button variant='primary' disabled>{m.gallery_demo_disabled()}</Button>
             <Button variant='primary' circle>⚙</Button>
           </div>
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='BareButton / IconButton' description='无样式按钮与图标按钮' code={codeBareIconButton}>
+    <DemoCard title='BareButton / IconButton' description={m.gallery_demo_unstyled_and_icon_buttons()} code={codeBareIconButton}>
       <div class='space-y-4'>
         <div>
-          <p class='text-sm font-medium mb-2'>BareButton（无样式按钮）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_barebutton_unstyled()}</p>
           <div class='flex items-center gap-4'>
-            <BareButton onclick={() => toast.info('裸按钮点击')}>
-              <span class='text-primary underline cursor-pointer'>可点击文字</span>
+            <BareButton onclick={() => toast.info(m.gallery_demo_bare_button_clicked())}>
+              <span class='text-primary underline cursor-pointer'>{m.gallery_demo_clickable_text()}</span>
             </BareButton>
             <BareButton disabled>
-              <span class='text-base-content/30 cursor-not-allowed'>禁用状态</span>
+              <span class='text-base-content/30 cursor-not-allowed'>{m.gallery_crypto_disabled()}</span>
             </BareButton>
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>IconButton（各变体）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_iconbutton_variants()}</p>
           <div class='flex items-center gap-4'>
-            <IconButton variant='primary' tooltip='设置' label='设置' onclick={() => toast.info('设置')}>
+            <IconButton variant='primary' tooltip={m.gallery_demo_settings()} label={m.gallery_demo_settings()} onclick={() => toast.info(m.gallery_demo_settings())}>
               {#snippet icon()}
                 <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
                   <circle cx='12' cy='12' r='3' />
@@ -201,7 +206,7 @@
                 </svg>
               {/snippet}
             </IconButton>
-            <IconButton variant='error' tooltip='删除' label='删除'>
+            <IconButton variant='error' tooltip={m.modules_vecdb_op_delete()} label={m.modules_vecdb_op_delete()}>
               {#snippet icon()}
                 <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
                   <polyline points='3 6 5 6 21 6' />
@@ -209,7 +214,7 @@
                 </svg>
               {/snippet}
             </IconButton>
-            <IconButton variant='info' tooltip='信息' label='信息'>
+            <IconButton variant='info' tooltip={m.audit_info()} label={m.audit_info()}>
               {#snippet icon()}
                 <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>
                   <circle cx='12' cy='12' r='10' />
@@ -218,7 +223,7 @@
                 </svg>
               {/snippet}
             </IconButton>
-            <IconButton disabled tooltip='禁用' label='禁用'>
+            <IconButton disabled tooltip={m.gallery_demo_disabled()} label={m.gallery_demo_disabled()}>
               {#snippet icon()}
                 <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><circle cx='12' cy='12' r='10' /><line x1='4.93' y1='4.93' x2='19.07' y2='19.07' /></svg>
               {/snippet}
@@ -232,157 +237,159 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='输入控件'
+    title={m.gallery_demo_input_controls()}
     subtitle='Input / BareInput / Textarea / Select / Checkbox / Switch / Radio'
     iconClass='icon-[tabler--forms]'
     tone='info'
   >
-    <DemoCard title='Input / BareInput / Textarea' description='输入框、裸输入框与多行文本' code={codeInput}>
+    <DemoCard title='Input / BareInput / Textarea' description={m.gallery_demo_input_bare_input_and_text_area()} code={codeInput}>
       <div class='space-y-4'>
         <div class='grid grid-cols-1 md:grid-cols-2 gap-4'>
           <div>
-            <label class='text-sm font-medium mb-1 block' for='g-input-std'>标准输入框</label>
-            <Input id='g-input-std' bind:value={inputVal} placeholder='请输入内容' />
-            <p class='text-xs text-base-content/50 mt-1'>当前值: {inputVal || '（空）'}</p>
+            <label class='text-sm font-medium mb-1 block' for='g-input-std'>{m.gallery_demo_standard_input()}</label>
+            <Input id='g-input-std' bind:value={inputVal} placeholder={m.gallery_demo_enter_text()} />
+            <p class='text-xs text-base-content/50 mt-1'>{m.gallery_demo_current_value()} {inputVal || m.gallery_demo_empty()}</p>
           </div>
           <div>
-            <label class='text-sm font-medium mb-1 block' for='g-input-bare'>裸输入框（BareInput）</label>
-            <BareInput id='g-input-bare' placeholder='无边框、无样式' />
+            <label class='text-sm font-medium mb-1 block' for='g-input-bare'>{m.gallery_demo_bare_input_bareinput()}</label>
+            <BareInput id='g-input-bare' placeholder={m.gallery_demo_no_border_or_styling()} />
           </div>
           <div>
-            <label class='text-sm font-medium mb-1 block' for='g-input-err'>错误状态</label>
-            <Input id='g-input-err' value='无效内容' error='请输入有效内容' />
+            <label class='text-sm font-medium mb-1 block' for='g-input-err'>{m.gallery_demo_error_state()}</label>
+            <Button size='sm' class='mb-2' data-testid='input-error-demo' onclick={() => showInputError = !showInputError}>{showInputError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
+            <Input id='g-input-err' value={m.gallery_demo_invalid_content()} error={showInputError ? m.gallery_demo_enter_a_valid_value() : undefined} />
           </div>
           <div>
-            <label class='text-sm font-medium mb-1 block' for='g-input-dis'>禁用状态</label>
-            <Input id='g-input-dis' value='不可编辑' disabled />
+            <label class='text-sm font-medium mb-1 block' for='g-input-dis'>{m.gallery_crypto_disabled()}</label>
+            <Input id='g-input-dis' value={m.gallery_demo_read_only()} disabled />
           </div>
           <div>
-            <label class='text-sm font-medium mb-1 block' for='g-input-ro'>只读状态</label>
-            <Input id='g-input-ro' value='只读内容' readonly />
+            <label class='text-sm font-medium mb-1 block' for='g-input-ro'>{m.gallery_demo_read_only_state()}</label>
+            <Input id='g-input-ro' value={m.gallery_demo_read_only_content()} readonly />
           </div>
           <div>
-            <label class='text-sm font-medium mb-1 block' for='g-input-pwd'>密码类型</label>
-            <Input id='g-input-pwd' type='password' placeholder='输入密码' />
+            <label class='text-sm font-medium mb-1 block' for='g-input-pwd'>{m.gallery_demo_password_input()}</label>
+            <Input id='g-input-pwd' type='password' placeholder={m.gallery_demo_enter_password()} />
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>尺寸（size）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_size_options()}</p>
           <div class='flex flex-wrap items-end gap-3'>
             <Input size='xs' placeholder='xs' />
             <Input size='sm' placeholder='sm' />
-            <Input size='md' placeholder='md（默认）' />
+            <Input size='md' placeholder={m.gallery_demo_md_default()} />
             <Input size='lg' placeholder='lg' />
           </div>
         </div>
         <div>
-          <label class='text-sm font-medium mb-1 block' for='g-textarea'>多行文本（Textarea）</label>
-          <Textarea id='g-textarea' bind:value={textareaVal} placeholder='请输入多行内容...' rows={3} />
-          <p class='text-xs text-base-content/50 mt-1'>已输入 {textareaVal.length} 字</p>
+          <label class='text-sm font-medium mb-1 block' for='g-textarea'>{m.gallery_demo_multiline_text_textarea()}</label>
+          <Textarea id='g-textarea' bind:value={textareaVal} placeholder={m.gallery_demo_enter_multiline_text()} rows={3} />
+          <p class='text-xs text-base-content/50 mt-1'>{m.gallery_demo_entered()} {textareaVal.length} {m.gallery_demo_characters()}</p>
         </div>
         <div>
-          <label class='text-sm font-medium mb-1 block' for='g-textarea-auto'>自动高度（autoResize）</label>
-          <Textarea id='g-textarea-auto' placeholder='输入后自动调整高度' rows={2} autoResize />
+          <label class='text-sm font-medium mb-1 block' for='g-textarea-auto'>{m.gallery_demo_automatic_height_autoresize()}</label>
+          <Textarea id='g-textarea-auto' placeholder={m.gallery_demo_height_adjusts_as_you_type()} rows={2} autoResize />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Select / Checkbox / Switch / Radio' description='下拉、复选、开关、单选' code={codeFormControls}>
+    <DemoCard title='Select / Checkbox / Switch / Radio' description={m.gallery_demo_select_checkbox_switch_and_radio()} code={codeFormControls}>
       <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6'>
         <div>
-          <label class='text-sm font-medium mb-1 block' for='g-sel'>下拉选择</label>
-          <Select id='g-sel' bind:value={selectVal} options={selectOpts} placeholder='请选择框架' />
-          <p class='text-xs text-base-content/50 mt-1'>选中: {selectVal || '（无）'}</p>
+          <label class='text-sm font-medium mb-1 block' for='g-sel'>{m.gallery_demo_select()}</label>
+          <Select id='g-sel' bind:value={selectVal} options={selectOpts} placeholder={m.gallery_demo_select_a_framework()} />
+          <p class='text-xs text-base-content/50 mt-1'>{m.gallery_demo_selected_2()} {selectVal || m.gallery_demo_none()}</p>
         </div>
         <fieldset>
-          <legend class='text-sm font-medium mb-3'>复选框（Checkbox）</legend>
+          <legend class='text-sm font-medium mb-3'>{m.gallery_demo_checkbox()}</legend>
           <div class='space-y-2'>
-            <Checkbox bind:checked={checkboxVal} label='同意用户协议' />
-            <Checkbox checked={checkboxIndeterminate} indeterminate label='半选状态' />
-            <Checkbox disabled label='禁用' />
-            <Checkbox checked disabled label='禁用（已选）' />
+            <Checkbox bind:checked={checkboxVal} label={m.gallery_demo_accept_the_user_agreement()} />
+            <Checkbox checked={checkboxIndeterminate} indeterminate label={m.gallery_demo_indeterminate_state()} />
+            <Checkbox disabled label={m.gallery_demo_disabled()} />
+            <Checkbox checked disabled label={m.gallery_demo_disabled_selected()} />
           </div>
         </fieldset>
         <fieldset>
-          <legend class='text-sm font-medium mb-3'>开关（Switch）</legend>
+          <legend class='text-sm font-medium mb-3'>{m.gallery_demo_switch()}</legend>
           <div class='space-y-2'>
-            <Switch bind:checked={switchVal} label='启用通知' />
-            <Switch checked={false} disabled label='禁用' />
-            <Switch checked disabled label='禁用（开）' />
+            <Switch bind:checked={switchVal} label={m.gallery_demo_enable_notifications()} />
+            <Switch checked={false} disabled label={m.gallery_demo_disabled()} />
+            <Switch checked disabled label={m.gallery_demo_disabled_on()} />
           </div>
-          <p class='text-xs text-base-content/50 mt-2'>通知: {switchVal ? '开' : '关'}</p>
+          <p class='text-xs text-base-content/50 mt-2'>{m.gallery_demo_notifications_2()} {switchVal ? m.gallery_demo_on() : m.gallery_demo_off()}</p>
         </fieldset>
         <fieldset>
-          <legend class='text-sm font-medium mb-3'>单选（Radio）</legend>
+          <legend class='text-sm font-medium mb-3'>{m.gallery_demo_radio_buttons()}</legend>
           <Radio value={radioVal} options={selectOpts} direction='vertical' onchange={(v: string) => radioVal = v} />
-          <p class='text-xs text-base-content/50 mt-2'>选中: {radioVal}</p>
+          <p class='text-xs text-base-content/50 mt-2'>{m.gallery_demo_selected_2()} {radioVal}</p>
         </fieldset>
       </div>
       <div class='mt-6'>
-        <p class='text-sm font-medium mb-3'>Radio 水平排列</p>
+        <p class='text-sm font-medium mb-3'>{m.gallery_demo_horizontal_radio_group()}</p>
         <Radio value={radioHorizontal} options={selectOpts} direction='horizontal' onchange={(v: string) => radioHorizontal = v} />
       </div>
     </DemoCard>
 
-    <DemoCard title='Select 尺寸与状态' description='xs / sm / lg 与错误态' code={codeSelectSize}>
+    <DemoCard title={m.gallery_demo_select_sizes_and_states()} description={m.gallery_demo_xs_sm_lg_and_error_states()} code={codeSelectSize}>
       <div class='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-xs'>xs</label>
-          <Select id='g-sel-xs' options={selectOpts} placeholder='超小' size='xs' />
+          <Select id='g-sel-xs' options={selectOpts} placeholder={m.gallery_demo_extra_small()} size='xs' />
         </div>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-sm'>sm</label>
-          <Select id='g-sel-sm' options={selectOpts} placeholder='小号' size='sm' />
+          <Select id='g-sel-sm' options={selectOpts} placeholder={m.gallery_demo_small()} size='sm' />
         </div>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-lg'>lg</label>
-          <Select id='g-sel-lg' options={selectOpts} placeholder='大号' size='lg' />
+          <Select id='g-sel-lg' options={selectOpts} placeholder={m.gallery_demo_large()} size='lg' />
         </div>
         <div>
-          <label class='text-sm font-medium mb-1 block' for='g-sel-err'>错误状态</label>
-          <Select id='g-sel-err' options={selectOpts} placeholder='请选择' error='请选择一项' />
+          <label class='text-sm font-medium mb-1 block' for='g-sel-err'>{m.gallery_demo_error_state()}</label>
+          <Button size='sm' class='mb-2' data-testid='select-error-demo' onclick={() => showSelectError = !showSelectError}>{showSelectError ? m.gallery_demo_clear_validation_feedback() : m.gallery_demo_show_validation_feedback()}</Button>
+          <Select id='g-sel-err' options={selectOpts} placeholder={m.gallery_demo_select_an_option()} error={showSelectError ? m.gallery_demo_select_an_option_2() : undefined} />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Select clearable & filterable' description='可清空、可筛选下拉框' code={codeSelectClearFilter}>
+    <DemoCard title='Select clearable & filterable' description={m.gallery_demo_clearable_and_searchable_select()} code={codeSelectClearFilter}>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-clear'>clearable</label>
-          <Select id='g-sel-clear' bind:value={selectClearVal} options={selectOpts} placeholder='可清空' clearable />
+          <Select id='g-sel-clear' bind:value={selectClearVal} options={selectOpts} placeholder={m.gallery_demo_clearable()} clearable />
         </div>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-filter'>filterable</label>
-          <Select id='g-sel-filter' bind:value={selectFilterVal} options={selectOpts} placeholder='可筛选' filterable />
+          <Select id='g-sel-filter' bind:value={selectFilterVal} options={selectOpts} placeholder={m.gallery_demo_searchable()} filterable />
         </div>
         <div>
           <label class='text-sm font-medium mb-1 block' for='g-sel-both'>clearable + filterable</label>
-          <Select id='g-sel-both' bind:value={selectBothVal} options={selectOpts} placeholder='可清空+可筛选' clearable filterable />
+          <Select id='g-sel-both' bind:value={selectBothVal} options={selectOpts} placeholder={m.gallery_demo_clearable_and_searchable()} clearable filterable />
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Select 布局与对齐' description='紧凑筛选行：与 Input 尺寸对齐、可随容器收缩、下拉层级不被相邻控件遮挡' code={codeSelectLayout}>
+    <DemoCard title={m.gallery_demo_select_layout_and_alignment()} description={m.gallery_demo_compact_filters_match_input_sizes_shrink_with_the()} code={codeSelectLayout}>
       <div class='space-y-4'>
         <div>
-          <p class='text-sm font-medium mb-2'>与 Input 同尺寸对齐（sm）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_aligned_with_input_size_sm()}</p>
           <div class='flex items-center gap-3'>
-            <Input size='sm' placeholder='搜索' class='w-40' />
-            <Select size='sm' options={selectOpts} placeholder='框架' />
-            <Select size='sm' options={selectOpts} placeholder='状态' />
-            <Select size='sm' options={selectOpts} placeholder='来源' />
+            <Input size='sm' placeholder={m.modules_vecdb_op_search()} class='w-40' />
+            <Select size='sm' options={selectOpts} placeholder={m.gallery_demo_framework()} />
+            <Select size='sm' options={selectOpts} placeholder={m.iam_users_form_status()} />
+            <Select size='sm' options={selectOpts} placeholder={m.gallery_demo_source()} />
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>相邻下拉展开不被遮挡（点击第一个再看后续控件）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_dropdowns_stay_above_nearby_controls_open_the_first()}</p>
           <div class='flex items-center gap-3'>
-            <Select options={selectOpts} placeholder='第一个' />
-            <Select options={selectOpts} placeholder='第二个' />
-            <Select options={selectOpts} placeholder='第三个' />
+            <Select options={selectOpts} placeholder={m.gallery_demo_first()} />
+            <Select options={selectOpts} placeholder={m.gallery_demo_second()} />
+            <Select options={selectOpts} placeholder={m.gallery_demo_third()} />
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>各尺寸与 Input 高度一致（xs / sm / md / lg / xl）</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_sizes_match_input_heights_xs_sm_md_lg()}</p>
           <div class='space-y-2'>
             <div class='flex items-center gap-3'>
               <Input size='xs' placeholder='xs' class='w-40' />
@@ -409,48 +416,48 @@
       </div>
     </DemoCard>
 
-    <DemoCard title='Toggle 系列' description='ToggleCheckbox / ToggleInput / ToggleRadio' code={codeToggle}>
+    <DemoCard title={m.gallery_demo_toggle_controls()} description='ToggleCheckbox / ToggleInput / ToggleRadio' code={codeToggle}>
       <div class='space-y-4'>
         <div class='flex flex-wrap items-center gap-8'>
           <label class='flex items-center gap-2 cursor-pointer'>
             <ToggleCheckbox bind:checked={toggleCheck} />
-            <span class='text-sm'>ToggleCheckbox: {toggleCheck ? '开' : '关'}</span>
+            <span class='text-sm'>ToggleCheckbox: {toggleCheck ? m.gallery_demo_on() : m.gallery_demo_off()}</span>
           </label>
           <label class='flex items-center gap-2 cursor-pointer'>
             <ToggleInput bind:checked={toggleInput} />
-            <span class='text-sm'>ToggleInput: {toggleInput ? '开' : '关'}</span>
+            <span class='text-sm'>ToggleInput: {toggleInput ? m.gallery_demo_on() : m.gallery_demo_off()}</span>
           </label>
           <label class='flex items-center gap-2 cursor-pointer'>
             <ToggleRadio bind:checked={toggleRadio} />
-            <span class='text-sm'>ToggleRadio: {toggleRadio ? '开' : '关'}</span>
+            <span class='text-sm'>ToggleRadio: {toggleRadio ? m.gallery_demo_on() : m.gallery_demo_off()}</span>
           </label>
         </div>
         <div class='flex flex-wrap items-center gap-8'>
           <label class='flex items-center gap-2 cursor-not-allowed'>
             <ToggleCheckbox checked disabled />
-            <span class='text-sm opacity-50'>禁用（开）</span>
+            <span class='text-sm opacity-50'>{m.gallery_demo_disabled_on()}</span>
           </label>
           <label class='flex items-center gap-2 cursor-not-allowed'>
             <ToggleInput disabled />
-            <span class='text-sm opacity-50'>禁用（关）</span>
+            <span class='text-sm opacity-50'>{m.gallery_demo_disabled_off()}</span>
           </label>
         </div>
       </div>
     </DemoCard>
 
-    <DemoCard title='Range 滑块 / Rating 评分' description='滑块与评分控件' code={codeRangeRating}>
+    <DemoCard title={m.gallery_demo_range_rating()} description={m.gallery_demo_slider_and_rating()} code={codeRangeRating}>
       <div class='grid grid-cols-1 md:grid-cols-2 gap-6'>
         <div class='space-y-4'>
           <div>
-            <p class='text-sm font-medium mb-2'>基础滑块: {rangeVal}</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_basic_slider()} {rangeVal}</p>
             <Range bind:value={rangeVal} min={0} max={100} step={10} variant='primary' />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>带步骤标记</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_with_step_markers()}</p>
             <Range value={30} min={0} max={100} step={25} variant='secondary' showSteps />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>各变体</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_variants_2()}</p>
             <div class='space-y-2'>
               <Range value={60} variant='success' />
               <Range value={40} variant='warning' />
@@ -459,7 +466,7 @@
             </div>
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>尺寸</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_size()}</p>
             <div class='space-y-2'>
               <Range value={50} size='xs' variant='primary' />
               <Range value={50} size='sm' variant='primary' />
@@ -470,23 +477,23 @@
         </div>
         <div class='space-y-4'>
           <div>
-            <p class='text-sm font-medium mb-2'>整数评分: {ratingVal} / 5</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_whole_star_rating()} {ratingVal} / 5</p>
             <Rating bind:value={ratingVal} max={5} size='lg' clearable />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>半星评分: {ratingHalf} / 5</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_half_star_rating()} {ratingHalf} / 5</p>
             <Rating bind:value={ratingHalf} max={5} size='lg' half clearable />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>只读</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_read_only_2()}</p>
             <Rating value={4} max={5} readonly />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>禁用</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_disabled()}</p>
             <Rating value={2} max={5} disabled />
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>尺寸</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_size()}</p>
             <div class='flex flex-wrap items-center gap-4'>
               <Rating value={3} max={5} size='xs' readonly />
               <Rating value={3} max={5} size='sm' readonly />
@@ -496,7 +503,7 @@
             </div>
           </div>
           <div>
-            <p class='text-sm font-medium mb-2'>颜色</p>
+            <p class='text-sm font-medium mb-2'>{m.gallery_demo_color()}</p>
             <div class='flex flex-wrap items-center gap-4'>
               <Rating value={3} max={5} color='primary' readonly />
               <Rating value={3} max={5} color='secondary' readonly />
@@ -512,17 +519,17 @@
   <div class='divider'></div>
 
   <DemoSection
-    title='展示与反馈'
+    title={m.gallery_demo_display_and_feedback()}
     subtitle='Badge / Avatar / Tag / Spinner / Progress'
     iconClass='icon-[tabler--mood-smile]'
     tone='success'
   >
-    <DemoCard title='Badge 徽章 / Avatar 头像 / Tag 标签' description='徽章、头像与标签' code={codeBadgeAvatarTag}>
+    <DemoCard title={m.gallery_demo_badge_avatar_tag()} description={m.gallery_demo_badges_avatars_and_tags()} code={codeBadgeAvatarTag}>
       <div class='space-y-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>Badge 变体</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_badge_variants()}</p>
           <div class='flex flex-wrap gap-2'>
-            <Badge>默认</Badge>
+            <Badge>{m.gallery_demo_default()}</Badge>
             <Badge variant='primary'>primary</Badge>
             <Badge variant='secondary'>secondary</Badge>
             <Badge variant='success'>success</Badge>
@@ -533,59 +540,59 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Badge 轮廓 + 尺寸</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_badge_outline_and_sizes()}</p>
           <div class='flex flex-wrap items-center gap-2'>
-            <Badge variant='primary' outline size='xs'>xs 轮廓</Badge>
-            <Badge variant='primary' outline size='sm'>sm 轮廓</Badge>
-            <Badge variant='primary' outline>md 轮廓</Badge>
-            <Badge variant='primary' outline size='lg'>lg 轮廓</Badge>
+            <Badge variant='primary' outline size='xs'>{m.gallery_demo_xs_outline()}</Badge>
+            <Badge variant='primary' outline size='sm'>{m.gallery_demo_sm_outline()}</Badge>
+            <Badge variant='primary' outline>{m.gallery_demo_md_outline()}</Badge>
+            <Badge variant='primary' outline size='lg'>{m.gallery_demo_lg_outline()}</Badge>
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Avatar 头像</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_avatar()}</p>
           <div class='flex items-end gap-4'>
             <div class='text-center'>
-              <Avatar name='张三' size='xs' />
+              <Avatar name={m.gallery_demo_zhang_san()} size='xs' />
               <p class='text-xs mt-1'>xs</p>
             </div>
             <div class='text-center'>
-              <Avatar name='李四' size='sm' />
+              <Avatar name={m.gallery_demo_li_si()} size='sm' />
               <p class='text-xs mt-1'>sm</p>
             </div>
             <div class='text-center'>
-              <Avatar name='王五' size='md' />
+              <Avatar name={m.gallery_demo_wang_wu()} size='md' />
               <p class='text-xs mt-1'>md</p>
             </div>
             <div class='text-center'>
-              <Avatar name='赵六' size='lg' />
+              <Avatar name={m.gallery_demo_zhao_liu()} size='lg' />
               <p class='text-xs mt-1'>lg</p>
             </div>
             <div class='text-center'>
-              <Avatar name='钱七' size='xl' />
+              <Avatar name={m.gallery_demo_qian_qi()} size='xl' />
               <p class='text-xs mt-1'>xl</p>
             </div>
             <div class='text-center'>
-              <Avatar name='方形' size='lg' shape='square' />
+              <Avatar name={m.gallery_demo_square()} size='lg' shape='square' />
               <p class='text-xs mt-1'>square</p>
             </div>
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Tag 标签</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_tag()}</p>
           <div class='flex flex-wrap gap-2'>
-            <Tag>默认</Tag>
+            <Tag>{m.gallery_demo_default()}</Tag>
             <Tag variant='primary'>primary</Tag>
             <Tag variant='secondary'>secondary</Tag>
-            <Tag variant='success'>成功</Tag>
-            <Tag variant='warning'>警告</Tag>
-            <Tag variant='error'>错误</Tag>
-            <Tag variant='info'>信息</Tag>
-            <Tag variant='primary' outline>轮廓</Tag>
-            <Tag closable onclose={() => toast.info('标签关闭')}>可关闭</Tag>
+            <Tag variant='success'>{m.gallery_toast_type_success()}</Tag>
+            <Tag variant='warning'>{m.gallery_toast_type_warning()}</Tag>
+            <Tag variant='error'>{m.gallery_toast_type_error()}</Tag>
+            <Tag variant='info'>{m.audit_info()}</Tag>
+            <Tag variant='primary' outline>{m.gallery_demo_outline()}</Tag>
+            <Tag closable onclose={() => toast.info(m.gallery_demo_tag_dismissed())}>{m.gallery_demo_dismissible()}</Tag>
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Tag 尺寸</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_tag_sizes()}</p>
           <div class='flex flex-wrap items-center gap-2'>
             <Tag variant='primary' size='xs'>xs</Tag>
             <Tag variant='primary' size='sm'>sm</Tag>
@@ -596,10 +603,10 @@
       </div>
     </DemoCard>
 
-    <DemoCard title='Spinner 加载器 / Progress 进度条' description='加载指示与进度条' code={codeSpinnerProgress}>
+    <DemoCard title={m.gallery_demo_spinner_progress()} description={m.gallery_demo_loading_indicators_and_progress()} code={codeSpinnerProgress}>
       <div class='space-y-6'>
         <div>
-          <p class='text-sm font-medium mb-2'>Spinner 尺寸与变体</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_spinner_sizes_and_variants()}</p>
           <div class='flex items-center gap-6'>
             <Spinner size='xs' />
             <Spinner size='sm' variant='primary' />
@@ -609,7 +616,7 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Progress 基础</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_basic_progress()}</p>
           <div class='space-y-3'>
             <Progress value={20} max={100} variant='primary' size='sm' showLabel />
             <Progress value={50} max={100} variant='info' size='md' showLabel />
@@ -618,7 +625,7 @@
           </div>
         </div>
         <div>
-          <p class='text-sm font-medium mb-2'>Progress 条纹 + 动画</p>
+          <p class='text-sm font-medium mb-2'>{m.gallery_demo_striped_and_animated_progress()}</p>
           <div class='space-y-3'>
             <Progress value={60} max={100} variant='primary' striped showLabel />
             <Progress value={45} max={100} variant='secondary' striped animated showLabel />

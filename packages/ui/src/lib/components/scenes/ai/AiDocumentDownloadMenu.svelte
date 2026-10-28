@@ -251,10 +251,10 @@
     flex-shrink: 0;
     min-height: 2.35rem;
     padding: 0 0.9rem;
-    border: 1px solid oklch(var(--bc) / 0.1);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
     border-radius: 9999px;
-    background: color-mix(in srgb, white 82%, oklch(var(--b1)) 18%);
-    color: oklch(var(--bc) / 0.8);
+    background: color-mix(in srgb, var(--color-base-100) 82%, var(--color-base-100) 18%);
+    color: color-mix(in oklab, var(--color-base-content) 80%, transparent);
     transition:
       background-color 160ms ease,
       border-color 160ms ease,
@@ -266,14 +266,14 @@
   }
 
   .hai-ai-download-menu__trigger:hover {
-    color: oklch(var(--bc));
-    border-color: oklch(var(--bc) / 0.18);
-    background: color-mix(in srgb, white 68%, oklch(var(--b2)) 32%);
-    box-shadow: 0 14px 28px -24px oklch(var(--bc) / 0.44);
+    color: var(--color-base-content);
+    border-color: color-mix(in oklab, var(--color-base-content) 18%, transparent);
+    background: color-mix(in srgb, var(--color-base-100) 68%, var(--color-base-200) 32%);
+    box-shadow: 0 14px 28px -24px color-mix(in oklab, var(--color-base-content) 44%, transparent);
   }
 
   .hai-ai-download-menu__trigger:focus-visible {
-    outline: 2px solid oklch(var(--p) / 0.26);
+    outline: 2px solid color-mix(in oklab, var(--color-primary) 26%, transparent);
     outline-offset: 2px;
   }
 
@@ -315,13 +315,13 @@
     display: grid;
     gap: 0.22rem;
     padding: 0.55rem;
-    border: 1px solid color-mix(in srgb, oklch(var(--bc)) 9%, white 91%);
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 9%, var(--color-base-100) 91%);
     border-radius: 1.4rem;
-    background: #fff;
+    background: var(--color-base-100);
     box-shadow:
       0 28px 56px -30px rgb(15 23 42 / 0.28),
       0 16px 28px -18px rgb(15 23 42 / 0.16),
-      0 0 0 1px rgb(255 255 255 / 0.92) inset;
+      0 0 0 1px color-mix(in oklab, var(--color-base-content) 8%, transparent) inset;
     backdrop-filter: none;
     isolation: isolate;
   }
@@ -346,8 +346,8 @@
   }
 
   .hai-ai-download-menu__item:hover {
-    border-color: color-mix(in srgb, oklch(var(--bc)) 8%, white 92%);
-    background: color-mix(in srgb, oklch(var(--bc)) 4%, white 96%);
+    border-color: color-mix(in srgb, var(--color-base-content) 8%, var(--color-base-100) 92%);
+    background: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100) 96%);
     transform: translateX(1px);
   }
 
@@ -390,7 +390,7 @@
     min-width: 0;
     font-size: 0.98rem;
     font-weight: 600;
-    color: #28313d;
+    color: var(--color-base-content);
     white-space: nowrap;
   }
 
@@ -399,9 +399,9 @@
     min-width: 2.9rem;
     padding: 0.34rem 0.56rem;
     border-radius: 9999px;
-    background: color-mix(in srgb, #eef3ff 72%, white 28%);
-    border: 1px solid color-mix(in srgb, #c8d7ff 68%, white 32%);
-    color: #5371b9;
+    background: color-mix(in oklab, var(--color-primary) 8%, var(--color-base-100));
+    border: 1px solid color-mix(in oklab, var(--color-primary) 20%, var(--color-base-100));
+    color: var(--color-base-content);
     font-size: 0.72rem;
     font-weight: 700;
     line-height: 1;

@@ -8,6 +8,7 @@
 
 import type { RendererObject, Tokens } from 'marked'
 import { Marked } from 'marked'
+import { uiM } from '../../../messages.js'
 import { createEditorMarkdownExtensions } from './editor-markdown-extensions.js'
 import { highlightCode, isLanguageSupported } from './highlight.js'
 import {
@@ -34,7 +35,7 @@ export interface MarkdownParseOptions {
   showCopyButton?: boolean
   /** 是否将换行符转换为 <br>（默认 true，适合 AI 输出） */
   breaks?: boolean
-  /** 是否按安全白名单解析原始 HTML 标签（默认 false） */
+  /** 是否按安全白名单解析原始 HTML（默认 false）；img可保留1–99999正整数width/height以预留空间 */
   allowHtmlTags?: boolean
 }
 
@@ -90,7 +91,7 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
         ? `<span class="hai-md-code-lang">${escapeHtml(language)}</span>`
         : ''
       const copyBtn = options.showCopyButton
-        ? `<button type="button" class="hai-md-copy-btn" data-copy-code aria-label="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
+        ? `<button type="button" class="hai-md-copy-btn" data-copy-code aria-label="${escapeHtml(uiM('markdown_copy_code'))}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
         : ''
 
       return `<div class="hai-md-code-block">`

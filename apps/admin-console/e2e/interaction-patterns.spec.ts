@@ -8,6 +8,7 @@ test('列表示例的键盘、排序、分页、筛选和错误恢复可连续�
   await registerAndLogin(page, request, 'interaction')
   await page.goto('/admin/ui-gallery/compounds')
   await waitForHydration(page)
+  await expect(page.locator('.hai-toast-item')).toHaveCount(0)
   const demo = page.getByTestId('interaction-patterns')
   const ready = demo.getByRole('tab', { name: '正常', exact: true })
   await ready.focus()
@@ -48,6 +49,32 @@ test('列表示例的键盘、排序、分页、筛选和错误恢复可连续�
   await expect(demo.getByRole('table').locator('tbody tr')).toHaveCount(10)
   await demo.screenshot({ path: testInfo.outputPath('interaction-desktop.png'), animations: 'disabled' })
   expect(errors).toEqual([])
+})
+
+test('演示错误由用户触发，清除后恢复且初始不挤占操作提示', async ({ page, request }) => {
+  await registerAndLogin(page, request, 'demofeedback')
+  for (const scenario of [
+    { route: 'compounds', demos: [{ id: 'combobox-error-demo', text: '请选择一个框架' }, { id: 'datepicker-error-demo', text: '请选择有效日期' }] },
+    { route: 'primitives', demos: [{ id: 'input-error-demo', text: '请输入有效内容' }, { id: 'select-error-demo', text: '请选择一项' }] },
+    { route: 'scenes', demos: [{ id: 'password-error-demo', text: '密码长度不足 8 位' }] },
+  ]) {
+    await page.goto(`/admin/ui-gallery/${scenario.route}`)
+    await waitForHydration(page)
+    await expect(page.locator('.hai-toast-item')).toHaveCount(0)
+    for (const demo of scenario.demos) {
+      const trigger = page.getByTestId(demo.id)
+      await trigger.click()
+      await expect(trigger).toHaveText('清除校验提示')
+      await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText(demo.text)
+      await trigger.click()
+      await expect(trigger).toHaveText('显示校验提示')
+      await expect(page.locator('.hai-toast-item')).toHaveCount(0)
+    }
+  }
+  await expect(page.locator('.encrypted-input')).toHaveCount(0)
+  await page.getByTestId('encryption-unconfigured-demo').click()
+  await expect(page.locator('.encrypted-input')).toHaveCount(2)
+  await expect(page.locator('.hai-toast-item[data-variant=warning]')).toContainText('未配置加密功能')
 })
 
 test.describe('触摸、主题、语言和减少动态效果', () => {

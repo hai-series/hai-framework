@@ -54,7 +54,7 @@
     getMermaidHostRenderAction,
     isCurrentMermaidRenderToken,
   } from './mermaid-host-sync.js'
-  import { renderMermaidDiagram, stripMermaidSvgStyleElements } from './mermaid-render.js'
+  import { renderMermaidDiagram } from './mermaid-render.js'
 
   /**
    * 选区工具条在编辑器视口中的坐标和对齐方向。
@@ -1205,7 +1205,7 @@
       const entry: MermaidRenderCacheEntry = {
         signature: renderToken,
         status: 'ready',
-        html: stripMermaidSvgStyleElements(svg),
+        html: svg,
       }
       mermaidRenderCache.set(cacheKey, entry)
       applyCachedMermaidRender(host, entry)
@@ -3445,10 +3445,10 @@
   .hai-ai-doc-pane {
     --hai-ai-doc-selection-bg: color-mix(
       in srgb,
-      oklch(var(--p, 0.62 0.22 264)) 28%,
-      oklch(var(--b1, 1 0 0)) 72%
+      var(--color-primary, oklch(0.62 0.22 264)) 28%,
+      var(--color-base-100, oklch(1 0 0)) 72%
     );
-    --hai-ai-doc-selection-fg: oklch(var(--bc, 0.22 0 0));
+    --hai-ai-doc-selection-fg: var(--color-base-content, oklch(0.22 0 0));
     display: flex;
     width: 100%;
     min-width: 0;
@@ -3457,15 +3457,15 @@
     container-type: inline-size;
     container-name: ai-doc-editor;
     flex-direction: column;
-    border: 1px solid oklch(var(--bc) / 0.08);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
     border-radius: 1.5rem;
     background: linear-gradient(
       180deg,
-      oklch(var(--b1)) 0%,
-      oklch(var(--b1) / 0.98) 100%
+      var(--color-base-100) 0%,
+      color-mix(in oklab, var(--color-base-100) 98%, transparent) 100%
     );
     overflow: hidden;
-    box-shadow: 0 14px 40px oklch(var(--bc) / 0.06);
+    box-shadow: 0 14px 40px color-mix(in oklab, var(--color-base-content) 6%, transparent);
   }
 
   .hai-ai-doc-shell {
@@ -3491,7 +3491,7 @@
 
   .hai-ai-doc-meta-bar {
     padding: 0.75rem 0;
-    border-bottom: 1px solid oklch(var(--bc) / 0.08);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
     justify-content: space-between;
   }
 
@@ -3516,7 +3516,7 @@
   .hai-ai-doc-toolbar-pill,
   :global(.hai-ai-doc-toolbar-pill),
   .hai-ai-doc-toolbar-action {
-    color: oklch(var(--bc));
+    color: var(--color-base-content);
     cursor: pointer;
     flex-shrink: 0;
   }
@@ -3529,8 +3529,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: oklch(var(--b1));
-    border: 1px solid oklch(var(--bc) / 0.1);
+    background: var(--color-base-100);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
     transition:
       border-color 0.15s ease,
       background-color 0.15s ease,
@@ -3552,8 +3552,8 @@
     gap: 0.58rem;
     padding: 0 0.98rem;
     border-radius: 9999px;
-    border: 1px solid color-mix(in srgb, oklch(var(--bc)) 8%, white 92%);
-    background: color-mix(in srgb, white 88%, oklch(var(--b1)) 12%);
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, var(--color-base-100) 92%);
+    background: color-mix(in srgb, var(--color-base-100) 88%, var(--color-base-100) 12%);
     transition:
       border-color 0.15s ease,
       background-color 0.15s ease,
@@ -3592,9 +3592,9 @@
   .hai-ai-doc-toolbar-close:not(:disabled):hover,
   .hai-ai-doc-version-toggle:hover,
   .hai-ai-doc-outline-open:hover {
-    border-color: oklch(var(--bc) / 0.16);
-    background: color-mix(in srgb, white 70%, oklch(var(--b2)) 30%);
-    color: oklch(var(--bc));
+    border-color: color-mix(in oklab, var(--color-base-content) 16%, transparent);
+    background: color-mix(in srgb, var(--color-base-100) 70%, var(--color-base-200) 30%);
+    color: var(--color-base-content);
   }
 
   .hai-ai-doc-toolbar-icon:not(:disabled):hover,
@@ -3603,7 +3603,7 @@
   :global(.hai-ai-doc-toolbar-pill:not(:disabled):hover),
   .hai-ai-doc-toolbar-close:not(:disabled):hover {
     transform: translateY(-1px);
-    box-shadow: 0 12px 28px -22px oklch(var(--bc) / 0.36);
+    box-shadow: 0 12px 28px -22px color-mix(in oklab, var(--color-base-content) 36%, transparent);
   }
 
   .hai-ai-doc-toolbar-icon:disabled,
@@ -3612,9 +3612,9 @@
   :global(.hai-ai-doc-toolbar-pill:disabled),
   .hai-ai-doc-toolbar-close:disabled {
     opacity: 0.72;
-    color: oklch(var(--bc) / 0.36);
-    border-color: oklch(var(--bc) / 0.12);
-    background: oklch(var(--b2) / 0.58);
+    color: color-mix(in oklab, var(--color-base-content) 36%, transparent);
+    border-color: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+    background: color-mix(in oklab, var(--color-base-200) 58%, transparent);
     cursor: not-allowed;
     box-shadow: none;
   }
@@ -3632,10 +3632,10 @@
 
   .hai-ai-doc-toolbar-action,
   .hai-ai-doc-version-toggle {
-    border: 1px solid oklch(var(--bc) / 0.08);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
     border-radius: 9999px;
     padding: 0.58rem 0.92rem;
-    background: color-mix(in srgb, oklch(var(--b1)) 76%, white 24%);
+    background: color-mix(in srgb, var(--color-base-100) 76%, var(--color-base-100) 24%);
     transition:
       border-color 0.15s ease,
       background-color 0.15s ease,
@@ -3644,15 +3644,15 @@
   }
 
   .hai-ai-doc-toolbar-pill--success {
-    color: oklch(var(--su, 0.7 0.15 160));
-    border-color: oklch(var(--su, 0.7 0.15 160) / 0.18);
-    background: oklch(var(--su, 0.7 0.15 160) / 0.08);
+    color: var(--color-success, oklch(0.7 0.15 160));
+    border-color: color-mix(in oklab, var(--color-success, oklch(0.7 0.15 160)) 18%, transparent);
+    background: color-mix(in oklab, var(--color-success, oklch(0.7 0.15 160)) 8%, transparent);
   }
 
   .hai-ai-doc-toolbar-divider {
     width: 1px;
     height: 1.4rem;
-    background: oklch(var(--bc) / 0.12);
+    background: color-mix(in oklab, var(--color-base-content) 12%, transparent);
   }
 
   .hai-ai-doc-title-block {
@@ -3689,10 +3689,10 @@
     position: relative;
     z-index: 0;
     padding: 0.5rem 0.625rem 1.25rem 1rem;
-    border-right: 1px solid oklch(var(--bc) / 0.08);
+    border-right: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
     background: linear-gradient(
       180deg,
-      oklch(var(--b2) / 0.42),
+      color-mix(in oklab, var(--color-base-200) 42%, transparent),
       transparent 100%
     );
   }
@@ -3707,7 +3707,7 @@
 
   .hai-ai-doc-outline-head strong {
     font-size: 0.94rem;
-    color: oklch(var(--bc) / 0.84);
+    color: color-mix(in oklab, var(--color-base-content) 84%, transparent);
   }
 
   .hai-ai-doc-outline-toggle,
@@ -3717,11 +3717,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid oklch(var(--bc) / 0.1);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
     border-radius: 1rem;
-    color: oklch(var(--bc) / 0.78);
-    background: #fff;
-    box-shadow: 0 12px 24px -22px oklch(var(--bc) / 0.28);
+    color: color-mix(in oklab, var(--color-base-content) 78%, transparent);
+    background: var(--color-base-100);
+    box-shadow: 0 12px 24px -22px color-mix(in oklab, var(--color-base-content) 28%, transparent);
     transition:
       border-color 0.15s ease,
       background-color 0.15s ease,
@@ -3750,7 +3750,7 @@
   .hai-ai-doc-outline-item {
     width: 100%;
     text-align: left;
-    color: oklch(var(--bc) / 0.68);
+    color: color-mix(in oklab, var(--color-base-content) 68%, transparent);
     line-height: 1.5;
     padding-top: 0.3rem;
     padding-right: 0.25rem;
@@ -3763,20 +3763,20 @@
   }
 
   .hai-ai-doc-outline-item:hover {
-    background: oklch(var(--bc) / 0.05);
+    background: color-mix(in oklab, var(--color-base-content) 5%, transparent);
     color: inherit;
   }
 
   .hai-ai-doc-outline-item.active {
-    color: oklch(var(--p));
+    color: var(--color-primary);
     font-weight: 700;
-    background: oklch(var(--p) / 0.12);
+    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
   }
 
   .hai-ai-doc-outline-empty {
     margin: 0;
     padding: 0.25rem 0.25rem 0;
-    color: oklch(var(--bc) / 0.58);
+    color: color-mix(in oklab, var(--color-base-content) 58%, transparent);
     font-size: 0.875rem;
   }
 
@@ -3844,8 +3844,8 @@
     gap: 0.18rem;
     padding: 0.22rem;
     border-radius: 9999px;
-    background: color-mix(in srgb, oklch(var(--b1, 1 0 0)) 94%, white 6%);
-    border: 1px solid color-mix(in srgb, oklch(var(--bc, 0.22 0 0)) 12%, white 88%);
+    background: color-mix(in srgb, var(--color-base-100, oklch(1 0 0)) 94%, var(--color-base-100) 6%);
+    border: 1px solid color-mix(in srgb, var(--color-base-content, oklch(0.22 0 0)) 12%, var(--color-base-100) 88%);
     box-shadow:
       0 20px 36px -26px rgb(15 23 42 / 0.26),
       0 10px 18px -16px rgb(15 23 42 / 0.18);
@@ -3864,7 +3864,7 @@
     border: none;
     border-radius: 9999px;
     background: transparent;
-    color: oklch(var(--bc) / 0.76);
+    color: color-mix(in oklab, var(--color-base-content) 76%, transparent);
     cursor: pointer;
     transition:
       background-color 0.14s ease,
@@ -3873,8 +3873,8 @@
   }
 
   .hai-ai-doc-link-hover-btn:hover {
-    background: oklch(var(--bc) / 0.06);
-    color: oklch(var(--bc));
+    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+    color: var(--color-base-content);
     transform: translateY(-1px);
   }
 
@@ -3896,9 +3896,9 @@
     padding: 0.38rem;
     border-radius: 1.2rem;
     background-color: rgb(255 255 255 / 0.96);
-    background: color-mix(in srgb, oklch(var(--b1, 1 0 0)) 94%, white 6%);
+    background: color-mix(in srgb, var(--color-base-100, oklch(1 0 0)) 94%, var(--color-base-100) 6%);
     border: 1px solid rgb(148 163 184 / 0.34);
-    border-color: color-mix(in srgb, oklch(var(--bc, 0.22 0 0)) 16%, white 84%);
+    border-color: color-mix(in srgb, var(--color-base-content, oklch(0.22 0 0)) 16%, var(--color-base-100) 84%);
     box-shadow:
       0 30px 60px -34px rgb(15 23 42 / 0.28),
       0 14px 26px -18px rgb(15 23 42 / 0.16),
@@ -3927,9 +3927,9 @@
     gap: 0.48rem;
     flex-shrink: 0;
     padding: 0 0.88rem;
-    border: 1px solid oklch(var(--p) / 0.16);
-    background: oklch(var(--p) / 0.1);
-    color: oklch(var(--bc) / 0.92);
+    border: 1px solid color-mix(in oklab, var(--color-primary) 16%, transparent);
+    background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+    color: color-mix(in oklab, var(--color-base-content) 92%, transparent);
     font-weight: 700;
     cursor: pointer;
   }
@@ -3941,9 +3941,9 @@
   }
 
   .hai-ai-doc-selection-chip--active {
-    border-color: oklch(var(--p) / 0.28);
-    background: oklch(var(--p) / 0.16);
-    color: oklch(var(--bc));
+    border-color: color-mix(in oklab, var(--color-primary) 28%, transparent);
+    background: color-mix(in oklab, var(--color-primary) 16%, transparent);
+    color: var(--color-base-content);
   }
 
   .hai-ai-doc-selection-chip:not(:disabled):hover,
@@ -3968,7 +3968,7 @@
     padding: 0;
     border: 1px solid transparent;
     background: transparent;
-    color: oklch(var(--bc) / 0.72);
+    color: color-mix(in oklab, var(--color-base-content) 72%, transparent);
     cursor: pointer;
   }
 
@@ -3987,22 +3987,22 @@
     padding: 0 0.66rem;
     border: 1px solid transparent;
     background: transparent;
-    color: oklch(var(--bc) / 0.78);
+    color: color-mix(in oklab, var(--color-base-content) 78%, transparent);
     cursor: pointer;
   }
 
   .hai-ai-doc-selection-btn:hover,
   .hai-ai-doc-selection-trigger:hover {
-    border-color: oklch(var(--bc) / 0.1);
-    background: oklch(var(--bc) / 0.045);
-    color: oklch(var(--bc));
+    border-color: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+    background: color-mix(in oklab, var(--color-base-content) 4.5%, transparent);
+    color: var(--color-base-content);
   }
 
   .hai-ai-doc-selection-btn--active,
   .hai-ai-doc-selection-trigger--active {
-    border-color: oklch(var(--p) / 0.22);
-    background: oklch(var(--p) / 0.12);
-    color: oklch(var(--bc));
+    border-color: color-mix(in oklab, var(--color-primary) 22%, transparent);
+    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+    color: var(--color-base-content);
   }
 
   .hai-ai-doc-selection-btn svg {
@@ -4032,7 +4032,7 @@
     width: 1px;
     height: 1.45rem;
     margin: 0 0.2rem;
-    background: oklch(var(--bc) / 0.12);
+    background: color-mix(in oklab, var(--color-base-content) 12%, transparent);
     flex-shrink: 0;
   }
 
@@ -4052,8 +4052,8 @@
     border-radius: 9999px;
     background: color-mix(
       in srgb,
-      var(--hai-ai-doc-current-color, oklch(var(--wa, 0.9 0.14 90))) 22%,
-      white 78%
+      var(--hai-ai-doc-current-color, var(--color-warning, oklch(0.9 0.14 90))) 22%,
+      var(--color-base-100) 78%
     );
     z-index: -1;
   }
@@ -4070,9 +4070,9 @@
     padding: 0.42rem;
     border-radius: 1rem;
     background-color: rgb(255 255 255 / 0.96);
-    background: color-mix(in srgb, oklch(var(--b1, 1 0 0)) 94%, white 6%);
+    background: color-mix(in srgb, var(--color-base-100, oklch(1 0 0)) 94%, var(--color-base-100) 6%);
     border: 1px solid rgb(148 163 184 / 0.3);
-    border-color: color-mix(in srgb, oklch(var(--bc, 0.22 0 0)) 14%, white 86%);
+    border-color: color-mix(in srgb, var(--color-base-content, oklch(0.22 0 0)) 14%, var(--color-base-100) 86%);
     box-shadow:
       0 24px 40px -28px rgb(15 23 42 / 0.25),
       0 10px 20px -16px rgb(15 23 42 / 0.14);
@@ -4124,9 +4124,9 @@
     width: 100%;
     padding: 0 0.72rem;
     border-radius: 0.8rem;
-    border: 1px solid oklch(var(--bc) / 0.14);
-    background: color-mix(in srgb, oklch(var(--b1)) 92%, white 8%);
-    color: oklch(var(--bc) / 0.86);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 14%, transparent);
+    background: color-mix(in srgb, var(--color-base-100) 92%, var(--color-base-100) 8%);
+    color: color-mix(in oklab, var(--color-base-content) 86%, transparent);
     font-size: 0.82rem;
     line-height: 1;
     cursor: pointer;
@@ -4139,17 +4139,17 @@
 
   .hai-ai-doc-selection-menu-btn--active,
   .hai-ai-doc-selection-panel-btn--primary {
-    border-color: oklch(var(--p) / 0.28);
-    background: oklch(var(--p) / 0.12);
-    color: oklch(var(--bc));
+    border-color: color-mix(in oklab, var(--color-primary) 28%, transparent);
+    background: color-mix(in oklab, var(--color-primary) 12%, transparent);
+    color: var(--color-base-content);
   }
 
   .hai-ai-doc-selection-menu-btn:hover,
   .hai-ai-doc-selection-panel-btn:hover,
   .hai-ai-doc-rewrite-menu-btn:hover:not(:disabled) {
-    border-color: oklch(var(--bc) / 0.22);
-    background: color-mix(in srgb, oklch(var(--b2)) 68%, white 32%);
-    color: oklch(var(--bc));
+    border-color: color-mix(in oklab, var(--color-base-content) 22%, transparent);
+    background: color-mix(in srgb, var(--color-base-200) 68%, var(--color-base-100) 32%);
+    color: var(--color-base-content);
     transform: translateY(-1px);
   }
 
@@ -4161,12 +4161,12 @@
 
   .hai-ai-doc-selection-menu-short {
     min-width: 2rem;
-    color: oklch(var(--p) / 0.92);
+    color: color-mix(in oklab, var(--color-primary) 92%, transparent);
     font-weight: 700;
   }
 
   .hai-ai-doc-selection-menu-check {
-    color: oklch(var(--p) / 0.88);
+    color: color-mix(in oklab, var(--color-primary) 88%, transparent);
     font-weight: 700;
   }
 
@@ -4175,16 +4175,16 @@
     min-height: 2.25rem;
     padding: 0 0.78rem;
     border-radius: 0.85rem;
-    border: 1px solid oklch(var(--bc) / 0.16);
-    background: color-mix(in srgb, oklch(var(--b1)) 94%, white 6%);
-    color: oklch(var(--bc));
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 16%, transparent);
+    background: color-mix(in srgb, var(--color-base-100) 94%, var(--color-base-100) 6%);
+    color: var(--color-base-content);
     font-size: 0.84rem;
     outline: none;
   }
 
   .hai-ai-doc-selection-input:focus {
-    border-color: oklch(var(--p) / 0.34);
-    box-shadow: 0 0 0 3px oklch(var(--p) / 0.12);
+    border-color: color-mix(in oklab, var(--color-primary) 34%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 12%, transparent);
   }
 
   .hai-ai-doc-selection-panel-actions {
@@ -4210,7 +4210,7 @@
   .hai-ai-doc-color-group-title {
     font-size: 0.78rem;
     font-weight: 600;
-    color: oklch(var(--bc) / 0.68);
+    color: color-mix(in oklab, var(--color-base-content) 68%, transparent);
   }
 
   .hai-ai-doc-color-grid {
@@ -4227,8 +4227,8 @@
     justify-content: center;
     padding: 0.18rem;
     border-radius: 0.7rem;
-    border: 1px solid oklch(var(--bc) / 0.12);
-    background: color-mix(in srgb, oklch(var(--b1)) 92%, white 8%);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+    background: color-mix(in srgb, var(--color-base-100) 92%, var(--color-base-100) 8%);
     cursor: pointer;
     transition:
       transform 0.14s ease,
@@ -4238,12 +4238,12 @@
 
   .hai-ai-doc-color-swatch:hover {
     transform: translateY(-1px);
-    border-color: oklch(var(--bc) / 0.2);
+    border-color: color-mix(in oklab, var(--color-base-content) 20%, transparent);
   }
 
   .hai-ai-doc-color-swatch--active {
-    border-color: oklch(var(--p) / 0.34);
-    box-shadow: 0 0 0 3px oklch(var(--p) / 0.12);
+    border-color: color-mix(in oklab, var(--color-primary) 34%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 12%, transparent);
   }
 
   .hai-ai-doc-color-swatch span {
@@ -4255,16 +4255,16 @@
 
   .hai-ai-doc-color-swatch[data-empty='true'] span {
     position: relative;
-    border-color: oklch(var(--bc) / 0.18);
+    border-color: color-mix(in oklab, var(--color-base-content) 18%, transparent);
     background:
       linear-gradient(
         135deg,
         transparent calc(50% - 0.75px),
-        oklch(var(--bc) / 0.34) calc(50% - 0.75px),
-        oklch(var(--bc) / 0.34) calc(50% + 0.75px),
+        color-mix(in oklab, var(--color-base-content) 34%, transparent) calc(50% - 0.75px),
+        color-mix(in oklab, var(--color-base-content) 34%, transparent) calc(50% + 0.75px),
         transparent calc(50% + 0.75px)
       ),
-      color-mix(in srgb, oklch(var(--b1)) 96%, white 4%);
+      color-mix(in srgb, var(--color-base-100) 96%, var(--color-base-100) 4%);
   }
 
   .hai-ai-doc-rewrite-menu-btn {
@@ -4327,14 +4327,14 @@
     margin-top: 1.6em;
     margin-bottom: 0.75em;
     letter-spacing: -0.02em;
-    color: oklch(var(--bc));
+    color: var(--color-base-content);
     scroll-margin-top: 1rem;
   }
 
   .hai-markdown :global(h1) {
     font-size: 2.2em;
     padding-bottom: 0.45em;
-    border-bottom: 1px solid oklch(var(--bc) / 0.12);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   }
 
   .hai-markdown :global(h2) {
@@ -4355,7 +4355,7 @@
 
   .hai-markdown :global(h6) {
     font-size: 0.88em;
-    color: oklch(var(--bc) / 0.7);
+    color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
   }
 
   .hai-markdown :global(:first-child) {
@@ -4372,7 +4372,7 @@
   }
 
   .hai-markdown :global(a) {
-    color: oklch(var(--p));
+    color: var(--color-primary);
     text-decoration: none;
     font-weight: 500;
   }
@@ -4395,7 +4395,7 @@
 
   .hai-markdown :global(del) {
     text-decoration: line-through;
-    color: oklch(var(--bc) / 0.55);
+    color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
   }
 
   .hai-markdown :global(u) {
@@ -4406,7 +4406,7 @@
   .hai-markdown :global(mark) {
     padding: 0 0.12em;
     border-radius: 0.25rem;
-    background: oklch(var(--wa, 0.9 0.14 90) / 0.34);
+    background: color-mix(in oklab, var(--color-warning, oklch(0.9 0.14 90)) 34%, transparent);
     color: inherit;
   }
 
@@ -4422,7 +4422,7 @@
     font-family:
       ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
       'Liberation Mono', monospace;
-    background: oklch(var(--bc) / 0.08);
+    background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
     border-radius: 0.375rem;
     word-break: break-word;
   }
@@ -4432,9 +4432,9 @@
     margin: 1em 0;
     border-radius: 0.95rem;
     overflow: hidden;
-    background: oklch(var(--n));
-    color: oklch(var(--nc));
-    box-shadow: 0 10px 26px oklch(var(--bc) / 0.08);
+    background: var(--color-neutral);
+    color: var(--color-neutral-content);
+    box-shadow: 0 10px 26px color-mix(in oklab, var(--color-base-content) 8%, transparent);
   }
 
   .hai-markdown :global(.hai-md-code-header) {
@@ -4445,8 +4445,8 @@
     padding: 0.65rem 1rem;
     min-height: 2.5rem;
     line-height: 1.2;
-    background: oklch(var(--n) / 0.94);
-    border-bottom: 1px solid oklch(var(--nc) / 0.1);
+    background: color-mix(in oklab, var(--color-neutral) 94%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-neutral-content) 10%, transparent);
   }
 
   .hai-markdown :global(.hai-md-code-header-main) {
@@ -4468,7 +4468,7 @@
     line-height: 1;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: oklch(var(--nc) / 0.6);
+    color: color-mix(in oklab, var(--color-neutral-content) 60%, transparent);
     user-select: none;
   }
 
@@ -4478,8 +4478,8 @@
     gap: 0.16rem;
     padding: 0.15rem;
     border-radius: 9999px;
-    border: 1px solid oklch(var(--nc) / 0.16);
-    background: oklch(var(--nc) / 0.08);
+    border: 1px solid color-mix(in oklab, var(--color-neutral-content) 16%, transparent);
+    background: color-mix(in oklab, var(--color-neutral-content) 8%, transparent);
     flex-shrink: 0;
   }
 
@@ -4489,7 +4489,7 @@
     border: none;
     border-radius: 9999px;
     background: transparent;
-    color: oklch(var(--nc) / 0.72);
+    color: color-mix(in oklab, var(--color-neutral-content) 72%, transparent);
     font-size: 0.86rem;
     font-weight: 600;
     line-height: 1;
@@ -4500,14 +4500,14 @@
   }
 
   .hai-markdown :global(.hai-md-code-view-btn[aria-pressed='true']) {
-    background: oklch(var(--nc) / 0.2);
-    color: oklch(var(--nc));
+    background: color-mix(in oklab, var(--color-neutral-content) 20%, transparent);
+    color: var(--color-neutral-content);
   }
 
   .hai-markdown :global(.hai-md-code-preview-hint) {
     font-size: 0.75rem;
     line-height: 1;
-    color: oklch(var(--nc) / 0.48);
+    color: color-mix(in oklab, var(--color-neutral-content) 48%, transparent);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4526,18 +4526,18 @@
     border: none;
     border-radius: 0.45rem;
     background: transparent;
-    color: oklch(var(--nc) / 0.55);
+    color: color-mix(in oklab, var(--color-neutral-content) 55%, transparent);
     cursor: pointer;
     transition: all 0.15s ease;
   }
 
   .hai-markdown :global(.hai-md-code-action:hover) {
-    background: oklch(var(--nc) / 0.1);
-    color: oklch(var(--nc) / 0.92);
+    background: color-mix(in oklab, var(--color-neutral-content) 10%, transparent);
+    color: color-mix(in oklab, var(--color-neutral-content) 92%, transparent);
   }
 
   .hai-markdown :global(.hai-md-copy-btn.hai-md-copied) {
-    color: oklch(var(--su, 0.7 0.15 160));
+    color: var(--color-success, oklch(0.7 0.15 160));
   }
 
   .hai-markdown :global(.hai-md-code-block pre) {
@@ -4556,22 +4556,22 @@
     tab-size: 2;
 
     /* Shiki CSS Variables 主题（由 highlight.ts 的 createCssVariablesTheme 引用） */
-    --hai-hl-foreground: oklch(var(--nc));
+    --hai-hl-foreground: var(--color-neutral-content);
     --hai-hl-background: transparent;
     --hai-hl-token-keyword: oklch(0.7 0.15 280);
     --hai-hl-token-string: oklch(0.75 0.12 150);
     --hai-hl-token-string-expression: oklch(0.75 0.12 150);
     --hai-hl-token-constant: oklch(0.78 0.12 70);
-    --hai-hl-token-comment: oklch(var(--nc) / 0.45);
+    --hai-hl-token-comment: color-mix(in oklab, var(--color-neutral-content) 45%, transparent);
     --hai-hl-token-function: oklch(0.72 0.14 220);
     --hai-hl-token-parameter: oklch(0.72 0.12 35);
-    --hai-hl-token-punctuation: oklch(var(--nc) / 0.7);
+    --hai-hl-token-punctuation: color-mix(in oklab, var(--color-neutral-content) 70%, transparent);
     --hai-hl-token-link: oklch(0.7 0.15 280);
   }
 
   .hai-markdown :global(.hai-md-code-preview-slot) {
-    border-top: 1px solid oklch(var(--nc) / 0.08);
-    background: oklch(var(--b1));
+    border-top: 1px solid color-mix(in oklab, var(--color-neutral-content) 8%, transparent);
+    background: var(--color-base-100);
   }
 
   .hai-markdown :global(.hai-md-code-block[data-code-view='code'] .hai-md-code-preview-slot) {
@@ -4631,8 +4631,8 @@
   }
 
   .hai-markdown-code-only :global(.hai-md-code-preview-slot) {
-    background: oklch(var(--n));
-    color: oklch(var(--nc));
+    background: var(--color-neutral);
+    color: var(--color-neutral-content);
   }
 
   .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview']) {
@@ -4647,10 +4647,10 @@
   .hai-markdown :global(blockquote) {
     margin: 1em 0;
     padding: 0.65em 1.1em;
-    border-left: 4px solid oklch(var(--p) / 0.4);
-    background: oklch(var(--bc) / 0.03);
+    border-left: 4px solid color-mix(in oklab, var(--color-primary) 40%, transparent);
+    background: color-mix(in oklab, var(--color-base-content) 3%, transparent);
     border-radius: 0 0.5rem 0.5rem 0;
-    color: oklch(var(--bc) / 0.85);
+    color: color-mix(in oklab, var(--color-base-content) 85%, transparent);
   }
 
   .hai-markdown :global(blockquote p:last-child) {
@@ -4697,14 +4697,14 @@
   .hai-markdown :global(li > input[type='checkbox']) {
     margin-right: 0.5em;
     vertical-align: middle;
-    accent-color: oklch(var(--p));
+    accent-color: var(--color-primary);
   }
 
   .hai-markdown :global(.hai-md-table-wrap) {
     margin: 1em 0;
     overflow-x: auto;
     border-radius: 0.5rem;
-    border: 1px solid oklch(var(--bc) / 0.1);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   .hai-markdown :global(table) {
@@ -4714,19 +4714,19 @@
   }
 
   .hai-markdown :global(thead) {
-    background: oklch(var(--bc) / 0.04);
+    background: color-mix(in oklab, var(--color-base-content) 4%, transparent);
   }
 
   .hai-markdown :global(th) {
     font-weight: 600;
     text-align: left;
     padding: 0.75rem 1rem;
-    border-bottom: 2px solid oklch(var(--bc) / 0.12);
+    border-bottom: 2px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   }
 
   .hai-markdown :global(td) {
     padding: 0.625rem 1rem;
-    border-bottom: 1px solid oklch(var(--bc) / 0.06);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-base-content) 6%, transparent);
   }
 
   .hai-markdown :global(tr:last-child td) {
@@ -4734,14 +4734,14 @@
   }
 
   .hai-markdown :global(tbody tr:hover) {
-    background: oklch(var(--bc) / 0.02);
+    background: color-mix(in oklab, var(--color-base-content) 2%, transparent);
   }
 
   .hai-markdown :global(hr) {
     height: 0;
     margin: 2em 0;
     border: 0;
-    border-top: 1px solid oklch(var(--bc) / 0.12);
+    border-top: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   }
 
   .hai-markdown :global(.hai-md-img) {
@@ -4755,17 +4755,17 @@
     padding: 0.15em 0.4em;
     font-size: 0.85em;
     font-family: ui-monospace, SFMono-Regular, monospace;
-    background: oklch(var(--bc) / 0.06);
-    border: 1px solid oklch(var(--bc) / 0.15);
+    background: color-mix(in oklab, var(--color-base-content) 6%, transparent);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 15%, transparent);
     border-radius: 0.25rem;
-    box-shadow: inset 0 -1px 0 oklch(var(--bc) / 0.1);
+    box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   :global(.hai-md-preview-card) {
     margin: 0;
     padding: 1rem;
-    background: oklch(var(--b1));
-    color: oklch(var(--bc));
+    background: var(--color-base-100);
+    color: var(--color-base-content);
   }
 
   /* mermaid 图表：阅读态自动渲染，code 预览态复用同一容器。 */
@@ -4776,8 +4776,8 @@
     margin: 1.25em 0;
     padding: 1rem;
     border-radius: 0.95rem;
-    border: 1px solid oklch(var(--bc) / 0.08);
-    background: oklch(var(--b1));
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 8%, transparent);
+    background: var(--color-base-100);
     overflow-x: auto;
   }
 
@@ -4790,8 +4790,8 @@
     width: 100%;
     padding: 0.75rem 1rem;
     border-radius: 0.6rem;
-    background: oklch(var(--er, 0.6 0.2 25) / 0.08);
-    color: oklch(var(--er, 0.6 0.2 25));
+    background: color-mix(in oklab, var(--color-error, oklch(0.6 0.2 25)) 8%, transparent);
+    color: var(--color-error, oklch(0.6 0.2 25));
     font-size: 0.85rem;
     line-height: 1.5;
     white-space: pre-wrap;
@@ -4816,8 +4816,8 @@
     flex: 1 1 auto;
     min-height: 0;
     padding: 0.95rem 1rem;
-    background: oklch(var(--n));
-    color: oklch(var(--nc));
+    background: var(--color-neutral);
+    color: var(--color-neutral-content);
   }
 
   .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-preview-head),
@@ -4830,13 +4830,13 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: oklch(var(--bc) / 0.7);
+    color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
   }
 
   :global(.hai-md-preview-desc) {
     margin: 0.5rem 0 0;
     font-size: 0.875rem;
-    color: oklch(var(--bc) / 0.7);
+    color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
   }
 
   :global(.hai-md-preview-empty) {
@@ -4851,7 +4851,7 @@
     font-size: 0.9rem;
     font-weight: 700;
     letter-spacing: 0.01em;
-    color: oklch(var(--bc) / 0.85);
+    color: color-mix(in oklab, var(--color-base-content) 85%, transparent);
   }
 
   :global(.hai-md-preview-empty-text) {
@@ -4859,15 +4859,15 @@
     font-size: 0.84rem;
     line-height: 1.58;
     white-space: pre-wrap;
-    color: oklch(var(--bc) / 0.74);
+    color: color-mix(in oklab, var(--color-base-content) 74%, transparent);
   }
 
   .hai-markdown-code-only :global(.hai-md-preview-empty-title) {
-    color: oklch(var(--nc) / 0.88);
+    color: color-mix(in oklab, var(--color-neutral-content) 88%, transparent);
   }
 
   .hai-markdown-code-only :global(.hai-md-preview-empty-text) {
-    color: oklch(var(--nc) / 0.72);
+    color: color-mix(in oklab, var(--color-neutral-content) 72%, transparent);
   }
 
   :global(.hai-md-preview-card pre) {
@@ -4875,12 +4875,12 @@
     padding: 0.85rem 1rem;
     overflow-x: auto;
     border-radius: 0.85rem;
-    background: oklch(var(--b2));
+    background: var(--color-base-200);
     font-size: 0.85rem;
   }
 
   :global(.hai-md-preview-card.hai-md-preview-error pre) {
-    color: oklch(var(--er));
+    color: var(--color-error);
   }
 
   :global(.hai-md-preview-frame) {
@@ -4888,7 +4888,7 @@
     width: 100%;
     min-height: 280px;
     margin-top: 0.85rem;
-    border: 1px solid oklch(var(--bc) / 0.1);
+    border: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
     border-radius: 1rem;
     background: white;
   }
@@ -4909,9 +4909,9 @@
     border-radius: 9999px;
     background: linear-gradient(
       90deg,
-      oklch(var(--p) / 0.15) 0%,
-      oklch(var(--p) / 0.5) 50%,
-      oklch(var(--p) / 0.15) 100%
+      color-mix(in oklab, var(--color-primary) 15%, transparent) 0%,
+      color-mix(in oklab, var(--color-primary) 50%, transparent) 50%,
+      color-mix(in oklab, var(--color-primary) 15%, transparent) 100%
     );
     background-size: 220px 100%;
     animation: hai-md-loading 1.2s linear infinite;
@@ -4946,11 +4946,11 @@
       max-width: 220px;
       z-index: 14;
       padding: 0.5rem 0.625rem 0.9rem 0.75rem;
-      border: 1px solid oklch(var(--bc) / 0.12);
+      border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
       border-radius: 0.95rem;
       background:
-        linear-gradient(180deg, oklch(var(--b2) / 0.84), oklch(var(--b1) / 0.92));
-      box-shadow: 0 20px 40px -28px oklch(var(--bc) / 0.35);
+        linear-gradient(180deg, color-mix(in oklab, var(--color-base-200) 84%, transparent), color-mix(in oklab, var(--color-base-100) 92%, transparent));
+      box-shadow: 0 20px 40px -28px color-mix(in oklab, var(--color-base-content) 35%, transparent);
       backdrop-filter: blur(8px);
     }
   }

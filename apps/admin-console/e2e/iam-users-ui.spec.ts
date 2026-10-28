@@ -151,12 +151,13 @@ test.describe('IAM Users UI', () => {
     expect(headerDividers[0]?.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
     expect(headerDividers.every(divider => JSON.stringify(divider) === JSON.stringify(headerDividers[0]))).toBe(true)
 
-    // 奇偶行必须保留不同底色，且固定操作格分别与同行数据格一致。
+    // CrudPage显式关闭斑马纹：数据行使用相同不透明底色，固定操作格始终与同行一致。
     await expect(firstRow).toBeVisible()
     await expect(secondRow).toBeVisible()
     const firstRowBackground = await firstDataCell.evaluate(cell => getComputedStyle(cell).backgroundColor)
     const secondRowBackground = await secondDataCell.evaluate(cell => getComputedStyle(cell).backgroundColor)
-    expect(secondRowBackground).not.toBe(firstRowBackground)
+    expect(firstRowBackground).not.toBe('rgba(0, 0, 0, 0)')
+    expect(secondRowBackground).toBe(firstRowBackground)
     await expect(firstActionCell).toHaveCSS('background-color', firstRowBackground)
     await expect(secondActionCell).toHaveCSS('background-color', secondRowBackground)
 

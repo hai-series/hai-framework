@@ -1248,11 +1248,11 @@
       - 组件库内部分场景仍可能提供旧版 `--b1/--bc/--p` 通道变量；
       - 这里统一抽象为 AiTableEditor 私有变量，确保在两套主题体系下都能稳定着色。
     */
-    --hai-ai-table-bg: var(--color-base-100, oklch(var(--b1, 1 0 0)));
-    --hai-ai-table-bg-soft: var(--color-base-200, oklch(var(--b2, 0.97 0 0)));
-    --hai-ai-table-fg: var(--color-base-content, oklch(var(--bc, 0.22 0 0)));
-    --hai-ai-table-primary: var(--color-primary, oklch(var(--p, 0.62 0.2 258)));
-    --hai-ai-table-error: var(--color-error, oklch(var(--er, 0.64 0.2 25)));
+    --hai-ai-table-bg: var(--color-base-100, var(--color-base-100, oklch(1 0 0)));
+    --hai-ai-table-bg-soft: var(--color-base-200, var(--color-base-200, oklch(0.97 0 0)));
+    --hai-ai-table-fg: var(--color-base-content, var(--color-base-content, oklch(0.22 0 0)));
+    --hai-ai-table-primary: var(--color-primary, var(--color-primary, oklch(0.62 0.2 258)));
+    --hai-ai-table-error: var(--color-error, var(--color-error, oklch(0.64 0.2 25)));
 
     display: flex;
     min-height: 0;
@@ -1263,7 +1263,7 @@
     background: linear-gradient(
       180deg,
       var(--hai-ai-table-bg) 0%,
-      color-mix(in srgb, var(--hai-ai-table-bg) 92%, white 8%) 100%
+      color-mix(in srgb, var(--hai-ai-table-bg) 92%, var(--color-base-100) 8%) 100%
     );
     overflow: hidden;
     box-shadow: 0 14px 40px color-mix(in srgb, var(--hai-ai-table-fg) 6%, transparent);
@@ -1276,7 +1276,7 @@
     gap: 1rem;
     padding: 1rem 1.25rem;
     border-bottom: 1px solid color-mix(in srgb, var(--hai-ai-table-fg) 8%, transparent);
-    background: color-mix(in srgb, var(--hai-ai-table-bg) 90%, white 10%);
+    background: color-mix(in srgb, var(--hai-ai-table-bg) 90%, var(--color-base-100) 10%);
   }
 
   .hai-ai-table-heading {
@@ -1500,7 +1500,7 @@
     outline: none;
     border-color: color-mix(in srgb, var(--hai-ai-table-primary) 58%, var(--hai-ai-table-bg) 42%);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--hai-ai-table-primary) 18%, transparent);
-    background: color-mix(in srgb, var(--hai-ai-table-bg) 88%, white 12%);
+    background: color-mix(in srgb, var(--hai-ai-table-bg) 88%, var(--color-base-100) 12%);
   }
 
   .hai-ai-table-cell-input:disabled {

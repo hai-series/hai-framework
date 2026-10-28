@@ -85,7 +85,7 @@
 <svelte:head>
   <title>{m.brand()} - {m.home_title()}</title>
   <meta name='description' content={m.meta_description()} />
-  <meta name='keywords' content='企业服务, 解决方案, 技术支持' />
+  <meta name='keywords' content={m.meta_keywords()} />
   <meta property='og:title' content={`${m.brand()} - ${m.home_title()}`} />
   <meta property='og:description' content={m.meta_description()} />
   <meta property='og:type' content='website' />
