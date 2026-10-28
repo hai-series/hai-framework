@@ -117,6 +117,8 @@ pnpm --filter admin-console preview
 
 ### ⚙️ 配置
 
+登录、首次改密、个人改密与敏感操作确认共用 `authErrorMessage`：凭据错误统一提示，当前密码复用与复杂度不足分别说明，未知异常不显示原文并保留追踪编号。密码按原始字符串校验，改密失败保留会话，成功后重新登录。真实加密与宽窄屏截图验收使用 `playwright.auth-errors.config.ts`。
+
 安全增强在 `_iam.yml` 中按业务选择：账号生命周期与临时到期、闲置账号扫描、密码长度/字符类别/期限、轻量 ALTCHA 挑战、失败计数窗口与锁定、独立初始凭据邀请、首次改密、用途绑定再认证、登录时段/IP，以及闲置/绝对会话期限、并发上限和重复登录策略。增强项可关闭；密码校验、拒绝访问和会话撤销在服务端执行。启用邀请后可从用户管理发送一次性设置密码通知，通知结果未知时先检查已创建账号，避免重复创建。
 
 敏感操作清单与 `reauthentication.operations` 对应，例如 `iam.users.create`、`iam.users.update`、`iam.users.delete`、`iam.users.invite`、`iam.roles.create`、`iam.roles.update`、`iam.roles.delete`、`iam.permissions.create`、`iam.permissions.delete`、`iam.apiKeys.create`、`iam.apiKeys.delete`、`iam.profile.update`、`iam.profile.avatar`、`business.settings.update`、`audit.backup`。界面按需弹出再认证框；凭据短期、单次且绑定当前会话与操作，不持久保存。

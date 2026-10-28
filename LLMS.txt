@@ -84,6 +84,8 @@ return result
 
 ## 任务导航
 
+认证提示由 UI 的公开 `authErrorMessage` 统一映射：凭据错误合并、未知异常隐藏、traceId 保留，首次改密/密码复用 034/会话上限提供操作指引；确认密码按原始字符串比较。详见 [IAM](packages/cli/templates/skills/hai-iam/SKILL.md) 与 [UI](packages/cli/templates/skills/hai-ui/SKILL.md)。
+
 | 任务 | 入口 |
 | --- | --- |
 | 仓库新增/审查模块 | [hai-module-create](.agents/skills/hai-module-create/SKILL.md) / [hai-module-review](.agents/skills/hai-module-review/SKILL.md) |

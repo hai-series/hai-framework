@@ -647,7 +647,7 @@ test('administrator and user complete account, avatar, preference, password and 
     await passwordInputs.nth(2).fill(password)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
-    await expect(userPage.getByTestId('error')).toContainText(/相同|must differ from|異なる/i)
+    await expect(userPage.getByTestId('error')).toContainText(/相同|different from|異なる/i)
     await passwordInputs.nth(1).fill(newPassword)
     await passwordInputs.nth(2).fill(newPassword)
     await userPage.getByTestId('password-form').getByRole('button', { name: /Change password/i }).click()

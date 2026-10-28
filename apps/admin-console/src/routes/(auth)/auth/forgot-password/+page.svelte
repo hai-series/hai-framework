@@ -11,6 +11,7 @@
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { authActions as actions } from '$lib/services/auth'
+  import { authErrorMessage } from '@h-ai/ui/i18n'
 
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -29,7 +30,7 @@
         success = true
       }
       else {
-        errors = { general: result.error?.message || m.common_error() }
+        errors = { general: authErrorMessage(result.error) }
       }
     }
     catch {

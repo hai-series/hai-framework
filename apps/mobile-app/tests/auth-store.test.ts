@@ -32,6 +32,24 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('auth store persistence failures', () => {
+  it.each(['login', 'register'] as const)('%s 使用安全认证提示，不显示原始字段或数据库错误', async (method) => {
+    const store = await import('../src/lib/stores/auth-store.svelte.js')
+    const action = mocks[method]
+    action.mockResolvedValueOnce({ success: false, error: { code: 'hai:iam:002', message: 'Private original-password detail', httpStatus: 401, traceId: 'mobile-auth' } })
+    const authenticate = () => method === 'login'
+      ? store.login({ identifier: 'alice', password: 'example' })
+      : store.register({ username: 'alice', password: 'example', confirmPassword: 'example' })
+    const credentials = await authenticate()
+    expect(credentials).toMatch(/用户名或密码不正确|Username or password is incorrect/)
+    expect(credentials).toContain('traceId: mobile-auth')
+    action.mockResolvedValueOnce({ success: false, error: { code: 'app:unknown', message: 'Private database detail', httpStatus: 500, traceId: 'mobile-internal' } })
+    const unknown = await authenticate()
+    expect(unknown).not.toContain('Private')
+    expect(unknown).toContain('traceId: mobile-internal')
+    expect(mocks.setTokens).not.toHaveBeenCalled()
+    expect(store.isAuthenticated()).toBe(false)
+  })
+
   it.each(['login', 'register'] as const)('%s 保存失败时不标记已认证并释放 loading', async (method) => {
     const store = await import('../src/lib/stores/auth-store.svelte.js')
     mocks.setTokens.mockRejectedValue(new Error('secure storage failed'))

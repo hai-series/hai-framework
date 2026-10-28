@@ -5,6 +5,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '$lib/services/profile-api'
   import { toast } from '@h-ai/ui'
+  import { authErrorMessage } from '@h-ai/ui/i18n'
 
   interface Props {
     data: PageData
@@ -196,7 +197,7 @@
     passwordLoading = true
     passwordErrors = {}
 
-    if (!formData.oldPassword?.trim()) {
+    if (!formData.oldPassword) {
       passwordErrors = { oldPassword: m.api_common_required_fields() }
       passwordLoading = false
       return
@@ -215,26 +216,19 @@
     }
 
     try {
-      const response = await changeProfilePassword({
+      const result = await changeProfilePassword({
         old_password: formData.oldPassword,
         new_password: formData.newPassword,
         confirm_password: formData.confirmPassword,
       })
 
-      const body = await response.json()
-      if (!response.ok || !body.success) {
-        const fields = body.error?.details?.fieldErrors ?? {}
-        passwordErrors = {
-          oldPassword: fields.old_password,
-          newPassword: fields.new_password,
-          confirmPassword: fields.confirm_password,
-          general: body.error?.message ?? m.common_error(),
-        }
+      if (!result.success) {
+        passwordErrors = { general: authErrorMessage(result.error) }
         return
       }
 
       toast.success(m.common_success())
-      if (body.data?.reloginRequired && typeof window !== 'undefined') {
+      if (result.data.reloginRequired && typeof window !== 'undefined') {
         window.setTimeout(() => {
           window.location.assign('/auth/login')
         }, 300)

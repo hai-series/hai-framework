@@ -410,6 +410,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 | `HaiIamError.USER_ALREADY_EXISTS`       | `hai:iam:006` | 用户已存在       |
 | `HaiIamError.PASSWORD_EXPIRED`          | `hai:iam:007` | 密码已过期       |
 | `HaiIamError.PASSWORD_POLICY_VIOLATION` | `hai:iam:008` | 密码不符合策略   |
+| `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED` | `hai:iam:034` | 新旧密码相同     |
 | `HaiIamError.OTP_INVALID`               | `hai:iam:009` | 验证码无效       |
 | `HaiIamError.NOT_INITIALIZED`           | `hai:iam:010` | 未初始化         |
 | `HaiIamError.OTP_RESEND_TOO_FAST`       | `hai:iam:011` | 发送过于频繁     |

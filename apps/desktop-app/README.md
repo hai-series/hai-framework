@@ -129,6 +129,8 @@ transport:
 
 #### 认证页面
 
+登录、注册及公开认证配置失败统一使用 `@h-ai/ui/i18n` 的 `authErrorMessage`；未知服务端或网络异常不显示原文，保留有效追踪编号。AuthPanel 的首次改密、密码复用和凭据错误提示与 fullstack 模板保持一致。
+
 协议支持配置中的 userAgreementMarkdown/privacyPolicyMarkdown 正文及 URL；同主题优先 Markdown，由安全渲染器在弹窗显示。
 
 认证方式、注册、重置、协议和品牌由服务端 config/_iam.yml 控制。SvelteKit 页面消费 iam.publicConfig；移动/桌面页面从 API 服务读取公开配置。选用 Reach 时，初始化成功后传入 iam.init({ ...settings, reach })，使用标准通知模板。多节点共享 DB 与 Redis。UI 复用 AuthPanel/LoginForm 和框架认证动作，应用只负责业务导航与用户状态。

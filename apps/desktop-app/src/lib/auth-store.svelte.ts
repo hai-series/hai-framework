@@ -6,6 +6,8 @@
  */
 
 import type { IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
+import { HaiErrorSchema } from '@h-ai/api-contract'
+import { authErrorMessage } from '@h-ai/ui/i18n'
 import { desktopApiClient } from './api.js'
 import { authMessage } from './auth-messages.js'
 
@@ -26,14 +28,6 @@ let loading = $state(false)
 let initialized = $state(false)
 let roles = $state<string[]>([])
 let permissions = $state<string[]>([])
-
-function resolveRequestErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message)
-    return error.message
-  if (typeof error === 'string' && error.trim())
-    return error
-  return fallback
-}
 
 function resolveHaiResultFailure(
   result: unknown,
@@ -56,13 +50,8 @@ function resolveHaiResultFailure(
   if (maybeResult.success !== false)
     return { success: false, message: fallback }
 
-  if (typeof maybeResult.error?.message === 'string' && maybeResult.error.message.trim())
-    return { success: false, message: maybeResult.error.message }
-
-  if (maybeResult.error?.code !== undefined)
-    return { success: false, message: String(maybeResult.error.code) }
-
-  return { success: false, message: fallback }
+  const error = HaiErrorSchema.safeParse(maybeResult.error)
+  return { success: false, message: error.success ? authErrorMessage(error.data) : fallback }
 }
 
 function isSuccessResult<TData>(result: unknown): result is { success: true, data: TData } {
@@ -149,8 +138,8 @@ export async function login(input: IamLoginInput): Promise<string | null> {
     setAccessScope(nextRoles, nextPermissions)
     return null
   }
-  catch (error) {
-    return resolveRequestErrorMessage(error, authMessage('auth_login_request_failed'))
+  catch {
+    return authMessage('auth_login_request_failed')
   }
   finally {
     loading = false
@@ -176,8 +165,8 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
     setAccessScope(nextRoles, nextPermissions)
     return null
   }
-  catch (error) {
-    return resolveRequestErrorMessage(error, authMessage('auth_register_request_failed'))
+  catch {
+    return authMessage('auth_register_request_failed')
   }
   finally {
     loading = false

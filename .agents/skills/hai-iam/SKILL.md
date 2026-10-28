@@ -40,6 +40,8 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 
 ## 按需参考
 
+认证凭据错误统一为“用户名或密码不正确”；当前密码复用使用 `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED`（034），复杂度不符仍为 008。UI 复用 `authErrorMessage`，隐藏未知原文并保留 traceId；本地确认不一致明确提示，不改写原始密码。首次改密失败不签发会话，已登录改密的凭据错误不作为会话过期处理。
+
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - §1 配置与初始化

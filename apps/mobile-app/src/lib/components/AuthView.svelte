@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
+  import { authErrorMessage } from '@h-ai/ui/i18n'
   import { onMount } from 'svelte'
   import { authActions } from '../services/auth.js'
   import { refreshCurrentUser } from '../stores/auth-store.svelte.js'
@@ -16,7 +17,7 @@
     if (result.success)
       config = result.data
     else
-      error = result.error.message
+      error = authErrorMessage(result.error)
   }
   onMount(() => {
     void loadConfig()

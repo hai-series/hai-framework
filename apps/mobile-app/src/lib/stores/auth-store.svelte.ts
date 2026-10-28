@@ -1,4 +1,6 @@
 import type { IamLoginInput, IamRegisterInput, IamUpdateCurrentUserInput } from '@h-ai/api-contract'
+import { HaiErrorSchema } from '@h-ai/api-contract'
+import { authErrorMessage } from '@h-ai/ui/i18n'
 import { mobileApiClient } from '../api.js'
 import * as m from '../paraglide/messages.js'
 
@@ -41,13 +43,8 @@ function resolveHaiResultFailure(
   if (maybeResult.success !== false)
     return { success: false, message: fallback }
 
-  if (typeof maybeResult.error?.message === 'string' && maybeResult.error.message.trim())
-    return { success: false, message: maybeResult.error.message }
-
-  if (maybeResult.error?.code !== undefined)
-    return { success: false, message: String(maybeResult.error.code) }
-
-  return { success: false, message: fallback }
+  const error = HaiErrorSchema.safeParse(maybeResult.error)
+  return { success: false, message: error.success ? authErrorMessage(error.data) : fallback }
 }
 
 function isSuccessResult<TData>(result: unknown): result is { success: true, data: TData } {

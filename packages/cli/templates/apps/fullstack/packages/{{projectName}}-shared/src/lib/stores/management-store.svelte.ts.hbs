@@ -5,7 +5,8 @@ import type { AdminAuditLog, AdminCreateUser, AdminInviteUser, AdminPermissionPo
 import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import type { HashRouter } from '../navigation/hash-router.svelte.js'
 import { HaiApiClientError } from '@h-ai/api-client'
-import { matchPermission } from '@h-ai/ui/components/scenes/iam/index'
+import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
+import { authErrorMessage, matchPermission } from '@h-ai/ui/components/scenes/iam/index'
 import { setGlobalLocale } from '@h-ai/ui/i18n'
 import { toast } from '@h-ai/ui/toast'
 import { SvelteDate } from 'svelte/reactivity'
@@ -399,14 +400,21 @@ export class ManagementStore {
 
   async changePassword(data: ChangePasswordFormData): Promise<void> {
     await this.mutate(async () => {
-      if (!data.oldPassword || data.newPassword !== data.confirmPassword) {
-        this.error = m.validation_failed()
+      if (!data.oldPassword) {
+        this.error = m.password_current_required()
+        return
+      }
+      if (!data.newPassword || data.newPassword !== data.confirmPassword) {
+        this.error = m.password_confirmation_mismatch()
         return
       }
       const oldPassword = data.oldPassword
       const result = await this.request(() => managementApi.iam.auth.changePassword({ oldPassword, newPassword: data.newPassword }))
-      if (!result?.success)
+      if (!result?.success) {
+        if (result)
+          this.error = authErrorMessage(result.error)
         return
+      }
       await managementApi.auth.clear()
       this.clearSession()
       toast.add({ 'message': m.password_changed(), 'variant': 'success', 'data-testid': 'notice' })
@@ -523,7 +531,7 @@ export class ManagementStore {
       if (!isCurrent())
         return undefined
       if (!result.success) {
-        if (result.error.httpStatus === 401 && this.user) {
+        if (result.error.httpStatus === 401 && this.user && (typeof result.error.code !== 'string' || !result.error.code.startsWith('hai:iam:') || IamSessionErrorCodeSchema.safeParse(result.error.code).success)) {
           this.expireSession()
         }
         else if (result.error.httpStatus === 403 && this.user) {

@@ -9,6 +9,7 @@
   import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
 {{#if features.iam}}
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
+  import { authErrorMessage } from '@h-ai/ui/i18n'
 {{/if}}
   import { onMount } from 'svelte'
 
@@ -63,7 +64,7 @@
 {{#if features.iam}}
       const config = await authActions.publicConfig()
       if (!config.success)
-        throw new Error(config.error.message)
+        throw new Error(authErrorMessage(config.error))
       authConfig = config.data
       if (!authConfig)
         throw new Error(m.boot_failed_title())

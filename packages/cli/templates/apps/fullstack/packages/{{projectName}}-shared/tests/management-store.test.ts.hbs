@@ -7,7 +7,7 @@ const api = vi.hoisted(() => ({
   initialize: vi.fn(),
   app: { info: vi.fn() },
   auth: { clear: vi.fn() },
-  iam: { auth: { logout: vi.fn(), currentUser: vi.fn(), reauthenticate: vi.fn() } },
+  iam: { auth: { logout: vi.fn(), currentUser: vi.fn(), reauthenticate: vi.fn(), changePassword: vi.fn() } },
   admin: { users: { list: vi.fn() }, audit: { list: vi.fn() } },
 }))
 vi.mock('../src/lib/api/api-client.js', () => ({
@@ -53,6 +53,39 @@ function createStore() {
 }
 
 describe('management session and request ownership', () => {
+  it('password validation explains missing current password and mismatched confirmation without a request', async () => {
+    const store = createStore()
+    store.user = member
+    await store.changePassword({ newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' })
+    expect(store.error).toBe(m.password_current_required())
+    await store.changePassword({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!', confirmPassword: 'ＮewPassword123!' })
+    expect(store.error).toBe(m.password_confirmation_mismatch())
+    expect(api.iam.auth.changePassword).not.toHaveBeenCalled()
+    expect(api.auth.clear).not.toHaveBeenCalled()
+  })
+
+  it.each(['hai:iam:002', 'hai:iam:034', 'hai:iam:999'])('password failures use safe messages and keep the active session: %s', async (code) => {
+    api.iam.auth.changePassword.mockResolvedValueOnce({ success: false, error: { code, message: 'Private password or database detail', httpStatus: code === 'hai:iam:002' ? 401 : code === 'hai:iam:999' ? 500 : 400, traceId: 'password-failure' } })
+    const store = createStore()
+    store.user = member
+    await store.changePassword({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' })
+    expect(store.error).toContain('traceId: password-failure')
+    expect(store.error).not.toContain('Private')
+    expect(store.error).not.toBe(m.session_expired())
+    expect(store.user?.id).toBe(member.id)
+    expect(api.auth.clear).not.toHaveBeenCalled()
+    expect(api.iam.auth.changePassword).toHaveBeenCalledWith({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!' })
+  })
+
+  it('an accepted password change clears local tokens only after the server confirms success', async () => {
+    api.iam.auth.changePassword.mockResolvedValueOnce({ success: true, data: undefined })
+    const store = createStore()
+    store.user = member
+    await store.changePassword({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' })
+    expect(api.auth.clear).toHaveBeenCalledOnce()
+    expect(store.user).toBeNull()
+  })
+
   it('preserves the clock synchronization advice when application bootstrap is rejected', async () => {
     const message = 'Synchronize device and server clocks, then refresh to retry.'
     api.initialize.mockResolvedValueOnce({ success: true })
@@ -121,8 +154,8 @@ describe('management session and request ownership', () => {
     expect(api.iam.auth.currentUser).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the page, original user and unsaved fields when an expired session request is cancelled', async () => {
-    api.admin.users.list.mockResolvedValueOnce({ success: false, error: { code: 'hai:iam:105', message: 'Expired', httpStatus: 401 } })
+  it.each(['hai:iam:105', 'hai:common:100'])('keeps the page, original user and unsaved fields when an expired session request is cancelled: %s', async (code) => {
+    api.admin.users.list.mockResolvedValueOnce({ success: false, error: { code, message: 'Expired', httpStatus: 401 } })
     const store = createStore()
     store.user = administrator
     store.businessNotice = 'Unsaved business input'

@@ -95,6 +95,8 @@ PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 
 ### 错误处理
 
+登录、注册和公开认证配置失败统一使用 `@h-ai/ui/i18n` 的 `authErrorMessage`。凭据错误不区分用户名或密码，未知错误隐藏原文并保留追踪编号；AuthPanel 内的首次改密和密码复用提示与 fullstack 模板一致。
+
 - `api-client` procedure 返回 `HaiResult`，store 层统一转换为页面错误文案。
 - 原生端 token 使用 `createCapacitorTokenStorage()`；Web 预览使用内存 token，不写入 `localStorage`。
 - 原生存储读写/删除失败会拒绝 Promise。登录保存失败不进入已认证状态，退出失败仍清除界面身份并显示提示，loading 在 finally 释放；重试恢复前不能把失败当作凭据已删除。适配器的实例内屏蔽不替代服务端会话撤销，原生删除与重启行为仍需真机验收。

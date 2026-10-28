@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const locale = vi.hoisted(() => ({ current: 'en-US' }))
-vi.mock('@h-ai/ui/i18n', () => ({ getGlobalLocale: () => locale.current }))
+vi.mock('@h-ai/ui/i18n', async importOriginal => ({ ...await importOriginal<typeof import('@h-ai/ui/i18n')>(), getGlobalLocale: () => locale.current }))
 
 const login = vi.fn()
 const register = vi.fn()
@@ -103,14 +103,30 @@ describe('auth-store', () => {
   })
 
   it('login 网络异常时返回可展示错误而不是抛出', async () => {
-    login.mockRejectedValueOnce(new Error('Failed to fetch'))
+    login.mockRejectedValueOnce(new Error('Private network connection detail'))
 
     const authStore = await import('../src/lib/auth-store.svelte.js')
     const error = await authStore.login({ identifier: 'alice', password: 'secret' })
 
-    expect(error).toBe('Failed to fetch')
+    expect(error).toEqual(expect.any(String))
+    expect(error).not.toContain('Private network connection detail')
     expect(setTokens).not.toHaveBeenCalled()
     expect(authStore.isLoading()).toBe(false)
+  })
+
+  it.each(['login', 'register'] as const)('%s 使用统一凭据提示并隐藏未知服务错误', async (method) => {
+    const action = method === 'login' ? login : register
+    action.mockResolvedValueOnce({ success: false, error: { code: 'hai:iam:002', message: 'Private account field', httpStatus: 401, traceId: 'desktop-auth' } })
+    const store = await import('../src/lib/auth-store.svelte.js')
+    const authenticate = () => method === 'login' ? store.login({ identifier: 'alice', password: 'example' }) : store.register({ username: 'alice', password: 'example' })
+    const credentials = await authenticate()
+    expect(credentials).toMatch(/用户名或密码不正确|Username or password is incorrect/)
+    expect(credentials).toContain('traceId: desktop-auth')
+    action.mockResolvedValueOnce({ success: false, error: { code: 'app:unknown', message: 'Private database detail', httpStatus: 500, traceId: 'desktop-internal' } })
+    const unknown = await authenticate()
+    expect(unknown).not.toContain('Private')
+    expect(unknown).toContain('traceId: desktop-internal')
+    expect(setTokens).not.toHaveBeenCalled()
   })
 
   it('register 收到异常响应形态时返回兜底消息而不是抛出 TypeError', async () => {
