@@ -1,0 +1,81 @@
+{
+  "engines": {
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
+  },
+  "name": "framework-website",
+  "version": "0.1.0-alpha.76",
+  "private": true,
+  "packageManager": "pnpm@12.11.2",
+  "description": "hai-framework public documentation website, generated from the website template",
+  "keywords": [
+    "hai",
+    "sveltekit",
+    "svelte5",
+    "website"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "build",
+    "config",
+    "data",
+    "package.json"
+  ],
+  "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "dev": "vite dev",
+    "dev:test": "vite dev --mode test",
+    "dev:prod": "vite dev --mode prod",
+    "compile": "pnpm paraglide:compile && node scripts/build-pages.mjs",
+    "build": "hai build",
+    "start": "node scripts/serve-pages.mjs",
+    "start:test": "pnpm start",
+    "start:prod": "pnpm start",
+    "preview": "vite preview",
+    "check": "pnpm typecheck",
+    "typecheck": "pnpm paraglide:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "pnpm paraglide:compile && vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "node ../../scripts/run-e2e.mjs",
+    "clean": "rimraf .svelte-kit build .turbo",
+    "compile:pages": "pnpm build"
+  },
+  "dependencies": {
+    "pino-pretty": "catalog:",
+    "@h-ai/core": "workspace:*",
+    "@h-ai/kit": "workspace:*",
+    "@h-ai/ui": "workspace:*",
+    "sm-crypto": "catalog:",
+    "zod": "catalog:",
+    "marked": "catalog:"
+  },
+  "devDependencies": {
+    "@h-ai/cli": "workspace:*",
+    "@antfu/eslint-config": "catalog:",
+    "@playwright/test": "catalog:",
+    "@sveltejs/adapter-node": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-format": "catalog:",
+    "eslint-plugin-svelte": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "svelte-eslint-parser": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "tailwindcss": "catalog:",
+    "daisyui": "catalog:",
+    "@iconify-json/tabler": "catalog:",
+    "@iconify/tailwind4": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "@sveltejs/adapter-static": "catalog:"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/usage/**", "$TURBO_ROOT$/package.json"],
+      "outputs": ["build/**", ".svelte-kit/**"]
+    }
+  }
+}

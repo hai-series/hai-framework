@@ -3,11 +3,22 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { commitVersionSync, missingPackages, releasePending } from '../release-status.mjs'
+import { commitVersionSync, missingPackages, releaseChannel, releasePending } from '../release-status.mjs'
 
 const packages = [{ name: '@h-ai/a', version: '1.0.0', directory: 'packages/a' }, { name: '@h-ai/b', version: '1.0.0', directory: 'packages/b' }]
 
 describe('release recovery', () => {
+  it.each([
+    ['1.0.0-beta.1', 'beta', true],
+    ['0.1.0-alpha.78', 'alpha', true],
+    ['1.0.0-rc.2', 'rc', true],
+    ['1.0.0-preview.1', 'next', true],
+    ['1.0.0-1', 'next', true],
+    ['1.0.0', 'latest', false],
+    ['1.0.0+build-with-hyphens', 'latest', false],
+  ])('selects the release channel for %s', (version, npmTag, prerelease) => {
+    expect(releaseChannel(version)).toEqual({ npmTag, prerelease })
+  })
   it('commits after release, tolerates the same sync on retry and refuses concurrent source changes', () => {
     const root = mkdtempSync(join(tmpdir(), 'hai-release-'))
     const remote = join(root, 'remote.git')
@@ -61,13 +72,15 @@ describe('release recovery', () => {
     }
   }, 30_000)
 
-  it('runs version commit independently after publish and uses the verified source for tags', () => {
+  it('anchors the verified source before publishing and commits versions independently after release', () => {
     const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
     const release = workflow.slice(workflow.indexOf('  release:'), workflow.indexOf('  sync_versions:'))
     expect(release).not.toContain('git commit')
     expect(release.indexOf('Sync versions')).toBeLessThan(release.indexOf('Publish missing npm packages'))
     expect(release.indexOf('Verify existing tag target')).toBeLessThan(release.indexOf('Publish missing npm packages'))
-    expect(release.indexOf('Publish missing npm packages')).toBeLessThan(release.indexOf('Create tag'))
+    expect(release.indexOf('Verify existing tag target')).toBeLessThan(release.indexOf('Create tag'))
+    expect(release.indexOf('Create tag')).toBeLessThan(release.indexOf('Publish missing npm packages'))
+    expect(release.indexOf('Publish missing npm packages')).toBeLessThan(release.indexOf('Create GitHub Release'))
     expect(workflow).toContain('needs.release.result == \'skipped\'')
   })
   it('checks the root release version before package versions are synchronized', async () => {

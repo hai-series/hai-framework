@@ -1,4 +1,4 @@
 #!/usr/bin/env sh
 # Windows 的 .cmd 包装与路径引号也占命令长度；为 8191 上限预留空间，并避免并发写同一 ESLint 缓存。
-pnpm lint-staged --max-arg-length 6000 --concurrent false
+pnpm lint-staged --max-arg-length 6000 --concurrent false --hide-unstaged
 pnpm check:leak-words

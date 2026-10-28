@@ -582,6 +582,9 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(jsdom@30.1.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.1
 
   apps/admin-console:
     dependencies:
@@ -1059,6 +1062,106 @@ importers:
       svelte-check:
         specifier: 'catalog:'
         version: 4.7.6(picomatch@4.0.7)(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.3.3
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(jsdom@30.1.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  apps/framework-website:
+    dependencies:
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@h-ai/kit':
+        specifier: workspace:*
+        version: link:../../packages/kit
+      '@h-ai/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      marked:
+        specifier: 'catalog:'
+        version: 18.1.0
+      pino-pretty:
+        specifier: 'catalog:'
+        version: 13.2.0
+      sm-crypto:
+        specifier: 'catalog:'
+        version: 0.5.7
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
+    devDependencies:
+      '@antfu/eslint-config':
+        specifier: 'catalog:'
+        version: 9.5.1(@typescript-eslint/typescript-estree@8.71.1(supports-color@7.2.0)(typescript@6.0.3))(@typescript-eslint/utils@8.71.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3))(@vue/compiler-sfc@3.5.43)(eslint-plugin-format@2.0.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0)))(eslint-plugin-svelte@3.23.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(svelte@5.57.2(@typescript-eslint/types@8.71.1)))(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(svelte-eslint-parser@1.9.0(svelte@5.57.2(@typescript-eslint/types@8.71.1)))(typescript@6.0.3)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(jsdom@30.1.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))
+      '@h-ai/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@iconify-json/tabler':
+        specifier: 'catalog:'
+        version: 1.2.42
+      '@iconify/tailwind4':
+        specifier: 'catalog:'
+        version: 1.2.3(tailwindcss@4.3.3)
+      '@inlang/paraglide-js':
+        specifier: 'catalog:'
+        version: 2.27.0(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@inlang/plugin-message-format':
+        specifier: 'catalog:'
+        version: 4.5.0
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.64.0
+      '@sveltejs/adapter-node':
+        specifier: 'catalog:'
+        version: 5.5.7(@sveltejs/kit@2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))
+      '@sveltejs/adapter-static':
+        specifier: 'catalog:'
+        version: 3.0.10(@sveltejs/kit@2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))
+      '@sveltejs/kit':
+        specifier: 'catalog:'
+        version: 2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@sveltejs/vite-plugin-svelte':
+        specifier: 'catalog:'
+        version: 7.3.1(svelte@5.57.2(@typescript-eslint/types@8.71.1))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@tailwindcss/vite':
+        specifier: 'catalog:'
+        version: 4.3.3(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      daisyui:
+        specifier: 'catalog:'
+        version: 5.7.47
+      eslint:
+        specifier: 'catalog:'
+        version: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
+      eslint-plugin-format:
+        specifier: 'catalog:'
+        version: 2.0.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))
+      eslint-plugin-svelte:
+        specifier: 'catalog:'
+        version: 3.23.1(eslint@10.12.0(jiti@2.7.0)(supports-color@7.2.0))(svelte@5.57.2(@typescript-eslint/types@8.71.1))
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.3
+      svelte:
+        specifier: 'catalog:'
+        version: 5.57.2(@typescript-eslint/types@8.71.1)
+      svelte-check:
+        specifier: 'catalog:'
+        version: 4.7.6(picomatch@4.0.7)(svelte@5.57.2(@typescript-eslint/types@8.71.1))(typescript@6.0.3)
+      svelte-eslint-parser:
+        specifier: 'catalog:'
+        version: 1.9.0(svelte@5.57.2(@typescript-eslint/types@8.71.1))
       tailwindcss:
         specifier: 'catalog:'
         version: 4.3.3

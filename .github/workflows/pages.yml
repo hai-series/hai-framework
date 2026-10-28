@@ -1,0 +1,113 @@
+name: Documentation website
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    # 只发布本仓库 main 推送且完整验收成功的制品，不消费 PR 或 fork 的产物。
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      publish: ${{ steps.source_guard.outputs.publish }}
+    permissions:
+      contents: read
+      actions: read
+      pages: read
+    steps:
+      - name: Skip superseded successful CI artifacts
+        id: source_guard
+        env:
+          PAGES_READ_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs'
+
+          const { workflow_run: trigger } = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'))
+          const repository = process.env.GITHUB_REPOSITORY
+          const trusted = run => run?.head_repository?.full_name === repository
+            && run.head_branch === 'main' && run.event === 'push'
+            && run.status === 'completed' && run.conclusion === 'success'
+            && run.workflow_id === trigger?.workflow_id
+          let publish = false
+          if (trusted(trigger)) {
+            if (!Number.isSafeInteger(trigger.run_number) || trigger.run_number < 1
+              || !Number.isSafeInteger(trigger.workflow_id) || trigger.workflow_id < 1
+              || !Number.isFinite(Date.parse(trigger.created_at)))
+              throw new Error('Invalid triggering CI run identity')
+            // 查询创建时间而非重跑更新时间；同秒内用稳定run_number比较，不依赖API排序。
+            let scanned = 0
+            for (let page = 1; page <= 10; page++) {
+              const query = new URLSearchParams({ branch: 'main', event: 'push', status: 'success', created: `>=${trigger.created_at}`, per_page: '100', page: String(page) })
+              const response = await fetch(`${process.env.GITHUB_API_URL}/repos/${repository}/actions/workflows/${trigger.workflow_id}/runs?${query}`, {
+                headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${process.env.PAGES_READ_TOKEN}`, 'X-GitHub-Api-Version': '2026-03-10' },
+                signal: AbortSignal.timeout(15000),
+                redirect: 'error',
+              })
+              if (!response.ok)
+                throw new Error(`Unable to verify newer successful CI runs: HTTP ${response.status}`)
+              const result = await response.json()
+              if (!Array.isArray(result.workflow_runs) || !Number.isSafeInteger(result.total_count) || result.total_count < 0)
+                throw new Error('Invalid successful CI run listing')
+              if (result.workflow_runs.some(run => trusted(run) && Number.isSafeInteger(run.run_number) && run.run_number > trigger.run_number))
+                break
+              scanned += result.workflow_runs.length
+              // GitHub搜索最多返回1000项；不完整或触顶的列表不能用来确认没有更新来源。
+              if (result.total_count < 1000 && scanned >= result.total_count) {
+                publish = true
+                break
+              }
+              if (result.workflow_runs.length < 100 || page === 10)
+                throw new Error('Successful CI run listing is incomplete or exceeds the verification limit')
+            }
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `publish=${publish}\n`)
+          process.stdout.write(publish ? 'Using the latest successful CI artifact.\n' : 'Skipping superseded or untrusted CI artifact.\n')
+          NODE
+      - uses: actions/download-artifact@v7.0.0
+        if: steps.source_guard.outputs.publish == 'true'
+        with:
+          name: framework-website-${{ github.event.workflow_run.head_sha }}
+          path: site
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - uses: actions/configure-pages@v6.0.0
+        if: steps.source_guard.outputs.publish == 'true'
+      - uses: actions/upload-pages-artifact@v5.0.0
+        if: steps.source_guard.outputs.publish == 'true'
+        with:
+          path: site
+          include-hidden-files: true
+
+  deploy:
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish verified static website
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1

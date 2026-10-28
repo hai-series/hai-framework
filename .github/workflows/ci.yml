@@ -16,7 +16,8 @@ jobs:
   quality:
     name: Typecheck, Lint, Build, Test and E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 全仓单元、十二类脚手架、SDK及真实SSH部署串行验收；预算覆盖实测总耗时与构建。
+    timeout-minutes: 150
     env:
       CI: true
       # Testcontainers 的 Ryuk 清理容器在 ephemeral CI runner 上偶发 "Failed to connect to Reaper"，
@@ -26,6 +27,8 @@ jobs:
     outputs:
       version_changed: ${{ steps.check_version.outputs.changed }}
       version: ${{ steps.check_version.outputs.version }}
+      npm_tag: ${{ steps.check_version.outputs.npm_tag }}
+      prerelease: ${{ steps.check_version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6.1.0
         with:
@@ -73,6 +76,19 @@ jobs:
 
       - name: Example and scaffold E2E
         run: pnpm e2e
+
+      - name: Deployment integration E2E
+        run: pnpm --filter @h-ai/cli test:deploy-gates
+
+      - name: Upload verified documentation website
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: framework-website-${{ github.sha }}
+          path: apps/framework-website/build
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Pack verified build artifacts
         if: steps.check_version.outputs.changed == 'true'
@@ -199,16 +215,8 @@ jobs:
             }
           fi
 
-      - name: Publish missing npm packages
-        run: |
-          node scripts/release-status.mjs missing > "$RUNNER_TEMP/missing-packages.txt"
-          while IFS= read -r pkg; do
-            [ -z "$pkg" ] && continue
-            (cd "$pkg" && pnpm publish --access public --no-git-checks)
-          done < "$RUNNER_TEMP/missing-packages.txt"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
+      # 首个包发布前绑定版本与本次验证SHA；中途失败只能从同一提交恢复，避免同版混包。
+      # tag仅作来源锚点，发布完成仍由全部npm版本和GitHub Release共同判定。
       - name: Create tag
         run: |
           git config user.name "github-actions[bot]"
@@ -221,6 +229,17 @@ jobs:
             git push origin "$VERSION"
           fi
 
+      - name: Publish missing npm packages
+        run: |
+          node scripts/release-status.mjs missing > "$RUNNER_TEMP/missing-packages.txt"
+          while IFS= read -r pkg; do
+            [ -z "$pkg" ] && continue
+            (cd "$pkg" && pnpm publish --access public --no-git-checks --tag "$NPM_DIST_TAG")
+          done < "$RUNNER_TEMP/missing-packages.txt"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_DIST_TAG: ${{ needs.quality.outputs.npm_tag }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.3
         with:
@@ -228,7 +247,7 @@ jobs:
           name: v${{ needs.quality.outputs.version }}
           body_path: /tmp/release-notes.md
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.quality.outputs.prerelease == 'true' }}
 
   sync_versions:
     name: Commit versions after release
