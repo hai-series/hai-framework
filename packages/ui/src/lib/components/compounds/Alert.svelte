@@ -1,6 +1,6 @@
 <!--
   @component Alert
-  警告框组件，使用 tabler icon 替代 emoji，更精致。
+  持续信息组件；警告与错误使用 ToastContainer。
 
   @example
   ```ts
@@ -44,8 +44,6 @@
   const iconMap: Record<string, string> = {
     info: 'icon-[tabler--info-circle]',
     success: 'icon-[tabler--circle-check]',
-    warning: 'icon-[tabler--alert-triangle]',
-    error: 'icon-[tabler--circle-x]',
   }
 
   function handleClose() {
@@ -55,7 +53,7 @@
 </script>
 
 {#if visible}
-  <div {...dataAttributes} class={alertClass} role='alert'>
+  <div {...dataAttributes} class={alertClass} role='status'>
     <span class='{iconMap[variant] ?? iconMap.info} mt-0.5 size-5 shrink-0' aria-hidden='true'></span>
 
     <div class='min-w-0 flex-1 [overflow-wrap:anywhere]'>

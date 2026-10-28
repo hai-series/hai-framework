@@ -290,7 +290,7 @@
               {#if attachment.mimeType?.startsWith('image/') && attachment.url}<FeedbackScreenshot {attachment} onannotate={!loading && !exporting && !staging && onannotate ? annotate : undefined} />{/if}
               {#if attachment.mimeType?.startsWith('video/') && attachment.url}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
                 <video src={attachment.url} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
-              {#if attachment.missingReason}<p class='text-warning text-sm break-words'>{uiM('feedback_missing')}: {attachment.missingReason}</p>{/if}
+              {#if attachment.missingReason}<Button size='sm' variant='ghost' onclick={() => toast.warning(`${uiM('feedback_missing')}: ${attachment.missingReason}`)}>{uiM('feedback_missing')}</Button>{/if}
             </div>
           {/each}
         </section>

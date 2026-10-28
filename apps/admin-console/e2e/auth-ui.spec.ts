@@ -8,12 +8,16 @@ async function gotoHydrated(page: Page, url: string): Promise<void> {
 }
 
 test.describe('Login Form UI', () => {
-  test('通过 UI 表单提交错误密码显示错误提示', async ({ page, request }) => {
+  test('通过 UI 表单提交错误密码显示错误提示', async ({ page, request }, testInfo) => {
     const user = uniqueUser('loginfail')
     await registerViaApi(request, user)
 
     await gotoHydrated(page, '/auth/login')
     await page.waitForLoadState('load')
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.screenshot({ path: testInfo.outputPath('auth-login-split.png'), animations: 'disabled' })
+    await page.setViewportSize({ width: 390, height: 960 })
+    await page.screenshot({ path: testInfo.outputPath('auth-login-mobile.png'), animations: 'disabled' })
 
     // 填写错误密码
     await page.locator('#login-username').fill(user.username)
@@ -24,6 +28,7 @@ test.describe('Login Form UI', () => {
 
     // 应显示错误提示（Alert 组件）
     await expect(page.locator('[role="alert"], .alert')).toBeVisible({ timeout: 10_000 })
+    await page.screenshot({ path: testInfo.outputPath('auth-login-failed.png'), animations: 'disabled' })
   })
 })
 
@@ -59,8 +64,8 @@ test.describe('Reset Password UI', () => {
     // 点击提交
     await page.locator('button[type="submit"]').click()
 
-    // 无效 token 应显示错误提示（Alert 组件）
-    await expect(page.locator('[role="alert"], .alert').first()).toBeVisible({ timeout: 10_000 })
+    // 无效 token 使用公共 Toast，字段辅助文本继续留给读屏。
+    await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeVisible({ timeout: 10_000 })
   })
 
   test('重置密码密码不一致时提交按钮禁用', async ({ page }) => {
@@ -78,7 +83,9 @@ test.describe('Reset Password UI', () => {
     const submitBtn = page.locator('button[type="submit"]')
     await expect(submitBtn).toBeDisabled()
 
-    // 应显示密码不一致提示
-    await expect(page.getByText(/不一致/)).toBeVisible()
+    // 可见反馈属于 Toast，字段仍通过关联的辅助文本说明错误。
+    await expect(page.locator('.hai-toast-item[data-variant=error]')).toContainText('确认密码：两次密码输入不一致')
+    await expect(pwdInputs.nth(1)).toHaveAttribute('aria-invalid', 'true')
+    await expect(pwdInputs.nth(1)).toHaveAccessibleDescription(/两次密码输入不一致/)
   })
 })

@@ -15,7 +15,7 @@
 <script lang='ts'>
   import type { DataAttributes, InputProps } from '../../types.js'
   import { getFormFieldContext } from '../../internal/form-context.js'
-  import { createControlValidation, resolveFormText } from '../../internal/form-validation.svelte.js'
+  import { createControlValidation, resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -58,6 +58,8 @@
   const messageId = `${uniqueId}-error`
   const localError = $derived(resolveFormText(error) || validation.message)
   const effectiveError = $derived(field?.error || localError)
+  // 直接订阅每次校验结果；文案相同的再次提交也应重新提示。
+  useControlFeedback(() => resolveFormText(error) || validation.message)
   $effect(() => {
     // 修正输入后清除旧的 customError，切换语言时同步原生提示。
     if (inputRef)
@@ -108,7 +110,10 @@
   }
 
   function handleInvalid(e: Event & { currentTarget: HTMLInputElement }) {
+    e.preventDefault()
     validation.validate(e.currentTarget)
+    if (!e.currentTarget.form || e.currentTarget.form.querySelector(':invalid') === e.currentTarget)
+      e.currentTarget.focus()
     oninvalid?.(e)
   }
 </script>
@@ -150,6 +155,6 @@
     />
   </div>
   {#if localError && !field?.error}
-    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
+    <p id={messageId} class='sr-only'>{localError}</p>
   {/if}
 </div>

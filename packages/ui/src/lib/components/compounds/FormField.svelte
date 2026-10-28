@@ -21,8 +21,10 @@
 <script lang='ts'>
   import type { DataAttributes, FormFieldProps } from '../../types.js'
   import { setContext } from 'svelte'
-  import { FORM_FIELD_CONTEXT, getFormLayoutContext } from '../../internal/form-context.js'
+  import { FORM_FIELD_CONTEXT, getFormLayoutContext, getFormVisibilityContext } from '../../internal/form-context.js'
   import { resolveFormText } from '../../internal/form-validation.svelte.js'
+  import { uiM } from '../../messages.js'
+  import { useToastFeedback } from '../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../utils.js'
 
   const {
@@ -41,6 +43,7 @@
 
   const dataAttributes = $derived(getDataAttributes(restProps))
   const layout = getFormLayoutContext()
+  const visibility = getFormVisibilityContext()
   const uniqueId = $props.id()
   const controlId = $derived(providedControlId ?? `${uniqueId}-control`)
   const messageId = `${uniqueId}-message`
@@ -48,9 +51,11 @@
   const resolvedLabel = $derived(resolveFormText(label))
   const resolvedError = $derived(resolveFormText(error))
   const resolvedHint = $derived(resolveFormText(hint))
+  useToastFeedback(() => resolvedError && visibility?.open !== false ? (resolvedLabel ? uiM('form_field_error', { label: resolvedLabel, message: resolvedError }) : resolvedError) : '')
   const position = $derived(labelPosition ?? layout?.labelPosition ?? 'top')
   const width = $derived(labelWidth ?? layout?.labelWidth ?? '8rem')
   setContext(FORM_FIELD_CONTEXT, {
+    get label() { return resolvedLabel },
     get controlId() { return controlId },
     get labelId() { return labelId },
     get messageId() { return resolvedError || resolvedHint ? messageId : undefined },
@@ -81,7 +86,7 @@
   </div>
 
   {#if resolvedError || resolvedHint}
-    <div id={messageId} class='field-message text-xs leading-relaxed break-words' aria-live='polite'>
+    <div id={messageId} class={resolvedError ? 'sr-only' : 'field-message text-xs leading-relaxed break-words'}>
       {#if resolvedError}
         <span class='text-error'>{resolvedError}</span>
       {:else if resolvedHint}

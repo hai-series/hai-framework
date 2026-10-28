@@ -6,11 +6,15 @@ import { Input, Select, Textarea } from '../src/lib/components/primitives/index.
 import { CrudEditPanel } from '../src/lib/components/scenes/crud/index.js'
 import { PasswordInput, UserProfile } from '../src/lib/components/scenes/iam/index.js'
 import { setUILocale } from '../src/lib/messages.js'
+import { toast } from '../src/lib/toast.svelte.js'
 import ControlledValidationHarness from './fixtures/ControlledValidationHarness.svelte'
 import FormLayoutHarness from './fixtures/FormLayoutHarness.svelte'
 import FormVisibilityHarness from './fixtures/FormVisibilityHarness.svelte'
 
-afterEach(() => setUILocale('zh-CN'))
+afterEach(() => {
+  setUILocale('zh-CN')
+  toast.clear()
+})
 
 function target() {
   const element = document.createElement('div')
@@ -25,6 +29,55 @@ function input(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
 }
 
 describe('form layout and accessible errors', () => {
+  it.each([Input, Textarea, PasswordInput])('关闭字段提示后再次无效提交仍显示错误', async (Control) => {
+    const element = target()
+    const component = mount(Control, { target: element, props: { required: true } })
+    try {
+      flushSync()
+      const control = element.querySelector<HTMLInputElement | HTMLTextAreaElement>('input, textarea')!
+      expect(control.checkValidity()).toBe(false)
+      flushSync()
+      expect(toast.items).toHaveLength(1)
+      toast.remove(toast.items[0].id)
+      flushSync()
+      expect(control.checkValidity()).toBe(false)
+      flushSync()
+      expect(toast.items).toHaveLength(1)
+      expect(toast.items[0].message).toBe('请填写此项。')
+    }
+    finally {
+      await unmount(component)
+      element.remove()
+    }
+  })
+
+  it('关闭选择框提示后再次无效提交仍显示错误，修正后清除', async () => {
+    const element = target()
+    const component = mount(Select, { target: element, props: { required: true, options: [{ value: 'admin', label: 'Admin' }] } })
+    try {
+      flushSync()
+      const control = element.querySelector('select')!
+      expect(control.checkValidity()).toBe(false)
+      flushSync()
+      toast.remove(toast.items[0].id)
+      flushSync()
+      expect(control.checkValidity()).toBe(false)
+      flushSync()
+      expect(toast.items).toHaveLength(1)
+      expect(toast.items[0].message).toBe('请填写此项。')
+      element.querySelector<HTMLInputElement>('input')!.focus()
+      flushSync()
+      document.querySelector<HTMLElement>('[role="option"]')!.click()
+      flushSync()
+      expect(control.checkValidity()).toBe(true)
+      expect(toast.items).toHaveLength(0)
+    }
+    finally {
+      await unmount(component)
+      element.remove()
+    }
+  })
+
   it.each([false, true])('关闭保留子树的容器后清除校验，重开保持未访问状态：drawer=%s', async (drawer) => {
     const element = target()
     const component = mount(FormVisibilityHarness, { target: element, props: { drawer } })
@@ -94,10 +147,13 @@ describe('form layout and accessible errors', () => {
       flushSync()
       expect(control.getAttribute('aria-invalid')).toBe('true')
       expect(element.textContent).toContain('This field is required.')
+      expect(element.querySelector('.sr-only')?.textContent).toContain('This field is required.')
+      expect(toast.items.at(-1)?.message).toBe('This field is required.')
       input(control, 'Corrected')
       expect(control.hasAttribute('aria-invalid')).toBe(false)
       expect(control.checkValidity()).toBe(true)
       expect(element.textContent).not.toContain('This field is required.')
+      expect(toast.items).toHaveLength(0)
     }
     finally {
       await unmount(component)

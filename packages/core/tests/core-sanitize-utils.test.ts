@@ -8,6 +8,28 @@ import { describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
 
 describe('core.sanitize', () => {
+  it.each(['secretKey', 'secret_key', 'passwordHash', 'password_hash', 'passwd'])('统一隐藏实际配置凭据 %s，普通字段保持可诊断', (key) => {
+    const input = { [key]: 'sensitive-sentinel', publicKey: 'public-material', passwordPolicy: 'strict', tokenCount: 12 }
+    expect(core.sanitize.sanitizeSensitiveFields(input)).toEqual({ ...input, [key]: '[REDACTED]' })
+    expect(core.sanitize.sanitizeUrl(`https://example.test/?${key}=sensitive-sentinel&limit=10`)).not.toContain('sensitive-sentinel')
+    expect(core.sanitize.sanitizeText(`${key}=sensitive-sentinel action=connect`)).toBe('[REDACTED] action=connect')
+    expect(input[key]).toBe('sensitive-sentinel')
+  })
+
+  it('日志观察者同样隐藏嵌套支付密钥与异常中的密码摘要', () => {
+    const records: unknown[] = []
+    const stop = core.logger.observe(record => records.push(record))
+    try {
+      core.logger.error('Payment configuration rejected', { stripe: { secretKey: 'stripe-sentinel' }, error: new Error('passwordHash=hash-sentinel invalid') })
+    }
+    finally { stop() }
+    expect(records).toHaveLength(1)
+    const output = JSON.stringify(records)
+    expect(output).not.toContain('stripe-sentinel')
+    expect(output).not.toContain('hash-sentinel')
+    expect(output).toContain('Payment configuration rejected')
+  })
+
   it.each(['verificationCode', 'verification_code', 'verifyCode', 'otpCode', 'totpCode', 'smsCode', 'emailCode', 'captcha', 'captchaCode', 'oneTimeCode', 'twoFactorCode', 'reauthentication', 'x-hai-reauthentication', 'ticket'])('默认脱敏鉴别凭据字段 %s，保留普通业务code', (key) => {
     expect(core.sanitize.sanitizeSensitiveFields({ nested: { [key]: 'credential-sentinel', code: 'ORDER_ACCEPTED' } })).toEqual({ nested: { [key]: '[REDACTED]', code: 'ORDER_ACCEPTED' } })
     expect(core.sanitize.sanitizeUrl(`https://example.test/verify?${key}=credential-sentinel&code=ORDER_ACCEPTED`)).not.toContain('credential-sentinel')

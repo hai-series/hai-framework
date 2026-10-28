@@ -201,6 +201,8 @@ components/
 
 `Input`、`Textarea`、`Select`、`PasswordInput` のネイティブ検証は中国語・英語・日本語に対応します。`validationMessage` は失敗時だけ適用され、有効な入力を無効にし続けません。UI の `setGlobalLocale` / `createLocaleStore` で言語を同期すると表示中のエラーも更新されます。`Textarea` は `minlength` / `maxlength`、`Select` は `name`・必須検証・FormData に対応します。
 
+項目のエラーは Toast で表示します。前の通知を閉じた場合や表示時間が過ぎた場合も、同じ無効な入力で再送信すると再び通知します。入力を修正すると古い通知を消去します。エラー枠、`aria-invalid`、スクリーンリーダー用の関連説明は項目に保持します。
+
 テキスト入力後のフォーカス離脱時に検証し、修正中も更新します。未入力の空欄は送信時に検証し、初期フォーカスの移動で操作を押し下げません。CRUD も入力後のフォーカス離脱時または送信時に検証し、カスタムメッセージに対応して再表示時に検証状態をリセットします。`Select` はトリガーと選択肢の両方からフォーカスが離れた時に検証します。`PasswordInput.minLength` は長さ制約と強度計算に使い、省略時はログイン用の長さ制限を設けず、強度のみ8文字を基準にします。
 
 `UserProfile.fieldConstraints` は項目別に `required`、`minlength`、`maxlength`、`pattern`、`validationMessage` を受け取り、ユーザー名などの業務ルールをフォーカス離脱時に検証します。`pattern` は単一行の入力に適用し、`validationMessage` は翻訳関数にも対応します。
@@ -382,6 +384,7 @@ components/
 >
 > - `fontSize` は px の `number`、または `1.125rem` などの CSS 長さ。
 > - `allowHtmlTags` は既定で無効です。有効化すると `<b>` / `<i>` / `<u>` / `<mark>` などを安全な許可リストで解析し、危険なタグ・属性は除去します。
+> - 生の `<img>` では、1～99999 の正整数ピクセル値の `width` / `height` を保持します。遅延読み込み前に領域を確保し、文書のレイアウトとアンカー位置のずれを減らします。割合、負数、小数、イベント属性、任意の `style` は保持しません。
 
 ```svelte
 <MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
@@ -483,13 +486,19 @@ components/
 <ToastContainer />
 ```
 
-通知は既定で右下に浮かび、ページのレイアウトを変えません。UI モジュールのテーマ色でお知らせ・成功・警告・エラーを区別し、淡い背景、細い色枠、種類別アイコンと控えめな影を使用し、手動で閉じられます。複数の通知は共通の FIFO キューから 1 件ずつ表示され、表示開始から計時します（既定 3 秒、`duration: 0` は手動で閉じるまで保持）。ルートに `<ToastContainer />` を 1 回だけ配置します。`toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` で位置を指定できます。`m.saved()` はアプリの翻訳関数です。位置は `bottom-right`（既定）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。ログイン・パスワード変更・保存・削除・アップロードの成功と失敗は Toast、フィールド検証や継続的な業務状態、復旧操作はインラインで表示します。`Alert` は淡い背景を使用します。
+通知は既定で右下に浮かび、ページのレイアウトを変えません。UI モジュールのテーマ色でお知らせ・成功・警告・エラーを区別し、淡い背景、細い色枠、種類別アイコンと控えめな影を使用し、手動で閉じられます。複数の通知は共通の FIFO キューから 1 件ずつ表示され、表示開始から計時します（既定 3 秒、`duration: 0` は手動で閉じるまで保持）。ルートに `<ToastContainer />` を 1 回だけ配置します。`toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })` で位置を指定できます。`m.saved()` はアプリの翻訳関数です。位置は `bottom-right`（既定）、`top-right`、`bottom-center`、`top-center`、`bottom-left`、`top-left`。ログイン・保存などの結果と、項目検証を含むすべての警告・エラーは ToastContainer に表示します。項目のエラー表示・読み上げとの関連、継続的な状態と復旧操作は維持します。`Alert` は info/success のみ対応します。
 
-> `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` を内蔵し、アプリ独自の toast ツールは不要です。`notifyError(err, fallback?)` は `Error`・文字列と代替文言を受け付け、既定は成功 3 秒・失敗 5 秒です。
+F8 で現在の通知にフォーカスし、再度 F8 で元の操作に戻ります。Escape は閉じられる通知だけを閉じ、Enter は閉じるボタンを実行します。Modal 内でも利用でき、通知を閉じてもダイアログは閉じません。閉じられない通知も読み上げ用にフォーカスでき、自動終了時も元の操作に戻ります。
 
-コンポーネントの初期化時に `useToastFeedback(() => error)` へ安全に翻訳された操作メッセージを渡せます。同じ種類・内容の通知はキュー内で統合され、コンポーネントを破棄しても通知は表示されます。`message` API も同じキュー・外観・閉じる動作を共有します。`MessageContainer` は `ToastContainer` を表示するため、ルートには片方だけ配置します。
+> `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` を内蔵しています。`notifyError(err, fallback?)` は通常の Error の内部文言を隠し、代替文言を表示し、traceId は調査情報から確認できます。文字列は翻訳済みの安全な文言のみ渡し、不明な `err.message` を直接渡さないでください。既定は成功 3 秒・失敗 5 秒です。
+
+Promise を使うコンポーネントに例外を渡す場合は、`throw new Error(result.error.message, { cause: result.error })` で元のエラーを保持します。`errorMessage` / `notifyError` は深さ制限と循環検出のある Error.cause チェーンから、安全な業務メッセージと traceId を取得します。5xx や不明な例外には安全な代替文言を使用し、内部の例外本文は表示しません。
+
+コンポーネントの初期化時に `useToastFeedback(() => error)` へ安全に翻訳された操作メッセージを渡せます。同じ種類・内容の通知はキュー内で統合され、コンポーネントを破棄しても通知は表示されます。元のメッセージの更新・クリア時はその通知を置き換え・削除し、重複判定には traceId も含めます。`message` API も同じキュー・外観・閉じる動作を共有します。`MessageContainer` は `ToastContainer` を表示するため、ルートには片方だけ配置します。
 
 状態層は軽量な `@h-ai/ui/toast` から `toast`、`useToastFeedback`、`notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning`、`errorMessage` を読み込めます。コンポーネントやガイド CSS は読み込みません。`ToastContainer` はコンポーネントの入口から読み込み、ルートに配置します。
+
+traceId は既定で非表示です。`toast.add({ message: m.retry(), variant: 'warning', traceId })` を使用でき、既存の安全な文言の `(traceId: …)` も自動で分離されます。小さなアイコンを開くと、問題の追跡番号、コピーボタン、サポート担当者や開発担当者へ番号を伝える案内が表示されます。コピーできない場合は番号を選択して手動でコピーできます。ホバー・フォーカス・詳細表示中はタイマーが停止し、操作後は残り時間から再開します。`toast.pause(id)` / `toast.resume(id)` も利用できます。旧 Alert の warning/error は Toast に移行し、項目の aria-invalid、読み上げ用説明、復旧操作は維持してください。
 
 #### 通知の位置を指定する
 
@@ -1000,7 +1009,7 @@ Tabs は方向キー・Home/End、無効項目のスキップと単一の Tab �
 
 ## エラー表示とログの関連付け
 
-HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer の本文には番号を表示せず、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 

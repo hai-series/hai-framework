@@ -24,13 +24,13 @@ export async function initializeBrowserFeedback(metadata: { appVersion: string, 
     },
   })
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
 /** 下载的内容来自受权 API 或本地采集器；对象 URL 在发起后释放。 */
 export async function downloadFeedback(bytes: Uint8Array, name: string, contentType = 'application/zip'): Promise<void> {
   const result = await saveFeedbackFile(bytes, name, contentType)
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
 }
 {{/if}}

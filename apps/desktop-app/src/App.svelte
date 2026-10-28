@@ -5,7 +5,7 @@
   - 已登录 → AppShell 内嵌当前视图；未登录 → 强制跳 /login 或 /register。
 -->
 <script lang='ts'>
-  import { Alert, ToastContainer } from '@h-ai/ui'
+  import { Button, ToastContainer, useToastFeedback } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import {
     hasPermission,
@@ -21,6 +21,8 @@
   import ProfileView from './views/ProfileView.svelte'
   import RegisterView from './views/RegisterView.svelte'
   import UsersView from './views/UsersView.svelte'
+
+  useToastFeedback(() => isInitialized() && isAuthenticated() && !['/', '/login', '/register', '/dashboard', '/users', '/profile'].includes(currentPathname()) ? m('unknown_route', { path: currentPathname() }) : '', 'warning')
 
   onMount(() => {
     const dispose = installRouter()
@@ -76,7 +78,7 @@
     {:else if currentPathname() === '/profile'}
       <ProfileView />
     {:else}
-      <Alert variant='warning'>{m('unknown_route', { path: currentPathname() })}</Alert>
+      <Button onclick={() => navigate('/dashboard')}>{m('nav_dashboard')}</Button>
     {/if}
   </AppShellView>
 {/if}

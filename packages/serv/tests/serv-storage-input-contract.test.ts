@@ -3,7 +3,7 @@ import { once } from 'node:events'
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { apiClient, HaiApiClientError } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
 import { storage } from '@h-ai/storage'
@@ -35,10 +35,20 @@ it('无效输入在授权和 Provider 前失败，允许的 1000 项真实删除
 
     for (const key of ['../secret', '/absolute', 'users/u1/a\\b', `users/u1/${'报'.repeat(342)}`]) {
       const result = await client.storage.files.getMetadata({ key })
-      expect(result).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, cause: { status: 400 } } })
+      expect(result).toMatchObject({ success: false, error: {
+        code: HaiCommonError.VALIDATION_ERROR.code,
+        httpStatus: 400,
+        traceId: expect.any(String),
+        cause: expect.arrayContaining([expect.objectContaining({ field: 'key' })]),
+      } })
     }
     const tooMany = await client.storage.files.deleteMany({ keys: Array.from({ length: STORAGE_DELETE_MAX_KEYS + 1 }, (_, i) => `users/u1/${i}`) })
-    expect(tooMany).toMatchObject({ success: false, error: { code: HaiApiClientError.VALIDATION_FAILED.code, cause: { status: 400 } } })
+    expect(tooMany).toMatchObject({ success: false, error: {
+      code: HaiCommonError.VALIDATION_ERROR.code,
+      httpStatus: 400,
+      traceId: expect.any(String),
+      cause: expect.arrayContaining([expect.objectContaining({ field: 'keys' })]),
+    } })
     const unsupported = await fetch(`${baseUrl}/storage/presigned-urls/upload`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'users/u1/a', contentLength: 100 }) })
     expect(unsupported.status).toBe(400)
     expect(authorize).not.toHaveBeenCalled()

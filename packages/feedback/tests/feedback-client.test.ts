@@ -636,6 +636,80 @@ describe('feedback browser collection', () => {
     expect(JSON.stringify(client.getDraft())).not.toContain('expired-event')
   })
 
+  it('未提交反馈时闲置一小时不发起补传，完成采集后也停止网络请求', async () => {
+    vi.useFakeTimers()
+    const { client, transport } = await setup({ afterCount: 0 })
+    await vi.advanceTimersByTimeAsync(3_600_000)
+    expect(transport.upload).not.toHaveBeenCalled()
+    expect(transport.appendEvidence).not.toHaveBeenCalled()
+    expect(transport.completeCollection).not.toHaveBeenCalled()
+    expect((await client.submit()).success).toBe(true)
+    expect((await client.flush()).success).toBe(true)
+    await vi.advanceTimersByTimeAsync(3_600_000)
+    expect(transport.completeCollection).toHaveBeenCalledOnce()
+  })
+
+  it.each([401, 403, 404, 409, 413, 422])('后台补传 HTTP %s 后暂停，保留材料供显式重试', async (httpStatus) => {
+    vi.useFakeTimers()
+    const transport = actions()
+    vi.mocked(transport.upload).mockResolvedValue(err({ code: 'app:rejected', httpStatus, message: 'Upload rejected' }))
+    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1, 2, 3]), afterCount: 0 })
+    expect((await client.submit()).success).toBe(true)
+    await vi.advanceTimersByTimeAsync(3_600_000)
+    expect(transport.upload).toHaveBeenCalledOnce()
+    expect(client.getDraft()!.attachments[0]!.bytes).toEqual(new Uint8Array([1, 2, 3]))
+    vi.mocked(transport.upload).mockResolvedValue(ok(undefined))
+    expect((await client.flush()).success).toBe(true)
+    expect(transport.upload).toHaveBeenCalledTimes(2)
+    expect(transport.completeCollection).toHaveBeenCalledOnce()
+  })
+
+  it('后台临时失败指数退避，连续六次失败后停止；手动重试可恢复', async () => {
+    vi.useFakeTimers()
+    const times: number[] = []
+    const transport = actions()
+    vi.mocked(transport.completeCollection).mockImplementation(async () => {
+      times.push(Date.now())
+      return err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage')
+    })
+    const { client } = await setup({ actions: transport, afterCount: 0 })
+    expect((await client.submit()).success).toBe(true)
+    await vi.advanceTimersByTimeAsync(3_600_000)
+    expect(times).toHaveLength(6)
+    expect(times.slice(1).map((time, index) => time - times[index]!)).toEqual([1000, 2000, 4000, 8000, 16000])
+    vi.mocked(transport.completeCollection).mockResolvedValue(ok({ ...report, collectionStatus: 'complete' }))
+    expect((await client.flush()).success).toBe(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(transport.completeCollection).toHaveBeenCalledTimes(7)
+  })
+
+  it('退出身份丢弃草稿时不发起新的补传请求', async () => {
+    const transport = actions()
+    vi.mocked(transport.upload).mockResolvedValue(err(HaiCommonError.INTERNAL_ERROR, 'Temporary outage'))
+    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1, 2, 3]), afterCount: 0 })
+    expect((await client.submit()).success).toBe(true)
+    await client.flush()
+    const before = vi.mocked(transport.upload).mock.calls.length
+    await client.close({ discard: true })
+    expect(transport.upload).toHaveBeenCalledTimes(before)
+    expect(client.getDraft()).toBeUndefined()
+  })
+
+  it('退出身份等待在途上传，但完成后不续发证据或采集确认', async () => {
+    let finish: (() => void) | undefined
+    const transport = actions()
+    vi.mocked(transport.upload).mockImplementation(() => new Promise(resolve => finish = () => resolve(ok(undefined))))
+    const { client } = await setup({ actions: transport, screenshot: true, captureScreenshot: async () => new Uint8Array([1]), afterCount: 0 })
+    expect((await client.submit()).success).toBe(true)
+    expect(transport.upload).toHaveBeenCalledOnce()
+    const closing = client.close({ discard: true })
+    finish!()
+    await closing
+    expect(transport.appendEvidence).not.toHaveBeenCalled()
+    expect(transport.completeCollection).not.toHaveBeenCalled()
+    expect(client.getDraft()).toBeUndefined()
+  })
+
   it('稳定操作触发截图早于反馈出现，后续反馈携带有界关键截图', async () => {
     const captureScreenshot = vi.fn(async () => new Uint8Array([1, 2, 3]))
     const { client } = await setup({ screenshot: true, captureScreenshot, keyScreenshots: true, keyScreenshotThrottleMs: 10000, maxKeyScreenshots: 1 })

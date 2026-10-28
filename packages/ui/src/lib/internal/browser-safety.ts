@@ -136,11 +136,13 @@ export async function writeTextToClipboard(text: string): Promise<boolean> {
       textarea.value = text
       textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0'
       document.body.appendChild(textarea)
-      textarea.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(textarea)
-      if (ok) {
-        return true
+      try {
+        textarea.select()
+        if (document.execCommand('copy'))
+          return true
+      }
+      finally {
+        document.body.removeChild(textarea)
       }
     }
     catch {

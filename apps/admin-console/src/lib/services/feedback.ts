@@ -19,7 +19,7 @@ export async function initFeedbackBrowser(): Promise<void> {
   initialize ??= (async () => {
     const initialized = await http.init({ baseUrl: feedbackApiBaseUrl(), fetch: apiFetch, clientName: 'admin-console' })
     if (!initialized.success)
-      throw new Error(initialized.error.message)
+      throw new Error(initialized.error.message, { cause: initialized.error })
     const result = await capture.init({ appId: 'admin-console', ...adminBuildMetadata, cookieAllowlist: ['PARAGLIDE_LOCALE', 'theme'], replay: true, actions: {
       policy: () => http.feedback.reports.policy({}),
       submit: input => http.feedback.reports.submit(input),
@@ -28,7 +28,7 @@ export async function initFeedbackBrowser(): Promise<void> {
       upload: input => http.feedback.attachments.upload(input),
     } })
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     stopRequests = observeAdminRequests((data) => {
       capture.record({ kind: 'request', data, requestId: typeof data.requestId === 'string' ? data.requestId : undefined })
     })
@@ -43,7 +43,7 @@ export async function prepareFeedback() {
   await initFeedbackBrowser()
   const result = await capture.prepare()
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return feedbackDraftView()
 }
 
@@ -62,35 +62,35 @@ export function feedbackDraftView() {
 export async function submitFeedback(input: FeedbackFormData) {
   const result = await capture.submit({ description: input.description, category: input.type, contact: input.contact, files: input.files, removedAttachmentIds: input.removedAttachmentIds })
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return { number: result.data.number, collectionStatus: result.data.collectionStatus }
 }
 
 export async function annotateFeedback(input: FeedbackAnnotation) {
   const result = await capture.annotate(input.id, { mode: input.mode, ...input.rect, coordinateSpace: 'ratio' })
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return feedbackDraftView()
 }
 
 export async function captureFeedbackPage(attachmentId?: string) {
   const result = await capture.captureScreenshot(attachmentId)
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return feedbackDraftView()
 }
 
 export async function addFeedbackFiles(files: File[], removedAttachmentIds: readonly string[] = []) {
   const result = await capture.addFiles(files, removedAttachmentIds)
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return feedbackDraftView()
 }
 
 export async function exportLocalFeedback(input: FeedbackFormData) {
   const result = await capture.saveDraft({ ...input, category: input.type })
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return result.data.status !== 'cancelled'
 }
 
@@ -107,20 +107,20 @@ export const feedbackApi = http
 export async function retryFeedback(id: string) {
   const result = await review.retryReport(id)
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
 export async function loadFeedbackReplay(id: string): Promise<FeedbackEvidence[]> {
   const result = await review.loadReplay(id)
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
   return result.data
 }
 
 export async function exportFeedback(id: string) {
   const result = await review.exportReport(id)
   if (!result.success)
-    throw new Error(result.error.message)
+    throw new Error(result.error.message, { cause: result.error })
 }
 
 export async function closeFeedbackBrowser() {

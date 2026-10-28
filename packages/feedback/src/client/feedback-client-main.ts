@@ -99,6 +99,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   let initialIds = new Set<string>()
   const uploadedIds = new Set<string>()
   let flushPromise: Promise<HaiResult<void>> | undefined
+  let flushFailures = 0
+  let nextBackgroundFlush = 0
   let preparePromise: Promise<HaiResult<FeedbackDraft>> | undefined
   let persistTimer: ReturnType<typeof setTimeout> | undefined
   let flushTimer: ReturnType<typeof setInterval> | undefined
@@ -334,8 +336,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
           stopReplay?.()
           stopReplay = undefined
         }
-        if (draft?.report)
-          void flush()
+        if (draft?.report && !collectionFinished && Date.now() >= nextBackgroundFlush)
+          void runFlush()
       }, 1000)
       return ok(undefined)
     }
@@ -467,6 +469,14 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     if (!config || closing)
       return failure('NOT_INITIALIZED')
     const activeConfig = config
+    // 先等上一轮补传退出，再收口本次窗口，避免复用收口前已完成的 Promise。
+    if (flushPromise) {
+      const pending = await flushPromise
+      if (!pending.success)
+        return pending
+      if (closing || config !== activeConfig)
+        return failure('NOT_INITIALIZED')
+    }
     if (draft?.report && !collectionFinished) {
       // 新反馈开始前先确认上一份待传材料，不能以关闭弹窗丢弃附件。
       if (Date.now() < deadline && afterCount < limits().after)
@@ -662,7 +672,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       initialIds = new Set(current.submission.evidence?.map(item => item.id))
       schedulePersist()
       // 已受理立即返回；大附件和后续日志由可重试的后台 flush 续传。
-      void flush()
+      void runFlush()
       return result
     }
     catch (cause) {
@@ -677,6 +687,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       return ok(undefined)
     try {
       for (const item of draft.attachments) {
+        if (discardOnClose)
+          return ok(undefined)
         if (uploadedIds.has(item.id))
           continue
         const result = await config.actions.upload({ id: draft.report.id, attachmentId: item.id, dataBase64: base64(item.bytes) })
@@ -686,6 +698,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
       }
       let drainPasses = 0
       while (true) {
+        if (discardOnClose)
+          return ok(undefined)
         if (closing || Date.now() >= deadline || afterCount >= limits().after)
           collectionSealed = true
         const pending = draft.evidence.filter(item => !initialIds.has(item.id)).slice(0, 200)
@@ -702,7 +716,7 @@ export function createFeedbackClient(): FeedbackBrowserClient {
         if (drainPasses >= budget.maxAttachmentCount)
           return ok(undefined)
       }
-      if (collectionSealed) {
+      if (collectionSealed && !discardOnClose) {
         const result = await config.actions.completeCollection({ id: draft.report.id, missing: [...new Set([...draft.missing, ...missing])] })
         if (!result.success)
           return result
@@ -724,7 +738,27 @@ export function createFeedbackClient(): FeedbackBrowserClient {
   }
 
   function flush(): Promise<HaiResult<void>> {
-    flushPromise ??= doFlush().finally(() => {
+    // 用户重新打开/显式重试时恢复补传；沿用同一提交和附件 ID。
+    flushFailures = 0
+    nextBackgroundFlush = 0
+    return runFlush()
+  }
+
+  function runFlush(): Promise<HaiResult<void>> {
+    flushPromise ??= doFlush().then((result) => {
+      if (result.success) {
+        flushFailures = 0
+        nextBackgroundFlush = 0
+      }
+      else {
+        flushFailures++
+        const status = result.error.httpStatus
+        // 权限/输入/资源拒绝等待用户处理；临时故障最多再试五次，避免闲置页面持续刷错。
+        const rejected = status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429
+        nextBackgroundFlush = rejected || flushFailures >= 6 ? Number.POSITIVE_INFINITY : Date.now() + 1000 * 2 ** (flushFailures - 1)
+      }
+      return result
+    }).finally(() => {
       flushPromise = undefined
     })
     return flushPromise
@@ -884,7 +918,10 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     // 截图有既定超时；等待采集退出后再清空草稿，避免旧回调复活会话。
     await preparePromise
     await keyScreenshotPromise
-    if (draft?.report)
+    // 身份退出只等待已经开始的请求，不使用新身份凭据补传旧草稿。
+    if (discardOnClose)
+      await flushPromise
+    else if (draft?.report)
       await flush()
     if (discardOnClose && storageKey)
       await deleteFeedbackDraft(storageKey).catch(() => undefined)
@@ -909,6 +946,8 @@ export function createFeedbackClient(): FeedbackBrowserClient {
     dropped = 0
     collectionFinished = false
     collectionSealed = false
+    flushFailures = 0
+    nextBackgroundFlush = 0
   }
 
   return { init, prepare, pause, captureScreenshot, submit, flush, record, getDraft: () => draft, getView, releasePreviews, annotate, addFiles, exportDraft, async saveDraft(input) {

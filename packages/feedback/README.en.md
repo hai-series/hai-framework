@@ -72,7 +72,9 @@ Ordinary routes retain `transport.maxPlaintextBytes` (auto/omitted: 1 MiB). Decl
 
 `keyScreenshots` defaults to false; automatic key screenshots require opt-in, while manual `prepare()` can still capture. Timeouts propagate AbortSignal and actual unfinished rendering retains the single-flight lock. The default renderer caps DOM traversal at 10000 nodes alongside its canvas pixel budget. With `replay:true`, `replayStart` defaults to `prepare`; pre-recording requires explicit `replayStart: init`. Call `pause()` when closing feedback to stop DOM replay/screenshots while retaining lightweight logs, drafts and uploads. Identity exit still calls `close({ discard:true })`. Custom `captureScreenshot({ signal })` should honor cancellation.
 
-Automatic screenshots reconstruct the visible page from a redacted DOM clone through SVG foreignObject. Cross-origin images, iframe/video content and network fonts that are not ready may be missing. Browser or CSP failures are recorded as missing, and users can still attach images manually.
+After acceptance, the SDK uploads attachments and subsequent evidence in the background. Network, 5xx, 408 and 429 failures retry after 1, 2, 4, 8 and 16 seconds, then pause after six consecutive failures. Other 4xx responses pause immediately. Drafts and attachments remain available; call `flush()` or prepare feedback again after connectivity or authentication recovers. Unsubmitted drafts and completed collections do not generate background uploads. `close({ discard: true })` waits for requests already in flight and starts no further requests for the old draft. Await it before initializing another identity.
+
+Automatic screenshots use html2canvas to render a redacted DOM clone. Cross-origin images, iframe/video content and network fonts that are not ready may be missing. Browser or CSP failures are recorded as missing, and users can still attach images manually.
 
 ### Feedback capture and delivery checks
 

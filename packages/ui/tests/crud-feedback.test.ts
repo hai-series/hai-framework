@@ -38,7 +38,7 @@ it('cRUD 删除失败没有回调时仍 Toast 提示，保留确认框以重试�
     flushSync()
     const confirm = [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find(button => button.textContent?.trim() === uiM('crud_delete'))!
     confirm.click()
-    await vi.waitFor(() => expect(toast.items.at(-1)?.message).toBe(`${uiM('crud_delete_failed')} (traceId: delete-request)`))
+    await vi.waitFor(() => expect(toast.items.at(-1)).toMatchObject({ message: uiM('crud_delete_failed'), traceId: 'delete-request' }))
     expect(remove).toHaveBeenCalledTimes(1)
     expect(document.body.textContent).not.toContain('Private SQL')
     expect(confirm.isConnected).toBe(true)

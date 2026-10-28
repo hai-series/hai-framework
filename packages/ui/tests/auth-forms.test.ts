@@ -84,7 +84,7 @@ describe('authentication form extensions and agreements', () => {
       input('#confirm-password', 'InitialPassword123!')
       target.querySelector('form')!.requestSubmit()
       await vi.waitFor(() => expect(toast.items.some(item => item.message.includes('新密码不能与当前密码相同'))).toBe(true))
-      expect(toast.items.at(-1)?.message).toContain('traceId: renew-same')
+      expect(toast.items.at(-1)?.traceId).toBe('renew-same')
       expect(target.querySelector('.alert-error')).toBeNull()
       expect(target.textContent).not.toContain('Private')
       expect(onauthenticated).not.toHaveBeenCalled()

@@ -201,6 +201,8 @@ Labels connect to nested UI controls automatically; use `<FormField for="control
 
 `Input`, `Textarea`, `Select` and `PasswordInput` provide Chinese/English/Japanese native validation messages. `validationMessage` overrides failures without keeping valid input invalid. Sync locale with the UI `setGlobalLocale` / `createLocaleStore` to update visible validation errors immediately. `Textarea` supports `minlength` / `maxlength`; `Select` supports `name`, required validation and FormData serialization.
 
+Field errors appear through Toast. Submitting the same invalid input again shows the error even after the previous notification was dismissed or expired. Correcting input clears the stale notification. Controls retain error borders, `aria-invalid` and linked screen-reader descriptions.
+
 Text controls validate on blur after input and update errors as input is corrected. Pristine empty fields validate on submit, so leaving default focus does not shift actions. CRUD create/edit forms also validate on blur after input or on submit, honor custom messages and reset validation when reopened. `Select` validates when focus leaves both its trigger and options. `PasswordInput.minLength` enforces length and informs strength; omitting it leaves login password length unrestricted while strength uses an eight-character baseline.
 
 `UserProfile.fieldConstraints` accepts per-field `required`, `minlength`, `maxlength`, `pattern` and `validationMessage` (`pattern` applies to single-line inputs), so application rules such as username formats share blur validation. `validationMessage` also accepts a deferred translation function.
@@ -382,6 +384,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 >
 > - `fontSize` accepts a `number` in px or any CSS length such as `1.125rem`.
 > - `allowHtmlTags` is off by default; when enabled, tags such as `<b>` / `<i>` / `<u>` / `<mark>` use a safe allowlist, with dangerous tags/attributes still sanitized.
+> - Raw `<img>` tags retain `width` / `height` as positive integer pixel values from 1 to 99999. These reserve space before lazy images load and keep document layout and anchor positions stable. Percentages, negatives, decimals, events, and arbitrary `style` are removed.
 
 ```svelte
 <MarkdownRenderer content={markdown} fontSize='1.125rem' allowHtmlTags />
@@ -483,13 +486,19 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 <ToastContainer />
 ```
 
-Toasts float at the bottom right by default without shifting layout, using UI-owned semantic colors for information, success, warning and error, with a soft tinted background, a narrow color border, a distinct icon and a subtle shadow. They can be dismissed manually. Notifications share one FIFO queue and appear one at a time; each timer starts when its notification is shown (3 seconds by default, `duration: 0` waits for dismissal). Mount `<ToastContainer />` once in the root layout. Set a position with `toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })`, where `m.saved()` is an application translation. Positions: `bottom-right` (default), `top-right`, `bottom-center`, `top-center`, `bottom-left`, `top-left`. Use Toast for login, password changes, saves, deletes and uploads, including failures. Keep field validation, persistent business status and recovery actions inline; `Alert` uses a soft background.
+Toasts float at the bottom right by default without shifting layout, using UI-owned semantic colors for information, success, warning and error, with a soft tinted background, a narrow color border, a distinct icon and a subtle shadow. They can be dismissed manually. Notifications share one FIFO queue and appear one at a time; each timer starts when its notification is shown (3 seconds by default, `duration: 0` waits for dismissal). Mount `<ToastContainer />` once in the root layout. Set a position with `toast.add({ message: m.saved(), variant: 'success', position: 'bottom-center' })`, where `m.saved()` is an application translation. Positions: `bottom-right` (default), `top-right`, `bottom-center`, `top-center`, `bottom-left`, `top-left`. Use Toast for login, password changes, saves, deletes and uploads, including failures. All warnings and errors, including field validation, use ToastContainer. Fields retain invalid markers and accessible descriptions; persistent status and recovery actions remain in place. `Alert` only accepts info/success.
 
-> Built-in `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` remove the need for application toast wrappers. `notifyError(err, fallback?)` accepts `Error` or strings with a fallback message. Success lasts 3s and errors 5s by default.
+Press F8 to focus the current notification and F8 again to return. Escape dismisses a dismissible notification and restores focus; Enter activates its dismiss button. This also works inside Modal without closing the dialog. Non-dismissible notifications can be focused for reading and exited with F8; automatic dismissal restores focus too.
 
-Reactive components can call `useToastFeedback(() => error)` during initialization with safe localized messages. Queued duplicates of the same type are merged; notifications survive component unmount. The `message` API shares this queue, style and dismissal behavior. `MessageContainer` renders `ToastContainer`; choose one container in the root layout.
+> Built-in `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` remove the need for application wrappers. `notifyError(err, fallback?)` hides an ordinary Error's internal message, displays a fallback and preserves traceId. String arguments must be safe localized messages; do not pass an unknown `err.message`. Success lasts 3s and errors 5s by default.
+
+When a Promise-based component requires an exception, preserve the complete failure with `throw new Error(result.error.message, { cause: result.error })`. `errorMessage` / `notifyError` follow the bounded, cycle-safe Error.cause chain to recover a safe business message and traceId. Server errors and unknown exceptions still use a safe fallback; internal exception text is not displayed.
+
+Reactive components can call `useToastFeedback(() => error)` during initialization with safe localized messages. Queued duplicates of the same type are merged; notifications survive component unmount. Updating or clearing a source replaces or removes its previous notification; duplicate matching also includes traceId. The `message` API shares this queue, style and dismissal behavior. `MessageContainer` renders `ToastContainer`; choose one container in the root layout.
 
 State modules can import `toast`, `useToastFeedback`, `notifySuccess` / `notifyError` / `notifyInfo` / `notifyWarning` and `errorMessage` from the lightweight `@h-ai/ui/toast` entry without loading components or tour CSS. Import `ToastContainer` from a component entry and mount it in the root layout.
+
+The traceId is hidden by default. Use `toast.add({ message: m.retry(), variant: 'warning', traceId })`; existing safe messages containing `(traceId: …)` are separated automatically. The diagnostic icon reveals an issue reference ID, a copy action, and guidance to provide it to customer support or the development team. If copying fails, the ID can be selected manually. Hovering, focusing or expanding pauses the timer; closing the details and leaving resumes the remaining time. `toast.pause(id)` / `toast.resume(id)` are also available. Migrate warning/error Alert components to Toast; field errors retain aria-invalid and accessible descriptions, with recovery actions in place.
 
 #### Choosing a Toast position
 
@@ -831,7 +840,7 @@ agreements:
 
 AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS login, registration and recovery. config.ui supplies layout, branding and images. LoginForm supports methods, onsendotp, otpLength and resendInterval; password forms accept passwordPolicy. Network and token storage remain in actions.
 
-Use `authErrorMessage(error)` from `@h-ai/ui/components/scenes/iam/index` for authentication failures. It maps public codes to the current UI language, combines username/password failures, hides raw unknown/server errors and preserves a valid `traceId`. AuthPanel, OTP sending, sensitive confirmation and fullstack password changes share this mapping. Initial/expired passwords, reuse of the current password (`hai:iam:034`) and session limits have actionable messages. Authentication errors and successful operations use the unified Toast. Password confirmation compares exact strings without Unicode normalization or trimming and shows mismatches beside the field.
+Use `authErrorMessage(error)` from `@h-ai/ui/components/scenes/iam/index` for authentication failures. It maps public codes to the current UI language, combines username/password failures, hides raw unknown/server errors and preserves a valid `traceId`. AuthPanel, OTP sending, sensitive confirmation and fullstack password changes share this mapping. Initial/expired passwords, reuse of the current password (`hai:iam:034`) and session limits have actionable messages. Authentication errors and successful operations use the unified Toast. Password confirmation compares exact strings without Unicode normalization or trimming and reports mismatches through Toast while retaining field associations.
 
 AuthPanel disables native form controls during SSR and enables input after client mount binds events, preventing early input from being lost during hydration. Applications need no extra readiness code. E2E tests wait for editable controls and cover delayed client scripts.
 
@@ -1000,7 +1009,7 @@ Tabs support arrow/Home/End navigation, disabled items and one Tab stop. Tables 
 
 ## Error messages and correlated logs
 
-HTTP errors expose localized safe messages followed by `(traceId: …)`, with the same ID in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+HTTP errors carry safe localized messages and a reference ID. ToastContainer shows only the readable message by default; its diagnostic icon reveals the ID and copy action. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
 
 Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
 

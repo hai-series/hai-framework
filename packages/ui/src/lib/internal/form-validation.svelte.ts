@@ -3,7 +3,30 @@ import type { UIMessageKey } from '../messages.js'
 import type { FormText } from '../types.js'
 import { untrack } from 'svelte'
 import { getUILocale, uiM } from '../messages.js'
-import { getFormVisibilityContext } from './form-context.js'
+import { useToastFeedback } from '../toast.svelte.js'
+import { getFormFieldContext, getFormVisibilityContext } from './form-context.js'
+
+/**
+ * 将字段错误交给公共 Toast；字段本身继续保留 aria-invalid 和关联说明。
+ * @param message - 读取当前字段的错误。
+ * @param label - 可选的独立字段名称；省略时使用 FormField 上下文。
+ * @example 模块内部上下文
+ * ```ts
+ * // 在 Svelte 组件初始化时注册，状态由控件维护。
+ * useControlFeedback(() => '邮箱格式不正确', () => '邮箱')
+ * ```
+ */
+export function useControlFeedback(message: () => string, label?: () => string | undefined): void {
+  const field = getFormFieldContext()
+  const visibility = getFormVisibilityContext()
+  useToastFeedback(() => {
+    const value = message()
+    if (!value || field?.error || visibility?.open === false)
+      return ''
+    const name = label?.() || field?.label
+    return name ? uiM('form_field_error', { label: name, message: value }) : value
+  })
+}
 
 /**
  * 可重新翻译的原生约束错误，不缓存某个语言的最终文案。

@@ -65,9 +65,9 @@
   .skeleton {
     background: linear-gradient(
       90deg,
-      oklch(var(--b3)) 25%,
-      oklch(var(--b2)) 50%,
-      oklch(var(--b3)) 75%
+      var(--color-base-300) 25%,
+      var(--color-base-200) 50%,
+      var(--color-base-300) 75%
     );
     background-size: 200% 100%;
   }

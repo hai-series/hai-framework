@@ -171,6 +171,7 @@
     }
   }
   useToastFeedback(() => errors.general)
+  useToastFeedback(() => errors.avatar)
 </script>
 
 <div {...dataAttributes} class={containerClass}>
@@ -199,9 +200,7 @@
                   onchange={handleAvatarChange}
                 />
                 <Button type='button' variant='outline' size='sm' disabled={loading} onclick={() => document.getElementById(avatarInputId)?.click()}>{uiM('user_profile_upload_avatar')}</Button>
-                {#if errors.avatar}
-                  <p class='text-xs text-error mt-1' role='alert'>{errors.avatar}</p>
-                {:else}
+                {#if !errors.avatar}
                   <p class='text-xs text-base-content/60 mt-1'>{avatarHint ?? uiM('user_profile_avatar_hint')}</p>
                 {/if}
               </div>

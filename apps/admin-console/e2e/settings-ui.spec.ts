@@ -2,14 +2,16 @@ import { expect, test } from '@playwright/test'
 import { dutyAccounts, loginOnPage, waitForHydration } from './helpers'
 
 test.describe('Settings UI', () => {
-  test('主题选择、刷新持久化和关于分区可连续操作', async ({ page }) => {
+  test('主题选择、刷新持久化和关于分区可连续操作', async ({ page }, testInfo) => {
     await loginOnPage(page, dutyAccounts.config.username, dutyAccounts.config.password)
     await page.goto('/admin/settings')
     await waitForHydration(page)
     await page.getByRole('button', { name: '外观', exact: true }).click()
+    await page.screenshot({ path: testInfo.outputPath('settings-light.png'), animations: 'disabled' })
     await page.getByRole('button', { name: '选择主题', exact: true }).last().click()
     await page.getByRole('button', { name: 'Dark', exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await page.screenshot({ path: testInfo.outputPath('settings-dark.png'), animations: 'disabled' })
     await page.reload()
     await waitForHydration(page)
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')

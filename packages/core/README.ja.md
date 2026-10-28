@@ -158,9 +158,9 @@ const level = core.logger.getLevel() // 'debug'
 
 ブラウザーでは引き続き DevTools console に出力します。`pretty` は読みやすいメッセージと context、`json` は `level` / `msg` を含む JSON 文字列です。既定の認証情報マスキングと設定したパスのマスキングを併用し、ネストしたドット・括弧パスと `*` に対応します。メッセージ本文の機密情報は呼び出し側で除去してください。
 
-ログ文脈のネイティブ `Error` は、`name`、`message`、`stack`、`cause`、`AggregateError.errors` と列挙可能な自身の文脈を持つコピーに変換してから、既定のフィールド/URL マスクと設定済み `redact` を適用します。両環境で同じ規則を使い、元の例外は変更しません。例外サブグラフの循環は `[Circular]`、32 階層の上限は `[MaxDepth]` になり、この範囲の独自置換値にも同じ正規化を適用します。通常オブジェクトの置換動作は変えません。Error を含まない通常オブジェクトの循環は元の構造を保持し、直接 JSON 化できる保証はありません。`name/message/stack` は自由文で、含まれる秘密を自動解析しません。記録前に除去するか、`error.message` / `error.stack` などのパス全体を隠してください。
+ログ文脈のネイティブ `Error` は、`name`、`message`、`stack`、`cause`、`AggregateError.errors` と列挙可能な自身の文脈を持つコピーに変換してから、既定のフィールド/URL マスクと設定済み `redact` を適用します。両環境で同じ規則を使い、元の例外は変更しません。例外サブグラフの循環は `[Circular]`、32 階層の上限は `[MaxDepth]` になり、この範囲の独自置換値にも同じ正規化を適用します。通常オブジェクトの置換動作は変えません。Error を含まない通常オブジェクトの循環は元の構造を保持し、直接 JSON 化できる保証はありません。例外文中の `passwordHash=...` や `secretKey=...` など明示的な認証情報、認証ヘッダー、URL の認証情報はマスクします。ラベルのない任意の秘密は検出できないため、呼び出し側で除去するか `error.message` / `error.stack` などのパス全体を隠してください。
 
-`core.logger` は既定でログの機密情報をマスクします。`password`、`token`、`secret`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワード、機密クエリ値、OAuth 形式の fragment をマスクします。不正な URL は固定値を返します。メールアドレス・電話番号は既定では隠しません。
+`core.logger` は既定でログの機密情報をマスクします。`password`、`passwordHash`、`passwd`、`token`、`secret`、`secretKey`、`privateKey`、`apiV3Key` などは `[REDACTED]` に置換されます。`url` / `baseUrl` / `endpoint` は URL 内のユーザー名・パスワード、機密クエリ値、OAuth 形式の fragment をマスクします。不正な URL は固定値を返します。メールアドレス・電話番号は既定では隠しません。
 
 ##### ログレベルの規約
 
@@ -201,7 +201,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 
 #### 機密情報のマスク
 
-`core.sanitize.sanitizeSensitiveFields()` はオブジェクト・配列内の機密情報を再帰的にマスクします。既定では password、token、secret、privateKey、apiV3Key などを処理し、`url` / `baseUrl` / `endpoint` の認証情報もマスクします。`core.sanitize.sanitizeUrl(url, options)` は単独の URL にも使用でき、不正な URL は `(invalid url)` を返します。独自の matcher はクエリ名にも適用されます。
+`core.sanitize.sanitizeSensitiveFields()` はオブジェクト・配列内の機密情報を再帰的にマスクします。既定では password/passwordHash、passwd、token、secret/secretKey、privateKey、apiV3Key などを処理し、`url` / `baseUrl` / `endpoint` の認証情報もマスクします。`core.sanitize.sanitizeUrl(url, options)` は単独の URL にも使用でき、不正な URL は `(invalid url)` を返します。独自の matcher はクエリ名にも適用されます。`sanitizeText` は明示的な認証情報と URL を処理し、既知の秘密値も指定できますが、ラベルのない任意の秘密は検出しません。
 
 ```typescript
 core.sanitize.sanitizeSensitiveFields({
@@ -608,7 +608,7 @@ unsubscribe()
 
 ## エラー表示とログの関連付け
 
-HTTP エラーはローカライズ済みの安全な表示に `(traceId: …)` を付け、同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
+HTTP エラーには安全な翻訳文と追跡番号を含めます。ToastContainer は番号を既定で非表示にし、調査情報のアイコンから表示・コピーできます。同じ ID を error.traceId と X-Trace-Id に返します。requestId を traceId として共有し、ブラウザーとサーバーのログを関連付けます。脱機密化した例外・スタック・操作情報はログに残し、内部 cause/ext は公開しません。項目検証は翻訳済みの項目名とメッセージだけを返します。
 
 HTTP/UI 境界には core.error.toPublic(error, traceId?)、再翻訳後の表示には core.error.formatMessage(error) を使い、ID を重複追加しません。ログには完全な Error を渡してください。DB ログにはドライバーコード、脱機密化したメッセージ・スタック、表・列を残し、SQL 本文、バインド値と接続認証情報を記録しません。
 

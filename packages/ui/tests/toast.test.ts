@@ -54,29 +54,10 @@ describe('toastState', () => {
     expect(toast.items.length).toBe(0)
   })
 
-  it('应该支持 success 快捷方法', () => {
-    const id = toast.success('操作成功')
-    expect(id).toBeDefined()
-    expect(toast.items[0].variant).toBe('success')
-    expect(toast.items[0].message).toBe('操作成功')
-  })
-
-  it('应该支持 error 快捷方法', () => {
-    const id = toast.error('操作失败')
-    expect(id).toBeDefined()
-    expect(toast.items[0].variant).toBe('error')
-  })
-
-  it('应该支持 warning 快捷方法', () => {
-    const id = toast.warning('警告信息')
-    expect(id).toBeDefined()
-    expect(toast.items[0].variant).toBe('warning')
-  })
-
-  it('应该支持 info 快捷方法', () => {
-    const id = toast.info('提示信息')
-    expect(id).toBeDefined()
-    expect(toast.items[0].variant).toBe('info')
+  it.each(['success', 'error', 'warning', 'info'] as const)('快捷方法 %s 保留消息、类型和停留时间', (variant) => {
+    const id = toast[variant]('操作结果', 4500)
+    expect(id).toEqual(expect.any(String))
+    expect(toast.items[0]).toMatchObject({ id, message: '操作结果', variant, duration: 4500 })
   })
 
   it('应该自动关闭 Toast', () => {
@@ -152,6 +133,31 @@ describe('toastState', () => {
     vi.advanceTimersByTime(1000)
     expect(toast.items).toEqual([])
   })
+
+  it('兼容已有格式且保留恢复建议，显式编号优先且拒绝非法编号', () => {
+    toast.add({ message: '提交失败 (traceId: request-1)；请稍后重试', traceId: 'request-2', variant: 'warning', duration: 0 })
+    expect(toast.items[0]).toMatchObject({ message: '提交失败；请稍后重试', traceId: 'request-2' })
+    toast.add({ message: '请求失败', traceId: '<script>private</script>' })
+    expect(toast.items[1].traceId).toBeUndefined()
+  })
+
+  it('暂停保留剩余时长，关闭暂停项后下一个提示仍正常计时', () => {
+    const id = toast.error('第一条', 2000)
+    toast.warning('第二条', 1000)
+    vi.advanceTimersByTime(500)
+    toast.pause(id)
+    vi.advanceTimersByTime(10000)
+    expect(toast.items).toHaveLength(2)
+    toast.resume(id)
+    vi.advanceTimersByTime(1499)
+    expect(toast.items[0].id).toBe(id)
+    toast.pause(id)
+    toast.remove(id)
+    toast.resume(id)
+    vi.advanceTimersByTime(1000)
+    expect(toast.items).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
 
 describe('toast notify helpers', () => {
@@ -174,31 +180,48 @@ describe('toast notify helpers', () => {
     expect(mod.toast.items[0].message).toBe('保存成功')
   })
 
-  it('notifyError 隐藏底层 Error，提示安全文案并附上 traceId', () => {
+  it('notifyError 隐藏底层 Error，将追踪编号与可读文案分开', () => {
     mod.notifyError(new Error('SQL private details'), '保存失败')
     expect(mod.toast.items[0].variant).toBe('error')
-    expect(mod.toast.items[0].message).toMatch(/^保存失败 \(traceId: [\w.:-]+\)$/)
+    expect(mod.toast.items[0].message).toBe('保存失败')
+    expect(mod.toast.items[0].traceId).toMatch(/^[\w.:-]+$/)
     expect(mod.toast.items[0].message).not.toContain('SQL')
   })
 
   it('notifyError 非 Error 且为空时使用兜底文案', () => {
     mod.notifyError(undefined, '未知错误')
-    expect(mod.toast.items[0].message).toMatch(/^未知错误 \(traceId: [\w.:-]+\)$/)
+    expect(mod.toast.items[0].message).toBe('未知错误')
+  })
+
+  it('保留异常 cause 中的业务原因和服务端追踪标识', () => {
+    const cause = { code: 'hai:feedback:004', message: '反馈已更新，请刷新后重试', httpStatus: 409, traceId: 'request-feedback-1' }
+    mod.notifyError(new Error('Feedback callback failed', { cause }), '操作失败')
+    expect(mod.toast.items[0]).toMatchObject({ message: '反馈已更新，请刷新后重试', traceId: 'request-feedback-1' })
+  })
+
+  it('包装后的服务端异常仍隐藏内部细节，循环 cause 不会阻塞提示', () => {
+    mod.notifyError(new Error('Internal wrapper', { cause: { code: 'app:db', message: 'SQL private statement', httpStatus: 500, traceId: 'request-db-1' } }), '操作失败')
+    expect(mod.toast.items[0].message).not.toContain('SQL')
+    expect(mod.toast.items[0].traceId).toBe('request-db-1')
+    const circular = new Error('Private detail')
+    circular.cause = circular
+    const message = mod.errorMessage(circular, '请联系管理员')
+    expect(message).toMatch(/^请联系管理员 \(traceId: [\w.:-]+\)$/)
   })
 
   it('notifyError 接受字符串文案', () => {
     mod.notifyError('直接文案')
-    expect(mod.toast.items[0].message).toMatch(/^直接文案 \(traceId: [\w.:-]+\)$/)
+    expect(mod.toast.items[0].message).toBe('直接文案')
   })
 
   it('异常即使携带 traceId 仍隐藏原文，只保留关联编号', () => {
     mod.notifyError(new Error('SQL private details (traceId: req-api)'), '保存失败')
-    expect(mod.toast.items[0].message).toBe('保存失败 (traceId: req-api)')
+    expect(mod.toast.items[0]).toMatchObject({ message: '保存失败', traceId: 'req-api' })
   })
 
   it('安全的本地化字符串保留 traceId 且不重复追加', () => {
     mod.notifyError('请求失败 (traceId: req-api)', '兜底')
-    expect(mod.toast.items[0].message).toBe('请求失败 (traceId: req-api)')
+    expect(mod.toast.items[0]).toMatchObject({ message: '请求失败', traceId: 'req-api' })
   })
 
   it('notifyInfo 与 notifyWarning 变体正确', () => {

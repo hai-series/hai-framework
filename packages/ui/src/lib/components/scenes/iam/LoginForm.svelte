@@ -20,7 +20,6 @@
   import { uiM } from '../../../messages.js'
   import { useToastFeedback } from '../../../toast.svelte.js'
   import { cn, getDataAttributes } from '../../../utils.js'
-  import Alert from '../../compounds/Alert.svelte'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
@@ -67,6 +66,7 @@
   let password = $state('')
   let selectedMethod = $state<AuthLoginMethod>('password')
   const method = $derived(methods.includes(selectedMethod) ? selectedMethod : methods[0])
+  useToastFeedback(() => !method ? uiM('auth_unavailable') : '', 'warning')
   const isOtp = $derived(method === 'email' || method === 'sms')
   $effect(() => {
     if (!autoFocus || focusedInitially || disabled || loading || !method || !formElement)
@@ -194,9 +194,7 @@
       </div>
     {/if}
     {#if method === 'ldap'}<p class='text-sm text-base-content/70'>{uiM('login_method_ldap_hint')}</p>{/if}
-    {#if !method}
-      <Alert variant='warning'>{uiM('auth_unavailable')}</Alert>
-    {:else}
+    {#if method}
       <FormField for='login-username' label={method === 'email' ? uiM('register_email') : method === 'sms' ? uiM('register_phone') : uiM('login_username')}>
         <Input
           id='login-username'

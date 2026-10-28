@@ -1,6 +1,28 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
+test('弹窗中的提示可通过键盘关闭并恢复操作焦点', async ({ page, request }, testInfo) => {
+  await registerAndLogin(page, request, 'toast-keyboard')
+  await page.goto('/admin/ui-gallery/overlays')
+  await page.getByRole('button', { name: '打开弹窗并测试 Toast', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  const trigger = dialog.getByRole('button', { name: '成功 Toast', exact: true })
+  await trigger.click()
+  const notification = page.locator('.hai-toast-item')
+  await page.keyboard.press('F8')
+  await expect(notification.getByRole('button', { name: '关闭', exact: true })).toBeFocused()
+  await page.screenshot({ path: testInfo.outputPath('toast-modal-keyboard.png'), animations: 'disabled' })
+  await page.keyboard.press('Escape')
+  await expect(notification).toHaveCount(0)
+  await expect(dialog).toBeVisible()
+  await expect(trigger).toBeFocused()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('F8')
+  await page.keyboard.press('Enter')
+  await expect(notification).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+})
+
 test('浮动提示支持方位、逐条展示、关闭和自动消失，不改变页面布局', async ({ page, request }, testInfo) => {
   test.setTimeout(90_000)
   await registerAndLogin(page, request, 'toast')
@@ -31,6 +53,7 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
   await expect(notification).toContainText('第 1 条提示')
   await notification.getByRole('button', { name: '关闭', exact: true }).click()
   await expect(notification).toContainText('第 2 条提示')
+  await page.mouse.move(10, 10)
   await expect(notification).toContainText('第 3 条提示')
   await expect(notification).toHaveCount(0)
 

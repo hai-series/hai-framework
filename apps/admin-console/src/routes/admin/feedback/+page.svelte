@@ -57,7 +57,7 @@
       await initFeedbackBrowser()
       const loaded = await feedbackApi.feedback.reports.get({ id: report.id })
       if (!loaded.success)
-        throw new Error(loaded.error.message)
+        throw new Error(loaded.error.message, { cause: loaded.error })
       if (generation !== detailGeneration)
         return
       detail = loaded.data
@@ -83,7 +83,7 @@
     const generation = ++evidenceGeneration
     const result = await feedbackApi.feedback.reports.getEvidence({ id, page: next.page, pageSize: next.pageSize, requestId: next.requestId || undefined, errorId: next.errorId || undefined, kind: next.kind as Parameters<typeof feedbackApi.feedback.reports.getEvidence>[0]['kind'] })
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     if (generation === evidenceGeneration && detail?.report.id === id)
       evidence = result.data
   }
@@ -92,7 +92,7 @@
     await initFeedbackBrowser()
     const changed = await feedbackApi.feedback.reports.setStatus(input)
     if (!changed.success)
-      throw new Error(changed.error.message)
+      throw new Error(changed.error.message, { cause: changed.error })
     if (detail?.report.id === input.id)
       await view(reportView(changed.data))
     await invalidateAll()
@@ -110,7 +110,7 @@
       return
     const result = await feedbackApi.feedback.attachments.get({ id: detail.report.id, attachmentId: item.id })
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     const bytes = feedbackBase64Bytes(result.data.dataBase64)
     if (['image/png', 'image/jpeg', 'image/webp', 'video/webm', 'video/mp4'].includes(result.data.contentType)) {
       const url = feedbackBlobUrl(bytes, result.data.contentType)

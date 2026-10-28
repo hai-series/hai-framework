@@ -23,7 +23,7 @@
   import type { DataAttributes, SelectProps } from '../../types.js'
   import { tick, untrack } from 'svelte'
   import { getFormFieldContext } from '../../internal/form-context.js'
-  import { createControlValidation, resolveFormText } from '../../internal/form-validation.svelte.js'
+  import { createControlValidation, resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes, portal } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
@@ -54,6 +54,7 @@
   const validation = createControlValidation(() => validationMessage)
   const localError = $derived(resolveFormText(error) || validation.message)
   const effectiveError = $derived(field?.error || localError)
+  useControlFeedback(() => resolveFormText(error) || validation.message)
   let nativeSelect: HTMLSelectElement | undefined = $state()
   // 独立保存原生选中值，筛选输入的文字不能代替表单实际选项。
   const nativeValue = $derived(value === undefined || value === null ? '' : String(value))
@@ -446,6 +447,6 @@
     {/if}
   </div>
   {#if localError && !field?.error}
-    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
+    <p id={messageId} class='sr-only'>{localError}</p>
   {/if}
 </div>

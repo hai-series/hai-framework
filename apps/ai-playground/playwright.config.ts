@@ -3,6 +3,9 @@ import { defineConfig } from '@playwright/test'
 import { createE2eServerEnv } from '../../scripts/e2e-env.js'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:4180'
+const previewUrl = new URL(baseURL)
+const previewHost = previewUrl.hostname || 'localhost'
+const previewPort = Number.parseInt(previewUrl.port || '4180', 10)
 const live = process.env.HAI_E2E_LIVE === '1'
 
 export default defineConfig({
@@ -27,7 +30,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm build && pnpm exec vite preview --port 4180 --strictPort',
+    command: `pnpm build && pnpm exec vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     env: createE2eServerEnv({
       // 实际商业模型仅在调用方显式选择 live 并注入该前缀时启用。
       ...(live ? Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[0].startsWith('HAI_AI_') && entry[1] !== undefined)) : {}),

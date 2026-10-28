@@ -28,7 +28,7 @@
     try {
       const result = await browserFeedback.prepare()
       if (!result.success)
-        throw new Error(result.error.message)
+        throw new Error(result.error.message, { cause: result.error })
       draft = result.data
       refreshAttachments()
       open = true
@@ -46,33 +46,33 @@
   async function submit(data: FeedbackFormData) {
     const result = await browserFeedback.submit(input(data))
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     return result.data
   }
   async function annotate(mark: FeedbackAnnotation) {
     const result = await browserFeedback.annotate(mark.id, { mode: mark.mode, ...mark.rect, coordinateSpace: 'ratio' })
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     refreshAttachments()
   }
   async function capturePage(id?: string) {
     const result = await browserFeedback.captureScreenshot(id)
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     draft = browserFeedback.getDraft()
     refreshAttachments()
   }
   async function addFiles(files: File[], removedAttachmentIds: readonly string[] = []) {
     const result = await browserFeedback.addFiles(files, removedAttachmentIds)
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     draft = browserFeedback.getDraft()
     refreshAttachments()
   }
   async function exportLocal(data: FeedbackFormData) {
     const result = await browserFeedback.saveDraft(input(data))
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     return result.data.status !== 'cancelled'
   }
   onDestroy(browserFeedback.releasePreviews)

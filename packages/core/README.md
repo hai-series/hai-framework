@@ -158,9 +158,9 @@ const level = core.logger.getLevel() // 'debug'
 
 浏览器仍输出到 DevTools console：`pretty` 使用可读消息与上下文，`json` 输出包含 `level` / `msg` 的 JSON 字符串。默认凭据脱敏与配置的字段路径脱敏同时生效，支持嵌套点/括号路径和 `*`；消息文本本身需调用方脱敏。
 
-日志上下文中的原生 `Error` 会先转为包含 `name`、`message`、`stack`、`cause`、`AggregateError.errors` 与可枚举自有上下文的副本，再执行默认字段/URL 脱敏与配置的 `redact`；两端规则一致，原异常不变。异常子图循环返回 `[Circular]`，32 层上限返回 `[MaxDepth]`；其中的自定义替换值也经同一规范化处理，普通对象的替换语义不变。无 Error 的普通对象循环仍保留原结构，不保证可直接 JSON 序列化。`name/message/stack` 是自由文本，不自动解析其中的秘密；调用方应先清理，或用 `error.message` / `error.stack` 等路径整体遮蔽。
+日志上下文中的原生 `Error` 会先转为包含 `name`、`message`、`stack`、`cause`、`AggregateError.errors` 与可枚举自有上下文的副本，再执行默认字段/URL 脱敏与配置的 `redact`；两端规则一致，原异常不变。异常子图循环返回 `[Circular]`，32 层上限返回 `[MaxDepth]`；其中的自定义替换值也经同一规范化处理，普通对象的替换语义不变。无 Error 的普通对象循环仍保留原结构，不保证可直接 JSON 序列化。异常文本会清理显式标注的凭据（如 `passwordHash=...`、`secretKey=...`）、认证头和 URL 凭据；无法保证识别任意无标签秘密，调用方仍应清理或用 `error.message` / `error.stack` 等路径整体遮蔽。
 
-`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`token`、`secret`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段会掩码 URL 中的用户名、密码和敏感查询参数（含 OAuth 键值 fragment）；非法 URL 返回固定占位符；邮箱、手机号默认不会被遮盖。
+`core.logger` 默认会对日志上下文执行安全脱敏：`password`、`passwordHash`、`passwd`、`token`、`secret`、`secretKey`、`privateKey`、`apiV3Key` 等凭证类字段会替换为 `[REDACTED]`，`url` / `baseUrl` / `endpoint` 这类字段会掩码 URL 中的用户名、密码和敏感查询参数（含 OAuth 键值 fragment）；非法 URL 返回固定占位符；邮箱、手机号默认不会被遮盖。
 
 ##### 日志级别规范
 
@@ -201,7 +201,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 
 #### 脱敏工具
 
-`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理密码、token、secret、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证、敏感查询参数和 OAuth 键值 fragment。`core.sanitize.sanitizeUrl(url, options)` 可单独处理 URL，非法 URL 返回 `(invalid url)`；自定义 matcher 同样适用于参数名。
+`core.sanitize.sanitizeSensitiveFields()` 可递归脱敏对象/数组中的敏感字段；默认会处理 password/passwordHash、passwd、token、secret/secretKey、privateKey、apiV3Key 等凭证类字段，并自动掩码 `url` / `baseUrl` / `endpoint` 字段中的内嵌凭证、敏感查询参数和 OAuth 键值 fragment。`core.sanitize.sanitizeUrl(url, options)` 可单独处理 URL，非法 URL 返回 `(invalid url)`；自定义 matcher 同样适用于参数名。`sanitizeText` 清理显式凭据标签和 URL，也可传入调用方已知的秘密值；它不识别任意无标签秘密。
 
 ```typescript
 core.sanitize.sanitizeSensitiveFields({
@@ -608,7 +608,7 @@ unsubscribe()
 
 ## 错误提示与关联日志
 
-HTTP 错误只向用户返回本地化的安全提示，末尾显示 `(traceId: …)`；响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
+HTTP 错误返回本地化安全文案及追踪编号；ToastContainer 默认隐藏编号，由排查信息图标展开和复制。响应同时包含 `error.traceId` 和 `X-Trace-Id`。框架复用本次 requestId 作为 traceId，前后端日志自动关联。底层异常、堆栈和操作上下文经凭据脱敏后写入日志，不通过 cause/ext 向用户公开。字段校验只返回本地化的字段名和错误。
 
 `core.error.toPublic(error, traceId?)` 用于接口/UI 边界；`core.error.formatMessage(error)` 用于重新翻译后的提示，重复调用不会重复追加标识。日志传入完整 Error 对象，不能只记录通用标题或提前 String(error) 丢失上下文。数据库失败记录驱动错误码、消息、堆栈及表/列；SQL 原文、绑定值和连接凭据不进入日志。
 

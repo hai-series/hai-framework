@@ -34,7 +34,7 @@
     try {
       const result = await managementApi.feedback.reports.list(next)
       if (!result.success)
-        throw new Error(result.error.message)
+        throw new Error(result.error.message, { cause: result.error })
       if (version === requestVersion)
         page = { ...result.data, items: result.data.items.map(view) }
     }
@@ -54,7 +54,7 @@
     const kind = next.kind as FeedbackEvidenceInput['kind'] | undefined
     const result = await managementApi.feedback.reports.getEvidence({ ...next, kind, id })
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     if (selected?.report.id === id)
       evidence = result.data
   }
@@ -64,7 +64,7 @@
     if (version !== detailVersion)
       return
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     selected = result.data
     await loadEvidence()
   }
@@ -74,7 +74,7 @@
       return []
     const result = await feedbackReview.loadReplay(id)
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     return result.data
   }
   async function select(report: FeedbackReportView) {
@@ -87,7 +87,7 @@
   async function status(input: FeedbackStatusChange) {
     const result = await managementApi.feedback.reports.setStatus(input)
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     if (selected?.report.id === input.id)
       await select(view(result.data))
     await load()
@@ -95,7 +95,7 @@
   async function retry(report: FeedbackReportView) {
     const retried = await feedbackReview.retryReport(report.id)
     if (!retried.success)
-      throw new Error(retried.error.message)
+      throw new Error(retried.error.message, { cause: retried.error })
     if (selected?.report.id === report.id)
       await select(report)
     await load()
@@ -103,14 +103,14 @@
   async function exportBundle(report: FeedbackReportView) {
     const result = await feedbackReview.exportReport(report.id)
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
   }
   async function attachment(id: string) {
     if (!selected)
       return
     const result = await managementApi.feedback.attachments.get({ id: selected.report.id, attachmentId: id })
     if (!result.success)
-      throw new Error(result.error.message)
+      throw new Error(result.error.message, { cause: result.error })
     if (result.data.contentType.startsWith('image/') || result.data.contentType.startsWith('video/')) {
       if (imageUrls[id])
         URL.revokeObjectURL(imageUrls[id])

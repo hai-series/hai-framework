@@ -109,12 +109,11 @@
     }
   }
   useToastFeedback(() => error || actionError)
+  useToastFeedback(() => permissions.read === false ? uiM('feedback_permission_denied') : '', 'warning')
 </script>
 
 <section {...dataAttributes} class={`feedback-list flex min-h-0 min-w-0 flex-1 flex-col gap-3 ${className}`} aria-label={uiM('feedback_list_title')}>
-  {#if permissions.read === false}
-    <p role='alert' class='alert alert-warning'>{uiM('feedback_permission_denied')}</p>
-  {:else}
+  {#if permissions.read !== false}
     <div class='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-base-content/8 bg-base-100'>
       <TableToolbar class='shrink-0 border-b border-base-content/8 p-3' bind:searchValue={search} {filterFields} bind:filterValues searchPlaceholder={uiM('feedback_search')} onsearch={() => filter(filterValues)} onclearfilters={() => applyQuery({ page: 1, pageSize: data.pageSize })} />
       <div class='min-h-0 min-w-0 flex-1 overflow-hidden'>

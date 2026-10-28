@@ -27,7 +27,7 @@
   import type { DataAttributes, FormText, Size } from '../../types.js'
   import { DatePicker as BitsDatePicker } from 'bits-ui'
   import { getFormFieldContext } from '../../internal/form-context.js'
-  import { resolveFormText } from '../../internal/form-validation.svelte.js'
+  import { resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
 
@@ -87,6 +87,7 @@
   const messageId = `${uniqueId}-message`
   const localError = $derived(resolveFormText(error))
   const effectiveError = $derived(field?.error || localError)
+  useControlFeedback(() => localError)
   const sizeClasses = $derived(getFormControlSizeClasses(size))
 </script>
 
@@ -173,6 +174,6 @@
   </BitsDatePicker.Root>
 
   {#if localError && !field?.error}
-    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
+    <p id={messageId} class='sr-only'>{localError}</p>
   {/if}
 </div>

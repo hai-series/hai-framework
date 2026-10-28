@@ -23,6 +23,7 @@
   import type { DataAttributes, Size } from '../../../types.js'
   import { writeTextToClipboard } from '../../../internal/browser-safety.js'
   import { uiM } from '../../../messages.js'
+  import { useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import { BareButton, IconButton, Input } from '../../primitives/index.js'
 
@@ -82,6 +83,8 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   let showValue = $state(false)
   let encryptionError = $state(false)
+  useToastFeedback(() => encryptionError ? uiM('encrypted_input_failed') : '')
+  useToastFeedback(() => !onencrypt ? uiM('encrypted_input_unavailable') : '', 'warning')
 
   // 输入、回调或组件生命周期变化时，旧请求立即失效。
   $effect(() => {
@@ -129,12 +132,6 @@
 </script>
 
 <div {...dataAttributes} class='encrypted-input space-y-2 {className}'>
-  {#if encryptionError}
-    <p role='alert' class='text-sm text-error'>{uiM('encrypted_input_failed')}</p>
-  {/if}
-  {#if !onencrypt}
-    <p role='status' class='text-sm text-warning'>{uiM('encrypted_input_unavailable')}</p>
-  {/if}
   <!-- 输入框 -->
   <div class='relative'>
     <Input

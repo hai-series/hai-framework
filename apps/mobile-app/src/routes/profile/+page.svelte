@@ -158,7 +158,7 @@
         {m.action_logout()}
       </Button>
     {:else}
-      <Alert variant='warning' title={m.profile_guest_title()}>
+      <Alert variant='info' title={m.profile_guest_title()}>
         {m.profile_guest_desc()}
       </Alert>
     {/if}

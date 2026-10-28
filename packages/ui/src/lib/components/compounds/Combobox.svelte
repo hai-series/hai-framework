@@ -29,7 +29,7 @@
   import type { DataAttributes, FormText, Size } from '../../types.js'
   import { Combobox } from 'bits-ui'
   import { getFormFieldContext } from '../../internal/form-context.js'
-  import { resolveFormText } from '../../internal/form-validation.svelte.js'
+  import { resolveFormText, useControlFeedback } from '../../internal/form-validation.svelte.js'
   import { uiM } from '../../messages.js'
   import { cn, getDataAttributes } from '../../utils.js'
   import { getFormControlSizeClasses } from '../control-size.js'
@@ -115,6 +115,7 @@
   const messageId = `${uniqueId}-message`
   const localError = $derived(resolveFormText(error))
   const effectiveError = $derived(field?.error || localError)
+  useControlFeedback(() => localError, () => fieldLabel)
   const sizeClasses = $derived(getFormControlSizeClasses(size))
   // 为未提供 value 时设置初始默认值（仅在初始化时执行一次）
   // 统一以空字符串初始化，避免在初始化阶段捕获 multiple 的初始值。
@@ -403,6 +404,6 @@
   {/if}
 
   {#if localError && !field?.error}
-    <p id={messageId} class='mt-1.5 text-xs text-error leading-relaxed break-words' aria-live='polite'>{localError}</p>
+    <p id={messageId} class='sr-only'>{localError}</p>
   {/if}
 </div>

@@ -60,7 +60,7 @@ import type {
   ApiRequestObserver,
   ApiRequestRecord,
 } from './api-client-types.js'
-import { apiContract, IamSessionErrorCodeSchema } from '@h-ai/api-contract'
+import { apiContract, HaiErrorSchema, IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core, err, ok } from '@h-ai/core'
 import { TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { createORPCClient, ORPCError } from '@orpc/client'
@@ -812,6 +812,14 @@ function mapClientError(error: unknown) {
   if (capacity)
     return err(HaiApiClientError.PAYLOAD_TOO_LARGE, capacity.message, { direction: capacity.direction, stage: capacity.stage, limitBytes: capacity.limitBytes, actualBytes: capacity.actualBytes })
   if (error instanceof ORPCError) {
+    // Kit 等 HTTP 宿主使用非 2xx HaiResult；oRPC 将该包络放在 data.body 中。
+    // 恢复已校验的业务错误，HTTP 状态优先，不能让正文把 5xx 降为可公开的 4xx。
+    const body: unknown = error.data && typeof error.data === 'object' && 'body' in error.data ? error.data.body : undefined
+    if (body && typeof body === 'object' && 'success' in body && body.success === false && 'error' in body) {
+      const parsed = HaiErrorSchema.safeParse(body.error)
+      if (parsed.success)
+        return err({ ...parsed.data, httpStatus: error.status })
+    }
     // 保留 ORPCError 的原始 code / status / data，供上层区分具体业务异常（不仅是 HTTP 状态码）。
     const detail = { orpcCode: error.code, status: error.status, data: error.data }
     if (error.status === 413)

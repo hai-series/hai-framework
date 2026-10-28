@@ -12,7 +12,7 @@
   import type { DataAttributes } from '../../../types.js'
   import type { FeedbackAttachmentView, FeedbackEvidenceQuery, FeedbackEvidenceView, FeedbackHistoryView, FeedbackPage, FeedbackPermissions, FeedbackReportView, FeedbackStatusChange } from './feedback-types.js'
   import { uiM } from '../../../messages.js'
-  import { errorMessage, useToastFeedback } from '../../../toast.svelte.js'
+  import { errorMessage, toast, useToastFeedback } from '../../../toast.svelte.js'
   import { getDataAttributes } from '../../../utils.js'
   import FormField from '../../compounds/FormField.svelte'
   import FormLayout from '../../compounds/FormLayout.svelte'
@@ -130,12 +130,12 @@
       void query({ page: 1, kind: 'business', requestId: undefined, errorId: undefined })
   }
   useToastFeedback(() => error || actionError)
+  useToastFeedback(() => permissions.read === false ? uiM('feedback_permission_denied') : '', 'warning')
+  useToastFeedback(() => failedPreviews.length ? uiM('feedback_preview_failed') : '', 'warning')
 </script>
 
 <section {...dataAttributes} class={`feedback-detail min-w-0 space-y-4 ${className}`} aria-label={uiM('feedback_details')}>
-  {#if permissions.read === false}
-    <p class='alert alert-warning' role='alert'>{uiM('feedback_permission_denied')}</p>
-  {:else if report}
+  {#if permissions.read !== false && report}
     <header class='flex flex-wrap items-center justify-between gap-3'>
       <div class='min-w-0'><h2 class='text-xl font-semibold break-all'>{report.number}</h2><p class='text-sm text-base-content/65'>{report.appId} · {report.appVersion || '—'} · {feedbackTime(report.createdAt)}</p></div>
       <div class='flex flex-wrap items-center gap-2'>
@@ -154,7 +154,7 @@
               <div><dt class='text-base-content/55'>{uiM('feedback_collection')}</dt><dd>{collectionLabel(report.collectionStatus)}</dd></div>
               <div><dt class='text-base-content/55'>{uiM('feedback_notification')}</dt><dd>{notificationLabel(report.notificationStatus)}</dd></div>
               {#if webhook}
-                <div><dt class='text-base-content/55'>{uiM('feedback_webhook')}</dt><dd>{notificationLabel(webhook.status === 'succeeded' ? 'sent' : webhook.status === 'running' ? 'sending' : webhook.status)} · {uiM('feedback_attempts')}: {webhook.attempts}</dd>{#if webhook.lastError}<dd class='break-all text-error'>{webhook.lastError}</dd>{/if}</div>
+                <div><dt class='text-base-content/55'>{uiM('feedback_webhook')}</dt><dd>{notificationLabel(webhook.status === 'succeeded' ? 'sent' : webhook.status === 'running' ? 'sending' : webhook.status)} · {uiM('feedback_attempts')}: {webhook.attempts}</dd>{#if webhook.lastError}<dd><Button variant='ghost' size='sm' onclick={() => toast.error(webhook!.lastError!)}>{uiM('toast_diagnostics')}</Button></dd>{/if}</div>
               {/if}
               <div><dt class='text-base-content/55'>{uiM('feedback_submitter')}</dt><dd class='break-all'>{report.userId || '—'}</dd></div>
               <div><dt class='text-base-content/55'>{uiM('feedback_revision')}</dt><dd>{report.evidenceRevision}</dd></div>
@@ -177,8 +177,7 @@
                     {#if attachment.mimeType?.startsWith('image/') && imagePreviewUrl(attachment.url)}<img src={imagePreviewUrl(attachment.url)} alt={attachment.name} class='max-w-full rounded' loading='lazy' referrerpolicy='no-referrer' onerror={() => failedPreviews = [...failedPreviews, attachment.id]} onload={() => failedPreviews = failedPreviews.filter(id => id !== attachment.id)} />{/if}
                     {#if attachment.mimeType?.startsWith('video/') && imagePreviewUrl(attachment.url)}<!-- svelte-ignore a11y_media_has_caption (用户上传的无声录屏) -->
                       <video src={imagePreviewUrl(attachment.url)} controls preload='metadata' class='max-w-full rounded' aria-label={attachment.name}></video>{/if}
-                    {#if failedPreviews.includes(attachment.id)}<p class='text-warning text-sm'>{uiM('feedback_preview_failed')}</p>{/if}
-                    {#if attachment.missingReason}<p class='text-warning break-words'>{uiM('feedback_missing')}: {attachment.missingReason}</p>
+                    {#if attachment.missingReason}<Button size='sm' variant='ghost' onclick={() => toast.warning(`${uiM('feedback_missing')}: ${attachment.missingReason}`)}>{uiM('feedback_missing')}</Button>
                     {:else if onattachment}<Button size='sm' variant='ghost' disabled={busy} onclick={() => run(() => onattachment(attachment))}>{uiM('feedback_download')}</Button>{/if}
                   </article>
                 {/each}
@@ -201,7 +200,7 @@
             {#each evidence.items as item (item.id)}
               <article class='min-w-0 rounded-lg border border-base-content/10 p-3 space-y-2'>
                 <div class='flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/65'><span>{feedbackTime(item.timestamp)}</span><span>{uiM('feedback_source')}: {item.source} #{item.sequence}</span><span>{item.kind}</span>{#if item.requestId}<span class='break-all'>{uiM('feedback_request_id')}: {item.requestId}</span>{/if}{#if item.errorId}<span class='text-error break-all'>{uiM('feedback_error_id')}: {item.errorId}</span>{/if}</div>
-                {#if item.missingReason}<p class='text-warning text-sm break-words'>{uiM('feedback_missing')}: {item.missingReason}</p>{/if}
+                {#if item.missingReason}<Button size='sm' variant='ghost' onclick={() => toast.warning(`${uiM('feedback_missing')}: ${item.missingReason}`)}>{uiM('feedback_missing')}</Button>{/if}
                 <pre class='max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded bg-base-200 p-3 text-xs'>{evidenceText(item.data)}</pre>
               </article>
             {/each}

@@ -18,6 +18,7 @@
   let loading = $state(false)
   let error = $state('')
   let imageFailed = $state(false)
+  useToastFeedback(() => imageFailed ? uiM('feedback_preview_failed') : '', 'warning')
   const url = $derived(imagePreviewUrl(attachment.url))
 
   function point(event: PointerEvent & { currentTarget: HTMLDivElement }) {
@@ -94,7 +95,6 @@
         <div class:mask-preview={mode === 'mask'} class='pointer-events-none absolute border-2 border-error' style:left={`${rect.x * 100}%`} style:top={`${rect.y * 100}%`} style:width={`${rect.width * 100}%`} style:height={`${rect.height * 100}%`}></div>
       {/if}
     </div>
-    {#if imageFailed}<p class='text-warning text-sm' role='status'>{uiM('feedback_preview_failed')}</p>{/if}
     {#if onannotate && !imageFailed}
       <div class='flex flex-wrap gap-2'>
         <Button size='xs' variant={mode === 'outline' ? 'primary' : 'ghost'} onclick={() => {

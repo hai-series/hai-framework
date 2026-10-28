@@ -22,6 +22,16 @@ export interface ToastItem extends ToastProps {
   id: string
 }
 
+/** 兼容安全错误消息中的追踪编号，将排查信息从用户说明中分离。 */
+function normalizeMessage(message: string, explicitTraceId?: string): Pick<ToastProps, 'message' | 'traceId'> {
+  let traceId = explicitTraceId && /^[\w.:-]{1,128}$/.test(explicitTraceId) ? explicitTraceId : undefined
+  const readable = message.replace(/\s*\(traceId: ([\w.:-]{1,128})\)/g, (_, embedded: string) => {
+    traceId ??= embedded
+    return ''
+  }).trim()
+  return { message: readable || core.i18n.coreM('core_errorInternal'), traceId }
+}
+
 /**
  * Toast 状态
  */
@@ -29,12 +39,53 @@ class ToastState {
   items = $state<ToastItem[]>([])
   /** 仅队首计时，等待项在展示后才开始计算停留时间。 */
   private timer: ReturnType<typeof setTimeout> | undefined
+  private deadline = 0
+  private remaining = 0
+  private paused = false
 
-  private startTimer(): void {
+  private startTimer(duration = this.items[0]?.duration ?? 0): void {
     const item = this.items[0]
     if (item && (item.duration ?? 0) > 0) {
-      this.timer = setTimeout(() => this.remove(item.id), item.duration)
+      this.remaining = duration
+      this.deadline = Date.now() + duration
+      this.timer = setTimeout(() => this.remove(item.id), duration)
     }
+  }
+
+  /**
+   * 暂停当前提示的自动关闭，供阅读和交互期间使用；等待项不受影响。
+   * @param id - 当前提示 ID。
+   * @example
+   * ```ts
+   * const id = toast.info('同步中')
+   * toast.pause(id)
+   * toast.resume(id)
+   * ```
+   */
+  pause(id: string): void {
+    if (this.items[0]?.id !== id || this.paused)
+      return
+    this.paused = true
+    this.remaining = Math.max(0, this.deadline - Date.now())
+    clearTimeout(this.timer)
+    this.timer = undefined
+  }
+
+  /**
+   * 从剩余时间恢复当前提示的自动关闭；手工关闭或清空后不会恢复旧计时器。
+   * @param id - 当前提示 ID。
+   * @example
+   * ```ts
+   * const id = toast.info('同步中')
+   * toast.pause(id)
+   * toast.resume(id)
+   * ```
+   */
+  resume(id: string): void {
+    if (this.items[0]?.id !== id || !this.paused)
+      return
+    this.paused = false
+    this.startTimer(this.remaining)
   }
 
   /**
@@ -53,6 +104,7 @@ class ToastState {
     const id = Math.random().toString(36).slice(2, 9)
     const item: ToastItem = {
       ...props,
+      ...normalizeMessage(props.message, props.traceId),
       id,
       duration: props.duration ?? 3000,
       position: props.position ?? 'bottom-right',
@@ -84,6 +136,7 @@ class ToastState {
     if (isCurrent) {
       clearTimeout(this.timer)
       this.timer = undefined
+      this.paused = false
     }
     this.items = this.items.filter(item => item.id !== id)
     if (isCurrent)
@@ -104,6 +157,7 @@ class ToastState {
   clear(): void {
     clearTimeout(this.timer)
     this.timer = undefined
+    this.paused = false
     this.items = []
   }
 
@@ -193,7 +247,7 @@ export const toast = new ToastState()
 /**
  * 在组件初始化时订阅操作提示，统一交给根布局的 ToastContainer 展示。
  * 只跟踪消息来源，不订阅 Toast 队列；同一消息已在队列中时合并，避免父子组件重复提示。
- * 字段校验仍由控件定位，传入此函数的文案应已经完成安全映射和本地化。
+ * 字段校验保留控件关联和定位，提示统一由此入口展示；文案应已经完成安全映射和本地化。
  * 订阅随组件销毁结束，已发出的通知继续由根容器管理。
  * @param message - 响应式消息读取函数；空值表示没有待提示的操作结果。
  * @param variant - 通知类型，默认 error。
@@ -207,13 +261,18 @@ export const toast = new ToastState()
  * ```
  */
 export function useToastFeedback(message: () => string | undefined | null, variant: NonNullable<ToastProps['variant']> = 'error'): void {
+  let ownId: string | undefined
   $effect(() => {
     const value = message()
-    if (!value)
-      return
     untrack(() => {
-      if (!toast.items.some(item => item.message === value && item.variant === variant))
-        toast.add({ message: value, variant })
+      if (ownId)
+        toast.remove(ownId)
+      ownId = undefined
+      if (!value)
+        return
+      const normalized = normalizeMessage(value)
+      if (!toast.items.some(item => item.message === normalized.message && item.traceId === normalized.traceId && item.variant === variant))
+        ownId = toast.add({ message: value, variant })
     })
   })
 }
@@ -246,11 +305,11 @@ export function notifySuccess(message: string, duration: number = SUCCESS_DURATI
 /**
  * 弹出操作失败提示（默认右下角）。
  *
- * @description 接受 `Error` 或字符串；`Error` 取其 message，其余回退到 fallback，
- *   避免各业务页面重复实现错误文案兜底逻辑。
+ * @description 接受完整错误对象或已本地化的安全字符串；普通 Error 隐藏原文，
+ *   使用 fallback 或通用错误并保留 traceId。不要把未知 Error.message 转成字符串传入。
  *
  * @param error - 错误对象或已本地化的错误文案。
- * @param fallback - 当 error 非 Error 且为空时使用的兜底文案。
+ * @param fallback - 未识别的异常或缺少错误文案时使用的安全兜底说明。
  * @param duration - 可选停留时长（毫秒），默认 5000。
  * @returns 新错误通知的 ID，可交给 toast.remove 提前移除。
  *
@@ -266,7 +325,7 @@ export function notifyError(error: unknown, fallback = '', duration: number = ER
 }
 
 /**
- * 行内错误和 Toast 共用的安全提示；日志保留脱敏原因，提示末尾共用 traceId。
+ * 生成安全错误提示；日志保留脱敏原因，字符串携带追踪编号供 ToastContainer 分离展示。
  * @example
  * ```ts
  * import { errorMessage } from '@h-ai/ui'
@@ -275,8 +334,15 @@ export function notifyError(error: unknown, fallback = '', duration: number = ER
  */
 export function errorMessage(error: unknown, fallback = ''): string {
   let known: Parameters<typeof core.error.toPublic>[0] | undefined
-  if (error && typeof error === 'object' && !(error instanceof Error) && Object.hasOwn(error, 'code') && Object.hasOwn(error, 'message') && 'message' in error && typeof error.message === 'string')
-    known = error as Parameters<typeof core.error.toPublic>[0]
+  // Promise 回调可用原生 Error 携带 HaiError；保留业务原因和追踪信息，同时防止 cause 环。
+  let candidate = error
+  const visited: Error[] = []
+  while (candidate instanceof Error && !visited.includes(candidate) && visited.length < 8) {
+    visited.push(candidate)
+    candidate = candidate.cause
+  }
+  if (candidate && typeof candidate === 'object' && !(candidate instanceof Error) && Object.hasOwn(candidate, 'code') && Object.hasOwn(candidate, 'message') && 'code' in candidate && typeof candidate.code === 'string' && 'message' in candidate && typeof candidate.message === 'string')
+    known = candidate as Parameters<typeof core.error.toPublic>[0]
   const receivedMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   const embeddedTraceId = /\(traceId: ([\w.:-]{1,128})\)$/.exec(receivedMessage)?.[1]
   const traceId = known?.traceId ?? embeddedTraceId ?? core.context.get().traceId ?? core.context.get().requestId ?? core.id.uuid()

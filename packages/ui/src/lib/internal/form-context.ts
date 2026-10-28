@@ -68,6 +68,7 @@ export function getFormVisibilityContext(): FormVisibilityContext | undefined {
  * ```
  */
 export interface FormFieldContext {
+  readonly label?: string
   readonly controlId: string
   readonly labelId: string
   readonly messageId: string | undefined

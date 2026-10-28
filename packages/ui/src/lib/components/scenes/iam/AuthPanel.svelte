@@ -147,6 +147,7 @@
   }
   useToastFeedback(() => error)
   useToastFeedback(() => notice ? uiM(notice) : '', 'info')
+  useToastFeedback(() => config && !available ? uiM('auth_unavailable') : '', 'warning')
 </script>
 
 {#snippet link(next: AuthPanelMode, label: string, href?: string)}
@@ -172,12 +173,10 @@
     <!-- 固定内容包装节点，避免 fieldset 插入通知时丢失容器查询子树的布局。 -->
     <div class='min-w-0'>
       {#if error}
-        <p class='text-sm text-base-content/60'>{uiM('auth_error_service')}</p>
         {#if onretry}<Button class='mt-4 w-full' onclick={onretry}>{uiM('crud_retry')}</Button>{/if}
       {:else if !config}
         <div class='flex justify-center' role='status'><Spinner /></div>
       {:else if !available}
-        <p class='text-sm text-base-content/60'>{uiM('auth_unavailable')}</p>
         <div class='mt-4 text-center'>{@render link('login', uiM('login_submit'), loginUrl)}</div>
       {:else}
         <span role='status' class='sr-only'>{verifying ? uiM('auth_captcha_verifying') : ''}</span>

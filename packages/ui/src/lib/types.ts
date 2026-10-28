@@ -824,8 +824,8 @@ export interface ProgressProps extends DataAttributes {
  * ```
  */
 export interface AlertProps extends DataAttributes {
-  /** 变体 */
-  variant?: Variant
+  /** 持续信息的变体；警告和错误统一使用 toast / ToastContainer。 */
+  variant?: 'info' | 'success'
   /** 标题 */
   title?: string
   /** 是否可关闭 */
@@ -853,9 +853,11 @@ export interface AlertProps extends DataAttributes {
 export interface ToastProps extends DataAttributes {
   /** 消息 */
   message: string
+  /** 问题追踪编号；默认隐藏，用户展开排查信息后可查看和复制，不传入敏感信息。 */
+  traceId?: string
   /** 变体 */
   variant?: Variant
-  /** 展示后的持续时间 (ms)，默认 3000；排队等待不计时，0 为不自动关闭 */
+  /** 展示后的持续时间 (ms)，默认 3000；排队、悬停、聚焦或展开排查信息时暂停，0 为不自动关闭 */
   duration?: number
   /** 浮动位置，默认 bottom-right；多个提示按加入顺序逐条显示 */
   position?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center'

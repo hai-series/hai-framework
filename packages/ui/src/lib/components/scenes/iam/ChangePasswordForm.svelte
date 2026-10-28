@@ -86,6 +86,7 @@
     await onsubmit?.(data)
   }
   useToastFeedback(() => errors.general)
+  useToastFeedback(() => policyError)
 </script>
 
 <form {...dataAttributes} class={formClass} onsubmit={handleSubmit}>
@@ -140,7 +141,6 @@
     </div>
 
     {#if passwordPolicy}<p class='text-xs text-base-content/60'>{passwordPolicyHint(passwordPolicy)}</p>{/if}
-    {#if policyError}<p role='alert' class='text-sm text-error'>{policyError}</p>{/if}
 
     <Button
       type='submit'

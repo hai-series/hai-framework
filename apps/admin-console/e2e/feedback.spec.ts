@@ -476,7 +476,9 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
   try {
     await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
     await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeVisible()
-    await expect(page.locator('.hai-toast-item[data-variant=error] .hai-toast-message')).toContainText(/\(traceId: [\w.:-]+\)$/)
+    await expect(page.locator('.hai-toast-item[data-variant=error] .hai-toast-message')).not.toContainText('traceId:')
+    await page.locator('.hai-toast-item[data-variant=error]').getByRole('button', { name: '查看排查信息', exact: true }).click()
+    await expect(page.locator('.hai-toast-item[data-variant=error] code')).toHaveText(/^[\w.:-]+$/)
     await expect(page.locator('.feedback-form textarea[name="description"]')).toHaveValue(description)
     const downloading = page.waitForEvent('download')
     await page.locator('.feedback-form').getByRole('button', { name: '保存反馈到本地', exact: true }).click()
