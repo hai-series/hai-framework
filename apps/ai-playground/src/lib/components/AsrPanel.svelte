@@ -3,6 +3,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { transcribe } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   let file = $state<File | undefined>()
   let language = $state<'auto' | 'zh' | 'en' | 'ja'>('auto')
@@ -28,13 +29,14 @@
       transcript = result.text || m.asr_empty_result()
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
       busy = false
     }
   }
+  useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>
@@ -58,10 +60,6 @@
     <option value='en'>{m.asr_language_en()}</option>
     <option value='ja'>{m.asr_language_ja()}</option>
   </select>
-
-  {#if error}
-    <div class='alert alert-error mt-3 py-2 text-sm' role='alert'>{error}</div>
-  {/if}
   {#if transcript}
     <div class='mt-4 rounded-2xl bg-base-200 p-4' data-testid='asr-result'>
       <div class='mb-2 text-xs font-semibold uppercase tracking-wider text-base-content/45'>{m.asr_result_label()}</div>

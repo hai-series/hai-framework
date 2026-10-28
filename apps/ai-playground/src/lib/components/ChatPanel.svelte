@@ -4,6 +4,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { rememberExchange, sendChat } from '$lib/services/ai-lab.js'
   import { Button, Card, toast, ToggleInput } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   interface Props {
     profileId: string
@@ -68,7 +69,7 @@
     catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError')
         return
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -113,6 +114,7 @@
     chatAbortController?.abort()
     memoryAbortController?.abort()
   })
+  useToastFeedback(() => error)
 </script>
 
 <Card class='flex min-h-[42rem] flex-col border border-base-content/8 bg-base-100/88 shadow-xl shadow-base-content/5' padding='none'>
@@ -156,9 +158,6 @@
   </div>
 
   <form class='border-t border-base-content/8 p-4' onsubmit={submit}>
-    {#if error}
-      <div class='alert alert-error mb-3 py-2 text-sm' role='alert'>{error}</div>
-    {/if}
     {#if remembering}
       <div class='mb-2 flex items-center gap-2 text-xs text-base-content/50'>
         <span class='loading loading-dots loading-xs'></span>

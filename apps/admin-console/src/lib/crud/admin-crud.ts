@@ -21,7 +21,8 @@ async function requestJson<T>(url: string, init: RequestInit, fallbackMessage: s
   const response = await sensitiveFetch(operation, url, init)
   const result = await response.json() as ApiResult<T>
   if (!result.success) {
-    throw new Error(result.error?.message || fallbackMessage)
+    // CRUD 的异常契约保留结构化错误，展示时统一做安全映射。
+    throw result.error ?? new Error(fallbackMessage)
   }
   return result.data
 }

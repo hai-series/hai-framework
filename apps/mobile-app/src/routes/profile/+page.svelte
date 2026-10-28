@@ -46,7 +46,6 @@
     })
     if (error) {
       errors = { general: m.profile_update_failed({ message: error }) }
-      toast.error(m.profile_update_failed({ message: error }))
       return
     }
 

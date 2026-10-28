@@ -12,6 +12,7 @@
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import { saveBusinessNotice } from '$lib/services/business-settings'
   import { applyTheme, getCurrentTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
+  import { errorMessage as formatOperationError, toast, useToastFeedback } from '@h-ai/ui/toast'
 
   interface Props { data: PageData }
   const { data }: Props = $props()
@@ -24,10 +25,13 @@
     errorMessage = ''
     try {
       const result = await saveBusinessNotice(notice)
-      if (!result.success)
-        errorMessage = result.error.message
-      else
+      if (!result.success) {
+        errorMessage = formatOperationError(result.error, m.common_error())
+      }
+      else {
+        toast.success(m.common_success())
         await invalidateAll()
+      }
     }
     catch { errorMessage = m.common_network_error() }
     finally { saving = false }
@@ -73,6 +77,7 @@
       currentLanguage = getLocale()
     }
   })
+  useToastFeedback(() => errorMessage)
 </script>
 
 <svelte:head>
@@ -98,7 +103,6 @@
         <Textarea id='business-notice' bind:value={notice} maxlength={200} rows={4} data-testid='business-notice-input' />
       </FormField>
       <p class='text-sm text-base-content/60'>{m.business_notice_hint()}</p>
-      {#if errorMessage}<p class='text-error' role='alert'>{errorMessage}</p>{/if}
       <Button type='submit' loading={saving}>{m.settings_save()}</Button>
     </form>
   {:else if activeSection === 'appearance'}

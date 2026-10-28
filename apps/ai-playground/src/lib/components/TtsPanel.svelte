@@ -3,6 +3,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { synthesize } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   interface Props {
     voices?: string[]
@@ -39,7 +40,7 @@
       audioUrl = URL.createObjectURL(audio)
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -51,6 +52,7 @@
     if (audioUrl)
       URL.revokeObjectURL(audioUrl)
   })
+  useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>
@@ -77,10 +79,6 @@
       <input class='input input-bordered w-full' bind:value={instruction} maxlength='1000' />
     </label>
   </div>
-
-  {#if error}
-    <div class='alert alert-error mt-3 py-2 text-sm' role='alert'>{error}</div>
-  {/if}
   {#if audioUrl}
     <audio class='mt-4 w-full' src={audioUrl} controls data-testid='tts-audio'></audio>
   {/if}

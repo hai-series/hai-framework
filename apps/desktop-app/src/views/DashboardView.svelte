@@ -4,6 +4,7 @@
 -->
 <script lang='ts'>
   import { Alert, Button, Card, PageHeader } from '@h-ai/ui'
+  import { useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import { currentUser, hasPermission } from '../lib/auth-store.svelte.js'
   import { desktopM as m } from '../lib/messages.svelte.js'
@@ -32,6 +33,8 @@
       return
     await sendEcho(trimmed)
   }
+  useToastFeedback(() => currentServiceInfoError())
+  useToastFeedback(() => currentEchoError())
 </script>
 
 <div class='flex flex-col gap-4'>
@@ -60,9 +63,7 @@
     {#if isServiceInfoLoading()}
       <p class='text-sm opacity-70'>{m('service_loading')}</p>
     {:else if currentServiceInfoError()}
-      <Alert variant='error' title={m('service_failed')}>
-        {currentServiceInfoError()}
-      </Alert>
+      <p class='text-sm text-base-content/60'>{m('service_failed')}</p>
     {:else if currentServiceInfo()}
       <div class='grid gap-3 md:grid-cols-2'>
         <div>
@@ -102,12 +103,6 @@
           {m('echo_send')}
         </Button>
       </div>
-
-      {#if currentEchoError()}
-        <Alert variant='error' title={m('echo_failed')}>
-          {currentEchoError()}
-        </Alert>
-      {/if}
 
       {#if currentEchoResult()}
         <div class='bg-base-200 rounded-box grid gap-3 p-4 md:grid-cols-2'>

@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
   import { Button, Input, Select, Textarea, toast } from '@h-ai/ui'
+  import { errorMessage } from '@h-ai/ui/toast'
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
 
@@ -90,7 +91,7 @@
         errors = {}
       }
       else {
-        toast.error(data.error?.message ?? m.partner_submit_failed())
+        toast.error(errorMessage(data.error && typeof data.error === 'object' ? { ...data.error, httpStatus: response.status } : undefined, m.partner_submit_failed()))
       }
     }
     catch {

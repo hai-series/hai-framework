@@ -6,6 +6,7 @@
   import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '$lib/services/profile-api'
   import { toast } from '@h-ai/ui'
   import { authErrorMessage } from '@h-ai/ui/i18n'
+  import { errorMessage } from '@h-ai/ui/toast'
 
   interface Props {
     data: PageData
@@ -103,7 +104,7 @@
       const uploadResponse = await uploadProfileAvatar(file)
       const uploadBody = await uploadResponse.json()
       if (!uploadResponse.ok || !uploadBody.success) {
-        profileErrors = { avatar: uploadBody.error?.message ?? m.common_error() }
+        profileErrors = { general: errorMessage(uploadBody.error, m.common_error()) }
         return
       }
 
@@ -111,7 +112,7 @@
         avatar: uploadBody.data?.avatar,
       })
       if (!response.ok || !body.success) {
-        profileErrors = { general: body.error?.message ?? m.common_error() }
+        profileErrors = { general: errorMessage(body.error, m.common_error()) }
         return
       }
 
@@ -159,7 +160,7 @@
       if (!response.ok || !body.success) {
         profileErrors = {
           ...normalizeProfileFieldErrors(body.error?.details?.fieldErrors),
-          general: body.error?.message ?? m.common_error(),
+          general: errorMessage(body.error, m.common_error()),
         }
         return
       }

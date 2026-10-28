@@ -1,7 +1,8 @@
 <script lang='ts'>
   import * as m from '$lib/paraglide/messages.js'
   import { inviteUser } from '$lib/services/invitation.js'
-  import { Alert, Button, FormField, FormLayout, Input, Modal, Select } from '@h-ai/ui'
+  import { Button, FormField, FormLayout, Input, Modal, Select } from '@h-ai/ui'
+  import { errorMessage as formatOperationError, useToastFeedback } from '@h-ai/ui/toast'
 
   interface Props {
     open: boolean
@@ -26,7 +27,7 @@
       const result = await inviteUser({ username, email: email || undefined, phone: mode === 'phone' ? phone : undefined, roles: role ? [role] : undefined })
       await onrefresh()
       if (!result.success) {
-        error = `${result.error.message} ${m.invitation_check_existing()}`
+        error = `${formatOperationError(result.error, m.common_error())} ${m.invitation_check_existing()}`
         return
       }
       username = ''
@@ -38,6 +39,7 @@
     catch { error = `${m.common_network_error()} ${m.invitation_check_existing()}` }
     finally { loading = false }
   }
+  useToastFeedback(() => error)
 </script>
 
 <Modal {open} title={m.invitation_title()} onclose={onclose} closeOnBackdrop={!loading} closeOnEscape={!loading} showClose={!loading}>
@@ -49,7 +51,6 @@
       {#if mode === 'phone'}<FormField label={m.invitation_phone()} required><Input type='tel' bind:value={phone} required maxlength={32} data-testid='invite-phone' /></FormField>{/if}
       <FormField label={m.iam_users_col_roles()}><Select bind:value={role} options={roleOptions} data-testid='invite-role' /></FormField>
     </FormLayout>
-    {#if error}<Alert variant='error'>{error}</Alert>{/if}
     <div class='flex justify-end gap-2'><Button variant='ghost' disabled={loading} onclick={onclose}>{m.action_cancel()}</Button><Button type='submit' {loading}>{m.invitation_send()}</Button></div>
   </form>
 </Modal>

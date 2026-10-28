@@ -9,7 +9,7 @@ interface MemoryMock {
   createdAt: number
 }
 
-test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({ page }) => {
+test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({ page }, testInfo) => {
   const memories: MemoryMock[] = []
 
   await page.route('**/api/**', async (route) => {
@@ -155,6 +155,18 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
   await expect(page.getByTestId('mic-stop')).toBeVisible()
   await page.getByTestId('mic-stop').click()
   await expect(page.getByTestId('mic-start')).toBeEnabled({ timeout: 20_000 })
+  const dismiss = page.locator('.hai-toast-layer button')
+  for (let count = 0; count < 10 && await dismiss.count(); count++)
+    await dismiss.click()
+  await page.route('**/api/image', route => route.fulfill({ status: 500, json: { success: false, error: { code: 'PROVIDER_ERROR', message: 'Private provider details (traceId: ai-request)' } } }))
+  await page.getByTestId('image-run').click()
+  const notification = page.locator('.hai-toast-item[data-variant=error]')
+  await expect(notification).toBeVisible()
+  await expect(notification).toContainText('traceId: ai-request')
+  await expect(notification).not.toContainText('Private provider')
+  await page.setViewportSize({ width: 390, height: 960 })
+  await expect(notification).toBeInViewport({ ratio: 1 })
+  await page.screenshot({ path: testInfo.outputPath('ai-error-toast-390.png'), fullPage: true })
 })
 
 for (const secondUseMemory of [true, false]) {

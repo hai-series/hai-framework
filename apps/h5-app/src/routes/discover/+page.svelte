@@ -1,5 +1,6 @@
 <script lang='ts'>
   import * as m from '$lib/paraglide/messages.js'
+  import { toast, useToastFeedback } from '@h-ai/ui/toast'
   import { onDestroy, onMount } from 'svelte'
 
   interface VisionAnalysis {
@@ -66,7 +67,7 @@
 
   async function analyze() {
     if (!file) {
-      errorMessage = m.discover_error_no_file()
+      toast.error(m.discover_error_no_file())
       return
     }
 
@@ -85,7 +86,7 @@
       const json = await res.json()
 
       if (!json.success) {
-        errorMessage = json.error?.message ?? m.discover_error_failed()
+        errorMessage = m.discover_error_failed()
         return
       }
 
@@ -100,6 +101,7 @@
     }
   }
 
+  useToastFeedback(() => errorMessage)
 </script>
 
 <svelte:head>
@@ -149,10 +151,6 @@
         placeholder={m.discover_prompt_placeholder()}
         rows={3}
       />
-
-      {#if errorMessage}
-        <Alert variant='error'>{errorMessage}</Alert>
-      {/if}
 
       <Button variant='primary' class='w-full' loading={loading} onclick={analyze}>
         {#if loading}

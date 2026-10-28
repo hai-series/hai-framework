@@ -9,11 +9,13 @@
     loadMoreUsers,
     refreshUsers,
   } from '$lib/stores/users-store.svelte.js'
+  import { useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
 
   onMount(() => {
     void refreshUsers()
   })
+  useToastFeedback(() => currentUsersError())
 </script>
 
 <svelte:head>
@@ -26,12 +28,6 @@
       <h1 class='text-2xl font-bold'>{m.users_title()}</h1>
       <p class='text-base-content/60 mt-1 text-sm'>{m.users_subtitle({ total: currentUsersTotal() })}</p>
     </section>
-
-    {#if currentUsersError()}
-      <Alert variant='error' title={m.users_error_title()}>
-        {currentUsersError()}
-      </Alert>
-    {/if}
 
     <InfiniteScroll
       onloadmore={loadMoreUsers}

@@ -3,6 +3,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { generateImage } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   let prompt = $state(m.image_default_prompt())
   let size = $state('1024x1024')
@@ -29,7 +30,7 @@
       imageUrl = URL.createObjectURL(image)
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -41,6 +42,7 @@
     if (imageUrl)
       URL.revokeObjectURL(imageUrl)
   })
+  useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>
@@ -71,10 +73,6 @@
     <option value='1536x1024'>1536 × 1024</option>
     <option value='1024x1536'>1024 × 1536</option>
   </select>
-
-  {#if error}
-    <div class='alert alert-error mt-3 py-2 text-sm' role='alert'>{error}</div>
-  {/if}
   {#if imageUrl}
     <img class='mt-4 w-full rounded-xl border border-base-content/10 object-contain' src={imageUrl} alt={m.image_result_alt()} data-testid='image-result' />
   {/if}

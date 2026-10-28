@@ -4,6 +4,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { transcribe } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   /** 面板阶段：空闲 / 录音并实时转写 / 完成最后一段转写 */
   type Phase = 'idle' | 'recording' | 'finalizing'
@@ -63,7 +64,7 @@
     catch (cause) {
       if (currentRecordingId !== recordingId)
         return
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -158,6 +159,7 @@
     }
     releaseStream()
   })
+  useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>
@@ -197,10 +199,6 @@
       <p class='text-sm text-base-content/40'>{m.mic_placeholder()}</p>
     {/if}
   </div>
-
-  {#if error}
-    <div class='alert alert-error mt-3 py-2 text-sm' role='alert'>{error}</div>
-  {/if}
 
   {#if phase === 'recording'}
     <Button class='mt-4 w-full' variant='error' onclick={stop} data-testid='mic-stop'>

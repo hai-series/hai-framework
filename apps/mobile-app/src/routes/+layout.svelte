@@ -14,6 +14,7 @@
   } from '$lib/stores/auth-store.svelte.js'
   import { changeLocale, localeStore } from '$lib/stores/locale-store.svelte.js'
   import { applyTheme, getSavedTheme } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import '../app.css'
 
@@ -75,7 +76,7 @@
       await refreshCurrentUser()
     }
     catch (error) {
-      bootError = error instanceof Error ? error.message : m.common_unknown_error()
+      bootError = errorMessage(error, m.common_unknown_error())
     }
     finally {
       booting = false
@@ -114,6 +115,7 @@
       void goto(resolve('/', {}))
     }
   })
+  useToastFeedback(() => bootError)
 </script>
 
 {#key localeStore.current}
@@ -131,7 +133,6 @@
         <div class='flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center'>
           <span class='icon-[tabler--alert-triangle] text-error text-4xl'></span>
           <h1 class='text-lg font-bold'>{m.boot_failed_title()}</h1>
-          <p class='text-base-content/60 text-sm'>{bootError}</p>
           <Button variant='primary' size='sm' onclick={() => location.reload()}>{m.common_retry()}</Button>
         </div>
       </div>

@@ -9,6 +9,7 @@
   import { exportFeedback, feedbackApi, feedbackListParameters, initFeedbackBrowser, loadFeedbackReplay, retryFeedback } from '$lib/services/feedback.js'
   import { downloadFeedbackBytes, feedbackBase64Bytes, feedbackBlobUrl } from '$lib/utils/feedback-browser.js'
   import { FeedbackDetail, FeedbackList, usePermission } from '@h-ai/ui'
+  import { errorMessage } from '@h-ai/ui/toast'
   import { onDestroy, untrack } from 'svelte'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
 
@@ -67,7 +68,7 @@
     }
     catch (cause) {
       if (generation === detailGeneration)
-        actionError = cause instanceof Error ? cause.message : m.feedback_request_failed()
+        actionError = errorMessage(cause, m.feedback_request_failed())
     }
     finally {
       if (generation === detailGeneration)
@@ -135,7 +136,7 @@
         await changeQuery(query)
       }
       catch (cause) {
-        actionError = cause instanceof Error ? cause.message : m.feedback_request_failed()
+        actionError = errorMessage(cause, m.feedback_request_failed())
       }
     }
   }

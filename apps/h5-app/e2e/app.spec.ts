@@ -67,7 +67,7 @@ test.describe('h5-app core flows', () => {
 
     await page.getByRole('button', { name: /开始识别|Analyze/ }).click()
 
-    const errorAlert = page.locator('.alert-error')
+    const errorAlert = page.locator('.hai-toast-item[data-variant=error]')
     await expect(errorAlert).toBeVisible()
     await expect(errorAlert).toContainText(/请先选择或拍摄一张图片|Please select or capture an image first/)
 

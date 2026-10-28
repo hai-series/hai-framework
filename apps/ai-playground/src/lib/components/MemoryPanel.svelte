@@ -4,6 +4,7 @@
   import * as m from '$lib/paraglide/messages.js'
   import { clearMemories, createMemory, deleteMemory, loadMemories } from '$lib/services/ai-lab.js'
   import { Button, Card } from '@h-ai/ui'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   interface Props {
     profileId: string
@@ -34,7 +35,7 @@
       items = await loadMemories(targetProfileId, query.trim())
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -53,7 +54,7 @@
       await refresh()
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
       busy = false
     }
@@ -67,7 +68,7 @@
       await refresh()
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
       busy = false
     }
@@ -81,7 +82,7 @@
       items = []
     }
     catch (cause) {
-      const detail = cause instanceof Error ? cause.message : m.error_unknown()
+      const detail = errorMessage(cause, m.error_unknown())
       error = m.error_request({ detail })
     }
     finally {
@@ -97,6 +98,7 @@
   $effect(() => {
     void refresh(profileId, refreshToken)
   })
+  useToastFeedback(() => error)
 </script>
 
 <Card class='border border-base-content/8 bg-base-100/88 shadow-lg shadow-base-content/5'>
@@ -132,10 +134,6 @@
     <input class='input input-bordered min-w-0 flex-1' bind:value={query} placeholder={m.memory_search_placeholder()} aria-label={m.memory_search_label()} />
     <Button type='submit' variant='default' disabled={busy}>{m.memory_search()}</Button>
   </form>
-
-  {#if error}
-    <div class='alert alert-error mt-3 py-2 text-sm' role='alert'>{error}</div>
-  {/if}
 
   <div class='mt-4 max-h-80 space-y-2 overflow-y-auto' data-testid='memory-list' aria-live='polite'>
     {#if busy && items.length === 0}

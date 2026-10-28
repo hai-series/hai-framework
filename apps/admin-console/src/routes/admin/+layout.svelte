@@ -20,6 +20,7 @@
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { applyTheme, FeedbackModal, getSavedTheme, ReauthenticationDialog, SessionRecoveryDialog, setPermissionContext, usePermission, WorkspaceLayout } from '@h-ai/ui'
   import { GuideHost } from '@h-ai/ui/guide'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
 
@@ -104,7 +105,7 @@
       feedbackOpen = true
     }
     catch (cause) {
-      feedbackError = cause instanceof Error ? cause.message : m.feedback_request_failed()
+      feedbackError = errorMessage(cause, m.feedback_request_failed())
     }
     finally {
       feedbackPreparing = false
@@ -229,6 +230,7 @@
       userMenuOpen = false
     }
   }
+  useToastFeedback(() => feedbackError)
 </script>
 
 <SessionRecoveryDialog recovery={sessionRecovery} actions={authActions} />
@@ -444,8 +446,6 @@
     {/snippet}
   </WorkspaceLayout>
 </div>
-
-{#if feedbackError}<div class='fixed bottom-4 right-4 z-50 max-w-sm break-words rounded-lg bg-error p-3 text-error-content' role='alert'>{feedbackError}</div>{/if}
 <FeedbackModal
   bind:open={feedbackOpen}
   attachments={feedbackMaterials.attachments}

@@ -8,7 +8,8 @@
   import * as m from '$lib/paraglide/messages'
   import { newAuditBackupId, runAuditBackup } from '$lib/services/audit-backup.js'
   import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
-  import { Alert, Badge, Button, CrudPage } from '@h-ai/ui'
+  import { Badge, Button, CrudPage } from '@h-ai/ui'
+  import { errorMessage as formatOperationError, useToastFeedback } from '@h-ai/ui/toast'
 
   interface Props {
     data: PageData
@@ -29,7 +30,7 @@
     try {
       const result = await runAuditBackup(backupId)
       if (!result.success) {
-        backupError = `${result.error.message} ${m.audit_backup_retry_hint()}`
+        backupError = `${formatOperationError(result.error, m.common_error())} ${m.audit_backup_retry_hint()}`
         return
       }
       receipt = result.data
@@ -47,6 +48,8 @@
     pageSize: data.pagination.pageSize,
     filters: data.filters,
   })
+  useToastFeedback(() => backupError)
+  useToastFeedback(() => receipt ? m.audit_backup_private_hint() : '', 'success')
 </script>
 
 <svelte:head>
@@ -57,8 +60,7 @@
   <p class='text-sm text-base-content/60'>{m.audit_stats_hint()}</p>
   <div class='flex flex-wrap gap-2'>{#each data.stats as stat (stat.action)}<Badge variant='ghost'>{stat.action}: {stat.count}</Badge>{/each}</div>
   {#if data.backupEnabled}<Button variant='outline' loading={backingUp} onclick={backup} data-testid='audit-backup'>{m.audit_backup_run()}</Button>{/if}
-  {#if backupError}<Alert variant='error'>{backupError}</Alert>{/if}
-  {#if receipt}<Alert variant='success'><p>{m.audit_backup_private_hint()}</p><p class='break-all font-mono text-xs' data-testid='audit-backup-receipt'>{receipt.key} · {receipt.recordCount} · SHA-256: {receipt.sha256}</p></Alert>{/if}
+  {#if receipt}<div class='rounded-lg border border-base-content/10 bg-base-200/50 p-3'><p class='break-all font-mono text-xs' data-testid='audit-backup-receipt'>{receipt.key} · {receipt.recordCount} · SHA-256: {receipt.sha256}</p></div>{/if}
 </div>
 
 <CrudPage

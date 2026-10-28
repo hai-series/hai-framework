@@ -3,7 +3,8 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { Alert, Badge, Button, Card, DataTable, FilterBar, Input, PageHeader, Pagination, Select } from '@h-ai/ui'
+  import { Badge, Button, Card, DataTable, FilterBar, Input, PageHeader, Pagination, Select } from '@h-ai/ui'
+  import { useToastFeedback } from '@h-ai/ui/toast'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
 
   const { data }: { data: PageData } = $props()
@@ -75,6 +76,7 @@
     await goto(loginHref)
   }
 
+  useToastFeedback(() => data.loadError)
 </script>
 
 <svelte:head>
@@ -98,7 +100,6 @@
         <div class='w-full sm:w-56'><Select size='sm' options={statusOptions} bind:value={status} /></div>
       </FilterBar>
     </form>
-    {#if data.loadError}<Alert variant='error'>{data.loadError}</Alert>{/if}
     <DataTable data={data.records} {columns} keyField='id' striped={false} sortKey={data.sortBy} sortDir={data.sortDirection} onsort={sort} class='min-h-0 min-w-0 flex-1 overflow-auto'>
       {#snippet cell(item, key)}
         {#if key === 'contact_info'}<div class='text-xs leading-5'><div>{String(item.phone ?? '')}</div><div class='text-base-content/60'>{String(item.email ?? '')}</div></div>

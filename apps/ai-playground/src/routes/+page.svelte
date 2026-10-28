@@ -9,6 +9,7 @@
   import TtsPanel from '$lib/components/TtsPanel.svelte'
   import * as m from '$lib/paraglide/messages.js'
   import { loadStatus } from '$lib/services/ai-lab.js'
+  import { errorMessage, useToastFeedback } from '@h-ai/ui/toast'
 
   let profileId = $state('demo-user')
   let status = $state<LabStatus | undefined>()
@@ -22,10 +23,11 @@
         statusError = ''
       })
       .catch((cause: unknown) => {
-        const detail = cause instanceof Error ? cause.message : m.error_unknown()
+        const detail = errorMessage(cause, m.error_unknown())
         statusError = m.error_request({ detail })
       })
   })
+  useToastFeedback(() => statusError)
 </script>
 
 <svelte:head>
@@ -80,10 +82,6 @@
       <div class='mt-2 truncate font-mono text-sm font-semibold'>{status?.imageModel ?? '—'}</div>
     </div>
   </section>
-
-  {#if statusError}
-    <div class='alert alert-error mb-5' role='alert'>{statusError}</div>
-  {/if}
 
   <div class='lab-grid'>
     <ChatPanel {profileId} onmemorychange={() => memoryRefreshToken += 1} />

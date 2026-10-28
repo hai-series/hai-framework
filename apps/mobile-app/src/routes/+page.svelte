@@ -13,6 +13,7 @@
     refreshServiceInfo,
     sendEcho,
   } from '$lib/stores/service-status.svelte.js'
+  import { useToastFeedback } from '@h-ai/ui/toast'
   import { onMount } from 'svelte'
 
   const me = $derived(currentUser())
@@ -33,6 +34,8 @@
 
     await sendEcho(trimmed)
   }
+  useToastFeedback(() => currentServiceInfoError())
+  useToastFeedback(() => currentEchoError())
 </script>
 
 <svelte:head>
@@ -76,9 +79,7 @@
           {m.common_loading()}
         </div>
       {:else if currentServiceInfoError()}
-        <Alert variant='error' title={m.service_error_title()}>
-          {currentServiceInfoError()}
-        </Alert>
+        <p class='text-sm text-base-content/60'>{m.service_error_title()}</p>
       {:else if currentServiceInfo()}
         <div class='grid grid-cols-2 gap-3 text-sm'>
           <div>
@@ -118,12 +119,6 @@
         <Button variant='primary' size='sm' loading={isEchoLoading()} class='w-full' onclick={handleEcho}>
           {m.echo_send()}
         </Button>
-
-        {#if currentEchoError()}
-          <Alert variant='error' title={m.echo_error_title()}>
-            {currentEchoError()}
-          </Alert>
-        {/if}
 
         {#if currentEchoResult()}
           <div class='bg-base-200 rounded-xl p-3 text-sm'>

@@ -3,7 +3,8 @@
   使用 @h-ai/ui 的 PageHeader / Card / DataTable / Pagination / Alert / Tag。
 -->
 <script lang='ts'>
-  import { Alert, Card, DataTable, PageHeader, Pagination, TableToolbar } from '@h-ai/ui'
+  import { Card, DataTable, PageHeader, Pagination, TableToolbar } from '@h-ai/ui'
+  import { useToastFeedback } from '@h-ai/ui/toast'
   import { desktopApiClient } from '../lib/api.js'
   import { desktopM as m } from '../lib/messages.svelte.js'
 
@@ -70,16 +71,11 @@
     sortDir = direction
     page = 1
   }
+  useToastFeedback(() => errorCode ? m('users_failed') : '')
 </script>
 
 <div class='flex min-h-0 flex-1 flex-col gap-4'>
   <PageHeader title={m('nav_users')} description={m('users_total', { total })} class='mb-0 shrink-0' />
-
-  {#if errorCode}
-    <Alert variant='error' title={m('users_failed')}>
-      {errorCode}
-    </Alert>
-  {/if}
 
   <Card padding='none' class='min-h-0 flex-1 overflow-hidden !shadow-none [&>.card-body]:min-h-0 [&>.card-body]:flex-1 [&>.card-body]:gap-0'>
     <TableToolbar class='shrink-0 border-b border-base-content/8 p-3' bind:searchValue={search} searchPlaceholder={m('users_search')} onsearch={(value) => {

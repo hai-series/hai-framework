@@ -10,6 +10,30 @@ interface ApiResponse<T = unknown> {
 }
 
 test.describe('Corporate pages and partner flow', () => {
+  test('partner login uses safe Toast for both credential failures on narrow and wide screens', async ({ page }, testInfo) => {
+    await page.route('**/api/partners/admin/login', route => route.fulfill({
+      status: 401,
+      json: { success: false, error: { code: 'AUTH_FAILED', message: 'Private credential field details', traceId: 'partner-login-request' } },
+    }))
+    await page.goto('/partners/admin/login')
+    await page.waitForLoadState('networkidle')
+    for (const [username, width] of [['missing-user', 390], ['partner-admin', 1440]] as const) {
+      await page.setViewportSize({ width, height: 960 })
+      await page.locator('#admin-username').fill(username)
+      await page.locator('#admin-password').fill('Incorrect-test-password!')
+      await page.locator('button[type=submit]').click()
+      const notification = page.locator('.hai-toast-item[data-variant=error]')
+      await expect(notification).toContainText('用户名或密码不正确')
+      await expect(notification).toContainText('traceId: partner-login-request')
+      await expect(notification).not.toContainText('Private')
+      await expect(notification).toBeInViewport({ ratio: 1 })
+      await expect(page.locator('form .alert-error')).toHaveCount(0)
+      await expect(page.locator('#admin-username')).toHaveValue(username)
+      await page.screenshot({ path: testInfo.outputPath(`partner-login-toast-${width}.png`), fullPage: true })
+      await notification.getByRole('button').click()
+    }
+  })
+
   test('contact delivery failure preserves input and success clears it', async ({ page }) => {
     let sent = false
     await page.route('**/api/contact', route => route.fulfill({

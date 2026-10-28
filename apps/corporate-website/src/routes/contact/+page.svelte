@@ -4,6 +4,7 @@
    * 联系我们页面 — 表单通过 API 提交，使用 @h-ai/reach 发送邮件
    */
   import { Button, Input, Textarea, toast } from '@h-ai/ui'
+  import { errorMessage } from '@h-ai/ui/toast'
 
   let name = $state('')
   let email = $state('')
@@ -29,7 +30,7 @@
         message = ''
       }
       else {
-        toast.error(data.error?.message ?? m.contact_submit_failed())
+        toast.error(errorMessage(data.error && typeof data.error === 'object' ? { ...data.error, httpStatus: res.status } : undefined, m.contact_submit_failed()))
       }
     }
     catch {

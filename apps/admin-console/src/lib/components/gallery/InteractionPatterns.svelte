@@ -1,7 +1,8 @@
 <script lang='ts'>
   import * as m from '$lib/paraglide/messages'
-  import { Alert, DataTable, Empty, Pagination, TableToolbar, Tabs } from '@h-ai/ui/components/compounds/index'
+  import { DataTable, Empty, Pagination, TableToolbar, Tabs } from '@h-ai/ui/components/compounds/index'
   import { Button } from '@h-ai/ui/components/primitives/index'
+  import { useToastFeedback } from '@h-ai/ui/toast'
 
   let viewState = $state('ready')
   let page = $state(1)
@@ -40,6 +41,7 @@
     page = 1
     viewState = 'ready'
   }
+  useToastFeedback(() => viewState === 'error' ? `${m.gallery_interaction_error_title()} ${m.gallery_interaction_error_description()}` : '')
 </script>
 
 <section data-testid='interaction-patterns' class='min-w-0 space-y-5 rounded-xl border border-base-300 bg-base-100 p-4 sm:p-6'>
@@ -57,10 +59,9 @@
     <div class='min-w-0 space-y-4'>
       <TableToolbar bind:searchValue={searchDraft} bind:filterValues={filterDraft} bind:viewMode searchLabel={m.gallery_interaction_search()} searchPlaceholder={m.gallery_interaction_search()} filterFields={[{ id: 'active', label: m.gallery_interaction_status(), type: 'boolean' }]} showViewSwitch onsearch={searchRecords} onclearfilters={resetRecords} />
       {#if viewState === 'error'}
-        <Alert variant='error' title={m.gallery_interaction_error_title()}>
-          {m.gallery_interaction_error_description()}
-          <div class='mt-3'><Button size='sm' onclick={() => viewState = 'ready'}>{m.gallery_interaction_retry()}</Button></div>
-        </Alert>
+        <Empty title={m.gallery_interaction_error_title()}>
+          {#snippet action()}<Button size='sm' onclick={() => viewState = 'ready'}>{m.gallery_interaction_retry()}</Button>{/snippet}
+        </Empty>
       {:else}
         {#if viewMode === 'table' || viewState !== 'ready' || !visible.length}
           <DataTable keyField='id' columns={[{ key: 'name', label: m.gallery_interaction_name(), sortable: true }]} data={visible} loading={viewState === 'loading'} sortKey={sortBy} sortDir={sortDirection} onsort={sortRecords} onrowclick={row => selected = row.name}>

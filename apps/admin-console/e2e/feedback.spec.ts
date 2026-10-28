@@ -79,7 +79,7 @@ async function submitFeedback(page: Page, description = '') {
   if (description)
     await page.locator('.feedback-form textarea[name="description"]').fill(description)
   await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
-  const receipt = page.locator('.feedback-form [role="status"]').first()
+  const receipt = page.locator('.feedback-form [data-testid=feedback-receipt]').first()
   await expect(receipt).toContainText(/已受理：FB-/)
   const number = (await receipt.textContent())?.match(/FB-[\w-]+/)?.[0]
   expect(number).toBeTruthy()
@@ -130,7 +130,7 @@ test('无说明反馈受理，分页管理详情可处理和撤销且保留历�
   await expect(page.locator('.feedback-form img[alt="screenshot.png"]')).toBeVisible()
   await capture(page, 'feedback-collect-desktop.png', testInfo)
   await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
-  const receipt = page.locator('.feedback-form [role="status"]').first()
+  const receipt = page.locator('.feedback-form [data-testid=feedback-receipt]').first()
   await expect(receipt).toContainText(/已受理：FB-/)
   const number = (await receipt.textContent())?.match(/FB-[\w-]+/)?.[0]
   expect(number).toBeTruthy()
@@ -326,7 +326,7 @@ test('当前截图、换页补图、材料内容、真实编码录屏和页面�
   expect(submitted.success).toBe(true)
   if (!submitted.success)
     throw new Error(submitted.error.message)
-  const receipt = form.locator('[role="status"]').first()
+  const receipt = form.getByTestId('feedback-receipt').first()
   await expect(receipt).toContainText(/已受理：FB-/)
   const number = (await receipt.textContent())!.match(/FB-[\w-]+/)![0]
   // 受理后附件继续后台上传；整页刷新前先确认已落地，不能主动中断本次验收的续传。
@@ -475,8 +475,8 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
   await page.route('**/api/feedback/reports', route => route.abort('connectionfailed'))
   try {
     await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
-    await expect(page.locator('.feedback-form [role="alert"]')).toBeVisible()
-    await expect(page.locator('.feedback-form [role="alert"]')).toContainText(/\(traceId: [\w.:-]+\)$/)
+    await expect(page.locator('.hai-toast-item[data-variant=error]')).toBeVisible()
+    await expect(page.locator('.hai-toast-item[data-variant=error] .hai-toast-message')).toContainText(/\(traceId: [\w.:-]+\)$/)
     await expect(page.locator('.feedback-form textarea[name="description"]')).toHaveValue(description)
     const downloading = page.waitForEvent('download')
     await page.locator('.feedback-form').getByRole('button', { name: '保存反馈到本地', exact: true }).click()
@@ -504,7 +504,7 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
     await page.unroute('**/api/feedback/reports')
   }
   await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
-  await expect(page.locator('.feedback-form [role="status"]').first()).toContainText(/已受理：FB-/)
+  await expect(page.locator('.feedback-form [data-testid=feedback-receipt]').first()).toContainText(/已受理：FB-/)
   await capture(page, 'feedback-network-recovered.png', testInfo)
 })
 
@@ -580,7 +580,7 @@ test('主动添加JPEG可以预览并烧录遮挡，以PNG实际上传', async (
   await preview.screenshot({ path: testInfo.outputPath('feedback-added-image-masked-detail.png'), animations: 'disabled' })
   const submittedImage = await preview.evaluate(async image => Array.from(new Uint8Array(await (await fetch((image as HTMLImageElement).src)).arrayBuffer())))
   await page.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
-  const receipt = page.locator('.feedback-form [role="status"]').first()
+  const receipt = page.locator('.feedback-form [data-testid=feedback-receipt]').first()
   await expect(receipt).toContainText(/已受理：FB-/)
   const number = (await receipt.textContent())?.match(/FB-[\w-]+/)?.[0]
   expect(number).toBeTruthy()
@@ -683,7 +683,7 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
       { name: pendingPngName, mimeType: 'image/png', buffer: validPng },
       { name: overLimitName, mimeType: 'text/plain', buffer: Buffer.alloc(5 * 1024 * 1024 + 1, 'B') },
     ])
-    const filesError = form.getByRole('alert').first()
+    const filesError = memberPage.locator('.hai-toast-item[data-variant=error]')
     await expect(filesError).toBeVisible()
     await expect(filesError).not.toHaveText('')
     await expect(form.getByText(pendingPngName, { exact: true })).toBeVisible()
@@ -700,7 +700,7 @@ test('默认反馈入口向普通用户开放，管理页面和操作仍受管�
     await form.locator('textarea[name="description"]').scrollIntoViewIfNeeded()
     await capture(memberPage, 'feedback-default-member-files-cleared-mobile.png', testInfo)
     await memberPage.locator('.feedback-form').getByRole('button', { name: '提交反馈', exact: true }).click()
-    const receipt = memberPage.locator('.feedback-form [role="status"]').first()
+    const receipt = memberPage.locator('.feedback-form [data-testid=feedback-receipt]').first()
     await expect(receipt).toContainText(/已受理：FB-/)
     const number = (await receipt.textContent())?.match(/FB-[\w-]+/)?.[0]
     expect(number).toBeTruthy()
