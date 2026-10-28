@@ -94,6 +94,7 @@ const VERSIONS = {
   svelte: '5.57.2',
   svelteKit: '2.70.3',
   svelteAdapterNode: '5.5.7',
+  svelteAdapterStatic: '^3.0.10',
   svelteCheck: '4.7.6',
   sveltePlugin: '7.3.1',
   // Build / Test
@@ -545,6 +546,8 @@ export interface TemplateContext {
   hasUi: boolean
   /** 是否有 i18n（非 api / fullstack 类型） */
   hasI18n: boolean
+  /** website静态模式须拒绝的已选服务端业务模块；部署开发工具和纯展示能力除外。 */
+  websiteServerFeatures: string[]
   /** 是否为 Capacitor 原生移动应用（mobile-app） */
   isCapacitorApp: boolean
   /** 是否为 API workspace（service + contract） */
@@ -932,6 +935,7 @@ export function buildTemplateContext(options: {
     moduleConfigs: options.moduleConfigs,
     hasUi,
     hasI18n: !isApi && !isFullstack,
+    websiteServerFeatures: Object.keys(featureMap).filter(feature => featureMap[feature] && !['deploy', 'ui', 'kit', 'datapipe'].includes(feature)),
     isCapacitorApp,
     isApiWorkspace: isApi,
     isSvelteOnlyApp,

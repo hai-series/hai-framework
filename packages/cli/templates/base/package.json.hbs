@@ -113,6 +113,9 @@
     "@capacitor/status-bar": "{{versions.capacitorStatusBar}}",
 {{else}}
     "@sveltejs/adapter-node": "{{versions.svelteAdapterNode}}",
+{{#if_eq appType 'website'}}
+    "@sveltejs/adapter-static": "{{versions.svelteAdapterStatic}}",
+{{/if_eq}}
 {{/if}}
 {{#unless isSvelteOnlyApp}}
     "@sveltejs/kit": "{{versions.svelteKit}}",

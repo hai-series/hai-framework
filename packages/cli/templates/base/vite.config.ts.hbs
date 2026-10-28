@@ -25,12 +25,18 @@ import tailwindcss from '@tailwindcss/vite'
 {{/if}}
 import { defineConfig } from 'vite'
 import { resolveBuildMetadata } from './scripts/build-metadata.js'
+{{#if_eq appType 'website'}}
+import { resolveStaticWebsite } from './scripts/static-website.mjs'
+{{/if_eq}}
 {{#if isSvelteOnlyApp}}
 import { publicRuntimeConfig } from './scripts/vite-runtime-config.js'
 {{/if}}
 
 export default defineConfig(({ mode, command }) => {
-  const envResult = command === 'build' || process.env.HAI_E2E === '1' ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
+{{#if_eq appType 'website'}}
+  const website = resolveStaticWebsite()
+{{/if_eq}}
+  const envResult = command === 'build' || process.env.HAI_E2E === '1'{{#if_eq appType 'website'}} || website.enabled{{/if_eq}} ? { success: true as const, data: {} as Record<string, string> } : core.config.loadEnvFiles({ mode, envDir: process.cwd() })
   if (!envResult.success)
     throw new Error(envResult.error.message)
   const env = envResult.data
@@ -60,12 +66,25 @@ export default defineConfig(({ mode, command }) => {
     envPrefix: ['VITE_', 'PUBLIC_'],
     define: {
       __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata),
+{{#if_eq appType 'website'}}
+      __HAI_BUILD_STATIC__: JSON.stringify(website.enabled),
+{{/if_eq}}
 {{#if isSvelteOnlyApp}}
       __APP_CORE_CONFIG__: JSON.stringify(appConfig),
 {{/if}}
     },
     plugins: [
       metadataAsset,
+{{#if_eq appType 'website'}}
+      {
+        name: 'hai-static-website-assets',
+        generateBundle() {
+          if (!website.enabled)
+            return
+          this.emitFile({ type: 'asset', fileName: '.nojekyll', source: '' })
+        },
+      },
+{{/if_eq}}
   {{#if isSvelteOnlyApp}}
       publicRuntimeConfig({ apiBase: process.env.PUBLIC_API_BASE, {{#if features.crypto}}apiTransport: process.env.PUBLIC_API_TRANSPORT, apiKeyExchangePath: process.env.PUBLIC_API_KEY_EXCHANGE_PATH, {{/if}}core: appConfig }),
       svelte(),

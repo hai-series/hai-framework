@@ -17,7 +17,9 @@
   import { kit } from '@h-ai/kit'
 {{/if}}
 {{#if hasI18n}}
-  import { LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
+  import { LanguageSwitch, setGlobalLocale, ToastContainer } from '@h-ai/ui'
+{{else}}
+  import { ToastContainer } from '@h-ai/ui'
 {{/if}}
   import '../app.css'
 

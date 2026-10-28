@@ -10,8 +10,9 @@ import process from 'node:process'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { cliM } from './cli-i18n.js'
-import { getCliVersion, writeCliMessage } from './cli-utils.js'
+import { getCliVersion, writeCliError, writeCliMessage } from './cli-utils.js'
 import { addModule, buildCommand, createProject, deployCommand, deploySecretsCommand, feedbackCommand, generate, initProject, upgradeCommand } from './commands/cli-commands.js'
+import { parseCreateFeatures } from './commands/cli-create.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
 const VERSION = getCliVersion()
@@ -41,9 +42,19 @@ cli
   .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
       // 解析功能列表
-      const features = typeof options.features === 'string'
-        ? options.features.split(',').map(f => f.trim()) as CreateProjectOptions['features']
-        : undefined
+      let features: CreateProjectOptions['features']
+      if (options.features !== undefined) {
+        try {
+          if (typeof options.features !== 'string')
+            throw new Error(cliM('cli_createFeaturesInvalid'))
+          features = parseCreateFeatures(options.features)
+        }
+        catch (error) {
+          writeCliError(cliM('cli_createFailed'), error)
+          process.exitCode = 1
+          return
+        }
+      }
       const frontends = typeof options.frontends === 'string'
         ? options.frontends.split(',').map(f => f.trim()).filter(Boolean) as FrontendTarget[]
         : undefined

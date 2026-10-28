@@ -244,7 +244,7 @@ export interface CreateProjectOptions extends GlobalOptions {
   frontends?: FrontendTarget[]
   /** 项目模板 */
   template?: 'default' | 'minimal' | 'full' | 'custom'
-  /** 选择的功能 */
+  /** 选择的功能；非fullstack的[]明确不选，CLI的--features none映射为[]。fullstack保留架构必需模块。 */
   features?: FeatureId[]
   /** 模块配置 */
   moduleConfigs?: ModuleConfigs

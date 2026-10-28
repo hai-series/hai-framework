@@ -5,6 +5,10 @@
 import '@h-ai/ui/auto-import'
 {{/if}}
 declare global {
+{{#if_eq appType 'website'}}
+  /** 编译期静态展示开关，不包含私有运行环境。 */
+  const __HAI_BUILD_STATIC__: boolean
+{{/if_eq}}
   namespace App {
     interface PageData {
       /** 经服务端 core 解析后可公开的应用配置 */

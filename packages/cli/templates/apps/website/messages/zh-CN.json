@@ -19,8 +19,9 @@
   "page_about_title": "关于我们",
   "page_about_desc": "在此介绍公司信息和发展历程。",
   "page_services_title": "我们的服务",
-  "page_services_item1": "服务一",
-  "page_services_item2": "服务二",
+  "page_services_item1": "咨询服务",
+  "page_services_item2": "定制开发",
+  "page_services_item3": "运维支持",
   "page_services_desc": "服务描述内容。",
   "page_contact_title": "联系我们",
   "page_contact_desc": "有任何疑问？欢迎联系我们。",
@@ -28,5 +29,6 @@
   "page_contact_email": "邮箱",
   "page_contact_message": "留言",
   "page_contact_submit": "发送",
+  "page_contact_unavailable": "在线留言尚未开通，请使用其他联系方式。您的输入已保留。",
   "footer_copyright": "Copyright © {year}. All rights reserved."
 }

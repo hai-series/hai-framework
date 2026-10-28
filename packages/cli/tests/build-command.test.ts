@@ -127,6 +127,37 @@ it('compile 仅投递本次生成的构建身份，外层伪造值与凭据仍�
   expect(process.env.HAI_BUILD_ID).toBe('forged-outer-build')
 })
 
+it('静态compile只透传两个已校验公开控制项，其他私有值继续过滤', async () => {
+  vi.stubEnv('HAI_BUILD_STATIC', '1')
+  vi.stubEnv('PUBLIC_BASE_PATH', '/hai-framework')
+  vi.stubEnv('HAI_PRIVATE_TOKEN', 'private-static-sentinel')
+  vi.stubEnv('PUBLIC_API_BASE', 'private-static-sentinel')
+  vi.stubEnv('VITE_PRIVATE_TOKEN', 'private-static-sentinel')
+  await buildCommand({ cwd: root })
+  expect(state.calls[0]!.env).toMatchObject({ HAI_BUILD_STATIC: '1', PUBLIC_BASE_PATH: '/hai-framework', NODE_ENV: 'production' })
+  for (const name of ['HAI_PRIVATE_TOKEN', 'PUBLIC_API_BASE', 'VITE_PRIVATE_TOKEN'])
+    expect(state.calls[0]!.env[name]).toBeUndefined()
+})
+
+it.each(['https://example.invalid', '//example.invalid', '/a/../b', '/a/%2e%2e/b', '/a\\b', '/a/', '/a?x=1'])('compile在运行子进程前拒绝非法PUBLIC_BASE_PATH：%s', async (base) => {
+  vi.stubEnv('HAI_BUILD_STATIC', '1')
+  vi.stubEnv('PUBLIC_BASE_PATH', base)
+  await expect(buildCommand({ cwd: root })).rejects.toThrow('PUBLIC_BASE_PATH')
+  expect(state.calls).toEqual([])
+})
+
+it.each(['true', 'false', '2'])('静态构建标记不接受含糊值：%s', async (value) => {
+  vi.stubEnv('HAI_BUILD_STATIC', value)
+  await expect(buildCommand({ cwd: root })).rejects.toThrow('HAI_BUILD_STATIC')
+  expect(state.calls).toEqual([])
+})
+
+it.each(['docker', 'app', 'desktop'] as const)('静态开关不改变%s目标的既有交付策略', async (target) => {
+  vi.stubEnv('HAI_BUILD_STATIC', '1')
+  await expect(buildCommand({ cwd: root, target })).rejects.toThrow()
+  expect(state.calls).toEqual([])
+})
+
 it('构建身份使用当前受Git管理工程的精确提交，未跟踪的子工程不能冒用父仓库HEAD', async () => {
   execFileSync('git', ['init', '--quiet'], { cwd: root })
   execFileSync('git', ['add', 'package.json'], { cwd: root })

@@ -19,8 +19,9 @@
   "page_about_title": "会社概要",
   "page_about_desc": "企業情報とこれまでの歩み。",
   "page_services_title": "サービス",
-  "page_services_item1": "サービス1",
-  "page_services_item2": "サービス2",
+  "page_services_item1": "技術コンサルティング",
+  "page_services_item2": "カスタム開発",
+  "page_services_item3": "運用サポート",
   "page_services_desc": "サービスの説明。",
   "page_contact_title": "お問い合わせ",
   "page_contact_desc": "ご質問はお気軽にお問い合わせください。",
@@ -28,5 +29,6 @@
   "page_contact_email": "メールアドレス",
   "page_contact_message": "メッセージ",
   "page_contact_submit": "送信",
+  "page_contact_unavailable": "オンラインメッセージは未対応です。別の連絡方法をご利用ください。入力内容は保持されています。",
   "footer_copyright": "Copyright © {year}. All rights reserved."
 }

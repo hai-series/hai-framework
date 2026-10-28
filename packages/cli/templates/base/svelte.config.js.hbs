@@ -9,8 +9,17 @@ import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 {{/if}}
 {{#unless isSvelteOnlyApp}}
 import adapter from '@sveltejs/adapter-node'
+{{#if_eq appType 'website'}}
+import staticAdapter from '@sveltejs/adapter-static'
+{{/if_eq}}
 {{/unless}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+{{#if_eq appType 'website'}}
+import { resolveStaticWebsite, validateStaticRoutes } from './scripts/static-website.mjs'
+
+const website = resolveStaticWebsite()
+const staticOutput = staticAdapter({ strict: false })
+{{/if_eq}}
 
 {{#if isSvelteOnlyApp}}
 /** @type {import('@sveltejs/vite-plugin-svelte').SvelteConfig} */
@@ -65,7 +74,22 @@ const config = {
       fallback: 'index.html',
     }),
 {{else}}
+{{#if_eq appType 'website'}}
+    paths: { base: website.base },
+    adapter: website.enabled
+      ? {
+          ...staticOutput,
+          name: 'hai-static-website',
+          async adapt(builder) {
+            // 仅省略模板健康端点；自定义API或未预渲染页面明确失败，不用SPA回退掩盖。
+            validateStaticRoutes(builder.routes)
+            await staticOutput.adapt(builder)
+          },
+        }
+      : adapter(),
+{{else}}
     adapter: adapter(),
+{{/if_eq}}
 {{/if}}
     csrf: {
       trustedOrigins: resolveTrustedOrigins(),

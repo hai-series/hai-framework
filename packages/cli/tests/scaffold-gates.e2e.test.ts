@@ -143,6 +143,121 @@ afterAll(async () => {
 }, 300_000)
 
 describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
+  it('static website gates pass local package install, quality checks and Pages browser flow', async () => {
+    expect(Object.keys(localPackageSpecifiers).length, 'Static acceptance must use the current local tarballs').toBeGreaterThan(0)
+    const root = await createTempRoot()
+    const projectPath = path.join(root, 'sample-static-website')
+    const basePath = '/scaffold-static'
+    const baseUrl = `${await allocateBaseUrl()}${basePath}/`
+    runNode([cliBin, '--cwd', root, 'create', 'sample-static-website', '--type', 'website', '--features', 'none', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'])
+    await replaceHaiPackageSpecifiers(projectPath)
+    await addLocalHaiOverrides(projectPath)
+    await removeReplacedHaiCatalogEntries(projectPath)
+    const manifest = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
+    for (const name of ['reldb', 'cache', 'iam', 'feedback'])
+      expect(manifest.dependencies).not.toHaveProperty(`@h-ai/${name}`)
+    expect(manifest.dependencies).toHaveProperty('@h-ai/core')
+    expect(manifest.dependencies).toHaveProperty('@h-ai/ui')
+    // 使用真实生成工程、真实安装和完整配置检查，不以模板字符串断言替代。
+    await runPnpm(projectPath, ['install', '--prefer-offline'])
+    await runPnpm(projectPath, ['typecheck'])
+    await runPnpm(projectPath, ['lint'])
+    const sentinel = 'static-private-env-must-not-be-published-1793205000'
+    appendFileSync(path.join(projectPath, '.env.local'), `\nPUBLIC_BUILD_ISOLATION_PROBE='${sentinel}'\nHAI_PRIVATE_TOKEN='${sentinel}'\n`)
+    await writeFile(path.join(projectPath, 'static/public-probe.svg'), '<svg xmlns="http://www.w3.org/2000/svg"><title>Public static asset</title></svg>\n')
+    runGate(pnpmBin, ['build'], projectPath, { ...buildChildEnv({}, 'production'), HAI_BUILD_STATIC: '1', PUBLIC_BASE_PATH: basePath }, true)
+    const output = path.join(projectPath, 'build')
+    for (const file of ['index.html', 'about/index.html', 'services/index.html', 'contact/index.html', '.nojekyll', 'favicon.png', 'public-probe.svg'])
+      expect(await fileExists(path.join(output, file)), `Static output missing ${file}`).toBe(true)
+    for (const file of ['api', 'index.js', 'handler.js'])
+      expect(await fileExists(path.join(output, file)), `Static output contains a dynamic entry: ${file}`).toBe(false)
+    let checked = 0
+    for (const file of readdirSync(output, { recursive: true })) {
+      if (/\.(?:js|json|html|css|map)$/.test(String(file))) {
+        checked++
+        expect(readFileSync(path.join(output, String(file)), 'utf8'), `Static output leaked .env.local: ${String(file)}`).not.toContain(sentinel)
+      }
+    }
+    expect(checked).toBeGreaterThan(0)
+    // 仅为临时生成工程提供纯静态服务器；没有Node宿主、API或SPA回退。
+    await writeFile(path.join(projectPath, 'scripts/static-gate-server.mjs'), `import { readFile, stat } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import path from 'node:path'
+const root = path.resolve('build')
+const base = ${JSON.stringify(basePath)}
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' }
+const server = createServer(async (request, response) => {
+  const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
+  if (!pathname.startsWith(base + '/')) return response.writeHead(404).end()
+  let file = path.resolve(root, '.' + pathname.slice(base.length))
+  if (file !== root && !file.startsWith(root + path.sep)) return response.writeHead(403).end()
+  try {
+    if ((await stat(file)).isDirectory()) file = path.join(file, 'index.html')
+    response.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' }).end(await readFile(file))
+  }
+  catch { response.writeHead(404).end() }
+})
+server.listen(${Number(new URL(baseUrl).port)}, '127.0.0.1')
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => server.close())
+`)
+    await writeFile(path.join(projectPath, 'playwright.static.config.ts'), `import { defineConfig } from '@playwright/test'
+export default defineConfig({
+  testDir: './e2e', testMatch: 'static-website.spec.ts', workers: 1, retries: 0, timeout: 45000,
+  use: { baseURL: ${JSON.stringify(baseUrl)}, channel: 'chrome', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+  webServer: { command: 'node scripts/static-gate-server.mjs', url: ${JSON.stringify(baseUrl)}, reuseExistingServer: false },
+})
+`)
+    await writeFile(path.join(projectPath, 'e2e/static-website.spec.ts'), `import { expect, test } from '@playwright/test'
+test('static Pages deep links, public assets and honest contact feedback', async ({ page, request }, testInfo) => {
+  const errors: string[] = []
+  const failed: string[] = []
+  const posts: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  page.on('response', response => { if (response.status() >= 400) failed.push(response.url()) })
+  page.on('request', request => { if (request.method() === 'POST') posts.push(request.url()) })
+  for (const route of ['', 'about/', 'services/', 'contact/']) {
+    const response = await page.goto(${JSON.stringify(baseUrl)} + route)
+    expect(response?.status()).toBe(200)
+    await expect(page.locator('header')).toBeVisible()
+    await expect(page.locator('main')).toBeVisible()
+    await expect(page.locator('footer')).toBeVisible()
+    expect((await page.reload())?.status()).toBe(200)
+    await expect(page).toHaveURL(${JSON.stringify(baseUrl)} + route)
+  }
+  const home = await (await request.get(${JSON.stringify(baseUrl)})).text()
+  const assets = [...home.matchAll(/["']([^"']+\\.(?:js|css|png))["']/g)].map(match => match[1])
+  expect(assets.some(value => value.endsWith('.js'))).toBe(true)
+  expect(assets.some(value => value.endsWith('.css'))).toBe(true)
+  for (const asset of assets) {
+    const resolved = new URL(asset, ${JSON.stringify(baseUrl)})
+    expect(resolved.origin).toBe(new URL(${JSON.stringify(baseUrl)}).origin)
+    expect(resolved.pathname.startsWith(${JSON.stringify(`${basePath}/`)})).toBe(true)
+    expect((await request.get(resolved.href)).status(), asset).toBe(200)
+  }
+  expect(await (await request.get(${JSON.stringify(`${baseUrl}public-probe.svg`)})).text()).toContain('Public static asset')
+  for (const route of ['api/health', 'api/not-present', 'not-a-page/'])
+    expect((await request.get(${JSON.stringify(baseUrl)} + route)).status()).toBe(404)
+  await page.locator('#name').fill('Static visitor')
+  await page.locator('#email').fill('visitor@example.invalid')
+  await page.locator('#message').fill('Contact input should remain available.')
+  await page.getByRole('button', { name: /发送|Send|送信/, exact: true }).click()
+  await expect(page.locator('.hai-toast-item[data-variant=warning]').filter({ hasText: /在线留言尚未开通|Online messages are not available yet|オンラインメッセージは未対応/ })).toBeVisible()
+  await expect(page.locator('#name')).toHaveValue('Static visitor')
+  await expect(page.locator('#email')).toHaveValue('visitor@example.invalid')
+  await expect(page.locator('#message')).toHaveValue('Contact input should remain available.')
+  await page.screenshot({ path: testInfo.outputPath('static-website-contact-warning.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('static-website-mobile.png'), fullPage: true })
+  expect(posts).toEqual([])
+  expect(errors).toEqual([])
+  expect(failed).toEqual([])
+})
+`)
+    await runPnpm(projectPath, ['test:e2e', '--config', 'playwright.static.config.ts'], { baseUrl })
+    await removeTempRoot(root)
+  }, 1_800_000)
+
   for (const scenario of scaffoldGateCases) {
     it(`${scenario.title} scaffold passes install, typecheck, lint, build, unit and e2e`, async () => {
       const root = await createTempRoot()

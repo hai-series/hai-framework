@@ -6,7 +6,7 @@
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
 {{/if}}
-  import { Button, Card, FormField, FormLayout, Input, PageHeader, Textarea } from '@h-ai/ui'
+  import { Button, Card, FormField, FormLayout, Input, notifyWarning, PageHeader, Textarea } from '@h-ai/ui'
 
   let name = $state('')
   let email = $state('')
@@ -14,6 +14,11 @@
 
   function handleSubmit(event: SubmitEvent) {
     event.preventDefault()
+{{#if hasI18n}}
+    notifyWarning(m.page_contact_unavailable())
+{{else}}
+    notifyWarning('在线留言尚未开通，请使用其他联系方式。您的输入已保留。')
+{{/if}}
   }
 </script>
 

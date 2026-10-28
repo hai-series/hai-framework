@@ -54,9 +54,10 @@ interface BuildConfig {
 }
 
 /** 子进程不经过 shell；pnpm 使用当前原生或 JS 入口，兼容 Windows 路径。 */
-async function run(command: string, args: string[], cwd: string, quiet = false, identity?: { buildId: string, commit: string }): Promise<void> {
+async function run(command: string, args: string[], cwd: string, quiet = false, identity?: { buildId: string, commit: string }, compileEnvironment?: Record<string, string>): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/.test(key)))
+    Object.assign(env, compileEnvironment)
     // 仅显式加入本次构建器生成的身份，不透传调用者的同名环境变量。
     if (identity) {
       env.HAI_BUILD_ID = identity.buildId
@@ -74,26 +75,42 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
 }
 
 /** 使用已安装的 pnpm，不通过 Corepack 下载另一套工具链。 */
-async function pnpm(args: string[], cwd: string, identity: { buildId: string, commit: string }): Promise<void> {
+async function pnpm(args: string[], cwd: string, identity: { buildId: string, commit: string }, compileEnvironment?: Record<string, string>): Promise<void> {
   const entry = process.env.npm_execpath
   if (entry && /(?:^|[/\\])pnpm(?:-native)?(?:\.exe|\.[cm]?js)?$/i.test(entry))
-    return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd, false, identity) : run(entry, args, cwd, false, identity)
+    return /\.[cm]?js$/i.test(entry) ? run(process.execPath, [entry, ...args], cwd, false, identity, compileEnvironment) : run(entry, args, cwd, false, identity, compileEnvironment)
   // CLI 直接调用时从 PATH 定位原生或 JS 入口；Windows 的 .cmd 不能由无 shell spawn 执行。
   if (process.platform === 'win32') {
     const directories = (process.env.PATH ?? '').split(';')
     for (const directory of directories) {
       const executable = join(directory, 'pnpm.exe')
       if (existsSync(executable))
-        return run(executable, args, cwd, false, identity)
+        return run(executable, args, cwd, false, identity, compileEnvironment)
       for (const relative of ['node_modules/pnpm/bin/pnpm.cjs', 'pnpm.cjs']) {
         const candidate = join(directory, relative)
         if (existsSync(candidate))
-          return run(process.execPath, [candidate, ...args], cwd, false, identity)
+          return run(process.execPath, [candidate, ...args], cwd, false, identity, compileEnvironment)
       }
     }
     throw new Error(cliM('cli_build_use_pnpm'))
   }
-  return run('pnpm', args, cwd, false, identity)
+  return run('pnpm', args, cwd, false, identity, compileEnvironment)
+}
+
+/** 静态站点只放行两个公开构建控制值；不改变其它目标的私有环境过滤。 */
+function staticCompileEnvironment(target: string): Record<string, string> {
+  const flag = process.env.HAI_BUILD_STATIC
+  const base = process.env.PUBLIC_BASE_PATH
+  if (flag !== undefined && flag !== '' && flag !== '0' && flag !== '1')
+    throw new Error(cliM('cli_build_static_flag'))
+  if (base && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(base) || base.split('/').some(segment => segment === '.' || segment === '..')))
+    throw new Error(cliM('cli_build_static_base'))
+  if (target !== 'compile') {
+    if (flag === '1' || base)
+      throw new Error(cliM('cli_build_static_target'))
+    return {}
+  }
+  return { ...(flag ? { HAI_BUILD_STATIC: flag } : {}), ...(base ? { PUBLIC_BASE_PATH: base } : {}) }
 }
 
 /** 只有工程 manifest 受当前仓库管理时，才将其 HEAD 作为源码事实。 */
@@ -132,12 +149,13 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const cwd = target === 'compile' ? directory : dirname(projectConfigPath(directory))
   if (!['compile', 'docker', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
+  const compileEnvironment = staticCompileEnvironment(target)
   if ((target !== 'docker' && (options.images !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
     || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.arch !== undefined)) || (target === 'app' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
   if (target === 'compile') {
-    await pnpm(['run', 'compile'], cwd, { buildId: randomUUID(), commit: sourceCommit(cwd) })
+    await pnpm(['run', 'compile'], cwd, { buildId: randomUUID(), commit: sourceCommit(cwd) }, compileEnvironment)
     return
   }
   const metadata: { name?: unknown, version?: unknown } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))

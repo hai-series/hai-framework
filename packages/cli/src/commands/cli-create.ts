@@ -597,6 +597,28 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 // =============================================================================
 
 /**
+ * 解析CLI显式功能列表；none是空选择标记，不是模块，不能与其它值混用。
+ * @param value - 逗号分隔的CLI输入。
+ * @returns 已校验并去重的模块；空数组保留明确不选模块的意图。
+ * @example 模块内部上下文
+ * ```ts
+ * const features = parseCreateFeatures('none') // []；不是省略features。
+ * ```
+ */
+export function parseCreateFeatures(value: string): FeatureId[] {
+  const selected = value.split(',').map(feature => feature.trim())
+  if (selected.includes('none')) {
+    if (selected.length !== 1)
+      throw new Error(cliM('cli_createFeaturesNoneExclusive'))
+    return []
+  }
+  const invalid = selected.find(feature => !feature || (!Object.hasOwn(FEATURES, feature) && feature !== 'ui' && feature !== 'kit'))
+  if (invalid !== undefined)
+    throw new Error(cliM('cli_createFeaturesInvalid'))
+  return [...new Set(selected)] as FeatureId[]
+}
+
+/**
  * 解析选项（交互式）
  */
 async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions>> {
@@ -1330,6 +1352,26 @@ ${pm} exec hai deploy ${appDir} --env prod --services web
 
 function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' | 'yarn', appType: AppType): string {
   const install = getInstallCommand(pm)
+  const staticWebsite = appType === 'website'
+    ? `### 静态网站与 GitHub Pages
+
+默认使用Node SSR。纯展示站点创建时使用 \`--type website --features none\`，保留Core/UI和默认部署开发工具，无须选择deploy再关闭。已有动态模块不能仅打开开关静态发布。
+
+\`HAI_BUILD_STATIC=1\`显式预渲染，\`PUBLIC_BASE_PATH=/${name}\`指定项目站目录（无末尾/，根站留空）；在PowerShell设置本次构建环境：
+
+\`\`\`powershell
+$env:HAI_BUILD_STATIC = '1'
+$env:PUBLIC_BASE_PATH = '/${name}'
+${getRunCommand(pm, 'build')}
+${getRunCommand(pm, 'preview')}
+\`\`\`
+
+检查build/index.html、各页面目录、_app、.nojekyll与子路径刷新；build/api/health不应存在。构建不读取根.env；static是公开资产目录，图片、字体和其他正常资源会原样发布，禁止放入私密内容，检测到.env/.env.*或符号链接会停止构建。服务端模块、自定义API、actions或未预渲染页面会明确拒绝；不会放宽生产守卫或用SPA回退掩盖。关闭当前终端或清除两个变量后恢复普通SSR构建；它们不能与docker/app/desktop目标混用。
+
+GitHub Pages选择Actions发布静态build目录；上传步骤显式include-hidden-files:true以保留.nojekyll，不上传config、data、.env或源码。发布前核对仓库项目名和PUBLIC_BASE_PATH一致。联系表单是未接真实服务的界面示例，提交时通过Toast说明尚未开通并保留输入；投入使用前应接实际留言服务并验证加载、成功与失败状态。
+
+`
+    : ''
   return `# ${name}
 
 ## 简介
@@ -1365,7 +1407,7 @@ ${getRunCommand(pm, 'paraglide:compile')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
 
-${generateBuildDeploymentReadme(pm, `.`)}
+${staticWebsite}${generateBuildDeploymentReadme(pm, `.`)}
 
 ${generateAiDevelopmentReadme()}### 文档
 

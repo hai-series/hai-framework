@@ -1,0 +1,68 @@
+/** website静态构建的显式开关、公开子路径和路由边界；普通SSR保持默认。 */
+import { existsSync, lstatSync, readdirSync } from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
+import { core } from '@h-ai/core'
+
+const message = core.i18n.createMessageGetter({
+  'zh-CN': {
+    flag: 'HAI_BUILD_STATIC仅支持0或1；省略或0保持SSR，1启用website静态构建。',
+    base: 'PUBLIC_BASE_PATH须为空或以/开头的站内目录；不允许外部地址、末尾/、查询、片段或路径逃逸。',
+    modules: '静态website不能启用服务端业务模块。请使用--features none创建纯展示站点，或继续使用默认SSR。',
+    routes: '静态website不能包含自定义API、表单actions或未预渲染页面；请移除动态入口或使用SSR。',
+    assets: 'static是公开资产目录，不能放入.env私有环境文件或符号链接；请移动私有内容后重新构建。',
+  },
+  'en-US': {
+    flag: 'HAI_BUILD_STATIC accepts only 0 or 1: omitted/0 keeps SSR, and 1 enables a static website build.',
+    base: 'PUBLIC_BASE_PATH must be empty or a site-local directory beginning with /. External URLs, trailing /, queries, fragments and path traversal are not allowed.',
+    modules: 'A static website cannot enable server-side business modules. Create a presentation site with --features none, or keep the default SSR mode.',
+    routes: 'A static website cannot contain custom APIs, form actions or pages that were not prerendered. Remove dynamic routes or use SSR.',
+    assets: 'static is a public asset directory and cannot contain private .env files or symbolic links. Move private content before building.',
+  },
+  'ja-JP': {
+    flag: 'HAI_BUILD_STATICは0または1です。省略/0はSSR、1はwebsiteの静的構築を有効にします。',
+    base: 'PUBLIC_BASE_PATHは空、または/で始まるサイト内ディレクトリーです。外部URL、末尾の/、クエリー、フラグメント、パス逸脱は使えません。',
+    modules: '静的websiteではサーバー業務モジュールを有効にできません。--features noneで表示専用サイトを作成するか、既定のSSRを使用してください。',
+    routes: '静的websiteに独自API、form actions、事前描画されないページを含められません。動的ルートを削除するかSSRを使用してください。',
+    assets: 'staticは公開資産ディレクトリーです。非公開.envファイルやシンボリックリンクを置かず、非公開内容を移動してから構築してください。',
+  },
+})
+const serverFeatures = [{{#each websiteServerFeatures}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}]
+const requestedLocale = [process.env.HAI_CORE_DEFAULTLOCALE, process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG].find(value => value?.trim())?.split(/[_.-]/)[0]?.toLowerCase()
+const locale = requestedLocale === 'en' || requestedLocale === 'c' || requestedLocale === 'posix' ? 'en-US' : requestedLocale === 'ja' ? 'ja-JP' : 'zh-CN'
+
+/** 只读取显式构建值，不加载dotenv和服务端秘密。 */
+export function resolveStaticWebsite() {
+  const flag = process.env.HAI_BUILD_STATIC
+  if (flag !== undefined && flag !== '' && flag !== '0' && flag !== '1')
+    throw new Error(message('flag', { locale }))
+  const enabled = flag === '1'
+  const base = process.env.PUBLIC_BASE_PATH ?? ''
+  if (base !== '' && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(base) || base.split('/').some(segment => segment === '.' || segment === '..')))
+    throw new Error(message('base', { locale }))
+  if (enabled && serverFeatures.length)
+    throw new Error(`${message('modules', { locale })} (${serverFeatures.join(', ')})`)
+  if (enabled) {
+    const assets = path.resolve(process.cwd(), 'static')
+    if (existsSync(assets)) {
+      if (lstatSync(assets).isSymbolicLink())
+        throw new Error(message('assets', { locale }))
+      for (const entry of readdirSync(assets, { recursive: true, withFileTypes: true })) {
+        if (entry.isSymbolicLink() || entry.name === '.env' || entry.name.startsWith('.env.'))
+          throw new Error(message('assets', { locale }))
+      }
+    }
+  }
+  return { enabled, base }
+}
+
+/** @param {import('@sveltejs/kit').Builder['routes']} routes - SvelteKit实际解析的路由。 */
+export function validateStaticRoutes(routes) {
+  const invalid = routes.filter((route) => {
+    // Builder始终提供api/page对象；只按实际方法判断，模板健康端点也不能豁免新增写入方法。
+    const templateHealth = route.id === '/api/health' && route.page.methods.length === 0 && route.api.methods.length > 0 && route.api.methods.every(method => method === 'GET' || method === 'HEAD')
+    return !templateHealth && (route.api.methods.length > 0 || route.prerender !== true || route.page.methods.includes('POST'))
+  })
+  if (invalid.length)
+    throw new Error(`${message('routes', { locale })} (${invalid.map(route => route.id).join(', ')})`)
+}
