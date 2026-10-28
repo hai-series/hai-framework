@@ -123,6 +123,7 @@ test('可在一个页面操作 LLM、文生图、Memory、TTS 与 ASR', async ({
   await page.getByLabel('聊天消息').fill('你好，请介绍这个实验台。')
   await page.getByTestId('chat-send').click()
   await expect(page.locator('[data-role="assistant"]').last()).toContainText('这是 AI 的测试回复。')
+  await expect(page.locator('.hai-toast-item[data-variant="success"]')).toContainText('本轮提取了 1 条记忆')
 
   await page.getByPlaceholder('添加一条事实、偏好或长期指令…').fill('我偏好简洁的中文回答')
   await page.getByTestId('memory-add').click()

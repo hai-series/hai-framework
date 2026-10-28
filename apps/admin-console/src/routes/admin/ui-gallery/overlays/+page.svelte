@@ -7,9 +7,25 @@
   采用分类（DemoSection）+ 可折叠示例卡片（DemoCard，含效果与可复制源码）。
 -->
 <script lang='ts'>
+  import type { ToastProps } from '@h-ai/ui'
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
-  import { message, messageBox, toast } from '@h-ai/ui'
+  import * as m from '$lib/paraglide/messages.js'
+  import { messageBox, toast } from '@h-ai/ui'
+
+  const toastPositions = $derived<{ value: NonNullable<ToastProps['position']>, label: string }[]>([
+    { value: 'bottom-right', label: m.gallery_toast_bottom_right() },
+    { value: 'top-right', label: m.gallery_toast_top_right() },
+    { value: 'bottom-center', label: m.gallery_toast_bottom_center() },
+    { value: 'top-center', label: m.gallery_toast_top_center() },
+    { value: 'bottom-left', label: m.gallery_toast_bottom_left() },
+    { value: 'top-left', label: m.gallery_toast_top_left() },
+  ])
+
+  function showToastQueue() {
+    for (let index = 1; index <= 3; index++)
+      toast.info(m.gallery_toast_queue_item({ index }), 1000)
+  }
 
   // === 覆盖层状态 ===
   let modalOpen = $state(false)
@@ -61,7 +77,7 @@
   title='确认删除'
   message='确定要永久删除此项目吗？此操作不可恢复。'
   variant='error'
-  onconfirm={async () => { toast.error('已永久删除'); open = false }}
+  onconfirm={async () => { toast.success('已永久删除'); open = false }}
   oncancel={() => open = false}
 />`
 
@@ -92,14 +108,11 @@
 <ThemeSelector showPreview grouped />
 <ThemeSelector showPreview={false} />`
 
-  const codeMessage = `import { message } from '@h-ai/ui'
-
-<Button onclick={() => message.info('这是一条信息消息')}>信息</Button>
-<Button onclick={() => message.success('保存成功')}>成功</Button>
-<Button onclick={() => message.warning('请检查输入')}>警告</Button>
-<Button onclick={() => message.error('操作失败')}>错误</Button>
-
-<!-- 应用根部需挂载一次 <MessageContainer /> -->`
+  const codeMessage = `// m 为应用翻译函数；根布局只挂载一次 <ToastContainer />。
+toast.success(m.common_success()) // 默认右下角，3 秒后消失
+toast.add({ message: m.common_success(), position: 'bottom-center' })
+// 连续触发会进入同一队列，每条在展示后单独计时。
+toast.info(m.common_success(), 1000)`
 
   const codeMessageBox = `import { messageBox } from '@h-ai/ui'
 
@@ -262,7 +275,7 @@ await messageBox.alert('这是一条提示信息')
         cancelText='取消'
         variant='error'
         onconfirm={async () => {
-          toast.error('已永久删除')
+          toast.success('已永久删除')
           confirmDeleteOpen = false
         }}
         oncancel={() => confirmDeleteOpen = false}
@@ -274,10 +287,10 @@ await messageBox.alert('这是一条提示信息')
         <div>
           <p class='text-sm font-medium mb-2'>基础通知</p>
           <div class='flex flex-wrap gap-3'>
-            <Button variant='info' onclick={() => toast.info('这是一条信息通知')}>信息</Button>
-            <Button variant='success' onclick={() => toast.success('操作成功完成！')}>成功</Button>
-            <Button variant='warning' onclick={() => toast.warning('请注意检查配置项')}>警告</Button>
-            <Button variant='error' onclick={() => toast.error('操作失败，请稍后重试')}>错误</Button>
+            <Button variant='info' data-testid='toast-type-info' onclick={() => toast.info(m.gallery_toast_type_info())}>{m.gallery_toast_type_info()}</Button>
+            <Button variant='success' data-testid='toast-type-success' onclick={() => toast.success(m.gallery_toast_type_success())}>{m.gallery_toast_type_success()}</Button>
+            <Button variant='warning' data-testid='toast-type-warning' onclick={() => toast.warning(m.gallery_toast_type_warning())}>{m.gallery_toast_type_warning()}</Button>
+            <Button variant='error' data-testid='toast-type-error' onclick={() => toast.error(m.gallery_toast_type_error())}>{m.gallery_toast_type_error()}</Button>
           </div>
         </div>
         <div>
@@ -323,17 +336,17 @@ await messageBox.alert('这是一条提示信息')
 
   <DemoSection
     title='轻量消息与命令式弹框'
-    subtitle='message / messageBox'
+    subtitle='toast / messageBox'
     iconClass='icon-[tabler--bell-ringing]'
     tone='secondary'
   >
-    <DemoCard title='Message 轻量消息' description='顶部居中滑入的命令式消息（类似 ElementUI Message）' code={codeMessage}>
+    <DemoCard title={m.gallery_toast_positions_title()} description={m.gallery_toast_positions_description()} code={codeMessage}>
       <div class='flex flex-wrap gap-3'>
-        <Button variant='info' outline onclick={() => message.info('这是一条信息消息')}>信息</Button>
-        <Button variant='success' outline onclick={() => message.success('保存成功')}>成功</Button>
-        <Button variant='warning' outline onclick={() => message.warning('请检查输入')}>警告</Button>
-        <Button variant='error' outline onclick={() => message.error('操作失败')}>错误</Button>
-        <Button variant='ghost' onclick={() => message.clear()}>清空</Button>
+        {#each toastPositions as position (position.value)}
+          <Button outline data-testid={`toast-position-${position.value}`} onclick={() => toast.add({ message: position.label, position: position.value })}>{position.label}</Button>
+        {/each}
+        <Button variant='primary' data-testid='toast-queue' onclick={showToastQueue}>{m.gallery_toast_queue()}</Button>
+        <Button variant='ghost' onclick={() => toast.clear()}>{m.gallery_toast_clear()}</Button>
       </div>
     </DemoCard>
 
@@ -343,7 +356,7 @@ await messageBox.alert('这是一条提示信息')
           variant='primary'
           onclick={async () => {
             const ok = await messageBox.confirm({ title: '确认操作', message: '确定要继续吗？', confirmText: '确定' })
-            message[ok ? 'success' : 'info'](ok ? '已确认' : '已取消')
+            toast[ok ? 'success' : 'info'](ok ? '已确认' : '已取消')
           }}
         >
           confirm 确认框
@@ -353,7 +366,7 @@ await messageBox.alert('这是一条提示信息')
           onclick={async () => {
             const ok = await messageBox.confirm({ title: '删除确认', message: '此操作不可恢复，确定删除？', confirmText: '删除', confirmVariant: 'error' })
             if (ok)
-              message.error('已删除')
+              toast.success('已删除')
           }}
         >
           危险确认框

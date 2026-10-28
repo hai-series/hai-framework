@@ -45,3 +45,4 @@
 </svelte:head>
 
 {@render children()}
+<ToastContainer />

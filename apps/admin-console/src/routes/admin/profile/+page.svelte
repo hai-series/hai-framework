@@ -4,6 +4,7 @@
   import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
   import { changeProfilePassword, updateProfile, uploadProfileAvatar } from '$lib/services/profile-api'
+  import { toast } from '@h-ai/ui'
 
   interface Props {
     data: PageData
@@ -65,9 +66,6 @@
   let profileLoading = $state(false)
   let passwordLoading = $state(false)
 
-  let profileSuccess = $state('')
-  let passwordSuccess = $state('')
-
   /**
    * 通过资料接口持久化保存个人信息。
    *
@@ -99,7 +97,6 @@
 
     profileLoading = true
     profileErrors = {}
-    profileSuccess = ''
 
     try {
       const uploadResponse = await uploadProfileAvatar(file)
@@ -122,7 +119,7 @@
         avatarUrl: body.data?.user?.avatar ?? uploadBody.data?.avatar,
       }
       await invalidateAll()
-      profileSuccess = m.common_success()
+      toast.success(m.common_success())
     }
     catch {
       profileErrors = { general: m.common_network_error() }
@@ -145,7 +142,6 @@
 
     profileLoading = true
     profileErrors = {}
-    profileSuccess = ''
 
     const username = formData.username?.trim() || undefined
     const email = formData.email?.trim() || undefined
@@ -176,7 +172,7 @@
         avatarUrl: body.data?.user?.avatar ?? '',
       }
       await invalidateAll()
-      profileSuccess = m.common_success()
+      toast.success(m.common_success())
     }
     catch {
       profileErrors = { general: m.common_network_error() }
@@ -199,7 +195,6 @@
 
     passwordLoading = true
     passwordErrors = {}
-    passwordSuccess = ''
 
     if (!formData.oldPassword?.trim()) {
       passwordErrors = { oldPassword: m.api_common_required_fields() }
@@ -238,7 +233,7 @@
         return
       }
 
-      passwordSuccess = m.common_success()
+      toast.success(m.common_success())
       if (body.data?.reloginRequired && typeof window !== 'undefined') {
         window.setTimeout(() => {
           window.location.assign('/auth/login')
@@ -303,10 +298,6 @@
           <h2 class='text-sm font-semibold text-base-content'>{m.nav_profile()}</h2>
         </div>
 
-        {#if profileSuccess}
-          <div class='alert alert-success text-sm' data-testid='profile-save-success'>{profileSuccess}</div>
-        {/if}
-
         <UserProfile
           columns={2}
           user={profileUser}
@@ -343,9 +334,6 @@
             <li>{m.profile_password_rule_confirm_match()}</li>
           </ul>
         </div>
-        {#if passwordSuccess}
-          <div class='alert alert-success text-sm' data-testid='profile-password-success'>{passwordSuccess}</div>
-        {/if}
       </aside>
 
       <div class='lg:col-span-8 p-6 lg:p-8'>

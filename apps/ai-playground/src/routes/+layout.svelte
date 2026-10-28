@@ -3,7 +3,7 @@
   import { browser } from '$app/environment'
   import * as m from '$lib/paraglide/messages.js'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
-  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector } from '@h-ai/ui'
+  import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
   import '../app.css'
 
   interface Props {
@@ -54,3 +54,4 @@
 </header>
 
 {@render children()}
+<ToastContainer />

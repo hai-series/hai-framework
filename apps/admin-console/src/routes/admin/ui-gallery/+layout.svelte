@@ -74,8 +74,6 @@
   <title>{m.gallery_title()} - {m.app_title()}</title>
 </svelte:head>
 
-<ToastContainer />
-<MessageContainer />
 <MessageBoxContainer />
 
 <div class='space-y-6'>

@@ -1,7 +1,7 @@
 <script lang='ts'>
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
-  import { Alert, Button, Input, Select, Textarea } from '@h-ai/ui'
+  import { Button, Input, Select, Textarea, toast } from '@h-ai/ui'
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
 
@@ -33,7 +33,6 @@
 
   let errors = $state<Record<string, string>>({})
   let submitting = $state(false)
-  let resultMessage = $state<{ success: boolean, text: string } | null>(null)
 
   /** 客户端表单校验，返回是否通过 */
   function validateForm(): boolean {
@@ -54,7 +53,6 @@
 
   async function handleSubmit(event: Event) {
     event.preventDefault()
-    resultMessage = null
 
     if (!validateForm())
       return
@@ -79,7 +77,7 @@
       const data = await response.json()
 
       if (data.success) {
-        resultMessage = { success: true, text: m.partner_submit_success() }
+        toast.success(m.partner_submit_success())
         form = {
           companyName: '',
           contactName: '',
@@ -92,11 +90,11 @@
         errors = {}
       }
       else {
-        resultMessage = { success: false, text: data.error?.message ?? m.partner_submit_failed() }
+        toast.error(data.error?.message ?? m.partner_submit_failed())
       }
     }
     catch {
-      resultMessage = { success: false, text: m.partner_network_error() }
+      toast.error(m.partner_network_error())
     }
     finally {
       submitting = false
@@ -117,12 +115,6 @@
 
     <div class='grid gap-6 lg:grid-cols-[1.1fr_0.9fr]'>
       <Card shadow='sm'>
-        {#if resultMessage}
-          <Alert variant={resultMessage.success ? 'success' : 'error'} dismissible class='mb-4'>
-            {resultMessage.text}
-          </Alert>
-        {/if}
-
         <form onsubmit={handleSubmit}>
           <FormLayout columns={2}>
             <FormField for='company-name' label={m.partner_form_company()} colSpan={2} required error={errors.companyName}>

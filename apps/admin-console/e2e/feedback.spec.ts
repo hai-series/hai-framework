@@ -434,6 +434,8 @@ test('受理网络故障保留现场与输入，可下载自包含离线包', as
     await page.locator('.feedback-form').getByRole('button', { name: '保存反馈到本地', exact: true }).click()
     const download = await downloading
     expect(download.suggestedFilename()).toMatch(/^feedback-[\w-]+\.zip$/)
+    await expect(page.locator('.hai-toast-item')).toContainText('已开始下载反馈文件。')
+    await expect(page.locator('.feedback-form')).not.toContainText('已开始下载反馈文件。')
     const output = testInfo.outputPath('feedback-local.zip')
     await download.saveAs(output)
     const bundle = await readFeedbackBundle(await readFile(output))

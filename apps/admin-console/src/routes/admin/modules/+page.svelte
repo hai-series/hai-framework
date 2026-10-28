@@ -152,8 +152,6 @@
   <title>{m.modules_title()} - {m.app_title()}</title>
 </svelte:head>
 
-<ToastContainer />
-
 <div class='space-y-4'>
   <PageHeader title={m.nav_modules()} description={m.modules_desc()} />
 

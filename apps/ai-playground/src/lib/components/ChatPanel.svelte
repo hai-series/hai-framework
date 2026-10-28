@@ -3,7 +3,7 @@
   import type { LabMessage } from '$lib/ai-lab-types.js'
   import * as m from '$lib/paraglide/messages.js'
   import { rememberExchange, sendChat } from '$lib/services/ai-lab.js'
-  import { Button, Card, ToggleInput } from '@h-ai/ui'
+  import { Button, Card, toast, ToggleInput } from '@h-ai/ui'
 
   interface Props {
     profileId: string
@@ -19,7 +19,6 @@
   let useMemory = $state(true)
   let busy = $state(false)
   let error = $state('')
-  let remembered = $state(0)
   let remembering = $state(false)
   let chatAbortController: AbortController | undefined
   let memoryAbortController: AbortController | undefined
@@ -39,7 +38,6 @@
     prompt = ''
     busy = true
     error = ''
-    remembered = 0
     chatAbortController = new AbortController()
     let replyAdded = false
     try {
@@ -89,9 +87,10 @@
       const result = await rememberExchange({ profileId, userMessage, assistantMessage }, controller.signal).catch(() => undefined)
       if (!result || memoryAbortController !== controller)
         return
-      remembered = result.remembered
-      if (result.remembered > 0)
+      if (result.remembered > 0) {
+        toast.success(m.chat_remembered({ count: result.remembered }))
         onmemorychange()
+      }
     }
     finally {
       if (memoryAbortController === controller) {
@@ -106,7 +105,6 @@
     memoryAbortController?.abort()
     memoryAbortController = undefined
     messages = [{ role: 'assistant', content: m.chat_welcome() }]
-    remembered = 0
     remembering = false
     error = ''
   }
@@ -166,8 +164,6 @@
         <span class='loading loading-dots loading-xs'></span>
         {m.chat_remembering()}
       </div>
-    {:else if remembered > 0}
-      <div class='mb-2 text-xs text-success'>{m.chat_remembered({ count: remembered })}</div>
     {/if}
     <div class='flex items-end gap-3'>
       <textarea

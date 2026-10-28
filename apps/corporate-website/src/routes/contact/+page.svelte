@@ -3,18 +3,16 @@
   /**
    * 联系我们页面 — 表单通过 API 提交，使用 @h-ai/reach 发送邮件
    */
-  import { Alert, Button, Input, Textarea } from '@h-ai/ui'
+  import { Button, Input, Textarea, toast } from '@h-ai/ui'
 
   let name = $state('')
   let email = $state('')
   let message = $state('')
   let submitting = $state(false)
-  let submitResult = $state<{ success: boolean, message: string } | null>(null)
 
   async function handleSubmit(e: Event) {
     e.preventDefault()
     submitting = true
-    submitResult = null
 
     try {
       const res = await fetch('/api/contact', {
@@ -25,17 +23,17 @@
       const data = await res.json()
 
       if (res.ok && data.success && data.data?.sent === true) {
-        submitResult = { success: true, message: m.contact_submit_success() }
+        toast.success(m.contact_submit_success())
         name = ''
         email = ''
         message = ''
       }
       else {
-        submitResult = { success: false, message: data.error?.message ?? m.contact_submit_failed() }
+        toast.error(data.error?.message ?? m.contact_submit_failed())
       }
     }
     catch {
-      submitResult = { success: false, message: m.contact_network_error() }
+      toast.error(m.contact_network_error())
     }
     finally {
       submitting = false
@@ -59,12 +57,6 @@
       <!-- 联系表单 -->
       <Card shadow='sm'>
         <h2 class='text-lg font-semibold text-base-content mb-4'>{m.contact_form_title()}</h2>
-
-        {#if submitResult}
-          <Alert variant={submitResult.success ? 'success' : 'error'} dismissible class='mb-4'>
-            {submitResult.message}
-          </Alert>
-        {/if}
 
         <form class='space-y-4' onsubmit={handleSubmit}>
           <FormLayout columns={2} labelPosition='top'>

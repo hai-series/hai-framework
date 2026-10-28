@@ -37,7 +37,7 @@ test.describe('Profile UI', () => {
     await saveBtn.click()
 
     // 应显示保存成功提示
-    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible({ timeout: 10_000 })
     await page.goto('/admin')
     await expect(page.locator('.user-menu-container').getByText(displayName, { exact: true })).toBeVisible()
   })
@@ -58,7 +58,7 @@ test.describe('Profile UI', () => {
     await saveBtn.click()
 
     // 保存成功
-    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible({ timeout: 10_000 })
 
     // 刷新后邮箱已更新
     await page.reload()
@@ -170,7 +170,7 @@ test.describe('Profile UI', () => {
     expect(uploadResponse.ok(), `avatar upload status=${uploadResponse.status()}`).toBeTruthy()
     expect(saveResponse.ok(), `profile save status=${saveResponse.status()}`).toBeTruthy()
 
-    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.hai-toast-item[data-variant="success"]')).toBeVisible({ timeout: 10_000 })
     await expect(summaryAvatar).toHaveCount(1)
     await expect(formAvatar).toHaveCount(1)
 

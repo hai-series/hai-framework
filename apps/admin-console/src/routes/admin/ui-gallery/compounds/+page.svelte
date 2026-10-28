@@ -197,7 +197,7 @@
 <Timeline items={timelineItems} compact />`
 
   const codeAlert = `<Alert variant='info'>信息提示</Alert>
-<Alert variant='success'>操作成功</Alert>
+<Alert variant='success'>服务运行正常</Alert>
 <Alert variant='warning' dismissible>可关闭警告</Alert>
 <Alert variant='error'>错误提示</Alert>
 <Alert variant='info' title='带标题的提示'>带标题正文</Alert>`
@@ -489,7 +489,7 @@
           >
             {#snippet actions(item: typeof tableData[0])}
               <Button size='xs' variant='ghost' onclick={() => toast.info(`编辑: ${item.name}`)}>编辑</Button>
-              <Button size='xs' variant='error' onclick={() => toast.error(`删除: ${item.name}`)}>删除</Button>
+              <Button size='xs' variant='error' onclick={() => toast.info(`删除: ${item.name}`)}>删除</Button>
             {/snippet}
           </DataTable>
         </div>
@@ -552,7 +552,7 @@
     <DemoCard title='Alert 警告提示' description='信息/成功/警告/错误/带标题' code={codeAlert}>
       <div class='space-y-3'>
         <Alert variant='info'>信息提示：系统将于今晚 22:00 进行例行维护，预计持续 2 小时。</Alert>
-        <Alert variant='success'>操作成功！数据已保存至数据库。</Alert>
+        <Alert variant='success'>{m.gallery_alert_service_healthy()}</Alert>
         <Alert variant='warning' dismissible>警告：存储空间已使用 90%，请及时清理。</Alert>
         <Alert variant='error'>错误：网络连接超时，请检查网络设置后重试。</Alert>
         <Alert variant='info' title='带标题的提示'>这是一条带有标题的信息提示，标题会以粗体显示。</Alert>
