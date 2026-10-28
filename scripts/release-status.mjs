@@ -16,7 +16,9 @@ export function publicPackages(root) {
 export async function missingPackages(packages, fetcher = fetch) {
   const missing = []
   for (const pkg of packages) {
-    const response = await fetcher(`https://registry.npmjs.org/${encodeURIComponent(pkg.name)}/${encodeURIComponent(pkg.version)}`, { signal: AbortSignal.timeout(15000) })
+    // 沿用 npm 的规范 scoped 路径，并重新校验状态，避免发布前的负缓存误判为缺包。
+    const packagePath = encodeURIComponent(pkg.name).replace(/^%40/, '@').replaceAll('%2F', '%2f')
+    const response = await fetcher(`https://registry.npmjs.org/${packagePath}/${encodeURIComponent(pkg.version)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
     if (response.status === 404) {
       missing.push(pkg)
       continue

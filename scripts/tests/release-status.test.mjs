@@ -80,7 +80,7 @@ describe('release recovery', () => {
     expect(requests.filter(url => url.includes('registry.npmjs.org')).every(url => url.endsWith('/2.0.0'))).toBe(true)
   })
   it('retries missing npm packages even when a release already exists', async () => {
-    const fetcher = async url => url.includes('%40h-ai%2Fb')
+    const fetcher = async url => url.includes('@h-ai%2fb')
       ? new Response('', { status: 404 })
       : Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0' })
     expect((await missingPackages(packages, fetcher)).map(pkg => pkg.name)).toEqual(['@h-ai/b'])
@@ -90,6 +90,17 @@ describe('release recovery', () => {
   it('repairs a missing GitHub release after npm publish succeeds', async () => {
     const fetcher = async url => url.includes('api.github.com') ? new Response('', { status: 404 }) : Response.json({ version: '1.0.0' })
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
+  })
+
+  it('recognizes scoped releases through canonical uncached npm requests', async () => {
+    const fetcher = async (url, options) => {
+      if (url.includes('api.github.com'))
+        return Response.json({ draft: false })
+      return url.includes('/@h-ai%2f') && options.cache === 'no-store'
+        ? Response.json({ version: '1.0.0' })
+        : new Response('', { status: 404 })
+    }
+    expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(false)
   })
 
   it('skips only a complete release and never treats lookup failures as missing packages', async () => {
