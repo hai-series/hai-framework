@@ -1,5 +1,5 @@
 import type { HaiError } from '@h-ai/core'
-/** 按公开 IAM 错误码展示当前 UI 语言；应用自定义错误保留原文。 */
+/** 按公开 IAM 错误码展示安全提示，不直接显示认证服务的原始消息。 */
 import type { UIMessageKey } from '../../../messages.js'
 import { core } from '@h-ai/core'
 import { uiM } from '../../../messages.js'
@@ -25,10 +25,25 @@ const messages: Partial<Record<string, UIMessageKey>> = {
   'hai:iam:022': 'auth_error_otp',
   'hai:iam:023': 'auth_error_busy',
   'hai:iam:024': 'auth_unavailable',
+  'hai:iam:025': 'auth_error_password_initial',
+  'hai:iam:026': 'auth_error_access',
+  'hai:iam:027': 'auth_error_reauthentication',
   'hai:iam:030': 'auth_captcha_error',
   'hai:iam:031': 'auth_captcha_error',
   'hai:iam:032': 'auth_captcha_error',
   'hai:iam:033': 'auth_captcha_error',
+  'hai:iam:034': 'auth_error_password_same',
+  'hai:iam:101': 'auth_error_session',
+  'hai:iam:102': 'auth_error_session',
+  'hai:iam:103': 'auth_error_session',
+  'hai:iam:104': 'auth_error_service',
+  'hai:iam:105': 'auth_error_session',
+  'hai:iam:106': 'auth_error_session',
+  'hai:iam:107': 'auth_error_session',
+  'hai:iam:108': 'auth_error_session_limit',
+  'hai:iam:110': 'auth_error_reauthentication',
+  'hai:iam:111': 'auth_error_reauthentication',
+  'hai:iam:201': 'auth_error_access',
   'hai:iam:301': 'auth_error_service',
   'hai:iam:302': 'auth_error_credentials',
   'hai:iam:303': 'auth_error_service',
@@ -38,16 +53,17 @@ const messages: Partial<Record<string, UIMessageKey>> = {
 }
 
 /**
- * 将已知 IAM 错误码映射为当前语言的认证提示，未知错误保留原消息。
+ * 将 IAM 错误映射为当前语言的安全认证提示；未知错误和服务异常使用通用提示。
  * @param error - 待显示的安全错误对象或消息。
- * @returns 当前语言的已知认证错误提示；未知错误保留服务端消息。
+ * @returns 本地化提示及有效 traceId，不包含原始异常、账户字段原因或其他内部信息。
  *
- * @example 模块内部上下文
+ * @example
  * ```ts
+ * import { authErrorMessage } from '@h-ai/ui/components/scenes/iam/index'
  * const message = authErrorMessage({ code: 'hai:iam:020', message: '登录失败' })
  * ```
  */
-export function authErrorMessage(error: Pick<HaiError, 'code' | 'message' | 'traceId'>): string {
-  const key = messages[error.code]
-  return core.error.formatMessage({ message: key ? uiM(key) : error.message, traceId: error.traceId })
+export function authErrorMessage(error: Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus'>): string {
+  const key = (error.httpStatus ?? 400) >= 500 || !Object.hasOwn(messages, error.code) ? 'auth_error_service' : messages[error.code] ?? 'auth_error_service'
+  return core.error.formatMessage({ message: uiM(key), traceId: error.traceId })
 }

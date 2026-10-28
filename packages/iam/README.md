@@ -907,6 +907,8 @@ if (!result.success) {
 
 ## 可选密码与登录保护
 
+凭据错误统一返回“用户名或密码不正确”，不区分账号不存在、未设密码或原密码错误。当前密码复用返回 `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED`（`hai:iam:034`），复杂度不符仍为 `PASSWORD_POLICY_VIOLATION`（`008`）；前端应按错误码映射友好提示，不能直接显示未知异常。首次改密失败不签发普通会话，成功后使用新密码重新登录。
+
 `password.minLength/maxLength` 控制长度，各 `require*` 指定必需类别；`minCharacterClasses` 支持大小写、数字、特殊字符中任意 N 类，0不额外限制。CLI/admin 示例默认8–128位、不额外要求字符类别；需要任意3类时显式设置 `minCharacterClasses: 3`。所有服务端创建、改密和重置入口共用校验。
 
 `expirationDays: 0` 关闭定期改密，正数为天数；`preventSamePassword` 可独立开启。启用期限或首次强改时，新旧密码必须不同。`requireInitialChange` 作用于管理端创建/重置的密码，自助注册设密不重复强改。首次/过期密码不能授权普通会话或刷新旧会话；用户通过 `iam.user.renewPassword({ identifier, password, newPassword })` 验证原密码并更换后重新登录，Kit/Serv 与 AuthPanel 提供完成流程。

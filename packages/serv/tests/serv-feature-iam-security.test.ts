@@ -122,6 +122,17 @@ it('首次改密端点完成后才能取得普通会话，typed client 使用新
   const username = `http-initial-${crypto.randomUUID()}`
   expect((await iam.user.createUser({ username, password })).success).toBe(true)
   expect(await client.iam.auth.login({ identifier: username, password })).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_CHANGE_REQUIRED.code } })
+  const reused = await client.iam.auth.renewPassword({ identifier: username, password, newPassword: password })
+  expect(reused).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_REUSE_NOT_ALLOWED.code, traceId: expect.any(String) } })
+  for (const identifier of [username, `missing-${username}`]) {
+    const rejected = await client.iam.auth.renewPassword({ identifier, password: 'IncorrectPassword123!', newPassword: 'SelectedPassword123!' })
+    expect(rejected).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code, traceId: expect.any(String) } })
+    if (!rejected.success) {
+      expect(rejected.error.message).toMatch(/用户名或密码不正确|Username or password is incorrect/)
+      expect(rejected.error).not.toHaveProperty('cause')
+    }
+  }
+  expect(await client.iam.auth.login({ identifier: username, password })).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_CHANGE_REQUIRED.code } })
   expect((await client.iam.auth.renewPassword({ identifier: username, password, newPassword: 'SelectedPassword123!' })).success).toBe(true)
   expect((await client.iam.auth.login({ identifier: username, password: 'SelectedPassword123!' })).success).toBe(true)
 })

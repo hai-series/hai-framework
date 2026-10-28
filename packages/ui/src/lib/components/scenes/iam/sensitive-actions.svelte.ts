@@ -2,6 +2,7 @@
 import type { HaiResult } from '@h-ai/core'
 import { untrack } from 'svelte'
 import { uiM } from '../../../messages.js'
+import { authErrorMessage } from './auth-error-message.js'
 
 /**
  * 二次认证动作；直接接受 Kit/API client 的 createAuthActions() 返回值。
@@ -115,7 +116,7 @@ export function createSensitiveActions(options: SensitiveActionsOptions): Sensit
         if (generation !== this.generation)
           return
         if (!proof.success) {
-          this.error = proof.error.message
+          this.error = authErrorMessage(proof.error)
           return
         }
         this.resolve = undefined

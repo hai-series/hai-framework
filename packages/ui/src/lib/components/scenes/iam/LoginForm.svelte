@@ -88,7 +88,7 @@
   })
   let code = $state('')
   let sending = $state(false)
-  let sendFailure = $state<Pick<HaiError, 'code' | 'message'> | 'network'>()
+  let sendFailure = $state<Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus'> | 'network'>()
   const sendError = $derived(sendFailure === 'network' ? uiM('auth_network_error') : sendFailure ? authErrorMessage(sendFailure) : '')
   let resendAt = $state(0)
   let now = $state(Date.now())

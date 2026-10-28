@@ -800,6 +800,8 @@ import {
 
 ### Configuration driven authentication
 
+State modules can import `authErrorMessage` from the lightweight `@h-ai/ui/i18n` entry without loading scene components. Admin profile password changes, mobile/desktop examples and generated templates share these messages.
+
 Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
 
 Agreement content can be configured as `agreements.userAgreementMarkdown` and `privacyPolicyMarkdown` using YAML `|`. The modal safely renders configured Markdown and prefers it over the URL of the same agreement. URL-only content stays in a sandboxed iframe.
@@ -825,7 +827,9 @@ agreements:
 
 
 
-AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS login, registration and recovery. config.ui supplies layout, branding and images. LoginForm supports methods, onsendotp, otpLength and resendInterval; password forms accept passwordPolicy. Network and token storage remain in actions. Known IAM authentication errors use the current UI language; custom application messages are preserved.
+AuthPanel accepts public IAM config and actions for password/LDAP/email/SMS login, registration and recovery. config.ui supplies layout, branding and images. LoginForm supports methods, onsendotp, otpLength and resendInterval; password forms accept passwordPolicy. Network and token storage remain in actions.
+
+Use `authErrorMessage(error)` from `@h-ai/ui/components/scenes/iam/index` for authentication failures. It maps public codes to the current UI language, combines username/password failures, hides raw unknown/server errors and preserves a valid `traceId`. AuthPanel, OTP sending, sensitive confirmation and fullstack password changes share this mapping. Initial/expired passwords, reuse of the current password (`hai:iam:034`) and session limits have actionable messages. Errors use soft inline Alerts; success uses floating notifications. Password confirmation compares exact strings without Unicode normalization or trimming and shows mismatches beside the field.
 
 AuthPanel disables native form controls during SSR and enables input after client mount binds events, preventing early input from being lost during hydration. Applications need no extra readiness code. E2E tests wait for editable controls and cover delayed client scripts.
 

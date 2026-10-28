@@ -260,7 +260,7 @@ function validatePasswordReplacement(ctx: UserFnContext, user: StoredUser, passw
     if (!same.success)
       return same
     if (same.data)
-      return err(HaiIamError.PASSWORD_POLICY_VIOLATION, iamM('iam_passwordMustDiffer'))
+      return err(HaiIamError.PASSWORD_REUSE_NOT_ALLOWED, iamM('iam_passwordMustDiffer'))
   }
   return ok(undefined)
 }

@@ -800,6 +800,8 @@ import {
 
 ### 設定による認証画面
 
+状態層では軽量入口 `@h-ai/ui/i18n` から `authErrorMessage` を読み込み、シーンコンポーネントを読み込まず同じ案内を使えます。管理台の個人パスワード変更、モバイル・デスクトップ例、生成テンプレートで共用します。
+
 パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
 
 YAML の `|` で `agreements.userAgreementMarkdown` と `privacyPolicyMarkdown` を設定できます。Modal は本文を安全に描画し、同じ規約の URL より本文を優先します。URL のみの場合は隔離 iframe を使用します。
@@ -825,7 +827,9 @@ agreements:
 
 
 
-AuthPanel に IAM 公開設定と actions を渡すと、複数方式のログイン、登録、復旧、規約を利用できます。config.ui でレイアウトとブランド画像を指定し、パスワードフォームは passwordPolicy を受け取ります。通信と Token 保存は actions の責務です。既知の IAM 認証エラーは現在の UI 言語で表示し、アプリ独自のメッセージはそのまま保持します。
+AuthPanel に IAM 公開設定と actions を渡すと、複数方式のログイン、登録、復旧、規約を利用できます。config.ui でレイアウトとブランド画像を指定し、パスワードフォームは passwordPolicy を受け取ります。通信と Token 保存は actions の責務です。
+
+認証エラーには `@h-ai/ui/components/scenes/iam/index` の `authErrorMessage(error)` を使用します。公開コードを現在の UI 言語に変換し、ユーザー名とパスワードの誤りを区別せず、未知・サーバーエラーの原文を隠し、有効な `traceId` を保持します。AuthPanel、OTP 送信、重要操作の再認証、fullstack のパスワード変更で共用します。初期・期限切れパスワード、現在のパスワードの再使用（`hai:iam:034`）、セッション数上限には操作案内を表示します。エラーは柔らかい背景の行内 Alert、成功はフローティング通知を使います。確認パスワードはサーバーと同じく Unicode 正規化や空白除去をせず厳密に比較し、不一致をフィールドに表示します。
 
 AuthPanel は SSR 中のフォーム操作を無効にし、クライアントのマウントとイベント登録が完了してから入力を有効にします。ハイドレーションによる入力の消失を防ぎ、アプリ側の追加の準備処理は不要です。E2E では入力可能な状態を待ち、クライアントスクリプトの読み込みが遅れる場合も検証します。
 

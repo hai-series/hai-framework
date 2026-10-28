@@ -364,12 +364,13 @@ export interface UserOperations {
    *
    * @param userId - 用户 ID
    * @param newPassword - 新密码
-   * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND，密码不合规返回 PASSWORD_POLICY_VIOLATION
+   * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND，复杂度不足返回 PASSWORD_POLICY_VIOLATION，策略禁止当前密码复用时返回 PASSWORD_REUSE_NOT_ALLOWED。
    */
   adminResetPassword: (userId: string, newPassword: string) => Promise<HaiResult<void>>
   /**
    * 使用原凭据完成首次或过期改密，不需要先获得普通会话。
    * 仍执行账号状态、旧密码校验、失败锁定及新密码策略；成功后需重新登录。
+   * 凭据失败统一返回 INVALID_CREDENTIALS；复杂度不足返回 PASSWORD_POLICY_VIOLATION，复用当前密码返回 PASSWORD_REUSE_NOT_ALLOWED。
    * @example
    * ```ts
    * import { iam } from '@h-ai/iam'
@@ -387,7 +388,7 @@ export interface UserOperations {
    * @param userId - 用户 ID
    * @param oldPassword - 旧密码
    * @param newPassword - 新密码
-   * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，新密码不合规返回 PASSWORD_POLICY_VIOLATION
+   * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，复杂度不足返回 PASSWORD_POLICY_VIOLATION，策略禁止当前密码复用时返回 PASSWORD_REUSE_NOT_ALLOWED。
    */
   changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<HaiResult<void>>
 
@@ -399,7 +400,7 @@ export interface UserOperations {
    * @param accessToken - 当前用户的访问令牌
    * @param oldPassword - 旧密码
    * @param newPassword - 新密码
-   * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，新密码不合规返回 PASSWORD_POLICY_VIOLATION
+   * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，复杂度不足返回 PASSWORD_POLICY_VIOLATION，策略禁止当前密码复用时返回 PASSWORD_REUSE_NOT_ALLOWED。
    */
   changeCurrentUserPassword: (
     accessToken: string,
@@ -433,7 +434,7 @@ export interface UserOperations {
    *
    * @param token - 重置令牌（明文，由 requestPasswordReset 生成并由业务层发送给用户）
    * @param newPassword - 新密码
-   * @returns 成功返回 ok；令牌无效/过期返回 RESET_TOKEN_INVALID，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
+   * @returns 成功返回 ok；令牌无效/过期返回 RESET_TOKEN_INVALID，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS，复杂度不足返回 PASSWORD_POLICY_VIOLATION，策略禁止当前密码复用时返回 PASSWORD_REUSE_NOT_ALLOWED。
    * @example
    * ```ts
    * import { iam } from '@h-ai/iam'

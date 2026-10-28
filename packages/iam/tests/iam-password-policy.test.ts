@@ -23,7 +23,7 @@ function tests() {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(Date.now() + 2 * 86400_000)
     expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_EXPIRED.code } })
-    expect((await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: TEST_PASSWORD })).success).toBe(false)
+    expect(await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: 'hai:iam:034' } })
     expect((await iam.user.renewPassword({ identifier: username, password: 'wrong', newPassword: 'NewPassword123!' })).success).toBe(false)
     expect((await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword123!' })).success).toBe(true)
     expect((await iam.auth.login({ identifier: username, password: 'NewPassword123!' })).success).toBe(true)
@@ -47,9 +47,26 @@ function tests() {
     const managed = await iam.user.createUser({ username, password: TEST_PASSWORD })
     expect(managed).toMatchObject({ success: true, data: { user: { mustChangePassword: true } } })
     expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: HaiIamError.PASSWORD_CHANGE_REQUIRED.code } })
+    expect(await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: 'hai:iam:034' } })
     expect((await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'FirstChosen123!' })).success).toBe(true)
     expect((await iam.auth.login({ identifier: username, password: 'FirstChosen123!' })).success).toBe(true)
     expect((await iam.auth.registerAndLogin({ username: `self-${crypto.randomUUID()}`, password: TEST_PASSWORD })).success).toBe(true)
+  })
+
+  it('不存在账号和错误原密码使用同一凭据错误，不泄露字段原因', async () => {
+    const iam = await initIam({ password: { requireInitialChange: true } })
+    const username = `credentials-${crypto.randomUUID()}`
+    expect((await iam.user.createUser({ username, password: TEST_PASSWORD })).success).toBe(true)
+    const login = await iam.auth.login({ identifier: username, password: 'wrong-password' })
+    const missing = await iam.user.renewPassword({ identifier: `missing-${username}`, password: TEST_PASSWORD, newPassword: 'NextPassword123!' })
+    const incorrect = await iam.user.renewPassword({ identifier: username, password: 'wrong-password', newPassword: 'NextPassword123!' })
+    for (const result of [login, missing, incorrect]) {
+      expect(result).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+      if (!result.success) {
+        expect(result.error.message).toBe('用户名或密码不正确')
+        expect(result.error).not.toHaveProperty('cause')
+      }
+    }
   })
 
   it('已有会话也受密码期限约束，不能只在登录页面提示过期', async () => {

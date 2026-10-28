@@ -32194,6 +32194,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "AuthLoginMethod",
               "kind": "type",
               "declaration": "AuthLoginMethod",
@@ -34478,6 +34484,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "AuthLoginMethod",
               "kind": "type",
               "declaration": "AuthLoginMethod",
@@ -36759,6 +36771,12 @@
               "name": "applyTheme",
               "kind": "value",
               "declaration": "applyTheme",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -39900,6 +39918,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "AuthLoginMethod",
               "kind": "type",
               "declaration": "AuthLoginMethod",
@@ -41368,6 +41392,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "AuthLoginMethod",
               "kind": "type",
               "declaration": "AuthLoginMethod",
@@ -42834,6 +42864,12 @@
               "kind": "value+type",
               "declaration": "AppBar",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "AuthLoginMethod",
@@ -46818,6 +46854,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "AuthPanel",
               "kind": "value+type",
               "declaration": "AuthPanel",
@@ -46960,6 +47002,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "AuthPanel",
               "kind": "value+type",
               "declaration": "AuthPanel",
@@ -47101,6 +47149,12 @@
           "target": "./dist/components/scenes/iam/index.d.ts",
           "exists": true,
           "symbols": [
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
             {
               "name": "AuthPanel",
               "kind": "value+type",
@@ -47344,6 +47398,12 @@
               "kind": "type",
               "declaration": "AiTableRow",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "AuthLoginMethod",
@@ -48422,6 +48482,12 @@
               "kind": "type",
               "declaration": "AiTableRow",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "AuthLoginMethod",
@@ -49500,6 +49566,12 @@
               "kind": "type",
               "declaration": "AiTableRow",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
             },
             {
               "name": "AuthLoginMethod",
@@ -50808,6 +50880,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createLocaleStore",
               "kind": "value",
               "declaration": "createLocaleStore",
@@ -50890,6 +50968,12 @@
           "exists": true,
           "symbols": [
             {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createLocaleStore",
               "kind": "value",
               "declaration": "createLocaleStore",
@@ -50971,6 +51055,12 @@
           "target": "./dist/i18n.svelte.d.ts",
           "exists": true,
           "symbols": [
+            {
+              "name": "authErrorMessage",
+              "kind": "value",
+              "declaration": "authErrorMessage",
+              "declarationKind": "FunctionDeclaration"
+            },
             {
               "name": "createLocaleStore",
               "kind": "value",

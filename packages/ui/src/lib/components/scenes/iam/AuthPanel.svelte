@@ -52,7 +52,7 @@
   let mode = $state<AuthPanelMode>(untrack(() => initialMode))
   let loading = $state(false)
   let renewalIdentifier = $state('')
-  let actionError = $state<Pick<HaiError, 'code' | 'message'>>()
+  let actionError = $state<Pick<HaiError, 'code' | 'message' | 'traceId' | 'httpStatus'>>()
   let networkFailed = $state(false)
   const errors = $derived<Record<string, string>>(actionError ? { general: authErrorMessage(actionError) } : networkFailed ? { general: uiM('auth_network_error') } : {})
   let notice = $state<UIMessageKey | ''>('')

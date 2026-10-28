@@ -4,6 +4,7 @@ import { err, ok } from '@h-ai/core'
 import { flushSync, mount, unmount } from 'svelte'
 import { describe, expect, it, vi } from 'vitest'
 import { createSensitiveActions } from '../src/lib/components/scenes/iam/index.js'
+import { uiM } from '../src/lib/messages.js'
 import SensitiveActionsHarness from './fixtures/SensitiveActionsHarness.svelte'
 
 function setup() {
@@ -52,12 +53,12 @@ describe('通用敏感操作确认', () => {
 
   it('密码错误可在同一弹窗重试，成功证明只返回给原动作', async () => {
     const { actions, reauthenticate } = setup()
-    reauthenticate.mockResolvedValueOnce(err({ code: 'test:password', message: 'Incorrect password' }))
+    reauthenticate.mockResolvedValueOnce(err({ code: 'hai:iam:002', message: 'Private original-password detail', traceId: 'reauth-failed' }))
     const pending = actions.authorize('orders.approve')
     expect(actions.open).toBe(true)
     expect(await actions.authorize('orders.approve')).toBeNull()
     await actions.submit('wrong')
-    expect(actions.error).toBe('Incorrect password')
+    expect(actions.error).toBe(`${uiM('auth_error_credentials')} (traceId: reauth-failed)`)
     expect(actions.open).toBe(true)
     await actions.submit('correct')
     expect(await pending).toBe('proof')

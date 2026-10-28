@@ -894,6 +894,8 @@ Kit/Serv の標準入口は POST /auth/captcha（Kit は同一生成元の /api 
 
 ## 任意のパスワード・ログイン保護
 
+存在しないアカウント、パスワード未設定、現在のパスワードの誤りはすべて「ユーザー名またはパスワードが正しくありません。」を返します。現在のパスワードの再使用は `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED`（`hai:iam:034`）、強度不足は従来の `PASSWORD_POLICY_VIOLATION`（`008`）です。UI はコードに応じた案内を表示し、未知の例外の原文を隠します。初回変更に失敗すると通常セッションは発行されず、成功後は新しいパスワードでログインします。
+
 `password.minLength/maxLength` と各 `require*` は強度を指定します。`minCharacterClasses` は大文字、小文字、数字、特殊文字の任意 N 種類を要求し、0は追加制約なしです。CLI/admin 例の既定は8–128文字で、追加の文字種数制限はありません。任意3種類を要求する場合は `minCharacterClasses: 3` を明示します。作成・変更・リセットで同じ検証を使います。
 
 `expirationDays: 0` は定期変更を無効にし、正数は日数です。`preventSamePassword` は単独でも有効化でき、有効期限制約・初回変更時は旧パスワードを拒否します。`requireInitialChange` は管理者作成・リセットの認証情報に適用され、自分で登録時に設定したパスワードは再変更不要です。初期・期限切れパスワードでは通常セッションを取得・更新できません。`iam.user.renewPassword({ identifier, password, newPassword })` で旧パスワードを確認し、変更後に再ログインします。Kit/Serv と AuthPanel はこの完了経路を提供します。

@@ -1,36 +1,18 @@
 /**
  * @h-ai/ui — IAM 密码工具
  *
- * 密码规范化与一致性比较工具
+ * 密码原始字符串比较及策略提示工具
  * @module password-utils
  */
 
-/**
- * 规范化密码字符串
- * - 使用 NFKC 统一兼容字符
- */
 import type { PasswordPolicy } from '../types.js'
 import { uiM } from '../../../messages.js'
 
 /**
- * 按约定进行 Unicode 归一化，保留用户密码的空白字符。
- * @param value - 待处理或校验的值。
- * @returns 按约定 Unicode 形式归一化的密码，保留空白字符。
- *
- * @example 模块内部上下文
- * ```ts
- * const normalized = normalizePassword('Ａbcd1234!')
- * ```
- */
-export function normalizePassword(value: string): string {
-  return value.normalize('NFKC')
-}
-
-/**
- * 比较两次密码是否一致
+ * 与服务端一致，逐字符比较两次密码；不归一化、裁剪空白或改写凭据。
  * @param password - 用户输入的密码，不能持久化为 UI 偏好。
  * @param confirmPassword - 再次输入的确认密码。
- * @returns 归一化后两次密码输入是否一致。
+ * @returns 两次密码的原始字符串是否完全一致。
  *
  * @example 模块内部上下文
  * ```ts
@@ -38,7 +20,7 @@ export function normalizePassword(value: string): string {
  * ```
  */
 export function arePasswordsEqual(password: string, confirmPassword: string): boolean {
-  return normalizePassword(password) === normalizePassword(confirmPassword)
+  return password === confirmPassword
 }
 
 /**

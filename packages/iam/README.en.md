@@ -898,6 +898,8 @@ Standard Kit/Serv expose POST /auth/captcha (Kit same-origin /api prefix) and pr
 
 ## Optional password and login protection
 
+Credential failures use “Username or password is incorrect.” for missing accounts, unset passwords and incorrect old passwords. Reusing the current password returns `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED` (`hai:iam:034`); strength failures remain `PASSWORD_POLICY_VIOLATION` (`008`). Map codes to friendly UI messages and hide raw unknown exceptions. Failed initial renewal never issues an ordinary session; sign in with the new password after success.
+
 `password.minLength/maxLength` and individual `require*` flags control strength. `minCharacterClasses` accepts any N of uppercase, lowercase, digits and special characters; 0 adds no count requirement. CLI/admin examples default to 8–128 characters with no extra class count; set `minCharacterClasses: 3` to require any three classes. All server creation/change/reset paths share validation.
 
 `expirationDays: 0` disables expiry; positive values are days. `preventSamePassword` is independent. Expiry/initial-change policies reject the current password. `requireInitialChange` applies to administrator-created/reset credentials, rather than self-chosen registration passwords. Initial/expired credentials cannot authorize sessions or refresh existing ones. `iam.user.renewPassword({ identifier, password, newPassword })` verifies the old password and requires fresh login; Kit/Serv and AuthPanel provide the completion flow.

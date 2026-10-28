@@ -10,6 +10,9 @@ import { core } from '@h-ai/core'
 import { readStoredValue, writeStoredValue } from './internal/browser-safety.js'
 import { changeUILocale as setGlobalLocale } from './internal/locale.js'
 
+// 状态层可格式化安全认证提示，无需加载场景组件。
+export { authErrorMessage } from './components/scenes/iam/auth-error-message.js'
+
 // 从 core.i18n 解构常用函数
 const {
   DEFAULT_LOCALE,

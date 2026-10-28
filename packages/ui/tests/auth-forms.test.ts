@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import type { AuthPanelConfig, LoginFormData, LoginFormProps } from '../src/lib/components/scenes/types.js'
+import type { AuthPanelActions, AuthPanelConfig, LoginFormData, LoginFormProps } from '../src/lib/components/scenes/types.js'
 import { err, ok } from '@h-ai/core'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { AuthPanel, LoginForm, RegisterForm } from '../src/lib/components/scenes/iam/index.js'
+import { AuthPanel, ChangePasswordForm, LoginForm, RegisterForm } from '../src/lib/components/scenes/iam/index.js'
 import { setUILocale } from '../src/lib/messages.js'
 import { toast } from '../src/lib/toast.svelte.js'
 
@@ -24,6 +24,87 @@ function snippet(text: string) {
 }
 
 describe('authentication form extensions and agreements', () => {
+  it('确认密码逐字符比较，兼容字符差异显示字段提示且不能静默进入提交层', async () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const onsubmit = vi.fn()
+    const component = mount(ChangePasswordForm, { target, props: { onsubmit } })
+    function input(id: string, value: string) {
+      const element = target.querySelector<HTMLInputElement>(id)!
+      element.value = value
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+      flushSync()
+    }
+    try {
+      flushSync()
+      input('#old-password', 'CurrentPassword123!')
+      input('#new-password', 'NewPassword123!')
+      input('#confirm-password', 'ＮewPassword123!')
+      target.querySelector('form')!.requestSubmit()
+      expect(onsubmit).not.toHaveBeenCalled()
+      expect(target.textContent).toContain('两次密码输入不一致')
+      input('#confirm-password', 'NewPassword123!')
+      target.querySelector('form')!.requestSubmit()
+      expect(onsubmit).toHaveBeenCalledWith({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' })
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
+  it('首次改密失败使用柔和错误样式和安全原因，保留追踪编号且成功前不授权', async () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const action = async () => ok(undefined)
+    const renewPassword = vi.fn<NonNullable<AuthPanelActions['renewPassword']>>(action)
+      .mockResolvedValueOnce(err({ code: 'hai:iam:034', message: 'Private policy detail', httpStatus: 400, traceId: 'renew-same' }))
+      .mockResolvedValueOnce(err({ code: 'hai:iam:002', message: 'Original password wrong', httpStatus: 401, traceId: 'renew-credentials' }))
+    const onauthenticated = vi.fn()
+    const component = mount(AuthPanel, { target, props: {
+      config: { ...config, agreements: { showOnLogin: false, showOnRegister: false } },
+      actions: { login: async () => err({ code: 'hai:iam:025', message: 'Private initial detail', httpStatus: 401 }), register: action, sendOtp: action, requestPasswordReset: action, confirmPasswordReset: action, renewPassword },
+      onauthenticated,
+    } })
+    function input(selector: string, value: string) {
+      const element = target.querySelector<HTMLInputElement>(selector)!
+      element.value = value
+      element.dispatchEvent(new Event('input', { bubbles: true }))
+      flushSync()
+    }
+    try {
+      flushSync()
+      input('input[name="username"]', 'config_admin')
+      input('input[type="password"]', 'InitialPassword123!')
+      target.querySelector('form')!.requestSubmit()
+      await vi.waitFor(() => expect(target.querySelector('.change-password-form')).not.toBeNull())
+      expect(target.textContent).toContain('修改初始密码')
+      input('#old-password', 'InitialPassword123!')
+      input('#new-password', 'InitialPassword123!')
+      input('#confirm-password', 'InitialPassword123!')
+      target.querySelector('form')!.requestSubmit()
+      await vi.waitFor(() => expect(target.textContent).toContain('新密码不能与当前密码相同'))
+      expect(target.querySelector('.alert-error.alert-soft')?.textContent).toContain('traceId: renew-same')
+      expect(target.textContent).not.toContain('Private')
+      expect(onauthenticated).not.toHaveBeenCalled()
+      input('#old-password', 'WrongPassword123!')
+      input('#new-password', 'NextPassword123!')
+      input('#confirm-password', 'NextPassword123!')
+      target.querySelector('form')!.requestSubmit()
+      await vi.waitFor(() => expect(target.textContent).toContain('用户名或密码不正确'))
+      expect(target.textContent).not.toContain('Original password wrong')
+      input('#old-password', 'InitialPassword123!')
+      target.querySelector('form')!.requestSubmit()
+      await vi.waitFor(() => expect(target.querySelector('.login-form')).not.toBeNull())
+      expect(onauthenticated).not.toHaveBeenCalled()
+      expect(renewPassword).toHaveBeenCalledTimes(3)
+    }
+    finally {
+      await unmount(component)
+      target.remove()
+    }
+  })
+
   it.each(['hai:iam:007', 'hai:iam:025'])('首次/过期先验证旧密码并完成改密，不提前授权：%s', async (code) => {
     const target = document.createElement('div')
     document.body.append(target)
