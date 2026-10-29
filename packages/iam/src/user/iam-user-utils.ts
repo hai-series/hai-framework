@@ -35,8 +35,8 @@ export function checkPasswordState(user: Pick<StoredUser, 'mustChangePassword' |
  * function allowed(user: User) { return isUserActive(user) }
  * ```
  */
-export function isUserActive(user: Pick<User, 'enabled' | 'accountType' | 'accountStatus' | 'accountExpiresAt'>): boolean {
-  return user.enabled && (user.accountStatus ?? 'active') === 'active'
+export function isUserActive(user: Pick<User, 'accountType' | 'accountStatus' | 'accountExpiresAt'>): boolean {
+  return user.accountStatus === 'active'
     && (user.accountType !== 'temporary' || !!user.accountExpiresAt)
     && (!user.accountExpiresAt || new Date(user.accountExpiresAt).getTime() > Date.now())
 }
@@ -48,7 +48,7 @@ export function isUserActive(user: Pick<User, 'enabled' | 'accountType' | 'accou
  * const result = validateAccountPolicy({ accountType: 'temporary', accountExpiresAt: new Date(Date.now() + 3600000) }); if (!result.success) result.error.code
  * ```
  */
-export function validateAccountPolicy(user: Pick<User, 'accountType' | 'accountStatus' | 'accountExpiresAt'>): HaiResult<void> {
+export function validateAccountPolicy(user: Partial<Pick<User, 'accountType' | 'accountStatus' | 'accountExpiresAt'>>): HaiResult<void> {
   if ((user.accountType !== undefined && !['permanent', 'temporary'].includes(user.accountType))
     || (user.accountStatus !== undefined && !['active', 'dormant', 'closed'].includes(user.accountStatus))
     || (user.accountExpiresAt != null && (!(user.accountExpiresAt instanceof Date) || !Number.isFinite(user.accountExpiresAt.getTime())))
@@ -82,7 +82,6 @@ export function toUser(storedUser: StoredUser): User {
     phone: storedUser.phone,
     displayName: storedUser.displayName,
     avatarUrl: storedUser.avatarUrl,
-    enabled: storedUser.enabled,
     accountType: storedUser.accountType ?? 'permanent',
     accountStatus: storedUser.accountStatus ?? 'active',
     accountExpiresAt: storedUser.accountExpiresAt ?? null,

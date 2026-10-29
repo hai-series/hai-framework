@@ -390,7 +390,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 
 以下操作自动清除受影响用户的所有活跃会话：
 
-- `deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset`
+- `deleteUser` / `updateUser({ accountStatus: 'dormant' })` / `changePassword` / `confirmPasswordReset`
 
 以下操作通过 `patchUserSessions` 同步更新活跃会话中的角色/权限列表（best-effort）：
 
@@ -405,7 +405,7 @@ Key 登录会话绑定 Key ID。刷新使用普通 `iam.session.refresh`，不�
 | `HaiIamError.AUTH_FAILED`               | `hai:iam:001` | 认证失败         |
 | `HaiIamError.INVALID_CREDENTIALS`       | `hai:iam:002` | 凭证无效         |
 | `HaiIamError.USER_NOT_FOUND`            | `hai:iam:003` | 用户不存在       |
-| `HaiIamError.USER_DISABLED`             | `hai:iam:004` | 用户已禁用       |
+| `HaiIamError.ACCOUNT_UNAVAILABLE`             | `hai:iam:004` | 账号状态或有效期不允许访问       |
 | `HaiIamError.USER_LOCKED`               | `hai:iam:005` | 用户已锁定       |
 | `HaiIamError.USER_ALREADY_EXISTS`       | `hai:iam:006` | 用户已存在       |
 | `HaiIamError.PASSWORD_EXPIRED`          | `hai:iam:007` | 密码已过期       |
@@ -531,7 +531,7 @@ agreements:
 | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
 | `login.password / otp / ldap`                                                        | 独立启用密码、验证码、企业账号                        |
 | `otp.email / sms`                                                                    | 独立启用邮件、短信                                    |
-| `register.enabled / defaultEnabled`                                                  | 自助注册及新账户状态                                  |
+| `register.enabled / defaultAccountStatus`                                                  | 自助注册及新账户状态                                  |
 | `passwordReset.enabled / mode / resetUrl`                                            | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
 | `agreements.showOnRegister / showOnLogin`                                            | 注册/登录协议弹窗显示；链接只接受 HTTP(S)             |
 | `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图                |
@@ -540,7 +540,7 @@ agreements:
 
 SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点白名单使用 `kit.auth.publicPaths`。客户端通过 `kit.client.createAuthActions()` 连接 Cookie 端点；独立 HTTP 客户端通过 `apiClient.createAuthActions(client)` 连接 IAM contract 并自动保存 Token 到已配置安全存储。将配置及动作直接传入 `AuthPanel`，完成登录、注册、找回及重置；单独使用 `LoginForm` 可传 `methods`、`onsendotp`、`resendInterval`，密码表单可传完整 `passwordPolicy`。
 
-管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认禁用账户不会创建会话。
+管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认休眠账号不会创建会话；`defaultAccountStatus` 默认 active，可设为 dormant 等待管理员激活。
 
 ### 分布式安全与边界
 
@@ -552,7 +552,7 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 未启用额外期限时，access 与 refresh 独立到期：access 过期仍可凭有效 refresh 轮换，刷新不先要求旧 access 认证。`session.idleTimeout`、`absoluteTimeout` 以秒配置，0关闭；启用后 access 与 refresh 均检查，刷新保留首次登录时间。成功的 access 认证请求算活动；自动 refresh 仅换票，不延长闲置期限。后台业务轮询仍需按项目设计。`maxSessions: 0` 不限，否则在用户分区 CAS 原子限制有效会话数；`singleDevice: true` 默认顶旧保新，`singleDeviceMode: 'reject'` 保留旧会话并拒绝新登录。删除 access、logoutAll、单设备替换均撤销对应 refresh；`revokeRefresh` 保留仍有效的 access。
 
-账号默认 `permanent/active`；管理端可配置 `temporary` 与 `accountExpiresAt`，或设 `accountStatus` 为 `dormant/closed`。状态/有效期变化推进持久凭据代际，重新激活不恢复旧会话。`accounts.dormantAfterDays: 0` 关闭自动休眠；启用后按 `scanIntervalSeconds` 扫描最后成功登录/创建时间，也可从可信后台调用 `iam.user.scanInactiveAccounts()`。公开注册不能接受管理字段；`closed` 保留记录，个人数据注销由项目处理。
+账号生命周期仅使用必填 `accountStatus`（active/dormant/closed），无 User.enabled；列表过滤/排序同名，注册 defaultAccountStatus 默认 active、可设 dormant。beta.1 迁移前停旧写入并备份数据库；v6 将原停用 active 账号转 dormant 后删除旧列，镜像回滚不能恢复数据库。账号默认 `permanent/active`；管理端可配置 `temporary` 与 `accountExpiresAt`，或设 `accountStatus` 为 `dormant/closed`。状态/有效期变化推进持久凭据代际，重新激活不恢复旧会话。`accounts.dormantAfterDays: 0` 关闭自动休眠；启用后按 `scanIntervalSeconds` 扫描最后成功登录/创建时间，也可从可信后台调用 `iam.user.scanInactiveAccounts()`。公开注册不能接受管理字段；`closed` 保留记录，个人数据注销由项目处理。
 
 `password.minCharacterClasses` 支持任意 N 类字符；创建/改密/重置共用服务端强度校验。`expirationDays: 0` 关闭期限；`preventSamePassword` 可独立启用，期限或首次强改时也拒绝旧密码。`requireInitialChange` 只约束管理端初始/重置密码，关闭后不受历史标记约束。首次/过期用户用 `iam.user.renewPassword({identifier,password,newPassword})` 完成原密码验证与换密后重新登录，不能先授予普通会话。AuthPanel 与标准 Kit/Serv 端点提供该流程。
 
@@ -563,9 +563,9 @@ SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点�
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
 
-LDAP 的 ldapSyncUser: false 要求已有启用的本地用户以绑定数据库 credentialVersion；没有本地记录返回 USER_NOT_FOUND，不再创建虚拟 DN 身份。
+LDAP 的 ldapSyncUser: false 要求已有且处于激活状态的本地用户以绑定数据库 credentialVersion；没有本地记录返回 USER_NOT_FOUND，不再创建虚拟 DN 身份。
 
-Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、激活且未到期的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
 
 `iam.auth.logout(accessToken)` 直接按完整不透明令牌在用户分区执行一次 CAS，原子撤销 access 与关联 refresh；access 已到期也不能跳过撤销。非法/不存在的令牌幂等成功，缓存读取或提交故障返回失败，恢复后可用同一令牌重试。HTTP 登出只允许撤销所持令牌，不以 userId 定位他人会话，也不要求该 access 仍通过认证。调用方必须检查 `success`；本地 Cookie/安全存储清理不代表服务端撤销已经确认，失败应显示提示。
 
@@ -576,3 +576,4 @@ Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessio
 ### 页面离开会话
 
 `session.endOnPageHide` 默认关闭。Kit/typed client 的 `createAuthActions().bindPageExit({ enabled })` 返回监听清理函数，宿主卸载时调用；typed client.close 也清理本实例监听。请求走现有 CSRF/加密管线，POST `/auth/session/close` 仅撤销所持旧会话，不清 Cookie，避免迟到响应影响新登录。刷新/整页导航也触发，BFCache 跳过；浏览器关闭属于最善努力，需配合服务端闲置/绝对期限，显式 logout 始终可靠撤销。
+

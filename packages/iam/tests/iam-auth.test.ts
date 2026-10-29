@@ -11,7 +11,7 @@
  * - verifyToken：有效/无效/空令牌、登出后令牌验证、Session 含 roles/permissions/displayName
  * - logout：正常登出、令牌失效、重复登出、不存在令牌幂等
  * - logout 吊销 refreshToken：登出后 refreshToken 不可用
- * - 禁用用户登录：register(defaultEnabled:false) → login 应返回 USER_DISABLED
+ * - 禁用用户登录：register(defaultAccountStatus: 'dormant') → login 应返回 ACCOUNT_UNAVAILABLE
  * - 账户锁定：超过最大尝试次数后锁定
  * - 登录结果中的 agreements
  */
@@ -307,7 +307,7 @@ describe('iam.auth', () => {
 
       beforeAll(async () => {
         disabledUserIam = await initIam({
-          register: { enabled: true, defaultEnabled: false },
+          register: { enabled: true, defaultAccountStatus: 'dormant' },
         })
         await disabledUserIam.user.register({
           username: 'disabled_user',
@@ -319,14 +319,14 @@ describe('iam.auth', () => {
         await initIam()
       })
 
-      it('禁用用户登录应返回 USER_DISABLED', async () => {
+      it('禁用用户登录应返回 ACCOUNT_UNAVAILABLE', async () => {
         const result = await disabledUserIam.auth.login({
           identifier: 'disabled_user',
           password: TEST_PASSWORD,
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.USER_DISABLED.code)
+          expect(result.error.code).toBe(HaiIamError.ACCOUNT_UNAVAILABLE.code)
         }
       })
     })

@@ -17,7 +17,7 @@
   "iam_passwordNeedSpecialChar": "パスワードには特殊文字を含めてください",
   "iam_credentialTypeMismatch": "認証情報の種類が一致しません",
   "iam_userNotExist": "ユーザーが存在しません",
-  "iam_accountDisabled": "アカウントが無効です",
+  "iam_accountUnavailable": "現在このアカウントは利用できません。状態または有効期限を管理者に確認してください。",
   "iam_accountLocked": "アカウントがロックされています。しばらくしてから再試行してください",
   "iam_accountNoPassword": "ユーザー名またはパスワードが正しくありません。",
   "iam_passwordWrong": "ユーザー名またはパスワードが正しくありません。",

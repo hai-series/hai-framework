@@ -17,7 +17,7 @@
   "iam_passwordNeedSpecialChar": "Password must contain special characters",
   "iam_credentialTypeMismatch": "Credential type mismatch",
   "iam_userNotExist": "User does not exist",
-  "iam_accountDisabled": "Account is disabled",
+  "iam_accountUnavailable": "This account is currently unavailable. Contact an administrator to check its status or expiration.",
   "iam_accountLocked": "Account is locked, please try again later",
   "iam_accountNoPassword": "Username or password is incorrect.",
   "iam_passwordWrong": "Username or password is incorrect.",

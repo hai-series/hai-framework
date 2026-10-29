@@ -1,6 +1,7 @@
 /** 账号类型、状态与闲置扫描覆盖已有会话，不能只检查登录表单。 */
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
+import { HaiIamError } from '../src/index.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
@@ -14,6 +15,48 @@ function tests() {
     const permanent = await iam.user.createUser({ username: `permanent-${crypto.randomUUID()}`, password: TEST_PASSWORD })
     expect(permanent).toMatchObject({ success: true, data: { user: { accountType: 'permanent', accountStatus: 'active' } } })
     expect((await iam.user.createUser({ username: `invalid-${crypto.randomUUID()}`, password: TEST_PASSWORD, accountType: 'temporary' })).success).toBe(false)
+  })
+
+  it('注册默认休眠由服务端决定，管理员创建不受该默认状态影响', async () => {
+    const iam = await initIam({ register: { enabled: true, defaultAccountStatus: 'dormant' } })
+    const username = `pending-${crypto.randomUUID()}`
+    const pending = await iam.user.register({ username, password: TEST_PASSWORD, accountStatus: 'active' })
+    expect(pending).toMatchObject({ success: true, data: { user: { accountStatus: 'dormant' } } })
+    expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(false)
+    const managed = await iam.user.createUser({ username: `managed-${crypto.randomUUID()}`, password: TEST_PASSWORD })
+    expect(managed).toMatchObject({ success: true, data: { user: { accountStatus: 'active' } } })
+    if (!pending.success)
+      throw new Error(pending.error.message)
+    expect((await iam.user.updateUser(pending.data.user.id, { accountStatus: 'active' })).success).toBe(true)
+    expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
+  })
+
+  it('保存资料和相同生命周期不会撤销现有会话', async () => {
+    const iam = await initIam()
+    const login = await iam.auth.registerAndLogin({ username: `profile-${crypto.randomUUID()}`, password: TEST_PASSWORD })
+    if (!login.success)
+      throw new Error(login.error.message)
+    const version = await reldb.sql.get('SELECT credential_version FROM hai_iam_users WHERE id = ?', [login.data.user.id])
+    expect((await iam.user.updateUser(login.data.user.id, { displayName: 'Updated profile', accountStatus: 'active', accountType: 'permanent', accountExpiresAt: null })).success).toBe(true)
+    expect(await reldb.sql.get('SELECT credential_version FROM hai_iam_users WHERE id = ?', [login.data.user.id])).toEqual(version)
+    expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(true)
+  })
+
+  it.each(['active', 'dormant', 'closed'] as const)('管理员可重置 %s 账号密码，保留状态并要求修改临时密码', async (accountStatus) => {
+    const iam = await initIam({ password: { requireInitialChange: true } })
+    const username = `reset-${crypto.randomUUID()}`
+    const created = await iam.user.createUser({ username, password: TEST_PASSWORD, accountStatus })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const temporaryPassword = `Reset-Aa1!${crypto.randomUUID()}`
+    expect((await iam.user.adminResetPassword(created.data.user.id, temporaryPassword)).success).toBe(true)
+    expect(await iam.user.getUser(created.data.user.id)).toMatchObject({ success: true, data: { accountStatus, mustChangePassword: true } })
+    expect((await iam.auth.login({ identifier: username, password: temporaryPassword })).success).toBe(false)
+    expect((await iam.user.updateUser(created.data.user.id, { accountStatus: 'active' })).success).toBe(true)
+    const login = await iam.auth.login({ identifier: username, password: temporaryPassword })
+    expect(login.success).toBe(false)
+    if (!login.success)
+      expect(login.error.code).toBe(HaiIamError.PASSWORD_CHANGE_REQUIRED.code)
   })
 
   it('部分更新的 undefined 保留临时到期时间，显式 null 仍不能取消临时账号到期', async () => {

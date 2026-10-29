@@ -14,6 +14,7 @@ import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { guardIamMutation } from '../iam-cache.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+import { isUserActive } from './iam-user-utils.js'
 
 // ─── 用户存储接口 ───
 
@@ -146,14 +147,6 @@ const USER_FIELDS: ReldbCrudFieldDefinition[] = [
     fieldName: 'avatarUrl',
     columnName: 'avatar_url',
     def: { type: 'TEXT' as const },
-    select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'enabled',
-    columnName: 'enabled',
-    def: { type: 'BOOLEAN' as const, notNull: true, defaultValue: 1 },
     select: true,
     create: true,
     update: true,
@@ -334,8 +327,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
 
   async suspendInactive(cutoff: Date): Promise<HaiResult<number>> {
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET account_status = ?, credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE enabled = ? AND account_status = ? AND COALESCE(last_login_at, created_at) <= ?`,
-      ['dormant', crypto.randomUUID(), crypto.randomUUID(), reldb.config?.type === 'postgresql' ? true : 1, 'active', reldb.config?.type === 'sqlite' ? cutoff.getTime() : cutoff],
+      `UPDATE ${TABLE_NAME} SET account_status = ?, credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE account_status = ? AND COALESCE(last_login_at, created_at) <= ?`,
+      ['dormant', crypto.randomUUID(), crypto.randomUUID(), 'active', reldb.config?.type === 'sqlite' ? cutoff.getTime() : cutoff],
     )
     return result.success ? ok(result.data.changes) : this.buildQueryError(result.error, result.error)
   }
@@ -343,8 +336,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
   /** 改密推进凭据代际；会话存储清理失败也不能让旧凭据恢复授权。 */
   async setPassword(input: { userId: string, expectedVersion: string, passwordHash: string, mustChangePassword?: boolean }): Promise<HaiResult<boolean>> {
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, must_change_password = ?, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0 WHERE id = ? AND credential_version = ? AND enabled = ?`,
-      [input.passwordHash, reldb.config?.type === 'sqlite' ? Date.now() : new Date(), crypto.randomUUID(), crypto.randomUUID(), reldb.config?.type === 'postgresql' ? input.mustChangePassword === true : Number(input.mustChangePassword === true), input.userId, input.expectedVersion, reldb.config?.type === 'postgresql' ? true : 1],
+      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, must_change_password = ?, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0 WHERE id = ? AND credential_version = ?`,
+      [input.passwordHash, reldb.config?.type === 'sqlite' ? Date.now() : new Date(), crypto.randomUUID(), crypto.randomUUID(), reldb.config?.type === 'postgresql' ? input.mustChangePassword === true : Number(input.mustChangePassword === true), input.userId, input.expectedVersion],
     )
     return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
   }
@@ -355,8 +348,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     if (!Number.isSafeInteger(expiry))
       return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_resetTokenInvalid'))
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET reset_hash = ?, reset_expires_at = ?, reset_attempts = 0, reset_version = ? WHERE id = ? AND credential_version = ? AND reset_version = ? AND enabled = ? AND ? > ${this.databaseNow()}`,
-      [input.tokenHash, expiry, crypto.randomUUID(), input.user.id, input.user.credentialVersion ?? '', input.user.resetVersion ?? '', reldb.config?.type === 'postgresql' ? true : 1, expiry],
+      `UPDATE ${TABLE_NAME} SET reset_hash = ?, reset_expires_at = ?, reset_attempts = 0, reset_version = ? WHERE id = ? AND credential_version = ? AND reset_version = ? AND account_status = ? AND ? > ${this.databaseNow()}`,
+      [input.tokenHash, expiry, crypto.randomUUID(), input.user.id, input.user.credentialVersion ?? '', input.user.resetVersion ?? '', 'active', expiry],
     )
     return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
   }
@@ -369,14 +362,14 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
     const user = found.data
     if (!user)
       return err(HaiIamError.RESET_TOKEN_INVALID, iamM('iam_resetTokenInvalid'))
-    if (!user.enabled)
-      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+    if (!isUserActive(user))
+      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     if ((user.resetAttempts ?? 0) >= maxAttempts)
       return err(HaiIamError.RESET_TOKEN_MAX_ATTEMPTS, iamM('iam_resetTokenMaxAttempts'))
     const version = crypto.randomUUID()
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET reset_attempts = reset_attempts + 1, reset_version = ? WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_attempts < ? AND reset_expires_at > ${this.databaseNow()} AND enabled = ?`,
-      [version, user.id, tokenHash, user.resetVersion ?? '', user.credentialVersion ?? '', maxAttempts, reldb.config?.type === 'postgresql' ? true : 1],
+      `UPDATE ${TABLE_NAME} SET reset_attempts = reset_attempts + 1, reset_version = ? WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_attempts < ? AND reset_expires_at > ${this.databaseNow()} AND account_status = ?`,
+      [version, user.id, tokenHash, user.resetVersion ?? '', user.credentialVersion ?? '', maxAttempts, 'active'],
     )
     if (!result.success)
       return this.buildQueryError(result.error, result.error)
@@ -388,8 +381,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
   /** 密码与令牌消费同一行原子提交，禁止先消费 Redis 凭据再无条件写数据库。 */
   async commitPasswordReset(input: { user: StoredUser, tokenHash: string, passwordHash: string }): Promise<HaiResult<boolean>> {
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, must_change_password = FALSE, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0, login_failed_count = 0, first_login_failed_at = NULL, locked_until = NULL, last_login_failed_at = NULL WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_expires_at > ${this.databaseNow()} AND enabled = ?`,
-      [input.passwordHash, reldb.config?.type === 'sqlite' ? Date.now() : new Date(), crypto.randomUUID(), crypto.randomUUID(), input.user.id, input.tokenHash, input.user.resetVersion ?? '', input.user.credentialVersion ?? '', reldb.config?.type === 'postgresql' ? true : 1],
+      `UPDATE ${TABLE_NAME} SET password_hash = ?, password_updated_at = ?, credential_version = ?, reset_version = ?, must_change_password = FALSE, reset_hash = NULL, reset_expires_at = NULL, reset_attempts = 0, login_failed_count = 0, first_login_failed_at = NULL, locked_until = NULL, last_login_failed_at = NULL WHERE id = ? AND reset_hash = ? AND reset_version = ? AND credential_version = ? AND reset_expires_at > ${this.databaseNow()} AND account_status = ?`,
+      [input.passwordHash, reldb.config?.type === 'sqlite' ? Date.now() : new Date(), crypto.randomUUID(), crypto.randomUUID(), input.user.id, input.tokenHash, input.user.resetVersion ?? '', input.user.credentialVersion ?? '', 'active'],
     )
     return result.success ? ok(result.data.changes === 1) : this.buildQueryError(result.error, result.error)
   }
@@ -419,11 +412,11 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
   }
 
   async resetLoginFailures(userId: string, expectedCredentialVersion: string, lockoutEnabled = true): Promise<HaiResult<void>> {
-    const params: unknown[] = [userId, expectedCredentialVersion, reldb.config?.type === 'postgresql' ? true : 1]
+    const params: unknown[] = [userId, expectedCredentialVersion, 'active']
     if (lockoutEnabled)
       params.push(reldb.config?.type === 'sqlite' ? Date.now() : new Date())
     const result = await reldb.sql.execute(
-      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, first_login_failed_at = NULL, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND credential_version = ? AND enabled = ? ${lockoutEnabled ? 'AND (locked_until IS NULL OR locked_until <= ?)' : ''}`,
+      `UPDATE ${TABLE_NAME} SET login_failed_count = 0, first_login_failed_at = NULL, last_login_failed_at = NULL, locked_until = NULL WHERE id = ? AND credential_version = ? AND account_status = ? ${lockoutEnabled ? 'AND (locked_until IS NULL OR locked_until <= ?)' : ''}`,
       params,
     )
     if (!result.success)
@@ -432,8 +425,8 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       const user = await this.findById(userId)
       if (!user.success)
         return user
-      if (!user.data?.enabled)
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (!user.data || !isUserActive(user.data))
+        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       if ((user.data.credentialVersion ?? '') !== expectedCredentialVersion)
         return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       if (lockoutEnabled && user.data.lockedUntil && user.data.lockedUntil > new Date())

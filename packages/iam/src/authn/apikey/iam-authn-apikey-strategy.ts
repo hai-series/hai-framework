@@ -215,7 +215,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
         return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       }
       if (!isUserActive(userResult.data)) {
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       }
 
       logger.debug('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })

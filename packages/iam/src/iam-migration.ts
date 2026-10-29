@@ -78,10 +78,26 @@ const steps: SchemaMigration[] = [{
     const added = await sql.execute('ALTER TABLE hai_iam_permissions ADD COLUMN sensitive_operations JSON')
     return added.success ? ok(undefined) : added
   },
+}, {
+  version: 6,
+  name: 'account-lifecycle-only',
+  async needed(sql) {
+    const found = await schemaColumns(reldb, 'hai_iam_users', sql)
+    return found.success ? ok(found.data.includes('enabled')) : found
+  },
+  async apply(sql) {
+    // 旧停用或空开关不能在删列后变为可登录状态；已休眠/注销的账号保持原状态。
+    // 同时推进被转换账号的凭据代际，旧会话和重置凭据不能因升级恢复有效。
+    const converted = await sql.execute('UPDATE hai_iam_users SET account_status = ?, credential_version = ?, reset_version = ?, reset_hash = NULL, reset_expires_at = NULL WHERE (enabled = ? OR enabled IS NULL) AND account_status = ?', ['dormant', globalThis.crypto.randomUUID(), globalThis.crypto.randomUUID(), reldb.config?.type === 'postgresql' ? false : 0, 'active'])
+    if (!converted.success)
+      return converted
+    const removed = await sql.execute('ALTER TABLE hai_iam_users DROP COLUMN enabled')
+    return removed.success ? ok(undefined) : removed
+  },
 }]
 
 /**
- * 预检或迁移 IAM 表。升级保留用户和密码；旧版无安全代次的会话需重新登录。
+ * 预检或迁移 IAM 表。保留用户与密码；旧停用账号转休眠，删除 enabled，旧版 SDK 不可与新表混用。
  * @example
  * ```ts
  * import { migrateIam } from '@h-ai/iam'

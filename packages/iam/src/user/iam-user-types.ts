@@ -18,7 +18,7 @@ import type { Role } from '../authz/iam-authz-types.js'
  * const value: UserSortField = 'username'
  * ```
  */
-export type UserSortField = 'username' | 'email' | 'displayName' | 'enabled' | 'createdAt'
+export type UserSortField = 'username' | 'email' | 'displayName' | 'accountStatus' | 'createdAt'
 
 /**
  * 用户列表排序方向。
@@ -35,7 +35,7 @@ export type UserSortDirection = 'asc' | 'desc'
  * @example
  * ```ts
  * import type { ListUsersOptions } from '@h-ai/iam'
- * const value: ListUsersOptions = { page: 1, pageSize: 20, enabled: true, roleCode: 'user', include: ['roles'] }
+ * const value: ListUsersOptions = { page: 1, pageSize: 20, accountStatus: 'active', roleCode: 'user', include: ['roles'] }
  * ```
  */
 export interface ListUsersOptions extends PaginationOptionsInput {
@@ -43,8 +43,8 @@ export interface ListUsersOptions extends PaginationOptionsInput {
   roleCode?: string
   /** 搜索关键字（模糊匹配用户名、邮箱、手机号、显示名称） */
   search?: string
-  /** 按启用状态过滤，不传则返回全部 */
-  enabled?: boolean
+  /** 按账号生命周期过滤，不传则返回全部。 */
+  accountStatus?: User['accountStatus']
   /** 服务端排序字段；未指定时保持按创建时间倒序的历史行为。 */
   sortBy?: UserSortField
   /** 服务端排序方向；仅在指定 sortBy 时生效，默认 desc。 */
@@ -60,7 +60,7 @@ export interface ListUsersOptions extends PaginationOptionsInput {
  * @example
  * ```ts
  * import type { User } from '@h-ai/iam'
- * const value: User = { id: 'user-1', username: 'alice', enabled: true, createdAt: new Date(), updatedAt: new Date() }
+ * const value: User = { id: 'user-1', username: 'alice', accountStatus: 'active', createdAt: new Date(), updatedAt: new Date() }
  * ```
  */
 export interface User {
@@ -76,12 +76,10 @@ export interface User {
   displayName?: string
   /** 头像 URL */
   avatarUrl?: string
-  /** 是否启用 */
-  enabled: boolean
   /** 账号类型；未设置时为长期账号。 */
   accountType?: 'permanent' | 'temporary'
-  /** 账号生命周期；与管理员 enabled 开关共同决定可用性。 */
-  accountStatus?: 'active' | 'dormant' | 'closed'
+  /** 唯一账号生命周期：active 可鉴别，dormant/closed 均拒绝；创建默认 active。 */
+  accountStatus: 'active' | 'dormant' | 'closed'
   /** 临时账号到期时间；长期账号可为 null，临时账号必须设置。 */
   accountExpiresAt?: Date | null
   /** 最近成功登录时间，失败尝试不更新。 */
@@ -220,7 +218,7 @@ export interface RegisterResult {
 /**
  * 当前登录用户可自行修改的字段白名单
  *
- * 仅允许修改个人资料相关字段，禁止修改安全字段（enabled、emailVerified、roles 等）。
+ * 仅允许修改个人资料相关字段，禁止修改安全字段（accountStatus、emailVerified、roles 等）。
  * @example
  * ```ts
  * import type { UpdateCurrentUserInput } from '@h-ai/iam'
@@ -299,7 +297,7 @@ export interface UserOperations {
    * 更新当前登录用户信息（通过 accessToken 识别用户）
    *
    * 仅允许修改白名单字段（username、email、displayName、avatarUrl、phone、metadata），
-   * 禁止修改安全字段（enabled、emailVerified 等）。修改 username/email 时自动校验唯一性。
+   * 禁止修改安全字段（accountStatus、emailVerified 等）。修改 username/email 时自动校验唯一性。
    *
    * @param accessToken - 访问令牌
    * @param data - 要更新的字段（仅白名单字段）

@@ -9,12 +9,13 @@ import { readIamCache } from './iam-cache.js'
  * async function securityExample(repository: UserRepository) {
  *   const result = await readIamUserSecurity(repository, 'user-1')
  *   if (!result.success) return result
- *   return result.data?.enabled
+ *   return result.data?.accountStatus
  * }
  * ```
  */
 export async function readIamUserSecurity(repository: UserRepository, userId: string) {
-  const found = await readIamCache(`user:${userId}`, async () => {
+  // 状态投影升级后不复用包含旧启用开关的缓存；写入仍走同一共享代际栅栏。
+  const found = await readIamCache(`user:v2:${userId}`, async () => {
     const row = await repository.findById(userId)
     if (!row.success)
       return row
@@ -24,7 +25,6 @@ export async function readIamUserSecurity(repository: UserRepository, userId: st
           username: user.username,
           displayName: user.displayName,
           avatarUrl: user.avatarUrl,
-          enabled: user.enabled,
           accountType: user.accountType,
           accountStatus: user.accountStatus,
           accountExpiresAt: user.accountExpiresAt ? new Date(user.accountExpiresAt).getTime() : null,

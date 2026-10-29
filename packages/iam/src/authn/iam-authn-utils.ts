@@ -75,7 +75,7 @@ export interface LoginFailurePolicy {
  * @example 模块内部上下文
  * ```ts
  * function canAttempt(user: StoredUser): boolean {
- *   return user.enabled && !isAccountLocked(user)
+ *   return user.accountStatus === 'active' && !isAccountLocked(user)
  * }
  * ```
  */

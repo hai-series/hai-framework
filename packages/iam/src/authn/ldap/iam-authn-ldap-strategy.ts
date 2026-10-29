@@ -140,8 +140,8 @@ export interface LdapStrategyConfig {
    * @param userId - 新创建的用户 ID
    */
   onUserAutoRegistered?: (userId: string) => Promise<HaiResult<void>>
-  /** 新同步账户是否默认启用 */
-  defaultEnabled?: boolean
+  /** 新同步账号的初始生命周期；休眠账号需要管理员激活。 */
+  defaultAccountStatus?: 'active' | 'dormant'
 }
 
 /**
@@ -268,8 +268,8 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (storedUser) {
           if (!isUserActive(storedUser)) {
             return err(
-              HaiIamError.USER_DISABLED,
-              iamM('iam_accountDisabled'),
+              HaiIamError.ACCOUNT_UNAVAILABLE,
+              iamM('iam_accountUnavailable'),
             )
           }
 
@@ -302,7 +302,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             username: ldapUsername,
             email: ldapEmail,
             displayName: ldapDisplayName,
-            enabled: config.defaultEnabled ?? true,
+            accountStatus: config.defaultAccountStatus ?? 'active',
             emailVerified: !!ldapEmail,
             metadata: {
               ldapDn: entry.dn,

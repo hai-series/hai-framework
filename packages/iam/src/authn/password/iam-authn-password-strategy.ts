@@ -161,7 +161,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
    */
   function checkAccountStatus(user: StoredUser): HaiResult<void> {
     if (!isUserActive(user)) {
-      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     }
     if (isAccountLocked(user, failurePolicy)) {
       return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))

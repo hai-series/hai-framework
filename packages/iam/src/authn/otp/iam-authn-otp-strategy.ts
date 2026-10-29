@@ -160,7 +160,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
   const failurePolicy = { maxLoginAttempts, lockoutDuration, lockoutEnabled: config.lockoutEnabled ?? true, failureWindow: config.failureWindow ?? 86400 }
   const registerConfig = config.registerConfig
   const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
-  const defaultEnabled = registerConfig?.defaultEnabled ?? true
+  const defaultAccountStatus = registerConfig?.defaultAccountStatus ?? 'active'
 
   const strategy: AuthStrategy = {
     type: 'otp',
@@ -188,7 +188,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
 
       if (storedUser) {
         if (!isUserActive(storedUser)) {
-          return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+          return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
         }
 
         if (isAccountLocked(storedUser, failurePolicy)) {
@@ -214,7 +214,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
           username: identifier,
           email: type === 'email' ? identifier : undefined,
           phone: type === 'phone' ? identifier : undefined,
-          enabled: defaultEnabled,
+          accountStatus: defaultAccountStatus,
           emailVerified: type === 'email',
           phoneVerified: type === 'phone',
         })
@@ -253,7 +253,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
 
       // 登录成功，重置失败计数
       if (!isUserActive(storedUser))
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       const resetResult = await resetLoginFailures(config.userRepository, storedUser, failurePolicy)
       if (!resetResult.success)
         return resetResult

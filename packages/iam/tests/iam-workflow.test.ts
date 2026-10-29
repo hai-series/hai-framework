@@ -710,7 +710,7 @@ describe('iam.workflow', () => {
       it('注册禁用 → 拒绝 → 开启后允许 → 登录失败锁定', async () => {
         // ① 注册禁用配置
         const restrictedIam = await initIam({
-          register: { enabled: false, defaultEnabled: true },
+          register: { enabled: false, defaultAccountStatus: 'active' },
           security: { maxLoginAttempts: 2, lockoutDuration: 60 },
         })
 

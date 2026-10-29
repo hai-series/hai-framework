@@ -37,7 +37,7 @@ describe('iam.user', () => {
           expect(result.data.user.username).toBe('user_reg_ok')
           expect(result.data.user.email).toBe('user_reg_ok@test.com')
           expect(result.data.user.displayName).toBe('注册测试')
-          expect(result.data.user.enabled).toBe(true)
+          expect(result.data.user.accountStatus).toBe('active')
           expect(result.data.user.id).toBeTruthy()
           expect(result.data.user.createdAt).toBeInstanceOf(Date)
           expect(result.data.user.updatedAt).toBeInstanceOf(Date)
@@ -148,7 +148,7 @@ describe('iam.user', () => {
 
       beforeAll(async () => {
         noRegIam = await initIam({
-          register: { enabled: false, defaultEnabled: true },
+          register: { enabled: false, defaultAccountStatus: 'active' },
         })
       })
 
@@ -177,7 +177,7 @@ describe('iam.user', () => {
 
       beforeAll(async () => {
         disabledByDefaultIam = await initIam({
-          register: { enabled: true, defaultEnabled: false },
+          register: { enabled: true, defaultAccountStatus: 'dormant' },
         })
       })
 
@@ -185,14 +185,14 @@ describe('iam.user', () => {
         await initIam()
       })
 
-      it('新注册用户 enabled 应为 false', async () => {
+      it('新注册用户默认休眠，等待管理员激活', async () => {
         const result = await disabledByDefaultIam.user.register({
           username: 'disabled_by_default',
           password: TEST_PASSWORD,
         })
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.user.enabled).toBe(false)
+          expect(result.data.user.accountStatus).toBe('dormant')
         }
       })
     })

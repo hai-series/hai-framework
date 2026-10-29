@@ -56,7 +56,7 @@ export const IamCaptchaChallengeSchema = z.object({
  * const value = IamUserSchema.parse({
  *   id: 'example-1',
  *   username: 'alice',
- *   enabled: true,
+ *   accountStatus: 'active',
  *   createdAt: null,
  *   updatedAt: null
  * })
@@ -70,9 +70,8 @@ export const IamUserSchema = z.object({
   phone: z.string().optional(),
   displayName: z.string().optional(),
   avatarUrl: z.string().optional(),
-  enabled: z.boolean(),
   accountType: z.enum(['permanent', 'temporary']).optional(),
-  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+  accountStatus: z.enum(['active', 'dormant', 'closed']),
   accountExpiresAt: z.coerce.date().nullable().optional(),
   lastLoginAt: z.coerce.date().nullable().optional(),
   mustChangePassword: z.boolean().optional(),
@@ -137,7 +136,7 @@ export const IamAgreementDisplaySchema = z.object({
  *   user: {
  *     id: 'example-1',
  *     username: 'alice',
- *     enabled: true,
+ *     accountStatus: 'active',
  *     createdAt: null,
  *     updatedAt: null
  *   },
@@ -167,7 +166,7 @@ export const IamAuthResultSchema = z.object({
  * const value = IamCurrentUserSchema.parse({
  *   id: 'example-1',
  *   username: 'alice',
- *   enabled: true,
+ *   accountStatus: 'active',
  *   createdAt: null,
  *   updatedAt: null,
  *   roles: [
@@ -525,13 +524,12 @@ export const IamUpdateCurrentUserInputSchema = z.object({
  * ```
  */
 export const IamListUsersInputSchema = PaginationQuerySchema.extend({
-  sortBy: z.enum(['username', 'email', 'displayName', 'enabled', 'createdAt']).optional(),
+  sortBy: z.enum(['username', 'email', 'displayName', 'accountStatus', 'createdAt']).optional(),
   sortDirection: z.enum(['asc', 'desc']).optional(),
   roleCode: z.string().trim().min(1).max(100).optional(),
   search: z.string().optional(),
-  // 注意：HTTP query 是字符串，使用枚举 + transform 避免 z.coerce.boolean 的 'false' → true 陷阱。
-  enabled: z.enum(['true', 'false']).optional().transform(v => v === undefined ? undefined : v === 'true'),
-})
+  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
+}).strict()
 
 /**
  * Admin 创建用户入参 Schema。
@@ -546,7 +544,7 @@ export const IamListUsersInputSchema = PaginationQuerySchema.extend({
  * void value
  * ```
  */
-export const IamAdminCreateUserInputSchema = z.object({
+export const IamAdminCreateUserInputSchema = z.strictObject({
   accountType: z.enum(['permanent', 'temporary']).optional(),
   accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
   accountExpiresAt: z.coerce.date().optional(),
@@ -557,18 +555,17 @@ export const IamAdminCreateUserInputSchema = z.object({
   displayName: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   roleIds: z.array(z.string()).optional(),
-  enabled: z.boolean().optional(),
 })
 
 /**
- * 管理端单次邀请不接收共享初始密码；初始账号必须启用且激活。
+ * 管理端单次邀请不接收共享初始密码；初始账号必须处于激活状态。
  * @example
  * ```ts
  * import { IamInviteUserInputSchema } from '@h-ai/api-contract'
  * const input = IamInviteUserInputSchema.parse({ username: 'alice', email: 'alice@example.com' })
  * ```
  */
-export const IamInviteUserInputSchema = IamAdminCreateUserInputSchema.omit({ password: true }).extend({ enabled: z.literal(true).optional(), accountStatus: z.literal('active').optional() })
+export const IamInviteUserInputSchema = IamAdminCreateUserInputSchema.omit({ password: true }).extend({ accountStatus: z.literal('active').optional() })
 
 /**
  * 单次邀请的管理端输入。
@@ -592,7 +589,7 @@ export type IamInviteUserInput = z.infer<typeof IamInviteUserInputSchema>
  * void value
  * ```
  */
-export const IamAdminUpdateUserInputSchema = z.object({
+export const IamAdminUpdateUserInputSchema = z.strictObject({
   accountType: z.enum(['permanent', 'temporary']).optional(),
   accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
   accountExpiresAt: z.coerce.date().nullable().optional(),
@@ -603,7 +600,6 @@ export const IamAdminUpdateUserInputSchema = z.object({
   displayName: z.string().optional(),
   avatarUrl: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  enabled: z.boolean().optional(),
   roleIds: z.array(z.string()).optional(),
 })
 

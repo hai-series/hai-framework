@@ -62,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` uses TLS; `ldap://` with `useTls: true` uses StartTLS. For Active Directory use `searchFilter: "(sAMAccountName={{username}})"` and `usernameAttribute: sAMAccountName`; the username placeholder is escaped before searching. First login synchronizes a local user and assigns the default role; disabled accounts and lockouts still apply. `ldapSyncUser: false` requires an existing enabled local user with a database credential generation; no virtual DN user is created. You may inject a `ldapClientFactory` returning `bind/search/unbind` methods with HaiResult results. An injected factory does not require ldapts.
+`ldaps://` uses TLS; `ldap://` with `useTls: true` uses StartTLS. For Active Directory use `searchFilter: "(sAMAccountName={{username}})"` and `usernameAttribute: sAMAccountName`; the username placeholder is escaped before searching. First login synchronizes a local user and assigns the default role; disabled accounts and lockouts still apply. `ldapSyncUser: false` requires an existing active, unexpired local user with a database credential generation; no virtual DN user is created. You may inject a `ldapClientFactory` returning `bind/search/unbind` methods with HaiResult results. An injected factory does not require ldapts.
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -405,7 +405,7 @@ Access and refresh expire independently. The user partition remains until the la
 
 Session cache read/commit failures return failed HaiResult values, never absence/expiry or cleanup compensation. Sessions and their index share one document, so batch updates no longer use per-token get/ttl calls or a separate index; cleanup uses confirmed absolute deadlines only. After recovery, re-read and retry updates/logout; logoutAll still covers every original record. Malformed state fails closed and is preserved for operator repair instead of being overwritten with an empty document.
 
-Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real enabled local user and binds its current generation; it cannot create an authenticated identity without a database record.
+Session.credentialVersion binds the database credential generation at creation. Only trusted authenticated strategies supply CreateSessionOptions.expectedCredentialVersion, and stale generations fail. Low-level create without that option still reads a real active, unexpired local user and binds its current generation; it cannot create an authenticated identity without a database record.
 
 ---
 
@@ -505,7 +505,7 @@ async function currentAuthorization(userId: string) {
 ##### Key types
 
 - **`UserOperations`**: registration, queries, updates, deletion, password changes/resets, and password strength validation.
-- **`User`** (public fields): `{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`.
+- **`User`** (public fields): `{ id, username, email, phone, displayName, avatarUrl, accountType?, accountStatus, accountExpiresAt?, roles? }`.
 - **`StoredUser`**: internal stored user, including sensitive `passwordHash`, `loginFailedCount`, `lockedUntil`, etc.
 - **`RegisterOptions`** / **`RegisterResult`**: registration input/output.
 - **`UpdateCurrentUserInput`**: fields the current user may change (`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`).
@@ -520,7 +520,7 @@ register(options)
   → Validate password strength (Zod schema + custom rules)
   → Hash password (@h-ai/crypto)
   → DB transaction: create user + query result
-  → Assign default role (rbac.defaultRole, outside transaction; failures only log)
+  → Assign default role (rbac.defaultRole; failure removes the new account and returns failure)
   → Return RegisterResult { user, agreements? }
 ```
 
@@ -530,14 +530,14 @@ register(options)
 requestPasswordReset(email)
   → Find user by email (missing users return ok silently to prevent enumeration)
   → Generate a random 256-bit token
-  → Cache SHA-256(token) → userId (TTL + maxAttempts)
+  → Store the token digest, expiry, attempt count and resetVersion in the user database row
   → Call onPasswordResetRequest (application sends email/SMS)
 
 confirmPasswordReset(token, newPassword)
-  → Look up SHA-256(token) and verify expiration/attempts
+  → Read the database digest and verify expiration, attempts and resetVersion
   → Validate password strength → hash → update DB
   → Clear all active user sessions to force login
-  → Delete consumed reset token
+  → Consume the token, replace the password and advance credential generation in one conditional SQL update
 ```
 
 ##### Usage
@@ -576,7 +576,7 @@ async function listReaders(page: number) {
     pageSize: 20,
     roleCode: 'record_reader',
     search: 'alice',
-    enabled: true,
+    accountStatus: 'active',
     include: ['roles'],
     sortBy: 'createdAt',
     sortDirection: 'desc',
@@ -592,20 +592,20 @@ async function loadUsers(userIds: readonly string[]) {
   return iam.user.getUsers(userIds, { include: ['roles'] })
 }
 
-async function disableUser(userId: string) {
+async function makeUserDormant(userId: string) {
   // 调用前已验证管理权限；成功后自动清除该用户会话。
-  return iam.user.updateUser(userId, { enabled: false })
+  return iam.user.updateUser(userId, { accountStatus: 'dormant' })
 }
 ```
 
 ##### Considerations
 
 - **`toUser()` redaction**: public users omit sensitive fields such as `passwordHash` and `loginFailedCount`.
-- **Session invalidation**: `deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset` clear all active sessions for affected users.
+- **Session invalidation**: `deleteUser` / `updateUser({ accountStatus: 'dormant' })` / `changePassword` / `confirmPasswordReset` clear all active sessions for affected users.
 - **Enumeration protection**: `requestPasswordReset` returns `ok(undefined)` for nonexistent emails instead of an error.
 - **Synchronous validatePassword**: the only synchronous method in `UserOperations`; all others are asynchronous.
 - **Fuzzy search**: `listUsers` searches username, email, phone, and display name with escaped LIKE wildcards.
-- **Server sorting**: `listUsers` allows only `username`, `email`, `displayName`, `enabled`, and `createdAt`, mapped through an allowlist; defaults to newest creation first.
+- **Server sorting**: `listUsers` allows only `username`, `email`, `displayName`, `accountStatus`, and `createdAt`, mapped through an allowlist; defaults to newest creation first.
 
 ---
 
@@ -822,7 +822,7 @@ Features: cryptographically secure randomness, TTL, atomic single use (only one 
 
 Password login submits only `identifier` and `password`; `AuthPanel` maps the `LoginForm` field `username` to `identifier`. Server settings `session.maxAge` / `session.refreshTokenMaxAge` control session lifetimes. The login form has no per-login persistent-session option.
 
-`iam.publicConfig` and the client's `client.iam.auth.publicConfig()` HTTP contract expose a safe configuration whitelist and only advertise configured, available methods. `login.password/otp/ldap`, `otp.email/sms`, `register.enabled/defaultEnabled`, `passwordReset.enabled/mode/resetUrl` and agreement display flags are independent. `ui` configures card/split layout, title, subtitle, brand text, Logo and illustration URLs. Browser links only accept HTTP(S). LDAP is optional and disabled by default; install ldapts only for the default client, or inject a custom factory.
+`iam.publicConfig` and the client's `client.iam.auth.publicConfig()` HTTP contract expose a safe configuration whitelist and only advertise configured, available methods. `login.password/otp/ldap`, `otp.email/sms`, `register.enabled/defaultAccountStatus`, `passwordReset.enabled/mode/resetUrl` and agreement display flags are independent. `ui` configures card/split layout, title, subtitle, brand text, Logo and illustration URLs. Browser links only accept HTTP(S). LDAP is optional and disabled by default; install ldapts only for the default client, or inject a custom factory.
 
 When using optional Reach, initialize it after reldb/cache and call `iam.init({ ...settings, reach })`. Standard `otp_email`, `otp_sms`, `password_reset` and `password_reset_sms` templates supply notification callbacks. Explicit callbacks override these defaults. Configure a real SMTP, SMS or HTTP provider for delivery; Console records metadata only. Delivery failures return errors.
 
@@ -916,7 +916,9 @@ RBAC permissions accept `sensitiveOperations: string[]`, persisted as nullable `
 
 ## Account type and lifecycle
 
-Users default to `accountType: 'permanent'` and `accountStatus: 'active'`. Administrative code can create a `temporary` account with `accountExpiresAt`, or use `updateUser` to set `dormant` or `closed`. State and credential generation change in one transaction. Expired or inactive accounts are rejected by every login method, access verification, and refresh. Explicit reactivation requires a new login; old tokens do not revive. `enabled` remains an independent administrative switch. `closed` retains the record; `deleteUser` still physically removes it, while the application owns personal-data retention and cancellation workflows.
+Users default to `accountType: 'permanent'` and `accountStatus: 'active'`. Administrative code can create a `temporary` account with `accountExpiresAt`, or use `updateUser` to set `dormant` or `closed`. State and credential generation change in one transaction. Expired or inactive accounts are rejected by every login method, access verification, and refresh. Explicit reactivation requires a new login; old tokens do not revive. `accountStatus` is the sole lifecycle field; there is no separate user enable/disable switch. `closed` retains the record; `deleteUser` still physically removes it, while the application owns personal-data retention and cancellation workflows.
+
+Before beta.1, stop older writers and back up the database. Migration v6 converts an old false/NULL `enabled` value with active status to dormant, retains dormant/closed states, invalidates affected credentials, and drops the column. User inputs, filters and sorting now use only `accountStatus`. An image rollback does not restore the old schema; restoring an older version also requires a verified database backup. Authorized administrators can reset passwords in any account state without changing that state. `password.requireInitialChange` controls the subsequent password-change requirement.
 
 `accounts.dormantAfterDays` defaults to `0`, disabling automatic dormancy. With `90`, IAM scans active accounts with no successful login in 90 days at `accounts.scanIntervalSeconds` intervals (3600 seconds by default); accounts never used start at creation. Only successful authentication updates `lastLoginAt`. Conditional database updates make repeated scans across nodes idempotent. Trusted code or an existing scheduler may also call `iam.user.scanInactiveAccounts()`. `close()` stops the timer and waits for its in-flight scan. Public registration must not expose administrative lifecycle fields.
 

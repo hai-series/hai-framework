@@ -183,7 +183,7 @@ export const iam: IamFunctions = {
             if (!passwordState.success)
               return passwordState
           }
-          return ok(found.data ? { version: found.data.credentialVersion ?? '', enabled: isUserActive(found.data), profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl } } : null)
+          return ok(found.data ? { version: found.data.credentialVersion ?? '', available: isUserActive(found.data), profile: { username: found.data.username, displayName: found.data.displayName, avatarUrl: found.data.avatarUrl } } : null)
         },
       })
       if (!sessionResult.success) {

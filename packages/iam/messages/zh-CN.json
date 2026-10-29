@@ -17,7 +17,7 @@
   "iam_passwordNeedSpecialChar": "密码必须包含特殊字符",
   "iam_credentialTypeMismatch": "凭证类型不匹配",
   "iam_userNotExist": "用户不存在",
-  "iam_accountDisabled": "账户已禁用",
+  "iam_accountUnavailable": "账号当前不可用，请联系管理员确认账号状态或有效期。",
   "iam_accountLocked": "账户已锁定，请稍后重试",
   "iam_accountNoPassword": "用户名或密码不正确",
   "iam_passwordWrong": "用户名或密码不正确",

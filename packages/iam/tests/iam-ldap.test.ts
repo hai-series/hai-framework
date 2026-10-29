@@ -167,7 +167,7 @@ describe('iam.ldap', () => {
 
         // 禁用该本地用户
         const updateResult = await getIam().user.updateUser(loginResult.data.user.id, {
-          enabled: false,
+          accountStatus: 'dormant',
         })
         expect(updateResult.success).toBe(true)
 
@@ -178,11 +178,11 @@ describe('iam.ldap', () => {
         })
         expect(retryResult.success).toBe(false)
         if (!retryResult.success) {
-          expect(retryResult.error.code).toBe(HaiIamError.USER_DISABLED.code)
+          expect(retryResult.error.code).toBe(HaiIamError.ACCOUNT_UNAVAILABLE.code)
         }
 
         // 恢复用户状态，避免影响后续测试
-        await getIam().user.updateUser(loginResult.data.user.id, { enabled: true })
+        await getIam().user.updateUser(loginResult.data.user.id, { accountStatus: 'active' })
       })
     })
 

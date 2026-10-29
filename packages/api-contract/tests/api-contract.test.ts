@@ -54,7 +54,7 @@ describe('@h-ai/api-contract', () => {
     const result = IamCurrentUserSchema.safeParse({
       id: 'u1',
       username: 'alice',
-      enabled: true,
+      accountStatus: 'active',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       roles: ['admin'],
@@ -70,7 +70,7 @@ describe('@h-ai/api-contract', () => {
     expect(IamCurrentUserSchema.safeParse({
       id: 'u1',
       username: 'alice',
-      enabled: true,
+      accountStatus: 'active',
       createdAt: new Date(),
       updatedAt: new Date(),
     }).success).toBe(false)

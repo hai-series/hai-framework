@@ -6,7 +6,7 @@ import { IamConfigSchema } from '../src/iam-config.js'
 import { createSessionOperations } from '../src/session/iam-session-functions.js'
 
 async function sessions(singleDevice = false) {
-  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', enabled: true } }), config: IamConfigSchema.parse({ session: { singleDevice, sliding: false } }) })
+  const result = await createSessionOperations({ readCredential: async () => ({ success: true, data: { version: '', available: true } }), config: IamConfigSchema.parse({ session: { singleDevice, sliding: false } }) })
   if (!result.success)
     throw new Error(result.error.message)
   return result.data

@@ -44,7 +44,7 @@ function defineAuthorizationTests() {
     expect(query).toHaveBeenCalledTimes(1)
     expect(get).not.toHaveBeenCalled()
     vi.spyOn(iam.session, 'deleteByUserId').mockResolvedValue(err(HaiIamError.REPOSITORY_ERROR, 'cache unavailable'))
-    expect((await iam.user.updateUser(user.data.user.id, { enabled: false })).success).toBe(true)
+    expect((await iam.user.updateUser(user.data.user.id, { accountStatus: 'dormant' })).success).toBe(true)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
   })
 

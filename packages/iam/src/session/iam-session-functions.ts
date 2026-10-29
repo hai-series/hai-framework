@@ -53,7 +53,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
 export interface SessionOperationsDeps {
   config: IamConfig
   /** 可信用户状态读取口；共享代际缓存与安全回源，缺失/禁用/读失败均拒绝签发和认证。 */
-  readCredential: (userId: string) => Promise<HaiResult<{ version: string, enabled: boolean, profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'> } | null>>
+  readCredential: (userId: string) => Promise<HaiResult<{ version: string, available: boolean, profile?: Pick<Session, 'username' | 'displayName' | 'avatarUrl'> } | null>>
 }
 
 /**
@@ -165,8 +165,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       const current = await config.readCredential(userId)
       if (!current.success)
         return current
-      if (!current.data || current.data.enabled !== true)
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      if (!current.data || current.data.available !== true)
+        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       if (typeof current.data.version !== 'string' || (expected !== undefined && current.data.version !== expected))
         return err(HaiIamError.SESSION_INVALID, iamM('iam_sessionExpired'))
       return ok(current.data)

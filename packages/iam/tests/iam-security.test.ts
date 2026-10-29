@@ -142,14 +142,14 @@ function tests() {
     expect(iam.publicConfig?.login).toMatchObject({ email: true, sms: false })
   })
 
-  it('oTP 自动注册遵守 defaultEnabled，注册可独立于密码登录开启', async () => {
+  it('oTP 自动注册遵守 defaultAccountStatus，注册可独立于密码登录开启', async () => {
     let code = ''
-    const iam = await initIam({ login: { password: false }, register: { defaultEnabled: false }, otp: {}, onOtpSendEmail: async (_id, value) => {
+    const iam = await initIam({ login: { password: false }, register: { defaultAccountStatus: 'dormant' }, otp: {}, onOtpSendEmail: async (_id, value) => {
       code = value
     } })
     await iam.auth.sendOtp('pending@example.com')
     const result = await iam.auth.loginWithOtp({ identifier: 'pending@example.com', code })
-    expect(result).toMatchObject({ success: false, error: { code: HaiIamError.USER_DISABLED.code } })
+    expect(result).toMatchObject({ success: false, error: { code: HaiIamError.ACCOUNT_UNAVAILABLE.code } })
     await initIam({ login: { password: false } })
     const registered = await iam.auth.registerAndLogin({ username: 'register-only', password: TEST_PASSWORD })
     expect(registered.success).toBe(true)

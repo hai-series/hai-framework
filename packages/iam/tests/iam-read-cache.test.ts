@@ -52,7 +52,7 @@ function tests(getIam: () => IamFunctions) {
     }
     expect((await iam.authz.removeRole(created.data.user.id, role.data.id)).success).toBe(true)
     expect(await iam.authz.checkPermission(created.data.user.id, `${name}:read`)).toMatchObject({ success: true, data: false })
-    expect((await iam.user.updateUser(created.data.user.id, { enabled: false })).success).toBe(true)
+    expect((await iam.user.updateUser(created.data.user.id, { accountStatus: 'dormant' })).success).toBe(true)
     expect((await iam.auth.verifyToken(login.data.tokens.accessToken)).success).toBe(false)
   })
 

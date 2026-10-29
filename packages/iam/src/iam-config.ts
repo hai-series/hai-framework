@@ -5,6 +5,7 @@
  * @module iam-config
  */
 
+import { AccessConditionSchema } from '@h-ai/core'
 import { z } from 'zod'
 
 /** 浏览器可访问链接仅接受 HTTP(S)，避免配置被用于脚本协议。 */
@@ -279,11 +280,11 @@ export type LoginConfig = z.infer<typeof LoginConfigSchema>
  * }
  * ```
  */
-export const RegisterConfigSchema = z.object({
+export const RegisterConfigSchema = z.strictObject({
   /** 是否允许访客自助注册；关闭后隐藏注册入口并由服务端拒绝注册，不影响已有账号登录或管理员创建账号。 */
   enabled: z.boolean().default(true),
-  /** 自助注册的新账号是否立即启用；false 时账号已创建但不能登录，须由管理员审核启用，不改变已有账号。 */
-  defaultEnabled: z.boolean().default(true),
+  /** 自助注册的初始生命周期；active 可登录，dormant 等待管理员激活；默认 active。 */
+  defaultAccountStatus: z.enum(['active', 'dormant']).default('active'),
 })
 
 /**
@@ -355,30 +356,9 @@ export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
  * const policy = LoginAccessConfigSchema.parse({ enabled: true, allowIps: ['192.0.2.0/24'], timezone: 'Asia/Shanghai' })
  * ```
  */
-export const LoginAccessConfigSchema = z.object({
-  /** 是否限制新建登录会话的时段和可信客户端地址；不在窗口结束时自动踢掉已登录用户。 */
+export const LoginAccessConfigSchema = AccessConditionSchema.extend({
+  /** 是否限制新建登录会话；已有会话的每次请求限制由 Serv/Kit 的 access 策略负责。 */
   enabled: z.boolean().default(false),
-  /** 允许登录的 IP/CIDR 列表，支持 IPv4/IPv6；空数组不限制地址，配置后须提供可信客户端 IP。 */
-  allowIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
-  /** 拒绝登录的 IP/CIDR 列表；与允许列表同时匹配时拒绝优先。 */
-  denyIps: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).default([]),
-  /** 登录时段使用的 IANA 时区；Asia/Shanghai 为北京时间，默认 UTC。 */
-  timezone: z.string().default('UTC').refine((value) => {
-    try {
-      new Intl.DateTimeFormat('en-US', { timeZone: value }).format()
-      return true
-    }
-    catch { return false }
-  }, 'Invalid IANA timezone'),
-  /** 允许新登录的时间窗口；空数组不限制时间，跨午夜窗口按开始日归属。 */
-  windows: z.array(z.object({
-    /** 允许的星期，周一为 1、周日为 7；跨午夜时填写开始日。 */
-    days: z.array(z.number().int().min(1).max(7)).min(1).max(7),
-    /** 窗口开始时间，HH:mm，包含此时刻；按上方 timezone 解释。 */
-    start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-    /** 窗口结束时间，HH:mm，不包含此时刻；小于开始值表示跨午夜。 */
-    end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-  }).refine(value => value.start !== value.end, 'Time window start and end must differ')).max(100).default([]),
 })
 
 /**
@@ -606,7 +586,7 @@ export const IamConfigSchema = z.object({
   /** 注册配置 */
   register: RegisterConfigSchema.default({
     enabled: true,
-    defaultEnabled: true,
+    defaultAccountStatus: 'active',
   }),
 
   /** 协议展示配置 */

@@ -90,7 +90,7 @@ it('旧密码已验证但尚未创建会话时改密，迟到策略不能用当�
 })
 
 it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新绝不升级旧代', async () => {
-  let current: { version: string, enabled: boolean } | null = { version: 'v1', enabled: true }
+  let current: { version: string, available: boolean } | null = { version: 'v1', available: true }
   const read = vi.fn(async () => ok(current))
   const built = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding: false } }), readCredential: read })
   if (!built.success)
@@ -101,10 +101,10 @@ it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新�
   if (!session.success)
     throw new Error(session.error.message)
   expect(session.data.credentialVersion).toBe('v1')
-  current = { version: 'v2', enabled: true }
+  current = { version: 'v2', available: true }
   expect((await ops.refresh(session.data.data!._tokenPair!.refreshToken)).success).toBe(false)
   expect((await ops.verifyToken(session.data.accessToken)).success).toBe(false)
-  current = { version: 'v2', enabled: false }
+  current = { version: 'v2', available: false }
   expect((await ops.create({ userId: 'u' })).success).toBe(false)
   current = null
   expect((await ops.create({ userId: 'u' })).success).toBe(false)
@@ -114,7 +114,7 @@ it('可信低层创建拒绝缺失/禁用/读取失败与不匹配代，刷新�
 
 it('refresh提交窗口发生改密，返回失败且后继仍带旧代而不可认证', async () => {
   let version = 'v1'
-  const built = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding: false } }), readCredential: async () => ok({ version, enabled: true }) })
+  const built = await createSessionOperations({ config: IamConfigSchema.parse({ session: { sliding: false } }), readCredential: async () => ok({ version, available: true }) })
   if (!built.success)
     throw new Error(built.error.message)
   const ops = built.data

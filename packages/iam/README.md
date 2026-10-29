@@ -62,7 +62,7 @@ ldap:
   connectTimeout: 5000
 ```
 
-`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有启用的本地用户以绑定数据库凭据代际；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
+`ldaps://` 使用 TLS；`ldap://` 加 `useTls: true` 使用 StartTLS。Active Directory 可用 `searchFilter: "(sAMAccountName={{username}})"` 和 `usernameAttribute: sAMAccountName`；占位符会转义后搜索。首次登录默认同步本地用户并分配默认角色，账户禁用与锁定仍有效。`ldapSyncUser: false` 要求已有且处于激活状态的本地用户以绑定数据库凭据代际；不创建虚拟 DN 用户。可传自定义 `ldapClientFactory`；工厂返回具备 `bind/search/unbind` 的客户端，结果均为 HaiResult。注入工厂时无需安装 ldapts。
 
 ```ts
 import type { IamConfigSettingsInput } from '@h-ai/iam'
@@ -405,7 +405,7 @@ async function forceSignOut(userId: string) {
 
 会话仓库将缓存读取/提交失败返回为失败 HaiResult，不解释为会话不存在或过期，也不执行清理补偿。用户会话及索引共用一个文档，批量授权更新不再逐 token 调用 get/ttl 或维护第二份索引；只按已确认的绝对期限清理。故障恢复后可重新读取并重试更新/退出，logoutAll 仍覆盖原有全部记录。结构损坏同样失败关闭并保留原值，交由运维处理，禁止用空文档覆盖未知授权状态。
 
-Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、启用的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
+Session.credentialVersion 绑定创建时的数据库凭据代际；CreateSessionOptions.expectedCredentialVersion 仅供已验证策略传入，旧代拒绝。省略它的受信低层 create 仍读取真实、激活且未到期的本地用户并绑定当前代，不能伪造缺少数据库记录的身份。
 
 ---
 
@@ -505,7 +505,7 @@ async function currentAuthorization(userId: string) {
 ##### 关键对象
 
 - **`UserOperations`** — 用户操作接口：注册、查询、更新、删除、密码修改与重置、密码强度验证
-- **`User`** — 用户实体（公开字段）：`{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`
+- **`User`** — 用户实体（公开字段）：`{ id, username, email, phone, displayName, avatarUrl, accountType?, accountStatus, accountExpiresAt?, roles? }`
 - **`StoredUser`** — 内部存储用户（含 `passwordHash`、`loginFailedCount`、`lockedUntil` 等敏感字段）
 - **`RegisterOptions`** / **`RegisterResult`** — 注册输入与输出
 - **`UpdateCurrentUserInput`** — 当前用户可修改的白名单字段（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）
@@ -520,7 +520,7 @@ register(options)
   → 密码强度验证（Zod schema + 自定义规则）
   → 密码哈希（@h-ai/crypto）
   → DB 事务：创建用户 + 查询创建结果
-  → 分配默认角色（rbac.defaultRole，事务外执行，失败仅 log）
+  → 分配默认角色（rbac.defaultRole；失败则撤销新账号并返回失败）
   → 返回 RegisterResult { user, agreements? }
 ```
 
@@ -530,14 +530,14 @@ register(options)
 requestPasswordReset(email)
   → 按邮箱查找用户（不存在时静默返回 ok → 防枚举攻击）
   → 生成 256-bit 随机令牌
-  → 缓存存储 SHA-256(token) → userId 映射（有 TTL + maxAttempts）
+  → 用户数据库行保存令牌摘要、期限、尝试次数和 resetVersion
   → 调用 onPasswordResetRequest 回调（业务层负责发送邮件/短信）
 
 confirmPasswordReset(token, newPassword)
-  → 缓存查询 SHA-256(token) → 校验有效期和尝试次数
+  → 读取数据库令牌摘要 → 校验有效期、尝试次数和 resetVersion
   → 密码强度验证 → 哈希 → 更新 DB
   → 清除该用户所有活跃会话（强制重新登录）
-  → 删除已使用的重置令牌
+  → 条件 SQL 同时消费令牌、更新密码并推进凭据代际
 ```
 
 ##### 使用方式
@@ -576,7 +576,7 @@ async function listReaders(page: number) {
     pageSize: 20,
     roleCode: 'record_reader',
     search: 'alice',
-    enabled: true,
+    accountStatus: 'active',
     include: ['roles'],
     sortBy: 'createdAt',
     sortDirection: 'desc',
@@ -592,20 +592,20 @@ async function loadUsers(userIds: readonly string[]) {
   return iam.user.getUsers(userIds, { include: ['roles'] })
 }
 
-async function disableUser(userId: string) {
+async function makeUserDormant(userId: string) {
   // 调用前已验证管理权限；成功后自动清除该用户会话。
-  return iam.user.updateUser(userId, { enabled: false })
+  return iam.user.updateUser(userId, { accountStatus: 'dormant' })
 }
 ```
 
 ##### 特别关注
 
 - **`toUser()` 字段脱敏**：所有对外返回的用户对象均剥离 `passwordHash`、`loginFailedCount` 等敏感字段
-- **会话联动**：`deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset` 自动清除受影响用户的所有活跃会话
+- **会话联动**：`deleteUser` / `updateUser({ accountStatus: 'dormant' })` / `changePassword` / `confirmPasswordReset` 自动清除受影响用户的所有活跃会话
 - **防枚举攻击**：`requestPasswordReset` 对不存在的邮箱返回 `ok(undefined)` 而非错误
 - **validatePassword 是同步方法**：这是 `UserOperations` 中唯一的同步方法，其余均为异步
 - **搜索模糊匹配**：`listUsers` 支持按用户名、邮箱、手机号、显示名称模糊搜索，LIKE 通配符已转义
-- **服务端排序**：`listUsers` 仅允许 `username`、`email`、`displayName`、`enabled`、`createdAt` 排序；字段经白名单映射，未指定时默认按创建时间倒序
+- **服务端排序**：`listUsers` 仅允许 `username`、`email`、`displayName`、`accountStatus`、`createdAt` 排序；字段经白名单映射，未指定时默认按创建时间倒序
 
 ---
 
@@ -828,7 +828,7 @@ async function consumeAudioTicket(ticket: string) {
 | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
 | `login.password / otp / ldap`                                                        | 独立启用密码、验证码、企业账号                        |
 | `otp.email / sms`                                                                    | 独立启用邮件、短信                                    |
-| `register.enabled / defaultEnabled`                                                  | 自助注册及新账户状态                                  |
+| `register.enabled / defaultAccountStatus`                                            | 自助注册及新账户状态                                  |
 | `passwordReset.enabled / mode / resetUrl`                                            | 启用重置、选择 email/phone 渠道、配置重置页面绝对地址 |
 | `agreements.showOnRegister / showOnLogin`                                            | 注册/登录协议弹窗显示；链接只接受 HTTP(S)             |
 | `ui.variant / title / subtitle / brandTitle / brandText / logoUrl / illustrationUrl` | 卡片/分栏布局、标题、品牌、Logo 和配图                |
@@ -837,7 +837,7 @@ async function consumeAudioTicket(ticket: string) {
 
 SvelteKit 使用 `kit.auth.createApi(iam)` 导出标准 handler，匿名端点白名单使用 `kit.auth.publicPaths`。客户端通过 `kit.client.createAuthActions()` 连接 Cookie 端点；独立 HTTP 客户端通过 `apiClient.createAuthActions(client)` 连接 IAM contract 并自动保存 Token 到已配置安全存储。将配置及动作直接传入 `AuthPanel`，完成登录、注册、找回及重置；单独使用 `LoginForm` 可传 `methods`、`onsendotp`、`resendInterval`，密码表单可传完整 `passwordPolicy`。
 
-管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认禁用账户不会创建会话。
+管理员使用 `iam.user.createUser()` 建用户，调用端必须校验管理员权限；关闭自助注册不影响管理端。注册与密码登录开关独立，`registerAndLogin` 在注册完成后创建会话；默认休眠账号不会创建会话；`defaultAccountStatus` 默认 active，可设为 dormant 等待管理员激活。
 
 协议在 Modal 中打开，关闭后保留表单输入。使用 URL 时，协议页面须允许 iframe 嵌入；禁止脚本执行，并提供新窗口查看入口。`LoginForm/RegisterForm` 提供 `header/extraFields/footer` snippet，`AuthPanel` 透传 `loginHeader/loginFields/loginFooter` 和 `registerHeader/registerFields/registerFooter`；自定义字段由应用绑定状态并在动作中处理。示例见 [UI 用法](../ui/README.md#配置驱动认证页面)。
 
@@ -925,7 +925,9 @@ RBAC 权限支持 `sensitiveOperations: string[]`（持久字段 `sensitive_oper
 
 ## 账号类型和生命周期
 
-用户默认是 `accountType: 'permanent'`、`accountStatus: 'active'`。管理入口可创建 `temporary` 账号并提供 `accountExpiresAt`，或通过 `updateUser` 将账号转为 `dormant`、`closed`。状态与凭据代际在同一事务更新；账号到期或非激活时，所有登录方式、旧 access 和 refresh 均被拒绝。管理员明确恢复为 `active` 时仍需重新登录，原 token 不会复活；`enabled` 是独立的管理员启停开关。`closed` 保留账号记录，物理删除仍由 `deleteUser` 完成，项目决定个人数据的保留与注销流程。
+用户默认是 `accountType: 'permanent'`、`accountStatus: 'active'`。管理入口可创建 `temporary` 账号并提供 `accountExpiresAt`，或通过 `updateUser` 将账号转为 `dormant`、`closed`。状态与凭据代际在同一事务更新；账号到期或非激活时，所有登录方式、旧 access 和 refresh 均被拒绝。管理员明确恢复为 `active` 时仍需重新登录，原 token 不会复活；账号仅使用 `accountStatus` 表达生命周期，不再提供独立的启用/停用字段。`closed` 保留账号记录，物理删除仍由 `deleteUser` 完成，项目决定个人数据的保留与注销流程。
+
+升级到 beta.1 前停止旧版本的写入并备份数据库。迁移 v6 将旧 `enabled=false`（含不明 NULL）且仍为 active 的账号转为 dormant，保留原有 dormant/closed，再删除 `enabled` 列；相关凭据同时失效。新接口、过滤和排序均只使用 `accountStatus`。这是一项数据库契约变更，容器镜像回滚不会恢复旧列，恢复旧版必须同时恢复经过核对的数据库备份。管理员可重置任何状态账号的密码，重置不改变状态；是否要求初始密码更换由 `password.requireInitialChange` 决定。
 
 `accounts.dormantAfterDays` 默认 `0`，关闭自动休眠。设为 `90` 时，IAM 每隔 `accounts.scanIntervalSeconds`（默认3600秒）扫描最近90天没有成功登录的激活账号，未登录账号从创建时间起算。`lastLoginAt` 只在成功鉴别时更新。扫描是数据库条件更新，多节点重复执行不会重复变更；`iam.user.scanInactiveAccounts()` 也可由可信后台或既有调度器调用。`close()` 停止定时器并等待本轮扫描完成。公开注册接口不应允许用户自行设置这些管理字段。
 

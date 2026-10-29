@@ -8,7 +8,7 @@
 import type { HaiError, HaiResult, PaginatedResult } from '@h-ai/core'
 import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
-import type { IamConfig, PasswordResetConfig, SecurityConfig } from '../iam-config.js'
+import type { IamConfig, PasswordResetConfig, RegisterConfig, SecurityConfig } from '../iam-config.js'
 import type { IamNotificationContext } from '../iam-types.js'
 import type { SessionOperations } from '../session/iam-session-types.js'
 import type { UserRepository } from './iam-user-repository-user.js'
@@ -50,8 +50,8 @@ const USER_SORT_COLUMNS: Record<UserSortField, string> = {
   email: 'email',
   /** 用户显示名称列。 */
   displayName: 'display_name',
-  /** 账号启用状态列。 */
-  enabled: 'enabled',
+  /** 账号生命周期列。 */
+  accountStatus: 'account_status',
   /** 用户创建时间列。 */
   createdAt: 'created_at',
 }
@@ -243,7 +243,7 @@ interface UserFnContext {
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   config: IamConfig
-  registerConfig: { enabled: boolean, defaultEnabled: boolean }
+  registerConfig: RegisterConfig
   agreementConfig: IamConfig['agreements']
   resetConfig: PasswordResetConfig
   loginConfig: SecurityConfig
@@ -324,7 +324,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
     return authzFunctions.assignRole(userId, roleResult.data.id)
   }
 
-  async function createUser(options: RegisterOptions, enabled: boolean, managed = false): Promise<HaiResult<RegisterResult>> {
+  async function createUser(options: RegisterOptions, managed = false): Promise<HaiResult<RegisterResult>> {
     // 校验前置条件
     const preResult = await validateRegisterPreconditions(options)
     if (!preResult.success)
@@ -347,7 +347,6 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       email: options.email,
       phone: options.phone,
       displayName: options.displayName,
-      enabled,
       accountType: options.accountType ?? 'permanent',
       accountStatus: options.accountStatus ?? 'active',
       accountExpiresAt: options.accountExpiresAt,
@@ -396,14 +395,14 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   }
 
   return {
-    createUser: options => createUser(options, true, true),
+    createUser: options => createUser(options, true),
     async register(options) {
       const captcha = await verifyIamCaptcha(ctx.config.captcha, 'register', options.captcha)
       if (!captcha.success)
         return captcha
       if (!registerConfig.enabled)
         return Promise.resolve(err(HaiIamError.REGISTER_DISABLED, iamM('iam_registerDisabled')))
-      return createUser(options, registerConfig.defaultEnabled)
+      return createUser({ ...options, accountStatus: registerConfig.defaultAccountStatus })
     },
     validatePassword(password: string): HaiResult<void> {
       return validatePassword(password)
@@ -500,9 +499,11 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         params.push(keyword, keyword, keyword, keyword)
       }
 
-      if (options?.enabled !== undefined) {
-        conditions.push('enabled = ?')
-        params.push(options.enabled ? 1 : 0)
+      if (options?.accountStatus !== undefined) {
+        if (!['active', 'dormant', 'closed'].includes(options.accountStatus))
+          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_accountPolicyInvalid'))
+        conditions.push('account_status = ?')
+        params.push(options.accountStatus)
       }
 
       if (options?.roleCode) {
@@ -657,9 +658,10 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return uniqueResult as HaiResult<User>
       }
 
-      const changesSecurity = data.enabled !== undefined || data.accountStatus !== undefined
-        || data.accountType !== undefined || data.accountExpiresAt !== undefined
-      // 状态与凭据代际同事务提交；恢复账号也不能让停用前的旧会话重新有效。
+      const changesSecurity = (data.accountStatus !== undefined && data.accountStatus !== currentAccount.data.accountStatus)
+        || (data.accountType !== undefined && data.accountType !== currentAccount.data.accountType)
+        || (data.accountExpiresAt !== undefined && (data.accountExpiresAt?.getTime() ?? null) !== (currentAccount.data.accountExpiresAt?.getTime() ?? null))
+      // 状态变更与凭据代际同事务提交；重新激活也不能恢复旧会话，仅保存相同状态不撤销会话。
       const transaction = changesSecurity ? await reldb.tx.begin() : undefined
       if (transaction && !transaction.success)
         return transaction
@@ -831,7 +833,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
       // 账户状态检查（防止被锁定/禁用的账户变更密码）
       if (!isUserActive(user)) {
-        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+        return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
       }
       if (isAccountLocked(user, ctx.loginConfig)) {
         return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
@@ -974,7 +976,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       }
 
       const user = toUser(userResult.data)
-      if (!user.enabled)
+      if (!isUserActive(user))
         return ok(undefined)
 
       return issuePasswordReset(ctx, userResult.data)

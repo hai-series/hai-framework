@@ -505,7 +505,7 @@ async function currentAuthorization(userId: string) {
 ##### 主要な型
 
 - **`UserOperations`**：登録、検索、更新、削除、パスワード変更・リセット、強度検証。
-- **`User`**（公開フィールド）：`{ id, username, email, phone, displayName, avatarUrl, enabled, roles? }`。
+- **`User`**（公開フィールド）：`{ id, username, email, phone, displayName, avatarUrl, accountType?, accountStatus, accountExpiresAt?, roles? }`。
 - **`StoredUser`**：内部保存用ユーザー。`passwordHash`、`loginFailedCount`、`lockedUntil` などの機密フィールドを含みます。
 - **`RegisterOptions`** / **`RegisterResult`**：登録の入力・出力。
 - **`UpdateCurrentUserInput`**：現在のユーザーが変更できるフィールド（`username` / `email` / `displayName` / `avatarUrl` / `phone` / `metadata`）。
@@ -520,7 +520,7 @@ register(options)
   → 強度検証（Zod schema + 独自ルール）
   → パスワードハッシュ（@h-ai/crypto）
   → DB トランザクション：作成 + 結果取得
-  → 既定ロール付与（rbac.defaultRole、トランザクション外、失敗は log のみ）
+  → 既定ロール付与（rbac.defaultRole、失敗時は新規アカウントを取り消して失敗を返す）
   → RegisterResult { user, agreements? } を返す
 ```
 
@@ -530,14 +530,14 @@ register(options)
 requestPasswordReset(email)
   → メールで検索（未存在は静かに ok、列挙攻撃を防止）
   → 256-bit ランダム Token を生成
-  → SHA-256(token) → userId をキャッシュ（TTL + maxAttempts）
+  → DB のユーザー行に Token 要約、期限、試行回数、resetVersion を保存
   → onPasswordResetRequest を呼ぶ（アプリがメール・SMS 送信）
 
 confirmPasswordReset(token, newPassword)
-  → SHA-256(token) を取得して期限・試行回数を検証
+  → DB の Token 要約、期限、試行回数、resetVersion を検証
   → 強度検証 → ハッシュ → DB 更新
   → 全活動セッションを削除して再ログインを要求
-  → 使用済みリセット Token を削除
+  → 条件 SQL で Token 消費、パスワード更新、資格情報世代の更新を同時に確定
 ```
 
 ##### 使用方法
@@ -576,7 +576,7 @@ async function listReaders(page: number) {
     pageSize: 20,
     roleCode: 'record_reader',
     search: 'alice',
-    enabled: true,
+    accountStatus: 'active',
     include: ['roles'],
     sortBy: 'createdAt',
     sortDirection: 'desc',
@@ -592,20 +592,20 @@ async function loadUsers(userIds: readonly string[]) {
   return iam.user.getUsers(userIds, { include: ['roles'] })
 }
 
-async function disableUser(userId: string) {
+async function makeUserDormant(userId: string) {
   // 调用前已验证管理权限；成功后自动清除该用户会话。
-  return iam.user.updateUser(userId, { enabled: false })
+  return iam.user.updateUser(userId, { accountStatus: 'dormant' })
 }
 ```
 
 ##### 注意点
 
 - **`toUser()` の機密除去**：公開ユーザー情報から `passwordHash`、`loginFailedCount` などを除外。
-- **セッション連動**：`deleteUser` / `updateUser({ enabled: false })` / `changePassword` / `confirmPasswordReset` は対象ユーザーの全セッションを削除。
+- **セッション連動**：`deleteUser` / `updateUser({ accountStatus: 'dormant' })` / `changePassword` / `confirmPasswordReset` は対象ユーザーの全セッションを削除。
 - **列挙攻撃対策**：未登録メールへの `requestPasswordReset` はエラーでなく `ok(undefined)`。
 - **validatePassword は同期**：`UserOperations` の唯一の同期メソッドで、ほかは非同期。
 - **部分一致検索**：`listUsers` はユーザー名・メール・電話・表示名を検索し、LIKE のワイルドカードはエスケープ済み。
-- **サーバー側の並び順**：`listUsers` は `username`、`email`、`displayName`、`enabled`、`createdAt` のみを許可リストで対応付け、既定は作成日時の降順。
+- **サーバー側の並び順**：`listUsers` は `username`、`email`、`displayName`、`accountStatus`、`createdAt` のみを許可リストで対応付け、既定は作成日時の降順。
 
 ---
 
@@ -822,7 +822,7 @@ async function consumeAudioTicket(ticket: string) {
 
 パスワードログインの送信項目は `identifier` と `password` のみです。`AuthPanel` は `LoginForm` の `username` を `identifier` に変換します。有効期間はサーバーの `session.maxAge` / `session.refreshTokenMaxAge` で設定し、フォームにログインごとの永続セッション選択肢はありません。
 
-`iam.publicConfig` とクライアントの HTTP `client.iam.auth.publicConfig()` は秘密情報を含まない設定だけを公開し、実際に利用可能な認証方式を表示します。`login.password/otp/ldap`、`otp.email/sms`、`register.enabled/defaultEnabled`、`passwordReset.enabled/mode/resetUrl` と規約表示を個別に設定できます。`ui` はカード/分割レイアウト、タイトル、説明、ブランド、Logo、画像を指定します。LDAP は任意で既定は無効です。既定クライアントを選択する時だけ ldapts を追加するか、独自ファクトリを注入します。
+`iam.publicConfig` とクライアントの HTTP `client.iam.auth.publicConfig()` は秘密情報を含まない設定だけを公開し、実際に利用可能な認証方式を表示します。`login.password/otp/ldap`、`otp.email/sms`、`register.enabled/defaultAccountStatus`、`passwordReset.enabled/mode/resetUrl` と規約表示を個別に設定できます。`ui` はカード/分割レイアウト、タイトル、説明、ブランド、Logo、画像を指定します。LDAP は任意で既定は無効です。既定クライアントを選択する時だけ ldapts を追加するか、独自ファクトリを注入します。
 
 任意の Reach を選択した場合、reldb/cache/Reach の初期化後、`iam.init({ ...settings, reach })` を呼び出します。`otp_email`、`otp_sms`、`password_reset`、`password_reset_sms` テンプレートを対応する送信 Provider に接続します。明示的なコールバックは既定動作を上書きします。Console はメタデータだけを記録するため、実際の配送には SMTP、SMS または HTTP サービスが必要です。送信失敗はエラーになります。
 
@@ -912,7 +912,9 @@ RBAC 権限は `sensitiveOperations: string[]` を持ち、可空 JSON 列 `sens
 
 ## アカウント種別とライフサイクル
 
-既定は `accountType: 'permanent'` と `accountStatus: 'active'` です。管理側は `accountExpiresAt` を指定して `temporary` アカウントを作成し、`updateUser` で `dormant` または `closed` に変更できます。状態と認証世代を同じトランザクションで更新し、期限切れまたは非アクティブなアカウントはすべてのログイン、access 検証、refresh で拒否します。管理者が明示的に再有効化しても旧トークンは復活せず、再ログインが必要です。`enabled` は独立した管理者スイッチです。`closed` は記録を保持し、物理削除は `deleteUser` が行います。個人データの保持と退会手順はアプリが決定します。
+既定は `accountType: 'permanent'` と `accountStatus: 'active'` です。管理側は `accountExpiresAt` を指定して `temporary` アカウントを作成し、`updateUser` で `dormant` または `closed` に変更できます。状態と認証世代を同じトランザクションで更新し、期限切れまたは非アクティブなアカウントはすべてのログイン、access 検証、refresh で拒否します。管理者が明示的に再有効化しても旧トークンは復活せず、再ログインが必要です。`accountStatus` だけでライフサイクルを表し、独立した有効/無効スイッチはありません。`closed` は記録を保持し、物理削除は `deleteUser` が行います。個人データの保持と退会手順はアプリが決定します。
+
+beta.1 への更新前に旧バージョンの書き込みを停止し、DB をバックアップしてください。移行 v6 は旧 enabled が false/NULL で active のアカウントを dormant に変更し、既存の dormant/closed を保持したうえで列を削除します。影響する資格情報も無効になります。入力、絞り込み、並び替えは accountStatus に統一します。旧イメージへの切り戻しだけでは DB スキーマは戻らず、検証済みバックアップの復元が必要です。権限のある管理者はどの状態のパスワードもリセットできますが、状態は変わりません。初回変更の要否は password.requireInitialChange で決まります。
 
 `accounts.dormantAfterDays` の既定値 `0` は自動休止を無効にします。`90` にすると、最後のログイン成功から90日間使用していない有効なアカウントを `accounts.scanIntervalSeconds` ごと（既定3600秒）に確認します。未使用のアカウントは作成時刻から計算し、成功した認証だけが `lastLoginAt` を更新します。条件付きSQLのため複数ノードで繰り返しても重複変更しません。信頼された処理や既存スケジューラーから `iam.user.scanInactiveAccounts()` を呼び出すこともできます。`close()` はタイマーを停止して実行中の処理を待ちます。公開登録APIに管理用の項目を公開しないでください。
 

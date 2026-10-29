@@ -32,7 +32,7 @@ async function createSession(target: IamFunctions, options: CreateSessionOptions
   if (!existing.success)
     throw new Error(existing.error.message)
   if (!existing.data) {
-    const inserted = await users.create({ id: options.userId, username: options.userId, enabled: true })
+    const inserted = await users.create({ id: options.userId, username: options.userId, accountStatus: 'active' })
     if (!inserted.success)
       throw new Error(inserted.error.message)
   }

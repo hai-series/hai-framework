@@ -175,7 +175,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         userRepository,
         ldapClientFactory: clientFactory,
         syncUser: ldapSyncUser ?? true,
-        defaultEnabled: config.register.defaultEnabled,
+        defaultAccountStatus: config.register.defaultAccountStatus,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
         lockoutEnabled: securityConfig.lockoutEnabled,
         failureWindow: securityConfig.failureWindow,
@@ -334,12 +334,12 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     if (!permitted.success)
       return permitted
     if (!isUserActive(user))
-      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     const stored = await userRepository.findById(user.id)
     if (!stored.success)
       return stored
     if (!stored.data || !isUserActive(stored.data))
-      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     const passwordState = checkPasswordState(stored.data, config.password)
     if (!passwordState.success)
       return passwordState
@@ -469,7 +469,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
     if (!stored.success)
       return stored
     if (!stored.data || !isUserActive(stored.data))
-      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
     return buildAuthResult({ ...user, credentialVersion: stored.data.credentialVersion ?? '' }, undefined, context)
   }, authn: {
     createCaptcha: input => createIamCaptcha(config.captcha, input),
