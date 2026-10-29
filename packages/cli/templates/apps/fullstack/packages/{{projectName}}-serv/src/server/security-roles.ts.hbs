@@ -52,17 +52,7 @@ export async function seedAppDuties(): Promise<HaiResult<void>> {
   return ok(undefined)
 }
 
-/** 系统管理员不能通过代改资料、角色或头像控制另一个职责的账号。 */
-export async function checkManagedUser(id: string): Promise<HaiResult<void>> {
-  const roles = await iam.authz.getUserRoles(id)
-  if (!roles.success)
-    return roles
-  if (roles.data.some(role => role.code !== 'admin' && role.code !== 'user'))
-    return err(HaiCommonError.FORBIDDEN, serverM('dutyProtected'))
-  return ok(undefined)
-}
-
-/** 部署者独立设置初始凭据；不重设已有账号，也不通过管理 API 越权授予职责。 */
+/** 部署者独立设置初始凭据；不重设已有账号；后续账号管理由系统管理员统一负责。 */
 export async function bootstrapDutyAccount(username: 'audit_admin' | 'config_admin' | 'business_operator', providedPassword?: string): Promise<HaiResult<void>> {
   const password = providedPassword?.trim()
   if (!password)

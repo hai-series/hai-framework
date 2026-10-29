@@ -6,20 +6,32 @@
   import type { Snippet } from 'svelte'
 {{#if hasI18n}}
   import { browser } from '$app/environment'
+{{else}}
+{{#if features.crypto}}
+  import { browser } from '$app/environment'
 {{/if}}
-  import { {{#if features.iam}}base, {{/if}}resolve } from '$app/paths'
+{{/if}}
+  import { {{#if features.iam}}base, {{else}}{{#if features.crypto}}base, {{/if}}{{/if}}resolve } from '$app/paths'
   import { page } from '$app/state'
 {{#if hasI18n}}
   import * as m from '$lib/paraglide/messages'
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
 {{/if}}
+{{#if features.crypto}}
+  import { crypto } from '@h-ai/crypto'
+  import { kit } from '@h-ai/kit'
+{{else}}
 {{#if features.iam}}
   import { kit } from '@h-ai/kit'
+{{/if}}
 {{/if}}
 {{#if hasI18n}}
   import { LanguageSwitch, setGlobalLocale, ToastContainer } from '@h-ai/ui'
 {{else}}
   import { ToastContainer } from '@h-ai/ui'
+{{/if}}
+{{#if features.crypto}}
+  import { untrack } from 'svelte'
 {{/if}}
   import '../app.css'
 
@@ -28,6 +40,10 @@
   }
 
   const { children }: Props = $props()
+{{#if features.crypto}}
+  if (browser)
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
+{{/if}}
 {{#if features.iam}}
   const authActions = kit.client.createAuthActions({ basePath: `${base}/api/auth` })
   $effect(() => authActions.bindPageExit({ enabled: page.data.iamPublicConfig?.session.endOnPageHide }))

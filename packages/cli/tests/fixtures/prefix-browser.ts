@@ -45,7 +45,7 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     await form.locator('#register-confirm-password').fill(password)
     await form.locator('button[type="submit"]').click()
     await expect(form).not.toBeVisible()
-    expect((await page.request.get(`${prefix}/api/auth/me`)).status()).toBe(200)
+    expect(await page.evaluate(async url => (await fetch(url)).status, `${prefix}/api/auth/me`)).toBe(200)
     await context.clearCookies()
     await page.goto(`${prefix}/auth/login`)
     await page.reload()
@@ -53,7 +53,7 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     await page.locator('input[type="password"]').fill(password)
     await page.locator('.login-form button[type="submit"]').click()
     await expect(page.locator('.login-form')).not.toBeVisible()
-    expect((await page.request.get(`${prefix}/api/auth/me`)).status()).toBe(200)
+    expect(await page.evaluate(async url => (await fetch(url)).status, `${prefix}/api/auth/me`)).toBe(200)
     expect(new URL(page.url()).pathname.startsWith(`${prefix}/`)).toBe(true)
   }
   else {

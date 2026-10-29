@@ -267,9 +267,9 @@ for (const [name, pkg, exported] of modules) {
   const schema = entry[exported]?.toJSONSchema({ io: 'input', unrepresentable: 'any' })
   if (!schema)
     throw new Error(`Missing public schema: @h-ai/${pkg}.${exported}`)
-  // 联合类型及复用的 datapipe/transport 配置，字段说明可能位于独立的类型文件。
+  // 复用的 datapipe/transport/访问策略配置，字段说明来自实际拥有 Schema 的包。
   const sources = [path.join(root, 'packages', pkg, 'src', `${pkg}-config.ts`)]
-  for (const sourcePackage of [...new Set([pkg, ...(pkg === 'ai' ? ['datapipe'] : []), ...(['kit', 'serv'].includes(pkg) ? ['crypto'] : [])])]) {
+  for (const sourcePackage of [...new Set([pkg, ...(pkg === 'ai' ? ['datapipe'] : []), ...(['kit', 'serv'].includes(pkg) ? ['crypto'] : []), ...(['iam', 'kit', 'serv', 'deploy'].includes(pkg) ? ['core'] : [])])]) {
     const directory = path.join(root, 'packages', sourcePackage, 'src')
     for (const file of await readdir(directory, { recursive: true })) {
       if (/(?:config|types)\.ts$/.test(file) && !file.endsWith('.d.ts'))
@@ -349,8 +349,9 @@ const extraDescriptions = {
   VITE_ADAPTER: ['SvelteKit 构建适配器', 'node | static；未识别的值回退 node'],
   HAI_AUDIT_ADMIN_PASSWORD: ['首次创建审计管理员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
   HAI_BUSINESS_OPERATOR_PASSWORD: ['首次创建业务操作员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
-  HAI_CONFIG_ADMIN_PASSWORD: ['首次创建业务配置员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
+  HAI_CONFIG_ADMIN_PASSWORD: ['首次创建配置管理员的独立密码', '满足 IAM 密码策略；仅在本地或目标进程注入；已有账号不改密'],
   HAI_ADMIN_DEFAULT_PASSWORD: ['首次创建管理员的密码', '满足 IAM 密码策略；敏感值仅在本地或目标进程注入'],
+  HAI_DEPLOY_PRIVATE_PROXY: ['受管 Compose 私有代理拓扑的内部标志，由部署工具生成；应用用户不要手动设置', '仅后端无公开端口且存在入口代理时为 1；普通宿主不设置，使用显式 trustedProxies 配置自管入口'],
   HAI_E2E: ['示例/模板端到端测试开关', '1 启用；其余值关闭'],
   CI: ['持续集成环境标记', 'true 或 1 启用；未设置为本地运行'],
   GITHUB_API_URL: ['发布检查使用的 GitHub API 基础地址', '有效 HTTP(S) URL；默认 https://api.github.com'],

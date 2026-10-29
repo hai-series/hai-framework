@@ -1,0 +1,40 @@
+{{! @skipIfEmpty }}
+{{#unless isSvelteOnlyApp}}
+import type { KitConfig } from '@h-ai/kit'
+import { base } from '$app/paths'
+import { core } from '@h-ai/core'
+import { KitConfigSchema } from '@h-ai/kit'
+
+let configured: KitConfig | undefined
+
+/** 输入已由 Schema 校验为绝对路径；宿主补构建目录并保留绝对路径类型。 */
+function mounted(path: string): `/${string}` {
+  if (!base || path === base || path.startsWith(`${base}/`))
+    return `/${path.slice(1)}`
+  return `/${base.slice(1)}${path}`
+}
+
+/** 启动时固定服务端配置；浏览器只能接收根 load 明确投影的 transport。 */
+export function getKitConfig(): KitConfig {
+  if (configured)
+    return configured
+  const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+  if (!loaded.success)
+    throw new Error(loaded.error.message)
+  const transport = loaded.data.transport
+  configured = {
+    ...loaded.data,
+    transport: transport === false
+      ? false
+      : {
+          ...transport,
+          keyExchangePath: mounted(transport.keyExchangePath),
+          excludePaths: transport.excludePaths.map(mounted),
+          routePlaintextBytes: transport.routePlaintextBytes
+            ? Object.fromEntries(Object.entries(transport.routePlaintextBytes).map(([path, bytes]) => [mounted(path), bytes]))
+            : undefined,
+        },
+  }
+  return configured
+}
+{{/unless}}

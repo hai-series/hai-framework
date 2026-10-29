@@ -23,7 +23,6 @@ export const AdminUserSchema = z.object({
   accountStatus: z.enum(['active', 'dormant', 'closed']),
   accountExpiresAt: z.string().datetime().nullable(),
   lastLoginAt: z.string().datetime().nullable(),
-  enabled: z.boolean(),
   roles: z.array(AdminRoleCodeSchema),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -32,7 +31,7 @@ export const AdminUsersInputSchema = AdminPageInputSchema.extend({
   sortBy: IamListUsersInputSchema.shape.sortBy,
   sortDirection: IamListUsersInputSchema.shape.sortDirection,
   search: z.string().max(100).optional(),
-  enabled: z.boolean().optional(),
+  accountStatus: IamListUsersInputSchema.shape.accountStatus,
 })
 export const AdminUsersSchema = z.object({
   items: z.array(AdminUserSchema),
@@ -46,17 +45,15 @@ export const AdminCreateUserSchema = z.object({
   email: z.email().optional(),
   displayName: z.string().max(100).optional(),
   role: AdminRoleCodeSchema.default('user'),
-  enabled: z.boolean().default(true),
   accountType: z.enum(['permanent', 'temporary']).default('permanent'),
   accountStatus: z.enum(['active', 'dormant', 'closed']).default('active'),
   accountExpiresAt: z.string().datetime().nullable().optional(),
 }).strict()
-export const AdminInviteUserSchema = AdminCreateUserSchema.omit({ password: true }).extend({ phone: z.string().trim().min(1).max(32).optional(), accountStatus: z.literal('active').default('active'), enabled: z.literal(true).default(true) })
+export const AdminInviteUserSchema = AdminCreateUserSchema.omit({ password: true }).extend({ phone: z.string().trim().min(1).max(32).optional(), accountStatus: z.literal('active').default('active') })
 export const AdminUpdateUserSchema = z.object({
   id: z.string().min(1),
   email: z.union([z.email(), z.literal('')]).optional(),
   displayName: z.string().max(100).optional(),
-  enabled: z.boolean().optional(),
   accountType: z.enum(['permanent', 'temporary']).optional(),
   accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
   accountExpiresAt: z.string().datetime().nullable().optional(),

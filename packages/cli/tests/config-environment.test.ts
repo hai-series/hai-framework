@@ -20,7 +20,7 @@ describe('environment configuration', () => {
     expect(first).not.toMatch(/- # 用途：/)
   })
   it('字段文档生成保留标量、数组、正文和已有注释，且重复执行不累加', () => {
-    const original = '# 业务保留的说明\nregister:\n  enabled: false\n  defaultEnabled: true\nloginAccess:\n  allowIps: [127.0.0.1]\nagreements:\n  userAgreementMarkdown: |\n    # 正文标题\n    用户协议正文。\n'
+    const original = '# 业务保留的说明\nregister:\n  enabled: false\n  defaultAccountStatus: active\nloginAccess:\n  allowIps: [127.0.0.1]\nagreements:\n  userAgreementMarkdown: |\n    # 正文标题\n    用户协议正文。\n'
     const documented = documentConfig('iam', original)
     expect(loadConfigText('iam', documented)).toEqual(loadConfigText('iam', original))
     expect(documented).toContain('# 业务保留的说明')

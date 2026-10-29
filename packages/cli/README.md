@@ -109,6 +109,12 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 `create`、`add`、`init` 与 `generate` 的提示、校验、模块/模板名称、描述和完成信息均使用当前 CLI 语言。静态选择目录在读取时翻译，同一进程切换 locale 也会生效。CLI 语言与生成应用的 `core.defaultLocale` 分开配置；生成的中文 README、配置/源码注释、用户输入和外部工具原始诊断保留原样。
 
+### SvelteKit 接口安全配置
+
+创建 admin、website 或 h5 时选择 crypto，可在 `_kit.yml` 中开启 transport；默认仍为 false。服务端从各环境独立生成的密钥环装配加密，根布局只向浏览器提供公开 transport 配置，私有 IP/时段规则不下发。选择 db 后使用数据库 registry；无 db 的内存 registry 仅限开发/测试。静态网站没有这些动态接口。
+
+路径规则 `encryption: required / disabled` 可以让内部接口保持加密、外部接口接收普通 HTTPS 请求；模式冲突或缺少必需加密装配会拒绝创建宿主。Fullstack 管理模板固定要求 transport，使用路径规则设置明文例外。完整配置与验证见[接口访问和加密](../../docs/usage/configuration/request-access.md)。
+
 ### 构建与部署
 
 数据库连接保存前使用所选后端的真实公开 Schema 校验：MySQL `ssl` 仅 `false` 或严格 TLS 对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其模式。CLI 已内联纯 Schema 和 Zod，配置校验不要求目标应用安装数据库包/驱动；实际运行应用仍需相应依赖。部署功能仍须能解析已安装的 `@h-ai/deploy`（生成工程将其作为开发依赖）。

@@ -10,7 +10,6 @@ import { iam } from '@h-ai/iam'
 import { storage } from '@h-ai/storage'
 import { SUPPORTED_LOCALES } from '{{fullstack.contractPackageName}}'
 import { serverM } from './messages.js'
-import { checkManagedUser } from './security-roles.js'
 
 const ROLE_CODES = new Set<AdminRoleCode>(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'])
 const SUPPORTED_THEMES = [{{#each fullstack.theme.themes}}'{{this}}'{{#unless @last}}, {{/unless}}{{/each}}] as readonly string[]
@@ -59,7 +58,7 @@ export async function withAdminMutation<T>(context: ServContext, operation: stri
     const permitted = await iam.authz.checkPermission(actor.data.id, operation.startsWith('iam.roles.') ? 'app.roles.manage' : 'app.users.manage')
     if (!permitted.success)
       return permitted
-    if (!actor.data.enabled || !permitted.data)
+    if (actor.data.accountStatus !== 'active' || (actor.data.accountType === 'temporary' && (!actor.data.accountExpiresAt || new Date(actor.data.accountExpiresAt).getTime() <= Date.now())) || !permitted.data)
       return err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
     if (leaseLost)
       return err(HaiCommonError.CONFLICT, serverM('busy', { locale: context.locale }))
@@ -104,9 +103,8 @@ export function toAdminUser(user: User, roles: Role[]): AdminUser {
     email: user.email,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
-    enabled: user.enabled,
     accountType: user.accountType ?? 'permanent',
-    accountStatus: user.accountStatus ?? 'active',
+    accountStatus: user.accountStatus,
     accountExpiresAt: user.accountExpiresAt?.toISOString() ?? null,
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
     roles: roles.map(role => role.code).filter(isRoleCode),
@@ -120,8 +118,6 @@ export function isRoleCode(code: string): code is AdminRoleCode {
 }
 
 export async function createAdminUser(input: AdminCreateUser, context: ServContext): Promise<HaiResult<AdminUser>> {
-  if (input.role && input.role !== 'admin' && input.role !== 'user')
-    return err(HaiCommonError.FORBIDDEN, serverM('dutyProtected', { locale: context.locale }))
   const role = await iam.authz.getRoleByCode(input.role)
   if (!role.success)
     return role
@@ -136,21 +132,12 @@ export async function createAdminUser(input: AdminCreateUser, context: ServConte
     await rollbackCreatedUser(userId)
     return assigned
   }
-  if (!input.enabled) {
-    const disabled = await iam.user.updateUser(userId, { enabled: false })
-    if (!disabled.success) {
-      await rollbackCreatedUser(userId)
-      return disabled
-    }
-  }
-  await recordAudit(context, 'create', 'users', userId, { role: input.role, enabled: input.enabled })
+  await recordAudit(context, 'create', 'users', userId, { role: input.role, accountStatus: input.accountStatus })
   return getAdminUser(userId)
 }
 
 /** 安全通知发送后发生未知结果时保留账号，不自动重试或删除已发出的邀请。 */
 export async function inviteAdminUser(input: AdminInviteUser, context: ServContext): Promise<HaiResult<AdminUser>> {
-  if (input.role !== 'admin' && input.role !== 'user')
-    return err(HaiCommonError.FORBIDDEN, serverM('dutyProtected', { locale: context.locale }))
   const role = await iam.authz.getRoleByCode(input.role)
   if (!role.success || !role.data)
     return role.success ? err(HaiCommonError.NOT_FOUND, serverM('notFound', { locale: context.locale })) : role
@@ -171,13 +158,8 @@ async function rollbackCreatedUser(id: string): Promise<void> {
 }
 
 export async function updateAdminUser(input: AdminUpdateUser, context: ServContext): Promise<HaiResult<AdminUser>> {
-  if (input.role && input.role !== 'admin' && input.role !== 'user')
-    return err(HaiCommonError.FORBIDDEN, serverM('dutyProtected', { locale: context.locale }))
-  if (input.id === context.session?.userId && (input.enabled === false || input.role === 'user' || (input.accountStatus && input.accountStatus !== 'active')))
+  if (input.id === context.session?.userId && ((input.role && input.role !== 'admin') || (input.accountStatus && input.accountStatus !== 'active') || input.accountType === 'temporary' || input.accountExpiresAt != null))
     return err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
-  const manageable = await checkManagedUser(input.id)
-  if (!manageable.success)
-    return manageable
   const existing = await iam.user.getUser(input.id)
   if (!existing.success)
     return existing
@@ -249,11 +231,6 @@ export async function updateProfile(input: ProfileUpdate, context: ServContext):
 
 /** 上传路径由服务端生成，禁止客户端写入任意 storage key。 */
 export async function uploadAvatar(userId: string, input: AvatarUpload, context: ServContext): Promise<HaiResult<{ avatarUrl: string }>> {
-  if (userId !== context.session?.userId) {
-    const manageable = await checkManagedUser(userId)
-    if (!manageable.success)
-      return manageable
-  }
   const current = await iam.user.getUser(userId)
   if (!current.success)
     return current

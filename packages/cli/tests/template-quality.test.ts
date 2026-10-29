@@ -268,3 +268,13 @@ describe('固定窗口限流模板', () => {
     expect(results.flatMap(result => result.messages.filter(message => message.severity === 2))).toEqual([])
   })
 })
+
+describe.each(['admin', 'website', 'h5'] as const)('%s 传输加密模板装配', (appType) => {
+  it.each([false, true])('db=%s 的 crypto 配置、服务端装配和浏览器投影通过实际生成 lint', async (database) => {
+    const projectPath = path.join(tmpRoot, `${appType}-transport-${database}`)
+    await generateFromTemplates(projectPath, buildTemplateContext({ name: `${appType}-transport-${database}`, appType, features: database ? ['crypto', 'db'] : ['crypto'], packageManager: 'pnpm' }))
+    const eslint = new ESLint({ cwd: projectPath, overrideConfigFile: path.join(projectPath, 'eslint.config.js') })
+    const results = await eslint.lintFiles(['src/hooks.server.ts', 'src/lib/server/kit-config.ts', 'src/routes/+layout.server.ts', 'src/routes/+layout.svelte'])
+    expect(results.flatMap(result => result.messages.filter(message => message.severity === 2))).toEqual([])
+  })
+})

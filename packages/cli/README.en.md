@@ -109,6 +109,12 @@ CLI messages support Chinese, English and Japanese. The first nonempty value fro
 
 Prompts, validation, module/template names, descriptions and completion messages in `create`, `add`, `init` and `generate` use the current CLI locale. Catalog labels are translated when read, including after an in-process locale change. The CLI locale is separate from the generated application’s `core.defaultLocale`; generated Chinese README text, configuration/code comments, user input and original external-tool diagnostics remain unchanged.
 
+### SvelteKit endpoint security
+
+Select crypto when creating admin, website or h5 projects to enable transport in `_kit.yml`; its default remains false. The server uses separately generated environment key rings, and the root layout exposes only public transport settings. Private IP/time policies remain server-side. Select db for a database registry; an in-memory registry without db is limited to development/test. Static websites have no dynamic endpoints.
+
+Path rules use `encryption: required / disabled` for encrypted internal APIs and ordinary HTTPS integrations. Conflicts and missing required transport reject host creation. Fullstack management always requires transport; use scoped rules for plaintext exceptions. See [endpoint access and encryption](../../docs/usage/configuration/request-access.md).
+
 ### Build and deploy
 
 Database connections are validated against the selected backend’s public schema before saving. MySQL `ssl` accepts only `false` or a strict TLS object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL keeps its modes. CLI bundles the pure schemas and Zod, so validation needs no database package or driver in the target application; running that application still requires its dependencies. Deployment still requires an installed, resolvable `@h-ai/deploy` (a development dependency in generated projects).

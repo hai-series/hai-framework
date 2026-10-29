@@ -18,11 +18,13 @@ const STARTED_AT = new Date().toISOString()
 
 /** 创建后端 HTTP App；与 @h-ai/serv 的 createApp 返回语义保持一致。 */
 export function createServerApp(): ServHttpApp {
+  const coreConfig = core.config.getOrThrow<CoreConfig>('core')
+  const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
+  if (servConfig.transport === false)
+    throw new Error('Fullstack management requires transport encryption; configure scoped access.rules[].encryption: disabled for plaintext external endpoints')
   const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
   if (!ring.success)
     throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
-  const coreConfig = core.config.getOrThrow<CoreConfig>('core')
-  const servConfig = ServConfigSchema.parse(core.config.getOrThrow('serv'))
 {{#if features.feedback}}  // 可选反馈故障重试期间仍使用配置预算，避免缓存默认容量。
   const feedbackSettings = FeedbackConfigSchema.safeParse(core.config.get('feedback'))
   const feedbackBudget = resolveFeedbackBudget(feedbackSettings.success ? feedbackSettings.data : {})
@@ -32,6 +34,7 @@ export function createServerApp(): ServHttpApp {
     nativeOrigins: servConfig.cors.nativeOrigins,
   })
   const publicPaths = [
+    `${servConfig.http.apiPrefix}/assets`,
     ...(servConfig.http.health ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path)) : []),
     ...(servConfig.http.openapi && security.exposeApiDocs ? [servConfig.http.openapi.path] : []),
     ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path] : []),
@@ -70,17 +73,17 @@ export function createServerApp(): ServHttpApp {
     },
     // 管理业务默认强制双向加密；各节点复用受管服务端密钥环与共享 reldb 客户端 registry。
     transport: {
-      ...(servConfig.transport || {}),
+      ...servConfig.transport,
 {{#if features.feedback}}
       routePlaintextBytes: {
         [`${servConfig.http.apiPrefix}/feedback/reports`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/evidence`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/attachments/*`]: feedbackBudget.maxTransportBytes,
         [`${servConfig.http.apiPrefix}/feedback/reports/*/exports/*`]: feedbackBudget.maxTransportBytes,
-        ...(servConfig.transport ? servConfig.transport.routePlaintextBytes : {}),
+        ...servConfig.transport.routePlaintextBytes,
       },
 {{/if}}
-      excludePaths: publicPaths,
+      excludePaths: [...new Set([...publicPaths, ...servConfig.transport.excludePaths])],
       crypto,
       serverKeyRing: ring.data,
       keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),

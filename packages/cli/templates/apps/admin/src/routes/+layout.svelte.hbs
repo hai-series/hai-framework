@@ -7,18 +7,30 @@
   import { browser } from '$app/environment'
 {{#if features.iam}}
   import { base } from '$app/paths'
+{{else}}
+{{#if features.crypto}}
+  import { base } from '$app/paths'
+{{/if}}
 {{/if}}
   import { page } from '$app/state'
 {{#if hasI18n}}
   import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
 {{/if}}
+{{#if features.crypto}}
+  import { crypto } from '@h-ai/crypto'
+  import { kit } from '@h-ai/kit'
+{{else}}
 {{#if features.iam}}
   import { kit } from '@h-ai/kit'
+{{/if}}
 {{/if}}
 {{#if hasI18n}}
   import { applyTheme, getSavedTheme, LanguageSwitch, setGlobalLocale, ThemeSelector } from '@h-ai/ui'
 {{else}}
   import { applyTheme, getSavedTheme, ThemeSelector } from '@h-ai/ui'
+{{/if}}
+{{#if features.crypto}}
+  import { untrack } from 'svelte'
 {{/if}}
   import '../app.css'
 
@@ -27,6 +39,10 @@
   }
 
   const { children }: Props = $props()
+{{#if features.crypto}}
+  if (browser)
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
+{{/if}}
   const initialTheme = browser ? getSavedTheme() : 'light'
   let currentTheme = $state(initialTheme)
   if (browser)

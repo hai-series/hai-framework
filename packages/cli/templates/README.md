@@ -35,6 +35,8 @@
 
 Fullstack 服务端保留各模块的配置示例，未使用模块保持注释。安装依赖、校验和初始化、接入业务后才启用对应配置。修改公开 Schema 时同步配置生成器、环境变量说明、调用方与技能。
 
+SvelteKit 的 `kit-config.ts` 在服务端读取并固定 `_kit.yml`，根 load 只投影公开 transport；选择 crypto 后，hooks 装配环境密钥环和 registry，布局安装浏览器传输。db 提供共享 registry，无 db 仅限开发/测试。路径规则可配置 IP、时段与 required/disabled 加密，规则冲突须在装配时失败。调整时同步三种 SSR 布局、服务端入口、私钥生成边界和实际生成工程的根/子目录门禁；纯客户端工程不生成服务端私钥。
+
 ### AI 指引
 
 `skills/hai-*` 的完整目录复制到生成应用 `.agents/skills/`，按应用架构排除不适用项。`bridges/<类型>/AGENTS.md` 提供根入口；Claude/Copilot/OpenCode 配置只引用共享规则。新增参考文件必须随 skill 一起复制，不能链接回框架私有路径。

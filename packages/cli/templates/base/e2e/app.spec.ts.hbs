@@ -121,8 +121,9 @@ test('configured IAM registration and password login', async ({ page, context })
   await registerForm.locator('button[type="submit"]').click()
   await expect(page.locator('.register-form')).not.toBeVisible()
 {{#unless isCapacitorApp}}
-  const me = await page.request.get('./api/auth/me')
-  expect(me.ok()).toBe(true)
+  // 通过页面 fetch 复用 Cookie 与已安装的传输加密，避免 HTTP 辅助客户端绕过浏览器协议。
+  const me = await page.evaluate(async url => (await fetch(url)).status, new URL('./api/auth/me', test.info().project.use.baseURL).href)
+  expect(me).toBe(200)
   await context.clearCookies()
 {{/unless}}
   await page.reload()
@@ -206,7 +207,7 @@ test('configured IAM registration and password login', async ({ page, context })
   // Web 预览采用内存 TokenStore，刷新后应回到登录，而不是已消费令牌的重置页面。
   await expect(page.locator('#login-username')).toBeVisible()
 {{else}}
-  await expect(await page.request.get('./api/auth/me')).toBeOK()
+  expect(await page.evaluate(async url => (await fetch(url)).status, new URL('./api/auth/me', test.info().project.use.baseURL).href)).toBe(200)
 {{/if}}
 })
 {{/if}}

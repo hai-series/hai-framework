@@ -1,4 +1,4 @@
-import { apiContract } from '@h-ai/api-contract'
+import { apiContract, IamAdminResetPasswordInputSchema } from '@h-ai/api-contract'
 import { z } from 'zod'
 import {
   AdminAuditInputSchema,
@@ -30,6 +30,9 @@ export const adminContract = {
     update: apiContract.route({ method: 'POST', path: '/admin/configuration/update', tags: ['admin'] }).input(BusinessSettingsSchema).output(apiContract.haiResultSchema(BusinessSettingsSchema)),
   },
   users: {
+    resetPassword: apiContract.route({ method: 'POST', path: '/admin/users/reset-password', tags: ['admin'] })
+      .input(IamAdminResetPasswordInputSchema.strict())
+      .output(apiContract.haiResultSchema(z.object({ reset: z.literal(true) }))),
     invite: apiContract.route({ method: 'POST', path: '/admin/users/invite', tags: ['admin'] }).input(AdminInviteUserSchema).output(apiContract.haiResultSchema(AdminUserSchema)),
     list: apiContract.route({ method: 'POST', path: '/admin/users/list', tags: ['admin'] })
       .input(AdminUsersInputSchema)

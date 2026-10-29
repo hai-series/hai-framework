@@ -19,6 +19,7 @@ import { reldb } from '@h-ai/reldb'
 {{/unless}}
 import { describe, expect, it } from 'vitest'
 {{#unless isSvelteOnlyApp}}
+import { getKitConfig } from '../src/lib/server/kit-config'
 import { load } from '../src/routes/+layout.server'
 {{/unless}}
 
@@ -80,6 +81,7 @@ describe('generated scaffold', () => {
       if (!publicConfig.success)
         throw new Error(publicConfig.error.message)
       expect(await load()).toEqual({
+        kitConfig: { transport: getKitConfig().transport },
         iamPublicConfig: publicConfig.data,
         appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
       })
@@ -91,6 +93,7 @@ describe('generated scaffold', () => {
     }
 {{else}}
     expect(await load()).toEqual({
+      kitConfig: { transport: getKitConfig().transport },
       appConfig: { name: config.name, version: config.version, env: config.env, defaultLocale: config.defaultLocale },
     })
 {{/if}}

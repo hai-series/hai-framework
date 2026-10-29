@@ -31,6 +31,8 @@ function generateLiteralConfigFile(moduleKey: string, configs?: ModuleConfigs): 
       return generateCoreConfig(configs?.core)
     case 'serv':
       return generateServConfig()
+    case 'kit':
+      return generateKitConfig()
     case 'db':
       return generateDbConfig(configs?.db)
     case 'cache':
@@ -86,6 +88,21 @@ defaultLocale: ${locale}
 `
 }
 
+function generateKitConfig(): string {
+  return `# SvelteKit 服务端入口；私有访问策略不传给浏览器。
+server:
+  host: 127.0.0.1
+  port: 3000
+# auto 仅在受管私有 Compose 代理中采用容器网段；普通宿主忽略转发头。
+# 自建代理填写明确的 IP/CIDR；[] 显式忽略转发头。
+trustedProxies: auto
+access: false
+# access:
+#   file: ./config/security/request-access.yml
+transport: false
+`
+}
+
 function generateServConfig(): string {
   return `# =============================================================================
 # Service / HTTP 入口配置
@@ -96,6 +113,10 @@ server:
   port: 3000
 
 http:
+  trustedProxies: auto
+  access: false
+  # access:
+  #   file: ./config/security/request-access.yml
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json
@@ -231,7 +252,7 @@ login:
 # 注册与登录安全
 register:
   enabled: true
-  defaultEnabled: true
+  defaultAccountStatus: active
 security:
   lockoutEnabled: false # 按需开启；关闭后历史锁不阻止登录/旧密码验证
   failureWindow: 86400 # 从首次失败起计数的固定窗口（秒）

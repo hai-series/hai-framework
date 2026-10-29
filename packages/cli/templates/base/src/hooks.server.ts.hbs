@@ -4,29 +4,49 @@
  * =============================================================================
  */
 
+{{#if features.crypto}}
+import type { TransportEncryptionOptions } from '@h-ai/kit'
+{{/if}}
 import type { Handle } from '@sveltejs/kit'
 {{#if features.cache}}
 import process from 'node:process'
+{{else}}
+{{#if features.crypto}}
+import process from 'node:process'
+{{/if}}
 {{/if}}
 {{#if hasI18n}}
 import { base } from '$app/paths'
 {{else}}
 {{#if features.iam}}
 import { base } from '$app/paths'
+{{else}}
+{{#if features.crypto}}
+import { base } from '$app/paths'
+{{/if}}
 {{/if}}
 {{/if}}
 {{#if hasI18n}}
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 {{/if}}
 import { initApp } from '$lib/server/init.js'
+import { getKitConfig } from '$lib/server/kit-config.js'
 {{#if features.cache}}
 import { cache } from '@h-ai/cache'
 {{/if}}
 import { core } from '@h-ai/core'
+{{#if features.crypto}}
+import { {{#if features.db}}createReldbTransportKeyStore{{else}}createInMemoryKeyStore{{/if}}, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+{{/if}}
 {{#if features.iam}}
 import { iam } from '@h-ai/iam'
 {{/if}}
 import { kit } from '@h-ai/kit'
+{{#if features.crypto}}
+{{#if features.db}}
+import { reldb } from '@h-ai/reldb'
+{{/if}}
+{{/if}}
 
 // =============================================================================
 // 应用初始化
@@ -83,47 +103,84 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 // hai Handle（会话验证 + 限流 + 日志）
 // =============================================================================
 
-const haiHandle = kit.createHandle({
-{{#if features.iam}}
-  auth: {
-    verifyToken: async (token) => {
-      const result = await iam.auth.verifyToken(token)
-      if (!result.success)
-        return null
-      const session = result.data
-      // 映射为 kit 的 SessionData 形态（携带守卫所需的核心字段）
-      return {
-        userId: session.userId,
-        username: session.username,
-        roles: session.roles,
-        permissions: session.permissions,
-        data: session.data,
-      }
-    },
-    loginUrl: `${base}/auth/login`,
-    protectedPaths: ['/admin/*', '/api/*'].map(path => `${base}${path}`),
-    publicPaths: [...kit.auth.publicPaths, '/api/auth/logout', '/api/public/*', '/api/health'].map(path => `${base}${path}`),
-    operations: () => iam.auth,
-  },
-{{/if}}
-{{#if features.cache}}
-  rateLimit: { windowMs: 60000, maxRequests: 200, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' }) },
+let configuredHandle: Handle | undefined
+const haiHandle: Handle = async (input) => {
+  if (!configuredHandle) {
+    const settings = getKitConfig()
+{{#if features.crypto}}
+    let transport: TransportEncryptionOptions | undefined
+    if (settings.transport !== false) {
+{{#unless features.db}}
+      if (core.module.requiresSharedState(process.env))
+        throw new Error('Production transport requires the db feature and a shared database registry')
+{{/unless}}
+      const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+      if (!ring.success)
+        throw new Error(`HAI_CRYPTO_TRANSPORT_SERVERKEYRING: ${ring.error.message} (${ring.error.code})`)
+      transport = {
+        ...settings.transport,
+        basePath: base,
+        serverKeyRing: ring.data,
+{{#if features.db}}
+        keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }),
 {{else}}
-  // 未选择cache能力时不启用限流；启用前须接入共享原子store。
-  rateLimit: false,
+        keyStore: createInMemoryKeyStore(),
 {{/if}}
-  logging: { logBody: false },
-  onError: (error: unknown, _event) => {
-    core.logger.error('Request error:', { error })
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
-  },
-})
+      }
+    }
+{{else}}
+    if (settings.transport !== false)
+      throw new Error('Transport encryption requires the crypto feature; add it before enabling kit.transport')
+{{/if}}
+    configuredHandle = kit.createHandle({
+      trustedProxies: settings.trustedProxies,
+      access: settings.access,
+{{#if features.crypto}}
+      crypto: { crypto, transport },
+{{/if}}
+    {{#if features.iam}}
+      auth: {
+        verifyToken: async (token) => {
+          const result = await iam.auth.verifyToken(token)
+          if (!result.success)
+            return null
+          const session = result.data
+          // 映射为 kit 的 SessionData 形态（携带守卫所需的核心字段）
+          return {
+            userId: session.userId,
+            username: session.username,
+            roles: session.roles,
+            permissions: session.permissions,
+            data: session.data,
+          }
+        },
+        loginUrl: `${base}/auth/login`,
+        protectedPaths: ['/admin/*', '/api/*'].map(path => `${base}${path}`),
+        publicPaths: [...kit.auth.publicPaths, '/api/auth/logout', '/api/public/*', '/api/health'].map(path => `${base}${path}`),
+        operations: () => iam.auth,
+      },
+    {{/if}}
+    {{#if features.cache}}
+      rateLimit: { windowMs: 60000, maxRequests: 200, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: '{{projectName}}', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' }) },
+    {{else}}
+      // 未选择cache能力时不启用限流；启用前须接入共享原子store。
+      rateLimit: false,
+    {{/if}}
+      logging: { logBody: false },
+      onError: (error: unknown, _event) => {
+        core.logger.error('Request error:', { error })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
+          }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } },
+        )
+      },
+    })
+  }
+  return configuredHandle(input)
+}
 
 // =============================================================================
 // 组合 Handle

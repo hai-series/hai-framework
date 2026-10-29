@@ -33,7 +33,7 @@ beforeAll(async () => {
   expect((await iam.init({
     initialCredentials: { enabled: true },
     passwordReset: { enabled: true, mode: 'email' },
-    reauthentication: { enabled: true, operations: ['iam.users.create', 'iam.users.invite', 'audit.backup', 'business.settings.update'] },
+    reauthentication: { enabled: true, operations: ['iam.users.create', 'iam.users.invite', 'iam.users.resetPassword', 'audit.backup', 'business.settings.update'] },
     onPasswordResetRequest: async (user, token) => {
       invitations.set(user.username, token)
       if (deliveryUnknown)
@@ -133,9 +133,9 @@ it('再鉴别按用途单次使用，临时账号状态变化立即阻止旧会�
   expect((await iam.session.refresh(login.data.tokens.refreshToken)).success).toBe(false)
 })
 
-it('设密邀请可完成，投递未知时保留账号；系统账号不能授予另一职责', async () => {
-  const forbidden = await post('admin', '/admin/users/create', { username: 'audit-escalation', password: 'Example-123!', role: 'audit_admin' }, await proof('admin', 'iam.users.create'))
-  expect(await forbidden.json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
+it('设密邀请可完成，投递未知时保留账号；系统管理员可创建其他职责账号', async () => {
+  const createdDuty = await post('admin', '/admin/users/create', { username: 'managed-auditor', password: 'Example-123!', role: 'audit_admin' }, await proof('admin', 'iam.users.create'))
+  expect(await createdDuty.json()).toMatchObject({ success: true, data: { roles: ['audit_admin'] } })
   const invite = await post('admin', '/admin/users/invite', { username: 'invited-member', email: 'member@example.test' }, await proof('admin', 'iam.users.invite'))
   expect(await invite.json()).toMatchObject({ success: true })
   const token = invitations.get('invited-member')
@@ -160,4 +160,24 @@ it('只有审计职责可手动备份且私有归档可验证', async () => {
   expect(body).toMatchObject({ success: true, data: { id, key: expect.stringContaining('hai-private/audit-backups/'), sha256: expect.stringMatching(/^[a-f\d]{64}$/) } })
   const verified = await audit.backup.verify(`hai-private/audit-backups/${id}.jsonl`)
   expect(verified.success).toBe(true)
+})
+
+it.each(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'] as const)('系统管理员统一管理 %s 的资料、生命周期、角色和密码', async (role) => {
+  const username = `managed-${role}`
+  const created = apiContract.haiResultSchema(AdminUserSchema).parse(await (await post('admin', '/admin/users/create', { username, password: 'Managed-example-123!', role }, await proof('admin', 'iam.users.create'))).json())
+  expect(created).toMatchObject({ success: true, data: { roles: [role], accountStatus: 'active' } })
+  if (!created.success)
+    throw new Error('Managed account fixture failed')
+  const input = { id: created.data.id, displayName: 'Managed profile', accountStatus: 'dormant', role: 'user' }
+  expect(await (await post('admin', '/admin/users/update', input)).json()).toMatchObject({ success: true, data: { displayName: 'Managed profile', roles: ['user'], accountStatus: 'dormant' } })
+  const reset = { id: created.data.id, newPassword: 'Reset-example-456!' }
+  expect(await (await post('admin', '/admin/users/reset-password', reset)).json()).toMatchObject({ success: false, error: { code: 'hai:iam:027' } })
+  const ticket = await proof('admin', 'iam.users.resetPassword')
+  expect(await (await post('admin', '/admin/users/reset-password', reset, ticket)).json()).toMatchObject({ success: true, data: { reset: true } })
+  expect(await (await post('admin', '/admin/users/reset-password', reset, ticket)).json()).toMatchObject({ success: false })
+  expect(await iam.user.getUser(created.data.id)).toMatchObject({ success: true, data: { accountStatus: 'dormant' } })
+  expect(await iam.auth.login({ identifier: username, password: reset.newPassword })).toMatchObject({ success: false, error: { code: 'hai:iam:002' } })
+  expect(await (await post('admin', '/admin/users/update', { id: created.data.id, accountStatus: 'active' })).json()).toMatchObject({ success: true })
+  expect((await iam.auth.login({ identifier: username, password: reset.newPassword })).success).toBe(true)
+  expect(await (await post('audit_admin', '/admin/users/reset-password', reset)).json()).toMatchObject({ success: false, error: { httpStatus: 403 } })
 })

@@ -309,6 +309,61 @@ test('static Pages deep links, public assets and honest contact feedback', async
         }, null, 2)}\n`)
       }
       if (scenario.title === 'admin') {
+        // 用生成应用的真实 SvelteKit Handle 验证独立策略生效；规则只限制专用夹具路径。
+        const policies = { rules: [
+          { id: 'scaffold-private-probe', paths: ['/api/public/request-denied', '/yyy/api/public/request-denied'], denyIps: ['0.0.0.0/0', '::/0'], encryption: 'disabled' },
+          { id: 'scaffold-plain', paths: ['/api/public/request-open', '/yyy/api/public/request-open', '/api/prefix-probe', '/yyy/api/prefix-probe'], encryption: 'disabled' },
+          { id: 'scaffold-encrypted', paths: ['/api/public/request-required', '/yyy/api/public/request-required'], encryption: 'required' },
+        ] }
+        await mkdir(path.join(projectPath, 'config/security'), { recursive: true })
+        await writeFile(path.join(projectPath, 'config/security/request-access.yml'), stringify(policies))
+        const kitConfig = path.join(projectPath, 'config/_kit.yml')
+        await writeFile(kitConfig, stringify({ ...parse(await readFile(kitConfig, 'utf8')), access: { file: './config/security/request-access.yml' }, transport: { excludePaths: ['/api/public/request-open', '/api/public/request-denied', '/api/prefix-probe'] } }))
+        for (const name of ['request-open', 'request-denied', 'request-required']) {
+          const route = path.join(projectPath, 'src/routes/api/public', name)
+          await mkdir(route, { recursive: true })
+          await writeFile(path.join(route, '+server.ts'), `import type { RequestHandler } from './$types'\n\nexport const GET: RequestHandler = ({ getClientAddress }) => Response.json({ ip: getClientAddress() })\n`)
+        }
+        await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), `import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
+import { expect, test } from '@playwright/test'
+
+test('generated SvelteKit applies file policies, trusted socket identity and path encryption', async ({ page, request }, testInfo) => {
+  const baseURL = testInfo.project.use.baseURL
+  if (!baseURL)
+    throw new Error('The generated-project policy gate requires baseURL')
+  const open = await request.get('./api/public/request-open', { headers: { 'x-forwarded-for': '203.0.113.9' } })
+  expect(open.status()).toBe(200)
+  expect(await open.json()).toMatchObject({ ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/) })
+  const denied = await request.get('./api/public/request-denied', { headers: { 'x-request-id': 'scaffold-policy-probe' } })
+  expect(denied.status()).toBe(403)
+  expect(await denied.json()).toMatchObject({ success: false, error: { code: 'hai:common:104', traceId: 'scaffold-policy-probe' } })
+  const requiredWithoutProtocol = await request.get('./api/public/request-required')
+  expect(requiredWithoutProtocol.status()).toBe(400)
+  const modeMismatch = await request.get('./api/public/request-open', { headers: { 'x-encrypted': 'true' } })
+  expect(modeMismatch.status()).toBe(400)
+  let encrypted = false
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname.endsWith('/api/public/request-required'))
+      encrypted = response.headers()['x-encrypted'] === 'true'
+  })
+  await page.goto('./auth/login')
+  // AuthPanel 在挂载后才启用表单；等待真实交互就绪，父布局已同步安装浏览器传输。
+  await expect(page.locator('form.login-form button[type=submit]')).toBeEnabled()
+  const protectedReply = await page.evaluate(async (endpoint) => {
+    const response = await fetch(endpoint)
+    return { status: response.status, body: await response.json() }
+  }, new URL('api/public/request-required', baseURL).href)
+  expect(protectedReply.status).toBe(200)
+  expect(protectedReply.body).toMatchObject({ ip: expect.stringMatching(/^(127\\.0\\.0\\.1|::1)$/) })
+  expect(encrypted).toBe(true)
+  const directory = process.env.HAI_AUTH_EVIDENCE_DIR || testInfo.outputDir
+  await mkdir(directory, { recursive: true })
+  const receiptName = new URL(baseURL).pathname === '/yyy/' ? 'request-encryption-kit-prefix.json' : 'request-encryption-kit.json'
+  await writeFile(path.join(directory, receiptName), JSON.stringify({ checkedAt: new Date().toISOString(), host: 'generated SvelteKit / Admin', baseURL, plain: { status: open.status(), body: await open.json(), encrypted: false }, denied: { status: denied.status(), body: await denied.json() }, requiredWithoutProtocol: { status: requiredWithoutProtocol.status() }, encryptedEnvelopeOnPlainEndpoint: { status: modeMismatch.status(), body: await modeMismatch.json() }, requiredWithProtocol: { ...protectedReply, encrypted } }, null, 2))
+})
+`)
         // 不只验证 create：增量生成的文件必须进入实际项目的编译、lint 与运行测试。
         for (const [type, name, output] of [
           ['page', 'review-page', 'src/routes'],
@@ -340,6 +395,32 @@ it('generated migration executes up and down with HaiResult', async () => {
 `)
       }
       if (scenario.title === 'fullstack-feedback') {
+        const servDirectory = path.join(projectPath, 'packages', `${scenario.projectName}-serv`)
+        const policyFile = path.join(servDirectory, 'config/security/request-access.yml')
+        await mkdir(path.dirname(policyFile), { recursive: true })
+        await writeFile(policyFile, stringify({ rules: [
+          { id: 'external-plain', paths: ['/api/v1/policy-plain'], allowIps: ['127.0.0.1', '::1'], encryption: 'disabled' },
+          { id: 'external-denied', paths: ['/api/v1/policy-denied'], denyIps: ['0.0.0.0/0', '::/0'], encryption: 'disabled' },
+          { id: 'internal-encrypted', paths: ['/api/v1/policy-required'], encryption: 'required' },
+        ] }))
+        const configFile = path.join(servDirectory, 'config/_serv.yml')
+        const settings = parse(await readFile(configFile, 'utf8'))
+        await writeFile(configFile, stringify({ ...settings, http: { ...settings.http, access: { file: './config/security/request-access.yml' } } }))
+        const appFile = path.join(servDirectory, 'src/app-server.ts')
+        const source = await readFile(appFile, 'utf8')
+        if (!source.includes('middlewares: [{'))
+          throw new Error('The actual Fullstack middleware assembly must be available to add the external-endpoint fixture')
+        await writeFile(appFile, source.replace('middlewares: [{', `middlewares: [{
+      path: '/api/v1/policy-plain',
+      middleware: async c => c.json({ kind: 'plain-external' }),
+    }, {
+      path: '/api/v1/policy-denied',
+      middleware: async c => c.json({ kind: 'must-not-run' }),
+    }, {
+      path: '/api/v1/policy-required',
+      middleware: async c => c.json({ kind: 'encrypted-internal' }),
+    }, {`))
+        await writeFile(path.join(projectPath, 'e2e/request-policy.spec.ts'), await readFile(path.resolve(process.cwd(), 'tests/fixtures/request-encryption.ts'), 'utf8'))
         // 前后端与 core 展示版本故意不同；提交仅属于本轮临时生成工程。
         for (const [target, version] of [['apps/sample-fullstack-feedback-web', '2.4.6-frontend'], ['packages/sample-fullstack-feedback-serv', '7.8.9-serv']]) {
           const manifestPath = path.join(projectPath, target, 'package.json')
@@ -534,7 +615,7 @@ export default defineConfig({
   ...original,
   workers: 1,
   fullyParallel: false,
-  testMatch: ${JSON.stringify(kind === 'vite' ? ['fullstack.spec.ts', 'prefix-browser.spec.ts'] : ['prefix-browser.spec.ts'])},
+  testMatch: ${JSON.stringify(kind === 'vite' ? ['fullstack.spec.ts', 'prefix-browser.spec.ts'] : ['prefix-browser.spec.ts', 'request-policy.spec.ts'])},
   use: { ...original.use, baseURL: ${JSON.stringify(prefixUrl)} },
   webServer: ${kind === 'sveltekit'
     ? `servers.map(server => ({ ...server, env: { ...server.env, PUBLIC_BASE_PATH: '/yyy' }, url: ${JSON.stringify(prefixUrl)} }))`
@@ -672,8 +753,15 @@ function describeHaiModules(cwd: string): string {
   }
   return names
     .map((name) => {
-      const dts = existsSync(path.join(haiDir, name, 'dist', 'index.d.ts'))
-      return `${name}(d.ts=${dts})`
+      const directory = path.join(haiDir, name)
+      try {
+        const manifest = JSON.parse(readFileSync(path.join(directory, 'package.json'), 'utf8'))
+        const declared = typeof manifest.types === 'string' ? manifest.types : undefined
+        return `${name}(types=${declared ? existsSync(path.resolve(directory, declared)) : 'unspecified'})`
+      }
+      catch {
+        return `${name}(manifest=unreadable)`
+      }
     })
     .join(', ')
 }

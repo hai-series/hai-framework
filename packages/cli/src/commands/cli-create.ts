@@ -478,6 +478,8 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           path.join(configDir, '_core.yml'),
           generateConfigFile('core', configs),
         )
+        if (!context.isSvelteOnlyApp)
+          await writeFile(path.join(configDir, '_kit.yml'), generateConfigFile('kit', configs))
       }
 
       const configContents: Record<string, string> = {}
@@ -520,7 +522,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           for (const name of ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD'])
             values += `\n${name}=Aa1!${randomBytes(24).toString('base64url')}\n`
         }
-        if (isFullstack || (isApiWorkspace && resolvedOptions.features.includes('crypto'))) {
+        if (isFullstack || (!context.isSvelteOnlyApp && resolvedOptions.features.includes('crypto'))) {
           // 每个环境独立生成版本化密钥环；运行时不隐式生成或轮换。
           const key = createECDH('SM2')
           key.generateKeys()

@@ -1,8 +1,14 @@
 import { fileURLToPath } from 'node:url'
+{{#unless isSvelteOnlyApp}}
+import { sveltekit } from '@sveltejs/kit/vite'
+{{/unless}}
 import { defineConfig } from 'vitest/config'
 import { resolveBuildMetadata } from './scripts/build-metadata.js'
 
 export default defineConfig({
+{{#unless isSvelteOnlyApp}}
+  plugins: [sveltekit()],
+{{/unless}}
   define: { __HAI_BUILD_METADATA__: JSON.stringify(resolveBuildMetadata(fileURLToPath(new URL('.', import.meta.url)))) },
   test: {
     globals: true,

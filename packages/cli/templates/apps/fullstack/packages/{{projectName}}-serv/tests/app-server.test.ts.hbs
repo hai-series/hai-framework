@@ -10,6 +10,7 @@ import { cache } from '@h-ai/cache'
 import { core, err, HaiCommonError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
+import { ServConfigSchema } from '@h-ai/serv'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createServerApp } from '../src/app-server.js'
 import { closeModules, initializeModules } from '../src/server/runtime.js'
@@ -82,6 +83,15 @@ afterAll(async () => {
 })
 
 describe('{{fullstack.servPackageName}} mini administration', () => {
+  it('reports disabled management transport instead of silently ignoring the configuration', () => {
+    const configured = ServConfigSchema.parse(core.config.getOrThrow('serv'))
+    const parse = vi.spyOn(ServConfigSchema, 'parse').mockReturnValueOnce({ ...configured, transport: false })
+    try {
+      expect(() => createServerApp()).toThrow(/Fullstack management requires transport encryption/)
+    }
+    finally { parse.mockRestore() }
+  })
+
   it('keeps health public, requires encryption and reads runtime identity from core', async () => {
     expect((await app.request('/health')).status).toBe(200)
     expect((await app.request(`${PREFIX}/app/info`, { method: 'POST' })).status).toBe(400)
@@ -142,7 +152,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('creates a normal user and enforces guards on every administration API', async () => {
-    const created = await call<AdminUser>('/admin/users/create', { username: 'normal-user', password: TEST_PASSWORD, role: 'user', enabled: true }, adminToken)
+    const created = await call<AdminUser>('/admin/users/create', { username: 'normal-user', password: TEST_PASSWORD, role: 'user', accountStatus: 'active' }, adminToken)
     expect(created.success).toBe(true)
     if (!created.success)
       return
@@ -155,7 +165,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     for (const [route, input] of [
       ['/admin/users/list', { page: 1, pageSize: 20 }],
       ['/admin/users/create', { username: 'forbidden', password: TEST_PASSWORD }],
-      ['/admin/users/update', { id: adminId, enabled: false }],
+      ['/admin/users/update', { id: adminId, accountStatus: 'dormant' }],
       ['/admin/users/delete', { id: adminId }],
       ['/admin/users/avatar', { id: adminId, contentType: 'image/png', base64: PNG }],
       ['/admin/roles/list', undefined],
@@ -206,14 +216,14 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     }
   })
 
-  it('paginates users and protects administrators from self deletion, disable and downgrade', async () => {
+  it('paginates users and protects administrators from self deletion, lifecycle changes and reassignment', async () => {
     const listed = await call<{ items: AdminUser[], total: number }>('/admin/users/list', { page: 1, pageSize: 1 }, adminToken)
     expect(listed.success).toBe(true)
     if (listed.success) {
       expect(listed.data.items).toHaveLength(1)
       expect(listed.data.total).toBe(2)
     }
-    for (const [route, input] of [['/admin/users/delete', { id: adminId }], ['/admin/users/update', { id: adminId, enabled: false }], ['/admin/users/update', { id: adminId, role: 'user' }]] as const) {
+    for (const [route, input] of [['/admin/users/delete', { id: adminId }], ['/admin/users/update', { id: adminId, accountStatus: 'dormant' }], ['/admin/users/update', { id: adminId, role: 'user' }]] as const) {
       const denied = await call(route, input, adminToken)
       expect(denied.success).toBe(false)
       if (!denied.success)
@@ -245,7 +255,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     const injected = await transport.encryptedFetch(`http://localhost${PREFIX}/profile/update`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'authorization': `Bearer ${userToken}` },
-      body: JSON.stringify({ id: adminId, enabled: false, displayName: 'Intruder' }),
+      body: JSON.stringify({ id: adminId, accountStatus: 'dormant', displayName: 'Intruder' }),
     })
     expect(injected.status).toBe(400)
     const uploaded = await call<{ avatarUrl: string }>('/profile/avatar', { contentType: 'image/png', base64: PNG }, userToken)
@@ -414,11 +424,11 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       await paused
       return original(id, data)
     })
-    const first = call('/admin/users/update', { id: other.data.id, enabled: false }, adminToken)
+    const first = call('/admin/users/update', { id: other.data.id, accountStatus: 'dormant' }, adminToken)
     await entry
     const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 301_000)
     try {
-      const conflicting = await call('/admin/users/update', { id: adminId, enabled: false }, otherLogin.data.tokens.accessToken)
+      const conflicting = await call('/admin/users/update', { id: adminId, accountStatus: 'dormant' }, otherLogin.data.tokens.accessToken)
       expect(conflicting.success).toBe(false)
       if (!conflicting.success)
         expect(conflicting.error.httpStatus).toBe(409)
@@ -427,7 +437,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       const admin = await iam.user.getUser(adminId)
       expect(admin.success).toBe(true)
       if (admin.success)
-        expect(admin.data?.enabled).toBe(true)
+        expect(admin.data?.accountStatus).toBe('active')
     }
     finally {
       resume()
@@ -437,7 +447,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     expect((await call('/admin/users/delete', { id: other.data.id }, adminToken)).success).toBe(true)
   })
 
-  it('serializes mutually destructive admin requests and preserves an enabled administrator', async () => {
+  it('serializes mutually destructive admin requests and preserves an active administrator', async () => {
     const created = await call<AdminUser>('/admin/users/create', { username: 'second-admin', password: TEST_PASSWORD, role: 'admin' }, adminToken)
     expect(created.success).toBe(true)
     if (!created.success)
@@ -448,11 +458,11 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
       return
     // 对手同时请求禁用原管理员；锁内重新鉴权阻止两个请求全部成功。
     const results = await Promise.all([
-      call('/admin/users/update', { id: created.data.id, enabled: false }, adminToken),
-      call('/admin/users/update', { id: adminId, enabled: false }, loggedIn.data.tokens.accessToken),
+      call('/admin/users/update', { id: created.data.id, accountStatus: 'dormant' }, adminToken),
+      call('/admin/users/update', { id: adminId, accountStatus: 'dormant' }, loggedIn.data.tokens.accessToken),
     ])
     expect(results.filter(result => result.success)).toHaveLength(1)
-    const admins = await iam.user.listUsers({ enabled: true, include: ['roles'] })
+    const admins = await iam.user.listUsers({ accountStatus: 'active', include: ['roles'] })
     expect(admins.success).toBe(true)
     if (admins.success) {
       const surviving = admins.data.items.filter(item => item.roles?.some(role => role.code === 'admin'))
@@ -466,12 +476,12 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
   })
 
   it('invalidates sessions on disable and password change and proves encrypted traffic', async () => {
-    expect((await call('/admin/users/update', { id: user.id, enabled: false }, adminToken)).success).toBe(true)
+    expect((await call('/admin/users/update', { id: user.id, accountStatus: 'dormant' }, adminToken)).success).toBe(true)
     const denied = await call('/auth/me', undefined, userToken, 'GET')
     expect(denied.success).toBe(false)
     if (!denied.success)
       expect(denied.error.httpStatus).toBe(401)
-    expect((await call('/admin/users/update', { id: user.id, enabled: true }, adminToken)).success).toBe(true)
+    expect((await call('/admin/users/update', { id: user.id, accountStatus: 'active' }, adminToken)).success).toBe(true)
     const loggedIn = await call<LoginData>('/auth/login', { identifier: user.username, password: TEST_PASSWORD })
     expect(loggedIn.success).toBe(true)
     if (!loggedIn.success)

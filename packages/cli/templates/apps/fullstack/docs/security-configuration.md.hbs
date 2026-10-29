@@ -1,6 +1,6 @@
 # fullstack 安全配置与使用影响
 
-本文对应本模板生成的 `{{projectName}}` 项目。开关由可信服务端配置决定，不是业务配置员网页里的开关。Web、App、Desktop 共用服务端策略及 shared 中的认证交互。额外密码复杂度、失败锁定、审计保留保护等增强默认关闭；下面的 YAML 是按需启用的示例，并非所有功能默认同时打开。
+本文对应本模板生成的 `{{projectName}}` 项目。开关由可信服务端配置决定，不是配置管理员网页里的开关。Web、App、Desktop 共用服务端策略及 shared 中的认证交互。额外密码复杂度、失败锁定、审计保留保护等增强默认关闭；下面的 YAML 是按需启用的示例，并非所有功能默认同时打开。
 
 ## 配置在哪里，怎么生效
 
@@ -62,7 +62,7 @@ HAI_AUDIT_BACKUP_ENABLED=true
 
 在 `_iam.yml` 设置 `register.enabled: false` 会隐藏访客注册入口，同时由服务端拒绝自助注册；已有账号仍可登录，管理员也仍可创建用户。设回 true 恢复访客注册。
 
-`register.defaultEnabled: false` 表示自助注册成功后先创建停用账号，由系统管理员在用户管理中启用后才能登录；不改变已有账号，也不是关闭整个注册功能。无需审批的项目保留 true。两项均通过同名 `HAI_IAM_REGISTER_ENABLED` / `HAI_IAM_REGISTER_DEFAULTENABLED` 覆盖。
+`register.defaultAccountStatus: dormant` 表示自助注册成功后创建休眠账号，等待系统管理员激活后才能登录。默认 active 表示无需审批；仅影响新自助注册账号，管理员创建可另选状态。环境变量为 `HAI_IAM_REGISTER_ENABLED` / `HAI_IAM_REGISTER_DEFAULTACCOUNTSTATUS`。账号只有激活、休眠、注销三种生命周期，不再使用独立启用/停用开关。系统管理员可管理所有职责账号的资料、状态、角色并重置密码；审计与业务配置权限仍归各职责。
 
 ## 账号类型、状态和自动休眠
 
@@ -172,7 +172,7 @@ reauthentication:
 
 权限表 `hai_iam_permissions.sensitive_operations` 还可保存操作 ID 列表。先启用主开关，系统管理员再进入“角色”页下方的“敏感操作”，选择一个权限并逐行填写，例如 `iam.users.delete`；对应 API 为 `admin.permissions.update`。主开关关闭时隐藏这块高级配置并省去策略列表请求。Admin Console 示例启用后在“权限管理”每行也有同一编辑入口，复用 UI 模块表单。实际集合为文件 `operations` 与所有权限记录的操作列表的并集，不受当前用户是否拥有该权限影响；删除权限或清空列表仅移除这条数据库规则，不能取消文件规则。`reauthentication.enabled: false` 关闭二次认证要求，数据库规则仍保留。服务端实时读取；标准 UI 在提交动作前获取最新公开策略，其他客户端应调用异步 `iam.getPublicConfig()`，同步 `iam.publicConfig` 只含文件快照。
 
-操作 ID 必须与服务端 `checkSensitiveOperation` / `requireSensitive` 守卫一致。给权限写一个未接入的 ID 不会自动拦截任意业务代码；新业务入口先做普通授权，再检查同名敏感操作。权限规则的写入仅授予系统管理职责，审计员、业务配置员和操作员不能修改。
+操作 ID 必须与服务端 `checkSensitiveOperation` / `requireSensitive` 守卫一致。给权限写一个未接入的 ID 不会自动拦截任意业务代码；新业务入口先做普通授权，再检查同名敏感操作。权限规则的写入仅授予系统管理职责，审计员、配置管理员和操作员不能修改。
 
 ## 示例职责分离如何使用
 
@@ -184,7 +184,7 @@ reauthentication:
 | business_operator | 示例反馈业务处理             | `HAI_BUSINESS_OPERATOR_PASSWORD` |
 | user              | 普通自助和反馈提交           | 按注册/创建流程设置              |
 
-这部分已经启用，不需要一个“角色分离=true”。系统管理员不能接管其他职责账号；页面菜单和服务端授权共同限制。业务配置员的配置页不提供修改密码策略、审计保护等服务端安全配置的权限。
+这部分已经启用，不需要一个“角色分离=true”。系统管理员统一管理全部职责账号的资料、状态、角色和密码，可在创建或编辑账号时选择全部五种职责；审计查询和业务配置仍按职责独立授权。重置密码不会激活休眠或注销账号，且会使目标账号已有会话失效。配置管理员的配置页不提供修改密码策略、审计保护等服务端安全配置的权限。
 
 角色名称及权限由 `src/server/security-roles.ts` 的 `APP_DUTIES` 维护，启动时按这个映射同步角色权限。项目改变职责时同步服务端守卫、UI 菜单和测试，不要只改菜单或临时改数据库。不把这些职责角色设成框架的 `rbac.superAdminRole`，模板会拒绝绕过职责分离的设置。这些是示例应用规则，可以按实际业务替换，不是框架对所有项目写死的角色。
 

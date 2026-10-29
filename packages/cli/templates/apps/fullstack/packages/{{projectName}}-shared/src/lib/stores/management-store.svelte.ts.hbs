@@ -6,7 +6,7 @@ import type { AppInfo, ManagementApiOptions } from '../api/api-client.js'
 import type { HashRouter } from '../navigation/hash-router.svelte.js'
 import { HaiApiClientError } from '@h-ai/api-client'
 import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
-import { err, HaiCommonError, ok } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { authErrorMessage, matchPermission } from '@h-ai/ui/components/scenes/iam/index'
 import { setGlobalLocale } from '@h-ai/ui/i18n'
 import { toast } from '@h-ai/ui/toast'
@@ -46,10 +46,10 @@ export class ManagementStore {
   usersTotal = $state(0)
   usersPage = $state(1)
   usersSearch = $state('')
-  usersStatus = $state('all')
+  usersStatus = $state<'all' | AdminUser['accountStatus']>('all')
   usersSortBy = $state<NonNullable<IamListUsersInput['sortBy']>>('createdAt')
   usersSortDirection = $state<'asc' | 'desc'>('desc')
-  private appliedUsersQuery: Partial<Pick<Parameters<typeof managementApi.admin.users.list>[0], 'search' | 'enabled'>> = {}
+  private appliedUsersQuery: Partial<Pick<Parameters<typeof managementApi.admin.users.list>[0], 'search' | 'accountStatus'>> = {}
   private appliedAuditQuery: Partial<Parameters<typeof managementApi.admin.audit.list>[0]> = {}
   roles = $state<AdminRole[]>([])
   permissionPolicies = $state<AdminPermissionPolicy[]>([])
@@ -76,10 +76,6 @@ export class ManagementStore {
   private requestVersion = 0
   private sessionEpoch = 0
   private onLocaleChange?: (locale: string) => void
-
-  canManageUser(user: AdminUser): boolean {
-    return user.roles.every(code => code === 'admin' || code === 'user')
-  }
 
   localDateTime(value: string): string {
     const date = new SvelteDate(value)
@@ -201,12 +197,12 @@ export class ManagementStore {
   }
 
   async queryUsers(): Promise<void> {
-    this.appliedUsersQuery = { search: this.usersSearch.trim() || undefined, enabled: this.usersStatus === 'all' ? undefined : this.usersStatus === 'enabled' }
+    this.appliedUsersQuery = { search: this.usersSearch.trim() || undefined, accountStatus: this.usersStatus === 'all' ? undefined : this.usersStatus }
     await this.loadUsers()
   }
 
   async sortUsers(key: string, direction: 'asc' | 'desc'): Promise<void> {
-    const field = (['username', 'email', 'enabled', 'createdAt'] as const).find(field => field === key)
+    const field = (['username', 'email', 'accountStatus', 'createdAt'] as const).find(field => field === key)
     if (!field)
       return
     this.usersSortBy = field
@@ -379,6 +375,22 @@ export class ManagementStore {
     return deleted
   }
 
+  async resetUserPassword(user: AdminUser, newPassword: string): Promise<boolean> {
+    let reset = false
+    await this.mutate(async () => {
+      const result = await this.request(() => requestSensitive('iam.users.resetPassword', options => managementApi.admin.users.resetPassword({ id: user.id, newPassword }, options)))
+      if (!result?.success)
+        return
+      reset = true
+      if (user.id === this.user?.id) {
+        await managementApi.auth.clear()
+        this.clearSession()
+      }
+      toast.add({ 'message': m.user_password_reset_done(), 'variant': 'success', 'data-testid': 'notice' })
+    })
+    return reset
+  }
+
   async saveRole(id: string, description: string): Promise<boolean> {
     let saved = false
     await this.mutate(async () => {
@@ -541,7 +553,10 @@ export class ManagementStore {
       if (!isCurrent())
         return undefined
       if (!result.success) {
-        if (result.error.httpStatus === 401 && this.user && (typeof result.error.code !== 'string' || !result.error.code.startsWith('hai:iam:') || IamSessionErrorCodeSchema.safeParse(result.error.code).success)) {
+        if (result.error.code === HaiCommonError.REQUEST_ACCESS_DENIED.code) {
+          this.error = authErrorMessage(result.error)
+        }
+        else if (result.error.httpStatus === 401 && this.user && (typeof result.error.code !== 'string' || !result.error.code.startsWith('hai:iam:') || IamSessionErrorCodeSchema.safeParse(result.error.code).success)) {
           this.expireSession()
         }
         else if (result.error.httpStatus === 403 && this.user) {
@@ -561,6 +576,7 @@ export class ManagementStore {
         else {
           this.error = result.error.httpStatus === 403 ? m.forbidden() : result.error.httpStatus === 409 ? m.conflict() : result.error.httpStatus === 400 || result.error.httpStatus === 422 ? result.error.message || m.validation_failed() : m.operation_failed()
         }
+        this.error = core.error.formatMessage({ message: this.error, traceId: result.error.traceId })
       }
       return result
     }

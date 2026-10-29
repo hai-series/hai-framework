@@ -109,6 +109,12 @@ CLI メッセージは中国語・英語・日本語に対応します。`HAI_CO
 
 `create`、`add`、`init`、`generate` のプロンプト、検証、モジュール/テンプレート名、説明と完了メッセージは現在の CLI 言語を使用します。選択肢は参照時に翻訳するため、同一プロセス内の locale 変更も反映します。CLI 言語と生成アプリの `core.defaultLocale` は独立しています。生成される中国語 README、設定/コードのコメント、ユーザー入力と外部ツールの元の診断は変更しません。
 
+### SvelteKit エンドポイントの安全設定
+
+admin・website・h5 作成時に crypto を選ぶと `_kit.yml` の transport を有効化できます。既定値は false です。サーバーは環境ごとに生成した鍵リングを使用し、ルートレイアウトは公開 transport 設定だけをブラウザーに渡します。非公開 IP・時間条件は渡しません。db 選択時は DB registry を使用し、db なしのメモリー registry は開発・テストに限ります。静的サイトに動的 API はありません。
+
+パスルール `encryption: required / disabled` で内部 API と通常 HTTPS の外部連携を分けます。相反する設定や必須 transport 不足ではホスト作成に失敗します。Fullstack 管理テンプレートは transport を必須とし、明文例外はパスルールで指定します。[アクセスと暗号化の手引き](../../docs/usage/configuration/request-access.md)を参照してください。
+
 ### ビルドとデプロイ
 
 DB 接続は保存前に選択したバックエンドの公開 Schema で検証します。MySQL の `ssl` は `false` または厳密な TLS オブジェクトのみで、`{}` は証明書チェーンと DNS ID を検証します。PostgreSQL のモードは維持します。CLI は純粋な Schema と Zod を内包するため、検証対象アプリに DB パッケージやドライバーは不要です。アプリの実行には依存関係が必要で、デプロイ機能には解決可能な `@h-ai/deploy`（生成プロジェクトの開発依存）が必要です。

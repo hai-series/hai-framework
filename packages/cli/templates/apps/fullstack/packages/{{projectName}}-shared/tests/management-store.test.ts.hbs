@@ -1,3 +1,4 @@
+import type { AdminUser } from '{{fullstack.contractPackageName}}'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HashRouter } from '../src/lib/navigation/hash-router.svelte.js'
 import * as m from '../src/lib/paraglide/messages.js'
@@ -8,7 +9,7 @@ const api = vi.hoisted(() => ({
   app: { info: vi.fn() },
   auth: { clear: vi.fn() },
   iam: { auth: { logout: vi.fn(), currentUser: vi.fn(), reauthenticate: vi.fn(), changePassword: vi.fn() } },
-  admin: { users: { list: vi.fn() }, audit: { list: vi.fn() } },
+  admin: { users: { list: vi.fn(), resetPassword: vi.fn() }, audit: { list: vi.fn() } },
 }))
 vi.mock('../src/lib/api/api-client.js', () => ({
   managementApi: api,
@@ -20,7 +21,7 @@ vi.mock('../src/lib/api/api-client.js', () => ({
 const member = {
   id: 'member-id',
   username: 'member',
-  enabled: true,
+  accountStatus: 'active' as const,
   roles: ['user'],
   permissions: [],
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -82,6 +83,47 @@ describe('management session and request ownership', () => {
     const store = createStore()
     store.user = member
     await store.changePassword({ oldPassword: 'CurrentPassword123!', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' })
+    expect(api.auth.clear).toHaveBeenCalledOnce()
+    expect(store.user).toBeNull()
+  })
+
+  it.each(['dormant', 'closed'] as const)('resetting another duty password preserves its %s state and the administrator session', async (accountStatus) => {
+    const target: AdminUser = { ...member, roles: ['config_admin'], accountStatus, accountType: 'permanent', accountExpiresAt: null, lastLoginAt: null }
+    api.admin.users.resetPassword.mockResolvedValueOnce({ success: true })
+    const store = createStore()
+    store.user = administrator
+    store.users = [target]
+    expect(await store.resetUserPassword(target, 'NewPassword123!')).toBe(true)
+    expect(api.admin.users.resetPassword).toHaveBeenCalledWith({ id: target.id, newPassword: 'NewPassword123!' }, expect.objectContaining({ context: expect.any(Object) }))
+    expect(store.users[0]?.accountStatus).toBe(accountStatus)
+    expect(store.user?.id).toBe(administrator.id)
+    expect(api.auth.clear).not.toHaveBeenCalled()
+    expect(store.saving).toBe(false)
+  })
+
+  it('an unsuccessful self reset retains authentication and hides private server details', async () => {
+    const target: AdminUser = { ...administrator, roles: ['admin'], accountType: 'permanent', accountExpiresAt: null, lastLoginAt: null }
+    api.admin.users.resetPassword.mockResolvedValueOnce({ success: false, error: { code: 'hai:iam:999', httpStatus: 500, message: 'Private password reset detail', traceId: 'reset-failure' } })
+    const store = createStore()
+    store.user = administrator
+    expect(await store.resetUserPassword(target, 'NewPassword123!')).toBe(false)
+    expect(store.user?.id).toBe(administrator.id)
+    expect(api.auth.clear).not.toHaveBeenCalled()
+    expect(store.error).not.toContain('Private')
+    expect(store.error).toContain('traceId: reset-failure')
+  })
+
+  it('a successful self reset clears local authentication after the server confirms revocation', async () => {
+    const target: AdminUser = { ...administrator, roles: ['admin'], accountType: 'permanent', accountExpiresAt: null, lastLoginAt: null }
+    const response = deferred<{ success: true }>()
+    api.admin.users.resetPassword.mockReturnValueOnce(response.promise)
+    const store = createStore()
+    store.user = administrator
+    const reset = store.resetUserPassword(target, 'NewPassword123!')
+    expect(api.auth.clear).not.toHaveBeenCalled()
+    expect(store.user?.id).toBe(administrator.id)
+    response.resolve({ success: true })
+    expect(await reset).toBe(true)
     expect(api.auth.clear).toHaveBeenCalledOnce()
     expect(store.user).toBeNull()
   })
@@ -183,16 +225,16 @@ it('user paging and header sorting keep applied filters until Query submits draf
   const store = createStore()
   store.user = administrator
   store.usersSearch = 'applied'
-  store.usersStatus = 'enabled'
+  store.usersStatus = 'active'
   await store.queryUsers()
   store.usersSearch = 'draft'
-  store.usersStatus = 'disabled'
+  store.usersStatus = 'dormant'
   await store.loadUsers(2)
-  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, search: 'applied', enabled: true }))
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, search: 'applied', accountStatus: 'active' }))
   await store.sortUsers('username', 'asc')
-  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, search: 'applied', enabled: true, sortBy: 'username', sortDirection: 'asc' }))
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, search: 'applied', accountStatus: 'active', sortBy: 'username', sortDirection: 'asc' }))
   await store.queryUsers()
-  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'draft', enabled: false }))
+  expect(api.admin.users.list).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'draft', accountStatus: 'dormant' }))
 })
 
 it('audit paging and header sorting do not submit unfinished filter drafts', async () => {

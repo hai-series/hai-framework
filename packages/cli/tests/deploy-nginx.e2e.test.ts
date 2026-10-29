@@ -211,4 +211,80 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       }
     }
   }, 300_000)
+
+  it.each([false, true])('真实 Nginx 与私有后端共享客户端 IP，Serv/Kit 策略拒绝不可绕过；信任外层代理=%s', async (trustedEdge) => {
+    if (!fixture)
+      throw new Error('Expected an owned proxy fixture')
+    const image = 'docker.io/library/node:24.22.1-bookworm-slim'
+    ensureDeployTestBaseImage(runtime, image, 30_000)
+    const expectedIp = trustedEdge ? '198.51.100.10' : '127.0.0.1'
+    const project = path.join(root, `access-project-${trustedEdge}`)
+    const artifacts = path.join(project, 'artifacts')
+    mkdirSync(artifacts, { recursive: true })
+    mkdirSync(path.join(project, 'config'))
+    writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'request-access-proxy', version: '1.2.3' }))
+    writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
+    writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
+    writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  access: {file: ./config/security/request-access.yml}\n')
+    const policy = path.join(project, 'config/security/request-access.yml')
+    writeFileSync(policy, `global:\n  allowIps: [${expectedIp}]\nrules:\n  - id: forbidden-path\n    paths: [/api/v1/denied, /api/v1/kit-denied]\n    denyIps: [${expectedIp}]\n`)
+    const images = ['serv', 'web'].map((name) => {
+      const file = `${name}-1.2.3.tar`
+      writeFileSync(path.join(artifacts, file), name)
+      return { name, file, imageRef: `localhost/access-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+    })
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'access', hasWeb: true, images }))
+    await deploy.close()
+    const initialized = await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 }, trustedEdgeProxies: trustedEdge ? ['127.0.0.1/32'] : [] } })
+    expect(initialized.success, initialized.success ? undefined : initialized.error.message).toBe(true)
+    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
+    if (!bundle.success || !bundle.data.bundlePath)
+      throw new Error('Expected a request access deployment bundle')
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+    const snapshot = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './request-access.yml'], { encoding: 'utf8', windowsHide: true })
+    const compose = JSON.parse(execFileSync('tar', ['-xOf', bundle.data.bundlePath, './compose.json'], { encoding: 'utf8', windowsHide: true }))
+    const privateProxy = compose.services.serv.environment.HAI_DEPLOY_PRIVATE_PROXY
+    expect(privateProxy).toBe('1')
+    const address = (await executeDeployTestFixture(runtime, fixture, ['hostname', '-i'], { timeoutMs: 10_000 })).trim().split(/\s+/)[0]!
+    expect(address).toMatch(/^\d+\.\d+\.\d+\.\d+$/)
+    const config = path.join(project, 'nginx.conf')
+    writeFileSync(config, `pid /tmp/request-access-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', `http://${address}:`)}\n}\n`)
+    const flow = path.join(project, 'request-access-node.mjs')
+    const require = createRequire(import.meta.url)
+    const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
+    const args = [path.resolve('tests/fixtures/request-access-node.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', `--outfile=${flow}`, '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);']
+    execFileSync(process.platform === 'win32' ? process.execPath : builder, process.platform === 'win32' ? [builder, ...args] : args, { windowsHide: true, timeout: 20_000, stdio: 'pipe' })
+    writeFileSync(policy, snapshot)
+    let nodeContainer: string | undefined
+    let started = false
+    try {
+      execFileSync(runtime, ['cp', config, `${fixture.containerId}:/tmp/request-access-nginx.conf`], { windowsHide: true, timeout: 15_000 })
+      await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/request-access-nginx.conf'], { timeoutMs: 10_000 })
+      started = true
+      const identity = execFileSync(runtime, ['create', '--network', `container:${fixture.containerId}`, '-e', 'NODE_ENV=test', '-e', `HAI_DEPLOY_PRIVATE_PROXY=${privateProxy}`, '-e', `HAI_FIXTURE_EXPECTED_IP=${expectedIp}`, '--entrypoint', 'node', image, '/tmp/request-access-node.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
+      if (!/^[a-f\d]{64}$/.test(identity))
+        throw new Error('Expected a newly created Node container identity')
+      nodeContainer = identity
+      execFileSync(runtime, ['cp', flow, `${nodeContainer}:/tmp/request-access-node.mjs`], { windowsHide: true, timeout: 15_000 })
+      execFileSync(runtime, ['cp', policy, `${nodeContainer}:/tmp/request-access.yml`], { windowsHide: true, timeout: 15_000 })
+      const output = execFileSync(runtime, ['start', '-a', nodeContainer], { encoding: 'utf8', windowsHide: true, timeout: 45_000 })
+      expect(output).toContain(`REQUEST_ACCESS_IP_PASS:{"expectedIp":"${expectedIp}"`)
+      if (process.env.HAI_AUTH_EVIDENCE_DIR) {
+        mkdirSync(process.env.HAI_AUTH_EVIDENCE_DIR, { recursive: true })
+        writeFileSync(path.join(process.env.HAI_AUTH_EVIDENCE_DIR, `request-access-ip-${trustedEdge}.json`), JSON.stringify({ verifiedAt: new Date().toISOString(), fixture: 'Real Nginx and Node Fetch hosts; Kit uses a platform event assembled from the real socket', result: JSON.parse(output.split('REQUEST_ACCESS_IP_PASS:')[1]!.trim()) }, null, 2))
+      }
+    }
+    finally {
+      try {
+        if (nodeContainer) {
+          execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
+          expect(spawnSync(runtime, ['inspect', nodeContainer], { windowsHide: true, stdio: 'ignore', timeout: 10_000 }).status).not.toBe(0)
+        }
+      }
+      finally {
+        if (started)
+          await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/request-access-nginx.conf', '-s', 'quit'], { timeoutMs: 10_000 })
+      }
+    }
+  }, 120_000)
 })

@@ -19,7 +19,6 @@ import {
 } from '../admin-service.js'
 import { readBusinessSettings, saveBusinessSettings } from '../business-settings.js'
 import { serverM } from '../messages.js'
-import { checkManagedUser } from '../security-roles.js'
 
 /** 身份认证沿用框架公共契约与 refresh-cookie 传输。 */
 export function createAuthProcedures() {
@@ -44,12 +43,15 @@ export function createAdminProcedures() {
     if (!roles.success)
       return roles
     return ok({ ...users.data, items: users.data.items.map(user => toAdminUser(user, roles.data.get(user.id) ?? [])) })
-  }).route('users.invite').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.invite', () => inviteAdminUser(input, context))).route('users.create').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.create', () => createAdminUser(input, context))).route('users.update').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.update', () => updateAdminUser(input, context))).route('users.delete').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.delete', async () => {
+  }).route('users.resetPassword').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.resetPassword', async () => {
+    const result = await iam.user.adminResetPassword(input.id, input.newPassword)
+    if (!result.success)
+      return result
+    await recordAudit(context, 'password_reset', 'users', input.id)
+    return ok({ reset: true as const })
+  })).route('users.invite').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.invite', () => inviteAdminUser(input, context))).route('users.create').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.create', () => createAdminUser(input, context))).route('users.update').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.update', () => updateAdminUser(input, context))).route('users.delete').permission('app.users.manage').handle(({ input, context }) => withAdminMutation(context, 'iam.users.delete', async () => {
     if (context.session.userId === input.id)
       return err(HaiCommonError.FORBIDDEN, serverM('selfProtection', { locale: context.locale }))
-    const manageable = await checkManagedUser(input.id)
-    if (!manageable.success)
-      return manageable
     const result = await iam.user.deleteUser(input.id)
     if (!result.success)
       return result
