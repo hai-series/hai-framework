@@ -17,6 +17,8 @@ description: "审查 hai-framework packages 模块的公共契约、生命周期
 
 ## 使用路径
 
+发现修复需要改变结构、配置、核心流程或模块边界时，按 [变更影响与方案确认](../hai-change-plan/SKILL.md) 先提出具体方案，用户决定后实施；审查时核对最终改动是否超出获准范围，以及文档、网站、注释是否同步。
+
 问题表达和交付前同步检查遵循[沟通与同步维护](../../../packages/cli/templates/skills/hai-app-create/collaboration.md)；每项先讲场景、影响和改法，再附代码与验证依据。
 
 1. 用 rg 确认 package.exports 条件/子路径、入口选择、配置、真实消费者、测试和文档；按生命周期、纯函数、工厂或组件区分契约。构建后用 generate:api/check:api/test:api 核实实际产物、声明、导入和浏览器隔离，不把源码 export 当作已发布 API。

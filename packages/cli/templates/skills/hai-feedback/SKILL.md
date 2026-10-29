@@ -72,7 +72,7 @@ Web 不导入原生插件。原生入口分别为 @h-ai/feedback/tauri 与 /capa
 
 - 已安装包的 README 和公开 /client、/bundle、api-contract/feedback、serv/features/feedback 类型。
 - 数据库、对象存储和通知分别读取 [hai-reldb](../hai-reldb/SKILL.md)、[hai-storage](../hai-storage/SKILL.md)、[hai-reach](../hai-reach/SKILL.md)。
-- UI 复用 [hai-ui](../hai-ui/SKILL.md)，验证遵循 [分轮流程](../hai-app-tests/validation.md)。
+- 带前端的工程按其 `hai-ui` Skill 复用界面组件；纯 API 只接入服务端能力。验证遵循[分轮流程](../hai-app-tests/validation.md)。
 
 反馈交互：当前截图优先；FeedbackModal.oncapture 连接 captureScreenshot(id?)，选择时隐藏弹窗，允许换页后补图/替换并保留输入。FeedbackForm.evidence 展开实际脱敏内容，不能把全部事件数量称作日志。onfileschange 接入后支持用户主动无声短录屏（60秒/5 MiB），视频不自动遮挡，必须支持预览/删除；停止共享、取消、超时和销毁释放流。WebM/MP4 的私有读授权、容器字节/checksum 校验、上传和离线查看须一并验证。
 

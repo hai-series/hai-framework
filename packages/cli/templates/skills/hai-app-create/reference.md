@@ -145,7 +145,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 ## 创建 API 端点
 
-API workspace/fullstack 先检查 [hai-api-contract](../hai-api-contract/SKILL.md) 的内置领域 contract 与 [hai-serv](../hai-serv/SKILL.md) 的 feature procedures；应用私有接口通过现有 contract → procedure → typed client 扩展。身份/权限守卫用 serv route 的 auth/permission/role，业务资源归属在服务层检查；不添加 `+server.ts` 或 kit.validate。
+API workspace/fullstack 读取本工程随模板交付的 `hai-api-contract` 与 `hai-serv` Skills，先检查内置领域 contract 和 feature procedures。应用私有接口通过现有 contract → procedure → typed client 扩展，serv route 使用 auth/permission/role，资源归属在服务层检查，不添加 `+server.ts` 或 kit.validate。
+
+同源 SvelteKit 工程读取其 `hai-kit` Skill，沿用文件路由与既有 guard。各架构只读取实际提供的技能。
 
 ### SvelteKit RESTful 端点模板
 

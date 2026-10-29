@@ -17,6 +17,8 @@ description: "审查 PR、提交或分支的实际差异、调用影响、需求
 
 ## 审查路径
 
+框架重要变更按 [变更影响与方案确认](../hai-change-plan/SKILL.md) 核对方案、用户决定与实际差异。缺少确认时说明具体缺口；新增修复影响先提方案，不把已有一般修复授权当成所有结构/流程改动的确认。
+
 按[沟通与同步维护](../hai-app-create/collaboration.md)核对使用文档、配置示例、截图、测试、模板及调用方，结论区分已确认问题与待验证事项。
 
 1. 读取仓库入口和 PR/任务目标，确认比较对象。按 [差异审查](../hai-app-review/differential.md) 固定 base/head、列全文件与重命名，说明 staged/unstaged 和截断限制。

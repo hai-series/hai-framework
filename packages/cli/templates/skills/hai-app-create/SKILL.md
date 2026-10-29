@@ -38,7 +38,7 @@ description: "在 hai 应用中新增、修改或修复功能，按需求复用�
 
 界面新建或明显改变信息结构时先用已交付的 hai-ui-design 确定页面模式、状态和组件映射；使用 hai-ui 的当前版本契约实现，以 hai-ui-review 的真实页面检查收尾。窄范围修复直接复用既有设计。界面方案与最终实现的差异需回写适用设计记录。
 
-新增新手引导或帮助说明时读取 [UI 引导指南](../hai-ui/guide.md)，复用 fullstack 默认的共享 guide-store、locale 和稳定 data-guide 锚点。
+带前端的工程新增引导或帮助时，读取本工程 `hai-ui` Skill 中的 `guide.md`，复用 fullstack 的共享 guide-store、locale 与稳定 data-guide 锚点；纯 API 工程不需要 UI 指引。
 
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 

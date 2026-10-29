@@ -12,7 +12,7 @@ README 编辑先读章节，把功能说明与示例合并到对应章节；新�
 
 ## 先确认应用与版本
 
-- 新手引导与帮助中心使用 `@h-ai/ui/guide`，按 [UI 引导指南](../hai-ui/guide.md) 接入。fullstack 的共享管理界面已有默认帮助入口；业务内容放共享 guide-store，使用应用 i18n 和稳定 data-guide 锚点，不重复实现浮层。
+- 带前端的工程新增引导与帮助时使用 `@h-ai/ui/guide`，读取随前端交付的 `hai-ui` Skill 中的 `guide.md`；纯 API 工程不需要该 UI 指引。fullstack 共享管理界面已有帮助入口，业务内容放共享 guide-store，使用应用 i18n 和稳定 data-guide 锚点。
 
 - 读取当前 `AGENTS.md`、README、`package.json`、lockfile、初始化入口和已有相似功能；用 `rg` 查实现、引用、测试。保留已有改动，沿用项目分层、命名、ESLint、i18n 与测试入口。
 - 确认架构：SvelteKit 使用 `kit` 和文件路由；API workspace 使用 contract/service；fullstack 使用 contract/serv/shared 与所选前端；Vite SPA/原生端通过 typed API 客户端调用服务。不要把服务端目录、DB、密钥或 Node 初始化复制到浏览器。
@@ -67,6 +67,8 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 托管 `test:e2e` 是明确的隔离测试入口：服务子进程使用本轮绝对数据目录和完整模块配置，不继承 ambient 模块变量，也不读取用户 `.env.local`。Svelte 仅在 `HAI_E2E=1` 的测试分支跳过 dotenv；API 测试直接执行已构建产物。普通开发与生产的上述优先级和共享后端守卫保持不变，transport 使用测试独立可信 ring 与实际 registry。
 
 `prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js`。文件路径相对进程工作目录，公共文件随项目提交；容器通过部署平台或 `--env-file` 注入目标环境值。浏览器只接收公开白名单，构建产物和镜像不包含 `.env.local`。
+
+Compose `env_file` 的变量在创建容器时固定，改文件后 `restart` 不会更新，应沿用原项目名/文件列表重新创建容器，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。完整 `HAI_SERV` / `HAI_KIT` 优先于叶子变量，不叠加覆盖。SDK 交付的 `.env.runtime` 与策略快照不可手改；运维外部文件和 Compose override 必须另行备份、纳入后续发布，SDK 自动回滚不恢复外部文件。
 
 Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-serv/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
 

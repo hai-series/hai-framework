@@ -11,6 +11,8 @@ Fullstack 多包工程入口。先读 README、根 workspace 脚本与相关 pac
 
 ## 行为契约
 
+涉及框架结构、配置、核心流程或模块边界变更时，先按 [变更影响与方案确认](.agents/skills/hai-change-plan/SKILL.md) 说明影响并等待用户决定；已确认且未扩大的方案继续执行。
+
 需求/设计文档审查或从文档生成代码时，读取 [hai-spec-review](.agents/skills/hai-spec-review/SKILL.md)，严格确认完备性、歧义、技术正确性与命名一致性；影响行为的问题未解决前不判定文档可生成。普通小改动不重审无关文档。
 
 升级 hai-framework 到最新/指定版本、比较版本差异或同步框架 skills 时，先读 [框架升级与同步 Skill](.agents/skills/hai-framework-sync/SKILL.md)，执行版本发现、差异分析、用户选择/阻塞处理、迁移与验证；仅要求比较时不修改应用。
