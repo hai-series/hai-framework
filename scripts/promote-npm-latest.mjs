@@ -55,8 +55,9 @@ export async function promoteLatest(packages, options = {}) {
 
 async function main() {
   const root = resolve(import.meta.dirname, '..')
-  const count = await promoteLatest(releasePackages(root, process.env.RELEASE_VERSION ?? ''))
-  process.stdout.write(`Verified npm latest for ${count} packages at ${process.env.RELEASE_VERSION}\n`)
+  const version = process.argv[2] ?? ''
+  const count = await promoteLatest(releasePackages(root, version))
+  process.stdout.write(`Verified npm latest for ${count} packages at ${version}\n`)
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

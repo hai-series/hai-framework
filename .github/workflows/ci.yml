@@ -419,7 +419,7 @@ jobs:
           make_latest: 'true'
 
       - name: Promote verified release to npm latest
-        run: node scripts/promote-npm-latest.mjs
+        run: node scripts/promote-npm-latest.mjs "$RELEASE_VERSION"
         env:
           RELEASE_VERSION: ${{ needs.quality.outputs.version }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
