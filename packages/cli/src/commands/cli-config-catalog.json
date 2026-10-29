@@ -6243,7 +6243,7 @@
     "name": "HAI_STORAGE_PUBLICENDPOINT",
     "module": "storage",
     "path": "storage.publicEndpoint",
-    "description": "浏览器预签名访问端点；仅 HTTP(S) 源地址，不含桶名、路径、凭据或查询。未配置时使用 endpoint。",
+    "description": "浏览器预签名端点，可含代理目录（如 /delivery/files），不含桶名、凭据或查询；代理须去除目录并保留 Host。",
     "value": "https://files.example.com",
     "constraint": "字符串；格式 uri"
   },

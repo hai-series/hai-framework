@@ -129,7 +129,7 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 #### 私有对象存储直连
 
-自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器下载须在 `_storage.yml` 配置 `publicEndpoint`，例如 `https://app.example.com`；只填源地址，不含桶名或网站目录。全栈 Web Nginx 及 SSR/API 的新增 gateway 将 `/<bucket>/` 原样代理到 storage:9000，保留签名 Host/URI/query，关闭对象缓冲与签名日志。存储端口和控制台不直接公开，实际权限由私有桶签名校验；跨源 CORS 在 S3 配置。外层入口也须原样转发桶路径，不能只转发网站子目录。
+自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器地址用 `_storage.yml` 的 `publicEndpoint` 配置，例如 `https://app.example.com/delivery/files`。Nginx 对外开放 `/delivery/files/<bucket>/...`，去掉 `/delivery/files` 后将原始桶 URI、签名查询与 Host 直接转发 storage:9000，文件不经过 Serv；省略目录时继续使用根桶路径。入口可位于网站目录内，API/资源/健康路径冲突会在打包前失败。存储端口与控制台不公开，对象缓冲和签名日志关闭；S3 负责私有桶授权和跨源 CORS。外层代理须保留完整入口路径与 Host，只由 SDK 网关去掉前缀。
 
 自建配置保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog，只替换内部连接与托管凭据。首次增加网关或改变这些访问设置须全量部署，增量预检按配置摘要拒绝不一致；普通应用/存储增量刷新保留代理的服务 DNS，失败恢复使用旧拓扑。外部/保持连接不生成本地存储路由，Local 不公开私有目录。详见[存储配置手册](../../docs/usage/configuration/data.md#配置人员区分三个访问地址)。
 
@@ -270,6 +270,8 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部署读取应用实际生效配置，包括 `.env.<环境>` / 私有覆盖中的 `HAI_SERV`、`HAI_SERV_HTTP_ACCESS` 或 `HAI_KIT_ACCESS`，校验文件后把规范化快照放入交付包。运行环境改为 `/run/hai/request-access.yml`，Compose 只读挂载；工程的原始文件引用不会被容器路径覆盖。快照参加 SHA-256 校验，无效或缺失文件在上传前失败。`.env.runtime` 是本次不可变交付的一部分，修改策略应重新打包部署，不能只编辑已交付文件。
 
 全量与包含后端的增量都交付自己的快照；仅更新前端时保留后端原挂载。失败恢复使用旧成功发布的 Compose 和策略文件。运行账号无需 root：发布目录私有，策略文件在受限目录内以只读权限供容器读取。回滚镜像和策略不撤销数据库迁移或已经产生的业务效果。
+
+如需由运维独立改规则、重启后生效，可在交付之外管理只读文件，并用 Compose override 替换同一 `/run/hai/request-access.yml` 挂载。该外部文件不参与 SDK 自动回滚，首次附加挂载需要重新创建容器；后续文件修改后重启即可。`env_file` 的环境变量改变仍需重新创建容器，通常无需重建镜像。步骤与验证边界见[独立文件重启配置](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效)。
 
 受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，其他宿主默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
 

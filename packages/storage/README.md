@@ -175,9 +175,9 @@ if (!initResult.success) {
 
 #### 内部连接与浏览器直连
 
-`endpoint` 用于服务端读写、建桶和连接检查；`publicEndpoint` 用于 `presign.getUrl/putUrl` 的签名地址。后者无默认值，省略时继续使用 endpoint。填写浏览器实际能访问的 HTTP(S) 源地址，例如 `https://app.example.com`，不能包含桶名、网站挂载目录、账号密码、查询或片段。`publicUrl` 是公开资源的 URL 拼接配置，不能替代私有预签名地址，也不会为私有对象授权。
+`endpoint` 用于服务端读写、建桶和连接检查；`publicEndpoint` 用于 `presign.getUrl/putUrl` 的外部地址，无默认值，省略时继续使用 endpoint。可填写 `https://app.example.com/delivery/files`；目录段支持字母、数字、下划线、点和连字符，拒绝 `.`/`..`、重复斜杠及编码的分隔符，不能包含桶名、凭据、查询或片段。`publicUrl` 只拼接公开资源地址，不会为私有对象授权。
 
-自建 Compose 的内部地址为 `http://storage:9000`。配置 `publicEndpoint` 后，浏览器使用形如 `https://app.example.com/hai/private/report.zip?...` 的签名 URL，Nginx 将桶路径原样转发至 Storage，大文件和 Range 不经过 Serv。前后端分离复用 Web Nginx；SvelteKit SSR 和独立 API 使用生成的 gateway。桶路径与网站/API 路径重叠会在打包时拒绝。增加网关、改变桶或对外配置须建立新的全量部署基线；应用增量与回滚保持已安装配置。
+自建 Compose 内部地址为 `http://storage:9000`。上例生成 `/delivery/files/hai/private/report.zip?...`；不带目录时生成 `/hai/private/report.zip?...`。含目录的外部预签名固定使用桶路径风格，内部操作仍按 `forcePathStyle` 配置。Nginx 去除入口目录，保留真正的 S3 签名路径、查询和 Host，直接转发 Storage，大文件和 Range 不经过 Serv。Fullstack 复用 Web Nginx，SvelteKit SSR/独立 API 使用 gateway。入口可位于网站目录内，不能覆盖 API、资源或健康路径。增加网关、改变桶或公开地址须建立全量基线；增量与回滚保留已安装配置。
 
 外部 AWS S3、R2 或已有独立网关使用自身可访问端点；保持/外部存储不生成到本地 sidecar 的路由。外部 HTTPS 入口必须保留签名 Host、原始路径和查询。跨源浏览器访问须在实际 S3 服务配置精确 CORS；当前网关不代替桶授权或 CORS 策略。签名 URL 是短期访问凭据，应控制有效期并避免写入日志；GET 签名不能当作 HEAD 签名使用。Local 不支持签名，不会把私有文件目录开放给 Nginx。
 

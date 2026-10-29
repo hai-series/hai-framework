@@ -131,7 +131,11 @@ describe('storageConfigSchema', () => {
       expect(() => S3ConfigSchema.parse({ ...validS3, publicUrl: 'not-a-url' })).toThrow()
     })
 
-    it.each(['not-a-url', '', 'ftp://files.example.com', 'https://user:pass@files.example.com', 'https://files.example.com/storage', 'https://files.example.com?token=secret', 'https://files.example.com/#secret'])('拒绝不能直接用于 S3 签名的外部地址：%s', (publicEndpoint) => {
+    it.each(['https://files.example.com/delivery/files', 'https://files.example.com/delivery/files/'])('接受对象存储代理目录：%s', (publicEndpoint) => {
+      expect(S3ConfigSchema.safeParse({ ...validS3, publicEndpoint }).success).toBe(true)
+    })
+
+    it.each(['not-a-url', '', 'ftp://files.example.com', 'https://user:pass@files.example.com', 'https://files.example.com/files;return-200', 'https://files.example.com/files%2fother', 'https://files.example.com/%2e%2e/files', 'https://files.example.com/a/../files', 'https://files.example.com/fi\nles', 'https://files.example.com?token=secret', 'https://files.example.com/#secret'])('拒绝不能用于存储代理的外部地址：%s', (publicEndpoint) => {
       expect(S3ConfigSchema.safeParse({ ...validS3, publicEndpoint }).success).toBe(false)
     })
   })

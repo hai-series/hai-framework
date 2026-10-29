@@ -50,7 +50,7 @@
   "deploy_webProxyInvalid": "The API prefix must be an absolute path containing only letters, numbers, underscores, hyphens and slashes.",
   "deploy_webBaseConflict": "The website mount path conflicts with an API or health endpoint. Choose a different PUBLIC_BASE_PATH.",
   "deploy_storageProxyInvalid": "Cannot generate the storage proxy. Use a valid DNS bucket name whose path does not overlap the website, API, or health endpoints.",
-  "deploy_storagePublicEndpointInvalid": "Invalid storage.publicEndpoint. Use a browser-accessible HTTP(S) origin without a bucket, path, credentials, query, or fragment.",
+  "deploy_storagePublicEndpointInvalid": "Invalid storage.publicEndpoint. Use a browser-accessible HTTP(S) address with an optional valid proxy path, without a bucket, credentials, query or fragment.",
   "deploy_storageBackendRequired": "A static browser app cannot deploy server-side storage credentials. Configure Storage in Serv or SvelteKit and obtain presigned links through its API.",
   "deploy_artifactInvalid": "Image artifacts are missing or invalid. Run pnpm build --target docker, select valid --artifact-dir, or use pnpm run deploy --build.",
   "deploy_sshRequired": "Automatic deployment requires SSH settings. Use --bundle-only for manual transfer when the server is unreachable.",

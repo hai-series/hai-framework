@@ -265,6 +265,19 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 })
 
 describe('对象存储网关边界', () => {
+  it.each(['/api/v1/files', '/_hai/files', '/health/files', '/portal/_app/files', '/portal//files', '/portal/../files'])('拒绝覆盖系统路径或非法存储入口：%s', (storageBasePath) => {
+    expect(() => generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket: 'business-files', storageBasePath, reservedPaths: ['/api/v1', '/portal/_app'] })).toThrow()
+  })
+  it('允许网站目录内独立存储入口，并按原始 URI 还原签名路径', () => {
+    const config = generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket: 'business-files', reservedPaths: ['/api/v1', '/portal/_app'], storageBasePath: '/portal/files' })
+    expect(config).toContain('location ^~ /portal/files/business-files/')
+    expect(config).toContain('upstream hai_storage_proxy')
+    expect(config).toContain('$request_uri')
+    expect(config).toContain('proxy_pass http://hai_storage_proxy$hai_storage_uri;')
+    expect(config).toContain('proxy_set_header Host $http_host;')
+    expect(config).not.toContain('proxy_pass http://storage:9000/;')
+  })
+
   it('对象请求保持签名原文并关闭大文件缓冲和签名日志；SSR 路径原样转发', () => {
     const config = generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket: 'business-files', reservedPaths: ['/portal', '/api/v1'] })
     expect(config).toContain('location ^~ /business-files/')

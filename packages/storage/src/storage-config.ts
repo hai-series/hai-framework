@@ -105,12 +105,16 @@ export const S3ConfigSchema = z.object({
   /** 自定义端点（用于 MinIO、RustFS、阿里云 OSS 等） */
   endpoint: z.string().url().optional(),
 
-  /** 浏览器预签名访问端点；仅 HTTP(S) 源地址，不含桶名、路径、凭据或查询。未配置时使用 endpoint。 */
-  publicEndpoint: z.string().url().refine((value) => {
+  /** 浏览器预签名端点，可含代理目录（如 /delivery/files），不含桶名、凭据或查询；代理须去除目录并保留 Host。 */
+  publicEndpoint: z.string().refine((value) => {
+    // 必须先检查原始文本；URL 校验会移除制表符和换行，不能在标准化后再检查。
+    // eslint-disable-next-line no-control-regex -- 在入口显式拒绝控制字符，避免校验与代理解释不一致。
+    return !/[\u0000-\u0020\u007F\\%]/.test(value) && !/(?:^|\/)\.{1,2}(?:\/|$)/.test(value)
+  }, storageM('storage_config_publicEndpointInvalid')).url().refine((value) => {
     try {
       const url = new URL(value)
       return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
-        && url.pathname === '/' && !url.search && !url.hash
+        && /^\/(?:[\w.-]+(?:\/[\w.-]+)*\/?)?$/.test(url.pathname) && !url.search && !url.hash
     }
     catch {
       return false

@@ -175,7 +175,7 @@ async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
 
-it.each(['not-a-url', 'https://files.example.com/portal', 'ftp://files.example.com', 'https://user:secret@files.example.com', false])('自建 S3 在打包前拒绝无效 publicEndpoint：%s', async (publicEndpoint) => {
+it.each(['not-a-url', 'https://files.example.com/portal%2ffiles', 'https://files.example.com/%2e%2e/files', 'https://files.example.com/a/../files', 'https://files.example.com/fi\nles', 'ftp://files.example.com', 'https://user:secret@files.example.com', false])('自建 S3 在打包前拒绝无效 publicEndpoint：%s', async (publicEndpoint) => {
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/storage': { version: '1' } } } }, packages: { '@h-ai/storage@1': {} }, snapshots: { '@h-ai/storage@1': {} } }))
   writeFileSync(join(root, 'config/_storage.yml'), JSON.stringify({ type: 's3', bucket: 'business-files', publicEndpoint }))
   await initialize(false)
@@ -185,11 +185,12 @@ it.each(['not-a-url', 'https://files.example.com/portal', 'ftp://files.example.c
   expect(ssh.upload).not.toHaveBeenCalled()
 })
 
-it.each(['fullstack', 'api', 'sveltekit'])('自建私有 S3 的 %s 全量交付有直连路由，应用增量保留代理和外部签名地址', async (kind) => {
+it.each(['fullstack', 'api', 'sveltekit'].flatMap(kind => ['', '/portal/files'].map(storageBasePath => ({ kind, storageBasePath }))))('自建私有 S3 的 $kind 全量与增量保留直连路由：$storageBasePath', async ({ kind, storageBasePath }) => {
   const ssr = kind === 'sveltekit'
   const names = ['@h-ai/storage', ...(ssr ? ['@sveltejs/kit'] : [])]
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: Object.fromEntries(names.map(name => [name, { version: '1' }])) } }, packages: Object.fromEntries(names.map(name => [`${name}@1`, {}])), snapshots: Object.fromEntries(names.map(name => [`${name}@1`, {}])) }))
-  writeFileSync(join(root, 'config/_storage.yml'), 'type: s3\nbucket: business-files\nprefix: private\npublicEndpoint: https://files.example.com\n')
+  const publicEndpoint = `https://files.example.com${storageBasePath}`
+  writeFileSync(join(root, 'config/_storage.yml'), `type: s3\nbucket: business-files\nprefix: private\npublicEndpoint: ${publicEndpoint}\n`)
   if (ssr) {
     writeFileSync(join(root, 'svelte.config.js'), 'export default {}')
     const file = 'web-1.2.3.tar'
@@ -206,9 +207,9 @@ it.each(['fullstack', 'api', 'sveltekit'])('自建私有 S3 的 %s 全量交付�
     const directory = deliveryDirectory(result)
     const proxy = kind === 'fullstack' ? 'web' : 'gateway'
     expect(readBundleFile(directory, 'proxy-service').trim()).toBe(proxy)
-    expect(readBundleFile(directory, 'web.conf')).toContain('location ^~ /business-files/')
+    expect(readBundleFile(directory, 'web.conf')).toContain(`location ^~ ${storageBasePath}/business-files/`)
     expect(JSON.parse(readBundleFile(directory, 'proxy-entry.json')).services[proxy].volumes).toHaveLength(1)
-    expect(JSON.parse(parseEnv(readBundleFile(directory, '.env.runtime')).HAI_STORAGE)).toMatchObject({ bucket: 'business-files', prefix: 'private', publicEndpoint: 'https://files.example.com', endpoint: 'http://storage:9000' })
+    expect(JSON.parse(parseEnv(readBundleFile(directory, '.env.runtime')).HAI_STORAGE)).toMatchObject({ bucket: 'business-files', prefix: 'private', publicEndpoint, endpoint: 'http://storage:9000' })
     const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
     if (partial) {
       expect(Object.keys(compose.services)).toEqual([primary])

@@ -15,7 +15,7 @@
   "storage_operationFailed": "操作に失敗しました: {error}",
   "storage_unsupportedType": "未対応のストレージの種類です: {type}",
   "storage_config_bucketRequired": "バケットは必須です",
-  "storage_config_publicEndpointInvalid": "署名付きアクセス先には、パス、認証情報、クエリ、フラグメントを含まない HTTP(S) オリジンを指定してください。",
+  "storage_config_publicEndpointInvalid": "HTTP(S) のアクセス先を指定してください。プロキシのパスには英数字、アンダースコア、ドット、ハイフンを使用できます。認証情報、クエリ、フラグメントは含められません。",
   "storage_config_regionRequired": "リージョンは必須です",
   "storage_config_accessKeyIdRequired": "Access Key IDは必須です",
   "storage_config_secretAccessKeyRequired": "Secret Access Keyは必須です",

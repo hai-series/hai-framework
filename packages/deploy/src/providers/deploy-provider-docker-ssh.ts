@@ -188,14 +188,21 @@ export function createDockerSshProvider(
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
     const managedStorage = sidecar.services.includes('storage') ? JSON.parse(sidecar.env.HAI_STORAGE) as { bucket: string, secretAccessKey: string, publicEndpoint?: unknown } : undefined
+    let storageBasePath = ''
     if (managedStorage?.publicEndpoint !== undefined) {
       // 与 Storage 的公开端点约束一致，在归档/上传前报告错误，不输出配置中的 URL 或秘密。
       try {
         if (typeof managedStorage.publicEndpoint !== 'string')
           throw new Error('Invalid public endpoint type')
+        // eslint-disable-next-line no-control-regex -- 在 URL 标准化前拒绝控制字符及编码目录。
+        const unsafeCharacters = /[\u0000-\u0020\u007F\\%]/.test(managedStorage.publicEndpoint)
         const endpoint = new URL(managedStorage.publicEndpoint)
-        if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash)
+        if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash
+          || !/^\/(?:[\w.-]+(?:\/[\w.-]+)*\/?)?$/.test(endpoint.pathname)
+          || unsafeCharacters || /(?:^|\/)\.{1,2}(?:\/|$)/.test(managedStorage.publicEndpoint)) {
           throw new Error('Invalid public endpoint origin')
+        }
+        storageBasePath = endpoint.pathname.replace(/\/+$/, '')
       }
       catch {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storagePublicEndpointInvalid'))
@@ -286,7 +293,7 @@ export function createDockerSshProvider(
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
         const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
-        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, storageBucket: managedStorage?.bucket, trustedEdgeProxies: config.trustedEdgeProxies })
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, storageBucket: managedStorage?.bucket, storageBasePath, trustedEdgeProxies: config.trustedEdgeProxies })
       }
       catch (error) {
         return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
@@ -301,7 +308,7 @@ export function createDockerSshProvider(
           const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
           applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto' ? undefined : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
         }
-        webProxy = generateApplicationProxyConfig({ primaryService, port: containerPort, bucket: managedStorage.bucket, reservedPaths: [webBasePath, http?.apiPrefix ?? '/api/v1'], maxPlaintextBytes: applicationPlaintextBytes, trustedEdgeProxies: config.trustedEdgeProxies })
+        webProxy = generateApplicationProxyConfig({ primaryService, port: containerPort, bucket: managedStorage.bucket, storageBasePath, reservedPaths: [http?.apiPrefix ?? '/api/v1', ...(storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], maxPlaintextBytes: applicationPlaintextBytes, trustedEdgeProxies: config.trustedEdgeProxies })
       }
       catch {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))

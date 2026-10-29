@@ -55,8 +55,9 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
       writeFileSync(path.join(root, 'resources.json'), JSON.stringify({ network: network.getId(), objectStore: objectStore.getId() }))
       const bytes = randomBytes(5 * 1024 * 1024 + 17)
       const key = '资料 +%/large-file.bin'
-      for (const kind of ['fullstack', 'api', 'sveltekit']) {
-        topology = kind
+      for (const { kind, storageBasePath } of ['fullstack', 'api', 'sveltekit'].flatMap(kind => ['', '/delivery/files.v1'].map(storageBasePath => ({ kind, storageBasePath })))) {
+        topology = `${kind}:${storageBasePath || 'root'}`
+        const webBasePath = storageBasePath ? '/delivery' : '/portal'
         phase = 'start independent gateway'
         // 每种应用独立部署；不让上一拓扑的保活连接跨越下一次网关重载。
         nginx = await new GenericContainer('docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine')
@@ -68,12 +69,13 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         const runtime = (['docker', 'podman'] as const).find(command => spawnSync(command, ['container', 'inspect', nginx!.getId()], { stdio: 'ignore', windowsHide: true, timeout: 10_000 }).status === 0)
         if (!runtime)
           throw new Error('No local CLI can address the owned Nginx fixture')
-        const publicEndpoint = `http://${nginx.getHost()}:${nginx.getMappedPort(8080)}`
+        const publicOrigin = `http://${nginx.getHost()}:${nginx.getMappedPort(8080)}`
+        const publicEndpoint = `${publicOrigin}${storageBasePath}`
         const connected = await storage.init({ type: 's3', bucket, region: 'us-east-1', endpoint: `http://${objectStore.getHost()}:${objectStore.getMappedPort(9000)}`, publicEndpoint, accessKeyId, secretAccessKey, forcePathStyle: true, createBucket: true, prefix: 'private' })
         expect(connected.success).toBe(true)
         expect((await storage.file.put(key, bytes)).success).toBe(true)
         phase = 'build deployment gateway'
-        const project = path.join(root, kind)
+        const project = path.join(root, `${kind}-${storageBasePath ? 'prefix' : 'root'}`)
         const artifacts = path.join(project, 'artifacts')
         mkdirSync(artifacts, { recursive: true })
         mkdirSync(path.join(project, 'config'))
@@ -92,14 +94,14 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
           writeFileSync(path.join(artifacts, file), content)
           return { name, file, imageRef: `localhost/storage-${kind}-${name}:gate-1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' && !ssr ? 8080 : 3000 }
         })
-        writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: kind === 'api' ? 4 : 5, primaryService: ssr ? 'web' : 'serv', appVersion: '1.0.0', buildId: 'storage-gate-1', hasWeb: kind !== 'api', webBasePath: kind === 'api' ? '' : '/portal', images }))
+        writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: kind === 'api' ? 4 : 5, primaryService: ssr ? 'web' : 'serv', appVersion: '1.0.0', buildId: 'storage-gate-1', hasWeb: kind !== 'api', webBasePath: kind === 'api' ? '' : webBasePath, images }))
         expect((await deploy.init({ container: { s3Engine: engine }, provider: { type: 'docker-ssh', remote: { runtime: 'auto' }, expose: { hostPort: 18080 } } })).success).toBe(true)
         const bundle = await deploy.deployApp(project, { environment: 'test', artifactDir: artifacts, bundleOnly: true })
         expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
         if (!bundle.success || !bundle.data.bundlePath)
           throw new Error('Expected a storage deployment bundle')
         const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
-        expect(proxy).toContain(`location ^~ /${bucket}/`)
+        expect(proxy).toContain(`location ^~ ${storageBasePath}/${bucket}/`)
         const configPath = path.join(root, 'web.conf')
         writeFileSync(configPath, proxy)
         execFileSync(runtime, ['cp', configPath, `${nginx.getId()}:/etc/nginx/conf.d/default.conf`], { windowsHide: true, timeout: 20_000 })
@@ -108,18 +110,25 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         phase = 'wait for gateway reload'
         const healthPath = kind === 'fullstack' ? '/_hai/web-health' : '/_hai/gateway-health'
         await expect.poll(async () => {
-          const response = await fetch(`${publicEndpoint}${healthPath}`, { signal: AbortSignal.timeout(3000) })
+          const response = await fetch(`${publicOrigin}${healthPath}`, { signal: AbortSignal.timeout(3000) })
           await response.body?.cancel()
           return response.status
         }, { timeout: 10_000 }).toBe(200)
-        const unavailable = await request(`${publicEndpoint}${kind === 'fullstack' ? '/backend/v2/unavailable' : '/portal/unavailable'}`)
+        const unavailable = await request(`${publicOrigin}${kind === 'fullstack' ? '/backend/v2/unavailable' : `${webBasePath}/unavailable`}`)
         expect(unavailable.status).toBe(502)
         await unavailable.body?.cancel()
         const signed = await storage.presign.getUrl(key, { expiresIn: 60, responseContentDisposition: 'attachment; filename="large-file.bin"' })
         if (!signed.success)
           throw new Error('Expected a presigned download')
-        expect(new URL(signed.data).origin).toBe(publicEndpoint)
+        expect(new URL(signed.data).origin).toBe(publicOrigin)
+        expect(new URL(signed.data).pathname).toBe(`${storageBasePath}/${bucket}/private/${key.split('/').map(encodeURIComponent).join('/')}`)
         const download = await request(signed.data)
+        if (download.status !== 200) {
+          const body = await download.text()
+          const code = /<Code>([\w.-]+)<\/Code>/.exec(body)?.[1] ?? 'non-S3 response'
+          const resource = /<Resource>([^<]*)<\/Resource>/.exec(body)?.[1]?.split('?')[0] ?? ''
+          throw new Error(`Object download failed: HTTP ${download.status}, code=${code}, resource=${resource}`)
+        }
         expect(download.status).toBe(200)
         expect(download.headers.get('content-security-policy')).toContain('sandbox;')
         expect(download.headers.get('content-security-policy')).toContain('default-src \'none\'')
@@ -159,7 +168,7 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         const expired = await request(expiring.data)
         expect(expired.status).toBe(403)
         await expired.body?.cancel()
-        evidence.push({ engine, kind, bytes: downloaded.length, sha256, download: 200, range: 206, unsigned: 403, tampered: 403, expired: 403, application: 502, upload: put.status, contentSecurityPolicy: download.headers.get('content-security-policy') ?? '', contentTypeOptions: download.headers.get('x-content-type-options') ?? '', referrerPolicy: download.headers.get('referrer-policy') ?? '', cacheControl: download.headers.get('cache-control') ?? '' })
+        evidence.push({ engine, kind, storageBasePath, bytes: downloaded.length, sha256, download: 200, range: 206, unsigned: 403, tampered: 403, expired: 403, application: 502, upload: put.status, contentSecurityPolicy: download.headers.get('content-security-policy') ?? '', contentTypeOptions: download.headers.get('x-content-type-options') ?? '', referrerPolicy: download.headers.get('referrer-policy') ?? '', cacheControl: download.headers.get('cache-control') ?? '' })
         phase = 'stop topology resources'
         await deploy.close()
         expect((await storage.close()).success).toBe(true)

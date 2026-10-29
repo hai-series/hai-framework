@@ -50,7 +50,7 @@
   "deploy_webProxyInvalid": "APIプレフィックスは、英数字、アンダースコア、ハイフン、スラッシュのみを含む絶対パスで指定してください。",
   "deploy_webBaseConflict": "サイトのマウントパスがAPIまたはヘルスチェックと競合しています。別のPUBLIC_BASE_PATHを指定してください。",
   "deploy_storageProxyInvalid": "ストレージプロキシを生成できません。有効な DNS バケット名を指定し、サイト、API、ヘルスチェックのパスとの重複を避けてください。",
-  "deploy_storagePublicEndpointInvalid": "storage.publicEndpoint が無効です。バケット、パス、認証情報、クエリ、フラグメントを含まない、ブラウザーから到達可能な HTTP(S) オリジンを指定してください。",
+  "deploy_storagePublicEndpointInvalid": "storage.publicEndpoint が無効です。ブラウザーから到達可能な HTTP(S) アドレスに有効なプロキシパスを指定できます。バケット、認証情報、クエリ、フラグメントは含めないでください。",
   "deploy_storageBackendRequired": "静的ブラウザアプリにはサーバー用ストレージ認証情報を配置できません。Serv または SvelteKit で Storage を設定し、API 経由で署名付きリンクを取得してください。",
   "deploy_artifactInvalid": "イメージ成果物が存在しないか、無効です。pnpm build --target docker を実行するか、--artifact-dir で有効な成果物を選択するか、pnpm run deploy --build を使用してください。",
   "deploy_sshRequired": "自動デプロイにはSSH設定が必要です。サーバーに接続できない場合は--bundle-onlyで手動転送用のバンドルを生成してください。",

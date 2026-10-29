@@ -50,7 +50,7 @@
   "deploy_webProxyInvalid": "API 前缀必须是仅含字母、数字、下划线、连字符和斜杠的绝对路径。",
   "deploy_webBaseConflict": "网站挂载目录与 API 或健康检查入口冲突，请使用不同的 PUBLIC_BASE_PATH。",
   "deploy_storageProxyInvalid": "无法生成对象存储代理：请使用有效的 DNS 桶名，并确保桶路径不与网站目录、API 或健康检查入口重叠。",
-  "deploy_storagePublicEndpointInvalid": "storage.publicEndpoint 无效：请填写浏览器可访问的 HTTP(S) 源地址，不能包含桶名、路径、凭据、查询或片段。",
+  "deploy_storagePublicEndpointInvalid": "storage.publicEndpoint 无效：请填写浏览器可访问的 HTTP(S) 地址，可包含规范的代理目录，不能包含桶名、凭据、查询或片段。",
   "deploy_storageBackendRequired": "静态浏览器应用不能部署存储服务端配置。请在 Serv 或 SvelteKit 服务中配置 Storage，再通过 API 获取预签名链接。",
   "deploy_artifactInvalid": "镜像产物缺失或校验失败。请先执行 pnpm build --target docker，或用 --artifact-dir 指定有效产物；也可用 pnpm run deploy --build 一次完成。",
   "deploy_sshRequired": "自动部署需要 SSH 配置；无网络连接时使用 --bundle-only 生成部署包并手工搬运。",

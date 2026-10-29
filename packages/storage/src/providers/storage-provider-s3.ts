@@ -168,6 +168,7 @@ export function createS3Provider(): StorageProvider {
   let client: S3Client | null = null
   let deleteClient: S3Client | null = null
   let presignClient: S3Client | null = null
+  let publicBasePath = ''
   let config: S3Config | null = null
   let ready = false
   let closing: Promise<void> | null = null
@@ -176,6 +177,7 @@ export function createS3Provider(): StorageProvider {
   function closeClients(): Promise<void> {
     ready = false
     config = null
+    publicBasePath = ''
     if (closing)
       return closing
     closing = Promise.resolve().then(() => {
@@ -213,6 +215,24 @@ export function createS3Provider(): StorageProvider {
       throw new Error(storageM('storage_s3ClientNotInitialized'))
     }
     return selected
+  }
+
+  /**
+   * 只添加入口代理目录，保留原始签名路径编码与查询；Nginx 转发时去除同一目录。
+   * @param url - S3 客户端按公开 origin 生成的签名地址。
+   * @param basePath - 已校验且无末尾斜杠的入口目录，空字符串保持地址不变。
+   * @returns 添加入口目录后的浏览器地址，不重新编码路径或查询。
+   * @example 模块内部上下文
+   * ```ts
+   * const url = publicPresignedUrl('https://files.example.com/private/report.pdf', '/delivery/files')
+   * void url
+   * ```
+   */
+  function publicPresignedUrl(url: string, basePath: string): string {
+    if (!basePath)
+      return url
+    const pathOffset = url.indexOf('/', url.indexOf('://') + 3)
+    return `${url.slice(0, pathOffset)}${basePath}${url.slice(pathOffset)}`
   }
 
   /** 获取当前 S3 配置，未初始化时抛异常 */
@@ -603,6 +623,7 @@ export function createS3Provider(): StorageProvider {
         const s3Config = getConfig()
         const fullPath = fullKey(key)
         logOperation('read', 'presign.getUrl', { key, fullPath, options })
+        const basePath = publicBasePath
 
         const command = new GetObjectCommand({
           Bucket: s3Config.bucket,
@@ -615,7 +636,7 @@ export function createS3Provider(): StorageProvider {
           expiresIn: parsed.expiresIn,
         })
 
-        return ok(url)
+        return ok(publicPresignedUrl(url, basePath))
       }
       catch (error) {
         return err(
@@ -633,6 +654,7 @@ export function createS3Provider(): StorageProvider {
         const s3Config = getConfig()
         const fullPath = fullKey(key)
         logOperation('write', 'presign.putUrl', { key, fullPath, options })
+        const basePath = publicBasePath
 
         const command = new PutObjectCommand({
           Bucket: s3Config.bucket,
@@ -644,7 +666,7 @@ export function createS3Provider(): StorageProvider {
           expiresIn: parsed.expiresIn,
         })
 
-        return ok(url)
+        return ok(publicPresignedUrl(url, basePath))
       }
       catch (error) {
         return err(
@@ -711,8 +733,12 @@ export function createS3Provider(): StorageProvider {
         // 回执丢失时重放可能删除并发新版本；只允许上层对明确的逐项瞬时错误重试。
         deleteClient = new S3Client({ ...clientConfig, maxAttempts: 1 })
         // 签名阶段不联网；不得用外部地址执行内部健康检查，也不能在签名后改写 Host。
-        if (cfg.publicEndpoint)
-          presignClient = new S3Client({ ...clientConfig, endpoint: cfg.publicEndpoint })
+        if (cfg.publicEndpoint) {
+          const endpoint = new URL(cfg.publicEndpoint)
+          publicBasePath = endpoint.pathname.replace(TRAILING_SLASHES_REGEX, '')
+          // 含目录的网关使用桶路径；签名针对网关还原后的 S3 URI，而非入口前缀。
+          presignClient = new S3Client({ ...clientConfig, endpoint: endpoint.origin, forcePathStyle: publicBasePath ? true : cfg.forcePathStyle })
+        }
 
         if (cfg.createBucket) {
           try {

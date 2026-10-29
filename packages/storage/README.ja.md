@@ -175,9 +175,9 @@ if (!initResult.success) {
 
 #### 内部接続とブラウザーからの直接アクセス
 
-`endpoint` はサーバーの CRUD、バケット作成、接続確認に使用します。`publicEndpoint` は `presign.getUrl/putUrl` の署名先で、既定値はありません。省略時は endpoint を使用します。`https://app.example.com` のようなブラウザーから到達可能な HTTP(S) オリジンを指定し、バケット名、サイトパス、認証情報、クエリ、フラグメントを含めないでください。`publicUrl` は公開リソース URL の組み立て用で、非公開オブジェクトへの権限は付与しません。
+`endpoint` はサーバーの CRUD、バケット作成、接続確認に使います。`publicEndpoint` は `presign.getUrl/putUrl` の外部アドレスで既定値はなく、省略時は endpoint を使います。`https://app.example.com/delivery/files` のようなプロキシパスを指定できます。パスには英数字、アンダースコア、ドット、ハイフンを使用でき、`.`/`..`、連続スラッシュ、符号化された区切りは使用できません。バケット、認証情報、クエリ、フラグメントは含めません。`publicUrl` は公開 URL の組み立て用で、私有オブジェクトを認可しません。
 
-自前 Compose の内部接続先は `http://storage:9000` です。publicEndpoint を設定すると、ブラウザーは `https://app.example.com/hai/private/report.zip?...` のような署名付き URL を使用します。Nginx はバケット URI を変更せず Storage に転送し、大容量ダウンロードと Range は Serv を経由しません。分離アプリは Web Nginx を再利用し、SvelteKit SSR と独立 API には gateway を生成します。バケットとサイト/API パスの競合はパッケージ作成時に拒否します。ゲートウェイ追加や公開設定の変更には新しい完全デプロイが必要で、アプリの部分更新とロールバックは既存設定を保持します。
+自前 Compose の内部接続先は `http://storage:9000` です。上記の外部 URL は `/delivery/files/hai/private/report.zip?...`、パス省略時は `/hai/private/report.zip?...` になります。パス指定時の外部署名はパス形式を使い、内部操作は `forcePathStyle` に従います。Nginx は入口パスだけを除去し、本来の S3 署名パス、クエリ、Host を保持して Storage へ直接転送します。大容量と Range は Serv を経由しません。Fullstack は Web Nginx、SSR/API は gateway を使用します。サイト配下に置けますが API、資源、ヘルスパスとの競合は拒否します。公開設定変更には完全デプロイが必要で、部分更新と復旧は既存設定を保持します。
 
 外部 S3/R2 や既存ゲートウェイには独自の到達可能な端点を使用し、外部/保持対象ストレージにローカル sidecar ルートは生成しません。HTTPS 入口では署名対象 Host、元の URI、クエリを保持します。クロスオリジンでは実際の S3 に適切な CORS を設定してください。ゲートウェイはバケット認可や CORS を代替しません。署名付き URL は短期認証情報として扱い、有効期間とログを管理します。GET 署名は HEAD には使えません。Local は署名 URL に非対応で、非公開ディレクトリを Nginx に公開しません。
 

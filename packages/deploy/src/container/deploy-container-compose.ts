@@ -591,6 +591,7 @@ export function generateComposeFile(options: {
  * @param options.maxPlaintextBytes - 业务明文 UTF-8 字节上限。
  * @param options.webBasePath - 无末尾斜杠的Web挂载目录，缺省或空字符串为域名根目录。
  * @param options.storageBucket - 自建私有 S3 桶，配置后对象请求由 Nginx 直达 storage。
+ * @param options.storageBasePath - 对象入口目录，转发前移除；空字符串保持根桶路径。
  * @param options.trustedEdgeProxies - Nginx 前方显式可信的负载均衡 IP/CIDR，默认不信任上游头。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
@@ -598,7 +599,7 @@ export function generateComposeFile(options: {
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, storageBucket?: string, trustedEdgeProxies?: string[] } = {}): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, storageBucket?: string, storageBasePath?: string, trustedEdgeProxies?: string[] } = {}): string {
   const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
@@ -608,8 +609,8 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     throw new Error('Invalid web proxy target')
   }
   const webLocation = renderWebLocation(webBasePath)
-  const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, webBasePath]) : ''
-  return `server {
+  const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, ...(options.storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], options.storageBasePath) : ''
+  return `${options.storageBucket ? renderStorageUpstream(options.storageBucket, options.storageBasePath) : ''}server {
   listen ${webPort};
   server_name _;
 ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  root /usr/share/nginx/html;
@@ -650,6 +651,7 @@ ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
  * 生成私有对象直连路由；不重写签名所绑定的 Host、原始 URI 和查询，不把大文件送进应用。
  * @param bucket - 自建桶名；仅接受可安全用于 S3 路径与 Nginx location 的 DNS 桶名。
  * @param reservedPaths - 应用目录和 API 前缀，桶路径不能遮蔽其中任一路由。
+ * @param storageBasePath - 已校验的公开入口目录，空字符串保持根桶路径。
  * @returns 不含凭据、不记录签名查询的 location 片段。
  * @example 模块内部上下文
  * ```ts
@@ -657,11 +659,15 @@ ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
  * void route
  * ```
  */
-function renderStorageLocation(bucket: string, reservedPaths: string[]): string {
-  const path = `/${bucket}`
+function renderStorageLocation(bucket: string, reservedPaths: string[], storageBasePath = ''): string {
+  // 与网站目录共用安全路径校验；入口可位于网站目录内，但不能覆盖 API、资源或健康接口。
+  renderWebLocation(storageBasePath)
+  const path = `${storageBasePath}/${bucket}`
+  const reserved = ['/health', '/_hai', ...reservedPaths].filter(Boolean)
   if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) || bucket.includes('..')
     || ['health', '_hai'].includes(bucket)
-    || reservedPaths.some(reserved => reserved && (reserved === path || reserved.startsWith(`${path}/`) || path.startsWith(`${reserved}/`)))) {
+    || reserved.some(item => item === path || item.startsWith(`${path}/`) || path.startsWith(`${item}/`)
+      || (storageBasePath && (item === storageBasePath || item.startsWith(`${storageBasePath}/`) || storageBasePath.startsWith(`${item}/`))))) {
     throw new Error('Storage bucket conflicts with application routes or is not a valid DNS bucket name')
   }
   return `  location ^~ ${path}/ {
@@ -678,7 +684,10 @@ function renderStorageLocation(bucket: string, reservedPaths: string[]): string 
     add_header Cache-Control "private, no-store" always;
     limit_except GET PUT OPTIONS { deny all; }
     client_max_body_size 0;
-    proxy_pass http://storage:9000;
+${storageBasePath
+  ? `    # map 保留原始 URI 与查询；不在 location 内创建改变代理继承的 if 配置。
+    proxy_pass http://hai_storage_proxy$hai_storage_uri;`
+  : '    proxy_pass http://storage:9000;'}
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header Connection "";
@@ -692,11 +701,35 @@ function renderStorageLocation(bucket: string, reservedPaths: string[]): string 
 }
 
 /**
+ * 显式 upstream 允许带原始 URI 变量转发，避免依赖不同容器引擎的运行时 DNS resolver。
+ * @param bucket - 已由对象路由校验的自建桶名。
+ * @param storageBasePath - 安全入口目录，空字符串无需 URI 映射。
+ * @returns 位于 http 上下文的 upstream 与 map，保留编码和查询并移除入口目录。
+ * @example 模块内部上下文
+ * ```ts
+ * const config = renderStorageUpstream('business-files', '/delivery/files')
+ * void config
+ * ```
+ */
+function renderStorageUpstream(bucket: string, storageBasePath = ''): string {
+  if (!storageBasePath)
+    return ''
+  const path = `${storageBasePath}/${bucket}`.replaceAll('.', '\\\\.')
+  return `upstream hai_storage_proxy { server storage:9000; }
+map $request_uri $hai_storage_uri {
+  default $request_uri;
+  "~^${path}(/.*)$" /${bucket}$1;
+}
+`
+}
+
+/**
  * 为独立 API 或 SvelteKit SSR 生成对象存储网关，应用路径（含部署目录）原样转发。
  * @param options - 内部服务、端口、桶、保留路径、transport 容量和上游代理 IP/CIDR。
  * @param options.primaryService - 实际处理请求的应用服务。
  * @param options.port - 应用容器内端口。
  * @param options.bucket - 私有 S3 桶名。
+ * @param options.storageBasePath - publicEndpoint 中的代理目录，不包含桶名。
  * @param options.reservedPaths - 不能与桶路由重叠的应用路径。
  * @param options.maxPlaintextBytes - 应用 transport 明文预算。
  * @param options.trustedEdgeProxies - Nginx 上游可信负载均衡 IP/CIDR。
@@ -707,16 +740,16 @@ function renderStorageLocation(bucket: string, reservedPaths: string[]): string 
  * void config
  * ```
  */
-export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket: string, reservedPaths: string[], maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
+export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket: string, reservedPaths: string[], storageBasePath?: string, maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
   const { primaryService, port, bucket, reservedPaths, maxPlaintextBytes } = options
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
   const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
-  return `server {
+  return `${renderStorageUpstream(bucket, options.storageBasePath)}server {
   listen 8080;
   server_name _;
 ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  large_client_header_buffers 4 32k;
-${renderStorageLocation(bucket, reservedPaths)}  location = /_hai/gateway-health {
+${renderStorageLocation(bucket, reservedPaths, options.storageBasePath)}  location = /_hai/gateway-health {
     access_log off;
     return 200 'ok';
   }

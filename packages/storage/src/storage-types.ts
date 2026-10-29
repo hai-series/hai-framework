@@ -530,7 +530,8 @@ export interface DirOperations {
  */
 export interface PresignOperations {
   /**
-   * 生成 GET 下载签名 URL；使用 publicEndpoint，缺省回退 endpoint/AWS 端点，签名后不能改写地址。
+   * 生成 GET 下载签名 URL；使用 publicEndpoint，缺省回退 endpoint/AWS 端点。
+   * publicEndpoint 可含代理目录，返回值已带此前缀；代理须去除它并保留 S3 URI/Host/query，调用方不得自行改写。
    *
    * @param key - 文件键/路径
    * @param options - 签名选项
@@ -546,7 +547,7 @@ export interface PresignOperations {
   getUrl: (key: string, options?: PresignOptions) => Promise<HaiResult<string>>
 
   /**
-   * 生成 PUT 上传签名 URL；使用 publicEndpoint，服务端 CRUD 仍使用内部 endpoint。
+   * 生成 PUT 上传签名 URL；publicEndpoint 目录与 GET 相同处理，服务端 CRUD 仍使用内部 endpoint。
    *
    * @param key - 文件键/路径
    * @param options - 上传签名选项

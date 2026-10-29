@@ -116,7 +116,7 @@ SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundl
 
 #### 非公開オブジェクトストレージへの直接アクセス
 
-自前 S3 の endpoint は内部接続先です。`_storage.yml` の publicEndpoint には `https://app.example.com` などブラウザーから到達可能なオリジンを指定し、バケットやサイトパスを含めません。全栈 Web Nginx と SSR/API 用 gateway は `/<bucket>/` を storage:9000 へ直接転送し、署名対象 Host/URI/query を保持してバッファリングと署名ログを無効化します。ストレージポートとコンソールは非公開で、権限は S3 が検証します。クロスオリジン CORS は S3 に設定し、外部入口でもサイトのディレクトリとは別にバケットルートを保持します。
+自前 S3 の endpoint は内部接続先です。publicEndpoint に `https://app.example.com/delivery/files` などの外部アドレスを設定できます。Nginx は `/delivery/files/<bucket>/...` を受け、入口パスだけを除去し、本来のバケット URI、署名クエリ、Host を保持して storage:9000 に転送します。Serv を経由せず、パス省略時は従来のルートバケット形式です。サイト配下に置けますが API、資源、ヘルスパスの競合は拒否します。ポートと管理コンソールは非公開、バッファリングと署名ログは無効です。認可と CORS は S3 に設定し、外部プロキシは入口パスと Host を保持してください。
 
 自前構成は bucket/region/prefix/publicEndpoint/publicUrl/operationLog を保持し、内部接続と受管認証情報だけを置き換えます。gateway 追加や公開設定変更には完全デプロイが必要で、部分更新の事前検証は設定摘要の不一致を拒否します。アプリ/ストレージ部分更新では保持プロキシの DNS を更新し、失敗時は以前の構成に復元します。外部/保持接続にローカルルートは生成せず、Local の非公開ディレクトリも公開しません。[ストレージ手引き](../../docs/usage/configuration/data.md)を参照してください。
 
@@ -258,6 +258,8 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 Serv の `http.access` と SvelteKit の `access` は独立した yml/yaml を参照できます。配備は `HAI_SERV`、`HAI_SERV_HTTP_ACCESS`、`HAI_KIT_ACCESS` などの環境上書きを含む実効設定を読み、検証済みの正規化スナップショットを配布物へ含めます。実行時は `/run/hai/request-access.yml` を Compose の読み取り専用マウントで参照し、工程の元の参照先は変更しません。SHA-256 検証に含まれ、ファイル不足・不正はアップロード前に失敗します。`.env.runtime` は不変の配備入力であり、ポリシー変更時は新しい配布物を作成します。
 
 全量とバックエンドを含む増分は独自のスナップショットを持ち、フロントエンドだけの増分は旧バックエンドのマウントを維持します。失敗時は前回成功した Compose とポリシーへ復旧します。非 root コンテナでも私有リリースディレクトリ内のファイルを読み取れます。イメージと設定の復旧は DB 移行や実施済み業務を取り消しません。
+
+運用側でルールを変更して再起動で反映する場合は、配布物の外で読み取り専用ファイルを管理し、Compose override で同じ `/run/hai/request-access.yml` のマウントを置き換えます。この外部ファイルは SDK の自動復旧対象外です。初回マウント適用はコンテナ再作成、以後のファイル変更は再起動で反映できます。`env_file` の環境変数変更は引き続きコンテナ再作成が必要で、通常イメージ再構築は不要です。[設定と実測の境界](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效)を参照してください。
 
 Web/gateway 入口がありバックエンドのポートが非公開の場合だけ、管理 Compose は `HAI_DEPLOY_PRIVATE_PROXY=1` を設定します。この構成の `trustedProxies: auto` はコンテナネットワークを採用し、他のホストでは転送ヘッダーを無視します。生成 Nginx は実接続元で転送ヘッダーを上書きします。外側の負荷分散器は Docker SSH Provider の `trustedEdgeProxies` に実 IP/CIDR を明記してください。省略時は上流を信頼せず、`[]` も同じ動作です。Nginx 到達前に失われた源 IP は復元できず、一部の rootless 構成も実測が必要です。[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)に例と確認手順を記載しています。
 
