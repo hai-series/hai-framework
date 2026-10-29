@@ -3,7 +3,6 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { ESLint } from 'eslint'
 import ts from 'typescript'
 import { expect, it } from 'vitest'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
@@ -47,14 +46,7 @@ it.each(['admin', 'api', 'fullstack'] as const)('%s 生成工程将本地产物�
         expect(await read(`apps/metadata-sample-${target}/src/build-metadata.ts`)).toContain('__HAI_BUILD_METADATA__')
       }
     }
-    const eslint = new ESLint({ cwd: directory, overrideConfigFile: path.join(directory, 'eslint.config.js') })
-    const sourceFiles = [
-      ...targets,
-      'scripts/build-metadata.ts',
-      ...(appType === 'fullstack' ? ['web', 'app', 'desktop'].flatMap(target => [`apps/metadata-sample-${target}/src/App.svelte`, `apps/metadata-sample-${target}/src/build-metadata.ts`]) : []),
-    ]
-    const linted = await eslint.lintFiles(sourceFiles)
-    expect(linted.flatMap(result => result.messages.filter(message => message.severity === 2).map(message => `${path.relative(directory, result.filePath)}:${message.line} ${message.ruleId} ${message.message}`))).toEqual([])
+    // 生成源码lint归并到template-quality的已预热夹具；本例只验证实际输出行为。
   }
   finally {
     await rm(directory, { recursive: true, force: true })
@@ -81,6 +73,8 @@ async function verifyMetadataOutput(source: string, configPath: string): Promise
       expect(path.resolve(directory)).toBe(path.dirname(configPath))
       return expected
     },
+    // 本例隔离验证元数据输出；目录校验由base-path和真实生成工程验收覆盖。
+    resolvePublicBasePath: () => '',
     defineConfig: (input: unknown) => typeof input === 'function' ? input({ mode: 'production', command: 'build' }) : input,
     writeFile: async (destination: URL, body: string) => { written.push({ destination, body }) },
     sveltekit: () => ({}),

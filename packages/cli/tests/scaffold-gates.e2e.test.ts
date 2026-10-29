@@ -513,7 +513,7 @@ async function getFreePort(): Promise<number> {
 /** 复用本轮安装与构建，额外验收真实生成工程的目录挂载和认证边界。 */
 async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'vite', envOptions: GateEnvOptions): Promise<void> {
   const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
-  const spec = (await readFile(path.join(fixtures, 'prefix-browser.spec.ts'), 'utf8')).replace('SCAFFOLD_KIND', kind)
+  const spec = (await readFile(path.join(fixtures, 'prefix-browser.ts'), 'utf8')).replace('SCAFFOLD_KIND', kind)
   await writeFile(path.join(projectPath, 'e2e/prefix-browser.spec.ts'), spec)
   const proxyUrl = kind === 'vite' ? await allocateBaseUrl() : undefined
   const rootUrl = envOptions.baseUrl!

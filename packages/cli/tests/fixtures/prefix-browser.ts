@@ -1,4 +1,4 @@
-/** 实际生成工程的子目录验收；由门禁复制并替换应用类型与公开路径。 */
+/** Playwright夹具只由门禁复制到生成工程，不使用单元测试收集后缀。 */
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'

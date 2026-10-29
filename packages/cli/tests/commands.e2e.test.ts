@@ -520,7 +520,7 @@ describe('createProject — admin 类型 + iam', () => {
     const content = await readText(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
     expect(content).toContain('AuthPanel')
     expect(content).toContain('page.data.iamPublicConfig')
-    expect(content).toContain('kit.client.createAuthActions()')
+    expect(content).toContain('kit.client.createAuthActions({ basePath: `$' + '{base}/api/auth` })')
   })
 
   it('iam API 路由存在', async () => {
@@ -1119,9 +1119,9 @@ describe('createProject — fullstack 类型', () => {
     expect(nginxConfig).toContain('alias /tmp/hai-runtime-config/runtime-config.js')
     expect(runtimeConfig).toContain('$' + '{PUBLIC_API_BASE_BASE64}')
     expect(runtimeConfigEnv).toContain('$' + '{PUBLIC_API_BASE:-}')
-    expect(webIndex).toContain('<script src="/runtime-config.js"></script>')
-    expect(webIndex).not.toContain('<script type="module" src="/runtime-config.js"></script>')
-    expect(webIndex.indexOf('/runtime-config.js')).toBeLessThan(webIndex.indexOf('</head>'))
+    expect(webIndex).toContain('<script src="./runtime-config.js"></script>')
+    expect(webIndex).not.toContain('<script type="module" src="./runtime-config.js"></script>')
+    expect(webIndex.indexOf('./runtime-config.js')).toBeLessThan(webIndex.indexOf('./src/main.ts'))
     expect(await exists(projectPath, 'apps/proj-fullstack-web/public/runtime-config.js')).toBe(true)
     expect(await exists(projectPath, '.dockerignore')).toBe(true)
   })
@@ -1178,7 +1178,7 @@ describe('createProject — fullstack 类型', () => {
       expect(css).toContain('--default')
 
       const indexHtml = await readText(projectPath, `apps/proj-fullstack-${target}/index.html`)
-      expect(indexHtml).toContain('<script type="module" src="/src/main.ts"></script>')
+      expect(indexHtml).toContain('<script type="module" src="./src/main.ts"></script>')
 
       const tsconfig = await readText(projectPath, `apps/proj-fullstack-${target}/tsconfig.json`)
       expect(tsconfig).toContain('"moduleDetection": "force",')
@@ -1211,7 +1211,7 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'apps/proj-fullstack-app/capacitor.config.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-app/src/lib/capacitor.ts')).toBe(true)
     expect(await exists(projectPath, 'apps/proj-fullstack-app/public/runtime-config.js')).toBe(true)
-    expect(await readText(projectPath, 'apps/proj-fullstack-app/index.html')).toContain('src="/runtime-config.js"')
+    expect(await readText(projectPath, 'apps/proj-fullstack-app/index.html')).toContain('src="./runtime-config.js"')
     expect(await exists(projectPath, 'apps/proj-fullstack-app/src/routes/+layout.ts')).toBe(false)
     const appSvelteConfig = await readText(projectPath, 'apps/proj-fullstack-app/svelte.config.js')
     expect(appSvelteConfig).not.toContain('@sveltejs/adapter-static')

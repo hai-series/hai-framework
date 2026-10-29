@@ -10,7 +10,7 @@ it.each(['admin', 'h5', 'website'] as const)('svelteKit %s使用同一公开挂�
   const root = await mkdtemp(path.join(fileURLToPath(new URL('../../../tmp/', import.meta.url)), 'hai-base-path-'))
   try {
     await generateFromTemplates(root, buildTemplateContext({ name: 'prefix-app', appType, features: [], packageManager: 'pnpm' }))
-    const source = (await readFile(path.join(root, 'scripts/public-base-path.mjs'), 'utf8')).replace(/^import .+\n/gm, '').replace(/^export /gm, '')
+    const source = (await readFile(path.join(root, 'scripts/public-base-path.mjs'), 'utf8')).replace(/^import[^\n]*\n/gm, '').replace(/^export /gm, '')
     const evaluate = (base: string | undefined) => runInNewContext(`${source}\nresolvePublicBasePath()`, { core, process: { env: { PUBLIC_BASE_PATH: base } } })
     expect(evaluate(undefined)).toBe('')
     expect(evaluate('/yyy')).toBe('/yyy')

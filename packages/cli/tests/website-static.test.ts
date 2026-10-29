@@ -51,7 +51,7 @@ async function staticScript(features: Parameters<typeof buildTemplateContext>[0]
   await generateFromTemplates(project, buildTemplateContext({ name: 'site', appType: 'website', features, packageManager: 'pnpm' }))
   const helper = await readFile(path.join(project, 'scripts/public-base-path.mjs'), 'utf8')
   const website = await readFile(path.join(project, 'scripts/static-website.mjs'), 'utf8')
-  return `${helper}\n${website}`.replace(/^import .+\n/gm, '').replace(/^export /gm, '')
+  return `${helper}\n${website}`.replace(/^import[^\n]*\n/gm, '').replace(/^export /gm, '')
 }
 
 function scriptContext(env: Record<string, string> = {}) {

@@ -516,7 +516,7 @@ describe('admin 应用类型生成', () => {
       const content = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
       expect(content).toContain('AuthPanel')
       expect(content).toContain('page.data.iamPublicConfig')
-      expect(content).toContain('kit.client.createAuthActions()')
+      expect(content).toContain('kit.client.createAuthActions({ basePath: `$' + '{base}/api/auth` })')
       expect(content).not.toContain('>登录<')
     })
 
@@ -860,7 +860,7 @@ describe('feature 叠加', () => {
   it('iam 认证模板应装配统一场景、配置与客户端动作', async () => {
     const login = await readGenerated(projectPath, 'src/routes/(auth)/auth/login/+page.svelte')
     expect(login).toContain('AuthPanel')
-    expect(login).toContain('kit.client.createAuthActions()')
+    expect(login).toContain('kit.client.createAuthActions({ basePath: `$' + '{base}/api/auth` })')
 
     const register = await readGenerated(projectPath, 'src/routes/(auth)/auth/register/+page.svelte')
     expect(register).toContain('AuthPanel')

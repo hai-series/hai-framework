@@ -253,7 +253,8 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
 
   test('reads edited JSON after moving the package and starting from another working directory', () => {
     const { target, execute, commands } = fixture()
-    const result = execute(script)
+    // 真实PowerShell冷启动与上传脚本属于跨进程集成；先在进程层设期限，外层保留回收预算。
+    const result = execute(script, { timeoutMs: 10_000 })
     expect(result.error).toBeUndefined()
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
     expect(result.stdout).toContain('[UPLOAD] 0%')
@@ -274,7 +275,7 @@ describe.each<Script>(['sh', 'ps1'])('deploy.%s target configuration', (script) 
     expect(calls[1]!.at(-2)!.replaceAll('\\', '/').split('/').at(-1)).toBe(target.bundle)
     expect(calls[1]!.at(-1)).toBe(`${target.username}@${target.host}:${target.directory}/incoming/${target.bundle}`)
     expect(calls[2]!.at(-1)).toContain(`'${target.bundle}.contents/apply.sh' '${target.directory}'`)
-  })
+  }, 15_000)
 
   passwordTest('大包上传完成前显示远端已接收字节和百分比', () => {
     const { execute } = fixture()

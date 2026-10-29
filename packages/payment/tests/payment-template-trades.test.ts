@@ -2,12 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '../../cli/templates/features/payment/routes/api/v1/payment/create/+server'
 
-const { createOrder } = vi.hoisted(() => ({ createOrder: vi.fn() }))
+const { createOrder, mount } = vi.hoisted(() => ({ createOrder: vi.fn(), mount: { base: '' } }))
 vi.mock('@h-ai/payment', () => ({ payment: { createOrder } }))
+vi.mock('$app/paths', () => mount)
 
 const valid = { provider: 'wechat', tradeType: 'jsapi', outTradeNo: 'ORDER_1', totalAmount: 100, subject: '商品', userId: 'openid-test' }
 
-/** 本路由只读取 request/locals；其余 SvelteKit 事件字段不参与这次协议验证。 */
+/** 本路由只读取request/locals；挂载目录由SvelteKit虚拟模块提供，其余事件字段不参与协议验证。 */
 function event(body: unknown): Parameters<typeof POST>[0] {
   return {
     request: new Request('https://shop.example/api/v1/payment/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
@@ -16,6 +17,7 @@ function event(body: unknown): Parameters<typeof POST>[0] {
 }
 
 beforeEach(() => {
+  mount.base = ''
   createOrder.mockReset()
   createOrder.mockResolvedValue({ success: true, data: { provider: 'wechat', tradeType: 'jsapi', clientParams: {} } })
 })
@@ -47,6 +49,14 @@ describe('payment template trade validation', () => {
       metadata: undefined,
       notifyUrl: 'https://shop.example/api/v1/payment/notify/wechat',
     })
+  })
+
+  it('默认支付回调包含SvelteKit目录，显式回调地址保持不变', async () => {
+    mount.base = '/portal'
+    await POST(event(valid))
+    expect(createOrder.mock.calls[0][1].notifyUrl).toBe('https://shop.example/portal/api/v1/payment/notify/wechat')
+    await POST(event({ ...valid, notifyUrl: 'https://notify.example/payments' }))
+    expect(createOrder.mock.calls[1][1].notifyUrl).toBe('https://notify.example/payments')
   })
 
   it('支付宝 h5 不改变模式，调用失败按 HaiResult 返回', async () => {

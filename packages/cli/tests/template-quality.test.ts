@@ -209,6 +209,19 @@ describe.each(['api', 'fullstack'])('生成 workspace %s 的根门禁', (name) =
   })
 })
 
+describe('构建元数据配置的静态质量', () => {
+  it.each(['admin', 'api', 'fullstack'] as const)('%s 的构建配置与元数据脚本通过同一生成项目lint', async (appType) => {
+    const projectName = `quality-${appType}`
+    const targets = appType === 'admin'
+      ? ['vite.config.ts']
+      : appType === 'api'
+        ? [`apps/${projectName}-serv/tsup.config.ts`]
+        : [`packages/${projectName}-serv/tsup.config.ts`, ...['web', 'app', 'desktop'].map(target => `apps/${projectName}-${target}/vite.config.ts`)]
+    // 复用beforeAll预热后的真实linter；前端App和build-metadata消费者由下方业务源码门禁覆盖。
+    expect(await lintFiles(appType, [...targets, 'scripts/build-metadata.ts'])).toEqual([])
+  })
+})
+
 describe('生成 fullstack 的业务 workspace 质量', () => {
   it.each(['contract', 'serv', 'shared', 'web', 'app', 'desktop'])('%s 业务源码通过实际 eslint 检查', async (workspace) => {
     const eslint = linters.get('fullstack')
