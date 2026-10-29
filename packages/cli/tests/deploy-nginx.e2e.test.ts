@@ -221,7 +221,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const project = path.join(root, `access-project-${trustedEdge}`)
     const artifacts = path.join(project, 'artifacts')
     mkdirSync(artifacts, { recursive: true })
-    mkdirSync(path.join(project, 'config'))
+    mkdirSync(path.join(project, 'config/security'), { recursive: true })
     writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'request-access-proxy', version: '1.2.3' }))
     writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
