@@ -13,7 +13,7 @@ export function publicPackages(root) {
   }).filter(pkg => !pkg.private)
 }
 
-/** 按版本选择发布渠道，预发布不推进正式 latest。 */
+/** 按版本保留渠道标签；全部发布后再独立推进默认 latest。 */
 export function releaseChannel(version) {
   const coreVersion = version.split('+')[0]
   const prerelease = coreVersion.includes('-')
@@ -92,7 +92,7 @@ async function main() {
     throw new Error('GITHUB_REPOSITORY and GITHUB_OUTPUT are required for release status')
   const pending = await releasePending(packages, process.env.GITHUB_REPOSITORY, version, { token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL })
   const channel = releaseChannel(version)
-  appendFileSync(process.env.GITHUB_OUTPUT, `changed=${pending}\nversion=${version}\nnpm_tag=${channel.npmTag}\nprerelease=${channel.prerelease}\n`)
+  appendFileSync(process.env.GITHUB_OUTPUT, `changed=${pending}\nversion=${version}\nnpm_tag=${channel.npmTag}\n`)
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

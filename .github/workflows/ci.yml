@@ -31,7 +31,6 @@ jobs:
       version_changed: ${{ steps.check_version.outputs.changed }}
       version: ${{ steps.check_version.outputs.version }}
       npm_tag: ${{ steps.check_version.outputs.npm_tag }}
-      prerelease: ${{ steps.check_version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6.1.0
         with:
@@ -253,7 +252,6 @@ jobs:
       version_changed: ${{ needs.plan.outputs.version_changed }}
       version: ${{ needs.plan.outputs.version }}
       npm_tag: ${{ needs.plan.outputs.npm_tag }}
-      prerelease: ${{ needs.plan.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6.1.0
       - uses: actions/setup-node@v6.5.0
@@ -275,6 +273,9 @@ jobs:
     if: needs.quality.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: npm-publication
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -413,7 +414,15 @@ jobs:
           name: v${{ needs.quality.outputs.version }}
           body_path: /tmp/release-notes.md
           draft: false
-          prerelease: ${{ needs.quality.outputs.prerelease == 'true' }}
+          # GitHub 默认展示 Latest；npm 的 alpha/beta/rc 标签独立按版本选择。
+          prerelease: false
+          make_latest: 'true'
+
+      - name: Promote verified release to npm latest
+        run: node scripts/promote-npm-latest.mjs
+        env:
+          RELEASE_VERSION: ${{ needs.quality.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   sync_versions:
     name: Commit versions after release

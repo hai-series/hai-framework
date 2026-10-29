@@ -61,6 +61,12 @@ flowchart TD
 
 ## 查看结果与重新运行
 
+GitHub Release 默认设置为 Latest（`prerelease: false`、`make_latest: 'true'`），包含版本名带 `-alpha`、`-beta`、`-rc` 的发布。这不改变版本的 SemVer 含义。npm 首先按版本发布 `alpha`、`beta`、`rc` 或 `next` 渠道；全部公开包发布完整、GitHub Release 创建成功后，统一将本次版本设为 npm `latest`，原渠道标签保留。正式版直接使用 `latest`。
+
+只需要调整默认安装版本时，使用 **Promote npm latest → Run workflow**，填写已有发布版本，例如 `1.0.0-beta.1`。脚本从不可变的 `v<版本>` 标签读取公开包名单，先确认所有目标包版本已存在、所有当前标签可查询，再逐包更新并复核。该流程不安装依赖、不构建、不发布 tarball、不移动 Git 标签；与自动发布共用写入互斥组。npm 标签更新没有跨包事务，中途失败时可以重跑，已完成项不会重复写入。原始发布来源和同版包的内容保持不变。
+
+**CodeQL** 在独立工作流中与 CI 并行，按 `security-extended` 查询分析 JavaScript/TypeScript，无需构建或安装应用依赖，结果上传到 GitHub Security。工作流成功代表分析和上传完成，发现项仍需逐项审查。**Leak Checker** 是现有私有词表检查，作用与 CodeQL 不同；两者均不能替代授权边界和实际部署测试。CodeQL Action 固定到已核验的 v4 提交，仓库生成产物不参与分析。
+
 - 每个阶段的日志和 Job Summary 明确写出实际运行，或复用的来源运行编号、提交及阶段。复用不应报告成当前提交重新执行了全部测试。
 - 同一提交的瞬时环境故障，可在 Actions 使用 **Re-run failed jobs**，保留其他独立阶段的结果。断言失败应先定位并修复；新提交按输入指纹决定复用范围。
 - 需要重新执行全部验证阶段时，在 Actions 的 **CI → Run workflow** 勾选 `full`（默认勾选）。这会忽略成功记录，保留正常构建任务缓存；手工验证不发布 npm 或 Pages。

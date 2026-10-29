@@ -3,11 +3,22 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
 import { commitVersionSync, missingPackages, releaseChannel, releasePending } from '../release-status.mjs'
 
 const packages = [{ name: '@h-ai/a', version: '1.0.0', directory: 'packages/a' }, { name: '@h-ai/b', version: '1.0.0', directory: 'packages/b' }]
 
 describe('release recovery', () => {
+  it('publishes GitHub Latest independently from npm prerelease channels', () => {
+    const workflow = parse(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8'))
+    const steps = workflow.jobs.release.steps
+    const release = steps.find(step => step.name === 'Create GitHub Release')
+    const publish = steps.find(step => step.name === 'Publish missing npm packages')
+    expect(release.with).toMatchObject({ draft: false, prerelease: false, make_latest: 'true' })
+    expect(publish.env.NPM_DIST_TAG).toMatch(/^\$\{\{ needs\.quality\.outputs\.npm_tag \}\}$/)
+    expect(releaseChannel('1.0.0-beta.1').npmTag).toBe('beta')
+  })
+
   it.each([
     ['1.0.0-beta.1', 'beta', true],
     ['0.1.0-alpha.78', 'alpha', true],

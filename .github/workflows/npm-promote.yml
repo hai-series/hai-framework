@@ -1,0 +1,36 @@
+name: Promote npm latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing release version to make the default npm installation
+        required: true
+        default: 1.0.0-beta.1
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publication
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6.1.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24.22.1
+          registry-url: https://registry.npmjs.org
+      - name: Verify release and promote latest
+        run: node scripts/promote-npm-latest.mjs
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
