@@ -9,6 +9,13 @@ import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
 {{/if}}
 {{#if hasI18n}}
+import { base } from '$app/paths'
+{{else}}
+{{#if features.iam}}
+import { base } from '$app/paths'
+{{/if}}
+{{/if}}
+{{#if hasI18n}}
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 {{/if}}
 import { initApp } from '$lib/server/init.js'
@@ -57,7 +64,7 @@ const initHandle: Handle = async ({ event, resolve }) => {
  * API 请求跳过 paraglideMiddleware（不需要页面级 locale + 避免消耗 body）
  */
 const i18nHandle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith('/api/')) {
+  if (event.url.pathname.startsWith(`${base}/api/`)) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? '{{defaultLocale}}'
     event.locals.locale = locale
     return kit.i18n.runWithLocale(locale, () => resolve(event))
@@ -93,9 +100,9 @@ const haiHandle = kit.createHandle({
         data: session.data,
       }
     },
-    loginUrl: '/auth/login',
-    protectedPaths: ['/admin/*', '/api/*'],
-    publicPaths: [...kit.auth.publicPaths, '/api/auth/logout', '/api/public/*', '/api/health'],
+    loginUrl: `${base}/auth/login`,
+    protectedPaths: ['/admin/*', '/api/*'].map(path => `${base}${path}`),
+    publicPaths: [...kit.auth.publicPaths, '/api/auth/logout', '/api/public/*', '/api/health'].map(path => `${base}${path}`),
     operations: () => iam.auth,
   },
 {{/if}}

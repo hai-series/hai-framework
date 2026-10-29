@@ -15,7 +15,8 @@ COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 ARG HAI_BUILD_ID=
 ARG HAI_BUILD_COMMIT=unknown
-RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" pnpm compile
+ARG PUBLIC_BASE_PATH=
+RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" PUBLIC_BASE_PATH="$PUBLIC_BASE_PATH" pnpm compile
 
 FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS runtime
 
@@ -45,12 +46,15 @@ COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 ARG HAI_BUILD_ID=
 ARG HAI_BUILD_COMMIT=unknown
-RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" pnpm compile
+ARG PUBLIC_BASE_PATH=
+RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" PUBLIC_BASE_PATH="$PUBLIC_BASE_PATH" pnpm compile
 RUN --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds pnpm pm deploy --filter {{projectName}} --prod /prod/app
 
 FROM node:24.22.1-bookworm-slim AS runtime-base
 
+ARG PUBLIC_BASE_PATH=
+ENV PUBLIC_BASE_PATH=$PUBLIC_BASE_PATH
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
@@ -62,7 +66,7 @@ RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+(process.env.PUBLIC_BASE_PATH||'')+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "build"]
 
 {{/if}}

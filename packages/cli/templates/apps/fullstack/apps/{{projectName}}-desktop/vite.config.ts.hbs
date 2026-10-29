@@ -31,6 +31,7 @@ export default defineConfig(({ mode, command }) => {
   const proxy = { '/api': { target, changeOrigin: true } }
 
   return {
+    base: './',
     envDir: false,
     define: { __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata) },
     preview: { proxy },

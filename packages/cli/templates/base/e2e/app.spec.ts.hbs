@@ -8,7 +8,7 @@ import { expect, test } from '@playwright/test'
 
 {{#if_eq appType 'admin'}}
 test('high contrast appearance is selectable and survives reload', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('./')
   const header = page.locator('header').first()
   await header.getByRole('button', { name: /选择主题|Select theme|テーマを選択/, exact: true }).click()
   await header.getByRole('button', { name: /高对比|High contrast|ハイコントラスト/, exact: true }).click()
@@ -39,7 +39,7 @@ test('home page renders from browser', async ({ page }) => {
 {{/if_eq}}
   const pageErrors: string[] = []
   page.on('pageerror', error => pageErrors.push(error.message))
-  await page.goto('/')
+  await page.goto('./')
   await expect(page).toHaveTitle(process.env.HAI_CORE_NAME ?? '{{projectName}}')
   await expect(pageErrors).toEqual([])
   await expect(page.locator('main, section').first()).toBeVisible()
@@ -68,7 +68,7 @@ test('home page renders from browser', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 {{/if_eq}}
 {{#if_eq appType 'website'}}
-  await page.goto('/about')
+  await page.goto('./about')
   await page.reload()
   await expect(page).toHaveURL(/\/about$/)
   await expect(page.locator('header')).toBeVisible()
@@ -91,7 +91,7 @@ test('configured IAM registration and password login', async ({ page, context })
   await mkdir(evidence, { recursive: true })
   const username = `scaf${randomUUID().replaceAll('-', '').slice(0, 12)}`
   const password = 'ScaffoldPassword123'
-  const authUrl = '{{#if isCapacitorApp}}/{{else}}/auth/login{{/if}}'
+  const authUrl = '{{#if isCapacitorApp}}./{{else}}./auth/login{{/if}}'
   await page.goto(authUrl)
   await expect(page.locator('#login-username')).toBeVisible()
   await expect(page.locator('header').first()).toBeVisible()
@@ -121,7 +121,7 @@ test('configured IAM registration and password login', async ({ page, context })
   await registerForm.locator('button[type="submit"]').click()
   await expect(page.locator('.register-form')).not.toBeVisible()
 {{#unless isCapacitorApp}}
-  const me = await page.request.get('/api/auth/me')
+  const me = await page.request.get('./api/auth/me')
   expect(me.ok()).toBe(true)
   await context.clearCookies()
 {{/unless}}
@@ -206,7 +206,7 @@ test('configured IAM registration and password login', async ({ page, context })
   // Web 预览采用内存 TokenStore，刷新后应回到登录，而不是已消费令牌的重置页面。
   await expect(page.locator('#login-username')).toBeVisible()
 {{else}}
-  await expect(await page.request.get('/api/auth/me')).toBeOK()
+  await expect(await page.request.get('./api/auth/me')).toBeOK()
 {{/if}}
 })
 {{/if}}

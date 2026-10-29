@@ -1321,7 +1321,9 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
   return `### 构建与部署
 
 创建时默认包含部署工具；不需要时使用 hai create --no-deploy。
-后端 serv、浏览器站点 web（静态或 SSR）、手机原生包 app、桌面原生包 desktop。--images/--services 使用 serv/web，--target app/desktop 用于原生交付。镜像和容器的项目名统一取工程根 package.json.name，去 scope、转小写并归一化字符；缺失或无效时报错，不使用目录名。制品格式4记录 primaryService 与 hasWeb，只有 serv + web 生成同源 API 代理；旧工程先同步 build.images、Dockerfile 和 API workspace 的 -serv 包名及引用，重新安装依赖并重建完整制品；旧部署须先备份并核对项目名、数据卷与受管凭据，再建立完整基线；完整部署会按 Compose 规则清理同项目的旧服务容器，不自动跨项目迁移数据。
+后端serv、浏览器站点web（静态或SSR）、手机原生包app、桌面原生包desktop。--images/--services使用serv/web，--target app/desktop用于原生交付。镜像和容器身份取工程根package.json.name，去scope、转小写并归一化字符；缺失或无效时报错，不使用目录名。根目录制品格式4，非根目录格式5及webBasePath，两者都记录primaryService/hasWeb；只有serv + web生成同源API代理。旧工程先同步build.images、Dockerfile及API workspace的-serv包名与引用，安装依赖并重建完整制品；旧部署先备份、核对项目名、卷与受管凭据，再建立完整基线。完整部署按Compose规则清理同项目旧服务，不自动跨项目迁移数据。
+
+网站地址含/yyy/等目录时，在构建进程显式设置PUBLIC_BASE_PATH=/yyy，默认空字符串；不从私有dotenv读取。SvelteKit编译时固定base，Vite默认相对资源与hash路由；API地址独立配置。Docker网站制品由SDK处理代理与健康路径，使用匹配CLI/Deploy；所有部分构建保持同一目录，即使只构建serv。目录变化使用全量部署，操作和验证见[网站挂载目录](.agents/skills/hai-build/paths.md)。
 每个镜像对应 images/ 中一个 Dockerfile，根 hai.json 的 build 分区指定文件，deploy 分区保存整个项目的部署配置。
 下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
@@ -1366,7 +1368,7 @@ ${getRunCommand(pm, 'build')}
 ${getRunCommand(pm, 'preview')}
 \`\`\`
 
-检查build/index.html、各页面目录、_app、.nojekyll与子路径刷新；build/api/health不应存在。构建不读取根.env；static是公开资产目录，图片、字体和其他正常资源会原样发布，禁止放入私密内容，检测到.env/.env.*或符号链接会停止构建。服务端模块、自定义API、actions或未预渲染页面会明确拒绝；不会放宽生产守卫或用SPA回退掩盖。关闭当前终端或清除两个变量后恢复普通SSR构建；它们不能与docker/app/desktop目标混用。
+检查build/index.html、各页面目录、_app、.nojekyll与子路径刷新；build/api/health不应存在。构建不读取根.env；static是公开资产目录，图片、字体和其他正常资源会原样发布，禁止放入私密内容，检测到.env/.env.*或符号链接会停止构建。服务端模块、自定义API、actions或未预渲染页面会明确拒绝；不会放宽生产守卫或用SPA回退掩盖。清除HAI_BUILD_STATIC后恢复普通SSR构建；PUBLIC_BASE_PATH可继续用于SSR或Docker网站目录，原生app/desktop目标不接受网站目录。
 
 GitHub Pages选择Actions发布静态build目录；上传步骤显式include-hidden-files:true以保留.nojekyll，不上传config、data、.env或源码。发布前核对仓库项目名和PUBLIC_BASE_PATH一致。联系表单是未接真实服务的界面示例，提交时通过Toast说明尚未开通并保留输入；投入使用前应接实际留言服务并验证加载、成功与失败状态。
 

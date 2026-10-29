@@ -14,6 +14,9 @@ import staticAdapter from '@sveltejs/adapter-static'
 {{/if_eq}}
 {{/unless}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+{{#unless isSvelteOnlyApp}}
+import { resolvePublicBasePath } from './scripts/public-base-path.mjs'
+{{/unless}}
 {{#if_eq appType 'website'}}
 import { resolveStaticWebsite, validateStaticRoutes } from './scripts/static-website.mjs'
 
@@ -67,6 +70,7 @@ const config = {
   kit: {
     // 环境文件由 Vite 的 core loader 统一加载；Kit 不再二次读取根目录私有配置。
     env: { dir: './.svelte-kit' },
+    paths: { base: resolvePublicBasePath() },
 {{#if isCapacitorApp}}
     adapter: adapter({
       pages: 'build',
@@ -75,7 +79,6 @@ const config = {
     }),
 {{else}}
 {{#if_eq appType 'website'}}
-    paths: { base: website.base },
     adapter: website.enabled
       ? {
           ...staticOutput,

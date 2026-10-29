@@ -1,11 +1,11 @@
 <script lang='ts'>
   import { goto } from '$app/navigation'
-  import { resolve } from '$app/paths'
+  import { base, resolve } from '$app/paths'
   import { page } from '$app/state'
   import { kit } from '@h-ai/kit'
   import { AuthPanel } from '@h-ai/ui/components/scenes/iam/index'
 
-  const actions = kit.client.createAuthActions()
+  const actions = kit.client.createAuthActions({ basePath: `${base}/api/auth` })
 </script>
 
 <AuthPanel config={page.data.iamPublicConfig} {actions} initialMode='register' loginUrl={resolve('/auth/login', {})} registerUrl={resolve('/auth/register', {})} onauthenticated={() => goto(resolve('/admin', {}))} />

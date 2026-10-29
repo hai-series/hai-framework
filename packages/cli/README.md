@@ -62,11 +62,17 @@ pnpm dev
 
 `hai create docs-site --type website --features none --yes`明确不选择可选业务模块，保留Core/Kit/UI和默认部署开发工具；无需用deploy模块再no-deploy绕行。none不能与其他值、逗号或空项混用。省略features仍沿用原默认；fullstack始终保留架构必需模块。
 
-website默认Node SSR。仅构建时设置`HAI_BUILD_STATIC=1`与`PUBLIC_BASE_PATH=/docs-site`（docs-site替换为实际仓库名；各目录段仅ASCII字母、数字、_、.、-，无末尾/，根站留空）后执行`pnpm build`，输出build静态目录。标志只接受0/1，两个公开值仅compile透传，不能与docker/app/desktop混用。静态拒绝服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产守卫，不生成SPA回退；默认健康API不进入静态产物。
+website默认Node SSR。仅构建时设置`HAI_BUILD_STATIC=1`与`PUBLIC_BASE_PATH=/docs-site`（docs-site替换为实际仓库名；各目录段仅ASCII字母、数字、_、.、-，无末尾/，根站留空）后执行`pnpm build`，输出build静态目录。静态标志只接受0/1，且仅用于compile；PUBLIC_BASE_PATH也可用于Docker网站构建，原生app/desktop目标不接受网站目录。静态拒绝服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产守卫，不生成SPA回退；默认健康API不进入静态产物。
 
 根.env不参与构建，Kit也不读取根私有文件。static是公开资产目录，图片、字体等正常资源会原样发布，不能放入任何私密内容；检测到.env/.env.*或符号链接时会停止构建。发布只上传build，显式include-hidden-files:true保留.nojekyll；实际验证子路径首页、每个深链刷新、资产和无敏感哨兵。详细命令见[静态网站配置](../../docs/usage/configuration/delivery.md#静态website与github-pages)。
 
 website联系表单是界面示例，尚未接入留言服务。提交后通过Toast说明尚未开通并保留输入；投入使用前应连接实际服务并验证加载、成功和失败状态。
+
+### 网站部署到子目录
+
+SvelteKit的admin/h5/website通过构建进程`PUBLIC_BASE_PATH=/yyy`设置`kit.paths.base`，默认空字符串；改变目录需要重新构建，网关保留前缀。Vite Web默认`base: './'`，入口和runtime-config.js使用相对地址，hash路由可经剥离目录的网关挂载到`/yyy/`；显式设置PUBLIC_BASE_PATH时固定Vite基址。API地址独立配置，不能从网页目录推断。
+
+Docker构建时同样显式设置PUBLIC_BASE_PATH；非根目录生成格式5制品，记录webBasePath，由部署SDK生成匹配代理、健康检查和访问URL，额外网关保留前缀。根目录继续使用格式4。全量和部分构建须保持相同目录，即使只构建serv；改变目录使用全量部署。格式5需匹配的CLI/Deploy，旧工具明确拒绝。操作、默认值、反代差异与实际截图见[网站子目录配置](../../docs/usage/configuration/delivery.md#网站部署在子目录)。
 
 ### Fullstack mini 管理后台
 
@@ -126,7 +132,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-命名与拓扑契约使用制品格式 4，新增 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；只有 serv + web 才生成同源 API 代理。旧格式制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
+制品格式4和5都记录 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有 serv + web 才生成同源 API 代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
 
 迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。
 

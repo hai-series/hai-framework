@@ -75,7 +75,7 @@ for (const scenario of [{ offset: -600_000, width: 1440 }, { offset: 600_000, wi
       const now = Date.now.bind(Date)
       Date.now = () => now() + offset
     }, scenario.offset)
-    await page.goto('/')
+    await page.goto('./')
     const advice = page.getByRole('alert').filter({ hasText: /同步|synchron|時刻/i })
     await expect(advice).toBeVisible()
     await expect(advice).toContainText(/刷新|refresh|再読み込み/i)
@@ -103,7 +103,7 @@ test('service rejects plaintext business requests', async ({ request }) => {
 
 {{#if fullstack.e2eFrontend}}
 test('hash routing and responsive workspace preserve usable content width', async ({ page }, testInfo) => {
-  await page.goto('/#/roles?source=direct')
+  await page.goto('./#/roles?source=direct')
   await login(page, 'admin', adminPassword)
   await expect(page.getByTestId('roles-page')).toBeVisible()
   await expect(page).toHaveURL(/#\/roles\?source=direct$/)
@@ -127,7 +127,7 @@ test('hash routing and responsive workspace preserve usable content width', asyn
   await expect(page.getByTestId('roles-page')).toBeVisible()
   await page.goForward()
   await expect(page.getByTestId('profile-form')).toBeVisible()
-  await page.goto('/#/unknown-page')
+  await page.goto('./#/unknown-page')
   await expect(page).toHaveURL(/#\/users$/)
   await expect(page.getByTestId('users-page')).toBeVisible()
   const usersPage = page.getByTestId('users-page')
@@ -158,7 +158,7 @@ test('hash routing and responsive workspace preserve usable content width', asyn
 test('branded authentication, profile layout and blur validation work across screen sizes', async ({ page }, testInfo) => {
   test.setTimeout(60_000)
   await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.getByRole('heading', { name: configuredName, exact: true })).toBeVisible()
   await expect(page.locator('header')).toBeVisible()
   await expect(page.locator('footer')).toBeVisible()
@@ -233,7 +233,7 @@ test('branded authentication, profile layout and blur validation work across scr
 })
 
 test('first-use tour, help search and settings navigation work on desktop and mobile', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'admin', adminPassword, true)
   await expect(page.getByTestId('guide-offer')).toBeVisible()
   await page.getByTestId('guide-start').click()
@@ -325,7 +325,7 @@ test('shared authentication supports public registration with configuration', as
   test.setTimeout(90_000)
   const evidence = process.env.HAI_AUTH_EVIDENCE_DIR || path.resolve('test-results/auth-screenshots')
   await mkdir(evidence, { recursive: true })
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.getByTestId('login-form')).toBeVisible()
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-login.png'), fullPage: true })
   await page.getByRole('button', { name: /立即注册|Register now/i }).click()
@@ -369,7 +369,7 @@ test('shared authentication supports public registration with configuration', as
   expect(Boolean(reset?.token)).toBe(true)
   await page.getByRole('button', { name: /已有重置令牌|I have a reset token/i }).click()
   await page.screenshot({ path: path.join(evidence, '{{projectName}}-reset.png'), fullPage: true })
-  await page.goto(`/?token=${encodeURIComponent(reset?.token ?? '')}`)
+  await page.goto(`./?token=${encodeURIComponent(reset?.token ?? '')}`)
   await expect(page.locator('input[type="password"]').nth(0)).toBeVisible()
   await page.locator('input[type="password"]').nth(0).fill('FullstackReset456')
   await page.locator('input[type="password"]').nth(1).fill('FullstackReset456')
@@ -384,7 +384,7 @@ test('shared authentication supports public registration with configuration', as
 })
 
 test('frontend displays configured core metadata and restores the administrator session', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await expect(page.getByTestId('app-name')).toHaveText(configuredName)
   await expect(page).toHaveTitle(configuredName)
   await expect(page.getByTestId('app-version')).toHaveText(`v${configuredVersion}`)
@@ -405,7 +405,7 @@ test('frontend displays configured core metadata and restores the administrator 
 })
 
 test('auditor reauthentication produces a verifiable private archive', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'audit_admin', auditAdminPassword)
   await expect(page.getByTestId('nav-users')).toHaveCount(0)
   await expect(page.getByTestId('nav-configuration')).toHaveCount(0)
@@ -449,7 +449,7 @@ test('one-time invitation completes password setup through the configured notifi
   test.setTimeout(90000)
   const username = `invited-${randomUUID().slice(0, 8)}`
   const email = `${username}@example.test`
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'admin', adminPassword)
   await page.getByTestId('invite-user').click()
   await page.getByTestId('user-username').locator('input').fill(username)
@@ -467,7 +467,7 @@ test('one-time invitation completes password setup through the configured notifi
   const context = await browser.newContext()
   try {
     const receiver = await context.newPage()
-    await receiver.goto(`/?token=${encodeURIComponent(token ?? '')}`)
+    await receiver.goto(`./?token=${encodeURIComponent(token ?? '')}`)
     const passwords = receiver.locator('input[type=password]')
     await passwords.nth(0).fill('Invited-Setup-123!')
     await passwords.nth(1).fill('Invited-Setup-123!')
@@ -482,7 +482,7 @@ test('one-time invitation completes password setup through the configured notifi
 })
 
 test('business configuration is isolated and the public notice reaches other duties', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'config_admin', configAdminPassword)
   await expect(page.getByTestId('nav-users')).toHaveCount(0)
   await expect(page.getByTestId('nav-audit')).toHaveCount(0)
@@ -498,7 +498,7 @@ test('business configuration is isolated and the public notice reaches other dut
 })
 
 test('audit filters collapse without losing values and fit compact workspaces', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'audit_admin', auditAdminPassword)
   await page.getByTestId('nav-audit').click()
   await expect(page.getByTestId('audit-page')).toBeVisible()
@@ -585,7 +585,7 @@ test('administrator and user complete account, avatar, preference, password and 
       encryptedResponses.push(response.url())
     }
   })
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'admin', adminPassword)
   await expect(page.getByTestId('users-page')).toBeVisible()
   await page.getByTestId('create-user').click()
@@ -617,7 +617,7 @@ test('administrator and user complete account, avatar, preference, password and 
   const userContext = await browser.newContext()
   const userPage = await userContext.newPage()
   try {
-    await userPage.goto('/')
+    await userPage.goto('./')
     await login(userPage, username, password)
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
     await expect(userPage.getByTestId('nav-users')).toHaveCount(0)
@@ -721,7 +721,7 @@ test('administrator and user complete account, avatar, preference, password and 
 {{#if fullstack.e2eFrontend}}
 
 test('feedback submits an empty description and business operator can process and reopen it', async ({ page }, testInfo) => {
-  await page.goto('/')
+  await page.goto('./')
   await login(page, 'business_operator', businessOperatorPassword)
   const feedbackImage = Buffer.from(await page.evaluate(() => {
     const canvas = document.createElement('canvas')

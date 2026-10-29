@@ -62,11 +62,17 @@ pnpm dev
 
 `hai create docs-site --type website --features none --yes`で任意業務モジュールを選択しないことを明示し、Core/Kit/UIと既定のデプロイ開発ツールは保持します。deployを選んでからno-deployで回避する必要はありません。noneは他の値、カンマ、空項目と併用できません。省略時の既定値とfullstackの必須構成は変わりません。
 
-websiteの既定はNode SSRです。ビルド時に`HAI_BUILD_STATIC=1`と`PUBLIC_BASE_PATH=/docs-site`（docs-siteを実際のリポジトリー名に置換。各区間はASCII英数字・_・.・-のみ、末尾/なし、ルートは空）を指定してpnpm buildを実行すると静的buildを生成します。フラグは0/1のみ、二つの公開値はcompile専用でdocker/app/desktopと併用できません。静的構築はサーバー業務モジュール、独自API/actions、事前描画されないページを拒否し、本番ガードを緩和せずSPAフォールバックも生成しません。既定のhealth APIは含めません。
+websiteの既定はNode SSRです。ビルド時に`HAI_BUILD_STATIC=1`と`PUBLIC_BASE_PATH=/docs-site`（docs-siteを実際のリポジトリー名に置換。各区間はASCII英数字・_・.・-のみ、末尾/なし、ルートは空）を指定してpnpm buildを実行すると静的buildを生成します。静的フラグは0/1のみでcompile専用です。PUBLIC_BASE_PATHはDockerのWeb構築にも対応しますが、ネイティブapp/desktopでは指定できません。静的構築はサーバー業務モジュール、独自API/actions、事前描画されないページを拒否し、本番ガードを緩和せずSPAフォールバックも生成しません。既定のhealth APIは含めません。
 
 ルートdotenvを読まず、Kitのenvも分離します。staticは公開資産用のディレクトリで、画像やフォントなどをそのまま配信します。秘密情報は置かず、.env/.env.*またはシンボリックリンクがある場合は静的ビルドを停止します。buildだけをinclude-hidden-files:trueで公開し、子パス、深いURLの再読込、資産、秘密の不在を確認します。[静的サイト設定（中国語）](../../docs/usage/configuration/delivery.md#静态website与github-pages)を参照してください。
 
 websiteのお問い合わせフォームは送信サービス未接続のUI例です。送信時には未対応であることをToastで知らせ、入力を保持します。実運用前にサービスへ接続し、処理中・成功・失敗を確認してください。
+
+### サブディレクトリーでの公開
+
+SvelteKitのadmin/h5/websiteは構築プロセスの`PUBLIC_BASE_PATH=/yyy`をkit.paths.baseに設定します。既定は空文字列です。変更時は再構築し、ゲートウェイは接頭辞を保持します。Vite Webの既定は`base: './'`、相対的な入口/runtime-config.jsとhashルーティングです。ルート配信サーバーへ転送するゲートウェイでは`/yyy/`を除去できます。PUBLIC_BASE_PATHを明示するとViteの基準パスが固定されます。APIのURLは別に設定します。
+
+Docker構築でもPUBLIC_BASE_PATHを明示できます。非ルートではwebBasePathを含む成果物形式5を生成し、SDKが対応するプロキシ・ヘルスチェック・公開URLを作成します。この入口へ追加のゲートウェイで転送する場合は接頭辞を保持します。ルートは形式4のままです。servのみの部分構築でも同じ値を使用し、ディレクトリー変更は全量デプロイで行います。形式5に対応するCLI/Deployが必要で、旧ツールは明示的に拒否します。[設定手順と実行画面](../../docs/usage/configuration/delivery.md#网站部署在子目录)を参照してください。
 
 ### Fullstack mini 管理画面
 
@@ -126,7 +132,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-成果物形式 4 は primaryService（serv/web）と、工程全体のブラウザー構成を示す hasWeb を記録します。同一オリジン API プロキシは serv + web の場合だけ生成します。旧形式は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じ Compose プロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directory の変更だけでは移行できません。
+成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
 
 既存工程では、hai.json の build.images 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
 

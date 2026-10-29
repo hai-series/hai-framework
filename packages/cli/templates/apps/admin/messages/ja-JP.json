@@ -5,6 +5,8 @@
   "nav_home": "ホーム",
   "nav_dashboard": "ダッシュボード",
   "nav_settings": "設定",
+  "nav_close_sidebar": "サイドバーを閉じる",
+  "nav_open_sidebar": "サイドバーを開く",
   "nav_admin": "管理画面へ",
   "page_home_title": "管理コンソール",
   "page_home_subtitle": "hai Agent Frameworkで構築",

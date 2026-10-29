@@ -97,7 +97,7 @@ async function pnpm(args: string[], cwd: string, identity: { buildId: string, co
   return run('pnpm', args, cwd, false, identity, compileEnvironment)
 }
 
-/** 静态站点只放行两个公开构建控制值；不改变其它目标的私有环境过滤。 */
+/** 网站只放行显式公开的构建控制值；镜像只接收目录参数，原生目标保持隔离。 */
 function staticCompileEnvironment(target: string): Record<string, string> {
   const flag = process.env.HAI_BUILD_STATIC
   const base = process.env.PUBLIC_BASE_PATH
@@ -106,9 +106,9 @@ function staticCompileEnvironment(target: string): Record<string, string> {
   if (base && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(base) || base.split('/').some(segment => segment === '.' || segment === '..')))
     throw new Error(cliM('cli_build_static_base'))
   if (target !== 'compile') {
-    if (flag === '1' || base)
+    if (flag === '1' || (base && target !== 'docker'))
       throw new Error(cliM('cli_build_static_target'))
-    return {}
+    return target === 'docker' && base ? { PUBLIC_BASE_PATH: base } : {}
   }
   return { ...(flag ? { HAI_BUILD_STATIC: flag } : {}), ...(base ? { PUBLIC_BASE_PATH: base } : {}) }
 }
@@ -201,6 +201,9 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   if (selected && (selected.some(name => !config.images!.some(image => image.name === name)) || new Set(selected).size !== selected.length))
     throw new Error(cliM('cli_build_selection_invalid'))
   const images = config.images.filter(image => !selected || selected.includes(image.name))
+  const webBasePath = compileEnvironment.PUBLIC_BASE_PATH
+  if (webBasePath && !config.images.some(image => image.name === 'web'))
+    throw new Error(cliM('cli_build_base_requires_web'))
   for (const image of images) {
     if (!existsSync(resolve(cwd, image.dockerfile)))
       throw new Error(cliM('cli_build_dockerfile_missing', { params: { path: image.dockerfile } }))
@@ -227,6 +230,10 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   const buildId = `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`
   const commit = sourceCommit(cwd)
   const artifact: DeploymentArtifact = { version: 4, primaryService: config.images.some(image => image.name === 'serv') ? 'serv' : 'web', appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
+  if (webBasePath) {
+    artifact.version = 5
+    artifact.webBasePath = webBasePath
+  }
   // 部分构建仍保留工程显式声明的端口，不用构建默认值覆盖部署配置。
   for (const image of config.images) {
     if (image.containerPort !== undefined)
@@ -274,6 +281,8 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       }
       if (options.sqlitePrebuildMirror)
         args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)
+      if (image.name === 'web' && compileEnvironment.PUBLIC_BASE_PATH)
+        args.push('--build-arg', `PUBLIC_BASE_PATH=${compileEnvironment.PUBLIC_BASE_PATH}`)
       built.push(imageRef)
       await run(runtime, [...args, context], cwd)
       const file = `${image.name}-${appVersion}.tar`

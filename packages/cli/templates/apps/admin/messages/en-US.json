@@ -5,6 +5,8 @@
   "nav_home": "Home",
   "nav_dashboard": "Dashboard",
   "nav_settings": "Settings",
+  "nav_close_sidebar": "Close sidebar",
+  "nav_open_sidebar": "Open sidebar",
   "nav_admin": "Enter Admin",
   "page_home_title": "Admin Console",
   "page_home_subtitle": "Built with hai Agent Framework",

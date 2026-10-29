@@ -29,6 +29,7 @@ import { resolveBuildMetadata } from './scripts/build-metadata.js'
 import { resolveStaticWebsite } from './scripts/static-website.mjs'
 {{/if_eq}}
 {{#if isSvelteOnlyApp}}
+import { resolvePublicBasePath } from './scripts/public-base-path.mjs'
 import { publicRuntimeConfig } from './scripts/vite-runtime-config.js'
 {{/if}}
 
@@ -59,9 +60,13 @@ export default defineConfig(({ mode, command }) => {
     defaultLocale: config.defaultLocale,
     logging: config.logging ? { level: config.logging.level, format: config.logging.format } : undefined,
   }
+  const publicBase = resolvePublicBasePath()
 {{/if}}
 
   return {
+{{#if isSvelteOnlyApp}}
+    base: publicBase ? `${publicBase}/` : './',
+{{/if}}
     envDir: false,
     envPrefix: ['VITE_', 'PUBLIC_'],
     define: {

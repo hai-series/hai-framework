@@ -1,5 +1,6 @@
 /** 创建支付参数 API；渠道、场景与 openid 必须通过显式校验，禁止回落到其它支付模式。 */
 import type { RequestHandler } from './$types'
+import { base } from '$app/paths'
 import { kit } from '@h-ai/kit'
 import { payment } from '@h-ai/payment'
 import { z } from 'zod'
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     tradeType,
     userId,
     metadata,
-    notifyUrl: notifyUrl ?? `${new URL(request.url).origin}/api/v1/payment/notify/${provider}`,
+    notifyUrl: notifyUrl ?? `${new URL(request.url).origin}${base}/api/v1/payment/notify/${provider}`,
   })
   return kit.response.fromResult(result, locals.requestId)
 }

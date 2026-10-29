@@ -139,6 +139,31 @@ it('静态compile只透传两个已校验公开控制项，其他私有值继续
     expect(state.calls[0]!.env[name]).toBeUndefined()
 })
 
+it('网站挂载前缀只作为Web镜像的公开构建参数，不传给serv或原生目标', async () => {
+  vi.stubEnv('PUBLIC_BASE_PATH', '/yyy/sub')
+  await buildCommand({ cwd: root, target: 'docker', runtime: 'docker' })
+  const builds = state.calls.filter(call => call.args[0] === 'build')
+  const parent = join(root, '.hai/build/docker')
+  const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
+  expect(manifest.webBasePath).toBe('/yyy/sub')
+  expect(manifest.version).toBe(5)
+  expect(builds.find(call => call.args.includes(join(root, 'images/web.Dockerfile')))?.args).toEqual(expect.arrayContaining(['--build-arg', 'PUBLIC_BASE_PATH=/yyy/sub']))
+  expect(builds.find(call => call.args.includes(join(root, 'images/serv.Dockerfile')))?.args).not.toContain('PUBLIC_BASE_PATH=/yyy/sub')
+  await buildCommand({ cwd: root, target: 'docker', images: 'serv', runtime: 'docker' })
+  const partial = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
+  expect(partial).toMatchObject({ version: 5, webBasePath: '/yyy/sub', partial: true, hasWeb: true })
+  expect(partial.images.map((image: { name: string }) => image.name)).toEqual(['serv'])
+  for (const target of ['app', 'desktop'] as const)
+    await expect(buildCommand({ cwd: root, target })).rejects.toThrow()
+})
+
+it('没有声明Web镜像时，在探测容器引擎前拒绝网站挂载配置', async () => {
+  vi.stubEnv('PUBLIC_BASE_PATH', '/yyy')
+  writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }] } }))
+  await expect(buildCommand({ cwd: root, target: 'docker', runtime: 'docker' })).rejects.toThrow('web')
+  expect(state.calls).toEqual([])
+})
+
 it.each(['https://example.invalid', '//example.invalid', '/a/../b', '/a/%2e%2e/b', '/a\\b', '/a/', '/a?x=1'])('compile在运行子进程前拒绝非法PUBLIC_BASE_PATH：%s', async (base) => {
   vi.stubEnv('HAI_BUILD_STATIC', '1')
   vi.stubEnv('PUBLIC_BASE_PATH', base)

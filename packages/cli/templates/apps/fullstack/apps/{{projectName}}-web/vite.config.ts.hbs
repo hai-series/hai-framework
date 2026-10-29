@@ -10,6 +10,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vitest/config'
 import { resolveBuildMetadata } from '../../scripts/build-metadata.js'
+import { resolvePublicBasePath } from '../../scripts/public-base-path.mjs'
 
 const envDir = fileURLToPath(new URL('../../', import.meta.url))
 
@@ -28,7 +29,9 @@ export default defineConfig(({ mode, command }) => {
   }
   const target = (env.PUBLIC_API_BASE || process.env.SERVICE_BASE_URL || 'http://127.0.0.1:3000').replace(/\/api\/v1\/?$/, '')
   const proxy = { '/api': { target, changeOrigin: true } }
+  const publicBase = resolvePublicBasePath()
   return {
+    base: publicBase ? `${publicBase}/` : './',
     envDir: false,
     define: { __HAI_BUILD_METADATA__: JSON.stringify(buildMetadata) },
     server: { proxy },

@@ -5,6 +5,8 @@
   "nav_home": "首页",
   "nav_dashboard": "仪表盘",
   "nav_settings": "设置",
+  "nav_close_sidebar": "关闭侧栏",
+  "nav_open_sidebar": "打开侧栏",
   "nav_admin": "进入后台",
   "page_home_title": "管理后台",
   "page_home_subtitle": "基于 hai Agent Framework 构建",

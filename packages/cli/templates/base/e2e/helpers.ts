@@ -40,7 +40,7 @@ export async function registerAndLogin(
 ) {
   const user = uniqueUser(prefix)
   await registerViaApi(request, user)
-  await page.goto('/login')
+  await page.goto('./login')
   await page.fill('[name="username"]', user.username)
   await page.fill('[name="password"]', user.password)
   await page.click('button[type="submit"]')

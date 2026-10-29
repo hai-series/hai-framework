@@ -16,6 +16,18 @@
   }
 
   const { children }: Props = $props()
+  let drawerOpen = $state(false)
+  let menuButton: HTMLButtonElement
+
+  function closeDrawer() {
+    drawerOpen = false
+    menuButton?.focus()
+  }
+
+  function handleDrawerKeydown(event: KeyboardEvent) {
+    if (drawerOpen && event.key === 'Escape')
+      closeDrawer()
+  }
 
   const navItems = $derived([
 {{#if hasI18n}}
@@ -28,16 +40,18 @@
   ] as const)
 </script>
 
+<svelte:window onkeydown={handleDrawerKeydown} />
+
 <div class='drawer min-h-0 flex-1 lg:drawer-open'>
-  <input id='admin-drawer' type='checkbox' class='drawer-toggle' />
+  <input id='admin-drawer' type='checkbox' class='drawer-toggle' bind:checked={drawerOpen} />
   <div class='drawer-content flex min-h-0 min-w-0 flex-col overflow-hidden'>
-    <label for='admin-drawer' class='btn btn-ghost btn-sm drawer-button m-1 shrink-0 self-start lg:hidden'>
+    <button bind:this={menuButton} type='button' class='btn btn-ghost btn-sm drawer-button m-1 shrink-0 self-start lg:hidden' aria-label={{#if hasI18n}}{m.nav_open_sidebar()}{{else}}'打开侧栏'{{/if}} aria-expanded={drawerOpen} aria-controls='admin-sidebar' onclick={() => drawerOpen = !drawerOpen}>
       <span class='icon-[tabler--menu-2] size-5'></span>
-    </label>
+    </button>
     <WorkspaceLayout>{@render children()}</WorkspaceLayout>
   </div>
-  <div class='drawer-side'>
-    <label for='admin-drawer' class='drawer-overlay' aria-label='close sidebar'></label>
+  <div id='admin-sidebar' class='drawer-side'>
+    <button type='button' class='drawer-overlay' aria-label={{#if hasI18n}}{m.nav_close_sidebar()}{{else}}'关闭侧栏'{{/if}} onclick={closeDrawer}></button>
     <nav class='menu p-4 w-64 min-h-full gap-1 bg-base-100 text-base-content border-r border-base-300/60'>
       <div class='flex items-center gap-2 px-2 mb-6 text-xl font-bold'>
         <span class='icon-[tabler--cube] size-6 text-primary'></span>
@@ -50,7 +64,7 @@
       <ul class='gap-1'>
         {#each navItems as item (item.path)}
           <li>
-            <a href={resolve(item.path, {})} class:menu-active={page.url.pathname === item.path}>
+            <a href={resolve(item.path, {})} class:menu-active={page.url.pathname === resolve(item.path, {})} onclick={closeDrawer}>
               <span class='{item.icon} size-5'></span>
               {item.label}
             </a>

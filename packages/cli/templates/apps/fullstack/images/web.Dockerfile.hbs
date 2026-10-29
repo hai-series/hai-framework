@@ -16,7 +16,8 @@ COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
 ARG HAI_BUILD_ID=
 ARG HAI_BUILD_COMMIT=unknown
-RUN pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile && HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" pnpm --filter {{projectName}}-web... --if-present build
+ARG PUBLIC_BASE_PATH=
+RUN pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile && HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" PUBLIC_BASE_PATH="$PUBLIC_BASE_PATH" pnpm --filter {{projectName}}-web... --if-present build
 
 FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS web
 

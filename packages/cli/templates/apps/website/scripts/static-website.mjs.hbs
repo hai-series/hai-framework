@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { core } from '@h-ai/core'
+import { resolvePublicBasePath } from './public-base-path.mjs'
 
 const message = core.i18n.createMessageGetter({
   'zh-CN': {
@@ -37,9 +38,7 @@ export function resolveStaticWebsite() {
   if (flag !== undefined && flag !== '' && flag !== '0' && flag !== '1')
     throw new Error(message('flag', { locale }))
   const enabled = flag === '1'
-  const base = process.env.PUBLIC_BASE_PATH ?? ''
-  if (base !== '' && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(base) || base.split('/').some(segment => segment === '.' || segment === '..')))
-    throw new Error(message('base', { locale }))
+  const base = resolvePublicBasePath()
   if (enabled && serverFeatures.length)
     throw new Error(`${message('modules', { locale })} (${serverFeatures.join(', ')})`)
   if (enabled) {
