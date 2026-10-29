@@ -53,7 +53,7 @@ jobs:
           cache: pnpm
       - name: Identify the validation environment
         id: environment
-        run: node scripts/ci-plan.mjs environment
+        run: node .github/scripts/ci-plan.mjs environment
       # 精确键且只由可信main写入；PR不使用通过记录跳过执行。
       - name: Restore independent successful result
         id: proof_cache
@@ -64,7 +64,7 @@ jobs:
           key: hai-ci-pass-v1-${{ inputs.stage }}-${{ inputs.base_sha }}-${{ inputs.fingerprint }}-${{ steps.environment.outputs.fingerprint }}
       - name: Validate result provenance and inputs
         id: proof
-        run: node scripts/ci-plan.mjs inspect
+        run: node .github/scripts/ci-plan.mjs inspect
         env:
           CI_CACHE_HIT: ${{ steps.proof_cache.outputs.cache-hit }}
           CI_FORCE: ${{ inputs.force || github.run_attempt > 1 }}
@@ -90,7 +90,7 @@ jobs:
         run: ${{ inputs.command }}
       - name: Record verified stage result
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.environment.outputs.fingerprint != ''
-        run: node scripts/ci-plan.mjs record
+        run: node .github/scripts/ci-plan.mjs record
         env:
           CI_ENVIRONMENT: ${{ steps.environment.outputs.fingerprint }}
           CI_EXECUTION_SHA: ${{ steps.proof.outputs.execution_sha }}

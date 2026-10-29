@@ -129,7 +129,7 @@ async function main() {
     return
   }
   if (process.argv[2] === 'plan') {
-    const root = fileURLToPath(new URL('../', import.meta.url))
+    const root = fileURLToPath(new URL('../../', import.meta.url))
     const tree = execFileSync('git', ['ls-tree', '-r', '-z', '--full-tree', 'HEAD'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 ** 2 })
     const files = tree.split('\0').filter(Boolean).map((row) => {
       const match = /^(\d+) (?:blob|commit) ([a-f\d]+)\t(.+)$/s.exec(row)

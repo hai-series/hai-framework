@@ -42,7 +42,7 @@ jobs:
           node-version: 24.22.1
       - name: Fingerprint real validation inputs
         id: inputs
-        run: node scripts/ci-plan.mjs plan
+        run: node .github/scripts/ci-plan.mjs plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Check release completion
@@ -124,7 +124,7 @@ jobs:
     with:
       stage: lint
       fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).lint }}
-      command: pnpm lint
+      command: pnpm lint && pnpm exec eslint .github/scripts .github/workflows scripts/tests/ci-plan.test.mjs
       baseline: ${{ needs.plan.outputs.baseline }}
       base_sha: ${{ needs.plan.outputs.base_sha }}
       force: ${{ inputs.full == true }}
@@ -248,12 +248,12 @@ jobs:
         with:
           node-version: 24.22.1
       - name: Require every stage to succeed
-        run: node scripts/ci-plan.mjs aggregate
+        run: node .github/scripts/ci-plan.mjs aggregate
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
       - name: Require repository leak scan before publishing
         if: github.event_name == 'push'
-        run: node scripts/ci-plan.mjs leaks
+        run: node .github/scripts/ci-plan.mjs leaks
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

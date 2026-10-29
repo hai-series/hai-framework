@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { assertChecksPassed, assertLeakScanPassed, baselineFromChecks, canReuseStage, createStageProof, environmentFingerprint, stageFingerprint, stageIds } from '../ci-plan.mjs'
+import { assertChecksPassed, assertLeakScanPassed, baselineFromChecks, canReuseStage, createStageProof, environmentFingerprint, stageFingerprint, stageIds } from '../../.github/scripts/ci-plan.mjs'
 
 const base = [
   { path: 'packages/ui/src/button.ts', mode: '100644', object: 'a'.repeat(40) },
