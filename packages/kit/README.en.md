@@ -152,6 +152,8 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit delegates transport encryption to `@h-ai/crypto`. The server creates a manager with `crypto.transport.createServer({ serverKeyRing, keyStore })`; the browser installs a same-origin fetch wrapper with one call to `kit.client.installBrowserTransport(kitConfig, { crypto })`. Servers must also inject a managed key ring and shared registry.
 
+For subdirectory hosting, read `base` from `$app/paths`: pass `basePath: base` in server `crypto.transport`, use `installBrowserTransport(kitConfig, { crypto, basePath: base })` in the browser, and set the same `transport.basePath` for a standalone `kit.client.create`. The default empty string means the domain root. This runtime argument comes from the host build path, without a duplicate YAML setting or inference from forwarding headers. Exchange paths, exclusions and route budgets still use full request paths. CLI SSR templates assemble both sides.
+
 **src/hooks.server.ts**：
 
 ```ts

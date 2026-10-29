@@ -9,6 +9,7 @@
 import type { TransportEncryptionOptions } from '@h-ai/kit'
 import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
+import { base } from '$app/paths'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getAdminKitConfig } from '$lib/server/kit-config.js'
@@ -114,7 +115,7 @@ async function createHaiHandle(): Promise<Handle> {
     const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     if (!ring.success)
       throw new Error(ring.error.message)
-    managedTransport = { ...handleTransportConfig, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }) }
+    managedTransport = { ...handleTransportConfig, basePath: base, serverKeyRing: ring.data, keyStore: createReldbTransportKeyStore({ reldb, ttlSeconds: 3600 }) }
   }
 
   return kit.createHandle({

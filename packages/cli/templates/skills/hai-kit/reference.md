@@ -162,6 +162,8 @@ export function load() {
 `resolveKitConfig()` 同时解析 `server`（host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`（与 `@h-ai/serv` 同构）。
 `_kit.yml` 在服务端读取，可包含 access 和 trustedProxies；layout data 只投影公开 transport，不通过 ?raw 导入完整文件到浏览器，也不放密钥。如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。请求策略按[共享约定](../hai-core/request-access.md)装配与验证。
 
+子目录部署从 `$app/paths` 取 `base`，服务端 `crypto.transport.basePath` 与客户端 `installBrowserTransport(config, { crypto, basePath: base })` 同步；独立 client 的 `transport.basePath` 也用该值。默认空字符串为根目录，不能仅调整资源地址后把登录成功当作加密验证。交换/排除/容量路径保持完整请求路径，验证原始请求带加密标记、缺协议被拒绝、排除接口正常且不影响相邻目录。
+
 ## 核心 API
 
 | API                                                      | 用途                                                     |

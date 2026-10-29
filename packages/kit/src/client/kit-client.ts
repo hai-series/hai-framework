@@ -13,7 +13,7 @@ import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { getDefaultBrowserTokenStore } from '../kit-auth.js'
-import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
+import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
 
 const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
 
@@ -30,6 +30,8 @@ const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_
  * ```
  */
 export interface ClientTransportConfig {
+  /** 宿主构建挂载目录，默认空字符串；SvelteKit 使用 $app/paths.base。 */
+  basePath?: string
   /** 可选本地明文上限；缺省跟随服务端握手。 */
   maxPlaintextBytes?: number
   /** @h-ai/crypto 服务实例 */
@@ -210,6 +212,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
   fetchState.__haiKitOriginalFetch = originalFetch
 
   const origin = getCurrentOrigin()
+  const basePath = normalizeTransportBasePath(transportConfig.basePath)
   const keyExchangeUrl = new URL(transportConfig.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL, origin).toString()
   const keyExchangePath = resolveTransportPath(keyExchangeUrl, origin)
   const transportClient = transportConfig.crypto.transport.createClient({
@@ -227,6 +230,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
       origin,
       keyExchangePath,
       excludePaths: transportConfig.excludePaths,
+      basePath,
     })) {
       return originalFetch(input, init)
     }
@@ -253,11 +257,12 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * - 否则启动 {@link installBrowserTransportFetch}，并预热 {@link CryptoFunctions} 模块。
  *
  * 应用层（SvelteKit `+layout.svelte` 或浏览器入口）只需调用此函数一次，
- * 之后所有同源 `/api/*` 与 `__data.json` 请求都会自动走传输加密。
+ * 之后宿主 basePath 下的同源 `/api/*` 与 `__data.json` 请求都会自动走传输加密。
  *
  * @param config 已解析的 kit 公共传输配置
  * @param deps  外部依赖
  * @param deps.crypto `@h-ai/crypto` 模块实例
+ * @param deps.basePath 宿主构建挂载目录，默认空字符串；SvelteKit 使用 $app/paths.base。
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
@@ -271,7 +276,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  */
 export function installBrowserTransport(
   config: KitPublicConfig,
-  deps: { crypto: CryptoFunctions },
+  deps: { crypto: CryptoFunctions, basePath?: string },
 ): void {
   if (typeof window === 'undefined' || config.transport === false)
     return
@@ -282,6 +287,7 @@ export function installBrowserTransport(
 
   installBrowserTransportFetch({
     crypto: deps.crypto,
+    basePath: deps.basePath,
     keyExchangeUrl: config.transport.keyExchangePath,
     excludePaths: [...config.transport.excludePaths],
   })
@@ -330,6 +336,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
 
   // ── 传输加密状态 ──
   const transportOrigin = getCurrentOrigin()
+  const transportBasePath = normalizeTransportBasePath(transportConfig?.basePath)
   const transportKeyExchangeUrl = transportConfig?.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL
   const transportKeyExchangePath = transportConfig
     ? resolveTransportPath(transportKeyExchangeUrl, transportOrigin)
@@ -383,6 +390,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
         origin: transportOrigin,
         keyExchangePath: transportKeyExchangePath,
         excludePaths: transportConfig?.excludePaths,
+        basePath: transportBasePath,
       })
     ) {
       return send(() => transportClient.encryptedFetch(input, { ...init, headers }))

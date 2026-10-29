@@ -158,6 +158,8 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer({ serverKeyRing, keyStore })` 创建管理器，浏览器端通过 `kit.client.installBrowserTransport(kitConfig, { crypto })` 一行安装同源 fetch 包装。服务端还须注入受管密钥环和共享 registry。
 
+部署到子目录时，从 `$app/paths` 读取 `base`：服务端 `crypto.transport` 传入 `basePath: base`，浏览器调用 `installBrowserTransport(kitConfig, { crypto, basePath: base })`；独立 `kit.client.create` 的 `transport.basePath` 采用同一值。默认空字符串表示域名根目录。这个运行时参数来自宿主的构建目录，不在 YAML 另设一份，也不从转发头推断。`keyExchangePath`、`excludePaths` 和路由容量仍使用完整请求路径。CLI 的 SSR 模板已同步装配。
+
 **src/hooks.server.ts**：
 
 ```ts

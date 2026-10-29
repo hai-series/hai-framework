@@ -27,6 +27,38 @@ function normalizePath(pathname: string): string {
 }
 
 /**
+ * 初始化时校验宿主挂载目录，统一为无末尾斜杠的 URL pathname；请求阶段不重复解析。
+ * @param value - 可信宿主的构建目录，域名根目录为空字符串。
+ * @returns 已规范化的挂载目录。
+ * @throws TypeError 目录包含转义分隔符、点段、查询、片段或控制字符。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const basePath = normalizeTransportBasePath('/console/')
+ * const endpoint = `${basePath}/api/articles`
+ * ```
+ */
+export function normalizeTransportBasePath(value = ''): string {
+  const invalid = () => new TypeError('Transport basePath must be an absolute mount path without dot segments, query or fragment')
+  if (value.includes('//') || /[\\?#\p{Cc} ]/u.test(value) || /%(?:2f|5c|25)/i.test(value))
+    throw invalid()
+  const basePath = value.replace(/\/$/, '')
+  if (!basePath)
+    return ''
+  if (!basePath.startsWith('/'))
+    throw invalid()
+  try {
+    const decoded = decodeURIComponent(basePath)
+    if (/[\\?#\p{Cc} ]/u.test(decoded) || decoded.split('/').some(segment => segment === '.' || segment === '..'))
+      throw invalid()
+    return new URL(basePath, 'http://kit.invalid').pathname
+  }
+  catch {
+    throw invalid()
+  }
+}
+
+/**
  * 判断路径是否为 SvelteKit 的页面数据端点。
  * @param pathname - URL pathname，不含 query 或 fragment。
  * @returns 是否是页面 __data.json 端点。
@@ -44,6 +76,7 @@ export function isSvelteKitDataPath(pathname: string): boolean {
  * 判断路径是否属于 transport 保护范围。
  * @param pathname - 待判断的 URL pathname。
  * @param keyExchangePath - 公开密钥交换路径。
+ * @param basePath - 已校验的宿主挂载目录；默认空字符串。
  * @returns 是否属于 API、密钥交换或 SvelteKit 数据端点。
  * @example 模块内部上下文
  * ```ts
@@ -54,8 +87,13 @@ export function isSvelteKitDataPath(pathname: string): boolean {
 export function shouldHandleTransportPath(
   pathname: string,
   keyExchangePath: string = DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH,
+  basePath = '',
 ): boolean {
-  return pathname === keyExchangePath || pathname.startsWith(API_PREFIX) || isSvelteKitDataPath(pathname)
+  if (pathname === keyExchangePath)
+    return true
+  if (basePath && pathname !== basePath && !pathname.startsWith(`${basePath}/`))
+    return false
+  return pathname.startsWith(`${basePath}${API_PREFIX}`) || isSvelteKitDataPath(pathname)
 }
 
 /**
@@ -103,13 +141,14 @@ export function resolveTransportPath(urlOrPath: string, origin = 'http://localho
  * 判断浏览器侧请求是否应走 transport。
  *
  * - 仅处理同源请求
- * - 仅保护 `/api/*` 与 SvelteKit `__data.json`
+ * - 仅保护宿主 basePath 下的 `/api/*` 与 SvelteKit `__data.json`
  * - 命中 `excludePaths` 时透传明文
  * @param url - 待判断的绝对或相对 URL。
  * @param options - 同源基准、密钥交换路径及排除列表。
  * @param options.origin - 当前应用 origin；跨域请求不进入包装。
  * @param options.keyExchangePath - 公开密钥交换路径。
  * @param options.excludePaths - 明文排除路径列表。
+ * @param options.basePath - 已校验的宿主挂载目录；默认空字符串。
  * @returns 是否同源、属于保护范围且未被排除。
  * @example 模块内部上下文
  * ```ts
@@ -123,6 +162,7 @@ export function shouldUseTransportForUrl(
     origin?: string
     keyExchangePath?: string
     excludePaths?: readonly string[]
+    basePath?: string
   } = {},
 ): boolean {
   const baseOrigin = options.origin ?? 'http://localhost'
@@ -132,7 +172,7 @@ export function shouldUseTransportForUrl(
     return false
 
   const keyExchangePath = options.keyExchangePath ?? DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
-  if (!shouldHandleTransportPath(requestUrl.pathname, keyExchangePath))
+  if (!shouldHandleTransportPath(requestUrl.pathname, keyExchangePath, options.basePath))
     return false
 
   return !shouldExcludeTransportPath(requestUrl.pathname, options.excludePaths ?? [], keyExchangePath)

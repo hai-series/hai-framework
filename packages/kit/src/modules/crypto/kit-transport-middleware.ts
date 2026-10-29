@@ -12,7 +12,7 @@ import type { TransportEncryptionConfig } from './kit-crypto-types.js'
 import { core, err, HaiCommonError } from '@h-ai/core'
 import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
-import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
+import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, normalizeTransportBasePath, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
 
 const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-data']
 
@@ -37,6 +37,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
   }
 
   const keyExchangePath = config.keyExchangePath ?? DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
+  const basePath = normalizeTransportBasePath(config.basePath)
   const excludePaths = config.excludePaths ?? []
 
   const policy = createTransportBodyPolicy(config.maxPlaintextBytes, config.routePlaintextBytes)
@@ -74,7 +75,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig,
     }
     // 仅对同源 API endpoint 与 SvelteKit __data 请求启用 transport；
     // 显式 required 也可保护自定义 JSON 端点；不能拿它包裹 HTML 页面。
-    if (mode !== 'required' && !shouldHandleTransportPath(pathname, keyExchangePath)) {
+    if (mode !== 'required' && !shouldHandleTransportPath(pathname, keyExchangePath, basePath)) {
       return next()
     }
 

@@ -340,6 +340,24 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
       .toThrow(expect.objectContaining({ code: HaiCommonError.INTERNAL_ERROR.code, message: expect.any(String) }))
   })
 
+  it('挂载目录的 transport 默认保护 API，保留排除路径、页面和相邻目录边界', async () => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: { basePath: '/yyy/', keyExchangePath: '/my/exchange', excludePaths: ['/yyy/api/public'], keyStore: createInMemoryKeyStore(), serverKeyRing } } })
+    const resolve = vi.fn(() => Response.json({ reached: true }))
+    const protectedResponse = await dispatch(handle, new Request('http://localhost/yyy/api/private'), resolve)
+    expect(protectedResponse.status).toBe(400)
+    expect(resolve).not.toHaveBeenCalled()
+    for (const pathname of ['/yyy/api/public/ping', '/yyy/about', '/yyy-other/api/private']) {
+      const response = await dispatch(handle, new Request(`http://localhost${pathname}`), resolve)
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ reached: true })
+    }
+    expect(resolve).toHaveBeenCalledTimes(3)
+  })
+
+  it.each(['relative', '/scope/../private', '//untrusted.example', '/scope?query', '/scope%2fprivate'])('挂载目录的 transport 在装配时拒绝无效目录 %s', (basePath) => {
+    expect(() => kit.createHandle({ crypto: { crypto, transport: { basePath, keyStore: createInMemoryKeyStore(), serverKeyRing } } })).toThrow(TypeError)
+  })
+
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {
     const keyStore = createInMemoryKeyStore(8)
     const createServer = vi.fn<CryptoFunctions['transport']['createServer']>(options => crypto.transport.createServer(options))

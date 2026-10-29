@@ -248,6 +248,19 @@ describe('createKitClient - 传输加密', () => {
     expect(payload.iv).toBeTruthy()
   })
 
+  it('挂载目录的 transport 客户端保护前缀 API，不依赖协商端点所在目录', async () => {
+    fetchSpy = createTransportFetch()
+    vi.stubGlobal('fetch', fetchSpy)
+    const client = kit.client.create({ transport: { crypto, basePath: '/yyy', keyExchangeUrl: '/my/exchange' } })
+    try {
+      expect(await (await client.apiFetch('/yyy/api/private')).text()).toBe('OK')
+      const request = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1])).find(request => new URL(request.url).pathname === '/yyy/api/private')
+      expect(request?.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+      expect(request?.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(true)
+    }
+    finally { client.destroy() }
+  })
+
   it('formData 写请求跳过传输加密并保留原始请求体', async () => {
     const formData = new FormData()
     formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
@@ -461,6 +474,18 @@ describe('installBrowserTransportFetch', () => {
     expect(dataRequest.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER)).toBe(true)
     expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
     expect(await response.text()).toBe(originalPayload)
+  })
+
+  it('挂载目录的 transport 全局 fetch 真实加密 API，保留排除路径和相邻目录', async () => {
+    fetchSpy = createTransportFetch()
+    stubBrowserFetch(fetchSpy)
+    kit.client.installBrowserTransport({ transport: { keyExchangePath: '/my/exchange', excludePaths: ['/yyy/api/public'] } }, { crypto, basePath: '/yyy' })
+    for (const pathname of ['/yyy/api/private', '/yyy/api/public/ping', '/yyy-other/api/private'])
+      expect(await (await fetch(`http://localhost${pathname}`)).text()).toBe('OK')
+    const requests = fetchSpy.mock.calls.map(call => toRequest(call[0], call[1]))
+    expect(requests.find(request => new URL(request.url).pathname === '/yyy/api/private')?.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe('true')
+    for (const pathname of ['/yyy/api/public/ping', '/yyy-other/api/private'])
+      expect(requests.find(request => new URL(request.url).pathname === pathname)?.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
   })
 
   it('普通页面文档请求保持明文透传', async () => {

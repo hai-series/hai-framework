@@ -450,6 +450,7 @@ function buildTransportMiddleware(
     enabled: true,
     crypto: cryptoConfig.crypto,
     serverKeyRing: transportOpts.serverKeyRing,
+    basePath: transportOpts.basePath,
     keyExchangePath: transportOpts.keyExchangePath,
     excludePaths: transportOpts.excludePaths,
     keyStore: transportOpts.keyStore,

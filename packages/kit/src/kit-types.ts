@@ -504,6 +504,8 @@ export interface HandleA2AConfig {
  * ```
  */
 export interface TransportEncryptionOptions {
+  /** 宿主构建挂载目录，默认空字符串；SvelteKit 传入 $app/paths.base。 */
+  basePath?: string
   /** 双向业务明文 UTF-8 字节上限；默认 1 MiB，整数范围 1 KiB～64 MiB。 */
   maxPlaintextBytes?: number
   /** 路由明文容量；* 匹配一个完整路径段。 */

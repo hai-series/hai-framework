@@ -117,6 +117,7 @@ return result
 - AI 持久化：先初始化 reldb + vecdb，或给 ai.init 提供 storeProvider；否则临时 Store 在关闭/退出后丢失。按 objectId/sessionId 隔离，模型/检索内容不作为工具授权。
 - 每次请求的路径/IP/时间限制、接口 required/disabled 加密模式、独立 YAML、真实 IP 与策略部署见[共享请求访问约定](packages/cli/templates/skills/hai-core/request-access.md)。Core 通过 core.access 注册调用，公开类型集中 core-types，浏览器无服务端执行实现。Kit 完整配置留在服务端，只投影公开 transport；模式冲突或缺少必需加密装配须拒绝创建宿主。
 - 浏览器公共 HTTP API：api-contract → serv → api-client；同源 SvelteKit 可用 kit。内置 Token 存储仅 Cookie/页面内存，原生 App 注入平台安全 TokenStorage；禁止凭据持久化到 Web Storage。
+- SvelteKit 子目录加密的服务端 `crypto.transport.basePath`、浏览器安装器 `deps.basePath` 和独立 Kit client 的 `transport.basePath` 均取宿主 `$app/paths.base`，默认空字符串为域名根目录；交换/排除/容量路径仍为完整请求路径。验证前缀 API 的实际加密头和普通请求拒绝，不能仅凭登录成功判断协议覆盖。
 
 ## 源码定位与验证
 

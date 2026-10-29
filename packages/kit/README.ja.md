@@ -158,6 +158,8 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `crypto.transport.createServer({ serverKeyRing, keyStore })` で管理器を作成し、ブラウザーは `kit.client.installBrowserTransport(kitConfig, { crypto })` の 1 行で同一オリジンの fetch ラッパーを導入します。サーバーには管理済み鍵環と共有 registry も渡します。
 
+サブディレクトリでは `$app/paths` の `base` を使用します。サーバーの `crypto.transport` に `basePath: base`、ブラウザーには `installBrowserTransport(kitConfig, { crypto, basePath: base })` を渡し、独立した `kit.client.create` の `transport.basePath` も同じ値にします。既定の空文字列はドメイン直下です。ホストのビルド時ディレクトリを使う実行時引数であり、YAML に重複して設定したり、転送ヘッダーから推測したりしません。鍵交換・除外・容量のパスは引き続き完全なリクエストパスです。CLI の SSR テンプレートは両側を設定します。
+
 **src/hooks.server.ts**：
 
 ```ts
