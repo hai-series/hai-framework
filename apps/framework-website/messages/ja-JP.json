@@ -51,6 +51,7 @@
   "site_view_repository": "GitHubで参加する",
   "site_doc_navigation": "文書の目次",
   "site_on_this_page": "このページの内容",
+  "site_screenshot_hint": "画像を選択して元の画像を表示できます。戻る操作で説明に戻ります。",
   "site_chinese_note": "詳細本文：中国語 · 英語・日本語の手順はフッターから参照",
   "site_edit_page": "原文を確認・編集",
   "site_docs_feedback": "説明やサンプルに問題があれば、状況と再現手順をお知らせください。",

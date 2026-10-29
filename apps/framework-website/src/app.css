@@ -500,6 +500,18 @@ summary {
   border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   border-radius: 0.5rem;
 }
+.document-image-hint {
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+.documentation-content a:has(> img) {
+  display: block;
+  cursor: zoom-in;
+}
+.documentation-content a:has(> img):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+}
 .documentation-content pre {
   overflow-x: auto;
 }

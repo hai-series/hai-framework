@@ -6,6 +6,7 @@
   import { MarkdownRenderer } from '@h-ai/ui'
 
   const { data }: PageProps = $props()
+  const hasScreenshots = $derived(data.document.sections.some(section => section.html.includes('<img ')))
   let mobileNavigation: HTMLDetailsElement
   afterNavigate(() => {
     if (mobileNavigation)
@@ -23,6 +24,7 @@
   <div class='document-column'>
     <details bind:this={mobileNavigation} class='mobile-doc-navigation'><summary>{m.site_doc_navigation()}</summary><nav aria-label={m.site_doc_navigation()}><DocTree nodes={data.navigation.sections} /></nav></details>
     <div class='document-meta'><span>{m.site_chinese_note()}</span><a href={`https://github.com/hai-series/hai-framework/blob/main/docs/usage/${data.document.file}`} target='_blank' rel='noopener noreferrer'>{m.site_edit_page()} ↗</a></div>
+    {#if hasScreenshots}<p class='document-image-hint'>{m.site_screenshot_hint()}</p>{/if}
     <article class='documentation-content'>
       {#each data.document.sections as section, index (index)}
         <section id={section.id}>

@@ -108,7 +108,7 @@ export async function getDocument(file: string, base: string) {
     image({ href, text }) {
       const target = contentHref(href, file, base)
       const size = dimensions.get(decodeURIComponent(target.slice(`${base}/guide-images/`.length)))
-      return `<img src="${escapeAttribute(target)}" alt="${escapeAttribute(text)}" loading="lazy"${size ? ` width="${size.width}" height="${size.height}"` : ''} />`
+      return `<a href="${escapeAttribute(target)}"><img src="${escapeAttribute(target)}" alt="${escapeAttribute(text)}" loading="lazy"${size ? ` width="${size.width}" height="${size.height}"` : ''} /></a>`
     },
   } })
   // 最终显示仍使用公共 MarkdownRenderer 的 HTML 消毒边界。

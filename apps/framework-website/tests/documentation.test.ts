@@ -21,14 +21,14 @@ describe('公开手册的静态阅读契约', () => {
     expect(routes).not.toContain('operations.md')
     expect(new Set(routes.map(docSlug)).size).toBe(routes.length)
     const navigation = await getNavigation()
-    for (const section of navigation.sections) {
-      for (const node of [section, ...section.children ?? []]) {
-        const document = await getDocument(node.path, '/hai-framework')
-        expect(document, node.path).toBeDefined()
-        expect(document?.title).toBeTruthy()
-        for (const heading of document?.headings ?? [])
-          expect(document?.sections.some(part => part.id === heading.id), `${node.path}#${heading.id}`).toBe(true)
-      }
+    const http = navigation.sections.find(section => section.id === 'configuration')?.children?.find(node => node.id === 'configuration-http')
+    expect(http?.children?.map(node => node.path)).toContain('configuration/request-access.md')
+    for (const file of routes) {
+      const document = await getDocument(file, '/hai-framework')
+      expect(document, file).toBeDefined()
+      expect(document?.title).toBeTruthy()
+      for (const heading of document?.headings ?? [])
+        expect(document?.sections.some(part => part.id === heading.id), `${file}#${heading.id}`).toBe(true)
     }
     expect(await getDocument('../../package.json', '/hai-framework')).toBeUndefined()
   })
