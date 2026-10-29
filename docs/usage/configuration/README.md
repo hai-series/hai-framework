@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | 使用框架开发功能 | [基础与加载](runtime.md) → 对应领域 → 操作指南 | 配置确实传入正确模块，失败会在启动或操作边界暴露 |
 | 管理开发、测试、生产配置 | [配置来源和覆盖](runtime.md#配置从哪里来) → [数据](data.md) → [部署](delivery.md) | 环境隔离、密钥来源、生产依赖和回滚材料都明确 |
+| 将网站发布到域名下的子目录 | [网站子目录](delivery.md#网站部署在子目录) → [HTTP与API地址](http.md) | 页面与资源、认证和守卫使用正确目录，API地址、健康检查与增量基线一致 |
 | 维护框架与生成模板 | [配置边界](runtime.md#保存以后如何生效) → [HTTP](http.md) → [验证](../governance/verification.md) | Schema、消费点、默认值、模板、调用方和截图同步 |
 | 审查安全性与恢复能力 | [身份与安全](identity.md) → [网络边界](http.md) → [运行维护](operations.md) → [部署恢复](delivery.md) | 权限在服务端执行；敏感信息、资源预算、未知结果及数据恢复有边界 |
 
@@ -28,7 +29,7 @@
 | [AI、知识与向量](ai.md) | 模型路由、令牌预算、检索、音频/图片和持久化 | `_ai.yml`、`_vecdb.yml`、显式 Store |
 | [反馈、通知、审计和任务](operations.md) | 材料保留、通知回执、审计保护和任务恢复 | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml` |
 | [页面、支付与设备](experience.md) | 表单/主题/提示、支付验签及原生配置 | UI props、`_payment.yml`、Capacitor/原生构建 |
-| [构建、部署、增量和恢复](delivery.md) | 交付什么、更新哪些服务、失败如何定位和恢复 | 根 `hai.json.build/deploy`、环境文件、服务器成功基线 |
+| [构建、部署、增量和恢复](delivery.md) | 交付什么、网站挂在哪个目录、更新哪些服务、失败如何恢复 | 根 `hai.json.build/deploy`、构建进程PUBLIC_BASE_PATH、环境文件、服务器成功基线 |
 
 `core`、`reldb`、`cache`、`storage`、`iam`、`ai`、`vecdb`、`feedback`、`reach`、`audit`、`scheduler`、`payment` 的配置由宿主读取并传入模块。Serv/Kit、API Client、Crypto、UI、Datapipe 和 Capacitor 按各自工厂、参数或宿主契约装配；创建一个同名 YAML 不会让功能自动启用。API Contract 定义输入输出，不存在通用的“contract 初始化配置”。CLI 的 build/deploy 配置也不进入业务模块的 YAML。
 

@@ -207,7 +207,9 @@ Dependency inputs are prepared under images/dependencies/ from package manifests
 
 The default container supports CPU workloads or remote AI services without downloading extra GPU runtimes. To use the deployment host's GPU, customize the image and container runtime settings.
 
-The root package.json.version identifies the application. `.hai/build/docker/<buildId>/` contains manifest format 4, selected image archives and SHA-256. partial marks incremental builds and hasWeb records topology. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
+The root package.json.version identifies the application. `.hai/build/docker/<buildId>/` contains a manifest, selected image archives and SHA-256. Root sites use format 4; non-root sites use format 5 with webBasePath. partial marks incremental builds and hasWeb records topology. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
+
+For a website under `/yyy/`, set PUBLIC_BASE_PATH=/yyy explicitly during full and partial builds, including serv-only builds. Use matching CLI/Deploy versions supporting format 5; older tools reject it. Directory changes require a full deployment. SvelteKit fixes its base at build time; Vite defaults to relative assets and hash navigation. The API URL remains independent. See [path configuration, gateway rules and runtime screenshots](../configuration/delivery.md#网站部署在子目录).
 
 ### 5. Deploy artifacts to an environment
 
@@ -215,7 +217,7 @@ The root package.json.version identifies the application. `.hai/build/docker/<bu
 
 The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
 
-Artifact format 4 records primaryService (serv/web); hasWeb describes the complete browser topology. Only serv + web generates a same-origin API proxy. Rebuild older artifacts. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
+Artifact formats 4 and 5 record primaryService (serv/web); hasWeb describes the complete browser topology. Format 5 also records a non-root webBasePath. Only serv + web generates a same-origin API proxy. Rebuild artifacts using formats 1–3. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
 
 For existing projects, update build.images names in hai.json, Dockerfile filenames and references first. Rename API service directories/packages and dependent references to -serv, then reinstall dependencies and build a complete artifact. Renaming archives or editing manifest files does not replace a new build.
 

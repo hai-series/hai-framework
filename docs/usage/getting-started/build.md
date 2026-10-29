@@ -16,7 +16,7 @@ pnpm build --target app --platform android
 
 ## 核对身份和产物
 
-package.json.name是资源身份，version是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录格式4、版本、构建ID、镜像角色、partial、hasWeb和SHA-256。相同版本允许重建，由buildId与镜像引用区分；只有全部导出成功才推进本机构建入口。
+package.json.name是资源身份，version是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录版本、构建ID、镜像角色、partial、hasWeb和SHA-256。根目录网站使用格式4；非根目录使用格式5并保存webBasePath，详见[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由buildId与镜像引用区分；只有全部导出成功才推进本机构建入口。
 
 构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。旧格式/旧角色名需要重新构建，不只改文件名。
 

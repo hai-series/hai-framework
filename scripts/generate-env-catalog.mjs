@@ -366,7 +366,7 @@ const extraDescriptions = {
   HAI_BUILD_ID: ['CLI 内部生成并向编译目标传递的产物标识；同次 SSR 构建复用', '非空字母、数字、下划线、点、加减号，最多128字符；显式非法值拒绝构建；hai build 不继承调用者的同名值'],
   HAI_BUILD_COMMIT: ['当前编译目标所属的源码提交；无所属 Git 提交时明确 unknown', '40或64位十六进制 Git SHA，或 unknown；hai build 内部确定，不继承调用者的同名值'],
   HAI_BUILD_STATIC: ['website模板显式静态预渲染；省略或0保持SSR，1仅用于无服务端业务模块的静态站点', '0 | 1；默认不启用；hai build仅compile目标透传，不能混用docker/app/desktop'],
-  PUBLIC_BASE_PATH: ['website公开站点子路径；GitHub Pages项目站例如/hai-framework', '默认空字符串表示根路径；以/开头的站内目录，无末尾/、查询、片段、外部地址和.或..路径段'],
+  PUBLIC_BASE_PATH: ['构建进程公开网站目录；SvelteKit编译base及Vite固定基址，Docker网站制品保留此值', '默认空字符串表示根路径；各段仅ASCII字母、数字、_、.、-，以/开头且无末尾/、查询、片段、外部地址和单独.或..段；原生目标拒绝'],
   HAI_MODEL_API_KEY: ['本地语音模型 HTTP 服务的 Bearer 认证密钥', '敏感字符串；空值表示该模型服务未启用认证'],
   HAI_MODEL_ID: ['本地模型权重的 Hugging Face 仓库 ID', '有效模型仓库 ID，例如组织名/模型名；由模型目录提供默认值'],
   HAI_MODEL_REVISION: ['Hugging Face 权重修订版本', '仓库已有的分支、标签或 commit；为空时使用厂商默认版本'],

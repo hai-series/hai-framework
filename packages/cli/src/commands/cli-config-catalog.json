@@ -5027,9 +5027,9 @@
     "name": "PUBLIC_BASE_PATH",
     "module": "runtime",
     "path": "PUBLIC_BASE_PATH",
-    "description": "website公开站点子路径；GitHub Pages项目站例如/hai-framework",
+    "description": "构建进程公开网站目录；SvelteKit编译base及Vite固定基址，Docker网站制品保留此值",
     "value": "",
-    "constraint": "默认空字符串表示根路径；以/开头的站内目录，无末尾/、查询、片段、外部地址和.或..路径段"
+    "constraint": "默认空字符串表示根路径；各段仅ASCII字母、数字、_、.、-，以/开头且无末尾/、查询、片段、外部地址和单独.或..段；原生目标拒绝"
   },
   {
     "name": "SERVED_MODEL_NAME",

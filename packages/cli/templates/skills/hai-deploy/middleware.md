@@ -6,7 +6,7 @@
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-命名与拓扑契约使用制品格式 4，新增 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；只有 serv + web 才生成同源 API 代理。旧格式制品须重新构建。CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已移除；旧参数会明确报错，请在工程根 package.json.name 维护资源身份。迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
+资源身份和制品格式沿用[构建技能](../hai-build/SKILL.md)及[网站挂载目录](../hai-build/paths.md)：根目录格式4，非根目录格式5，两者都有primaryService/hasWeb；webBasePath仅格式5。旧工程同步镜像角色、Dockerfile、-serv包名与引用后重建，不手改清单。旧部署先核对项目名、卷和受管凭据，再建立完整基线；工具不跨项目迁移数据，改target目录不能完成迁移。
 
 `hai deploy` 首先输入部署环境，或用 `hai deploy --env test` 指定。`.env.test` / `.env.prod` 必须由用户先创建；缺失时停止，不代替用户创建一个空文件继续部署。指定要部署的目录，例如 `hai deploy packages/my-app-serv --env test`，该目录必须对应 lockfile 的一个 importer；不遍历 apps/packages 或猜测 fullstack 布局。环境文件默认取当前目录（有 `.env` 时）或 lockfile 根目录，必要时传 `--env-dir`。
 

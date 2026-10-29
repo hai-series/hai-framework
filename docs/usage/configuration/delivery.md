@@ -48,7 +48,139 @@
 | --sqlite-prebuild-mirror | 无通用镜像地址默认 | 可信HTTP(S)预编译根地址，需匹配ABI/架构/libc |
 | --platform/--arch | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
 
-格式4 manifest记录appVersion/buildId/partial/hasWeb/primaryService、镜像tar和SHA-256及显式端口。相同版本可重建，由buildId/镜像引用区分；全部导出成功才推进本机构建入口。旧制品格式须重新构建。
+根目录应用沿用格式4 manifest；非根目录网站使用格式5，并记录webBasePath。两种格式都记录appVersion/buildId/partial/hasWeb/primaryService、镜像tar和SHA-256及显式端口。相同应用版本可重建，由buildId/镜像引用区分；全部导出成功才推进本机构建入口。格式5需要支持该格式的CLI与Deploy，旧部署器会拒绝，防止静默丢失目录信息；不要手改格式编号绕过检查。
+
+## 网站部署在子目录
+
+当访问地址是 `https://example.com/yyy/`，浏览器资源、页面路由和服务器守卫都要对应这个目录。只把一处script改为相对地址，还不足以保证登录、API和页面刷新可用。先确定使用哪类模板，再选择托管方式。
+
+### 配置与真实默认值
+
+| 能力 | 配置位置与默认值 | 设置以后的影响 |
+| --- | --- | --- |
+| SvelteKit的admin、h5、website | 构建进程的PUBLIC_BASE_PATH默认空字符串，kit.paths.base为空 | `/yyy`使页面、资源及生成模板中的认证地址、登录跳转和守卫都带此前缀；更改后重新构建 |
+| Vite的Fullstack Web及独立mobile浏览器端 | vite.config默认base为`./`；runtime-config.js使用相对引用；页面使用hash导航 | 不指定目录时，同一份构建可以经剥离目录的网关挂载；显式PUBLIC_BASE_PATH会将Vite基址固定为该目录加`/` |
+| App/Desktop原生包 | Vite资源使用`./`，原生build目标不接受PUBLIC_BASE_PATH | 本地资源由原生宿主加载；原生API地址仍按设备配置，网站目录不代表设备API地址 |
+| SDK管理的网站目录 | `hai build --target docker`读取构建进程的PUBLIC_BASE_PATH，默认根目录 | 只传给web镜像；非空时生成格式5制品、匹配的Nginx/SSR健康检查和带目录的访问地址 |
+
+PUBLIC_BASE_PATH是公开的**构建期进程变量**。例如 `/yyy`、`/portal/admin`有效；根目录用空字符串。各段仅允许ASCII字母、数字、`_`、`.`、`-`，不接受末尾斜杠、外部URL、查询、片段、编码分隔符或单独的`.`/`..`段。`/`应改为空字符串。构建不会从根.env或私有.env.local读取这个控制值；请在当前终端或CI构建任务中显式设置。
+
+SvelteKit由kit.paths.base处理资源和路由，模板不另设Vite base。Vite模板采用相对资源与hash导航，例如 `/yyy/#/roles`；自行引入history路由时，应同时配置固定基址、路由器basename及服务器回退，不能只修改script。
+
+### SvelteKit：同时处理路由、认证与权限
+
+以下以启用IAM的Admin项目为例。先创建项目、安装依赖，并核对开发所需服务；可生成一个受保护的测试API，便于验证匿名请求确实被拒绝：
+
+```sh
+hai create portal --type admin --features iam,db,cache --yes --no-install
+cd portal
+pnpm install
+hai generate api prefix-probe --output src/routes/api
+```
+
+然后检查开发路径，停止开发服务后恢复原环境值：
+
+```powershell
+$previousBase = $env:PUBLIC_BASE_PATH
+try {
+  $env:PUBLIC_BASE_PATH = '/yyy'
+  pnpm.cmd dev --host 127.0.0.1 --port 5173
+}
+finally {
+  $env:PUBLIC_BASE_PATH = $previousBase
+}
+```
+
+访问 `http://127.0.0.1:5173/yyy/`，从导航进入登录页，再刷新登录或业务深链接。正式编译时在同样的PUBLIC_BASE_PATH下执行 `pnpm build`；生产服务仍须满足数据库、缓存、密钥等配置要求，开发可访问不代表生产配置已验收。
+
+新模板已将base加入kit.createHandle的protectedPaths/publicPaths/loginUrl，并为createAuthActions设置带base的api/auth地址。已有应用升级时，同步检查自定义fetch、链接、守卫与回调地址；守卫匹配的是实际URL。带目录的私有API应返回401，页面应跳转到同一目录下的登录页。API的401响应保留诊断信息，界面错误继续使用公共Toast。
+
+![SvelteKit子目录登录页](../images/subpath-sveltekit-login.png)
+
+图为CLI实际生成的Admin在`/yyy/auth/login`的登录页。验收同时执行注册、登录和直接刷新，核对浏览器资源均位于`/yyy/`下；截图本身只展示页面状态。
+
+![子目录私有API拒绝匿名访问](../images/subpath-sveltekit-api-401.png)
+
+图为实际私有测试接口的原始401响应。处理器自身没有重复认证代码，用于确认全局守卫仍生效；普通页面仍通过Toast给出可读提示，追踪编号由详情入口查看。
+
+### 前后端分离：网站目录与API地址分别配置
+
+Fullstack Web的运行配置先于应用模块加载。未指定固定目录时，模板中的`./runtime-config.js`与Vite `base: './'`允许页面挂在`/yyy/`下；网关将该前缀剥离后交给根目录静态服务。访问入口应规范为带末尾斜杠的`/yyy/`，hash导航和刷新保持在这个目录。
+
+Web的API地址按显式baseUrl、runtime-config.js、构建时PUBLIC_API_BASE、当前origin的顺序选择；只提供origin时补`/api/v1`。独立托管Web时，在公开运行配置中设置实际API的完整地址及前缀，不放密钥。SDK部署Fullstack时，同源运行配置由当前_serv.http.apiPrefix生成；额外网关也要转发该API前缀。网站在`/yyy/`，并不自动把API改为`/yyy/api/v1`。详见[HTTP与客户端配置](http.md)。
+
+![前后端分离应用的子目录入口](../images/subpath-vite-login.png)
+
+图为真实生成的Fullstack Web经`/yyy/`反代访问的页面。验收沿该入口执行管理业务流程、hash深链接与刷新；API通过单独的`/api/v1/`代理访问实际服务。
+
+![子目录加载公开运行配置](../images/subpath-vite-runtime-config.png)
+
+图为浏览器实际收到的`/yyy/runtime-config.js`。本地端口属于独立验收环境，生产应使用实际公开地址；响应设置no-store，配置中仅包含公开字段。
+
+### 容器、增量部署与反向代理
+
+使用支持格式5的CLI和Deploy版本构建目录化镜像；即使只构建serv，也要传入与既有Web一致的公开目录，保留完整拓扑元数据：
+
+```powershell
+$previousBase = $env:PUBLIC_BASE_PATH
+try {
+  $env:PUBLIC_BASE_PATH = '/yyy'
+  pnpm.cmd build --target docker
+  $buildId = (Get-Content '.hai/build/docker/latest' -Raw).Trim()
+  $manifestPath = Join-Path (Join-Path '.hai/build/docker' $buildId) 'manifest.json'
+  Get-Content $manifestPath -Raw | ConvertFrom-Json | Select-Object version, webBasePath, partial, hasWeb
+}
+finally {
+  $env:PUBLIC_BASE_PATH = $previousBase
+}
+```
+
+预期version为5、webBasePath为`/yyy`。根目录制品仍为格式4。CLI与应用的框架依赖应使用匹配版本；正式部署步骤见[部署操作指南](../operations/deployment.md)。SDK据此配置页面入口、运行配置、健康检查与返回URL；更改目录后重新构建镜像。目录不能占用同源代理的API或健康入口；冲突会作为配置错误提前报告。
+
+增量包必须保持既有目录。忘传或改变目录会在替换服务前拒绝；修正构建变量后重建，或在确需改目录时执行新的全量部署。自动失败恢复继续使用旧发布记录的端口与健康路径。容器恢复仍不撤销业务数据和Schema迁移。
+
+额外网关转发到SDK已管理的目录入口时，**保留目录**。SvelteKit直接托管同样保留目录，例如已有server内的配置片段：
+
+```nginx
+location = /yyy {
+  return 308 /yyy/$is_args$args;
+}
+location /yyy/ {
+  proxy_pass http://127.0.0.1:18080;
+  proxy_set_header Host $http_host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+# Fullstack同源API的实际前缀，按_serv配置同步修改。
+location /api/v1/ {
+  proxy_pass http://127.0.0.1:18080;
+  proxy_set_header Host $http_host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+只有转发到**未配置固定目录、使用相对资源的Vite根目录服务**时，Web location中的proxy_pass才带末尾`/`，以剥离`/yyy/`；API仍单独转发到实际服务：
+
+```nginx
+location = /yyy {
+  return 308 /yyy/$is_args$args;
+}
+location /yyy/ {
+  proxy_pass http://127.0.0.1:8080/;
+  proxy_set_header Host $http_host;
+}
+location /api/v1/ {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_set_header Host $http_host;
+}
+```
+
+这些是已有网关server中的片段，替换为实际上游，并按[HTTP配置](http.md)设置HTTPS、公开源和可信代理。SvelteKit adapter-node的ORIGIN使用公网源，不把路径附在origin中。Vite剥离模式与SDK保留模式分别使用，不能叠加两次剥离。
+
+![子目录SvelteKit手机布局](../images/subpath-sveltekit-mobile.png)
+
+![子目录Vite手机布局](../images/subpath-vite-mobile.png)
+
+两图来自390px真实浏览器，等待实际布局过渡结束后拍摄。Admin菜单按需打开，Escape关闭后焦点回到菜单按钮，导航选中项包含挂载目录。验收还核对运行配置、JS/CSS、注册登录、匿名拒绝、hash导航、页面刷新、无整页横向溢出；真实Nginx另验证多级目录、保查询的308跳转、页面回退和根目录运行配置404。Linux shell夹具验证匹配、遗漏、变化和异常目录元数据的增量边界；这些证据不代表已经在用户生产环境完成灾备演练。
 
 ## 静态website与GitHub Pages
 
@@ -66,7 +198,7 @@ none是明确不选择可选模块，不是模块名，不能与其他模块、�
 | HAI_BUILD_STATIC | 未启用；省略或0为SSR | 1启用website静态预渲染；其他含糊值拒绝，不放宽生产依赖守卫 |
 | PUBLIC_BASE_PATH | 空，站点根路径 | 项目站填真实仓库路径，例如 `/docs-site`。每段只允许ASCII字母、数字、`_`、`.`、`-`；不含末尾斜杠、查询、片段、外部地址或单独的 `.` / `..` 路径段 |
 
-这两个值是公开构建控制，不从私有.env读取，只由compile明确放行；docker/app/desktop混用报错。Linux/macOS可运行`HAI_BUILD_STATIC=1 PUBLIC_BASE_PATH=/docs-site pnpm build`。PowerShell可在本次终端使用：
+HAI_BUILD_STATIC只用于compile；PUBLIC_BASE_PATH也可用于上述Docker网站构建，原生app/desktop目标不接受。两者都是显式公开的构建控制，不从私有.env读取。Linux/macOS可运行`HAI_BUILD_STATIC=1 PUBLIC_BASE_PATH=/docs-site pnpm build`。PowerShell可在本次终端使用：
 
 ```powershell
 $previousStatic = $env:HAI_BUILD_STATIC
