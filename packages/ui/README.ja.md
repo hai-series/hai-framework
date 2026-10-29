@@ -207,6 +207,8 @@ components/
 
 `UserProfile.fieldConstraints` は項目別に `required`、`minlength`、`maxlength`、`pattern`、`validationMessage` を受け取り、ユーザー名などの業務ルールをフォーカス離脱時に検証します。`pattern` は単一行の入力に適用し、`validationMessage` は翻訳関数にも対応します。
 
+`CrudEditPanel.onsubmit` はフォームに宣言された書き込み可能な項目だけを受け取ります。`readonly` の項目は編集時に除外し、新規作成時には入力できます。主キー、関連データの表示値、監査日時を行全体から自動送信しません。空値、`false`、`0` は保持します。サーバーでは引き続き厳密なスキーマ検証を行ってください。
+
 `LoginForm`、`RegisterForm`、`ChangePasswordForm`、`ForgotPasswordForm`、`ResetPasswordForm`、`AuthPanel`、`UserProfile`、`FeedbackModal` は同じレイアウト設定に対応します。`CrudPage.form` または `CrudEditPanel` に渡します。CRUD 項目は `colSpan` と翻訳関数の `validation.message` に対応し、ボタンと Enter のどちらも送信前に検証します。入力修正でエラーが消えます。サーバー側の検証も必要です。
 
 ```svelte
@@ -384,6 +386,7 @@ components/
 >
 > - `fontSize` は px の `number`、または `1.125rem` などの CSS 長さ。
 > - `allowHtmlTags` は既定で無効です。有効化すると `<b>` / `<i>` / `<u>` / `<mark>` などを安全な許可リストで解析し、危険なタグ・属性は除去します。
+> - 安全な HTML テキストの実体参照は一段だけ解釈し、設定例の引用符、比較記号、`&` を読みやすく表示します。符号化されたタグはテキストのまま保持し、タグとして再解析しません。
 > - 生の `<img>` では、1～99999 の正整数ピクセル値の `width` / `height` を保持します。遅延読み込み前に領域を確保し、文書のレイアウトとアンカー位置のずれを減らします。割合、負数、小数、イベント属性、任意の `style` は保持しません。
 
 ```svelte

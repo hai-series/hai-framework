@@ -107,6 +107,11 @@ export function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/** 仅用于已分离的 HTML 文本：保留实体的一层含义，不把编码标签重新交给标签解析器。 */
+function escapeHtmlText(text: string): string {
+  return escapeHtml(text).replace(/&amp;((?:#\d+|#[xX][\da-fA-F]+|[a-zA-Z][a-zA-Z\d]+);)/g, '&$1')
+}
+
 /**
  * 拒绝脚本等危险协议，只输出允许的链接地址。
  * @param href - 待验证的链接候选地址。
@@ -413,11 +418,11 @@ export function sanitizeMarkdownHtml(fragment: string): string {
   let lastIndex = 0
 
   for (let match = readNextHtmlTag(fragment, lastIndex); match; match = readNextHtmlTag(fragment, lastIndex)) {
-    sanitized += escapeHtml(fragment.slice(lastIndex, match.start))
+    sanitized += escapeHtmlText(fragment.slice(lastIndex, match.start))
     sanitized += sanitizeHtmlTag(match.rawTag)
     lastIndex = match.end
   }
 
-  sanitized += escapeHtml(fragment.slice(lastIndex))
+  sanitized += escapeHtmlText(fragment.slice(lastIndex))
   return sanitized
 }

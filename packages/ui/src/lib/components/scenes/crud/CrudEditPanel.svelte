@@ -79,6 +79,7 @@
     modalHeight?: string
     submitting?: boolean
     error?: string
+    /** 只接收当前表单声明且可写的字段；编辑时不提交 readonly 字段。 */
     onsubmit?: (data: Record<string, unknown>) => Promise<void>
     onclose?: () => void
     editFormExtra?: Snippet<[Record<string, unknown> | null, 'create' | 'edit']>
@@ -144,7 +145,14 @@
       formElement?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
       return
     }
-    await onsubmit?.(formData)
+    // 列表记录还包含主键、关联展示值和审计字段，不能随编辑请求回传。
+    const keys = sortedFields
+      .filter(field => mode !== 'edit' || !field.readonly)
+      .flatMap(field => field.type === 'date-range'
+        ? [field.id, field.startKey ?? `${field.id}Start`, field.endKey ?? `${field.id}End`]
+        : [field.id])
+    const data = Object.fromEntries(keys.filter(key => Object.hasOwn(formData, key)).map(key => [key, formData[key]]))
+    await onsubmit?.(data)
   }
 
   function getInputType(fieldType: string): 'email' | 'url' | 'tel' | 'password' | 'number' | 'text' {

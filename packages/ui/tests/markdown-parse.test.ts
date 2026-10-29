@@ -19,6 +19,15 @@ import { parseMarkdown } from '../src/lib/components/scenes/ai/markdown-parse.js
 // =============================================================================
 
 describe('parseMarkdown - 基础渲染', () => {
+  it('安全 HTML 保留文本实体的一层含义，配置代码可读且编码标签不会变成活动内容', () => {
+    const html = parseMarkdown('<p><code>start: &#39;22:00&#39;; &lt;img src=x onerror=evil()&gt;; &amp;; &amp;lt;; &#x1f4c4;; A & B</code></p>', { allowHtmlTags: true })
+    expect(html).toContain('start: &#39;22:00&#39;')
+    expect(html).not.toContain('&amp;#39;')
+    expect(html).toContain('&lt;img src=x onerror=evil()&gt;')
+    expect(html).not.toContain('<img')
+    expect(html).toContain('&amp;; &amp;lt;; &#x1f4c4;; A &amp; B')
+  })
+
   it('应该解析标题', () => {
     const html = parseMarkdown('# Hello')
     expect(html).toContain('<h1>')

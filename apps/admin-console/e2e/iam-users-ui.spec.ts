@@ -316,10 +316,11 @@ test.describe('IAM Users UI', () => {
         email: targetUser.email,
         password: targetUser.password,
         roles: [],
-        status: 'active',
+        accountStatus: 'active',
       },
     })
     expect(createTargetRes.ok()).toBeTruthy()
+    expect(await createTargetRes.json()).toMatchObject({ success: true, data: { accountStatus: 'active' } })
 
     await page.goto(`/admin/iam/users?search=${encodeURIComponent(targetUser.username)}`)
     await page.waitForLoadState('domcontentloaded')
@@ -349,14 +350,16 @@ test.describe('IAM Users UI', () => {
 
     // 先通过 API 创建一个待删除的用户
     const victim = uniqueUser('victim')
-    await request.post('/api/iam/users', {
+    const created = await request.post('/api/iam/users', {
       data: {
         username: victim.username,
         email: victim.email,
         password: victim.password,
-        status: 'active',
+        accountStatus: 'active',
       },
     })
+    expect(created.ok()).toBe(true)
+    expect(await created.json()).toMatchObject({ success: true, data: { accountStatus: 'active' } })
 
     await page.goto(`/admin/iam/users?search=${encodeURIComponent(victim.username)}`)
     await page.waitForLoadState('domcontentloaded')

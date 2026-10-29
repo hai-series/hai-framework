@@ -207,6 +207,8 @@ Text controls validate on blur after input and update errors as input is correct
 
 `UserProfile.fieldConstraints` accepts per-field `required`, `minlength`, `maxlength`, `pattern` and `validationMessage` (`pattern` applies to single-line inputs), so application rules such as username formats share blur validation. `validationMessage` also accepts a deferred translation function.
 
+`CrudEditPanel.onsubmit` receives only writable fields declared by the form. Fields marked `readonly` are omitted when editing and remain available when creating. Primary keys, related display values and audit timestamps are not copied from the entire row. Null values, `false` and `0` are preserved. Keep strict schema validation on the server.
+
 `LoginForm`, `RegisterForm`, `ChangePasswordForm`, `ForgotPasswordForm`, `ResetPasswordForm`, `AuthPanel`, `UserProfile` and `FeedbackModal` accept the same layout options. Pass them through `CrudPage.form` or directly to `CrudEditPanel`. CRUD fields support `colSpan` and deferred `validation.message`. Buttons and Enter both validate before submission; corrections clear errors. Server validation remains required.
 
 ```svelte
@@ -384,6 +386,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 >
 > - `fontSize` accepts a `number` in px or any CSS length such as `1.125rem`.
 > - `allowHtmlTags` is off by default; when enabled, tags such as `<b>` / `<i>` / `<u>` / `<mark>` use a safe allowlist, with dangerous tags/attributes still sanitized.
+> - Text entities in safe HTML retain one level of meaning, so quotes, comparison operators and `&` in configuration snippets remain readable. Encoded tags remain text and are never reparsed as markup.
 > - Raw `<img>` tags retain `width` / `height` as positive integer pixel values from 1 to 99999. These reserve space before lazy images load and keep document layout and anchor positions stable. Percentages, negatives, decimals, events, and arbitrary `style` are removed.
 
 ```svelte

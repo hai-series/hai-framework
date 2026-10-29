@@ -83,6 +83,8 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 
 UserProfile 的 `fieldConstraints` 按字段声明 `required/minlength/maxlength/pattern/validationMessage`；单行控件支持 pattern，业务文案可用翻译函数。不要只在保存回调内放前端校验，服务端仍须执行 schema 校验。
 
+CrudEditPanel 的 onsubmit 只提交表单声明的可写字段；编辑时不回传 readonly 字段，新建仍可填写。主键、关联展示值和审计时间不自动提交，空值、false 和 0 保留。自定义保存逻辑也应遵守输入白名单，服务端继续严格 schema 校验，不通过放宽校验接收整行记录。
+
 状态层通过轻量入口 `@h-ai/ui/i18n` 导入 `setGlobalLocale` / `createLocaleStore`，不加载组件或引导 CSS。
 
 应用业务文案使用项目自己的 Paraglide 消息。`uiM` 为 UI 包内部函数，不能从 `@h-ai/ui/i18n` 导入或复制内部字典。

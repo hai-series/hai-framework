@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, mount, unmount } from 'svelte'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { CrudPage, defineCrud } from '../src/lib/components/scenes/crud/index.js'
+import { CrudEditPanel, CrudPage, defineCrud } from '../src/lib/components/scenes/crud/index.js'
 import { uiM } from '../src/lib/messages.js'
 import { toast } from '../src/lib/toast.svelte.js'
 
@@ -23,6 +23,40 @@ afterEach(() => {
       Object.defineProperty(HTMLDialogElement.prototype, name, descriptor)
     else
       Reflect.deleteProperty(HTMLDialogElement.prototype, name)
+  }
+})
+
+it.each(['create', 'edit'] as const)('表单 %s 只提交声明的可写字段，保留空值与日期范围且不修改原始记录', async (mode) => {
+  const target = document.body.appendChild(document.createElement('div'))
+  const formData = { id: 'record', name: 'Updated', active: false, count: 0, note: null, period: '', from: '2026-10-01', until: '2026-10-30', avatar: '/avatar.png', roleNames: ['System administrator'], created_at: 1 }
+  const original = structuredClone(formData)
+  const onsubmit = vi.fn(async () => {})
+  const component = mount(CrudEditPanel, { target, props: {
+    open: true,
+    mode,
+    formData,
+    onsubmit,
+    fields: [
+      { id: 'id', label: 'ID', type: 'text', readonly: true },
+      { id: 'name', label: 'Name', type: 'text' },
+      { id: 'active', label: 'Active', type: 'boolean' },
+      { id: 'count', label: 'Count', type: 'number' },
+      { id: 'note', label: 'Note', type: 'text' },
+      { id: 'password', label: 'Password', type: 'password' },
+      { id: 'period', label: 'Period', type: 'date-range', startKey: 'from', endKey: 'until' },
+    ],
+  } })
+  try {
+    flushSync()
+    const form = document.querySelector('form')!
+    expect(form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))).toBe(false)
+    await vi.waitFor(() => expect(onsubmit).toHaveBeenCalledOnce())
+    expect(onsubmit).toHaveBeenCalledWith({ ...(mode === 'create' ? { id: 'record' } : {}), name: 'Updated', active: false, count: 0, note: null, period: '', from: '2026-10-01', until: '2026-10-30' })
+    expect(formData).toEqual(original)
+  }
+  finally {
+    await unmount(component)
+    target.remove()
   }
 })
 
