@@ -231,6 +231,14 @@ HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
 
 设置完整 `HAI_SERV` 或 `HAI_KIT` 父对象时，父对象整体覆盖配置，不再继续叠加子字段变量。建议同一设置只选一种覆盖方式；通常用上面的策略入口变量即可。完整环境优先级见[配置来源](runtime.md#配置从哪里来)。
 
+内联规则同样可以用 JSON 传入。例如只对外部同步接口限制来源，并关闭该接口的框架应用层加密：
+
+```dotenv
+HAI_SERV_HTTP_ACCESS='{"rules":[{"id":"delivery-sync","paths":["/api/v1/sync"],"allowIps":["192.0.2.10"],"encryption":"disabled"}]}'
+```
+
+将示例地址替换为真实允许来源；接口原有认证、API Key 与权限校验继续执行，HTTPS 仍需保留。该值可以来自进程环境，或由 Compose 的 `env_file` 读取。修改 `env_file` 后要**重新创建容器**才会更新环境变量；`docker compose restart serv` 继续使用原值。通常执行 `docker compose up -d --no-deps --force-recreate serv` 即可，不需要重新构建镜像。应沿用启动时的项目名和全部 Compose 文件参数。
+
 ### 4.3 全量、增量与回滚
 
 部署器在打包前读取当前应用的配置，并验证独立文件。相对路径按所部署的后端应用目录解析。文件内容形成该次交付的 `request-access.yml` 快照，纳入 SHA-256 校验，并以只读文件挂到后端的 `/run/hai/request-access.yml`。
@@ -250,6 +258,56 @@ HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
 
 上图在真实 Linux 文件系统中运行交付包的原始脚本，确认旧策略不被新发布覆盖、篡改停止在预检，以及健康失败后回到旧策略。Compose 和 HTTP 使用确定性故障夹具；Node 实际读取和拒绝行为另由本章代理请求及模块测试验证。业务数据与数据库迁移的恢复仍需独立方案。
 
+### 4.4 运维独立管理文件：修改后重启生效
+
+如果需要只修改规则并重启容器，使用**固定文件引用 + 容器只读挂载**。框架在服务实例初始化时读取、校验和编译文件；请求阶段不读取磁盘。保持引用不变，修改宿主上的 YAML 后重启服务，就会重新加载。它不监视文件变化，也不在每次请求时读取文件。
+
+**自行维护 Compose 的项目**可以使用目录挂载，便于在宿主原子替换文件。以下配置合并到现有 Compose，保留原镜像、端口和其他配置：
+
+```yaml
+services:
+  serv:
+    env_file: .env.runtime
+    volumes:
+      - ./runtime/security:/run/hai/security:ro
+```
+
+`.env.runtime` 中固定使用以下入口；SvelteKit 对应改为 `HAI_KIT_ACCESS`：
+
+```dotenv
+HAI_SERV_HTTP_ACCESS='{"file":"/run/hai/security/request-access.yml"}'
+```
+
+前提是没有完整 `HAI_SERV` 父对象覆盖它；若已经使用父对象，就在父对象的 `http.access` 中设置同一引用，不能同时依赖叶子变量叠加。宿主准备 `runtime/security/request-access.yml`，内容采用 4.1 的完整规则。限制宿主目录的修改权限，并确保容器运行用户可读。新增挂载或首次改变引用时先重新创建容器，此后只改变 YAML：
+
+```sh
+docker compose up -d --no-deps --force-recreate serv
+# 后续规则文件修改并保存后执行
+docker compose restart serv
+```
+
+**部署器生成的交付包**默认仍使用 4.3 的不可变快照。若明确由运维独立管理策略，可在交付之外保存一份宿主文件与 Compose override，将已有 `/run/hai/request-access.yml` 挂载替换为外部文件，保持部署器注入的完整 `HAI_SERV` / `HAI_KIT` 引用不变：
+
+```yaml
+services:
+  serv:
+    volumes:
+      - type: bind
+        source: /opt/hai-config/request-access.yml
+        target: /run/hai/request-access.yml
+        read_only: true
+```
+
+`serv` 要换成实际后端服务名；同源模板可能为 `web`。Compose 按容器目标路径合并挂载，所以只替换这一项。启动或重建时，把该 override 作为**原有完整 `-f` 列表的最后一项**，并使用原项目名。首次应用需要重新创建后端容器；之后原子替换宿主文件并重启同一后端即可。不要编辑校验过的交付快照或 `.env.runtime`。
+
+该 override 及外部文件需要纳入运维自己的部署与备份流程，后续 SDK 发布不会自动保存人工附加的参数。**SDK 回滚不恢复这份外部策略**；如需规则与制品一起自动回滚，继续使用默认快照模式。修改前备份，重启后检查健康状态，并实际请求一条允许路径和一条拒绝路径；规则只限制业务路径时，保留健康探测可达。SvelteKit 可能在首个请求时才创建 Handle，容器显示运行中不足以证明策略已加载。
+
+无效文件或权限错误会阻止服务初始化，不会自动放行。恢复最后可用文件并再次重启，再核对接口响应。对下载或长连接较多的应用，重启前安排连接排空或多实例切换。
+
+![环境变量重建与只读 YAML 重启的真实容器验证](../images/serv-config-restart.png)
+
+上图使用当前 Core/Serv 的已构建公开入口、Node 24.22.1，在实际 Podman Linux 容器中发起 HTTP 请求；`env_file` 的引号与 JSON 由 Docker Compose 5.3.0 实际解析。验证了改环境文件后 restart 保留旧值、重新创建后变为 403、只读文件原子替换并重启后变为 403、恢复后回到 200，以及无效 YAML 阻止启动和恢复后重新可用。Docker Desktop 引擎当时未运行，未把该结果称为 Docker 引擎实测；Docker 的 restart 环境行为另见[官方说明](https://docs.docker.com/reference/cli/docker/compose/restart/)。
+
 ## 5. 安全审查与排错
 
 | 现象 | 应检查什么 | 处理方式 |
@@ -264,6 +322,8 @@ HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
 用户界面统一通过 ToastContainer 提示。默认只显示可读说明；点击信息图标可查看或复制追踪编号，供客服或开发进一步定位。日志记录规则编号、原因类别、可信客户端 IP 和请求关联，不向用户回显策略文件正文或完整来源列表。
 
 访问策略与账号权限共同生效。它不会授予接口权限，也不会替代 API Key、租户归属或数据范围检查。关闭策略后，原有认证和权限规则继续执行。
+
+本章策略在 Serv/Kit 请求链执行。Nginx 直接返回的静态资源及[对象存储直连](data.md#配置人员区分三个访问地址)不经过这条链；文件下载需依赖 S3 签名及入口网络策略，不能仅靠 Serv/Kit 的全局配置限制已发出的存储链接。
 
 ## 6. 性能与验证
 

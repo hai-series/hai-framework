@@ -69,6 +69,63 @@ logging:
 
 ![公开错误保留关联信息并隐藏内部原因](../images/errors-public-boundary.png)
 
+## 可选：Node 容器重启时重读环境文件
+
+### 用途、适用条件与默认行为
+
+普通 Compose 的 `env_file` 在创建容器时注入变量，修改后单纯 `restart` 不会更新。本模式适合需要频繁调整日志、业务开关、请求策略等**应用启动配置**的 Node 后端：固定挂载一份外部 `.env.runtime`，每次启动先解析它，再导入应用。首次设置需要重新创建容器，后续改文件后重启即可，无需重建镜像。
+
+这是可选的运维装配，**默认不启用**，不增加 Core 配置项。现有 Node 镜像可通过挂载配套脚本接入，无需覆盖已发布包。SvelteKit 后端与独立 Serv 后端适用；Nginx 静态前端、数据库和其他中间件不使用这个 Node 入口。
+
+### 准备完整、受保护的运行文件
+
+将[预加载脚本](../examples/runtime-env.mjs)保存为 `runtime-env.mjs`，与外部 `.env.runtime` 放在宿主私有目录，例如 `/opt/hai-config/my-app/`。首次应带上后端原有的完整配置与受管凭据，不能只保留需要修改的一项；交付包中的原文件仍作为不可变发布快照保留。
+
+下面只展示常见可调整项，省略已有 DB、Cache、transport 等运行配置，不能直接代替完整生产环境文件：
+
+```dotenv
+HAI_CORE_LOGGING_LEVEL=info
+HAI_SERV_HTTP_ACCESS='{"rules":[{"id":"delivery-sync","paths":["/api/v1/sync"],"allowIps":["192.0.2.10"],"encryption":"disabled"}]}'
+```
+
+文件采用 Node 的 dotenv 字面语法，不执行 shell、变量展开或 Compose 插值。JSON 用单引号包裹；`$` 是字面字符，不写成 Compose 专用的 `$$`。从 Compose 文件导出值时先确认插值已正确还原，不把 Compose 转义直接当作实际密码。
+
+目录仅允许运维修改，容器只读；含秘密的环境文件不能设为所有用户可读。例如镜像以 UID/GID 1000 运行时，可将目录设为 `root:1000`、`0750`，文件设为 `root:1000`、`0640`；其他 UID 按实际调整。脚本也必须处于同一受保护的只读目录，不能让应用进程修改启动代码。
+
+### 覆盖 Compose 启动方式
+
+将以下内容保存为交付目录之外的 `runtime.override.yml`，作为原有完整 Compose 文件列表的最后一项，保留原项目名。需要支持 `!reset` 的 Compose 版本；本轮以 Docker Compose 5.3.0 验证解析。
+
+```yaml
+services:
+  serv:
+    env_file: !reset []
+    volumes:
+      - type: bind
+        source: /opt/hai-config/my-app
+        target: /run/hai/runtime
+        read_only: true
+    command: [node, --import, /run/hai/runtime/runtime-env.mjs, dist/index.js]
+```
+
+SvelteKit 模板把服务名换成实际后端（通常是 `web`），最后一项换为 `build/index.js`。`env_file: !reset []` **必须保留**：它清除原文件在创建时的注入，让删除的配置项不会从旧容器环境中复活。若原 Compose 的 `environment` 中也重复写了应用变量，同样应去掉重复项；保留受管私有代理标记等部署基础设置。
+
+本模式的优先级是：**外部文件 > 同名进程/镜像环境 > 原应用配置**。未在文件中设置的值仍可使用镜像默认值或原应用配置。完整 `HAI_SERV` / `HAI_KIT` 仍会覆盖其叶子变量；删除父对象后再使用叶子配置时，不应在其他来源保留该父对象。
+
+首次用原项目名、原来的全部 `-f` 参数及追加的 override，执行 `up -d --no-deps --force-recreate <后端服务>`。此后将新文件写入同一目录的临时文件，校验后原子替换 `.env.runtime`，再用同一组 Compose 参数执行 `restart <后端服务>`。目录挂载可正确反映原子替换，不依赖运行中旧文件的 inode。
+
+### 确认生效与恢复
+
+验证健康接口，以及一条配置前后结果不同的业务请求。例如将测试策略从允许改为拒绝，重启后应得到 `hai:common:104` / HTTP 403，再恢复文件并重启，应回到允许。不要为验证而打印全部环境；`docker inspect` 或独立 `docker exec env` 也不会显示应用预加载后自己的环境对象。
+
+预加载脚本拒绝缺失、不可读、非普通文件及超过 1 MiB 的文件；读取失败在应用导入前终止。解析后由应用按既有 Schema 校验业务配置，解析成功不等于业务配置有效。修改前备份脚本与文件，失败时恢复最后可用内容并重启，再检查健康与业务响应。
+
+![外部环境文件在容器重启后加载新值、清除旧父对象并在文件缺失时阻止启动](../images/serv-env-restart.png)
+
+图中是本轮真实容器 HTTP 请求与进程状态的验证记录：修改文件尚未重启时仍允许，重启后加载拒绝规则并返回 403，删除的父配置和测试变量未残留，恢复文件后重新允许。底层运行环境为 Podman Linux 容器，Compose 配置由 Docker Compose 实际解析；Docker Desktop 引擎未运行，本图不代表该引擎或客户生产环境的实测。截图不展示环境文件内容、凭据和业务数据。
+
+该模式不用于更改容器端口、网络、挂载、UID、Node 启动选项、编译时公共路径或已生成的 Nginx 限额。中间件凭据与持久卷需要协调轮换，不能只改应用连接密码。外部环境文件与 override 需纳入运维后续发布流程，SDK 自动回滚不恢复它；要求配置随制品自动恢复时继续使用默认不可变快照。
+
 ## 保存以后如何生效
 
 以下是独立 Node 宿主的完整装配片段；生成工程已有同类入口时直接复用。

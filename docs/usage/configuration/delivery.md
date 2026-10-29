@@ -241,6 +241,10 @@ GitHub仓库Pages选择Actions，上传build时显式include-hidden-files:true�
 
 运行时`.env.runtime`在交付tar内，属于私有产物；NODE_ENV默认dev→development、test→test、prod及其他模式→production，显式环境可覆盖。构建优化模式不改变部署运行默认。反向代理和加密预算从解析后的Serv/Kit配置推导，容量变化要同时验附件与页面/API。
 
+Compose 在创建容器时读取 `env_file`。修改环境变量后仅 `restart` 不会重新加载；沿用原项目名和 Compose 文件列表执行 `up -d --no-deps --force-recreate <后端服务>`，通常无需重新构建镜像。需要“改规则后重启”时，可将请求策略固定引用到只读挂载的 YAML；默认交付快照与运维独立文件的两种方式、父对象覆盖及恢复边界见[请求策略：修改后重启生效](request-access.md#44-运维独立管理文件修改后重启生效)。不要手工改写校验过的 `.env.runtime` 或策略快照。
+
+需要对整份 Node 应用环境文件采用“改文件后重启”时，使用[可选的启动预加载方式](runtime.md#可选node-容器重启时重读环境文件)：挂载外部环境目录、清除旧 `env_file` 注入，先读文件再启动应用。该外部文件独立于发布快照，部署设置与中间件凭据仍须按原流程更新。
+
 ## SSH、端口、中间件与云服务
 
 | deploy.provider字段 | 框架默认/必填 | 影响 |
