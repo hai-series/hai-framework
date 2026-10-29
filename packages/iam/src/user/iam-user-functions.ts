@@ -27,7 +27,7 @@ import { crypto } from '@h-ai/crypto'
 import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 import { verifyIamCaptcha } from '../authn/iam-authn-captcha.js'
-import { isAccountLocked, recordLoginFailure, resetLoginFailures } from '../authn/iam-authn-utils.js'
+import { isAccountLocked, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../authn/iam-authn-utils.js'
 import { buildAgreementDisplay } from '../iam-agreement.js'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -831,24 +831,22 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
       const user = userResult.data
 
-      // 账户状态检查（防止被锁定/禁用的账户变更密码）
-      if (!isUserActive(user)) {
+      const active = isUserActive(user)
+      const locked = isAccountLocked(user, ctx.loginConfig)
+      // 受限期间不比较口令；公开 renewPassword 会掩码，已有会话的操作保留具体错误。
+      if (!active)
         return err(HaiIamError.ACCOUNT_UNAVAILABLE, iamM('iam_accountUnavailable'))
-      }
-      if (isAccountLocked(user, ctx.loginConfig)) {
+      if (locked)
         return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
-      }
 
       // 验证旧密码
-      if (!user.passwordHash) {
-        return err(
-          HaiIamError.INVALID_CREDENTIALS,
-          iamM('iam_accountNoPassword'),
-        )
-      }
+      if (!user.passwordHash)
+        return rejectMissingPasswordCredentials()
 
       const verifyResult = crypto.password.verify(oldPassword, user.passwordHash)
-      if (!verifyResult.success || !verifyResult.data) {
+      if (!verifyResult.success)
+        return err(HaiIamError.INTERNAL_ERROR, verifyResult.error.message)
+      if (!verifyResult.data) {
         // 记录失败计数 / 触发锁定，防止通过 changePassword 端点暴力枚举旧密码
         const failureResult = await recordLoginFailure(userRepository, user, ctx.loginConfig)
         if (!failureResult.success)
@@ -1071,12 +1069,17 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       const found = await deps.userRepository.findByIdentifier(input.identifier)
       if (!found.success)
         return found
-      if (!found.data) {
-        // 不存在账号同样执行散列工作，不暴露“账号不存在”分支。
-        crypto.password.hash('dummy-password-to-prevent-timing-leak')
-        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+      if (!found.data)
+        return rejectMissingPasswordCredentials()
+      const changed = await passwordChanges.changePassword(found.data.id, input.password, input.newPassword)
+      // 公开改密接口不以错误文案区分不存在账号、无本地口令或错误原密码。
+      if (!changed.success) {
+        if ([HaiIamError.ACCOUNT_UNAVAILABLE.code, HaiIamError.USER_LOCKED.code, HaiIamError.USER_NOT_FOUND.code].includes(changed.error.code))
+          return rejectMissingPasswordCredentials()
+        if (changed.error.code === HaiIamError.INVALID_CREDENTIALS.code)
+          return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
       }
-      return passwordChanges.changePassword(found.data.id, input.password, input.newPassword)
+      return changed
     },
     async scanInactiveAccounts() {
       const days = deps.config.accounts?.dormantAfterDays ?? 0

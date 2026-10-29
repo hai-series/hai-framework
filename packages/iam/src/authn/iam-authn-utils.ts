@@ -10,9 +10,30 @@ import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { StoredUser } from '../user/iam-user-types.js'
 import type { Credentials } from './iam-authn-types.js'
 import { err, ok } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+
+/**
+ * 不存在、无本地口令或受限账号执行同类哈希工作后统一拒绝凭据，不验证受限账号密码。
+ * @returns 凭据错误；底层哈希故障保留为内部错误，不能静默伪装成认证失败。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const rejected = rejectMissingPasswordCredentials()
+ * if (!rejected.success) {
+ *   const code = rejected.error.code
+ * }
+ * ```
+ */
+export function rejectMissingPasswordCredentials(): HaiResult<never> {
+  // 此固定值仅用于计算量填充，不作为任何账号、密钥或业务凭据保存。
+  const padded = crypto.password.hash('dummy-password-to-prevent-timing-leak')
+  if (!padded.success)
+    return err(HaiIamError.INTERNAL_ERROR, padded.error.message)
+  return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+}
 
 /**
  * 校验凭证类型并进行类型收窄

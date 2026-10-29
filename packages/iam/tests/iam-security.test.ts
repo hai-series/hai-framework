@@ -4,7 +4,7 @@ import { reach } from '@h-ai/reach'
 import { reldb } from '@h-ai/reldb'
 import { expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
-import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
   it('公开配置与注册/登录结果保留 Markdown 协议，按场景开关展示', async () => {
@@ -103,7 +103,8 @@ function tests() {
     const failures = await Promise.all(Array.from({ length: 8 }, () => iam.auth.login({ identifier: 'parallel-password', password: 'wrong' })))
     expect(failures.every(result => !result.success)).toBe(true)
     const locked = await iam.auth.login({ identifier: 'parallel-password', password: TEST_PASSWORD })
-    expect(locked).toMatchObject({ success: false, error: { code: HaiIamError.USER_LOCKED.code } })
+    expect(locked).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+    await expectAccountLocked('parallel-password')
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       vi.setSystemTime(Date.now() + 61_000)
@@ -149,7 +150,7 @@ function tests() {
     } })
     await iam.auth.sendOtp('pending@example.com')
     const result = await iam.auth.loginWithOtp({ identifier: 'pending@example.com', code })
-    expect(result).toMatchObject({ success: false, error: { code: HaiIamError.ACCOUNT_UNAVAILABLE.code } })
+    expect(result).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
     await initIam({ login: { password: false } })
     const registered = await iam.auth.registerAndLogin({ username: 'register-only', password: TEST_PASSWORD })
     expect(registered.success).toBe(true)

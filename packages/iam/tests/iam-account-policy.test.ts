@@ -1,4 +1,6 @@
 /** 账号类型、状态与闲置扫描覆盖已有会话，不能只检查登录表单。 */
+import { err } from '@h-ai/core'
+import { crypto as haiCrypto, HaiCryptoError } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
@@ -15,6 +17,65 @@ function tests() {
     const permanent = await iam.user.createUser({ username: `permanent-${crypto.randomUUID()}`, password: TEST_PASSWORD })
     expect(permanent).toMatchObject({ success: true, data: { user: { accountType: 'permanent', accountStatus: 'active' } } })
     expect((await iam.user.createUser({ username: `invalid-${crypto.randomUUID()}`, password: TEST_PASSWORD, accountType: 'temporary' })).success).toBe(false)
+  })
+
+  it.each(['dormant', 'closed', 'expired', 'locked', 'passwordless'] as const)('公开凭据反馈不暴露 %s 账号状态，登录与公开改密不改变受限账号的失败计数', async (state) => {
+    const iam = await initIam({ security: { maxLoginAttempts: 1, lockoutDuration: 1200 } })
+    const username = `privacy-${crypto.randomUUID()}`
+    const missing = `missing-${crypto.randomUUID()}`
+    const created = await iam.user.createUser({
+      username,
+      password: TEST_PASSWORD,
+      accountStatus: state === 'dormant' || state === 'closed' ? state : 'active',
+      accountType: state === 'expired' ? 'temporary' : 'permanent',
+      accountExpiresAt: state === 'expired' ? new Date(Date.now() + 60_000) : undefined,
+    })
+    expect(created.success).toBe(true)
+    if (!created.success)
+      throw new Error(created.error.message)
+    if (state === 'passwordless') {
+      // OTP/目录创建的账号可没有本地口令；以真实存储状态准备此边界，不违反 createUser 的必填类型。
+      expect((await reldb.sql.execute('UPDATE hai_iam_users SET password_hash = NULL WHERE id = ?', [created.data.user.id])).success).toBe(true)
+    }
+    if (state === 'locked')
+      await iam.auth.login({ identifier: username, password: 'WrongPassword123!' })
+    if (state === 'expired') {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(Date.now() + 60_001)
+    }
+    const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
+    const before = await query()
+    expect(before.success).toBe(true)
+    const unknown = await iam.auth.login({ identifier: missing, password: 'WrongPassword123!' })
+    const login = await iam.auth.login({ identifier: username, password: 'WrongPassword123!' })
+    expect(unknown).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+    expect(login).toEqual(unknown)
+    const unknownRenewal = await iam.user.renewPassword({ identifier: missing, password: 'WrongPassword123!', newPassword: 'NewPassword456!' })
+    const renewal = await iam.user.renewPassword({ identifier: username, password: 'WrongPassword123!', newPassword: 'NewPassword456!' })
+    expect(unknownRenewal).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+    expect(renewal).toEqual(unknownRenewal)
+    expect(await query()).toEqual(before)
+    // 即使密码正确也给相同反馈，不能在锁定/休眠期间继续验证猜测是否命中。
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toEqual(unknown)
+    expect(await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword456!' })).toEqual(unknownRenewal)
+    expect(await query()).toEqual(before)
+  })
+
+  it('密码计算故障不计为用户输错密码，依赖恢复后原密码仍可登录', async () => {
+    const iam = await initIam({ security: { maxLoginAttempts: 1, lockoutDuration: 1200 } })
+    const username = `crypto-fault-${crypto.randomUUID()}`
+    const created = await iam.user.createUser({ username, password: TEST_PASSWORD })
+    if (!created.success)
+      throw new Error(created.error.message)
+    const query = () => reldb.sql.get('SELECT login_failed_count, locked_until FROM hai_iam_users WHERE id = ?', [created.data.user.id])
+    const before = await query()
+    expect(before.success).toBe(true)
+    const verify = vi.spyOn(haiCrypto.password, 'verify').mockReturnValueOnce(err(HaiCryptoError.VERIFY_FAILED, 'Simulated password computation failure'))
+    const changed = await iam.user.renewPassword({ identifier: username, password: TEST_PASSWORD, newPassword: 'NewPassword456!' })
+    expect(changed).toMatchObject({ success: false, error: { code: HaiIamError.INTERNAL_ERROR.code } })
+    expect(await query()).toEqual(before)
+    verify.mockRestore()
+    expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
   })
 
   it('注册默认休眠由服务端决定，管理员创建不受该默认状态影响', async () => {

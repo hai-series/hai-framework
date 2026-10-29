@@ -368,7 +368,8 @@ export interface UserOperations {
   /**
    * 使用原凭据完成首次或过期改密，不需要先获得普通会话。
    * 仍执行账号状态、旧密码校验、失败锁定及新密码策略；成功后需重新登录。
-   * 凭据失败统一返回 INVALID_CREDENTIALS；复杂度不足返回 PASSWORD_POLICY_VIOLATION，复用当前密码返回 PASSWORD_REUSE_NOT_ALLOWED。
+   * 不存在、无本地口令或受限账号统一返回 INVALID_CREDENTIALS，不以正确密码继续探测受限账号。
+   * 复杂度不足返回 PASSWORD_POLICY_VIOLATION，复用当前密码返回 PASSWORD_REUSE_NOT_ALLOWED。
    * @example
    * ```ts
    * import { iam } from '@h-ai/iam'

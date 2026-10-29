@@ -34,6 +34,7 @@ import { applyApiKeyScopes } from './apikey/iam-authn-apikey-scope.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
 import { createLoginAccessCheck } from './iam-authn-access.js'
 import { createIamCaptcha, verifyIamCaptcha } from './iam-authn-captcha.js'
+import { rejectMissingPasswordCredentials } from './iam-authn-utils.js'
 import { loadLdapClientFactory } from './ldap/iam-authn-ldap-client.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
@@ -428,12 +429,19 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Pick<AuthnOperationsResult,
 
     if (!authResult.success) {
       logger.warn('Login failed', { type, reason: authResult.error.code })
+      // 不公开生命周期或锁定状态，也不让受限账号继续充当密码/验证码猜测的反馈源。
+      if (authResult.error.code === HaiIamError.ACCOUNT_UNAVAILABLE.code || authResult.error.code === HaiIamError.USER_LOCKED.code)
+        return rejectMissingPasswordCredentials()
       return authResult as HaiResult<AuthResult>
     }
 
     if (credentials.expectedUserId && credentials.expectedUserId !== authResult.data.id)
       return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     const result = await buildAuthResult(authResult.data, undefined, context)
+    if (!result.success && (result.error.code === HaiIamError.ACCOUNT_UNAVAILABLE.code || result.error.code === HaiIamError.USER_LOCKED.code)) {
+      logger.warn('Account eligibility changed during login', { type, userId: authResult.data.id, reason: result.error.code })
+      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
+    }
     if (result.success) {
       logger.info('Login succeeded', { type, userId: authResult.data.id })
     }

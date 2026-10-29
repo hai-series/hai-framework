@@ -17,7 +17,7 @@ import { PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { HaiIamError } from '../../iam-types.js'
 import { checkPasswordState, isUserActive, toUser } from '../../user/iam-user-utils.js'
-import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
+import { ensureCredentialType, isAccountLocked, recordLoginFailure, rejectMissingPasswordCredentials, resetLoginFailures } from '../iam-authn-utils.js'
 
 /**
  * 密码认证策略配置
@@ -157,7 +157,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
   }
 
   /**
-   * 校验账户状态（启用、锁定）
+   * 先拒绝非激活、到期或锁定账号；公开登录边界统一掩码，不能在受限期间继续猜测密码。
    */
   function checkAccountStatus(user: StoredUser): HaiResult<void> {
     if (!isUserActive(user)) {
@@ -173,9 +173,8 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
    * 验证用户密码
    */
   async function verifyUserPassword(user: StoredUser, password: string): Promise<HaiResult<void>> {
-    if (!user.passwordHash) {
-      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_accountNoPassword'))
-    }
+    if (!user.passwordHash)
+      return rejectMissingPasswordCredentials()
     const verifyResult = passwordOps.verify(password, user.passwordHash)
     if (!verifyResult.success) {
       return mapPasswordError(verifyResult.error.message)
@@ -210,18 +209,13 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
         return userResult
 
       const storedUser = userResult.data
-      if (!storedUser) {
-        // 防止用户枚举：执行伪哈希验证以消除时序差异，统一返回 INVALID_CREDENTIALS
-        await passwordOps.hash('dummy-password-to-prevent-timing-leak')
-        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
-      }
+      if (!storedUser)
+        return rejectMissingPasswordCredentials()
 
-      // 校验账户状态
+      // 受限账号不继续验证密码；公开登录边界执行计算填充并隐藏具体状态。
       const statusResult = checkAccountStatus(storedUser)
       if (!statusResult.success)
         return statusResult as HaiResult<AuthenticatedUser>
-
-      // 验证密码
       const pwResult = await verifyUserPassword(storedUser, password)
       if (!pwResult.success)
         return pwResult as HaiResult<AuthenticatedUser>

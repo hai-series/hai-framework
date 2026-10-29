@@ -907,7 +907,9 @@ if (!result.success) {
 
 ## 可选密码与登录保护
 
-凭据错误统一返回“用户名或密码不正确”，不区分账号不存在、未设密码或原密码错误。当前密码复用返回 `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED`（`hai:iam:034`），复杂度不符仍为 `PASSWORD_POLICY_VIOLATION`（`008`）；前端应按错误码映射友好提示，不能直接显示未知异常。首次改密失败不签发普通会话，成功后使用新密码重新登录。
+公开登录与 `renewPassword` 对不存在、无本地口令、休眠、注销、到期及锁定账号统一返回 `INVALID_CREDENTIALS`（“用户名或密码不正确”）。受限账号不继续校验猜测的密码，正确与错误密码得到相同反馈且不改变原有锁定计数；已认证管理入口仍可查看具体状态。密码计算或存储故障保留为基础设施错误，不能计为用户输错密码。
+
+当前密码复用返回 `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED`（`hai:iam:034`），复杂度不符仍为 `PASSWORD_POLICY_VIOLATION`（`008`）；前端应按错误码映射友好提示，不能直接显示未知异常。首次改密失败不签发普通会话，成功后使用新密码重新登录。
 
 `password.minLength/maxLength` 控制长度，各 `require*` 指定必需类别；`minCharacterClasses` 支持大小写、数字、特殊字符中任意 N 类，0不额外限制。CLI/admin 示例默认8–128位、不额外要求字符类别；需要任意3类时显式设置 `minCharacterClasses: 3`。所有服务端创建、改密和重置入口共用校验。
 

@@ -11,7 +11,7 @@
  * - verifyToken：有效/无效/空令牌、登出后令牌验证、Session 含 roles/permissions/displayName
  * - logout：正常登出、令牌失效、重复登出、不存在令牌幂等
  * - logout 吊销 refreshToken：登出后 refreshToken 不可用
- * - 禁用用户登录：register(defaultAccountStatus: 'dormant') → login 应返回 ACCOUNT_UNAVAILABLE
+ * - 休眠账号登录：register(defaultAccountStatus: 'dormant') → login 统一返回 INVALID_CREDENTIALS
  * - 账户锁定：超过最大尝试次数后锁定
  * - 登录结果中的 agreements
  */
@@ -19,7 +19,7 @@
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
-import { defineIamSuite, initIam, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, expectAccountLocked, initIam, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.auth', () => {
   const defineCommon = (getIam: () => IamFunctions) => {
@@ -319,14 +319,14 @@ describe('iam.auth', () => {
         await initIam()
       })
 
-      it('禁用用户登录应返回 ACCOUNT_UNAVAILABLE', async () => {
+      it('休眠账号登录不公开具体状态', async () => {
         const result = await disabledUserIam.auth.login({
           identifier: 'disabled_user',
           password: TEST_PASSWORD,
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.ACCOUNT_UNAVAILABLE.code)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
       })
     })
@@ -367,8 +367,9 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.USER_LOCKED.code)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
+        await expectAccountLocked('lock_user')
       })
 
       it('未达到锁定次数时密码正确应成功', async () => {

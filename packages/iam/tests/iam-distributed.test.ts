@@ -11,6 +11,7 @@ import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { HaiIamError, iam } from '../src/index.js'
+import { expectAccountLocked } from './helpers/iam-test-suite.js'
 import { acquirePostgresContainer } from './helpers/postgres-container.js'
 import { acquireRedisContainer } from './helpers/redis-container.js'
 
@@ -65,7 +66,8 @@ it('独立节点累计错误密码达到统一锁定阈值', async () => {
   expect((await iam.user.register({ username: 'distributed-password', password: 'Password123' })).success).toBe(true)
   const results = await Promise.all(Array.from({ length: 6 }, () => worker({ operation: 'password', credentials: { identifier: 'distributed-password', password: 'wrong' } })))
   expect(results.every(result => !result.success)).toBe(true)
-  expect(await iam.auth.login({ identifier: 'distributed-password', password: 'Password123' })).toMatchObject({ success: false, error: { code: HaiIamError.USER_LOCKED.code } })
+  expect(await iam.auth.login({ identifier: 'distributed-password', password: 'Password123' })).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+  await expectAccountLocked('distributed-password')
 }, 60_000)
 
 it('独立节点仅有一次 OTP 消费和一次发送成功', async () => {

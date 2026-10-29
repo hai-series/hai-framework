@@ -32,7 +32,7 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 - LDAP/Reach 均可选：基础认证无需安装；默认 LDAP 关闭，选用默认客户端才安装 ldapts 并设置 login.ldap + ldap。OTP 邮件/短信由 otp.email/sms 控制，选择 Reach 标准模板或自定义发送回调；具体签名与失败处理见参考中的“可选 LDAP 与通知”。
 - 多节点共享 DB + Redis，Memory 只用于单进程。重置的策略失败计入 maxAttempts；OTP 消费不解除 resendInterval。管理员 createUser 不受自助注册开关限制。
 
-- 受保护请求使用 `iam.auth.verifyToken`：会话校验读取共享代际缓存中的当前用户/凭据状态，校验启用状态、期限与 `credentialVersion`，再读取共享缓存中的当前角色/权限；缓存不可信时回源，必要读取失败即拒绝。`iam.session.get/verifyToken` 复用同一当前用户/凭据状态读取，但返回的角色/权限仍是会话快照，不能替代当前授权。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
+- 受保护请求使用 `iam.auth.verifyToken`：会话校验读取共享代际缓存中的当前用户/凭据状态，校验激活状态、期限与 `credentialVersion`，再读取共享缓存中的当前角色/权限；缓存不可信时回源，必要读取失败即拒绝。`iam.session.get/verifyToken` 复用同一当前用户/凭据状态读取，但返回的角色/权限仍是会话快照，不能替代当前授权。serv 内置 IAM 注入默认使用当前授权入口，无需手动补查。
 - 用户批量读取用 `iam.user.getUsers(ids, { include: ['roles'] })`（最多 1000，去重保留输入顺序，缺失省略）；角色筛选用 `listUsers({ roleCode })`，在分页前执行，避免 N+1 和分页后过滤。
 
 
@@ -41,6 +41,8 @@ description: "使用 @h-ai/iam 实现登录、注册、会话、OTP/LDAP/API Key
 ## 按需参考
 
 认证凭据错误统一为“用户名或密码不正确”；当前密码复用使用 `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED`（034），复杂度不符仍为 008。UI 复用 `authErrorMessage`，隐藏未知原文并保留 traceId；本地确认不一致明确提示，不改写原始密码。首次改密失败不签发会话，已登录改密的凭据错误不作为会话过期处理。
+
+公开登录与 `renewPassword` 对不存在、无本地口令、休眠、注销、到期或锁定账号统一返回 `INVALID_CREDENTIALS`。受限账号不继续验证猜测的密码，正确与错误密码反馈相同且不改变原有失败计数；具体状态只供已认证管理入口查看。密码计算或存储故障保留基础设施错误，不累计密码失败。测试同时验证公开反馈、实际锁定和到期恢复，不能只把锁定断言改成统一错误码。
 
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 

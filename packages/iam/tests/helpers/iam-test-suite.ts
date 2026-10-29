@@ -15,7 +15,7 @@ import type { PostgresContainerLease } from './postgres-container.js'
 import type { RedisContainerLease } from './redis-container.js'
 import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
-import { afterAll, beforeAll, describe } from 'vitest'
+import { afterAll, beforeAll, describe, expect } from 'vitest'
 import { iam } from '../../src/index.js'
 import { acquireLdapContainer } from './ldap-container.js'
 import { acquirePostgresContainer } from './postgres-container.js'
@@ -26,6 +26,18 @@ export const TEST_PASSWORD = 'TestPass123'
 
 /** 弱密码（不满足策略） */
 export const WEAK_PASSWORD = 'abc'
+
+/** 直接检查持久化锁，避免公开登录统一错误后丢失锁定行为的独有覆盖。 */
+export async function expectAccountLocked(username: string): Promise<void> {
+  // 仅锁定用例加载真实 Repository，环境清理用例的最小依赖 mock 不应被辅助断言扩大。
+  const { createDbUserRepository } = await import('../../src/user/iam-user-repository-user.js')
+  const repository = await createDbUserRepository()
+  const stored = await repository.findByUsername(username)
+  expect(stored.success).toBe(true)
+  if (!stored.success || !stored.data)
+    throw new Error('Expected an existing account for the lock assertion')
+  expect(stored.data.lockedUntil?.getTime()).toBeGreaterThan(Date.now())
+}
 
 // =============================================================================
 // 测试环境定义

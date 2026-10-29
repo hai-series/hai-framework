@@ -17,7 +17,7 @@ import type { IamFunctions } from '../src/iam-types.js'
 import type { LdapContainerLease } from './helpers/ldap-container.js'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
-import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 import { acquireLdapContainer } from './helpers/ldap-container.js'
 
 // 该文件会执行真实 LDAP 往返，全量测试并行时单个集成场景可能超过 Vitest 默认的 5 秒超时。
@@ -178,7 +178,7 @@ describe('iam.ldap', () => {
         })
         expect(retryResult.success).toBe(false)
         if (!retryResult.success) {
-          expect(retryResult.error.code).toBe(HaiIamError.ACCOUNT_UNAVAILABLE.code)
+          expect(retryResult.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
 
         // 恢复用户状态，避免影响后续测试
@@ -262,8 +262,9 @@ describe('iam.ldap', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(HaiIamError.USER_LOCKED.code)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
+        await expectAccountLocked(ldapLease.testUser.username)
       })
     })
   }

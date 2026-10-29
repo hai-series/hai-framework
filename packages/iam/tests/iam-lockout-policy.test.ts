@@ -3,7 +3,7 @@ import { reldb } from '@h-ai/reldb'
 import { afterEach, expect, it, vi } from 'vitest'
 import { HaiIamError } from '../src/index.js'
 import { createDbUserRepository } from '../src/user/iam-user-repository-user.js'
-import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 function tests() {
   afterEach(() => vi.useRealTimers())
@@ -25,7 +25,8 @@ function tests() {
     expect(await repository.findById(registered.data.user.id)).toMatchObject({ success: true, data: { loginFailedCount: 1, lockedUntil: undefined } })
     await iam.auth.login({ identifier: username, password: 'wrong' })
     await iam.auth.login({ identifier: username, password: 'wrong' })
-    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: HaiIamError.USER_LOCKED.code } })
+    expect(await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).toMatchObject({ success: false, error: { code: HaiIamError.INVALID_CREDENTIALS.code } })
+    await expectAccountLocked(username)
     vi.setSystemTime(Date.now() + 1201_000)
     expect((await iam.auth.login({ identifier: username, password: TEST_PASSWORD })).success).toBe(true)
   })

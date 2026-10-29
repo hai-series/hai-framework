@@ -898,7 +898,9 @@ Standard Kit/Serv expose POST /auth/captcha (Kit same-origin /api prefix) and pr
 
 ## Optional password and login protection
 
-Credential failures use “Username or password is incorrect.” for missing accounts, unset passwords and incorrect old passwords. Reusing the current password returns `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED` (`hai:iam:034`); strength failures remain `PASSWORD_POLICY_VIOLATION` (`008`). Map codes to friendly UI messages and hide raw unknown exceptions. Failed initial renewal never issues an ordinary session; sign in with the new password after success.
+Public login and `renewPassword` return `INVALID_CREDENTIALS` (“Username or password is incorrect.”) for missing, passwordless, dormant, closed, expired and locked accounts. Restricted accounts do not verify further password guesses: correct and incorrect passwords receive the same response without changing the existing lock counters. Authenticated administration can still inspect the account state. Password computation or storage faults remain infrastructure failures and do not count as incorrect passwords.
+
+Reusing the current password returns `HaiIamError.PASSWORD_REUSE_NOT_ALLOWED` (`hai:iam:034`); strength failures remain `PASSWORD_POLICY_VIOLATION` (`008`). Map codes to friendly UI messages and hide raw unknown exceptions. Failed initial renewal never issues an ordinary session; sign in with the new password after success.
 
 `password.minLength/maxLength` and individual `require*` flags control strength. `minCharacterClasses` accepts any N of uppercase, lowercase, digits and special characters; 0 adds no count requirement. CLI/admin examples default to 8–128 characters with no extra class count; set `minCharacterClasses: 3` to require any three classes. All server creation/change/reset paths share validation.
 

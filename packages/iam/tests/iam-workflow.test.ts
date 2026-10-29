@@ -17,7 +17,7 @@
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { HaiIamError } from '../src/iam-types.js'
-import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, expectAccountLocked, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.workflow', () => {
   const defineCommon = (getIam: () => IamFunctions) => {
@@ -752,8 +752,9 @@ describe('iam.workflow', () => {
         })
         expect(lockedResult.success).toBe(false)
         if (!lockedResult.success) {
-          expect(lockedResult.error.code).toBe(HaiIamError.USER_LOCKED.code)
+          expect(lockedResult.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
+        await expectAccountLocked('wf_lock_target')
 
         // ⑥ 锁定后即使密码正确也应失败（不等待解锁，lockoutDuration=60s 远超测试时间）
 
