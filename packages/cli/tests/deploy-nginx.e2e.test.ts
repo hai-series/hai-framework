@@ -63,8 +63,9 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       throw new AggregateError(failures.map(failure => failure.error), 'Nginx gate cleanup failed')
   }, 90_000)
 
-  it('部署包中的大认证头代理配置通过实际 nginx -t', async () => {
-    const project = path.join(root, 'project')
+  it.each([{ base: '', standalone: false }, { base: '/yyy/sub', standalone: false }, { base: '/yyy/sub.v1-app', standalone: true }])('部署包Nginx配置与实际子目录请求有效：$base standalone=$standalone', async ({ base, standalone }) => {
+    await deploy.close()
+    const project = path.join(root, `project-${standalone ? 'standalone' : base ? 'prefix' : 'root'}`)
     const artifacts = path.join(project, '.hai/build/docker/release-1')
     mkdirSync(artifacts, { recursive: true })
     mkdirSync(path.join(project, 'config'))
@@ -72,22 +73,26 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
     writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /backend/v2\n')
-    const images = ['serv', 'web'].map((name) => {
+    const images = (standalone ? ['web'] : ['serv', 'web']).map((name) => {
       const content = `prebuilt-${name}`
       const file = `${name}-1.2.3.tar`
       writeFileSync(path.join(artifacts, file), content)
       return { name, file, imageRef: `localhost/nginx-check-${name}:1`, sha256: createHash('sha256').update(content).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
     })
-    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, images }))
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: base ? 5 : 4, primaryService: standalone ? 'web' : 'serv', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, webBasePath: base, images }))
     expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
-    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts, output: path.join(root, 'proxy.tar') })
+    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts, output: path.join(project, 'proxy.tar') })
     expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
     if (!bundle.success || !bundle.data.bundlePath || !fixture)
       throw new Error('Expected an owned Nginx fixture and public deployment bundle')
     const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
-    expect(proxy).toContain('location /backend/v2/')
+    if (!standalone)
+      expect(proxy).toContain('location /backend/v2/')
+    if (base)
+      expect(proxy).toContain(`location ${base}/`)
     // 仅替换夹具不存在的 serv DNS；实际代理指令及缓冲区保持发布包原文，由 Nginx 解析器校验。
-    const config = `pid /tmp/nginx-test.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:')}\n}\n`
+    // 静态目录使用本轮可写路径；路由、回退和公开配置指令保持交付包原文。
+    const config = `pid /tmp/nginx-test.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:').replaceAll('/usr/share/nginx/html', '/tmp/hai-prefix-static').replaceAll('/tmp/hai-runtime-config', '/tmp/hai-prefix-runtime')}\n}\n`
     const source = path.join(root, 'nginx.conf')
     writeFileSync(source, config)
     execFileSync(runtime, ['cp', source, `${fixture.containerId}:/tmp/nginx-test.conf`], { windowsHide: true, timeout: 20_000 })
@@ -96,6 +101,39 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     expect(checked).toContain('syntax is ok')
     expect(checked).toContain('test is successful')
     expect(checked).toContain('NGINX_EXIT:0')
+    if (base) {
+      const staticFiles = path.join(root, 'prefix-static')
+      const runtimeFiles = path.join(root, 'prefix-runtime')
+      mkdirSync(path.join(staticFiles, 'assets'), { recursive: true })
+      mkdirSync(runtimeFiles, { recursive: true })
+      writeFileSync(path.join(staticFiles, 'index.html'), `<!doctype html><h1>Prefix ready</h1><script type="module" src="${base}/assets/app.js"></script>`)
+      writeFileSync(path.join(staticFiles, 'assets/app.js'), 'globalThis.prefixReady = true;')
+      writeFileSync(path.join(runtimeFiles, 'runtime-config.js'), 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:"https://api.example.invalid/api/v1"};')
+      await executeDeployTestFixture(runtime, fixture, ['mkdir', '-p', '/tmp/hai-prefix-static', '/tmp/hai-prefix-runtime'], { timeoutMs: 10_000 })
+      execFileSync(runtime, ['cp', `${staticFiles}/.`, `${fixture.containerId}:/tmp/hai-prefix-static`], { windowsHide: true, timeout: 20_000 })
+      execFileSync(runtime, ['cp', `${runtimeFiles}/.`, `${fixture.containerId}:/tmp/hai-prefix-runtime`], { windowsHide: true, timeout: 20_000 })
+      let started = false
+      try {
+        await executeDeployTestFixture(runtime, fixture, ['nginx', '-c', '/tmp/nginx-test.conf'], { timeoutMs: 10_000 })
+        started = true
+        for (const target of [`${base}/`, `${base}/admin/users`]) {
+          const body = await executeDeployTestFixture(runtime, fixture, ['wget', '-qO-', `http://127.0.0.1:8080${target}`], { timeoutMs: 10_000 })
+          expect(body).toContain('Prefix ready')
+        }
+        const asset = await executeDeployTestFixture(runtime, fixture, ['wget', '-qO-', `http://127.0.0.1:8080${base}/assets/app.js`], { timeoutMs: 10_000 })
+        expect(asset).toContain('globalThis.prefixReady = true')
+        const publicConfig = await executeDeployTestFixture(runtime, fixture, ['wget', '-qO-', `http://127.0.0.1:8080${base}/runtime-config.js`], { timeoutMs: 10_000 })
+        expect(publicConfig).toContain(standalone ? 'https://api.example.invalid/api/v1' : '/backend/v2')
+        const redirect = await executeDeployTestFixture(runtime, fixture, ['sh', '-c', `wget -S -O /dev/null 'http://127.0.0.1:8080${base}?from=gate' 2>&1`], { timeoutMs: 10_000 })
+        expect(redirect).toContain(`${base}/?from=gate`)
+        const unmounted = await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'wget -S -O /dev/null http://127.0.0.1:8080/runtime-config.js 2>&1 || true'], { timeoutMs: 10_000 })
+        expect(unmounted).toContain('404')
+      }
+      finally {
+        if (started)
+          await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'nginx -s quit -c /tmp/nginx-test.conf; for n in 1 2 3 4 5 6 7 8 9 10; do [ ! -e /tmp/nginx-test.pid ] && exit 0; sleep 0.1; done; exit 1'], { timeoutMs: 10_000 })
+      }
+    }
   }, 60_000)
 
   it.each([8 * 1048576, 24 * 1048576])('真实 Nginx 保留 %i 明文容量，反馈不缩容，普通 JSON 边界与超限均符合协议', async (maxPlaintextBytes) => {

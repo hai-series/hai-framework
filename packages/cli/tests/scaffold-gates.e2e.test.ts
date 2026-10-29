@@ -7,7 +7,7 @@
 
 import { spawn, spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
-import { access, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -367,6 +367,9 @@ it('generated migration executes up and down with HaiResult', async () => {
         await runQualityGates(projectPath, envOptions)
       }
 
+      if (scenario.title === 'admin' || scenario.title === 'fullstack-feedback')
+        await runPrefixBrowserGates(projectPath, scenario.title === 'admin' ? 'sveltekit' : 'vite', envOptions)
+
       if (scenario.title === 'fullstack' && process.env.HAI_CLI_NATIVE_BUILD === '1') {
         if (process.platform !== 'win32')
           throw new Error('This installer acceptance case requires a Windows runner')
@@ -507,6 +510,53 @@ async function getFreePort(): Promise<number> {
   })
 }
 
+/** 复用本轮安装与构建，额外验收真实生成工程的目录挂载和认证边界。 */
+async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'vite', envOptions: GateEnvOptions): Promise<void> {
+  const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
+  const spec = (await readFile(path.join(fixtures, 'prefix-browser.spec.ts'), 'utf8')).replace('SCAFFOLD_KIND', kind)
+  await writeFile(path.join(projectPath, 'e2e/prefix-browser.spec.ts'), spec)
+  const proxyUrl = kind === 'vite' ? await allocateBaseUrl() : undefined
+  const rootUrl = envOptions.baseUrl!
+  const prefixUrl = `${proxyUrl ?? rootUrl}/yyy/`
+  if (kind === 'sveltekit') {
+    const route = path.join(projectPath, 'src/routes/api/prefix-probe')
+    await mkdir(route, { recursive: true })
+    await writeFile(path.join(route, '+server.ts'), `/** 专用于验证全局认证守卫，处理器自身不重复实现认证。 */\nexport const GET = () => Response.json({ success: true, data: { private: true } })\n`)
+  }
+  else {
+    await writeFile(path.join(projectPath, 'scripts/prefix-proxy.mjs'), await readFile(path.join(fixtures, 'prefix-proxy.mjs')))
+  }
+  const config = `import { defineConfig } from '@playwright/test'
+import original from './playwright.config'
+
+const servers = Array.isArray(original.webServer) ? original.webServer : [original.webServer!]
+export default defineConfig({
+  ...original,
+  workers: 1,
+  fullyParallel: false,
+  testMatch: ${JSON.stringify(kind === 'vite' ? ['fullstack.spec.ts', 'prefix-browser.spec.ts'] : ['prefix-browser.spec.ts'])},
+  use: { ...original.use, baseURL: ${JSON.stringify(prefixUrl)} },
+  webServer: ${kind === 'sveltekit'
+    ? `servers.map(server => ({ ...server, env: { ...server.env, PUBLIC_BASE_PATH: '/yyy' }, url: ${JSON.stringify(prefixUrl)} }))`
+    : `[...servers.map(server => server.name?.endsWith('-web') ? {
+      ...server,
+      command: ${JSON.stringify(`pnpm --filter ${path.basename(projectPath)}-web exec vite preview --host 127.0.0.1 --port ${new URL(rootUrl).port} --strictPort`)},
+      url: ${JSON.stringify(rootUrl)},
+    } : server), {
+      command: 'node scripts/prefix-proxy.mjs',
+      env: { PREFIX_WEB_URL: ${JSON.stringify(rootUrl)}, PREFIX_SERVICE_URL: ${JSON.stringify(envOptions.serviceBaseUrl)}, PREFIX_PROXY_URL: ${JSON.stringify(proxyUrl)} },
+      url: ${JSON.stringify(`${proxyUrl}/health`)},
+      reuseExistingServer: false,
+    }]`},
+})
+`
+  await writeFile(path.join(projectPath, 'playwright.prefix.config.ts'), config)
+  // 测试夹具使用JSON编码安全嵌入地址；统一为项目风格后，再执行完整lint。
+  await runPnpm(projectPath, ['exec', 'eslint', 'playwright.prefix.config.ts', '--fix'], envOptions)
+  await runPnpm(projectPath, ['lint'], envOptions)
+  await runPnpm(projectPath, ['exec', 'node', 'scripts/run-e2e.mjs', '--config', 'playwright.prefix.config.ts'], { ...envOptions, baseUrl: prefixUrl, ...(kind === 'vite' ? { frontendUrls: { ...envOptions.frontendUrls, web: prefixUrl } } : {}) })
+}
+
 async function runQualityGates(projectPath: string, envOptions: GateEnvOptions = {}): Promise<void> {
   await runPnpm(projectPath, ['install', '--prefer-offline'], envOptions)
   await runPnpm(projectPath, ['typecheck'], envOptions)
@@ -555,9 +605,10 @@ function runNode(args: string[]): void {
  * ```
  */
 async function runPnpm(cwd: string, args: string[], envOptions: GateEnvOptions = {}): Promise<void> {
-  const nodeEnv = args[0] === 'build' || args[0] === 'test:e2e' ? 'production' : 'test'
+  const isBrowser = args[0] === 'test:e2e' || (args[0] === 'exec' && args[1] === 'node' && args[2] === 'scripts/run-e2e.mjs')
+  const nodeEnv = args[0] === 'build' || isBrowser ? 'production' : 'test'
   const env = buildChildEnv(envOptions, nodeEnv)
-  if (args[0] === 'test:e2e') {
+  if (isBrowser) {
     // 只持久保留浏览器产物，临时工程及私有环境仍由 removeTempRoot 回收。
     const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || path.join(process.cwd(), '../../tmp/validation/module-review/scaffold-browser'))
     mkdirSync(parent, { recursive: true })
