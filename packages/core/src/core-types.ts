@@ -37,6 +37,7 @@ export type ZodValidationMessageKey
     | 'validationRequired'
     | 'validationInvalid'
     | 'validationInvalidType'
+    | 'validationUnexpectedFields'
     | 'validationStringMin'
     | 'validationStringMax'
     | 'validationNumberMin'

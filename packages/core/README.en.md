@@ -224,6 +224,8 @@ core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
 `core.zodValidation` converts Zod `SafeParseError` / `ZodError` into flat form errors and maps Zod's
 default English messages to the caller's own localized messages.
 
+Unknown fields rejected by strict schemas map to `validationUnexpectedFields` without exposing internal field names. Custom message getters must handle this key; Kit and Serv provide Chinese, English and Japanese messages. Explicit business messages in a schema remain unchanged.
+
 - Two public entry points:
   - `createPrefixedZodMessageGetter()`: derive keys such as `serv_validation*` / `kit_validation*` from module prefixes without a manual `KEY_MAP`.
   - `mapZodErrorToFormErrors()`: extract, localize, and flatten in one step.

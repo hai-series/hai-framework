@@ -32,6 +32,7 @@
   "kit_validationRequired": "此字段必填",
   "kit_validationInvalid": "输入格式无效",
   "kit_validationInvalidType": "字段类型不正确",
+  "kit_validationUnexpectedFields": "提交的数据包含当前操作不支持的内容，请刷新页面后重试。",
   "kit_validationStringMin": "至少输入 {min} 个字符",
   "kit_validationStringMax": "最多输入 {max} 个字符",
   "kit_validationNumberMin": "数值不能小于 {min}",

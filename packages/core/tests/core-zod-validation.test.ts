@@ -5,9 +5,17 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { core } from '../src/index.js'
 
 describe('core.zodValidation', () => {
+  it('严格 schema 的未知字段使用安全消息键，保留显式自定义消息', () => {
+    const result = z.strictObject({ name: z.string() }).safeParse({ name: 'Name', internalField: true })
+    if (result.success)
+      throw new Error('Expected strict schema rejection')
+    expect(core.zodValidation.mapZodErrorToFormErrors(result.error, key => key)).toEqual([{ field: '_', message: 'validationUnexpectedFields' }])
+    expect(core.zodValidation.mapZodErrorToFormErrors({ issues: [{ path: [], code: 'unrecognized_keys', message: '请使用当前版本表单提交' }] }, key => key)).toEqual([{ field: '_', message: '请使用当前版本表单提交' }])
+  })
   it('应只暴露最小必要 API', () => {
     expect(Object.keys(core.zodValidation).sort()).toEqual([
       'createPrefixedZodMessageGetter',

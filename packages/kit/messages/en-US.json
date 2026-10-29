@@ -32,6 +32,7 @@
   "kit_validationRequired": "This field is required",
   "kit_validationInvalid": "Invalid input format",
   "kit_validationInvalidType": "Invalid field type",
+  "kit_validationUnexpectedFields": "The submitted data contains unsupported fields. Refresh the page and try again.",
   "kit_validationStringMin": "Enter at least {min} characters",
   "kit_validationStringMax": "Enter at most {max} characters",
   "kit_validationNumberMin": "Value must be at least {min}",

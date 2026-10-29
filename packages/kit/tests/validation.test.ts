@@ -14,6 +14,17 @@ afterEach(() => {
 })
 
 describe('validateForm', () => {
+  it.each([
+    ['zh-CN', '提交的数据包含当前操作不支持的内容，请刷新页面后重试。'],
+    ['en-US', 'The submitted data contains unsupported fields. Refresh the page and try again.'],
+    ['ja-JP', '送信データにこの操作で使用できない項目が含まれています。ページを更新して再度お試しください。'],
+  ] as const)('严格表单的未知字段提示遵循 %s，不暴露内部字段名', async (locale, message) => {
+    setAllModulesLocale(locale)
+    const request = new Request('http://localhost', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Name', internalField: true }) })
+    const result = await validateForm(request, z.strictObject({ name: z.string() }))
+    expect(result).toEqual({ valid: false, errors: [{ field: '_', message }] })
+  })
+
   const userSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),

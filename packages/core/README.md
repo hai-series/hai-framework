@@ -224,6 +224,8 @@ core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
 `core.zodValidation` 用于把 Zod `SafeParseError` / `ZodError` 转为扁平表单错误，并将 Zod
 默认英文消息映射为调用方自己的 i18n 文案。
 
+严格 schema 的未知字段错误映射为 `validationUnexpectedFields`，不向用户暴露内部字段名。自定义消息获取器需要处理此 key；Kit、Serv 已提供中英日文提示。Schema 显式指定的业务消息仍原样保留。
+
 - 两个公开入口：
   - `createPrefixedZodMessageGetter()`：按模块前缀自动派生 `serv_validation*` / `kit_validation*` 这类 key，省掉手写 `KEY_MAP`
   - `mapZodErrorToFormErrors()`：一步完成提取 + 本地化 + 扁平化

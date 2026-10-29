@@ -5,6 +5,7 @@
   "serv_validationRequired": "此字段必填",
   "serv_validationInvalid": "输入格式无效",
   "serv_validationInvalidType": "字段类型不正确",
+  "serv_validationUnexpectedFields": "提交的数据包含当前操作不支持的内容，请刷新页面后重试。",
   "serv_validationStringMin": "至少输入 {min} 个字符",
   "serv_validationStringMax": "最多输入 {max} 个 UTF-8 字节",
   "serv_validationNumberMin": "数值不能小于 {min}",

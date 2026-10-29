@@ -156,6 +156,7 @@ const ZOD_DEFAULT_MESSAGE_PATTERNS: RegExp[] = [
   /^Invalid url$/i,
   /^Invalid UUID$/,
   /^Invalid enum value/,
+  /^Unrecognized key(?:s|\(s\))?(?: in object)?:/,
   /^Required$/,
   /^String must contain/,
   /^Number must be/,
@@ -257,6 +258,9 @@ function localizeZodIssue(
   const format = getIssueFormat(issue)
   const min = formatLimit(issue.minimum)
   const max = formatLimit(issue.maximum)
+
+  if (issue.code === 'unrecognized_keys')
+    return getMessage('validationUnexpectedFields')
 
   if (issue.code === 'too_small') {
     if (target === 'string' && min)

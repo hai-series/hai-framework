@@ -3,6 +3,16 @@ import { z } from 'zod'
 import { localizeZodError, resolveRequestLocale, validateInputOrFail } from '../src/serv-validation.js'
 
 describe('serv-validation', () => {
+  it.each([
+    ['zh-CN', '提交的数据包含当前操作不支持的内容，请刷新页面后重试。'],
+    ['en-US', 'The submitted data contains unsupported fields. Refresh the page and try again.'],
+    ['ja-JP', '送信データにこの操作で使用できない項目が含まれています。ページを更新して再度お試しください。'],
+  ] as const)('严格 schema 的未知字段提示遵循 %s，不暴露内部字段名', (locale, message) => {
+    const result = z.strictObject({ name: z.string() }).safeParse({ name: 'Name', internalField: true })
+    if (result.success)
+      throw new Error('Expected strict schema rejection')
+    expect(localizeZodError(result.error, locale)).toEqual([{ field: '_', message }])
+  })
   it('resolveRequestLocale 应该优先使用 x-hai-locale', () => {
     const locale = resolveRequestLocale({
       'x-hai-locale': 'en-US',

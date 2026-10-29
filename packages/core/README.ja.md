@@ -224,6 +224,8 @@ core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
 `core.zodValidation` は Zod の `SafeParseError` / `ZodError` をフラットなフォームエラーに変換し、
 Zod の既定の英語メッセージを呼び出し元の i18n 文言に変換します。
 
+厳密なスキーマで拒否された未知の項目は `validationUnexpectedFields` に変換し、内部の項目名をユーザーに表示しません。独自のメッセージ取得関数はこの key に対応してください。Kit と Serv は中英日文のメッセージを提供します。スキーマに明示した業務メッセージは保持します。
+
 - 公開入口は 2 つです：
   - `createPrefixedZodMessageGetter()`：モジュールの接頭辞から `serv_validation*` / `kit_validation*` などの key を生成し、手書きの `KEY_MAP` を省略。
   - `mapZodErrorToFormErrors()`：抽出・ローカライズ・フラット化を一度に実行。

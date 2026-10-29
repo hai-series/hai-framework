@@ -5,6 +5,7 @@
   "serv_validationRequired": "この項目は必須です",
   "serv_validationInvalid": "入力形式が無効です",
   "serv_validationInvalidType": "フィールドの型が無効です",
+  "serv_validationUnexpectedFields": "送信データにこの操作で使用できない項目が含まれています。ページを更新して再度お試しください。",
   "serv_validationStringMin": "{min}文字以上で入力してください",
   "serv_validationStringMax": "UTF-8 で {max} バイト以内で入力してください",
   "serv_validationNumberMin": "{min}以上の値を入力してください",
