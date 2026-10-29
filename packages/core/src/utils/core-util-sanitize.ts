@@ -1,3 +1,4 @@
+import type { SanitizeSensitiveFieldsOptions, SensitiveKeyMatcher } from '../core-types.js'
 /**
  * @h-ai/core — 脱敏工具
  * @module core-util-sanitize
@@ -52,31 +53,6 @@ const SENSITIVE_KEY_CACHE_LIMIT = 512
 
 /** Error 诊断子图的递归上限；普通对象的循环缓存策略保持不变。 */
 const ERROR_DIAGNOSTIC_MAX_DEPTH = 32
-
-/**
- * 敏感字段匹配器
- * @example 模块内部上下文
- * ```ts
- * const matcher: SensitiveKeyMatcher = ['password', 'credential']
- * const safe = sanitizeSensitiveFields({ credential: 'example-only', id: 'order-1' }, { matcher })
- * ```
- */
-export type SensitiveKeyMatcher = RegExp | string[] | ((key: string) => boolean)
-
-/**
- * 敏感字段脱敏选项
- * @example 模块内部上下文
- * ```ts
- * const options: SanitizeSensitiveFieldsOptions = { matcher: ['credential'], replacement: '[HIDDEN]' }
- * const safe = sanitizeSensitiveFields({ credential: 'example-only' }, options)
- * ```
- */
-export interface SanitizeSensitiveFieldsOptions {
-  /** 自定义敏感字段匹配规则 */
-  matcher?: SensitiveKeyMatcher
-  /** 自定义脱敏替换值 */
-  replacement?: unknown
-}
 
 /**
  * 已编译的敏感键匹配函数；第二个参数是已归一化字段名。
@@ -442,13 +418,3 @@ export const sanitize = {
   sanitizeSensitiveValue,
   sanitizeSensitiveFields,
 }
-
-/**
- * sanitize 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: SanitizeFn = sanitize
- * tools.sanitizeSensitiveFields({ apiKey: 'example-only', id: 'order-1' })
- * ```
- */
-export type SanitizeFn = typeof sanitize

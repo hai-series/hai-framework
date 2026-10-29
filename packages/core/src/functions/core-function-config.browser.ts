@@ -8,8 +8,8 @@
  */
 
 import type { ZodType } from 'zod'
-import type { HaiError, HaiResult } from '../core-types.js'
-import type { ConfigFn, WatchCallback } from './core-function-config.node.js'
+import type { ConfigFn, HaiError, HaiResult, WatchCallback } from '../core-types.js'
+
 import { err, HaiCommonError } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 
@@ -84,13 +84,3 @@ export const config: ConfigFn = {
     return false
   },
 }
-
-/**
- * config 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const result = config.load('app', '/srv/app/config/app.yml')
- * if (!result.success) result.error.message
- * ```
- */
-export type BrowserConfigFn = typeof config

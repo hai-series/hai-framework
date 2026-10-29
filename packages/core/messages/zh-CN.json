@@ -56,5 +56,6 @@
   "core_runtimeEnvMissing": "{message}：未设置必需的环境变量 {fields}。请在当前环境的 .env 文件或进程环境中设置有效值后重新启动应用。",
   "core_runtimeConfigInvalid": "{message}：配置校验未通过，涉及配置项 {fields}。请检查配置值是否符合要求，修正后重新启动应用。",
   "core_runtimeConfigProblem": "{message}：配置项缺失或无效，涉及配置项 {fields}。请检查配置文件或环境变量，补全或修正后重新启动应用。",
-  "core_runtimeErrorCode": "错误码：{code}"
+  "core_runtimeErrorCode": "错误码：{code}",
+  "core_requestAccessDenied": "当前请求未通过访问策略检查。请确认访问地址、网络或允许的时段；如需帮助，请联系管理员。"
 }

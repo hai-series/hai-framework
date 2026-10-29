@@ -5,7 +5,7 @@
  * @module core-main.browser
  */
 
-import type { CoreOptions } from './core-types.js'
+import type { BrowserCoreFunctions, CoreOptions } from './core-types.js'
 import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.browser.js'
 import { logger } from './functions/core-function-logger.browser.js'
@@ -21,7 +21,7 @@ import { logger } from './functions/core-function-logger.browser.js'
  * core.logger.info('ready')
  * ```
  */
-function createBrowserCore() {
+function createBrowserCore(): BrowserCoreFunctions {
   const baseCore = createCore({
     createLogger: logger.createLogger,
     getLogger: logger.getLogger,
@@ -49,7 +49,7 @@ function createBrowserCore() {
  * core.logger.info('Browser ready')
  * ```
  */
-export const core = createBrowserCore()
+export const core: BrowserCoreFunctions = createBrowserCore()
 
 /**
  * 初始化 Core（内部实现，通过 core.init() 调用）。

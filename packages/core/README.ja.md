@@ -571,6 +571,28 @@ Node リクエストと SSR は `core.i18n.runWithLocale(locale, () => handleReq
 
 ブラウザーはアプリ全体の `setGlobalLocale` / `createLocaleStore` を使います。SSR の UI store 初期化と setter は自身の状態のみ変更し、メッセージはリクエストコンテキストを参照します。`runWithLocale` は Node 入口専用です。
 
+## 信頼する接続元とリクエスト制御（Node）
+
+`core.access` は HTTP ホストが共用する IP・時間・パスの判定を提供し、HTTP 処理への登録は行いません。Serv は `http.access`、SvelteKit は `kit.createHandle({ access })` を使用します。IAM の `loginAccess` はログイン時だけの判定です。
+
+```ts
+import { core } from '@h-ai/core'
+
+const check = core.access.createRequestCheck({
+  rules: [{ id: 'external-api', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'], encryption: 'disabled' }],
+})
+const decision = check('/api/v1/external/sync', 'POST', '192.0.2.10')
+const mode = check.encryption('/api/v1/external/sync', 'POST') // disabled
+```
+
+生成時に設定を検証・コンパイルします。`loadPolicy({ file: './config/request-access.yml' })` は最大 1 MiB の YAML を起動時に一度読み、不正な設定では例外によりホストの起動を停止します。全体条件と一致するすべてのルールを満たす必要があり、拒否 IP が優先します。空の IP・時間リストは制限なし、既定のタイムゾーンは UTC です。パスは配備プレフィックスを含む実際の URL pathname で、完全一致と末尾 `/**` に対応します。GET に HEAD は含まれません。
+
+接続元の解決は `core.access.createClientIpResolver()` を使用します。既定の `auto` は通常のホストで転送ヘッダーを無視し、管理対象 Compose の非公開バックエンド構成だけでコンテナのネットワークを採用します。`[]` は信頼を無効化し、独自の入口では実際の代理 IP/CIDR を指定します。任意のヘッダーを socket の接続元として渡してはいけません。要求中にファイル読取、CIDR 解析、全パスルールの走査は行いません。同じ分の時刻結果を再利用し、分境界で再判定します。`core.access` は Node のみです。設定 Schema は `core-config`、公開型は `core-types`、関数呼出は `core-main` に登録した `core.access` に集約します。
+
+パスルールの `encryption` は `required` / `disabled` を指定でき、省略時はホスト設定に従います。選択はパス索引だけを参照し、IP や時刻を再計算しません。同じパスとメソッドに反対の指定が重なると、宣言順に関係なく起動時に失敗します。同じモードや異なるメソッドは組み合わせられます。`check.requiresEncryption` はホストに必要な暗号化を知らせます。Core は鍵や暗号処理を持たず、HTTPS、認証、アクセス条件は別途必要です。
+
+既定値・代理条件・独立ファイル・配備と確認は[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)を参照してください。
+
 ## 設定の消費範囲
 
 `_core.yml` は name/version/env/defaultLocale のメタデータと logging のみを受け付け、不明なフィールドでは読み込みに失敗します。グローバルな debug、ID 長/接頭辞、業務 features、言語登録リストは提供しません。logging.level、core.id の呼び出し引数、独自 Schema で検証する app.yml を使用してください。defaultLocale はメタデータであり、翻訳登録や Paraglide の切り替えを自動実行しません。Logger の import は Windows TTY でも LANG、LC_ALL、PYTHONIOENCODING を変更しません。[設定と消費点の対応表（中国語）](../../.agents/skills/hai-module-create/configuration.md)を参照してください。

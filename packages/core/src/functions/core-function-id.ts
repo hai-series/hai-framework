@@ -184,13 +184,3 @@ export const id = {
     return regex.test(str)
   },
 }
-
-/**
- * id 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: IdFn = id
- * tools.withPrefix('order_')
- * ```
- */
-export type IdFn = typeof id

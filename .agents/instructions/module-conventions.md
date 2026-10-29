@@ -146,6 +146,7 @@ function register(tool: Tool): HaiResult<void> {
 - 禁止 `any`，用 `unknown` + 类型缩窄
 - 禁止 `as unknown as T`（第三方库 workaround 除外，须加注释）
 - 对外类型集中在 `xx-types.ts`，不泄漏内部实现类型
+- Core 的公共类型统一在 `core-types.ts`，Schema 在 `core-config.ts` 或其领域配置文件中维护；函数实现放 `functions/`，由 `core-main` 注册为 `core.xx`，不增加包级函数入口。Node 专属能力只注册到 Node main，浏览器不提供伪实现；配置/类型仍可供浏览器校验。
 - 已有依赖包的类型直接 import，禁止定义本地鸭子类型
 
 ## 构建配置（tsup.config.ts）

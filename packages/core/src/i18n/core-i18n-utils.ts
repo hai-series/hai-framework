@@ -173,14 +173,3 @@ export const i18n = {
   createMessageGetter,
   coreM,
 }
-
-/**
- * i18n 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: I18nFn = i18n
- * const message = tools.createMessageGetter({ 'en-US': { hello: 'Hello' }, 'zh-CN': { hello: '你好' } })
- * message('hello', { locale: 'en-US' })
- * ```
- */
-export type I18nFn = typeof i18n

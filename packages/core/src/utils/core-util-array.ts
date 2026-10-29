@@ -201,13 +201,3 @@ export const array = {
   intersection,
   difference,
 }
-
-/**
- * array 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: ArrayFn = array
- * tools.chunk([1, 2, 3], 2)
- * ```
- */
-export type ArrayFn = typeof array

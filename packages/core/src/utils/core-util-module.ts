@@ -1,3 +1,4 @@
+import type { HaiError, HaiErrorDef, HaiResult, NotInitializedKit } from '../core-types.js'
 /**
  * @h-ai/core — 模块初始化工具
  *
@@ -5,39 +6,7 @@
  * @module core-util-module
  */
 
-import type { HaiError, HaiErrorDef, HaiResult } from '../core-types.js'
-
-import type { createRuntime } from './core-util-runtime.js'
 import { error as errorUtils } from '../functions/core-function-error.js'
-
-// ─── 未初始化工具集 ───
-
-/**
- * 未初始化工具集返回类型。
- *
- * 提供错误创建、HaiResult 包装和 Proxy 代理等能力，
- * 用于模块未初始化时的安全回退。
- *
- * @template E - 模块错误类型（必须继承 HaiError）
- * @example 模块内部上下文
- * ```ts
- * const state: NotInitializedKit<HaiError> = createNotInitializedKit({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
- * const result = state.result<string>()
- * if (!result.success) result.error.message
- * ```
- */
-export interface NotInitializedKit<E extends HaiError> {
-  /** 创建未初始化错误对象 */
-  error: () => E
-  /** 创建包含未初始化错误的失败 HaiResult */
-  result: <T>() => HaiResult<T>
-  /**
-   * 创建 Proxy 代理，拦截所有方法调用并返回未初始化错误。
-   *
-   * @param mode - 'async'（默认）所有方法返回 `Promise<HaiResult>`；'sync' 所有方法返回 `HaiResult`
-   */
-  proxy: <T>(mode?: 'async' | 'sync') => T
-}
 
 /**
  * 创建模块未初始化工具集
@@ -112,22 +81,6 @@ export function createNotInitializedKit<E extends HaiError>(
   return { error, result, proxy }
 }
 
-/** module 子工具类型 */
-/**
- * 未初始化代理的两个重载：错误定义或具体错误码。
- * @example 模块内部上下文
- * ```ts
- * const create: CreateNotInitializedKitFn = createNotInitializedKit
- * const state = create({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
- * const result = state.result<string>()
- * if (!result.success) result.error.code
- * ```
- */
-export interface CreateNotInitializedKitFn {
-  (codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
-  <E extends HaiError>(codeOrDef: E['code'], messageFn: () => string): NotInitializedKit<E>
-}
-
 /**
  * 生产进程默认要求跨主机共享状态；显式E2E测试可使用测试替身。
  * @param environment - 服务端实际进程环境，不接受请求参数
@@ -145,19 +98,4 @@ export interface CreateNotInitializedKitFn {
  */
 export function requiresSharedState(environment: { NODE_ENV?: string, HAI_CORE_ENV?: string, HAI_E2E?: string, HAI_E2E_MOCK?: string }): boolean {
   return (environment.NODE_ENV === 'production' || environment.HAI_CORE_ENV === 'production') && environment.HAI_E2E !== '1' && environment.HAI_E2E_MOCK !== '1'
-}
-
-/**
- * 模块初始化占位与生产共享状态要求的工具契约。
- * @example 模块内部上下文
- * ```ts
- * function createHostRuntime(tools: ModuleFn) { return tools.createRuntime([]) }
- * ```
- */
-export interface ModuleFn {
-  /** 顺序启动和反序关闭真实模块；不持有业务配置。 */
-  createRuntime: typeof createRuntime
-  createNotInitializedKit: CreateNotInitializedKitFn
-  /** 生产共享状态要求；浏览器工具为纯函数，不隐式读取进程环境。 */
-  requiresSharedState: typeof requiresSharedState
 }

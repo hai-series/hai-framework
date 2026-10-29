@@ -160,13 +160,3 @@ export const error = {
   formatMessage,
   toPublic,
 }
-
-/**
- * error 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: ErrorFn = error
- * tools.buildHaiErrorsDef('orders', { NOT_FOUND: '001:404' })
- * ```
- */
-export type ErrorFn = typeof error

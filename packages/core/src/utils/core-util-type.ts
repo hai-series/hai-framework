@@ -141,14 +141,3 @@ export const typeUtils = {
   isBoolean,
   isArray,
 }
-
-/**
- * typeUtils 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: TypeUtilFn = typeUtils
- * const value: unknown = 'order-1'
- * if (tools.isString(value)) value.toUpperCase()
- * ```
- */
-export type TypeUtilFn = typeof typeUtils

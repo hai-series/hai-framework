@@ -571,6 +571,28 @@ Node 请求与 SSR 使用 `core.i18n.runWithLocale(locale, () => handleRequest()
 
 浏览器继续使用应用级 `setGlobalLocale` / `createLocaleStore`。SSR 的 UI store 初始化和 setter 只修改自身状态，不写全局语言；UI 消息从请求上下文读取。`runWithLocale` 仅支持 Node 入口，浏览器通过显式 locale 或应用状态翻译。
 
+## 可信地址与请求访问策略（Node）
+
+`core.access` 为 HTTP 宿主提供共享的 IP、时间与路径检查，不自动安装 HTTP 拦截器。Serv 使用 `http.access`，SvelteKit 使用 `kit.createHandle({ access })`；IAM 的 `loginAccess` 只检查登录，不能替代每次请求检查。
+
+```ts
+import { core } from '@h-ai/core'
+
+const check = core.access.createRequestCheck({
+  rules: [{ id: 'external-api', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'], encryption: 'disabled' }],
+})
+const decision = check('/api/v1/external/sync', 'POST', '192.0.2.10')
+const mode = check.encryption('/api/v1/external/sync', 'POST') // disabled
+```
+
+`createRequestCheck` 在创建时验证并编译规则；`loadPolicy({ file: './config/request-access.yml' })` 只在启动时读取独立 YAML，最大 1 MiB，错误配置抛出异常并阻止宿主启动。全局条件与所有命中规则取交集，拒绝地址优先；默认空地址、时间列表不限制对应维度，时区为 UTC。路径是实际 URL pathname，包含部署前缀；支持精确路径和末尾 `/**`，GET 不隐含 HEAD。
+
+可信地址通过 `core.access.createClientIpResolver()` 解析。默认 `auto` 在普通宿主忽略转发头，仅受管 Compose 的私有代理拓扑采用容器网段；`[]` 显式关闭代理信任，自管入口填入真实代理 IP/CIDR。不得把任意请求头当作可信 socket 地址。检查器不在请求中读文件、解析 CIDR 或扫描全部路径规则；同一时区的分钟结果复用，跨分钟仍重新判定。`core.access` 仅在 Node 入口存在，浏览器不提供伪实现。公开配置 Schema 由 `core-config` 入口转出，类型集中于 `core-types`，函数通过 `core-main` 注册的 `core.access` 调用。
+
+路径规则的 `encryption` 可选 `required` 或 `disabled`，省略时沿用宿主。选择器复用路径索引，不计算 IP/时间。重叠路径与方法若声明相反模式，创建检查器时失败，与声明顺序无关；同模式或不同方法可以组合。`check.requiresEncryption` 告知宿主是否必须装配传输加密，Core 本身不持有密钥或执行加解密。关闭应用层加密仍需 HTTPS、身份鉴别和访问检查。
+
+完整默认值、代理条件、独立文件、部署和验证步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
+
 ## 配置的实际消费边界
 
 `_core.yml` 仅接受 name/version/env/defaultLocale 元数据与 logging；未知字段加载失败。Core 不提供全局 debug、ID 长度/前缀、业务 features 或语言注册列表；日志级别用 logging.level，ID 选项在每次 core.id 调用传入，业务配置放 app.yml 并由应用 Schema 校验。defaultLocale 是可读取的元数据，不会替应用注册翻译或切换 Paraglide。导入 Logger 不改写 LANG、LC_ALL、PYTHONIOENCODING，包括 Windows TTY。全部模块的配置与环境消费链见[配置对应表](../../.agents/skills/hai-module-create/configuration.md)。

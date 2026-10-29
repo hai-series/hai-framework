@@ -178,13 +178,3 @@ export const object = {
   entries,
   fromEntries,
 }
-
-/**
- * object 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: ObjectFn = object
- * tools.pick({ id: 'order-1', password: 'example-only' }, ['id'])
- * ```
- */
-export type ObjectFn = typeof object

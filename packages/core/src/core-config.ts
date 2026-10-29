@@ -18,15 +18,6 @@ import { z } from 'zod'
  * ```
  */
 export const EnvSchema = z.enum(['development', 'production', 'test', 'staging'])
-/**
- * 运行环境标识；不会自行设置进程环境或初始化模块。
- * @example
- * ```ts
- * import type { Env } from '@h-ai/core'
- * const value: Env = 'production'
- * ```
- */
-export type Env = z.infer<typeof EnvSchema>
 
 /**
  * 日志级别 Schema。
@@ -37,15 +28,6 @@ export type Env = z.infer<typeof EnvSchema>
  * ```
  */
 export const LogLevelSchema = z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
-/**
- * 日志输出级别；未显式配置的 Logger 动态继承全局级别。
- * @example
- * ```ts
- * import type { LogLevel } from '@h-ai/core'
- * const value: LogLevel = 'warn'
- * ```
- */
-export type LogLevel = z.infer<typeof LogLevelSchema>
 
 /**
  * 日志格式 Schema。
@@ -56,15 +38,6 @@ export type LogLevel = z.infer<typeof LogLevelSchema>
  * ```
  */
 export const LogFormatSchema = z.enum(['json', 'pretty'])
-/**
- * 日志输出格式：JSON 或适合终端阅读的 pretty。
- * @example
- * ```ts
- * import type { LogFormat } from '@h-ai/core'
- * const value: LogFormat = 'json'
- * ```
- */
-export type LogFormat = z.infer<typeof LogFormatSchema>
 
 // ─── 日志配置 Schema ───
 
@@ -86,15 +59,6 @@ export const LoggingConfigSchema = z.object({
   /** 要脱敏的字段路径列表（如 ['password', 'token']，默认 []） */
   redact: z.array(z.string()).default([]),
 })
-/**
- * 经过默认值填充的 Logger 配置；redact 是输出脱敏路径。
- * @example
- * ```ts
- * import { LoggingConfigSchema, type LoggingConfig } from '@h-ai/core'
- * const config: LoggingConfig = LoggingConfigSchema.parse({})
- * ```
- */
-export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
 
 // ─── Core 配置 Schema ───
 
@@ -122,12 +86,5 @@ export const CoreConfigSchema = z.strictObject({
   /** 默认语言（默认 'zh-CN'） */
   defaultLocale: z.string().default('zh-CN'),
 })
-/**
- * 严格校验后的 Core 配置；业务配置使用独立 Schema。
- * @example
- * ```ts
- * import { CoreConfigSchema, type CoreConfig } from '@h-ai/core'
- * const config: CoreConfig = CoreConfigSchema.parse({})
- * ```
- */
-export type CoreConfig = z.infer<typeof CoreConfigSchema>
+
+export { AccessConditionSchema, RequestAccessConfigSchema, RequestAccessPolicySchema, TrustedProxiesSchema } from './core-access-config.js'

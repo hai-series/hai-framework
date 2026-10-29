@@ -1,3 +1,4 @@
+import type { ZodType } from 'zod'
 /**
  * @h-ai/core — 配置管理（Node.js 专用）
  *
@@ -5,8 +6,7 @@
  * @module core-function-config.node
  */
 
-import type { ZodType } from 'zod'
-import type { HaiError, HaiResult } from '../core-types.js'
+import type { HaiError, HaiResult, WatchCallback } from '../core-types.js'
 
 import { existsSync, readFileSync, watch } from 'node:fs'
 import { join } from 'node:path'
@@ -176,21 +176,6 @@ function resolveEnv(value: unknown, name: string, path: string[] = []): HaiResul
 
 /** 配置缓存 */
 const configCache = new Map<string, CacheEntry>()
-
-/**
- * 监听回调类型。
- *
- * @template T - 配置数据类型
- * @example 模块内部上下文
- * ```ts
- * const callback: WatchCallback<{ enabled: boolean }> = (config, failure) => {
- *   if (failure) { messages.push(failure.message); return }
- *   if (config) messages.push(String(config.enabled))
- * }
- * const messages: string[] = []
- * ```
- */
-export type WatchCallback<T = unknown> = (config: T | null, error?: HaiError) => void
 
 /**
  * 配置监听条目（包含文件 watcher 和回调集合）
@@ -767,13 +752,3 @@ export const config = {
     return watchEntries.has(name)
   },
 }
-
-/**
- * config 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const result = config.load('app', '/srv/app/config/app.yml')
- * if (!result.success) result.error.message
- * ```
- */
-export type ConfigFn = typeof config

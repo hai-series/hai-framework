@@ -56,5 +56,6 @@
   "core_runtimeEnvMissing": "{message}: Required environment variables are not set: {fields}. Please set valid values in the current environment's .env files or process environment, then restart the application.",
   "core_runtimeConfigInvalid": "{message}: Configuration validation failed for {fields}. Please check the configuration requirements, correct the values, then restart the application.",
   "core_runtimeConfigProblem": "{message}: Configuration is missing or invalid: {fields}. Please check the configuration files or environment variables, supply or correct the values, then restart the application.",
-  "core_runtimeErrorCode": "Error code: {code}"
+  "core_runtimeErrorCode": "Error code: {code}",
+  "core_requestAccessDenied": "The access policy blocked this request. Check the address, network and permitted hours. Contact your administrator for help."
 }

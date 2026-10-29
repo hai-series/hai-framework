@@ -56,5 +56,6 @@
   "core_runtimeEnvMissing": "{message}：必須の環境変数が設定されていません：{fields}。現在の環境の .env ファイルまたはプロセス環境に有効な値を設定して、アプリを再起動してください。",
   "core_runtimeConfigInvalid": "{message}：設定の検証に失敗しました：{fields}。設定の要件を確認し、値を修正してアプリを再起動してください。",
   "core_runtimeConfigProblem": "{message}：設定が不足しているか無効です：{fields}。設定ファイルまたは環境変数を確認し、値を補完または修正してアプリを再起動してください。",
-  "core_runtimeErrorCode": "エラーコード：{code}"
+  "core_runtimeErrorCode": "エラーコード：{code}",
+  "core_requestAccessDenied": "アクセス制限により、このリクエストは許可されませんでした。アクセス先、ネットワーク、許可時間帯を確認してください。必要な場合は管理者にお問い合わせください。"
 }

@@ -5,8 +5,8 @@
  * @module core-function-logger.browser
  */
 
-import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
-import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
+import type { LogContext, LogFormat, Logger, LoggerFunctions, LoggerOptions, LoggingConfig, LogLevel } from '../core-types.js'
+
 import log from 'loglevel'
 import { sanitize as sanitizeUtils } from '../utils/core-util-sanitize.js'
 import { requestContext } from './core-function-context.js'

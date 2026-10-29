@@ -571,6 +571,28 @@ Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleReque
 
 Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
 
+## Trusted addresses and request access policies (Node)
+
+`core.access` supplies shared IP, time and path checks to HTTP hosts; it does not install HTTP interception itself. Serv uses `http.access`, SvelteKit uses `kit.createHandle({ access })`, and IAM `loginAccess` checks login only.
+
+```ts
+import { core } from '@h-ai/core'
+
+const check = core.access.createRequestCheck({
+  rules: [{ id: 'external-api', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'], encryption: 'disabled' }],
+})
+const decision = check('/api/v1/external/sync', 'POST', '192.0.2.10')
+const mode = check.encryption('/api/v1/external/sync', 'POST') // disabled
+```
+
+`createRequestCheck` validates and compiles at creation. `loadPolicy({ file: './config/request-access.yml' })` reads YAML once at startup, with a 1 MiB limit; invalid configuration throws and must stop host startup. Global conditions and all matching rules must pass. Denied IPs take precedence; empty IP and time lists impose no restriction, and the default timezone is UTC. Paths are actual URL pathnames including the deployment prefix, with exact or trailing `/**` matching. GET does not imply HEAD.
+
+`core.access.createClientIpResolver()` resolves trusted addresses. Default `auto` ignores forwarded headers on ordinary hosts and uses container networks only in managed Compose topologies with a private backend. Use `[]` to disable proxy trust, or explicit proxy IPs/CIDRs for custom ingress. Never treat arbitrary headers as socket metadata. Request checks perform no file reads, CIDR parsing or full path-rule scan; timezone results are reused within each minute and recomputed across minute boundaries. Only the Node entry exposes `core.access`. Configuration schemas come through `core-config`, public types live in `core-types`, and functions are called through `core.access` registered in `core-main`.
+
+Rules accept `encryption: required` or `disabled`; omission inherits the host. The selector uses the path index without evaluating IP or time conditions. Conflicting modes on overlapping paths and methods fail at compilation regardless of declaration order; matching modes and separate methods can be combined. `check.requiresEncryption` tells the host when transport encryption must be installed. Core owns neither keys nor encryption. HTTPS, authentication and access checks remain necessary.
+
+See the [request access handbook](../../docs/usage/configuration/request-access.md) for defaults, ingress conditions, policy files, deployment and verification.
+
 ## Configuration consumption
 
 `_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../.agents/skills/hai-module-create/configuration.md).

@@ -1,35 +1,7 @@
 /** 顺序启动、反序关闭的薄编排，不持有模块配置、依赖容器或业务服务。 */
-import type { HaiError, HaiResult } from '../core-types.js'
+import type { HaiError, HaiResult, ModuleRuntime, RuntimeStep } from '../core-types.js'
 import { HaiCommonError, HaiConfigError } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
-
-/**
- * 单个真实模块或业务钩子的资源所有权；close 应可重试。
- * @example 模块内部上下文
- * ```ts
- * const step: RuntimeStep = { name: 'example', start: () => {}, close: () => {} }
- * ```
- */
-interface RuntimeStep {
-  name: string
-  enabled?: () => boolean
-  start: () => void | HaiResult<unknown> | Promise<void | HaiResult<unknown>>
-  close: () => void | HaiResult<unknown> | Promise<void | HaiResult<unknown>>
-}
-
-/**
- * 初始化和关闭合并并发调用；失败关闭保留自身及尚未关闭的依赖，供下次重试。
- * @example 模块内部上下文
- * ```ts
- * const runtime: ModuleRuntime = createRuntime([])
- * await runtime.close()
- * ```
- */
-interface ModuleRuntime {
-  readonly isInitialized: boolean
-  start: () => Promise<HaiResult<void>>
-  close: () => Promise<HaiResult<void>>
-}
 
 function failure(module: string, phase: 'start' | 'close', detail?: unknown): { success: false, error: HaiError } {
   const fields: string[] = []

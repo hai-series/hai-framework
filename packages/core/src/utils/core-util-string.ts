@@ -230,13 +230,3 @@ export const string = {
   padEnd,
   constantTimeEqual,
 }
-
-/**
- * string 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: StringFn = string
- * tools.camelCase('order-created')
- * ```
- */
-export type StringFn = typeof string

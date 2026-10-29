@@ -5,7 +5,7 @@
  * @module core-main.node
  */
 
-import type { CoreFunctions, CoreOptions } from './core-types.js'
+import type { CoreOptions, NodeCoreFunctions } from './core-types.js'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
@@ -13,6 +13,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
+import { access } from './functions/core-function-access.node.js'
 import { config } from './functions/core-function-config.node.js'
 import { installRequestContext } from './functions/core-function-context.js'
 import { logger } from './functions/core-function-logger.node.js'
@@ -23,20 +24,6 @@ installRequestLocales(new AsyncLocalStorage())
 installRequestContext(new AsyncLocalStorage())
 
 const YAML_EXTENSION_REGEX = /\.ya?ml$/
-/**
- * Node 入口的 Core 扩展：提供文件配置和初始化；不是额外的公开工厂。
- * @example 模块内部上下文
- * ```ts
- * const tools: NodeCoreFunctions = core
- * tools.init({ logging: { level: 'info' } })
- * tools.logger.info('Core ready')
- * ```
- */
-type NodeCoreFunctions = CoreFunctions & {
-  readonly config: typeof config
-  readonly init: typeof initCore
-}
-
 // ─── Core 实例 ───
 
 /**
@@ -60,6 +47,8 @@ function createNodeCore(): NodeCoreFunctions {
   // 扩展 config 和 init 功能
   return {
     ...baseCore,
+    /** Node 专属的可信地址、策略文件读取与已编译访问检查。 */
+    access,
     string: {
       ...baseCore.string,
       /**

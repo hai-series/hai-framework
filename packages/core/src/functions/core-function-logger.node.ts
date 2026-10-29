@@ -5,8 +5,8 @@
  * @module core-function-logger.node
  */
 
-import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
-import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
+import type { LogContext, LogFormat, Logger, LoggerFunctions, LoggerOptions, LoggingConfig, LogLevel } from '../core-types.js'
+
 import { execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import process from 'node:process'

@@ -5,18 +5,23 @@
  * @module core-types
  */
 
-import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
-import type { ErrorFn } from './functions/core-function-error.js'
-import type { IdFn } from './functions/core-function-id.js'
-import type { I18nFn } from './i18n/core-i18n-utils.js'
-import type { ArrayFn } from './utils/core-util-array.js'
-import type { AsyncFn } from './utils/core-util-async.js'
-import type { ModuleFn } from './utils/core-util-module.js'
-import type { ObjectFn } from './utils/core-util-object.js'
-import type { SanitizeFn } from './utils/core-util-sanitize.js'
-import type { StringFn } from './utils/core-util-string.js'
-import type { TimeFn } from './utils/core-util-time.js'
-import type { TypeUtilFn } from './utils/core-util-type.js'
+import type { z } from 'zod'
+import type { AccessConditionSchema, RequestAccessConfigSchema, RequestAccessPolicySchema, TrustedProxiesSchema } from './core-access-config.js'
+import type { CoreConfigSchema, EnvSchema, LogFormatSchema, LoggingConfigSchema, LogLevelSchema } from './core-config.js'
+import type { config as browserConfig } from './functions/core-function-config.browser.js'
+import type { config as nodeConfig } from './functions/core-function-config.node.js'
+import type { id } from './functions/core-function-id.js'
+import type { i18n } from './i18n/core-i18n-utils.js'
+import type { array } from './utils/core-util-array.js'
+import type { async } from './utils/core-util-async.js'
+import type { requiresSharedState } from './utils/core-util-module.js'
+import type { object } from './utils/core-util-object.js'
+import type { createRuntime } from './utils/core-util-runtime.js'
+import type { sanitize } from './utils/core-util-sanitize.js'
+import type { string } from './utils/core-util-string.js'
+import type { time } from './utils/core-util-time.js'
+import type { typeUtils } from './utils/core-util-type.js'
+
 import { error } from './functions/core-function-error.js'
 
 /**
@@ -270,6 +275,7 @@ const CommonErrorInfo = {
   FORBIDDEN: '101:403',
   TOKEN_EXPIRED: '102:401',
   TOKEN_INVALID: '103:401',
+  REQUEST_ACCESS_DENIED: '104:403',
 
   // 200-299: 校验 & 参数
   VALIDATION_ERROR: '200:400',
@@ -702,4 +708,451 @@ export interface CoreFunctions {
   readonly error: ErrorFn
   /** 模块基础工具 */
   readonly module: ModuleFn
+}
+
+/**
+ * Node 专属访问工具，通过 core.access 调用；浏览器不提供该能力。
+ * @example
+ * ```ts
+ * import { core, type AccessFunctions } from '@h-ai/core'
+ * const tools: AccessFunctions = core.access
+ * const check = tools.createRequestCheck(false)
+ * const decision = check('/api/v1/sync', 'POST', '192.0.2.10')
+ * ```
+ */
+export interface AccessFunctions {
+  /** 规范化可信宿主地址；非法 IP 返回 undefined。 */
+  normalizeClientIp: (value?: string) => string | undefined
+  /** 启动编译可信代理；第二参数必须来自 socket 或受信平台。auto 只在受管私有代理部署生效。 */
+  createClientIpResolver: (trustedProxies?: TrustedProxies | readonly string[]) => (request: Request, remoteAddress?: string) => string | undefined
+  /** 编译共享的 IP/时间条件，供登录许可和其他可信服务端流程使用。 */
+  createConditionCheck: (condition: AccessCondition) => (ip?: string) => AccessDecision
+  /** 启动读取和编译请求策略；检查期间无文件 I/O、CIDR 解析或全规则扫描。 */
+  createRequestCheck: (input?: RequestAccessConfigInput) => RequestAccessCheck
+  /** 启动读取最大 1 MiB 的 YAML；相对路径按服务工作目录或显式目录解析，配置失败抛出安全错误。 */
+  loadPolicy: (input?: RequestAccessConfigInput, baseDirectory?: string) => RequestAccessPolicy | false
+}
+
+/**
+ * Node 入口的完整 Core 形态；访问检查和文件配置不属于浏览器运行时。
+ * @example
+ * ```ts
+ * import { core, type NodeCoreFunctions } from '@h-ai/core'
+ * const tools: NodeCoreFunctions = core
+ * tools.init({ logging: { level: 'info' } })
+ * ```
+ */
+export interface NodeCoreFunctions extends CoreFunctions {
+  readonly access: AccessFunctions
+  readonly config: ConfigFn
+  readonly init: (options?: CoreOptions) => void
+}
+
+/**
+ * 浏览器 Core 形态；文件配置方法明确返回不可用，不包含 Node 的 access 能力。
+ * @example
+ * ```ts
+ * import type { BrowserCoreFunctions } from '@h-ai/core'
+ * function nextId(tools: BrowserCoreFunctions) { return tools.id.request() }
+ * ```
+ */
+export interface BrowserCoreFunctions extends CoreFunctions {
+  readonly config: BrowserConfigFn
+  readonly init: (options?: CoreOptions) => void
+}
+
+// ─── 配置与公共操作类型 ───
+
+/**
+ * 运行环境标识；不会自行设置进程环境或初始化模块。
+ * @example
+ * ```ts
+ * import type { Env } from '@h-ai/core'
+ * const value: Env = 'production'
+ * ```
+ */
+export type Env = z.infer<typeof EnvSchema>
+
+/**
+ * 日志输出级别；未显式配置的 Logger 动态继承全局级别。
+ * @example
+ * ```ts
+ * import type { LogLevel } from '@h-ai/core'
+ * const value: LogLevel = 'warn'
+ * ```
+ */
+export type LogLevel = z.infer<typeof LogLevelSchema>
+
+/**
+ * 日志输出格式：JSON 或适合终端阅读的 pretty。
+ * @example
+ * ```ts
+ * import type { LogFormat } from '@h-ai/core'
+ * const value: LogFormat = 'json'
+ * ```
+ */
+export type LogFormat = z.infer<typeof LogFormatSchema>
+
+/**
+ * 经过默认值填充的 Logger 配置；redact 是输出脱敏路径。
+ * @example
+ * ```ts
+ * import { LoggingConfigSchema, type LoggingConfig } from '@h-ai/core'
+ * const config: LoggingConfig = LoggingConfigSchema.parse({})
+ * ```
+ */
+export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
+
+/**
+ * 严格校验后的 Core 配置；业务配置使用独立 Schema。
+ * @example
+ * ```ts
+ * import { CoreConfigSchema, type CoreConfig } from '@h-ai/core'
+ * const config: CoreConfig = CoreConfigSchema.parse({})
+ * ```
+ */
+export type CoreConfig = z.infer<typeof CoreConfigSchema>
+
+/**
+ * 可信代理配置；空数组显式忽略全部转发头。
+ * @example
+ * ```ts
+ * import type { TrustedProxies } from '@h-ai/core'
+ * const proxies: TrustedProxies = []
+ * ```
+ */
+export type TrustedProxies = z.infer<typeof TrustedProxiesSchema>
+
+/**
+ * 已补齐默认值的 IP/时间条件。
+ * @example
+ * ```ts
+ * import { AccessConditionSchema, type AccessCondition } from '@h-ai/core'
+ * const condition: AccessCondition = AccessConditionSchema.parse({})
+ * ```
+ */
+export type AccessCondition = z.infer<typeof AccessConditionSchema>
+
+/**
+ * 已验证的请求策略。
+ * @example
+ * ```ts
+ * import { RequestAccessPolicySchema, type RequestAccessPolicy } from '@h-ai/core'
+ * const policy: RequestAccessPolicy = RequestAccessPolicySchema.parse({ rules: [] })
+ * ```
+ */
+export type RequestAccessPolicy = z.infer<typeof RequestAccessPolicySchema>
+
+/**
+ * 请求访问策略的输入；默认关闭由宿主配置决定。
+ * @example
+ * ```ts
+ * import type { RequestAccessConfigInput } from '@h-ai/core'
+ * const input: RequestAccessConfigInput = { rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.10'] }] }
+ * ```
+ */
+export type RequestAccessConfigInput = z.input<typeof RequestAccessConfigSchema>
+
+/**
+ * 路径的应用层加解密要求；不改变 TLS、身份鉴别或访问条件。
+ * @example
+ * ```ts
+ * import type { RequestEncryptionMode } from '@h-ai/core'
+ * const mode: RequestEncryptionMode = 'disabled'
+ * ```
+ */
+export type RequestEncryptionMode = NonNullable<RequestAccessPolicy['rules'][number]['encryption']>
+
+/**
+ * 启动编译后的请求检查器；加密选择只查路径索引，不重新计算 IP 或时间条件。
+ * @example
+ * ```ts
+ * import { core, type RequestAccessCheck } from '@h-ai/core'
+ * const check: RequestAccessCheck = core.access.createRequestCheck({ rules: [{ id: 'partner', paths: ['/api/v1/partner/**'], encryption: 'disabled' }] })
+ * const mode = check.encryption('/api/v1/partner/sync', 'POST')
+ * const decision = check('/api/v1/partner/sync', 'POST', '192.0.2.10')
+ * ```
+ */
+export interface RequestAccessCheck {
+  (pathname: string, method: string, ip?: string): AccessDecision
+  /** 是否存在强制加密的规则；宿主未装配加密时必须拒绝启动。 */
+  readonly requiresEncryption: boolean
+  /** 选取路径及方法对应的模式；undefined 表示沿用宿主；无请求期 I/O 或全规则扫描。 */
+  readonly encryption: (pathname: string, method: string) => RequestEncryptionMode | undefined
+}
+
+/**
+ * 安全判断只携带原因类别及规则编号，不向调用方复制策略内容。
+ * @example
+ * ```ts
+ * import type { AccessDecision } from '@h-ai/core'
+ * const decision: AccessDecision = { allowed: false, reason: 'address', ruleId: 'external' }
+ * ```
+ */
+export type AccessDecision = Readonly<{ allowed: true } | { allowed: false, reason: 'address' | 'time' | 'path', ruleId?: string }>
+
+/**
+ * id 子工具类型
+ * @example
+ * ```ts
+ * import { core, type IdFn } from '@h-ai/core'
+ * const tools: IdFn = core.id
+ * tools.withPrefix('order_')
+ * ```
+ */
+export type IdFn = typeof id
+
+/**
+ * error 子工具类型
+ * @example 模块内部上下文
+ * ```ts
+ * const tools: ErrorFn = error
+ * tools.buildHaiErrorsDef('orders', { NOT_FOUND: '001:404' })
+ * ```
+ */
+export type ErrorFn = typeof error
+
+/**
+ * 监听回调类型。
+ *
+ * @template T - 配置数据类型
+ * @example 模块内部上下文
+ * ```ts
+ * const callback: WatchCallback<{ enabled: boolean }> = (config, failure) => {
+ *   if (failure) { messages.push(failure.message); return }
+ *   if (config) messages.push(String(config.enabled))
+ * }
+ * const messages: string[] = []
+ * ```
+ */
+export type WatchCallback<T = unknown> = (config: T | null, error?: HaiError) => void
+
+/**
+ * config 子工具类型
+ * @example
+ * ```ts
+ * import { core, type ConfigFn } from '@h-ai/core'
+ * const result = core.config.load('app', '/srv/app/config/app.yml')
+ * if (!result.success) result.error.message
+ * ```
+ */
+export type ConfigFn = typeof nodeConfig
+
+/**
+ * config 子工具类型
+ * @example
+ * ```ts
+ * import { core, type BrowserConfigFn } from '@h-ai/core'
+ * const result = core.config.load('app', '/srv/app/config/app.yml')
+ * if (!result.success) result.error.message
+ * ```
+ */
+export type BrowserConfigFn = typeof browserConfig
+
+/**
+ * i18n 子工具类型
+ * @example
+ * ```ts
+ * import { core, type I18nFn } from '@h-ai/core'
+ * const tools: I18nFn = core.i18n
+ * const message = tools.createMessageGetter({ 'en-US': { hello: 'Hello' }, 'zh-CN': { hello: '你好' } })
+ * message('hello', { locale: 'en-US' })
+ * ```
+ */
+export type I18nFn = typeof i18n
+
+/**
+ * array 子工具类型
+ * @example
+ * ```ts
+ * import { core, type ArrayFn } from '@h-ai/core'
+ * const tools: ArrayFn = core.array
+ * tools.chunk([1, 2, 3], 2)
+ * ```
+ */
+export type ArrayFn = typeof array
+
+/**
+ * async 子工具类型
+ * @example
+ * ```ts
+ * import { core, type AsyncFn } from '@h-ai/core'
+ * const tools: AsyncFn = core.async
+ * await tools.retry(async () => 'ready', { maxRetries: 2 })
+ * ```
+ */
+export type AsyncFn = typeof async
+
+/**
+ * object 子工具类型
+ * @example
+ * ```ts
+ * import { core, type ObjectFn } from '@h-ai/core'
+ * const tools: ObjectFn = core.object
+ * tools.pick({ id: 'order-1', password: 'example-only' }, ['id'])
+ * ```
+ */
+export type ObjectFn = typeof object
+
+/**
+ * string 子工具类型
+ * @example
+ * ```ts
+ * import { core, type StringFn } from '@h-ai/core'
+ * const tools: StringFn = core.string
+ * tools.camelCase('order-created')
+ * ```
+ */
+export type StringFn = typeof string
+
+/**
+ * time 子工具类型
+ * @example
+ * ```ts
+ * import { core, type TimeFn } from '@h-ai/core'
+ * const tools: TimeFn = core.time
+ * tools.addDays(new Date('2026-01-01T00:00:00Z'), 1)
+ * ```
+ */
+export type TimeFn = typeof time
+
+/**
+ * typeUtils 子工具类型
+ * @example
+ * ```ts
+ * import { core, type TypeUtilFn } from '@h-ai/core'
+ * const tools: TypeUtilFn = core.typeUtils
+ * const value: unknown = 'order-1'
+ * if (tools.isString(value)) value.toUpperCase()
+ * ```
+ */
+export type TypeUtilFn = typeof typeUtils
+
+// ─── 未初始化工具集 ───
+
+/**
+ * 未初始化工具集返回类型。
+ *
+ * 提供错误创建、HaiResult 包装和 Proxy 代理等能力，
+ * 用于模块未初始化时的安全回退。
+ *
+ * @template E - 模块错误类型（必须继承 HaiError）
+ * @example
+ * ```ts
+ * import { core, type HaiError, type NotInitializedKit } from '@h-ai/core'
+ * const state: NotInitializedKit<HaiError> = core.module.createNotInitializedKit({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
+ * const result = state.result<string>()
+ * if (!result.success) result.error.message
+ * ```
+ */
+export interface NotInitializedKit<E extends HaiError> {
+  /** 创建未初始化错误对象 */
+  error: () => E
+  /** 创建包含未初始化错误的失败 HaiResult */
+  result: <T>() => HaiResult<T>
+  /**
+   * 创建 Proxy 代理，拦截所有方法调用并返回未初始化错误。
+   *
+   * @param mode - 'async'（默认）所有方法返回 `Promise<HaiResult>`；'sync' 所有方法返回 `HaiResult`
+   */
+  proxy: <T>(mode?: 'async' | 'sync') => T
+}
+
+/** module 子工具类型 */
+/**
+ * 未初始化代理的两个重载：错误定义或具体错误码。
+ * @example
+ * ```ts
+ * import { core, type CreateNotInitializedKitFn } from '@h-ai/core'
+ * const create: CreateNotInitializedKitFn = core.module.createNotInitializedKit
+ * const state = create({ code: 'app:orders:001', httpStatus: 503, system: 'app', module: 'orders' }, () => 'Orders unavailable')
+ * const result = state.result<string>()
+ * if (!result.success) result.error.code
+ * ```
+ */
+export interface CreateNotInitializedKitFn {
+  (codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
+  <E extends HaiError>(codeOrDef: E['code'], messageFn: () => string): NotInitializedKit<E>
+}
+
+/**
+ * 模块初始化占位与生产共享状态要求的工具契约。
+ * @example 模块内部上下文
+ * ```ts
+ * function createHostRuntime(tools: ModuleFn) { return tools.createRuntime([]) }
+ * ```
+ */
+export interface ModuleFn {
+  /** 顺序启动和反序关闭真实模块；不持有业务配置。 */
+  createRuntime: typeof createRuntime
+  createNotInitializedKit: CreateNotInitializedKitFn
+  /** 生产共享状态要求；浏览器工具为纯函数，不隐式读取进程环境。 */
+  requiresSharedState: typeof requiresSharedState
+}
+
+/**
+ * 敏感字段匹配器
+ * @example
+ * ```ts
+ * import { core, type SensitiveKeyMatcher } from '@h-ai/core'
+ * const matcher: SensitiveKeyMatcher = ['password', 'credential']
+ * const safe = core.sanitize.sanitizeSensitiveFields({ credential: 'example-only', id: 'order-1' }, { matcher })
+ * ```
+ */
+export type SensitiveKeyMatcher = RegExp | string[] | ((key: string) => boolean)
+
+/**
+ * 敏感字段脱敏选项
+ * @example
+ * ```ts
+ * import { core, type SanitizeSensitiveFieldsOptions } from '@h-ai/core'
+ * const options: SanitizeSensitiveFieldsOptions = { matcher: ['credential'], replacement: '[HIDDEN]' }
+ * const safe = core.sanitize.sanitizeSensitiveFields({ credential: 'example-only' }, options)
+ * ```
+ */
+export interface SanitizeSensitiveFieldsOptions {
+  /** 自定义敏感字段匹配规则 */
+  matcher?: SensitiveKeyMatcher
+  /** 自定义脱敏替换值 */
+  replacement?: unknown
+}
+
+/**
+ * sanitize 子工具类型
+ * @example
+ * ```ts
+ * import { core, type SanitizeFn } from '@h-ai/core'
+ * const tools: SanitizeFn = core.sanitize
+ * tools.sanitizeSensitiveFields({ apiKey: 'example-only', id: 'order-1' })
+ * ```
+ */
+export type SanitizeFn = typeof sanitize
+
+/**
+ * 单个真实模块或业务钩子的资源所有权；close 应可重试。
+ * @example 模块内部上下文
+ * ```ts
+ * const step: RuntimeStep = { name: 'example', start: () => {}, close: () => {} }
+ * ```
+ */
+export interface RuntimeStep {
+  name: string
+  enabled?: () => boolean
+  start: () => void | HaiResult<unknown> | Promise<void | HaiResult<unknown>>
+  close: () => void | HaiResult<unknown> | Promise<void | HaiResult<unknown>>
+}
+
+/**
+ * 初始化和关闭合并并发调用；失败关闭保留自身及尚未关闭的依赖，供下次重试。
+ * @example
+ * ```ts
+ * import { core, type ModuleRuntime } from '@h-ai/core'
+ * const runtime: ModuleRuntime = core.module.createRuntime([])
+ * await runtime.close()
+ * ```
+ */
+export interface ModuleRuntime {
+  readonly isInitialized: boolean
+  start: () => Promise<HaiResult<void>>
+  close: () => Promise<HaiResult<void>>
 }

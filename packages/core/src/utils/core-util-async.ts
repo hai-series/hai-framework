@@ -214,13 +214,3 @@ export const async = {
   debounce,
   throttle,
 }
-
-/**
- * async 子工具类型
- * @example 模块内部上下文
- * ```ts
- * const tools: AsyncFn = async
- * await tools.retry(async () => 'ready', { maxRetries: 2 })
- * ```
- */
-export type AsyncFn = typeof async
