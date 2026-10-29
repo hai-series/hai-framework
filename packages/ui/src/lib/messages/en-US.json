@@ -153,7 +153,7 @@
   "change_password_confirm_placeholder": "Re-enter new password",
   "change_password_mismatch": "Passwords do not match",
   "change_password_submit": "Change Password",
-  "change_password_relogin_hint": "After submission, the current session will be invalidated immediately. Please sign in again with your new password.",
+  "change_password_relogin_hint": "After the password is changed successfully, this account's existing sessions will end. The next sign-in requires the new password.",
   "feedback_title": "Feedback",
   "feedback_description": "We value your feedback. Please share your thoughts with us.",
   "feedback_type_label": "Feedback Type",
@@ -347,7 +347,6 @@
   "login_resend_wait": "Resend in {seconds}s",
   "auth_network_error": "Unable to connect. Please try again later.",
   "auth_error_credentials": "Username or password is incorrect.",
-  "auth_error_disabled": "Your account is disabled. Contact your administrator.",
   "auth_error_locked": "Your account is temporarily locked. Try again later.",
   "auth_error_duplicate": "This username or contact address is already registered.",
   "auth_error_password_expired": "Your password has expired. Reset it before signing in.",
@@ -363,7 +362,7 @@
   "auth_error_reset_token": "The reset token is invalid or expired. Request a new one.",
   "auth_error_busy": "Too many requests. Please try again shortly.",
   "auth_error_service": "Unable to complete this authentication request. Try again later.",
-  "auth_registration_pending": "Your account has been created. Wait for administrator approval before signing in.",
+  "auth_registration_pending": "Your account has been created. Wait for an administrator to activate it before signing in.",
   "auth_unavailable": "This authentication feature is unavailable.",
   "auth_reset_sent": "If the account exists, a reset notification has been sent. Check your email or SMS.",
   "auth_reset_done": "Password reset. Sign in with your new password.",
@@ -518,5 +517,7 @@
   "filter_bar_collapse": "Collapse filters",
   "filter_bar_active": "Active filters: {count}",
   "theme_formal": "Formal",
-  "keyboard_submit_enter": "Press Enter in a single-line field to submit"
+  "keyboard_submit_enter": "Press Enter in a single-line field to submit",
+  "request_access_denied": "The access policy blocked this request. Check the address, network and permitted hours. Contact your administrator for help.",
+  "auth_error_account_unavailable": "This account is unavailable. Contact your administrator to check its status and expiry."
 }

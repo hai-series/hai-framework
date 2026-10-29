@@ -152,7 +152,7 @@
   "change_password_confirm_placeholder": "新しいパスワードを再入力",
   "change_password_mismatch": "パスワードが一致しません",
   "change_password_submit": "パスワードを変更",
-  "change_password_relogin_hint": "送信後、現在のセッションは直ちに無効になります。新しいパスワードで再度ログインしてください。",
+  "change_password_relogin_hint": "パスワードの変更が完了すると、対象アカウントの既存セッションは無効になります。次回は新しいパスワードでログインしてください。",
   "feedback_title": "フィードバック",
   "feedback_description": "ご意見をお寄せください。サービス改善の参考にいたします。",
   "feedback_type_label": "フィードバックの種類",
@@ -347,7 +347,6 @@
   "login_resend_wait": "{seconds}秒後に再送信",
   "auth_network_error": "接続できません。しばらくしてから再試行してください。",
   "auth_error_credentials": "ユーザー名またはパスワードが正しくありません。",
-  "auth_error_disabled": "アカウントが無効です。管理者にお問い合わせください。",
   "auth_error_locked": "アカウントが一時的にロックされています。しばらくしてから再試行してください。",
   "auth_error_duplicate": "このユーザー名または連絡先は既に登録されています。",
   "auth_error_password_expired": "パスワードの有効期限が切れています。リセットしてからログインしてください。",
@@ -363,7 +362,7 @@
   "auth_error_reset_token": "リセットトークンが無効か、有効期限が切れています。新しいトークンを取得してください。",
   "auth_error_busy": "リクエストが多すぎます。しばらくしてから再試行してください。",
   "auth_error_service": "認証リクエストを完了できません。しばらくしてから再試行してください。",
-  "auth_registration_pending": "アカウントを作成しました。管理者の承認後にログインできます。",
+  "auth_registration_pending": "アカウントを作成しました。管理者による有効化後にログインできます。",
   "auth_unavailable": "この認証機能は利用できません。",
   "auth_reset_sent": "アカウントが存在する場合、リセット通知を送信しました。メールまたはSMSをご確認ください。",
   "auth_reset_done": "パスワードをリセットしました。新しいパスワードでログインしてください。",
@@ -518,5 +517,7 @@
   "filter_bar_collapse": "絞り込みを折りたたむ",
   "filter_bar_active": "適用中の条件：{count}件",
   "theme_formal": "ビジネス（角丸なし）",
-  "keyboard_submit_enter": "1行の入力欄で Enter を押して送信"
+  "keyboard_submit_enter": "1行の入力欄で Enter を押して送信",
+  "request_access_denied": "アクセス制限により、このリクエストは許可されませんでした。アクセス先、ネットワーク、許可時間帯を確認してください。必要な場合は管理者にお問い合わせください。",
+  "auth_error_account_unavailable": "現在このアカウントは利用できません。状態と有効期限を管理者に確認してください。"
 }

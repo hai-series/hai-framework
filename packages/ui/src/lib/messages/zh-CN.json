@@ -153,7 +153,7 @@
   "change_password_confirm_placeholder": "请再次输入新密码",
   "change_password_mismatch": "两次密码输入不一致",
   "change_password_submit": "修改密码",
-  "change_password_relogin_hint": "提交后将立即使当前会话失效，请使用新密码重新登录。",
+  "change_password_relogin_hint": "密码修改成功后，该账号的现有会话将失效，下次登录需使用新密码。",
   "feedback_title": "反馈",
   "feedback_description": "我们重视您的反馈。请将问题或建议告诉我们。",
   "feedback_type_label": "反馈类型",
@@ -347,7 +347,6 @@
   "login_resend_wait": "{seconds} 秒后重发",
   "auth_network_error": "网络连接失败，请稍后重试",
   "auth_error_credentials": "用户名或密码不正确",
-  "auth_error_disabled": "账号已禁用，请联系管理员",
   "auth_error_locked": "账号暂时锁定，请稍后再试",
   "auth_error_duplicate": "用户名或联系方式已注册",
   "auth_error_password_expired": "密码已过期，请重置后登录",
@@ -363,7 +362,7 @@
   "auth_error_reset_token": "重置令牌无效或已过期，请重新申请",
   "auth_error_busy": "请求较多，请稍后重试",
   "auth_error_service": "暂时无法完成认证请求，请稍后重试",
-  "auth_registration_pending": "账号已创建，请等待管理员启用后再登录。",
+  "auth_registration_pending": "账号已创建，请等待管理员激活后再登录。",
   "auth_unavailable": "此认证功能暂不可用",
   "auth_reset_sent": "如果账号存在，重置通知已发送，请查看邮箱或短信。",
   "auth_reset_done": "密码已重置，请使用新密码登录。",
@@ -518,5 +517,7 @@
   "filter_bar_collapse": "收起筛选",
   "filter_bar_active": "已启用 {count} 项筛选",
   "theme_formal": "简洁商务",
-  "keyboard_submit_enter": "在单行输入框中按 Enter 提交"
+  "keyboard_submit_enter": "在单行输入框中按 Enter 提交",
+  "request_access_denied": "当前请求未通过访问策略检查。请确认访问地址、网络或允许的时段；如需帮助，请联系管理员。",
+  "auth_error_account_unavailable": "账号当前无法使用，请联系管理员确认账号状态及有效期。"
 }

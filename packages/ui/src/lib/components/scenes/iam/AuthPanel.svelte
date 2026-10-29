@@ -115,7 +115,7 @@
       const result = await operation()
       if (!result.success) {
         if (mode === 'register' && result.error.code === 'hai:iam:004') {
-          // 默认禁用的新账户已完成注册，提示等待启用，避免用户重复注册。
+          // 默认休眠的新账户已完成注册，提示等待激活，避免用户重复注册。
           switchMode('login')
           notice = 'auth_registration_pending'
         }

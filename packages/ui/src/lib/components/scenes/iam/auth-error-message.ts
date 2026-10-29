@@ -5,10 +5,11 @@ import { core } from '@h-ai/core'
 import { uiM } from '../../../messages.js'
 
 const messages: Partial<Record<string, UIMessageKey>> = {
+  'hai:common:104': 'request_access_denied',
   'hai:iam:001': 'auth_error_credentials',
   'hai:iam:002': 'auth_error_credentials',
   'hai:iam:003': 'auth_error_credentials',
-  'hai:iam:004': 'auth_error_disabled',
+  'hai:iam:004': 'auth_error_account_unavailable',
   'hai:iam:005': 'auth_error_locked',
   'hai:iam:006': 'auth_error_duplicate',
   'hai:iam:007': 'auth_error_password_expired',
