@@ -1,3 +1,9 @@
+# auto 仅在受管私有容器代理中采用容器网段；自建代理填写 IP/CIDR。
+# 用途：可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段
+trustedProxies: ${HAI_KIT_TRUSTEDPROXIES:auto}
+# 用途：每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用
+access: ${HAI_KIT_ACCESS:false}
+# 独立策略文件：access: { file: ./config/security/request-access.yml }
 # 用途：HTTP 服务监听地址与端口
 server:
   # 用途：HTTP 监听主机名或 IP

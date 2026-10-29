@@ -44,5 +44,8 @@
   "auth_login_response_invalid": "サーバーからのログイン応答が無効です",
   "auth_register_response_invalid": "サーバーからの登録応答が無効です",
   "auth_login_request_failed": "ログインリクエストに失敗しました",
-  "auth_register_request_failed": "登録リクエストに失敗しました"
+  "auth_register_request_failed": "登録リクエストに失敗しました",
+  "account_active": "有効",
+  "account_dormant": "休眠",
+  "account_closed": "閉鎖"
 }

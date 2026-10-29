@@ -88,12 +88,12 @@ function normalizeAccountInput(data: Record<string, unknown>): Record<string, un
 }
 
 /** 创建用户管理 CRUD 定义。 */
-export function createUserCrud(roles: Array<{ id: string, code: string, name: string }>, grantableRoleIds?: string[]) {
-  const roleOptions = () => roles.filter(role => !grantableRoleIds || grantableRoleIds.includes(role.id)).map(r => ({ label: r.name, value: r.id }))
+export function createUserCrud(roles: Array<{ id: string, code: string, name: string }>) {
+  const roleOptions = () => roles.map(r => ({ label: r.name, value: r.id }))
 
   const fields: CrudFieldDef[] = [
     { id: 'accountType', label: () => m.account_type(), type: 'select', defaultValue: 'permanent', options: () => [{ value: 'permanent', label: m.account_permanent() }, { value: 'temporary', label: m.account_temporary() }], order: 4 },
-    { id: 'accountStatus', label: () => m.account_state(), type: 'select', defaultValue: 'active', options: () => [{ value: 'active', label: m.account_active() }, { value: 'dormant', label: m.account_dormant() }, { value: 'closed', label: m.account_closed() }], order: 5 },
+    { id: 'accountStatus', label: () => m.account_state(), type: 'select', filterable: true, defaultValue: 'active', options: () => [{ value: 'active', label: m.account_active() }, { value: 'dormant', label: m.account_dormant() }, { value: 'closed', label: m.account_closed() }], order: 5 },
     { id: 'accountExpiresAt', label: () => m.account_expires(), type: 'datetime', order: 6 },
     { id: 'lastLoginAt', label: () => m.account_last_login(), type: 'datetime', inCreate: false, inEdit: false, order: 8 },
     {
@@ -140,26 +140,6 @@ export function createUserCrud(roles: Array<{ id: string, code: string, name: st
         return roleNames.join(', ')
       },
       order: 4,
-    },
-    {
-      id: 'status',
-      label: () => m.iam_users_col_status(),
-      type: 'select',
-      filterable: true,
-      options: () => [
-        { label: m.iam_users_status_active(), value: 'active' },
-        { label: m.iam_users_status_disabled(), value: 'suspended' },
-      ],
-      defaultValue: 'active',
-      render: (value) => {
-        switch (value) {
-          case 'active': return m.iam_users_status_active()
-          case 'inactive': return m.iam_users_status_inactive()
-          case 'suspended': return m.iam_users_status_disabled()
-          default: return String(value)
-        }
-      },
-      order: 5,
     },
     {
       id: 'role',

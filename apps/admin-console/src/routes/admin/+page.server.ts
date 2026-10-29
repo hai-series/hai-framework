@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   // 所有无依赖查询合并为单次 Promise.all，减少串行等待
   const [usersResult, activeUsersResult, rolesResult, permissionsResult, recentAuditResult, auditStatsResult] = await Promise.all([
     canReadUsers ? iam.user.listUsers({ page: 1, pageSize: 1 }) : emptyPage,
-    canReadUsers ? iam.user.listUsers({ page: 1, pageSize: 1, enabled: true }) : emptyPage,
+    canReadUsers ? iam.user.listUsers({ page: 1, pageSize: 1, accountStatus: 'active' }) : emptyPage,
     canReadRoles ? iam.authz.getAllRoles({ page: 1, pageSize: 1 }) : emptyPage,
     canReadPermissions ? iam.authz.getAllPermissions({ page: 1, pageSize: 1 }) : emptyPage,
     canReadAudit ? audit.list({ pageSize: 10 }) : emptyPage,

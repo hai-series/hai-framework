@@ -7,7 +7,6 @@
 import type { UserSortDirection, UserSortField } from '@h-ai/iam'
 import type { PageServerLoad } from './$types'
 import { listAdminRoles, requireAdminData } from '$lib/server/iam-admin.js'
-import { canGrantRole } from '$lib/server/security-roles.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
@@ -18,11 +17,10 @@ interface UserData {
   email: string
   display_name: string | null
   avatar: string | null
-  status: 'active' | 'inactive' | 'suspended'
   roles: string[]
   roleIds: string[]
   accountType?: 'permanent' | 'temporary'
-  accountStatus?: 'active' | 'dormant' | 'closed'
+  accountStatus: 'active' | 'dormant' | 'closed'
   accountExpiresAt?: Date | null
   lastLoginAt?: Date | null
   created_at: Date
@@ -30,7 +28,7 @@ interface UserData {
 }
 
 /** 用户管理表格允许写入 URL 的前端排序字段。 */
-type UserPageSortKey = 'username' | 'email' | 'status' | 'created_at'
+type UserPageSortKey = 'username' | 'email' | 'accountStatus' | 'created_at'
 
 /**
  * 用户管理表格字段到 IAM 公共排序字段的映射。
@@ -42,8 +40,8 @@ const USER_PAGE_SORT_FIELDS: Record<UserPageSortKey, UserSortField> = {
   username: 'username',
   /** 邮箱。 */
   email: 'email',
-  /** 表格状态列对应 IAM 的 enabled 字段。 */
-  status: 'enabled',
+  /** 账号生命周期是唯一状态字段。 */
+  accountStatus: 'accountStatus',
   /** 表格创建时间列对应 IAM 的 createdAt 字段。 */
   created_at: 'createdAt',
 }
@@ -104,22 +102,16 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
   const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100)
   const search = url.searchParams.get('search') || undefined
-  const statusParam = url.searchParams.get('status') || undefined
+  const statusParam = url.searchParams.get('accountStatus')
+  const accountStatus = statusParam === 'active' || statusParam === 'dormant' || statusParam === 'closed' ? statusParam : undefined
   const roleFilter = url.searchParams.get('role') || undefined
   /** 校验后的服务端排序参数与客户端回填值。 */
   const userSort = parseUserSort(url)
 
-  // 将前端 status 值映射为 enabled 布尔值
-  let enabled: boolean | undefined
-  if (statusParam === 'active')
-    enabled = true
-  else if (statusParam === 'suspended')
-    enabled = false
-
   // 角色列表 + 用户列表（含角色）并行获取
   const [roles, usersResult] = await Promise.all([
     listAdminRoles(),
-    iam.user.listUsers({ page, pageSize, search, enabled, roleCode: roleFilter || undefined, include: ['roles'], sortBy: userSort.sortBy, sortDirection: userSort.sortDirection }),
+    iam.user.listUsers({ page, pageSize, search, accountStatus, roleCode: roleFilter || undefined, include: ['roles'], sortBy: userSort.sortBy, sortDirection: userSort.sortDirection }),
   ])
   const data = requireAdminData(usersResult)
   const iamUsers = data.items
@@ -134,7 +126,6 @@ export const load: PageServerLoad = async ({ url, locals }) => {
       email: user.email ?? '',
       display_name: user.displayName ?? null,
       avatar: user.avatarUrl ?? null,
-      status: user.enabled ? 'active' : 'suspended' as const,
       roles: userRoles.map(r => r.name),
       roleIds: userRoles.map(r => r.id),
       accountType: user.accountType,
@@ -151,10 +142,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     total,
     page,
     pageSize,
-    roles,
-    grantableRoleIds: roles.filter(role => canGrantRole(locals.session, role)).map(role => role.id),
+    roles: roles.filter(role => role.code !== iam.config?.rbac.superAdminRole),
     search: search ?? '',
-    status: statusParam ?? '',
+    accountStatus: accountStatus ?? '',
     role: roleFilter ?? '',
     sortBy: userSort.pageSortBy,
     sortDirection: userSort.pageSortDirection,

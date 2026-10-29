@@ -5,7 +5,7 @@ import { CreateApiKeySchema, ListApiKeysQuerySchema } from '$lib/server/schemas/
  * =============================================================================
  */
 
-import { requireGrantablePermissions, requireManageableUser } from '$lib/server/security-roles.js'
+import { requireGrantablePermissions, requireManageableApiKeyOwner } from '$lib/server/security-roles.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -57,7 +57,7 @@ export const POST = kit.handler(async ({ request, locals, cookies }) => {
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.apiKeys.create')
 
   const { userId, name, expirationDays, scopes } = await kit.validate.body(request, CreateApiKeySchema)
-  await requireManageableUser(locals.session, userId)
+  await requireManageableApiKeyOwner(locals.session, userId)
   requireGrantablePermissions(locals.session, scopes ?? [])
 
   const result = await iam.apiKey.createApiKey(userId, { name, expirationDays, scopes })

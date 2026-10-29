@@ -44,5 +44,8 @@
   "auth_login_response_invalid": "服务端登录响应异常",
   "auth_register_response_invalid": "服务端注册响应异常",
   "auth_login_request_failed": "登录请求失败",
-  "auth_register_request_failed": "注册请求失败"
+  "auth_register_request_failed": "注册请求失败",
+  "account_active": "激活",
+  "account_dormant": "休眠",
+  "account_closed": "注销"
 }

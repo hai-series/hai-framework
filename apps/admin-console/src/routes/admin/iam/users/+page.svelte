@@ -17,7 +17,7 @@
     email: string
     display_name: string | null
     avatar: string | null
-    status: 'active' | 'inactive' | 'suspended'
+    accountStatus: 'active' | 'dormant' | 'closed'
     roles: string[]
     roleIds: string[]
     created_at: Date
@@ -38,7 +38,7 @@
       page: number
       pageSize: number
       search: string
-      status: string
+      accountStatus: string
       role: string
       sortBy: string
       sortDirection: string
@@ -55,7 +55,7 @@
   const canDelete = $derived(hasPerm('user:delete') && hasPerm('user:api:delete'))
 
   // 创建 CRUD 定义（传入 roles 选项）
-  const userCrud: CrudOperations = $derived(createUserCrud(data.roles, data.grantableRoleIds))
+  const userCrud: CrudOperations = $derived(createUserCrud(data.roles))
 
   // 转换数据格式：roleIds 用于编辑，roles（名称数组）用于显示
   const crudData = $derived({
@@ -69,7 +69,7 @@
     pageSize: data.pageSize,
     filters: {
       search: data.search || undefined,
-      status: data.status || undefined,
+      accountStatus: data.accountStatus || undefined,
       role: data.role || undefined,
       sortBy: data.sortBy || undefined,
       sortDirection: data.sortDirection || undefined,
@@ -80,7 +80,7 @@
   const userSortableColumns = $derived([
     { key: 'username', label: m.iam_users_col_username() },
     { key: 'email', label: m.iam_users_col_email() },
-    { key: 'status', label: m.iam_users_col_status() },
+    { key: 'accountStatus', label: m.account_state() },
     { key: 'created_at', label: m.iam_users_col_created_at() },
   ])
 
@@ -113,4 +113,4 @@
   {/snippet}
 </CrudPage>
 
-<InviteUserDialog open={inviteOpen} mode={data.iamPublicConfig.passwordReset.mode} roles={data.roles.filter(role => data.grantableRoleIds.includes(role.id))} onclose={() => { inviteOpen = false }} onrefresh={handleAfterSubmit} />
+<InviteUserDialog open={inviteOpen} mode={data.iamPublicConfig.passwordReset.mode} roles={data.roles} onclose={() => { inviteOpen = false }} onrefresh={handleAfterSubmit} />

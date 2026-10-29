@@ -24,8 +24,8 @@ login:
 register:
   # 用途：是否允许访客自助注册；关闭后隐藏注册入口并由服务端拒绝注册，不影响已有账号登录或管理员创建账号。
   enabled: ${HAI_IAM_REGISTER_ENABLED:true}
-  # 用途：自助注册的新账号是否立即启用；false 时账号已创建但不能登录，须由管理员审核启用，不改变已有账号。
-  defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
+  # 用途：自助注册的初始生命周期；active 可登录，dormant 等待管理员激活；默认 active。
+  defaultAccountStatus: ${HAI_IAM_REGISTER_DEFAULTACCOUNTSTATUS:active}
 
 # 用途：RBAC 配置
 rbac:

@@ -7,7 +7,7 @@ import * as m from '$lib/paraglide/messages.js'
 
 import { deleteAdminRole, getAdminRole, resolvePermissionIds, updateAdminRole } from '$lib/server/iam-admin.js'
 import { IdParamSchema, UpdateRoleSchema } from '$lib/server/schemas/index.js'
-import { requireGrantablePermissions, requireGrantableRoles } from '$lib/server/security-roles.js'
+import { requireGrantablePermissions, requireManageableRoles } from '$lib/server/security-roles.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -41,7 +41,7 @@ export const PUT = kit.handler(async ({ params, request, locals, cookies }) => {
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
   const input = await kit.validate.body(request, UpdateRoleSchema)
-  await requireGrantableRoles(locals.session, [roleId])
+  await requireManageableRoles(locals.session, [roleId])
   requireGrantablePermissions(locals.session, input.permissions ?? [])
 
   // 检查角色是否存在
@@ -80,7 +80,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, cookies }) =
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
 
   // 检查角色是否存在
-  await requireGrantableRoles(locals.session, [roleId])
+  await requireManageableRoles(locals.session, [roleId])
   const existing = await getAdminRole(roleId)
   if (!existing) {
     return kit.response.notFound(m.api_iam_roles_not_found({}, { locale }))

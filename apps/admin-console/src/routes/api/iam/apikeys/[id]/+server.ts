@@ -1,4 +1,4 @@
-import { requireManageableUser } from '$lib/server/security-roles.js'
+import { requireManageableApiKeyOwner } from '$lib/server/security-roles.js'
 /**
  * =============================================================================
  * Admin Console - 单个 API Key 管理 API（详情 / 吊销）
@@ -42,7 +42,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, cookies }) =
   if (!key.success)
     return kit.response.fromError(key.error)
   if (key.data)
-    await requireManageableUser(locals.session, key.data.userId)
+    await requireManageableApiKeyOwner(locals.session, key.data.userId)
 
   const { id } = kit.validate.params(params, kit.validate.IdParamSchema)
 

@@ -1,9 +1,11 @@
 <!--
   UsersView — 分页列出用户，演示 `desktopApiClient.iam.users.list`。
-  使用 @h-ai/ui 的 PageHeader / Card / DataTable / Pagination / Alert / Tag。
+  使用公共表格、分页与根 ToastContainer 展示结果。
 -->
 <script lang='ts'>
+  import { core, HaiCommonError } from '@h-ai/core'
   import { Card, DataTable, PageHeader, Pagination, TableToolbar } from '@h-ai/ui'
+  import { authErrorMessage } from '@h-ai/ui/i18n'
   import { useToastFeedback } from '@h-ai/ui/toast'
   import { desktopApiClient } from '../lib/api.js'
   import { desktopM as m } from '../lib/messages.svelte.js'
@@ -17,12 +19,12 @@
   let users = $state<IamUser[]>([])
   let total = $state(0)
   let loading = $state(false)
-  let errorCode = $state<string | null>(null)
+  let error = $state('')
   let page = $state(1)
   const pageSize = 20
   let search = $state('')
   let appliedSearch = $state('')
-  let sortKey = $state<'username' | 'email' | 'enabled'>('username')
+  let sortKey = $state<'username' | 'email' | 'accountStatus'>('username')
   let sortDir = $state<'asc' | 'desc'>('asc')
   let requestVersion = 0
   let queryRevision = $state(0)
@@ -32,19 +34,19 @@
     { key: 'username', sortable: true, label: m('username') },
     { key: 'email', sortable: true, label: m('email') },
     {
-      key: 'enabled',
+      key: 'accountStatus',
       sortable: true,
       label: m('status'),
       align: 'center' as const,
       width: '6rem',
-      render: (item: IamUser) => (item.enabled ? m('enabled') : m('disabled')),
+      render: (item: IamUser) => item.accountStatus === 'active' ? m('account_active') : item.accountStatus === 'dormant' ? m('account_dormant') : m('account_closed'),
     },
   ])
 
   async function fetchUsers(query: Parameters<typeof desktopApiClient.iam.users.list>[0]): Promise<void> {
     const version = ++requestVersion
     loading = true
-    errorCode = null
+    error = ''
     const result = await desktopApiClient.iam.users.list(query)
     if (version !== requestVersion)
       return
@@ -53,7 +55,9 @@
       total = result.data.total
     }
     else {
-      errorCode = String(result.error.code ?? 'unknown')
+      error = result.error.code === HaiCommonError.REQUEST_ACCESS_DENIED.code
+        ? authErrorMessage(result.error)
+        : core.error.formatMessage({ message: m('users_failed'), traceId: result.error.traceId })
     }
     loading = false
   }
@@ -64,14 +68,14 @@
   })
 
   function sort(key: string, direction: 'asc' | 'desc') {
-    const field = (['username', 'email', 'enabled'] as const).find(field => field === key)
+    const field = (['username', 'email', 'accountStatus'] as const).find(field => field === key)
     if (!field)
       return
     sortKey = field
     sortDir = direction
     page = 1
   }
-  useToastFeedback(() => errorCode ? m('users_failed') : '')
+  useToastFeedback(() => error)
 </script>
 
 <div class='flex min-h-0 flex-1 flex-col gap-4'>

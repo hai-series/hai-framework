@@ -7,7 +7,7 @@ import * as m from '$lib/paraglide/messages.js'
 
 import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
-import { requireGrantableRoles } from '$lib/server/security-roles.js'
+import { requireAssignableRoles } from '$lib/server/security-roles.js'
 import { audit } from '@h-ai/audit'
 import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -17,23 +17,23 @@ import { kit } from '@h-ai/kit'
  *
  * 需要权限：user:list
  *
- * 支持分页、搜索关键字、启用状态过滤和白名单字段排序。
+ * 支持分页、搜索关键字、账号状态过滤和白名单字段排序。
  *
  * 查询参数：
  * - page: 页码（默认 1）
  * - pageSize: 每页数量（默认 20）
  * - search: 搜索关键字（模糊匹配用户名/邮箱）
- * - enabled: 启用状态过滤（true/false，不传则返回全部）
+ * - accountStatus: active/dormant/closed，不传则返回全部
  * - roleCode: 角色代码过滤（在数据库分页前执行）
- * - sortBy: 排序字段（username/email/displayName/enabled/createdAt）
+ * - sortBy: 排序字段（username/email/displayName/accountStatus/createdAt）
  * - sortDirection: 排序方向（asc/desc）
  */
 export const GET = kit.handler(async ({ url, locals }) => {
   kit.guard.require(locals.session, 'user:list')
 
-  const { page, pageSize, search, enabled, roleCode, sortBy, sortDirection } = kit.validate.query(url, ListUsersQuerySchema)
+  const { page, pageSize, search, accountStatus, roleCode, sortBy, sortDirection } = kit.validate.query(url, ListUsersQuerySchema)
 
-  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled, roleCode, include: ['roles'], sortBy, sortDirection })
+  const usersResult = await iam.user.listUsers({ page, pageSize, search, accountStatus, roleCode, include: ['roles'], sortBy, sortDirection })
   if (!usersResult.success) {
     return kit.response.internalError(usersResult.error.message)
   }
@@ -47,7 +47,6 @@ export const GET = kit.handler(async ({ url, locals }) => {
     email: user.email,
     display_name: user.displayName,
     avatar: user.avatarUrl,
-    status: user.enabled !== false ? 'active' as const : 'inactive' as const,
     accountType: user.accountType,
     accountStatus: user.accountStatus,
     accountExpiresAt: user.accountExpiresAt,
@@ -70,8 +69,8 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress, cook
   kit.guard.require(locals.session, 'user:api:create')
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.create')
 
-  const { username, email, password, display_name, roles, status, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createCreateUserSchema())
-  await requireGrantableRoles(locals.session, roles)
+  const { username, email, password, display_name, roles, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createCreateUserSchema())
+  await requireAssignableRoles(locals.session, roles)
 
   // 管理员创建不受自助注册开关影响。
   const registerResult = await iam.user.createUser({
@@ -91,17 +90,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress, cook
     return kit.response.fromError(registerResult.error)
   }
 
-  let { user } = registerResult.data
-
-  // 如果管理员创建时指定了非 active 状态，需要禁用用户
-  if (status && status !== 'active') {
-    const disabled = await iam.user.updateUser(user.id, { enabled: false })
-    if (!disabled.success) {
-      await iam.user.deleteUser(user.id)
-      return kit.response.fromError(disabled.error)
-    }
-    user = disabled.data
-  }
+  const { user } = registerResult.data
 
   // 分配角色（iam.user.createUser 已分配 config.rbac.defaultRole）
   // 管理员创建时额外分配指定角色

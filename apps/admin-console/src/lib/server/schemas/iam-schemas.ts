@@ -26,33 +26,29 @@ function getPasswordMinLength(): number {
 /**
  * 路径参数 id 校验 Schema
  *
- * 从 @h-ai/kit 导出，保持向后兼容。
+ * 复用 @h-ai/kit 的公开校验契约。
  */
 export { IdParamSchema }
 
 /** 用户列表查询参数 Schema（扩展通用分页参数） */
 export const ListUsersQuerySchema = PaginationQuerySchema.extend({
   roleCode: z.string().trim().min(1).max(100).optional(),
-  enabled: z
-    .enum(['true', 'false'])
-    .transform(v => v === 'true')
-    .optional(),
+  accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
   /** IAM 用户列表允许排序的领域字段。 */
-  sortBy: z.enum(['username', 'email', 'displayName', 'enabled', 'createdAt']).optional(),
+  sortBy: z.enum(['username', 'email', 'displayName', 'accountStatus', 'createdAt']).optional(),
   /** 服务端排序方向。 */
   sortDirection: z.enum(['asc', 'desc']).optional(),
-})
+}).strict()
 
 /** 创建用户请求 Schema */
 export function createCreateUserSchema() {
   const minLen = getPasswordMinLength()
-  return z.object({
+  return z.strictObject({
     username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()),
     email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()),
     password: z.string().min(minLen, m.api_auth_password_too_short()),
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
-    status: z.enum(['active', 'inactive', 'suspended']).optional(),
     accountType: z.enum(['permanent', 'temporary']).optional(),
     accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
     accountExpiresAt: z.coerce.date().nullable().optional().transform(value => value ?? undefined),
@@ -61,19 +57,18 @@ export function createCreateUserSchema() {
 
 /** 更新用户请求 Schema */
 export function createInviteUserSchema() {
-  return createCreateUserSchema().omit({ password: true }).extend({ email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(), phone: z.string().trim().min(1).max(32).optional(), status: z.literal('active').optional(), accountStatus: z.literal('active').optional() })
+  return createCreateUserSchema().omit({ password: true }).extend({ email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(), phone: z.string().trim().min(1).max(32).optional(), accountStatus: z.literal('active').optional() })
 }
 
 /** 更新用户请求 Schema */
 export function createUpdateUserSchema() {
   const minLen = getPasswordMinLength()
-  return z.object({
+  return z.strictObject({
     username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()).optional(),
     email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(),
     password: z.string().min(minLen).optional(),
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
-    status: z.enum(['active', 'inactive', 'suspended']).optional(),
     accountType: z.enum(['permanent', 'temporary']).optional(),
     accountStatus: z.enum(['active', 'dormant', 'closed']).optional(),
     accountExpiresAt: z.coerce.date().nullable().optional(),

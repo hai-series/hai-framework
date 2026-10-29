@@ -11,7 +11,7 @@ import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { ensureAIInitialized } from '$lib/server/init.js'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { kit } from '@h-ai/kit'
+import { kit, KitConfigSchema } from '@h-ai/kit'
 
 // 初始化 AI（E2E mock 模式跳过）、设置 locale 与 API 安全响应头
 let rateLimitInit: Promise<void> | undefined
@@ -58,8 +58,21 @@ const securityHandle: Handle = async ({ event, resolve }) => {
   })
 }
 
-const haiHandle = kit.createHandle({
-  rateLimit: { windowMs: 60000, maxRequests: 120, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'ai-playground', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
-})
+let configuredHandle: Handle | undefined
+const haiHandle: Handle = async (input) => {
+  if (!configuredHandle) {
+    const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+    if (!loaded.success)
+      throw new Error(loaded.error.message)
+    if (loaded.data.transport !== false)
+      throw new Error('This example does not install transport encryption; use admin-console or a crypto-enabled CLI template for the complete server and browser assembly')
+    configuredHandle = kit.createHandle({
+      trustedProxies: loaded.data.trustedProxies,
+      access: loaded.data.access,
+      rateLimit: { windowMs: 60000, maxRequests: 120, store: kit.middleware.createCacheRateLimitStore(cache, { namespace: 'ai-playground', allowMemory: process.env.NODE_ENV !== 'production' || process.env.HAI_E2E === '1' || process.env.HAI_E2E_MOCK === '1' }) },
+    })
+  }
+  return configuredHandle(input)
+}
 
 export const handle: Handle = kit.sequence(securityHandle, haiHandle)

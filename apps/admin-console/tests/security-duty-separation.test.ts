@@ -5,7 +5,7 @@ import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { ADMIN_DUTIES, canGrantRole, requireGrantableRoles, requireManageableUser, requirePagePermission, seedAdminDuties } from '../src/lib/server/security-roles.js'
+import { ADMIN_DUTIES, canGrantRole, requireAssignableRoles, requireManageableApiKeyOwner, requirePagePermission, seedAdminDuties } from '../src/lib/server/security-roles.js'
 import { load as dashboard } from '../src/routes/admin/+page.server.js'
 import { DELETE as deletePermission } from '../src/routes/api/iam/permissions/[id]/+server.js'
 import { POST as createUser } from '../src/routes/api/iam/users/+server.js'
@@ -103,7 +103,7 @@ it('四类职责与基础用户权限互斥，重复初始化也不会把审计�
   }
 })
 
-it('系统管理员不能通过修改审计账号或授予super admin间接越权', async () => {
+it('账号管理与 API Key 委托分开，禁止混合职责及授予隐式超级角色', async () => {
   expect((await seedAdminDuties({ admin: 'System', audit_admin: 'Audit', config_admin: 'Config', business_operator: 'Operator', user: 'Member' })).success).toBe(true)
   const actor = { userId: 'system', roles: ['admin'], permissions: [...ADMIN_DUTIES.admin] }
   expect(canGrantRole(actor, { code: 'user', permissions: [...ADMIN_DUTIES.user] })).toBe(true)
@@ -114,11 +114,43 @@ it('系统管理员不能通过修改审计账号或授予super admin间接越�
   if (!created.success || !role.success || !role.data)
     throw new Error('Missing audit fixture')
   expect((await iam.authz.syncRoles(created.data.user.id, [role.data.id])).success).toBe(true)
-  await expect(requireManageableUser(actor, created.data.user.id)).rejects.toMatchObject({ status: 403 })
+  await expect(requireAssignableRoles(actor, [role.data.id])).resolves.toBeUndefined()
+  await expect(requireManageableApiKeyOwner(actor, created.data.user.id)).rejects.toMatchObject({ status: 403 })
+  const systemRole = await iam.authz.getRoleByCode('admin')
+  if (!systemRole.success || !systemRole.data)
+    throw new Error('Missing system role')
+  await expect(requireAssignableRoles(actor, [systemRole.data.id, role.data.id])).rejects.toMatchObject({ status: 400 })
   const superRole = await iam.authz.createRole({ code: 'super_admin', name: 'Unseeded recovery role' })
   if (!superRole.success)
     throw new Error(superRole.error.message)
-  await expect(requireGrantableRoles(actor, [superRole.data.id])).rejects.toMatchObject({ status: 403 })
+  await expect(requireAssignableRoles(actor, [superRole.data.id])).rejects.toMatchObject({ status: 403 })
+})
+
+it.each(['admin', 'audit_admin', 'config_admin', 'business_operator', 'user'])('系统管理员可创建并管理 %s 账号，重置密码不会激活休眠账号', async (code) => {
+  expect((await seedAdminDuties({ admin: 'System', audit_admin: 'Audit', config_admin: 'Config', business_operator: 'Operator', user: 'Member' })).success).toBe(true)
+  const role = await iam.authz.getRoleByCode(code)
+  if (!role.success || !role.data)
+    throw new Error('Missing duty role')
+  const actor = { userId: 'system-actor', roles: ['admin'], permissions: [...ADMIN_DUTIES.admin] }
+  const username = `duty_${code.slice(0, 12)}`
+  const created = await createUser({
+    request: new Request('https://app.test/api/iam/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, email: `${code}@example.test`, password: 'ExampleOnly123!', roles: [role.data.id] }) }),
+    cookies: { get: () => undefined },
+    locals: { session: actor },
+    getClientAddress: () => '127.0.0.1',
+  } as RequestEvent)
+  expect(created.status).toBe(200)
+  const body = await created.json() as { data: { id: string } }
+  const updated = await updateUser({
+    params: { id: body.data.id },
+    request: new Request('https://app.test/api/iam/users/target', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ display_name: 'Managed account', accountStatus: 'dormant', password: 'ResetExample456!' }) }),
+    cookies: { get: () => undefined },
+    locals: { session: actor },
+    getClientAddress: () => '127.0.0.1',
+  } as RequestEvent)
+  expect(updated.status).toBe(200)
+  expect(await updated.json()).toMatchObject({ data: { display_name: 'Managed account', accountStatus: 'dormant' } })
+  expect(await iam.auth.login({ identifier: username, password: 'ResetExample456!' })).toMatchObject({ success: false, error: { code: 'hai:iam:002' } })
 })
 
 it('允许清理未分配的自定义权限，拒绝删除其他职责正在使用的定义', async () => {

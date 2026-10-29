@@ -8,7 +8,7 @@ import type { Handle } from '@sveltejs/kit'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { core } from '@h-ai/core'
-import { kit } from '@h-ai/kit'
+import { kit, KitConfigSchema } from '@h-ai/kit'
 
 // =============================================================================
 // 应用初始化
@@ -63,21 +63,34 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 // hai Handle（会话验证 + 限流 + 日志）
 // =============================================================================
 
-const haiHandle = kit.createHandle({
-  // 未选择cache能力时不启用限流；启用前须接入共享原子store。
-  rateLimit: false,
-  logging: { logBody: false },
-  onError: (error: unknown, _event) => {
-    core.logger.error('Request error:', { error })
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
-  },
-})
+let configuredHandle: Handle | undefined
+const haiHandle: Handle = async (input) => {
+  if (!configuredHandle) {
+    const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+    if (!loaded.success)
+      throw new Error(loaded.error.message)
+    if (loaded.data.transport !== false)
+      throw new Error('This example does not install transport encryption; use admin-console or a crypto-enabled CLI template for the complete server and browser assembly')
+    configuredHandle = kit.createHandle({
+      trustedProxies: loaded.data.trustedProxies,
+      access: loaded.data.access,
+      // 未选择cache能力时不启用限流；启用前须接入共享原子store。
+      rateLimit: false,
+      logging: { logBody: false },
+      onError: (error: unknown, _event) => {
+        core.logger.error('Request error:', { error })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: core.error.toPublic({ code: 'INTERNAL_ERROR', message: '', httpStatus: 500 }),
+          }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } },
+        )
+      },
+    })
+  }
+  return configuredHandle(input)
+}
 
 // =============================================================================
 // 组合 Handle

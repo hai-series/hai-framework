@@ -11,6 +11,11 @@ server:
 
 # 用途：HTTP 基础路径、请求体大小及访问配置
 http:
+  # 用途：可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段
+  trustedProxies: ${HAI_SERV_HTTP_TRUSTEDPROXIES:auto}
+  # 用途：每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用
+  access: ${HAI_SERV_HTTP_ACCESS:false}
+  # 独立策略文件：access: { file: ./config/security/request-access.yml }
   # 用途：业务 HTTP API 的基础路径前缀
   apiPrefix: ${HAI_SERV_HTTP_APIPREFIX:/api/v1}
   # 用途：OpenAPI 端点开关或端点配置

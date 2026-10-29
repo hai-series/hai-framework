@@ -119,9 +119,6 @@
   "iam_users_password_mismatch": "Passwords do not match",
   "iam_users_operation_failed": "Operation failed",
   "iam_users_delete_failed": "Delete failed",
-  "iam_users_status_active": "Active",
-  "iam_users_status_inactive": "Inactive",
-  "iam_users_status_disabled": "Disabled",
   "iam_users_col_username": "Username",
   "iam_users_col_email": "Email",
   "iam_users_col_display_name": "Display Name",
@@ -531,7 +528,7 @@
   "feedback_material_missing": "Missing materials",
   "security_role_system": "System administrator",
   "security_role_audit": "Audit administrator",
-  "security_role_config": "Business configurator",
+  "security_role_config": "Configuration administrator",
   "security_role_operator": "Business operator",
   "business_settings_title": "Business configuration",
   "business_notice_label": "Public business notice",
@@ -1177,5 +1174,7 @@
   "gallery_demo_more_item": "More mobile items {value}",
   "gallery_demo_ai_response_intro": "This example returns JSON using the built-in Node.js HTTP module, with no additional server dependency.",
   "gallery_demo_place_order": "Place order",
-  "gallery_demo_check_stock": "Check stock"
+  "gallery_demo_check_stock": "Check stock",
+  "security_duty_conflict": "Assign only one administrative duty per account. Create separate accounts for different duties.",
+  "security_self_protection": "Ask another system administrator to change your role, expiry or account status."
 }

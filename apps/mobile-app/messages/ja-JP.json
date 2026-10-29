@@ -64,5 +64,8 @@
   "users_subtitle": "ユーザー{total}人",
   "users_error_title": "ユーザーの読み込みに失敗しました",
   "users_email_empty": "メールアドレスなし",
-  "users_empty": "ユーザーがいません"
+  "users_empty": "ユーザーがいません",
+  "account_active": "有効",
+  "account_dormant": "休眠",
+  "account_closed": "閉鎖"
 }

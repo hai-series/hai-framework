@@ -64,5 +64,8 @@
   "users_subtitle": "共 {total} 个用户",
   "users_error_title": "用户列表读取失败",
   "users_email_empty": "未设置邮箱",
-  "users_empty": "暂无用户"
+  "users_empty": "暂无用户",
+  "account_active": "激活",
+  "account_dormant": "休眠",
+  "account_closed": "注销"
 }

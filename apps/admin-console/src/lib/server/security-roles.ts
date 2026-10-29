@@ -66,7 +66,7 @@ export async function seedAdminDuties(names: Record<keyof typeof ADMIN_DUTIES, s
   return ok(undefined)
 }
 
-/** 写入前限制可授予范围，禁止通过角色、密码重置或 API Key 跨越职责。 */
+/** 权限定义和 API Key 的委托范围不能超出操作者已有权限。 */
 export function requireGrantablePermissions(actor: SessionLike | null | undefined, codes: string[]): void {
   for (const code of codes) {
     if (code.includes('*') || !kit.guard.check(actor, code))
@@ -84,7 +84,7 @@ export function canGrantRole(actor: SessionLike | null | undefined, role: { code
   return basicMember || role.permissions.every(code => !code.includes('*') && kit.guard.check(actor, code))
 }
 
-export async function requireGrantableRoles(actor: SessionLike | null | undefined, ids: string[] | undefined): Promise<void> {
+export async function requireManageableRoles(actor: SessionLike | null | undefined, ids: string[] | undefined): Promise<void> {
   for (const id of ids ?? []) {
     const role = await iam.authz.getRole(id)
     if (!role.success)
@@ -99,11 +99,32 @@ export async function requireGrantableRoles(actor: SessionLike | null | undefine
   }
 }
 
-export async function requireManageableUser(actor: SessionLike | null | undefined, id: string): Promise<void> {
+/** 系统管理员可分配所有应用职责；一个账号不能同时承担多个管理职责。 */
+export async function requireAssignableRoles(actor: SessionLike | null | undefined, ids: string[] | undefined): Promise<void> {
+  if (!ids)
+    return
+  if (!kit.guard.check(actor, 'user:api:create') && !kit.guard.check(actor, 'user:api:update'))
+    throw kit.response.forbidden()
+  const duties = new Set<string>()
+  for (const id of new Set(ids)) {
+    const role = await iam.authz.getRole(id)
+    if (!role.success)
+      throw kit.response.fromError(role.error)
+    if (!role.data || role.data.code === iam.config?.rbac.superAdminRole)
+      throw kit.response.forbidden()
+    if (role.data.code !== 'user' && Object.hasOwn(ADMIN_DUTIES, role.data.code))
+      duties.add(role.data.code)
+  }
+  if (duties.size > 1)
+    throw kit.response.badRequest(m.security_duty_conflict())
+}
+
+/** 代发 API Key 会取得目标账号的业务访问能力，继续按权限子集校验。 */
+export async function requireManageableApiKeyOwner(actor: SessionLike | null | undefined, id: string): Promise<void> {
   const roles = await iam.authz.getUserRoles(id)
   if (!roles.success)
     throw kit.response.fromError(roles.error)
-  await requireGrantableRoles(actor, roles.data.map(role => role.id))
+  await requireManageableRoles(actor, roles.data.map(role => role.id))
 }
 
 /** 未分配的自定义定义可清理；删除不能撤销其他职责角色的权限。 */

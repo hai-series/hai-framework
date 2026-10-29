@@ -9,7 +9,7 @@
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime.js'
   import { crypto } from '@h-ai/crypto'
-  import { kit, resolveKitConfig } from '@h-ai/kit'
+  import { kit } from '@h-ai/kit'
   import { setGlobalLocale } from '@h-ai/ui'
   import { untrack } from 'svelte'
   import '../app.css'
@@ -31,7 +31,7 @@
   if (browser) {
     setGlobalLocale(getLocale())
     // 服务进程的配置在首次加载时固定，后续页面导航无需重新安装全局 fetch。
-    const config = resolveKitConfig(untrack(() => data.kitConfig))
+    const config = untrack(() => data.kitConfig)
     kit.client.installBrowserTransport(config, { crypto })
 
     // E2E 需要一个稳定、同步可观测的标记来判断浏览器端 transport 已安装完成。

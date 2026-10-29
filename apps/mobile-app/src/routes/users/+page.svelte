@@ -45,8 +45,8 @@
               <div class='min-w-0 flex-1'>
                 <div class='flex items-center gap-2'>
                   <p class='truncate font-medium'>{user.username}</p>
-                  <Badge variant={user.enabled ? 'success' : 'warning'} size='sm'>
-                    {user.enabled ? m.common_enabled() : m.common_disabled()}
+                  <Badge variant={user.accountStatus === 'active' ? 'success' : 'warning'} size='sm'>
+                    {user.accountStatus === 'active' ? m.account_active() : user.accountStatus === 'dormant' ? m.account_dormant() : m.account_closed()}
                   </Badge>
                 </div>
                 <p class='text-base-content/50 truncate text-sm'>{user.email ?? m.users_email_empty()}</p>

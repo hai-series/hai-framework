@@ -59,15 +59,15 @@ reauthentication:
 
 # 用途：宿主提供可信客户端地址；绝不从凭据 JSON 或任意转发头取得 IP。
 loginAccess:
-  # 用途：是否限制新建登录会话的时段和可信客户端地址；不在窗口结束时自动踢掉已登录用户。
+  # 用途：是否限制新建登录会话；已有会话的每次请求限制由 Serv/Kit 的 access 策略负责。
   enabled: ${HAI_IAM_LOGINACCESS_ENABLED:false}
-  # 用途：登录时段使用的 IANA 时区；Asia/Shanghai 为北京时间，默认 UTC。
+  # 用途：访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟
   timezone: ${HAI_IAM_LOGINACCESS_TIMEZONE:Asia/Shanghai}
-  # 用途：允许登录的 IP/CIDR 列表，支持 IPv4/IPv6；空数组不限制地址，配置后须提供可信客户端 IP。
+  # 用途：允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项
   allowIps: [] # 空列表不限制；支持 IPv4、IPv6 与 CIDR
-  # 用途：拒绝登录的 IP/CIDR 列表；与允许列表同时匹配时拒绝优先。
+  # 用途：拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项
   denyIps: [] # 拒绝优先于允许
-  # 用途：允许新登录的时间窗口；空数组不限制时间，跨午夜窗口按开始日归属。
+  # 用途：允许的访问时间窗口；空数组不限时间，最多 100 个
   windows: [] # days 为周一1至周日7；start/end 为 HH:mm，支持跨午夜
 
 # 会话配置
@@ -127,8 +127,8 @@ seedDefaultData: ${HAI_IAM_SEEDDEFAULTDATA:true}
 register:
   # 用途：是否允许访客自助注册；关闭后隐藏注册入口并由服务端拒绝注册，不影响已有账号登录或管理员创建账号。
   enabled: ${HAI_IAM_REGISTER_ENABLED:true}
-  # 用途：自助注册的新账号是否立即启用；false 时账号已创建但不能登录，须由管理员审核启用，不改变已有账号。
-  defaultEnabled: ${HAI_IAM_REGISTER_DEFAULTENABLED:true}
+  # 用途：自助注册的初始生命周期；active 可登录，dormant 等待管理员激活；默认 active。
+  defaultAccountStatus: ${HAI_IAM_REGISTER_DEFAULTACCOUNTSTATUS:active}
 # 用途：安全策略配置
 security:
   # 用途：是否累计失败并暂时锁定密码鉴别；关闭忽略历史锁，成功密码验证会重置计数。

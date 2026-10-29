@@ -5,22 +5,11 @@
  */
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
-import type { Permission, PermissionQueryOptions, PermissionType, Role } from '@h-ai/iam'
+import type { Permission, PermissionQueryOptions, PermissionType, Role, User } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
 import { core, err, ok } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { error } from '@sveltejs/kit'
-
-interface IamUserInput {
-  id: string
-  username: string
-  email?: string | null
-  displayName?: string | null
-  avatarUrl?: string | null
-  enabled?: boolean
-  createdAt: Date
-  updatedAt: Date
-}
 
 interface IamProfileInput {
   id: string
@@ -309,9 +298,8 @@ export function normalizeUniqueConstraintError(message: string | undefined, fall
 }
 
 /** IAM 用户对象转后台用户列表响应格式（含角色 code）。 */
-export async function toIamUserResponse(user: IamUserInput) {
-  const userResult = await iam.user.getUser(user.id, { include: ['roles'] })
-  const loaded = requireAdminData(userResult)
+export async function toIamUserResponse(user: User) {
+  const loaded = user.roles ? user : requireAdminData(await iam.user.getUser(user.id, { include: ['roles'] }))
   if (!loaded)
     throw error(503, { message: m.common_network_error() })
   const roles = loaded.roles?.map(role => role.code) ?? []
@@ -322,7 +310,6 @@ export async function toIamUserResponse(user: IamUserInput) {
     email: user.email,
     display_name: user.displayName,
     avatar: user.avatarUrl,
-    status: user.enabled !== false ? 'active' as const : 'inactive' as const,
     accountType: loaded.accountType,
     accountStatus: loaded.accountStatus,
     accountExpiresAt: loaded.accountExpiresAt,

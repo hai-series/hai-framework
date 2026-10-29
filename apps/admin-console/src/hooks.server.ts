@@ -93,7 +93,8 @@ async function validateSession(token: string) {
  */
 async function createHaiHandle(): Promise<Handle> {
   // initHandle 已完成模块初始化，此时读取反馈的真实容量，保留显式关闭传输的配置。
-  const kitTransportConfig = getAdminKitConfig().transport
+  const kitConfig = getAdminKitConfig()
+  const kitTransportConfig = kitConfig.transport
   const handleTransportConfig = kitTransportConfig === false
     ? false
     : {
@@ -117,6 +118,8 @@ async function createHaiHandle(): Promise<Handle> {
   }
 
   return kit.createHandle({
+    trustedProxies: kitConfig.trustedProxies,
+    access: kitConfig.access,
     middleware: [(_context, next) => core.context.run({ scopeId: 'admin-console' }, next)],
     auth: {
       verifyToken: validateSession,

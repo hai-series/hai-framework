@@ -8,7 +8,7 @@ import type { User } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
 import { toIamUserResponse } from '$lib/server/iam-admin.js'
 import { createUpdateUserSchema, IdParamSchema } from '$lib/server/schemas/index.js'
-import { requireGrantableRoles, requireManageableUser } from '$lib/server/security-roles.js'
+import { requireAssignableRoles } from '$lib/server/security-roles.js'
 import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -43,9 +43,16 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   await kit.guard.requireSensitive(iam, { request, cookies }, 'iam.users.update')
 
   const { id: userId } = kit.validate.params(params, IdParamSchema)
-  const { username, email, password, display_name, roles, status, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createUpdateUserSchema())
-  await requireManageableUser(locals.session, userId)
-  await requireGrantableRoles(locals.session, roles)
+  const { username, email, password, display_name, roles, accountType, accountStatus, accountExpiresAt } = await kit.validate.body(request, createUpdateUserSchema())
+  await requireAssignableRoles(locals.session, roles)
+
+  if (userId === locals.session!.userId) {
+    const adminRole = roles !== undefined ? await iam.authz.getRoleByCode('admin') : undefined
+    if (adminRole && !adminRole.success)
+      return kit.response.fromError(adminRole.error)
+    if ((accountStatus !== undefined && accountStatus !== 'active') || accountType === 'temporary' || accountExpiresAt != null || (roles !== undefined && (!adminRole?.success || !adminRole.data || !roles.includes(adminRole.data.id))))
+      return kit.response.forbidden(m.security_self_protection({}, { locale }))
+  }
 
   // 检查用户是否存在
   const existingResult = await iam.user.getUser(userId)
@@ -53,7 +60,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     return kit.response.notFound(m.api_iam_users_not_found({}, { locale }))
   }
 
-  // 更新用户信息（含启用/禁用状态）
+  // 生命周期与资料使用同一更新入口。
   const updateData: Partial<User> = {}
   if (username)
     updateData.username = username
@@ -61,8 +68,6 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     updateData.email = email
   if (display_name !== undefined)
     updateData.displayName = display_name
-  if (status !== undefined)
-    updateData.enabled = status === 'active'
   if (accountType !== undefined)
     updateData.accountType = accountType
   if (accountStatus !== undefined)
@@ -101,7 +106,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     action: 'update',
     resource: 'user',
     resourceId: userId,
-    details: { username, email, passwordReset: !!password },
+    details: { username, email, accountType, accountStatus, roles, passwordReset: !!password },
     ip,
     ua,
   })
@@ -128,7 +133,6 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   const { id: userId } = kit.validate.params(params, IdParamSchema)
 
   // 检查用户是否存在
-  await requireManageableUser(locals.session, userId)
   const existingResult = await iam.user.getUser(userId)
   if (!existingResult.success || !existingResult.data) {
     return kit.response.notFound(m.api_iam_users_not_found({}, { locale }))

@@ -64,5 +64,8 @@
   "users_subtitle": "{total} users",
   "users_error_title": "Failed to load users",
   "users_email_empty": "No email",
-  "users_empty": "No users"
+  "users_empty": "No users",
+  "account_active": "Active",
+  "account_dormant": "Dormant",
+  "account_closed": "Closed"
 }
