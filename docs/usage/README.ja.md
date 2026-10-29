@@ -15,4 +15,4 @@
 
 役割ごとに同じ本文へ案内し、設定を別々の説明へ複製しません。公式サイトはこのMarkdownとnavigation.jsonを直接読み込みます。
 
-実際のインストール版とnpm公開状態を確認してください。Betaはbetaタグまたは公開済みの固定版を指定し、mainだけで公開済みとは判断しません。[検証説明](governance/verification.md)に実行済みと対象環境で必要な確認を分けています。
+最新の公開版は `pnpm view @h-ai/cli@latest version` または [npm](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions) で確認してください。再現性が必要な場合は取得した版を固定し、main だけで公開済みとは判断しません。[検証説明](governance/verification.md)で実行済みと対象環境で必要な確認を分けています。

@@ -5,7 +5,7 @@
   import { Badge, MarkdownRenderer } from '@h-ai/ui'
 
   const { data }: PageProps = $props()
-  const install = '```sh\npnpm add -g @h-ai/cli@1.0.0-beta.1\nhai create my-app --type website --yes\ncd my-app && pnpm dev\n```'
+  const install = '```sh\npnpm add -g @h-ai/cli@latest\nhai create my-app --type website --yes\ncd my-app && pnpm dev\n```'
   const features = [
     { icon: 'icon-[tabler--layout-grid]', title: m.site_feature_apps, body: m.site_feature_apps_body, slug: 'getting-started/create' },
     { icon: 'icon-[tabler--settings]', title: m.site_feature_config, body: m.site_feature_config_body, slug: 'configuration/data' },

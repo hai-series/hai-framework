@@ -65,10 +65,10 @@ Defaults below describe what happens when an option is omitted, including cases 
 
 Install the CLI, then create a Web + API workspace with deployment support:
 
-An unversioned install selects npm's `latest` tag. To use the beta channel, run `pnpm add -g @h-ai/cli@beta`, or pin `@h-ai/cli@1.0.0-beta.1`, after `pnpm view @h-ai/cli dist-tags` confirms publication. Version `1.0.0-beta.1` is the target of this release work; a workspace version does not prove npm availability. Beta releases use the `beta` tag and preserve the existing `latest` pointer. Upgrade application packages to the same exact framework version.
+An unversioned install selects npm's `latest` tag. Query `pnpm view @h-ai/cli@latest version` and `pnpm view @h-ai/cli dist-tags` for the current versions. Use `@h-ai/cli@latest` for the default release, `@beta` for the beta channel, or replace the tag with the returned exact version to pin it. Completed releases advance `latest` after all packages are published while retaining their channel tags. Upgrade application packages to the same exact framework version.
 
 ```sh
-pnpm add -g @h-ai/cli@1.0.0-beta.1
+pnpm add -g @h-ai/cli@latest
 hai --version
 hai create my-app --type fullstack --frontends web --yes
 cd my-app

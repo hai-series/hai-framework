@@ -1,727 +1,149 @@
 # hai Framework
 
-[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+**AI 機能、セキュリティ、業務アプリの開発と配布を、一つの TypeScript 基盤で。**
 
-フレームワークの各モジュール、`apps/` のサンプル、CLI テンプレートは簡体字中国語（`zh-CN`）、英語（`en-US`）、日本語（`ja-JP`）に対応します。`core.i18n.setGlobalLocale('ja')` は `ja-JP` に正規化されます。アプリでは言語メニューから切り替えます。
+[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-> 現在の開発版は`1.0.0-beta.1`です。ソースの版とnpmの公開状況は異なるため、導入前にregistryを確認し、用途に応じた安全性・処理能力・復旧を検証してください。
+[![npm 最新版](https://img.shields.io/npm/v/%40h-ai%2Fcli?label=npm%20latest)](https://www.npmjs.com/package/@h-ai/cli)
+[![CI](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml)
+[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
+[![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-状態を持つバックエンドを使用する本番構成では、単一インスタンスでも[22 パッケージの共有状態・復旧能力表（中国語）](.agents/instructions/distributed-state.md)を確認してください。PostgreSQL/MySQL、Redis、共有オブジェクト・ベクトルサービスを使用し、初期化時にローカル後端を拒否します。純粋な静的サイトにはデータベースやキャッシュは不要で、これらの業務APIも含まれません。CAS・租約・冪等性・未知の外部効果と検証範囲を記載しています。
+[公式サイトとテンプレート](https://hai-series.github.io/hai-framework/) · [利用ガイド](docs/usage/README.ja.md) · [設定マニュアル](docs/usage/configuration/README.md) · [リリース](https://github.com/hai-series/hai-framework/releases/latest)
 
-<p align="center">
-  <strong>AI Runtime · 企業向けフルスタックモジュール · Agent Skills · エンドツーエンドの型安全性</strong>
-</p>
+権限管理付きの業務システムから AI アシスタント、ナレッジベース、マルチプラットフォームアプリまで。**組み合わせて使える 22 パッケージ**、実行可能な CLI テンプレート、共通 UI、デプロイツールを提供します。フロントエンドとバックエンドは型と API 契約を共有し、開発者と AI は規約、Skills、検証手順を共有します。
 
-<p align="center">
-  AI アプリ向けの TypeScript フルスタックフレームワーク。1 回の LLM 呼び出しから、提供可能な企業向けアプリケーションまで。
-</p>
+## hai の特長
 
-<p align="center">
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
-  <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
-</p>
+### AI：モデルの呼び出しから業務機能へ
 
----
+OpenAI 互換モデル、ツール呼び出し、MCP を統一して扱い、RAG、会話メモリ、画像、音声、A2A と組み合わせます。チャット、Markdown、文書、Mermaid の表示コンポーネントを業務画面に再利用できます。
 
-## 概要
+![目次、ダークテーマ、Mermaid を備えた文書コンポーネント](docs/usage/images/ai-document-dark.png)
 
-hai Framework は **AI Runtime を中核に、企業向け機能を必要に応じて組み合わせ、AI コーディング支援向けに最適化した** TypeScript フルスタックフレームワークです。
+実際のコンポーネント画面です。推論には選択した Provider と認証情報の設定が必要です。この画像はコンテンツ表示を示します。[AI 開発](docs/usage/development/ai.md) · [モデルとナレッジ設定](docs/usage/configuration/ai.md)
 
-最小構成では `@h-ai/ai` で LLM とツールを呼び出せます。永続化、マルチテナント、認証、監査、API、UI、デプロイが必要になったときに `reldb`、`vecdb`、`iam`、`audit`、`serv`、`ui` などを組み合わせます。全スタックを一度に導入する必要はありません。
+### セキュリティ：アカウント、API、監査をまとめて設計
 
-共通の API スタイルで 4 種類の機能を統合し、AI 支援によるアプリ全体の構築を可能にします：
+認証と RBAC、アカウントの有効・休眠・登録解除状態、パスワードとセッションのポリシー、セキュリティ監査を提供します。パス、メソッド、IP、時間によるアクセス制限と、API ごとのアプリ層暗号化を設定できます。信頼するプロキシの境界を確認した上でクライアント IP を判定します。
 
-- **AI**：LLM 対話、画像生成、音声（ASR / TTS）、MCP、ツール、RAG、ベクトル検索。
-- **安全性**：中国の国家暗号規格、認証、RBAC 認可、監査ログ。
-- **データ**：リレーショナル DB、キャッシュ、オブジェクトストレージ、データパイプライン。
-- **運用**：決済、通知、定時タスク、自動デプロイ。
+![Fullstack でシステム管理者がアカウントのロールを選択する画面](docs/usage/images/account-role-choices.png)
 
-## 目的から探す
+実際のテンプレート画面です。システム管理者は全アカウントとロールを管理でき、監査などの業務権限は別に認可します。[認証と安全設定](docs/usage/configuration/identity.md) · [リクエストポリシー](docs/usage/configuration/request-access.md) · [安全レビュー](docs/usage/governance/security-review.md)
 
-| 目的                                 | 入口                                                                                                                                                                     |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| アプリを作成する                     | [作成・開発・配布ガイド](docs/usage/README.ja.md)                                                                                                                        |
-| 静的サイト・Pagesを公開する          | [静的サイトの設定と制限（中国語）](docs/usage/configuration/delivery.md#静态website与github-pages)、[フレームワークの公式サイトアプリ](apps/framework-website/README.md) |
-| 環境、既定値、動作への影響を設定する | [アプリ設定マニュアル（中国語）](docs/usage/configuration/README.md)                                                                                                     |
-| 既存工程で機能を使う                 | [モジュール一覧](#モジュール一覧)と各パッケージの使い始める節                                                                                                            |
-| AI と機能を実装する                  | [AI 索引](LLMS.txt)と生成工程の AGENTS.md                                                                                                                                |
-| イメージ作成・オフライン配布         | [ビルドとデプロイ](packages/deploy/README.ja.md)                                                                                                                         |
-| フレームワークを開発する             | [開発](#開発)と[作業規則](AGENTS.md)                                                                                                                                     |
+### データ：ローカルで始め、用途に合わせて選択
 
-## 主な特長
+関係データは SQLite/PostgreSQL/MySQL、キャッシュは Memory/Redis、ファイルは Local/S3、ベクトル検索は LanceDB/pgvector/Qdrant/Chroma に対応します。トランザクション、ページング、署名付き URL、テキスト分割を専用モジュールで扱えます。
 
-| 特長                   | 説明                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| **AI-First 設計**      | AI コーディング支援が正しく使える API を優先し、人にも使いやすくします。              |
-| **共通ライフサイクル** | 状態を持つモジュールは `init() → use → close()` の共通パターンに従います。            |
-| **明示的な失敗**       | ドメイン操作は `HaiResult<T>` で成功と失敗を型レベルで区別します。                    |
-| **設定の検証**         | Zod Schema が `init()` で設定を検証し、起動時にエラーを検出します。                   |
-| **必要に応じた構成**   | 独立公開の 22 モジュール。最小依存の `@h-ai/core` から必要に応じて追加します。        |
-| **全体の型安全性**     | 厳密な TypeScript と `api-contract → serv → api-client` 全体の型推論。                |
-| **複数端末の UI**      | デスクトップ・モバイル向けの 92 Svelte 5 Runes コンポーネント（基本・複合・用途別）。 |
-| **生成・デプロイ**     | `hai create` で作成し、`hai deploy` で Vercel・自前ホストへ展開。                     |
-| **Agent Skills 内蔵**  | 標準化された Skill により AI 支援が正しい用法を取得できます。                         |
+![ローカルの読み書き、ロールバック、キャッシュ、ファイルを実行した結果](docs/usage/images/data-local-results.png)
 
-## 設計方針
+実際の SQLite、メモリキャッシュ、ローカルファイル、テキスト分割の検証結果です。複数インスタンスの本番環境では共有 DB、Redis、オブジェクトストレージを要件に合わせて設定します。[データアクセス](docs/usage/development/data.md) · [データ設定](docs/usage/configuration/data.md)
 
-**AI-First は AI 専用という意味ではなく、各設計を AI コーディング支援が正しく使えるかを優先する方針です。** AI が正しく使える設計は、人の開発体験も改善します。
+### 運用：ユーザーの報告を対応につなげる
 
-多くのフレームワークは人の自由度と規約を重視しますが、AI が書く場合は制約不足によりパターン・エラー処理・ログが不統一になりがちです。hai Framework は共通契約、実行可能な規約、Skill を組み合わせ、生成コードの一貫性・型安全性・エラー処理を保ち、人が審査できる成果にします。
+フィードバックに操作状況、ページ再生、ログ、リクエスト、業務証跡を関連付けます。管理者は絞り込み、対応、再オープン、診断パッケージの出力ができます。監査、通知、定期タスクと組み合わせて継続的に運用できます。
 
-この方針を次の設計に反映しています：
+![対応メモ、状態、履歴を確認できるフィードバック画面](docs/usage/images/feedback-handled.png)
 
-| 設計                                    | AI への利点                  | 開発者への利点                          |
-| --------------------------------------- | ---------------------------- | --------------------------------------- |
-| 共通ライフサイクル `init → use → close` | 共通の使い方を習得           | 予測可能なモジュール動作                |
-| `HaiResult<T>` の戻り値                 | 主処理で明示的に失敗を処理   | 業務 try-catch を減らし呼び出しを明確化 |
-| Zod の設定検証                          | 設定エラーを即座に確認       | 起動時に検証して障害を予防              |
-| Provider パターン                       | 設定でバックエンドを切り替え | 複数環境で移行が容易                    |
-| 厳密な TypeScript                       | 型推論が正しい呼び出しへ誘導 | 安全なリファクタリング                  |
-| Skill ファイル + LLMS.txt               | 正しい用法を自動取得         | 生成コードの品質改善                    |
-| 実行可能なコーディング規約              | 変更ごとに規約を適用         | スタイル統一・審査負担の軽減            |
+実際のサンプル画面です。表示中の報告バージョンは採取時のものです。収集範囲、機密情報の除去、容量、通知はアプリごとに設定します。[フィードバックと調査](docs/usage/operations/feedback.md) · [運用設定](docs/usage/configuration/operations.md)
 
-> **失敗の扱い**：ドメイン操作は `HaiResult<T>` を優先し、`{ success: true, data }` または `{ success: false, error }` を返します。`AsyncIterable`・クライアント通信・コールバック・SvelteKit 制御フローなど throw が必要な境界は型・文書で個別に説明します。
+### UI と配布：テンプレートから本番まで
 
-## 技術構成
+Svelte 5 の共通コンポーネントでフォーム、表、ダイアログ、認証、初回ガイド、ヘルプを構築します。テーマと中英日メッセージを共有し、警告とエラーは ToastContainer に読みやすく表示します。追跡 ID は必要なときに展開できます。
 
-| 分野                   | 採用技術                                                       |
-| ---------------------- | -------------------------------------------------------------- |
-| 言語                   | TypeScript 6 / 7（厳密モード）                                 |
-| ランタイム             | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                         |
-| フロントエンド         | Svelte 5（Runes）+ SvelteKit 2                                 |
-| UI                     | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                        |
-| API 契約               | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
-| API サービス           | Hono + oRPC + Scalar 文書                                      |
-| リレーショナル DB      | SQLite / PostgreSQL / MySQL（SQL 直接操作、ORM なし）          |
-| ベクトル DB            | LanceDB / pgvector / Qdrant / Chroma                           |
-| キャッシュ             | メモリー / Redis（単一ノード / Cluster / Sentinel）            |
-| オブジェクトストレージ | ローカル / S3 互換（AWS / MinIO / Alibaba Cloud OSS）          |
-| AI                     | OpenAI 互換 API + MCP                                          |
-| 暗号                   | 中国国家暗号規格 SM2 / SM3 / SM4                               |
-| 決済                   | WeChat Pay / Alipay / Stripe                                   |
-| デスクトップ           | Tauri                                                          |
-| モバイル               | Capacitor（Android / iOS）                                     |
-| ビルド                 | pnpm + Turborepo + Vite + tsup                                 |
-| デプロイ               | Vercel（SaaS）· docker-ssh 自前ホスト · Neon / Upstash / R2    |
+![コンポーネント一覧のログインフォームと統一エラー通知](docs/usage/images/gallery-scenes-ja-JP.png)
 
-## はじめに
+同一オリジンの SvelteKit アプリ、独立 API と Web/App/Desktop クライアントを作成できます。イメージ、オフライン配布、サービス単位の更新、失敗時の復旧に対応し、静的 Website は GitHub Pages に公開できます。[UI 設定](docs/usage/configuration/experience.md) · [配布マニュアル](docs/usage/configuration/delivery.md)
 
-環境準備、手作業・AI first 開発、コンパイル、イメージ/ネイティブパッケージ、自動・オフラインデプロイ、フレームワーク更新は完全ガイドを参照してください：[日本語](docs/usage/README.ja.md) · [简体中文](docs/usage/README.md) · [English](docs/usage/README.en.md)。コマンド引数、`hai.json`、各工程で使う skills も説明しています。
+## 最初のアプリを作成
 
-プロジェクトの `engines` に合う Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）と pnpm 12.11.2 を用意します。PowerShell では `pnpm.cmd` を使ってください。
+Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` と pnpm 12.11.2 を用意します。CI と同じ Node.js 24.22.1 を推奨します。Windows PowerShell では `pnpm.cmd` を使用します。
 
-最低バージョンは [2026-10-21 の Node.js 公式セキュリティリリース](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)に基づきます。Node.js 22・24・26 の各系列で上記の最低バージョンを満たすものだけをサポートし、それ以前のバージョン、保守終了した系列、未検証の将来のメジャーバージョンはサポートしません。開発・CI・コンテナーには Node.js 24.22.1 LTS を推奨します。
-
-### 新規プロジェクト作成
-
-次の例では`1.0.0-beta.1`を使います。npmにこの版が公開されたことを確認してからインストールしてください。版を省略した場合は`latest`が選ばれ、Betaは自動選択されません。
-
-```bash
-# 公開チャネルと対象版を確認してからCLIをインストール
-pnpm view @h-ai/cli dist-tags
-pnpm view @h-ai/cli@1.0.0-beta.1 version
-pnpm add -g @h-ai/cli@1.0.0-beta.1
-
-# デプロイ対応の Web + API を作成。オプション省略時は対話で選択
-hai create my-app --type fullstack --frontends web --yes
-
-# 依存関係は既定でインストール済み
+```sh
+pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --yes
 cd my-app
 pnpm dev
 ```
 
-### コード生成
+CLI は既定で依存関係をインストールし、Git を初期化します。`admin` でログインし、生成された `.env.dev` の `HAI_ADMIN_DEFAULT_PASSWORD` にあるランダム初期パスワードを使用します。画面に従って変更し、環境ファイルとパスワードは公開しないでください。
 
-以下の page/api 生成器は SvelteKit のファイルルート向けです。fullstack/API workspace の contract、procedure、hash ページは、生成済み構成と[使用ガイド](docs/usage/README.ja.md)に沿って開発します。
+Fullstack には DB、Cache、IAM、Crypto、Storage、Audit が含まれ、初回起動に AI モデルや CUDA は不要です。ディレクトリ、環境、接続先は生成 README と[初回起動ガイド](docs/usage/getting-started/create.md)を確認してください。
 
-```bash
-hai generate page dashboard         # ページを生成
-hai generate component UserCard     # コンポーネントを生成
-hai generate api users              # API を生成
+インストール版は [npm の latest タグ](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)に従い、バッジは登録情報を直接参照します。`pnpm view @h-ai/cli@latest version` で確認し、再現性が必要な場合は `@latest` を取得した版に置き換えます。npm のインストールタグと GitHub Latest の表示設定は別に管理します。
 
-# 短縮形
-hai g:page dashboard
-hai g:component UserCard
-```
+### テンプレートを選ぶ
 
-### ビルドとデプロイ
+| テンプレート | 用途                                                   | 作成オプション                     |
+| ------------ | ------------------------------------------------------ | ---------------------------------- |
+| Fullstack    | 契約を共有する独立 API と複数クライアント              | `--type fullstack --frontends web` |
+| API          | 独立 Node.js サービスと公開 API                        | `--type api`                       |
+| Admin        | アカウント管理と業務画面を持つ同一オリジン管理システム | `--type admin`                     |
+| Website      | 企業サイト、製品紹介、静的ドキュメント                 | `--type website --features none`   |
+| H5 / Mobile  | モバイル Web または Capacitor アプリ                   | `--type h5` / `--type mobile-app`  |
 
-```bash
-# 環境に依存せずビルド。auto は利用可能な Podman、次に Docker を選択
+![CLI で実際に生成した Admin のログイン画面](apps/framework-website/public/template-previews/admin-login.png)
+
+[公式サイトで Fullstack、Website、Admin、Mobile の実際の画面を確認](https://hai-series.github.io/hai-framework/#template-previews)できます。Website の既定は SSR です。静的公開には[静的ビルド設定](docs/usage/configuration/delivery.md#静态website与github-pages)が必要で、ネイティブパッケージには対象 OS のツールチェーンが必要です。
+
+### ビルドと公開
+
+生成したプロジェクトで環境と配布先を設定して実行します。
+
+```sh
 pnpm build --target docker
-# .env.prod と接続先を設定し、既存の API/Web イメージを公開
+pnpm run deploy --env prod --plan
 pnpm run deploy --env prod
-pnpm run deploy --env prod --build --services web
-# 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
 pnpm run deploy --env prod --build --services "serv,web"
-# 接続できない場合はパッケージを手で移動し、同梱 README に従って起動
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-デプロイツールは既定で開発依存に含まれ、作成時に `--no-deploy` で省略できます。各イメージは `images/` の独立した Dockerfile を使い、hai.json で指定します。完全オフラインパッケージには自前ミドルウェアと Windows/Linux/macOS のアップロードスクリプトが含まれます。隔離サーバーでは deploy-local.sh が検証・展開・配置を自動実行します。部分更新はサーバーの成功状態を基準に他のサービスとボリュームを保ち、全体の down を実行しません。同じ版でも構築 ID とチェックサムで内容を区別します。[使用ガイド](docs/usage/README.ja.md)を参照してください。
+`--plan` は読み取り専用の事前確認、`--services` は更新サービスの選択、`--bundle-only` は持ち運べるオフラインパッケージの生成です。自動復旧はサービスと設定スナップショットが対象です。DB 移行と外部副作用は別の復旧手順を用意します。実 IP、サブパス、ストレージ直結、ポリシーファイルは[配布設定](docs/usage/configuration/delivery.md)を参照してください。
 
-### 既存プロジェクトへの導入
+## 分野別モジュール
 
-`@h-ai/core` は必須で、ほかは必要に応じて導入します：
+既存プロジェクトでは必要な `@h-ai/*` をインストールするか、対応するテンプレートで `hai add <module>` を使います。各リンクに公開 API、設定、使用例があります。
 
-```bash
-pnpm add @h-ai/core                 # 基础能力（必装）
-pnpm add @h-ai/ai                   # AI / LLM / MCP / 文生图 / 语音
-pnpm add @h-ai/reldb                # 关系数据库
-pnpm add @h-ai/vecdb                # 向量数据库
-pnpm add @h-ai/iam                  # 身份认证 / 授权
-pnpm add @h-ai/ui                   # UI 组件库
-# …按需添加其余模块
+| 分野                   | モジュールと役割                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 基盤と安全             | [core](packages/core/README.ja.md)：結果、設定、ログ、ライフサイクル、アクセス制限；[crypto](packages/crypto/README.ja.md)：SM2/SM3/SM4 とパスワードハッシュ；[iam](packages/iam/README.ja.md)：認証、セッション、RBAC                                                                                                 |
+| データ                 | [reldb](packages/reldb/README.ja.md)：関係データとトランザクション；[cache](packages/cache/README.ja.md)：キャッシュと分散ロック；[storage](packages/storage/README.ja.md)：ファイルと署名付き URL；[vecdb](packages/vecdb/README.ja.md)：ベクトル検索；[datapipe](packages/datapipe/README.ja.md)：テキスト処理と分割 |
+| AI                     | [ai](packages/ai/README.ja.md)：LLM、ツール/MCP、RAG、メモリ、画像、音声、A2A                                                                                                                                                                                                                                          |
+| 業務と運用             | [feedback](packages/feedback/README.ja.md)：報告と診断；[audit](packages/audit/README.ja.md)：監査とアラート；[reach](packages/reach/README.ja.md)：メッセージ配信；[scheduler](packages/scheduler/README.ja.md)：定期タスク；[payment](packages/payment/README.ja.md)：決済                                           |
+| API とプラットフォーム | [api-contract](packages/api-contract/README.ja.md)：共有契約；[serv](packages/serv/README.ja.md)：Hono/oRPC サービス；[api-client](packages/api-client/README.ja.md)：型付きクライアント；[kit](packages/kit/README.ja.md)：SvelteKit 連携；[capacitor](packages/capacitor/README.ja.md)：ネイティブ連携               |
+| UI と開発環境          | [ui](packages/ui/README.ja.md)：Svelte コンポーネントとテーマ；[cli](packages/cli/README.ja.md)：生成と更新；[deploy](packages/deploy/README.ja.md)：Vercel と Docker SSH 配布                                                                                                                                         |
+
+ライフサイクルを持つモジュールは `init → use → close` の順に使い、`HaiResult.success` を確認します。Core、純粋関数、契約、サービス生成関数は実際の型に従います。共有状態、Provider の前提、権限境界は[設定マニュアル](docs/usage/configuration/README.md)を参照してください。
+
+## 役割別の読み方
+
+| 作業               | 読み始める場所                                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| 評価と新規作成     | [機能と環境](docs/usage/overview/README.md) → [最初の配布](docs/usage/getting-started/README.md)               |
+| 業務機能と AI      | [開発ガイド](docs/usage/development/README.md) → 各モジュール README                                           |
+| 設定とデプロイ管理 | [設定と既定値の索引](docs/usage/configuration/README.md) → [運用](docs/usage/operations/README.md)             |
+| 安全審査と障害調査 | [安全レビュー](docs/usage/governance/security-review.md) → [フィードバック](docs/usage/operations/feedback.md) |
+| 基盤保守と AI 協働 | [AGENTS.md](AGENTS.md) → [LLMS.txt](LLMS.txt) → 作業に合う Skills                                              |
+
+分野別マニュアルは現在中国語です。[日本語ガイド](docs/usage/README.ja.md)から、作成から配布までの日本語手順に進めます。
+
+## 開発とテスト
+
+`packages/*` はフレームワーク、`apps/*` はサンプルと文書サイト、`packages/cli/templates/` は生成アプリと共有 Skills を管理します。機能変更時は呼び出し側、設定例、文書、画像、テストを同期します。
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter admin-console dev
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm --filter @h-ai/cli test:scaffold-gates
 ```
 
-> 既存プロジェクトのルートで `hai add <module>` を使うと、CLI が依存関係を解決し設定を補って追加します。
+[CI は段階ごとに並列実行](docs/ci.md)し、入力指紋が一致する有効な成功記録を再利用します。**CI** は型、ビルド、テスト、ブラウザ操作を検証します。**CodeQL** は JavaScript/TypeScript を静的解析し、結果を GitHub Security に登録します。**Leak Checker** は管理者指定の漏えい語リストを確認します。バッジは実行状態を示し、解析結果は業務権限や配布構成と合わせて評価します。
 
-## モジュール一覧
-
-現在 **22 の独立公開モジュール**を、5 層に分類して提供しています。
-
-### 基盤機能
-
-| パッケージ     | 役割                                                                      | 対応 Provider |                                             npm 最新版                                              |
-| -------------- | ------------------------------------------------------------------------- | :-----------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/core`   | 基盤：`HaiResult`、child ログ、設定読み込み、ID、i18n、エラー定義、ツール |       —       |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcore)](https://www.npmjs.com/package/@h-ai/core)   |
-| `@h-ai/crypto` | SM2 非対称暗号・署名、SM3 ハッシュ、SM4 対称暗号、パスワードハッシュ      |       —       | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcrypto)](https://www.npmjs.com/package/@h-ai/crypto) |
-
-### データ層
-
-| パッケージ       | 役割                                                                         |              対応 Provider              |                                               npm 最新版                                                |
-| ---------------- | ---------------------------------------------------------------------------- | :-------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
-| `@h-ai/reldb`    | リレーショナル DB：DDL、SQL、トランザクション、ページ分割、CRUD リポジトリー |         ✅ SQLite / PG / MySQL          |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Freldb)](https://www.npmjs.com/package/@h-ai/reldb)    |
-| `@h-ai/vecdb`    | ベクトル DB：コレクション、ベクトル挿入、類似検索                            | ✅ LanceDB / pgvector / Qdrant / Chroma |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fvecdb)](https://www.npmjs.com/package/@h-ai/vecdb)    |
-| `@h-ai/cache`    | キャッシュ・分散ロック：KV、Hash、List、Set、SortedSet、Lock、Redis 型 API   |            ✅ Memory / Redis            |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcache)](https://www.npmjs.com/package/@h-ai/cache)    |
-| `@h-ai/storage`  | ファイル保存：アップロード・ダウンロード・削除・コピー・署名付き URL         |              ✅ Local / S3              |  [![npm](https://img.shields.io/npm/v/%40h-ai%2Fstorage)](https://www.npmjs.com/package/@h-ai/storage)  |
-| `@h-ai/datapipe` | データパイプライン：テキスト整理、7 分割方式、合成（純粋関数、init 不要）    |                    —                    | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdatapipe)](https://www.npmjs.com/package/@h-ai/datapipe) |
-
-### 業務機能
-
-| パッケージ        | 役割                                                                                                      |           対応 Provider           |                                                npm 最新版                                                 |
-| ----------------- | --------------------------------------------------------------------------------------------------------- | :-------------------------------: | :-------------------------------------------------------------------------------------------------------: |
-| `@h-ai/iam`       | 認証・アクセス管理：パスワード/OTP/LDAP、RBAC、セッション、ユーザー                                       |                 —                 |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
-| `@h-ai/reach`     | 通知：メール、SMS、API 通知、テンプレート、DND                                                            | ✅ SMTP / Alibaba Cloud SMS / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
-| `@h-ai/feedback`  | 問題報告：現場収集、非公開画像、メール、一覧処理、オフライン診断                                          |     DB / S3 / optional Reach      |                                                     —                                                     |
-| `@h-ai/ai`        | AI：通常・ストリーミング対話、画像、ASR/TTS、ツール、MCP、Embedding、RAG/知識、記憶、Context、Rerank、A2A |     ✅ OpenAI 互換 / 拡張可能     |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
-| `@h-ai/payment`   | 決済：注文作成、複数端末からの開始、通知                                                                  |  ✅ WeChat Pay / Alipay / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
-| `@h-ai/audit`     | 監査：記録、ページ検索、統計、定期削除                                                                    |                 —                 |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
-| `@h-ai/scheduler` | 定時実行：cron、JS/HTTP、DB 永続化、分散ロック、ログ                                                      |                 —                 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fscheduler)](https://www.npmjs.com/package/@h-ai/scheduler) |
-
-### 統合層
-
-| パッケージ           | 役割                                                                                             | 対応 Provider |                                                   npm 最新版                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------ | :-----------: | :-------------------------------------------------------------------------------------------------------------: |
-| `@h-ai/api-contract` | 公開 HTTP 契約：oRPC + Zod、用途別のドメイン構成、共通 `HaiResult<T>`                            |       —       | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-contract)](https://www.npmjs.com/package/@h-ai/api-contract) |
-| `@h-ai/serv`         | API runtime：Hono + oRPC、contract/procedure、OpenAPI 3.1・Scalar 文書                           |       —       |         [![npm](https://img.shields.io/npm/v/%40h-ai%2Fserv)](https://www.npmjs.com/package/@h-ai/serv)         |
-| `@h-ai/kit`          | SvelteKit：Hook、middleware、guard、検証、同一オリジン endpoint（公開 HTTP contract を持たない） |       —       |          [![npm](https://img.shields.io/npm/v/%40h-ai%2Fkit)](https://www.npmjs.com/package/@h-ai/kit)          |
-| `@h-ai/api-client`   | 型付き client：ネストした contract 呼び出し、Bearer/httpOnly Token、401 更新                     |       —       |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-client)](https://www.npmjs.com/package/@h-ai/api-client)   |
-| `@h-ai/capacitor`    | モバイル連携：安全な Token 保存、端末情報、通知、カメラ、ステータスバー                          |       —       |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcapacitor)](https://www.npmjs.com/package/@h-ai/capacitor)    |
-
-### UI・ツール
-
-| パッケージ     | 役割                                                                      |                               対応 Provider                               |                                             npm 最新版                                              |
-| -------------- | ------------------------------------------------------------------------- | :-----------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | 92 の Svelte 5 Runes 部品（基本 20 + 複合 36 + 用途別 36）、15 テーマ     |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
-| `@h-ai/cli`    | CLI：作成、モジュール追加、コード生成、デプロイ                           |                                     —                                     |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
-| `@h-ai/deploy` | 自動デプロイ：クラウドを作成する Vercel、機能別 sidecar を伴う docker-ssh | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / Alibaba Cloud SMS | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
-
-### モジュール文書一覧
-
-| 分類        | モジュール           | README                                                                       |
-| ----------- | -------------------- | ---------------------------------------------------------------------------- |
-| 基盤        | `@h-ai/core`         | [`packages/core/README.ja.md`](./packages/core/README.ja.md)                 |
-| 基盤        | `@h-ai/crypto`       | [`packages/crypto/README.ja.md`](./packages/crypto/README.ja.md)             |
-| データ      | `@h-ai/reldb`        | [`packages/reldb/README.ja.md`](./packages/reldb/README.ja.md)               |
-| データ      | `@h-ai/vecdb`        | [`packages/vecdb/README.ja.md`](./packages/vecdb/README.ja.md)               |
-| データ      | `@h-ai/cache`        | [`packages/cache/README.ja.md`](./packages/cache/README.ja.md)               |
-| データ      | `@h-ai/storage`      | [`packages/storage/README.ja.md`](./packages/storage/README.ja.md)           |
-| データ      | `@h-ai/datapipe`     | [`packages/datapipe/README.ja.md`](./packages/datapipe/README.ja.md)         |
-| 業務機能    | `@h-ai/iam`          | [`packages/iam/README.ja.md`](./packages/iam/README.ja.md)                   |
-| 業務機能    | `@h-ai/reach`        | [`packages/reach/README.ja.md`](./packages/reach/README.ja.md)               |
-| 業務機能    | `@h-ai/feedback`     | [`packages/feedback/README.ja.md`](./packages/feedback/README.ja.md)         |
-| 業務機能    | `@h-ai/ai`           | [`packages/ai/README.ja.md`](./packages/ai/README.ja.md)                     |
-| 業務機能    | `@h-ai/payment`      | [`packages/payment/README.ja.md`](./packages/payment/README.ja.md)           |
-| 業務機能    | `@h-ai/audit`        | [`packages/audit/README.ja.md`](./packages/audit/README.ja.md)               |
-| 業務機能    | `@h-ai/scheduler`    | [`packages/scheduler/README.ja.md`](./packages/scheduler/README.ja.md)       |
-| 統合        | `@h-ai/api-contract` | [`packages/api-contract/README.ja.md`](./packages/api-contract/README.ja.md) |
-| 統合        | `@h-ai/serv`         | [`packages/serv/README.ja.md`](./packages/serv/README.ja.md)                 |
-| 統合        | `@h-ai/kit`          | [`packages/kit/README.ja.md`](./packages/kit/README.ja.md)                   |
-| 統合        | `@h-ai/api-client`   | [`packages/api-client/README.ja.md`](./packages/api-client/README.ja.md)     |
-| 統合        | `@h-ai/capacitor`    | [`packages/capacitor/README.ja.md`](./packages/capacitor/README.ja.md)       |
-| UI とツール | `@h-ai/ui`           | [`packages/ui/README.ja.md`](./packages/ui/README.ja.md)                     |
-| UI とツール | `@h-ai/cli`          | [`packages/cli/README.ja.md`](./packages/cli/README.ja.md)                   |
-| UI とツール | `@h-ai/deploy`       | [`packages/deploy/README.ja.md`](./packages/deploy/README.ja.md)             |
-
-### 一般的な初期化順
-
-多くのプロジェクトは次の依存順で初期化でき、AI 支援にも理解しやすい構成になります：
-
-`core → reldb / cache / storage / vecdb → crypto / reach → audit → iam → scheduler / ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
-
-- `iam` は初期化済みの `reldb` と `cache` に依存。
-- `audit` は初期化済みの `reldb` に依存。セキュリティ監査では `iam` より先に初期化し、通知で使う `reach` はさらに先に初期化します。終了時は最初に `scheduler` を停止し、その後は逆順で閉じます。
-- DB 永続化の `scheduler` は `reldb` を先に初期化します。`cache` が初期化済みなら分散ロックを自動有効化。
-- `reach`・`payment`・`ai` は用途に応じてほかの機能を再利用します。詳細は各 README を参照。
-- `api-contract` は初期化不要で、公開 HTTP schema・oRPC contract のみを定義。
-- `serv` は業務モジュール初期化後に Hono app を作成し、`contract` と `procedures` の形状をそろえます。
-- `kit` は SvelteKit Hook・guard・同一オリジン endpoint を担当し、公開クロスプラットフォーム API は定義しません。
-- `api-client` は Web / App / SSR で同じアプリ contract を利用し、既定で `HaiResult<T>` を返します。
-
-## アーキテクチャ
-
-```mermaid
-graph TD
-    APP["アプリ層 · apps/<br/>admin-console · api-service · corporate-website · h5-app<br/>desktop-app · mobile-app · ai-playground"]
-
-    subgraph INTEG["統合層"]
-        KIT["kit（SvelteKit パイプライン / ガード）"]
-        SERV["serv（Hono + oRPC · OpenAPI）"]
-        CLIENT["api-client（型付き client · Token）"]
-    end
-
-    CONTRACT["api-contract（Schema + oRPC Contract 定義元）"]
-
-    subgraph BIZ["業務機能"]
-        B["iam · ai · payment · reach · audit · scheduler"]
-    end
-
-    subgraph DATA["データ層"]
-        D["reldb · vecdb · cache · storage · datapipe"]
-    end
-
-    CORE["core（HaiResult · Logger · Config · i18n · Utils）"]
-    TOOL["ツール：cli · deploy · capacitor · ui · crypto"]
-
-    APP --> INTEG
-    SERV --> CONTRACT
-    CLIENT --> CONTRACT
-    INTEG --> BIZ
-    BIZ --> DATA
-    BIZ --> CORE
-    DATA --> CORE
-    TOOL -.-> APP
-```
-
-**依存方向**：上位層が下位層に依存します。最下層の `@h-ai/core` はほかのモジュールへ依存しません。公開 HTTP API は **`api-contract`（定義）→ `serv`（実装・接続）→ `api-client`（呼び出し）** に統一し、`kit` は SvelteKit パイプライン・同一オリジン endpoint を担当します。
-
-## 使用例
-
-以下は代表的な断片です。業務変数・schema はアプリに合わせて補ってください。完全な API・エラーコード・例は各 README と [LLMS.txt（中国語）](./LLMS.txt) を参照します。
-
-### HaiResult のエラー処理
-
-ドメインの失敗は `HaiResult` で表します。ストリーミング・通信クライアント・フレームワーク制御・外部 callback は throw する場合があるため、各 API の境界で捕捉してください：
-
-```typescript
-import type { HaiResult } from '@h-ai/core'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
-
-function divide(a: number, b: number): HaiResult<number> {
-  if (b === 0)
-    return err(HaiCommonError.VALIDATION_ERROR, 'Division by zero')
-  return ok(a / b)
-}
-
-const result = divide(10, 2)
-if (result.success) {
-  const quotient = result.data // 5
-}
-else {
-  core.logger.warn('Division failed', { code: result.error.code, message: result.error.message })
-}
-```
-
-### リレーショナル DB
-
-```typescript
-import { reldb } from '@h-ai/reldb'
-
-const initResult = await reldb.init({ type: 'sqlite', database: './data/app.db' })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-// DDL — 建表
-await reldb.ddl.createTable('users', {
-  id: { type: 'TEXT', primaryKey: true },
-  email: { type: 'TEXT', notNull: true, unique: true },
-  name: { type: 'TEXT' },
-}, true)
-
-// 参数化查询与分页
-const users = await reldb.sql.query<User>('SELECT * FROM users WHERE name = ?', ['Alice'])
-const page = await reldb.sql.queryPage<User>({
-  sql: 'SELECT * FROM users',
-  pagination: { page: 1, pageSize: 20 },
-})
-
-// 事务
-await reldb.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (id, email) VALUES (?, ?)', ['1', 'a@b.com'])
-  await tx.execute('INSERT INTO logs (action) VALUES (?)', ['user_created'])
-})
-
-// CRUD 仓库（自动生成 SQL）
-const userRepo = reldb.crud.table<User>({
-  table: 'users',
-  idColumn: 'id',
-  select: ['id', 'email', 'name'],
-  createColumns: ['id', 'email', 'name'],
-  updateColumns: ['email', 'name'],
-  dbType: 'sqlite',
-})
-await userRepo.create({ id: '1', email: 'a@b.com', name: 'Alice' })
-```
-
-### ベクトル DB
-
-```typescript
-import { vecdb } from '@h-ai/vecdb'
-
-const initResult = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-await vecdb.collection.create('docs', { dimension: 1536 })
-await vecdb.vector.insert('docs', [
-  { id: 'doc-1', vector: embeddings, content: '文档内容', metadata: { source: 'wiki' } },
-])
-const results = await vecdb.vector.search('docs', queryVector, { topK: 5, minScore: 0.7 })
-```
-
-### キャッシュ
-
-```typescript
-import { cache } from '@h-ai/cache'
-
-const initResult = await cache.init({ type: 'memory' })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-// await cache.init({ type: 'redis', url: 'redis://localhost:6379' })
-
-await cache.kv.set('key', { name: 'Alice' }, { ex: 3600 })
-const val = await cache.kv.get<{ name: string }>('key')
-await cache.zset.zadd('leaderboard', { score: 100, member: 'Alice' })
-```
-
-### AI / LLM / 画像 / 音声
-
-```typescript
-import { ai } from '@h-ai/ai'
-
-// 初始化（OpenAI 兼容 API）；未初始化 reldb/vecdb 时使用进程内临时 Store
-const initResult = await ai.init({
-  llm: { apiKey: process.env.HAI_AI_LLM_APIKEY, model: 'gpt-4o-mini' },
-})
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-// 同步调用
-const chat = await ai.llm.chat({
-  messages: [{ role: 'user', content: '用一句话解释量子计算' }],
-})
-if (chat.success)
-  void chat.data.choices[0].message.content
-
-// 流式调用
-const stream = ai.llm.chatStream({ messages: [{ role: 'user', content: '讲一个故事' }] })
-for await (const chunk of stream)
-  process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
-
-// 文生图
-const image = await ai.image.generate({ prompt: '一只在星空下的猫', size: '1024x1024' })
-
-// 语音合成（TTS）
-const speech = await ai.audio.synthesize({ text: '你好，世界', voice: 'default' })
-```
-
-### 認証・認可
-
-```typescript
-import { cache } from '@h-ai/cache'
-import { iam } from '@h-ai/iam'
-import { reldb } from '@h-ai/reldb'
-
-// 先初始化 reldb 与 cache，IAM 会复用已初始化单例
-const dbInit = await reldb.init({ type: 'sqlite', database: './data/app.db' })
-if (!dbInit.success)
-  throw new Error(dbInit.error.message)
-const cacheInit = await cache.init({ type: 'memory' })
-if (!cacheInit.success)
-  throw new Error(cacheInit.error.message)
-const iamInit = await iam.init({ session: { maxAge: 86400, sliding: true } })
-if (!iamInit.success)
-  throw new Error(iamInit.error.message)
-
-await iam.user.register({ username: 'alice', password: 'StrongPass123!' })
-const loginResult = await iam.auth.login({ identifier: 'alice', password: 'StrongPass123!' })
-
-// RBAC 权限控制
-await iam.authz.assignRole(userId, 'admin')
-const allowed = await iam.authz.checkPermission(userId, 'users:read')
-```
-
-### 設定可能なセキュリティポリシー
-
-[IAM](packages/iam/README.ja.md) は常設/一時アカウント、有効/休眠/終了状態、未使用スキャン、パスワード長/文字種/有効期限、軽量 ALTCHA チャレンジ、共有失敗ウィンドウとロック、一回限りの招待、初回パスワード変更、用途限定の再認証、ログイン時間/IP 制御を提供します。業務ごとに有効化・設定し、サーバーで適用します。期限切れ・初期パスワードには専用変更フローがあります。ログインごとに独立したセッションを作成し、厳密なアイドル/絶対期限、同時数上限、新規拒否/既存置換を選べます。ページ離脱時の失効は既定で無効で、有効時も最善努力のためサーバー期限と併用します。
-
-[Audit](packages/audit/README.ja.md) はシステム/業務分類、イベント時の本人情報、失敗/拒否イベント、マスキング、絞り込み、並び替え、統計を統合します。保持保護、非公開の手動/定期バックアップ、Reach による軽量通知を設定できます。バックアップは検証用受領情報を返しますが、データベースの原子的スナップショットではなく、復元は独立環境で実施します。既定値だけで不変ストレージや導入環境の適合性を保証するものではありません。
-
-[管理画面](apps/admin-console/README.md) と fullstack テンプレートはシステム管理、監査管理、業務設定、業務操作と一般会員の権限を分離し、サーバーでも他職務への権限付与・アカウント奪取を拒否します。これらはアプリケーションが管理・変更できる例であり、IAM は具体的なロール名を固定しません。
-
-### 公開 API：契約 → サービス → クライアント
-
-```typescript
-// 1) 契约（api-contract）：只描述“有哪些 API”，纯定义、无业务实现
-import { apiContract } from '@h-ai/api-contract'
-
-export const contract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: apiContract.ai,
-})
-```
-
-```typescript
-// 2) 服务（serv）：挂载 contract + procedures，生成 OpenAPI 与文档页
-import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
-
-const app = serv.createApp({
-  contract,
-  procedures: {
-    iam: createIamProcedures({ iam }),
-    storage: createStorageProcedures({ storage }),
-    ai: createAiProcedures({ ai }),
-  },
-  http: {
-    apiPrefix: '/api/v1',
-    openapi: { path: '/openapi.json' },
-    docs: { path: '/docs' },
-  },
-  iam, // 顶层传入后自动派生 access token 校验
-})
-serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
-```
-
-```typescript
-// 3) 客户端（api-client）：Web / App / SSR 消费同一份契约，默认返回 HaiResult<T>
-import { apiClient } from '@h-ai/api-client'
-
-const initResult = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'xxx' })
-if (login.success)
-  await apiClient.auth.setTokens(login.data.tokens)
-```
-
-### Svelte 5 UI コンポーネント
-
-```text
-<script lang="ts">
-  import { Button, Card, DataTable, Input, Modal } from '@h-ai/ui'
-
-  let showModal = $state(false)
-  let users = $state([])
-</script>
-
-<Card>
-  <DataTable
-    data={users}
-    columns={[
-      { key: 'name', label: '姓名' },
-      { key: 'email', label: '邮箱' },
-    ]}
-    keyField="id"
-  >
-    {#snippet actions(user)}
-      <Button size="xs" onclick={() => edit(user)}>编辑</Button>
-    {/snippet}
-  </DataTable>
-</Card>
-
-<Button onclick={() => (showModal = true)}>新建用户</Button>
-
-<Modal bind:open={showModal} title="新建用户">
-  <Input label="姓名" bind:value={name} />
-  <Input label="邮箱" bind:value={email} type="email" />
-</Modal>
-```
-
-> `storage` / `datapipe` / `payment` / `audit` / `scheduler` / `reach` / `crypto` / `kit` / `capacitor` / `deploy` は各 README と `LLMS.txt` を参照してください。
-
-## 初回ガイドとヘルプセンター
-
-`@h-ai/ui/guide` は `createGuide`、`GuideHost`、`HelpCenter` を提供します。Cookie による初回案内、手動再表示、対象ページへの移動と段階的な強調表示、Markdown ヘルプの検索を利用できます。既存テーマに対応し、共通文言は中国語・英語・日本語、業務内容はアプリの i18n を使用します。
-
-admin-console と CLI fullstack の Web/App/Desktop で標準搭載されます。ユーザーとガイドのバージョンごとに状態を保存し、後で表示する選択肢と再通知しない選択肢を提供します。[UI ガイド](packages/ui/README.ja.md#初回ガイドとヘルプセンター)を参照してください。
-
-## サンプルアプリ
-
-`apps/` に 7 つの実行可能なアプリがあり、生成の参考と統合例を兼ねます。`api-service-contract` は API 関連アプリが共有する契約パッケージです。
-
-| アプリ              | 説明                                            | 使用モジュール                                           |
-| ------------------- | ----------------------------------------------- | -------------------------------------------------------- |
-| `admin-console`     | 管理画面（全モジュール統合の参考）              | core, reldb, iam, cache, storage, crypto, ai, kit, ui    |
-| `ai-playground`     | AI 実験環境（LLM / 画像 / 記憶 / 音声）         | core, ai, kit, ui                                        |
-| `api-service`       | Hono + oRPC API サービス（contract の構成入口） | core, reldb, cache, iam, storage, ai, api-contract, serv |
-| `corporate-website` | 企業サイト + 提携登録 + AI サポート             | core, reldb, cache, storage, ai, reach, kit, ui          |
-| `h5-app`            | モバイル H5（写真認識 / カート / ログイン）     | core, reldb, iam, cache, storage, ai, kit, ui            |
-| `desktop-app`       | Tauri デスクトップアプリ                        | api-client, api-service-contract, crypto, ui             |
-| `mobile-app`        | Capacitor Android / iOS アプリ                  | api-client, api-service-contract, crypto, ui, capacitor  |
-
-### アプリ別の起動
-
-| アプリ              | 起動コマンド                            |
-| ------------------- | --------------------------------------- |
-| `admin-console`     | `pnpm --filter admin-console dev`       |
-| `ai-playground`     | `pnpm --filter ai-playground dev`       |
-| `api-service`       | `pnpm --filter api-service dev`         |
-| `corporate-website` | `pnpm --filter corporate-website dev`   |
-| `h5-app`            | `pnpm --filter h5-app dev`              |
-| `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev` |
-| `mobile-app`        | `pnpm --filter mobile-app dev`          |
-
-## フィードバック収集と配布確認
-
-フィードバック例は独立したコンソール通知、軽量録画とページ再生に対応し、容量、保存と旧表移行をフレームワークが扱います。`hai upgrade <exact-version>` と `hai deploy --env prod --plan` は読み取り専用です。[フィードバック](packages/feedback/README.ja.md)、[ライフサイクル](packages/core/README.ja.md#アプリケーションのライフサイクル)、[CLI](packages/cli/README.ja.md#リリース確認とネイティブビルド)を参照。
-
-## 開発
-
-### ローカル開発
-
-```bash
-pnpm install                    # 安装依赖
-pnpm dev                        # 全量开发模式
-pnpm typecheck                  # 类型检查
-pnpm lint                       # ESLint（含 check:skills）
-pnpm test                       # 单元测试
-pnpm --filter @h-ai/reldb test  # 只运行某个模块
-```
-
-### プロジェクト構成
-
-```
-hai-framework/
-├── packages/            # 22 のフレームワークパッケージ（@h-ai/*）
-│   └── cli/templates/   # CLI と Skill のテンプレート（生成アプリへ配布）
-├── apps/                # サンプルアプリ
-├── scripts/             # 検証・公開スクリプト
-├── AGENTS.md            # AI 支援の作業入口
-├── LLMS.txt             # AI 向け使用索引
-├── .agents/             # 共通開発規約（instructions/）とリポジトリー Skill（skills/）
-├── AGENTS.md            # 共通 AI 入口とタスク案内
-└── .github/             # GitHub Actions と Copilot の軽量な入口
-```
-
-### AI-First の基盤
-
-本リポジトリーは [AGENTS.md](AGENTS.md) を共通入口とし、詳細な規約を `.agents/instructions/`、開発 Skill を `.agents/skills/` に保存します。Copilot のパス指示にはマッチ条件とリンクのみを置き、Claude/OpenCode の入口も共通規約を参照します。Codex は `AGENTS.md` と `.agents/skills/` を標準で検出し、プロジェクト内で `$hai-module-create`、`$hai-module-review` などを呼び出せます。参考ファイルは必要なタスクに応じて読みます。根拠：[Codex skills](https://learn.chatgpt.com/docs/build-skills)、[プロジェクト指針](https://learn.chatgpt.com/docs/agent-configuration/agents-md)。
-
-`hai create` は同じ共通入口と Skill を生成し、アプリ種別に応じた `AGENTS.md` を提供します：
-
-```
-my-app/
-├── .agents/
-│   └── skills/                       # 共通 Skill 本文と参考（Codex が標準で検出）
-├── .github/
-│   └── copilot-instructions.md       # 共通 AGENTS.md を参照
-├── AGENTS.md                         # Codex / OpenCode / 共通 AI ガイド
-├── CLAUDE.md                         # Claude Code ガイド（@AGENTS.md を再利用）
-└── opencode.json                     # instructions で AGENTS.md を直接参照
-```
-
-| AI 支援ツール  | 生成する主なファイル                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| GitHub Copilot | `.github/copilot-instructions.md` → `AGENTS.md` + `.agents/skills/`                        |
-| Cursor         | `AGENTS.md` + `.agents/skills/`                                                            |
-| Claude Code    | `CLAUDE.md` + `AGENTS.md`（`@AGENTS.md` で規約再利用、`.agents/skills/` は自動検出しない） |
-| Codex          | `AGENTS.md` + `.agents/skills/`                                                            |
-| OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                          |
-
-Skill は `packages/cli/templates/skills/` で管理し、`@h-ai/cli` が利用先の `.agents/skills/` へ配布します。モジュール用法に加え、文書確認と実装（`hai-spec-review`、`hai-spec-implement`）、機能開発と検証（`hai-app-create`、`hai-app-review`、`hai-app-tests`）、配布と保守（`hai-build`、`hai-deploy`、`hai-ci`、`hai-pr-review`、`hai-framework-sync`）を支援します。[完全ガイド](docs/usage/README.ja.md)で各工程をつなげて説明しています。リポジトリー開発 Skill とアプリテンプレートは用途を分け、公開契約を同期します。影響範囲に応じて `typecheck → lint → build → test` を実行し、UI・ルート・CLI テンプレートは対応する E2E 門禁も実行します。
-
-### 設定・環境変数
-
-アプリとテンプレートは `HAI_<CONFIG>_<PATH>` を共用します。ルートの [`.env.example`](.env.example) に変数の用途、列挙値と範囲を掲載しています。各サンプルアプリの `.env.example` に、そのアプリで利用できる全変数を記載しています。
-
-`.env.example` は全項目の説明と制約、`.env` は共通の公開設定、`.env.dev` / `.env.test` / `.env.prod` は環境別の公開設定として Git に登録します。端末固有の秘密情報は登録対象外の `.env.local` に保存します。優先順位はプロセス環境 > `.env.local` > 環境別ファイル > `.env` です。各アプリの `.env.example` に利用できる全項目を掲載します。
-
-公開 Schema、YAML、環境変数の読み取りを変更したら、対象モジュールをビルドして `pnpm generate:env` を実行し、ルート一覧、CLI メタデータ、各サンプルの `.env.example` を更新します。`pnpm check:env` で更新漏れを確認します。生成処理は公開ソースとサンプルのみを読み、`.env.local` やプロジェクト固有の公開設定値を変更しません。用途、型、列挙値、単位、範囲、有効条件を説明し、配列・動的キー・親オブジェクトの上書きは Schema と実行テストで確認します。
-
-入口の走査では JS/TS（Svelte script を含む）の実際の JSDoc を除外します。Schema のフィールド注釈は説明の生成に引き続き使用します。テンプレート/YAML の任意設定コメントと文字列内の生成コード参照は保持され、文書の例だけで実行時設定が増えることはありません。
-
-`pnpm dev` / `dev:test` / `dev:prod` で環境を選び、ビルド済み Node サービスは `start:test` / `start:prod` で起動します。Vite は `core.config.loadEnvFiles({ mode, envDir })` の成功を確認して注入し、Node は基本・環境・ローカルの順で `--env-file` を読み込みます。`core.init` は dotenv を読みません。ファイルモードの development / production は dev / prod に対応します。Provider 切り替えと移行手順はアプリ skill の[環境設定](packages/cli/templates/skills/hai-app-create/development.md#环境配置)にあります。
-
-- **命名**：`HAI_<CONFIG_NAME>_<YAML_PATH>`。階層を `_` で区切り、camelCase は分割しません（`llm.apiKey` → `HAI_AI_LLM_APIKEY`）。
-- **優先順位**：規約の環境変数 > YAML の明示的 `${VAR}` > YAML 既定値。
-- **AI 互換**：`OPENAI_*` は `@h-ai/ai` の互換 fallback のみ。
-- **秘密情報**：直書き・ログ記録・クライアントの `PUBLIC_*` / `VITE_*` への保存は禁止。
-
-| 分類           | 主な変数                                 | 説明                                                       |
-| -------------- | ---------------------------------------- | ---------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` | 実行環境・ログレベル                                       |
-| Database       | `HAI_DB_*`                               | `_db.yml` の SQLite / PostgreSQL / MySQL                   |
-| Cache          | `HAI_CACHE_*`                            | `@h-ai/cache` の memory / Redis / Upstash                  |
-| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | `@h-ai/iam`・`@h-ai/kit` の認証・安全性                    |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`        | `apps/api-service` / `@h-ai/serv` の待受・フロント URL     |
-| Storage        | `HAI_STORAGE_*`                          | `@h-ai/storage` の local / S3                              |
-| AI             | `HAI_AI_LLM_*`                           | `@h-ai/ai` の LLM API Key・Base URL・モデル                |
-| VecDB          | `HAI_VECDB_*`                            | `@h-ai/vecdb` の LanceDB / pgvector / Qdrant / Chroma      |
-| Reach          | `HAI_REACH_*`                            | `@h-ai/reach` の SMTP・SMS・Webhook                        |
-| Feedback       | `HAI_FEEDBACK_*`                         | フィードバック、管理者、収集上限と保存期間                 |
-| Payment        | `HAI_PAYMENT_*`                          | `@h-ai/payment` の WeChat Pay・Alipay・Stripe の加盟店設定 |
-| Deploy         | `HAI_DEPLOY_*`                           | `@h-ai/deploy` / `@h-ai/cli` の展開・基盤認証情報          |
-
-全項目・既定値はルートの `.env.example` が基準です。個別アプリでは対応する `README.md` と `.env.example` で追加設定を確認します。
-
-Schema の既定値、実際の消費点、環境変数と生成アプリの関係は[22 パッケージの設定対応表（中国語）](.agents/skills/hai-module-create/configuration.md)を参照してください。
-
-### 品質チェック
-
-影響範囲に合わせてコマンドを選び、複数パッケージ契約・ルート設定の変更はルートで実行します：
-
-GitHub CI は独立した runner で段階ごとに並列検証し、必須結果の集約が成功した後に公開します。main の変更が分離されたアプリの Playwright spec のみの場合、入力・runner 環境・UTC 日付が一致する他段階の成功結果を再利用できます。証拠がない場合や共有入力が変わった場合は再検証します。段階図、再利用の境界、全体再実行は [CI 保守ガイド（中国語）](docs/ci.md)を参照してください。
-
-| チェック         | コマンド                  | 対象                                              |
-| ---------------- | ------------------------- | ------------------------------------------------- |
-| 型確認           | `pnpm typecheck`          | 全変更                                            |
-| コード規約       | `pnpm lint`               | 全変更（`check:skills` を含む）                   |
-| ビルド           | `pnpm build`              | ビルド / テンプレート / 公開 / 複数パッケージ契約 |
-| 単体テスト       | `pnpm test`               | 全変更                                            |
-| エンドツーエンド | `pnpm e2e`                | UI / ルート / 一連の処理                          |
-| 公開前の検証     | `pnpm test:release-local` | 公開前の全体検証（導入 → E2E）                    |
-
-> Windows PowerShell は `pnpm.cmd` を使います。ルートの `pnpm test` は Testcontainers に依存しないパッケージを最大 4 件、利用可能な CPU とメモリーでさらに制限して並列実行した後、コンテナーパッケージを直列実行します。各パッケージのファイル worker は最大 2 個です。2 つのグループは順番に実行し、共有ビルド出力の同時更新を防ぎます。ルートの `pnpm e2e` は CLI 生成、デプロイの実行とロック、および Admin Console・AI Playground・Corporate Website・H5・Mobile Web の Playwright を検証します。コンテナーテストには利用可能な Docker / Podman が必要です。
-
-CLI の Vitest グローバル teardown は、`test`、`test:e2e`、`test:deploy-gates` の成功・失敗・通常のキャンセル後に、その実行でビルドしたイメージを回収します。Podman では中間イメージにも実行ごとの識別ラベルを付け、Docker では今回のビルド台帳に記録された最終イメージの tag を回収します。イメージをビルドしないテストにはコンテナーエンジンは不要です。回収にはビルドに使用したエンジンを使い、今回の識別情報とビルド台帳に該当するリソースだけを処理します。公開ベースイメージ、外部の tag、ほかのタスクのリソースは保持し、全体の prune や強制削除は行いません。レポートは `packages/cli/test-results/image-cleanup-*.json` に保存され、回収に失敗するとゲートも失敗します。プロセスの強制終了、停電、エンジンとの接続切断ではリソースが残る場合があります。Docker BuildKit の独立したビルドキャッシュは、このイメージ回収の対象外です。
-
-過去の tag なし Podman ビルドイメージは、まずプレビューしてから明示的に削除できます。既定では、作成から 24 時間を超え、履歴上の名前がランダムなハッシュに `-tmp` を付けた形式のイメージだけを選びます。ほかのイメージやコンテナーから参照されているイメージは保持します。
-
-```bash
-node scripts/cleanup-test-images.mjs --runtime=podman --legacy
-node scripts/cleanup-test-images.mjs --runtime=podman --legacy --apply
-```
-
-`--min-age-hours=24` で対象イメージの最小経過時間を変更し、`--report=tmp/container-cleanup/report.json` で項目別レポートの保存先を指定できます。`--runtime=docker` にも対応しています。信頼できる出所のメタデータがない過去の Docker イメージは保持し、自動 teardown では両エンジンとも今回のラベルと台帳を使います。実エンジンでの回帰検証は、`HAI_TEST_IMAGE_SMOKE=1` と `HAI_TEST_IMAGE_RUNTIME=podman`（または `docker`）を設定して `pnpm test:scripts` を実行します。成功、アサーション失敗、ビルド失敗、SIGINT/SIGTERM によるキャンセル後の回収と、外部イメージの保護を検証します。
-
-### コミット確認（Leak Hooks）
-
-Git hooks は `git commit` / `git push` 前に漏洩キーワードを確認します。ローカルの `.leak-words.json` を作成できます（Git 除外・ローカルのみ）：
-
-```json
-["your-leak-word"]
-```
-
-入口は `.husky/pre-commit`、`.husky/commit-msg`、`.husky/pre-push`、`scripts/check-leak-words.mjs` です。
+ローカルのコミット/プッシュでは `scripts/check-leak-words.mjs` を使い、`.leak-words.json` は非公開に保ちます。コンテナ検証はその実行で登録したリソースを回収します。過去のテストイメージは `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` で確認後、`--apply` を追加します。[検証説明](docs/usage/governance/verification.md)で実行、再利用、環境依存の境界を確認できます。
 
 ## ライセンス
 
-[Apache-2.0](./LICENSE)
+[Apache-2.0](LICENSE)

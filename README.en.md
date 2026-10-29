@@ -1,727 +1,149 @@
 # hai Framework
 
-[简体中文](./README.md) | [English](./README.en.md) | [日本語](./README.ja.md)
+**AI capabilities, security controls and business delivery in one TypeScript workspace.**
 
-Framework modules, `apps/` examples and CLI templates include Simplified Chinese (`zh-CN`), English (`en-US`) and Japanese (`ja-JP`). `core.i18n.setGlobalLocale('ja')` normalizes to `ja-JP`; applications expose a language menu.
+[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-> The current development version is `1.0.0-beta.1`. The source version does not establish npm availability; check the registry before installing and validate security, capacity and recovery for your use cases.
+[![npm latest](https://img.shields.io/npm/v/%40h-ai%2Fcli?label=npm%20latest)](https://www.npmjs.com/package/@h-ai/cli)
+[![CI](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/hai-series/hai-framework/actions/workflows/codeql.yml)
+[![Documentation website](https://github.com/hai-series/hai-framework/actions/workflows/pages.yml/badge.svg?branch=main)](https://hai-series.github.io/hai-framework/)
+[![License](https://img.shields.io/github/license/hai-series/hai-framework)](LICENSE)
 
-For production deployments using stateful backends, including a single instance, review the [22-package shared-state and recovery matrix (Chinese)](.agents/instructions/distributed-state.md). Use PostgreSQL/MySQL, Redis, and shared object/vector services; initialization rejects local state backends. A purely static website needs no database or cache and contains none of their business APIs. The matrix documents CAS/leases, idempotency, unknown external effects and validation boundaries.
+[Website and template previews](https://hai-series.github.io/hai-framework/) · [Usage guide](docs/usage/README.en.md) · [Configuration handbook](docs/usage/configuration/README.md) · [Releases](https://github.com/hai-series/hai-framework/releases/latest)
 
-<p align="center">
-  <strong>AI Runtime · Enterprise full-stack modules · Agent Skills · End-to-end type safety</strong>
-</p>
+Build business dashboards, AI assistants, knowledge bases and applications across platforms with **22 composable packages**, runnable CLI templates, shared UI and deployment tools. Frontends and backends share types and API contracts; developers and AI assistants share instructions, Skills and validation entry points.
 
-<p align="center">
-  A TypeScript full-stack framework for AI applications, from a single LLM call to a deployable enterprise application.
-</p>
+## Why hai
 
-<p align="center">
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-6%20%2F%207-3178c6.svg">
-  <img alt="Node" src="https://img.shields.io/badge/Node-%5E22.23.4%20%7C%20%5E24.22.1%20%7C%20%5E26.12.1-339933.svg">
-  <img alt="Svelte" src="https://img.shields.io/badge/Svelte-5-ff3e00.svg">
-</p>
+### AI: turn model calls into application features
 
----
+Connect OpenAI-compatible models, tool calls and MCP, then compose RAG, conversation memory, images, speech and A2A. Reuse chat, Markdown, document and Mermaid components to bring model output into business interfaces.
 
-## Introduction
+![Document component with navigation, dark theme and Mermaid content](docs/usage/images/ai-document-dark.png)
 
-hai Framework is a TypeScript full-stack framework **centered on an AI Runtime, with composable enterprise capabilities and APIs optimized for AI coding assistants**.
+Actual component screenshot. Model inference requires the selected provider and credentials; this image demonstrates content presentation. [AI development](docs/usage/development/ai.md) · [Models and knowledge configuration](docs/usage/configuration/ai.md)
 
-Start with `@h-ai/ai` for LLM and tool calls. Add `reldb`, `vecdb`, `iam`, `audit`, `serv`, `ui`, and other modules when you need persistence, multitenancy, authentication, auditing, APIs, UI, or deployment. Applications do not need the full stack at once.
+### Security: connect accounts, APIs and audit controls
 
-A consistent API style brings together four capability groups, helping AI assistants build complete intelligent applications:
+Use authentication and RBAC, active/dormant/deactivated account states, password and session policies, security auditing, and request rules by path, method, IP and time. Choose application encryption requirements for individual external APIs; trusted proxy handling establishes the client address used for access checks.
 
-- **AI**: LLM chat, image generation, audio (ASR / TTS), MCP, tools, RAG, and vector retrieval.
-- **Security**: Chinese national cryptographic algorithms, authentication, RBAC authorization, and audit logs.
-- **Data**: relational databases, caches, object storage, and data pipelines.
-- **Operations**: payments, notifications, scheduled tasks, and automated deployment.
+![System administrator selecting a role when creating a Fullstack account](docs/usage/images/account-role-choices.png)
 
-## Start here
+Actual template screenshot. System administrators manage all accounts and roles; audit and other business permissions remain separately authorized. [Identity and security](docs/usage/configuration/identity.md) · [Request policies](docs/usage/configuration/request-access.md) · [Security review](docs/usage/governance/security-review.md)
 
-| Your task                                     | Entry point                                                                                                                                                                            |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create an application                         | [Create, develop and deliver](docs/usage/README.en.md)                                                                                                                                 |
-| Create a static website or publish to Pages   | [Static website configuration and limits (Chinese)](docs/usage/configuration/delivery.md#静态website与github-pages); [framework website application](apps/framework-website/README.md) |
-| Configure environments, defaults and behavior | [Application configuration handbook (Chinese)](docs/usage/configuration/README.md)                                                                                                     |
-| Use a capability in an existing project       | [Module catalog](#module-catalog), then the package getting started section                                                                                                            |
-| Develop with an AI assistant                  | [AI index](LLMS.txt) and the generated project AGENTS.md                                                                                                                               |
-| Build images or deploy offline                | [Build and deployment](packages/deploy/README.en.md)                                                                                                                                   |
-| Contribute to the framework                   | [Development](#development) and [workspace rules](AGENTS.md)                                                                                                                           |
+### Data: start locally and choose the backends you need
 
-## Highlights
+Choose SQLite, PostgreSQL or MySQL for relational data, Memory/Redis for caching, Local/S3 for files, and LanceDB, pgvector, Qdrant or Chroma for vector search. Transactions, pagination, presigned URLs and text chunking have dedicated modules.
 
-| Feature                        | Description                                                                                         |
-| ------------------------------ | --------------------------------------------------------------------------------------------------- |
-| **AI-first design**            | APIs prioritize correct use by AI coding assistants, improving usability for human developers too.  |
-| **Consistent lifecycle**       | Stateful modules follow `init() → use → close()` with a consistent usage pattern.                   |
-| **Explicit failures**          | Domain operations return `HaiResult<T>`, distinguishing success from failure at the type level.     |
-| **Validated configuration**    | Zod validates configuration during `init()`, exposing errors at startup.                            |
-| **Composable modules**         | 22 independently publishable modules, with `@h-ai/core` as the minimum dependency, added as needed. |
-| **End-to-end type safety**     | Strict TypeScript with inference across `api-contract → serv → api-client`.                         |
-| **Cross-platform UI**          | Svelte 5 Runes components (primitives / compounds / scenes) for desktop and mobile.                 |
-| **Scaffolding and deployment** | `hai create` scaffolds projects; `hai deploy` targets Vercel or self-hosted machines.               |
-| **Built-in Agent Skills**      | Standardized module skills give AI assistants direct access to correct usage.                       |
+![Actual local data checks covering reads, writes, rollback, cache and files](docs/usage/images/data-local-results.png)
 
-## Design philosophy
+The image presents real SQLite, memory cache, local file and chunking results. Multiple production instances need suitable shared databases, Redis and object storage; configure external services separately. [Data access](docs/usage/development/data.md) · [Data configuration](docs/usage/configuration/data.md)
 
-**AI-first means prioritizing whether an AI coding assistant can correctly use each design, rather than limiting the framework to AI users.** Clear, correct usage also improves the human developer experience.
+### Operations: move feedback into a support workflow
 
-Many frameworks emphasize flexibility and conventions for human developers. AI-generated code can become inconsistent when patterns, errors, and logging lack constraints. hai Framework combines shared contracts, executable conventions, and skills to keep generated code consistent, typed, complete in error handling, and reviewable by people.
+Associate feedback with captured interactions, page replay, logs, requests and business evidence. Administrators can filter, handle, reopen and export diagnostic packages. Audit, notifications and scheduling support ongoing application operations.
 
-This philosophy leads to these decisions:
+![Feedback handling with notes, status and history](docs/usage/images/feedback-handled.png)
 
-| Design decision                       | Value for AI                          | Value for developers                         |
-| ------------------------------------- | ------------------------------------- | -------------------------------------------- |
-| Shared lifecycle `init → use → close` | One usage pattern to learn            | Predictable module behavior                  |
-| `HaiResult<T>` domain results         | Explicit failures in the main flow    | Less business try-catch; clearer call chains |
-| Zod configuration validation          | Immediate configuration feedback      | Startup validation before runtime            |
-| Provider pattern                      | Switch backends through configuration | Migrate between environments                 |
-| Strict TypeScript                     | Inference guides correct calls        | Safer refactoring                            |
-| Skill files + LLMS.txt                | Discover correct usage automatically  | Better generated code                        |
-| Executable coding conventions         | Apply conventions to every change     | Consistent style and easier reviews          |
+Actual example application screenshot. The version inside the feedback identifies its capture context. Configure collection scope, redaction, capacity and notifications for your application. [Feedback and troubleshooting](docs/usage/operations/feedback.md) · [Operations configuration](docs/usage/configuration/operations.md)
 
-> **Failure semantics**: domain operations prefer `HaiResult<T>`: `{ success: true, data }` or `{ success: false, error }`. Boundaries that must throw, such as `AsyncIterable`, client transports, callbacks, and SvelteKit control flow, are documented separately in types and guides.
+### UI and delivery: carry the template through to deployment
 
-## Technology stack
+Shared Svelte 5 components cover forms, tables, dialogs, authentication, onboarding and help. Themes and Chinese, English and Japanese messages carry across applications. ToastContainer presents readable warnings and errors, with trace identifiers available on demand.
 
-| Layer                | Technology                                                         |
-| -------------------- | ------------------------------------------------------------------ |
-| Language             | TypeScript 6 / 7 (strict mode)                                     |
-| Runtime              | Node.js 22.23.4+ / 24.22.1+ / 26.12.1+                             |
-| Frontend             | Svelte 5（Runes）+ SvelteKit 2                                     |
-| UI                   | Tailwind CSS 4 + DaisyUI 5 + Bits UI v2                            |
-| API contracts        | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`）     |
-| API service          | Hono + oRPC + Scalar docs                                          |
-| Relational databases | SQLite / PostgreSQL / MySQL (raw SQL, no ORM)                      |
-| Vector databases     | LanceDB / pgvector / Qdrant / Chroma                               |
-| Cache                | Memory / Redis (standalone / Cluster / Sentinel)                   |
-| Object storage       | Local filesystem / S3-compatible (AWS / MinIO / Alibaba Cloud OSS) |
-| AI                   | OpenAI-compatible API + MCP                                        |
-| Cryptography         | Chinese national algorithms SM2 / SM3 / SM4                        |
-| Payments             | WeChat Pay / Alipay / Stripe                                       |
-| Desktop              | Tauri                                                              |
-| Mobile               | Capacitor（Android / iOS）                                         |
-| Build                | pnpm + Turborepo + Vite + tsup                                     |
-| Deployment           | Vercel (SaaS) · docker-ssh self-hosting · Neon / Upstash / R2      |
+![Component gallery with login form and unified error feedback](docs/usage/images/gallery-scenes-en-US.png)
 
-## Getting started
+Create same-origin SvelteKit applications or separate APIs with Web/App/Desktop clients. Deploy images or offline bundles, update selected services and recover failed releases; static Website output can run on GitHub Pages. [UI configuration](docs/usage/configuration/experience.md) · [Delivery handbook](docs/usage/configuration/delivery.md)
 
-Follow the complete guide for prerequisites, traditional or AI-first development, compilation, image/native packaging, automatic or offline deployment, and framework updates: [English](docs/usage/README.en.md) · [简体中文](docs/usage/README.md) · [日本語](docs/usage/README.ja.md). It includes command options, `hai.json`, and the skills used throughout the workflow.
+## Create your first application
 
-Use Node.js matching the project's `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.11.2. In PowerShell, use `pnpm.cmd`.
+Use Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` and pnpm 12.11.2. Node.js 24.22.1 matches CI. Use `pnpm.cmd` in Windows PowerShell.
 
-These minimum versions follow the [official Node.js security release on 2026-10-21](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases). Support is limited to Node.js 22, 24, and 26 at or above the stated minimum within each release line; older versions, EOL releases, and unvalidated future major versions are unsupported. Use Node.js 24.22.1 LTS for development, CI, and containers.
-
-### Create a project
-
-The example uses `1.0.0-beta.1`. Confirm that npm has this version before installing. An unversioned install selects `latest`, which does not automatically select beta.
-
-```bash
-# Check the published channel and version, then install the CLI
-pnpm view @h-ai/cli dist-tags
-pnpm view @h-ai/cli@1.0.0-beta.1 version
-pnpm add -g @h-ai/cli@1.0.0-beta.1
-
-# Create Web + API with deployment support; omit options for prompts
-hai create my-app --type fullstack --frontends web --yes
-
-# Dependencies are installed by default
+```sh
+pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --yes
 cd my-app
 pnpm dev
 ```
 
-### Code generation
+The CLI installs dependencies and initializes Git by default. Sign in as `admin`; find the random initial password in `HAI_ADMIN_DEFAULT_PASSWORD` in the generated `.env.dev`, then change it when prompted. Keep environment files and passwords private.
 
-The page/api generators below emit SvelteKit file routes. For fullstack/API workspace contracts, procedures, and hash pages, follow the generated structure and the [usage guide](docs/usage/README.en.md).
+Fullstack includes DB, Cache, IAM, Crypto, Storage and Audit by default. Your first run requires no AI model or CUDA. Follow the generated README for directories, environment files and addresses, or use the [first-run guide](docs/usage/getting-started/create.md).
 
-```bash
-hai generate page dashboard         # Generate a page
-hai generate component UserCard     # Generate a component
-hai generate api users              # Generate an API
+The installation version follows [npm's latest tag](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions), which the badge reads directly. Run `pnpm view @h-ai/cli@latest version` to query it; replace `@latest` with the returned version for reproducible team installations. npm installation tags and GitHub's Latest presentation setting are managed separately.
 
-# Short aliases
-hai g:page dashboard
-hai g:component UserCard
-```
+### Choose a template
 
-### Build and deploy
+| Template    | Purpose                                               | Creation options                   |
+| ----------- | ----------------------------------------------------- | ---------------------------------- |
+| Fullstack   | Separate API and multiple clients sharing a contract  | `--type fullstack --frontends web` |
+| API         | Independent Node.js service and public APIs           | `--type api`                       |
+| Admin       | Same-origin dashboard with account and business pages | `--type admin`                     |
+| Website     | Corporate, product and static documentation sites     | `--type website --features none`   |
+| H5 / Mobile | Mobile web or Capacitor application                   | `--type h5` / `--type mobile-app`  |
 
-```bash
-# Environment-independent build; auto prefers reachable Podman, then Docker
+![Login page from an actual CLI-generated Admin project](apps/framework-website/public/template-previews/admin-login.png)
+
+[Explore real Fullstack, Website, Admin and Mobile previews](https://hai-series.github.io/hai-framework/#template-previews). Website uses SSR by default; follow the [static build instructions](docs/usage/configuration/delivery.md#静态website与github-pages) for static hosting. Native packages require the platform toolchain.
+
+### Build and release
+
+Configure the environment and deployment destination in the generated project, then run:
+
+```sh
 pnpm build --target docker
-# Configure .env.prod and the destination, then publish existing API/Web images
+pnpm run deploy --env prod --plan
 pnpm run deploy --env prod
-pnpm run deploy --env prod --build --services web
-# Use one --services with comma-separated names; quote the value for PowerShell
 pnpm run deploy --env prod --build --services "serv,web"
-# Without connectivity between machines, transfer and start the bundle manually
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-Deployment tools are development dependencies by default; use `--no-deploy` when creating a project to omit them. Each image uses a separate Dockerfile under `images/`, selected by `hai.json`. Complete offline bundles include self-hosted middleware and Windows/Linux/macOS upload scripts; isolated servers run deploy-local.sh to verify, extract and deploy automatically. Partial updates preserve unselected services and volumes using the server success baseline, without project-wide down. Rebuilds of the same version use distinct build IDs and checksums. See the [usage guide](docs/usage/README.en.md) for caching, manual deployment and recovery.
+`--plan` performs a read-only preflight, `--services` selects services to update, and `--bundle-only` produces a portable offline bundle. Automatic recovery covers services and configuration snapshots; database migrations and external side effects need their own recovery plans. See [delivery configuration](docs/usage/configuration/delivery.md) for real client IPs, subpaths, direct storage access and policy files.
 
-### Integrate into an existing project
+## Find modules by domain
 
-`@h-ai/core` is required; add other modules as needed:
+Install `@h-ai/*` as needed in existing projects, or use `hai add <module>` to add modules and configuration to supported templates. Each link documents the public API, configuration and examples.
 
-```bash
-pnpm add @h-ai/core                 # 基础能力（必装）
-pnpm add @h-ai/ai                   # AI / LLM / MCP / 文生图 / 语音
-pnpm add @h-ai/reldb                # 关系数据库
-pnpm add @h-ai/vecdb                # 向量数据库
-pnpm add @h-ai/iam                  # 身份认证 / 授权
-pnpm add @h-ai/ui                   # UI 组件库
-# …按需添加其余模块
-```
+| Domain                  | Modules and responsibilities                                                                                                                                                                                                                                                                                                                 |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation and security | [core](packages/core/README.en.md): results, configuration, logs, lifecycle and request policies; [crypto](packages/crypto/README.en.md): SM2/SM3/SM4 and password hashing; [iam](packages/iam/README.en.md): authentication, sessions and RBAC                                                                                              |
+| Data                    | [reldb](packages/reldb/README.en.md): relational data and transactions; [cache](packages/cache/README.en.md): cache and distributed locks; [storage](packages/storage/README.en.md): files and presigned URLs; [vecdb](packages/vecdb/README.en.md): vector search; [datapipe](packages/datapipe/README.en.md): text processing and chunking |
+| AI                      | [ai](packages/ai/README.en.md): LLM, tools/MCP, RAG, memory, images, speech and A2A                                                                                                                                                                                                                                                          |
+| Business and operations | [feedback](packages/feedback/README.en.md): feedback and diagnostics; [audit](packages/audit/README.en.md): audits and alerts; [reach](packages/reach/README.en.md): messaging; [scheduler](packages/scheduler/README.en.md): scheduled jobs; [payment](packages/payment/README.en.md): payment providers                                    |
+| APIs and platforms      | [api-contract](packages/api-contract/README.en.md): shared contracts; [serv](packages/serv/README.en.md): Hono/oRPC runtime; [api-client](packages/api-client/README.en.md): typed clients; [kit](packages/kit/README.en.md): SvelteKit integration; [capacitor](packages/capacitor/README.en.md): native bridge                             |
+| UI and engineering      | [ui](packages/ui/README.en.md): Svelte components and themes; [cli](packages/cli/README.en.md): scaffolding, generation and upgrades; [deploy](packages/deploy/README.en.md): Vercel and Docker SSH delivery                                                                                                                                 |
 
-> Run `hai add <module>` at an existing project root to enable modules incrementally; the CLI resolves dependencies and completes configuration.
+Lifecycle modules follow `init → use → close`, checking `HaiResult.success` at each step. Core, pure functions, contracts and service factories follow their actual type contracts. Consult the [configuration handbook](docs/usage/configuration/README.md) for shared state, provider prerequisites and authorization boundaries.
 
-## Module catalog
+## Reading paths
 
-The framework provides **22 independently publishable modules**, organized into five layers.
+| Your task                             | Start here                                                                                                             |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Evaluate and create                   | [Capabilities and environment](docs/usage/overview/README.md) → [first delivery](docs/usage/getting-started/README.md) |
+| Develop business features or AI       | [Development guide](docs/usage/development/README.md) → module README                                                  |
+| Manage configuration and deployment   | [Defaults and configuration index](docs/usage/configuration/README.md) → [operations](docs/usage/operations/README.md) |
+| Review security and diagnose problems | [Security review](docs/usage/governance/security-review.md) → [feedback](docs/usage/operations/feedback.md)            |
+| Maintain the framework with AI        | [AGENTS.md](AGENTS.md) → [LLMS.txt](LLMS.txt) → task-specific Skills                                                   |
 
-### Foundation
-
-| Package        | Responsibility                                                                                     | Provider support |                                            Latest on npm                                            |
-| -------------- | -------------------------------------------------------------------------------------------------- | :--------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/core`   | Foundation: `HaiResult`, contextual child loggers, configuration, IDs, i18n, errors, and utilities |        —         |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcore)](https://www.npmjs.com/package/@h-ai/core)   |
-| `@h-ai/crypto` | SM2 asymmetric encryption/signatures, SM3 hashes, SM4 encryption, and password hashing             |        —         | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcrypto)](https://www.npmjs.com/package/@h-ai/crypto) |
-
-### Data
-
-| Package          | Responsibility                                                                     |            Provider support             |                                              Latest on npm                                              |
-| ---------------- | ---------------------------------------------------------------------------------- | :-------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
-| `@h-ai/reldb`    | Relational databases: DDL, raw SQL, transactions, pagination, CRUD repositories    |         ✅ SQLite / PG / MySQL          |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Freldb)](https://www.npmjs.com/package/@h-ai/reldb)    |
-| `@h-ai/vecdb`    | Vector databases: collections, vector insertion, similarity search                 | ✅ LanceDB / pgvector / Qdrant / Chroma |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fvecdb)](https://www.npmjs.com/package/@h-ai/vecdb)    |
-| `@h-ai/cache`    | Cache and distributed locks: KV, Hash, List, Set, SortedSet, Lock; Redis-style API |            ✅ Memory / Redis            |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcache)](https://www.npmjs.com/package/@h-ai/cache)    |
-| `@h-ai/storage`  | File storage: upload/download/delete/copy/presigned URLs                           |              ✅ Local / S3              |  [![npm](https://img.shields.io/npm/v/%40h-ai%2Fstorage)](https://www.npmjs.com/package/@h-ai/storage)  |
-| `@h-ai/datapipe` | Data pipelines: cleaning, 7 chunking modes, composition (pure functions, no init)  |                    —                    | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdatapipe)](https://www.npmjs.com/package/@h-ai/datapipe) |
-
-### Business capabilities
-
-| Package           | Responsibility                                                                                                   |         Provider support          |                                               Latest on npm                                               |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------- | :-------------------------------: | :-------------------------------------------------------------------------------------------------------: |
-| `@h-ai/iam`       | Identity/access management: password/OTP/LDAP authentication, RBAC, sessions, users                              |                 —                 |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
-| `@h-ai/reach`     | Notifications: email, SMS, API callbacks, templates, do-not-disturb (DND)                                        | ✅ SMTP / Alibaba Cloud SMS / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
-| `@h-ai/feedback`  | User feedback: evidence, private screenshots, email, review and offline bundles                                  |     DB / S3 / optional Reach      |                                                     —                                                     |
-| `@h-ai/ai`        | AI: full/streaming chat, images, ASR/TTS, tools, MCP, embeddings, RAG/knowledge, memory, context, reranking, A2A | ✅ OpenAI-compatible / extensible |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
-| `@h-ai/payment`   | Payments: order creation, cross-platform initiation, callbacks                                                   |  ✅ WeChat Pay / Alipay / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
-| `@h-ai/audit`     | Audit logs: recording, paginated queries, statistics, scheduled cleanup                                          |                 —                 |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
-| `@h-ai/scheduler` | Scheduling: cron, JS/HTTP execution, DB persistence, distributed locks, logs                                     |                 —                 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fscheduler)](https://www.npmjs.com/package/@h-ai/scheduler) |
-
-### Integration
-
-| Package              | Responsibility                                                                                     | Provider support |                                                  Latest on npm                                                  |
-| -------------------- | -------------------------------------------------------------------------------------------------- | :--------------: | :-------------------------------------------------------------------------------------------------------------: |
-| `@h-ai/api-contract` | Public HTTP contracts: oRPC + Zod, application domain composition, unified `HaiResult<T>`          |        —         | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-contract)](https://www.npmjs.com/package/@h-ai/api-contract) |
-| `@h-ai/serv`         | API runtime: Hono + oRPC, contracts/procedures, OpenAPI 3.1 and Scalar docs                        |        —         |         [![npm](https://img.shields.io/npm/v/%40h-ai%2Fserv)](https://www.npmjs.com/package/@h-ai/serv)         |
-| `@h-ai/kit`          | SvelteKit: hooks, middleware, guards, validation, same-origin endpoints (no public HTTP contracts) |        —         |          [![npm](https://img.shields.io/npm/v/%40h-ai%2Fkit)](https://www.npmjs.com/package/@h-ai/kit)          |
-| `@h-ai/api-client`   | Cross-platform typed clients: nested contract calls, Bearer/httpOnly tokens, 401 refresh           |        —         |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-client)](https://www.npmjs.com/package/@h-ai/api-client)   |
-| `@h-ai/capacitor`    | Mobile bridge: secure token storage, device info, push, camera, status bar                         |        —         |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcapacitor)](https://www.npmjs.com/package/@h-ai/capacitor)    |
-
-### UI and tooling
-
-| Package        | Responsibility                                                                     |                             Provider support                              |                                            Latest on npm                                            |
-| -------------- | ---------------------------------------------------------------------------------- | :-----------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
-| `@h-ai/ui`     | Svelte 5 Runes components (20 primitives + 36 compounds + 36 scenes), 15 themes    |                                     —                                     |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
-| `@h-ai/cli`    | CLI: project creation, module addition, code generation, deployment                |                                     —                                     |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
-| `@h-ai/deploy` | Deployment: Vercel with cloud provisioning; docker-ssh with feature-based sidecars | ✅ Vercel / docker-ssh · Neon / Upstash / R2 / Resend / Alibaba Cloud SMS | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
-
-### Module documentation index
-
-| Category       | Module               | README                                                                       |
-| -------------- | -------------------- | ---------------------------------------------------------------------------- |
-| Foundation     | `@h-ai/core`         | [`packages/core/README.en.md`](./packages/core/README.en.md)                 |
-| Foundation     | `@h-ai/crypto`       | [`packages/crypto/README.en.md`](./packages/crypto/README.en.md)             |
-| Data           | `@h-ai/reldb`        | [`packages/reldb/README.en.md`](./packages/reldb/README.en.md)               |
-| Data           | `@h-ai/vecdb`        | [`packages/vecdb/README.en.md`](./packages/vecdb/README.en.md)               |
-| Data           | `@h-ai/cache`        | [`packages/cache/README.en.md`](./packages/cache/README.en.md)               |
-| Data           | `@h-ai/storage`      | [`packages/storage/README.en.md`](./packages/storage/README.en.md)           |
-| Data           | `@h-ai/datapipe`     | [`packages/datapipe/README.en.md`](./packages/datapipe/README.en.md)         |
-| Business       | `@h-ai/iam`          | [`packages/iam/README.en.md`](./packages/iam/README.en.md)                   |
-| Business       | `@h-ai/reach`        | [`packages/reach/README.en.md`](./packages/reach/README.en.md)               |
-| Business       | `@h-ai/feedback`     | [`packages/feedback/README.en.md`](./packages/feedback/README.en.md)         |
-| Business       | `@h-ai/ai`           | [`packages/ai/README.en.md`](./packages/ai/README.en.md)                     |
-| Business       | `@h-ai/payment`      | [`packages/payment/README.en.md`](./packages/payment/README.en.md)           |
-| Business       | `@h-ai/audit`        | [`packages/audit/README.en.md`](./packages/audit/README.en.md)               |
-| Business       | `@h-ai/scheduler`    | [`packages/scheduler/README.en.md`](./packages/scheduler/README.en.md)       |
-| Integration    | `@h-ai/api-contract` | [`packages/api-contract/README.en.md`](./packages/api-contract/README.en.md) |
-| Integration    | `@h-ai/serv`         | [`packages/serv/README.en.md`](./packages/serv/README.en.md)                 |
-| Integration    | `@h-ai/kit`          | [`packages/kit/README.en.md`](./packages/kit/README.en.md)                   |
-| Integration    | `@h-ai/api-client`   | [`packages/api-client/README.en.md`](./packages/api-client/README.en.md)     |
-| Integration    | `@h-ai/capacitor`    | [`packages/capacitor/README.en.md`](./packages/capacitor/README.en.md)       |
-| UI and tooling | `@h-ai/ui`           | [`packages/ui/README.en.md`](./packages/ui/README.en.md)                     |
-| UI and tooling | `@h-ai/cli`          | [`packages/cli/README.en.md`](./packages/cli/README.en.md)                   |
-| UI and tooling | `@h-ai/deploy`       | [`packages/deploy/README.en.md`](./packages/deploy/README.en.md)             |
-
-### Typical initialization order
-
-Most projects can initialize in this dependency order, which also helps AI assistants reason about usage:
-
-`core → reldb / cache / storage / vecdb → crypto / reach → audit → iam → scheduler / ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
-
-- `iam` requires initialized `reldb` and `cache`.
-- `audit` requires initialized `reldb`; initialize it before `iam` for security auditing, and initialize `reach` earlier when alerts use it. Stop `scheduler` first, then close modules in reverse order.
-- For persisted `scheduler` tasks, initialize `reldb` first. Initialized `cache` enables distributed locking automatically.
-- `reach`, `payment`, and `ai` reuse other module capabilities as needed; see their READMEs for configuration.
-- `api-contract` needs no initialization; it defines public HTTP schemas and oRPC contracts only.
-- `serv` creates the Hono app after business modules initialize; `contract` and `procedures` must have matching shapes.
-- `kit` provides SvelteKit hooks/guards/same-origin endpoints; cross-platform contracts are defined elsewhere.
-- `api-client` consumes one application contract on Web / App / SSR and returns `HaiResult<T>` by default.
-
-## Architecture
-
-```mermaid
-graph TD
-    APP["Applications · apps/<br/>admin-console · api-service · corporate-website · h5-app<br/>desktop-app · mobile-app · ai-playground"]
-
-    subgraph INTEG["Integration"]
-        KIT["kit (SvelteKit pipelines / guards)"]
-        SERV["serv (Hono + oRPC · OpenAPI)"]
-        CLIENT["api-client (typed client · Token)"]
-    end
-
-    CONTRACT["api-contract (Schema + oRPC Contract source)"]
-
-    subgraph BIZ["Business capabilities"]
-        B["iam · ai · payment · reach · audit · scheduler"]
-    end
-
-    subgraph DATA["Data"]
-        D["reldb · vecdb · cache · storage · datapipe"]
-    end
-
-    CORE["core (HaiResult · Logger · Config · i18n · Utils)"]
-    TOOL["Tooling: cli · deploy · capacitor · ui · crypto"]
-
-    APP --> INTEG
-    SERV --> CONTRACT
-    CLIENT --> CONTRACT
-    INTEG --> BIZ
-    BIZ --> DATA
-    BIZ --> CORE
-    DATA --> CORE
-    TOOL -.-> APP
-```
-
-**Dependency direction**: higher layers depend on lower ones. `@h-ai/core` is the foundation and never depends on other modules. Public HTTP APIs follow **`api-contract` (definition) → `serv` (implementation/mounting) → `api-client` (calls)**. `kit` handles SvelteKit pipelines and same-origin endpoints, not shared cross-platform contracts.
-
-## Examples
-
-These are representative snippets. Supply application-specific variables and schemas. For full APIs, codes, and examples, see module READMEs and [LLMS.txt (Chinese)](./LLMS.txt).
-
-### HaiResult error handling
-
-Domain failures use `HaiResult`. Stream iteration, network clients, framework control flow, and third-party callbacks may throw; catch at the documented API boundary:
-
-```typescript
-import type { HaiResult } from '@h-ai/core'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
-
-function divide(a: number, b: number): HaiResult<number> {
-  if (b === 0)
-    return err(HaiCommonError.VALIDATION_ERROR, 'Division by zero')
-  return ok(a / b)
-}
-
-const result = divide(10, 2)
-if (result.success) {
-  const quotient = result.data // 5
-}
-else {
-  core.logger.warn('Division failed', { code: result.error.code, message: result.error.message })
-}
-```
-
-### Relational databases
-
-```typescript
-import { reldb } from '@h-ai/reldb'
-
-const initResult = await reldb.init({ type: 'sqlite', database: './data/app.db' })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-// DDL — 建表
-await reldb.ddl.createTable('users', {
-  id: { type: 'TEXT', primaryKey: true },
-  email: { type: 'TEXT', notNull: true, unique: true },
-  name: { type: 'TEXT' },
-}, true)
-
-// 参数化查询与分页
-const users = await reldb.sql.query<User>('SELECT * FROM users WHERE name = ?', ['Alice'])
-const page = await reldb.sql.queryPage<User>({
-  sql: 'SELECT * FROM users',
-  pagination: { page: 1, pageSize: 20 },
-})
-
-// 事务
-await reldb.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (id, email) VALUES (?, ?)', ['1', 'a@b.com'])
-  await tx.execute('INSERT INTO logs (action) VALUES (?)', ['user_created'])
-})
-
-// CRUD 仓库（自动生成 SQL）
-const userRepo = reldb.crud.table<User>({
-  table: 'users',
-  idColumn: 'id',
-  select: ['id', 'email', 'name'],
-  createColumns: ['id', 'email', 'name'],
-  updateColumns: ['email', 'name'],
-  dbType: 'sqlite',
-})
-await userRepo.create({ id: '1', email: 'a@b.com', name: 'Alice' })
-```
-
-### Vector databases
-
-```typescript
-import { vecdb } from '@h-ai/vecdb'
-
-const initResult = await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-await vecdb.collection.create('docs', { dimension: 1536 })
-await vecdb.vector.insert('docs', [
-  { id: 'doc-1', vector: embeddings, content: '文档内容', metadata: { source: 'wiki' } },
-])
-const results = await vecdb.vector.search('docs', queryVector, { topK: 5, minScore: 0.7 })
-```
-
-### Cache
-
-```typescript
-import { cache } from '@h-ai/cache'
-
-const initResult = await cache.init({ type: 'memory' })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-// await cache.init({ type: 'redis', url: 'redis://localhost:6379' })
-
-await cache.kv.set('key', { name: 'Alice' }, { ex: 3600 })
-const val = await cache.kv.get<{ name: string }>('key')
-await cache.zset.zadd('leaderboard', { score: 100, member: 'Alice' })
-```
-
-### AI / LLM / images / audio
-
-```typescript
-import { ai } from '@h-ai/ai'
-
-// 初始化（OpenAI 兼容 API）；未初始化 reldb/vecdb 时使用进程内临时 Store
-const initResult = await ai.init({
-  llm: { apiKey: process.env.HAI_AI_LLM_APIKEY, model: 'gpt-4o-mini' },
-})
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-// 同步调用
-const chat = await ai.llm.chat({
-  messages: [{ role: 'user', content: '用一句话解释量子计算' }],
-})
-if (chat.success)
-  void chat.data.choices[0].message.content
-
-// 流式调用
-const stream = ai.llm.chatStream({ messages: [{ role: 'user', content: '讲一个故事' }] })
-for await (const chunk of stream)
-  process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
-
-// 文生图
-const image = await ai.image.generate({ prompt: '一只在星空下的猫', size: '1024x1024' })
-
-// 语音合成（TTS）
-const speech = await ai.audio.synthesize({ text: '你好，世界', voice: 'default' })
-```
-
-### Authentication and authorization
-
-```typescript
-import { cache } from '@h-ai/cache'
-import { iam } from '@h-ai/iam'
-import { reldb } from '@h-ai/reldb'
-
-// 先初始化 reldb 与 cache，IAM 会复用已初始化单例
-const dbInit = await reldb.init({ type: 'sqlite', database: './data/app.db' })
-if (!dbInit.success)
-  throw new Error(dbInit.error.message)
-const cacheInit = await cache.init({ type: 'memory' })
-if (!cacheInit.success)
-  throw new Error(cacheInit.error.message)
-const iamInit = await iam.init({ session: { maxAge: 86400, sliding: true } })
-if (!iamInit.success)
-  throw new Error(iamInit.error.message)
-
-await iam.user.register({ username: 'alice', password: 'StrongPass123!' })
-const loginResult = await iam.auth.login({ identifier: 'alice', password: 'StrongPass123!' })
-
-// RBAC 权限控制
-await iam.authz.assignRole(userId, 'admin')
-const allowed = await iam.authz.checkPermission(userId, 'users:read')
-```
-
-### Configurable security policies
-
-[IAM](packages/iam/README.en.md) provides permanent/temporary accounts, active/dormant/closed states, inactivity scans, password length/character classes/expiry, lightweight ALTCHA challenges, shared failure windows and lockout, one-time invitations, initial password renewal, purpose-bound reauthentication, and login time/IP controls. Enable and configure enhancements per application; the server enforces them, with a dedicated password renewal flow. Every login creates a separate session, with strict idle/absolute deadlines, concurrency limits, and explicit reject-new or replace-existing behavior. Page-exit revocation is disabled by default and remains best effort when enabled, alongside server deadlines.
-
-[Audit](packages/audit/README.en.md) unifies system/business categories, event-time identity snapshots, failure/denial events, redaction, filtering, sorting and statistics. Retention protection, private manual/scheduled backups and lightweight Reach alerts are configurable. Backup receipts support verification; archives are not atomic database snapshots and restoration belongs in an isolated environment. Defaults alone do not establish immutable storage or deployment compliance.
-
-The [admin console](apps/admin-console/README.md) and fullstack template demonstrate separate system, audit, configuration and business operator duties plus a basic member role. Server checks also prevent cross-duty grants and account takeover. Applications own and can adapt these example roles; IAM does not impose their names.
-
-### Public APIs: contract → service → client
-
-```typescript
-// 1) 契约（api-contract）：只描述“有哪些 API”，纯定义、无业务实现
-import { apiContract } from '@h-ai/api-contract'
-
-export const contract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: apiContract.ai,
-})
-```
-
-```typescript
-// 2) 服务（serv）：挂载 contract + procedures，生成 OpenAPI 与文档页
-import { serv } from '@h-ai/serv'
-import { createAiProcedures } from '@h-ai/serv/features/ai'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
-import { createStorageProcedures } from '@h-ai/serv/features/storage'
-
-const app = serv.createApp({
-  contract,
-  procedures: {
-    iam: createIamProcedures({ iam }),
-    storage: createStorageProcedures({ storage }),
-    ai: createAiProcedures({ ai }),
-  },
-  http: {
-    apiPrefix: '/api/v1',
-    openapi: { path: '/openapi.json' },
-    docs: { path: '/docs' },
-  },
-  iam, // 顶层传入后自动派生 access token 校验
-})
-serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
-```
-
-```typescript
-// 3) 客户端（api-client）：Web / App / SSR 消费同一份契约，默认返回 HaiResult<T>
-import { apiClient } from '@h-ai/api-client'
-
-const initResult = await apiClient.init({ baseUrl: '/api/v1', auth: {} })
-if (!initResult.success)
-  throw new Error(initResult.error.message)
-
-const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'xxx' })
-if (login.success)
-  await apiClient.auth.setTokens(login.data.tokens)
-```
-
-### Svelte 5 UI components
-
-```text
-<script lang="ts">
-  import { Button, Card, DataTable, Input, Modal } from '@h-ai/ui'
-
-  let showModal = $state(false)
-  let users = $state([])
-</script>
-
-<Card>
-  <DataTable
-    data={users}
-    columns={[
-      { key: 'name', label: '姓名' },
-      { key: 'email', label: '邮箱' },
-    ]}
-    keyField="id"
-  >
-    {#snippet actions(user)}
-      <Button size="xs" onclick={() => edit(user)}>编辑</Button>
-    {/snippet}
-  </DataTable>
-</Card>
-
-<Button onclick={() => (showModal = true)}>新建用户</Button>
-
-<Modal bind:open={showModal} title="新建用户">
-  <Input label="姓名" bind:value={name} />
-  <Input label="邮箱" bind:value={email} type="email" />
-</Modal>
-```
-
-> See individual READMEs and `LLMS.txt` for `storage` / `datapipe` / `payment` / `audit` / `scheduler` / `reach` / `crypto` / `kit` / `capacitor` / `deploy`.
-
-## Onboarding and help center
-
-`@h-ai/ui/guide` provides `createGuide`, `GuideHost` and `HelpCenter` for first-use cookie invitations, manual replay, navigation to guided pages and searchable Markdown help. Tours follow existing themes; built-in controls support Chinese, English and Japanese, while business content uses application i18n.
-
-The admin-console example and CLI fullstack Web/App/Desktop enable this by default. Preferences are isolated by user and tour version, with later and dismiss options. See [UI onboarding](packages/ui/README.en.md#onboarding-and-help-center).
-
-## Example applications
-
-`apps/` contains seven runnable examples that serve as scaffolding references and integration samples. `api-service-contract` is their shared API contract package.
-
-| Application         | Description                                         | Modules used                                             |
-| ------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| `admin-console`     | Admin console (all-module integration reference)    | core, reldb, iam, cache, storage, crypto, ai, kit, ui    |
-| `ai-playground`     | AI playground (LLM / images / memory / audio)       | core, ai, kit, ui                                        |
-| `api-service`       | Hono + oRPC API service (contract composition root) | core, reldb, cache, iam, storage, ai, api-contract, serv |
-| `corporate-website` | Corporate website + registration + AI support       | core, reldb, cache, storage, ai, reach, kit, ui          |
-| `h5-app`            | Mobile H5 (photo recognition / cart / login)        | core, reldb, iam, cache, storage, ai, kit, ui            |
-| `desktop-app`       | Tauri desktop application                           | api-client, api-service-contract, crypto, ui             |
-| `mobile-app`        | Capacitor Android / iOS application                 | api-client, api-service-contract, crypto, ui, capacitor  |
-
-### Start individual applications
-
-| Application         | Start command                           |
-| ------------------- | --------------------------------------- |
-| `admin-console`     | `pnpm --filter admin-console dev`       |
-| `ai-playground`     | `pnpm --filter ai-playground dev`       |
-| `api-service`       | `pnpm --filter api-service dev`         |
-| `corporate-website` | `pnpm --filter corporate-website dev`   |
-| `h5-app`            | `pnpm --filter h5-app dev`              |
-| `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev` |
-| `mobile-app`        | `pnpm --filter mobile-app dev`          |
-
-## Feedback capture and delivery checks
-
-Feedback examples support independent console notifications, lightweight screen recording and page replay, with framework-owned budgets, saving and schema upgrades. Use `hai upgrade <exact-version>` and `hai deploy --env prod --plan` for read-only preflight. See [feedback](packages/feedback/README.en.md), [lifecycle](packages/core/README.en.md#application-lifecycle) and [CLI](packages/cli/README.en.md#release-inspection-and-native-packaging).
+The role-based domain handbook is currently in Chinese; the [English guide](docs/usage/README.en.md) links to the translated creation-to-delivery workflow.
 
 ## Development
 
-### Local development
+`packages/*` contains framework packages, `apps/*` contains examples and the documentation site, and `packages/cli/templates/` contains generated applications and shared Skills. Keep callers, configuration examples, documentation, screenshots and tests aligned with feature changes.
 
-```bash
-pnpm install                    # 安装依赖
-pnpm dev                        # 全量开发模式
-pnpm typecheck                  # 类型检查
-pnpm lint                       # ESLint（含 check:skills）
-pnpm test                       # 单元测试
-pnpm --filter @h-ai/reldb test  # 只运行某个模块
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter admin-console dev
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm --filter @h-ai/cli test:scaffold-gates
 ```
 
-### Project structure
+[CI runs in parallel stages](docs/ci.md) and reuses eligible successful results by input fingerprint. **CI** validates types, builds, tests and browser flows. **CodeQL** analyzes JavaScript/TypeScript for security findings, available in GitHub Security. **Leak Checker** checks a maintainer-configured word list. Badges report workflow results; assess findings alongside business authorization and deployment reviews.
 
-```
-hai-framework/
-├── packages/            # 22 framework packages (@h-ai/*)
-│   └── cli/templates/   # CLI scaffolding and skills distributed to generated apps
-├── apps/                # Example applications
-├── scripts/             # Validation and release scripts
-├── AGENTS.md            # AI assistant workflow entry
-├── LLMS.txt             # AI usage index
-├── .agents/             # Shared development instructions/ and repository skills/
-├── AGENTS.md            # Shared AI entry point and task navigation
-└── .github/             # GitHub Actions and lightweight Copilot entry points
-```
-
-### AI-first infrastructure
-
-This repository uses [AGENTS.md](AGENTS.md) as its shared entry point, `.agents/instructions/` for detailed conventions, and `.agents/skills/` for repository development skills. Copilot path instructions contain matching metadata and links; Claude and OpenCode entry points reuse the shared rules. Codex reads `AGENTS.md` and discovers `.agents/skills/` natively. Invoke skills such as `$hai-module-create` or `$hai-module-review` in the project and load references as needed. Sources: [Codex skills](https://learn.chatgpt.com/docs/build-skills), [project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
-
-`hai create` generates the same shared entry points and skills, with application-specific `AGENTS.md` rules:
-
-```
-my-app/
-├── .agents/
-│   └── skills/                       # Shared skill bodies and references; native Codex discovery
-├── .github/
-│   └── copilot-instructions.md       # References the shared AGENTS.md
-├── AGENTS.md                         # Codex / OpenCode / shared AI guidance
-├── CLAUDE.md                         # Claude Code guidance reusing @AGENTS.md
-└── opencode.json                     # instructions references AGENTS.md directly
-```
-
-| AI assistant   | Generated files                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| GitHub Copilot | `.github/copilot-instructions.md` → `AGENTS.md` + `.agents/skills/`                              |
-| Cursor         | `AGENTS.md` + `.agents/skills/`                                                                  |
-| Claude Code    | `CLAUDE.md` + `AGENTS.md` (reuse through `@AGENTS.md`; no native discovery of `.agents/skills/`) |
-| Codex          | `AGENTS.md` + `.agents/skills/`                                                                  |
-| OpenCode       | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                                |
-
-Skills are managed in `packages/cli/templates/skills/` and distributed by `@h-ai/cli` into user projects' `.agents/skills/`. Alongside module guides, workflows cover document review and implementation (`hai-spec-review`, `hai-spec-implement`), feature development and validation (`hai-app-create`, `hai-app-review`, `hai-app-tests`), and delivery and maintenance (`hai-build`, `hai-deploy`, `hai-ci`, `hai-pr-review`, `hai-framework-sync`). The [complete usage guide](docs/usage/README.en.md) connects these steps. Repository development skills and application templates retain their own task boundaries while sharing public contracts. Run scoped `typecheck → lint → build → test` checks, followed by the relevant E2E gates for UI, routes, or CLI templates.
-
-### Configuration and environment variables
-
-Applications and templates share `HAI_<CONFIG>_<PATH>`. The root [`.env.example`](.env.example) lists available variables, descriptions, enums and bounds. Each example application lists its complete variables in its own `.env.example`.
-
-Track `.env.example` (complete descriptions and constraints), `.env` (shared public values), and `.env.dev` / `.env.test` / `.env.prod` (public environment overrides). Ignore `.env.local` for machine secrets. Priority: process environment > `.env.local` > environment file > `.env`. Each application example lists its complete available settings.
-
-After changing a public Schema, YAML configuration or an environment-variable reader, build the affected modules and run `pnpm generate:env` to update the root catalog, CLI metadata and example applications. Run `pnpm check:env` to detect stale output. The generator reads public source and examples, never `.env.local`, and preserves project values in base and mode files. Document each field’s purpose, type, enums, units, bounds and activation conditions; validate indexed/dynamic keys and parent-object overrides through the module Schema and runtime tests.
-
-Entry scanning excludes genuine JSDoc in JS/TS, including Svelte scripts; Schema field comments still supply documentation. Optional template/YAML comments and generated-code references inside strings remain included. Documentation examples do not create runtime settings.
-
-Use `pnpm dev` / `dev:test` / `dev:prod` for the selected mode and `start:test` / `start:prod` for built Node services. Vite checks `core.config.loadEnvFiles({ mode, envDir })` before injecting values; Node loads base, mode and local files in that order with `--env-file`. `core.init` does not read dotenv. File modes map `development` / `production` to `dev` / `prod`. Provider switching and migration steps are included in the application skill’s [environment configuration](packages/cli/templates/skills/hai-app-create/development.md#环境配置).
-
-- **Naming**: `HAI_<CONFIG_NAME>_<YAML_PATH>`, levels separated by `_`, camelCase kept intact (such as `llm.apiKey` → `HAI_AI_LLM_APIKEY`).
-- **Precedence**: convention-based variables > explicit YAML `${VAR}` > YAML defaults.
-- **AI compatibility**: `OPENAI_*` is only a fallback for `@h-ai/ai`.
-- **Secrets**: never hardcode, log, or expose secrets through client `PUBLIC_*` / `VITE_*` variables.
-
-| Group          | Example variables                        | Description                                                            |
-| -------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
-| Runtime        | `HAI_CORE_ENV`、`HAI_CORE_LOGGING_LEVEL` | Runtime environment and logging level                                  |
-| Database       | `HAI_DB_*`                               | SQLite / PostgreSQL / MySQL in `_db.yml`                               |
-| Cache          | `HAI_CACHE_*`                            | Memory / Redis / Upstash for `@h-ai/cache`                             |
-| Session / Auth | `HAI_IAM_*`、`HAI_KIT_COOKIE_KEY`        | Authentication/security for `@h-ai/iam` and `@h-ai/kit`                |
-| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`        | Listen/frontend addresses for `apps/api-service` / `@h-ai/serv`        |
-| Storage        | `HAI_STORAGE_*`                          | Local / S3 for `@h-ai/storage`                                         |
-| AI             | `HAI_AI_LLM_*`                           | LLM API keys, base URLs, and models for `@h-ai/ai`                     |
-| VecDB          | `HAI_VECDB_*`                            | LanceDB / pgvector / Qdrant / Chroma for `@h-ai/vecdb`                 |
-| Reach          | `HAI_REACH_*`                            | SMTP, SMS, webhooks for `@h-ai/reach`                                  |
-| Feedback       | `HAI_FEEDBACK_*`                         | Feedback application, administrators, capture quotas and retention     |
-| Payment        | `HAI_PAYMENT_*`                          | WeChat Pay / Alipay / Stripe merchant settings for `@h-ai/payment`     |
-| Deploy         | `HAI_DEPLOY_*`                           | Deployment/infrastructure credentials for `@h-ai/deploy` / `@h-ai/cli` |
-
-The root `.env.example` defines complete fields and defaults. When working on an example app, consult its `README.md` and `.env.example` for additional settings.
-
-See the [22-package configuration and consumer map (Chinese)](.agents/skills/hai-module-create/configuration.md) for schema defaults, runtime consumers, environment names and generated apps.
-
-### Quality gates
-
-Choose commands by impact scope; use root commands for cross-package contracts or root configuration changes:
-
-GitHub CI validates stages in parallel on separate runners and publishes only after the complete aggregate succeeds. A main-branch fix limited to an isolated application Playwright spec can reuse other successful stages with identical inputs, runner environment and UTC date. Missing evidence or shared input changes require verification again. See [CI maintenance](docs/ci.md) for the graph, reuse boundaries and full-run controls.
-
-| Gate               | Command                   | Scope                                                    |
-| ------------------ | ------------------------- | -------------------------------------------------------- |
-| Type checking      | `pnpm typecheck`          | All changes                                              |
-| Lint               | `pnpm lint`               | All changes, including `check:skills`                    |
-| Build              | `pnpm build`              | Build / templates / publishing / cross-package contracts |
-| Unit tests         | `pnpm test`               | All changes                                              |
-| End-to-end         | `pnpm e2e`                | UI / routes / end-to-end flows                           |
-| Release acceptance | `pnpm test:release-local` | Full pre-release validation (installation → E2E)         |
-
-> Use `pnpm.cmd` in Windows PowerShell. Root `pnpm test` runs up to four packages without Testcontainers dependencies concurrently, further limited by available CPUs and memory, then schedules container packages serially. Each package uses at most two file workers; the groups do not rebuild shared outputs simultaneously. Root `pnpm e2e` covers CLI scaffolding, deployment runtime and locks, and Playwright suites for Admin Console, AI Playground, Corporate Website, H5, and Mobile Web. Container unit tests require working Docker / Podman.
-
-The CLI's Vitest global teardown reclaims images built by the current run after `test`, `test:e2e`, and `test:deploy-gates` succeed, fail, or are gracefully cancelled. Podman builds also label intermediate images with the run identity; Docker cleanup uses the final image tags recorded for the run. Tests that do not build images do not require a container engine. Cleanup uses the engine that performed the build and only processes the current run's identity and build ledger. Public base images, external tags, and resources belonging to other tasks are preserved; cleanup never runs a global prune or forces deletion. Reports are written to `packages/cli/test-results/image-cleanup-*.json`, and cleanup failures make the gate fail. Forced termination, power loss, or a disconnected engine can still leave resources behind. Docker BuildKit's separate build cache is outside the image cleanup scope.
-
-Preview historical untagged Podman build images before explicitly deleting them. By default, only images older than 24 hours with a historical name consisting of a random hash followed by `-tmp` are selected; images still referenced by another image or container are preserved:
-
-```bash
-node scripts/cleanup-test-images.mjs --runtime=podman --legacy
-node scripts/cleanup-test-images.mjs --runtime=podman --legacy --apply
-```
-
-Use `--min-age-hours=24` to adjust the minimum image age and `--report=tmp/container-cleanup/report.json` to choose the itemized report path. The script also supports `--runtime=docker`. Historical Docker images without reliable provenance metadata are preserved; automatic teardown uses the current run's labels and ledger for both engines. To run the real-engine regression tests, set `HAI_TEST_IMAGE_SMOKE=1` and `HAI_TEST_IMAGE_RUNTIME=podman` (or `docker`), then run `pnpm test:scripts`. These tests verify cleanup and external-image protection after success, assertion failure, build failure, and SIGINT/SIGTERM cancellation.
-
-### Commit checks (Leak Hooks)
-
-Git hooks check leakage keywords before `git commit` / `git push`. Create local `.leak-words.json` (ignored by Git and local-only):
-
-```json
-["your-leak-word"]
-```
-
-The entry points are `.husky/pre-commit`, `.husky/commit-msg`, `.husky/pre-push`, and `scripts/check-leak-words.mjs`.
+Local commit/push hooks use `scripts/check-leak-words.mjs`; keep `.leak-words.json` private. Container gates clean up resources registered for that run. Preview historical test image cleanup with `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` before adding `--apply`. [Verification notes](docs/usage/governance/verification.md) distinguish actual runs, reuse and environment dependencies.
 
 ## License
 
-[Apache-2.0](./LICENSE)
+[Apache-2.0](LICENSE)

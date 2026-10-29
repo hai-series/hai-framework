@@ -65,10 +65,10 @@
 
 CLI をインストールし、デプロイ機能を含む Web + API プロジェクトを作成します。
 
-版を指定しないインストールはnpmの`latest`タグを選びます。Betaを使う場合、`pnpm view @h-ai/cli dist-tags`で公開を確認してから`pnpm add -g @h-ai/cli@beta`、または`@h-ai/cli@1.0.0-beta.1`を指定してください。`1.0.0-beta.1`は今回の公開目標であり、作業ツリーの版だけではnpm公開済みとは判断できません。Betaは`beta`タグへ公開し、既存の`latest`は維持します。アプリのフレームワーク各パッケージは同じ固定版に合わせて更新します。
+版を指定しないインストールは npm の `latest` を選びます。`pnpm view @h-ai/cli@latest version` と `pnpm view @h-ai/cli dist-tags` で現在の公開版を確認してください。既定版は `@h-ai/cli@latest`、Beta は `@beta`、固定する場合は取得した具体的な版を使います。全パッケージ公開後に `latest` を更新し、チャネルのタグは保持します。アプリの各フレームワークパッケージは同じ版に合わせて更新します。
 
 ```sh
-pnpm add -g @h-ai/cli@1.0.0-beta.1
+pnpm add -g @h-ai/cli@latest
 hai --version
 hai create my-app --type fullstack --frontends web --yes
 cd my-app

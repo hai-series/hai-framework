@@ -2,7 +2,7 @@
 
 [首次交付](README.md) · [前置环境](../overview/environment.md) · [下一步：配置与开发](develop.md)
 
-先确认版本，再创建项目。本轮发布目标是 `1.0.0-beta.1`，最终是否可安装以 npm 查询结果为准。普通安装选择 `latest`；Beta 使用 `beta` 标签或精确版本，两者不会自动互相替代。
+普通安装使用 npm 的 `latest` 标签，最新版本以[注册表](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)为准。团队需要可复现安装时，先查询实际版本再固定；不以工作区版本或文档中的历史发布记录判断当前最新版。
 
 ## 第一步：确认并安装CLI
 
@@ -10,13 +10,13 @@
 
 ```sh
 pnpm view @h-ai/cli dist-tags
-pnpm view @h-ai/cli@1.0.0-beta.1 version
+pnpm view @h-ai/cli@latest version
 ```
 
-确认目标版本存在后再安装。下面固定精确版本，便于团队复现；如需跟随已发布的 Beta 渠道，可把安装目标改成 `@h-ai/cli@beta`。
+下面跟随默认发布版；如需跟随已发布的 Beta 渠道，可改成 `@h-ai/cli@beta`。需要锁定时，将 `@latest` 替换为刚查询得到的具体版本。
 
 ```sh
-pnpm add -g @h-ai/cli@1.0.0-beta.1
+pnpm add -g @h-ai/cli@latest
 hai --version
 ```
 
