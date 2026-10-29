@@ -78,6 +78,8 @@ When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application productio
 
 #### Build the request pipeline
 
+When mounting an application under `/yyy/`, keep SvelteKit's `kit.paths.base` and the actual URLs used by guards consistent. Prefix `protectedPaths`, `publicPaths` and `loginUrl` with `base` from `$app/paths`, for example `${base}/api/*`. Authentication pages use ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``. Kit recognizes application `/api/*` routes through route groups and mount prefixes: unauthenticated APIs return 401, while pages follow the configured login redirect. Generated templates include this wiring.
+
 **src/hooks.server.ts**：
 
 ```typescript

@@ -84,6 +84,8 @@ export default defineConfig({
 
 #### 搭建请求管道
 
+应用部署在 `/yyy/` 等子目录时，SvelteKit 的 `kit.paths.base` 与守卫使用的实际 URL 应保持一致：将 `$app/paths` 的 `base` 加到 `protectedPaths`、`publicPaths` 和 `loginUrl`，例如 `${base}/api/*`。认证页面使用 ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``。Kit 根据应用路由识别 `/api/*`，包括路由分组和挂载前缀；未认证的 API 返回 401，页面按配置跳转登录。生成模板已处理这些路径。
+
 **src/hooks.server.ts**：
 
 ```typescript

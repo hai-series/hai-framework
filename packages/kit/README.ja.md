@@ -84,6 +84,8 @@ Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypt
 
 #### リクエストパイプラインの構築
 
+`/yyy/`などの配下に配置する場合、SvelteKitの`kit.paths.base`とガードが参照する実際のURLを揃えます。`$app/paths`の`base`を`protectedPaths`、`publicPaths`、`loginUrl`に付け、`${base}/api/*`のように指定してください。認証画面は``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``を使用します。Kitはルートグループや配置接頭辞を含むアプリ内`/api/*`を識別し、未認証APIは401、画面は設定したログイン先へ遷移します。生成テンプレートにはこの接続を含みます。
+
 **src/hooks.server.ts**：
 
 ```typescript

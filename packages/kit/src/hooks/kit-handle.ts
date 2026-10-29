@@ -293,7 +293,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
 /**
  * 根据 auth 配置构建路由守卫
  *
- * - API 路径（以 `/api/` 开头）：未认证返回 401 JSON
+ * - 应用内API路径（实际URL或route.id位于`/api/`）：未认证返回401 JSON
  * - 非 API 路径：未认证时重定向到 loginUrl（若配置），否则返回 401
  */
 function buildAuthGuard(
@@ -308,7 +308,9 @@ function buildAuthGuard(
       return { allowed: true }
     }
 
-    const isApiRoute = event.url.pathname.startsWith('/api/')
+    // route.id不含挂载前缀；移除路由分组后仍按应用API识别，避免子目录API被当成页面重定向。
+    const routePath = event.route.id?.replace(/\/\([^/]*\)/g, '')
+    const isApiRoute = event.url.pathname.startsWith('/api/') || routePath?.startsWith('/api/') === true
 
     if (isApiRoute) {
       return {

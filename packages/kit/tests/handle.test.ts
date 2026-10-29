@@ -15,10 +15,11 @@ import { createHandle, sequence } from '../src/hooks/index.js'
 function createMockEvent(options: {
   method?: string
   path?: string
+  routeId?: string
   cookies?: Record<string, string>
   headers?: Record<string, string>
 } = {}) {
-  const { method = 'GET', path = '/', cookies = {}, headers = {} } = options
+  const { method = 'GET', path = '/', routeId = path, cookies = {}, headers = {} } = options
 
   const url = new URL(`http://localhost${path}`)
 
@@ -35,7 +36,7 @@ function createMockEvent(options: {
     locals: {},
     getClientAddress: () => '127.0.0.1',
     params: {},
-    route: { id: path },
+    route: { id: routeId },
     platform: undefined,
     isDataRequest: false,
     isSubRequest: false,
@@ -45,6 +46,16 @@ function createMockEvent(options: {
 }
 
 describe('createHandle', () => {
+  it.each(['/api/private', '/(service)/api/private'])('带挂载前缀的API仍返回401，不重定向或绕过认证：%s', async (routeId) => {
+    const handle = createHandle({ logging: false, auth: { verifyToken: async () => null, protectedPaths: ['/yyy/api/**'], loginUrl: '/yyy/auth/login' } })
+    const event = createMockEvent({ path: '/yyy/api/private', routeId })
+    const resolve = vi.fn().mockResolvedValue(new Response('must not resolve'))
+    const response = await handle({ event, resolve })
+    expect(response.status).toBe(401)
+    expect(response.headers.get('Location')).toBeNull()
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
   it('应该创建基本 handle', async () => {
     const handle = createHandle({ logging: false })
 
