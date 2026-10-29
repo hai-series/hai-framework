@@ -65,7 +65,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     }
     const middlewares = (app.middlewares ?? []).filter(item => !['sqlite', 'local', 'memory', 'disabled', 'console', 'lancedb'].includes(item.backend))
     const available = [...new Set([...images, ...app.requiredServices])]
-    const selected = options.selectedServices ?? (artifact?.partial ? artifact.images.map(image => image.name) : available)
+    const selected = [...(options.selectedServices ?? (artifact?.partial ? artifact.images.map(image => image.name) : available))]
     if (!selected.length || new Set(selected).size !== selected.length || selected.some(name => !available.includes(name)))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
     if (artifact && selected.some(name => images.includes(name) && !artifact.images.some(image => image.name === name)))
@@ -101,12 +101,20 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     const provisioners = new Map<string, string>()
     for (const service of Object.keys(provisionKeys) as Array<keyof typeof provisionKeys>) {
       const provisioner = config.services?.[service]
-      if (provisioner && !options.skipMiddleware && usesDefaultMiddleware(app, service, effective)) {
+      if (provisioner && !options.skipMiddleware && usesDefaultMiddleware(app, service, { ...options, serviceModes })) {
         provisionEnv[provisionKeys[service]] = 'planned'
         provisioners.set(service, provisioner.provisioner)
       }
     }
     const sidecar = provider.type === 'docker-ssh' ? planSidecars(directory, projectName, app, provisionEnv, effective, config.container?.s3Engine, { dbPassword: '', storagePassword: '', ldapPassword: '' }) : undefined
+    const gateway = !!artifact && sidecar?.services.includes('storage') && !(artifact.primaryService === 'serv' && artifact.hasWeb)
+    if (gateway && artifact.primaryService === 'web' && !app.isSvelteKit)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
+    if (gateway) {
+      available.push('gateway')
+      if (!baseline.required)
+        selected.push('gateway')
+    }
     const services = Object.entries(sidecar?.composeServices ?? {}).filter(([name]) => selected.includes(name))
     return ok({
       projectName,
@@ -117,10 +125,10 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       artifact: artifact ? { directory: artifactDir, version: artifact.appVersion, buildId: artifact.buildId, verified: true, images: artifact.images.map(image => ({ name: image.name, reference: image.imageRef, sha256: image.sha256 })) } : undefined,
       selected,
       retained: available.filter(name => !selected.includes(name)),
-      containers: provider.type === 'docker-ssh' ? [...selected.filter(name => images.includes(name)).map(name => `hai-${projectName}-${name}`), ...services.flatMap(([, service]) => typeof service.container_name === 'string' ? [service.container_name] : [])] : [],
+      containers: provider.type === 'docker-ssh' ? [...selected.filter(name => images.includes(name) || name === 'gateway').map(name => `hai-${projectName}-${name}`), ...services.flatMap(([, service]) => typeof service.container_name === 'string' ? [service.container_name] : [])] : [],
       composeManagedServices: services.filter(([, service]) => typeof service.container_name !== 'string').map(([name]) => name),
       logicalVolumes: Object.keys(sidecar?.volumes ?? {}),
-      middleware: middlewares.map(item => ({ service: item.service, backend: item.backend, configuration: item.envPrefix, action: effective.serviceModes?.[item.envPrefix] ?? effective.serviceModes?.[item.service] ?? 'default', provisioner: provisioners.get(item.service) })),
+      middleware: middlewares.map(item => ({ service: item.service, backend: item.backend, configuration: item.envPrefix, action: selected.includes(item.service) ? effective.serviceModes?.[item.envPrefix] ?? effective.serviceModes?.[item.service] ?? 'default' : 'keep', provisioner: provisioners.get(item.service) })),
       configuration: { files: [join(root, 'hai.json'), ...configFiles].filter(existsSync), environmentKeys: Object.keys(environment.data.values).sort() },
       baseline,
       recovery: { releases: remoteDirectory ? `${remoteDirectory}/releases` : undefined, point: baseline.release ?? 'previous-successful-release', preservesVolumes: true, databaseRollback: false },

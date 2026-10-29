@@ -148,7 +148,7 @@ checksum の中止時は次のチャンクを待つ処理を終了し、入力�
 
 ### 設定
 
-- **S3**：`bucket / region / accessKeyId / secretAccessKey` は必須。`createBucket / endpoint / forcePathStyle / prefix / publicUrl` は任意。
+- **S3**：`bucket / region / accessKeyId / secretAccessKey` は必須。`createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl` は任意。
 - **Local**：`root` は必須。`directoryMode / fileMode` は任意。
 
 MinIO と RustFS は S3 Provider を共有し、`type: 's3'` を使います。専用のストレージ種別は不要です。自前のインスタンスでは S3 API endpoint（通常ポート 9000）とパス形式を設定します。
@@ -172,6 +172,16 @@ if (!initResult.success) {
   throw new Error(initResult.error.message)
 }
 ```
+
+#### 内部接続とブラウザーからの直接アクセス
+
+`endpoint` はサーバーの CRUD、バケット作成、接続確認に使用します。`publicEndpoint` は `presign.getUrl/putUrl` の署名先で、既定値はありません。省略時は endpoint を使用します。`https://app.example.com` のようなブラウザーから到達可能な HTTP(S) オリジンを指定し、バケット名、サイトパス、認証情報、クエリ、フラグメントを含めないでください。`publicUrl` は公開リソース URL の組み立て用で、非公開オブジェクトへの権限は付与しません。
+
+自前 Compose の内部接続先は `http://storage:9000` です。publicEndpoint を設定すると、ブラウザーは `https://app.example.com/hai/private/report.zip?...` のような署名付き URL を使用します。Nginx はバケット URI を変更せず Storage に転送し、大容量ダウンロードと Range は Serv を経由しません。分離アプリは Web Nginx を再利用し、SvelteKit SSR と独立 API には gateway を生成します。バケットとサイト/API パスの競合はパッケージ作成時に拒否します。ゲートウェイ追加や公開設定の変更には新しい完全デプロイが必要で、アプリの部分更新とロールバックは既存設定を保持します。
+
+外部 S3/R2 や既存ゲートウェイには独自の到達可能な端点を使用し、外部/保持対象ストレージにローカル sidecar ルートは生成しません。HTTPS 入口では署名対象 Host、元の URI、クエリを保持します。クロスオリジンでは実際の S3 に適切な CORS を設定してください。ゲートウェイはバケット認可や CORS を代替しません。署名付き URL は短期認証情報として扱い、有効期間とログを管理します。GET 署名は HEAD には使えません。Local は署名 URL に非対応で、非公開ディレクトリを Nginx に公開しません。
+
+自前バケット/リージョンが空の場合はデプロイが hai/us-east-1 を注入します。Storage Schema の既定値ではありません。オブジェクトプロキシは CSP sandbox、nosniff、no-referrer、private,no-store を設定し、同一オリジンの HTML を含む信頼できない添付ファイルを隔離します。ファイル配信用で、実行可能なサイトスクリプトは配信しません。外部 S3/CDN にも同等の分離を設定してください。
 
 #### 操作ログ
 

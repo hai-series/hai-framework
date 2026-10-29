@@ -28,7 +28,7 @@ const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vite
 const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
 const lightTestFiles = ['tests/generate-i18n.test.ts', 'tests/command-locales.test.ts', 'tests/environment-output.test.ts']
 const testFiles = deployGate
-  ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-nginx.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts']
+  ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-nginx.e2e.test.ts', 'tests/deploy-storage-proxy.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts']
   : generateGate
     ? ['tests/generate-runtime.e2e.test.ts']
     : i18nGate

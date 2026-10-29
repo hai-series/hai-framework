@@ -114,6 +114,12 @@ SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundl
 
 実行依存と設定に基づき、既定、自分の接続、設定維持を選びます。対象環境の設定が完全なら、`--yes` は値を保持し、再入力やクラウド資源の再作成を行いません。対話モードでは今回の処理範囲を選べます。--skip-middleware は設定と開通を省略します。SQLite、メモリーキャッシュ、ローカル保存には外部イメージがありません。完全配布物には自前ミドルウェアのイメージも自動で含めます。外部サービスは接続先への到達性が必要で、クラウド開通はオフライン処理ではありません。
 
+#### 非公開オブジェクトストレージへの直接アクセス
+
+自前 S3 の endpoint は内部接続先です。`_storage.yml` の publicEndpoint には `https://app.example.com` などブラウザーから到達可能なオリジンを指定し、バケットやサイトパスを含めません。全栈 Web Nginx と SSR/API 用 gateway は `/<bucket>/` を storage:9000 へ直接転送し、署名対象 Host/URI/query を保持してバッファリングと署名ログを無効化します。ストレージポートとコンソールは非公開で、権限は S3 が検証します。クロスオリジン CORS は S3 に設定し、外部入口でもサイトのディレクトリとは別にバケットルートを保持します。
+
+自前構成は bucket/region/prefix/publicEndpoint/publicUrl/operationLog を保持し、内部接続と受管認証情報だけを置き換えます。gateway 追加や公開設定変更には完全デプロイが必要で、部分更新の事前検証は設定摘要の不一致を拒否します。アプリ/ストレージ部分更新では保持プロキシの DNS を更新し、失敗時は以前の構成に復元します。外部/保持接続にローカルルートは生成せず、Local の非公開ディレクトリも公開しません。[ストレージ手引き](../../docs/usage/configuration/data.md)を参照してください。
+
 #### deploy のオプション
 
 --env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジンです。--output はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy、--sqlite-prebuild-mirror を指定できます。
@@ -239,7 +245,7 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 `--plan --inspect-remote`（SDK inspectRemote:true）で SSH 経由の current と成功ディレクトリーを読み取り、verified/missing/unavailable と復旧リリース ID を示します。対象への書込は行いません。
 
-リソースは実行側の sidecar 計画を共用します。`containers` は明示名のみ、Compose が命名する LDAP/SMTP は `composeManagedServices` に表示します。`logicalVolumes` は Compose の論理キーで、実際のエンジン名は Compose プロジェクトのスコープで決まります。内部接続の keep、スキップ、部分更新、クラウド開通も実行規則に従い、認証値を表示しません。
+リソースは実行側の完全な構成を共用します。`containers` は今回選択した明示名のみ、Compose が命名する LDAP/SMTP は `composeManagedServices` に表示します。SSR/API のストレージ gateway も更新・保持対象に表示します。`logicalVolumes` は保持サービスとアプリが継続使用するデータを含む構成全体の論理キーで、新規作成や再作成の指示ではありません。実際の名前は Compose プロジェクトのスコープで決まります。未選択ミドルウェアの action は keep で、クラウド開通は実際の選択範囲に従い、認証値を表示しません。
 
 ## 容量の一貫性と旧認証情報のインポート
 

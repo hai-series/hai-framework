@@ -18,11 +18,13 @@ description: "实现本地/S3 文件与目录操作、流式读写、checksum �
 ## 使用路径
 
 1. Node 端配置 Local/S3，校验并检查 init；MinIO/RustFS 使用 s3 类型。S3 `createBucket` 默认 false，需自动建桶时设 true（YAML 用 `${HAI_STORAGE_CREATEBUCKET:false}`）；初始化只在 HeadBucket 明确 404 时创建，权限/网络/建桶失败会阻止就绪。默认自建 S3 部署通过环境启用此项。
-2. 从 file/dir/presign 选择操作，检查 HaiResult。流与 checksum 按真实签名处理，checksum 在 Node 无需 init。
+2. 从 file/dir/presign 选择操作，检查 HaiResult。流与 checksum 按真实签名处理，checksum 在 Node 无需 init。S3 内部 endpoint 与浏览器 publicEndpoint 分开：publicEndpoint 无默认，缺省仍用 endpoint 签名；仅 HTTP(S) origin，不含桶、网站目录、凭据或查询。publicUrl 仅用于公开资源 URL。签名后不能改 Host/URI/query，GET 签名不能用于 HEAD；跨源 CORS 在实际 S3 配置。
 3. 客户端经受保护 API 或预签名 URL，服务端校验路径、内容、大小及资源权限；putUrl 不强制 maxSize。
    进度上传使用原生 XHR；预取消不发送，取消/错误一次结算并清理监听，完成后取消不影响旧请求。取消不回滚远端对象，先核对状态再授权删除。
 4. 不覆盖上传使用 ifNoneMatch；冲突/checksum 失败不能伪装成功。验证取消、流错误和文件清理，最后 close。
 5. 批量删除核对逐项进度，S3 每批最多 1000 项；HTTP 200 不能代替成功判断。unknown 结果先核对业务状态，避免重删并发新对象；dir.delete 不保证隔离并发写入或清除 S3 历史版本。
+6. 自建 Compose 的桶路径由 Web Nginx 或 SSR/API gateway 直达 storage，下载/Range 不经过 Serv，存储端口和控制台不直接公开。先配置真实 publicEndpoint；新增网关、变更桶/对外访问配置需全量基线，应用增量及回滚保持原配置。外部 S3 不生成本地路由，Local 不开放目录。验证实际大文件、Range、过期/篡改/匿名拒绝和增量代理 DNS 刷新；签名 URL 不进入日志或截图。
+7. 同源对象可能包含不可信 HTML；默认代理返回 CSP sandbox/default-src none、nosniff、no-referrer、private/no-store，不用于执行网站脚本。外部 S3/CDN 须配置等价策略。自建 bucket/region 为空时由部署补 hai/us-east-1，不能误写成 Storage Schema 默认值。
 
 ## 按需参考
 

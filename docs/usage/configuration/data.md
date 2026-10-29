@@ -117,6 +117,7 @@ region: us-east-1
 accessKeyId: ${S3_ACCESS_KEY_ID}
 secretAccessKey: ${S3_SECRET_ACCESS_KEY}
 endpoint: https://s3.internal.example
+publicEndpoint: https://files.example.com
 createBucket: false
 forcePathStyle: true
 prefix: orders/
@@ -127,7 +128,9 @@ operationLog: { read: false, write: false, maxLength: 1000, level: debug }
 | --- | --- | --- |
 | local.root | 必填 | 指定根目录，调用对象路径仍要防逃逸；开发目录不代表生产共享存储 |
 | local.directoryMode/fileMode | 0755 / 0644 | POSIX 权限默认；私有部署需目录访问控制，Windows 使用自身权限模型 |
-| S3 endpoint/publicUrl | 无默认 | endpoint 是 API 连接地址；publicUrl 仅地址拼接，不实施访问授权 |
+| S3 endpoint | 无默认 | 服务端 API 连接地址；省略时 AWS SDK 按 region 解析 AWS 端点，自建服务必须显式设置 |
+| S3 publicEndpoint | 无默认 | 预签名使用的浏览器可访问 HTTP(S) 源地址；省略时继续按 endpoint/AWS 端点签名 |
+| S3 publicUrl | 无默认 | 公开资源的 URL 拼接地址；不生成签名、不实施访问授权，也不会使私有桶变为公开桶 |
 | createBucket | false | true 在初始化时检查并创建缺失桶，需要对应权限；自建部署会明确注入 true |
 | forcePathStyle | false | true 使用路径风格寻址，按兼容 S3 服务要求选择 |
 | prefix | 空串 | 组织对象路径，不是租户/用户授权边界 |
@@ -140,6 +143,61 @@ operationLog: { read: false, write: false, maxLength: 1000, level: debug }
 验证普通上传、禁止覆盖、无权限访问、过期签名和删除后不可读。私有对象由服务端检查访问权限后生成短期签名，不能把 accessKey 下发客户端。下图是隔离 SQLite、memory、local 的实际写读/回滚/清理结果，网络后端尚需实际连接。
 
 ![隔离本地数据的成功和失败边界](../images/data-local-results.png)
+
+### 配置人员：区分三个访问地址
+
+应用服务器与浏览器不一定在同一个网络。Compose 中的 `http://storage:9000` 能被 Serv 访问，用户电脑通常无法解析这个地址。此时保留内部 `endpoint`，把 `publicEndpoint` 配置为用户实际访问的源地址。Storage 在签名前选用外部端点；对象读写、建桶和启动检查仍连接内部端点，不要求应用通过公网绕回存储。
+
+例如，应用位于 `https://app.example.com/yyy/`，私有桶名为 `business-files`：
+
+```yaml schema=@h-ai/storage:StorageConfigSchema
+# config/_storage.yml；以下内部地址用于默认自建 Compose
+type: s3
+bucket: business-files
+region: us-east-1
+endpoint: http://storage:9000
+publicEndpoint: https://app.example.com
+forcePathStyle: true
+createBucket: true
+accessKeyId: ${HAI_STORAGE_ACCESSKEYID}
+secretAccessKey: ${HAI_STORAGE_SECRETACCESSKEY}
+prefix: private
+```
+
+`publicEndpoint` 只接受 HTTP(S) 源地址，例如 `https://app.example.com` 或 `https://files.example.com:9443`，可以带端口，不能带 `/yyy`、桶名、账号密码、查询或片段。浏览器得到的路径为 `/business-files/private/<对象键>`。网站挂载目录不属于 S3 对象路径；外层反向代理除了 `/yyy/`，还须将 `/business-files/` 原样转发到此应用的公开端口。若无法增加同源桶路由，使用独立文件域名并将其转发到相同网关。HTTPS 建议在外部受管入口终止；仅将公网地址改为 HTTPS 不会给 Compose 自动安装证书。
+
+普通应用通过 Core 的环境覆盖规则加载此项；可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。整体父对象会覆盖 YAML 和其下叶项；部署保存过 HAI_STORAGE 时，修改这一有效对象，不能只改已被覆盖的 YAML。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、prefix、publicEndpoint、publicUrl 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
+
+### 应用开发者：先授权，再给用户下载链接
+
+默认自建模式在 bucket/region 为空时补为 `hai` / `us-east-1`；这是部署注入值，Storage Schema 本身仍要求填写这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
+
+1. 初始化模块并检查结果。HTTP Storage feature 必须具备资源授权策略；签名 API 仍经过认证、权限及对象归属检查。
+2. 调用 `apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 300 })`，确认 `result.success` 后使用 `result.data.url`。下载时浏览器直接请求这条 URL；下载字节不经过生成签名的 Serv 请求。
+3. 需要浏览器保存大文件时，可把 URL 用作正常下载链接，并由 `responseContentDisposition` 声明文件名；不要为了下载再让应用 API 读取整个对象。现有 `downloadWithPresignedUrl` 也直连存储，但它为了进度/Blob 保存会占用客户端内存，应按文件规模选择。
+4. 失败时重新经过授权获取新链接。URL 不能在签名后改域名、改桶名、删查询或加网站目录；GET 的签名也不能拿来发送 HEAD 请求。客户端取消只结束本次传输，不撤销已经授予的 URL 或远端上传。
+
+签名默认值仍分入口：Node 省略有效期为 3600 秒，HTTP 为 900 秒，允许整数 1–604800 秒；300 秒是上例建议值。下载签名可以设置响应 Content-Type/Content-Disposition；上传签名默认 Content-Type 为 application/octet-stream。上传 URL 只授权 PUT，不保证文件大小或内容符合业务要求，应用须在存储完成后核验实际对象。
+
+### 运维与安全人员：直连路由、增量与回滚
+
+前后端分离部署把桶路由加到已有 Web Nginx；SvelteKit SSR 和独立 API 增加 `gateway`，宿主机公开端口由它持有，应用只在 Compose 网络监听。Storage 的 9000 端口与控制台不直接发布。Nginx 保留签名 Host、原始 URI 和查询，关闭对象请求/响应缓冲及对象路由日志，支持 Range；仅允许 GET/HEAD、PUT 和 OPTIONS，实际对象权限仍由 S3 校验。外层负载均衡、CDN和日志平台也必须清除签名查询；跨源浏览器需要在实际 S3 服务配置精确 CORS，网关不会自动放开来源。
+
+首次从旧拓扑升级、改变公开端点、桶或其他自建 S3 访问配置时使用全量部署。交付包记录代理服务和不含密钥的配置摘要；与已装配置不一致的增量包会在更新服务前拒绝。正常应用/Storage 增量保留未选服务；容器 IP 变化后刷新保留代理的 DNS。失败回滚按原发布的拓扑、端口和健康路径恢复。容器回滚不撤销对象写入，数据仍按原卷和托管凭据保留；改变 prefix/bucket 前应准备数据迁移与业务核对。
+
+验收时在浏览器 Network 或受控请求工具检查：签名接口只返回小响应；大文件请求的地址是公开桶路径；Range 返回 206；无签名、篡改及过期 URL 返回 403。部署日志不能记录完整 URL。Local 不支持预签名，框架不会把私有文件目录直接映射给 Nginx。
+
+对象响应默认带 CSP sandbox 和禁止脚本/表单/基地址的策略、`nosniff`、`no-referrer`、`private, no-store`。即使文件与应用同源，不可信 HTML 也不应获得应用脚本权限；这条路由用于文件交付，不用于托管可执行的网站脚本。对象路由连接超时为 5 秒、连续无读写数据的超时为 300 秒；300 秒不是持续传输的总时限。外部 S3/CDN 须自行配置等价的隔离与日志策略。
+
+下面两张是当前候选实现的实际验证记录截图。测试从公开部署 API 取得原始 `web.conf`，分别连接真实 MinIO/RustFS；每种后端都覆盖前后端分离、API 和 SvelteKit，下载对象为 5,242,897 字节，且包含中文、空格、`+`、`%` 的键。应用上游保持不可用，下载仍成功；这验证了直连路径和签名边界，不代表外部 HTTPS、跨源 CORS 或客户生产环境已经验收。签名和随机端口均未显示。
+
+![MinIO 通过真实 Nginx 的三种部署下载、Range 与拒绝访问结果](../images/storage-proxy-minio.png)
+
+![RustFS 通过真实 Nginx 的三种部署下载、Range 与拒绝访问结果](../images/storage-proxy-rustfs.png)
+
+下图在受控同源 HTML 中应用上面实际返回的响应头，使用 Chrome 复核隔离效果。未隔离对照能改变父页状态并发起模拟操作；默认策略下脚本被阻止。这是本机浏览器验证页面，不是客户业务页面。
+
+![实际对象响应策略在 Chrome 中阻止同源 HTML 脚本的验证](../images/storage-proxy-isolation.png)
 
 ## 文本清洗和分块
 

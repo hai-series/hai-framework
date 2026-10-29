@@ -306,6 +306,8 @@ pnpm run deploy --env prod --build --services web
 
 最后两条实际修改目标，执行前核对环境。--plan只读，不生成凭据或连接目标；--inspect-remote配合plan才读取真实成功基线，不能把not-inspected当验证通过。
 
+计划中的 `containers` 是本次更新的显式容器名，`retained` 列出保留服务，自建 S3 的 SSR/API 网关也在其中。`logicalVolumes` 列出完整拓扑的卷声明，包括未选服务和应用继续挂载的数据卷，不表示要重新创建这些卷；未选中间件的 action 为 keep。对象直连的配置、网络和安全边界见[文件存储](data.md#配置人员区分三个访问地址)。
+
 ![本地真实计划和不存在服务的拒绝](../images/deployment-plan.png)
 
 增量以服务器current成功状态为准，保留未选服务的配置、网络、卷和凭据。先恢复已停止/down的既有基线，检查未选依赖，再仅删除选中旧容器并up --no-deps --no-build --pull never --no-recreate；不会整个项目down。先中间件健康，再serv/web。容器替换有服务中断窗口，不能把该方式称为无停机发布；生产按可接受停机窗口安排，需零停机时另设计流量切换。

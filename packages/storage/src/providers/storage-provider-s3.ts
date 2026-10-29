@@ -167,11 +167,12 @@ function withoutPrefix(key: string, prefix: string): string {
 export function createS3Provider(): StorageProvider {
   let client: S3Client | null = null
   let deleteClient: S3Client | null = null
+  let presignClient: S3Client | null = null
   let config: S3Config | null = null
   let ready = false
   let closing: Promise<void> | null = null
 
-  /** 两个客户端独立释放；失败的客户端保留供重试，成功的客户端不重复释放。 */
+  /** 所有自有客户端独立释放；失败的客户端保留供重试，成功的客户端不重复释放。 */
   function closeClients(): Promise<void> {
     ready = false
     config = null
@@ -179,15 +180,17 @@ export function createS3Provider(): StorageProvider {
       return closing
     closing = Promise.resolve().then(() => {
       const failures: unknown[] = []
-      for (const kind of ['normal', 'delete'] as const) {
-        const owned = kind === 'normal' ? client : deleteClient
+      for (const kind of ['normal', 'delete', 'presign'] as const) {
+        const owned = kind === 'normal' ? client : kind === 'delete' ? deleteClient : presignClient
         if (!owned)
           continue
         try {
           owned.destroy()
           if (kind === 'normal')
             client = null
-          else deleteClient = null
+          else if (kind === 'delete')
+            deleteClient = null
+          else presignClient = null
         }
         catch (error) {
           failures.push(error)
@@ -203,9 +206,9 @@ export function createS3Provider(): StorageProvider {
   // 内部辅助
   // -------------------------------------------------------------------------
 
-  /** 获取当前 S3Client；批量删除使用禁用 SDK 请求重试的独立客户端。 */
-  function getClient(operation?: 'deleteMany'): S3Client {
-    const selected = operation === 'deleteMany' ? deleteClient : client
+  /** 预签名仅使用外部端点；CRUD 与健康检查仍使用内部端点，批量删除禁用 SDK 重试。 */
+  function getClient(operation?: 'deleteMany' | 'presign'): S3Client {
+    const selected = operation === 'deleteMany' ? deleteClient : operation === 'presign' ? presignClient ?? client : client
     if (!ready || !selected) {
       throw new Error(storageM('storage_s3ClientNotInitialized'))
     }
@@ -596,7 +599,7 @@ export function createS3Provider(): StorageProvider {
     async getUrl(key, options?): Promise<HaiResult<string>> {
       try {
         const parsed = PresignOptionsSchema.parse(options ?? {})
-        const s3Client = getClient()
+        const s3Client = getClient('presign')
         const s3Config = getConfig()
         const fullPath = fullKey(key)
         logOperation('read', 'presign.getUrl', { key, fullPath, options })
@@ -626,7 +629,7 @@ export function createS3Provider(): StorageProvider {
     async putUrl(key, options?): Promise<HaiResult<string>> {
       try {
         const parsed = PresignUploadOptionsSchema.parse(options ?? {})
-        const s3Client = getClient()
+        const s3Client = getClient('presign')
         const s3Config = getConfig()
         const fullPath = fullKey(key)
         logOperation('write', 'presign.putUrl', { key, fullPath, options })
@@ -707,6 +710,9 @@ export function createS3Provider(): StorageProvider {
         client = new S3Client(clientConfig)
         // 回执丢失时重放可能删除并发新版本；只允许上层对明确的逐项瞬时错误重试。
         deleteClient = new S3Client({ ...clientConfig, maxAttempts: 1 })
+        // 签名阶段不联网；不得用外部地址执行内部健康检查，也不能在签名后改写 Host。
+        if (cfg.publicEndpoint)
+          presignClient = new S3Client({ ...clientConfig, endpoint: cfg.publicEndpoint })
 
         if (cfg.createBucket) {
           try {

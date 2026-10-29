@@ -25,6 +25,7 @@ type: local # local | s3
 root: ./data/storage
 # S3 存储（type=s3 时生效）
 # endpoint: ''
+# publicEndpoint: https://app.example.com # 预签名访问 origin；不含桶或网站目录
 # region: us-east-1
 # accessKeyId: ''
 # secretAccessKey: ''

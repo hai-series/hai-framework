@@ -71,6 +71,7 @@
     "altcha": "catalog:",
     "fast-string-width": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

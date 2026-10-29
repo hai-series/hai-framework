@@ -94,7 +94,9 @@ it.each<{ name: string, host: string, options: DeployAppOptions, hosted: boolean
   const directory = await middlewareFixture({ db: { type: 'postgresql', url: `postgresql://hai:PLAN_DB_SECRET@${host}:5432/hai`, database: 'hai' } })
   const before = await readdir(directory, { recursive: true })
   const result = await createDeploymentPlan(directory, { provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } }, { ...options, environment: 'prod' })
-  expect(result).toMatchObject({ success: true, data: { containers: ['hai-shop-prod-serv', ...(hosted ? ['hai-shop-prod-db'] : [])], logicalVolumes: hosted ? ['shop-prod-db-data'] : [], middleware: [{ service: 'db', action }] } })
+  expect(result).toMatchObject({ success: true, data: { containers: ['hai-shop-prod-serv', ...(hosted ? ['hai-shop-prod-db'] : [])], logicalVolumes: hosted || host === 'db' ? ['shop-prod-db-data'] : [], middleware: [{ service: 'db', action }] } })
+  if (options.selectedServices)
+    expect(result).toMatchObject({ success: true, data: { retained: ['db'] } })
   expect(JSON.stringify(result)).not.toContain('PLAN_DB_SECRET')
   expect(await readdir(directory, { recursive: true })).toEqual(before)
 })
@@ -108,11 +110,19 @@ it('云开通配置不伪报本地数据库容器，也不发网络请求', asyn
   expect(JSON.stringify(result)).not.toContain('PLAN_CLOUD_SECRET')
 })
 
-it('文件后端共享实际 app 数据卷，增量 app 制品不重建未选中的服务', async () => {
+it('文件后端共享实际 app 数据卷，应用增量仍挂载同一数据卷并保留未选服务', async () => {
   const directory = await middlewareFixture({ db: { type: 'sqlite' }, storage: { type: 'local' }, vecdb: { type: 'lancedb' } })
   const config = { provider: { type: 'docker-ssh' as const, expose: { hostPort: 8080 } } }
   expect(await createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({ success: true, data: { containers: ['hai-shop-prod-serv'], logicalVolumes: ['shop-prod-data'] } })
   const manifest = join(directory, '.hai/build/docker/manifest.json')
   await writeFile(manifest, JSON.stringify({ ...JSON.parse(await readFile(manifest, 'utf8')), partial: true }))
-  expect(await createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({ success: true, data: { selected: ['serv'], logicalVolumes: [], baseline: { required: true } } })
+  expect(await createDeploymentPlan(directory, config, { environment: 'prod' })).toMatchObject({ success: true, data: { selected: ['serv'], logicalVolumes: ['shop-prod-data'], retained: ['db', 'storage', 'vecdb'], baseline: { required: true } } })
+})
+
+it.each([false, true])('自建 Storage 只读计划与实际 gateway 拓扑一致，应用增量=%s', async (partial) => {
+  const directory = await middlewareFixture({ storage: { type: 's3', bucket: 'business-files', endpoint: 'http://storage:9000', publicEndpoint: 'https://files.example.com' } }, partial)
+  const before = await readdir(directory, { recursive: true })
+  const result = await createDeploymentPlan(directory, { provider: { type: 'docker-ssh', expose: { hostPort: 8080 } } }, { environment: 'prod' })
+  expect(result).toMatchObject({ success: true, data: { selected: partial ? ['serv'] : ['serv', 'storage', 'gateway'], retained: partial ? ['storage', 'gateway'] : [], containers: partial ? ['hai-shop-prod-serv'] : ['hai-shop-prod-serv', 'hai-shop-prod-gateway', 'hai-shop-prod-storage'], logicalVolumes: ['shop-prod-storage-data'], middleware: [{ service: 'storage', action: partial ? 'keep' : 'default' }] } })
+  expect(await readdir(directory, { recursive: true })).toEqual(before)
 })

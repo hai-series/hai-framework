@@ -45,6 +45,17 @@ function declareWebBase(bundle: { directory: string }, base: '/yyy' | '/other') 
   execute(`printf '%s\\n' '${base}' > /fixture/${bundle.directory}/web-base-path; cd /fixture/${bundle.directory}; sed '/  web-base-path$/d' SHA256SUMS > SHA256SUMS.next; sha256sum web-base-path >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
 }
 
+/** 确定性 Compose 夹具仅声明代理身份；真实 shell 必须按该元数据刷新并恢复保留代理。 */
+function declareProxyIdentity(bundle: { directory: string }, proxy: 'web' | 'gateway'): void {
+  execute(`cd /fixture/${bundle.directory}; printf '%s\\n' '${proxy}' > proxy-service; awk -F: 'BEGIN {OFS=":"} {$3="${proxy === 'web' ? 'true' : 'gateway'}"; print}' layout > layout.next; mv layout.next layout; sed '/  proxy-service$/d; /  layout$/d' SHA256SUMS > SHA256SUMS.next; sha256sum proxy-service layout >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
+}
+
+/** 只调整非敏感配置摘要并重算真实交付校验和，验证更新前的增量拒绝。 */
+function declareStorageRouting(bundle: { directory: string }, value: string | undefined): void {
+  const digest = value === undefined ? undefined : createHash('sha256').update(value).digest('hex')
+  execute(`cd /fixture/${bundle.directory}; ${digest ? `printf '%s\\n' '${digest}' > storage-routing` : 'rm storage-routing'}; sed '/  storage-routing$/d' SHA256SUMS > SHA256SUMS.next; ${digest ? 'sha256sum storage-routing >> SHA256SUMS.next;' : ''} mv SHA256SUMS.next SHA256SUMS`)
+}
+
 /** 只写入公开导入工具会生成的受控 v2 状态；实际容器身份仍由脚本重新核对。 */
 function seedImportedDatabase(bundle: { directory: string }, volume: string, projectOverride?: string): string {
   const project = execute(`cat /fixture/${bundle.directory}/managed-project`)
@@ -154,6 +165,7 @@ case "$*" in
   *'config --services'*)
     if [ -f /fixture/has-web ]; then printf 'serv\\nweb\\n'; else printf 'serv\\n'; fi
     if [ -f /fixture/has-db ]; then printf 'db\\n'; fi
+    if [ -f /fixture/has-gateway ]; then printf 'gateway\\n'; fi
     if [ -f /fixture/invalidate-backend-snapshot ]; then printf 'invalid-snapshot\\n' > "$(cat /fixture/invalidate-backend-snapshot)"; fi;;
   *'image inspect --format'*) printf 'amd64\\n';;
 esac
@@ -188,6 +200,50 @@ fi
     execute('chmod 700 /fixture/bin/*; command -v flock; mkdir -p /fixture/server/.deploy-lock')
     expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
   }, 60_000)
+
+  it.each(['matching', 'missing', 'different', 'symlink'] as const)('真实 shell 在更新前核对自建 Storage 配置摘要：%s', async (scenario) => {
+    const installed = await pack()
+    declareStorageRouting(installed, 'https://files.example.com')
+    expect(apply(installed).status).toBe(0)
+    const candidate = await pack(['serv'])
+    declareStorageRouting(candidate, scenario === 'missing' ? undefined : scenario === 'different' ? 'https://other.example.com' : 'https://files.example.com')
+    if (scenario === 'symlink')
+      execute(`cp /fixture/server/releases/${installed.id}/storage-routing /fixture/old-storage-routing; rm /fixture/server/releases/${installed.id}/storage-routing; ln -s /fixture/old-storage-routing /fixture/server/releases/${installed.id}/storage-routing`)
+    execute(': > /fixture/commands.log')
+    const outcome = apply(candidate)
+    if (scenario === 'matching') {
+      expect(outcome.status, outcome.stderr).toBe(0)
+      expect(execute('cat /fixture/server/current')).toBe(candidate.id)
+    }
+    else {
+      expectPreflightRefusal(candidate, outcome)
+      expect(outcome.stderr).toContain(scenario === 'symlink' ? 'metadata must be a regular file' : 'Managed storage configuration changed')
+      expect(execute('cat /fixture/server/current')).toBe(installed.id)
+    }
+  }, 30_000)
+
+  it.each(['web', 'gateway'] as const)('真实 shell 根据 %s 代理身份刷新 DNS，健康失败后恢复旧代理', async (proxy) => {
+    execute(`touch /fixture/has-${proxy}`)
+    const installed = await pack()
+    declareProxyIdentity(installed, proxy)
+    expect(apply(installed).status).toBe(0)
+    const updated = await pack(['serv'])
+    declareProxyIdentity(updated, proxy)
+    execute(': > /fixture/commands.log')
+    expect(apply(updated).status).toBe(0)
+    expect(execute('cat /fixture/commands.log')).toContain(`exec -T ${proxy} nginx -s reload`)
+    const failed = await pack(['serv'])
+    declareProxyIdentity(failed, proxy)
+    const curl = join(root, 'proxy-rollback-curl')
+    writeFileSync(curl, `#!/bin/sh\n! grep -q '/releases/${failed.id}/' /fixture/active-command\n`)
+    execFileSync(runtime, ['cp', curl, `${container}:/fixture/bin/curl`], { windowsHide: true })
+    execute('chmod 700 /fixture/bin/curl; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; : > /fixture/commands.log')
+    const outcome = apply(failed)
+    expect(outcome.status, outcome.stderr).toBe(1)
+    expect(JSON.parse(execute(`cat /fixture/server/result-${failed.id}.json`))).toMatchObject({ stage: 'health', recoveryStatus: 'passed' })
+    expect(execute('cat /fixture/server/current')).toBe(updated.id)
+    expect(execute('cat /fixture/commands.log').match(new RegExp(`exec -T ${proxy} nginx -s reload`, 'g'))).toHaveLength(2)
+  }, 30_000)
 
   it.each(['matching', 'missing', 'different', 'symlink'] as const)('真实shell保持Web前缀的增量边界：%s', async (scenario) => {
     const installed = await pack()

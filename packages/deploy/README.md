@@ -127,6 +127,12 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 根据锁文件运行依赖和模块配置识别数据库、缓存、文件存储、向量库、LDAP、邮件等。逐项选择默认、自定义或保持。目标环境已有完整配置时，`--yes` 保持原值，不重新输入或重复云开通；交互模式仍可选择本次处理范围。配置完备可用 `--skip-middleware` 跳过向导和开通。SQLite、Memory cache、本地存储不产生外部镜像；Compose 自建服务的镜像自动加入完整交付包。外部服务仍需目标网络可达，云开通不属于完全离线部署。
 
+#### 私有对象存储直连
+
+自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器下载须在 `_storage.yml` 配置 `publicEndpoint`，例如 `https://app.example.com`；只填源地址，不含桶名或网站目录。全栈 Web Nginx 及 SSR/API 的新增 gateway 将 `/<bucket>/` 原样代理到 storage:9000，保留签名 Host/URI/query，关闭对象缓冲与签名日志。存储端口和控制台不直接公开，实际权限由私有桶签名校验；跨源 CORS 在 S3 配置。外层入口也须原样转发桶路径，不能只转发网站子目录。
+
+自建配置保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog，只替换内部连接与托管凭据。首次增加网关或改变这些访问设置须全量部署，增量预检按配置摘要拒绝不一致；普通应用/存储增量刷新保留代理的服务 DNS，失败恢复使用旧拓扑。外部/保持连接不生成本地存储路由，Local 不公开私有目录。详见[存储配置手册](../../docs/usage/configuration/data.md#配置人员区分三个访问地址)。
+
 #### deploy 的可选参数
 
 | 参数                  | 用途                                                       |
@@ -265,7 +271,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
 
-资源清单复用执行端的 sidecar 规划：`containers` 只列显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；`logicalVolumes` 是 Compose 逻辑卷键，实际引擎卷名由 Compose 项目作用域决定。keep 内部连接、跳过、局部更新和云开通配置均按实际执行规则计算，不展示凭据值。
+资源清单复用执行端的完整 sidecar 拓扑：`containers` 只列本次选中的显式容器名，LDAP/SMTP 等由 Compose 命名的服务列在 `composeManagedServices`；自建 S3 的 SSR/API gateway 也会列入实际更新或保留范围。`logicalVolumes` 是完整拓扑的 Compose 逻辑卷声明，包含保留服务和应用继续挂载的数据卷，不表示新建或重建这些卷；实际引擎卷名由 Compose 项目作用域决定。未选中间件的 action 为 keep，云开通仅按实际选择范围计算，不展示凭据值。
 
 ## 容量一致性与旧凭据导入
 

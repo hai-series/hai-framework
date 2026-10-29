@@ -530,7 +530,7 @@ export interface DirOperations {
  */
 export interface PresignOperations {
   /**
-   * 生成下载签名 URL
+   * 生成 GET 下载签名 URL；使用 publicEndpoint，缺省回退 endpoint/AWS 端点，签名后不能改写地址。
    *
    * @param key - 文件键/路径
    * @param options - 签名选项
@@ -546,7 +546,7 @@ export interface PresignOperations {
   getUrl: (key: string, options?: PresignOptions) => Promise<HaiResult<string>>
 
   /**
-   * 生成上传签名 URL
+   * 生成 PUT 上传签名 URL；使用 publicEndpoint，服务端 CRUD 仍使用内部 endpoint。
    *
    * @param key - 文件键/路径
    * @param options - 上传签名选项

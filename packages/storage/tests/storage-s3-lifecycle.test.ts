@@ -24,7 +24,7 @@ describe.sequential('s3 lifecycle ownership', () => {
     return { type: 's3' as const, bucket: lease.bucket, region: lease.region, endpoint: lease.endpoint, accessKeyId: lease.accessKeyId, secretAccessKey: lease.secretAccessKey, forcePathStyle: true }
   }
 
-  it('post-health failures destroy both clients and their actual keepalive sockets', async () => {
+  it.each([false, true])('post-health failures release all clients and actual keepalive sockets, public endpoint=%s', async (publicAccess) => {
     const destroyed = new Set<S3Client>()
     const sockets = new Set<Socket>()
     const destroyAgent = Agent.prototype.destroy
@@ -47,18 +47,18 @@ describe.sequential('s3 lifecycle ownership', () => {
         await send.call(this, command)
         throw new Error('injected health failure after actual S3 request')
       })
-      expect((await storage.init(config())).success).toBe(false)
+      expect((await storage.init({ ...config(), ...(publicAccess ? { publicEndpoint: 'https://files.example.invalid' } : {}) })).success).toBe(false)
       expect(storage.isInitialized).toBe(false)
     }
-    expect(destroyed.size).toBe(6)
+    expect(destroyed.size).toBe(publicAccess ? 9 : 6)
     expect(sockets.size).toBeGreaterThanOrEqual(3)
     await vi.waitFor(() => expect([...sockets].every(socket => socket.destroyed)).toBe(true))
     expect((await storage.init(config())).success).toBe(true)
     expect((await storage.dir.list()).success).toBe(true)
   }, 30_000)
 
-  it('one client destroy failure still releases the other and blocks replacement until retry', async () => {
-    expect((await storage.init(config())).success).toBe(true)
+  it.each([false, true])('one destroy failure still releases the others and blocks replacement, public endpoint=%s', async (publicAccess) => {
+    expect((await storage.init({ ...config(), ...(publicAccess ? { publicEndpoint: 'https://files.example.invalid' } : {}) })).success).toBe(true)
     const counts = new Map<S3Client, number>()
     const blocked = new Set<S3Client>()
     let failures = 2
@@ -73,13 +73,37 @@ describe.sequential('s3 lifecycle ownership', () => {
     })
     const send = vi.spyOn(S3Client.prototype, 'send')
     expect((await storage.close()).success).toBe(false)
-    expect(counts.size).toBe(2)
+    expect(counts.size).toBe(publicAccess ? 3 : 2)
     expect(storage.isInitialized).toBe(false)
     expect((await storage.dir.list()).success).toBe(false)
     expect((await storage.init(config())).success).toBe(false)
     expect(send).not.toHaveBeenCalled()
     expect((await storage.close()).success).toBe(true)
-    expect([...counts.values()].sort()).toEqual([1, 3])
+    expect([...counts.values()].sort()).toEqual(publicAccess ? [1, 1, 3] : [1, 3])
     expect((await storage.init(config())).success).toBe(true)
+  })
+
+  it.each([false, true])('presigning chooses the configured endpoint without external connections, public endpoint=%s', async (publicAccess) => {
+    const destroyed = new Set<S3Client>()
+    const destroy = S3Client.prototype.destroy
+    vi.spyOn(S3Client.prototype, 'destroy').mockImplementation(function (this: S3Client) {
+      destroyed.add(this)
+      destroy.call(this)
+    })
+    expect((await storage.init({ ...config(), ...(publicAccess ? { publicEndpoint: 'https://files.example.invalid:9443' } : {}) })).success).toBe(true)
+    expect((await storage.file.put('internal.txt', 'internal CRUD remains available')).success).toBe(true)
+    expect((await storage.file.get('internal.txt')).success).toBe(true)
+    for (const operation of ['getUrl', 'putUrl'] as const) {
+      const signed = await storage.presign[operation]('internal.txt', { expiresIn: 60 })
+      expect(signed.success).toBe(true)
+      if (signed.success) {
+        const url = new URL(signed.data)
+        expect(url.origin).toBe(publicAccess ? 'https://files.example.invalid:9443' : new URL(config().endpoint).origin)
+        expect(url.pathname).toBe(`/${config().bucket}/internal.txt`)
+        expect(url.searchParams.get('X-Amz-SignedHeaders')).toContain('host')
+      }
+    }
+    expect((await storage.close()).success).toBe(true)
+    expect(destroyed.size).toBe(publicAccess ? 3 : 2)
   })
 })

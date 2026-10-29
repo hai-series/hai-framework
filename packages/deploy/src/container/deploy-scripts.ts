@@ -168,7 +168,7 @@ start_services() {
   application_services=''
   application_orphan_option=$orphan_option
   for service in "$@"; do
-    case "$service" in serv|web) ;; *) middleware_services="$middleware_services $service";; esac
+    case "$service" in serv|web|gateway) ;; *) middleware_services="$middleware_services $service";; esac
   done
   if [ -n "$middleware_services" ]; then
     compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $middleware_services || return 1
@@ -182,6 +182,29 @@ start_services() {
   if [ -n "$application_services" ]; then
     compose up -d --no-deps --no-build --pull never "$recreate_option" $application_orphan_option $application_services || return 1
   fi
+  case " $* " in *' gateway '*) compose up -d --no-deps --no-build --pull never "$recreate_option" gateway || return 1;; esac
+}
+read_proxy_service() {
+  proxy_directory=$1
+  if [ -e "$proxy_directory/proxy-service" ] || [ -L "$proxy_directory/proxy-service" ]; then
+    test -f "$proxy_directory/proxy-service" && test ! -L "$proxy_directory/proxy-service" || return 1
+    stored_proxy=$(cat "$proxy_directory/proxy-service") || return 1
+  else
+    stored_proxy=$(awk -F: 'NR == 1 { if ($3 == "true") print "web"; else if ($3 == "gateway") print "gateway"; }' "$proxy_directory/layout") || return 1
+  fi
+  case "$stored_proxy" in ''|web|gateway) printf '%s' "$stored_proxy";; *) return 1;; esac
+}
+reload_retained_proxy() {
+  retained_proxy=$(read_proxy_service "$1") || return 1
+  test -n "$retained_proxy" || return 0
+  # Nginx 静态 upstream 会保留旧容器 IP；应用或存储增量替换后重新解析服务 DNS。
+  case " $selected " in *' serv '*|*' web '*|*' storage '*)
+    case " $selected " in *" $retained_proxy "*) ;; *)
+      if grep -qx "$retained_proxy" "$1/services"; then compose exec -T "$retained_proxy" nginx -s reload || return 1; fi
+      ;;
+    esac
+    ;;
+  esac
 }
 wait_http() {
   http_port=$1
@@ -215,10 +238,7 @@ verify_recovery() {
   case "$recovery_port" in ''|*[!0-9]*) return 1;; esac
   test -n "$recovery_paths" || return 1
   wait_services $recover_selected || return 1
-  case " $selected " in *' serv '*)
-    if grep -qx web "$recovery_release/services"; then compose exec -T web nginx -s reload || return 1; fi
-    ;;
-  esac
+  reload_retained_proxy "$recovery_release" || return 1
   wait_http "$recovery_port" $recovery_paths
 }
 finish() {
@@ -333,15 +353,18 @@ sh "$source_dir/resolve-backend-state.sh" "$root" "$source_dir" "$runtime" "$pre
 if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
   # 目录属于完整Web拓扑；旧版本缺省为根目录，服务增量不能意外丢失或改变既有目录。
-  read_web_base() {
+  read_deployment_metadata() {
     if [ -e "$1" ] || [ -L "$1" ]; then
-      test -f "$1" && test ! -L "$1" || { printf 'Web base path metadata must be a regular file.\n' >&2; return 1; }
+      test -f "$1" && test ! -L "$1" || { printf 'Deployment path/config metadata must be a regular file.\n' >&2; return 1; }
       cat "$1"
     fi
   }
-  current_web_base=$(read_web_base "$source_dir/web-base-path")
-  previous_web_base=$(read_web_base "$root/releases/$previous/web-base-path")
+  current_web_base=$(read_deployment_metadata "$source_dir/web-base-path")
+  previous_web_base=$(read_deployment_metadata "$root/releases/$previous/web-base-path")
   test "$current_web_base" = "$previous_web_base" || { printf 'Web base path changed. Match the installed prefix for partial updates, or create a full deployment.\n' >&2; exit 1; }
+  current_storage_routing=$(read_deployment_metadata "$source_dir/storage-routing")
+  previous_storage_routing=$(read_deployment_metadata "$root/releases/$previous/storage-routing")
+  test "$current_storage_routing" = "$previous_storage_routing" || { printf 'Managed storage configuration changed. Create a full deployment to switch its public endpoint, bucket, or access policy consistently.\n' >&2; exit 1; }
   if ! cmp -s layout "$root/releases/$previous/layout"; then
     # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
     test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' "$root/releases/$previous/layout")" || { printf 'Ports or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
@@ -355,8 +378,10 @@ if [ "$partial" = true ]; then
     previous_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' "$previous_proxy" | sha256sum)
     current_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' web.conf | sha256sum)
     test "$previous_shape" = "$current_shape" || { printf 'API routes or proxy policy changed. Create a full deployment bundle.\n' >&2; exit 1; }
-    case " $selected " in *' serv '*) ;; *) printf 'Transport capacity changes require the serv service. Include serv in the partial deployment.\n' >&2; exit 1;; esac
-    case " $selected " in *' web '*) ;; *) selected="$selected web"; proxy_update=true;; esac
+    case " $selected " in *' @@PRIMARY@@ '*) ;; *) printf 'Transport capacity changes require the primary application service. Include it in the partial deployment.\n' >&2; exit 1;; esac
+    current_proxy=$(read_proxy_service "$source_dir") || exit 1
+    test -n "$current_proxy" || { printf 'Proxy service metadata missing. Create a full deployment bundle.\n' >&2; exit 1; }
+    case " $selected " in *" $current_proxy "*) ;; *) selected="$selected $current_proxy"; proxy_update=true;; esac
   fi
 fi
 mkdir -p "$release"
@@ -428,13 +453,7 @@ step start 'Updating selected services'
 changed=true
 remove_selected $selected
 start_services $selected
-case " $selected " in
-  *' serv '*)
-    case " $selected " in *' web '*) ;; *)
-      if grep -qx web "$release/services"; then compose exec -T web nginx -s reload; fi
-    esac
-    ;;
-esac
+reload_retained_proxy "$release"
 step health 'Checking HTTP access'
 wait_http @@PORT@@ @@HEALTH@@
 step complete 'Deployment passed all checks'

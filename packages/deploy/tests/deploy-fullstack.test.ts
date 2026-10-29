@@ -107,6 +107,55 @@ async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
 
+it.each(['not-a-url', 'https://files.example.com/portal', 'ftp://files.example.com', 'https://user:secret@files.example.com', false])('自建 S3 在打包前拒绝无效 publicEndpoint：%s', async (publicEndpoint) => {
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/storage': { version: '1' } } } }, packages: { '@h-ai/storage@1': {} }, snapshots: { '@h-ai/storage@1': {} } }))
+  writeFileSync(join(root, 'config/_storage.yml'), JSON.stringify({ type: 's3', bucket: 'business-files', publicEndpoint }))
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code, message: expect.stringContaining('storage.publicEndpoint') } })
+  expect(JSON.stringify(result)).not.toContain('user:secret')
+  expect(ssh.upload).not.toHaveBeenCalled()
+})
+
+it.each(['fullstack', 'api', 'sveltekit'])('自建私有 S3 的 %s 全量交付有直连路由，应用增量保留代理和外部签名地址', async (kind) => {
+  const ssr = kind === 'sveltekit'
+  const names = ['@h-ai/storage', ...(ssr ? ['@sveltejs/kit'] : [])]
+  writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: Object.fromEntries(names.map(name => [name, { version: '1' }])) } }, packages: Object.fromEntries(names.map(name => [`${name}@1`, {}])), snapshots: Object.fromEntries(names.map(name => [`${name}@1`, {}])) }))
+  writeFileSync(join(root, 'config/_storage.yml'), 'type: s3\nbucket: business-files\nprefix: private\npublicEndpoint: https://files.example.com\n')
+  if (ssr) {
+    writeFileSync(join(root, 'svelte.config.js'), 'export default {}')
+    const file = 'web-1.2.3.tar'
+    writeFileSync(join(artifacts, file), 'prebuilt-web')
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 5, primaryService: 'web', appVersion: '1.2.3', buildId: 'release-1', hasWeb: true, webBasePath: '/portal', images: [{ name: 'web', file, imageRef: 'localhost/example-web:release-1', sha256: createHash('sha256').update('prebuilt-web').digest('hex'), containerPort: 3000 }] }))
+  }
+  else {
+    writeArtifact(kind === 'fullstack')
+  }
+  await initialize(false)
+  const primary = ssr ? 'web' : 'serv'
+  for (const partial of [false, true]) {
+    const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: partial ? [primary] : undefined })
+    const directory = deliveryDirectory(result)
+    const proxy = kind === 'fullstack' ? 'web' : 'gateway'
+    expect(readBundleFile(directory, 'proxy-service').trim()).toBe(proxy)
+    expect(readBundleFile(directory, 'web.conf')).toContain('location ^~ /business-files/')
+    expect(JSON.parse(readBundleFile(directory, 'proxy-entry.json')).services[proxy].volumes).toHaveLength(1)
+    expect(JSON.parse(parseEnv(readBundleFile(directory, '.env.runtime')).HAI_STORAGE)).toMatchObject({ bucket: 'business-files', prefix: 'private', publicEndpoint: 'https://files.example.com', endpoint: 'http://storage:9000' })
+    const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
+    if (partial) {
+      expect(Object.keys(compose.services)).toEqual([primary])
+      expect(compose.services[primary]).not.toHaveProperty('ports')
+    }
+    else {
+      expect(compose.services.storage).not.toHaveProperty('ports')
+      expect(compose.services[proxy].ports).toEqual(['18080:8080'])
+      expect(compose.services[proxy]).not.toHaveProperty('env_file')
+      expect(compose.services[primary]).not.toHaveProperty('ports')
+      expect(readBundleFile(directory, 'manifest.json')).toContain(`"${proxy}"`)
+    }
+  }
+}, 30_000)
+
 it.each([
   { name: 'hai-delivery', expected: 'hai-delivery', online: true },
   { name: '@example/hai-delivery', expected: 'hai-delivery', online: false },

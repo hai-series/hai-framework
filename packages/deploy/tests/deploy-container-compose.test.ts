@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
   buildRuntimeEnv,
+  generateApplicationProxyConfig,
   generateComposeFile,
   generateWebProxyConfig,
   serializeEnvFile,
@@ -47,6 +48,17 @@ function makeScan(
 }
 
 describe('buildRuntimeEnv 按功能追加 sidecar', () => {
+  it('自建 S3 保留公开访问和对象命名配置，只替换内部连接与托管凭据', () => {
+    const scan = makeScan(['storage'], { storage: 's3' })
+    scan.middlewares = [{ service: 'storage', backend: 's3', source: '_storage.yml', configName: 'storage', configPath: [], envPrefix: 'HAI_STORAGE', config: { type: 's3', bucket: 'business-files', region: 'us-west-2', prefix: 'private', publicEndpoint: 'https://files.example.com', publicUrl: 'https://cdn.example.com/public', endpoint: 'http://old.internal', operationLog: { write: true } } }]
+    const plan = buildRuntimeEnv(tmpDir, 'public-storage', scan, {}, 3000)
+    expect(JSON.parse(plan.env.HAI_STORAGE)).toMatchObject({ bucket: 'business-files', region: 'us-west-2', prefix: 'private', publicEndpoint: 'https://files.example.com', publicUrl: 'https://cdn.example.com/public', operationLog: { write: true }, endpoint: 'http://storage:9000', forcePathStyle: true, createBucket: true })
+  })
+  it('模板尚未填写的桶/区域由默认自建模式补齐，不将空字符串当成已配置桶', () => {
+    const scan = makeScan(['storage'], { storage: 's3' })
+    scan.middlewares = [{ service: 'storage', backend: 's3', source: '_storage.yml', configName: 'storage', configPath: [], envPrefix: 'HAI_STORAGE', config: { type: 's3', bucket: '', region: '' } }]
+    expect(JSON.parse(buildRuntimeEnv(tmpDir, 'defaults', scan, {}, 3000).env.HAI_STORAGE)).toMatchObject({ bucket: 'hai', region: 'us-east-1' })
+  })
   it('sidecar 和云开通的整体配置清除被替换的旧叶配置，保留其它业务变量', () => {
     const { env } = buildRuntimeEnv(tmpDir, 'override', makeScan(['cache', 'storage']), { HAI_STORAGE: '{"type":"s3","endpoint":"https://external.example"}' }, 3000, {}, {
       HAI_CACHE_TYPE: 'memory',
@@ -249,6 +261,25 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     const result = buildRuntimeEnv(otherComputer, 'demo', makeScan(['db']), {}, 3000)
     expect(result.sidecar.containerEnv.POSTGRES_PASSWORD).toMatch(/^[\w-]{32}$/)
     expect(fs.existsSync(otherComputer)).toBe(false)
+  })
+})
+
+describe('对象存储网关边界', () => {
+  it('对象请求保持签名原文并关闭大文件缓冲和签名日志；SSR 路径原样转发', () => {
+    const config = generateApplicationProxyConfig('web', 3000, 'business-files', ['/portal', '/api/v1'])
+    expect(config).toContain('location ^~ /business-files/')
+    expect(config).toContain('proxy_pass http://storage:9000;')
+    expect(config).toContain('proxy_set_header Host $http_host;')
+    expect(config).toContain('access_log off;')
+    expect(config).toContain('error_log /dev/null;')
+    expect(config).toContain('limit_except GET PUT OPTIONS { deny all; }')
+    expect(config).toContain('client_max_body_size 0;')
+    expect(config).toContain('proxy_pass http://web:3000;')
+    expect(config).not.toContain('rewrite ')
+  })
+
+  it.each(['api', 'portal', 'health', '../private', 'files;return 200'])('提前拒绝桶名注入或与应用路由冲突：%s', (bucket) => {
+    expect(() => generateApplicationProxyConfig('web', 3000, bucket, ['/portal', '/api/v1'])).toThrow()
   })
 })
 

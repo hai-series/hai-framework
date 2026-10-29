@@ -15,6 +15,7 @@
   "storage_operationFailed": "Operation failed: {error}",
   "storage_unsupportedType": "Unsupported storage type: {type}",
   "storage_config_bucketRequired": "Bucket is required",
+  "storage_config_publicEndpointInvalid": "The presigned access endpoint must be an HTTP(S) origin without a path, credentials, query, or fragment.",
   "storage_config_regionRequired": "Region is required",
   "storage_config_accessKeyIdRequired": "Access Key ID is required",
   "storage_config_secretAccessKeyRequired": "Secret Access Key is required",

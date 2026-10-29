@@ -105,6 +105,18 @@ export const S3ConfigSchema = z.object({
   /** 自定义端点（用于 MinIO、RustFS、阿里云 OSS 等） */
   endpoint: z.string().url().optional(),
 
+  /** 浏览器预签名访问端点；仅 HTTP(S) 源地址，不含桶名、路径、凭据或查询。未配置时使用 endpoint。 */
+  publicEndpoint: z.string().url().refine((value) => {
+    try {
+      const url = new URL(value)
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
+        && url.pathname === '/' && !url.search && !url.hash
+    }
+    catch {
+      return false
+    }
+  }, storageM('storage_config_publicEndpointInvalid')).optional(),
+
   /** 强制使用路径风格 URL（某些 S3 兼容服务需要） */
   forcePathStyle: z.boolean().default(false),
 

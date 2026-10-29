@@ -30,6 +30,8 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.middlewareEnv - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
  * @param options.hasWebConfig - 是否挂载公开Nginx配置，包含前后端代理或独立Vite目录路由。
+ * @param options.proxyService - 挂载 Nginx 配置的服务；缺省为 web，SSR/API 的存储网关为 gateway。
+ * @param options.storageRouting - 自建 S3 非敏感连接/访问配置摘要，阻止增量配置与已装基线不一致。
  * @param options.containerPort - 应用容器的实际监听端口。
  * @returns tar 路径、手工执行说明及启动脚本名。
  * @example 模块内部上下文
@@ -57,6 +59,8 @@ export async function createDeploymentBundle(options: {
   middlewareEnv: string
   healthPaths: string[]
   hasWebConfig: boolean
+  proxyService?: 'web' | 'gateway'
+  storageRouting?: string
   containerPort: number
 }): Promise<{ bundlePath: string, instructions: string, startName: string }> {
   const { directory, artifactDir, artifact, projectName, environment, config, selected } = options
@@ -149,9 +153,11 @@ export async function createDeploymentBundle(options: {
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)
     if (options.hasWebConfig) {
       // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
-      put('proxy-entry.json', JSON.stringify({ services: { web: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
+      put('proxy-entry.json', JSON.stringify({ services: { [options.proxyService ?? 'web']: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
     }
-    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
+    put('proxy-service', `${options.hasWebConfig ? options.proxyService ?? 'web' : ''}\n`)
+    put('storage-routing', `${options.storageRouting ?? ''}\n`)
+    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig ? options.proxyService === 'gateway' ? 'gateway' : 'true' : 'false'}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
     put('health-port', `${config.expose.hostPort}\n`)
     put('web-base-path', `${artifact.webBasePath ?? ''}\n`)
     put('health-paths', `${options.healthPaths.join('\n')}\n`)

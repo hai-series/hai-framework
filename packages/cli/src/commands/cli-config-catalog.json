@@ -5672,6 +5672,14 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_STORAGE_PUBLICENDPOINT",
+    "module": "storage",
+    "path": "storage.publicEndpoint",
+    "description": "浏览器预签名访问端点；仅 HTTP(S) 源地址，不含桶名、路径、凭据或查询。未配置时使用 endpoint。",
+    "value": "https://files.example.com",
+    "constraint": "字符串；格式 uri"
+  },
+  {
     "name": "HAI_STORAGE_PUBLICURL",
     "module": "storage",
     "path": "storage.publicUrl",

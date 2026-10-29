@@ -58,6 +58,12 @@ pnpm run deploy --env prod --services web
 
 成功发布后需回退业务版本时，使用保留的旧完整制品和与其匹配的配置/私有环境备份，恢复配置后执行 `pnpm run deploy --env prod --artifact-dir .hai/build/docker/<previousBuildId>`。省略 --build 和 --services，以旧制品创建新的全量交付包和部署 ID，再经历锁、校验、健康验证。不要重跑已使用的旧包、手动覆盖 current 或只改镜像 tag。发布前验证数据库迁移向后兼容或准备匹配的数据备份；保留外部服务凭据与卷身份，未知状态先检查实际服务。此路径不是自动的数据恢复命令。
 
+## 自建对象存储直连
+
+S3 的内部 endpoint 与预签名 publicEndpoint 分开；后者无默认，填用户可访问的 HTTP(S) origin，不含桶名或网站目录。全栈 Web Nginx 及 SSR/API gateway 将实际桶路径原样代理至 storage，不经过 Serv，保留签名 Host/URI/query，关闭对象缓冲和签名日志。桶与网站/API 路径不能重叠；外层反向代理也须转发桶路径，不能把网站 base 加到签名 URL。跨源 CORS 在 S3 配置，私有桶保持签名授权；外部 S3 不生成本地路由，Local 不开放目录。
+
+自建保留 bucket/region/prefix/publicEndpoint/publicUrl/operationLog。增加 gateway 或改变这些访问配置需全量基线，增量摘要不一致在更新前拒绝；选中范围不改变完整拓扑规划。应用/Storage 增量刷新保留代理 DNS，恢复使用旧发布拓扑。验证真实 S3+Nginx 大文件、Range、PUT、匿名/篡改/过期拒绝，并核对外层日志和回滚；不能用只检查生成字符串代替网络验证。
+
 ## SDK
 
 deploy.init 后检查 HaiResult.success，deploy.deployApp 接收 artifactDir、bundleOnly、selectedServices、runtime 与 onProgress；finally 中 deploy.close。deploy.scan 和 deploy.credentials.* 不依赖 init。Vercel 只消费已有 .vercel/output，不执行源码构建，也不支持 Compose 离线/部分更新。

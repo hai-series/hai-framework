@@ -372,6 +372,7 @@ secretAccessKey: ''
 endpoint: \${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 forcePathStyle: false
 # prefix: ''
+# publicEndpoint: https://app.example.com # 私有预签名访问源；不含桶名或网站目录
 # publicUrl: https://cdn.example.com`
   return `# 存储配置；HAI_STORAGE 可整体替换连接配置。
 type: ${type}

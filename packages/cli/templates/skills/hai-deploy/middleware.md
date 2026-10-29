@@ -4,6 +4,8 @@
 
 ## 环境先行
 
+自建 S3 还要区分内部 endpoint 和浏览器 publicEndpoint；后者是 HTTP(S) origin，无默认、不含桶或网站目录。全栈 Web Nginx 或 SSR/API gateway 将桶路径直接转至 storage，存储端口与控制台不直接发布。外层入口保持 Host/URI/query 并转发桶路径，精确 CORS 在实际 S3 设置。增加网关或改变自建访问配置需全量基线，应用增量仅复用原配置；外部 S3 不生成本地路由，local 不公开目录。操作与验证见 [Storage skill](../hai-storage/SKILL.md)。
+
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
 资源身份和制品格式沿用[构建技能](../hai-build/SKILL.md)及[网站挂载目录](../hai-build/paths.md)：根目录格式4，非根目录格式5，两者都有primaryService/hasWeb；webBasePath仅格式5。旧工程同步镜像角色、Dockerfile、-serv包名与引用后重建，不手改清单。旧部署先核对项目名、卷和受管凭据，再建立完整基线；工具不跨项目迁移数据，改target目录不能完成迁移。

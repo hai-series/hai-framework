@@ -148,7 +148,7 @@ Cancelling a checksum stops waiting for the next chunk and requests closure of t
 
 ### Configuration
 
-- **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `createBucket / endpoint / forcePathStyle / prefix / publicUrl`.
+- **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl`.
 - **Local**: requires `root`; optional `directoryMode / fileMode`.
 
 MinIO and RustFS share the S3 provider with `type: 's3'`; no separate storage type is needed. For self-hosted instances, set the S3 API endpoint (usually port 9000) and enable path-style access.
@@ -172,6 +172,16 @@ if (!initResult.success) {
   throw new Error(initResult.error.message)
 }
 ```
+
+#### Internal connections and browser access
+
+`endpoint` handles server-side CRUD, bucket creation and health checks. Optional `publicEndpoint` determines the signing endpoint for `presign.getUrl/putUrl`; omission preserves endpoint-based signing. Supply the browser-accessible HTTP(S) origin, such as `https://app.example.com`, without a bucket, website path, credentials, query or fragment. `publicUrl` only constructs public-resource URLs and does not authorize private objects.
+
+Self-hosted Compose uses `http://storage:9000` internally. Configure `publicEndpoint` to generate browser URLs such as `https://app.example.com/hai/private/report.zip?...`. Nginx forwards the bucket URI unchanged to Storage; large downloads and Range bypass Serv. Split apps reuse Web Nginx; SvelteKit SSR and standalone APIs receive a gateway. Bucket/website/API path conflicts fail packaging. Adding the gateway or changing managed storage access settings requires a new full baseline; application partial updates and rollback retain the installed configuration.
+
+External AWS S3, R2 and existing gateways use their own accessible endpoints; kept/external storage does not receive a local sidecar route. HTTPS ingress must preserve the signed Host, original URI and query. Cross-origin browsers require precise CORS at the actual S3 service. The gateway does not replace bucket authorization or CORS. Treat signed URLs as temporary credentials, limit expiry and exclude them from logs. A GET signature is not a HEAD signature. Local storage does not support presigning or expose private directories through Nginx.
+
+For empty self-hosted bucket/region settings, deployment injects hai/us-east-1; these are not Storage Schema defaults. The object proxy applies CSP sandbox, nosniff, no-referrer and private,no-store to isolate untrusted attachments, including same-origin HTML. Use it for file delivery, not executable website scripts. Configure equivalent isolation at external S3/CDN endpoints.
 
 #### Operation logging
 

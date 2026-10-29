@@ -116,6 +116,12 @@ SSH settings are saved in `.env.<environment>.local`. `--bundle-only` offers to 
 
 Runtime lockfile dependencies and configuration determine middleware. Choose defaults, custom connections or keep settings. With complete target-environment settings, `--yes` preserves values without asking again or provisioning cloud resources again; interactive mode still lets you select the scope. --skip-middleware skips configuration/provisioning. SQLite, memory cache and local storage need no external images. Complete bundles automatically include self-hosted middleware images. External services still require reachable destinations; cloud provisioning is not an offline operation.
 
+#### Direct private object storage access
+
+Self-hosted S3 uses an internal endpoint; configure `_storage.yml` publicEndpoint with the browser-accessible origin, such as `https://app.example.com`, without a bucket or website path. Fullstack Web Nginx and the generated SSR/API gateway forward `/<bucket>/` directly to storage:9000, preserve signed Host/URI/query and disable object buffering/signature logs. Storage ports and consoles remain private; S3 validates authorization. Configure cross-origin CORS at S3 and preserve the bucket route at external ingress, including sites hosted below a prefix.
+
+Managed deployments retain bucket/region/prefix/publicEndpoint/publicUrl/operationLog while replacing internal connections and managed credentials. Adding the gateway or changing access settings requires a full baseline; partial preflight rejects mismatching configuration fingerprints. App/storage partial updates refresh retained proxy DNS, and recovery restores the previous topology. External/kept storage gets no local sidecar route; Local does not expose private directories. See the [storage handbook](../../docs/usage/configuration/data.md).
+
 #### Deployment options
 
 --env/--env-dir select configuration. --build builds selected application images before packaging. --services selects Compose services; --artifact-dir selects existing artifacts. --bundle-only creates a tar and platform scripts without SSH. --runtime selects the local build/export engine; --output overrides the archive path, resolved from the command's working directory, and adds the application version suffix. --yes uses valid settings without interaction and reports missing required values.
@@ -241,7 +247,7 @@ The server persists managed middleware passwords in `<remoteDir>/managed-secrets
 
 Use `--plan --inspect-remote` (SDK inspectRemote:true) to read current and the successful release directory over SSH. It reports verified/missing/unavailable and the actual recovery release ID without target writes.
 
-Resources use the execution sidecar planner: `containers` contains explicit names only; Compose-named LDAP/SMTP services appear in `composeManagedServices`. `logicalVolumes` contains Compose keys, with actual engine names scoped by the Compose project. Internal keep connections, skipped services, partial updates and cloud provisioning follow execution rules without exposing credential values.
+Resources use the complete execution topology. `containers` lists selected explicit container names; Compose-named LDAP/SMTP services appear in `composeManagedServices`. The SSR/API storage gateway appears in the actual selected or retained scope. `logicalVolumes` declares the complete Compose topology, including retained services and data volumes still mounted by the app; it does not mean those volumes will be created or replaced. Engine names are scoped by the Compose project. Unselected middleware has action keep, and cloud provisioning follows the actual selection without exposing credentials.
 
 ## Capacity consistency and legacy credential import
 

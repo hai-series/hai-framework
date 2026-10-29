@@ -148,7 +148,7 @@ if (!result.success) {
 
 ### 配置
 
-- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `createBucket / endpoint / forcePathStyle / prefix / publicUrl`
+- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
 
 MinIO、RustFS 共用 S3 Provider，使用 `type: 's3'`，无需单独的存储类型。连接自建实例时指定 S3 API 端点（通常为 9000 端口）并启用路径风格。
@@ -172,6 +172,16 @@ if (!initResult.success) {
   throw new Error(initResult.error.message)
 }
 ```
+
+#### 内部连接与浏览器直连
+
+`endpoint` 用于服务端读写、建桶和连接检查；`publicEndpoint` 用于 `presign.getUrl/putUrl` 的签名地址。后者无默认值，省略时继续使用 endpoint。填写浏览器实际能访问的 HTTP(S) 源地址，例如 `https://app.example.com`，不能包含桶名、网站挂载目录、账号密码、查询或片段。`publicUrl` 是公开资源的 URL 拼接配置，不能替代私有预签名地址，也不会为私有对象授权。
+
+自建 Compose 的内部地址为 `http://storage:9000`。配置 `publicEndpoint` 后，浏览器使用形如 `https://app.example.com/hai/private/report.zip?...` 的签名 URL，Nginx 将桶路径原样转发至 Storage，大文件和 Range 不经过 Serv。前后端分离复用 Web Nginx；SvelteKit SSR 和独立 API 使用生成的 gateway。桶路径与网站/API 路径重叠会在打包时拒绝。增加网关、改变桶或对外配置须建立新的全量部署基线；应用增量与回滚保持已安装配置。
+
+外部 AWS S3、R2 或已有独立网关使用自身可访问端点；保持/外部存储不生成到本地 sidecar 的路由。外部 HTTPS 入口必须保留签名 Host、原始路径和查询。跨源浏览器访问须在实际 S3 服务配置精确 CORS；当前网关不代替桶授权或 CORS 策略。签名 URL 是短期访问凭据，应控制有效期并避免写入日志；GET 签名不能当作 HEAD 签名使用。Local 不支持签名，不会把私有文件目录开放给 Nginx。
+
+默认自建桶/区域为空时部署注入 hai/us-east-1；Storage Schema 没有这两个默认值。对象代理使用 CSP sandbox、nosniff、no-referrer 及 private,no-store 隔离不可信附件，避免同源 HTML 获得应用权限。该路由用于文件交付，不托管可执行网站脚本；外部 S3/CDN 由部署者设置等价策略。
 
 #### 操作日志
 

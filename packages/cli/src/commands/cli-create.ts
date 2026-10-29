@@ -1324,6 +1324,8 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
 后端serv、浏览器站点web（静态或SSR）、手机原生包app、桌面原生包desktop。--images/--services使用serv/web，--target app/desktop用于原生交付。镜像和容器身份取工程根package.json.name，去scope、转小写并归一化字符；缺失或无效时报错，不使用目录名。根目录制品格式4，非根目录格式5及webBasePath，两者都记录primaryService/hasWeb；只有serv + web生成同源API代理。旧工程先同步build.images、Dockerfile及API workspace的-serv包名与引用，安装依赖并重建完整制品；旧部署先备份、核对项目名、卷与受管凭据，再建立完整基线。完整部署按Compose规则清理同项目旧服务，不自动跨项目迁移数据。
 
 网站地址含/yyy/等目录时，在构建进程显式设置PUBLIC_BASE_PATH=/yyy，默认空字符串；不从私有dotenv读取。SvelteKit编译时固定base，Vite默认相对资源与hash路由；API地址独立配置。Docker网站制品由SDK处理代理与健康路径，使用匹配CLI/Deploy；所有部分构建保持同一目录，即使只构建serv。目录变化使用全量部署，操作和验证见[网站挂载目录](.agents/skills/hai-build/paths.md)。
+
+自建S3的内部endpoint与浏览器publicEndpoint分开。下载配置publicEndpoint为真实HTTP(S)源地址，不含桶名或网站目录；Web Nginx或SSR/API gateway把桶路径直接转发到storage，大文件不经过Serv。外层入口也须原样转发桶路径；外部S3/CORS按实际服务配置，Local不公开私有目录。增加网关、改变桶或对外配置时全量部署，应用增量与回滚保持原配置；详见[存储使用规范](.agents/skills/hai-storage/SKILL.md)。
 每个镜像对应 images/ 中一个 Dockerfile，根 hai.json 的 build 分区指定文件，deploy 分区保存整个项目的部署配置。
 下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。

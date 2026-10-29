@@ -105,6 +105,7 @@ describe('storageConfigSchema', () => {
       const full = {
         ...validS3,
         endpoint: 'http://localhost:9000',
+        publicEndpoint: 'https://files.example.com',
         forcePathStyle: true,
         prefix: 'uploads',
         publicUrl: 'https://cdn.example.com',
@@ -112,6 +113,7 @@ describe('storageConfigSchema', () => {
       }
       const result = S3ConfigSchema.parse(full)
       expect(result.endpoint).toBe('http://localhost:9000')
+      expect(result.publicEndpoint).toBe('https://files.example.com')
       expect(result.forcePathStyle).toBe(true)
       expect(result.prefix).toBe('uploads')
       expect(result.publicUrl).toBe('https://cdn.example.com')
@@ -127,6 +129,10 @@ describe('storageConfigSchema', () => {
 
     it('非法 publicUrl 应校验失败', () => {
       expect(() => S3ConfigSchema.parse({ ...validS3, publicUrl: 'not-a-url' })).toThrow()
+    })
+
+    it.each(['not-a-url', '', 'ftp://files.example.com', 'https://user:pass@files.example.com', 'https://files.example.com/storage', 'https://files.example.com?token=secret', 'https://files.example.com/#secret'])('拒绝不能直接用于 S3 签名的外部地址：%s', (publicEndpoint) => {
+      expect(S3ConfigSchema.safeParse({ ...validS3, publicEndpoint }).success).toBe(false)
     })
   })
 

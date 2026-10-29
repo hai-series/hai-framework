@@ -26,6 +26,7 @@ const IMAGES = {
   chroma: 'docker.io/chromadb/chroma:1.5.5',
   ldap: 'docker.io/osixia/openldap:1.5.0',
   smtp: 'docker.io/axllent/mailpit:v1.27.4',
+  nginx: 'docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine',
 } as const
 
 // 旧版本曾把镜像原生变量保存到应用环境；读取旧配置时也不再传给业务容器。
@@ -188,7 +189,7 @@ function planRedisCache(plan: SidecarPlan, projectName: string, net: string[]): 
 }
 
 /** S3 协议与服务实现分离；RustFS/MinIO 使用相同应用契约及幂等 bucket 初始化。 */
-function planS3Storage(plan: SidecarPlan, projectName: string, password: string, net: string[], engine: 'rustfs' | 'minio'): void {
+function planS3Storage(plan: SidecarPlan, projectName: string, password: string, net: string[], engine: 'rustfs' | 'minio', configured: Record<string, unknown> = {}): void {
   plan.services.push('storage')
   plan.dependsOn.push('storage')
   plan.composeServices.storage = {
@@ -211,8 +212,10 @@ function planS3Storage(plan: SidecarPlan, projectName: string, password: string,
   plan.env.HAI_STORAGE = JSON.stringify({
     type: 's3',
     endpoint: 'http://storage:9000',
-    bucket: 'hai',
-    region: 'us-east-1',
+    bucket: configured.bucket || 'hai',
+    region: configured.region || 'us-east-1',
+    // 自建只替换连接和托管凭据，不能丢失对象前缀、外部签名地址或操作日志策略。
+    ...Object.fromEntries(['prefix', 'publicEndpoint', 'publicUrl', 'operationLog'].filter(name => configured[name] !== undefined).map(name => [name, configured[name]])),
     accessKeyId: 'hai-storage',
     secretAccessKey: password,
     forcePathStyle: true,
@@ -290,8 +293,7 @@ export function resolveSidecarOptions(scan: ScanResult, options?: DeployAppOptio
   // 保持配置不变仍需交付自建服务镜像；已保存的容器服务地址可明确区分外部连接。
   const serviceModes = { ...options?.serviceModes }
   for (const requirement of scan.middlewares ?? []) {
-    if (options?.selectedServices && !options.selectedServices.includes(requirement.service))
-      continue
+    // 规划描述完整拓扑；selectedServices 只限制后续归档和更新，不能让未选自建依赖消失。
     const mode = serviceModes[requirement.envPrefix] ?? serviceModes[requirement.service]
     if (mode !== 'keep')
       continue
@@ -377,7 +379,7 @@ export function planSidecars(
     }
     else if (service === 'storage' && !provisionEnv.HAI_STORAGE) {
       if ((backends.storage ?? 's3') === 's3')
-        planS3Storage(plan, projectName, secrets.storagePassword, net, s3Engine)
+        planS3Storage(plan, projectName, secrets.storagePassword, net, s3Engine, scan.middlewares?.find(item => item.service === 'storage')?.config)
       else
         addAppDataVolume(plan, projectName)
     }
@@ -481,6 +483,7 @@ export function buildRuntimeEnv(
  * @param options.web.imageRef - Web 镜像引用
  * @param options.web.containerPort - Web 容器监听端口
  * @param options.mountWebConfig - 独立Vite站点是否挂载公开的目录路由配置，默认不挂载。
+ * @param options.gateway - SSR/API 自建对象存储的公开 Nginx 入口；只在没有现成 Web 代理时启用。
  * @returns compose YAML 字符串
  * @example 模块内部上下文
  * ```ts
@@ -500,6 +503,7 @@ export function generateComposeFile(options: {
   /** Web 公开入口；私有运行环境仅属于 API 服务。 */
   web?: { imageRef: string, containerPort: number }
   mountWebConfig?: boolean
+  gateway?: boolean
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
   const primaryService = options.primaryService ?? 'serv'
@@ -535,7 +539,20 @@ export function generateComposeFile(options: {
       environment: { PUBLIC_API_BASE: '' },
       healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', `http://127.0.0.1:${options.web.containerPort}/_hai/web-health`], interval: '30s', timeout: '5s', retries: 3 },
       volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
-      depends_on: ['serv'],
+      depends_on: sidecar.services.includes('storage') ? ['serv', 'storage'] : ['serv'],
+      networks: ['hai-app'],
+    }
+  }
+  if (options.gateway) {
+    delete app.ports
+    services.gateway = {
+      image: IMAGES.nginx,
+      container_name: `hai-${projectName}-gateway`,
+      restart: 'unless-stopped',
+      ports: [`${hostPort}:8080`],
+      healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/_hai/gateway-health'], interval: '30s', timeout: '5s', retries: 3 },
+      volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
+      depends_on: [primaryService, 'storage'],
       networks: ['hai-app'],
     }
   }
@@ -564,13 +581,14 @@ export function generateComposeFile(options: {
  * @param options.webPort - Web 容器监听端口，默认 8080。
  * @param options.maxPlaintextBytes - 业务明文 UTF-8 字节上限。
  * @param options.webBasePath - 无末尾斜杠的Web挂载目录，缺省或空字符串为域名根目录。
+ * @param options.storageBucket - 自建私有 S3 桶，配置后对象请求由 Nginx 直达 storage。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string } = {}): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, storageBucket?: string } = {}): string {
   const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
@@ -580,12 +598,13 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     throw new Error('Invalid web proxy target')
   }
   const webLocation = renderWebLocation(webBasePath)
+  const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, webBasePath]) : ''
   return `server {
   listen ${webPort};
   server_name _;
   root /usr/share/nginx/html;
   large_client_header_buffers 4 32k;
-${webLocation}  location = ${webBasePath}/runtime-config.js {
+${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
     add_header Cache-Control "no-store";
     default_type application/javascript;
     return 200 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:globalThis.location.origin+"${apiPrefix}"};';
@@ -604,6 +623,93 @@ ${webLocation}  location = ${webBasePath}/runtime-config.js {
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_buffer_size 32k;
+    proxy_buffers 8 32k;
+  }
+}
+`
+}
+
+/**
+ * 生成私有对象直连路由；不重写签名所绑定的 Host、原始 URI 和查询，不把大文件送进应用。
+ * @param bucket - 自建桶名；仅接受可安全用于 S3 路径与 Nginx location 的 DNS 桶名。
+ * @param reservedPaths - 应用目录和 API 前缀，桶路径不能遮蔽其中任一路由。
+ * @returns 不含凭据、不记录签名查询的 location 片段。
+ * @example 模块内部上下文
+ * ```ts
+ * const route = renderStorageLocation('uploads', ['/api/v1', '/portal'])
+ * void route
+ * ```
+ */
+function renderStorageLocation(bucket: string, reservedPaths: string[]): string {
+  const path = `/${bucket}`
+  if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) || bucket.includes('..')
+    || ['health', '_hai'].includes(bucket)
+    || reservedPaths.some(reserved => reserved && (reserved === path || reserved.startsWith(`${path}/`) || path.startsWith(`${reserved}/`)))) {
+    throw new Error('Storage bucket conflicts with application routes or is not a valid DNS bucket name')
+  }
+  return `  location ^~ ${path}/ {
+    # 预签名 URL 属于短期访问凭据，不写入代理访问或错误日志。
+    access_log off;
+    error_log /dev/null;
+    # 对象可能含不可信 HTML；同源下载也不能取得应用脚本权限或泄露签名来源。
+    add_header Content-Security-Policy "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'" always;
+    proxy_hide_header X-Content-Type-Options;
+    add_header X-Content-Type-Options nosniff always;
+    proxy_hide_header Referrer-Policy;
+    add_header Referrer-Policy no-referrer always;
+    proxy_hide_header Cache-Control;
+    add_header Cache-Control "private, no-store" always;
+    limit_except GET PUT OPTIONS { deny all; }
+    client_max_body_size 0;
+    proxy_pass http://storage:9000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header Connection "";
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+  }
+`
+}
+
+/**
+ * 为独立 API 或 SvelteKit SSR 生成对象存储网关，应用路径（含部署目录）原样转发。
+ * @param primaryService - 实际应用服务角色。
+ * @param port - 应用容器内监听端口。
+ * @param bucket - 自建 S3 私有桶名。
+ * @param reservedPaths - 不得与桶路由重叠的应用/API 路径。
+ * @param maxPlaintextBytes - 应用 transport 明文预算；仅派生应用路由请求上限。
+ * @returns 监听 8080 的公开 Nginx 配置，不含应用或对象存储凭据。
+ * @example 模块内部上下文
+ * ```ts
+ * const config = generateApplicationProxyConfig('web', 3000, 'uploads', ['/portal'])
+ * void config
+ * ```
+ */
+export function generateApplicationProxyConfig(primaryService: 'serv' | 'web', port: number, bucket: string, reservedPaths: string[], maxPlaintextBytes?: number): string {
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('Invalid application proxy target')
+  const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
+  return `server {
+  listen 8080;
+  server_name _;
+  large_client_header_buffers 4 32k;
+${renderStorageLocation(bucket, reservedPaths)}  location = /_hai/gateway-health {
+    access_log off;
+    return 200 'ok';
+  }
+  location / {
+    client_max_body_size ${bodyLimits.encryptedPayloadBytes};
+    proxy_pass http://${primaryService}:${port};
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;

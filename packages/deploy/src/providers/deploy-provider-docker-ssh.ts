@@ -14,7 +14,7 @@ import type {
 } from '../container/deploy-container-types.js'
 import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
@@ -25,6 +25,7 @@ import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
 import {
   buildRuntimeEnv,
+  generateApplicationProxyConfig,
   generateComposeFile,
   generateStaticWebConfig,
   generateWebProxyConfig,
@@ -159,6 +160,29 @@ export function createDockerSshProvider(
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    const managedStorage = sidecar.services.includes('storage') ? JSON.parse(sidecar.env.HAI_STORAGE) as { bucket: string, secretAccessKey: string, publicEndpoint?: unknown } : undefined
+    if (managedStorage?.publicEndpoint !== undefined) {
+      // 与 Storage 的公开端点约束一致，在归档/上传前报告错误，不输出配置中的 URL 或秘密。
+      try {
+        if (typeof managedStorage.publicEndpoint !== 'string')
+          throw new Error('Invalid public endpoint type')
+        const endpoint = new URL(managedStorage.publicEndpoint)
+        if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash)
+          throw new Error('Invalid public endpoint origin')
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storagePublicEndpointInvalid'))
+      }
+    }
+    // 应用增量继承已安装连接配置；对外地址或桶等配置改变须全量切换，不能静默沿用旧值。
+    const storageRouting = managedStorage ? createHash('sha256').update(JSON.stringify({ ...managedStorage, secretAccessKey: undefined })).digest('hex') : ''
+    // SSR/API 没有现成 Web Nginx 时追加网关；静态客户端不能持有存储服务端凭据。
+    const gateway = !!managedStorage && !hasWebProxy
+    if (gateway && primaryService === 'web' && !scan.isSvelteKit)
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
+    const proxyService = gateway ? 'gateway' : 'web'
+    if (gateway)
+      healthPaths.push('/_hai/gateway-health')
     const updatesApp = options?.selectedServices ? options.selectedServices.includes(primaryService) : !!app
     const serverPath = join(appDir, 'config', '_serv.yml')
     const server = existsSync(serverPath) || hasWebProxy ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
@@ -177,6 +201,7 @@ export function createDockerSshProvider(
       }
     }
     let protectedTransport = !!server.data.transport
+    let applicationPlaintextBytes: number | undefined
     if (scan.isSvelteKit) {
       const kitPath = join(appDir, 'config', '_kit.yml')
       const kit = existsSync(kitPath) ? loadDeploymentConfig('kit', kitPath, env) : ok({})
@@ -191,6 +216,7 @@ export function createDockerSshProvider(
           const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, routes).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
           // adapter-node 默认容量比 transport 小；正式部署必须使用同一派生密文预算。
           env.BODY_SIZE_LIMIT = String(limits.encryptedPayloadBytes)
+          applicationPlaintextBytes = limits.plaintextBytes
         }
         catch (error) {
           return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM('deploy_transportBodyLimitInvalid'))
@@ -214,13 +240,26 @@ export function createDockerSshProvider(
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
         const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
-        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath })
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, storageBucket: managedStorage?.bucket })
       }
       catch (error) {
-        return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM('deploy_transportBodyLimitInvalid'))
+        return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
       env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && config.ssh ? url : cors?.origin ?? '*' } })
+    }
+    else if (gateway && managedStorage) {
+      try {
+        const http = server.data.http as { apiPrefix?: string } | undefined
+        if (primaryService === 'serv') {
+          const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
+          applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto' ? undefined : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
+        }
+        webProxy = generateApplicationProxyConfig(primaryService, containerPort, managedStorage.bucket, [webBasePath, http?.apiPrefix ?? '/api/v1'], applicationPlaintextBytes)
+      }
+      catch {
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
+      }
     }
     else if (standaloneWebConfig) {
       if (['/health', '/_hai/web-health'].includes(webBasePath))
@@ -263,12 +302,15 @@ export function createDockerSshProvider(
       sidecar,
       web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
       mountWebConfig: standaloneWebConfig,
+      gateway,
     })
     const composePath = join(artifactDir, composeName)
     writeFileSync(composePath, composeContent)
     if (webProxy)
       writeFileSync(join(artifactDir, 'web.conf'), webProxy)
     const selected = options?.selectedServices ? [...options.selectedServices] : artifact.partial ? images.map(image => image.name) : [...images.map(image => image.name), ...Object.keys(sidecar.composeServices)]
+    if (gateway && !partial)
+      selected.push('gateway')
     if (!selected.length || selected.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selected).size !== selected.length)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: selected.join(', ') } }))
     for (const name of selected) {
@@ -288,6 +330,8 @@ export function createDockerSshProvider(
       selected,
       partial,
       hasWebConfig: !!webProxy,
+      proxyService,
+      storageRouting,
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env),
       healthPaths,

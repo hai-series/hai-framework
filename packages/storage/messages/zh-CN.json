@@ -15,6 +15,7 @@
   "storage_operationFailed": "操作失败: {error}",
   "storage_unsupportedType": "不支持的存储类型：{type}",
   "storage_config_bucketRequired": "存储桶不能为空",
+  "storage_config_publicEndpointInvalid": "预签名访问地址必须是 HTTP(S) 源地址，不能包含路径、凭据、查询参数或片段。",
   "storage_config_regionRequired": "区域不能为空",
   "storage_config_accessKeyIdRequired": "Access Key ID 不能为空",
   "storage_config_secretAccessKeyRequired": "Secret Access Key 不能为空",
