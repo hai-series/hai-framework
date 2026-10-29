@@ -85,7 +85,7 @@ export const RequestAccessPolicySchema = z.strictObject({
  * @example
  * ```ts
  * import { RequestAccessConfigSchema } from '@h-ai/core'
- * const config = RequestAccessConfigSchema.parse({ file: './config/request-access.yml' })
+ * const config = RequestAccessConfigSchema.parse({ file: './config/security/request-access.yml' })
  * ```
  */
 export const RequestAccessConfigSchema = z.union([

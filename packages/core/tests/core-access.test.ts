@@ -122,6 +122,7 @@ it('加密模式按完整路径和方法选择，不改变 IP 条件或未配置
   expect(check.encryption('/api/v1/partner', 'HEAD')).toBeUndefined()
   expect(check.encryption('/health/deep', 'GET')).toBeUndefined()
   expect(check.encryption('/health/', 'GET')).toBe('required')
+  expect(check.encryption('/health', 'PROPFIND')).toBe('required')
   expect(check.encryption('/api%2fv1/partner', 'POST')).toBeUndefined()
   expect(check('/api/v1/partner/sync', 'POST', '198.51.100.10')).toMatchObject({ allowed: false, reason: 'address' })
   expect(core.access.createRequestCheck(false).requiresEncryption).toBe(false)

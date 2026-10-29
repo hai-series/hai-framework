@@ -585,7 +585,7 @@ const decision = check('/api/v1/external/sync', 'POST', '192.0.2.10')
 const mode = check.encryption('/api/v1/external/sync', 'POST') // disabled
 ```
 
-生成時に設定を検証・コンパイルします。`loadPolicy({ file: './config/request-access.yml' })` は最大 1 MiB の YAML を起動時に一度読み、不正な設定では例外によりホストの起動を停止します。全体条件と一致するすべてのルールを満たす必要があり、拒否 IP が優先します。空の IP・時間リストは制限なし、既定のタイムゾーンは UTC です。パスは配備プレフィックスを含む実際の URL pathname で、完全一致と末尾 `/**` に対応します。GET に HEAD は含まれません。
+生成時に設定を検証・コンパイルします。`loadPolicy({ file: './config/security/request-access.yml' })` は最大 1 MiB の YAML を起動時に一度読み、不正な設定では例外によりホストの起動を停止します。全体条件と一致するすべてのルールを満たす必要があり、拒否 IP が優先します。空の IP・時間リストは制限なし、既定のタイムゾーンは UTC です。パスは配備プレフィックスを含む実際の URL pathname で、完全一致と末尾 `/**` に対応します。GET に HEAD は含まれません。
 
 接続元の解決は `core.access.createClientIpResolver()` を使用します。既定の `auto` は通常のホストで転送ヘッダーを無視し、管理対象 Compose の非公開バックエンド構成だけでコンテナのネットワークを採用します。`[]` は信頼を無効化し、独自の入口では実際の代理 IP/CIDR を指定します。任意のヘッダーを socket の接続元として渡してはいけません。要求中にファイル読取、CIDR 解析、全パスルールの走査は行いません。同じ分の時刻結果を再利用し、分境界で再判定します。`core.access` は Node のみです。設定 Schema は `core-config`、公開型は `core-types`、関数呼出は `core-main` に登録した `core.access` に集約します。
 

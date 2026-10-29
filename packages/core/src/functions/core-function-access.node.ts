@@ -305,7 +305,7 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
   const globalCheck = policy.global ? compile(policy.global) : () => allowed
   const exact = new Map<string, CompiledRule[]>()
   const prefixes: PathNode = { children: new Map(), rules: [] }
-  const allMethods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'CONNECT', 'TRACE']
+  const allMethods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'CONNECT', 'TRACE', '*']
   let requiresEncryption = false
   let hasEncryption = false
   for (const rule of policy.rules) {
@@ -407,14 +407,14 @@ function createRequestCheck(input: RequestAccessConfigInput = false): RequestAcc
     if (!path)
       return undefined
     let node: PathNode | undefined = prefixes
-    let mode = node.encryption?.get(method)
+    let mode = node.encryption?.get(method) ?? node.encryption?.get('*')
     for (const segment of path.split('/').filter(Boolean)) {
       node = node.children.get(segment)
       if (!node)
         return mode
-      mode ??= node.encryption?.get(method)
+      mode ??= node.encryption?.get(method) ?? node.encryption?.get('*')
     }
-    return mode ?? node?.exactEncryption?.get(method)
+    return mode ?? node?.exactEncryption?.get(method) ?? node?.exactEncryption?.get('*')
   }
   return Object.assign(check, { encryption: hasEncryption ? encryption : () => undefined, requiresEncryption })
 }

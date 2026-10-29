@@ -585,7 +585,7 @@ const decision = check('/api/v1/external/sync', 'POST', '192.0.2.10')
 const mode = check.encryption('/api/v1/external/sync', 'POST') // disabled
 ```
 
-`createRequestCheck` 在创建时验证并编译规则；`loadPolicy({ file: './config/request-access.yml' })` 只在启动时读取独立 YAML，最大 1 MiB，错误配置抛出异常并阻止宿主启动。全局条件与所有命中规则取交集，拒绝地址优先；默认空地址、时间列表不限制对应维度，时区为 UTC。路径是实际 URL pathname，包含部署前缀；支持精确路径和末尾 `/**`，GET 不隐含 HEAD。
+`createRequestCheck` 在创建时验证并编译规则；`loadPolicy({ file: './config/security/request-access.yml' })` 只在启动时读取独立 YAML，最大 1 MiB，错误配置抛出异常并阻止宿主启动。全局条件与所有命中规则取交集，拒绝地址优先；默认空地址、时间列表不限制对应维度，时区为 UTC。路径是实际 URL pathname，包含部署前缀；支持精确路径和末尾 `/**`，GET 不隐含 HEAD。
 
 可信地址通过 `core.access.createClientIpResolver()` 解析。默认 `auto` 在普通宿主忽略转发头，仅受管 Compose 的私有代理拓扑采用容器网段；`[]` 显式关闭代理信任，自管入口填入真实代理 IP/CIDR。不得把任意请求头当作可信 socket 地址。检查器不在请求中读文件、解析 CIDR 或扫描全部路径规则；同一时区的分钟结果复用，跨分钟仍重新判定。`core.access` 仅在 Node 入口存在，浏览器不提供伪实现。公开配置 Schema 由 `core-config` 入口转出，类型集中于 `core-types`，函数通过 `core-main` 注册的 `core.access` 调用。
 
