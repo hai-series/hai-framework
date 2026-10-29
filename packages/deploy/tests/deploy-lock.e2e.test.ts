@@ -293,7 +293,7 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
   }, 60_000)
 
   it('独立请求策略的真实 Linux 全量、增量、篡改拦截和失败恢复保留对应快照', async () => {
-    mkdirSync(join(root, 'config'))
+    mkdirSync(join(root, 'config/security'), { recursive: true })
     writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  access: {file: ./config/security/request-access.yml}\n')
     const policy = join(root, 'config/security/request-access.yml')
     const writePolicy = (ip: string) => writeFileSync(policy, `global:\n  allowIps: [${ip}]\n`)
