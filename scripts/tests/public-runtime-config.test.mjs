@@ -7,10 +7,17 @@ it.each(['configureServer', 'configurePreviewServer'])('%s 只输出公开字段
   const input = {
     apiBase: 'https://api.example.test/api/v1',
     privateKey: 'must-not-be-public',
-    core: { name: "品牌 'quotes'\n<script>文本</script>", version: '1.0.0', env: 'test', defaultLocale: 'zh-CN', database: 'private-database' },
+    core: { name: '品牌 \'quotes\'\n<script>文本</script>', version: '1.0.0', env: 'test', defaultLocale: 'zh-CN', database: 'private-database' },
   }
   let middleware
-  publicRuntimeConfig(input)[hook]({ middlewares: { use: (_route, handler) => { middleware = handler } } })
+  publicRuntimeConfig(input)[hook]({
+    config: { base: '/' },
+    middlewares: {
+      use: (_route, handler) => {
+        middleware = handler
+      },
+    },
+  })
   const server = createServer((request, response) => middleware(request, response))
   try {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))

@@ -45,10 +45,12 @@ export function publicRuntimeConfig(config: PublicRuntimeConfig): Plugin {
   return {
     name: 'hai-public-runtime-config',
     configureServer(server) {
-      server.middlewares.use('/runtime-config.js', respond)
+      const base = server.config.base.startsWith('/') ? server.config.base : '/'
+      server.middlewares.use(`${base}runtime-config.js`, respond)
     },
     configurePreviewServer(server) {
-      server.middlewares.use('/runtime-config.js', respond)
+      const base = server.config.base.startsWith('/') ? server.config.base : '/'
+      server.middlewares.use(`${base}runtime-config.js`, respond)
     },
   }
 }
