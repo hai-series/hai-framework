@@ -148,7 +148,9 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       const require = createRequire(import.meta.url)
       const builder = createRequire(require.resolve('tsup')).resolve('esbuild/bin/esbuild')
       const flow = path.join(root, 'transport-flow.mjs')
-      execFileSync(process.execPath, [builder, path.resolve('tests/fixtures/transport-capacity-node.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', `--outfile=${flow}`, '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);'], { windowsHide: true, timeout: 15_000 })
+      const buildArgs = [path.resolve('tests/fixtures/transport-capacity-node.ts'), '--bundle', '--platform=node', '--format=esm', '--target=node22', `--outfile=${flow}`, '--banner:js=import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);']
+      // Windows 使用Node启动JS入口；POSIX入口可能已被esbuild优化为原生程序，也可由shebang直接启动。
+      execFileSync(process.platform === 'win32' ? process.execPath : builder, process.platform === 'win32' ? [builder, ...buildArgs] : buildArgs, { windowsHide: true, timeout: 15_000 })
       const identity = execFileSync(runtime, ['create', '--network', `container:${fixture.containerId}`, '-e', 'NODE_ENV=test', '-e', `HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES=${maxPlaintextBytes}`, '--entrypoint', 'node', image, '/tmp/transport-flow.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
       if (!/^[a-f0-9]{64}$/.test(identity))
         throw new Error('Expected an owned Node container identity')
