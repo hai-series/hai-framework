@@ -149,7 +149,16 @@ jobs:
     with:
       stage: contracts
       fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).contracts }}
-      command: pnpm check:env && pnpm check:usage-examples && pnpm check:api && pnpm check:jsdoc && pnpm test:api
+      command: |
+        status=0
+        for script in check:env check:usage-examples check:api check:jsdoc test:api; do
+          if pnpm "$script"; then
+            :
+          else
+            status=1
+          fi
+        done
+        exit "$status"
       baseline: ${{ needs.plan.outputs.baseline }}
       base_sha: ${{ needs.plan.outputs.base_sha }}
       build_artifact: ${{ needs.build.outputs.artifact }}
