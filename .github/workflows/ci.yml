@@ -4,27 +4,30 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run every verification stage without reusing successful results
+        default: true
+        type: boolean
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  quality:
-    name: Typecheck, Lint, Build, Test and E2E
+  plan:
+    name: Plan validation and release
     runs-on: ubuntu-latest
-    # 全仓单元、十二类脚手架、SDK及真实SSH部署串行验收；预算覆盖实测总耗时与构建。
-    timeout-minutes: 150
-    env:
-      CI: true
-      # Testcontainers 的 Ryuk 清理容器在 ephemeral CI runner 上偶发 "Failed to connect to Reaper"，
-      # 导致 vecdb/cache 容器化测试随机失败。测试已在 release() 显式 stop 容器，runner 用完即销毁，
-      # Ryuk 冗余，禁用即可消除该 flaky 失败。turbo test 任务已 passThroughEnv TESTCONTAINERS_*。
-      TESTCONTAINERS_RYUK_DISABLED: true
+    timeout-minutes: 10
     outputs:
+      fingerprints: ${{ steps.inputs.outputs.fingerprints }}
+      baseline: ${{ steps.inputs.outputs.baseline }}
+      base_sha: ${{ steps.inputs.outputs.base_sha }}
       version_changed: ${{ steps.check_version.outputs.changed }}
       version: ${{ steps.check_version.outputs.version }}
       npm_tag: ${{ steps.check_version.outputs.npm_tag }}
@@ -34,16 +37,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6.1.0
-
       - uses: actions/setup-node@v6.5.0
         with:
           node-version: 24.22.1
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+      - name: Fingerprint real validation inputs
+        id: inputs
+        run: node scripts/ci-plan.mjs plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Check release completion
         if: github.event_name == 'push'
         id: check_version
@@ -51,57 +52,205 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Build
-        run: pnpm build
-
-      - name: Unit tests
-        run: pnpm test
-
-      - name: Cache Playwright browsers
+  build:
+    name: Build shared artifacts
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+    outputs:
+      artifact: ci-build-state-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - name: Restore content-addressed task outputs
         uses: actions/cache@v5.1.0
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          path: .turbo/cache
+          key: hai-ci-build-v1-${{ runner.os }}-node24.22.1-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Install Playwright browser
-        run: pnpm --filter admin-console exec playwright install --with-deps chrome
-
-      - name: Example and scaffold E2E
-        run: pnpm e2e
-
-      - name: Deployment integration E2E
-        run: pnpm --filter @h-ai/cli test:deploy-gates
-
-      - name: Upload verified documentation website
+            hai-ci-build-v1-${{ runner.os }}-node24.22.1-${{ hashFiles('pnpm-lock.yaml') }}-
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # lint独立运行；Turbo仍按真实^build依赖恢复/构建，不使用失效dist绕过前置。
+      - name: Build
+        run: pnpm exec turbo run build
+      # 提交号不是普通源码输入；官网元数据必须来自本次SHA，不能沿用旧Turbo输出。
+      - name: Refresh website build identity
+        run: pnpm --filter framework-website build
+      - name: Pack build state
+        run: tar -czf "$RUNNER_TEMP/build-state.tgz" packages/*/dist .turbo/cache
+      - uses: actions/upload-artifact@v6.0.0
+        with:
+          name: ci-build-state-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/build-state.tgz
+          if-no-files-found: error
+          retention-days: 3
+      # 制品先准备，只有最终汇总和完整CI成功后才允许npm/Pages消费。
+      - name: Upload documentation website
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v6.0.0
         with:
           name: framework-website-${{ github.sha }}
           path: apps/framework-website/build
           include-hidden-files: true
+          overwrite: true
           if-no-files-found: error
           retention-days: 3
 
-      - name: Pack verified build artifacts
-        if: steps.check_version.outputs.changed == 'true'
+      - name: Pack release artifacts
+        if: needs.plan.outputs.version_changed == 'true'
         run: tar -czf build-artifacts.tgz packages/*/dist
 
-      - name: Upload verified build artifacts
-        if: steps.check_version.outputs.changed == 'true'
+      - name: Upload release artifacts
+        if: needs.plan.outputs.version_changed == 'true'
         uses: actions/upload-artifact@v6.0.0
         with:
-          name: release-build-${{ steps.check_version.outputs.version }}
+          name: release-build-${{ needs.plan.outputs.version }}
           path: build-artifacts.tgz
           if-no-files-found: error
+          overwrite: true
           retention-days: 1
+
+  lint:
+    name: Lint and documentation structure
+    needs: plan
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: lint
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).lint }}
+      command: pnpm lint
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      force: ${{ inputs.full == true }}
+
+  typecheck:
+    name: Typecheck
+    needs: [plan, build]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: typecheck
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).typecheck }}
+      command: pnpm typecheck
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      force: ${{ inputs.full == true }}
+
+  contracts:
+    name: Public contracts and configuration
+    needs: [plan, build]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: contracts
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).contracts }}
+      command: pnpm check:env && pnpm check:usage-examples && pnpm check:api && pnpm check:jsdoc && pnpm test:api
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      force: ${{ inputs.full == true }}
+
+  unit:
+    name: Unit and container tests
+    needs: [plan, build]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: unit
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).unit }}
+      command: pnpm test
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      force: ${{ inputs.full == true }}
+
+  scaffold:
+    name: CLI scaffold gates
+    needs: [plan, build, lint, typecheck, contracts]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: scaffold
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).scaffold }}
+      command: pnpm --filter @h-ai/cli test:scaffold-gates
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      browser: true
+      timeout: 60
+      force: ${{ inputs.full == true }}
+
+  sdk:
+    name: Deployment SDK E2E
+    needs: [plan, build, lint, typecheck, contracts]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: sdk
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).sdk }}
+      command: pnpm --filter @h-ai/deploy test:e2e
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      timeout: 45
+      force: ${{ inputs.full == true }}
+
+  deploy:
+    name: CLI deployment integration E2E
+    needs: [plan, build, lint, typecheck, contracts]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: deploy
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).deploy }}
+      command: pnpm --filter @h-ai/cli test:deploy-gates
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      browser: true
+      timeout: 75
+      force: ${{ inputs.full == true }}
+
+  browsers:
+    name: Browser ${{ matrix.app }}
+    needs: [plan, build, lint, typecheck, contracts]
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [admin-console, ai-playground, corporate-website, h5-app, mobile-app, framework-website]
+    uses: ./.github/workflows/ci-stage.yml
+    with:
+      stage: browser-${{ matrix.app }}
+      fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints)[format('browser-{0}', matrix.app)] }}
+      command: pnpm --filter ${{ matrix.app }} test:e2e
+      baseline: ${{ needs.plan.outputs.baseline }}
+      base_sha: ${{ needs.plan.outputs.base_sha }}
+      build_artifact: ${{ needs.build.outputs.artifact }}
+      browser: true
+      force: ${{ inputs.full == true }}
+
+  quality:
+    # 保留原必需检查名称，避免已有分支保护因拆分阶段而失去汇总检查。
+    name: Typecheck, Lint, Build, Test and E2E
+    if: always()
+    needs: [plan, build, lint, typecheck, contracts, unit, scaffold, sdk, deploy, browsers]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version_changed: ${{ needs.plan.outputs.version_changed }}
+      version: ${{ needs.plan.outputs.version }}
+      npm_tag: ${{ needs.plan.outputs.npm_tag }}
+      prerelease: ${{ needs.plan.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24.22.1
+      - name: Require every stage to succeed
+        run: node scripts/ci-plan.mjs aggregate
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
 
   release:
     name: Release

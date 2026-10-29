@@ -688,6 +688,8 @@ See the [22-package configuration and consumer map (Chinese)](.agents/skills/hai
 
 Choose commands by impact scope; use root commands for cross-package contracts or root configuration changes:
 
+GitHub CI validates stages in parallel on separate runners and publishes only after the complete aggregate succeeds. A main-branch fix limited to an isolated application Playwright spec can reuse other successful stages with identical inputs, runner environment and UTC date. Missing evidence or shared input changes require verification again. See [CI maintenance](docs/ci.md) for the graph, reuse boundaries and full-run controls.
+
 | Gate               | Command                   | Scope                                                    |
 | ------------------ | ------------------------- | -------------------------------------------------------- |
 | Type checking      | `pnpm typecheck`          | All changes                                              |

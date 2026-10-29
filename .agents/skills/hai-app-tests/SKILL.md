@@ -21,3 +21,5 @@ description: "为 hai 应用编写或修复 Vitest/Playwright 测试，组织分
 读取 [完整工作流程与按需参考](../../../packages/cli/templates/skills/hai-app-tests/SKILL.md)，共享契约只在该位置维护。仓库开发先按 [工作规范](../../instructions/workspace.md) 选择模块、应用与测试规范；框架 API 以本仓库真实公开导出与类型核验，发布包消费者以安装版本核验。
 
 公共变化同步 packages、apps、CLI 模板、README、skills、LLMS 与受影响测试。只读审查和仅规划请求按其范围交付；已有实现/修复授权按流程继续，验证结果关联当前代码和实际环境。
+
+本仓库 GitHub 验证另读 [CI 阶段与结果复用](../../../docs/ci.md)。区分实际执行与有来源的等价结果；单元与浏览器用例保持隔离，改变收集范围、共享 helper 或阶段指纹时同步审查失效范围。应用模板不复制本仓库专用流水线。

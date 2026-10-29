@@ -1,0 +1,115 @@
+name: CI verification stage
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        required: true
+        type: string
+      fingerprint:
+        required: true
+        type: string
+      baseline:
+        required: true
+        type: string
+      base_sha:
+        required: true
+        type: string
+      command:
+        required: true
+        type: string
+      build_artifact:
+        default: ''
+        type: string
+      browser:
+        default: false
+        type: boolean
+      force:
+        default: false
+        type: boolean
+      timeout:
+        default: 45
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check ${{ inputs.stage }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout }}
+    env:
+      CI: true
+      TESTCONTAINERS_RYUK_DISABLED: true
+      CI_STAGE: ${{ inputs.stage }}
+      CI_FINGERPRINT: ${{ inputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - name: Identify the validation environment
+        id: environment
+        run: node scripts/ci-plan.mjs environment
+      # 精确键且只由可信main写入；PR不使用通过记录跳过执行。
+      - name: Restore independent successful result
+        id: proof_cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && !inputs.force && inputs.base_sha != '' && steps.environment.outputs.fingerprint != ''
+        uses: actions/cache/restore@v5.1.0
+        with:
+          path: ${{ runner.temp }}/hai-ci-proof/${{ inputs.stage }}
+          key: hai-ci-pass-v1-${{ inputs.stage }}-${{ inputs.base_sha }}-${{ inputs.fingerprint }}-${{ steps.environment.outputs.fingerprint }}
+      - name: Validate result provenance and inputs
+        id: proof
+        run: node scripts/ci-plan.mjs inspect
+        env:
+          CI_CACHE_HIT: ${{ steps.proof_cache.outputs.cache-hit }}
+          CI_FORCE: ${{ inputs.force || github.run_attempt > 1 }}
+          CI_ENVIRONMENT: ${{ steps.environment.outputs.fingerprint }}
+          CI_BASELINE: ${{ inputs.baseline }}
+      - name: Install dependencies
+        if: steps.proof.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Download this run's build
+        if: steps.proof.outputs.run == 'true' && inputs.build_artifact != ''
+        uses: actions/download-artifact@v7.0.0
+        with:
+          name: ${{ inputs.build_artifact }}
+          path: ${{ runner.temp }}/ci-build
+      - name: Restore build and task cache
+        if: steps.proof.outputs.run == 'true' && inputs.build_artifact != ''
+        run: tar -xzf "$RUNNER_TEMP/ci-build/build-state.tgz"
+      - name: Install browser and system dependencies
+        if: steps.proof.outputs.run == 'true' && inputs.browser
+        run: pnpm --filter admin-console exec playwright install --with-deps chrome
+      - name: Execute verification
+        if: steps.proof.outputs.run == 'true'
+        run: ${{ inputs.command }}
+      - name: Record verified stage result
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.environment.outputs.fingerprint != ''
+        run: node scripts/ci-plan.mjs record
+        env:
+          CI_ENVIRONMENT: ${{ steps.environment.outputs.fingerprint }}
+          CI_EXECUTION_SHA: ${{ steps.proof.outputs.execution_sha }}
+          CI_EXECUTION_RUN_ID: ${{ steps.proof.outputs.execution_run_id }}
+      - name: Save independent successful result
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.environment.outputs.fingerprint != ''
+        uses: actions/cache/save@v5.1.0
+        with:
+          path: ${{ runner.temp }}/hai-ci-proof/${{ inputs.stage }}
+          key: hai-ci-pass-v1-${{ inputs.stage }}-${{ github.sha }}-${{ inputs.fingerprint }}-${{ steps.environment.outputs.fingerprint }}
+      - name: Preserve browser failure evidence
+        if: failure() && inputs.browser
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: ci-failure-${{ inputs.stage }}-${{ github.run_attempt }}
+          path: |
+            apps/*/test-results/**/*.png
+            apps/*/test-results/**/error-context.md
+            packages/cli/test-results/**/*.png
+            packages/cli/test-results/**/error-context.md
+          if-no-files-found: ignore
+          retention-days: 3
