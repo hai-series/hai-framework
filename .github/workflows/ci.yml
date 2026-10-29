@@ -84,7 +84,10 @@ jobs:
       - name: Refresh website build identity
         run: pnpm --filter framework-website build
       - name: Pack build state
-        run: tar -czf "$RUNNER_TEMP/build-state.tgz" packages/*/dist .turbo/cache
+        run: |
+          shopt -s nullglob
+          outputs=(packages/*/dist apps/*/dist apps/*/build apps/*/.svelte-kit apps/*/.vercel/output)
+          tar -czf "$RUNNER_TEMP/build-state.tgz" "${outputs[@]}" .turbo/cache
       - uses: actions/upload-artifact@v6.0.0
         with:
           name: ci-build-state-${{ github.run_id }}-${{ github.run_attempt }}
@@ -124,7 +127,7 @@ jobs:
     with:
       stage: lint
       fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).lint }}
-      command: pnpm lint && pnpm exec eslint .github/scripts .github/workflows scripts/tests/ci-plan.test.mjs
+      command: pnpm lint && pnpm exec eslint .github/scripts .github/workflows scripts/tests/ci-plan.test.mjs scripts/tests/ci-build-state.test.mjs scripts/tests/static-preview.test.mjs
       baseline: ${{ needs.plan.outputs.baseline }}
       base_sha: ${{ needs.plan.outputs.base_sha }}
       force: ${{ inputs.full == true }}
