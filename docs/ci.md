@@ -45,7 +45,7 @@ flowchart TD
 4. UTC 日期、runner 系统/架构/镜像版本和实际 Node 版本一致。
 5. 未选择强制全量，且不是重跑同一轮的失败任务。
 
-记录只在 main 推送的阶段实际成功或完成上述复用校验后写入，并保留原始执行来源，不含 token、环境值或测试数据。按提交保存记录，可连续传递等价结果；不会用任意历史提交的旧通过覆盖本次基线失败。缓存缺失、损坏、环境身份缺失或变化时重新执行，不根据文件名直接宣称通过。PR、手工验证和失败任务重跑实际执行阶段；PR 不写入可信通过记录。GitHub 的分支缓存隔离见[官方缓存说明](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)。
+记录只在 main 推送的阶段实际成功或完成上述复用校验后写入，并保留原始执行来源，不含 token、环境值或测试数据。按提交保存记录，可连续传递等价结果；不会用任意历史提交的旧通过覆盖本次基线失败。缓存缺失、损坏、环境身份缺失或变化时重新执行，不根据文件名直接宣称通过。PR、手工验证和失败任务重跑实际执行阶段；PR 不写入可复用的成功记录。GitHub 的分支缓存隔离见[官方缓存说明](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)。
 
 目前明确隔离的用例是六个已登记应用 `e2e/**/*.spec.ts`。这些文件由 Playwright 执行，不进入应用的单元或类型检查：
 
@@ -66,6 +66,6 @@ flowchart TD
 - 需要重新执行全部验证阶段时，在 Actions 的 **CI → Run workflow** 勾选 `full`（默认勾选）。这会忽略成功记录，保留正常构建任务缓存；手工验证不发布 npm 或 Pages。
 - 新流程首次执行、CI 自身改变或没有可信记录时，需要建立一次完整基线；不能用旧串行流程没有生成的记录冒充命中。
 
-汇总沿用原必需检查名称 **Typecheck, Lint, Build, Test and E2E**，兼容已有分支保护。缺失、失败、取消和跳过都不能作为必需阶段成功。只有汇总成功才进入 npm 发布；Pages 仍只使用本仓库 main 推送且**完整 CI 成功**的指定提交制品。发布来源 tag、Beta 标签、缺包恢复及旧官网防回退规则保留。
+汇总沿用原必需检查名称 **Typecheck, Lint, Build, Test and E2E**，兼容已有分支保护。缺失、失败、取消和跳过都不能作为必需阶段成功；main 汇总还核对同一提交的 Leak Checker 已成功，扫描词表仍只在原独立扫描流程使用，不向 PR 或验证脚本公开。只有汇总成功才进入 npm 发布；Pages 仍只使用本仓库 main 推送且**完整 CI 成功**的指定提交制品。发布来源 tag、Beta 标签、缺包恢复及旧官网防回退规则保留。
 
 工作流复用与矩阵语法依据 [GitHub 官方说明](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)。workflow、输入归属、缓存可信边界或阶段命令改变时，应同步此页、三语 README、仓库规范、相关 Skills 和测试，并用真实 GitHub 运行验证。

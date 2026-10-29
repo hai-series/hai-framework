@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { assertChecksPassed, baselineFromChecks, canReuseStage, createStageProof, environmentFingerprint, stageFingerprint, stageIds } from '../ci-plan.mjs'
+import { assertChecksPassed, assertLeakScanPassed, baselineFromChecks, canReuseStage, createStageProof, environmentFingerprint, stageFingerprint, stageIds } from '../ci-plan.mjs'
 
 const base = [
   { path: 'packages/ui/src/button.ts', mode: '100644', object: 'a'.repeat(40) },
@@ -129,6 +129,22 @@ describe('ci 最终汇总守卫', () => {
 
   it('后来加入的阶段失败也不能被旧必需列表忽略', () => {
     expect(() => assertChecksPassed({ ...success(), newGate: { result: 'failure' } })).toThrow('newGate')
+  })
+})
+
+describe('ci 发布扫描门禁', () => {
+  const scan = { head_sha: identity.sha, name: 'Scan Changed Content', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' }
+  const body = altered => ({ total_count: 1, check_runs: [{ ...scan, ...altered }] })
+
+  it('同一提交扫描成功才允许发布', () => {
+    expect(() => assertLeakScanPassed(identity.sha, body())).not.toThrow()
+  })
+  it.each([{ conclusion: 'failure' }, { conclusion: 'cancelled' }, { status: 'in_progress' }, { head_sha: '2'.repeat(40) }, { app: { slug: 'other' } }])('拒绝失败、未完成或不匹配的扫描 %j', (altered) => {
+    expect(() => assertLeakScanPassed(identity.sha, body(altered))).toThrow()
+  })
+  it('扫描缺失或列表不完整不能视为通过', () => {
+    expect(() => assertLeakScanPassed(identity.sha, { total_count: 0, check_runs: [] })).toThrow()
+    expect(() => assertLeakScanPassed(identity.sha, { ...body(), total_count: 2 })).toThrow()
   })
 })
 

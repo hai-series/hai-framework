@@ -80,6 +80,15 @@ export function assertChecksPassed(results) {
     throw new Error(`Required CI stages did not succeed: ${failed.join(', ')}`)
 }
 
+/** 发布前核对同一提交的独立仓库扫描；不能由其他来源、旧提交或未完成的检查替代。 */
+export function assertLeakScanPassed(sha, body) {
+  const scans = body?.check_runs?.filter(check => check?.head_sha === sha && check.name === 'Scan Changed Content' && check.app?.slug === 'github-actions')
+  if (!shaPattern.test(sha) || !Array.isArray(scans) || scans.length !== 1 || body.total_count !== body.check_runs.length
+    || scans[0].status !== 'completed' || scans[0].conclusion !== 'success') {
+    throw new Error('Repository leak scan has not succeeded for this commit')
+  }
+}
+
 function identity() {
   return {
     event: process.env.GITHUB_EVENT_NAME,
@@ -100,6 +109,18 @@ function output(name, value) {
 }
 
 async function main() {
+  if (process.argv[2] === 'leaks') {
+    const response = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}/commits/${process.env.GITHUB_SHA}/check-runs?check_name=Scan%20Changed%20Content&filter=latest&per_page=100`, {
+      headers: { 'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`, 'Accept': 'application/vnd.github+json', 'Cache-Control': 'no-cache', 'X-GitHub-Api-Version': '2026-03-10' },
+      redirect: 'error',
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok)
+      throw new Error(`Unable to verify repository leak scan: HTTP ${response.status}`)
+    assertLeakScanPassed(process.env.GITHUB_SHA, await response.json())
+    process.stdout.write('Repository leak scan succeeded for this commit.\n')
+    return
+  }
   if (process.argv[2] === 'environment') {
     const fingerprint = environmentFingerprint({ os: process.env.RUNNER_OS, arch: process.env.RUNNER_ARCH, imageOS: process.env.ImageOS, imageVersion: process.env.ImageVersion, nodeVersion: process.version, day: new Date().toISOString().slice(0, 10) })
     output('fingerprint', fingerprint ?? '')

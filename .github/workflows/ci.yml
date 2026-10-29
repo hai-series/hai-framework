@@ -251,6 +251,11 @@ jobs:
         run: node scripts/ci-plan.mjs aggregate
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
+      - name: Require repository leak scan before publishing
+        if: github.event_name == 'push'
+        run: node scripts/ci-plan.mjs leaks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   release:
     name: Release
