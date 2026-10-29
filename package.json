@@ -59,7 +59,7 @@
     "eslint-plugin-yml": "3.9.0"
   },
   "lint-staged": {
-    "*.{js,ts,svelte,json,md,yml,yaml}": [
+    "*.{js,mjs,cjs,ts,svelte,json,md,yml,yaml}": [
       "eslint --fix --cache --cache-location .turbo/.eslintcache --no-warn-ignored"
     ]
   }
