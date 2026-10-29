@@ -25,10 +25,19 @@ export interface ToastItem extends ToastProps {
 /** 兼容安全错误消息中的追踪编号，将排查信息从用户说明中分离。 */
 function normalizeMessage(message: string, explicitTraceId?: string): Pick<ToastProps, 'message' | 'traceId'> {
   let traceId = explicitTraceId && /^[\w.:-]{1,128}$/.test(explicitTraceId) ? explicitTraceId : undefined
-  const readable = message.replace(/\s*\(traceId: ([\w.:-]{1,128})\)/g, (_, embedded: string) => {
-    traceId ??= embedded
-    return ''
-  }).trim()
+  const parts: string[] = []
+  let cursor = 0
+  // 先找固定标记，再移除相邻空白；无标记的长空白不会从每个字符重新回溯。
+  for (const match of message.matchAll(/\(traceId: ([\w.:-]{1,128})\)/g)) {
+    let end = match.index
+    while (end > cursor && message[end - 1]!.trim() === '')
+      end--
+    parts.push(message.slice(cursor, end))
+    cursor = match.index + match[0].length
+    traceId ??= match[1]
+  }
+  parts.push(message.slice(cursor))
+  const readable = parts.join('').trim()
   return { message: readable || core.i18n.coreM('core_errorInternal'), traceId }
 }
 

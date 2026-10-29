@@ -8,6 +8,20 @@ import { describe, expect, it } from 'vitest'
 import { datapipe } from '../src/index.js'
 
 describe('datapipe.clean', () => {
+  it.each([
+    { input: '<'.repeat(262144), options: { removeHtml: true } },
+    { input: 'a'.repeat(262144), options: { removeEmails: true } },
+  ])('长未闭合标签或无邮箱输入不触发重复扫描', ({ input, options }) => {
+    const start = performance.now()
+    const result = datapipe.clean(input, options)
+    expect(result).toMatchObject({ success: true, data: input })
+    expect(performance.now() - start).toBeLessThan(1000)
+  })
+
+  it('标签清洗保留原有对空标签、嵌套开头及未闭合内容的行为', () => {
+    const result = datapipe.clean('<>a<<b>>c<unclosed')
+    expect(result).toMatchObject({ success: true, data: 'a>c<unclosed' })
+  })
   // ─── HTML 移除 ───
 
   describe('removeHtml', () => {

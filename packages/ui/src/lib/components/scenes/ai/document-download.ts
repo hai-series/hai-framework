@@ -273,10 +273,11 @@ function resolveDocumentBaseName(title?: string, filename?: string): string {
   const sanitizedName = stripControlCharacters(preferredName)
     .replace(/[<>:"/\\|?*]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .replace(/[. ]+$/g, '')
     .trim()
-
-  return sanitizedName || 'ai-document'
+  let end = sanitizedName.length
+  while (end > 0 && (sanitizedName[end - 1] === '.' || sanitizedName[end - 1] === ' '))
+    end--
+  return sanitizedName.slice(0, end) || 'ai-document'
 }
 
 function downloadBlob(blob: Blob, filename: string): void {

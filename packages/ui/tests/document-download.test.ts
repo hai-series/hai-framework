@@ -148,6 +148,14 @@ describe('document-download', () => {
     expect(document.body.innerHTML).toBe('')
   })
 
+  it('长文件名不触发后缀重复扫描，并继续去除结尾的点与空格', async () => {
+    const filename = `${'.'.repeat(262144)}report`
+    const start = performance.now()
+    await downloadAiDocument({ actionId: 'markdown', content: '# Export', filename: `${filename}. . ` })
+    expect(anchorClickSpy.mock.instances[0]?.download).toBe(`${filename}.md`)
+    expect(performance.now() - start).toBeLessThan(1000)
+  })
+
   it('prefers blank rows when splitting long pdf pages', async () => {
     html2canvasMock.mockImplementationOnce(async () => {
       const canvas = document.createElement('canvas')

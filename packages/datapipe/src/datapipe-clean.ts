@@ -14,10 +14,23 @@ import { CleanOptionsSchema } from './datapipe-config.js'
 import { datapipeM } from './datapipe-i18n.js'
 import { HaiDatapipeError } from './datapipe-types.js'
 
-/**
- * HTML 标签正则
- */
-const HTML_TAG_REGEX = /<[^>]*>/g
+/** 按首个闭合符提取文本；仅用于清洗，不代替渲染 HTML 前的安全消毒。 */
+function stripHtmlTags(text: string): string {
+  const parts: string[] = []
+  let cursor = 0
+  while (cursor < text.length) {
+    const start = text.indexOf('<', cursor)
+    if (start < 0)
+      break
+    const end = text.indexOf('>', start + 1)
+    if (end < 0)
+      break
+    parts.push(text.slice(cursor, start))
+    cursor = end + 1
+  }
+  parts.push(text.slice(cursor))
+  return parts.join('')
+}
 
 /**
  * URL 正则（HTTP/HTTPS）
@@ -27,7 +40,7 @@ const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g
 /**
  * Email 正则
  */
-const EMAIL_REGEX = /[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi
+const EMAIL_REGEX = /(?<![\w.%+-])[\w.%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi
 
 /**
  * 多空行正则（3行及以上空行 → 2行）
@@ -67,7 +80,7 @@ export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<
   try {
     // 移除 HTML 标签
     if (opts.removeHtml) {
-      result = result.replace(HTML_TAG_REGEX, '')
+      result = stripHtmlTags(result)
     }
 
     // 移除 URL

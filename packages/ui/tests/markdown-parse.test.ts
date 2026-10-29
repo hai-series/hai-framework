@@ -69,6 +69,21 @@ describe('parseMarkdown - 基础渲染', () => {
     expect(html).toContain('<mark>highlight</mark>')
   })
 
+  it.each(['++', '=='])('未闭合 %s 和长反斜线按普通内容处理', (marker) => {
+    const start = performance.now()
+    const html = parseMarkdown(`${marker}${'\\'.repeat(4096)}`)
+    expect(html).not.toContain('<u>')
+    expect(html).not.toContain('<mark>')
+    expect(html).toContain(marker)
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
+
+  it('有效格式内容中的转义符仍按 Markdown 解析', () => {
+    const html = parseMarkdown('++escaped \\+ plus++ and ==escaped \\= equals==')
+    expect(html).toContain('<u>escaped + plus</u>')
+    expect(html).toContain('<mark>escaped = equals</mark>')
+  })
+
   it('应该解析编辑器扩展的颜色和对齐标签', () => {
     const html = parseMarkdown(
       '<hai-align value="center">\nHello <hai-span color="#2563eb" bg="#dbeafe">world</hai-span>\n</hai-align>',

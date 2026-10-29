@@ -16,8 +16,9 @@ const ALIGN_VALUE_REGEX = /^(?:left|center|right|justify)$/i
 const HAI_ALIGN_BLOCK_REGEX = /^<hai-align\s+value="(left|center|right|justify)">\n?([\s\S]+?)\n?<\/hai-align>\n{0,2}/i
 const HAI_SPAN_INLINE_REGEX = /^<hai-span\b([^>]*)>([\s\S]+?)<\/hai-span>/i
 const HAI_SPAN_ATTR_REGEX = /\b(color|bg)="([^"]+)"/gi
-const HAI_UNDERLINE_REGEX = /^\+\+((?:\\.|[\s\S])+?)\+\+/
-const HAI_HIGHLIGHT_REGEX = /^==((?:\\.|[\s\S])+?)==/
+// 转义分支与普通字符互斥，未闭合标记中的长反斜线不会触发组合回溯。
+const HAI_UNDERLINE_REGEX = /^\+\+((?:\\[\s\S]|[^\\])+?)\+\+/
+const HAI_HIGHLIGHT_REGEX = /^==((?:\\[\s\S]|[^\\])+?)==/
 
 /**
  * 编辑器允许的受控颜色 span token。

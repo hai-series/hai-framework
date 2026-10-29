@@ -36,6 +36,16 @@ describe('toastState', () => {
     expect(typeof id).toBe('string')
   })
 
+  it('长空白消息保留可读内容，多个追踪标记按原有规则移除', () => {
+    vi.useRealTimers()
+    const start = performance.now()
+    toast.add({ message: `${' '.repeat(262144)}操作失败`, duration: 0 })
+    expect(toast.items[0].message).toBe('操作失败')
+    expect(performance.now() - start).toBeLessThan(1000)
+    toast.add({ message: '失败 (traceId: first) \t(traceId: second)；请重试', duration: 0 })
+    expect(toast.items[1]).toMatchObject({ message: '失败；请重试', traceId: 'first' })
+  })
+
   it('应该移除 Toast', () => {
     const id = toast.add({ message: '测试消息', variant: 'info', duration: 0 })
     expect(toast.items.length).toBe(1)

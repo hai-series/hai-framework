@@ -16,6 +16,8 @@ A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS
 - Authentication, CRUD, AI content, onboarding and a help center.
 - Svelte 5, themes, responsive layouts and Chinese/English/Japanese component messages.
 
+Markdown underline and highlight markers support escaping; unclosed markers remain text. Toasts and document downloads handle unusually long text without repeated scanning, while trace identifiers remain hidden by default.
+
 ## Getting started
 
 ### Installation

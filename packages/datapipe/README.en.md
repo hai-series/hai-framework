@@ -10,6 +10,8 @@ A data processing pipeline module for text cleaning (`clean`), chunking (`chunk`
 
 ## Core features
 
+HTML removal extracts text; it is not an HTML security sanitizer. Use the UI's safe rendering mechanism before rendering HTML. Built-in tag and email cleaning avoids repeated backtracking on long malformed input. Custom regular expressions must come from trusted configuration, not external user-supplied patterns.
+
 | Feature              | Description                                                                                           |
 | -------------------- | ----------------------------------------------------------------------------------------------------- |
 | Text cleaning        | Remove HTML tags, URLs, and emails; normalize whitespace; apply custom regex replacements             |
