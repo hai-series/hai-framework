@@ -28,8 +28,15 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
     const accessKeyId = randomBytes(12).toString('hex')
     const secretAccessKey = randomBytes(24).toString('hex')
     const bucket = 'business-files'
+    let topology = 'setup'
+    let phase = 'start containers'
     const requestsAbort = new AbortController()
-    const request: typeof fetch = (input, init) => fetch(input, { ...init, signal: AbortSignal.any([requestsAbort.signal, init?.signal ?? AbortSignal.timeout(20_000)]) })
+    const request: typeof fetch = (input, init) => {
+      const target = new URL(input instanceof Request ? input.url : input)
+      // 仅记录操作和路径，不把签名查询或凭据写进失败诊断。
+      phase = `${init?.method ?? 'GET'} ${target.pathname}`
+      return fetch(input, { ...init, signal: AbortSignal.any([requestsAbort.signal, init?.signal ?? AbortSignal.timeout(20_000)]) })
+    }
     try {
       network = await new Network().start()
       const objectContainer = new GenericContainer(engine === 'minio' ? 'ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z' : 'ghcr.io/rustfs/rustfs:1.0.1')
@@ -46,22 +53,26 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         objectContainer.withCommand(['server', '/data'])
       objectStore = await objectContainer.start()
       writeFileSync(path.join(root, 'resources.json'), JSON.stringify({ network: network.getId(), objectStore: objectStore.getId() }))
-      nginx = await new GenericContainer('docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine')
-        .withNetwork(network)
-        .withExposedPorts(8080)
-        .withWaitStrategy(Wait.forHttp('/', 8080))
-        .start()
-      writeFileSync(path.join(root, 'resources.json'), JSON.stringify({ network: network.getId(), objectStore: objectStore.getId(), nginx: nginx.getId() }))
-      const runtime = (['docker', 'podman'] as const).find(command => spawnSync(command, ['container', 'inspect', nginx!.getId()], { stdio: 'ignore', windowsHide: true, timeout: 10_000 }).status === 0)
-      if (!runtime)
-        throw new Error('No local CLI can address the owned Nginx fixture')
-      const publicEndpoint = `http://${nginx.getHost()}:${nginx.getMappedPort(8080)}`
-      const connected = await storage.init({ type: 's3', bucket, region: 'us-east-1', endpoint: `http://${objectStore.getHost()}:${objectStore.getMappedPort(9000)}`, publicEndpoint, accessKeyId, secretAccessKey, forcePathStyle: true, createBucket: true, prefix: 'private' })
-      expect(connected.success).toBe(true)
       const bytes = randomBytes(5 * 1024 * 1024 + 17)
       const key = '资料 +%/large-file.bin'
-      expect((await storage.file.put(key, bytes)).success).toBe(true)
       for (const kind of ['fullstack', 'api', 'sveltekit']) {
+        topology = kind
+        phase = 'start independent gateway'
+        // 每种应用独立部署；不让上一拓扑的保活连接跨越下一次网关重载。
+        nginx = await new GenericContainer('docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine')
+          .withNetwork(network)
+          .withExposedPorts(8080)
+          .withWaitStrategy(Wait.forHttp('/', 8080))
+          .start()
+        writeFileSync(path.join(root, 'resources.json'), JSON.stringify({ network: network.getId(), objectStore: objectStore.getId(), nginx: nginx.getId(), topology }))
+        const runtime = (['docker', 'podman'] as const).find(command => spawnSync(command, ['container', 'inspect', nginx!.getId()], { stdio: 'ignore', windowsHide: true, timeout: 10_000 }).status === 0)
+        if (!runtime)
+          throw new Error('No local CLI can address the owned Nginx fixture')
+        const publicEndpoint = `http://${nginx.getHost()}:${nginx.getMappedPort(8080)}`
+        const connected = await storage.init({ type: 's3', bucket, region: 'us-east-1', endpoint: `http://${objectStore.getHost()}:${objectStore.getMappedPort(9000)}`, publicEndpoint, accessKeyId, secretAccessKey, forcePathStyle: true, createBucket: true, prefix: 'private' })
+        expect(connected.success).toBe(true)
+        expect((await storage.file.put(key, bytes)).success).toBe(true)
+        phase = 'build deployment gateway'
         const project = path.join(root, kind)
         const artifacts = path.join(project, 'artifacts')
         mkdirSync(artifacts, { recursive: true })
@@ -94,6 +105,7 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         execFileSync(runtime, ['cp', configPath, `${nginx.getId()}:/etc/nginx/conf.d/default.conf`], { windowsHide: true, timeout: 20_000 })
         execFileSync(runtime, ['exec', nginx.getId(), 'nginx', '-t'], { windowsHide: true, timeout: 20_000, stdio: 'pipe' })
         execFileSync(runtime, ['exec', nginx.getId(), 'nginx', '-s', 'reload'], { windowsHide: true, timeout: 20_000, stdio: 'pipe' })
+        phase = 'wait for gateway reload'
         const healthPath = kind === 'fullstack' ? '/_hai/web-health' : '/_hai/gateway-health'
         await expect.poll(async () => {
           const response = await fetch(`${publicEndpoint}${healthPath}`, { signal: AbortSignal.timeout(3000) })
@@ -148,11 +160,15 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         expect(expired.status).toBe(403)
         await expired.body?.cancel()
         evidence.push({ engine, kind, bytes: downloaded.length, sha256, download: 200, range: 206, unsigned: 403, tampered: 403, expired: 403, application: 502, upload: put.status, contentSecurityPolicy: download.headers.get('content-security-policy') ?? '', contentTypeOptions: download.headers.get('x-content-type-options') ?? '', referrerPolicy: download.headers.get('referrer-policy') ?? '', cacheControl: download.headers.get('cache-control') ?? '' })
+        phase = 'stop topology resources'
         await deploy.close()
+        expect((await storage.close()).success).toBe(true)
+        await nginx.stop()
+        nginx = undefined
       }
     }
     catch (error) {
-      failures.push(error)
+      failures.push(new Error(`Storage proxy ${engine}/${topology} failed during ${phase}`, { cause: error }))
     }
     finally {
       requestsAbort.abort()
@@ -184,7 +200,7 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
       }
       if (process.env.HAI_STORAGE_PROXY_EVIDENCE) {
         mkdirSync(process.env.HAI_STORAGE_PROXY_EVIDENCE, { recursive: true })
-        writeFileSync(path.join(process.env.HAI_STORAGE_PROXY_EVIDENCE, `${engine}.json`), `${JSON.stringify({ startedAt, evidence, cleanupFailures }, null, 2)}\n`)
+        writeFileSync(path.join(process.env.HAI_STORAGE_PROXY_EVIDENCE, `${engine}.json`), `${JSON.stringify({ startedAt, topology, phase, evidence, cleanupFailures }, null, 2)}\n`)
       }
     }
     if (failures.length)
