@@ -62,12 +62,24 @@ function typeSmoke(directories, suffix, browser, generated) {
     }
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
+    if (directory === 'core') {
+      source.push('export const policy = api.RequestAccessConfigSchema.parse(false)')
+      source.push('// @ts-expect-error 请求检查执行函数统一注册在 core.access', 'api.createRequestCheck(false)')
+      if (browser)
+        source.push('// @ts-expect-error 浏览器没有 Node 访问策略执行能力', 'api.core.access')
+      else
+        source.push('export const access: api.AccessFunctions = api.core.access', 'export const decision = access.createRequestCheck(policy)(\'/api/example\', \'GET\')')
+    }
     if (directory === 'feedback') {
       source.push('import { createFeedbackClient } from \'@h-ai/feedback/client\'', 'import { createFeedbackBundle, readFeedbackBundle } from \'@h-ai/feedback/bundle\'', 'export const factories = [createFeedbackClient, createFeedbackBundle, readFeedbackBundle]')
       source.push('// @ts-expect-error Browser collector does not export the Node singleton', 'import { feedback } from \'@h-ai/feedback/client\'')
       source.push('// @ts-expect-error Offline bundles do not export the Node singleton', 'import { feedback as bundleService } from \'@h-ai/feedback/bundle\'')
     }
     if (directory === 'kit') {
+      source.push('export const publicKit: api.KitPublicConfig = { transport: false }')
+      source.push('export function readonlyClientPaths(crypto: api.ClientTransportConfig["crypto"]) { return api.kit.client.create({ transport: { crypto, excludePaths: ["/api/public"] as const } }) }')
+      if (!browser)
+        source.push('export function configuredHost(crypto: api.HookCryptoConfig["crypto"], serverKeyRing: api.TransportEncryptionOptions["serverKeyRing"], keyStore: api.TransportEncryptionOptions["keyStore"]) { const config = api.resolveKitConfig({ transport: {} }); if (config.transport !== false) return api.kit.createHandle({ crypto: { crypto, transport: { ...config.transport, serverKeyRing, keyStore } } }) }')
       source.push('// @ts-expect-error No implementation exists for this subpath', 'import * as absent from \'@h-ai/kit/vite\'')
       source.push('// @ts-expect-error Runtime helpers belong to the kit namespace or client subpath', 'api.createHandle({})')
       if (browser)
@@ -168,6 +180,8 @@ try {
         const paths = [...new Set(entries.filter(entry => select(entries, entry.subpath) === entry
           && entry.target.endsWith('.js') && !(directory === 'kit' && entry.subpath === './client')).map(entry => `${manifest.name}${entry.subpath.slice(1)}`))]
         child(base, ['--input-type=module', '--eval', `for (const name of ${JSON.stringify(paths)}) await import(name)`])
+        if (directory === 'core')
+          child(base, ['--input-type=module', '--eval', 'const api = await import(\'@h-ai/core\'); if (\'createRequestCheck\' in api || !api.core.access.createRequestCheck(false)(\'/api/example\', \'GET\').allowed) throw new Error(\'Core access registration mismatch\')'])
       }
       imports++
     }

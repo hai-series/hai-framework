@@ -1,4 +1,5 @@
 {
+  "serv_transportPlaintextRequired": "This endpoint accepts unencrypted application data. Disable transport encryption for this request and retry over HTTPS.",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "serv_validationFailed": "Validation failed",
   "serv_validationRequired": "This field is required",

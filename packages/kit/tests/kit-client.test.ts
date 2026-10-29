@@ -440,7 +440,7 @@ describe('installBrowserTransportFetch', () => {
     const payload = JSON.stringify({ text: '合法内容'.repeat(90_000) })
     fetchSpy = createTransportFetch({ encryptedResponseBody: payload, maxPlaintextBytes: 2 * 1024 * 1024 })
     stubBrowserFetch(fetchSpy)
-    kit.client.installBrowserTransport({ server: { host: '127.0.0.1', port: 3000 }, transport: { keyExchangePath: KEY_EXCHANGE_URL, excludePaths: [], maxPlaintextBytes: 1024 } }, { crypto })
+    kit.client.installBrowserTransport({ transport: { keyExchangePath: KEY_EXCHANGE_URL, excludePaths: [], maxPlaintextBytes: 1024 } }, { crypto })
     const response = await fetch('http://localhost/api/data')
     expect(await response.text()).toBe(payload)
   })

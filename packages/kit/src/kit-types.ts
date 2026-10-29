@@ -5,12 +5,120 @@
  * @module kit-types
  */
 
+import type { RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
 import type { CryptoFunctions, TransportKeyStore, TransportServerKeyRing } from '@h-ai/crypto'
 import type { AuthnOperations } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
 
-export type { KitConfig, KitConfigInput, KitServerConfig, KitServerConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-config.js'
+/**
+ * 服务器监听配置（对应 `config/_kit.yml` 的 `server`）。
+ * @example
+ * ```ts
+ * import type { KitServerConfig } from '@h-ai/kit'
+ *
+ * const value: KitServerConfig = { host: '127.0.0.1', port: 3000 }
+ * void value
+ * ```
+ */
+export interface KitServerConfig {
+  readonly host: string
+  readonly port: number
+}
+
+/**
+ * `config/_kit.yml` 中的服务器监听输入类型。
+ * @example
+ * ```ts
+ * import type { KitServerConfigInput } from '@h-ai/kit'
+ *
+ * const value: KitServerConfigInput = { port: 4000 }
+ * void value
+ * ```
+ */
+export type KitServerConfigInput = Partial<KitServerConfig>
+
+/**
+ * `config/_kit.yml` 中的 transport 配置。
+ * @example
+ * ```ts
+ * import type { KitTransportConfig } from '@h-ai/kit'
+ *
+ * const value: KitTransportConfig = { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] }
+ * void value
+ * ```
+ */
+export interface KitTransportConfig {
+  /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
+  readonly maxPlaintextBytes?: number
+  /** 按完整路径段匹配的明文容量；* 匹配单段。 */
+  readonly routePlaintextBytes?: Readonly<Record<string, number>>
+  readonly keyExchangePath: `/${string}`
+  readonly excludePaths: readonly `/${string}`[]
+}
+
+/**
+ * `config/_kit.yml` 的顶层配置结构。
+ * @example
+ * ```ts
+ * import type { KitConfig } from '@h-ai/kit'
+ *
+ * const value: KitConfig = { server: { host: '127.0.0.1', port: 3000 }, transport: false, trustedProxies: 'auto', access: false }
+ * void value
+ * ```
+ */
+export interface KitConfig {
+  readonly server: KitServerConfig
+  readonly transport: false | KitTransportConfig
+  /** auto 仅在受管私有容器入口采用容器网段；普通宿主忽略转发头。 */
+  readonly trustedProxies: TrustedProxies
+  /** 每次请求的地址/时间/路径限制，默认 false；不会限制由静态服务器直接提供的资源。 */
+  readonly access: RequestAccessConfigInput
+}
+
+/**
+ * `config/_kit.yml` 中的 transport 输入类型。
+ * @example
+ * ```ts
+ * import type { KitTransportConfigInput } from '@h-ai/kit'
+ *
+ * const value: KitTransportConfigInput = { excludePaths: ['/api/health'] }
+ * void value
+ * ```
+ */
+export type KitTransportConfigInput = Partial<{
+  readonly maxPlaintextBytes: number | 'auto'
+  readonly routePlaintextBytes: Readonly<Record<string, number>>
+  readonly keyExchangePath: `/${string}`
+  readonly excludePaths: readonly `/${string}`[]
+}>
+
+/**
+ * `config/_kit.yml` 的顶层输入类型。
+ * @example
+ * ```ts
+ * import type { KitConfigInput } from '@h-ai/kit'
+ *
+ * const value: KitConfigInput = { transport: false }
+ * void value
+ * ```
+ */
+export interface KitConfigInput {
+  readonly server?: KitServerConfigInput
+  readonly transport?: false | KitTransportConfigInput
+  readonly trustedProxies?: TrustedProxies
+  readonly access?: RequestAccessConfigInput
+}
+
+/**
+ * 浏览器可接收的 Kit 公共配置，仅包含传输协议路径和开关。
+ * @example
+ * ```ts
+ * import type { KitPublicConfig } from '@h-ai/kit'
+ * const config: KitPublicConfig = { transport: false }
+ * ```
+ */
+export type KitPublicConfig = Pick<KitConfig, 'transport'>
 
 /**
  * kit.auth 认证操作（由 createHandle auth.operations 注入）
@@ -280,6 +388,10 @@ export interface HandleAuthConfig {
  * ```
  */
 export interface HandleConfig {
+  /** 可信入口地址；auto 只信任受管私有容器网段，空数组忽略转发头。 */
+  trustedProxies?: TrustedProxies
+  /** 每次请求的 IP/时间/路径策略；独立文件在创建 Handle 时读取并验证一次。 */
+  access?: RequestAccessConfigInput
   /**
    * 认证配置
    *
@@ -401,7 +513,7 @@ export interface TransportEncryptionOptions {
   /** 密钥交换端点路径（默认 `'/api/_hai/key-exchange'`） */
   keyExchangePath?: string
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
-  excludePaths?: string[]
+  excludePaths?: readonly string[]
   /** 共享客户端公钥存储；适用于多节点部署。 */
   keyStore: TransportKeyStore
 }

@@ -65,6 +65,7 @@ export type {
   HookCryptoConfig,
   KitConfig,
   KitConfigInput,
+  KitPublicConfig,
   KitServerConfig,
   KitServerConfigInput,
   KitTransportConfig,

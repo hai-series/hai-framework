@@ -1,11 +1,13 @@
 /**
- * @h-ai/kit — transport 配置
+ * @h-ai/kit — 宿主配置
  *
- * 为 `config/_kit.yml` 提供统一的 transport 配置结构、默认值与校验逻辑，
- * 方便应用层用一份配置同时驱动 `hooks.server.ts` 与 `kit.client.create()`。
+ * 为 `config/_kit.yml` 提供监听、传输与请求策略的默认值和校验。
+ * 服务端消费完整配置；浏览器仅接收显式投影的 transport 公共字段。
  * @module kit-config
  */
 
+import type { KitConfig, KitConfigInput, KitServerConfig, KitServerConfigInput, KitTransportConfig, KitTransportConfigInput } from './kit-types.js'
+import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
 import { TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
 import { z } from 'zod'
 
@@ -13,99 +15,6 @@ const AbsolutePathSchema = z.custom<`/${string}`>(
   value => typeof value === 'string' && value.startsWith('/'),
   'path must start with /',
 )
-
-/**
- * 服务器监听配置（对应 `config/_kit.yml` 的 `server`）。
- * @example
- * ```ts
- * import type { KitServerConfig } from '@h-ai/kit'
- *
- * const value: KitServerConfig = { host: '127.0.0.1', port: 3000 }
- * void value
- * ```
- */
-export interface KitServerConfig {
-  readonly host: string
-  readonly port: number
-}
-
-/**
- * `config/_kit.yml` 中的服务器监听输入类型。
- * @example
- * ```ts
- * import type { KitServerConfigInput } from '@h-ai/kit'
- *
- * const value: KitServerConfigInput = { port: 4000 }
- * void value
- * ```
- */
-export type KitServerConfigInput = Partial<KitServerConfig>
-
-/**
- * `config/_kit.yml` 中的 transport 配置。
- * @example
- * ```ts
- * import type { KitTransportConfig } from '@h-ai/kit'
- *
- * const value: KitTransportConfig = { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] }
- * void value
- * ```
- */
-export interface KitTransportConfig {
-  /** 双向明文 UTF-8 字节上限；省略使用 1 MiB，范围 1 KiB～64 MiB。 */
-  readonly maxPlaintextBytes?: number
-  /** 按完整路径段匹配的明文容量；* 匹配单段。 */
-  readonly routePlaintextBytes?: Readonly<Record<string, number>>
-  readonly keyExchangePath: `/${string}`
-  readonly excludePaths: readonly `/${string}`[]
-}
-
-/**
- * `config/_kit.yml` 的顶层配置结构。
- * @example
- * ```ts
- * import type { KitConfig } from '@h-ai/kit'
- *
- * const value: KitConfig = { server: { host: '127.0.0.1', port: 3000 }, transport: false }
- * void value
- * ```
- */
-export interface KitConfig {
-  readonly server: KitServerConfig
-  readonly transport: false | KitTransportConfig
-}
-
-/**
- * `config/_kit.yml` 中的 transport 输入类型。
- * @example
- * ```ts
- * import type { KitTransportConfigInput } from '@h-ai/kit'
- *
- * const value: KitTransportConfigInput = { excludePaths: ['/api/health'] }
- * void value
- * ```
- */
-export type KitTransportConfigInput = Partial<{
-  readonly maxPlaintextBytes: number | 'auto'
-  readonly routePlaintextBytes: Readonly<Record<string, number>>
-  readonly keyExchangePath: `/${string}`
-  readonly excludePaths: readonly `/${string}`[]
-}>
-
-/**
- * `config/_kit.yml` 的顶层输入类型。
- * @example
- * ```ts
- * import type { KitConfigInput } from '@h-ai/kit'
- *
- * const value: KitConfigInput = { transport: false }
- * void value
- * ```
- */
-export interface KitConfigInput {
-  readonly server?: KitServerConfigInput
-  readonly transport?: false | KitTransportConfigInput
-}
 
 const KitTransportConfigInputSchema = z.union([
   z.literal(false),
@@ -135,9 +44,13 @@ const ServerConfigInputSchema = z.object({
 export const KitConfigSchema = z.object({
   server: ServerConfigInputSchema.optional(),
   transport: KitTransportConfigInputSchema.optional(),
-}).transform(({ server, transport }) => ({
+  trustedProxies: TrustedProxiesSchema.default('auto'),
+  access: RequestAccessConfigSchema.default(false),
+}).transform(({ server, transport, trustedProxies, access }) => ({
   server: resolveKitServerConfig(server ?? {}),
   transport: resolveKitTransportConfig(transport ?? false),
+  trustedProxies,
+  access,
 }))
 
 /**

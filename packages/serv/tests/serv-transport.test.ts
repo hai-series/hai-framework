@@ -3,8 +3,10 @@ import type { ServContext } from '../src/serv-context.js'
 import { apiContract } from '@h-ai/api-contract'
 import { err, ok } from '@h-ai/core'
 import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportTimeError } from '@h-ai/crypto'
+import { Hono } from 'hono'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { serv } from '../src/serv-main.js'
+import { createTransportMiddleware } from '../src/serv-transport.js'
 
 let serverKeyRing: TransportServerKeyRing
 
@@ -125,7 +127,7 @@ describe('serv.createApp({ transport })', () => {
     expect(createServer).toHaveBeenCalledWith(expect.objectContaining({ keyStore }))
   })
 
-  it('runs custom preflight middleware before transport', async () => {
+  it('allows custom preflight responses without requiring a transport handshake', async () => {
     const origin = 'http://localhost:5176'
     const app = serv.createApp({
       contract,
@@ -411,23 +413,26 @@ describe('serv.createApp({ transport })', () => {
     expect(response.headers.get('Content-Encoding')).toBeNull()
   })
 
-  it('解密后明文超限时不进入 handler，正常请求会重建 Hono 正文缓存', async () => {
+  it('解密后明文超限时不进入业务中间件和 handler，正常请求可读取明文', async () => {
     const manager = createFailingEncryptManager()
     const decrypt = vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('你'.repeat(400_000)))
     vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    const middleware = vi.fn(async (c: Parameters<ReturnType<typeof createTransportMiddleware>>[0]) => {
+      expect(c.req.bodyCache).toEqual({})
+      expect(await c.req.json()).toEqual({ ok: true })
+    })
     const app = serv.createApp({
       contract,
       procedures,
       transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: createCryptoWithTransportServer(() => ok(manager)) },
-      middlewares: [{ middleware: (c, next) => {
-        c.req.bodyCache = { text: 'stale encrypted cache' }
-        return next()
+      middlewares: [{ middleware: async (c, next) => {
+        await middleware(c)
+        await next()
       } }],
     })
     const handler = vi.fn()
     app.post('/api/v1/raw-body', async (c) => {
       handler()
-      expect(c.req.bodyCache).toEqual({})
       expect(await c.req.json()).toEqual({ ok: true })
       return c.json({ ok: true })
     })
@@ -438,8 +443,37 @@ describe('serv.createApp({ transport })', () => {
     }
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(413)
     expect(handler).not.toHaveBeenCalled()
+    expect(middleware).not.toHaveBeenCalled()
     decrypt.mockResolvedValue(ok('{"ok":true}'))
     expect((await app.request('/api/v1/raw-body', init)).status).toBe(200)
+    expect(handler).toHaveBeenCalledOnce()
+    expect(middleware).toHaveBeenCalledOnce()
+  })
+
+  it('传输中间件替换正文时清除宿主已缓存的密文', async () => {
+    const manager = createFailingEncryptManager()
+    vi.spyOn(manager, 'decryptRequest').mockResolvedValue(ok('{"ok":true}'))
+    vi.spyOn(manager, 'encryptResponse').mockResolvedValue(ok(testResponse()))
+    const app = new Hono()
+    // 真实 Hono 宿主可在安装传输层前缓存正文；解密后不得复用该密文缓存。
+    app.use(async (c, next) => {
+      c.req.bodyCache = { text: c.req.raw.clone().text() }
+      expect(c.req.bodyCache.text).toBeDefined()
+      await next()
+    })
+    app.use(createTransportMiddleware(manager, '/api/v1/_hai/key-exchange'))
+    const handler = vi.fn()
+    app.post('/api/v1/raw-body', async (c) => {
+      handler()
+      expect(c.req.bodyCache).toEqual({})
+      expect(await c.req.json()).toEqual({ ok: true })
+      return c.json({ ok: true })
+    })
+    expect((await app.request('/api/v1/raw-body', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id', [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER]: TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE },
+      body: JSON.stringify(testPayload()),
+    })).status).toBe(200)
     expect(handler).toHaveBeenCalledOnce()
   })
 

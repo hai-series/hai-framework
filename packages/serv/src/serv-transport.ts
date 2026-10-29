@@ -16,9 +16,10 @@
  * @module serv-transport
  */
 
+import type { RequestAccessCheck } from '@h-ai/core'
 import type { CryptoFunctions, TransportEncryptionManager, TransportKeyStore, TransportMessageContext, TransportServerKeyRing } from '@h-ai/crypto'
 import type { MiddlewareHandler } from 'hono'
-import { core } from '@h-ai/core'
+import { core, err, HaiCommonError } from '@h-ai/core'
 import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { servM } from './serv-i18n.js'
 
@@ -79,6 +80,7 @@ export interface ServTransportConfig {
  * @param keyExchangePath - 密钥协商绝对路径（已与 apiPrefix 拼接）
  * @param excludePaths - 不参与加解密的路径
  * @param policy - 共享容量准入，由 createApp 创建。
+ * @param encryption - 已编译的路径/方法选择器；显式规则优先于宿主排除列表。
  *
  * @example
  * ```ts
@@ -94,16 +96,28 @@ export function createTransportMiddleware(
   keyExchangePath: string,
   excludePaths: readonly string[] = [],
   policy = createTransportBodyPolicy(manager.bodyLimits.plaintextBytes),
+  encryption?: RequestAccessCheck['encryption'],
 ): MiddlewareHandler {
   return async (c, next) => {
     const pathname = new URL(c.req.url).pathname
+
+    // OPTIONS 无业务密文；交由请求策略和 CORS 处理，不要求先建立密钥。
+    if (c.req.method === 'OPTIONS')
+      return next()
 
     // Step 1：密钥协商端点直接短路处理，不进入下游业务逻辑。
     if (pathname === keyExchangePath && c.req.method === 'POST')
       return handleKeyExchange(c.req.raw, manager)
 
-    // Step 2：健康检查 / 文档页等可配置排除路径直接跳过加解密。
-    if (shouldExclude(pathname, excludePaths, keyExchangePath))
+    const mode = encryption?.(pathname, c.req.method)
+    if (mode === 'disabled') {
+      // 明文端点拒绝传输信封，防止把密文当业务数据处理或返回无法解密的成功响应。
+      if (c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
+        return Response.json(err({ ...HaiCommonError.VALIDATION_ERROR, message: servM('serv_transportPlaintextRequired'), traceId: core.context.get().traceId ?? core.context.get().requestId }), { status: 400 })
+      return next()
+    }
+    // Step 2：未显式要求加密时，健康检查 / 文档页等宿主排除路径保持透传。
+    if (mode !== 'required' && shouldExclude(pathname, excludePaths, keyExchangePath))
       return next()
 
     // Step 3：普通业务请求必须先确认 clientId 存在，且服务端已经保存过该客户端公钥。

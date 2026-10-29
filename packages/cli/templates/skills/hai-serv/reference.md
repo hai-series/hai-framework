@@ -266,7 +266,8 @@ server:
   port: 3000
 
 http:
-  trustedProxies: [] # 仅信任会清洗/追加转发头的代理 IP/CIDR
+  trustedProxies: auto # 普通宿主忽略转发头，受管私有 Compose 自动采用容器网段
+  access: false # 按路径/IP/时间限制见 hai-core/request-access.md
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json
@@ -289,7 +290,7 @@ transport:
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
 ## 核心 API
 
@@ -482,9 +483,9 @@ const app = serv.createApp({
 })
 ```
 
-执行顺序固定为：`securityHeaders` → `middlewares` → `transport`（若启用）→ health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
+执行顺序为：`securityHeaders` → 内置 CORS 响应包装/握手和预检策略 → `transport`（若启用）/请求策略 → 普通 `middlewares` → health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
 
-- `middlewares` 先于 `transport` 执行，因此 CORS preflight 或二进制端点可以直接短路；短路响应仍带内置安全头，但不会经过 transport。
+- 普通 `middlewares` 在解密和策略之后执行，提前响应仍受访问策略和响应加密约束。二进制端点显式加入 transport.excludePaths；内置 CORS 预检和密钥交换也执行策略。
 - 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念。
 - 私有资源、Range 下载或动态授权继续使用自定义 middleware/procedure。
 - 若需要读取解密后的业务 body，请改用 context / procedure 层扩展。

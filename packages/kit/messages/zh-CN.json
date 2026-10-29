@@ -1,4 +1,5 @@
 {
+  "kit_transportPlaintextRequired": "此接口接收未加密的应用数据，请关闭传输加密后通过 HTTPS 重试。",
   "kit_a2aAuthFailed": "A2A 身份认证失败",
   "kit_a2aParseError": "请求体不是有效的 JSON",
   "kit_a2aCardUnavailable": "Agent Card 不可用",

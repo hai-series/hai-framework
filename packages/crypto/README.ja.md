@@ -250,7 +250,7 @@ const server = crypto.transport.createServer({ serverKeyRing, keyStore })
 
 認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
-空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は Serv/Kit の `encryption: disabled` ルールまたはホストの `excludePaths` で明示的に許可し、呼出側も通常の要求を選びます。API Client/Kit のラッパーは自身の `excludePaths` を使用します。CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
 
 `transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [容量配置、文件换算与升级](TRANSPORT-CAPACITY.md)。
 

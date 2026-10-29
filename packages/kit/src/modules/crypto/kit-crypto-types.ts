@@ -204,7 +204,7 @@ export interface TransportEncryptionConfig {
   /** 密钥交换端点路径（默认 `/api/_hai/key-exchange`） */
   keyExchangePath?: string
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
-  excludePaths?: string[]
+  excludePaths?: readonly string[]
   /** 显式客户端公钥存储；生产使用共享 Redis/reldb，内存仅供开发/测试。 */
   keyStore: TransportKeyStore
 }

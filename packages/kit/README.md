@@ -222,7 +222,7 @@ transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` �
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
 业务容量通过 `transport.maxPlaintextBytes` 统一配置：默认 1 MiB，整数范围 1 KiB～64 MiB，请求和响应共用 UTF-8 明文字节预算。客户端从握手自动获取上限，密文与部署代理预算由 `resolveTransportBodyLimits()` 推导（两倍明文 + 32 KiB）。握手、公钥、认证头和防重放约束独立；超限取消原流并释放 reader，请求 413、响应为加密的 500 容量错误，客户端识别 `TransportBodyTooLargeError` / `hai:crypto:070`。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -249,31 +249,37 @@ transport:
 ```
 
 ```ts
-import { resolveKitConfig } from '@h-ai/kit'
-import { parse } from 'yaml'
-import rawKitConfig from '../config/_kit.yml?raw'
+import { core } from '@h-ai/core'
+import { KitConfigSchema } from '@h-ai/kit'
 
-export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
+// 仅放在 src/lib/server 中；浏览器通过 layout data 接收公共投影。
+const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+export const appKitConfig = loaded.data
+export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
 `resolveKitConfig()` 同时解析 `server` （host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`，供 SvelteKit 服务器入口统一消费（与 `@h-ai/serv` 同构）。
 如只在服务端读取配置，也可配合 `core.config.validate('kit', KitConfigSchema)` 使用。
-由于浏览器端也可能读取这份配置，`_kit.yml` 只应放公开的 server/transport 路径与开关，不要写入密钥。
+完整 `_kit.yml` 由服务端读取，可包含内部代理网段和访问策略文件路径。`+layout.server.ts` 只返回 `{ kit: publicKitConfig }` 等明确公共投影，浏览器消费其中的 transport；禁止用 `?raw` 把完整配置或策略文件打入客户端，也不要在其中写入密钥。
 
 ### 配置
 
 `kit.createHandle()` 配置项：
 
-| 字段         | 类型                                     | 说明                                                              |
-| ------------ | ---------------------------------------- | ----------------------------------------------------------------- |
-| `auth`       | `HandleAuthConfig`                       | 认证配置（verifyToken / protectedPaths / publicPaths / loginUrl） |
-| `rateLimit`  | `object \| false`                        | 速率限制（windowMs / maxRequests）                                |
-| `logging`    | `boolean \| object`                      | 请求日志（默认 `true`，`{ logBody: true }` 记录请求体）           |
-| `crypto`     | `HookCryptoConfig`                       | 传输加密 + Cookie 加密                                            |
-| `guards`     | `GuardConfig[]`                          | 自定义守卫（在 auth 自动守卫之后执行）                            |
-| `middleware` | `Middleware[]`                           | 自定义中间件（在内置中间件之后执行）                              |
-| `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A 协议集成（Agent Card + JSON-RPC）                             |
-| `onError`    | `function`                               | 自定义错误处理                                                    |
+| 字段             | 类型                                     | 说明                                                               |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `auth`           | `HandleAuthConfig`                       | 认证配置（verifyToken / protectedPaths / publicPaths / loginUrl）  |
+| `trustedProxies` | `TrustedProxies`                         | 默认 `auto`；普通宿主忽略转发头，受管私有 Compose 代理采用容器网段 |
+| `access`         | `RequestAccessConfigInput`               | 默认 `false`；按路径、IP 和时间检查每次请求，可引用独立 YAML       |
+| `rateLimit`      | `object \| false`                        | 速率限制（windowMs / maxRequests）                                 |
+| `logging`        | `boolean \| object`                      | 请求日志（默认 `true`，`{ logBody: true }` 记录请求体）            |
+| `crypto`         | `HookCryptoConfig`                       | 传输加密 + Cookie 加密                                             |
+| `guards`         | `GuardConfig[]`                          | 自定义守卫（在 auth 自动守卫之后执行）                             |
+| `middleware`     | `Middleware[]`                           | 自定义中间件（在内置中间件之后执行）                               |
+| `a2a`            | `HandleA2AOperations \| HandleA2AConfig` | A2A 协议集成（Agent Card + JSON-RPC）                              |
+| `onError`        | `function`                               | 自定义错误处理                                                     |
 
 请求/响应摘要使用 `trace` 日志级别；`logging` 默认开启，`logBody` 默认关闭。日志查询从原始 `request.url` 读取，路径保留 SvelteKit 当前路由的 `event.url.pathname`，不会读取预渲染受限的 `event.url.search/searchParams`；静态页无需为构建关闭日志。查询和启用后的 JSON 正文在日志入口对 password/token/secret、授权/API Key 等字段脱敏，正文使用请求副本读取，不影响业务处理。
 
@@ -373,6 +379,16 @@ audit 已初始化时，createHandle 为业务 audit.log 绑定已验证会话�
 配置 `transport.maxPlaintextBytes` 支持 1 KiB～64 MiB 的显式整数或 `auto`。auto/省略在解析后为 undefined：无模块需求时仍为 1 MiB，反馈宿主使用 crypto.resolveTransportBodyLimits 的 requiredPlaintextBytes 统一推导。显式上限不足时启动/打包失败，不能被反馈覆盖；代理、adapter-node、握手与运行时使用一致预算。业务附件、解压和数据行数上限继续独立校验。
 
 敏感调用通过本次 `reauthorize: () => sensitiveActions.authorize(operation)` 重新确认用途：Kit 放 apiFetch 第三参数，typed client 放 options.context。会话刷新/恢复或明确的再认证拒绝后仅续发一次；取消不写入，未提供回调不重放旧证明。
+
+## 每次请求的访问控制
+
+路径规则的 `encryption` 可选 required / disabled，省略沿用宿主。disabled 不解密请求或加密响应，仍执行访问和身份检查；不接受框架传输信封。required 可保护自定义 JSON 端点并优先于 `excludePaths`，没有 Crypto、密钥环和 registry 时不能启用。模式冲突在创建 Handle 时拒绝。CLI 的 crypto 模板同步装配服务端和浏览器，生产选择 db 和共享数据库；策略及代理配置不下发浏览器，明文调用方按公开传输排除路径选择协议。
+
+将服务端 `_kit.yml` 的 `trustedProxies` 和 `access` 显式传给 `kit.createHandle`。示例和生成模板在应用初始化后只创建一次 Handle。`access` 默认为 `false`；内联 `{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` 只限制匹配接口，`global` 则限制宿主处理的全部请求。实际路径包含部署前缀；静态服务器直接返回的资源不经过 Handle。
+
+独立文件使用 `access: { file: './config/security/request-access.yml' }`，按工作目录解析，启动读取一次，最大 1 MiB，修改后重建 Handle。全局与所有匹配规则取交集，空列表不限对应维度，时区默认 UTC。时间窗口结束后，已有会话的后续请求同样被拒绝。预检和密钥交换也执行策略；普通 transport 请求的 HTTP 403 / `hai:common:104` 保留响应加密。
+
+`trustedProxies: auto` 在普通宿主不信任转发头；受管 Compose 只有后端私有且存在入口代理时才采用容器网段。自管入口显式指定代理 IP/CIDR，`[]` 可关闭。解析后的 `event.getClientAddress()` 与策略、IAM、审计使用相同地址。外层代理、不可恢复的源地址丢失、环境变量与部署回滚见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
 
 ## 开发测试
 

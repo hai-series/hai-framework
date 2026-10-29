@@ -9,10 +9,10 @@ import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
  * 1. 解析 HTTP 配置
  * 2. 选择请求上下文工厂
  * 3. 挂基础安全 middleware
- * 4. 挂自定义 middleware（若提供）
- * 5. （可选）挂传输加密 middleware
- * 6. 挂基础路由（health / refresh-cookie）
- * 7. 挂业务路由（oRPC / RPC）
+ * 4. 挂内置 CORS 包装及握手/预检的策略检查
+ * 5. （可选）挂传输加密 middleware，再挂每次请求的访问策略
+ * 6. 挂普通自定义 middleware（若提供）
+ * 7. 挂基础路由（health / refresh-cookie）与业务路由（oRPC / RPC）
  * 8. 挂文档路由（openapi / docs）
  * @module serv-app
  */
@@ -32,7 +32,7 @@ import type { ServValidationFailureBody } from './serv-validation.js'
 import { AUDIO_WS_PATH } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
-import { createTransportBodyPolicy } from '@h-ai/crypto'
+import { createTransportBodyPolicy, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { upgradeWebSocket } from '@hono/node-server'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { RPCHandler } from '@orpc/server/fetch'
@@ -42,10 +42,11 @@ import { registerAudioWsRoute } from './features/serv-feature-audio.js'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
-import { createClientIpResolver, readRemoteAddress } from './serv-client-ip.js'
+import { readRemoteAddress } from './serv-client-ip.js'
 import { resolveServHttpConfig } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext, resolveRequestId } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
+import { isCorsMiddleware } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
 import { createTransportMiddleware } from './serv-transport.js'
@@ -59,7 +60,7 @@ const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as cons
  *
  * - `path` 省略时默认挂到 `'*'`
  * - 按数组顺序注册
- * - 注册位置固定在内置 `securityHeaders` 之后、`transport` / 业务路由之前
+ * - 普通 middleware 位于 `transport` 解密和请求访问策略之后、业务路由之前
  *
  * @example
  * ```ts
@@ -67,7 +68,7 @@ const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as cons
  * import { serv } from '@h-ai/serv'
  *
  * const mount: ServMiddlewareMount = { path: '/api/v1/*', middleware: serv.cors({ origin: 'https://app.example.com' }) }
- * // middleware 在 transport 之前运行；短路响应不会经过传输加密。
+ * // 内置 CORS 在外层补充响应头；预检仍执行访问策略。
  * ```
  */
 export interface ServMiddlewareMount {
@@ -137,9 +138,9 @@ export interface CreateServAppOptions<
    *
    * 典型用途：请求日志、trace、指标、CORS、限流、租户头校验，以及不适合放入
    * JSON/oRPC contract 的 WebSocket、文件或其它二进制 HTTP 端点。
-   * 这些 middleware 会在内置安全头之后、传输加密与业务路由之前注册；
-   * 因此 CORS preflight 或二进制端点可以直接短路返回。短路响应仍包含内置安全头，
-   * 但不会经过 transport；若需要读取解密后的业务 body，应改用 context / procedure 层扩展。
+   * 普通 middleware 位于传输解密和请求访问策略之后、业务路由之前，读取的是解密正文；
+   * 提前返回仍经过传输响应加密，不能绕过访问策略。二进制端点需显式列入 transport.excludePaths。
+   * 通过 serv.cors 创建的内置 CORS 会在外层补充响应头，预检仍执行请求访问策略。
    */
   readonly middlewares?: readonly ServMiddlewareMount[]
   /**
@@ -348,7 +349,10 @@ export function createApp<
 >(options: CreateServAppOptions<TContract, TProcedures>): ServHttpApp {
   // Step 1：先把用户输入的 HTTP 配置收敛成完整配置，后续挂载逻辑只处理一种形态。
   const http = resolveServHttpConfig(options.http)
-  const resolveIp = createClientIpResolver(http.trustedProxies)
+  const resolveIp = core.access.createClientIpResolver(http.trustedProxies)
+  const checkAccess = core.access.createRequestCheck(http.access)
+  if (checkAccess.requiresEncryption && !options.transport)
+    throw new Error('Request access rules require transport encryption, but Serv transport is not configured')
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
   // 仅保存本次 Request 的可信解析结果，弱引用随请求释放；不充当身份或审计真值。
@@ -430,10 +434,47 @@ export function createApp<
   // Step 5：最先挂全局安全响应头，让后续所有响应（包括错误响应）都自动带上保护性 header。
   app.use('*', securityHeaders())
 
-  // Step 6：先注册调用方自定义 middleware。位置固定在内置安全头之后、传输加密/业务路由之前，
-  // 让 CORS preflight 等 HTTP 层横切逻辑可以优先短路，同时保持 transport 仍然位于业务路由之前。
-  if (options.middlewares)
-    mountCustomMiddlewares(app, options.middlewares)
+  const accessDenied = (c: HonoContext): Response | undefined => {
+    const ipAddress = resolveIp(c.req.raw, readRemoteAddress(c.env))
+    const decision = checkAccess(c.req.path, c.req.method, ipAddress)
+    if (decision.allowed) {
+      if (!options.transport && c.req.method !== 'OPTIONS'
+        && (c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || c.req.raw.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
+        && checkAccess.encryption(c.req.path, c.req.method) === 'disabled') {
+        return c.json(buildHaiErrorBody(HaiCommonError.VALIDATION_ERROR, servM('serv_transportPlaintextRequired')), 400)
+      }
+      return undefined
+    }
+    core.logger.info('Request access policy denied', { ruleId: decision.ruleId, reason: decision.reason, method: c.req.method, ipAddress })
+    return c.json(buildHaiErrorBody(HaiCommonError.REQUEST_ACCESS_DENIED, core.i18n.coreM('core_requestAccessDenied')), 403)
+  }
+  // CORS 保持在加密外层，为策略拒绝也补齐响应头；预检只执行策略，不执行业务处理器。
+  const cors = options.middlewares?.filter(entry => isCorsMiddleware(entry.middleware)) ?? []
+  const custom = options.middlewares?.filter(entry => !isCorsMiddleware(entry.middleware)) ?? []
+  for (const entry of cors) {
+    if (http.access === false) {
+      app.use(entry.path ?? '*', entry.middleware)
+      continue
+    }
+    app.use(entry.path ?? '*', async (c, next) => {
+      if (c.req.method !== 'OPTIONS')
+        return entry.middleware(c, next)
+      const rejected = accessDenied(c)
+      const preflight = await entry.middleware(c, async () => {})
+      if (!rejected)
+        return preflight
+      if (preflight instanceof Response) {
+        for (const [key, value] of preflight.headers)
+          rejected.headers.set(key, value)
+        rejected.headers.set('content-type', 'application/json; charset=utf-8')
+      }
+      return rejected
+    })
+  }
+  const keyExchangePath = options.transport ? `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}` : undefined
+  if (http.access !== false && keyExchangePath) {
+    app.use('*', async (c, next) => c.req.path === keyExchangePath && c.req.method === 'POST' ? accessDenied(c) ?? next() : next())
+  }
 
   // Step 7：若启用传输加密，必须在业务路由之前挂载。
   // 这样请求能先被解密，响应也能在离开应用前被重新加密。
@@ -456,9 +497,13 @@ export function createApp<
         mgr.error,
       )
     }
-    const keyExchangePath = `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
-    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths, policy))
+    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath!, options.transport.excludePaths, policy, checkAccess.encryption))
   }
+
+  // 业务拒绝位于加密管线内，客户端仍能解析标准错误；自定义静态路由也必须经过策略。
+  if (http.access !== false)
+    app.use('*', async (c, next) => accessDenied(c) ?? next())
+  mountCustomMiddlewares(app, custom)
 
   // Step 8：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。
   if (http.health !== false)

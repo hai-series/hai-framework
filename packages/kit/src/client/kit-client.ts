@@ -8,7 +8,7 @@
 
 import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
-import type { KitConfig } from '../kit-config.js'
+import type { KitPublicConfig } from '../kit-types.js'
 import { IamSessionErrorCodeSchema } from '@h-ai/api-contract'
 import { core } from '@h-ai/core'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
@@ -37,7 +37,7 @@ export interface ClientTransportConfig {
   /** 密钥交换端点 URL（默认 `'/api/_hai/key-exchange'`） */
   keyExchangeUrl?: string
   /** 排除路径（命中后强制走明文），需与服务端 transport.excludePaths 保持一致 */
-  excludePaths?: string[]
+  excludePaths?: readonly string[]
 }
 
 /**
@@ -246,7 +246,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
 }
 
 /**
- * 用 `config/_kit.yml` 解析后的 {@link KitConfig} 一次性安装浏览器端传输加密。
+ * 用 `config/_kit.yml` 解析后的 {@link KitPublicConfig} 公共投影 一次性安装浏览器端传输加密。
  *
  * 行为：
  * - `config.transport === false` 时直接返回（不启用传输加密）；
@@ -255,7 +255,7 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * 应用层（SvelteKit `+layout.svelte` 或浏览器入口）只需调用此函数一次，
  * 之后所有同源 `/api/*` 与 `__data.json` 请求都会自动走传输加密。
  *
- * @param config 已解析的 kit 顶层配置
+ * @param config 已解析的 kit 公共传输配置
  * @param deps  外部依赖
  * @param deps.crypto `@h-ai/crypto` 模块实例
  * @example
@@ -265,12 +265,12 @@ export function installBrowserTransportFetch(transportConfig?: ClientTransportCo
  * import { crypto } from '@h-ai/crypto'
  *
  * function installAfterCryptoInit() {
- *   kit.client.installBrowserTransport({ server: { host: '127.0.0.1', port: 3000 }, transport: { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] } }, { crypto })
+ *   kit.client.installBrowserTransport({ transport: { keyExchangePath: '/api/_hai/key-exchange', excludePaths: ['/api/health'] } }, { crypto })
  * }
  * ```
  */
 export function installBrowserTransport(
-  config: KitConfig,
+  config: KitPublicConfig,
   deps: { crypto: CryptoFunctions },
 ): void {
   if (typeof window === 'undefined' || config.transport === false)

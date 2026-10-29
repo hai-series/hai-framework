@@ -5,9 +5,11 @@
  * @module kit-transport-middleware
  */
 
+import type { RequestAccessCheck } from '@h-ai/core'
 import type { TransportEncryptionManager, TransportMessageContext } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig } from './kit-crypto-types.js'
+import { core, err, HaiCommonError } from '@h-ai/core'
 import { authenticateTransportRequest, createTransportBodyPolicy, createTransportErrorResponse, isValidSM2PublicKey, readTransportBody, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL, TransportBodyTooLargeError, TransportTimeError } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
 import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, shouldExcludeTransportPath, shouldHandleTransportPath } from './kit-transport-paths.js'
@@ -18,7 +20,9 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-
  * 创建传输加密中间件
  *
  * @param config - 传输加密配置
+ * @param encryption - 已编译的路径/方法选择器；省略时沿用宿主默认范围。
  * @returns SvelteKit 中间件
+ * @throws 显式启用但管理器初始化失败时抛出配置错误，调用方须停止宿主装配。
  * @example 模块内部上下文
  * ```ts
  * function install(config: TransportEncryptionConfig) {
@@ -26,7 +30,7 @@ const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json', 'text/sveltekit-
  * }
  * ```
  */
-export function transportEncryptionMiddleware(config: TransportEncryptionConfig): Middleware {
+export function transportEncryptionMiddleware(config: TransportEncryptionConfig, encryption?: RequestAccessCheck['encryption']): Middleware {
   // 未启用时直接透传
   if (!config.enabled) {
     return async (_context, next) => next()
@@ -44,8 +48,8 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     maxPlaintextBytes: policy.maximum.plaintextBytes,
   })
   if (!result.success) {
-    // 安全策略：transport 已启用但服务端管理器不可用时，受保护路由必须 fail-closed，禁止明文透传。
-    return createUnavailableTransportMiddleware(keyExchangePath, excludePaths)
+    // 与 Serv 一致：静态配置或必需依赖失败即拒绝装配，不能让健康页面掩盖不可用的业务加密。
+    throw core.error.buildHaiErrorInst(HaiCommonError.INTERNAL_ERROR, kitM('kit_transportKeyGenerationFailed'), result.error)
   }
   const manager = result.data
 
@@ -53,19 +57,29 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     const { event } = context
     const pathname = getRequestPathname(event.request)
 
+    // CORS 预检没有业务密文，仍交由请求访问策略判断。
+    if (event.request.method === 'OPTIONS')
+      return next()
+
     // 密钥交换端点：委托给 keyExchangeHandler
     if (pathname === keyExchangePath && event.request.method === 'POST') {
       return handleKeyExchange(manager, event.request)
     }
 
+    const mode = encryption?.(pathname, event.request.method)
+    if (mode === 'disabled') {
+      if (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
+        return Response.json(err({ ...HaiCommonError.VALIDATION_ERROR, message: kitM('kit_transportPlaintextRequired'), traceId: context.requestId }), { status: 400 })
+      return next()
+    }
     // 仅对同源 API endpoint 与 SvelteKit __data 请求启用 transport；
-    // 页面文档、静态资源等仍透传，避免首页 HTML 被误拦截。
-    if (!shouldHandleTransportPath(pathname, keyExchangePath)) {
+    // 显式 required 也可保护自定义 JSON 端点；不能拿它包裹 HTML 页面。
+    if (mode !== 'required' && !shouldHandleTransportPath(pathname, keyExchangePath)) {
       return next()
     }
 
     // 排除路径不做加解密
-    if (shouldExcludeTransportPath(pathname, excludePaths, keyExchangePath)) {
+    if (mode !== 'required' && shouldExcludeTransportPath(pathname, excludePaths, keyExchangePath)) {
       return next()
     }
 
@@ -152,25 +166,6 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
 
 function canEncryptResponseContentType(contentType: string): boolean {
   return ENCRYPTABLE_RESPONSE_CONTENT_TYPES.some(type => contentType.includes(type))
-}
-
-function createUnavailableTransportMiddleware(
-  keyExchangePath: string,
-  excludePaths: string[],
-): Middleware {
-  return async (context, next) => {
-    const pathname = getRequestPathname(context.event.request)
-    if (pathname === keyExchangePath) {
-      return jsonError(kitM('kit_transportKeyGenerationFailed'), 500)
-    }
-    if (!shouldHandleTransportPath(pathname, keyExchangePath)) {
-      return next()
-    }
-    if (shouldExcludeTransportPath(pathname, excludePaths, keyExchangePath)) {
-      return next()
-    }
-    return jsonError(kitM('kit_transportKeyGenerationFailed'), 500)
-  }
 }
 
 function isEmptyResponse(response: Response): boolean {

@@ -1,4 +1,5 @@
 {
+  "serv_transportPlaintextRequired": "此接口接收未加密的应用数据，请关闭传输加密后通过 HTTPS 重试。",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "serv_validationFailed": "数据验证失败",
   "serv_validationRequired": "此字段必填",

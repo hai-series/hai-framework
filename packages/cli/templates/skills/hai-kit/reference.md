@@ -4,7 +4,7 @@
 
 认证协议仅支持 v2：独立随机 SM4-CBC 密钥和 HMAC-SM3 密钥由 SM2 封装，先验签、再验证 MAC，最后解密 CBC。请求由客户端私钥签名，响应由所选服务端版本签名。认证字段包括 version、direction、serverKeyId、clientId、128 位随机 requestId（兼 nonce）、issuedAt、HTTP method、pathname + 原始 search 的 SM3 pathHash，以及响应 status。请求有效期 5 分钟，未来时钟偏差最多 30 秒；共享 registry 原子消费 (clientId, requestId)，nonce 至少保留到 issuedAt + 6 分钟以覆盖节点偏差，存储故障拒绝请求。Redis 必须保留有效 nonce，使用 noeviction/可靠持久化策略；各节点时钟须同步。此能力防止同一传输消息重放，业务重试仍需自己的幂等键。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
 ## 使用步骤
 
@@ -95,13 +95,16 @@ export const handle = kit.createHandle({
 <!-- src/routes/+layout.svelte -->
 <script lang='ts'>
   import { browser } from '$app/environment'
-  import { appKitConfig } from '$lib/config/kit-config'
+  import type { LayoutData } from './$types'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
+  import { untrack } from 'svelte'
 
-  // 一次性安装：内部按 appKitConfig.transport 是否启用决定行为，并预热 crypto
+  const { data }: { data: LayoutData } = $props()
+
+  // 服务端 layout 只返回 kit 公共投影；初次加载安装，不下发完整策略。
   if (browser) {
-    kit.client.installBrowserTransport(appKitConfig, { crypto })
+    kit.client.installBrowserTransport(untrack(() => data.kit), { crypto })
   }
 </script>
 ```
@@ -119,9 +122,9 @@ export const { apiFetch } = kit.client.create()
 
 transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求；页面文档、静态资源与 `multipart/form-data` 上传请求保持明文透传。
 
-受保护路径不允许协议降级；缺少认证、管理器不可用、响应加密失败均拒绝。明文接口仅通过 excludePaths 显式排除。
+受保护路径不允许协议降级；缺少认证、管理器不可用、响应加密失败均拒绝。明文接口通过请求规则 encryption:disabled 或宿主 excludePaths 显式配置，调用方同步选择协议；IP、时间和认证继续检查。规则 required 优先于宿主排除表，冲突或缺少加密装配会拒绝创建 Handle。
 
-空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口只能经 excludePaths 显式排除。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
+空 POST 也发送空明文的认证封装；GET/HEAD 将封装放在 X-Hai-Transport 头，204/304/HEAD 等无正文响应也使用同名头承载认证封装。其它请求/响应在 JSON 正文承载封装并带 X-Encrypted: true。客户端必须关联原请求上下文和 HTTP status，缺标记、旧格式或认证失败一律 reject；明文接口由 Serv/Kit 路径规则 `encryption: disabled` 或宿主 `excludePaths` 显式允许；调用方同步选择普通请求，API Client/Kit 包装器使用自己的 `excludePaths`。CORS 须允许并暴露 X-Hai-Transport。握手公钥的真实性依赖 TLS，不替代 IAM 业务授权。
 
 业务容量统一配置 transport.maxPlaintextBytes：UTF-8 JSON 明文字节，默认 1 MiB，有效整数范围 1 KiB～64 MiB，请求和响应共用。客户端从握手获取服务端预算，可选本地上限取较小值；resolveTransportBodyLimits(limit, { requiredPlaintextBytes }) 合并模块需求：保留显式上限，不足时报配置冲突；省略时按需要推导，无模块需要仍为 1 MiB。Serv/Kit 的 auto 规范化为 undefined。密文预算为两倍明文加 32 KiB。握手 JSON 16 KiB、公钥 4 KiB、认证头 16 KiB、路径 8 KiB、认证及防重放保持独立。原流超限/取消立即停止、取消并释放 reader；请求 413、响应返回加密的 500 容量错误，客户端识别 TransportBodyTooLargeError / hai:crypto:070。 通过 _kit.yml 的 transport.maxPlaintextBytes 或对应 HAI_*_TRANSPORT_MAXPLAINTEXTBYTES 配置并转发到服务端 transport；重建正文保留 signal 并删除旧长度/编码头。
 
@@ -144,15 +147,20 @@ transport:
 ```
 
 ```ts
-import { resolveKitConfig } from '@h-ai/kit'
-import { parse } from 'yaml'
-import rawKitConfig from '../config/_kit.yml?raw'
+import { core } from '@h-ai/core'
+import { KitConfigSchema } from '@h-ai/kit'
 
-export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
+// src/routes/+layout.server.ts；服务端已先完成应用配置初始化。
+export function load() {
+  const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+  if (!loaded.success)
+    throw new Error(loaded.error.message)
+  return { kit: { transport: loaded.data.transport } }
+}
 ```
 
 `resolveKitConfig()` 同时解析 `server`（host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`（与 `@h-ai/serv` 同构）。
-`_kit.yml` 只放公开的 server/transport 路径/开关，不放密钥；如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。
+`_kit.yml` 在服务端读取，可包含 access 和 trustedProxies；layout data 只投影公开 transport，不通过 ?raw 导入完整文件到浏览器，也不放密钥。如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。请求策略按[共享约定](../hai-core/request-access.md)装配与验证。
 
 ## 核心 API
 
@@ -166,7 +174,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `kit.validate.*`                                         | Zod 请求校验                                             |
 | `kit.auth.*`                                             | Cookie / Token 辅助                                      |
 | `kit.client.create()`                                    | 浏览器端同源 apiFetch                                    |
-| `kit.client.installBrowserTransport(config, { crypto })` | 推荐入口：按解析后的 `_kit.yml` 一键安装浏览器端传输加密 |
+| `kit.client.installBrowserTransport(config, { crypto })` | 接收 KitPublicConfig，只含 transport；不要求浏览器接收代理或访问策略 |
 | `kit.client.installBrowserTransportFetch()`              | 底层入口：直接传 transport 配置安装浏览器全局 fetch 包装 |
 | `kit.crud.define()`                                      | 声明式 CRUD 资源                                         |
 
@@ -175,7 +183,7 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 ## 常见模式
 
 - SvelteKit 应用内同源请求用 `kit.client.create().apiFetch`。
-- SvelteKit 应用启用 transport 时，在 `+layout.svelte` 的 `if (browser)` 分支调用一次 `kit.client.installBrowserTransport(appKitConfig, { crypto })`，无需重复连线 `keyExchangeUrl` / `excludePaths`。
+- SvelteKit 应用启用 transport 时，服务端 layout 只投影 transport 为公共 data；`+layout.svelte` 的 `if (browser)` 分支调用一次安装器，无需复制 `keyExchangeUrl` / `excludePaths`，不下发完整配置。
 - Web/App/小程序跨域访问公共 API 用 `@h-ai/api-client` typed client。
 - 传输加密只通过 `crypto.transport` 间接装配，不在 kit 中新增本地加密工厂或鸭子类型。
 - 服务端业务模块直接调用模块 API，不通过 HTTP 自环。

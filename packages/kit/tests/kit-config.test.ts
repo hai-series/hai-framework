@@ -48,7 +48,7 @@ describe('kit transport config', () => {
   })
 
   it('默认关闭 transport', () => {
-    expect(resolveKitConfig({})).toEqual({ server: DEFAULT_SERVER, transport: false })
+    expect(resolveKitConfig({})).toEqual({ server: DEFAULT_SERVER, transport: false, trustedProxies: 'auto', access: false })
   })
 
   it('补齐 transport 默认值', () => {
@@ -65,6 +65,8 @@ describe('kit transport config', () => {
       },
     })).toEqual({
       server: DEFAULT_SERVER,
+      trustedProxies: 'auto',
+      access: false,
       transport: {
         keyExchangePath: '/custom/key-exchange',
         excludePaths: [],

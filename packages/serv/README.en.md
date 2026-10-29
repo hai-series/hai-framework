@@ -178,7 +178,8 @@ When using `@h-ai/core` and `ServConfigSchema` with `config/_serv.yml`, transpor
 ```yaml
 # config/_serv.yml
 http:
-  trustedProxies: []
+  trustedProxies: auto
+  access: false
   apiPrefix: /api/v1
 
 transport:
@@ -224,7 +225,7 @@ const app = serv.createApp({
 
 Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
 
-Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Serv/Kit hosts explicitly allow plaintext through `encryption: disabled` path rules or host `excludePaths`. Callers must select ordinary requests; API Client/Kit wrappers use their own `excludePaths`. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
 
 Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -351,18 +352,19 @@ const app = serv.createApp({
 Execution order is fixed:
 
 1. Built-in `securityHeaders`.
-2. Your `middlewares`.
-3. Built-in `transport`, if enabled.
-4. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
+2. Built-in CORS response wrapping; access checks for key exchange and preflight.
+3. Built-in `transport`, if enabled, and request access checks.
+4. Your `middlewares`.
+5. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
 
 Notes:
 
 - `middlewares` register in array order.
 - Omitted `path` defaults to `'*'`.
-- Middleware runs before transport, so CORS preflight or binary endpoints can short-circuit. Responses retain security headers but bypass transport.
+- Ordinary middleware runs after decryption and access checks. Early responses still follow policy and response encryption. Binary endpoints must be listed in `transport.excludePaths`; those exclusions do not bypass access checks.
 - Prefer `serv.storageAssets(...)` for public read-only files. Applications must supply key/MIME allowlists, caching, and CORS; no business concepts such as avatars are built in.
 - Private resources, Range downloads, and dynamic authorization need custom middleware/procedures, not the public asset helper.
-- To read decrypted business bodies, extend context/procedure instead.
+- `c.req.json()` reads decrypted bodies here; built-in `serv.cors(...)` preflight still follows access checks.
 - Expose custom response headers such as `X-Encrypted` explicitly through `serv.cors({ exposedHeaders: [...] })` for browsers.
 - This layer works with HTTP middleware context and returns **HTTP Response**, not `HaiResult`.
 
@@ -512,6 +514,16 @@ Additional root types / named exports:
 
 > Transport encryption is a `createApp` option delegated internally to `crypto.transport`, not a flat `serv.xxx` API.
 
+### Access checks on every request
+
+Rules accept `encryption: required` or `disabled`; omission inherits the host. Disabled endpoints accept ordinary HTTPS data while retaining IP, time and authentication checks, and reject framework encryption envelopes with HTTP 400. Required mode overrides host `excludePaths` and rejects App creation without transport. Conflicting modes on overlapping paths and methods fail at compilation; there is no automatic downgrade or declaration-order override.
+
+`http.access` defaults to `false`. To restrict external endpoints only, set `http.access.rules` in `_serv.yml`, for example `{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }`. `http.access.global` restricts all requests handled by the host, including health checks. Global conditions and every matching rule must pass. Timezones default to UTC; empty lists leave the corresponding dimension unrestricted. Existing sessions are checked on every request; IAM `loginAccess` checks login only.
+
+Use `http.access: { file: './config/security/request-access.yml' }` for larger policies. Paths resolve from the service working directory. App creation reads the file once, up to 1 MiB; invalid configuration stops startup, and changes require a new App. Denials return HTTP 403 with `hai:common:104`; ordinary transport requests retain encrypted responses. Logs correlate rule ID and denial reason with the request ID without copying policy contents.
+
+`http.trustedProxies` defaults to `auto`: ordinary hosts ignore forwarded headers; only private managed Compose proxy topologies adopt container networks automatically. Custom ingress uses explicit proxy IPs/CIDRs; `[]` disables trust. Proxies sanitize forwarded headers, and Node listeners or Fetch platforms supply trusted peer metadata. See the [request access handbook](../../docs/usage/configuration/request-access.md) for files, edge proxies and deployment rollback.
+
 ### Configuration
 
 `@h-ai/serv` does not scan YAML itself. Load `config/_serv.yml` through `@h-ai/core` and pass the result to `serv.createApp()`.
@@ -552,7 +564,8 @@ server:
   port: 3000
 
 http:
-  trustedProxies: []
+  trustedProxies: auto
+  access: false
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

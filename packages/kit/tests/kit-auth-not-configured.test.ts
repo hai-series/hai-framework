@@ -25,7 +25,7 @@ afterEach(() => vi.unstubAllEnvs())
 /** 使用真实认证契约构造成功响应，避免强制断言掩盖 Cookie 消费字段变化。 */
 function createAuthOperations() {
   const result: AuthResult = {
-    user: { id: '1', username: 'user', enabled: true, createdAt: new Date(), updatedAt: new Date() },
+    user: { id: '1', username: 'user', accountStatus: 'active', createdAt: new Date(), updatedAt: new Date() },
     tokens: { accessToken: 'tk', refreshToken: 'refresh', expiresIn: 3600, tokenType: 'Bearer' },
     roles: [],
     permissions: [],

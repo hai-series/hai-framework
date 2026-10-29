@@ -1,6 +1,6 @@
 import type { CryptoFunctions, EncryptedPayload, EncryptedRequestPayload, TransportEncryptionManager, TransportServerKeyRing } from '@h-ai/crypto'
 import type { Handle, RequestEvent } from '@sveltejs/kit'
-import { err, ok } from '@h-ai/core'
+import { err, HaiCommonError, ok } from '@h-ai/core'
 import { createInMemoryKeyStore, crypto, TRANSPORT_BODY_LIMITS, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
@@ -334,15 +334,10 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('X-Client-Id') })
   })
 
-  it('transport 管理器不可用时受保护路由 fail-closed', async () => {
+  it('transport 管理器初始化失败即拒绝创建 Handle，不产生部分可用的宿主', () => {
     const failingCrypto = createCryptoWithTransportServer(() => err(new Error('server unavailable')))
-    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } })
-    const resolve = vi.fn(() => new Response('should not run'))
-
-    const response = await dispatch(handle, new Request('http://localhost/api/data'), resolve)
-
-    expect(response.status).toBe(500)
-    expect(resolve).not.toHaveBeenCalled()
+    expect(() => kit.createHandle({ crypto: { crypto: failingCrypto, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing } } }))
+      .toThrow(expect.objectContaining({ code: HaiCommonError.INTERNAL_ERROR.code, message: expect.any(String) }))
   })
 
   it('透传 transport.keyStore 到 crypto.transport.createServer', () => {

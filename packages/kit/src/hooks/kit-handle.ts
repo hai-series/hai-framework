@@ -7,11 +7,13 @@
  */
 
 import type { AuditActorSnapshot } from '@h-ai/audit'
+import type { RequestAccessCheck } from '@h-ai/core'
 import type { Handle, RequestEvent, ResolveOptions } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import { audit } from '@h-ai/audit'
-import { core } from '@h-ai/core'
+import { core, err, HaiCommonError } from '@h-ai/core'
+import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { configureAuth, getAccessToken } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
 import { isSvelteKitControlFlow } from '../kit-utils.js'
@@ -67,6 +69,8 @@ function applyDefaultSecurityHeaders(response: Response): void {
  * ```
  */
 export function createHandle(config: HandleConfig = {}): Handle {
+  const resolveIp = core.access.createClientIpResolver(config.trustedProxies ?? 'auto')
+  const checkAccess = config.access && core.access.createRequestCheck(config.access)
   const {
     auth: authConfig,
     rateLimit: rateLimitConfig,
@@ -77,6 +81,8 @@ export function createHandle(config: HandleConfig = {}): Handle {
     middleware: customMiddleware = [],
     a2a: a2aInput,
   } = config
+  if (checkAccess && checkAccess.requiresEncryption && !cryptoConfig?.transport)
+    throw new Error('Request access rules require transport encryption, but Kit transport is not configured')
 
   // ── A2A 配置解析 ──
   const a2aResolved = resolveA2AConfig(a2aInput)
@@ -113,7 +119,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
   const allMiddleware = [...builtinMiddleware, ...customMiddleware]
 
   // ── 传输加密中间件单独包裹整个 handle 流程 ──
-  const transportMiddleware = buildTransportMiddleware(cryptoConfig)
+  const transportMiddleware = buildTransportMiddleware(cryptoConfig, checkAccess ? checkAccess.encryption : undefined)
 
   // ── Cookie 加密配置预处理 ──
   const cookieProxyConfig = buildCookieProxyConfig(cryptoConfig)
@@ -126,6 +132,17 @@ export function createHandle(config: HandleConfig = {}): Handle {
       clientAddress = event.getClientAddress()
     }
     catch { /* 静态预渲染等宿主可能没有连接地址，不能改信任请求转发头。 */ }
+    const resolvedAddress = resolveIp(event.request, clientAddress)
+    if (resolvedAddress !== clientAddress) {
+      // IAM、审计、限流及业务路由读取同一可信地址；无效代理链不能降级为代理身份。
+      event.getClientAddress = () => {
+        if (!resolvedAddress)
+          throw new Error('Trusted client address is unavailable')
+        return resolvedAddress
+      }
+    }
+    clientAddress = resolvedAddress
+    const accessDecision = checkAccess ? checkAccess(event.url.pathname, event.request.method, clientAddress) : undefined
     return core.context.run({ requestId, userId: undefined, scopeId: undefined, jobId: undefined }, () => audit.withContext({
       actor: null,
       requestId,
@@ -176,7 +193,17 @@ export function createHandle(config: HandleConfig = {}): Handle {
 
       const runRequest = async (): Promise<Response> => {
         try {
-        // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
+          if (accessDecision && !accessDecision.allowed) {
+            guardDenied = true
+            core.logger.info('Request access policy denied', { ruleId: accessDecision.ruleId, reason: accessDecision.reason, method: event.request.method, ipAddress: clientAddress })
+            return Response.json({ success: false, error: { ...HaiCommonError.REQUEST_ACCESS_DENIED, message: core.i18n.coreM('core_requestAccessDenied'), traceId: requestId } }, { status: 403 })
+          }
+          if (!transportMiddleware && event.request.method !== 'OPTIONS'
+            && (event.request.headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) || event.request.headers.has(TRANSPORT_PROTOCOL.ENVELOPE_HEADER))
+            && checkAccess && checkAccess.encryption(event.url.pathname, event.request.method) === 'disabled') {
+            return Response.json(err({ ...HaiCommonError.VALIDATION_ERROR, message: kitM('kit_transportPlaintextRequired'), traceId: requestId }), { status: 400 })
+          }
+          // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
           if (a2aResolved) {
             const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
             if (a2aResponse)
@@ -275,9 +302,16 @@ export function createHandle(config: HandleConfig = {}): Handle {
         }
       }
 
-      const response = transportMiddleware
-        ? await transportMiddleware(context, runRequest)
-        : await runRequest()
+      // 密钥交换由传输层短路、响应本来就是明文，先让它经过同一访问策略。
+      const keyExchange = cryptoConfig?.transport
+        ? cryptoConfig.transport.keyExchangePath ?? '/api/_hai/key-exchange'
+        : undefined
+      const deniedHandshake = accessDecision && !accessDecision.allowed && event.request.method === 'POST' && event.url.pathname === keyExchange
+      const response = deniedHandshake
+        ? await runRequest()
+        : transportMiddleware
+          ? await transportMiddleware(context, runRequest)
+          : await runRequest()
 
       await captureRequest(response.status)
       applyDefaultSecurityHeaders(response)
@@ -405,6 +439,7 @@ function matchPath(pathname: string, pattern: string): boolean {
  */
 function buildTransportMiddleware(
   cryptoConfig: HandleConfig['crypto'],
+  encryption?: RequestAccessCheck['encryption'],
 ): Middleware | null {
   if (!cryptoConfig?.transport)
     return null
@@ -420,7 +455,7 @@ function buildTransportMiddleware(
     keyStore: transportOpts.keyStore,
     maxPlaintextBytes: transportOpts.maxPlaintextBytes,
     routePlaintextBytes: transportOpts.routePlaintextBytes,
-  })
+  }, encryption)
 }
 
 /**

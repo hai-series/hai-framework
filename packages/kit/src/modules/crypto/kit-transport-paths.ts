@@ -72,7 +72,7 @@ export function shouldHandleTransportPath(
  */
 export function shouldExcludeTransportPath(
   pathname: string,
-  excludePaths: string[],
+  excludePaths: readonly string[],
   keyExchangePath: string,
 ): boolean {
   if (pathname === keyExchangePath)
@@ -122,7 +122,7 @@ export function shouldUseTransportForUrl(
   options: {
     origin?: string
     keyExchangePath?: string
-    excludePaths?: string[]
+    excludePaths?: readonly string[]
   } = {},
 ): boolean {
   const baseOrigin = options.origin ?? 'http://localhost'

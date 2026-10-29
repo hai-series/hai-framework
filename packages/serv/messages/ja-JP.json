@@ -1,4 +1,5 @@
 {
+  "serv_transportPlaintextRequired": "このエンドポイントはアプリケーション層で暗号化されていないデータを受け付けます。リクエストの伝送暗号化を無効にし、HTTPS で再試行してください。",
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "serv_validationFailed": "入力内容の検証に失敗しました",
   "serv_validationRequired": "この項目は必須です",

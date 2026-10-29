@@ -42,6 +42,8 @@ Kit 自动请求审计与 Serv 一样，仅在请求时发现 audit.isInitialize
 
 ## 按需参考
 
+按路径/IP/时间检查每次请求、真实 IP 与独立文件见[请求访问控制](../hai-core/request-access.md)。完整 Kit 配置只在服务端读取，浏览器接收 transport 等公开投影。
+
 按本次操作读取对应小节；以已安装版本的公开类型核验签名，示例中的业务变量由应用提供。
 
 - [使用步骤](reference.md#使用步骤)

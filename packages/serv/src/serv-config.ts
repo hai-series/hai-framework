@@ -6,10 +6,11 @@
  * @module serv-config
  */
 
+import type { RequestAccessConfigInput, TrustedProxies } from '@h-ai/core'
 import process from 'node:process'
+import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
 import { TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
 import { z } from 'zod'
-import { isTrustedProxyEntry } from './serv-client-ip.js'
 
 const ApiPrefixSchema = z.custom<`/api/${string}`>(
   value => typeof value === 'string' && value.startsWith('/api/'),
@@ -167,12 +168,14 @@ export interface ServCorsRuntimeConfig {
  * import type { ServHttpConfig } from '@h-ai/serv'
  * import { serv } from '@h-ai/serv'
  *
- * const http: ServHttpConfig = { trustedProxies: [], apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' }, rpc: false }
+ * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' }, rpc: false }
  * ```
  */
 export interface ServHttpConfig {
-  /** 可信任的连接代理 IP/CIDR；默认空数组，不采纳转发头。 */
-  readonly trustedProxies: readonly string[]
+  /** auto 仅在受管私有容器代理中采用容器网段；空数组显式忽略转发头。 */
+  readonly trustedProxies: TrustedProxies
+  /** 每次请求的 IP/时间策略；默认 false，内联与独立文件二选一。 */
+  readonly access: RequestAccessConfigInput
   readonly apiPrefix: `/api/${string}`
   readonly openapi: false | ServOpenAPIHttpConfig
   readonly docs: false | ServDocsHttpConfig
@@ -245,7 +248,8 @@ export type ServTransportRuntimeConfigInput = Partial<{
  * ```
  */
 export type ServHttpConfigInput = Partial<{
-  readonly trustedProxies: readonly string[]
+  readonly trustedProxies: TrustedProxies
+  readonly access: RequestAccessConfigInput
   readonly apiPrefix: `/api/${string}`
   readonly openapi: false | Partial<ServOpenAPIHttpConfig>
   readonly docs: false | Partial<ServDocsHttpConfig>
@@ -330,7 +334,8 @@ const CorsRuntimeConfigInputSchema = z.object({
 })
 
 const ServHttpConfigInputSchema = z.object({
-  trustedProxies: z.array(z.string().trim().refine(isTrustedProxyEntry, 'Expected an IP address or CIDR')).default([]),
+  trustedProxies: TrustedProxiesSchema.default('auto'),
+  access: RequestAccessConfigSchema.default(false),
   apiPrefix: ApiPrefixSchema.default('/api/v1'),
   openapi: OpenAPIHttpConfigInputSchema.default(false),
   docs: DocsHttpConfigInputSchema.default(false),

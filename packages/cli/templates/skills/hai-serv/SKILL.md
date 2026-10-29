@@ -21,7 +21,7 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 
 ## 使用路径
 
-- 在满足包 Node API 依赖的宿主中选择 listen 或标准 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。Node 自动提供 socket 对端；Fetch 通过 app.fetch 的 remoteAddress 元数据提供可信平台对端。http.trustedProxies 默认为空，仅显式代理 IP/CIDR 可以提供转发头；自定义 context 传递完整 input 保留解析后的 ip。
+- 在满足包 Node API 依赖的宿主中选择 listen 或标准 Fetch adapter，再从共享 contract 装配 procedures；不要直接暴露 Hono。Node 自动提供 socket 对端；Fetch 通过 app.fetch 的 remoteAddress 元数据提供可信平台对端。http.trustedProxies 默认 auto，普通宿主忽略转发头，仅受管私有 Compose 自动采用容器网段；自定义 context 传递完整 input 保留解析后的 ip。
 - Storage 默认 procedures 必须注入 authorize 资源策略，使用可信 session 校验全部 key/prefix；缺失策略默认拒绝，混合批量全量授权后才执行。
 - AI 默认 feature 以可信 session.userId 绑定 objectId，所有读写和记忆按主体隔离；跨主体访问必须显式 authorizeObject，同名 sessionId 不代表同一用户。
 - 认证绑定 route 的 auth/permission/role；启动配置错误与正常请求领域错误分别处理。
@@ -37,6 +37,8 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 错误提示与诊断分离：HTTP/UI 边界用 core.error.toPublic，仅公开 i18n 安全消息及 error.traceId；重新翻译后用 core.error.formatMessage 保留关联。ToastContainer 默认只显示可读说明，自动将编号移入排查信息图标，展开后可查看、复制并提供给客户支持或开发人员。前后端日志传完整 Error 和操作上下文，使用同一 requestId/traceId 并脱敏；禁止只写通用错误标题，也不能把 cause/ext/SQL/绑定值直接返回用户。数据库日志保留安全的驱动错误码、消息和堆栈。
 
 ## 按需参考
+
+每次请求的 IP/时段、加密模式、独立文件、真实 IP 与部署核对见[请求访问控制](../hai-core/request-access.md)。普通 middleware 位于解密和策略之后，提前返回仍加密；明文或二进制端点使用路径规则 encryption:disabled 或宿主 transport.excludePaths，不能绕过访问和身份检查。
 
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 

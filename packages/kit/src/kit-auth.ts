@@ -8,7 +8,6 @@
 import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthRequestContext, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
-import process from 'node:process'
 import { err, ok } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
@@ -162,12 +161,15 @@ export function getAccessToken(request: Request, cookies?: CookieReader): string
  * 写入 Access Token Cookie（内部使用，由 login 自动调用）。
  */
 function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
+  // 共享文件也供浏览器内存 Token 使用，不引入 Node 内建模块；未知宿主保持安全默认值。
+  // eslint-disable-next-line node/prefer-global/process
+  const secure = typeof process === 'undefined' || process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production'
   cookies.set(authState.cookieName, token, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
     // 测试开关仅放宽共享状态要求，不降低生产凭证 Cookie 的传输安全。
-    secure: process.env.NODE_ENV === 'production' || process.env.HAI_CORE_ENV === 'production',
+    secure,
     maxAge,
   })
 }

@@ -178,7 +178,8 @@ await apiClient.init({
 ```yaml
 # config/_serv.yml
 http:
-  trustedProxies: []
+  trustedProxies: auto
+  access: false
   apiPrefix: /api/v1
 
 transport:
@@ -224,7 +225,7 @@ const app = serv.createApp({
 
 認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
-空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は Serv/Kit の `encryption: disabled` ルールまたはホストの `excludePaths` で明示的に許可し、呼出側も通常の要求を選びます。API Client/Kit のラッパーは自身の `excludePaths` を使用します。CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
 
 `transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -351,18 +352,19 @@ const app = serv.createApp({
 実行順は固定です：
 
 1. 組み込み `securityHeaders`。
-2. 独自の `middlewares`。
-3. 組み込み `transport`（有効時）。
-4. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
+2. 組み込み CORS 応答処理；鍵交換と preflight のアクセス判定。
+3. 組み込み `transport`（有効時）と各リクエストのアクセス判定。
+4. 独自の `middlewares`。
+5. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
 
 補足：
 
 - `middlewares` は配列順に登録。
 - `path` 省略時は `'*'`。
-- middleware は transport より先なので、CORS preflight・バイナリー endpoint は途中で応答できます。安全ヘッダーは残りますが transport は通りません。
+- 通常の middleware は復号とアクセス判定の後に実行し、途中の応答もポリシーと応答暗号化の対象です。バイナリー endpoint は `transport.excludePaths` に明記しますが、アクセス判定は省略されません。
 - 公開読み取り専用ファイルは `serv.storageAssets(...)` を優先。key/MIME 許可リスト・キャッシュ・CORS はアプリが指定し、アバターなどの業務概念は内蔵しません。
 - 非公開リソース・Range ダウンロード・動的認可は独自 middleware/procedure を使い、公開 helper は使いません。
-- 復号済みの業務 body を読む場合は context / procedure 層を拡張。
+- この段階の `c.req.json()` は復号後の本文を読みます。組み込み `serv.cors(...)` の preflight もアクセス判定の対象です。
 - ブラウザーが `X-Encrypted` などを読む場合は `serv.cors({ exposedHeaders: [...] })` で明示的に公開。
 - この層は HTTP middleware context を操作し、`HaiResult` ではなく **HTTP Response** を返します。
 
@@ -512,6 +514,16 @@ await apiClient.init({
 
 > 通信暗号化は `createApp` の設定機能で、内部で `crypto.transport` に委譲します。`serv.xxx` の独立 API ではありません。
 
+### リクエストごとのアクセス制御
+
+ルールの `encryption` は `required` / `disabled` を指定でき、省略時はホストに従います。disabled は通常の HTTPS データを受け付けますが、IP・時刻・認証は検証し、暗号化信封には 400 を返します。required は `excludePaths` より優先し、transport 未設定では App 作成に失敗します。重複するパスとメソッドの反対指定は装配時に拒否し、宣言順の上書きや自動降格は行いません。
+
+`http.access` の既定値は `false` です。外部 API だけを制限する場合、`_serv.yml` の `http.access.rules` に `{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }` などを設定します。`http.access.global` はヘルスチェックを含むホストの全要求を制限します。全体条件と一致するすべてのルールを満たす必要があります。時区は既定 UTC、空のリストは対象の制限なしです。既存セッションも毎回判定し、IAM `loginAccess` はログイン時だけを制限します。
+
+大きな設定には `http.access: { file: './config/security/request-access.yml' }` を使用します。サービスの作業ディレクトリを基準に、App 生成時だけ最大 1 MiB を読みます。不正な設定では起動を停止し、変更時は App を作り直します。拒否は HTTP 403、`hai:common:104` で、通常の暗号化要求は応答も暗号化します。ポリシー本文をログに複製せず、ルール ID・拒否理由・要求 ID で調査します。
+
+`http.trustedProxies` は既定 `auto` です。通常のホストでは転送ヘッダーを無視し、管理対象 Compose の非公開バックエンド構成だけでコンテナのネットワークを採用します。独自の代理は実際の IP/CIDR を指定し、`[]` は信頼を無効化します。代理はヘッダーを清掃し、Node・Fetch は信頼できる接続元情報を提供します。独立ファイル・外側の代理・復旧は[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)を参照してください。
+
 ### 設定
 
 `@h-ai/serv` 自体は YAML を走査しません。`@h-ai/core` で `config/_serv.yml` を読み、解析結果を `serv.createApp()` に渡してください。
@@ -552,7 +564,8 @@ server:
   port: 3000
 
 http:
-  trustedProxies: []
+  trustedProxies: auto
+  access: false
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json

@@ -37,7 +37,7 @@ Beta 使用前先确认 npm 的 `@h-ai/cli@beta` 实际版本并固定同一版�
 | 类别 | 契约 |
 | --- | --- |
 | reldb/cache/crypto/iam/ai/storage/vecdb/payment/reach/feedback/audit/scheduler/deploy/api-client/capacitor | 有状态模块，按各包 init → use → close；领域操作通常返回 HaiResult，getter/工厂/流另看签名 |
-| core | init 同步返回 void，无 close；工具直接返回值，配置 validate/load 等返回 HaiResult；浏览器不加载文件配置 |
+| core | init 同步返回 void，无 close；工具直接返回值，配置 validate/load 等返回 HaiResult；浏览器不加载文件配置；Node core.access 编译可信代理与 IP/时间/路径策略，公共类型集中 core-types |
 | datapipe / kit / api-contract | 纯函数或契约定义，无 init/close |
 | serv | App 工厂，无 init/close；createApp 启动配置错误可抛出，依赖由应用管理 |
 | ui | Svelte 组件与工具，使用公开组件/样式入口 |
@@ -79,7 +79,7 @@ return result
 | @h-ai/scheduler | [定时/API/JS/Hook 任务](packages/cli/templates/skills/hai-scheduler/SKILL.md) | 任务定义刷新/注册/修改/删除在进程内按序提交、close 排空；强制共享RelDB journal/可续租任务槽，leaseMs代替lockExpireMs；cron/manual跨周期统一串行；idempotent仅声明接收端原子持久去重，过期未知保留槽，先停旧runner并核对副作用再execution.resolveUnknown按版本人工裁定；日志UUID固定、persistence独立于业务status，终态fence后投影；listLogFailures/repairLog幂等补写不重跑业务，未确认终态不投影成功；大载荷JSON；共享租约SQL内以DB执行时钟原子判期限，cron分钟身份取DB时间且默认UTC/显式IANA、不读节点TZ，节点±2h/真实行锁等待不能提前接管或迟到提交；JSDoc例区分公开入口/内部上下文、HaiResult/取消与void关闭，类型编译不代替真实分布式行为验证 |
 | @h-ai/crypto | [SM2/SM3/SM4、密码、transport](packages/cli/templates/skills/hai-crypto/SKILL.md) | password 仅 Node；SM4密钥用generateKey，不提供密码KDF；isValidSM2PublicKey纯验证编码/曲线点，握手先验再注册；DB registry失败可重试、事务共享maxClients、pruneExpired有界清理且不驱逐有效nonce；服务端显式注入serverKeyRing与共享keyStore，v2以SM2签名+Encrypt-then-HMAC绑定HTTP上下文/响应status，requestId兼nonce并由共享registry原子防重放，支持跨节点/重启/版本轮换；私钥仅Secret/私有环境；transport.maxPlaintextBytes默认1MiB且范围1KiB～64MiB，双向UTF-8明文；握手同步客户端，resolveTransportBodyLimits按 requiredPlaintextBytes 合并模块需要，显式上限不足拒绝、auto/省略才推导，密文/代理预算一致；超限TransportBodyTooLargeError(hai:crypto:070)，已认证时效错误TransportTimeError(hai:crypto:071)提示校时；readTransportBody按UTF-8字节有界读取；客户端握手30秒超时 |
 | @h-ai/api-contract | [共享领域 HTTP contract](packages/cli/templates/skills/hai-api-contract/SKILL.md) | 业务路径唯一来源，不含服务端实现；公开转出路由声明推导所需的上游 builder/Schema 类型，独立 contract 包验证声明构建；AI completion 为非流式 JSON，拒绝 stream，完整 function JSON Schema/strict/tool_choice 按角色校验透传 |
-| @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node 自动提供 socket 对端，Fetch 显式 remoteAddress；http.trustedProxies 为空时忽略转发头；Hono 是内部实现；Storage feature 必须注入 authorize 资源策略，缺失时拒绝；AI feature 默认绑定认证用户，跨主体须显式 authorizeObject，补全仅非流式且完整透传工具/选择，不自动执行工具；transport必填受管serverKeyRing与共享keyStore；包括空正文的每个请求/响应均认证，GET/HEAD用X-Hai-Transport头，缺标记/篡改/重放拒绝；transport.maxPlaintextBytes支持正式配置并传入transport，客户端握手同步；安全预算独立，超限取消原流，请求413/响应500；JSDoc实际入口/内部上下文类型校验，工厂throw/领域HaiResult/listener关闭分界，toFetch仅签名适配且仍需Node依赖；toFetch统一RequestInit覆盖/正文校验，取消传signal并结束等待/清迟到响应，不撤回外部效果 |
+| @h-ai/serv | [procedures、HTTP App、OpenAPI、守卫](packages/cli/templates/skills/hai-serv/SKILL.md) | Node 自动提供 socket 对端，Fetch 显式 remoteAddress；http.trustedProxies 默认 auto（普通宿主忽略，受管私有 Compose 采用容器网段）；http.access 默认 false，支持全局/路径规则和启动一次读取的独立 YAML；普通中间件在解密/策略之后，提前返回仍加密；Hono 是内部实现；Storage feature 必须注入 authorize 资源策略，缺失时拒绝；AI feature 默认绑定认证用户，跨主体须显式 authorizeObject，补全仅非流式且完整透传工具/选择，不自动执行工具；transport必填受管serverKeyRing与共享keyStore；包括空正文的每个请求/响应均认证，GET/HEAD用X-Hai-Transport头，缺标记/篡改/重放拒绝；transport.maxPlaintextBytes支持正式配置并传入transport，客户端握手同步；安全预算独立，超限取消原流，请求413/响应500；JSDoc实际入口/内部上下文类型校验，工厂throw/领域HaiResult/listener关闭分界，toFetch仅签名适配且仍需Node依赖；toFetch统一RequestInit覆盖/正文校验，取消传signal并结束等待/清迟到响应，不撤回外部效果 |
 | @h-ai/kit | [SvelteKit hooks、guard、validate、response](packages/cli/templates/skills/hai-kit/SKILL.md) | 仅 SvelteKit 集成，不替代共享 HTTP contract；服务端transport对象必填serverKeyRing/keyStore，私钥不进公开_kit.yml/浏览器；v2完整性/上下文绑定及共享原子防重放，空请求/响应也认证，无降级开关；共享UTF-8预算，超限取消原流，请求413/响应500；i18n.runWithLocale包裹SSR resolve；限流必须显式原子store，共享Redis CAS固定窗口，生产禁止隐式内存/非原子回退，故障503；开发 memory 限流无定时器且容量有界，外部 store 由调用者管理 |
 | @h-ai/api-client | [typed API、Token、自动刷新](packages/cli/templates/skills/hai-api-client/SKILL.md) | Cookie/transport 与服务端一致；退出/换账号用 auth.clear/setTokens 使在途刷新失效，异步存储串行提交；SSR 避免共享用户状态；默认 AI completion 无 stream，工具调用结果由业务授权执行后按 tool_call_id 回传 |
 | @h-ai/capacitor | [原生设备、推送、安全存储](packages/cli/templates/skills/hai-capacitor/SKILL.md) | Web 与 Android/iOS 能力不同；TokenStorage 平台/存储失败拒绝Promise，clear立即屏蔽本实例旧凭据并传播删除失败；跨重启撤销依赖服务端；push 设置阶段30秒、可取消、close回收含迟到句柄，cleanup/close返回HaiResult并保留失败句柄重试 |
@@ -115,6 +115,7 @@ return result
 - Core 运行时 YAML 的父节点约定变量优先于子节点，且整体替换后不再遍历叶子变量；当前节点约定变量优先于显式 `${VAR}`/`${VAR:default}` 和 YAML 默认值。根对象覆盖（如 HAI_DB）可提供原 YAML 未声明的连接字段；没有父节点覆盖时只遍历已有路径。部署 SDK 的 HAI_DEPLOY 命名空间按来源逐层合并，同层父后叶、较高来源的父清除较低来源的叶，并允许已知 SSH 叶补齐节点，详见[部署环境契约](packages/cli/templates/skills/hai-deploy/middleware.md)；不改变 Core 规则。
 - 密钥不写死、不进入日志或 PUBLIC_/VITE_ 客户端变量。日志英文，代码注释中文，用户文案同步 i18n。
 - AI 持久化：先初始化 reldb + vecdb，或给 ai.init 提供 storeProvider；否则临时 Store 在关闭/退出后丢失。按 objectId/sessionId 隔离，模型/检索内容不作为工具授权。
+- 每次请求的路径/IP/时间限制、接口 required/disabled 加密模式、独立 YAML、真实 IP 与策略部署见[共享请求访问约定](packages/cli/templates/skills/hai-core/request-access.md)。Core 通过 core.access 注册调用，公开类型集中 core-types，浏览器无服务端执行实现。Kit 完整配置留在服务端，只投影公开 transport；模式冲突或缺少必需加密装配须拒绝创建宿主。
 - 浏览器公共 HTTP API：api-contract → serv → api-client；同源 SvelteKit 可用 kit。内置 Token 存储仅 Cookie/页面内存，原生 App 注入平台安全 TokenStorage；禁止凭据持久化到 Web Storage。
 
 ## 源码定位与验证

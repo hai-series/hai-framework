@@ -216,7 +216,7 @@ Transport applies by default to same-origin `/api/*` endpoints, SvelteKit `__dat
 
 Only authenticated protocol v2 is accepted. Independent random SM4-CBC and HMAC-SM3 keys are wrapped with SM2; verify the sender signature and MAC before CBC decryption. Clients sign requests and the selected server key version signs responses. Authentication covers version, direction, serverKeyId, clientId, a random 128-bit requestId acting as the nonce, issuedAt, HTTP method, the SM3 pathHash of pathname plus the original search, and response status. Requests have a five-minute lifetime and at most 30 seconds of future clock skew. The shared registry atomically consumes (clientId, requestId), retaining it until at least issuedAt plus six minutes to cover node skew; storage failures reject requests. Synchronize node clocks and use a Redis noeviction/durable policy that preserves live nonces. Transport replay prevention does not replace business idempotency keys.
 
-Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Exclude plaintext endpoints explicitly with excludePaths. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
+Empty POSTs still send an authenticated envelope for empty plaintext. GET/HEAD carry it in X-Hai-Transport; bodyless responses such as 204/304/HEAD use the same header. Other requests/responses carry a JSON envelope and X-Encrypted: true. The client must match the original request context and HTTP status; missing markers, old formats and authentication failures reject. Serv/Kit hosts explicitly allow plaintext through `encryption: disabled` path rules or host `excludePaths`. Callers must select ordinary requests; API Client/Kit wrappers use their own `excludePaths`. CORS must allow and expose X-Hai-Transport. TLS authenticates handshake keys; this protocol does not replace IAM authorization.
 
 Set `transport.maxPlaintextBytes` for both request and response JSON plaintext, measured in UTF-8 bytes: default 1 MiB, integer range 1 KiB–64 MiB. Clients learn the server limit during key exchange. `resolveTransportBodyLimits()` derives encrypted/proxy bytes as twice the plaintext limit plus 32 KiB. Handshake, public-key, header and replay constraints remain independent. Oversized streams are cancelled and readers released: requests return 413; oversized responses return an encrypted 500 capacity error, recognized as `TransportBodyTooLargeError` / `hai:crypto:070`. [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -243,16 +243,20 @@ transport:
 ```
 
 ```ts
-import { resolveKitConfig } from '@h-ai/kit'
-import { parse } from 'yaml'
-import rawKitConfig from '../config/_kit.yml?raw'
+import { core } from '@h-ai/core'
+import { KitConfigSchema } from '@h-ai/kit'
 
-export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
+// 仅放在 src/lib/server 中；浏览器通过 layout data 接收公共投影。
+const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+export const appKitConfig = loaded.data
+export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
 `resolveKitConfig()` resolves both `server` (host/port) and `transport`. Host/port precedence is `HOST` / `PORT` environment variables > `_kit.yml` `server` > `127.0.0.1:3000`, for shared consumption by the SvelteKit server entry, matching `@h-ai/serv`.
 For server-only configuration, use `core.config.validate('kit', KitConfigSchema)` as well.
-Because the browser may read this configuration, `_kit.yml` must contain only public server/transport paths and switches, never secrets.
+Read the complete `_kit.yml` on the server; it can contain private proxy networks and policy-file paths. Return only an explicit public projection such as `{ kit: publicKitConfig }` from `+layout.server.ts`, and consume its transport fields in the browser. Never bundle the full configuration or policy file with `?raw`, and keep secrets outside these files.
 
 ### Configuration
 
@@ -373,6 +377,16 @@ Set `kit.client.create({ recoverSession })` to sign in again without discarding 
 ## Transport capacity and module budgets
 
 For a sensitive call, supply `reauthorize: () => sensitiveActions.authorize(operation)` in the third Kit apiFetch argument or typed-client options.context. After session rotation/recovery or an explicit proof rejection, obtain a new purpose-bound proof before one retry. Cancellation sends no further write; without a callback, an old proof is never replayed.
+
+## Access checks on every request
+
+Path rules accept `encryption: required` or `disabled`; omission inherits the host. Disabled endpoints skip application encryption while retaining access and identity checks, and reject framework envelopes. Required mode can protect custom JSON endpoints and overrides `excludePaths`; Crypto, a managed key ring and a registry are required. Conflicting modes fail when creating the Handle. Crypto-enabled CLI templates install both server and browser transport; use db and a shared database in production. Private policy and proxy configuration remain server-side; plaintext callers select their protocol using the public transport exclusions.
+
+Pass server-side `_kit.yml` fields `trustedProxies` and `access` explicitly to `kit.createHandle`. Examples and generated templates create one Handle after application initialization. `access` defaults to `false`. Inline `{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` restricts matching endpoints only; `global` applies to all host-handled requests. Paths include the deployment prefix. Assets served directly by static hosting do not pass through Handle.
+
+Use `access: { file: './config/security/request-access.yml' }` for a separate YAML file. It resolves from the working directory and is read once at startup, up to 1 MiB; changes require a new Handle. Global conditions and all matching rules must pass. Empty lists leave their dimension unrestricted; the default timezone is UTC. Existing sessions are denied after an allowed time window ends. Preflight and key exchange also follow policy; ordinary transport requests preserve encrypted HTTP 403 / `hai:common:104` responses.
+
+Default `trustedProxies: auto` ignores forwarded headers on ordinary hosts and adopts container networks only for private managed Compose proxy topologies. Custom ingress uses explicit proxy IPs/CIDRs; `[]` disables trust. Resolved `event.getClientAddress()`, policy, IAM and audit share the same address. See the [request access handbook](../../docs/usage/configuration/request-access.md) for edge proxies, lost source addresses, environment overrides and rollback.
 
 ## Development and testing
 

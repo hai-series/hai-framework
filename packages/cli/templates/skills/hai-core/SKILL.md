@@ -30,6 +30,8 @@ description: "配置 hai 应用启动、YAML/环境变量、日志、i18n 与 Ha
 
 ## 按需参考
 
+真实客户端地址、每次请求的 IP/时间/路径策略、独立 YAML 及部署边界读取[请求访问控制](request-access.md)；执行工具只从 Node `core.access` 使用。
+
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - 运行环境

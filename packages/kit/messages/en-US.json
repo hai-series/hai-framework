@@ -1,4 +1,5 @@
 {
+  "kit_transportPlaintextRequired": "This endpoint accepts unencrypted application data. Disable transport encryption for this request and retry over HTTPS.",
   "kit_a2aAuthFailed": "A2A authentication failed",
   "kit_a2aParseError": "Invalid JSON request body",
   "kit_a2aCardUnavailable": "Agent card not available",

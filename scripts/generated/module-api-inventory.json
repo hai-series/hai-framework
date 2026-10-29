@@ -17424,6 +17424,60 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccessCondition",
+              "kind": "type",
+              "declaration": "AccessCondition",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessConditionSchema",
+              "kind": "value",
+              "declaration": "AccessConditionSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AccessDecision",
+              "kind": "type",
+              "declaration": "AccessDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessFunctions",
+              "kind": "type",
+              "declaration": "AccessFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArrayFn",
+              "kind": "type",
+              "declaration": "ArrayFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AsyncFn",
+              "kind": "type",
+              "declaration": "AsyncFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserConfigFn",
+              "kind": "type",
+              "declaration": "BrowserConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserCoreFunctions",
+              "kind": "type",
+              "declaration": "BrowserCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ConfigFn",
+              "kind": "type",
+              "declaration": "ConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "core",
               "kind": "value",
               "declaration": "core",
@@ -17460,6 +17514,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateNotInitializedKitFn",
+              "kind": "type",
+              "declaration": "CreateNotInitializedKitFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Env",
               "kind": "type",
               "declaration": "Env",
@@ -17476,6 +17536,12 @@
               "kind": "value",
               "declaration": "err",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ErrorFn",
+              "kind": "type",
+              "declaration": "ErrorFn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ErrorInfo",
@@ -17517,6 +17583,18 @@
               "name": "HaiResult",
               "kind": "type",
               "declaration": "HaiResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "I18nFn",
+              "kind": "type",
+              "declaration": "I18nFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IdFn",
+              "kind": "type",
+              "declaration": "IdFn",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -17634,6 +17712,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ModuleFn",
+              "kind": "type",
+              "declaration": "ModuleFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModuleRuntime",
+              "kind": "type",
+              "declaration": "ModuleRuntime",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NodeCoreFunctions",
+              "kind": "type",
+              "declaration": "NodeCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NotInitializedKit",
+              "kind": "type",
+              "declaration": "NotInitializedKit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ObjectFn",
+              "kind": "type",
+              "declaration": "ObjectFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ok",
               "kind": "value",
               "declaration": "ok",
@@ -17658,16 +17766,112 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestAccessCheck",
+              "kind": "type",
+              "declaration": "RequestAccessCheck",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigInput",
+              "kind": "type",
+              "declaration": "RequestAccessConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigSchema",
+              "kind": "value",
+              "declaration": "RequestAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicy",
+              "kind": "type",
+              "declaration": "RequestAccessPolicy",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicySchema",
+              "kind": "value",
+              "declaration": "RequestAccessPolicySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RequestContext",
               "kind": "type",
               "declaration": "RequestContext",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestEncryptionMode",
+              "kind": "type",
+              "declaration": "RequestEncryptionMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RuntimeStep",
+              "kind": "type",
+              "declaration": "RuntimeStep",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SanitizeFn",
+              "kind": "type",
+              "declaration": "SanitizeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SanitizeSensitiveFieldsOptions",
+              "kind": "type",
+              "declaration": "SanitizeSensitiveFieldsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveKeyMatcher",
+              "kind": "type",
+              "declaration": "SensitiveKeyMatcher",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StringFn",
+              "kind": "type",
+              "declaration": "StringFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TimeFn",
+              "kind": "type",
+              "declaration": "TimeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxies",
+              "kind": "type",
+              "declaration": "TrustedProxies",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxiesSchema",
+              "kind": "value",
+              "declaration": "TrustedProxiesSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TypeUtilFn",
+              "kind": "type",
+              "declaration": "TypeUtilFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ValidationFormError",
               "kind": "type",
               "declaration": "ValidationFormError",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WatchCallback",
+              "kind": "type",
+              "declaration": "WatchCallback",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -17699,6 +17903,60 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccessCondition",
+              "kind": "type",
+              "declaration": "AccessCondition",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessConditionSchema",
+              "kind": "value",
+              "declaration": "AccessConditionSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AccessDecision",
+              "kind": "type",
+              "declaration": "AccessDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessFunctions",
+              "kind": "type",
+              "declaration": "AccessFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArrayFn",
+              "kind": "type",
+              "declaration": "ArrayFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AsyncFn",
+              "kind": "type",
+              "declaration": "AsyncFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserConfigFn",
+              "kind": "type",
+              "declaration": "BrowserConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserCoreFunctions",
+              "kind": "type",
+              "declaration": "BrowserCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ConfigFn",
+              "kind": "type",
+              "declaration": "ConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "core",
               "kind": "value",
               "declaration": "core",
@@ -17735,6 +17993,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateNotInitializedKitFn",
+              "kind": "type",
+              "declaration": "CreateNotInitializedKitFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Env",
               "kind": "type",
               "declaration": "Env",
@@ -17751,6 +18015,12 @@
               "kind": "value",
               "declaration": "err",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ErrorFn",
+              "kind": "type",
+              "declaration": "ErrorFn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ErrorInfo",
@@ -17792,6 +18062,18 @@
               "name": "HaiResult",
               "kind": "type",
               "declaration": "HaiResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "I18nFn",
+              "kind": "type",
+              "declaration": "I18nFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IdFn",
+              "kind": "type",
+              "declaration": "IdFn",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -17909,6 +18191,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ModuleFn",
+              "kind": "type",
+              "declaration": "ModuleFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModuleRuntime",
+              "kind": "type",
+              "declaration": "ModuleRuntime",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NodeCoreFunctions",
+              "kind": "type",
+              "declaration": "NodeCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NotInitializedKit",
+              "kind": "type",
+              "declaration": "NotInitializedKit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ObjectFn",
+              "kind": "type",
+              "declaration": "ObjectFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ok",
               "kind": "value",
               "declaration": "ok",
@@ -17933,16 +18245,112 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestAccessCheck",
+              "kind": "type",
+              "declaration": "RequestAccessCheck",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigInput",
+              "kind": "type",
+              "declaration": "RequestAccessConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigSchema",
+              "kind": "value",
+              "declaration": "RequestAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicy",
+              "kind": "type",
+              "declaration": "RequestAccessPolicy",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicySchema",
+              "kind": "value",
+              "declaration": "RequestAccessPolicySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RequestContext",
               "kind": "type",
               "declaration": "RequestContext",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestEncryptionMode",
+              "kind": "type",
+              "declaration": "RequestEncryptionMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RuntimeStep",
+              "kind": "type",
+              "declaration": "RuntimeStep",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SanitizeFn",
+              "kind": "type",
+              "declaration": "SanitizeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SanitizeSensitiveFieldsOptions",
+              "kind": "type",
+              "declaration": "SanitizeSensitiveFieldsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveKeyMatcher",
+              "kind": "type",
+              "declaration": "SensitiveKeyMatcher",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StringFn",
+              "kind": "type",
+              "declaration": "StringFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TimeFn",
+              "kind": "type",
+              "declaration": "TimeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxies",
+              "kind": "type",
+              "declaration": "TrustedProxies",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxiesSchema",
+              "kind": "value",
+              "declaration": "TrustedProxiesSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TypeUtilFn",
+              "kind": "type",
+              "declaration": "TypeUtilFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ValidationFormError",
               "kind": "type",
               "declaration": "ValidationFormError",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WatchCallback",
+              "kind": "type",
+              "declaration": "WatchCallback",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -17973,6 +18381,60 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccessCondition",
+              "kind": "type",
+              "declaration": "AccessCondition",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessConditionSchema",
+              "kind": "value",
+              "declaration": "AccessConditionSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AccessDecision",
+              "kind": "type",
+              "declaration": "AccessDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessFunctions",
+              "kind": "type",
+              "declaration": "AccessFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArrayFn",
+              "kind": "type",
+              "declaration": "ArrayFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AsyncFn",
+              "kind": "type",
+              "declaration": "AsyncFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserConfigFn",
+              "kind": "type",
+              "declaration": "BrowserConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserCoreFunctions",
+              "kind": "type",
+              "declaration": "BrowserCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ConfigFn",
+              "kind": "type",
+              "declaration": "ConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "core",
               "kind": "value",
               "declaration": "core",
@@ -18009,6 +18471,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateNotInitializedKitFn",
+              "kind": "type",
+              "declaration": "CreateNotInitializedKitFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Env",
               "kind": "type",
               "declaration": "Env",
@@ -18025,6 +18493,12 @@
               "kind": "value",
               "declaration": "err",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ErrorFn",
+              "kind": "type",
+              "declaration": "ErrorFn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ErrorInfo",
@@ -18066,6 +18540,18 @@
               "name": "HaiResult",
               "kind": "type",
               "declaration": "HaiResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "I18nFn",
+              "kind": "type",
+              "declaration": "I18nFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IdFn",
+              "kind": "type",
+              "declaration": "IdFn",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -18183,6 +18669,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ModuleFn",
+              "kind": "type",
+              "declaration": "ModuleFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModuleRuntime",
+              "kind": "type",
+              "declaration": "ModuleRuntime",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NodeCoreFunctions",
+              "kind": "type",
+              "declaration": "NodeCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NotInitializedKit",
+              "kind": "type",
+              "declaration": "NotInitializedKit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ObjectFn",
+              "kind": "type",
+              "declaration": "ObjectFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ok",
               "kind": "value",
               "declaration": "ok",
@@ -18207,16 +18723,112 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestAccessCheck",
+              "kind": "type",
+              "declaration": "RequestAccessCheck",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigInput",
+              "kind": "type",
+              "declaration": "RequestAccessConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigSchema",
+              "kind": "value",
+              "declaration": "RequestAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicy",
+              "kind": "type",
+              "declaration": "RequestAccessPolicy",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicySchema",
+              "kind": "value",
+              "declaration": "RequestAccessPolicySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RequestContext",
               "kind": "type",
               "declaration": "RequestContext",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestEncryptionMode",
+              "kind": "type",
+              "declaration": "RequestEncryptionMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RuntimeStep",
+              "kind": "type",
+              "declaration": "RuntimeStep",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SanitizeFn",
+              "kind": "type",
+              "declaration": "SanitizeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SanitizeSensitiveFieldsOptions",
+              "kind": "type",
+              "declaration": "SanitizeSensitiveFieldsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveKeyMatcher",
+              "kind": "type",
+              "declaration": "SensitiveKeyMatcher",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StringFn",
+              "kind": "type",
+              "declaration": "StringFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TimeFn",
+              "kind": "type",
+              "declaration": "TimeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxies",
+              "kind": "type",
+              "declaration": "TrustedProxies",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxiesSchema",
+              "kind": "value",
+              "declaration": "TrustedProxiesSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TypeUtilFn",
+              "kind": "type",
+              "declaration": "TypeUtilFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ValidationFormError",
               "kind": "type",
               "declaration": "ValidationFormError",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WatchCallback",
+              "kind": "type",
+              "declaration": "WatchCallback",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -18247,6 +18859,60 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccessCondition",
+              "kind": "type",
+              "declaration": "AccessCondition",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessConditionSchema",
+              "kind": "value",
+              "declaration": "AccessConditionSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AccessDecision",
+              "kind": "type",
+              "declaration": "AccessDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessFunctions",
+              "kind": "type",
+              "declaration": "AccessFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArrayFn",
+              "kind": "type",
+              "declaration": "ArrayFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AsyncFn",
+              "kind": "type",
+              "declaration": "AsyncFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserConfigFn",
+              "kind": "type",
+              "declaration": "BrowserConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserCoreFunctions",
+              "kind": "type",
+              "declaration": "BrowserCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ConfigFn",
+              "kind": "type",
+              "declaration": "ConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "core",
               "kind": "value",
               "declaration": "core",
@@ -18283,6 +18949,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateNotInitializedKitFn",
+              "kind": "type",
+              "declaration": "CreateNotInitializedKitFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Env",
               "kind": "type",
               "declaration": "Env",
@@ -18299,6 +18971,12 @@
               "kind": "value",
               "declaration": "err",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ErrorFn",
+              "kind": "type",
+              "declaration": "ErrorFn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ErrorInfo",
@@ -18340,6 +19018,18 @@
               "name": "HaiResult",
               "kind": "type",
               "declaration": "HaiResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "I18nFn",
+              "kind": "type",
+              "declaration": "I18nFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IdFn",
+              "kind": "type",
+              "declaration": "IdFn",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -18457,6 +19147,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ModuleFn",
+              "kind": "type",
+              "declaration": "ModuleFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModuleRuntime",
+              "kind": "type",
+              "declaration": "ModuleRuntime",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NodeCoreFunctions",
+              "kind": "type",
+              "declaration": "NodeCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NotInitializedKit",
+              "kind": "type",
+              "declaration": "NotInitializedKit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ObjectFn",
+              "kind": "type",
+              "declaration": "ObjectFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ok",
               "kind": "value",
               "declaration": "ok",
@@ -18481,16 +19201,112 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestAccessCheck",
+              "kind": "type",
+              "declaration": "RequestAccessCheck",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigInput",
+              "kind": "type",
+              "declaration": "RequestAccessConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigSchema",
+              "kind": "value",
+              "declaration": "RequestAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicy",
+              "kind": "type",
+              "declaration": "RequestAccessPolicy",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicySchema",
+              "kind": "value",
+              "declaration": "RequestAccessPolicySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RequestContext",
               "kind": "type",
               "declaration": "RequestContext",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestEncryptionMode",
+              "kind": "type",
+              "declaration": "RequestEncryptionMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RuntimeStep",
+              "kind": "type",
+              "declaration": "RuntimeStep",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SanitizeFn",
+              "kind": "type",
+              "declaration": "SanitizeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SanitizeSensitiveFieldsOptions",
+              "kind": "type",
+              "declaration": "SanitizeSensitiveFieldsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveKeyMatcher",
+              "kind": "type",
+              "declaration": "SensitiveKeyMatcher",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StringFn",
+              "kind": "type",
+              "declaration": "StringFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TimeFn",
+              "kind": "type",
+              "declaration": "TimeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxies",
+              "kind": "type",
+              "declaration": "TrustedProxies",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxiesSchema",
+              "kind": "value",
+              "declaration": "TrustedProxiesSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TypeUtilFn",
+              "kind": "type",
+              "declaration": "TypeUtilFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ValidationFormError",
               "kind": "type",
               "declaration": "ValidationFormError",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WatchCallback",
+              "kind": "type",
+              "declaration": "WatchCallback",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -18521,6 +19337,60 @@
           "exists": true,
           "symbols": [
             {
+              "name": "AccessCondition",
+              "kind": "type",
+              "declaration": "AccessCondition",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessConditionSchema",
+              "kind": "value",
+              "declaration": "AccessConditionSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "AccessDecision",
+              "kind": "type",
+              "declaration": "AccessDecision",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AccessFunctions",
+              "kind": "type",
+              "declaration": "AccessFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ArrayFn",
+              "kind": "type",
+              "declaration": "ArrayFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "AsyncFn",
+              "kind": "type",
+              "declaration": "AsyncFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserConfigFn",
+              "kind": "type",
+              "declaration": "BrowserConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "BrowserCoreFunctions",
+              "kind": "type",
+              "declaration": "BrowserCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ConfigFn",
+              "kind": "type",
+              "declaration": "ConfigFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "core",
               "kind": "value",
               "declaration": "core",
@@ -18557,6 +19427,12 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "CreateNotInitializedKitFn",
+              "kind": "type",
+              "declaration": "CreateNotInitializedKitFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Env",
               "kind": "type",
               "declaration": "Env",
@@ -18573,6 +19449,12 @@
               "kind": "value",
               "declaration": "err",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ErrorFn",
+              "kind": "type",
+              "declaration": "ErrorFn",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ErrorInfo",
@@ -18614,6 +19496,18 @@
               "name": "HaiResult",
               "kind": "type",
               "declaration": "HaiResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "I18nFn",
+              "kind": "type",
+              "declaration": "I18nFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "IdFn",
+              "kind": "type",
+              "declaration": "IdFn",
               "declarationKind": "TypeAliasDeclaration"
             },
             {
@@ -18731,6 +19625,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ModuleFn",
+              "kind": "type",
+              "declaration": "ModuleFn",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModuleRuntime",
+              "kind": "type",
+              "declaration": "ModuleRuntime",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NodeCoreFunctions",
+              "kind": "type",
+              "declaration": "NodeCoreFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "NotInitializedKit",
+              "kind": "type",
+              "declaration": "NotInitializedKit",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ObjectFn",
+              "kind": "type",
+              "declaration": "ObjectFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ok",
               "kind": "value",
               "declaration": "ok",
@@ -18755,16 +19679,112 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestAccessCheck",
+              "kind": "type",
+              "declaration": "RequestAccessCheck",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigInput",
+              "kind": "type",
+              "declaration": "RequestAccessConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessConfigSchema",
+              "kind": "value",
+              "declaration": "RequestAccessConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicy",
+              "kind": "type",
+              "declaration": "RequestAccessPolicy",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RequestAccessPolicySchema",
+              "kind": "value",
+              "declaration": "RequestAccessPolicySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "RequestContext",
               "kind": "type",
               "declaration": "RequestContext",
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "RequestEncryptionMode",
+              "kind": "type",
+              "declaration": "RequestEncryptionMode",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "RuntimeStep",
+              "kind": "type",
+              "declaration": "RuntimeStep",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SanitizeFn",
+              "kind": "type",
+              "declaration": "SanitizeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "SanitizeSensitiveFieldsOptions",
+              "kind": "type",
+              "declaration": "SanitizeSensitiveFieldsOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "SensitiveKeyMatcher",
+              "kind": "type",
+              "declaration": "SensitiveKeyMatcher",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StringFn",
+              "kind": "type",
+              "declaration": "StringFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TimeFn",
+              "kind": "type",
+              "declaration": "TimeFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxies",
+              "kind": "type",
+              "declaration": "TrustedProxies",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "TrustedProxiesSchema",
+              "kind": "value",
+              "declaration": "TrustedProxiesSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "TypeUtilFn",
+              "kind": "type",
+              "declaration": "TypeUtilFn",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ValidationFormError",
               "kind": "type",
               "declaration": "ValidationFormError",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "WatchCallback",
+              "kind": "type",
+              "declaration": "WatchCallback",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "ZodMessageGetter",
@@ -24338,6 +25358,12 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "KitPublicConfig",
+              "kind": "type",
+              "declaration": "KitPublicConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "KitServerConfig",
               "kind": "type",
               "declaration": "KitServerConfig",
@@ -24551,6 +25577,12 @@
               "kind": "value",
               "declaration": "KitConfigSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "KitPublicConfig",
+              "kind": "type",
+              "declaration": "KitPublicConfig",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "KitServerConfig",
@@ -24909,6 +25941,12 @@
               "kind": "value",
               "declaration": "KitConfigSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "KitPublicConfig",
+              "kind": "type",
+              "declaration": "KitPublicConfig",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "KitServerConfig",
@@ -25369,6 +26407,12 @@
               "kind": "value",
               "declaration": "KitConfigSchema",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "KitPublicConfig",
+              "kind": "type",
+              "declaration": "KitPublicConfig",
+              "declarationKind": "TypeAliasDeclaration"
             },
             {
               "name": "KitServerConfig",

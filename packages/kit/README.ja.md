@@ -222,7 +222,7 @@ transport は既定で同一オリジンの `/api/*`、SvelteKit の `__data.jso
 
 認証済み v2 のみを受け付けます。独立したランダム SM4-CBC 鍵と HMAC-SM3 鍵を SM2 で包み、送信者署名、MAC の順に検証してから CBC を復号します。要求はクライアント秘密鍵、応答は選択されたサーバー鍵バージョンで署名します。version、direction、serverKeyId、clientId、nonce を兼ねるランダム 128 ビット requestId、issuedAt、HTTP method、pathname と元の search の SM3 pathHash、応答 status を認証します。要求の有効期限は 5 分、未来方向の時計差は最大 30 秒です。共有 registry が (clientId, requestId) を原子的に消費し、ノード間の時計差を含め issuedAt + 6 分まで保持します。保存障害では拒否します。時計同期と Redis の noeviction/永続化により有効な nonce を保持してください。業務の再試行には別の冪等キーが必要です。
 
-空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は excludePaths で明示的に除外し、CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
+空の POST も空平文の認証封装を送ります。GET/HEAD は X-Hai-Transport ヘッダー、204/304/HEAD など本文なし応答も同じヘッダーを使います。他の要求・応答は JSON 本文と X-Encrypted: true を使います。クライアントは元の要求コンテキストと HTTP status を照合し、マーカー欠落、旧形式、認証失敗では reject します。平文 endpoint は Serv/Kit の `encryption: disabled` ルールまたはホストの `excludePaths` で明示的に許可し、呼出側も通常の要求を選びます。API Client/Kit のラッパーは自身の `excludePaths` を使用します。CORS では X-Hai-Transport を許可・公開してください。鍵交換の公開鍵認証は TLS に依存し、IAM の業務認可は別に必要です。
 
 `transport.maxPlaintextBytes` でリクエストとレスポンスの JSON 平文容量を共通設定します。単位は UTF-8 バイト、既定値は 1 MiB、有効範囲は 1 KiB～64 MiB の整数です。クライアントは鍵交換で上限を取得し、`resolveTransportBodyLimits()` が暗号文とプロキシ容量（平文の 2 倍 + 32 KiB）を算出します。鍵交換、公開鍵、認証ヘッダー、防リプレイ制約は独立です。超過時は元ストリームを停止して reader を解放します。要求は 413、応答は暗号化された 500 容量エラーとなり、`TransportBodyTooLargeError` / `hai:crypto:070` で識別できます。 [Transport capacity and upgrade](../crypto/TRANSPORT-CAPACITY.md)。
 
@@ -249,16 +249,20 @@ transport:
 ```
 
 ```ts
-import { resolveKitConfig } from '@h-ai/kit'
-import { parse } from 'yaml'
-import rawKitConfig from '../config/_kit.yml?raw'
+import { core } from '@h-ai/core'
+import { KitConfigSchema } from '@h-ai/kit'
 
-export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
+// 仅放在 src/lib/server 中；浏览器通过 layout data 接收公共投影。
+const loaded = core.config.load('kit', './config/_kit.yml', KitConfigSchema)
+if (!loaded.success)
+  throw new Error(loaded.error.message)
+export const appKitConfig = loaded.data
+export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
 `resolveKitConfig()` は `server`（host/port）と `transport` を解決します。host/port は `HOST` / `PORT` 環境変数 > `_kit.yml` の `server` > `127.0.0.1:3000` の順で、SvelteKit サーバー入口で共通利用します（`@h-ai/serv` と同じ構造）。
 サーバーのみで設定を読む場合は `core.config.validate('kit', KitConfigSchema)` も利用できます。
-ブラウザーも読む可能性があるため、`_kit.yml` は公開 server/transport パスとスイッチのみを含め、秘密鍵などを書かないでください。
+完全な `_kit.yml` はサーバーだけで読みます。内部の代理ネットワークやポリシーファイルのパスを含むため、`+layout.server.ts` は `{ kit: publicKitConfig }` のような公開投影だけを返し、ブラウザーは transport を使用します。`?raw` で設定全体やポリシーをブラウザーへ含めず、秘密鍵も記載しないでください。
 
 ### 設定
 
@@ -373,6 +377,16 @@ kit.auth.createApi(iam).createCaptcha を POST /api/auth/captcha として公開
 設定 transport.maxPlaintextBytes は 1 KiB～64 MiB の明示整数または auto を受け付けます。auto/省略は undefined に正規化され、要件なしの既定は 1 MiB、フィードバックのホストでは crypto.resolveTransportBodyLimits の requiredPlaintextBytes で統合します。明示上限の不足は起動/梱包時の失敗とし、上書きしません。プロキシ・adapter-node・ハンドシェイク・実行時の予算を一致させ、添付・展開・行数の制限は独立して検証します。
 
 重要操作では `reauthorize: () => sensitiveActions.authorize(operation)` を Kit apiFetch の第3引数、または typed client の options.context に渡します。セッション更新・復帰または明確な証明拒否の後、新しい用途証明で1回だけ続行します。取消時は追加の書込を送らず、コールバックがなければ旧証明を再送しません。
+
+## リクエストごとのアクセス制御
+
+パスルールの `encryption` は required / disabled、省略時はホスト設定です。disabled でもアクセス条件と認証は検証し、フレームワークの暗号化信封は拒否します。required は独自 JSON エンドポイントにも適用でき、`excludePaths` より優先します。Crypto・管理鍵リング・registry が必要で、反対指定の重複は Handle 作成時に失敗します。crypto 対応 CLI テンプレートはサーバーとブラウザーを装配し、本番では db と共有 DB を使用します。非公開ポリシーと代理設定はブラウザーに渡さず、明文呼出側は公開の転送除外設定に従います。
+
+サーバーの `_kit.yml` にある `trustedProxies` と `access` を `kit.createHandle` に明示的に渡します。例と生成テンプレートはアプリ初期化後に Handle を一度だけ生成します。`access` は既定 `false` です。`{ rules: [{ id: 'external', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'] }] }` は一致する入口だけを、`global` はホストが扱う全要求を制限します。パスは配備プレフィックスを含みます。静的ホストが直接返す資源は Handle を通りません。
+
+独立 YAML は `access: { file: './config/security/request-access.yml' }` と指定します。作業ディレクトリを基準に起動時だけ最大 1 MiB を読み、変更時は Handle を再生成します。全体条件と一致するすべてのルールを満たす必要があります。空のリストは対応する制限なし、時区は既定 UTC です。既存セッションも許可時間終了後は拒否します。preflight と鍵交換も判定し、通常の暗号化要求は HTTP 403 / `hai:common:104` の応答暗号化を保持します。
+
+既定 `trustedProxies: auto` は通常のホストで転送ヘッダーを無視し、管理対象 Compose の非公開バックエンド構成だけでコンテナネットワークを採用します。独自の入口は実際の代理 IP/CIDR を指定し、`[]` で信頼を無効化します。解決後の `event.getClientAddress()`、ポリシー、IAM、監査は同じ接続元を使います。外側の代理・源 IP の喪失・環境変数と復旧は[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)を参照してください。
 
 ## 開発とテスト
 

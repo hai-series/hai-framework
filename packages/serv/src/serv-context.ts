@@ -17,7 +17,6 @@
 import type { HaiResult, Logger } from '@h-ai/core'
 import type { RefreshTokenPair } from './serv-cookie-auth.js'
 import { core } from '@h-ai/core'
-import { normalizeClientIp } from './serv-client-ip.js'
 import { resolveRequestLocale } from './serv-validation.js'
 
 /**
@@ -218,7 +217,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
   const headers = input.request.headers
   const requestId = core.context.get().requestId ?? resolveRequestId(headers.get(HEADER_REQUEST_ID))
   // 显式 ip: undefined 表示代理链未确认客户端，不能再回退成代理对端。
-  const ip = normalizeClientIp(Object.hasOwn(input, 'ip') ? input.ip : input.remoteAddress)
+  const ip = core.access.normalizeClientIp(Object.hasOwn(input, 'ip') ? input.ip : input.remoteAddress)
   const locale = resolveRequestLocale(headers)
   const accessToken = extractBearerToken(headers.get(HEADER_AUTHORIZATION))
   const terminal = headers.get('x-hai-terminal')

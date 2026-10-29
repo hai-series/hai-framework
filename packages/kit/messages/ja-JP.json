@@ -1,4 +1,5 @@
 {
+  "kit_transportPlaintextRequired": "このエンドポイントはアプリケーション層で暗号化されていないデータを受け付けます。リクエストの伝送暗号化を無効にし、HTTPS で再試行してください。",
   "kit_a2aAuthFailed": "A2A認証に失敗しました",
   "kit_a2aParseError": "リクエスト本文が有効なJSONではありません",
   "kit_a2aCardUnavailable": "エージェントカードを利用できません",

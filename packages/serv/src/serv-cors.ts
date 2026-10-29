@@ -37,6 +37,19 @@ export interface ServCorsConfig {
 const DEFAULT_CORS_METHODS = ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS']
 const DEFAULT_CORS_ALLOWED_HEADERS = ['Authorization', 'Content-Type', 'X-Requested-With', 'X-Hai-Reauthentication', 'X-Hai-Terminal']
 const DEFAULT_CORS_MAX_AGE = 86_400
+const corsMiddlewares = new WeakSet<ServMiddleware>()
+
+/**
+ * 内部标记内置 CORS，让请求策略与加密统一保护其后的自定义路由。
+ * @internal
+ * @example 模块内部上下文
+ * ```ts
+ * const builtin = isCorsMiddleware(cors())
+ * ```
+ */
+export function isCorsMiddleware(middleware: ServMiddleware): boolean {
+  return corsMiddlewares.has(middleware)
+}
 
 /**
  * 创建可复用的 CORS middleware。
@@ -57,7 +70,7 @@ export function cors(config: ServCorsConfig = {}): ServMiddleware {
   const maxAge = config.maxAge ?? DEFAULT_CORS_MAX_AGE
   const originConfig = config.origin ?? '*'
 
-  return async (c, next) => {
+  const middleware: ServMiddleware = async (c, next) => {
     const allowedOrigin = resolveCorsOrigin(c.req.header('Origin'), originConfig)
 
     if (c.req.method === 'OPTIONS') {
@@ -96,6 +109,8 @@ export function cors(config: ServCorsConfig = {}): ServMiddleware {
 
     return undefined
   }
+  corsMiddlewares.add(middleware)
+  return middleware
 }
 
 function resolveCorsOrigin(

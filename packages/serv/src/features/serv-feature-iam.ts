@@ -259,15 +259,6 @@ async function createUser(iam: IamFunctions, input: IamAdminCreateUserInput | Ia
     }
   }
 
-  if (input.enabled === false) {
-    const updateResult = await iam.user.updateUser(userId, { enabled: false })
-    if (!updateResult.success) {
-      await rollback('initial disable failed')
-      return updateResult
-    }
-    return updateResult
-  }
-
   return ok(registerResult.data.user)
 }
 
