@@ -86,7 +86,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 构建器将锁文件、包配置、本地归档和补丁准备为 `images/dependencies/` 输入，结合 pnpm store 缓存与 Docker 分层复用下载。源码修改不应重新下载全部依赖；缓存为空仍能联网构建。Windows node_modules 不用于 Linux 镜像。完全离线构建还需预先准备基础镜像、工具链和匹配 ABI/架构/libc 的原生预编译包。
 
-版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括格式版本 4 的 manifest.json、所选镜像 tar 和 SHA-256；partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
+版本来自应用根 package.json.version。制品位于 `.hai/build/docker/<buildId>/`，包括manifest.json、所选镜像tar和SHA-256；根目录使用格式4，非根目录使用格式5及webBasePath。partial 标识部分构建，hasWeb 保留工程拓扑。清单还会记住配置中填写的 serv/web 容器端口（servContainerPort、webContainerPort），只打包一个镜像也不会丢掉另一个的端口；没填写则沿用部署默认值。相同应用版本允许重建，构建编号和镜像引用区分实际内容；全部导出成功才更新本机构建入口。基础镜像、中间件及工具使用明确版本，不使用 latest。
+
+#### 网站挂载目录
+
+默认网站位于根目录。需要`https://example.com/yyy/`时，在应用构建进程显式设置`PUBLIC_BASE_PATH=/yyy`，由CLI生成格式5制品；webBasePath是构建结果，不是部署环境的可覆盖参数。各目录段仅ASCII字母、数字、`_`、`.`、`-`，无末尾斜杠或单独的`.`/`..`段。使用支持格式5的CLI/Deploy，旧工具拒绝该格式；不能手改编号绕过。
+
+SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL，额外网关应保留此前缀。同源API仍由Serv的http.apiPrefix独立决定，CORS允许源只包含协议、域名和端口。独立Vite站点保留其运行配置中的外部API地址。完整及部分构建保持同一PUBLIC_BASE_PATH，即使只构建serv；增量在替换前拒绝目录不一致，目录变更使用全量部署。失败恢复按旧发布记录的健康路径验证。操作示例、两种框架差异与真实截图见[网站子目录配置](../../docs/usage/configuration/delivery.md#网站部署在子目录)。
 
 ### 部署到环境
 
@@ -94,7 +100,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
-命名与拓扑契约使用制品格式 4，新增 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；只有 serv + web 才生成同源 API 代理。旧格式制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
+制品格式4和5都记录primaryService（serv/web），hasWeb表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有serv + web才生成同源API代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按Compose规则清理同项目的旧服务容器，不能仅修改deploy-target.json.directory完成迁移。
 
 迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。
 

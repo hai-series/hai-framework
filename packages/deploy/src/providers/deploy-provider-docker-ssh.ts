@@ -26,6 +26,7 @@ import { maskSecrets } from '../container/deploy-command.js'
 import {
   buildRuntimeEnv,
   generateComposeFile,
+  generateStaticWebConfig,
   generateWebProxyConfig,
   serializeEnvFile,
 } from '../container/deploy-container-compose.js'
@@ -151,6 +152,10 @@ export function createDockerSshProvider(
     const webContainerPort = web?.containerPort ?? artifact.webContainerPort ?? 8080
     const host = config.ssh?.host
     const url = host ? `http://${host.includes(':') ? `[${host}]` : host}:${hostPort}` : `http://SERVER_HOST:${hostPort}`
+    const webBasePath = artifact.webBasePath ?? ''
+    const applicationUrl = `${url}${webBasePath ? `${webBasePath}/` : ''}`
+    const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && !!webBasePath
+    const healthPaths = hasWebProxy ? ['/health', '/_hai/web-health', `${webBasePath}/`] : scan.isSvelteKit ? [`${webBasePath}/`] : standaloneWebConfig ? ['/health', `${webBasePath}/`] : ['/health']
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
@@ -200,19 +205,27 @@ export function createDockerSshProvider(
       const http = server.data.http as { apiPrefix?: string } | undefined
       const cors = server.data.cors as { origin?: string } | undefined
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
-      if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix))
+      if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix)) {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+      }
+      if (webBasePath && (['/health', '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
         const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
-        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes })
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath })
       }
       catch (error) {
         return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM('deploy_transportBodyLimitInvalid'))
       }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
       env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && config.ssh ? url : cors?.origin ?? '*' } })
+    }
+    else if (standaloneWebConfig) {
+      if (['/health', '/_hai/web-health'].includes(webBasePath))
+        return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
+      webProxy = generateStaticWebConfig(containerPort, webBasePath)
     }
     // 一次交付对应一个目录；自定义同名输出也不覆盖已经可复制的旧包。
     const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar`)
@@ -249,6 +262,7 @@ export function createDockerSshProvider(
       primaryService,
       sidecar,
       web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
+      mountWebConfig: standaloneWebConfig,
     })
     const composePath = join(artifactDir, composeName)
     writeFileSync(composePath, composeContent)
@@ -273,10 +287,10 @@ export function createDockerSshProvider(
       runtime: options?.runtime ?? 'auto',
       selected,
       partial,
-      hasWebProxy,
+      hasWebConfig: !!webProxy,
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env),
-      healthPaths: hasWebProxy ? ['/health', '/_hai/web-health', '/'] : [scan.isSvelteKit ? '/' : '/health'],
+      healthPaths,
       output: join(artifactDir, `${name}.tar`),
     })
     if (options?.bundleOnly)
@@ -343,12 +357,17 @@ export function createDockerSshProvider(
     }
 
     // 在线部署完成后检查实际公开入口。
-    logger.info('Running health check', { url })
-    const healthy = await healthCheck(`${url}${!hasWebProxy && scan.isSvelteKit ? '/' : '/health'}`)
-      && (!hasWebProxy || (await healthCheck(`${url}/_hai/web-health`) && await healthCheck(`${url}/`)))
+    logger.info('Running health check', { url: applicationUrl })
+    let healthy = true
+    for (const healthPath of healthPaths) {
+      if (!await healthCheck(`${url}${healthPath}`)) {
+        healthy = false
+        break
+      }
+    }
     if (!healthy) {
       return err(
-        { ...HaiDeployError.HEALTH_CHECK_FAILED, message: deployM('deploy_healthCheckFailed', { params: { url } }), ext: { commandExecution: {
+        { ...HaiDeployError.HEALTH_CHECK_FAILED, message: deployM('deploy_healthCheckFailed', { params: { url: applicationUrl } }), ext: { commandExecution: {
           reason: 'exit',
           localTermination: 'confirmed',
           remoteExecution: 'finished',
@@ -362,7 +381,7 @@ export function createDockerSshProvider(
     }
 
     const result: DeployResult = {
-      url,
+      url: applicationUrl,
       deploymentId,
       status: 'ready',
       provider: 'docker-ssh',
@@ -370,7 +389,7 @@ export function createDockerSshProvider(
       envVarsSet: Object.keys(env),
       bundlePath: bundle.bundlePath,
     }
-    logger.info('docker-ssh deployment complete', { url, deploymentId })
+    logger.info('docker-ssh deployment complete', { url: applicationUrl, deploymentId })
     return ok(result)
   }
 

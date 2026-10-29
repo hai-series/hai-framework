@@ -73,7 +73,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備し、pnpm store と依存レイヤーをキャッシュします。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
 
-アプリの版はルート package.json.version で管理します。`.hai/build/docker/<buildId>/` に形式 4 の manifest.json、選択イメージの tar と SHA-256 を出力します。partial は部分構築、hasWeb は構成を記録します。servContainerPort と webContainerPort は明示した serv/web の待受ポートを保持し、部分構築で選ばなかったイメージのポートも失いません。未指定のポートにはデプロイ時の既定値を使います。同じアプリ版でも再構築可能で、構築 ID とイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latest を使いません。
+アプリの版はルートpackage.json.versionで管理します。`.hai/build/docker/<buildId>/`にmanifest、選択イメージのtarとSHA-256を出力します。ルートは形式4、非ルートはwebBasePathを含む形式5です。partialは部分構築、hasWebは構成を記録します。servContainerPortとwebContainerPortは明示したserv/webの待受ポートを保持し、部分構築で選ばなかったイメージのポートも失いません。未指定のポートにはデプロイ時の既定値を使います。同じアプリ版でも再構築可能で、構築IDとイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latestを使いません。
+
+#### サイトの公開ディレクトリー
+
+既定はサイトルートです。`https://example.com/yyy/`で公開する場合は、アプリ構築プロセスで`PUBLIC_BASE_PATH=/yyy`を明示します。CLIは形式5を生成し、webBasePathを保存します。これは構築情報であり、デプロイ環境で上書きする設定ではありません。各区間はASCII英数字・`_`・`.`・`-`のみ、末尾の斜線や単独の`.`/`..`区間は使用できません。形式5対応のCLI/Deployが必要で、旧ツールは拒否します。形式番号を手で変更しないでください。
+
+SDKは対応するNginx、実行時設定URL、SSRヘルスチェック、公開URLを生成します。追加のゲートウェイは接頭辞を保持します。同一オリジンAPIはServのhttp.apiPrefixで別に決まり、CORSの許可元はスキーム・ホスト・ポートだけです。独立Viteサイトは設定済みの外部APIアドレスを維持します。servだけの部分構築も含め、全量・部分構築で同じPUBLIC_BASE_PATHを使用します。増分では置換前に不一致を拒否し、ディレクトリー変更には全量デプロイを使います。復旧時は旧公開のヘルスパスを検証します。[設定・フレームワークの違い・実行画面](../../docs/usage/configuration/delivery.md#网站部署在子目录)を参照してください。
 
 ### 5. 成果物を対象環境へデプロイする
 
@@ -81,7 +87,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-成果物形式 4 は primaryService（serv/web）と、工程全体のブラウザー構成を示す hasWeb を記録します。同一オリジン API プロキシは serv + web の場合だけ生成します。旧形式は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じ Compose プロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directory の変更だけでは移行できません。
+成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
 
 既存工程では、hai.json の build.images 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
 

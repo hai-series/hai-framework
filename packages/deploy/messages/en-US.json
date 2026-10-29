@@ -48,6 +48,7 @@
   "deploy_purposeEmail": "Email/HTTP delivery; the default SMTP container only captures test messages",
   "deploy_purposeSms": "SMS through Aliyun credentials; requires an existing signature and quota",
   "deploy_webProxyInvalid": "The API prefix must be an absolute path containing only letters, numbers, underscores, hyphens and slashes.",
+  "deploy_webBaseConflict": "The website mount path conflicts with an API or health endpoint. Choose a different PUBLIC_BASE_PATH.",
   "deploy_artifactInvalid": "Image artifacts are missing or invalid. Run pnpm build --target docker, select valid --artifact-dir, or use pnpm run deploy --build.",
   "deploy_sshRequired": "Automatic deployment requires SSH settings. Use --bundle-only for manual transfer when the server is unreachable.",
   "deploy_sshPasswordInvalid": "SSH passwords must be nonempty, contain no CR/LF/NUL, and be at most 1023 UTF-8 bytes.",

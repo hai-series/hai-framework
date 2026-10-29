@@ -332,6 +332,16 @@ fi
 sh "$source_dir/resolve-backend-state.sh" "$root" "$source_dir" "$runtime" "$previous" check
 if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
+  # 目录属于完整Web拓扑；旧版本缺省为根目录，服务增量不能意外丢失或改变既有目录。
+  read_web_base() {
+    if [ -e "$1" ] || [ -L "$1" ]; then
+      test -f "$1" && test ! -L "$1" || { printf 'Web base path metadata must be a regular file.\n' >&2; return 1; }
+      cat "$1"
+    fi
+  }
+  current_web_base=$(read_web_base "$source_dir/web-base-path")
+  previous_web_base=$(read_web_base "$root/releases/$previous/web-base-path")
+  test "$current_web_base" = "$previous_web_base" || { printf 'Web base path changed. Match the installed prefix for partial updates, or create a full deployment.\n' >&2; exit 1; }
   if ! cmp -s layout "$root/releases/$previous/layout"; then
     # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
     test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' "$root/releases/$previous/layout")" || { printf 'Ports or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }

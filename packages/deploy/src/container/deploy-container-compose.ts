@@ -480,6 +480,7 @@ export function buildRuntimeEnv(
  * @param options.web - 同一编排中的 Web 镜像与监听端口，独立于私有应用环境
  * @param options.web.imageRef - Web 镜像引用
  * @param options.web.containerPort - Web 容器监听端口
+ * @param options.mountWebConfig - 独立Vite站点是否挂载公开的目录路由配置，默认不挂载。
  * @returns compose YAML 字符串
  * @example 模块内部上下文
  * ```ts
@@ -498,6 +499,7 @@ export function generateComposeFile(options: {
   sidecar: SidecarPlan
   /** Web 公开入口；私有运行环境仅属于 API 服务。 */
   web?: { imageRef: string, containerPort: number }
+  mountWebConfig?: boolean
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
   const primaryService = options.primaryService ?? 'serv'
@@ -515,6 +517,8 @@ export function generateComposeFile(options: {
   }
   if (sidecar.appVolumes.length > 0)
     app.volumes = sidecar.appVolumes
+  if (options.mountWebConfig)
+    app.volumes = [...sidecar.appVolumes, './web.conf:/etc/nginx/conf.d/default.conf:ro']
   if (sidecar.dependsOn.length > 0)
     app.depends_on = Object.fromEntries(sidecar.dependsOn.map(name => [name, { condition: sidecar.composeServices[name]?.healthcheck ? 'service_healthy' : 'service_started' }]))
 
@@ -559,26 +563,29 @@ export function generateComposeFile(options: {
  * @param options - Web 监听端口和双向业务明文 UTF-8 字节上限，缺省使用 crypto 默认值
  * @param options.webPort - Web 容器监听端口，默认 8080。
  * @param options.maxPlaintextBytes - 业务明文 UTF-8 字节上限。
+ * @param options.webBasePath - 无末尾斜杠的Web挂载目录，缺省或空字符串为域名根目录。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number } = {}): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string } = {}): string {
   const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
-  if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535))
+  const webBasePath = options.webBasePath ?? ''
+  const apiPath = apiPrefix.replace(/\/+$/, '')
+  if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535)
+    || (webBasePath && (webBasePath === apiPath || webBasePath.startsWith(`${apiPath}/`)))) {
     throw new Error('Invalid web proxy target')
+  }
+  const webLocation = renderWebLocation(webBasePath)
   return `server {
   listen ${webPort};
   server_name _;
   root /usr/share/nginx/html;
   large_client_header_buffers 4 32k;
-  location / {
-    try_files $uri $uri/ /index.html;
-  }
-  location = /runtime-config.js {
+${webLocation}  location = ${webBasePath}/runtime-config.js {
     add_header Cache-Control "no-store";
     default_type application/javascript;
     return 200 'globalThis.__HAI_PUBLIC_CONFIG__={apiBase:globalThis.location.origin+"${apiPrefix}"};';
@@ -601,6 +608,67 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     proxy_buffering off;
     proxy_buffer_size 32k;
     proxy_buffers 8 32k;
+  }
+}
+`
+}
+
+/**
+ * 目录路由共享同一校验与静态回退；文件命中后直接输出，避免重定向到域名根目录。
+ * @param webBasePath - 无末尾斜杠的目录，空字符串为根目录。
+ * @returns 包含目录校验、无末尾斜杠跳转和静态回退的location配置。
+ * @example 模块内部上下文
+ * ```ts
+ * const locations = renderWebLocation('/portal')
+ * void locations
+ * ```
+ */
+function renderWebLocation(webBasePath: string): string {
+  if (webBasePath && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(webBasePath) || webBasePath.split('/').some(segment => segment === '.' || segment === '..') || ['/health', '/_hai/web-health'].includes(webBasePath)))
+    throw new Error('Invalid web base path')
+  return webBasePath
+    ? `  absolute_redirect off;
+  location = ${webBasePath} {
+    return 308 ${webBasePath}/$is_args$args;
+  }
+  location ${webBasePath}/ {
+    rewrite ^${webBasePath.replaceAll('.', '\\.').replaceAll('-', '\\-')}/(.*)$ /$1 break;
+    try_files $uri/index.html $uri /index.html =404;
+  }
+  location / { return 404; }
+`
+    : `  location / {
+    try_files $uri $uri/ /index.html;
+  }
+`
+}
+
+/**
+ * 独立Vite站点复用目录路由，公开运行配置仍由已有启动脚本生成，保留外部API地址与品牌字段。
+ * @param port - Web容器实际监听端口。
+ * @param webBasePath - 已声明的Web挂载目录；无末尾斜杠，空字符串表示根目录。
+ * @returns 只含静态页面、公开运行配置和健康入口的Nginx配置。
+ * @example 模块内部上下文
+ * ```ts
+ * const config = generateStaticWebConfig(8080, '/portal')
+ * void config
+ * ```
+ */
+export function generateStaticWebConfig(port: number, webBasePath: string): string {
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error('Invalid web proxy target')
+  return `server {
+  listen ${port};
+  server_name _;
+  root /usr/share/nginx/html;
+${renderWebLocation(webBasePath)}  location = ${webBasePath}/runtime-config.js {
+    alias /tmp/hai-runtime-config/runtime-config.js;
+    add_header Cache-Control "no-store";
+    default_type application/javascript;
+  }
+  location = /health {
+    access_log off;
+    return 200 'ok';
   }
 }
 `

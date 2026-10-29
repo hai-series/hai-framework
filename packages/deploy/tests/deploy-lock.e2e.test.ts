@@ -40,6 +40,11 @@ function declareDatabaseBackend(bundle: { directory: string }, backend: 'postgre
   return volume
 }
 
+/** 故障夹具只调整公开目录元数据并重算摘要，真实apply负责判断增量是否匹配既有基线。 */
+function declareWebBase(bundle: { directory: string }, base: '/yyy' | '/other') {
+  execute(`printf '%s\\n' '${base}' > /fixture/${bundle.directory}/web-base-path; cd /fixture/${bundle.directory}; sed '/  web-base-path$/d' SHA256SUMS > SHA256SUMS.next; sha256sum web-base-path >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
+}
+
 /** 只写入公开导入工具会生成的受控 v2 状态；实际容器身份仍由脚本重新核对。 */
 function seedImportedDatabase(bundle: { directory: string }, volume: string, projectOverride?: string): string {
   const project = execute(`cat /fixture/${bundle.directory}/managed-project`)
@@ -183,6 +188,28 @@ fi
     execute('chmod 700 /fixture/bin/*; command -v flock; mkdir -p /fixture/server/.deploy-lock')
     expect(await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime: 'docker' }, expose: { hostPort: 18080 } } })).toMatchObject({ success: true })
   }, 60_000)
+
+  it.each(['matching', 'missing', 'different', 'symlink'] as const)('真实shell保持Web前缀的增量边界：%s', async (scenario) => {
+    const installed = await pack()
+    declareWebBase(installed, '/yyy')
+    expect(apply(installed).status).toBe(0)
+    const candidate = await pack(['serv'])
+    if (scenario !== 'missing')
+      declareWebBase(candidate, scenario === 'different' ? '/other' : '/yyy')
+    if (scenario === 'symlink')
+      execute(`printf '%s\\n' '/yyy' > /fixture/old-web-prefix; rm /fixture/server/releases/${installed.id}/web-base-path; ln -s /fixture/old-web-prefix /fixture/server/releases/${installed.id}/web-base-path`)
+    execute(': > /fixture/commands.log')
+    const outcome = apply(candidate)
+    if (scenario === 'matching') {
+      expect(outcome.status, outcome.stderr).toBe(0)
+      expect(execute('cat /fixture/server/current')).toBe(candidate.id)
+    }
+    else {
+      expectPreflightRefusal(candidate, outcome)
+      expect(execute('cat /fixture/server/current')).toBe(installed.id)
+      expect(outcome.stderr).toContain(scenario === 'symlink' ? 'metadata must be a regular file' : 'Web base path changed')
+    }
+  }, 30_000)
 
   it.each([false, true])('失败回滚验证旧端口与 HTTP，并保留真实恢复状态（恢复失败：%s）', async (recoveryFails) => {
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')

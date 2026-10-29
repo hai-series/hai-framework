@@ -29,7 +29,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
  * @param options.middlewareEnv - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
- * @param options.hasWebProxy - 工程是否包含独立 Web 服务拓扑。
+ * @param options.hasWebConfig - 是否挂载公开Nginx配置，包含前后端代理或独立Vite目录路由。
  * @param options.containerPort - 应用容器的实际监听端口。
  * @returns tar 路径、手工执行说明及启动脚本名。
  * @example 模块内部上下文
@@ -39,7 +39,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * const artifact = await readDeploymentArtifact(artifactDir)
  * // directory 已由 Provider 准备好 docker-compose-<版本>.yml 与 .env.runtime。
  * const directory = '.hai/deploy/prod/prepared-id'
- * const result = await createDeploymentBundle({ directory, artifactDir, artifact, projectName: 'shop', deploymentId: 'shop-prod-001', environment: 'prod', config: { type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } }, runtime: 'auto', output: '.hai/deploy/shop.tar', selected: ['serv'], partial: false, middlewareEnv: '', healthPaths: ['/health'], hasWebProxy: false, containerPort: 3000 })
+ * const result = await createDeploymentBundle({ directory, artifactDir, artifact, projectName: 'shop', deploymentId: 'shop-prod-001', environment: 'prod', config: { type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } }, runtime: 'auto', output: '.hai/deploy/shop.tar', selected: ['serv'], partial: false, middlewareEnv: '', healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
  * ```
  */
 export async function createDeploymentBundle(options: {
@@ -56,7 +56,7 @@ export async function createDeploymentBundle(options: {
   partial: boolean
   middlewareEnv: string
   healthPaths: string[]
-  hasWebProxy: boolean
+  hasWebConfig: boolean
   containerPort: number
 }): Promise<{ bundlePath: string, instructions: string, startName: string }> {
   const { directory, artifactDir, artifact, projectName, environment, config, selected } = options
@@ -144,15 +144,16 @@ export async function createDeploymentBundle(options: {
     put('middleware-runtime.env', nativeEnvironment)
     for (const [file, content] of Object.entries(createManagedSecretAssets(projectName, nativeEnvironment, compose)))
       put(file, content)
-    if (options.hasWebProxy)
+    if (options.hasWebConfig)
       put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)
-    if (options.hasWebProxy) {
+    if (options.hasWebConfig) {
       // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
       put('proxy-entry.json', JSON.stringify({ services: { web: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
     }
-    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebProxy}:${artifact.primaryService}:${options.hasWebProxy ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
+    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
     put('health-port', `${config.expose.hostPort}\n`)
+    put('web-base-path', `${artifact.webBasePath ?? ''}\n`)
     put('health-paths', `${options.healthPaths.join('\n')}\n`)
     put('image-list', `${imageList.join('\n')}\n`)
     put('dependencies', `${[...dependencies].join('\n')}\n`)
@@ -209,7 +210,7 @@ export async function createDeploymentBundle(options: {
     }
     writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...target, _comments: comments }, null, 2)}\n`)
     writeFileSync(join(scripts, 'README.txt'), readFileSync(join(staging, 'README.txt'), 'utf8'))
-    for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', ...(options.hasWebProxy ? ['web.conf'] : [])])
+    for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', ...(options.hasWebConfig ? ['web.conf'] : [])])
       rmSync(join(directory, file), { force: true })
     return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
   }
