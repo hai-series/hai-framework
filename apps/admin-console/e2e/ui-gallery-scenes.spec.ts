@@ -70,7 +70,7 @@ test.describe('UI Gallery Scenes', () => {
 
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
     const copy = documentDemo.getByRole('button', { name: '复制全文', exact: true })
-    const contrast = await copy.evaluate((element) => {
+    const colors = await copy.evaluate(async (element) => {
       const context = document.createElement('canvas').getContext('2d')!
       const luminance = (value: string) => {
         context.clearRect(0, 0, 1, 1)
@@ -82,12 +82,22 @@ test.describe('UI Gallery Scenes', () => {
         })
         return rgb[0]! * 0.2126 + rgb[1]! * 0.7152 + rgb[2]! * 0.0722
       }
-      const style = getComputedStyle(element)
-      const a = luminance(style.color)
-      const b = luminance(style.backgroundColor)
-      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+      const measure = () => {
+        const style = getComputedStyle(element)
+        const color = style.color
+        const background = style.backgroundColor
+        const a = luminance(color)
+        const b = luminance(background)
+        return { color, background, contrast: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }
+      }
+      // 切换主题会触发按钮的颜色过渡；先读取样式，再等待真实过渡完成后检查最终配色。
+      const before = measure()
+      const animations = element.getAnimations()
+      await Promise.all(animations.map(animation => animation.finished))
+      return { before, after: measure(), animationCount: animations.length }
     })
+    await testInfo.attach('theme-contrast.json', { body: JSON.stringify(colors, null, 2), contentType: 'application/json' })
     await documentDemo.screenshot({ path: testInfo.outputPath('ai-document-dark.png') })
-    expect(contrast).toBeGreaterThanOrEqual(4.5)
+    expect(colors.after.contrast).toBeGreaterThanOrEqual(4.5)
   })
 })
