@@ -80,11 +80,14 @@ When using Crypto or Kit/IAM, include `sm-crypto@0.5.7` in application productio
 
 When mounting an application under `/yyy/`, keep SvelteKit's `kit.paths.base` and the actual URLs used by guards consistent. Prefix `protectedPaths`, `publicPaths` and `loginUrl` with `base` from `$app/paths`, for example `${base}/api/*`. Authentication pages use ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``. Kit recognizes application `/api/*` routes through route groups and mount prefixes: unauthenticated APIs return 401, while pages follow the configured login redirect. Generated templates include this wiring.
 
+The Hook examples assume the application has initialized its database, shared cache and IAM and checked every result. The application owns resource cleanup; do not initialize modules per request.
+
 **src/hooks.server.ts**：
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
 import { cache } from '@h-ai/cache'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
@@ -157,29 +160,41 @@ For subdirectory hosting, read `base` from `$app/paths`: pass `basePath: base` i
 **src/hooks.server.ts**：
 
 ```ts
+import { base } from '$app/paths'
+import { appKitConfig } from '$lib/server/kit-config'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-await crypto.init()
+const cryptoReady = await crypto.init()
+if (!cryptoReady.success)
+  throw new Error(cryptoReady.error.message)
 const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
 const serverKeyRing = ring.data
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+// Redis/IAM 由应用启动流程初始化并检查；此处复用同一实例。
 
 export const handle = kit.createHandle({
   auth: {
-    verifyToken,
-    protectedPaths: ['/api/*'],
-    publicPaths: ['/api/_hai/*'], // 默认密钥协商端点
+    verifyToken: async (token) => {
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
+    },
+    protectedPaths: [`${base}/api/*`],
+    publicPaths: [`${base}/api/_hai/*`], // 默认密钥协商端点
   },
   crypto: {
     crypto,
-    transport: {
-      serverKeyRing,
-      keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-    },
+    transport: appKitConfig.transport === false
+      ? false
+      : {
+          ...appKitConfig.transport,
+          basePath: base,
+          serverKeyRing,
+          keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+        },
   },
 })
 ```
@@ -189,13 +204,15 @@ export const handle = kit.createHandle({
 ```svelte
 <script lang='ts'>
   import { browser } from '$app/environment'
-  import { appKitConfig } from '$lib/config/kit-config'
+  import { base } from '$app/paths'
+  import { page } from '$app/state'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
+  import { untrack } from 'svelte'
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
-    kit.client.installBrowserTransport(appKitConfig, { crypto })
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
   }
 </script>
 ```
@@ -256,9 +273,19 @@ export const appKitConfig = loaded.data
 export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
+Pass the public projection through `src/routes/+layout.server.ts` to the browser layout above, without importing the server configuration into browser code:
+
+```ts
+import { publicKitConfig } from '$lib/server/kit-config'
+
+export function load() {
+  return { kitConfig: publicKitConfig }
+}
+```
+
 `resolveKitConfig()` resolves both `server` (host/port) and `transport`. Host/port precedence is `HOST` / `PORT` environment variables > `_kit.yml` `server` > `127.0.0.1:3000`, for shared consumption by the SvelteKit server entry, matching `@h-ai/serv`.
 For server-only configuration, use `core.config.validate('kit', KitConfigSchema)` as well.
-Read the complete `_kit.yml` on the server; it can contain private proxy networks and policy-file paths. Return only an explicit public projection such as `{ kit: publicKitConfig }` from `+layout.server.ts`, and consume its transport fields in the browser. Never bundle the full configuration or policy file with `?raw`, and keep secrets outside these files.
+Read the complete `_kit.yml` on the server; it can contain private proxy networks and policy-file paths. Return only an explicit public projection such as `{ kitConfig: publicKitConfig }` from `+layout.server.ts`, and consume its transport fields in the browser. Never bundle the full configuration or policy file with `?raw`, and keep secrets outside these files.
 
 ### Configuration
 

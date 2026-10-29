@@ -11,7 +11,7 @@
 | 项 | 框架默认 | 影响 |
 | --- | --- | --- |
 | server.host/port | 127.0.0.1/3000 | 本机回环；容器通常明确监听0.0.0.0，暴露端口不代表已做认证 |
-| http.apiPrefix | /api/v1 | 客户端 baseUrl 与代理路径必须一致 |
+| http.apiPrefix | /api/v1 | 以 /api/ 开头，客户端 baseUrl 与代理路径必须一致 |
 | http.health | /health 和 /ready | false 关闭；健康与依赖就绪分开，检查路径也应同步部署 health |
 | http.openapi | false | 对象启用，默认 path=/openapi.json；生产按公开范围选择 |
 | http.docs | false | 对象启用，默认 path=/docs；requireAuth 可显式要求认证 |
@@ -22,7 +22,8 @@
 server: { host: 0.0.0.0, port: 3000 }
 http:
   apiPrefix: /api/v1
-  trustedProxies: []
+  trustedProxies: auto
+  access: false
   health: { path: /health, readyPath: /ready }
   openapi: false
   docs: false
@@ -40,7 +41,8 @@ transport: false
 
 | 项 | 框架默认 | 取值影响 |
 | --- | --- | --- |
-| http.trustedProxies | [] | 不采纳不可信转发头；只列入口代理IP/CIDR，不能为了方便信任任意来源 |
+| http.trustedProxies / Kit trustedProxies | auto | 普通宿主忽略转发头；受管私有 Compose 代理采用实际容器网段。自建代理填写 IP/CIDR，[] 显式忽略转发头 |
+| http.access / Kit access | false | 对每次请求限制 IP、时间和路径；可引用独立 YAML，详细配置见[请求策略](request-access.md) |
 | cors.origin/nativeOrigins | 无默认 | 指定真实浏览器和原生来源；按生成宿主规则解析来源字符串 |
 | cors.credentials | false | 跨源Cookie需明确true并匹配允许来源；通配来源不能代替身份验证 |
 | cors.allowedHeaders | Authorization、Content-Type、X-Requested-With、X-Hai-Reauthentication、X-Hai-Terminal | 自定义头需明确加入，保留框架敏感动作和终端头 |
@@ -58,9 +60,13 @@ cors:
 
 替换文档代理地址后，从允许和拒绝来源分别发预检及真实请求，再验证Cookie和服务端权限。CORS只是浏览器跨源约束，不阻止脚本/后端直接请求；不能作为资源权限守卫。
 
+示例和模板统一向 IAM、审计、限流和业务传递可信地址。受管 Nginx 用经过确认的 remote_addr 覆盖 XFF 和 X-Real-IP；外层负载均衡需显式配置 `provider.trustedEdgeProxies`。rootless 网络是否保留原始地址必须实测，条件和独立文件部署见[真实 IP 与请求策略](request-access.md#3-运维人员先确认真实-ip-的来源)。
+
 ## Kit、Cookie与请求上下文
 
 `config/_kit.yml` 的 server 默认同Serv，transport默认false；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit没有close，认证、Cookie、限流和请求处理由hooks工厂参数装配，不能把Serv整个http对象放入Kit。
+
+SvelteKit 部署在 `/yyy` 等目录时，读取 `$app/paths` 的 `base`，在服务端 `crypto.transport` 传入 `basePath: base`，浏览器使用 `kit.client.installBrowserTransport(公开配置, { crypto, basePath: base })`。独立 Kit client 的 `transport.basePath` 采用同一个值。默认空字符串表示根目录；它是宿主构建参数，不在 YAML 重复配置。这样 `/yyy/api/*` 的默认加密范围与页面目录保持一致，交换路径和排除列表仍填写完整请求路径。CLI 模板已装配，已有应用升级时需核对两端。
 
 ```yaml schema=@h-ai/kit:KitConfigSchema
 server: { host: 127.0.0.1, port: 3000 }

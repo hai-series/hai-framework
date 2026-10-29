@@ -86,11 +86,14 @@ export default defineConfig({
 
 应用部署在 `/yyy/` 等子目录时，SvelteKit 的 `kit.paths.base` 与守卫使用的实际 URL 应保持一致：将 `$app/paths` 的 `base` 加到 `protectedPaths`、`publicPaths` 和 `loginUrl`，例如 `${base}/api/*`。认证页面使用 ``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``。Kit 根据应用路由识别 `/api/*`，包括路由分组和挂载前缀；未认证的 API 返回 401，页面按配置跳转登录。生成模板已处理这些路径。
 
+以下 Hook 片段假设应用已完成数据库、共享缓存和 IAM 初始化，并检查每项初始化结果。关闭资源由应用统一负责；不在每个请求中初始化模块。
+
 **src/hooks.server.ts**：
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
 import { cache } from '@h-ai/cache'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
@@ -163,29 +166,41 @@ kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.tran
 **src/hooks.server.ts**：
 
 ```ts
+import { base } from '$app/paths'
+import { appKitConfig } from '$lib/server/kit-config'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-await crypto.init()
+const cryptoReady = await crypto.init()
+if (!cryptoReady.success)
+  throw new Error(cryptoReady.error.message)
 const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
 const serverKeyRing = ring.data
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+// Redis/IAM 由应用启动流程初始化并检查；此处复用同一实例。
 
 export const handle = kit.createHandle({
   auth: {
-    verifyToken,
-    protectedPaths: ['/api/*'],
-    publicPaths: ['/api/_hai/*'], // 默认密钥协商端点
+    verifyToken: async (token) => {
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
+    },
+    protectedPaths: [`${base}/api/*`],
+    publicPaths: [`${base}/api/_hai/*`], // 默认密钥协商端点
   },
   crypto: {
     crypto,
-    transport: {
-      serverKeyRing,
-      keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-    },
+    transport: appKitConfig.transport === false
+      ? false
+      : {
+          ...appKitConfig.transport,
+          basePath: base,
+          serverKeyRing,
+          keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+        },
   },
 })
 ```
@@ -195,13 +210,15 @@ export const handle = kit.createHandle({
 ```svelte
 <script lang='ts'>
   import { browser } from '$app/environment'
-  import { appKitConfig } from '$lib/config/kit-config'
+  import { base } from '$app/paths'
+  import { page } from '$app/state'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
+  import { untrack } from 'svelte'
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
-    kit.client.installBrowserTransport(appKitConfig, { crypto })
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
   }
 </script>
 ```
@@ -262,9 +279,19 @@ export const appKitConfig = loaded.data
 export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
+在 `src/routes/+layout.server.ts` 将公共投影交给上述浏览器布局，不导入服务端配置文件：
+
+```ts
+import { publicKitConfig } from '$lib/server/kit-config'
+
+export function load() {
+  return { kitConfig: publicKitConfig }
+}
+```
+
 `resolveKitConfig()` 同时解析 `server` （host/port）与 `transport`；host/port 优先级为 `HOST` / `PORT` 环境变量 > `_kit.yml` 的 `server` > 默认 `127.0.0.1:3000`，供 SvelteKit 服务器入口统一消费（与 `@h-ai/serv` 同构）。
 如只在服务端读取配置，也可配合 `core.config.validate('kit', KitConfigSchema)` 使用。
-完整 `_kit.yml` 由服务端读取，可包含内部代理网段和访问策略文件路径。`+layout.server.ts` 只返回 `{ kit: publicKitConfig }` 等明确公共投影，浏览器消费其中的 transport；禁止用 `?raw` 把完整配置或策略文件打入客户端，也不要在其中写入密钥。
+完整 `_kit.yml` 由服务端读取，可包含内部代理网段和访问策略文件路径。`+layout.server.ts` 只返回 `{ kitConfig: publicKitConfig }` 等明确公共投影，浏览器消费其中的 transport；禁止用 `?raw` 把完整配置或策略文件打入客户端，也不要在其中写入密钥。
 
 ### 配置
 

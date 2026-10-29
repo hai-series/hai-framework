@@ -13,6 +13,7 @@
 | 使用框架开发功能 | [基础与加载](runtime.md) → 对应领域 → 操作指南 | 配置确实传入正确模块，失败会在启动或操作边界暴露 |
 | 管理开发、测试、生产配置 | [配置来源和覆盖](runtime.md#配置从哪里来) → [数据](data.md) → [部署](delivery.md) | 环境隔离、密钥来源、生产依赖和回滚材料都明确 |
 | 将网站发布到域名下的子目录 | [网站子目录](delivery.md#网站部署在子目录) → [HTTP与API地址](http.md) | 页面与资源、认证和守卫使用正确目录，API地址、健康检查与增量基线一致 |
+| 配置外部接口的来源、工作时段与加密 | [请求策略](request-access.md) → [代理边界](request-access.md#3-运维人员先确认真实-ip-的来源) → [独立文件交付](request-access.md#4-运维人员携带独立-yaml-交付) | 目标路径使用正确来源和协议，更新和回滚使用匹配的策略文件 |
 | 维护框架与生成模板 | [配置边界](runtime.md#保存以后如何生效) → [HTTP](http.md) → [验证](../governance/verification.md) | Schema、消费点、默认值、模板、调用方和截图同步 |
 | 审查安全性与恢复能力 | [身份与安全](identity.md) → [网络边界](http.md) → [运行维护](operations.md) → [部署恢复](delivery.md) | 权限在服务端执行；敏感信息、资源预算、未知结果及数据恢复有边界 |
 
@@ -25,7 +26,7 @@
 | [基础、环境、日志和生命周期](runtime.md) | 配置为什么没生效，日志如何采集，依赖怎样启停 | `_core.yml`、dotenv、`HAI_*`、宿主入口 |
 | [数据、缓存、文件和文本](data.md) | 数据保存在哪里，连接池/证书/签名多久有效 | `_db.yml`、`_cache.yml`、`_storage.yml`、Datapipe 参数 |
 | [身份、密码、会话和权限](identity.md) | 登录方式、锁定、会话配额、改密和登录页 | `_iam.yml`、公开认证策略、服务端守卫 |
-| [HTTP、客户端和传输](http.md) | 监听地址、跨域、可信代理、Cookie、加密和超时 | `_serv.yml`、`_kit.yml`、`apiClient.init`、Transport 工厂 |
+| [HTTP、客户端和传输](http.md) | 监听地址、跨域、可信代理、Cookie、加密和超时 | `_serv.yml`、`_kit.yml`、apiClient、[按路径配置 IP、时段与加密](request-access.md) |
 | [AI、知识与向量](ai.md) | 模型路由、令牌预算、检索、音频/图片和持久化 | `_ai.yml`、`_vecdb.yml`、显式 Store |
 | [反馈、通知、审计和任务](operations.md) | 材料保留、通知回执、审计保护和任务恢复 | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml` |
 | [页面、支付与设备](experience.md) | 表单/主题/提示、支付验签及原生配置 | UI props、`_payment.yml`、Capacitor/原生构建 |

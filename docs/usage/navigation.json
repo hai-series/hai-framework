@@ -48,7 +48,14 @@
         { "id": "configuration-runtime", "title": "基础、覆盖与生命周期", "path": "configuration/runtime.md" },
         { "id": "configuration-data", "title": "数据库、缓存、文件与文本", "path": "configuration/data.md" },
         { "id": "configuration-identity", "title": "身份、会话与安全策略", "path": "configuration/identity.md" },
-        { "id": "configuration-http", "title": "HTTP、客户端与传输", "path": "configuration/http.md" },
+        {
+          "id": "configuration-http",
+          "title": "HTTP、客户端与传输",
+          "path": "configuration/http.md",
+          "children": [
+            { "id": "configuration-request-access", "title": "请求来源、时段与接口加密", "path": "configuration/request-access.md" }
+          ]
+        },
         { "id": "configuration-ai", "title": "模型、知识与向量", "path": "configuration/ai.md" },
         { "id": "configuration-operations", "title": "反馈、通知、审计与任务", "path": "configuration/operations.md" },
         { "id": "configuration-experience", "title": "页面、支付与设备", "path": "configuration/experience.md" },

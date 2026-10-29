@@ -86,11 +86,14 @@ Crypto または Kit/IAM を使う場合、アプリの本番依存に `sm-crypt
 
 `/yyy/`などの配下に配置する場合、SvelteKitの`kit.paths.base`とガードが参照する実際のURLを揃えます。`$app/paths`の`base`を`protectedPaths`、`publicPaths`、`loginUrl`に付け、`${base}/api/*`のように指定してください。認証画面は``kit.client.createAuthActions({ basePath: `${base}/api/auth` })``を使用します。Kitはルートグループや配置接頭辞を含むアプリ内`/api/*`を識別し、未認証APIは401、画面は設定したログイン先へ遷移します。生成テンプレートにはこの接続を含みます。
 
+以下の Hook 例では、アプリがデータベース、共有キャッシュ、IAM を初期化し、各結果を確認済みとします。リソースの終了はアプリが管理し、リクエストごとに初期化しません。
+
 **src/hooks.server.ts**：
 
 ```typescript
 import type { Handle } from '@sveltejs/kit'
 import { cache } from '@h-ai/cache'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 const haiHandle = kit.createHandle({
@@ -163,29 +166,41 @@ kit の通信暗号化は `@h-ai/crypto` に委譲します。サーバーは `c
 **src/hooks.server.ts**：
 
 ```ts
+import { base } from '$app/paths'
+import { appKitConfig } from '$lib/server/kit-config'
 import { cache } from '@h-ai/cache'
 import { createRedisTransportKeyStore, crypto, parseTransportServerKeyRing } from '@h-ai/crypto'
+import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-await crypto.init()
+const cryptoReady = await crypto.init()
+if (!cryptoReady.success)
+  throw new Error(cryptoReady.error.message)
 const ring = parseTransportServerKeyRing(process.env.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
 if (!ring.success)
   throw new Error(ring.error.message)
 const serverKeyRing = ring.data
-await cache.init({ type: 'redis', host: '127.0.0.1', port: 6379 })
+// Redis/IAM 由应用启动流程初始化并检查；此处复用同一实例。
 
 export const handle = kit.createHandle({
   auth: {
-    verifyToken,
-    protectedPaths: ['/api/*'],
-    publicPaths: ['/api/_hai/*'], // 默认密钥协商端点
+    verifyToken: async (token) => {
+      const verified = await iam.auth.verifyToken(token)
+      return verified.success ? verified.data : null
+    },
+    protectedPaths: [`${base}/api/*`],
+    publicPaths: [`${base}/api/_hai/*`], // 默认密钥协商端点
   },
   crypto: {
     crypto,
-    transport: {
-      serverKeyRing,
-      keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
-    },
+    transport: appKitConfig.transport === false
+      ? false
+      : {
+          ...appKitConfig.transport,
+          basePath: base,
+          serverKeyRing,
+          keyStore: createRedisTransportKeyStore({ cache, ttlSeconds: 3600 }),
+        },
   },
 })
 ```
@@ -195,13 +210,15 @@ export const handle = kit.createHandle({
 ```svelte
 <script lang='ts'>
   import { browser } from '$app/environment'
-  import { appKitConfig } from '$lib/config/kit-config'
+  import { base } from '$app/paths'
+  import { page } from '$app/state'
   import { crypto } from '@h-ai/crypto'
   import { kit } from '@h-ai/kit'
+  import { untrack } from 'svelte'
 
   // 一次性安装：内部按 _kit.yml 决定是否启用 transport，并预热 crypto
   if (browser) {
-    kit.client.installBrowserTransport(appKitConfig, { crypto })
+    kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
   }
 </script>
 ```
@@ -262,9 +279,19 @@ export const appKitConfig = loaded.data
 export const publicKitConfig = { transport: appKitConfig.transport }
 ```
 
+`src/routes/+layout.server.ts` から上記ブラウザーレイアウトへ公開部分だけ渡します。ブラウザー側からサーバー設定をインポートしません。
+
+```ts
+import { publicKitConfig } from '$lib/server/kit-config'
+
+export function load() {
+  return { kitConfig: publicKitConfig }
+}
+```
+
 `resolveKitConfig()` は `server`（host/port）と `transport` を解決します。host/port は `HOST` / `PORT` 環境変数 > `_kit.yml` の `server` > `127.0.0.1:3000` の順で、SvelteKit サーバー入口で共通利用します（`@h-ai/serv` と同じ構造）。
 サーバーのみで設定を読む場合は `core.config.validate('kit', KitConfigSchema)` も利用できます。
-完全な `_kit.yml` はサーバーだけで読みます。内部の代理ネットワークやポリシーファイルのパスを含むため、`+layout.server.ts` は `{ kit: publicKitConfig }` のような公開投影だけを返し、ブラウザーは transport を使用します。`?raw` で設定全体やポリシーをブラウザーへ含めず、秘密鍵も記載しないでください。
+完全な `_kit.yml` はサーバーだけで読みます。内部の代理ネットワークやポリシーファイルのパスを含むため、`+layout.server.ts` は `{ kitConfig: publicKitConfig }` のような公開投影だけを返し、ブラウザーは transport を使用します。`?raw` で設定全体やポリシーをブラウザーへ含めず、秘密鍵も記載しないでください。
 
 ### 設定
 
