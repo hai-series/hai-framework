@@ -102,7 +102,7 @@ export async function createDeploymentBundle(options: {
           : [`../${options.deploymentId}/middleware-runtime.env`]
       }
       if (Array.isArray(service.volumes))
-        service.volumes = service.volumes.map(mount => typeof mount === 'string' ? mount.replace('./web.conf:', `../${options.deploymentId}/web.conf:`) : mount)
+        service.volumes = service.volumes.map(mount => typeof mount === 'string' ? mount.replace('./web.conf:', `../${options.deploymentId}/web.conf:`).replace('./request-access.yml:', `../${options.deploymentId}/request-access.yml:`) : mount)
     }
     put('compose.json', JSON.stringify({ ...compose, services: Object.fromEntries(selected.map(name => [name, compose.services[name]])) }))
     // 合并入口仅保存 extends 指向；更新服务时整体切换定义，避免旧 env_file/卷列表累加。
@@ -142,6 +142,8 @@ export async function createDeploymentBundle(options: {
       imageList.push(`${file} ${reference}`)
     }
     put('.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
+    if (selected.includes(artifact.primaryService) && existsSync(join(directory, 'request-access.yml')))
+      put('request-access.yml', readFileSync(join(directory, 'request-access.yml'), 'utf8'))
     put('middleware.env', options.middlewareEnv)
     const middlewareRuntime = join(directory, 'middleware-runtime.env')
     const nativeEnvironment = existsSync(middlewareRuntime) ? readFileSync(middlewareRuntime, 'utf8') : ''
@@ -216,7 +218,7 @@ export async function createDeploymentBundle(options: {
     }
     writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...target, _comments: comments }, null, 2)}\n`)
     writeFileSync(join(scripts, 'README.txt'), readFileSync(join(staging, 'README.txt'), 'utf8'))
-    for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', ...(options.hasWebConfig ? ['web.conf'] : [])])
+    for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', 'request-access.yml', ...(options.hasWebConfig ? ['web.conf'] : [])])
       rmSync(join(directory, file), { force: true })
     return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
   }

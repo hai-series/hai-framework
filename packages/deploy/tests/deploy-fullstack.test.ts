@@ -84,6 +84,74 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', hasWeb: web, appVersion, buildId: 'release-1', images }))
 }
 
+it.each(['serv', 'kit'])('全量和应用增量交付携带 %s 独立请求策略快照，宿主环境保留原始文件引用', async (module) => {
+  const policyFile = join(root, 'config/access.yaml')
+  writeFileSync(policyFile, 'rules:\n  - id: external\n    paths: [/custom-api/v2/external/**]\n    encryption: disabled\n    allowIps: [192.0.2.0/24]\n')
+  const configName = module === 'serv' ? 'HAI_SERV' : 'HAI_KIT'
+  const file = { file: './config/access.yaml' }
+  const settings = module === 'serv' ? { http: { apiPrefix: '/custom-api/v2', access: file } } : { access: file, transport: false }
+  writeFileSync(join(root, '.env.test'), `${configName}='${JSON.stringify(settings)}'\n`)
+  const primary = module === 'serv' ? 'serv' : 'web'
+  if (module === 'kit') {
+    writeFileSync(join(root, 'svelte.config.js'), 'export default {}')
+    writeFileSync(join(root, 'config/_kit.yml'), 'transport: false\n')
+    writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@sveltejs/kit': { version: '1' } } } }, packages: { '@sveltejs/kit@1': {} }, snapshots: { '@sveltejs/kit@1': {} } }))
+    const image = 'web-1.2.3.tar'
+    writeFileSync(join(artifacts, image), 'prebuilt-web')
+    writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 5, primaryService: 'web', hasWeb: true, webBasePath: '/portal', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'web', file: image, imageRef: 'localhost/example-web:release-1', sha256: createHash('sha256').update('prebuilt-web').digest('hex'), containerPort: 3000 }] }))
+  }
+  await initialize(false)
+  for (const partial of [false, true]) {
+    const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: partial ? [primary] : undefined })
+    const directory = deliveryDirectory(result)
+    const environment = parseEnv(readBundleFile(directory, '.env.runtime'))
+    const runtimeSettings = JSON.parse(environment[configName]!)
+    const access = module === 'serv' ? runtimeSettings.http.access : runtimeSettings.access
+    expect(access).toEqual({ file: '/run/hai/request-access.yml' })
+    const snapshot = readBundleFile(directory, 'request-access.yml')
+    expect(parse(snapshot)).toMatchObject({ rules: [{ id: 'external', encryption: 'disabled', allowIps: ['192.0.2.0/24'] }] })
+    expect(readBundleFile(directory, 'SHA256SUMS')).toContain(`${createHash('sha256').update(snapshot).digest('hex')}  request-access.yml`)
+    const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
+    expect(compose.services[primary].volumes).toContainEqual(expect.stringMatching(/\/request-access\.yml:\/run\/hai\/request-access\.yml:ro$/))
+    if (module === 'serv')
+      expect(compose.services.serv.environment.HAI_DEPLOY_PRIVATE_PROXY).toBe('1')
+    expect(JSON.parse(parseEnv(readFileSync(join(root, '.env.test'), 'utf8'))[configName]!)).toEqual(settings)
+    // 打包结果不依赖日后宿主文件内容，旧发布目录继续保存自己的策略。
+    writeFileSync(policyFile, 'rules: []\n')
+    expect(readBundleFile(directory, 'request-access.yml')).toBe(snapshot)
+    writeFileSync(policyFile, 'rules:\n  - id: external\n    paths: [/custom-api/v2/external/**]\n    encryption: disabled\n    allowIps: [192.0.2.0/24]\n')
+  }
+}, 30_000)
+
+it.each(['missing', 'alias', 'unknown-field', 'conflicting-encryption', 'required-without-transport'])('请求策略文件 %s 时在上传前失败，不泄漏内容', async (state) => {
+  writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  access: { file: ./config/access.yml }\n')
+  if (state !== 'missing') {
+    const contents: Record<string, string> = {
+      'alias': 'global: &private { allowIps: [192.0.2.10] }\nrules: [{id: external, paths: [/api/**], <<: *private}]\n',
+      'unknown-field': 'private-secret-field: private-value\n',
+      'conflicting-encryption': 'rules: [{id: external, paths: [/api/**], encryption: disabled}, {id: internal, paths: [/api/private], encryption: required}]\n',
+      'required-without-transport': 'rules: [{id: internal, paths: [/api/private], encryption: required}]\n',
+    }
+    writeFileSync(join(root, 'config/access.yml'), contents[state]!)
+  }
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result).toMatchObject({ success: false, error: { code: HaiDeployError.CONFIG_ERROR.code, message: expect.stringContaining('serv.http.access') } })
+  expect(JSON.stringify(result)).not.toContain('private-value')
+  expect(ssh.upload).not.toHaveBeenCalled()
+  expect(ssh.exec).not.toHaveBeenCalled()
+})
+
+it('仅部署前端时不读取未选后端的策略文件，也不替换其挂载', async () => {
+  writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  access: { file: ./config/missing-policy.yml }\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: ['web'] })
+  const directory = deliveryDirectory(result)
+  const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
+  expect(Object.keys(compose.services)).toEqual(['web'])
+  expect(readBundleFile(directory, 'SHA256SUMS')).not.toContain('request-access.yml')
+})
+
 it('独立 Web 直接公开主容器，保留运行环境且不生成 API 代理', async () => {
   writeArtifact(true)
   const file = join(artifacts, 'manifest.json')

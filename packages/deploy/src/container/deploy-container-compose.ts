@@ -9,6 +9,7 @@
 
 import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
+import { TrustedProxiesSchema } from '@h-ai/core'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { mergeEnvironmentLayers } from '../deploy-environment.js'
@@ -484,6 +485,7 @@ export function buildRuntimeEnv(
  * @param options.web.containerPort - Web 容器监听端口
  * @param options.mountWebConfig - 独立Vite站点是否挂载公开的目录路由配置，默认不挂载。
  * @param options.gateway - SSR/API 自建对象存储的公开 Nginx 入口；只在没有现成 Web 代理时启用。
+ * @param options.requestAccessPolicy - 是否为本次更新的后端挂载只读请求策略快照。
  * @returns compose YAML 字符串
  * @example 模块内部上下文
  * ```ts
@@ -504,6 +506,8 @@ export function generateComposeFile(options: {
   web?: { imageRef: string, containerPort: number }
   mountWebConfig?: boolean
   gateway?: boolean
+  /** 本次更新的服务挂载不可变、已验证的请求策略快照。 */
+  requestAccessPolicy?: boolean
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
   const primaryService = options.primaryService ?? 'serv'
@@ -519,10 +523,15 @@ export function generateComposeFile(options: {
     ports: [`${hostPort}:${containerPort}`],
     networks: ['hai-app'],
   }
-  if (sidecar.appVolumes.length > 0)
-    app.volumes = sidecar.appVolumes
+  const appVolumes = [...sidecar.appVolumes]
+  if (options.requestAccessPolicy)
+    appVolumes.push('./request-access.yml:/run/hai/request-access.yml:ro')
+  if (options.web || options.gateway)
+    app.environment = { HAI_DEPLOY_PRIVATE_PROXY: '1' }
   if (options.mountWebConfig)
-    app.volumes = [...sidecar.appVolumes, './web.conf:/etc/nginx/conf.d/default.conf:ro']
+    appVolumes.push('./web.conf:/etc/nginx/conf.d/default.conf:ro')
+  if (appVolumes.length)
+    app.volumes = appVolumes
   if (sidecar.dependsOn.length > 0)
     app.depends_on = Object.fromEntries(sidecar.dependsOn.map(name => [name, { condition: sidecar.composeServices[name]?.healthcheck ? 'service_healthy' : 'service_started' }]))
 
@@ -582,13 +591,14 @@ export function generateComposeFile(options: {
  * @param options.maxPlaintextBytes - 业务明文 UTF-8 字节上限。
  * @param options.webBasePath - 无末尾斜杠的Web挂载目录，缺省或空字符串为域名根目录。
  * @param options.storageBucket - 自建私有 S3 桶，配置后对象请求由 Nginx 直达 storage。
+ * @param options.trustedEdgeProxies - Nginx 前方显式可信的负载均衡 IP/CIDR，默认不信任上游头。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, storageBucket?: string } = {}): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, storageBucket?: string, trustedEdgeProxies?: string[] } = {}): string {
   const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
@@ -602,7 +612,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   return `server {
   listen ${webPort};
   server_name _;
-  root /usr/share/nginx/html;
+${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  root /usr/share/nginx/html;
   large_client_header_buffers 4 32k;
 ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
     add_header Cache-Control "no-store";
@@ -616,6 +626,8 @@ ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
   location = /health {
     proxy_pass http://serv:${port};
     proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
   }
   location ${apiPrefix.replace(/\/$/, '')}/ {
     client_max_body_size ${bodyLimits.encryptedPayloadBytes};
@@ -623,6 +635,8 @@ ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;
@@ -679,26 +693,29 @@ function renderStorageLocation(bucket: string, reservedPaths: string[]): string 
 
 /**
  * 为独立 API 或 SvelteKit SSR 生成对象存储网关，应用路径（含部署目录）原样转发。
- * @param primaryService - 实际应用服务角色。
- * @param port - 应用容器内监听端口。
- * @param bucket - 自建 S3 私有桶名。
- * @param reservedPaths - 不得与桶路由重叠的应用/API 路径。
- * @param maxPlaintextBytes - 应用 transport 明文预算；仅派生应用路由请求上限。
+ * @param options - 内部服务、端口、桶、保留路径、transport 容量和上游代理 IP/CIDR。
+ * @param options.primaryService - 实际处理请求的应用服务。
+ * @param options.port - 应用容器内端口。
+ * @param options.bucket - 私有 S3 桶名。
+ * @param options.reservedPaths - 不能与桶路由重叠的应用路径。
+ * @param options.maxPlaintextBytes - 应用 transport 明文预算。
+ * @param options.trustedEdgeProxies - Nginx 上游可信负载均衡 IP/CIDR。
  * @returns 监听 8080 的公开 Nginx 配置，不含应用或对象存储凭据。
  * @example 模块内部上下文
  * ```ts
- * const config = generateApplicationProxyConfig('web', 3000, 'uploads', ['/portal'])
+ * const config = generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket: 'uploads', reservedPaths: ['/portal'] })
  * void config
  * ```
  */
-export function generateApplicationProxyConfig(primaryService: 'serv' | 'web', port: number, bucket: string, reservedPaths: string[], maxPlaintextBytes?: number): string {
+export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket: string, reservedPaths: string[], maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
+  const { primaryService, port, bucket, reservedPaths, maxPlaintextBytes } = options
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
   const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
   return `server {
   listen 8080;
   server_name _;
-  large_client_header_buffers 4 32k;
+${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  large_client_header_buffers 4 32k;
 ${renderStorageLocation(bucket, reservedPaths)}  location = /_hai/gateway-health {
     access_log off;
     return 200 'ok';
@@ -710,6 +727,8 @@ ${renderStorageLocation(bucket, reservedPaths)}  location = /_hai/gateway-health
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Connection "";
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_buffer_size 32k;
@@ -719,10 +738,19 @@ ${renderStorageLocation(bucket, reservedPaths)}  location = /_hai/gateway-health
 `
 }
 
+/** 上游 LB 只接受显式 IP/CIDR；随后用 Nginx 已验证的 remote_addr 重写转发头。 */
+function renderTrustedEdgeProxies(entries: string[] = []): string {
+  if (!TrustedProxiesSchema.safeParse(entries).success)
+    throw new Error('Invalid trusted edge proxy address')
+  if (!entries.length)
+    return ''
+  return `${entries.map(entry => `  set_real_ip_from ${entry};`).join('\n')}\n  real_ip_header X-Forwarded-For;\n  real_ip_recursive on;\n`
+}
+
 /**
  * 目录路由共享同一校验与静态回退；文件命中后直接输出，避免重定向到域名根目录。
  * @param webBasePath - 无末尾斜杠的目录，空字符串为根目录。
- * @returns 包含目录校验、无末尾斜杠跳转和静态回退的location配置。
+ * @returns 包含目录校验、无末尾斜杠跳转和静态回退的 location 配置。
  * @example 模块内部上下文
  * ```ts
  * const locations = renderWebLocation('/portal')

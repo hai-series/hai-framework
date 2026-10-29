@@ -266,7 +266,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
 
 describe('对象存储网关边界', () => {
   it('对象请求保持签名原文并关闭大文件缓冲和签名日志；SSR 路径原样转发', () => {
-    const config = generateApplicationProxyConfig('web', 3000, 'business-files', ['/portal', '/api/v1'])
+    const config = generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket: 'business-files', reservedPaths: ['/portal', '/api/v1'] })
     expect(config).toContain('location ^~ /business-files/')
     expect(config).toContain('proxy_pass http://storage:9000;')
     expect(config).toContain('proxy_set_header Host $http_host;')
@@ -279,7 +279,7 @@ describe('对象存储网关边界', () => {
   })
 
   it.each(['api', 'portal', 'health', '../private', 'files;return 200'])('提前拒绝桶名注入或与应用路由冲突：%s', (bucket) => {
-    expect(() => generateApplicationProxyConfig('web', 3000, bucket, ['/portal', '/api/v1'])).toThrow()
+    expect(() => generateApplicationProxyConfig({ primaryService: 'web', port: 3000, bucket, reservedPaths: ['/portal', '/api/v1'] })).toThrow()
   })
 })
 

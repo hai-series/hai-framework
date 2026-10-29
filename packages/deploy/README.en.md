@@ -255,6 +255,14 @@ Explicit plaintext limits are preserved. Packaging rejects feedback requirements
 
 Use `importDeploymentSecrets({ directory, inputFile, runtime })` or run `hai deploy-secrets <directory> --import <private.json>` on the server for read-only verification. Only explicit `--apply` / dryRun:false imports state. The tool verifies projects, containers, volumes and live credentials; it never infers passwords from old bundles, rotates credentials or rebuilds services. V2 state supports special characters and is atomically written with mode 0600 under the deployment flock. Ordinary offline deployment still requires no server Node; this one-time import tool needs supported Node and installed CLI/deploy. See the [import and recovery procedure](docs/credential-import.en.md).
 
+## Request policy files and trusted proxies
+
+Serv `http.access` and SvelteKit `access` can reference separate yml/yaml files. Deployment reads effective application configuration, including environment overrides such as `HAI_SERV`, `HAI_SERV_HTTP_ACCESS` and `HAI_KIT_ACCESS`, validates the file and includes a normalized snapshot in the bundle. Runtime configuration points to `/run/hai/request-access.yml` with a read-only Compose mount. The project retains its original file reference. The snapshot participates in SHA-256 verification; missing or invalid files fail before upload. `.env.runtime` is immutable delivery input: policy changes require a new bundle and deployment.
+
+Full deployments and backend increments carry their own snapshot; frontend-only increments retain the backend mount. Failed deployment recovery uses the previous successful release's Compose and policy file. Non-root containers can read the policy inside a private release directory. Image and policy rollback does not undo database migrations or completed business effects.
+
+Managed Compose sets `HAI_DEPLOY_PRIVATE_PROXY=1` only when a Web/gateway proxy fronts a backend without public ports. Serv/Kit default `trustedProxies: auto` uses container networks there and ignores forwarded headers on other hosts. Generated Nginx overwrites client-supplied forwarding headers with the actual peer. For an upstream load balancer, explicitly set Docker SSH Provider `trustedEdgeProxies` to its IPs/CIDRs; omitting it trusts no upstream, and `[]` explicitly selects the same behavior. Source addresses lost before Nginx cannot be reconstructed, including some rootless forwarding environments. See the [request access handbook](../../docs/usage/configuration/request-access.md) for examples and verification.
+
 ## Development and testing
 
 ```sh

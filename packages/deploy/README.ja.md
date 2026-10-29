@@ -253,6 +253,14 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 `importDeploymentSecrets({ directory, inputFile, runtime })` またはサーバー上の `hai deploy-secrets <directory> --import <private.json>` で読み取り専用検査を行います。明示 `--apply` / dryRun:false のみ保存します。プロジェクト・コンテナ・ボリューム・実際の認証情報を検証し、古いパッケージからの推測、パスワード変更、サービス再作成はしません。特殊文字対応 v2 状態をデプロイ共通 flock 内で原子的に0600で保存します。通常のオフライン配布にサーバー Node は不要で、一度限りの移行ツールには対応 Node と CLI/deploy が必要です。[導入・復旧手順](docs/credential-import.ja.md)を参照してください。
 
+## リクエストポリシーファイルと信頼する代理
+
+Serv の `http.access` と SvelteKit の `access` は独立した yml/yaml を参照できます。配備は `HAI_SERV`、`HAI_SERV_HTTP_ACCESS`、`HAI_KIT_ACCESS` などの環境上書きを含む実効設定を読み、検証済みの正規化スナップショットを配布物へ含めます。実行時は `/run/hai/request-access.yml` を Compose の読み取り専用マウントで参照し、工程の元の参照先は変更しません。SHA-256 検証に含まれ、ファイル不足・不正はアップロード前に失敗します。`.env.runtime` は不変の配備入力であり、ポリシー変更時は新しい配布物を作成します。
+
+全量とバックエンドを含む増分は独自のスナップショットを持ち、フロントエンドだけの増分は旧バックエンドのマウントを維持します。失敗時は前回成功した Compose とポリシーへ復旧します。非 root コンテナでも私有リリースディレクトリ内のファイルを読み取れます。イメージと設定の復旧は DB 移行や実施済み業務を取り消しません。
+
+Web/gateway 入口がありバックエンドのポートが非公開の場合だけ、管理 Compose は `HAI_DEPLOY_PRIVATE_PROXY=1` を設定します。この構成の `trustedProxies: auto` はコンテナネットワークを採用し、他のホストでは転送ヘッダーを無視します。生成 Nginx は実接続元で転送ヘッダーを上書きします。外側の負荷分散器は Docker SSH Provider の `trustedEdgeProxies` に実 IP/CIDR を明記してください。省略時は上流を信頼せず、`[]` も同じ動作です。Nginx 到達前に失われた源 IP は復元できず、一部の rootless 構成も実測が必要です。[リクエスト制御手引き](../../docs/usage/configuration/request-access.md)に例と確認手順を記載しています。
+
 ## 開発とテスト
 
 ```sh

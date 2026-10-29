@@ -388,6 +388,8 @@ mkdir -p "$release"
 cp -R "$source_dir/." "$release/"
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
 if [ -f "$release/web.conf" ]; then chmod 644 "$release/web.conf"; fi
+# 策略不是凭据，发布目录保持700；只读挂载允许镜像中的非root应用读取。
+if [ -f "$release/request-access.yml" ]; then chmod 444 "$release/request-access.yml"; fi
 : > "$release/compose-files"
 if [ "$partial" = true ]; then
   cp "$root/releases/$previous/compose-files" "$release/compose-files"

@@ -18,8 +18,9 @@ import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-import { core, err, ok } from '@h-ai/core'
+import { core, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
 import { createTransportBodyPolicy, parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
+import { stringify } from 'yaml'
 import { z } from 'zod'
 import { createDeploymentBundle } from '../container/deploy-bundle.js'
 import { maskSecrets } from '../container/deploy-command.js'
@@ -43,6 +44,32 @@ const logger = core.logger.child({ module: 'deploy', scope: 'provider-docker-ssh
 
 /** 健康检查轮询间隔（毫秒） */
 const HEALTH_POLL_INTERVAL = 3000
+
+/** 只处理本次选中的应用配置；文件按应用目录读取，运行期路径不回写调用方环境。 */
+function prepareRequestAccess(options: { settings: Record<string, unknown>, module: 'serv' | 'kit', directory: string }): HaiResult<{ settings: Record<string, unknown>, snapshot?: string }> {
+  const scope = options.module === 'serv' ? options.settings.http : options.settings
+  if (!scope || typeof scope !== 'object' || !('access' in scope))
+    return ok({ settings: options.settings })
+  const configured = RequestAccessConfigSchema.safeParse(scope.access)
+  if (!configured.success)
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', { params: { field: options.module === 'serv' ? 'serv.http.access' : 'kit.access' } }))
+  try {
+    const policy = core.access.loadPolicy(configured.data, options.directory)
+    const check = core.access.createRequestCheck(policy)
+    if (check.requiresEncryption && !options.settings.transport)
+      throw new Error('Transport encryption is required but not configured')
+    if (configured.data === false || !('file' in configured.data))
+      return ok({ settings: options.settings })
+    const access = { file: '/run/hai/request-access.yml' }
+    const settings = options.module === 'serv'
+      ? { ...options.settings, http: { ...scope, access } }
+      : { ...options.settings, access }
+    return ok({ settings, snapshot: stringify(policy, { aliasDuplicateObjects: false }) })
+  }
+  catch {
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_requestAccessInvalid', { params: { field: options.module === 'serv' ? 'serv.http.access' : 'kit.access' } }))
+  }
+}
 
 /** 健康检查最大轮询次数 */
 const HEALTH_MAX_ATTEMPTS = 40
@@ -188,6 +215,16 @@ export function createDockerSshProvider(
     const server = existsSync(serverPath) || hasWebProxy ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
     if (!server.success)
       return server
+    let requestAccessSnapshot: string | undefined
+    if (updatesApp && primaryService === 'serv') {
+      const prepared = prepareRequestAccess({ settings: server.data, module: 'serv', directory: appDir })
+      if (!prepared.success)
+        return prepared
+      Object.assign(server.data, prepared.data.settings)
+      requestAccessSnapshot = prepared.data.snapshot
+      if (requestAccessSnapshot)
+        env.HAI_SERV = JSON.stringify(server.data)
+    }
     let feedbackTransportBytes: number | undefined
     if (scan.haiModules?.includes('@h-ai/feedback')) {
       const policy = loadDeploymentConfig('feedback', join(appDir, 'config', '_feedback.yml'), env)
@@ -207,6 +244,15 @@ export function createDockerSshProvider(
       const kit = existsSync(kitPath) ? loadDeploymentConfig('kit', kitPath, env) : ok({})
       if (!kit.success)
         return kit
+      if (updatesApp) {
+        const prepared = prepareRequestAccess({ settings: kit.data, module: 'kit', directory: appDir })
+        if (!prepared.success)
+          return prepared
+        Object.assign(kit.data, prepared.data.settings)
+        requestAccessSnapshot = prepared.data.snapshot
+        if (requestAccessSnapshot)
+          env.HAI_KIT = JSON.stringify(kit.data)
+      }
       const transport = (kit.data as Record<string, unknown>).transport
       if (transport && typeof transport === 'object') {
         protectedTransport = !('enabled' in transport) || transport.enabled !== false
@@ -240,7 +286,7 @@ export function createDockerSshProvider(
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
         const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
-        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, storageBucket: managedStorage?.bucket })
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, storageBucket: managedStorage?.bucket, trustedEdgeProxies: config.trustedEdgeProxies })
       }
       catch (error) {
         return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
@@ -255,7 +301,7 @@ export function createDockerSshProvider(
           const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
           applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto' ? undefined : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
         }
-        webProxy = generateApplicationProxyConfig(primaryService, containerPort, managedStorage.bucket, [webBasePath, http?.apiPrefix ?? '/api/v1'], applicationPlaintextBytes)
+        webProxy = generateApplicationProxyConfig({ primaryService, port: containerPort, bucket: managedStorage.bucket, reservedPaths: [webBasePath, http?.apiPrefix ?? '/api/v1'], maxPlaintextBytes: applicationPlaintextBytes, trustedEdgeProxies: config.trustedEdgeProxies })
       }
       catch {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
@@ -281,6 +327,8 @@ export function createDockerSshProvider(
     chmodSync(artifactDir, 0o700)
     const envPath = join(artifactDir, '.env.runtime')
     writeFileSync(envPath, serializeEnvFile(env), { mode: 0o600 })
+    if (requestAccessSnapshot)
+      writeFileSync(join(artifactDir, 'request-access.yml'), requestAccessSnapshot, { mode: 0o600 })
     writeFileSync(join(artifactDir, 'middleware-runtime.env'), serializeEnvFile(sidecar.containerEnv), { mode: 0o600 })
     if (options?.environment) {
       const environment = loadDeploymentEnvironment({ environment: options.environment, envDir: options.envDir ?? scan.envDir ?? appDir })
@@ -299,6 +347,7 @@ export function createDockerSshProvider(
       hostPort,
       containerPort,
       primaryService,
+      requestAccessPolicy: requestAccessSnapshot !== undefined,
       sidecar,
       web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
       mountWebConfig: standaloneWebConfig,

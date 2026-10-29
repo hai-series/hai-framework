@@ -70,6 +70,8 @@ const DockerSshProviderConfigSchema = z.object({
   }).default({ baseDir: '/opt/hai/apps', runtime: 'auto' }),
   /** 应用暴露方式 */
   expose: ExposeSchema,
+  /** Nginx 前方可信负载均衡的 IP/CIDR；省略时不接受外部转发头。 */
+  trustedEdgeProxies: z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()])).max(1000).optional(),
 })
 
 /**

@@ -58,6 +58,10 @@ pnpm run deploy --env prod --services web
 
 成功发布后需回退业务版本时，使用保留的旧完整制品和与其匹配的配置/私有环境备份，恢复配置后执行 `pnpm run deploy --env prod --artifact-dir .hai/build/docker/<previousBuildId>`。省略 --build 和 --services，以旧制品创建新的全量交付包和部署 ID，再经历锁、校验、健康验证。不要重跑已使用的旧包、手动覆盖 current 或只改镜像 tag。发布前验证数据库迁移向后兼容或准备匹配的数据备份；保留外部服务凭据与卷身份，未知状态先检查实际服务。此路径不是自动的数据恢复命令。
 
+## 请求访问策略
+
+请求策略的文件快照、只读挂载、环境覆盖、入口代理信任和增量保留见[请求访问控制](../hai-core/request-access.md#部署与公共边界)。策略更新要重新交付，恢复使用原成功发布文件，不把新文件覆盖到旧发布目录。
+
 ## 自建对象存储直连
 
 S3 的内部 endpoint 与预签名 publicEndpoint 分开；后者无默认，填用户可访问的 HTTP(S) origin，不含桶名或网站目录。全栈 Web Nginx 及 SSR/API gateway 将实际桶路径原样代理至 storage，不经过 Serv，保留签名 Host/URI/query，关闭对象缓冲和签名日志。桶与网站/API 路径不能重叠；外层反向代理也须转发桶路径，不能把网站 base 加到签名 URL。跨源 CORS 在 S3 配置，私有桶保持签名授权；外部 S3 不生成本地路由，Local 不开放目录。
