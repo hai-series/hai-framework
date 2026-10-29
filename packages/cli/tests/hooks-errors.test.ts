@@ -12,27 +12,40 @@ it('website 实际生成的请求错误处理器对外隐藏底层异常且保�
   const rendered = renderTemplate(template, context)
   const compiled = ts.transpileModule(rendered, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
   let onError: ((error: unknown, event: unknown) => Response) | undefined
+  const hookExports: { handle?: (input: unknown) => Promise<unknown> } = {}
+  const getKitConfig = vi.fn(() => ({ transport: false, access: false, trustedProxies: 'auto' }))
+  const createHandle = vi.fn((options: { onError: typeof onError }) => {
+    onError = options.onError
+    return async () => new Response()
+  })
   const logger = vi.spyOn(core.logger, 'error').mockImplementation(() => {})
   try {
     runInNewContext(compiled, {
-      exports: {},
+      exports: hookExports,
       Response,
       require: (module: string) => {
         if (module === '@h-ai/core')
           return { core }
+        if (module === '$lib/server/kit-config.js')
+          return { getKitConfig }
         if (module === '@h-ai/kit') {
           return { kit: {
-            createHandle: (options: { onError: typeof onError }) => {
-              onError = options.onError
-              return () => {}
-            },
-            sequence: () => {},
+            createHandle,
+            // 本用例隔离业务 Handle；完整组合、初始化与语言中间件由生成项目 E2E 验证。
+            sequence: (...handles: Array<(input: unknown) => Promise<unknown>>) => handles.at(-1),
           } }
         }
         // 模块只装配Handle，不执行初始化或语言中间件。
         return {}
       },
     })
+    expect(onError).toBeUndefined()
+    expect(createHandle).not.toHaveBeenCalled()
+    expect(hookExports.handle).toBeTypeOf('function')
+    await hookExports.handle!({})
+    await hookExports.handle!({})
+    expect(getKitConfig).toHaveBeenCalledOnce()
+    expect(createHandle).toHaveBeenCalledOnce()
     expect(onError).toBeTypeOf('function')
     const failure = new Error('Database password=private-secret at internal-db:5432')
     const response = onError!(failure, {})
