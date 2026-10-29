@@ -12,7 +12,8 @@ const check = process.argv.includes('--check')
 
 /** 收集实际应用入口直接读取的环境变量；跳过生成目录与测试夹具。 */
 async function runtimeVariables(directory, names = new Set()) {
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
+  // NTFS与Linux返回顺序不同；先稳定文件次序，避免可选变量的说明顺序随平台漂移。
+  for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
     if (['node_modules', 'dist', 'build', '.svelte-kit', 'paraglide', 'target', 'tests', 'e2e', 'src-tauri'].includes(entry.name))
       continue
     const file = path.join(directory, entry.name)
@@ -27,7 +28,7 @@ async function runtimeVariables(directory, names = new Set()) {
   return names
 }
 
-for (const app of await readdir('apps')) {
+for (const app of (await readdir('apps')).sort()) {
   const directory = path.join('apps', app)
   const file = path.join(directory, '.env.example')
   let previous
@@ -41,7 +42,7 @@ for (const app of await readdir('apps')) {
   }
   const active = new Map()
   const modules = new Set()
-  for (const configFile of await readdir(path.join(directory, 'config')).catch(error => error.code === 'ENOENT' ? [] : Promise.reject(error))) {
+  for (const configFile of (await readdir(path.join(directory, 'config')).catch(error => error.code === 'ENOENT' ? [] : Promise.reject(error))).sort()) {
     if (!configFile.endsWith('.yml'))
       continue
     const module = configFile.replace(/^_/, '').replace(/\.yml$/, '')
