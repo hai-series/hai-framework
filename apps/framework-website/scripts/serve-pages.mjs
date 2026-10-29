@@ -5,6 +5,10 @@ import path from 'node:path'
 import process from 'node:process'
 
 const root = path.resolve('build')
+const entry = await stat(path.join(root, 'index.html')).catch(() => null)
+if (!entry?.isFile())
+  throw new Error('Static site build is missing. Run "pnpm build" in this application before starting the preview.')
+
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.woff2': 'font/woff2' }
 const server = createServer(async (request, response) => {
   const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname)
