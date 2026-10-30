@@ -23,6 +23,7 @@ FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS runtime
 COPY --chmod=755 images/web/19-runtime-config.sh /docker-entrypoint.d/19-hai-runtime-config.sh
 COPY images/web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /workspace/dist /usr/share/nginx/html
+RUN find /usr/share/nginx/html -type f -name '*.map' -delete
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
@@ -50,6 +51,7 @@ ARG PUBLIC_BASE_PATH=
 RUN HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" PUBLIC_BASE_PATH="$PUBLIC_BASE_PATH" pnpm compile
 RUN --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds if [ -d node_modules/better-sqlite3 ]; then cd node_modules/better-sqlite3; for attempt in 1 2 3; do node -e "require('node:child_process').execFileSync(process.execPath,[require.resolve('prebuild-install/bin.js'),'--verbose'],{stdio:'inherit'})" && break; [ "$attempt" = 3 ] && exit 1; sleep 3; done; fi
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds pnpm pm deploy --filter {{projectName}} --prod /prod/app
+RUN rm -f /prod/app/README* && find /prod/app/build -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \) -delete
 
 FROM node:24.22.1-bookworm-slim AS runtime-base
 

@@ -320,8 +320,9 @@ export function createDockerSshProvider(
       webProxy = generateStaticWebConfig(containerPort, webBasePath)
     }
     // 一次交付对应一个目录；自定义同名输出也不覆盖已经可复制的旧包。
-    const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar`)
-    const stem = basename(requestedOutput).replace(/\.tar$/i, '')
+    const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar.gz`)
+    const compressed = requestedOutput.endsWith('.tar.gz')
+    const stem = basename(requestedOutput).replace(/\.tar(?:\.gz)?$/i, '')
     const suffix = `-${artifact.appVersion}`
     const name = stem.endsWith(suffix) ? stem : `${stem}${suffix}`
     if (!/^[\w.+-]+$/.test(name))
@@ -391,7 +392,8 @@ export function createDockerSshProvider(
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env),
       healthPaths,
-      output: join(artifactDir, `${name}.tar`),
+      output: join(artifactDir, `${name}.tar${compressed ? '.gz' : ''}`),
+      cacheDirectory: join(resolveProjectDirectory(appDir), '.hai', 'cache', 'images'),
     })
     if (options?.bundleOnly)
       return ok({ url: '', deploymentId, status: 'packaged', provider: 'docker-ssh', healthCheck: 'skipped', envVarsSet: Object.keys(env), ...bundle })
@@ -413,7 +415,7 @@ export function createDockerSshProvider(
       return uploaded
     let pendingOutput = ''
     const started = await ssh.exec(
-      `mkdir -p ${shellArgument(`${remoteTar}.contents`)} && chmod 600 ${shellArgument(remoteTar)} && tar -xf ${shellArgument(remoteTar)} -C ${shellArgument(`${remoteTar}.contents`)} && sh ${shellArgument(`${remoteTar}.contents/${bundle.startName}`)} ${shellArgument(remoteDir)}`,
+      `mkdir -p ${shellArgument(`${remoteTar}.contents`)} && chmod 600 ${shellArgument(remoteTar)} && tar -xf ${shellArgument(remoteTar)} -C ${shellArgument(`${remoteTar}.contents`)} && sh ${shellArgument(`${remoteTar}.contents/${bundle.startName}`)} ${shellArgument(remoteDir)} && { rm -rf -- ${shellArgument(`${remoteTar}.contents`)} && rm -f -- ${shellArgument(remoteTar)} || printf '[WARN] Deployment passed; incoming archive cleanup failed\\n' >&2; }`,
       { timeoutMs: 600_000, secrets: sidecar.secrets, onOutput: (output) => {
         const parts = output.split('\n')
         for (let index = 0; index < parts.length; index++) {

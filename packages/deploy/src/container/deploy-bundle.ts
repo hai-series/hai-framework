@@ -1,8 +1,12 @@
+import type { Buffer } from 'node:buffer'
 /** 完整或增量交付包，包含所选服务需要的全部镜像及跨平台部署入口。 */
 import type { DeploymentArtifact } from '../deploy-artifact.js'
 import type { DockerSshProviderConfig } from '../deploy-config.js'
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { chmodSync, copyFileSync, createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
+import { Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
 import { deployM } from '../deploy-i18n.js'
@@ -33,6 +37,8 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.proxyService - 挂载 Nginx 配置的服务；缺省为 web，SSR/API 的存储网关为 gateway。
  * @param options.storageRouting - 自建 S3 非敏感连接/访问配置摘要，阻止增量配置与已装基线不一致。
  * @param options.containerPort - 应用容器的实际监听端口。
+ * @param options.httpsAssets - 已校验的 HTTPS 证书与脚本附件。
+ * @param options.cacheDirectory - 按镜像内容身份组织的私有归档缓存。
  * @returns tar 路径、手工执行说明及启动脚本名。
  * @example 模块内部上下文
  * ```ts
@@ -62,16 +68,21 @@ export async function createDeploymentBundle(options: {
   proxyService?: 'web' | 'gateway'
   storageRouting?: string
   containerPort: number
+  /** HTTPS 附件已在写入交付目录前校验证书与域名。 */
+  httpsAssets?: Record<string, string>
+  /** 按镜像内容身份复用的本地归档缓存；命中仍核验实际归档。 */
+  cacheDirectory?: string
 }): Promise<{ bundlePath: string, instructions: string, startName: string }> {
   const { directory, artifactDir, artifact, projectName, environment, config, selected } = options
   const output = resolve(options.output)
-  if (!/^[\w.+-]+\.tar$/.test(basename(output)))
+  if (!/^[\w.+-]+\.tar(?:\.gz)?$/.test(basename(output)))
     throw new Error(deployM('deploy_bundleNameInvalid'))
   const staging = mkdtempSync(join(directory, '.bundle-'))
   const temporaryTar = `${output}.partial`
   mkdirSync(dirname(output), { recursive: true, mode: 0o700 })
   chmodSync(staging, 0o700)
   const files: string[] = []
+  const fileHashes = new Map<string, string>()
   const put = (file: string, content: string): void => {
     mkdirSync(dirname(join(staging, file)), { recursive: true })
     writeFileSync(join(staging, file), content, { mode: 0o600 })
@@ -114,8 +125,12 @@ export async function createDeploymentBundle(options: {
         throw new Error(deployM('deploy_imageVersionRequired', { params: { image: reference } }))
       const built = artifact.images.find(image => image.imageRef === reference)
       const file = built?.file ?? `middleware-${imageList.length + 1}.tar`
+      const destination = join(staging, 'images', file)
       if (built) {
-        copyFileSync(join(artifactDir, file), join(staging, 'images', file))
+        const checksum = await copyArchive(join(artifactDir, file), destination)
+        if (checksum !== built.sha256)
+          throw new Error(deployM('deploy_artifactInvalid'))
+        fileHashes.set(`images/${file}`, checksum)
       }
       else {
         if (!runtime) {
@@ -129,14 +144,43 @@ export async function createDeploymentBundle(options: {
           if (!runtime)
             throw new Error(deployM('deploy_bundleRuntimeRequired'))
         }
-        if (!(await runCommand(runtime, ['image', 'inspect', reference])).success) {
+        let inspected = await runCommand(runtime, ['image', 'inspect', '--format', '{{.Id}}', reference])
+        if (!inspected.success) {
           const pulled = await runCommand(runtime, ['pull', reference], { timeoutMs: 600_000 })
           if (!pulled.success)
             throw new Error(pulled.error.message)
+          inspected = await runCommand(runtime, ['image', 'inspect', '--format', '{{.Id}}', reference])
         }
-        const saved = await runCommand(runtime, ['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', join(staging, 'images', file), reference], { timeoutMs: 600_000 })
-        if (!saved.success)
-          throw new Error(saved.error.message)
+        const identity = inspected.success && !inspected.data.stdoutTruncated ? inspected.data.stdout.trim().replace(/^sha256:/, '') : ''
+        // 导出的归档保留请求的镜像标签；相同内容的不同引用不能直接共用该归档。
+        const cacheIdentity = createHash('sha256').update(identity).update('\0').update(reference).digest('hex')
+        const cache = options.cacheDirectory && /^[a-f0-9]{64}$/.test(identity) ? join(options.cacheDirectory, `${runtime}-${cacheIdentity}.tar`) : undefined
+        let checksum: string | undefined
+        if (cache && existsSync(cache) && existsSync(`${cache}.sha256`) && lstatSync(cache).isFile() && !lstatSync(cache).isSymbolicLink()) {
+          const copied = await copyArchive(cache, destination)
+          if (copied === readFileSync(`${cache}.sha256`, 'utf8').trim())
+            checksum = copied
+        }
+        if (!checksum) {
+          const saved = await runCommand(runtime, ['save', ...(runtime === 'podman' ? ['--format', 'docker-archive'] : []), '-o', destination, reference], { timeoutMs: 600_000 })
+          if (!saved.success)
+            throw new Error(saved.error.message)
+          checksum = await artifactChecksum(destination)
+          if (cache) {
+            mkdirSync(dirname(cache), { recursive: true, mode: 0o700 })
+            // 不发布半写入缓存；并发打包使用各自的临时文件。
+            const temporary = `${cache}.${basename(staging)}`
+            try {
+              copyFileSync(destination, temporary)
+              renameSync(temporary, cache)
+              writeFileSync(`${cache}.sha256`, `${checksum}\n`, { mode: 0o600 })
+            }
+            finally {
+              rmSync(temporary, { force: true })
+            }
+          }
+        }
+        fileHashes.set(`images/${file}`, checksum)
       }
       files.push(`images/${file}`)
       imageList.push(`${file} ${reference}`)
@@ -157,7 +201,6 @@ export async function createDeploymentBundle(options: {
       // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
       put('proxy-entry.json', JSON.stringify({ services: { [options.proxyService ?? 'web']: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
     }
-    put('proxy-service', `${options.hasWebConfig ? options.proxyService ?? 'web' : ''}\n`)
     put('storage-routing', `${options.storageRouting ?? ''}\n`)
     put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig ? options.proxyService === 'gateway' ? 'gateway' : 'true' : 'false'}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
     put('health-port', `${config.expose.hostPort}\n`)
@@ -173,12 +216,12 @@ export async function createDeploymentBundle(options: {
     const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')
     const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
     const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
-    put('README.txt', `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n`)
+    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n`
     const checksums = []
     for (const file of files)
-      checksums.push(`${await artifactChecksum(join(staging, file))}  ${file}`)
+      checksums.push(`${fileHashes.get(file) ?? await artifactChecksum(join(staging, file))}  ${file}`)
     writeFileSync(join(staging, 'SHA256SUMS'), `${checksums.join('\n')}\n`)
-    const tar = await runCommand('tar', ['-cf', temporaryTar, '-C', staging, '.'])
+    const tar = await runCommand('tar', [output.endsWith('.gz') ? '-czf' : '-cf', temporaryTar, '-C', staging, '.'])
     if (!tar.success)
       throw new Error(tar.error.message)
     chmodSync(temporaryTar, 0o600)
@@ -217,7 +260,7 @@ export async function createDeploymentBundle(options: {
       bundle: deployM('deploy_targetBundle'),
     }
     writeFileSync(join(scripts, 'deploy-target.json'), `${JSON.stringify({ ...target, _comments: comments }, null, 2)}\n`)
-    writeFileSync(join(scripts, 'README.txt'), readFileSync(join(staging, 'README.txt'), 'utf8'))
+    writeFileSync(join(scripts, 'README.txt'), readme)
     for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', 'request-access.yml', ...(options.hasWebConfig ? ['web.conf'] : [])])
       rmSync(join(directory, file), { force: true })
     return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
@@ -226,4 +269,17 @@ export async function createDeploymentBundle(options: {
     rmSync(staging, { recursive: true, force: true })
     rmSync(temporaryTar, { force: true })
   }
+}
+
+/** 复制与计算摘要共用一次顺序读取，避免每个大镜像复制后再读取一遍。 */
+async function copyArchive(source: string, destination: string): Promise<string> {
+  const hash = createHash('sha256')
+  const digest = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      hash.update(chunk)
+      callback(null, chunk)
+    },
+  })
+  await pipeline(createReadStream(source), digest, createWriteStream(destination, { mode: 0o600 }))
+  return hash.digest('hex')
 }

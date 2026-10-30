@@ -385,7 +385,12 @@ if [ "$partial" = true ]; then
   fi
 fi
 mkdir -p "$release"
-cp -R "$source_dir/." "$release/"
+# 镜像直接从本次解包目录导入；发布记录只保存运行配置与恢复证据。
+for entry in "$source_dir"/* "$source_dir"/.[!.]*; do
+  test -e "$entry" || continue
+  test "$entry" != "$source_dir/images" || continue
+  cp -R "$entry" "$release/"
+done
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
 if [ -f "$release/web.conf" ]; then chmod 644 "$release/web.conf"; fi
 # 策略不是凭据，发布目录保持700；只读挂载允许镜像中的非root应用读取。
@@ -438,7 +443,7 @@ step images 'Loading packaged images (no registry access)'
 while IFS=' ' read -r archive reference; do
   test -n "$archive" || continue
   images_changed=true
-  "$runtime" load -i "$release/images/$archive"
+  "$runtime" load -i "$source_dir/images/$archive"
   "$runtime" image inspect "$reference" >/dev/null
   architecture=$("$runtime" image inspect --format '{{.Architecture}}' "$reference")
   host_arch=$(uname -m)
@@ -524,7 +529,7 @@ case "$timeout" in ''|*[!0-9]*|???????????*) invalid_target;; esac
 test "$timeout" -ge 1 && test "$timeout" -le 2147483647 || invalid_target
 case "$remote" in /*) ;; *) invalid_target;; esac
 case "$remote" in *[!a-zA-Z0-9/_.\ -]*|*/../*|*/..|/..) invalid_target;; esac
-case "$bundle" in *.tar) ;; *) invalid_target;; esac
+case "$bundle" in *.tar|*.tar.gz) ;; *) invalid_target;; esac
 case "$bundle" in ''|*[!a-zA-Z0-9_.+-]*) invalid_target;; esac
 case "$strict" in true) strict=accept-new;; false) strict=no;; *) invalid_target;; esac
 test -f "./$bundle" || { printf 'Bundle missing: %s\n' "$bundle" >&2; exit 1; }
@@ -648,7 +653,7 @@ monitor=''
 if [ "$upload_code" -ne 0 ]; then printf '[FAIL] Upload failed (exit %s). Check SSH output above.\n' "$upload_code" >&2; exit "$upload_code"; fi
 printf '[UPLOAD] 100%% (%s/%s bytes)\n' "$total" "$total"
 printf '[3/3] Applying package and checking HTTP access\n'
-if run_native ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"; then
+if run_native ssh "$@" -p "$port" "$user@$host" "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote' && { rm -rf -- '$bundle.contents' && rm -f -- '$bundle' || printf '[WARN] Deployment passed; incoming archive cleanup failed\\n' >&2; }"; then
   :
 else
   code=$?
@@ -683,7 +688,7 @@ if ($windowsRuntime) {
 Set-Location -LiteralPath $PSScriptRoot
 $target = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'deploy-target.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($target.host -eq 'SERVER_HOST') { throw 'Set the server host in deploy-target.json.' }
-if ($target.host -isnot [string] -or $target.host -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.:-]*$' -or $target.username -isnot [string] -or $target.username -notmatch '^[a-zA-Z_][a-zA-Z0-9_-]*$' -or $target.directory -isnot [string] -or $target.directory -notmatch '^/[a-zA-Z0-9/_. -]*$' -or $target.directory -match '(^|/)\.\.(/|$)' -or $target.bundle -isnot [string] -or $target.bundle -notmatch '^[a-zA-Z0-9_.+-]+\.tar$') { throw 'Invalid deployment target.' }
+if ($target.host -isnot [string] -or $target.host -notmatch '^[a-zA-Z0-9][a-zA-Z0-9.:-]*$' -or $target.username -isnot [string] -or $target.username -notmatch '^[a-zA-Z_][a-zA-Z0-9_-]*$' -or $target.directory -isnot [string] -or $target.directory -notmatch '^/[a-zA-Z0-9/_. -]*$' -or $target.directory -match '(^|/)\.\.(/|$)' -or $target.bundle -isnot [string] -or $target.bundle -notmatch '^[a-zA-Z0-9_.+-]+\.tar(\.gz)?$') { throw 'Invalid deployment target.' }
 $port = if ($null -eq $target.port) { 22 } else { $target.port }
 $timeout = if ($null -eq $target.connectTimeoutSeconds) { 10 } else { $target.connectTimeoutSeconds }
 if ($port -is [string] -or [string]$port -notmatch '^[0-9]+$' -or $port -lt 1 -or $port -gt 65535 -or $timeout -is [string] -or [string]$timeout -notmatch '^[0-9]+$' -or $timeout -lt 1 -or $timeout -gt 2147483647) { throw 'Invalid deployment port or timeout.' }
@@ -842,7 +847,7 @@ try {
   Invoke-Step '2/3 Upload' 'scp' ($options + @('-P', [string]$port, "./$bundle", "$($scpDestination):$remote/incoming/$bundle"))
   Write-Host "[UPLOAD] 100% ($uploadBytes/$uploadBytes bytes)"
   $applying = $true
-  Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote'"))
+  Invoke-Step '3/3 Apply and verify HTTP' 'ssh' ($options + @('-p', [string]$port, $destination, "cd '$remote/incoming' && mkdir -p '$bundle.contents' && tar -xf '$bundle' -C '$bundle.contents' && sh '$bundle.contents/apply.sh' '$remote' && { rm -rf -- '$bundle.contents' && rm -f -- '$bundle' || printf '[WARN] Deployment passed; incoming archive cleanup failed\\n' >&2; }"))
 } catch {
   if ($applying) {
     if ($LASTEXITCODE -gt 0 -and $LASTEXITCODE -lt 128) { [Console]::Error.WriteLine("[FAIL] Remote deployment failed (exit $LASTEXITCODE). Inspect $remote/result-<deploymentId>.json (ID in README.txt) and startup diagnostics.") }
