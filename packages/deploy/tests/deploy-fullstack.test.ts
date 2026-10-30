@@ -175,6 +175,72 @@ async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
 
+it.each([false, true])('有效健康路径贯穿 %s Web 拓扑、在线探针和发布恢复记录', async (web) => {
+  writeArtifact(web)
+  writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  health: {path: /health, readyPath: /ready}\n')
+  writeFileSync(join(root, '.env.test'), 'HAI_SERV_HTTP_HEALTH_PATH=\'/status\'\n')
+  await initialize()
+  const result = await deploy.deployApp(root, { environment: 'test' })
+  expect(result.success).toBe(true)
+  const directory = deliveryDirectory(result)
+  const paths = readBundleFile(directory, 'health-paths').trim().split('\n')
+  expect(paths).toContain('/status')
+  expect(paths).not.toContain('/health')
+  expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toContain('http://127.0.0.1:18080/status')
+  const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
+  expect(compose.services.serv.healthcheck.test).toEqual(expect.arrayContaining(['--input-type=module']))
+  if (web) {
+    const proxy = readBundleFile(directory, 'web.conf')
+    expect(proxy).toContain('location = /status {')
+    expect(proxy).not.toContain('location = /health {')
+  }
+})
+
+it.each([false, true])('关闭后端健康路由不再探测旧路径，Web=%s', async (web) => {
+  writeArtifact(web)
+  writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  health: {path: /health, readyPath: /ready}\n')
+  writeFileSync(join(root, '.env.test'), 'HAI_SERV_HTTP_HEALTH=\'false\'\n')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result.success).toBe(true)
+  const directory = deliveryDirectory(result)
+  expect(readBundleFile(directory, 'health-paths')).not.toContain('/health')
+  if (web)
+    expect(readBundleFile(directory, 'web.conf')).not.toContain('location = /health {')
+})
+
+it.each(['enabled', 'production', 'disabled', 'parent'])('文档代理按 Core 环境和最终父对象配置启用，保留后端认证：%s', async (mode) => {
+  writeFileSync(join(root, 'config/_core.yml'), 'env: test\n')
+  writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  health: {path: /file-status}\n  docs: {path: /reference, requireAuth: true}\n  openapi: {path: /schema.json}\n')
+  writeFileSync(join(root, '.env.test'), mode === 'production'
+    ? 'HAI_CORE=\'{"env":"production"}\'\n'
+    : mode === 'disabled'
+      ? 'HAI_SERV=\'{"http":{"docs":false,"openapi":false}}\'\n'
+      : mode === 'parent'
+        ? 'HAI_SERV=\'{"http":{"health":{"path":"/parent-status"},"docs":{"path":"/parent-docs","requireAuth":true},"openapi":false}}\'\nHAI_SERV_HTTP_HEALTH_PATH=/ignored-status\n'
+        : '')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  expect(result.success).toBe(true)
+  const directory = deliveryDirectory(result)
+  const proxy = readBundleFile(directory, 'web.conf')
+  if (mode === 'enabled' || mode === 'parent') {
+    expect(proxy).toContain(`location = ${mode === 'parent' ? '/parent-docs' : '/reference'} {`)
+    expect(proxy).toContain('location = /_hai/scalar.js {')
+    const runtime = JSON.parse(parseEnv(readBundleFile(directory, '.env.runtime')).HAI_SERV!)
+    expect(runtime.http.docs.requireAuth).toBe(true)
+  }
+  else {
+    expect(proxy).not.toContain('location = /reference {')
+    expect(proxy).not.toContain('location = /_hai/scalar.js {')
+  }
+  expect(proxy.includes('location = /schema.json {')).toBe(mode === 'enabled')
+  if (mode === 'parent') {
+    expect(readBundleFile(directory, 'health-paths')).toContain('/parent-status')
+    expect(proxy).not.toContain('/ignored-status')
+  }
+})
+
 it.each(['not-a-url', 'https://files.example.com/portal%2ffiles', 'https://files.example.com/%2e%2e/files', 'https://files.example.com/a/../files', 'https://files.example.com/fi\nles', 'ftp://files.example.com', 'https://user:secret@files.example.com', false])('自建 S3 在打包前拒绝无效 publicEndpoint：%s', async (publicEndpoint) => {
   writeFileSync(join(root, 'pnpm-lock.yaml'), JSON.stringify({ lockfileVersion: '9.0', importers: { '.': { dependencies: { '@h-ai/storage': { version: '1' } } } }, packages: { '@h-ai/storage@1': {} }, snapshots: { '@h-ai/storage@1': {} } }))
   writeFileSync(join(root, 'config/_storage.yml'), JSON.stringify({ type: 's3', bucket: 'business-files', publicEndpoint }))

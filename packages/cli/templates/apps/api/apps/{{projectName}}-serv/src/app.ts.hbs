@@ -57,7 +57,12 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
       },
 {{else}}      routePlaintextBytes: servConfig.transport.routePlaintextBytes,
 {{/if}}
-      excludePaths: [...servConfig.transport.excludePaths],
+      excludePaths: [...new Set([
+        ...servConfig.transport.excludePaths,
+        ...(servConfig.http.health ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path)) : []),
+        ...(servConfig.http.openapi && security.exposeApiDocs ? [servConfig.http.openapi.path] : []),
+        ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path, `${servConfig.http.docs.path.slice(0, servConfig.http.docs.path.lastIndexOf('/') + 1)}_hai/scalar.js`] : []),
+      ])],
     }
   }
 {{else}}  const transport = undefined

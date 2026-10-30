@@ -29,6 +29,7 @@ import type { CreateServContext, ServContext, ServIam, ServRequestMetadata, Serv
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
+import { posix } from 'node:path'
 import { AUDIO_WS_PATH } from '@h-ai/api-contract'
 import { audit } from '@h-ai/audit'
 import { core, HaiCommonError } from '@h-ai/core'
@@ -548,8 +549,9 @@ export function createApp<
   // Step 13：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
   if (http.docs !== false) {
     const docs = http.docs
-    // 挂载 Scalar UI 脚本本地路由，避免访问外网 CDN
-    app.get(SCALAR_ROUTE, async (c) => {
+    // 资源与页面共用目录；相对 URL 在外层网关添加或剥离前缀后仍留在同一入口。
+    const docsDirectory = docs.path.slice(0, docs.path.lastIndexOf('/') + 1)
+    app.get(`${docsDirectory}${SCALAR_ROUTE.slice(1)}`, async (c) => {
       const content = await getScalarScript()
       if (!content)
         return c.notFound()
@@ -566,8 +568,8 @@ export function createApp<
         if (!context.session)
           return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: resolveRequestLocale(c.req.raw.headers) })), 401)
       }
-      const specUrl = http.openapi === false ? undefined : http.openapi.path
-      return c.html(createDocsPage(await getSpec(), { specUrl }))
+      const specUrl = http.openapi === false ? undefined : posix.relative(docsDirectory, http.openapi.path) || '.'
+      return c.html(createDocsPage(await getSpec(), { specUrl, scriptUrl: SCALAR_ROUTE.slice(1) }))
     })
   }
 

@@ -266,6 +266,26 @@ describe('@h-ai/serv', () => {
     expect(authorized.headers.get('content-type')).toContain('text/html')
   })
 
+  it.each(['/somepath/reference', '/somepath/reference/'])('文档 %s 的脚本和 spec 保持在同一网关前缀，保留或剥离前缀均可访问', async (path) => {
+    const app = serv.createApp({ contract, procedures, http: { docs: { path: path as `/${string}` }, openapi: { path: '/somepath/openapi.json' } } })
+    const response = await app.request(path)
+    const html = await response.text()
+    expect(response.status).toBe(200)
+    const script = /src="([^"]+)"/.exec(html)![1]!
+    const spec = /data-url="([^"]+)"/.exec(html)![1]!
+    const base = `https://example.test${path}`
+    const scriptPath = new URL(script, base).pathname
+    expect(scriptPath.startsWith('/somepath/')).toBe(true)
+    expect((await app.request(scriptPath)).status).toBe(200)
+    expect(new URL(spec, base).pathname).toBe('/somepath/openapi.json')
+    expect((await app.request('/_hai/scalar.js')).status).toBe(404)
+    const stripped = serv.createApp({ contract, procedures, http: { docs: { path: '/reference' }, openapi: { path: '/openapi.json' } } })
+    const strippedHtml = await (await stripped.request('/reference')).text()
+    const strippedScript = /src="([^"]+)"/.exec(strippedHtml)![1]!
+    expect(new URL(strippedScript, 'https://example.test/somepath/reference').pathname).toBe('/somepath/_hai/scalar.js')
+    expect((await stripped.request('/_hai/scalar.js')).status).toBe(200)
+  })
+
   it('serves local Scalar script for docs page', async () => {
     const app = serv.createApp({
       contract,
@@ -278,7 +298,7 @@ describe('@h-ai/serv', () => {
 
     const docs = await app.request('/docs')
     expect(docs.status).toBe(200)
-    expect(await docs.text()).toContain('/_hai/scalar.js')
+    expect(await docs.text()).toContain('src="_hai/scalar.js"')
 
     const script = await app.request('/_hai/scalar.js')
     expect(script.status).toBe(200)

@@ -34,5 +34,5 @@ RUN mkdir -p /app/data && chown node:node /app/data
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node --input-type=module -e "import { core } from '@h-ai/core'; import { ServConfigSchema } from '@h-ai/serv'; try { core.init({ configDir: './config' }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow('serv')); if (http.health === false) process.exit(0); const response = await fetch('http://127.0.0.1:' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); }"
 CMD ["node", "dist/index.js"]

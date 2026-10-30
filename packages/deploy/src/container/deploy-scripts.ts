@@ -247,7 +247,6 @@ verify_recovery() {
     elif [ "$recovery_primary" = web ]; then recovery_paths='/'; else recovery_paths='/health'; fi
   fi
   case "$recovery_port" in ''|*[!0-9]*) return 1;; esac
-  test -n "$recovery_paths" || return 1
   wait_services $recover_selected || return 1
   start_renewal $recover_selected || return 1
   reload_retained_proxy "$recovery_release" || return 1

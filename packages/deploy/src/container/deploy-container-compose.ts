@@ -535,6 +535,16 @@ export function generateComposeFile(options: {
     ports: [`${hostPort}:${containerPort}`],
     networks: ['hai-app'],
   }
+  if (primaryService === 'serv') {
+    // 与应用相同的公开 Schema 和环境解析；重启后探针也读取当前健康路径，关闭时不请求旧路径。
+    app.healthcheck = {
+      test: ['CMD', 'node', '--input-type=module', '-e', 'import { core } from \'@h-ai/core\'; import { ServConfigSchema } from \'@h-ai/serv\'; try { core.init({ configDir: \'./config\' }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); }'],
+      interval: '30s',
+      timeout: '5s',
+      start_period: '15s',
+      retries: 3,
+    }
+  }
   const appVolumes = [...sidecar.appVolumes]
   const appEnvironment: Record<string, string> = {}
   if (nodeRuntime) {
@@ -641,23 +651,35 @@ export function generateComposeFile(options: {
  * @param options.storageBucket - 自建私有 S3 桶，配置后对象请求由 Nginx 直达 storage。
  * @param options.storageBasePath - 对象入口目录，转发前移除；空字符串保持根桶路径。
  * @param options.trustedEdgeProxies - Nginx 前方显式可信的负载均衡 IP/CIDR，默认不信任上游头。
+ * @param options.backendPaths - 后端实际启用的健康、就绪及文档精确路径，认证仍由后端执行。
  * @returns 仅含公开路由的 Nginx 配置
  * @example 模块内部上下文
  * ```ts
  * const nginx = generateWebProxyConfig(3000, '/api', { webPort: 8080 }) // Web 将同源 /api 转发至 serv 服务。
  * ```
  */
-export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, storageBucket?: string, storageBasePath?: string, trustedEdgeProxies?: string[] } = {}): string {
+export function generateWebProxyConfig(port: number, apiPrefix: string, options: { webPort?: number, maxPlaintextBytes?: number, webBasePath?: string, backendPaths?: string[], storageBucket?: string, storageBasePath?: string, trustedEdgeProxies?: string[] } = {}): string {
   const bodyLimits = resolveTransportBodyLimits(options.maxPlaintextBytes)
   const webPort = options.webPort ?? 8080
   const webBasePath = options.webBasePath ?? ''
   const apiPath = apiPrefix.replace(/\/+$/, '')
+  const backendPaths = [...new Set(options.backendPaths ?? ['/health'])]
   if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535)
-    || (webBasePath && (webBasePath === apiPath || webBasePath.startsWith(`${apiPath}/`)))) {
+    || backendPaths.some(path => !/^\/[\w./-]*$/.test(path) || path.startsWith('//') || path.split('/').some(part => part === '.' || part === '..') || path === `${webBasePath}/runtime-config.js` || path === '/_hai/web-health')
+    || (webBasePath && (backendPaths.includes(webBasePath) || webBasePath === apiPath || webBasePath.startsWith(`${apiPath}/`)))) {
     throw new Error('Invalid web proxy target')
   }
   const webLocation = renderWebLocation(webBasePath)
-  const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, ...(options.storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], options.storageBasePath) : ''
+  const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, ...backendPaths, ...(options.storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], options.storageBasePath) : ''
+  const backendLocations = backendPaths.map(path => `  location = ${path} {
+    proxy_pass http://serv:${port};
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+`).join('')
   return `${options.storageBucket ? renderStorageUpstream(options.storageBucket, options.storageBasePath) : ''}server {
   listen ${webPort};
   server_name _;
@@ -672,13 +694,7 @@ ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
     access_log off;
     return 200 'ok';
   }
-  location = /health {
-    proxy_pass http://serv:${port};
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Real-IP $remote_addr;
-  }
-  location ${apiPrefix.replace(/\/$/, '')}/ {
+${backendLocations}  location ${apiPrefix.replace(/\/$/, '')}/ {
     client_max_body_size ${bodyLimits.encryptedPayloadBytes};
     proxy_pass http://serv:${port};
     proxy_http_version 1.1;

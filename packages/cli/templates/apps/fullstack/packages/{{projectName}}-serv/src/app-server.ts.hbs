@@ -37,7 +37,7 @@ export function createServerApp(): ServHttpApp {
     `${servConfig.http.apiPrefix}/assets`,
     ...(servConfig.http.health ? [servConfig.http.health.path, servConfig.http.health.readyPath].filter((path): path is `/${string}` => Boolean(path)) : []),
     ...(servConfig.http.openapi && security.exposeApiDocs ? [servConfig.http.openapi.path] : []),
-    ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path] : []),
+    ...(servConfig.http.docs && security.exposeApiDocs ? [servConfig.http.docs.path, `${servConfig.http.docs.path.slice(0, servConfig.http.docs.path.lastIndexOf('/') + 1)}_hai/scalar.js`] : []),
   ]
 {{#if features.feedback}}
   // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。

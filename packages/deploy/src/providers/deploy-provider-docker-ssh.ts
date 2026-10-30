@@ -20,7 +20,7 @@ import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
-import { core, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
+import { core, CoreConfigSchema, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
 import { createTransportBodyPolicy, parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { z } from 'zod'
@@ -76,6 +76,23 @@ function prepareRequestAccess(options: { settings: Record<string, unknown>, modu
 
 /** 健康检查最大轮询次数 */
 const HEALTH_MAX_ATTEMPTS = 40
+
+/** 只提取 Serv 已注册的精确路径；阻止配置路径进入 Nginx 指令或 shell 语法。 */
+function servicePath(value: unknown, fallback: string): string {
+  const path = value ?? fallback
+  if (typeof path !== 'string' || !/^\/[\w./-]*$/.test(path) || path.startsWith('//') || path.split('/').some(part => part === '.' || part === '..'))
+    throw new Error('Invalid service endpoint path')
+  return path
+}
+
+/** 未配置的健康检查沿用 Serv 默认；文档必须显式使用对象启用。 */
+function endpointSettings(value: unknown): Record<string, unknown> {
+  if (value === undefined)
+    return {}
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Invalid service endpoint configuration')
+  return value as Record<string, unknown>
+}
 
 /** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
 const ServerResultSchema = z.object({
@@ -204,7 +221,7 @@ export function createDockerSshProvider(
     const webBasePath = artifact.webBasePath ?? ''
     const applicationUrl = `${url}${webBasePath ? `${webBasePath}/` : ''}`
     const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && (!!webBasePath || !!https)
-    const healthPaths = hasWebProxy ? ['/health', '/_hai/web-health', `${webBasePath}/`] : scan.isSvelteKit ? [`${webBasePath}/`] : standaloneWebConfig ? ['/health', `${webBasePath}/`] : ['/health']
+    const healthPaths = hasWebProxy ? ['/_hai/web-health', `${webBasePath}/`] : scan.isSvelteKit ? [`${webBasePath}/`] : primaryService === 'serv' ? [] : standaloneWebConfig ? ['/health', `${webBasePath}/`] : ['/health']
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
@@ -245,6 +262,37 @@ export function createDockerSshProvider(
     const server = existsSync(serverPath) || hasWebProxy ? loadDeploymentConfig('serv', serverPath, env) : ok<Record<string, unknown>>({})
     if (!server.success)
       return server
+    const backendPaths: string[] = []
+    try {
+      const http = endpointSettings(server.data.http)
+      if (primaryService === 'serv' && http.health !== false) {
+        const health = endpointSettings(http.health)
+        const path = servicePath(health.path, '/health')
+        healthPaths.unshift(path)
+        backendPaths.push(path, servicePath(health.readyPath, '/ready'))
+      }
+      if (hasWebProxy) {
+        // 生成应用按 Core 环境关闭生产文档，不能用部署目标名或 NODE_ENV 猜测启用状态。
+        const corePath = join(appDir, 'config', '_core.yml')
+        const settings = existsSync(corePath) ? loadDeploymentConfig('core', corePath, env) : ok(env.HAI_CORE ? JSON.parse(env.HAI_CORE) : { env: env.HAI_CORE_ENV })
+        if (!settings.success)
+          return settings
+        const application = CoreConfigSchema.safeParse(settings.data)
+        if (!application.success)
+          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+        if (application.data.env !== 'production') {
+          if (http.openapi !== undefined && http.openapi !== false)
+            backendPaths.push(servicePath(endpointSettings(http.openapi).path, '/openapi.json'))
+          if (http.docs !== undefined && http.docs !== false) {
+            const docsPath = servicePath(endpointSettings(http.docs).path, '/docs')
+            backendPaths.push(docsPath, `${docsPath.slice(0, docsPath.lastIndexOf('/') + 1)}_hai/scalar.js`)
+          }
+        }
+      }
+    }
+    catch {
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
+    }
     let requestAccessSnapshot: string | undefined
     if (updatesApp && primaryService === 'serv') {
       const prepared = prepareRequestAccess({ settings: server.data, module: 'serv', directory: appDir })
@@ -310,13 +358,13 @@ export function createDockerSshProvider(
       if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix)) {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
       }
-      if (webBasePath && (['/health', '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))
+      if (webBasePath && ([...backendPaths, '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | false | undefined
       try {
         const configured = transport ? transport.maxPlaintextBytes : undefined
         const limits = resolveTransportBodyLimits(Math.max(createTransportBodyPolicy(configured === 'auto' ? undefined : configured, transport ? transport.routePlaintextBytes : undefined).maximum.plaintextBytes, feedbackTransportBytes ?? 0))
-        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, storageBucket: managedStorage?.bucket, storageBasePath, trustedEdgeProxies: config.trustedEdgeProxies })
+        webProxy = generateWebProxyConfig(containerPort, apiPrefix, { webPort: webContainerPort, maxPlaintextBytes: limits.plaintextBytes, webBasePath, backendPaths, storageBucket: managedStorage?.bucket, storageBasePath, trustedEdgeProxies: config.trustedEdgeProxies })
       }
       catch (error) {
         return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))

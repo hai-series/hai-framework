@@ -226,6 +226,60 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     }
   }, 60_000)
 
+  it.each([false, true])('真实 Nginx 转发自定义健康、前缀内文档和脚本并保留后端 401；生产=%s', async (production) => {
+    if (!fixture)
+      throw new Error('Expected an owned Nginx fixture')
+    const project = path.join(root, `routes-${production}`)
+    const artifacts = path.join(project, 'artifacts')
+    mkdirSync(artifacts, { recursive: true })
+    mkdirSync(path.join(project, 'config'))
+    writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'routes-check', version: '1.0.0' }))
+    writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
+    writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=${production ? 'production' : 'test'}\nHAI_SERV_HTTP_HEALTH_PATH=/somepath/status\n`)
+    writeFileSync(path.join(project, 'config/_core.yml'), 'env: test\n')
+    writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  health: {path: /health, readyPath: /ready}\n  docs: {path: /somepath/reference, requireAuth: true}\n  openapi: {path: /somepath/schema.json}\n')
+    const images = ['serv', 'web'].map((name) => {
+      const file = `${name}-1.0.0.tar`
+      writeFileSync(path.join(artifacts, file), name)
+      return { name, file, imageRef: `localhost/routes-${name}:1`, sha256: createHash('sha256').update(name).digest('hex'), containerPort: name === 'web' ? 8080 : 3000 }
+    })
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 5, primaryService: 'serv', appVersion: '1.0.0', buildId: 'routes', hasWeb: true, webBasePath: '/somepath', images }))
+    await deploy.close()
+    expect((await deploy.init({ provider: { type: 'docker-ssh', remote: { runtime }, expose: { hostPort: 18080 } } })).success).toBe(true)
+    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
+    if (!bundle.success || !bundle.data.bundlePath)
+      throw new Error('Expected a route deployment bundle')
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+    const configuration = path.join(project, 'nginx.conf')
+    // 后端仅充当协议夹具；此处验证 Nginx 不吞掉文档请求、不将后端 401 改成前端成功页。
+    const upstream = `server { listen 3000; location = /somepath/status { return 200 'backend healthy'; } location = /somepath/reference { return 401 'authenticated docs required'; } location = /somepath/schema.json { default_type application/json; return 200 '{"openapi":"3.1.0"}'; } location = /somepath/_hai/scalar.js { default_type application/javascript; return 200 'globalThis.scalarBackend = true'; } location / { return 404; } }`
+    writeFileSync(configuration, `pid /tmp/routes-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:').replaceAll('/usr/share/nginx/html', '/tmp/routes-static')}\n${upstream}\n}\n`)
+    execFileSync(runtime, ['cp', configuration, `${fixture.containerId}:/tmp/routes-nginx.conf`], { windowsHide: true, timeout: 15_000 })
+    await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'mkdir -p /tmp/routes-static; printf "frontend fallback" > /tmp/routes-static/index.html; nginx -t -c /tmp/routes-nginx.conf; nginx -c /tmp/routes-nginx.conf'], { timeoutMs: 15_000 })
+    try {
+      const read = (pathname: string) => executeDeployTestFixture(runtime, fixture!, ['sh', '-c', 'wget -S -O - "$1" 2>&1 || true', 'probe', `http://127.0.0.1:8080${pathname}`], { timeoutMs: 10_000 })
+      expect(await read('/somepath/status')).toContain('backend healthy')
+      const docs = await read('/somepath/reference')
+      const spec = await read('/somepath/schema.json')
+      const scalar = await read('/somepath/_hai/scalar.js')
+      if (production) {
+        expect(docs).toContain('frontend fallback')
+        expect(spec).not.toContain('"openapi"')
+        expect(scalar).not.toContain('scalarBackend')
+      }
+      else {
+        expect(docs).toContain('401')
+        expect(docs).not.toContain('frontend fallback')
+        expect(spec).toContain('"openapi":"3.1.0"')
+        expect(scalar).toContain('scalarBackend')
+      }
+      expect(await read('/_hai/scalar.js')).toContain('404')
+    }
+    finally {
+      await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'nginx -s quit -c /tmp/routes-nginx.conf; for n in 1 2 3 4 5 6 7 8 9 10; do [ ! -e /tmp/routes-nginx.pid ] && exit 0; sleep 0.1; done; exit 1'], { timeoutMs: 10_000 })
+    }
+  }, 60_000)
+
   it.each([8 * 1048576, 24 * 1048576])('真实 Nginx 保留 %i 明文容量，反馈不缩容，普通 JSON 边界与超限均符合协议', async (maxPlaintextBytes) => {
     if (!fixture)
       throw new Error('Expected an owned proxy fixture')

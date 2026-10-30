@@ -12,7 +12,7 @@ import { OpenAPIGenerator } from '@orpc/openapi'
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
 
 /**
- * Scalar UI 脚本本地路由，由 createApp 自动挂载，无需外网 CDN。
+ * Scalar UI 脚本的默认路径；createApp 按文档所在目录挂载，并使用相对资源地址。
  *
  * @example
  * ```ts
@@ -114,7 +114,7 @@ export interface CreateDocsPageOptions {
 /**
  * 读取本地 Scalar browser bundle。
  *
- * 供 `createApp()` 在 docs 路由中按需挂载 `/_hai/scalar.js` 使用。
+ * 供 `createApp()` 在 docs 所在目录按需挂载 `_hai/scalar.js` 使用。
  *
  * @example
  * ```ts
