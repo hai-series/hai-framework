@@ -198,14 +198,16 @@ export async function createDeploymentBundle(options: {
       put(file, content)
     if (options.hasWebConfig)
       put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
+    for (const [file, content] of Object.entries(options.httpsAssets ?? {}))
+      put(file, content)
     put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)
     if (options.hasWebConfig) {
       // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
       put('proxy-entry.json', JSON.stringify({ services: { [options.proxyService ?? 'web']: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
     }
     put('storage-routing', `${options.storageRouting ?? ''}\n`)
-    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig ? options.proxyService === 'gateway' ? 'gateway' : 'true' : 'false'}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}\n`)
-    put('health-port', `${config.expose.hostPort}\n`)
+    const httpsFingerprint = config.expose.https ? createHash('sha256').update(JSON.stringify({ ...config.expose.https, certificateFile: undefined, privateKeyFile: undefined, certificate: options.httpsAssets?.['tls/fullchain.pem'] })).digest('hex') : ''
+    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig ? options.proxyService === 'gateway' ? 'gateway' : 'true' : 'false'}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}${httpsFingerprint ? `:${httpsFingerprint}` : ''}\n`)
     put('web-base-path', `${artifact.webBasePath ?? ''}\n`)
     put('health-paths', `${options.healthPaths.join('\n')}\n`)
     put('image-list', `${imageList.join('\n')}\n`)

@@ -108,7 +108,9 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       }
     }
     const sidecar = provider.type === 'docker-ssh' ? planSidecars(directory, projectName, app, provisionEnv, effective, config.container?.s3Engine, { dbPassword: '', storagePassword: '', ldapPassword: '' }) : undefined
-    const gateway = !!artifact && sidecar?.services.includes('storage') && !(artifact.primaryService === 'serv' && artifact.hasWeb)
+    const https = provider.type === 'docker-ssh' ? provider.expose.https : undefined
+    const gateway = !!artifact && !(artifact.primaryService === 'serv' && artifact.hasWeb)
+      && (sidecar?.services.includes('storage') || (!!https && (artifact.primaryService === 'serv' || app.isSvelteKit)))
     if (gateway && artifact.primaryService === 'web' && !app.isSvelteKit)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     if (gateway) {
@@ -116,18 +118,23 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       if (!baseline.required)
         selected.push('gateway')
     }
+    if (https?.type === 'letsencrypt') {
+      available.push('certbot')
+      if (!baseline.required)
+        selected.push('certbot')
+    }
     const services = Object.entries(sidecar?.composeServices ?? {}).filter(([name]) => selected.includes(name))
     return ok({
       projectName,
       root,
       serviceDir: directory,
       environment: environment.data.environment,
-      target: provider.type === 'docker-ssh' ? { provider: provider.type, host: provider.ssh?.host, port: provider.ssh?.port, directory: remoteDirectory, runtime: provider.remote.runtime, hostPort: provider.expose.hostPort } : { provider: provider.type },
+      target: provider.type === 'docker-ssh' ? { provider: provider.type, host: provider.ssh?.host, port: provider.ssh?.port, directory: remoteDirectory, runtime: provider.remote.runtime, hostPort: provider.expose.hostPort, https: https ? { type: https.type, domain: https.domain, port: https.port } : undefined } : { provider: provider.type },
       artifact: artifact ? { directory: artifactDir, version: artifact.appVersion, buildId: artifact.buildId, verified: true, images: artifact.images.map(image => ({ name: image.name, reference: image.imageRef, sha256: image.sha256 })) } : undefined,
       selected,
       retained: available.filter(name => !selected.includes(name)),
       containers: provider.type === 'docker-ssh' ? [...selected.filter(name => images.includes(name) || name === 'gateway').map(name => `hai-${projectName}-${name}`), ...services.flatMap(([, service]) => typeof service.container_name === 'string' ? [service.container_name] : [])] : [],
-      composeManagedServices: services.filter(([, service]) => typeof service.container_name !== 'string').map(([name]) => name),
+      composeManagedServices: [...services.filter(([, service]) => typeof service.container_name !== 'string').map(([name]) => name), ...(selected.includes('certbot') ? ['certbot'] : [])],
       logicalVolumes: Object.keys(sidecar?.volumes ?? {}),
       middleware: middlewares.map(item => ({ service: item.service, backend: item.backend, configuration: item.envPrefix, action: selected.includes(item.service) ? effective.serviceModes?.[item.envPrefix] ?? effective.serviceModes?.[item.service] ?? 'default' : 'keep', provisioner: provisioners.get(item.service) })),
       configuration: { files: [join(root, 'hai.json'), ...configFiles].filter(existsSync), environmentKeys: Object.keys(environment.data.values).sort() },

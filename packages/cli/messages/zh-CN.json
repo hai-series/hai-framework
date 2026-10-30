@@ -379,5 +379,18 @@
   "cli_createOptionsRemoved": "create 已移除 template/features/examples/yes 参数；新工程固定完整模块与示例，非交互请使用 --defaults。",
   "cli_createDirectoryExists": "目标目录已存在；请使用另一个项目名或在交互模式下处理。",
   "cli_help_buildConcurrency": "同时构建的镜像数：1 或 2（默认 2）",
-  "cli_build_concurrency_invalid": "镜像并发数仅支持 1 或 2；--concurrency 只用于 image 构建。"
+  "cli_build_concurrency_invalid": "镜像并发数仅支持 1 或 2；--concurrency 只用于 image 构建。",
+  "cli_deploy_https_mode": "HTTPS 证书（可选）",
+  "cli_deploy_https_keep": "保留已有 HTTPS 配置",
+  "cli_deploy_https_off": "使用 HTTP",
+  "cli_deploy_https_files": "使用已有 PEM 证书和私钥",
+  "cli_deploy_httpsDomain": "HTTPS 域名",
+  "cli_deploy_httpsPort": "HTTPS 公开端口",
+  "cli_deploy_httpsCertificate": "PEM 完整证书链路径（相对于工程根或绝对路径）",
+  "cli_deploy_httpsPrivateKey": "PEM 私钥路径（相对于工程根或绝对路径）",
+  "cli_deploy_httpsEmail": "Let’s Encrypt 联系邮箱",
+  "cli_deploy_https_requirements": "Certbot 使用 HTTP-01：域名须指向服务器，公网 80 端口可达，服务器须能访问 Let’s Encrypt。HTTP 入口将设为 80。",
+  "cli_deploy_https_terms": "同意 Let’s Encrypt 服务条款（https://letsencrypt.org/repository/）并启用自动续期？",
+  "cli_deploy_https_saved": "HTTPS 配置已保存到当前环境的私有配置；证书在打包时复制。",
+  "cli_deploy_stage_https": "正在申请或安装 HTTPS 证书"
 }

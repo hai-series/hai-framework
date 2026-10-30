@@ -168,7 +168,7 @@ start_services() {
   application_services=''
   application_orphan_option=$orphan_option
   for service in "$@"; do
-    case "$service" in serv|web|gateway) ;; *) middleware_services="$middleware_services $service";; esac
+    case "$service" in serv|web|gateway|certbot) ;; *) middleware_services="$middleware_services $service";; esac
   done
   if [ -n "$middleware_services" ]; then
     compose up -d --no-deps --no-build --pull never "$recreate_option" $orphan_option $middleware_services || return 1
@@ -183,6 +183,9 @@ start_services() {
     compose up -d --no-deps --no-build --pull never "$recreate_option" $application_orphan_option $application_services || return 1
   fi
   case " $* " in *' gateway '*) compose up -d --no-deps --no-build --pull never "$recreate_option" gateway || return 1;; esac
+}
+start_renewal() {
+  case " $* " in *' certbot '*) compose up -d --no-deps --no-build --pull never --no-recreate certbot || return 1;; esac
 }
 read_proxy_service() {
   proxy_directory=$1
@@ -207,13 +210,22 @@ reload_retained_proxy() {
   esac
 }
 wait_http() {
-  http_port=$1
-  shift
+  http_release=$1
+  http_port=$2
+  shift 2
+  https_domain=''
+  if [ -f "$http_release/https" ]; then
+    read -r https_domain https_port https_type < "$http_release/https"
+    https_certificates="$http_release/tls"
+    if [ "$https_type" = letsencrypt ]; then https_certificates="$root/https/certificates/$https_domain"; fi
+  fi
   for http_path in "$@"; do
     http_ready=false
     http_attempt=0
     while [ "$http_attempt" -lt 40 ]; do
-      if curl --noproxy '*' -fsS --max-time 5 "http://127.0.0.1:$http_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
+      if [ -n "$https_domain" ]; then
+        if curl --noproxy '*' -fsS --max-time 5 --cacert "$https_certificates/fullchain.pem" --resolve "$https_domain:$https_port:127.0.0.1" "https://$https_domain:$https_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
+      elif curl --noproxy '*' -fsS --max-time 5 "http://127.0.0.1:$http_port$http_path" >/dev/null 2>&1; then http_ready=true; break; fi
       http_attempt=$((http_attempt + 1))
       sleep 3
     done
@@ -226,7 +238,6 @@ verify_recovery() {
   recovery_port=$(awk -F: 'NR == 1 { print $1 }' "$recovery_release/layout") || return 1
   recovery_paths=''
   if [ -f "$recovery_release/health-paths" ]; then
-    recovery_port=$(cat "$recovery_release/health-port") || return 1
     recovery_paths=$(cat "$recovery_release/health-paths") || return 1
   else
     # 旧格式发布没有独立健康文件；按已存拓扑恢复最小 HTTP 检查。
@@ -238,8 +249,9 @@ verify_recovery() {
   case "$recovery_port" in ''|*[!0-9]*) return 1;; esac
   test -n "$recovery_paths" || return 1
   wait_services $recover_selected || return 1
+  start_renewal $recover_selected || return 1
   reload_retained_proxy "$recovery_release" || return 1
-  wait_http "$recovery_port" $recovery_paths
+  wait_http "$recovery_release" "$recovery_port" $recovery_paths
 }
 finish() {
   code=$?
@@ -367,7 +379,7 @@ if [ "$partial" = true ]; then
   test "$current_storage_routing" = "$previous_storage_routing" || { printf 'Managed storage configuration changed. Create a full deployment to switch its public endpoint, bucket, or access policy consistently.\n' >&2; exit 1; }
   if ! cmp -s layout "$root/releases/$previous/layout"; then
     # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
-    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4}' "$root/releases/$previous/layout")" || { printf 'Ports or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
+    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$root/releases/$previous/layout")" || { printf 'Ports, HTTPS or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
     test -f web.conf && test -f proxy-entry.json || { printf 'Proxy configuration missing. Create a full deployment bundle.\n' >&2; exit 1; }
     previous_proxy=
     while IFS= read -r compose_file; do
@@ -393,6 +405,9 @@ for entry in "$source_dir"/* "$source_dir"/.[!.]*; do
 done
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
 if [ -f "$release/web.conf" ]; then chmod 644 "$release/web.conf"; fi
+for https_script in https-start.sh renew-https.sh; do
+  if [ -f "$release/$https_script" ]; then chmod 444 "$release/$https_script"; fi
+done
 # 策略不是凭据，发布目录保持700；只读挂载允许镜像中的非root应用读取。
 if [ -f "$release/request-access.yml" ]; then chmod 444 "$release/request-access.yml"; fi
 : > "$release/compose-files"
@@ -455,6 +470,9 @@ while IFS=' ' read -r archive reference; do
   host_arch=$(uname -m)
   case "$host_arch:$architecture" in x86_64:amd64|aarch64:arm64) ;; *) printf 'Image architecture %s does not match server %s\n' "$architecture" "$host_arch" >&2; exit 1;; esac
 done < "$release/image-list"
+if [ -f "$release/prepare-https.sh" ]; then
+  sh "$release/prepare-https.sh" "$root" "$release" "$runtime" prepare "$partial"
+fi
 step dependencies 'Checking dependencies of selected services'
 if [ "$partial" = true ]; then cat "$release/services" >> "$release/dependencies"; fi
 while IFS= read -r dependency; do
@@ -466,9 +484,18 @@ step start 'Updating selected services'
 changed=true
 remove_selected $selected
 start_services $selected
+if [ -f "$release/prepare-https.sh" ] && [ "$partial" = false ]; then
+  step https 'Issuing or installing HTTPS certificate'
+  tls_proxy=$(read_proxy_service "$release")
+  wait_services "$tls_proxy"
+  sh "$release/prepare-https.sh" "$root" "$release" "$runtime" issue "$partial"
+  compose exec -T "$tls_proxy" nginx -t
+  compose exec -T "$tls_proxy" nginx -s reload
+fi
+start_renewal $selected
 reload_retained_proxy "$release"
 step health 'Checking HTTP access'
-wait_http @@PORT@@ @@HEALTH@@
+wait_http "$release" @@PORT@@ @@HEALTH@@
 step complete 'Deployment passed all checks'
 printf '%s\n' "$id" > "$root/current.next"
 mv "$root/current.next" "$root/current"

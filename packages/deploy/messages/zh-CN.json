@@ -102,5 +102,7 @@
   "deploy_secretImportFailed": "旧凭据导入在 {phase} 阶段被拒绝；请核对私有输入权限、项目/卷身份、实际服务凭据及部署锁，未执行服务更新；提交结果不明时请核对受保护的状态文件",
   "deploy_projectNameRequired": "工程根 package.json.name 缺失或无法归一化，不能生成镜像与部署资源身份。",
   "deploy_projectNameOverrideRemoved": "部署项目名统一来自工程根 package.json.name；请移除旧 projectName 覆盖参数。",
-  "deploy_requestAccessInvalid": "请求访问策略配置无效（{field}）。请检查字段、IP、时区及时间窗口；如引用文件，请确认文件可读、格式为 YAML 且不超过 1 MiB。修正后重新打包。"
+  "deploy_requestAccessInvalid": "请求访问策略配置无效（{field}）。请检查字段、IP、时区及时间窗口；如引用文件，请确认文件可读、格式为 YAML 且不超过 1 MiB。修正后重新打包。",
+  "deploy_httpsPortsInvalid": "HTTP 与 HTTPS 端口必须不同；Let’s Encrypt 的 HTTP-01 入口必须使用宿主机 80 端口。",
+  "deploy_httpsCertificateInvalid": "HTTPS 证书无效：请核对 PEM 文件可读、证书与未加密私钥匹配、证书有效期及域名，然后重新打包。"
 }

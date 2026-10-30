@@ -102,5 +102,7 @@
   "deploy_secretImportFailed": "Legacy credential import was rejected during {phase}; check private input permissions, project/volume identity, live credentials and the deployment lock. No services were updated; inspect the protected state file if commit is unconfirmed",
   "deploy_projectNameRequired": "The root package.json.name is missing or cannot be normalized into an image and deployment resource identity.",
   "deploy_projectNameOverrideRemoved": "Deployment identity comes from the root package.json.name; remove the obsolete projectName override.",
-  "deploy_requestAccessInvalid": "Invalid request access policy ({field}). Check fields, IP addresses, timezones and time windows. For a file reference, use readable YAML no larger than 1 MiB. Fix the configuration and create a new bundle."
+  "deploy_requestAccessInvalid": "Invalid request access policy ({field}). Check fields, IP addresses, timezones and time windows. For a file reference, use readable YAML no larger than 1 MiB. Fix the configuration and create a new bundle.",
+  "deploy_httpsPortsInvalid": "HTTP and HTTPS ports must differ; Let’s Encrypt HTTP-01 requires host port 80.",
+  "deploy_httpsCertificateInvalid": "Invalid HTTPS certificate. Check readable PEM files, matching unencrypted private key, validity dates and domain, then repackage."
 }

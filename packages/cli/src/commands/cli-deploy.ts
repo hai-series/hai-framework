@@ -169,7 +169,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
       type: 'docker-ssh',
       ssh: { ...ssh, host, port, username, auth, password, identityFile: identityFile || undefined, knownHostsFile: knownHostsFile || undefined },
       remote: { ...remote, baseDir, runtime: runtime.value },
-      expose: { type: 'port', hostPort, containerPort },
+      expose: { ...expose, type: 'port', hostPort, containerPort },
     }
   }
   else {
@@ -183,6 +183,60 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     throw new Error(saved.error.message)
   config.provider = validated.data
   writeCliMessage(cliM('cli_deploy_target_saved'))
+}
+
+/** 所有模板共用的可选 HTTPS 环节；配置保存到选中环境的私有层。 */
+async function configureDeployHttps(module: typeof import('@h-ai/deploy'), config: Record<string, unknown>, environment: DeploymentEnvironment, nonInteractive?: boolean, partial?: boolean): Promise<void> {
+  const provider = configObject(config.provider)
+  if (provider.type !== 'docker-ssh' || nonInteractive || partial)
+    return
+  const expose = configObject(provider.expose)
+  const previous = configObject(expose.https)
+  const selection = await prompts({
+    type: 'select',
+    name: 'httpsMode',
+    message: cliM('cli_deploy_https_mode'),
+    choices: [
+      { title: cliM(previous.type ? 'cli_deploy_https_keep' : 'cli_deploy_https_off'), value: 'keep' },
+      { title: cliM('cli_deploy_https_files'), value: 'files' },
+      { title: 'Let\'s Encrypt (Certbot)', value: 'letsencrypt' },
+      ...(previous.type ? [{ title: cliM('cli_deploy_https_off'), value: 'off' }] : []),
+    ],
+  })
+  if (selection.httpsMode === undefined)
+    throw new Error(cliM('cli_deploy_cancelled'))
+  if (selection.httpsMode === 'keep')
+    return
+  let https: Record<string, unknown> | undefined
+  if (selection.httpsMode !== 'off') {
+    const ask = async (name: string, initial?: unknown): Promise<string> => {
+      const answer = await prompts({ type: 'text', name, message: cliM((`cli_deploy_${name}`) as Parameters<typeof cliM>[0]), initial: initial === undefined ? '' : String(initial), validate: (value: string) => !!value.trim() || cliM('cli_deploy_invalid_value') })
+      if (answer[name] === undefined)
+        throw new Error(cliM('cli_deploy_cancelled'))
+      return String(answer[name]).trim()
+    }
+    https = { type: selection.httpsMode, domain: await ask('httpsDomain', previous.domain), port: Number(await ask('httpsPort', previous.port ?? 443)), redirectHttp: true }
+    if (https.type === 'files') {
+      https.certificateFile = await ask('httpsCertificate', previous.certificateFile)
+      https.privateKeyFile = await ask('httpsPrivateKey', previous.privateKeyFile)
+    }
+    else {
+      writeCliMessage(cliM('cli_deploy_https_requirements'))
+      https.email = await ask('httpsEmail', previous.email)
+      const consent = await prompts({ type: 'confirm', name: 'acceptTerms', message: cliM('cli_deploy_https_terms'), initial: previous.acceptTerms === true })
+      if (consent.acceptTerms !== true)
+        throw new Error(cliM('cli_deploy_cancelled'))
+      https.acceptTerms = true
+    }
+  }
+  const parsed = module.ProviderConfigSchema.safeParse({ ...provider, expose: { ...expose, ...(https?.type === 'letsencrypt' ? { hostPort: 80 } : {}), https } })
+  if (!parsed.success)
+    throw new Error(cliM('cli_deploy_invalid_value'))
+  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: JSON.stringify(parsed.data) }, { private: true })
+  if (!saved.success)
+    throw new Error(saved.error.message)
+  config.provider = parsed.data
+  writeCliMessage(cliM('cli_deploy_https_saved'))
 }
 
 /**
@@ -401,6 +455,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     // 离线模式在构建和中间件配置之后最后询问；生成 tar 和 target 时使用同一份目标。
     if (options.bundleOnly)
       await configureDeployTarget(deployModule, deployConfig, environment.data, options.yes, true)
+    await configureDeployHttps(deployModule, deployConfig, environment.data, options.yes, selectedServices !== undefined)
     // 刚写入文件的值不能被本次命令之前注入的快照覆盖；保留用户原有进程变量优先级。
     for (const key of Object.keys(process.env)) {
       if (originalEnv[key] === undefined)

@@ -44,16 +44,49 @@ const SshConfigSchema = z.object({
     context.addIssue({ code: 'custom', path: ['password'], message: deployM('deploy_sshPasswordInvalid') })
 })
 
-/** 端口直出暴露配置 */
+/** 入口域名同时用于证书校验、Nginx 与公开 URL，禁止配置指令或路径。 */
+const HttpsDomainSchema = z.string().max(253).regex(/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i).refine(value => !value.includes('..'))
+const httpsOptions = {
+  /** 公开访问域名；同时用于证书身份校验和 Nginx 入口。 */
+  domain: HttpsDomainSchema.describe('HTTPS 公开域名；证书必须匹配该域名'),
+  /** HTTPS 宿主端口，与 HTTP 端口不同。 */
+  port: z.number().int().min(1).max(65535).default(443).describe('HTTPS 宿主端口，默认 443，须与 HTTP 端口不同'),
+  /** 是否将普通 HTTP 请求跳转到 HTTPS。 */
+  redirectHttp: z.boolean().default(true).describe('普通 HTTP 请求是否以 308 跳转至 HTTPS，健康检查和 ACME 挑战除外'),
+}
+const HttpsConfigSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('files'),
+    ...httpsOptions,
+    /** 相对于工程根或绝对路径的 PEM 完整证书链及未加密私钥。 */
+    certificateFile: z.string().min(1).describe('PEM 完整证书链路径，相对工程根或绝对路径；打包时复制到私有发布目录'),
+    privateKeyFile: z.string().min(1).describe('未加密 PEM 私钥路径，相对工程根或绝对路径；必须与证书匹配'),
+  }),
+  z.object({
+    type: z.literal('letsencrypt'),
+    ...httpsOptions,
+    domain: HttpsDomainSchema.refine(value => value.includes('.') && !/^\d+(?:\.\d+){3}$/.test(value)).describe('Let’s Encrypt 单个公网域名，使用 HTTP-01，不支持 IP 或通配符'),
+    email: z.email().describe('Let’s Encrypt 账号联系邮箱'),
+    /** 使用者须明确同意 Let's Encrypt 的服务条款。 */
+    acceptTerms: z.literal(true).describe('明确同意 Let’s Encrypt 服务条款后才可设置为 true'),
+  }),
+])
+
+/** HTTP 端口及可选 HTTPS 入口；Let's Encrypt 使用 HTTP-01，HTTP 必须映射 80。 */
 const PortExposeSchema = z.object({
   type: z.literal('port').default('port'),
   /** 容器内监听端口（adapter-node 默认 3000） */
   containerPort: z.number().int().min(1).max(65535).default(3000),
   /** 宿主机映射端口 */
   hostPort: z.number().int().min(1).max(65535),
+  /** 可选 HTTPS：已有 PEM 文件或官方 Certbot 自动申请续期；省略保留 HTTP。 */
+  https: HttpsConfigSchema.optional().describe('可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP'),
+}).superRefine((expose, context) => {
+  if (expose.https && (expose.https.port === expose.hostPort || (expose.https.type === 'letsencrypt' && expose.hostPort !== 80)))
+    context.addIssue({ code: 'custom', path: ['https'], message: deployM('deploy_httpsPortsInvalid') })
 })
 
-/** 应用暴露配置（MVP 仅支持端口直出，域名网关为后续能力） */
+/** 应用入口：HTTP 及统一的可选 HTTPS。 */
 const ExposeSchema = PortExposeSchema
 
 /** docker-ssh 部署平台配置 */

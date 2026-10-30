@@ -379,5 +379,18 @@
   "cli_createOptionsRemoved": "create の template/features/examples/yes は廃止されました。全モジュールとサンプルを生成します。非対話には --defaults を使用してください。",
   "cli_createDirectoryExists": "対象ディレクトリが存在します。別の名前を指定するか、対話モードで処理してください。",
   "cli_help_buildConcurrency": "同時イメージビルド数：1 または 2（既定値：2）",
-  "cli_build_concurrency_invalid": "イメージの同時実行数は 1 または 2 です。--concurrency は image ビルド専用です。"
+  "cli_build_concurrency_invalid": "イメージの同時実行数は 1 または 2 です。--concurrency は image ビルド専用です。",
+  "cli_deploy_https_mode": "HTTPS 証明書（任意）",
+  "cli_deploy_https_keep": "現在の HTTPS 設定を維持",
+  "cli_deploy_https_off": "HTTP を使用",
+  "cli_deploy_https_files": "既存の PEM 証明書と秘密鍵を使用",
+  "cli_deploy_httpsDomain": "HTTPS ドメイン",
+  "cli_deploy_httpsPort": "HTTPS 公開ポート",
+  "cli_deploy_httpsCertificate": "PEM 証明書チェーンのパス（プロジェクト相対または絶対）",
+  "cli_deploy_httpsPrivateKey": "PEM 秘密鍵のパス（プロジェクト相対または絶対）",
+  "cli_deploy_httpsEmail": "Let’s Encrypt 連絡先メール",
+  "cli_deploy_https_requirements": "Certbot は HTTP-01 を使用します。ドメインをサーバーに向け、公開ポート 80 と Let’s Encrypt への接続を確保してください。HTTP ポートを 80 に設定します。",
+  "cli_deploy_https_terms": "Let’s Encrypt 利用規約（https://letsencrypt.org/repository/）に同意し、自動更新を有効にしますか？",
+  "cli_deploy_https_saved": "HTTPS 設定を現在の環境の非公開設定に保存しました。証明書はパッケージ作成時にコピーします。",
+  "cli_deploy_stage_https": "HTTPS 証明書を発行または配置しています"
 }

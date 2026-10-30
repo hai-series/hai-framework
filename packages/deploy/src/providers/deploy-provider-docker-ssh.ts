@@ -16,7 +16,9 @@ import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployResult } from '../deploy-types.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
+import { rootCertificates } from 'node:tls'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
 import { createTransportBodyPolicy, parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
@@ -32,6 +34,7 @@ import {
   generateWebProxyConfig,
   serializeEnvFile,
 } from '../container/deploy-container-compose.js'
+import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
 import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
@@ -77,7 +80,7 @@ const HEALTH_MAX_ATTEMPTS = 40
 /** 只接收服务器脚本原子发布的终态；匹配 ID 后才能确认本次执行完成。 */
 const ServerResultSchema = z.object({
   deploymentId: z.string(),
-  stage: z.enum(['preflight', 'credentials', 'recover', 'images', 'dependencies', 'start', 'health', 'complete']),
+  stage: z.enum(['preflight', 'credentials', 'recover', 'images', 'dependencies', 'start', 'https', 'health', 'complete']),
   exitCode: z.number().int().min(0).max(255),
   durationSeconds: z.number().int().nonnegative(),
   recoveryStatus: z.enum(['not-needed', 'passed', 'failed', 'stopped']).optional(),
@@ -140,14 +143,30 @@ export function createDockerSshProvider(
   }
 
   /** HTTP 健康检查：轮询访问地址直到返回成功。 */
-  async function healthCheck(url: string): Promise<boolean> {
+  async function healthCheck(url: string, certificate?: string): Promise<boolean> {
     for (let attempt = 0; attempt < HEALTH_MAX_ATTEMPTS; attempt++) {
       try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
-        // 健康检查只消费状态码，主动释放响应体和连接，避免失败轮询积压未读数据。
-        await response.body?.cancel()
-        if (response.ok)
-          return true
+        if (certificate) {
+          const healthy = await new Promise<boolean>((resolve) => {
+            const request = requestHttps(url, { ca: [...rootCertificates, certificate], timeout: 5000 }, (response) => {
+              response.resume()
+              resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300)
+            })
+            request.on('error', () => resolve(false))
+            request.on('close', () => resolve(false))
+            request.on('timeout', () => request.destroy())
+            request.end()
+          })
+          if (healthy)
+            return true
+        }
+        else {
+          const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+          // 健康检查只消费状态码，主动释放响应体和连接，避免失败轮询积压未读数据。
+          await response.body?.cancel()
+          if (response.ok)
+            return true
+        }
       }
       catch {
         // 未就绪，继续轮询
@@ -161,6 +180,8 @@ export function createDockerSshProvider(
     const { appDir, projectName, scan, provisionEnv, appEnv, options } = context
     const deploymentId = makeDeploymentId()
     const hostPort = config.expose.hostPort
+    const https = config.expose.https
+    const httpsAssets = https ? createHttpsAssets(https, resolveProjectDirectory(appDir)) : undefined
     const deploymentRoot = join(resolveProjectDirectory(appDir), '.hai', 'deploy', options?.environment ?? 'prod')
     const artifact = context.artifact
     const resolvedBuildDir = context.artifactDir
@@ -179,14 +200,16 @@ export function createDockerSshProvider(
     const containerPort = app?.containerPort ?? (primaryService === 'serv' ? artifact.servContainerPort : artifact.webContainerPort) ?? config.expose.containerPort
     const webContainerPort = web?.containerPort ?? artifact.webContainerPort ?? 8080
     const host = config.ssh?.host
-    const url = host ? `http://${host.includes(':') ? `[${host}]` : host}:${hostPort}` : `http://SERVER_HOST:${hostPort}`
+    const url = https ? `https://${https.domain}${https.port === 443 ? '' : `:${https.port}`}` : host ? `http://${host.includes(':') ? `[${host}]` : host}:${hostPort}` : `http://SERVER_HOST:${hostPort}`
     const webBasePath = artifact.webBasePath ?? ''
     const applicationUrl = `${url}${webBasePath ? `${webBasePath}/` : ''}`
-    const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && !!webBasePath
+    const standaloneWebConfig = primaryService === 'web' && !scan.isSvelteKit && (!!webBasePath || !!https)
     const healthPaths = hasWebProxy ? ['/health', '/_hai/web-health', `${webBasePath}/`] : scan.isSvelteKit ? [`${webBasePath}/`] : standaloneWebConfig ? ['/health', `${webBasePath}/`] : ['/health']
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
     const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    if (https && scan.isSvelteKit && !env.ORIGIN)
+      env.ORIGIN = url
     const managedStorage = sidecar.services.includes('storage') ? JSON.parse(sidecar.env.HAI_STORAGE) as { bucket: string, secretAccessKey: string, publicEndpoint?: unknown } : undefined
     let storageBasePath = ''
     if (managedStorage?.publicEndpoint !== undefined) {
@@ -211,7 +234,7 @@ export function createDockerSshProvider(
     // 应用增量继承已安装连接配置；对外地址或桶等配置改变须全量切换，不能静默沿用旧值。
     const storageRouting = managedStorage ? createHash('sha256').update(JSON.stringify({ ...managedStorage, secretAccessKey: undefined })).digest('hex') : ''
     // SSR/API 没有现成 Web Nginx 时追加网关；静态客户端不能持有存储服务端凭据。
-    const gateway = !!managedStorage && !hasWebProxy
+    const gateway = !hasWebProxy && (!!managedStorage || (!!https && !standaloneWebConfig))
     if (gateway && primaryService === 'web' && !scan.isSvelteKit)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageBackendRequired'))
     const proxyService = gateway ? 'gateway' : 'web'
@@ -299,16 +322,16 @@ export function createDockerSshProvider(
         return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
-      env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && config.ssh ? url : cors?.origin ?? '*' } })
+      env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && (config.ssh || https) ? url : cors?.origin ?? '*' } })
     }
-    else if (gateway && managedStorage) {
+    else if (gateway) {
       try {
         const http = server.data.http as { apiPrefix?: string } | undefined
         if (primaryService === 'serv') {
           const transport = server.data.transport as { maxPlaintextBytes?: number | 'auto', routePlaintextBytes?: Record<string, number> } | undefined
           applicationPlaintextBytes = Math.max(createTransportBodyPolicy(transport?.maxPlaintextBytes === 'auto' ? undefined : transport?.maxPlaintextBytes, transport?.routePlaintextBytes).maximum.plaintextBytes, feedbackTransportBytes ?? 0)
         }
-        webProxy = generateApplicationProxyConfig({ primaryService, port: containerPort, bucket: managedStorage.bucket, storageBasePath, reservedPaths: [http?.apiPrefix ?? '/api/v1', ...(storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], maxPlaintextBytes: applicationPlaintextBytes, trustedEdgeProxies: config.trustedEdgeProxies })
+        webProxy = generateApplicationProxyConfig({ primaryService, port: containerPort, bucket: managedStorage?.bucket, storageBasePath, reservedPaths: [http?.apiPrefix ?? '/api/v1', ...(storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], maxPlaintextBytes: applicationPlaintextBytes, trustedEdgeProxies: config.trustedEdgeProxies })
       }
       catch {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_storageProxyInvalid'))
@@ -318,6 +341,12 @@ export function createDockerSshProvider(
       if (['/health', '/_hai/web-health'].includes(webBasePath))
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webBaseConflict'))
       webProxy = generateStaticWebConfig(containerPort, webBasePath)
+    }
+    if (https && webProxy)
+      webProxy = renderHttpsProxy(webProxy, https, hasWebProxy ? webContainerPort : gateway ? 8080 : containerPort)
+    if (https && primaryService === 'serv' && !hasWebProxy) {
+      const cors = server.data.cors as { origin?: string } | undefined
+      env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: !cors?.origin || cors.origin === '*' ? url : cors.origin } })
     }
     // 一次交付对应一个目录；自定义同名输出也不覆盖已经可复制的旧包。
     const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar.gz`)
@@ -362,6 +391,7 @@ export function createDockerSshProvider(
       web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
       mountWebConfig: standaloneWebConfig,
       gateway,
+      https,
     })
     const composePath = join(artifactDir, composeName)
     writeFileSync(composePath, composeContent)
@@ -370,6 +400,8 @@ export function createDockerSshProvider(
     const selected = options?.selectedServices ? [...options.selectedServices] : artifact.partial ? images.map(image => image.name) : [...images.map(image => image.name), ...Object.keys(sidecar.composeServices)]
     if (gateway && !partial)
       selected.push('gateway')
+    if (https?.type === 'letsencrypt' && !partial)
+      selected.push('certbot')
     if (!selected.length || selected.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selected).size !== selected.length)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_selectionInvalid', { params: { service: selected.join(', ') } }))
     for (const name of selected) {
@@ -394,6 +426,7 @@ export function createDockerSshProvider(
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env),
       healthPaths,
+      httpsAssets,
       output: join(artifactDir, `${name}.tar${compressed ? '.gz' : ''}`),
       cacheDirectory: join(resolveProjectDirectory(appDir), '.hai', 'cache', 'images'),
     })
@@ -427,9 +460,9 @@ export function createDockerSshProvider(
             break
           const line = pendingOutput
           pendingOutput = ''
-          const stage = /^\[(preflight|images|dependencies|start|health|complete)\]/.exec(line)?.[1]
+          const stage = /^\[(preflight|images|dependencies|start|https|health|complete)\]/.exec(line)?.[1]
           if (stage)
-            options?.onProgress?.(stage as 'preflight' | 'images' | 'dependencies' | 'start' | 'health' | 'complete')
+            options?.onProgress?.(stage as 'preflight' | 'images' | 'dependencies' | 'start' | 'https' | 'health' | 'complete')
         }
       } },
     )
@@ -464,7 +497,7 @@ export function createDockerSshProvider(
     logger.info('Running health check', { url: applicationUrl })
     let healthy = true
     for (const healthPath of healthPaths) {
-      if (!await healthCheck(`${url}${healthPath}`)) {
+      if (!await healthCheck(`${url}${healthPath}`, httpsAssets?.['tls/fullchain.pem'])) {
         healthy = false
         break
       }

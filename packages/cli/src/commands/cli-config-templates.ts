@@ -680,6 +680,16 @@ provider:
   expose:
     hostPort: 18080
     containerPort: 3000
+    # HTTPS 也可在 pnpm run deploy 的可选证书环节中配置。
+    # https:
+    #   type: files
+    #   domain: app.example.com
+    #   port: 443
+    #   redirectHttp: true
+    #   certificateFile: .hai/certificates/fullchain.pem
+    #   privateKeyFile: .hai/certificates/privkey.pem
+    # Let's Encrypt：type 改为 letsencrypt，HTTP hostPort 设为 80；
+    # 以 email 和 acceptTerms: true 替代两个文件路径。
 
 container:
   s3Engine: \${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs} # rustfs | minio

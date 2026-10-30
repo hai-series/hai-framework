@@ -2,15 +2,17 @@
 import type { DeployFixtureCleanupFailure, DeployTestFixture } from './helpers/deploy-container-fixture.js'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createECDH, createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { request } from 'node:https'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { TLSSocket } from 'node:tls'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from './helpers/deploy-container-fixture.js'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from './helpers/deploy-container-fixture.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
 let runtime: 'podman' | 'docker'
@@ -29,6 +31,94 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     ensureDeployTestBaseImage(runtime, image, deadline - Date.now(), process.env.HAI_DEPLOY_E2E_MIRROR)
     fixture = await createDeployTestFixture(runtime, image, '', root, undefined, { command: ['sleep', 'infinity'], timeoutMs: deadline - Date.now() })
   }, 120_000)
+
+  it('https verifies certificates, redirects HTTP and reloads renewed certificates in real Nginx', async () => {
+    if (!fixture)
+      throw new Error('Expected an owned Nginx fixture')
+    const owned = fixture
+    const project = path.join(root, 'https-project')
+    const artifacts = path.join(project, 'artifacts')
+    mkdirSync(artifacts, { recursive: true })
+    writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'https-nginx', version: '1.0.0' }))
+    writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
+    writeFileSync(path.join(project, '.env.test'), 'HAI_CORE_ENV=test\n')
+    const content = 'prebuilt-https-web'
+    writeFileSync(path.join(artifacts, 'web-1.0.0.tar'), content)
+    writeFileSync(path.join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'web', hasWeb: true, appVersion: '1.0.0', buildId: 'https-nginx', partial: false, images: [{ name: 'web', file: 'web-1.0.0.tar', imageRef: 'localhost/https-web:1', containerPort: 8080, sha256: createHash('sha256').update(content).digest('hex') }] }))
+    const openssl = process.platform === 'win32' && existsSync('C:/Program Files/Git/usr/bin/openssl.exe') ? 'C:/Program Files/Git/usr/bin/openssl.exe' : 'openssl'
+    const certificate = (suffix: string) => {
+      const cert = path.join(project, `cert-${suffix}.pem`)
+      const key = path.join(project, `key-${suffix}.pem`)
+      execFileSync(openssl, ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost'], { stdio: 'ignore', windowsHide: true })
+      return { cert, key, pem: readFileSync(cert, 'utf8') }
+    }
+    const first = certificate('first')
+    expect((await deploy.init({ provider: { type: 'docker-ssh', expose: { hostPort: 18080, https: { type: 'files', domain: 'localhost', certificateFile: first.cert, privateKeyFile: first.key } } } })).success).toBe(true)
+    const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
+    expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
+    if (!bundle.success || !bundle.data.bundlePath)
+      throw new Error('Expected an HTTPS bundle')
+    const read = (file: string) => execFileSync('tar', ['-xOf', bundle.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
+    const proxy = read('web.conf').replace('listen 8443 ssl', `listen ${DEPLOY_FIXTURE_API_PORT} ssl`).replace('listen 8080;', `listen ${DEPLOY_FIXTURE_WEB_PORT};`).replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replaceAll('/usr/share/nginx/html', '/tmp/hai-tls-www')
+    writeFileSync(path.join(project, 'nginx.conf'), `pid /tmp/hai-tls.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n${proxy}\n}\n`)
+    // 只缩短轮询间隔并替换夹具路径，证书比较、配置验证和重载逻辑来自公开部署包。
+    const watcher = read('https-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('/docker-entrypoint.sh nginx', 'nginx -c /tmp/hai-tls.conf').replace('watch_certificate &', 'watch_certificate &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')
+    writeFileSync(path.join(project, 'https-start.sh'), watcher)
+    await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'mkdir -p /tmp/hai-tls-pem /tmp/hai-tls-www; printf "https fixture" > /tmp/hai-tls-www/index.html'])
+    const copyCertificate = (files: { cert: string, key: string }) => {
+      for (const [source, target] of [[files.key, 'privkey.pem'], [files.cert, 'fullchain.pem']])
+        execFileSync(runtime, ['cp', source!, `${owned.containerId}:/tmp/hai-tls-pem/${target}`], { windowsHide: true })
+      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'chmod', '444', '/tmp/hai-tls-pem/fullchain.pem', '/tmp/hai-tls-pem/privkey.pem'], { windowsHide: true })
+    }
+    copyCertificate(first)
+    execFileSync(runtime, ['cp', path.join(project, 'nginx.conf'), `${owned.containerId}:/tmp/hai-tls.conf`], { windowsHide: true })
+    execFileSync(runtime, ['cp', path.join(project, 'https-start.sh'), `${owned.containerId}:/tmp/hai-tls-start.sh`], { windowsHide: true })
+    const probe = (ca: string, servername = 'localhost') => new Promise<{ body: string, fingerprint: string }>((resolve, reject) => {
+      const client = request({ hostname: '127.0.0.1', port: owned.apiHostPort, servername, ca, agent: false, timeout: 3000, path: '/' }, (response) => {
+        let body = ''
+        const fingerprint = response.socket instanceof TLSSocket ? response.socket.getPeerCertificate().fingerprint256 : ''
+        response.setEncoding('utf8')
+        response.on('data', (chunk) => {
+          body += chunk
+        })
+        response.on('end', () => resolve({ body, fingerprint }))
+      })
+      client.on('error', reject)
+      client.on('timeout', () => client.destroy(new Error('TLS fixture timeout')))
+      client.end()
+    })
+    try {
+      execFileSync(runtime, ['exec', '-d', owned.containerId, 'sh', '/tmp/hai-tls-start.sh'], { windowsHide: true })
+      let initial: Awaited<ReturnType<typeof probe>> | undefined
+      for (let attempt = 0; attempt < 30; attempt++) {
+        initial = await probe(first.pem).catch(() => undefined)
+        if (initial)
+          break
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+      expect(initial?.body).toBe('https fixture')
+      await expect(probe(first.pem, 'wrong.example.test')).rejects.toThrow()
+      const redirect = await fetch(`http://127.0.0.1:${owned.webHostPort}/deep?value=1`, { redirect: 'manual' })
+      expect(redirect.status).toBe(308)
+      expect(redirect.headers.get('location')).toBe('https://localhost/deep?value=1')
+      await redirect.body?.cancel()
+      const renewed = certificate('renewed')
+      copyCertificate(renewed)
+      let updated: Awaited<ReturnType<typeof probe>> | undefined
+      for (let attempt = 0; attempt < 30; attempt++) {
+        updated = await probe(renewed.pem).catch(() => undefined)
+        if (updated)
+          break
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+      expect(updated?.body).toBe('https fixture')
+      expect(updated?.fingerprint).not.toBe(initial?.fingerprint)
+    }
+    finally {
+      await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'if [ -f /tmp/hai-tls.pid ]; then nginx -s quit -c /tmp/hai-tls.conf; fi; if [ -f /tmp/hai-tls-watcher.pid ]; then kill "$(cat /tmp/hai-tls-watcher.pid)" || true; fi'])
+      await deploy.close()
+    }
+  }, 90_000)
 
   afterAll(async () => {
     const failures: DeployFixtureCleanupFailure[] = []

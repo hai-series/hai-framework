@@ -468,6 +468,7 @@ it('仅打包不需要 SSH 或本地容器引擎，tar 可搬运且暂存目录�
   expect(script).toContain('image inspect')
   expect(script).toContain('compose-files')
   expect(existsSync(join(extracted, 'README.txt'))).toBe(false)
+  expect(existsSync(join(extracted, 'health-port'))).toBe(false)
   expect(existsSync(join(extracted, 'proxy-service'))).toBe(false)
   expect(readFileSync(join(scripts, 'README.txt'), 'utf8')).toContain('1.2.3')
   expect(JSON.parse(readFileSync(join(extracted, 'manifest.json'), 'utf8')).appVersion).toBe('1.2.3')
@@ -676,7 +677,7 @@ it('完整 tar 上传失败不启动半份部署', async () => {
   expect(ssh.exec.mock.calls.some(([command]) => String(command).includes('start-test.sh'))).toBe(false)
 })
 
-it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-success', 'finished-credentials', 'finished-recover', 'finished-rollback'])('ssh 失败只读核对匹配终态结果，保留准确执行状态且不重跑 (%s)', async (mode) => {
+it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-success', 'finished-credentials', 'finished-recover', 'finished-https', 'finished-rollback'])('ssh 失败只读核对匹配终态结果，保留准确执行状态且不重跑 (%s)', async (mode) => {
   await initialize()
   let applyCalls = 0
   ssh.exec.mockImplementation(async (command: string) => {
@@ -687,7 +688,7 @@ it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-succe
     }
     if (command.includes('result-')) {
       const id = /result-([a-z0-9-]+)\.json/.exec(command)?.[1]
-      data.stdout = mode === 'missing' ? '' : JSON.stringify({ deploymentId: mode === 'mismatch' ? 'older-deployment' : id, stage: mode === 'finished-credentials' ? 'credentials' : mode === 'finished-recover' ? 'recover' : 'health', exitCode: mode === 'finished-success' ? 0 : 1, durationSeconds: 1, ...(mode === 'finished-rollback' ? { recoveryStatus: 'passed' } : {}) })
+      data.stdout = mode === 'missing' ? '' : JSON.stringify({ deploymentId: mode === 'mismatch' ? 'older-deployment' : id, stage: mode === 'finished-credentials' ? 'credentials' : mode === 'finished-recover' ? 'recover' : mode === 'finished-https' ? 'https' : 'health', exitCode: mode === 'finished-success' ? 0 : 1, durationSeconds: 1, ...(mode === 'finished-rollback' ? { recoveryStatus: 'passed' } : {}) })
       data.stdoutTruncated = mode === 'truncated'
     }
     return { success: true, data }
@@ -703,6 +704,8 @@ it.each(['missing', 'mismatch', 'truncated', 'finished-failure', 'finished-succe
     expect(state?.remoteExitCode).toBe(mode === 'finished-success' ? 0 : 1)
   if (mode === 'finished-rollback')
     expect(state).toHaveProperty('remoteRecovery', 'passed')
+  if (mode === 'finished-https')
+    expect(state).toHaveProperty('remoteStage', 'https')
   expect(applyCalls).toBe(1)
 })
 it('aPI 正常但 Web 不健康时不会报告部署成功', async () => {

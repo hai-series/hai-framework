@@ -7,6 +7,7 @@
  * @module deploy-container-compose
  */
 
+import type { DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { TrustedProxiesSchema } from '@h-ai/core'
@@ -14,6 +15,7 @@ import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
+import { CERTBOT_IMAGE } from './deploy-https.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
 const IMAGES = {
@@ -477,6 +479,7 @@ export function buildRuntimeEnv(
  * @param options.imageRef - 应用镜像引用
  * @param options.appVersion - 应用发布版本，例如 1.2.3；不改变持久化卷身份
  * @param options.hostPort - 宿主机映射端口
+ * @param options.https - 可选的统一 HTTPS 入口与 Certbot 设置。
  * @param options.containerPort - 容器内端口
  * @param options.primaryService - 主运行服务角色，独立 API 为 serv，浏览器站点为 web。
  * @param options.sidecar - sidecar 规划
@@ -514,6 +517,8 @@ export function generateComposeFile(options: {
   nodeRuntime?: boolean
   /** 需要保留的 Node 启动参数；变化仍需重新部署容器。 */
   nodeOptions?: string
+  /** HTTPS 与 Certbot 的统一入口设置。 */
+  https?: DockerSshProviderConfig['expose']['https']
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
   const primaryService = options.primaryService ?? 'serv'
@@ -576,8 +581,36 @@ export function generateComposeFile(options: {
       ports: [`${hostPort}:8080`],
       healthcheck: { test: ['CMD', 'wget', '-Y', 'off', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/_hai/gateway-health'], interval: '30s', timeout: '5s', retries: 3 },
       volumes: ['./web.conf:/etc/nginx/conf.d/default.conf:ro'],
-      depends_on: [primaryService, 'storage'],
+      depends_on: [primaryService, ...(sidecar.services.includes('storage') ? ['storage'] : [])],
       networks: ['hai-app'],
+    }
+  }
+  if (options.https) {
+    const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!
+    const https = options.https
+    const httpPort = options.gateway ? 8080 : options.web?.containerPort ?? containerPort
+    proxy.ports = [...proxy.ports as string[], `${https.port}:${httpPort === 8443 ? 8444 : 8443}`]
+    const certificates = https.type === 'files' ? './tls' : `../../https/certificates/${https.domain}`
+    proxy.volumes = [
+      ...proxy.volumes as string[],
+      `${certificates}:/etc/nginx/tls:ro`,
+      './https-start.sh:/run/hai/https-start.sh:ro',
+      ...(https.type === 'letsencrypt' ? ['../../https/webroot:/var/www/certbot:ro'] : []),
+    ]
+    proxy.entrypoint = ['sh', '/run/hai/https-start.sh']
+    if (https.type === 'letsencrypt') {
+      services.certbot = {
+        image: CERTBOT_IMAGE,
+        restart: 'unless-stopped',
+        entrypoint: ['sh', '/run/hai/renew-https.sh'],
+        volumes: [
+          '../../https/acme:/etc/letsencrypt',
+          '../../https/webroot:/var/www/certbot',
+          `../../https/certificates/${https.domain}:/output`,
+          './renew-https.sh:/run/hai/renew-https.sh:ro',
+        ],
+        networks: ['hai-app'],
+      }
     }
   }
   const compose: Record<string, unknown> = {
@@ -755,16 +788,16 @@ map $request_uri $hai_storage_uri {
  * void config
  * ```
  */
-export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket: string, reservedPaths: string[], storageBasePath?: string, maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
+export function generateApplicationProxyConfig(options: { primaryService: 'serv' | 'web', port: number, bucket?: string, reservedPaths: string[], storageBasePath?: string, maxPlaintextBytes?: number, trustedEdgeProxies?: string[] }): string {
   const { primaryService, port, bucket, reservedPaths, maxPlaintextBytes } = options
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
   const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
-  return `${renderStorageUpstream(bucket, options.storageBasePath)}server {
+  return `${bucket ? renderStorageUpstream(bucket, options.storageBasePath) : ''}server {
   listen 8080;
   server_name _;
 ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  large_client_header_buffers 4 32k;
-${renderStorageLocation(bucket, reservedPaths, options.storageBasePath)}  location = /_hai/gateway-health {
+${bucket ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath) : ''}  location = /_hai/gateway-health {
     access_log off;
     return 200 'ok';
   }

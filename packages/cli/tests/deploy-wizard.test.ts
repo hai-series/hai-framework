@@ -34,7 +34,7 @@ it('asks once per email and SMS provider and reports saved services without envi
   expect(scan.success && environment.success).toBe(true)
   if (!scan.success || !environment.success)
     return
-  mocked.prompt.mockImplementation(async question => ({ value: question.choices[question.initial ?? 0].value }))
+  mocked.prompt.mockImplementation(async question => ({ [question.name]: question.choices[question.initial ?? 0].value }))
   const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
   const reach = { ...scan.data, middlewares: scan.data.middlewares?.filter(item => item.configName === 'reach') }
   const modes = await configureDeployMiddleware(deployModule, reach, environment.data, { provider: { type: 'docker-ssh' } })
@@ -87,14 +87,43 @@ beforeEach(() => {
   vi.spyOn(deploy.credentials, 'load').mockReturnValue({ success: true, data: [] })
 })
 
+it.each(['files', 'letsencrypt'])('configures the optional HTTPS step and reuses it non-interactively (%s)', async (type) => {
+  const { app, service } = await fullstackFixture()
+  setDeployment(app, 'provider:\n  type: docker-ssh\n  ssh:\n    host: https-server.internal\n    username: deploy\n  expose:\n    hostPort: 8080\n')
+  mocked.prompt.mockImplementation(async (question) => {
+    const answers: Record<string, unknown> = {
+      httpsMode: type,
+      httpsDomain: 'app.example.test',
+      httpsPort: '443',
+      httpsCertificate: '.hai/certificates/fullchain.pem',
+      httpsPrivateKey: '.hai/certificates/privkey.pem',
+      httpsEmail: 'operator@example.test',
+      acceptTerms: true,
+    }
+    if (Object.hasOwn(answers, question.name))
+      return { [question.name]: answers[question.name] }
+    return { [question.name]: question.type === 'multiselect' ? question.choices.map((item: { value: string }) => item.value) : question.choices?.[0]?.value }
+  })
+  const init = vi.spyOn(deploy, 'init')
+  vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'https://app.example.test', deploymentId: 'https-test', status: 'ready', envVarsSet: [] } })
+  await deployCommand({ appDir: service, env: 'test', skipMiddleware: true })
+  expect(init).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ expose: expect.objectContaining({ hostPort: type === 'letsencrypt' ? 80 : 18080, https: expect.objectContaining({ type, domain: 'app.example.test', port: 443 }) }) }) }))
+  expect(readFileSync(join(app, '.env.test.local'), 'utf8')).toContain('app.example.test')
+  expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('app.example.test')
+  mocked.prompt.mockClear()
+  await deployCommand({ appDir: service, env: 'test', yes: true, skipMiddleware: true })
+  expect(mocked.prompt).not.toHaveBeenCalled()
+}, 30_000)
+
 it('lets a complete environment bypass every middleware prompt and preserves environment files', async () => {
   const { app, service } = await fullstackFixture()
   writeFileSync(join(app, '.env.test'), 'HAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","ssh":{"host":"existing.test","username":"deploy"},"expose":{"hostPort":8080}}\'\nHAI_DB_TYPE=sqlite\n')
   const before = readFileSync(join(app, '.env.test'), 'utf8')
-  mocked.prompt.mockImplementation(async question => ({ value: question.type === 'multiselect' ? question.choices.map((item: { value: string }) => item.value) : 'skip' }))
+  mocked.prompt.mockImplementation(async question => ({ [question.name]: question.name === 'httpsMode' ? 'keep' : question.type === 'multiselect' ? question.choices.map((item: { value: string }) => item.value) : 'skip' }))
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://existing.test:8080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   await deployCommand({ appDir: service, env: 'test' })
-  expect(mocked.prompt).toHaveBeenCalledTimes(2)
+  expect(mocked.prompt).toHaveBeenCalledTimes(3)
+  expect(mocked.prompt.mock.calls.some(([question]) => question.name === 'httpsMode')).toBe(true)
   expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ skipMiddleware: true, serviceModes: expect.objectContaining({ db: 'keep', cache: 'keep', storage: 'keep' }) }))
   expect(readFileSync(join(app, '.env.test'), 'utf8')).toBe(before)
   expect(deploy.config?.services).toBeUndefined()
@@ -133,11 +162,11 @@ it('guides SSH setup once, saves parameters privately and reuses them without pr
   }
   mocked.prompt.mockImplementation(async (question) => {
     if (question.type === 'multiselect')
-      return { value: question.choices.map((item: { value: string }) => item.value) }
+      return { [question.name]: question.choices.map((item: { value: string }) => item.value) }
     if (question.choices)
-      return { value: question.choices[0].value }
+      return { [question.name]: question.choices[0].value }
     const name = Object.keys(inputs).find(key => question.message === cliM(`cli_deploy_input${key.split('_').at(-1)}` as Parameters<typeof cliM>[0]))
-    return { value: name ? inputs[name] : question.initial }
+    return { [question.name]: name ? inputs[name] : question.initial }
   })
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://server.internal:8080', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   const init = vi.spyOn(deploy, 'init')
@@ -165,13 +194,13 @@ it('saves a hidden SSH password unchanged and reuses it without another prompt',
   }
   mocked.prompt.mockImplementation(async (question) => {
     if (question.message === cliM('cli_deploy_target_auth'))
-      return { value: 'password' }
+      return { [question.name]: 'password' }
     if (question.type === 'multiselect')
-      return { value: question.choices.map((item: { value: string }) => item.value) }
+      return { [question.name]: question.choices.map((item: { value: string }) => item.value) }
     if (question.choices)
-      return { value: question.choices[0].value }
+      return { [question.name]: question.choices[0].value }
     const name = Object.keys(inputs).find(key => question.message === cliM(`cli_deploy_input${key.split('_').at(-1)}` as Parameters<typeof cliM>[0]))
-    return { value: name ? inputs[name] : question.initial ?? '' }
+    return { [question.name]: name ? inputs[name] : question.initial ?? '' }
   })
   const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
   vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://password-server.internal:8080', deploymentId: 'password-test', status: 'ready', envVarsSet: [] } })
@@ -228,17 +257,17 @@ it.each(['missing', 'partial', 'saved', 'password'])('离线打包最后确认 S
   const inputs: Record<string, string> = { HOST: 'new.internal', PORT: '2202', USERNAME: 'new-user', IDENTITYFILE: 'C:/keys/deploy', KNOWNHOSTSFILE: '', BASEDIR: '/srv/apps', HOSTPORT: '8080', CONTAINERPORT: '3000' }
   mocked.prompt.mockImplementation(async (question) => {
     if (question.type === 'confirm')
-      return { value: true }
+      return { [question.name]: true }
     if (question.message === cliM('cli_deploy_target_auth') && state === 'password')
-      return { value: 'password' }
+      return { [question.name]: 'password' }
     if (question.type === 'password') {
       expect(question.initial).toBeUndefined()
-      return { value: password }
+      return { [question.name]: password }
     }
     if (question.choices)
-      return { value: question.choices[0].value }
+      return { [question.name]: question.choices[0].value }
     const name = Object.keys(inputs).find(key => question.message === cliM(`cli_deploy_input${key}` as Parameters<typeof cliM>[0]))
-    return { value: name ? inputs[name] : question.initial }
+    return { [question.name]: name ? inputs[name] : question.initial }
   })
   const publicBefore = readFileSync(join(app, '.env.test'), 'utf8')
   const deploymentBefore = readFileSync(join(app, 'hai.json'), 'utf8')
@@ -357,22 +386,22 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   }
   mocked.prompt.mockImplementation(async (question) => {
     if (question.type === 'multiselect')
-      return { value: question.choices.map((item: { value: string }) => item.value) }
+      return { [question.name]: question.choices.map((item: { value: string }) => item.value) }
     questions.push(question.message)
     if (question.name === 'environment')
       return { environment: 'test' }
     if (question.message.includes('How should db'))
-      return { value: 'custom' }
+      return { [question.name]: 'custom' }
     if (question.message.includes('How should cache')) {
       expect(question.choices.map((item: { value: string }) => item.value)).toContain('keep')
-      return { value: 'keep' }
+      return { [question.name]: 'keep' }
     }
     if (question.message.includes('How should'))
-      return { value: 'default' }
+      return { [question.name]: 'default' }
     if (question.message.includes('Select the backend for db'))
-      return { value: 'mysql' }
+      return { [question.name]: 'mysql' }
     if (question.type === 'select')
-      return { value: question.choices[question.initial ?? 0].value }
+      return { [question.name]: question.choices[question.initial ?? 0].value }
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     if (name === 'HAI_DB_PORT')
       expect(question.validate('70000')).not.toBe(true)
@@ -383,7 +412,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
       expect(question.validate('false')).toBe(true)
       expect(question.validate(inputValues.HAI_DB_SSL)).toBe(true)
     }
-    return { value: name ? inputValues[name] ?? question.initial : question.initial }
+    return { [question.name]: name ? inputValues[name] ?? question.initial : question.initial }
   })
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'https://example.test', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   await deployCommand({ appDir: service })
@@ -417,9 +446,9 @@ it.each(['true', 'require', 'prefer', 'allow', 'disable', '{ ca: "" }', '{ cert:
   const before = files.map(file => readFileSync(file, 'utf8'))
   mocked.prompt.mockImplementation(async (question) => {
     if (question.choices)
-      return { value: question.message.includes('How should') ? 'custom' : 'mysql' }
+      return { [question.name]: question.message.includes('How should') ? 'custom' : 'mysql' }
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
-    return { value: name === 'HAI_DB_SSL' ? ssl : question.initial }
+    return { [question.name]: name === 'HAI_DB_SSL' ? ssl : question.initial }
   })
   await expect(configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } })).rejects.toThrow()
   expect(files.map(file => readFileSync(file, 'utf8'))).toEqual(before)
@@ -459,11 +488,11 @@ it.each([
     return
   mocked.prompt.mockImplementation(async (question) => {
     if (question.choices)
-      return { value: question.message.includes('How should') ? 'custom' : backend }
+      return { [question.name]: question.message.includes('How should') ? 'custom' : backend }
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     if (name === 'HAI_DB_SSL')
       expect(question.validate(ssl)).toBe(true)
-    return { value: name === 'HAI_DB_SSL' ? ssl : question.initial }
+    return { [question.name]: name === 'HAI_DB_SSL' ? ssl : question.initial }
   })
   await configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } })
   const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: app })

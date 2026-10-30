@@ -379,5 +379,18 @@
   "cli_createOptionsRemoved": "create no longer accepts template/features/examples/yes; new projects include all modules and examples. Use --defaults to skip prompts.",
   "cli_createDirectoryExists": "The target directory exists. Choose another name or handle it interactively.",
   "cli_help_buildConcurrency": "Concurrent image builds: 1 or 2 (default: 2)",
-  "cli_build_concurrency_invalid": "Image concurrency must be 1 or 2; --concurrency is only for image builds."
+  "cli_build_concurrency_invalid": "Image concurrency must be 1 or 2; --concurrency is only for image builds.",
+  "cli_deploy_https_mode": "HTTPS certificate (optional)",
+  "cli_deploy_https_keep": "Keep the existing HTTPS configuration",
+  "cli_deploy_https_off": "Use HTTP",
+  "cli_deploy_https_files": "Use existing PEM certificate and private key",
+  "cli_deploy_httpsDomain": "HTTPS domain",
+  "cli_deploy_httpsPort": "Public HTTPS port",
+  "cli_deploy_httpsCertificate": "PEM full certificate chain path (project relative or absolute)",
+  "cli_deploy_httpsPrivateKey": "PEM private key path (project relative or absolute)",
+  "cli_deploy_httpsEmail": "Let’s Encrypt contact email",
+  "cli_deploy_https_requirements": "Certbot uses HTTP-01: point the domain to the server, expose public port 80 and allow server access to Let’s Encrypt. HTTP will use port 80.",
+  "cli_deploy_https_terms": "Agree to the Let’s Encrypt terms (https://letsencrypt.org/repository/) and enable automatic renewal?",
+  "cli_deploy_https_saved": "HTTPS settings saved to the private environment configuration; certificates are copied during packaging.",
+  "cli_deploy_stage_https": "Issuing or installing the HTTPS certificate"
 }
