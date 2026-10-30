@@ -18,6 +18,7 @@ import { HaiDeployError } from './deploy-types.js'
 
 /**
  * 查看与执行入口相同的扫描、环境、项目身份和制品校验结果。远端 current 只报告为待执行时核验。
+ * 输出 root 是工程根，serviceDir 是读取运行配置、扫描依赖的部署服务目录。
  * @example
  * ```ts
  * import { createDeploymentPlan } from '@h-ai/deploy'
@@ -119,7 +120,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     return ok({
       projectName,
       root,
-      appDir: directory,
+      serviceDir: directory,
       environment: environment.data.environment,
       target: provider.type === 'docker-ssh' ? { provider: provider.type, host: provider.ssh?.host, port: provider.ssh?.port, directory: remoteDirectory, runtime: provider.remote.runtime, hostPort: provider.expose.hostPort } : { provider: provider.type },
       artifact: artifact ? { directory: artifactDir, version: artifact.appVersion, buildId: artifact.buildId, verified: true, images: artifact.images.map(image => ({ name: image.name, reference: image.imageRef, sha256: image.sha256 })) } : undefined,

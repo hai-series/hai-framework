@@ -45,6 +45,10 @@ it('只读计划使用工程身份、校验制品、报告保留服务与未知�
   const envBefore = await readFile(join(root, '.env.prod'), 'utf8')
   const result = await createDeploymentPlan(root, { provider: { type: 'docker-ssh', expose: { hostPort: 8080 }, ssh: { host: 'host.example.test', username: 'deploy', password: 'SSH_PLAN_SENTINEL' } } }, { environment: 'prod', envDir: root })
   expect(result).toMatchObject({ success: true, data: { projectName: 'shop-prod', selected: ['serv'], retained: ['web'], artifact: { buildId: 'build-1', verified: true }, baseline: { required: true, state: 'not-inspected' }, recovery: { databaseRollback: false, preservesVolumes: true } } })
+  if (result.success) {
+    expect(result.data.serviceDir).toBe(root)
+    expect(result.data).not.toHaveProperty('appDir')
+  }
   expect(JSON.stringify(result)).not.toMatch(/DEPLOY_PLAN_SENTINEL|SSH_PLAN_SENTINEL/)
   expect(await readdir(root, { recursive: true })).toEqual(before)
   expect(await readFile(join(root, '.env.prod'), 'utf8')).toBe(envBefore)
