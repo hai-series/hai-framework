@@ -104,5 +104,6 @@
   "deploy_projectNameOverrideRemoved": "デプロイ識別名は工程ルートの package.json.name から取得します。旧 projectName 上書き引数を削除してください。",
   "deploy_requestAccessInvalid": "リクエストアクセス設定（{field}）が無効です。フィールド、IP、タイムゾーン、時間帯を確認してください。ファイルは読み取り可能な 1 MiB 以下の YAML を指定し、修正後に再パッケージしてください。",
   "deploy_httpsPortsInvalid": "HTTP と HTTPS のポートは異なる必要があります。Let’s Encrypt HTTP-01 にはホストのポート 80 が必要です。",
-  "deploy_httpsCertificateInvalid": "HTTPS 証明書が無効です。PEM ファイル、暗号化されていない秘密鍵との一致、有効期間、ドメインを確認し、再作成してください。"
+  "deploy_httpsCertificateInvalid": "HTTPS 証明書が無効です。PEM ファイル、暗号化されていない秘密鍵との一致、有効期間、ドメインを確認し、再作成してください。",
+  "deploy_bundleRuntime": "実行設定の変更と反映：\n今回の配備記録：{directory}/releases/{deploymentId}\nNode バックエンドは /run/hai/.env.runtime に実際にマウントされたファイルを読みます。差分配備では古い記録を参照するため current だけでは判定できません。docker inspect --format '{{json .Mounts}}' <コンテナ名> の Source を確認してください。\n通常のバックエンド設定はバックアップ後に編集し、docker restart <コンテナ名>（Podman も同様）で反映してヘルスと業務を確認します。HAI 親設定と middleware.env の管理接続が優先します。\nCompose env_file の静的 Web・ミドルウェア設定はコンテナ再作成、ポート・マウント・Nginx 経路/上限・HTTPS 構成は新しい全量配備が必要です。サイト base の変更は制品も再構築します。\n恒久的な変更は元の環境へ戻してください。次回配備でファイルが再生成されます。"
 }

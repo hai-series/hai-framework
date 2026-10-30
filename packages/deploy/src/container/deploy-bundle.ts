@@ -220,7 +220,8 @@ export async function createDeploymentBundle(options: {
     const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')
     const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
     const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
-    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n`
+    const runtimeGuide = deployM('deploy_bundleRuntime', { params: { directory: `${config.remote.baseDir}/${projectName}`, deploymentId: options.deploymentId } })
+    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n\n${runtimeGuide}\n`
     const checksums = []
     for (const file of files)
       checksums.push(`${fileHashes.get(file) ?? await artifactChecksum(join(staging, file))}  ${file}`)
@@ -267,7 +268,7 @@ export async function createDeploymentBundle(options: {
     writeFileSync(join(scripts, 'README.txt'), readme)
     for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', 'request-access.yml', ...(options.hasWebConfig ? ['web.conf'] : [])])
       rmSync(join(directory, file), { force: true })
-    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${scripts}`, startName: 'apply.sh' }
+    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${runtimeGuide}\n${scripts}`, startName: 'apply.sh' }
   }
   finally {
     rmSync(staging, { recursive: true, force: true })
