@@ -188,7 +188,8 @@ it.each([false, true])('有效健康路径贯穿 %s Web 拓扑、在线探针和
   expect(paths).not.toContain('/health')
   expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toContain('http://127.0.0.1:18080/status')
   const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
-  expect(compose.services.serv.healthcheck.test).toEqual(expect.arrayContaining(['--input-type=module']))
+  expect(compose.services.serv.healthcheck.test).toEqual(expect.arrayContaining(['node', '-e']))
+  expect(compose.services.serv.healthcheck.test).not.toContain('--input-type=module')
   if (web) {
     const proxy = readBundleFile(directory, 'web.conf')
     expect(proxy).toContain('location = /status {')

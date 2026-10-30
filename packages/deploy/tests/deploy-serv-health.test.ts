@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { generateComposeFile } from '../src/container/deploy-container-compose.js'
@@ -21,6 +21,10 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
     mkdirSync(join(directory, 'config'))
     writeFileSync(join(directory, 'config/_core.yml'), 'name: health-probe\nenv: test\nlogging:\n  format: pretty\n')
     writeFileSync(join(directory, 'config/_serv.yml'), 'http:\n  health: { path: /health }\n')
+    // 与交付容器一致：预加载运行文件，pretty 日志会创建真实 worker。
+    copyFileSync(fileURLToPath(new URL('../src/container/deploy-runtime-env.mjs', import.meta.url)), join(directory, 'runtime-env.mjs'))
+    writeFileSync(join(directory, '.env.runtime'), 'HAI_CORE_LOGGING_FORMAT=pretty\nHAI_SERV_HTTP_HEALTH_PATH=/status\n')
+    writeFileSync(join(directory, 'middleware.env'), '')
     mkdirSync(join(directory, 'node_modules/@h-ai'), { recursive: true })
     for (const name of ['core', 'serv']) {
       const target = fileURLToPath(new URL(`../../${name}`, import.meta.url))
@@ -33,14 +37,14 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
     }
     else {
       const file = resolve(fileURLToPath(new URL('../../cli/templates/apps/', import.meta.url)), source, 'images/serv.Dockerfile.hbs')
-      script = /CMD node --input-type=module -e "([^\r\n]+)"/.exec(readFileSync(file, 'utf8'))![1]!
+      script = /CMD node -e "([^\r\n]+)"/.exec(readFileSync(file, 'utf8'))![1]!
     }
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     const address = server.address()
     if (!address || typeof address === 'string')
       throw new Error('Expected an owned health probe listener')
     const run = (extra: Record<string, string | undefined>) => new Promise<number | null>((resolve, reject) => {
-      const child = spawn(process.execPath, ['--input-type=module', '-e', script], { cwd: directory, env: { ...process.env, NODE_OPTIONS: undefined, HAI_SERV: undefined, HAI_SERV_HTTP_HEALTH: undefined, HAI_SERV_HTTP_HEALTH_PATH: '/status', PORT: String(address.port), ...extra }, stdio: 'ignore', windowsHide: true, timeout: 10_000 })
+      const child = spawn(process.execPath, ['-e', script], { cwd: directory, env: { ...process.env, NODE_OPTIONS: `--import ${pathToFileURL(join(directory, 'runtime-env.mjs')).href}`, HAI_SERV: undefined, HAI_SERV_HTTP_HEALTH: undefined, HAI_SERV_HTTP_HEALTH_PATH: undefined, PORT: String(address.port), ...extra }, stdio: 'ignore', windowsHide: true, timeout: 20_000 })
       child.once('error', reject)
       child.once('exit', resolve)
     })

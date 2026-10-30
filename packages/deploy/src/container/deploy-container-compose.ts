@@ -542,9 +542,9 @@ export function generateComposeFile(options: {
     networks: ['hai-app'],
   }
   if (primaryService === 'serv') {
-    // 与应用相同的公开 Schema 和环境解析；重启后探针也读取当前健康路径，关闭时不请求旧路径。
+    // 与应用相同的公开 Schema 和环境解析；不传 --input-type，避免预加载时传给日志 worker。
     app.healthcheck = {
-      test: ['CMD', 'node', '--input-type=module', '-e', 'import { core } from \'@h-ai/core\'; import { ServConfigSchema } from \'@h-ai/serv\'; try { core.init({ configDir: \'./config\' }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); }'],
+      test: ['CMD', 'node', '-e', '(async () => { try { const { core } = await import(\'@h-ai/core\'); const { ServConfigSchema } = await import(\'@h-ai/serv\'); core.init({ configDir: \'./config\' }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); } })()'],
       interval: '30s',
       timeout: '5s',
       start_period: '15s',
