@@ -36,7 +36,13 @@ export async function promoteLatest(packages, options = {}) {
     throw new Error('Expected public framework packages from one release')
   const fetcher = options.fetcher ?? fetch
   // 所有目标版本与当前标签均可查询后才开始写入，避免已知缺包时部分推进。
-  const missing = await missingPackages(packages, fetcher)
+  let missing = await missingPackages(packages, fetcher)
+  // npm 发布回执先于查询副本可见；只等待明确 404，其他服务/认证/网络错误仍立即失败。
+  for (let attempt = 1; missing.length && attempt < 6; attempt++) {
+    process.stdout.write(`Waiting for npm version metadata (${attempt}/5)\n`)
+    await new Promise(resolve => setTimeout(resolve, 10_000))
+    missing = await missingPackages(packages, fetcher)
+  }
   if (missing.length)
     throw new Error(`Release is incomplete: ${missing.map(pkg => pkg.name).join(', ')}`)
   const before = await readLatest(packages, fetcher)

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { promoteLatest, releasePackages } from '../promote-npm-latest.mjs'
 
 const packages = ['a', 'b'].map(name => ({ name: `@h-ai/${name}`, version: '1.0.0-beta.1' }))
@@ -24,9 +24,46 @@ function registry(initial = {}) {
 
 describe('npm latest promotion', () => {
   it('preflights all versions before any tag writes', async () => {
+    vi.useFakeTimers()
     const fixture = registry()
-    fixture.fetcher = async url => url.includes('%2fb/') ? new Response('', { status: 404 }) : Response.json({ version: packages[0].version })
-    await expect(promoteLatest(packages, fixture)).rejects.toThrow('Release is incomplete')
+    const fetcher = vi.fn(async url => url.includes('%2fb/') ? new Response('', { status: 404 }) : Response.json({ version: packages[0].version }))
+    fixture.fetcher = fetcher
+    try {
+      const assertion = expect(promoteLatest(packages, fixture)).rejects.toThrow('Release is incomplete')
+      await vi.runAllTimersAsync()
+      await assertion
+      expect(fixture.writes).toEqual([])
+      expect(fetcher).toHaveBeenCalledTimes(packages.length * 6)
+    }
+    finally { vi.useRealTimers() }
+  })
+
+  it('waits for newly published metadata before writing any tags', async () => {
+    vi.useFakeTimers()
+    const fixture = registry()
+    const fetcher = fixture.fetcher
+    let versionQueries = 0
+    fixture.fetcher = async (url) => {
+      if (!url.endsWith('/dist-tags') && ++versionQueries <= packages.length)
+        return new Response('', { status: 404 })
+      return fetcher(url)
+    }
+    try {
+      const result = promoteLatest(packages, fixture).then(value => ({ value }), error => ({ error }))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fixture.writes).toEqual([])
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(result).resolves.toEqual({ value: 2 })
+      expect(fixture.writes).toEqual(['@h-ai/a', '@h-ai/b'])
+    }
+    finally { vi.useRealTimers() }
+  })
+
+  it('does not retry registry service failures or write tags', async () => {
+    const fixture = registry()
+    const fetcher = vi.fn(async () => new Response('', { status: 503 }))
+    await expect(promoteLatest(packages, { ...fixture, fetcher })).rejects.toThrow('npm registry status 503')
+    expect(fetcher).toHaveBeenCalledTimes(1)
     expect(fixture.writes).toEqual([])
   })
 
