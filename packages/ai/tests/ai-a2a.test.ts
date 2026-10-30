@@ -101,7 +101,7 @@ describe('buildAgentCard', () => {
 describe('a2A 配置 Schema', () => {
   it('aIConfigSchema 接受 a2a 配置', () => {
     const result = AIConfigSchema.safeParse({
-      llm: { type: 'openai', apiKey: 'test', model: 'gpt-4' },
+      llm: { protocol: 'chat', apiKey: 'test', model: 'gpt-4' },
       a2a: {
         agentCard: {
           name: 'test-agent',
@@ -121,7 +121,7 @@ describe('a2A 配置 Schema', () => {
 
   it('a2a 配置可选', () => {
     const result = AIConfigSchema.safeParse({
-      llm: { type: 'openai', apiKey: 'test', model: 'gpt-4' },
+      llm: { protocol: 'chat', apiKey: 'test', model: 'gpt-4' },
     })
 
     expect(result.success).toBe(true)
@@ -132,7 +132,7 @@ describe('a2A 配置 Schema', () => {
 
   it('a2a.agentCard.name 必填', () => {
     const result = AIConfigSchema.safeParse({
-      llm: { type: 'openai', apiKey: 'test', model: 'gpt-4' },
+      llm: { protocol: 'chat', apiKey: 'test', model: 'gpt-4' },
       a2a: {
         agentCard: {
           // 缺少 name
@@ -142,6 +142,8 @@ describe('a2A 配置 Schema', () => {
     })
 
     expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.issues.some(issue => issue.path.join('.') === 'a2a.agentCard.name')).toBe(true)
   })
 })
 
