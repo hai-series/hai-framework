@@ -411,7 +411,7 @@ export function createDockerSshProvider(
     mkdirSync(artifactDir, { mode: 0o700 })
     chmodSync(artifactDir, 0o700)
     const envPath = join(artifactDir, '.env.runtime')
-    writeFileSync(envPath, serializeEnvFile(env), { mode: 0o600 })
+    writeFileSync(envPath, serializeEnvFile(env, sidecar.env), { mode: 0o600 })
     if (requestAccessSnapshot)
       writeFileSync(join(artifactDir, 'request-access.yml'), requestAccessSnapshot, { mode: 0o600 })
     writeFileSync(join(artifactDir, 'middleware-runtime.env'), serializeEnvFile(sidecar.containerEnv), { mode: 0o600 })
@@ -472,7 +472,7 @@ export function createDockerSshProvider(
       proxyService,
       storageRouting,
       containerPort,
-      middlewareEnv: serializeEnvFile(sidecar.env),
+      middlewareEnv: serializeEnvFile(sidecar.env, Object.fromEntries(Object.entries(env).filter(([name]) => !Object.hasOwn(sidecar.env, name)))),
       healthPaths,
       httpsAssets,
       output: join(artifactDir, `${name}.tar${compressed ? '.gz' : ''}`),

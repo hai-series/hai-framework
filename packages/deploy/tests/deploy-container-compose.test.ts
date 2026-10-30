@@ -377,6 +377,31 @@ describe('generateComposeFile', () => {
 })
 
 describe('serializeEnvFile', () => {
+  it('清除所有被父级配置和后加载文件覆盖的项，保留独立配置与原始输入', () => {
+    const env = {
+      HAI_SERV: '{"http":{"access":{"file":"/run/hai/request-access.yml"}}}',
+      HAI_SERV_HTTP: '{"access":false}',
+      HAI_SERV_HTTP_ACCESS: '{"file":"C:/local/request-access.yml"}',
+      HAI_SERV_HTTP_HEALTH_PATH: '/ignored',
+      HAI_CORE_LOGGING: '{"level":"warn"}',
+      HAI_CORE_LOGGING_LEVEL: 'debug',
+      HAI_STORAGE: '{"type":"s3"}',
+      HAI_STORAGE_BUCKET: 'ignored',
+      HAI_CONFIG_ADMIN_PASSWORD: 'fixture-value',
+      PUBLIC_API_BASE: '/api/v1',
+    }
+    const original = { ...env }
+    const content = serializeEnvFile(env, { HAI_STORAGE: '{"type":"s3","bucket":"managed"}' })
+    expect(content).toContain('HAI_SERV=')
+    expect(content).toContain('HAI_CORE_LOGGING=')
+    expect(content).toContain('HAI_CONFIG_ADMIN_PASSWORD=')
+    expect(content).toContain('PUBLIC_API_BASE=')
+    expect(content).not.toMatch(/^HAI_SERV_HTTP/m)
+    expect(content).not.toMatch(/^HAI_CORE_LOGGING_LEVEL=/m)
+    expect(content).not.toMatch(/^HAI_STORAGE/m)
+    expect(content).not.toContain('C:/local')
+    expect(env).toEqual(original)
+  })
   it('序列化为 KEY=VALUE 行', () => {
     const content = serializeEnvFile({ A: '1', B: 'x=y' })
     expect(content).toContain('A=1')

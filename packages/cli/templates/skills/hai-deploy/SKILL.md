@@ -49,6 +49,8 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 ## 后端运行配置重载
 
+交付配置清理所有被 HAI 父级变量遮蔽的子项，并从 `.env.runtime` 移除由 `middleware.env` 提供的重复项；不据清理后的交付变量反向覆盖工程源环境。
+
 Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
 
 运行文件在后端实际挂载的releases/<后端发布ID>/.env.runtime；仅更新Web/中间件后current可能指向新记录，不能据此猜测后端文件，按容器Mounts中/run/hai/.env.runtime的Source确认。只读文件挂载，上级目录0700，容器非root可读，宿主所有者可修改。dotenv字面解析不执行shell；双引号支持JSON转义。单文件≤1MiB，缺失/不可读/超限在应用导入前失败。父HAI_SERV/HAI_KIT仍优先于叶字段。重启后验健康与配置影响的业务，失败恢复文件再重启。
