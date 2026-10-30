@@ -264,21 +264,24 @@ async function runPnpm(commands: DeployTestCommands, args: string[], cwd: string
     return await (/\.[cm]?js$/i.test(entry) ? commands.run(process.execPath, [entry, ...args], cwd, env) : commands.run(entry, args, cwd, env))
   }
   catch (error) {
-    if (error instanceof DeployTestCommandError && error.message.includes('Service serv is unhealthy')) {
-      // 只读取本轮已拥有的服务状态；不输出健康日志正文、环境或配置值。
-      try {
-        const raw = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{json .State.Health}}', 'hai-e2e-fullstack-test-serv'])
-        const health = JSON.parse(raw) as { Status: string, FailingStreak: number, Log?: Array<{ ExitCode: number, Start: string, End: string, Output: string }> }
-        process.stderr.write(`Deployment health diagnostic: ${JSON.stringify({ status: health.Status, failures: health.FailingStreak, probes: health.Log?.map(probe => ({ exitCode: probe.ExitCode, durationMs: Date.parse(probe.End) - Date.parse(probe.Start), syntaxError: probe.Output.includes('SyntaxError'), moduleMissing: probe.Output.includes('ERR_MODULE_NOT_FOUND'), runtimeFileError: probe.Output.includes('Runtime environment file') })) })}\n`)
-        // 保留 Schema 与实际 HTTP 请求，关闭诊断子进程的日志线程，结果仅含状态与字段路径。
-        const script = 'import { existsSync } from \'node:fs\'; import { core } from \'@h-ai/core\'; import { ServConfigSchema } from \'@h-ai/serv\'; const result = { cwd: process.cwd(), configExists: existsSync(\'./config/_serv.yml\'), runtimeParentPresent: !!process.env.HAI_SERV }; try { core.init({ configDir: \'./config\', logging: { level: \'fatal\', format: \'json\' } }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); result.httpStatus = http.health === false ? 0 : (await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) })).status; } catch (error) { result.errorType = typeof error.name === \'string\' && /^[A-Za-z_]+$/.test(error.name) ? error.name : \'Error\'; result.paths = Array.isArray(error.issues) ? error.issues.map(issue => issue.path) : []; } process.stdout.write(JSON.stringify(result)); process.exit(0)'
-        const checked = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', 'hai-e2e-fullstack-test-serv', 'node', '--input-type=module', '-e', script])
-        process.stderr.write(`Deployment configuration diagnostic: ${checked}\n`)
-      }
-      catch { process.stderr.write('Deployment health diagnostic could not complete within the fixture budget.\n') }
-    }
+    if (error instanceof DeployTestCommandError && error.message.includes('Service serv is unhealthy'))
+      await diagnoseBackendHealth(commands)
     throw error
   }
+}
+
+/** 只读取本轮拥有的后端；不输出健康日志正文、环境或配置值。 */
+async function diagnoseBackendHealth(commands: DeployTestCommands): Promise<void> {
+  try {
+    const raw = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{json .State.Health}}', 'hai-e2e-fullstack-test-serv'])
+    const health = JSON.parse(raw) as { Status: string, FailingStreak: number, Log?: Array<{ ExitCode: number, Start: string, End: string, Output: string }> }
+    process.stderr.write(`Deployment health diagnostic: ${JSON.stringify({ status: health.Status, failures: health.FailingStreak, probes: health.Log?.map(probe => ({ exitCode: probe.ExitCode, durationMs: Date.parse(probe.End) - Date.parse(probe.Start), syntaxError: probe.Output.includes('SyntaxError'), moduleMissing: probe.Output.includes('ERR_MODULE_NOT_FOUND'), runtimeFileError: probe.Output.includes('Runtime environment file') })) })}\n`)
+    // 保留 Schema 与实际 HTTP 请求，关闭诊断子进程的日志线程，结果仅含状态与字段路径。
+    const script = 'import { existsSync } from \'node:fs\'; import { core } from \'@h-ai/core\'; import { ServConfigSchema } from \'@h-ai/serv\'; const result = { cwd: process.cwd(), configExists: existsSync(\'./config/_serv.yml\'), runtimeParentPresent: !!process.env.HAI_SERV }; try { core.init({ configDir: \'./config\', logging: { level: \'fatal\', format: \'json\' } }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); result.httpStatus = http.health === false ? 0 : (await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) })).status; } catch (error) { result.errorType = typeof error.name === \'string\' && /^[A-Za-z_]+$/.test(error.name) ? error.name : \'Error\'; result.paths = Array.isArray(error.issues) ? error.issues.map(issue => issue.path) : []; } process.stdout.write(JSON.stringify(result)); process.exit(0)'
+    const checked = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', 'hai-e2e-fullstack-test-serv', 'node', '--input-type=module', '-e', script])
+    process.stderr.write(`Deployment configuration diagnostic: ${checked}\n`)
+  }
+  catch { process.stderr.write('Deployment health diagnostic could not complete within the fixture budget.\n') }
 }
 
 /** 只读取实际交付压缩归档，不依赖打包后已清除的外层私有配置。 */
@@ -682,6 +685,15 @@ done`
         }
         const response = await commands.fetch(`http://127.0.0.1:${fixture().webHostPort}/health`, { signal: AbortSignal.timeout(10_000) })
         expect(response.ok).toBe(true)
+        // HTTP 就绪与容器健康都必须成立，避免只在后续增量部署才发现探针失效。
+        try {
+          await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'healthcheck', 'run', 'hai-e2e-fullstack-test-serv'])
+        }
+        catch (error) {
+          await diagnoseBackendHealth(commands)
+          throw error
+        }
+        expect((await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.State.Health.Status}}', 'hai-e2e-fullstack-test-serv'])).trim()).toBe('healthy')
         const web = await commands.fetch(`http://127.0.0.1:${fixture().webHostPort}/`)
         expect(web.headers.get('content-type')).toContain('text/html')
         expect(await web.text()).toContain('runtime-config.js')
