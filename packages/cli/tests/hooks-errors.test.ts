@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { core } from '@h-ai/core'
@@ -10,7 +11,8 @@ it('website 实际生成的请求错误处理器对外隐藏底层异常且保�
   const template = await readFile(new URL('../templates/base/src/hooks.server.ts.hbs', import.meta.url), 'utf8')
   const context = buildTemplateContext({ name: 'public-errors', appType: 'website', features: [], packageManager: 'pnpm' })
   const rendered = renderTemplate(template, context)
-  const compiled = ts.transpileModule(rendered, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  const compiled = ts.transpileModule(rendered, { compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
+  const runtimeProcess = Object.assign(new EventEmitter(), { env: {} })
   let onError: ((error: unknown, event: unknown) => Response) | undefined
   const hookExports: { handle?: (input: unknown) => Promise<unknown> } = {}
   const getKitConfig = vi.fn(() => ({ transport: false, access: false, trustedProxies: 'auto' }))
@@ -24,6 +26,8 @@ it('website 实际生成的请求错误处理器对外隐藏底层异常且保�
       exports: hookExports,
       Response,
       require: (module: string) => {
+        if (module === 'node:process')
+          return runtimeProcess
         if (module === '@h-ai/core')
           return { core }
         if (module === '$lib/server/kit-config.js')
