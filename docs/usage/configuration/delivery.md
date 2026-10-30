@@ -458,6 +458,14 @@ Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`
 
 框架默认`remote.runtime`为auto，优先可用Podman。生产建议在`hai.json.deploy.provider.remote`中将`runtime`明确设为已经验收的docker或podman。若后续安装Podman，使auto从原Docker切换过来，身份检查会停止发布。先恢复原`runtime`、SSH用户和原存储再重试，无须立即新建项目；只有有意更换服务器、daemon或存储时，才规划独立身份和数据迁移。相同uid、路径或卷名不能证明跨daemon的数据身份，不要删除或编辑账本让检查通过。
 
+### 服务器目录与清理边界
+
+交付 `README.txt` 会列出实际部署根目录和本次 ID。根目录 `incoming/` 接收压缩包及 `.contents/`；正常成功后清理本次上传，失败或状态未知时保留供诊断。`releases/<ID>/` 保存运行配置、Compose 组合、元数据和恢复脚本，不复制镜像 tar。镜像由容器引擎保存，数据库和对象数据位于数据卷。
+
+`compose.json` 定义服务；`compose-entry.json`、`proxy-entry.json`、`compose-files` 组合全量、增量及代理覆盖。环境文件、策略快照与代理的作用见前述运行配置表；`manifest.json`、`image-list`、`services`、`dependencies` 记录制品和服务，`layout`、`web-base-path`、`storage-routing`、`health-paths` 记录布局和探活。`managed-*` 是本包的凭据候选和绑定声明，不能代替根目录的长期凭据；`state-backends` 和 `resolve-*.sh` 参与后端核验。`SHA256SUMS` 用于上传交付内容校验。
+
+`current` 是普通文本，只有服务器本地部署健康通过后才更新。结合 `result-<ID>.json` 的 `stage`、`exitCode`、`recoveryStatus` 及 `steps-<ID>.jsonl` 判断结果，不能用 release 目录存在判断成功。增量部署可能继续引用旧 release 的配置和挂载；清理前核对活动容器 Mounts、当前 `compose-files` 及恢复需要，不能简单删除所有非 current 目录。服务器凭据、账本和数据卷按下面的规则成套保护。
+
 ## 持久凭据、数据和发布成功基线
 
 自建服务凭据存服务器`managed-secrets.env`（0600），打包机只给首次候选。部署锁内复用服务器值并定稿私有运行文件，交付tar保持不可变。有卷却缺受管凭据时，在改服务前拒绝，不能随机新密码覆盖旧数据。

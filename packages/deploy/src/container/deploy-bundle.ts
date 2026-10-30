@@ -231,7 +231,8 @@ export async function createDeploymentBundle(options: {
       + (https.type === 'letsencrypt' ? `\n${deployM('deploy_bundleAcme', { params: { state: `${serverDirectory}/https/acme`, domain: https.domain } })}` : '')
       : deployM('deploy_bundleHttpOnly', { params: { port: config.expose.hostPort } })
     const accountGuide = deployM('deploy_bundleAccounts', { params: { sources: options.accountSources || '—' } })
-    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n\n${runtimeGuide}\n\n${httpsGuide}\n\n${accountGuide}\n`
+    const guides = [runtimeGuide, httpsGuide, accountGuide, deployM('deploy_bundleDirectories', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })].join('\n\n')
+    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n\n${guides}\n`
     const checksums = []
     for (const file of files)
       checksums.push(`${fileHashes.get(file) ?? await artifactChecksum(join(staging, file))}  ${file}`)
@@ -278,7 +279,7 @@ export async function createDeploymentBundle(options: {
     writeFileSync(join(scripts, 'README.txt'), readme)
     for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', 'request-access.yml', ...(options.hasWebConfig ? ['web.conf'] : [])])
       rmSync(join(directory, file), { force: true })
-    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${runtimeGuide}\n${httpsGuide}\n${accountGuide}\n${scripts}`, startName: 'apply.sh' }
+    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${guides}\n${scripts}`, startName: 'apply.sh' }
   }
   finally {
     rmSync(staging, { recursive: true, force: true })
