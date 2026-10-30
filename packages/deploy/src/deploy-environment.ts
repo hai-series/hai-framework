@@ -130,6 +130,16 @@ export function mergeEnvironmentLayers(layers: Array<Record<string, string | und
   return result
 }
 
+/** 只描述变量名与来源，不把初始密码等变量值带入交付说明。 */
+export function describeDeploymentVariableSources(directory: string, environment: string, values: Record<string, string>, names: readonly string[]): string {
+  const files = [`.env.${environment}.local`, '.env.local', `.env.${environment}`, '.env']
+    .map(name => ({ path: join(directory, name), values: environmentFile(join(directory, name)) }))
+  return names.filter(name => values[name]).map((name) => {
+    const source = process.env[name] !== undefined ? 'process.env' : files.find(file => Object.hasOwn(file.values, name))?.path
+    return `${name}: ${source ?? '.env.runtime'}`
+  }).join('\n')
+}
+
 /**
  * 按部署环境解析配置；未选择的可选 Provisioner 缺少凭据时保留空值，选择完成后由 Schema 校验。
  * hai.json 只读取对应的根分区；运行时模块继续读取 YAML。不修改 core 缓存或进程变量。

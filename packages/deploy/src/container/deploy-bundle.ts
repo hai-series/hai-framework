@@ -63,6 +63,8 @@ export async function createDeploymentBundle(options: {
   selected: string[]
   partial: boolean
   middlewareEnv: string
+  /** 初始账号变量名与配置来源，不包含变量值。 */
+  accountSources?: string
   healthPaths: string[]
   hasWebConfig: boolean
   proxyService?: 'web' | 'gateway'
@@ -228,7 +230,8 @@ export async function createDeploymentBundle(options: {
       ? deployM('deploy_bundleHttps', { params: { domain: https.domain, port: https.port, mode: https.type, certificates, environment } })
       + (https.type === 'letsencrypt' ? `\n${deployM('deploy_bundleAcme', { params: { state: `${serverDirectory}/https/acme`, domain: https.domain } })}` : '')
       : deployM('deploy_bundleHttpOnly', { params: { port: config.expose.hostPort } })
-    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n\n${runtimeGuide}\n\n${httpsGuide}\n`
+    const accountGuide = deployM('deploy_bundleAccounts', { params: { sources: options.accountSources || '—' } })
+    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n\n${runtimeGuide}\n\n${httpsGuide}\n\n${accountGuide}\n`
     const checksums = []
     for (const file of files)
       checksums.push(`${fileHashes.get(file) ?? await artifactChecksum(join(staging, file))}  ${file}`)
@@ -275,7 +278,7 @@ export async function createDeploymentBundle(options: {
     writeFileSync(join(scripts, 'README.txt'), readme)
     for (const file of [`docker-compose-${artifact.appVersion}.yml`, '.env.runtime', 'middleware-runtime.env', 'request-access.yml', ...(options.hasWebConfig ? ['web.conf'] : [])])
       rmSync(join(directory, file), { force: true })
-    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${runtimeGuide}\n${httpsGuide}\n${scripts}`, startName: 'apply.sh' }
+    return { bundlePath: output, instructions: `${selection}\n${deployM('deploy_bundleInstructions', { params: { ...instructionParams, file: output } })}\n${runtimeGuide}\n${httpsGuide}\n${accountGuide}\n${scripts}`, startName: 'apply.sh' }
   }
   finally {
     rmSync(staging, { recursive: true, force: true })

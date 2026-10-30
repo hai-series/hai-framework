@@ -108,5 +108,6 @@
   "deploy_bundleRuntime": "运行配置与生效：\n本次发布记录：{directory}/releases/{deploymentId}\nNode 后端读取实际挂载到 /run/hai/.env.runtime 的文件；增量部署可能继续引用旧记录，不能只按 current 推断。用 docker inspect --format '{{json .Mounts}}' <容器名> 查看 Source。\n普通后端配置：备份、修改该文件，然后 docker restart <容器名>（Podman 同理），核验健康与相关业务。HAI 父对象优先于叶子，middleware.env 的托管连接优先。\nCompose env_file 注入的静态 Web/中间件环境变更需要重建容器；端口、挂载、Nginx 路由/限额、HTTPS 布局需要重新生成全量部署包。网站 base 变化还需要重新构建制品。\n手工修改同步回打包源环境；下次发布会重新生成。",
   "deploy_bundleHttpOnly": "HTTPS：未启用。本包仅发布 HTTP 端口 {port}，没有证书附件，也不会在服务器申请证书。",
   "deploy_bundleHttps": "HTTPS：已启用，https://{domain}:{port}；模式 {mode}。\n服务器证书：{certificates}/fullchain.pem；私钥：{certificates}/privkey.pem。容器只读挂载到 /etc/nginx/tls/。\n修改本地打包环境 .env.{environment}.local 的 HAI_DEPLOY_PROVIDER 中 expose.https，或未被覆盖的 hai.json.deploy.provider.expose.https。启停、切换模式/域名/端口后生成新的全量部署包；修改 .env.runtime 并重启不能触发新域名签发。",
-  "deploy_bundleAcme": "Certbot 持久状态：{state}；当前证书入口：{state}/live/{domain}。打包不请求 CA，服务器部署时申请，之后自动续期。公网 80 端口及根路径 /.well-known/acme-challenge/ 必须可达，不能只允许业务 context path。"
+  "deploy_bundleAcme": "Certbot 持久状态：{state}；当前证书入口：{state}/live/{domain}。打包不请求 CA，服务器部署时申请，之后自动续期。公网 80 端口及根路径 /.well-known/acme-challenge/ 必须可达，不能只允许业务 context path。",
+  "deploy_bundleAccounts": "初始账号变量（只列名称和来源，不显示密码）：\n{sources}\nHAI_CONFIG_ADMIN_PASSWORD 供有相应引导逻辑的应用创建 config_admin 配置管理员；HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD 对应其他模板职责账号。\nCLI 创建 Fullstack 时为各环境生成独立初始密码；打包读取所选环境与进程覆盖，不会因服务器部署再生成应用账号密码。有配置且账号缺失时由应用启动引导；已有账号不会因修改变量重置密码或恢复旧职责。无相应引导逻辑的自定义应用以自身实现为准。"
 }

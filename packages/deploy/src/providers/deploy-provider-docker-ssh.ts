@@ -37,7 +37,7 @@ import {
 import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
-import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
+import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { resolveProjectDirectory } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
 import { getDeployCommandState } from '../deploy-recovery.js'
@@ -473,6 +473,7 @@ export function createDockerSshProvider(
       storageRouting,
       containerPort,
       middlewareEnv: serializeEnvFile(sidecar.env, Object.fromEntries(Object.entries(env).filter(([name]) => !Object.hasOwn(sidecar.env, name)))),
+      accountSources: describeDeploymentVariableSources(options?.envDir ?? scan.envDir ?? appDir, options?.environment ?? 'prod', env, ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']),
       healthPaths,
       httpsAssets,
       output: join(artifactDir, `${name}.tar${compressed ? '.gz' : ''}`),

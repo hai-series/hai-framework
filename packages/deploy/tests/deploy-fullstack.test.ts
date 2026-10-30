@@ -844,6 +844,21 @@ it('缺少应用版本、路径伪装或镜像 tar 版本不一致的清单被�
   }
 })
 
+it.each(['file', 'process'])('初始密码说明仅显示实际 %s 来源，不公开密码', async (source) => {
+  const name = 'HAI_CONFIG_ADMIN_PASSWORD'
+  const privateFile = join(root, '.env.test.local')
+  writeFileSync(privateFile, `${name}=Source-file-fixture123!\n`)
+  vi.stubEnv(name, source === 'process' ? 'Source-process-fixture123!' : undefined)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  const directory = deliveryDirectory(result)
+  const guide = readFileSync(join(directory, 'README.txt'), 'utf8')
+  expect(guide).toContain(`${name}: ${source === 'process' ? 'process.env' : privateFile}`)
+  expect(guide).not.toContain('Source-file-fixture123!')
+  expect(guide).not.toContain('Source-process-fixture123!')
+  expect(parseEnv(readBundleFile(directory, '.env.runtime'))[name]).toBe(source === 'process' ? 'Source-process-fixture123!' : 'Source-file-fixture123!')
+})
+
 it('每次部署的归档、配置和入口均位于唯一交付目录中', async () => {
   await initialize(false)
   const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
