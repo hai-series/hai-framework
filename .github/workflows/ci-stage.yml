@@ -84,7 +84,17 @@ jobs:
         run: tar -xzf "$RUNNER_TEMP/ci-build/build-state.tgz"
       - name: Install browser and system dependencies
         if: steps.proof.outputs.run == 'true' && inputs.browser
-        run: pnpm --filter admin-console exec playwright install --with-deps chrome
+        run: |
+          for browser_attempt in 1 2 3; do
+            if pnpm --filter admin-console exec playwright install --with-deps chrome; then
+              exit 0
+            fi
+            if [ "$browser_attempt" -eq 3 ]; then
+              exit 1
+            fi
+            printf 'Retrying browser installation after an interrupted attempt.\n'
+            sleep 2
+          done
       - name: Execute verification
         if: steps.proof.outputs.run == 'true'
         run: ${{ inputs.command }}
@@ -114,5 +124,8 @@ jobs:
             tmp/validation/module-review/scaffold-browser/**/*.png
             tmp/validation/module-review/scaffold-browser/**/error-context.md
             tmp/validation/module-review/scaffold-browser/**/trace.zip
+            tmp/validation/module-review/deploy-browser/**/*.png
+            tmp/validation/module-review/deploy-browser/**/error-context.md
+            tmp/validation/module-review/deploy-browser/**/trace.zip
           if-no-files-found: ignore
           retention-days: 3
