@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/reach",
   "type": "module",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Hai Framework user reach module for email, SMS, and webhook channels.",
   "license": "Apache-2.0",
   "exports": {
