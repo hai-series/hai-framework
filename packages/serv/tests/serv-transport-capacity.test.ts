@@ -1,6 +1,7 @@
 import type { TransportServerKeyRing } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
 import { Buffer } from 'node:buffer'
+import { once } from 'node:events'
 import { apiContract } from '@h-ai/api-contract'
 import { createInMemoryKeyStore, crypto, resolveTransportBodyLimits } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -10,9 +11,12 @@ import { createTransportWorkbook } from './helpers/serv-transport-workbook.js'
 
 let serverKeyRing: TransportServerKeyRing
 const origin = 'http://localhost'
-function fixture(maxPlaintextBytes = 8 * 1024 * 1024) {
+function createApplication(maxPlaintextBytes = 8 * 1024 * 1024) {
   const contract = apiContract.create({})
-  const app = serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), transport: { crypto, serverKeyRing, keyStore: createInMemoryKeyStore(), maxPlaintextBytes } })
+  return serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), transport: { crypto, serverKeyRing, keyStore: createInMemoryKeyStore(), maxPlaintextBytes } })
+}
+function fixture(maxPlaintextBytes = 8 * 1024 * 1024) {
+  const app = createApplication(maxPlaintextBytes)
   const client = crypto.transport.createClient({ keyExchangeUrl: `${origin}/api/v1/_hai/key-exchange`, fetch: (input, init) => app.fetch(new Request(input, init)) })
   return { app, client }
 }
@@ -46,8 +50,8 @@ describe('serv configurable transport capacity', () => {
     finally { client.destroy() }
   })
 
-  it('仅配置服务端即可完成 4 MiB XLSX base64 JSON 上传及大 JSON 响应', async () => {
-    const { app, client } = fixture()
+  it('仅配置服务端即可通过真实 Node HTTP 完成 4 MiB XLSX base64 JSON 上传及大 JSON 响应', async () => {
+    const app = createApplication()
     const workbook = createTransportWorkbook(4 * 1024 * 1024)
     expect(workbook.byteLength).toBe(4 * 1024 * 1024)
     expect(workbook.readUInt32LE()).toBe(0x04034B50)
@@ -58,12 +62,22 @@ describe('serv configurable transport capacity', () => {
       expect(Buffer.from(input.file, 'base64').equals(workbook)).toBe(true)
       return c.json({ data: result })
     })
+    const node = serv.listen(app, { host: '127.0.0.1', port: 0 })
+    await once(node.server, 'listening')
+    const address = node.server.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Expected an owned transport listener')
+    const endpoint = `http://127.0.0.1:${address.port}`
+    const client = crypto.transport.createClient({ keyExchangeUrl: `${endpoint}/api/v1/_hai/key-exchange` })
     try {
-      const response = await client.encryptedFetch(`${origin}/api/v1/import`, { method: 'POST', body: JSON.stringify({ name: 'capacity.xlsx', file: workbook.toString('base64') }) })
+      const response = await client.encryptedFetch(`${endpoint}/api/v1/import`, { method: 'POST', body: JSON.stringify({ name: 'capacity.xlsx', file: workbook.toString('base64') }), signal: AbortSignal.timeout(30_000) })
       expect(response.status).toBe(200)
       expect(await response.json()).toEqual({ data: result })
     }
-    finally { client.destroy() }
+    finally {
+      client.destroy()
+      await node.close()
+    }
   }, 120_000)
 
   it('恰好达到明文预算正常返回，多一个字节在发送业务请求前拒绝', async () => {
