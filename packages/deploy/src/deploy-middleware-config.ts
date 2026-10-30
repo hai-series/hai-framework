@@ -16,6 +16,11 @@ const connectionFields: Partial<Record<ServiceType, readonly string[]>> = {
  * @param requirement - 扫描得到的最终有效中间件配置。
  * @param supplied - 自建或云开通生成的实际连接。
  * @returns 完整配置，可能含凭据，不能直接输出到日志。
+ * @example 模块内部上下文
+ * ```ts
+ * const requirement: MiddlewareRequirement = { service: 'storage', backend: 's3', source: 'storage', configName: 'storage', configPath: [], envPrefix: 'HAI_STORAGE', config: { publicEndpoint: 'https://app.example.com/files' } }
+ * const storage = mergeManagedMiddlewareConfig(requirement, { type: 's3', endpoint: 'http://storage:9000', bucket: 'hai' })
+ * ```
  */
 export function mergeManagedMiddlewareConfig(requirement: MiddlewareRequirement | undefined, supplied: Record<string, unknown>): Record<string, unknown> {
   if (!requirement || (requirement.service !== 'ldap' && requirement.backend !== supplied.type))

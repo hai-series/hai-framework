@@ -7,8 +7,21 @@ import { resolve } from 'node:path'
 import { deployM } from '../deploy-i18n.js'
 import { shellArgument } from './deploy-scripts.js'
 
-/** 官方 Certbot 客户端的固定版本，随离线包导出，目标服务器不拉取镜像。 */
+/**
+ * 官方 Certbot 客户端的固定版本，随离线包导出，目标服务器不拉取镜像。
+ * @example 模块内部上下文
+ * ```ts
+ * const certbotImage = CERTBOT_IMAGE
+ * ```
+ */
 export const CERTBOT_IMAGE = 'docker.io/certbot/certbot:v5.9.0'
+/**
+ * Docker SSH 入口已校验的 HTTPS 配置。
+ * @example 模块内部上下文
+ * ```ts
+ * const https: HttpsConfig = { type: 'files', domain: 'app.example.com', port: 443, redirectHttp: true, certificateFile: './tls/fullchain.pem', privateKeyFile: './tls/privkey.pem' }
+ * ```
+ */
 type HttpsConfig = NonNullable<DockerSshProviderConfig['expose']['https']>
 
 /**
@@ -16,6 +29,11 @@ type HttpsConfig = NonNullable<DockerSshProviderConfig['expose']['https']>
  * @param config - 已解析的 HTTPS 设置。
  * @param projectDirectory - 相对证书路径的工程根。
  * @returns 包内附件；私钥只能保存到私密交付目录，不能复制到构建上下文。
+ * @example 模块内部上下文
+ * ```ts
+ * // 申请脚本由实际 HTTPS 配置生成，不在示例中请求证书。
+ * const assets = createHttpsAssets({ type: 'letsencrypt', domain: 'app.example.com', port: 443, redirectHttp: true, email: 'ops@example.com', acceptTerms: true }, '.')
+ * ```
  */
 export function createHttpsAssets(config: HttpsConfig, projectDirectory: string): Record<string, string> {
   const assets: Record<string, string> = {
@@ -74,6 +92,11 @@ exec /docker-entrypoint.sh nginx -g 'daemon off;'
  * @param config - HTTPS 设置。
  * @param httpPort - Nginx 容器内原有监听端口。
  * @returns TLS 入口与 HTTP 跳转/挑战配置。
+ * @example 模块内部上下文
+ * ```ts
+ * const https: HttpsConfig = { type: 'files', domain: 'app.example.com', port: 443, redirectHttp: true, certificateFile: './tls/fullchain.pem', privateKeyFile: './tls/privkey.pem' }
+ * const nginx = renderHttpsProxy('server { listen 8080; server_name _; }', https, 8080)
+ * ```
  */
 export function renderHttpsProxy(source: string, config: HttpsConfig, httpPort: number): string {
   const publicPort = config.port === 443 ? '' : `:${config.port}`
