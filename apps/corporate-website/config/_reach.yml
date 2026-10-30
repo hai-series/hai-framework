@@ -3,22 +3,30 @@
 # =============================================================================
 # 用于联系表单的邮件发送
 
-# 用途：Provider 配置列表
+# 说明：Provider 配置列表
+# 取值：列表（每项以 - 开头）；最少项数 1
 providers:
-  # 用途：Provider 唯一名称
+  # 说明：Provider 唯一名称
+  # 取值：字符串；最小字符数 1
   - name: email
-    # 用途：后端或功能类型，按枚举选择
+    # 说明：后端或功能类型，按枚举选择
+    # 取值：字符串；取值：console | smtp | aliyun-sms | api
     type: ${HAI_REACH_PROVIDERS_0_TYPE:console}
 
-# 用途：模板配置（通过配置文件注册）
+# 说明：模板配置（通过配置文件注册）
+# 取值：列表（每项以 - 开头）
 templates:
-  # 用途：模板名称
+  # 说明：模板名称
+  # 取值：字符串；最小字符数 1
   - name: contact_form
-    # 用途：绑定的 Provider 名称
+    # 说明：绑定的 Provider 名称
+    # 取值：字符串；最小字符数 1
     provider: email
-    # 用途：邮件主题模板
+    # 说明：邮件主题模板
+    # 取值：字符串
     subject: 'New contact from website: {name}'
-    # 用途：正文模板
+    # 说明：正文模板
+    # 取值：字符串；最小字符数 1
     body: 'Name: {name}
 
       Email: {email}

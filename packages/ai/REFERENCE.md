@@ -24,6 +24,8 @@ MySQL 首次初始化允许多个节点并发建索引：仅接受 mysql2 明确
 
 ## LLM
 
+模型请求格式由 `llm.protocol` 指定，每个 `llm.models[]` 或单次 `tempModel` 可用 `protocol` 覆盖。取值为 `chat`、`responses`、`anthropic`。环境变量使用 `HAI_AI_LLM_PROTOCOL` 和 `HAI_AI_LLM_MODELS_0_PROTOCOL` 等；旧 `api` 字段及旧协议变量会返回迁移错误。密钥仍使用 `apiKey`。
+
 - `chat(options)`：非流式 Chat Completion。
 - `chatStream(options)`：流式 Chat Completion。
 - `ask(query, options?)`：返回纯文本的简易问答。

@@ -1,61 +1,85 @@
 # 审计日志与事件时身份快照
-# 用途：用户表名，用于 list 查询时 LEFT JOIN 获取用户名
+# 说明：用户表名，用于 list 查询时 LEFT JOIN 获取用户名
+# 取值：字符串
 userTable: hai_iam_users
-# 用途：用户表主键列名，用于 JOIN 条件
+# 说明：用户表主键列名，用于 JOIN 条件
+# 取值：字符串
 userIdColumn: id
-# 用途：用户表用户名列名，用于 SELECT 输出
+# 说明：用户表用户名列名，用于 SELECT 输出
+# 取值：字符串
 userNameColumn: username
 
 # 自动框架事件采集；显式业务 audit.log 不受此开关影响
-# 用途：框架入口自动采集；显式 audit.log 不受此开关影响。
+# 说明：框架入口自动采集；显式 audit.log 不受此开关影响。
+# 取值：配置块（填写下方缩进字段）
 capture:
-  # 用途：是否自动记录已接入框架入口的重要操作、失败和拒绝；关闭不阻止显式 audit.log 写入。
+  # 说明：是否自动记录已接入框架入口的重要操作、失败和拒绝；关闭不阻止显式 audit.log 写入。
+  # 取值：true | false
   enabled: ${HAI_AUDIT_CAPTURE_ENABLED:true}
-  # 用途：是否也采集成功读取事件；开启可追溯查询行为，但会显著增加日志量与存储开销。
+  # 说明：是否也采集成功读取事件；开启可追溯查询行为，但会显著增加日志量与存储开销。
+  # 取值：true | false
   includeReads: ${HAI_AUDIT_CAPTURE_INCLUDEREADS:false}
 
 # 只由可信启动配置更改共享保留策略；未传时沿用数据库设置
-# 用途：未传时沿用数据库保留设置；显式关闭才解除保护。
+# 说明：未传时沿用数据库保留设置；显式关闭才解除保护。
+# 取值：配置块（填写下方缩进字段）
 retention:
-  # 用途：是否启用共享数据库的审计修改/删除/覆盖保护；配置会持久化，移除配置不会解除已有保护。
+  # 说明：是否启用共享数据库的审计修改/删除/覆盖保护；配置会持久化，移除配置不会解除已有保护。
+  # 取值：true | false
   enabled: ${HAI_AUDIT_RETENTION_ENABLED:false}
-  # 用途：保护期天数；例如 90 天内 cleanup(0) 也不能删除，到期不会自动清理日志。
+  # 说明：保护期天数；例如 90 天内 cleanup(0) 也不能删除，到期不会自动清理日志。
+  # 取值：整数；>= 1；<= 36500
   minDays: ${HAI_AUDIT_RETENTION_MINDAYS:90}
 
 # 凭据始终隐藏；业务隐私字段可配置
-# 用途：凭据始终脱敏；此开关仅控制业务隐私字段。
+# 说明：凭据始终脱敏；此开关仅控制业务隐私字段。
+# 取值：配置块（填写下方缩进字段）
 privacy:
-  # 用途：是否对业务隐私字段脱敏；关闭也不会暴露密码、token 等凭据，脱敏前的内容不会恢复。
+  # 说明：是否对业务隐私字段脱敏；关闭也不会暴露密码、token 等凭据，脱敏前的内容不会恢复。
+  # 取值：true | false
   enabled: ${HAI_AUDIT_PRIVACY_ENABLED:true}
-  # 用途：额外脱敏的详情字段名，不区分大小写；例如 customerPhone，不要将秘密放进 action/resourceId。
+  # 说明：额外脱敏的详情字段名，不区分大小写；例如 customerPhone，不要将秘密放进 action/resourceId。
+  # 取值：列表（每项以 - 开头）；最多项数 1000
   fields: []
 
 # 私有流式归档；手动备份与定时计划分别启用。公开文件入口始终拒绝归档前缀。
-# 用途：可选的流式归档；自动执行由宿主现有 Scheduler 装配。
+# 说明：可选的流式归档；自动执行由宿主现有 Scheduler 装配。
+# 取值：配置块（填写下方缩进字段）
 backup:
-  # 用途：是否允许手动/计划归档审计；需已初始化的私有 Storage，关闭不影响审计采集。
+  # 说明：是否允许手动/计划归档审计；需已初始化的私有 Storage，关闭不影响审计采集。
+  # 取值：true | false
   enabled: ${HAI_AUDIT_BACKUP_ENABLED:false}
-  # 用途：每批读取的记录数；较小更省内存但请求更多，不改变归档内容。
+  # 说明：每批读取的记录数；较小更省内存但请求更多，不改变归档内容。
+  # 取值：整数；>= 1；<= 1000
   batchSize: ${HAI_AUDIT_BACKUP_BATCHSIZE:200}
-  # 用途：单条归档记录的 UTF-8 字节上限；默认 1 MiB，超限报错而不截断原审计。
+  # 说明：单条归档记录的 UTF-8 字节上限；默认 1 MiB，超限报错而不截断原审计。
+  # 取值：整数；>= 1024；<= 67108864
   maxRecordBytes: ${HAI_AUDIT_BACKUP_MAXRECORDBYTES:1048576}
-  # 用途：自动备份计划；与手动备份开关独立，备份不会删除源日志，也不是原子数据库快照。
+  # 说明：自动备份计划；与手动备份开关独立，备份不会删除源日志，也不是原子数据库快照。
+  # 取值：配置块（填写下方缩进字段）
   schedule:
-    # 用途：是否由 Scheduler 自动备份；还需 backup.enabled=true，关闭后仍可手动备份。
+    # 说明：是否由 Scheduler 自动备份；还需 backup.enabled=true，关闭后仍可手动备份。
+    # 取值：true | false
     enabled: ${HAI_AUDIT_BACKUP_SCHEDULE_ENABLED:false}
-    # 用途：备份 Cron 表达式；0 2 * * * 表示在下方时区每天 02:00 执行。
+    # 说明：备份 Cron 表达式；0 2 * * * 表示在下方时区每天 02:00 执行。
+    # 取值：字符串；最小字符数 1；最大字符数 128
     cron: '${HAI_AUDIT_BACKUP_SCHEDULE_CRON:0 2 * * *}'
-    # 用途：定时备份采用的 IANA 时区；Asia/Shanghai 为北京时间，UTC 的 02:00 对应北京时间 10:00。
+    # 说明：定时备份采用的 IANA 时区；Asia/Shanghai 为北京时间，UTC 的 02:00 对应北京时间 10:00。
+    # 取值：字符串；最小字符数 1；最大字符数 128
     timezone: ${HAI_AUDIT_BACKUP_SCHEDULE_TIMEZONE:UTC}
 
 # 告警统计已提交事件；人员/渠道由应用配置，默认关闭。
-# 用途：以固定时间窗口统计已提交事件；目标和事件由应用配置，不内置业务角色。
+# 说明：以固定时间窗口统计已提交事件；目标和事件由应用配置，不内置业务角色。
+# 取值：配置块（填写下方缩进字段）
 alerts:
-  # 用途：是否检查异常事件并发送告警；开启前配置至少一条规则和真实 Reach 通道，关闭不影响审计入库。
+  # 说明：是否检查异常事件并发送告警；开启前配置至少一条规则和真实 Reach 通道，关闭不影响审计入库。
+  # 取值：true | false
   enabled: ${HAI_AUDIT_ALERTS_ENABLED:false}
-  # 用途：每次检查最多尝试的通知数；超过的目标留待后续检查，避免突发告警挤占业务资源。
+  # 说明：每次检查最多尝试的通知数；超过的目标留待后续检查，避免突发告警挤占业务资源。
+  # 取值：整数；>= 1；<= 1000
   maxNotificationsPerCheck: ${HAI_AUDIT_ALERTS_MAXNOTIFICATIONSPERCHECK:100}
-  # 用途：告警规则列表；每条按全站匹配事件的固定窗口累计计数，不是每个账号各自计数。
+  # 说明：告警规则列表；每条按全站匹配事件的固定窗口累计计数，不是每个账号各自计数。
+  # 取值：列表（每项以 - 开头）；最多项数 20
   rules: []
   # 启用前配置规则及 Reach 中已注册的 provider，例如：
   # - id: login-failures
@@ -65,11 +89,15 @@ alerts:
   #   windowSeconds: 300
   #   severity: warning
   #   targets: [{ id: security-team, provider: email, to: security@example.com }]
-  # 用途：自动告警检查计划；宿主需接入 audit.schedulerPlan，只开启告警功能不会自动轮询。
+  # 说明：自动告警检查计划；宿主需接入 audit.schedulerPlan，只开启告警功能不会自动轮询。
+  # 取值：配置块（填写下方缩进字段）
   schedule:
-    # 用途：是否让 Scheduler 自动检查；需同时开启 alerts.enabled，否则仅保留计划配置。
+    # 说明：是否让 Scheduler 自动检查；需同时开启 alerts.enabled，否则仅保留计划配置。
+    # 取值：true | false
     enabled: ${HAI_AUDIT_ALERTS_SCHEDULE_ENABLED:false}
-    # 用途：检查频率的 Cron 表达式；默认每分钟检查，窗口阈值仍由规则决定。
+    # 说明：检查频率的 Cron 表达式；默认每分钟检查，窗口阈值仍由规则决定。
+    # 取值：字符串；最小字符数 1；最大字符数 128
     cron: '${HAI_AUDIT_ALERTS_SCHEDULE_CRON:* * * * *}'
-    # 用途：Cron 使用的 IANA 时区，例如 Asia/Shanghai；UTC 不等于北京时间。
+    # 说明：Cron 使用的 IANA 时区，例如 Asia/Shanghai；UTC 不等于北京时间。
+    # 取值：字符串；最小字符数 1；最大字符数 128
     timezone: ${HAI_AUDIT_ALERTS_SCHEDULE_TIMEZONE:UTC}

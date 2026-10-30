@@ -15,7 +15,7 @@ import { createAnthropicProvider } from '../src/llm/providers/ai-llm-provider-an
 function makeConfig(): AIConfig {
   return AIConfigSchema.parse({
     llm: {
-      api: 'anthropic',
+      protocol: 'anthropic',
       apiKey: 'sk-ant-test',
       model: 'claude-3-5-sonnet-latest',
       baseUrl: 'https://api.anthropic.com',
@@ -52,19 +52,19 @@ describe('anthropic provider chat', () => {
       content: [],
       usage: { input_tokens: 0, output_tokens: 0 },
     }))
-    const config = AIConfigSchema.parse({ llm: { api: 'anthropic', model: 'claude-test' } })
+    const config = AIConfigSchema.parse({ llm: { protocol: 'anthropic', model: 'claude-test' } })
     const result = await createAnthropicProvider({ config }).chat({ messages: [{ role: 'user', content: 'test' }] })
     expect(result.success).toBe(true)
     expect(fetchMock.mock.calls[0][0]).toBe('https://anthropic-proxy.example/v1/messages')
     expect(((fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>)['x-api-key']).toBe('test-anthropic-key')
 
-    config.llm.api = 'chat'
+    config.llm.protocol = 'chat'
     config.llm.baseUrl = 'https://openai.example'
     vi.stubEnv('ANTHROPIC_BASE_URL', 'https://anthropic-vendor.example')
     await createAnthropicProvider({ config }).chat({ model: 'claude-test', messages: [{ role: 'user', content: 'test' }] })
     expect(fetchMock.mock.calls[1][0]).toBe('https://anthropic-vendor.example/v1/messages')
 
-    config.llm.api = 'anthropic'
+    config.llm.protocol = 'anthropic'
     config.llm.baseUrl = undefined
     vi.stubEnv('HAI_AI_LLM_BASEURL', '   ')
     await createAnthropicProvider({ config }).chat({ messages: [{ role: 'user', content: 'test' }] })

@@ -306,6 +306,9 @@ const streamOperations: StreamOperations = {
  */
 export const ai: AIFunctions = {
   async init(config?: AIConfigInput, options?: AIInitOptions): Promise<HaiResult<void>> {
+    // 旧变量不再参与协议选择；明确拒绝，避免用户误以为仍在使用原协议。
+    if (Object.keys(process.env).some(name => /^HAI_AI_LLM_(?:MODELS_\d+_)?API$/.test(name)))
+      return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_llmProtocolRenamed'))
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('AI init already in progress, skipping concurrent call')

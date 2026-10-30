@@ -132,5 +132,6 @@
   "ai_a2aOutputLimit": "A2A 输出队列容量超限",
   "ai_a2aExecutionInterrupted": "A2A 执行已中断，须核对外部效果",
   "ai_a2aSubscriptionAdvanced": "后续消息已推进任务，请重新订阅",
-  "ai_a2aExecutorAlreadyRegistered": "A2A 执行器已注册，更换前请关闭 AI"
+  "ai_a2aExecutorAlreadyRegistered": "A2A 执行器已注册，更换前请关闭 AI",
+  "ai_llmProtocolRenamed": "LLM 的 api 已改名为 protocol。请更新 llm.protocol、models[].protocol、tempModel.protocol 及 HAI_AI_LLM_PROTOCOL / HAI_AI_LLM_MODELS_<索引>_PROTOCOL 环境变量。"
 }

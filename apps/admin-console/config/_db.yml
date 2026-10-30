@@ -3,27 +3,35 @@
 # =============================================================================
 
 # 数据库类型: sqlite | postgresql | mysql
-# 用途：后端或功能类型，按枚举选择
+# 说明：后端或功能类型，按枚举选择
+# 取值：字符串；取值：sqlite | postgresql | mysql
 type: ${HAI_DB_TYPE:sqlite}
 
 # SQLite 数据库路径，或 PostgreSQL/MySQL 连接字符串
-# 用途：数据库：SQLite文件路径或:memory:；PostgreSQL必填名称；MySQL无URL时必填，URL模式从URL读取
+# 说明：数据库：SQLite文件路径或:memory:；PostgreSQL必填名称；MySQL无URL时必填，URL模式从URL读取
+# 取值：字符串；最小字符数 1
 database: ${HAI_DB_DATABASE:./data/admin.db}
-# 用途：数据库主机地址（默认 localhost）
+# 说明：数据库主机地址（默认 localhost）
+# 取值：字符串
 host: ${HAI_DB_HOST:localhost}
-# 用途：数据库端口 - PostgreSQL 默认 5432 - MySQL 默认 3306
+# 说明：数据库端口 - PostgreSQL 默认 5432 - MySQL 默认 3306
+# 取值：整数；>= 1；<= 65535
 port: ${HAI_DB_PORT:5432}
-# 用途：数据库用户名
+# 说明：数据库用户名
+# 取值：字符串
 user: ${HAI_DB_USER:postgres}
-# 用途：数据库密码
+# 说明：数据库密码
+# 取值：字符串
 password: ${HAI_DB_PASSWORD:}
-# 用途：网络数据库URL；MySQL空串表示使用分字段，非空仅mysql://且拒绝query/fragment，优先于host/port/database/user/password
+# 说明：网络数据库URL；MySQL空串表示使用分字段，非空仅mysql://且拒绝query/fragment，优先于host/port/database/user/password
+# 取值：字符串；格式 uri；取值：
 url: ${HAI_DB_URL:}
-# 用途：TLS：PostgreSQL使用其模式；MySQL仅false或严格对象，空对象默认校验证书链和DNS身份
+# 说明：TLS：PostgreSQL使用其模式；MySQL仅false或严格对象，空对象默认校验证书链和DNS身份
+# 取值：MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象
 ssl: ${HAI_DB_SSL:false}
 
 # PostgreSQL/MySQL 配置（可选）
-# host: localhost
-# port: 5432
-# user: postgres
-# password: ''
+# host: localhost # 说明：数据库主机地址（默认 localhost）；取值：字符串
+# port: 5432 # 说明：数据库端口 - PostgreSQL 默认 5432 - MySQL 默认 3306；取值：整数；>= 1；<= 65535
+# user: postgres # 说明：数据库用户名；取值：字符串
+# password: '' # 说明：数据库密码；取值：字符串

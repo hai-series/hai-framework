@@ -1,16 +1,22 @@
 # SvelteKit 服务端配置；访问策略不发送到浏览器。
-# 用途：HTTP 服务监听地址与端口
+# 说明：HTTP 服务监听地址与端口
+# 取值：配置块（填写下方缩进字段）
 server:
-  # 用途：HTTP 监听主机名或 IP
+  # 说明：HTTP 监听主机名或 IP
+  # 取值：字符串；最小字符数 1
   host: ${HOST:127.0.0.1}
-  # 用途：HTTP 监听端口
+  # 说明：HTTP 监听端口
+  # 取值：整数；>= 1；<= 65535
   port: ${PORT:3000}
 # auto 只在受管私有 Compose 代理中信任容器网段；直连忽略转发头。
 # 其他反向代理请填写明确 IP/CIDR，[] 显式忽略所有转发头。
-# 用途：可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段
+# 说明：可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段
+# 取值：字符串；列表（每项以 - 开头）；最多项数 1000；取值：auto
 trustedProxies: ${HAI_KIT_TRUSTEDPROXIES:auto}
-# 用途：每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用
+# 说明：每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用
+# 取值：true | false；false；配置块（填写下方缩进字段）；取值：false
 access: ${HAI_KIT_ACCESS:false}
 # 独立策略文件示例：access: { file: ./config/security/request-access.yml }
-# 用途：传输加密开关或密钥协商配置
+# 说明：传输加密开关或密钥协商配置
+# 取值：false；配置块（填写下方缩进字段）；取值：false
 transport: false

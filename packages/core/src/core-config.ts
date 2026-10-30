@@ -56,7 +56,7 @@ export const LoggingConfigSchema = z.object({
   format: LogFormatSchema.default('json'),
   /** 默认上下文，会自动添加到每条日志 */
   context: z.record(z.string(), z.unknown()).optional(),
-  /** 要脱敏的字段路径列表（如 ['password', 'token']，默认 []） */
+  /** 额外业务隐私的日志字段路径，如 customer.email、recipients[*].phone；* 匹配一层，区分大小写，默认 []。已知密码/令牌始终脱敏。 */
   redact: z.array(z.string()).default([]),
 })
 

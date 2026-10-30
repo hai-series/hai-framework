@@ -216,11 +216,11 @@ export const ReachQueueIdSchema = z.string().uuid()
  * ```
  */
 export const ReachQueueConfigSchema = z.object({
-  /** 自动领取次数上限（含首次及崩溃恢复，默认 5，范围 1–100）。 */
+  /** 每条队列消息最多处理多少次，包含首次发送、失败重试和异常退出后的重新处理；默认 5，范围 1–100。 */
   maxAttempts: z.number().int().min(1).max(100).default(5),
-  /** 首次失败后的退避毫秒数（默认 60000，范围 1000–86400000）。 */
+  /** 第一次发送失败后，等待多少毫秒再试；默认 60000（1 分钟），范围 1000–86400000。 */
   retryDelayMs: z.number().int().min(1000).max(86_400_000).default(60_000),
-  /** 指数退避上限毫秒数，不得小于 retryDelayMs（默认 3600000）。 */
+  /** 后续失败时等待时间逐次加倍，但不超过此值；默认 3600000（1 小时），不得小于 retryDelayMs。 */
   maxRetryDelayMs: z.number().int().min(1000).max(86_400_000).default(3_600_000),
 }).refine(value => value.maxRetryDelayMs >= value.retryDelayMs, {
   message: reachM('reach_queueRetryInvalid'),

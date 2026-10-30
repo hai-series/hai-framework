@@ -119,7 +119,7 @@ function toOpenAIMessage(message: ChatMessage): OpenAI.Chat.Completions.ChatComp
  * ```ts
  * // 模块内部上下文：示例复用当前声明所在模块的实际绑定。
  * function resolved(client: OpenAI, model: string): ResolvedClient {
- *   return { client, model, api: 'chat', maxTokens: 1024 }
+ *   return { client, model, protocol: 'chat', maxTokens: 1024 }
  * }
  * ```
  */
@@ -127,7 +127,7 @@ interface ResolvedClient {
   client: OpenAI
   model: string
   /** API 协议：chat = Chat Completions；responses = Responses API */
-  api: 'chat' | 'responses'
+  protocol: 'chat' | 'responses'
   maxTokens?: number
   temperature?: number
 }
@@ -203,10 +203,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     })
     if (!resolvedResult.success)
       return resolvedResult
-    const { apiKey, baseUrl, timeout, model, api } = resolvedResult.data
+    const { apiKey, baseUrl, timeout, model, protocol: api } = resolvedResult.data
     // 本 Provider 覆盖 OpenAI 原生的两种协议；anthropic 由路由层分派到 Anthropic Provider
     const resolvedApi = api === 'responses' ? 'responses' : 'chat'
-    return ok({ client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout), model, api: resolvedApi })
+    return ok({ client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout), model, protocol: resolvedApi })
   }
 
   /**
@@ -221,11 +221,11 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for temp model' } }))
     const baseUrl = tempModel.baseUrl ?? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || process.env.OPENAI_BASE_URL) ?? 'https://api.openai.com/v1'
     const timeout = tempModel.timeout ?? config.llm.timeout ?? 60000
-    const api = (tempModel.api ?? config.llm.api) === 'responses' ? 'responses' : 'chat'
+    const api = (tempModel.protocol ?? config.llm.protocol) === 'responses' ? 'responses' : 'chat'
     return ok({
       client: getTempClient(apiKey, baseUrl, timeout),
       model: tempModel.model,
-      api,
+      protocol: api,
       maxTokens: tempModel.maxTokens ?? config.llm.maxTokens,
       temperature: tempModel.temperature ?? config.llm.temperature,
     })
@@ -262,7 +262,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       if (!clientResult.success)
         return clientResult
       const resolved = clientResult.data
-      const { client, model, maxTokens, temperature, api } = resolved
+      const { client, model, maxTokens, temperature, protocol: api } = resolved
       const { objectId: _objectId, sessionId: _sessionId, tempModel: _tempModel, signal, ...openaiRequest } = request
       try {
         // Responses API 分支：转换请求/响应形状，对调用方透明
@@ -297,7 +297,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       if (!clientResult.success)
         throw new Error(clientResult.error.message)
       const resolved = clientResult.data
-      const { client, model, maxTokens, temperature, api } = resolved
+      const { client, model, maxTokens, temperature, protocol: api } = resolved
       const { objectId: _objectId, sessionId: _sessionId, tempModel: _tempModel, signal, ...openaiRequest } = request
 
       // Responses API 流式分支：转发文本增量与完成事件

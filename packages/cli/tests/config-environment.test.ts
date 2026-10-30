@@ -12,6 +12,14 @@ import { loadConfigText } from './helpers/config.js'
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
+  it.each([
+    'agreements:\n  userAgreementMarkdown: |\n    # 说明：协议正文不能删除\n    请阅读并同意。\n',
+    'ui:\n  title: "Orders # 说明：这是标题内容"\n',
+  ])('更新字段说明时保留正文中的同名文字', (original) => {
+    const documented = documentConfig('iam', original)
+    expect(loadConfigText('iam', documented)).toEqual(loadConfigText('iam', original))
+    expect(documentConfig('iam', documented)).toBe(documented)
+  })
   it.each(['iam', 'reach'])('真实应用 %s 配置的说明可重复更新，数组与段尾注释不累加', async (module) => {
     const original = await readFile(new URL(`../../../apps/admin-console/config/_${module}.yml`, import.meta.url), 'utf8')
     const first = documentConfig(module, original)
@@ -29,7 +37,7 @@ describe('environment configuration', () => {
   })
   it('支付宝 H5 returnUrl 经生成 YAML 和真实环境插值后由渠道 Schema 校验', () => {
     const generated = generateConfigFile('payment')
-    const alipayExample = generated.match(/^# alipay:\n(?:# {3}.*\n)+/m)?.[0]
+    const alipayExample = generated.match(/^# alipay:[^\n]*\n(?:# {3}.*\n)+/m)?.[0]
     if (!alipayExample)
       throw new Error('Missing Alipay configuration example')
     // 示例渠道默认注释关闭；用户启用后由真实参数化入口生成对应环境引用。

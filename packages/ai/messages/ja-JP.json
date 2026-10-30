@@ -132,5 +132,6 @@
   "ai_a2aOutputLimit": "A2A 出力キューの容量上限を超えています",
   "ai_a2aExecutionInterrupted": "A2A 実行が中断されました。外部への影響を確認してください",
   "ai_a2aSubscriptionAdvanced": "後続のメッセージがタスクを進めています。再度購読してください",
-  "ai_a2aExecutorAlreadyRegistered": "A2A 実行器は既に登録されています。置き換える前に AI を終了してください"
+  "ai_a2aExecutorAlreadyRegistered": "A2A 実行器は既に登録されています。置き換える前に AI を終了してください",
+  "ai_llmProtocolRenamed": "LLM の api は protocol に変更されました。llm.protocol、models[].protocol、tempModel.protocol と環境変数 HAI_AI_LLM_PROTOCOL / HAI_AI_LLM_MODELS_<番号>_PROTOCOL を更新してください。"
 }

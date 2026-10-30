@@ -146,6 +146,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    * 包装 chat，在有 objectId 时自动保存 ChatRecord
    */
   async function chatWithRecord(request: ChatCompletionRequest): Promise<HaiResult<ChatCompletionResponse>> {
+    if (request.tempModel && Object.hasOwn(request.tempModel, 'api'))
+      return err(HaiAIError.INVALID_REQUEST, aiM('ai_llmProtocolRenamed'))
     const start = Date.now()
     const context = { model: request.model ?? request.tempModel?.model, messageCount: request.messages.length }
     logger.debug('LLM chat started', context)
@@ -207,6 +209,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    * 流式输出不受影响，记录在流消费完成后异步保存。
    */
   async function* chatStreamWithRecord(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
+    if (request.tempModel && Object.hasOwn(request.tempModel, 'api'))
+      throw new Error(aiM('ai_llmProtocolRenamed'))
     const start = Date.now()
     const logContext = { model: request.model ?? request.tempModel?.model, messageCount: request.messages.length }
     logger.debug('LLM chat stream started', logContext)

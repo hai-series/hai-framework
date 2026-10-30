@@ -142,13 +142,13 @@ export type ApiType = z.infer<typeof ApiTypeSchema>
  * }
  * ```
  */
-export const ModelEntrySchema = z.object({
+export const ModelEntrySchema = z.strictObject({
   /** 模型唯一标识（用于 ModelResolver 解析） */
   id: z.string(),
   /** 模型名称（传给 API 的实际模型名） */
   model: z.string(),
-  /** API 协议（可选，未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
-  api: ApiTypeSchema.optional(),
+  /** API 协议（可选，未指定时回退全局 `protocol`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
+  protocol: ApiTypeSchema.optional(),
   /** API Key 覆盖（可选，未提供时使用全局配置） */
   apiKey: OptionalSecretSchema,
   /** Base URL 覆盖（可选） */
@@ -159,7 +159,7 @@ export const ModelEntrySchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   /** 超时覆盖（可选，毫秒） */
   timeout: z.number().positive().optional(),
-})
+}, { error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api') ? aiM('ai_llmProtocolRenamed') : undefined })
 
 /**
  * 模型条目类型
@@ -197,20 +197,20 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
  * }
  * ```
  */
-export const LLMConfigSchema = z.object({
-  /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`） */
+export const LLMConfigSchema = z.strictObject({
+  /** 默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端。 */
   apiKey: OptionalSecretSchema,
-  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`） */
+  /** 默认模型服务地址；使用代理时填写，模型项可覆盖。未填写时按协议读取环境地址或使用供应商默认地址。 */
   baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
-  /** 全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`） */
-  api: ApiTypeSchema.optional().default('chat'),
-  /** 全局最大 Token 数（各模型 fallback，默认 `4096`） */
+  /** 默认请求格式：chat 为 Chat Completions，responses 为 OpenAI Responses，anthropic 为 Anthropic Messages；模型项可覆盖。 */
+  protocol: ApiTypeSchema.optional().default('chat'),
+  /** 单次回答最多生成多少 Token，默认 4096；模型项可覆盖，需符合供应商限制。 */
   maxTokens: z.number().positive().optional().default(4096),
-  /** 全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`） */
+  /** 回答的随机程度，0–2，默认 0.7；较低通常更稳定，模型项可覆盖，部分模型不支持自定义。 */
   temperature: z.number().min(0).max(2).optional().default(0.7),
-  /** 全局请求超时时间（各模型 fallback，毫秒，默认 `60000`） */
+  /** 一次模型请求最多等待多少毫秒，默认 60000；模型项可覆盖。 */
   timeout: z.number().positive().optional().default(60000),
   /** 临时模型客户端缓存存活时间（毫秒，默认 `600000` = 10 分钟；超时后临时模型客户端实例失效并重建） */
   tempModelCacheTtl: z.number().positive().optional().default(600000),
@@ -218,7 +218,7 @@ export const LLMConfigSchema = z.object({
   models: z.array(ModelEntrySchema).optional(),
   /** 场景模型映射（场景名 → 模型 ID 或直接模型名称，各场景均可选） */
   scenarios: z.object(Object.fromEntries(ModelScenarioSchema.options.map(k => [k, z.string().optional()])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
-})
+}, { error: issue => issue.code === 'unrecognized_keys' && issue.keys.includes('api') ? aiM('ai_llmProtocolRenamed') : undefined })
 
 /**
  * LLM 配置类型
@@ -244,7 +244,7 @@ export type LLMConfig = z.infer<typeof LLMConfigSchema>
  *
  * // 展示模型选择，不输出配置中的 apiKey。
  * function label(config: ResolvedModelConfig): string {
- *   return `${config.api}/${config.model}, timeout=${config.timeout}ms`
+ *   return `${config.protocol}/${config.model}, timeout=${config.timeout}ms`
  * }
  * ```
  */
@@ -252,7 +252,7 @@ export interface ResolvedModelConfig {
   /** 模型名称（传给 API 的实际模型名） */
   model: string
   /** API 协议（模型条目 > 全局配置 > `chat`） */
-  api: ApiType
+  protocol: ApiType
   /** API Key（模型条目 > 全局配置 > 环境变量） */
   apiKey: string | undefined
   /** API 基础 URL（模型条目 > 全局配置 > 环境变量 > 默认 OpenAI） */
@@ -331,7 +331,7 @@ export function resolveModelEntry(
 
   const resolved: ResolvedModelConfig = {
     model: modelName,
-    api: entry?.api ?? llmConfig.api ?? 'chat',
+    protocol: entry?.protocol ?? llmConfig.protocol ?? 'chat',
     apiKey: entry?.apiKey ?? llmConfig.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.OPENAI_API_KEY),
     baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || process.env.OPENAI_BASE_URL) ?? 'https://api.openai.com/v1',
     maxTokens: entry?.maxTokens ?? llmConfig.maxTokens ?? 4096,
@@ -349,8 +349,8 @@ export function resolveModelEntry(
 /**
  * 解析某次 chat 请求应使用的 API 协议（不校验 API Key）
  *
- * 供 LLM Provider 路由层选择底层实现使用：优先取显式模型条目的 `api`，
- * 其次全局 `api`，最后回退 `chat`。临时模型的 `api` 由调用方单独传入优先。
+ * 供 LLM Provider 路由层选择底层实现使用：优先取显式模型条目的 `protocol`，
+ * 其次全局 `protocol`，最后回退 `chat`。临时模型的 `protocol` 由调用方单独传入优先。
  *
  * @param llmConfig - LLM 配置
  * @param explicitModel - 显式指定的模型名/ID（可选）
@@ -361,7 +361,7 @@ export function resolveModelEntry(
  * ```ts
  * import { LLMConfigSchema, resolveModelApi } from '@h-ai/ai'
  *
- * const config = LLMConfigSchema.parse({ models: [{ id: 'claude', model: 'claude-sonnet-4', api: 'anthropic' }] })
+ * const config = LLMConfigSchema.parse({ models: [{ id: 'claude', model: 'claude-sonnet-4', protocol: 'anthropic' }] })
  * const protocol = resolveModelApi(config, 'claude')
  * ```
  */
@@ -371,7 +371,7 @@ export function resolveModelApi(llmConfig: LLMConfig, explicitModel?: string, te
   const entry = explicitModel
     ? llmConfig.models?.find(m => m.id === explicitModel || m.model === explicitModel)
     : undefined
-  return entry?.api ?? llmConfig.api ?? 'chat'
+  return entry?.protocol ?? llmConfig.protocol ?? 'chat'
 }
 
 // ─── MCP 配置 Schema ───
@@ -1639,7 +1639,7 @@ export const AIConfigSchema = z.object({
   /** LLM 配置（可选，所有字段有默认值） */
   llm: LLMConfigSchema.default({
     model: 'gpt-4o-mini',
-    api: 'chat',
+    protocol: 'chat',
     maxTokens: 4096,
     temperature: 0.7,
     timeout: 60000,

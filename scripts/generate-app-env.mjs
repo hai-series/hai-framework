@@ -87,16 +87,33 @@ for (const app of (await readdir('apps')).sort()) {
     if (metadata)
       optional.set(name, metadata)
   }
-  for (const name of active.keys())
-    optional.delete(name)
-  const optionalText = renderEnvironment([...optional.values()]).split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')
+  for (const [name, variable] of active) {
+    if (variable.optional)
+      optional.set(name, variable)
+    else
+      optional.delete(name)
+  }
+  const candidates = [...optional.values()]
+  const primitiveArrays = candidates.filter(variable => variable.constraint.includes('JSON 数组') && candidates.some(child => child.name === `${variable.name}_0` && !child.constraint.includes('JSON 对象')))
+  const optionalText = renderEnvironment(candidates.filter((variable) => {
+    if (primitiveArrays.some(parent => variable.name.startsWith(`${parent.name}_`)) && !active.has(variable.name))
+      return false
+    if (!(variable.constraint.includes('JSON 对象') || variable.constraint.includes('JSON 数组')) || variable.constraint.includes('false'))
+      return true
+    if ([...active.values()].some(child => child.name.startsWith(`${variable.name}_`)))
+      return false
+    return !candidates.some(child => child.name.startsWith(`${variable.name}_`)) || primitiveArrays.includes(variable)
+  }))
+    .split('\n')
+    .map(line => line && !line.startsWith('#') ? `# ${line}` : line)
+    .join('\n')
   const content = [
     '# 环境配置示例：包含本应用完整可用字段、说明和取值约束。',
     '# .env / .env.dev / .env.test / .env.prod 为公共配置，提交 Git；.env.local 为本机私有覆盖，不提交。',
     '# 优先级：进程环境 > .env.local > .env.<dev|test|prod> > .env。',
-    '# 可选字段先在 YAML 或 hai.json.deploy 声明，或使用父级对象整体覆盖；完整框架变量见根 .env.example。',
+    '# 可选字段先在 YAML 或 hai.json.deploy 中启用对应配置块；一般优先设置细项，避免再用父 JSON 覆盖。完整框架变量见根 .env.example。',
     '',
-    renderEnvironment([...active.values()]),
+    renderEnvironment([...active.values()].filter(variable => !variable.optional)),
     '',
     '# 可选字段（模块字段先启用 YAML 路径，运行时入口可直接注入）：',
     optionalText.trimEnd(),
@@ -106,7 +123,7 @@ for (const app of (await readdir('apps')).sort()) {
     if (previous !== content)
       throw new Error(`${file} is stale; run pnpm generate:env`)
   }
-  else {
+  else if (previous !== content) {
     await writeFile(file, content)
   }
 }

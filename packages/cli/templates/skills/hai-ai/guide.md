@@ -80,16 +80,18 @@ await ai.close()
 
 ## 配置要点
 
+LLM 协议使用 `llm.protocol`、`llm.models[].protocol` 和 `tempModel.protocol`，值为 `chat | responses | anthropic`；环境变量使用 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL` 等。旧 `api` 字段及旧协议变量会报迁移错误，密钥字段 `apiKey` 不变。
+
 ```yaml
 llm:
   apiKey: ''
   baseUrl: https://api.openai.com/v1
   model: gpt-4o-mini
-  api: chat # chat（默认）| responses | anthropic——底层协议，对使用方透明
+  protocol: chat # chat（默认）| responses | anthropic——底层协议，对使用方透明
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
   models: # 可为单个模型指定协议（responses / anthropic）
-    - {id: claude, model: claude-3-5-sonnet-latest, api: anthropic}
+    - {id: claude, model: claude-3-5-sonnet-latest, protocol: anthropic}
   scenarios:
     chat: fast
     reasoning: strong
@@ -125,7 +127,7 @@ memory:
 | ------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 非流式对话    | `ai.llm.chat({ messages })`                                                                                    | OpenAI 兼容 Chat Completion                                                                                                                                  |
 | 流式对话      | `ai.llm.chatStream({ messages })`                                                                              | 返回 `AsyncIterable`                                                                                                                                         |
-| 多协议        | 模型 `api: chat/responses/anthropic`                                                                           | 底层走 Chat Completions / Responses / Anthropic，公共形状不变                                                                                                |
+| 多协议        | 模型 `protocol: chat/responses/anthropic`                                                                           | 底层走 Chat Completions / Responses / Anthropic，公共形状不变                                                                                                |
 | 请求取消      | `ai.llm.chat({ messages, signal })`                                                                            | 传 `AbortSignal`，`abort()` 立即停上游生成                                                                                                                   |
 | 临时模型      | `ai.llm.chat({ messages, tempModel })`                                                                         | 单次请求级临时端点，客户端按 TTL 缓存                                                                                                                        |
 | 工具定义      | `ai.tools.define(...)`                                                                                         | Zod schema 转 JSON Schema；`handler(input, ctx)` 第二参为执行上下文                                                                                          |

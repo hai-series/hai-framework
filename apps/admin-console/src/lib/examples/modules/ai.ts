@@ -1,7 +1,7 @@
 import type { AIConfigInput } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
-// config 从服务端配置读取；llm.api 选择协议，密钥不传给浏览器。
+// config 从服务端配置读取；llm.protocol 选择协议，密钥不传给浏览器。
 export async function chatExample(config: AIConfigInput, question: string) {
   const initialized = await ai.init(config)
   if (!initialized.success)

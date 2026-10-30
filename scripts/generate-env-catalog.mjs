@@ -208,7 +208,7 @@ function walkSchema(node, segments, context, ancestors = new Set(), inheritedDef
   const constraints = []
   const enums = node.enum ?? ('const' in node ? [node.const] : [])
   if (node.type)
-    constraints.push({ string: '字符串', boolean: 'true | false', number: '数字', integer: '整数', object: 'JSON 对象；整体覆盖时替换该节点', array: 'JSON 数组；索引可按 0、1、2 扩展', null: 'null' }[node.type] ?? String(node.type))
+    constraints.push(node.type === 'boolean' && enums.length ? enums.map(String).join(' | ') : { string: '字符串', boolean: 'true | false', number: '数字', integer: '整数', object: 'JSON 对象；整体覆盖时替换该节点', array: 'JSON 数组；索引可按 0、1、2 扩展', null: 'null' }[node.type] ?? String(node.type))
   for (const [key, label] of [['minimum', '>='], ['maximum', '<='], ['exclusiveMinimum', '>'], ['exclusiveMaximum', '<'], ['minLength', '最小字符数'], ['maxLength', '最大字符数'], ['minItems', '最少项数'], ['maxItems', '最多项数'], ['format', '格式'], ['pattern', '正则']]) {
     if (key in node)
       constraints.push(`${label} ${node[key]}`)
@@ -458,6 +458,11 @@ const catalogText = `${JSON.stringify(catalog.map(({ constraints, enums, ...entr
   constraint: entry.name === 'HAI_DB_SSL' ? 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象' : [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
 })), null, 2)}\n`
 const catalogFile = path.join(root, 'packages/cli/src/commands/cli-config-catalog.json')
+// 清单仍记录完整 Schema；给用户的 .env 示例只展示一种配置方式，避免父 JSON 与细项重复。
+const entries = JSON.parse(catalogText)
+const primitiveArrays = entries.filter(entry => entry.constraint.includes('JSON 数组') && entries.some(child => child.name === `${entry.name}_0` && !child.constraint.includes('JSON 对象')))
+const exampleEntries = entries.filter(entry => !primitiveArrays.some(parent => entry.name.startsWith(`${parent.name}_`))
+  && (!(entry.constraint.includes('JSON 对象') || entry.constraint.includes('JSON 数组')) || entry.constraint.includes('false') || !entries.some(child => child.name.startsWith(`${entry.name}_`)) || primitiveArrays.includes(entry)))
 const envText = [
   '# hai-framework 环境变量总表（由 scripts/generate-env-catalog.mjs 生成）',
   '# 所有变量默认注释；按应用 .env.example 选择启用，公共值放已跟踪的 .env / .env.dev / .env.test / .env.prod，私有值仅放 .env.local 或进程环境。',
@@ -467,7 +472,7 @@ const envText = [
   '# 对象/数组变量整体替换节点并优先于叶子；叶子覆盖要求 YAML 已声明路径。',
   '# Schema 枚举和上下界如下；Provider 的依赖与跨字段条件仍由模块校验。',
   '',
-  ...JSON.parse(catalogText).flatMap(entry => [
+  ...exampleEntries.flatMap(entry => [
     `# ${entry.path} — ${entry.description.replace(/\s+/g, ' ')}`,
     `# 约束：${entry.constraint || '由对应模块 Schema 校验'}`,
     `# ${entry.name}=${JSON.stringify(entry.value)}`,
@@ -479,7 +484,22 @@ if (process.argv.includes('--check')) {
     throw new Error('Environment catalog is stale; run pnpm generate:env after building packages')
 }
 else {
-  await writeFile(catalogFile, catalogText)
-  await writeFile(path.join(root, '.env.example'), envText)
+  if (await needsWrite(catalogFile, catalogText))
+    await writeFile(catalogFile, catalogText)
+  const exampleFile = path.join(root, '.env.example')
+  if (await needsWrite(exampleFile, envText))
+    await writeFile(exampleFile, envText)
 }
 process.stdout.write(`Environment catalog: ${catalog.length} variables\n`)
+
+/** 新目录允许首次生成；已存在且内容相同时不重写，减少文件监听器和 Windows 文件锁冲突。 */
+async function needsWrite(file, content) {
+  try {
+    return (await readFile(file, 'utf8')).replaceAll('\r\n', '\n') !== content
+  }
+  catch (error) {
+    if (error.code === 'ENOENT')
+      return true
+    throw error
+  }
+}

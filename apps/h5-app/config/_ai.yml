@@ -2,17 +2,24 @@
 # H5 App - AI 配置
 # =============================================================================
 
-# 用途：LLM 配置（可选，所有字段有默认值）
+# 说明：LLM 配置（可选，所有字段有默认值）
+# 取值：配置块（填写下方缩进字段）
 llm:
-  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
+  # 说明：默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端。
+  # 取值：字符串或空值
   apiKey: ${HAI_AI_LLM_APIKEY:}
-  # 用途：全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）
+  # 说明：默认模型服务地址；使用代理时填写，模型项可覆盖。未填写时按协议读取环境地址或使用供应商默认地址。
+  # 取值：字符串；格式 uri
   baseUrl: ${HAI_AI_LLM_BASEURL:https://api.openai.com/v1}
-  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
+  # 说明：默认模型名称（默认 `'gpt-4o-mini'`）
+  # 取值：字符串
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
-  # 用途：全局请求超时时间（各模型 fallback，毫秒，默认 `60000`）
+  # 说明：一次模型请求最多等待多少毫秒，默认 60000；模型项可覆盖。
+  # 取值：数字；> 0
   timeout: ${HAI_AI_LLM_TIMEOUT:60000}
-  # 用途：全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`）
+  # 说明：回答的随机程度，0–2，默认 0.7；较低通常更稳定，模型项可覆盖，部分模型不支持自定义。
+  # 取值：数字；>= 0；<= 2
   temperature: ${HAI_AI_LLM_TEMPERATURE:0.2}
-  # 用途：全局最大 Token 数（各模型 fallback，默认 `4096`）
+  # 说明：单次回答最多生成多少 Token，默认 4096；模型项可覆盖，需符合供应商限制。
+  # 取值：数字；> 0
   maxTokens: ${HAI_AI_LLM_MAXTOKENS:1024}

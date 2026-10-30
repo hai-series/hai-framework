@@ -5,7 +5,7 @@
  * （`/v1/responses`）互相转换，使 `ai.llm.chat/chatStream` 的调用方无需感知底层协议差异。
  *
  * 纯函数、无副作用，便于单测。文本对话与非流式工具调用完整支持；
- * 流式仅覆盖文本增量（流式工具调用建议使用 `api: 'chat'`）。
+ * 流式仅覆盖文本增量（流式工具调用建议使用 `protocol: 'chat'`）。
  * @module ai-llm-provider-openai-responses
  */
 

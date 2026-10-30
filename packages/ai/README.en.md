@@ -146,17 +146,17 @@ const controller = new AbortController()
 const cancellable = ai.llm.chat({ messages, signal: controller.signal })
 // controller.abort()
 
-// 多协议：模型的 api 决定底层走 Chat Completions / Responses / Anthropic，公共请求响应形状不变
+// 多协议：模型的 protocol 决定底层走 Chat Completions / Responses / Anthropic，公共请求响应形状不变
 // - chat（默认）：OpenAI Chat Completions（兼容绝大多数厂商）
 // - responses：OpenAI Responses API（/v1/responses）
 // - anthropic：Anthropic Messages API（Claude 原生协议，环境变量 ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL）
-const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配置 api: anthropic
+const claude = await ai.llm.chat({ messages, model: 'claude' }) // 该模型配置 protocol: anthropic
 
 // 临时模型：单次请求绕过配置注册模型，直接指定端点与凭据（chat/chatStream/ask/askStream 均支持）
 // 临时客户端按 TTL 缓存（llm.tempModelCacheTtl，默认 10 分钟），与常驻模型客户端隔离
 const temp = await ai.llm.chat({
   messages,
-  tempModel: { model: 'claude-3-5-sonnet', api: 'anthropic', apiKey: 'sk-temp' },
+  tempModel: { model: 'claude-3-5-sonnet', protocol: 'anthropic', apiKey: 'sk-temp' },
 })
 ```
 
@@ -516,18 +516,20 @@ const manager = ai.context.createManager({
 
 ### Configuration
 
+The LLM protocol field is now `protocol` in `llm`, `llm.models[]`, and `tempModel`, replacing `api`. Values remain `chat | responses | anthropic`. Use `HAI_AI_LLM_PROTOCOL` and `HAI_AI_LLM_MODELS_0_PROTOCOL` (adjust the index for other entries). Old fields and protocol variables fail with a migration message; `apiKey` and its variables are unchanged.
+
 ```yaml
 llm:
   apiKey: ''
   baseUrl: https://api.openai.com/v1
   model: gpt-4o-mini
-  api: chat # chat（默认）| responses | anthropic —— 底层 API 协议，对使用方透明
+  protocol: chat # chat（默认）| responses | anthropic —— 底层 API 协议，对使用方透明
   timeout: 60000
   tempModelCacheTtl: 600000 # 临时模型客户端缓存 TTL（毫秒，默认 10 分钟）
   models: # 可为每个模型单独指定协议
     - {id: fast, model: gpt-4o-mini}
-    - {id: strong, model: gpt-4.1, api: responses}
-    - {id: claude, model: claude-3-5-sonnet-latest, api: anthropic}
+    - {id: strong, model: gpt-4.1, protocol: responses}
+    - {id: claude, model: claude-3-5-sonnet-latest, protocol: anthropic}
   scenarios:
     chat: fast
     reasoning: strong

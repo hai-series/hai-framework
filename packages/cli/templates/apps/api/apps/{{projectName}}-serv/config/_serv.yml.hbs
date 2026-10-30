@@ -7,11 +7,26 @@ server:
   port: 3000
 
 http:
+  # auto 仅在受管私有 Compose 代理中采用容器网段；普通宿主忽略转发头。
+  trustedProxies: auto
+  access: false
+  # 独立文件与下方内联规则二选一，用所选配置块替换 access: false。
+  # access:
+  #   file: ./config/security/request-access.yml
+  # access:
+  #   global:
+  #     timezone: UTC # 可用 HAI_SERV_HTTP_ACCESS_GLOBAL_TIMEZONE=Asia/Shanghai
+  #     allowIps: []
+  #     denyIps: []
+  #     windows: []
+  #   rules: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json
+  # HAI_SERV_HTTP_DOCS=false 关闭文档；开启时再配置 path/requireAuth。
   docs:
     path: /docs
+    # requireAuth: true
   health:
     path: /health
     readyPath: /ready
@@ -42,6 +57,11 @@ cors:
 {{else}}
   maxPlaintextBytes: ${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576}
 {{/if}}
+  # HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES 可填 JSON 路径映射。
+  routePlaintextBytes: {}
+  # 单条路径需要更大请求体时填写字节数，* 只匹配一段路径。
+  # routePlaintextBytes:
+  #   /api/v1/uploads/*: 8388608
   keyExchangePath: /_hai/key-exchange
   excludePaths:
     - /health

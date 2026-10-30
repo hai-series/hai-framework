@@ -132,5 +132,6 @@
   "ai_a2aOutputLimit": "A2A output queue limit exceeded",
   "ai_a2aExecutionInterrupted": "A2A execution interrupted",
   "ai_a2aSubscriptionAdvanced": "A later message advanced the subscription",
-  "ai_a2aExecutorAlreadyRegistered": "A2A executor is already registered; close AI before replacing it"
+  "ai_a2aExecutorAlreadyRegistered": "A2A executor is already registered; close AI before replacing it",
+  "ai_llmProtocolRenamed": "LLM api was renamed to protocol. Update llm.protocol, models[].protocol, tempModel.protocol and HAI_AI_LLM_PROTOCOL / HAI_AI_LLM_MODELS_<index>_PROTOCOL environment variables."
 }

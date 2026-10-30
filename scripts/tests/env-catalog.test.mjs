@@ -22,11 +22,15 @@ async function yamlFiles(directory) {
 }
 
 describe('environment catalog', () => {
-  it('根示例完整列出变量，每项都有用途和约束且不含重复项', async () => {
+  it('根示例优先列细项，每项都有用途和约束且不含冗余父对象', async () => {
     const example = await readFile(path.join(root, '.env.example'), 'utf8')
     const names = [...example.matchAll(/^# ([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1])
     expect(new Set(names).size).toBe(names.length)
-    expect(new Set(names)).toEqual(new Set(byName.keys()))
+    expect(names.every(name => byName.has(name))).toBe(true)
+    expect(names).not.toContain('HAI_AI')
+    expect(names).not.toContain('HAI_AI_LLM')
+    expect(names).not.toContain('HAI_AI_LLM_MODELS_0')
+    expect(names).toContain('HAI_AI_LLM_MODELS_0_PROTOCOL')
     expect(byName.has('VITE_HAI_E2E_KIT_TRANSPORT_MODE')).toBe(false)
     for (const entry of catalog) {
       expect(entry.description).toBeTruthy()
@@ -36,7 +40,7 @@ describe('environment catalog', () => {
       ['HAI_DB_TYPE', ['sqlite', 'postgresql', 'mysql']],
       ['HAI_CACHE_TYPE', ['memory', 'redis']],
       ['HAI_CORE_ENV', ['development', 'production', 'test', 'staging']],
-      ['HAI_AI_LLM_API', ['chat', 'responses', 'anthropic']],
+      ['HAI_AI_LLM_PROTOCOL', ['chat', 'responses', 'anthropic']],
     ]) {
       for (const value of values)
         expect(byName.get(name)?.constraint).toContain(value)

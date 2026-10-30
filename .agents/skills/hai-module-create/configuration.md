@@ -4,6 +4,8 @@
 
 纯配置消费者可从 `@h-ai/reldb/schemas` 导入同一组数据库 Schema/类型；该入口只依赖 Zod，不创建实例或加载驱动。CLI 部署向导内联它，并在保存连接前按实际后端校验 TLS。
 
+LLM 请求协议使用 `llm.protocol`、`llm.models[].protocol` 和 `tempModel.protocol`；对应 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL` 等。旧 `api` 字段及旧协议变量必须明确报告迁移错误，不能忽略后回退。密钥字段 `apiKey` 不变。环境目录保留完整 Schema，面向用户的 `.env.example` 优先列细项，避免同时推荐冗余父 JSON；`false | 对象` 开关及无固定子键的动态映射仍保留。
+
 ## 配置经过哪些步骤
 
 1. `core.config.loadEnvFiles` 读取公共基础、环境及本机私有文件，返回合并结果；调用方决定是否注入进程。已有进程环境优先，空字符串也是显式覆盖。不要在环境总表中填入真实凭据。

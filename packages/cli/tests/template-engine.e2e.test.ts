@@ -78,8 +78,16 @@ it.each(['api', 'fullstack'] as const)('正式容量配置在 %s 生成项目中
   const project = path.join(tmpRoot, name)
   await generateFromTemplates(project, buildTemplateContext({ name, appType, frontends: ['web'], features: ['crypto', 'db'], packageManager: 'pnpm' }))
   const service = appType === 'api' ? `apps/${name}-serv` : `packages/${name}-serv`
-  const loaded = loadDeploymentConfig('serv', path.join(project, service, 'config/_serv.yml'), { HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES: '8388608' })
-  expect(loaded).toMatchObject({ success: true, data: { transport: { maxPlaintextBytes: 8388608 } } })
+  const file = path.join(project, service, 'config/_serv.yml')
+  const content = await fse.readFile(file, 'utf8')
+  for (const variable of ['HAI_SERV_HTTP_ACCESS_GLOBAL_TIMEZONE', 'HAI_SERV_HTTP_DOCS', 'HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES'])
+    expect(content).toContain(variable)
+  const loaded = loadDeploymentConfig('serv', file, {
+    HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES: '8388608',
+    HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES: '{"/api/v1/uploads/*":16777216}',
+    HAI_SERV_HTTP_DOCS: 'false',
+  })
+  expect(loaded).toMatchObject({ success: true, data: { http: { docs: false }, transport: { maxPlaintextBytes: 8388608, routePlaintextBytes: { '/api/v1/uploads/*': 16777216 } } } })
 })
 
 /**
@@ -220,7 +228,7 @@ it('fullstack 选择可选模块时应保留其可用配置及创建参数', asy
     packageManager: 'pnpm',
   }))
   const config = loadConfigText('ai', await readGenerated(projectPath, `packages/${projectName}-serv/config/_ai.yml`))
-  expect(config).toMatchObject({ llm: { api: 'anthropic', model: 'claude-sonnet-4-5' } })
+  expect(config).toMatchObject({ llm: { protocol: 'anthropic', model: 'claude-sonnet-4-5' } })
 })
 
 it('fullstack 的原生应用名称应读取 core 配置并正确转义', async () => {

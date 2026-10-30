@@ -4,7 +4,10 @@ providers:
     type: console
   - name: sms
     type: console
-  # SMTP 替换 email 控制台 Provider；同名 Provider 只保留一个。
+# 生产示例：用下面 providers 整段替换上方控制台列表；保留需要的项。
+# 数组索引从 0 开始，删掉某项后同步修改其余环境变量中的索引。
+# providers:
+  # SMTP 邮件；名称 email 与下方通知模板对应。
   # - name: email
   #   type: smtp
   #   host: ${HAI_REACH_PROVIDERS_0_HOST:smtp.example.com}
@@ -16,8 +19,8 @@ providers:
   # 阿里云短信替换 sms 控制台 Provider。
   # - name: sms
   #   type: aliyun-sms
-  #   accessKeyId: ${HAI_REACH_PROVIDERS_0_ACCESSKEYID}
-  #   accessKeySecret: ${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET}
+  #   accessKeyId: ${HAI_REACH_PROVIDERS_1_ACCESSKEYID}
+  #   accessKeySecret: ${HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
   # 自有发送服务：按需将 template.provider 改为 custom。
@@ -26,9 +29,9 @@ providers:
   #   url: https://notify.example.com/send
   #   method: POST # POST | PUT
   #   headers:
-  #     Authorization: '${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
+  #     Authorization: '${HAI_REACH_PROVIDERS_2_HEADERS_AUTHORIZATION}'
   #   timeout: 10000
-  #   idempotent: ${HAI_REACH_PROVIDERS_0_IDEMPOTENT:false} # 仅接收端具备原子持久去重时启用；默认在途不明结果转 unknown
+  #   idempotent: ${HAI_REACH_PROVIDERS_2_IDEMPOTENT:false} # 仅接收端具备原子持久去重时启用；默认在途不明结果转 unknown
 templates:
   - name: otp_email
     provider: email
@@ -52,8 +55,8 @@ templates:
 #   start: '22:00'
 #   end: '08:00'
 
-# 延迟队列策略随每条消息保存；最多领取 5 次，指数退避 1 分钟至 1 小时。
-# 超限 dead 只经可信服务端人工恢复；unknown 不允许自动重发。
+# 消息发送失败后最多尝试 5 次。首次重试等待 1 分钟，以后每次加倍，最长等待 1 小时。
+# 尝试次数用完后停止，交给管理员处理；若无法确认对方是否已收到，先核对结果，避免重复发送。
 queue:
   maxAttempts: ${HAI_REACH_QUEUE_MAXATTEMPTS:5}
   retryDelayMs: ${HAI_REACH_QUEUE_RETRYDELAYMS:60000}

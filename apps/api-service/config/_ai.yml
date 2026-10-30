@@ -2,44 +2,63 @@
 # API Service - AI 配置
 # =============================================================================
 
-# 用途：LLM 配置（可选，所有字段有默认值）
+# 说明：LLM 配置（可选，所有字段有默认值）
+# 取值：配置块（填写下方缩进字段）
 llm:
-  # 用途：全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`）
-  api: ${HAI_AI_LLM_API:chat}
-  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
+  # 说明：默认请求格式：chat 为 Chat Completions，responses 为 OpenAI Responses，anthropic 为 Anthropic Messages；模型项可覆盖。
+  # 取值：字符串；取值：chat | responses | anthropic
+  protocol: ${HAI_AI_LLM_PROTOCOL:chat}
+  # 说明：默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端。
+  # 取值：字符串或空值
   apiKey: ${HAI_AI_LLM_APIKEY:sk-placeholder}
-  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
+  # 说明：默认模型名称（默认 `'gpt-4o-mini'`）
+  # 取值：字符串
   model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
 
-# 用途：A2A 配置（Agent-to-Agent 协议）
+# 说明：A2A 配置（Agent-to-Agent 协议）
+# 取值：配置块（填写下方缩进字段）
 a2a:
-  # 用途：Agent Card 配置
+  # 说明：Agent Card 配置
+  # 取值：配置块（填写下方缩进字段）
   agentCard:
-    # 用途：Agent 名称
+    # 说明：Agent 名称
+    # 取值：字符串
     name: ${HAI_AI_A2A_AGENTCARD_NAME:echo-agent}
-    # 用途：Agent 描述
+    # 说明：Agent 描述
+    # 取值：字符串
     description: ${HAI_AI_A2A_AGENTCARD_DESCRIPTION:A simple echo agent that repeats your message (A2A demo)}
-    # 用途：Agent 对外 URL
+    # 说明：Agent 对外 URL
+    # 取值：字符串
     url: ${HAI_AI_A2A_AGENTCARD_URL:http://localhost:5173}
-    # 用途：Agent 版本
+    # 说明：Agent 版本
+    # 取值：字符串
     version: ${HAI_AI_A2A_AGENTCARD_VERSION:0.1.0}
-    # 用途：Agent 技能列表
+    # 说明：Agent 技能列表
+    # 取值：列表（每项以 - 开头）
     skills:
-      # 用途：技能 ID
+      # 说明：技能 ID
+      # 取值：字符串
       - id: echo
-        # 用途：技能名称
+        # 说明：技能名称
+        # 取值：字符串
         name: Echo
-        # 用途：技能描述
+        # 说明：技能描述
+        # 取值：字符串
         description: ${HAI_AI_A2A_AGENTCARD_SKILLS_0_DESCRIPTION:Echoes back the user message}
-        # 用途：标签列表
+        # 说明：标签列表
+        # 取值：列表（每项以 - 开头）
         tags:
           - ${HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_0:demo}
           - ${HAI_AI_A2A_AGENTCARD_SKILLS_0_TAGS_1:echo}
-  # 用途：A2A 安全认证配置
+  # 说明：A2A 安全认证配置
+  # 取值：配置块（填写下方缩进字段）
   security:
-    # 用途：API Key 认证（通过 IAM apiKey.verifyApiKey 验证）
+    # 说明：API Key 认证（通过 IAM apiKey.verifyApiKey 验证）
+    # 取值：配置块（填写下方缩进字段）
     apiKey:
-      # 用途：API Key 的传递位置（默认 header）
+      # 说明：API Key 的传递位置（默认 header）
+      # 取值：字符串；取值：header | query
       in: ${HAI_AI_A2A_SECURITY_APIKEY_IN:header}
-      # 用途：参数名（默认 x-api-key）
+      # 说明：参数名（默认 x-api-key）
+      # 取值：字符串
       name: ${HAI_AI_A2A_SECURITY_APIKEY_NAME:x-api-key}

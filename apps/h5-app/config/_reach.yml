@@ -1,41 +1,61 @@
 # 开发触达示例；生产环境改为 SMTP、短信或 API Provider。
-# 用途：Provider 配置列表
+# 说明：Provider 配置列表
+# 取值：列表（每项以 - 开头）；最少项数 1
 providers:
-  # 用途：Provider 唯一名称
+  # 说明：Provider 唯一名称
+  # 取值：字符串；最小字符数 1
   - name: email
-    # 用途：后端或功能类型，按枚举选择
+    # 说明：后端或功能类型，按枚举选择
+    # 取值：字符串；取值：console | smtp | aliyun-sms | api
     type: ${HAI_REACH_PROVIDERS_0_TYPE:console}
-  # 用途：Provider 唯一名称
+  # 说明：Provider 唯一名称
+  # 取值：字符串；最小字符数 1
   - name: sms
-    # 用途：后端或功能类型，按枚举选择
+    # 说明：后端或功能类型，按枚举选择
+    # 取值：字符串；取值：console | smtp | aliyun-sms | api
     type: ${HAI_REACH_PROVIDERS_1_TYPE:console}
-# 用途：模板配置（通过配置文件注册）
+# 说明：模板配置（通过配置文件注册）
+# 取值：列表（每项以 - 开头）
 templates:
-  # 用途：模板名称
+  # 说明：模板名称
+  # 取值：字符串；最小字符数 1
   - name: otp_email
-    # 用途：绑定的 Provider 名称
+    # 说明：绑定的 Provider 名称
+    # 取值：字符串；最小字符数 1
     provider: email
-    # 用途：邮件主题模板
+    # 说明：邮件主题模板
+    # 取值：字符串
     subject: Verification code
-    # 用途：正文模板
+    # 说明：正文模板
+    # 取值：字符串；最小字符数 1
     body: 'Your verification code is {code}.'
-  # 用途：模板名称
+  # 说明：模板名称
+  # 取值：字符串；最小字符数 1
   - name: otp_sms
-    # 用途：绑定的 Provider 名称
+    # 说明：绑定的 Provider 名称
+    # 取值：字符串；最小字符数 1
     provider: sms
-    # 用途：正文模板
+    # 说明：正文模板
+    # 取值：字符串；最小字符数 1
     body: 'Your verification code is {code}.'
-  # 用途：模板名称
+  # 说明：模板名称
+  # 取值：字符串；最小字符数 1
   - name: password_reset
-    # 用途：绑定的 Provider 名称
+    # 说明：绑定的 Provider 名称
+    # 取值：字符串；最小字符数 1
     provider: email
-    # 用途：邮件主题模板
+    # 说明：邮件主题模板
+    # 取值：字符串
     subject: Password reset
-    # 用途：正文模板
+    # 说明：正文模板
+    # 取值：字符串；最小字符数 1
     body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'
-  # 用途：模板名称
+  # 说明：模板名称
+  # 取值：字符串；最小字符数 1
   - name: password_reset_sms
-    # 用途：绑定的 Provider 名称
+    # 说明：绑定的 Provider 名称
+    # 取值：字符串；最小字符数 1
     provider: sms
-    # 用途：正文模板
+    # 说明：正文模板
+    # 取值：字符串；最小字符数 1
     body: 'Reset your password: {resetUrl}. Expires at {expiresAt}.'

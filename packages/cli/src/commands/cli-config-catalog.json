@@ -856,18 +856,10 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
-    "name": "HAI_AI_LLM_API",
-    "module": "ai",
-    "path": "ai.llm.api",
-    "description": "全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`）",
-    "value": "chat",
-    "constraint": "字符串；取值：chat | responses | anthropic"
-  },
-  {
     "name": "HAI_AI_LLM_APIKEY",
     "module": "ai",
     "path": "ai.llm.apiKey",
-    "description": "全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）",
+    "description": "默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端。",
     "value": "",
     "constraint": "string,null"
   },
@@ -875,7 +867,7 @@
     "name": "HAI_AI_LLM_BASEURL",
     "module": "ai",
     "path": "ai.llm.baseUrl",
-    "description": "全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）",
+    "description": "默认模型服务地址；使用代理时填写，模型项可覆盖。未填写时按协议读取环境地址或使用供应商默认地址。",
     "value": "",
     "constraint": "字符串；格式 uri"
   },
@@ -883,7 +875,7 @@
     "name": "HAI_AI_LLM_MAXTOKENS",
     "module": "ai",
     "path": "ai.llm.maxTokens",
-    "description": "全局最大 Token 数（各模型 fallback，默认 `4096`）",
+    "description": "单次回答最多生成多少 Token，默认 4096；模型项可覆盖，需符合供应商限制。",
     "value": "4096",
     "constraint": "数字；> 0"
   },
@@ -910,14 +902,6 @@
     "description": "多模型配置列表（各字段可选，未指定时回退到全局默认值）；此变量整体替换单个数组项",
     "value": "",
     "constraint": "JSON 对象；整体覆盖时替换该节点"
-  },
-  {
-    "name": "HAI_AI_LLM_MODELS_0_API",
-    "module": "ai",
-    "path": "ai.llm.models.0.api",
-    "description": "API 协议（可选，未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic）",
-    "value": "chat",
-    "constraint": "字符串；取值：chat | responses | anthropic"
   },
   {
     "name": "HAI_AI_LLM_MODELS_0_APIKEY",
@@ -960,6 +944,14 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_AI_LLM_MODELS_0_PROTOCOL",
+    "module": "ai",
+    "path": "ai.llm.models.0.protocol",
+    "description": "API 协议（可选，未指定时回退全局 `protocol`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic）",
+    "value": "chat",
+    "constraint": "字符串；取值：chat | responses | anthropic"
+  },
+  {
     "name": "HAI_AI_LLM_MODELS_0_TEMPERATURE",
     "module": "ai",
     "path": "ai.llm.models.0.temperature",
@@ -974,6 +966,14 @@
     "description": "超时覆盖（可选，毫秒）",
     "value": "",
     "constraint": "数字；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_PROTOCOL",
+    "module": "ai",
+    "path": "ai.llm.protocol",
+    "description": "默认请求格式：chat 为 Chat Completions，responses 为 OpenAI Responses，anthropic 为 Anthropic Messages；模型项可覆盖。",
+    "value": "chat",
+    "constraint": "字符串；取值：chat | responses | anthropic"
   },
   {
     "name": "HAI_AI_LLM_SCENARIOS",
@@ -1075,7 +1075,7 @@
     "name": "HAI_AI_LLM_TEMPERATURE",
     "module": "ai",
     "path": "ai.llm.temperature",
-    "description": "全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`）",
+    "description": "回答的随机程度，0–2，默认 0.7；较低通常更稳定，模型项可覆盖，部分模型不支持自定义。",
     "value": "0.7",
     "constraint": "数字；>= 0；<= 2"
   },
@@ -1091,7 +1091,7 @@
     "name": "HAI_AI_LLM_TIMEOUT",
     "module": "ai",
     "path": "ai.llm.timeout",
-    "description": "全局请求超时时间（各模型 fallback，毫秒，默认 `60000`）",
+    "description": "一次模型请求最多等待多少毫秒，默认 60000；模型项可覆盖。",
     "value": "60000",
     "constraint": "数字；> 0"
   },
@@ -2027,7 +2027,7 @@
     "name": "HAI_CORE_LOGGING_REDACT",
     "module": "core",
     "path": "core.logging.redact",
-    "description": "要脱敏的字段路径列表（如 ['password', 'token']，默认 []）",
+    "description": "额外业务隐私的日志字段路径，如 customer.email、recipients[*].phone；* 匹配一层，区分大小写，默认 []。已知密码/令牌始终脱敏。",
     "value": "[]",
     "constraint": "JSON 数组；索引可按 0、1、2 扩展"
   },
@@ -2035,7 +2035,7 @@
     "name": "HAI_CORE_LOGGING_REDACT_0",
     "module": "core",
     "path": "core.logging.redact.0",
-    "description": "要脱敏的字段路径列表（如 ['password', 'token']，默认 []）；此变量整体替换单个数组项",
+    "description": "额外业务隐私的日志字段路径，如 customer.email、recipients[*].phone；* 匹配一层，区分大小写，默认 []。已知密码/令牌始终脱敏。；此变量整体替换单个数组项",
     "value": "",
     "constraint": "字符串"
   },
@@ -2429,7 +2429,7 @@
     "path": "deploy.provider.expose.https.acceptTerms",
     "description": "明确同意 Let’s Encrypt 服务条款后才可设置为 true",
     "value": "true",
-    "constraint": "true | false；取值：true"
+    "constraint": "true；取值：true"
   },
   {
     "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_CERTIFICATEFILE",
@@ -4045,7 +4045,7 @@
     "path": "kit.access",
     "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用",
     "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "true | false；false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_KIT_ACCESS_FILE",
@@ -4341,7 +4341,7 @@
     "path": "kit.transport",
     "description": "传输加密开关或密钥协商配置",
     "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_KIT_TRANSPORT_EXCLUDEPATHS",
@@ -4776,14 +4776,6 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
-    "name": "HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION",
-    "module": "reach",
-    "path": "HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION",
-    "description": "API 通知 Provider 的完整 Authorization 请求头",
-    "value": "",
-    "constraint": "敏感字符串，包含认证方案及凭据，例如 Bearer <token>"
-  },
-  {
     "name": "HAI_REACH_PROVIDERS_0_HOST",
     "module": "reach",
     "path": "reach.providers.0.host",
@@ -4896,12 +4888,44 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_REACH_PROVIDERS_1_ACCESSKEYID",
+    "module": "reach",
+    "path": "HAI_REACH_PROVIDERS_1_ACCESSKEYID",
+    "description": "阿里云 AccessKey ID",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET",
+    "module": "reach",
+    "path": "HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET",
+    "description": "阿里云 AccessKey Secret",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
     "name": "HAI_REACH_PROVIDERS_1_TYPE",
     "module": "reach",
     "path": "HAI_REACH_PROVIDERS_1_TYPE",
     "description": "后端或功能类型，按枚举选择",
     "value": "console",
     "constraint": "字符串；取值：console | smtp | aliyun-sms | api"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_2_HEADERS_AUTHORIZATION",
+    "module": "reach",
+    "path": "HAI_REACH_PROVIDERS_2_HEADERS_AUTHORIZATION",
+    "description": "凭据输入；使用位置 packages/cli/src/commands/cli-config-templates.ts",
+    "value": "",
+    "constraint": "敏感字符串；启用相应功能时必填，不得提交真实值"
+  },
+  {
+    "name": "HAI_REACH_PROVIDERS_2_IDEMPOTENT",
+    "module": "reach",
+    "path": "HAI_REACH_PROVIDERS_2_IDEMPOTENT",
+    "description": "接收端按 Idempotency-Key 原子持久去重，且覆盖所有重试与旧节点迟到请求时才启用；默认 false。",
+    "value": "false",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_REACH_QUEUE",
@@ -4915,7 +4939,7 @@
     "name": "HAI_REACH_QUEUE_MAXATTEMPTS",
     "module": "reach",
     "path": "reach.queue.maxAttempts",
-    "description": "自动领取次数上限（含首次及崩溃恢复，默认 5，范围 1–100）。",
+    "description": "每条队列消息最多处理多少次，包含首次发送、失败重试和异常退出后的重新处理；默认 5，范围 1–100。",
     "value": "5",
     "constraint": "整数；>= 1；<= 100"
   },
@@ -4923,7 +4947,7 @@
     "name": "HAI_REACH_QUEUE_MAXRETRYDELAYMS",
     "module": "reach",
     "path": "reach.queue.maxRetryDelayMs",
-    "description": "指数退避上限毫秒数，不得小于 retryDelayMs（默认 3600000）。",
+    "description": "后续失败时等待时间逐次加倍，但不超过此值；默认 3600000（1 小时），不得小于 retryDelayMs。",
     "value": "3600000",
     "constraint": "整数；>= 1000；<= 86400000"
   },
@@ -4931,7 +4955,7 @@
     "name": "HAI_REACH_QUEUE_RETRYDELAYMS",
     "module": "reach",
     "path": "reach.queue.retryDelayMs",
-    "description": "首次失败后的退避毫秒数（默认 60000，范围 1000–86400000）。",
+    "description": "第一次发送失败后，等待多少毫秒再试；默认 60000（1 分钟），范围 1000–86400000。",
     "value": "60000",
     "constraint": "整数；>= 1000；<= 86400000"
   },
@@ -5501,7 +5525,7 @@
     "path": "scheduler.enableDb",
     "description": "必须使用共享数据库保存执行状态；false 不再允许，需要先初始化",
     "value": "true",
-    "constraint": "true | false；取值：true"
+    "constraint": "true；取值：true"
   },
   {
     "name": "HAI_SCHEDULER_LEASEMS",
@@ -5709,7 +5733,7 @@
     "path": "serv.http.access",
     "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用",
     "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "true | false；false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_SERV_HTTP_ACCESS_FILE",
@@ -5981,7 +6005,7 @@
     "path": "serv.http.docs",
     "description": "HTTP API 文档功能开关或文档访问配置",
     "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "true | false；false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_SERV_HTTP_DOCS_PATH",
@@ -6005,7 +6029,7 @@
     "path": "serv.http.health",
     "description": "HTTP 健康检查开关或检查配置",
     "value": "{\"path\":\"/health\",\"readyPath\":\"/ready\"}",
-    "constraint": "JSON 对象；true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "JSON 对象；false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_SERV_HTTP_HEALTH_PATH",
@@ -6029,7 +6053,7 @@
     "path": "serv.http.openapi",
     "description": "OpenAPI 端点开关或端点配置",
     "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "true | false；false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_SERV_HTTP_OPENAPI_PATH",
@@ -6085,7 +6109,7 @@
     "path": "serv.transport",
     "description": "传输加密开关或密钥协商配置",
     "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
+    "constraint": "false；JSON 对象；整体覆盖时替换该节点；取值：false"
   },
   {
     "name": "HAI_SERV_TRANSPORT_EXCLUDEPATHS",

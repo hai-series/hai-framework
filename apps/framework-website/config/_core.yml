@@ -2,26 +2,34 @@
 # 应用配置
 # =============================================================================
 
-# 用途：应用名称（默认 'hai Admin'）
+# 说明：应用名称（默认 'hai Admin'）
+# 取值：字符串
 name: ${HAI_CORE_NAME:framework-website}
-# 用途：应用版本（默认 '0.1.0'）
+# 说明：应用版本（默认 '0.1.0'）
+# 取值：字符串
 version: ${HAI_CORE_VERSION:0.1.0}
-# 用途：运行环境（默认 'development'）
+# 说明：运行环境（默认 'development'）
+# 取值：字符串；取值：development | production | test | staging
 env: ${HAI_CORE_ENV:development}
 
-# 用途：日志配置（可选）
+# 说明：日志配置（可选）
+# 取值：配置块（填写下方缩进字段）
 logging:
-  # 用途：日志级别（默认 'info'）
+  # 说明：日志级别（默认 'info'）
+  # 取值：字符串；取值：trace | debug | info | warn | error | fatal
   level: ${HAI_CORE_LOGGING_LEVEL:info}
-  # 用途：日志格式：'json' 用于生产环境，'pretty' 用于开发环境（默认 'json'）
+  # 说明：日志格式：'json' 用于生产环境，'pretty' 用于开发环境（默认 'json'）
+  # 取值：字符串；取值：json | pretty
   format: ${HAI_CORE_LOGGING_FORMAT:pretty}
-  # context:
+  # context: # 说明：默认上下文，会自动添加到每条日志；取值：配置块（填写下方缩进字段）
   #   service: api
-  # 用途：要脱敏的字段路径列表（如 ['password', 'token']，默认 []）
+  # 说明：额外业务隐私的日志字段路径，如 customer.email、recipients[*].phone；* 匹配一层，区分大小写，默认 []。已知密码/令牌始终脱敏。
+  # 取值：列表（每项以 - 开头）
   redact:
     - password
     - token
     - secret
 
-# 用途：默认语言（默认 'zh-CN'）
+# 说明：默认语言（默认 'zh-CN'）
+# 取值：字符串
 defaultLocale: ${HAI_CORE_DEFAULTLOCALE:zh-CN}

@@ -18,7 +18,7 @@ import fse from 'fs-extra'
 import Handlebars from 'handlebars'
 import { parse, stringify } from 'yaml'
 import { getCliVersion } from '../cli-utils.js'
-import { parameterizeConfig } from './cli-config-environment.js'
+import { documentConfig, parameterizeConfig } from './cli-config-environment.js'
 import { generateConfigFile } from './cli-config-templates.js'
 
 // 注册自定义 Handlebars helpers
@@ -1336,7 +1336,7 @@ async function renderHbsInDir(
 
     const destPath = path.join(destRoot, outRelPath)
     const configMatch = /(?:^|[/\\])config[/\\]_([^/\\]+)\.ya?ml$/.exec(outRelPath)
-    const normalizedRendered = normalizeRenderedContent(configMatch ? parameterizeConfig(configMatch[1], rendered) : rendered, outRelPath)
+    const normalizedRendered = normalizeRenderedContent(configMatch ? documentConfig(configMatch[1], parameterizeConfig(configMatch[1], rendered)) : rendered, outRelPath)
 
     await fse.ensureDir(path.dirname(destPath))
     await fse.writeFile(destPath, normalizedRendered, 'utf-8')

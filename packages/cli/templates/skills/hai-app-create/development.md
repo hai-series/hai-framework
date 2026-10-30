@@ -78,7 +78,7 @@ Node后端的当前部署包默认重读发布.env.runtime，修改后restart容
 
 #### 迁移已有项目
 
-先把原来被忽略的 `.env` 私有值迁入 `.env.local`，再提交公共基础和环境文件。本机文件只保留需要覆盖的值，避免整份复制示例后固定开发环境。旧的 `HAI_AI_LLM_API_KEY` / `HAI_AI_LLM_BASE_URL` 改为 `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL`；音频和图像厂商回退变量同样使用 `APIKEY` 后缀。Reach 和 deploy 凭据按当前 YAML 路径命名，以项目 `.env.example` 为准，同步迁移部署平台变量和本机文件。
+先把原来被忽略的 `.env` 私有值迁入 `.env.local`，再提交公共基础和环境文件。本机文件只保留需要覆盖的值，避免整份复制示例后固定开发环境。旧的 `HAI_AI_LLM_PROTOCOL_KEY` / `HAI_AI_LLM_BASE_URL` 改为 `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL`；音频和图像厂商回退变量同样使用 `APIKEY` 后缀。Reach 和 deploy 凭据按当前 YAML 路径命名，以项目 `.env.example` 为准，同步迁移部署平台变量和本机文件。
 
 原 `HAI_AI_ANTHROPIC_API_KEY` / `HAI_AI_ANTHROPIC_BASE_URL` 不再使用。默认协议为 `anthropic` 时改用标准 LLM 变量；混合模型池中有独立凭据或端点时，将 `apiKey` / `baseUrl` 配置在对应模型项。厂商回退 `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` 保留，优先级以 AI 模块说明为准。
 
@@ -96,7 +96,7 @@ Node后端的当前部署包默认重读发布.env.runtime，修改后restart容
 | `HAI_CACHE_TYPE` / `HAI_CACHE_DB`                                 | `memory \| redis`；DB 为整数 0–15；memory 仅单进程使用                                 |
 | `HAI_STORAGE_TYPE`                                                | `local \| s3`；local 要求 root，s3 要求 bucket、region、accessKeyId、secretAccessKey   |
 | `HAI_SERV_SERVER_HOST` / `HAI_SERV_SERVER_PORT`                   | HTTP 主机和整数端口 1–65535；部署平台 HOST/PORT 可覆盖                                 |
-| `HAI_AI_LLM_API` / `HAI_AI_LLM_TEMPERATURE`                       | `chat \| responses \| anthropic`；temperature 为数字 0–2                               |
+| `HAI_AI_LLM_PROTOCOL` / `HAI_AI_LLM_TEMPERATURE`                       | `chat \| responses \| anthropic`；temperature 为数字 0–2                               |
 | `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL` / `HAI_AI_LLM_MODEL`   | 厂商密钥、服务 URL、实际可用模型名；启用时满足厂商要求                                 |
 | `HAI_ADMIN_DEFAULT_PASSWORD`                                      | 首次创建管理员的密码，满足 IAM 密码策略；CLI 为 fullstack 的 `.env.dev/.env.test/.env.prod` 分别生成独立随机值 |
 | `PUBLIC_API_BASE`                                                 | 可公开的 API 地址，不得包含用户名、密码或 token                                        |

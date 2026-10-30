@@ -1,105 +1,144 @@
 # AI Playground 完整示例配置。
 # 模型、端点和行为参数提供 YAML 默认值；约定环境变量可覆盖任意叶子项。
-# 用途：LLM 配置（可选，所有字段有默认值）
+# 说明：LLM 配置（可选，所有字段有默认值）
+# 取值：配置块（填写下方缩进字段）
 llm:
-  # 用途：全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_APIKEY` 或 `process.env.OPENAI_API_KEY`）
+  # 说明：默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端。
+  # 取值：字符串或空值
   apiKey: ${HAI_AI_LLM_APIKEY:}
-  # 用途：全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASEURL` 或 `process.env.OPENAI_BASE_URL`）
+  # 说明：默认模型服务地址；使用代理时填写，模型项可覆盖。未填写时按协议读取环境地址或使用供应商默认地址。
+  # 取值：字符串；格式 uri
   baseUrl: ${HAI_AI_LLM_BASEURL:https://api.xiaomimimo.com/v1}
-  # 用途：默认模型名称（默认 `'gpt-4o-mini'`）
+  # 说明：默认模型名称（默认 `'gpt-4o-mini'`）
+  # 取值：字符串
   model: ${HAI_AI_LLM_MODEL:mimo-v2.5}
-  # 用途：全局 API 协议（各模型 fallback，默认 `'chat'`；可选 `chat` / `responses` / `anthropic`）
-  api: ${HAI_AI_LLM_API:chat}
-  # 用途：全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`）
+  # 说明：默认请求格式：chat 为 Chat Completions，responses 为 OpenAI Responses，anthropic 为 Anthropic Messages；模型项可覆盖。
+  # 取值：字符串；取值：chat | responses | anthropic
+  protocol: ${HAI_AI_LLM_PROTOCOL:chat}
+  # 说明：回答的随机程度，0–2，默认 0.7；较低通常更稳定，模型项可覆盖，部分模型不支持自定义。
+  # 取值：数字；>= 0；<= 2
   temperature: ${HAI_AI_LLM_TEMPERATURE:0.7}
-  # 用途：全局最大 Token 数（各模型 fallback，默认 `4096`）
+  # 说明：单次回答最多生成多少 Token，默认 4096；模型项可覆盖，需符合供应商限制。
+  # 取值：数字；> 0
   maxTokens: ${HAI_AI_LLM_MAXTOKENS:4096}
-  # 用途：全局请求超时时间（各模型 fallback，毫秒，默认 `60000`）
+  # 说明：一次模型请求最多等待多少毫秒，默认 60000；模型项可覆盖。
+  # 取值：数字；> 0
   timeout: ${HAI_AI_LLM_TIMEOUT:120000}
 
-# 用途：Audio 配置（语音识别 / 语音合成）
+# 说明：Audio 配置（语音识别 / 语音合成）
+# 取值：配置块（填写下方缩进字段）
 audio:
   # MiMo 的 LLM/ASR/TTS 共用同一密钥；跨供应商时不要启用继承。
-  # 用途：是否允许未单独配置密钥的语音模型继承 LLM 全局密钥；跨供应商部署应保持关闭。
+  # 说明：是否允许未单独配置密钥的语音模型继承 LLM 全局密钥；跨供应商部署应保持关闭。
+  # 取值：true | false
   inheritLlmApiKey: ${HAI_AI_AUDIO_INHERITLLMAPIKEY:true}
-  # 用途：注册的语音模型列表
+  # 说明：注册的语音模型列表
+  # 取值：列表（每项以 - 开头）
   models:
-    # 用途：模型唯一标识（用于场景解析与请求显式指定）
+    # 说明：模型唯一标识（用于场景解析与请求显式指定）
+    # 取值：字符串
     - id: asr
-      # 用途：所属语音平台
+      # 说明：所属语音平台
+      # 取值：字符串；取值：openai | mimo | qwen | doubao | whisper | indextts
       provider: ${HAI_AI_AUDIO_MODELS_0_PROVIDER:mimo}
-      # 用途：厂商模型名（传给厂商 API 的实际模型名）
+      # 说明：厂商模型名（传给厂商 API 的实际模型名）
+      # 取值：字符串
       model: ${HAI_AI_AUDIO_MODELS_0_MODEL:mimo-v2.5-asr}
-      # 用途：模型允许执行的操作；解析模型时会在调用厂商前校验
+      # 说明：模型允许执行的操作；解析模型时会在调用厂商前校验
+      # 取值：列表（每项以 - 开头）；最少项数 1
       operations: [ transcribe ]
-      # 用途：HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）
+      # 说明：HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）
+      # 取值：字符串
       baseUrl: ${HAI_AI_AUDIO_MODELS_0_BASEURL:https://api.xiaomimimo.com/v1}
-      # 用途：请求超时（毫秒，默认 60000）
+      # 说明：请求超时（毫秒，默认 60000）
+      # 取值：数字；> 0
       timeout: ${HAI_AI_AUDIO_MODELS_0_TIMEOUT:120000}
-    # 用途：模型唯一标识（用于场景解析与请求显式指定）
+    # 说明：模型唯一标识（用于场景解析与请求显式指定）
+    # 取值：字符串
     - id: tts
-      # 用途：所属语音平台
+      # 说明：所属语音平台
+      # 取值：字符串；取值：openai | mimo | qwen | doubao | whisper | indextts
       provider: ${HAI_AI_AUDIO_MODELS_1_PROVIDER:mimo}
-      # 用途：厂商模型名（传给厂商 API 的实际模型名）
+      # 说明：厂商模型名（传给厂商 API 的实际模型名）
+      # 取值：字符串
       model: ${HAI_AI_AUDIO_MODELS_1_MODEL:mimo-v2.5-tts}
-      # 用途：模型允许执行的操作；解析模型时会在调用厂商前校验
+      # 说明：模型允许执行的操作；解析模型时会在调用厂商前校验
+      # 取值：列表（每项以 - 开头）；最少项数 1
       operations: [ synthesize ]
-      # 用途：HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）
+      # 说明：HTTP / WebSocket 端点覆盖（`whisper` / `indextts` 无默认端点，必须显式配置）
+      # 取值：字符串
       baseUrl: ${HAI_AI_AUDIO_MODELS_1_BASEURL:https://api.xiaomimimo.com/v1}
-      # 用途：请求超时（毫秒，默认 60000）
+      # 说明：请求超时（毫秒，默认 60000）
+      # 取值：数字；> 0
       timeout: ${HAI_AI_AUDIO_MODELS_1_TIMEOUT:120000}
-  # 用途：默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用）
+  # 说明：默认识别模型 ID（`ai.audio.transcribe*` 未指定 model 时使用）
+  # 取值：字符串
   transcribeModel: ${HAI_AI_AUDIO_TRANSCRIBEMODEL:asr}
-  # 用途：默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用）
+  # 说明：默认合成模型 ID（`ai.audio.synthesize*` 未指定 model 时使用）
+  # 取值：字符串
   synthesizeModel: ${HAI_AI_AUDIO_SYNTHESIZEMODEL:tts}
 
-# 用途：Image 配置（文生图）
+# 说明：Image 配置（文生图）
+# 取值：配置块（填写下方缩进字段）
 image:
-  # 用途：单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。
+  # 说明：单张图片或参考图的字节上限，默认 20 MiB；JSON 上限为 max(64 KiB, 两倍图片上限)。
+  # 取值：整数；<= 104857600；> 0
   maxImageBytes: ${HAI_AI_IMAGE_MAXIMAGEBYTES:20971520}
-  # 用途：单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。
+  # 说明：单次生成/参考图数量上限，默认 4，最大 16；临时 URL 串行下载。
+  # 取值：整数；<= 16；> 0
   maxImages: ${HAI_AI_IMAGE_MAXIMAGES:4}
-  # 用途：注册的文生图模型
+  # 说明：注册的文生图模型
+  # 取值：列表（每项以 - 开头）
   models:
     # 默认示例使用 Pollinations。402 表示账户余额或该 Key 的预算耗尽；
     # 可在 https://enter.pollinations.ai/ 创建/调整 Key 与预算。
-    # 用途：模型唯一标识（供请求选择）
+    # 说明：模型唯一标识（供请求选择）
+    # 取值：字符串
     - id: image
-      # 用途：所属文生图平台
+      # 说明：所属文生图平台
+      # 取值：字符串；取值：openai | google | qwen | seedream | pollinations
       provider: ${HAI_AI_IMAGE_MODELS_0_PROVIDER:pollinations}
-      # 用途：厂商模型名
+      # 说明：厂商模型名
+      # 取值：字符串
       model: ${HAI_AI_IMAGE_MODELS_0_MODEL:zimage}
       # 数组项通常用索引生成变量名；这里显式指定更稳定的厂商密钥名。
-      # 用途：API Key 覆盖；未提供时回退厂商环境变量
+      # 说明：API Key 覆盖；未提供时回退厂商环境变量
+      # 取值：字符串或空值
       apiKey: ${HAI_AI_IMAGE_POLLINATIONS_APIKEY:}
-      # 用途：整次图片生成与下载超时（毫秒，1–2147483647，默认 120000）
+      # 说明：整次图片生成与下载超时（毫秒，1–2147483647，默认 120000）
+      # 取值：整数；<= 2147483647；> 0
       timeout: ${HAI_AI_IMAGE_MODELS_0_TIMEOUT:120000}
     # 切换厂商时，取消对应块的注释，并把 generateModel 改为相应 id。
-    # - id: openai-image
-    #   provider: openai
-    #   model: gpt-image-2
-    #   apiKey: ${OPENAI_API_KEY:}
-    # - id: google-image
-    #   provider: google
-    #   model: gemini-3.1-flash-image
-    #   apiKey: ${GEMINI_API_KEY:}
-    # - id: qwen-image
-    #   provider: qwen
-    #   model: qwen-image-3.0-pro
-    #   apiKey: ${DASHSCOPE_API_KEY:}
-    #   workspaceId: ${DASHSCOPE_WORKSPACE_ID:}
-    # - id: seedream-image
-    #   provider: seedream
-    #   model: doubao-seedream-5-0-lite
-    #   apiKey: ${ARK_API_KEY:}
-  # 用途：默认文生图模型 ID
+    # - id: openai-image # 说明：模型唯一标识（供请求选择）；取值：字符串
+    #   provider: openai # 说明：所属文生图平台；取值：字符串；取值：openai | google | qwen | seedream | pollinations
+    #   model: gpt-image-2 # 说明：厂商模型名；取值：字符串
+    #   apiKey: ${OPENAI_API_KEY:} # 说明：API Key 覆盖；未提供时回退厂商环境变量；取值：字符串或空值
+    # - id: google-image # 说明：模型唯一标识（供请求选择）；取值：字符串
+    #   provider: google # 说明：所属文生图平台；取值：字符串；取值：openai | google | qwen | seedream | pollinations
+    #   model: gemini-3.1-flash-image # 说明：厂商模型名；取值：字符串
+    #   apiKey: ${GEMINI_API_KEY:} # 说明：API Key 覆盖；未提供时回退厂商环境变量；取值：字符串或空值
+    # - id: qwen-image # 说明：模型唯一标识（供请求选择）；取值：字符串
+    #   provider: qwen # 说明：所属文生图平台；取值：字符串；取值：openai | google | qwen | seedream | pollinations
+    #   model: qwen-image-3.0-pro # 说明：厂商模型名；取值：字符串
+    #   apiKey: ${DASHSCOPE_API_KEY:} # 说明：API Key 覆盖；未提供时回退厂商环境变量；取值：字符串或空值
+    #   workspaceId: ${DASHSCOPE_WORKSPACE_ID:} # 说明：阿里云百炼业务空间 ID（可选）；取值：字符串
+    # - id: seedream-image # 说明：模型唯一标识（供请求选择）；取值：字符串
+    #   provider: seedream # 说明：所属文生图平台；取值：字符串；取值：openai | google | qwen | seedream | pollinations
+    #   model: doubao-seedream-5-0-lite # 说明：厂商模型名；取值：字符串
+    #   apiKey: ${ARK_API_KEY:} # 说明：API Key 覆盖；未提供时回退厂商环境变量；取值：字符串或空值
+  # 说明：默认文生图模型 ID
+  # 取值：字符串
   generateModel: ${HAI_AI_IMAGE_GENERATEMODEL:image}
 
-# 用途：Memory 配置
+# 说明：Memory 配置
+# 取值：配置块（填写下方缩进字段）
 memory:
-  # 用途：记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端
+  # 说明：记忆后端：native 使用框架原生存储与批量合并；mem0 将框架提取结果写入受支持的嵌入式 SDK 后端
+  # 取值：字符串；取值：native | mem0
   provider: ${HAI_AI_MEMORY_PROVIDER:native}
-  # 用途：是否启用向量检索（默认 true，关闭则仅使用关键词匹配）
+  # 说明：是否启用向量检索（默认 true，关闭则仅使用关键词匹配）
+  # 取值：true | false
   embeddingEnabled: ${HAI_AI_MEMORY_EMBEDDINGENABLED:false}
-  # 用途：检索时默认返回数量（默认 10）
+  # 说明：检索时默认返回数量（默认 10）
+  # 取值：整数；> 0
   defaultTopK: ${HAI_AI_MEMORY_DEFAULTTOPK:8}

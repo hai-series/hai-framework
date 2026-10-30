@@ -79,6 +79,8 @@ logging:
   format: pretty
   # context:
   #   service: api
+  # redact 填日志字段路径；customer.email 遮盖客户邮箱，recipients[*].phone 遮盖数组中的电话。
+  # 只匹配指定层级，* 匹配一层；密码和令牌等已知凭据默认仍会脱敏。
   redact:
     - password
     - token
@@ -117,9 +119,18 @@ http:
   access: false
   # access:
   #   file: ./config/security/request-access.yml
+  # 或将 access: false 替换为下列内联配置；与 file 二选一。
+  # access:
+  #   global:
+  #     timezone: UTC # 可用 HAI_SERV_HTTP_ACCESS_GLOBAL_TIMEZONE=Asia/Shanghai
+  #     allowIps: []
+  #     denyIps: []
+  #     windows: []
+  #   rules: []
   apiPrefix: /api/v1
   openapi:
     path: /openapi.json
+  # HAI_SERV_HTTP_DOCS=false 关闭文档；开启时再配置 path/requireAuth。
   docs:
     path: /docs
     # requireAuth: true
@@ -141,6 +152,9 @@ transport: false
 #   maxPlaintextBytes: \${HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES:1048576} # 双向 UTF-8 明文，1 KiB～64 MiB
 #   keyExchangePath: /_hai/key-exchange
 #   excludePaths: [/health, /ready]
+# 单条路径需要更大请求体时填写字节数，* 只匹配一段路径。
+#   routePlaintextBytes: # HAI_SERV_TRANSPORT_ROUTEPLAINTEXTBYTES 可填 JSON 路径映射
+#     /api/v1/uploads/*: 8388608
 `
 }
 
@@ -164,7 +178,7 @@ function generateDbConfig(cfg?: DbModuleConfig): string {
 # MySQL 专用；PostgreSQL 无需此块。
 # mysql:
 #   charset: utf8mb4
-#   timezone: '+08:00'`
+# MySQL 不支持 timezone 配置；不要在 mysql 块内填写该字段。`
 
   return `# =============================================================================
 # 数据库配置
@@ -181,7 +195,7 @@ url: \${HAI_DB_URL:}
 ssl: \${HAI_DB_SSL:false}
 ${networkOptions}
 
-# SQL 日志按需开启；maxLength 限制 SQL / 参数输出长度。
+# 操作日志按需开启，只记录耗时、数量等安全摘要；maxLength 限制摘要长度，不记录 SQL 原文和参数。
 # operationLog:
 #   read: false
 #   write: false
@@ -275,7 +289,7 @@ captcha:
 # apikey:
 #   maxKeysPerUser: 10
 #   defaultExpirationDays: 0 # 0 表示不限制有效期
-#   prefix: hai_
+#   prefix: hai_ # 新建 API Key 的开头，例如 hai_abc123；只填应用标识，不放密码。
 # OTP 需启用 login.otp，并选择 Reach 标准模板或自定义发送回调。
 ${(loginOtp ? '' : '# 保留默认策略入口，单独切换 login.otp 即可启用验证码登录。\notp: {}\n# 定制策略时用下方配置块替换空对象，或通过 HAI_IAM_OTP 整体覆盖。\n') + `otp:
   email: true
@@ -339,7 +353,12 @@ loginAccess:
   timezone: UTC
   allowIps: [] # 空列表不限制；支持 IPv4、IPv6 与 CIDR
   denyIps: [] # 拒绝优先
-  windows: [] # days 为周一1至周日7；start/end 为 HH:mm，支持跨午夜
+  windows: [] # 留空允许任何时间；以下例子只允许周一至周五 09:00–18:00 登录。
+  # windows:
+  #   - days: [1, 2, 3, 4, 5]
+  #     start: '09:00'
+  #     end: '18:00'
+  # timezone 设为 Asia/Shanghai 时，上述时间按北京时间解释。
 
 # 会话配置
 session:
@@ -350,7 +369,11 @@ session:
   singleDeviceMode: replace # replace 顶旧保新；reject 拒绝重复登录
   maxSessions: 0 # 每用户有效会话上限，0 不限制
   # 按终端分别限制；非空时仅允许列出的类型，仍受全局最大会话数约束。
-  terminalLimits: {}
+  terminalLimits: {} # 留空不按终端限制。下面例子允许 web 2 个、app 1 个，其余终端不允许新登录。
+  # terminalLimits:
+  #   web: 2
+  #   app: 1
+  # 前端发送的终端名称必须与键名相同；此限制同时受 maxSessions 约束。
   terminalLimitMode: reject
   idleTimeout: 0 # 闲置期限（秒），0 关闭；access/refresh 均执行
   absoluteTimeout: 0 # 从首次登录起的绝对期限（秒），0 关闭
@@ -385,8 +408,8 @@ accessKeyId: ''
 secretAccessKey: ''
 endpoint: \${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 forcePathStyle: false
-# prefix: ''
-# publicEndpoint: https://app.example.com # 私有预签名访问源；不含桶名或网站目录
+# prefix: '' # 对象路径前缀，例如 invoices/2026；保存 report.pdf 后键名为 invoices/2026/report.pdf。
+# publicEndpoint: https://app.example.com # 浏览器下载入口，可带 /files 等代理目录；不含桶名
 # publicUrl: https://cdn.example.com`
   return `# 存储配置；HAI_STORAGE 可整体替换连接配置。
 type: ${type}
@@ -411,7 +434,7 @@ function generateAiConfig(cfg?: AiModuleConfig): string {
 # AI 配置
 # =============================================================================
 
-# LLM 配置（必填）
+# 对话模型（使用对话功能时配置）
 llm:
   # API Key（约定环境变量 HAI_AI_LLM_APIKEY 优先）
   apiKey: ''
@@ -419,7 +442,7 @@ llm:
   # baseUrl: https://api.openai.com/v1
   # 默认模型
 ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
-  api: ${api} # chat | responses | anthropic
+  protocol: ${api} # 请求格式：OpenAI 兼容选 chat，Responses 选 responses，Claude Messages 选 anthropic。
   # 全局最大 Token 数（默认 4096）
   # maxTokens: 4096
   # 采样温度（0-2，默认 0.7）
@@ -428,11 +451,11 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   # timeout: 60000
   # tempModelCacheTtl: 600000
 
-  # 多模型配置（可选，用于场景路由）
+  # 多模型配置：id 是应用中的短名，model 是供应商的真实型号。各项可单独设置协议、地址和密钥。
   # models:
   #   - id: fast
   #     model: gpt-4o-mini
-  #     api: chat
+  #     protocol: chat
   #     apiKey: ''
   #     baseUrl: https://api.openai.com/v1
   #     maxTokens: 4096
@@ -442,7 +465,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   #     model: gpt-4o
   #     apiKey: ''
 
-  # 场景模型映射（可选）
+  # 场景模型映射：普通对话用 fast，复杂推理用 smart；值对应上方 models 的 id。
   # scenarios:
   #   default: fast
   #   chat: fast
@@ -609,11 +632,17 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
     if (!keys.has(key) && !includeDisabled)
       continue
     const variables = configEnvironmentVariables(key, configContents[key] ?? generateConfigFile(key, configs))
-    const section = renderEnvironment(variables)
+    const section = renderEnvironment(variables.filter(variable => !variable.optional))
+    const declaredOptional = renderEnvironment(variables.filter(variable => variable.optional))
     const activeNames = new Set(variables.map(variable => variable.name))
-    const optional = renderEnvironment(moduleEnvironmentVariables(key).filter(variable => !activeNames.has(variable.name)))
+    const candidates = moduleEnvironmentVariables(key)
+    const primitiveArrays = candidates.filter(variable => variable.constraint.includes('JSON 数组') && candidates.some(child => child.name === `${variable.name}_0` && !child.constraint.includes('JSON 对象')))
+    const optional = renderEnvironment(candidates.filter(variable => !activeNames.has(variable.name)
+      && !primitiveArrays.some(parent => variable.name.startsWith(`${parent.name}_`))
+      && !variables.some(child => child.name.startsWith(`${variable.name}_`) && (variable.constraint.includes('JSON 对象') || variable.constraint.includes('JSON 数组')) && !variable.constraint.includes('false'))
+      && (!(variable.constraint.includes('JSON 对象') || variable.constraint.includes('JSON 数组')) || variable.constraint.includes('false') || !candidates.some(child => child.name.startsWith(`${variable.name}_`)) || primitiveArrays.includes(variable))))
     const commented = (value: string) => value.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')
-    sections.push(`# --- ${key} ---\n${keys.has(key) ? section : commented(section)}\n\n# 可选字段：先启用 YAML 路径，或用父级对象整体覆盖。\n${commented(optional)}`)
+    sections.push(`# --- ${key} ---\n${keys.has(key) ? section : commented(section)}\n\n# 可选字段：先在 YAML 中启用对应配置块；下列变量名与字段路径一一对应。\n${commented(declaredOptional)}\n${commented(optional)}`)
   }
   return `${sections.join('\n\n')}\n`
 }
@@ -757,7 +786,10 @@ providers:
   - name: console_dev
     type: console
 
-  # SMTP 邮件（按需开启）
+# 生产示例：用下面 providers 整段替换上方控制台列表；保留需要的项。
+# 数组索引从 0 开始，删掉某项后同步修改其余环境变量中的索引。
+# providers:
+  # SMTP 邮件
   # - name: email
   #   type: smtp
   #   host: \${HAI_REACH_PROVIDERS_0_HOST:smtp.example.com}
@@ -770,8 +802,8 @@ providers:
   # 阿里云短信（按需开启）
   # - name: sms
   #   type: aliyun-sms
-  #   accessKeyId: \${HAI_REACH_PROVIDERS_0_ACCESSKEYID}
-  #   accessKeySecret: \${HAI_REACH_PROVIDERS_0_ACCESSKEYSECRET}
+  #   accessKeyId: \${HAI_REACH_PROVIDERS_1_ACCESSKEYID}
+  #   accessKeySecret: \${HAI_REACH_PROVIDERS_1_ACCESSKEYSECRET}
   #   signName: MyApp
   #   endpoint: dysmsapi.aliyuncs.com
 
@@ -781,7 +813,7 @@ providers:
   #   url: https://notify.example.com/send
   #   method: POST # POST | PUT
   #   headers:
-  #     Authorization: 'Bearer \${HAI_REACH_PROVIDERS_0_HEADERS_AUTHORIZATION}'
+  #     Authorization: 'Bearer \${HAI_REACH_PROVIDERS_2_HEADERS_AUTHORIZATION}'
   #   timeout: 10000
   #   redirect: error # 普通消息才可显式 follow；敏感发送始终拒绝跳转。
   #   requireHttps: true # 强制 HTTPS；省略时生产敏感发送仍要求 HTTPS。
@@ -812,7 +844,8 @@ templates: []
 #   start: "22:00"
 #   end: "08:00"
 
-# 延迟队列重试策略（入队时持久保存；领取/崩溃恢复计数，超限 dead；unknown 禁止自动重发）
+# 发送失败时最多尝试 5 次；等待时间从 1 分钟逐次加倍，最长 1 小时。
+# 无法确认对方是否收到时停止自动重发，先核对投递结果。修改策略只影响以后进入队列的消息。
 queue:
   maxAttempts: \${HAI_REACH_QUEUE_MAXATTEMPTS:5}
   retryDelayMs: \${HAI_REACH_QUEUE_RETRYDELAYMS:60000}
@@ -847,7 +880,7 @@ function generateAuditConfig(): string {
 # 审计日志配置 (@h-ai/audit)
 # =============================================================================
 
-# 用户表名（用于 JOIN 查询）
+# 审计列表查询操作者名称时使用的用户表。使用框架 IAM 时保持下面三个默认值。
 userTable: hai_iam_users
 
 # 用户表主键列名
@@ -856,22 +889,27 @@ userIdColumn: id
 # 用户名列名
 userNameColumn: username
 
-# 框架自动事件采集；显式业务 audit.log 不受此开关影响
+# 自动记录已接入框架的重要操作；includeReads=true 时也记录成功查询，会增加记录量。
+# enabled=false 只关闭自动采集，业务主动调用 audit.log() 仍可写入。
 capture:
   enabled: true
   includeReads: false
 
-# 应用示例保护近期日志；框架未配置时不强制启用。0天清理不能绕过已启用保护。
+# enabled=true 后，最近 minDays 天的记录不能修改或删除；超过保护期也不会自动删除。
+# 保护设置会存入数据库，删掉这一段会沿用已有设置；明确 enabled=false 才关闭保护。
 retention:
   enabled: false
   minDays: 90
 
-# 凭据始终脱敏；仅业务隐私可关闭，可补充项目字段名
+# fields 填额外的隐私字段名，例如 [customerPhone, idCard]，不区分大小写。
+# 密码、令牌等凭据始终遮盖；enabled 只控制这里补充的业务字段，不恢复历史原文。
 privacy:
   enabled: true
   fields: []
 
-# 私有 JSONL 归档；生产使用私有存储，定时执行由应用现有 Scheduler 装配。
+# 将审计另存为私有 JSONL 备份，启用前先初始化私有 Storage。
+# batchSize 是每批读取条数；maxRecordBytes 是单条上限（字节），超限报错，不截断记录。
+# schedule.enabled=true 按 cron 自动备份；例如 UTC 02:00 对应北京时间 10:00。
 backup:
   enabled: false
   batchSize: 200
@@ -881,18 +919,21 @@ backup:
     cron: '0 2 * * *'
     timezone: UTC
 
-# 分级阈值告警：启用前配置规则及 Reach 通知目标。只统计已提交事件。
+# 按一段时间内的事件数量通知管理员；启用前配置 Reach，并将 provider 填为已注册的通道名称。
+# 例子：5 分钟内登录失败/拒绝达到 10 次时通知安全团队；规则和定时检查需要分别启用。
 alerts:
   enabled: false
   maxNotificationsPerCheck: 100
   rules: []
-  # - id: login-failures
-  #   actions: [auth.login]
-  #   outcomes: [failure, denied]
-  #   threshold: 10
-  #   windowSeconds: 300
-  #   severity: warning
-  #   targets: [{ id: security-team, provider: email, to: security@example.com }]
+  # 用下面的 rules 列表替换空数组。
+  # rules:
+  #   - id: login-failures
+  #     actions: [auth.login]
+  #     outcomes: [failure, denied]
+  #     threshold: 10
+  #     windowSeconds: 300
+  #     severity: warning
+  #     targets: [{ id: security-team, provider: email, to: security@example.com }]
   schedule:
     enabled: false
     cron: '* * * * *'

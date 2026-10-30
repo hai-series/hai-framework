@@ -349,7 +349,7 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
     const apiKey = tempModel?.apiKey ?? entry?.apiKey ?? config.llm.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.ANTHROPIC_API_KEY)
     if (!apiKey)
       return err(HaiAIError.CONFIGURATION_ERROR, aiM('ai_configError', { params: { error: 'API Key is required for Anthropic' } }))
-    const globalBaseUrl = config.llm.api === 'anthropic' ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined) : undefined
+    const globalBaseUrl = config.llm.protocol === 'anthropic' ? config.llm.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || undefined) : undefined
     const baseUrl = (tempModel?.baseUrl ?? entry?.baseUrl ?? globalBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? DEFAULT_ANTHROPIC_BASE_URL).replace(/\/+$/, '')
     return ok({
       apiKey,
@@ -481,7 +481,7 @@ export function createAnthropicProvider(deps: AILLMFunctionsDeps): LLMProvider {
       if (config.llm.model)
         models.add(config.llm.model)
       for (const entry of config.llm.models ?? []) {
-        if ((entry.api ?? config.llm.api) === 'anthropic')
+        if ((entry.protocol ?? config.llm.protocol) === 'anthropic')
           models.add(entry.model)
       }
       return ok([...models])

@@ -117,7 +117,7 @@ async function serve(handler: (response: ServerResponse) => Promise<void>, opera
 
 async function initialize(origin: string, timeout = 3000): Promise<void> {
   const result = await ai.init({
-    llm: { api: 'anthropic', model: 'test-model', apiKey: 'test-only-key', baseUrl: origin, timeout },
+    llm: { protocol: 'anthropic', model: 'test-model', apiKey: 'test-only-key', baseUrl: origin, timeout },
     audio: { models: [{ id: 'mimo', provider: 'mimo', model: 'mimo-test', apiKey: 'test-only-key', baseUrl: origin, operations: ['transcribe'], timeout }], transcribeModel: 'mimo' },
   }, { storeProvider: createMemoryStoreProvider() })
   expect(result.success).toBe(true)

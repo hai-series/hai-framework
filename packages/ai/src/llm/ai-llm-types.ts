@@ -187,14 +187,14 @@ export type ToolDefinition = OpenAI.Chat.Completions.ChatCompletionTool
  * ```ts
  * import type { TempModelConfig } from '@h-ai/ai'
  *
- * const value: TempModelConfig = { model: 'gpt-4o-mini', api: 'chat', timeout: 15_000 }
+ * const value: TempModelConfig = { model: 'gpt-4o-mini', protocol: 'chat', timeout: 15_000 }
  * ```
  */
 export interface TempModelConfig {
   /** 模型名称（传给 API 的实际模型名） */
   model: string
-  /** API 协议（未指定时回退全局 `api`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
-  api?: ApiType
+  /** API 协议（未指定时回退全局 `protocol`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
+  protocol?: ApiType
   /** API Key（未指定时回退全局配置 / 环境变量） */
   apiKey?: string
   /** API 基础 URL（未指定时回退全局配置 / 环境变量 / 默认 OpenAI） */

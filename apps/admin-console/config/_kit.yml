@@ -1,23 +1,32 @@
 # auto 仅在受管私有容器代理中采用容器网段；自建代理填写 IP/CIDR。
-# 用途：可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段
+# 说明：可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段
+# 取值：字符串；列表（每项以 - 开头）；最多项数 1000；取值：auto
 trustedProxies: ${HAI_KIT_TRUSTEDPROXIES:auto}
-# 用途：每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用
+# 说明：每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用
+# 取值：true | false；false；配置块（填写下方缩进字段）；取值：false
 access: ${HAI_KIT_ACCESS:false}
 # 独立策略文件：access: { file: ./config/security/request-access.yml }
-# 用途：HTTP 服务监听地址与端口
+# 说明：HTTP 服务监听地址与端口
+# 取值：配置块（填写下方缩进字段）
 server:
-  # 用途：HTTP 监听主机名或 IP
+  # 说明：HTTP 监听主机名或 IP
+  # 取值：字符串；最小字符数 1
   host: ${HAI_KIT_SERVER_HOST:127.0.0.1}
-  # 用途：HTTP 监听端口
+  # 说明：HTTP 监听端口
+  # 取值：整数；>= 1；<= 65535
   port: ${HAI_KIT_SERVER_PORT:3000}
 
-# 用途：传输加密开关或密钥协商配置
+# 说明：传输加密开关或密钥协商配置
+# 取值：false；配置块（填写下方缩进字段）；取值：false
 transport:
-  # 用途：普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明
+  # 说明：普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明
+  # 取值：整数；>= 1024；<= 67108864；字符串；取值：auto
   maxPlaintextBytes: ${HAI_KIT_TRANSPORT_MAXPLAINTEXTBYTES:auto}
-  # 用途：客户端与服务端约定的密钥交换端点
+  # 说明：客户端与服务端约定的密钥交换端点
+  # 取值：字符串；以 / 开头的路径字符串
   keyExchangePath: ${HAI_KIT_TRANSPORT_KEYEXCHANGEPATH:/api/_hai/key-exchange}
-  # 用途：不进入传输加密管道的路径
+  # 说明：不进入传输加密管道的路径
+  # 取值：列表（每项以 - 开头）
   excludePaths:
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_0:/api/storage}
     - ${HAI_KIT_TRANSPORT_EXCLUDEPATHS_1:/api/public}

@@ -1433,7 +1433,7 @@ describe('ai.llm 多协议路由', () => {
       llm: {
         apiKey: 'sk-test',
         model: 'gpt-4.1',
-        models: [{ id: 'gpt-4.1', model: 'gpt-4.1', api: 'responses' }],
+        models: [{ id: 'gpt-4.1', model: 'gpt-4.1', protocol: 'responses' }],
         scenarios: { chat: 'gpt-4.1' },
       },
     })

@@ -18,7 +18,7 @@ import { createOpenAIProvider } from './ai-llm-provider-openai.js'
  * 创建按协议分派的 LLM Provider
  *
  * @param deps - LLM 子功能依赖（含校验后配置）
- * @returns 统一的 LLMProvider（内部按模型 `api` 路由）
+ * @returns 统一的 LLMProvider（内部按模型 `protocol` 路由）
  *
  * @example
  * ```ts
@@ -43,7 +43,7 @@ export function createLLMProvider(deps: AILLMFunctionsDeps): LLMProvider {
 
   /** 按请求解析协议并选择 Provider（chat / responses → OpenAI；anthropic → Anthropic） */
   function pick(request: ChatCompletionRequest): LLMProvider {
-    const api = resolveModelApi(deps.config.llm, request.model, request.tempModel?.api)
+    const api = resolveModelApi(deps.config.llm, request.model, request.tempModel?.protocol)
     return api === 'anthropic' ? getAnthropic() : openai
   }
 
@@ -51,7 +51,7 @@ export function createLLMProvider(deps: AILLMFunctionsDeps): LLMProvider {
     chat: request => pick(request).chat(request),
     chatStream: (request): AsyncIterable<ChatCompletionChunk> => pick(request).chatStream(request),
     listModels: () => {
-      const api = deps.config.llm.api ?? 'chat'
+      const api = deps.config.llm.protocol ?? 'chat'
       return api === 'anthropic' ? getAnthropic().listModels() : openai.listModels()
     },
   }

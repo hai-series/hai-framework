@@ -62,7 +62,7 @@
   const aiFeatures = $derived([
     { name: m.modules_ai_feat_chat_name(), desc: m.modules_ai_feat_chat_desc(), api: 'ai.llm.chat({ messages: [...] })' },
     { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embedding.embedText(text)' },
-    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { api, model } })' },
+    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { protocol, model } })' },
     { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.llm.chatStream({ messages: [...] })' },
     { name: m.modules_ai_feat_image_name(), desc: m.modules_ai_feat_image_desc(), api: 'ai.image.generate({ prompt, size })' },
   ])

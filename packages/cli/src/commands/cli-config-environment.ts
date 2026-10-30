@@ -2,11 +2,62 @@
  * 配置模板与环境变量清单共用的转换逻辑。
  * @module cli-config-environment
  */
-import { isMap, isScalar, isSeq, parseDocument, Scalar } from 'yaml'
+import { isMap, isScalar, isSeq, LineCounter, parseDocument, Scalar } from 'yaml'
 import catalog from './cli-config-catalog.json' with { type: 'json' }
 
 const catalogByName = new Map(catalog.map(entry => [entry.name, entry]))
 const catalogByPath = new Map(catalog.map(entry => [entry.path, entry]))
+
+/** YAML 使用配置块和列表表达结构；环境变量目录中的 JSON 覆盖说明不适合作为字段填写提示。 */
+function configurationConstraint(value: string): string {
+  return value.replaceAll('JSON 对象；整体覆盖时替换该节点', '配置块（填写下方缩进字段）')
+    .replaceAll('JSON 数组；索引可按 0、1、2 扩展', '列表（每项以 - 开头）')
+    .replaceAll('string,null', '字符串或空值')
+    .replaceAll('；<= 9007199254740991', '')
+}
+
+/** 只清理生成的 YAML 注释，不能误删协议正文、标题等字符串里的同名文字。 */
+function withoutGeneratedDocumentation(content: string): string {
+  const { lines, document: optional, counter } = readOptionalConfig(content)
+  const starts: number[] = []
+  let offset = 0
+  for (const line of lines) {
+    starts.push(offset)
+    offset += line.length + 1
+  }
+  const ranges: Array<[number, number]> = []
+  function originalOffset(position: number, end: boolean): number {
+    const location = counter.linePos(position)
+    const line = lines[location.line - 1] ?? ''
+    const prefix = /^(\s*)# (?=\s*(?:[a-z][\w-]*:|-\s))/i.exec(line)
+    const column = location.col - 1
+    const removed = prefix && (column > prefix[1].length || (!end && column === prefix[1].length)) ? 2 : 0
+    return (starts[location.line - 1] ?? content.length) + column + removed
+  }
+  function collect(node: unknown, virtual: boolean): void {
+    if (isMap(node)) {
+      for (const pair of node.items)
+        collect(pair.value, virtual)
+    }
+    else if (isSeq(node)) {
+      node.items.forEach(item => collect(item, virtual))
+    }
+    else if (isScalar(node) && node.range) {
+      ranges.push(virtual ? [originalOffset(node.range[0], false), originalOffset(node.range[1], true)] : [node.range[0], node.range[1]])
+    }
+  }
+  collect(parseDocument(content).contents, false)
+  if (!optional.errors.length)
+    collect(optional.contents, true)
+  const protectedAt = (position: number) => ranges.some(([start, end]) => position >= start && position < end)
+  return lines.flatMap((line, index) => {
+    const metadata = /^(\s*)#\s*(?:用途|说明|取值)：/.exec(line)
+    if (metadata && !protectedAt(starts[index] + metadata[1].length))
+      return []
+    const suffix = line.lastIndexOf(' # 说明：')
+    return [suffix >= 0 && !protectedAt(starts[index] + suffix + 1) ? line.slice(0, suffix) : line]
+  }).join('\n')
+}
 
 /**
  * 将 Schema 的用途说明同步到真实 YAML 字段，保留既有注释和值；重复生成不追加副本。
@@ -20,6 +71,7 @@ const catalogByPath = new Map(catalog.map(entry => [entry.path, entry]))
  * ```
  */
 export function documentConfig(name: string, content: string): string {
+  content = withoutGeneratedDocumentation(content)
   const document = parseDocument(content)
   if (document.errors.length)
     throw new Error(`Invalid ${name} configuration documentation source`)
@@ -30,7 +82,7 @@ export function documentConfig(name: string, content: string): string {
         const previous = node[field]
         if (!previous)
           continue
-        const kept = previous.split('\n').filter(line => !/^\s*用途：/.test(line)).join('\n') || null
+        const kept = previous.split('\n').filter(line => !/^\s*(?:用途|说明|取值)：/.test(line)).join('\n') || null
         if (kept !== previous) {
           node[field] = kept
           changed = true
@@ -51,7 +103,8 @@ export function documentConfig(name: string, content: string): string {
         if (description) {
           // 数组项的首字段说明放在短横线之前，避免生成 "- # 注释" 破坏既有排版规范。
           const target = sequenceItem && index === 0 ? node : pair.key
-          const comment = [target.commentBefore, ` 用途：${description}`].filter(Boolean).join('\n')
+          const entry = catalogByPath.get([name, ...field].join('.').replace(/\.\d+(?=\.|$)/g, '.0'))
+          const comment = [target.commentBefore, ` 说明：${description}`, entry?.constraint ? ` 取值：${configurationConstraint(entry.constraint)}` : undefined].filter(Boolean).join('\n')
           if (target.commentBefore !== comment) {
             target.commentBefore = comment
             changed = true
@@ -65,7 +118,47 @@ export function documentConfig(name: string, content: string): string {
     }
   }
   walk(document.contents, [])
-  return changed ? document.toString({ lineWidth: 0 }) : content
+  return documentOptionalConfig(name, changed ? document.toString({ lineWidth: 0 }) : content)
+}
+
+/** 注释中的可选字段同样要说明用途与取值；保持单层 #，不启用可选功能。 */
+function documentOptionalConfig(name: string, content: string): string {
+  const { lines, document, counter } = readOptionalConfig(content)
+  if (document.errors.length)
+    return content
+  const additions = new Map<number, string>()
+  function walk(node: unknown, path: string[]): void {
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        if (!isScalar(pair.key))
+          continue
+        const segments = [...path, String(pair.key.value)]
+        const entry = catalogByPath.get([name, ...segments].join('.').replace(/\.\d+(?=\.|$)/g, '.0'))
+        if (entry && pair.key.range) {
+          const line = counter.linePos(pair.key.range[0]).line - 1
+          const prefix = /^(\s*#\s*)(?:-\s*)?[A-Z][\w-]*:/i.exec(lines[line])?.[1]
+          // 用行尾说明保留可直接取消注释的 YAML，不额外生成会被误取消注释的说明行。
+          if (prefix && !additions.has(line))
+            additions.set(line, ` # 说明：${entry.description}；取值：${configurationConstraint(entry.constraint)}`)
+        }
+        walk(pair.value, segments)
+      }
+    }
+    else if (isSeq(node)) {
+      node.items.forEach((item, index) => walk(item, [...path, String(index)]))
+    }
+  }
+  walk(document.contents, [])
+  return lines.map((line, index) => line + (additions.get(index) ?? '')).join('\n')
+}
+
+/** 将可选示例临时作为 YAML 读取，只用于获取路径和位置，原文件仍保持注释。 */
+function readOptionalConfig(content: string) {
+  const lines = content.split('\n')
+  const virtual = lines.map(line => line.replace(/^(\s*)# (?=\s*(?:[A-Z][\w-]*:|-\s))/i, '$1')).join('\n')
+  const counter = new LineCounter()
+  const document = parseDocument(virtual, { uniqueKeys: false, lineCounter: counter })
+  return { lines, document, counter }
 }
 
 /**
@@ -86,6 +179,8 @@ export interface ConfigEnvironmentVariable {
   constraint: string
   /** 字段用途；优先来自模块配置 Schema 的源码注释。 */
   description?: string
+  /** 仅出现在注释示例中；.env.example 保持注释，避免误以为该功能已经启用。 */
+  optional?: boolean
 }
 
 /**
@@ -100,12 +195,14 @@ export interface ConfigEnvironmentVariable {
  * ```
  */
 export function parameterizeConfig(name: string, content: string): string {
+  content = parameterizeOptionalConfig(name, content)
   const document = parseDocument(content)
   if (document.errors.length > 0)
     throw new Error(`Invalid ${name} configuration template`)
   if (!document.contents || (isScalar(document.contents) && document.contents.value === null))
     return content
 
+  let changed = false
   function walk(node: unknown, path: string[]): void {
     // 固定业务契约不配置化；正文中的 {code} 等占位符也不能作为环境变量默认值。
     if (['templates', 'supportedLocales', 'id'].includes(path[0]) || path.includes('redact')
@@ -134,11 +231,54 @@ export function parameterizeConfig(name: string, content: string): string {
       const fallback = typeof node.value === 'string' && value !== '' && (parsed.errors.length > 0 || !isScalar(parsed.contents) || parsed.contents.value !== value) ? JSON.stringify(value) : value
       node.value = `\${${variable}:${fallback}}`
       node.type = Scalar.PLAIN
+      changed = true
     }
   }
 
   walk(document.contents, [])
-  return document.toString({ lineWidth: 0 })
+  return changed ? document.toString({ lineWidth: 0 }) : content
+}
+
+/** 可选 YAML 示例保留注释状态，但使用与启用字段相同的环境路径，便于取消注释后直接配置。 */
+function parameterizeOptionalConfig(name: string, content: string): string {
+  const { lines, document, counter } = readOptionalConfig(content)
+  if (document.errors.length)
+    return content
+  const edits = new Map<number, Array<{ start: number, end: number, value: string }>>()
+  function walk(node: unknown, segments: string[]): void {
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        if (isScalar(pair.key))
+          walk(pair.value, [...segments, String(pair.key.value)])
+      }
+    }
+    else if (isSeq(node)) {
+      node.items.forEach((item, index) => walk(item, [...segments, String(index)]))
+    }
+    else if (isScalar(node) && node.range && node.value !== null && node.value !== undefined) {
+      const location = counter.linePos(node.range[0])
+      const line = lines[location.line - 1]
+      if (!/^\s*# /.test(line) || /[\n\r}]/.test(String(node.value)) || String(node.value).includes('${'))
+        return
+      const field = [name, ...segments].join('.').replace(/\.\d+(?=\.|$)/g, '.0')
+      if (!catalogByPath.has(field) || ['id', 'name', 'operations'].includes(segments.at(-1) ?? '') || segments.includes('templates') || segments.includes('redact'))
+        return
+      const variable = ['HAI', name, ...segments].map(part => part.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toUpperCase()).join('_')
+      const text = String(node.value)
+      const parsed = parseDocument(text)
+      const fallback = typeof node.value === 'string' && text !== '' && (parsed.errors.length > 0 || !isScalar(parsed.contents) || parsed.contents.value !== text) ? JSON.stringify(text) : text
+      const replacement = `\${${variable}:${fallback}}`
+      const list = edits.get(location.line - 1) ?? []
+      list.push({ start: location.col + 1, end: location.col + 1 + node.range[1] - node.range[0], value: JSON.stringify(replacement) })
+      edits.set(location.line - 1, list)
+    }
+  }
+  walk(document.contents, [])
+  for (const [index, replacements] of edits) {
+    for (const edit of replacements.sort((a, b) => b.start - a.start))
+      lines[index] = lines[index].slice(0, edit.start) + edit.value + lines[index].slice(edit.end)
+  }
+  return lines.join('\n')
 }
 
 /**
@@ -155,6 +295,7 @@ export function parameterizeConfig(name: string, content: string): string {
 export function configEnvironmentVariables(name: string, content: string): ConfigEnvironmentVariable[] {
   const variables = new Map<string, ConfigEnvironmentVariable>()
   const locations = new Map<string, string>()
+  const activeValues = new Map<string, string>()
   function locate(node: unknown, path: string[]): void {
     if (isMap(node)) {
       for (const pair of node.items) {
@@ -166,19 +307,29 @@ export function configEnvironmentVariables(name: string, content: string): Confi
       node.items.forEach((item, index) => locate(item, [...path, String(index)]))
     }
     else if (isScalar(node) && typeof node.value === 'string') {
-      for (const match of node.value.matchAll(/\$\{([^}:]+)/g))
+      for (const match of node.value.matchAll(/\$\{([^}:]+)(?::([^}]*))?\}/g)) {
         locations.set(match[1], [name, ...path].join('.'))
+        if (!activeValues.has(match[1]))
+          activeValues.set(match[1], match[2] ?? '')
+      }
     }
   }
   locate(parseDocument(content).contents, [])
   for (const match of content.matchAll(/\$\{((?:HAI_|PUBLIC_|VITE_|AI_|OPENAI_|GEMINI_|DASHSCOPE_|ARK_|LDAP_)[A-Z0-9_]*)(?::([^}]*))?\}/g)) {
     const [, variable, value = ''] = match
+    if (variables.has(variable))
+      continue
+    const normalized = catalogByName.get(variable.replace(/_\d+(?=_|$)/g, '_0'))
+    const entry = catalogByName.get(variable) ?? normalized
+    const indices = [...variable.matchAll(/_(\d+)(?=_|$)/g)].map(item => item[1])
+    const catalogPath = (entry?.path === variable ? normalized?.path : entry?.path)?.replace(/\.0(?=\.|$)/g, () => `.${indices.shift() ?? '0'}`)
     variables.set(variable, {
       name: variable,
-      path: locations.get(variable) ?? `${name} (${variable}，可选块)`,
-      value,
+      path: locations.get(variable) ?? catalogPath ?? `${name} (${variable}，可选块)`,
+      value: activeValues.get(variable) ?? value,
       constraint: variableConstraint(variable, value),
-      description: catalogByName.get(variable)?.description,
+      description: entry?.description,
+      optional: !locations.has(variable),
     })
   }
   return [...variables.values()]
@@ -186,7 +337,7 @@ export function configEnvironmentVariables(name: string, content: string): Confi
 
 /** 根据公开模块 Schema 和基础标量类型描述取值约束。 */
 function variableConstraint(name: string, value: string): string {
-  const known = catalogByName.get(name)
+  const known = catalogByName.get(name) ?? catalogByName.get(name.replace(/_\d+(?=_|$)/g, '_0'))
   if (known)
     return known.constraint
   const enums: Record<string, string> = {
@@ -197,7 +348,7 @@ function variableConstraint(name: string, value: string): string {
     HAI_CACHE_TYPE: 'memory | redis',
     HAI_STORAGE_TYPE: 'local | s3',
     HAI_VECDB_TYPE: 'lancedb | pgvector | qdrant | chroma',
-    HAI_AI_LLM_API: 'chat | responses | anthropic',
+    HAI_AI_LLM_PROTOCOL: 'chat | responses | anthropic',
     HAI_DB_SSL: 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象',
     HAI_IAM_PASSWORD_MINLENGTH: '整数 >= 1，且不大于 maxLength',
     HAI_IAM_PASSWORD_MAXLENGTH: '整数 1–256，且不小于 minLength',

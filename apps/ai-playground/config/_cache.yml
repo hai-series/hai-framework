@@ -2,27 +2,39 @@
 # AI Playground - 缓存配置
 # =============================================================================
 
-# 用途：后端或功能类型，按枚举选择
+# 说明：后端或功能类型，按枚举选择
+# 取值：字符串；取值：memory | redis
 type: ${HAI_CACHE_TYPE:memory}
-# 用途：主机地址；默认 'localhost'
+# 说明：主机地址；默认 'localhost'
+# 取值：字符串
 host: ${HAI_CACHE_HOST:localhost}
-# 用途：端口号；默认 6379
+# 说明：端口号；默认 6379
+# 取值：整数；>= 1；<= 65535
 port: ${HAI_CACHE_PORT:6379}
-# 用途：单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。
+# 说明：单机、Cluster 和 Sentinel 数据节点的认证密码；url 模式使用 URL 内凭据。
+# 取值：字符串
 password: ${HAI_CACHE_PASSWORD:}
-# 用途：Redis 连接 URL（如 redis://user:pass
+# 说明：Redis 连接 URL（如 redis://user:pass
+# 取值：字符串
 url: ${HAI_CACHE_URL:}
-# 用途：数据库编号（0~15）；默认 0
+# 说明：数据库编号（0~15）；默认 0
+# 取值：整数；>= 0；<= 15
 db: ${HAI_CACHE_DB:0}
-# 用途：连接超时时间（毫秒）；默认 10000
+# 说明：连接超时时间（毫秒）；默认 10000
+# 取值：整数；>= 0
 connectTimeout: ${HAI_CACHE_CONNECTTIMEOUT:10000}
-# 用途：命令执行超时（毫秒）；默认 5000
+# 说明：命令执行超时（毫秒）；默认 5000
+# 取值：整数；>= 0
 commandTimeout: ${HAI_CACHE_COMMANDTIMEOUT:5000}
-# 用途：是否开启 TLS；默认 false
+# 说明：是否开启 TLS；默认 false
+# 取值：true | false
 tls: ${HAI_CACHE_TLS:false}
-# 用途：最大重试次数；默认 3
+# 说明：最大重试次数；默认 3
+# 取值：整数；>= 0
 maxRetries: ${HAI_CACHE_MAXRETRIES:3}
-# 用途：重试间隔基数（毫秒）；实际间隔 = retryDelay × 重试次数；默认 50
+# 说明：重试间隔基数（毫秒）；实际间隔 = retryDelay × 重试次数；默认 50
+# 取值：整数；>= 0
 retryDelay: ${HAI_CACHE_RETRYDELAY:50}
-# 用途：是否只读模式；默认 false
+# 说明：是否只读模式；默认 false
+# 取值：true | false
 readOnly: ${HAI_CACHE_READONLY:false}
