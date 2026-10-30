@@ -889,6 +889,11 @@ test('feedback submits an empty description and business operator can process an
   await expectUncovered(uploaded)
   await capture(page, 'feedback-preview.png', testInfo.outputPath('feedback-preview.png'))
   await uploaded.screenshot({ path: testInfo.outputPath('feedback-image-after-mask-detail.png'), animations: 'disabled' })
+  // 回执只表示记录已受理；等这份大附件真正上传成功，再开始后台处理操作。
+  const largeUpload = page.waitForResponse(response => response.request().method() === 'POST'
+    && /\/feedback\/reports\/[^/]+\/attachments\/[^/]+$/.test(new URL(response.url()).pathname)
+    && (response.request().postDataBuffer()?.byteLength ?? 0) > 2 * 1024 * 1024, { timeout: 60_000 })
+    .then(response => ({ response }), (error: unknown) => ({ error }))
   await dialog.getByRole('button', { name: /提交反馈|Submit Feedback|フィードバックを送信/ }).click()
   await expect(dialog.getByTestId('feedback-receipt')).toContainText(/FB-/)
   const number = (await dialog.getByTestId('feedback-receipt').textContent())?.match(/FB-[A-Za-z0-9-]+/)?.[0]
@@ -897,6 +902,10 @@ test('feedback submits an empty description and business operator can process an
     throw new Error('Feedback receipt number is missing')
   await expectDialogViewport()
   await capture(page, 'feedback-accepted.png', testInfo.outputPath('feedback-accepted.png'))
+  const completedUpload = await largeUpload
+  if ('error' in completedUpload)
+    throw completedUpload.error
+  expect(completedUpload.response.status()).toBe(200)
   await dialog.getByRole('button', { name: /关闭|Close|閉じる/ }).filter({ hasText: /关闭|Close|閉じる/ }).click()
   await page.getByTestId('nav-feedback').click()
   await expect(page.getByTestId('feedback-page')).toBeVisible()
