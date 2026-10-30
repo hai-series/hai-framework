@@ -77,6 +77,8 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### サイトの公開ディレクトリー
 
+`/somepath/` のみを公開する場合、`PUBLIC_BASE_PATH=/somepath` でビルドし、Serv の `http.apiPrefix`、ヘルス/準備確認、ドキュメントとストレージ `publicEndpoint` を同じディレクトリに明示設定します。SDK は実効設定からプロキシとブラウザ API アドレスを生成します。外側では接頭辞を保持し、内部プローブとルートの ACME 検証は別に扱います。[設定と検証](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录)。
+
 既定はサイトルートです。`https://example.com/yyy/`で公開する場合は、アプリ構築プロセスで`PUBLIC_BASE_PATH=/yyy`を明示します。CLIは形式5を生成し、webBasePathを保存します。これは構築情報であり、デプロイ環境で上書きする設定ではありません。各区間はASCII英数字・`_`・`.`・`-`のみ、末尾の斜線や単独の`.`/`..`区間は使用できません。形式5対応のCLI/Deployが必要で、旧ツールは拒否します。形式番号を手で変更しないでください。
 
 SDKは対応するNginx、実行時設定URL、SSRヘルスチェック、公開URLを生成します。追加のゲートウェイは接頭辞を保持します。同一オリジンAPIはServのhttp.apiPrefixで別に決まり、CORSの許可元はスキーム・ホスト・ポートだけです。独立Viteサイトは設定済みの外部APIアドレスを維持します。servだけの部分構築も含め、全量・部分構築で同じPUBLIC_BASE_PATHを使用します。増分では置換前に不一致を拒否し、ディレクトリー変更には全量デプロイを使います。復旧時は旧公開のヘルスパスを検証します。[設定・フレームワークの違い・実行画面](../../docs/usage/configuration/delivery.md#网站部署在子目录)を参照してください。

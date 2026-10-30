@@ -132,6 +132,30 @@ Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_B
 
 图为真实生成的Fullstack Web经`/yyy/`反代访问的页面。验收沿该入口执行管理业务流程、hash深链接与刷新；API通过单独的`/api/v1/`代理访问实际服务。
 
+### 所有对外业务路径必须带同一目录
+
+如果网关只允许 `/somepath/`，仅设置前端 `PUBLIC_BASE_PATH` 不够。复用已有配置，把 Serv 的 API、健康和文档路径一起放入目录；不需要额外的 context path 开关：
+
+```yaml
+# 服务的 config/_serv.yml；原有 transport、CORS 等配置继续保留。
+http:
+  apiPrefix: /somepath/api/v1
+  health:
+    path: /somepath/health
+    readyPath: /somepath/ready
+  docs:
+    path: /somepath/docs
+    requireAuth: true
+  openapi:
+    path: /somepath/openapi.json
+```
+
+使用 `PUBLIC_BASE_PATH=/somepath` 构建完整制品，然后全量部署。SDK 从有效 Serv 配置生成 API 运行地址、精确代理和探活路径；上述文档在 `/somepath/_hai/scalar.js` 加载本地脚本，生产环境仍按应用策略关闭文档。显式访问规则和业务中手写的 URL 也须同步，避免旧父级环境变量遮蔽新 YAML。自建 S3 的 `publicEndpoint` 配成实际公开地址，例如 `https://app.example.com/somepath/files`。
+
+额外网关将 `/somepath/` 原样转发给 SDK Web 入口，其他业务路径返回 404。不要只把 Nginx `location` 改成带目录的健康路径：无 URI 的 `proxy_pass` 会把整个路径交给后端，必须与 Serv 配置一致。`/_hai/web-health` 继续供内部探活，外层网关无需公开；Let’s Encrypt HTTP-01 的公网 80 端口及 `/.well-known/acme-challenge/` 则需要单独放行。
+
+验收不仅检查首页：在根路径 `/api/v1/`、`/health` 被网关拒绝时，检查带目录的运行配置、匿名 API 拒绝、登录、导航刷新和文件上传下载。生成工程的浏览器门禁使用仅开放目录的网关，容器门禁另验证实际生成的 Nginx 配置。
+
 ### 容器、增量部署与反向代理
 
 CLI 与 Deploy 使用匹配版本。即使只构建后端，也要传入与既有网站一致的公开目录，让增量包保留完整的网站信息：

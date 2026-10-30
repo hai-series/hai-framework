@@ -100,6 +100,8 @@ SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
+全站仅开放 `/somepath/` 时，构建设置 `PUBLIC_BASE_PATH=/somepath`，并将 Serv 的 `http.apiPrefix`、健康/就绪和文档路径及存储 `publicEndpoint` 显式配置到同一目录。SDK 按这些有效配置生成代理和浏览器 API 地址；外层网关保留前缀，内部探活和 ACME 根路径单独处理。[完整配置与验收](../../docs/usage/configuration/delivery.md#所有对外业务路径必须带同一目录)。
+
 制品格式4和5都记录primaryService（serv/web），hasWeb表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有serv + web才生成同源API代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按Compose规则清理同项目的旧服务容器，不能仅修改deploy-target.json.directory完成迁移。
 
 迁移已有工程时，先同步 hai.json 的 build.images 名称、Dockerfile 文件名与引用；API workspace 的服务目录、包名和依赖引用统一为 -serv，并重新安装依赖。随后重新构建完整制品；不要仅改归档文件名或手工修改 manifest 冒充新构建。

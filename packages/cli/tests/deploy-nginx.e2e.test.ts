@@ -237,7 +237,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lockfileVersion: "9.0"\nimporters:\n  .: {}\n')
     writeFileSync(path.join(project, '.env.test'), `HAI_CORE_ENV=${production ? 'production' : 'test'}\nHAI_SERV_HTTP_HEALTH_PATH=/somepath/status\n`)
     writeFileSync(path.join(project, 'config/_core.yml'), 'env: test\n')
-    writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  health: {path: /health, readyPath: /ready}\n  docs: {path: /somepath/reference, requireAuth: true}\n  openapi: {path: /somepath/schema.json}\n')
+    writeFileSync(path.join(project, 'config/_serv.yml'), 'http:\n  apiPrefix: /somepath/api/v1\n  health: {path: /health, readyPath: /somepath/ready}\n  docs: {path: /somepath/reference, requireAuth: true}\n  openapi: {path: /somepath/schema.json}\n')
     const images = ['serv', 'web'].map((name) => {
       const file = `${name}-1.0.0.tar`
       writeFileSync(path.join(artifacts, file), name)
@@ -252,13 +252,18 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
     const configuration = path.join(project, 'nginx.conf')
     // 后端仅充当协议夹具；此处验证 Nginx 不吞掉文档请求、不将后端 401 改成前端成功页。
-    const upstream = `server { listen 3000; location = /somepath/status { return 200 'backend healthy'; } location = /somepath/reference { return 401 'authenticated docs required'; } location = /somepath/schema.json { default_type application/json; return 200 '{"openapi":"3.1.0"}'; } location = /somepath/_hai/scalar.js { default_type application/javascript; return 200 'globalThis.scalarBackend = true'; } location / { return 404; } }`
-    writeFileSync(configuration, `pid /tmp/routes-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:').replaceAll('/usr/share/nginx/html', '/tmp/routes-static')}\n${upstream}\n}\n`)
+    const upstream = `server { listen 3000; location = /somepath/status { return 200 'backend healthy'; } location = /somepath/reference { return 401 'authenticated docs required'; } location = /somepath/schema.json { default_type application/json; return 200 '{"openapi":"3.1.0"}'; } location = /somepath/_hai/scalar.js { default_type application/javascript; return 200 'globalThis.scalarBackend = true'; } location = /somepath/ready { return 200 'ready'; } location /somepath/api/v1/ { return 401 'api authentication required'; } location / { return 404; } }`
+    writeFileSync(configuration, `pid /tmp/routes-nginx.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:').replaceAll('/usr/share/nginx/html', '/tmp/routes-static')}\n${upstream}\nserver { listen 8081; location /somepath/ { proxy_pass http://127.0.0.1:8080; } location / { return 404; } }\n}\n`)
     execFileSync(runtime, ['cp', configuration, `${fixture.containerId}:/tmp/routes-nginx.conf`], { windowsHide: true, timeout: 15_000 })
     await executeDeployTestFixture(runtime, fixture, ['sh', '-c', 'mkdir -p /tmp/routes-static; printf "frontend fallback" > /tmp/routes-static/index.html; nginx -t -c /tmp/routes-nginx.conf; nginx -c /tmp/routes-nginx.conf'], { timeoutMs: 15_000 })
     try {
-      const read = (pathname: string) => executeDeployTestFixture(runtime, fixture!, ['sh', '-c', 'wget -S -O - "$1" 2>&1 || true', 'probe', `http://127.0.0.1:8080${pathname}`], { timeoutMs: 10_000 })
+      const read = (pathname: string) => executeDeployTestFixture(runtime, fixture!, ['sh', '-c', 'wget -S -O - "$1" 2>&1 || true', 'probe', `http://127.0.0.1:8081${pathname}`], { timeoutMs: 10_000 })
       expect(await read('/somepath/status')).toContain('backend healthy')
+      expect(await read('/somepath/ready')).toContain('ready')
+      expect(await read('/somepath/api/v1/private')).toContain('401')
+      expect(await read('/api/v1/private')).toContain('404')
+      expect(await read('/health')).toContain('404')
+      expect(await read('/somepath/runtime-config.js')).toContain('location.origin+"/somepath/api/v1"')
       const docs = await read('/somepath/reference')
       const spec = await read('/somepath/schema.json')
       const scalar = await read('/somepath/_hai/scalar.js')

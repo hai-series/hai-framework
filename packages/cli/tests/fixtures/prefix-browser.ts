@@ -14,7 +14,7 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
   page.on('pageerror', error => errors.push(error.message))
   page.on('request', (entry) => {
     const url = new URL(entry.url())
-    if (['script', 'stylesheet', 'image', 'font'].includes(entry.resourceType()) && url.origin === new URL(page.url()).origin && !url.pathname.startsWith(`${prefix}/`))
+    if (['script', 'stylesheet', 'image', 'font', 'fetch', 'xhr'].includes(entry.resourceType()) && url.origin === new URL(page.url()).origin && !url.pathname.startsWith(`${prefix}/`))
       invalidAssets.push(url.pathname)
   })
   if (kind === 'sveltekit') {
@@ -63,7 +63,9 @@ test('挂载目录下资源、运行配置、认证和刷新保持有效', async
     expect(runtime.headers()['cache-control']).toBe('no-store')
     await page.goto(`${prefix}/`)
     await expect(page.getByTestId('login-form')).toBeVisible()
-    expect(await page.evaluate(() => (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__?.apiBase)).toBe(`${new URL(page.url()).origin}/api/v1`)
+    expect(await page.evaluate(() => (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__?.apiBase)).toBe(`${new URL(page.url()).origin}${prefix}/api/v1`)
+    expect((await request.get('/api/v1/auth/me')).status()).toBe(404)
+    expect((await request.get('/health')).status()).toBe(404)
     expect((await page.reload())?.status()).toBe(200)
     await expect(page.getByTestId('login-form')).toBeVisible()
     await page.screenshot({ path: screenshot('vite-prefix-login.png'), fullPage: true })

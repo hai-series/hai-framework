@@ -608,7 +608,7 @@ export default defineConfig({
     } : server), {
       command: 'node scripts/prefix-proxy.mjs',
       env: { PREFIX_WEB_URL: ${JSON.stringify(rootUrl)}, PREFIX_SERVICE_URL: ${JSON.stringify(envOptions.serviceBaseUrl)}, PREFIX_PROXY_URL: ${JSON.stringify(proxyUrl)} },
-      url: ${JSON.stringify(`${proxyUrl}/health`)},
+      url: ${JSON.stringify(`${proxyUrl}/yyy/health`)},
       reuseExistingServer: false,
     }]`},
 })
