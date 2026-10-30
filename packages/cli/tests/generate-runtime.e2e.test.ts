@@ -51,10 +51,24 @@ afterEach(async () => {
         if (child.exitCode !== null || child.signalCode !== null)
           continue
         await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(() => reject(new Error('Generated server did not close')), 15_000)
+          let forced = false
+          let forcedDeadline: ReturnType<typeof setTimeout> | undefined
+          const timer = setTimeout(() => {
+            forced = true
+            child.kill('SIGKILL')
+            forcedDeadline = setTimeout(() => reject(new Error('Generated server termination could not be confirmed')), 5000)
+          }, 15_000)
+          child.once('error', (error) => {
+            clearTimeout(timer)
+            clearTimeout(forcedDeadline)
+            reject(error)
+          })
           child.once('close', () => {
             clearTimeout(timer)
-            resolve()
+            clearTimeout(forcedDeadline)
+            if (forced)
+              reject(new Error('Generated server required forced shutdown'))
+            else resolve()
           })
           child.kill()
         })
@@ -183,6 +197,9 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     let base: string
     let request: typeof fetch = fetch
     if (appType === 'website') {
+      // 本门禁验证生成路由和真实会话；验证码的完整交互由脚手架浏览器门禁验证。
+      runtimeEnvironment(project).HAI_IAM_CAPTCHA_ENABLED = 'false'
+      runtimeEnvironment(project).HAI_IAM_REGISTER_ENABLED = 'true'
       // Paraglide 工程以 ./node_modules 显式加载插件；复用本仓库已安装的同版本依赖。
       await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
       await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
@@ -192,6 +209,22 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       const page = await fetch(`${base}/route-page`)
       expect(page.status).toBe(200)
       expect(await page.text()).toContain('RoutePage')
+      expect((await fetch(`${base}/api/route-probe`)).status).toBe(401)
+      const registered = await fetch(`${base}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'origin': base },
+        body: JSON.stringify({ username: `route${randomBytes(6).toString('hex')}`, password: `Aa1!${randomBytes(24).toString('base64url')}` }),
+      })
+      expect(registered.status).toBe(200)
+      expect(await registered.json()).toMatchObject({ success: true })
+      const cookie = registered.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+      expect(cookie.length).toBeGreaterThan(0)
+      request = (input, init) => {
+        const authenticated = new Request(input, init)
+        authenticated.headers.set('cookie', cookie)
+        authenticated.headers.set('origin', base)
+        return fetch(authenticated)
+      }
     }
     else {
       const parent = appType === 'api' ? 'apps' : 'packages'
