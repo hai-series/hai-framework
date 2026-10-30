@@ -49,7 +49,6 @@ describe('resolveServHttpConfig', () => {
     expect(config.apiPrefix).toBe('/api/v1')
     expect(config.openapi).toBe(false)
     expect(config.docs).toBe(false)
-    expect(config.rpc).toBe(false)
     expect(config.health).toEqual({ path: '/health', readyPath: '/ready' })
   })
 
@@ -71,11 +70,6 @@ describe('resolveServHttpConfig', () => {
 
   it('rejects apiPrefix that does not start with /api/', () => {
     expect(() => resolveServHttpConfig({ apiPrefix: '/v1' as `/api/${string}` })).toThrow()
-  })
-
-  it('rpc defaults to loopback access', () => {
-    const config = resolveServHttpConfig({ rpc: {} })
-    expect(config.rpc).toEqual({ prefix: '/rpc', access: 'loopback' })
   })
 
   it('parses _serv.yml style config and fills top-level defaults', () => {

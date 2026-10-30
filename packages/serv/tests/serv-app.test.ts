@@ -64,7 +64,6 @@ describe('@h-ai/serv', () => {
     expect(typeof serv.implement).toBe('function')
     expect('createDocsPage' in serv).toBe(false)
     expect('securityHeaders' in serv).toBe(false)
-    expect('requireInternalRPC' in serv).toBe(false)
     expect('requireAuth' in serv).toBe(false)
     expect('requirePermission' in serv).toBe(false)
     expect('requireRole' in serv).toBe(false)
@@ -99,6 +98,7 @@ describe('@h-ai/serv', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(await response.json()).toEqual({ status: 'ok' })
+    expect((await app.request('/rpc/health')).status).toBe(404)
   })
 
   it('mounts custom middlewares before built-in routes', async () => {

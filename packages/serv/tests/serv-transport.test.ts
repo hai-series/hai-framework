@@ -51,7 +51,7 @@ function createFailingEncryptManager(): TransportEncryptionManager {
 
 describe('serv.createApp({ transport })', () => {
   it.each([600_000, -600_000])('时间偏差 %s 经真实 HTTP 中间件返回加密校时提示', async (offset) => {
-    const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false }, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto } })
+    const app = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', openapi: false, docs: false }, transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto } })
     const client = crypto.transport.createClient({ keyExchangeUrl: 'http://localhost/api/v1/_hai/key-exchange', fetch: async (input, init) => {
       const request = new Request(input, init)
       const clock = request.url.endsWith('/_hai/key-exchange') ? undefined : vi.spyOn(Date, 'now').mockReturnValue(Date.now() + offset)
@@ -80,7 +80,7 @@ describe('serv.createApp({ transport })', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
     })
 
@@ -119,7 +119,7 @@ describe('serv.createApp({ transport })', () => {
     serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: { serverKeyRing, crypto: forwardingCrypto, keyStore },
     })
 
@@ -132,7 +132,7 @@ describe('serv.createApp({ transport })', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       middlewares: [
         {
           middleware: (c, next) => {
@@ -171,7 +171,7 @@ describe('serv.createApp({ transport })', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
     })
 
@@ -221,7 +221,7 @@ describe('serv.createApp({ transport })', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto: failingCrypto },
     })
 
@@ -481,7 +481,7 @@ describe('serv.createApp({ transport })', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
       transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
     })
 

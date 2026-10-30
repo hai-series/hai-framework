@@ -28,7 +28,7 @@ const contract = {
   denied: apiContract.route({ method: 'GET', path: '/denied' }).output(apiContract.haiResultSchema(z.object({ ip: z.string().optional() }))),
 }
 const procedures = serv.implement(contract).context<ServContext>().route('ip').handle(({ context }) => ok({ ip: context.ip })).route('denied').handle(({ context }) => ok({ ip: context.ip })).build()
-const application = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', access: policy, trustedProxies: 'auto', openapi: false, docs: false, rpc: false } })
+const application = serv.createApp({ contract, procedures, http: { apiPrefix: '/api/v1', access: policy, trustedProxies: 'auto', openapi: false, docs: false } })
 const handle = kit.createHandle({ logging: false, access: policy, trustedProxies: 'auto' })
 const backend = createServer(async (incoming, outgoing) => {
   try {

@@ -32,9 +32,6 @@ http:
     path: ${HAI_SERV_HTTP_HEALTH_PATH:/health}
     # 用途：服务就绪检查的端点路径
     readyPath: ${HAI_SERV_HTTP_HEALTH_READYPATH:/ready}
-  # 用途：RPC 端点开关或访问配置
-  rpc: ${HAI_SERV_HTTP_RPC:false}
-
 # 用途：跨域访问的来源、请求头与凭据策略
 cors:
   # 用途：CORS 允许的 Origin，星号表示任意来源

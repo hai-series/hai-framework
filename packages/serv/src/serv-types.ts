@@ -24,7 +24,6 @@ export type {
   ServHttpConfig,
   ServHttpConfigInput,
   ServOpenAPIHttpConfig,
-  ServRpcHttpConfig,
   ServServerConfig,
   ServServerConfigInput,
   ServTransportRuntimeConfig,

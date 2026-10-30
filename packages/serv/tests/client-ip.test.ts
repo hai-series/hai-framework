@@ -40,7 +40,7 @@ describe('可信客户端 IP', () => {
       expect(() => resolveServHttpConfig({ trustedProxies: [invalid] })).toThrow()
   })
 
-  it('node socket、Fetch 元数据与自定义上下文共用可信解析，RPC 仍按连接对端限制', async () => {
+  it('node socket、Fetch 元数据与自定义上下文共用可信解析', async () => {
     const contract = {
       peer: apiContract.route({ method: 'GET', path: '/peer' }).output(apiContract.haiResultSchema(z.string().optional())),
     }
@@ -48,7 +48,6 @@ describe('可信客户端 IP', () => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { rpc: { prefix: '/rpc', access: 'loopback' } },
       createContext: input => serv.parseRequestContext(input),
     })
     const node = serv.listen(app, { host: '127.0.0.1', port: 0 })
@@ -67,8 +66,6 @@ describe('可信客户端 IP', () => {
       expect(await proxied.json()).toMatchObject({ success: true, data: '198.51.100.10' })
       const unknown = await proxiedApp.fetch(request({ 'x-forwarded-for': 'unknown, 10.0.0.2', 'x-real-ip': '127.0.0.1' }), { remoteAddress: '10.0.0.1' })
       expect(await unknown.json()).toEqual({ success: true })
-      const rpc = await app.fetch(new Request('http://test.local/rpc/peer', { headers: { 'x-real-ip': '127.0.0.1' } }), { remoteAddress: '203.0.113.9' })
-      expect(rpc.status).toBe(403)
     }
     finally {
       await node.close()

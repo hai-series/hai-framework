@@ -103,7 +103,7 @@ describe('serv feature audio', () => {
       return err({ code: 'provider:internal', httpStatus: 500 }, 'SELECT private_column; private-schema; credential=private-key')
     }
     const contract = apiContract.create({})
-    const app = serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), audio: { ai: { audio }, verifyTicket: async () => ok({ session: TEST_SESSION }) }, http: { openapi: false, docs: false, rpc: false } })
+    const app = serv.createApp({ contract, procedures: serv.implement(contract).context<ServContext>().build(), audio: { ai: { audio }, verifyTicket: async () => ok({ session: TEST_SESSION }) }, http: { openapi: false, docs: false } })
     const handle = serv.listen(app, { host: '127.0.0.1', port: 0 })
     let socket: WebSocket | undefined
     try {
@@ -143,7 +143,7 @@ describe('serv feature audio', () => {
       contract,
       procedures,
       audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
-      http: { openapi: false, docs: false, rpc: false },
+      http: { openapi: false, docs: false },
     })
     const handle = serv.listen(app, { port: 0 })
     if (!handle.server.listening)
@@ -420,7 +420,7 @@ describe('serv feature audio', () => {
       contract,
       procedures,
       audio: { ai: { audio: createAudioMock() }, verifyTicket: async () => ok({ session: TEST_SESSION }) },
-      http: { openapi: false, docs: false, rpc: false },
+      http: { openapi: false, docs: false },
     })
     expect(audioWsServers.has(app)).toBe(true)
   })

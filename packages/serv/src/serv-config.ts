@@ -1,7 +1,7 @@
 /**
  * @h-ai/serv — HTTP 配置
  *
- * 提供用于控制 API 前缀、OpenAPI、docs、健康检查、内部 RPC 与传输加密策略的配置结构，
+ * 提供用于控制 API 前缀、OpenAPI、docs、健康检查与传输加密策略的配置结构，
  * 并由 zod 负责默认值填充与边界校验。
  * @module serv-config
  */
@@ -102,25 +102,6 @@ export interface ServHealthHttpConfig {
 }
 
 /**
- * 内部 RPC endpoint 配置。
- *
- * @example
- * ```ts
- * import type { ServRpcHttpConfig } from '@h-ai/serv'
- * import { serv } from '@h-ai/serv'
- *
- * const rpc: ServRpcHttpConfig = { prefix: '/rpc', access: 'loopback' }
- * // 缺少可信连接信息时拒绝；跨节点来源通过明确网关/网络策略控制。
- * ```
- */
-export interface ServRpcHttpConfig {
-  readonly prefix: `/${string}`
-  readonly access: 'loopback' | 'private-network' | 'gateway-only'
-  readonly gatewayHeader?: string
-  readonly gatewaySecret?: string
-}
-
-/**
  * 传输加密运行时配置（对应 `config/_serv.yml`）。
  *
  * @example
@@ -168,7 +149,7 @@ export interface ServCorsRuntimeConfig {
  * import type { ServHttpConfig } from '@h-ai/serv'
  * import { serv } from '@h-ai/serv'
  *
- * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' }, rpc: false }
+ * const http: ServHttpConfig = { trustedProxies: 'auto', access: false, apiPrefix: '/api/v1', openapi: false, docs: false, health: { path: '/health' } }
  * ```
  */
 export interface ServHttpConfig {
@@ -180,7 +161,6 @@ export interface ServHttpConfig {
   readonly openapi: false | ServOpenAPIHttpConfig
   readonly docs: false | ServDocsHttpConfig
   readonly health: false | ServHealthHttpConfig
-  readonly rpc: false | ServRpcHttpConfig
 }
 
 /**
@@ -254,7 +234,6 @@ export type ServHttpConfigInput = Partial<{
   readonly openapi: false | Partial<ServOpenAPIHttpConfig>
   readonly docs: false | Partial<ServDocsHttpConfig>
   readonly health: false | Partial<ServHealthHttpConfig>
-  readonly rpc: false | Partial<ServRpcHttpConfig>
 }>
 
 /**
@@ -300,16 +279,6 @@ const HealthHttpConfigInputSchema = z.union([
   }),
 ])
 
-const RpcHttpConfigInputSchema = z.union([
-  z.literal(false),
-  z.object({
-    prefix: AbsolutePathSchema.default('/rpc'),
-    access: z.enum(['loopback', 'private-network', 'gateway-only']).default('loopback'),
-    gatewayHeader: z.string().optional(),
-    gatewaySecret: z.string().optional(),
-  }),
-])
-
 const TransportRuntimeConfigInputSchema = z.union([
   z.literal(false),
   z.object({
@@ -340,7 +309,6 @@ const ServHttpConfigInputSchema = z.object({
   openapi: OpenAPIHttpConfigInputSchema.default(false),
   docs: DocsHttpConfigInputSchema.default(false),
   health: HealthHttpConfigInputSchema.default({ path: '/health', readyPath: '/ready' }),
-  rpc: RpcHttpConfigInputSchema.default(false),
 })
 
 /**

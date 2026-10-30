@@ -12,7 +12,7 @@ import type { AudioFormat, AudioWsStartMessage } from '@h-ai/ai'
  * 4. 挂内置 CORS 包装及握手/预检的策略检查
  * 5. （可选）挂传输加密 middleware，再挂每次请求的访问策略
  * 6. 挂普通自定义 middleware（若提供）
- * 7. 挂基础路由（health / refresh-cookie）与业务路由（oRPC / RPC）
+ * 7. 挂基础路由（health / refresh-cookie）与业务路由（oRPC OpenAPI）
  * 8. 挂文档路由（openapi / docs）
  * @module serv-app
  */
@@ -36,12 +36,10 @@ import { core, HaiCommonError } from '@h-ai/core'
 import { createTransportBodyPolicy, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { upgradeWebSocket } from '@hono/node-server'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
-import { RPCHandler } from '@orpc/server/fetch'
 import { Hono as HonoApp } from 'hono'
 import { WebSocketServer } from 'ws'
 import { registerAudioWsRoute } from './features/serv-feature-audio.js'
 import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
-import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
 import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
 import { readRemoteAddress } from './serv-client-ip.js'
 import { resolveServHttpConfig } from './serv-config.js'
@@ -537,16 +535,12 @@ export function createApp<
   // Step 10：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
   mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext)
 
-  // Step 11：按需挂内部 RPC 路由，并在入口处限制访问来源。
-  if (http.rpc !== false)
-    mountRPCRoutes(app, options.procedures, http.rpc, createContext)
-
-  // Step 12：按需挂 OpenAPI JSON 文档端点。
+  // Step 11：按需挂 OpenAPI JSON 文档端点。
   if (http.openapi !== false) {
     app.get(http.openapi.path, async c => c.json(await getSpec()))
   }
 
-  // Step 13：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
+  // Step 12：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
   if (http.docs !== false) {
     const docs = http.docs
     // 资源与页面共用目录；相对 URL 在外层网关添加或剥离前缀后仍留在同一入口。
@@ -573,7 +567,7 @@ export function createApp<
     })
   }
 
-  // Step 14：所有运行时能力都已装配完毕，返回对外稳定的 HTTP app 抽象。
+  // Step 13：所有运行时能力都已装配完毕，返回对外稳定的 HTTP app 抽象。
   return app
 }
 
@@ -601,23 +595,11 @@ function mountOpenAPIRoutes(
   app.on([...API_METHODS], `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext))
 }
 
-function mountRPCRoutes(
-  app: Hono,
-  procedures: Router<AnyContractRouter, ServContext>,
-  rpcConfig: { readonly prefix: `/${string}` } & Parameters<typeof requireInternalRPC>[0],
-  createContext: CreateServContext,
-): void {
-  const handler = new RPCHandler(procedures)
-  const prefix = rpcConfig.prefix
-  app.use(`${prefix}/*`, requireInternalRPC(rpcConfig))
-  app.on([...API_METHODS], `${prefix}/*`, (c, next) => handleORPC(c, next, prefix, handler, createContext))
-}
-
 async function handleORPC(
   c: HonoContext,
   next: Next,
   prefix: `/${string}`,
-  handler: OpenAPIHandler<ServContext> | RPCHandler<ServContext>,
+  handler: OpenAPIHandler<ServContext>,
   createContext: CreateServContext,
 ): Promise<Response | void> {
   // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。

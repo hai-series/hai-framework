@@ -126,13 +126,6 @@ http:
   health:
     path: /health
     readyPath: /ready
-  rpc: false
-  # 启用内部 RPC 时用对象替换 false，gateway-only 必须配置网关密钥。
-  # rpc:
-  #   prefix: /api/rpc
-  #   access: gateway-only # loopback | private-network | gateway-only
-  #   gatewayHeader: X-Gateway-Key
-  #   gatewaySecret: \${HAI_SERV_HTTP_RPC_GATEWAYSECRET}
 
 # 按需开启跨域访问，生产环境填写明确的 Origin。
 # cors:

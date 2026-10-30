@@ -58,7 +58,7 @@ beforeAll(async () => {
     contract: {{fullstack.contractExportName}},
     procedures: createServerProcedures({ app: { name: 'Security fixture', version: 'test', env: 'test', defaultLocale: 'en-US', supportedLocales: ['en-US'], startedAt: new Date().toISOString(), frontends: ['web'] } }),
     iam,
-    http: { openapi: false, docs: false, rpc: false },
+    http: { openapi: false, docs: false },
   })
   server = serv.listen(app, { host: '127.0.0.1', port: 0 })
   if (!server.server.listening)

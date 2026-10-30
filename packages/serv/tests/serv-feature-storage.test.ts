@@ -73,7 +73,7 @@ describe('serv feature storage', () => {
       contract: apiContract.storage,
       procedures: createStorageProcedures({ storage: createStorageMock(), authorize: authorizeUserKeys }),
       createContext: createContext('en-US'),
-      http: { openapi: false, docs: false, rpc: false },
+      http: { openapi: false, docs: false },
     })
 
     const response = await app.request('/api/v1/storage/presigned-urls/download', {
@@ -97,7 +97,7 @@ describe('serv feature storage', () => {
       contract: apiContract.storage,
       procedures: createStorageProcedures({ storage: createStorageMock(), authorize: authorizeUserKeys }),
       createContext: createContext('zh-CN'),
-      http: { openapi: false, docs: false, rpc: false },
+      http: { openapi: false, docs: false },
     })
 
     const response = await app.request('/api/v1/storage/files/delete-many', {
