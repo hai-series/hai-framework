@@ -284,13 +284,13 @@ async function diagnoseBackendHealth(commands: DeployTestCommands): Promise<void
   catch { process.stderr.write('Deployment health diagnostic could not complete within the fixture budget.\n') }
 }
 
-/** 只读取实际交付压缩归档，不依赖打包后已清除的外层私有配置。 */
-function readDeliveryFile(directory: string, name: string): string {
+/** 读取实际归档，解压大型镜像时沿用本轮可取消的工作期限，不单独限制为十秒。 */
+async function readDeliveryFile(commands: DeployTestCommands, directory: string, name: string): Promise<string> {
   const archives = readdirSync(directory).filter(file => /\.tar(?:\.gz)?$/.test(file))
   if (archives.length !== 1)
     throw new Error('Expected one deployment archive')
   try {
-    return execFileSync('tar', ['-xOf', path.join(directory, archives[0]!), `./${name}`], { encoding: 'utf8', timeout: 10_000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] })
+    return await commands.run('tar', ['-xOf', path.join(directory, archives[0]!), `./${name}`])
   }
   catch {
     // 不把可能包含私有环境的命令输出拼入异常。
@@ -705,9 +705,9 @@ done`
           expect(details).toMatchObject({ success: true, data: { env: 'test' } })
           metadata = details.data
           const local = parseEnv(readFileSync(path.join(appDir, '.env.test'), 'utf8'))
-          const runtimeEnv = parseEnv(readDeliveryFile(deliveryDirectory, '.env.runtime'))
+          const runtimeEnv = parseEnv(await readDeliveryFile(commands, deliveryDirectory, '.env.runtime'))
           // 每次打包都没有本机稳定密码缓存，模拟换电脑；服务器状态与数据库数据必须保持。
-          const candidateDigest = createHash('sha256').update(readDeliveryFile(deliveryDirectory, 'managed-candidates.env')).digest('hex')
+          const candidateDigest = createHash('sha256').update(await readDeliveryFile(commands, deliveryDirectory, 'managed-candidates.env')).digest('hex')
           expect(candidateDigests.has(candidateDigest)).toBe(false)
           candidateDigests.add(candidateDigest)
           const digest = (await commands.run(runtime!, ['exec', fixture().containerId, 'sha256sum', '/opt/hai/apps with spaces/e2e-fullstack-test/managed-secrets.env'])).split(' ')[0]!
@@ -761,7 +761,7 @@ done`
           }
           const login = await client.encryptedFetch(loginUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD, captcha }) })
           expect(await login.json()).toMatchObject({ success: true })
-          const compose = JSON.parse(readDeliveryFile(deliveryDirectory, 'compose.json'))
+          const compose = JSON.parse(await readDeliveryFile(commands, deliveryDirectory, 'compose.json'))
           expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
           expect(compose.services.serv.ports).toBeUndefined()
           expect(compose.services.web.ports).toEqual([`${remoteWebPort}:8080`])
