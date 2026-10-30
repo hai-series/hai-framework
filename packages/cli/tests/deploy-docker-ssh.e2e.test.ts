@@ -318,6 +318,20 @@ async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { n
   const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url)))
   mkdirSync(parent, { recursive: true })
   const evidence = mkdtempSync(path.join(parent, `${RUN_ID}-${path.basename(project)}-`))
+  // 镜像编译不生成宿主 dist；从本轮实际部署的容器读取旁证，继续核对反馈包中的各端身份。
+  const projectName = path.basename(project)
+  for (const [service, source, destination] of [
+    ['web', '/usr/share/nginx/html/build-metadata.json', `apps/${projectName}-web/dist/build-metadata.json`],
+    ['serv', '/app/dist/build-metadata.json', `packages/${projectName}-serv/dist/build-metadata.json`],
+  ] as const) {
+    const raw = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', `hai-${projectName}-${metadata.env}-${service}`, 'cat', source])
+    const identity = JSON.parse(raw)
+    expect(Object.keys(identity).sort()).toEqual(['appVersion', 'buildId', 'commit'])
+    const target = path.join(project, destination)
+    mkdirSync(path.dirname(target), { recursive: true })
+    writeFileSync(target, raw)
+    writeFileSync(path.join(evidence, `deployed-${service}-build-metadata.json`), raw)
+  }
   const env = {
     HAI_CORE_NAME: metadata.name,
     HAI_CORE_VERSION: metadata.version,
