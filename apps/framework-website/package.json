@@ -3,7 +3,7 @@
     "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "name": "framework-website",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.4",
   "private": true,
   "packageManager": "pnpm@12.11.2",
   "description": "hai-framework public documentation website, generated from the website template",
