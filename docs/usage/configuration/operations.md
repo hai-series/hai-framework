@@ -6,7 +6,7 @@
 
 ## Feedback通知、采集和保留
 
-位置：`config/_feedback.yml`。先初始化关系数据库（RelDB）和私有存储（Storage），再启动 Feedback。需要发送邮件或短信通知时，还要先准备 Reach 通道。
+位置：`config/_feedback.yml`。先初始化关系数据库（RelDB）和私有存储（Storage），再启动 Feedback。需要通过邮件或短信发送通知时，还要先准备 Reach 通道。
 
 | 项 | 框架默认 | 影响与条件 |
 | --- | --- | --- |
