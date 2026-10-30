@@ -252,11 +252,13 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await expectFailure({}, ['EADDRINUSE', String(selectedPort)])
       if (appType === 'fullstack') {
         await expectMissing('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', ['hai:crypto:'])
-        expect((await crypto.init()).success).toBe(true)
-        const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange` })
-        clients.push(client)
-        request = client.encryptedFetch
       }
+      // create 固定完整模块后，API 与 Fullstack 都通过真实加密客户端访问。
+      expect((await fetch(`${base}/api/v1/route-probe`)).status).toBe(400)
+      expect((await crypto.init()).success).toBe(true)
+      const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange` })
+      clients.push(client)
+      request = client.encryptedFetch
     }
     const prefix = appType === 'website' ? '/api' : '/api/v1'
     const list = await request(`${base}${prefix}/route-probe`)

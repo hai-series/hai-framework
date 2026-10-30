@@ -46,7 +46,7 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
     title: 'api-feedback',
     projectName: 'sample-api-feedback',
     createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
-    expectedFiles: ['apps/sample-api-feedback-serv/config/_feedback.yml', 'e2e/api-serv.spec.ts'],
+    expectedFiles: ['apps/sample-api-feedback-serv/config/_feedback.yml', 'apps/sample-api-feedback-serv/config/_iam.yml', 'apps/sample-api-feedback-serv/config/_serv.yml', 'e2e/api-serv.spec.ts'],
   },
   {
     title: 'fullstack-feedback',
@@ -55,34 +55,10 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
     expectedFiles: ['packages/sample-fullstack-feedback-shared/src/lib/pages/feedback.svelte', 'packages/sample-fullstack-feedback-serv/config/_feedback.yml'],
   },
   {
-    title: 'api-transport',
-    projectName: 'sample-api-transport',
-    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
-    expectedFiles: ['apps/sample-api-transport-serv/config/_serv.yml', 'e2e/api-serv.spec.ts'],
-  },
-  {
-    title: 'api',
-    projectName: 'sample-api',
-    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
-    expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-serv/package.json'],
-  },
-  {
     title: 'admin',
     projectName: 'sample-admin',
     createArgs: ['--type', 'admin', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/app.spec.ts', 'src/routes/api/auth/login/+server.ts'],
-  },
-  {
-    title: 'api-iam',
-    projectName: 'sample-api-iam',
-    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
-    expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-iam-serv/config/_iam.yml'],
-  },
-  {
-    title: 'api-iam-basic',
-    projectName: 'sample-api-iam-basic',
-    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
-    expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-iam-basic-serv/config/_iam.yml'],
   },
   {
     title: 'website',
@@ -483,13 +459,13 @@ it('generated migration executes up and down with HaiResult', async () => {
             .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills', skill, resource), 'utf8'))
         }
       }
-      if (scenario.title === 'api-iam-basic') {
-        // 生成项目实际安装和运行基础认证，且没有强制添加可选通知模块或 LDAP SDK。
-        const servicePath = path.join(projectPath, 'apps/sample-api-iam-basic-serv')
+      if (scenario.title === 'api-feedback') {
+        // 完整 API 样板统一验收认证、通知、反馈和加密，不再重复运行已删除的轻量组合。
+        const servicePath = path.join(projectPath, 'apps/sample-api-feedback-serv')
         const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
-        expect(manifest.dependencies).not.toHaveProperty('@h-ai/reach')
-        expect(manifest.dependencies).not.toHaveProperty('ldapts')
-        expect(await fileExists(path.join(servicePath, 'config/_reach.yml'))).toBe(false)
+        for (const name of ['iam', 'reach', 'feedback', 'crypto', 'ai', 'vecdb'])
+          expect(manifest.dependencies).toHaveProperty(`@h-ai/${name}`)
+        expect(await fileExists(path.join(servicePath, 'config/_reach.yml'))).toBe(true)
       }
       // 每个成功场景立即释放磁盘资源，清理计入该场景的整体超时预算。
       await removeTempRoot(root)
