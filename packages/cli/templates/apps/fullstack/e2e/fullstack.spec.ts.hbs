@@ -902,8 +902,11 @@ test('feedback submits an empty description and business operator can process an
   await expect(page.getByTestId('feedback-page')).toBeVisible()
   const row = page.getByRole('row').filter({ hasText: number })
   await expect(row).toBeVisible()
-  await row.getByRole('button', { name: /标记已处理|Mark handled|処理済み/ }).click()
-  await expect(row).toContainText(/已处理|Handled|処理済み/)
+  const handled = page.waitForResponse(response => response.request().method() === 'PATCH' && new URL(response.url()).pathname.endsWith('/status'))
+  await row.getByRole('button', { name: /标记已处理|Mark(?: as)? handled|処理済み/ }).click()
+  expect((await handled).status()).toBe(200)
+  // 仅核对状态徽标；“标记已处理”按钮本身也包含“已处理”，不能据此放行。
+  await expect(row.getByText(/^(已处理|Handled|処理済み)$/)).toBeVisible()
   await row.getByRole('button', { name: /撤销处理|Reopen|処理を取り消す/ }).scrollIntoViewIfNeeded()
   await capture(page, 'feedback-handled.png', testInfo.outputPath('feedback-handled.png'))
   await row.getByRole('button', { name: /撤销处理|Reopen|処理を取り消す/ }).click()

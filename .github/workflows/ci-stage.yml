@@ -101,8 +101,8 @@ jobs:
         with:
           path: ${{ runner.temp }}/hai-ci-proof/${{ inputs.stage }}
           key: hai-ci-pass-v1-${{ inputs.stage }}-${{ github.sha }}-${{ inputs.fingerprint }}-${{ steps.environment.outputs.fingerprint }}
-      - name: Preserve browser failure evidence
-        if: failure() && inputs.browser
+      - name: Preserve browser and scaffold failure evidence
+        if: failure() && (inputs.browser || inputs.stage == 'scaffold')
         uses: actions/upload-artifact@v6.0.0
         with:
           name: ci-failure-${{ inputs.stage }}-${{ github.run_attempt }}
@@ -111,5 +111,8 @@ jobs:
             apps/*/test-results/**/error-context.md
             packages/cli/test-results/**/*.png
             packages/cli/test-results/**/error-context.md
+            tmp/validation/module-review/scaffold-browser/**/*.png
+            tmp/validation/module-review/scaffold-browser/**/error-context.md
+            tmp/validation/module-review/scaffold-browser/**/trace.zip
           if-no-files-found: ignore
           retention-days: 3
