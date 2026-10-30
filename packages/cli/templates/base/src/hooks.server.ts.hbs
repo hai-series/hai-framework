@@ -8,13 +8,7 @@
 import type { TransportEncryptionOptions } from '@h-ai/kit'
 {{/if}}
 import type { Handle } from '@sveltejs/kit'
-{{#if features.cache}}
 import process from 'node:process'
-{{else}}
-{{#if features.crypto}}
-import process from 'node:process'
-{{/if}}
-{{/if}}
 {{#if hasI18n}}
 import { base } from '$app/paths'
 {{else}}
@@ -29,7 +23,7 @@ import { base } from '$app/paths'
 {{#if hasI18n}}
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 {{/if}}
-import { initApp } from '$lib/server/init.js'
+import { closeApp, initApp } from '$lib/server/init.js'
 import { getKitConfig } from '$lib/server/kit-config.js'
 {{#if features.cache}}
 import { cache } from '@h-ai/cache'
@@ -53,6 +47,14 @@ import { reldb } from '@h-ai/reldb'
 // =============================================================================
 
 let appInitPromise: Promise<void> | null = null
+
+// Node 适配器停止接收请求后释放模块，避免数据库或后台任务阻止进程退出。
+process.once('sveltekit:shutdown', () => {
+  void closeApp().catch((error: unknown) => {
+    core.logger.error('Application shutdown failed', { error })
+    process.exitCode = 1
+  })
+})
 
 async function ensureAppInitialized() {
   if (!appInitPromise) {
