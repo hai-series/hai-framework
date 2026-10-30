@@ -113,7 +113,7 @@ export async function createDeploymentBundle(options: {
           : [`../${options.deploymentId}/middleware-runtime.env`]
       }
       if (Array.isArray(service.volumes))
-        service.volumes = service.volumes.map(mount => typeof mount === 'string' ? mount.replace('./web.conf:', `../${options.deploymentId}/web.conf:`).replace('./request-access.yml:', `../${options.deploymentId}/request-access.yml:`) : mount)
+        service.volumes = service.volumes.map(mount => typeof mount === 'string' ? mount.replace(/\.\/(web\.conf|request-access\.yml|tls|https-start\.sh|renew-https\.sh|\.env\.runtime|middleware\.env|runtime-env\.mjs):/g, `../${options.deploymentId}/$1:`) : mount)
     }
     put('compose.json', JSON.stringify({ ...compose, services: Object.fromEntries(selected.map(name => [name, compose.services[name]])) }))
     // 合并入口仅保存 extends 指向；更新服务时整体切换定义，避免旧 env_file/卷列表累加。
@@ -189,6 +189,8 @@ export async function createDeploymentBundle(options: {
     if (selected.includes(artifact.primaryService) && existsSync(join(directory, 'request-access.yml')))
       put('request-access.yml', readFileSync(join(directory, 'request-access.yml'), 'utf8'))
     put('middleware.env', options.middlewareEnv)
+    if (selected.includes(artifact.primaryService) && !compose.services[artifact.primaryService]?.env_file)
+      put('runtime-env.mjs', readFileSync(new URL('./deploy-runtime-env.mjs', import.meta.url), 'utf8'))
     const middlewareRuntime = join(directory, 'middleware-runtime.env')
     const nativeEnvironment = existsSync(middlewareRuntime) ? readFileSync(middlewareRuntime, 'utf8') : ''
     put('middleware-runtime.env', nativeEnvironment)

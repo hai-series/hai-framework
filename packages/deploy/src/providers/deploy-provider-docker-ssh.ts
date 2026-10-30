@@ -356,6 +356,8 @@ export function createDockerSshProvider(
       containerPort,
       primaryService,
       requestAccessPolicy: requestAccessSnapshot !== undefined,
+      nodeRuntime: primaryService === 'serv' || scan.isSvelteKit,
+      nodeOptions: env.NODE_OPTIONS,
       sidecar,
       web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
       mountWebConfig: standaloneWebConfig,

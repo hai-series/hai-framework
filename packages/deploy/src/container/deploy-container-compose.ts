@@ -486,6 +486,8 @@ export function buildRuntimeEnv(
  * @param options.mountWebConfig - 独立Vite站点是否挂载公开的目录路由配置，默认不挂载。
  * @param options.gateway - SSR/API 自建对象存储的公开 Nginx 入口；只在没有现成 Web 代理时启用。
  * @param options.requestAccessPolicy - 是否为本次更新的后端挂载只读请求策略快照。
+ * @param options.nodeRuntime - Node 后端默认重读运行文件；SSR web 显式标识。
+ * @param options.nodeOptions - 打包时保留的 Node 启动参数，更新需重新部署。
  * @returns compose YAML 字符串
  * @example 模块内部上下文
  * ```ts
@@ -508,9 +510,14 @@ export function generateComposeFile(options: {
   gateway?: boolean
   /** 本次更新的服务挂载不可变、已验证的请求策略快照。 */
   requestAccessPolicy?: boolean
+  /** Node 后端每次启动重读运行文件；serv 默认开启，SSR web 由扫描结果标识。 */
+  nodeRuntime?: boolean
+  /** 需要保留的 Node 启动参数；变化仍需重新部署容器。 */
+  nodeOptions?: string
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
   const primaryService = options.primaryService ?? 'serv'
+  const nodeRuntime = options.nodeRuntime ?? primaryService === 'serv'
 
   const app: ComposeService = {
     image: imageRef,
@@ -524,10 +531,18 @@ export function generateComposeFile(options: {
     networks: ['hai-app'],
   }
   const appVolumes = [...sidecar.appVolumes]
+  const appEnvironment: Record<string, string> = {}
+  if (nodeRuntime) {
+    delete app.env_file
+    appVolumes.push('./.env.runtime:/run/hai/.env.runtime:ro', './middleware.env:/run/hai/middleware.env:ro', './runtime-env.mjs:/run/hai/runtime-env.mjs:ro')
+    appEnvironment.NODE_OPTIONS = (`--import /run/hai/runtime-env.mjs${options.nodeOptions ? ` ${options.nodeOptions}` : ''}`).replaceAll('$', () => '$$')
+  }
   if (options.requestAccessPolicy)
     appVolumes.push('./request-access.yml:/run/hai/request-access.yml:ro')
   if (options.web || options.gateway)
-    app.environment = { HAI_DEPLOY_PRIVATE_PROXY: '1' }
+    appEnvironment.HAI_DEPLOY_PRIVATE_PROXY = '1'
+  if (Object.keys(appEnvironment).length)
+    app.environment = appEnvironment
   if (options.mountWebConfig)
     appVolumes.push('./web.conf:/etc/nginx/conf.d/default.conf:ro')
   if (appVolumes.length)

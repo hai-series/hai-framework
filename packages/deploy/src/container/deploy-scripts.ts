@@ -406,6 +406,12 @@ if [ "$partial" = true ]; then
 fi
 step credentials 'Resolving server-managed middleware credentials'
 sh "$release/resolve-managed-secrets.sh" "$root" "$release" "$runtime"
+if [ -f "$release/runtime-env.mjs" ]; then
+  # 上级目录保护宿主秘密；只读文件挂载允许非 root 应用读取，宿主所有者仍可修改配置。
+  chmod 700 "$root" "$release"
+  chmod 644 "$release/.env.runtime" "$release/middleware.env"
+  chmod 444 "$release/runtime-env.mjs"
+fi
 # 在任何可能启动服务（包括增量恢复旧拓扑）之前定稿，失败回滚不删除卷的引擎身份。
 sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" commit
 printf '%s\n' "$release/compose-entry.json" >> "$release/compose-files"
