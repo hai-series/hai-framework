@@ -805,6 +805,8 @@ test('administrator and user complete account, avatar, preference, password and 
 {{#if fullstack.e2eFrontend}}
 
 test('feedback submits an empty description and business operator can process and reopen it', async ({ page }, testInfo) => {
+  // 附件脱敏、桌面/手机截图和导出校验共用完整流程预算，目录代理也执行相同断言。
+  test.setTimeout(120_000)
   await page.goto('./')
   await login(page, 'business_operator', businessOperatorPassword)
   const feedbackImage = Buffer.from(await page.evaluate(() => {

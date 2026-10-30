@@ -231,7 +231,7 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     }
   })
 
-  it('updates personal preferences, validates images and serves only allowed avatar resources', async () => {
+  it('updates personal preferences and clears the email address', async () => {
     expect((await call('/profile/update', { displayName: 'Updated', locale: 'en-US', theme: '{{fullstack.theme.defaultTheme}}' }, userToken)).success).toBe(true)
     const current = await call<{ metadata: { locale: string, theme: string } }>('/auth/me', undefined, userToken, 'GET')
     expect(current.success).toBe(true)
@@ -242,6 +242,9 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     expect(cleared.success).toBe(true)
     if (cleared.success)
       expect(cleared.data.email).toBe('')
+  })
+
+  it('rejects invalid images, oversized payloads and anonymous avatar uploads', async () => {
     const invalid = await call('/profile/avatar', { contentType: 'image/png', base64: 'PHN2Zz48L3N2Zz4=' }, userToken)
     expect(invalid.success).toBe(false)
     if (!invalid.success)
@@ -252,6 +255,9 @@ describe('{{fullstack.servPackageName}} mini administration', () => {
     expect(anonymous.success).toBe(false)
     if (!anonymous.success)
       expect(anonymous.error.httpStatus).toBe(401)
+  })
+
+  it('serves only uploaded avatar resources and restricts profile fields', async () => {
     const injected = await transport.encryptedFetch(`http://localhost${PREFIX}/profile/update`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'authorization': `Bearer ${userToken}` },
