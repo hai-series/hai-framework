@@ -306,6 +306,7 @@ async function readDeliveryFile(commands: DeployTestCommands, directory: string,
  * @param metadata.version - 预期的已部署版本。
  * @param metadata.env - 预期的运行环境。
  * @param project - 本轮生成并已部署的工程路径，默认使用 appDir。
+ * @param buildMetadata - 此工程浏览器用例需要读取的镜像旁证；其他模板不使用 Fullstack 路径。
  * @returns 验收成功后返回。
  * @throws 浏览器验收或证据持久化失败时抛错。
  * @example
@@ -313,17 +314,14 @@ async function readDeliveryFile(commands: DeployTestCommands, directory: string,
  * await verifyDeployedBrowser(commands, { name: 'Acceptance app', version: '2.4.6', env: 'test' }, appDir)
  * ```
  */
-async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { name: string, version: string, env: string }, project = appDir): Promise<void> {
+async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { name: string, version: string, env: string }, project = appDir, buildMetadata: ReadonlyArray<{ service: string, source: string, destination: string }> = []): Promise<void> {
   const local = parseEnv(readFileSync(path.join(project, '.env.test'), 'utf8'))
   const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url)))
   mkdirSync(parent, { recursive: true })
   const evidence = mkdtempSync(path.join(parent, `${RUN_ID}-${path.basename(project)}-`))
   // 镜像编译不生成宿主 dist；从本轮实际部署的容器读取旁证，继续核对反馈包中的各端身份。
   const projectName = path.basename(project)
-  for (const [service, source, destination] of [
-    ['web', '/usr/share/nginx/html/build-metadata.json', `apps/${projectName}-web/dist/build-metadata.json`],
-    ['serv', '/app/dist/build-metadata.json', `packages/${projectName}-serv/dist/build-metadata.json`],
-  ] as const) {
+  for (const { service, source, destination } of buildMetadata) {
     const raw = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', `hai-${projectName}-${metadata.env}-${service}`, 'cat', source])
     const identity = JSON.parse(raw)
     expect(Object.keys(identity).sort()).toEqual(['appVersion', 'buildId', 'commit'])
@@ -787,8 +785,12 @@ done`
         }
       }
       expect(metadata).toBeDefined()
-      if (metadata)
-        await verifyDeployedBrowser(commands, metadata)
+      if (metadata) {
+        await verifyDeployedBrowser(commands, metadata, appDir, [
+          { service: 'web', source: '/usr/share/nginx/html/build-metadata.json', destination: 'apps/e2e-fullstack-web/dist/build-metadata.json' },
+          { service: 'serv', source: '/app/dist/build-metadata.json', destination: 'packages/e2e-fullstack-serv/dist/build-metadata.json' },
+        ])
+      }
       // 可选人工视觉复核；截图留在独立证据根目录，工程和密钥仍由 afterAll 清理。
       if (process.env.HAI_DEPLOY_E2E_REVIEW === '1') {
         process.stdout.write(`Review screenshots: ${process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url))}\n`)
