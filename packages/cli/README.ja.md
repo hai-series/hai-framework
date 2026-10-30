@@ -38,12 +38,12 @@ hai --help
 ### アプリの作成
 
 ```sh
-hai create my-app --type fullstack --frontends web --yes
+hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
 
-省略した項目は対話で選択し、`--yes` は既定値を使います。依存インストールと Git 初期化は既定で有効です。`--no-install` / `--no-git` で無効化できます。デプロイツールは開発依存として既定で入り、不要なら `--no-deploy` を指定します。
+省略した項目は対話で選択し、`--defaults` は既定値を使います。依存インストールと Git 初期化は既定で有効です。`--no-install` / `--no-git` で無効化できます。デプロイツールは開発依存として既定で入り、不要なら `--no-deploy` を指定します。
 
 ### プロジェクトテンプレート
 
@@ -54,13 +54,13 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                            |
 | `fullstack`                | contract、API、共通 UI、選択した Web/App/Desktop。miniapp は説明のみ |
 
-`--template minimal|default|full|custom` で構成を選び、`--features iam,db,...` で業務モジュールを指定します。Fullstack は管理 UI に必要な IAM・DB・cache・crypto・storage・audit・任意バックアップ/アラート用 scheduler を保持します。`--features` を省略すると feedback と reach も有効になります。明示した機能一覧では任意モジュールの選択を保持し、他のアプリ種別では問題報告を明示的に選択します。AI/ONNX/CUDA は既定で入りません。
+新規作成は適用可能な全モジュールとサンプルに統一し、サーバーには AI・ベクトル保存先・feedback も導入します。クライアントの依存境界は維持します。インストール容量は増え、サンプルは実業務に合わせて変更が必要です。`--template`、`--features`、`--examples/--no-examples` は削除し、`create --yes/-y` は `--defaults` に変更しました。旧引数は明示的に拒否します。`deploy --yes` と既存工程の構成は維持します。
 
-独立した `mobile-app` で IAM または crypto を選択すると、フロント用 crypto を導入し、typed client の暗号化 transport を既定で有効にします。crypto を選択しない明示的な平文 API も利用できます。`PUBLIC_API_TRANSPORT=off` は対応する平文サービスにのみ使用し、`PUBLIC_API_KEY_EXCHANGE_PATH` は公開された鍵交換パスだけを変更します。鍵交換失敗時に平文へ切り替えず、サーバー秘密鍵をクライアントへ渡しません。終了時は client transport の後に自身が初期化した crypto を解放します。
+独立した `mobile-app` は frontend crypto と暗号化 typed client transport を含みます。既存の平文 API には `PUBLIC_API_TRANSPORT=off` を明示します。`PUBLIC_API_KEY_EXCHANGE_PATH` は公開鍵交換パスの上書きです。失敗時に平文へ切り替えず、サーバー秘密鍵はクライアントに渡しません。終了時は transport、その後に自身の crypto を解放します。
 
 ### 静的websiteとGitHub Pages
 
-`hai create docs-site --type website --features none --yes`で任意業務モジュールを選択しないことを明示し、Core/Kit/UIと既定のデプロイ開発ツールは保持します。deployを選んでからno-deployで回避する必要はありません。noneは他の値、カンマ、空項目と併用できません。省略時の既定値とfullstackの必須構成は変わりません。
+新規 website は全モジュールとサンプルを含み、既定は Node SSR です。静的公開前にサーバー業務依存・初期化・独自 API/actions を工程から除去し、Core/Kit/UI を保持します。軽量作成引数はありません。動的機能のない既存 website では下記の静的構築を利用できます。
 
 websiteの既定はNode SSRです。ビルド時に`HAI_BUILD_STATIC=1`と`PUBLIC_BASE_PATH=/docs-site`（docs-siteを実際のリポジトリー名に置換。各区間はASCII英数字・_・.・-のみ、末尾/なし、ルートは空）を指定してpnpm buildを実行すると静的buildを生成します。静的フラグは0/1のみでcompile専用です。PUBLIC_BASE_PATHはDockerのWeb構築にも対応しますが、ネイティブapp/desktopでは指定できません。静的構築はサーバー業務モジュール、独自API/actions、事前描画されないページを拒否し、本番ガードを緩和せずSPAフォールバックも生成しません。既定のhealth APIは含めません。
 
@@ -115,7 +115,17 @@ admin・website・h5 作成時に crypto を選ぶと `_kit.yml` の transport �
 
 パスルール `encryption: required / disabled` で内部 API と通常 HTTPS の外部連携を分けます。相反する設定や必須 transport 不足ではホスト作成に失敗します。Fullstack 管理テンプレートは transport を必須とし、明文例外はパスルールで指定します。[アクセスと暗号化の手引き](../../docs/usage/configuration/request-access.md)を参照してください。
 
+### 任意の HTTPS 証明書
+
+`pnpm run deploy` は全コンテナーテンプレートで HTTPS なし、既存 PEM 証明書・秘密鍵、Let’s Encrypt を選択できます。相対パスは工程ルート基準です。ドメイン・期限・鍵一致を検証して配布物にコピーします。版を固定した公式 Certbot イメージで申請し、12 時間ごとに更新を確認して Nginx を再読み込みします。利用規約の承認、実際のメール、公的 DNS、80 番ポート、CA 接続が必要です。隔離環境では既存証明書を使います。状態はサーバーに保持し、秘密鍵をアプリイメージに含めません。`--yes` は保存設定を使います。
+
+`hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../../docs/usage/configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
+
 ### ビルドとデプロイ
+
+Node バックエンド（Serv / SvelteKit SSR）は起動ごとに配布先の `.env.runtime` を既定で読み直します。編集後に `docker restart <コンテナー>` または `podman restart <コンテナー>` を実行し、イメージ再構築や追加 override は不要です。既存配置は新 CLI で一度デプロイしてください。削除した設定を旧 Compose 環境から復活させず、管理接続の `middleware.env` を優先します。私有プロキシ識別と Node 起動引数は配置設定のままです。静的 Web・ミドルウェア・ポート/マウント・Nginx 制限は従来手順で更新します。手動変更をバックアップし、継続する値は元の環境にも反映してください。次のバックエンド配置時に再生成されます。
+
+イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
 
 DB 接続は保存前に選択したバックエンドの公開 Schema で検証します。MySQL の `ssl` は `false` または厳密な TLS オブジェクトのみで、`{}` は証明書チェーンと DNS ID を検証します。PostgreSQL のモードは維持します。CLI は純粋な Schema と Zod を内包するため、検証対象アプリに DB パッケージやドライバーは不要です。アプリの実行には依存関係が必要で、デプロイ機能には解決可能な `@h-ai/deploy`（生成プロジェクトの開発依存）が必要です。
 
@@ -128,7 +138,7 @@ CLI は呼び出し元の `HAI_/PUBLIC_/VITE_` を除外し、内部で生成し
 配布ロールは、独立 API バックエンドが `serv`、静的または SSR のブラウザーサイトが `web`、Android/iOS インストーラーが `app`、デスクトップインストーラーが `desktop` です。Fullstack は serv と任意の web、API は serv、admin/website/h5/mobile-app のブラウザーイメージは web を使用します。ネイティブ app/desktop はサーバーの Compose サービスではありません。`--images` と `--services` には serv/web、ネイティブ配布には `--target app` または `--target desktop` を指定します。API サービスのディレクトリは `apps/<project>-serv` です。イメージとコンテナーはルート `package.json.name` を共通の識別名として正規化します（scope 除去、小文字化、無効文字の連続をハイフンに変換）。名前がないか無効な場合は失敗し、ディレクトリ名へフォールバックしません。イメージは `localhost/hai-<project>-<role>:<buildId>`、コンテナーは `hai-<project>-<environment>-<role>` となり、イメージは環境間で再利用できます。
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # 複数サービスは一つの --services にカンマ区切りで指定。PowerShell 向けに引用符で囲む
@@ -136,7 +146,7 @@ pnpm run deploy --env prod --build --services "serv,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar.gz` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
 成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
 
@@ -176,7 +186,7 @@ fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`b
 
 feedback.init(config, { collectEvidence }) で業務の本文・ZIP を非同期収集できます。_feedback.yml は businessCollectionTimeoutMs と webhookUrl/webhookSecret/webhookTimeoutMs を提供します。Webhook は永続再試行と詳細画面での状態確認・再試行に対応し、秘密はサーバー非公開環境に保存します。[feedback の例](../feedback/README.ja.md) を参照してください。
 
-`hai create my-app --type fullstack --frontends web --yes` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは business_operator に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。本番では共有 DB と非公開 S3 を使用します。通知は disabled/console/reach を独立に選び、console の既定は metadata のみです。要約は consoleContent: summary を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
+`hai create my-app --type fullstack --frontends web --defaults` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは business_operator に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。本番では共有 DB と非公開 S3 を使用します。通知は disabled/console/reach を独立に選び、console の既定は metadata のみです。要約は consoleContent: summary を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
 
 `hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
 

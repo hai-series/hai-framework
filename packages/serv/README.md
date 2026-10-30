@@ -18,7 +18,7 @@ hai-framework 的 API 服务运行时：对外暴露稳定的 HTTP App 抽象，
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - `build()` 同步返回普通 router，可按嵌套属性选取默认 feature procedures；挂载的 contract 与所选 procedures 保持一致，未选入口不开放。
 - 缺失路由返回本地化的 HaiResult JSON 404，启用传输加密后保留 404，不误报为非 JSON 响应导致的 500。
-- 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
+- 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页
 - 可选传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` 自动挂载密钥协商与请求/响应加解密
 - 可选语音入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` 挂载统一语音 WebSocket；连接建立即用一次性 ticket 鉴权（返回 `{ session, grant? }`，独立预鉴权超时），每帧运行时 Zod 校验 + 严格状态机，输入/积压/发送缓冲背压与级联取消；授权回调负责服务端确认操作、模型、音色、配额与并发占用
 
@@ -102,7 +102,7 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
-Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。内部 RPC 仍按连接对端限制。
+Node `serv.listen()` 自动提供 socket 对端地址；默认忽略 `X-Forwarded-For` / `X-Real-IP`。只有 `http.trustedProxies` 中列出的代理 IP/CIDR 才能提供转发头，XFF 从右向左停在首个不可信地址，忽略其左侧内容；可信链无法解析或过长时 IP 为 undefined，不能回退为代理身份。代理必须清洗或追加转发头。Fetch 平台通过 `app.fetch(request, { remoteAddress: platformPeerAddress })` 显式提供可信对端，缺失时 IP 为 undefined，不能从任意请求头复制。自定义 `createContext(input)` 复用完整 input，保留框架已解析的 `input.ip`。
 
 toFetch 对 Request、URL、字符串统一调用标准 Request(input, init)，RequestInit 可覆盖 method、headers、body、signal 等字段；不修改原 Request 的字段，正文已消费/锁定或非法正文组合会以 Promise 拒绝。预取消和派发前取消不进入 handler，进行中取消结束调用方等待并把有效 signal 传给应用；监听器在完成/失败/取消后释放，取消后的迟到响应会取消未消费正文。取消不能回滚已经开始的外部副作用；Response 交付后的流由应用监听 request.signal 并自行关闭。
 
@@ -355,7 +355,7 @@ const app = serv.createApp({
 2. 内置 CORS 响应包装；密钥交换和预检先检查访问策略
 3. 内置 `transport`（若启用）及每次请求访问策略
 4. 你的 `middlewares`
-5. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
+5. health / refresh-cookie / OpenAPI / docs / oRPC routes
 
 说明：
 
@@ -426,7 +426,7 @@ const procedures = serv
 
 - `src/pipelines/*` 是 `@h-ai/serv` 的内部默认实现目录，不作为公开子路径 API 承诺
 - 对应用层公开的稳定入口仍然是根入口 `@h-ai/serv`
-- `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径文档暴露
+- `securityHeaders` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径文档暴露
 
 #### httpOnly Cookie 认证（推荐生产方案）
 
@@ -489,7 +489,7 @@ await apiClient.init({
 
 ### API 概览
 
-- `serv.createApp(options)`：创建 HTTP App 抽象，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
+- `serv.createApp(options)`：创建 HTTP App 抽象，挂载自定义 `middlewares`、健康检查、OpenAPI handler 与可选文档
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
@@ -574,7 +574,6 @@ http:
   health:
     path: /health
     readyPath: /ready
-  rpc: false
 
 cors:
   origin: https://app.example.com
@@ -601,11 +600,12 @@ transport:
 
 `ServHttpConfigInput`：
 
+原生 RPC 入口及 `HAI_SERV_HTTP_RPC`、`ServRpcHttpConfig` 已删除。业务继续使用现有 OpenAPI/REST 路径和 `api-client`，底层 oRPC contract 与 procedure 保留。
+
 - `apiPrefix`：默认 `/api/v1`
 - `health`：默认 `{ path: '/health', readyPath: '/ready' }`
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
-- `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）；启用后自动挂载 `/_hai/scalar.js`，从 `@scalar/api-reference` 的 browser bundle 提供本地 Scalar UI 脚本，无需外网 CDN
-- `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private-network' | 'gateway-only', gatewayHeader?, gatewaySecret? }`
+- `docs`：默认 `false`；启用：`{ path: '/docs' }`；文档目录下自动挂载 `_hai/scalar.js`（默认 `/_hai/scalar.js`），提供本地 Scalar UI，无需外网 CDN。页面中的脚本和 spec 使用相对地址；网关保留前缀时 docs/openapi 都应配置在转发范围内，剥离前缀时仍可用后端原路径。`requireAuth` 仍由后端校验。
 - `cors`：配置文件中的跨端 origin、credentials、allowedHeaders 与 exposedHeaders；应用通过 `serv.cors(...)` 装配。
 - `transport`：`config/_serv.yml` 顶层配置；启用后可通过 `servConfig.transport` 装配到 `createApp({ transport })`，默认密钥协商子路径 `/_hai/key-exchange`
 
@@ -652,7 +652,7 @@ const app = serv.createApp({
 
 普通 procedure 的认证、授权、业务失败和被捕获的 handler 异常都作为 `HaiResult` 输出，默认通过 HTTP 200 返回；`error.httpStatus` 是领域错误元数据，不会自动改写响应状态。客户端必须检查 `success` 与 `error.code`。例如未登录为 `error.httpStatus=401`，数据库查询失败或 INTERNAL_ERROR 为 500。
 
-oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地化失败体包含 `error.httpStatus=400` 和字段错误；procedure 内 `serv.validateInputOrFail` 返回的失败仍为 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI/RPC 权限与 transport 协议错误另按自身契约返回真实 HTTP 状态。api-client 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路。
+oRPC contract 输入校验在 procedure 之前失败时返回 HTTP 400，本地化失败体包含 `error.httpStatus=400` 和字段错误；procedure 内 `serv.validateInputOrFail` 返回的失败仍为 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI 权限与 transport 协议错误另按自身契约返回真实 HTTP 状态。api-client 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路。
 
 - Default procedures 全部返回 `HaiResult<T>`，客户端直接判断 `result.success`
 - 认证失败 → `HaiCommonError.UNAUTHORIZED`（由 `.auth()` 按 `context.locale` 本地化）

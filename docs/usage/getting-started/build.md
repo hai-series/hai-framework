@@ -2,17 +2,17 @@
 
 [首次交付](README.md) · [上一步：开发](develop.md) · [下一步：部署](../operations/deployment.md)
 
-先决定交付什么，再选target。compile编译源码，docker生成serv/web镜像，app/desktop生成对应原生包；cap:sync只同步资源，不是安装包。
+先决定交付什么，再选target。compile编译源码，image生成serv/web镜像，app/desktop生成对应原生包；cap:sync只同步资源，不是安装包。
 
 ```sh
 pnpm build
-pnpm build --target docker
-pnpm build --target docker --images web
+pnpm build --target image --concurrency 2
+pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 pnpm build --target app --platform android
 ```
 
-命令在生成工程根运行。所需参数、hai.json完整例子和真实默认值见[构建部署配置](../configuration/delivery.md#配置入口和角色)，避免在不同流程重复维护。
+命令在生成工程根运行。镜像默认并行两项，资源紧张时设置 `--concurrency 1`。所需参数、hai.json完整例子和真实默认值见[构建部署配置](../configuration/delivery.md#配置入口和角色)，避免在不同流程重复维护。
 
 ## 核对身份和产物
 

@@ -22,18 +22,18 @@
 
 ```sh
 pnpm build
-pnpm build --target docker
-pnpm build --target docker --images web
+pnpm build --target image
+pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
-源码编译、镜像构建、桌面打包分别对应 compile/docker/desktop。构建不选择部署环境、不注入运行期密钥。原生安装包在对应操作系统准备 SDK 与 Rust 工具链后构建。
+源码编译、镜像构建、桌面打包分别对应 compile/image/desktop。构建不选择部署环境、不注入运行期密钥。原生安装包在对应操作系统准备 SDK 与 Rust 工具链后构建。
 
 #### build 的可选参数
 
 | 参数                       | 用途                                      |
 | -------------------------- | ----------------------------------------- |
-| `--target`                 | compile（默认）、docker、desktop          |
+| `--target`                 | compile（默认）、image、app、desktop      |
 | `--images`                 | serv、web 或 serv,web；只构建导出所选镜像 |
 | `--runtime`                | auto（优先 Podman）、podman、docker       |
 | `--network`                | 容器构建网络，默认引擎设置                |
@@ -98,7 +98,7 @@ SDK据制品生成Nginx目录、运行配置入口、SSR健康路径和返回URL
 
 #### 先准备环境与部署目标
 
-默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
 制品格式4和5都记录primaryService（serv/web），hasWeb表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有serv + web才生成同源API代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按Compose规则清理同项目的旧服务容器，不能仅修改deploy-target.json.directory完成迁移。
 
@@ -169,7 +169,7 @@ S3 的 `createBucket` 默认为 `false`；部署器为自建 S3 注入 `HAI_STOR
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，外层仅保留 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest.json 仅保存在 tar 内，README 同时记录部署 ID，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
+每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，外层仅保留 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest.json 仅保存在 tar 内，README 同时记录部署 ID，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar.gz`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
 
 离线上传支持密钥和密码认证。`deploy-target.json` 只保存认证方式及 `passwordEnv` 名称（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`），不保存密码值。密码由操作机环境提供，仅传给本次 SSH/SCP 子进程，不进入应用环境、tar 或 manifest；Windows 也可读取用户持久环境。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。修改 target 只影响当前交付目录，不回写工程；新交付仍使用工程保存的环境配置。
 
@@ -212,6 +212,16 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 - 包含私有配置，安全搬运，不提交 Git；持久化卷身份跨版本稳定。
 - 实际断外网验证启动、登录、页面刷新、重启与数据持久化。生产 HTTPS、证书、DNS 和外部服务需另行准备。
 
+### 构建与交付优化
+
+镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；README 仅保留外层一份。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
+
+### 可选 HTTPS 证书
+
+`pnpm run deploy` 为所有容器模板统一提供“不启用 / 已有 PEM 证书和私钥路径 / Let’s Encrypt”。相对路径以工程根为基准，已有证书校验域名、有效期和密钥匹配后复制到私有发布包。Let’s Encrypt 使用固定版本官方 Certbot 镜像申请，每 12 小时检查续期，Nginx 自动重载。需要确认服务条款、真实邮箱、公网 DNS、80 端口和 CA 网络；隔离环境使用已有证书。证书状态保留在服务器，私钥不进入应用镜像。`--yes` 复用保存配置。
+
+配置为 `hai.json.deploy.provider.expose.https`，也可用环境私有文件覆盖。默认 HTTPS 443、HTTP 跳转开启，未配置保持 HTTP；启停或更改模式、域名、端口、本地证书需全量部署。配置和续期边界见[HTTPS 手册](../../docs/usage/configuration/delivery.md#可选https证书)。`--plan` 的 `root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录，仅显示公开证书元数据。
+
 ### SDK
 
 ```ts
@@ -249,6 +259,8 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 
 ### 运行环境文件与重复部署
 
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+
 框架持久配置使用 `HAI_*` 命名。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` 是中间件镜像的原生协议，必须保留原名，但只生成到私有的 `middleware-runtime.env` 并由中间件容器加载；不再写入工程环境文件或应用的 `.env.runtime`。应用增量部署沿用的 `middleware.env` 仅保存框架 `HAI_*` 配置。旧工程已保存的这些原生字段不会被自动删除，新应用环境会忽略它们；新包与旧成功基线可共存，旧服务仍读取其原交付文件。
 
 自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 serv/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
@@ -259,7 +271,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点复用同一有效密钥环，可直接加载环境文件，也可通过 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
 
-每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`，供 Compose 加载运行配置；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
+每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`，供后端启动预加载（静态 Web 仍用 Compose env_file）；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 
@@ -277,7 +289,7 @@ Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部�
 
 ## 只读部署计划
 
-`createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
+`createDeploymentPlan(appDir, config, options)` 不初始化 Provider、不生成中间件凭据、不创建输出目录、不连接目标。复用实际扫描、环境解析、资源名称与制品 checksum 校验，返回工程根 `root`、部署服务目录 `serviceDir`、版本、构建 ID、范围、保留服务、配置文件与变量名、基线要求和恢复目录，省略所有变量值与 SSH 凭据。远端 current 未读取时明确 not-inspected；局部更新仍由执行端严格要求成功基线。Compose 恢复不会回退数据库数据或迁移。CLI 对应 `hai deploy --env prod --plan`。
 
 需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
 

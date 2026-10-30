@@ -5,7 +5,7 @@
   import { Badge, MarkdownRenderer } from '@h-ai/ui'
 
   const { data }: PageProps = $props()
-  const install = '```sh\npnpm add -g @h-ai/cli@latest\nhai create my-app --type website --yes\ncd my-app && pnpm dev\n```'
+  const install = '```sh\npnpm add -g @h-ai/cli@latest\nhai create my-app --type website --defaults\ncd my-app && pnpm dev\n```'
   const features = [
     { icon: 'icon-[tabler--layout-grid]', title: m.site_feature_apps, body: m.site_feature_apps_body, slug: 'getting-started/create' },
     { icon: 'icon-[tabler--settings]', title: m.site_feature_config, body: m.site_feature_config_body, slug: 'configuration/data' },
@@ -15,10 +15,10 @@
     { icon: 'icon-[tabler--package]', title: m.site_feature_delivery, body: m.site_feature_delivery_body, slug: 'operations/deployment' },
   ]
   const previews = [
-    { id: 'fullstack', title: m.site_preview_fullstack, body: m.site_preview_fullstack_body, image: '/template-previews/fullstack-users.png', width: 1280, height: 720, command: 'hai create my-business --type fullstack --frontends web --yes' },
-    { id: 'website', title: m.site_preview_website, body: m.site_preview_website_body, image: '/guide-images/website-static-contact-warning.png', width: 1280, height: 720, command: 'hai create my-site --type website --features none --yes' },
-    { id: 'admin', title: m.site_preview_admin, body: m.site_preview_admin_body, image: '/template-previews/admin-login.png', width: 1280, height: 720, command: 'hai create my-admin --type admin --yes' },
-    { id: 'mobile', title: m.site_preview_mobile, body: m.site_preview_mobile_body, image: '/template-previews/mobile-login.png', width: 390, height: 933, command: 'hai create my-mobile --type mobile-app --yes' },
+    { id: 'fullstack', title: m.site_preview_fullstack, body: m.site_preview_fullstack_body, image: '/template-previews/fullstack-users.png', width: 1280, height: 720, command: 'hai create my-business --type fullstack --frontends web --defaults' },
+    { id: 'website', title: m.site_preview_website, body: m.site_preview_website_body, image: '/guide-images/website-static-contact-warning.png', width: 1280, height: 720, command: 'hai create my-site --type website --defaults' },
+    { id: 'admin', title: m.site_preview_admin, body: m.site_preview_admin_body, image: '/template-previews/admin-login.png', width: 1280, height: 720, command: 'hai create my-admin --type admin --defaults' },
+    { id: 'mobile', title: m.site_preview_mobile, body: m.site_preview_mobile_body, image: '/template-previews/mobile-login.png', width: 390, height: 933, command: 'hai create my-mobile --type mobile-app --defaults' },
   ]
 </script>
 

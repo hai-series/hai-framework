@@ -70,7 +70,7 @@ An unversioned install selects npm's `latest` tag. Query `pnpm view @h-ai/cli@la
 ```sh
 pnpm add -g @h-ai/cli@latest
 hai --version
-hai create my-app --type fullstack --frontends web --yes
+hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
@@ -79,21 +79,20 @@ Creation installs dependencies and initializes Git by default. Run `hai create m
 
 | Creation option | Meaning and values | Default | Example |
 | --- | --- | --- | --- |
-| `[name]` | Project name: lowercase letters, digits, hyphens | Prompt, initially my-app; my-app with --yes | `hai create orders-app` |
-| `--type <type>` | fullstack: API + clients; api: contract + service; admin/website/h5: SvelteKit; mobile-app: Capacitor + Vite | Prompt, initially admin; admin with --yes | `--type fullstack` |
+| `[name]` | Project name: lowercase letters, digits, hyphens | Prompt, initially my-app; my-app with --defaults | `hai create orders-app` |
+| `--type <type>` | fullstack: API + clients; api: contract + service; admin/website/h5: SvelteKit; mobile-app: Capacitor + Vite | Prompt, initially admin; admin with --defaults | `--type fullstack` |
 | `--frontends <targets>` | fullstack web/app/desktop, comma-separated; miniapp is a placeholder | web,app,desktop for fullstack; unused otherwise | `--frontends web,desktop` |
-| `-t, --template <template>` | minimal/default/full/custom | custom for fullstack; otherwise prompt, default with --yes | `--template custom` |
-| `-f, --features <features>` | 业务模块 / Application modules / 業務モジュール | 类型与模板预设 / Template defaults | `--template custom --features iam,db` |
-| `--examples` / `--no-examples` | Include example code | `true` | `--no-examples` |
 | `--no-install` | Defer dependency installation | Install dependencies | `--no-install` |
 | `--no-git` | Skip Git initialization | Initialize Git | `--no-git` |
 | `-p, --package-manager <pm>` | pnpm/npm/yarn | pnpm for fullstack/API; otherwise detected or selected interactively | `--package-manager pnpm` |
 | `--git-remote <url>` | Remote repository URL | Unset | `--git-remote https://git.example.com/team/my-app.git` |
-| `-y, --yes` | Create with defaults without prompts | false | `hai create my-app --yes` |
+| `-y, --defaults` | Create with defaults without prompts | false | `hai create my-app --defaults` |
 
-To include a desktop client, use `--frontends web,desktop`. Existing applications can add supported modules with `hai add <module>`, for example `hai add deploy`. Fullstack includes database, cache, IAM, encryption, storage, and audit modules by default; it has no AI runtime dependency and does not require CUDA.
+To include a desktop client, use `--frontends web,desktop`. Existing applications can add supported modules with `hai add <module>`, for example `hai add deploy`.
 
 In fullstack, `packages/my-app-contract` defines APIs, `packages/my-app-serv` implements them, `packages/my-app-shared` holds shared code, and `apps/my-app-web` provides the Web client. Environment files live at the project root. In the API template they live in `apps/my-app-serv`. Read your generated README and AGENTS.md before making changes.
+
+Creation always uses the full applicable modules and examples, including AI, vector storage and feedback on servers. Clients retain their dependency boundaries. Installation is larger, and examples need adaptation. `--template`, `--features` and `--examples/--no-examples` have been removed; `create --yes/-y` is now `--defaults`. Old options fail explicitly. `deploy --yes` and existing projects keep their behavior.
 
 ### 3. Configure the application and develop features
 
@@ -158,14 +157,14 @@ Delivery roles are `serv` for a separate API backend, `web` for a static or SSR 
 
 ```sh
 pnpm build
-pnpm build --target docker
-pnpm build --target docker --images web
+pnpm build --target image
+pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
 #### Build options
 
-`--target` selects compile (default), docker, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
+`--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
 #### Describe packaging in hai.json
 
@@ -213,9 +212,17 @@ For a website under `/yyy/`, set PUBLIC_BASE_PATH=/yyy explicitly during full an
 
 ### 5. Deploy artifacts to an environment
 
+Node backends (Serv / SvelteKit SSR) reread the release `.env.runtime` on every start by default. Edit it, then run `docker restart <container>` or `podman restart <container>`; no image rebuild or extra override is needed. Existing deployments need one deployment with the new CLI. Removed settings do not survive through stale Compose injection. Managed connections in `middleware.env` retain precedence; private proxy identity and Node startup options remain deployment settings. Static Web, middleware, ports/mounts and Nginx limits keep their existing update flow. Back up manual edits and copy permanent changes into the source environment; the next backend deployment regenerates the file.
+
+`pnpm run deploy` offers no HTTPS, existing PEM certificate/key paths, or Let’s Encrypt for every container template. Relative paths resolve from the project root. Certificates are checked for domain, validity and key matching, then copied into private releases. A pinned official Certbot image handles issuance and renewal checks every 12 hours, with automatic Nginx reload. It requires terms acceptance, a real email, public DNS, port 80 and CA connectivity. Isolated servers use existing certificates. Certificate state stays on the server; keys stay out of application images. `--yes` reuses saved settings.
+
+Configure `hai.json.deploy.provider.expose.https` or private environment overrides. Defaults are HTTPS 443 and HTTP redirection; omission retains HTTP. Enabling/disabling HTTPS or changing mode, domain, ports or supplied certificates requires a full deployment. See the [HTTPS guide](../../docs/usage/configuration/delivery.md#可选https证书). Plans use `root` for the project and `serviceDir` for the service source/configuration directory, exposing only public certificate metadata.
+
+Image builds run at most two images concurrently by default; use `--concurrency 1` to reduce resource use. Dependency installation precedes source copies, and each side copies only its required source. Runtime images omit application declaration files, source maps and README files. Packaging validates and reuses middleware archives by image content ID and hashes application archives while copying. Delivery defaults to `.tar.gz`; explicit `--output release.tar` keeps an uncompressed archive. README is only outside the archive. Successful deployment removes its incoming upload/extraction, retains recovery configuration in releases, and keeps images in the container engine.
+
 #### Prepare the environment and destination
 
-The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
+The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar.gz`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
 
 Artifact formats 4 and 5 record primaryService (serv/web); hasWeb describes the complete browser topology. Format 5 also records a non-root webBasePath. Only serv + web generates a same-origin API proxy. Rebuild artifacts using formats 1–3. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
 
@@ -276,7 +283,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 Each delivery creates one `.hai/deploy/<environment>/bundle-<project>-<deploymentId>-<version>/` directory. Its outer files are the tar, `deploy.sh`, `deploy.ps1`, `deploy-target.json`, `read-target.awk`, `deploy-local.sh` and `README.txt`. Compose, private runtime environments, optional web.conf, the manifest and apply.sh are inside the tar, together with the selected application/middleware images and checksums. Copy the directory as a unit; do not expect private runtime files beside the upload scripts.
 
-Explicit `--output release-prod.tar` produces `release-prod-<version>/release-prod-<version>.tar` relative to the command directory, with companion files in that delivery directory. Before uploading, open `deploy-target.json` and check the server, SSH user and port, private-key/known-hosts paths and remote directory using the field descriptions.
+Explicit `--output release-prod.tar` produces `release-prod-<version>/release-prod-<version>.tar.gz` relative to the command directory, with companion files in that delivery directory. Before uploading, open `deploy-target.json` and check the server, SSH user and port, private-key/known-hosts paths and remote directory using the field descriptions.
 
 Run `deploy.ps1` on Windows or `deploy.sh` on Linux/macOS; both read the same JSON and execute the same server workflow. The latter requires sh, awk, ssh and scp locally. Use `sh deploy.sh HOST [PORT] [USER]` to override the address, or `-IdentityFile` on deploy.ps1 to override its key. Both support `HAI_DEPLOY_IDENTITY_FILE` and `HAI_DEPLOY_KNOWN_HOSTS_FILE` overrides. After moving to another computer or operating system, update the paths to actual files there.
 

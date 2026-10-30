@@ -15,8 +15,12 @@
 | http.health | /health 和 /ready | false 关闭；健康与依赖就绪分开，检查路径也应同步部署 health |
 | http.openapi | false | 对象启用，默认 path=/openapi.json；生产按公开范围选择 |
 | http.docs | false | 对象启用，默认 path=/docs；requireAuth 可显式要求认证 |
-| http.rpc | false | 对象启用，prefix=/rpc、access=loopback；private-network/gateway-only 仍需可信连接边界 |
-| rpc.gatewayHeader/gatewaySecret | 无默认 | gateway-only 按实际网关配置，密钥仅服务端，不放公开YAML值或页面 |
+
+原生 RPC 入口、`HAI_SERV_HTTP_RPC` 及其子配置和 `ServRpcHttpConfig` 已删除；应用继续通过现有 OpenAPI/REST 路径与 `api-client` 调用业务。
+
+容器部署的后端探针按最终有效的 `http.health.path` 请求，`health: false` 时跳过该 HTTP 探针。Fullstack 同源入口转发实际启用的健康/就绪路径、OpenAPI JSON、docs 和文档目录下的 `_hai/scalar.js`；生产模板按实际 Core 环境关闭文档，代理不绕过 `docs.requireAuth`。整段 `HAI_SERV` 覆盖高于叶子变量。改变路径或文档路由后需重新部署，以同步 Nginx 和部署探针；普通业务配置仍可修改运行文件后重启后端。
+
+文档 HTML 使用相对的脚本和 spec 地址。网关保留 `/somepath/` 时，将 docs 与 OpenAPI 路径一起放在此目录下，例如 `/somepath/docs` 和 `/somepath/openapi.json`；脚本自动位于 `/somepath/_hai/scalar.js`，不会请求其他应用的根路径。网关剥离此前缀时，后端仍可使用 `/docs` 和 `/openapi.json`，浏览器的相对请求同样保留外部前缀。不要只转发页面而漏掉同目录下的资源；文档带尾斜杠时脚本挂在该文档目录内部。
 
 ```yaml schema=@h-ai/serv:ServConfigSchema
 server: { host: 0.0.0.0, port: 3000 }
@@ -27,7 +31,6 @@ http:
   health: { path: /health, readyPath: /ready }
   openapi: false
   docs: false
-  rpc: false
 transport: false
 ```
 

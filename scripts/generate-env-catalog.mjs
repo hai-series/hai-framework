@@ -95,7 +95,7 @@ function fieldDescription(module, segments) {
     host: 'HTTP 监听主机名或 IP',
     port: 'HTTP 监听端口',
     apiPrefix: '业务 HTTP API 的基础路径前缀',
-    prefix: 'RPC 端点的路径前缀',
+    access: 'HTTP 请求的来源、时间与传输访问策略',
     runtime: '本地或远程容器运行时，auto 按部署模块顺序探测',
     transport: '传输加密开关或密钥协商配置',
     keyExchangePath: '客户端与服务端约定的密钥交换端点',
@@ -111,10 +111,6 @@ function fieldDescription(module, segments) {
     requireAuth: '是否要求认证后访问接口文档',
     health: 'HTTP 健康检查开关或检查配置',
     openapi: 'OpenAPI 端点开关或端点配置',
-    rpc: 'RPC 端点开关或访问配置',
-    access: 'RPC 对外访问策略',
-    gatewayHeader: '受信网关认证请求头名称',
-    gatewaySecret: '受信网关认证密钥',
     trustedProxies: '可信代理的 IP/CIDR，只有这些代理的转发头会被信任',
   })[key === '0' ? segments.at(-2) : key]
 }

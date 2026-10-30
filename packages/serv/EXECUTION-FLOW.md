@@ -89,7 +89,7 @@ serv.listen(app, { onClose: closeApp })
 - `src/pipelines/serv-pipeline-types.ts`：pipeline 共享类型（HTTP middleware / procedure handler）
 - `src/pipelines/serv-pipeline-helper.ts`：pipeline 公共 helper（`mapHaiError`、`buildHaiErrorBody`）
 - `src/pipelines/serv-pipeline-guard.ts`：route 认证、权限、角色 guard 与异常映射
-- `src/pipelines/*.ts`：其余 HTTP pipeline（安全头、内部 RPC 等）
+- `src/pipelines/*.ts`：其余 HTTP pipeline（安全头等）
 - `src/serv-transport.ts`：传输加密，负责密钥协商、请求解密、响应加密
 - `src/serv-cookie-auth.ts`：refresh cookie 传输，负责登录写 cookie、刷新 token、退出时清 cookie
 - `src/serv-openapi.ts`：文档生成，负责 OpenAPI 3.1 spec 与 Scalar HTML
@@ -127,11 +127,7 @@ flowchart TD
    J -- 否 --> L[跳过]
    K --> M[挂 oRPC OpenAPI routes]
    L --> M
-   M --> N{是否启用内部 RPC}
-   N -- 是 --> O[挂 RPC 路由 + 访问控制]
-   N -- 否 --> P[跳过]
-   O --> Q{是否启用 openapi/docs}
-   P --> Q
+   M --> Q{是否启用 openapi/docs}
    Q --> R[返回 Hono app]
 ```
 
@@ -141,7 +137,7 @@ flowchart TD
    - `resolveServHttpConfig()` 负责填充默认值。
    - `apiPrefix` 默认 `/api/v1`。
    - `health` 默认 `/health`、`/ready`。
-   - `openapi`、`docs`、`rpc` 默认关闭。
+   - `openapi`、`docs` 默认关闭。
 
 2. **决定请求上下文工厂**
    - `createApp()` 会根据 `createContext`、`verifyToken`、`iam` 选择 `CreateServContext`。
@@ -172,12 +168,7 @@ flowchart TD
 9. **挂主 API 路由**
    - `mountOpenAPIRoutes()` 把所有 `${apiPrefix}/*` 请求交给 oRPC 的 `OpenAPIHandler`。
 
-10. **按需挂内部 RPC 路由**
-
-- 如果启用 `rpc`，会先经过 `requireInternalRPC()` 做来源限制。
-- 通过后再进入 `RPCHandler`。
-
-11. **按需挂 OpenAPI JSON / 文档页**
+10. **按需挂 OpenAPI JSON / 文档页**
 
 - `openapi.path` 返回 spec。
 - `docs.path` 返回 Scalar 文档页面。
@@ -191,7 +182,7 @@ flowchart TD
 
 1. 请求进入 Hono。
 2. `securityHeaders()` 先挂好响应头。
-3. 若配置了自定义 `middlewares`，它们会先于 health / docs / oRPC / RPC 路由执行。
+3. 若配置了自定义 `middlewares`，它们会先于 health / docs / oRPC OpenAPI 路由执行。
 4. `handleORPC()` 调用 `createContext({ request })` 生成 `ServContext`。
 5. oRPC 根据 contract 匹配 procedure。
 6. 链式 router 在进入 handler 前执行该 route 声明的 auth / permission / role guard。
@@ -266,7 +257,7 @@ serv
 5. 所有 route 的未处理异常统一转成 INTERNAL_ERROR HaiResult。
 6. 编译期拒绝未知/重复/遗漏 route；运行时也会拒绝未知、重复和缺失路径。
 
-认证、授权、业务失败与被捕获的 handler 异常均是普通 procedure 的 HaiResult 输出，不从 `error.httpStatus` 自动映射 HTTP 状态。contract 输入 schema 校验失败发生在 handler 之前，返回 HTTP 400；handler 内的 `validateInputOrFail` 失败仍返回 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI/RPC 入口权限与 transport 协议错误另按自身契约处理。
+认证、授权、业务失败与被捕获的 handler 异常均是普通 procedure 的 HaiResult 输出，不从 `error.httpStatus` 自动映射 HTTP 状态。contract 输入 schema 校验失败发生在 handler 之前，返回 HTTP 400；handler 内的 `validateInputOrFail` 失败仍返回 HTTP 200。HTTP middleware、refresh-cookie、OpenAPI 入口权限与 transport 协议错误另按自身契约处理。
 
 ## 内置 feature procedures 的关键逻辑
 

@@ -13,7 +13,7 @@ pnpm run deploy --env test --plan
 pnpm run deploy --env test --plan --inspect-remote
 ```
 
-第一条只读核对本地制品、项目/环境、选中/保留范围；第二条再用SSH读取真实成功基线。not-inspected、missing和unavailable不能当验证通过，失败不得退成真实部署。
+第一条只读核对本地制品、项目/环境、选中/保留范围；`root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录；第二条再用SSH读取真实成功基线。not-inspected、missing和unavailable不能当验证通过，失败不得退成真实部署。
 
 仓库可运行`node docs/usage/examples/deployment-plan.mjs`：建立临时浏览器项目，实际确认web、拒绝不存在的serv，核对文件不变后清理。
 
@@ -23,10 +23,10 @@ pnpm run deploy --env test --plan --inspect-remote
 
 ## 区分编译、镜像和安装包
 
-compile编译源码，docker生成服务镜像，app/desktop生成原生包。核对根name/version和hai.json.build路径；serv/web是容器角色，app/desktop不是Compose服务。旧命名或旧格式须重新完整构建，不只改归档名。
+compile编译源码，image生成服务镜像，app/desktop生成原生包。核对根name/version和hai.json.build路径；serv/web是容器角色，app/desktop不是Compose服务。旧命名或旧格式须重新完整构建，不只改归档名。
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env test --artifact-dir .hai/build/docker/<buildId>
 ```
 
@@ -38,6 +38,10 @@ pnpm run deploy --env test --artifact-dir .hai/build/docker/<buildId>
 
 新连接与中间件私密值放.env.<环境>.local或Secret Manager，公开差异放.env.<环境>。部署来源与普通Core不同，先看[优先级](../configuration/delivery.md#环境和秘密的来源)，不要用打印完整环境排查。
 
+## 可选 HTTPS
+
+部署可选择已有 PEM 证书和私钥（复制至发布包），或由官方 Certbot 申请、续期。首次启用和证书布局变更使用全量；`--yes` 复用保存设置。自动申请需确认条款、公网域名、80 端口和 CA 网络，隔离环境使用已有证书。详见[HTTPS 配置](../configuration/delivery.md#可选https证书)。
+
 ## 完整包、增量包与生效检查
 
 ```sh
@@ -45,17 +49,23 @@ pnpm run deploy --env test --build --bundle-only
 pnpm run deploy --env test --build --services web
 ```
 
-第一条生成完整交付，不连接SSH；复制整个目录，在Windows用deploy.ps1、Linux/macOS用deploy.sh上传，完全隔离Linux运行sh deploy-local.sh。第二条基于目标成功完整基线只更新web，实际修改目标。
+第一条生成默认 `.tar.gz` 完整交付，不连接SSH；复制整个目录，在Windows用deploy.ps1、Linux/macOS用deploy.sh上传，完全隔离Linux运行sh deploy-local.sh。第二条基于目标成功完整基线只更新web，实际修改目标。
 
 检查manifest.partial/selectedServices、版本/构建ID、校验和、端口和保留范围。首次安装或拓扑改变用全量；增量不能改任意布局。已有后端不能原地换引擎复用旧卷，要独立目标和迁移。详见[全量/增量选择](../configuration/delivery.md#全量和增量怎样选择)。
 
-部署后核对health/ready、公开版本、登录、列表刷新和持久数据。只有服务器本地HTTP成功才推进current；操作机公开地址复核失败时，远端可能已经complete，先查防火墙/DNS/网络，不自动重发。
+成功后清理本次 incoming 归档与解包目录，release 保留恢复配置和结果，镜像由引擎保存；失败保留诊断。部署后核对health/ready、公开版本、登录、列表刷新和持久数据。只有服务器本地HTTP成功才推进current；操作机公开地址复核失败时，远端可能已经complete，先查防火墙/DNS/网络，不自动重发。
 
 ![实际离线部署后访问生成应用的登录页](../images/deployment-login-desktop.png)
 
 图中是CLI生成的fullstack应用，经SSH将完整离线包部署到隔离Linux环境后实际访问的页面。表单为空，未显示密码或内部连接信息；该轮同时检查了登录、账号操作、设置、审计及移动布局。应用页脚的0.1.0是演示应用版本，不代表框架的npm版本。
 
 此实例开启了自动计算挑战，登录表单仍保持简洁。是否生效应核对挑战接口及登录校验结果，不能凭一张登录截图确认；测试使用较低计算量缩短验收时间，不作为框架默认值或生产建议。配置与真实默认值见[验证码和登录来源](../configuration/identity.md#锁定验证码与登录来源)。
+
+## 修改运行配置后重启
+
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+
+当前文件位于 `releases/<current 中的部署ID>/.env.runtime`。修改前备份，重启后检查健康与受影响业务；失败时恢复文件再重启。详见[运行配置](../configuration/runtime.md#部署后重启加载运行配置)。
 
 ## 凭据、数据卷与未知结果
 

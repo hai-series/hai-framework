@@ -2416,6 +2416,78 @@
     "constraint": "整数；>= 1；<= 65535"
   },
   {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https",
+    "description": "可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_ACCEPTTERMS",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.acceptTerms",
+    "description": "明确同意 Let’s Encrypt 服务条款后才可设置为 true",
+    "value": "true",
+    "constraint": "true | false；取值：true"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_CERTIFICATEFILE",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.certificateFile",
+    "description": "PEM 完整证书链路径，相对工程根或绝对路径；打包时复制到私有发布目录",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_DOMAIN",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.domain",
+    "description": "HTTPS 公开域名；证书必须匹配该域名",
+    "value": "",
+    "constraint": "字符串；最大字符数 253；正则 ^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_EMAIL",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.email",
+    "description": "Let’s Encrypt 账号联系邮箱",
+    "value": "",
+    "constraint": "字符串；格式 email；正则 ^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_PORT",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.port",
+    "description": "HTTPS 宿主端口，默认 443，须与 HTTP 端口不同",
+    "value": "443",
+    "constraint": "整数；>= 1；<= 65535"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_PRIVATEKEYFILE",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.privateKeyFile",
+    "description": "未加密 PEM 私钥路径，相对工程根或绝对路径；必须与证书匹配",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_REDIRECTHTTP",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.redirectHttp",
+    "description": "普通 HTTP 请求是否以 308 跳转至 HTTPS，健康检查和 ACME 挑战除外",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_DEPLOY_PROVIDER_EXPOSE_HTTPS_TYPE",
+    "module": "deploy",
+    "path": "deploy.provider.expose.https.type",
+    "description": "应用部署：平台/暴露方式，按所在节点的枚举选择",
+    "value": "files",
+    "constraint": "字符串；取值：files | letsencrypt"
+  },
+  {
     "name": "HAI_DEPLOY_PROVIDER_EXPOSE_TYPE",
     "module": "deploy",
     "path": "deploy.provider.expose.type",
@@ -5965,46 +6037,6 @@
     "path": "serv.http.openapi.path",
     "description": "当前 HTTP 功能的端点路径",
     "value": "/openapi.json",
-    "constraint": "字符串；以 / 开头的路径字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC",
-    "module": "serv",
-    "path": "serv.http.rpc",
-    "description": "RPC 端点开关或访问配置",
-    "value": "false",
-    "constraint": "true | false；JSON 对象；整体覆盖时替换该节点；取值：false"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_ACCESS",
-    "module": "serv",
-    "path": "serv.http.rpc.access",
-    "description": "RPC 对外访问策略",
-    "value": "loopback",
-    "constraint": "字符串；取值：loopback | private-network | gateway-only"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_GATEWAYHEADER",
-    "module": "serv",
-    "path": "serv.http.rpc.gatewayHeader",
-    "description": "受信网关认证请求头名称",
-    "value": "",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_GATEWAYSECRET",
-    "module": "serv",
-    "path": "serv.http.rpc.gatewaySecret",
-    "description": "受信网关认证密钥",
-    "value": "",
-    "constraint": "字符串"
-  },
-  {
-    "name": "HAI_SERV_HTTP_RPC_PREFIX",
-    "module": "serv",
-    "path": "serv.http.rpc.prefix",
-    "description": "RPC 端点的路径前缀",
-    "value": "/rpc",
     "constraint": "字符串；以 / 开头的路径字符串"
   },
   {

@@ -95,7 +95,7 @@
   "site_preview_fullstack": "Fullstack · Users and role permissions",
   "site_preview_fullstack_body": "Separate service and browser applications share interface contracts. This user management view was verified after an SSH deployment.",
   "site_preview_website": "Website · Presentation and static hosting",
-  "site_preview_website_body": "Start with home, about, services and contact pages, with optional static output. Connect your own service to accept contact submissions.",
+  "site_preview_website_body": "Full modules with home, about, services and contact examples, using SSR by default. Remove server features before static publication and connect a service for contact submissions.",
   "site_preview_admin": "Admin · A business management starting point",
   "site_preview_admin_body": "Start with login, registration, a management entry point and shared components, then add business pages and access rules.",
   "site_preview_mobile": "Mobile app · A mobile business entry point",

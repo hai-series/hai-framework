@@ -38,12 +38,12 @@ hai --help
 ### 创建项目
 
 ```sh
-hai create my-app --type fullstack --frontends web --yes
+hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
 
-省略选项时按向导选择，`--yes` 使用默认值。默认安装依赖并初始化 Git，`--no-install` / `--no-git` 可关闭。部署工具默认作为开发依赖安装，不需要时加 `--no-deploy`。
+省略选项时按向导选择，`--defaults` 使用默认值。默认安装依赖并初始化 Git，`--no-install` / `--no-git` 可关闭。部署工具默认作为开发依赖安装，不需要时加 `--no-deploy`。
 
 ### 项目模板
 
@@ -54,13 +54,13 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                         |
 | `fullstack`                | contract、API、共享界面与所选 Web/App/Desktop；miniapp 仅预留说明 |
 
-`--template minimal|default|full|custom` 选择模块预设，`--features iam,db,...` 选择业务模块。Fullstack 始终保留默认管理界面所需的 IAM、数据库、缓存、加密、存储、审计和用于可选备份/告警的调度器；未指定 `--features` 时默认开启 feedback 并补齐 Reach。显式功能列表保留可选模块选择，其它应用类型仍需显式启用反馈。默认不安装 AI/ONNX/CUDA。
+新建工程统一采用适用的完整模块和示例，服务端包含 AI、向量库、反馈等依赖；客户端仍按类型隔离服务端模块。安装体积相应增加，示例需按实际业务替换。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程的模块选择不受影响。
 
-独立 `mobile-app` 选择 IAM 或 crypto 时会安装前端 crypto 并默认启用 typed client 加密传输；未选择 crypto 时可连接明确的明文 API。`PUBLIC_API_TRANSPORT=off` 只用于匹配的明文服务，`PUBLIC_API_KEY_EXCHANGE_PATH` 仅覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
+独立 `mobile-app` 默认包含前端 crypto，并启用 typed client 加密传输。已有明文 API 可显式使用 `PUBLIC_API_TRANSPORT=off`；`PUBLIC_API_KEY_EXCHANGE_PATH` 只覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
 
 ### 纯静态 website 与 GitHub Pages
 
-`hai create docs-site --type website --features none --yes`明确不选择可选业务模块，保留Core/Kit/UI和默认部署开发工具；无需用deploy模块再no-deploy绕行。none不能与其他值、逗号或空项混用。省略features仍沿用原默认；fullstack始终保留架构必需模块。
+新建 website 同样包含完整模块和示例，默认 Node SSR。静态发布前须在工程中移除服务端业务依赖及其初始化、API/actions，保留 Core/Kit/UI；没有轻量创建参数。已有不含这些动态能力的 website 仍可使用下述静态构建。
 
 website默认Node SSR。仅构建时设置`HAI_BUILD_STATIC=1`与`PUBLIC_BASE_PATH=/docs-site`（docs-site替换为实际仓库名；各目录段仅ASCII字母、数字、_、.、-，无末尾/，根站留空）后执行`pnpm build`，输出build静态目录。静态标志只接受0/1，且仅用于compile；PUBLIC_BASE_PATH也可用于Docker网站构建，原生app/desktop目标不接受网站目录。静态拒绝服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产守卫，不生成SPA回退；默认健康API不进入静态产物。
 
@@ -115,7 +115,17 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 路径规则 `encryption: required / disabled` 可以让内部接口保持加密、外部接口接收普通 HTTPS 请求；模式冲突或缺少必需加密装配会拒绝创建宿主。Fullstack 管理模板固定要求 transport，使用路径规则设置明文例外。完整配置与验证见[接口访问和加密](../../docs/usage/configuration/request-access.md)。
 
+### 可选 HTTPS 证书
+
+`pnpm run deploy` 为所有容器模板统一提供“不启用 / 已有 PEM 证书和私钥路径 / Let’s Encrypt”。相对路径以工程根为基准，已有证书校验域名、有效期和密钥匹配后复制到私有发布包。Let’s Encrypt 使用固定版本官方 Certbot 镜像申请，每 12 小时检查续期，Nginx 自动重载。需要确认服务条款、真实邮箱、公网 DNS、80 端口和 CA 网络；隔离环境使用已有证书。证书状态保留在服务器，私钥不进入应用镜像。`--yes` 复用保存配置。
+
+配置为 `hai.json.deploy.provider.expose.https`，也可用环境私有文件覆盖。默认 HTTPS 443、HTTP 跳转开启，未配置保持 HTTP；启停或更改模式、域名、端口、本地证书需全量部署。配置和续期边界见[HTTPS 手册](../../docs/usage/configuration/delivery.md#可选https证书)。`--plan` 的 `root` 表示工程根，`serviceDir` 表示部署服务源码与配置目录，仅显示公开证书元数据。
+
 ### 构建与部署
+
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+
+镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；README 仅保留外层一份。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
 
 数据库连接保存前使用所选后端的真实公开 Schema 校验：MySQL `ssl` 仅 `false` 或严格 TLS 对象，`{}` 默认校验证书链和 DNS 身份；PostgreSQL 保留其模式。CLI 已内联纯 Schema 和 Zod，配置校验不要求目标应用安装数据库包/驱动；实际运行应用仍需相应依赖。部署功能仍须能解析已安装的 `@h-ai/deploy`（生成工程将其作为开发依赖）。
 
@@ -128,7 +138,7 @@ CLI 在过滤调用者的 `HAI_/PUBLIC_/VITE_` 后，只注入内部生成的 `H
 交付角色统一为 `serv`（独立 API 后端）、`web`（静态或 SSR 浏览器站点）、`app`（Android/iOS 手机安装包）、`desktop`（桌面安装包）。Fullstack 容器为 serv + 可选 web，API 为 serv，admin/website/h5/mobile-app 的浏览器镜像为 web；原生 app/desktop 不作为服务器 Compose 服务。`--images` 与 `--services` 使用 serv/web，`--target app` 与 `--target desktop` 生成原生包。API workspace 的服务目录为 `apps/<项目>-serv`。镜像与容器共用工程根 `package.json.name` 的归一化身份（去 scope、转小写、非法字符合并为连字符）；名称缺失或无效时报错，不回退目录名。镜像为 `localhost/hai-<项目>-<角色>:<buildId>`，容器为 `hai-<项目>-<环境>-<角色>`，镜像可跨环境复用。
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # 多个服务共用一个 --services，用英文逗号分隔；加引号兼容 PowerShell
@@ -136,7 +146,7 @@ pnpm run deploy --env prod --build --services "serv,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
+默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
 制品格式4和5都记录 primaryService（serv/web），hasWeb 表示完整工程是否包含浏览器端；格式5另记录非根目录webBasePath。只有 serv + web 才生成同源 API 代理。格式1至3制品须重新构建。旧部署先备份并核对项目名、数据卷和受管凭据，再切换到新的完整部署基线；工具不自动跨项目迁移数据。完整部署仍会按 Compose 规则清理同项目的旧服务容器，不能仅修改 deploy-target.json.directory 完成迁移。
 
@@ -174,7 +184,7 @@ fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化
 
 ### 问题反馈与离线分析
 
-使用 `hai create my-app --type fullstack --frontends web --yes` 默认启用反馈；API 工程需显式选择 `--features feedback`。普通成员及业务操作员可提交反馈，business_operator 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 disabled/console/reach，默认 console 只输出 metadata。需要摘要时显式设 consoleContent: summary，需要实际发送时再配置 Reach 通道与收件人。
+使用 `hai create my-app --type fullstack --frontends web --defaults` 默认启用反馈；API 工程需显式选择 `--features feedback`。普通成员及业务操作员可提交反馈，business_operator 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 disabled/console/reach，默认 console 只输出 metadata。需要摘要时显式设 consoleContent: summary，需要实际发送时再配置 Reach 通道与收件人。
 
 业务扩展在 feedback.init(config, { collectEvidence }) 中 await 文本/ZIP 等材料；_feedback.yml 提供 businessCollectionTimeoutMs、webhookUrl/webhookSecret/webhookTimeoutMs。Webhook 独立持久重试，详情可查看状态并重试；密钥仅放服务端私有环境。见 [feedback 配置与示例](../feedback/README.md)。
 

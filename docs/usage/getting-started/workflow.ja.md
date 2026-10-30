@@ -70,7 +70,7 @@ CLI をインストールし、デプロイ機能を含む Web + API プロジ�
 ```sh
 pnpm add -g @h-ai/cli@latest
 hai --version
-hai create my-app --type fullstack --frontends web --yes
+hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
@@ -79,21 +79,20 @@ pnpm dev
 
 | 作成オプション | 意味と値 | 既定値 | 例 |
 | --- | --- | --- | --- |
-| `[name]` | 小文字、数字、ハイフンのプロジェクト名 | 対話入力、初期値 my-app。--yes では my-app | `hai create orders-app` |
-| `--type <type>` | fullstack：API とクライアント。api：contract + service。admin/website/h5：SvelteKit。mobile-app：Capacitor + Vite | 対話選択、初期値 admin。--yes では admin | `--type fullstack` |
+| `[name]` | 小文字、数字、ハイフンのプロジェクト名 | 対話入力、初期値 my-app。--defaults では my-app | `hai create orders-app` |
+| `--type <type>` | fullstack：API とクライアント。api：contract + service。admin/website/h5：SvelteKit。mobile-app：Capacitor + Vite | 対話選択、初期値 admin。--defaults では admin | `--type fullstack` |
 | `--frontends <targets>` | fullstack の web/app/desktop をカンマ区切りで指定。miniapp は説明のみ | fullstack は web,app,desktop。それ以外では未使用 | `--frontends web,desktop` |
-| `-t, --template <template>` | minimal/default/full/custom | fullstack は custom。それ以外は対話選択、--yes では default | `--template custom` |
-| `-f, --features <features>` | 业务模块 / Application modules / 業務モジュール | 类型与模板预设 / Template defaults | `--template custom --features iam,db` |
-| `--examples` / `--no-examples` | サンプルを含めるか | `true` | `--no-examples` |
 | `--no-install` | 依存インストールを後回しにする | インストールする | `--no-install` |
 | `--no-git` | Git 初期化を省略 | 初期化する | `--no-git` |
 | `-p, --package-manager <pm>` | pnpm/npm/yarn | fullstack/API は pnpm。それ以外は検出または対話選択 | `--package-manager pnpm` |
 | `--git-remote <url>` | リモート URL | 未設定 | `--git-remote https://git.example.com/team/my-app.git` |
-| `-y, --yes` | 対話を省略して既定値を使う | false | `hai create my-app --yes` |
+| `-y, --defaults` | 対話を省略して既定値を使う | false | `hai create my-app --defaults` |
 
 デスクトップ端末も必要なら `--frontends web,desktop` を指定します。既存アプリには `hai add <module>` で対応モジュールを追加できます。例えば `hai add deploy` です。fullstack の既定の実行依存はデータベース、キャッシュ、IAM、暗号化、ストレージ、監査で、AI は含みません。CUDA のインストールも不要です。
 
 fullstack では `packages/my-app-contract` が API 契約、`packages/my-app-serv` が API 実装、`packages/my-app-shared` が共有処理、`apps/my-app-web` が Web クライアントです。環境ファイルはプロジェクトのルートに置きます。API テンプレートでは `apps/my-app-serv` 内です。変更を始める前に、生成された README と AGENTS.md を読んでください。
+
+新規作成は適用可能な全モジュールとサンプルに統一し、サーバーには AI・ベクトル保存先・feedback も導入します。クライアントの依存境界は維持します。インストール容量は増え、サンプルは実業務に合わせて変更が必要です。`--template`、`--features`、`--examples/--no-examples` は削除し、`create --yes/-y` は `--defaults` に変更しました。旧引数は明示的に拒否します。`deploy --yes` と既存工程の構成は維持します。
 
 ### 3. 環境を設定して開発する
 
@@ -158,14 +157,14 @@ CLI はアプリの `.agents/skills/` に完全な skill 一式を配置しま�
 
 ```sh
 pnpm build
-pnpm build --target docker
-pnpm build --target docker --images web
+pnpm build --target image
+pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
 #### build のオプション
 
-`--target` は compile（既定）、docker、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
 #### hai.json でパッケージの構成を指定する
 
@@ -213,9 +212,17 @@ pnpm build --target desktop --platform windows --arch x64
 
 ### 5. 成果物を対象環境へデプロイする
 
+Node バックエンド（Serv / SvelteKit SSR）は起動ごとに配布先の `.env.runtime` を既定で読み直します。編集後に `docker restart <コンテナー>` または `podman restart <コンテナー>` を実行し、イメージ再構築や追加 override は不要です。既存配置は新 CLI で一度デプロイしてください。削除した設定を旧 Compose 環境から復活させず、管理接続の `middleware.env` を優先します。私有プロキシ識別と Node 起動引数は配置設定のままです。静的 Web・ミドルウェア・ポート/マウント・Nginx 制限は従来手順で更新します。手動変更をバックアップし、継続する値は元の環境にも反映してください。次のバックエンド配置時に再生成されます。
+
+`pnpm run deploy` は全コンテナーテンプレートで HTTPS なし、既存 PEM 証明書・秘密鍵、Let’s Encrypt を選択できます。相対パスは工程ルート基準です。ドメイン・期限・鍵一致を検証して配布物にコピーします。版を固定した公式 Certbot イメージで申請し、12 時間ごとに更新を確認して Nginx を再読み込みします。利用規約の承認、実際のメール、公的 DNS、80 番ポート、CA 接続が必要です。隔離環境では既存証明書を使います。状態はサーバーに保持し、秘密鍵をアプリイメージに含めません。`--yes` は保存設定を使います。
+
+`hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../../docs/usage/configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
+
+イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
+
 #### 環境と接続先を用意する
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar.gz` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
 成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
 
@@ -274,7 +281,7 @@ pnpm run deploy --env prod --build --bundle-only
 
 毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を生成します。外側にはtar、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh`、`README.txt`を置きます。Compose、非公開の実行環境、必要なweb.conf、マニフェスト、apply.shは、イメージとチェックサムとともにtar内へ格納します。非公開の実行ファイルがスクリプトの横にあるとは扱わず、ディレクトリ全体をコピーしてください。
 
-`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルを同じ配布ディレクトリへ置きます。実行前に `deploy-target.json` の説明に従い、サーバー、SSHユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリを確認します。
+`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar.gz` を生成し、付属ファイルを同じ配布ディレクトリへ置きます。実行前に `deploy-target.json` の説明に従い、サーバー、SSHユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリを確認します。
 
 Windowsは `deploy.ps1`、Linux/macOSは `deploy.sh` を実行します。どちらも同じJSONとサーバー処理を使います。deploy.shには操作機のsh/awk/ssh/scpが必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1の `-IdentityFile` で鍵を上書きできます。両方とも `HAI_DEPLOY_IDENTITY_FILE` と `HAI_DEPLOY_KNOWN_HOSTS_FILE` の上書きに対応します。別のPC・OSへ移す場合は、その環境に実在するパスへ変更してください。
 

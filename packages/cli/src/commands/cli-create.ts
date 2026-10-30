@@ -1152,7 +1152,7 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
 
 自建S3的内部endpoint与浏览器publicEndpoint分开。publicEndpoint可设置为https://example.com/delivery/files等带目录地址，不含桶名、凭据或查询；返回URL保留桶名，Web Nginx或SSR/API gateway去掉入口前缀，保留原始S3路径、Host与查询后直接转发storage，大文件不经过Serv。外层代理保留完整入口路径，不重复去前缀；外部S3/CORS按实际服务配置，Local不公开私有目录。增加网关、改变桶或公开地址时全量部署，应用增量与回滚保持原配置；详见[存储使用规范](.agents/skills/hai-storage/SKILL.md)。
 每个镜像对应 images/ 中一个 Dockerfile，根 hai.json 的 build 分区指定文件，deploy 分区保存整个项目的部署配置。
-下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，避免重复下载。
+下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，依赖安装先于源码复制。前后端默认最多并行构建两项，--concurrency 1可降低资源占用。运行镜像去除应用自身的声明文件、源码映射和说明文件。
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 
 \`\`\`sh
@@ -1172,8 +1172,10 @@ ${pm} exec hai deploy ${appDir} --env prod --services web
 完整离线包自动携带自建中间件镜像；准备中间件镜像需要构建机有可用 Podman/Docker，缺镜像时在打包阶段拉取。
 服务器需要 Linux、Docker/Podman、Docker Compose v2 或 podman-compose 1.6.0 及以上、sh、tar、sha256sum、awk、curl、util-linux flock 和支持 flock 的文件系统，启动阶段不联网拉取。
 固定 .deploy.lock 内核锁覆盖部署及恢复；禁止删除或替换，所有持有进程退出或重启后自动释放。强杀后须核对结果文件、current 和容器状态，再用新包恢复。
-每次离线交付生成独立目录，外层仅含 tar、deploy.ps1（Windows）、deploy.sh（Linux/macOS）、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境和清单仅在 tar 内。交互式打包在构建和中间件配置后最后询问是否保存或修改 SSH 信息，写入 .env.<环境>.local 并用于本次和后续 target；--yes 复用已有配置，复制整个目录即可。脚本按已保存的 SSH 参数上传、导入、启动并验证 HTTP。
+每次离线交付生成独立目录，默认tar.gz（显式--output release.tar可保留未压缩），外层仅含归档、deploy.ps1（Windows）、deploy.sh（Linux/macOS）、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境和清单仅在归档内，README不重复。中间件归档按镜像内容ID缓存并在复用前验证摘要。成功后清理本次incoming上传与解包目录，release保留恢复配置和状态，镜像由引擎保存。交互式打包在构建和中间件配置后最后询问是否保存或修改 SSH 信息，写入 .env.<环境>.local 并用于本次和后续 target；--yes 复用已有配置，复制整个目录即可。脚本按已保存的 SSH 参数上传、导入、启动并验证 HTTP或HTTPS。
+部署向导可选已有PEM证书与私钥路径（相对工程根，校验后复制到私有包）或Let’s Encrypt。官方Certbot申请并每12小时检查续期，Nginx自动重载；需要条款确认、真实邮箱、公网DNS、80端口及CA网络。HTTPS默认443、HTTP跳转开启，未配置仍为HTTP；启停或改模式/域名/端口/本地证书须全量。证书状态保留在服务器并备份，隔离目标使用已有证书。--plan中的root表示工程根，serviceDir表示部署服务源码与配置目录。
 完全隔离时复制整个交付目录，运行 sh deploy-local.sh 自动解包并部署；可传入部署目录覆盖默认位置。
+Node后端默认在启动时重读实际挂载的releases/<后端发布ID>/.env.runtime，修改后restart容器即可；无需新开关或override，旧部署先用新版CLI发布一次。仅更新Web/中间件后，按后端容器Mounts确认源文件，不能根据current猜路径。托管连接middleware.env仍优先；端口/挂载/Node启动参数、静态Web和中间件按原流程更新。手工修改先备份，长期配置同步源环境，下次后端发布会重新生成。
 部分更新要求已有成功的完整部署，保留未选服务及数据卷；失败返回非零退出码，已有部署尝试恢复选中服务。
 中间件连接齐全时使用 --skip-middleware 跳过配置向导。包中包含私有配置，不提交 Git。
 `

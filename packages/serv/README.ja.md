@@ -18,7 +18,7 @@ hai-framework の API サービスランタイム。公開 HTTP App 抽象を通
 - 既定の機能 procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`。
 - `build()` は通常の router を同期的に返すため、標準 feature のネストした procedures を直接選択できます。接続する contract と procedures を一致させ、未選択の入口は公開しません。
 - 存在しないルートは翻訳された HaiResult JSON と HTTP 404 を返します。通信暗号化でも 404 を保ち、非 JSON 応答による 500 にしません。
-- 安全な応答ヘッダー・ヘルスチェックを内蔵し、OpenAPI JSON・Scalar 文書・内部 RPC endpoint は任意。
+- 安全な応答ヘッダー・ヘルスチェックを内蔵し、OpenAPI JSON・Scalar 文書・
 - 任意の通信暗号化：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` で鍵交換とリクエスト・レスポンスの暗号化を自動接続。
 - 任意の音声入口：`serv.createApp({ audio: { ai, verifyTicket, authorize } })` が共通 WebSocket を接続します。接続直後に単回 ticket で認証（`{ session, grant? }`、独立した事前認証 timeout）。各フレームを Zod と厳密な状態機械で検証し、入力・キュー・送信バッファの背圧と連鎖キャンセルを管理します。サーバーの認可処理で操作・モデル・声・割当量・同時使用数を確認します。
 
@@ -102,7 +102,7 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
-Node `serv.listen()` は socket の接続元を自動で渡し、既定では転送ヘッダーを無視します。`http.trustedProxies` の IP/CIDR のみ信頼し、XFF を右から左へ調べ、最初の非信頼アドレスで停止します。その左側は無視します。信頼チェーンが不正・長すぎる場合は IP 未定義となり、代理をクライアントとして扱いません。代理は転送ヘッダーを清掃・追加してください。Fetch は `app.fetch(request, { remoteAddress: platformPeerAddress })` で信頼できる接続元を渡します。メタデータなしは IP 未定義です。任意のヘッダーをコピーしないでください。独自 `createContext(input)` は input 全体を再利用し、解決済み `input.ip` を保持します。内部 RPC は接続元で制限します。
+Node `serv.listen()` は socket の接続元を自動で渡し、既定では転送ヘッダーを無視します。`http.trustedProxies` の IP/CIDR のみ信頼し、XFF を右から左へ調べ、最初の非信頼アドレスで停止します。その左側は無視します。信頼チェーンが不正・長すぎる場合は IP 未定義となり、代理をクライアントとして扱いません。代理は転送ヘッダーを清掃・追加してください。Fetch は `app.fetch(request, { remoteAddress: platformPeerAddress })` で信頼できる接続元を渡します。メタデータなしは IP 未定義です。任意のヘッダーをコピーしないでください。独自 `createContext(input)` は input 全体を再利用し、解決済み `input.ip` を保持します。
 
 toFetch は Request・URL・文字列を標準 Request(input, init) で構築し、入力フィールドを変更せず method・headers・body・signal などを上書きします。消費済み・ロック中の本文や不正な本文指定は返却 Promise を reject します。派発前の取消しは handler を呼ばず、実行中の取消しは呼出側の待機を終了し、有効な signal をアプリへ伝えます。終了・失敗・取消しで listener を外し、取消し後に遅れて返る本文も cancel します。開始済みの外部効果は巻き戻せず、Response 返却後のストリーム終了はアプリが request.signal を消費して管理します。
 
@@ -355,7 +355,7 @@ const app = serv.createApp({
 2. 組み込み CORS 応答処理；鍵交換と preflight のアクセス判定。
 3. 組み込み `transport`（有効時）と各リクエストのアクセス判定。
 4. 独自の `middlewares`。
-5. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
+5. health / refresh-cookie / OpenAPI / docs / oRPC routes
 
 補足：
 
@@ -426,7 +426,7 @@ const procedures = serv
 
 - `src/pipelines/*` は内部の既定実装で、公開サブパス API ではありません。
 - アプリ向けの安定した入口はルートの `@h-ai/serv`。
-- `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` などの内部 helper は独立サブパスとして公開しません。
+- `securityHeaders` / `buildHaiErrorBody` などの内部 helper は独立サブパスとして公開しません。
 
 #### httpOnly Cookie 認証（本番推奨）
 
@@ -489,7 +489,7 @@ await apiClient.init({
 
 ### API 一覧
 
-- `serv.createApp(options)`：独自 middleware、ヘルスチェック、OpenAPI、任意の文書・RPC を備えた HTTP App を作成。
+- `serv.createApp(options)`：独自 middleware、ヘルスチェック、OpenAPI、任意の文書を備えた HTTP App を作成。
 - `serv.parseRequestContext({ request })`：Bearer token + requestId を抽出し、session は設定しません。
 - `serv.listen(app, options)`：Node.js HTTP サービスを起動し、`{ server, address, close }` を返す。
 - `serv.toFetch(app)`：標準の `fetch(Request)` handler に変換。
@@ -574,7 +574,6 @@ http:
   health:
     path: /health
     readyPath: /ready
-  rpc: false
 
 cors:
   origin: https://app.example.com
@@ -601,11 +600,12 @@ transport:
 
 `ServHttpConfigInput`：
 
+ネイティブ RPC 入口、`HAI_SERV_HTTP_RPC`、`ServRpcHttpConfig` は削除しました。既存の OpenAPI/REST API、`api-client`、oRPC contract と procedure は引き続き利用できます。
+
 - `apiPrefix`：既定 `/api/v1`。
 - `health`：既定 `{ path: '/health', readyPath: '/ready' }`。
 - `openapi`：既定 `false`。`{ path: '/openapi.json' }` で有効化。
-- `docs`：既定 `false`。`{ path: '/docs' }` で有効化（`openapi` が必要）。`@scalar/api-reference` の browser bundle から `/_hai/scalar.js` を提供し、外部 CDN なしで Scalar UI を使えます。
-- `rpc`：既定 `false`。`{ prefix: '/rpc', access: 'loopback' | 'private-network' | 'gateway-only', gatewayHeader?, gatewaySecret? }` で有効化。
+- `docs`：既定 `false`。`{ path: '/docs' }` で有効化。文書ディレクトリ内の `_hai/scalar.js`（既定 `/_hai/scalar.js`）で Scalar UI を配信し、外部 CDN は不要です。スクリプトと spec の URL は相対指定です。ゲートウェイが接頭辞を保持する場合は docs/openapi も転送範囲内に配置し、接頭辞を除去する構成にも対応します。`requireAuth` は後端で検証します。
 - `cors`：origin・credentials・allowedHeaders・exposedHeaders を設定し、`serv.cors(...)` で接続。
 - `transport`：`config/_serv.yml` のトップレベル設定。`servConfig.transport` を `createApp({ transport })` に渡し、既定の鍵交換サブパスは `/_hai/key-exchange`。
 
@@ -652,7 +652,7 @@ createIamProcedures({ iam }) は公開設定、LDAP/OTP/パスワード、登録
 
 通常の procedure は認証・認可・業務の失敗と捕捉した handler 例外を HaiResult として既定で HTTP 200 で返します。`error.httpStatus` はドメインエラーのメタデータで、HTTP 応答ステータスを変更しません。クライアントは `success` と `error.code` を確認してください。未認証では `error.httpStatus=401`、DB クエリー失敗や INTERNAL_ERROR では 500 です。
 
-oRPC contract の入力検証は procedure の前に失敗すると HTTP 400 となり、ローカライズ済み body に `error.httpStatus=400` とフィールドエラーを含みます。procedure 内の `serv.validateInputOrFail` の失敗は HTTP 200 のままです。HTTP middleware、refresh-cookie、OpenAPI/RPC のアクセス確認、transport のプロトコルエラーは各自の HTTP 応答契約に従います。api-client は実際の HTTP 401、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で自動更新し、成功後に一度だけ再試行します。組み込みのログイン・登録と設定された更新パスは対象外で、403/500 でも更新しません。transport 有効時は更新と再試行も同じ暗号化 fetch を使用します。
+oRPC contract の入力検証は procedure の前に失敗すると HTTP 400 となり、ローカライズ済み body に `error.httpStatus=400` とフィールドエラーを含みます。procedure 内の `serv.validateInputOrFail` の失敗は HTTP 200 のままです。HTTP middleware、refresh-cookie、OpenAPI のアクセス確認、transport のプロトコルエラーは各自の HTTP 応答契約に従います。api-client は実際の HTTP 401、または HTTP 200 の有効な失敗 HaiResult（`success=false`、文字列の `error.code/message`、`error.httpStatus=401`）で自動更新し、成功後に一度だけ再試行します。組み込みのログイン・登録と設定された更新パスは対象外で、403/500 でも更新しません。transport 有効時は更新と再試行も同じ暗号化 fetch を使用します。
 
 - 既定 procedures はすべて `HaiResult<T>` を返し、クライアントで `result.success` を確認。
 - 認証失敗 → `HaiCommonError.UNAUTHORIZED`。`.auth()` が `context.locale` でローカライズ。

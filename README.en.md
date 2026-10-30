@@ -61,14 +61,14 @@ Create same-origin SvelteKit applications or separate APIs with Web/App/Desktop 
 Use Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` and pnpm 12.11.2. Node.js 24.22.1 matches CI. Use `pnpm.cmd` in Windows PowerShell.
 
 ```sh
-pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --yes
+pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
 
 The CLI installs dependencies and initializes Git by default. Sign in as `admin`; find the random initial password in `HAI_ADMIN_DEFAULT_PASSWORD` in the generated `.env.dev`, then change it when prompted. Keep environment files and passwords private.
 
-Fullstack includes DB, Cache, IAM, Crypto, Storage and Audit by default. Your first run requires no AI model or CUDA. Follow the generated README for directories, environment files and addresses, or use the [first-run guide](docs/usage/getting-started/create.md).
+New projects include the full applicable modules and examples, including server AI/vector dependencies. Use `hai create --defaults` to skip prompts; default containers skip extra CUDA downloads. Follow the generated README for directories, environment files and addresses, or use the [first-run guide](docs/usage/getting-started/create.md).
 
 The installation version follows [npm's latest tag](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions), which the badge reads directly. Run `pnpm view @h-ai/cli@latest version` to query it; replace `@latest` with the returned version for reproducible team installations. npm installation tags and GitHub's Latest presentation setting are managed separately.
 
@@ -79,7 +79,7 @@ The installation version follows [npm's latest tag](https://www.npmjs.com/packag
 | Fullstack   | Separate API and multiple clients sharing a contract  | `--type fullstack --frontends web` |
 | API         | Independent Node.js service and public APIs           | `--type api`                       |
 | Admin       | Same-origin dashboard with account and business pages | `--type admin`                     |
-| Website     | Corporate, product and static documentation sites     | `--type website --features none`   |
+| Website     | Corporate, product and static documentation sites     | `--type website`                   |
 | H5 / Mobile | Mobile web or Capacitor application                   | `--type h5` / `--type mobile-app`  |
 
 ![Login page from an actual CLI-generated Admin project](apps/framework-website/public/template-previews/admin-login.png)
@@ -91,7 +91,7 @@ The installation version follows [npm's latest tag](https://www.npmjs.com/packag
 Configure the environment and deployment destination in the generated project, then run:
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod --plan
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services "serv,web"

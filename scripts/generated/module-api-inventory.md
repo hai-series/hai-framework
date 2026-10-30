@@ -93,9 +93,9 @@
 | @h-ai/scheduler | `. (default)` | 37 |
 | @h-ai/scheduler | `. (import)` | 37 |
 | @h-ai/scheduler | `. (types)` | 37 |
-| @h-ai/serv | `. (default)` | 51 |
-| @h-ai/serv | `. (import)` | 51 |
-| @h-ai/serv | `. (types)` | 51 |
+| @h-ai/serv | `. (default)` | 50 |
+| @h-ai/serv | `. (import)` | 50 |
+| @h-ai/serv | `. (types)` | 50 |
 | @h-ai/serv | `./features/ai (import)` | 3 |
 | @h-ai/serv | `./features/ai (types)` | 3 |
 | @h-ai/serv | `./features/feedback (import)` | 2 |

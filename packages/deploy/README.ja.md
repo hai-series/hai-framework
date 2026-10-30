@@ -22,14 +22,14 @@
 
 ```sh
 pnpm build
-pnpm build --target docker
-pnpm build --target docker --images web
+pnpm build --target image
+pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
 ```
 
 #### build のオプション
 
-`--target` は compile（既定）、docker、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
 #### hai.json でパッケージの構成を指定する
 
@@ -85,7 +85,7 @@ SDKは対応するNginx、実行時設定URL、SSRヘルスチェック、公開
 
 #### 環境と接続先を用意する
 
-既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
+既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar.gz` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
 成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
 
@@ -146,7 +146,7 @@ S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAG
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、外側には tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh、README.txt だけを保存します。Compose、実行環境、web.conf、manifest.json は tar 内に置き、外側の README にも配置 ID を記録します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
+毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、外側には tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh、README.txt だけを保存します。Compose、実行環境、web.conf、manifest.json は tar 内に置き、外側の README にも配置 ID を記録します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar.gz` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
 
 オフラインアップロードは鍵とパスワードの両方に対応します。`deploy-target.json` に保存するのは認証方式と `passwordEnv` 名（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）だけで、パスワード値は含めません。操作する PC の環境から与え、今回の SSH/SCP 子プロセスだけに渡します。アプリ環境、tar、manifest には入りません。Windows では永続化したユーザー環境も参照できます。Windows は PowerShell 5+ と OpenSSH、Linux/macOS は sh、awk、ssh、scp が必要で、どちらも Node/pnpm は不要です。target の変更はその配布ディレクトリだけに適用し、プロジェクトには書き戻しません。新しい配布物は保存済みの環境設定を使います。
 
@@ -186,6 +186,16 @@ SDK はサーバー内の正常性確認と `current` 更新後、操作端末�
 
 完全 tar は自前ミドルウェアのアーカイブと一致するアーキテクチャを含み、起動時にレジストリーへ接続しません。Linux に Docker/Podman、Docker Compose v2 または podman-compose 1.6.0 以降、sh、tar、sha256sum、awk、curl、util-linux の flock、ディレクトリ・コンテナー権限が必要です。秘密設定を安全に転送し、版間でボリューム識別を保持します。外部ネットワークを切って起動、ログイン、再読込、再起動と永続化を検証します。HTTPS、証明書、DNS、外部サービスは別途用意します。
 
+### 構築と配布の最適化
+
+イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
+
+### 任意の HTTPS 証明書
+
+`pnpm run deploy` は全コンテナーテンプレートで HTTPS なし、既存 PEM 証明書・秘密鍵、Let’s Encrypt を選択できます。相対パスは工程ルート基準です。ドメイン・期限・鍵一致を検証して配布物にコピーします。版を固定した公式 Certbot イメージで申請し、12 時間ごとに更新を確認して Nginx を再読み込みします。利用規約の承認、実際のメール、公的 DNS、80 番ポート、CA 接続が必要です。隔離環境では既存証明書を使います。状態はサーバーに保持し、秘密鍵をアプリイメージに含めません。`--yes` は保存設定を使います。
+
+`hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../../docs/usage/configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
+
 ### SDK
 
 ```ts
@@ -223,6 +233,8 @@ SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は�
 
 ### 実行環境ファイルと設定の再利用
 
+Node バックエンド（Serv / SvelteKit SSR）は起動ごとに配布先の `.env.runtime` を既定で読み直します。編集後に `docker restart <コンテナー>` または `podman restart <コンテナー>` を実行し、イメージ再構築や追加 override は不要です。既存配置は新 CLI で一度デプロイしてください。削除した設定を旧 Compose 環境から復活させず、管理接続の `middleware.env` を優先します。私有プロキシ識別と Node 起動引数は配置設定のままです。静的 Web・ミドルウェア・ポート/マウント・Nginx 制限は従来手順で更新します。手動変更をバックアップし、継続する値は元の環境にも反映してください。次のバックエンド配置時に再生成されます。
+
 フレームワークの永続設定は `HAI_*` を使います。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` はミドルウェアイメージ必須の名前を維持し、非公開の `middleware-runtime.env` にだけ生成してミドルウェアに渡します。プロジェクト環境ファイルやアプリの `.env.runtime` には新規保存しません。増分アプリ更新用の `middleware.env` は `HAI_*` 設定のみです。既存の原生変数は自動削除せず、新しいアプリ環境から除外します。未更新サービスは以前の配布ファイルを使い続けます。
 
 サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、serv/Web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
@@ -233,7 +245,7 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
 
-配布ごとに Compose 用の `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。これは生成物であり、設定の保存元ではありません。`NODE_ENV` の既定値は対象環境に従い、`test` は `test`、`dev/development` は `development`、`prod/production` とその他は `production` です。環境設定の明示的な `NODE_ENV` が優先され、構築の最適化モードとは別です。旧配布物は再度パッケージ化してください。
+配布ごとに起動時読み込み用の `.hai/deploy/<環境>/bundle-.../.env.runtime` を生成します。これは生成物であり、設定の保存元ではありません。`NODE_ENV` の既定値は対象環境に従い、`test` は `test`、`dev/development` は `development`、`prod/production` とその他は `production` です。環境設定の明示的な `NODE_ENV` が優先され、構築の最適化モードとは別です。旧配布物は再度パッケージ化してください。
 
 プロジェクトルートの `hai.json.deploy` に配置構造、`.env.<環境>` に公開設定、`.env.<環境>.local` に SSH とミドルウェアの認証情報を保存します。環境ファイルは既定でプロジェクト/workspace ルート、変更時は `--env-dir` を指定します。設定後は `pnpm run deploy --env test --build --bundle-only --yes` で再入力を省略でき、ミドルウェア設定を保持する場合は `--skip-middleware` を追加します。対話式 bundle-only は最後に SSH 設定の保存・変更を確認します。配布物の `deploy-target.json` の編集はプロジェクトに反映されません。
 
@@ -241,7 +253,7 @@ Podman では設定済みの healthcheck を明示的に実行して状態を再
 
 ## 読み取り専用デプロイ計画
 
-`createDeploymentPlan(appDir, config, options)` は Provider 初期化、認証情報・出力作成、対象への接続を行いません。実際の走査、環境解決、命名と checksum 検証を共用し、版、ビルド ID、更新・保持範囲、設定元とキー名、基準要件と復旧先を返します。値と SSH 認証情報を除外します。未読の current は not-inspected とし、部分更新は実行時に成功基準を厳密に要求します。Compose 復旧は DB データや移行を戻しません。CLI は `hai deploy --env prod --plan`。
+`createDeploymentPlan(appDir, config, options)` は Provider 初期化、認証情報・出力作成、対象への接続を行いません。実際の走査、環境解決、命名と checksum 検証を共用し、工程 `root`、サービスのソース・設定 `serviceDir`、版、ビルド ID、更新・保持範囲、設定元とキー名、基準要件と復旧先を返します。値と SSH 認証情報を除外します。未読の current は not-inspected とし、部分更新は実行時に成功基準を厳密に要求します。Compose 復旧は DB データや移行を戻しません。CLI は `hai deploy --env prod --plan`。
 
 `--plan --inspect-remote`（SDK inspectRemote:true）で SSH 経由の current と成功ディレクトリーを読み取り、verified/missing/unavailable と復旧リリース ID を示します。対象への書込は行いません。
 

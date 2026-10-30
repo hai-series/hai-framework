@@ -41,14 +41,23 @@
 
 | build参数 | 默认/条件 | 影响 |
 | --- | --- | --- |
-| --target | compile | compile编译源码，docker构建镜像，app/desktop生成对应原生制品 |
+| --target | compile | compile编译源码，image构建镜像，app/desktop生成对应原生制品 |
 | --images | 按项目配置 | serv/web或逗号列表，部分构建保留完整hasWeb拓扑，不能直接作为首次完整安装 |
+| --concurrency | 2；仅image | 同时构建的镜像数，只接受1或2；deploy --build也可使用 |
 | --runtime | auto | 本机引擎选择优先Podman；不是远端引擎探测结果 |
 | --network/--no-http-proxy | 默认引擎网络/默认继承规则 | 按网络环境明确设置，完全离线还需基础镜像和依赖缓存 |
 | --sqlite-prebuild-mirror | 无通用镜像地址默认 | 可信HTTP(S)预编译根地址，需匹配ABI/架构/libc |
 | --platform/--arch | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
 
 根目录应用沿用格式4 manifest；非根目录网站使用格式5，并记录webBasePath。两种格式都记录appVersion/buildId/partial/hasWeb/primaryService、镜像tar和SHA-256及显式端口。相同应用版本可重建，由buildId/镜像引用区分；全部导出成功才推进本机构建入口。格式5需要支持该格式的CLI与Deploy，旧部署器会拒绝，防止静默丢失目录信息；不要手改格式编号绕过检查。
+
+### 构建并发和缓存
+
+image 目标默认最多并行两项镜像，资源紧张时用 `--concurrency 1`。Dockerfile 在源码 COPY 前安装依赖，前后端仅复制各自必要的源码，源码变化可复用下载与安装层。运行镜像移除应用自身的声明文件、源码映射与说明文件。打包按镜像内容 ID 在 `.hai/cache/images` 缓存中间件归档，复用前验证摘要，损坏则重新导出；应用镜像复制时同步计算摘要。速度取决于资源与缓存命中，不承诺固定比例。
+
+旧 `--target docker` 已改为 `--target image`；`--runtime docker|podman` 继续表示引擎，现有 `.hai/build/docker` 制品目录保持可用。
+
+后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`；整段 `HAI_SERV` 仍优先于叶字段。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
 
 ## 网站部署在子目录
 
@@ -61,7 +70,7 @@
 | SvelteKit的admin、h5、website | 构建进程的PUBLIC_BASE_PATH默认空字符串，kit.paths.base为空 | `/yyy`使页面、资源及生成模板中的认证地址、登录跳转和守卫都带此前缀；更改后重新构建 |
 | Vite的Fullstack Web及独立mobile浏览器端 | vite.config默认base为`./`；runtime-config.js使用相对引用；页面使用hash导航 | 不指定目录时，同一份构建可以经剥离目录的网关挂载；显式PUBLIC_BASE_PATH会将Vite基址固定为该目录加`/` |
 | App/Desktop原生包 | Vite资源使用`./`，原生build目标不接受PUBLIC_BASE_PATH | 本地资源由原生宿主加载；原生API地址仍按设备配置，网站目录不代表设备API地址 |
-| SDK管理的网站目录 | `hai build --target docker`读取构建进程的PUBLIC_BASE_PATH，默认根目录 | 只传给web镜像；非空时生成格式5制品、匹配的Nginx/SSR健康检查和带目录的访问地址 |
+| SDK管理的网站目录 | `hai build --target image`读取构建进程的PUBLIC_BASE_PATH，默认根目录 | 只传给web镜像；非空时生成格式5制品、匹配的Nginx/SSR健康检查和带目录的访问地址 |
 
 PUBLIC_BASE_PATH是公开的**构建期进程变量**。例如 `/yyy`、`/portal/admin`有效；根目录用空字符串。各段仅允许ASCII字母、数字、`_`、`.`、`-`，不接受末尾斜杠、外部URL、查询、片段、编码分隔符或单独的`.`/`..`段。`/`应改为空字符串。构建不会从根.env或私有.env.local读取这个控制值；请在当前终端或CI构建任务中显式设置。
 
@@ -72,7 +81,7 @@ SvelteKit由kit.paths.base处理资源和路由，模板不另设Vite base。Vit
 以下以启用IAM的Admin项目为例。先创建项目、安装依赖，并核对开发所需服务；可生成一个受保护的测试API，便于验证匿名请求确实被拒绝：
 
 ```sh
-hai create portal --type admin --features iam,db,cache --yes --no-install
+hai create portal --type admin --defaults --no-install
 cd portal
 pnpm install
 hai generate api prefix-probe --output src/routes/api
@@ -125,7 +134,7 @@ Web的API地址按显式baseUrl、runtime-config.js、构建时PUBLIC_API_BASE�
 $previousBase = $env:PUBLIC_BASE_PATH
 try {
   $env:PUBLIC_BASE_PATH = '/yyy'
-  pnpm.cmd build --target docker
+  pnpm.cmd build --target image
   $buildId = (Get-Content '.hai/build/docker/latest' -Raw).Trim()
   $manifestPath = Join-Path (Join-Path '.hai/build/docker' $buildId) 'manifest.json'
   Get-Content $manifestPath -Raw | ConvertFrom-Json | Select-Object version, webBasePath, partial, hasWeb
@@ -184,14 +193,14 @@ location /api/v1/ {
 
 ## 静态website与GitHub Pages
 
-用于企业介绍、帮助和文档等纯展示站点。website默认SSR，已有动态模块不能只打开开关就改成静态；从空业务选择创建可避免无用服务依赖：
+用于企业介绍、帮助和文档等纯展示站点。新建 website 统一包含完整模块和示例，默认 SSR；静态发布前须手动移除服务端业务依赖、初始化及 API/actions，不能只打开静态开关：
 
 ```sh
-hai create docs-site --type website --features none --yes
+hai create docs-site --type website --defaults
 cd docs-site
 ```
 
-none是明确不选择可选模块，不是模块名，不能与其他模块、逗号或空项混用。Core/Kit/UI和默认部署开发工具保留；省略features保持原默认，fullstack必需模块也不因none移除。
+创建后先完成上述裁剪，保留 Core/Kit/UI，再执行静态构建。现有已裁剪工程仍可直接使用静态构建；不再提供轻量创建参数。
 
 | 构建值 | 默认 | 不同值的影响 |
 | --- | --- | --- |
@@ -241,9 +250,9 @@ GitHub仓库Pages选择Actions，上传build时显式include-hidden-files:true�
 
 运行时`.env.runtime`在交付tar内，属于私有产物；NODE_ENV默认dev→development、test→test、prod及其他模式→production，显式环境可覆盖。构建优化模式不改变部署运行默认。反向代理和加密预算从解析后的Serv/Kit配置推导，容量变化要同时验附件与页面/API。
 
-Compose 在创建容器时读取 `env_file`。修改环境变量后仅 `restart` 不会重新加载；沿用原项目名和 Compose 文件列表执行 `up -d --no-deps --force-recreate <后端服务>`，通常无需重新构建镜像。需要“改规则后重启”时，可将请求策略固定引用到只读挂载的 YAML；默认交付快照与运维独立文件的两种方式、父对象覆盖及恢复边界见[请求策略：修改后重启生效](request-access.md#44-运维独立管理文件修改后重启生效)。不要手工改写校验过的 `.env.runtime` 或策略快照。
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
 
-需要对整份 Node 应用环境文件采用“改文件后重启”时，使用[可选的启动预加载方式](runtime.md#可选node-容器重启时重读环境文件)：挂载外部环境目录、清除旧 `env_file` 注入，先读文件再启动应用。该外部文件独立于发布快照，部署设置与中间件凭据仍须按原流程更新。
+配置路径、保护、解析规则与检查方式见[重启加载运行配置](runtime.md#部署后重启加载运行配置)。请求策略也可引用运维独立 YAML，见[修改后重启生效](request-access.md#44-运维独立管理文件修改后重启生效)。
 
 ## SSH、端口、中间件与云服务
 
@@ -291,6 +300,56 @@ services对象可为空，表示没有在这里声明云开通；并不表示应
 
 云开通需要外网和账号授权，不是完全离线自包含部署。自建中间件镜像随完整包交付，外部服务还需目标网络可达。
 
+## 可选HTTPS证书
+
+所有 Docker-SSH 模板共用 `provider.expose.https`，不区分 fullstack、API、admin、website、h5 或静态 SPA。`pnpm run deploy` 的 HTTPS 环节可选不启用、已有 PEM 证书、Let’s Encrypt；选择保存到当前环境私有文件，`--yes` 复用配置。未配置时保持 HTTP，HTTPS 端口默认 443，`redirectHttp` 默认 true。`expose.hostPort` 仍为 HTTP 端口，必须与 HTTPS 端口不同。
+
+已有证书配置（以下为 `hai.json.deploy` 的内容，也可用环境私有文件覆盖）：
+
+```json schema=@h-ai/deploy:DeployConfigSchema
+{
+  "provider": {
+    "type": "docker-ssh",
+    "expose": {
+      "hostPort": 80,
+      "https": {
+        "type": "files",
+        "domain": "app.example.com",
+        "certificateFile": "./certs/fullchain.pem",
+        "privateKeyFile": "./certs/privkey.pem"
+      }
+    }
+  }
+}
+```
+
+相对路径以工程根为基准。打包校验证书域名、有效期和私钥匹配，并将证书与私钥复制到私有发布包，只读挂载给 Nginx。模板构建上下文排除证书和私钥，运行镜像不含它们。证书源文件变化后生成新的全量发布，不修改旧包或旧发布快照。使用私有 CA 时，访问客户端也须信任该 CA。
+
+Let’s Encrypt 使用同一配置位置：
+
+```json schema=@h-ai/deploy:DeployConfigSchema
+{
+  "provider": {
+    "type": "docker-ssh",
+    "expose": {
+      "hostPort": 80,
+      "https": {
+        "type": "letsencrypt",
+        "domain": "app.example.com",
+        "email": "ops@example.com",
+        "acceptTerms": true
+      }
+    }
+  }
+}
+```
+
+由域名持有者确认[Let’s Encrypt 服务条款](https://letsencrypt.org/repository/)，使公网 DNS 指向目标、外部 80 端口可达，并允许目标访问 CA。仅支持单域名 HTTP-01，不提供 DNS 自动化或通配符。固定版本的官方 Certbot 镜像随完整包交付；打包与 `--plan` 不申请证书。首次发布以临时自签证书启动代理，只有官方客户端申请成功并通过 HTTPS 检查才提交成功状态。
+
+Certbot 每 12 小时检查续期，成功后发布新的证书对，Nginx 检测变化并自动重载。状态在服务器部署根的 `https/acme` 与按域名隔离的 `https/certificates/<域名>`，上级目录保持私有。续期失败保留原证书并写容器日志，需在到期前修复 DNS、80 端口或 CA 网络；无 CA 网络的隔离目标使用已有证书。备份证书状态，清理旧域名前确认没有发布引用。
+
+HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由。SDK 与服务器验证实际 HTTPS；SSR 默认 ORIGIN、未明确指定的 API CORS origin 使用配置的 HTTPS 域名，已有显式值保持优先。自建 S3 的公开地址仍须配置为实际 HTTPS origin。首次启用/关闭 HTTPS、更改模式/域名/端口/本地证书需全量部署。证书状态不随应用版本回退，旧域名发布继续引用自己的证书目录。
+
 ## 全量和增量怎样选择
 
 如果服务引用独立 IP/时间策略文件，部署器会把经过验证的文件作为该次发布的只读快照交付，并同步 `.env.runtime` 的容器内路径。更新后端时更换快照，只更新其他服务时保留后端原策略；恢复旧服务时使用它原有的快照。准备文件、环境变量覆盖和恢复条件见[独立请求策略的交付](request-access.md#4-运维人员携带独立-yaml-交付)。
@@ -304,7 +363,7 @@ services对象可为空，表示没有在这里声明云开通；并不表示应
 | 使用部分构建制品 | 即使未显式--services也为增量 | 根据manifest.partial/selectedServices固定范围，首次安装拒绝 |
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod --plan
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --build --services web
@@ -312,7 +371,7 @@ pnpm run deploy --env prod --build --services web
 
 最后两条实际修改目标，执行前核对环境。--plan只读，不生成凭据或连接目标；--inspect-remote配合plan才读取真实成功基线，不能把not-inspected当验证通过。
 
-计划中的 `containers` 是本次更新的显式容器名，`retained` 列出保留服务，自建 S3 的 SSR/API 网关也在其中。`logicalVolumes` 列出完整拓扑的卷声明，包括未选服务和应用继续挂载的数据卷，不表示要重新创建这些卷；未选中间件的 action 为 keep。对象直连的配置、网络和安全边界见[文件存储](data.md#配置人员区分三个访问地址)。
+计划中的 `root` 是工程根，`serviceDir` 是部署服务源码与配置所在目录（fullstack 通常为 `packages/<项目>-serv`）。`target.https` 仅含模式、域名和端口。`containers` 是本次更新的显式容器名，`retained` 列出保留服务，自建 S3 或 HTTPS 的 SSR/API 网关也在其中。`logicalVolumes` 列出完整拓扑的卷声明，包括未选服务和应用继续挂载的数据卷，不表示要重新创建这些卷；未选中间件的 action 为 keep。对象直连的配置、网络和安全边界见[文件存储](data.md#配置人员区分三个访问地址)。
 
 ![本地真实计划和不存在服务的拒绝](../images/deployment-plan.png)
 
@@ -320,7 +379,7 @@ pnpm run deploy --env prod --build --services web
 
 ## 离线交付与服务器条件
 
-`--bundle-only`只打包，不连接SSH。完整交付目录包含tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh和README；Compose、环境、manifest和apply.sh在tar内。目录在`.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/`，自定义output按运行目录生成版本目录，不覆盖旧交付。
+`--bundle-only`只打包，不连接SSH。默认归档为 `.tar.gz`，显式 `--output release.tar` 保留未压缩格式。交付目录包含归档、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh和README；Compose、环境、manifest和apply.sh在归档内，README 仅保留外层一份。镜像从本次解包目录直接导入，release 不再复制镜像归档；完整成功后清理本次 incoming 上传与解包目录，失败保留诊断。恢复配置、结果与数据卷继续保留。目录在`.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/`，自定义output按运行目录生成版本目录，不覆盖旧交付。
 
 ```sh
 pnpm run deploy --env prod --build --bundle-only

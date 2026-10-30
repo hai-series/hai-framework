@@ -18,7 +18,7 @@ hai-framework's API service runtime: a stable public HTTP App abstraction that m
 - Default feature procedures: `createIamProcedures()`, `createStorageProcedures()`, `createAiProcedures()`.
 - `build()` synchronously returns a plain router, so nested default feature procedures can be selected directly. Match the mounted contract to the selected procedures; unselected routes stay unavailable.
 - Missing routes return localized HaiResult JSON with HTTP 404. Transport encryption preserves that status instead of producing a 500 for a non-JSON response.
-- Built-in security headers and health checks; optional OpenAPI JSON, Scalar docs, and internal RPC endpoints.
+- Built-in security headers and health checks; optional OpenAPI JSON, Scalar docs.
 - Optional transport encryption: `serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })` mounts key exchange and request/response encryption automatically.
 - Optional audio: `serv.createApp({ audio: { ai, verifyTicket, authorize } })` mounts a unified audio WebSocket. Connections authenticate immediately with one-time tickets (`{ session, grant? }`, separate pre-auth timeout). Every frame uses runtime Zod validation and a strict state machine, with input/queue/send-buffer backpressure and cascading cancellation. Authorization verifies operations, models, voices, quotas, and concurrency on the server.
 
@@ -102,7 +102,7 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
-Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`. Internal RPC checks the connection peer.
+Node `serv.listen()` supplies the socket peer address. Forwarded headers are ignored by default. Only proxy IPs/CIDRs in `http.trustedProxies` may supply them: XFF is walked from right to left until the first untrusted address; content to the left of that address is ignored. An invalid or excessively long trusted chain leaves IP undefined rather than promoting the proxy to client identity. Proxies must sanitize or append forwarded headers. Fetch platforms explicitly provide a trusted peer through `app.fetch(request, { remoteAddress: platformPeerAddress })`; without metadata IP is undefined. Do not copy arbitrary headers into metadata. Custom `createContext(input)` forwards the complete input to preserve resolved `input.ip`.
 
 toFetch constructs Request(input, init) for Request, URL and string inputs, applying RequestInit overrides including method, headers, body and signal without mutating input fields. Consumed or locked bodies and invalid body combinations reject the returned Promise. Cancellation before dispatch skips the handler; in-flight cancellation ends the caller wait and reaches the app through the effective signal. Listeners are released on completion, failure or cancellation, and a discarded late response body is cancelled. Cancellation cannot roll back external effects already started; after Response delivery the app owns streaming cleanup through request.signal.
 
@@ -355,7 +355,7 @@ Execution order is fixed:
 2. Built-in CORS response wrapping; access checks for key exchange and preflight.
 3. Built-in `transport`, if enabled, and request access checks.
 4. Your `middlewares`.
-5. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
+5. health / refresh-cookie / OpenAPI / docs / oRPC routes
 
 Notes:
 
@@ -426,7 +426,7 @@ Public API boundaries:
 
 - `src/pipelines/*` holds internal defaults and is not a public subpath API.
 - The stable application-facing entry remains `@h-ai/serv`.
-- Internal helpers such as `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` are not documented as separate subpath exports.
+- Internal helpers such as `securityHeaders` / `buildHaiErrorBody` are not documented as separate subpath exports.
 
 #### httpOnly cookie authentication (recommended for production)
 
@@ -489,7 +489,7 @@ await apiClient.init({
 
 ### API overview
 
-- `serv.createApp(options)`: create the HTTP App with custom middleware, health checks, OpenAPI, optional docs, and RPC.
+- `serv.createApp(options)`: create the HTTP App with custom middleware, health checks, OpenAPI, optional docs.
 - `serv.parseRequestContext({ request })`: extract Bearer token + requestId without populating session.
 - `serv.listen(app, options)`: start Node.js HTTP service; return `{ server, address, close }`.
 - `serv.toFetch(app)`: wrap as a standard `fetch(Request)` handler.
@@ -574,7 +574,6 @@ http:
   health:
     path: /health
     readyPath: /ready
-  rpc: false
 
 cors:
   origin: https://app.example.com
@@ -601,11 +600,12 @@ transport:
 
 `ServHttpConfigInput`：
 
+Native RPC endpoints, `HAI_SERV_HTTP_RPC` and `ServRpcHttpConfig` have been removed. Existing OpenAPI/REST APIs, `api-client`, and the oRPC contracts and procedures remain supported.
+
 - `apiPrefix`: defaults to `/api/v1`.
 - `health`: defaults to `{ path: '/health', readyPath: '/ready' }`.
 - `openapi`: defaults to `false`; enable with `{ path: '/openapi.json' }`.
-- `docs`: defaults to `false`; enable with `{ path: '/docs' }` (requires `openapi`). It mounts `/_hai/scalar.js` from the `@scalar/api-reference` browser bundle for local Scalar UI without an external CDN.
-- `rpc`: defaults to `false`; enable with `{ prefix: '/rpc', access: 'loopback' | 'private-network' | 'gateway-only', gatewayHeader?, gatewaySecret? }`.
+- `docs`: defaults to `false`; enable with `{ path: '/docs' }`. Scalar is mounted as `_hai/scalar.js` in the document directory (default `/_hai/scalar.js`), without an external CDN. Script and spec URLs are relative. When a gateway preserves a prefix, place docs and OpenAPI paths within it; stripping a prefix also works. Backend `requireAuth` checks remain enforced.
 - `cors`: configured origins, credentials, allowedHeaders, and exposedHeaders; mount through `serv.cors(...)`.
 - `transport`: top-level `config/_serv.yml` option passed as `servConfig.transport` to `createApp({ transport })`; default key exchange subpath is `/_hai/key-exchange`.
 
@@ -652,7 +652,7 @@ createIamProcedures({ iam }) implements public config, password/LDAP/OTP login, 
 
 Ordinary procedures return authentication, authorization, business failures and caught handler exceptions as HaiResult over HTTP 200 by default. `error.httpStatus` is domain-error metadata and does not change the response status. Clients must check `success` and `error.code`: an unauthenticated failure has `error.httpStatus=401`, while database query failures or INTERNAL_ERROR have 500.
 
-oRPC contract input validation fails before procedures with HTTP 400 and a localized body containing `error.httpStatus=400` and field errors. Procedure-level `serv.validateInputOrFail` failures remain HTTP 200. HTTP middleware, refresh-cookie, OpenAPI/RPC access checks and transport protocol failures follow their own HTTP response contracts. api-client refreshes after an actual HTTP 401 or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`) and retries once on success. Built-in login and registration and the configured refresh path are excluded; 403/500 do not trigger refresh. With transport enabled, refresh and retry share the encrypted fetch path.
+oRPC contract input validation fails before procedures with HTTP 400 and a localized body containing `error.httpStatus=400` and field errors. Procedure-level `serv.validateInputOrFail` failures remain HTTP 200. HTTP middleware, refresh-cookie, OpenAPI access checks and transport protocol failures follow their own HTTP response contracts. api-client refreshes after an actual HTTP 401 or a valid failed HaiResult over HTTP 200 (`success=false`, string `error.code/message` and `error.httpStatus=401`) and retries once on success. Built-in login and registration and the configured refresh path are excluded; 403/500 do not trigger refresh. With transport enabled, refresh and retry share the encrypted fetch path.
 
 - All default procedures return `HaiResult<T>`; clients check `result.success`.
 - Authentication failure → `HaiCommonError.UNAUTHORIZED`, localized by `.auth()` using `context.locale`.

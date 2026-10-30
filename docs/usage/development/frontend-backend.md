@@ -8,8 +8,8 @@
 
 | 场景 | 组合 | 创建方式 |
 | --- | --- | --- |
-| Web/App/Desktop共用API | api-contract→serv→api-client | hai create orders --type fullstack --frontends web --yes |
-| 单个独立API | api-contract+serv | hai create orders --type api --yes |
+| Web/App/Desktop共用API | api-contract→serv→api-client | hai create orders --type fullstack --frontends web --defaults |
+| 单个独立API | api-contract+serv | hai create orders --type api --defaults |
 | 同源SvelteKit页面与API | kit+业务服务+UI | admin/website/h5模板，保持hooks与文件路由宿主控制流 |
 
 contract定义输入输出，不初始化连接或授予权限；Serv是App工厂，Kit是适配器。Node宿主关闭HTTP后反序关闭业务依赖，不臆造serv.init/kit.close。

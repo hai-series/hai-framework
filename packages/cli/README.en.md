@@ -38,12 +38,12 @@ Generated framework dependencies use the exact CLI version. Installation failure
 ### Create an application
 
 ```sh
-hai create my-app --type fullstack --frontends web --yes
+hai create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
 
-Omit options for interactive choices, or use `--yes` for defaults. Installation and Git initialization are enabled; disable them with `--no-install` / `--no-git`. Deployment tools are development dependencies by default; use `--no-deploy` to omit them.
+Omit options for interactive choices, or use `--defaults` for defaults. Installation and Git initialization are enabled; disable them with `--no-install` / `--no-git`. Deployment tools are development dependencies by default; use `--no-deploy` to omit them.
 
 ### Project templates
 
@@ -54,13 +54,13 @@ Omit options for interactive choices, or use `--yes` for defaults. Installation 
 | `mobile-app`               | Svelte + Vite + Capacitor                                                       |
 | `fullstack`                | Contract, API, shared UI and selected Web/App/Desktop; miniapp is a placeholder |
 
-Use `--template minimal|default|full|custom` for module presets and `--features iam,db,...` for application modules. Fullstack keeps IAM, database, cache, crypto, storage, audit and the scheduler for optional backups/alerts for its management UI. When `--features` is omitted, it also enables feedback and reach. An explicit feature list keeps optional modules under your control; other application types still require feedback to be selected. AI/ONNX/CUDA are not installed by default.
+Creation always uses the full applicable modules and examples, including AI, vector storage and feedback on servers. Clients retain their dependency boundaries. Installation is larger, and examples need adaptation. `--template`, `--features` and `--examples/--no-examples` have been removed; `create --yes/-y` is now `--defaults`. Old options fail explicitly. `deploy --yes` and existing projects keep their behavior.
 
-A standalone `mobile-app` with IAM or crypto installs frontend crypto and enables encrypted typed-client transport by default. Without crypto, a deliberate plaintext API remains supported. Use `PUBLIC_API_TRANSPORT=off` only with a matching plaintext service; `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. A failed handshake never falls back to plaintext, and server private keys never enter the client. Cleanup closes client transport before crypto initialized by that client.
+Standalone `mobile-app` includes frontend crypto and encrypted typed-client transport. For an existing plaintext API, explicitly set `PUBLIC_API_TRANSPORT=off`. `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. Handshake failures never fall back, server private keys never enter clients, and cleanup closes transport before client-owned crypto.
 
 ### Static websites and GitHub Pages
 
-`hai create docs-site --type website --features none --yes` explicitly selects no optional business modules while retaining Core/Kit/UI and the default deployment development tools. No deploy/no-deploy workaround is needed. `none` cannot be combined with another value, comma or empty item. Omitting features preserves existing defaults; fullstack retains its required architecture modules.
+New websites include the full modules and examples and default to Node SSR. Before static publication, remove server business dependencies and initialization, custom APIs and actions, retaining Core/Kit/UI. There is no lightweight creation option. Existing websites without these dynamic capabilities can use the static build below.
 
 Website defaults to Node SSR. Set `HAI_BUILD_STATIC=1` and `PUBLIC_BASE_PATH=/docs-site` (replace docs-site with the repository name; segments allow only ASCII letters, digits, _, . and -; no trailing slash, empty for a root site) for `pnpm build` to generate the static build directory. The static flag accepts 0/1 and applies only to compile. PUBLIC_BASE_PATH also supports Docker website builds; native app/desktop targets reject website paths. Static builds reject server-side business modules, custom APIs/actions and pages that were not prerendered, preserve production guards and use no SPA fallback. The default health API is excluded.
 
@@ -115,7 +115,17 @@ Select crypto when creating admin, website or h5 projects to enable transport in
 
 Path rules use `encryption: required / disabled` for encrypted internal APIs and ordinary HTTPS integrations. Conflicts and missing required transport reject host creation. Fullstack management always requires transport; use scoped rules for plaintext exceptions. See [endpoint access and encryption](../../docs/usage/configuration/request-access.md).
 
+### Optional HTTPS certificates
+
+`pnpm run deploy` offers no HTTPS, existing PEM certificate/key paths, or Let’s Encrypt for every container template. Relative paths resolve from the project root. Certificates are checked for domain, validity and key matching, then copied into private releases. A pinned official Certbot image handles issuance and renewal checks every 12 hours, with automatic Nginx reload. It requires terms acceptance, a real email, public DNS, port 80 and CA connectivity. Isolated servers use existing certificates. Certificate state stays on the server; keys stay out of application images. `--yes` reuses saved settings.
+
+Configure `hai.json.deploy.provider.expose.https` or private environment overrides. Defaults are HTTPS 443 and HTTP redirection; omission retains HTTP. Enabling/disabling HTTPS or changing mode, domain, ports or supplied certificates requires a full deployment. See the [HTTPS guide](../../docs/usage/configuration/delivery.md#可选https证书). Plans use `root` for the project and `serviceDir` for the service source/configuration directory, exposing only public certificate metadata.
+
 ### Build and deploy
+
+Node backends (Serv / SvelteKit SSR) reread the release `.env.runtime` on every start by default. Edit it, then run `docker restart <container>` or `podman restart <container>`; no image rebuild or extra override is needed. Existing deployments need one deployment with the new CLI. Removed settings do not survive through stale Compose injection. Managed connections in `middleware.env` retain precedence; private proxy identity and Node startup options remain deployment settings. Static Web, middleware, ports/mounts and Nginx limits keep their existing update flow. Back up manual edits and copy permanent changes into the source environment; the next backend deployment regenerates the file.
+
+Image builds run at most two images concurrently by default; use `--concurrency 1` to reduce resource use. Dependency installation precedes source copies, and each side copies only its required source. Runtime images omit application declaration files, source maps and README files. Packaging validates and reuses middleware archives by image content ID and hashes application archives while copying. Delivery defaults to `.tar.gz`; explicit `--output release.tar` keeps an uncompressed archive. README is only outside the archive. Successful deployment removes its incoming upload/extraction, retains recovery configuration in releases, and keeps images in the container engine.
 
 Database connections are validated against the selected backend’s public schema before saving. MySQL `ssl` accepts only `false` or a strict TLS object; `{}` verifies the certificate chain and DNS identity by default. PostgreSQL keeps its modes. CLI bundles the pure schemas and Zod, so validation needs no database package or driver in the target application; running that application still requires its dependencies. Deployment still requires an installed, resolvable `@h-ai/deploy` (a development dependency in generated projects).
 
@@ -128,7 +138,7 @@ After filtering caller `HAI_/PUBLIC_/VITE_` values, CLI injects only internally 
 Delivery roles are `serv` for a separate API backend, `web` for a static or SSR browser site, `app` for Android/iOS installers, and `desktop` for desktop installers. Fullstack containers use serv plus optional web; API uses serv; browser images for admin/website/h5/mobile-app use web. Native app/desktop outputs are not server Compose services. Use serv/web with `--images` and `--services`, and `--target app` or `--target desktop` for native packages. API service directories are `apps/<project>-serv`. Images and containers share the normalized root `package.json.name`: remove scope, lowercase, and replace invalid character runs with a hyphen. Missing or invalid names fail without falling back to directory names. Images use `localhost/hai-<project>-<role>:<buildId>`; containers use `hai-<project>-<environment>-<role>`. Images remain reusable across environments.
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services web
 # Use one --services with comma-separated names; quote the value for PowerShell
@@ -136,7 +146,7 @@ pnpm run deploy --env prod --build --services "serv,web"
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
+The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar.gz`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
 
 Artifact formats 4 and 5 record primaryService (serv/web); hasWeb describes the complete browser topology. Format 5 also records a non-root webBasePath. Only serv + web generates a same-origin API proxy. Rebuild artifacts using formats 1–3. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
 
@@ -174,7 +184,7 @@ The [fullstack security configuration guide template](templates/apps/fullstack/d
 
 ### Feedback and offline analysis
 
-A new `hai create my-app --type fullstack --frontends web --yes` includes feedback by default; API projects require `--features feedback`. Members and business operators can submit reports. Only business_operator sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Production uses shared DB and private S3. Notifications independently select disabled/console/reach; console defaults to metadata only. Select consoleContent: summary explicitly for summaries, or configure Reach providers and recipients for actual delivery.
+A new `hai create my-app --type fullstack --frontends web --defaults` includes feedback by default; API projects require `--features feedback`. Members and business operators can submit reports. Only business_operator sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. The generated app provides intake, paginated review and server contracts. Production uses shared DB and private S3. Notifications independently select disabled/console/reach; console defaults to metadata only. Select consoleContent: summary explicitly for summaries, or configure Reach providers and recipients for actual delivery.
 
 Register collectEvidence through feedback.init(config, { collectEvidence }) to await business text or archives. _feedback.yml includes businessCollectionTimeoutMs and webhookUrl/webhookSecret/webhookTimeoutMs. Webhook delivery retries durably and exposes status and administrator retry in details. Keep secrets in private server environment settings; see [feedback examples](../feedback/README.en.md).
 

@@ -22,7 +22,9 @@ README 编辑先读章节，把功能说明与示例合并到对应章节；新�
 
 ### 页面与布局
 
-纯展示官网可用website模板加`--features none`明确空选择，默认模板行为不变；none不能与其他模块/空项混用。静态发布使用`HAI_BUILD_STATIC=1`及公开`PUBLIC_BASE_PATH`（如/hai-framework，无末尾/），先确认没有服务端业务模块/API/actions。它不启用数据库/IAM、不放宽生产守卫，也不赋予静态联系表单发送能力；构建和实际子路径验证按[hai-build](../hai-build/SKILL.md)。
+新建工程统一采用适用的完整模块和示例，服务端包含 AI、向量库、反馈等依赖；客户端仍按类型隔离服务端模块。安装体积相应增加，示例需按实际业务替换。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程的模块选择不受影响。
+
+website默认SSR；静态发布须先移除服务端业务依赖、初始化及API/actions。静态构建与实际路径验证按[hai-build](../hai-build/SKILL.md)。
 
 网站挂载到`/yyy/`等目录时，按[网站挂载目录](../hai-build/paths.md)同步资源、链接、认证端点和服务端守卫。SvelteKit在编译时固定base，Vite默认相对资源加hash导航；API基址单独配置。SDK子目录制品使用格式5，健康与增量检查随制品处理，不手工修改旧格式清单来代替重新构建。
 
@@ -71,6 +73,8 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 Compose `env_file` 的变量在创建容器时固定，改文件后 `restart` 不会更新，应沿用原项目名/文件列表重新创建容器，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。完整 `HAI_SERV` / `HAI_KIT` 优先于叶子变量，不叠加覆盖。SDK 交付的 `.env.runtime` 与策略快照不可手改；运维外部文件和 Compose override 必须另行备份、纳入后续发布，SDK 自动回滚不恢复外部文件。
 
 Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-serv/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
+
+Node后端的当前部署包默认重读发布.env.runtime，修改后restart容器即可；托管连接优先级不变，布局/Node参数与中间件仍需重新部署。长期修改同步回源环境；见[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)。
 
 #### 迁移已有项目
 

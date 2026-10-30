@@ -95,7 +95,7 @@
   "site_preview_fullstack": "Fullstack · 用户管理与职责权限",
   "site_preview_fullstack_body": "独立服务端与浏览器端，共享接口契约；图示为 SSH 部署后运行的用户管理和角色分工。",
   "site_preview_website": "Website · 企业展示与静态托管",
-  "site_preview_website_body": "包含首页、企业介绍、服务与联系页，可选纯静态输出。在线留言需要接入自己的提交服务。",
+  "site_preview_website_body": "包含完整模块及首页、企业介绍、服务与联系示例，默认 SSR。静态发布前需裁剪服务端能力；在线留言需接入提交服务。",
   "site_preview_admin": "Admin · 业务管理起点",
   "site_preview_admin_body": "提供登录、注册、后台入口与公共组件，便于按业务逐步增加页面和访问权限。",
   "site_preview_mobile": "Mobile app · 移动业务入口",

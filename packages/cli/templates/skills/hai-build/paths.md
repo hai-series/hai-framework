@@ -20,7 +20,7 @@
 
 ## SDK容器交付
 
-- `PUBLIC_BASE_PATH=/yyy`用于compile或docker网站构建；HAI_BUILD_STATIC仍只用于website的compile静态预渲染。
+- `PUBLIC_BASE_PATH=/yyy`用于compile或image网站构建；HAI_BUILD_STATIC仍只用于website的compile静态预渲染。
 - 根目录制品沿用格式4，非根目录制品使用格式5并记录webBasePath。使用支持格式5的CLI/Deploy；旧工具拒绝新格式，不能手改编号绕过。
 - SDK生成匹配的Nginx目录、运行配置入口、健康检查和访问URL。外部网关转发到此入口时保留目录，避免再次剥离。
 - 每次完整或部分构建保持同一PUBLIC_BASE_PATH，即使只构建serv。目录变化须全量部署；遗漏或改变目录的增量包会在替换前拒绝。失败恢复使用旧发布的健康路径；容器恢复不撤销业务数据。

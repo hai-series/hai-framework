@@ -95,7 +95,7 @@
   "site_preview_fullstack": "Fullstack · ユーザー管理と職務権限",
   "site_preview_fullstack_body": "独立したサービスとブラウザーがインターフェース契約を共有。画像は SSH 配布後に確認したユーザー管理画面です。",
   "site_preview_website": "Website · 企業紹介と静的ホスティング",
-  "site_preview_website_body": "ホーム、企業紹介、サービス、お問い合わせを用意し、静的出力も選べます。送信受付には独自サービスの接続が必要です。",
+  "site_preview_website_body": "全モジュールとホーム・企業紹介・サービス・問い合わせ例を含み、既定は SSR です。静的公開前にサーバー機能を除去し、送信受付にはサービスを接続します。",
   "site_preview_admin": "Admin · 業務管理の出発点",
   "site_preview_admin_body": "ログイン、登録、管理画面への入口と共通部品を基に、業務画面やアクセス権を追加できます。",
   "site_preview_mobile": "Mobile app · モバイル業務の入口",

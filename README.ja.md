@@ -61,14 +61,14 @@ Svelte 5 の共通コンポーネントでフォーム、表、ダイアログ�
 Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` と pnpm 12.11.2 を用意します。CI と同じ Node.js 24.22.1 を推奨します。Windows PowerShell では `pnpm.cmd` を使用します。
 
 ```sh
-pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --yes
+pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
 
 CLI は既定で依存関係をインストールし、Git を初期化します。`admin` でログインし、生成された `.env.dev` の `HAI_ADMIN_DEFAULT_PASSWORD` にあるランダム初期パスワードを使用します。画面に従って変更し、環境ファイルとパスワードは公開しないでください。
 
-Fullstack には DB、Cache、IAM、Crypto、Storage、Audit が含まれ、初回起動に AI モデルや CUDA は不要です。ディレクトリ、環境、接続先は生成 README と[初回起動ガイド](docs/usage/getting-started/create.md)を確認してください。
+新規工程は全モジュールとサンプルを含み、サーバーに AI・ベクトル依存も導入します。`hai create --defaults` で対話を省略し、既定コンテナーは追加 CUDA ダウンロードを省きます。
 
 インストール版は [npm の latest タグ](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)に従い、バッジは登録情報を直接参照します。`pnpm view @h-ai/cli@latest version` で確認し、再現性が必要な場合は `@latest` を取得した版に置き換えます。npm のインストールタグと GitHub Latest の表示設定は別に管理します。
 
@@ -79,7 +79,7 @@ Fullstack には DB、Cache、IAM、Crypto、Storage、Audit が含まれ、初�
 | Fullstack    | 契約を共有する独立 API と複数クライアント              | `--type fullstack --frontends web` |
 | API          | 独立 Node.js サービスと公開 API                        | `--type api`                       |
 | Admin        | アカウント管理と業務画面を持つ同一オリジン管理システム | `--type admin`                     |
-| Website      | 企業サイト、製品紹介、静的ドキュメント                 | `--type website --features none`   |
+| Website      | 企業サイト、製品紹介、静的ドキュメント                 | `--type website`                   |
 | H5 / Mobile  | モバイル Web または Capacitor アプリ                   | `--type h5` / `--type mobile-app`  |
 
 ![CLI で実際に生成した Admin のログイン画面](apps/framework-website/public/template-previews/admin-login.png)
@@ -91,7 +91,7 @@ Fullstack には DB、Cache、IAM、Crypto、Storage、Audit が含まれ、初�
 生成したプロジェクトで環境と配布先を設定して実行します。
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod --plan
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services "serv,web"

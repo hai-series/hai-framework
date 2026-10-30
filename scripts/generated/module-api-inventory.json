@@ -30650,12 +30650,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ServRpcHttpConfig",
-              "kind": "type",
-              "declaration": "ServRpcHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ServRuntimeSecurityPolicy",
               "kind": "type",
               "declaration": "ServRuntimeSecurityPolicy",
@@ -30966,12 +30960,6 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
-              "name": "ServRpcHttpConfig",
-              "kind": "type",
-              "declaration": "ServRpcHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
-            },
-            {
               "name": "ServRuntimeSecurityPolicy",
               "kind": "type",
               "declaration": "ServRuntimeSecurityPolicy",
@@ -31280,12 +31268,6 @@
               "kind": "type",
               "declaration": "ServRouterBuilder",
               "declarationKind": "TypeAliasDeclaration"
-            },
-            {
-              "name": "ServRpcHttpConfig",
-              "kind": "type",
-              "declaration": "ServRpcHttpConfig",
-              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ServRuntimeSecurityPolicy",

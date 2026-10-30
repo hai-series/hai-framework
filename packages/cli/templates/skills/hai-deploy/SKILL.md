@@ -41,14 +41,26 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 成功后手工回退使用**当前 CLI**、旧应用 build 制品和匹配配置，省略 `--build`、`--services` 生成新全量 ID；离线也须重新打包，不能运行旧 bundle 或旧工具绕过账本。旧制品通常只保留 serv/web 镜像，中间件仍按当前 CLI 固定版本规划，不承诺精确回退全部中间件版本、DDL 或业务数据。确认主版本、Schema、拓扑和数据兼容并准备备份，再发布和验证。
 
+## 可选 HTTPS
+
+所有容器模板共用deploy.provider.expose.https，省略时HTTP。files指定domain、certificateFile、privateKeyFile（相对工程根），校验域名/期限/密钥并复制到私有包。letsencrypt指定domain、email、acceptTerms:true，HTTP hostPort必须80，公网DNS、80入站及CA出站须可达。固定版本官方Certbot申请并每12小时检查续期，Nginx自动重载。仅单域名HTTP-01，无DNS/通配符。HTTPS默认443、redirectHttp默认true；--yes复用配置。启停或改模式/域名/端口/本地证书需全量。状态在服务器https/acme及按域名隔离的https/certificates目录，需备份；续期失败保留旧证书并须及时处理，隔离目标用已有证书。打包/plan不申请证书。
+
+默认.tar.gz，显式--output release.tar为未压缩，README仅外层。镜像从解包目录导入，release只留配置/恢复状态；成功后清理本次incoming，失败保留诊断。中间件归档按镜像内容ID缓存且复用前验摘要。
+
+## 后端运行配置重载
+
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+
+运行文件在后端实际挂载的releases/<后端发布ID>/.env.runtime；仅更新Web/中间件后current可能指向新记录，不能据此猜测后端文件，按容器Mounts中/run/hai/.env.runtime的Source确认。只读文件挂载，上级目录0700，容器非root可读，宿主所有者可修改。dotenv字面解析不执行shell；双引号支持JSON转义。单文件≤1MiB，缺失/不可读/超限在应用导入前失败。父HAI_SERV/HAI_KIT仍优先于叶字段。重启后验健康与配置影响的业务，失败恢复文件再重启。
+
 ## CLI
 
 ```sh
 pnpm run deploy --env prod --build
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
 pnpm run deploy --env prod --bundle-only
-pnpm build --target docker --images web
+pnpm build --target image --images web
 pnpm run deploy --env prod --services web
 ```
 
@@ -84,7 +96,7 @@ Linux 预备 Docker/Podman、支持 --pull never 的 Compose（Docker Compose v2
 
 按 [分轮验证与集中修复](../hai-app-tests/validation.md) 收集适用的 typecheck、lint、build、test、scaffold gates 和 test:deploy-gates，汇总后集中修复、再验证。实际验证无 registry 网络的首次部署、登录刷新、同版本重发、只更新 Web/API、停止/down 后增量恢复、缺密码隐藏输入、上传进度、损坏归档、缺基线、健康失败与恢复。Windows/Linux/macOS 上传入口分别执行验收；原生安装包在对应 OS 验证。测试临时工程、容器、镜像、数据和进程在 finally/teardown 清理，只清理测试拥有的资源；日志、截图和报告保留到分析和交付结束再清理。
 
-部署前可 hai deploy --env prod --plan，只读校验真实制品和执行范围，显示项目/环境、版本/构建、配置文件及键名、保留范围、基线要求和恢复目录；不构建、不创建凭据、不连接或改变目标。远端 current 未读取标 not-inspected；不得把计划或本地打包当真实基线成功。数据库与业务数据不随 Compose 恢复回退。
+部署前可 hai deploy --env prod --plan，只读校验真实制品和执行范围，显示工程根root、服务源码/配置目录serviceDir、项目/环境、版本/构建、配置文件及键名、保留范围、基线要求和恢复目录；不构建、不创建凭据、不连接或改变目标。远端 current 未读取标 not-inspected；不得把计划或本地打包当真实基线成功。数据库与业务数据不随 Compose 恢复回退。
 
 需要核对目标真实基线时加 --inspect-remote（必须配合 --plan），仅 SSH 读取 current/成功发布目录，按 verified/missing/unavailable 与真实发布 ID 报告，不写目标；不能把未检查当作成功。
 

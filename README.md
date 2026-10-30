@@ -61,7 +61,7 @@ CLI 可创建同源 SvelteKit 应用，也可创建独立 API 与 Web/App/Deskto
 准备 Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` 与 pnpm 12.11.2；推荐与 CI 一致的 Node.js 24.22.1。Windows PowerShell 使用 `pnpm.cmd`。
 
 ```sh
-pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --yes
+pnpm dlx @h-ai/cli@latest create my-app --type fullstack --frontends web --defaults
 cd my-app
 pnpm dev
 ```
@@ -79,7 +79,7 @@ Fullstack 默认包含 DB、Cache、IAM、Crypto、Storage 与 Audit，首次运
 | Fullstack   | 独立 API、多端业务应用，共用接口契约 | `--type fullstack --frontends web` |
 | API         | 独立 Node.js 服务与公共接口          | `--type api`                       |
 | Admin       | 同源管理后台，快速接入账号与业务页面 | `--type admin`                     |
-| Website     | 企业官网、产品站与静态文档站         | `--type website --features none`   |
+| Website     | 企业官网、产品站与静态文档站         | `--type website`                   |
 | H5 / Mobile | 移动网页或 Capacitor 应用            | `--type h5` / `--type mobile-app`  |
 
 ![CLI 生成 Admin 模板的实际登录页面](apps/framework-website/public/template-previews/admin-login.png)
@@ -91,7 +91,7 @@ Fullstack 默认包含 DB、Cache、IAM、Crypto、Storage 与 Audit，首次运
 在生成工程中配置目标环境与部署参数后执行：
 
 ```sh
-pnpm build --target docker
+pnpm build --target image
 pnpm run deploy --env prod --plan
 pnpm run deploy --env prod
 pnpm run deploy --env prod --build --services "serv,web"

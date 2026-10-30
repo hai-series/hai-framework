@@ -446,10 +446,10 @@ export const { apiFetch } = client
 
 ## §10 容器交付
 
-- 新应用模板必须提供`images/*.Dockerfile`、`.dockerignore` 与 `pnpm build --target docker`（auto 优先 Podman，可用 --runtime 指定），镜像构建必须使用仓库锁文件。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
+- 新应用模板必须提供`images/*.Dockerfile`、`.dockerignore` 与 `pnpm build --target image`（auto 优先 Podman，可用 --runtime 指定），镜像构建必须使用仓库锁文件。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 - Podman 多阶段构建命令使用 `--format docker --jobs=1`：保留 Dockerfile `HEALTHCHECK`，并避免 Buildah 并行 stage 在部分 Podman 5.8 环境触发内部 semaphore panic。
 - SvelteKit 服务使用 Node adapter；纯 Vite/Capacitor Web 产物使用带 SPA fallback 的静态服务器。
-- Dockerfile 必须先复制 lockfile、workspace 配置与构建器准备的 `images/dependencies/` 安装输入，再执行 `pnpm fetch --ignore-scripts`，再复制源码并离线安装、构建；这样源码变化不重复下载依赖，也能兼容脚手架生成后新增的 workspace。
+- Dockerfile 必须先复制 lockfile、workspace 配置与构建器准备的 `images/dependencies/` 安装输入，再执行 `pnpm fetch --ignore-scripts`，再离线安装、复制源码并构建；这样源码变化可复用下载与安装层，也能兼容脚手架生成后新增的 workspace。
 - API/fullstack 使用 `pnpm pm deploy --filter <服务包名> --prod` 收敛生产依赖；fetch、安装和 deploy 阶段共用 pnpm store，安装和 deploy 阶段共用 SQLite 驱动缓存，避免收集生产依赖时重新下载。fullstack 的默认镜像由 Service 直接监听，Web 通过独立静态镜像交付，不增加转发进程。
 - 默认容器面向 CPU 运行或远程 AI 服务，在 Dockerfile 的安装和生产依赖收集阶段设置 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`，不额外下载 CUDA/TensorRT。容器使用宿主机 GPU 时需定制镜像与运行参数；该默认策略不修改本机 npm 配置或全局 AI/GPU 设置。
 - 纯 Vite Web 的 `PUBLIC_*` 部署配置必须在容器启动时生成静态运行时配置，不得作为 Docker build arg 烘焙，以支持一次构建、多环境部署。

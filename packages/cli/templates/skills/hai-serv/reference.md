@@ -18,7 +18,7 @@
 - 使用 Node listener，或在满足包 Node 依赖的宿主/测试中注入标准 fetch handler
 - 自定义 `ServContext`（注入 session、tenant 等请求级数据）
 - 生成 OpenAPI 3.1 文档供外部工具消费
-- 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
+- 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health 等 HTTP 挂载配置
 - 通过 `serv.createRuntimeSecurityPolicy(...)` 对生产 CORS Origin、原生 WebView Origin、Secure Cookie 与 API 文档暴露执行 fail-closed 策略
 - 启用传输加密：`serv.createApp({ transport: { crypto, serverKeyRing, keyStore } })`
 - 高级场景通过 `createApp({ middlewares })` 自定义 HTTP middleware，通过 `createContext` 注入请求级业务字段
@@ -276,7 +276,6 @@ http:
   health:
     path: /health
     readyPath: /ready
-  rpc: false
 
 transport:
   keyExchangePath: /_hai/key-exchange
@@ -483,7 +482,7 @@ const app = serv.createApp({
 })
 ```
 
-执行顺序为：`securityHeaders` → 内置 CORS 响应包装/握手和预检策略 → `transport`（若启用）/请求策略 → 普通 `middlewares` → health/refresh-cookie/OpenAPI/RPC/docs/oRPC routes。
+执行顺序为：`securityHeaders` → 内置 CORS 响应包装/握手和预检策略 → `transport`（若启用）/请求策略 → 普通 `middlewares` → health/refresh-cookie/OpenAPI/docs/oRPC routes。
 
 - 普通 `middlewares` 在解密和策略之后执行，提前响应仍受访问策略和响应加密约束。二进制端点显式加入 transport.excludePaths；内置 CORS 预检和密钥交换也执行策略。
 - 公开只读文件优先使用 `serv.storageAssets(...)`；应用仍须显式提供 key/MIME 白名单、缓存与跨域策略，框架不内置头像等业务概念。
@@ -549,7 +548,7 @@ HTTP 审计、限流、CORS、租户头校验等跨 route 能力继续放在
 | oRPC contract 输入 schema 校验失败（handler 之前） | 400       | 本地化失败体，`error.httpStatus=400` 与字段错误                           |
 | handler 内 `serv.validateInputOrFail(...)` 失败    | 200       | 失败 HaiResult，`error.httpStatus=400` 与字段错误                         |
 
-HTTP middleware、自定义 Response、refresh-cookie、OpenAPI/RPC 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路，不能手写明文刷新请求。
+HTTP middleware、自定义 Response、refresh-cookie、OpenAPI 入口权限和 transport 协议错误分别按自身响应契约处理，可返回真实 HTTP 4xx/5xx。`@h-ai/api-client` 在真实 HTTP 401 或 HTTP 200 的有效失败 HaiResult（`success=false`、字符串 `error.code/message`、`error.httpStatus=401`）后自动刷新，成功后只重试一次；内置登录、注册和配置的刷新路径除外，403/500 不刷新。启用 transport 时刷新和重试复用加密链路，不能手写明文刷新请求。
 
 SvelteKit 的 `kit.response.fromError` 根据 `error.httpStatus` 生成 HTTP Response；`kit.response.fromResult` 使用显式错误码映射，未命中默认 400。这些响应转换规则不能套用到 serv 普通 procedure。
 
@@ -584,7 +583,7 @@ const procedures = serv
 
 ### `serv.parseRequestContext` — 默认 Context 解析器
 
-默认忽略转发头，缺少运行时对端时 IP 为 undefined。XFF 从右向左停在首个不可信地址，忽略左侧；可信链无效/过长时保留 IP 未知，不能回退为代理身份。Fetch 使用 `app.fetch(request, { remoteAddress: platformPeerAddress })`，对端必须来自可信平台 API。自定义 context 传递完整 input，保留已解析的 ip；内部 RPC 使用连接对端，转发头不能放宽来源限制。
+默认忽略转发头，缺少运行时对端时 IP 为 undefined。XFF 从右向左停在首个不可信地址，忽略左侧；可信链无效/过长时保留 IP 未知，不能回退为代理身份。Fetch 使用 `app.fetch(request, { remoteAddress: platformPeerAddress })`，对端必须来自可信平台 API。自定义 context 传递完整 input，保留已解析的 ip。
 
 从 HTTP 请求头自动解析：
 
@@ -615,8 +614,7 @@ const spec = await serv.generateSpec(contract, {
 | `apiPrefix` | `'/api/v1'`                                | oRPC OpenAPI handler 挂载前缀                                                                          |
 | `health`    | `{ path: '/health', readyPath: '/ready' }` | 健康与就绪检查端点                                                                                     |
 | `openapi`   | `false`                                    | OpenAPI JSON endpoint，显式开启                                                                        |
-| `docs`      | `false`                                    | Scalar 文档页，显式开启；启用后自动挂载 `/_hai/scalar.js` 本地脚本路由                                 |
-| `rpc`       | `false`                                    | 内部 RPC endpoint，显式开启；`loopback` / `private-network` 基于真实连接 IP，网关场景用 `gateway-only` |
+| `docs`      | `false`                                    | Scalar 文档页，显式开启；在文档目录下挂载 `_hai/scalar.js`，页面使用相对脚本和 spec 地址；认证仍在后端执行 |
 | `transport` | `undefined`                                | 顶层配置；启用后默认挂载 `{apiPrefix}/_hai/key-exchange`                                               |
 
 ```ts
@@ -627,7 +625,6 @@ const http: ServHttpConfigInput = {
   openapi: { path: '/openapi.json' },
   docs: { path: '/docs' },
   health: { path: '/health', readyPath: '/ready' },
-  rpc: false,
 }
 ```
 
