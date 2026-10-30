@@ -48,6 +48,28 @@ function makeScan(
 }
 
 describe('buildRuntimeEnv 按功能追加 sidecar', () => {
+  it.each([
+    { service: 'db' as const, backend: 'postgresql', prefix: 'HAI_DB', configName: 'db', config: { pool: { max: 7 }, operationLog: { write: true }, ssl: true, host: 'old-db', password: 'old-password' }, retained: { pool: { max: 7 }, operationLog: { write: true } } },
+    { service: 'db' as const, backend: 'mysql', prefix: 'HAI_DB', configName: 'db', config: { pool: { max: 7, queueLimit: 10 }, mysql: { charset: 'utf8mb4' }, operationLog: { read: true } }, retained: { pool: { max: 7, queueLimit: 10 }, mysql: { charset: 'utf8mb4' }, operationLog: { read: true } } },
+    { service: 'cache' as const, backend: 'redis', prefix: 'HAI_CACHE', configName: 'cache', config: { keyPrefix: 'business:', db: 4, maxRetries: 8, retryDelay: 90, readOnly: true, commandTimeout: 7000, cluster: [{ host: 'old-cluster' }], sentinel: { masterName: 'old' }, password: 'old-password', tls: true }, retained: { keyPrefix: 'business:', db: 4, maxRetries: 8, retryDelay: 90, readOnly: true, commandTimeout: 7000, url: 'redis://cache:6379/4' } },
+    { service: 'vecdb' as const, backend: 'pgvector', prefix: 'HAI_VECDB', configName: 'vecdb', config: { tablePrefix: 'custom_', indexType: 'ivfflat', metric: 'dot', operationLog: { read: true }, host: 'old-vec' }, retained: { tablePrefix: 'custom_', indexType: 'ivfflat', metric: 'dot', operationLog: { read: true } } },
+    { service: 'vecdb' as const, backend: 'qdrant', prefix: 'HAI_VECDB', configName: 'vecdb', config: { metric: 'dot', operationLog: { write: true }, apiKey: 'old-token' }, retained: { metric: 'dot', operationLog: { write: true } } },
+    { service: 'vecdb' as const, backend: 'chroma', prefix: 'HAI_VECDB', configName: 'vecdb', config: { metric: 'dot', operationLog: { write: true }, apiKey: 'old-token', path: '/old/path' }, retained: { metric: 'dot', operationLog: { write: true } } },
+    { service: 'ldap' as const, backend: 'ldap', prefix: 'HAI_IAM_LDAP', configName: 'iam', config: { searchFilter: '(mail={{username}})', usernameAttribute: 'mail', emailAttribute: 'email', displayNameAttribute: 'displayName', connectTimeout: 9000, bindPassword: 'old-password' }, retained: { searchFilter: '(mail={{username}})', usernameAttribute: 'mail', emailAttribute: 'email', displayNameAttribute: 'displayName', connectTimeout: 9000 } },
+    { service: 'email' as const, backend: 'smtp', prefix: 'HAI_REACH_PROVIDERS_0', configName: 'reach', config: { name: 'alerts', from: 'Alerts <alerts@example.test>', pass: 'old-password' }, retained: { name: 'alerts', from: 'Alerts <alerts@example.test>' } },
+  ])('自建 $service/$backend 保留业务选项并清除旧连接选择器', ({ service, backend, prefix, configName, config, retained }) => {
+    const scan = makeScan([service], { [service]: backend })
+    scan.middlewares = [{ service, backend, source: 'config', configName, configPath: [], envPrefix: prefix, config: { type: backend, ...config } }]
+    const plan = buildRuntimeEnv(tmpDir, 'retained', scan, {}, 3000)
+    const effective = JSON.parse(plan.env[prefix])
+    expect(effective).toMatchObject(retained)
+    for (const name of ['host', 'password', 'bindPassword', 'apiKey']) {
+      if (name in effective)
+        expect(effective[name]).not.toMatch(/^old-/)
+    }
+    for (const name of ['cluster', 'sentinel', 'ssl', 'tls', 'path']) expect(effective).not.toHaveProperty(name)
+    expect(JSON.parse(plan.sidecar.env[prefix])).toEqual(effective)
+  })
   it('自建 S3 保留公开访问和对象命名配置，只替换内部连接与托管凭据', () => {
     const scan = makeScan(['storage'], { storage: 's3' })
     scan.middlewares = [{ service: 'storage', backend: 's3', source: '_storage.yml', configName: 'storage', configPath: [], envPrefix: 'HAI_STORAGE', config: { type: 's3', bucket: 'business-files', region: 'us-west-2', prefix: 'private', publicEndpoint: 'https://files.example.com', publicUrl: 'https://cdn.example.com/public', endpoint: 'http://old.internal', operationLog: { write: true } } }]

@@ -4,7 +4,7 @@
 
 ## 环境先行
 
-自建 S3 还要区分内部 endpoint 和浏览器 publicEndpoint；后者是 HTTP(S) origin，无默认、不含桶或网站目录。全栈 Web Nginx 或 SSR/API gateway 将桶路径直接转至 storage，存储端口与控制台不直接发布。外层入口保持 Host/URI/query 并转发桶路径，精确 CORS 在实际 S3 设置。增加网关或改变自建访问配置需全量基线，应用增量仅复用原配置；外部 S3 不生成本地路由，local 不公开目录。操作与验证见 [Storage skill](../hai-storage/SKILL.md)。
+自建 S3 还要区分内部 endpoint 和浏览器 publicEndpoint；后者是 HTTP(S) origin 或带代理目录的入口，无默认且不含桶名。全栈 Web Nginx 或 SSR/API gateway 将桶路径直接转至 storage，存储端口与控制台不直接发布。外层入口保持 Host/URI/query，仅生成网关移除代理目录，精确 CORS 在实际 S3 设置。增加网关或改变自建访问配置需全量基线，应用增量仅复用原配置；外部 S3 不生成本地路由，local 不公开目录。操作与验证见 [Storage skill](../hai-storage/SKILL.md)。
 
 默认部署名取工程根（最近的 `hai.json` 或锁文件所在目录）的 `package.json.name`，缺失时报错，再附加显式环境后缀。例如 fullstack 工程 `hai-delivery` 扫描 `packages/hai-delivery-serv`，`--env test` 生成 `/opt/hai/apps/hai-delivery-test` 和 `bundle-hai-delivery-test-<部署ID>-<版本>.tar.gz`。远端目录、交付包、Compose 项目、API/Web/中间件容器、数据卷、服务器凭据状态及增量基线统一使用该名称；不会按字符串删除真实项目名中的 `-serv`。
 
@@ -34,6 +34,8 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点可直接加载环境文件中的同一有效密钥环，也可由 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
 
 ## 识别与逐项选择
+
+默认和自定义模式均从同后端的有效配置继续，不能按表单重建对象而丢掉未展示项。自建/云开通保留连接池、操作日志、公开端点/前缀、Redis 重试、向量检索、SMTP 发件人及 LDAP 属性映射，仅由实际服务定稿地址与认证；旧 URL、TLS/集群选择器不能覆盖新服务。切换后端清除不兼容字段。若旧向导已写出缺字段父 JSON，先从原配置/备份恢复最高优先级 `HAI_STORAGE` 的 `publicEndpoint` 等字段，再用修复版重建部署包；父 JSON 仍优先于 YAML 和叶变量，不自动猜测丢失值。
 
 框架 `HAI_*` 连接配置与镜像原生变量分开：PostgreSQL/MySQL/RustFS/MinIO/LDAP 的原生键必须按镜像契约命名，只写私有 `middleware-runtime.env`、只让中间件加载。不得改成镜像不识别的 HAI 前缀，也不得写回工程 `.env.<mode>` / 私有覆盖或注入应用 `.env.runtime`。应用的增量覆盖文件 `middleware.env` 只含 `HAI_*`。旧工程原生字段不自动删除，新应用环境忽略框架曾生成的已知原生键；不要批量过滤其他业务变量。
 

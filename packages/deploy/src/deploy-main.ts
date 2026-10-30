@@ -34,6 +34,7 @@ import {
 import { loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
 import { normalizeProjectName, resolveArtifactDirectory, resolveOutputDir, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
+import { mergeManagedMiddlewareConfig } from './deploy-middleware-config.js'
 import { getDeployRecovery, recoveryFailure } from './deploy-recovery.js'
 import { scanApp } from './deploy-scanner.js'
 import { HaiDeployError } from './deploy-types.js'
@@ -137,7 +138,7 @@ const deployCredentials: DeployCredentialOperations = {
 
 /** 合并 Provisioner 输出环境变量，并聚合 HAI_REACH_PROVIDERS 数组。 */
 function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, options?: DeployAppOptions): Record<string, string> {
-  let env: Record<string, string> = {}
+  const env: Record<string, string> = {}
   const reachRequirements = scan?.middlewares?.filter(item => item.configName === 'reach') ?? []
   const reachProviders: unknown[] = reachRequirements.map(item => item.config)
   let hasReachOutput = false
@@ -152,14 +153,17 @@ function mergeProvisionEnv(results: ProvisionResult[], scan?: ScanResult, option
         })
         if (targets.length) {
           for (const target of targets)
-            reachProviders[reachRequirements.indexOf(target)] = { ...provider, name: target.config.name ?? provider.name }
+            reachProviders[reachRequirements.indexOf(target)] = { ...mergeManagedMiddlewareConfig(target, provider), name: target.config.name ?? provider.name }
         }
         else {
           reachProviders.push(provider)
         }
       }
     }
-    env = { ...env, ...prov.envVars }
+    for (const [name, value] of Object.entries(prov.envVars)) {
+      const requirement = scan?.middlewares?.find(item => item.envPrefix === name)
+      env[name] = requirement ? JSON.stringify(mergeManagedMiddlewareConfig(requirement, JSON.parse(value))) : value
+    }
   }
   if (hasReachOutput)
     env.HAI_REACH_PROVIDERS = JSON.stringify(reachProviders)

@@ -254,7 +254,8 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     else {
       if (mode === 'default' && ['aliyun-sms', 'api'].includes(backendName))
         throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: backend.label } }))
-      const connection: Record<string, unknown> = mode === 'custom' && backendName === current.backend ? { ...requirement.config } : requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service } : {}
+      // 默认与自定义都从同后端的有效配置继续，不能用表单字段重建并丢失未展示选项。
+      const connection: Record<string, unknown> = backendName === current.backend ? { ...requirement.config } : requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service } : {}
       for (const field of backend.fields) {
         const previous = backendName === current.backend ? requirement.config[field.name] : undefined
         const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)

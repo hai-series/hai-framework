@@ -15,6 +15,7 @@ import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
 import { mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
+import { mergeManagedMiddlewareConfig } from '../deploy-middleware-config.js'
 import { CERTBOT_IMAGE } from './deploy-https.js'
 
 /** sidecar 镜像固定版本，避免 `:latest` 漂移导致行为变化。 */
@@ -415,7 +416,7 @@ export function planSidecars(
       const requirements = scan.middlewares?.filter(item => item.service === 'email' && item.backend === 'smtp' && ['default', undefined].includes(options?.serviceModes?.[item.envPrefix] ?? options?.serviceModes?.email))
       if (requirements?.length) {
         for (const requirement of requirements)
-          plan.env[requirement.envPrefix] = JSON.stringify({ name: requirement.config.name ?? 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: 'noreply@example.com' })
+          plan.env[requirement.envPrefix] = JSON.stringify({ name: requirement.config.name ?? 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: requirement.config.from || 'noreply@example.com' })
       }
       else if (!scan.middlewares) {
         plan.env.HAI_REACH_PROVIDERS_0 = JSON.stringify({ name: 'email', type: 'smtp', host: 'email', port: 1025, secure: false, from: 'noreply@example.com' })
@@ -423,6 +424,11 @@ export function planSidecars(
     }
   }
 
+  for (const requirement of scan.middlewares ?? []) {
+    const supplied = plan.env[requirement.envPrefix]
+    if (supplied)
+      plan.env[requirement.envPrefix] = JSON.stringify(mergeManagedMiddlewareConfig(requirement, JSON.parse(supplied)))
+  }
   return plan
 }
 
