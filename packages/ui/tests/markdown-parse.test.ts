@@ -149,6 +149,36 @@ describe('parseMarkdown - 基础渲染', () => {
 // =============================================================================
 
 describe('parseMarkdown - 代码块', () => {
+  it('已转成 HTML 的配置代码仍高亮并能复制，输入样式和事件不会进入页面', () => {
+    const source = '<p onclick="evil()">示例</p><pre style="background:url(javascript:evil())"><code class="language-yaml" onclick="evil()">start: &#39;22:00&#39;\ntext: &lt;img src=x onerror=evil()&gt;\nliteral: &amp;lt;</code></pre><script>evil()</script>'
+    const html = parseMarkdown(source, { allowHtmlTags: true })
+    expect(html).toContain('hai-md-code-block')
+    expect(html).toContain('data-copy-code')
+    expect(html).toContain('language-yaml')
+    expect(html).toMatch(/<span[^>]*style="[^"]*color:/)
+    expect(html).not.toContain('<script>')
+    expect(html).not.toContain('<img')
+    expect(html).not.toContain('onclick=')
+    expect(html).not.toContain('background:url')
+    const disabled = parseMarkdown(source, { allowHtmlTags: true, enableHighlight: false, showCopyButton: false })
+    expect(disabled).toContain('literal: &amp;lt;')
+    expect(disabled).not.toContain('data-copy-code')
+    expect(disabled).not.toMatch(/<span[^>]*style="[^"]*color:/)
+    expect(parseMarkdown(source)).not.toContain('<pre')
+  })
+
+  it.each([
+    ['powershell', '$env:PUBLIC_BASE_PATH = \'/portal\'\npnpm.cmd build'],
+    ['dotenv', 'HAI_CORE_ENV=production'],
+    ['nginx', 'location /portal/ { proxy_pass http://backend; }'],
+    ['dockerfile', 'FROM node:22-alpine\nWORKDIR /app'],
+  ])('部署说明中的 %s 代码有语法颜色且保留复制内容', (language, code) => {
+    const html = parseMarkdown(`\`\`\`${language}\n${code}\n\`\`\``)
+    expect(html).toContain(`language-${language}`)
+    expect(html).toMatch(/<span[^>]*style="[^"]*color:/)
+    expect(html).toContain('hai-md-code-block')
+  })
+
   it('应该渲染代码块容器', () => {
     const html = parseMarkdown('```js\nconst x = 1\n```')
     expect(html).toContain('hai-md-code-block')

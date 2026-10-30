@@ -63,6 +63,60 @@ function createTableCellAttrs(cell: Tokens.TableCell): string {
   return attrs.length > 0 ? ` ${attrs.join(' ')}` : ''
 }
 
+/** 围栏代码和 HTML 代码共用渲染，颜色与复制控件始终由框架生成。 */
+function renderCodeBlock(text: string, lang: string | undefined, options: Required<MarkdownParseOptions>): string {
+  const language = lang && isLanguageSupported(lang) ? lang : ''
+  let highlighted: string
+
+  if (options.enableHighlight && language) {
+    highlighted = highlightCode(text, language)
+  }
+  else if (options.enableHighlight) {
+    // 未指定语言时不做自动检测，直接转义
+    highlighted = escapeHtml(text)
+  }
+  else {
+    highlighted = escapeHtml(text)
+  }
+
+  const langLabel = language
+    ? `<span class="hai-md-code-lang">${escapeHtml(language)}</span>`
+    : ''
+  const copyBtn = options.showCopyButton
+    ? `<button type="button" class="hai-md-copy-btn" data-copy-code aria-label="${escapeHtml(uiM('markdown_copy_code'))}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
+    : ''
+
+  return `<div class="hai-md-code-block">`
+    + `<div class="hai-md-code-header">${langLabel}${copyBtn}</div>`
+    + `<pre><code class="hai-hl${language ? ` language-${escapeHtml(language)}` : ''}">${highlighted}</code></pre>`
+    + `</div>`
+}
+
+/** 仅还原代码文本的实体；随后仍按普通代码转义，绝不把代码中的标签作为 HTML 执行。 */
+function decodeCodeText(text: string): string {
+  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: '\'', nbsp: '\u00A0' }
+  return text.replace(/&(#(?:[xX][\da-fA-F]+|\d+)|amp|lt|gt|quot|apos|nbsp);/g, (entity, key: string) => {
+    if (!key.startsWith('#'))
+      return named[key] ?? entity
+    const code = key[1]?.toLowerCase() === 'x' ? Number.parseInt(key.slice(2), 16) : Number(key.slice(1))
+    return code > 0 && code <= 0x10FFFF && !(code >= 0xD800 && code <= 0xDFFF) ? String.fromCodePoint(code) : entity
+  })
+}
+
+/** 重建 pre/code，不保留输入的 style、事件或任意 class；其余 HTML 继续通过原有白名单。 */
+function renderHtmlWithCode(source: string, options: Required<MarkdownParseOptions>): string {
+  let html = ''
+  let offset = 0
+  for (const match of source.matchAll(/<pre\b[^>]*>\s*<code\b([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi)) {
+    html += sanitizeMarkdownHtml(source.slice(offset, match.index))
+    const classes = /\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(match[1])
+    const language = /(?:^|\s)language-([a-z\d#+.-]+)(?:\s|$)/i.exec(classes?.[1] ?? classes?.[2] ?? '')?.[1]
+    html += renderCodeBlock(decodeCodeText(match[2]), language, options)
+    offset = match.index + match[0].length
+  }
+  return html + sanitizeMarkdownHtml(source.slice(offset))
+}
+
 /**
  * 创建自定义渲染器对象
  *
@@ -73,38 +127,14 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
   return {
     // 代码块：语法高亮 + 语言标签 + 复制按钮
     code({ text, lang }: Tokens.Code): string {
-      const language = lang && isLanguageSupported(lang) ? lang : ''
-      let highlighted: string
-
-      if (options.enableHighlight && language) {
-        highlighted = highlightCode(text, language)
-      }
-      else if (options.enableHighlight) {
-        // 未指定语言时不做自动检测，直接转义
-        highlighted = escapeHtml(text)
-      }
-      else {
-        highlighted = escapeHtml(text)
-      }
-
-      const langLabel = language
-        ? `<span class="hai-md-code-lang">${escapeHtml(language)}</span>`
-        : ''
-      const copyBtn = options.showCopyButton
-        ? `<button type="button" class="hai-md-copy-btn" data-copy-code aria-label="${escapeHtml(uiM('markdown_copy_code'))}"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
-        : ''
-
-      return `<div class="hai-md-code-block">`
-        + `<div class="hai-md-code-header">${langLabel}${copyBtn}</div>`
-        + `<pre><code class="hai-hl${language ? ` language-${escapeHtml(language)}` : ''}">${highlighted}</code></pre>`
-        + `</div>`
+      return renderCodeBlock(text, lang, options)
     },
 
     // 原始 HTML 块：转义以防止 XSS
     html(token: Tokens.HTML | Tokens.Tag): string {
       const source = readHtmlTokenSource(token)
       return options.allowHtmlTags
-        ? sanitizeMarkdownHtml(source)
+        ? renderHtmlWithCode(source, options)
         : escapeHtml(source)
     },
 

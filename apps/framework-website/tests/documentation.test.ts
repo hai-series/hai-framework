@@ -4,9 +4,21 @@ import { contentHref, getDocument, getNavigation, routeDocuments, searchIndex } 
 import { searchDocuments } from '../src/lib/services/search.js'
 
 describe('公开手册的静态阅读契约', () => {
+  it('配置示例标明 YAML 语言，校验元数据不作为语言名', async () => {
+    const document = await getDocument('configuration/runtime.md', '/hai-framework')
+    const html = document?.sections.map(section => section.html).join('\n') ?? ''
+    expect(html).toContain('language-yaml')
+    expect(html).not.toContain('language-yaml schema=')
+  })
+  it('正文流程图使用公开路径并预留尺寸，浏览器加载前不推动锚点', async () => {
+    const document = await getDocument('configuration/runtime.md', '/hai-framework')
+    const html = document?.sections.map(section => section.html).join('\n') ?? ''
+    expect(html).toContain('src="/hai-framework/guide-images/configuration-sources.svg"')
+    expect(html).toContain('width="1080" height="480"')
+  })
   it('相对文档、图片、源码链接在repo子路径保持正确，私有路径不发布', () => {
     expect(docLink('configuration/README.md', '/hai-framework')).toBe('/hai-framework/docs/configuration/')
-    expect(contentHref('../images/config-core.png', 'configuration/runtime.md', '/hai-framework')).toBe('/hai-framework/guide-images/config-core.png')
+    expect(contentHref('../images/auth-login-split.png', 'configuration/runtime.md', '/hai-framework')).toBe('/hai-framework/guide-images/auth-login-split.png')
     expect(contentHref('../configuration/runtime.md#日志采集与隐私', 'development/ui.md', '/hai-framework')).toBe('/hai-framework/docs/configuration/runtime/#%E6%97%A5%E5%BF%97%E9%87%87%E9%9B%86%E4%B8%8E%E9%9A%90%E7%A7%81')
     expect(contentHref('../../../packages/core/README.md', 'configuration/runtime.md', '/hai-framework')).toBe('https://github.com/hai-series/hai-framework/blob/main/packages/core/README.md')
     expect(contentHref('C:/private/report.md', 'README.md', '/hai-framework')).toBe('#')

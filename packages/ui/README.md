@@ -388,6 +388,7 @@ components/
 > - `fontSize` 支持 `number`（按 px 解释）或任意 CSS 长度字符串（如 `1.125rem`）
 > - `allowHtmlTags` 默认关闭；开启后会按安全白名单解析 `<b>` / `<i>` / `<u>` / `<mark>` 等 HTML 标签，危险标签与属性仍会被消毒
 > - 安全 HTML 文本中的引号、比较符和 `&` 实体只保留一层含义，配置代码不会显示为实体编号；编码后的标签保持文字，不会重新作为标签执行。
+> - HTML 中的 `<pre><code class="language-yaml">` 等代码块也会安全重建高亮和复制按钮，不保留输入的任意样式或事件。支持 YAML、TypeScript、Shell、PowerShell、dotenv、Nginx、Dockerfile 和 Svelte 等常用语言。
 > - 原始 `<img>` 可保留 `width` / `height`（1–99999 的正整数像素值），用于在图片延迟加载前预留空间，减少文档布局和锚点位置跳变；百分比、负数、小数、事件及任意 `style` 不保留。
 
 ```svelte

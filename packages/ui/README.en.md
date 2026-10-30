@@ -389,6 +389,7 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 > - `fontSize` accepts a `number` in px or any CSS length such as `1.125rem`.
 > - `allowHtmlTags` is off by default; when enabled, tags such as `<b>` / `<i>` / `<u>` / `<mark>` use a safe allowlist, with dangerous tags/attributes still sanitized.
 > - Text entities in safe HTML retain one level of meaning, so quotes, comparison operators and `&` in configuration snippets remain readable. Encoded tags remain text and are never reparsed as markup.
+> - HTML code blocks such as `<pre><code class="language-yaml">` also receive safely rebuilt highlighting and copy buttons. Input styles and events are discarded. Supported languages include YAML, TypeScript, Shell, PowerShell, dotenv, Nginx, Dockerfile and Svelte.
 > - Raw `<img>` tags retain `width` / `height` as positive integer pixel values from 1 to 99999. These reserve space before lazy images load and keep document layout and anchor positions stable. Percentages, negatives, decimals, events, and arbitrary `style` are removed.
 
 ```svelte

@@ -16,22 +16,28 @@ import langCpp from '@shikijs/langs/cpp'
 import langCsharp from '@shikijs/langs/csharp'
 import langCss from '@shikijs/langs/css'
 import langDiff from '@shikijs/langs/diff'
+import langDockerfile from '@shikijs/langs/dockerfile'
+import langDotenv from '@shikijs/langs/dotenv'
 import langGo from '@shikijs/langs/go'
 import langGraphql from '@shikijs/langs/graphql'
 import langHtml from '@shikijs/langs/html'
+import langIni from '@shikijs/langs/ini'
 import langJava from '@shikijs/langs/java'
 import langJavascript from '@shikijs/langs/javascript'
 import langJson from '@shikijs/langs/json'
 import langKotlin from '@shikijs/langs/kotlin'
 import langLua from '@shikijs/langs/lua'
 import langMarkdown from '@shikijs/langs/markdown'
+import langNginx from '@shikijs/langs/nginx'
 import langPhp from '@shikijs/langs/php'
+import langPowershell from '@shikijs/langs/powershell'
 import langPython from '@shikijs/langs/python'
 import langRuby from '@shikijs/langs/ruby'
 import langRust from '@shikijs/langs/rust'
 import langScss from '@shikijs/langs/scss'
 import langShell from '@shikijs/langs/shellscript'
 import langSql from '@shikijs/langs/sql'
+import langSvelte from '@shikijs/langs/svelte'
 import langSwift from '@shikijs/langs/swift'
 import langToml from '@shikijs/langs/toml'
 import langTypescript from '@shikijs/langs/typescript'
@@ -81,6 +87,12 @@ const highlighter = createHighlighterCoreSync({
     langToml,
     langMarkdown,
     langDiff,
+    langDockerfile,
+    langDotenv,
+    langIni,
+    langNginx,
+    langPowershell,
+    langSvelte,
     langGraphql,
     langLua,
   ],
@@ -98,6 +110,9 @@ const LANG_ALIASES: Record<string, string> = {
   'sh': 'bash',
   'shell': 'bash',
   'zsh': 'bash',
+  'ps1': 'powershell',
+  'pwsh': 'powershell',
+  'env': 'dotenv',
   'yml': 'yaml',
   'c++': 'cpp',
   'c#': 'csharp',

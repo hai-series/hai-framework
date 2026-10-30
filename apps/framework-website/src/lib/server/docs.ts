@@ -40,9 +40,18 @@ function headingSlug(value: string): string {
 let navigationPromise: Promise<DocNavigation> | undefined
 let imageDimensionsPromise: Promise<Map<string, { width: number, height: number }>> | undefined
 
-/** 读取截图头部尺寸，为浏览器预留空间，避免加载图片时把锚点推离视口。 */
+/** 读取截图与流程图尺寸，为浏览器预留空间，避免加载图片时把锚点推离视口。 */
 function imageDimensions() {
-  imageDimensionsPromise ??= readdir(path.join(usageRoot, 'images')).then(async files => new Map(await Promise.all(files.filter(file => file.endsWith('.png')).map(async (file) => {
+  imageDimensionsPromise ??= readdir(path.join(usageRoot, 'images')).then(async files => new Map(await Promise.all(files.filter(file => /\.(?:png|svg)$/.test(file)).map(async (file) => {
+    if (file.endsWith('.svg')) {
+      const source = await readFile(path.join(usageRoot, 'images', file), 'utf8')
+      const root = /<svg\b[^>]*>/.exec(source)?.[0] ?? ''
+      const width = Number(/\bwidth="([1-9]\d{0,4})"/.exec(root)?.[1])
+      const height = Number(/\bheight="([1-9]\d{0,4})"/.exec(root)?.[1])
+      if (!width || !height)
+        throw new Error(`Invalid documentation image dimensions: ${file}`)
+      return [file, { width, height }] as const
+    }
     const handle = await open(path.join(usageRoot, 'images', file), 'r')
     try {
       const header = Buffer.alloc(24)
@@ -91,6 +100,11 @@ export async function getDocument(file: string, base: string) {
   const headings: { id: string, title: string, depth: number }[] = []
   const used = new Map<string, number>()
   const parser = new Marked({ renderer: {
+    code({ text, lang }) {
+      // 公共 MarkdownRenderer 按语言安全重建代码高亮；校验元数据不进入语言名。
+      const language = lang?.split(/\s+/)[0] ?? 'text'
+      return `<pre><code class="language-${escapeAttribute(language)}">${escapeAttribute(text)}</code></pre>`
+    },
     heading({ tokens, depth }) {
       const text = this.parser.parseInline(tokens)
       const root = headingSlug(text)
