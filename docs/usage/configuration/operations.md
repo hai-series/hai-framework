@@ -6,21 +6,21 @@
 
 ## Feedback通知、采集和保留
 
-位置：`config/_feedback.yml`。先RelDB和私有Storage，再初始化Feedback；Reach模式另需已初始化的真实通道。
+位置：`config/_feedback.yml`。先初始化关系数据库（RelDB）和私有存储（Storage），再启动 Feedback。需要发送邮件或短信通知时，还要先准备 Reach 通道。
 
 | 项 | 框架默认 | 影响与条件 |
 | --- | --- | --- |
 | `appId` | 必填，无默认 | 服务端、客户端及API必须一致；`appVersion`/`buildId`/`commit`可选，无默认 |
-| `notificationMode` | `reach` | disabled不通知，console本地日志，`reach`实际通知；CLI模板明确选console，与框架默认不同 |
-| `consoleContent` | metadata | `summary`显式加入通用脱敏摘要，正文可能含业务隐私，生产谨慎启用 |
-| `recipients`/`notificationProvider` | []/`email` | `reach`要求至少一位接收方；Provider是注册名称，不是smtp/api类型 |
+| `notificationMode` | `reach` | `disabled` 不通知，`console` 只写本地日志，`reach` 通过已配置通道通知。CLI 模板使用 `console`，方便首次启动 |
+| `consoleContent` | `metadata` | 默认只记录编号、状态等基本信息；改为 `summary` 后还会写入经过通用脱敏的摘要，可能仍包含业务隐私 |
+| `recipients`/`notificationProvider` | `[]`/`email` | `reach` 模式至少需要一位接收方。`notificationProvider` 填 Reach 中注册的通道名称，例如 `email`，而非通道类型 `smtp` 或 `api` |
 | `adminUrl` | 无默认 | 通知内的可信管理页面地址；不能由任意用户输入决定 |
-| `collectionTimeoutMs`/`businessCollectionTimeoutMs` | 60000/30000ms | 前者材料汇集期限、后者业务回调等待上限，不是相同超时 |
-| `workerIntervalMs`/`leaseMs`/`maxAttempts` | 1000/30000ms/5 | 0关闭自动扫描需宿主手动运行任务；租约与最大尝试分别约束并发和失败恢复 |
+| `collectionTimeoutMs`/`businessCollectionTimeoutMs` | 60 秒/30 秒 | 前者是整份反馈等待材料补齐的最长时间；后者是单次业务采集回调最多等待多久。配置值的单位均为毫秒 |
+| `workerIntervalMs`/`leaseMs`/`maxAttempts` | 1 秒/30 秒/5 次 | 后台默认每秒扫描待办任务；处理进程失联后，其他进程要等租约到期才能接手。每个任务最多尝试 5 次；`workerIntervalMs: 0` 关闭自动扫描，需由应用主动执行任务 |
 | `retentionDays` | 30天 | 到期清理数据/对象；删除成功后才释放预留，不能只改数据库状态 |
 | `webhookUrl`/`webhookSecret` | 空串/空串 | URL空关闭；secret空未签名，生产HTTPS并显式签名密钥 |
 | `webhookTimeoutMs` | 10000ms | 请求失败进入持久重试；接收方按`eventId`持久去重，拒绝重定向 |
-| `envAllowlist` | [] | 只采集允许的非敏感环境键，凭据类仍排除；不允许为方便导出全部环境 |
+| `envAllowlist` | `[]` | 只采集这里列出的非敏感环境变量；密码、令牌等凭据仍会被排除 |
 
 ```yaml schema=@h-ai/feedback:FeedbackConfigSchema
 appId: orders
@@ -36,9 +36,9 @@ webhookUrl: ''
 envAllowlist: [NODE_ENV]
 ```
 
-把console换为`reach`时，同时配置真实`recipients`/`provider`，并用专用接收端确认；只改`mode`会因缺收件人校验失败。Webhook独立于Reach通知，业务异步采集回调必须被等待，采集终态后才投递固定载荷。
+把 `notificationMode` 从 `console` 改为 `reach` 时，同时填写 `recipients` 和 `notificationProvider`，再发一条测试通知确认接收端收到。只改通知模式而不填收件人，会在初始化时校验失败。Webhook 单独配置，不依赖 Reach；系统等待材料采集结束后再投递通知载荷。
 
-操作：提交专用反馈，记录受理编号，分别查看`collection`/notification/webhook的jobs；只重试失败的目标。下面是实际受理页面，说明“记录已保存”与“所有任务完成”分开：
+验证时提交一条测试反馈，保存受理编号，再查看材料采集状态及通知、Webhook 任务结果。已经受理表示记录已保存，不代表所有材料和通知任务都已完成；重试时只选失败的任务。
 
 ![反馈受理结果](../images/feedback-accepted.png)
 
@@ -80,22 +80,22 @@ exportRetentionHours: 12
 
 ## Reach通道、免打扰与失败队列
 
-位置：`config/_reach.yml`。`providers`至少一项，`name`唯一且与业务引用一致。console只输出本地结果，不代表真实邮件/短信已送达。
+位置：`config/_reach.yml`。`providers` 至少配置一个通道，每个通道的 `name` 需要唯一，业务通过这个名称选择发送渠道。`console` 通道只写本地日志，不会真的发送邮件或短信。
 
 | 配置组 | 默认/必填 | 影响 |
 | --- | --- | --- |
-| SMTP `host`/from | 必填 | 发件地址与服务授权对应；`port`=465、`secure`=true；user/pass可选且按服务要求提供 |
-| API `url` | 必填HTTP(S) | 默认`method`=POST、`timeout`=10000ms、`redirect`=error、`idempotent`=false；`headers`可选 |
-| API `requireHttps` | 无Schema默认；发送时按敏感标记与环境推导 | true拒绝HTTP地址和follow重定向配置；false显式放宽HTTPS检查，包括生产敏感消息，生产应明确true |
-| API `idempotent` | false | 只有接收方按稳定幂等键原子持久去重才选true，声明不会自动改造接收端 |
+| SMTP `host`/`from` | 必填 | `host` 是邮件服务器地址，`from` 是已获授权的发件地址。端口 `port` 默认 `465`，`secure` 默认 `true`；账号 `user` 和密码 `pass` 按邮件服务要求填写 |
+| API `url` | 必填 HTTP(S) 地址 | 默认使用 `method: POST`，`timeout: 10000` 表示等待 10 秒；`redirect: error` 表示拒绝重定向。认证信息等请求头放在 `headers` 中 |
+| API `requireHttps` | 未填写时按消息和环境决定 | `true` 拒绝 HTTP 地址及 `follow` 重定向设置；`false` 明确允许 HTTP，包括生产中的敏感消息。生产通道需要强制 HTTPS 时填写 `true` |
+| API `idempotent` | `false` | 接收端能按同一个幂等键识别并丢弃重复消息时，才填写 `true`；这个开关不会替接收端实现去重 |
 | Aliyun短信 | `accessKeyId`/`accessKeySecret`/`signName`必填 | `endpoint`默认`dysmsapi.aliyuncs.com`；模板和目的地按真实服务授权 |
-| `templates` | 可省略 | 每项`name`/`provider`/body必填，`subject`可选；Provider引用注册名称 |
-| `dnd.enabled` / `strategy` / `start` / `end` | 对象内false/discard/00:00/00:00 | delay需RelDB持久入队，discard是丢弃，不可显示为已发送 |
-| `queue`.`maxAttempts`/`retryDelayMs`/`maxRetryDelayMs` | 5 次 / 60000 毫秒 / 3600000 毫秒 | 最多尝试 5 次；首次重试等 1 分钟，以后逐次加倍，最长等 1 小时。修改只影响新入队消息 |
+| `templates` | 可省略 | 每项必须有模板名 `name`、通道名 `provider` 和正文 `body`；邮件主题 `subject` 可选 |
+| `dnd.enabled` / `dnd.strategy` / `dnd.start` / `dnd.end` | `false`/`discard`/`00:00`/`00:00` | 开启后，指定时段内的消息按策略处理：`delay` 先存入关系数据库等待发送，`discard` 直接丢弃。丢弃不表示已发送 |
+| `queue.maxAttempts`/`queue.retryDelayMs`/`queue.maxRetryDelayMs` | 5 次 / 60000 毫秒 / 3600000 毫秒 | 最多尝试 5 次；首次重试等 1 分钟，以后逐次加倍，最长等 1 小时。修改只影响新入队消息 |
 
-`requireHttps` 省略时，仅当消息 `sensitive=true` 且运行环境需要生产共享状态时，发送强制HTTPS；普通消息和开发环境不自动强制。生产条件沿用 `NODE_ENV` 或 `HAI_CORE_ENV` 为 production 的判定，显式E2E测试例外。显式false会覆盖此推导，不能因为处于生产就认定HTTP必然被拒绝。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
+省略 `requireHttps` 时，生产环境中的敏感消息（`sensitive: true`）会强制使用 HTTPS；普通消息和开发环境不自动强制。生产环境按 `NODE_ENV` 或 `HAI_CORE_ENV` 为 `production` 判断，显式 E2E 测试例外。填写 `false` 会覆盖这个自动判断。敏感消息始终不跟随重定向，与 `requireHttps` 的取值无关。
 
-免打扰的`start`/end按运行进程的本地时区解释，不继承IAM/Scheduler的UTC或IANA时区设置。部署前明确进程TZ并让同一环境节点保持一致；换时区后要验证实际发送窗口。起点包含、终点不包含，22:00到08:00表示跨午夜；`start`与end相等表示**没有阻塞时段**。因此只设`enabled`=true而保留默认00:00/00:00，不会拦截任何通知。需要夜间静默时明确设置不同的起止时间，选择delay还需已初始化的RelDB；discard会丢弃，不能用于必须送达的通知。
+免打扰的 `start` 和 `end` 使用运行进程的本地时区，不继承 IAM 或 Scheduler 的时区设置。部署时设置进程的 `TZ`，并让同一环境的节点保持一致。`22:00` 到 `08:00` 表示跨午夜，包含起点、不包含终点；起止时间相等表示**没有免打扰时段**。因此只打开 `enabled: true`，仍保留 `00:00` 到 `00:00`，不会拦截通知。必须送达的消息选择 `delay` 并先初始化关系数据库；选择 `discard` 会丢弃消息。
 
 ```yaml schema=@h-ai/reach:ReachConfigSchema
 providers:
@@ -110,7 +110,7 @@ queue: { maxAttempts: 5, retryDelayMs: 60000, maxRetryDelayMs: 3600000 }
 dnd: { enabled: false, strategy: discard, start: '00:00', end: '00:00' }
 ```
 
-用专用收件箱/受控接收端发无敏感内容的消息，核对Provider回执和接收端记录。对unknown先查业务事实，确认后sent/discarded处理；dead重排需当前版本防并发覆盖。敏感消息同时使用sensitive/`expiresAt`/`idempotencyKey`，避免长期保留和盲目补发。
+配置好后，用测试收件箱或受控接口接收一条不含敏感内容的消息，同时核对发送结果和接收端记录。状态为 `unknown` 时，先确认接收端是否已收到，再按事实标记 `sent` 或 `discarded`；重排 `dead` 消息时携带当前版本，防止覆盖其他人的操作。敏感消息同时设置 `sensitive`、到期时间 `expiresAt` 和幂等键 `idempotencyKey`。
 
 ## Audit采集、保留保护、归档与告警
 
