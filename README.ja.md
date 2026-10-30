@@ -140,6 +140,8 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 
 [CI は段階ごとに並列実行](docs/ci.md)し、入力指紋が一致する有効な成功記録を再利用します。**CI** は型、ビルド、テスト、ブラウザ操作を検証します。**CodeQL** は JavaScript/TypeScript を静的解析し、結果を GitHub Security に登録します。**Leak Checker** は管理者指定の漏えい語リストを確認します。バッジは実行状態を示し、解析結果は業務権限や配布構成と合わせて評価します。
 
+npm は公開前にパッケージをスキャンします。CI は全パッケージを照会できるまで最大三十分待ち、その後 `latest` を更新します。[公開の復旧手順](docs/ci.md#查看结果与重新运行)を参照してください。
+
 ローカルのコミット/プッシュでは `scripts/check-leak-words.mjs` を使い、`.leak-words.json` は非公開に保ちます。コンテナ検証はその実行で登録したリソースを回収します。過去のテストイメージは `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` で確認後、`--apply` を追加します。[検証説明](docs/usage/governance/verification.md)で実行、再利用、環境依存の境界を確認できます。
 
 ## ライセンス

@@ -272,7 +272,7 @@ jobs:
     needs: quality
     if: needs.quality.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     concurrency:
       group: npm-publication
       cancel-in-progress: false

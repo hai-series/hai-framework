@@ -140,6 +140,8 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 
 [CI runs in parallel stages](docs/ci.md) and reuses eligible successful results by input fingerprint. **CI** validates types, builds, tests and browser flows. **CodeQL** analyzes JavaScript/TypeScript for security findings, available in GitHub Security. **Leak Checker** checks a maintainer-configured word list. Badges report workflow results; assess findings alongside business authorization and deployment reviews.
 
+npm scans packages before making them available. CI waits up to thirty minutes for every package to become queryable before promoting `latest`; see [release recovery](docs/ci.md#查看结果与重新运行).
+
 Local commit/push hooks use `scripts/check-leak-words.mjs`; keep `.leak-words.json` private. Container gates clean up resources registered for that run. Preview historical test image cleanup with `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` before adding `--apply`. [Verification notes](docs/usage/governance/verification.md) distinguish actual runs, reuse and environment dependencies.
 
 ## License

@@ -29,11 +29,34 @@ describe('npm latest promotion', () => {
     const fetcher = vi.fn(async url => url.includes('%2fb/') ? new Response('', { status: 404 }) : Response.json({ version: packages[0].version }))
     fixture.fetcher = fetcher
     try {
+      const started = Date.now()
       const assertion = expect(promoteLatest(packages, fixture)).rejects.toThrow('Release is incomplete')
       await vi.runAllTimersAsync()
       await assertion
       expect(fixture.writes).toEqual([])
-      expect(fetcher).toHaveBeenCalledTimes(packages.length * 6)
+      expect(Date.now() - started).toBe(30 * 60_000)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+    finally { vi.useRealTimers() }
+  })
+
+  it('waits through a twelve-minute npm scan without advancing tags early', async () => {
+    vi.useFakeTimers()
+    const fixture = registry()
+    const fetcher = fixture.fetcher
+    const started = Date.now()
+    fixture.fetcher = async (url) => {
+      if (!url.endsWith('/dist-tags') && Date.now() - started < 12 * 60_000)
+        return new Response('', { status: 404 })
+      return fetcher(url)
+    }
+    try {
+      const result = promoteLatest(packages, fixture).then(value => ({ value }), error => ({ error }))
+      await vi.advanceTimersByTimeAsync(11 * 60_000)
+      expect(fixture.writes).toEqual([])
+      await vi.advanceTimersByTimeAsync(60_000)
+      await expect(result).resolves.toEqual({ value: 2 })
+      expect(fixture.writes).toEqual(['@h-ai/a', '@h-ai/b'])
     }
     finally { vi.useRealTimers() }
   })

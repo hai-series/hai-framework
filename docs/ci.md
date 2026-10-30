@@ -65,7 +65,9 @@ GitHub Release 默认设置为 Latest（`prerelease: false`、`make_latest: 'tru
 
 只需要调整默认安装版本时，先查询 `pnpm view @h-ai/cli dist-tags`，再使用 **Promote npm latest → Run workflow** 填写已存在的目标版本。脚本从不可变的 `v<版本>` 标签读取公开包名单，先确认所有目标包版本已存在、所有当前标签可查询，再逐包更新并复核。该流程不安装依赖、不构建、不发布 tarball、不移动 Git 标签；与自动发布共用写入互斥组。npm 标签更新没有跨包事务，中途失败时可以重跑，已完成项不会重复写入。原始发布来源和同版包的内容保持不变。
 
-npm 的发布成功回执可能先于版本查询可见。推进 `latest` 的预检仅对明确的 HTTP 404 最多查询 6 轮，轮次间隔 10 秒；等待期间不改标签、不重发包。认证、网络或服务错误继续立即报错。达到上限后仍有缺包则失败，先核对注册表，再重跑原发布的失败阶段；只有全部目标版本可确认后才开始修改标签。
+npm 会在包可安装前进行扫描，发布回执可能先于版本查询可见；[官方说明](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/)指出通常约五分钟，高峰期可能超过十五分钟。推进 `latest` 的预检只对明确的 HTTP 404 每十秒重查一次，最多等待三十分钟；期间不改标签、不重发包。发布任务保留四十五分钟预算，覆盖安装、扫描等待及标签核验。认证、网络或服务错误继续立即报错。
+
+等待超过上限时先核对注册表。即使版本暂时查不到，重新发布也可能返回 `409 Cannot publish over previously staged version`，这不能当作发布完成。应等待目标版本可查询，再从原始发布提交重跑失败阶段；只有全部目标版本可确认后才开始修改标签。已发布版本的内容和来源标签保持原样。
 
 **CodeQL** 在独立工作流中与 CI 并行，按 `security-extended` 查询分析 JavaScript/TypeScript，无需构建或安装应用依赖，结果上传到 GitHub Security。工作流成功代表分析和上传完成，发现项仍需逐项审查。**Leak Checker** 是现有私有词表检查，作用与 CodeQL 不同；两者均不能替代授权边界和实际部署测试。CodeQL Action 固定到已核验的 v4 提交，仓库生成产物不参与分析。
 
