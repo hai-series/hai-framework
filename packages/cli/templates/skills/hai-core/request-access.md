@@ -50,7 +50,7 @@ Node listener 使用 socket 对端；Fetch 必须传可信平台 `remoteAddress`
 
 `.env.<环境>` 或私有覆盖可设置 `HAI_SERV_HTTP_ACCESS='{"file":"./config/security/request-access.yml"}'` / `HAI_KIT_ACCESS=...`。Core 父节点覆盖优先；已有 `HAI_SERV` / `HAI_KIT` 时应修改父对象，不能假定叶子变量会叠加。
 
-部署校验当前选中后端的配置文件，规范化快照放入交付包并参加 SHA-256 校验，容器通过 `/run/hai/request-access.yml` 只读挂载。工程原始引用不回写成容器路径。仅更新前端时保留后端原文件；失败恢复使用旧发布的 Compose/文件。交付 `.env.runtime` 不可随意编辑，配置变化重新打包发布；镜像/配置回退不能撤销数据库和业务效果。
+部署校验当前选中后端的配置文件，规范化快照放入交付包并参加 SHA-256 校验，容器通过 `/run/hai/request-access.yml` 只读挂载。工程原始引用不回写成容器路径。仅更新前端时保留后端原文件；失败恢复使用旧发布的 Compose/文件。待上传归档和 SDK 策略快照不能手改；替换快照时重新打包。已部署 Node 后端挂载的 `.env.runtime` 可按[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)修改后重启，注意上层 JSON 优先级；不会自动重写 Nginx 或策略文件。镜像/配置回退不能撤销数据库和业务效果。
 
 完整 Kit 配置只留在服务端；layout data 只下发 transport 等公开字段，不把策略、代理网段和文件路径用 `?raw` 打入浏览器。
 

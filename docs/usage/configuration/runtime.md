@@ -119,7 +119,7 @@ core.logger.info('Customer updated', { customer: { email } })
 
 ## 部署后重启加载运行配置
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
 
 运行文件在服务器 `<部署目录>/releases/<该后端的发布ID>/.env.runtime`，以该后端容器实际挂载的源文件为准。后续只更新 Web 或中间件时，`current` 可能指向较新的发布记录，后端仍读取其原发布文件。运行文件和托管连接只读挂载给后端，上级发布目录保持 0700，宿主所有者可修改文件。先备份，再编辑，重启并核对健康和一条受配置影响的业务请求；加载或 Schema 校验失败时恢复文件再重启。进程启动后不会持续监视文件。
 

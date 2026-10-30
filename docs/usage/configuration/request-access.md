@@ -186,8 +186,6 @@ trustedEdgeProxies: [192.0.2.10/32]
 
 rootless 端口转发器有时会把外部来源替换为网关地址。已经丢失的地址无法通过增加一个转发头恢复；应选择保留来源的网络模式，或在外层可信入口完成真实 IP 解析，并实际检查后端收到的结果。
 
-上图来自本轮 Linux 容器请求：未信任外层代理时，伪造 XFF 被入口覆盖；显式信任测试代理后，后端才取得它确认的地址。Serv 与 Kit 的访问判断一致，受限路径的普通请求和预检均为 403。Kit 在此使用从实际 socket 装配的平台事件；完整 SvelteKit 模板流程单独执行浏览器验收。
-
 ## 4. 运维人员：携带独立 YAML 交付
 
 ### 4.1 准备文件
@@ -233,7 +231,9 @@ HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
 HAI_SERV_HTTP_ACCESS='{"rules":[{"id":"delivery-sync","paths":["/api/v1/sync"],"allowIps":["192.0.2.10"],"encryption":"disabled"}]}'
 ```
 
-将示例地址替换为真实允许来源；接口原有认证、API Key 与权限校验继续执行，HTTPS 仍需保留。该值可以来自进程环境，或由 Compose 的 `env_file` 读取。修改 `env_file` 后要**重新创建容器**才会更新环境变量；`docker compose restart serv` 继续使用原值。通常执行 `docker compose up -d --no-deps --force-recreate serv` 即可，不需要重新构建镜像。应沿用启动时的项目名和全部 Compose 文件参数。
+将示例地址替换为真实允许来源；接口原有认证、API Key 与权限校验继续执行，HTTPS 仍需保留。当前 SDK 的 Node 后端可以修改实际挂载的发布 `.env.runtime` 后重启；已有 `HAI_SERV` 或 `HAI_SERV_HTTP` 上层 JSON 时，分别修改其中的 `http.access` 或 `access`，不能只增加已被覆盖的叶子变量。Kit 同理修改 `HAI_KIT` 的 `access`。具体路径与保护范围见[重启加载运行配置](runtime.md#部署后重启加载运行配置)。
+
+自行维护且只使用 Compose `env_file` 注入环境的容器，修改该文件后需要**重新创建容器**；`docker compose restart serv` 会保留创建时的变量，见[Docker 说明](https://docs.docker.com/reference/cli/docker/compose/restart/)。通常执行 `docker compose up -d --no-deps --force-recreate serv`，无需重建镜像；沿用原项目名和全部 Compose 文件参数。
 
 ### 4.3 全量、增量与回滚
 
@@ -248,9 +248,9 @@ HAI_SERV_HTTP_ACCESS='{"rules":[{"id":"delivery-sync","paths":["/api/v1/sync"],"
 | 仅更新其他服务 | 未选择的后端保留其旧配置、旧挂载和旧策略 |
 | 本次更新失败后恢复旧版 | 使用旧服务定义及其对应的旧策略快照，再检查旧版健康 |
 
-`.env.runtime` 和策略快照都是交付校验的一部分。需要改变设置时，修改源环境或策略文件后生成新包；手工编辑已经校验的包会使校验失败。健康接口也受全局条件约束，因此只想限制外部业务 API 时，优先使用路径规则，避免让部署器的本地探测被误拒绝。
+归档内的 `.env.runtime` 和策略快照都参加交付校验，上传前不要编辑已经校验的包。替换 SDK 管理的策略快照时，修改源文件并生成新包。已部署 Node 后端的挂载运行文件可按 4.2 修改后重启，不能因此改写归档或策略快照。健康接口也受全局条件约束，因此只想限制外部业务 API 时，优先使用路径规则，避免让部署器的本地探测被误拒绝。
 
-上图在真实 Linux 文件系统中运行交付包的原始脚本，确认旧策略不被新发布覆盖、篡改停止在预检，以及健康失败后回到旧策略。Compose 和 HTTP 使用确定性故障夹具；Node 实际读取和拒绝行为另由本章代理请求及模块测试验证。业务数据与数据库迁移的恢复仍需独立方案。
+镜像和配置回退不会撤销已经完成的业务写入，数据库迁移和数据恢复按业务方案处理。
 
 ### 4.4 运维独立管理文件：修改后重启生效
 
@@ -292,13 +292,11 @@ services:
         read_only: true
 ```
 
-`serv` 要换成实际后端服务名；同源模板可能为 `web`。Compose 按容器目标路径合并挂载，所以只替换这一项。启动或重建时，把该 override 作为**原有完整 `-f` 列表的最后一项**，并使用原项目名。首次应用需要重新创建后端容器；之后原子替换宿主文件并重启同一后端即可。不要编辑校验过的交付快照或 `.env.runtime`。
+`serv` 要换成实际后端服务名；同源模板可能为 `web`。Compose 按容器目标路径合并挂载，所以只替换这一项。启动或重建时，把该 override 作为**原有完整 `-f` 列表的最后一项**，并使用原项目名。首次应用需要重新创建后端容器；之后原子替换宿主文件并重启同一后端即可。不要编辑校验过的归档或 SDK 策略快照。Node 后端挂载的 `.env.runtime` 按 4.2 更新；它不会改写外部文件或 Nginx。
 
 该 override 及外部文件需要纳入运维自己的部署与备份流程，后续 SDK 发布不会自动保存人工附加的参数。**SDK 回滚不恢复这份外部策略**；如需规则与制品一起自动回滚，继续使用默认快照模式。修改前备份，重启后检查健康状态，并实际请求一条允许路径和一条拒绝路径；规则只限制业务路径时，保留健康探测可达。SvelteKit 可能在首个请求时才创建 Handle，容器显示运行中不足以证明策略已加载。
 
 无效文件或权限错误会阻止服务初始化，不会自动放行。恢复最后可用文件并再次重启，再核对接口响应。对下载或长连接较多的应用，重启前安排连接排空或多实例切换。
-
-上图使用当前 Core/Serv 的已构建公开入口、Node 24.22.1，在实际 Podman Linux 容器中发起 HTTP 请求；`env_file` 的引号与 JSON 由 Docker Compose 5.3.0 实际解析。验证了改环境文件后 restart 保留旧值、重新创建后变为 403、只读文件原子替换并重启后变为 403、恢复后回到 200，以及无效 YAML 阻止启动和恢复后重新可用。Docker Desktop 引擎当时未运行，未把该结果称为 Docker 引擎实测；Docker 的 restart 环境行为另见[官方说明](https://docs.docker.com/reference/cli/docker/compose/restart/)。
 
 ## 5. 安全审查与排错
 

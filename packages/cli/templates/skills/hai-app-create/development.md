@@ -70,15 +70,13 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 
 `prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js`。文件路径相对进程工作目录，公共文件随项目提交；容器通过部署平台或 `--env-file` 注入目标环境值。浏览器只接收公开白名单，构建产物和镜像不包含 `.env.local`。
 
-Compose `env_file` 的变量在创建容器时固定，改文件后 `restart` 不会更新，应沿用原项目名/文件列表重新创建容器，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。完整 `HAI_SERV` / `HAI_KIT` 优先于叶子变量，不叠加覆盖。SDK 交付的 `.env.runtime` 与策略快照不可手改；运维外部文件和 Compose override 必须另行备份、纳入后续发布，SDK 自动回滚不恢复外部文件。
+当前 SDK 的 Node 后端默认读取实际挂载的发布 `.env.runtime`，修改后重启容器生效；托管连接保持更高优先级，静态 Web、中间件、网关路径、端口/挂载和 Node 启动参数按部署流程更新。长期修改同步回源环境，下一次后端发布会重新生成；见[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)。自行维护且只使用 Compose `env_file` 注入环境的容器，改文件后需要重新创建，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。完整 `HAI_SERV` / `HAI_KIT` 优先于叶子变量，不叠加覆盖。待上传归档与 SDK 策略快照不能手改；运维外部文件和 Compose override 另行备份，SDK 自动回滚不恢复外部文件。
 
 Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加载，Web/App/Desktop 的 Vite 自动 dotenv 加载关闭（`envDir: false`），开发和预览由 `core.config.loadEnvFiles` 从工程根读取，构建不读取部署环境文件。API workspace 的环境文件在 `apps/<name>-serv/`。独立应用在各自根目录加载。静态 Web 通过 `runtime-config.js` 获取公开地址，部署环境覆盖无需重建镜像；原生包在复制静态资源前配置该入口。修改编译进客户端的默认值时仍需重新构建；fullstack 的公开应用元数据由 service `app.info` 返回。
 
-Node后端的当前部署包默认重读发布.env.runtime，修改后restart容器即可；托管连接优先级不变，布局/Node参数与中间件仍需重新部署。长期修改同步回源环境；见[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)。
-
 #### 迁移已有项目
 
-先把原来被忽略的 `.env` 私有值迁入 `.env.local`，再提交公共基础和环境文件。本机文件只保留需要覆盖的值，避免整份复制示例后固定开发环境。旧的 `HAI_AI_LLM_PROTOCOL_KEY` / `HAI_AI_LLM_BASE_URL` 改为 `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL`；音频和图像厂商回退变量同样使用 `APIKEY` 后缀。Reach 和 deploy 凭据按当前 YAML 路径命名，以项目 `.env.example` 为准，同步迁移部署平台变量和本机文件。
+先把原来被忽略的 `.env` 私有值迁入 `.env.local`，再提交公共基础和环境文件。本机文件只保留需要覆盖的值，避免整份复制示例后固定开发环境。旧的 `HAI_AI_LLM_API_KEY` / `HAI_AI_LLM_BASE_URL` 改为 `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL`；音频和图像厂商回退变量同样使用 `APIKEY` 后缀。Reach 和 deploy 凭据按当前 YAML 路径命名，以项目 `.env.example` 为准，同步迁移部署平台变量和本机文件。
 
 原 `HAI_AI_ANTHROPIC_API_KEY` / `HAI_AI_ANTHROPIC_BASE_URL` 不再使用。默认协议为 `anthropic` 时改用标准 LLM 变量；混合模型池中有独立凭据或端点时，将 `apiKey` / `baseUrl` 配置在对应模型项。厂商回退 `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` 保留，优先级以 AI 模块说明为准。
 

@@ -70,7 +70,7 @@ Markdown 的 `allowHtmlTags` 默认 `false`，`true` 只渲染允许的HTML并�
 
 ![深色文档工具栏](../images/ai-document-dark.png)
 
-界面文字走zh-CN/en-US/ja-JP翻译，错误使用安全消息；不要通过翻译开关泄露原始异常。上图是指定组件的验证，不代表全部主题和所有业务页面均已验收。
+界面文字走 `zh-CN`、`en-US`、`ja-JP` 翻译，错误使用安全消息；不要通过翻译开关泄露原始异常。
 
 ## 支付渠道配置
 

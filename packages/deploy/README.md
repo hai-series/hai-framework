@@ -261,7 +261,7 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 
 ### 运行环境文件与重复部署
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载和 Nginx 限额不在该重载范围。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
 
 框架持久配置使用 `HAI_*` 命名。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` 是中间件镜像的原生协议，必须保留原名，但只生成到私有的 `middleware-runtime.env` 并由中间件容器加载；不再写入工程环境文件或应用的 `.env.runtime`。应用增量部署沿用的 `middleware.env` 仅保存框架 `HAI_*` 配置。旧工程已保存的这些原生字段不会被自动删除，新应用环境会忽略它们；新包与旧成功基线可共存，旧服务仍读取其原交付文件。
 
@@ -281,11 +281,11 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 ## 请求策略文件与可信代理
 
-Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部署读取应用实际生效配置，包括 `.env.<环境>` / 私有覆盖中的 `HAI_SERV`、`HAI_SERV_HTTP_ACCESS` 或 `HAI_KIT_ACCESS`，校验文件后把规范化快照放入交付包。运行环境改为 `/run/hai/request-access.yml`，Compose 只读挂载；工程的原始文件引用不会被容器路径覆盖。快照参加 SHA-256 校验，无效或缺失文件在上传前失败。`.env.runtime` 是本次不可变交付的一部分，修改策略应重新打包部署，不能只编辑已交付文件。
+Serv 的 `http.access`、SvelteKit 的 `access` 可引用独立 yml/yaml。部署读取应用实际生效配置，包括 `.env.<环境>` / 私有覆盖中的 `HAI_SERV`、`HAI_SERV_HTTP_ACCESS` 或 `HAI_KIT_ACCESS`，校验文件后把规范化快照放入交付包。运行环境改为 `/run/hai/request-access.yml`，Compose 只读挂载；工程的原始文件引用不会被容器路径覆盖。快照参加 SHA-256 校验，无效或缺失文件在上传前失败。待上传的归档和其中的策略快照参与完整性校验，不应手工修改；替换 SDK 策略快照时重新打包部署。已部署 Node 后端挂载的 `.env.runtime` 可以按“运行配置重载”修改并重启，改变内联规则不会重写策略快照或 Nginx 配置。
 
 全量与包含后端的增量都交付自己的快照；仅更新前端时保留后端原挂载。失败恢复使用旧成功发布的 Compose 和策略文件。运行账号无需 root：发布目录私有，策略文件在受限目录内以只读权限供容器读取。回滚镜像和策略不撤销数据库迁移或已经产生的业务效果。
 
-如需由运维独立改规则、重启后生效，可在交付之外管理只读文件，并用 Compose override 替换同一 `/run/hai/request-access.yml` 挂载。该外部文件不参与 SDK 自动回滚，首次附加挂载需要重新创建容器；后续文件修改后重启即可。`env_file` 的环境变量改变仍需重新创建容器，通常无需重建镜像。步骤与验证边界见[独立文件重启配置](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效)。
+如需由运维独立改规则、重启后生效，可在交付之外管理只读文件，并用 Compose override 替换同一 `/run/hai/request-access.yml` 挂载。该外部文件不参与 SDK 自动回滚，首次附加挂载需要重新创建容器；后续文件修改后重启即可。自行维护且只用 Compose `env_file` 注入环境的容器，修改该文件仍需重新创建，通常无需重建镜像；这与 SDK 默认挂载读取的后端 `.env.runtime` 不同。步骤与验证边界见[独立文件重启配置](../../docs/usage/configuration/request-access.md#44-运维独立管理文件修改后重启生效)。
 
 受管 Compose 只有存在 Web/gateway 代理且后端没有公开端口时，才设置 `HAI_DEPLOY_PRIVATE_PROXY=1`。Serv/Kit 默认 `trustedProxies: auto` 在此采用容器网段，其他宿主默认忽略转发头。生成 Nginx 用实际对端覆盖客户端提交的转发头；外层负载均衡需在 Docker SSH Provider 的 `trustedEdgeProxies` 显式配置真实 IP/CIDR，省略时不信任上游，`[]` 同样关闭信任。根本未传到 Nginx 的源 IP 无法恢复，Podman rootless 等环境应实际核验入口日志。完整示例和验证步骤见[请求访问控制手册](../../docs/usage/configuration/request-access.md)。
 
