@@ -293,7 +293,7 @@ describe('createProject — api 类型', () => {
     expect(content).toContain('apps/proj-api-contract')
     expect(content).toContain('apps/proj-api-serv')
     expect(content).toContain('## 构建与部署')
-    expect(content).toContain('pnpm build --target docker')
+    expect(content).toContain('pnpm build --target image')
   })
 
   it('应生成可传入配置与嵌入数据的 API 镜像入口', async () => {
@@ -310,7 +310,7 @@ describe('createProject — api 类型', () => {
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
-    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
+    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/') ? 'COPY packages/' : 'COPY . .'))
     expect(dockerfile).toContain('USER node')
     expect(await exists(projectPath, '.dockerignore')).toBe(true)
     // Docker 与 Git 一致：排除本机私有文件，避免 .env.local 的密钥进入构建上下文。
@@ -532,7 +532,7 @@ describe('createProject — admin 类型 + iam', () => {
   it('应在根 README 说明分离的构建、部署及手工交付命令', async () => {
     const readme = await readText(projectPath, 'README.md')
     expect(readme).toContain('## 构建与部署')
-    expect(readme).toContain('pnpm build --target docker')
+    expect(readme).toContain('pnpm build --target image')
   })
 
   it('应生成从页面发起的 E2E 测试', async () => {
@@ -693,11 +693,11 @@ describe('createProject — website 类型', () => {
     expect(dockerfile).not.toContain('pnpm fetch --frozen-lockfile')
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
-    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
+    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/') ? 'COPY packages/' : 'COPY . .'))
 
     const readme = await readText(projectPath, 'README.md')
     expect(readme).toContain('## 构建与部署')
-    expect(readme).toContain('pnpm build --target docker')
+    expect(readme).toContain('pnpm build --target image')
   })
 
   it('应生成 website 兼容的全量 skills', async () => {
@@ -746,7 +746,7 @@ describe('createProject — h5 类型', () => {
   it('应在根 README 说明分离的构建、部署及手工交付命令', async () => {
     const readme = await readText(projectPath, 'README.md')
     expect(readme).toContain('## 构建与部署')
-    expect(readme).toContain('pnpm build --target docker')
+    expect(readme).toContain('pnpm build --target image')
   })
 })
 
@@ -962,7 +962,7 @@ describe('createProject — fullstack 类型', () => {
     expect(readme).toContain('packages/proj-fullstack-shared')
     expect(readme).toContain('i18n 与 shared 协同')
     expect(readme).toContain('## 构建与部署')
-    expect(readme).toContain('pnpm build --target docker')
+    expect(readme).toContain('pnpm build --target image')
 
     const eslintConfig = await readText(projectPath, 'eslint.config.js')
     expect(eslintConfig).toContain('\'svelte/indent\': \'off\'')
@@ -1098,7 +1098,7 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerfile.indexOf('pnpm fetch')).toBeGreaterThanOrEqual(0)
     // file: 包归档是离线交付材料，fetch 前必须已在构建上下文内。
     expect(dockerfile.indexOf('COPY images/dependencies/ ./')).toBeLessThan(dockerfile.indexOf('pnpm fetch'))
-    expect(dockerfile.indexOf('COPY . .')).toBeLessThan(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts'))
+    expect(dockerfile.indexOf('pnpm install --offline --frozen-lockfile --ignore-scripts')).toBeLessThan(dockerfile.indexOf(dockerfile.includes('COPY packages/') ? 'COPY packages/' : 'COPY . .'))
     expect(dockerfile).not.toContain('ARG PUBLIC_API_BASE')
     const webDockerfile = await readText(projectPath, 'images/web.Dockerfile')
     expect(webDockerfile).toContain('NGINX_ENVSUBST_OUTPUT_DIR=/tmp/hai-runtime-config')

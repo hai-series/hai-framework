@@ -32,7 +32,7 @@
     "test:e2e": "node ../../scripts/run-e2e.mjs --next --config playwright.transport-on.config.ts --next --config playwright.auth-security.config.ts",
     "clean": "rimraf .svelte-kit build .turbo",
     "compile": "vite build",
-    "build:images": "hai build --target docker",
+    "build:images": "hai build --target image",
     "deploy": "hai deploy"
   },
   "dependencies": {

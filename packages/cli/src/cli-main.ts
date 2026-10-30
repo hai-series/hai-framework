@@ -124,6 +124,7 @@ cli
   .command('build', cliM('cli_help_build'))
   .option('--target <target>', cliM('cli_help_target'))
   .option('--images <names>', cliM('cli_help_images'))
+  .option('--concurrency <count>', cliM('cli_help_buildConcurrency'))
   .option('--runtime <runtime>', cliM('cli_help_buildRuntime'))
   .option('--network <network>', cliM('cli_help_buildNetwork'))
   .option('--platform <platform>', cliM('cli_help_platform'))
@@ -163,6 +164,7 @@ cli
   .option('--artifact-dir <path>', cliM('cli_help_artifactDir'))
   .option('--services <names>', cliM('cli_help_services'))
   .option('--build', cliM('cli_help_deployBuild'))
+  .option('--concurrency <count>', cliM('cli_help_buildConcurrency'))
   .option('--network <network>', cliM('cli_help_deployNetwork'))
   .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_deploySqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_deployNoProxy'))
@@ -182,6 +184,7 @@ cli
         artifactDir: options.artifactDir as string,
         services: options.services as string,
         build: options.build as boolean,
+        concurrency: options.concurrency as number,
         network: options.network as string,
         sqlitePrebuildMirror: options.sqlitePrebuildMirror as string,
         httpProxy: options.httpProxy as boolean,

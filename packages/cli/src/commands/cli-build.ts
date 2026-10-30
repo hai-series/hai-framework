@@ -14,17 +14,19 @@ import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
  * 构建参数，不接受部署环境。
- * 对应 hai build --target docker --images serv,web --runtime podman --no-http-proxy；镜像参数仅用于 docker。
+ * 对应 hai build --target image --images serv,web --runtime podman --no-http-proxy；镜像参数仅用于 image。
  * @example 模块内部上下文
  * ```ts
- * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'docker', images: 'serv,web', runtime: 'podman', httpProxy: false }
+ * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'image', images: 'serv,web', runtime: 'podman', httpProxy: false }
  * ```
  */
 export interface BuildCommandOptions extends GlobalOptions {
-  /** compile 编译源码，docker 导出 serv/web 镜像，app 调用 Capacitor，desktop 调用 Tauri。 */
-  target?: 'compile' | 'docker' | 'desktop' | 'app'
+  /** compile 编译源码，image 导出 serv/web 镜像，app 调用 Capacitor，desktop 调用 Tauri。 */
+  target?: 'compile' | 'image' | 'desktop' | 'app'
   /** 逗号分隔的应用镜像名；省略时构建全部。 */
   images?: string
+  /** 并行镜像任务数，默认 2；内存受限时设为 1。 */
+  concurrency?: number
   /** auto 优先使用可达的 Podman。 */
   runtime?: 'auto' | 'podman' | 'docker'
   /** 容器构建网络，默认采用引擎设置；例如 rootless Podman 的 pasta。 */
@@ -106,9 +108,9 @@ function staticCompileEnvironment(target: string): Record<string, string> {
   if (base && (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(base) || base.split('/').some(segment => segment === '.' || segment === '..')))
     throw new Error(cliM('cli_build_static_base'))
   if (target !== 'compile') {
-    if (flag === '1' || (base && target !== 'docker'))
+    if (flag === '1' || (base && target !== 'image'))
       throw new Error(cliM('cli_build_static_target'))
-    return target === 'docker' && base ? { PUBLIC_BASE_PATH: base } : {}
+    return target === 'image' && base ? { PUBLIC_BASE_PATH: base } : {}
   }
   return { ...(flag ? { HAI_BUILD_STATIC: flag } : {}), ...(base ? { PUBLIC_BASE_PATH: base } : {}) }
 }
@@ -146,11 +148,14 @@ function sourceCommit(cwd: string): string {
 export async function buildCommand(options: BuildCommandOptions): Promise<void> {
   const directory = resolve(options.cwd ?? process.cwd())
   const target = options.target ?? 'compile'
+  const concurrency = Number(options.concurrency ?? 2)
+  if (![1, 2].includes(concurrency))
+    throw new Error(cliM('cli_build_concurrency_invalid'))
   const cwd = target === 'compile' ? directory : dirname(projectConfigPath(directory))
-  if (!['compile', 'docker', 'desktop', 'app'].includes(target))
+  if (!['compile', 'image', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
   const compileEnvironment = staticCompileEnvironment(target)
-  if ((target !== 'docker' && (options.images !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
     || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.arch !== undefined)) || (target === 'app' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
@@ -246,7 +251,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   try {
     for (const context of new Set(images.map(image => resolve(cwd, image.context ?? '.'))))
       prepareDependencyInputs(context)
-    for (const image of images) {
+    const buildImage = async (image: (typeof images)[number]): Promise<DeploymentArtifact['images'][number]> => {
       if (!['serv', 'web'].includes(image.name))
         throw new Error(cliM('cli_build_images_missing'))
       const context = resolve(cwd, image.context ?? '.')
@@ -290,7 +295,16 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       const hash = createHash('sha256')
       for await (const chunk of createReadStream(join(staging, file)))
         hash.update(chunk)
-      artifact.images.push({ name: image.name, file, imageRef, sha256: hash.digest('hex'), ...(image.containerPort ? { containerPort: image.containerPort } : {}) })
+      return { name: image.name, file, imageRef, sha256: hash.digest('hex'), ...(image.containerPort ? { containerPort: image.containerPort } : {}) }
+    }
+    for (let offset = 0; offset < images.length; offset += concurrency) {
+      // 等待同批任务全部退出后再处理失败，避免清理仍在写入的归档或镜像。
+      const results = await Promise.allSettled(images.slice(offset, offset + concurrency).map(buildImage))
+      for (const result of results) {
+        if (result.status === 'rejected')
+          throw result.reason
+        artifact.images.push(result.value)
+      }
     }
     // 不覆盖以前成功的构建；manifest 是一次完整构建的提交点。
     const output = join(parent, buildId)

@@ -52,6 +52,8 @@ export interface DeployCommandOptions extends GlobalOptions {
   services?: string
   /** 先构建镜像。 */
   build?: boolean
+  /** 同时构建的应用镜像数，默认 2。 */
+  concurrency?: number
   /** 本地容器引擎。 */
   runtime?: 'auto' | 'podman' | 'docker'
   /** 构建阶段的网络与原生依赖设置。 */
@@ -214,7 +216,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(cliM('cli_build_runtime_missing'))
     if (options.artifactDir && options.build)
       throw new Error(cliM('cli_deploy_build_artifact_conflict'))
-    if (!options.build && (options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+    if (!options.build && (options.concurrency !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
       throw new Error(cliM('cli_deploy_build_options_required'))
     let selectedServices = options.services?.split(',').map(name => name.trim())
     if (selectedServices && (!selectedServices.length || selectedServices.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selectedServices).size !== selectedServices.length))
@@ -372,7 +374,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       const imageNames = selectedServices?.filter(name => ['serv', 'web'].includes(name))
       if (!selectedServices || imageNames?.length) {
         writeCliMessage(cliM('cli_deploy_build_started'))
-        await buildCommand({ cwd: buildRoot, target: 'docker', images: imageNames?.join(','), runtime: options.runtime, network: options.network, sqlitePrebuildMirror: options.sqlitePrebuildMirror, httpProxy: options.httpProxy })
+        await buildCommand({ cwd: buildRoot, target: 'image', images: imageNames?.join(','), concurrency: options.concurrency, runtime: options.runtime, network: options.network, sqlitePrebuildMirror: options.sqlitePrebuildMirror, httpProxy: options.httpProxy })
       }
     }
     if (selectedServices)

@@ -51,7 +51,7 @@ describe('website静态构建边界', () => {
     for (const base of ['//host', '/a/../b', '/a/', '/a?b=1', '/a%2fb'])
       expect(() => runInNewContext(`${source}\nresolveStaticWebsite()`, scriptContext({ HAI_BUILD_STATIC: '1', PUBLIC_BASE_PATH: base }))).toThrow('PUBLIC_BASE_PATH')
     const dynamic = await staticScript(['db'])
-    expect(() => runInNewContext(`${dynamic}\nresolveStaticWebsite()`, scriptContext({ HAI_BUILD_STATIC: '1' }))).toThrow('--features none')
+    expect(() => runInNewContext(`${dynamic}\nresolveStaticWebsite()`, scriptContext({ HAI_BUILD_STATIC: '1' }))).toThrow('服务端')
   })
 
   it('只省略模板健康端点，拒绝自定义API、actions与未预渲染页面', async () => {

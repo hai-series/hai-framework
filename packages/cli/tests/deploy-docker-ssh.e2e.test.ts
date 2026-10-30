@@ -611,7 +611,7 @@ done`
       }
       writeFileSync(path.join(appDir, '.env.local'), `${readFileSync(path.join(appDir, '.env.local'), 'utf8')}\nHAI_DEPLOY_PROVIDER='${JSON.stringify(deployConfig.provider)}'\n`)
       writeFileSync(path.join(appDir, 'hai.json'), JSON.stringify({ ...JSON.parse(readFileSync(path.join(appDir, 'hai.json'), 'utf8')), deploy: deployConfig }, null, 2))
-      await runPnpm(commands, ['run', 'build', '--target', 'docker', '--runtime', runtime ?? 'auto', ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      await runPnpm(commands, ['run', 'build', '--target', 'image', '--runtime', runtime ?? 'auto', ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
       const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
       const artifact = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', buildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
       expect(artifact).toMatchObject({ version: 4, primaryService: 'serv', appVersion: APPLICATION_VERSION })
@@ -755,7 +755,7 @@ done`
     it('同版本 Web/API/storage 增量更新保留未选容器，损坏制品不部署，启动失败恢复上一成功版本', context => withCommands(900_000, async (commands) => {
       const before = (await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-test-serv'])).trim()
       writeFileSync(path.join(appDir, 'apps/e2e-fullstack-web/public/deployment-marker.txt'), 'incremental-web')
-      await runPnpm(commands, ['run', 'build', '--target', 'docker', '--images', 'web', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy'])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      await runPnpm(commands, ['run', 'build', '--target', 'image', '--images', 'web', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy'])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
       const buildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
       const artifacts = path.join(appDir, '.hai/build/docker', buildId)
       const manifest = JSON.parse(readFileSync(path.join(artifacts, 'manifest.json'), 'utf8')) as DeploymentArtifact
@@ -775,7 +775,7 @@ done`
       expect((await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-test-serv'])).trim()).toBe(recoveredApp)
       // API 单独更新后 Nginx 必须重新解析后端地址，同时保持 Web 容器和页面不变。
       const webBefore = (await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.Id}}', 'hai-e2e-fullstack-test-web'])).trim()
-      await runPnpm(commands, ['run', 'build', '--target', 'docker', '--images', 'serv', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      await runPnpm(commands, ['run', 'build', '--target', 'image', '--images', 'serv', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
       const apiBuildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
       const apiManifest = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', apiBuildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
       expect(apiManifest).toMatchObject({ appVersion: APPLICATION_VERSION, partial: true, hasWeb: true, images: [{ name: 'serv' }] })
@@ -797,7 +797,7 @@ done`
       const successfulWebImage = (await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{.Image}}', 'hai-e2e-fullstack-test-web'])).trim()
       const webDockerfile = path.join(appDir, 'images/web.Dockerfile')
       writeFileSync(webDockerfile, `${readFileSync(webDockerfile, 'utf8')}\nCMD ["sh", "-c", "exit 1"]\n`)
-      await runPnpm(commands, ['run', 'build', '--target', 'docker', '--images', 'web', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy'])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+      await runPnpm(commands, ['run', 'build', '--target', 'image', '--images', 'web', '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy'])], appDir, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
       const failedBuildId = readFileSync(path.join(appDir, '.hai/build/docker/latest'), 'utf8').trim()
       const failedManifest = JSON.parse(readFileSync(path.join(appDir, '.hai/build/docker', failedBuildId, 'manifest.json'), 'utf8')) as DeploymentArtifact
       expect(failedManifest).toMatchObject({ appVersion: APPLICATION_VERSION, partial: true, images: [{ name: 'web' }] })
@@ -833,7 +833,7 @@ done`
     const dockerfilePath = path.join(project, appType === 'api' ? 'images/serv.Dockerfile' : 'images/web.Dockerfile')
     if (NPM_MIRROR)
       writeFileSync(dockerfilePath, readFileSync(dockerfilePath, 'utf8').replace(/(FROM [^\n]+ AS build\r?\n)/g, `$1ENV pnpm_config_registry=${NPM_MIRROR}\n`))
-    await runPnpm(commands, [...(appType === 'api' ? ['run', 'deploy', '--env', 'test', '--yes', '--build', '--bundle-only'] : ['run', 'build', '--target', 'docker']), '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], project, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
+    await runPnpm(commands, [...(appType === 'api' ? ['run', 'deploy', '--env', 'test', '--yes', '--build', '--bundle-only'] : ['run', 'build', '--target', 'image']), '--runtime', runtime!, ...(CONTAINER_NETWORK ? ['--network', CONTAINER_NETWORK] : []), ...(CONTAINER_PROXY ? [] : ['--no-http-proxy']), ...(SQLITE_MIRROR ? ['--sqlite-prebuild-mirror', SQLITE_MIRROR] : [])], project, CONTAINER_PROXY ? { HTTP_PROXY: CONTAINER_PROXY, HTTPS_PROXY: CONTAINER_PROXY } : undefined)
     const buildId = readFileSync(path.join(project, '.hai/build/docker/latest'), 'utf8').trim()
     const artifactDir = path.join(project, '.hai/build/docker', buildId)
     const artifact = JSON.parse(readFileSync(path.join(artifactDir, 'manifest.json'), 'utf8')) as DeploymentArtifact

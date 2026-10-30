@@ -32,7 +32,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "compile": "vite build",
-    "build:images": "hai build --target docker",
+    "build:images": "hai build --target image",
     "deploy": "hai deploy"
   },
   "dependencies": {

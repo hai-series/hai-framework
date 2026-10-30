@@ -479,7 +479,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     await writeFile(
       path.join(projectPath, 'README.md'),
       resolvedOptions.deploy === false
-        ? readmeContent.replace(/### 构建与部署[\s\S]*?(?=\n#{2,3} |$)/, '### 构建\n\npnpm build\npnpm build --target docker\n\n本项目创建时关闭了部署工具。\n')
+        ? readmeContent.replace(/### 构建与部署[\s\S]*?(?=\n#{2,3} |$)/, '### 构建\n\npnpm build\npnpm build --target image\n\n本项目创建时关闭了部署工具。\n')
         : readmeContent,
     )
 
@@ -1134,7 +1134,7 @@ function generateEnvironmentReadme(): string {
 | 开发 / 测试模式 / 生产模式预览 | \`pnpm dev\` / \`dev:test\` / \`dev:prod\` |
 | 类型检查（check 为别名） | \`pnpm typecheck\` |
 | 检查 / 自动修复格式 | \`pnpm lint\` / \`lint:fix\` |
-| 源码构建 / 镜像构建 | \`pnpm build\` / \`pnpm build --target docker\` |
+| 源码构建 / 镜像构建 | \`pnpm build\` / \`pnpm build --target image\` |
 | 单元测试 / 监听 / 浏览器验收 | \`pnpm test\` / \`test:watch\` / \`test:e2e\` |
 | Node 服务按环境启动（构建后） | \`pnpm start\` / \`start:test\` / \`start:prod\` |
 
@@ -1157,13 +1157,13 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
 
 \`\`\`sh
 ${pm} build
-${pm} build --target docker
+${pm} build --target image
 # 构建和部署一次完成
 ${pm} exec hai deploy ${appDir} --env test --build
 # 复用已有镜像；只生成完整离线包及跨平台部署脚本
 ${pm} exec hai deploy ${appDir} --env prod --bundle-only
 # 只更新前端（工程存在 web 镜像时）
-${pm} build --target docker --images web
+${pm} build --target image --images web
 ${pm} exec hai deploy ${appDir} --env prod --services web
 \`\`\`
 

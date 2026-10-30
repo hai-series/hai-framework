@@ -32,7 +32,7 @@ pnpm --filter {{projectName}}-web dev
 pnpm --filter {{projectName}}-web build
 ```
 
-从工程根运行 `pnpm build --target docker` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
+从工程根运行 `pnpm build --target image` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
 
 ### IAM 认证配置
 

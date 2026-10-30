@@ -12,8 +12,12 @@ RUN corepack enable && corepack prepare pnpm@12.11.2 --activate && pnpm config s
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY images/dependencies/ ./
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --ignore-scripts
-COPY . .
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
+COPY tsconfig.base.json ./
+COPY scripts/ ./scripts/
+COPY packages/{{projectName}}-contract/ ./packages/{{projectName}}-contract/
+COPY packages/{{projectName}}-shared/ ./packages/{{projectName}}-shared/
+COPY apps/{{projectName}}-web/ ./apps/{{projectName}}-web/
 ARG HAI_BUILD_ID=
 ARG HAI_BUILD_COMMIT=unknown
 ARG PUBLIC_BASE_PATH=

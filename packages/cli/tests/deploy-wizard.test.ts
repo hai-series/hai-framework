@@ -315,6 +315,12 @@ async function fullstackFixture(): Promise<{ root: string, app: string, service:
   return { root, app, service }
 }
 
+it('rejects build concurrency without requesting a build before reading deployment configuration', async () => {
+  await expect(deployCommand({ env: 'test', yes: true, concurrency: 1 })).rejects.toThrow(cliM('cli_deploy_build_options_required'))
+  expect(deploy.credentials.load).not.toHaveBeenCalled()
+  expect(mocked.prompt).not.toHaveBeenCalled()
+})
+
 it('requires the selected file before loading credentials or starting deployment', async () => {
   const { app, service } = await fullstackFixture()
   unlinkSync(join(app, '.env.test'))

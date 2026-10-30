@@ -30,7 +30,7 @@
     "clean": "rimraf dist .turbo",
     "test:watch": "vitest",
     "compile": "tsup",
-    "build:images": "hai build --target docker",
+    "build:images": "hai build --target image",
     "deploy": "hai deploy"
   },
   "dependencies": {

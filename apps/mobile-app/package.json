@@ -44,7 +44,7 @@
     "cap:build:android:release": "pnpm build && cap sync android && cap build android --androidreleasetype APK",
     "cap:build:ios": "pnpm build && cap sync ios && cap build ios",
     "compile": "pnpm paraglide:compile && vite build",
-    "build:images": "hai build --target docker",
+    "build:images": "hai build --target image",
     "deploy": "hai deploy"
   },
   "dependencies": {

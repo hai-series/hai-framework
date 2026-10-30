@@ -101,7 +101,7 @@ afterEach(() => {
 
 describe('cli-main', () => {
   it('构建参数完整交给构建器，部署仅暴露一个跳过中间件选项', async () => {
-    const options = { cwd: 'C:/workspace', target: 'docker', runtime: 'podman', network: 'pasta', httpProxy: false, sqlitePrebuildMirror: 'http://mirror.internal/sqlite' }
+    const options = { cwd: 'C:/workspace', target: 'image', runtime: 'podman', network: 'pasta', httpProxy: false, sqlitePrebuildMirror: 'http://mirror.internal/sqlite' }
     await getCommandAction('build')(options)
     expect(commandMocks.buildCommand).toHaveBeenCalledWith(options)
     expect(cliState.commands.get('build')!.options).toContain('--network <network>')

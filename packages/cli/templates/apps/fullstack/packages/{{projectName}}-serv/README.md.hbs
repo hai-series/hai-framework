@@ -48,7 +48,7 @@ CLI 同时在根 `.env.dev/.env.test/.env.prod` 分别生成独立的 `HAI_CRYPT
 
 ### 容器运行
 
-从工程根运行 `pnpm build --target docker` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
+从工程根运行 `pnpm build --target image` 导出镜像。默认带部署工具，可运行 `pnpm run deploy --env test --build` 一次完成构建发布，或 `pnpm run deploy --env prod --bundle-only` 交付已有镜像及跨平台脚本。完整包包含自建中间件，人工部署与按服务更新见工程根 README。
 
 - 服务镜像直接由 `@h-ai/serv` 对外监听，配置挂载点为 `/app/config`，数据目录为 `/app/data`，不包含额外转发进程。
 - Web 镜像不烘焙 API 地址；启动时使用 `-e PUBLIC_API_BASE=https://api.example.com` 注入，同一镜像可部署到不同环境。未设置时 Web 默认请求自身 origin。
