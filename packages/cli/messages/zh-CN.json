@@ -391,6 +391,6 @@
   "cli_deploy_httpsEmail": "Let’s Encrypt 联系邮箱",
   "cli_deploy_https_requirements": "Certbot 使用 HTTP-01：域名须指向服务器，公网 80 端口可达，服务器须能访问 Let’s Encrypt。HTTP 入口将设为 80。",
   "cli_deploy_https_terms": "同意 Let’s Encrypt 服务条款（https://letsencrypt.org/repository/）并启用自动续期？",
-  "cli_deploy_https_saved": "HTTPS 配置已保存到当前环境的私有配置；证书在打包时复制。",
+  "cli_deploy_https_saved": "HTTPS 配置已保存到所选环境私有文件；模式、域名或端口变更须全量部署，证书在服务器部署时申请或安装。",
   "cli_deploy_stage_https": "正在申请或安装 HTTPS 证书"
 }

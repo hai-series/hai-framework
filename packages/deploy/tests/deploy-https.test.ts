@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -73,6 +73,10 @@ it.each(['api', 'fullstack', 'spa', 'ssr'])('已有证书对 %s 使用统一 HTT
   expect(createHash('sha256').update(read('tls/privkey.pem')).digest('hex')).toBe(createHash('sha256').update(readFileSync(join(root, 'key.pem'))).digest('hex'))
   expect(read('web.conf')).toContain('listen 8443 ssl')
   expect(read('web.conf')).toContain('return 308 https://localhost$request_uri')
+  const guide = readFileSync(join(dirname(result.data.bundlePath), 'README.txt'), 'utf8')
+  expect(guide).toContain(`https://localhost:443`)
+  expect(guide).toContain(`/releases/${result.data.deploymentId}/tls/fullchain.pem`)
+  expect(guide).not.toContain('BEGIN PRIVATE KEY')
   expect(read('compose.json')).not.toContain('BEGIN PRIVATE KEY')
   expect(read('apply.sh')).toContain('--cacert "$https_certificates/fullchain.pem"')
   const compose = JSON.parse(read('compose.json'))
@@ -97,6 +101,10 @@ it('let’s Encrypt 交付官方 Certbot 镜像与申请、续期脚本，打包
   expect(JSON.parse(read('compose.json')).services.certbot.image).toBe('docker.io/certbot/certbot:v5.9.0')
   expect(read('prepare-https.sh')).toContain('certonly --webroot')
   expect(read('renew-https.sh')).toContain('certbot renew')
+  const guide = readFileSync(join(dirname(result.data.bundlePath), 'README.txt'), 'utf8')
+  expect(guide).toContain('https://app.example.test:443')
+  expect(guide).toContain('/https/certificates/app.example.test/fullchain.pem')
+  expect(guide).toContain('/https/acme/live/app.example.test')
   expect(read('https-start.sh')).toContain('nginx -t && nginx -s reload')
   expect(commands.some(command => command[1] === 'run')).toBe(false)
   const planned = await createDeploymentPlan(root, { provider: { type: 'docker-ssh', expose: { hostPort: 80, https: { type: 'letsencrypt', domain: 'app.example.test', email: 'operator@example.test', acceptTerms: true } } } }, { environment: 'test', artifactDir: artifacts })

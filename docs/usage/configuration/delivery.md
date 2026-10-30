@@ -393,6 +393,16 @@ Let’s Encrypt 使用同一配置位置：
 
 Certbot 每 12 小时检查续期，成功后发布新的证书对，Nginx 检测变化并自动重载。状态在服务器部署根的 `https/acme` 与按域名隔离的 `https/certificates/<域名>`，上级目录保持私有。续期失败保留原证书并写容器日志，需在到期前修复 DNS、80 端口或 CA 网络；无 CA 网络的隔离目标使用已有证书。备份证书状态，清理旧域名前确认没有发布引用。
 
+部署包 `README.txt` 会明确列出是否启用 HTTPS、域名、端口、模式和本次目标服务器证书路径。未启用时没有证书附件，也不会申请证书。设部署根目录为 `R`：
+
+| 模式 | 服务器位置 |
+| --- | --- |
+| `files`（含自签名） | `R/releases/<部署ID>/tls/fullchain.pem`、`privkey.pem` |
+| `letsencrypt` 的 Nginx 证书副本 | `R/https/certificates/<域名>/fullchain.pem`、`privkey.pem` |
+| `letsencrypt` 持久状态及证书入口 | `R/https/acme/`，当前入口为 `live/<域名>/`；备份整个状态目录 |
+
+两种模式在 Nginx 容器内都挂载为 `/etc/nginx/tls/`。域名只填 `app.example.com`，不含协议、端口和 context path。交互全量部署选择 HTTPS 后收集域名、端口，并按模式收集证书路径或邮箱/条款确认；`--yes`、增量部署沿用配置。修改本地所选私有环境中的 `HAI_DEPLOY_PROVIDER.expose.https`，或未被覆盖的 `hai.json.deploy.provider.expose.https` 后生成新全量部署包。单改服务器 `.env.runtime` 并重启，不能开启 HTTPS 或给新域名申请证书。
+
 HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由。SDK 与服务器验证实际 HTTPS；SSR 默认 ORIGIN、未明确指定的 API CORS `origin` 使用配置的 HTTPS 域名，已有显式值保持优先。自建 S3 的公开地址仍须配置为实际 HTTPS `origin`。首次启用/关闭 HTTPS、更改模式/域名/端口/本地证书需全量部署。证书状态不随应用版本回退，旧域名发布继续引用自己的证书目录。
 
 ![已有证书与 Certbot 两种 HTTPS 配置的部署关系](../images/deployment-https.svg)

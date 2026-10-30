@@ -391,6 +391,6 @@
   "cli_deploy_httpsEmail": "Let’s Encrypt contact email",
   "cli_deploy_https_requirements": "Certbot uses HTTP-01: point the domain to the server, expose public port 80 and allow server access to Let’s Encrypt. HTTP will use port 80.",
   "cli_deploy_https_terms": "Agree to the Let’s Encrypt terms (https://letsencrypt.org/repository/) and enable automatic renewal?",
-  "cli_deploy_https_saved": "HTTPS settings saved to the private environment configuration; certificates are copied during packaging.",
+  "cli_deploy_https_saved": "HTTPS settings saved to the selected private environment. Mode, domain or port changes require a full deployment; certificates are issued or installed on the server during deployment.",
   "cli_deploy_stage_https": "Issuing or installing the HTTPS certificate"
 }

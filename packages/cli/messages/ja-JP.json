@@ -391,6 +391,6 @@
   "cli_deploy_httpsEmail": "Let’s Encrypt 連絡先メール",
   "cli_deploy_https_requirements": "Certbot は HTTP-01 を使用します。ドメインをサーバーに向け、公開ポート 80 と Let’s Encrypt への接続を確保してください。HTTP ポートを 80 に設定します。",
   "cli_deploy_https_terms": "Let’s Encrypt 利用規約（https://letsencrypt.org/repository/）に同意し、自動更新を有効にしますか？",
-  "cli_deploy_https_saved": "HTTPS 設定を現在の環境の非公開設定に保存しました。証明書はパッケージ作成時にコピーします。",
+  "cli_deploy_https_saved": "選択した環境の非公開ファイルへ HTTPS 設定を保存しました。モード・ドメイン・ポート変更は全量配備が必要で、証明書はサーバー配備時に申請または設置します。",
   "cli_deploy_stage_https": "HTTPS 証明書を発行または配置しています"
 }
