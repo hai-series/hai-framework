@@ -263,9 +263,9 @@ async function runPnpm(commands: DeployTestCommands, args: string[], cwd: string
   return await (/\.[cm]?js$/i.test(entry) ? commands.run(process.execPath, [entry, ...args], cwd, env) : commands.run(entry, args, cwd, env))
 }
 
-/** 只读取实际交付 tar，不依赖打包后已清除的外层私有配置。 */
+/** 只读取实际交付压缩归档，不依赖打包后已清除的外层私有配置。 */
 function readDeliveryFile(directory: string, name: string): string {
-  const archives = readdirSync(directory).filter(file => file.endsWith('.tar'))
+  const archives = readdirSync(directory).filter(file => file.endsWith('.tar.gz'))
   if (archives.length !== 1)
     throw new Error('Expected one deployment archive')
   try {
