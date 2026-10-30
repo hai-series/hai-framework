@@ -26,25 +26,25 @@
 | [基础、环境、日志和生命周期](runtime.md) | 配置为什么没生效，日志如何采集，依赖怎样启停 | `_core.yml`、dotenv、`HAI_*`、宿主入口 |
 | [数据、缓存、文件和文本](data.md) | 数据保存在哪里，连接池/证书/签名多久有效 | `_db.yml`、`_cache.yml`、`_storage.yml`、Datapipe 参数 |
 | [身份、密码、会话和权限](identity.md) | 登录方式、锁定、会话配额、改密和登录页 | `_iam.yml`、公开认证策略、服务端守卫 |
-| [HTTP、客户端和传输](http.md) | 监听地址、跨域、可信代理、Cookie、加密和超时 | `_serv.yml`、`_kit.yml`、apiClient、[按路径配置 IP、时段与加密](request-access.md) |
+| [HTTP、客户端和传输](http.md) | 监听地址、跨域、可信代理、Cookie、加密和超时 | `_serv.yml`、`_kit.yml`、`apiClient`、[按路径配置 IP、时段与加密](request-access.md) |
 | [AI、知识与向量](ai.md) | 模型路由、令牌预算、检索、音频/图片和持久化 | `_ai.yml`、`_vecdb.yml`、显式 Store |
 | [反馈、通知、审计和任务](operations.md) | 材料保留、通知回执、审计保护和任务恢复 | `_feedback.yml`、`_reach.yml`、`_audit.yml`、`_scheduler.yml` |
 | [页面、支付与设备](experience.md) | 表单/主题/提示、支付验签及原生配置 | UI props、`_payment.yml`、Capacitor/原生构建 |
-| [构建、部署、增量和恢复](delivery.md) | 交付什么、网站挂在哪个目录、更新哪些服务、失败如何恢复 | 根 `hai.json.build/deploy`、构建进程PUBLIC_BASE_PATH、环境文件、服务器成功基线 |
+| [构建、部署、增量和恢复](delivery.md) | 交付什么、网站挂在哪个目录、更新哪些服务、失败如何恢复 | 根 `hai.json.build/deploy`、构建进程`PUBLIC_BASE_PATH`、环境文件、服务器成功基线 |
 
-`core`、`reldb`、`cache`、`storage`、`iam`、`ai`、`vecdb`、`feedback`、`reach`、`audit`、`scheduler`、`payment` 的配置由宿主读取并传入模块。Serv/Kit、API Client、Crypto、UI、Datapipe 和 Capacitor 按各自工厂、参数或宿主契约装配；创建一个同名 YAML 不会让功能自动启用。API Contract 定义输入输出，不存在通用的“contract 初始化配置”。CLI 的 build/deploy 配置也不进入业务模块的 YAML。
+`core`、`reldb`、`cache`、`storage`、`iam`、`ai`、`vecdb`、`feedback`、`reach`、`audit`、`scheduler`、`payment` 的配置由宿主读取并传入模块。Serv/Kit、API Client、Crypto、UI、Datapipe 和 Capacitor 按各自工厂、参数或宿主契约装配；创建一个同名 YAML 不会让功能自动启用。API Contract 定义输入输出，不存在通用的“contract 初始化配置”。CLI 的 build/`deploy` 配置也不进入业务模块的 YAML。
 
 ## 如何理解默认值与例子
 
 | 本手册用语 | 含义 |
 | --- | --- |
 | 框架默认 | 当前实现未收到对应值时采用的行为。对象可省略时，会说明“整个对象省略”和“对象内字段省略”的区别 |
-| 模板选择 | CLI 生成工程明确写入的值，可覆盖框架默认。例如 Feedback 模板选择 console，而 Schema 默认 reach |
+| 模板选择 | CLI 生成工程明确写入的值，可覆盖框架默认。例如 Feedback 模板选择 console，而 Schema 默认 `reach` |
 | 示例值 / 建议值 | 为演示或某个环境选择的值，不是框架自动启用的策略 |
 | 无默认 / 必填 | 需要应用或运维提供真实值；文档地址、网段、模型和凭据占位不能直接当生产配置 |
 | 已验证 | 注明实际调用、请求或页面操作；Schema 校验只证明字段和范围有效，不证明外部服务可连接 |
 
-除专门写明外，期限字段会标单位，容量使用字节或 MiB（1 MiB = 1048576 字节）。凭据只写环境变量占位，截图只显示非敏感项。每章的结果图来自当前公开 API/Schema 的真实输出，界面图来自隔离应用；页面解释会明确二者区别。
+除专门写明外，期限字段会标单位，容量使用字节或 MiB（1 MiB = 1048576 字节）。凭据只写环境变量占位，截图只显示非敏感项。配置用文字和可复制示例说明，流程图帮助理解配置与运行过程的关系，实际截图补充界面入口、按钮和操作效果。手机上可点击图片打开原图。
 
 本手册中，“租约”指节点在有限时间内取得的执行资格，需要续期与最终提交校验；“幂等”指重复请求不会重复产生业务效果；“unknown”表示不能确认外部动作是否完成，应先查询事实。“Provider”是具体后端或供应商实现，“scope”是应用划定的资源范围。这些术语用于说明配置影响，不代表仅修改一个开关就具备相应安全保证。
 

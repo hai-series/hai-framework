@@ -6,7 +6,7 @@ hai-framework是TypeScript应用框架，提供AI调用、身份和权限、数�
 
 ## 从一个能力开始
 
-调用聊天模型时，先接服务端AI和可信模型凭据。需要保留会话再接持久Store，需要企业知识检索再增加文本处理、embedding和向量后端。页面只展示Markdown或文档编辑器时，可以只用UI，无需先连模型。
+调用聊天模型时，先接服务端AI和可信模型凭据。需要保留会话再接持久Store，需要企业知识检索再增加文本处理、`embedding`和向量后端。页面只展示Markdown或文档编辑器时，可以只用UI，无需先连模型。
 
 数据与安全模块各自有公开契约。RelDB、Cache、IAM等有初始化和关闭；Datapipe是函数；Serv是HTTP工厂；Kit是宿主适配；UI是组件。返回HaiResult的业务操作先判断success，不能把失败当成正常data。
 

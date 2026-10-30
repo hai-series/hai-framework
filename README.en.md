@@ -36,9 +36,7 @@ Actual template screenshot. System administrators manage all accounts and roles;
 
 Choose SQLite, PostgreSQL or MySQL for relational data, Memory/Redis for caching, Local/S3 for files, and LanceDB, pgvector, Qdrant or Chroma for vector search. Transactions, pagination, presigned URLs and text chunking have dedicated modules.
 
-![Actual local data checks covering reads, writes, rollback, cache and files](docs/usage/images/data-local-results.png)
-
-The image presents real SQLite, memory cache, local file and chunking results. Multiple production instances need suitable shared databases, Redis and object storage; configure external services separately. [Data access](docs/usage/development/data.md) · [Data configuration](docs/usage/configuration/data.md)
+Multiple production instances need suitable shared databases, Redis and object storage; configure external services separately. [Data access](docs/usage/development/data.md) · [Data configuration](docs/usage/configuration/data.md)
 
 ### Operations: move feedback into a support workflow
 
@@ -52,7 +50,7 @@ Actual example application screenshot. The version inside the feedback identifie
 
 Shared Svelte 5 components cover forms, tables, dialogs, authentication, onboarding and help. Themes and Chinese, English and Japanese messages carry across applications. ToastContainer presents readable warnings and errors, with trace identifiers available on demand.
 
-![Component gallery with login form and unified error feedback](docs/usage/images/gallery-scenes-en-US.png)
+![Component gallery with login form and unified error feedback](docs/usage/images/gallery-scenes-zh-CN.png)
 
 Create same-origin SvelteKit applications or separate APIs with Web/App/Desktop clients. Deploy images or offline bundles, update selected services and recover failed releases; static Website output can run on GitHub Pages. [UI configuration](docs/usage/configuration/experience.md) · [Delivery handbook](docs/usage/configuration/delivery.md)
 

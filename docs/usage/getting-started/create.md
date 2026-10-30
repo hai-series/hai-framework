@@ -52,7 +52,7 @@ pnpm dev
 
 新建工程统一采用适用的完整模块和示例，服务端包含 AI、向量库、反馈等依赖；客户端仍按类型隔离服务端模块。安装体积相应增加，示例需按实际业务替换。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程的模块选择不受影响。
 
-新建 website 同样包含完整模块和示例，默认 Node SSR。静态发布前须在工程中移除服务端业务依赖及其初始化、API/actions，保留 Core/Kit/UI；没有轻量创建参数。已有不含这些动态能力的 website 仍可按[静态构建配置](../configuration/delivery.md#静态website与github-pages)发布。
+新建 website 同样包含完整模块和示例，默认 Node SSR。静态发布前须在工程中移除服务端业务依赖及其初始化、API/`actions`，保留 Core/Kit/UI；没有轻量创建参数。已有不含这些动态能力的 website 仍可按[静态构建配置](../configuration/delivery.md#静态website与github-pages)发布。
 
 以本例为准：`packages/my-app-contract` 定义接口，`packages/my-app-serv` 实现API，`packages/my-app-shared` 保存共享内容，`apps/my-app-web` 提供Web页面。fullstack环境文件在工程根；独立API模板的环境文件在 `apps/my-app-serv`。开始修改前先读生成项目的 `README.md` 和 `AGENTS.md`。
 

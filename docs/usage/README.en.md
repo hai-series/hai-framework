@@ -13,6 +13,6 @@ Start with the work you need to complete. New users can follow the [English crea
 5. [Deploy and operate](operations/README.md): full/incremental updates, recovery conditions, feedback and troubleshooting.
 6. [Maintain, review security and validate](governance/README.md): public contracts, synchronized documentation and evidence boundaries.
 
-Each role links to the same maintained content. The website consumes these authored Markdown files and navigation.json; configuration defaults are maintained in the domain handbook rather than copied into separate role manuals.
+Each role links to the same maintained content. The website consumes these authored Markdown files and `navigation.json`; configuration defaults are maintained in the domain handbook rather than copied into separate role manuals.
 
 Query `pnpm view @h-ai/cli@latest version` or consult [npm](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions) for the current release. Pin the returned version for reproducible installations. Main is not proof of registry availability. [Verification](governance/verification.md) distinguishes actual runs from environment-dependent work.

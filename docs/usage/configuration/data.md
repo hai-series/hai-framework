@@ -2,11 +2,11 @@
 
 [配置手册](README.md) · [实际写读、事务和清理流程](../development/data.md)
 
-先按数据的使用范围选择后端。开发可使用 SQLite、memory、local；生产即使只有一个应用实例，也要按框架共享状态要求使用 PostgreSQL/MySQL、Redis 和共享文件后端。连接成功只证明能访问，不证明权限、备份、并发和恢复策略正确。
+先按数据的使用范围选择后端。开发可使用 SQLite、`memory`、local；生产即使只有一个应用实例，也要按框架共享状态要求使用 PostgreSQL/MySQL、Redis 和共享文件后端。连接成功只证明能访问，不证明权限、备份、并发和恢复策略正确。
 
 ## 数据库类型与地址
 
-位置：`config/_db.yml`，宿主用 `ReldbConfigSchema` 校验后传给 reldb。`type` 没有默认，必须明确 sqlite/postgresql/mysql。
+位置：`config/_db.yml`，宿主用 `ReldbConfigSchema` 校验后传给 reldb。`type` 没有默认，必须明确 `sqlite`/postgresql/`mysql`。
 
 | 项 | 默认与必填 | 影响 |
 | --- | --- | --- |
@@ -14,7 +14,7 @@
 | 网络 `host` / `port` | localhost；运行时 PostgreSQL 5432、MySQL 3306 | 应填可解析的服务地址；容器 localhost 指容器自身 |
 | `database` | PostgreSQL 必填；MySQL URL 模式可从 URL 读取，否则必填 | 选择实际数据库，不自动意味着当前用户可建库 |
 | `user` / `password` | 无默认 | 按目标服务授权；放私有环境，避免超管账号 |
-| `url` | 无默认；提供时优先于分字段 | MySQL 仅 mysql://，不接 query/fragment；不要在日志打印包含密码的 URL |
+| `url` | 无默认；提供时优先于分字段 | MySQL 仅 `mysql`://，不接 query/fragment；不要在日志打印包含密码的 URL |
 | `ssl` | 无统一默认，由所选 Provider/服务决定 | 生产显式配置 TLS 与信任；不能以禁用证书校验解决错误 |
 
 ```yaml schema=@h-ai/reldb:ReldbConfigSchema
@@ -50,9 +50,7 @@ sqlite:
 | `sqlite.executor` | sync | sync 在调用线程执行 better-sqlite3；worker 使用专用连接线程，减少主线程阻塞 |
 | `workerConnectTimeoutMs` | 10000 ms | worker 等待连接打开的上限，不是所有 SQL 的执行上限 |
 
-![SQLite默认、worker和只读选项](../images/config-database-sqlite.png)
-
-图中是公开 Schema 的解析结果；真实 SQLite 写读与回滚另见下图。配置改为 readonly 后，要在专用已有库验证读取成功、写入被拒绝；不要用生产库做试验。
+配置改为 `readonly` 后，要在专用已有库验证读取成功、写入被拒绝；不要用生产库做试验。
 
 ### 连接池、TLS 与操作日志
 
@@ -60,20 +58,18 @@ sqlite:
 | --- | --- | --- |
 | PostgreSQL `pool.min` / `max` | 1 / 10 | min 是已建连接保留下限，不预先建连接；总连接预算应按所有实例计算 |
 | PostgreSQL `idleTimeout` / `acquireTimeout` | 30000 / 10000 ms，0 关闭对应期限 | 排队/建连与 SQL 执行期限不同，不能靠增大连接数掩盖慢事务 |
-| MySQL `pool.max` / `acquireTimeout` / `queueLimit` | 10 / 10000 ms / 1000 | 有界 FIFO；拒绝 min/idleTimeout；acquireTimeout 包括排队与建连，必须大于0 |
+| MySQL `pool.max` / `acquireTimeout` / `queueLimit` | 10 / 10000 ms / 1000 | 有界 FIFO；拒绝 min/`idleTimeout`；`acquireTimeout` 包括排队与建连，必须大于0 |
 | MySQL `ssl.rejectUnauthorized` / `verifyIdentity` | ssl 对象存在时 true / true | 默认校验证书链与 DNS 主机身份；后者不是 IP 身份验证承诺 |
-| MySQL `ssl.ca` / `cert` / `key` | 无默认 | PEM 内容，cert/key 成对；省略 ca 使用 Node 信任库 |
+| MySQL `ssl.ca` / `cert` / `key` | 无默认 | PEM 内容，cert/`key` 成对；省略 ca 使用 Node 信任库 |
 | `mysql.charset` | utf8mb4 | 保留完整 Unicode，变更时核对表结构和排序规则 |
 | `operationLog.read` / `write` | 对象存在时均 false | 开启输出安全数量摘要，始终不记录 SQL 原文和绑定值 |
 | `operationLog.maxLength` / `level` | 1000 字符 / debug | 0 省略摘要，级别同时受全局日志级别过滤 |
-
-![PostgreSQL和MySQL池不同；不支持的字段会拒绝](../images/config-database-pools.png)
 
 确认方式：在隔离库做参数化写入、查询、事务中失败和回滚，再检查连接在超时/关闭后释放。事务回调正常返回会提交，返回失败 HaiResult 并不会自动回滚，业务必须按公开事务机制处理失败。MySQL DDL 隐式提交，迁移步骤必须可重入；数据库结构和数据回退要单独准备。
 
 ## 缓存与共享状态
 
-位置：`config/_cache.yml`。type 无默认，memory 仅开发/显式测试；会话、限流、锁和幂等状态在生产使用 Redis。
+位置：`config/_cache.yml`。`type` 无默认，`memory` 仅开发/显式测试；会话、限流、锁和幂等状态在生产使用 Redis。
 
 ```yaml schema=@h-ai/cache:CacheConfigSchema
 type: redis
@@ -92,23 +88,21 @@ readOnly: false
 
 | 项 | 框架默认 | 影响与注意事项 |
 | --- | --- | --- |
-| host/port/db | localhost/6379/0 | db 范围0–15；按 Redis 拓扑限制使用，Cluster 不等于支持任意逻辑库 |
-| url/password | 无默认 | URL 模式优先，密码仅私有配置；不向浏览器公开 |
+| `host`/`port`/db | localhost/6379/0 | db 范围0–15；按 Redis 拓扑限制使用，Cluster 不等于支持任意逻辑库 |
+| `url`/`password` | 无默认 | URL 模式优先，密码仅私有配置；不向浏览器公开 |
 | tls | false | true 启用 TLS，需服务本身支持；示例 true 是生产选择，不是默认 |
-| connectTimeout/commandTimeout | 10000/5000 ms | 分别控制连接和命令等待，0 的语义依驱动，生产保留有界期限 |
-| maxRetries/retryDelay | 3 / 50 ms | 限制单请求驱动重试；重试不赋予业务写入幂等性 |
-| keyPrefix | 无默认 | 隔离键名，不能代替租户权限，也不能让多个环境共用相同前缀 |
-| readOnly | false | Cluster 读路由相关选项；读取副本需接受一致性条件 |
-| cluster | 无默认 | 节点数组，每项 host/port 必填；与 sentinel/普通实例按实际拓扑选择 |
-| sentinel | 无默认 | sentinels 非空数组及主节点 name 必填，实际故障切换需目标环境验证 |
-
-![Redis默认、显式TLS与非法数据库编号](../images/config-cache.png)
+| `connectTimeout`/`commandTimeout` | 10000/5000 ms | 分别控制连接和命令等待，0 的语义依驱动，生产保留有界期限 |
+| `maxRetries`/`retryDelay` | 3 / 50 ms | 限制单请求驱动重试；重试不赋予业务写入幂等性 |
+| `keyPrefix` | 无默认 | 隔离键名，不能代替租户权限，也不能让多个环境共用相同前缀 |
+| `readOnly` | false | Cluster 读路由相关选项；读取副本需接受一致性条件 |
+| `cluster` | 无默认 | 节点数组，每项 `host`/`port` 必填；与 `sentinel`/普通实例按实际拓扑选择 |
+| `sentinel` | 无默认 | `sentinels` 非空数组及主节点 `name` 必填，实际故障切换需目标环境验证 |
 
 初始化后做带 TTL 写读、到期读取、条件写与锁释放。`kv.set` 的 success=true 表示调用成功，是否真的条件写入还看 data；不能把未取得锁当作已获授权。
 
 ## 文件存储与临时签名
 
-位置：`config/_storage.yml`。type 无默认；local 需要 root，S3 需要 bucket/region/accessKeyId/secretAccessKey。私有反馈材料不得因配置 publicUrl 而公开。
+位置：`config/_storage.yml`。`type` 无默认；local 需要 root，S3 需要 `bucket`/`region`/`accessKeyId`/`secretAccessKey`。私有反馈材料不得因配置 `publicUrl` 而公开。
 
 ```yaml schema=@h-ai/storage:StorageConfigSchema
 type: s3
@@ -126,23 +120,21 @@ operationLog: { read: false, write: false, maxLength: 1000, level: debug }
 
 | 项 | 框架默认 | 不同值的影响 |
 | --- | --- | --- |
-| local.root | 必填 | 指定根目录，调用对象路径仍要防逃逸；开发目录不代表生产共享存储 |
-| local.directoryMode/fileMode | 0755 / 0644 | POSIX 权限默认；私有部署需目录访问控制，Windows 使用自身权限模型 |
-| S3 endpoint | 无默认 | 服务端 API 连接地址；省略时 AWS SDK 按 region 解析 AWS 端点，自建服务必须显式设置 |
-| S3 publicEndpoint | 无默认 | 浏览器可访问的 HTTP(S) 地址，可含代理目录；省略时仍按 endpoint/AWS 端点签名 |
-| S3 publicUrl | 无默认 | 公开资源的 URL 拼接地址；不生成签名、不实施访问授权，也不会使私有桶变为公开桶 |
-| createBucket | false | true 在初始化时检查并创建缺失桶，需要对应权限；自建部署会明确注入 true |
-| forcePathStyle | false | true 使用路径风格寻址，按兼容 S3 服务要求选择 |
-| prefix | 空串 | 组织对象路径，不是租户/用户授权边界 |
-| operationLog | 可省略 | 启用对象内默认同数据库，只输出安全摘要 |
-| 预签名 expiresIn | 调用参数3600秒，允许1–604800 | 越长暴露窗口越大；敏感下载按业务选较短期限，local 不支持预签名 |
-| 预签名 responseContentType/Disposition | 无默认 | 控制下载响应；上传签名 contentType 默认 application/octet-stream |
+| `local.root` | 必填 | 指定根目录，调用对象路径仍要防逃逸；开发目录不代表生产共享存储 |
+| `local.directoryMode` / `fileMode` | 0755 / 0644 | POSIX 权限默认；私有部署需目录访问控制，Windows 使用自身权限模型 |
+| S3 `endpoint` | 无默认 | 服务端 API 连接地址；省略时 AWS SDK 按 `region` 解析 AWS 端点，自建服务必须显式设置 |
+| S3 `publicEndpoint` | 无默认 | 浏览器可访问的 HTTP(S) 地址，可含代理目录；省略时仍按 `endpoint`/AWS 端点签名 |
+| S3 `publicUrl` | 无默认 | 公开资源的 URL 拼接地址；不生成签名、不实施访问授权，也不会使私有桶变为公开桶 |
+| `createBucket` | false | true 在初始化时检查并创建缺失桶，需要对应权限；自建部署会明确注入 true |
+| `forcePathStyle` | false | true 使用路径风格寻址，按兼容 S3 服务要求选择 |
+| `prefix` | 空串 | 组织对象路径，不是租户/用户授权边界 |
+| `operationLog` | 可省略 | 启用对象内默认同数据库，只输出安全摘要 |
+| 预签名 `expiresIn` | 调用参数3600秒，允许1–604800 | 越长暴露窗口越大；敏感下载按业务选较短期限，local 不支持预签名 |
+| 预签名 `responseContentType`/Disposition | 无默认 | 控制下载响应；上传签名 `contentType` 默认 application/octet-stream |
 
-![本地权限默认与下载签名有效期的实际校验](../images/config-storage.png)
+验证普通上传、禁止覆盖、无权限访问、过期签名和删除后不可读。私有对象由服务端检查访问权限后生成短期签名，不能把 `accessKey` 下发客户端。
 
-验证普通上传、禁止覆盖、无权限访问、过期签名和删除后不可读。私有对象由服务端检查访问权限后生成短期签名，不能把 accessKey 下发客户端。下图是隔离 SQLite、memory、local 的实际写读/回滚/清理结果，网络后端尚需实际连接。
-
-![隔离本地数据的成功和失败边界](../images/data-local-results.png)
+`prefix` 相当于给所有对象键加一个统一目录。例如 `prefix: invoices/2026`，调用 `storage.file.put('report.pdf', bytes)` 后，桶内保存的键为 `invoices/2026/report.pdf`。之后读、删、签名仍传 `report.pdf`，不要再手工重复前缀。多个应用可用不同前缀整理文件；访问权限仍由应用和存储策略控制。修改前缀不会搬迁已有对象，切换前先处理数据迁移。
 
 ### 配置人员：区分三个访问地址
 
@@ -166,7 +158,7 @@ prefix: private
 
 浏览器得到 `/delivery/files/business-files/private/<对象键>`。桶名仍属于 S3 路径，`publicEndpoint` 中不要再写桶名。地址可以带端口；目录段允许字母、数字、下划线、点和连字符，不允许 `.`/`..`、重复斜杠、编码的分隔符、凭据、查询或片段。它不自动跟随网站目录改变，需要配置人员明确选择。
 
-| publicEndpoint 的写法 | 浏览器访问路径 | 网关转发给 Storage 的路径 |
+| `publicEndpoint` 的写法 | 浏览器访问路径 | 网关转发给 Storage 的路径 |
 | --- | --- | --- |
 | `https://app.example.com` | `/business-files/private/<对象键>` | `/business-files/private/<对象键>` |
 | `https://app.example.com/delivery/files` | `/delivery/files/business-files/private/<对象键>` | `/business-files/private/<对象键>` |
@@ -179,11 +171,13 @@ prefix: private
 
 生成链接的应用 API 仍受认证、权限和请求策略约束。文件直连由 Nginx 与 S3 校验，**不会再次执行 Serv/Kit 的会话、IP 或时段守卫**；已经发出的链接也不会因退出登录或改变角色立即撤销。下载请求本身需要网络/时间限制时，在受管入口或存储网络策略中配置并实测，同时采用符合业务要求的短有效期。
 
-普通应用通过 Core 的环境覆盖规则加载此项；可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。整体父对象会覆盖 YAML 和其下叶项；部署保存过 HAI_STORAGE 时，修改这一有效对象，不能只改已被覆盖的 YAML。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、prefix、publicEndpoint、publicUrl 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
+普通应用通过 Core 的环境覆盖规则加载此项；可在 YAML 写明 `publicEndpoint: ${HAI_STORAGE_PUBLICENDPOINT:https://app.example.com}`，或在私有环境文件整体配置 `HAI_STORAGE`。整体父对象会覆盖 YAML 和其下叶项；部署保存过 `HAI_STORAGE` 时，修改这一有效对象，不能只改已被覆盖的 YAML。Compose 默认自建会替换内部连接和托管凭据，保留桶、区域、`prefix`、`publicEndpoint`、`publicUrl` 和操作日志设置。外部 S3、R2 或既有连接按其自身地址访问，不生成指向本地 Storage 的路由。
+
+![从授权请求到私有对象直接下载](../images/storage-private-download.svg)
 
 ### 应用开发者：先授权，再给用户下载链接
 
-默认自建模式在 bucket/region 为空时补为 `hai` / `us-east-1`；这是部署注入值，Storage Schema 本身仍要求填写这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
+默认自建模式在 `bucket`/`region` 为空时补为 `hai` / `us-east-1`；这是部署注入值，Storage Schema 本身仍要求填写这两项。`publicEndpoint` 没有自动猜测值，SSH Host 别名、HTTP 端口与用户实际访问的 HTTPS 地址可能不同，部署前应明确填写。
 
 1. 初始化模块并检查结果。HTTP Storage feature 必须具备资源授权策略；签名 API 仍经过认证、权限及对象归属检查。
 2. 调用 `apiClient.storage.presignedUrls.createDownload({ key, expiresIn: 300 })`，确认 `result.success` 后使用 `result.data.url`。下载时浏览器直接请求这条 URL；下载字节不经过生成签名的 Serv 请求。
@@ -196,21 +190,11 @@ prefix: private
 
 前后端分离部署把桶路由加到已有 Web Nginx；SvelteKit SSR 和独立 API 增加 `gateway`，宿主机公开端口由它持有，应用只在 Compose 网络监听。Storage 的 9000 端口与控制台不直接发布。Nginx 保留签名 Host、原始 URI 和查询，关闭对象请求/响应缓冲及对象路由日志，支持 Range；仅允许 GET/HEAD、PUT 和 OPTIONS，实际对象权限仍由 S3 校验。外层负载均衡、CDN和日志平台也必须清除签名查询；跨源浏览器需要在实际 S3 服务配置精确 CORS，网关不会自动放开来源。
 
-首次从旧拓扑升级、改变公开端点、桶或其他自建 S3 访问配置时使用全量部署。交付包记录代理服务和不含密钥的配置摘要；与已装配置不一致的增量包会在更新服务前拒绝。正常应用/Storage 增量保留未选服务；容器 IP 变化后刷新保留代理的 DNS。失败回滚按原发布的拓扑、端口和健康路径恢复。容器回滚不撤销对象写入，数据仍按原卷和托管凭据保留；改变 prefix/bucket 前应准备数据迁移与业务核对。
+首次从旧拓扑升级、改变公开端点、桶或其他自建 S3 访问配置时使用全量部署。交付包记录代理服务和不含密钥的配置摘要；与已装配置不一致的增量包会在更新服务前拒绝。正常应用/Storage 增量保留未选服务；容器 IP 变化后刷新保留代理的 DNS。失败回滚按原发布的拓扑、端口和健康路径恢复。容器回滚不撤销对象写入，数据仍按原卷和托管凭据保留；改变 `prefix`/`bucket` 前应准备数据迁移与业务核对。
 
 验收时在浏览器 Network 或受控请求工具检查：签名接口只返回小响应；大文件请求的地址是公开桶路径；Range 返回 206；无签名、篡改及过期 URL 返回 403。部署日志不能记录完整 URL。Local 不支持预签名，框架不会把私有文件目录直接映射给 Nginx。
 
-对象响应默认带 CSP sandbox 和禁止脚本/表单/基地址的策略、`nosniff`、`no-referrer`、`private, no-store`。即使文件与应用同源，不可信 HTML 也不应获得应用脚本权限；这条路由用于文件交付，不用于托管可执行的网站脚本。对象路由连接超时为 5 秒、连续无读写数据的超时为 300 秒；300 秒不是持续传输的总时限。外部 S3/CDN 须自行配置等价的隔离与日志策略。
-
-下面两张是实际请求结果整理后的验证记录截图。测试从公开部署 API 取得原始 `web.conf`，分别连接真实 MinIO/RustFS；每种后端都覆盖前后端分离、API 和 SvelteKit，以及根路径和 `/delivery/files.v1` 目录前缀，下载对象为 5,242,897 字节，且包含中文、空格、`+`、`%` 的键。应用上游保持不可用，下载仍成功；这验证了直连路径和签名边界，不代表外部 HTTPS、跨源 CORS 或客户生产环境已经验收。签名和随机端口均未显示。
-
-![MinIO 在三种部署及两种入口路径的下载、Range、上传与拒绝访问结果](../images/storage-proxy-minio-prefix.png)
-
-![RustFS 在三种部署及两种入口路径的下载、Range、上传与拒绝访问结果](../images/storage-proxy-rustfs-prefix.png)
-
-下图在受控同源 HTML 中应用上面实际返回的响应头，使用 Chrome 复核隔离效果。未隔离对照能改变父页状态并发起模拟操作；默认策略下脚本被阻止。这是本机浏览器验证页面，不是客户业务页面。
-
-![实际对象响应策略在 Chrome 中阻止同源 HTML 脚本的验证](../images/storage-proxy-isolation.png)
+对象响应默认带 CSP `sandbox` 和禁止脚本/表单/基地址的策略、`nosniff`、`no-referrer`、`private, no-store`。即使文件与应用同源，不可信 HTML 也不应获得应用脚本权限；这条路由用于文件交付，不用于托管可执行的网站脚本。对象路由连接超时为 5 秒、连续无读写数据的超时为 300 秒；300 秒不是持续传输的总时限。外部 S3/CDN 须自行配置等价的隔离与日志策略。
 
 ## 文本清洗和分块
 
@@ -218,16 +202,12 @@ Datapipe 是函数，不通过 `_clean.yml` / `_chunk.yml` 初始化。调用时
 
 | 项 | 框架默认 | 取值影响 |
 | --- | --- | --- |
-| removeHtml/normalizeWhitespace/trim | true/true/true | 去标签、规范空白与边缘空白；不是安全 HTML 渲染器 |
-| removeUrls/removeEmails | false/false | true 去除对应材料，适合隐私准备；保留原件用于追溯 |
-| customReplacements | 可省略 | 每项 pattern/replacement 必填，可信业务代码定义规则 |
-| chunk.mode | 必填 | character/word/sentence/paragraph/markdown/page/custom；按实际文本结构选择 |
-| maxSize/overlap | 1500 / 0 | 重叠必须小于maxSize；增大重叠保留上下文但提高embedding和存储成本 |
-| separator | 无默认 | custom 模式的分隔符；不要误认为所有模式使用它 |
-| markdownMinLevel/markdownKeepTitle | 2 / true | 控制标题分块边界与保留；AI Knowledge 的默认 overlap 另为200 |
+| `removeHtml`/`normalizeWhitespace`/trim | true/true/true | 去标签、规范空白与边缘空白；不是安全 HTML 渲染器 |
+| `removeUrls`/`removeEmails` | false/false | true 去除对应材料，适合隐私准备；保留原件用于追溯 |
+| `customReplacements` | 可省略 | 每项 `pattern`/`replacement` 必填，可信业务代码定义规则 |
+| `chunk.mode` | 必填 | character/word/sentence/paragraph/markdown/page/custom；按实际文本结构选择 |
+| `maxSize`/`overlap` | 1500 / 0 | 重叠必须小于`maxSize`；增大重叠保留上下文但提高`embedding`和存储成本 |
+| `separator` | 无默认 | custom 模式的分隔符；不要误认为所有模式使用它 |
+| `markdownMinLevel`/`markdownKeepTitle` | 2 / true | 控制标题分块边界与保留；AI Knowledge 的默认 `overlap` 另为200 |
 
-![清洗开关改变实际字符串，分块默认另行显示](../images/config-text.png)
-
-![相同输入的零重叠与一个字符重叠](../images/data-chunk-overlap.png)
-
-结果来自公开函数的实际输出。先用短文本确认边界，再用真实非敏感文档评估检索效果，不能只看分块数量。
+先用一段短文本确认分块位置和重叠内容，再用真实非敏感文档评估检索效果。

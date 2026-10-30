@@ -18,29 +18,11 @@
 
 完整门禁结果以固定提交的CI和交付报告为准；未执行、被过滤、前置失败或结果unknown分别记录，不能统称通过。源码main、工作区版本和本地构建成功也不等于npm已发布。
 
-## 在仓库复现配置和本地流程
-
-先安装依赖并构建相关包，PowerShell使用pnpm.cmd。以下例子创建隔离数据，不读取生产凭据，不连接外部付费服务：
-
-```sh
-pnpm check:usage-examples
-node docs/usage/examples/configuration-checks.mjs
-node docs/usage/examples/configuration-effects.mjs
-node docs/usage/examples/local-data.mjs
-node docs/usage/examples/deployment-plan.mjs
-pnpm check:skills
-pnpm check:readme
-```
-
-check:usage-examples递归读取手册标注的完整YAML/JSON，检查输入字段没有被Zod静默忽略。configuration-checks调用公开Schema和Datapipe函数，对比默认、显式变化和非法输入；configuration-effects检查覆盖、分块与本地HTTP；local-data执行真实写读/回滚/清理；deployment-plan只读核对计划，不连接目标发布。
-
-生产配置需在独立服务上验证证书、权限、并发、重启和恢复，不能将本地流程结果移作目标服务证据。
-
 ## 选择测试范围和运行前置
 
 先分析差异、直接调用方和用户流程，再按typecheck→lint→适用build→test→相关E2E调度；明确要求完整验收时运行完整范围。失败先收集再按根因集中修复，复测失败及直接影响项，不拿旧dist绕过依赖构建失败。
 
-生成模板另运行CLI scaffold门禁，包含新工程安装、类型、lint、构建、单元和浏览器。部署完整E2E使用`pnpm --filter @h-ai/deploy test:e2e`，由runner设置所需开关。浏览器使用项目runner隔离数据和证据，按配置准备真实LDAP等前置；关闭无关前置只能用于相应局部检查。
+生成模板另运行CLI scaffold门禁，包含新工程安装、类型、lint、构建、单元和浏览器。部署完整E2E使用`pnpm --filter @h-ai/deploy test:e2e`，由runner设置所需开关。浏览器使用项目runner隔离数据和证据，按配置准备真实LDAP等前置。
 
 网站目录有变化时，保留根目录回归，再实际挂载子目录。SvelteKit验证页面/资源、注册登录、匿名API拒绝及刷新；前后端分离验证相对资源、公开运行配置、独立API前缀、hash导航和业务操作。另以真实Nginx核对多级目录、重定向和静态回退，以Linux部署流程验证增量目录一致性；浏览器加载成功不能代替部署恢复检查。步骤与截图见[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。
 
@@ -58,13 +40,11 @@ check:usage-examples递归读取手册标注的完整YAML/JSON，检查输入字
 
 ![按需展开排查信息](../images/feedback-conflict-diagnostics.png)
 
-配置/请求/测试结果图对真实结构化输出作可读排版，不冒充业务界面。图旁会说明调用命令、变化以及不能证明什么。例如下面的配置覆盖图来自同一YAML的三次实际加载：
+截图用于说明界面入口、操作状态和不同屏幕下的布局。配置字段和命令直接给出可复制的文本，不再把表格、终端输出或测试报告做成图片。
 
-![YAML与父叶覆盖的实际结果](../images/configuration-precedence.png)
+涉及多层关系或多步操作时，用流程图补充说明，例如环境值怎样覆盖 YAML、签名下载怎样绕过应用传输文件、审计的保护与备份怎样配合。流程图解释机制，真实页面截图展示使用效果；两者贴近对应段落，并配有可理解的图注。
 
-部署恢复图使用真实Podman Linux下的原始生成Shell、tar、checksum、flock、文件与退出码，Compose/HTTP为确定性故障夹具；过滤项不计通过。长Mermaid图单独展示同次浏览器生成的SVG，未重绘内容。
-
-原始日志与来源清单由维护人员在测试证据中保存，不随官网发布私有验收目录。长期使用的脱敏图位于本手册共享images目录。正文人工维护，脚本只校验例子、引用或采集实际结果。
+原始日志由维护人员在测试证据中保存，不随官网发布私有验收目录。手册中保留的图片位于共享 `images` 目录；正文人工维护，脚本只负责校验示例和引用。
 
 ## 上线前仍需按目标环境确认
 
@@ -74,7 +54,7 @@ check:usage-examples递归读取手册标注的完整YAML/JSON，检查输入字
 
 ### 外部渠道与原生设备
 
-模型、支付、通知和Webhook使用已授权测试账户、沙箱和真实接收端回执。Android/iOS/Desktop在对应OS构建签名新包并安装，检查设备权限、推送和安全存储；浏览器预览不够。
+模型、支付、通知和Webhook使用已授权测试账户、沙箱和真实接收端回执。Android/`iOS`/Desktop在对应OS构建签名新包并安装，检查设备权限、推送和安全存储；浏览器预览不够。
 
 ### 发布与业务数据恢复
 

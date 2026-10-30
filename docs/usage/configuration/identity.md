@@ -66,14 +66,14 @@ ldap:
 
 ## 密码复杂度、初始密码与复用
 
-| 配置（password 下） | 框架默认 | 调整后的影响 |
+| 配置（`password` 下） | 框架默认 | 调整后的影响 |
 | --- | --- | --- |
-| minLength/maxLength | 8/128 | 范围越严越影响输入体验；最大允许256，示例12不是默认 |
-| requireUppercase/requireLowercase/requireNumber | true/true/true | 分别要求大写、小写、数字；关闭一项不代表关闭其他项 |
-| requireSpecialChar/minCharacterClasses | false/0 | 可增加特殊字符或最少字符类别；类别计数与显式必含规则一起生效 |
-| requireInitialChange | false | true 要求被标记为初始凭据的账号先改密，不会自动把全部老账号标为初始密码 |
-| preventSamePassword | false | true 拒绝复用当前密码；不是完整历史密码库 |
-| expirationDays | 0 | 0 不启用定期到期策略；正值按天限制，需配套改密和恢复流程 |
+| `minLength`/`maxLength` | 8/128 | 范围越严越影响输入体验；最大允许256，示例12不是默认 |
+| `requireUppercase`/`requireLowercase`/`requireNumber` | true/true/true | 分别要求大写、小写、数字；关闭一项不代表关闭其他项 |
+| `requireSpecialChar`/`minCharacterClasses` | false/0 | 可增加特殊字符或最少字符类别；类别计数与显式必含规则一起生效 |
+| `requireInitialChange` | false | true 要求被标记为初始凭据的账号先改密，不会自动把全部老账号标为初始密码 |
+| `preventSamePassword` | false | true 拒绝复用当前密码；不是完整历史密码库 |
+| `expirationDays` | 0 | 0 不启用定期到期策略；正值按天限制，需配套改密和恢复流程 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 password:
@@ -89,15 +89,13 @@ password:
   expirationDays: 0
 ```
 
-![默认密码策略和显式加强策略的真实解析](../images/config-iam-password.png)
-
 在隔离环境创建受管账号并发初始凭据，登录应进入改密；复用当前密码被拒绝，换不同的新密码后可重新登录。字符串按原始值比较，不裁剪或做 Unicode 归一化。字段提示统一为 Toast，保留错误边框及读屏关联；用户关闭提示后再次提交相同无效内容，仍会重新提示。
 
 ![初始凭据场景的实际拒绝与操作入口](../images/auth-initial-password-390.png)
 
 ### 邀请和密码重置
 
-`initialCredentials.enabled` 对象内默认 false；true 使用一次性邀请设密，需要联系方式、密码重置入口和真实通知通道。`passwordReset` 可省略，对象内默认 enabled=true、mode=email、tokenExpiresIn=3600秒、maxAttempts=3；resetUrl 无默认，必须是可信 HTTP(S) 地址。mode=phone 使用对应手机号流程，不能沿用邮件接收假设。
+`initialCredentials.enabled` 对象内默认 false；true 使用一次性邀请设密，需要联系方式、密码重置入口和真实通知通道。`passwordReset` 可省略，对象内默认 `enabled`=true、`mode`=`email`、`tokenExpiresIn`=3600秒、`maxAttempts`=3；`resetUrl` 无默认，必须是可信 HTTP(S) 地址。`mode`=phone 使用对应手机号流程，不能沿用邮件接收假设。
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 initialCredentials: { enabled: true }
@@ -113,15 +111,15 @@ passwordReset:
 
 ## 会话有效期与终端配额
 
-| 配置（session 下） | 框架默认 | 取值影响 |
+| 配置（`session` 下） | 框架默认 | 取值影响 |
 | --- | --- | --- |
-| maxAge/refreshTokenMaxAge | 86400/604800秒 | 访问凭据与刷新凭据分别计时；访问到期不必然要求用户立即重登 |
-| sliding | true | 允许按实现续期；不能绕过绝对/闲置期限 |
-| idleTimeout/absoluteTimeout | 0/0秒 | 0 关闭额外限制；正值分别按实际业务闲置、会话总时长限制，自动刷新不延长闲置 |
-| endOnPageHide | false | true 尝试在页面隐藏/退出时结束；浏览器送达尽力而为，不能作为唯一撤销保障 |
-| singleDevice/singleDeviceMode | false/replace | 开启单设备策略后 replace 替换旧会话，reject 拒绝新登录 |
-| maxSessions | 0 | 0 不限额；正数控制总会话数，需用独立上下文确认 |
-| terminalLimits/terminalLimitMode | `{}`/reject | 显式列终端后，未列出的 web/app/desktop/api 不能新登录；replace 替换旧配额，终端标识不是硬件证明 |
+| `maxAge`/`refreshTokenMaxAge` | 86400/604800秒 | 访问凭据与刷新凭据分别计时；访问到期不必然要求用户立即重登 |
+| `sliding` | true | 允许按实现续期；不能绕过绝对/闲置期限 |
+| `idleTimeout`/`absoluteTimeout` | 0/0秒 | 0 关闭额外限制；正值分别按实际业务闲置、会话总时长限制，自动刷新不延长闲置 |
+| `endOnPageHide` | false | true 尝试在页面隐藏/退出时结束；浏览器送达尽力而为，不能作为唯一撤销保障 |
+| `singleDevice`/`singleDeviceMode` | false/replace | 开启单设备策略后 replace 替换旧会话，reject 拒绝新登录 |
+| `maxSessions` | 0 | 0 不限额；正数控制总会话数，需用独立上下文确认 |
+| `terminalLimits`/`terminalLimitMode` | `{}`/reject | 显式列终端后，未列出的 web/app/desktop/api 不能新登录；replace 替换旧配额，终端标识不是硬件证明 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 session:
@@ -136,20 +134,30 @@ session:
   endOnPageHide: false
 ```
 
-![默认期限、受限会话和过短期限的校验结果](../images/config-iam-session.png)
+操作：重新登录建立新会话，开独立浏览器上下文直到达到配额；确认额外登录被拒绝，退出一个会话后可恢复。再用可控时钟核对闲置/绝对期限。生产验证使用共享 DB/Redis，不用进程内 `memory` 冒充多节点会话。
 
-操作：重新登录建立新会话，开独立浏览器上下文直到达到配额；确认额外登录被拒绝，退出一个会话后可恢复。再用可控时钟核对闲置/绝对期限。生产验证使用共享 DB/Redis，不用进程内 memory 冒充多节点会话。
+### `terminalLimits`：同一账号可在哪些终端登录
+
+上例允许一个账号同时保留两个浏览器会话和一个 App 会话，总数仍受 `maxSessions: 3` 限制。终端名只接受 `web`、`app`、`desktop`、`api`；数字表示该类终端最多保留多少个会话，必须是正整数。
+
+- `terminalLimits: {}`：不按终端类别限额，仍检查总会话数和单设备策略。
+- `terminalLimits: { web: 2, app: 1 }`：只允许 Web 和 App 新登录，未列出的 Desktop、API 终端会被拒绝。
+- `terminalLimitMode: reject`：达到该类终端的配额时，拒绝新登录；`replace` 则让旧会话退出，为新会话腾出位置。
+
+前端登录请求应使用正确的终端类别。终端名是客户端声明的类别，不是物理设备识别；需要限制总登录数量时同时设置 `maxSessions`。
+
+![同一账号的 Web、App 会话配额与未列出终端的处理](../images/iam-terminal-limits.svg)
 
 ## 锁定、验证码与登录来源
 
 | 配置 | 框架默认 | 作用与条件 |
 | --- | --- | --- |
-| security.lockoutEnabled | true | 账号失败累计锁定，不替代网络/接口限流 |
-| failureWindow/maxLoginAttempts/lockoutDuration | 86400秒/5次/900秒 | 分别是累计窗口、阈值、锁定时长，不能把窗口当锁定期 |
-| captcha.enabled | false | 开启自托管计算挑战，标准 AuthPanel 自动接入，自定义请求也要传用途对应挑战 |
-| captcha.ttlSeconds/cost/maxCounter | 120秒/5000/100 | 提高计算量可能影响低性能设备，按真实设备耗时选择 |
-| otp.email/sms | 对象内 true/true | 能否送达仍需通道，不能由配置替代 |
-| otp.length/expiresIn/maxAttempts/resendInterval | 6位/300秒/3次/60秒 | 期限、错误次数和重发冷却分别限制，过期/重放仍服务端拒绝 |
+| `security.lockoutEnabled` | true | 账号失败累计锁定，不替代网络/接口限流 |
+| `failureWindow`/`maxLoginAttempts`/`lockoutDuration` | 86400秒/5次/900秒 | 分别是累计窗口、阈值、锁定时长，不能把窗口当锁定期 |
+| `captcha.enabled` | false | 开启自托管计算挑战，标准 AuthPanel 自动接入，自定义请求也要传用途对应挑战 |
+| `captcha`.`ttlSeconds`/cost/`maxCounter` | 120秒/5000/100 | 提高计算量可能影响低性能设备，按真实设备耗时选择 |
+| `otp.email` / `sms` | 对象内 true/true | 能否送达仍需通道，不能由配置替代 |
+| `otp.length` / `expiresIn` / `maxAttempts` / `resendInterval` | 6位/300秒/3次/60秒 | 期限、错误次数和重发冷却分别限制，过期/重放仍服务端拒绝 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 security:
@@ -161,13 +169,11 @@ captcha: { enabled: true, ttlSeconds: 120, cost: 5000, maxCounter: 100 }
 otp: { email: true, sms: false, length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 60 }
 ```
 
-![锁定窗口、挑战与OTP各自的真实默认值](../images/config-iam-lockout.png)
-
 在隔离账号上测试错误尝试、锁定、等待后恢复、挑战过期/错误用途/重复消费；避免对正常用户账号做阈值试验。
 
 公开登录和初始改密统一显示“用户名或密码不正确”。不存在、无本地口令、休眠、注销、到期和锁定账号都采用同一反馈；受限期间即使输入正确密码也不能登录或换密，且不会继续累计失败次数。这能避免通过提示或锁定期间的密码尝试判断账号状态和密码是否命中。用户确认凭据无误后，应联系管理员；管理员在已认证的账号管理中核对生命周期、有效期和锁定状态，再按实际原因处理。密码计算、数据库等依赖故障保留为系统错误供开发人员追踪，不误计为用户输错密码。
 
-`loginAccess` 可省略，默认 enabled=false、allowIps/denyIps/windows为空、timezone=UTC。启用后按可信地址和时间窗限制新登录；days 使用1–7，时段是 HH:mm，时区必须明确。先在 Serv/Kit 装配可信客户端 IP，再应用下面的示例，文档网段必须替换：
+`loginAccess` 可省略，默认 `enabled`=false、`allowIps`/`denyIps`/`windows`为空、`timezone`=UTC。启用后按可信地址和时间窗限制新登录；days 使用1–7，时段是 HH:mm，时区必须明确。先在 Serv/Kit 装配可信客户端 IP，再应用下面的示例，文档网段必须替换：
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 loginAccess:
@@ -179,18 +185,43 @@ loginAccess:
     - { days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00' }
 ```
 
-![办公时间策略与登录页布局的实际解析](../images/config-iam-access.png)
-
 从允许/拒绝网络分别验证直接和代理请求，不能信任凭据 JSON 或任意 X-Forwarded-For。时间窗结束不自动撤销已有会话。
+
+### `windows`：只在指定时段允许新登录
+
+上例按北京时间，只允许周一至周五的 09:00（包含）至 18:00（不包含）登录。先将 `loginAccess.enabled` 设为 `true`，再填写时段；只写时段而未启用策略不会生效。
+
+| 字段 | 填写方法 |
+| --- | --- |
+| `timezone` | IANA 时区，例如 `Asia/Shanghai`。默认 `UTC`，不能把北京时间直接填进 UTC 时段 |
+| `windows` | 允许时段的数组，空数组 `[]` 表示不限制登录时间；多个时段满足任意一个即可 |
+| `days` | 周一为 `1`，周日为 `7`，例如 `[1, 3, 5]` 表示周一、三、五 |
+| `start` / `end` | 用引号包住的 24 小时时间，例如 `'09:00'`。开始与结束不能相同 |
+
+跨午夜时，星期按**开始日**填写。例如只允许周五 22:00 到周六 02:00：
+
+```yaml schema=@h-ai/iam:IamConfigSchema
+loginAccess:
+  enabled: true
+  timezone: Asia/Shanghai
+  windows:
+    - days: [5]
+      start: '22:00'
+      end: '02:00'
+```
+
+时间依据服务器时钟计算，浏览器改时间不能改变规则。这一策略只检查新登录；需要限制已登录用户的每次请求时，使用 [HTTP 请求访问策略](request-access.md)。
+
+![登录时段按指定时区和开始日判断](../images/iam-login-windows.svg)
 
 ## 权限、二次认证与 API Key
 
 | 配置 | 框架默认 | 影响 |
 | --- | --- | --- |
-| rbac.enabled/superAdminRole/defaultRole | true/super_admin/user | 默认角色按业务最小权限；示例 admin 不应作为公开注册角色 |
-| seedDefaultData | true | 初始化框架默认角色/权限，不代替应用资源授权 |
-| reauthentication.enabled/operations/ttlSeconds | 对象内 false/[]/300秒 | 指定敏感操作的一次性证明；仅加操作名不会自动保护自定义接口，两端接同名守卫 |
-| apikey.maxKeysPerUser/defaultExpirationDays/prefix | 对象内10/0天/hai_ | 0 表示无默认到期；scopes 只收敛现有角色授权，不授予额外权限 |
+| `rbac.enabled` / `superAdminRole` / `defaultRole` | true/super_admin/user | 默认角色按业务最小权限；示例 admin 不应作为公开注册角色 |
+| `seedDefaultData` | true | 初始化框架默认角色/权限，不代替应用资源授权 |
+| `reauthentication`.`enabled`/`operations`/`ttlSeconds` | 对象内 false/[]/300秒 | 指定敏感操作的一次性证明；仅加操作名不会自动保护自定义接口，两端接同名守卫 |
+| `apikey`.`maxKeysPerUser`/`defaultExpirationDays`/`prefix` | 对象内10/0天/hai_ | 0 表示无默认到期；scopes 只收敛现有角色授权，不授予额外权限 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 rbac: { enabled: true, superAdminRole: super_admin, defaultRole: user }
@@ -201,7 +232,9 @@ reauthentication:
 apikey: { maxKeysPerUser: 10, defaultExpirationDays: 30, prefix: 'orders_' }
 ```
 
-UI 使用 createSensitiveActions/ReauthenticationDialog；服务端仍校验用户、会话、操作、资源范围并单次消费证明。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
+`apikey.prefix` 只是新生成 Key 的开头。例如 `orders_` 会生成形如 `orders_<随机内容>` 的 Key，便于区分应用；它不增加权限，也不应包含密码。修改前缀只影响之后创建的 Key，已有 Key 不会被重写。
+
+UI 使用 `createSensitiveActions`/ReauthenticationDialog；服务端仍校验用户、会话、操作、资源范围并单次消费证明。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
 
 ## 账号生命周期与管理
 
@@ -214,7 +247,7 @@ UI 使用 createSensitiveActions/ReauthenticationDialog；服务端仍校验用�
 | 状态 | 用户会遇到什么 | 管理人员如何处理 |
 | --- | --- | --- |
 | active，激活 | 可以继续按密码、时间、来源、权限和有效期等策略进行鉴别和访问 | 核对其他策略；激活本身不授予业务权限 |
-| dormant，休眠 | 拒绝新登录及旧 access/refresh 凭据 | 核实身份和使用需求后激活，用户重新登录 |
+| dormant，休眠 | 拒绝新登录及旧 `access`/refresh 凭据 | 核实身份和使用需求后激活，用户重新登录 |
 | closed，注销 | 拒绝鉴别与既有凭据，保留账号记录 | 按业务注销及个人数据保留流程处理；物理删除另用 `deleteUser` |
 
 账号默认类型为 permanent（长期），状态为 active。temporary（临时）账号必须提供将来的 `accountExpiresAt`；到期后不能继续使用原会话。更改状态、类型或有效期会推进凭据代际并撤销旧会话，重新激活不会恢复旧凭据。只保存没有变化的状态和资料不会无故登出用户。
@@ -262,7 +295,7 @@ Fullstack 的操作顺序如下：
 
 ![重置目标用户密码的公共表单及会话影响说明](../images/account-password-reset.png)
 
-![休眠账号重置成功，原生命周期状态保持不变](../images/account-password-reset-success.png)
+![重置成功后提示旧会话失效，休眠账号仍保持休眠](../images/account-password-reset-success.png)
 
 ![390像素屏幕下的账号列表和管理入口](../images/account-lifecycle-mobile.png)
 
@@ -270,15 +303,15 @@ Fullstack 的操作顺序如下：
 
 ### 升级与数据恢复
 
-beta.1 删除用户表中的 `enabled` 列。升级前停止旧版本写入，备份数据库，并核对账号和角色清单。迁移 v6 会把旧 enabled 为 false 或不明 NULL、但生命周期仍为 active 的账号转为 dormant，保留已有 dormant/closed 状态，再删除旧列；受影响的旧凭据同时失效。
+beta.1 删除用户表中的 `enabled` 列。升级前停止旧版本写入，备份数据库，并核对账号和角色清单。迁移 v6 会把旧 `enabled` 为 false 或不明 NULL、但生命周期仍为 active 的账号转为 dormant，保留已有 dormant/closed 状态，再删除旧列；受影响的旧凭据同时失效。
 
-应用代码、查询字段、配置及客户端应一起升级：使用 accountStatus 替代旧字段，使用 register.defaultAccountStatus 替代旧注册默认值。管理输入带有旧 enabled 字段时会被拒绝，不保留另一套运行时状态入口。
+应用代码、查询字段、配置及客户端应一起升级：使用 `accountStatus` 替代旧字段，使用 `register.defaultAccountStatus` 替代旧注册默认值。管理输入带有旧 `enabled` 字段时会被拒绝，不保留另一套运行时状态入口。
 
 容器镜像回滚不会恢复已经删除的数据库列。需要恢复旧版本时，同时使用经过核验的数据库备份和旧应用制品，按维护窗口恢复；先恢复与数据匹配的配置，再检查登录、状态、角色和业务记录。
 
 ## 登录页外观
 
-`ui.variant` 对象内默认 card；split 显示品牌区。title/subtitle/brandTitle/brandText/logoUrl/illustrationUrl 无配置默认，图片接受可信 HTTP(S) 或站内绝对路径。外观不改变认证策略。
+`ui.variant` 对象内默认 card；split 显示品牌区。`title`/`subtitle`/`brandTitle`/`brandText`/`logoUrl`/`illustrationUrl` 无配置默认，图片接受可信 HTTP(S) 或站内绝对路径。外观不改变认证策略。
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 ui:

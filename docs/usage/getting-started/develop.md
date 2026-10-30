@@ -6,7 +6,7 @@
 
 ## 先确认配置来源
 
-_db.yml等表达模块结构；地址、Provider和秘密按环境提供。公共基础用.env，环境公共差异用.env.dev/test/prod，私有覆盖用.env.local；部署额外有环境私有层。加载、覆盖、默认值和重新生效统一见[基础配置手册](../configuration/runtime.md)，不要为不同环境复制实现。
+`_db.yml`等表达模块结构；地址、Provider和秘密按环境提供。公共基础用`.env`，环境公共差异用`.env`.dev/test/prod，私有覆盖用`.env.local`；部署额外有环境私有层。加载、覆盖、默认值和重新生效统一见[基础配置手册](../configuration/runtime.md)，不要为不同环境复制实现。
 
 ```sh
 pnpm dev
@@ -14,7 +14,7 @@ pnpm dev:test
 pnpm dev:prod
 ```
 
-这是开发服务器选择运行配置，构建不按部署环境注入密钥。Node编译后使用项目start:test/start:prod；fullstack根start仅启动API，Web预览在对应客户端运行preview。
+这是开发服务器选择运行配置，构建不按部署环境注入密钥。Node编译后使用项目`start`:test/`start`:prod；fullstack根`start`仅启动API，Web预览在对应客户端运行preview。
 
 ## 手工开发一条完整流程
 
@@ -24,7 +24,7 @@ fullstack先调整contract，再补服务层授权/数据，再接客户端和�
 
 ## 使用AI协作
 
-CLI复制完整Skills到应用.agents/skills。Skill是给编程助手的任务入口，不是Shell命令。
+CLI复制完整Skills到应用.agents/`skills`。Skill是给编程助手的任务入口，不是Shell命令。
 
 1. 在docs写业务需求/设计，列目标、角色、权限、页面/API、字段、状态、异常和验收。
 2. 用[hai-spec-review](../../../packages/cli/templates/skills/hai-spec-review/SKILL.md)找缺项和歧义，固定已审查范围。

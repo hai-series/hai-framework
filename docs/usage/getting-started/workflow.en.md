@@ -29,8 +29,6 @@ The detailed domain guides below are currently in Chinese. They distinguish fram
 | Payment and native devices | [Integrations](../development/integrations.md) |
 | Current run evidence, screenshots and limitations | [Verification](../governance/verification.md) |
 
-These guides are written from the implementation and actual workflows, rather than generated from schemas. `pnpm check:usage-examples` validates configuration examples without generating prose; `node docs/usage/examples/local-data.mjs` runs the isolated local example. Run these commands in the framework repository. They do not connect to production providers.
-
 ### Main workflow
 
 - Create applications and configure environments.
@@ -43,7 +41,7 @@ These guides are written from the implementation and actual workflows, rather th
 
 | Work | Requirements |
 | --- | --- |
-| Create, develop, compile, and run the CLI | Node.js `^22.23.4 \|\| ^24.22.1 \|\| ^26.12.1`, pnpm 12.11.2; check the project's `engines` and `packageManager` |
+| Create, develop, compile, and run the CLI | `Node.js` `^22.23.4 \|\| ^24.22.1 \|\| ^26.12.1`, `pnpm 12`.11.2; check the project's `engines` and `packageManager` |
 | Version control and document-driven AI development | Git; an AI coding assistant that can read project files and run commands |
 | Build container images | An installed, running Podman or Docker engine; use Linux containers on Windows |
 | Build desktop installers | Rust, the target architecture toolchain, and Tauri's system SDKs and packaging tools on the target OS |
@@ -79,18 +77,18 @@ Creation installs dependencies and initializes Git by default. Run `hai create m
 
 | Creation option | Meaning and values | Default | Example |
 | --- | --- | --- | --- |
-| `[name]` | Project name: lowercase letters, digits, hyphens | Prompt, initially my-app; my-app with --defaults | `hai create orders-app` |
-| `--type <type>` | fullstack: API + clients; api: contract + service; admin/website/h5: SvelteKit; mobile-app: Capacitor + Vite | Prompt, initially admin; admin with --defaults | `--type fullstack` |
+| `[name]` | Project name: lowercase letters, digits, hyphens | Prompt, initially my-app; my-app with `--defaults` | `hai create orders-app` |
+| `--type <type>` | fullstack: API + clients; api: contract + service; admin/website/h5: SvelteKit; mobile-app: Capacitor + Vite | Prompt, initially admin; admin with `--defaults` | `--type fullstack` |
 | `--frontends <targets>` | fullstack web/app/desktop, comma-separated; miniapp is a placeholder | web,app,desktop for fullstack; unused otherwise | `--frontends web,desktop` |
 | `--no-install` | Defer dependency installation | Install dependencies | `--no-install` |
 | `--no-git` | Skip Git initialization | Initialize Git | `--no-git` |
-| `-p, --package-manager <pm>` | pnpm/npm/yarn | pnpm for fullstack/API; otherwise detected or selected interactively | `--package-manager pnpm` |
+| `-p, --package-manager <pm>` | pnpm/npm/yarn | `pnpm for fullstack/API`; otherwise detected or selected interactively | `--package-manager pnpm` |
 | `--git-remote <url>` | Remote repository URL | Unset | `--git-remote https://git.example.com/team/my-app.git` |
 | `-y, --defaults` | Create with defaults without prompts | false | `hai create my-app --defaults` |
 
 To include a desktop client, use `--frontends web,desktop`. Existing applications can add supported modules with `hai add <module>`, for example `hai add deploy`.
 
-In fullstack, `packages/my-app-contract` defines APIs, `packages/my-app-serv` implements them, `packages/my-app-shared` holds shared code, and `apps/my-app-web` provides the Web client. Environment files live at the project root. In the API template they live in `apps/my-app-serv`. Read your generated README and AGENTS.md before making changes.
+In fullstack, `packages/my-app-contract` defines APIs, `packages/my-app-serv` implements them, `packages/my-app-shared` holds shared code, and `apps/my-app-web` provides the Web client. Environment files live at the project root. In the API template they live in `apps/my-app-serv`. Read your generated README and `AGENTS.md` before making changes.
 
 Creation always uses the full applicable modules and examples, including AI, vector storage and feedback on servers. Clients retain their dependency boundaries. Installation is larger, and examples need adaptation. `--template`, `--features` and `--examples/--no-examples` have been removed; `create --yes/-y` is now `--defaults`. Old options fail explicitly. `deploy --yes` and existing projects keep their behavior.
 
@@ -153,7 +151,7 @@ All four application skills named above—`hai-app-create`, `hai-app-review`, `h
 
 Projects include deployment tooling by default; use `hai create my-app --no-deploy` to opt out. The deployment SDK is a development dependency and is excluded from runtime images.
 
-Delivery roles are `serv` for a separate API backend, `web` for a static or SSR browser site, `app` for Android/iOS installers, and `desktop` for desktop installers. Fullstack containers use serv plus optional web; API uses serv; browser images for admin/website/h5/mobile-app use web. Native app/desktop outputs are not server Compose services. Use serv/web with `--images` and `--services`, and `--target app` or `--target desktop` for native packages. API service directories are `apps/<project>-serv`. Images and containers share the normalized root `package.json.name`: remove scope, lowercase, and replace invalid character runs with a hyphen. Missing or invalid names fail without falling back to directory names. Images use `localhost/hai-<project>-<role>:<buildId>`; containers use `hai-<project>-<environment>-<role>`. Images remain reusable across environments.
+Delivery roles are `serv` for a separate API backend, `web` for a static or SSR browser site, `app` for Android/`iOS` installers, and `desktop` for desktop installers. Fullstack containers use serv plus optional web; API uses serv; browser images for admin/website/h5/mobile-app use web. Native app/desktop outputs are not server Compose services. Use serv/web with `--images` and `--services`, and `--target app` or `--target desktop` for native packages. API service directories are `apps/<project>-serv`. Images and containers share the normalized root `package.json.name`: remove scope, lowercase, and replace invalid character runs with a hyphen. Missing or invalid names fail without falling back to directory names. Images use `localhost/hai-<project>-<role>:<buildId>`; containers use `hai-<project>-<environment>-<role>`. Images remain reusable across environments.
 
 ```sh
 pnpm build
@@ -166,7 +164,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 `--target` selects compile (default), image, app or desktop. `--images serv|web|serv,web` selects images. `--runtime auto|podman|docker` selects the local engine; auto prefers reachable Podman. `--network` overrides build networking, `--no-http-proxy` disables inherited Podman proxies, and `--sqlite-prebuild-mirror` selects a trusted HTTP(S) binary mirror. Native `--platform` and `--arch` require the matching host SDK and Rust toolchain. Builds do not load deployment environments or runtime secrets.
 
-#### Describe packaging in hai.json
+#### Describe packaging in `hai.json`
 
 ```json
 {
@@ -202,13 +200,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 Each image has its own Dockerfile. Web runtime assets live in images/web/. Dockerfiles retain internal build/runtime stages; configuration does not select stages. Omit absent images and add desktop directories only for native projects.
 
-Dependency inputs are prepared under images/dependencies/ from package manifests, local archives and patches. Downloads, installation and production dependency packaging share pnpm store and SQLite driver caches alongside stable dependency layers. Source changes should reuse downloaded packages. Empty caches still permit online builds. Windows node_modules cannot supply Linux native dependencies. Offline builds additionally require base images, tools and matching ABI/architecture/libc binaries.
+Dependency inputs are prepared under images/dependencies/ from package manifests, local archives and patches. Downloads, installation and production dependency packaging share `pnpm store and SQLite driver caches alongside stable dependency layers. Source changes should reuse downloaded packages. Empty caches still permit online builds. Windows node_modules cannot supply Linux native dependencies. Offline builds additionally require base images`, tools and matching ABI/architecture/libc binaries.
 
 The default container supports CPU workloads or remote AI services without downloading extra GPU runtimes. To use the deployment host's GPU, customize the image and container runtime settings.
 
-The root package.json.version identifies the application. `.hai/build/docker/<buildId>/` contains a manifest, selected image archives and SHA-256. Root sites use format 4; non-root sites use format 5 with webBasePath. partial marks incremental builds and hasWeb records topology. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
+The root `package.json.version` identifies the application. `.hai/build/docker/<buildId>/` contains a manifest, selected image archives and SHA-256. Root sites use format 4; non-root sites use format 5 with `webBasePath`. partial marks incremental builds and `hasWeb` records topology. Rebuilding the same application version is allowed; unique build IDs/image references distinguish contents. Publish the local build pointer only after all exports succeed. Pin base images, middleware and tools; do not use latest.
 
-For a website under `/yyy/`, set PUBLIC_BASE_PATH=/yyy explicitly during full and partial builds, including serv-only builds. Use matching CLI/Deploy versions supporting format 5; older tools reject it. Directory changes require a full deployment. SvelteKit fixes its base at build time; Vite defaults to relative assets and hash navigation. The API URL remains independent. See [path configuration, gateway rules and runtime screenshots](../configuration/delivery.md#网站部署在子目录).
+For a website under `/yyy/`, set `PUBLIC_BASE_PATH`=/yyy explicitly during full and partial builds, including serv-only builds. Use matching CLI/Deploy versions supporting `format` 5; older `tools` reject it. Directory changes require a full deployment. SvelteKit fixes its base at build time; Vite defaults to relative assets and hash navigation. The API URL remains independent. See [path configuration, gateway rules and runtime screenshots](../configuration/delivery.md#网站部署在子目录).
 
 ### 5. Deploy artifacts to an environment
 
@@ -216,7 +214,7 @@ Node backends (Serv / SvelteKit SSR) reread the release `.env.runtime` on every 
 
 `pnpm run deploy` offers no HTTPS, existing PEM certificate/key paths, or Let’s Encrypt for every container template. Relative paths resolve from the project root. Certificates are checked for domain, validity and key matching, then copied into private releases. A pinned official Certbot image handles issuance and renewal checks every 12 hours, with automatic Nginx reload. It requires terms acceptance, a real email, public DNS, port 80 and CA connectivity. Isolated servers use existing certificates. Certificate state stays on the server; keys stay out of application images. `--yes` reuses saved settings.
 
-Configure `hai.json.deploy.provider.expose.https` or private environment overrides. Defaults are HTTPS 443 and HTTP redirection; omission retains HTTP. Enabling/disabling HTTPS or changing mode, domain, ports or supplied certificates requires a full deployment. See the [HTTPS guide](../../docs/usage/configuration/delivery.md#可选https证书). Plans use `root` for the project and `serviceDir` for the service source/configuration directory, exposing only public certificate metadata.
+Configure `hai.json.deploy.provider.expose.https` or private `environment` overrides. Defaults are HTTPS 443 and HTTP redirection; omission retains HTTP. Enabling/disabling HTTPS or changing `mode`, `domain`, ports or supplied certificates requires a full deployment. See the [HTTPS guide](../../docs/usage/configuration/delivery.md#可选https证书). Plans use `root` for the project and `serviceDir` for the service source/configuration directory, exposing only public certificate metadata.
 
 Image builds run at most two images concurrently by default; use `--concurrency 1` to reduce resource use. Dependency installation precedes source copies, and each side copies only its required source. Runtime images omit application declaration files, source maps and README files. Packaging validates and reuses middleware archives by image content ID and hashes application archives while copying. Delivery defaults to `.tar.gz`; explicit `--output release.tar` keeps an uncompressed archive. README is only outside the archive. Successful deployment removes its incoming upload/extraction, retains recovery configuration in releases, and keeps images in the container engine.
 
@@ -224,11 +222,11 @@ Image builds run at most two images concurrently by default; use `--concurrency 
 
 The default deployment name comes from `package.json.name` at the project root (the nearest `hai.json` or lockfile directory), rejecting missing or invalid names, with an explicit environment appended. A fullstack `hai-delivery` project scanned at `packages/hai-delivery-serv` with `--env test` generates `/opt/hai/apps/hai-delivery-test` and `bundle-hai-delivery-test-<deploymentId>-<version>.tar.gz`. Remote directories, bundles, the Compose project, API/Web/middleware containers, data volumes, server credential state and incremental baselines share this name. Actual project names ending in `-serv` are preserved.
 
-Artifact formats 4 and 5 record primaryService (serv/web); hasWeb describes the complete browser topology. Format 5 also records a non-root webBasePath. Only serv + web generates a same-origin API proxy. Rebuild artifacts using formats 1–3. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing deploy-target.json.directory alone does not migrate resources.
+Artifact formats 4 and 5 record `primaryService` (serv/web); `hasWeb` describes the complete browser topology. Format 5 also records a non-root `webBasePath`. Only serv + web generates a same-origin API proxy. Rebuild artifacts using formats 1–3. Back up the existing deployment and verify project identity, volumes and managed credentials before establishing a new full deployment baseline. Tools do not migrate data across projects. Full deployments still remove obsolete service containers under the same Compose project; editing `deploy-target.json.directory` alone does not migrate resources.
 
-For existing projects, update build.images names in hai.json, Dockerfile filenames and references first. Rename API service directories/packages and dependent references to -serv, then reinstall dependencies and build a complete artifact. Renaming archives or editing manifest files does not replace a new build.
+For existing projects, update `build.images` names in `hai.json`, Dockerfile filenames and references first. Rename API service directories/packages and dependent references to -serv, then reinstall dependencies and build a complete artifact. Renaming archives or editing manifest files does not replace a new build.
 
-The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
+The CLI `--project-name` option and SDK `DeployAppOptions.projectName` override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root `package.json.name`.
 
 Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-serv, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
 
@@ -236,13 +234,13 @@ Prepare `.env.<environment>` and the project root `hai.json`, with image/native 
 
 For existing projects, move the previous build object into `hai.json.build`, convert deployment YAML into `hai.json.deploy`, remove the old files and retain `HAI_DEPLOY_*` variables. Existing self-hosted S3 installations must use a full deployment for this upgrade: their old baseline contains an exited initialization service, which fails the dependency checks of new incremental packages. The full deployment also refreshes the `createBucket` middleware setting; subsequent incremental updates work normally.
 
-The CLI --project-name option and SDK DeployAppOptions.projectName override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root package.json.name.
+The CLI `--project-name` option and SDK `DeployAppOptions.projectName` override have been removed. Obsolete overrides fail explicitly; maintain resource identity in the root `package.json.name`.
 
 Direct deployment collects missing SSH settings once, supporting key/agent and password authentication. SSH settings go to `.env.<environment>.local`, with hidden password input and key paths only. Middleware public settings go to `.env.<environment>`, secrets to `.env.<environment>.local`. Use `--yes` to reuse complete settings without prompts; add `--skip-middleware` to retain middleware configuration. Bundle-only mode skips SSH questions and includes existing connections in `deploy-target.json`. Editing this file affects only that delivery. Offline passwords come from the operator environment variable referenced by the target, such as `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`, and are not bundled.
 
 Each delivery includes a private `.env.runtime` inside its tar; it is not an editable file beside the upload scripts. `--env test` defaults to `NODE_ENV=test`, dev to development, and prod/other modes to production. Explicit environment configuration can override this default. The generated file is not the saved configuration source; build optimization is separate. Regenerate old bundles after changing the saved environment.
 
-The server persists managed middleware passwords in `<remoteDir>/managed-secrets.env` (mode 0600); back it up with data volumes. Each package supplies random first-use candidates without a build-machine cache. The online SDK, deploy.sh, deploy.ps1 and deploy-local.sh resolve server values under the deployment lock and update both application connections and native middleware variables. The delivery tar stays immutable; only private server runtime files receive resolved values. Missing state with an existing corresponding volume stops deployment before services change: restore the server credential backup. Deployment never silently rotates passwords or deletes data. Normal deployment does not import legacy state; verified existing credentials can use the separate [controlled import](../../../packages/deploy/docs/credential-import.md), which is read-only until explicitly applied.
+The server persists managed middleware passwords in `<remoteDir>/managed-secrets.env` (mode 0600); back it up with data volumes. Each package supplies random first-use candidates without a build-machine cache. The online SDK, `deploy.sh`, `deploy.ps1` and `deploy-local.sh` resolve server values under the deployment lock and update both application connections and native middleware variables. The delivery tar stays immutable; only private server runtime files receive resolved values. Missing state with an existing corresponding volume stops deployment before services change: restore the server credential backup. Deployment never silently rotates passwords or deletes data. Normal deployment does not import legacy state; verified existing credentials can use the separate [controlled import](../../../packages/deploy/docs/credential-import.md), which is read-only until explicitly applied.
 
 Whole `HAI_*` configuration supplied by sidecars or provisioners clears superseded leaf variables: Redis overrides no longer leave `HAI_CACHE_TYPE=memory`. Global `~/.hai/credentials.yml` fills missing settings only, respecting existing environment/process keys and parent objects. Deployment starts selected middleware and waits for PostgreSQL/MySQL/Redis/S3 health before serv/web; incremental deployment and recovery use the same order and preserve unselected containers.
 
@@ -252,11 +250,11 @@ Generated fullstack projects create different administrator passwords and transp
 
 Framework connections use `HAI_*`. Image-native variables such as `POSTGRES_*` and `RUSTFS_*` keep their required names in private `middleware-runtime.env`, loaded only by middleware. They no longer enter project settings or the application's `.env.runtime`; the application's incremental `middleware.env` contains framework settings only. Previously saved native entries are not automatically removed, but known generated native keys are excluded from new application environments.
 
-Runtime lockfile dependencies and configuration determine middleware. Choose defaults, custom connections or keep settings. --skip-middleware skips configuration/provisioning. SQLite, memory cache and local storage need no external images. Complete bundles automatically include self-hosted middleware images. External services still require reachable destinations; cloud provisioning is not an offline operation.
+Runtime lockfile dependencies and configuration determine middleware. Choose defaults, custom connections or keep settings. `--skip-middleware` skips configuration/provisioning. SQLite, memory cache and local storage need no external images. Complete bundles automatically include self-hosted middleware images. External services still require reachable destinations; cloud provisioning is not an offline operation.
 
 #### Deployment options
 
---env/--env-dir select configuration. --build builds selected application images before packaging. --services selects Compose services; --artifact-dir selects existing artifacts. --bundle-only creates a tar and platform scripts without SSH. --runtime selects the local build/export engine; --output overrides the archive path, resolved from the command's working directory, and adds the application version suffix. --yes uses valid settings without interaction and reports missing required values.
+`--env`/`--env-dir` select configuration. `--build` builds selected application images before packaging. `--services` selects Compose services; `--artifact-dir` selects existing artifacts. `--bundle-only` creates a tar and platform scripts without SSH. `--runtime` selects the local build/export engine; `--output` overrides the archive path, resolved from the command's working directory, and adds the application version suffix. `--yes` uses valid settings without interaction and reports missing required values.
 
 #### When the machines can connect: automatic deployment
 
@@ -274,26 +272,25 @@ Here `-d` starts in the background; `--no-deps` leaves dependencies untouched; `
 
 S3 `createBucket` defaults to `false`. Self-hosted S3 deployments set `HAI_STORAGE_CREATEBUCKET=true`; application initialization creates a missing bucket and preserves an existing one. External S3 remains opt-in. Compose uses the `hai-app` network without YAML anchors. Storage-only updates need no application image; new buckets are initialized on the next application startup.
 
-
 #### When the machines cannot connect: copy a bundle
 
 ```sh
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-Each delivery creates one `.hai/deploy/<environment>/bundle-<project>-<deploymentId>-<version>/` directory. Its outer files are the tar, `deploy.sh`, `deploy.ps1`, `deploy-target.json`, `read-target.awk`, `deploy-local.sh` and `README.txt`. Compose, private runtime environments, optional web.conf, the manifest and apply.sh are inside the tar, together with the selected application/middleware images and checksums. Copy the directory as a unit; do not expect private runtime files beside the upload scripts.
+Each delivery creates one `.hai/deploy/<environment>/bundle-<project>-<deploymentId>-<version>/` directory. Its outer files are the tar, `deploy.sh`, `deploy.ps1`, `deploy-target.json`, `read-target.awk`, `deploy-local.sh` and `README.txt`. Compose, private runtime environments, optional `web.conf`, the manifest and `apply.sh` are inside the tar, together with the selected application/middleware images and checksums. Copy the directory as a unit; do not expect private runtime files beside the upload scripts.
 
 Explicit `--output release-prod.tar` produces `release-prod-<version>/release-prod-<version>.tar.gz` relative to the command directory, with companion files in that delivery directory. Before uploading, open `deploy-target.json` and check the server, SSH user and port, private-key/known-hosts paths and remote directory using the field descriptions.
 
-Run `deploy.ps1` on Windows or `deploy.sh` on Linux/macOS; both read the same JSON and execute the same server workflow. The latter requires sh, awk, ssh and scp locally. Use `sh deploy.sh HOST [PORT] [USER]` to override the address, or `-IdentityFile` on deploy.ps1 to override its key. Both support `HAI_DEPLOY_IDENTITY_FILE` and `HAI_DEPLOY_KNOWN_HOSTS_FILE` overrides. After moving to another computer or operating system, update the paths to actual files there.
+Run `deploy.ps1` on Windows or `deploy.sh` on Linux/`macOS`; both read the same JSON and execute the same server workflow. The latter requires sh, awk, ssh and scp locally. Use `sh deploy.sh HOST [PORT] [USER]` to override the address, or `-IdentityFile` on `deploy.ps1` to override its key. Both support `HAI_DEPLOY_IDENTITY_FILE` and `HAI_DEPLOY_KNOWN_HOSTS_FILE` overrides. After moving to another computer or operating system, update the paths to actual files there.
 
-On isolated Linux servers, copy the delivery directory and run `sh deploy-local.sh`, optionally passing the deployment root. The script verifies and extracts the adjacent tar and invokes the bundled apply.sh automatically. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
+On isolated Linux servers, copy the delivery directory and run `sh deploy-local.sh`, optionally passing the deployment root. The script verifies and extracts the adjacent tar and invokes the bundled `apply.sh` automatically. Every failed step exits nonzero. Image loading, service startup and HTTP checks are distinct steps. result-<deploymentId>.json records the result; current changes only after successful checks. Reapplying the same deployment ID stops clearly; a newly generated bundle for the same application version is allowed. Failed updates attempt to restore selected containers and configuration while preserving data volumes and diagnostics. Data already written by the application is not rolled back.
 
 The bundle `manifest.json` records `partial` and `selectedServices`, and the apply script embeds the same choice. A complete build without `--services` is a full deployment; explicit service selection or a partial build is incremental. Incremental packages require a matching successful `current` baseline and cannot perform a first installation.
 
 #### Before going fully offline
 
-Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports --pull never), sh, tar, sha256sum, awk, curl, util-linux flock, a filesystem supporting flock and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
+Complete bundles include self-hosted middleware archives and matching architecture; server startup never pulls images. Linux needs Docker/Podman, Docker Compose v2 or podman-compose 1.6.0+ (supports `--pull` never), sh, tar, sha256sum, awk, curl, util-linux flock, a filesystem supporting flock and filesystem/container permissions. Protect private bundle contents. Keep volume identities stable across versions. Verify actual offline startup, login, refresh, restart and persistence. HTTPS, certificates, DNS and external services need separate preparation.
 
 Deployment and recovery retain a kernel lock on the fixed `.deploy.lock` file. Never delete, replace or steal it based on time. Active children may keep the lock after the parent is killed; all holders exiting or a restart releases it. Forced termination skips recovery traps: inspect the result, `current` and actual containers before recovering with a new bundle. See the [deployment guide](../../../packages/deploy/README.en.md).
 
@@ -315,7 +312,7 @@ After upgrading, run the project's typecheck, lint, build, test, and affected E2
 
 `hai upgrade 0.1.0-alpha.71` reads all consumed framework packages plus exact CLI/deploy artifacts, integrity, skills and catalog/lock/installed drift. It never installs or overwrites local/custom files; incomplete releases exit nonzero. JSON includes module migration preflight, backups and legacy-session boundaries. `hai deploy --env prod --plan` verifies local artifacts and reports identity, configuration source keys, selected/retained scope, baseline requirements and recovery directories without building, generating credentials or connecting to the target; unobserved remote state is explicitly not-inspected.
 
-`hai build --target app --platform android|ios` creates and verifies new APK/IPA files. Add platforms and install Android SDK/JDK or macOS/Xcode, then configure signing. cap:sync only synchronizes. Missing platform/toolchain/artifacts fail. Release builds exclude CAPACITOR_SERVER_URL and reject reload URLs in synchronized native configuration. build.app lists App directories.
+`hai build --target app --platform android|ios` creates and verifies new APK/IPA files. Add platforms and install Android SDK/JDK or `macOS`/Xcode, then configure signing. cap:sync only synchronizes. Missing platform/toolchain/artifacts fail. Release builds exclude `CAPACITOR_SERVER_URL` and reject reload URLs in synchronized native configuration. `build.app` lists App directories.
 
 `schemaColumns(reldb, table, sql?)` inspects real columns. `migrateSchema(reldb, module, steps, { dryRun: true })` creates no ledger. Modules own their steps. Execution journals versions in `hai_schema_migrations`; SQLite/PostgreSQL are transactional, while MySQL implicit DDL commits require reentrant steps. Failures do not advance versions; retries inspect real state. Older code rejects newer ledgers. Stop old writers and back up DB/session cache first. Rollback restores compatible database and binaries together. See the [upgrade guide](workflow.en.md).
 

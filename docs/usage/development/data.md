@@ -6,17 +6,9 @@
 
 ## 本地开发的最小组合
 
-按[数据配置](../configuration/data.md)为开发选择SQLite、memory和local，逐项校验并初始化；生产按共享状态要求使用网络后端。类型、默认值和TLS不在本页重复维护。
+按[数据配置](../configuration/data.md)为开发选择SQLite、`memory`和local，逐项校验并初始化；生产按共享状态要求使用网络后端。类型、默认值和TLS不在本页重复维护。
 
-在框架仓库运行：
-
-```sh
-node docs/usage/examples/local-data.mjs
-```
-
-示例创建独立临时目录，做真实SQLite写入/冲突回滚、缓存TTL/条件写、本地文件往返、拒绝local预签名，最后反序关闭并清理。不读取应用秘密，不关闭生产后端守卫。
-
-![真实本地调用和预期失败边界](../images/data-local-results.png)
+下面的代码直接在应用已初始化的模块上调用。先按本章配置连接，再使用业务自己的表和文件路径。
 
 调用先判断success，再读data；条件set还要检查data布尔值是否真正写入。锁的owner需在release/extend带回。local预签名失败必须明确处理，不能当作返回了链接。
 
@@ -40,7 +32,7 @@ const result = await reldb.tx.wrap(async (tx) => {
 // 外层result是HaiResult；继续检查success。
 ```
 
-需要原样保留领域错误时用显式begin/rollback/commit，每一步检查结果。示例实际制造第二次写入主键冲突，确认前次写入回滚、残留0。动态值用参数；表名/排序列只能来自可信白名单。详见[RelDB事务](../../../packages/reldb/README.md#事务)。
+需要原样保留领域错误时用显式begin/rollback/`commit`，每一步检查结果。示例实际制造第二次写入主键冲突，确认前次写入回滚、残留0。动态值用参数；表名/排序列只能来自可信白名单。详见[RelDB事务](../../../packages/reldb/README.md#事务)。
 
 ## PostgreSQL / MySQL 与 TLS
 
@@ -52,12 +44,10 @@ SQLite通过不能证明网络库/TLS通过。迁移前备份，MySQL DDL可隐�
 
 按[Redis](../configuration/data.md#缓存与共享状态)与[私有文件](../configuration/data.md#文件存储与临时签名)准备真实依赖，测试TTL、条件拒绝、并发锁、写读删、无权签名和过期下载。Cluster多键需同slot，单实例通过不代表集群行为。
 
-批量删除即使HTTP200也可能部分失败，检查逐项回执；unknown先查对象真实状态再补偿。publicUrl不是访问控制；服务端先检查私有文件的访问权限，再提供短期签名。
+批量删除即使HTTP200也可能部分失败，检查逐项回执；unknown先查对象真实状态再补偿。`publicUrl`不是访问控制；服务端先检查私有文件的访问权限，再提供短期签名。
 
 ## 清洗和分块
 
-按[文本参数](../configuration/data.md#文本清洗和分块)选择清洗和边界，保留来源与顺序。分块失败不能继续embedding，原始材料保留用于追溯。
+按[文本参数](../configuration/data.md#文本清洗和分块)选择清洗和边界，保留来源与顺序。分块失败不能继续`embedding`，原始材料保留用于追溯。
 
-![同一文本零重叠和一个字符重叠](../images/data-chunk-overlap.png)
-
-图中用maxSize=4便于观察，依次得到abcd/efgh/ij与abcd/defg/ghij。先在短文本核对，再用实际业务样本评估检索质量，不能只比较片段数量。
+例如按字符切分 `abcdefghij`，`maxSize: 4`、`overlap: 0` 得到 `abcd`、`efgh`、`ij`；`overlap: 1` 得到 `abcd`、`defg`、`ghij`。重叠能保留相邻片段的上下文，也会增加嵌入和存储开销。

@@ -36,9 +36,7 @@
 
 关系数据支持 SQLite、PostgreSQL、MySQL；缓存支持 Memory/Redis；文件支持 Local/S3；向量检索可选择 LanceDB、pgvector、Qdrant 或 Chroma。事务、分页、预签名地址与文本分块都有对应模块。
 
-![本地真实数据流程中的读写、回滚、缓存与存储验证结果](docs/usage/images/data-local-results.png)
-
-上图是实际 SQLite、内存缓存、本地文件及分块流程的验证结果。多实例生产环境按共享状态要求选择数据库、Redis 与对象存储，外部服务需另行配置。[数据访问](docs/usage/development/data.md) · [数据与存储配置](docs/usage/configuration/data.md)
+多实例生产环境按共享状态要求选择数据库、Redis 与对象存储，外部服务需另行配置。[数据访问](docs/usage/development/data.md) · [数据与存储配置](docs/usage/configuration/data.md)
 
 ### 运营：用户反馈能够进入处理流程
 

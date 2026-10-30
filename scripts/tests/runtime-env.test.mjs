@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 function fixture(run) {
   const directory = mkdtempSync(join(tmpdir(), 'hai-runtime-env-'))
   const loader = join(directory, 'runtime-env.mjs')
-  copyFileSync(new URL('../../docs/usage/examples/runtime-env.mjs', import.meta.url), loader)
+  copyFileSync(new URL('./fixtures/runtime-env.mjs', import.meta.url), loader)
   try {
     return run({
       envFile: join(directory, '.env.runtime'),

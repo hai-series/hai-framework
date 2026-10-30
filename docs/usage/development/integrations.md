@@ -6,21 +6,19 @@
 
 ## 支付渠道
 
-用途：创建订单、验证通知、查单与退款。先初始化共享 RelDB，准备渠道测试账号及已登记回调地址；应用负责订单状态、金额/币种、授权与持久去重。当前支持微信 jsapi、支付宝 h5、Stripe h5，不能假设所有渠道支持所有 tradeType。
+用途：创建订单、验证通知、查单与退款。先初始化共享 RelDB，准备渠道测试账号及已登记回调地址；应用负责订单状态、金额/币种、授权与持久去重。当前支持微信 jsapi、支付宝 h5、Stripe h5，不能假设所有渠道支持所有 `tradeType`。
 
-先按[支付渠道配置](../configuration/experience.md#支付渠道配置)注入沙箱凭据、回调和信任密钥。该处统一维护完整例子、必填项、默认容差和渠道差异；Schema检查不发送支付请求。微信按平台serial选验签密钥，支付宝核对sellerId/app，Stripe区分test/live和通知密钥。完整方法见[Payment](../../../packages/payment/README.md)。
+先按[支付渠道配置](../configuration/experience.md#支付渠道配置)注入沙箱凭据、回调和信任密钥。该处统一维护完整例子、必填项、默认容差和渠道差异；Schema检查不发送支付请求。微信按平台serial选验签密钥，支付宝核对`sellerId`/app，Stripe区分test/live和通知密钥。完整方法见[Payment](../../../packages/payment/README.md)。
 
-操作：创建测试订单 → 客户端调用渠道 → 服务端验证通知 → 在应用事务内按 eventId 去重、订单 CAS 和 outbox 发布履约 → 查询订单状态。前端跳转成功或 HTTP 200 不等于已付款；Stripe completed/unpaid 仍为 pending，refund processing 要等待渠道确认。外部履约使用稳定幂等键；unknown 先核对渠道，不能无限重试。
+操作：创建测试订单 → 客户端调用渠道 → 服务端验证通知 → 在应用事务内按 `eventId` 去重、订单 CAS 和 outbox 发布履约 → 查询订单状态。前端跳转成功或 HTTP 200 不等于已付款；Stripe completed/unpaid 仍为 pending，refund processing 要等待渠道确认。外部履约使用稳定幂等键；unknown 先核对渠道，不能无限重试。
 
 确认时，先验证签名和商户边界，再核对业务订单金额与状态。当前运行了支付通知安全测试：使用真实签名/加解密与受控请求夹具，覆盖有效通知、错误签名、错误商户和时间边界等 38 个场景。下面是该测试文件实际运行结果，未发起外部交易：
-
-![支付通知安全测试的实际结果](../images/payment-notification-checks.png)
 
 接入自己的支付渠道后，还要在沙箱覆盖金额不匹配、重复/乱序通知和处理中退款，核对服务端订单与渠道记录。本轮没有真实支付、退款或渠道沙箱验收，测试通过不能证明真实商户配置已经可用。
 
 ## Capacitor 与桌面应用
 
-用途：设备信息、相机、推送与安全 TokenStorage。`capacitor.init()` 无配置参数，检测原生宿主；Web 与 Android/iOS 能力不同。相机、推送等通过每次调用的公开选项控制，没有统一的 `_capacitor.yml` 或约定环境变量。
+用途：设备信息、相机、推送与安全 TokenStorage。`capacitor.init()` 无配置参数，检测原生宿主；Web 与 Android/`iOS` 能力不同。相机、推送等通过每次调用的公开选项控制，没有统一的 `_capacitor.yml` 或约定环境变量。
 
 ```ts
 import { capacitor } from '@h-ai/capacitor'

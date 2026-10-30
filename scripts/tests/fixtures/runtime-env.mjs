@@ -1,4 +1,4 @@
-/** 可选 Node 启动预加载：读取相邻的外部 .env.runtime，先装配配置再导入应用。 */
+/** 配置加载回归夹具；供 runtime-env.test 使用，不作为部署入口或使用手册示例。 */
 import { Buffer } from 'node:buffer'
 import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs'
 import process from 'node:process'

@@ -29,8 +29,6 @@
 | 決済とネイティブ端末 | [外部連携](../development/integrations.md) |
 | 今回の実行結果、画面、検証の限界 | [検証記録](../governance/verification.md) |
 
-ガイドは Schema からの自動生成ではなく、実装と実際の操作を理解して記述しています。`pnpm check:usage-examples` は設定例の検証のみを行い、本文は生成しません。隔離したローカル例は `node docs/usage/examples/local-data.mjs` で確認できます。いずれもフレームワークのルートで実行し、本番サービスには接続しません。
-
 ### 主な流れ
 
 - アプリ作成と環境設定。
@@ -43,7 +41,7 @@
 
 | 作業 | 必要なもの |
 | --- | --- |
-| 作成、開発、コンパイル、CLI 実行 | Node.js `^22.23.4 \|\| ^24.22.1 \|\| ^26.12.1`、pnpm 12.11.2。プロジェクトの `engines` と `packageManager` を確認 |
+| 作成、開発、コンパイル、CLI 実行 | `Node.js` `^22.23.4 \|\| ^24.22.1 \|\| ^26.12.1`、`pnpm 12`.11.2。プロジェクトの `engines` と `packageManager` を確認 |
 | バージョン管理、文書からの AI 実装 | Git、プロジェクトのファイルを読みコマンドを実行できる AI コーディング支援ツール |
 | コンテナーイメージの作成 | インストール済みで起動している Podman または Docker。Windows では Linux コンテナーを使用 |
 | デスクトップ用インストーラーの作成 | 対象 OS 上の Rust、対象アーキテクチャーのツールチェーン、Tauri が必要とする SDK とパッケージツール |
@@ -79,8 +77,8 @@ pnpm dev
 
 | 作成オプション | 意味と値 | 既定値 | 例 |
 | --- | --- | --- | --- |
-| `[name]` | 小文字、数字、ハイフンのプロジェクト名 | 対話入力、初期値 my-app。--defaults では my-app | `hai create orders-app` |
-| `--type <type>` | fullstack：API とクライアント。api：contract + service。admin/website/h5：SvelteKit。mobile-app：Capacitor + Vite | 対話選択、初期値 admin。--defaults では admin | `--type fullstack` |
+| `[name]` | 小文字、数字、ハイフンのプロジェクト名 | 対話入力、初期値 my-app。`--defaults` では my-app | `hai create orders-app` |
+| `--type <type>` | fullstack：API とクライアント。api：contract + service。admin/website/h5：SvelteKit。mobile-app：Capacitor + Vite | 対話選択、初期値 admin。`--defaults` では admin | `--type fullstack` |
 | `--frontends <targets>` | fullstack の web/app/desktop をカンマ区切りで指定。miniapp は説明のみ | fullstack は web,app,desktop。それ以外では未使用 | `--frontends web,desktop` |
 | `--no-install` | 依存インストールを後回しにする | インストールする | `--no-install` |
 | `--no-git` | Git 初期化を省略 | 初期化する | `--no-git` |
@@ -90,9 +88,9 @@ pnpm dev
 
 デスクトップ端末も必要なら `--frontends web,desktop` を指定します。既存アプリには `hai add <module>` で対応モジュールを追加できます。例えば `hai add deploy` です。fullstack の既定の実行依存はデータベース、キャッシュ、IAM、暗号化、ストレージ、監査で、AI は含みません。CUDA のインストールも不要です。
 
-fullstack では `packages/my-app-contract` が API 契約、`packages/my-app-serv` が API 実装、`packages/my-app-shared` が共有処理、`apps/my-app-web` が Web クライアントです。環境ファイルはプロジェクトのルートに置きます。API テンプレートでは `apps/my-app-serv` 内です。変更を始める前に、生成された README と AGENTS.md を読んでください。
+fullstack では `packages/my-app-contract` が API 契約、`packages/my-app-serv` が API 実装、`packages/my-app-shared` が共有処理、`apps/my-app-web` が Web クライアントです。環境ファイルはプロジェクトのルートに置きます。API テンプレートでは `apps/my-app-serv` 内です。変更を始める前に、生成された README と `AGENTS.md` を読んでください。
 
-新規作成は適用可能な全モジュールとサンプルに統一し、サーバーには AI・ベクトル保存先・feedback も導入します。クライアントの依存境界は維持します。インストール容量は増え、サンプルは実業務に合わせて変更が必要です。`--template`、`--features`、`--examples/--no-examples` は削除し、`create --yes/-y` は `--defaults` に変更しました。旧引数は明示的に拒否します。`deploy --yes` と既存工程の構成は維持します。
+新規作成は適用可能な全モジュールとサンプルに統一し、サーバーには AI・ベクトル保存先・`feedback` も導入します。クライアントの依存境界は維持します。インストール容量は増え、サンプルは実業務に合わせて変更が必要です。`--template`、`--features`、`--examples/--no-examples` は削除し、`create --yes/-y` は `--defaults` に変更しました。旧引数は明示的に拒否します。`deploy --yes` と既存工程の構成は維持します。
 
 ### 3. 環境を設定して開発する
 
@@ -147,13 +145,13 @@ CLI はアプリの `.agents/skills/` に完全な skill 一式を配置しま�
 
 要件が変わったら、先に関係する業務文書を更新してコミットし、変更を再確認します。そのうえで「hai-spec-implement を使い、検収済み文書ベースラインから今回の文書コミットまでの差分を実装に反映し、既存タスクを再利用して統合検証してください」と依頼します。旧・新のスナップショットを固定し、関連ルール、タスク、実装、テスト、文書を更新します。全体の検収後にだけベースラインを進めます。現在の HEAD を旧ベースラインと決めつけたり、未マージのブランチを完了扱いにしたりしないでください。中断後はタスク一覧から再開できます。
 
-`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-pr-review` は四つとも実際に CLI から配布されるアプリ用 skills です。フレームワークのソース側にある `hai-app-create` / `hai-app-review` はリポジトリーの保守用で、名前と対象が異なります。
+`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-pr-review` は四つとも実際に CLI から配布されるアプリ用 `skills` です。フレームワークのソース側にある `hai-app-create` / `hai-app-review` はリポジトリーの保守用で、名前と対象が異なります。
 
 ### 4. ソースをコンパイルし、配布物を作る
 
 デプロイツールは作成時に既定で含まれます。不要な場合は `hai create my-app --no-deploy` を指定します。SDK は開発依存に配置し、実行イメージには含めません。
 
-配布ロールは、独立 API バックエンドが `serv`、静的または SSR のブラウザーサイトが `web`、Android/iOS インストーラーが `app`、デスクトップインストーラーが `desktop` です。Fullstack は serv と任意の web、API は serv、admin/website/h5/mobile-app のブラウザーイメージは web を使用します。ネイティブ app/desktop はサーバーの Compose サービスではありません。`--images` と `--services` には serv/web、ネイティブ配布には `--target app` または `--target desktop` を指定します。API サービスのディレクトリは `apps/<project>-serv` です。イメージとコンテナーはルート `package.json.name` を共通の識別名として正規化します（scope 除去、小文字化、無効文字の連続をハイフンに変換）。名前がないか無効な場合は失敗し、ディレクトリ名へフォールバックしません。イメージは `localhost/hai-<project>-<role>:<buildId>`、コンテナーは `hai-<project>-<environment>-<role>` となり、イメージは環境間で再利用できます。
+配布ロールは、独立 API バックエンドが `serv`、静的または SSR のブラウザーサイトが `web`、Android/`iOS` インストーラーが `app`、デスクトップインストーラーが `desktop` です。Fullstack は serv と任意の web、API は serv、admin/website/h5/mobile-app のブラウザーイメージは web を使用します。ネイティブ app/desktop はサーバーの Compose サービスではありません。`--images` と `--services` には serv/web、ネイティブ配布には `--target app` または `--target desktop` を指定します。API サービスのディレクトリは `apps/<project>-serv` です。イメージとコンテナーはルート `package.json.name` を共通の識別名として正規化します（scope 除去、小文字化、無効文字の連続をハイフンに変換）。名前がないか無効な場合は失敗し、ディレクトリ名へフォールバックしません。イメージは `localhost/hai-<project>-<role>:<buildId>`、コンテナーは `hai-<project>-<environment>-<role>` となり、イメージは環境間で再利用できます。
 
 ```sh
 pnpm build
@@ -164,9 +162,9 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build のオプション
 
-`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、`image`、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
 
-#### hai.json でパッケージの構成を指定する
+#### `hai.json` でパッケージの構成を指定する
 
 ```json
 {
@@ -202,13 +200,13 @@ pnpm build --target desktop --platform windows --arch x64
 
 各イメージに独立した Dockerfile を用意します。Web 用設定は images/web/ に置きます。Dockerfile 内の構築・実行段階は維持しますが、設定から段階を選びません。不要なイメージ項目は削除し、desktop ディレクトリは対象プロジェクトのみ設定します。
 
-構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備します。依存レイヤーを再利用し、取得・インストール・本番依存の収集で同じ pnpm store と SQLite ドライバーのキャッシュを共有します。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
+構築器はパッケージ情報、ローカルアーカイブとパッチを images/dependencies/ に準備します。依存レイヤーを再利用し、取得・インストール・本番依存の収集で同じ `pnpm store` と SQLite ドライバーのキャッシュを共有します。通常のソース変更で全依存を再ダウンロードしない構成です。キャッシュが空でもオンライン構築できます。Windows の node_modules は Linux のネイティブ依存を代替できません。完全オフライン構築には基底イメージ、ツールと一致する ABI・アーキテクチャ・libc のバイナリも準備します。
 
 標準コンテナーは CPU 実行またはリモート AI サービスへの接続向けで、追加の GPU ランタイムをダウンロードしません。デプロイ先の GPU を使う場合は、イメージとコンテナーの実行設定を個別に調整してください。
 
-アプリの版はルートpackage.json.versionで管理します。`.hai/build/docker/<buildId>/`にmanifest、選択イメージのtarとSHA-256を出力します。ルートは形式4、非ルートはwebBasePathを含む形式5です。partialは部分構築、hasWebは構成を記録します。同じアプリ版でも再構築可能で、構築IDとイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latestを使いません。
+アプリの版はルート`package.json.version`で管理します。`.hai/build/docker/<buildId>/`にmanifest、選択イメージのtarとSHA-256を出力します。ルートは形式4、非ルートは`webBasePath`を含む形式5です。partialは部分構築、`hasWeb`は構成を記録します。同じアプリ版でも再構築可能で、構築IDとイメージ参照で内容を区別します。全出力に成功してからローカルの構築参照を更新します。基底・ミドルウェア・ツールは版を固定し、latestを使いません。
 
-`/yyy/`で公開する場合は全量・部分構築ともPUBLIC_BASE_PATH=/yyyを明示します。servだけの構築でも同じ値が必要です。形式5対応のCLI/Deployを使い、ディレクトリー変更には全量デプロイを使用します。SvelteKitは構築時にbaseを固定し、Viteの既定は相対アセットとhash遷移です。APIのURLは別設定です。[パス設定・ゲートウェイ・実行画面](../configuration/delivery.md#网站部署在子目录)を参照してください。
+`/yyy/`で公開する場合は全量・部分構築とも`PUBLIC_BASE_PATH`=/yyyを明示します。servだけの構築でも同じ値が必要です。形式5対応のCLI/Deployを使い、ディレクトリー変更には全量デプロイを使用します。SvelteKitは構築時にbaseを固定し、Viteの既定は相対アセットとhash遷移です。APIのURLは別設定です。[パス設定・ゲートウェイ・実行画面](../configuration/delivery.md#网站部署在子目录)を参照してください。
 
 ### 5. 成果物を対象環境へデプロイする
 
@@ -224,11 +222,11 @@ Node バックエンド（Serv / SvelteKit SSR）は起動ごとに配布先の 
 
 既定の配置名はプロジェクトルート（最も近い `hai.json` またはロックファイルのディレクトリ）の `package.json.name` を使い、未指定または無効な名前はエラーになります。明示した環境名を末尾に追加します。fullstack の `hai-delivery` で `packages/hai-delivery-serv` を走査しても、`--env test` は `/opt/hai/apps/hai-delivery-test` と `bundle-hai-delivery-test-<配置ID>-<版>.tar.gz` を生成します。接続先ディレクトリ、配布物、Compose プロジェクト、API/Web/ミドルウェアのコンテナー、ボリューム、サーバー認証状態のファイル名、増分基準で同じ名前を使います。実際のプロジェクト名に含まれる `-serv` は削除しません。
 
-成果物形式4・5はprimaryService（serv/web）と、工程全体のブラウザー構成を示すhasWebを記録します。形式5には非ルートのwebBasePathも含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、deploy-target.json.directoryの変更だけでは移行できません。
+成果物形式4・5は`primaryService`（serv/web）と、工程全体のブラウザー構成を示す`hasWeb`を記録します。形式5には非ルートの`webBasePath`も含まれます。同一オリジンAPIプロキシはserv + webの場合だけ生成します。形式1～3は再構築が必要です。既存デプロイをバックアップし、プロジェクト名・ボリューム・管理対象の認証情報を確認してから、新しい完全デプロイの基準を作成してください。プロジェクト間のデータ移行は自動化しません。完全デプロイでは同じComposeプロジェクトの旧サービスコンテナーを削除するため、`deploy-target.json.directory`の変更だけでは移行できません。
 
-既存工程では、hai.json の build.images 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
+既存工程では、`hai.json` の `build.images` 名、Dockerfile 名と参照を先に更新します。API サービスのディレクトリ、パッケージ名と依存参照を -serv に統一し、依存を再インストールして完全な成果物を再構築してください。アーカイブ名や manifest の手動変更では再構築を代替できません。
 
-CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃止しました。旧引数は明示的に失敗します。工程ルートの package.json.name で識別名を管理してください。
+CLI の `--project-name` と SDK の `DeployAppOptions.projectName` 上書きは廃止しました。旧引数は明示的に失敗します。工程ルートの `package.json.name` で識別名を管理してください。
 
 `.env.<環境>` とプロジェクトルートの `hai.json` を用意します。`build` にイメージ・ネイティブ構築、`deploy` にアプリ全体の配置設定を保存します。fullstack は packages/<プロジェクト>-serv、API workspace は apps/<プロジェクト>-serv を実行依存とモジュール YAML の走査入口として使います。フロントとバックエンドは同じ設定を共有します。
 
@@ -240,21 +238,21 @@ CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃�
 
 配布tarの内部に非公開の `.env.runtime` を生成します。アップロードスクリプトと並ぶ編集用ファイルではありません。`--env test` は既定で `NODE_ENV=test`、dev は development、prod とその他は production です。明示設定が優先されます。この生成物は次回設定の保存元ではなく、構築の最適化モードとも別です。保存元の環境を変更したらパッケージを再生成してください。
 
-自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、deploy.sh、deploy.ps1、deploy-local.sh は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行いません。通常デプロイは旧状態を自動取り込みしません。検証済みの既存認証情報は別の[管理されたインポート](../../../packages/deploy/docs/credential-import.md)で事前確認し、明示的な適用操作でのみ保存します。
+自前ミドルウェアのパスワードはサーバーの `<remoteDir>/managed-secrets.env`（権限 0600）で永続管理し、データボリュームと一緒にバックアップします。各パッケージは初回用の候補のみ生成し、ビルド端末のキャッシュに依存しません。オンライン SDK、`deploy.sh`、`deploy.ps1`、`deploy-local.sh` は配置ロック内でサーバー値を再利用し、アプリ接続とミドルウェア固有変数の両方へ反映します。配布 tar は変更せず、サーバーの非公開実行ファイルだけに確定値を反映します。対応するボリュームが存在し状態がない場合、サービス変更前に停止してバックアップ復元を求めます。自動的なパスワード変更やデータ削除は行いません。通常デプロイは旧状態を自動取り込みしません。検証済みの既存認証情報は別の[管理されたインポート](../../../packages/deploy/docs/credential-import.md)で事前確認し、明示的な適用操作でのみ保存します。
 
 サイドカーやクラウドの `HAI_*` オブジェクトで置換した古い子変数は除去し、Redis 選択後に `HAI_CACHE_TYPE=memory` を残しません。グローバル `~/.hai/credentials.yml` は不足値のみ補い、環境・プロセスの同名キーや親設定を上書きしません。選択したミドルウェアを起動し PostgreSQL/MySQL/Redis/S3 の正常性を確認後、serv/web を起動します。増分と復旧も同じ順序で、未選択のコンテナーは維持します。
 
-作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
+作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。`transport` 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
 
 #### 本当に必要なミドルウェアだけを設定する
 
 接続設定は `HAI_*` を使い、イメージが要求する `POSTGRES_*`、`RUSTFS_*` などは元の名前を維持して非公開 `middleware-runtime.env` に分離します。読み込むのはミドルウェアだけで、プロジェクト設定やアプリの `.env.runtime` には混在しません。アプリの増分 `middleware.env` はフレームワーク設定のみです。旧設定は自動削除せず、既知の生成済み原生キーを新しいアプリ環境から除外します。
 
-実行依存と設定に基づき、既定、自分の接続、設定維持を選びます。--skip-middleware は設定と開通を省略します。SQLite、メモリーキャッシュ、ローカル保存には外部イメージがありません。完全配布物には自前ミドルウェアのイメージも自動で含めます。外部サービスは接続先への到達性が必要で、クラウド開通はオフライン処理ではありません。
+実行依存と設定に基づき、既定、自分の接続、設定維持を選びます。`--skip-middleware` は設定と開通を省略します。SQLite、メモリーキャッシュ、ローカル保存には外部イメージがありません。完全配布物には自前ミドルウェアのイメージも自動で含めます。外部サービスは接続先への到達性が必要で、クラウド開通はオフライン処理ではありません。
 
 #### deploy のオプション
 
---env/--env-dir は環境、--build は先行する選択イメージ構築、--services は更新対象、--artifact-dir は既存成果物を指定します。--bundle-only は SSH 接続なしで tar と OS 別スクリプトを生成します。--runtime はローカル構築・イメージ出力エンジンです。--output はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。--yes は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも --network、--no-http-proxy、--sqlite-prebuild-mirror を指定できます。
+`--env`/`--env-dir` は環境、`--build` は先行する選択イメージ構築、`--services` は更新対象、`--artifact-dir` は既存成果物を指定します。`--bundle-only` は SSH 接続なしで tar と OS 別スクリプトを生成します。`--runtime` はローカル構築・イメージ出力エンジンです。`--output` はコマンドの作業ディレクトリを基準とする出力先を指定し、アプリ版を末尾に付けます。`--yes` は有効な設定を非対話で使い、不足値はエラーで示します。一体化構築でも `--network`、`--no-http-proxy`、`--sqlite-prebuild-mirror` を指定できます。
 
 #### マシン同士が接続できる場合：自動デプロイ
 
@@ -270,8 +268,7 @@ pnpm run deploy --env prod --build --services "serv,web"
 
 `-d` はバックグラウンド起動、`--no-deps` は依存サービスを更新しない指定、`--no-build` はサーバーでの構築禁止、`--pull never` は取得禁止、`--no-recreate` は残っているコンテナーを保持します。選択した旧コンテナーは事前に削除されているため、新しいコンテナーが作成されます。末尾の `web` は Compose サービス名で、複数指定は空白で区切ります。
 
-S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAGE_CREATEBUCKET=true` を設定し、アプリ初期化時に不足するバケットだけを作成します。外部 S3 は任意で有効化します。Compose は YAML アンカーを使わず `hai-app` ネットワークを使います。storage だけの更新にアプリイメージは不要で、新規バケットは次回のアプリ初期化時に作成します。
-
+S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAGE_CREATEBUCKET=true` を設定し、アプリ初期化時に不足するバケットだけを作成します。外部 S3 は任意で有効化します。Compose は YAML アンカーを使わず `hai-app` ネットワークを使います。`storage` だけの更新にアプリイメージは不要で、新規バケットは次回のアプリ初期化時に作成します。
 
 #### マシン同士が接続できない場合：パッケージをコピー
 
@@ -279,13 +276,13 @@ S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAG
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を生成します。外側にはtar、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh`、`README.txt`を置きます。Compose、非公開の実行環境、必要なweb.conf、マニフェスト、apply.shは、イメージとチェックサムとともにtar内へ格納します。非公開の実行ファイルがスクリプトの横にあるとは扱わず、ディレクトリ全体をコピーしてください。
+毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を生成します。外側にはtar、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh`、`README.txt`を置きます。Compose、非公開の実行環境、必要な`web.conf`、マニフェスト、`apply.sh`は、イメージとチェックサムとともにtar内へ格納します。非公開の実行ファイルがスクリプトの横にあるとは扱わず、ディレクトリ全体をコピーしてください。
 
 `--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar.gz` を生成し、付属ファイルを同じ配布ディレクトリへ置きます。実行前に `deploy-target.json` の説明に従い、サーバー、SSHユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリを確認します。
 
-Windowsは `deploy.ps1`、Linux/macOSは `deploy.sh` を実行します。どちらも同じJSONとサーバー処理を使います。deploy.shには操作機のsh/awk/ssh/scpが必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1の `-IdentityFile` で鍵を上書きできます。両方とも `HAI_DEPLOY_IDENTITY_FILE` と `HAI_DEPLOY_KNOWN_HOSTS_FILE` の上書きに対応します。別のPC・OSへ移す場合は、その環境に実在するパスへ変更してください。
+Windowsは `deploy.ps1`、Linux/`macOS`は `deploy.sh` を実行します。どちらも同じJSONとサーバー処理を使います。`deploy.sh`には操作機のsh/awk/ssh/scpが必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、`deploy.ps1`の `-IdentityFile` で鍵を上書きできます。両方とも `HAI_DEPLOY_IDENTITY_FILE` と `HAI_DEPLOY_KNOWN_HOSTS_FILE` の上書きに対応します。別のPC・OSへ移す場合は、その環境に実在するパスへ変更してください。
 
-隔離された Linux では交付ディレクトリ全体をコピーし、`sh deploy-local.sh` を実行します。スクリプトが同じ場所の tar を展開し、apply.sh が内容を検証して配置します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
+隔離された Linux では交付ディレクトリ全体をコピーし、`sh deploy-local.sh` を実行します。スクリプトが同じ場所の tar を展開し、`apply.sh` が内容を検証して配置します。引数で配置先を上書きできます。各段階の失敗は非ゼロ終了し、イメージ導入・起動・HTTP 検査を別々に報告します。result-<配置ID>.json に結果を記録し、成功時だけ current を更新します。同じ配置 ID の再適用は停止しますが、同じアプリ版から生成した新しい配布物は適用できます。更新失敗時は対象コンテナーと設定を以前の状態に戻すことを試み、データボリュームと診断情報を保持します。すでに書き込まれた業務データは元に戻しません。
 
 パッケージの `manifest.json` の `partial` と `selectedServices`、実行スクリプトに配置モードと対象を記録します。完全な構築で `--services` を省略すると全量、明示的なサービス選択または部分構築では増分です。増分にはサーバーの成功済み `current` と一致する基準が必要で、初回インストールは拒否します。
 
@@ -301,19 +298,19 @@ Windowsは `deploy.ps1`、Linux/macOSは `deploy.sh` を実行します。どち
 
 アプリのディレクトリーで [hai-framework-sync](../../../packages/cli/templates/skills/hai-framework-sync/SKILL.md) を使うよう依頼します。
 
-> hai-framework を最新の公開済みバージョンに更新してください。現在の依存と対象版を確認し、差分と選択が必要な事項を説明したうえで、依存、呼び出し、設定、skills を移行してください。プロジェクト固有ルールを保持して検証まで行い、公開やデプロイはしないでください。
+> hai-framework を最新の公開済みバージョンに更新してください。現在の依存と対象版を確認し、差分と選択が必要な事項を説明したうえで、依存、呼び出し、設定、`skills` を移行してください。プロジェクト固有ルールを保持して検証まで行い、公開やデプロイはしないでください。
 
 特定の版を指定したり、比較だけを依頼したりすることもできます。実際の registry/dist-tag、使用中の全パッケージの対象版と実行要件、途中の版を含む差分を確認し、固定バージョンと lockfile、公開 API、設定、scripts、skill の関連資料を更新します。ネットワーク障害や公開版の不足は対処が必要な事項として示し、キャッシュを「最新」とは扱いません。
 
-`hai init` は旧プロジェクトに不足する AI 入口と skills を補いますが、既存ファイルは保持します。フレームワーク更新コマンドではなく、古いルールを上書きもしません。既存 skill は旧テンプレート、アプリ固有の変更、新テンプレートを比較して統合します。ソースの `main` と npm 公開版も同一とは限りません。
+`hai init` は旧プロジェクトに不足する AI 入口と `skills` を補いますが、既存ファイルは保持します。フレームワーク更新コマンドではなく、古いルールを上書きもしません。既存 skill は旧テンプレート、アプリ固有の変更、新テンプレートを比較して統合します。ソースの `main` と npm 公開版も同一とは限りません。
 
 更新後はプロジェクトの typecheck、lint、build、test と影響範囲の E2E を実行し、認証、データ、主要処理を実際に確認します。配布するイメージやインストーラーを再生成し、第 5 節の手順でデプロイします。版番号の変更やビルド成功だけでは更新完了とはいえません。
 
 ## リリース確認とネイティブビルド
 
-`hai upgrade 0.1.0-alpha.71` は全消費パッケージと CLI/deploy の正確な版、tar の整合性、skills、catalog/lock/導入済み版と独自変更を読み取り専用で確認します。導入や上書きは行わず、不完全な公開は非ゼロ終了します。JSON は移行事前確認、バックアップと旧セッションの境界も示します。`hai deploy --env prod --plan` はローカル成果物、識別情報、設定元キー、更新・保持範囲、基準要件と復旧先を表示します。ビルド、認証情報作成、接続は行わず、未確認の遠隔状態は not-inspected です。
+`hai upgrade 0.1.0-alpha.71` は全消費パッケージと CLI/`deploy` の正確な版、tar の整合性、`skills`、catalog/lock/導入済み版と独自変更を読み取り専用で確認します。導入や上書きは行わず、不完全な公開は非ゼロ終了します。JSON は移行事前確認、バックアップと旧セッションの境界も示します。`hai deploy --env prod --plan` はローカル成果物、識別情報、設定元キー、更新・保持範囲、基準要件と復旧先を表示します。ビルド、認証情報作成、接続は行わず、未確認の遠隔状態は not-inspected です。
 
-`hai build --target app --platform android|ios` で新しい APK/IPA を生成・検証します。プラットフォーム、Android SDK/JDK または macOS/Xcode と署名設定が必要です。cap:sync は同期のみで、工程・ツール・成果物不足は失敗します。リリースは CAPACITOR_SERVER_URL を除外し、同期済み設定の開発 URL を拒否します。build.app は App フォルダー一覧です。
+`hai build --target app --platform android|ios` で新しい APK/IPA を生成・検証します。プラットフォーム、Android SDK/JDK または `macOS`/Xcode と署名設定が必要です。cap:sync は同期のみで、工程・ツール・成果物不足は失敗します。リリースは `CAPACITOR_SERVER_URL` を除外し、同期済み設定の開発 URL を拒否します。`build.app` は App フォルダー一覧です。
 
 `schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](workflow.ja.md)を参照。
 

@@ -36,9 +36,7 @@ OpenAI 互換モデル、ツール呼び出し、MCP を統一して扱い、RAG
 
 関係データは SQLite/PostgreSQL/MySQL、キャッシュは Memory/Redis、ファイルは Local/S3、ベクトル検索は LanceDB/pgvector/Qdrant/Chroma に対応します。トランザクション、ページング、署名付き URL、テキスト分割を専用モジュールで扱えます。
 
-![ローカルの読み書き、ロールバック、キャッシュ、ファイルを実行した結果](docs/usage/images/data-local-results.png)
-
-実際の SQLite、メモリキャッシュ、ローカルファイル、テキスト分割の検証結果です。複数インスタンスの本番環境では共有 DB、Redis、オブジェクトストレージを要件に合わせて設定します。[データアクセス](docs/usage/development/data.md) · [データ設定](docs/usage/configuration/data.md)
+複数インスタンスの本番環境では共有 DB、Redis、オブジェクトストレージを要件に合わせて設定します。[データアクセス](docs/usage/development/data.md) · [データ設定](docs/usage/configuration/data.md)
 
 ### 運用：ユーザーの報告を対応につなげる
 
@@ -52,7 +50,7 @@ OpenAI 互換モデル、ツール呼び出し、MCP を統一して扱い、RAG
 
 Svelte 5 の共通コンポーネントでフォーム、表、ダイアログ、認証、初回ガイド、ヘルプを構築します。テーマと中英日メッセージを共有し、警告とエラーは ToastContainer に読みやすく表示します。追跡 ID は必要なときに展開できます。
 
-![コンポーネント一覧のログインフォームと統一エラー通知](docs/usage/images/gallery-scenes-ja-JP.png)
+![コンポーネント一覧のログインフォームと統一エラー通知](docs/usage/images/gallery-scenes-zh-CN.png)
 
 同一オリジンの SvelteKit アプリ、独立 API と Web/App/Desktop クライアントを作成できます。イメージ、オフライン配布、サービス単位の更新、失敗時の復旧に対応し、静的 Website は GitHub Pages に公開できます。[UI 設定](docs/usage/configuration/experience.md) · [配布マニュアル](docs/usage/configuration/delivery.md)
 

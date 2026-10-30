@@ -13,6 +13,6 @@
 5. [配布と日常運用](operations/README.md)：全量・増分、復旧条件、フィードバックと原因調査。
 6. [保守・安全性・受け入れ](governance/README.md)：公開契約、資料の同期、検証できた範囲。
 
-役割ごとに同じ本文へ案内し、設定を別々の説明へ複製しません。公式サイトはこのMarkdownとnavigation.jsonを直接読み込みます。
+役割ごとに同じ本文へ案内し、設定を別々の説明へ複製しません。公式サイトはこのMarkdownと`navigation.json`を直接読み込みます。
 
 最新の公開版は `pnpm view @h-ai/cli@latest version` または [npm](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions) で確認してください。再現性が必要な場合は取得した版を固定し、main だけで公開済みとは判断しません。[検証説明](governance/verification.md)で実行済みと対象環境で必要な確認を分けています。

@@ -2,7 +2,7 @@
 
 [首次交付](README.md) · [上一步：开发](develop.md) · [下一步：部署](../operations/deployment.md)
 
-先决定交付什么，再选target。compile编译源码，image生成serv/web镜像，app/desktop生成对应原生包；cap:sync只同步资源，不是安装包。
+先决定交付什么，再选target。compile编译源码，`image`生成serv/web镜像，app/desktop生成对应原生包；cap:sync只同步资源，不是安装包。
 
 ```sh
 pnpm build
@@ -12,11 +12,11 @@ pnpm build --target desktop --platform windows --arch x64
 pnpm build --target app --platform android
 ```
 
-命令在生成工程根运行。镜像默认并行两项，资源紧张时设置 `--concurrency 1`。所需参数、hai.json完整例子和真实默认值见[构建部署配置](../configuration/delivery.md#配置入口和角色)，避免在不同流程重复维护。
+命令在生成工程根运行。镜像默认并行两项，资源紧张时设置 `--concurrency 1`。所需参数、`hai.json`完整例子和真实默认值见[构建部署配置](../configuration/delivery.md#配置入口和角色)，避免在不同流程重复维护。
 
 ## 核对身份和产物
 
-package.json.name是资源身份，version是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录版本、构建ID、镜像角色、partial、hasWeb和SHA-256。根目录网站使用格式4；非根目录使用格式5并保存webBasePath，详见[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由buildId与镜像引用区分；只有全部导出成功才推进本机构建入口。
+`package.json.name`是资源身份，`version`是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。
 
 构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。旧格式/旧角色名需要重新构建，不只改文件名。
 

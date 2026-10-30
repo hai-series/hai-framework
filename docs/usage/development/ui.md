@@ -32,6 +32,12 @@
 
 ![重试后恢复列表](../images/ui-list-recovered.png)
 
+## 导航与页面分区
+
+页面包含多个分区时，可以在组件页比较 `Tabs` 的线条、卡片和药丸样式；层级页面用 `Breadcrumb` 说明当前位置。下面的组件页同时展示几种导航效果，先选择符合内容层级的形式，再接业务路由。
+
+![组件页中的面包屑层级与多种标签页样式](../images/gallery-compounds-zh-CN.png)
+
 ## 表单与重复提交
 
 `Form` / `FormLayout` 默认一列、标签在上。字段较多且容器足够宽时，可以设置 `columns={2}`；希望标签对齐时设置 `labelPosition="left"` 和 `labelWidth`。这些是组件参数，修改后立即影响布局，不需要重启后端。
@@ -101,13 +107,11 @@
 
 复制成功显示“编号已复制”；浏览器拒绝剪贴板访问时，提示选中编号手动复制。窄屏会折行，展开期间不会自动消失：
 
-![窄屏中的排查信息](../images/feedback-conflict-diagnostics-mobile.png)
-
-已有 `errorMessage` / `authErrorMessage` 返回的 `(traceId: …)` 会由 Toast 自动分离；新代码也可直接传 `toast.add({ message: m.retry(), variant: 'warning', traceId })`。`m.retry()` 为应用翻译函数，traceId 使用本次请求的公开标识，不能填入凭据或业务隐私。
+已有 `errorMessage` / `authErrorMessage` 返回的 `(traceId: …)` 会由 Toast 自动分离；新代码也可直接传 `toast.add({ message: m.retry(), variant: 'warning', traceId })`。`m.retry()` 为应用翻译函数，`traceId` 使用本次请求的公开标识，不能填入凭据或业务隐私。
 
 迁移已有页面时，将 `Alert variant="warning"/"error"` 改为 `toast.warning`、`notifyError` 或组件初始化时的 `useToastFeedback(() => error)`；Alert 的类型已收窄，编译器会指出遗漏调用。响应式提示更新或清空时会替换或移除该来源的旧通知，同类、同文案、同编号的待显示通知合并；组件卸载不会撤销已经发出的通知。
 
-直接传入完整 `HaiError`，可以保留安全的业务原因和 traceId。需要向组件抛出异常时，使用 `new Error(result.error.message, { cause: result.error })`。`errorMessage` / `notifyError` 能读取这条来源链；未知异常和 5xx 仍显示安全兜底，不能把数据库或密钥细节展示给用户。
+直接传入完整 `HaiError`，可以保留安全的业务原因和 `traceId`。需要向组件抛出异常时，使用 `new Error(result.error.message, { cause: result.error })`。`errorMessage` / `notifyError` 能读取这条来源链；未知异常和 5xx 仍显示安全兜底，不能把数据库或密钥细节展示给用户。
 
 ![弹窗内通过键盘访问提示](../images/toast-modal-keyboard.png)
 
@@ -124,9 +128,5 @@
 ![深色主题](../images/settings-dark.png)
 
 业务文字使用应用 i18n；公共组件使用 UI 字典。标题、占位符、校验、空状态、提示以及无障碍标签都需要翻译。组件演示页已接入三语，长说明改为换行：
-
-![英文组件演示](../images/gallery-compounds-en-US.png)
-
-![日文组件演示](../images/gallery-compounds-ja-JP.png)
 
 实际验收至少检查窄屏、键盘焦点、弹窗关闭后的焦点恢复、语言切换和失败恢复。当前截图与测试覆盖浏览器；读屏软件和原生宿主需在目标环境另行验收，详细边界见[验证说明](../governance/verification.md)。
