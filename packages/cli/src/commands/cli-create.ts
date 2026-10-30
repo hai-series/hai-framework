@@ -37,7 +37,7 @@ const RE_GIT_SSH_URL = /^git@.+:.+/
 /**
  * 应用类型定义；展示字段延迟读取当前 locale，避免模块首次导入时固定语言。
  */
-const APP_TYPES: Record<AppType, { name: string, description: string, defaultFeatures: FeatureId[] }> = {
+const APP_TYPES: Record<AppType, { name: string, description: string }> = {
   'admin': {
     get name() {
       return cliM('cli_appAdminName')
@@ -45,7 +45,6 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appAdminDescription')
     },
-    defaultFeatures: ['iam', 'db', 'cache', 'crypto'],
   },
   'website': {
     get name() {
@@ -54,7 +53,6 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appWebsiteDescription')
     },
-    defaultFeatures: ['db', 'cache'],
   },
   'h5': {
     get name() {
@@ -63,7 +61,6 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appH5Description')
     },
-    defaultFeatures: ['db', 'cache'],
   },
   'api': {
     get name() {
@@ -72,7 +69,6 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appApiDescription')
     },
-    defaultFeatures: ['db', 'cache'],
   },
   'mobile-app': {
     get name() {
@@ -81,7 +77,6 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appMobileDescription')
     },
-    defaultFeatures: ['api-client', 'capacitor'],
   },
   'fullstack': {
     get name() {
@@ -90,7 +85,6 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
     get description() {
       return cliM('cli_appFullstackDescription')
     },
-    defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'storage', 'audit', 'scheduler'],
   },
 }
 
@@ -303,81 +297,8 @@ const FEATURES: Record<string, FeatureDefinition> = {
 /**
  * 可选择的功能列表
  */
-const SELECTABLE_FEATURES: FeatureId[] = [
-  'iam',
-  'db',
-  'cache',
-  'ai',
-  'storage',
-  'crypto',
-  'audit',
-  'reach',
-  'feedback',
-  'payment',
-  'vecdb',
-  'datapipe',
-  'scheduler',
-  'api-client',
-  'capacitor',
-]
-
+const FULL_FEATURES: FeatureId[] = ['iam', 'db', 'cache', 'crypto', 'ai', 'storage', 'audit', 'reach', 'feedback', 'payment', 'vecdb', 'datapipe', 'scheduler', 'deploy', 'api-client', 'capacitor']
 const PROJECT_NAME_REGEX = /^[a-z0-9-]+$/
-
-// =============================================================================
-// 项目模板定义
-// =============================================================================
-
-const PROJECT_TEMPLATES = {
-  minimal: {
-    name: 'minimal',
-    get description() {
-      return cliM('cli_templateMinimalDescription')
-    },
-    features: [] as FeatureId[],
-  },
-  default: {
-    name: 'default',
-    get description() {
-      return cliM('cli_templateDefaultDescription')
-    },
-    features: ['iam', 'db', 'cache', 'crypto'] as FeatureId[],
-  },
-  full: {
-    name: 'full',
-    get description() {
-      return cliM('cli_templateFullDescription')
-    },
-    features: [
-      'iam',
-      'db',
-      'cache',
-      'crypto',
-      'ai',
-      'storage',
-      'audit',
-      'reach',
-      'feedback',
-      'payment',
-      'vecdb',
-      'datapipe',
-      'scheduler',
-      'deploy',
-      'api-client',
-      'capacitor',
-    ] as FeatureId[],
-  },
-  custom: {
-    name: 'custom',
-    get description() {
-      return cliM('cli_templateCustomDescription')
-    },
-    features: [] as FeatureId[],
-  },
-}
-
-// =============================================================================
-// 创建项目（主入口）
-// =============================================================================
 
 /**
  * 创建项目
@@ -388,14 +309,16 @@ const PROJECT_TEMPLATES = {
  * @example 模块内部上下文
  * ```ts
  * // 在当前目录创建新的 shop 子目录；目标必须不存在或为空。
- * await createProject({ cwd: process.cwd(), name: 'shop', appType: 'api', features: ['ai'], packageManager: 'pnpm', yes: true, install: false, git: false, deploy: false })
- * // 对应 hai create shop --type api --features ai -y --no-install --no-git --no-deploy。
+ * await createProject({ cwd: process.cwd(), name: 'shop', appType: 'api', packageManager: 'pnpm', defaults: true, install: false, git: false, deploy: false })
+ * // 对应 hai create shop --type api --defaults --no-install --no-git --no-deploy。
  * ```
  */
 export async function createProject(options: CreateProjectOptions): Promise<void> {
   const spinner = ora()
 
   try {
+    if (['template', 'features', 'examples', 'yes'].some(key => Object.hasOwn(options, key)))
+      throw new Error(cliM('cli_createOptionsRemoved'))
     // 交互式获取选项
     const resolvedOptions = await resolveOptions(options)
 
@@ -407,6 +330,8 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
     // 检查目录是否存在
     if (await fileExists(projectPath)) {
+      if (resolvedOptions.defaults)
+        throw new Error(cliM('cli_createDirectoryExists'))
       const { overwrite } = await prompts({
         type: 'confirm',
         active: cliM('cli_yes'),
@@ -461,7 +386,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 
       for (const featureId of resolvedOptions.features) {
         const configKey = getFeatureConfigKey(featureId)
-        if (configKey && configKey !== 'deploy') {
+        if (!context.isSvelteOnlyApp && configKey && configKey !== 'deploy') {
           const configPath = path.join(configDir, `_${configKey}.yml`)
           // fullstack 已用模块配置 helper 渲染完整配置，不能再覆盖 Reach 模板等应用默认值。
           if (isFullstack && await fse.pathExists(configPath))
@@ -487,7 +412,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         if (/^_.*\.yml$/.test(file))
           configContents[file.slice(1, -4)] = await fse.readFile(path.join(configDir, file), 'utf8')
       }
-      const envFeatures: FeatureId[] = isFullstack ? [...new Set<FeatureId>([...resolvedOptions.features, 'reach'])] : resolvedOptions.features
+      const envFeatures: FeatureId[] = context.isSvelteOnlyApp ? [] : isFullstack ? [...new Set<FeatureId>([...resolvedOptions.features, 'reach'])] : resolvedOptions.features
       const envContents = generateEnvExample(envFeatures, configs, isFullstack, configContents)
       let envExample = isApiWorkspace
         ? envContents
@@ -599,32 +524,10 @@ export async function createProject(options: CreateProjectOptions): Promise<void
 // =============================================================================
 
 /**
- * 解析CLI显式功能列表；none是空选择标记，不是模块，不能与其它值混用。
- * @param value - 逗号分隔的CLI输入。
- * @returns 已校验并去重的模块；空数组保留明确不选模块的意图。
- * @example 模块内部上下文
- * ```ts
- * const features = parseCreateFeatures('none') // []；不是省略features。
- * ```
- */
-export function parseCreateFeatures(value: string): FeatureId[] {
-  const selected = value.split(',').map(feature => feature.trim())
-  if (selected.includes('none')) {
-    if (selected.length !== 1)
-      throw new Error(cliM('cli_createFeaturesNoneExclusive'))
-    return []
-  }
-  const invalid = selected.find(feature => !feature || (!Object.hasOwn(FEATURES, feature) && feature !== 'ui' && feature !== 'kit'))
-  if (invalid !== undefined)
-    throw new Error(cliM('cli_createFeaturesInvalid'))
-  return [...new Set(selected)] as FeatureId[]
-}
-
-/**
  * 解析选项（交互式）
  */
-async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions>> {
-  const useDefaults = options.yes ?? false
+async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions> & { features: FeatureId[] }> {
+  const useDefaults = options.defaults ?? false
 
   writeCliMessage('')
   writeCliMessage(chalk.bold.cyan('  🚀 hai Agent Framework'))
@@ -685,99 +588,21 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     ? await resolveFrontendTargets(options.frontends, useDefaults, onCancel)
     : []
 
-  // 模板选择
-  let selectedTemplate = options.template
-  if (selectedAppType === 'fullstack') {
-    selectedTemplate = selectedTemplate ?? 'custom'
-  }
-  else if (!selectedTemplate) {
-    if (useDefaults) {
-      selectedTemplate = 'default'
-    }
-    else {
-      const { template } = await prompts({
-        type: 'select',
-        name: 'template',
-        message: cliM('cli_createTemplatePrompt'),
-        hint: `\n${formatPromptDescription(cliM('cli_selectHint'))}`,
-        choices: Object.values(PROJECT_TEMPLATES).map(t => ({
-          title: t.name,
-          description: formatPromptDescription(t.description),
-          value: t.name,
-        })),
-        initial: 1,
-      }, { onCancel })
-      selectedTemplate = template
-    }
-  }
-
-  // 功能选择
-  let selectedFeatures: FeatureId[] = []
-  const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
-
-  if (selectedAppType === 'fullstack') {
-    // 省略功能列表时交付反馈入口；显式列表保留用户对可选模块的选择。
-    selectedFeatures = resolveFeatureDependencies([...appTypeDefaults, ...(options.features ?? ['feedback'])])
-  }
-  else if (options.features) {
-    selectedFeatures = resolveFeatureDependencies(options.features)
-  }
-  else if (selectedTemplate === 'custom' && !options.features && useDefaults) {
-    selectedFeatures = resolveFeatureDependencies(appTypeDefaults)
-  }
-  else if (selectedTemplate === 'custom' && !options.features) {
-    const featureChoices = SELECTABLE_FEATURES.map(id => ({
-      title: FEATURES[id].name,
-      description: formatPromptDescription(FEATURES[id].description),
-      value: id,
-      selected: appTypeDefaults.includes(id),
-    }))
-
-    const { features } = await prompts({
-      type: 'multiselect',
-      name: 'features',
-      message: cliM('cli_featuresPrompt'),
-      choices: featureChoices,
-      hint: `\n${formatPromptDescription(cliM('cli_multiselectHint'))}`,
-      instructions: false,
-    }, { onCancel })
-
-    selectedFeatures = features || []
-    selectedFeatures = resolveFeatureDependencies(selectedFeatures)
-  }
-  else {
-    const templateFeatures = PROJECT_TEMPLATES[selectedTemplate as keyof typeof PROJECT_TEMPLATES]?.features || []
-    const merged = new Set([...templateFeatures, ...appTypeDefaults])
-    selectedFeatures = resolveFeatureDependencies(Array.from(merged))
-  }
+  // 所有新工程使用完整模块及示例；客户端模板仍遵守自身的服务端隔离边界。
+  let selectedFeatures: FeatureId[] = selectedAppType === 'mobile-app'
+    ? ['iam', 'crypto', 'api-client', 'capacitor']
+    : resolveFeatureDependencies(FULL_FEATURES)
 
   selectedFeatures = selectedFeatures.filter(feature => feature !== 'deploy')
   if (options.deploy !== false)
     selectedFeatures.push('deploy')
 
   // 模块配置
-  const moduleConfigs = selectedAppType === 'fullstack'
+  const moduleConfigs = selectedAppType === 'fullstack' || selectedAppType === 'mobile-app'
     ? { ...buildDefaultModuleConfigs(selectedFeatures, projectName!), ...options.moduleConfigs }
     : options.moduleConfigs ?? (useDefaults
       ? buildDefaultModuleConfigs(selectedFeatures, projectName!)
       : await promptModuleConfigs(selectedFeatures, projectName!))
-
-  // 示例代码
-  let addExamples = options.examples
-  if (addExamples === undefined && useDefaults) {
-    addExamples = true
-  }
-  else if (addExamples === undefined) {
-    const { examples } = await prompts({
-      type: 'confirm',
-      active: cliM('cli_yes'),
-      inactive: cliM('cli_no'),
-      name: 'examples',
-      message: cliM('cli_createExamplesPrompt'),
-      initial: true,
-    }, { onCancel })
-    addExamples = examples
-  }
 
   // 包管理器
   const detected = await detectPackageManager(options.cwd ?? '.')
@@ -863,16 +688,14 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     name: projectName!,
     appType: selectedAppType,
     frontends: selectedFrontends,
-    template: (selectedTemplate ?? 'default') as 'default' | 'minimal' | 'full' | 'custom',
     features: selectedFeatures,
     deploy: options.deploy !== false,
     moduleConfigs,
-    examples: addExamples ?? true,
     install: install ?? true,
     packageManager: packageManager || 'pnpm',
     git: git ?? true,
     gitRemote: gitRemote ?? '',
-    yes: useDefaults,
+    defaults: useDefaults,
     verbose: options.verbose ?? false,
     cwd: options.cwd ?? '.',
   }
@@ -1361,7 +1184,7 @@ function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' |
   const staticWebsite = appType === 'website'
     ? `### 静态网站与 GitHub Pages
 
-默认使用Node SSR。纯展示站点创建时使用 \`--type website --features none\`，保留Core/UI和默认部署开发工具，无须选择deploy再关闭。已有动态模块不能仅打开开关静态发布。
+默认使用Node SSR，包含完整模块和示例。静态发布前先移除服务端业务依赖、初始化及API/actions，保留Core/UI；已有动态模块不能仅打开开关静态发布。
 
 \`HAI_BUILD_STATIC=1\`显式预渲染，\`PUBLIC_BASE_PATH=/${name}\`指定项目站目录（无末尾/，根站留空）；在PowerShell设置本次构建环境：
 
@@ -1620,7 +1443,7 @@ Apache-2.0
 /**
  * 打印完成提示
  */
-function printCompletionMessage(options: Required<CreateProjectOptions>): void {
+function printCompletionMessage(options: Required<CreateProjectOptions> & { features: FeatureId[] }): void {
   writeCliMessage('')
   writeCliMessage(chalk.green(cliM('cli_createSuccess')))
   writeCliMessage('')

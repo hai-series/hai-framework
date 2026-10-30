@@ -24,12 +24,12 @@ import { reach, ReachConfigSchema } from '@h-ai/reach'
 {{#if features.db}}
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 {{/if}}
-import { ServConfigSchema } from '@h-ai/serv'
 {{#if features.audit}}
 {{#if features.scheduler}}
 import { scheduler, SchedulerConfigSchema } from '@h-ai/scheduler'
 {{/if}}
 {{/if}}
+import { ServConfigSchema } from '@h-ai/serv'
 {{#if features.storage}}
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{/if}}

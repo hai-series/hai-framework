@@ -306,7 +306,7 @@ afterEach(async () => {
 async function fullstackFixture(): Promise<{ root: string, app: string, service: string }> {
   const root = mkdtempSync(join(tmpdir(), 'hai-deploy-fullstack-'))
   roots.push(root)
-  await createProject({ name: 'deploy-app', appType: 'fullstack', frontends: ['web'], template: 'default', features: ['db', 'cache', 'storage', 'iam', 'deploy'], yes: true, install: false, git: false, cwd: root })
+  await createProject({ name: 'deploy-app', appType: 'fullstack', frontends: ['web'], defaults: true, install: false, git: false, cwd: root })
   const app = join(root, 'deploy-app')
   expect(JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).devDependencies['@h-ai/deploy']).toBe('catalog:')
   const service = join(app, 'packages/deploy-app-serv')

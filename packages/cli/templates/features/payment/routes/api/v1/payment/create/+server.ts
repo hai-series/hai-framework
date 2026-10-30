@@ -28,5 +28,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     metadata,
     notifyUrl: notifyUrl ?? `${new URL(request.url).origin}${base}/api/v1/payment/notify/${provider}`,
   })
-  return kit.response.fromResult(result, locals.requestId)
+  if (!result.success)
+    return kit.response.fromError(result.error, locals.requestId)
+  return kit.response.ok(result.data, locals.requestId)
 }

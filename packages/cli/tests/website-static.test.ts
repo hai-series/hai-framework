@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createProject, parseCreateFeatures } from '../src/commands/cli-create.js'
+import { createProject } from '../src/commands/cli-create.js'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 let root: string
@@ -20,29 +20,14 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('显式空模块选择', () => {
-  it('none是空选择，正常模块去重且保留依赖解析入口', () => {
-    expect(parseCreateFeatures('none')).toEqual([])
-    expect(parseCreateFeatures(' db,cache,db ')).toEqual(['db', 'cache'])
-  })
-
-  it.each(['none,db', 'db,none', 'none,', '', ',', 'db,,cache', 'missing', '../db'])('在创建文件前拒绝互斥或无效列表：%s', (value) => {
-    expect(() => parseCreateFeatures(value)).toThrow()
-  })
-
-  it('website明确不选模块保留core/UI及默认部署开发工具，省略参数仍保留原默认', async () => {
-    const options = { appType: 'website' as const, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm' as const, cwd: root }
-    await createProject({ ...options, name: 'plain-site', features: parseCreateFeatures('none') })
-    await createProject({ ...options, name: 'default-site' })
-    const plain = JSON.parse(await readFile(path.join(root, 'plain-site/package.json'), 'utf8'))
-    const standard = JSON.parse(await readFile(path.join(root, 'default-site/package.json'), 'utf8'))
-    expect(plain.dependencies).toMatchObject({ '@h-ai/core': 'catalog:', '@h-ai/ui': 'catalog:' })
-    expect(plain.dependencies['@h-ai/reldb']).toBeUndefined()
-    expect(plain.dependencies['@h-ai/cache']).toBeUndefined()
-    expect(plain.dependencies['@h-ai/iam']).toBeUndefined()
-    expect(plain.devDependencies).toMatchObject({ '@h-ai/deploy': 'catalog:', '@sveltejs/adapter-static': '^3.0.10' })
-    expect(standard.dependencies['@h-ai/reldb']).toBe('catalog:')
-    expect(standard.dependencies['@h-ai/cache']).toBe('catalog:')
+describe('完整创建默认', () => {
+  it('website 默认包含完整模块，已移除的功能参数在写文件前拒绝', async () => {
+    const options = { appType: 'website' as const, defaults: true, install: false, git: false, packageManager: 'pnpm' as const, cwd: root }
+    await createProject({ ...options, name: 'complete-site' })
+    const pkg = JSON.parse(await readFile(path.join(root, 'complete-site/package.json'), 'utf8'))
+    expect(pkg.dependencies).toMatchObject({ '@h-ai/ai': 'catalog:', '@h-ai/feedback': 'catalog:', '@h-ai/reldb': 'catalog:', '@h-ai/iam': 'catalog:' })
+    await expect(createProject(Object.assign({ ...options, name: 'obsolete-site' }, { features: [] }))).rejects.toThrow('create')
+    expect(existsSync(path.join(root, 'obsolete-site'))).toBe(false)
   })
 })
 

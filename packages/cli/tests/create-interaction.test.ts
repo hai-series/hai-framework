@@ -43,7 +43,7 @@ describe('create 用户输出', () => {
     temporaryRoots.push(root)
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    await expect(createProject({ name, appType: 'api', yes: true, install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow()
+    await expect(createProject({ name, appType: 'api', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow()
     expect(stderr).toHaveBeenCalled()
     expect(await readdir(root)).toEqual([])
     expect(commandMocks.execSync).not.toHaveBeenCalled()
@@ -63,7 +63,7 @@ describe('create 用户输出', () => {
       throw Object.assign(new Error('Command failed'), { status: 1, stdout: 'Install progress', stderr: 'ERR_PNPM_TEST_FAILURE: registry unavailable' })
     })
 
-    await expect(createProject({ name: 'install-error', appType: 'fullstack', frontends: ['web'], yes: true, install: true, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow('registry unavailable')
+    await expect(createProject({ name: 'install-error', appType: 'fullstack', frontends: ['web'], defaults: true, install: true, git: false, packageManager: 'pnpm', cwd: root })).rejects.toThrow('registry unavailable')
     const errorOutput = stderr.mock.calls.map(([message]) => String(message)).join('')
     expect(errorOutput).toContain('ERR_PNPM_TEST_FAILURE: registry unavailable')
     expect(errorOutput).toContain(exitCode)
@@ -86,7 +86,7 @@ describe('create 用户输出', () => {
     vi.spyOn(templateEngine, 'generateFromTemplates').mockRejectedValueOnce(promptsCollected)
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-    await expect(createProject({ name: 'prompt-test', examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toBe(promptsCollected)
+    await expect(createProject({ name: 'prompt-test', install: false, git: false, packageManager: 'pnpm', cwd: root })).rejects.toBe(promptsCollected)
     const questions = [select.mock.calls[0][0], multiselect.mock.calls[0][0]]
     select.mockRestore()
     multiselect.mockRestore()

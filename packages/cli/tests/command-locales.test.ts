@@ -77,7 +77,7 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
 
   it('真实创建 API 工程并本地化完成提示，目标语言配置独立保留', async () => {
     const root = await fixture()
-    await createProject({ cwd: root, name: 'shop', appType: 'api', features: ['db'], yes: true, install: false, git: false, deploy: false, moduleConfigs: { core: { defaultLocale: 'zh-CN' } } })
+    await createProject({ cwd: root, name: 'shop', appType: 'api', defaults: true, install: false, git: false, deploy: false, moduleConfigs: { core: { defaultLocale: 'zh-CN' } } })
     expect(await fse.pathExists(path.join(root, 'shop/apps/shop-serv/src/index.ts'))).toBe(true)
     expect(await readFile(path.join(root, 'shop/apps/shop-serv/config/_core.yml'), 'utf8')).toContain('zh-CN')
     if (locale === 'en-US') {
@@ -125,7 +125,7 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     const root = await fixture()
     const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(() => 'admin')
     const typed = vi.spyOn(prompts.prompts, 'text').mockImplementation(() => 'bad/name')
-    await expect(createProject({ cwd: root, name: '', features: [], moduleConfigs: {}, examples: false, install: false, git: false, packageManager: 'pnpm', template: 'minimal', deploy: false })).rejects.toThrow('bad/name')
+    await expect(createProject({ cwd: root, name: '', moduleConfigs: {}, install: false, git: false, packageManager: 'pnpm', deploy: false })).rejects.toThrow('bad/name')
     const appQuestion = selected.mock.calls[0]![0]
     const nameQuestion = typed.mock.calls[0]![0]
     selected.mockRestore()
@@ -151,29 +151,28 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
       expect(rendered).not.toMatch(/\p{Script=Han}/u)
   })
 
-  it('模块配置、功能多选和模板描述动态读取当前语言', async () => {
+  it('完整预设的模块配置动态读取当前语言，并移除功能多选', async () => {
     const root = await fixture()
     const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(question => Array.isArray(question.choices) ? question.choices[0]?.value : undefined)
     const features = vi.spyOn(prompts.prompts, 'multiselect').mockImplementation(() => ['iam', 'ai', 'storage'])
     const typed = vi.spyOn(prompts.prompts, 'text').mockImplementation(question => question.initial)
     vi.spyOn(prompts.prompts, 'confirm').mockImplementation(() => false)
     // 非法名称在选项收集后拒绝，仍完整走过所有配置提示，且不会创建目录。
-    await expect(createProject({ cwd: root, name: 'bad/name', appType: 'admin', template: 'custom', examples: false, install: false, git: false, deploy: false, packageManager: 'pnpm' })).rejects.toThrow('bad/name')
+    await expect(createProject({ cwd: root, name: 'bad/name', appType: 'admin', install: false, git: false, deploy: false, packageManager: 'pnpm' })).rejects.toThrow('bad/name')
     const questions = selected.mock.calls.map(([question]) => question)
-    const choice = features.mock.calls[0]![0]
+    expect(features).not.toHaveBeenCalled()
+    expect(questions.length).toBeGreaterThan(0)
     selected.mockRestore()
     features.mockRestore()
     typed.mockRestore()
-    const descriptions = [choice, ...questions].map(question => JSON.stringify({ message: question.message, choices: question.choices })).join('\n')
+    const descriptions = questions.map(question => JSON.stringify({ message: question.message, choices: question.choices })).join('\n')
     if (locale === 'en-US') {
       expect(descriptions).not.toMatch(/\p{Script=Han}/u)
       expect(output()).not.toMatch(/\p{Script=Han}/u)
-      expect(descriptions).toContain('Identity and access')
       expect(descriptions).toContain('Database type')
       expect(descriptions).toContain('Storage type')
     }
     else if (locale === 'ja-JP') {
-      expect(descriptions).toContain('認証とアクセス管理')
       expect(descriptions).toContain('データベース種別')
       expect(descriptions).toContain('ストレージ種別')
       expect(descriptions).toContain('日本語（ja-JP）')
@@ -181,7 +180,6 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     else {
       expect(descriptions).toContain('数据库类型')
     }
-    expect(await render(choice)).toContain(locale === 'en-US' ? 'Select features' : locale === 'ja-JP' ? '機能を選択してください' : '选择功能')
     expect(await fse.pathExists(path.join(root, 'bad'))).toBe(false)
   })
 
@@ -211,7 +209,7 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     const env = { ...process.env, HAI_CORE_DEFAULTLOCALE: locale }
     const binary = path.resolve('dist/index.js')
     const run = (cwd: string, args: string[]) => spawnSync(process.execPath, [binary, '--cwd', cwd, ...args], { env, encoding: 'utf8', windowsHide: true, timeout: 30_000 })
-    const created = run(root, ['create', 'shop', '--type', 'api', '--features', 'db', '--yes', '--no-install', '--no-git', '--no-deploy'])
+    const created = run(root, ['create', 'shop', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'])
     expect(created.status).toBe(0)
     const target = path.join(root, 'shop')
     const service = path.join(target, 'apps/shop-serv')
@@ -220,7 +218,7 @@ describe.skipIf(process.env.HAI_CLI_RUN_LOCALE_GATES !== '1')('built create/add/
     const initialized = run(service, ['init', '--force'])
     expect(initialized.status).toBe(0)
     const failed = run(service, ['add', 'unknown-module', '--no-install'])
-    const invalidName = run(root, ['create', 'BAD_NAME', '--type', 'api', '--yes', '--no-install', '--no-git', '--no-deploy'])
+    const invalidName = run(root, ['create', 'BAD_NAME', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'])
     expect(invalidName.status).toBe(1)
     expect(await fse.pathExists(path.join(root, 'BAD_NAME'))).toBe(false)
     const diagnostics = [created, added, initialized, failed].map(r => r.stdout + r.stderr).join('\n')

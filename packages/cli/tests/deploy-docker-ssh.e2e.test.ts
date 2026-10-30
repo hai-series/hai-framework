@@ -552,13 +552,10 @@ done`
         name: 'e2e-fullstack',
         appType: 'fullstack',
         frontends: ['web'],
-        template: 'default',
-        features: ['db', 'cache', 'storage', 'iam'],
-        examples: false,
         install: false,
         packageManager: 'pnpm', // 生成 pnpm-lock.yaml，供容器 Dockerfile 的 pnpm fetch 使用
         git: false,
-        yes: true,
+        defaults: true,
         cwd: workDir,
       })
       appDir = path.join(workDir, 'e2e-fullstack')
@@ -580,9 +577,9 @@ done`
       await runPnpm(commands, ['install'], appDir)
       // 浏览器测试的 Node 侧导入应用 contract；只编译测试客户端契约，不启动本地 API/Web。
       await runPnpm(commands, ['--filter', 'e2e-fullstack-contract', 'build'], appDir)
-      expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).not.toContain('ai')
+      expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).toContain('ai')
       expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).toContain('deploy')
-      expect(readdirSync(path.join(appDir, 'node_modules'))).not.toContain('onnxruntime-node')
+      expect(readdirSync(path.join(appDir, 'node_modules'))).toContain('onnxruntime-node')
       // 受限网络：调整生成应用的 Dockerfile —— 去掉 syntax 指令（避免 BuildKit 从 docker.io
       // 拉取前端镜像；内置 frontend 已支持 RUN --mount=type=cache），并在构建阶段注入 npm 镜像
       // （.npmrc 在 pnpm fetch 前尚未 COPY，故用 ENV pnpm_config_registry）
@@ -826,7 +823,7 @@ done`
     // 内层引擎存储独占且不挂宿主 engine/socket/storage；只在本轮已记录外层 ID 内释放上一场景。
     await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'rm', '-af'])
     const name = `delivery-${appType}`
-    await createProject({ name, appType, yes: true, install: false, git: false, examples: false, packageManager: 'pnpm', cwd: workDir })
+    await createProject({ name, appType, defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: workDir })
     const project = path.join(workDir, name)
     useLocalPackages(project)
     // 本轮测试配置显式允许隔离本地状态；生产环境文件和共享状态守卫保持不变。

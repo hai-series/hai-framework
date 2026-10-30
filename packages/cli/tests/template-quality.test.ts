@@ -1,6 +1,6 @@
 import type { Linter } from 'eslint'
 import type { AppType } from '../src/cli-types.js'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ESLint } from 'eslint'
 import ts from 'typescript'
@@ -33,10 +33,17 @@ beforeAll(async () => {
       }
     }
   }
-  // 两个真实创建分支共享同一套 lint 配置；只初始化已有 mobile linter，不重复加载插件。
+  // 新建工程固定完整加密能力；已有工程的明文消费者继续通过模板引擎单独验证。
   for (const encrypted of [true, false]) {
     const cwd = path.join(tmpRoot, `mobile-transport-${encrypted}`)
-    await createProject({ name: 'mobile-test', appType: 'mobile-app', template: 'custom', features: encrypted ? ['iam'] : ['api-client', 'capacitor'], yes: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd, examples: false })
+    if (encrypted) {
+      await createProject({ name: 'mobile-test', appType: 'mobile-app', defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd })
+    }
+    else {
+      const directory = path.join(cwd, 'mobile-test')
+      await generateFromTemplates(directory, buildTemplateContext({ name: 'mobile-test', appType: 'mobile-app', features: ['api-client', 'capacitor'], deploy: false, packageManager: 'pnpm' }))
+      await writeFile(path.join(directory, '.env.example'), '# Plaintext template fixture\n')
+    }
     mobileProjects.set(encrypted, path.join(cwd, 'mobile-test'))
   }
   // 首次初始化会加载全部 lint 插件，放在有明确超时的准备阶段。

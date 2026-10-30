@@ -25,7 +25,7 @@ const roots: string[] = []
 function runtimeHarness(source: string) {
   const calls: string[] = []
   const state = { vectorFailure: false, cleanupFailure: false }
-  const modules = Object.fromEntries(['ai', 'audit', 'cache', 'crypto', 'iam', 'reach', 'reldb', 'storage', 'vecdb'].map(name => [name, {
+  const modules = Object.fromEntries(['ai', 'audit', 'cache', 'crypto', 'feedback', 'iam', 'reach', 'reldb', 'scheduler', 'storage', 'vecdb'].map(name => [name, {
     init: async () => {
       calls.push(`${name}.init`)
       return state.vectorFailure && name === 'vecdb' ? { success: false, error: { message: 'Vector unavailable' } } : { success: true }
@@ -145,13 +145,13 @@ describe('shared production configuration', () => {
     expect(parseEnv(generateProductionEnvironment([]))).not.toHaveProperty('HAI_DB_TYPE')
   })
 
-  it.each(['website', 'api', 'fullstack'] as const)('%s只选AI也补足实际依赖、配置和生产profile', async (appType) => {
+  it.each(['website', 'api', 'fullstack'] as const)('%s完整预设包含AI依赖、配置和生产profile', async (appType) => {
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-create-'))
     roots.push(root)
     const name = `production-${appType}`
-    await createProject({ name, appType, features: ['ai'], yes: true, install: false, git: false, deploy: false, examples: false, packageManager: 'pnpm', frontends: ['web'], cwd: root })
+    await createProject({ name, appType, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', frontends: ['web'], cwd: root })
     const project = path.join(root, name)
     const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
     const pkg = JSON.parse(await readFile(path.join(service, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
@@ -226,7 +226,7 @@ describe('shared production configuration', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-crypto-'))
     roots.push(root)
-    await createProject({ name: 'crypto-api', appType: 'api', features: ['crypto'], yes: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd: root })
+    await createProject({ name: 'crypto-api', appType: 'api', defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', cwd: root })
     const service = path.join(root, 'crypto-api', 'apps', 'crypto-api-serv')
     const app = await readFile(path.join(service, 'src', 'app.ts'), 'utf8')
     expect(app).toContain('createReldbTransportKeyStore')

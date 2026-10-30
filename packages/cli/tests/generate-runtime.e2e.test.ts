@@ -174,7 +174,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     await mkdir(tempParent, { recursive: true })
     const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
     roots.push(root)
-    await createProject({ name: 'runtime-route', appType, template: 'minimal', features: [], frontends: ['web'], cwd: root, yes: true, install: false, git: false, deploy: false, examples: false, packageManager: 'pnpm' })
+    await createProject({ name: 'runtime-route', appType, frontends: ['web'], cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
     const project = path.join(root, 'runtime-route')
     await generate({ type: 'api', name: 'route-probe', cwd: project })
     if (appType !== 'website')

@@ -14,6 +14,8 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
+import { generateConfigFile } from '../src/commands/cli-config-templates.js'
+import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
 
 const runScaffoldGates = process.env.HAI_CLI_RUN_SCAFFOLD_GATES === '1'
@@ -43,67 +45,67 @@ const scaffoldGateCases: readonly ScaffoldGateCase[] = [
   {
     title: 'api-feedback',
     projectName: 'sample-api-feedback',
-    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'feedback', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['apps/sample-api-feedback-serv/config/_feedback.yml', 'e2e/api-serv.spec.ts'],
   },
   {
     title: 'fullstack-feedback',
     projectName: 'sample-fullstack-feedback',
-    createArgs: ['--type', 'fullstack', '--frontends', 'web', '--features', 'feedback', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: ['--type', 'fullstack', '--frontends', 'web', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['packages/sample-fullstack-feedback-shared/src/lib/pages/feedback.svelte', 'packages/sample-fullstack-feedback-serv/config/_feedback.yml'],
   },
   {
     title: 'api-transport',
     projectName: 'sample-api-transport',
-    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'crypto,db', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['apps/sample-api-transport-serv/config/_serv.yml', 'e2e/api-serv.spec.ts'],
   },
   {
     title: 'api',
     projectName: 'sample-api',
-    createArgs: ['--type', 'api', '--template', 'minimal', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-serv/package.json'],
   },
   {
     title: 'admin',
     projectName: 'sample-admin',
-    createArgs: ['--type', 'admin', '--template', 'custom', '--features', 'iam,db,cache,crypto,storage,ai,audit,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'admin', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/app.spec.ts', 'src/routes/api/auth/login/+server.ts'],
   },
   {
     title: 'api-iam',
     projectName: 'sample-api-iam',
-    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-iam-serv/config/_iam.yml'],
   },
   {
     title: 'api-iam-basic',
     projectName: 'sample-api-iam-basic',
-    createArgs: ['--type', 'api', '--template', 'custom', '--features', 'iam,db,cache', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'api', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/api-serv.spec.ts', 'apps/sample-api-iam-basic-serv/config/_iam.yml'],
   },
   {
     title: 'website',
     projectName: 'sample-website',
-    createArgs: ['--type', 'website', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'website', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/app.spec.ts'],
   },
   {
     title: 'h5',
     projectName: 'sample-h5',
-    createArgs: ['--type', 'h5', '--template', 'custom', '--features', 'iam,db,cache,reach', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'h5', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/app.spec.ts'],
   },
   {
     title: 'mobile-app',
     projectName: 'sample-mobile',
-    createArgs: ['--type', 'mobile-app', '--template', 'custom', '--features', 'api-client,capacitor,iam', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'],
+    createArgs: ['--type', 'mobile-app', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/app.spec.ts', 'src/App.svelte'],
   },
   {
     title: 'fullstack',
     projectName: 'sample-fullstack',
-    createArgs: ['--type', 'fullstack', '--frontends', 'web,app,miniapp,desktop', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm'],
+    createArgs: ['--type', 'fullstack', '--frontends', 'web,app,miniapp,desktop', '--defaults', '--no-install', '--no-git', '--package-manager', 'pnpm'],
     expectedFiles: ['e2e/fullstack.spec.ts', 'packages/sample-fullstack-serv/package.json'],
   },
 ] as const
@@ -149,7 +151,11 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     const projectPath = path.join(root, 'sample-static-website')
     const basePath = '/scaffold-static'
     const baseUrl = `${await allocateBaseUrl()}${basePath}/`
-    runNode([cliBin, '--cwd', root, 'create', 'sample-static-website', '--type', 'website', '--features', 'none', '--yes', '--no-install', '--no-git', '--package-manager', 'pnpm', '--no-examples'])
+    // 静态裁剪是既有工程的定制能力；create 固定 full，不再提供轻量参数入口。
+    await generateFromTemplates(projectPath, buildTemplateContext({ name: 'sample-static-website', appType: 'website', features: [], packageManager: 'pnpm' }))
+    await mkdir(path.join(projectPath, 'config'), { recursive: true })
+    for (const name of ['core', 'kit'])
+      await writeFile(path.join(projectPath, 'config', `_${name}.yml`), generateConfigFile(name))
     await replaceHaiPackageSpecifiers(projectPath)
     await addLocalHaiOverrides(projectPath)
     await removeReplacedHaiCatalogEntries(projectPath)

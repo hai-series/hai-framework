@@ -49,7 +49,7 @@ describe('generated environment profiles', () => {
   it.each(['website', 'api', 'fullstack'] as const)('%s 的 dev/test/prod 文件不再生成无消费的 DEBUG', async (appType) => {
     const root = await fixture()
     const name = `env-${appType}`
-    await createProject({ cwd: root, name, appType, features: [], yes: true, install: false, git: false, deploy: false, examples: false, frontends: ['web'], packageManager: 'pnpm' })
+    await createProject({ cwd: root, name, appType, defaults: true, install: false, git: false, deploy: false, frontends: ['web'], packageManager: 'pnpm' })
     const project = path.join(root, name)
     const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
     await expectProfiles(appType === 'api' ? service : project, service)
@@ -59,7 +59,7 @@ describe('generated environment profiles', () => {
 describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environment output gates', () => {
   it('fresh CLI Node 入口生成的 API 环境文件可由 Core 消费', async () => {
     const root = await fixture()
-    const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--yes', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
+    const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
     expect(created.error).toBeUndefined()
     expect(created.status, created.stderr).toBe(0)
     const service = path.join(root, 'env-binary/apps/env-binary-serv')

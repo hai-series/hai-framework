@@ -26,7 +26,7 @@ afterEach(async () => {
 async function create(appType: 'api' | 'fullstack' | 'website') {
   const root = await mkdtemp(path.join(tmpdir(), 'hai-generate-'))
   roots.push(root)
-  await createProject({ name: 'generated', appType, template: 'minimal', features: [], frontends: ['web'], cwd: root, yes: true, install: false, git: false, deploy: false, examples: false, packageManager: 'pnpm' })
+  await createProject({ name: 'generated', appType, frontends: ['web'], cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
   return path.join(root, 'generated')
 }
 

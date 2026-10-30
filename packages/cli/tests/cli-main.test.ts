@@ -128,33 +128,23 @@ describe('cli-main', () => {
 
   it('wires create command options to createProject', async () => {
     await getCommandAction('create [name]')('demo-api', {
-      cwd: 'C:/workspace',
-      examples: false,
-      features: 'db,cache',
-      frontends: 'web,app',
+      cwd: 'C:/workspace',      frontends: 'web,app',
       git: false,
       install: false,
-      packageManager: 'pnpm',
-      template: 'custom',
-      type: 'api',
+      packageManager: 'pnpm',      type: 'api',
       verbose: true,
-      yes: true,
+      defaults: true,
     })
 
     expect(commandMocks.createProject).toHaveBeenCalledWith({
       appType: 'api',
-      cwd: 'C:/workspace',
-      examples: false,
-      features: ['db', 'cache'],
-      frontends: ['web', 'app'],
+      cwd: 'C:/workspace',      frontends: ['web', 'app'],
       git: false,
       gitRemote: undefined,
       install: false,
       name: 'demo-api',
-      packageManager: 'pnpm',
-      template: 'custom',
-      verbose: true,
-      yes: true,
+      packageManager: 'pnpm',      verbose: true,
+      defaults: true,
     })
   })
 

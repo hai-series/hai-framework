@@ -507,6 +507,10 @@ function buildFullstackCatalogPackages(frontends: readonly FrontendTarget[], dep
     packageNames.push('@h-ai/ai')
   if (features.vecdb)
     packageNames.push('@h-ai/vecdb')
+  if (features.payment)
+    packageNames.push('@h-ai/payment')
+  if (features.datapipe)
+    packageNames.push('@h-ai/datapipe')
 
   return pickCatalogPackages(packageNames, FULLSTACK_CATALOG_PACKAGES)
 }

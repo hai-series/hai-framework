@@ -189,14 +189,11 @@ describe('createProject — api 类型', () => {
     await createProject({
       name: 'proj-api',
       appType: 'api',
-      template: 'custom',
-      features: ['db', 'cache'],
       moduleConfigs: {
         core: { name: 'proj-api', defaultLocale: 'zh-CN' },
         db: { type: 'sqlite', database: './data/app.db' },
         cache: { type: 'memory' },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -212,7 +209,7 @@ describe('createProject — api 类型', () => {
   it('aPI仅选crypto时生成私有密钥环并补充RelDB registry依赖', async () => {
     const name = 'proj-api-crypto-only'
     const directory = path.join(tmpRoot, name)
-    await createProject({ name, appType: 'api', template: 'custom', features: ['crypto'], moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
+    await createProject({ name, appType: 'api', moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
     const prefix = `apps/${name}-serv`
     const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
@@ -267,10 +264,10 @@ describe('createProject — api 类型', () => {
 
   it('应生成 config/_serv.yml', async () => {
     const content = await readText(projectPath, 'apps/proj-api-serv/config/_serv.yml')
-    expect(content).toContain('transport: $' + '{HAI_SERV_TRANSPORT:false}')
+    expect(content).toContain('maxPlaintextBytes:')
     expect(content).toContain('apiPrefix: $' + '{HAI_SERV_HTTP_APIPREFIX:/api/v1}')
     expect(content).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
-    expect(content).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:false}')
+    expect(content).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:true}')
     expect(content).toContain(
       'nativeOrigins: $' + '{HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
     )
@@ -347,8 +344,8 @@ describe('createProject — api 类型', () => {
     expect(procedures).toContain('.implement(appContract)')
     expect(procedures).toContain('.context<ServContext>()')
     expect(procedures).toContain('.route(\'info\'')
-    expect(procedures).toContain('.route(\'echo\',')
-    expect(procedures).not.toContain('.auth()')
+    expect(procedures).toContain('.route(\'echo\'')
+    expect(procedures).toContain('.auth()')
     expect(procedures).toContain('.build()')
     expect(procedures).not.toContain('$context')
     expect(procedures).not.toContain('requireAuth')
@@ -360,15 +357,12 @@ describe('createProject — api 类型', () => {
     await createProject({
       name: 'proj-api-iam',
       appType: 'api',
-      template: 'custom',
-      features: ['iam', 'db', 'cache'],
       moduleConfigs: {
         core: { name: 'proj-api-iam', defaultLocale: 'zh-CN' },
         db: { type: 'sqlite', database: './data/app.db' },
         cache: { type: 'memory' },
         iam: { loginPassword: true, loginOtp: false },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -422,12 +416,10 @@ describe('createProject — --yes 非交互默认配置', () => {
     await createProject({
       name: 'proj-api-yes',
       appType: 'api',
-      template: 'minimal',
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
-      yes: true,
+      defaults: true,
       verbose: false,
       cwd: tmpRoot,
     })
@@ -460,15 +452,12 @@ describe('createProject — admin 类型 + iam', () => {
     await createProject({
       name: 'proj-admin',
       appType: 'admin',
-      template: 'custom',
-      features: ['iam', 'db', 'cache', 'crypto'],
       moduleConfigs: {
         core: { name: 'proj-admin', defaultLocale: 'zh-CN' },
         db: { type: 'sqlite', database: './data/app.db' },
         cache: { type: 'memory' },
         iam: { loginPassword: true, loginOtp: false },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -592,12 +581,9 @@ describe('createProject — git remote', () => {
     await createProject({
       name: 'proj-git-remote',
       appType: 'api',
-      template: 'custom',
-      features: [],
       moduleConfigs: {
         core: { name: 'proj-git-remote', defaultLocale: 'zh-CN' },
       },
-      examples: false,
       install: false,
       git: true,
       gitRemote: 'https://github.com/test/test-repo.git',
@@ -652,12 +638,9 @@ describe('createProject — website 类型', () => {
     await createProject({
       name: 'proj-website',
       appType: 'website',
-      template: 'custom',
-      features: [],
       moduleConfigs: {
         core: { name: 'proj-website', defaultLocale: 'zh-CN' },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -734,12 +717,9 @@ describe('createProject — h5 类型', () => {
     await createProject({
       name: 'proj-h5',
       appType: 'h5',
-      template: 'custom',
-      features: [],
       moduleConfigs: {
         core: { name: 'proj-h5', defaultLocale: 'zh-CN' },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -782,12 +762,9 @@ describe('createProject — mobile-app 类型', () => {
     await createProject({
       name: 'proj-mobile',
       appType: 'mobile-app',
-      template: 'custom',
-      features: ['api-client', 'capacitor'],
       moduleConfigs: {
         core: { name: 'proj-mobile', defaultLocale: 'zh-CN' },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -853,6 +830,19 @@ describe('createProject — mobile-app 类型', () => {
     expect(agents).not.toContain('adapter-static')
     await expectCompatibleSkills(projectPath, 'mobile-app')
   })
+
+  it('完整客户端只生成浏览器所需依赖与配置，不携带服务端环境', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    expect(pkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_SPECIFIER)
+    for (const name of ['ai', 'reldb', 'cache', 'storage', 'iam']) {
+      expect(pkg.dependencies).not.toHaveProperty(`@h-ai/${name}`)
+      expect(await exists(projectPath, `config/_${name === 'reldb' ? 'db' : name}.yml`)).toBe(false)
+    }
+    for (const file of ['.env', '.env.prod']) {
+      const environment = await readText(projectPath, file)
+      expect(environment).not.toMatch(/^HAI_(?:DB_|CACHE_|STORAGE_|AI_|CRYPTO_TRANSPORT_SERVERKEYRING)/m)
+    }
+  })
 })
 
 // =============================================================================
@@ -868,12 +858,9 @@ describe('createProject — fullstack 类型', () => {
       name: 'proj-fullstack',
       appType: 'fullstack',
       frontends: ['web', 'app', 'miniapp', 'desktop'],
-      template: 'custom',
-      features: [],
       moduleConfigs: {
         core: { name: 'proj-fullstack', defaultLocale: 'zh-CN' },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -944,7 +931,7 @@ describe('createProject — fullstack 类型', () => {
     expect(dockerignoreLines).toContain('**/.hai')
     expect(dockerignoreLines).not.toContain('.env')
     expect(dockerignoreLines).not.toContain('.env.*')
-    await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], yes: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
+    await createProject({ name: 'proj-fullstack-env-other', appType: 'fullstack', frontends: ['web'], defaults: true, install: false, git: false, cwd: tmpRoot, packageManager: 'pnpm' })
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.dev')).not.toContain(password)
     expect(await readText(path.join(tmpRoot, 'proj-fullstack-env-other'), '.env.dev')).not.toContain(ring.data.keys[ring.data.activeKeyId]!.privateKey)
   }, 30_000)
@@ -1016,6 +1003,8 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.scripts.start).toBe('node --env-file=../../.env --env-file=../../.env.prod --env-file-if-exists=../../.env.local dist/index.js')
+    expect(pkg.dependencies['@h-ai/payment']).toBe('catalog:')
+    expect(pkg.dependencies['@h-ai/datapipe']).toBe('catalog:')
     expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/data/.gitkeep')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
@@ -1023,10 +1012,12 @@ describe('createProject — fullstack 类型', () => {
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/app-server.test.ts')).toBe(true)
 
     // 实际 create 命令不能覆盖模板生成的可选配置和 Reach 标准通知模板。
-    for (const moduleKey of ['ai', 'vecdb', 'payment']) {
+    for (const moduleKey of ['ai', 'vecdb']) {
       const content = await readText(projectPath, `packages/proj-fullstack-serv/config/_${moduleKey}.yml`)
-      expect(parse(content)).toBeNull()
+      expect(parse(content)).not.toBeNull()
     }
+    // 支付需要显式提供商户配置；完整生成不自动启用未配置的支付通道。
+    expect(parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_payment.yml'))).toBeNull()
     const scheduler = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_scheduler.yml'))
     expect(scheduler).toEqual({ enableDb: '$' + '{HAI_SCHEDULER_ENABLEDB:true}', tickInterval: '$' + '{HAI_SCHEDULER_TICKINTERVAL:1000}', leaseMs: '$' + '{HAI_SCHEDULER_LEASEMS:300000}' })
     const audit = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_audit.yml'))
@@ -1036,7 +1027,7 @@ describe('createProject — fullstack 类型', () => {
     expect(audit.alerts.schedule.enabled).toBe('$' + '{HAI_AUDIT_ALERTS_SCHEDULE_ENABLED:false}')
     const reach = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_reach.yml'))
     expect(reach.templates.map((template: { name: string }) => template.name)).toEqual(['otp_email', 'otp_sms', 'password_reset', 'password_reset_sms'])
-    expect(await readText(projectPath, '.env.example')).toContain('# HAI_AI_LLM_APIKEY=')
+    expect(await readText(projectPath, '.env.example')).toContain('\nHAI_AI_LLM_APIKEY=')
     // 公共 .env 提供基础参数，私有值仅放 .env.local。
     const envDefaults = (await readText(projectPath, '.env.example')).split('\n').filter(line => /^HAI_(?:CORE|DB|CACHE|STORAGE)_/.test(line))
     expect(envDefaults).toContain('HAI_DB_TYPE=\'sqlite\'')
@@ -1050,7 +1041,7 @@ describe('createProject — fullstack 类型', () => {
     expect(servConfig).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:true}')
 
     const appServer = await readText(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')
-    expect(appServer).toContain('import type { ServHttpApp } from \'@h-ai/serv\'')
+    expect(appServer).toContain('import type { CreateServContext, ServHttpApp } from \'@h-ai/serv\'')
     expect(appServer).toContain('createServerApp(): ServHttpApp')
     expect(appServer).toContain('serv.createApp')
     expect(appServer).not.toContain('from \'hono\'')
@@ -1359,12 +1350,9 @@ describe('createProject — fullstack 前端条件生成', () => {
       name: 'proj-fullstack-web-only',
       appType: 'fullstack',
       frontends: ['web'],
-      template: 'custom',
-      features: [],
       moduleConfigs: {
         core: { name: 'proj-fullstack-web-only', defaultLocale: 'zh-CN' },
       },
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
@@ -1394,13 +1382,10 @@ describe('createProject — fullstack --yes 默认前端', () => {
     await createProject({
       name: 'proj-fullstack-yes',
       appType: 'fullstack',
-      template: 'custom',
-      features: [],
-      examples: false,
       install: false,
       git: false,
       packageManager: 'pnpm',
-      yes: true,
+      defaults: true,
       verbose: false,
       cwd: tmpRoot,
     })

@@ -10,9 +10,8 @@ import process from 'node:process'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { cliM } from './cli-i18n.js'
-import { getCliVersion, writeCliError, writeCliMessage } from './cli-utils.js'
+import { getCliVersion, writeCliMessage } from './cli-utils.js'
 import { addModule, buildCommand, createProject, deployCommand, deploySecretsCommand, feedbackCommand, generate, initProject, upgradeCommand } from './commands/cli-commands.js'
-import { parseCreateFeatures } from './commands/cli-create.js'
 
 // CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
 const VERSION = getCliVersion()
@@ -29,32 +28,14 @@ cli
   .command('create [name]', cliM('cli_help_create'))
   .option('--type <type>', cliM('cli_help_appType'))
   .option('--frontends <targets>', cliM('cli_help_frontends'))
-  .option('-t, --template <template>', cliM('cli_help_template'))
-  .option('-f, --features <features>', cliM('cli_help_features'))
-  .option('--examples', cliM('cli_help_examples'))
-  .option('--no-examples', cliM('cli_help_noExamples'))
   .option('--no-install', cliM('cli_help_noInstall'))
   .option('--no-deploy', cliM('cli_help_noDeploy'))
   .option('-p, --package-manager <pm>', cliM('cli_help_packageManager'))
   .option('--no-git', cliM('cli_help_noGit'))
   .option('--git-remote <url>', cliM('cli_help_gitRemote'))
-  .option('-y, --yes', cliM('cli_help_yes'))
+  .option('--defaults', cliM('cli_help_defaults'))
   .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
-      // 解析功能列表
-      let features: CreateProjectOptions['features']
-      if (options.features !== undefined) {
-        try {
-          if (typeof options.features !== 'string')
-            throw new Error(cliM('cli_createFeaturesInvalid'))
-          features = parseCreateFeatures(options.features)
-        }
-        catch (error) {
-          writeCliError(cliM('cli_createFailed'), error)
-          process.exitCode = 1
-          return
-        }
-      }
       const frontends = typeof options.frontends === 'string'
         ? options.frontends.split(',').map(f => f.trim()).filter(Boolean) as FrontendTarget[]
         : undefined
@@ -63,15 +44,12 @@ cli
         name: name ?? '',
         appType: options.type as AppType,
         frontends,
-        template: options.template as CreateProjectOptions['template'],
-        features,
         deploy: options.deploy as boolean,
-        examples: options.examples as boolean,
         install: options.install as boolean,
         packageManager: options.packageManager as CreateProjectOptions['packageManager'],
         git: options.git as boolean,
         gitRemote: options.gitRemote as string,
-        yes: options.yes as boolean,
+        defaults: options.defaults as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
       })

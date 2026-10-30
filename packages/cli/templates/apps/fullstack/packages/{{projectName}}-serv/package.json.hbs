@@ -43,11 +43,17 @@
     "@h-ai/cache": "{{haiPackageSpecifier}}",
     "@h-ai/core": "{{haiPackageSpecifier}}",
     "@h-ai/crypto": "{{haiPackageSpecifier}}",
+{{#if features.datapipe}}
+    "@h-ai/datapipe": "{{haiPackageSpecifier}}",
+{{/if}}
 {{#if features.feedback}}
     "@h-ai/api-contract": "{{haiPackageSpecifier}}",
     "@h-ai/feedback": "{{haiPackageSpecifier}}",
 {{/if}}
     "@h-ai/iam": "{{haiPackageSpecifier}}",
+{{#if features.payment}}
+    "@h-ai/payment": "{{haiPackageSpecifier}}",
+{{/if}}
     "@h-ai/reach": "{{haiPackageSpecifier}}",
     "@h-ai/reldb": "{{haiPackageSpecifier}}",
     "@h-ai/scheduler": "{{haiPackageSpecifier}}",

@@ -1,5 +1,5 @@
 import type { FeatureId } from '../src/cli-types.js'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -26,7 +26,7 @@ describe('fullstack 默认反馈生成', () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-default-'))
     temporaryRoots.push(root)
     const name = 'default-feedback'
-    await createProject({ name, appType: 'fullstack', frontends: ['web'], yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    await createProject({ name, appType: 'fullstack', frontends: ['web'], defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
     const directory = path.join(root, name)
     const service = `packages/${name}-serv`
     const shared = `packages/${name}-shared`
@@ -55,30 +55,25 @@ describe('fullstack 默认反馈生成', () => {
   it.each([
     { label: '显式空选择', features: [] as FeatureId[] },
     { label: '显式其它模块', features: ['ai'] as FeatureId[] },
-  ])('$label 保留用户意图，不自动启用反馈', async ({ features }) => {
+  ])('$label 已移除，在写入文件前明确拒绝', async ({ features }) => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-explicit-'))
     temporaryRoots.push(root)
     const name = 'explicit-features'
-    await createProject({ name, appType: 'fullstack', frontends: ['web'], features, yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })
-    const directory = path.join(root, name)
-    const service = `packages/${name}-serv`
-    const manifest: { dependencies: Record<string, string> } = JSON.parse(await readFile(path.join(directory, service, 'package.json'), 'utf8'))
-    expect(manifest.dependencies['@h-ai/feedback']).toBeUndefined()
-    expect(parse(await readFile(path.join(directory, service, 'config/_feedback.yml'), 'utf8'))).toBeNull()
-    expect(parseEnv(await readFile(path.join(directory, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('1048576')
-    expect(await readFile(path.join(directory, `packages/${name}-shared/src/lib/components/AppShell.svelte`), 'utf8')).not.toContain('<FeedbackEntry />')
+    const options = Object.assign({ name, appType: 'fullstack' as const, frontends: ['web'] as const, defaults: true, install: false, git: false, packageManager: 'pnpm' as const, cwd: root }, { features })
+    await expect(createProject({ ...options, frontends: ['web'] })).rejects.toThrow('create')
+    expect(await readdir(root)).toEqual([])
   })
 
-  it('aPI 工程未指定 features 时保持原有默认模块，不全局启用反馈', async () => {
+  it('api 新工程也包含完整反馈能力与自动容量预算', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'hai-feedback-api-default-'))
     temporaryRoots.push(root)
     const name = 'default-api'
-    await createProject({ name, appType: 'api', yes: true, examples: false, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    await createProject({ name, appType: 'api', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
     const directory = path.join(root, name)
     const service = `apps/${name}-serv`
     const manifest: { dependencies: Record<string, string> } = JSON.parse(await readFile(path.join(directory, service, 'package.json'), 'utf8'))
-    expect(manifest.dependencies['@h-ai/feedback']).toBeUndefined()
-    expect(parseEnv(await readFile(path.join(directory, service, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('1048576')
-    expect(await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')).not.toContain('createFeedbackProcedures')
+    expect(manifest.dependencies['@h-ai/feedback']).toBe('catalog:')
+    expect(parseEnv(await readFile(path.join(directory, service, '.env.example'), 'utf8')).HAI_SERV_TRANSPORT_MAXPLAINTEXTBYTES).toBe('auto')
+    expect(await readFile(path.join(directory, service, 'src/server/procedures/index.ts'), 'utf8')).toContain('createFeedbackProcedures')
   })
 })

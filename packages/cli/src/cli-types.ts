@@ -230,7 +230,7 @@ export interface AiModuleConfig {
  * 项目创建选项
  * @example 模块内部上下文
  * ```ts
- * const options: CreateProjectOptions = { name: 'shop', appType: 'api', features: ['ai'], packageManager: 'pnpm', yes: true, install: false, git: false, deploy: false } // AI 自动补 db/vecdb。
+ * const options: CreateProjectOptions = { name: 'shop', appType: 'api', packageManager: 'pnpm', defaults: true, install: false, git: false, deploy: false }
  * ```
  */
 export interface CreateProjectOptions extends GlobalOptions {
@@ -242,14 +242,8 @@ export interface CreateProjectOptions extends GlobalOptions {
   appType?: AppType
   /** 前后端分离工程的前端目标 */
   frontends?: FrontendTarget[]
-  /** 项目模板 */
-  template?: 'default' | 'minimal' | 'full' | 'custom'
-  /** 选择的功能；非fullstack的[]明确不选，CLI的--features none映射为[]。fullstack保留架构必需模块。 */
-  features?: FeatureId[]
   /** 模块配置 */
   moduleConfigs?: ModuleConfigs
-  /** 是否添加示例代码 */
-  examples?: boolean
   /** 是否安装依赖 */
   install?: boolean
   /** 包管理器 */
@@ -259,7 +253,7 @@ export interface CreateProjectOptions extends GlobalOptions {
   /** Git 远程仓库地址 */
   gitRemote?: string
   /** 使用默认值跳过交互 */
-  yes?: boolean
+  defaults?: boolean
 }
 
 /**
