@@ -186,7 +186,7 @@ fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化
 
 ### 问题反馈与离线分析
 
-使用 `hai create my-app --type fullstack --frontends web --defaults` 默认启用反馈；API 工程需显式选择 `--features feedback`。普通成员及业务操作员可提交反馈，business_operator 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。生成收集入口、分页管理页和服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 disabled/console/reach，默认 console 只输出 metadata。需要摘要时显式设 consoleContent: summary，需要实际发送时再配置 Reach 通道与收件人。
+使用 `hai create my-app --type fullstack --frontends web --defaults` 默认启用反馈；API 工程也默认包含反馈，无需额外参数。普通成员及业务操作员可提交反馈，`business_operator` 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。Fullstack 生成收集入口、分页管理页和服务端接口；API 工程生成服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 `disabled`、`console` 或 `reach`，默认 `console` 只输出 `metadata`。需要摘要时显式设 `consoleContent: summary`，需要实际发送时再配置 Reach 通道与收件人。
 
 业务扩展在 feedback.init(config, { collectEvidence }) 中 await 文本/ZIP 等材料；_feedback.yml 提供 businessCollectionTimeoutMs、webhookUrl/webhookSecret/webhookTimeoutMs。Webhook 独立持久重试，详情可查看状态并重试；密钥仅放服务端私有环境。见 [feedback 配置与示例](../feedback/README.md)。
 

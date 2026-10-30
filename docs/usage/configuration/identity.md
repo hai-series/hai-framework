@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | `login.password` / `otp` | true / true | 启用密码/一次性验证码；OTP 还需配置通道和可用发送回调，可接应用已有服务或可选 Reach，不是打开按钮就能送达 |
 | `login.ldap` / `apikey` | false / false | 启用目录/API Key 策略；API Key 不等同于交互网页登录 |
-| `register.enabled` | true | false 关闭公开注册；员工应用通常按业务关闭 |
+| `register.enabled` | `true` | `false` 关闭公开注册；员工应用通常按业务关闭 |
 | `register.defaultAccountStatus` | active | active 注册后可登录；dormant 创建为休眠账号，等待管理员激活。仅影响新自助注册账号，管理员创建可另选状态 |
 | `agreements.showOnRegister` / `showOnLogin` | true / false | 控制公开认证页协议入口；未提供内容不会自动生成法务文本 |
 | `userAgreementMarkdown` / `privacyPolicyMarkdown` | 无默认 | 内嵌内容，须经业务审定；对应 URL 字段也无默认 |
@@ -44,7 +44,7 @@ agreements:
 | `searchFilter` | `(uid={{username}})` | 账号查找规则；占位符由框架替换并转义，按目录实际属性配置 |
 | `usernameAttribute` | uid | 目录条目中作为应用用户名的属性 |
 | `emailAttribute` / `displayNameAttribute` | mail / cn | 同步邮箱和显示名称所读取的属性；不改变目录侧权限 |
-| `useTls` | false | 对 ldap:// 连接启用 StartTLS；ldaps:// 已使用 TLS，不重复执行 StartTLS |
+| `useTls` | `false` | 对 `ldap://` 连接启用 StartTLS；`ldaps://` 已使用 TLS，不重复执行 StartTLS |
 | `connectTimeout` | 5000 毫秒 | 连接及目录操作的超时预算，最小 1000；提高值会延长依赖故障时的等待 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
@@ -69,10 +69,10 @@ ldap:
 | 配置（`password` 下） | 框架默认 | 调整后的影响 |
 | --- | --- | --- |
 | `minLength`/`maxLength` | 8/128 | 范围越严越影响输入体验；最大允许256，示例12不是默认 |
-| `requireUppercase`/`requireLowercase`/`requireNumber` | true/true/true | 分别要求大写、小写、数字；关闭一项不代表关闭其他项 |
+| `requireUppercase`/`requireLowercase`/`requireNumber` | 均为 `true` | 分别要求大写、小写、数字；关闭一项不代表关闭其他项 |
 | `requireSpecialChar`/`minCharacterClasses` | false/0 | 可增加特殊字符或最少字符类别；类别计数与显式必含规则一起生效 |
-| `requireInitialChange` | false | true 要求被标记为初始凭据的账号先改密，不会自动把全部老账号标为初始密码 |
-| `preventSamePassword` | false | true 拒绝复用当前密码；不是完整历史密码库 |
+| `requireInitialChange` | `false` | `true` 要求被标记为初始凭据的账号先改密，不会自动把全部老账号标为初始密码 |
+| `preventSamePassword` | `false` | `true` 拒绝复用当前密码；不是完整历史密码库 |
 | `expirationDays` | 0 | 0 不启用定期到期策略；正值按天限制，需配套改密和恢复流程 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
@@ -114,12 +114,12 @@ passwordReset:
 | 配置（`session` 下） | 框架默认 | 取值影响 |
 | --- | --- | --- |
 | `maxAge`/`refreshTokenMaxAge` | 86400/604800秒 | 访问凭据与刷新凭据分别计时；访问到期不必然要求用户立即重登 |
-| `sliding` | true | 允许按实现续期；不能绕过绝对/闲置期限 |
+| `sliding` | `true` | 允许按实现续期；不能绕过绝对/闲置期限 |
 | `idleTimeout`/`absoluteTimeout` | 0/0秒 | 0 关闭额外限制；正值分别按实际业务闲置、会话总时长限制，自动刷新不延长闲置 |
-| `endOnPageHide` | false | true 尝试在页面隐藏/退出时结束；浏览器送达尽力而为，不能作为唯一撤销保障 |
-| `singleDevice`/`singleDeviceMode` | false/replace | 开启单设备策略后 replace 替换旧会话，reject 拒绝新登录 |
+| `endOnPageHide` | `false` | `true` 尝试在页面隐藏/退出时结束；浏览器送达尽力而为，不能作为唯一撤销保障 |
+| `singleDevice`/`singleDeviceMode` | `false` / `replace` | 开启单设备策略后，`replace` 替换旧会话，`reject` 拒绝新登录 |
 | `maxSessions` | 0 | 0 不限额；正数控制总会话数，需用独立上下文确认 |
-| `terminalLimits`/`terminalLimitMode` | `{}`/reject | 显式列终端后，未列出的 web/app/desktop/api 不能新登录；replace 替换旧配额，终端标识不是硬件证明 |
+| `terminalLimits`/`terminalLimitMode` | `{}` / `reject` | 显式列终端后，未列出的 `web`、`app`、`desktop`、`api` 不能新登录；`replace` 替换旧配额，终端标识不是硬件证明 |
 
 ```yaml schema=@h-ai/iam:IamConfigSchema
 session:
@@ -152,10 +152,10 @@ session:
 
 | 配置 | 框架默认 | 作用与条件 |
 | --- | --- | --- |
-| `security.lockoutEnabled` | true | 账号失败累计锁定，不替代网络/接口限流 |
+| `security.lockoutEnabled` | `true` | 账号失败累计锁定，不替代网络/接口限流 |
 | `failureWindow`/`maxLoginAttempts`/`lockoutDuration` | 86400秒/5次/900秒 | 分别是累计窗口、阈值、锁定时长，不能把窗口当锁定期 |
-| `captcha.enabled` | false | 开启自托管计算挑战，标准 AuthPanel 自动接入，自定义请求也要传用途对应挑战 |
-| `captcha`.`ttlSeconds`/cost/`maxCounter` | 120秒/5000/100 | 提高计算量可能影响低性能设备，按真实设备耗时选择 |
+| `captcha.enabled` | `false` | 开启自托管计算挑战，标准 AuthPanel 自动接入，自定义请求也要传用途对应挑战 |
+| `captcha.ttlSeconds` / `captcha.cost` / `captcha.maxCounter` | 120秒/5000/100 | 提高计算量可能影响低性能设备，按真实设备耗时选择 |
 | `otp.email` / `sms` | 对象内 true/true | 能否送达仍需通道，不能由配置替代 |
 | `otp.length` / `expiresIn` / `maxAttempts` / `resendInterval` | 6位/300秒/3次/60秒 | 期限、错误次数和重发冷却分别限制，过期/重放仍服务端拒绝 |
 
@@ -219,7 +219,7 @@ loginAccess:
 | 配置 | 框架默认 | 影响 |
 | --- | --- | --- |
 | `rbac.enabled` / `superAdminRole` / `defaultRole` | true/super_admin/user | 默认角色按业务最小权限；示例 admin 不应作为公开注册角色 |
-| `seedDefaultData` | true | 初始化框架默认角色/权限，不代替应用资源授权 |
+| `seedDefaultData` | `true` | 初始化框架默认角色/权限，不代替应用资源授权 |
 | `reauthentication`.`enabled`/`operations`/`ttlSeconds` | 对象内 false/[]/300秒 | 指定敏感操作的一次性证明；仅加操作名不会自动保护自定义接口，两端接同名守卫 |
 | `apikey`.`maxKeysPerUser`/`defaultExpirationDays`/`prefix` | 对象内10/0天/hai_ | 0 表示无默认到期；scopes 只收敛现有角色授权，不授予额外权限 |
 
@@ -234,7 +234,7 @@ apikey: { maxKeysPerUser: 10, defaultExpirationDays: 30, prefix: 'orders_' }
 
 `apikey.prefix` 只是新生成 Key 的开头。例如 `orders_` 会生成形如 `orders_<随机内容>` 的 Key，便于区分应用；它不增加权限，也不应包含密码。修改前缀只影响之后创建的 Key，已有 Key 不会被重写。
 
-UI 使用 `createSensitiveActions`/ReauthenticationDialog；服务端仍校验用户、会话、操作、资源范围并单次消费证明。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
+UI 使用 `createSensitiveActions` / `ReauthenticationDialog`；服务端仍校验用户、会话、操作、资源范围并单次消费证明。取消验证不发送敏感业务请求。通过普通用户/管理员/跨资源 ID 的请求验证边界，不能只看按钮是否隐藏。
 
 ## 账号生命周期与管理
 
@@ -246,11 +246,11 @@ UI 使用 `createSensitiveActions`/ReauthenticationDialog；服务端仍校验�
 
 | 状态 | 用户会遇到什么 | 管理人员如何处理 |
 | --- | --- | --- |
-| active，激活 | 可以继续按密码、时间、来源、权限和有效期等策略进行鉴别和访问 | 核对其他策略；激活本身不授予业务权限 |
-| dormant，休眠 | 拒绝新登录及旧 `access`/refresh 凭据 | 核实身份和使用需求后激活，用户重新登录 |
-| closed，注销 | 拒绝鉴别与既有凭据，保留账号记录 | 按业务注销及个人数据保留流程处理；物理删除另用 `deleteUser` |
+| `active`，激活 | 可以继续按密码、时间、来源、权限和有效期等策略进行鉴别和访问 | 核对其他策略；激活本身不授予业务权限 |
+| `dormant`，休眠 | 拒绝新登录及旧 `access` / `refresh` 凭据 | 核实身份和使用需求后激活，用户重新登录 |
+| `closed`，注销 | 拒绝鉴别与既有凭据，保留账号记录 | 按业务注销及个人数据保留流程处理；物理删除另用 `deleteUser` |
 
-账号默认类型为 permanent（长期），状态为 active。temporary（临时）账号必须提供将来的 `accountExpiresAt`；到期后不能继续使用原会话。更改状态、类型或有效期会推进凭据代际并撤销旧会话，重新激活不会恢复旧凭据。只保存没有变化的状态和资料不会无故登出用户。
+账号默认类型为 `permanent`（长期），状态为 `active`。`temporary`（临时）账号必须提供将来的 `accountExpiresAt`；到期后不能继续使用原会话。更改状态、类型或有效期会推进凭据代际并撤销旧会话，重新激活不会恢复旧凭据。只保存没有变化的状态和资料不会无故登出用户。
 
 在 Fullstack 的“用户管理”中编辑账号，“账号状态”只提供激活、休眠、注销三个选项。保存后核对列表中的状态；选择休眠或注销后，目标用户需要先由管理员恢复为激活，再重新登录。前端隐藏菜单不能代替这些服务端检查。
 

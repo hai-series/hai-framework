@@ -14,8 +14,8 @@
 | `apiKey`/`baseUrl` | 无Schema默认，按协议解析 | 模型项可覆盖全局；OpenAI与Anthropic的环境回退及地址继承不同，见下表 |
 | `maxTokens`/`temperature`/`timeout` | 4096/0.7/60000ms | 输出预算、采样参数和请求期限不同；更大预算可能增加费用/延迟，模型可能不支持某些参数 |
 | `tempModelCacheTtl` | 600000ms | 临时模型缓存期限，不是业务会话保留时间 |
-| `models` | 可省略 | 注册多个模型，每项 id/`model` 必填；`protocol`/`apiKey`/`baseUrl`/`maxTokens`/`temperature`/`timeout` 可分别覆盖全局 |
-| `scenarios` | 可省略 | 为chat/`reasoning`/plan/`execute`/`extraction`/`summary`/`embedding`/`rerank`/ocr/fast/`default`指定模型id；调用显式选择优先 |
+| `models` | 可省略 | 注册多个模型，每项 `id`、`model` 必填；`protocol`/`apiKey`/`baseUrl`/`maxTokens`/`temperature`/`timeout` 可分别覆盖全局 |
+| `scenarios` | 可省略 | 为 `chat`、`reasoning`、`plan`、`execute`、`extraction`、`summary`、`embedding`、`rerank`、`ocr`、`fast`、`default` 指定模型 `id`；调用显式选择优先 |
 
 ![从模型选择到 protocol 对应的供应商请求格式](../images/ai-model-routing.svg)
 
@@ -87,7 +87,7 @@ LLM 的协议字段统一叫 `protocol`，取值仍为 `chat | responses | anthr
 | --- | --- | --- |
 | `embedding`.`dimensions`/`batchSize` | 维度无默认/100 | 模型支持时指定输出维度；批次越大不一定越快，受服务上限约束 |
 | `knowledge`.`collection`/`dimension` | hai_ai_knowledge/1536 | 集合维度必须与`embedding`一致；换模型/维度需新集合与重建索引 |
-| `enableEntityExtraction` | true | 提取实体可能增加模型调用；false关闭此步骤，不等于关闭向量化 |
+| `enableEntityExtraction` | `true` | 提取实体可能增加模型调用；`false` 关闭此步骤，不等于关闭向量化 |
 | `cleanOptions` | Datapipe默认 | 去HTML、规范空白、trim；是否去URL/邮箱按业务选择 |
 | `chunkOptions` | markdown/1500/overlap200 | 与独立Datapipe默认overlap0不同，分块失败不能静默退回整篇 |
 | `entityBoostWeight` | 0.15 | 实体命中分数增益，范围0–1；需用实际查询评估 |
@@ -140,9 +140,9 @@ metric: cosine
 
 | 配置 | 框架默认（对象存在时） | 影响 |
 | --- | --- | --- |
-| `memory`.`provider`/`allowEphemeralFallback` | native/false | mem0当前映射qdrant；pgvector SDK连接不能公开关闭，拒绝使用；其他后端不得静默退内存，生产始终要求真实持久连接 |
+| `memory.provider` / `memory.allowEphemeralFallback` | `native` / `false` | `mem0` 当前映射 `qdrant`；`pgvector` SDK 连接不能公开关闭，拒绝使用；其他后端不得静默退内存，生产始终要求真实持久连接 |
 | `maxEntriesPerObject`/`maxEntriesGlobal` | 1000/100000 | 主体与全局容量限制，主体淘汰不应误删其他主体数据 |
-| `recencyDecay`/`embeddingEnabled` | 0.95/true | 时间衰减及向量检索开关，需评估旧记忆保留和检索成本 |
+| `recencyDecay`/`embeddingEnabled` | 0.95 / `true` | 时间衰减及向量检索开关，需评估旧记忆保留和检索成本 |
 | `defaultTopK`/`candidateMultiplier`/`writebackRelatedTopK` | 10/5/20 | 输出条数、候选倍数及写回关联候选，改变检索/写回成本 |
 | `memory.systemPrompt`、`summary.systemPrompt`、`file.systemPrompt` | 无配置默认 | 使用实现内置提示；覆盖时保留安全和实际任务约束 |
 | `token.tokenRatio` | 0.25 | Token估算比例，不是供应商实际计费凭据 |
@@ -170,7 +170,7 @@ retrieval:
 | 项 | 框架默认 | 修改的影响 |
 | --- | --- | --- |
 | `audio.models` | 可省略 | 项目id/`provider`/`model`/`operations`必填，`operations`明确transcribe/synthesize；凭据字段按供应商要求 |
-| `inheritLlmApiKey` | false | true才允许音频继承LLM密钥；默认隔离避免串用账号 |
+| `inheritLlmApiKey` | `false` | `true` 才允许音频继承 LLM 密钥；默认隔离避免串用账号 |
 | `transcribeModel`/`synthesizeModel` | 无默认选择 | 指定注册id；Provider需支持对应操作，不能按名称推断 |
 | `maxAudioBytes`/`maxStreamDurationMs` | 10MiB/300000ms | 限制上传与实时流资源，增大需同步HTTP/代理预算 |
 | `image`.`models`/`generateModel` | 可省略/无默认选择 | 每项id/`provider`/`model`必填，`apiKey`/`baseUrl`/`workspaceId`按Provider提供 |

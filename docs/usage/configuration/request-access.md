@@ -12,8 +12,8 @@
 
 | 应用入口 | 配置位置 | 生效参数 | 默认行为 |
 | --- | --- | --- | --- |
-| 独立 API、Fullstack 的 Serv 后端 | `config/_serv.yml` | `http.access` → `serv.createApp({ http })` | false，不限制请求来源和时段 |
-| SvelteKit 的动态页面与接口 | `config/_kit.yml` | `access` → `kit.createHandle({ access })` | false，不限制请求来源和时段 |
+| 独立 API、Fullstack 的 Serv 后端 | `config/_serv.yml` | `http.access` → `serv.createApp({ http })` | `false`，不限制请求来源和时段 |
+| SvelteKit 的动态页面与接口 | `config/_kit.yml` | `access` → `kit.createHandle({ access })` | `false`，不限制请求来源和时段 |
 | 浏览器 Vite、静态导出、Nginx 静态文件 | 由实际入口服务器配置 | 没有 Node 请求处理链 | 本章 Node 策略不处理这些请求 |
 
 当前 CLI 的 API、Fullstack 和 SvelteKit 模板已经装配上述参数。已有应用升级时，核对自己的 `createApp` 或 `createHandle` 调用是否传入配置，避免只增加 YAML 却没有消费它。Kit 的策略和文件路径属于服务端配置；SSR 向浏览器传递配置时，只选取需要公开的字段。
@@ -65,14 +65,14 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 
 | 配置项 | 框架默认 | 用途与取值影响 |
 | --- | --- | --- |
-| `http.access` / `access` | false | false 关闭；对象开启内联策略，或用 `{ file: ... }` 引用一个文件 |
+| `http.access` / `access` | `false` | `false` 关闭；对象开启内联策略，或用 `{ file: ... }` 引用一个文件 |
 | `file` | 无默认 | `.yml` 或 `.yaml` 文件，最大 1 MiB；相对路径按服务工作目录解析 |
 | `global` | 省略 | 对宿主处理的全部请求增加条件，包括健康检查和密钥交换 |
 | `rules` | `[]` | 按路径和方法选择受限请求；最多 1000 条 |
 | `rules[].id` | 必填，无默认 | 唯一的规则编号，用于日志定位；1–64 个字母、数字、下划线、点或连字符 |
 | `rules[].paths` | 必填，无默认 | 1–100 个精确路径或末尾 `/**` 路径；不支持任意正则 |
 | `rules[].methods` | `[]` | 空数组包含全部方法；指定 POST 后只限制 POST，GET 不自动包含 HEAD |
-| `rules[].encryption` | 未设置，沿用宿主 | required 强制应用层加密；disabled 接收普通明文应用数据；均不改变 HTTPS、认证和 IP/时间条件 |
+| `rules[].encryption` | 未设置，沿用宿主 | `required` 强制应用层加密；`disabled` 接收普通明文应用数据；均不改变 HTTPS、认证和 IP/时间条件 |
 
 文件引用与内联的 `global/rules` 二选一，混合配置会报错。文件只包含策略正文，不再包一层 `http`、`access` 或 `serv`。
 
@@ -88,10 +88,10 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 | --- | --- | --- |
 | `allowIps` | `[]` | 空数组不限允许来源；非空时必须匹配至少一个 IPv4、IPv6 或 CIDR |
 | `denyIps` | `[]` | 明确拒绝的来源，优先于允许列表 |
-| `timezone` | UTC | 该条规则使用的 IANA 时区；每条规则独立解释，不继承全局时区 |
+| `timezone` | `UTC` | 该条规则使用的 IANA 时区；每条规则独立解释，不继承全局时区 |
 | `windows` | `[]` | 空数组不限时间；有窗口时，满足任意一个窗口即可通过该条时间条件 |
 | `windows[].days` | 必填 | 周一为 1，周日为 7；跨午夜填写开始日 |
-| `windows[].start/end` | 必填 | HH:mm，包含开始、不包含结束；结束早于开始表示跨午夜，相同值无效 |
+| `windows[].start/end` | 必填 | `HH:mm`，包含开始、不包含结束；结束早于开始表示跨午夜，相同值无效 |
 
 地址列表各最多 1000 项，时间窗口最多 100 个。配置了地址条件却没有可信客户端 IP 时，请求会被拒绝；不会把代理地址或请求正文里的 IP 当作用户地址。
 
@@ -105,15 +105,15 @@ Nginx 直达对象存储的下载也不经过 Node。若文件下载本身需要
 
 ### 2.4 外部接口使用普通 HTTPS，内部接口保持加密
 
-`encryption` 控制框架的应用层加解密，不控制 HTTPS。选择 disabled 后，请求体是普通 JSON，响应也是普通 JSON；不需要 `X-Client-Id` 或密钥协商。生产仍须使用 HTTPS，并保留接口需要的认证、签名、API Key、资源归属或重放控制。
+`encryption` 控制框架的应用层加解密，不控制 HTTPS。选择 `disabled` 后，请求体是普通 JSON，响应也是普通 JSON；不需要 `X-Client-Id` 或密钥协商。生产仍须使用 HTTPS，并保留接口需要的认证、签名、API Key、资源归属或重放控制。
 
 | 取值 | 请求和响应如何处理 | 前置条件 |
 | --- | --- | --- |
 | 省略 | 沿用宿主原有加密范围和 `transport.excludePaths` | 核对该应用实际装配的 `transport`；框架默认不自动开启加密 |
-| required | 请求必须符合框架传输协议，成功和业务拒绝响应均走加密 | 宿主已经装配 Crypto、受管服务端密钥环和 registry；否则启动失败 |
-| disabled | 使用普通请求和响应；携带框架加密信封会得到 400，避免密文被误作业务内容 | 调用方按明文接口契约发起 HTTPS 请求；IP、时段和身份守卫仍执行 |
+| `required` | 请求必须符合框架传输协议，成功和业务拒绝响应均走加密 | 宿主已经装配 Crypto、受管服务端密钥环和 registry；否则启动失败 |
+| `disabled` | 使用普通请求和响应；携带框架加密信封会得到 400，避免密文被误作业务内容 | 调用方按明文接口契约发起 HTTPS 请求；IP、时段和身份守卫仍执行 |
 
-显式模式优先于宿主排除列表。比如，某个路径虽然在 `excludePaths` 中，required 仍会要求加密。相同路径和方法如果同时命中 required 与 disabled，装配时直接失败，不采用“最后一条覆盖前一条”。同一模式可以重叠；不同方法可以分别设置。IP 和时间条件始终取交集，不因加密模式而减少检查。
+显式模式优先于宿主排除列表。比如，某个路径虽然在 `excludePaths` 中，`required` 仍会要求加密。相同路径和方法如果同时命中 `required` 与 `disabled`，装配时直接失败，不采用“最后一条覆盖前一条”。同一模式可以重叠；不同方法可以分别设置。IP 和时间条件始终取交集，不因加密模式而减少检查。
 
 下面的 Serv 示例将两个接口域分开。路径是业务示例，需要先实现相应路由；网段和工作时段也应替换为实际值。
 

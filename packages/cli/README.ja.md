@@ -188,7 +188,7 @@ fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`b
 
 feedback.init(config, { collectEvidence }) で業務の本文・ZIP を非同期収集できます。_feedback.yml は businessCollectionTimeoutMs と webhookUrl/webhookSecret/webhookTimeoutMs を提供します。Webhook は永続再試行と詳細画面での状態確認・再試行に対応し、秘密はサーバー非公開環境に保存します。[feedback の例](../feedback/README.ja.md) を参照してください。
 
-`hai create my-app --type fullstack --frontends web --defaults` は問題報告を既定で有効にし、API 工程では `--features feedback` を指定します。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは business_operator に限定します。DB・ストレージ・通知・認証の依存を補い、収集、ページ一覧とサーバーAPIを生成します。本番では共有 DB と非公開 S3 を使用します。通知は disabled/console/reach を独立に選び、console の既定は metadata のみです。要約は consoleContent: summary を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
+`hai create my-app --type fullstack --frontends web --defaults` は問題報告を既定で有効にし、API 工程にも追加引数なしで feedback を含めます。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは `business_operator` に限定します。DB・ストレージ・通知・認証の依存を補い、Fullstack では収集、ページ一覧とサーバー API、API 工程ではサーバー API を生成します。本番では共有 DB と非公開 S3 を使用します。通知は `disabled`、`console`、`reach` を独立に選び、`console` の既定は `metadata` のみです。要約は `consoleContent: summary` を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
 
 `hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
 

@@ -58,7 +58,7 @@
 | `--target` | compile | compile编译源码，`image`构建镜像，app/desktop生成对应原生制品 |
 | `--images` | 按项目配置 | serv/web或逗号列表，部分构建保留完整`hasWeb`拓扑，不能直接作为首次完整安装 |
 | `--concurrency` | 2；仅`image` | 同时构建的镜像数，只接受1或2；`deploy` `--build`也可使用 |
-| `--runtime` | auto | 本机引擎选择优先Podman；不是远端引擎探测结果 |
+| `--runtime` | `auto` | 本机引擎选择优先Podman；不是远端引擎探测结果 |
 | `--network`/`--no-http-proxy` | 默认引擎网络/默认继承规则 | 按网络环境明确设置，完全离线还需基础镜像和依赖缓存 |
 | `--sqlite-prebuild-mirror` | 无通用镜像地址默认 | 可信HTTP(S)预编译根地址，需匹配ABI/架构/libc |
 | `--platform`/`--arch` | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
@@ -173,7 +173,7 @@ location /api/v1/ {
 }
 ```
 
-只有转发到**未配置固定目录、使用相对资源的Vite根目录服务**时，Web location中的proxy_pass才带末尾`/`，以剥离`/yyy/`；API仍单独转发到实际服务：
+只有转发到**未配置固定目录、使用相对资源的Vite根目录服务**时，Web `location` 中的 `proxy_pass`才带末尾`/`，以剥离`/yyy/`；API仍单独转发到实际服务：
 
 ```nginx
 location = /yyy {
@@ -267,9 +267,9 @@ Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录�
 | `type` | 必填，docker-ssh或vercel | Docker-SSH支持本文离线/增量；Vercel只消费已有.vercel/output |
 | `ssh.host` / `username` | 实际连接必填 | 文档域名不是可用目标；`--bundle-only`可先不提供完整SSH |
 | `ssh.port` / `connectTimeoutSeconds` | 22/10秒 | 连接建立期限，不是整个部署超时 |
-| `ssh.auth` | 省略时非空`password`选`password`，否则`key`/agent | 显式`key`忽略残留`password`；不在命令参数公开密码 |
+| `ssh.auth` | 省略时非空`password`选`password`，否则使用 `key` 或 `agent` | 显式`key`忽略残留`password`；不在命令参数公开密码 |
 | `ssh.password` / `identityFile` / `knownHostsFile` | 无默认 | 密码私有，私钥只保存路径，换操作机后路径需有效 |
-| `strictHostKeyChecking` | true | 实际首次accept-new，拒绝指纹变化；敏感环境预置已核实指纹 |
+| `strictHostKeyChecking` | `true` | 实际首次采用 `accept-new`，拒绝指纹变化；敏感环境预置已核实指纹 |
 | `remote`.`baseDir`/`runtime` | /opt/hai/apps / auto | auto优先Podman；生产建议固定已验收的docker或podman，后续引擎身份变化会被拒绝。改目录不迁移数据 |
 | `expose.hostPort` | 必填，无默认 | 例18080只是示例；核对防火墙、HTTPS入口与端口冲突 |
 | `expose.containerPort` | 3000 | 需与应用/制品端口匹配，增量不允许任意改布局 |

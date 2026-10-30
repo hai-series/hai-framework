@@ -84,7 +84,7 @@ pnpm dev
 | `--no-git` | Git 初期化を省略 | 初期化する | `--no-git` |
 | `-p, --package-manager <pm>` | pnpm/npm/yarn | fullstack/API は pnpm。それ以外は検出または対話選択 | `--package-manager pnpm` |
 | `--git-remote <url>` | リモート URL | 未設定 | `--git-remote https://git.example.com/team/my-app.git` |
-| `-y, --defaults` | 対話を省略して既定値を使う | false | `hai create my-app --defaults` |
+| `--defaults` | 対話を省略して既定値を使う | false | `hai create my-app --defaults` |
 
 デスクトップ端末も必要なら `--frontends web,desktop` を指定します。既存アプリには `hai add <module>` で対応モジュールを追加できます。例えば `hai add deploy` です。fullstack の既定の実行依存はデータベース、キャッシュ、IAM、暗号化、ストレージ、監査で、AI は含みません。CUDA のインストールも不要です。
 

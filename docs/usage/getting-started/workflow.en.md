@@ -84,7 +84,7 @@ Creation installs dependencies and initializes Git by default. Run `hai create m
 | `--no-git` | Skip Git initialization | Initialize Git | `--no-git` |
 | `-p, --package-manager <pm>` | pnpm/npm/yarn | `pnpm for fullstack/API`; otherwise detected or selected interactively | `--package-manager pnpm` |
 | `--git-remote <url>` | Remote repository URL | Unset | `--git-remote https://git.example.com/team/my-app.git` |
-| `-y, --defaults` | Create with defaults without prompts | false | `hai create my-app --defaults` |
+| `--defaults` | Create with defaults without prompts | false | `hai create my-app --defaults` |
 
 To include a desktop client, use `--frontends web,desktop`. Existing applications can add supported modules with `hai add <module>`, for example `hai add deploy`.
 

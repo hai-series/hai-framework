@@ -13,8 +13,8 @@
 | `server`.`host`/`port` | 127.0.0.1/3000 | 本机回环；容器通常明确监听0.0.0.0，暴露端口不代表已做认证 |
 | `http.apiPrefix` | /api/v1 | 以 /api/ 开头，客户端 `baseUrl` 与代理路径必须一致 |
 | `http.health` | /`health` 和 /ready | false 关闭；健康与依赖就绪分开，检查路径也应同步部署 `health` |
-| `http.openapi` | false | 对象启用，默认 `path=/openapi.json`；生产按公开范围选择 |
-| `http.docs` | false | 对象启用，默认 `path`=/docs；`requireAuth` 可显式要求认证 |
+| `http.openapi` | `false` | 对象启用，默认 `path: /openapi.json`；生产按公开范围选择 |
+| `http.docs` | `false` | 对象启用，默认 `path: /docs`；`requireAuth` 可显式要求认证 |
 
 原生 RPC 入口、`HAI_SERV_HTTP_RPC` 及其子配置和 `ServRpcHttpConfig` 已删除；应用继续通过现有 OpenAPI/REST 路径与 `api-client` 调用业务。
 
@@ -40,10 +40,10 @@ transport: false
 
 | 项 | 框架默认 | 取值影响 |
 | --- | --- | --- |
-| `http.trustedProxies` / Kit `trustedProxies` | auto | 普通宿主忽略转发头；受管私有 Compose 代理采用实际容器网段。自建代理填写 IP/CIDR，[] 显式忽略转发头 |
-| `http.access` / Kit `access` | false | 对每次请求限制 IP、时间和路径；可引用独立 YAML，详细配置见[请求策略](request-access.md) |
+| `http.trustedProxies` / Kit `trustedProxies` | `auto` | 普通宿主忽略转发头；受管私有 Compose 代理采用实际容器网段。自建代理填写 IP/CIDR，`[]` 显式忽略转发头 |
+| `http.access` / Kit `access` | `false` | 对每次请求限制 IP、时间和路径；可引用独立 YAML，详细配置见[请求策略](request-access.md) |
 | `cors.origin` / `nativeOrigins` | 无默认 | 指定真实浏览器和原生来源；按生成宿主规则解析来源字符串 |
-| `cors.credentials` | false | 跨源Cookie需明确true并匹配允许来源；通配来源不能代替身份验证 |
+| `cors.credentials` | `false` | 跨源 Cookie 需明确 `true`并匹配允许来源；通配来源不能代替身份验证 |
 | `cors.allowedHeaders` | Authorization、Content-Type、X-Requested-With、X-Hai-Reauthentication、X-Hai-Terminal | 自定义头需明确加入，保留框架敏感动作和终端头 |
 | `cors.exposedHeaders` | [] | 仅向浏览器脚本公开需要读取的响应头，不泄露内部诊断 |
 
@@ -63,7 +63,7 @@ cors:
 
 ## Kit、Cookie与请求上下文
 
-`config/_kit.yml` 的 `server` 默认同Serv，`transport`默认false；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit没有close，认证、Cookie、限流和请求处理由hooks工厂参数装配，不能把Serv整个http对象放入Kit。
+`config/_kit.yml` 的 `server` 默认同Serv，`transport` 默认 `false`；默认协商路径为 `/api/_hai/key-exchange`，与Serv默认不同。Kit 没有 `close()`，认证、Cookie、限流和请求处理由 hooks 工厂参数装配，不能把Serv 整个 `http` 对象放入Kit。
 
 SvelteKit 部署在 `/yyy` 等目录时，读取 `$app/paths` 的 `base`，在服务端 `crypto.transport` 传入 `basePath: base`，浏览器使用 `kit.client.installBrowserTransport(公开配置, { crypto, basePath: base })`。独立 Kit client 的 `transport.basePath` 采用同一个值。默认空字符串表示根目录；它是宿主构建参数，不在 YAML 重复配置。这样 `/yyy/api/*` 的默认加密范围与页面目录保持一致，交换路径和排除列表仍填写完整请求路径。CLI 模板已装配，已有应用升级时需核对两端。
 
@@ -88,7 +88,7 @@ transport: false
 | `auth.recoverSession` | 可选回调，无默认 | 原地恢复同一用户，取消或结果不明不能返回true；成功仅重试原请求一次 |
 | `auth.onTokenRefreshed` / `onRefreshFailed` | 可选回调，无默认 | 同步状态或引导重登；不抛错或记录`token`，暂时网络失败保留凭据 |
 | `clientName` | hai-api-client | 写入x-request-client头，明确业务客户端有助定位 |
-| `headers`/fetch | 可选 | 静态/异步头与平台fetch适配，不在通用`headers`放超权限秘密 |
+| `headers` / `fetch` | 可选 | 静态/异步头与平台 `fetch` 适配，不在通用`headers`放超权限秘密 |
 | `transport` | 可省略，默认不启用 | 开启需匹配服务端和`crypto`能力；不能只打开客户端单边加密 |
 
 ```ts
@@ -103,7 +103,7 @@ const started = await apiClient.init({
 if (!started.success) throw new Error(started.error.message)
 ```
 
-示例显式15秒是业务选择。按真实流程验证请求、401单次恢复、二次认证取消、退出与失败；跨身份请求不能复用旧刷新结果。非2xx合法HaiResult保留业务码和`traceId`，5xx仍由实际HTTP状态执行安全隐藏。提示通过`notifyError`/ToastContainer，默认不展示编号。
+示例显式15秒是业务选择。按真实流程验证请求、401单次恢复、二次认证取消、退出与失败；跨身份请求不能复用旧刷新结果。非 2xx 合法 `HaiResult`保留业务码和`traceId`，5xx仍由实际HTTP状态执行安全隐藏。提示通过`notifyError` / `ToastContainer`，默认不展示编号。
 
 ## 加密传输与容量
 
@@ -111,7 +111,7 @@ if (!started.success) throw new Error(started.error.message)
 
 | 参数 | 默认 | 影响与条件 |
 | --- | --- | --- |
-| `transport` | false | false明文宿主流程；对象启用后还需运行时私有依赖 |
+| `transport` | `false` | `false` 使用明文宿主流程；对象启用后还需运行时私有依赖 |
 | `maxPlaintextBytes` | auto，实际1MiB；范围1KiB–64MiB | 双向明文UTF-8预算，超限尽早拒绝；不能只看加密后body长度 |
 | `routePlaintextBytes` | 无默认 | 按完整路径段匹配，`*`匹配单段，附件/导出单独给预算 |
 | `keyExchangePath` | Serv `/_hai/key-exchange`；Kit `/api/_hai/key-exchange` | 服务端完整路径；客户端是相对`baseUrl`，避免重复前缀 |
@@ -145,9 +145,9 @@ Crypto通过公开工厂/调用参数装配，不依赖`_crypto.yml`。先执行
 | --- | --- | --- |
 | `createServer`的`serverKeyRing`/`keyStore` | 显式提供，无秘密/内存回退 | 多节点必须同一有效ring与共享registry，重启加载原ring；不能每次启动新建 |
 | `createRedisTransportKeyStore`的`cache`/`ttlSeconds` | 已初始化`cache`；ttl省略不过期 | 显式ttl为1–2147483647秒；Redis原生TTL，无DB式容量上限，需要noeviction和可靠持久化 |
-| `createReldbTransportKeyStore`的reldb/`ttlSeconds`/`maxClients` | 已初始化共享reldb；ttl省略不过期；`maxClients`=10000 | 所有节点容量一致，满时拒绝，不驱逐有效公钥或nonce；定期调用`pruneExpired` |
+| `createReldbTransportKeyStore`的 `reldb` / `ttlSeconds`/`maxClients` | 已初始化共享reldb；ttl省略不过期；`maxClients`=10000 | 所有节点容量一致，满时拒绝，不驱逐有效公钥或nonce；定期调用`pruneExpired` |
 | `createInMemoryKeyStore(maxClients)` | 显式容量 | 仅开发/测试，不能代替跨节点注册表 |
 | `apiClient.transport.maxPlaintextBytes` | 省略跟服务端；显式取较小值 | 本地更严格预算，不放宽服务端限制 |
-| 对称encrypt默认 | SM4 CBC+自动随机IV，返回结构化密文 | 保存`mode`/ciphertext/iv/encoding一起解密；同密钥不得复用IV |
+| 对称 `encrypt` 默认 | SM4 CBC+自动随机IV，返回结构化密文 | 保存 `mode`、`ciphertext`、`iv`、`encoding` 一起解密；同密钥不得复用IV |
 
 请求认证有效期、未来偏差和nonce保留是协议约束，不能为“兼容时钟错误”任意放宽。服务端时钟同步，数据存储故障拒绝请求；nonce防重放不代替业务幂等键。完整SM2/SM3/SM4、密码哈希和协议选项见[Crypto公开用法](../../../packages/crypto/README.md)及[Transport协议](../../../packages/crypto/TRANSPORT-PROTOCOL.md)，它们是API参考，本手册不重复算法接口。
