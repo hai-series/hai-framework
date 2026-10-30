@@ -19,7 +19,7 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
   })
   try {
     mkdirSync(join(directory, 'config'))
-    writeFileSync(join(directory, 'config/_core.yml'), 'name: health-probe\nenv: test\n')
+    writeFileSync(join(directory, 'config/_core.yml'), 'name: health-probe\nenv: test\nlogging:\n  format: pretty\n')
     writeFileSync(join(directory, 'config/_serv.yml'), 'http:\n  health: { path: /health }\n')
     mkdirSync(join(directory, 'node_modules/@h-ai'), { recursive: true })
     for (const name of ['core', 'serv']) {
