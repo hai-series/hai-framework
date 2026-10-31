@@ -38,6 +38,15 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
       await expect(notification).toHaveCount(1)
       await expect(page.locator('.hai-toast-position')).toHaveAttribute('data-position', position)
       const box = (await notification.boundingBox())!
+      const centers = await notification.evaluate((element) => {
+        const center = (target: Element) => {
+          const bounds = target.getBoundingClientRect()
+          return bounds.y + bounds.height / 2
+        }
+        return [element.querySelector(':scope > span[aria-hidden="true"]')!, element.querySelector('.hai-toast-message')!, element.querySelector('button')!].map(center)
+      })
+      expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(1)
+      expect(box.height).toBeLessThanOrEqual(52)
       expect(box.x).toBeGreaterThanOrEqual(0)
       expect(box.x + box.width).toBeLessThanOrEqual(width)
       expect(position.startsWith('top') ? box.y : 960 - box.y - box.height).toBeLessThan(40)
@@ -75,6 +84,32 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
   await page.keyboard.press('Enter')
   await expect(notification).toHaveCount(0)
 
+  await page.getByTestId('toast-position-bottom-right').click()
+  await notification.hover()
+  // 替换当前消息以单独验证布局：超长文本的首尾都应能滚动到可见区域。
+  const overflow = await notification.locator('.hai-toast-message').evaluate((element) => {
+    element.textContent = Array.from({ length: 100 }, (_, index) => `Line ${index + 1}`).join('\n')
+    const text = element.firstChild!
+    const character = (offset: number) => {
+      const range = document.createRange()
+      range.setStart(text, offset)
+      range.setEnd(text, offset + 1)
+      return range.getBoundingClientRect()
+    }
+    const frame = element.getBoundingClientRect()
+    const first = character(0)
+    element.scrollTop = element.scrollHeight
+    const last = character(element.textContent.length - 1)
+    return {
+      scrollable: element.scrollHeight > element.clientHeight,
+      firstVisible: first.top >= frame.top && first.bottom <= frame.bottom,
+      lastVisible: last.top >= frame.top && last.bottom <= frame.bottom,
+    }
+  })
+  expect(overflow).toEqual({ scrollable: true, firstVisible: true, lastVisible: true })
+  await notification.getByRole('button', { name: '关闭', exact: true }).click()
+  await expect(notification).toHaveCount(0)
+
   for (const theme of ['light', 'dark']) {
     await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme)
     const borders = new Set<string>()
@@ -92,6 +127,8 @@ test('浮动提示支持方位、逐条展示、关闭和自动消失，不改�
       borders.add(colors.border)
       backgrounds.add(colors.background)
       await page.screenshot({ path: testInfo.outputPath(`toast-type-${theme}-${variant}.png`), animations: 'disabled' })
+      if (theme === 'light' && variant === 'error')
+        await notification.screenshot({ path: testInfo.outputPath('toast-error-compact.png'), animations: 'disabled' })
       await notification.getByRole('button', { name: '关闭', exact: true }).click()
       await expect(notification).toHaveCount(0)
     }

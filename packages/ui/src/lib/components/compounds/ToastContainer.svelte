@@ -343,9 +343,9 @@
   .hai-toast-item {
     --hai-toast-accent: var(--color-info);
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
     border-width: 1px;
     border-style: solid;
     border-color: color-mix(in oklab, var(--hai-toast-accent) 20%, var(--color-base-100));
@@ -366,6 +366,15 @@
 
   .hai-toast-details-toggle {
     flex-shrink: 0;
+  }
+
+  /* 展开排查信息后，图标和操作仍与正文首行对齐。 */
+  .hai-toast-item:has(.hai-toast-details) {
+    align-items: flex-start;
+  }
+
+  .hai-toast-item:has(.hai-toast-details) > span[aria-hidden='true'] {
+    margin-top: 0.375rem;
   }
 
   .hai-toast-details {
@@ -396,7 +405,9 @@
   }
 
   .hai-toast-message {
-    flex: 1;
+    display: flex;
+    align-items: safe center;
+    min-height: 2rem;
     min-width: 0;
     max-height: min(20rem, 60dvh);
     overflow: auto;
