@@ -1,5 +1,6 @@
+import process from 'node:process'
 import { core } from '@h-ai/core'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { desktopBuildConfig } from '../config-env.js'
 
 afterEach(() => {
@@ -8,6 +9,13 @@ afterEach(() => {
 })
 
 describe('desktop build environment', () => {
+  beforeEach(() => {
+    // Vite 已在收集测试前加载文件；隔离被提升为进程来源的旧值，恢复真实启动时的来源边界。
+    for (const key of Object.keys(process.env)) {
+      if (key === 'HAI_CRYPTO' || key.startsWith('HAI_CRYPTO_'))
+        vi.stubEnv(key, undefined)
+    }
+  })
   it('源码构建省略模式时不读取环境覆盖文件', () => {
     const load = vi.spyOn(core.config, 'loadEnvFiles')
     expect(JSON.parse(desktopBuildConfig())).toEqual({ transport: { keyExchangePath: '/_hai/key-exchange' } })
@@ -25,5 +33,11 @@ describe('desktop build environment', () => {
     expect(JSON.parse(desktopBuildConfig('test'))).toEqual({ transport: { keyExchangePath: '/custom-exchange' } })
     vi.stubEnv('HAI_CRYPTO_TRANSPORT', 'false')
     expect(JSON.parse(desktopBuildConfig('test'))).toEqual({ transport: false })
+  })
+
+  it('同一进程来源的细项覆盖 transport 兜底对象', () => {
+    vi.stubEnv('HAI_CRYPTO_TRANSPORT', '{keyExchangePath: /fallback-exchange}')
+    vi.stubEnv('HAI_CRYPTO_TRANSPORT_KEYEXCHANGEPATH', '/specific-exchange')
+    expect(JSON.parse(desktopBuildConfig('test'))).toEqual({ transport: { keyExchangePath: '/specific-exchange' } })
   })
 })
