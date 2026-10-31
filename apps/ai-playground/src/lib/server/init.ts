@@ -1,7 +1,7 @@
 /**
  * AI 实验台服务端初始化
  *
- * 配置统一由 core/db/vecdb/ai 的 YAML 提供；约定环境变量拥有最高优先级。
+ * 配置统一由 core/cache/db/vecdb/ai 的 YAML 提供；约定环境变量拥有最高优先级。
  * @module server/init
  */
 
@@ -9,6 +9,7 @@ import type { AIConfig, AIConfigInput, AudioProviderName, ImageProviderName } fr
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { ai, AIConfigSchema } from '@h-ai/ai'
+import { CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
@@ -78,7 +79,7 @@ async function initialize(): Promise<void> {
   if (cleanupPending)
     await cleanup()
   // 不传 logging，确保 config/_core.yml 中的日志配置拥有最终决定权。
-  core.init({ configDir: './config', configSchemas: { ai: AIConfigSchema, db: ReldbConfigSchema, vecdb: VecdbConfigSchema } })
+  core.init({ configDir: './config', configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, db: ReldbConfigSchema, vecdb: VecdbConfigSchema } })
 
   const validated = core.config.validate('ai', AIConfigSchema)
   if (!validated.success) {

@@ -70,7 +70,7 @@ export async function initApp(): Promise<void> {
     // 1. 加载配置
     core.init({
       configDir: './config',
-      configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, db: ReldbConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema },
+      configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, db: ReldbConfigSchema, partner: PartnerAdminConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema },
       logging: { level: 'info' },
     })
 
@@ -158,9 +158,12 @@ export async function initApp(): Promise<void> {
     const reachConfig = core.config.get('reach')
     if (reachConfig) {
       try {
-        const { reach } = await import('@h-ai/reach')
+        const { reach, ReachConfigSchema } = await import('@h-ai/reach')
+        const reachValidation = core.config.load('reach', './config/_reach.yml', ReachConfigSchema)
+        if (!reachValidation.success)
+          throw new Error(`Reach config invalid: ${reachValidation.error.message}`)
         trackOwned(reach)
-        const reachResult = await reach.init(reachConfig as Parameters<typeof reach.init>[0])
+        const reachResult = await reach.init(reachValidation.data)
         if (!reachResult.success) {
           core.logger.warn('Reach module initialization failed, contact form email unavailable', {
             error: reachResult.error.message,

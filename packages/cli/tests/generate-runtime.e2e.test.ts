@@ -125,7 +125,9 @@ function runtimeEnvironment(cwd: string): NodeJS.ProcessEnv {
       ...createE2eServerEnv({
         HAI_E2E_DATA_ROOT: data,
         HAI_CORE_ENV: 'test',
-        HAI_DB: JSON.stringify({ type: 'sqlite', database: path.join(data, 'app.db') }),
+        HAI_DB: '{}',
+        HAI_DB_TYPE: 'sqlite',
+        HAI_DB_DATABASE: path.join(data, 'app.db'),
         HAI_CACHE: JSON.stringify({ type: 'memory' }),
         HAI_STORAGE: JSON.stringify({ type: 'local', root: path.join(data, 'uploads') }),
         HAI_VECDB: JSON.stringify({ type: 'lancedb', path: path.join(data, 'vecdb') }),
@@ -230,6 +232,8 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       const parent = appType === 'api' ? 'apps' : 'packages'
       const contract = path.join(project, parent, 'runtime-route-contract')
       const service = path.join(project, parent, 'runtime-route-serv')
+      // YAML 不声明可选路径时，实际启动仍须通过模块 Schema 识别细项。
+      await writeFile(path.join(service, 'config/_db.yml'), 'type: sqlite\n')
       await mkdir(path.join(service, 'node_modules'), { recursive: true })
       await symlink(contract, path.join(service, 'node_modules/runtime-route-contract'), 'junction')
       await tool('tsup', [], contract)
@@ -283,6 +287,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       if (appType === 'fullstack')
         await expectMissing('HAI_ADMIN_DEFAULT_PASSWORD', ['bootstrap', 'hai:core:013', '未设置必需的环境变量', '.env'])
       base = await start(service, entryArgs, selectedPort)
+      expect((await readFile(path.join(root, 'runtime-data/app.db'))).subarray(0, 16).toString()).toBe('SQLite format 3\0')
       await expectFailure({}, ['EADDRINUSE', String(selectedPort)])
       if (appType === 'fullstack') {
         await expectMissing('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', ['hai:crypto:'])

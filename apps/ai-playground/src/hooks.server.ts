@@ -21,7 +21,7 @@ async function ensureRateLimit(): Promise<void> {
   if (!rateLimitInit) {
     rateLimitInit = (async () => {
       if (!core.config.has('cache'))
-        core.init({ configDir: './config' })
+        core.init({ configDir: './config', configSchemas: { cache: CacheConfigSchema } })
       const config = core.config.validate('cache', CacheConfigSchema)
       if (!config.success)
         throw new Error('Rate limit cache configuration is invalid')

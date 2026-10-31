@@ -45,7 +45,6 @@ beforeAll(async () => {
   vi.stubEnv('HAI_DB_DATABASE', '":memory:"')
   vi.stubEnv('HAI_STORAGE_ROOT', storageRoot)
   vi.stubEnv('HAI_ADMIN_DEFAULT_PASSWORD', TEST_PASSWORD)
-  core.init({ configDir: './config' })
   await initializeModules()
   const key = crypto.asymmetric.generateKeyPair()
   if (!key.success)

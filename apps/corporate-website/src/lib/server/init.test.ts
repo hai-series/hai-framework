@@ -58,6 +58,9 @@ vi.mock('@h-ai/core', () => ({ core: {
     validate: (name: string) => name === state.settings.invalid
       ? { success: false, error: { message: 'invalid configuration' } }
       : { success: true, data: state.config[name] },
+    load: (name: string) => name === state.settings.invalid
+      ? { success: false, error: { message: 'invalid configuration' } }
+      : { success: true, data: state.config[name] },
   },
 } }))
 vi.mock('./partner-service.js', () => ({ PartnerAdminConfigSchema: {}, ensurePartnerTables: vi.fn(async () => {}) }))
@@ -81,6 +84,21 @@ beforeEach(() => {
 })
 
 describe('corporate-website application startup', () => {
+  it('可选 Reach 按公开 Schema 加载后初始化，配置无效不会阻断主应用', async () => {
+    state.config.reach = { providers: [] }
+    state.settings.invalid = 'reach'
+    let app = await import('./init.js')
+    await app.initApp()
+    expect(state.modules.reach.init).not.toHaveBeenCalled()
+    expect(state.modules.ai.init).toHaveBeenCalledOnce()
+
+    vi.resetModules()
+    state.settings.invalid = ''
+    app = await import('./init.js')
+    await app.initApp()
+    expect(state.modules.reach.init).toHaveBeenCalledWith(state.config.reach)
+  })
+
   it('已配置存储连接失败时停止启动，释放本次资源并允许恢复后重试', async () => {
     state.config.storage = { type: 's3', createBucket: true }
     state.settings.failInit = 'storage'

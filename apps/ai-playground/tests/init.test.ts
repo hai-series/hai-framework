@@ -37,6 +37,7 @@ vi.mock('@h-ai/reldb', () => ({
     },
   },
 }))
+vi.mock('@h-ai/cache', () => ({ CacheConfigSchema: {} }))
 vi.mock('@h-ai/vecdb', () => ({
   VecdbConfigSchema: {},
   vecdb: {

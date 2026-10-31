@@ -7,8 +7,7 @@ import { createServerApp } from './app-server.js'
 import { closeModules, initializeModules } from './server/runtime.js'
 
 async function startServer(): Promise<void> {
-  // 加载配置后按依赖顺序初始化；日志设置沿用 _core.yml。
-  core.init({ configDir: './config' })
+  // 运行时先注册模块 Schema 并加载配置，再按依赖顺序初始化；日志设置沿用 _core.yml。
   await initializeModules()
   try {
     // HOST/PORT 环境变量优先于 config/_serv.yml。

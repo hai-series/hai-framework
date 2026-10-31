@@ -10,12 +10,12 @@ import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core, HaiConfigError } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 {{#if features.feedback}}
-import { feedback } from '@h-ai/feedback'
+import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
 {{/if}}
 import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
-import { scheduler } from '@h-ai/scheduler'
+import { scheduler, SchedulerConfigSchema } from '@h-ai/scheduler'
 import { ServConfigSchema } from '@h-ai/serv'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 {{#if features.vecdb}}
@@ -79,6 +79,30 @@ async function closeFeedback() {
 
 {{/if}}
 const runtime = core.module.createRuntime([
+  { name: 'configuration', start: () => {
+    core.init({
+      configDir: './config',
+      configSchemas: {
+{{#if features.ai}}
+        ai: AIConfigSchema,
+{{/if}}
+        audit: AuditInitConfigSchema,
+        cache: CacheConfigSchema,
+        db: ReldbConfigSchema,
+{{#if features.feedback}}
+        feedback: FeedbackConfigSchema,
+{{/if}}
+        iam: IamConfigSchema,
+        reach: ReachConfigSchema,
+        scheduler: SchedulerConfigSchema,
+        serv: ServConfigSchema,
+        storage: StorageConfigSchema,
+{{#if features.vecdb}}
+        vecdb: VecdbConfigSchema,
+{{/if}}
+      },
+    })
+  }, close: () => {} },
   { name: 'serv-config', start: () => core.config.validate('serv', ServConfigSchema), close: () => {} },
   { name: 'reldb', start: async () => {
     const config = ReldbConfigSchema.parse(core.config.getOrThrow('db'))
