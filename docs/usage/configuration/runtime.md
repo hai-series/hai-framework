@@ -153,6 +153,8 @@ docker inspect hai-myapp-test-serv --format '{{range .Mounts}}{{if eq .Destinati
 docker restart hai-myapp-test-serv
 ```
 
+生成的 Nginx 代理会动态跟随后端和存储容器的 DNS 地址变化，Podman 重启后分配新 IP 时也能自动恢复访问。解析器取自容器自身配置，无需手动设置 Docker 或 Podman 专用的 DNS 地址。
+
 环境文件采用 dotenv 字面语法，不执行 shell、变量展开或 Compose 插值；生成器编码保留混合引号、多行、反斜线和 Unicode。单个文件上限 1 MiB；缺失、不可读、重复变量或超限会在导入应用前失败，不打印变量值。同源细项覆盖父 JSON，显式进程 `HAI_*` 注入仍优先。Node 启动选项变更需重新部署。修改连接密码不会自动修改中间件内部密码，托管凭据与数据卷状态必须一致。
 
 SvelteKit SSR 在 Node 服务正常停止后，会先关闭业务模块，再释放其依赖的数据库、缓存等资源，避免后台任务或连接阻止进程退出。

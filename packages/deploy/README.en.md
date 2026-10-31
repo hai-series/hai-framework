@@ -258,6 +258,8 @@ Node backends (Serv / SvelteKit SSR) read `<deployment-root>/config/.env.runtime
 
 Container packaging sets the listener to `0.0.0.0` and the port declared by the artifact, falling back to deployment settings when absent. It generates `HOST`, `PORT`, and the matching Serv fields. Loopback addresses and development ports in local `.env` files remain local settings. Update the artifact and deployment layout together when changing container ports.
 
+Nginx dynamically tracks DNS changes for application and storage containers. The shared `.hai/proxy-start.sh` reads resolvers from the container's `/etc/resolv.conf` and also watches certificate changes for HTTPS. Docker and Podman need no fixed DNS address. After editing runtime configuration and restarting the backend, the proxy reconnects automatically even if its IP changes.
+
 Image-native `POSTGRES_*`, `MYSQL_*`, `RUSTFS_*`, `MINIO_*`, and `LDAP_*` keep the names required by their images, only in private `.hai/middleware-runtime.env` loaded by middleware. All application connections are merged into `config/.env.runtime`.
 
 Whole `HAI_*` configuration supplied by sidecars or provisioners clears superseded leaf variables: Redis overrides no longer leave `HAI_CACHE_TYPE=memory`. Global `~/.hai/credentials.yml` fills missing settings only, respecting existing environment/process keys and parent objects. Deployment starts selected middleware and waits for PostgreSQL/MySQL/Redis/S3 health before serv/Web; incremental deployment and recovery use the same order and preserve unselected containers.
