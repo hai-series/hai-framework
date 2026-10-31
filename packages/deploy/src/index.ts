@@ -1,6 +1,7 @@
 export * from './deploy-artifact.js'
 export * from './deploy-config.js'
-export * from './deploy-environment.js'
+export type { DeploymentEnvironment } from './deploy-environment.js'
+export { loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from './deploy-environment.js'
 export { normalizeProjectName } from './deploy-functions.js'
 export * from './deploy-main.js'
 export * from './deploy-middleware.js'
