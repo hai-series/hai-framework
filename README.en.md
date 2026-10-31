@@ -1,6 +1,6 @@
 # hai Framework
 
-**AI capabilities, security controls and business delivery in one TypeScript workspace.**
+**An AI-native, configuration-driven, security-first TypeScript application framework.**
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
@@ -12,47 +12,49 @@
 
 [Website and template previews](https://hai-series.github.io/hai-framework/) · [Usage guide](docs/usage/README.en.md) · [Configuration handbook](docs/usage/configuration/README.md) · [Releases](https://github.com/hai-series/hai-framework/releases/latest)
 
-Build business dashboards, AI assistants, knowledge bases and applications across platforms with **22 composable packages**, runnable CLI templates, shared UI and deployment tools. Frontends and backends share types and API contracts; developers and AI assistants share instructions, Skills and validation entry points.
+hai-framework is a full-stack application development and delivery framework for the AI era. Its unified, composable TypeScript foundation connects AI, data, security, interfaces and engineering tools. Developers and AI assistants share contracts, configuration, project guidance and validation workflows, from building applications to delivery across platforms and continued evolution. AI becomes part of both the development process and the applications themselves.
+
+![Framework overview: developers and coding agents share guidance; clients share API contracts and business services compose AI, data, security and operations](docs/images/framework-overview.en-US.svg)
+
+_A Fullstack composition: project guidance, clients, contracts and business modules ship together. Choose the modules and clients you need._
 
 ## Why hai
 
-### AI: turn model calls into application features
+### AI-native: coding collaboration and business integration
 
-Connect OpenAI-compatible models, tool calls and MCP, then compose RAG, conversation memory, images, speech and A2A. Reuse chat, Markdown, document and Mermaid components to bring model output into business interfaces.
+Generated projects include `AGENTS.md`, module Skills and workflows for reviewing requirements, implementation, testing and review. Coding agents work with the project's public APIs, authorization rules and validation requirements. At runtime, compose model calls, tools/MCP, RAG, conversation memory and multimodal features with application data and services.
 
-![Document component with navigation, dark theme and Mermaid content](docs/usage/images/ai-document-dark.png)
+[Project guidance and Skills](AGENTS.md) · [AI development and integration](docs/usage/development/ai.md)
 
-Actual component screenshot. Model inference requires the selected provider and credentials; this image demonstrates content presentation. [AI development](docs/usage/development/ai.md) · [Models and knowledge configuration](docs/usage/configuration/ai.md)
+![Running AI playground: model conversations and memory for the current subject](docs/images/runtime-ai.en-US.png)
 
-### Security: connect accounts, APIs and audit controls
+_The AI playground connects to a live model and shows multi-turn conversations alongside memory records. Conversations and preferences are demo data._
 
-Use authentication and RBAC, active/dormant/deactivated account states, password and session policies, security auditing, and request rules by path, method, IP and time. Choose application encryption requirements for individual external APIs; trusted proxy handling establishes the client address used for access checks.
+### Configuration-driven: explicit settings for each environment
 
-![System administrator selecting a role when creating a Fullstack account](docs/usage/images/account-role-choices.png)
+Models, databases, caches, files and vector search follow shared conventions for YAML, `HAI_*` environment mappings and schema validation. Select SQLite/PostgreSQL/MySQL, Memory/Redis, Local/S3 and other backends per environment. Development, test and deployment settings have an explicit entry point, while business code uses public module interfaces.
 
-Actual template screenshot. System administrators manage all accounts and roles; audit and other business permissions remain separately authorized. [Identity and security](docs/usage/configuration/identity.md) · [Request policies](docs/usage/configuration/request-access.md) · [Security review](docs/usage/governance/security-review.md)
+[Configuration handbook](docs/usage/configuration/README.md) · [Data and storage](docs/usage/configuration/data.md)
 
-### Data: start locally and choose the backends you need
+### Security-first: identity, cryptography and audit together
 
-Choose SQLite, PostgreSQL or MySQL for relational data, Memory/Redis for caching, Local/S3 for files, and LanceDB, pgvector, Qdrant or Chroma for vector search. Transactions, pagination, presigned URLs and text chunking have dedicated modules.
+Built-in SM2/SM3/SM4 and application-layer transport encryption sit alongside authentication and RBAC, account lifecycle, password and session policies, IP/time access rules and security auditing. Identity, business authorization and auditing belong to the same engineering foundation, supporting separation of duties and defense in depth.
 
-Multiple production instances need suitable shared databases, Redis and object storage; configure external services separately. [Data access](docs/usage/development/data.md) · [Data configuration](docs/usage/configuration/data.md)
+[Identity and permissions](docs/usage/configuration/identity.md) · [Cryptography and transport encryption](packages/crypto/README.en.md) · [Request policies](docs/usage/configuration/request-access.md)
 
-### Operations: move feedback into a support workflow
+![Running CLI-generated application: separate user, business operator and administrator duties](docs/images/runtime-identity.en-US.png)
 
-Associate feedback with captured interactions, page replay, logs, requests and business evidence. Administrators can filter, handle, reopen and export diagnostic packages. Audit, notifications and scheduling support ongoing application operations.
+_A CLI-generated Fullstack application with separate account, role, configuration and audit responsibilities. Management permissions are split by role; accounts shown are demo data._
 
-![Feedback handling with notes, status and history](docs/usage/images/feedback-handled.png)
+### Delivery: shared client contracts and private deployment
 
-Actual example application screenshot. The version inside the feedback identifies its capture context. Configure collection scope, redaction, capacity and notifications for your application. [Feedback and troubleshooting](docs/usage/operations/feedback.md) · [Operations configuration](docs/usage/configuration/operations.md)
+Web, App and Desktop share typed API contracts and server-side business capabilities; same-origin Web applications can use SvelteKit and Kit. Delivery tools bundle application and self-hosted middleware images for SSH releases, local deployment on offline servers, selected-service updates and recovery. After release, feedback can associate page replay, logs, requests and business evidence in an exportable diagnostic package.
 
-### UI and delivery: carry the template through to deployment
+[Shared API contracts](packages/api-contract/README.en.md) · [Deployment and recovery](docs/usage/configuration/delivery.md) · [Feedback diagnostics](docs/usage/operations/feedback.md)
 
-Shared Svelte 5 components cover forms, tables, dialogs, authentication, onboarding and help. Themes and Chinese, English and Japanese messages carry across applications. ToastContainer presents readable warnings and errors, with trace identifiers available on demand.
+![Running feedback diagnostics: an authorized operator reviews a user's page replay with input values masked](docs/images/runtime-feedback.en-US.png)
 
-![Component gallery with login form and unified error feedback](docs/usage/images/gallery-scenes-zh-CN.png)
-
-Create same-origin SvelteKit applications or separate APIs with Web/App/Desktop clients. Deploy images or offline bundles, update selected services and recover failed releases; static Website output can run on GitHub Pages. [UI configuration](docs/usage/configuration/experience.md) · [Delivery handbook](docs/usage/configuration/delivery.md)
+_From user report to authorized diagnosis: replay page interactions inside the application, with input values masked, and export a diagnostic bundle. Shown with demo records in an isolated environment._
 
 ## Create your first application
 
@@ -80,8 +82,6 @@ The installation version follows [npm's latest tag](https://www.npmjs.com/packag
 | Website     | Corporate, product and static documentation sites     | `--type website`                   |
 | H5 / Mobile | Mobile web or Capacitor application                   | `--type h5` / `--type mobile-app`  |
 
-![Login page from an actual CLI-generated Admin project](apps/framework-website/public/template-previews/admin-login.png)
-
 [Explore real Fullstack, Website, Admin and Mobile previews](https://hai-series.github.io/hai-framework/#template-previews). Website uses SSR by default; follow the [static build instructions](docs/usage/configuration/delivery.md#静态website与github-pages) for static hosting. Native packages require the platform toolchain.
 
 ### Build and release
@@ -97,6 +97,8 @@ pnpm run deploy --env prod --build --bundle-only
 ```
 
 `--plan` performs a read-only preflight, `--services` selects services to update, and `--bundle-only` produces a portable offline bundle. Automatic recovery covers services and configuration snapshots; database migrations and external side effects need their own recovery plans. See [delivery configuration](docs/usage/configuration/delivery.md) for real client IPs, subpaths, direct storage access and policy files.
+
+![Delivery flow: package application and middleware images, deploy over SSH or on an offline server, then check health and maintain the release baseline](docs/images/delivery-flow.en-US.svg)
 
 ## Find modules by domain
 

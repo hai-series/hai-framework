@@ -1,6 +1,6 @@
 # hai Framework
 
-**AI 機能、セキュリティ、業務アプリの開発と配布を、一つの TypeScript 基盤で。**
+**AI ネイティブ、設定駆動、セキュリティ優先の TypeScript アプリフレームワーク。**
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
@@ -12,47 +12,49 @@
 
 [公式サイトとテンプレート](https://hai-series.github.io/hai-framework/) · [利用ガイド](docs/usage/README.ja.md) · [設定マニュアル](docs/usage/configuration/README.md) · [リリース](https://github.com/hai-series/hai-framework/releases/latest)
 
-権限管理付きの業務システムから AI アシスタント、ナレッジベース、マルチプラットフォームアプリまで。**組み合わせて使える 22 パッケージ**、実行可能な CLI テンプレート、共通 UI、デプロイツールを提供します。フロントエンドとバックエンドは型と API 契約を共有し、開発者と AI は規約、Skills、検証手順を共有します。
+hai-framework は AI 時代のフルスタックアプリ開発と配布を支えるフレームワークです。統一された組み合わせ可能な TypeScript 基盤で、AI、データ、セキュリティ、画面、開発ツールをつなぎます。開発者と AI は契約、設定、規約、検証手順を共有し、アプリの構築から複数プラットフォームへの配布、継続的な進化までを進められます。AI を開発プロセスとアプリ自体の双方に組み込めます。
+
+![開発者と AI の共通規約、複数クライアントの API 契約、AI・データ・安全・運用モジュールの関係](docs/images/framework-overview.ja-JP.svg)
+
+_Fullstack の構成例：開発規約、クライアント、API 契約、業務モジュールをまとめて提供します。必要なモジュールとクライアントを選べます。_
 
 ## hai の特長
 
-### AI：モデルの呼び出しから業務機能へ
+### AI ネイティブ：開発協働と業務への組み込み
 
-OpenAI 互換モデル、ツール呼び出し、MCP を統一して扱い、RAG、会話メモリ、画像、音声、A2A と組み合わせます。チャット、Markdown、文書、Mermaid の表示コンポーネントを業務画面に再利用できます。
+生成プロジェクトには `AGENTS.md`、モジュール Skills、要件レビュー、実装、テスト、再レビューの手順が含まれます。AI コーディング支援は公開 API、権限規則、検証要件を共有します。実行時はモデル呼び出し、ツール/MCP、RAG、会話メモリ、マルチモーダル機能をアプリのデータとサービスに組み込めます。
 
-![目次、ダークテーマ、Mermaid を備えた文書コンポーネント](docs/usage/images/ai-document-dark.png)
+[開発規約と Skills](AGENTS.md) · [AI 開発と統合](docs/usage/development/ai.md)
 
-実際のコンポーネント画面です。推論には選択した Provider と認証情報の設定が必要です。この画像はコンテンツ表示を示します。[AI 開発](docs/usage/development/ai.md) · [モデルとナレッジ設定](docs/usage/configuration/ai.md)
+![実行中の AI 実験台：モデルとの会話と利用主体ごとのメモリ](docs/images/runtime-ai.ja-JP.png)
 
-### セキュリティ：アカウント、API、監査をまとめて設計
+_実際のモデルに接続した AI 実験台で、複数ターンの会話とメモリを表示しています。会話と設定はデモ用データです。_
 
-認証と RBAC、アカウントの有効・休眠・登録解除状態、パスワードとセッションのポリシー、セキュリティ監査を提供します。パス、メソッド、IP、時間によるアクセス制限と、API ごとのアプリ層暗号化を設定できます。信頼するプロキシの境界を確認した上でクライアント IP を判定します。
+### 設定駆動：環境ごとの差分を明確な入口で管理
 
-![Fullstack でシステム管理者がアカウントのロールを選択する画面](docs/usage/images/account-role-choices.png)
+モデル、DB、キャッシュ、ファイル、ベクトル検索は YAML、`HAI_*` 環境変数マッピング、Schema 検証の規約を共有します。環境ごとに SQLite/PostgreSQL/MySQL、Memory/Redis、Local/S3 などを選択し、開発・テスト・配布の設定入口を明確にしながら、業務コードはモジュールの公開インターフェースを利用します。
 
-実際のテンプレート画面です。システム管理者は全アカウントとロールを管理でき、監査などの業務権限は別に認可します。[認証と安全設定](docs/usage/configuration/identity.md) · [リクエストポリシー](docs/usage/configuration/request-access.md) · [安全レビュー](docs/usage/governance/security-review.md)
+[設定マニュアル](docs/usage/configuration/README.md) · [データとストレージ](docs/usage/configuration/data.md)
 
-### データ：ローカルで始め、用途に合わせて選択
+### セキュリティ優先：認証、暗号化、監査をセットで提供
 
-関係データは SQLite/PostgreSQL/MySQL、キャッシュは Memory/Redis、ファイルは Local/S3、ベクトル検索は LanceDB/pgvector/Qdrant/Chroma に対応します。トランザクション、ページング、署名付き URL、テキスト分割を専用モジュールで扱えます。
+SM2/SM3/SM4 とアプリ層の伝送暗号化に加え、認証と RBAC、アカウントのライフサイクル、パスワードとセッションのポリシー、IP・時間のアクセス制限、安全監査を提供します。認証、業務の認可、監査を共通の開発基盤に組み込み、職務の分離と多層防御を支えます。
 
-複数インスタンスの本番環境では共有 DB、Redis、オブジェクトストレージを要件に合わせて設定します。[データアクセス](docs/usage/development/data.md) · [データ設定](docs/usage/configuration/data.md)
+[認証と権限](docs/usage/configuration/identity.md) · [暗号化と伝送保護](packages/crypto/README.ja.md) · [リクエストポリシー](docs/usage/configuration/request-access.md)
 
-### 運用：ユーザーの報告を対応につなげる
+![CLI で生成したアプリの実行画面：利用者、業務担当者、管理者の職務を分離](docs/images/runtime-identity.ja-JP.png)
 
-フィードバックに操作状況、ページ再生、ログ、リクエスト、業務証跡を関連付けます。管理者は絞り込み、対応、再オープン、診断パッケージの出力ができます。監査、通知、定期タスクと組み合わせて継続的に運用できます。
+_CLI で生成した Fullstack アプリです。アカウント、ロール、設定、監査の責務を分け、管理権限をロールごとに分離しています。アカウントはデモ用です。_
 
-![対応メモ、状態、履歴を確認できるフィードバック画面](docs/usage/images/feedback-handled.png)
+### 配布まで対応：共通 API 契約とプライベート環境
 
-実際のサンプル画面です。表示中の報告バージョンは採取時のものです。収集範囲、機密情報の除去、容量、通知はアプリごとに設定します。[フィードバックと調査](docs/usage/operations/feedback.md) · [運用設定](docs/usage/configuration/operations.md)
+Web、App、Desktop は型付き API 契約とサーバーの業務機能を共有し、同一オリジンの Web は SvelteKit と Kit を利用できます。アプリと自営ミドルウェアのイメージをまとめて、SSH 配布、オフラインサーバー上のローカル配布、サービス単位の更新、失敗時の復旧に対応します。公開後はページ再生、ログ、リクエスト、業務証跡をフィードバックに関連付け、診断パッケージを出力できます。
 
-### UI と配布：テンプレートから本番まで
+[共通 API 契約](packages/api-contract/README.ja.md) · [配布と復旧](docs/usage/configuration/delivery.md) · [フィードバック診断](docs/usage/operations/feedback.md)
 
-Svelte 5 の共通コンポーネントでフォーム、表、ダイアログ、認証、初回ガイド、ヘルプを構築します。テーマと中英日メッセージを共有し、警告とエラーは ToastContainer に読みやすく表示します。追跡 ID は必要なときに展開できます。
+![フィードバック診断の実行画面：権限を持つ担当者が入力値をマスクしたページ再生を確認](docs/images/runtime-feedback.ja-JP.png)
 
-![コンポーネント一覧のログインフォームと統一エラー通知](docs/usage/images/gallery-scenes-zh-CN.png)
-
-同一オリジンの SvelteKit アプリ、独立 API と Web/App/Desktop クライアントを作成できます。イメージ、オフライン配布、サービス単位の更新、失敗時の復旧に対応し、静的 Website は GitHub Pages に公開できます。[UI 設定](docs/usage/configuration/experience.md) · [配布マニュアル](docs/usage/configuration/delivery.md)
+_利用者の報告から権限に基づく診断まで、アプリ内でページ操作を再生し、診断パッケージを出力できます。入力値はマスクされ、記録は隔離環境のデモ用です。_
 
 ## 最初のアプリを作成
 
@@ -66,7 +68,7 @@ pnpm dev
 
 CLI は既定で依存関係をインストールし、Git を初期化します。`admin` でログインし、生成された `.env.dev` の `HAI_ADMIN_DEFAULT_PASSWORD` にあるランダム初期パスワードを使用します。画面に従って変更し、環境ファイルとパスワードは公開しないでください。
 
-新規工程は全モジュールとサンプルを含み、サーバーに AI・ベクトル依存も導入します。`hai create --defaults` で対話を省略し、既定コンテナーは追加 CUDA ダウンロードを省きます。
+新規プロジェクトは適用対象の全モジュールとサンプルを含み、サーバーに AI・ベクトル依存も導入します。`--defaults` で対話を省略し、既定コンテナーは追加 CUDA ダウンロードを省きます。ディレクトリ、環境設定、実行 URL は生成された README と[初回起動ガイド](docs/usage/getting-started/create.md)を参照してください。
 
 インストール版は [npm の latest タグ](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)に従い、バッジは登録情報を直接参照します。`pnpm view @h-ai/cli@latest version` で確認し、再現性が必要な場合は `@latest` を取得した版に置き換えます。npm のインストールタグと GitHub Latest の表示設定は別に管理します。
 
@@ -79,8 +81,6 @@ CLI は既定で依存関係をインストールし、Git を初期化します
 | Admin        | アカウント管理と業務画面を持つ同一オリジン管理システム | `--type admin`                     |
 | Website      | 企業サイト、製品紹介、静的ドキュメント                 | `--type website`                   |
 | H5 / Mobile  | モバイル Web または Capacitor アプリ                   | `--type h5` / `--type mobile-app`  |
-
-![CLI で実際に生成した Admin のログイン画面](apps/framework-website/public/template-previews/admin-login.png)
 
 [公式サイトで Fullstack、Website、Admin、Mobile の実際の画面を確認](https://hai-series.github.io/hai-framework/#template-previews)できます。Website の既定は SSR です。静的公開には[静的ビルド設定](docs/usage/configuration/delivery.md#静态website与github-pages)が必要で、ネイティブパッケージには対象 OS のツールチェーンが必要です。
 
@@ -97,6 +97,8 @@ pnpm run deploy --env prod --build --bundle-only
 ```
 
 `--plan` は読み取り専用の事前確認、`--services` は更新サービスの選択、`--bundle-only` は持ち運べるオフラインパッケージの生成です。自動復旧はサービスと設定スナップショットが対象です。DB 移行と外部副作用は別の復旧手順を用意します。実 IP、サブパス、ストレージ直結、ポリシーファイルは[配布設定](docs/usage/configuration/delivery.md)を参照してください。
+
+![アプリとミドルウェアを梱包し、SSH またはオフラインサーバーへ配布して正常性と配布基準を確認する流れ](docs/images/delivery-flow.ja-JP.svg)
 
 ## 分野別モジュール
 

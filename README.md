@@ -1,6 +1,6 @@
 # hai Framework
 
-**把 AI 能力、安全治理与业务交付放进同一套 TypeScript 工程。**
+**AI 原生、配置驱动、安全优先的 TypeScript 应用框架。**
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
@@ -12,47 +12,49 @@
 
 [官网与模板预览](https://hai-series.github.io/hai-framework/) · [使用指南](docs/usage/README.md) · [配置手册](docs/usage/configuration/README.md) · [发布记录](https://github.com/hai-series/hai-framework/releases/latest)
 
-从带权限的业务后台，到 AI 助手、知识库和多端应用，hai-framework 提供 **22 个按需组合的包**、可运行的 CLI 模板、公共 UI 与部署工具。前后端共用类型和接口契约；人类开发者与 AI 助手共用规范、Skills 和验证入口。
+hai-framework 是面向 AI 时代的全栈应用研发与交付框架。它以统一、可组合的 TypeScript 技术体系连接 AI、数据、安全、界面与工程工具，让开发者与 AI 助手共用契约、配置、规范和验证流程，贯通从应用构建、多端交付到持续演进的完整过程。智能能力既融入开发过程，也成为应用本身的一部分。
+
+![框架总览：人和 AI 共用开发流程，多端共享 API 契约，业务服务组合 AI、数据、安全与运维模块](docs/images/framework-overview.zh-CN.svg)
+
+_以 Fullstack 为例：开发规范、客户端、接口契约和业务模块一起交付，模块与客户端按需组合。_
 
 ## 为什么选择 hai
 
-### AI：从模型调用走到可用的业务功能
+### AI 原生：覆盖开发协作与业务集成
 
-统一接入 OpenAI 兼容模型、工具调用与 MCP，组合 RAG、会话记忆、图像、语音和 A2A。业务页面可复用聊天、Markdown、文档与 Mermaid 展示组件，减少模型接入和界面之间的重复工作。
+开发时，生成工程自带 `AGENTS.md`、模块 Skills，以及需求审查、实施、测试和复审流程，让 AI 编程助手沿用项目的公开 API、权限规则和验证要求。业务运行时，统一组合模型调用、工具/MCP、RAG、会话记忆与多模态能力，复用应用的数据和服务层。
 
-![AI 文档组件展示目录、主题与流程图](docs/usage/images/ai-document-dark.png)
+[工程规范与 Skills](AGENTS.md) · [AI 开发与集成](docs/usage/development/ai.md)
 
-实际组件截图：文档目录、深色主题与 Mermaid 内容展示。模型推理需配置所选 Provider 及其凭据；本图展示内容组件。[AI 开发](docs/usage/development/ai.md) · [模型与知识库配置](docs/usage/configuration/ai.md)
+![AI 实验台实际运行：模型对话与当前主体的记忆记录](docs/images/runtime-ai.zh-CN.png)
 
-### 安全：把账号、接口和审计一起考虑
+_AI 实验台连接真实模型，展示多轮对话与记忆记录。对话和偏好为演示数据。_
 
-提供认证与 RBAC、账号激活/休眠/注销、密码与会话策略、安全审计，以及按路径、方法、IP 和时间生效的访问规则。外部接口可单独选择应用层加密要求，可信代理解析让后端按经过校验的客户端地址判断请求。
+### 配置驱动：把环境差异收敛到配置入口
 
-![Fullstack 应用中系统管理员创建账号并选择角色](docs/usage/images/account-role-choices.png)
+模型、数据库、缓存、文件和向量检索使用统一的 YAML、`HAI_*` 环境变量映射与 Schema 校验约定。按环境选择 SQLite/PostgreSQL/MySQL、Memory/Redis、Local/S3 等后端，让开发、测试与部署环境的连接和策略有明确入口；业务代码复用模块公开接口。
 
-实际模板截图：系统管理员可管理全部账号与角色，审计等业务权限仍独立授权。[认证与安全](docs/usage/configuration/identity.md) · [接口访问策略](docs/usage/configuration/request-access.md) · [安全审查](docs/usage/governance/security-review.md)
+[配置手册](docs/usage/configuration/README.md) · [数据与存储](docs/usage/configuration/data.md)
 
-### 数据：开发时轻装运行，按需求选择后端
+### 安全优先：身份、国密与审计配套提供
 
-关系数据支持 SQLite、PostgreSQL、MySQL；缓存支持 Memory/Redis；文件支持 Local/S3；向量检索可选择 LanceDB、pgvector、Qdrant 或 Chroma。事务、分页、预签名地址与文本分块都有对应模块。
+内置 SM2/SM3/SM4 与应用层传输加密，并提供认证与 RBAC、账号生命周期、密码与会话策略、IP/时间访问规则和安全审计。将身份、业务授权和审计纳入同一工程体系，支持按职责分权与纵深防护。
 
-多实例生产环境按共享状态要求选择数据库、Redis 与对象存储，外部服务需另行配置。[数据访问](docs/usage/development/data.md) · [数据与存储配置](docs/usage/configuration/data.md)
+[认证与权限](docs/usage/configuration/identity.md) · [国密与传输加密](packages/crypto/README.md) · [接口访问策略](docs/usage/configuration/request-access.md)
 
-### 运营：用户反馈能够进入处理流程
+![CLI 生成应用实际运行：普通用户、业务操作员和管理职责分离](docs/images/runtime-identity.zh-CN.png)
 
-反馈可关联操作现场、页面回放、日志与请求、业务证据；管理员能够筛选、处理、重新打开并导出诊断包。结合审计、通知和定时任务，让业务应用从“能运行”走向“能维护”。
+_CLI 生成的 Fullstack 应用：账号、角色、配置与审计各有职责边界，管理权限按角色分离。图中为演示账号。_
 
-![反馈处理页面展示处理备注、状态与历史](docs/usage/images/feedback-handled.png)
+### 面向交付：共享多端契约，支持私有部署
 
-实际示例应用截图：处理记录与状态变化可追溯。图中反馈版本是采集现场的版本；采集范围、脱敏、容量及通知按应用配置启用。[反馈与排错](docs/usage/operations/feedback.md) · [运营配置](docs/usage/configuration/operations.md)
+Web、App、Desktop 共用类型化 API 契约与服务端业务能力；同源 Web 可使用 SvelteKit 与 Kit。交付工具将应用和自建中间件镜像一起打包，支持 SSH 发布、服务器本地离线部署、指定服务增量与失败恢复。上线后，用户反馈可关联页面回放、日志、请求和业务证据，导出诊断包。
 
-### 界面与交付：从同一模板延续到上线
+[共享 API 契约](packages/api-contract/README.md) · [部署与恢复](docs/usage/configuration/delivery.md) · [反馈诊断](docs/usage/operations/feedback.md)
 
-Svelte 5 公共组件覆盖表单、表格、弹窗、身份认证、引导与帮助；主题和中英日文案贯穿应用。警告和错误统一由 ToastContainer 展示可读说明，按需展开追踪编号。
+![反馈诊断实际运行：业务操作员查看用户报送的页面回放，输入内容已遮挡](docs/images/runtime-feedback.zh-CN.png)
 
-![实际组件库中的登录表单与统一错误反馈](docs/usage/images/gallery-scenes-zh-CN.png)
-
-CLI 可创建同源 SvelteKit 应用，也可创建独立 API 与 Web/App/Desktop 客户端。部署支持镜像、离线包、按服务增量及失败恢复；静态 Website 可发布到 GitHub Pages。[界面开发](docs/usage/configuration/experience.md) · [部署手册](docs/usage/configuration/delivery.md)
+_从用户报送到授权诊断：在应用内回看页面操作，输入内容已遮挡，并可导出问题包。图中为隔离环境的演示记录。_
 
 ## 创建第一个应用
 
@@ -66,7 +68,7 @@ pnpm dev
 
 CLI 默认安装依赖并初始化 Git。首次使用 `admin` 登录，随机初始密码在生成工程的 `.env.dev` 对应 `HAI_ADMIN_DEFAULT_PASSWORD` 中，首次登录后按页面要求修改。不要公开环境文件或密码。
 
-Fullstack 默认包含 DB、Cache、IAM、Crypto、Storage 与 Audit，首次运行不需要 AI 模型或 CUDA。目录、环境和运行地址以生成工程 README 为准；[首次运行指南](docs/usage/getting-started/create.md)带你完成登录与验证。
+新工程包含适用的完整模块与示例，服务端也安装 AI 与向量依赖。`--defaults` 跳过交互，默认容器跳过额外 CUDA 下载。目录、环境和运行地址以生成工程 README 为准；[首次运行指南](docs/usage/getting-started/create.md)带你完成登录与验证。
 
 安装版本以 [npm 的 latest 标签](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)为准，上方徽标直接读取注册表。可运行 `pnpm view @h-ai/cli@latest version` 查询；团队需要固定版本时，将 `@latest` 换成查询得到的具体版本。npm 的安装标签与 GitHub 的 Latest 展示标记分别管理。
 
@@ -79,8 +81,6 @@ Fullstack 默认包含 DB、Cache、IAM、Crypto、Storage 与 Audit，首次运
 | Admin       | 同源管理后台，快速接入账号与业务页面 | `--type admin`                     |
 | Website     | 企业官网、产品站与静态文档站         | `--type website`                   |
 | H5 / Mobile | 移动网页或 Capacitor 应用            | `--type h5` / `--type mobile-app`  |
-
-![CLI 生成 Admin 模板的实际登录页面](apps/framework-website/public/template-previews/admin-login.png)
 
 [官网提供 Fullstack、Website、Admin、Mobile 四类模板的实际页面预览](https://hai-series.github.io/hai-framework/#template-previews)。Website 默认 SSR，静态托管需按[静态构建说明](docs/usage/configuration/delivery.md#静态website与github-pages)配置；原生安装包需要对应平台工具链。
 
@@ -97,6 +97,8 @@ pnpm run deploy --env prod --build --bundle-only
 ```
 
 `--plan` 用于只读预检；`--services` 选择本次更新的服务；`--bundle-only` 生成可搬运的离线交付包。自动恢复覆盖服务与配置快照，数据库迁移和外部副作用需另设恢复方案。真实 IP、子路径、存储直连和策略文件见[部署与运行配置](docs/usage/configuration/delivery.md)。
+
+![交付流程：打包应用与中间件，经 SSH 或离线服务器部署，检查健康状态并维护发布基线](docs/images/delivery-flow.zh-CN.svg)
 
 ## 按领域查找模块
 

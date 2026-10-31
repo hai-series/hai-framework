@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="456" viewBox="0 0 1120 456" role="img" aria-labelledby="title desc" xml:lang="en-US">
+  <title id="title">Private deployment and offline delivery</title>
+  <desc id="desc">Bundle application and self-hosted middleware images, deploy over SSH or with a local server script, then check health and the successful release baseline.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1 9 5 1 9" fill="none" stroke="#7988a1" stroke-width="1.5"/></marker>
+  </defs>
+  <g font-family="Segoe UI, Microsoft YaHei, Meiryo, sans-serif">
+  <rect x="1" y="1" width="1118" height="454" rx="20" fill="#f8faff" stroke="#d5dfed"/>
+  <text x="32" y="48" font-size="28" fill="#14233b" font-weight="700">Private deployment and offline delivery</text>
+  <text x="32" y="80" font-size="17" fill="#56657e" >Package application and middleware images for full or partial releases.</text>
+  <rect x="32" y="116" width="278" height="214" rx="14" fill="#fff" stroke="#d5dced"/>
+  <text x="52" y="151" font-size="21" fill="#24344c" font-weight="650">Build &amp; package</text>
+  <text x="52" y="191" font-size="17" fill="#394b65" >Application images</text>
+  <text x="52" y="224" font-size="17" fill="#394b65" >Middleware images</text>
+  <text x="52" y="257" font-size="15" fill="#394b65" >Configuration · Manifest · Scripts</text>
+  <rect x="52" y="279" width="238" height="30" rx="8" fill="#f0ecfd"/>
+  <text x="171" y="300" font-size="13" fill="#6247a6" text-anchor="middle" font-weight="600">Complete delivery bundle</text>
+  <path d="M310 225H350" fill="none" stroke="#7f91b2" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="364" y="116" width="350" height="214" rx="14" fill="#fff" stroke="#d5dced"/>
+  <text x="384" y="151" font-size="21" fill="#24344c" font-weight="650">Choose a delivery path</text>
+  <rect x="384" y="170" width="310" height="64" rx="10" fill="#f0ecfd"/>
+  <text x="400" y="196" font-size="17" fill="#523e8b" font-weight="650">Deploy over SSH</text>
+  <text x="400" y="219" font-size="13" fill="#65577e" >Windows / Linux / macOS scripts</text>
+  <rect x="384" y="246" width="310" height="64" rx="10" fill="#e8f4f1"/>
+  <text x="400" y="272" font-size="17" fill="#1d6c5c" font-weight="650">Deploy on an offline server</text>
+  <text x="400" y="295" font-size="13" fill="#42695f" >Transfer bundle · deploy-local.sh</text>
+  <path d="M714 225H754" fill="none" stroke="#7f91b2" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="768" y="116" width="320" height="214" rx="14" fill="#fff" stroke="#d5dced"/>
+  <text x="788" y="151" font-size="21" fill="#24344c" font-weight="650">Verify &amp; maintain</text>
+  <text x="788" y="193" font-size="16" fill="#394b65" >Health check → successful release</text>
+  <text x="788" y="238" font-size="16" fill="#394b65" >Update selected services</text>
+  <text x="788" y="283" font-size="15" fill="#394b65" >Attempt service / config recovery</text>
+  <rect x="32" y="354" width="1056" height="48" rx="12" fill="#e8f4f1" stroke="#c4dfd7"/>
+  <text x="560" y="385" font-size="18" fill="#1f6657" text-anchor="middle" font-weight="600">Retain existing data volumes and managed credentials</text>
+  <text x="32" y="435" font-size="13" fill="#65738a" >Database migrations and external side effects need separate recovery. Prepare the required runtimes and services.</text>
+  </g>
+</svg>
