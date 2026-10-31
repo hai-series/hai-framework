@@ -239,6 +239,8 @@ SSH interruptions initially report `remoteExecution: 'unknown'`. The docker-ssh 
 
 ### Runtime environment files and repeated deployments
 
+Environment flags, initial account passwords and the transport key ring are also read directly by startup code. They remain available even when a similarly named configuration parent exists.
+
 Delivery removes every HAI child variable hidden by a parent and omits settings supplied by `middleware.env` from `.env.runtime`. Container paths stay in delivery files; pruning leaves the source environment intact. Edit the retained parent object or managed connection file.
 
 Node backends (Serv / SvelteKit SSR) reread the release `.env.runtime` on every start by default. Edit it, then run `docker restart <container>` or `podman restart <container>`; no image rebuild or extra override is needed. Existing deployments need one deployment with the new CLI. Removed settings do not survive through stale Compose injection. Managed connections in `middleware.env` retain precedence; private proxy identity and Node startup options remain deployment settings. Static Web, middleware, ports/mounts, and Nginx routes and limits keep their existing update flow. Gateway path, port or mount changes require a full deployment. Back up manual edits and copy permanent changes into the source environment; the next backend deployment regenerates the file.

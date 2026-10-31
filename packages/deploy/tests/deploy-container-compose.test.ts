@@ -388,13 +388,23 @@ describe('serializeEnvFile', () => {
       HAI_STORAGE: '{"type":"s3"}',
       HAI_STORAGE_BUCKET: 'ignored',
       HAI_CONFIG_ADMIN_PASSWORD: 'fixture-value',
+      HAI_CONFIG: '{}',
+      HAI_CRYPTO: '{}',
+      HAI_CRYPTO_TRANSPORT_SERVERKEYRING: 'fixture-ring',
+      HAI_CORE: '{"env":"test"}',
+      HAI_CORE_ENV: 'production',
+      HAI_E2E: '1',
+      HAI_E2E_MOCK: '1',
       PUBLIC_API_BASE: '/api/v1',
     }
     const original = { ...env }
     const content = serializeEnvFile(env, { HAI_STORAGE: '{"type":"s3","bucket":"managed"}' })
     expect(content).toContain('HAI_SERV=')
-    expect(content).toContain('HAI_CORE_LOGGING=')
+    expect(content).not.toContain('HAI_CORE_LOGGING=')
     expect(content).toContain('HAI_CONFIG_ADMIN_PASSWORD=')
+    expect(content).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING=fixture-ring')
+    expect(content).toContain('HAI_CORE_ENV=production')
+    expect(content).toContain('HAI_E2E_MOCK=1')
     expect(content).toContain('PUBLIC_API_BASE=')
     expect(content).not.toMatch(/^HAI_SERV_HTTP/m)
     expect(content).not.toMatch(/^HAI_CORE_LOGGING_LEVEL=/m)

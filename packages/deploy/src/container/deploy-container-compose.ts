@@ -33,6 +33,17 @@ const IMAGES = {
   nginx: 'docker.io/nginxinc/nginx-unprivileged:1.29.8-alpine',
 } as const
 
+// 这些变量还由启动代码直接读取，父级 YAML/JSON 不会替代其进程语义。
+const PROCESS_ENV_KEYS = new Set([
+  'HAI_CORE_ENV',
+  'HAI_CRYPTO_TRANSPORT_SERVERKEYRING',
+  'HAI_ADMIN_DEFAULT_PASSWORD',
+  'HAI_AUDIT_ADMIN_PASSWORD',
+  'HAI_CONFIG_ADMIN_PASSWORD',
+  'HAI_BUSINESS_OPERATOR_PASSWORD',
+  'HAI_E2E',
+])
+
 // 旧版本曾把镜像原生变量保存到应用环境；读取旧配置时也不再传给业务容器。
 const CONTAINER_ENV_KEYS = new Set([
   'POSTGRES_USER',
@@ -929,7 +940,7 @@ export function serializeEnvFile(env: Record<string, string>, overrides: Record<
     .filter(([name]) => {
       if (Object.hasOwn(overrides, name))
         return false
-      if (!name.startsWith('HAI_'))
+      if (!name.startsWith('HAI_') || PROCESS_ENV_KEYS.has(name) || name.startsWith('HAI_E2E_'))
         return true
       for (let at = name.indexOf('_', 4); at !== -1; at = name.indexOf('_', at + 1)) {
         if (Object.hasOwn(effective, name.slice(0, at)))

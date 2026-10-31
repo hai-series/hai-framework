@@ -33,7 +33,7 @@ it.each(['missing', 'malformed', 'valid'])('部署启用 transport 的应用时�
   key.generateKeys()
   const ring = JSON.stringify({ activeKeyId: 'v1', keys: { v1: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } })
   if (state !== 'missing')
-    writeFileSync(join(root, '.env.test.local'), `HAI_CRYPTO_TRANSPORT_SERVERKEYRING='${state === 'valid' ? ring : 'invalid-fixture-ring'}'\n`)
+    writeFileSync(join(root, '.env.test.local'), `HAI_CRYPTO='{}'\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${state === 'valid' ? ring : 'invalid-fixture-ring'}'\n`)
   await initialize(false)
   const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
   expect(result.success).toBe(state === 'valid')
@@ -842,6 +842,20 @@ it('缺少应用版本、路径伪装或镜像 tar 版本不一致的清单被�
     for (const port of [0, 65536, 1.5, '3000'])
       expect(DeploymentArtifactSchema.safeParse({ ...artifact, [name]: port }).success).toBe(false)
   }
+})
+
+it('node 启动参数保存在有效装配中，运行文件不重复保留忽略项', async () => {
+  writeFileSync(join(root, '.env.test.local'), 'NODE_OPTIONS=--enable-source-maps\n')
+  vi.stubEnv('NODE_OPTIONS', '--enable-source-maps')
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  const directory = deliveryDirectory(result)
+  const runtime = parseEnv(readBundleFile(directory, '.env.runtime'))
+  expect(runtime).not.toHaveProperty('NODE_OPTIONS')
+  expect(runtime).not.toHaveProperty('HAI_DEPLOY_PRIVATE_PROXY')
+  const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
+  expect(compose.services.serv.environment.NODE_OPTIONS).toContain('--enable-source-maps')
+  expect(compose.services.serv.environment.HAI_DEPLOY_PRIVATE_PROXY).toBe('1')
 })
 
 it.each(['file', 'process'])('初始密码说明仅显示实际 %s 来源，不公开密码', async (source) => {

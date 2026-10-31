@@ -717,7 +717,7 @@ done`
           expect(details).toMatchObject({ success: true, data: { env: 'test' } })
           metadata = details.data
           const local = parseEnv(readFileSync(path.join(appDir, '.env.test'), 'utf8'))
-          const runtimeEnv = parseEnv(await readDeliveryFile(commands, deliveryDirectory, '.env.runtime'))
+          const runtimeEnv = { ...parseEnv(await readDeliveryFile(commands, deliveryDirectory, '.env.runtime')), ...parseEnv(await readDeliveryFile(commands, deliveryDirectory, 'middleware.env')) }
           // 每次打包都没有本机稳定密码缓存，模拟换电脑；服务器状态与数据库数据必须保持。
           const candidateDigest = createHash('sha256').update(await readDeliveryFile(commands, deliveryDirectory, 'managed-candidates.env')).digest('hex')
           expect(candidateDigests.has(candidateDigest)).toBe(false)

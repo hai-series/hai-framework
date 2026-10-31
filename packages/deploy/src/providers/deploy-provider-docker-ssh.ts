@@ -411,7 +411,9 @@ export function createDockerSshProvider(
     mkdirSync(artifactDir, { mode: 0o700 })
     chmodSync(artifactDir, 0o700)
     const envPath = join(artifactDir, '.env.runtime')
-    writeFileSync(envPath, serializeEnvFile(env, sidecar.env), { mode: 0o600 })
+    const nodeRuntime = primaryService === 'serv' || scan.isSvelteKit
+    const startupOverrides: Record<string, string> = nodeRuntime ? { NODE_OPTIONS: '', HAI_DEPLOY_PRIVATE_PROXY: '' } : {}
+    writeFileSync(envPath, serializeEnvFile(env, { ...sidecar.env, ...startupOverrides }), { mode: 0o600 })
     if (requestAccessSnapshot)
       writeFileSync(join(artifactDir, 'request-access.yml'), requestAccessSnapshot, { mode: 0o600 })
     writeFileSync(join(artifactDir, 'middleware-runtime.env'), serializeEnvFile(sidecar.containerEnv), { mode: 0o600 })
@@ -433,7 +435,7 @@ export function createDockerSshProvider(
       containerPort,
       primaryService,
       requestAccessPolicy: requestAccessSnapshot !== undefined,
-      nodeRuntime: primaryService === 'serv' || scan.isSvelteKit,
+      nodeRuntime,
       nodeOptions: env.NODE_OPTIONS,
       sidecar,
       web: hasWebProxy ? { imageRef: web?.imageRef ?? 'localhost/hai-unselected:0', containerPort: webContainerPort } : undefined,
