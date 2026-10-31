@@ -154,7 +154,8 @@ function documentOptionalConfig(name: string, content: string): string {
 
 /** 将可选示例临时作为 YAML 读取，只用于获取路径和位置，原文件仍保持注释。 */
 function readOptionalConfig(content: string) {
-  const lines = content.split('\n')
+  // 行尾注释必须追加在换行符之前；去掉 CRLF 中的 CR，避免说明被挤到下一行。
+  const lines = content.split(/\r?\n/)
   const virtual = lines.map(line => line.replace(/^(\s*)# (?=\s*(?:[A-Z][\w-]*:|-\s))/i, '$1')).join('\n')
   const counter = new LineCounter()
   const document = parseDocument(virtual, { uniqueKeys: false, lineCounter: counter })

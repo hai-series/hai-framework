@@ -20,8 +20,9 @@ describe('environment configuration', () => {
     expect(loadConfigText('iam', documented)).toEqual(loadConfigText('iam', original))
     expect(documentConfig('iam', documented)).toBe(documented)
   })
-  it.each(['iam', 'reach'])('真实应用 %s 配置的说明可重复更新，数组与段尾注释不累加', async (module) => {
-    const original = await readFile(new URL(`../../../apps/admin-console/config/_${module}.yml`, import.meta.url), 'utf8')
+  it.each(['iam', 'reach'].flatMap(module => ['LF', 'CRLF'].map(newline => ({ module, newline }))))('真实应用 $module 配置在 $newline 换行下可重复更新，数组与段尾注释不累加', async ({ module, newline }) => {
+    const source = await readFile(new URL(`../../../apps/admin-console/config/_${module}.yml`, import.meta.url), 'utf8')
+    const original = source.replaceAll('\r\n', '\n').replaceAll('\n', newline === 'CRLF' ? '\r\n' : '\n')
     const first = documentConfig(module, original)
     expect(loadConfigText(module, first)).toEqual(loadConfigText(module, original))
     expect(documentConfig(module, first)).toBe(first)
