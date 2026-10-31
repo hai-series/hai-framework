@@ -129,6 +129,28 @@ it('lets a complete environment bypass every middleware prompt and preserves env
   expect(deploy.config?.services).toBeUndefined()
 }, 30_000)
 
+it('首次部署先保存下载源和代理选择，后续交互仍沿用中间件流程', async () => {
+  const { app, service } = await fullstackFixture(false)
+  writeFileSync(join(app, '.env.test'), 'HAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","ssh":{"host":"existing.test","username":"deploy"},"expose":{"hostPort":8080}}\'\nHAI_DB_TYPE=sqlite\n')
+  mocked.prompt.mockImplementation(async (question) => {
+    if ([cliM('cli_download_choose_image'), cliM('cli_download_choose_npm')].includes(question.message))
+      return { value: 'cn' }
+    if (question.message === cliM('cli_download_choose_proxy'))
+      return { value: 'none' }
+    return { [question.name]: question.name === 'httpsMode' ? 'keep' : question.type === 'multiselect' ? question.choices.map((item: { value: string }) => item.value) : 'skip' }
+  })
+  const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'http://existing.test:8080', deploymentId: 'first-download-selection', status: 'ready', envVarsSet: [] } })
+  await deployCommand({ appDir: service, env: 'test' })
+  const downloadQuestions = [cliM('cli_download_choose_image'), cliM('cli_download_choose_npm'), cliM('cli_download_choose_proxy')]
+  expect(mocked.prompt.mock.calls.map(([question]) => question.message).filter(message => downloadQuestions.includes(message))).toEqual([
+    cliM('cli_download_choose_image'),
+    cliM('cli_download_choose_npm'),
+    cliM('cli_download_choose_proxy'),
+  ])
+  expect(JSON.parse(readFileSync(join(app, 'hai.json'), 'utf8')).build).toMatchObject({ sources: { image: { type: 'cn' }, npm: { type: 'cn' } }, proxy: { mode: 'none' } })
+  expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ imageSource: { type: 'cn' }, proxy: { mode: 'none' }, skipMiddleware: true }))
+}, 30_000)
+
 it('infers Web selection from a partial artifact before configuring middleware', async () => {
   const { app, service } = await fullstackFixture()
   const artifacts = join(app, '.hai/build/docker/partial')
@@ -332,11 +354,19 @@ afterEach(async () => {
     rmSync(root, { recursive: true, force: true })
 })
 
-async function fullstackFixture(): Promise<{ root: string, app: string, service: string }> {
+async function fullstackFixture(downloadsConfigured = true): Promise<{ root: string, app: string, service: string }> {
   const root = mkdtempSync(join(tmpdir(), 'hai-deploy-fullstack-'))
   roots.push(root)
   await createProject({ name: 'deploy-app', appType: 'fullstack', frontends: ['web'], defaults: true, install: false, git: false, cwd: root })
   const app = join(root, 'deploy-app')
+  if (downloadsConfigured) {
+    // 旧向导用例验证中间件和 SSH；已保存下载偏好时不应插入首次选择问题。
+    const path = join(app, 'hai.json')
+    const project = JSON.parse(readFileSync(path, 'utf8'))
+    project.build.sources = { image: { type: 'official' }, npm: { type: 'official' } }
+    project.build.proxy = { mode: 'inherit' }
+    writeFileSync(path, JSON.stringify(project, null, 2))
+  }
   expect(JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).devDependencies['@h-ai/deploy']).toBe('catalog:')
   const service = join(app, 'packages/deploy-app-serv')
   writeFileSync(join(app, 'pnpm-lock.yaml'), stringify({ lockfileVersion: '9.0', importers: { 'packages/deploy-app-serv': { dependencies: Object.fromEntries(['iam', 'reldb', 'cache', 'storage', 'reach'].map(name => [`@h-ai/${name}`, { version: '1' }])) } }, packages: Object.fromEntries(['iam', 'reldb', 'cache', 'storage', 'reach'].map(name => [`@h-ai/${name}@1`, {}])), snapshots: Object.fromEntries(['iam', 'reldb', 'cache', 'storage', 'reach'].map(name => [`@h-ai/${name}@1`, {}])) }))
