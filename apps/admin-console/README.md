@@ -128,7 +128,7 @@ pnpm --filter admin-console preview
 
 `_audit.yml` 控制采集、隐私脱敏、保留保护、备份与轻量告警。审计管理员可取得私有 JSONL 备份的 key、记录数和 SHA-256 回执，失败重试复用编号；`hai-private/audit-backups/` 不提供公开下载。自动任务复用 Scheduler，告警复用 Reach。归档不是数据库原子快照；严格时间点恢复须暂停写入/清理或使用数据库备份，并在独立环境核验、恢复。保留保护启用时清理不能突破最小保留时间；部署者仍须保护数据库和私有存储权限。
 
-本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。优先级为进程环境 > `.env.local` > 环境文件 > `.env`。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../README.md#配置与环境变量)。
+本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。统一优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同源父 JSON 为基础、细项覆盖；高来源整段替换清掉低来源细项。模式私有文件不提交 Git。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../docs/usage/configuration/runtime.md)。
 
 #### 环境变量
 

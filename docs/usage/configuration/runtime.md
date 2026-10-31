@@ -11,16 +11,36 @@
 | 来源 | 普通应用运行时的优先级与用途 |
 | --- | --- |
 | 进程环境 | 最高；CI/容器/Secret Manager 注入，已有变量不被 dotenv 覆盖；空字符串也是显式输入 |
+| `.env.<mode>.local` | 当前环境的私有覆盖，不提交版本库 |
 | `.env.local` | 本机私有覆盖，不提交版本库 |
 | `.env.<mode>` | 环境公共差异，例如 `.env.prod`；不放真实秘密 |
 | `.env` | 公共基础值 |
-| YAML 中的 `HAI_<配置名>_<路径>` 覆盖 | 加载 YAML 时按约定覆盖节点，父对象整体替换优先于已有子叶；`camelCase` 不拆词 |
+| YAML 中的 `HAI_<配置名>_<路径>` 覆盖 | 环境值覆盖 YAML；同源先父 JSON 后细项，`camelCase` 不拆词 |
 | `${VAR}` / `${VAR:回退值}` | 没有约定节点覆盖时解析插值；必需变量缺失返回 `CONFIG_ENV_VAR_MISSING` |
 | Schema 默认 | 最后补齐该 Schema 明确声明的缺省字段，不能补真实服务地址和凭据 |
 
-`core.init()` 不读取 dotenv。Node/Vite 宿主需先调用 `core.config.loadEnvFiles` 并检查 success，或采用生成工程已有装配。部署额外支持 `.env.<mode>.local` 且父/叶合并有不同规则，见[部署配置](delivery.md#环境和秘密的来源)。不要在应用里再实现一套覆盖顺序。
+`core.init()` 不读取 dotenv。Node/Vite 宿主先调用 `core.config.loadEnvFiles` 并检查 success，生成工程的 Node 启动命令复用 `scripts/run-node.mjs`。Core、构建和部署使用相同顺序。更高来源整段替换节点时先清除低来源细项，同来源再按父到子应用，与行序无关。同文件重复变量报错。
 
-例如 YAML 写 `session.maxAge: 86400`，`HAI_IAM_SESSION_MAXAGE=1800` 可把它改成 1800。若同时设置 `HAI_IAM_SESSION='{"maxAge":3600}'`，父对象整体替换，叶子 1800 不再生效；YAML 没有的任意叶子不会凭空创建，应补字段或覆盖完整父对象。
+例如同一文件有 `HAI_IAM_SESSION='{"maxAge":3600}'` 和 `HAI_IAM_SESSION_MAXAGE=1800`，最终为 1800。宿主显式提供模块 `configSchemas` 后，Schema 中合法的可选路径即使未写入 YAML 也能接收细项；扫描仅使用结构和类型，模块仍执行完整校验。没有 Schema 时按已有 YAML/JSON 结构定位，未知路径不凭空创建。
+
+### JSON 兜底与生成规则
+
+手写 JSON 可用于任何对象或数组，放在对应模块细项之前便于阅读。生成命令优先写细项，数组保留 JSON。动态字典、显式空对象以及本身要求 JSON 文本的字段保留原义；整体替换对象展开时可能留下最上层 `{}` 重置标记，避免旧 YAML 字段重新出现。
+
+```dotenv
+# 对象基础在前，细项在后；本例最终公开地址包含 12348 端口。
+HAI_STORAGE='{"type":"s3","bucket":"hai","region":"us-east-1"}'
+HAI_STORAGE_ENDPOINT=http://storage:9000
+HAI_STORAGE_FORCEPATHSTYLE=true
+HAI_STORAGE_PUBLICENDPOINT=http://172.30.85.45:12348/files
+HAI_STORAGE_CREATEBUCKET=true
+
+# 列表保留一个 JSON；索引只修改已有项，不追加、不生成空洞。
+HAI_REACH_PROVIDERS='[{"name":"mail","type":"smtp","host":"smtp.example.com","port":465,"secure":true,"from":"noreply@example.com"}]'
+# 密码单独写 .env.test.local：HAI_REACH_PROVIDERS_0_PASS=...
+```
+
+生成工具不会同时写一份包含相同属性的大 JSON 和细项。空字符串、false、0、空数组均为显式值；Schema 字符串保留前导零，JSON/环境值中的 `${...}` 不再次插值。数组越界或缺少列表声明时报错。
 
 ![环境值合并、YAML 覆盖与模块初始化](../images/configuration-sources.svg)
 
@@ -119,18 +139,19 @@ core.logger.info('Customer updated', { customer: { email } })
 
 ## 部署后重启加载运行配置
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
-运行文件在服务器 `<部署目录>/releases/<该后端的发布ID>/.env.runtime`，以该后端容器实际挂载的源文件为准。后续只更新 Web 或中间件时，`current` 可能指向较新的发布记录，后端仍读取其原发布文件。运行文件和托管连接只读挂载给后端，上级发布目录保持 0700，宿主所有者可修改文件。先备份，再编辑，重启并核对健康和一条受配置影响的业务请求；加载或 Schema 校验失败时恢复文件再重启。进程启动后不会持续监视文件。
+运行文件固定为服务器 `<部署目录>/config/.env.runtime`，各发布记录在自己的 `config/.env.runtime` 保存快照。宿主部署根目录保护凭据，容器只读挂载配置目录。先备份，再编辑，重启并核对健康和一条受影响的业务请求；加载或 Schema 校验失败时恢复文件再重启。进程启动后不会持续监视文件。
 
 可在服务器查询实际路径（Podman 将命令名换成 `podman`），然后编辑返回的文件并重启同一后端容器：
 
 ```bash
-docker inspect hai-myapp-test-serv --format '{{range .Mounts}}{{if eq .Destination "/run/hai/.env.runtime"}}{{.Source}}{{end}}{{end}}'
+docker inspect hai-myapp-test-serv --format '{{range .Mounts}}{{if eq .Destination "/run/hai/config"}}{{.Source}}{{end}}{{end}}'
+# 编辑上述目录中的 .env.runtime，然后重启。
 docker restart hai-myapp-test-serv
 ```
 
-环境文件采用 dotenv 字面语法，不执行 shell、变量展开或 Compose 插值；双引号字符串支持交付使用的 JSON 转义。单个文件上限 1 MiB；缺失、不可读或超限会在导入应用前失败，不打印变量值。整个 `HAI_SERV` / `HAI_KIT` 父对象仍优先于同名叶字段，调整叶字段时先处理已有父对象。Node 启动选项变更仍需重新部署。
+环境文件采用 dotenv 字面语法，不执行 shell、变量展开或 Compose 插值；生成器编码保留混合引号、多行、反斜线和 Unicode。单个文件上限 1 MiB；缺失、不可读、重复变量或超限会在导入应用前失败，不打印变量值。同源细项覆盖父 JSON，显式进程 `HAI_*` 注入仍优先。Node 启动选项变更需重新部署。修改连接密码不会自动修改中间件内部密码，托管凭据与数据卷状态必须一致。
 
 SvelteKit SSR 在 Node 服务正常停止后，会先关闭业务模块，再释放其依赖的数据库、缓存等资源，避免后台任务或连接阻止进程退出。
 

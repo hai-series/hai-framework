@@ -8,7 +8,7 @@
 
 `package.json.name`是项目资源身份，去scope、转小写并规范非法字符；不能通过目录名猜测，缺失会报错。应用根`version`用于制品版本。`hai.json.build`描述编译/镜像/原生打包，`hai.json.deploy`描述部署；服务目录仅用于扫描依赖和运行配置。
 
-中间件向导选择默认或自定义时，保留同后端的完整有效配置，表单未展示项也会传到运行环境：数据库连接池/操作日志、S3 的 `publicEndpoint/publicUrl/prefix`、Redis 重试/键前缀、向量检索选项、SMTP 发件人和 LDAP 属性映射。自建与云开通只定稿实际连接及凭据，切换后端清除不兼容字段。若旧版已保存缺字段的 `HAI_STORAGE` 父 JSON，须从原配置/备份补回最高优先级父对象，再重新生成部署包；父对象存在时，仅修改 YAML 或叶变量不能恢复公开下载地址。
+中间件向导选择默认或自定义时，保留同后端的完整有效配置，表单未展示项也会传到运行环境：数据库连接池/操作日志、S3 的 `publicEndpoint/publicUrl/prefix`、Redis 重试/键前缀、向量检索选项、SMTP 发件人和 LDAP 属性映射。自建与云开通只定稿实际连接及凭据，切换后端清除不兼容字段。生成端优先输出细项，同来源细项覆盖手写 JSON 基础。配置合并在 Core，字段 Schema 与业务验证属于所属模块；CLI 部署向导只收集输入并调用 SDK。
 
 ### 连接已有数据库、缓存和对象存储
 
@@ -324,20 +324,19 @@ GitHub仓库Pages选择Actions，上传build时显式include-hidden-files:true�
 
 ## 环境和秘密的来源
 
-应用根需要`.env.<环境>`，例如`.env.prod`。部署SDK额外读取环境私有文件，Core普通加载规则不变。
+应用根需要 `.env.<环境>`，例如 `.env.prod`。Core、Node/Vite 和部署 SDK 使用相同来源规则。
 
 | 配置类别 | 从高到低 |
 | --- | --- |
-| `HAI_DEPLOY_`* | 进程 → `.env.prod.local` → `.env.prod` → 旧`.env.local` → `.env` |
-| 其他模块 | 进程 → `.env.prod.local` → 旧`.env.local` → `.env.prod` → `.env` |
+| 全部 `HAI_*` | 进程 → `.env.prod.local` → `.env.local` → `.env.prod` → `.env` → YAML |
 
-`${VAR:回退值}`支持插值。`HAI_DEPLOY`按来源合并：高来源父对象清除低来源叶子，同一来源先父后叶；与Core父对象整体优先不同。SSH文本保留前后空格和前导零，不把密码转数字。
+`${VAR:回退值}` 支持插值。所有模块按来源合并：高来源父对象清除低来源细项，同一来源先父后细项，与行序无关。Schema 字符串保留前后空格和前导零，不把密码转数字；环境值中的插值标记保持字面内容。
 
 公共地址/后端选择放环境公共文件，新SSH与中间件私密值保存在忽略Git的`.env.<环境>.local`；生产密钥可由Secret Manager注入。生成模板可能提供初始凭据候选，部署前必须按本环境管理和轮换，不能因文件可提交就把真实生产秘密放入版本库。
 
 运行时`.env.runtime`在交付tar内，属于私有产物；`NODE_ENV`默认dev→development、test→test、prod及其他模式→production，显式环境可覆盖。构建优化模式不改变部署运行默认。反向代理和加密预算从解析后的Serv/Kit配置推导，容量变化要同时验附件与页面/API。
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
 配置路径、保护、解析规则与检查方式见[重启加载运行配置](runtime.md#部署后重启加载运行配置)。请求策略也可引用运维独立 YAML，见[修改后重启生效](request-access.md#44-运维独立管理文件修改后重启生效)。
 
@@ -349,15 +348,15 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 ### 修改配置后如何生效
 
-交付时清理被父对象或托管连接覆盖的配置。核心环境标记、职责账号初始密码和传输密钥环仍由启动代码直接读取，因此保留；`NODE_OPTIONS` 和私有代理标记则以部署装配为准，运行文件不再重复保存忽略项。
+交付时先解析粗细覆盖结果，再生成细项；数组、动态字典和显式空对象保留原意，整体对象替换的最上层 `{}` 重置标记防止旧 YAML 值恢复。核心环境标记、职责账号初始密码和传输密钥环由启动代码直接读取，继续保留；`NODE_OPTIONS` 和私有代理标记以部署装配为准。
 
-交付目录的 `README.txt` 会列出本次服务器发布记录路径和修改步骤。仅更新 Web 或中间件后，`current` 可能指向新记录，而后端仍挂载旧记录；先从容器 Mounts 中定位 `/run/hai/.env.runtime` 的 Source，备份后再编辑。
+交付目录的 `README.txt` 列出服务器固定配置路径 `<部署目录>/config/.env.runtime` 和本次快照路径。配置目录挂载到 `/run/hai/config`，备份后编辑其中的 `.env.runtime`。
 
 | 内容 | 修改位置与生效方式 |
 | --- | --- |
 | 普通 Node 后端配置 | 实际挂载的 `.env.runtime`；修改后重启后端并验证业务 |
-| HAI 父级对象内的字段 | 修改保留的 JSON 对象；新加叶子变量不会覆盖父级 |
-| 服务器托管连接 | `middleware.env` 优先；凭据、账本及实际中间件配置须一致，单改应用连接不能给中间件换密 |
+| HAI 父级对象内的字段 | 同源细项覆盖 JSON 基础；按模块把 JSON 放细项之前 |
+| 服务器托管连接 | 统一在 `config/.env.runtime`；凭据、账本及实际中间件配置须一致，单改应用连接不能给中间件换密 |
 | 仅 Compose `env_file` 注入的环境 | 修改后重新创建对应容器；通常不需重建镜像 |
 | HTTPS 模式/域名/端口、挂载、Nginx 路由与容量 | 修改源配置，生成新全量部署包 |
 | 网站 `PUBLIC_BASE_PATH` | 重新构建并全量部署 |
@@ -521,9 +520,19 @@ Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`
 
 交付 `README.txt` 会列出实际部署根目录和本次 ID。根目录 `incoming/` 接收压缩包及 `.contents/`；正常成功后清理本次上传，失败或状态未知时保留供诊断。`releases/<ID>/` 保存运行配置、Compose 组合、元数据和恢复脚本，不复制镜像 tar。镜像由容器引擎保存，数据库和对象数据位于数据卷。
 
-`compose.json` 定义服务；`compose-entry.json`、`proxy-entry.json`、`compose-files` 组合全量、增量及代理覆盖。环境文件、策略快照与代理的作用见前述运行配置表；`manifest.json`、`image-list`、`services`、`dependencies` 记录制品和服务，`layout`、`web-base-path`、`storage-routing`、`health-paths` 记录布局和探活。`managed-*` 是本包的凭据候选和绑定声明，不能代替根目录的长期凭据；`state-backends` 和 `resolve-*.sh` 参与后端核验。`SHA256SUMS` 用于上传交付内容校验。
+归档只有五个顶层入口：
 
-`current` 是普通文本，只有服务器本地部署健康通过后才更新。结合 `result-<ID>.json` 的 `stage`、`exitCode`、`recoveryStatus` 及 `steps-<ID>.jsonl` 判断结果，不能用 release 目录存在判断成功。增量部署可能继续引用旧 release 的配置和挂载；清理前核对活动容器 Mounts、当前 `compose-files` 及恢复需要，不能简单删除所有非 current 目录。服务器凭据、账本和数据卷按下面的规则成套保护。
+```text
+apply.sh                # 部署入口，内嵌凭据和后端核验辅助脚本
+manifest.json           # 制品、选择服务及非敏感 metadata
+config/.env.runtime     # 唯一应用配置，包含最终连接细项
+images/                 # 本次镜像归档
+.hai/                   # 内部运行资产与恢复证据
+```
+
+`manifest.json.metadata` 合并依赖、布局、健康路径、镜像列表、网关路径和托管绑定等非敏感信息，秘密不进入 manifest。`.hai/compose.json` 保存完整 Compose 快照，局部更新按服务替换并保留未选定义，不链接历史 Compose 文件。原生环境 `.hai/middleware-runtime.env`、加载器、Nginx/TLS、请求策略和 `.hai/SHA256SUMS` 属于内部生成文件。新包格式为 2，不提供旧目录兼容或迁移。
+
+`current` 是普通文本，只有服务器本地部署健康通过后才更新。结合 `result-<ID>.json` 的 `stage`、`exitCode`、`recoveryStatus` 及 `steps-<ID>.jsonl` 判断结果，不能用 release 目录存在判断成功。增量部署可能继续引用旧 release 的只读内部挂载；清理前核对活动容器 Mounts、当前 `.hai/compose.json` 及恢复需要，不能简单删除所有非 current 目录。失败恢复先还原应用配置，再恢复旧服务。服务器凭据、账本和数据卷成套保护。
 
 ## 持久凭据、数据和发布成功基线
 
@@ -535,7 +544,7 @@ Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`
 | --- | --- |
 | `managed-secrets.env` | 服务器长期凭据，与数据卷成套备份；凭据导入不等于证明卷的后端类型 |
 | persistent-backends | 长期保存项目、引擎/用户/存储身份和实际卷的后端家族，启动前原子保存；服务移除、首次失败和自动恢复均不清掉 |
-| releases/部署ID/previous-state-backends | 新发布保存已确认的旧绑定，恢复前据此核对账本及旧卷；只作恢复核验，不回退长期账本 |
+| releases/部署ID/.hai/previous-state-backends | 新发布保存已确认的旧绑定，恢复前据此核对账本及旧卷；只作恢复核验，不回退长期账本 |
 | current及result-部署`ID.json` | 分别表示最后成功发布和某次执行结果，不能替代数据卷或凭据备份 |
 
 这些文件是私有部署元数据，没有新增公开配置API。保护访问权限，备份账本、凭据及数据卷，不手工编辑绑定、删除账本或复用旧工具强行认领。

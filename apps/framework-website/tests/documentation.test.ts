@@ -14,7 +14,7 @@ describe('公开手册的静态阅读契约', () => {
     const document = await getDocument('configuration/runtime.md', '/hai-framework')
     const html = document?.sections.map(section => section.html).join('\n') ?? ''
     expect(html).toContain('src="/hai-framework/guide-images/configuration-sources.svg"')
-    expect(html).toContain('width="1080" height="480"')
+    expect(html).toContain('width="1080" height="540"')
   })
   it('相对文档、图片、源码链接在repo子路径保持正确，私有路径不发布', () => {
     expect(docLink('configuration/README.md', '/hai-framework')).toBe('/hai-framework/docs/configuration/')

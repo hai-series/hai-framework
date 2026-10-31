@@ -223,7 +223,7 @@ HAI_SERV_HTTP_ACCESS='{"file":"./config/security/request-access.yml"}'
 HAI_KIT_ACCESS='{"file":"./config/security/request-access.yml"}'
 ```
 
-设置完整 `HAI_SERV` 或 `HAI_KIT` 父对象时，父对象整体覆盖配置，不再继续叠加子字段变量。建议同一设置只选一种覆盖方式；通常用上面的策略入口变量即可。完整环境优先级见[配置来源](runtime.md#配置从哪里来)。
+完整 `HAI_SERV` 或 `HAI_KIT` JSON 是基础，同一来源的子字段变量继续覆盖。生成命令优先输出 `HAI_SERV_HTTP_ACCESS_FILE` / `HAI_KIT_ACCESS_FILE` 等细项，JSON 位于对应模块的细项之前。完整环境优先级见[配置来源](runtime.md#配置从哪里来)。
 
 内联规则同样可以用 JSON 传入。例如只对外部同步接口限制来源，并关闭该接口的框架应用层加密：
 

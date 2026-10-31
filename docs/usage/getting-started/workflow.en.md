@@ -103,9 +103,10 @@ Configuration files describe module structure: for example, `_db.yml` references
 | `.env.dev` | Public development overrides | Yes |
 | `.env.test` | Public test overrides | Yes |
 | `.env.prod` | Public production overrides | Yes |
+| `.env.<mode>.local` | Private values for this environment | No |
 | `.env.local` | Private settings, credentials, and SSH paths for this machine | No |
 
-Precedence is **existing process variables > `.env.local` > `.env.<environment>` > `.env`**. Check local overrides when changing environments: a connection in `.env.local` can still point to a different environment. JSON object overrides take precedence over individual child fields. Your generated `.env.example` describes available variables and allowed values; the framework-wide catalog is in the [root `.env.example`](../../../.env.example). Apart from the CLI-generated shared bootstrap password and transport key ring for each environment, keep real credentials in private files or the deployment process environment.
+All entries use **process > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML**. Within one source, fields override JSON bases regardless of line order; a higher-source whole-node replacement clears lower-source fields. Generated files prefer field variables and retain arrays, dynamic maps and explicit empty objects. Module schemas define legal optional paths and types.
 
 ```sh
 pnpm dev
@@ -210,7 +211,7 @@ For a website under `/yyy/`, set `PUBLIC_BASE_PATH`=/yyy explicitly during full 
 
 ### 5. Deploy artifacts to an environment
 
-Node backends (Serv / SvelteKit SSR) reread the release `.env.runtime` on every start by default. Edit it, then run `docker restart <container>` or `podman restart <container>`; no image rebuild or extra override is needed. Existing deployments need one deployment with the new CLI. Removed settings do not survive through stale Compose injection. Managed connections in `middleware.env` retain precedence; private proxy identity and Node startup options remain deployment settings. Static Web, middleware, ports/mounts, and Nginx routes and limits keep their existing update flow. Gateway path, port or mount changes require a full deployment. Back up manual edits and copy permanent changes into the source environment; the next backend deployment regenerates the file.
+Node backends (Serv / SvelteKit SSR) read `<deployment-root>/config/.env.runtime` on every start. This single application file includes managed connections. Edit a field such as `HAI_STORAGE_PUBLICENDPOINT`, then restart the backend; fields override parent JSON within the same source. The configuration directory is mounted read-only at `/run/hai/config`, so atomic file replacement is visible on restart. Private proxy identity and Node startup options remain deployment settings. Static Web, native middleware environment, ports/mounts, and Nginx routes or limits require deployment. Web/middleware-only updates retain the file; partial backend updates preserve managed connections, while full updates use the new package with existing managed credentials. Back up edits and copy permanent settings into the source environment.
 
 `pnpm run deploy` offers no HTTPS, existing PEM certificate/key paths, or Let’s Encrypt for every container template. Relative paths resolve from the project root. Certificates are checked for domain, validity and key matching, then copied into private releases. A pinned official Certbot image handles issuance and renewal checks every 12 hours, with automatic Nginx reload. It requires terms acceptance, a real email, public DNS, port 80 and CA connectivity. Isolated servers use existing certificates. Certificate state stays on the server; keys stay out of application images. `--yes` reuses saved settings.
 
@@ -230,7 +231,7 @@ The CLI `--project-name` option and SDK `DeployAppOptions.projectName` override 
 
 Prepare `.env.<environment>` and the project root `hai.json`, with image/native configuration in `build` and application deployment in `deploy`. Fullstack scripts still point to packages/<project>-serv, and API workspaces to apps/<project>-serv, only to scan runtime dependencies and module YAML. Frontend and backend share the project configuration.
 
-`deploy` supports `${VARIABLE:fallback}` and hierarchical `HAI_DEPLOY_*` overrides, including whole JSON objects. Deployment precedence is process > `.env.<environment>.local` > `.env.<environment>` > legacy `.env.local` > `.env`. Other modules retain process > mode-private > legacy global-private > mode-public > base. The deployment-only private layer does not change Core runtime loading. Builds do not load deployment environments or secrets.
+All entries use **process > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML**. Within one source, fields override JSON bases regardless of line order; a higher-source whole-node replacement clears lower-source fields. Generated files prefer field variables and retain arrays, dynamic maps and explicit empty objects. Module schemas define legal optional paths and types. Builds do not read deployment secrets.
 
 For existing projects, move the previous build object into `hai.json.build`, convert deployment YAML into `hai.json.deploy`, remove the old files and retain `HAI_DEPLOY_*` variables. Existing self-hosted S3 installations must use a full deployment for this upgrade: their old baseline contains an exited initialization service, which fails the dependency checks of new incremental packages. The full deployment also refreshes the `createBucket` middleware setting; subsequent incremental updates work normally.
 
@@ -244,11 +245,11 @@ The server persists managed middleware passwords in `<remoteDir>/managed-secrets
 
 Whole `HAI_*` configuration supplied by sidecars or provisioners clears superseded leaf variables: Redis overrides no longer leave `HAI_CACHE_TYPE=memory`. Global `~/.hai/credentials.yml` fills missing settings only, respecting existing environment/process keys and parent objects. Deployment starts selected middleware and waits for PostgreSQL/MySQL/Redis/S3 health before serv/web; incremental deployment and recovery use the same order and preserve unselected containers.
 
-Generated fullstack projects create different administrator passwords and transport key rings in `.env.dev/.env.test/.env.prod`. Commit these environment files to share them after cloning; local private files and process variables can override them. Before upload, deployment identifies missing or malformed `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` for transport-enabled applications. All nodes in an environment use the same valid ring from its environment file or a Secret Manager override; never generate one per node. CLI completion identifies the actual source of `HAI_ADMIN_DEFAULT_PASSWORD` without printing it, independently of log level. It applies only when initially creating the administrator. Offline scripts also identify the password variable in the server's private `.env.runtime`.
+Creation generates independent initial passwords and transport rings in Git-ignored `.env.dev.local`, `.env.test.local`, and `.env.prod.local`. After cloning, distribute environment secrets through protected files or a Secret Manager. Nodes in one environment share a valid ring and registry; startup never generates keys. Initial account passwords do not reset existing accounts.
 
 #### Configure only the middleware the application needs
 
-Framework connections use `HAI_*`. Image-native variables such as `POSTGRES_*` and `RUSTFS_*` keep their required names in private `middleware-runtime.env`, loaded only by middleware. They no longer enter project settings or the application's `.env.runtime`; the application's incremental `middleware.env` contains framework settings only. Previously saved native entries are not automatically removed, but known generated native keys are excluded from new application environments.
+Framework connections are merged into `config/.env.runtime`. Image-native variables keep their required names only in private `.hai/middleware-runtime.env`, loaded by middleware.
 
 Runtime lockfile dependencies and configuration determine middleware. Choose defaults, custom connections or keep settings. `--skip-middleware` skips configuration/provisioning. SQLite, memory cache and local storage need no external images. Complete bundles automatically include self-hosted middleware images. External services still require reachable destinations; cloud provisioning is not an offline operation.
 

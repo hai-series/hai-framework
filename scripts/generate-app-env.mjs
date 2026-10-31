@@ -109,13 +109,13 @@ for (const app of (await readdir('apps')).sort()) {
     .join('\n')
   const content = [
     '# 环境配置示例：包含本应用完整可用字段、说明和取值约束。',
-    '# .env / .env.dev / .env.test / .env.prod 为公共配置，提交 Git；.env.local 为本机私有覆盖，不提交。',
-    '# 优先级：进程环境 > .env.local > .env.<dev|test|prod> > .env。',
-    '# 可选字段先在 YAML 或 hai.json.deploy 中启用对应配置块；一般优先设置细项，避免再用父 JSON 覆盖。完整框架变量见根 .env.example。',
+    '# .env / .env.dev / .env.test / .env.prod 为公共配置，提交 Git；.env.local / .env.<mode>.local 为私有覆盖，不提交。',
+    '# 优先级：进程环境 > .env.<mode>.local > .env.local > .env.<mode> > .env > YAML。',
+    '# 生成配置优先细项，数组保留 JSON；手写 JSON 放模块细项前，同源细项继续覆盖。宿主提供 Schema 后可设置未填写的合法路径。完整框架变量见根 .env.example。',
     '',
     renderEnvironment([...active.values()].filter(variable => !variable.optional)),
     '',
-    '# 可选字段（模块字段先启用 YAML 路径，运行时入口可直接注入）：',
+    '# 可选字段（宿主 Schema 识别结构，所属模块最终校验）：',
     optionalText.trimEnd(),
     '',
   ].join('\n')

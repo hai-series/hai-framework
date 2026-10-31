@@ -6,7 +6,7 @@
 
 ## 先确认配置来源
 
-`_db.yml`等表达模块结构；地址、Provider和秘密按环境提供。公共基础用`.env`，环境公共差异用`.env`.dev/test/prod，私有覆盖用`.env.local`；部署额外有环境私有层。加载、覆盖、默认值和重新生效统一见[基础配置手册](../configuration/runtime.md)，不要为不同环境复制实现。
+`_db.yml`等表达模块结构；地址、Provider和秘密按环境提供。公共基础用`.env`，环境公共差异用`.env`.dev/test/prod，私有覆盖用 `.env.local` 和 `.env.<mode>.local`；全部入口共用来源顺序。加载、覆盖、默认值和重新生效统一见[基础配置手册](../configuration/runtime.md)，不要为不同环境复制实现。
 
 ```sh
 pnpm dev

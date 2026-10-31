@@ -21086,6 +21086,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "canKeepMiddleware",
+              "kind": "value",
+              "declaration": "canKeepMiddleware",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createDeploymentPlan",
               "kind": "value",
               "declaration": "createDeploymentPlan",
@@ -21284,6 +21290,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "parseMiddlewareField",
+              "kind": "value",
+              "declaration": "parseMiddlewareField",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "PortExposeConfig",
               "kind": "type",
               "declaration": "PortExposeConfig",
@@ -21326,6 +21338,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "saveMiddlewareEnvironment",
+              "kind": "value",
+              "declaration": "saveMiddlewareEnvironment",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ScanResult",
               "kind": "type",
               "declaration": "ScanResult",
@@ -21342,6 +21360,12 @@
               "kind": "type",
               "declaration": "SshConfig",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "validateMiddlewareField",
+              "kind": "value",
+              "declaration": "validateMiddlewareField",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -21360,6 +21384,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "canKeepMiddleware",
+              "kind": "value",
+              "declaration": "canKeepMiddleware",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createDeploymentPlan",
               "kind": "value",
               "declaration": "createDeploymentPlan",
@@ -21558,6 +21588,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "parseMiddlewareField",
+              "kind": "value",
+              "declaration": "parseMiddlewareField",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "PortExposeConfig",
               "kind": "type",
               "declaration": "PortExposeConfig",
@@ -21600,6 +21636,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "saveMiddlewareEnvironment",
+              "kind": "value",
+              "declaration": "saveMiddlewareEnvironment",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ScanResult",
               "kind": "type",
               "declaration": "ScanResult",
@@ -21616,6 +21658,12 @@
               "kind": "type",
               "declaration": "SshConfig",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "validateMiddlewareField",
+              "kind": "value",
+              "declaration": "validateMiddlewareField",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         },
@@ -21634,6 +21682,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "canKeepMiddleware",
+              "kind": "value",
+              "declaration": "canKeepMiddleware",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "createDeploymentPlan",
               "kind": "value",
               "declaration": "createDeploymentPlan",
@@ -21832,6 +21886,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "parseMiddlewareField",
+              "kind": "value",
+              "declaration": "parseMiddlewareField",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "PortExposeConfig",
               "kind": "type",
               "declaration": "PortExposeConfig",
@@ -21874,6 +21934,12 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "saveMiddlewareEnvironment",
+              "kind": "value",
+              "declaration": "saveMiddlewareEnvironment",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
               "name": "ScanResult",
               "kind": "type",
               "declaration": "ScanResult",
@@ -21890,6 +21956,12 @@
               "kind": "type",
               "declaration": "SshConfig",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "validateMiddlewareField",
+              "kind": "value",
+              "declaration": "validateMiddlewareField",
+              "declarationKind": "FunctionDeclaration"
             }
           ]
         }

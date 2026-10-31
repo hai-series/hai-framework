@@ -37,8 +37,8 @@
 
 ## 环境变量
 
-- `.env.example` 完整列出可用字段、用途、默认值、枚举与范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存当前机器的私有覆盖，不提交 Git。
-- 加载优先级为进程环境 > `.env.local` > 环境文件 > `.env`。Vite 在 Node 配置阶段通过 `core.config.loadEnvFiles` 读取并检查结果，Node 启动脚本按同样顺序传入环境文件；`core.init` 不自行读取 dotenv。完整约定见 [环境配置](../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
+- `.env.example` 完整列出可用字段、用途、默认值、枚举与范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机共享私有覆盖，`.env.<mode>.local` 保存模式私有值，均不提交 Git。
+- 统一优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同源父 JSON 为基础，细项覆盖；高来源整段替换清掉低来源细项。Vite 在 Node 配置阶段通过 `core.config.loadEnvFiles` 读取并检查结果，Node 启动脚本复用 `scripts/run-node.mjs`，避免原生多 `--env-file` 遗留低来源细项；`core.init` 不自行读取 dotenv。完整约定见 [环境配置](../../packages/cli/templates/skills/hai-app-create/development.md#环境配置)。
 - YAML 使用 `HAI_<配置名>_<字段路径>` 显式引用；camelCase 不拆词，数组使用从零开始的索引。运行参数、示例应用、CLI 模板与模块文档使用相同变量名，并保留 Schema 校验。
 - 禁止硬编码 API Key / 密钥
 - `PUBLIC_` / `VITE_` 前缀仅用于客户端安全的变量
