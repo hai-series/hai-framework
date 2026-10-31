@@ -1,10 +1,17 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parseEnv } from 'node:util'
 import { CacheConfigSchema } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { loadDeploymentEnvironment, saveMiddlewareEnvironment } from '@h-ai/deploy'
+import { IamConfigSchema } from '@h-ai/iam'
 import { AlipayConfigSchema } from '@h-ai/payment'
 import { ReldbConfigSchema } from '@h-ai/reldb'
 import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
 import { configEnvironmentVariables, documentConfig, moduleEnvironmentVariables, parameterizeConfig, renderEnvironment, runtimeEnvironmentVariables } from '../src/commands/cli-config-environment.js'
 import { generateConfigFile, generateEnvExample } from '../src/commands/cli-config-templates.js'
 import { loadConfigText } from './helpers/config.js'
@@ -12,6 +19,43 @@ import { loadConfigText } from './helpers/config.js'
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
+  it.each([false, true])('禁用 LDAP 后再次构建的配置仍有效，并保留已有连接：%s', (configured) => {
+    const directory = mkdtempSync(join(tmpdir(), 'hai-optional-ldap-'))
+    try {
+      mkdirSync(join(directory, 'config'))
+      const path = join(directory, 'config/_iam.yml')
+      const connection = { url: 'ldaps://directory.example.test:636', bindDn: 'cn=service,dc=example,dc=test', bindPassword: 'fixture-only', searchBase: 'ou=users,dc=example,dc=test' }
+      writeFileSync(path, `${generateConfigFile('iam')}\n${configured ? `ldap: ${JSON.stringify(connection)}\n` : ''}`)
+      writeFileSync(join(directory, '.env.test'), '')
+      const environment = loadDeploymentEnvironment({ environment: 'test', envDir: directory })
+      expect(environment.success).toBe(true)
+      if (!environment.success)
+        throw new Error(environment.error.message)
+      const saved = saveMiddlewareEnvironment(environment.data, {
+        appDir: directory,
+        requirement: { service: 'ldap', backend: 'disabled', source: 'iam', configName: 'iam', configPath: ['ldap'], envPrefix: 'HAI_IAM_LDAP', config: configured ? connection : {} },
+        backend: 'disabled',
+        configuration: {},
+      })
+      expect(saved.success).toBe(true)
+      const reloaded = loadDeploymentEnvironment({ environment: 'test', envDir: directory })
+      expect(reloaded.success).toBe(true)
+      if (!reloaded.success)
+        throw new Error(reloaded.error.message)
+      // 下一轮镜像会打包保存后的 YAML，再由运行时细项解析和模块 Schema 校验。
+      const resolved = core.config.resolve({ name: 'iam', value: parse(readFileSync(path, 'utf8')), schema: IamConfigSchema, environment: reloaded.data.values })
+      expect(resolved.success).toBe(true)
+      if (!resolved.success)
+        throw new Error(resolved.error.message)
+      const result = IamConfigSchema.parse(resolved.data)
+      expect(result.login.ldap).toBe(false)
+      expect(result.ldap).toEqual(configured ? expect.objectContaining(connection) : undefined)
+    }
+    finally {
+      // directory 由本用例 mkdtempSync 返回，仅删除本用例拥有的临时工程。
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
   it.each([
     'agreements:\n  userAgreementMarkdown: |\n    # 说明：协议正文不能删除\n    请阅读并同意。\n',
     'ui:\n  title: "Orders # 说明：这是标题内容"\n',

@@ -174,7 +174,8 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
     const document = parseDocument(existsSync(path) ? readFileSync(path, 'utf8') : '{}\n')
     if (document.errors.length)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentWriteFailed'))
-    if (requirement.configPath.length && !document.hasIn(requirement.configPath))
+    // 禁用可选后端时保持节点缺省，避免下次构建把空连接当作已配置连接校验。
+    if (backend !== 'disabled' && requirement.configPath.length && !document.hasIn(requirement.configPath))
       document.setIn(requirement.configPath, document.createNode(requirement.config.name ? { name: requirement.config.name, type: backend } : {}))
     if (requirement.service === 'ldap' && !document.hasIn(['login', 'ldap']))
       document.setIn(['login', 'ldap'], false)
