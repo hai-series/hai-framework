@@ -21200,6 +21200,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "DownloadProxyConfig",
+              "kind": "type",
+              "declaration": "DownloadProxyConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "getDeployCommandState",
               "kind": "value",
               "declaration": "getDeployCommandState",
@@ -21216,6 +21222,12 @@
               "kind": "value",
               "declaration": "HaiDeployError",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ImageSourceConfig",
+              "kind": "type",
+              "declaration": "ImageSourceConfig",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "importDeploymentSecrets",
@@ -21293,6 +21305,18 @@
               "name": "readDeploymentArtifact",
               "kind": "value",
               "declaration": "readDeploymentArtifact",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "resolveDownloadProxy",
+              "kind": "value",
+              "declaration": "resolveDownloadProxy",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "resolveImageReference",
+              "kind": "value",
+              "declaration": "resolveImageReference",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -21450,6 +21474,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "DownloadProxyConfig",
+              "kind": "type",
+              "declaration": "DownloadProxyConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "getDeployCommandState",
               "kind": "value",
               "declaration": "getDeployCommandState",
@@ -21466,6 +21496,12 @@
               "kind": "value",
               "declaration": "HaiDeployError",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ImageSourceConfig",
+              "kind": "type",
+              "declaration": "ImageSourceConfig",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "importDeploymentSecrets",
@@ -21543,6 +21579,18 @@
               "name": "readDeploymentArtifact",
               "kind": "value",
               "declaration": "readDeploymentArtifact",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "resolveDownloadProxy",
+              "kind": "value",
+              "declaration": "resolveDownloadProxy",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "resolveImageReference",
+              "kind": "value",
+              "declaration": "resolveImageReference",
               "declarationKind": "FunctionDeclaration"
             },
             {
@@ -21700,6 +21748,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "DownloadProxyConfig",
+              "kind": "type",
+              "declaration": "DownloadProxyConfig",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "getDeployCommandState",
               "kind": "value",
               "declaration": "getDeployCommandState",
@@ -21716,6 +21770,12 @@
               "kind": "value",
               "declaration": "HaiDeployError",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ImageSourceConfig",
+              "kind": "type",
+              "declaration": "ImageSourceConfig",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "importDeploymentSecrets",
@@ -21793,6 +21853,18 @@
               "name": "readDeploymentArtifact",
               "kind": "value",
               "declaration": "readDeploymentArtifact",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "resolveDownloadProxy",
+              "kind": "value",
+              "declaration": "resolveDownloadProxy",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "resolveImageReference",
+              "kind": "value",
+              "declaration": "resolveImageReference",
               "declarationKind": "FunctionDeclaration"
             },
             {

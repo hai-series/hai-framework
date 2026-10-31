@@ -1,5 +1,6 @@
 export * from './deploy-artifact.js'
 export * from './deploy-config.js'
+export { resolveDownloadProxy, resolveImageReference } from './deploy-download.js'
 export type { DeploymentEnvironment } from './deploy-environment.js'
 export { loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from './deploy-environment.js'
 export { normalizeProjectName } from './deploy-functions.js'

@@ -477,6 +477,8 @@ export function createDockerSshProvider(
       deploymentId,
       config,
       runtime: options?.runtime ?? 'auto',
+      imageSource: options?.imageSource,
+      proxy: options?.proxy,
       selected,
       partial,
       hasWebConfig: !!webProxy,

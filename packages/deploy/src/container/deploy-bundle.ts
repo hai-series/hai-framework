@@ -2,6 +2,7 @@ import type { Buffer } from 'node:buffer'
 /** 完整或增量交付包，包含所选服务需要的全部镜像及跨平台部署入口。 */
 import type { DeploymentArtifact } from '../deploy-artifact.js'
 import type { DockerSshProviderConfig } from '../deploy-config.js'
+import type { DownloadProxyConfig, ImageSourceConfig } from '../deploy-types.js'
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -9,6 +10,7 @@ import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { parse } from 'yaml'
 import { artifactChecksum } from '../deploy-artifact.js'
+import { resolveDownloadProxy, resolveImageReference } from '../deploy-download.js'
 import { deployM } from '../deploy-i18n.js'
 import { createBackendStateAssets } from './deploy-backend-state.js'
 import { runCommand } from './deploy-command.js'
@@ -28,6 +30,8 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.environment - 部署环境标识，通常为 prod。
  * @param options.config - 已通过 Schema 解析的 docker-ssh 配置。
  * @param options.runtime - 容器引擎策略；auto 探测可用引擎并优先 Podman。
+ * @param options.imageSource - 仅改变镜像下载地址；归档仍保留原始引用。
+ * @param options.proxy - 本次下载代理；远程引擎需单独配置。
  * @param options.output - 本次独立交付目录内的最终 tar 输出路径。
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
@@ -60,6 +64,8 @@ export async function createDeploymentBundle(options: {
   environment: string
   config: DockerSshProviderConfig
   runtime: 'auto' | 'podman' | 'docker'
+  imageSource?: ImageSourceConfig
+  proxy?: DownloadProxyConfig
   output: string
   selected: string[]
   partial: boolean
@@ -77,6 +83,7 @@ export async function createDeploymentBundle(options: {
   cacheDirectory?: string
 }): Promise<{ bundlePath: string, instructions: string, startName: string }> {
   const { directory, artifactDir, artifact, projectName, environment, config, selected } = options
+  const proxyEnvironment = resolveDownloadProxy(options.proxy)
   const output = resolve(options.output)
   if (!/^[\w.+-]+\.tar(?:\.gz)?$/.test(basename(output)))
     throw new Error(deployM('deploy_bundleNameInvalid'))
@@ -149,9 +156,15 @@ export async function createDeploymentBundle(options: {
         }
         let inspected = await runCommand(runtime, ['image', 'inspect', '--format', '{{.Id}}', reference])
         if (!inspected.success) {
-          const pulled = await runCommand(runtime, ['pull', reference], { timeoutMs: 600_000 })
+          const download = resolveImageReference(reference, options.imageSource)
+          const pulled = await runCommand(runtime, ['pull', download], { timeoutMs: 600_000, env: proxyEnvironment, secrets: Object.values(proxyEnvironment).filter(Boolean) })
           if (!pulled.success)
             throw new Error(pulled.error.message)
+          if (download !== reference) {
+            const tagged = await runCommand(runtime, ['tag', download, reference])
+            if (!tagged.success)
+              throw new Error(tagged.error.message)
+          }
           inspected = await runCommand(runtime, ['image', 'inspect', '--format', '{{.Id}}', reference])
         }
         const identity = inspected.success && !inspected.data.stdoutTruncated ? inspected.data.stdout.trim().replace(/^sha256:/, '') : ''

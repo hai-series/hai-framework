@@ -287,6 +287,10 @@ export interface DeployCommandState {
  * ```
  */
 export interface DeployAppOptions {
+  /** 本地打包所需镜像的下载源；Compose 与部署身份保留原始镜像引用。 */
+  imageSource?: ImageSourceConfig
+  /** 本次拉取子进程的代理；远程 Podman/Docker daemon 的代理需在引擎侧设置。 */
+  proxy?: DownloadProxyConfig
   /** 接收实际执行阶段，用于终端进度显示；不包含凭据或配置原文。 */
   onProgress?: (stage: 'packaging' | 'preflight' | 'images' | 'dependencies' | 'start' | 'https' | 'health' | 'complete') => void
   /** 只更新指定的 Compose 服务；省略时完整制品部署全部，部分制品只部署其镜像。 */
@@ -307,6 +311,33 @@ export interface DeployAppOptions {
   bundleOnly?: boolean
   /** 交付包命名路径；默认在 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 中输出同名 tar 和脚本，自定义 release.tar 输出 release-<版本>/release-<版本>.tar；已有目录拒绝覆盖。 */
   output?: string
+}
+
+/**
+ * 镜像下载源；自定义映射可带命名空间路径，不含认证信息。
+ * @example
+ * ```ts
+ * import type { ImageSourceConfig } from '@h-ai/deploy'
+ * const source: ImageSourceConfig = { type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }
+ * ```
+ */
+export interface ImageSourceConfig {
+  type: 'official' | 'cn' | 'custom'
+  registries?: Record<string, string>
+}
+
+/**
+ * 下载代理；自定义地址仅接受无认证的 HTTP(S)，认证代理从进程环境继承。
+ * @example
+ * ```ts
+ * import type { DownloadProxyConfig } from '@h-ai/deploy'
+ * const proxy: DownloadProxyConfig = { mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost,127.0.0.1' }
+ * ```
+ */
+export interface DownloadProxyConfig {
+  mode: 'inherit' | 'system' | 'custom' | 'none'
+  url?: string
+  bypass?: string
 }
 
 // ─── 凭证子功能 ───
