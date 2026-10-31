@@ -427,9 +427,8 @@ done
 chmod 700 "$root" "$release"
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
 if [ -f "$release/.hai/web.conf" ]; then chmod 644 "$release/.hai/web.conf"; fi
-for proxy_script in proxy-start.sh renew-https.sh; do
-  if [ -f "$release/.hai/$proxy_script" ]; then chmod 444 "$release/.hai/$proxy_script"; fi
-done
+if [ -f "$release/.hai/proxy-start.sh" ]; then chmod 555 "$release/.hai/proxy-start.sh"; fi
+if [ -f "$release/.hai/renew-https.sh" ]; then chmod 444 "$release/.hai/renew-https.sh"; fi
 # 策略不是凭据，发布目录保持700；只读挂载允许镜像中的非root应用读取。
 if [ -f "$release/.hai/request-access.yml" ]; then chmod 444 "$release/.hai/request-access.yml"; fi
 if [ "$partial" = true ]; then

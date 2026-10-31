@@ -355,6 +355,9 @@ describe('generateComposeFile', () => {
     expect(compose.services.serv.ports).toBeUndefined()
     expect(compose.services.web.ports).toEqual(['18080:8081'])
     expect(compose.services.web.env_file).toBeUndefined()
+    // 代理准备不能替换镜像的 ENTRYPOINT/CMD，否则故障镜像会被错误地启动为 Nginx。
+    expect(compose.services.web.entrypoint).toBeUndefined()
+    expect(compose.services.web.command).toBeUndefined()
     const proxy = generateWebProxyConfig(3001, '/backend/v2', { webPort: 8081 })
     expect(proxy).toContain('listen 8081;')
     expect(proxy).toContain('location /backend/v2/')

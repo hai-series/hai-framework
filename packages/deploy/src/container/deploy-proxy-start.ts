@@ -1,9 +1,9 @@
-/** Nginx 共用启动入口：使用当前容器 DNS，HTTPS 时同时监视原子替换的证书。 */
+/** Nginx 镜像入口钩子：准备当前容器 DNS，HTTPS 时同时监视原子替换的证书。 */
 
 /**
  * 启动前从容器 resolv.conf 生成动态上游的解析器配置，不假定 Docker 或 Podman 的 DNS 地址。
  * @param https - 是否启动证书变更监视。
- * @returns 只依赖镜像内 POSIX Shell、awk 和 Nginx 的脚本。
+ * @returns 只依赖 POSIX Shell、awk 和 Nginx 的入口钩子，由镜像原入口执行后继续启动应用。
  * @example 模块内部上下文
  * ```ts
  * const script = createProxyStartupScript(false)
@@ -41,6 +41,6 @@ watch_certificate() {
 }
 watch_certificate &
 `
-  : ''}exec /docker-entrypoint.sh nginx -g 'daemon off;'
+  : ''}
 `
 }

@@ -607,8 +607,7 @@ export function generateComposeFile(options: {
   }
   if (options.web || options.gateway || options.mountWebConfig) {
     const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!
-    proxy.volumes = [...proxy.volumes as string[], './proxy-start.sh:/run/hai/proxy-start.sh:ro']
-    proxy.entrypoint = ['sh', '/run/hai/proxy-start.sh']
+    proxy.volumes = [...proxy.volumes as string[], './proxy-start.sh:/docker-entrypoint.d/18-hai-proxy-start.sh:ro']
   }
   if (options.https) {
     const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!

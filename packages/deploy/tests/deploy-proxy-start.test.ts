@@ -27,7 +27,6 @@ describe.skipIf(!existsSync(shell))('proxy startup resolver preparation', () => 
       const preparation = createProxyStartupScript(false)
         .replace('/etc/resolv.conf', '"$1"')
         .replace('/tmp/hai-dns.conf', '"$2"')
-        .replace('exec /docker-entrypoint.sh nginx -g \'daemon off;\'', '')
       const result = spawnSync(shell, ['-c', preparation, 'hai-proxy-dns', input.replaceAll('\\', '/'), output.replaceAll('\\', '/')], { encoding: 'utf8', windowsHide: true, timeout: 10_000 })
       expect(result.error).toBeUndefined()
       if (expected === undefined) {

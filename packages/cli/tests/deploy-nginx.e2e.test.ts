@@ -63,8 +63,11 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
     const configuration = path.join(project, 'nginx.conf')
     writeFileSync(configuration, `pid /tmp/dns-proxy.pid;\nevents {}\nhttp {\n${proxy}\n}\n`)
+    const hook = path.join(project, 'proxy-start.sh')
+    writeFileSync(hook, execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/proxy-start.sh'], { encoding: 'utf8', windowsHide: true }))
     let nodeContainer: string | undefined
     let started = false
+    let hookInstalled = false
     try {
       const identity = execFileSync(runtime, ['create', '--network', `container:${owned.containerId}`, '--entrypoint', 'node', image, '/tmp/proxy-dns-node.mjs'], { encoding: 'utf8', windowsHide: true, timeout: 15_000 }).trim()
       if (!/^[a-f\d]{64}$/.test(identity))
@@ -82,6 +85,14 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       await expect.poll(response, { timeout: 10_000 }).toBe('backend-one')
       await executeDeployTestFixture(runtime, owned, ['wget', '-qO-', 'http://127.0.0.1:19001/switch'])
       await expect.poll(response, { timeout: 12_000, interval: 500 }).toBe('backend-two')
+      // 真正的镜像入口执行钩子后仍继续原命令，不能把失败命令偷偷替换成 Nginx。
+      execFileSync(runtime, ['cp', hook, `${owned.containerId}:/docker-entrypoint.d/18-hai-proxy-start.sh`], { windowsHide: true, timeout: 15_000 })
+      hookInstalled = true
+      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'chmod', '555', '/docker-entrypoint.d/18-hai-proxy-start.sh'], { windowsHide: true, timeout: 15_000 })
+      await executeDeployTestFixture(runtime, owned, ['/docker-entrypoint.sh', 'nginx', '-t', '-c', '/tmp/dns-proxy.conf'])
+      expect(await executeDeployTestFixture(runtime, owned, ['cat', '/tmp/hai-dns.conf'])).toContain('valid=5s;')
+      const failed = spawnSync(runtime, ['exec', owned.containerId, '/docker-entrypoint.sh', 'sh', '-c', 'exit 23'], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
+      expect(failed.status).toBe(23)
     }
     finally {
       try {
@@ -89,9 +100,15 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
           await executeDeployTestFixture(runtime, owned, ['nginx', '-c', '/tmp/dns-proxy.conf', '-s', 'quit'])
       }
       finally {
-        if (nodeContainer) {
-          execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
-          expect(spawnSync(runtime, ['inspect', nodeContainer], { windowsHide: true, timeout: 10_000, stdio: 'ignore' }).status).not.toBe(0)
+        try {
+          if (nodeContainer) {
+            execFileSync(runtime, ['rm', '-f', nodeContainer], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
+            expect(spawnSync(runtime, ['inspect', nodeContainer], { windowsHide: true, timeout: 10_000, stdio: 'ignore' }).status).not.toBe(0)
+          }
+        }
+        finally {
+          if (hookInstalled)
+            execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'rm', '-f', '/docker-entrypoint.d/18-hai-proxy-start.sh'], { windowsHide: true, timeout: 15_000, stdio: 'pipe' })
         }
       }
     }
@@ -126,8 +143,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const read = (file: string) => execFileSync('tar', ['-xOf', bundle.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
     const proxy = read('.hai/web.conf').replace('listen 8443 ssl', `listen ${DEPLOY_FIXTURE_API_PORT} ssl`).replace('listen 8080;', `listen ${DEPLOY_FIXTURE_WEB_PORT};`).replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replaceAll('/usr/share/nginx/html', '/tmp/hai-tls-www')
     writeFileSync(path.join(project, 'nginx.conf'), `pid /tmp/hai-tls.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n${proxy}\n}\n`)
-    // 只缩短轮询间隔并替换夹具路径，证书比较、配置验证和重载逻辑来自公开部署包。
-    const watcher = read('.hai/proxy-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('/docker-entrypoint.sh nginx', 'nginx -c /tmp/hai-tls.conf').replace('watch_certificate &', 'watch_certificate &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')
+    // 入口钩子保留发布包的证书逻辑，夹具随后启动自定义配置的 Nginx。
+    const watcher = `${read('.hai/proxy-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('watch_certificate &', 'watch_certificate &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')}\nexec nginx -c /tmp/hai-tls.conf -g 'daemon off;'\n`
     writeFileSync(path.join(project, 'proxy-start.sh'), watcher)
     await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'mkdir -p /tmp/hai-tls-pem /tmp/hai-tls-www; printf "https fixture" > /tmp/hai-tls-www/index.html'])
     const copyCertificate = (files: { cert: string, key: string }) => {
