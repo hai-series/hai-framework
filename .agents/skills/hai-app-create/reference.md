@@ -135,17 +135,17 @@ export const handle: Handle = kit.sequence(i18nHandle, haiHandle)
 
 ```ts
 import { core } from '@h-ai/core'
-import { reldb } from '@h-ai/reldb'
-import { cache } from '@h-ai/cache'
-import { iam } from '@h-ai/iam'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { cache, CacheConfigSchema } from '@h-ai/cache'
+import { iam, IamConfigSchema } from '@h-ai/iam'
 
 let initialized = false
 
 export async function initApp(): Promise<void> {
   if (initialized) return
 
-  // 1. core.init 加载配置
-  core.init({ configDir: './config' })
+  // 1. 注册模块 Schema 并加载配置，识别 YAML 未声明的合法可选细项。
+  core.init({ configDir: './config', configSchemas: { db: ReldbConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema } })
 
   // 2. 按依赖顺序初始化各模块（HaiResult 失败则 throw）
   const dbResult = await reldb.init(core.config.getOrThrow('db'))

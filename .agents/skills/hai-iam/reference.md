@@ -50,11 +50,11 @@ rbac:
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
+import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
 // 位于应用启动函数内；依赖初始化失败时立即返回，不能继续启动 IAM。
-core.init({ configDir: './config' })
+core.init({ configDir: './config', configSchemas: { iam: IamConfigSchema } })
 const db = await reldb.init({ type: 'sqlite', database: './data.db' })
 if (!db.success)
   return db

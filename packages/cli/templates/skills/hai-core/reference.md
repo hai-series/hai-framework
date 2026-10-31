@@ -474,7 +474,7 @@ if (!result.success) {
 
 ### 服务端初始化（SvelteKit hooks.server.ts）
 
-在应用已有的 init.ts 中执行 core.init({ configDir: './config' })，然后初始化依赖模块；hooks.server.ts 等待该启动流程完成后接入 kit.createHandle。完整依赖顺序与失败清理见 [hai-build](../hai-build/SKILL.md)。不要在一个文件里同时 import 和声明同名 initModules。
+在应用已有的 init.ts 中执行 core.init({ configDir: './config', configSchemas })，configSchemas 登记所用模块的公开 Schema，再校验配置并初始化依赖模块；hooks.server.ts 等待该启动流程完成后接入 kit.createHandle。完整依赖顺序与失败清理见 [hai-build](../hai-build/SKILL.md)。不要在一个文件里同时 import 和声明同名 initModules。
 
 ### 配置校验最佳实践
 

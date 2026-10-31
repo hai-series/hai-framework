@@ -17,7 +17,7 @@ description: "配置 hai 应用启动、YAML/环境变量、日志、i18n 与 Ha
 
 ## 使用路径
 
-- Node 启动用 core.init({ configDir }) 加载配置；勿传 logging 覆盖 _core.yml 中的日志设置，除非任务明确要求。
+- Node 启动用 core.init({ configDir, configSchemas }) 加载配置；configSchemas 登记所用模块的公开 Schema，使 YAML 未声明的合法可选字段也能接收细项环境变量。勿传 logging 覆盖 _core.yml 中的日志设置，除非任务明确要求。
 - 自动加载和监听配置目录内所有 YAML；项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取，不进入运行时配置。单项 load 返回失败时记日志并继续，必需配置须 validate 并检查 success；目录扫描、日志设置等异常仍可能传播。
 - 应用名称、版本、环境、默认语言和日志设置统一从 `_core.yml` 经 core.config 获取，日志使用 core.logger；UI 不另维护硬编码副本。SvelteKit layout / fullstack app.info 仅下发公开字段白名单；独立 Vite mobile-app 在 Node 构建时解析并注入公开默认值，修改这些编译默认值需要重新构建。静态 Web 的公开 API 地址等通过 `runtime-config.js` 覆盖时无需重建镜像，原生包在复制静态资源前准备配置入口。浏览器不加载 YAML，不接收完整模块配置、密钥或日志脱敏上下文。
 - `HAI_<配置名>_<路径>` 支持父 JSON 基础与细项覆盖，同源先父后子，高来源整段替换清除低来源细项。camelCase 不拆词，约定变量优先于显式插值；宿主显式提供 `configSchemas` 识别 YAML 缺少的可选路径，模块执行业务校验。

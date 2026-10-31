@@ -235,7 +235,7 @@ export default { fetch: handler }
 import { core } from '@h-ai/core'
 import { serv, ServConfigSchema } from '@h-ai/serv'
 
-core.init({ configDir: './config' })
+core.init({ configDir: './config', configSchemas: { serv: ServConfigSchema } })
 
 const validation = core.config.validate('serv', ServConfigSchema)
 if (!validation.success)

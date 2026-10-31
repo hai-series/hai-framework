@@ -155,7 +155,7 @@ import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { iam, IamConfigSchema } from '@h-ai/iam'
 
 // 放入应用已有的启动函数；并发防护和关闭钩子复用当前模板。
-core.init({ configDir: './config' })
+core.init({ configDir: './config', configSchemas: { db: ReldbConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema } })
 const dbConfig = core.config.validate('db', ReldbConfigSchema)
 if (!dbConfig.success) return dbConfig
 const cacheConfig = core.config.validate('cache', CacheConfigSchema)

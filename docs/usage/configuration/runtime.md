@@ -168,7 +168,7 @@ import { ReldbConfigSchema, reldb } from '@h-ai/reldb'
 const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
 if (!env.success) throw new Error(env.error.message)
 Object.assign(process.env, env.data)
-core.init({ configDir: './config' })
+core.init({ configDir: './config', configSchemas: { db: ReldbConfigSchema } })
 const db = core.config.validate('db', ReldbConfigSchema)
 if (!db.success) throw new Error(db.error.message)
 const started = await reldb.init(db.data)

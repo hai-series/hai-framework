@@ -434,7 +434,7 @@ await saveImage(image.data.images[0].data, image.data.images[0].mimeType)
 ```
 
 - `Pollinations` 提供可免费起步的开发额度，但仍需 API key；不要把“免费额度”描述为匿名或无限调用。
-- 应用应通过 `core.init({ configDir: './config' })` 加载 `_core.yml` / `_ai.yml`，再以 `core.config.validate('ai', AIConfigSchema)` 校验并传给 `ai.init`；不要在启动代码中重复拼装模型、端点和超时，也不要传入 `logging` 覆盖 `_core.yml`。
+- 应用应通过 `core.init({ configDir: './config', configSchemas: { ai: AIConfigSchema } })` 加载 `_core.yml` / `_ai.yml`，并登记其他所用模块的公开 Schema，再以 `core.config.validate('ai', AIConfigSchema)` 校验并传给 `ai.init`；不要在启动代码中重复拼装模型、端点和超时，也不要传入 `logging` 覆盖 `_core.yml`。
 - Pollinations 的 HTTP 402 表示账户余额或该 API Key 的预算耗尽；401 是密钥无效，403 是权限或模型访问被拒。诊断日志记录厂商、模型、状态、上游错误码和请求 ID，不记录密钥、提示词或图片内容。
 - Qwen 等返回的临时图片 URL 会在 Provider 内立即下载，公共结果不泄漏易过期 URL。
 - 参考图统一使用 `{ data: Uint8Array, mimeType: 'image/...' }`；不要把厂商 URL、multipart 或 Base64 结构泄漏到业务层。
