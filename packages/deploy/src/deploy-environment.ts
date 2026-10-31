@@ -130,7 +130,22 @@ export function mergeEnvironmentLayers(layers: Array<Record<string, string | und
   return result
 }
 
-/** 只描述变量名与来源，不把初始密码等变量值带入交付说明。 */
+/**
+ * 只描述变量名与来源，不把初始密码等变量值带入交付说明。
+ * @param directory - 打包源工程的环境文件目录。
+ * @param environment - 本次交付选择的环境名。
+ * @param values - 已解析的有效环境变量，可能包含私密值。
+ * @param names - 需要在交付说明中解释的变量名。
+ * @returns 已配置变量的名称及来源，不含变量值。
+ * @example 模块内部上下文
+ * ```ts
+ * const environment = loadDeploymentEnvironment({ environment: 'prod', envDir: process.cwd() })
+ * if (environment.success) {
+ *   const sources = describeDeploymentVariableSources(environment.data.envDir, 'prod', environment.data.values, ['HAI_CONFIG_ADMIN_PASSWORD'])
+ *   // sources 仅包含变量名和来源，可以写入交付说明。
+ * }
+ * ```
+ */
 export function describeDeploymentVariableSources(directory: string, environment: string, values: Record<string, string>, names: readonly string[]): string {
   const files = [`.env.${environment}.local`, '.env.local', `.env.${environment}`, '.env']
     .map(name => ({ path: join(directory, name), values: environmentFile(join(directory, name)) }))
