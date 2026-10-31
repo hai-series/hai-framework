@@ -5016,6 +5016,14 @@
     "constraint": "本机 HTTP(S) URL；直接运行时 BASE_URL 优先"
   },
   {
+    "name": "ALL_PROXY",
+    "module": "runtime",
+    "path": "ALL_PROXY",
+    "description": "构建下载的其他代理入口；仅 inherit 模式原样传递，其他模式清空",
+    "value": "",
+    "constraint": "代理 URL；协议支持由下载工具决定；小写 all_proxy 也受支持"
+  },
+  {
     "name": "ANTHROPIC_API_KEY",
     "module": "runtime",
     "path": "ANTHROPIC_API_KEY",
@@ -5144,6 +5152,14 @@
     "constraint": "整数 1–65535"
   },
   {
+    "name": "FTP_PROXY",
+    "module": "runtime",
+    "path": "FTP_PROXY",
+    "description": "构建下载的 FTP 代理入口；仅 inherit 模式原样传递，其他模式清空",
+    "value": "",
+    "constraint": "代理 URL；协议支持由下载工具决定；小写 ftp_proxy 也受支持"
+  },
+  {
     "name": "GEMINI_API_KEY",
     "module": "runtime",
     "path": "GEMINI_API_KEY",
@@ -5224,6 +5240,22 @@
     "constraint": "JSON 对象 {activeKeyId,keys:{id:{publicKey,privateKey}}}；所有节点共享，ID 为 1-64 个字母/数字/下划线/连字符；禁止 PUBLIC_/VITE_/公开 YAML/日志"
   },
   {
+    "name": "HAI_NGINX_IMAGE",
+    "module": "runtime",
+    "path": "HAI_NGINX_IMAGE",
+    "description": "Dockerfile 的 Nginx 基础镜像构建参数，由 CLI 按 build.sources.image 或 --image-source 注入",
+    "value": "",
+    "constraint": "OCI 镜像引用；不是应用 .env 配置项"
+  },
+  {
+    "name": "HAI_NODE_IMAGE",
+    "module": "runtime",
+    "path": "HAI_NODE_IMAGE",
+    "description": "Dockerfile 的 Node 基础镜像构建参数，由 CLI 按 build.sources.image 或 --image-source 注入",
+    "value": "",
+    "constraint": "OCI 镜像引用；不是应用 .env 配置项"
+  },
+  {
     "name": "HF_ENDPOINT",
     "module": "runtime",
     "path": "HF_ENDPOINT",
@@ -5246,6 +5278,22 @@
     "description": "部署平台 HTTP 监听地址，覆盖 serv/kit server.host",
     "value": "0.0.0.0",
     "constraint": "主机名或 IP"
+  },
+  {
+    "name": "HTTP_PROXY",
+    "module": "runtime",
+    "path": "HTTP_PROXY",
+    "description": "构建下载的 HTTP 代理；inherit 模式继承进程环境，system/custom/none 模式由 CLI 覆盖",
+    "value": "",
+    "constraint": "HTTP(S) 代理 URL；小写 http_proxy 也受支持；镜像拉取仍取决于引擎代理"
+  },
+  {
+    "name": "HTTPS_PROXY",
+    "module": "runtime",
+    "path": "HTTPS_PROXY",
+    "description": "构建下载的 HTTPS 代理；未提供时回退 HTTP_PROXY；system/custom/none 模式由 CLI 覆盖",
+    "value": "",
+    "constraint": "HTTP(S) 代理 URL；小写 https_proxy 也受支持；镜像拉取仍取决于引擎代理"
   },
   {
     "name": "IAM_FIXTURE_LDAP",
@@ -5326,6 +5374,14 @@
     "description": "模型容器内的权重目录或模型仓库 ID",
     "value": "/opt/models",
     "constraint": "可读取的模型路径或有效仓库 ID；默认 /opt/models"
+  },
+  {
+    "name": "NO_PROXY",
+    "module": "runtime",
+    "path": "NO_PROXY",
+    "description": "构建下载的代理绕过列表；inherit 模式继承，可由 build.proxy.bypass 或 --proxy-bypass 覆盖",
+    "value": "",
+    "constraint": "逗号分隔的主机或地址；小写 no_proxy 也受支持；none 模式清空"
   },
   {
     "name": "NODE_ENV",

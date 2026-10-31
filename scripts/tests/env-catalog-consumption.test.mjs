@@ -26,3 +26,16 @@ it('documents independent host bootstrap secrets without adding them to module c
     expect(h5Example).not.toContain(name)
   }
 })
+
+it('documents image arguments as Dockerfile inputs and preserves proxy mode boundaries', () => {
+  for (const name of ['HAI_NODE_IMAGE', 'HAI_NGINX_IMAGE']) {
+    const entry = catalog.find(entry => entry.name === name)
+    expect(entry?.module).toBe('runtime')
+    expect(entry?.description).toContain('Dockerfile')
+    expect(entry?.description).toContain('--image-source')
+    expect(entry?.constraint).toContain('不是应用 .env 配置项')
+  }
+  expect(catalog.find(entry => entry.name === 'HTTP_PROXY')?.constraint).toContain('镜像拉取仍取决于引擎代理')
+  expect(catalog.find(entry => entry.name === 'NO_PROXY')?.constraint).toContain('none 模式清空')
+  expect(catalog.find(entry => entry.name === 'ALL_PROXY')?.description).toContain('仅 inherit 模式原样传递')
+})

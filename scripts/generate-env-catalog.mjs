@@ -363,6 +363,13 @@ const extraDescriptions = {
   HAI_BUILD_ID: ['CLI 内部生成并向编译目标传递的产物标识；同次 SSR 构建复用', '非空字母、数字、下划线、点、加减号，最多128字符；显式非法值拒绝构建；hai build 不继承调用者的同名值'],
   HAI_BUILD_COMMIT: ['当前编译目标所属的源码提交；无所属 Git 提交时明确 unknown', '40或64位十六进制 Git SHA，或 unknown；hai build 内部确定，不继承调用者的同名值'],
   HAI_BUILD_STATIC: ['website模板显式静态预渲染；省略或0保持SSR，1仅用于无服务端业务模块的静态站点', '0 | 1；默认不启用；hai build仅compile目标透传，不能混用docker/app/desktop'],
+  HAI_NODE_IMAGE: ['Dockerfile 的 Node 基础镜像构建参数，由 CLI 按 build.sources.image 或 --image-source 注入', 'OCI 镜像引用；不是应用 .env 配置项'],
+  HAI_NGINX_IMAGE: ['Dockerfile 的 Nginx 基础镜像构建参数，由 CLI 按 build.sources.image 或 --image-source 注入', 'OCI 镜像引用；不是应用 .env 配置项'],
+  HTTP_PROXY: ['构建下载的 HTTP 代理；inherit 模式继承进程环境，system/custom/none 模式由 CLI 覆盖', 'HTTP(S) 代理 URL；小写 http_proxy 也受支持；镜像拉取仍取决于引擎代理'],
+  HTTPS_PROXY: ['构建下载的 HTTPS 代理；未提供时回退 HTTP_PROXY；system/custom/none 模式由 CLI 覆盖', 'HTTP(S) 代理 URL；小写 https_proxy 也受支持；镜像拉取仍取决于引擎代理'],
+  NO_PROXY: ['构建下载的代理绕过列表；inherit 模式继承，可由 build.proxy.bypass 或 --proxy-bypass 覆盖', '逗号分隔的主机或地址；小写 no_proxy 也受支持；none 模式清空'],
+  ALL_PROXY: ['构建下载的其他代理入口；仅 inherit 模式原样传递，其他模式清空', '代理 URL；协议支持由下载工具决定；小写 all_proxy 也受支持'],
+  FTP_PROXY: ['构建下载的 FTP 代理入口；仅 inherit 模式原样传递，其他模式清空', '代理 URL；协议支持由下载工具决定；小写 ftp_proxy 也受支持'],
   PUBLIC_BASE_PATH: ['构建进程公开网站目录；SvelteKit编译base及Vite固定基址，Docker网站制品保留此值', '默认空字符串表示根路径；各段仅ASCII字母、数字、_、.、-，以/开头且无末尾/、查询、片段、外部地址和单独.或..段；原生目标拒绝'],
   HAI_MODEL_API_KEY: ['本地语音模型 HTTP 服务的 Bearer 认证密钥', '敏感字符串；空值表示该模型服务未启用认证'],
   HAI_MODEL_ID: ['本地模型权重的 Hugging Face 仓库 ID', '有效模型仓库 ID，例如组织名/模型名；由模型目录提供默认值'],
@@ -433,7 +440,7 @@ for (const [name, entry] of explicit) {
         : '字符串；按使用位置的校验规则填写'
   add(name, {
     // 宿主凭据只属于实际读取入口，不能随名称相似的模块 Schema 自动推荐。
-    module: ['HAI_CRYPTO_TRANSPORT_SERVERKEYRING', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD'].includes(name) ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
+    module: ['HAI_CRYPTO_TRANSPORT_SERVERKEYRING', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD', 'HAI_NODE_IMAGE', 'HAI_NGINX_IMAGE'].includes(name) ? 'runtime' : name.startsWith('HAI_') ? name.split('_')[1].toLowerCase() : 'runtime',
     path: name,
     description: meta?.[0] ?? `${sensitive ? '凭据输入' : '环境入口'}；使用位置 ${entry.source}`,
     constraints: [meta?.[1] ?? (sensitive ? '敏感字符串；启用相应功能时必填，不得提交真实值' : inferred)],
