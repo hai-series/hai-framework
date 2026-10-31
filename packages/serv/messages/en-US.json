@@ -34,5 +34,6 @@
   "serv_transportEncryptFailed": "Failed to encrypt response",
   "serv_transportKeyExchangeFailed": "Key exchange failed",
   "serv_transportBusy": "Material processing is busy. Please retry shortly.",
-  "serv_feedbackUnavailable": "Feedback is temporarily unavailable. Business features remain available."
+  "serv_feedbackUnavailable": "Feedback is temporarily unavailable. Business features remain available.",
+  "serv_invalidApiPrefix": "API prefix must be a valid absolute path without empty segments, queries, fragments or traversal."
 }

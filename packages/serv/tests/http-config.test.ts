@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveServConfig, resolveServHttpConfig, resolveServServerConfig } from '../src/serv-config.js'
+import { resolveServConfig, resolveServHttpConfig, resolveServServerConfig, ServConfigSchema } from '../src/serv-config.js'
 
 describe('resolveServServerConfig', () => {
   beforeEach(() => {
@@ -68,8 +68,12 @@ describe('resolveServHttpConfig', () => {
     expect(config.health).toBe(false)
   })
 
-  it('rejects apiPrefix that does not start with /api/', () => {
-    expect(() => resolveServHttpConfig({ apiPrefix: '/v1' as `/api/${string}` })).toThrow()
+  it.each(['/api/v1', '/v1', '/somepath/api/v1', '/some.path/api/v1'])('接受完整 API 前缀 %s', (apiPrefix) => {
+    expect(ServConfigSchema.parse({ http: { apiPrefix } }).http.apiPrefix).toBe(apiPrefix)
+  })
+
+  it.each(['api/v1', '//host/api', '/x//api', '/x/../api', '/x/./api', '/x/%2e%2e/api', '/x?query', '/x#fragment', '/x y', '/', '/somepath/api/v1/'])('拒绝不合法 API 前缀 %s', (apiPrefix) => {
+    expect(ServConfigSchema.safeParse({ http: { apiPrefix } }).success).toBe(false)
   })
 
   it('parses _serv.yml style config and fills top-level defaults', () => {

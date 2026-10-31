@@ -76,22 +76,22 @@ describe('serv.createApp({ transport })', () => {
     await crypto.close()
   })
 
-  it('handles key-exchange and rejects unauthenticated business requests', async () => {
+  it.each(['/api/v1', '/somepath/api/v1', '/some.path/api/v1'] as const)('handles key-exchange and rejects unauthenticated requests under %s', async (apiPrefix) => {
     const app = serv.createApp({
       contract,
       procedures,
-      http: { apiPrefix: '/api/v1', openapi: false, docs: false },
+      http: { apiPrefix, openapi: false, docs: false },
       transport: { keyStore: createInMemoryKeyStore(), serverKeyRing, crypto },
     })
 
     // 健康检查路径不在 keyExchange 范围；但缺少 X-Client-Id 时被中间件拦截。
     // 健康路由由 createApp 自动挂载在 /health（apiPrefix 之外）。
     // 业务请求 (apiPrefix 下) 缺少 client-id 应被拒。
-    const unauthed = await app.request('/api/v1/whatever', { method: 'POST' })
+    const unauthed = await app.request(`${apiPrefix}/whatever`, { method: 'POST' })
     expect(unauthed.status).toBe(400)
 
     // GET / __data 类无请求体场景也必须先带 clientId，不能因为无需解密 body 而放行。
-    const unauthedGet = await app.request('/api/v1/whatever', { method: 'GET' })
+    const unauthedGet = await app.request(`${apiPrefix}/whatever`, { method: 'GET' })
     expect(unauthedGet.status).toBe(400)
 
     // 密钥协商
@@ -100,7 +100,7 @@ describe('serv.createApp({ transport })', () => {
     if (!kpResult.success)
       return
 
-    const exchangeResp = await app.request('/api/v1/_hai/key-exchange', {
+    const exchangeResp = await app.request(`${apiPrefix}/_hai/key-exchange`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientPublicKey: kpResult.data.publicKey }),

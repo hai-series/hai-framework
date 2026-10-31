@@ -602,7 +602,7 @@ transport:
 
 原生 RPC 入口及 `HAI_SERV_HTTP_RPC`、`ServRpcHttpConfig` 已删除。业务继续使用现有 OpenAPI/REST 路径和 `api-client`，底层 oRPC contract 与 procedure 保留。
 
-- `apiPrefix`：默认 `/api/v1`
+- `apiPrefix`：默认 `/api/v1`；支持 `/somepath/api/v1` 等完整绝对前缀。路径段只含字母、数字、下划线、连字符和点，不接受末尾斜杠、空段、单独的 `.`/`..`、查询或片段。健康、文档和存储公开路径分别配置到同一目录。
 - `health`：默认 `{ path: '/health', readyPath: '/ready' }`
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
 - `docs`：默认 `false`；启用：`{ path: '/docs' }`；文档目录下自动挂载 `_hai/scalar.js`（默认 `/_hai/scalar.js`），提供本地 Scalar UI，无需外网 CDN。页面中的脚本和 spec 使用相对地址；网关保留前缀时 docs/openapi 都应配置在转发范围内，剥离前缀时仍可用后端原路径。`requireAuth` 仍由后端校验。

@@ -602,7 +602,7 @@ transport:
 
 ネイティブ RPC 入口、`HAI_SERV_HTTP_RPC`、`ServRpcHttpConfig` は削除しました。既存の OpenAPI/REST API、`api-client`、oRPC contract と procedure は引き続き利用できます。
 
-- `apiPrefix`：既定 `/api/v1`。
+- `apiPrefix`：既定 `/api/v1`。`/somepath/api/v1` などの絶対接頭辞を指定できます。英数字・アンダースコア・ハイフン・点を使用し、末尾のスラッシュ、空区間、単独の `.`/`..`、クエリとフラグメントは拒否します。ヘルス・文書・公開ストレージのパスも同じディレクトリに別途設定します。
 - `health`：既定 `{ path: '/health', readyPath: '/ready' }`。
 - `openapi`：既定 `false`。`{ path: '/openapi.json' }` で有効化。
 - `docs`：既定 `false`。`{ path: '/docs' }` で有効化。文書ディレクトリ内の `_hai/scalar.js`（既定 `/_hai/scalar.js`）で Scalar UI を配信し、外部 CDN は不要です。スクリプトと spec の URL は相対指定です。ゲートウェイが接頭辞を保持する場合は docs/openapi も転送範囲内に配置し、接頭辞を除去する構成にも対応します。`requireAuth` は後端で検証します。

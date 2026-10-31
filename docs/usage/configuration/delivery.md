@@ -130,7 +130,11 @@ Web的API地址按显式`baseUrl`、`runtime-config.js`、构建时`PUBLIC_API_B
 
 ![前后端分离应用的子目录入口](../images/subpath-vite-login.png)
 
-图为真实生成的Fullstack Web经`/yyy/`反代访问的页面。验收沿该入口执行管理业务流程、hash深链接与刷新；API通过单独的`/api/v1/`代理访问实际服务。
+图为当轮真实生成的 Fullstack Web 经 `/yyy/` 反代访问的页面。验收将 Serv 的 `http.apiPrefix` 配为 `/yyy/api/v1`，网关保留 API 前缀并拒绝根路径 `/api/v1/` 与 `/health`；沿该入口完成管理业务、hash 深链接与刷新。
+
+![子目录入口使用的公开 API 运行配置](../images/subpath-vite-runtime-config.png)
+
+公开运行配置中的 `apiBase` 同样带 `/yyy/api/v1`，只包含可公开的地址。图中的名称、版本和回环地址由测试夹具指定，部署时使用实际公网地址。
 
 ### 所有对外业务路径必须带同一目录
 

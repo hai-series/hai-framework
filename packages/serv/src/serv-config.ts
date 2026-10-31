@@ -11,10 +11,12 @@ import process from 'node:process'
 import { RequestAccessConfigSchema, TrustedProxiesSchema } from '@h-ai/core'
 import { TRANSPORT_PLAINTEXT_RANGE } from '@h-ai/crypto'
 import { z } from 'zod'
+import { servM } from './serv-i18n.js'
 
-const ApiPrefixSchema = z.custom<`/api/${string}`>(
-  value => typeof value === 'string' && value.startsWith('/api/'),
-  'apiPrefix must start with /api/',
+const ApiPrefixSchema = z.custom<`/${string}`>(
+  value => typeof value === 'string' && /^\/[\w.-]+(?:\/[\w.-]+)*$/.test(value)
+    && !value.split('/').some(segment => segment === '.' || segment === '..'),
+  { error: () => servM('serv_invalidApiPrefix') },
 )
 
 const AbsolutePathSchema = z.custom<`/${string}`>(
@@ -157,7 +159,7 @@ export interface ServHttpConfig {
   readonly trustedProxies: TrustedProxies
   /** 每次请求的 IP/时间策略；默认 false，内联与独立文件二选一。 */
   readonly access: RequestAccessConfigInput
-  readonly apiPrefix: `/api/${string}`
+  readonly apiPrefix: `/${string}`
   readonly openapi: false | ServOpenAPIHttpConfig
   readonly docs: false | ServDocsHttpConfig
   readonly health: false | ServHealthHttpConfig
@@ -230,7 +232,7 @@ export type ServTransportRuntimeConfigInput = Partial<{
 export type ServHttpConfigInput = Partial<{
   readonly trustedProxies: TrustedProxies
   readonly access: RequestAccessConfigInput
-  readonly apiPrefix: `/api/${string}`
+  readonly apiPrefix: `/${string}`
   readonly openapi: false | Partial<ServOpenAPIHttpConfig>
   readonly docs: false | Partial<ServDocsHttpConfig>
   readonly health: false | Partial<ServHealthHttpConfig>

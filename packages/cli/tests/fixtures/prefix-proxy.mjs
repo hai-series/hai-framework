@@ -1,4 +1,4 @@
-/** 本轮独立 loopback 网关：所有公开请求必须带目录，向根目录测试服务剥离一次前缀。 */
+/** 本轮独立 loopback 网关：API 保留完整目录，只为根目录静态站点剥离一次前缀。 */
 import { createServer, request as proxyRequest } from 'node:http'
 import process from 'node:process'
 
@@ -19,7 +19,7 @@ const server = createServer((request, response) => {
   const isApi = url.pathname.startsWith(`${prefix}/api/`)
   if (!url.pathname.startsWith(`${prefix}/`))
     return response.writeHead(404).end()
-  const upstream = new URL(`${url.pathname.slice(prefix.length)}${url.search}`, isApi ? service : web)
+  const upstream = new URL(`${isApi ? url.pathname : url.pathname.slice(prefix.length)}${url.search}`, isApi ? service : web)
   const forwarded = proxyRequest(upstream, { method: request.method, headers: request.headers }, (result) => {
     response.writeHead(result.statusCode ?? 502, result.headers)
     result.pipe(response)

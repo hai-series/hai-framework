@@ -11,7 +11,7 @@
 | 项 | 框架默认 | 影响 |
 | --- | --- | --- |
 | `server`.`host`/`port` | 127.0.0.1/3000 | 本机回环；容器通常明确监听0.0.0.0，暴露端口不代表已做认证 |
-| `http.apiPrefix` | /api/v1 | 以 /api/ 开头，客户端 `baseUrl` 与代理路径必须一致 |
+| `http.apiPrefix` | /api/v1 | 无末尾斜杠的合法绝对路径，可为 `/somepath/api/v1`；客户端 `baseUrl` 与代理路径必须一致 |
 | `http.health` | /`health` 和 /ready | false 关闭；健康与依赖就绪分开，检查路径也应同步部署 `health` |
 | `http.openapi` | `false` | 对象启用，默认 `path: /openapi.json`；生产按公开范围选择 |
 | `http.docs` | `false` | 对象启用，默认 `path: /docs`；`requireAuth` 可显式要求认证 |

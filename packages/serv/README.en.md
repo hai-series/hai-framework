@@ -602,7 +602,7 @@ transport:
 
 Native RPC endpoints, `HAI_SERV_HTTP_RPC` and `ServRpcHttpConfig` have been removed. Existing OpenAPI/REST APIs, `api-client`, and the oRPC contracts and procedures remain supported.
 
-- `apiPrefix`: defaults to `/api/v1`.
+- `apiPrefix`: defaults to `/api/v1`; accepts full absolute prefixes such as `/somepath/api/v1`. Segments use letters, digits, underscores, hyphens and dots; trailing slashes, empty segments, standalone `.`/`..`, queries and fragments are rejected. Configure health, docs and public storage paths under the same directory separately.
 - `health`: defaults to `{ path: '/health', readyPath: '/ready' }`.
 - `openapi`: defaults to `false`; enable with `{ path: '/openapi.json' }`.
 - `docs`: defaults to `false`; enable with `{ path: '/docs' }`. Scalar is mounted as `_hai/scalar.js` in the document directory (default `/_hai/scalar.js`), without an external CDN. Script and spec URLs are relative. When a gateway preserves a prefix, place docs and OpenAPI paths within it; stripping a prefix also works. Backend `requireAuth` checks remain enforced.

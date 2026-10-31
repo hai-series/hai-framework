@@ -26,6 +26,7 @@ transport 仅支持 v2：SM2 发送方签名、独立密钥的 Encrypt-then-HMAC
 - AI 默认 feature 以可信 session.userId 绑定 objectId，所有读写和记忆按主体隔离；跨主体访问必须显式 authorizeObject，同名 sessionId 不代表同一用户。
 - 认证绑定 route 的 auth/permission/role；启动配置错误与正常请求领域错误分别处理。
 - 普通 procedure 的失败 HaiResult 默认通过 HTTP 200 返回，必须检查 success 与 error.code；error.httpStatus 是领域错误元数据。contract 输入校验失败为 HTTP 400，HTTP middleware、刷新 cookie 等响应另按自身契约处理，不能混为同一种状态映射。
+- `http.apiPrefix` 默认 `/api/v1`，支持 `/somepath/api/v1` 等完整合法绝对路径；与前端 base、健康/文档及存储路径成套配置，网关保留 API 前缀。拒绝末尾斜杠、空路径段、路径穿越、查询和片段。
 - 浏览器 Cookie、CORS、apiPrefix、transport 须与 api-client 同步；语音 ticket 单独核验。
 - transport 服务端显式注入受管 serverKeyRing 和共享 keyStore；请求带协商 serverKeyId。私钥只从 Secret/私有环境加载，不放公开配置；轮换、重启与跨节点要求见 hai-crypto。
 - 缺失路由返回本地化 HaiResult JSON 404；加密传输保留该状态。默认 feature 可按需选用，contract 与挂载的 procedures 保持一致。

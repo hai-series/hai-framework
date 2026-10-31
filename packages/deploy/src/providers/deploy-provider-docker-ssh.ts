@@ -81,7 +81,7 @@ const HEALTH_MAX_ATTEMPTS = 40
 /** 只提取 Serv 已注册的精确路径；阻止配置路径进入 Nginx 指令或 shell 语法。 */
 function servicePath(value: unknown, fallback: string): string {
   const path = value ?? fallback
-  if (typeof path !== 'string' || !/^\/[\w./-]*$/.test(path) || path.startsWith('//') || path.split('/').some(part => part === '.' || part === '..'))
+  if (typeof path !== 'string' || !/^\/[\w./-]*$/.test(path) || path.includes('//') || path.split('/').some(part => part === '.' || part === '..'))
     throw new Error('Invalid service endpoint path')
   return path
 }
@@ -356,7 +356,7 @@ export function createDockerSshProvider(
       const http = server.data.http as { apiPrefix?: string } | undefined
       const cors = server.data.cors as { origin?: string } | undefined
       const apiPrefix = http?.apiPrefix ?? '/api/v1'
-      if (typeof apiPrefix !== 'string' || !/^\/[\w/-]+$/.test(apiPrefix)) {
+      if (typeof apiPrefix !== 'string' || !/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(apiPrefix) || apiPrefix.split('/').some(part => part === '.' || part === '..')) {
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_webProxyInvalid'))
       }
       if (webBasePath && ([...backendPaths, '/_hai/web-health'].includes(webBasePath) || webBasePath === apiPrefix.replace(/\/+$/, '') || webBasePath.startsWith(`${apiPrefix.replace(/\/+$/, '')}/`)))

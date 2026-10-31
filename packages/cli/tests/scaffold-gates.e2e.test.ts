@@ -588,6 +588,12 @@ async function runPrefixBrowserGates(projectPath: string, kind: 'sveltekit' | 'v
   }
   else {
     await writeFile(path.join(projectPath, 'scripts/prefix-proxy.mjs'), await readFile(path.join(fixtures, 'prefix-proxy.mjs')))
+    const testFile = path.join(projectPath, 'e2e/fullstack.spec.ts')
+    const source = await readFile(testFile, 'utf8')
+    const scoped = source.replace('const apiPrefix = \'/api/v1\'', 'const apiPrefix = \'/yyy/api/v1\'')
+    if (source === scoped)
+      throw new Error('Expected the Fullstack API prefix fixture')
+    await writeFile(testFile, scoped)
   }
   const config = `import { defineConfig } from '@playwright/test'
 import original from './playwright.config'
@@ -601,11 +607,19 @@ export default defineConfig({
   use: { ...original.use, baseURL: ${JSON.stringify(prefixUrl)} },
   webServer: ${kind === 'sveltekit'
     ? `servers.map(server => ({ ...server, env: { ...server.env, PUBLIC_BASE_PATH: '/yyy' }, url: ${JSON.stringify(prefixUrl)} }))`
-    : `[...servers.map(server => server.name?.endsWith('-web') ? {
-      ...server,
-      command: ${JSON.stringify(`pnpm --filter ${path.basename(projectPath)}-web exec vite preview --host 127.0.0.1 --port ${new URL(rootUrl).port} --strictPort`)},
-      url: ${JSON.stringify(rootUrl)},
-    } : server), {
+    : `[...servers.map(server => {
+      if (server.name?.endsWith('-web')) return {
+        ...server,
+        command: ${JSON.stringify(`pnpm --filter ${path.basename(projectPath)}-web exec vite preview --host 127.0.0.1 --port ${new URL(rootUrl).port} --strictPort`)},
+        url: ${JSON.stringify(rootUrl)},
+      }
+      if (server.name?.endsWith('-serv')) {
+        const settings: Record<string, unknown> | undefined = server.env?.HAI_SERV ? JSON.parse(server.env.HAI_SERV) : undefined
+        const http = settings?.http
+        return { ...server, env: { ...server.env, HAI_SERV_HTTP_APIPREFIX: '/yyy/api/v1', ...(settings ? { HAI_SERV: JSON.stringify({ ...settings, http: { ...(http && typeof http === 'object' ? http : {}), apiPrefix: '/yyy/api/v1' } }) } : {}) } }
+      }
+      return server
+    }), {
       command: 'node scripts/prefix-proxy.mjs',
       env: { PREFIX_WEB_URL: ${JSON.stringify(rootUrl)}, PREFIX_SERVICE_URL: ${JSON.stringify(envOptions.serviceBaseUrl)}, PREFIX_PROXY_URL: ${JSON.stringify(proxyUrl)} },
       url: ${JSON.stringify(`${proxyUrl}/yyy/health`)},

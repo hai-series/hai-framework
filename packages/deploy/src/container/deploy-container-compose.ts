@@ -681,8 +681,9 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   const webBasePath = options.webBasePath ?? ''
   const apiPath = apiPrefix.replace(/\/+$/, '')
   const backendPaths = [...new Set(options.backendPaths ?? ['/health'])]
-  if (!/^\/[\w/-]+$/.test(apiPrefix) || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535)
-    || backendPaths.some(path => !/^\/[\w./-]*$/.test(path) || path.startsWith('//') || path.split('/').some(part => part === '.' || part === '..') || path === `${webBasePath}/runtime-config.js` || path === '/_hai/web-health')
+  if (!/^\/[\w.-]+(?:\/[\w.-]+)*$/.test(apiPrefix) || apiPrefix.split('/').some(part => part === '.' || part === '..') || ![port, webPort].every(value => Number.isInteger(value) && value >= 1 && value <= 65535)
+    || backendPaths.includes(`${webBasePath}/`)
+    || backendPaths.some(path => !/^\/[\w./-]*$/.test(path) || path.includes('//') || path.split('/').some(part => part === '.' || part === '..') || path === `${webBasePath}/runtime-config.js` || path === '/_hai/web-health')
     || (webBasePath && (backendPaths.includes(webBasePath) || webBasePath === apiPath || webBasePath.startsWith(`${apiPath}/`)))) {
     throw new Error('Invalid web proxy target')
   }

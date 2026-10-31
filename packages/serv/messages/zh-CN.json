@@ -34,5 +34,6 @@
   "serv_transportEncryptFailed": "响应加密失败",
   "serv_transportKeyExchangeFailed": "密钥协商失败",
   "serv_transportBusy": "材料处理繁忙，请稍后重试",
-  "serv_feedbackUnavailable": "问题反馈暂不可用，业务功能可继续使用"
+  "serv_feedbackUnavailable": "问题反馈暂不可用，业务功能可继续使用",
+  "serv_invalidApiPrefix": "API 前缀必须是合法的绝对路径，不能包含空路径段、查询、片段或路径穿越。"
 }

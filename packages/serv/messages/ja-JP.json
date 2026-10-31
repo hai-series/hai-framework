@@ -34,5 +34,6 @@
   "serv_transportEncryptFailed": "レスポンスの暗号化に失敗しました",
   "serv_transportKeyExchangeFailed": "鍵交換に失敗しました",
   "serv_transportBusy": "資料の処理が混み合っています。しばらくしてから再試行してください。",
-  "serv_feedbackUnavailable": "フィードバックは一時的に利用できません。業務機能は引き続き利用できます。"
+  "serv_feedbackUnavailable": "フィードバックは一時的に利用できません。業務機能は引き続き利用できます。",
+  "serv_invalidApiPrefix": "API 接頭辞は空の区間・クエリ・フラグメント・相対移動を含まない絶対パスにしてください。"
 }

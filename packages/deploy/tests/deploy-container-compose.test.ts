@@ -320,6 +320,18 @@ describe('对象存储网关边界', () => {
 })
 
 describe('generateComposeFile', () => {
+  it('拒绝会产生双斜杠路由的 API 前缀', () => {
+    expect(() => generateWebProxyConfig(3000, '/somepath/api/v1/')).toThrow()
+  })
+
+  it.each([
+    { webBasePath: '', backendPaths: ['/'] },
+    { webBasePath: '/somepath', backendPaths: ['/somepath/'] },
+    { webBasePath: '/somepath', backendPaths: ['/somepath//health'] },
+  ])('拒绝后端探活覆盖站点入口或使用空路径段：%j', (options) => {
+    expect(() => generateWebProxyConfig(3000, '/somepath/api/v1', options)).toThrow()
+  })
+
   it('多服务使用 hai-app 网络且输出不含 YAML 锚点', () => {
     const { sidecar } = buildRuntimeEnv(tmpDir, 'demo', makeScan(['db', 'cache', 'storage']), {}, 3000)
     const content = generateComposeFile({ appVersion: '1.2.3', projectName: 'demo', imageRef: 'app:1', hostPort: 8080, containerPort: 3000, sidecar })
