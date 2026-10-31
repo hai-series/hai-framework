@@ -143,8 +143,8 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const read = (file: string) => execFileSync('tar', ['-xOf', bundle.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
     const proxy = read('.hai/web.conf').replace('listen 8443 ssl', `listen ${DEPLOY_FIXTURE_API_PORT} ssl`).replace('listen 8080;', `listen ${DEPLOY_FIXTURE_WEB_PORT};`).replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replaceAll('/usr/share/nginx/html', '/tmp/hai-tls-www')
     writeFileSync(path.join(project, 'nginx.conf'), `pid /tmp/hai-tls.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n${proxy}\n}\n`)
-    // 入口钩子保留发布包的证书逻辑，夹具随后启动自定义配置的 Nginx。
-    const watcher = `${read('.hai/proxy-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('watch_certificate &', 'watch_certificate &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')}\nexec nginx -c /tmp/hai-tls.conf -g 'daemon off;'\n`
+    // 故意延后后台监视器执行，验证证书在首次调度前已更新时仍会触发重载。
+    const watcher = `${read('.hai/proxy-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('watch_certificate &', '( while [ ! -f /tmp/hai-tls-watch-ready ]; do sleep 1; done; watch_certificate ) &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')}\nexec nginx -c /tmp/hai-tls.conf -g 'daemon off;'\n`
     writeFileSync(path.join(project, 'proxy-start.sh'), watcher)
     await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'mkdir -p /tmp/hai-tls-pem /tmp/hai-tls-www; printf "https fixture" > /tmp/hai-tls-www/index.html'])
     const copyCertificate = (files: { cert: string, key: string }) => {
@@ -186,6 +186,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       await redirect.body?.cancel()
       const renewed = certificate('renewed')
       copyCertificate(renewed)
+      await executeDeployTestFixture(runtime, owned, ['touch', '/tmp/hai-tls-watch-ready'])
       let updated: Awaited<ReturnType<typeof probe>> | undefined
       for (let attempt = 0; attempt < 30; attempt++) {
         updated = await probe(renewed.pem).catch(() => undefined)

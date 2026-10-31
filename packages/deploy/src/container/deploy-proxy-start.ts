@@ -29,9 +29,10 @@ awk '
   }
 ' /etc/resolv.conf > /tmp/hai-dns.conf
 ${https
-  ? String.raw`# 目录挂载允许原子替换证书；只有新证书通过 nginx -t 才重载。
+  ? String.raw`# 启动 Nginx 前同步记录指纹，避免后台首次调度晚于续期而漏掉更新。
+previous=$(sha256sum /etc/nginx/tls/fullchain.pem)
+# 目录挂载允许原子替换证书；只有新证书通过 nginx -t 才重载。
 watch_certificate() {
-  previous=$(sha256sum /etc/nginx/tls/fullchain.pem)
   while sleep 60; do
     current=$(sha256sum /etc/nginx/tls/fullchain.pem) || continue
     if [ "$previous" != "$current" ]; then
