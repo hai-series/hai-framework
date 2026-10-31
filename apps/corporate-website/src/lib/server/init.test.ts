@@ -42,9 +42,9 @@ const state = vi.hoisted(() => {
   return { calls, initialized, borrowed, settings, config, modules }
 })
 
-vi.mock('@h-ai/ai', () => ({ ai: state.modules.ai }))
+vi.mock('@h-ai/ai', () => ({ ai: state.modules.ai, AIConfigSchema: {} }))
 vi.mock('@h-ai/cache', () => ({ cache: state.modules.cache, CacheConfigSchema: {} }))
-vi.mock('@h-ai/iam', () => ({ iam: state.modules.iam }))
+vi.mock('@h-ai/iam', () => ({ iam: state.modules.iam, IamConfigSchema: {} }))
 vi.mock('@h-ai/reach', () => ({ reach: state.modules.reach, ReachConfigSchema: { parse: (value: unknown) => value } }))
 vi.mock('@h-ai/reldb', () => ({ reldb: state.modules.reldb, ReldbConfigSchema: {} }))
 vi.mock('@h-ai/storage', () => ({ storage: state.modules.storage, StorageConfigSchema: {} }))

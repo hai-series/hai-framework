@@ -14,14 +14,14 @@
 
 构建与部署配置统一在项目根 `hai.json`：`build` 保存 images/desktop，`deploy` 保存 provider/container/services 等项目级配置。服务目录只扫描运行依赖与模块 YAML。`deploy` 支持 `${变量:回退值}` 和 `HAI_DEPLOY_*` 分层覆盖；父对象可用 JSON 整体覆盖，缺省 SSH 节点可由 Schema 已知字段补齐，不接受未知字段。高层来源父对象覆盖低层叶字段，同一来源叶字段优先。凭据不要直接写入 hai.json。构建不读取部署环境或密钥。
 
-公共文件沿用 `.env.example` 清单、`.env` 基础和 `.env.dev/test/prod` 环境覆盖。部署 SDK 新保存的 SSH 连接、密码、API Key 和含认证 URL 写忽略 Git 的 `.env.<mode>.local`；公共后端和地址写目标环境文件。旧 `.env.local` 保留为共享兼容回退，不猜测其环境归属、不强制迁移、不删除旧值。CLI 不打印秘密值。调用 deploy API 时显式传 `{ environment: 'test', envDir: '/workspace/app' }`，不要用调用者的 `NODE_ENV` 猜测部署目标。
+公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。
 
 部署 SDK 的来源优先级从高到低为：
 
-- `HAI_DEPLOY_*`：进程 > `.env.<mode>.local` > `.env.<mode>` > 旧 `.env.local` > `.env`，所选环境明确目标胜过旧全局目标。
-- 普通模块：进程 > `.env.<mode>.local` > 旧 `.env.local` > `.env.<mode>` > `.env`，保留旧私有凭据优先级。
+所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
 
-`.env.<mode>.local` 仅属于部署 SDK 的配置读取和记忆；Core 的普通应用加载规则不变，不能据此宣称 dev/start 会读取这个文件。
+
+`.env.<mode>.local` 同时用于普通开发、Node 启动和部署；通过公共 Core 工具合并，不实现模块专用来源顺序。
 
 交付 tar 内的 `.env.runtime` 是按上述配置生成的 Compose 运行文件，不是下次部署的配置源。`NODE_ENV` 默认按目标模式选择：test 为 test，dev/development 为 development，其余为 production；显式应用配置仍可覆盖。构建保持正式优化模式，旧包需重新生成。完整配置使用 `--env test --yes` 复用；需要保持中间件时追加 `--skip-middleware`。自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。旧版本可通过显式预检和凭据导入流程迁移，缺状态的普通部署仍拒绝。
 
@@ -31,13 +31,13 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 分批启动仅在首批清理孤立容器，后续 serv/Web 启动必须保留已经就绪的中间件。
 
-生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点可直接加载环境文件中的同一有效密钥环，也可由 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+生成时为 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立的初始管理员密码和传输密钥环；文件不提交 Git，克隆后通过受保护配置分发对应环境秘密，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点可直接加载环境文件中的同一有效密钥环，也可由 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
 
 ## 识别与逐项选择
 
-默认和自定义模式均从同后端的有效配置继续，不能按表单重建对象而丢掉未展示项。自建/云开通保留连接池、操作日志、公开端点/前缀、Redis 重试、向量检索、SMTP 发件人及 LDAP 属性映射，仅由实际服务定稿地址与认证；旧 URL、TLS/集群选择器不能覆盖新服务。切换后端清除不兼容字段。若旧向导已写出缺字段父 JSON，先从原配置/备份恢复最高优先级 `HAI_STORAGE` 的 `publicEndpoint` 等字段，再用修复版重建部署包；父 JSON 仍优先于 YAML 和叶变量，不自动猜测丢失值。
+默认和自定义模式均从同后端的有效配置继续，不能按表单重建对象而丢掉未展示项。自建/云开通保留连接池、操作日志、公开端点/前缀、Redis 重试、向量检索、SMTP 发件人及 LDAP 属性映射，仅由实际服务定稿地址与认证；旧 URL、TLS/集群选择器不能覆盖新服务。切换后端清除不兼容字段。生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
-框架 `HAI_*` 连接配置与镜像原生变量分开：PostgreSQL/MySQL/RustFS/MinIO/LDAP 的原生键必须按镜像契约命名，只写私有 `middleware-runtime.env`、只让中间件加载。不得改成镜像不识别的 HAI 前缀，也不得写回工程 `.env.<mode>` / 私有覆盖或注入应用 `.env.runtime`。应用的增量覆盖文件 `middleware.env` 只含 `HAI_*`。旧工程原生字段不自动删除，新应用环境忽略框架曾生成的已知原生键；不要批量过滤其他业务变量。
+中间件原生变量（`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*`）按镜像契约保留原名，只写私有 `.hai/middleware-runtime.env`，仅由中间件读取。应用连接全部合并到 `config/.env.runtime`。
 
 数据库连接保存前复用所选后端的公开配置 Schema；MySQL `ssl` 仅 `false` 或严格对象，`{}` 默认验证证书链和 DNS 身份，`ca/cert/key` 为 PEM 内容且 `cert/key` 必须成对；私钥仅进入私有环境。PostgreSQL 保留其布尔值/字符串模式/对象契约。CLI 内联 `@h-ai/reldb/schemas` 与 Zod，无需为配置校验给目标应用额外安装数据库包或驱动；部署本身仍需已安装的 `@h-ai/deploy`，实际运行应用仍需其数据库依赖。
 
@@ -60,7 +60,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 1. **使用默认配置**：选择后端；Compose 生成匹配容器/卷，云平台调用已支持的 Provisioner，并保存实际连接配置。MySQL、LDAP、向量库等没有云自动开通器时，明确提示改用自定义连接；不能声称已经创建云资源。Resend 需要已验证的发件域名，R2 需要已有 S3 访问密钥，阿里云短信需要签名/模板与额度。
 2. **使用自定义配置**：逐项输入所选后端的连接字段，展示字段用途与约束，校验必填项、端口、布尔和 URL；凭据用密码输入。保存配置后跳过该服务的开通与 sidecar。
-3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.<mode>.local`、兼容 `.env.local` 或进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
+3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.<mode>.local`、共享 `.env.local` 或进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
 
 逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍校验已有构建产物并执行部署及健康检查。命令行使用唯一的 `--skip-middleware`，SDK 使用 `skipMiddleware`。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
 

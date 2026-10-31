@@ -48,8 +48,7 @@ it('asks once per email and SMS provider and reports saved services without envi
   const saved = loadDeploymentEnvironment({ environment: 'test', envDir: app })
   expect(saved.success).toBe(true)
   if (saved.success) {
-    expect(JSON.parse(saved.data.values.HAI_REACH_PROVIDERS_0)).toEqual({ name: 'email', type: 'console' })
-    expect(JSON.parse(saved.data.values.HAI_REACH_PROVIDERS_1)).toEqual({ name: 'sms', type: 'console' })
+    expect(deployModule.loadDeploymentConfig('reach', join(service, 'config/_reach.yml'), saved.data.values)).toMatchObject({ success: true, data: { providers: [{ name: 'email', type: 'console' }, { name: 'sms', type: 'console' }] } })
   }
   expect(output.mock.calls.map(([message]) => message).join('\n')).not.toMatch(/HAI_|NODE_ENV|PORT/)
   expect(output).toHaveBeenCalledWith(cliM('cli_deploy_saved', { params: { service: 'email' } }))
@@ -300,9 +299,10 @@ it.each(['missing', 'partial', 'saved', 'password'])('离线打包最后确认 S
   expect(environment.success).toBe(true)
   if (!environment.success)
     return
-  expect(JSON.parse(environment.data.values.HAI_DEPLOY_PROVIDER!)).toMatchObject({ ssh: { host: 'new.internal', port: 2202, username: 'new-user' }, remote: { baseDir: '/srv/apps' } })
+  const configuration = deployModule.loadDeploymentConfig('deploy', join(app, 'hai.json'), environment.data.values)
+  expect(configuration).toMatchObject({ success: true, data: { provider: { ssh: { host: 'new.internal', port: 2202, username: 'new-user' }, remote: { baseDir: '/srv/apps' } } } })
   if (state === 'password')
-    expect(JSON.parse(environment.data.values.HAI_DEPLOY_PROVIDER!).ssh.password).toBe(password)
+    expect(configuration).toMatchObject({ success: true, data: { provider: { ssh: { password } } } })
   expect(parseEnv(readFileSync(join(app, '.env.test'), 'utf8'))).toMatchObject(parseEnv(publicBefore))
   expect(readFileSync(join(app, '.env.test'), 'utf8')).not.toContain('new.internal')
   expect(readFileSync(join(app, 'hai.json'), 'utf8')).toBe(deploymentBefore)

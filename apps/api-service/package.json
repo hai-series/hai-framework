@@ -14,13 +14,13 @@
     "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
-    "dev": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.dev --env-file-if-exists=.env.local dist/index.js\"",
-    "dev:test": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local dist/index.js\"",
-    "dev:prod": "tsup --watch --onSuccess \"node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local dist/index.js\"",
+    "dev": "tsup --watch --onSuccess \"node ../../scripts/run-node.mjs dev . dist/index.js\"",
+    "dev:test": "tsup --watch --onSuccess \"node ../../scripts/run-node.mjs test . dist/index.js\"",
+    "dev:prod": "tsup --watch --onSuccess \"node ../../scripts/run-node.mjs prod . dist/index.js\"",
     "build": "hai build",
     "preview": "pnpm start",
-    "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local dist/index.js",
-    "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local dist/index.js",
+    "start": "node ../../scripts/run-node.mjs prod . dist/index.js",
+    "start:test": "node ../../scripts/run-node.mjs test . dist/index.js",
     "start:prod": "pnpm start",
     "check": "pnpm typecheck",
     "typecheck": "node ../../scripts/typecheck.mjs --noEmit",

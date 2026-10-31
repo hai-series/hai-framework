@@ -42,6 +42,7 @@ website默认SSR；静态发布须先移除服务端业务依赖、初始化及A
 | `.env.test`    | 测试环境公共覆盖                                       | 提交   |
 | `.env.prod`    | 生产环境公共覆盖                                       | 提交   |
 | `.env.local`   | 当前机器的私有配置，覆盖公共配置                       | 不提交 |
+| `.env.<mode>.local` | 当前模式的私有覆盖、初始密码和传输密钥环 | 不提交 |
 
 YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时的本地默认值。应用仍通过 `core.config.validate(name, ModuleConfigSchema)` 和模块初始化校验类型、枚举、范围和必填项；插值本身不能代替校验。只开启实际使用的模块，未启用模块的整份 YAML 保留注释。
 
@@ -51,8 +52,8 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 
 - `HAI_<配置名>_<字段路径>`：`_db.yml` 的 `type` 对应 `HAI_DB_TYPE`；`_ai.yml` 的 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`。camelCase 不拆词，数组使用从零开始的索引，如 `HAI_AI_AUDIO_MODELS_0_BASEURL`。
 - 框架配置统一采用路径命名，如 `HAI_REACH_PROVIDERS_0_PASS`。第三方 SDK 自身读取的 `OPENAI_API_KEY` 等外部变量保留厂商约定；应用 YAML 使用框架标准名。
-- 完整变量引用按 YAML 标量还原类型：布尔用 `true/false`，数字不带单位；要保留看似数字/布尔的字符串，在环境值中保留 YAML 引号，例如 dotenv 中 `HAI_AI_LLM_APIKEY='"123456"'`。空字符串保持为空字符串。
-- `HAI_DB` 等父级变量可用 JSON/YAML 整体替换对象，优先于子级变量；非必要不整体覆盖，避免遗漏字段。
+- Schema 决定类型：布尔用 `true/false`，数字不带单位；字符串直接填写即可保留前导零，无须再嵌套 YAML 引号。没有 Schema 的自定义配置按已有 YAML/JSON 结构与 YAML 标量规则解析。空字符串保持为空字符串。
+- JSON 对象可作为基础，后续按路径细化；同来源先父后子、与行序无关，高来源整段替换会清掉低来源细项。生成配置优先细项，数组保留 JSON；动态字典与空对象保留原意，JSON 放对应模块细项之前。
 - `PUBLIC_` / `VITE_` 只用于浏览器可见的 API 地址和非敏感参数。业务正文、模板 ID、表名/列名及数据结构留在代码/YAML；环境参数不能改变固定表结构契约。
 
 #### 加载与启动
@@ -62,13 +63,13 @@ YAML 使用 `${HAI_DB_TYPE:sqlite}` 等显式引用，冒号后是未配置时�
 | Vite / SvelteKit | `pnpm dev` | `pnpm dev:test`          | `pnpm dev:prod` 预览；build 不选择环境 |
 | Node service     | `pnpm dev` | 构建后 `pnpm start:test` | 构建后 `pnpm start:prod`                      |
 
-`hai create` 为 fullstack 在 `.env.dev/.env.test/.env.prod` 各自生成不同的 `HAI_ADMIN_DEFAULT_PASSWORD` 和 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`；API 启用 crypto 时也分别生成 ring。提交这些环境文件后，克隆用户共享对应环境的初始凭据；`.env.local` 默认只保留覆盖说明，进程环境仍最高。运行时不生成或轮换 ring，所有同环境节点使用同一 ring。模板默认 `pretty` 并声明运行依赖 `pino-pretty`，需要 JSON 时覆盖 `HAI_CORE_LOGGING_FORMAT`。启动失败检查模块、错误码和字段路径；监听冲突检查 `EADDRINUSE` 的地址与端口。
+`hai create` 为 fullstack 在 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成初始密码和传输密钥环，API 启用 crypto 时也生成 ring；这些私有文件不提交 Git。克隆后通过受保护配置或 Secret Manager 分发对应环境秘密。同环境节点共享 ring 和 registry，运行时不生成或轮换。模板默认 `pretty` 并声明运行依赖 `pino-pretty`，需要 JSON 时覆盖 `HAI_CORE_LOGGING_FORMAT`。启动失败检查模块、错误码和字段路径；监听冲突检查 `EADDRINUSE` 的地址与端口。
 
-所有入口优先级一致：**进程环境 > `.env.local` > `.env.<dev|test|prod>` > `.env`**。Vite 配置在 Node 阶段通过 `core.config.loadEnvFiles({ mode, envDir })` 读取，检查 `success` 后注入进程；`development`/`production` 分别映射到 `dev`/`prod`。Node 服务按 `.env`、环境文件、`.env.local` 的顺序传入 `--env-file`，后者覆盖前者，已有进程环境最高。`core.init` 只读取已注入的变量，不自行读取 dotenv。
+所有入口优先级一致：**进程环境 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML**。Vite 在 Node 阶段通过 `core.config.loadEnvFiles` 读取并检查结果；Node 服务复用 `scripts/run-node.mjs <mode> <环境目录> <入口>`，让来源与对象覆盖规则一致，`NODE_OPTIONS` 在子进程启动前生效。`development`/`production` 映射为 `dev`/`prod`，`core.init` 不自行读取 dotenv。
 
 托管 `test:e2e` 是明确的隔离测试入口：服务子进程使用本轮绝对数据目录和完整模块配置，不继承 ambient 模块变量，也不读取用户 `.env.local`。Svelte 仅在 `HAI_E2E=1` 的测试分支跳过 dotenv；API 测试直接执行已构建产物。普通开发与生产的上述优先级和共享后端守卫保持不变，transport 使用测试独立可信 ring 与实际 registry。
 
-`prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js`。文件路径相对进程工作目录，公共文件随项目提交；容器通过部署平台或 `--env-file` 注入目标环境值。浏览器只接收公开白名单，构建产物和镜像不包含 `.env.local`。
+`prod` 是文件模式名，对应 `HAI_CORE_ENV=production`；环境枚举为 `development | test | production | staging`。SvelteKit adapter-node 产物使用 `node scripts/run-node.mjs prod . build/index.js`。路径相对工作目录，公共文件提交 Git，私有文件不进入镜像或版本库。部署容器由 SDK 统一运行文件加载，浏览器只接收公开白名单。
 
 当前 SDK 的 Node 后端默认读取实际挂载的发布 `.env.runtime`，修改后重启容器生效；托管连接保持更高优先级，静态 Web、中间件、网关路径、端口/挂载和 Node 启动参数按部署流程更新。长期修改同步回源环境，下一次后端发布会重新生成；见[部署指引](../hai-deploy/SKILL.md#后端运行配置重载)。自行维护且只使用 Compose `env_file` 注入环境的容器，改文件后需要重新创建，通常无需重建镜像。请求策略可固定引用只读挂载 YAML，后续改文件并重启服务实例重新读取；运行中不监视文件、不逐请求读盘。完整 `HAI_SERV` / `HAI_KIT` 优先于叶子变量，不叠加覆盖。待上传归档与 SDK 策略快照不能手改；运维外部文件和 Compose override 另行备份，SDK 自动回滚不恢复外部文件。
 
@@ -96,7 +97,7 @@ Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加�
 | `HAI_SERV_SERVER_HOST` / `HAI_SERV_SERVER_PORT`                   | HTTP 主机和整数端口 1–65535；部署平台 HOST/PORT 可覆盖                                 |
 | `HAI_AI_LLM_PROTOCOL` / `HAI_AI_LLM_TEMPERATURE`                       | `chat \| responses \| anthropic`；temperature 为数字 0–2                               |
 | `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL` / `HAI_AI_LLM_MODEL`   | 厂商密钥、服务 URL、实际可用模型名；启用时满足厂商要求                                 |
-| `HAI_ADMIN_DEFAULT_PASSWORD`                                      | 首次创建管理员的密码，满足 IAM 密码策略；CLI 为 fullstack 的 `.env.dev/.env.test/.env.prod` 分别生成独立随机值 |
+| `HAI_ADMIN_DEFAULT_PASSWORD`                                      | 首次创建管理员的密码，满足 IAM 密码策略；CLI 为 fullstack 的 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立随机值 |
 | `PUBLIC_API_BASE`                                                 | 可公开的 API 地址，不得包含用户名、密码或 token                                        |
 
 其余变量逐项见对应 `.env.example` 及模块公开 Schema；可选块启用后也应使用相同命名、显式引用与逐项说明。
@@ -179,7 +180,7 @@ CLI 用户消息通过现有中英字典输出。初始语言按非空的 `HAI_C
 
 独立 fullstack 默认后台的 Web/App/Desktop 共用管理组件、状态与 typed client。`@h-ai/serv/features/iam` 默认 procedures 可按需选用并与 contract 对齐；有业务缺口时覆写必要路由。主题的 DOM 更新和安全缓存使用 `@h-ai/ui/theme`（`applyTheme` / `getSavedTheme`），应用保留响应式状态与已编译主题白名单。初始 admin/user、管理员自我保护、头像限额、分页和审计策略都是应用示例，可按需求替换；实际权限、资源范围和写入一致性按目标业务落实。
 
-Fullstack 创建时在根 `.env.dev/.env.test/.env.prod` 分别写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，提交后克隆共享，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把环境凭据复制到前端配置、日志、源码或镜像。
+Fullstack 创建时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别写入独立随机 `HAI_ADMIN_DEFAULT_PASSWORD`，文件不提交 Git，克隆后通过受保护配置共享，`.env.example` 保留空占位。`dev` / `start` 自动读取；已有用户不重设密码。启动边界保留模块错误的具体说明与错误码，失败后反序清理。不能把环境凭据复制到前端配置、日志、源码或镜像。
 
 ## 落实契约与安全边界
 

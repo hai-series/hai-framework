@@ -76,15 +76,15 @@ Docker构建时同样显式设置PUBLIC_BASE_PATH；非根目录生成格式5制
 
 ### Fullstack mini 管理后台
 
-提供用户管理、角色、审计日志、头像和个人设置，以及主题、语言、引导和帮助中心。首次登录使用 `admin`，随机密码在当前环境 `.env.dev/.env.test/.env.prod` 的 `HAI_ADMIN_DEFAULT_PASSWORD`；已有用户时不会重设密码。模板业务可按需求修改，权限检查始终在服务端执行。
+提供用户管理、角色、审计日志、头像和个人设置，以及主题、语言、引导和帮助中心。首次登录使用 `admin`，随机密码在当前环境 `.env.dev.local/.env.test.local/.env.prod.local` 的 `HAI_ADMIN_DEFAULT_PASSWORD`；已有用户时不会重设密码。模板业务可按需求修改，权限检查始终在服务端执行。
 
-生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点复用同一有效密钥环，可直接加载环境文件，也可通过 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+创建工程时为 `.env.dev.local`、`.env.test.local`、`.env.prod.local` 分别生成独立初始密码和传输密钥环，文件不提交 Git。克隆工程后通过受保护文件或 Secret Manager 分发对应环境秘密，同环境所有节点使用同一 ring 与共享 registry，不在节点启动时生成。缺少或无效的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 在上传前报错。CLI 和离线说明只提示初始密码变量及来源，不输出值；密码仅用于创建缺失账号，已有账号不被重置。
 
 ### 应用配置与显示
 
 模板默认使用 `pretty` 日志并安装运行依赖 `pino-pretty`；`HAI_CORE_LOGGING_FORMAT=json` 可切换为结构化输出。启动失败保留模块、错误码与缺失配置字段；端口冲突显示 `EADDRINUSE`、地址和端口。
 
-运行参数见 `.env.example`。公共基础 `.env` 与 `.env.dev/.env.test/.env.prod` 提交 Git，私有值放 `.env.local`。覆盖顺序为进程环境 > 本机私有文件 > 所选环境 > 公共基础。API 模板在服务目录放环境文件，fullstack 在工程根。模块 YAML、环境覆盖和显示信息说明见[使用指南](../../docs/usage/README.md#3-配置环境再开始开发)。
+公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
 
 ### 已有项目与代码生成
 
@@ -133,9 +133,9 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
 ```
 
-部署向导的默认/自定义模式保留同后端完整配置，包括未出现在表单中的 `publicEndpoint`、连接池及操作日志；自建或云开通只重新定稿连接与认证。旧版已保存的缺字段父 JSON 需先补回再打包，见[中间件配置说明](../deploy/README.md#按应用真正需要的中间件处理)。
+部署向导的默认/自定义模式保留同后端完整配置，包括未出现在表单中的 `publicEndpoint`、连接池及操作日志；自建或云开通只重新定稿连接与认证。 生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
 镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；README 仅保留外层一份。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
 
@@ -170,7 +170,7 @@ CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已�
 
 完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。交互式仅打包在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存到 `.env.<环境>.local` 并用于本次和后续 target；`--yes` 或跳过时复用已有连接。交付目录仅含 tar、deploy-local.sh、read-target.awk、README.txt、带逐项说明的 `deploy-target.json` 与 Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh`。上传前核对 target 并补齐缺项，两个脚本均读取此文件，支持 key/agent 和 password，均无需 Node/pnpm。target 只引用 `passwordEnv`（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）；密码取自操作机环境，仅进入本次 SSH/SCP 子进程，不进入应用环境或包内。修改 target 仅影响本包，不回写工程。完全隔离的 Linux 服务器复制整个目录后运行 `sh deploy-local.sh`，自动解包部署。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
 
-直接部署首次补齐缺失的 SSH 连接和认证信息，完整有效配置（包括 `--yes`）直接复用；密码隐藏输入，保留前后空格和前导零。新连接和中间件秘密值写 `.env.<环境>.local`，旧 `.env.local` 保留为兼容回退。部署 SDK 的 `HAI_DEPLOY_*` 优先级为进程 > 环境私有 > 环境公共 > 旧全局私有 > 基础；其他模块为进程 > 环境私有 > 旧全局私有 > 环境公共 > 基础。此私有层仅用于部署 SDK，不改变 Core 的普通应用加载。目标环境完整中间件配置在 `--yes` 下保持，不重复询问或云开通；交互模式仍可选择本次范围。
+首次补齐 SSH 连接和认证，密码隐藏输入并保留空格与前导零；完整配置在 `--yes` 下复用。 公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
 
 部署失败时分别显示本地受管理进程终止确认、远端未知/脚本已完成状态和结果文件路径；本地 SSH 结束不证明远端停止。未知状态先核对服务器，CLI 不自动重跑发布或回滚。Windows 命令使用内嵌的系统 PowerShell/.NET Job，需允许 Add-Type，失败不会裸启动。
 
@@ -190,7 +190,7 @@ Skill 入口保存任务边界，相邻参考按需读取。`hai init` / `hai ad
 
 UI 模块成套交付 [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui 与 [hai-ui-review](templates/skills/hai-ui-review/SKILL.md)；纯 API 模板排除这些前端技能。init/add 保留已有私有入口并补齐缺失参考资源。仓库同职责技能采用同名入口。
 
-fullstack 示例按应用配置分离 `admin`、`audit_admin`、`config_admin`、`business_operator` 与基础 `user`，系统管理员不能接管其他职责账号。CLI 沿用 `.env.dev/.env.test/.env.prod` 的环境配置方式，为每个环境的四类账号分别生成独立随机初始密码；配置随项目共享，本机私有文件或进程变量可覆盖；已有账号不改密、不重新分配职责。`_iam.yml` 和 `_audit.yml` 按业务启用安全增强，详见生成项目 README。
+fullstack 示例按应用配置分离 `admin`、`audit_admin`、`config_admin`、`business_operator` 与基础 `user`，系统管理员不能接管其他职责账号。CLI 沿用 `.env.dev.local/.env.test.local/.env.prod.local` 的环境配置方式，为每个环境的四类账号分别生成独立随机初始密码；私有配置不提交 Git，同环境通过受保护配置共享，本机私有文件或进程变量可覆盖；已有账号不改密、不重新分配职责。`_iam.yml` 和 `_audit.yml` 按业务启用安全增强，详见生成项目 README。
 
 fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化安全使用指南模板](templates/apps/fullstack/docs/security-configuration.md.hbs)；新项目会生成 `docs/security-configuration.md`，工程 README 提供入口。
 

@@ -29,6 +29,7 @@ async function withHelper(name: string, body: (fixture: { verify: Verify, projec
     const evidence = path.join(directory, 'evidence')
     await mkdir(project)
     await writeFile(path.join(project, '.env.test'), '')
+    await writeFile(path.join(project, '.env.test.local'), '')
     const exports: { verify?: Verify } = {}
     const browser = vi.fn(async () => 'Browser checks completed')
     runInNewContext(compiled, {

@@ -205,7 +205,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
       await generate({ type: 'page', name: 'route-page', cwd: project })
       await tool('vite', ['build'], project)
-      base = await start(project, ['--env-file=.env', '--env-file=.env.dev', 'build/index.js'], selectedPort)
+      base = await start(project, ['scripts/run-node.mjs', 'dev', '.', 'build/index.js'], selectedPort)
       const page = await fetch(`${base}/route-page`)
       expect(page.status).toBe(200)
       expect(await page.text()).toContain('RoutePage')
@@ -240,7 +240,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       const environmentRoot = appType === 'api' ? service : project
       // 模拟克隆工程没有本机覆盖文件；正常运行仍使用本轮隔离后端。
       await rm(path.join(environmentRoot, '.env.local'), { force: true })
-      const entryArgs = [`--env-file=${path.join(environmentRoot, '.env')}`, `--env-file=${path.join(environmentRoot, '.env.dev')}`, 'dist/index.js']
+      const entryArgs = [path.join(project, 'scripts/run-node.mjs'), 'dev', environmentRoot, 'dist/index.js']
       const expectFailure = async (override: NodeJS.ProcessEnv, expected: string[]) => {
         let output = ''
         serverOutputs.push(() => `${appType} failure ${expected.join(', ')}\n${output}`)

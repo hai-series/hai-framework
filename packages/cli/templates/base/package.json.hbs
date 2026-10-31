@@ -29,8 +29,8 @@
     "deploy": "hai deploy",
 {{/if}}
 {{#unless isSvelteOnlyApp}}
-    "start": "node --env-file=.env --env-file=.env.prod --env-file-if-exists=.env.local build/index.js",
-    "start:test": "node --env-file=.env --env-file=.env.test --env-file-if-exists=.env.local build/index.js",
+    "start": "node scripts/run-node.mjs prod . build/index.js",
+    "start:test": "node scripts/run-node.mjs test . build/index.js",
     "start:prod": "pnpm start",
 {{/unless}}
     "preview": "vite preview",

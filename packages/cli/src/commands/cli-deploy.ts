@@ -180,7 +180,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
   const validated = module.ProviderConfigSchema.safeParse(provider)
   if (!validated.success)
     throw new Error(cliM('cli_deploy_invalid_value'))
-  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: JSON.stringify(validated.data) }, { private: true })
+  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: validated.data }, { private: true })
   if (!saved.success)
     throw new Error(saved.error.message)
   config.provider = validated.data
@@ -234,7 +234,7 @@ async function configureDeployHttps(module: typeof import('@h-ai/deploy'), confi
   const parsed = module.ProviderConfigSchema.safeParse({ ...provider, expose: { ...expose, ...(https?.type === 'letsencrypt' ? { hostPort: 80 } : {}), https } })
   if (!parsed.success)
     throw new Error(cliM('cli_deploy_invalid_value'))
-  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: JSON.stringify(parsed.data) }, { private: true })
+  const saved = module.saveDeploymentEnvironment(environment, { HAI_DEPLOY_PROVIDER: parsed.data }, { private: true })
   if (!saved.success)
     throw new Error(saved.error.message)
   config.provider = parsed.data

@@ -298,6 +298,46 @@ async function readDeliveryFile(commands: DeployTestCommands, directory: string,
   }
 }
 
+/** 实际容器验证唯一运行文件、细项优先和编辑器原子替换后的重启读取。 */
+async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, originalName: string): Promise<void> {
+  const environment = '/opt/hai/apps with spaces/e2e-fullstack-test/config/.env.runtime'
+  const backup = `${environment}.probe-${RUN_ID}`
+  const endpoint = 'https://files.example.test:12348/files'
+  const marker = `Runtime probe ${RUN_ID}`
+  const script = 'const fs=require("node:fs");const [file,backup,name,endpoint]=process.argv.slice(1);fs.copyFileSync(file,backup,fs.constants.COPYFILE_EXCL);fs.chmodSync(backup,0o600);let text=fs.readFileSync(file,"utf8");for(const [key,value] of Object.entries({HAI_CORE_NAME:name,HAI_STORAGE_PUBLICENDPOINT:endpoint})){const pattern=new RegExp("^"+key+"=.*$","m");const line=key+"="+JSON.stringify(value);text=pattern.test(text)?text.replace(pattern,()=>line):text+"\\n"+line+"\\n";}fs.writeFileSync(file+".probe-next",text,{mode:0o644});fs.renameSync(file+".probe-next",file);'
+  const base = `http://127.0.0.1:${fixture().webHostPort}`
+  const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange`, fetch: (input, init) => commands.fetch(input, { ...init, signal: AbortSignal.timeout(5000) }) })
+  const waitName = async (name: string) => {
+    await expect.poll(async () => {
+      const response = await client.encryptedFetch(`${base}/api/v1/app/info`, { method: 'POST' })
+      const result = await response.json() as HaiResult<{ name: string }>
+      return result.success ? result.data.name : ''
+    }, { timeout: 30_000, interval: 1000 }).toBe(name)
+  }
+  let modified = false
+  try {
+    await commands.run(runtime!, ['exec', fixture().containerId, 'node', '-e', script, environment, backup, marker, endpoint])
+    modified = true
+    await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'restart', 'hai-e2e-fullstack-test-serv'])
+    await waitName(marker)
+    const configuration = 'import {core} from "@h-ai/core";import {StorageConfigSchema} from "@h-ai/storage";core.init({configDir:"./config",configSchemas:{storage:StorageConfigSchema},logging:{level:"fatal",format:"json"}});process.stdout.write(core.config.getOrThrow("storage").publicEndpoint);'
+    const effective = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', 'hai-e2e-fullstack-test-serv', 'node', '--import', '/run/hai/runtime-env.mjs', '--input-type=module', '-e', configuration])
+    expect(effective.trim()).toBe(endpoint)
+  }
+  finally {
+    try {
+      if (modified) {
+        await commands.run(runtime!, ['exec', fixture().containerId, 'node', '-e', 'const fs=require("node:fs");fs.renameSync(process.argv[2],process.argv[1]);fs.chmodSync(process.argv[1],0o644);', environment, backup])
+        await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'restart', 'hai-e2e-fullstack-test-serv'])
+        await waitName(originalName)
+      }
+    }
+    finally {
+      client.destroy()
+    }
+  }
+}
+
 /**
  * 浏览器访问本轮 SSH 服务器上的 Web/API，并在私有工程回收后保留验收证据。
  * @param commands - 当前用例的期限与取消作用域。
@@ -315,7 +355,7 @@ async function readDeliveryFile(commands: DeployTestCommands, directory: string,
  * ```
  */
 async function verifyDeployedBrowser(commands: DeployTestCommands, metadata: { name: string, version: string, env: string }, project = appDir, buildMetadata: ReadonlyArray<{ service: string, source: string, destination: string }> = []): Promise<void> {
-  const local = parseEnv(readFileSync(path.join(project, '.env.test'), 'utf8'))
+  const local = { ...parseEnv(readFileSync(path.join(project, '.env.test'), 'utf8')), ...parseEnv(readFileSync(path.join(project, '.env.test.local'), 'utf8')) }
   const parent = path.resolve(process.env.HAI_AUTH_EVIDENCE_DIR || fileURLToPath(new URL('../../../tmp/validation/module-review/deploy-browser/', import.meta.url)))
   mkdirSync(parent, { recursive: true })
   const evidence = mkdtempSync(path.join(parent, `${RUN_ID}-${path.basename(project)}-`))
@@ -637,7 +677,7 @@ done`
         'HAI_IAM_REAUTHENTICATION_OPERATIONS=["iam.users.invite","audit.backup"]',
         'HAI_AUDIT_BACKUP_ENABLED=true',
       ].join('\n')
-      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\n${browserSecurityProfile}\nHAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=memory\nHAI_STORAGE_TYPE=local\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
+      writeFileSync(path.join(appDir, '.env.test'), `${readFileSync(path.join(appDir, '.env.test'), 'utf8')}\nHAI_E2E=1\n${browserSecurityProfile}\nHAI_DB_TYPE=postgresql\nHAI_CACHE_TYPE=redis\nHAI_STORAGE_TYPE=s3\nHAI_CACHE='{"type":"redis"}'\nHAI_STORAGE='{"type":"s3"}'\n`)
       const deployConfig = {
         provider: { type: 'docker-ssh', ssh: { host: '127.0.0.1', port: fixture().sshHostPort, username: 'root', identityFile: keyPath, knownHostsFile: knownHostsPath, strictHostKeyChecking: false }, remote: { baseDir: '/opt/hai/apps with spaces', runtime: 'podman' }, expose: { type: 'port', containerPort: 3000, hostPort: remoteWebPort } },
         container: { s3Engine: 'rustfs' },
@@ -716,10 +756,10 @@ done`
           const details = await info.json() as { success: boolean, data: { name: string, version: string, env: string } }
           expect(details).toMatchObject({ success: true, data: { env: 'test' } })
           metadata = details.data
-          const local = parseEnv(readFileSync(path.join(appDir, '.env.test'), 'utf8'))
-          const runtimeEnv = { ...parseEnv(await readDeliveryFile(commands, deliveryDirectory, '.env.runtime')), ...parseEnv(await readDeliveryFile(commands, deliveryDirectory, 'middleware.env')) }
+          const local = { ...parseEnv(readFileSync(path.join(appDir, '.env.test'), 'utf8')), ...parseEnv(readFileSync(path.join(appDir, '.env.test.local'), 'utf8')) }
+          const runtimeEnv = parseEnv(await readDeliveryFile(commands, deliveryDirectory, 'config/.env.runtime'))
           // 每次打包都没有本机稳定密码缓存，模拟换电脑；服务器状态与数据库数据必须保持。
-          const candidateDigest = createHash('sha256').update(await readDeliveryFile(commands, deliveryDirectory, 'managed-candidates.env')).digest('hex')
+          const candidateDigest = createHash('sha256').update(await readDeliveryFile(commands, deliveryDirectory, '.hai/managed-candidates.env')).digest('hex')
           expect(candidateDigests.has(candidateDigest)).toBe(false)
           candidateDigests.add(candidateDigest)
           const digest = (await commands.run(runtime!, ['exec', fixture().containerId, 'sha256sum', '/opt/hai/apps with spaces/e2e-fullstack-test/managed-secrets.env'])).split(' ')[0]!
@@ -731,11 +771,9 @@ done`
             : 'SELECT note FROM deployment_password_probe;'
           const persisted = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'exec', 'hai-e2e-fullstack-test-db', 'sh', '-ec', 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U hai -d hai -Atc "$1"', 'probe', sql])
           expect(persisted).toContain('retained-across-packagers')
-          expect(runtimeEnv.HAI_CACHE_TYPE).toBeUndefined()
-          expect(runtimeEnv.HAI_STORAGE_TYPE).toBeUndefined()
-          expect(JSON.parse(runtimeEnv.HAI_DB!).type).toBe('postgresql')
-          expect(JSON.parse(runtimeEnv.HAI_CACHE!).type).toBe('redis')
-          expect(JSON.parse(runtimeEnv.HAI_STORAGE!).type).toBe('s3')
+          expect(runtimeEnv.HAI_DB_TYPE).toBe('postgresql')
+          expect(runtimeEnv.HAI_CACHE_TYPE).toBe('redis')
+          expect(runtimeEnv.HAI_STORAGE_TYPE).toBe('s3')
           expect(runtimeEnv.HAI_CRYPTO_TRANSPORT_SERVERKEYRING === local.HAI_CRYPTO_TRANSPORT_SERVERKEYRING).toBe(true)
           expect(runtimeEnv.HAI_ADMIN_DEFAULT_PASSWORD === local.HAI_ADMIN_DEFAULT_PASSWORD).toBe(true)
           for (const service of ['db', 'cache', 'storage'])
@@ -773,7 +811,7 @@ done`
           }
           const login = await client.encryptedFetch(loginUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identifier: 'admin', password: local.HAI_ADMIN_DEFAULT_PASSWORD, captcha }) })
           expect(await login.json()).toMatchObject({ success: true })
-          const compose = JSON.parse(await readDeliveryFile(commands, deliveryDirectory, 'compose.json'))
+          const compose = JSON.parse(await readDeliveryFile(commands, deliveryDirectory, '.hai/compose.json'))
           expect(compose['x-hai-version']).toBe(APPLICATION_VERSION)
           expect(compose.services.serv.ports).toBeUndefined()
           expect(compose.services.web.ports).toEqual([`${remoteWebPort}:8080`])
@@ -786,6 +824,7 @@ done`
       }
       expect(metadata).toBeDefined()
       if (metadata) {
+        await verifyRuntimeConfigurationRestart(commands, metadata.name)
         await verifyDeployedBrowser(commands, metadata, appDir, [
           { service: 'web', source: '/usr/share/nginx/html/build-metadata.json', destination: 'apps/e2e-fullstack-web/dist/build-metadata.json' },
           { service: 'serv', source: '/app/dist/build-metadata.json', destination: 'packages/e2e-fullstack-serv/dist/build-metadata.json' },

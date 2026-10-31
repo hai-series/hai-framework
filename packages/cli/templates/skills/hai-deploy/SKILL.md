@@ -31,7 +31,7 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 排错与交付按[沟通与同步维护](../hai-app-create/collaboration.md)先说明实际影响、恢复步骤和验证边界，再附脱敏错误码/traceId/日志；配置、使用文档和截图随实际部署流程同步。
 
 1. 读取项目 scripts、images/ 中的 Dockerfile、项目根 hai.json 的 build/deploy 与服务目录运行配置。构建与部署属于整个项目；服务目录只用于扫描运行依赖。创建默认带开发期部署工具；用户明确 --no-deploy 时不生成部署入口。构建细节见 [hai-build](../hai-build/SKILL.md)。
-2. 选择环境，验证 .env.<mode> 存在，再处理部署目标与必要中间件。SSH 支持 key/agent 或 password，缺项按说明补齐，有效完整配置直接复用；--bundle-only 在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存并用于本次和后续 target；--yes 或跳过时复用已有配置。新私有参数写 .env.<mode>.local，旧 .env.local 保留兼容回退；私钥仅引用路径，密码隐藏输入并保留原值。该按环境私有层仅由部署 SDK 加载，不改变 Core 运行规则。优先级与认证边界见 [middleware.md](middleware.md)。
+2. 选择环境，验证 .env.<mode> 存在，再处理部署目标与必要中间件。SSH 支持 key/agent 或 password，缺项按说明补齐，有效完整配置直接复用；--bundle-only 在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存并用于本次和后续 target；--yes 或跳过时复用已有配置。新私有参数写 .env.<mode>.local，共享 .env.local 保留本机私有值；私钥仅引用路径，密码隐藏输入并保留原值。Core、Node/Vite 和部署统一加载模式私有层，按来源先父后细项。优先级与认证边界见 [middleware.md](middleware.md)。
 3. 先校验所选制品、版本、服务和SHA-256。--build只构建所选应用镜像；不带它时缺产物明确失败，不隐式补构建。根目录使用格式4，非根目录使用格式5及webBasePath；两者都记录appVersion、buildId、partial、hasWeb、镜像归档及显式配置的servContainerPort/webContainerPort，部分构建也保留未选镜像端口，缺省使用部署默认值。网站目录由构建进程PUBLIC_BASE_PATH确定，所有部分构建须保持一致；目录变化必须全量，健康与恢复按制品记录处理。具体步骤见[网站挂载目录](../hai-build/paths.md)。同一应用版本可重建，镜像引用区分实际内容；禁止latest与无版本镜像。
 4. 完整包自动导出实际自建中间件镜像并去重；只更新 Web 不重新打包 API/中间件。打包机需容器引擎导出中间件，服务器仅 load，禁止 pull/build。外部连接及云开通不能伪称为离线自包含服务。
 5. --services 使用目标服务器最后成功状态为基线，检查端口/拓扑及未选依赖，保留未选配置、凭据、网络和卷。脚本先按项目/服务标签仅删除选中旧容器（保留卷），再 up -d --no-deps --no-build --pull never --no-recreate 创建新容器并保留其他容器；先等待选中中间件健康，再启动 serv/Web，失败恢复同序，避免 Compose Provider 连带重建反向依赖，禁止整个项目 down。S3 可选 createBucket 在 storage.init 中检查并创建缺失桶，自建 S3 注入 HAI_STORAGE_CREATEBUCKET=true；仅更新 storage 无须应用镜像，新桶在下次应用初始化时创建。Compose 网络统一 hai-app，序列化不使用 YAML 锚点。
@@ -53,11 +53,13 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 独立读取的核心环境、职责账号初始密码和传输密钥环保留进程语义，不能仅按前缀判定已失效；Node 启动参数及私有代理标记由部署装配提供，不在运行文件重复保留无效项。
 
-交付配置清理所有被 HAI 父级变量遮蔽的子项，并从 `.env.runtime` 移除由 `middleware.env` 提供的重复项；不据清理后的交付变量反向覆盖工程源环境。
+生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
-运行文件在后端实际挂载的releases/<后端发布ID>/.env.runtime；仅更新Web/中间件后current可能指向新记录，不能据此猜测后端文件，按容器Mounts中/run/hai/.env.runtime的Source确认。只读文件挂载，上级目录0700，容器非root可读，宿主所有者可修改。dotenv字面解析不执行shell；双引号支持JSON转义。单文件≤1MiB，缺失/不可读/超限在应用导入前失败。父HAI_SERV/HAI_KIT仍优先于叶字段。重启后验健康与配置影响的业务，失败恢复文件再重启。
+运行文件固定为 `<部署目录>/config/.env.runtime`，只读挂载目录到 `/run/hai/config`；各 release 保留配置快照。单文件不超过 1 MiB，缺失、不可读、重复变量或超限阻止启动；dotenv 字面解析不执行 shell。同源细项覆盖 JSON，显式进程 HAI 配置优先。修改后重启、验健康和受影响业务，失败恢复备份再重启。
+
+部署归档只保留五个顶层入口：`apply.sh`、`manifest.json`、`config/`、`images/`、`.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。新包格式为 2，不实现旧目录兼容或迁移。
 
 ## CLI
 

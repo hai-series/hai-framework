@@ -19,7 +19,7 @@ vi.mock('$lib/build-metadata.js', () => ({ adminBuildMetadata: { appVersion: 'te
 vi.mock('$lib/server/business-settings.js', () => ({ initBusinessSettings: vi.fn(async () => ({ success: true, data: undefined })) }))
 vi.mock('$lib/server/security-roles.js', () => ({ seedAdminDuties: vi.fn(async () => ({ success: true, data: undefined })), bootstrapDutyAccount: vi.fn(async () => ({ success: true, data: undefined })) }))
 vi.mock('$lib/server/audit-jobs.js', () => ({ startAuditJobs: vi.fn(async () => ({ success: true, data: undefined })) }))
-vi.mock('@h-ai/scheduler', () => ({ scheduler: { close: vi.fn() } }))
+vi.mock('@h-ai/scheduler', () => ({ scheduler: { close: vi.fn() }, SchedulerConfigSchema: {} }))
 vi.mock('@h-ai/feedback', () => ({
   feedback: { init: state.feedbackInit, close: vi.fn(async () => ({ success: true })), isInitialized: false },
   FeedbackConfigSchema: { safeParse: vi.fn() },
@@ -33,20 +33,20 @@ vi.mock('@h-ai/core', async (importOriginal) => {
     config: { ...actual.core.config, get: (name: string) => state.config[name], getOrThrow: (name: string) => state.config[name] },
   } }
 })
-vi.mock('@h-ai/reldb', () => ({ reldb: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
-vi.mock('@h-ai/cache', () => ({ cache: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
+vi.mock('@h-ai/reldb', () => ({ reldb: { init: vi.fn(async () => ({ success: true })), close: vi.fn() }, ReldbConfigSchema: {} }))
+vi.mock('@h-ai/cache', () => ({ cache: { init: vi.fn(async () => ({ success: true })), close: vi.fn() }, CacheConfigSchema: {} }))
 vi.mock('@h-ai/crypto', () => ({ crypto: { init: vi.fn(async () => ({ success: true })), close: vi.fn() } }))
 vi.mock('@h-ai/audit', () => ({
   audit: { init: vi.fn(async () => ({ success: true })), close: vi.fn(), schedulerPlan: null },
   AuditInitConfigSchema: { parse: (value: Record<string, unknown>) => value },
 }))
-vi.mock('@h-ai/iam', () => ({ iam: {
+vi.mock('@h-ai/iam', () => ({ IamConfigSchema: {}, iam: {
   init: state.iamInit,
   close: vi.fn(),
   user: { listUsers: vi.fn(async () => ({ success: true, data: { total: 1 } })) },
 } }))
-vi.mock('@h-ai/storage', () => ({ storage: { init: state.storageInit, close: vi.fn() } }))
-vi.mock('@h-ai/reach', () => ({ reach: {} }))
+vi.mock('@h-ai/storage', () => ({ storage: { init: state.storageInit, close: vi.fn() }, StorageConfigSchema: {} }))
+vi.mock('@h-ai/reach', () => ({ reach: {}, ReachConfigSchema: {} }))
 
 beforeEach(() => {
   vi.resetModules()

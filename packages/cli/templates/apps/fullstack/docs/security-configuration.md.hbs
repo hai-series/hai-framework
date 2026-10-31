@@ -128,7 +128,7 @@ security:
 
 ## 独立初始凭据和安全邀请
 
-CLI 创建完成时会提示四个用户名、职责及密码变量位置；不在终端打印明文密码。新项目已在 `.env.dev/.env.test/.env.prod` 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机密码，各环境也不同。服务首次启动才创建缺失账号；缺少对应初始密码时跳过该账号，已有账号不覆盖。Admin Console 仓库示例由部署者在私有环境/进程中提供下表四个变量，不能把模板随机密码当成示例的固定通用密码。同名进程变量或 `.env.local` 可覆盖；修改这些初始变量不会重设已有账号的密码。需要首次强改时，在首次创建这些账号前开启上一节的 `requireInitialChange`。
+CLI 创建完成时会提示四个用户名、职责及密码变量位置；不在终端打印明文密码。新项目已在 `.env.dev.local/.env.test.local/.env.prod.local` 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机密码，各环境也不同。服务首次启动才创建缺失账号；缺少对应初始密码时跳过该账号，已有账号不覆盖。Admin Console 仓库示例由部署者在私有环境/进程中提供下表四个变量，不能把模板随机密码当成示例的固定通用密码。同名进程变量或 `.env.local` 可覆盖；修改这些初始变量不会重设已有账号的密码。需要首次强改时，在首次创建这些账号前开启上一节的 `requireInitialChange`。
 
 日常创建业务账号希望改为一次性邀请，先配置真实发送通道，再设置：
 

@@ -78,7 +78,7 @@ async function initialize(): Promise<void> {
   if (cleanupPending)
     await cleanup()
   // 不传 logging，确保 config/_core.yml 中的日志配置拥有最终决定权。
-  core.init({ configDir: './config' })
+  core.init({ configDir: './config', configSchemas: { ai: AIConfigSchema, db: ReldbConfigSchema, vecdb: VecdbConfigSchema } })
 
   const validated = core.config.validate('ai', AIConfigSchema)
   if (!validated.success) {

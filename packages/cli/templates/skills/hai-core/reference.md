@@ -118,8 +118,8 @@ unwatch()
 
 - YAML 根、对象、数组和叶子节点均可映射为 `HAI_<配置名>_<YAML 路径>`；配置名和 key 转大写、层级以 `_` 分隔，camelCase 不拆词
 - 例如 `core.config.load('ai', ...)` 加载的 `llm.apiKey` 对应 `HAI_AI_LLM_APIKEY`，`llm.models[0].temperature` 对应 `HAI_AI_LLM_MODELS_0_TEMPERATURE`
-- 约定环境变量存在时整体替换对应节点并按 YAML 规则解析；例如 HAI_DB 可注入整段连接配置、HAI_REACH_PROVIDERS 可替换数组。父节点覆盖优先于子节点，覆盖后不再遍历其叶子变量；无父节点覆盖时，只遍历 YAML 已有路径
-- 优先级为父节点约定变量 > 当前节点约定变量 > 显式 `${VAR}` > YAML 默认值；显式语法只用于指定特殊变量名
+- 父 JSON 提供节点基础，随后细项覆盖；例如 HAI_DB 提供连接基础，HAI_DB_HOST 细化主机。数组 JSON 替换完整列表，索引仅更新已有元素，缺少列表或越界报错。Schema 决定字段类型，字符串保留前导零，变量/JSON 中的内容不再次插值。
+- 所有入口统一来源：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同源先父后子，与行序无关；高来源整段替换清除低来源细项。约定变量优先于显式 `${VAR}`。`configSchemas` 由宿主显式传入，Core 不导入业务模块；扫描只使用结构，模块负责完整校验。
 
 - `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `HaiConfigError.CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；缺失则使用默认值

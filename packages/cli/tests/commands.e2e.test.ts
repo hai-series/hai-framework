@@ -211,7 +211,7 @@ describe('createProject — api 类型', () => {
     const directory = path.join(tmpRoot, name)
     await createProject({ name, appType: 'api', moduleConfigs: { core: { name, defaultLocale: 'zh-CN' } }, defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: tmpRoot })
     const prefix = `apps/${name}-serv`
-    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
+    const ring = parseTransportServerKeyRing(parseEnv(await readText(directory, `${prefix}/.env.dev.local`)).HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
     expect(ring.success).toBe(true)
     if (!ring.success)
       throw new Error(ring.error.message)
@@ -869,8 +869,8 @@ describe('createProject — fullstack 类型', () => {
     })
   })
 
-  it('各环境生成独立随机密码和密钥环，克隆共享且保留本机覆盖', async () => {
-    const env = await readText(projectPath, '.env.dev')
+  it('各环境私有文件生成独立随机密码和密钥环，公共文件不含真实秘密', async () => {
+    const env = await readText(projectPath, '.env.dev.local')
     const password = env.match(/^HAI_ADMIN_DEFAULT_PASSWORD=(.+)$/m)?.[1]?.trim()
     expect(password).toBeDefined()
     expect(password!.length).toBeGreaterThanOrEqual(24)
@@ -899,7 +899,10 @@ describe('createProject — fullstack 类型', () => {
     const bootstrapPasswords = new Set<string>()
     const privateKeys = new Set<string>()
     for (const mode of ['dev', 'test', 'prod']) {
-      const values = parseEnv(await readText(projectPath, `.env.${mode}`))
+      const values = parseEnv(await readText(projectPath, `.env.${mode}.local`))
+      const publicValues = parseEnv(await readText(projectPath, `.env.${mode}`))
+      expect(publicValues).not.toHaveProperty('HAI_CRYPTO_TRANSPORT_SERVERKEYRING')
+      expect(publicValues).not.toHaveProperty('HAI_ADMIN_DEFAULT_PASSWORD')
       const parsed = parseTransportServerKeyRing(values.HAI_CRYPTO_TRANSPORT_SERVERKEYRING)
       expect(parsed.success).toBe(true)
       if (!parsed.success)
@@ -1002,7 +1005,7 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies['@h-ai/core']).toBe(HAI_DEP_SPECIFIER)
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
-    expect(pkg.scripts.start).toBe('node --env-file=../../.env --env-file=../../.env.prod --env-file-if-exists=../../.env.local dist/index.js')
+    expect(pkg.scripts.start).toBe('node ../../scripts/run-node.mjs prod ../.. dist/index.js')
     expect(pkg.dependencies['@h-ai/payment']).toBe('catalog:')
     expect(pkg.dependencies['@h-ai/datapipe']).toBe('catalog:')
     expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))

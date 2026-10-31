@@ -108,7 +108,11 @@ it.each(['yaml', 'leaf-env', 'parent-env'])('默认 S3 保留 %s 中的公开端
   expect(saved.success).toBe(true)
   if (!saved.success)
     return
-  const effective = StorageConfigSchema.parse(JSON.parse(saved.data.values.HAI_STORAGE))
+  const resolved = deployModule.loadDeploymentConfig('storage', join(root, 'config/_storage.yml'), saved.data.values)
+  expect(resolved.success).toBe(true)
+  if (!resolved.success)
+    return
+  const effective = StorageConfigSchema.parse(resolved.data)
   expect(effective).toMatchObject({ publicEndpoint: config.publicEndpoint, publicUrl: config.publicUrl, prefix: 'tenant', operationLog: { write: true } })
   expect(readFileSync(join(root, '.env.test'), 'utf8')).not.toContain('fixture-secret')
   expect(await storage.init({ ...effective, createBucket: false })).toMatchObject({ success: true })
@@ -157,7 +161,8 @@ it('切换数据库后端不迁移不兼容的旧字段', async () => {
   const saved = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(saved.success).toBe(true)
   if (saved.success) {
-    expect(JSON.parse(saved.data.values.HAI_DB)).toMatchObject({ type: 'mysql' })
-    expect(JSON.parse(saved.data.values.HAI_DB)).not.toHaveProperty('sqlite')
+    const resolved = deployModule.loadDeploymentConfig('db', join(root, 'config/_db.yml'), saved.data.values)
+    expect(resolved).toMatchObject({ success: true, data: { type: 'mysql' } })
+    expect(resolved.success && resolved.data).not.toHaveProperty('sqlite')
   }
 })

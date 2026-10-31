@@ -29,7 +29,7 @@
 - `src/server/admin-service.ts`：角色分配、头像上传和审计编排，全部底层操作复用 hai 模块。初始使用 admin、audit_admin、config_admin、business_operator 和 user 五种角色，四类职责及基础成员权限由 security-roles.ts 配置；锁内重新鉴权，默认禁止管理员自删、自禁用、自降级，并补偿用户更新失败后的角色变更。业务规则可按需求替换，保留的不变量需验证并发与失败路径。
 - `tests/app-server.test.ts`：真实加密 HTTP 测试，覆盖 Cookie/受信原生刷新、RBAC、旧会话权限、并发管理操作、补偿、头像安全、偏好、审计及会话失效。
 
-CLI 已在根目录 `.env.dev/.env.test/.env.prod` 为每个环境的 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 `HAI_ADMIN_DEFAULT_PASSWORD`、`HAI_AUDIT_ADMIN_PASSWORD`、`HAI_CONFIG_ADMIN_PASSWORD`、`HAI_BUSINESS_OPERATOR_PASSWORD`。已有账号不改密或重新分配职责；未配置密码的独立职责账号不创建；`dev`/`start` 自动读取，首次登录使用用户名 `admin` 和该密码。仅在没有用户时创建管理员，不重设已有用户密码。密码不符合 `_iam.yml` 策略时，启动日志显示具体原因及错误码。环境文件随项目提交供克隆后共享；私有文件或进程变量可覆盖，`.env.example` 不含真实密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。
+CLI 已在根目录 `.env.dev.local/.env.test.local/.env.prod.local` 为每个环境的 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 `HAI_ADMIN_DEFAULT_PASSWORD`、`HAI_AUDIT_ADMIN_PASSWORD`、`HAI_CONFIG_ADMIN_PASSWORD`、`HAI_BUSINESS_OPERATOR_PASSWORD`。已有账号不改密或重新分配职责；未配置密码的独立职责账号不创建；`dev`/`start` 自动读取，首次登录使用用户名 `admin` 和该密码。仅在没有用户时创建管理员，不重设已有用户密码。密码不符合 `_iam.yml` 策略时，启动日志显示具体原因及错误码。这些私有文件不提交 Git，克隆后通过受保护配置分发对应环境秘密；私有文件或进程变量可覆盖，`.env.example` 不含真实密码。所有业务 JSON 请求和响应强制加密；健康检查和随机路径的只读头像图片可直接访问。头像支持 PNG/JPEG/WebP，最大 512 KiB，校验内容特征和大小后由服务端生成 key，不能指定任意文件路径。
 
 默认 SQLite + 本地 storage + memory cache 仅适合本地开发与显式测试，管理写入仅支持单写实例：进程内保护无过期时间，共享 cache 锁定期续租，丢失锁或释放失败会记录错误。多实例读取可使用共享数据库、Redis cache 和 S3 storage，但管理写请求必须统一路由到同一写实例；仅更换 Redis 不提供任意多写副本的最后管理员原子保证。传输在所有节点共享受管版本化密钥环与 registry，不依赖会话粘性；重启加载原 ring，轮换先分发新旧版本再切 activeKeyId。Web 使用 HttpOnly refresh Cookie + 内存 access token；仅同时满足客户端标识、body 通道头与受信原生 Origin 的 App/Desktop 请求返回 refresh token body。
 
@@ -37,9 +37,9 @@ CLI 已在根目录 `.env.dev/.env.test/.env.prod` 为每个环境的 admin、au
 
 ### 开发
 
-所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。叶子环境变量只覆盖已有 YAML 路径，先取消相应键的注释，或用 `HAI_DB` / `HAI_CACHE` 等整体对象覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，初始管理员密码和传输密钥环按环境生成到 `.env.dev/.env.test/.env.prod`；其他私有值或覆盖值保存在忽略的 `.env.local` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。
+所有配置字段以模块 Schema 为准；未使用字段和替代 Provider 用注释保留。宿主显式提供模块 Schema 后，合法可选路径可直接用细项配置；同源 `HAI_DB` / `HAI_CACHE` JSON 为基础，细项继续覆盖；`connectTimeout` 对应 `HAI_CACHE_CONNECTTIMEOUT`。凭据示例在根 `.env.example`，初始管理员密码和传输密钥环按环境生成到 `.env.dev.local/.env.test.local/.env.prod.local`；其他私有值或覆盖值保存在忽略的 `.env.local` 或部署环境。`.gitignore` 的 `**/data/` 忽略所有运行数据及 `.gitkeep`；运行时会创建目录。`crypto.init()` 无配置参数，datapipe 为纯函数，不提供虚构配置。
 
-CLI 同时在根 `.env.dev/.env.test/.env.prod` 分别生成独立的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`，运行时不隐式生成。同一环境所有节点从环境文件加载相同 ring，也可由 Secret Manager 统一覆盖，客户端 registry 复用共享 reldb。私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发含新旧版本的 ring，再切 activeKeyId 并滚动重建；过渡期后删除旧 ID，旧客户端 destroy 后重协商。没有 sticky session 依赖。
+CLI 同时在根 `.env.dev.local/.env.test.local/.env.prod.local` 分别生成独立的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`，结构为 `{activeKeyId,keys:{id:{publicKey,privateKey}}}`，运行时不隐式生成。同一环境所有节点从环境文件加载相同 ring，也可由 Secret Manager 统一覆盖，客户端 registry 复用共享 reldb。私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发含新旧版本的 ring，再切 activeKeyId 并滚动重建；过渡期后删除旧 ID，旧客户端 destroy 后重协商。没有 sticky session 依赖。
 
 自动生成的 `.env` 包含已启用模块的环境参数；YAML 显式引用相同变量并保留本地回退。使用 `start:test` / `start:prod` 加载对应环境覆盖。
 

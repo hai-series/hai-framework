@@ -130,7 +130,7 @@ it('发布 CLI 内联数据库 Schema，未安装依赖的目标应用也能拒�
   await fse.writeFile(path.join(app, 'config/_db.yml'), 'type: mysql\ndatabase: shop\nhost: db.example.test\nssl: true\n')
   const invalid = run(args)
   expect(invalid.status).not.toBe(0)
-  expect(invalid.stderr + invalid.stdout).toContain('The value does not satisfy the field constraints')
+  expect(invalid.stderr + invalid.stdout).toContain('Invalid middleware configuration; check these fields: ssl.')
   expect(await fse.readFile(envFile, 'utf8')).toBe('HAI_CORE_ENV=test\n')
   await fse.writeFile(path.join(app, 'config/_db.yml'), 'type: mysql\ndatabase: shop\nhost: db.example.test\nssl: {}\n')
   const valid = run(args)

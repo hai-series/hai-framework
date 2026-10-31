@@ -16,7 +16,7 @@ import type { AIConfigInput } from '@h-ai/ai'
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { HaiResult } from '@h-ai/core'
 import type { StorageConfigInput } from '@h-ai/storage'
-import { ai } from '@h-ai/ai'
+import { ai, AIConfigSchema } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
@@ -70,6 +70,7 @@ export async function initApp(): Promise<void> {
     // 1. 加载配置
     core.init({
       configDir: './config',
+      configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, db: ReldbConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema },
       logging: { level: 'info' },
     })
 

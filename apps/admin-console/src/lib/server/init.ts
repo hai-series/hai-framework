@@ -48,15 +48,15 @@ import { initBusinessSettings } from '$lib/server/business-settings.js'
 import { seedFeedbackPermissions } from '$lib/server/feedback.js'
 import { bootstrapDutyAccount, seedAdminDuties } from '$lib/server/security-roles.js'
 import { audit, AuditInitConfigSchema } from '@h-ai/audit'
-import { cache } from '@h-ai/cache'
+import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
-import { feedback } from '@h-ai/feedback'
-import { iam } from '@h-ai/iam'
-import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
-import { scheduler } from '@h-ai/scheduler'
-import { storage } from '@h-ai/storage'
+import { feedback, FeedbackConfigSchema } from '@h-ai/feedback'
+import { iam, IamConfigSchema } from '@h-ai/iam'
+import { reach, ReachConfigSchema } from '@h-ai/reach'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { scheduler, SchedulerConfigSchema } from '@h-ai/scheduler'
+import { storage, StorageConfigSchema } from '@h-ai/storage'
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 
@@ -111,7 +111,7 @@ async function closeFeedback() {
 
 const runtime = core.module.createRuntime([
   { name: 'configuration', start: () => {
-    core.init({ configDir: './config' })
+    core.init({ configDir: './config', configSchemas: { audit: AuditInitConfigSchema, cache: CacheConfigSchema, feedback: FeedbackConfigSchema, iam: IamConfigSchema, reach: ReachConfigSchema, db: ReldbConfigSchema, scheduler: SchedulerConfigSchema, storage: StorageConfigSchema } })
   }, close: () => {} },
   { name: 'reldb', start: async () => {
     const config = core.config.getOrThrow<DbConfigInput>('db')

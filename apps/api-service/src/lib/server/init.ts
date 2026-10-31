@@ -87,6 +87,7 @@ async function doInit(): Promise<void> {
   // 1. 加载配置
   core.init({
     configDir: './config',
+    configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema, reach: ReachConfigSchema, db: ReldbConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema, serv: ServConfigSchema },
     logging: { level: 'info' },
   })
 

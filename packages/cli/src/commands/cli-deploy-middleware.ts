@@ -1,10 +1,7 @@
 /** 部署向导：逐项配置实际依赖的中间件，不以文件存在代替有效连接配置。 */
-import type { DeploymentEnvironment, MiddlewareBackend, MiddlewareField, MiddlewareMode, MiddlewareRequirement, ScanResult } from '@h-ai/deploy'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
+import type { DeploymentEnvironment, MiddlewareMode, ScanResult } from '@h-ai/deploy'
+import { writeFileSync } from 'node:fs'
 import prompts from 'prompts'
-import { parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { moduleEnvironmentVariables } from './cli-config-environment.js'
@@ -20,139 +17,12 @@ import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
  */
 type DeployModule = typeof import('@h-ai/deploy')
 
-/** 凭据输入字段，名称与 deploy 公开配置 Schema 相同。 */
-const CLOUD_FIELDS: Record<string, string[]> = {
-  'neon': ['apiKey'],
-  'upstash': ['email', 'apiKey'],
-  'cloudflare-r2': ['accountId', 'apiToken', 'accessKeyId', 'secretAccessKey'],
-  'resend': ['apiKey', 'from'],
-  'aliyun': ['accessKeyId', 'accessKeySecret', 'signName'],
-}
-
-/** 解析目标环境显式声明的配置，仅用于判断是否允许跳过。 */
-function targetConfig(requirement: MiddlewareRequirement, environment: DeploymentEnvironment): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  const parent = environment.targetValues[requirement.envPrefix]
-  if (parent) {
-    try {
-      Object.assign(result, JSON.parse(parent))
-    }
-    catch { return {} }
-  }
-  for (const [key, value] of Object.entries(environment.targetValues)) {
-    if (key.startsWith(`${requirement.envPrefix}_`))
-      result[key.slice(requirement.envPrefix.length + 1).toLowerCase()] = value
-  }
-  return result
-}
-
-/**
- * 只有目标文件显式声明了当前后端及必要连接项，才允许保持不变。
- * 凭据仍可来自 .env.local/进程；其他环境的配置不能让此选项出现。
- * @param requirement - 扫描出的实际中间件需求。
- * @param backend - 部署目录中选定的后端。
- * @param environment - 已合并变量与目标文件显式值的环境快照。
- * @returns 仅当目标文件明确声明后端与必要连接项时为 true。
- * @example 模块内部上下文
- * ```ts
- * const module = await import('@h-ai/deploy')
- * const requirement: MiddlewareRequirement = { service: 'db', backend: 'postgresql', source: '@h-ai/reldb', configName: 'db', configPath: [], envPrefix: 'HAI_DB', config: { host: 'db', port: 5432, database: 'shop' } }
- * const environment: DeploymentEnvironment = { environment: 'prod', envDir: '/workspace/shop', values: {}, targetValues: { HAI_DB_TYPE: 'postgresql', HAI_DB_HOST: 'db', HAI_DB_PORT: '5432', HAI_DB_DATABASE: 'shop' } }
- * const backend = module.DEPLOY_MIDDLEWARE.db.find(item => item.backend === 'postgresql')
- * if (backend) {
- *   const keep = canKeepMiddleware(requirement, backend, environment)
- * }
- * ```
- */
-export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: MiddlewareBackend, environment: DeploymentEnvironment): boolean {
-  const target = targetConfig(requirement, environment)
-  if (requirement.service === 'ldap' && backend.backend === 'disabled')
-    return environment.targetValues.HAI_IAM_LOGIN_LDAP === 'false'
-  if (requirement.service === 'ldap') {
-    if (!Object.keys(target).length)
-      return false
-  }
-  else if (target.type !== backend.backend) {
-    return false
-  }
-  return backend.fields.filter(field => field.required && !field.secret).every((field) => {
-    if ((target.url || (requirement.config.url && Object.keys(target).length)) && ['host', 'port'].includes(field.name))
-      return true
-    return (target[field.name] !== undefined && target[field.name] !== '') || (target[field.name.toLowerCase()] !== undefined && target[field.name.toLowerCase()] !== '')
-  }) && backend.fields.filter(field => field.required && field.secret).every(field => Boolean(requirement.config[field.name] || environment.values[`${requirement.envPrefix}_${field.name.toUpperCase()}`]))
-}
-
 /** 用户取消与缺少非交互输入都必须停止，禁止使用未回答的隐含默认值。 */
 async function ask(question: prompts.PromptObject): Promise<unknown> {
   const answer = await prompts({ ...question, name: 'value' })
   if (answer.value === undefined)
     throw new Error(cliM('cli_deploy_cancelled'))
   return answer.value
-}
-
-/** 校验连接字段；数据库 TLS 复用所选后端的真实公开 Schema。 */
-function validateField(value: string, field: MiddlewareField, backend: string): boolean | string {
-  if (value === '')
-    return field.required ? cliM('cli_deploy_required') : true
-  if (field.kind === 'port')
-    return (/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) || cliM('cli_deploy_invalid_value')
-  if (field.kind === 'number')
-    return (/^\d+$/.test(value) && Number(value) >= (field.minimum ?? 0) && Number(value) <= (field.maximum ?? Number.MAX_SAFE_INTEGER)) || cliM('cli_deploy_invalid_value')
-  if (field.kind === 'boolean')
-    return ['true', 'false'].includes(value) || cliM('cli_deploy_invalid_value')
-  if (field.kind === 'url') {
-    try {
-      return Boolean(new URL(value).protocol)
-    }
-    catch { return cliM('cli_deploy_invalid_value') }
-  }
-  if (field.name === 'ssl') {
-    const parsed = parseDocument(value)
-    const schema = backend === 'mysql' ? MysqlSslConfigSchema : SslConfigSchema
-    return (parsed.errors.length === 0 && schema.safeParse(parsed.toJS()).success) || cliM('cli_deploy_invalid_value')
-  }
-  if (field.name === 'headers') {
-    try {
-      const headers: unknown = JSON.parse(value)
-      return (headers !== null && typeof headers === 'object' && !Array.isArray(headers) && Object.values(headers).every(item => typeof item === 'string')) || cliM('cli_deploy_invalid_value')
-    }
-    catch {
-      return cliM('cli_deploy_invalid_value')
-    }
-  }
-  if (field.name === 'method')
-    return ['POST', 'PUT'].includes(value) || cliM('cli_deploy_invalid_value')
-  return true
-}
-
-/** 连接配置的声明节点必须存在，约定变量才能覆盖原 YAML 未启用的可选功能。 */
-function ensureConfigNode(appDir: string, requirement: MiddlewareRequirement, backend: string): void {
-  if (requirement.service === 'ldap' && backend === 'disabled')
-    return
-  const directory = join(appDir, 'config')
-  mkdirSync(directory, { recursive: true })
-  const path = join(directory, `_${requirement.configName}.yml`)
-  const document = parseDocument(existsSync(path) ? readFileSync(path, 'utf8') : '{}\n')
-  if (document.errors.length)
-    throw new Error(cliM('cli_deploy_invalid_value'))
-  if (requirement.configPath.length && !document.hasIn(requirement.configPath))
-    document.setIn(requirement.configPath, document.createNode(requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service, type: backend } : {}))
-  if (requirement.service === 'ldap') {
-    if (!document.hasIn(['login']))
-      document.set('login', document.createNode({}))
-    if (!document.hasIn(['login', 'ldap']))
-      document.setIn(['login', 'ldap'], `\${HAI_IAM_LOGIN_LDAP:false}`)
-  }
-  const content = document.toString()
-  if (!existsSync(path) || readFileSync(path, 'utf8') !== content)
-    writeFileSync(path, content)
-}
-
-/** 保存单个连接对象；整体覆盖可避免旧 URL 或不兼容后端字段残留。 */
-function connectionEnv(requirement: MiddlewareRequirement, backend: string, config: Record<string, unknown>): Record<string, string> {
-  if (requirement.service === 'ldap')
-    return backend === 'disabled' ? { HAI_IAM_LOGIN_LDAP: 'false' } : { HAI_IAM_LOGIN_LDAP: 'true', [requirement.envPrefix]: JSON.stringify(config) }
-  return { [requirement.envPrefix]: JSON.stringify({ ...config, type: backend }) }
 }
 
 /**
@@ -186,7 +56,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     if (!current)
       throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: requirement.backend } }))
     writeCliMessage(cliM('cli_deploy_middleware', { params: { service: requirement.service, backend: current.label, purpose: module.describeMiddlewareBackend(current), source: requirement.source } }))
-    const canKeep = canKeepMiddleware(requirement, current, environment)
+    const canKeep = module.canKeepMiddleware(requirement, current, environment)
     const mode = yes
       ? canKeep ? 'keep' : 'default'
       : await ask({
@@ -213,23 +83,24 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
     if (!backend)
       throw new Error(cliM('cli_deploy_invalid_value'))
     requirement.backend = backendName
-    const updates: Record<string, string> = {}
-    if (mode === 'default' && backendName === 's3' && provider?.type === 'docker-ssh') {
+    const updates: Record<string, unknown> = {}
+    let configuration: Record<string, unknown> | undefined
+    for (const option of mode === 'default' && provider?.type === 'docker-ssh' ? backend.containerOptions ?? [] : []) {
       const container = config.container && typeof config.container === 'object' ? config.container as Record<string, unknown> : {}
-      const currentEngine = container.s3Engine === 'minio' ? 'minio' : 'rustfs'
-      const engine = yes ? currentEngine : String(await ask({ type: 'select', name: 'value', message: cliM('cli_deploy_s3_engine'), initial: currentEngine === 'rustfs' ? 0 : 1, choices: [{ title: 'RustFS', value: 'rustfs' }, { title: 'MinIO', value: 'minio' }] }))
-      if (!['rustfs', 'minio'].includes(engine))
+      const currentValue = String(container[option.field] ?? option.defaultValue)
+      const selected = yes ? currentValue : String(await ask({ type: 'select', name: 'value', message: module.describeMiddlewareBackend(option), initial: Math.max(0, option.choices.findIndex(item => item.value === currentValue)), choices: option.choices.map(item => ({ title: item.label, value: item.value })) }))
+      if (!option.choices.some(item => item.value === selected))
         throw new Error(cliM('cli_deploy_invalid_value'))
-      config.container = { ...container, s3Engine: engine }
-      updates.HAI_DEPLOY_CONTAINER_S3ENGINE = engine
+      config.container = { ...container, [option.field]: selected }
+      updates[option.variable] = selected
       const deploymentFile = projectConfigPath(scan.appDir ?? environment.envDir)
       const project: { deploy?: { container?: Record<string, unknown> | null } } = readProjectConfig(deploymentFile)
       project.deploy ??= {}
       if (project.deploy.container != null && (typeof project.deploy.container !== 'object' || Array.isArray(project.deploy.container)))
         throw new Error(cliM('cli_deploy_config_node', { params: { path: deploymentFile, field: 'deploy.container' } }))
       project.deploy.container ??= {}
-      if (!('s3Engine' in project.deploy.container)) {
-        project.deploy.container.s3Engine = `\${HAI_DEPLOY_CONTAINER_S3ENGINE:rustfs}`
+      if (!(option.field in project.deploy.container)) {
+        project.deploy.container[option.field] = `\${${option.variable}:${option.defaultValue}}`
         writeFileSync(deploymentFile, `${JSON.stringify(project, null, 2)}\n`)
       }
     }
@@ -239,7 +110,7 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       const prior = existingServices[requirement.service]
       const priorConfig = prior && typeof prior === 'object' ? prior as Record<string, unknown> : {}
       const cloud: Record<string, string> = { provisioner: backend.provisioner }
-      for (const name of CLOUD_FIELDS[backend.provisioner]) {
+      for (const name of backend.cloudFields ?? []) {
         const key = `HAI_DEPLOY_SERVICES_${requirement.service.toUpperCase()}_${name.toUpperCase()}`
         const initial = String(priorConfig[name] ?? environment.values[key] ?? '')
         const label = `${backend.label} — ${cliM(`cli_deploy_cloud_input_${name}` as Parameters<typeof cliM>[0])}`
@@ -252,36 +123,26 @@ export async function configureDeployMiddleware(module: DeployModule, scan: Scan
       services[requirement.service] = cloud
     }
     else {
-      if (mode === 'default' && ['aliyun-sms', 'api'].includes(backendName))
+      if (mode === 'default' && backend.containerSupported === false)
         throw new Error(cliM('cli_deploy_cloud_unsupported', { params: { backend: backend.label } }))
       // 默认与自定义都从同后端的有效配置继续，不能用表单字段重建并丢失未展示选项。
-      const connection: Record<string, unknown> = backendName === current.backend ? { ...requirement.config } : requirement.configName === 'reach' ? { name: requirement.config.name ?? requirement.service } : {}
+      const connection: Record<string, unknown> = backendName === current.backend ? { ...requirement.config } : requirement.config.name === undefined ? {} : { name: requirement.config.name }
       for (const field of backend.fields) {
         const previous = backendName === current.backend ? requirement.config[field.name] : undefined
         const initial = previous === undefined ? field.defaultValue ?? '' : typeof previous === 'object' ? JSON.stringify(previous) : String(previous)
         const variable = `${requirement.envPrefix}_${field.name.toUpperCase()}`
         const info = moduleEnvironmentVariables(requirement.configName).find(item => item.name === variable)
-        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => validateField(String(input), field, backendName) })) : initial
-        // TLS 交互返回值与非交互值保存前再次校验，不依赖 prompts UI 曾调用 validate。
-        if (field.name === 'ssl' && validateField(value, field, backendName) !== true)
-          throw new Error(cliM('cli_deploy_invalid_value'))
-        // 默认的服务端凭据由 sidecar/云开通器生成，不要求用户填写。
-        if (value !== '') {
-          connection[field.name] = field.kind === 'number' || field.kind === 'port' ? Number(value) : field.kind === 'boolean' ? value === 'true' : field.name === 'headers' || field.name === 'ssl' ? parseDocument(value).toJS() : value
-        }
-        else {
+        const value = mode === 'custom' && !yes ? String(await ask({ type: field.secret ? 'password' : 'text', name: 'value', message: cliM('cli_deploy_field', { params: { description: info?.description ?? field.name, constraint: info?.constraint ?? field.kind ?? 'string' } }), initial, validate: input => module.validateMiddlewareField({ value: String(input), field, backend: backendName }) || cliM('cli_deploy_invalid_value') })) : initial
+        const parsed = module.parseMiddlewareField({ value, field, backend: backendName, managed: mode === 'default' })
+        if (!parsed.success)
+          throw new Error(parsed.error.message)
+        if (parsed.data === undefined)
           delete connection[field.name]
-        }
+        else connection[field.name] = parsed.data
       }
-      if (requirement.service === 'db') {
-        const validated = ReldbConfigSchema.safeParse({ ...connection, type: backendName })
-        if (!validated.success)
-          throw new Error(cliM('cli_deploy_config_invalid', { params: { path: join(scan.appDir ?? '.', 'config', '_db.yml'), fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
-      }
-      Object.assign(updates, connectionEnv(requirement, backendName, connection))
+      configuration = connection
     }
-    ensureConfigNode(scan.appDir ?? '.', requirement, backendName)
-    const saved = module.saveDeploymentEnvironment(environment, updates)
+    const saved = module.saveMiddlewareEnvironment(environment, { appDir: scan.appDir ?? '.', requirement, backend: backendName, configuration, updates })
     if (!saved.success)
       throw new Error(saved.error.message)
     writeCliMessage(cliM('cli_deploy_saved', { params: { service: requirement.service } }))

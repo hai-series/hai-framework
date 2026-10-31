@@ -439,13 +439,14 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       const sharedVariables = envExample.split('\n').filter(line => /^[A-Z][A-Z0-9_]*=/.test(line))
       await writeFile(path.join(envDirectory, '.env'), `# 公共基础配置（可提交）；完整字段说明见 .env.example。\n${sharedVariables.join('\n')}\n`)
       for (const [mode, environment] of [['dev', 'development'], ['test', 'test'], ['prod', 'production']] as const) {
-        let values = mode === 'prod'
+        let privateValues = '# 模式私有配置，不提交 Git；各节点通过受管配置共享对应秘密。\n'
+        const values = mode === 'prod'
           ? generateProductionEnvironment(envFeatures, configs)
           : `# 公共 ${mode} 环境配置；本机私有值放 .env.local，进程环境变量优先。\nHAI_CORE_ENV=${environment}\nHAI_CORE_LOGGING_LEVEL=${mode === 'test' ? 'warn' : 'debug'}\n`
         if (isFullstack) {
-          // 沿用各环境共享配置；各职责账号分别生成独立随机初始密码。
+          // 各职责账号分别生成初始密码，仅写入模式私有文件。
           for (const name of ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD'])
-            values += `\n${name}=Aa1!${randomBytes(24).toString('base64url')}\n`
+            privateValues += `\n${name}=Aa1!${randomBytes(24).toString('base64url')}\n`
         }
         if (isFullstack || (!context.isSvelteOnlyApp && resolvedOptions.features.includes('crypto'))) {
           // 每个环境独立生成版本化密钥环；运行时不隐式生成或轮换。
@@ -453,11 +454,12 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           key.generateKeys()
           const id = `${mode}-${randomBytes(6).toString('hex')}`
           const ring = { activeKeyId: id, keys: { [id]: { publicKey: key.getPublicKey('hex'), privateKey: key.getPrivateKey('hex').padStart(64, '0') } } }
-          values += `\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'\n`
+          privateValues += `\nHAI_CRYPTO_TRANSPORT_SERVERKEYRING='${JSON.stringify(ring)}'\n`
         }
         await writeFile(path.join(envDirectory, `.env.${mode}`), values)
+        await fse.writeFile(path.join(envDirectory, `.env.${mode}.local`), privateValues, { mode: 0o600 })
       }
-      await fse.writeFile(path.join(envDirectory, '.env.local'), '# 本机私有覆盖，不提交 Git；初始管理员密码和传输密钥环见 .env.dev / .env.test / .env.prod。\n', { mode: 0o600 })
+      await fse.writeFile(path.join(envDirectory, '.env.local'), '# 本机通用私有覆盖，不提交 Git；初始密码和传输密钥环分别位于 .env.dev.local / .env.test.local / .env.prod.local。\n', { mode: 0o600 })
     }
 
     // 生成 Skill 文件
@@ -1125,7 +1127,7 @@ function generateAiDevelopmentReadme(): string {
 function generateEnvironmentReadme(): string {
   return `### 分环境配置
 
-运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程环境 > \`.env.local\` > 环境文件 > \`.env\`。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
+运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程 > \`.env.<mode>.local\` > \`.env.local\` > \`.env.<mode>\` > \`.env\` > YAML。同来源先父 JSON 后细项，高来源整段替换先清除低来源细项。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
 
 生产 .env.prod 按已启用模块选择共享 PostgreSQL（明确选择 MySQL 时保留）、Redis、S3、Qdrant，默认使用 Compose 内部服务名 db/cache/storage/vecdb。密码、S3 凭据、模型 Key 与受保护 Qdrant 的 Key 只由私有环境注入；容器外运行覆盖内部连接地址。生产 Reach 必须注入真实 HAI_REACH_PROVIDERS JSON，公共空数组会拒绝启动。AI 自动补全 db+vecdb 依赖，并在二者就绪后初始化，失败逆序清理。
 
@@ -1176,7 +1178,7 @@ ${pm} exec hai deploy ${appDir} --env prod --services web
 每次离线交付生成独立目录，默认tar.gz（显式--output release.tar可保留未压缩），外层仅含归档、deploy.ps1（Windows）、deploy.sh（Linux/macOS）、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境和清单仅在归档内，README不重复。中间件归档按镜像内容ID缓存并在复用前验证摘要。成功后清理本次incoming上传与解包目录，release保留恢复配置和状态，镜像由引擎保存。交互式打包在构建和中间件配置后最后询问是否保存或修改 SSH 信息，写入 .env.<环境>.local 并用于本次和后续 target；--yes 复用已有配置，复制整个目录即可。脚本按已保存的 SSH 参数上传、导入、启动并验证 HTTP或HTTPS。
 部署向导可选已有PEM证书与私钥路径（相对工程根，校验后复制到私有包）或Let’s Encrypt。官方Certbot申请并每12小时检查续期，Nginx自动重载；需要条款确认、真实邮箱、公网DNS、80端口及CA网络。HTTPS默认443、HTTP跳转开启，未配置仍为HTTP；启停或改模式/域名/端口/本地证书须全量。证书状态保留在服务器并备份，隔离目标使用已有证书。--plan中的root表示工程根，serviceDir表示部署服务源码与配置目录。
 完全隔离时复制整个交付目录，运行 sh deploy-local.sh 自动解包并部署；可传入部署目录覆盖默认位置。
-Node后端默认在启动时重读实际挂载的releases/<后端发布ID>/.env.runtime，修改后restart容器即可；无需新开关或override，旧部署先用新版CLI发布一次。仅更新Web/中间件后，按后端容器Mounts确认源文件，不能根据current猜路径。托管连接middleware.env仍优先；端口/挂载/Node启动参数、静态Web和中间件按原流程更新。手工修改先备份，长期配置同步源环境，下次后端发布会重新生成。
+Node 后端启动时读取服务器 config/.env.runtime，应用配置和托管连接合并在此；修改细项后重启后端即可。同源细项覆盖 JSON，配置目录只读挂载到 /run/hai/config，原子替换文件也能读取。归档仅有 apply.sh、manifest.json、config/、images/、.hai/ 五个顶层入口；完整 Compose、加载器、原生环境、代理/TLS、策略和校验和位于 .hai/，辅助脚本内嵌 apply.sh。Web/中间件局部更新保留应用文件，失败先恢复应用配置再恢复服务；长期修改同步源环境。端口、挂载、Node 启动参数和代理变更需部署。
 部分更新要求已有成功的完整部署，保留未选服务及数据卷；失败返回非零退出码，已有部署尝试恢复选中服务。
 中间件连接齐全时使用 --skip-middleware 跳过配置向导。包中包含私有配置，不提交 Git。
 `
@@ -1364,7 +1366,7 @@ Web/App/Desktop 共享 AppShell 的 header/footer。新增页面放 shared/src/l
 
 ${hasFeedback ? '普通成员和业务操作员可从顶部“问题反馈”提交说明、截图与日志；只有 business_operator 显示反馈管理菜单并能查看、处理、撤销和导出问题包。服务端继续按可信身份与应用范围授权。开发通知使用 Console，生产须在 _feedback.yml 与 _reach.yml 配置收件人和真实邮件。' : ''}
 
-CLI 在根目录 .env.dev、.env.test、.env.prod 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_CONFIG_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD。同一环境的配置随项目提交供克隆后共享；被忽略的 .env.local 或同名进程环境可覆盖。已有账号不改密、不重新分配职责；未配置密码的独立职责账号不创建。密码须符合 _iam.yml 策略；启动失败保留模块、配置字段、错误码和端口占用诊断。
+CLI 在根目录 .env.dev.local、.env.test.local、.env.prod.local 中为 admin、audit_admin、config_admin、business_operator 分别生成独立随机强密码，对应 HAI_ADMIN_DEFAULT_PASSWORD、HAI_AUDIT_ADMIN_PASSWORD、HAI_CONFIG_ADMIN_PASSWORD、HAI_BUSINESS_OPERATOR_PASSWORD。这些私有文件不提交 Git；克隆后通过受保护配置或 Secret Manager 分发对应环境秘密，同一环境各节点共享。共享 .env.local 或进程变量可覆盖公共值，模式私有文件优先于共享私有文件。已有账号不改密、不重新分配职责；未配置密码的独立职责账号不创建。密码须符合 _iam.yml 策略；启动失败保留模块、配置字段、错误码和端口占用诊断。
 
 \`_iam.yml\` 可按业务启用账号闲置扫描、密码复杂度/期限、ALTCHA 挑战、失败窗口锁定、一次性邀请、首次改密、敏感操作再认证、登录时间/IP 和会话期限/并发策略。敏感操作清单使用服务端操作标识；界面通过短期单次票据完成再认证。\`session.endOnPageHide\` 默认关闭，开启时页面离开尝试撤销，但浏览器通知仅最佳努力，需配合服务端闲置/绝对期限。\`_audit.yml\` 配置保留保护、私有备份及 Reach 告警；手动备份失败复用同一编号重试，回执含 key/记录数/SHA-256，不公开下载。归档不是原子数据库快照，严格恢复须暂停写入/清理或使用原生备份，在独立环境核验恢复。
 
@@ -1372,7 +1374,7 @@ CLI 在根目录 .env.dev、.env.test、.env.prod 中为 admin、audit_admin、c
 
 本地开发默认 \`PUBLIC_API_BASE=http://127.0.0.1:3000\`，Vite 使用同源代理；部署时改为实际公网 API Origin，Android 模拟器访问宿主机时使用 \`http://10.0.2.2:3000\`。不要将密钥放入任何 \`PUBLIC_\` 或 \`VITE_\` 变量。
 
-服务端版本化传输密钥环在创建时分别写入 \`.env.dev\`、\`.env.test\`、\`.env.prod\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，各环境密钥不同；运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry，也可通过进程环境或 Secret Manager 覆盖。私钥不进入 PUBLIC_/VITE_、日志或浏览器。
+服务端版本化传输密钥环在创建时分别写入不提交 Git 的 \`.env.dev.local\`、\`.env.test.local\`、\`.env.prod.local\`，变量为 \`HAI_CRYPTO_TRANSPORT_SERVERKEYRING\`，各环境密钥不同；运行时不生成密钥。同一环境的所有节点使用同一 ring 和共享 registry，也可通过进程环境或 Secret Manager 覆盖。私钥不进入 PUBLIC_/VITE_、日志或浏览器。
 
 所有业务 JSON 请求和响应默认通过 \`@h-ai/crypto\` transport 双向加密（含登录、刷新、头像上传）；前端统一使用共享 typed API client。Web 访问令牌仅存内存、刷新令牌由 HttpOnly Cookie 保存；受信原生端使用平台安全存储或内存。头像为随机路径只读图片资源，支持 PNG/JPEG/WebP，最大 512 KiB。健康检查和只读头像图片可直接访问。
 

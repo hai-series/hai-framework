@@ -27,7 +27,7 @@ pnpm --filter {{api.servPackageName}} test
 
 ### 关键目录
 
-{{#if features.crypto}}启用 transport 时，`serverKeyRing` 与客户端 `keyStore` 都必须显式提供。CLI 在本服务 `.env.dev/.env.test/.env.prod` 中分别生成独立 ring，提交环境文件后克隆用户可共享，变量为 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`；运行时不生成密钥。部署直接复用所选环境文件的 ring，或由 Secret Manager 向所有节点分发相同受管 ring，配合共享数据库 registry。公钥/版本参与协商，私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发新旧版本再切 activeKeyId，过渡期后撤销旧 ID；无需会话粘性。
+{{#if features.crypto}}启用 transport 时，`serverKeyRing` 与客户端 `keyStore` 都必须显式提供。CLI 在本服务 `.env.dev.local/.env.test.local/.env.prod.local` 中分别生成独立 ring，私有文件不提交 Git，克隆后通过受保护配置或 Secret Manager 分发，变量为 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING`；运行时不生成密钥。部署直接复用所选环境文件的 ring，或由 Secret Manager 向所有节点分发相同受管 ring，配合共享数据库 registry。公钥/版本参与协商，私钥不进入普通 YAML、PUBLIC_/VITE_、日志或公开响应。轮换先分发新旧版本再切 activeKeyId，过渡期后撤销旧 ID；无需会话粘性。
 {{#unless features.db}}本模板未选择 db，registry 仅在 development/test 显式使用内存；production/staging 会拒绝启动 transport。选择 db 并配置共享数据库后再部署，或显式关闭 transport。
 {{/unless}}{{/if}}
 

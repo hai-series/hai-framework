@@ -16,13 +16,13 @@ import type { AIConfigInput } from '@h-ai/ai'
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { HaiResult } from '@h-ai/core'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
-import { ai } from '@h-ai/ai'
+import { ai, AIConfigSchema } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
+import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reach, ReachConfigSchema } from '@h-ai/reach'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
-import { storage } from '@h-ai/storage'
+import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
@@ -102,6 +102,7 @@ export async function initApp(): Promise<void> {
     // 1. 加载配置
     core.init({
       configDir: './config',
+      configSchemas: { ai: AIConfigSchema, cache: CacheConfigSchema, iam: IamConfigSchema, reach: ReachConfigSchema, db: ReldbConfigSchema, storage: StorageConfigSchema, vecdb: VecdbConfigSchema },
       logging: { level: 'info' },
     })
 

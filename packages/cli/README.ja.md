@@ -76,15 +76,15 @@ Docker構築でもPUBLIC_BASE_PATHを明示できます。非ルートではwebB
 
 ### Fullstack mini 管理画面
 
-ユーザー、ロール、監査ログ、アバター、個人設定、テーマ、言語、操作ガイドとヘルプを提供します。初回は `admin` と、選択環境の `.env.dev/.env.test/.env.prod` のランダムな `HAI_ADMIN_DEFAULT_PASSWORD` でログインします。既存ユーザーのパスワードは変更しません。例の業務ルールは変更できますが、認可はサーバーで行います。
+ユーザー、ロール、監査ログ、アバター、個人設定、テーマ、言語、操作ガイドとヘルプを提供します。初回は `admin` と、選択環境の `.env.dev.local/.env.test.local/.env.prod.local` のランダムな `HAI_ADMIN_DEFAULT_PASSWORD` でログインします。既存ユーザーのパスワードは変更しません。例の業務ルールは変更できますが、認可はサーバーで行います。
 
-作成時に `.env.dev/.env.test/.env.prod` ごとに別の初期管理者パスワードと転送鍵リングを生成し、Git に保存します。クローン後も環境ごとに共有し、ローカル秘密ファイルやプロセス環境で上書きできます。transport 有効アプリの `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` が不足・不正ならアップロード前に設定元を案内します。同じ環境の全ノードは環境ファイルまたは Secret Manager の上書きから同じ有効リングを読み込み、ノードごとに生成しないでください。CLI 完了時はログレベルによらず `HAI_ADMIN_DEFAULT_PASSWORD` の実際の保存元を案内し、値は表示しません。初回管理者作成時だけ有効です。 オフライン入口でも、サーバーの非公開 `.env.runtime` 内のパスワード変数の場所を案内します。
+作成時に `.env.dev.local`、`.env.test.local`、`.env.prod.local` に個別の初期パスワードと転送鍵リングを生成し、Git には登録しません。クローン後は保護ファイルまたは Secret Manager で環境の秘密値を配布します。同じ環境のノードは有効な ring と共有 registry を使い、起動時に生成しません。`HAI_CRYPTO_TRANSPORT_SERVERKEYRING` の不足・不正はアップロード前に失敗します。CLI とオフライン説明はパスワード変数と保存元のみ示し、値は表示しません。初期値は不足アカウント作成時のみ使用し、既存アカウントを変更しません。
 
 ### アプリ設定と表示
 
 テンプレートは `pretty` ログを既定とし、実行依存に `pino-pretty` を追加します。`HAI_CORE_LOGGING_FORMAT=json` で JSON に切り替えます。起動失敗はモジュール・エラーコード・設定項目、ポート競合は `EADDRINUSE`・アドレス・ポートを表示します。
 
-設定項目は `.env.example` を参照します。共通 `.env` と `.env.dev/.env.test/.env.prod` は Git に保存し、秘密値は `.env.local` に置きます。優先順はプロセス環境 > ローカル秘密ファイル > 選択環境 > 共通値です。API 工程はサービスディレクトリ、fullstack はルートに配置します。YAML・環境上書き・表示情報は[利用ガイド](../../docs/usage/README.ja.md)を参照してください。
+公開設定は `.env` と `.env.<mode>`、SSH と資格情報は Git 対象外の `.env.<mode>.local`、マシン共通の秘密値は `.env.local` に保存します。構築時には配備の秘密値を読みません。 すべての `HAI_*` はプロセス > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML の順です。同一ソースは JSON を基礎として個別フィールドで上書きし、高優先度ソースの全体置換は低優先度の細項を解除します。Node/Vite と配備は同じ Core 処理を使います。
 
 ### 既存工程とコード生成
 
@@ -133,9 +133,9 @@ pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source 
 pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
 ```
 
-既定/カスタム設定は同じバックエンドの全有効項目を保持し、フォームにない `publicEndpoint`、接続プール、操作ログも引き継ぎます。自前/クラウド構成は接続と認証を更新します。旧親 JSON から消えた項目は復元後に再梱包してください。[ミドルウェア設定](../deploy/README.ja.md#本当に必要なミドルウェアだけを設定する)を参照してください。
+既定/カスタム設定は同じバックエンドの全有効項目を保持し、フォームにない `publicEndpoint`、接続プール、操作ログも引き継ぎます。自前/クラウド構成は接続と認証を更新します。 生成処理は個別変数を優先し、配列は JSON を維持します。手書き JSON はモジュール細項の前に置く基礎値で、同一ソースの細項が優先されます。動的辞書、JSON テキスト、明示的な空オブジェクトの意味を維持します。全体置換を展開する際は最上位の `{}` リセットを残し、古い YAML フィールドの復活を防ぎます。コンテナー内パスは配布物のみ変更します。
 
-Node バックエンド（Serv / SvelteKit SSR）は起動ごとに配布先の `.env.runtime` を既定で読み直します。編集後に `docker restart <コンテナー>` または `podman restart <コンテナー>` を実行し、イメージ再構築や追加 override は不要です。既存配置は新 CLI で一度デプロイしてください。削除した設定を旧 Compose 環境から復活させず、管理接続の `middleware.env` を優先します。私有プロキシ識別と Node 起動引数は配置設定のままです。静的 Web・ミドルウェア・ポート/マウント・Nginx の経路と制限は従来手順で更新します。ゲートウェイの経路、ポート、マウントの変更は全量デプロイを行います。手動変更をバックアップし、継続する値は元の環境にも反映してください。次のバックエンド配置時に再生成されます。
+Node バックエンド（Serv / SvelteKit SSR）は起動ごとに `<配備ディレクトリー>/config/.env.runtime` を読みます。管理接続も同じアプリ設定に統合します。`HAI_STORAGE_PUBLICENDPOINT` などを編集して再起動すると反映され、同じソースでは個別フィールドが親 JSON を上書きします。設定ディレクトリーを `/run/hai/config` に読み取り専用でマウントするため、ファイルのアトミック置換も次の起動で反映されます。非公開プロキシ識別と Node 起動引数は配備設定です。静的 Web、ネイティブ環境、ポート、マウント、Nginx の変更は再配備します。Web/ミドルウェアのみの更新は設定を維持し、バックエンドの部分更新は管理接続を維持、全量更新は新しい設定と既存の管理資格情報を使います。編集前にバックアップし、恒久的な値は元の環境にも反映してください。
 
 イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
 
@@ -170,7 +170,7 @@ CLI の --project-name と SDK の DeployAppOptions.projectName 上書きは廃�
 
 完全配布にはアプリと自前ミドルウェアのイメージが入ります。デプロイキャッシュ、tar と操作ディレクトリは既定でプロジェクトルートの `.hai/deploy/<環境>/` に置きます。`--output` でコマンドの作業ディレクトリを基準とする tar 出力先を指定できます。対話式の梱包では構築・ミドルウェア設定後、梱包前に SSH 設定の追加・変更を確認します。`.env.<環境>.local` に保存し、今回と次回以降の target に反映します。`--yes` またはスキップ時は既存設定を使います。配布ディレクトリには tar、deploy-local.sh、read-target.awk、README.txt、項目説明付き `deploy-target.json`、Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh` を生成します。アップロード前に target を確認して不足項目を補います。両スクリプトともこのファイルを読み、key/agent と password に対応し、Node/pnpm は不要です。target は `passwordEnv`（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）だけを参照し、パスワードは操作 PC の環境から今回の SSH/SCP 子プロセスだけに渡します。アプリ環境や配布物には含めません。target の変更はその配布物だけに適用し、プロジェクトには書き戻しません。隔離 Linux サーバーにはディレクトリ全体をコピーし、`sh deploy-local.sh` で自動展開・配置します。初回は完全配布が必要で、部分更新は他サービスとボリュームを維持します。各手順の結果を表示し、失敗は非ゼロで終了して復元を試みます。前提・キャッシュ・版管理・復元は[デプロイ説明](../deploy/README.ja.md)を参照してください。
 
-直接デプロイでは不足する SSH 接続・認証情報を初回に補い、その後は `--yes` を含め有効で完全な設定を再利用します。パスワード入力は非表示で、前後の空白と先頭のゼロを保持します。新しい接続・ミドルウェアの秘密値は `.env.<環境>.local` に保存し、旧 `.env.local` は互換フォールバックとして残します。デプロイ SDK の `HAI_DEPLOY_*` はプロセス > 環境別非公開 > 環境別公開 > 旧全体非公開 > 基礎の順、その他のモジュールはプロセス > 環境別非公開 > 旧全体非公開 > 環境別公開 > 基礎の順です。この非公開層はデプロイ SDK のみが使い、通常の Core 読み込みは変えません。対象環境のミドルウェア設定が完全なら `--yes` は再質問やクラウド資源の再作成をせず保持します。対話モードでは今回の範囲を選べます。
+不足する SSH 接続・認証を初回に入力し、非表示のパスワードは空白と先頭ゼロを維持します。完全な設定は `--yes` で再利用します。 公開設定は `.env` と `.env.<mode>`、SSH と資格情報は Git 対象外の `.env.<mode>.local`、マシン共通の秘密値は `.env.local` に保存します。構築時には配備の秘密値を読みません。 すべての `HAI_*` はプロセス > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML の順です。同一ソースは JSON を基礎として個別フィールドで上書きし、高優先度ソースの全体置換は低優先度の細項を解除します。Node/Vite と配備は同じ Core 処理を使います。
 
 失敗時はローカルの管理対象プロセス終了確認と、遠隔の不明/スクリプト完了状態、結果ファイルのパスを別々に表示します。ローカル SSH 終了だけでは遠隔停止を断定しません。不明状態をサーバーで確認し、CLI は配置や復元を自動再実行しません。Windows は内嵌のシステム PowerShell/.NET Job と Add-Type を使い、失敗時は管理外でコマンドを起動しません。
 
@@ -190,7 +190,7 @@ hai-spec-review、hai-spec-implement、hai-app-create、hai-app-tests、hai-app-
 
 UI には [hai-ui-design](templates/skills/hai-ui-design/SKILL.md)、hai-ui、[hai-ui-review](templates/skills/hai-ui-review/SKILL.md) を一緒に配布し、API テンプレートでは除外します。init/add は既存の独自入口を保持して不足リソースを補完します。リポジトリ側でも同じ責務には同じ名前を使います。
 
-fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`business_operator` と一般 `user` を分離し、システム管理者による他職務アカウントの奪取を拒否します。CLI は既存の環境設定方式を維持し、`.env.dev/.env.test/.env.prod` ごとに四職務の独立した初期パスワードを作成します。設定は共有でき、ローカル非公開ファイルや環境変数で上書きでき、既存アカウントの再設定・再割当は行いません。`_iam.yml`/`_audit.yml` の強化機能は業務ごとに選択し、生成 README を参照してください。
+fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`business_operator` と一般 `user` を分離し、システム管理者による他職務アカウントの奪取を拒否します。CLI は既存の環境設定方式を維持し、`.env.dev.local/.env.test.local/.env.prod.local` ごとに四職務の独立した初期パスワードを作成します。ファイルは Git 対象外で、保護設定や Secret Manager により同じ環境へ配布し、既存アカウントの再設定・再割当は行いません。`_iam.yml`/`_audit.yml` の強化機能は業務ごとに選択し、生成 README を参照してください。
 
 各スイッチ、既定値、前提条件と利用への影響は [fullstack セキュリティ設定ガイドのテンプレート](templates/apps/fullstack/docs/security-configuration.md.hbs) を参照してください。新規プロジェクトには `docs/security-configuration.md` と README のリンクを生成します。
 
