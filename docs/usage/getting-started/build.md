@@ -14,6 +14,8 @@ pnpm build --target app --platform android
 
 命令在生成工程根运行。镜像默认并行两项，资源紧张时设置 `--concurrency 1`。所需参数、`hai.json`完整例子和真实默认值见[构建部署配置](../configuration/delivery.md#配置入口和角色)，避免在不同流程重复维护。
 
+下载慢时可加 `--image-source cn --npm-source cn`；需要代理时选择 `--proxy-mode inherit|system|custom|none`。首次交互选择保存为项目默认，`--yes` 复用已保存值。自定义源、代理地址及引擎侧设置见[下载源和代理](../configuration/delivery.md#下载源和代理)。
+
 ## 核对身份和产物
 
 `package.json.name`是资源身份，`version`是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。

@@ -73,6 +73,57 @@
 
 后端探针、模板镜像和 Fullstack 同源代理按最终健康路径生成，支持 `HAI_SERV_HTTP_HEALTH_PATH=/status`；整段 `HAI_SERV` 仍优先于叶字段。已启用的文档页面、OpenAPI JSON 与本地 Scalar 脚本会转发至后端，保留生产关闭与认证限制。路径和路由变更需要重新部署，同步 Nginx 与发布探针。
 
+### 下载源和代理
+
+在中国大陆构建镜像时，可以分别选择镜像和 npm 下载源：
+
+```sh
+pnpm build --target image --image-source cn --npm-source cn
+pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
+```
+
+两项均支持 `official`、`cn`、`custom`。镜像的大陆预设使用[毫秒镜像](https://1ms.run/guide/temp)：Docker Hub 映射到 `docker.1ms.run`，GHCR 映射到 `ghcr.1ms.run`；npm 使用 [npmmirror](https://npmmirror.com/)。公共服务可能限流或存在同步延迟，具体网络和固定版本应以实际下载为准。源选择覆盖应用基础镜像及打包时缺失的中间件镜像；中间件本地已存在时复用缓存，归档与 Compose 保留原始镜像引用。服务器仍从交付包导入镜像。
+
+首次交互会保存尚未配置的选择，后续直接复用。优先级是本次命令参数 → `hai.json.build.sources` → 官方源；命令参数只覆盖本次，不回写默认。`--yes` 跳过选择，首次非交互未配置时使用官方源。
+
+下面只展示 `hai.json` 的 `build` 下载分区，原有 `build.images` 与 `deploy` 等字段保留：
+
+```json
+{
+  "build": {
+    "sources": {
+      "image": { "type": "cn" },
+      "npm": { "type": "cn" }
+    },
+    "proxy": { "mode": "inherit" }
+  }
+}
+```
+
+自定义镜像按原仓库映射，可在目标地址中加入命名空间路径。命令中的逗号值在 PowerShell 中加引号：
+
+```sh
+pnpm build --target image --image-source custom --image-mirrors "docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io" --npm-source custom --npm-registry https://npm.example.com/registry
+```
+
+对应配置为 `image: { "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`、`npm: { "type": "custom", "registry": "https://npm.example.com/registry" }`。所需原仓库缺少映射时明确失败。镜像映射采用 HTTPS，npm registry 支持 HTTP(S)，地址不包含认证信息、查询或片段。registry 同时供 Corepack 下载 pnpm、pnpm 获取依赖使用；lockfile 中显式的 tarball、Git URL 和原生预编译包仍按各自地址下载，SQLite 继续使用 `--sqlite-prebuild-mirror`。
+
+代理单独选择，不随下载源自动改变：
+
+| 参数 | 行为 |
+| --- | --- |
+| `--proxy-mode inherit` | 默认继承 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 及小写变量 |
+| `--proxy-mode system` | 读取 Windows/macOS 的静态系统代理；PAC、自动发现及其他平台改用继承或自定义 |
+| `--proxy-mode custom --proxy-url http://127.0.0.1:10808` | 使用本次 HTTP(S) 代理；可保存为 `build.proxy` 的 `mode`、`url` |
+| `--proxy-bypass "localhost,127.0.0.1,.example.com"` | 覆盖绕过列表，对应 `build.proxy.bypass` |
+| `--proxy-mode none` / `--no-http-proxy` | 清空本次子进程与构建代理变量；引擎已有代理仍由引擎管理 |
+
+自定义代理地址不含认证信息；认证代理通过进程环境继承，不写入项目。命令先检查本机代理端口，构建容器再检查实际代理连通性。Podman 默认网络保留调用者代理地址；显式选择 `--network pasta` 等隔离网络时将回环地址转换为 `host.containers.internal`。Docker 默认使用 `host.docker.internal`；显式 `--network host` 时保留原地址。构建与普通容器网络可能不同，不能用 `podman run` 的结果代替构建验证。默认网络不通时可显式尝试 `--network pasta`，或填写该构建网络可访问的代理地址。代理使用预定义构建参数，运行镜像不保存代理环境。
+
+`docker pull` 和远程 `podman pull` 由引擎执行，构建参数不能配置该引擎的出口。CLI 单独提示预检结果；Docker Desktop 在代理设置中选择系统/手动代理，Linux Docker 在 daemon 服务中配置，Podman Machine/API 服务设置自身代理。[Docker 说明](https://docs.docker.com/engine/daemon/proxy/)和[Podman 说明](https://podman-desktop.io/docs/proxy)提供对应入口。修改这些设置及重启引擎需独立安排。
+
+现有工程先同步新版 Dockerfile 的全局 `HAI_NODE_IMAGE`、适用的 `HAI_NGINX_IMAGE`，以及构建阶段的 `HAI_NPM_REGISTRY`、`COREPACK_NPM_REGISTRY`、`npm_config_registry`、`pnpm_config_registry`。选择非官方源而旧模板不支持时，CLI 在构建前指出文件。模板同步后重新构建，已有交付包不变。
+
 ## 网站部署在子目录
 
 当访问地址是 `https://example.com/yyy/`，浏览器资源、页面路由和服务器守卫都要对应这个目录。只把一处script改为相对地址，还不足以保证登录、API和页面刷新可用。先确定使用哪类模板，再选择托管方式。

@@ -123,6 +123,14 @@ Configure `hai.json.deploy.provider.expose.https` or private environment overrid
 
 ### Build and deploy
 
+Select image and npm downloads independently with `--image-source official|cn|custom` and `--npm-source official|cn|custom`. The mainland-China preset uses 1ms mirrors for Docker Hub/GHCR and npmmirror for npm. First-time interactive choices become `hai.json.build.sources` defaults. Flags override only this invocation; `--yes` reuses settings, and an unconfigured noninteractive run uses official sources. Configure `build.proxy` through `--proxy-mode inherit|system|custom|none`, `--proxy-url`, and `--proxy-bypass`. Both Docker and Podman receive build proxy arguments; loopback URLs are handled according to the build network and checked inside the build container. Image pulls use the engine's own proxy settings. See [download sources and proxies](../../docs/usage/configuration/delivery.md#下载源和代理) for custom mappings, system-proxy support and existing Dockerfile updates.
+
+```sh
+pnpm build --target image --image-source cn --npm-source cn
+pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
+pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
+```
+
 Default/custom middleware configuration preserves all effective settings for the same backend, including `publicEndpoint`, pool and operation log options absent from the form. Managed services replace connection selectors and credentials. Restore fields already lost from old parent JSON before rebuilding; see [middleware settings](../deploy/README.en.md#configure-only-the-middleware-the-application-needs).
 
 Node backends (Serv / SvelteKit SSR) reread the release `.env.runtime` on every start by default. Edit it, then run `docker restart <container>` or `podman restart <container>`; no image rebuild or extra override is needed. Existing deployments need one deployment with the new CLI. Removed settings do not survive through stale Compose injection. Managed connections in `middleware.env` retain precedence; private proxy identity and Node startup options remain deployment settings. Static Web, middleware, ports/mounts, and Nginx routes and limits keep their existing update flow. Gateway path, port or mount changes require a full deployment. Back up manual edits and copy permanent changes into the source environment; the next backend deployment regenerates the file.

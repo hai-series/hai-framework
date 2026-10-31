@@ -90,6 +90,8 @@ S3 的内部 endpoint 与预签名 publicEndpoint 分开；后者无默认，填
 
 deploy.init 后检查 HaiResult.success，deploy.deployApp 接收 artifactDir、bundleOnly、selectedServices、runtime 与 onProgress；finally 中 deploy.close。deploy.scan 和 deploy.credentials.* 不依赖 init。Vercel 只消费已有 .vercel/output，不执行源码构建，也不支持 Compose 离线/部分更新。
 
+下载源由 `--image-source official|cn|custom` 控制构建和打包中间件，`--npm-source` 只随 `--build` 作用于 Corepack/pnpm。SDK 的 DeployAppOptions.imageSource 接收 `{ type, registries? }`，proxy 接收 `{ mode, url?, bypass? }`；resolveImageReference / resolveDownloadProxy 是无 init 的解析工具。配置、优先级与代理边界见 [hai-build 下载源与代理](../hai-build/reference.md#下载源与代理)。SDK 拉取子进程会覆盖代理变量，远程引擎仍需自身设置；镜像归档保持原始标签。
+
 内部命令工具须显式枚举 `secrets`（包括转换后的敏感字面量），成功/失败/回调均跨块脱敏；不得向日志附加原始异常 cause。捕获默认每流末尾 1 Mi 字符，结构化消费先检查截断标志；异步输出回调按序等待并保持 pipe 背压。进度每行最多解析 512 字符，超时后确认远程执行状态。详细边界见 [middleware.md](middleware.md#命令输出)。
 
 超时或输入/输出失败会终止本地受管理 Job/进程组并等待核验；Windows 用系统 PowerShell/.NET 内嵌 Job，先挂起创建、分配成功才恢复，失败不降级裸进程；POSIX 后代须保留继承的进程组。`terminationTimeoutMs` 默认 10000、最大 60000 毫秒，核验失败返回 unknown。失败分支用 `getDeployCommandState(error)` 读取 localTermination 和 remoteExecution；CLI 分别显示。本地已退出不能证明 SSH 远端停止；仅新连接读到完整、ID 匹配的原子结果才确认 finished，给出结果路径/退出码。未知状态不自动重跑发布或回滚，先核对 current、步骤和实际服务。

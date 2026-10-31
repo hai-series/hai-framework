@@ -29,7 +29,17 @@ pnpm build --target desktop --platform windows --arch x64
 
 #### build のオプション
 
-`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は Podman のプロキシ継承無効、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+`--target` は compile（既定）、image、app、desktop を選択します。`--images serv|web|serv,web` は対象イメージを、`--runtime auto|podman|docker` はローカルエンジンを選択します。auto は接続可能な Podman を優先します。`--network` は構築ネットワーク、`--no-http-proxy` は 今回のビルドのプロキシ無効（none と同じ）、`--sqlite-prebuild-mirror` は信頼できる HTTP(S) バイナリ配布元です。ネイティブ配布物には対象 OS の SDK と Rust ツールチェーンが必要です。構築時にデプロイ環境や秘密情報を読み込みません。
+
+#### 取得元とプロキシ
+
+`--image-source official|cn|custom` はアプリのベースと梱包時に不足したミドルウェアイメージに適用します。`--npm-source` は `--build` と併用し Corepack/pnpm を制御します。中国本土は毫秒镜像の Docker Hub/GHCR 通道と npmmirror を使用します。初回対話で `hai.json.build.sources` に保存し、引数は今回のみ上書きします。プロキシは `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定し、`--no-http-proxy` は none と同じです。Docker／リモート Podman の取得はエンジン側の設定が必要で、ビルドコンテナの接続は別途確認します。カスタム設定、対応 OS、旧テンプレートの更新は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
+
+SDK の `DeployAppOptions.imageSource` は `{ type: 'cn' }` または `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`、`proxy` は `{ mode: 'inherit' }` または `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }` です。既定は公式とプロセスの継承です。`resolveImageReference()`／`resolveDownloadProxy()` は init 不要でエンジン設定を変更しません。ミドルウェアの元参照をアーカイブに保ち、サーバーではオフラインで読み込みます。
+
+```sh
+pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
+```
 
 #### hai.json でパッケージの構成を指定する
 

@@ -115,6 +115,8 @@ return result
 
 ## 配置与依赖
 
+打包下载用 `--image-source` / `--npm-source` 选择 official/cn/custom，项目默认在 `hai.json.build.sources`，参数只覆盖本次；cn 使用毫秒镜像（Docker Hub/GHCR）及 npmmirror。代理用 `build.proxy` 与 `--proxy-mode inherit|system|custom|none`；Docker/远程 Podman 拉取需引擎自身代理，构建容器单独检查。旧 Dockerfile 同步 HAI_NODE_IMAGE / HAI_NGINX_IMAGE / HAI_NPM_REGISTRY；SDK DeployAppOptions.imageSource/proxy 与 resolveImageReference/resolveDownloadProxy 契约见[下载源和代理](docs/usage/configuration/delivery.md#下载源和代理)。
+
 - Node 配置：`core.init({ configDir: './config' })` 加载 YAML；例如 `_db.yml` 注册为 `db`。使用模块 Schema 校验结果后传给 init；依赖按顺序初始化并检查 success，失败清理已创建资源。
 - CLI 所有项目忽略 `**/data/`（含嵌套 workspace 和 `.gitkeep`）。Fullstack 为各模块生成 YAML（包含 _feedback.yml），构建部署配置位于项目根 hai.json；默认部署名取工程根 package.json.name（缺失或无效时报错）并附加显式环境，扫描服务目录不参与命名，旧 app 命名资源须单独迁移并建立完整部署基线。未使用模块及可选字段用注释保留；先安装、校验、初始化模块并接入业务，再按需取消注释，存在文件不代表模块已启用。详细步骤见 [CLI 配置说明](packages/cli/README.md#应用配置与显示)。
 - `hai generate` 按实际应用选择 SvelteKit 文件路由或 serv 共享 contract/procedure；多应用用 `--workspace` 指定包名或相对路径。纯 Vite 不生成假文件路由；serv 只更新模板标注的既有聚合入口，未知结构明确拒绝。提示/校验/结果复用中英日消息，初始语言按 `HAI_CORE_DEFAULTLOCALE` → `LC_ALL` → `LC_MESSAGES` → `LANG` 选择，省略参数时交互输入，取消不写文件。详见 [CLI 代码生成](packages/cli/README.md#已有项目与代码生成)。 `create` / `add` / `init` 的选择目录、校验与完成提示使用同一 CLI locale；终端语言不改目标应用默认语言与中文工程说明。

@@ -35,7 +35,8 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 - pnpm run deploy --build 显式串联构建、打包和发布；--bundle-only 只交付完整离线包与跨平台脚本；--services 以服务器成功状态为基线只更新选中服务。完整包自动包含自建中间件镜像，服务器禁止联网拉取。
 - `pnpm build` 默认仅编译源码（调用 compile）；`pnpm build --target image` 根据 hai.json.build.images 的 dockerfile 构建并导出 serv/web 镜像（可单独或组合），可用 --images web 只构建前端，默认最多两项并行，--concurrency 1可串行，auto 优先可达 Podman、其次 Docker，可用 --runtime 显式指定。
 - compile 交付源码编译结果，image 交付镜像归档，desktop 交付 Tauri 系统安装包，app 交付 Capacitor 原生制品；每次选择一个 target。hai.json 的 build.images[].dockerfile 指向独立镜像文件，build.desktop/build.app 声明原生工程目录，deploy 保存整个项目的部署配置；参数和平台前置以当前 CLI 类型与工程 scripts 为准。cap:sync 只同步工程，不能作为已打包或已安装的证据。
-- Podman 的客户端代理通过预定义构建参数传递，覆盖 Windows/macOS 远程引擎的服务端默认值；代理地址必须能从构建容器访问，--no-http-proxy 禁止此传递。不要把代理写成 Dockerfile ENV 或固化进交付镜像。
+- `--image-source` / `--npm-source` 分别选 official/cn/custom；首次交互保存到 hai.json.build.sources，参数仅覆盖本次，--yes 复用且未配置时走官方。cn 镜像用毫秒镜像覆盖 Docker Hub/GHCR，npm 用 npmmirror；保留版本和 lockfile 校验。旧 Dockerfile 缺参数时明确提示同步模板。自定义映射见 [下载源与代理](reference.md#下载源与代理)。
+- Docker/Podman 的构建代理用预定义参数传递；--proxy-mode 选 inherit/system/custom/none，--proxy-url 指定自定义地址，--proxy-bypass 覆盖绕过列表，--no-http-proxy 等价 none。Podman 默认网络保留原代理地址，显式 pasta 等隔离网络才改为宿主入口；Docker 非 host 网络使用宿主入口。首个下载步骤检查实际构建可达性，不能用 run 网络代替。镜像拉取端仍需 Docker daemon/Desktop 或 Podman Machine/API 自身代理，CLI 分别预检提示。不要把代理写成 Dockerfile ENV 或固化进运行镜像。
 - --network 默认沿用引擎网络；只有实际构建网络无法访问依赖/代理时才显式选择网络，pasta 仅适用于 rootless Podman。build 与 run 的主机名解析可能不同，须验证构建网络中的可达性，不默认改成 host 网络。
 - 从运行build的应用根package.json.version读取版本，不能使用CLI/框架版本或服务子包版本代替。根目录清单version=4，非根目录version=5并记录webBasePath；appVersion为应用版本。servContainerPort/webContainerPort仅记录images配置显式填写的端口，部分构建也保留未选镜像端口，未填写时沿用部署默认值。镜像tar名含版本、buildId区分同版本构建，Tauri也接收根版本。不要手改清单或保留无版本的交付归档。
 - 构建不区分 dev/test/prod，不加载部署环境覆盖，不注入运行期凭据；所选镜像清单含 SHA-256，全部成功才更新本机最近构建指针（不是镜像标签）。不要让 compile、Dockerfile 或 Tauri beforeBuildCommand 递归调用自身的原生/镜像构建。

@@ -29,6 +29,8 @@
 
 ### 配置与构建
 
+Dockerfile 用全局 `HAI_NODE_IMAGE` / `HAI_NGINX_IMAGE` 接收镜像源，用构建阶段 `HAI_NPM_REGISTRY` 同时控制 Corepack 和 pnpm 下载。代理仅使用预定义构建参数，首个下载步骤检查容器内可达性；运行阶段不保存代理。CLI 的 `--image-source` / `--npm-source` 和 `--proxy-mode` 以 `hai.json.build.sources` / `build.proxy` 保存项目默认，具体契约见[下载源与代理](skills/hai-build/reference.md#下载源与代理)。
+
 模板通过 `projectName`、`appType`、`features`、`hasUi`、`hasI18n`、`versions` 以及 `api`/`fullstack` 上下文渲染，完整字段见 [cli-types.ts](../src/cli-types.ts)。模块 YAML 使用 `moduleConfig` helper，与 [配置生成器](../src/commands/cli-config-templates.ts) 共用字段和默认值。
 
 部署默认启用，`--no-deploy` 可关闭；SDK 是开发依赖。每个镜像使用 `images/` 中独立 Dockerfile，Web 资源放 `images/web/`。`hai.json` 的 `build.images` 选择文件，`deploy` 保存项目级部署参数；依赖输入由构建器生成到 `images/dependencies/`。所有根 `.gitignore` 均忽略 `**/images/dependencies/`、运行数据和私有环境文件。

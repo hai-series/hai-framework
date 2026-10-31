@@ -123,6 +123,14 @@ admin・website・h5 作成時に crypto を選ぶと `_kit.yml` の transport �
 
 ### ビルドとデプロイ
 
+イメージと npm の取得元を `--image-source official|cn|custom`、`--npm-source official|cn|custom` で個別に指定できます。中国本土のプリセットは Docker Hub/GHCR に毫秒镜像、npm に npmmirror を使用します。初回対話の選択は `hai.json.build.sources` に保存し、引数は今回のみ上書きします。`--yes` は既存設定を再利用し、非対話で未設定の場合は公式を使用します。プロキシは `build.proxy` と `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定します。Docker と Podman のビルドに渡し、ビルドネットワークに応じてループバックを処理し、コンテナ内で接続を確認します。イメージ取得はエンジン側のプロキシ設定を使用します。カスタム対応表、システムプロキシの対応範囲、既存 Dockerfile の更新は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
+
+```sh
+pnpm build --target image --image-source cn --npm-source cn
+pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
+pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
+```
+
 既定/カスタム設定は同じバックエンドの全有効項目を保持し、フォームにない `publicEndpoint`、接続プール、操作ログも引き継ぎます。自前/クラウド構成は接続と認証を更新します。旧親 JSON から消えた項目は復元後に再梱包してください。[ミドルウェア設定](../deploy/README.ja.md#本当に必要なミドルウェアだけを設定する)を参照してください。
 
 Node バックエンド（Serv / SvelteKit SSR）は起動ごとに配布先の `.env.runtime` を既定で読み直します。編集後に `docker restart <コンテナー>` または `podman restart <コンテナー>` を実行し、イメージ再構築や追加 override は不要です。既存配置は新 CLI で一度デプロイしてください。削除した設定を旧 Compose 環境から復活させず、管理接続の `middleware.env` を優先します。私有プロキシ識別と Node 起動引数は配置設定のままです。静的 Web・ミドルウェア・ポート/マウント・Nginx の経路と制限は従来手順で更新します。ゲートウェイの経路、ポート、マウントの変更は全量デプロイを行います。手動変更をバックアップし、継続する値は元の環境にも反映してください。次のバックエンド配置時に再生成されます。

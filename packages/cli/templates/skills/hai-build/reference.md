@@ -44,6 +44,20 @@
 
 pnpm 专属配置放在 `pnpm-workspace.yaml`，`.npmrc` 仅用于注册表与认证。Docker 缓存层使用 `pnpm fetch` 读取锁文件；pnpm 12 的该命令不支持 `--frozen-lockfile`。后续仍通过 `pnpm install --offline --frozen-lockfile` 校验清单与锁文件一致。容器裁剪用 `pnpm pm deploy --filter <服务包> --prod <目标目录>`，确保执行内置命令，避免项目同名 `deploy` 脚本覆盖它。保留 `.gitattributes`，让 `.dockerignore`、Dockerfile 和 POSIX 脚本统一使用 LF，保持跨平台输入一致并确保 Linux 脚本可运行。
 
+### 下载源与代理
+
+```sh
+pnpm build --target image --image-source cn --npm-source cn
+pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
+pnpm build --target image --image-source custom --image-mirrors "docker.io=mirror.example.com/docker.io,ghcr.io=mirror.example.com/ghcr.io" --npm-source custom --npm-registry https://npm.example.com/registry
+```
+
+首次交互保存尚未配置的 `hai.json.build.sources.image` / `.npm` 与 `build.proxy`。命令参数优先且不回写，已保存值其次；非交互未配置时官方源与 inherit 代理。image 形如 `{ "type": "custom", "registries": { "docker.io": "mirror.example.com/docker.io", "ghcr.io": "mirror.example.com/ghcr.io" } }`，npm 形如 `{ "type": "custom", "registry": "https://npm.example.com/registry" }`。official/cn 只需 type。cn 使用毫秒镜像的 docker.1ms.run / ghcr.1ms.run 及 registry.npmmirror.com；公共服务有同步延迟和限流，需验证实际版本。打包中间件会复用本地原始镜像，缺失时从所选源拉取并恢复原标签，离线包与部署身份保持一致。
+
+代理形如 `{ "mode": "custom", "url": "http://127.0.0.1:10808", "bypass": "localhost,127.0.0.1" }`。inherit 使用进程变量；system 读取 Windows/macOS 静态代理，PAC/自动发现或其他平台用继承/自定义；none 清空本次代理变量，--no-http-proxy 等价 none。自定义地址不含认证，认证代理仅从环境继承。Podman 默认构建网络保留原代理地址，显式 --network pasta 等隔离网络时回环地址替换为 host.containers.internal；Docker 非 host 网络使用 host.docker.internal。须验证真实构建网络，run 结果不能代替；默认不通时显式试 --network pasta 或改用可达代理地址。Docker/远程 Podman 拉取使用引擎侧代理，不能用构建参数代替配置引擎，修改与重启独立安排。
+
+Dockerfile 在 FROM 前声明 HAI_NODE_IMAGE / 适用的 HAI_NGINX_IMAGE，构建阶段用 HAI_NPM_REGISTRY 设置 COREPACK_NPM_REGISTRY、npm_config_registry、pnpm_config_registry。首个下载步骤验证代理 TCP 可达性，代理不进入运行 ENV。旧工程同步模板后重新构建；显式 tarball/Git URL 和原生包不由 registry 覆盖，SQLite 继续用 --sqlite-prebuild-mirror。deploy 的 npm 参数须与 --build 一起使用。
+
 ### SvelteKit Adapter 模式
 
 CLI website模板默认Node SSR。新建工程包含完整模块和示例，静态发布须先移除服务端业务依赖、初始化和API/actions；在compile时使用`HAI_BUILD_STATIC=1`与可选`PUBLIC_BASE_PATH`切换完整静态预渲染，边界见本skill的静态网站说明；该模板没有使用下方VITE_ADAPTER工厂。静态产物用preview本机检查，上传build到Pages/CDN；生成的start/Docker配置属于普通SSR模式，不能用于运行静态HTML。切回SSR只需清除静态开关并重建，PUBLIC_BASE_PATH仍可按实际网站目录用于SSR或Docker；SvelteKit/Vite差异、制品格式和健康检查见[网站挂载目录](paths.md)。

@@ -123,6 +123,14 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 ### 构建与部署
 
+镜像和 npm 下载分别使用 `--image-source official|cn|custom`、`--npm-source official|cn|custom`。大陆预设采用毫秒镜像（Docker Hub/GHCR）和 npmmirror。首次交互把选择保存为 `hai.json.build.sources` 默认；命令参数只覆盖本次，`--yes` 复用配置，非交互未配置时使用官方源。代理用 `--proxy-mode inherit|system|custom|none`，自定义配合 `--proxy-url`、`--proxy-bypass`，配置位于 `build.proxy`。Docker/Podman 构建均传递代理参数，按构建网络处理回环地址并检查容器内可达性；镜像拉取仍由引擎侧代理决定。自定义映射、旧 Dockerfile 更新和系统代理支持范围见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
+
+```sh
+pnpm build --target image --image-source cn --npm-source cn
+pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
+pnpm build --target image --proxy-mode custom --proxy-url http://127.0.0.1:10808
+```
+
 部署向导的默认/自定义模式保留同后端完整配置，包括未出现在表单中的 `publicEndpoint`、连接池及操作日志；自建或云开通只重新定稿连接与认证。旧版已保存的缺字段父 JSON 需先补回再打包，见[中间件配置说明](../deploy/README.md#按应用真正需要的中间件处理)。
 
 Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。

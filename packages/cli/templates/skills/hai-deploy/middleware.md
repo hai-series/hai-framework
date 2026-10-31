@@ -120,7 +120,7 @@ manifest.json 的 partial 与 selectedServices、apply 脚本共同记录部署�
 
 生成 web.conf 时从目标环境解析后的 _serv.yml 读取 transport.maxPlaintextBytes，调用 crypto.resolveTransportBodyLimits 推导 client_max_body_size；默认 2129920 字节，8 MiB 明文对应 16809984 字节。请求/响应 buffering 关闭，认证头缓冲固定。SvelteKit 从 _kit.yml 自动推导 adapter-node BODY_SIZE_LIMIT。app 增量包携带代理配置；容量变化时复用现有 Web 镜像重建代理并纳入失败恢复，容量不变保留 Web 容器。容量变化须选择 app；路由/端口/其他代理策略改变仍要求全量部署。应用继续独立限制业务文件、解压和行数。自管代理调用 resolveTransportBodyLimits 获取同一预算。
 
-完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。构建可用 --sqlite-prebuild-mirror，Podman 代理不可达可用 --no-http-proxy；不要改系统代理或让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
+完全离线构建另需基础镜像、Linux 依赖缓存、pnpm 和匹配驱动/Node ABI/架构/libc 的原生预编译包。联网准备可选 --image-source / --npm-source 的 official、cn、custom；npm 参数随 --build 使用。代理通过 --proxy-mode 及 --proxy-url / --proxy-bypass 配置，--no-http-proxy 等价 none；镜像拉取端还需配置引擎代理。具体契约见 [下载源与代理](../hai-build/reference.md#下载源与代理)。原生包保留 --sqlite-prebuild-mirror，不让 deploy 下载编译环境。生产 HTTPS、CORS、证书、DNS 另行准备。实际断网验收登录、刷新、重启和数据持久化。
 
 ## 命令输出
 

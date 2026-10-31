@@ -37,9 +37,19 @@ pnpm build --target desktop --platform windows --arch x64
 | `--images`                 | serv、web 或 serv,web；只构建导出所选镜像 |
 | `--runtime`                | auto（优先 Podman）、podman、docker       |
 | `--network`                | 容器构建网络，默认引擎设置                |
-| `--no-http-proxy`          | Podman 构建不继承本机代理                 |
+| `--no-http-proxy`          | 禁用本次构建代理（等价 none）             |
 | `--sqlite-prebuild-mirror` | SQLite 预编译包的可信 HTTP(S) 根地址      |
 | `--platform` / `--arch`    | 原生安装包的系统与架构                    |
+
+#### 下载源和代理
+
+`--image-source official|cn|custom` 同时作用于应用基础镜像和打包时缺少的中间件镜像。`--npm-source` 随 `--build` 控制 Corepack/pnpm；cn 使用毫秒镜像的 Docker Hub/GHCR 通道和 npmmirror。首次交互保存 `hai.json.build.sources`，命令覆盖只作用本次。代理使用 `--proxy-mode inherit|system|custom|none`、`--proxy-url` 与 `--proxy-bypass`；`--no-http-proxy` 等价 none。Docker/远程 Podman 的镜像拉取代理须在引擎侧设置，构建容器另做可达性检查。自定义源、平台范围及旧模板迁移见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
+
+SDK 的 `DeployAppOptions.imageSource` 为 `{ type: 'cn' }` 或 `{ type: 'custom', registries: { 'docker.io': 'mirror.example.com/docker.io', 'ghcr.io': 'mirror.example.com/ghcr.io' } }`，`proxy` 为 `{ mode: 'inherit' }` 或 `{ mode: 'custom', url: 'http://127.0.0.1:10808', bypass: 'localhost' }`。缺省为官方源、继承进程代理。`resolveImageReference()` / `resolveDownloadProxy()` 是无需 init 的解析工具，不修改引擎设置。中间件归档保留原始引用，服务器继续离线导入。
+
+```sh
+pnpm run deploy --env prod --build --bundle-only --image-source cn --npm-source cn
+```
 
 #### 用 hai.json 描述要打什么包
 
