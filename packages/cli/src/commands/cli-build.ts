@@ -1,15 +1,17 @@
 /** `pnpm build` 的环境无关构建入口：源码、OCI 镜像或 Tauri 安装包。 */
 import type { DeploymentArtifact } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
+import type { BuildDownloadOptions } from './cli-build-downloads.js'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
-import { normalizeProjectName } from '@h-ai/deploy'
+import { normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { buildMobileApp } from './cli-build-app.js'
+import { buildProxyArguments, preflightDownloadProxy, resolveBuildDownloads, validateDownloadDockerfile } from './cli-build-downloads.js'
 import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
@@ -20,7 +22,7 @@ import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
  * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'image', images: 'serv,web', runtime: 'podman', httpProxy: false }
  * ```
  */
-export interface BuildCommandOptions extends GlobalOptions {
+export interface BuildCommandOptions extends GlobalOptions, BuildDownloadOptions {
   /** compile 编译源码，image 导出 serv/web 镜像，app 调用 Capacitor，desktop 调用 Tauri。 */
   target?: 'compile' | 'image' | 'desktop' | 'app'
   /** 逗号分隔的应用镜像名；省略时构建全部。 */
@@ -155,7 +157,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   if (!['compile', 'image', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
   const compileEnvironment = staticCompileEnvironment(target)
-  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined))
     || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.arch !== undefined)) || (target === 'app' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
@@ -213,6 +215,8 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     if (!existsSync(resolve(cwd, image.dockerfile)))
       throw new Error(cliM('cli_build_dockerfile_missing', { params: { path: image.dockerfile } }))
   }
+  const downloads = await resolveBuildDownloads(cwd, options)
+  for (const image of images) validateDownloadDockerfile(resolve(cwd, image.dockerfile), downloads)
   const candidates = options.runtime && options.runtime !== 'auto' ? [options.runtime] : ['podman', 'docker']
   if (candidates.some(runtime => !['podman', 'docker'].includes(runtime)))
     throw new Error(cliM('cli_build_runtime_missing'))
@@ -227,6 +231,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   }
   if (!runtime)
     throw new Error(cliM('cli_build_runtime_missing'))
+  await preflightDownloadProxy(runtime, downloads.proxy)
   if (options.sqlitePrebuildMirror) {
     const url = new URL(options.sqlitePrebuildMirror)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
@@ -269,20 +274,19 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
         appendFileSync(testLedger, `${JSON.stringify({ runtime, imageRef })}\n`)
       }
       args.push('--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', `HAI_BUILD_COMMIT=${commit}`)
+      const dockerfile = readFileSync(resolve(cwd, image.dockerfile), 'utf8')
+      for (const match of dockerfile.matchAll(/^ARG (HAI_(?:NODE|NGINX)_IMAGE)=(\S+)\s*$/gm))
+        args.push('--build-arg', `${match[1]}=${resolveImageReference(match[2], downloads.imageSource)}`)
+      args.push('--build-arg', `HAI_NPM_REGISTRY=${downloads.npmRegistry}`, ...buildProxyArguments(downloads.proxy, runtime, options.network))
+      if (runtime === 'docker' && process.platform === 'linux' && options.network !== 'host')
+        args.push('--add-host', 'host.docker.internal:host-gateway')
       if (options.network !== undefined)
         args.push('--network', options.network)
       const ignore = `${resolve(cwd, image.dockerfile)}.dockerignore`
       if (runtime === 'podman' && existsSync(ignore))
         args.push('--ignorefile', ignore)
       if (runtime === 'podman') {
-        args.push('--format', 'docker', '--jobs', '1', ...(options.httpProxy === false ? ['--http-proxy=false'] : []))
-        // Windows/macOS 的远程 Podman 默认读取服务端代理；显式传递预定义构建参数。
-        if (options.httpProxy !== false) {
-          for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'FTP_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'ftp_proxy', 'no_proxy']) {
-            if (process.env[key])
-              args.push('--build-arg', `${key}=${process.env[key]}`)
-          }
-        }
+        args.push('--format', 'docker', '--jobs', '1', ...(downloads.proxy.mode === 'none' ? ['--http-proxy=false'] : []))
       }
       if (options.sqlitePrebuildMirror)
         args.push('--build-arg', `SQLITE_PREBUILD_MIRROR=${options.sqlitePrebuildMirror}`)

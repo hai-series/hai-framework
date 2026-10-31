@@ -1152,6 +1152,7 @@ function generateBuildDeploymentReadme(pm: string, appDir: string): string {
 
 自建S3的内部endpoint与浏览器publicEndpoint分开。publicEndpoint可设置为https://example.com/delivery/files等带目录地址，不含桶名、凭据或查询；返回URL保留桶名，Web Nginx或SSR/API gateway去掉入口前缀，保留原始S3路径、Host与查询后直接转发storage，大文件不经过Serv。外层代理保留完整入口路径，不重复去前缀；外部S3/CORS按实际服务配置，Local不公开私有目录。增加网关、改变桶或公开地址时全量部署，应用增量与回滚保持原配置；详见[存储使用规范](.agents/skills/hai-storage/SKILL.md)。
 每个镜像对应 images/ 中一个 Dockerfile，根 hai.json 的 build 分区指定文件，deploy 分区保存整个项目的部署配置。
+镜像构建可加 --image-source cn --npm-source cn，分别选择中国大陆镜像源与 npm 源；还支持 official/custom。首次交互选择保存到 hai.json.build.sources，--yes 复用配置，未配置时使用官方源。代理用 --proxy-mode inherit|system|custom|none，自定义配合 --proxy-url；Docker/Podman 引擎拉取代理需在引擎侧设置，构建容器会单独检查代理可达性。自定义源和旧工程 Dockerfile 更新见 .agents/skills/hai-build/reference.md 的下载源与代理说明。
 下载、安装和整理生产依赖复用同一份包缓存与 SQLite 驱动缓存，依赖安装先于源码复制。前后端默认最多并行构建两项，--concurrency 1可降低资源占用。运行镜像去除应用自身的声明文件、源码映射和说明文件。
 默认容器用于 CPU 运行或连接远程 AI 服务，不额外下载 GPU 运行库；需要使用部署机器上的 GPU 时，自行定制镜像和容器运行参数。
 

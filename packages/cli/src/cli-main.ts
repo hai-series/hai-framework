@@ -131,6 +131,14 @@ cli
   .option('--arch <arch>', cliM('cli_help_arch'))
   .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_sqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_noHttpProxy'))
+  .option('-y, --yes', cliM('cli_help_deployYes'))
+  .option('--image-source <source>', cliM('cli_help_imageSource'))
+  .option('--image-mirrors <mappings>', cliM('cli_help_imageMirrors'))
+  .option('--npm-source <source>', cliM('cli_help_npmSource'))
+  .option('--npm-registry <url>', cliM('cli_help_npmRegistry'))
+  .option('--proxy-mode <mode>', cliM('cli_help_proxyMode'))
+  .option('--proxy-url <url>', cliM('cli_help_proxyUrl'))
+  .option('--proxy-bypass <hosts>', cliM('cli_help_proxyBypass'))
   .action(async (options: Parameters<typeof buildCommand>[0]) => {
     try {
       await buildCommand(options)
@@ -168,6 +176,13 @@ cli
   .option('--network <network>', cliM('cli_help_deployNetwork'))
   .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_deploySqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_deployNoProxy'))
+  .option('--image-source <source>', cliM('cli_help_imageSource'))
+  .option('--image-mirrors <mappings>', cliM('cli_help_imageMirrors'))
+  .option('--npm-source <source>', cliM('cli_help_npmSource'))
+  .option('--npm-registry <url>', cliM('cli_help_npmRegistry'))
+  .option('--proxy-mode <mode>', cliM('cli_help_proxyMode'))
+  .option('--proxy-url <url>', cliM('cli_help_proxyUrl'))
+  .option('--proxy-bypass <hosts>', cliM('cli_help_proxyBypass'))
   .option('--runtime <runtime>', cliM('cli_help_deployRuntime'))
   .option('--bundle-only', cliM('cli_help_bundleOnly'))
   .option('--output <path>', cliM('cli_help_bundleOutput'))
@@ -188,6 +203,13 @@ cli
         network: options.network as string,
         sqlitePrebuildMirror: options.sqlitePrebuildMirror as string,
         httpProxy: options.httpProxy as boolean,
+        imageSource: options.imageSource as 'official' | 'cn' | 'custom',
+        imageMirrors: options.imageMirrors as string,
+        npmSource: options.npmSource as 'official' | 'cn' | 'custom',
+        npmRegistry: options.npmRegistry as string,
+        proxyMode: options.proxyMode as 'inherit' | 'system' | 'custom' | 'none',
+        proxyUrl: options.proxyUrl as string,
+        proxyBypass: options.proxyBypass as string,
         runtime: options.runtime as 'auto' | 'podman' | 'docker',
         bundleOnly: options.bundleOnly as boolean,
         output: options.output as string,

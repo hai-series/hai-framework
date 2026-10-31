@@ -1,4 +1,5 @@
-FROM node:24.22.1-bookworm-slim AS build
+ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim
+FROM ${HAI_NODE_IMAGE} AS build
 ARG SQLITE_PREBUILD_MIRROR=
 ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
 
@@ -8,7 +9,11 @@ ENV CI=true
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 WORKDIR /workspace
 
-RUN corepack enable && corepack prepare pnpm@12.11.2 --activate && pnpm config set store-dir /pnpm/store
+ARG HAI_NPM_REGISTRY=https://registry.npmjs.org
+ARG COREPACK_NPM_REGISTRY=$HAI_NPM_REGISTRY
+ARG npm_config_registry=$HAI_NPM_REGISTRY
+ARG pnpm_config_registry=$HAI_NPM_REGISTRY
+RUN node -e "const p=process.env.HTTPS_PROXY||process.env.HTTP_PROXY;if(p){const u=new URL(p);const s=require('node:net').connect({host:u.hostname,port:Number(u.port||(u.protocol==='https:'?443:80))});s.setTimeout(3000);s.on('connect',()=>s.end());const fail=()=>{process.stderr.write('Build proxy is unreachable from the container. Check the host address and proxy listener.\\n');process.exit(1)};s.on('error',fail);s.on('timeout',fail)}" && corepack enable && corepack prepare pnpm@12.11.2 --activate && pnpm config set store-dir /pnpm/store
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY images/dependencies/ ./
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --ignore-scripts
@@ -21,7 +26,7 @@ RUN --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds if
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store --mount=type=cache,id={{projectName}}-sqlite,target=/root/.npm/_prebuilds pnpm pm deploy --filter {{api.servPackageName}} --prod /prod/app
 RUN rm -f /prod/app/README* && find /prod/app/dist -type f \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' \) -delete
 
-FROM node:24.22.1-bookworm-slim AS runtime-base
+FROM ${HAI_NODE_IMAGE} AS runtime-base
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0

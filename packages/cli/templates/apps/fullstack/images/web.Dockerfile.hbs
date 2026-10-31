@@ -1,5 +1,7 @@
+ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim
+ARG HAI_NGINX_IMAGE=nginxinc/nginx-unprivileged:1.29.8-alpine
 {{#if fullstack.frontends.web}}
-FROM node:24.22.1-bookworm-slim AS build
+FROM ${HAI_NODE_IMAGE} AS build
 ARG SQLITE_PREBUILD_MIRROR=
 ENV npm_config_better_sqlite3_binary_host_mirror=$SQLITE_PREBUILD_MIRROR
 
@@ -8,7 +10,11 @@ ENV PATH=$PNPM_HOME:$PATH
 ENV CI=true
 WORKDIR /workspace
 
-RUN corepack enable && corepack prepare pnpm@12.11.2 --activate && pnpm config set store-dir /pnpm/store
+ARG HAI_NPM_REGISTRY=https://registry.npmjs.org
+ARG COREPACK_NPM_REGISTRY=$HAI_NPM_REGISTRY
+ARG npm_config_registry=$HAI_NPM_REGISTRY
+ARG pnpm_config_registry=$HAI_NPM_REGISTRY
+RUN node -e "const p=process.env.HTTPS_PROXY||process.env.HTTP_PROXY;if(p){const u=new URL(p);const s=require('node:net').connect({host:u.hostname,port:Number(u.port||(u.protocol==='https:'?443:80))});s.setTimeout(3000);s.on('connect',()=>s.end());const fail=()=>{process.stderr.write('Build proxy is unreachable from the container. Check the host address and proxy listener.\\n');process.exit(1)};s.on('error',fail);s.on('timeout',fail)}" && corepack enable && corepack prepare pnpm@12.11.2 --activate && pnpm config set store-dir /pnpm/store
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY images/dependencies/ ./
 RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --ignore-scripts
@@ -23,7 +29,7 @@ ARG HAI_BUILD_COMMIT=unknown
 ARG PUBLIC_BASE_PATH=
 RUN pnpm --filter {{fullstack.sharedPackageName}} paraglide:compile && HAI_BUILD_ID="$HAI_BUILD_ID" HAI_BUILD_COMMIT="$HAI_BUILD_COMMIT" PUBLIC_BASE_PATH="$PUBLIC_BASE_PATH" pnpm --filter {{projectName}}-web... --if-present build
 
-FROM nginxinc/nginx-unprivileged:1.29.8-alpine AS web
+FROM ${HAI_NGINX_IMAGE} AS web
 
 ENV PUBLIC_API_BASE=
 ENV NGINX_ENVSUBST_FILTER=PUBLIC_API_BASE_BASE64

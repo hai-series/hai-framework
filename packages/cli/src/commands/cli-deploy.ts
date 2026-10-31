@@ -7,6 +7,7 @@
 
 import type { DeploymentEnvironment } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
+import type { BuildDownloadOptions } from './cli-build-downloads.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
@@ -19,6 +20,7 @@ import ora from 'ora'
 import prompts from 'prompts'
 import { cliM } from '../cli-i18n.js'
 import { writeCliError, writeCliMessage } from '../cli-utils.js'
+import { preflightDownloadProxy, resolveBuildDownloads } from './cli-build-downloads.js'
 import { buildCommand } from './cli-build.js'
 import { configureDeployMiddleware } from './cli-deploy-middleware.js'
 import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
@@ -31,7 +33,7 @@ import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
  * const options: DeployCommandOptions = { cwd: '/workspace/shop', appDir: 'packages/shop-serv', env: 'prod', yes: true, bundleOnly: true, output: '.hai/shop.tar' }
  * ```
  */
-export interface DeployCommandOptions extends GlobalOptions {
+export interface DeployCommandOptions extends GlobalOptions, BuildDownloadOptions {
   /** 只读检查，不初始化 Provider、不写配置、不构建、不连接目标。 */
   plan?: boolean
   /** 配合 plan，只读检查目标 current 与成功发布目录。 */
@@ -270,7 +272,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
       throw new Error(cliM('cli_build_runtime_missing'))
     if (options.artifactDir && options.build)
       throw new Error(cliM('cli_deploy_build_artifact_conflict'))
-    if (!options.build && (options.concurrency !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false))
+    if (!options.build && (options.concurrency !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined))
       throw new Error(cliM('cli_deploy_build_options_required'))
     let selectedServices = options.services?.split(',').map(name => name.trim())
     if (selectedServices && (!selectedServices.length || selectedServices.some(name => !/^[a-z][a-z0-9-]*$/.test(name)) || new Set(selectedServices).size !== selectedServices.length))
@@ -339,7 +341,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (!environment.success)
       throw new Error(environment.error.message)
     if (options.plan) {
-      if (options.build || options.bundleOnly || options.output)
+      if (options.build || options.bundleOnly || options.output || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined || options.httpProxy === false)
         throw new Error(cliM('cli_deploy_plan_options'))
       const loaded = deployModule.loadDeploymentConfig('deploy', buildFile, { ...process.env, ...environment.data.values })
       if (!loaded.success)
@@ -422,13 +424,16 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     spinner.succeed(cliM('cli_deploy_scanned', { params: { name: scan.appName, sveltekit: String(scan.isSvelteKit), services: scan.requiredServices.join(', ') || cliM('cli_deploy_none') } }))
 
+    const downloads = configObject(deployConfig.provider).type === 'docker-ssh' ? await resolveBuildDownloads(buildRoot, options) : undefined
+    let builtImages = false
     if (options.build) {
       if (!existsSync(buildFile))
         throw new Error(cliM('cli_build_images_missing'))
       const imageNames = selectedServices?.filter(name => ['serv', 'web'].includes(name))
       if (!selectedServices || imageNames?.length) {
         writeCliMessage(cliM('cli_deploy_build_started'))
-        await buildCommand({ cwd: buildRoot, target: 'image', images: imageNames?.join(','), concurrency: options.concurrency, runtime: options.runtime, network: options.network, sqlitePrebuildMirror: options.sqlitePrebuildMirror, httpProxy: options.httpProxy })
+        builtImages = true
+        await buildCommand({ ...options, cwd: buildRoot, target: 'image', images: imageNames?.join(','), yes: true, imageSource: downloads?.imageSource.type, imageMirrors: downloads?.imageSource.registries ? Object.entries(downloads.imageSource.registries).map(([key, value]) => `${key}=${value}`).join(',') : undefined, npmSource: downloads?.npmSource.type, npmRegistry: downloads?.npmSource.registry, proxyMode: downloads?.proxy.mode, proxyUrl: downloads?.proxy.url, proxyBypass: downloads?.proxy.bypass })
       }
     }
     if (selectedServices)
@@ -481,7 +486,11 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
 
     // 5. 执行部署
     spinner.start(cliM('cli_deploy_deploying'))
+    if (downloads && !builtImages && (!selectedServices || selectedServices.some(name => !['serv', 'web'].includes(name))))
+      await preflightDownloadProxy(options.runtime ?? 'auto', downloads.proxy)
     const deployResult = await deploy.deployApp(appDir, {
+      imageSource: downloads?.imageSource,
+      proxy: downloads?.proxy,
       selectedServices,
       runtime: options.runtime,
       onProgress: stage => writeCliMessage(cliM(`cli_deploy_stage_${stage}`)),

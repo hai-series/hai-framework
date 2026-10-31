@@ -7,6 +7,12 @@ import process from 'node:process'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { buildCommand } from '../src/commands/cli-build.js'
 
+// 本文件验证构建调度；真实网络预检在下载配置与容器门禁中验证。
+vi.mock('../src/commands/cli-build-downloads.js', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/commands/cli-build-downloads.js')>(),
+  preflightDownloadProxy: vi.fn(),
+}))
+
 const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv }>, failPodman: false, failWeb: false, active: 0, peak: 0 }))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
@@ -54,6 +60,19 @@ it.each([1, 2])('镜像并发上限 %s 保留清单顺序并等待全部任务�
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
   expect(manifest.images.map((image: { name: string }) => image.name)).toEqual(['serv', 'web'])
+})
+
+it.each(['docker', 'podman'] as const)('选源和代理参数实际传递给 %s 构建', async (runtime) => {
+  for (const name of ['serv', 'web'])
+    writeFileSync(join(root, `images/${name}.Dockerfile`), ['ARG HAI_NODE_IMAGE=node:24.22.1-bookworm-slim', 'ARG HAI_NGINX_IMAGE=nginxinc/nginx-unprivileged:1.29.8-alpine', 'FROM $' + '{HAI_NODE_IMAGE}', 'ARG HAI_NPM_REGISTRY=https://registry.npmjs.org'].join('\n'))
+  await buildCommand({ cwd: root, target: 'image', runtime, network: runtime === 'podman' ? 'pasta' : undefined, imageSource: 'cn', npmSource: 'cn', proxyUrl: 'http://127.0.0.1:10808', yes: true })
+  const builds = state.calls.filter(call => call.args[0] === 'build')
+  expect(builds).toHaveLength(2)
+  for (const { args } of builds) {
+    expect(args).toContain('HAI_NODE_IMAGE=docker.1ms.run/library/node:24.22.1-bookworm-slim')
+    expect(args).toContain('HAI_NPM_REGISTRY=https://registry.npmmirror.com')
+    expect(args).toContain(`HTTPS_PROXY=http://${runtime === 'podman' ? 'host.containers.internal' : 'host.docker.internal'}:10808`)
+  }
 })
 
 it('并行构建失败后不发布清单，全部子任务退出后清理本轮镜像', async () => {
