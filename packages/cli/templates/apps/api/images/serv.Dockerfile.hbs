@@ -16,8 +16,8 @@ ARG pnpm_config_registry=$HAI_NPM_REGISTRY
 RUN node -e "const p=process.env.HTTPS_PROXY||process.env.HTTP_PROXY;if(p){const u=new URL(p);const s=require('node:net').connect({host:u.hostname,port:Number(u.port||(u.protocol==='https:'?443:80))});s.setTimeout(3000);s.on('connect',()=>s.end());const fail=()=>{process.stderr.write('Build proxy is unreachable from the container. Check the host address and proxy listener.\\n');process.exit(1)};s.on('error',fail);s.on('timeout',fail)}" && corepack enable && corepack prepare pnpm@12.11.2 --activate && pnpm config set store-dir /pnpm/store
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY images/dependencies/ ./
-RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --ignore-scripts
-RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --offline --frozen-lockfile --ignore-scripts
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm fetch --reporter=append-only --ignore-scripts
+RUN --mount=type=cache,id={{projectName}}-pnpm,target=/pnpm/store pnpm install --reporter=append-only --offline --frozen-lockfile --ignore-scripts
 COPY . .
 ARG HAI_BUILD_ID=
 ARG HAI_BUILD_COMMIT=unknown

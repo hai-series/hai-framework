@@ -123,6 +123,8 @@ Configure `hai.json.deploy.provider.expose.https` or private environment overrid
 
 ### Build and deploy
 
+On Windows, builds forward stdout/stderr with normalized terminal line endings. pnpm downloads use append-only logs while retaining warnings and failures.
+
 Select image and npm downloads independently with `--image-source official|cn|custom` and `--npm-source official|cn|custom`. The mainland-China preset uses 1ms mirrors for Docker Hub/GHCR and npmmirror for npm. First-time interactive choices become `hai.json.build.sources` defaults. Flags override only this invocation; `--yes` reuses settings, and an unconfigured noninteractive run uses official sources. Configure `build.proxy` through `--proxy-mode inherit|system|custom|none`, `--proxy-url`, and `--proxy-bypass`. Both Docker and Podman receive build proxy arguments; loopback URLs are handled according to the build network and checked inside the build container. Image pulls use the engine's own proxy settings. See [download sources and proxies](../../docs/usage/configuration/delivery.md#下载源和代理) for custom mappings, system-proxy support and existing Dockerfile updates.
 
 ```sh

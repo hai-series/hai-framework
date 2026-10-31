@@ -123,6 +123,8 @@ CLI 消息支持中文、英文和日文，优先使用 `HAI_CORE_DEFAULTLOCALE`
 
 ### 构建与部署
 
+Windows 构建会转发标准输出与错误，统一终端换行；pnpm 下载使用追加式日志，保留 WARN 与失败信息。
+
 镜像和 npm 下载分别使用 `--image-source official|cn|custom`、`--npm-source official|cn|custom`。大陆预设采用毫秒镜像（Docker Hub/GHCR）和 npmmirror。首次交互把选择保存为 `hai.json.build.sources` 默认；命令参数只覆盖本次，`--yes` 复用配置，非交互未配置时使用官方源。代理用 `--proxy-mode inherit|system|custom|none`，自定义配合 `--proxy-url`、`--proxy-bypass`，配置位于 `build.proxy`。Docker/Podman 构建均传递代理参数，按构建网络处理回环地址并检查容器内可达性；镜像拉取仍由引擎侧代理决定。自定义映射、旧 Dockerfile 更新和系统代理支持范围见[下载源和代理](../../docs/usage/configuration/delivery.md#下载源和代理)。
 
 ```sh

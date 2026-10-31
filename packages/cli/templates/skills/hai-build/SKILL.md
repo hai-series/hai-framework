@@ -55,6 +55,8 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 
 ## 按需参考
 
+Windows 构建子进程使用追加式 pnpm 日志并规范 CRLF，等待输出写完再完成；保留 stdout/stderr、UTF-8 和所有警告，不靠静默输出隐藏下载错误。Dockerfile 的 pnpm fetch/install 同步使用 --reporter=append-only。
+
 按任务读取 [reference.md](reference.md) 的对应小节；签名以当前源码或安装版本的公开类型为准，不默认加载全部资料。示例中的业务变量由应用提供。
 
 - 适用场景

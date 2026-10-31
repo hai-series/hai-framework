@@ -50,7 +50,7 @@ it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepac
     const header = template.slice(0, template.indexOf('COPY pnpm-lock.yaml')).replace('RUN node', `RUN node -e "process.stdout.write('${randomUUID()}')" > /tmp/download-gate\nRUN node`)
     // 直接使用生成模板的下载阶段；业务编译改为小包验证，隔离框架应用安装开销。
     const proof = 'process.stdout.write(JSON.stringify({registry:process.env.pnpm_config_registry,corepackRegistry:process.env.COREPACK_NPM_REGISTRY,proxyHost:process.env.HTTPS_PROXY?new URL(process.env.HTTPS_PROXY).hostname:null,packageWorks:require(\'is-number\')(42)}))'
-    writeFileSync(join(directory, 'images/serv.Dockerfile'), `${header}COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./\nRUN pnpm fetch --ignore-scripts && pnpm install --offline --frozen-lockfile --ignore-scripts\nRUN node -e "${proof}" > /download-proof.json\nCMD ["node", "-e", "process.stdout.write(require('node:fs').readFileSync('/download-proof.json','utf8'))"]\n`)
+    writeFileSync(join(directory, 'images/serv.Dockerfile'), `${header}COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./\nRUN pnpm fetch --reporter=append-only --ignore-scripts && pnpm install --reporter=append-only --offline --frozen-lockfile --ignore-scripts\nRUN node -e "${proof}" > /download-proof.json\nCMD ["node", "-e", "process.stdout.write(require('node:fs').readFileSync('/download-proof.json','utf8'))"]\n`)
     const pnpmArguments = ['install', '--lockfile-only', '--ignore-scripts', '--registry=https://registry.npmmirror.com']
     if (process.platform === 'win32')
       await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', '& pnpm.cmd install --lockfile-only --ignore-scripts --registry=https://registry.npmmirror.com; exit $LASTEXITCODE'])

@@ -123,6 +123,8 @@ admin・website・h5 作成時に crypto を選ぶと `_kit.yml` の transport �
 
 ### ビルドとデプロイ
 
+Windows のビルドでは標準出力とエラーの改行を統一して転送します。pnpm の取得ログは追記方式とし、警告と失敗情報を保持します。
+
 イメージと npm の取得元を `--image-source official|cn|custom`、`--npm-source official|cn|custom` で個別に指定できます。中国本土のプリセットは Docker Hub/GHCR に毫秒镜像、npm に npmmirror を使用します。初回対話の選択は `hai.json.build.sources` に保存し、引数は今回のみ上書きします。`--yes` は既存設定を再利用し、非対話で未設定の場合は公式を使用します。プロキシは `build.proxy` と `--proxy-mode inherit|system|custom|none`、`--proxy-url`、`--proxy-bypass` で指定します。Docker と Podman のビルドに渡し、ビルドネットワークに応じてループバックを処理し、コンテナ内で接続を確認します。イメージ取得はエンジン側のプロキシ設定を使用します。カスタム対応表、システムプロキシの対応範囲、既存 Dockerfile の更新は[取得元とプロキシ](../../docs/usage/configuration/delivery.md#下载源和代理)を参照してください。
 
 ```sh

@@ -12,6 +12,7 @@ import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { buildMobileApp } from './cli-build-app.js'
 import { buildProxyArguments, preflightDownloadProxy, resolveBuildDownloads, validateDownloadDockerfile } from './cli-build-downloads.js'
+import { forwardWindowsBuildOutput } from './cli-build-output.js'
 import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
@@ -68,13 +69,30 @@ async function run(command: string, args: string[], cwd: string, quiet = false, 
       env.HAI_BUILD_COMMIT = identity.commit
     }
     env.NODE_ENV = 'production'
+    // 子进程不使用交互进度条；保留每一条下载、警告和错误记录。
+    if (process.platform === 'win32') {
+      env.npm_config_reporter = 'append-only'
+      env.pnpm_config_reporter = 'append-only'
+    }
     delete env.CAPACITOR_SERVER_URL
     // Tauri 的 CI 参数只接受 true/false，兼容 CI 平台常用的 1/0 写法。
     if (env.CI === '1' || env.CI === '0')
       env.CI = env.CI === '1' ? 'true' : 'false'
-    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: quiet ? 'ignore' : 'inherit', shell: false })
+    const windowsOutput = !quiet && process.platform === 'win32'
+    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: quiet ? 'ignore' : windowsOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit', shell: false })
+    let output = Promise.resolve()
+    if (windowsOutput && child.stdout && child.stderr) {
+      output = Promise.all([
+        forwardWindowsBuildOutput(child.stdout, process.stdout),
+        forwardWindowsBuildOutput(child.stderr, process.stderr),
+      ]).then(() => undefined)
+      // 输出流异常时结束本次本地子进程，再由 close 等待剩余管道关闭。
+      void output.catch(() => child.kill())
+    }
     child.once('error', reject)
-    child.once('exit', code => code === 0 ? resolve() : reject(new Error(cliM('cli_build_failed', { params: { command, code: String(code) } }))))
+    child.once(windowsOutput && child.stdout && child.stderr ? 'close' : 'exit', (code) => {
+      void output.then(() => code === 0 ? resolve() : reject(new Error(cliM('cli_build_failed', { params: { command, code: String(code) } }))), reject)
+    })
   })
 }
 

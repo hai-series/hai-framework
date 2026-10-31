@@ -1,3 +1,4 @@
+import type { SpawnOptions } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
@@ -13,12 +14,12 @@ vi.mock('../src/commands/cli-build-downloads.js', async importOriginal => ({
   preflightDownloadProxy: vi.fn(),
 }))
 
-const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv }>, failPodman: false, failWeb: false, active: 0, peak: 0 }))
+const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>, failPodman: false, failWeb: false, active: 0, peak: 0 }))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
-  spawn: (command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => {
+  spawn: (command: string, args: string[], options: { env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }) => {
     const child = new EventEmitter()
-    state.calls.push({ command, args, env: options.env })
+    state.calls.push({ command, args, env: options.env, stdio: options.stdio })
     if (args[0] === 'build') {
       state.active++
       state.peak = Math.max(state.peak, state.active)
@@ -153,6 +154,16 @@ it('pnpm build 默认编译源码，不选择环境、不调用容器工具', as
   expect(state.calls[0].env.PUBLIC_API_BASE).toBeUndefined()
   expect(state.calls[0].env.HAI_E2E).toBeUndefined()
   expect(state.calls[0].env.NODE_ENV).toBe('production')
+})
+
+it.skipIf(process.platform !== 'win32')('windows 编译使用管道和追加式日志，保留标准输入', async () => {
+  vi.stubEnv('npm_config_reporter', 'default')
+  vi.stubEnv('pnpm_config_reporter', 'default')
+  await buildCommand({ cwd: root })
+  expect(state.calls[0]).toMatchObject({
+    stdio: ['inherit', 'pipe', 'pipe'],
+    env: { npm_config_reporter: 'append-only', pnpm_config_reporter: 'append-only' },
+  })
 })
 
 it('compile 仅投递本次生成的构建身份，外层伪造值与凭据仍被过滤', async () => {

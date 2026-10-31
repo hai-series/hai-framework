@@ -75,6 +75,8 @@
 
 ### 下载源和代理
 
+Windows/PowerShell 下，构建入口会转发并规范子进程输出的换行；pnpm fetch/install 使用 `--reporter=append-only`，保留警告、错误和退出码。构建完成前等待输出流关闭，防止完成提示与最后几行交错。
+
 在中国大陆构建镜像时，可以分别选择镜像和 npm 下载源：
 
 ```sh
