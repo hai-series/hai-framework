@@ -1,4 +1,4 @@
-/** 使用框架统一的环境来源规则启动 Node，同时让 NODE_OPTIONS 在子进程启动前生效。 */
+/** 所有模板共用环境来源规则启动 Node，让 NODE_OPTIONS 在子进程启动前生效。 */
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'

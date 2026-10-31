@@ -1006,6 +1006,7 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies.hono).toBeUndefined()
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.scripts.start).toBe('node ../../scripts/run-node.mjs prod ../.. dist/index.js')
+    expect(await exists(projectPath, 'scripts/run-node.mjs')).toBe(true)
     expect(pkg.dependencies['@h-ai/payment']).toBe('catalog:')
     expect(pkg.dependencies['@h-ai/datapipe']).toBe('catalog:')
     expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))

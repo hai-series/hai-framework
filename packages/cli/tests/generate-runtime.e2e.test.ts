@@ -240,6 +240,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       const environmentRoot = appType === 'api' ? service : project
       // 模拟克隆工程没有本机覆盖文件；正常运行仍使用本轮隔离后端。
       await rm(path.join(environmentRoot, '.env.local'), { force: true })
+      await rm(path.join(environmentRoot, '.env.dev.local'), { force: true })
       const entryArgs = [path.join(project, 'scripts/run-node.mjs'), 'dev', environmentRoot, 'dist/index.js']
       const expectFailure = async (override: NodeJS.ProcessEnv, expected: string[]) => {
         let output = ''

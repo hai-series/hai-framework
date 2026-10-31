@@ -1197,8 +1197,9 @@ export async function generateFromTemplates(
   // ─── ④ 渲染 .hbs 动态模板 ───
   await renderDynamicFiles(root, projectPath, context)
 
-  // 多包模板不继承 base；所有应用统一复制同一份 E2E 清理入口。
+  // 多包模板不继承 base；所有应用统一复制共享启动与 E2E 清理入口。
   await fse.copy(path.join(root, 'shared', 'run-e2e.mjs'), path.join(projectPath, 'scripts', 'run-e2e.mjs'))
+  await fse.copy(path.join(root, 'shared', 'run-node.mjs'), path.join(projectPath, 'scripts', 'run-node.mjs'))
   await fse.copy(path.join(root, 'shared', 'e2e-env.ts'), path.join(projectPath, 'scripts', 'e2e-env.ts'))
   await fse.copy(path.join(root, 'shared', 'build-metadata.ts'), path.join(projectPath, 'scripts', 'build-metadata.ts'))
   await fse.copy(path.join(root, 'shared', 'public-base-path.mjs'), path.join(projectPath, 'scripts', 'public-base-path.mjs'))
