@@ -100,6 +100,7 @@ describe.skipIf(!enabled)('linux process groups and real ssh execution', () => {
       throw new Error('Expected an APT mirror hostname')
     const mirrorCommand = mirror ? `sed -i 's#deb.debian.org#${mirror}#g' /etc/apt/sources.list.d/debian.sources && ` : ''
     writeFileSync(path.join(root, 'package.json'), '{"type":"module"}')
+    writeFileSync(path.join(root, 'runtime-preparation.mjs'), readFileSync(new URL('./fixtures/runtime-preparation.mjs', import.meta.url)))
     copyDependency('@h-ai/core', path.join(repository, 'packages/deploy'), new Set())
     const source = path.join(repository, 'packages/deploy/src/container/deploy-command.ts').replaceAll('\\', '/')
     const recovery = path.join(repository, 'packages/deploy/src/deploy-recovery.ts').replaceAll('\\', '/')
@@ -140,7 +141,7 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     container = fixtureContext.containerId
     sshPort = fixtureContext.sshHostPort
     await executeDeployTestFixture(runtime, fixtureContext, ['mkdir', '/fixture'], { timeoutMs: remaining(10_000), signal: setupSignal })
-    for (const folder of ['node_modules', 'runner'])
+    for (const folder of ['node_modules', 'runner', 'runtime-preparation.mjs'])
       execFileSync(runtime, ['cp', path.join(root, folder), `${container}:/fixture/${folder}`], { windowsHide: true, timeout: remaining(180_000) })
     await executeDeployTestFixture(runtime, fixtureContext, ['sh', '-ec', `printf '#!/bin/sh\\nexit 0\\n' >/usr/local/bin/curl; chmod 700 /usr/local/bin/curl`], { timeoutMs: remaining(10_000), signal: setupSignal })
     const ssh = sshModule.createSshExecutor({ host: '127.0.0.1', port: sshPort, username: 'root', identityFile: key, knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false, connectTimeoutSeconds: 5 })
@@ -265,6 +266,12 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
     execute('rm -f /fixture/block-load /fixture/release-load /fixture/remote-heartbeat /fixture/remote-worker.pid')
     const docker = path.join(root, 'docker-fixture')
     writeFileSync(docker, `#!/bin/sh
+case "$1" in
+  create) exec node /fixture/runtime-preparation.mjs "$@";;
+  start) if [ "\${2:-}" = --attach ]; then exec node /fixture/runtime-preparation.mjs "$@"; fi;;
+  inspect) case "\${3:-}" in *runtime-preparation*|*State.ExitCode*) exec node /fixture/runtime-preparation.mjs "$@";; esac;;
+  rm|ps) case "$*" in *${'f'.repeat(64)}*) exec node /fixture/runtime-preparation.mjs "$@";; esac;;
+esac
 case "$*" in
   *'up --help'*) printf 'never\\n';;
   'context show') printf 'default\\n';;
@@ -287,9 +294,9 @@ fi
     vi.spyOn(sshModule, 'createSshExecutor').mockImplementation((config) => {
       const ssh = original(config)
       return { ...ssh, exec: (command, options) => ssh.exec(command, command.includes('apply.sh')
-        ? { ...options, timeoutMs: 2500, onOutput: async (chunk) => {
+        ? { ...options, timeoutMs: mode === 'completed' ? 10_000 : 2500, onOutput: async (chunk) => {
             await options?.onOutput?.(chunk)
-            // 故障注入仅缩短 10 分钟 deadline，并在已完成场景暂停消费，制造真实丢失回执。
+            // 完成场景包含真实配置编译；暂停消费制造丢失回执，原始十分钟 deadline 仍缩短为本用例预算。
             if (mode === 'completed')
               await paused
           } }

@@ -136,13 +136,7 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
     writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
     writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/lock-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
     // 锁门禁的引擎替身只转交配置编译给真实 Linux Node；真正的容器隔离由 CLI 部署门禁验证。
-    writeFileSync(join(root, 'bin/runtime-preparation.mjs'), `import fs from 'node:fs'; import path from 'node:path'; import {spawnSync} from 'node:child_process';
-const args=process.argv.slice(2), id='${'f'.repeat(64)}', state='/fixture/compiler.json';
-if(args[0]==='create') { const mounts={}; for(let i=0;i<args.length;i++) if(args[i]==='--mount') { const value=args[++i]; const source=/source=([^,]+),/.exec(value)[1].replace(/^"|"$/g,'').replaceAll('""','"'); const target=/target=([^,]+)/.exec(value)[1]; mounts[target]=source; } fs.writeFileSync(state,JSON.stringify({mounts,mode:args.at(-1),owner:args[args.indexOf('--label')+1].split('=')[1]})); fs.writeFileSync(args[args.indexOf('--cidfile')+1],id); process.stdout.write(id); }
-else if(args[0]==='inspect') process.stdout.write(args[2].includes('ExitCode')?'0':JSON.parse(fs.readFileSync(state)).owner);
-else if(args[0]==='start') { const {mounts,mode}=JSON.parse(fs.readFileSync(state)); const directory=fs.mkdtempSync('/fixture/runtime-input-'); try {fs.mkdirSync(path.join(directory,'config')); fs.copyFileSync(mounts['/input/manifest.json'],path.join(directory,'manifest.json')); fs.copyFileSync(mounts['/input/config/.env.runtime'],path.join(directory,'config/.env.runtime')); const result=spawnSync(process.execPath,[mounts['/runtime-env.mjs'],'prepare',directory+'/',mounts['/input/previous-manifest.json']??'-',mounts['/input/previous.env']??'-',mounts['/input/credentials.env']??'-',mode],{encoding:'utf8'}); process.stdout.write(result.stdout);process.stderr.write(result.stderr);process.exitCode=result.status??1;}finally{fs.rmSync(directory,{recursive:true,force:true});} }
-else if(args[0]==='rm') fs.rmSync(state,{force:true});
-`)
+    writeFileSync(join(root, 'bin/runtime-preparation.mjs'), readFileSync(new URL('./fixtures/runtime-preparation.mjs', import.meta.url)))
     writeFileSync(join(root, 'bin/docker'), `#!/bin/sh
 printf '%s\\n' "$*" >> /fixture/commands.log
 case "$1" in

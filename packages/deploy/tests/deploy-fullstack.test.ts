@@ -667,8 +667,16 @@ it.skipIf(process.platform === 'win32')('实际执行交付脚本：拒绝首次
   const destination = join(root, 'server').replaceAll('\\', '/')
   const bin = join(root, 'bin')
   mkdirSync(bin)
+  const runtimePreparation = join(bin, 'runtime-preparation.mjs')
+  writeFileSync(runtimePreparation, readFileSync(new URL('./fixtures/runtime-preparation.mjs', import.meta.url)))
   const engine = `#!/bin/sh
 printf '%s\\n' "$*" >> "$HAI_TEST_COMMANDS"
+case "$1" in
+  create) exec node "$HAI_TEST_RUNTIME_PREPARATION" "$@";;
+  start) if [ "\${2:-}" = --attach ]; then exec node "$HAI_TEST_RUNTIME_PREPARATION" "$@"; fi;;
+  inspect) case "\${3:-}" in *runtime-preparation*|*State.ExitCode*) exec node "$HAI_TEST_RUNTIME_PREPARATION" "$@";; esac;;
+  rm|ps) case "$*" in *${'f'.repeat(64)}*) exec node "$HAI_TEST_RUNTIME_PREPARATION" "$@";; esac;;
+esac
 for argument in "$@"; do
   case "$argument" in
     label=*.project=*) printf '%s' "$argument" | sed 's/^label=[^=]*=//' > "$HAI_TEST_COMMANDS.project";;
@@ -692,7 +700,7 @@ esac
   writeFileSync(join(bin, 'curl'), '#!/bin/sh\nif [ "$HAI_TEST_HTTP_FAIL" = 1 ]; then exit 22; fi\n', { mode: 0o700 })
   writeFileSync(join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o700 })
   const commands = join(root, 'commands.txt')
-  const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${process.platform === 'win32' ? ';C:/Program Files/Git/usr/bin;' : ':'}${process.env.PATH}`, HAI_TEST_COMMANDS: commands.replaceAll('\\', '/'), HAI_TEST_HTTP_FAIL: '0' }
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${bin}${process.platform === 'win32' ? ';C:/Program Files/Git/usr/bin;' : ':'}${process.env.PATH}`, HAI_TEST_COMMANDS: commands.replaceAll('\\', '/'), HAI_TEST_RUNTIME_PREPARATION: runtimePreparation, HAI_TEST_HTTP_FAIL: '0' }
   // 假引擎只使用本例声明的本地身份，不继承操作机的真实 Docker/Podman 端点。
   for (const key of ['DOCKER_HOST', 'DOCKER_CONTEXT', 'CONTAINER_HOST', 'CONTAINER_CONNECTION', 'CONTAINERS_CONF', 'CONTAINERS_STORAGE_CONF', 'STORAGE_DRIVER', 'STORAGE_OPTS'])
     delete env[key]
