@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/serv",
   "type": "module",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.6",
   "description": "Hai Framework service runtime powered by Hono and oRPC.",
   "license": "Apache-2.0",
   "exports": {

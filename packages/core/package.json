@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/core",
   "type": "module",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.6",
   "description": "Hai Framework core module with shared utilities, types, configuration, and logging.",
   "license": "Apache-2.0",
   "exports": {
