@@ -264,7 +264,7 @@ async function runPnpm(commands: DeployTestCommands, args: string[], cwd: string
     return await (/\.[cm]?js$/i.test(entry) ? commands.run(process.execPath, [entry, ...args], cwd, env) : commands.run(entry, args, cwd, env))
   }
   catch (error) {
-    if (error instanceof DeployTestCommandError && error.message.includes('Service serv is unhealthy'))
+    if (error instanceof DeployTestCommandError && /Service serv is unhealthy|HTTP check failed:/.test(error.message))
       await diagnoseBackendHealth(commands)
     throw error
   }
@@ -273,6 +273,32 @@ async function runPnpm(commands: DeployTestCommands, args: string[], cwd: string
 /** 只读取本轮拥有的后端；不输出健康日志正文、环境或配置值。 */
 async function diagnoseBackendHealth(commands: DeployTestCommands): Promise<void> {
   try {
+    for (const service of ['serv', 'web']) {
+      const container = `hai-e2e-fullstack-test-${service}`
+      const state = JSON.parse(await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{json .State}}', container])) as { Status: string, ExitCode: number }
+      const output = await commands.run(runtime!, ['exec', fixture().containerId, 'sh', '-c', 'podman logs --tail 100 "$1" 2>&1', 'diagnostic', container])
+      process.stderr.write(`Deployment container diagnostic: ${JSON.stringify({ service, status: state.Status, exitCode: state.ExitCode, runtimeFileError: output.includes('Runtime environment file'), moduleMissing: output.includes('ERR_MODULE_NOT_FOUND'), permissionError: /EACCES|Permission denied/.test(output), configurationError: /configuration.*(?:invalid|failed)|ConfigurationError|ConfigError|配置.*(?:失败|无效)/i.test(output), connectionRefused: output.includes('ECONNREFUSED'), upstreamMissing: output.includes('host not found in upstream'), errorCodes: [...new Set(output.match(/hai:[a-z]+:\d+/g))], connectionSignals: ['Connection is closed', 'Command timed out', 'max retries', 'NOAUTH', 'WRONGPASS', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'Invalid argument', 'not a constructor', 'ioredis', 'DENIED'].filter(signal => output.includes(signal)) })}\n`)
+    }
+    // 只输出缓存连接的协议、主机和端口；不输出 URL 凭据、密码或其它运行配置。
+    const configuration = String.raw`import ast,json,pathlib,urllib.parse
+file=pathlib.Path('/opt/hai/apps with spaces/e2e-fullstack-test/config/.env.runtime')
+values={}
+if file.is_file():
+ for line in file.read_text().splitlines():
+  if '=' not in line: continue
+  key,literal=line.split('=',1)
+  if key not in ['HAI_CACHE_TYPE','HAI_CACHE_URL','HAI_CACHE_HOST','HAI_CACHE_PORT','HAI_CACHE_TLS','HAI_CACHE_DB']: continue
+  try: value=ast.literal_eval(literal)
+  except: value=literal
+  if key=='HAI_CACHE_URL':
+   try:
+    target=urllib.parse.urlsplit(value)
+    value={'protocol':target.scheme,'host':target.hostname,'port':target.port,'authPresent':bool(target.username or target.password)}
+   except: value={'invalid':True}
+  values[key]=value
+print(json.dumps(values))`
+    const cacheTarget = await commands.run(runtime!, ['exec', fixture().containerId, 'python', '-c', configuration])
+    process.stderr.write(`Deployment cache target diagnostic: ${cacheTarget}\n`)
     const raw = await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'inspect', '--format', '{{json .State.Health}}', 'hai-e2e-fullstack-test-serv'])
     const health = JSON.parse(raw) as { Status: string, FailingStreak: number, Log?: Array<{ ExitCode: number, Start: string, End: string, Output: string }> }
     process.stderr.write(`Deployment health diagnostic: ${JSON.stringify({ status: health.Status, failures: health.FailingStreak, probes: health.Log?.map(probe => ({ exitCode: probe.ExitCode, durationMs: Date.parse(probe.End) - Date.parse(probe.Start), syntaxError: probe.Output.includes('SyntaxError'), moduleMissing: probe.Output.includes('ERR_MODULE_NOT_FOUND'), runtimeFileError: probe.Output.includes('Runtime environment file') })) })}\n`)
@@ -304,7 +330,8 @@ async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, o
   const backup = `${environment}.probe-${RUN_ID}`
   const endpoint = 'https://files.example.test:12348/files'
   const marker = `Runtime probe ${RUN_ID}`
-  const script = 'const fs=require("node:fs");const [file,backup,name,endpoint]=process.argv.slice(1);fs.copyFileSync(file,backup,fs.constants.COPYFILE_EXCL);fs.chmodSync(backup,0o600);let text=fs.readFileSync(file,"utf8");for(const [key,value] of Object.entries({HAI_CORE_NAME:name,HAI_STORAGE_PUBLICENDPOINT:endpoint})){const pattern=new RegExp("^"+key+"=.*$","m");const line=key+"="+JSON.stringify(value);text=pattern.test(text)?text.replace(pattern,()=>line):text+"\\n"+line+"\\n";}fs.writeFileSync(file+".probe-next",text,{mode:0o644});fs.renameSync(file+".probe-next",file);'
+  // 隔离服务器使用 Python 基础镜像，刻意不安装宿主 Node。
+  const script = 'import json,os,re,sys\nfile,backup,name,endpoint=sys.argv[1:]\nwith open(file,encoding="utf-8") as stream: text=stream.read()\ndescriptor=os.open(backup,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)\nwith os.fdopen(descriptor,"w",encoding="utf-8") as stream: stream.write(text)\nfor key,value in {"HAI_CORE_NAME":name,"HAI_STORAGE_PUBLICENDPOINT":endpoint}.items():\n pattern=re.compile("^"+key+"=.*$",re.MULTILINE)\n line=key+"="+json.dumps(value,ensure_ascii=False)\n text=pattern.sub(lambda match:line,text) if pattern.search(text) else text+"\\n"+line+"\\n"\nwith open(file+".probe-next","x",encoding="utf-8") as stream: stream.write(text)\nos.chmod(file+".probe-next",0o644)\nos.replace(file+".probe-next",file)'
   const base = `http://127.0.0.1:${fixture().webHostPort}`
   const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange`, fetch: (input, init) => commands.fetch(input, { ...init, signal: AbortSignal.timeout(5000) }) })
   const waitName = async (name: string) => {
@@ -316,7 +343,7 @@ async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, o
   }
   let modified = false
   try {
-    await commands.run(runtime!, ['exec', fixture().containerId, 'node', '-e', script, environment, backup, marker, endpoint])
+    await commands.run(runtime!, ['exec', fixture().containerId, 'python', '-c', script, environment, backup, marker, endpoint])
     modified = true
     await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'restart', 'hai-e2e-fullstack-test-serv'])
     await waitName(marker)
@@ -327,7 +354,7 @@ async function verifyRuntimeConfigurationRestart(commands: DeployTestCommands, o
   finally {
     try {
       if (modified) {
-        await commands.run(runtime!, ['exec', fixture().containerId, 'node', '-e', 'const fs=require("node:fs");fs.renameSync(process.argv[2],process.argv[1]);fs.chmodSync(process.argv[1],0o644);', environment, backup])
+        await commands.run(runtime!, ['exec', fixture().containerId, 'python', '-c', 'import os,sys;os.replace(sys.argv[2],sys.argv[1]);os.chmod(sys.argv[1],0o644)', environment, backup])
         await commands.run(runtime!, ['exec', fixture().containerId, 'podman', 'restart', 'hai-e2e-fullstack-test-serv'])
         await waitName(originalName)
       }

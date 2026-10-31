@@ -59,10 +59,10 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     if (!bundle.success || !bundle.data.bundlePath)
       throw new Error('Expected an HTTPS bundle')
     const read = (file: string) => execFileSync('tar', ['-xOf', bundle.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
-    const proxy = read('web.conf').replace('listen 8443 ssl', `listen ${DEPLOY_FIXTURE_API_PORT} ssl`).replace('listen 8080;', `listen ${DEPLOY_FIXTURE_WEB_PORT};`).replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replaceAll('/usr/share/nginx/html', '/tmp/hai-tls-www')
+    const proxy = read('.hai/web.conf').replace('listen 8443 ssl', `listen ${DEPLOY_FIXTURE_API_PORT} ssl`).replace('listen 8080;', `listen ${DEPLOY_FIXTURE_WEB_PORT};`).replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replaceAll('/usr/share/nginx/html', '/tmp/hai-tls-www')
     writeFileSync(path.join(project, 'nginx.conf'), `pid /tmp/hai-tls.pid;\nevents {}\nhttp {\ninclude /etc/nginx/mime.types;\n${proxy}\n}\n`)
     // 只缩短轮询间隔并替换夹具路径，证书比较、配置验证和重载逻辑来自公开部署包。
-    const watcher = read('https-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('/docker-entrypoint.sh nginx', 'nginx -c /tmp/hai-tls.conf').replace('watch_certificate &', 'watch_certificate &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')
+    const watcher = read('.hai/https-start.sh').replaceAll('/etc/nginx/tls', '/tmp/hai-tls-pem').replace('sleep 60', 'sleep 1').replaceAll('nginx -t', 'nginx -t -c /tmp/hai-tls.conf').replaceAll('nginx -s reload', 'nginx -s reload -c /tmp/hai-tls.conf').replace('/docker-entrypoint.sh nginx', 'nginx -c /tmp/hai-tls.conf').replace('watch_certificate &', 'watch_certificate &\nprintf "%s\\n" "$!" > /tmp/hai-tls-watcher.pid')
     writeFileSync(path.join(project, 'https-start.sh'), watcher)
     await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'mkdir -p /tmp/hai-tls-pem /tmp/hai-tls-www; printf "https fixture" > /tmp/hai-tls-www/index.html'])
     const copyCertificate = (files: { cert: string, key: string }) => {
@@ -175,7 +175,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
     if (!bundle.success || !bundle.data.bundlePath || !fixture)
       throw new Error('Expected an owned Nginx fixture and public deployment bundle')
-    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
     if (!standalone)
       expect(proxy).toContain('location /backend/v2/')
     if (base)
@@ -249,7 +249,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
     if (!bundle.success || !bundle.data.bundlePath)
       throw new Error('Expected a route deployment bundle')
-    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
     const configuration = path.join(project, 'nginx.conf')
     // 后端仅充当协议夹具；此处验证 Nginx 不吞掉文档请求、不将后端 401 改成前端成功页。
     const upstream = `server { listen 3000; location = /somepath/status { return 200 'backend healthy'; } location = /somepath/reference { return 401 'authenticated docs required'; } location = /somepath/schema.json { default_type application/json; return 200 '{"openapi":"3.1.0"}'; } location = /somepath/_hai/scalar.js { default_type application/javascript; return 200 'globalThis.scalarBackend = true'; } location = /somepath/ready { return 200 'ready'; } location /somepath/api/v1/ { return 401 'api authentication required'; } location / { return 404; } }`
@@ -324,7 +324,7 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
         throw new Error(bundle.error.message)
       if (!bundle.data.bundlePath)
         throw new Error('Expected a public deployment bundle')
-      const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+      const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
       expect(proxy).toContain(`client_max_body_size ${limits.encryptedPayloadBytes};`)
       const source = path.join(root, 'capacity-nginx.conf')
       writeFileSync(source, `pid /tmp/capacity-nginx-${maxPlaintextBytes}.pid;\nevents {}\nhttp {\n${proxy.replaceAll('http://serv:', 'http://127.0.0.1:')}\n}\n`)
@@ -389,9 +389,9 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     const bundle = await deploy.deployApp(project, { environment: 'test', bundleOnly: true, artifactDir: artifacts })
     if (!bundle.success || !bundle.data.bundlePath)
       throw new Error('Expected a request access deployment bundle')
-    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
-    const snapshot = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './request-access.yml'], { encoding: 'utf8', windowsHide: true })
-    const compose = JSON.parse(execFileSync('tar', ['-xOf', bundle.data.bundlePath, './compose.json'], { encoding: 'utf8', windowsHide: true }))
+    const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
+    const snapshot = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/request-access.yml'], { encoding: 'utf8', windowsHide: true })
+    const compose = JSON.parse(execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/compose.json'], { encoding: 'utf8', windowsHide: true }))
     const privateProxy = compose.services.serv.environment.HAI_DEPLOY_PRIVATE_PROXY
     expect(privateProxy).toBe('1')
     const address = (await executeDeployTestFixture(runtime, fixture, ['hostname', '-i'], { timeoutMs: 10_000 })).trim().split(/\s+/)[0]!

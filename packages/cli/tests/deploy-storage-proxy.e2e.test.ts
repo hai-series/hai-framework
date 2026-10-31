@@ -100,7 +100,7 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         expect(bundle.success, bundle.success ? undefined : bundle.error.message).toBe(true)
         if (!bundle.success || !bundle.data.bundlePath)
           throw new Error('Expected a storage deployment bundle')
-        const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+        const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
         expect(proxy).toContain(`location ^~ ${storageBasePath}/${bucket}/`)
         const configPath = path.join(root, 'web.conf')
         writeFileSync(configPath, proxy)
