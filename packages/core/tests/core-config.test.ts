@@ -47,14 +47,14 @@ describe('core.config', () => {
   // load
   // =========================================================================
 
-  it('对象与数组的环境覆盖替换整个节点，仍通过 Schema 验证', () => {
+  it('对象与数组整体替换节点后继续应用更细的覆盖，仍通过 Schema 验证', () => {
     writeFileSync(configPath, 'providers:\n  - name: console\n    type: console\n', 'utf-8')
     const providersSchema = z.object({ providers: z.array(z.object({ name: z.string(), type: z.string() })) })
     vi.stubEnv('HAI_APP_PROVIDERS', JSON.stringify([{ name: 'email', type: 'smtp' }]))
     expect(core.config.load('app', configPath, providersSchema)).toMatchObject({ success: true, data: { providers: [{ name: 'email', type: 'smtp' }] } })
     core.config.clear()
     vi.stubEnv('HAI_APP', JSON.stringify({ providers: [{ name: 'sms', type: 'sms' }] }))
-    expect(core.config.load('app', configPath, providersSchema)).toMatchObject({ success: true, data: { providers: [{ name: 'sms', type: 'sms' }] } })
+    expect(core.config.load('app', configPath, providersSchema)).toMatchObject({ success: true, data: { providers: [{ name: 'email', type: 'smtp' }] } })
     core.config.clear()
     vi.stubEnv('HAI_APP', 'invalid-object')
     expect(core.config.load('app', configPath, providersSchema).success).toBe(false)

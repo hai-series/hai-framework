@@ -341,7 +341,7 @@ core.config.clear() // 清除全部
 
 ##### dotenv ファイルと環境切り替え
 
-Node 専用の `core.config.loadEnvFiles({ mode, envDir })` は HaiResult を返し、`.env` → `.env.<mode>` → `.env.local` の順で読み込みます。既存のプロセス変数が最優先です。development/production は dev/prod に対応し、存在しないファイルは省略します。プロセスは変更しないため、success を確認してから代入します。公開設定と `.env.example` は Git 登録し、私有の `.env.local` は除外します。core.init は dotenv を読み込まず、ブラウザーでは SERVICE_UNAVAILABLE を返します。
+Node 専用の `core.config.loadEnvFiles({ mode, envDir })` は `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` → 既存のプロセス変数の順に統合し、プロセスを変更せず HaiResult を返します。development/production は dev/prod に対応し、存在しないファイルは省略、同一ファイルの重複キーはエラーです。success を確認してから代入します。公開環境ファイルと `.env.example` は Git 登録し、`.env.local` と `.env.*.local` は除外します。core.init は dotenv を読み込みません。ブラウザーのファイル API は SERVICE_UNAVAILABLE を返します。
 
 ```ts
 const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
@@ -359,8 +359,11 @@ camelCase の単語は分割しません。例：`ai.llm.apiKey` は `HAI_AI_LLM
 `ai.llm.maxTokens` は `HAI_AI_LLM_MAXTOKENS`。配列の添字も 1 階層として扱い、
 `ai.llm.models[0].temperature` は `HAI_AI_LLM_MODELS_0_TEMPERATURE` です。
 
-環境変数が存在すれば YAML を上書きし、YAML のスカラー規則で number / boolean などに変換します。
-変数がなければ YAML 値を保持します。オブジェクト・配列全体も同名の JSON 変数で置換でき、HAI_DB は接続設定全体、HAI_REACH_PROVIDERS は配信チャネル配列を置換します。親ノード全体の上書きが子フィールド変数より優先され、置換後も Schema 検証を行います。
+環境変数は YAML を上書きします。同一ソース内は親 JSON、子オブジェクト、個別フィールドの順に適用し、行順には依存しません。高優先度のソースがノード全体を置換した場合、そのノードに対する低優先度ソースの個別上書きは解除します。配列 JSON は一覧全体を置換し、添字変数は既存要素のみ変更できます。範囲外はエラーです。型は Schema に従い、文字列の先頭ゼロを保持します。空文字、false、0、空配列も明示値です。環境変数や JSON の文字列は再展開しません。
+
+宿主は `core.init({ configDir, configSchemas })` でモジュール Schema を明示します。スキャンでは構造と型のヒントだけを使い、業務検証はモジュール初期化または明示的な `validate` が実行します。`core.config.load(name, path, schema)` は即時検証します。YAML にない省略可能フィールドも個別変数で設定できます。Schema がない場合は既存の YAML/JSON 構造に従います。Core は業務モジュールを import・暗黙登録しません。
+
+生成処理は Node 専用の `core.config.resolve`、`mergeEnv`、`toEnv`、`parseEnv`、`stringifyEnv` を共用します。通常のオブジェクトは個別変数、配列は JSON で出力し、動的キーと空オブジェクトの意味を維持します。オブジェクト全体の置換を展開する配備生成処理は、最上位の `{}` リセットと個別変数を残し、古い YAML の値が復活することを防ぎます。手書き JSON は基礎値として個別変数で上書きできます。秘密を含む出力は保護された設定に保存し、全体をログに出さないでください。
 
 ```yaml
 # config/_ai.yml（core.init 扫描后配置名为 ai）

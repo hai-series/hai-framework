@@ -341,7 +341,7 @@ core.config.clear() // 清除全部
 
 ##### dotenv 文件与环境切换
 
-Node 专用的 `core.config.loadEnvFiles({ mode, envDir })` 返回 HaiResult，读取 `.env` → `.env.<mode>` → `.env.local`，已有进程环境最高；development/production 映射为 dev/prod，文件不存在时跳过。该函数不修改进程，调用方检查 success 后注入。除 `.env.local` 外的公共环境文件及完整说明 `.env.example` 提交 Git。`core.init` 不自动读取 dotenv，浏览器调用返回 SERVICE_UNAVAILABLE。
+Node 专用的 `core.config.loadEnvFiles({ mode, envDir })` 返回 HaiResult，按 `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` → 已有进程环境合并。development/production 映射为 dev/prod；缺失文件跳过，同文件重复键报错。该函数不修改进程，调用方检查 success 后注入。公共环境文件及 `.env.example` 提交 Git，`.env.local` 和 `.env.*.local` 不提交。`core.init` 不自动读取 dotenv，浏览器文件 API 返回 SERVICE_UNAVAILABLE。
 
 ```ts
 const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
@@ -359,8 +359,11 @@ core.init({ configDir: './config' })
 `ai.llm.maxTokens` 对应 `HAI_AI_LLM_MAXTOKENS`。数组索引也作为一层，例如
 `ai.llm.models[0].temperature` 对应 `HAI_AI_LLM_MODELS_0_TEMPERATURE`。
 
-环境变量存在时覆盖 YAML 值，并按 YAML 标量规则还原 number / boolean 等类型；
-环境变量不存在时保留 YAML 值。对象或数组节点也可用同名变量整体替换（JSON），例如 HAI_DB 切换完整连接配置、HAI_REACH_PROVIDERS 替换渠道数组。父节点整体覆盖优先于其子字段环境变量；替换后仍执行 Schema 校验。
+环境变量覆盖 YAML。同一来源先应用父 JSON，再应用子对象和具体字段，与赋值行序无关；高优先级来源整体替换节点时，清除低来源对该节点的细项覆盖。数组 JSON 替换列表，索引变量只修改已有元素，越界报错。Schema 决定字段类型，字符串保留前导零；空串、false、0 和空数组都是显式值。JSON 与变量中的文本不再次执行插值。
+
+宿主可通过 `core.init({ configDir, configSchemas })` 显式提供模块 Schema，扫描时仅使用结构与类型提示，完整业务校验仍在模块初始化或显式 `validate` 中执行；`core.config.load(name, path, schema)` 则立即校验。合法的可选字段即使未写入 YAML，也可通过环境细项设置。未提供 Schema 时按 YAML/JSON 已有结构解析。Core 不导入或隐式注册业务模块。
+
+生成工具共用 Node 专属的 `core.config.resolve`、`mergeEnv`、`toEnv`、`parseEnv` 和 `stringifyEnv`。默认展开对象、保留数组 JSON；动态键和空对象按原意保留。整体替换对象再展开时，部署生成器保留最上层的 `{}` 重置标记及实际细项，避免旧 YAML 字段重新生效。用户手写 JSON 仍可作为基础值并由细项覆盖。含秘密的返回值只保存到受保护配置，不整体记录日志。
 
 ```yaml
 # config/_ai.yml（core.init 扫描后配置名为 ai）

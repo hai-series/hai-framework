@@ -341,7 +341,7 @@ core.config.clear() // 清除全部
 
 ##### Dotenv files and environment modes
 
-Node-only `core.config.loadEnvFiles({ mode, envDir })` returns HaiResult and merges `.env` → `.env.<mode>` → `.env.local`, with existing process variables taking priority. development/production map to dev/prod; missing files are skipped. It does not mutate the process: check success before assigning. Track public environment files and `.env.example`; ignore private `.env.local`. core.init does not load dotenv. Browser calls return SERVICE_UNAVAILABLE.
+Node-only `core.config.loadEnvFiles({ mode, envDir })` merges `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` → existing process variables. It returns HaiResult without mutating the process. development/production map to dev/prod; missing files are skipped and duplicate keys within a file are rejected. Check success before assigning. Track public environment files and `.env.example`; ignore `.env.local` and `.env.*.local`. core.init does not load dotenv. Browser file APIs return SERVICE_UNAVAILABLE.
 
 ```ts
 const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
@@ -359,8 +359,11 @@ and camelCase is not split. For example, `ai.llm.apiKey` maps to `HAI_AI_LLM_API
 and `ai.llm.maxTokens` to `HAI_AI_LLM_MAXTOKENS`. Array indexes are also levels:
 `ai.llm.models[0].temperature` maps to `HAI_AI_LLM_MODELS_0_TEMPERATURE`.
 
-Existing environment variables override YAML and are parsed with YAML scalar rules into numbers, booleans, and other native types.
-Absent variables leave YAML unchanged. Object/array nodes can also be replaced wholesale with same-name JSON variables, such as HAI_DB for connection configuration or HAI_REACH_PROVIDERS for channel arrays. A parent replacement takes precedence over child variables; schema validation still runs afterward.
+Environment variables override YAML. Within one source, apply parent JSON, nested objects, then specific fields, regardless of line order. A higher-priority source replacing a whole node clears lower-source field overrides for that node. Array JSON replaces the list; indexed variables modify existing elements and reject out-of-range indexes. Schema types preserve string literals, including leading zeros. Empty strings, false, zero, and empty arrays are explicit values. Environment and JSON literals are not interpolated again.
+
+Hosts can pass module schemas through `core.init({ configDir, configSchemas })`. Scanning uses only structure and type hints; module initialization or explicit `validate` still performs business validation. `core.config.load(name, path, schema)` validates immediately. Optional schema fields can receive environment overrides even when absent from YAML. Without a schema, resolution follows the existing YAML/JSON structure. Core does not import or implicitly register business modules.
+
+Generators share the Node-only `core.config.resolve`, `mergeEnv`, `toEnv`, `parseEnv`, and `stringifyEnv` methods. Objects expand into field variables by default; arrays retain JSON. Dynamic keys and empty objects retain their meaning. When expanding a whole-object replacement, deployment generators retain its highest `{}` reset marker alongside the fields so old YAML fields cannot reappear. User-provided JSON remains a base that more specific fields can override. Protect outputs containing secrets and never log the complete configuration.
 
 ```yaml
 # config/_ai.yml（core.init 扫描后配置名为 ai）

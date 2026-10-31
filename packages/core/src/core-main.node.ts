@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
 import { access } from './functions/core-function-access.node.js'
-import { config } from './functions/core-function-config.node.js'
+import { config, loadConfigStructure } from './functions/core-function-config.node.js'
 import { installRequestContext } from './functions/core-function-context.js'
 import { logger } from './functions/core-function-logger.node.js'
 import { installRequestLocales } from './i18n/core-i18n-utils.js'
@@ -217,7 +217,7 @@ function initCore(options: CoreOptions = {}): void {
       }
     }
     else {
-      const result = config.load(item.name, item.filePath)
+      const result = loadConfigStructure(item.name, item.filePath, options.configSchemas?.[item.name])
       if (result.success) {
         logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
       }

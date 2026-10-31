@@ -569,6 +569,8 @@ export interface CoreOptions {
    * ```
    */
   configDir?: string
+  /** 宿主显式提供模块 Schema，供扫描时识别可选字段和环境变量类型；Core 不注册业务模块。 */
+  configSchemas?: Readonly<Record<string, z.ZodType>>
   /** 是否启用配置文件监听（默认 false） */
   watchConfig?: boolean
 }

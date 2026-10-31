@@ -11,14 +11,13 @@ import type { HaiError, HaiResult, WatchCallback } from '../core-types.js'
 import { existsSync, readFileSync, watch } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import { parseEnv } from 'node:util'
 import { parse } from 'yaml'
 
 // ─── 配置文件监听 ───
 
 import { err, HaiConfigError, ok } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
-import { typeUtils } from '../utils/core-util-type.js'
+import { mergeEnv, parseEnvironment, resolveEnvironment, stringifyEnv, toEnv } from './core-function-environment.node.js'
 
 /**
  * 缓存项（存储已加载的配置及其元信息）
@@ -35,142 +34,13 @@ interface CacheEntry<T = unknown> {
   filePath: string
   /** Zod 校验 Schema（重载时复用，无 Schema 加载时为 undefined） */
   schema?: ZodType<T>
+  /** 宿主提供的结构提示；模块仍自行执行完整业务校验。 */
+  schemaHint?: ZodType
   /** 加载时间戳（毫秒） */
   loadedAt: number
 }
 
 // ─── 内部工具 ───
-
-/** 环境变量插值正则（支持 ${VAR} 与 ${VAR:default}） */
-const ENV_VAR_PATTERN = /\$\{([^}:]+)(?::([^}]*))?\}/g
-
-/** 判断整个字符串是否恰好是单个 ${VAR} 或 ${VAR:default}（用于类型还原） */
-const FULL_VAR_PATTERN = /^\$\{[^}:]+(?::[^}]*)?\}$/
-
-/**
- * 将环境变量字符串按 YAML 标量规则还原类型。
- *
- * @param value - 环境变量原始字符串
- * @returns 空字符串保持不变；其余值尽量还原为 YAML 原生类型
- */
-function parseEnvValue(value: string): unknown {
-  // YAML 会把空文档解析为 null；空环境变量仍是明确的字符串值，不能改变其类型。
-  if (value === '')
-    return ''
-
-  try {
-    const parsed = parse(value)
-    return parsed === undefined ? value : parsed
-  }
-  catch {
-    return value
-  }
-}
-
-/**
- * 将配置名或 YAML 路径片段规范化为环境变量片段。
- *
- * camelCase 不拆词，例如 apiKey → APIKEY；非字母数字字符统一为下划线。
- *
- * @param segment - 配置名、键名或数组索引
- * @returns 可用于环境变量名的片段
- */
-function normalizeEnvSegment(segment: string): string {
-  return segment
-    .replace(/[^a-z0-9]+/gi, '_')
-    .replace(/^_+|_+$/g, '')
-    .toUpperCase()
-}
-
-/**
- * 构建配置项的约定环境变量名。
- *
- * @example `ai` + `llm.apiKey` → `HAI_AI_LLM_APIKEY`
- *
- * @param name - 配置名称
- * @param path - YAML 中从根到叶子的键路径；数组索引也作为一段
- * @returns 以 HAI 开头的环境变量名
- */
-function buildConventionEnvName(name: string, path: string[]): string {
-  return ['HAI', name, ...path]
-    .map(normalizeEnvSegment)
-    .filter(Boolean)
-    .join('_')
-}
-
-/**
- * 解析配置中的环境变量。
- *
- * 每个叶子配置项都会优先读取 `HAI_<配置名>_<YAML 路径>`；
- * 约定变量不存在时再解析显式 `${VAR}`，显式语法用于指定特殊变量名。
- *
- * @param value - 任意配置值（字符串、数组、对象或原始值）
- * @param name - 配置名称
- * @param path - 当前值的 YAML 路径
- * @returns 插值后的结果；当环境变量缺失且未提供默认值时返回 ENV_VAR_MISSING 错误
- */
-function resolveEnv(value: unknown, name: string, path: string[] = []): HaiResult<unknown> {
-  // 对象和数组也可整体覆盖，云配置可以注入原 YAML 未声明的连接字段。
-  const conventionEnvValue = process.env[buildConventionEnvName(name, path)]
-  if (conventionEnvValue !== undefined)
-    return ok(parseEnvValue(conventionEnvValue))
-
-  if (typeof value === 'string') {
-    ENV_VAR_PATTERN.lastIndex = 0
-    const hasExplicitEnv = ENV_VAR_PATTERN.test(value)
-    ENV_VAR_PATTERN.lastIndex = 0
-
-    if (!hasExplicitEnv)
-      return ok(value)
-
-    let result = value
-    // 避免在 while 条件中赋值（满足 lint 规则 no-cond-assign）
-    while (true) {
-      const match = ENV_VAR_PATTERN.exec(value)
-      if (!match)
-        break
-
-      const [fullMatch, varName, defaultValue] = match
-      const envValue = process.env[varName]
-
-      // 未提供默认值且环境变量不存在时，返回错误
-      if (envValue === undefined && defaultValue === undefined) {
-        return err(HaiConfigError.CONFIG_ENV_VAR_MISSING, i18n.coreM('core_configEnvVarMissing', { params: { varName } }))
-      }
-      result = result.replace(fullMatch, () => envValue ?? defaultValue ?? '')
-    }
-
-    // 当原值整体是单个 ${VAR:default} 时，插值结果需还原为 YAML 原生类型。
-    if (FULL_VAR_PATTERN.test(value))
-      return ok(parseEnvValue(result))
-
-    return ok(result)
-  }
-
-  if (Array.isArray(value)) {
-    const results: unknown[] = []
-    for (const [index, item] of value.entries()) {
-      const r = resolveEnv(item, name, [...path, String(index)])
-      if (!r.success)
-        return r
-      results.push(r.data)
-    }
-    return ok(results)
-  }
-
-  if (typeUtils.isObject(value)) {
-    const results: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(value)) {
-      const r = resolveEnv(v, name, [...path, k])
-      if (!r.success)
-        return r
-      results[k] = r.data
-    }
-    return ok(results)
-  }
-
-  return ok(value)
-}
 
 // ─── 配置管理器 ───
 
@@ -250,7 +120,7 @@ function notifyWatchCallbacks(name: string, result: HaiResult<unknown>): void {
  * @param filePath - YAML 文件路径
  * @returns 解析结果；可能的错误码：FILE_NOT_FOUND / PARSE_ERROR / ENV_VAR_MISSING
  */
-function loadYaml(name: string, filePath: string): HaiResult<unknown> {
+function loadYaml(name: string, filePath: string, schema?: ZodType): HaiResult<unknown> {
   if (!existsSync(filePath)) {
     return err(HaiConfigError.CONFIG_FILE_NOT_FOUND, i18n.coreM('core_configFileNotExist', { params: { filePath } }))
   }
@@ -258,7 +128,7 @@ function loadYaml(name: string, filePath: string): HaiResult<unknown> {
   try {
     const content = readFileSync(filePath, 'utf-8')
     const parsed = parse(content)
-    return resolveEnv(parsed, name)
+    return resolveEnvironment({ name, value: parsed, schema })
   }
   catch (error) {
     return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', { params: { filePath } }), error)
@@ -280,7 +150,7 @@ function loadConfig<T>(
   filePath: string,
   schema: ZodType<T>,
 ): HaiResult<T> {
-  const yamlResult = loadYaml(name, filePath)
+  const yamlResult = loadYaml(name, filePath, schema)
   if (!yamlResult.success)
     return yamlResult
 
@@ -318,6 +188,21 @@ function loadAndCache<T>(
 }
 
 /**
+ * 扫描时仅借助宿主 Schema 识别路径和类型，保留原有模块初始化校验边界。
+ * @example 模块内部上下文
+ * ```ts
+ * const loaded = loadConfigStructure('app', '/srv/app/config/app.yml')
+ * if (!loaded.success) loaded.error.message
+ * ```
+ */
+export function loadConfigStructure(name: string, filePath: string, schemaHint?: ZodType): HaiResult<unknown> {
+  const result = loadYaml(name, filePath, schemaHint)
+  if (result.success)
+    configCache.set(name, { data: result.data, filePath, schemaHint, loadedAt: Date.now() })
+  return result
+}
+
+/**
  * 校验已加载的配置并写回缓存。
  *
  * 从缓存中取出原始数据重新用 Schema 校验，校验通过后更新缓存。
@@ -332,7 +217,10 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T>
     return err(createNotLoadedError(name))
   }
 
-  const parseResult = schema.safeParse(entry.data)
+  const resolved = resolveEnvironment({ name, value: entry.data, schema }, true)
+  if (!resolved.success)
+    return resolved
+  const parseResult = schema.safeParse(resolved.data)
   if (!parseResult.success) {
     return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parseResult.error.issues)
   }
@@ -365,7 +253,7 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
   }
 
   // 无 Schema 时直接加载 YAML（不做校验），避免 schema 为 undefined 导致运行时崩溃
-  const result = entry.schema ? loadConfig(name, entry.filePath, entry.schema) : loadYaml(name, entry.filePath)
+  const result = entry.schema ? loadConfig(name, entry.filePath, entry.schema) : loadYaml(name, entry.filePath, entry.schemaHint)
   if (result.success) {
     configCache.set(name, {
       ...entry,
@@ -508,9 +396,66 @@ function clearCache(name?: string): void {
  */
 export const config = {
   /**
+   * 合并从低到高的环境来源；高来源父项替换旧节点，同来源细项覆盖父 JSON。
+   * @param layers - 按优先级排列的字面变量。
+   * @returns 合并后的变量，可能含秘密。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * const value = core.config.mergeEnv([{ HAI_APP_NAME: 'base' }, { HAI_APP_NAME: 'test' }])
+   * ```
+   */
+  mergeEnv,
+  /**
+   * 解析 dotenv 字面文本，拒绝重复键，不执行 shell 或变量展开。
+   * @param text - dotenv 文本，可能包含秘密。
+   * @returns 字面变量；重复键抛出不含变量值的错误。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * const value = core.config.parseEnv('HAI_APP_NAME=Example\n')
+   * ```
+   */
+  parseEnv: parseEnvironment,
+  /**
+   * 无损编码 dotenv，父变量排在细项前；含秘密时只能写入受保护文件。
+   * @param values - 字面变量，不进行脱敏。
+   * @param options - 输出语法目标，默认 Node dotenv。
+   * @param options.target - Compose 目标同时处理其美元符号插值规则。
+   * @returns dotenv 文本；非法变量名抛错。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * const value = core.config.stringifyEnv({ HAI_APP_NAME: 'Example' })
+   * ```
+   */
+  stringifyEnv,
+  /**
+   * 按已有结构或 Schema 解析父 JSON 和细项，不修改缓存或进程环境。
+   * @param options - 配置名、原始结构、变量、可选 Schema 和缺失插值规则。
+   * @returns 解析结果；调用方仍须执行最终 Schema 校验。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * const value = core.config.resolve({ name: 'app', value: { name: 'Example' }, environment: { HAI_APP_NAME: 'Test' } })
+   * ```
+   */
+  resolve: (options: Parameters<typeof resolveEnvironment>[0]) => resolveEnvironment(options),
+  /**
+   * 默认将对象展开为细项；数组、动态字典和空对象保留 JSON。
+   * @param options - 完整变量前缀、配置值和可选 Schema。
+   * @returns 字面环境变量，不脱敏；非法名称抛错。
+   * @example
+   * ```ts
+   * import { core } from '@h-ai/core'
+   * const value = core.config.toEnv({ prefix: 'HAI_APP', value: { name: 'Example', tags: ['demo'] } })
+   * ```
+   */
+  toEnv,
+  /**
    * 读取 dotenv 文件并按统一顺序合并，不修改进程环境。
    *
-   * 优先级：已有进程环境 > .env.local > .env.<mode> > .env。
+   * 优先级：已有进程环境 > .env.<mode>.local > .env.local > .env.<mode> > .env。
    * development/production 分别映射到 dev/prod；不存在的文件跳过。
    * 返回值可能包含私有配置，仅在 Node 启动/构建边界注入，不下发浏览器。
    * @param options - 文件所在目录及环境模式
@@ -531,16 +476,15 @@ export const config = {
       return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'))
     const envDir = options.envDir ?? process.cwd()
     try {
-      const merged: Record<string, string> = {}
-      for (const name of ['.env', `.env.${mode}`, '.env.local']) {
+      const layers: Array<Record<string, string | undefined>> = []
+      for (const name of ['.env', `.env.${mode}`, '.env.local', `.env.${mode}.local`]) {
         const file = join(envDir, name)
         if (existsSync(file))
-          Object.assign(merged, parseEnv(readFileSync(file, 'utf8')))
+          layers.push(parseEnvironment(readFileSync(file, 'utf8')))
       }
-      for (const name of Object.keys(merged)) {
-        if (process.env[name] !== undefined)
-          merged[name] = process.env[name]
-      }
+      const declared = new Set(layers.flatMap(layer => Object.keys(layer)))
+      layers.push(Object.fromEntries(Object.entries(process.env).filter(([name]) => declared.has(name) || name.startsWith('HAI_'))))
+      const merged = mergeEnv(layers)
       return ok(merged)
     }
     catch {

@@ -8,7 +8,7 @@
  */
 
 import type { ZodType } from 'zod'
-import type { ConfigFn, HaiError, HaiResult, WatchCallback } from '../core-types.js'
+import type { HaiError, HaiResult, WatchCallback } from '../core-types.js'
 
 import { err, HaiCommonError } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
@@ -35,7 +35,7 @@ function unsupportedError(): HaiError {
  * if (!result.success) result.error.message
  * ```
  */
-export const config: ConfigFn = {
+export const config = {
   loadEnvFiles(_options: { mode: string, envDir?: string }): HaiResult<Record<string, string>> {
     return unsupported<Record<string, string>>()
   },
