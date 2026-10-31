@@ -19,6 +19,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { request as requestHttps } from 'node:https'
 import { basename, dirname, join, resolve } from 'node:path'
 import { rootCertificates } from 'node:tls'
+import { parseEnv } from 'node:util'
 import { resolveFeedbackBudget } from '@h-ai/api-contract/feedback'
 import { core, CoreConfigSchema, err, ok, RequestAccessConfigSchema } from '@h-ai/core'
 import { createTransportBodyPolicy, parseTransportServerKeyRing, resolveTransportBodyLimits } from '@h-ai/crypto'
@@ -413,7 +414,15 @@ export function createDockerSshProvider(
     const envPath = join(artifactDir, '.env.runtime')
     const nodeRuntime = primaryService === 'serv' || scan.isSvelteKit
     const startupOverrides: Record<string, string> = nodeRuntime ? { NODE_OPTIONS: '', HAI_DEPLOY_PRIVATE_PROXY: '' } : {}
-    writeFileSync(envPath, serializeEnvFile(env, { ...sidecar.env, ...startupOverrides }), { mode: 0o600 })
+    const runtimeEnvironment = serializeEnvFile(env, { ...sidecar.env, ...startupOverrides })
+    const middlewareEnv = serializeEnvFile(sidecar.env, Object.fromEntries(Object.entries(env).filter(([name]) => !Object.hasOwn(sidecar.env, name))))
+    const envVarsSet = [...new Set([
+      ...Object.keys(parseEnv(runtimeEnvironment)),
+      ...Object.keys(parseEnv(middlewareEnv)),
+      ...(nodeRuntime ? ['NODE_OPTIONS'] : []),
+      ...(hasWebProxy || gateway ? ['HAI_DEPLOY_PRIVATE_PROXY'] : []),
+    ])]
+    writeFileSync(envPath, runtimeEnvironment, { mode: 0o600 })
     if (requestAccessSnapshot)
       writeFileSync(join(artifactDir, 'request-access.yml'), requestAccessSnapshot, { mode: 0o600 })
     writeFileSync(join(artifactDir, 'middleware-runtime.env'), serializeEnvFile(sidecar.containerEnv), { mode: 0o600 })
@@ -474,7 +483,7 @@ export function createDockerSshProvider(
       proxyService,
       storageRouting,
       containerPort,
-      middlewareEnv: serializeEnvFile(sidecar.env, Object.fromEntries(Object.entries(env).filter(([name]) => !Object.hasOwn(sidecar.env, name)))),
+      middlewareEnv,
       accountSources: describeDeploymentVariableSources(options?.envDir ?? scan.envDir ?? appDir, options?.environment ?? 'prod', env, ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']),
       healthPaths,
       httpsAssets,
@@ -482,7 +491,7 @@ export function createDockerSshProvider(
       cacheDirectory: join(resolveProjectDirectory(appDir), '.hai', 'cache', 'images'),
     })
     if (options?.bundleOnly)
-      return ok({ url: '', deploymentId, status: 'packaged', provider: 'docker-ssh', healthCheck: 'skipped', envVarsSet: Object.keys(env), ...bundle })
+      return ok({ url: '', deploymentId, status: 'packaged', provider: 'docker-ssh', healthCheck: 'skipped', envVarsSet, ...bundle })
     if (!ssh)
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
     const ping = await ssh.ping()
@@ -574,7 +583,7 @@ export function createDockerSshProvider(
       status: 'ready',
       provider: 'docker-ssh',
       healthCheck: 'passed',
-      envVarsSet: Object.keys(env),
+      envVarsSet,
       bundlePath: bundle.bundlePath,
     }
     logger.info('docker-ssh deployment complete', { url: applicationUrl, deploymentId })

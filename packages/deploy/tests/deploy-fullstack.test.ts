@@ -856,6 +856,11 @@ it('node 启动参数保存在有效装配中，运行文件不重复保留忽�
   const compose = JSON.parse(readBundleFile(directory, 'compose.json'))
   expect(compose.services.serv.environment.NODE_OPTIONS).toContain('--enable-source-maps')
   expect(compose.services.serv.environment.HAI_DEPLOY_PRIVATE_PROXY).toBe('1')
+  if (result.success) {
+    expect(result.data.envVarsSet).toContain('NODE_OPTIONS')
+    expect(result.data.envVarsSet).toContain('HAI_SERV')
+    expect(result.data.envVarsSet).not.toContain('HAI_SERV_SERVER_HOST')
+  }
 })
 
 it.each(['file', 'process'])('初始密码说明仅显示实际 %s 来源，不公开密码', async (source) => {

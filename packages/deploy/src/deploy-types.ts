@@ -192,7 +192,7 @@ export interface DeployResult {
   bundlePath?: string
   /** 手工搬运和启动说明；仅打包不代表服务器已运行。 */
   instructions?: string
-  /** 已设置的环境变量名列表 */
+  /** 保留的有效环境变量名；packaged 状态仅表示交付计划，尚未在服务器设置。 */
   envVarsSet: string[]
   /** 部署 Provider 名称（如 vercel / docker-ssh），容器部署时返回 */
   provider?: string
