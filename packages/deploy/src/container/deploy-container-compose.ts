@@ -919,13 +919,14 @@ ${renderWebLocation(webBasePath)}  location = ${webBasePath}/runtime-config.js {
  * 编码 dotenv 值，不进行脱敏；含密钥时只能写入受保护的运行环境文件。
  * @param env - 要序列化的运行变量，可能包含秘密。
  * @param overrides - 后加载的运行变量；被其覆盖的项不重复写入本文件。
+ * @param target - Node 后端字面文件，或静态 Web 的 Compose env_file 编码。
  * @returns 保留字面量值且正确转义的 dotenv 文本，不进行脱敏。
  * @example 模块内部上下文
  * ```ts
  * const content = serializeEnvFile({ NODE_ENV: 'production', HAI_CORE_NAME: 'Shop app' })
  * ```
  */
-export function serializeEnvFile(env: Record<string, string>, overrides: Record<string, string> = {}): string {
+export function serializeEnvFile(env: Record<string, string>, overrides: Record<string, string> = {}, target: 'node' | 'compose' = 'node'): string {
   const effective = generatedVariables(mergeEnvironmentLayers([env, overrides]))
   for (const name of Object.keys(overrides)) {
     for (const key of Object.keys(effective)) {
@@ -933,5 +934,5 @@ export function serializeEnvFile(env: Record<string, string>, overrides: Record<
         delete effective[key]
     }
   }
-  return core.config.stringifyEnv(effective)
+  return core.config.stringifyEnv(effective, { target })
 }

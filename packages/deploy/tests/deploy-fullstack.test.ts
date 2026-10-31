@@ -84,13 +84,14 @@ function writeArtifact(web = true, appVersion = '1.2.3'): void {
   writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', hasWeb: web, appVersion, buildId: 'release-1', images }))
 }
 
-it.each(['serv', 'kit'])('全量和应用增量交付携带 %s 独立请求策略快照，宿主环境保留原始文件引用', async (module) => {
+it.each(['serv', 'kit'].flatMap(module => ['object', 'field'].map(source => ({ module, source }))))('全量和应用增量交付携带 $module/$source 独立请求策略快照，宿主环境保留原始文件引用', async ({ module, source }) => {
   const policyFile = join(root, 'config/access.yaml')
   writeFileSync(policyFile, 'rules:\n  - id: external\n    paths: [/custom-api/v2/external/**]\n    encryption: disabled\n    allowIps: [192.0.2.0/24]\n')
   const configName = module === 'serv' ? 'HAI_SERV' : 'HAI_KIT'
   const file = { file: './config/access.yaml' }
   const settings = module === 'serv' ? { http: { apiPrefix: '/custom-api/v2', access: file } } : { access: file, transport: false }
-  writeFileSync(join(root, '.env.test'), `${configName}='${JSON.stringify(settings)}'\n`)
+  const field = module === 'serv' ? 'HAI_SERV_HTTP_ACCESS_FILE' : 'HAI_KIT_ACCESS_FILE'
+  writeFileSync(join(root, '.env.test'), `${configName}='${JSON.stringify(settings)}'\n${source === 'field' ? `${field}=./config/access.yaml\n` : ''}`)
   const primary = module === 'serv' ? 'serv' : 'web'
   if (module === 'kit') {
     writeFileSync(join(root, 'svelte.config.js'), 'export default {}')

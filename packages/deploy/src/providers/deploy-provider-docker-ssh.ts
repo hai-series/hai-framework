@@ -38,7 +38,7 @@ import {
 import { createHttpsAssets, renderHttpsProxy } from '../container/deploy-https.js'
 import { shellArgument } from '../container/deploy-scripts.js'
 import { createSshExecutor } from '../container/deploy-ssh.js'
-import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../deploy-environment.js'
+import { describeDeploymentVariableSources, loadDeploymentConfig, loadDeploymentEnvironment, mergeEnvironmentLayers, saveDeploymentEnvironment } from '../deploy-environment.js'
 import { resolveProjectDirectory } from '../deploy-functions.js'
 import { deployM } from '../deploy-i18n.js'
 import { getDeployCommandState } from '../deploy-recovery.js'
@@ -225,7 +225,9 @@ export function createDockerSshProvider(
     const healthPaths = hasWebProxy ? ['/_hai/web-health', `${webBasePath}/`] : scan.isSvelteKit ? [`${webBasePath}/`] : primaryService === 'serv' ? [] : standaloneWebConfig ? ['/health', `${webBasePath}/`] : ['/health']
 
     // 先保存开通结果和 sidecar 凭据，传输失败后仍可检查与复用配置。
-    const { env, sidecar } = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    const plannedRuntime = buildRuntimeEnv(appDir, projectName, scan, provisionEnv, containerPort, options, appEnv, container?.s3Engine)
+    const { sidecar } = plannedRuntime
+    let { env } = plannedRuntime
     if (https && scan.isSvelteKit && !env.ORIGIN)
       env.ORIGIN = url
     const managedStorage = sidecar.services.includes('storage') ? JSON.parse(sidecar.env.HAI_STORAGE) as { bucket: string, secretAccessKey: string, publicEndpoint?: unknown } : undefined
@@ -302,7 +304,7 @@ export function createDockerSshProvider(
       Object.assign(server.data, prepared.data.settings)
       requestAccessSnapshot = prepared.data.snapshot
       if (requestAccessSnapshot)
-        env.HAI_SERV = JSON.stringify(server.data)
+        env = mergeEnvironmentLayers([env, { HAI_SERV: JSON.stringify(server.data) }])
     }
     let feedbackTransportBytes: number | undefined
     if (scan.haiModules?.includes('@h-ai/feedback')) {
@@ -330,7 +332,7 @@ export function createDockerSshProvider(
         Object.assign(kit.data, prepared.data.settings)
         requestAccessSnapshot = prepared.data.snapshot
         if (requestAccessSnapshot)
-          env.HAI_KIT = JSON.stringify(kit.data)
+          env = mergeEnvironmentLayers([env, { HAI_KIT: JSON.stringify(kit.data) }])
       }
       const transport = (kit.data as Record<string, unknown>).transport
       if (transport && typeof transport === 'object') {
@@ -371,7 +373,7 @@ export function createDockerSshProvider(
         return err(HaiDeployError.CONFIG_ERROR, error instanceof RangeError ? error.message : deployM(managedStorage ? 'deploy_storageProxyInvalid' : 'deploy_transportBodyLimitInvalid'))
       }
       // 每次从当前配置生成，避免上次运行环境里的父对象遮蔽新修改；保留明确 Origin。
-      env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && (config.ssh || https) ? url : cors?.origin ?? '*' } })
+      env = mergeEnvironmentLayers([env, { HAI_SERV: JSON.stringify({ ...server.data, cors: { ...cors, origin: (!cors?.origin || cors.origin === '*') && (config.ssh || https) ? url : cors?.origin ?? '*' } }) }])
     }
     else if (gateway) {
       try {
@@ -395,7 +397,7 @@ export function createDockerSshProvider(
       webProxy = renderHttpsProxy(webProxy, https, hasWebProxy ? webContainerPort : gateway ? 8080 : containerPort)
     if (https && primaryService === 'serv' && !hasWebProxy) {
       const cors = server.data.cors as { origin?: string } | undefined
-      env.HAI_SERV = JSON.stringify({ ...server.data, cors: { ...cors, origin: !cors?.origin || cors.origin === '*' ? url : cors.origin } })
+      env = mergeEnvironmentLayers([env, { HAI_SERV: JSON.stringify({ ...server.data, cors: { ...cors, origin: !cors?.origin || cors.origin === '*' ? url : cors.origin } }) }])
     }
     // 一次交付对应一个目录；自定义同名输出也不覆盖已经可复制的旧包。
     const requestedOutput = options?.output ?? join(deploymentRoot, `bundle-${projectName}-${deploymentId}-${artifact.appVersion}.tar.gz`)
@@ -414,7 +416,7 @@ export function createDockerSshProvider(
     const envPath = join(artifactDir, '.env.runtime')
     const nodeRuntime = primaryService === 'serv' || scan.isSvelteKit
     const startupOverrides: Record<string, string> = nodeRuntime ? { NODE_OPTIONS: '', HAI_DEPLOY_PRIVATE_PROXY: '' } : {}
-    const runtimeEnvironment = serializeEnvFile(env, startupOverrides)
+    const runtimeEnvironment = serializeEnvFile(env, startupOverrides, nodeRuntime ? 'node' : 'compose')
     const envVarsSet = [...new Set([
       ...Object.keys(parseEnv(runtimeEnvironment)),
       ...(nodeRuntime ? ['NODE_OPTIONS'] : []),

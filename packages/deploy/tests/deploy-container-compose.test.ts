@@ -8,6 +8,7 @@
  */
 
 import type { ScanResult } from '../src/deploy-types.js'
+import { spawnSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -423,5 +424,26 @@ describe('serializeEnvFile', () => {
     const content = serializeEnvFile({ A: '1', B: 'x=y' })
     expect(core.config.parseEnv(content)).toEqual({ A: '1', B: 'x=y' })
     expect(content.endsWith('\n')).toBe(true)
+  })
+  it('静态 Web 的真实 Compose env_file 无损保留引号、美元符号、多行和反斜线', (context) => {
+    if (spawnSync('docker', ['compose', 'version'], { windowsHide: true, timeout: 5000, stdio: 'ignore' }).status !== 0)
+      context.skip()
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-compose-env-literal-'))
+    if (path.dirname(path.resolve(directory)) !== path.resolve(os.tmpdir()) || !path.basename(directory).startsWith('hai-compose-env-literal-'))
+      throw new Error('Unexpected Compose environment fixture cleanup directory')
+    try {
+      const expected = { PUBLIC_NAME: 'O\'Brien $literal with "quotes"', PUBLIC_BLOCK: 'one\nO\'Brien \\path $literal' }
+      fs.writeFileSync(path.join(directory, '.env.runtime'), serializeEnvFile(expected, {}, 'compose'))
+      const compose = path.join(directory, 'compose.json')
+      fs.writeFileSync(compose, JSON.stringify({ services: { web: { image: 'nginx:1.29.8', env_file: ['.env.runtime'] } } }))
+      const result = spawnSync('docker', ['compose', '-p', 'hai-literal-check', '--project-directory', directory, '-f', compose, 'config', '--format', 'json'], { encoding: 'utf8', windowsHide: true, timeout: 20_000 })
+      expect(result.status, result.stderr).toBe(0)
+      // config 输出可再次作为 Compose 输入，美元会再次转义；比较其规范化文档值。
+      const canonical = Object.fromEntries(Object.entries(expected).map(([name, value]) => [name, value.replaceAll('$', () => '$$')]))
+      expect(JSON.parse(result.stdout).services.web.environment).toEqual(canonical)
+    }
+    finally {
+      fs.rmSync(directory, { recursive: true, force: true })
+    }
   })
 })
