@@ -182,7 +182,8 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
     const content = document.toString()
     if (!existsSync(path) || readFileSync(path, 'utf8') !== content)
       writeFileSync(path, content)
-    return saveDeploymentEnvironment(environment, updates, { replace: options.configuration ? [requirement.envPrefix] : [] })
+    // 禁用只切换功能开关；保留已有连接与凭据，确保 YAML 节点仍可解析并允许重新启用。
+    return saveDeploymentEnvironment(environment, updates, { replace: options.configuration && backend !== 'disabled' ? [requirement.envPrefix] : [] })
   }
   catch {
     return err(HaiDeployError.ENV_VAR_FAILED, deployM('deploy_environmentWriteFailed'))

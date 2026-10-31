@@ -19,21 +19,30 @@ import { loadConfigText } from './helpers/config.js'
 afterEach(() => vi.unstubAllEnvs())
 
 describe('environment configuration', () => {
-  it.each([false, true])('禁用 LDAP 后再次构建的配置仍有效，并保留已有连接：%s', (configured) => {
+  it.each(['unset', 'yaml', 'environment'])('禁用 LDAP 后再次构建的配置仍有效，并保留已有连接：%s', (source) => {
     const directory = mkdtempSync(join(tmpdir(), 'hai-optional-ldap-'))
     try {
       mkdirSync(join(directory, 'config'))
       const path = join(directory, 'config/_iam.yml')
       const connection = { url: 'ldaps://directory.example.test:636', bindDn: 'cn=service,dc=example,dc=test', bindPassword: 'fixture-only', searchBase: 'ou=users,dc=example,dc=test' }
-      writeFileSync(path, `${generateConfigFile('iam')}\n${configured ? `ldap: ${JSON.stringify(connection)}\n` : ''}`)
+      writeFileSync(path, `${generateConfigFile('iam')}\n${source === 'yaml' ? `ldap: ${JSON.stringify(connection)}\n` : ''}`)
       writeFileSync(join(directory, '.env.test'), '')
       const environment = loadDeploymentEnvironment({ environment: 'test', envDir: directory })
       expect(environment.success).toBe(true)
       if (!environment.success)
         throw new Error(environment.error.message)
+      if (source === 'environment') {
+        const enabled = saveMiddlewareEnvironment(environment.data, {
+          appDir: directory,
+          requirement: { service: 'ldap', backend: 'disabled', source: 'iam', configName: 'iam', configPath: ['ldap'], envPrefix: 'HAI_IAM_LDAP', config: {} },
+          backend: 'ldap',
+          configuration: connection,
+        })
+        expect(enabled.success).toBe(true)
+      }
       const saved = saveMiddlewareEnvironment(environment.data, {
         appDir: directory,
-        requirement: { service: 'ldap', backend: 'disabled', source: 'iam', configName: 'iam', configPath: ['ldap'], envPrefix: 'HAI_IAM_LDAP', config: configured ? connection : {} },
+        requirement: { service: 'ldap', backend: 'disabled', source: 'iam', configName: 'iam', configPath: ['ldap'], envPrefix: 'HAI_IAM_LDAP', config: source === 'unset' ? {} : connection },
         backend: 'disabled',
         configuration: {},
       })
@@ -49,7 +58,7 @@ describe('environment configuration', () => {
         throw new Error(resolved.error.message)
       const result = IamConfigSchema.parse(resolved.data)
       expect(result.login.ldap).toBe(false)
-      expect(result.ldap).toEqual(configured ? expect.objectContaining(connection) : undefined)
+      expect(result.ldap).toEqual(source === 'unset' ? undefined : expect.objectContaining(connection))
     }
     finally {
       // directory 由本用例 mkdtempSync 返回，仅删除本用例拥有的临时工程。
