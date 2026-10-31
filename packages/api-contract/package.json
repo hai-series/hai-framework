@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/api-contract",
   "type": "module",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "description": "Hai Framework public API contracts powered by oRPC and Zod.",
   "license": "Apache-2.0",
   "exports": {

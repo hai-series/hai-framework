@@ -1,7 +1,7 @@
 {
   "name": "api-service",
   "type": "module",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "private": true,
   "description": "hai Agent Framework - 无头 REST API 服务示例应用",
   "keywords": [
