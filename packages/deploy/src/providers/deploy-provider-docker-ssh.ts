@@ -414,18 +414,16 @@ export function createDockerSshProvider(
     const envPath = join(artifactDir, '.env.runtime')
     const nodeRuntime = primaryService === 'serv' || scan.isSvelteKit
     const startupOverrides: Record<string, string> = nodeRuntime ? { NODE_OPTIONS: '', HAI_DEPLOY_PRIVATE_PROXY: '' } : {}
-    const runtimeEnvironment = serializeEnvFile(env, { ...sidecar.env, ...startupOverrides })
-    const middlewareEnv = serializeEnvFile(sidecar.env, Object.fromEntries(Object.entries(env).filter(([name]) => !Object.hasOwn(sidecar.env, name))))
+    const runtimeEnvironment = serializeEnvFile(env, startupOverrides)
     const envVarsSet = [...new Set([
       ...Object.keys(parseEnv(runtimeEnvironment)),
-      ...Object.keys(parseEnv(middlewareEnv)),
       ...(nodeRuntime ? ['NODE_OPTIONS'] : []),
       ...(hasWebProxy || gateway ? ['HAI_DEPLOY_PRIVATE_PROXY'] : []),
     ])]
     writeFileSync(envPath, runtimeEnvironment, { mode: 0o600 })
     if (requestAccessSnapshot)
       writeFileSync(join(artifactDir, 'request-access.yml'), requestAccessSnapshot, { mode: 0o600 })
-    writeFileSync(join(artifactDir, 'middleware-runtime.env'), serializeEnvFile(sidecar.containerEnv), { mode: 0o600 })
+    writeFileSync(join(artifactDir, 'middleware-runtime.env'), core.config.stringifyEnv(sidecar.containerEnv, { target: 'compose' }), { mode: 0o600 })
     if (options?.environment) {
       const environment = loadDeploymentEnvironment({ environment: options.environment, envDir: options.envDir ?? scan.envDir ?? appDir })
       if (!environment.success)
@@ -485,7 +483,7 @@ export function createDockerSshProvider(
       proxyService,
       storageRouting,
       containerPort,
-      middlewareEnv,
+      managedAppKeys: Object.keys(sidecar.env),
       accountSources: describeDeploymentVariableSources(options?.envDir ?? scan.envDir ?? appDir, options?.environment ?? 'prod', env, ['HAI_ADMIN_DEFAULT_PASSWORD', 'HAI_AUDIT_ADMIN_PASSWORD', 'HAI_CONFIG_ADMIN_PASSWORD', 'HAI_BUSINESS_OPERATOR_PASSWORD']),
       healthPaths,
       httpsAssets,

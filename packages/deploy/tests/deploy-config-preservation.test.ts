@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
-import { deploy, loadDeploymentEnvironment } from '../src/index.js'
+import { deploy, loadDeploymentConfig, loadDeploymentEnvironment } from '../src/index.js'
 
 let root: string | undefined
 afterEach(async () => {
@@ -61,12 +61,19 @@ it('云开通保留同后端业务配置，以新连接替换旧认证并完整�
   if (!loaded.success)
     return
   for (const values of [loaded.data.values, deployed]) {
-    expect(JSON.parse(values.HAI_DB)).toMatchObject({ pool: { max: 7 }, operationLog: { write: true }, database: 'hai', url: expect.stringContaining('@new-db') })
-    expect(JSON.parse(values.HAI_DB)).not.toHaveProperty('password')
-    expect(JSON.parse(values.HAI_CACHE)).toMatchObject({ keyPrefix: 'business:', maxRetries: 8, retryDelay: 90, url: expect.stringContaining('@new-cache') })
-    expect(JSON.parse(values.HAI_CACHE)).not.toHaveProperty('sentinel')
-    expect(JSON.parse(values.HAI_STORAGE)).toMatchObject({ prefix: 'tenant', publicEndpoint: 'https://files.example.test/portal/files', publicUrl: 'https://cdn.example.test', operationLog: { read: true }, bucket: 'new-bucket', endpoint: 'https://new-r2.example.test' })
-    expect(JSON.parse(values.HAI_REACH_PROVIDERS)).toEqual([
+    const resolved = (name: string) => {
+      const result = loadDeploymentConfig(name, join(root!, 'config', `_${name}.yml`), values)
+      expect(result.success).toBe(true)
+      if (!result.success)
+        throw new Error(result.error.message)
+      return result.data
+    }
+    expect(resolved('db')).toMatchObject({ pool: { max: 7 }, operationLog: { write: true }, database: 'hai', url: expect.stringContaining('@new-db') })
+    expect(resolved('db')).not.toHaveProperty('password')
+    expect(resolved('cache')).toMatchObject({ keyPrefix: 'business:', maxRetries: 8, retryDelay: 90, url: expect.stringContaining('@new-cache') })
+    expect(resolved('cache')).not.toHaveProperty('sentinel')
+    expect(resolved('storage')).toMatchObject({ prefix: 'tenant', publicEndpoint: 'https://files.example.test/portal/files', publicUrl: 'https://cdn.example.test', operationLog: { read: true }, bucket: 'new-bucket', endpoint: 'https://new-r2.example.test' })
+    expect(resolved('reach').providers).toEqual([
       expect.objectContaining({ name: 'alerts', host: 'new-email', from: 'new@example.test', pass: 'new-password' }),
       expect.objectContaining({ name: 'sms', endpoint: 'custom-sms.example.test', signName: 'new-sign' }),
       expect.objectContaining({ name: 'webhook', idempotent: true, redirect: 'error', requireHttps: true }),

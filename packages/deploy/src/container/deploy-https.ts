@@ -5,7 +5,7 @@ import { readFileSync, statSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { resolve } from 'node:path'
 import { deployM } from '../deploy-i18n.js'
-import { shellArgument } from './deploy-scripts.js'
+import { shellArgument } from './deploy-shell.js'
 
 /**
  * 官方 Certbot 客户端的固定版本，随离线包导出，目标服务器不拉取镜像。
@@ -149,8 +149,8 @@ function createPrepareScript(config: HttpsConfig): string {
 test "$mode" != prepare || {
   # 宿主 root/release 保持私密；容器仅可读取独立挂载的证书目录。
   chmod 700 "$root" "$release"
-  chmod 755 "$release/tls"
-  chmod 444 "$release/tls/fullchain.pem" "$release/tls/privkey.pem"
+  chmod 755 "$release/.hai/tls"
+  chmod 444 "$release/.hai/tls/fullchain.pem" "$release/.hai/tls/privkey.pem"
 }
 `
   }

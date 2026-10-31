@@ -203,6 +203,20 @@ const ServicesConfigSchema = z.object({
   sms: z.discriminatedUnion('provisioner', [AliyunSmsServiceSchema]).optional(),
 }).optional()
 
+/**
+ * 从开通器实际 Schema 获取表单字段，避免 CLI 再维护凭据清单。
+ * @param provisioner - 开通器标识。
+ * @returns 对应配置字段名，不含判别字段。
+ * @example 模块内部上下文
+ * ```ts
+ * const fields = provisionerFields('neon') // ['apiKey']
+ * ```
+ */
+export function provisionerFields(provisioner: string): string[] {
+  const schema = [NeonServiceSchema, UpstashServiceSchema, R2ServiceSchema, ResendServiceSchema, AliyunSmsServiceSchema].find(item => item.shape.provisioner.value === provisioner)
+  return schema ? Object.keys(schema.shape).filter(name => name !== 'provisioner') : []
+}
+
 // ─── 完整配置 Schema ───
 
 /**

@@ -47,6 +47,24 @@ it('更新代理配置挂载时保留原镜像、TLS 挂载与其他服务', () 
   expect(JSON.parse(result.stdout)).toEqual({ services: { ...previous.services, web: { ...previous.services.web, volumes: [mount, '/certs:/etc/nginx/tls:ro'] } } })
 })
 
+it('局部发布清单保留未选服务的后端身份与托管配置键，更新选中服务的记录', () => {
+  const previous = { partial: false, metadata: { 'state-backends': 'db postgresql database-data\nstorage rustfs objects-data\n', 'managed-app-keys': 'HAI_DB\nHAI_STORAGE\n', 'managed-bindings': 'DB_PASSWORD HAI_DB prefix\n' } }
+  const incoming = { partial: true, deploymentId: 'next', metadata: { 'state-backends': 'storage rustfs objects-data\n', 'managed-app-keys': 'HAI_STORAGE\n', 'managed-bindings': 'STORAGE_PASSWORD HAI_STORAGE prefix\n' } }
+  const result = run('metadata', [previous, incoming])
+  expect(result.status, result.stderr).toBe(0)
+  const manifest = JSON.parse(result.stdout)
+  expect(manifest.deploymentId).toBe('next')
+  expect(manifest.metadata['state-backends']).toBe(previous.metadata['state-backends'])
+  expect(manifest.metadata['managed-app-keys']).toBe(previous.metadata['managed-app-keys'])
+  expect(manifest.metadata['managed-bindings']).toBe('DB_PASSWORD HAI_DB prefix\nSTORAGE_PASSWORD HAI_STORAGE prefix\n')
+})
+
+it('从完整 Compose 快照取得实际服务，无需保留额外 services 文件', () => {
+  const result = run('services', [{ services: { serv: { image: 'serv:v1' }, web: { image: 'web:v1' } } }])
+  expect(result.status, result.stderr).toBe(0)
+  expect(result.stdout).toBe('serv\nweb\n')
+})
+
 it.each(['{"a":1,"a":2}', '{"metadata":{"health":"private",}}', '{"a":[1,]}', '{"a":true} trailing'])('拒绝无效 JSON 且不输出私有内容：%s', (document) => {
   const result = run('read', [document], { field: 'metadata.health', expected: 'string', required: '1' })
   expect(result.status).not.toBe(0)

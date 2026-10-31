@@ -2,6 +2,7 @@
 import { deployM } from '../deploy-i18n.js'
 import { createComposeContainerLookupScript } from './deploy-compose-identity.js'
 import { createManagedSecretValidationScript, resolveComposeNamedVolumes } from './deploy-managed-secrets.js'
+import { createDeploymentManifestFunctions } from './deploy-manifest.js'
 
 const backendFamilies: Record<string, readonly string[]> = {
   db: ['postgresql', 'mysql'],
@@ -50,15 +51,21 @@ export function createBackendStateAssets(projectName: string, compose: {
   }
   return {
     'state-backends': tuples.length ? `${tuples.join('\n')}\n` : '',
-    'resolve-backend-state.sh': createBackendStateScript()
-      .replace('@@PROJECT@@', projectName)
-      .replace('@@MANAGED_VALUES_VALIDATOR@@', createManagedSecretValidationScript())
-      .replace('@@COMPOSE_CONTAINER_LOOKUP@@', createComposeContainerLookupScript()),
+    'resolve-backend-state.sh': createBackendStateScript(projectName),
   }
 }
 
-/** 只在 apply.sh 持有项目部署锁时执行，不执行配置文件中的代码，不输出凭据。 */
-function createBackendStateScript(): string {
+/**
+ * 生成持久卷与引擎身份检查代码，由部署入口持锁调用。
+ * @param projectName - 已归一化的项目及环境身份。
+ * @returns 合入 apply.sh 的 Shell 代码，不执行配置内容或输出凭据。
+ * @example 模块内部上下文
+ * ```ts
+ * const script = createBackendStateScript('shop-prod')
+ * void script
+ * ```
+ */
+export function createBackendStateScript(projectName: string): string {
   return String.raw`#!/bin/sh
 set -eu
 umask 077
@@ -71,11 +78,16 @@ previous=$4
 mode=$5
 project='hai-@@PROJECT@@'
 state="$root/persistent-backends"
-snapshot="$release/previous-state-backends"
+snapshot="$release/.hai/previous-state-backends"
 case "$mode" in check|commit|recover) ;; *) fail 'Invalid backend state mode.';; esac
 case "$runtime" in docker|podman) ;; *) fail 'Backend state requires a resolved container runtime.';; esac
 case "$previous" in .|..|*[!A-Za-z0-9_.-]*) fail 'Invalid previous deployment identity.';; esac
 test -d "$root" && test ! -L "$root" && test -d "$release" && test ! -L "$release" || fail 'Invalid backend state directory.'
+test -d "$release/.hai" && test ! -L "$release/.hai" || fail 'Invalid backend state assets directory.'
+@@MANIFEST_FUNCTIONS@@
+deployment_metadata_init
+trap deployment_metadata_cleanup EXIT
+backend_manifest=$(deployment_metadata_file "$release" state-backends)
 regular() { test -f "$1" && test ! -L "$1" || fail "Backend state must be a regular file: $1"; }
 absent_or_regular() { if [ -e "$1" ] || [ -L "$1" ]; then regular "$1"; fi; }
 valid_tuples() {
@@ -136,7 +148,7 @@ exists_volume() { printf '%s\n' "$known" | grep -Fxq "$1"; }
 ledger_tuple() { printf '%s\n' "$ledger" | awk -v volume="$1" '$3==volume {print}'; }
 @@MANAGED_VALUES_VALIDATOR@@
 @@COMPOSE_CONTAINER_LOOKUP@@
-# 仅供旧状态补证：卷挂载和镜像均取自同项目、同角色的唯一实际容器。
+# 状态补证：卷挂载和镜像均取自同项目、同角色的唯一实际容器。
 container_binding() {
   binding_service=$1
   binding_family=$2
@@ -189,59 +201,34 @@ $(sed -n '7,$p' "$snapshot")
 RECOVERY_TUPLES
   exit 0
 fi
-regular "$release/state-backends"
-valid_tuples "$release/state-backends" 0 || fail 'Invalid backend manifest; rebuild the deployment bundle.'
+regular "$backend_manifest"
+valid_tuples "$backend_manifest" 0 || fail 'Invalid backend manifest; rebuild the deployment bundle.'
 active=''
 if [ -n "$previous" ]; then
   baseline="$root/releases/$previous"
   test -d "$root/releases" && test ! -L "$root/releases" && test -d "$baseline" && test ! -L "$baseline" || fail 'Invalid successful deployment directory.'
-  regular "$baseline/services"
-  regular "$baseline/compose-files"
-  LC_ALL=C awk 'NF {if(NF!=1 || $1!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ || seen[$1]++) exit 1}' "$baseline/services" || fail 'Invalid successful deployment services.'
+  regular "$baseline/.hai/compose.json"
+  baseline_services=$(deployment_services_file "$baseline")
+  previous_manifest=$(deployment_metadata_file "$baseline" state-backends)
+  regular "$previous_manifest"
+  valid_tuples "$previous_manifest" 0 || fail 'Invalid successful backend manifest.'
+  LC_ALL=C awk 'NF {if(NF!=1 || $1!~/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/ || seen[$1]++) exit 1}' "$baseline_services" || fail 'Invalid successful deployment services.'
   for active_service in db storage vecdb; do
-    if ! grep -Fxq "$active_service" "$baseline/services"; then continue; fi
+    if ! grep -Fxq "$active_service" "$baseline_services"; then continue; fi
     active_family=''
     active_volume=''
-    while IFS= read -r compose_file; do
-      compose_directory=$(dirname -- "$compose_file")
-      compose_id=$(basename -- "$compose_directory")
-      case "$compose_id" in ''|.|..|*[!A-Za-z0-9_.-]*) fail 'Invalid successful Compose identity.';; esac
-      test "$compose_directory" = "$root/releases/$compose_id" && test ! -L "$compose_directory" || fail 'Successful Compose file escapes the deployment directory.'
-      regular "$compose_file"
-      previous_manifest="$compose_directory/state-backends"
-      absent_or_regular "$previous_manifest"
-      if [ -f "$previous_manifest" ]; then
-        valid_tuples "$previous_manifest" 1 || fail 'Invalid successful backend manifest.'
-        recorded=$(awk -v service="$active_service" '$1==service {print}' "$previous_manifest")
-        if [ -n "$recorded" ]; then
-          active_family=$(printf '%s\n' "$recorded" | awk '{print $2}')
-          active_volume=$(printf '%s\n' "$recorded" | awk '{print $3}')
-        fi
-      fi
-    done < "$baseline/compose-files"
-    if [ -z "$active_family" ]; then
-      # 兼容旧包只读取已知字段，不 source dotenv；凭据本身不是后端身份的证据。
-      case "$active_service" in
-        db|vecdb)
-          regular "$baseline/middleware.env"
-          state_key=HAI_DB
-          if [ "$active_service" = vecdb ]; then state_key=HAI_VECDB; fi
-          active_family=$(awk -F= -v key="$state_key" '$1==key {if($0~/"type"[[:space:]]*:[[:space:]]*"postgresql"/) print "postgresql"; else if($0~/"type"[[:space:]]*:[[:space:]]*"mysql"/) print "mysql"; else if($0~/"type"[[:space:]]*:[[:space:]]*"qdrant"/) print "qdrant"; else if($0~/"type"[[:space:]]*:[[:space:]]*"pgvector"/) print "pgvector"; else if($0~/"type"[[:space:]]*:[[:space:]]*"chroma"/) print "chroma"}' "$baseline/middleware.env")
-          ;;
-        storage)
-          regular "$baseline/middleware-runtime.env"
-          active_family=$(awk -F= '$1=="RUSTFS_SECRET_KEY" {print "rustfs"} $1=="MINIO_ROOT_PASSWORD" {print "minio"}' "$baseline/middleware-runtime.env")
-          ;;
-      esac
-    fi
-    # 旧两列清单或丢失账本只能以当前真实容器的命名卷挂载补证，不猜默认卷名。
-    if [ -z "$active_volume" ] || [ -z "$(ledger_tuple "$active_volume")" ]; then
-      active_volume=$(container_binding "$active_service" "$active_family" "$active_volume" false) || fail "Cannot confirm the active persistent backend: $active_service."
-    fi
-    printf '%s %s %s\n' "$active_service" "$active_family" "$active_volume" | LC_ALL=C awk 'NF!=3 || !(($1=="db" && $2~/^(postgresql|mysql)$/) || ($1=="storage" && $2~/^(rustfs|minio)$/) || ($1=="vecdb" && $2~/^(qdrant|pgvector|chroma)$/)) {exit 1}' || fail "Unknown previous backend for $active_service; explicit migration is required."
+    recorded=$(awk -v service="$active_service" '$1==service {print}' "$previous_manifest")
+    test -n "$recorded" || fail "Installed backend identity is missing: $active_service."
+    active_family=$(printf '%s\n' "$recorded" | awk '{print $2}')
+    active_volume=$(printf '%s\n' "$recorded" | awk '{print $3}')
+    printf '%s %s %s\n' "$active_service" "$active_family" "$active_volume" | LC_ALL=C awk 'NF!=3 || !(($1=="db" && $2~/^(postgresql|mysql)$/) || ($1=="storage" && $2~/^(rustfs|minio)$/) || ($1=="vecdb" && $2~/^(qdrant|pgvector|chroma)$/)) {exit 1}' || fail "Unknown installed backend for $active_service."
     exists_volume "$active_volume" || fail "Active persistent volume is missing: $active_volume. Restore its backup instead of creating an empty replacement."
     confirmed=$(ledger_tuple "$active_volume")
     test -z "$confirmed" || test "$confirmed" = "$active_service $active_family $active_volume" || fail "Active persistent backend conflicts with the protected ledger: $active_service."
+    if [ -z "$confirmed" ]; then
+      proven_volume=$(container_binding "$active_service" "$active_family" "$active_volume" false)
+      test "$proven_volume" = "$active_volume" || fail "Cannot confirm the active persistent volume: $active_service."
+    fi
     active=$(printf '%s\n%s %s %s\n' "$active" "$active_service" "$active_family" "$active_volume" | sed '/^$/d')
   done
 fi
@@ -274,7 +261,7 @@ while IFS=' ' read -r candidate_service candidate_family candidate_volume; do
     test -z "$users" || fail "A container still references missing persistent volume $candidate_volume. Restore or migrate explicitly."
   fi
   merge_tuple "$candidate_service" "$candidate_family" "$candidate_volume"
-done < "$release/state-backends"
+done < "$backend_manifest"
 absent_or_regular "$snapshot"
 if [ -e "$snapshot.next" ] || [ -L "$snapshot.next" ] || [ -e "$state.next" ] || [ -L "$state.next" ]; then fail 'Backend state staging file already exists; inspect the interrupted deployment before retrying.'; fi
 if [ "$mode" = check ]; then exit 0; fi
@@ -287,5 +274,5 @@ mv -f -- "$snapshot.next" "$snapshot"
 (set -C; printf '%s\n' "$state_content" > "$state.next") || fail 'Cannot stage the persistent backend ledger.'
 chmod 600 "$state.next"
 mv -f -- "$state.next" "$state"
-`
+`.replace('@@PROJECT@@', () => projectName).replace('@@MANAGED_VALUES_VALIDATOR@@', () => createManagedSecretValidationScript()).replace('@@COMPOSE_CONTAINER_LOOKUP@@', () => createComposeContainerLookupScript()).replace('@@MANIFEST_FUNCTIONS@@', () => createDeploymentManifestFunctions())
 }

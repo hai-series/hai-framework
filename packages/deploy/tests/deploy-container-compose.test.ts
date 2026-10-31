@@ -11,6 +11,7 @@ import type { ScanResult } from '../src/deploy-types.js'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { core } from '@h-ai/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
@@ -107,7 +108,7 @@ describe('buildRuntimeEnv 按功能追加 sidecar', () => {
     expect(Object.keys(sidecar.env).every(name => name.startsWith('HAI_'))).toBe(true)
     const compose = parse(generateComposeFile({ projectName: 'isolated', appVersion: '1.0.0', imageRef: 'app:1', hostPort: 3000, containerPort: 3000, sidecar }))
     expect(compose.services.serv.env_file).toBeUndefined()
-    expect(compose.services.serv.volumes).toContain('./middleware.env:/run/hai/middleware.env:ro')
+    expect(compose.services.serv.volumes).toContain('./config:/run/hai/config:ro')
     for (const service of ['db', 'storage', 'ldap'])
       expect(compose.services[service].env_file).toEqual(['middleware-runtime.env'])
     expect(compose).not.toHaveProperty('services.db.environment.POSTGRES_PASSWORD')
@@ -389,7 +390,7 @@ describe('generateComposeFile', () => {
 })
 
 describe('serializeEnvFile', () => {
-  it('清除所有被父级配置和后加载文件覆盖的项，保留独立配置与原始输入', () => {
+  it('生成细项保留粗细覆盖结果，排除独立注入项且不修改原始输入', () => {
     const env = {
       HAI_SERV: '{"http":{"access":{"file":"/run/hai/request-access.yml"}}}',
       HAI_SERV_HTTP: '{"access":false}',
@@ -411,23 +412,16 @@ describe('serializeEnvFile', () => {
     }
     const original = { ...env }
     const content = serializeEnvFile(env, { HAI_STORAGE: '{"type":"s3","bucket":"managed"}' })
-    expect(content).toContain('HAI_SERV=')
-    expect(content).not.toContain('HAI_CORE_LOGGING=')
-    expect(content).toContain('HAI_CONFIG_ADMIN_PASSWORD=')
-    expect(content).toContain('HAI_CRYPTO_TRANSPORT_SERVERKEYRING=fixture-ring')
-    expect(content).toContain('HAI_CORE_ENV=production')
-    expect(content).toContain('HAI_E2E_MOCK=1')
-    expect(content).toContain('PUBLIC_API_BASE=')
-    expect(content).not.toMatch(/^HAI_SERV_HTTP/m)
-    expect(content).not.toMatch(/^HAI_CORE_LOGGING_LEVEL=/m)
-    expect(content).not.toMatch(/^HAI_STORAGE/m)
-    expect(content).not.toContain('C:/local')
+    const effective = core.config.parseEnv(content)
+    expect(effective).toMatchObject({ HAI_SERV_HTTP_ACCESS_FILE: 'C:/local/request-access.yml', HAI_SERV_HTTP_HEALTH_PATH: '/ignored', HAI_CORE_LOGGING_LEVEL: 'debug', HAI_CONFIG_ADMIN_PASSWORD: 'fixture-value', HAI_CRYPTO_TRANSPORT_SERVERKEYRING: 'fixture-ring', HAI_CORE_ENV: 'production', HAI_E2E_MOCK: '1', PUBLIC_API_BASE: '/api/v1' })
+    expect(effective.HAI_SERV).toBe('{}')
+    expect(effective.HAI_CORE_LOGGING).toBeUndefined()
+    expect(Object.keys(effective).some(name => name === 'HAI_STORAGE' || name.startsWith('HAI_STORAGE_'))).toBe(false)
     expect(env).toEqual(original)
   })
   it('序列化为 KEY=VALUE 行', () => {
     const content = serializeEnvFile({ A: '1', B: 'x=y' })
-    expect(content).toContain('A=1')
-    expect(content).toContain('B=x=y')
+    expect(core.config.parseEnv(content)).toEqual({ A: '1', B: 'x=y' })
     expect(content.endsWith('\n')).toBe(true)
   })
 })

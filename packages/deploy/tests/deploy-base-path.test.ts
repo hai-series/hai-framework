@@ -41,14 +41,14 @@ it.each(['fullstack', 'sveltekit', 'vite'])('子目录部署包记录路径、�
     throw new Error('Expected a prefix deployment bundle')
   const read = (file: string) => execFileSync('tar', ['-xOf', bundle.data.bundlePath!, `./${file}`], { encoding: 'utf8', windowsHide: true })
   expect(JSON.parse(read('manifest.json'))).toMatchObject({ webBasePath: '/yyy/sub' })
-  expect(read('web-base-path').trim()).toBe('/yyy/sub')
-  expect(read('health-paths').trim().split(/\r?\n/)).toEqual(ssr ? ['/yyy/sub/'] : kind === 'fullstack' ? ['/yyy/sub/health', '/_hai/web-health', '/yyy/sub/'] : ['/health', '/yyy/sub/'])
+  expect(JSON.parse(read('manifest.json')).metadata['web-base-path'].trim()).toBe('/yyy/sub')
+  expect(JSON.parse(read('manifest.json')).metadata['health-paths'].trim().split(/\r?\n/)).toEqual(ssr ? ['/yyy/sub/'] : kind === 'fullstack' ? ['/yyy/sub/health', '/_hai/web-health', '/yyy/sub/'] : ['/health', '/yyy/sub/'])
   expect(read('apply.sh')).toContain('Web base path changed')
   if (!ssr) {
-    expect(read('web.conf')).toContain('location /yyy/sub/')
-    expect(read('web.conf')).toContain('location = /yyy/sub/runtime-config.js')
+    expect(read('.hai/web.conf')).toContain('location /yyy/sub/')
+    expect(read('.hai/web.conf')).toContain('location = /yyy/sub/runtime-config.js')
     if (kind === 'fullstack') {
-      const proxy = read('web.conf')
+      const proxy = read('.hai/web.conf')
       for (const endpoint of ['health', 'ready', 'docs', 'openapi.json', '_hai/scalar.js'])
         expect(proxy).toContain(`location = /yyy/sub/${endpoint} {`)
       expect(proxy).toContain('location /yyy/sub/api/v1/')
@@ -57,7 +57,7 @@ it.each(['fullstack', 'sveltekit', 'vite'])('子目录部署包记录路径、�
       expect(proxy).not.toContain('location /api/v1/')
     }
     if (kind === 'vite')
-      expect(read('web.conf')).toContain('alias /tmp/hai-runtime-config/runtime-config.js;')
+      expect(read('.hai/web.conf')).toContain('alias /tmp/hai-runtime-config/runtime-config.js;')
   }
   expect(readFileSync(path.join(artifacts, 'manifest.json'), 'utf8')).toContain('prefix-build')
 })

@@ -81,12 +81,12 @@ it('applies same-source SSH leaves after their parent JSON irrespective of decla
   expect(readDeployment(root)).toMatchObject({ provider: { ssh: { host: 'leaf.test', username: 'deploy', password: '  0007  ' } } })
 })
 
-it('lets a selected public deployment target replace old global JSON and lower-source SSH leaves', () => {
+it('uses shared private JSON above public mode settings with the same source order as Core', () => {
   const root = fixture()
   writeFileSync(join(root, '.env'), 'HAI_DEPLOY_PROVIDER_SSH_HOST=base-leaf.test\nHAI_DEPLOY_PROVIDER_SSH_PORT=2222\n')
   writeFileSync(join(root, '.env.local'), 'HAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","expose":{"hostPort":9000},"ssh":{"host":"legacy.test","username":"legacy","password":"legacy"}}\'\n')
   writeFileSync(join(root, '.env.test'), 'HAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","expose":{"hostPort":8081},"ssh":{"host":"selected.test","username":"selected","port":2203}}\'\n')
-  expect(readDeployment(root)).toEqual({ provider: { type: 'docker-ssh', expose: { hostPort: 8081 }, ssh: { host: 'selected.test', username: 'selected', port: 2203 } } })
+  expect(readDeployment(root)).toMatchObject({ provider: { type: 'docker-ssh', expose: { hostPort: 9000 }, ssh: { host: 'legacy.test', username: 'legacy', password: 'legacy' } } })
 })
 
 it('applies mode-private leaves above the selected parent and process parent above all lower leaves', () => {
@@ -132,7 +132,7 @@ it('saves separate test/prod private targets and secrets without modifying the s
       return
     const provider = { type: 'docker-ssh', expose: { hostPort: 8080 }, ssh: { host: `${mode}.test`, username: 'deploy', auth: 'password', password: `  000-${mode}  ` } }
     expect(saveDeploymentEnvironment(snapshot.data, { HAI_DEPLOY_PROVIDER: JSON.stringify(provider), HAI_DB_PASSWORD: `${mode}-db-password` }, { private: true }).success).toBe(true)
-    expect(readDeployment(root, mode)).toEqual({ provider })
+    expect(readDeployment(root, mode)).toEqual({ environment: mode, provider })
     const privateFile = readFileSync(join(root, `.env.${mode}.local`), 'utf8')
     expect(privateFile).toContain(`${mode}-db-password`)
     expect(readFileSync(join(root, `.env.${mode}`), 'utf8')).not.toContain('password')
@@ -155,7 +155,7 @@ it('switches a saved middleware backend without deleting its old shared fallback
   const selected = loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(selected.success).toBe(true)
   if (selected.success)
-    expect(JSON.parse(selected.data.values.HAI_DB)).toEqual({ type: 'sqlite', database: './data/new.db' })
+    expect(selected.data.values).toMatchObject({ HAI_DB_TYPE: 'sqlite', HAI_DB_DATABASE: './data/new.db' })
   expect(readFileSync(join(root, '.env.local'), 'utf8')).toBe(legacy)
   expect(existsSync(join(root, '.env.test.local'))).toBe(true)
 })

@@ -124,10 +124,9 @@ CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已�
 
 部署 SDK 的环境优先级从高到低为：
 
-- `HAI_DEPLOY_*`：进程 > `.env.<环境>.local` > `.env.<环境>` > 旧 `.env.local` > `.env`。
-- 其他模块：进程 > `.env.<环境>.local` > 旧 `.env.local` > `.env.<环境>` > `.env`，保留原有私有凭据优先级。
+所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
 
-新保存的连接和中间件凭据写入忽略 Git 的 `.env.<环境>.local`；公共后端和地址保留在 `.env.<环境>`。旧 `.env.local` 继续作为共享兼容回退，不自动迁移或删除；所选环境明确的部署目标优先。按环境私有文件仅由部署 SDK 加载，Core 的普通应用加载规则不变。构建不加载部署环境和密钥。
+公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。
 
 已有项目需把原构建对象移入 `hai.json.build`，把原部署 YAML 转成 JSON 放入 `hai.json.deploy`，删除原文件并保留现有 `HAI_DEPLOY_*` 变量。已有自建 S3 的项目首次升级必须全量部署：旧成功基线仍含已退出的一次性初始化服务，直接使用新增量包会被依赖存活检查拒绝；全量部署同时刷新中间件环境中的 `createBucket`，之后即可继续增量更新。
 
@@ -139,7 +138,7 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 根据锁文件运行依赖和模块配置识别数据库、缓存、文件存储、向量库、LDAP、邮件等。逐项选择默认、自定义或保持。目标环境已有完整配置时，`--yes` 保持原值，不重新输入或重复云开通；交互模式仍可选择本次处理范围。配置完备可用 `--skip-middleware` 跳过向导和开通。SQLite、Memory cache、本地存储不产生外部镜像；Compose 自建服务的镜像自动加入完整交付包。外部服务仍需目标网络可达，云开通不属于完全离线部署。
 
-默认和自定义模式均保留同后端的有效配置，包括表单未展示的连接池、操作日志、存储公开端点/前缀、Redis 重试和向量检索选项。自建与云开通仅重新定稿实际连接和认证；旧 URL、TLS/集群模式与凭据不能覆盖新服务，SMTP 发件人和 LDAP 属性映射继续保留。切换后端时清除不兼容字段。旧向导已保存的缺字段父 JSON 不会自动恢复：须从原配置或备份补回最高优先级 `HAI_STORAGE` 中的 `publicEndpoint` 等字段，再重新打包部署；只改被父 JSON 覆盖的 YAML/叶变量无效。
+默认和自定义模式均保留同后端的有效配置，包括表单未展示的连接池、操作日志、存储公开端点/前缀、Redis 重试和向量检索选项。自建与云开通仅重新定稿实际连接和认证；旧 URL、TLS/集群模式与凭据不能覆盖新服务，SMTP 发件人和 LDAP 属性映射继续保留。切换后端时清除不兼容字段。 生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
 #### 私有对象存储直连
 
@@ -273,13 +272,15 @@ SSH 中断始终先记 `remoteExecution: 'unknown'`。docker-ssh SDK 用新连�
 
 ### 运行环境文件与重复部署
 
-Node 后端（Serv / SvelteKit SSR）默认在每次启动时重读发布目录的 `.env.runtime`，修改后 `docker restart <容器名>` 或 `podman restart <容器名>` 即可，无需重建镜像或额外 override。旧部署先用新版 CLI 发布一次。删除的字段不会从旧 Compose 注入中复活；服务器托管连接的 `middleware.env` 保持原有更高优先级，私有代理标记和 Node 启动参数仍由部署装配管理。静态 Web、中间件、端口/挂载、Nginx 路由与限额不在该重载范围；改变网关路径、端口或挂载时使用全量部署。手工修改需备份；下一次后端发布会从工程环境重新生成，需要长期保留的配置同步回源环境。
+Node 后端（Serv / SvelteKit SSR）每次启动读取服务器 `<部署目录>/config/.env.runtime`。应用配置与托管连接在此合并，修改 `HAI_STORAGE_PUBLICENDPOINT` 等细项后重启对应后端即可；同一来源的细项覆盖父 JSON。配置目录只读挂载到 `/run/hai/config`，编辑器原子替换文件也会被下一次启动读取。私有代理标记和 Node 启动参数由部署装配管理；静态 Web、中间件原生环境、端口/挂载、Nginx 路由与限额变更仍需部署。仅更新 Web/中间件保留当前应用配置；后端局部更新保留服务器托管连接，其余值来自新包，全量更新采用新包并按已有凭据状态定稿。手工修改先备份，长期配置同步回源环境。
 
 同前缀但由进程直接读取的环境标记、初始账号密码和传输密钥环仍保留；它们不属于已被父对象替代的配置。
 
-交付配置会清除所有被 `HAI_*` 父级变量遮蔽的子项，并从 `.env.runtime` 删除由 `middleware.env` 提供的重复项。容器内路径只保存在交付配置中；清理不会改写源环境。修改时以保留下来的父对象或托管连接文件为准。
+生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
-框架持久配置使用 `HAI_*` 命名。`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*` 是中间件镜像的原生协议，必须保留原名，但只生成到私有的 `middleware-runtime.env` 并由中间件容器加载；不再写入工程环境文件或应用的 `.env.runtime`。应用增量部署沿用的 `middleware.env` 仅保存框架 `HAI_*` 配置。旧工程已保存的这些原生字段不会被自动删除，新应用环境会忽略它们；新包与旧成功基线可共存，旧服务仍读取其原交付文件。
+部署归档只保留五个顶层入口：`apply.sh`、`manifest.json`、`config/`、`images/`、`.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。新包格式为 2，不实现旧目录兼容或迁移。 运行配置定稿复用本包已导入的 Node 应用镜像，临时容器禁网，不额外下载镜像；服务器无需安装 Node 或 jq。
+
+中间件原生变量（`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*`）按镜像契约保留原名，只写私有 `.hai/middleware-runtime.env`，仅由中间件读取。应用连接全部合并到 `config/.env.runtime`。
 
 自建或云开通的整体 `HAI_*` 配置会清除被替换的旧叶字段，例如 Redis 覆盖后不再留下 `HAI_CACHE_TYPE=memory`。全局 `~/.hai/credentials.yml` 只补缺项，不能覆盖当前环境/进程的同名键或父配置。部署先启动选中中间件，等待 PostgreSQL/MySQL/Redis/S3 健康，再启动 serv/Web；增量和失败恢复沿用此顺序，未选容器保持不变。
 
@@ -287,9 +288,9 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 分批启动仅在首批清理孤立容器，后续 serv/Web 启动保留已经就绪的中间件。
 
-生成时为 `.env.dev/.env.test/.env.prod` 分别生成独立的初始管理员密码和传输密钥环；环境文件随项目提交，克隆后可共享，并可通过本机私有文件或进程环境覆盖。启用 transport 的应用缺少/错误配置 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 时，部署在上传前指出配置来源；同一环境的所有节点复用同一有效密钥环，可直接加载环境文件，也可通过 Secret Manager 覆盖；不为每个节点临时生成。CLI 完成部署后提示 `HAI_ADMIN_DEFAULT_PASSWORD` 的实际来源，不打印密码，不依赖日志级别；该密码仅在首次创建管理员时生效。 离线入口也会提示服务器私有 `.env.runtime` 中的密码变量位置。
+创建工程时为 `.env.dev.local`、`.env.test.local`、`.env.prod.local` 分别生成独立初始密码和传输密钥环，文件不提交 Git。克隆工程后通过受保护文件或 Secret Manager 分发对应环境秘密，同环境所有节点使用同一 ring 与共享 registry，不在节点启动时生成。缺少或无效的 `HAI_CRYPTO_TRANSPORT_SERVERKEYRING` 在上传前报错。CLI 和离线说明只提示初始密码变量及来源，不输出值；密码仅用于创建缺失账号，已有账号不被重置。
 
-每次交付仍生成 `.hai/deploy/<环境>/bundle-.../.env.runtime`，供后端启动预加载（静态 Web 仍用 Compose env_file）；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
+每次交付仍生成 归档内 `config/.env.runtime`，供后端启动预加载（静态 Web 仍用 Compose env_file）；它是生成产物，不是配置记忆源。`NODE_ENV` 默认随目标环境选择：`test` → `test`，`dev/development` → `development`，`prod/production` 及其他模式 → `production`。环境文件中显式设置的 `NODE_ENV` 仍优先于该默认值；`--build` 的构建优化模式不决定运行环境。旧交付包不会自动改写，需重新打包。
 
 项目根 `hai.json.deploy` 保存部署结构，`.env.<环境>` 保存公共配置，`.env.<环境>.local` 保存 SSH 及中间件秘密值。环境文件默认来自项目/workspace 根，`--env-dir` 可指定目录。完整配置后可使用 `pnpm run deploy --env test --build --bundle-only --yes` 无交互复用；只想保留现有中间件配置时追加 `--skip-middleware`。交互式仅打包会在最后询问是否保存或修改 SSH 信息；修改交付目录的 `deploy-target.json` 不会回写工程。
 

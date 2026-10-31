@@ -31,7 +31,7 @@ import {
   saveCredential,
   saveCredentials,
 } from './deploy-credentials.js'
-import { loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
+import { generatedVariables, loadDeploymentEnvironment, saveDeploymentEnvironment } from './deploy-environment.js'
 import { normalizeProjectName, resolveArtifactDirectory, resolveOutputDir, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { mergeManagedMiddlewareConfig } from './deploy-middleware-config.js'
@@ -469,6 +469,8 @@ export const deploy: DeployFunctions = {
           return recoveryFailure(saved.error, { ...recovery, stage: 'save-env' })
       }
     }
+
+    allEnvVars = generatedVariables(allEnvVars)
 
     // 4. 创建平台项目
     const projectResult = await currentProvider.createProject(projectName)

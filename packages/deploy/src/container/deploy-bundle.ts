@@ -35,7 +35,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.output - 本次独立交付目录内的最终 tar 输出路径。
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
- * @param options.middlewareEnv - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
+ * @param options.managedAppKeys - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
  * @param options.accountSources - 初始账号变量名及来源，不包含密码值。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
  * @param options.hasWebConfig - 是否挂载公开Nginx配置，包含前后端代理或独立Vite目录路由。
@@ -52,7 +52,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * const artifact = await readDeploymentArtifact(artifactDir)
  * // directory 已由 Provider 准备好 docker-compose-<版本>.yml 与 .env.runtime。
  * const directory = '.hai/deploy/prod/prepared-id'
- * const result = await createDeploymentBundle({ directory, artifactDir, artifact, projectName: 'shop', deploymentId: 'shop-prod-001', environment: 'prod', config: { type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } }, runtime: 'auto', output: '.hai/deploy/shop.tar', selected: ['serv'], partial: false, middlewareEnv: '', healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
+ * const result = await createDeploymentBundle({ directory, artifactDir, artifact, projectName: 'shop', deploymentId: 'shop-prod-001', environment: 'prod', config: { type: 'docker-ssh', remote: { baseDir: '/opt/hai/apps', runtime: 'auto' }, expose: { type: 'port', hostPort: 8080, containerPort: 3000 } }, runtime: 'auto', output: '.hai/deploy/shop.tar', selected: ['serv'], partial: false, managedAppKeys: [], healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
  * ```
  */
 export async function createDeploymentBundle(options: {
@@ -69,7 +69,7 @@ export async function createDeploymentBundle(options: {
   output: string
   selected: string[]
   partial: boolean
-  middlewareEnv: string
+  managedAppKeys: string[]
   /** 初始账号变量名与配置来源，不包含变量值。 */
   accountSources?: string
   healthPaths: string[]
@@ -107,6 +107,7 @@ export async function createDeploymentBundle(options: {
     }
     const dependencies = new Set<string>()
     const references = new Set<string>()
+    const nodeRuntime = artifact.primaryService === 'serv' || !!(compose.services[artifact.primaryService]?.environment as Record<string, unknown> | undefined)?.NODE_OPTIONS
     for (const name of selected) {
       const service = compose.services[name]
       if (!service)
@@ -119,15 +120,16 @@ export async function createDeploymentBundle(options: {
       }
       if (service.env_file) {
         service.env_file = name === artifact.primaryService
-          ? [`../${options.deploymentId}/.env.runtime`, `../${options.deploymentId}/middleware.env`]
-          : [`../${options.deploymentId}/middleware-runtime.env`]
+          ? ['../../../config/.env.runtime']
+          : [`../../${options.deploymentId}/.hai/middleware-runtime.env`]
       }
-      if (Array.isArray(service.volumes))
-        service.volumes = service.volumes.map(mount => typeof mount === 'string' ? mount.replace(/\.\/(web\.conf|request-access\.yml|tls|https-start\.sh|renew-https\.sh|\.env\.runtime|middleware\.env|runtime-env\.mjs):/g, `../${options.deploymentId}/$1:`) : mount)
+      if (Array.isArray(service.volumes)) {
+        service.volumes = service.volumes.map(mount => typeof mount === 'string'
+          ? mount.replace(/^\.\/config(?=:)/, '../../../config').replace(/\.\/(web\.conf|request-access\.yml|tls|https-start\.sh|renew-https\.sh|runtime-env\.mjs):/g, `../../${options.deploymentId}/.hai/$1:`)
+          : mount)
+      }
     }
-    put('compose.json', JSON.stringify({ ...compose, services: Object.fromEntries(selected.map(name => [name, compose.services[name]])) }))
-    // 合并入口仅保存 extends 指向；更新服务时整体切换定义，避免旧 env_file/卷列表累加。
-    put('compose-entry.json', JSON.stringify({ ...compose, services: Object.fromEntries(selected.map(name => [name, { extends: { file: `../${options.deploymentId}/compose.json`, service: name } }])) }))
+    put('.hai/compose.json', JSON.stringify({ ...compose, services: Object.fromEntries(selected.map(name => [name, compose.services[name]])) }))
     let runtime: 'podman' | 'docker' | undefined
     const imageList: string[] = []
     for (const reference of references) {
@@ -201,56 +203,61 @@ export async function createDeploymentBundle(options: {
       files.push(`images/${file}`)
       imageList.push(`${file} ${reference}`)
     }
-    put('.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
+    put('config/.env.runtime', readFileSync(join(directory, '.env.runtime'), 'utf8'))
     if (selected.includes(artifact.primaryService) && existsSync(join(directory, 'request-access.yml')))
-      put('request-access.yml', readFileSync(join(directory, 'request-access.yml'), 'utf8'))
-    put('middleware.env', options.middlewareEnv)
-    if (selected.includes(artifact.primaryService) && !compose.services[artifact.primaryService]?.env_file)
-      put('runtime-env.mjs', readFileSync(new URL('./deploy-runtime-env.mjs', import.meta.url), 'utf8'))
+      put('.hai/request-access.yml', readFileSync(join(directory, 'request-access.yml'), 'utf8'))
+    if (nodeRuntime)
+      put('.hai/runtime-env.mjs', readFileSync(new URL('./deploy-runtime-env.mjs', import.meta.url), 'utf8'))
     const middlewareRuntime = join(directory, 'middleware-runtime.env')
     const nativeEnvironment = existsSync(middlewareRuntime) ? readFileSync(middlewareRuntime, 'utf8') : ''
-    put('middleware-runtime.env', nativeEnvironment)
-    for (const [file, content] of Object.entries(createManagedSecretAssets(projectName, nativeEnvironment, compose)))
-      put(file, content)
+    put('.hai/middleware-runtime.env', nativeEnvironment)
+    const managed = createManagedSecretAssets(projectName, nativeEnvironment, compose)
+    put('.hai/managed-candidates.env', managed['managed-candidates.env']!)
     if (options.hasWebConfig)
-      put('web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
-    for (const [file, content] of Object.entries(options.httpsAssets ?? {}))
-      put(file, content)
-    put('manifest.json', `${JSON.stringify({ ...artifact, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial }, null, 2)}\n`)
-    if (options.hasWebConfig) {
-      // 增量部署复用当前 Web 镜像，只覆盖公开代理配置；无需重新构建或打包 Web 镜像。
-      put('proxy-entry.json', JSON.stringify({ services: { [options.proxyService ?? 'web']: { volumes: [`../${options.deploymentId}/web.conf:/etc/nginx/conf.d/default.conf:ro`] } } }))
+      put('.hai/web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
+    for (const [file, content] of Object.entries(options.httpsAssets ?? {})) {
+      if (file !== 'https')
+        put(`.hai/${file}`, content)
     }
-    put('storage-routing', `${options.storageRouting ?? ''}\n`)
     const httpsFingerprint = config.expose.https ? createHash('sha256').update(JSON.stringify({ ...config.expose.https, certificateFile: undefined, privateKeyFile: undefined, certificate: options.httpsAssets?.['tls/fullchain.pem'] })).digest('hex') : ''
-    put('layout', `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig ? options.proxyService === 'gateway' ? 'gateway' : 'true' : 'false'}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}${httpsFingerprint ? `:${httpsFingerprint}` : ''}\n`)
-    put('web-base-path', `${artifact.webBasePath ?? ''}\n`)
-    put('health-paths', `${options.healthPaths.join('\n')}\n`)
-    put('image-list', `${imageList.join('\n')}\n`)
-    put('dependencies', `${[...dependencies].join('\n')}\n`)
-    // 卷身份和引擎随校验和交付；服务器持久账本不会随暂时移除服务而删除。
-    for (const [file, content] of Object.entries(createBackendStateAssets(projectName, compose, selected)))
-      put(file, content)
+    const backend = createBackendStateAssets(projectName, compose, selected)
+    const metadata = {
+      'layout': `${config.expose.hostPort}:${options.containerPort}:${options.hasWebConfig ? options.proxyService === 'gateway' ? 'gateway' : 'true' : 'false'}:${artifact.primaryService}:${options.hasWebConfig ? await artifactChecksum(join(directory, 'web.conf')) : ''}${httpsFingerprint ? `:${httpsFingerprint}` : ''}\n`,
+      'web-base-path': `${artifact.webBasePath ?? ''}\n`,
+      'health-paths': `${options.healthPaths.join('\n')}\n`,
+      'image-list': `${imageList.join('\n')}\n`,
+      'dependencies': `${[...dependencies].join('\n')}\n`,
+      'storage-routing': `${options.storageRouting ?? ''}\n`,
+      'node-runtime': String(nodeRuntime),
+      'proxy-service': options.hasWebConfig ? options.proxyService ?? 'web' : '',
+      'https': options.httpsAssets?.https ?? '',
+      'managed-project': managed['managed-project']!,
+      'managed-bindings': managed['managed-bindings']!,
+      'managed-volumes': managed['managed-volumes']!,
+      'managed-app-keys': `${[...new Set(options.managedAppKeys)].join('\n')}\n`,
+      'state-backends': backend['state-backends']!,
+    }
+    put('manifest.json', `${JSON.stringify({ ...artifact, bundleFormat: 2, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial, metadata }, null, 2)}\n`)
     put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: `${config.remote.baseDir}/${projectName}`, runtime: config.remote.runtime, partial: options.partial, selected, primaryService: artifact.primaryService, hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
-    const instructionParams = { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: 'compose.json' }
+    const instructionParams = { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: '.hai/compose.json' }
     const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')
     const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
     const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
     const runtimeGuide = deployM('deploy_bundleRuntime', { params: { directory: `${config.remote.baseDir}/${projectName}`, deploymentId: options.deploymentId } })
     const https = config.expose.https
     const serverDirectory = `${config.remote.baseDir}/${projectName}`
-    const certificates = https?.type === 'files' ? `${serverDirectory}/releases/${options.deploymentId}/tls` : `${serverDirectory}/https/certificates/${https?.domain}`
+    const certificates = https?.type === 'files' ? `${serverDirectory}/releases/${options.deploymentId}/.hai/tls` : `${serverDirectory}/https/certificates/${https?.domain}`
     const httpsGuide = https
       ? deployM('deploy_bundleHttps', { params: { domain: https.domain, port: https.port, mode: https.type, certificates, environment } })
       + (https.type === 'letsencrypt' ? `\n${deployM('deploy_bundleAcme', { params: { state: `${serverDirectory}/https/acme`, domain: https.domain } })}` : '')
       : deployM('deploy_bundleHttpOnly', { params: { port: config.expose.hostPort } })
     const accountGuide = deployM('deploy_bundleAccounts', { params: { sources: options.accountSources || '—' } })
     const guides = [runtimeGuide, httpsGuide, accountGuide, deployM('deploy_bundleDirectories', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })].join('\n\n')
-    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: 'compose.json' } })}\n${instructions}\n\n${guides}\n`
+    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: '.hai/compose.json' } })}\n${instructions}\n\n${guides}\n`
     const checksums = []
     for (const file of files)
       checksums.push(`${fileHashes.get(file) ?? await artifactChecksum(join(staging, file))}  ${file}`)
-    writeFileSync(join(staging, 'SHA256SUMS'), `${checksums.join('\n')}\n`)
+    writeFileSync(join(staging, '.hai/SHA256SUMS'), `${checksums.join('\n')}\n`)
     const tar = await runCommand('tar', [output.endsWith('.gz') ? '-czf' : '-cf', temporaryTar, '-C', staging, '.'])
     if (!tar.success)
       throw new Error(tar.error.message)

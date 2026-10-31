@@ -13,7 +13,7 @@ import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApplyScript } from '../src/container/deploy-scripts.js'
+import { createApplyScript, shellArgument } from '../src/container/deploy-scripts.js'
 import { deploy } from '../src/index.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
@@ -32,33 +32,56 @@ function apply(bundle: { directory: string }) {
   return spawnSync(runtime, ['exec', container, 'sh', '-c', `export PATH=/fixture/bin:$PATH; sh /fixture/${bundle.directory}/apply.sh /fixture/server`], { encoding: 'utf8', timeout: 20_000, windowsHide: true })
 }
 
+/** 夹具只修改新清单的非敏感元数据，包内修改同时重算完整性摘要。 */
+function metadata(directory: string, key: string): string {
+  return JSON.parse(execute(`cat ${shellArgument(`/fixture/${directory}/manifest.json`)}`)).metadata[key]
+}
+
+function updateMetadata(directory: string, values: Record<string, string>): void {
+  const program = 'const fs=require("node:fs");const file=process.argv[1];const value=JSON.parse(fs.readFileSync(file,"utf8"));Object.assign(value.metadata,JSON.parse(process.argv[2]));fs.writeFileSync(file,JSON.stringify(value));'
+  execute(`node -e ${shellArgument(program)} ${shellArgument(`/fixture/${directory}/manifest.json`)} ${shellArgument(JSON.stringify(values))}; cd ${shellArgument(`/fixture/${directory}`)}; sed '/  manifest.json$/d' .hai/SHA256SUMS > .hai/SHA256SUMS.next; sha256sum manifest.json >> .hai/SHA256SUMS.next; mv .hai/SHA256SUMS.next .hai/SHA256SUMS`)
+}
+
+/** 完整基线包含实际服务定义，不能用独立 services 文件伪造拓扑。 */
+function declareService(directory: string, service: string, definition: Record<string, unknown>, volumes: Record<string, unknown> = {}): void {
+  if (JSON.parse(execute(`cat ${shellArgument(`/fixture/${directory}/manifest.json`)}`)).partial)
+    return
+  const program = 'const fs=require("node:fs");const file=process.argv[1];const value=JSON.parse(fs.readFileSync(file,"utf8"));value.services[process.argv[2]]=JSON.parse(process.argv[3]);value.volumes={...value.volumes,...JSON.parse(process.argv[4])};fs.writeFileSync(file,JSON.stringify(value));'
+  execute(`node -e ${shellArgument(program)} ${shellArgument(`/fixture/${directory}/.hai/compose.json`)} ${shellArgument(service)} ${shellArgument(JSON.stringify(definition))} ${shellArgument(JSON.stringify(volumes))}; cd ${shellArgument(`/fixture/${directory}`)}; awk '$2 != ".hai/compose.json" {print}' .hai/SHA256SUMS > .hai/SHA256SUMS.next; sha256sum .hai/compose.json >> .hai/SHA256SUMS.next; mv .hai/SHA256SUMS.next .hai/SHA256SUMS`)
+}
+
 /** 只在故障夹具中替换已校验的卷/引擎元数据，重新生成真实 SHA-256。 */
 function declareDatabaseBackend(bundle: { directory: string }, backend: 'postgresql' | 'mysql'): string {
-  const project = execute(`cat /fixture/${bundle.directory}/managed-project`)
+  const project = metadata(bundle.directory, 'managed-project').trim()
   const volume = `${project}_${project.slice('hai-'.length)}-db-data`
-  execute(`printf 'db ${backend} ${volume}\\n' > /fixture/${bundle.directory}/state-backends; cd /fixture/${bundle.directory}; sed '/  state-backends$/d' SHA256SUMS > SHA256SUMS.next; sha256sum state-backends >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS; printf '${volume}\\n' > /fixture/volume-to-create`)
+  updateMetadata(bundle.directory, { 'state-backends': `db ${backend} ${volume}\n` })
+  declareService(bundle.directory, 'db', { image: backend === 'postgresql' ? 'docker.io/library/postgres:16.15-alpine' : 'docker.io/library/mysql:8.4', volumes: [`${volume}:/data`] }, { [volume]: { name: volume } })
+  execute(`printf '${volume}\\n' > /fixture/volume-to-create`)
   return volume
 }
 
 /** 故障夹具只调整公开目录元数据并重算摘要，真实apply负责判断增量是否匹配既有基线。 */
 function declareWebBase(bundle: { directory: string }, base: '/yyy' | '/other') {
-  execute(`printf '%s\\n' '${base}' > /fixture/${bundle.directory}/web-base-path; cd /fixture/${bundle.directory}; sed '/  web-base-path$/d' SHA256SUMS > SHA256SUMS.next; sha256sum web-base-path >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
+  updateMetadata(bundle.directory, { 'web-base-path': `${base}\n` })
 }
 
 /** 确定性 Compose 夹具仅声明代理身份；真实 shell 必须按该元数据刷新并恢复保留代理。 */
 function declareProxyIdentity(bundle: { directory: string }, proxy: 'web' | 'gateway'): void {
-  execute(`cd /fixture/${bundle.directory}; printf '%s\\n' '${proxy}' > proxy-service; awk -F: 'BEGIN {OFS=":"} {$3="${proxy === 'web' ? 'true' : 'gateway'}"; print}' layout > layout.next; mv layout.next layout; sed '/  proxy-service$/d; /  layout$/d' SHA256SUMS > SHA256SUMS.next; sha256sum proxy-service layout >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
+  const layout = metadata(bundle.directory, 'layout').trim().split(':')
+  layout[2] = proxy === 'web' ? 'true' : 'gateway'
+  updateMetadata(bundle.directory, { 'proxy-service': proxy, 'layout': `${layout.join(':')}\n` })
+  declareService(bundle.directory, proxy, { image: 'localhost/proxy-test:1' })
 }
 
 /** 只调整非敏感配置摘要并重算真实交付校验和，验证更新前的增量拒绝。 */
 function declareStorageRouting(bundle: { directory: string }, value: string | undefined): void {
   const digest = value === undefined ? undefined : createHash('sha256').update(value).digest('hex')
-  execute(`cd /fixture/${bundle.directory}; ${digest ? `printf '%s\\n' '${digest}' > storage-routing` : 'rm storage-routing'}; sed '/  storage-routing$/d' SHA256SUMS > SHA256SUMS.next; ${digest ? 'sha256sum storage-routing >> SHA256SUMS.next;' : ''} mv SHA256SUMS.next SHA256SUMS`)
+  updateMetadata(bundle.directory, { 'storage-routing': digest ? `${digest}\n` : '' })
 }
 
 /** 只写入公开导入工具会生成的受控 v2 状态；实际容器身份仍由脚本重新核对。 */
 function seedImportedDatabase(bundle: { directory: string }, volume: string, projectOverride?: string): string {
-  const project = execute(`cat /fixture/${bundle.directory}/managed-project`)
+  const project = metadata(bundle.directory, 'managed-project').trim()
   const imported = join(root, 'imported-managed-secrets.env')
   writeFileSync(imported, `FORMAT_VERSION=2\nPROJECT=${projectOverride ?? project}\nDB_PASSWORD=${Buffer.from('fixture-import-password').toString('hex')}\nVOLUME_1=DB_PASSWORD:${volume}\n`)
   execFileSync(runtime, ['cp', imported, `${container}:/fixture/server/managed-secrets.env`], { windowsHide: true })
@@ -112,8 +135,22 @@ describe.skipIf(!enabled)('linux deployment process locks', () => {
     writeFileSync(join(root, '.hai/build/docker/latest'), 'release-1\n')
     writeFileSync(join(artifacts, 'serv-1.2.3.tar'), 'prebuilt-image')
     writeFileSync(join(artifacts, 'manifest.json'), JSON.stringify({ version: 4, primaryService: 'serv', appVersion: '1.2.3', buildId: 'release-1', images: [{ name: 'serv', file: 'serv-1.2.3.tar', imageRef: 'localhost/lock-test:1', sha256: createHash('sha256').update('prebuilt-image').digest('hex'), containerPort: 3000 }] }))
+    // 锁门禁的引擎替身只转交配置编译给真实 Linux Node；真正的容器隔离由 CLI 部署门禁验证。
+    writeFileSync(join(root, 'bin/runtime-preparation.mjs'), `import fs from 'node:fs'; import path from 'node:path'; import {spawnSync} from 'node:child_process';
+const args=process.argv.slice(2), id='${'f'.repeat(64)}', state='/fixture/compiler.json';
+if(args[0]==='create') { const mounts={}; for(let i=0;i<args.length;i++) if(args[i]==='--mount') { const value=args[++i]; const source=/source=([^,]+),/.exec(value)[1].replace(/^"|"$/g,'').replaceAll('""','"'); const target=/target=([^,]+)/.exec(value)[1]; mounts[target]=source; } fs.writeFileSync(state,JSON.stringify({mounts,mode:args.at(-1),owner:args[args.indexOf('--label')+1].split('=')[1]})); fs.writeFileSync(args[args.indexOf('--cidfile')+1],id); process.stdout.write(id); }
+else if(args[0]==='inspect') process.stdout.write(args[2].includes('ExitCode')?'0':JSON.parse(fs.readFileSync(state)).owner);
+else if(args[0]==='start') { const {mounts,mode}=JSON.parse(fs.readFileSync(state)); const directory=fs.mkdtempSync('/fixture/runtime-input-'); try {fs.mkdirSync(path.join(directory,'config')); fs.copyFileSync(mounts['/input/manifest.json'],path.join(directory,'manifest.json')); fs.copyFileSync(mounts['/input/config/.env.runtime'],path.join(directory,'config/.env.runtime')); const result=spawnSync(process.execPath,[mounts['/runtime-env.mjs'],'prepare',directory+'/',mounts['/input/previous-manifest.json']??'-',mounts['/input/previous.env']??'-',mounts['/input/credentials.env']??'-',mode],{encoding:'utf8'}); process.stdout.write(result.stdout);process.stderr.write(result.stderr);process.exitCode=result.status??1;}finally{fs.rmSync(directory,{recursive:true,force:true});} }
+else if(args[0]==='rm') fs.rmSync(state,{force:true});
+`)
     writeFileSync(join(root, 'bin/docker'), `#!/bin/sh
 printf '%s\\n' "$*" >> /fixture/commands.log
+case "$1" in
+  create) exec node /fixture/bin/runtime-preparation.mjs "$@";;
+  start) if [ "\${2:-}" = --attach ]; then exec node /fixture/bin/runtime-preparation.mjs "$@"; fi;;
+  inspect) case "\${3:-}" in *runtime-preparation*|*State.ExitCode*) exec node /fixture/bin/runtime-preparation.mjs "$@";; esac;;
+  rm|ps) case "$*" in *${'f'.repeat(64)}*) exec node /fixture/bin/runtime-preparation.mjs "$@";; esac;;
+esac
 query_project=''
 query_role=''
 query_column=1
@@ -161,7 +198,9 @@ case "$*" in
     if [ -f /fixture/health-count ]; then count=$(cat /fixture/health-count); fi
     count=$((count + 1)); printf '%s' "$count" > /fixture/health-count
     if [ "$count" -lt 3 ]; then printf 'starting\\n'; else printf 'healthy\\n'; fi;;
-  *'ps -q'*) if [ -f /fixture/services-stopped ]; then exit 0; fi; printf 'fixture-container\\n';;
+  *'ps -q'*)
+    if [ -f /fixture/invalidate-backend-snapshot ] && [ -f "$(cat /fixture/invalidate-backend-snapshot)" ]; then printf 'invalid-snapshot\\n' > "$(cat /fixture/invalidate-backend-snapshot)"; fi
+    if [ -f /fixture/services-stopped ]; then exit 0; fi; printf 'fixture-container\\n';;
   *'config --services'*)
     if [ -f /fixture/has-web ]; then printf 'serv\\nweb\\n'; else printf 'serv\\n'; fi
     if [ -f /fixture/has-db ]; then printf 'db\\n'; fi
@@ -208,7 +247,7 @@ fi
     const candidate = await pack(['serv'])
     declareStorageRouting(candidate, scenario === 'missing' ? undefined : scenario === 'different' ? 'https://other.example.com' : 'https://files.example.com')
     if (scenario === 'symlink')
-      execute(`cp /fixture/server/releases/${installed.id}/storage-routing /fixture/old-storage-routing; rm /fixture/server/releases/${installed.id}/storage-routing; ln -s /fixture/old-storage-routing /fixture/server/releases/${installed.id}/storage-routing`)
+      execute(`cp /fixture/server/releases/${installed.id}/manifest.json /fixture/old-manifest; rm /fixture/server/releases/${installed.id}/manifest.json; ln -s /fixture/old-manifest /fixture/server/releases/${installed.id}/manifest.json`)
     execute(': > /fixture/commands.log')
     const outcome = apply(candidate)
     if (scenario === 'matching') {
@@ -253,7 +292,7 @@ fi
     if (scenario !== 'missing')
       declareWebBase(candidate, scenario === 'different' ? '/other' : '/yyy')
     if (scenario === 'symlink')
-      execute(`printf '%s\\n' '/yyy' > /fixture/old-web-prefix; rm /fixture/server/releases/${installed.id}/web-base-path; ln -s /fixture/old-web-prefix /fixture/server/releases/${installed.id}/web-base-path`)
+      execute(`cp /fixture/server/releases/${installed.id}/manifest.json /fixture/old-manifest; rm /fixture/server/releases/${installed.id}/manifest.json; ln -s /fixture/old-manifest /fixture/server/releases/${installed.id}/manifest.json`)
     execute(': > /fixture/commands.log')
     const outcome = apply(candidate)
     if (scenario === 'matching') {
@@ -308,18 +347,18 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     writePolicy('192.0.2.10')
     const full = await pack()
     expect(apply(full).status).toBe(0)
-    const snapshot = (id: string) => execute(`cat /fixture/server/releases/${id}/request-access.yml`)
+    const snapshot = (id: string) => execute(`cat /fixture/server/releases/${id}/.hai/request-access.yml`)
     expect(snapshot(full.id)).toContain('192.0.2.10')
-    expect(execute(`stat -c %a /fixture/server/releases/${full.id}/request-access.yml`)).toBe('444')
-    const fullEntry = JSON.parse(execute(`cat /fixture/server/releases/${full.id}/compose.json`))
-    expect(fullEntry.services.serv.volumes).toContainEqual(expect.stringContaining(`../${full.id}/request-access.yml:/run/hai/request-access.yml:ro`))
+    expect(execute(`stat -c %a /fixture/server/releases/${full.id}/.hai/request-access.yml`)).toBe('444')
+    const fullEntry = JSON.parse(execute(`cat /fixture/server/releases/${full.id}/.hai/compose.json`))
+    expect(fullEntry.services.serv.volumes).toContainEqual(expect.stringContaining(`../../${full.id}/.hai/request-access.yml:/run/hai/request-access.yml:ro`))
 
     // 未选后端时不读取本地失效文件，保留旧服务定义中的只读策略挂载。
     writeFileSync(policy, 'invalid-field: private-value\n')
     const web = await pack(['web'])
     expect(apply(web).status).toBe(0)
-    expect(execute(`test ! -e /fixture/server/releases/${web.id}/request-access.yml && printf absent`)).toBe('absent')
-    expect(execute(`cat /fixture/server/releases/${web.id}/compose-files`)).toContain(`/releases/${full.id}/compose-entry.json`)
+    expect(execute(`test ! -e /fixture/server/releases/${web.id}/.hai/request-access.yml && printf absent`)).toBe('absent')
+    expect(JSON.parse(execute(`cat /fixture/server/releases/${web.id}/.hai/compose.json`)).services.serv.volumes).toContainEqual(expect.stringContaining(`../../${full.id}/.hai/request-access.yml:`))
     expect(snapshot(full.id)).toContain('192.0.2.10')
 
     writePolicy('198.51.100.20')
@@ -327,11 +366,11 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(apply(incremental).status).toBe(0)
     expect(snapshot(incremental.id)).toContain('198.51.100.20')
     expect(snapshot(full.id)).toContain('192.0.2.10')
-    const runtimeSettings = JSON.parse(parseEnv(execute(`cat /fixture/server/releases/${incremental.id}/.env.runtime`)).HAI_SERV!)
-    expect(runtimeSettings.http.access).toEqual({ file: '/run/hai/request-access.yml' })
+    const runtimeSettings = parseEnv(execute('cat /fixture/server/config/.env.runtime'))
+    expect(runtimeSettings.HAI_SERV_HTTP_ACCESS_FILE).toBe('/run/hai/request-access.yml')
 
     const tampered = await pack(['serv'])
-    execute(`printf 'rules: []\\n' > /fixture/${tampered.directory}/request-access.yml; : > /fixture/commands.log`)
+    execute(`printf 'rules: []\\n' > /fixture/${tampered.directory}/.hai/request-access.yml; : > /fixture/commands.log`)
     const refused = apply(tampered)
     expectPreflightRefusal(tampered, refused)
     expect(execute('cat /fixture/server/current')).toBe(incremental.id)
@@ -377,7 +416,7 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(new Set([first.id, second.id, rollback.id]).size).toBe(3)
     expect(apply(rollback).status).toBe(0)
     expect(execute('cat /fixture/server/current')).toBe(rollback.id)
-    const restoredCompose = JSON.parse(execute(`cat /fixture/server/releases/${rollback.id}/compose.json`))
+    const restoredCompose = JSON.parse(execute(`cat /fixture/server/releases/${rollback.id}/.hai/compose.json`))
     expect(restoredCompose.services.serv.image).toBe('localhost/lock-test:1')
     expect(JSON.parse(execute(`cat /fixture/server/result-${rollback.id}.json`))).toMatchObject({ stage: 'complete', exitCode: 0 })
     expect(execute('cat /fixture/commands.log')).not.toMatch(/\bdown\b|\bpull\s+(?!never)/)
@@ -387,7 +426,6 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
     const full = await pack()
     expect(apply(full).status).toBe(0)
-    execute(`printf 'db postgresql\\n' > /fixture/server/releases/${full.id}/state-backends`)
     const candidate = await pack(partial ? ['serv'] : undefined)
     declareDatabaseBackend(candidate, 'mysql')
     execute(': > /fixture/commands.log')
@@ -407,7 +445,7 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     execute('rm /fixture/has-db')
     const withoutDatabase = await pack()
     expect(apply(withoutDatabase).status).toBe(0)
-    expect(execute(`cat /fixture/server/releases/${withoutDatabase.id}/services`)).not.toMatch(/^db$/m)
+    expect(Object.keys(JSON.parse(execute(`cat /fixture/server/releases/${withoutDatabase.id}/.hai/compose.json`)).services)).not.toContain('db')
     expect(execute('cat /fixture/persistent-volumes')).toBe(volume)
     execute('touch /fixture/has-db')
     const next = await pack()
@@ -504,13 +542,11 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(execute('test ! -e /fixture/server/current && echo no-current')).toBe('no-current')
   }, 60_000)
 
-  it.each(['matching', 'different-mount', 'different-image', 'removed'] as const)('持久账本处理无账本旧发布时必须证明实际卷与引擎：%s', async (legacy) => {
+  it.each(['matching', 'different-mount', 'different-image', 'removed'] as const)('持久账本缺失时必须证明当前格式基线的实际卷与引擎：%s', async (legacy) => {
     execute('printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep; touch /fixture/has-db')
     const first = await pack()
     const volume = declareDatabaseBackend(first, 'postgresql')
     expect(apply(first).status).toBe(0)
-    if (legacy !== 'removed')
-      execute(`printf 'db postgresql\\n' > /fixture/server/releases/${first.id}/state-backends`)
     let previous = first.id
     if (legacy === 'removed') {
       execute('rm /fixture/has-db')
@@ -620,7 +656,7 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     const curl = join(root, 'guard-recovery-curl')
     const operation = fault === 'missing-volume'
       ? 'rm /fixture/persistent-volumes'
-      : `printf 'invalid-snapshot\\n' > /fixture/server/releases/${next.id}/previous-state-backends`
+      : `printf 'invalid-snapshot\\n' > /fixture/server/releases/${next.id}/.hai/previous-state-backends`
     writeFileSync(curl, `#!/bin/sh\nif [ ! -f /fixture/backend-fault-applied ]; then\n  touch /fixture/backend-fault-applied\n  : > /fixture/commands.log\n  ${operation}\nfi\nexit 22\n`)
     execFileSync(runtime, ['cp', curl, `${container}:/fixture/bin/curl`], { windowsHide: true })
     execute('chmod 700 /fixture/bin/curl')
@@ -638,7 +674,7 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     expect(apply(first).status).toBe(0)
     const ledger = execute('cat /fixture/server/persistent-backends')
     const next = await pack(['serv'])
-    execute(`touch /fixture/services-stopped; printf '/fixture/server/releases/${next.id}/previous-state-backends' > /fixture/invalidate-backend-snapshot; : > /fixture/commands.log`)
+    execute(`touch /fixture/services-stopped; printf '/fixture/server/releases/${next.id}/.hai/previous-state-backends' > /fixture/invalidate-backend-snapshot; : > /fixture/commands.log`)
     const applied = apply(next)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(1)
     expect(JSON.parse(execute(`cat /fixture/server/result-${next.id}.json`))).toMatchObject({ stage: 'recover', exitCode: 1, recoveryStatus: 'not-needed' })
@@ -660,20 +696,25 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     }
   }, 60_000)
 
-  it('真实 Linux 增量仅继承旧基线的框架变量，不重新注入镜像原生变量', async () => {
+  it('真实 Linux 增量保留当前托管配置细项，不复制无关原生变量，失败恢复精确保留原文件', async () => {
     const full = await pack()
+    updateMetadata(full.directory, { 'managed-app-keys': 'HAI_STORAGE\n' })
     expect(apply(full).status).toBe(0)
-    const database = JSON.stringify({ type: 'postgresql', password: 'retained-fixture-password' })
-    const legacyContent = `HAI_DB='${database}'\nPOSTGRES_USER=hai\nPOSTGRES_PASSWORD=legacy-native-password\nRUSTFS_ADDRESS=0.0.0.0:9000\n`
-    const legacyFile = join(root, 'legacy-middleware.env')
-    writeFileSync(legacyFile, legacyContent)
-    execFileSync(runtime, ['cp', legacyFile, `${container}:/fixture/server/releases/${full.id}/middleware.env`], { windowsHide: true })
+    const content = 'HAI_STORAGE=\'{}\'\nHAI_STORAGE_TYPE=s3\nHAI_STORAGE_PUBLICENDPOINT=http://files.example.test:12348/files\nPOSTGRES_PASSWORD=unrelated-native\n'
+    const file = join(root, 'current-runtime.env')
+    writeFileSync(file, content)
+    execFileSync(runtime, ['cp', file, `${container}:/fixture/server/config/.env.runtime`], { windowsHide: true })
     const incremental = await pack(['serv'])
     const applied = apply(incremental)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
-    const inherited = parseEnv(execute(`cat /fixture/server/releases/${incremental.id}/middleware.env`))
-    expect(inherited).toEqual({ HAI_DB: database })
-    expect(execute(`cat /fixture/server/releases/${full.id}/middleware.env`)).toBe(legacyContent.trim())
+    const inherited = parseEnv(execute('cat /fixture/server/config/.env.runtime'))
+    expect(inherited).toMatchObject({ HAI_STORAGE: '{}', HAI_STORAGE_TYPE: 's3', HAI_STORAGE_PUBLICENDPOINT: 'http://files.example.test:12348/files' })
+    expect(inherited).not.toHaveProperty('POSTGRES_PASSWORD')
+    const before = execute('cat /fixture/server/config/.env.runtime')
+    const failed = await pack(['serv'])
+    execute('touch /fixture/fail-health; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
+    expect(apply(failed).status).toBe(1)
+    expect(execute('cat /fixture/server/config/.env.runtime')).toBe(before)
   }, 60_000)
 
   it.each([{ selected: ['serv'] }, { selected: ['serv', 'web'] }, { selected: ['web', 'serv'] }])('真实 Linux 执行 $selected 增量容量更新并恢复失败配置', async ({ selected }) => {
@@ -695,9 +736,9 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     execute(': > /fixture/commands.log')
     const applied = apply(incremental)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
-    expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
-    const composeFiles = execute(`cat /fixture/server/releases/${incremental.id}/compose-files`)
-    expect(composeFiles.includes('proxy-entry.json')).toBe(!selected.includes('web'))
+    expect(execute(`cat /fixture/server/releases/${incremental.id}/.hai/web.conf`)).toContain('client_max_body_size 16809984;')
+    const snapshot = JSON.parse(execute(`cat /fixture/server/releases/${incremental.id}/.hai/compose.json`))
+    expect(snapshot.services.web.volumes).toContainEqual(expect.stringContaining(`../../${incremental.id}/.hai/web.conf:`))
     expect(execute('cat /fixture/commands.log')).toContain('--no-recreate serv web')
     const commands = execute('cat /fixture/commands.log')
     // 镜像直接从本次解包目录加载；发布快照只保留运行配置，不再复制归档。
@@ -708,8 +749,8 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
     execute('touch /fixture/fail-health; printf "#!/bin/sh\\nexit 0\\n" > /fixture/bin/sleep; chmod 700 /fixture/bin/sleep')
     expect(apply(failed).status).toBe(1)
     expect(execute('cat /fixture/server/current')).toBe(incremental.id)
-    expect(execute(`cat /fixture/server/releases/${incremental.id}/web.conf`)).toContain('client_max_body_size 16809984;')
-    expect(execute('cat /fixture/commands.log')).toContain(`/releases/${incremental.id}/compose-entry.json`)
+    expect(execute(`cat /fixture/server/releases/${incremental.id}/.hai/web.conf`)).toContain('client_max_body_size 16809984;')
+    expect(execute('cat /fixture/commands.log')).toContain(`/releases/${incremental.id}/.hai/compose.json`)
   }, 60_000)
 
   it.each(['docker', 'podman'] as const)('真实 shell 在 %s 中等待中间件健康后才启动 serv，不健康时不启动 serv', async (remoteRuntime) => {
@@ -725,13 +766,13 @@ ${recoveryFails ? 'exit 22' : `grep -q '/releases/${full.id}/' /fixture/active-c
       const file = join(root, 'readiness.sh')
       writeFileSync(file, createApplyScript({ deploymentId: bundle.id, projectName: 'readiness-test', environment: 'test', directory: '/fixture/server', runtime: remoteRuntime, partial: !!selectedServices, selected: selectedServices ?? ['serv', 'db'], hostPort: 18080, healthPaths: ['/health'] }))
       execFileSync(runtime, ['cp', file, `${container}:/fixture/${bundle.directory}/apply.sh`], { windowsHide: true })
-      execute(`cd /fixture/${bundle.directory}; sed '/  apply.sh$/d' SHA256SUMS > SHA256SUMS.next; sha256sum apply.sh >> SHA256SUMS.next; mv SHA256SUMS.next SHA256SUMS`)
+      execute(`cd /fixture/${bundle.directory}; sed '/  apply.sh$/d' .hai/SHA256SUMS > .hai/SHA256SUMS.next; sha256sum apply.sh >> .hai/SHA256SUMS.next; mv .hai/SHA256SUMS.next .hai/SHA256SUMS`)
       return bundle
     }
     const full = await readinessBundle()
     const applied = apply(full)
     expect(applied.status, `${applied.stdout}\n${applied.stderr}`).toBe(0)
-    expect(applied.stdout).toContain(`/releases/${full.id}/.env.runtime`)
+    expect(applied.stdout).toContain('/config/.env.runtime')
     expect(applied.stdout).toContain('HAI_ADMIN_DEFAULT_PASSWORD')
     expect(applied.stdout).not.toContain(password)
     const commands = execute('cat /fixture/commands.log')

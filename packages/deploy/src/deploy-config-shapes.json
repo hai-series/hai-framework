@@ -1,0 +1,4610 @@
+{
+  "core": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "default": "hai Admin",
+        "type": "string"
+      },
+      "version": {
+        "default": "0.1.0",
+        "type": "string"
+      },
+      "env": {
+        "default": "development",
+        "type": "string",
+        "enum": [
+          "development",
+          "production",
+          "test",
+          "staging"
+        ]
+      },
+      "logging": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "default": "info",
+            "type": "string",
+            "enum": [
+              "trace",
+              "debug",
+              "info",
+              "warn",
+              "error",
+              "fatal"
+            ]
+          },
+          "format": {
+            "default": "json",
+            "type": "string",
+            "enum": [
+              "json",
+              "pretty"
+            ]
+          },
+          "context": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "redact": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "defaultLocale": {
+        "default": "zh-CN",
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "db": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "sqlite"
+          },
+          "database": {
+            "type": "string"
+          },
+          "sqlite": {
+            "type": "object",
+            "properties": {
+              "walMode": {
+                "default": true,
+                "type": "boolean"
+              },
+              "readonly": {
+                "default": false,
+                "type": "boolean"
+              },
+              "executor": {
+                "default": "sync",
+                "type": "string",
+                "enum": [
+                  "sync",
+                  "worker"
+                ]
+              },
+              "workerConnectTimeoutMs": {
+                "default": 10000,
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "database"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "host": {
+            "default": "localhost",
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "database": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "ssl": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "require",
+                  "prefer",
+                  "allow",
+                  "disable"
+                ]
+              },
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            ]
+          },
+          "pool": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "max": {
+                "default": 10,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "idleTimeout": {
+                "default": 30000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "acquireTimeout": {
+                "default": 10000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          "type": {
+            "type": "string",
+            "const": "postgresql"
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "database",
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": ""
+              },
+              {
+                "type": "string",
+                "format": "uri"
+              }
+            ]
+          },
+          "host": {
+            "default": "localhost",
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "database": {
+            "type": "string",
+            "minLength": 1
+          },
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "ssl": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "rejectUnauthorized": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "verifyIdentity": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "ca": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "cert": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "pool": {
+            "type": "object",
+            "properties": {
+              "max": {
+                "default": 10,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "acquireTimeout": {
+                "default": 10000,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483647
+              },
+              "queueLimit": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            },
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "const": "mysql"
+          },
+          "mysql": {
+            "type": "object",
+            "properties": {
+              "charset": {
+                "default": "utf8mb4",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    ]
+  },
+  "cache": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "memory"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "redis"
+          },
+          "url": {
+            "type": "string"
+          },
+          "host": {
+            "default": "localhost",
+            "type": "string"
+          },
+          "port": {
+            "default": 6379,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "password": {
+            "type": "string"
+          },
+          "db": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          },
+          "cluster": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              },
+              "required": [
+                "host",
+                "port"
+              ]
+            }
+          },
+          "sentinel": {
+            "type": "object",
+            "properties": {
+              "sentinels": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "port": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 65535
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "port"
+                  ]
+                }
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sentinels",
+              "name"
+            ]
+          },
+          "connectTimeout": {
+            "default": 10000,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "commandTimeout": {
+            "default": 5000,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "tls": {
+            "default": false,
+            "type": "boolean"
+          },
+          "maxRetries": {
+            "default": 3,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "retryDelay": {
+            "default": 50,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "readOnly": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    ]
+  },
+  "storage": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "s3"
+          },
+          "bucket": {
+            "type": "string",
+            "minLength": 1
+          },
+          "createBucket": {
+            "default": false,
+            "type": "boolean"
+          },
+          "region": {
+            "type": "string",
+            "minLength": 1
+          },
+          "accessKeyId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "secretAccessKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "endpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "publicEndpoint": {
+            "type": "string",
+            "format": "uri"
+          },
+          "forcePathStyle": {
+            "default": false,
+            "type": "boolean"
+          },
+          "prefix": {
+            "default": "",
+            "type": "string"
+          },
+          "publicUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "bucket",
+          "region",
+          "accessKeyId",
+          "secretAccessKey"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "local"
+          },
+          "root": {
+            "type": "string",
+            "minLength": 1
+          },
+          "directoryMode": {
+            "default": 493,
+            "type": "number"
+          },
+          "fileMode": {
+            "default": 420,
+            "type": "number"
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "root"
+        ]
+      }
+    ]
+  },
+  "iam": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "initialCredentials": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "reauthentication": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "operations": {
+            "default": [],
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "ttlSeconds": {
+            "default": 300,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 900
+          }
+        }
+      },
+      "loginAccess": {
+        "type": "object",
+        "properties": {
+          "allowIps": {
+            "default": [],
+            "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "ipv4",
+                  "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                },
+                {
+                  "type": "string",
+                  "format": "ipv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv4",
+                  "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                }
+              ]
+            }
+          },
+          "denyIps": {
+            "default": [],
+            "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "ipv4",
+                  "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                },
+                {
+                  "type": "string",
+                  "format": "ipv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv4",
+                  "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                }
+              ]
+            }
+          },
+          "timezone": {
+            "default": "UTC",
+            "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+            "type": "string"
+          },
+          "windows": {
+            "default": [],
+            "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "days": {
+                  "minItems": 1,
+                  "maxItems": 7,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7
+                  },
+                  "description": "允许窗口的开始日，周一 1 至周日 7，至少一项"
+                },
+                "start": {
+                  "type": "string",
+                  "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                  "description": "允许窗口开始时间 HH:mm，包含开始时刻"
+                },
+                "end": {
+                  "type": "string",
+                  "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                  "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同"
+                }
+              },
+              "required": [
+                "days",
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "accounts": {
+        "type": "object",
+        "properties": {
+          "dormantAfterDays": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 36500
+          },
+          "scanIntervalSeconds": {
+            "default": 3600,
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          }
+        }
+      },
+      "ui": {
+        "type": "object",
+        "properties": {
+          "variant": {
+            "default": "card",
+            "type": "string",
+            "enum": [
+              "card",
+              "split"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "brandTitle": {
+            "type": "string"
+          },
+          "brandText": {
+            "type": "string"
+          },
+          "logoUrl": {
+            "type": "string"
+          },
+          "illustrationUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "password": {
+        "type": "object",
+        "properties": {
+          "minLength": {
+            "default": 8,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "maxLength": {
+            "default": 128,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "requireUppercase": {
+            "default": true,
+            "type": "boolean"
+          },
+          "requireLowercase": {
+            "default": true,
+            "type": "boolean"
+          },
+          "requireNumber": {
+            "default": true,
+            "type": "boolean"
+          },
+          "requireSpecialChar": {
+            "default": false,
+            "type": "boolean"
+          },
+          "minCharacterClasses": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "expirationDays": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "preventSamePassword": {
+            "default": false,
+            "type": "boolean"
+          },
+          "requireInitialChange": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "otp": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "default": true,
+            "type": "boolean"
+          },
+          "sms": {
+            "default": true,
+            "type": "boolean"
+          },
+          "length": {
+            "default": 6,
+            "type": "integer",
+            "minimum": 4,
+            "maximum": 8
+          },
+          "expiresIn": {
+            "default": 300,
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 9007199254740991
+          },
+          "maxAttempts": {
+            "default": 3,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "resendInterval": {
+            "default": 60,
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "ldap": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "bindDn": {
+            "type": "string"
+          },
+          "bindPassword": {
+            "type": "string"
+          },
+          "searchBase": {
+            "type": "string"
+          },
+          "searchFilter": {
+            "default": "(uid={{username}})",
+            "type": "string"
+          },
+          "usernameAttribute": {
+            "default": "uid",
+            "type": "string"
+          },
+          "emailAttribute": {
+            "default": "mail",
+            "type": "string"
+          },
+          "displayNameAttribute": {
+            "default": "cn",
+            "type": "string"
+          },
+          "useTls": {
+            "default": false,
+            "type": "boolean"
+          },
+          "connectTimeout": {
+            "default": 5000,
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "url",
+          "bindDn",
+          "bindPassword",
+          "searchBase"
+        ]
+      },
+      "apikey": {
+        "type": "object",
+        "properties": {
+          "maxKeysPerUser": {
+            "default": 10,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "defaultExpirationDays": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "prefix": {
+            "default": "hai_",
+            "type": "string"
+          }
+        }
+      },
+      "passwordReset": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "default": "email",
+            "type": "string",
+            "enum": [
+              "email",
+              "phone"
+            ]
+          },
+          "resetUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "tokenExpiresIn": {
+            "default": 3600,
+            "type": "integer",
+            "minimum": 300,
+            "maximum": 9007199254740991
+          },
+          "maxAttempts": {
+            "default": 3,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "login": {
+        "default": {
+          "password": true,
+          "otp": true,
+          "ldap": false,
+          "apikey": false
+        },
+        "type": "object",
+        "properties": {
+          "password": {
+            "default": true,
+            "type": "boolean"
+          },
+          "otp": {
+            "default": true,
+            "type": "boolean"
+          },
+          "ldap": {
+            "default": false,
+            "type": "boolean"
+          },
+          "apikey": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "register": {
+        "default": {
+          "enabled": true,
+          "defaultAccountStatus": "active"
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "defaultAccountStatus": {
+            "default": "active",
+            "type": "string",
+            "enum": [
+              "active",
+              "dormant"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "agreements": {
+        "default": {
+          "showOnRegister": true,
+          "showOnLogin": false
+        },
+        "type": "object",
+        "properties": {
+          "userAgreementMarkdown": {
+            "type": "string",
+            "minLength": 1
+          },
+          "privacyPolicyMarkdown": {
+            "type": "string",
+            "minLength": 1
+          },
+          "userAgreementUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "privacyPolicyUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "showOnRegister": {
+            "default": true,
+            "type": "boolean"
+          },
+          "showOnLogin": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "captcha": {
+        "default": {
+          "enabled": false,
+          "ttlSeconds": 120,
+          "cost": 5000,
+          "maxCounter": 100
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "ttlSeconds": {
+            "default": 120,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "cost": {
+            "default": 5000,
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 50000
+          },
+          "maxCounter": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          }
+        }
+      },
+      "security": {
+        "default": {
+          "lockoutEnabled": true,
+          "failureWindow": 86400,
+          "maxLoginAttempts": 5,
+          "lockoutDuration": 900
+        },
+        "type": "object",
+        "properties": {
+          "lockoutEnabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "failureWindow": {
+            "default": 86400,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 31536000
+          },
+          "maxLoginAttempts": {
+            "default": 5,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "lockoutDuration": {
+            "default": 900,
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "session": {
+        "type": "object",
+        "properties": {
+          "maxAge": {
+            "default": 86400,
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 9007199254740991
+          },
+          "endOnPageHide": {
+            "default": false,
+            "type": "boolean"
+          },
+          "sliding": {
+            "default": true,
+            "type": "boolean"
+          },
+          "singleDevice": {
+            "default": false,
+            "type": "boolean"
+          },
+          "singleDeviceMode": {
+            "default": "replace",
+            "type": "string",
+            "enum": [
+              "replace",
+              "reject"
+            ]
+          },
+          "maxSessions": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "terminalLimits": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "enum": [
+                "web",
+                "app",
+                "desktop",
+                "api"
+              ]
+            },
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          },
+          "terminalLimitMode": {
+            "default": "reject",
+            "type": "string",
+            "enum": [
+              "reject",
+              "replace"
+            ]
+          },
+          "idleTimeout": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 31536000
+          },
+          "absoluteTimeout": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 31536000
+          },
+          "refreshTokenMaxAge": {
+            "default": 604800,
+            "type": "integer",
+            "minimum": 3600,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "rbac": {
+        "default": {
+          "enabled": true,
+          "superAdminRole": "super_admin",
+          "defaultRole": "user"
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "superAdminRole": {
+            "default": "super_admin",
+            "type": "string"
+          },
+          "defaultRole": {
+            "default": "user",
+            "type": "string"
+          }
+        }
+      },
+      "seedDefaultData": {
+        "default": true,
+        "type": "boolean"
+      }
+    }
+  },
+  "ai": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "llm": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "baseUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "model": {
+            "default": "gpt-4o-mini",
+            "type": "string"
+          },
+          "protocol": {
+            "default": "chat",
+            "type": "string",
+            "enum": [
+              "chat",
+              "responses",
+              "anthropic"
+            ]
+          },
+          "maxTokens": {
+            "default": 4096,
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "temperature": {
+            "default": 0.7,
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "timeout": {
+            "default": 60000,
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "tempModelCacheTtl": {
+            "default": 600000,
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "protocol": {
+                  "type": "string",
+                  "enum": [
+                    "chat",
+                    "responses",
+                    "anthropic"
+                  ]
+                },
+                "apiKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "maxTokens": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "timeout": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "model"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "scenarios": {
+            "type": "object",
+            "properties": {
+              "default": {
+                "type": "string"
+              },
+              "chat": {
+                "type": "string"
+              },
+              "reasoning": {
+                "type": "string"
+              },
+              "plan": {
+                "type": "string"
+              },
+              "execute": {
+                "type": "string"
+              },
+              "extraction": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "embedding": {
+                "type": "string"
+              },
+              "rerank": {
+                "type": "string"
+              },
+              "ocr": {
+                "type": "string"
+              },
+              "fast": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "mcp": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "default": "1.0.0",
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "object",
+                "properties": {
+                  "tools": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "resources": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "prompts": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        }
+      },
+      "embedding": {
+        "type": "object",
+        "properties": {
+          "dimensions": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "batchSize": {
+            "default": 100,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "knowledge": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "default": "hai_ai_knowledge",
+            "type": "string"
+          },
+          "dimension": {
+            "default": 1536,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "enableEntityExtraction": {
+            "default": true,
+            "type": "boolean"
+          },
+          "cleanOptions": {
+            "default": {
+              "removeHtml": true,
+              "removeUrls": false,
+              "removeEmails": false,
+              "normalizeWhitespace": true,
+              "trim": true
+            },
+            "type": "object",
+            "properties": {
+              "removeHtml": {
+                "default": true,
+                "type": "boolean"
+              },
+              "removeUrls": {
+                "default": false,
+                "type": "boolean"
+              },
+              "removeEmails": {
+                "default": false,
+                "type": "boolean"
+              },
+              "normalizeWhitespace": {
+                "default": true,
+                "type": "boolean"
+              },
+              "trim": {
+                "default": true,
+                "type": "boolean"
+              },
+              "customReplacements": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "pattern": {
+                      "type": "string"
+                    },
+                    "replacement": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "pattern",
+                    "replacement"
+                  ]
+                }
+              }
+            }
+          },
+          "chunkOptions": {
+            "default": {
+              "mode": "markdown",
+              "maxSize": 1500,
+              "overlap": 200,
+              "markdownMinLevel": 2,
+              "markdownKeepTitle": true
+            },
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sentence",
+                  "paragraph",
+                  "markdown",
+                  "page",
+                  "word",
+                  "character",
+                  "custom"
+                ]
+              },
+              "maxSize": {
+                "default": 1500,
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "overlap": {
+                "default": 0,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "separator": {
+                "type": "string"
+              },
+              "markdownMinLevel": {
+                "default": 2,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 6
+              },
+              "markdownKeepTitle": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "entityBoostWeight": {
+            "default": 0.15,
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "entityTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "systemPrompt": {
+            "type": "string"
+          }
+        }
+      },
+      "memory": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "default": "native",
+            "type": "string",
+            "enum": [
+              "native",
+              "mem0"
+            ]
+          },
+          "allowEphemeralFallback": {
+            "default": false,
+            "type": "boolean"
+          },
+          "maxEntriesPerObject": {
+            "default": 1000,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxEntriesGlobal": {
+            "default": 100000,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "recencyDecay": {
+            "default": 0.95,
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "embeddingEnabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "defaultTopK": {
+            "default": 10,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "candidateMultiplier": {
+            "default": 5,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "writebackRelatedTopK": {
+            "default": 20,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "token": {
+        "type": "object",
+        "properties": {
+          "tokenRatio": {
+            "default": 0.25,
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "summary": {
+        "type": "object",
+        "properties": {
+          "systemPrompt": {
+            "type": "string"
+          }
+        }
+      },
+      "compress": {
+        "type": "object",
+        "properties": {
+          "defaultStrategy": {
+            "default": "hybrid",
+            "type": "string",
+            "enum": [
+              "summary",
+              "sliding-window",
+              "hybrid"
+            ]
+          },
+          "defaultMaxTokens": {
+            "default": 0,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "preserveLastN": {
+            "default": 4,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "retrieval": {
+        "type": "object",
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "collection": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "topK": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "minScore": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "filter": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "id",
+                "collection"
+              ]
+            }
+          }
+        }
+      },
+      "file": {
+        "type": "object",
+        "properties": {
+          "systemPrompt": {
+            "type": "string"
+          }
+        }
+      },
+      "a2a": {
+        "type": "object",
+        "properties": {
+          "execution": {
+            "default": {},
+            "type": "object",
+            "properties": {
+              "leaseMs": {
+                "default": 30000,
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 86400000
+              },
+              "pollIntervalMs": {
+                "default": 250,
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 5000
+              },
+              "maxExecutionMs": {
+                "default": 300000,
+                "type": "integer",
+                "minimum": 1000,
+                "maximum": 86400000
+              }
+            }
+          },
+          "agentCard": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "skills": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ]
+          },
+          "security": {
+            "type": "object",
+            "properties": {
+              "apiKey": {
+                "type": "object",
+                "properties": {
+                  "in": {
+                    "default": "header",
+                    "type": "string",
+                    "enum": [
+                      "header",
+                      "query"
+                    ]
+                  },
+                  "name": {
+                    "default": "x-api-key",
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "agentCard"
+        ]
+      },
+      "audio": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "openai",
+                    "mimo",
+                    "qwen",
+                    "doubao",
+                    "whisper",
+                    "indextts"
+                  ]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "operations": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "transcribe",
+                      "synthesize"
+                    ]
+                  }
+                },
+                "apiKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "baseUrl": {
+                  "type": "string"
+                },
+                "appKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "accessKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "resourceId": {
+                  "type": "string"
+                },
+                "workspaceId": {
+                  "type": "string"
+                },
+                "timeout": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "provider",
+                "model",
+                "operations"
+              ]
+            }
+          },
+          "inheritLlmApiKey": {
+            "default": false,
+            "type": "boolean"
+          },
+          "transcribeModel": {
+            "type": "string"
+          },
+          "synthesizeModel": {
+            "type": "string"
+          },
+          "maxAudioBytes": {
+            "default": 10485760,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxStreamDurationMs": {
+            "default": 300000,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "image": {
+        "type": "object",
+        "properties": {
+          "maxImageBytes": {
+            "default": 20971520,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 104857600
+          },
+          "maxImages": {
+            "default": 4,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 16
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "openai",
+                    "google",
+                    "qwen",
+                    "seedream",
+                    "pollinations"
+                  ]
+                },
+                "model": {
+                  "type": "string"
+                },
+                "apiKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "workspaceId": {
+                  "type": "string"
+                },
+                "timeout": {
+                  "default": 120000,
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 2147483647
+                }
+              },
+              "required": [
+                "id",
+                "provider",
+                "model"
+              ]
+            }
+          },
+          "generateModel": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "vecdb": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "lancedb"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "metric": {
+            "default": "cosine",
+            "type": "string",
+            "enum": [
+              "cosine",
+              "euclidean",
+              "dot"
+            ]
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "path"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "pgvector"
+          },
+          "url": {
+            "type": "string"
+          },
+          "host": {
+            "default": "localhost",
+            "type": "string"
+          },
+          "port": {
+            "default": 5432,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "database": {
+            "type": "string",
+            "minLength": 1
+          },
+          "user": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "indexType": {
+            "default": "hnsw",
+            "type": "string",
+            "enum": [
+              "ivfflat",
+              "hnsw"
+            ]
+          },
+          "metric": {
+            "default": "cosine",
+            "type": "string",
+            "enum": [
+              "cosine",
+              "euclidean",
+              "dot"
+            ]
+          },
+          "tablePrefix": {
+            "default": "vec_",
+            "type": "string"
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "database"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "qdrant"
+          },
+          "url": {
+            "default": "http://localhost:6333",
+            "type": "string",
+            "format": "uri"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "metric": {
+            "default": "cosine",
+            "type": "string",
+            "enum": [
+              "cosine",
+              "euclidean",
+              "dot"
+            ]
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "chroma"
+          },
+          "path": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "host": {
+            "default": "localhost",
+            "type": "string"
+          },
+          "port": {
+            "default": 8000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "apiKey": {
+            "type": "string",
+            "pattern": "^[\\x21-\\x7E]*$"
+          },
+          "serverCommand": {
+            "default": "chroma",
+            "type": "string"
+          },
+          "startupTimeout": {
+            "default": 30000,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "metric": {
+            "default": "cosine",
+            "type": "string",
+            "enum": [
+              "cosine",
+              "euclidean",
+              "dot"
+            ]
+          },
+          "operationLog": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "default": false,
+                "type": "boolean"
+              },
+              "write": {
+                "default": false,
+                "type": "boolean"
+              },
+              "maxLength": {
+                "default": 1000,
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "level": {
+                "default": "debug",
+                "type": "string",
+                "enum": [
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    ]
+  },
+  "reach": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "providers": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "type": "string",
+                  "const": "console"
+                }
+              },
+              "required": [
+                "name",
+                "type"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "type": "string",
+                  "const": "smtp"
+                },
+                "host": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "port": {
+                  "default": 465,
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "secure": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "user": {
+                  "type": "string"
+                },
+                "pass": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "host",
+                "from"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "type": "string",
+                  "const": "aliyun-sms"
+                },
+                "accessKeyId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "accessKeySecret": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "signName": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "endpoint": {
+                  "default": "dysmsapi.aliyuncs.com",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "accessKeyId",
+                "accessKeySecret",
+                "signName"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "type": "string",
+                  "const": "api"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "method": {
+                  "default": "POST",
+                  "type": "string",
+                  "enum": [
+                    "POST",
+                    "PUT"
+                  ]
+                },
+                "headers": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "timeout": {
+                  "default": 10000,
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "redirect": {
+                  "default": "error",
+                  "type": "string",
+                  "enum": [
+                    "error",
+                    "follow"
+                  ]
+                },
+                "requireHttps": {
+                  "type": "boolean"
+                },
+                "idempotent": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "url"
+              ]
+            }
+          ]
+        }
+      },
+      "templates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "subject": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "name",
+            "provider",
+            "body"
+          ]
+        }
+      },
+      "dnd": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "strategy": {
+            "default": "discard",
+            "type": "string",
+            "enum": [
+              "discard",
+              "delay"
+            ]
+          },
+          "start": {
+            "default": "00:00",
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          },
+          "end": {
+            "default": "00:00",
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+          }
+        }
+      },
+      "queue": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "maxAttempts": {
+            "default": 5,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "retryDelayMs": {
+            "default": 60000,
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 86400000
+          },
+          "maxRetryDelayMs": {
+            "default": 3600000,
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 86400000
+          }
+        }
+      }
+    },
+    "required": [
+      "providers"
+    ]
+  },
+  "feedback": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "appId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "appVersion": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "buildId": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "commit": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "notificationMode": {
+        "default": "reach",
+        "type": "string",
+        "enum": [
+          "disabled",
+          "console",
+          "reach"
+        ]
+      },
+      "consoleContent": {
+        "default": "metadata",
+        "type": "string",
+        "enum": [
+          "metadata",
+          "summary"
+        ]
+      },
+      "recipients": {
+        "default": [],
+        "maxItems": 20,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320
+        }
+      },
+      "notificationProvider": {
+        "default": "email",
+        "type": "string",
+        "minLength": 1
+      },
+      "adminUrl": {
+        "type": "string",
+        "format": "uri"
+      },
+      "collectionTimeoutMs": {
+        "default": 60000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 300000
+      },
+      "businessCollectionTimeoutMs": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 300000
+      },
+      "webhookUrl": {
+        "default": "",
+        "type": "string",
+        "maxLength": 2048
+      },
+      "webhookSecret": {
+        "default": "",
+        "type": "string",
+        "maxLength": 4096
+      },
+      "webhookTimeoutMs": {
+        "default": 10000,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 60000
+      },
+      "workerIntervalMs": {
+        "default": 1000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 60000
+      },
+      "leaseMs": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 300000
+      },
+      "maxAttempts": {
+        "default": 5,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "retentionDays": {
+        "default": 30,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3650
+      },
+      "maxReportsPerUserDay": {
+        "default": 20,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
+      },
+      "maxBytesPerUserDay": {
+        "default": 2147483648,
+        "type": "integer",
+        "minimum": 4194304,
+        "maximum": 1099511627776
+      },
+      "maxStoredBytesPerScope": {
+        "default": 10737418240,
+        "type": "integer",
+        "minimum": 4194304,
+        "maximum": 1099511627776
+      },
+      "maxExportsPerReport": {
+        "default": 5,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "exportRetentionHours": {
+        "default": 24,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 720
+      },
+      "envAllowlist": {
+        "default": [],
+        "maxItems": 100,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "maxTotalBytes": {
+        "default": 33554432,
+        "type": "integer",
+        "minimum": 4194304,
+        "maximum": 41943040
+      },
+      "maxAttachmentBytes": {
+        "default": 5242880,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 5242880
+      },
+      "maxEvidenceBytes": {
+        "default": 4194304,
+        "type": "integer",
+        "minimum": 1024,
+        "maximum": 4194304
+      },
+      "maxEvidenceCount": {
+        "default": 2000,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 10000
+      }
+    },
+    "required": [
+      "appId"
+    ],
+    "additionalProperties": false
+  },
+  "payment": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "wechat": {
+        "type": "object",
+        "properties": {
+          "mchId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "apiV3Key": {
+            "type": "string",
+            "minLength": 1
+          },
+          "serialNo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "privateKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "platformKeys": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "appId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "mchId",
+          "apiV3Key",
+          "serialNo",
+          "privateKey",
+          "platformKeys",
+          "appId"
+        ]
+      },
+      "alipay": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sellerId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "privateKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "alipayPublicKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "returnUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "signType": {
+            "default": "RSA2",
+            "type": "string",
+            "enum": [
+              "RSA2",
+              "RSA"
+            ]
+          },
+          "sandbox": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "appId",
+          "sellerId",
+          "privateKey",
+          "alipayPublicKey",
+          "returnUrl"
+        ]
+      },
+      "stripe": {
+        "type": "object",
+        "properties": {
+          "secretKey": {
+            "type": "string",
+            "pattern": "^(?:sk|rk)_(?:test|live)_\\S+$"
+          },
+          "webhookSecret": {
+            "type": "string",
+            "minLength": 1
+          },
+          "successUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "cancelUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "webhookToleranceSeconds": {
+            "default": 300,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "secretKey",
+          "webhookSecret",
+          "successUrl"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "audit": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "alerts": {
+        "default": {
+          "enabled": false,
+          "maxNotificationsPerCheck": 100,
+          "rules": [],
+          "schedule": {
+            "enabled": false,
+            "cron": "* * * * *",
+            "timezone": "UTC"
+          }
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "maxNotificationsPerCheck": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "rules": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[\\w-]{1,64}$"
+                },
+                "actions": {
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "resource": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "outcomes": {
+                  "default": [
+                    "failure",
+                    "denied"
+                  ],
+                  "maxItems": 3,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "success",
+                      "failure",
+                      "denied"
+                    ]
+                  }
+                },
+                "minimumSeverity": {
+                  "default": "info",
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warning",
+                    "error",
+                    "critical"
+                  ]
+                },
+                "severity": {
+                  "default": "warning",
+                  "type": "string",
+                  "enum": [
+                    "warning",
+                    "error",
+                    "critical"
+                  ]
+                },
+                "threshold": {
+                  "default": 1,
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                },
+                "windowSeconds": {
+                  "default": 300,
+                  "type": "integer",
+                  "minimum": 60,
+                  "maximum": 86400
+                },
+                "targets": {
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[\\w-]{1,64}$"
+                      },
+                      "provider": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "to": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "provider",
+                      "to"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "actions",
+                "targets"
+              ]
+            }
+          },
+          "schedule": {
+            "default": {
+              "enabled": false,
+              "cron": "* * * * *",
+              "timezone": "UTC"
+            },
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "default": false,
+                "type": "boolean"
+              },
+              "cron": {
+                "default": "* * * * *",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "timezone": {
+                "default": "UTC",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
+          }
+        }
+      },
+      "backup": {
+        "default": {
+          "enabled": false,
+          "batchSize": 200,
+          "maxRecordBytes": 1048576,
+          "schedule": {
+            "enabled": false,
+            "cron": "0 2 * * *",
+            "timezone": "UTC"
+          }
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "batchSize": {
+            "default": 200,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "maxRecordBytes": {
+            "default": 1048576,
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 67108864
+          },
+          "schedule": {
+            "default": {
+              "enabled": false,
+              "cron": "0 2 * * *",
+              "timezone": "UTC"
+            },
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "default": false,
+                "type": "boolean"
+              },
+              "cron": {
+                "default": "0 2 * * *",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "timezone": {
+                "default": "UTC",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
+          }
+        }
+      },
+      "capture": {
+        "default": {
+          "enabled": true,
+          "includeReads": false
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "includeReads": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "retention": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "minDays": {
+            "default": 90,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 36500
+          }
+        }
+      },
+      "privacy": {
+        "default": {
+          "enabled": true,
+          "fields": []
+        },
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "fields": {
+            "default": [],
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        }
+      },
+      "userTable": {
+        "default": "hai_iam_users",
+        "type": "string"
+      },
+      "userIdColumn": {
+        "default": "id",
+        "type": "string"
+      },
+      "userNameColumn": {
+        "default": "username",
+        "type": "string"
+      }
+    }
+  },
+  "scheduler": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "enableDb": {
+        "default": true,
+        "type": "boolean",
+        "const": true
+      },
+      "tickInterval": {
+        "default": 1000,
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 9007199254740991
+      },
+      "leaseMs": {
+        "default": 300000,
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 86400000
+      },
+      "nodeId": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxLogs": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+      },
+      "retentionDays": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 9007199254740991
+      }
+    }
+  },
+  "deploy": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "environment": {
+        "type": "string",
+        "pattern": "^[a-z0-9][\\w-]*$"
+      },
+      "provider": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "vercel"
+              },
+              "token": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "token"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "docker-ssh"
+              },
+              "ssh": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9.:-]*$"
+                  },
+                  "port": {
+                    "default": 22,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "username": {
+                    "type": "string",
+                    "pattern": "^[a-z_][\\w-]*$"
+                  },
+                  "auth": {
+                    "type": "string",
+                    "enum": [
+                      "key",
+                      "password"
+                    ]
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "identityFile": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "knownHostsFile": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "strictHostKeyChecking": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "connectTimeoutSeconds": {
+                    "default": 10,
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "host",
+                  "username"
+                ]
+              },
+              "remote": {
+                "default": {
+                  "baseDir": "/opt/hai/apps",
+                  "runtime": "auto"
+                },
+                "type": "object",
+                "properties": {
+                  "baseDir": {
+                    "default": "/opt/hai/apps",
+                    "type": "string",
+                    "pattern": "^\\/[\\w/. -]+$"
+                  },
+                  "runtime": {
+                    "default": "auto",
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "docker",
+                      "podman"
+                    ]
+                  }
+                }
+              },
+              "expose": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "default": "port",
+                    "type": "string",
+                    "const": "port"
+                  },
+                  "containerPort": {
+                    "default": 3000,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "hostPort": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "https": {
+                    "description": "可选 HTTPS 入口；files 使用已有证书，letsencrypt 使用官方 Certbot 申请续期，省略保持 HTTP",
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "files"
+                          },
+                          "domain": {
+                            "type": "string",
+                            "maxLength": 253,
+                            "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+                            "description": "HTTPS 公开域名；证书必须匹配该域名"
+                          },
+                          "port": {
+                            "default": 443,
+                            "description": "HTTPS 宿主端口，默认 443，须与 HTTP 端口不同",
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 65535
+                          },
+                          "redirectHttp": {
+                            "default": true,
+                            "description": "普通 HTTP 请求是否以 308 跳转至 HTTPS，健康检查和 ACME 挑战除外",
+                            "type": "boolean"
+                          },
+                          "certificateFile": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "PEM 完整证书链路径，相对工程根或绝对路径；打包时复制到私有发布目录"
+                          },
+                          "privateKeyFile": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "未加密 PEM 私钥路径，相对工程根或绝对路径；必须与证书匹配"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "domain",
+                          "certificateFile",
+                          "privateKeyFile"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "letsencrypt"
+                          },
+                          "domain": {
+                            "type": "string",
+                            "maxLength": 253,
+                            "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+                            "description": "Let’s Encrypt 单个公网域名，使用 HTTP-01，不支持 IP 或通配符"
+                          },
+                          "port": {
+                            "default": 443,
+                            "description": "HTTPS 宿主端口，默认 443，须与 HTTP 端口不同",
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 65535
+                          },
+                          "redirectHttp": {
+                            "default": true,
+                            "description": "普通 HTTP 请求是否以 308 跳转至 HTTPS，健康检查和 ACME 挑战除外",
+                            "type": "boolean"
+                          },
+                          "email": {
+                            "type": "string",
+                            "format": "email",
+                            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+                            "description": "Let’s Encrypt 账号联系邮箱"
+                          },
+                          "acceptTerms": {
+                            "type": "boolean",
+                            "const": true,
+                            "description": "明确同意 Let’s Encrypt 服务条款后才可设置为 true"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "domain",
+                          "email",
+                          "acceptTerms"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "hostPort"
+                ]
+              },
+              "trustedEdgeProxies": {
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "ipv4",
+                      "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                    },
+                    {
+                      "type": "string",
+                      "format": "ipv6",
+                      "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                    },
+                    {
+                      "type": "string",
+                      "format": "cidrv4",
+                      "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                    },
+                    {
+                      "type": "string",
+                      "format": "cidrv6",
+                      "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "type",
+              "expose"
+            ]
+          }
+        ]
+      },
+      "services": {
+        "type": "object",
+        "properties": {
+          "db": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provisioner": {
+                    "type": "string",
+                    "const": "neon"
+                  },
+                  "apiKey": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "provisioner",
+                  "apiKey"
+                ]
+              }
+            ]
+          },
+          "cache": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provisioner": {
+                    "type": "string",
+                    "const": "upstash"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "apiKey": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "provisioner",
+                  "email",
+                  "apiKey"
+                ]
+              }
+            ]
+          },
+          "storage": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provisioner": {
+                    "type": "string",
+                    "const": "cloudflare-r2"
+                  },
+                  "accessKeyId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "secretAccessKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "accountId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "apiToken": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "provisioner",
+                  "accessKeyId",
+                  "secretAccessKey",
+                  "accountId",
+                  "apiToken"
+                ]
+              }
+            ]
+          },
+          "email": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provisioner": {
+                    "type": "string",
+                    "const": "resend"
+                  },
+                  "from": {
+                    "type": "string",
+                    "format": "email",
+                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                  },
+                  "apiKey": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "provisioner",
+                  "from",
+                  "apiKey"
+                ]
+              }
+            ]
+          },
+          "sms": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "provisioner": {
+                    "type": "string",
+                    "const": "aliyun"
+                  },
+                  "signName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "accessKeyId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "accessKeySecret": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "provisioner",
+                  "signName",
+                  "accessKeyId",
+                  "accessKeySecret"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "container": {
+        "type": "object",
+        "properties": {
+          "s3Engine": {
+            "default": "rustfs",
+            "type": "string",
+            "enum": [
+              "rustfs",
+              "minio"
+            ]
+          }
+        }
+      }
+    },
+    "required": [
+      "provider"
+    ]
+  },
+  "serv": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "default": "127.0.0.1",
+            "type": "string",
+            "minLength": 1
+          },
+          "port": {
+            "default": 3000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        }
+      },
+      "http": {
+        "type": "object",
+        "properties": {
+          "trustedProxies": {
+            "default": "auto",
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "auto"
+              },
+              {
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "ipv4",
+                      "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                    },
+                    {
+                      "type": "string",
+                      "format": "ipv6",
+                      "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                    },
+                    {
+                      "type": "string",
+                      "format": "cidrv4",
+                      "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                    },
+                    {
+                      "type": "string",
+                      "format": "cidrv6",
+                      "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                    }
+                  ]
+                }
+              }
+            ],
+            "description": "可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段"
+          },
+          "access": {
+            "default": false,
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "\\.ya?ml$",
+                    "description": "独立 yml/yaml 策略文件；按工作目录解析，启动读一次，最大 1 MiB"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "global": {
+                    "description": "所有宿主请求的共同条件；包含健康检查，省略不增加全局限制",
+                    "type": "object",
+                    "properties": {
+                      "allowIps": {
+                        "default": [],
+                        "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+                        "maxItems": 1000,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "ipv4",
+                              "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                            },
+                            {
+                              "type": "string",
+                              "format": "ipv6",
+                              "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                            },
+                            {
+                              "type": "string",
+                              "format": "cidrv4",
+                              "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                            },
+                            {
+                              "type": "string",
+                              "format": "cidrv6",
+                              "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                            }
+                          ]
+                        }
+                      },
+                      "denyIps": {
+                        "default": [],
+                        "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+                        "maxItems": 1000,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "ipv4",
+                              "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                            },
+                            {
+                              "type": "string",
+                              "format": "ipv6",
+                              "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                            },
+                            {
+                              "type": "string",
+                              "format": "cidrv4",
+                              "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                            },
+                            {
+                              "type": "string",
+                              "format": "cidrv6",
+                              "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                            }
+                          ]
+                        }
+                      },
+                      "timezone": {
+                        "default": "UTC",
+                        "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+                        "type": "string"
+                      },
+                      "windows": {
+                        "default": [],
+                        "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "minItems": 1,
+                              "maxItems": 7,
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 7
+                              },
+                              "description": "允许窗口的开始日，周一 1 至周日 7，至少一项"
+                            },
+                            "start": {
+                              "type": "string",
+                              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                              "description": "允许窗口开始时间 HH:mm，包含开始时刻"
+                            },
+                            "end": {
+                              "type": "string",
+                              "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                              "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "rules": {
+                    "default": [],
+                    "description": "路径访问规则，最多 1000 条；全局和所有匹配规则都必须通过",
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "allowIps": {
+                          "default": [],
+                          "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+                          "maxItems": 1000,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "ipv4",
+                                "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                              },
+                              {
+                                "type": "string",
+                                "format": "ipv6",
+                                "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                              },
+                              {
+                                "type": "string",
+                                "format": "cidrv4",
+                                "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                              },
+                              {
+                                "type": "string",
+                                "format": "cidrv6",
+                                "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                              }
+                            ]
+                          }
+                        },
+                        "denyIps": {
+                          "default": [],
+                          "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+                          "maxItems": 1000,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "ipv4",
+                                "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                              },
+                              {
+                                "type": "string",
+                                "format": "ipv6",
+                                "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                              },
+                              {
+                                "type": "string",
+                                "format": "cidrv4",
+                                "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                              },
+                              {
+                                "type": "string",
+                                "format": "cidrv6",
+                                "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                              }
+                            ]
+                          }
+                        },
+                        "timezone": {
+                          "default": "UTC",
+                          "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+                          "type": "string"
+                        },
+                        "windows": {
+                          "default": [],
+                          "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "days": {
+                                "minItems": 1,
+                                "maxItems": 7,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 7
+                                },
+                                "description": "允许窗口的开始日，周一 1 至周日 7，至少一项"
+                              },
+                              "start": {
+                                "type": "string",
+                                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                                "description": "允许窗口开始时间 HH:mm，包含开始时刻"
+                              },
+                              "end": {
+                                "type": "string",
+                                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                                "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同"
+                              }
+                            },
+                            "required": [
+                              "days",
+                              "start",
+                              "end"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64,
+                          "pattern": "^[\\w.-]+$",
+                          "description": "唯一规则编号，用于日志定位；1–64 个字母数字下划线、点或连字符"
+                        },
+                        "paths": {
+                          "minItems": 1,
+                          "maxItems": 100,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          },
+                          "description": "完整请求路径列表，包含部署前缀；精确或末尾 /**，最多 100 项"
+                        },
+                        "methods": {
+                          "default": [],
+                          "description": "受该规则约束的 HTTP 方法；空数组全部方法，GET 不隐含 HEAD",
+                          "maxItems": 9,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "GET",
+                              "HEAD",
+                              "POST",
+                              "PUT",
+                              "PATCH",
+                              "DELETE",
+                              "OPTIONS",
+                              "CONNECT",
+                              "TRACE"
+                            ]
+                          }
+                        },
+                        "encryption": {
+                          "description": "路径的应用层加解密模式；省略沿用宿主，required 强制加密，disabled 明文；重叠路径和方法不得冲突",
+                          "type": "string",
+                          "enum": [
+                            "required",
+                            "disabled"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "paths"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            ],
+            "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用"
+          },
+          "apiPrefix": {
+            "default": "/api/v1"
+          },
+          "openapi": {
+            "default": false,
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "default": "/openapi.json"
+                  }
+                }
+              }
+            ]
+          },
+          "docs": {
+            "default": false,
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "default": "/docs"
+                  },
+                  "requireAuth": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            ]
+          },
+          "health": {
+            "default": {
+              "path": "/health",
+              "readyPath": "/ready"
+            },
+            "anyOf": [
+              {
+                "type": "boolean",
+                "const": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "default": "/health"
+                  },
+                  "readyPath": {
+                    "default": "/ready"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "cors": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string"
+          },
+          "nativeOrigins": {
+            "type": "string"
+          },
+          "allowedHeaders": {
+            "default": [
+              "Authorization",
+              "Content-Type",
+              "X-Requested-With",
+              "X-Hai-Reauthentication",
+              "X-Hai-Terminal"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exposedHeaders": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "credentials": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "transport": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "const": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "maxPlaintextBytes": {
+                "description": "普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1024,
+                    "maximum": 67108864
+                  },
+                  {
+                    "type": "string",
+                    "const": "auto"
+                  }
+                ]
+              },
+              "routePlaintextBytes": {
+                "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
+                "type": "object",
+                "propertyNames": {},
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 1024,
+                  "maximum": 67108864
+                }
+              },
+              "keyExchangePath": {
+                "default": "/_hai/key-exchange"
+              },
+              "excludePaths": {
+                "default": [],
+                "type": "array",
+                "items": {}
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "kit": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "default": "127.0.0.1",
+            "type": "string",
+            "minLength": 1
+          },
+          "port": {
+            "default": 3000,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        }
+      },
+      "transport": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "const": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "maxPlaintextBytes": {
+                "description": "普通业务双向明文上限；auto 为 1 MiB；大材料使用 routePlaintextBytes 单独声明",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1024,
+                    "maximum": 67108864
+                  },
+                  {
+                    "type": "string",
+                    "const": "auto"
+                  }
+                ]
+              },
+              "routePlaintextBytes": {
+                "description": "完整路径段到双向明文字节上限的映射；星号匹配单段，供附件和归档独立容量",
+                "type": "object",
+                "propertyNames": {},
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 1024,
+                  "maximum": 67108864
+                }
+              },
+              "keyExchangePath": {
+                "default": "/api/_hai/key-exchange"
+              },
+              "excludePaths": {
+                "default": [],
+                "type": "array",
+                "items": {}
+              }
+            }
+          }
+        ]
+      },
+      "trustedProxies": {
+        "default": "auto",
+        "anyOf": [
+          {
+            "type": "string",
+            "const": "auto"
+          },
+          {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "ipv4",
+                  "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                },
+                {
+                  "type": "string",
+                  "format": "ipv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv4",
+                  "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                },
+                {
+                  "type": "string",
+                  "format": "cidrv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                }
+              ]
+            }
+          }
+        ],
+        "description": "可信代理 IP/CIDR；默认 auto 在普通宿主忽略转发头，仅受管私有 Compose 采用容器网段"
+      },
+      "access": {
+        "default": false,
+        "anyOf": [
+          {
+            "type": "boolean",
+            "const": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "\\.ya?ml$",
+                "description": "独立 yml/yaml 策略文件；按工作目录解析，启动读一次，最大 1 MiB"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "global": {
+                "description": "所有宿主请求的共同条件；包含健康检查，省略不增加全局限制",
+                "type": "object",
+                "properties": {
+                  "allowIps": {
+                    "default": [],
+                    "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "ipv4",
+                          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                        },
+                        {
+                          "type": "string",
+                          "format": "ipv6",
+                          "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                        },
+                        {
+                          "type": "string",
+                          "format": "cidrv4",
+                          "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                        },
+                        {
+                          "type": "string",
+                          "format": "cidrv6",
+                          "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                        }
+                      ]
+                    }
+                  },
+                  "denyIps": {
+                    "default": [],
+                    "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "ipv4",
+                          "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                        },
+                        {
+                          "type": "string",
+                          "format": "ipv6",
+                          "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                        },
+                        {
+                          "type": "string",
+                          "format": "cidrv4",
+                          "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                        },
+                        {
+                          "type": "string",
+                          "format": "cidrv6",
+                          "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                        }
+                      ]
+                    }
+                  },
+                  "timezone": {
+                    "default": "UTC",
+                    "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+                    "type": "string"
+                  },
+                  "windows": {
+                    "default": [],
+                    "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "days": {
+                          "minItems": 1,
+                          "maxItems": 7,
+                          "type": "array",
+                          "items": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 7
+                          },
+                          "description": "允许窗口的开始日，周一 1 至周日 7，至少一项"
+                        },
+                        "start": {
+                          "type": "string",
+                          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                          "description": "允许窗口开始时间 HH:mm，包含开始时刻"
+                        },
+                        "end": {
+                          "type": "string",
+                          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                          "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同"
+                        }
+                      },
+                      "required": [
+                        "days",
+                        "start",
+                        "end"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "rules": {
+                "default": [],
+                "description": "路径访问规则，最多 1000 条；全局和所有匹配规则都必须通过",
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "allowIps": {
+                      "default": [],
+                      "description": "允许的 IPv4/IPv6 地址或 CIDR；空数组不限，最多 1000 项",
+                      "maxItems": 1000,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "ipv4",
+                            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                          },
+                          {
+                            "type": "string",
+                            "format": "ipv6",
+                            "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                          },
+                          {
+                            "type": "string",
+                            "format": "cidrv4",
+                            "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                          },
+                          {
+                            "type": "string",
+                            "format": "cidrv6",
+                            "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                          }
+                        ]
+                      }
+                    },
+                    "denyIps": {
+                      "default": [],
+                      "description": "拒绝的 IP/CIDR；拒绝优先，空数组不限，最多 1000 项",
+                      "maxItems": 1000,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "ipv4",
+                            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+                          },
+                          {
+                            "type": "string",
+                            "format": "ipv6",
+                            "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+                          },
+                          {
+                            "type": "string",
+                            "format": "cidrv4",
+                            "pattern": "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\/([0-9]|[1-2][0-9]|3[0-2])$"
+                          },
+                          {
+                            "type": "string",
+                            "format": "cidrv6",
+                            "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$"
+                          }
+                        ]
+                      }
+                    },
+                    "timezone": {
+                      "default": "UTC",
+                      "description": "访问时间窗口使用的 IANA 时区，默认 UTC，使用服务器时钟",
+                      "type": "string"
+                    },
+                    "windows": {
+                      "default": [],
+                      "description": "允许的访问时间窗口；空数组不限时间，最多 100 个",
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "days": {
+                            "minItems": 1,
+                            "maxItems": 7,
+                            "type": "array",
+                            "items": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 7
+                            },
+                            "description": "允许窗口的开始日，周一 1 至周日 7，至少一项"
+                          },
+                          "start": {
+                            "type": "string",
+                            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                            "description": "允许窗口开始时间 HH:mm，包含开始时刻"
+                          },
+                          "end": {
+                            "type": "string",
+                            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+                            "description": "允许窗口结束时间 HH:mm，不含结束；早于开始表示跨午夜，不得与开始相同"
+                          }
+                        },
+                        "required": [
+                          "days",
+                          "start",
+                          "end"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^[\\w.-]+$",
+                      "description": "唯一规则编号，用于日志定位；1–64 个字母数字下划线、点或连字符"
+                    },
+                    "paths": {
+                      "minItems": 1,
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                      },
+                      "description": "完整请求路径列表，包含部署前缀；精确或末尾 /**，最多 100 项"
+                    },
+                    "methods": {
+                      "default": [],
+                      "description": "受该规则约束的 HTTP 方法；空数组全部方法，GET 不隐含 HEAD",
+                      "maxItems": 9,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "GET",
+                          "HEAD",
+                          "POST",
+                          "PUT",
+                          "PATCH",
+                          "DELETE",
+                          "OPTIONS",
+                          "CONNECT",
+                          "TRACE"
+                        ]
+                      }
+                    },
+                    "encryption": {
+                      "description": "路径的应用层加解密模式；省略沿用宿主，required 强制加密，disabled 明文；重叠路径和方法不得冲突",
+                      "type": "string",
+                      "enum": [
+                        "required",
+                        "disabled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "paths"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "description": "每次请求的路径/IP/时间策略；false 关闭，内联规则与独立 YAML 文件引用不能混用"
+      }
+    }
+  }
+}

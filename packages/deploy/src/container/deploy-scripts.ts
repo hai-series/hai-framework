@@ -1,20 +1,22 @@
 /** 在线发布与手工交付共用的服务器执行脚本。远程依赖 Linux flock、基础工具及 Compose。 */
 import { deployM } from '../deploy-i18n.js'
+import { createBackendStateScript } from './deploy-backend-state.js'
 import { createComposeContainerLookupScript } from './deploy-compose-identity.js'
+import { createManagedSecretScript } from './deploy-managed-secrets.js'
+import { createDeploymentManifestFunctions } from './deploy-manifest.js'
+import { createRuntimeConfigurationScript } from './deploy-runtime-script.js'
+import { shellArgument } from './deploy-shell.js'
 import { windowsAskpassSource } from './deploy-ssh-askpass.js'
 import { createTargetReader } from './deploy-target.js'
 
-/**
- * 将可信配置编码为一个 shell 参数。
- * @param value - 受信值，编码为一个远端 shell 参数。
- * @returns 可作为一个远端 shell 参数的编码文本。
- * @example 模块内部上下文
- * ```ts
- * const encoded = shellArgument("Shop's app") // 整体作为一个远端 shell 参数。
- * ```
- */
-export function shellArgument(value: string): string {
-  return `'${value.replaceAll('\'', '\'"\'"\'')}'`
+export { shellArgument } from './deploy-shell.js'
+
+/** 合并文件但保留独立 Shell 的失败即停语义，条件调用不能抑制内部 set -e。 */
+function embeddedHandler(name: string, script: string): string {
+  const marker = `HAI_${name.toUpperCase()}_BODY`
+  if (script.split('\n').includes(marker))
+    throw new Error('Invalid embedded deployment handler')
+  return `${name}() {\n  metadata_work="$metadata_work" sh -s -- "$@" <<'${marker}'\n${script}\n${marker}\n}\n`
 }
 
 /**
@@ -61,6 +63,10 @@ export function createApplyScript(options: {
     HEALTH: options.healthPaths.map(shellArgument).join(' '),
     PRIMARY: options.primaryService ?? 'serv',
     LOOKUP: createComposeContainerLookupScript(),
+    MANIFEST: createDeploymentManifestFunctions(),
+    BACKEND: embeddedHandler('resolve_backend_state', createBackendStateScript(options.projectName)),
+    MANAGED: embeddedHandler('resolve_managed_secrets', createManagedSecretScript()),
+    CONFIGURATION: createRuntimeConfigurationScript(options.primaryService ?? 'serv'),
   }
   return String.raw`#!/bin/sh
 # 服务器部署流程：由 deploy-local.sh 或 SSH 入口自动解包后调用，无需手工解包。
@@ -73,6 +79,7 @@ source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 destination=@@ROOT@@
 if [ "$#" -gt 0 ]; then destination=$1; fi
 root=$(mkdir -p -- "$destination" && CDPATH= cd -- "$destination" && pwd)
+test "$root" != / || { printf 'The filesystem root cannot be used as a deployment directory.\n' >&2; exit 1; }
 id=@@ID@@
 project=@@PROJECT@@
 export HAI_DEPLOY_ENVIRONMENT=@@ENV@@
@@ -95,9 +102,20 @@ recovery_status=not-needed
 locked=false
 result_owned=false
 interrupted=false
+metadata_work=''
+metadata_work_owned=false
+configuration_container=''
+configuration_creation_started=false
+runtime_config_changed=false
+runtime_config_existed=false
+runtime_next_owned=false
 started=$(date +%s)
 step_started=$started
 @@LOOKUP@@
+@@MANIFEST@@
+@@BACKEND@@
+@@MANAGED@@
+@@CONFIGURATION@@
 step() {
   if [ -n "$stage" ] && [ "$result_owned" = true ]; then
     duration=$(( $(date +%s) - step_started ))
@@ -109,14 +127,9 @@ step() {
   printf '\n[%s] %s\n' "$stage" "$2"
 }
 compose() {
-  arguments_file="$release/compose-files"
-  if [ -n "$restore" ]; then arguments_file="$root/releases/$restore/compose-files"; fi
-  # -f 按顺序合并，由 Compose 保留未选服务、卷和环境文件，不自行拼装配置。
-  command_args="$release/.compose-command"
-  # 文件列表先反向读取，再向参数头部加入，保留原始合并顺序。
-  awk '{lines[NR]=$0} END {for(i=NR;i>0;i--) print lines[i]}' "$arguments_file" > "$command_args"
-  while IFS= read -r file; do set -- -f "$file" "$@"; done < "$command_args"
-  "$runtime" compose -p "$project" "$@"
+  compose_file="$release/.hai/compose.json"
+  if [ -n "$restore" ]; then compose_file="$root/releases/$restore/.hai/compose.json"; fi
+  "$runtime" compose -p "$project" -f "$compose_file" "$@"
 }
 remove_selected() {
   test "$partial" = true || return 0
@@ -189,12 +202,7 @@ start_renewal() {
 }
 read_proxy_service() {
   proxy_directory=$1
-  if [ -e "$proxy_directory/proxy-service" ] || [ -L "$proxy_directory/proxy-service" ]; then
-    test -f "$proxy_directory/proxy-service" && test ! -L "$proxy_directory/proxy-service" || return 1
-    stored_proxy=$(cat "$proxy_directory/proxy-service") || return 1
-  else
-    stored_proxy=$(awk -F: 'NR == 1 { if ($3 == "true") print "web"; else if ($3 == "gateway") print "gateway"; }' "$proxy_directory/layout") || return 1
-  fi
+  stored_proxy=$(deployment_json read metadata.proxy-service string "$proxy_directory/manifest.json") || return 1
   case "$stored_proxy" in ''|web|gateway) printf '%s' "$stored_proxy";; *) return 1;; esac
 }
 reload_retained_proxy() {
@@ -203,7 +211,7 @@ reload_retained_proxy() {
   # Nginx 静态 upstream 会保留旧容器 IP；应用或存储增量替换后重新解析服务 DNS。
   case " $selected " in *' serv '*|*' web '*|*' storage '*)
     case " $selected " in *" $retained_proxy "*) ;; *)
-      if grep -qx "$retained_proxy" "$1/services"; then compose exec -T "$retained_proxy" nginx -s reload || return 1; fi
+      if grep -qx "$retained_proxy" "$(deployment_services_file "$1")"; then compose exec -T "$retained_proxy" nginx -s reload || return 1; fi
       ;;
     esac
     ;;
@@ -214,9 +222,12 @@ wait_http() {
   http_port=$2
   shift 2
   https_domain=''
-  if [ -f "$http_release/https" ]; then
-    read -r https_domain https_port https_type < "$http_release/https"
-    https_certificates="$http_release/tls"
+  https_metadata=$(deployment_json read metadata.https string "$http_release/manifest.json") || return 1
+  if [ -n "$https_metadata" ]; then
+    read -r https_domain https_port https_type <<HTTPS_METADATA
+$https_metadata
+HTTPS_METADATA
+    https_certificates="$http_release/.hai/tls"
     if [ "$https_type" = letsencrypt ]; then https_certificates="$root/https/certificates/$https_domain"; fi
   fi
   for http_path in "$@"; do
@@ -235,17 +246,8 @@ wait_http() {
 verify_recovery() {
   # 回滚使用旧发布的端口与探测路径，不能用失败新包的地址证明旧服务健康。
   recovery_release="$root/releases/$previous"
-  recovery_port=$(awk -F: 'NR == 1 { print $1 }' "$recovery_release/layout") || return 1
-  recovery_paths=''
-  if [ -f "$recovery_release/health-paths" ]; then
-    recovery_paths=$(cat "$recovery_release/health-paths") || return 1
-  else
-    # 旧格式发布没有独立健康文件；按已存拓扑恢复最小 HTTP 检查。
-    recovery_proxy=$(awk -F: 'NR == 1 { print $3 }' "$recovery_release/layout") || return 1
-    recovery_primary=$(awk -F: 'NR == 1 { print $4 }' "$recovery_release/layout") || return 1
-    if [ "$recovery_proxy" = true ]; then recovery_paths='/health /_hai/web-health /';
-    elif [ "$recovery_primary" = web ]; then recovery_paths='/'; else recovery_paths='/health'; fi
-  fi
+  recovery_port=$(awk -F: 'NR == 1 { print $1 }' "$(deployment_metadata_file "$recovery_release" layout)") || return 1
+  recovery_paths=$(cat "$(deployment_metadata_file "$recovery_release" health-paths)") || return 1
   case "$recovery_port" in ''|*[!0-9]*) return 1;; esac
   wait_services $recover_selected || return 1
   start_renewal $recover_selected || return 1
@@ -255,7 +257,21 @@ verify_recovery() {
 finish() {
   code=$?
   trap - EXIT HUP INT TERM
+  configuration_cleanup_ok=true
+  if ! remove_runtime_preparation; then
+    configuration_cleanup_ok=false
+    recovery_status=failed
+    if [ "$code" -eq 0 ]; then code=1; fi
+    printf 'Runtime preparation cleanup could not be confirmed; private evidence remains in %s.\n' "$metadata_work" >&2
+  fi
+  if [ "$runtime_next_owned" = true ]; then rm -f -- "$root/config/.env.runtime.next-$id" || code=1; fi
+  runtime_restore_ready=true
   if [ "$code" -ne 0 ]; then
+    if ! restore_application_runtime; then
+      runtime_restore_ready=false
+      recovery_status=failed
+      printf 'Cannot restore the previous application runtime configuration.\n' >&2
+    fi
     printf '[FAIL] %s (exit %s)\n' "$stage" "$code" >&2
     if [ "$changed" = true ]; then
       diagnostics="$root/diagnostics-$id.log"
@@ -282,9 +298,9 @@ finish() {
     if [ "$changed" = true ] && [ -n "$previous" ]; then
       printf '[RECOVER] Restoring previous selected services\n' >&2
       recover_selected=$selected
-      if [ "$partial" = false ]; then recover_selected=$(cat "$root/releases/$previous/services"); fi
+      if [ "$partial" = false ]; then recover_selected=$(cat "$(deployment_services_file "$root/releases/$previous")"); fi
       restore="$previous"
-      if sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" recover && remove_selected $recover_selected && start_services $recover_selected && verify_recovery && [ "$recovery_status" != failed ]; then
+      if [ "$runtime_restore_ready" = true ] && resolve_backend_state "$root" "$release" "$runtime" "$previous" recover && remove_selected $recover_selected && start_services $recover_selected && verify_recovery && [ "$recovery_status" != failed ]; then
         recovery_status=passed
         printf '[RECOVER] Previous release passed recovery health checks\n' >&2
       else
@@ -299,6 +315,12 @@ finish() {
         recovery_status=failed
         printf '[FAIL] Could not stop failed first installation; inspect containers.\n' >&2
       fi
+    fi
+  fi
+  if [ "$configuration_cleanup_ok" = true ] && [ "$metadata_work_owned" = true ]; then
+    if ! deployment_metadata_cleanup; then
+      printf 'Deployment metadata cleanup failed.\n' >&2
+      if [ "$code" -eq 0 ]; then code=1; fi
     fi
   fi
   if [ "$locked" = true ]; then
@@ -323,7 +345,7 @@ finish() {
 trap finish EXIT
 trap 'interrupted=true; exit 130' HUP INT TERM
 step preflight 'Checking deployment tools and package'
-for tool in sha256sum tar awk curl flock; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
+for tool in sha256sum tar awk curl flock mktemp; do command -v "$tool" >/dev/null || { printf 'Required command missing: %s\n' "$tool" >&2; exit 1; }; done
 if [ "$runtime" = auto ]; then
   if command -v podman >/dev/null 2>&1 && podman version >/dev/null 2>&1; then runtime=podman; else runtime=docker; fi
 fi
@@ -352,42 +374,43 @@ if [ -e "$release" ] || [ -L "$release" ] || [ -e "$root/result-$id.json" ] || [
   exit 1
 fi
 result_owned=true
+deployment_metadata_init
 cd "$source_dir"
-sha256sum -c SHA256SUMS
+sha256sum -c .hai/SHA256SUMS
+test "$(deployment_json read bundleFormat number manifest.json)" = 2 || { printf 'Unsupported deployment bundle format.\n' >&2; exit 1; }
 if [ -f "$root/current" ]; then
   previous=$(cat "$root/current")
   case "$previous" in ''|*[!a-zA-Z0-9._-]*) printf 'Invalid deployment state\n' >&2; exit 1;; esac
-  test -f "$root/releases/$previous/compose-files"
+  test -f "$root/releases/$previous/.hai/compose.json"
+  test "$(deployment_json read bundleFormat number "$root/releases/$previous/manifest.json")" = 2 || { printf 'Unsupported installed deployment format.\n' >&2; exit 1; }
+fi
+if [ -z "$previous" ] && { [ -e "$root/config/.env.runtime" ] || [ -L "$root/config/.env.runtime" ]; }; then
+  printf 'Application runtime configuration exists without an installed deployment baseline. Use a dedicated deployment directory.\n' >&2
+  exit 1
 fi
 # 独立持久账本覆盖暂时移除的服务和首次失败留下的卷，预检不写状态。
-sh "$source_dir/resolve-backend-state.sh" "$root" "$source_dir" "$runtime" "$previous" check
+resolve_backend_state "$root" "$source_dir" "$runtime" "$previous" check
 if [ "$partial" = true ]; then
   test -n "$previous" || { printf 'Partial deployment requires a successful full installation. Deploy a complete bundle first.\n' >&2; exit 1; }
   # 目录属于完整Web拓扑；旧版本缺省为根目录，服务增量不能意外丢失或改变既有目录。
-  read_deployment_metadata() {
-    if [ -e "$1" ] || [ -L "$1" ]; then
-      test -f "$1" && test ! -L "$1" || { printf 'Deployment path/config metadata must be a regular file.\n' >&2; return 1; }
-      cat "$1"
-    fi
-  }
-  current_web_base=$(read_deployment_metadata "$source_dir/web-base-path")
-  previous_web_base=$(read_deployment_metadata "$root/releases/$previous/web-base-path")
+  current_web_base=$(deployment_json read metadata.web-base-path string "$source_dir/manifest.json")
+  previous_web_base=$(deployment_json read metadata.web-base-path string "$root/releases/$previous/manifest.json")
   test "$current_web_base" = "$previous_web_base" || { printf 'Web base path changed. Match the installed prefix for partial updates, or create a full deployment.\n' >&2; exit 1; }
-  current_storage_routing=$(read_deployment_metadata "$source_dir/storage-routing")
-  previous_storage_routing=$(read_deployment_metadata "$root/releases/$previous/storage-routing")
+  current_storage_routing=$(deployment_json read metadata.storage-routing string "$source_dir/manifest.json")
+  previous_storage_routing=$(deployment_json read metadata.storage-routing string "$root/releases/$previous/manifest.json")
   test "$current_storage_routing" = "$previous_storage_routing" || { printf 'Managed storage configuration changed. Create a full deployment to switch its public endpoint, bucket, or access policy consistently.\n' >&2; exit 1; }
-  if ! cmp -s layout "$root/releases/$previous/layout"; then
+  source_layout=$(deployment_metadata_file "$source_dir" layout)
+  previous_layout=$(deployment_metadata_file "$root/releases/$previous" layout)
+  if ! cmp -s "$source_layout" "$previous_layout"; then
     # 容量调整允许复用已部署 Web 镜像；端口、路由及其余代理策略仍要求全量部署。
-    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' layout)" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$root/releases/$previous/layout")" || { printf 'Ports, HTTPS or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
-    test -f web.conf && test -f proxy-entry.json || { printf 'Proxy configuration missing. Create a full deployment bundle.\n' >&2; exit 1; }
-    previous_proxy=
-    while IFS= read -r compose_file; do
-      candidate_proxy="$(dirname -- "$compose_file")/web.conf"
-      if [ -f "$candidate_proxy" ]; then previous_proxy=$candidate_proxy; fi
-    done < "$root/releases/$previous/compose-files"
-    test -n "$previous_proxy" || { printf 'Proxy baseline missing. Create a full deployment bundle.\n' >&2; exit 1; }
+    test "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$source_layout")" = "$(awk -F: '{print $1 ":" $2 ":" $3 ":" $4 ":" $6}' "$previous_layout")" || { printf 'Ports, HTTPS or application layout changed. Create a full deployment bundle.\n' >&2; exit 1; }
+    test -f .hai/web.conf || { printf 'Proxy configuration missing. Create a full deployment bundle.\n' >&2; exit 1; }
+    json_proxy_service=$(read_proxy_service "$root/releases/$previous")
+    previous_proxy=$(deployment_json proxy-source '' '' "$root/releases/$previous/.hai/compose.json")
+    case "$previous_proxy" in /*) ;; *) previous_proxy="$root/releases/$previous/.hai/$previous_proxy";; esac
+    test -f "$previous_proxy" && test ! -L "$previous_proxy" || { printf 'Proxy baseline missing. Create a full deployment bundle.\n' >&2; exit 1; }
     previous_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' "$previous_proxy" | sha256sum)
-    current_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' web.conf | sha256sum)
+    current_shape=$(sed 's/client_max_body_size [0-9][0-9]*;/client_max_body_size TRANSPORT;/' .hai/web.conf | sha256sum)
     test "$previous_shape" = "$current_shape" || { printf 'API routes or proxy policy changed. Create a full deployment bundle.\n' >&2; exit 1; }
     case " $selected " in *' @@PRIMARY@@ '*) ;; *) printf 'Transport capacity changes require the primary application service. Include it in the partial deployment.\n' >&2; exit 1;; esac
     current_proxy=$(read_proxy_service "$source_dir") || exit 1
@@ -397,43 +420,50 @@ if [ "$partial" = true ]; then
 fi
 mkdir -p "$release"
 # 镜像直接从本次解包目录导入；发布记录只保存运行配置与恢复证据。
-for entry in "$source_dir"/* "$source_dir"/.[!.]*; do
-  test -e "$entry" || continue
-  test "$entry" != "$source_dir/images" || continue
-  cp -R "$entry" "$release/"
+for entry in apply.sh manifest.json config .hai; do
+  test -e "$source_dir/$entry" && test ! -L "$source_dir/$entry" || { printf 'Required deployment entry missing or invalid: %s\n' "$entry" >&2; exit 1; }
+  cp -R "$source_dir/$entry" "$release/"
 done
+chmod 700 "$root" "$release"
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
-if [ -f "$release/web.conf" ]; then chmod 644 "$release/web.conf"; fi
+if [ -f "$release/.hai/web.conf" ]; then chmod 644 "$release/.hai/web.conf"; fi
 for https_script in https-start.sh renew-https.sh; do
-  if [ -f "$release/$https_script" ]; then chmod 444 "$release/$https_script"; fi
+  if [ -f "$release/.hai/$https_script" ]; then chmod 444 "$release/.hai/$https_script"; fi
 done
 # 策略不是凭据，发布目录保持700；只读挂载允许镜像中的非root应用读取。
-if [ -f "$release/request-access.yml" ]; then chmod 444 "$release/request-access.yml"; fi
-: > "$release/compose-files"
+if [ -f "$release/.hai/request-access.yml" ]; then chmod 444 "$release/.hai/request-access.yml"; fi
 if [ "$partial" = true ]; then
-  cp "$root/releases/$previous/compose-files" "$release/compose-files"
-  # 旧版本的生成文件混有镜像原生变量；每项单行，只继承框架连接配置。
-  awk '/^HAI_[A-Z0-9_]+=/ { print }' "$root/releases/$previous/middleware.env" > "$release/middleware.env"
+  baseline_services=$(deployment_services_file "$root/releases/$previous")
   for service in $selected; do
-    grep -qx "$service" "$root/releases/$previous/services" || { printf 'Service %s has no installed baseline. Use a full deployment.\n' "$service" >&2; exit 1; }
+    grep -qx "$service" "$baseline_services" || { printf 'Service %s has no installed baseline. Use a full deployment.\n' "$service" >&2; exit 1; }
   done
 fi
 step credentials 'Resolving server-managed middleware credentials'
-sh "$release/resolve-managed-secrets.sh" "$root" "$release" "$runtime"
-if [ -f "$release/runtime-env.mjs" ]; then
+resolve_managed_secrets "$root" "$release" "$runtime"
+rm -f -- "$release/.hai/managed-candidates.env"
+if [ -f "$release/.hai/runtime-env.mjs" ]; then
   # 上级目录保护宿主秘密；只读文件挂载允许非 root 应用读取，宿主所有者仍可修改配置。
   chmod 700 "$root" "$release"
-  chmod 644 "$release/.env.runtime" "$release/middleware.env"
-  chmod 444 "$release/runtime-env.mjs"
+  chmod 755 "$release/config"
+  chmod 644 "$release/config/.env.runtime" "$release/manifest.json"
+  chmod 444 "$release/.hai/runtime-env.mjs"
 fi
 # 在任何可能启动服务（包括增量恢复旧拓扑）之前定稿，失败回滚不删除卷的引擎身份。
-sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" commit
-printf '%s\n' "$release/compose-entry.json" >> "$release/compose-files"
-if [ "$proxy_update" = true ]; then
-  printf '%s\n' "$release/proxy-entry.json" >> "$release/compose-files"
+resolve_backend_state "$root" "$release" "$runtime" "$previous" commit
+if [ "$partial" = true ]; then
+  deployment_json merge '' '' "$root/releases/$previous/.hai/compose.json" "$release/.hai/compose.json" > "$release/.hai/compose.json.next"
+  mv "$release/.hai/compose.json.next" "$release/.hai/compose.json"
+  deployment_json metadata '' '' "$root/releases/$previous/manifest.json" "$release/manifest.json" > "$release/manifest.json.next"
+  mv "$release/manifest.json.next" "$release/manifest.json"
+  deployment_forget_metadata "$release"
 fi
-compose config >/dev/null
-compose config --services > "$release/services"
+if [ "$proxy_update" = true ]; then
+  json_proxy_service=$(read_proxy_service "$release")
+  json_proxy_mount="../../$id/.hai/web.conf:/etc/nginx/conf.d/default.conf:ro"
+  deployment_json proxy '' '' "$release/.hai/compose.json" > "$release/.hai/compose.json.next"
+  mv "$release/.hai/compose.json.next" "$release/.hai/compose.json"
+fi
+deployment_forget_metadata "$release"
 # 增量包依赖已安装的完整基线；先恢复 down/stop 后的服务，使用旧配置和本地镜像，不重建运行中的容器。
 if [ "$partial" = true ]; then
   recover=false
@@ -441,12 +471,12 @@ if [ "$partial" = true ]; then
     case " $selected " in *" $service "*) continue;; esac
     containers=$(compose_container_ids "$runtime" "$project" "$service" -q)
     if [ -z "$containers" ]; then recover=true; fi
-  done < "$release/services"
+  done < "$(deployment_services_file "$release")"
   if [ "$recover" = true ]; then
     step recover 'Starting stopped services from the installed baseline'
     restore=$previous
-    sh "$release/resolve-backend-state.sh" "$root" "$release" "$runtime" "$previous" recover
-    start_services $(cat "$root/releases/$previous/services")
+    resolve_backend_state "$root" "$release" "$runtime" "$previous" recover
+    start_services $(cat "$(deployment_services_file "$root/releases/$previous")")
     restore=''
   fi
 fi
@@ -468,26 +498,30 @@ while IFS=' ' read -r archive reference; do
   architecture=$("$runtime" image inspect --format '{{.Architecture}}' "$reference")
   host_arch=$(uname -m)
   case "$host_arch:$architecture" in x86_64:amd64|aarch64:arm64) ;; *) printf 'Image architecture %s does not match server %s\n' "$architecture" "$host_arch" >&2; exit 1;; esac
-done < "$release/image-list"
-if [ -f "$release/prepare-https.sh" ]; then
-  sh "$release/prepare-https.sh" "$root" "$release" "$runtime" prepare "$partial"
+done < "$(deployment_metadata_file "$release" image-list)"
+step configuration 'Preparing one application runtime configuration'
+prepare_application_runtime
+compose config >/dev/null
+if [ -f "$release/.hai/prepare-https.sh" ]; then
+  metadata_work="$metadata_work" sh "$release/.hai/prepare-https.sh" "$root" "$release" "$runtime" prepare "$partial"
 fi
 step dependencies 'Checking dependencies of selected services'
-if [ "$partial" = true ]; then cat "$release/services" >> "$release/dependencies"; fi
+dependency_file=$(deployment_metadata_file "$release" dependencies)
+if [ "$partial" = true ]; then cat "$(deployment_services_file "$release")" >> "$dependency_file"; fi
 while IFS= read -r dependency; do
   test -n "$dependency" || continue
   case " $selected " in *" $dependency "*) continue;; esac
   wait_services "$dependency"
-done < "$release/dependencies"
+done < "$dependency_file"
 step start 'Updating selected services'
 changed=true
 remove_selected $selected
 start_services $selected
-if [ -f "$release/prepare-https.sh" ] && [ "$partial" = false ]; then
+if [ -f "$release/.hai/prepare-https.sh" ] && [ "$partial" = false ]; then
   step https 'Issuing or installing HTTPS certificate'
   tls_proxy=$(read_proxy_service "$release")
   wait_services "$tls_proxy"
-  sh "$release/prepare-https.sh" "$root" "$release" "$runtime" issue "$partial"
+  metadata_work="$metadata_work" sh "$release/.hai/prepare-https.sh" "$root" "$release" "$runtime" issue "$partial"
   compose exec -T "$tls_proxy" nginx -t
   compose exec -T "$tls_proxy" nginx -s reload
 fi
@@ -496,11 +530,12 @@ reload_retained_proxy "$release"
 step health 'Checking HTTP access'
 wait_http "$release" @@PORT@@ @@HEALTH@@
 step complete 'Deployment passed all checks'
+deployment_metadata_cleanup
 printf '%s\n' "$id" > "$root/current.next"
 mv "$root/current.next" "$root/current"
 case " $selected " in *' @@PRIMARY@@ '*)
-  if grep -q '^HAI_ADMIN_DEFAULT_PASSWORD=' "$release/.env.runtime"; then
-    printf '[INFO] Initial administrator password source: %s/.env.runtime (HAI_ADMIN_DEFAULT_PASSWORD). Existing users keep their passwords.\n' "$release"
+  if grep -q '^HAI_ADMIN_DEFAULT_PASSWORD=' "$root/config/.env.runtime"; then
+    printf '[INFO] Initial administrator password source: %s/config/.env.runtime (HAI_ADMIN_DEFAULT_PASSWORD). Existing users keep their passwords.\n' "$root"
   fi
   ;;
 esac

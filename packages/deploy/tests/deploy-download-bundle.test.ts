@@ -45,7 +45,7 @@ async function bundle(): Promise<string> {
     throw new Error('Expected docker SSH config')
   writeFileSync(join(directory, 'docker-compose-1.2.3.yml'), 'services:\n  serv:\n    image: localhost/download-test:1.2.3\n    env_file: [.env.runtime]\n  storage:\n    image: ghcr.io/rustfs/rustfs:1.0.1\n    volumes: [storage-data:/data]\nvolumes:\n  storage-data: {}\n')
   writeFileSync(join(directory, '.env.runtime'), 'APP_PUBLIC_LABEL=application\n')
-  const result = await createDeploymentBundle({ directory, artifactDir, artifact, config, projectName: 'download-test', deploymentId: 'download-release', environment: 'test', runtime: 'docker', imageSource: { type: 'cn' }, proxy: { mode: 'custom', url: 'http://127.0.0.1:10808' }, output: join(directory, 'download.tar'), selected: ['serv', 'storage'], partial: false, middlewareEnv: '', healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
+  const result = await createDeploymentBundle({ directory, artifactDir, artifact, config, projectName: 'download-test', deploymentId: 'download-release', environment: 'test', runtime: 'docker', imageSource: { type: 'cn' }, proxy: { mode: 'custom', url: 'http://127.0.0.1:10808' }, output: join(directory, 'download.tar'), selected: ['serv', 'storage'], partial: false, managedAppKeys: [], healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
   return result.bundlePath
 }
 
@@ -53,7 +53,7 @@ it('中间件从所选源下载，归档与 Compose 保留原始引用，代理�
   const path = await bundle()
   expect(state.calls.find(call => call.args[0] === 'pull')).toMatchObject({ args: ['pull', 'ghcr.1ms.run/rustfs/rustfs:1.0.1'], env: { HTTPS_PROXY: 'http://127.0.0.1:10808' } })
   expect(state.calls.some(call => call.args.join(' ') === 'tag ghcr.1ms.run/rustfs/rustfs:1.0.1 ghcr.io/rustfs/rustfs:1.0.1')).toBe(true)
-  const compose = execFileSync('tar', ['-xOf', path, './compose.json'], { encoding: 'utf8', windowsHide: true })
+  const compose = execFileSync('tar', ['-xOf', path, './.hai/compose.json'], { encoding: 'utf8', windowsHide: true })
   expect(compose).toContain('ghcr.io/rustfs/rustfs:1.0.1')
   expect(compose).not.toContain('ghcr.1ms.run')
   expect(readFileSync(path).includes('http://127.0.0.1:10808')).toBe(false)

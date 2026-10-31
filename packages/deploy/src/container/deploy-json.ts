@@ -108,7 +108,7 @@ function value_node(depth,    node, start, character, key, key_start, child) {
   return node
 }
 function parse_document(    node) {
-  if (length(input) > 1048576) fail("document exceeds 1 MiB")
+  if (length(input) > (action == "runtime" ? 16777216 : 1048576)) fail("document exceeds its size limit")
   position = 1
   if (substr(input, 1, 3) == sprintf("%c%c%c", 239, 187, 191)) position = 4
   whitespace(); node = value_node(1); whitespace()
@@ -168,6 +168,64 @@ function quote_json(value,    result, i, character) {
   }
   return result "\""
 }
+function metadata_string(value,    result, i, character) {
+  result = "\""
+  for (i = 1; i <= length(value); i++) {
+    character = substr(value, i, 1)
+    if (character == "\n") result = result "\\n"
+    else if (character ~ /[[:cntrl:]]/) fail("control character in metadata")
+    else result = result (character == "\\" || character == "\"" ? "\\" : "") character
+  }
+  return result "\""
+}
+function combined_rows(previous, incoming, keyed,    values_by_key, keys_in_order, count, pass, rows, total, i, row, key, position, result) {
+  count = 0
+  for (pass = 1; pass <= 2; pass++) {
+    total = split(pass == 1 ? previous : incoming, rows, /\n/)
+    for (i = 1; i <= total; i++) {
+      row = rows[i]
+      if (!length(row)) continue
+      position = index(row, " "); key = keyed && position ? substr(row, 1, position - 1) : row
+      if (!(key in values_by_key)) keys_in_order[++count] = key
+      values_by_key[key] = row
+    }
+  }
+  result = ""
+  for (i = 1; i <= count; i++) result = result values_by_key[keys_in_order[i]] "\n"
+  return result
+}
+function finalize_metadata(    previous, incoming, before, after, fields, count, i, key, old_node, new_node, node, value) {
+  if (document_count != 2) fail("metadata merge requires two documents")
+  previous = roots[1]; incoming = roots[2]
+  before = children[previous, "metadata"]; after = children[incoming, "metadata"]
+  if (kinds[before] != "object" || kinds[after] != "object") fail("deployment metadata is missing")
+  if (values[children[incoming, "partial"]] != "true") return raw[incoming]
+  count = split("state-backends managed-app-keys managed-bindings managed-volumes dependencies", fields, " ")
+  for (i = 1; i <= count; i++) {
+    key = fields[i]; old_node = children[before, key]; new_node = children[after, key]
+    if ((old_node && kinds[old_node] != "string") || (new_node && kinds[new_node] != "string")) fail("invalid deployment metadata type")
+    value = combined_rows(values[old_node], values[new_node], key == "state-backends")
+    if (!new_node) {
+      new_node = ++node_count; children[after, key] = new_node
+      key_json[after, key] = quote_json(key); order[after, ++sizes[after]] = key; kinds[new_node] = "string"
+    }
+    values[new_node] = value; raw[new_node] = metadata_string(value)
+  }
+  raw[after] = object_text(after)
+  return object_text(incoming)
+}
+function service_names(    services, result, i, key) {
+  if (document_count != 1) fail("service lookup requires one document")
+  services = children[roots[1], "services"]
+  if (kinds[services] != "object") fail("Compose services are missing")
+  result = ""
+  for (i = 1; i <= sizes[services]; i++) {
+    key = order[services, i]
+    if (key !~ /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/) fail("invalid Compose service name")
+    result = result key "\n"
+  }
+  return result
+}
 function update_proxy(    root, services, selected, volumes, i, item, matches, result) {
   if (document_count != 1 || (service != "web" && service != "gateway") || !mount) fail("invalid proxy update")
   root = roots[1]; services = children[root, "services"]; selected = children[services, service]; volumes = children[selected, "volumes"]
@@ -183,6 +241,20 @@ function update_proxy(    root, services, selected, volumes, i, item, matches, r
   raw[selected] = object_text(selected); raw[services] = object_text(services)
   return object_text(root)
 }
+function proxy_source(    services, selected, volumes, i, item, at, matches, result) {
+  if (document_count != 1 || (service != "web" && service != "gateway")) fail("invalid proxy lookup")
+  services = children[roots[1], "services"]; selected = children[services, service]; volumes = children[selected, "volumes"]
+  if (kinds[volumes] != "array") fail("proxy config mount is missing")
+  for (i = 1; i <= sizes[volumes]; i++) {
+    item = items[volumes, i]
+    if (kinds[item] == "string" && values[item] ~ /:\/etc\/nginx\/conf[.]d\/default[.]conf(:[a-z,]+)?$/) {
+      at = index(values[item], ":/etc/nginx/conf.d/default.conf")
+      result = substr(values[item], 1, at - 1); matches++
+    }
+  }
+  if (matches != 1 || result ~ /[[:cntrl:]]/) fail("proxy must have one config mount")
+  return result
+}
 function read_field(    node, count, parts, i, text) {
   if (document_count != 1) fail("field read requires one document")
   node = roots[1]; count = split(field, parts, /\./)
@@ -194,7 +266,8 @@ function read_field(    node, count, parts, i, text) {
   if (expected == "json") return raw[node]
   if (kinds[node] != expected) fail("wrong type for " field)
   text = values[node]
-  if (multiline == "1") gsub(/\n/, "", text)
+  if (action == "runtime") gsub(/[[:cntrl:]]/, "", text)
+  else if (multiline == "1") gsub(/\n/, "", text)
   if (text ~ /[[:cntrl:]]/) fail("control character in " field)
   return values[node]
 }
@@ -204,14 +277,17 @@ function read_field(    node, count, parts, i, text) {
     filename = FILENAME; input = ""
   }
   input = input $0 "\n"
-  if (length(input) > 1048576) fail("document exceeds 1 MiB")
+  if (length(input) > (action == "runtime" ? 16777216 : 1048576)) fail("document exceeds its size limit")
 }
 END {
   if (failed) exit 2
   parse_document()
   if (action == "merge") print merge_compose()
+  else if (action == "metadata") print finalize_metadata()
+  else if (action == "services") printf "%s", service_names()
   else if (action == "proxy") print update_proxy()
-  else if (action == "" || action == "read") print read_field()
+  else if (action == "proxy-source") print proxy_source()
+  else if (action == "" || action == "read" || action == "runtime") print read_field()
   else fail("unknown action")
 }
 `

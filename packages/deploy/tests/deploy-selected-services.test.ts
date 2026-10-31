@@ -52,12 +52,13 @@ it('creates the selected cloud database, skips a kept cache and persists actual 
   expect(JSON.parse(settings?.body ?? '[]')).toEqual(expect.arrayContaining([
     expect.objectContaining({ key: 'HAI_DEPLOY_ENVIRONMENT', value: 'test' }),
     expect.objectContaining({ key: 'HAI_CORE_ENV', value: 'test' }),
-    expect.objectContaining({ key: 'HAI_CACHE', value: '{"type":"redis","url":"redis://existing:6379"}' }),
+    expect.objectContaining({ key: 'HAI_CACHE_TYPE', value: 'redis' }),
+    expect.objectContaining({ key: 'HAI_CACHE_URL', value: 'redis://existing:6379' }),
   ]))
   expect(settings?.body).not.toContain('test-platform-token')
   expect(readFileSync(join(root, '.env.test'), 'utf8')).not.toContain('test-secret')
   const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(loaded.success).toBe(true)
   if (loaded.success)
-    expect(JSON.parse(loaded.data.values.HAI_DB)).toMatchObject({ type: 'postgresql', database: 'app', url: 'postgresql://operator:test-secret@db.example.test/app' })
+    expect(loaded.data.values).toMatchObject({ HAI_DB_TYPE: 'postgresql', HAI_DB_DATABASE: 'app', HAI_DB_URL: 'postgresql://operator:test-secret@db.example.test/app' })
 })

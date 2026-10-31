@@ -9,7 +9,7 @@ import { expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { generateComposeFile } from '../src/container/deploy-container-compose.js'
 
-it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema，父对象优先且关闭健康路由时不发送请求', async (source) => {
+it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema，细项覆盖父 JSON 且关闭健康路由时不发送请求', async (source) => {
   const directory = mkdtempSync(join(tmpdir(), 'hai-serv-health-'))
   const requests: string[] = []
   const server = createServer((request, response) => {
@@ -23,7 +23,7 @@ it.each(['compose', 'api', 'fullstack'])('%s 探针使用应用的真实 Schema�
     writeFileSync(join(directory, 'config/_serv.yml'), 'http:\n  health: { path: /health }\n')
     // 与交付容器一致：预加载运行文件，pretty 日志会创建真实 worker。
     copyFileSync(fileURLToPath(new URL('../src/container/deploy-runtime-env.mjs', import.meta.url)), join(directory, 'runtime-env.mjs'))
-    writeFileSync(join(directory, '.env.runtime'), 'HAI_CORE_LOGGING_FORMAT=pretty\nHAI_SERV_HTTP_HEALTH_PATH=/status\n')
+    writeFileSync(join(directory, 'config/.env.runtime'), 'HAI_CORE_LOGGING_FORMAT=pretty\nHAI_SERV_HTTP_HEALTH_PATH=/status\n')
     writeFileSync(join(directory, 'middleware.env'), '')
     mkdirSync(join(directory, 'node_modules/@h-ai'), { recursive: true })
     for (const name of ['core', 'serv']) {

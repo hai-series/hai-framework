@@ -31,7 +31,7 @@ it.each([undefined, 'key', 'password'] as const)('交付包只保存认证方式
     throw new Error('Expected docker SSH configuration')
   writeFileSync(join(directory, 'docker-compose-1.2.3.yml'), 'services:\n  serv:\n    image: localhost/password-test:1.2.3\n    env_file: [.env.runtime]\n')
   writeFileSync(join(directory, '.env.runtime'), 'APP_PUBLIC_LABEL=application\n')
-  const result = await createDeploymentBundle({ directory, artifactDir, artifact, config, projectName: 'password-test', deploymentId: 'password-release', environment: 'test', runtime: 'docker', output: join(directory, 'password.tar'), selected: ['serv'], partial: false, middlewareEnv: 'CACHE_PASSWORD=other-secret\n', healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
+  const result = await createDeploymentBundle({ directory, artifactDir, artifact, config, projectName: 'password-test', deploymentId: 'password-release', environment: 'test', runtime: 'docker', output: join(directory, 'password.tar'), selected: ['serv'], partial: false, managedAppKeys: [], healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
   const target = JSON.parse(readFileSync(join(directory, 'deploy-target.json'), 'utf8')) as Record<string, unknown>
   expect(target.auth).toBe(auth === 'key' ? 'key' : 'password')
   expect(target.passwordEnv).toBe('HAI_DEPLOY_PROVIDER_SSH_PASSWORD')

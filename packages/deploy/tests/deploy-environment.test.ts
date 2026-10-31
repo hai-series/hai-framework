@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseEnv } from 'node:util'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { loadDeploymentConfig, loadDeploymentEnvironment, saveDeploymentEnvironment } from '../src/index.js'
 
@@ -57,7 +58,7 @@ it('resolves object overrides and special characters without interpolating raw Y
   const file = join(root, '_deploy.yml')
   writeFileSync(file, `provider:\n  type: vercel\n  token: \${HAI_DEPLOY_PROVIDER_TOKEN}\n`)
   const token = 'test: key#value$&'
-  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER_TOKEN: JSON.stringify(token) })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token } } })
+  expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER_TOKEN: token })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token } } })
   expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY_PROVIDER: '{"type":"docker-ssh","ssh":{"host":"host"}}' })).toMatchObject({ success: true, data: { provider: { type: 'docker-ssh', ssh: { host: 'host' } } } })
 })
 
@@ -102,8 +103,47 @@ it('keeps secrets private, round-trips complex JSON values and preserves unrelat
   const merged = loadDeploymentEnvironment({ environment: 'prod', envDir })
   expect(merged.success).toBe(true)
   if (merged.success)
-    expect(JSON.parse(merged.data.values.HAI_DB)).toEqual(JSON.parse(db))
+    expect(merged.data.values).toMatchObject({ HAI_DB_TYPE: 'postgresql', HAI_DB_DATABASE: 'app', HAI_DB_HOST: 'db', HAI_DB_PASSWORD: password })
   expect(readFileSync(join(envDir, '.gitignore'), 'utf8')).toContain('.env.local')
+})
+
+it('生成先合并模块再展开，子对象替换不残留旧字段，更细字段可以覆盖 false', () => {
+  const root = fixture()
+  writeFileSync(join(root, '.env.test'), '# Test\n')
+  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!loaded.success)
+    throw new Error('Missing fixture')
+  expect(saveDeploymentEnvironment(loaded.data, {
+    HAI_SERV: { http: { docs: { path: '/old', requireAuth: true }, access: { file: '/old-policy.yml' } } },
+    HAI_SERV_HTTP: { access: false },
+    HAI_SERV_HTTP_ACCESS_FILE: '/new-policy.yml',
+  }).success).toBe(true)
+  const generated = core.config.parseEnv(readFileSync(join(root, '.env.test'), 'utf8'))
+  expect(generated.HAI_SERV).toBe('{}')
+  expect(generated.HAI_SERV_HTTP).toBeUndefined()
+  expect(generated.HAI_SERV_HTTP_ACCESS).toBeUndefined()
+  expect(generated.HAI_SERV_HTTP_ACCESS_FILE).toBe('/new-policy.yml')
+  const content = readFileSync(join(root, '.env.test'), 'utf8')
+  expect(content.indexOf('HAI_SERV=')).toBeLessThan(content.indexOf('HAI_SERV_HTTP_ACCESS_FILE='))
+  expect(Object.keys(generated).some(name => name.startsWith('HAI_SERV_HTTP_DOCS'))).toBe(false)
+  const file = join(root, '_serv.yml')
+  writeFileSync(file, 'http:\n  docs:\n    path: /yaml-docs\n    requireAuth: true\ntransport:\n  enabled: true\n')
+  expect(loadDeploymentConfig('serv', file, generated)).toEqual({ success: true, data: { http: { access: { file: '/new-policy.yml' } } } })
+})
+
+it('数组公共结构与私有索引凭据分别保存，不复制完整私有数组', () => {
+  const root = fixture()
+  writeFileSync(join(root, '.env.test'), '# Test\n')
+  const loaded = loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!loaded.success)
+    throw new Error('Missing fixture')
+  const providers = [{ name: 'mail', type: 'smtp', host: 'smtp.test', port: 465, secure: true, from: 'noreply@test.test', pass: 'private-array-credential' }]
+  expect(saveDeploymentEnvironment(loaded.data, { HAI_REACH_PROVIDERS: providers }).success).toBe(true)
+  const publicValues = core.config.parseEnv(readFileSync(join(root, '.env.test'), 'utf8'))
+  const privateValues = core.config.parseEnv(readFileSync(join(root, '.env.test.local'), 'utf8'))
+  expect(JSON.parse(publicValues.HAI_REACH_PROVIDERS!)[0]).not.toHaveProperty('pass')
+  expect(privateValues).toEqual({ HAI_REACH_PROVIDERS_0_PASS: 'private-array-credential' })
+  expect(readFileSync(join(root, '.env.test'), 'utf8')).not.toContain('private-array-credential')
 })
 
 it('keeps nested SMTP pass values out of the public environment file', () => {
@@ -144,7 +184,7 @@ it('stores machine-specific host, port and key paths privately and reloads them'
   const loaded = loadDeploymentEnvironment({ environment: 'prod', envDir })
   if (!loaded.success)
     throw new Error('Missing fixture')
-  expect(JSON.parse(loaded.data.values.HAI_DEPLOY_PROVIDER)).toEqual(provider)
+  expect(loaded.data.values).toMatchObject({ HAI_DEPLOY_PROVIDER_TYPE: provider.type, HAI_DEPLOY_PROVIDER_SSH_HOST: provider.ssh.host, HAI_DEPLOY_PROVIDER_SSH_PORT: String(provider.ssh.port) })
   const file = join(envDir, '_deploy.yml')
   writeFileSync(file, 'provider:\n  type: vercel\n  token: placeholder\n')
   expect(loadDeploymentConfig('deploy', file, loaded.data.values)).toMatchObject({ success: true, data: { provider } })
@@ -164,5 +204,5 @@ it('shadows an old shared private object only in the selected mode without delet
   const selected = loadDeploymentEnvironment({ environment: 'test', envDir })
   expect(selected.success).toBe(true)
   if (selected.success)
-    expect(JSON.parse(selected.data.values.HAI_DB)).toEqual({ type: 'sqlite', database: './data/new.db' })
+    expect(selected.data.values).toMatchObject({ HAI_DB_TYPE: 'sqlite', HAI_DB_DATABASE: './data/new.db' })
 })

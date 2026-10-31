@@ -1847,6 +1847,9 @@ importers:
         specifier: 'catalog:'
         version: 4.6.5
     devDependencies:
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../reldb
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5

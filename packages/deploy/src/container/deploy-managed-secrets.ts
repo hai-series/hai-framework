@@ -1,6 +1,7 @@
 /** 自建中间件凭据在服务器定稿；打包机仅提供首次部署候选值。 */
 import { parseEnv } from 'node:util'
 import { deployM } from '../deploy-i18n.js'
+import { createDeploymentManifestFunctions } from './deploy-manifest.js'
 
 const groups = [
   { name: 'DB_PASSWORD', keys: ['POSTGRES_PASSWORD', 'MYSQL_PASSWORD', 'MYSQL_ROOT_PASSWORD'], services: ['db', 'vecdb'] },
@@ -128,8 +129,16 @@ export function createManagedSecretValidationScript(): string {
 `
 }
 
-/** 由 apply.sh 持有项目部署锁时调用，不输出密码值。 */
-function createManagedSecretScript(): string {
+/**
+ * 生成由部署入口持锁调用的凭据定稿函数体，不输出密码值。
+ * @returns 合入 apply.sh 的 Shell 代码，所有应用配置写入单一运行文件。
+ * @example 模块内部上下文
+ * ```ts
+ * const script = createManagedSecretScript()
+ * void script
+ * ```
+ */
+export function createManagedSecretScript(): string {
   return String.raw`#!/bin/sh
 # 由 apply.sh 在项目部署锁内调用；长期凭据只保存在服务器，不依赖打包机。
 set -eu
@@ -138,14 +147,21 @@ root=$1
 release=$2
 runtime=$3
 state="$root/managed-secrets.env"
-candidate_file="$release/managed-candidates.env"
+candidate_file="$release/.hai/managed-candidates.env"
+test -d "$root" && test ! -L "$root" && test -d "$release/.hai" && test ! -L "$release/.hai" || exit 1
+@@MANIFEST_FUNCTIONS@@
+deployment_metadata_init
+trap deployment_metadata_cleanup EXIT
+managed_project=$(deployment_metadata_file "$release" managed-project)
+managed_bindings=$(deployment_metadata_file "$release" managed-bindings)
+managed_volumes=$(deployment_metadata_file "$release" managed-volumes)
 test -s "$candidate_file" || exit 0
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 @@MANAGED_VALUES_VALIDATOR@@
 value_of() { awk -F= -v key="$2" '$1==key {print $2}' "$1"; }
 test ! -L "$state" || fail "Invalid managed middleware credential state: $state"
 valid_values "$candidate_file" || fail 'Invalid managed middleware credential candidates; rebuild the deployment bundle.'
-next="$release/managed-secrets.next"
+next="$release/.hai/managed-secrets.next"
 if [ -f "$state" ]; then
   test -s "$state" && valid_values "$state" || fail "Invalid managed middleware credential state: $state. Restore its protected backup."
   cp "$state" "$next"
@@ -154,7 +170,7 @@ else
 fi
 format=$(value_of "$next" FORMAT_VERSION)
 if [ "$format" = 2 ]; then
-  test "$(value_of "$next" PROJECT)" = "$(cat "$release/managed-project")" || fail 'Managed middleware credential project mismatch.'
+  test "$(value_of "$next" PROJECT)" = "$(cat "$managed_project")" || fail 'Managed middleware credential project mismatch.'
   known=$("$runtime" volume ls -q) || fail 'Cannot check persistent volumes; managed middleware credentials were not changed.'
   while IFS=' ' read -r volume_group volume; do
     test -n "$volume" || continue
@@ -166,7 +182,7 @@ if [ "$format" = 2 ]; then
       index=$(awk -F= '$1~/^VOLUME_[0-9]+$/ {n=substr($1,8)+0; if(n>max)max=n} END {print max+1}' "$next")
       printf 'VOLUME_%s=%s\n' "$index" "$binding" >> "$next"
     fi
-  done < "$release/managed-volumes"
+  done < "$managed_volumes"
 fi
 volumes_checked=false
 known_volumes=''
@@ -183,7 +199,7 @@ while IFS='=' read -r name candidate; do
       if printf '%s\n' "$known_volumes" | grep -Fxq "$volume"; then
         fail "Missing $name in $state for existing persistent volume $volume. Restore the server credential state before retrying."
       fi
-    done < "$release/managed-volumes"
+    done < "$managed_volumes"
     value=$candidate
     if [ "$format" = 2 ]; then value=$(printf '%s' "$candidate" | od -An -tx1 | tr -d ' \n'); fi
     printf '%s=%s\n' "$name" "$value" >> "$next"
@@ -192,8 +208,10 @@ done < "$candidate_file"
 while IFS='=' read -r name candidate; do
   test -n "$name" || continue
   value=$(value_of "$next" "$name")
-  for file in .env.runtime middleware.env middleware-runtime.env; do
-    HAI_DEPLOY_SECRET_CANDIDATE="$candidate" HAI_DEPLOY_SECRET_VALUE="$value" LC_ALL=C awk -v group="$name" -v format="$format" '
+  for file in config/.env.runtime .hai/middleware-runtime.env; do
+    compose_environment=false
+    if [ "$file" = .hai/middleware-runtime.env ]; then compose_environment=true; fi
+    HAI_DEPLOY_SECRET_CANDIDATE="$candidate" HAI_DEPLOY_SECRET_VALUE="$value" LC_ALL=C awk -v group="$name" -v format="$format" -v compose_environment="$compose_environment" '
       FILENAME==ARGV[1] {if($1==group) {keys[$2]=$3}; next}
       function replace_literal(line, needle, value, result, at) {
         result=""
@@ -235,19 +253,19 @@ while IFS='=' read -r name candidate; do
           else {
             if(substr(literal,1,1)==quote || substr(literal,1,1)=="\"") literal=substr(literal,2,length(literal)-2)
             literal=replace_literal(literal,candidate,value)
-            literal=json_escape(literal,0); literal=replace_literal(literal,"$","$$")
+            literal=json_escape(literal,0); if(compose_environment=="true") literal=replace_literal(literal,"$","$")
             print key "=\"" literal "\""
           }
         }
         else if(scoped) print replace_literal($0,ENVIRON["HAI_DEPLOY_SECRET_CANDIDATE"],ENVIRON["HAI_DEPLOY_SECRET_VALUE"])
         else print
       }
-    ' "$release/managed-bindings" "$release/$file" > "$release/$file.next"
+    ' "$managed_bindings" "$release/$file" > "$release/$file.next"
     mv "$release/$file.next" "$release/$file"
   done
 done < "$candidate_file"
 chmod 600 "$next"
 mv "$next" "$state"
 printf '[INFO] Managed middleware credential source: %s (server state; values hidden).\n' "$state"
-`.replace('@@MANAGED_VALUES_VALIDATOR@@', createManagedSecretValidationScript())
+`.replace('@@MANAGED_VALUES_VALIDATOR@@', () => createManagedSecretValidationScript()).replace('@@MANIFEST_FUNCTIONS@@', () => createDeploymentManifestFunctions())
 }

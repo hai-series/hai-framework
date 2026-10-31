@@ -77,7 +77,7 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
       if (provider.type !== 'docker-ssh' || !provider.ssh || !remoteDirectory)
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_sshRequired'))
       // 仅读取 current 和成功发布目录；不能创建目录、锁、凭据或触发恢复。
-      const command = `root=${shellArgument(remoteDirectory)}; if [ -f "$root/current" ]; then id=$(head -c 129 "$root/current"); case "$id" in ''|*[!a-zA-Z0-9._-]*) exit 2;; esac; test -f "$root/releases/$id/compose-files" || exit 3; printf '%s' "$id"; fi`
+      const command = `root=${shellArgument(remoteDirectory)}; if [ -f "$root/current" ]; then id=$(head -c 129 "$root/current"); case "$id" in ''|*[!a-zA-Z0-9._-]*) exit 2;; esac; test -f "$root/releases/$id/.hai/compose.json" || exit 3; printf '%s' "$id"; fi`
       const result = await createSshExecutor(provider.ssh).exec(command, { timeoutMs: 15000, maxCaptureChars: 1024 })
       if (!result.success) {
         baseline.state = 'unavailable'

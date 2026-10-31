@@ -10,10 +10,10 @@
 import type { DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
-import { TrustedProxiesSchema } from '@h-ai/core'
+import { core, TrustedProxiesSchema } from '@h-ai/core'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { stringify } from 'yaml'
-import { mergeEnvironmentLayers } from '../deploy-environment.js'
+import { generatedVariables, mergeEnvironmentLayers } from '../deploy-environment.js'
 import { usesDefaultMiddleware } from '../deploy-functions.js'
 import { mergeManagedMiddlewareConfig } from '../deploy-middleware-config.js'
 import { CERTBOT_IMAGE } from './deploy-https.js'
@@ -34,15 +34,6 @@ const IMAGES = {
 } as const
 
 // 这些变量还由启动代码直接读取，父级 YAML/JSON 不会替代其进程语义。
-const PROCESS_ENV_KEYS = new Set([
-  'HAI_CORE_ENV',
-  'HAI_CRYPTO_TRANSPORT_SERVERKEYRING',
-  'HAI_ADMIN_DEFAULT_PASSWORD',
-  'HAI_AUDIT_ADMIN_PASSWORD',
-  'HAI_CONFIG_ADMIN_PASSWORD',
-  'HAI_BUSINESS_OPERATOR_PASSWORD',
-  'HAI_E2E',
-])
 
 // 旧版本曾把镜像原生变量保存到应用环境；读取旧配置时也不再传给业务容器。
 const CONTAINER_ENV_KEYS = new Set([
@@ -555,7 +546,7 @@ export function generateComposeFile(options: {
   if (primaryService === 'serv') {
     // 与应用相同的公开 Schema 和环境解析；不传 --input-type，避免预加载时传给日志 worker。
     app.healthcheck = {
-      test: ['CMD', 'node', '-e', '(async () => { try { const { core } = await import(\'@h-ai/core\'); const { ServConfigSchema } = await import(\'@h-ai/serv\'); core.init({ configDir: \'./config\' }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); } })()'],
+      test: ['CMD', 'node', '-e', '(async () => { try { const { core } = await import(\'@h-ai/core\'); const { ServConfigSchema } = await import(\'@h-ai/serv\'); core.init({ configDir: \'./config\', configSchemas: { serv: ServConfigSchema } }); const { server, http } = ServConfigSchema.parse(core.config.getOrThrow(\'serv\')); if (http.health === false) process.exit(0); const response = await fetch(\'http://127.0.0.1:\' + server.port + http.health.path, { signal: AbortSignal.timeout(4000) }); process.exit(response.ok ? 0 : 1); } catch { process.exit(1); } })()'],
       interval: '30s',
       timeout: '5s',
       start_period: '15s',
@@ -566,7 +557,7 @@ export function generateComposeFile(options: {
   const appEnvironment: Record<string, string> = {}
   if (nodeRuntime) {
     delete app.env_file
-    appVolumes.push('./.env.runtime:/run/hai/.env.runtime:ro', './middleware.env:/run/hai/middleware.env:ro', './runtime-env.mjs:/run/hai/runtime-env.mjs:ro')
+    appVolumes.push('./config:/run/hai/config:ro', './runtime-env.mjs:/run/hai/runtime-env.mjs:ro')
     appEnvironment.NODE_OPTIONS = (`--import /run/hai/runtime-env.mjs${options.nodeOptions ? ` ${options.nodeOptions}` : ''}`).replaceAll('$', () => '$$')
   }
   if (options.requestAccessPolicy)
@@ -935,31 +926,12 @@ ${renderWebLocation(webBasePath)}  location = ${webBasePath}/runtime-config.js {
  * ```
  */
 export function serializeEnvFile(env: Record<string, string>, overrides: Record<string, string> = {}): string {
-  // 与运行时保持一致：后加载文件的同名项及 HAI 父对象都会遮蔽子项。
-  const effective = { ...env, ...overrides }
-  return `${Object.entries(env)
-    .filter(([name]) => {
-      if (Object.hasOwn(overrides, name))
-        return false
-      if (!name.startsWith('HAI_') || PROCESS_ENV_KEYS.has(name) || name.startsWith('HAI_E2E_'))
-        return true
-      for (let at = name.indexOf('_', 4); at !== -1; at = name.indexOf('_', at + 1)) {
-        if (Object.hasOwn(effective, name.slice(0, at)))
-          return false
-      }
-      return true
-    })
-    .map(([key, value]) => {
-      let literal = value
-      if (/[\s#$'"]/.test(value)) {
-        if (value.startsWith('{') || value.startsWith('['))
-          literal = `'${value.replaceAll('\'', '\\u0027')}'`
-        else if (!value.includes('\''))
-          literal = `'${value}'`
-        else
-          literal = JSON.stringify(value).replaceAll('$', '$$')
-      }
-      return `${key}=${literal}`
-    })
-    .join('\n')}\n`
+  const effective = generatedVariables(mergeEnvironmentLayers([env, overrides]))
+  for (const name of Object.keys(overrides)) {
+    for (const key of Object.keys(effective)) {
+      if (key === name || key.startsWith(`${name}_`))
+        delete effective[key]
+    }
+  }
+  return core.config.stringifyEnv(effective)
 }

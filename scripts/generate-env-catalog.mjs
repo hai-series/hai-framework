@@ -26,6 +26,8 @@ const modules = [
 ]
 const variables = new Map()
 const explicit = new Map()
+// SDK 只消费从真实模块 Schema 派生的结构，不加载各模块运行时或手写字段解释器。
+const configurationShapes = {}
 
 /** 补充没有独立 JSDoc 的联合类型标记、动态场景及第三方嵌套字段。 */
 function fieldDescription(module, segments) {
@@ -263,6 +265,7 @@ for (const [name, pkg, exported] of modules) {
   const schema = entry[exported]?.toJSONSchema({ io: 'input', unrepresentable: 'any' })
   if (!schema)
     throw new Error(`Missing public schema: @h-ai/${pkg}.${exported}`)
+  configurationShapes[name] = schema
   // 复用的 datapipe/transport/访问策略配置，字段说明来自实际拥有 Schema 的包。
   const sources = [path.join(root, 'packages', pkg, 'src', `${pkg}-config.ts`)]
   for (const sourcePackage of [...new Set([pkg, ...(pkg === 'ai' ? ['datapipe'] : []), ...(['kit', 'serv'].includes(pkg) ? ['crypto'] : []), ...(['iam', 'kit', 'serv', 'deploy'].includes(pkg) ? ['core'] : [])])]) {
@@ -465,6 +468,8 @@ const catalogText = `${JSON.stringify(catalog.map(({ constraints, enums, ...entr
   constraint: entry.name === 'HAI_DB_SSL' ? 'MySQL：false 或严格 TLS 对象（{} 默认校验证书链和 DNS 身份）；PostgreSQL：布尔值、require/prefer/allow/disable 或 TLS 对象' : [...constraints, ...(enums.length ? [`取值：${enums.map(value => String(value)).join(' | ')}`] : [])].join('；'),
 })), null, 2)}\n`
 const catalogFile = path.join(root, 'packages/cli/src/commands/cli-config-catalog.json')
+const shapesFile = path.join(root, 'packages/deploy/src/deploy-config-shapes.json')
+const shapesText = `${JSON.stringify(configurationShapes, null, 2)}\n`
 // 清单仍记录完整 Schema；给用户的 .env 示例只展示一种配置方式，避免父 JSON 与细项重复。
 const entries = JSON.parse(catalogText)
 const primitiveArrays = entries.filter(entry => entry.constraint.includes('JSON 数组') && entries.some(child => child.name === `${entry.name}_0` && !child.constraint.includes('JSON 对象')))
@@ -472,11 +477,11 @@ const exampleEntries = entries.filter(entry => !primitiveArrays.some(parent => e
   && (!(entry.constraint.includes('JSON 对象') || entry.constraint.includes('JSON 数组')) || entry.constraint.includes('false') || !entries.some(child => child.name.startsWith(`${entry.name}_`)) || primitiveArrays.includes(entry)))
 const envText = [
   '# hai-framework 环境变量总表（由 scripts/generate-env-catalog.mjs 生成）',
-  '# 所有变量默认注释；按应用 .env.example 选择启用，公共值放已跟踪的 .env / .env.dev / .env.test / .env.prod，私有值仅放 .env.local 或进程环境。',
+  '# 所有变量默认注释；按应用 .env.example 选择启用，公共值放已跟踪的 .env / .env.dev / .env.test / .env.prod，私有值仅放 .env.local / .env.<mode>.local 或进程环境。',
   '# 赋值为合法示例或建议值，不代表所有字段的 Schema 默认值；实际默认、单位和消费位置见 .agents/skills/hai-module-create/configuration.md。',
   '# 规则、加载优先级与环境命令：README.md 的配置与环境变量章节。',
   '# HAI_<配置名>_<路径>；camelCase 不拆词；数组的 0 可替换为任意有效索引。',
-  '# 对象/数组变量整体替换节点并优先于叶子；叶子覆盖要求 YAML 已声明路径。',
+  '# 同来源 JSON 为基础、细项覆盖；高来源整段替换清掉低来源细项。Schema 可识别 YAML 未填写的合法路径；数组索引仅覆盖已有元素。',
   '# Schema 枚举和上下界如下；Provider 的依赖与跨字段条件仍由模块校验。',
   '',
   ...exampleEntries.flatMap(entry => [
@@ -487,10 +492,14 @@ const envText = [
   ]),
 ].join('\n')
 if (process.argv.includes('--check')) {
+  if ((await readFile(shapesFile, 'utf8')).replaceAll('\r\n', '\n') !== shapesText)
+    throw new Error('Deployment configuration shapes are stale; run pnpm generate:env after building packages')
   if ((await readFile(catalogFile, 'utf8')).replaceAll('\r\n', '\n') !== catalogText || (await readFile(path.join(root, '.env.example'), 'utf8')).replaceAll('\r\n', '\n') !== envText)
     throw new Error('Environment catalog is stale; run pnpm generate:env after building packages')
 }
 else {
+  if (await needsWrite(shapesFile, shapesText))
+    await writeFile(shapesFile, shapesText)
   if (await needsWrite(catalogFile, catalogText))
     await writeFile(catalogFile, catalogText)
   const exampleFile = path.join(root, '.env.example')

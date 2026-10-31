@@ -3,10 +3,9 @@ import type { HaiResult } from '@h-ai/core'
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { parseEnv } from 'node:util'
 import { core, err, ok } from '@h-ai/core'
-import { LineCounter, parse, parseDocument } from 'yaml'
-import { ProviderConfigSchema } from './deploy-config.js'
+import { LineCounter, parseDocument } from 'yaml'
+import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
 import { deployM } from './deploy-i18n.js'
 import { HaiDeployError } from './deploy-types.js'
 
@@ -30,69 +29,14 @@ export interface DeploymentEnvironment {
   targetValues: Record<string, string>
 }
 
-/** 与 Core 一致，普通字符串如 CORS 的 `*` 不能因 YAML 标量解析失败而使配置加载失败。 */
-function environmentValue(value: string): unknown {
-  try {
-    return parse(value) ?? value
-  }
-  catch {
-    return value
-  }
-}
-
-const SSH_PREFIX = 'HAI_DEPLOY_PROVIDER_SSH'
-const sshProvider = ProviderConfigSchema.options.find(provider => 'ssh' in provider.shape)
-// 从同一 Schema 读取已知键；不把任意环境变量扩成配置字段。
-const sshFields = new Map(sshProvider && 'ssh' in sshProvider.shape
-  ? Object.keys(sshProvider.shape.ssh.unwrap().shape).map(name => [name.toUpperCase(), name])
-  : [])
-const numericSshFields = new Set(['PORT', 'CONNECTTIMEOUTSECONDS', 'STRICTHOSTKEYCHECKING'])
-
-/** 在已解析的结构上覆盖；部署父对象仍允许同来源、更具体的 SSH 字段覆盖。 */
-function resolveConfig(value: unknown, prefix: string, env: Record<string, string | undefined>, deployment = false, literal = false): unknown {
-  const sshField = prefix.startsWith(`${SSH_PREFIX}_`) ? prefix.slice(SSH_PREFIX.length + 1) : undefined
-  const textSshField = sshField !== undefined && sshFields.has(sshField) && !numericSshFields.has(sshField)
-  if (env[prefix] !== undefined) {
-    if (deployment && textSshField)
-      return env[prefix]
-    if (!deployment)
-      return environmentValue(env[prefix])
-    value = environmentValue(env[prefix])
-    // 环境 JSON 中的密码等文本已经是字面量，不能二次展开其中的 ${...}。
-    literal = true
-  }
-  if (Array.isArray(value))
-    return value.map((item, index) => resolveConfig(item, `${prefix}_${index}`, env, deployment, literal))
-  if (value && typeof value === 'object') {
-    const input: Record<string, unknown> = { ...value }
-    if (deployment) {
-      const hasSshInput = env[SSH_PREFIX] !== undefined || [...sshFields.keys()].some(field => env[`${SSH_PREFIX}_${field}`] !== undefined)
-      if (hasSshInput && prefix === 'HAI_DEPLOY' && input.provider === undefined)
-        input.provider = {}
-      if (hasSshInput && prefix === 'HAI_DEPLOY_PROVIDER' && input.ssh === undefined)
-        input.ssh = {}
-      if (prefix === SSH_PREFIX) {
-        for (const [field, name] of sshFields) {
-          if (env[`${SSH_PREFIX}_${field}`] !== undefined && !(name in input))
-            input[name] = undefined
-        }
-      }
-    }
-    return Object.fromEntries(Object.entries(input).map(([key, nested]) => [key, resolveConfig(nested, `${prefix}_${key.toUpperCase()}`, env, deployment, literal)]))
-  }
-  if (typeof value !== 'string')
-    return value
-  if (literal)
-    return value
-  const resolved = value.replace(/\$\{([^:}]+)(?::([^}]*))?\}/g, (_match, name: string, fallback?: string) => env[name] ?? fallback ?? '')
-  return /^\$\{[^}]+\}$/.test(value) && !textSshField ? environmentValue(resolved) : resolved
-}
+/** 结构由模块公开 Schema 自动生成；SDK 不维护模块字段解析规则。 */
+const shapes: Record<string, Record<string, unknown>> = configurationShapes
 
 /** 读取单层 dotenv；所有错误由调用边界转换为脱敏 HaiResult。 */
 function environmentFile(path: string): Record<string, string> {
   const values: Record<string, string> = {}
   if (existsSync(path)) {
-    for (const [name, value] of Object.entries(parseEnv(readFileSync(path, 'utf8')))) {
+    for (const [name, value] of Object.entries(core.config.parseEnv(readFileSync(path, 'utf8')))) {
       if (value !== undefined)
         values[name] = value
     }
@@ -111,23 +55,7 @@ function environmentFile(path: string): Record<string, string> {
  * ```
  */
 export function mergeEnvironmentLayers(layers: Array<Record<string, string | undefined>>, prefix?: string): Record<string, string> {
-  const result: Record<string, string> = {}
-  for (const layer of layers) {
-    const names = Object.keys(layer).filter(name => !prefix || name === prefix || name.startsWith(`${prefix}_`)).sort((left, right) => left.length - right.length)
-    for (const name of names) {
-      const value = layer[name]
-      if (value === undefined)
-        continue
-      if (name.startsWith('HAI_')) {
-        for (const previous of Object.keys(result)) {
-          if (previous.startsWith(`${name}_`))
-            delete result[previous]
-        }
-      }
-      result[name] = value
-    }
-  }
-  return result
+  return core.config.mergeEnv(layers.map(layer => Object.fromEntries(Object.entries(layer).filter(([name]) => !prefix || name === prefix || name.startsWith(`${prefix}_`)))))
 }
 
 /**
@@ -194,7 +122,10 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
         return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
       input = document.toJS()
     }
-    const config = resolveConfig(input, `HAI_${name.toUpperCase()}`, values, name === 'deploy')
+    const resolved = core.config.resolve({ name, value: input, environment: values, shape: shapes[name], missing: 'empty' })
+    if (!resolved.success)
+      return resolved
+    const config = resolved.data
     if (config !== null && (typeof config !== 'object' || Array.isArray(config)))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
     return ok(config && typeof config === 'object' && !Array.isArray(config) ? config as Record<string, unknown> : {})
@@ -206,8 +137,7 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
 
 /**
  * 加载部署环境；指定环境文件缺失时返回错误并要求用户创建。
- * 部署目标按进程 > 模式私有 > 模式公共 > 旧全局私有 > 基础归并。
- * 其它模块保留进程 > 模式私有 > 旧全局私有 > 模式公共 > 基础；targetValues 仅记录模式公共项。
+ * 统一按进程 > 模式私有 > 全局私有 > 模式公共 > 基础归并；targetValues 仅记录模式公共项。
  * @param options - 模式、环境目录与是否强制存在目标文件
  * @param options.environment - dev/test/prod 或自定义模式
  * @param options.envDir - 环境文件所在目录
@@ -233,28 +163,20 @@ export function loadDeploymentEnvironment(options: { environment: string, envDir
   if (!loaded.success)
     return loaded
   try {
-    const base = environmentFile(join(envDir, '.env'))
-    const globalPrivate = environmentFile(join(envDir, '.env.local'))
     const selected = environmentFile(target)
-    const modePrivate = environmentFile(join(envDir, `.env.${environment}.local`))
-    const values = { ...loaded.data, ...modePrivate }
-    // Core 已处理原三层；模式私有层也必须继续服从显式进程覆盖。
-    for (const name of Object.keys(values)) {
-      if (process.env[name] !== undefined)
-        values[name] = process.env[name]
-    }
-    // 只传递应用配置和显式声明的运行变量，不上传整个调用者进程环境。
+    const values = { ...loaded.data }
+    // Core 负责所有 HAI 配置的统一来源归并；公开构建入口仅携带显式进程注入。
     for (const [name, value] of Object.entries(process.env)) {
-      if (/^(?:HAI_|PUBLIC_|VITE_)/.test(name) && value !== undefined)
+      if (/^(?:PUBLIC_|VITE_)/.test(name) && value !== undefined)
         values[name] = value
     }
-    for (const name of Object.keys(values)) {
-      if (name === 'HAI_DEPLOY' || name.startsWith('HAI_DEPLOY_'))
-        delete values[name]
-    }
-    Object.assign(values, mergeEnvironmentLayers([base, globalPrivate, selected, modePrivate, process.env], 'HAI_DEPLOY'))
     values.HAI_DEPLOY_ENVIRONMENT = environment
-    values.HAI_CORE_ENV ??= environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
+    if (values.HAI_CORE_ENV === undefined) {
+      const fallback = environment === 'prod' ? 'production' : environment === 'dev' ? 'development' : environment === 'test' ? 'test' : 'staging'
+      const configured = core.config.resolve({ name: 'core', value: { env: fallback }, environment: values, shape: shapes.core })
+      const settings = configured.success && configured.data && typeof configured.data === 'object' ? configured.data as Record<string, unknown> : undefined
+      values.HAI_CORE_ENV = typeof settings?.env === 'string' ? settings.env : fallback
+    }
     return ok({ environment, envDir, values, targetValues: selected })
   }
   catch {
@@ -281,33 +203,74 @@ function isSecret(name: string, value: string): boolean {
   return false
 }
 
-/** 将 JSON 中的凭据剥离，公共文件仍保留可审查的后端/连接结构。 */
-function publicConfig(value: unknown): unknown {
-  if (Array.isArray(value))
-    return value.map(publicConfig)
-  if (value && typeof value === 'object')
-    return Object.fromEntries(Object.entries(value).filter(([name, item]) => !isSecret(name, typeof item === 'string' ? item : '')).map(([name, item]) => [name, publicConfig(item)]))
-  return value
-}
-
-/** dotenv 引号保留空格、注释符、美元符号和 JSON；非法换行键由调用边界拒绝。 */
-function quoteEnv(value: string): string {
-  // JSON 内用 Unicode 转义表示单引号，dotenv 单引号即可无损保存复杂密码。
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (parsed && typeof parsed === 'object')
-      return `'${JSON.stringify(parsed).replaceAll('\'', '\\u0027')}'`
+/**
+ * 生成端优先细项；字符串字段的含义仍由模块结构决定。
+ * @example 模块内部上下文
+ * ```ts
+ * const values = generatedVariables({ HAI_STORAGE: { type: 's3', bucket: 'files' } })
+ * ```
+ */
+export function generatedVariables(values: Record<string, unknown>): Record<string, string> {
+  const generated: Record<string, string> = {}
+  const groups = new Map<string, Record<string, string>>()
+  const structures = new Set<string>()
+  for (const [name, value] of Object.entries(values)) {
+    if (value === undefined)
+      continue
+    const text = typeof value === 'string' ? value : value === null || typeof value === 'object' ? JSON.stringify(value) : String(value)
+    generated[name] = text
+    const module = /^HAI_([A-Z0-9]+)(?:_|$)/.exec(name)?.[1]?.toLowerCase()
+    if (!module || !shapes[module])
+      continue
+    const group = groups.get(module) ?? {}
+    group[name] = text
+    groups.set(module, group)
+    try {
+      const parsed: unknown = JSON.parse(text)
+      if (parsed !== null && typeof parsed === 'object')
+        structures.add(name)
+    }
+    catch { /* 标量保持原样，不猜测字符串业务含义。 */ }
   }
-  catch { /* 标量按 dotenv 原生引号规则处理。 */ }
-  if (!value.includes('\''))
-    return `'${value}'`
-  if (!value.includes('"'))
-    return `"${value}"`
-  if (!value.includes('`'))
-    return `\`${value}\``
-  if (!/[\r\n#]/.test(value))
-    return value
-  throw new Error('Unsupported dotenv value')
+  for (const [module, group] of groups) {
+    const structuredNames = Object.keys(group).filter(name => structures.has(name))
+    if (!structuredNames.length)
+      continue
+    const resolved = core.config.resolve({ name: module, value: {}, environment: group, shape: shapes[module], missing: 'empty' })
+    if (resolved.success) {
+      const flattened = core.config.toEnv({ prefix: `HAI_${module.toUpperCase()}`, value: resolved.data, shape: shapes[module] })
+      const represented = structuredNames.every(name => Object.entries(flattened).some(([key, value]) => key === name || key.startsWith(`${name}_`) || (name.startsWith(`${key}_`) && value.startsWith('['))))
+      if (represented) {
+        for (const name of Object.keys(group)) {
+          if (structures.has(name) || Object.keys(flattened).some(key => name === key || key.startsWith(`${name}_`)))
+            delete generated[name]
+        }
+        Object.assign(generated, flattened)
+        // 展开父对象仍保留最小空节点，明确替换 YAML，防止旧可选字段重新出现。
+        const replacements = structuredNames.filter((name) => {
+          const parsed: unknown = JSON.parse(group[name]!)
+          return parsed !== null && !Array.isArray(parsed) && typeof parsed === 'object' && Object.keys(flattened).some(key => key.startsWith(`${name}_`))
+        }).sort((left, right) => left.length - right.length)
+        const ancestors: string[] = []
+        for (const name of replacements) {
+          if (!ancestors.some(parent => name.startsWith(`${parent}_`))) {
+            generated[name] = '{}'
+            ancestors.push(name)
+          }
+        }
+        continue
+      }
+    }
+    // 未声明完整列表时，只展开已有数组项；不猜测或创建列表长度。
+    for (const name of structuredNames.filter(name => /_\d+$/.test(name))) {
+      delete generated[name]
+      const flattened = core.config.toEnv({ prefix: name, value: JSON.parse(group[name]!) })
+      Object.assign(generated, flattened)
+      if (Object.keys(flattened).some(key => key.startsWith(`${name}_`)))
+        generated[name] = '{}'
+    }
+  }
+  return generated
 }
 
 /** 按原有行更新键，保留注释与其他配置；更新私有文件时要求权限 600。 */
@@ -316,13 +279,24 @@ function updateFile(path: string, values: Record<string, string>, privateFile: b
   for (const [name, value] of Object.entries(values)) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(name))
       throw new Error('Invalid environment variable name')
-    const line = `${name}=${quoteEnv(value)}`
+    const line = core.config.stringifyEnv({ [name]: value }).trimEnd()
     // parseEnv 支持多行引号；替换时一起消费原值，避免遗留秘密片段。
-    const pattern = new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"[^"]*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*`, 'gm')
+    const pattern = new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*`, 'gm')
     if (pattern.test(content))
       content = content.replace(pattern, () => line)
     else
       content = `${content.trimEnd()}\n${line}\n`
+  }
+  // 手工内容和注释保留；结构基础移动到其细项前，文件阅读顺序与合并顺序一致。
+  for (const [name, value] of Object.entries(core.config.parseEnv(content)).sort(([left], [right]) => left.length - right.length)) {
+    if (!name.startsWith('HAI_') || !/^\s*[[{]/.test(value))
+      continue
+    const parent = new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'm').exec(content)
+    const child = new RegExp(`^(?:export\\s+)?${name}_[A-Z0-9_]+\\s*=`, 'm').exec(content)
+    if (parent && child && parent.index > child.index) {
+      const withoutParent = content.slice(0, parent.index) + content.slice(parent.index + parent[0].length)
+      content = withoutParent.slice(0, child.index) + parent[0].replace(/\r?\n?$/, '\n') + withoutParent.slice(child.index)
+    }
   }
   writeFileSync(path, content, { mode: privateFile ? 0o600 : 0o644 })
   if (privateFile)
@@ -335,7 +309,7 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
     return
   let content = readFileSync(path, 'utf8')
   for (const name of names)
-    content = content.replace(new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"[^"]*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'gm'), '')
+    content = content.replace(new RegExp(`^(?:export\\s+)?${name}\\s*=\\s*(?:'[^']*'|"(?:[^"\\\\]|\\\\.)*"|\`[^\`]*\`|[^\\r\\n]*)[^\\r\\n]*(?:\\r?\\n|$)`, 'gm'), '')
   writeFileSync(path, content, { mode: privateFile ? 0o600 : 0o644 })
   chmodSync(path, privateFile ? 0o600 : 0o644)
 }
@@ -347,6 +321,7 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
  * @param values - 需要更新的变量；未提供的项保持原状
  * @param options - private 为 true 时所有值只保存在本机；适用于 SSH 地址、端口及密钥路径
  * @param options.private - 是否将全部值保存到选中模式的私有文件
+ * @param options.replace - 本次完整替换的配置前缀，只清理该模式中对应项。
  * @returns 已保存的变量名或脱敏错误
  * @example
  * ```ts
@@ -358,33 +333,59 @@ function removeOverrides(path: string, names: string[], privateFile = true): voi
  * // 密钥应以 { private: true } 写入被忽略的 .env.prod.local，不能放公共环境文件。
  * ```
  */
-export function saveDeploymentEnvironment(environment: DeploymentEnvironment, values: Record<string, string>, options: { private?: boolean } = {}): HaiResult<string[]> {
+export function saveDeploymentEnvironment(environment: DeploymentEnvironment, values: Record<string, unknown>, options: { private?: boolean, replace?: readonly string[] } = {}): HaiResult<string[]> {
   try {
     const shared: Record<string, string> = {}
     const privateValues: Record<string, string> = {}
-    for (const [name, value] of Object.entries(values)) {
-      if (options.private) {
-        privateValues[name] = value
-      }
-      else if (isSecret(name, value)) {
-        privateValues[name] = value
-        try {
-          const parsed: unknown = JSON.parse(value)
-          if (parsed && typeof parsed === 'object')
-            shared[name] = JSON.stringify(publicConfig(parsed))
-        }
-        catch { /* 标量秘密仅写私有文件。 */ }
-      }
-      else {
-        shared[name] = value
+    // 数组保留一个公共结构，秘密仅以索引细项写私有文件，不复制完整数组。
+    function splitArrayValue(name: string, value: unknown): unknown {
+      const literal = typeof value === 'string' ? value : JSON.stringify(value)
+      if (!isSecret(name, literal))
+        return value
+      if (Array.isArray(value))
+        return value.map((item, index) => splitArrayValue(`${name}_${index}`, item) ?? null)
+      if (value && typeof value === 'object' && !isSecret(name, '') && Object.keys(value).every(key => /^[a-z][a-zA-Z0-9]*$/.test(key)))
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, splitArrayValue(`${name}_${key.toUpperCase()}`, item)]).filter(([, item]) => item !== undefined))
+      privateValues[name] = literal
+      return undefined
+    }
+    const generated = generatedVariables(values)
+    for (const prefix of options.replace ?? []) {
+      for (const file of [`.env.${environment.environment}`, `.env.${environment.environment}.local`]) {
+        const path = join(environment.envDir, file)
+        removeOverrides(path, Object.keys(environmentFile(path)).filter(name => name === prefix || name.startsWith(`${prefix}_`)), file.endsWith('.local'))
       }
     }
+    for (const [name, value] of Object.entries(generated)) {
+      if (options.private) {
+        privateValues[name] = value
+        continue
+      }
+      if (!isSecret(name, value)) {
+        shared[name] = value
+        continue
+      }
+      let array: unknown
+      try {
+        array = JSON.parse(value)
+      }
+      catch { /* 标量秘密只保存到私有文件。 */ }
+      if (Array.isArray(array))
+        shared[name] = JSON.stringify(splitArrayValue(name, array))
+      else privateValues[name] = value
+    }
+    // 替换生成端负责的整段配置时清理同模式父对象，避免私有父对象遮蔽新细项。
+    const expanded = Object.keys(values).filter(name => !Object.hasOwn(generated, name))
+    removeOverrides(join(environment.envDir, `.env.${environment.environment}`), expanded, false)
+    removeOverrides(join(environment.envDir, `.env.${environment.environment}.local`), expanded)
     const privatePath = join(environment.envDir, `.env.${environment.environment}.local`)
     const globalPrivate = environmentFile(join(environment.envDir, '.env.local'))
     // 非部署模块保留旧 private 优先级；显式换后端时在当前模式遮盖旧值，不破坏其它环境的 fallback。
     for (const [name, value] of Object.entries(shared)) {
-      if (!(name in privateValues) && globalPrivate[name] !== undefined && name !== 'HAI_DEPLOY' && !name.startsWith('HAI_DEPLOY_'))
+      if (!(name in privateValues) && Object.keys(globalPrivate).some(parent => name === parent || name.startsWith(`${parent}_`))) {
         privateValues[name] = value
+        delete shared[name]
+      }
     }
     if (Object.keys(shared).length)
       updateFile(join(environment.envDir, `.env.${environment.environment}`), shared, false)

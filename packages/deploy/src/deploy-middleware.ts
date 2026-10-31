@@ -4,6 +4,7 @@
  * @module deploy-middleware
  */
 import type { ServiceType } from './deploy-types.js'
+import { provisionerFields } from './deploy-config.js'
 import { deployM } from './deploy-i18n.js'
 
 /**
@@ -23,6 +24,8 @@ export interface MiddlewareField {
   required?: boolean
   /** 密码输入与私有环境文件写入标记。 */
   secret?: boolean
+  /** 自建服务会定稿此字段，默认模式允许尚未生成。 */
+  managed?: boolean
   /** 交互校验类型；端口范围为 1–65535。 */
   kind?: 'port' | 'boolean' | 'number' | 'url'
   /** 数值下限；未声明时为 0。 */
@@ -48,6 +51,23 @@ export interface MiddlewareBackend {
   purpose: Parameters<typeof deployM>[0]
   /** 云自动开通器；缺失表示不能自动开通该云服务。 */
   provisioner?: 'neon' | 'upstash' | 'cloudflare-r2' | 'resend' | 'aliyun'
+  /** 云凭据字段，由所属开通器 Schema 派生。 */
+  cloudFields?: string[]
+  /** 是否支持容器自动创建；省略为支持。 */
+  containerSupported?: boolean
+  /** 自建容器的可选实现，配置位置属于 deploy.container。 */
+  containerOptions?: Array<{
+    /** deploy.container 中的字段。 */
+    field: string
+    /** 对应细项环境变量。 */
+    variable: string
+    /** 输入提示的消息键。 */
+    purpose: Parameters<typeof deployM>[0]
+    /** 未配置时的选择。 */
+    defaultValue: string
+    /** 可选实现。 */
+    choices: Array<{ /** 显示名称。 */ label: string, /** 配置值。 */ value: string }>
+  }>
   /** 自定义连接需要逐项输入的字段。 */
   fields: MiddlewareField[]
 }
@@ -73,16 +93,17 @@ export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
       label: backend === 'mysql' ? 'MySQL' : 'PostgreSQL',
       purpose: 'deploy_purposeDatabase' as const,
       provisioner: backend === 'postgresql' ? 'neon' as const : undefined,
+      cloudFields: backend === 'postgresql' ? provisionerFields('neon') : undefined,
       fields: [field('url', '', 'url', true), required('host', 'localhost'), required('port', backend === 'mysql' ? '3306' : '5432', 'port'), required('database', 'hai'), field('user', 'hai'), field('password', '', undefined, true), field('ssl', 'false')],
     })),
   ],
   cache: [
     { backend: 'memory', label: 'Memory', purpose: 'deploy_purposeMemory', fields: [] },
-    { backend: 'redis', label: 'Redis', purpose: 'deploy_purposeCache', provisioner: 'upstash', fields: [field('url', '', 'url', true), required('host', 'localhost'), required('port', '6379', 'port'), field('password', '', undefined, true), { ...field('db', '0', 'number'), maximum: 15 }, field('tls', 'false', 'boolean'), field('keyPrefix'), field('connectTimeout', '10000', 'number'), field('commandTimeout', '5000', 'number')] },
+    { backend: 'redis', label: 'Redis', purpose: 'deploy_purposeCache', provisioner: 'upstash', cloudFields: provisionerFields('upstash'), fields: [field('url', '', 'url', true), required('host', 'localhost'), required('port', '6379', 'port'), field('password', '', undefined, true), { ...field('db', '0', 'number'), maximum: 15 }, field('tls', 'false', 'boolean'), field('keyPrefix'), field('connectTimeout', '10000', 'number'), field('commandTimeout', '5000', 'number')] },
   ],
   storage: [
     { backend: 'local', label: 'Local filesystem', purpose: 'deploy_purposeLocal', fields: [required('root', './data/storage')] },
-    { backend: 's3', label: 'S3 / RustFS / MinIO / Cloudflare R2', purpose: 'deploy_purposeStorage', provisioner: 'cloudflare-r2', fields: [field('endpoint', '', 'url'), required('bucket', 'hai'), required('region', 'us-east-1'), required('accessKeyId'), { ...required('secretAccessKey'), secret: true }, field('forcePathStyle', 'true', 'boolean')] },
+    { backend: 's3', label: 'S3 / RustFS / MinIO / Cloudflare R2', purpose: 'deploy_purposeStorage', provisioner: 'cloudflare-r2', cloudFields: provisionerFields('cloudflare-r2'), containerOptions: [{ field: 's3Engine', variable: 'HAI_DEPLOY_CONTAINER_S3ENGINE', purpose: 'deploy_s3Engine', defaultValue: 'rustfs', choices: [{ label: 'RustFS', value: 'rustfs' }, { label: 'MinIO', value: 'minio' }] }], fields: [field('endpoint', '', 'url'), required('bucket', 'hai'), required('region', 'us-east-1'), { ...required('accessKeyId'), managed: true }, { ...required('secretAccessKey'), secret: true }, field('forcePathStyle', 'true', 'boolean')] },
   ],
   vecdb: [
     { backend: 'lancedb', label: 'LanceDB', purpose: 'deploy_purposeLocal', fields: [required('path', './data/vectors')] },
@@ -96,13 +117,13 @@ export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
   ],
   email: [
     { backend: 'console', label: 'Console', purpose: 'deploy_purposeConsole', fields: [] },
-    { backend: 'smtp', label: 'SMTP', purpose: 'deploy_purposeEmail', provisioner: 'resend', fields: [required('host', 'localhost'), required('port', '465', 'port'), field('secure', 'true', 'boolean'), field('user'), field('pass', '', undefined, true), required('from', 'noreply@example.com')] },
-    { backend: 'api', label: 'HTTP notification API', purpose: 'deploy_purposeEmail', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers'), field('timeout', '10000', 'number')] },
+    { backend: 'smtp', label: 'SMTP', purpose: 'deploy_purposeEmail', provisioner: 'resend', cloudFields: provisionerFields('resend'), fields: [required('host', 'localhost'), required('port', '465', 'port'), field('secure', 'true', 'boolean'), field('user'), field('pass', '', undefined, true), required('from', 'noreply@example.com')] },
+    { backend: 'api', containerSupported: false, label: 'HTTP notification API', purpose: 'deploy_purposeEmail', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers'), field('timeout', '10000', 'number')] },
   ],
   sms: [
     { backend: 'console', label: 'Console', purpose: 'deploy_purposeConsole', fields: [] },
-    { backend: 'aliyun-sms', label: 'Aliyun SMS', purpose: 'deploy_purposeSms', provisioner: 'aliyun', fields: [required('accessKeyId'), { ...required('accessKeySecret'), secret: true }, required('signName'), field('endpoint', 'dysmsapi.aliyuncs.com')] },
-    { backend: 'api', label: 'HTTP notification API', purpose: 'deploy_purposeSms', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers'), field('timeout', '10000', 'number')] },
+    { backend: 'aliyun-sms', containerSupported: false, label: 'Aliyun SMS', purpose: 'deploy_purposeSms', provisioner: 'aliyun', cloudFields: provisionerFields('aliyun'), fields: [required('accessKeyId'), { ...required('accessKeySecret'), secret: true }, required('signName'), field('endpoint', 'dysmsapi.aliyuncs.com')] },
+    { backend: 'api', containerSupported: false, label: 'HTTP notification API', purpose: 'deploy_purposeSms', fields: [required('url', '', 'url'), field('method', 'POST'), field('headers'), field('timeout', '10000', 'number')] },
   ],
 }
 
@@ -119,6 +140,6 @@ export const DEPLOY_MIDDLEWARE: Record<ServiceType, MiddlewareBackend[]> = {
  * }
  * ```
  */
-export function describeMiddlewareBackend(backend: MiddlewareBackend): string {
+export function describeMiddlewareBackend(backend: Pick<MiddlewareBackend, 'purpose'>): string {
   return deployM(backend.purpose)
 }

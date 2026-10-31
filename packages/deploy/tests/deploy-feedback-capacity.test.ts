@@ -72,12 +72,12 @@ it.each([false, true])('公开离线包保留较大的显式上限并一致推�
   expect(result.success, result.success ? undefined : result.error.message).toBe(true)
   if (!result.success || !result.data.bundlePath)
     return
-  const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath, './web.conf'], { encoding: 'utf8', windowsHide: true })
+  const proxy = execFileSync('tar', ['-xOf', result.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
   const lowered = resolveTransportBodyLimits(feedback.maxTransportBytes).encryptedPayloadBytes
   expect(proxy).toContain('client_max_body_size 50364416;')
   expect(proxy).not.toContain(`client_max_body_size ${lowered};`)
   if (kit) {
-    const env = parseEnv(execFileSync('tar', ['-xOf', result.data.bundlePath, './.env.runtime'], { encoding: 'utf8', windowsHide: true }))
+    const env = parseEnv(execFileSync('tar', ['-xOf', result.data.bundlePath, './config/.env.runtime'], { encoding: 'utf8', windowsHide: true }))
     expect(env.BODY_SIZE_LIMIT).toBe('50364416')
   }
 })

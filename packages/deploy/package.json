@@ -43,6 +43,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/reldb": "workspace:*",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",

@@ -4,9 +4,11 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import { parseEnv } from 'node:util'
+import { core } from '@h-ai/core'
 import { afterEach, expect, it } from 'vitest'
 import { createManagedSecretAssets } from '../src/container/deploy-managed-secrets.js'
+
+const { parseEnv } = core.config
 
 const roots: string[] = []
 const shell = process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/bash.exe' : '/bin/sh'
@@ -33,11 +35,14 @@ function fixture() {
     mkdirSync(directory)
     const native = `POSTGRES_PASSWORD=${password}\n`
     const assets = createManagedSecretAssets('demo-test', native, { services: { db: { env_file: ['middleware-runtime.env'], volumes: ['db-data:/data'] } }, volumes: { 'db-data': null } })
-    for (const [name, content] of Object.entries(assets))
-      writeFileSync(join(directory, name), content)
-    writeFileSync(join(directory, 'middleware-runtime.env'), native)
-    writeFileSync(join(directory, 'middleware.env'), `HAI_DB='${JSON.stringify({ type: 'postgresql', url: `postgresql://hai:${password}@db:5432/hai` })}'\n`)
-    writeFileSync(join(directory, '.env.runtime'), `HAI_DB_PASSWORD=${password}\nHAI_ADMIN_DEFAULT_PASSWORD=${password}\nCUSTOM_REFERENCE=${password}\n`)
+    mkdirSync(join(directory, '.hai'))
+    mkdirSync(join(directory, 'config'))
+    const metadata = Object.fromEntries(Object.entries(assets).filter(([name]) => !name.endsWith('.sh') && name !== 'managed-candidates.env'))
+    writeFileSync(join(directory, 'manifest.json'), JSON.stringify({ bundleFormat: 2, metadata }))
+    writeFileSync(join(directory, 'resolve-managed-secrets.sh'), assets['resolve-managed-secrets.sh']!)
+    writeFileSync(join(directory, '.hai/managed-candidates.env'), assets['managed-candidates.env']!)
+    writeFileSync(join(directory, '.hai/middleware-runtime.env'), native)
+    writeFileSync(join(directory, 'config/.env.runtime'), core.config.stringifyEnv({ HAI_DB_URL: `postgresql://hai:${password}@db:5432/hai`, HAI_DB_PASSWORD: password, HAI_ADMIN_DEFAULT_PASSWORD: password, CUSTOM_REFERENCE: password }))
     const run = () => spawnSync(shell, [join(directory, 'resolve-managed-secrets.sh'), server, directory, runtime].map(value => value.replaceAll('\\', '/')), { encoding: 'utf8', windowsHide: true, env: { ...process.env, PATH: `${dirname(shell)}${delimiter}${process.env.PATH ?? ''}` } })
     return { directory, run }
   }
@@ -56,12 +61,12 @@ it('不同电脑的候选不同，服务器保持同一密码，应用与中间�
   const reused = second.run()
   expect(reused.status, reused.stderr).toBe(0)
   expect(parseEnv(readFileSync(join(server, 'managed-secrets.env'), 'utf8')).DB_PASSWORD).toBe(oldPassword)
-  expect(parseEnv(readFileSync(join(second.directory, 'middleware-runtime.env'), 'utf8')).POSTGRES_PASSWORD).toBe(oldPassword)
-  const application = parseEnv(readFileSync(join(second.directory, '.env.runtime'), 'utf8'))
+  expect(parseEnv(readFileSync(join(second.directory, '.hai/middleware-runtime.env'), 'utf8')).POSTGRES_PASSWORD).toBe(oldPassword)
+  const application = parseEnv(readFileSync(join(second.directory, 'config/.env.runtime'), 'utf8'))
   expect(application.HAI_DB_PASSWORD).toBe(oldPassword)
   expect(application.HAI_ADMIN_DEFAULT_PASSWORD).toBe(newPassword)
   expect(application.CUSTOM_REFERENCE).toBe(newPassword)
-  expect(readFileSync(join(second.directory, 'middleware.env'), 'utf8')).toContain(`hai:${oldPassword}@db`)
+  expect(readFileSync(join(second.directory, 'config/.env.runtime'), 'utf8')).toContain(`hai:${oldPassword}@db`)
 })
 
 it('服务器凭据状态丢失且数据卷已存在时，在变更服务前明确停止', () => {
@@ -124,7 +129,7 @@ it('导入的 v2 状态保留特殊字符和卷身份，连接 URL 正确编码�
   const incoming = bundle('G'.repeat(32))
   const result = incoming.run()
   expect(result.status, result.stderr).toBe(0)
-  const connection = JSON.parse(parseEnv(readFileSync(join(incoming.directory, 'middleware.env'), 'utf8')).HAI_DB!)
+  const connection = { url: parseEnv(readFileSync(join(incoming.directory, 'config/.env.runtime'), 'utf8')).HAI_DB_URL! }
   expect(decodeURIComponent(new URL(connection.url).password)).toBe(password)
   expect(readFileSync(join(server, 'managed-secrets.env'), 'utf8')).toBe(state)
   expect(JSON.stringify({ stdout: result.stdout, stderr: result.stderr })).not.toContain(password)
