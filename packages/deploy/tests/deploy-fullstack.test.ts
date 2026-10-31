@@ -174,6 +174,17 @@ async function initialize(online = true, containerPort = 3000): Promise<void> {
   expect(await deploy.init({ provider: { type: 'docker-ssh', ...(online ? { ssh: { host: '127.0.0.1', username: 'deploy' } } : {}), remote: { runtime: 'docker' }, expose: { hostPort: 18080, containerPort } } })).toMatchObject({ success: true })
 }
 
+it.each(['fields', 'object'])('容器监听使用制品端口和全部接口，不继承本机环境的回环监听：%s', async (source) => {
+  const server = source === 'fields' ? 'HAI_SERV_SERVER_HOST=127.0.0.1\nHAI_SERV_SERVER_PORT=4700' : 'HAI_SERV=\'{"server":{"host":"127.0.0.1","port":4700},"cors":{"origin":"https://app.example.test"}}\''
+  writeFileSync(join(root, '.env.test'), `HOST=127.0.0.1\nPORT=4700\n${server}\n`)
+  await initialize(false)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  const values = parseEnv(readBundleFile(deliveryDirectory(result), 'config/.env.runtime'))
+  expect(values).toMatchObject({ HOST: '0.0.0.0', PORT: '3000', HAI_SERV_SERVER_HOST: '0.0.0.0', HAI_SERV_SERVER_PORT: '3000' })
+  if (source === 'object')
+    expect(values.HAI_SERV_CORS_ORIGIN).toBe('https://app.example.test')
+})
+
 it.each([false, true])('有效健康路径贯穿 %s Web 拓扑、在线探针和发布恢复记录', async (web) => {
   writeArtifact(web)
   writeFileSync(join(root, 'config/_serv.yml'), 'http:\n  apiPrefix: /api/v1\n  health: {path: /health, readyPath: /ready}\n')
@@ -656,6 +667,8 @@ it('跳过中间件配置时，完整包仍携带已保存的自建 Redis', asyn
   execFileSync('tar', ['-xf', result.data.bundlePath!, '-C', extracted])
   const compose = JSON.parse(readFileSync(join(extracted, '.hai/compose.json'), 'utf8'))
   expect(compose.services.cache.image).toMatch(/^docker.io\/library\/redis:/)
+  const runtime = parseEnv(readFileSync(join(extracted, 'config/.env.runtime'), 'utf8'))
+  expect(runtime.HAI_CACHE_URL).toBe('redis://cache:6379')
   expect(JSON.parse(readFileSync(join(extracted, 'manifest.json'), 'utf8')).metadata['image-list']).toContain('redis:')
   expect(existsSync(join(extracted, 'images/middleware-2.tar'))).toBe(true)
 })

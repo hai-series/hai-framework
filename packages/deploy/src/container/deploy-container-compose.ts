@@ -437,7 +437,7 @@ export function planSidecars(
 /**
  * 构建运行期环境变量并规划 sidecar。
  *
- * 合并顺序（后者覆盖前者）：目标环境默认 < 应用显式配置 < sidecar 自建 < Provisioner 输出。
+ * 合并顺序（后者覆盖前者）：目标环境默认 < 应用显式配置 < sidecar 自建 < Provisioner 输出 < 制品监听绑定。
  * NODE_ENV 默认按目标模式选择：dev/development 为 development，test 为 test，其余为 production。
  * @param appDir - 应用根目录
  * @param projectName - 项目名
@@ -472,11 +472,13 @@ export function buildRuntimeEnv(
   const nodeEnv = environment === 'dev' || environment === 'development' ? 'development' : environment === 'test' ? 'test' : 'production'
   const env = mergeEnvironmentLayers([{
     NODE_ENV: nodeEnv,
+  }, Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))), sidecar.env, provisionEnv, {
+    // 容器监听由本次制品决定，本机回环地址和开发端口不能覆盖部署拓扑。
     HOST: '0.0.0.0',
     PORT: String(containerPort),
     HAI_SERV_SERVER_HOST: '0.0.0.0',
     HAI_SERV_SERVER_PORT: String(containerPort),
-  }, Object.fromEntries(Object.entries(appEnv).filter(([name]) => !CONTAINER_ENV_KEYS.has(name))), sidecar.env, provisionEnv])
+  }])
   return { env, sidecar }
 }
 
