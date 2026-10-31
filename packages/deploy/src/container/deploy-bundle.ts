@@ -32,6 +32,7 @@ import { usesSshPassword } from './deploy-ssh.js'
  * @param options.selected - 本次选择更新的 Compose 服务。
  * @param options.partial - 是否为增量服务部署；不能据此执行首次全量安装。
  * @param options.middlewareEnv - 应用增量继承的框架 HAI_* dotenv；镜像原生变量从独立文件读取。
+ * @param options.accountSources - 初始账号变量名及来源，不包含密码值。
  * @param options.healthPaths - 允许执行的应用健康检查路径。
  * @param options.hasWebConfig - 是否挂载公开Nginx配置，包含前后端代理或独立Vite目录路由。
  * @param options.proxyService - 挂载 Nginx 配置的服务；缺省为 web，SSR/API 的存储网关为 gateway。
