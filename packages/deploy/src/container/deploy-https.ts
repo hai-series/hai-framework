@@ -68,21 +68,6 @@ export function createHttpsAssets(config: HttpsConfig, projectDirectory: string)
     assets['renew-https.sh'] = createRenewScript(config)
   }
   assets['prepare-https.sh'] = createPrepareScript(config)
-  assets['https-start.sh'] = String.raw`#!/bin/sh
-set -eu
-# 目录挂载允许原子替换证书；只有新证书通过 nginx -t 才重载。
-watch_certificate() {
-  previous=$(sha256sum /etc/nginx/tls/fullchain.pem)
-  while sleep 60; do
-    current=$(sha256sum /etc/nginx/tls/fullchain.pem) || continue
-    if [ "$previous" != "$current" ]; then
-      if nginx -t && nginx -s reload; then previous=$current; else printf '[ERROR] HTTPS certificate reload failed\n' >&2; fi
-    fi
-  done
-}
-watch_certificate &
-exec /docker-entrypoint.sh nginx -g 'daemon off;'
-`
   return assets
 }
 

@@ -208,7 +208,7 @@ read_proxy_service() {
 reload_retained_proxy() {
   retained_proxy=$(read_proxy_service "$1") || return 1
   test -n "$retained_proxy" || return 0
-  # Nginx 静态 upstream 会保留旧容器 IP；应用或存储增量替换后重新解析服务 DNS。
+  # 上游地址由 Nginx 动态解析；保留的代理仍须加载增量发布的路由配置。
   case " $selected " in *' serv '*|*' web '*|*' storage '*)
     case " $selected " in *" $retained_proxy "*) ;; *)
       if grep -qx "$retained_proxy" "$(deployment_services_file "$1")"; then compose exec -T "$retained_proxy" nginx -s reload || return 1; fi
@@ -427,8 +427,8 @@ done
 chmod 700 "$root" "$release"
 # Nginx 以非 root 用户运行；只开放不含凭据的代理配置读取权限。
 if [ -f "$release/.hai/web.conf" ]; then chmod 644 "$release/.hai/web.conf"; fi
-for https_script in https-start.sh renew-https.sh; do
-  if [ -f "$release/.hai/$https_script" ]; then chmod 444 "$release/.hai/$https_script"; fi
+for proxy_script in proxy-start.sh renew-https.sh; do
+  if [ -f "$release/.hai/$proxy_script" ]; then chmod 444 "$release/.hai/$proxy_script"; fi
 done
 # 策略不是凭据，发布目录保持700；只读挂载允许镜像中的非root应用读取。
 if [ -f "$release/.hai/request-access.yml" ]; then chmod 444 "$release/.hai/request-access.yml"; fi

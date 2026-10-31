@@ -101,6 +101,11 @@ describe.skipIf(!enabled).sequential('私有 S3 公开下载网关', () => {
         if (!bundle.success || !bundle.data.bundlePath)
           throw new Error('Expected a storage deployment bundle')
         const proxy = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/web.conf'], { encoding: 'utf8', windowsHide: true })
+        const startup = execFileSync('tar', ['-xOf', bundle.data.bundlePath, './.hai/proxy-start.sh'], { encoding: 'utf8', windowsHide: true })
+        // 夹具保留已经运行的 Nginx；执行交付入口的 DNS 准备部分后再加载本轮公开配置。
+        const prepare = startup.slice(0, startup.indexOf('exec /docker-entrypoint.sh nginx'))
+        expect(prepare).toContain('/etc/resolv.conf')
+        execFileSync(runtime, ['exec', nginx.getId(), 'sh', '-ec', prepare], { windowsHide: true, timeout: 20_000 })
         expect(proxy).toContain(`location ^~ ${storageBasePath}/${bucket}/`)
         const configPath = path.join(root, 'web.conf')
         writeFileSync(configPath, proxy)

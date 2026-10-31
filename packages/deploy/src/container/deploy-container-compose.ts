@@ -605,6 +605,11 @@ export function generateComposeFile(options: {
       networks: ['hai-app'],
     }
   }
+  if (options.web || options.gateway || options.mountWebConfig) {
+    const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!
+    proxy.volumes = [...proxy.volumes as string[], './proxy-start.sh:/run/hai/proxy-start.sh:ro']
+    proxy.entrypoint = ['sh', '/run/hai/proxy-start.sh']
+  }
   if (options.https) {
     const proxy = services[options.gateway ? 'gateway' : options.web ? 'web' : primaryService]!
     const https = options.https
@@ -614,10 +619,8 @@ export function generateComposeFile(options: {
     proxy.volumes = [
       ...proxy.volumes as string[],
       `${certificates}:/etc/nginx/tls:ro`,
-      './https-start.sh:/run/hai/https-start.sh:ro',
       ...(https.type === 'letsencrypt' ? ['../../https/webroot:/var/www/certbot:ro'] : []),
     ]
-    proxy.entrypoint = ['sh', '/run/hai/https-start.sh']
     if (https.type === 'letsencrypt') {
       services.certbot = {
         image: CERTBOT_IMAGE,
@@ -683,7 +686,7 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
   const webLocation = renderWebLocation(webBasePath)
   const storageLocation = options.storageBucket ? renderStorageLocation(options.storageBucket, [apiPath, ...backendPaths, ...(options.storageBasePath ? [`${webBasePath}/_app`, `${webBasePath}/assets`, `${webBasePath}/runtime-config.js`] : [webBasePath])], options.storageBasePath) : ''
   const backendLocations = backendPaths.map(path => `  location = ${path} {
-    proxy_pass http://serv:${port};
+    proxy_pass http://hai_serv_backend;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -691,7 +694,8 @@ export function generateWebProxyConfig(port: number, apiPrefix: string, options:
     proxy_set_header X-Real-IP $remote_addr;
   }
 `).join('')
-  return `${options.storageBucket ? renderStorageUpstream(options.storageBucket, options.storageBasePath) : ''}server {
+  return `include /tmp/hai-dns.conf;
+${renderResolvedUpstream('hai_serv_backend', 'serv', port)}${options.storageBucket ? renderStorageUpstream(options.storageBucket, options.storageBasePath) : ''}server {
   listen ${webPort};
   server_name _;
 ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  root /usr/share/nginx/html;
@@ -707,7 +711,7 @@ ${storageLocation}${webLocation}  location = ${webBasePath}/runtime-config.js {
   }
 ${backendLocations}  location ${apiPrefix.replace(/\/$/, '')}/ {
     client_max_body_size ${bodyLimits.encryptedPayloadBytes};
-    proxy_pass http://serv:${port};
+    proxy_pass http://hai_serv_backend;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -762,7 +766,7 @@ function renderStorageLocation(bucket: string, reservedPaths: string[], storageB
 ${storageBasePath
   ? `    # map 保留原始 URI 与查询；不在 location 内创建改变代理继承的 if 配置。
     proxy_pass http://hai_storage_proxy$hai_storage_uri;`
-  : '    proxy_pass http://storage:9000;'}
+  : '    proxy_pass http://hai_storage_proxy;'}
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header Connection "";
@@ -776,7 +780,7 @@ ${storageBasePath
 }
 
 /**
- * 显式 upstream 允许带原始 URI 变量转发，避免依赖不同容器引擎的运行时 DNS resolver。
+ * 显式动态 upstream 保留原始 URI，容器重启或更换地址后自动跟随 DNS。
  * @param bucket - 已由对象路由校验的自建桶名。
  * @param storageBasePath - 安全入口目录，空字符串无需 URI 映射。
  * @returns 位于 http 上下文的 upstream 与 map，保留编码和查询并移除入口目录。
@@ -787,10 +791,11 @@ ${storageBasePath
  * ```
  */
 function renderStorageUpstream(bucket: string, storageBasePath = ''): string {
+  const upstream = renderResolvedUpstream('hai_storage_proxy', 'storage', 9000)
   if (!storageBasePath)
-    return ''
+    return upstream
   const path = `${storageBasePath}/${bucket}`.replaceAll('.', '\\\\.')
-  return `upstream hai_storage_proxy { server storage:9000; }
+  return `${upstream}
 map $request_uri $hai_storage_uri {
   default $request_uri;
   "~^${path}(/.*)$" /${bucket}$1;
@@ -820,7 +825,8 @@ export function generateApplicationProxyConfig(options: { primaryService: 'serv'
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Invalid application proxy target')
   const bodyLimits = resolveTransportBodyLimits(maxPlaintextBytes)
-  return `${bucket ? renderStorageUpstream(bucket, options.storageBasePath) : ''}server {
+  return `include /tmp/hai-dns.conf;
+${renderResolvedUpstream('hai_application_backend', primaryService, port)}${bucket ? renderStorageUpstream(bucket, options.storageBasePath) : ''}server {
   listen 8080;
   server_name _;
 ${renderTrustedEdgeProxies(options.trustedEdgeProxies)}  large_client_header_buffers 4 32k;
@@ -830,7 +836,7 @@ ${bucket ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
   }
   location / {
     client_max_body_size ${bodyLimits.encryptedPayloadBytes};
-    proxy_pass http://${primaryService}:${port};
+    proxy_pass http://hai_application_backend;
     proxy_http_version 1.1;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -842,6 +848,15 @@ ${bucket ? renderStorageLocation(bucket, reservedPaths, options.storageBasePath)
     proxy_buffer_size 32k;
     proxy_buffers 8 32k;
   }
+}
+`
+}
+
+/** 共享内存上游由 Nginx 原生 DNS 更新；解析器由共用启动脚本读取当前容器配置。 */
+function renderResolvedUpstream(name: string, service: 'serv' | 'web' | 'storage', port: number): string {
+  return `upstream ${name} {
+  zone ${name} 64k;
+  server ${service}:${port} resolve;
 }
 `
 }

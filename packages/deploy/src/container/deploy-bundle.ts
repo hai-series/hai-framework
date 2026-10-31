@@ -15,6 +15,7 @@ import { deployM } from '../deploy-i18n.js'
 import { createBackendStateAssets } from './deploy-backend-state.js'
 import { runCommand } from './deploy-command.js'
 import { createManagedSecretAssets } from './deploy-managed-secrets.js'
+import { createProxyStartupScript } from './deploy-proxy-start.js'
 import { createApplyScript, createLocalInstallScript, createUploadScripts } from './deploy-scripts.js'
 import { usesSshPassword } from './deploy-ssh.js'
 
@@ -125,7 +126,7 @@ export async function createDeploymentBundle(options: {
       }
       if (Array.isArray(service.volumes)) {
         service.volumes = service.volumes.map(mount => typeof mount === 'string'
-          ? mount.replace(/^\.\/config(?=:)/, '../../../config').replace(/\.\/(web\.conf|request-access\.yml|tls|https-start\.sh|renew-https\.sh|runtime-env\.mjs):/g, `../../${options.deploymentId}/.hai/$1:`)
+          ? mount.replace(/^\.\/config(?=:)/, '../../../config').replace(/\.\/(web\.conf|request-access\.yml|tls|proxy-start\.sh|renew-https\.sh|runtime-env\.mjs):/g, `../../${options.deploymentId}/.hai/$1:`)
           : mount)
       }
     }
@@ -213,8 +214,10 @@ export async function createDeploymentBundle(options: {
     put('.hai/middleware-runtime.env', nativeEnvironment)
     const managed = createManagedSecretAssets(projectName, nativeEnvironment, compose)
     put('.hai/managed-candidates.env', managed['managed-candidates.env']!)
-    if (options.hasWebConfig)
+    if (options.hasWebConfig) {
       put('.hai/web.conf', readFileSync(join(directory, 'web.conf'), 'utf8'))
+      put('.hai/proxy-start.sh', createProxyStartupScript(Boolean(config.expose.https)))
+    }
     for (const [file, content] of Object.entries(options.httpsAssets ?? {})) {
       if (file !== 'https')
         put(`.hai/${file}`, content)

@@ -105,7 +105,7 @@ it('let’s Encrypt 交付官方 Certbot 镜像与申请、续期脚本，打包
   expect(guide).toContain('https://app.example.test:443')
   expect(guide).toContain('/https/certificates/app.example.test/fullchain.pem')
   expect(guide).toContain('/https/acme/live/app.example.test')
-  expect(read('.hai/https-start.sh')).toContain('nginx -t && nginx -s reload')
+  expect(read('.hai/proxy-start.sh')).toContain('nginx -t && nginx -s reload')
   expect(commands.some(command => command[1] === 'run')).toBe(false)
   const planned = await createDeploymentPlan(root, { provider: { type: 'docker-ssh', expose: { hostPort: 80, https: { type: 'letsencrypt', domain: 'app.example.test', email: 'operator@example.test', acceptTerms: true } } } }, { environment: 'test', artifactDir: artifacts })
   expect(planned).toMatchObject({ success: true, data: { serviceDir: root, selected: ['serv', 'gateway', 'certbot'], target: { https: { type: 'letsencrypt', domain: 'app.example.test', port: 443 } }, composeManagedServices: ['certbot'] } })
