@@ -23,6 +23,7 @@ const COMPONENT_EXPORT_INDEX_FILES = [
   'src/lib/components/primitives/index.ts',
   'src/lib/components/compounds/index.ts',
   'src/lib/components/scenes/app/index.ts',
+  'src/lib/components/scenes/charts/index.ts',
   'src/lib/components/scenes/ai/index.ts',
   'src/lib/components/scenes/crud/index.ts',
   'src/lib/components/scenes/crypto/index.ts',

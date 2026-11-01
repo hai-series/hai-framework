@@ -299,7 +299,7 @@ components/
 | -------------- | -------------- | ---------------------------------------------- |
 | `PageHeader`   | ページヘッダー | `title`, `description`、`actions` スロット対応 |
 
-#### Scenes：用途別コンポーネント（41）
+#### Scenes：用途別コンポーネント（47）
 
 ##### Guide：案内・ヘルプ（2）
 
@@ -406,6 +406,27 @@ components/
 ```
 
 ##### Charts：グラフ
+
+軽量ダッシュボードには `MetricCard`（値・単位・変化率）、`ReportCard`（見出し・操作・内容・読み込み/空状態）、`DashboardGrid`（コンテナー幅に応じた一列・二列・複数列）を使います。指標カードだけではグラフエンジンを読み込みません。`trend={12.8}` は +12.8% を意味します。`trendTone` は業務上の意味を別に表すため、減少も success にできます。欠損値・非有限数は「—」、ゼロはそのまま表示します。
+
+`Chart` の `preset` は `grouped-bar`、`stacked-bar`、`stacked-area`、`donut`、`sparkline` です。明示的な `type` とネイティブ属性が既定値より優先されます。例として `innerRadius={0.8}` でドーナツの内径を変更できます。他の LayerChart 属性と snippet も引き続き転送されます。
+
+レンダラーは種類別に動的読み込みします。SSR は高さを確保してプレースホルダーを表示し、ブラウザのマウント後に描画します。読み込み中・空データではレンダラーを取得しません。看板だけを使う場合は公開 charts エントリを推奨します。高度な図形は ReportCard の children にネイティブ LayerChart 部品を置けます。Chart の五種類に制限されません。互換性のある `layerchart` を明示的依存に追加し、`layerchart/svg` や `layerchart/hierarchy` など実際の公開エントリを使います。高度な部品も必要時に動的読み込みできます。admin の ArcChart 例を参照してください。
+
+```svelte
+<script lang="ts">
+  import { Chart, DashboardGrid, MetricCard, ReportCard } from '@h-ai/ui/components/scenes/charts/index'
+  const data = [{ month: 'Jan', revenue: 42, cost: 24 }, { month: 'Feb', revenue: 58, cost: 31 }]
+</script>
+
+<DashboardGrid label="Key metrics" columns={4}>
+  <MetricCard title="Revenue" value="128,430" unit="CNY" trend={12.8} trendTone="success" trendLabel="vs previous month" />
+</DashboardGrid>
+<ReportCard title="Revenue and cost">
+  <Chart preset="grouped-bar" {data} x="month" y={['revenue', 'cost']} />
+</ReportCard>
+```
+
 
 `Chart type='line'` は既定で LayerChart の折れ線を使います。監視画面で分割線・点・最寄りの点への hover・縦基準線が必要な場合は `lineVariant='segmented-point'` を使います：
 

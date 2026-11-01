@@ -120,6 +120,11 @@ const UI_COMPONENTS = new Set([
   'CrudEditPanel',
   'CrudFilterBar',
   'CrudPage',
+  // scenes - charts
+  'Chart',
+  'DashboardGrid',
+  'MetricCard',
+  'ReportCard',
   // scenes - error
   'ErrorPage',
 ])

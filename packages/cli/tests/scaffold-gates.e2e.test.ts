@@ -128,6 +128,9 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     const baseUrl = `${await allocateBaseUrl()}${basePath}/`
     // 实际 create 默认只安装网站所需依赖，完整注释配置不能妨碍静态发布。
     await createProject({ name: 'sample-static-website', appType: 'website', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
+    // 新增的图表参考必须随实际生成工程交付，且不经过模板插值改写。
+    expect(await readFile(path.join(projectPath, '.agents/skills/hai-ui/charts.md'), 'utf8'))
+      .toBe(await readFile(path.resolve(process.cwd(), 'templates/skills/hai-ui/charts.md'), 'utf8'))
     await replaceHaiPackageSpecifiers(projectPath)
     await addLocalHaiOverrides(projectPath)
     await removeReplacedHaiCatalogEntries(projectPath)

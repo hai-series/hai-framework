@@ -299,7 +299,7 @@ Text controls validate on blur after input and update errors as input is correct
 | ------------ | ----------- | ----------------------------------------------- |
 | `PageHeader` | Page header | `title`, `description`; supports `actions` slot |
 
-#### Scenes (43)
+#### Scenes (47)
 
 ##### Guide (2)
 
@@ -406,6 +406,27 @@ Defaults match `@h-ai/crypto`: `SM4` for encrypted inputs, `SM3` for hashes, and
 ```
 
 ##### Charts
+
+Lightweight dashboards use `MetricCard` (value, unit and percentage change), `ReportCard` (heading, actions, content, loading/empty states), and `DashboardGrid` (one, two or more columns based on container width). MetricCard alone does not load a chart engine. `trend={12.8}` means +12.8%; `trendTone` expresses business meaning independently, so a decrease can be success. Missing and non-finite values show “—”; zero remains visible.
+
+`Chart` supports `preset`: `grouped-bar`, `stacked-bar`, `stacked-area`, `donut`, and `sparkline`. Presets supply defaults; explicit `type` and native props take precedence, such as `innerRadius={0.8}` overriding the donut radius. Other LayerChart props and snippets continue to pass through.
+
+Renderers load dynamically by type. SSR reserves height and shows a loading placeholder; drawing starts after browser mount. Loading and empty charts do not load renderers. Prefer the public charts entry for dashboard-only consumers. For advanced charts, place native LayerChart components in ReportCard children, beyond Chart's five types. Declare a compatible `layerchart` dependency and use its actual public entries such as `layerchart/svg` or `layerchart/hierarchy`. Load advanced components dynamically when needed; see the admin native ArcChart example.
+
+```svelte
+<script lang="ts">
+  import { Chart, DashboardGrid, MetricCard, ReportCard } from '@h-ai/ui/components/scenes/charts/index'
+  const data = [{ month: 'Jan', revenue: 42, cost: 24 }, { month: 'Feb', revenue: 58, cost: 31 }]
+</script>
+
+<DashboardGrid label="Key metrics" columns={4}>
+  <MetricCard title="Revenue" value="128,430" unit="CNY" trend={12.8} trendTone="success" trendLabel="vs previous month" />
+</DashboardGrid>
+<ReportCard title="Revenue and cost">
+  <Chart preset="grouped-bar" {data} x="month" y={['revenue', 'cost']} />
+</ReportCard>
+```
+
 
 `Chart type='line'` uses LayerChart's native line chart by default. For monitoring dashboards with segmented lines, points, nearest-point hover, and vertical reference lines, use `lineVariant='segmented-point'`:
 

@@ -38,6 +38,44 @@
 
 ![组件页中的面包屑层级与多种标签页样式](../images/gallery-compounds-zh-CN.png)
 
+## 指标卡、图表与轻量看板
+
+在管理台“组件演示 → 图表”可以查看完整经营看板：顶部指标卡显示收入、订单、转化和耗时，统计周期切换会同步更新示例数据。下方报表展示收入与成本、渠道占比、图形预设、原生仪表和加载/空态。
+
+![管理台的指标卡、经营图表与原生图形入口](../images/ui-dashboard-light.png)
+
+`MetricCard` 展示数值、单位与百分比变化。`trend={12.8}` 表示 +12.8%；`trendTone` 表达业务好坏，响应耗时下降也可以用 success。传入已格式化字符串可以保留业务单位和精度。缺失或非有限数显示“—”，零值正常显示。
+
+```svelte
+<script lang="ts">
+  import { Chart, DashboardGrid, MetricCard, ReportCard } from '@h-ai/ui/components/scenes/charts/index'
+  const data = [{ month: 'Jan', revenue: 42, cost: 24 }, { month: 'Feb', revenue: 58, cost: 31 }]
+</script>
+
+<DashboardGrid label="经营指标" columns={4}>
+  <MetricCard title="收入" value="128,430" unit="CNY" trend={12.8} trendTone="success" trendLabel="较上月" />
+</DashboardGrid>
+<ReportCard title="收入与成本">
+  <Chart preset="grouped-bar" {data} x="month" y={['revenue', 'cost']} />
+</ReportCard>
+```
+
+示例文字接入应用自己的翻译模块。DashboardGrid 按容器宽度收拢：小于 40rem 为一列，40rem 起最多两列，64rem 起采用指定的 1–4 列。ReportCard 复用 Card，支持标题、说明、操作、页脚及 loading/empty；状态期间不挂载图形。
+
+390px 下报表卡片按单列显示，图表保持在自身容器内：
+
+![窄屏中的经营柱状图](../images/ui-dashboard-mobile.png)
+
+Chart 的 `preset` 支持 grouped-bar、stacked-bar、stacked-area、donut、sparkline。选择预设后仍能传原生属性：例如 `legend={false}` 关闭图例，`innerRadius={0.8}` 改变环形内径，`height={80}` 改变迷你图高度。显式 `type` 和原生属性覆盖预设默认值。
+
+SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型加载渲染器。加载态和空数据不加载图形；分块加载失败通过统一 Toast 提示，原位提供刷新重试。只使用指标卡或容器时不需要加载图形引擎。
+
+更多图形可直接放入 ReportCard 的 children。应用声明兼容的 layerchart 依赖后使用其真实公开入口；例如独立的动态组件从 `layerchart/svg` 导入 ArcChart，就能展示目标仪表。树图、径向图等也沿此方式组合，无须扩大统一 Chart 的类型枚举。详细契约见[图表与看板参考](../../../packages/cli/templates/skills/hai-ui/charts.md)。
+
+图例、数值和控件随语言及主题更新；下面是通过实际主题选择器切换后的英文深色看板：
+
+![英文深色看板](../images/ui-dashboard-dark.png)
+
 ## 表单与重复提交
 
 `Form` / `FormLayout` 默认一列、标签在上。字段较多且容器足够宽时，可以设置 `columns={2}`；希望标签对齐时设置 `labelPosition="left"` 和 `labelWidth`。这些是组件参数，修改后立即影响布局，不需要重启后端。

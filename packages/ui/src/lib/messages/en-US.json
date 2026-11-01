@@ -519,5 +519,10 @@
   "theme_formal": "Formal",
   "keyboard_submit_enter": "Press Enter in a single-line field to submit",
   "request_access_denied": "The access policy blocked this request. Check the address, network and permitted hours. Contact your administrator for help.",
-  "auth_error_account_unavailable": "This account is unavailable. Contact your administrator to check its status and expiry."
+  "auth_error_account_unavailable": "This account is unavailable. Contact your administrator to check its status and expiry.",
+  "chart_load_failed": "Unable to load the chart. Please retry.",
+  "chart_retry": "Refresh page to retry",
+  "metric_increase": "Increase",
+  "metric_decrease": "Decrease",
+  "metric_unchanged": "Unchanged"
 }

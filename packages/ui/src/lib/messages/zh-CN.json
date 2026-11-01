@@ -519,5 +519,10 @@
   "theme_formal": "简洁商务",
   "keyboard_submit_enter": "在单行输入框中按 Enter 提交",
   "request_access_denied": "当前请求未通过访问策略检查。请确认访问地址、网络或允许的时段；如需帮助，请联系管理员。",
-  "auth_error_account_unavailable": "账号当前无法使用，请联系管理员确认账号状态及有效期。"
+  "auth_error_account_unavailable": "账号当前无法使用，请联系管理员确认账号状态及有效期。",
+  "chart_load_failed": "图表加载失败，请重试",
+  "chart_retry": "刷新页面重试",
+  "metric_increase": "上升",
+  "metric_decrease": "下降",
+  "metric_unchanged": "持平"
 }

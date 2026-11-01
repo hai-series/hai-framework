@@ -1,7 +1,7 @@
 {
   "name": "admin-console",
   "type": "module",
-  "version": "1.0.0-beta.8",
+  "version": "1.0.0-beta.9",
   "private": true,
   "description": "hai Agent Framework - 管理控制台示例应用",
   "keywords": [
@@ -54,6 +54,7 @@
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "d3-shape": "catalog:",
+    "layerchart": "catalog:",
     "sm-crypto": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"

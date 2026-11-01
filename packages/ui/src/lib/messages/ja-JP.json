@@ -519,5 +519,10 @@
   "theme_formal": "ビジネス（角丸なし）",
   "keyboard_submit_enter": "1行の入力欄で Enter を押して送信",
   "request_access_denied": "アクセス制限により、このリクエストは許可されませんでした。アクセス先、ネットワーク、許可時間帯を確認してください。必要な場合は管理者にお問い合わせください。",
-  "auth_error_account_unavailable": "現在このアカウントは利用できません。状態と有効期限を管理者に確認してください。"
+  "auth_error_account_unavailable": "現在このアカウントは利用できません。状態と有効期限を管理者に確認してください。",
+  "chart_load_failed": "グラフを読み込めませんでした。再試行してください。",
+  "chart_retry": "ページを更新して再試行",
+  "metric_increase": "増加",
+  "metric_decrease": "減少",
+  "metric_unchanged": "変化なし"
 }

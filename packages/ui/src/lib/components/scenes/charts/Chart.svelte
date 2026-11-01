@@ -20,18 +20,16 @@
 -->
 <script lang='ts'>
   import type { ChartProps, ChartSeries, ChartType } from './chart-types.js'
+  import { onMount } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { cn, getDataAttributes } from '../../../utils.js'
+  import { resolveChartPreset } from './chart-presets.js'
   import { DAISYUI_CHART_COLORS, resolveChartColors } from './chart-theme.js'
-  import AreaChart from './renderers/AreaChart.svelte'
-  import BarChart from './renderers/BarChart.svelte'
-  import LineChart from './renderers/LineChart.svelte'
-  import PieChart from './renderers/PieChart.svelte'
-  import ScatterChart from './renderers/ScatterChart.svelte'
-  import 'layerchart/daisyui-5.css'
+  import ChartLoadError from './ChartLoadError.svelte'
 
   const {
-    type,
+    type: requestedType,
+    preset,
     data = [],
     x,
     y,
@@ -46,7 +44,23 @@
     ...restProps
   }: ChartProps = $props()
 
+  const presetConfig = $derived(resolveChartPreset(preset))
+  const type = $derived(requestedType ?? presetConfig.type ?? 'line')
+  const nativeProps = $derived({ ...presetConfig.props, ...restProps })
   const dataAttributes = $derived(getDataAttributes(restProps))
+
+  // 仅浏览器挂载且确有数据时加载对应图形；Svelte await 自动丢弃过期 Promise 的结果。
+  const renderers = {
+    bar: () => import('./renderers/BarChart.svelte'),
+    line: () => import('./renderers/LineChart.svelte'),
+    area: () => import('./renderers/AreaChart.svelte'),
+    pie: () => import('./renderers/PieChart.svelte'),
+    scatter: () => import('./renderers/ScatterChart.svelte'),
+  }
+  let mounted = $state(false)
+  onMount(() => {
+    mounted = true
+  })
 
   const chartSizeHeights: Record<NonNullable<ChartProps['size']>, number> = {
     sm: 200,
@@ -58,10 +72,11 @@
 
   /** 图表可视高度优先尊重 LayerChart 原生 height，未传时使用 @h-ai/ui 的 size 预设。 */
   const chartHeight = $derived(
-    typeof restProps.height === 'number' ? restProps.height : chartSizeHeights[size],
+    typeof nativeProps.height === 'number' ? nativeProps.height : chartSizeHeights[size],
   )
 
   const isEmpty = $derived(empty || data.length === 0)
+  const rendererPromise = $derived(mounted && !loading && !isEmpty ? renderers[type]() : undefined)
   const hasHeader = $derived(Boolean(title || description))
 
   const rootClass = $derived(
@@ -112,7 +127,7 @@
     data,
     height: chartHeight,
     cRange: DAISYUI_CHART_COLORS,
-    ...restProps,
+    ...nativeProps,
     orientation,
     series: resolvedSeries,
     x,
@@ -126,7 +141,7 @@
     label: x,
     value: pieValue,
     cRange: DAISYUI_CHART_COLORS,
-    ...restProps,
+    ...nativeProps,
     series: resolvedSeries,
   })
 </script>
@@ -148,16 +163,24 @@
       <span class='loading loading-spinner loading-md text-primary' aria-label={uiM('chart_loading')}></span>
     {:else if isEmpty}
       <p class='text-sm text-base-content/50'>{uiM('chart_empty')}</p>
-    {:else if type === 'bar'}
-      <BarChart {...cartesianLayerProps} />
-    {:else if type === 'line'}
-      <LineChart {...cartesianLayerProps} />
-    {:else if type === 'area'}
-      <AreaChart {...cartesianLayerProps} />
-    {:else if type === 'pie'}
-      <PieChart {...pieLayerProps} />
-    {:else if type === 'scatter'}
-      <ScatterChart {...cartesianLayerProps} />
+    {:else if !mounted}
+      <div class='flex h-full items-center justify-center' role='status' aria-label={uiM('chart_loading')}>
+        <span class='loading loading-spinner loading-md text-primary'></span>
+      </div>
+    {:else}
+      {#await rendererPromise}
+        <div class='flex h-full items-center justify-center' role='status' aria-label={uiM('chart_loading')}>
+          <span class='loading loading-spinner loading-md text-primary'></span>
+        </div>
+      {:then renderer}
+        {#if renderer}
+          {@const Renderer = renderer.default}
+          <Renderer {...(type === 'pie' ? pieLayerProps : cartesianLayerProps)} />
+        {/if}
+      {:catch}
+        <!-- 浏览器可能缓存失败的模块请求；刷新文档后才能可靠重试同一资源。 -->
+        <ChartLoadError onretry={() => window.location.reload()} />
+      {/await}
     {/if}
   </div>
 </div>

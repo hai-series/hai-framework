@@ -10,6 +10,7 @@
   import type { ScatterChartProps } from 'layerchart'
   import type { ChartDataItem } from '../chart-types.js'
   import { ScatterChart as LayerScatterChart } from 'layerchart'
+  import 'layerchart/daisyui-5.css'
 
   /** 透传给 LayerChart ScatterChart 的全部原生属性。 */
   const { ...props }: ScatterChartProps<ChartDataItem> = $props()
