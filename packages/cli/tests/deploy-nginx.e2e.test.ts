@@ -169,16 +169,25 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       client.on('timeout', () => client.destroy(new Error('TLS fixture timeout')))
       client.end()
     })
-    try {
-      execFileSync(runtime, ['exec', '-d', owned.containerId, 'sh', '/tmp/hai-tls-start.sh'], { windowsHide: true })
-      let initial: Awaited<ReturnType<typeof probe>> | undefined
+    const waitForCertificate = async (ca: string) => {
+      let lastFailure: unknown
       for (let attempt = 0; attempt < 30; attempt++) {
-        initial = await probe(first.pem).catch(() => undefined)
-        if (initial)
-          break
+        try {
+          return await probe(ca)
+        }
+        catch (error) {
+          lastFailure = error
+        }
         await new Promise(resolve => setTimeout(resolve, 200))
       }
-      expect(initial?.body).toBe('https fixture')
+      const startupLog = await executeDeployTestFixture(runtime, owned, ['cat', '/tmp/hai-tls-start.log'])
+      throw new Error(`HTTPS fixture did not serve the expected certificate: ${lastFailure instanceof Error ? lastFailure.message : String(lastFailure)}\n${startupLog}`)
+    }
+    try {
+      // 模拟 detached exec 关闭输出后重建日志描述符，避免 nginx -t 写 stderr 时提前失败。
+      execFileSync(runtime, ['exec', '-d', owned.containerId, 'sh', '-c', 'exec 1>&- 2>&-; exec sh /tmp/hai-tls-start.sh > /tmp/hai-tls-start.log 2>&1'], { windowsHide: true })
+      const initial = await waitForCertificate(first.pem)
+      expect(initial.body).toBe('https fixture')
       await expect(probe(first.pem, 'wrong.example.test')).rejects.toThrow()
       const redirect = await fetch(`http://127.0.0.1:${owned.webHostPort}/deep?value=1`, { redirect: 'manual' })
       expect(redirect.status).toBe(308)
@@ -187,15 +196,9 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       const renewed = certificate('renewed')
       copyCertificate(renewed)
       await executeDeployTestFixture(runtime, owned, ['touch', '/tmp/hai-tls-watch-ready'])
-      let updated: Awaited<ReturnType<typeof probe>> | undefined
-      for (let attempt = 0; attempt < 30; attempt++) {
-        updated = await probe(renewed.pem).catch(() => undefined)
-        if (updated)
-          break
-        await new Promise(resolve => setTimeout(resolve, 200))
-      }
-      expect(updated?.body).toBe('https fixture')
-      expect(updated?.fingerprint).not.toBe(initial?.fingerprint)
+      const updated = await waitForCertificate(renewed.pem)
+      expect(updated.body).toBe('https fixture')
+      expect(updated.fingerprint).not.toBe(initial.fingerprint)
     }
     finally {
       await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'if [ -f /tmp/hai-tls.pid ]; then nginx -s quit -c /tmp/hai-tls.conf; fi; if [ -f /tmp/hai-tls-watcher.pid ]; then kill "$(cat /tmp/hai-tls-watcher.pid)" || true; fi'])
