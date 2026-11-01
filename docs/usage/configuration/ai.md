@@ -4,6 +4,12 @@
 
 先让一条无敏感信息的模型请求成功，再接会话、知识库和工具。模型能回答不表示会话已持久保存；Schema通过不表示供应商凭据、模型名或额度可用。密钥保存在服务端，前端通过受权限检查保护的API发起调用。
 
+## ACP 运行限制与模型能力
+
+`acp` 的 requestTimeout（30000ms）、promptTimeout（600000ms）、cancelTimeout（5000ms）、maxContentBytes（8388608）、maxPendingEvents（1024）控制连接、取消和输出边界。环境变量对应 `HAI_AI_ACP_REQUESTTIMEOUT` 等。Agent、workspace 和 session 通过 `ai.acp` 登记，不在配置文件另存一套模型密钥。
+
+`llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量。Codex 使用 Responses；DeepSeek Harness 自定义模型需要完整、已确认的容量/输入/工具/推理信息。详见 [ACP 接入](../development/ai.md#acp-智能体与工程会话)。
+
 ## 模型、协议与场景路由
 
 位置：`config/_ai.yml` 的 `llm`。以下默认来自当前实现，不表示对某供应商或型号的推荐。
@@ -238,3 +244,11 @@ a2a:
 ```
 
 取消、超时和unknown须核对外部动作和持久事件，不能因为租约已释放就自动重放。多节点最终提交还受数据库租约与绝对期限约束；本章没有用配置校验替代真实行锁、取消和故障演练。
+
+## 配置与数据库清单
+
+`llm.models`、`audio.models`、`image.models`、`mcp.servers`、`retrieval.sources`、`acp.agents`、`acp.workspaces` 同时读取初始化配置和数据库，按 ID 合并，配置优先且不可修改。对应 API 均提供 list/get/register/update/remove；条目包含 value/source，数据库 get 带 version。更新为完整替换，可附版本拒绝过期写入。配置不会被写入数据库。
+
+ACP 会话通过 `mcpServerIds` 使用外部 MCP 清单；凭据用 environmentRefs/headerEnv 在启动时解析。运行中的会话保留模型绑定，恢复时检测配置变化。音频同步 getCapabilities 使用最近目录读写或异步调用刷新的快照。目录是可信服务端管理 API，不应直接向浏览器暴露含密钥的模型定义。
+
+错误码 090 只读、091 不存在、092 冲突、093 无效定义、094 存储失败。CLI 生成项目中的 `.agents/skills/hai-ai/resources.md` 包含配置和 CRUD 示例。

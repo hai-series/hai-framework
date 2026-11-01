@@ -1,6 +1,6 @@
 ---
 name: hai-ai
-description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像、语音及 A2A。"
+description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像、语音、A2A 及 ACP。"
 ---
 
 # hai-ai
@@ -9,7 +9,7 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 
 | 项目 | 契约 |
 | --- | --- |
-| 能力 | 接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像、语音及 A2A |
+| 能力 | 接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像、语音、A2A 及 ACP |
 | 适用场景 | AI 应用服务端集成或浏览器代理接入 |
 | 输入 | AIConfigInput、消息/音频/图片、scope、AbortSignal |
 | 输出 | 领域操作为 HaiResult；流为 AsyncIterable，迭代可抛错 |
@@ -25,6 +25,8 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 - 压缩超过硬预算须停止模型请求；不能失败后发送原始超长消息。
 
 ## 按需参考
+
+智能体接入、工程/worktree、容器和 Git 发布见 [ACP 接入指南](acp.md)。
 
 详细配置、API 签名、错误码和范本在 [guide.md](guide.md)。按下列标题定位所需小节，不默认通读；用例中的业务变量需结合当前应用补齐。
 
@@ -48,3 +50,5 @@ description: "接入 @h-ai/ai 的 LLM、工具/MCP、RAG、会话记忆、图像
 公开 API 示例以安装包的实际入口为准；框架源码中的内部工厂例子仅供模块维护。HaiResult 调用先检查 success，流与浏览器 AudioClient 按显式抛错契约处理；Context flush 失败和 A2A 未知外部效果不得盲目重放。
 
 Node 自定义 SSE 使用 ai.stream 的统一编解码，不用 split/trim 手拆上游事件；encoder 的非法元数据会显式抛错。Anthropic/MiMo 的真实 HTTP 流在退出和取消时释放正文，EOF 不伪造未完成事件，不自动重连或重放业务。
+
+资源目录维护见 [配置与数据库资源清单](resources.md)：配置只读、数据库 CRUD、来源与版本、LLM/音频/图像/MCP/检索源/ACP。

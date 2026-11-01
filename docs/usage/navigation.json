@@ -36,6 +36,7 @@
         { "id": "development-data", "title": "数据、事务和附件", "path": "development/data.md" },
         { "id": "development-identity", "title": "登录、改密与退出", "path": "development/authentication.md" },
         { "id": "development-ai", "title": "AI内容、模型与检索", "path": "development/ai.md" },
+        { "id": "development-acp", "title": "ACP智能体与工程会话", "path": "development/ai-acp.md" },
         { "id": "development-ui", "title": "页面布局、交互与提示", "path": "development/ui.md" },
         { "id": "development-integrations", "title": "支付与原生能力", "path": "development/integrations.md" }
       ]

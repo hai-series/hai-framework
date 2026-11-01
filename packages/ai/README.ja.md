@@ -194,6 +194,29 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
+#### ACP エージェント、ワークスペースとセッション
+
+`ai.acp` は Node サーバーで動作します。`embedded` はローカルプロセス、`builtin-service` は Podman/Docker コンテナ（利用可能な Podman を優先）、`custom-service` は既存の HTTP/WS ACP サービスです。Codex/dsh は stdio を使用し、未対応の転送方式を暗黙に変換しません。
+
+Goose 1.57.0 イメージは `goose serve` のネイティブ HTTP/WS `/acp` を提供し、custom-service と `X-Secret-Key` で接続します。モデルは Goose 側で管理し、ワークスペースと状態 volume は配備側がマウントします。実際のリモート E2E では宣言された復元機能を検証します。
+
+- `agents.register/get/list/update/remove/initialize/check` で管理します。`codex`、`deepseek-harness` は `llm.models` を参照し、その他は `generic` または信頼された `AIInitOptions.acpAdapters` を使用します。外部サービスは自身でモデルを管理します。
+- `workspaces.register/prepare/importFiles` は永続ディレクトリ/volume、複数 Git、通常ファイルを管理します。各 Git の `mainBranch` は必須で、prepare は未コミットの変更を上書きしません。
+- `sessions.create/resume/get/list/close` と `newWorktree: true` で各ローカル主ブランチから同名ブランチを作成します。prompt/stream、厳密な構造化結果、権限、MCP、設定、キャンセルは ACP の能力を確認して実行します。
+- `session.updateMain()` は指定主ブランチを fetch/ff-only 更新します。`publish({ mode: 'merge-main' | 'push-branch', message, author })` は管理対象の分離セッションだけを公開し、リポジトリ単位の部分失敗を報告します。強制 push は行いません。実行環境を停止してから操作し、続行には明示的に resume します。
+
+確認済み容量、モダリティ、推論能力は `llm.models[].capabilities` に設定します。Codex は Responses を必要とし、既存 Hai 変換は逆方向ゲートウェイではありません。close 後もコード/状態を保持し、所有プロセス停止を確認後 CAS 占有を解放します。worktree はセキュリティサンドボックスではありません。
+
+[ACP ガイド](../cli/templates/skills/hai-ai/acp.md) と [Agent イメージ](models/agents/README.md) を参照してください。Git/Node/Python を含み Java/Rust/Go は任意、Codex イメージには codex-acp と codex の両方を含みます。エラーは `hai:ai:070`–`084`、通常 API は HaiResult、stream の失敗は例外です。
+
+管理対象 Git でサブモジュールや Git LFS 属性を検出すると ACP_UNSUPPORTED を返し、不完全な内容を準備完了として扱いません。
+
+#### 設定とデータベースのリソース一覧
+
+`llm.models`、`audio.models`、`image.models`、`mcp.servers`、`retrieval.sources`、`acp.agents/workspaces` は設定と DB を統合します。同じ ID は設定を優先し、設定は読み取り専用です。DB は list/get/register/update/remove に対応し、value/source/version と任意のバージョン照合を使用します。非同期呼び出しは最新の定義を読み、同期音声機能照会は直近のローカル情報を使います。エラーは 090–094。定義には認証情報が含まれるため、信頼できるサーバー管理 API として使用します。
+
+[Resource catalogs](../cli/templates/skills/hai-ai/resources.md) · [ACP](../cli/templates/skills/hai-ai/acp.md)
+
 #### A2A プロトコルの境界
 
 `ai.a2a.getAgentCard()` は `protocolVersion`、MIME、streaming 機能を含む完全な A2A 0.3 Agent Card を返します。Kit の既定検出パスは `/.well-known/agent-card.json`。`handleRequest()` は常に JSON-RPC/SSE の結果を返し、未初期化時は JSON-RPC エラーです。信頼された HTTP の `agentId` を executor の `context.user.userName` に対応付けます。JSON-RPC/SSE に対応し、push notifications・gRPC・REST 対応は宣言しません。業務リソースの認可はアプリの責任です。

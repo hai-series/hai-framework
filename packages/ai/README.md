@@ -211,6 +211,29 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
+#### ACP 智能体、工作区和会话
+
+`ai.acp` 在 Node 服务端接入原生 ACP 智能体：`embedded` 本机进程、`builtin-service` Podman/Docker 容器（自动选择优先 Podman）、`custom-service` 已有 HTTP/WS 服务。Codex/dsh 当前使用 stdio；不自动转换不支持的传输。
+
+Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 custom-service 和 `X-Secret-Key` 接入。模型由 Goose 服务维护，工作区与状态卷由部署方挂载；真实远程 E2E 按握手能力验收恢复。
+
+- `agents.register/get/list/update/remove/initialize/check` 维护智能体。`codex`、`deepseek-harness` 适配器引用 `llm.models`；其他原生程序用 `generic` 或可信 `AIInitOptions.acpAdapters`。自定义服务自行管理模型。
+- `workspaces.register/prepare/importFiles` 管理目录或持久 volume、多 Git 工程和普通文件；每个 Git 明确 `mainBranch`。prepare 不覆盖脏目录。
+- `sessions.create/resume/get/list/close` 管理会话；`newWorktree: true` 从各本地主分支建同名 worktree。prompt/stream/strict promptStructured、权限回调、MCP、模式配置、取消和能力检查沿用 ACP。
+- `session.updateMain()` 只 fetch/ff-only 更新明确主分支；`publish({ mode: 'merge-main' | 'push-branch', message, author })` 仅发布受管隔离 session，逐仓库报告部分失败，不强推。操作前停止执行环境，继续任务显式 resume。
+
+模型容量、模态和推理能力填 `llm.models[].capabilities`，未知不猜。Codex 要求原生 Responses；Hai 现有转换不是反向服务网关。关闭后保留代码/状态卷，确认拥有的进程停止才释放 CAS 占用；worktree 不是安全沙箱。
+
+接入示例与限制见 [ACP 指南](../cli/templates/skills/hai-ai/acp.md)。[Agent 镜像](models/agents/README.md) 包含 Git/Node/Python，可选 Java/Rust/Go；Codex 镜像同时含 codex-acp 和 codex。错误码为 `hai:ai:070`–`084`。普通 API 返回 HaiResult，stream 失败抛出；Node 以外不启动 Agent。
+
+托管 Git 遇到子模块或 Git LFS 属性时明确返回 ACP_UNSUPPORTED，避免将不完整工程报告为就绪。
+
+#### 配置与数据库资源清单
+
+`llm.models`、`audio.models`、`image.models`、`mcp.servers`、`retrieval.sources`、`acp.agents/workspaces` 合并配置和数据库。配置同 ID 优先且只读，数据库支持 list/get/register/update/remove；条目返回 value/source/version，更新可检查版本。异步调用读取最新定义，音频同步能力查询使用最近刷新快照。资源错误为 090–094。管理定义可能含模型密钥，仅在可信服务端使用。
+
+[Resource catalogs](../cli/templates/skills/hai-ai/resources.md) · [ACP](../cli/templates/skills/hai-ai/acp.md)
+
 #### A2A 协议边界
 
 `ai.a2a.getAgentCard()` 返回完整 A2A 0.3 Agent Card，含 `protocolVersion`、MIME 和 streaming 能力；Kit 默认发现路径为 `/.well-known/agent-card.json`。`handleRequest()` 始终返回 JSON-RPC/SSE 处理结果，未初始化返回 JSON-RPC 错误。可信 HTTP 认证上下文的 `agentId` 映射为 executor 的 `context.user.userName`。当前支持 JSON-RPC/SSE，不声明 push notifications、gRPC 或 REST 支持；业务资源授权仍由应用负责。

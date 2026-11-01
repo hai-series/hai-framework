@@ -103,6 +103,102 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPAgentAdapter",
+              "kind": "type",
+              "declaration": "ACPAgentAdapter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentAdapterInput",
+              "kind": "type",
+              "declaration": "ACPAgentAdapterInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentLaunch",
+              "kind": "type",
+              "declaration": "ACPAgentLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentSchema",
+              "kind": "value",
+              "declaration": "ACPAgentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPClientOptions",
+              "kind": "type",
+              "declaration": "ACPClientOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPConfig",
+              "kind": "type",
+              "declaration": "ACPConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigInput",
+              "kind": "type",
+              "declaration": "ACPConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigSchema",
+              "kind": "value",
+              "declaration": "ACPConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPCreateSessionOptions",
+              "kind": "type",
+              "declaration": "ACPCreateSessionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPGitReport",
+              "kind": "type",
+              "declaration": "ACPGitReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPOperations",
+              "kind": "type",
+              "declaration": "ACPOperations",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPPublishSchema",
+              "kind": "value",
+              "declaration": "ACPPublishSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRepositorySchema",
+              "kind": "value",
+              "declaration": "ACPRepositorySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPSessionInfo",
+              "kind": "type",
+              "declaration": "ACPSessionInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPTransport",
+              "kind": "type",
+              "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPWorkspaceSchema",
+              "kind": "value",
+              "declaration": "ACPWorkspaceSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -178,6 +274,18 @@
               "name": "AIRelStoreOptions",
               "kind": "type",
               "declaration": "AIRelStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceEntry",
+              "kind": "type",
+              "declaration": "AIResourceEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceRegistry",
+              "kind": "type",
+              "declaration": "AIResourceRegistry",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -1039,6 +1147,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ManagedAudioOperations",
+              "kind": "type",
+              "declaration": "ManagedAudioOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedImageOperations",
+              "kind": "type",
+              "declaration": "ManagedImageOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedLLMOperations",
+              "kind": "type",
+              "declaration": "ManagedLLMOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedMCPOperations",
+              "kind": "type",
+              "declaration": "ManagedMCPOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedRetrievalOperations",
+              "kind": "type",
+              "declaration": "ManagedRetrievalOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPConfig",
               "kind": "type",
               "declaration": "MCPConfig",
@@ -1055,6 +1193,18 @@
               "kind": "type",
               "declaration": "MCPContext",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPExternalServer",
+              "kind": "type",
+              "declaration": "MCPExternalServer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MCPExternalServerSchema",
+              "kind": "value",
+              "declaration": "MCPExternalServerSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "MCPOperations",
@@ -1271,6 +1421,12 @@
               "kind": "type",
               "declaration": "MessageSendParams",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModelCapabilitiesSchema",
+              "kind": "value",
+              "declaration": "ModelCapabilitiesSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "ModelEntry",
@@ -2046,6 +2202,102 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPAgentAdapter",
+              "kind": "type",
+              "declaration": "ACPAgentAdapter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentAdapterInput",
+              "kind": "type",
+              "declaration": "ACPAgentAdapterInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentLaunch",
+              "kind": "type",
+              "declaration": "ACPAgentLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentSchema",
+              "kind": "value",
+              "declaration": "ACPAgentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPClientOptions",
+              "kind": "type",
+              "declaration": "ACPClientOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPConfig",
+              "kind": "type",
+              "declaration": "ACPConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigInput",
+              "kind": "type",
+              "declaration": "ACPConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigSchema",
+              "kind": "value",
+              "declaration": "ACPConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPCreateSessionOptions",
+              "kind": "type",
+              "declaration": "ACPCreateSessionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPGitReport",
+              "kind": "type",
+              "declaration": "ACPGitReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPOperations",
+              "kind": "type",
+              "declaration": "ACPOperations",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPPublishSchema",
+              "kind": "value",
+              "declaration": "ACPPublishSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRepositorySchema",
+              "kind": "value",
+              "declaration": "ACPRepositorySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPSessionInfo",
+              "kind": "type",
+              "declaration": "ACPSessionInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPTransport",
+              "kind": "type",
+              "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPWorkspaceSchema",
+              "kind": "value",
+              "declaration": "ACPWorkspaceSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -2121,6 +2373,18 @@
               "name": "AIRelStoreOptions",
               "kind": "type",
               "declaration": "AIRelStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceEntry",
+              "kind": "type",
+              "declaration": "AIResourceEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceRegistry",
+              "kind": "type",
+              "declaration": "AIResourceRegistry",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -2982,6 +3246,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ManagedAudioOperations",
+              "kind": "type",
+              "declaration": "ManagedAudioOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedImageOperations",
+              "kind": "type",
+              "declaration": "ManagedImageOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedLLMOperations",
+              "kind": "type",
+              "declaration": "ManagedLLMOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedMCPOperations",
+              "kind": "type",
+              "declaration": "ManagedMCPOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedRetrievalOperations",
+              "kind": "type",
+              "declaration": "ManagedRetrievalOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPConfig",
               "kind": "type",
               "declaration": "MCPConfig",
@@ -2998,6 +3292,18 @@
               "kind": "type",
               "declaration": "MCPContext",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPExternalServer",
+              "kind": "type",
+              "declaration": "MCPExternalServer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MCPExternalServerSchema",
+              "kind": "value",
+              "declaration": "MCPExternalServerSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "MCPOperations",
@@ -3214,6 +3520,12 @@
               "kind": "type",
               "declaration": "MessageSendParams",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModelCapabilitiesSchema",
+              "kind": "value",
+              "declaration": "ModelCapabilitiesSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "ModelEntry",
@@ -3988,6 +4300,102 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPAgentAdapter",
+              "kind": "type",
+              "declaration": "ACPAgentAdapter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentAdapterInput",
+              "kind": "type",
+              "declaration": "ACPAgentAdapterInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentLaunch",
+              "kind": "type",
+              "declaration": "ACPAgentLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentSchema",
+              "kind": "value",
+              "declaration": "ACPAgentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPClientOptions",
+              "kind": "type",
+              "declaration": "ACPClientOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPConfig",
+              "kind": "type",
+              "declaration": "ACPConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigInput",
+              "kind": "type",
+              "declaration": "ACPConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigSchema",
+              "kind": "value",
+              "declaration": "ACPConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPCreateSessionOptions",
+              "kind": "type",
+              "declaration": "ACPCreateSessionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPGitReport",
+              "kind": "type",
+              "declaration": "ACPGitReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPOperations",
+              "kind": "type",
+              "declaration": "ACPOperations",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPPublishSchema",
+              "kind": "value",
+              "declaration": "ACPPublishSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRepositorySchema",
+              "kind": "value",
+              "declaration": "ACPRepositorySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPSessionInfo",
+              "kind": "type",
+              "declaration": "ACPSessionInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPTransport",
+              "kind": "type",
+              "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPWorkspaceSchema",
+              "kind": "value",
+              "declaration": "ACPWorkspaceSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -4069,6 +4477,18 @@
               "name": "AIRelStoreOptions",
               "kind": "type",
               "declaration": "AIRelStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceEntry",
+              "kind": "type",
+              "declaration": "AIResourceEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceRegistry",
+              "kind": "type",
+              "declaration": "AIResourceRegistry",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -4912,6 +5332,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ManagedAudioOperations",
+              "kind": "type",
+              "declaration": "ManagedAudioOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedImageOperations",
+              "kind": "type",
+              "declaration": "ManagedImageOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedLLMOperations",
+              "kind": "type",
+              "declaration": "ManagedLLMOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedMCPOperations",
+              "kind": "type",
+              "declaration": "ManagedMCPOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedRetrievalOperations",
+              "kind": "type",
+              "declaration": "ManagedRetrievalOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPConfig",
               "kind": "type",
               "declaration": "MCPConfig",
@@ -4928,6 +5378,18 @@
               "kind": "type",
               "declaration": "MCPContext",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPExternalServer",
+              "kind": "type",
+              "declaration": "MCPExternalServer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MCPExternalServerSchema",
+              "kind": "value",
+              "declaration": "MCPExternalServerSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "MCPOperations",
@@ -5150,6 +5612,12 @@
               "kind": "type",
               "declaration": "MessageSendParams",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModelCapabilitiesSchema",
+              "kind": "value",
+              "declaration": "ModelCapabilitiesSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "ModelEntry",
@@ -5954,6 +6422,102 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPAgentAdapter",
+              "kind": "type",
+              "declaration": "ACPAgentAdapter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentAdapterInput",
+              "kind": "type",
+              "declaration": "ACPAgentAdapterInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentLaunch",
+              "kind": "type",
+              "declaration": "ACPAgentLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentSchema",
+              "kind": "value",
+              "declaration": "ACPAgentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPClientOptions",
+              "kind": "type",
+              "declaration": "ACPClientOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPConfig",
+              "kind": "type",
+              "declaration": "ACPConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigInput",
+              "kind": "type",
+              "declaration": "ACPConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigSchema",
+              "kind": "value",
+              "declaration": "ACPConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPCreateSessionOptions",
+              "kind": "type",
+              "declaration": "ACPCreateSessionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPGitReport",
+              "kind": "type",
+              "declaration": "ACPGitReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPOperations",
+              "kind": "type",
+              "declaration": "ACPOperations",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPPublishSchema",
+              "kind": "value",
+              "declaration": "ACPPublishSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRepositorySchema",
+              "kind": "value",
+              "declaration": "ACPRepositorySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPSessionInfo",
+              "kind": "type",
+              "declaration": "ACPSessionInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPTransport",
+              "kind": "type",
+              "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPWorkspaceSchema",
+              "kind": "value",
+              "declaration": "ACPWorkspaceSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -6035,6 +6599,18 @@
               "name": "AIRelStoreOptions",
               "kind": "type",
               "declaration": "AIRelStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceEntry",
+              "kind": "type",
+              "declaration": "AIResourceEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceRegistry",
+              "kind": "type",
+              "declaration": "AIResourceRegistry",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -6878,6 +7454,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ManagedAudioOperations",
+              "kind": "type",
+              "declaration": "ManagedAudioOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedImageOperations",
+              "kind": "type",
+              "declaration": "ManagedImageOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedLLMOperations",
+              "kind": "type",
+              "declaration": "ManagedLLMOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedMCPOperations",
+              "kind": "type",
+              "declaration": "ManagedMCPOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedRetrievalOperations",
+              "kind": "type",
+              "declaration": "ManagedRetrievalOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPConfig",
               "kind": "type",
               "declaration": "MCPConfig",
@@ -6894,6 +7500,18 @@
               "kind": "type",
               "declaration": "MCPContext",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPExternalServer",
+              "kind": "type",
+              "declaration": "MCPExternalServer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MCPExternalServerSchema",
+              "kind": "value",
+              "declaration": "MCPExternalServerSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "MCPOperations",
@@ -7116,6 +7734,12 @@
               "kind": "type",
               "declaration": "MessageSendParams",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModelCapabilitiesSchema",
+              "kind": "value",
+              "declaration": "ModelCapabilitiesSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "ModelEntry",
@@ -7920,6 +8544,102 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ACPAgentAdapter",
+              "kind": "type",
+              "declaration": "ACPAgentAdapter",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentAdapterInput",
+              "kind": "type",
+              "declaration": "ACPAgentAdapterInput",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentLaunch",
+              "kind": "type",
+              "declaration": "ACPAgentLaunch",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPAgentSchema",
+              "kind": "value",
+              "declaration": "ACPAgentSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPClientOptions",
+              "kind": "type",
+              "declaration": "ACPClientOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPConfig",
+              "kind": "type",
+              "declaration": "ACPConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigInput",
+              "kind": "type",
+              "declaration": "ACPConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPConfigSchema",
+              "kind": "value",
+              "declaration": "ACPConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPCreateSessionOptions",
+              "kind": "type",
+              "declaration": "ACPCreateSessionOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPGitReport",
+              "kind": "type",
+              "declaration": "ACPGitReport",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPOperations",
+              "kind": "type",
+              "declaration": "ACPOperations",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPPublishSchema",
+              "kind": "value",
+              "declaration": "ACPPublishSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPRepositorySchema",
+              "kind": "value",
+              "declaration": "ACPRepositorySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ACPSessionInfo",
+              "kind": "type",
+              "declaration": "ACPSessionInfo",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ACPTransport",
+              "kind": "type",
+              "declaration": "ACPTransport",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ACPWorkspaceSchema",
+              "kind": "value",
+              "declaration": "ACPWorkspaceSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
               "name": "AgentCapabilities",
               "kind": "type",
               "declaration": "AgentCapabilities",
@@ -8001,6 +8721,18 @@
               "name": "AIRelStoreOptions",
               "kind": "type",
               "declaration": "AIRelStoreOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceEntry",
+              "kind": "type",
+              "declaration": "AIResourceEntry",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "AIResourceRegistry",
+              "kind": "type",
+              "declaration": "AIResourceRegistry",
               "declarationKind": "InterfaceDeclaration"
             },
             {
@@ -8844,6 +9576,36 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "ManagedAudioOperations",
+              "kind": "type",
+              "declaration": "ManagedAudioOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedImageOperations",
+              "kind": "type",
+              "declaration": "ManagedImageOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedLLMOperations",
+              "kind": "type",
+              "declaration": "ManagedLLMOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedMCPOperations",
+              "kind": "type",
+              "declaration": "ManagedMCPOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ManagedRetrievalOperations",
+              "kind": "type",
+              "declaration": "ManagedRetrievalOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "MCPConfig",
               "kind": "type",
               "declaration": "MCPConfig",
@@ -8860,6 +9622,18 @@
               "kind": "type",
               "declaration": "MCPContext",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MCPExternalServer",
+              "kind": "type",
+              "declaration": "MCPExternalServer",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "MCPExternalServerSchema",
+              "kind": "value",
+              "declaration": "MCPExternalServerSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "MCPOperations",
@@ -9082,6 +9856,12 @@
               "kind": "type",
               "declaration": "MessageSendParams",
               "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ModelCapabilitiesSchema",
+              "kind": "value",
+              "declaration": "ModelCapabilitiesSchema",
+              "declarationKind": "VariableDeclaration"
             },
             {
               "name": "ModelEntry",

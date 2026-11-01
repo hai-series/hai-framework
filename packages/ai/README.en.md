@@ -194,6 +194,29 @@ const batch = await registry.executeAll(toolCalls)
 const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 ```
 
+#### ACP agents, workspaces and sessions
+
+`ai.acp` runs on Node: `embedded` starts a local process, `builtin-service` starts a Podman/Docker container (ready Podman first), and `custom-service` connects to a native HTTP/WS ACP service. Codex/dsh use stdio; unsupported transports are not silently bridged.
+
+The Goose 1.57.0 image exposes its native `goose serve` HTTP/WS `/acp` service through custom-service with `X-Secret-Key`. Goose manages its models; deployment owns workspace/state volumes. Real remote E2E verifies native resume when advertised.
+
+- `agents.register/get/list/update/remove/initialize/check` manage definitions. The `codex` and `deepseek-harness` adapters reference `llm.models`; use `generic` or trusted `AIInitOptions.acpAdapters` for other agents. External services own their models.
+- `workspaces.register/prepare/importFiles` manage directories or persistent volumes, multiple Git repositories and plain files. Every repository requires `mainBranch`; prepare preserves dirty directories.
+- `sessions.create/resume/get/list/close` manage native sessions. `newWorktree: true` creates matching branches from each committed local main branch. Prompt, stream, strict structured output, permission callbacks, MCP, configuration and cancellation use native ACP capabilities.
+- `session.updateMain()` fetches and fast-forwards configured main branches. `publish({ mode: 'merge-main' | 'push-branch', message, author })` publishes managed isolated sessions only, with per-repository partial-failure reports and no force push. Both stop execution first; resume explicitly to continue.
+
+Declare verified capacity, modalities and reasoning in `llm.models[].capabilities`. Codex needs native Responses; the existing Hai adapter is not a reverse gateway. Code and state persist after close. CAS ownership is released only after owned processes stop; worktrees are not security sandboxes.
+
+See the [ACP guide](../cli/templates/skills/hai-ai/acp.md) and [agent images](models/agents/README.md). Images include Git/Node/Python, optional Java/Rust/Go, and both codex-acp and codex in the Codex image. Errors use `hai:ai:070`–`084`; ordinary methods return HaiResult, while stream failures throw.
+
+Managed Git rejects submodules and Git LFS attributes with ACP_UNSUPPORTED instead of reporting incomplete checkouts as ready.
+
+#### Configuration and database resource catalogs
+
+`llm.models`, `audio.models`, `image.models`, `mcp.servers`, `retrieval.sources`, and `acp.agents/workspaces` merge configuration and database entries. Configuration wins duplicate IDs and is read-only. Database entries support list/get/register/update/remove with value/source/version metadata and optional version checks. Async calls read current definitions; synchronous audio capability checks use the latest local snapshot. Catalog errors use 090–094. Definitions may contain model credentials; expose only authorized, selected fields.
+
+[Resource catalogs](../cli/templates/skills/hai-ai/resources.md) · [ACP](../cli/templates/skills/hai-ai/acp.md)
+
 #### A2A protocol boundaries
 
 `ai.a2a.getAgentCard()` returns a complete A2A 0.3 Agent Card with `protocolVersion`, MIME, and streaming capabilities. Kit discovery defaults to `/.well-known/agent-card.json`. `handleRequest()` always returns JSON-RPC/SSE results; uninitialized calls return JSON-RPC errors. Trusted HTTP `agentId` maps to executor `context.user.userName`. JSON-RPC/SSE are supported; push notifications, gRPC, and REST are not claimed. Applications remain responsible for business resource authorization.
