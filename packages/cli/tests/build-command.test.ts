@@ -240,6 +240,7 @@ it.each(['docker', 'app', 'desktop'] as const)('静态开关不改变%s目标的
 })
 
 it('构建身份使用当前受Git管理工程的精确提交，未跟踪的子工程不能冒用父仓库HEAD', async () => {
+  // Windows runner 的 tmpdir 可能使用 8.3 短名；manifest 跟踪状态必须由当前目录下的 Git 判断。
   execFileSync('git', ['init', '--quiet'], { cwd: root })
   execFileSync('git', ['add', 'package.json'], { cwd: root })
   execFileSync('git', ['-c', 'user.name=Build fixture', '-c', 'user.email=build@example.invalid', 'commit', '--quiet', '-m', 'fixture'], { cwd: root })

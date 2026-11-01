@@ -139,11 +139,8 @@ function staticCompileEnvironment(target: string): Record<string, string> {
 function sourceCommit(cwd: string): string {
   try {
     const options = { cwd, encoding: 'utf8' as const, stdio: 'pipe' as const, windowsHide: true }
-    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], options).trim()
-    const manifest = relative(root, join(cwd, 'package.json')).replaceAll('\\', '/')
-    if (manifest.startsWith('../'))
-      return 'unknown'
-    execFileSync('git', ['ls-files', '--error-unmatch', '--', manifest], { ...options, cwd: root })
+    // 由 Git 在当前目录解释路径，避免 Windows 8.3 短名、长名和 junction 别名之间的字符串误判。
+    execFileSync('git', ['--literal-pathspecs', 'ls-files', '--error-unmatch', '--', 'package.json'], options)
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], options).trim()
     return /^(?:[a-f\d]{40}|[a-f\d]{64})$/i.test(commit) ? commit : 'unknown'
   }
