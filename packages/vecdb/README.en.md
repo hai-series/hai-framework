@@ -51,6 +51,8 @@ if (!closeResult.success) {
 
 ### Configuration
 
+pgvector persists each collection metric in its vector column comment; indexes, info and queries use that definition. Changing the connection default leaves existing collections unchanged. Legacy collections recover the metric from their vector index; missing both index and valid metadata returns CONFIG_ERROR until repaired.
+
 ```ts
 // LanceDB（默认，嵌入式本地存储）
 await vecdb.init({ type: 'lancedb', path: './data/vecdb' })

@@ -193,7 +193,7 @@ flush 对本节点后台提取的异常和失败 HaiResult 返回 MEMORY_EXTRACT
 
 - `ai.file.parse({ content, filename, options })`：text/html/pdf/docx/ocr 解析。
 - `ai.file.parseText(content, filename?)`：直接返回文本。
-- `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排。
+- `ai.rerank.rerank(request)` / `rerankTexts(query, texts, topN?)`：相关性重排；模型 `timeout` 覆盖响应头与正文读取，超时返回失败结果。
 - `ai.reasoning.run(query, options?)` / `runStream(query, options?)`：`react`、`cot`、`plan-execute`。
 
 ## Audio

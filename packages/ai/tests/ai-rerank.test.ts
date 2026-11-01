@@ -222,6 +222,18 @@ describe('rerank operations', () => {
       }
     })
 
+    it('applies the selected model timeout to the actual fetch signal', async () => {
+      mockFetch.mockImplementationOnce((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+      }))
+      const config = { ...mockConfigWithRerank, llm: { ...mockConfigWithRerank.llm, models: [{ id: 'timed', model: 'timed', timeout: 5 }], scenarios: { rerank: 'timed' } } }
+      const result = await createRerankOperations(config).rerank({ query: 'test', documents: ['one'] })
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
+      expect(mockFetch.mock.calls[0][1].signal.aborted).toBe(true)
+    })
+
     it('网络错误时返回 RERANK_API_ERROR', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'))
 

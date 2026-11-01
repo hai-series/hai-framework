@@ -51,6 +51,8 @@ if (!closeResult.success) {
 
 ### 設定
 
+pgvector は距離尺度を vector 列コメントに保存し、索引・info・検索で共有します。接続の既定値変更は既存集合に影響しません。旧集合は実際の索引から復元し、索引と有効なメタデータが両方ない場合は CONFIG_ERROR を返します。
+
 ```ts
 // LanceDB（默认，嵌入式本地存储）
 await vecdb.init({ type: 'lancedb', path: './data/vecdb' })

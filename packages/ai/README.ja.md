@@ -541,6 +541,8 @@ const manager = ai.context.createManager({
 
 ### 設定
 
+Rerank は LLM 全体の timeout を継承し、モデル単位で上書きできます。期限は応答本文まで含み、超過時は RERANK_API_ERROR を返します。
+
 LLM の `llm.api`、`llm.models[].api`、`tempModel.api` は `protocol` に統一されました。値は `chat | responses | anthropic` のままです。環境変数は `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL`（他の項目は対応する添字）を使います。旧フィールドと旧プロトコル変数は移行案内付きでエラーになります。`apiKey` とその変数は変更ありません。
 
 ```yaml

@@ -27,5 +27,6 @@
   "vecdb_configDatabaseRequired": "データベース名は必須です",
   "vecdb_sharedBackendRequired": "本番環境には共有バックエンドが必要です。ローカルファイルとメモリーバックエンドは開発環境または明示的な E2E テストでのみ使用できます。",
   "vecdb_chromaEndpointInvalid": "Chroma には HTTP(S) のルートエンドポイントを指定してください。認証情報、パスプレフィックス、クエリ、フラグメントは使用できません",
-  "vecdb_chromaTokenInvalid": "Chroma Bearer トークンには空白を含まない表示可能な ASCII 文字のみ使用できます"
+  "vecdb_chromaTokenInvalid": "Chroma Bearer トークンには空白を含まない表示可能な ASCII 文字のみ使用できます",
+  "vecdb_collectionMetricMissing": "コレクションの距離尺度がありません。ベクトルインデックスまたは列メタデータを復元してください"
 }

@@ -541,6 +541,8 @@ const manager = ai.context.createManager({
 
 ### Configuration
 
+Rerank inherits the global LLM timeout with per-model overrides; the deadline covers the request and response body, returning RERANK_API_ERROR on timeout.
+
 The LLM protocol field is now `protocol` in `llm`, `llm.models[]`, and `tempModel`, replacing `api`. Values remain `chat | responses | anthropic`. Use `HAI_AI_LLM_PROTOCOL` and `HAI_AI_LLM_MODELS_0_PROTOCOL` (adjust the index for other entries). Old fields and protocol variables fail with a migration message; `apiKey` and its variables are unchanged.
 
 ```yaml

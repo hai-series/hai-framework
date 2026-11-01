@@ -135,6 +135,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
           'Authorization': `Bearer ${resolved.apiKey}`,
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(resolved.timeout),
       })
 
       if (!response.ok) {

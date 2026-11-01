@@ -51,6 +51,8 @@ if (!closeResult.success) {
 
 ### 配置
 
+pgvector 创建集合时将距离算法保存在 vector 列注释，索引、info 与查询均读取该集合定义；修改连接默认 metric 不改变已有集合。旧集合从实际向量索引恢复算法；索引和有效注释均缺失时返回 CONFIG_ERROR，须先恢复集合定义。
+
 ```ts
 // LanceDB（默认，嵌入式本地存储）
 await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
