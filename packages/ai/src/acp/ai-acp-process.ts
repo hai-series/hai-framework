@@ -3,6 +3,60 @@ import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import process from 'node:process'
 import { ACPFailure } from './ai-acp-errors.js'
+import { windowsACPJobProbe } from './ai-acp-process-windows.js'
+
+/** 探测只返回退出码，不捕获私有参数；超过剩余期限按未确认处理。 */
+async function jobProbe(name: string, timeout: number): Promise<number> {
+  return new Promise((resolve) => {
+    const probe = spawn('powershell.exe', windowsACPJobProbe(name), { shell: false, windowsHide: true, stdio: 'ignore', env: baseEnvironment() })
+    let settled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const finish = (code: number) => {
+      if (settled)
+        return
+      settled = true
+      clearTimeout(timer)
+      resolve(code)
+    }
+    timer = setTimeout(() => {
+      // 仅停止本次查询 helper；未知结果不能释放 Agent 的资源占用。
+      void stopProcess(probe).catch(() => {}).finally(() => finish(2))
+      probe.kill('SIGKILL')
+      finish(2)
+    }, Math.max(1, timeout))
+    probe.once('error', () => finish(2))
+    probe.once('close', code => finish(code ?? 2))
+  })
+}
+
+/** 终止拥有的 Job helper 后核验真实 Job 归零，不依赖中间进程的父子关系。 */
+async function stopWindowsJob(child: ChildProcess, name: string, closeObserved?: boolean): Promise<void> {
+  const deadline = performance.now() + 15000
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      stopProcess(child, { closeObserved }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(new ACPFailure('cleanup'))
+        }, Math.max(1, deadline - performance.now()))
+      }),
+    ])
+    while (performance.now() < deadline) {
+      const state = await jobProbe(name, deadline - performance.now())
+      if (state === 0)
+        return
+      if (state !== 1)
+        throw new ACPFailure('cleanup')
+      await new Promise(resolve => setTimeout(resolve, 20))
+    }
+    throw new ACPFailure('cleanup')
+  }
+  finally {
+    clearTimeout(timer)
+  }
+}
 
 /**
  * 只停止本次创建的进程树；等待 close 后才允许释放目录占用。
@@ -10,6 +64,7 @@ import { ACPFailure } from './ai-acp-errors.js'
  * @param options - ownedTree 用于长期 ACP 进程；closeObserved 表示已观察到 close 事件，避免重复等待。
  * @param options.ownedTree - 长期 Agent 清理必须核验其后台进程树。
  * @param options.closeObserved - 调用方已观察到主进程 close 事件。
+ * @param options.windowsJob - Windows ACP 启动时创建的私有 Job 名；关闭后必须确认无成员。
  * @returns 进程树终止并关闭管道后的 Promise。
  * @example
  * ```ts
@@ -19,8 +74,10 @@ import { ACPFailure } from './ai-acp-errors.js'
  */
 export async function stopProcess(
   child: ChildProcess,
-  options: { ownedTree?: boolean, closeObserved?: boolean } = {},
+  options: { ownedTree?: boolean, closeObserved?: boolean, windowsJob?: string } = {},
 ): Promise<void> {
+  if (process.platform === 'win32' && options.windowsJob)
+    return stopWindowsJob(child, options.windowsJob, options.closeObserved)
   const exited = child.exitCode !== null || child.signalCode !== null
   if (!child.pid || (exited && !options.ownedTree))
     return

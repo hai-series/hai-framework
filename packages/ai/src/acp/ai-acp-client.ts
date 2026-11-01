@@ -22,6 +22,7 @@ import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-
 import { WebSocket } from 'ws'
 import { ACPConfigSchema } from './ai-acp-config.js'
 import { ACPFailure } from './ai-acp-errors.js'
+import { windowsACPCommand } from './ai-acp-process-windows.js'
 import { baseEnvironment, stopProcess } from './ai-acp-process.js'
 
 /**
@@ -61,9 +62,10 @@ export async function connectACP(
   let stop: () => Promise<void> = async () => {}
   let stream: Stream
   if (transport.type === 'stdio') {
-    const child = spawn(transport.command, transport.args ?? [], {
+    const job = process.platform === 'win32' ? windowsACPCommand(transport.command, transport.args ?? []) : undefined
+    const child = spawn(job ? 'powershell.exe' : transport.command, job?.args ?? transport.args ?? [], {
       cwd: transport.cwd,
-      env: { ...baseEnvironment(), ...transport.env },
+      env: { ...baseEnvironment(), ...transport.env, ...job?.env },
       detached: process.platform !== 'win32',
       shell: false,
       windowsHide: true,
@@ -78,7 +80,7 @@ export async function connectACP(
       child.once('spawn', resolve)
       child.once('error', () => reject(new ACPFailure('runtime')))
     })
-    stop = () => stopProcess(child, { ownedTree: true, closeObserved: childClosed })
+    stop = () => stopProcess(child, { ownedTree: true, closeObserved: childClosed, windowsJob: job?.name })
     // Node 与 DOM 流声明不同；pipe stdout 始终产生 Uint8Array。
     stream = ndJsonStream(
       Writable.toWeb(child.stdin),
