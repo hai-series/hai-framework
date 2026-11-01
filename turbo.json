@@ -59,7 +59,8 @@
     },
     "test": {
       "env": [
-        "HAI_ACP_E2E_*"
+        "HAI_ACP_E2E_*",
+        "HAI_STORAGE_RUN_BROWSER_GATES"
       ],
       "passThroughEnv": [
         "DOCKER_HOST",

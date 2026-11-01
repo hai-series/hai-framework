@@ -4,10 +4,15 @@
 
 ## 阶段与依赖
 
+CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。
+
+发布完成判定同时核验所有包版本、GitHub Release 和全部 npm latest；标签部分推进后重新规划整轮仍会恢复未完成发布。
+
 ```mermaid
 flowchart TD
   P[输入指纹与发布状态] --> B[构建共享产物]
   P --> L[规范与文档结构]
+  P --> W[Windows 进程、存储路径与 CLI 回归]
   B --> T[类型检查]
   B --> C[公开契约与配置]
   B --> U[单元与容器测试]
@@ -23,6 +28,7 @@ flowchart TD
   I --> Q
   A --> Q
   U --> Q
+  W --> Q
   Q --> R[npm 发布及版本同步]
   R --> G[完整 CI 成功后发布 Pages]
 ```

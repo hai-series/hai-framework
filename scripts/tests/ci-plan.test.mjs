@@ -111,7 +111,7 @@ describe('ci 环境边界', () => {
 })
 
 describe('ci 最终汇总守卫', () => {
-  const success = () => Object.fromEntries(['plan', 'build', 'lint', 'typecheck', 'contracts', 'unit', 'scaffold', 'sdk', 'deploy', 'browsers'].map(stage => [stage, { result: 'success' }]))
+  const success = () => Object.fromEntries(['plan', 'build', 'lint', 'typecheck', 'contracts', 'unit', 'scaffold', 'sdk', 'deploy', 'browsers', 'windows'].map(stage => [stage, { result: 'success' }]))
 
   it('所有必需阶段成功才允许发布', () => {
     expect(() => assertChecksPassed(success())).not.toThrow()
@@ -161,6 +161,10 @@ describe('ci 真实workflow依赖图', () => {
       expect(workflow.jobs[job].needs).not.toContain('unit')
       expect(workflow.jobs[job].uses).toBe('./.github/workflows/ci-stage.yml')
     }
+    expect(workflow.jobs.windows['runs-on']).toBe('windows-latest')
+    expect(workflow.jobs.windows.steps.some(step => step.run?.includes('ai-acp-process.test.ts'))).toBe(true)
+    expect(workflow.jobs.windows.steps.some(step => step.run?.includes('storage-local-boundaries.test.ts'))).toBe(true)
+    expect(workflow.jobs.quality.needs).toContain('windows')
     expect(workflow.jobs.browsers.strategy['fail-fast']).toBe(false)
   })
 

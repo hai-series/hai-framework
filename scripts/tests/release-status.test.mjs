@@ -49,7 +49,7 @@ describe('release recovery', () => {
       writeFileSync(join(checkout, 'package.json'), JSON.stringify({ version: '2.0.0' }))
       const manifest = join(checkout, 'packages/a/package.json')
       const template = join(checkout, 'packages/cli/templates/base/package.json.hbs')
-      writeFileSync(manifest, JSON.stringify({ version: '1.0.0' }))
+      writeFileSync(manifest, JSON.stringify({ version: '1.0.0', latest: '1.0.0' }))
       writeFileSync(template, 'old')
       writeFileSync(join(checkout, 'apps/demo/package.json'), '{}')
       git('add', '.')
@@ -106,13 +106,20 @@ describe('release recovery', () => {
   it('retries missing npm packages even when a release already exists', async () => {
     const fetcher = async url => url.includes('@h-ai%2fb')
       ? new Response('', { status: 404 })
-      : Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0' })
+      : Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0', latest: '1.0.0' })
     expect((await missingPackages(packages, fetcher)).map(pkg => pkg.name)).toEqual(['@h-ai/b'])
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
   })
 
+  it('resumes a release whose versions and GitHub Release exist but latest is only partly promoted', async () => {
+    const fetcher = async url => Response.json(url.includes('api.github.com')
+      ? { draft: false }
+      : url.endsWith('/dist-tags') ? { latest: url.includes('%2fb') ? '0.9.0' : '1.0.0' } : { version: '1.0.0' })
+    expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
+  })
+
   it('repairs a missing GitHub release after npm publish succeeds', async () => {
-    const fetcher = async url => url.includes('api.github.com') ? new Response('', { status: 404 }) : Response.json({ version: '1.0.0' })
+    const fetcher = async url => url.includes('api.github.com') ? new Response('', { status: 404 }) : Response.json({ version: '1.0.0', latest: '1.0.0' })
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(true)
   })
 
@@ -121,14 +128,14 @@ describe('release recovery', () => {
       if (url.includes('api.github.com'))
         return Response.json({ draft: false })
       return url.includes('/@h-ai%2f') && options.cache === 'no-store'
-        ? Response.json({ version: '1.0.0' })
+        ? Response.json({ version: '1.0.0', latest: '1.0.0' })
         : new Response('', { status: 404 })
     }
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(false)
   })
 
   it('skips only a complete release and never treats lookup failures as missing packages', async () => {
-    const fetcher = async url => Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0' })
+    const fetcher = async url => Response.json(url.includes('api.github.com') ? { draft: false } : { version: '1.0.0', latest: '1.0.0' })
     expect(await releasePending(packages, 'owner/repo', '1.0.0', { fetcher })).toBe(false)
     await expect(missingPackages(packages, async () => new Response('', { status: 503 }))).rejects.toThrow('503')
     await expect(releasePending([], 'owner/repo', '1.0.0', { fetcher: async () => new Response('', { status: 401 }) })).rejects.toThrow('401')

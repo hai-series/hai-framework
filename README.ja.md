@@ -131,6 +131,8 @@ pnpm run deploy --env prod --build --bundle-only
 
 ## 開発とテスト
 
+CI は Windows プロセス・ストレージパス・CLI、実 Chrome の Storage キャンセル、ダウンロードコンテナー、外部ミドルウェア E2E も必須とします。[CI の段階と復旧](docs/ci.md)を参照してください。
+
 `packages/*` はフレームワーク、`apps/*` はサンプルと文書サイト、`packages/cli/templates/` は生成アプリと共有 Skills を管理します。機能変更時は呼び出し側、設定例、文書、画像、テストを同期します。
 
 ```sh

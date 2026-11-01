@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 
 const browserApps = ['admin-console', 'ai-playground', 'corporate-website', 'h5-app', 'mobile-app', 'framework-website']
 export const stageIds = ['lint', 'typecheck', 'contracts', 'unit', 'scaffold', 'sdk', 'deploy', ...browserApps.map(app => `browser-${app}`)]
-const requiredJobs = ['plan', 'build', 'lint', 'typecheck', 'contracts', 'unit', 'scaffold', 'sdk', 'deploy', 'browsers']
+const requiredJobs = ['plan', 'build', 'lint', 'typecheck', 'contracts', 'unit', 'scaffold', 'sdk', 'deploy', 'browsers', 'windows']
 const digestPattern = /^[a-f\d]{64}$/
 const shaPattern = /^[a-f\d]{40}$/
 
