@@ -677,9 +677,10 @@ done`
       await runPnpm(commands, ['install'], appDir)
       // 浏览器测试的 Node 侧导入应用 contract；只编译测试客户端契约，不启动本地 API/Web。
       await runPnpm(commands, ['--filter', 'e2e-fullstack-contract', 'build'], appDir)
-      expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).toContain('ai')
+      // 全栈预设只安装实际使用的模块，不因配置参考包含 AI 而安装其重型运行时。
+      expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).not.toContain('ai')
       expect(readdirSync(path.join(appDir, 'node_modules', '@h-ai'))).toContain('deploy')
-      expect(readdirSync(path.join(appDir, 'node_modules'))).toContain('onnxruntime-node')
+      expect(readdirSync(path.join(appDir, 'node_modules'))).not.toContain('onnxruntime-node')
       // 受限网络：调整生成应用的 Dockerfile —— 去掉 syntax 指令（避免 BuildKit 从 docker.io
       // 拉取前端镜像；内置 frontend 已支持 RUN --mount=type=cache），并在构建阶段注入 npm 镜像
       // （.npmrc 在 pnpm fetch 前尚未 COPY，故用 ENV pnpm_config_registry）
