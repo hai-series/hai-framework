@@ -1,3 +1,4 @@
+import type { HaiError, HaiResult } from '@h-ai/core'
 /**
  * @h-ai/ai — 错误码 + 配置 Schema
  *
@@ -5,11 +6,11 @@
  * @module ai-config
  */
 
-import type { HaiError, HaiResult } from '@h-ai/core'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 import { ChunkOptionsSchema, CleanOptionsSchema } from '@h-ai/datapipe'
 import { z } from 'zod'
+import { ACPConfigSchema } from './acp/ai-acp-config.js'
 import { aiM } from './ai-i18n.js'
 
 import { HaiAIError } from './ai-types.js'
@@ -125,6 +126,34 @@ export const ApiTypeSchema = z.enum(['chat', 'responses', 'anthropic'])
 export type ApiType = z.infer<typeof ApiTypeSchema>
 
 /**
+ * 模型能力元数据；缺省字段表示未知，不从调用预算推断容量。
+ * @example
+ * ```ts
+ * import { ModelCapabilitiesSchema } from '@h-ai/ai'
+ * const capabilities = ModelCapabilitiesSchema.parse({ contextWindow: 128000, toolCalling: true })
+ * ```
+ */
+export const ModelCapabilitiesSchema = z.strictObject({
+  /** 可用上下文总容量（Token）；未知时省略，不由输出预算推断。 */
+  contextWindow: z.number().int().positive().optional(),
+  /** 模型单次输出能力上限（Token）；与默认 maxTokens 预算不同。 */
+  maxOutputTokens: z.number().int().positive().optional(),
+  /** 已确认支持的输入模态；未知时省略。 */
+  inputModalities: z.array(z.enum(['text', 'image', 'audio', 'video'])).min(1).optional(),
+  /** 已确认支持的输出模态；仍需调用接口支持。 */
+  outputModalities: z.array(z.enum(['text', 'image', 'audio', 'video'])).min(1).optional(),
+  /** 模型是否支持函数工具调用；未知时省略。 */
+  toolCalling: z.boolean().optional(),
+  /** 推理能力元数据，不自动启用推理请求参数。 */
+  reasoning: z.strictObject({
+    /** 是否支持推理能力。 */
+    supported: z.boolean(),
+    /** 已确认可选择的推理级别。 */
+    efforts: z.array(z.string().min(1)).min(1).optional(),
+  }).refine(value => value.supported || !value.efforts, { message: aiM('ai_modelCapabilitiesInvalid') }).optional(),
+}).refine(value => !value.contextWindow || !value.maxOutputTokens || value.maxOutputTokens <= value.contextWindow, { message: aiM('ai_modelCapabilitiesInvalid') })
+
+/**
  * 模型条目 Schema
  *
  * 定义单个模型的配置信息，包含唯一 ID、模型名称和可选参数覆盖。
@@ -145,6 +174,8 @@ export type ApiType = z.infer<typeof ApiTypeSchema>
 export const ModelEntrySchema = z.strictObject({
   /** 模型唯一标识（用于 ModelResolver 解析） */
   id: z.string(),
+  /** 已确认的模型能力，缺省表示未知 */
+  capabilities: ModelCapabilitiesSchema.optional(),
   /** 模型名称（传给 API 的实际模型名） */
   model: z.string(),
   /** API 协议（可选，未指定时回退全局 `protocol`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic） */
@@ -249,6 +280,8 @@ export type LLMConfig = z.infer<typeof LLMConfigSchema>
  * ```
  */
 export interface ResolvedModelConfig {
+  /** 已确认的模型能力 */
+  capabilities?: z.infer<typeof ModelCapabilitiesSchema>
   /** 模型名称（传给 API 的实际模型名） */
   model: string
   /** API 协议（模型条目 > 全局配置 > `chat`） */
@@ -331,6 +364,7 @@ export function resolveModelEntry(
 
   const resolved: ResolvedModelConfig = {
     model: modelName,
+    capabilities: entry?.capabilities,
     protocol: entry?.protocol ?? llmConfig.protocol ?? 'chat',
     apiKey: entry?.apiKey ?? llmConfig.apiKey ?? (process.env.HAI_AI_LLM_APIKEY?.trim() || process.env.OPENAI_API_KEY),
     baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? (process.env.HAI_AI_LLM_BASEURL?.trim() || process.env.OPENAI_BASE_URL) ?? 'https://api.openai.com/v1',
@@ -453,6 +487,43 @@ export const MCPServerConfigSchema = z.object({
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 
 /**
+ * 外部 MCP 服务清单项；凭据仅保存环境变量引用，可供 ACP 会话选择。
+ * @example
+ * ```ts
+ * import { MCPExternalServerSchema } from '@h-ai/ai'
+ * const server = MCPExternalServerSchema.parse({ id: 'docs', name: 'Docs', transport: 'http', url: 'https://mcp.example.com' })
+ * ```
+ */
+export const MCPExternalServerSchema = z.strictObject({
+  /** 服务唯一标识。 */
+  id: z.string().min(1),
+  /** 传给原生 MCP 客户端的服务名。 */
+  name: z.string().min(1),
+  /** 原生 MCP 传输类型。 */
+  transport: z.enum(['stdio', 'http', 'sse']),
+  /** stdio 程序路径；仅可信服务端配置。 */
+  command: z.string().min(1).optional(),
+  /** stdio 参数，不使用 shell 拼接。 */
+  args: z.array(z.string()).default([]),
+  /** HTTP/SSE 地址。 */
+  url: z.url().optional(),
+  /** stdio 变量名到宿主凭据变量名的映射。 */
+  environmentRefs: z.record(z.string(), z.string()).default({}),
+  /** 认证 Header 名到宿主凭据变量名的映射。 */
+  headerEnv: z.record(z.string(), z.string()).default({}),
+}).refine(value => value.transport === 'stdio' ? Boolean(value.command) : Boolean(value.url && /^https?:/.test(value.url)))
+
+/**
+ * 外部 MCP 服务配置。
+ * @example
+ * ```ts
+ * import type { MCPExternalServer } from '@h-ai/ai'
+ * function serverId(server: MCPExternalServer) { return server.id }
+ * ```
+ */
+export type MCPExternalServer = z.infer<typeof MCPExternalServerSchema>
+
+/**
  * MCP 配置 Schema
  *
  * 配置 MCP（Model Context Protocol）服务器参数。
@@ -471,6 +542,8 @@ export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
  * ```
  */
 export const MCPConfigSchema = z.object({
+  /** 外部 MCP 服务只读清单；与数据库记录合并供受管 Agent 使用。 */
+  servers: z.array(MCPExternalServerSchema).optional(),
   /** 服务器配置 */
   server: MCPServerConfigSchema.optional(),
 })
@@ -1636,6 +1709,8 @@ export function resolveImageModel(imageConfig: ImageConfig, explicit?: string): 
  * ```
  */
 export const AIConfigSchema = z.object({
+  /** ACP 会话与执行限制（仅 Node 服务端）。 */
+  acp: ACPConfigSchema.optional(),
   /** LLM 配置（可选，所有字段有默认值） */
   llm: LLMConfigSchema.default({
     model: 'gpt-4o-mini',

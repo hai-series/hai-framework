@@ -156,6 +156,10 @@ llm:
 - **IndexTTS CPU**：CPU 镜像使用官方源码与 CPU-only PyTorch；首次真实合成会下载主模型和辅助模型，速度明显慢于 GPU，但协议与能力一致。
 - **离线运行**：离线镜像设置 `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`，断网启动不访问外部模型源。
 
+## ACP 智能体执行镜像
+
+[agents/README.md](agents/README.md) 提供 Codex ACP + Codex CLI、DeepSeek Harness 的独立镜像和构建命令。所有镜像包含 Git/Node/Python，可选 Java/Rust/Go；Podman 优先，同时支持 Docker。它们属于 Agent 执行环境，不作为 LLM 推理模型服务登记。
+
 ## 开发测试
 
 在仓库根执行 `pnpm --filter @h-ai/ai typecheck`、`pnpm --filter @h-ai/ai lint`、`pnpm --filter @h-ai/ai test`。镜像与权重另按目标 CPU/GPU 平台构建，检查 `/health` 和一次真实推理；离线交付应断网复测，不以清单校验代替模型可用。

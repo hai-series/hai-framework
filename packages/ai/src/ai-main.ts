@@ -1,3 +1,5 @@
+import type { HaiResult } from '@h-ai/core'
+import type { A2ADeps, A2AImplementation } from './a2a/ai-a2a-functions.js'
 /**
  * @h-ai/ai — AI 服务主入口
  *
@@ -5,27 +7,23 @@
  * @module ai-main
  */
 
-import type { HaiResult } from '@h-ai/core'
-
-import type { A2ADeps, A2AImplementation } from './a2a/ai-a2a-functions.js'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
+
+import type { ACPOperations } from './acp/ai-acp-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIFunctions, AIInitOptions } from './ai-types.js'
-import type { AudioOperations } from './audio/ai-audio-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
-import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
-import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
-import type { MCPOperations } from './mcp/ai-mcp-types.js'
+import type { StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
 import type { PersonaOperations } from './persona/ai-persona-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
+import type { ManagedAudioOperations, ManagedImageOperations, ManagedLLMOperations, ManagedMCPOperations, ManagedRetrievalOperations } from './registry/ai-registry-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
-import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
@@ -53,15 +51,17 @@ let initInProgress = false
 /** 当前配置（`null` 表示未初始化） */
 let currentConfig: AIConfig | null = null
 /** 当前 LLM 操作实例 */
-let currentLLM: LLMOperations | null = null
+let currentLLM: ManagedLLMOperations | null = null
+/** 当前 ACP 操作实例 */
+let currentACP: ACPOperations | null = null
 /** 当前 MCP 操作实例 */
-let currentMCP: MCPOperations | null = null
+let currentMCP: ManagedMCPOperations | null = null
 /** 当前 Embedding 操作实例 */
 let currentEmbedding: EmbeddingOperations | null = null
 /** 当前 Reasoning 操作实例 */
 let currentReasoning: ReasoningOperations | null = null
 /** 当前 Retrieval 操作实例 */
-let currentRetrieval: RetrievalOperations | null = null
+let currentRetrieval: ManagedRetrievalOperations | null = null
 /** 当前 RAG 操作实例 */
 let currentRag: RagOperations | null = null
 /** 当前 Knowledge 操作实例 */
@@ -83,15 +83,17 @@ let currentRerank: RerankOperations | null = null
 /** 当前 File 操作实例 */
 let currentFile: FileOperations | null = null
 /** 当前 Audio 操作实例 */
-let currentAudio: AudioOperations | null = null
+let currentAudio: ManagedAudioOperations | null = null
 /** 当前 Image 操作实例 */
-let currentImage: ImageOperations | null = null
+let currentImage: ManagedImageOperations | null = null
 /** A2A 配置（从 config.a2a 存储，供延迟初始化使用） */
 let currentA2AConfig: AIConfig['a2a']
 /** A2A 内部实现（registerExecutor 成功后才有值） */
 let currentA2AImpl: A2AImplementation | null = null
 /** 初始化阶段准备完成的任务与消息存储 */
 let currentA2AStores: A2ADeps | null = null
+/** 使所有配置/数据库清单的旧句柄失效。 */
+let currentRegistriesClose: (() => void) | null = null
 /** 当前存储 Provider（用于模块关闭时统一释放资源） */
 let currentStoreProvider: AIStoreProvider | null = null
 
@@ -110,7 +112,8 @@ const notInitialized = core.module.createNotInitializedKit(
  * chatStream 是 async generator，无法返回 HaiResult，
  * 只能在迭代时抛出异常通知调用方。
  */
-const notInitializedLLM: LLMOperations = {
+const notInitializedLLM: ManagedLLMOperations = {
+  models: notInitialized.proxy<ManagedLLMOperations['models']>(),
   chat: () => Promise.resolve(notInitialized.result()),
   async* chatStream() {
     throw notInitialized.error()
@@ -125,8 +128,18 @@ const notInitializedLLM: LLMOperations = {
   generateObject: () => Promise.resolve(notInitialized.result()),
 }
 
+/** ACP 未初始化占位；各层对象与其他子功能一样在模块顶层复用。 */
+const notInitializedACP: ACPOperations = {
+  agents: notInitialized.proxy<ACPOperations['agents']>(),
+  sessions: notInitialized.proxy<ACPOperations['sessions']>(),
+  workspaces: notInitialized.proxy<ACPOperations['workspaces']>(),
+  connect: () => Promise.resolve(notInitialized.result()),
+  close: async () => {},
+}
+
 /** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */
-const notInitializedMCP: MCPOperations = {
+const notInitializedMCP: ManagedMCPOperations = {
+  servers: notInitialized.proxy<ManagedMCPOperations['servers']>(),
   registerTool: () => notInitialized.result(),
   registerResource: () => notInitialized.result(),
   registerPrompt: () => notInitialized.result(),
@@ -145,7 +158,8 @@ const notInitializedReasoning: ReasoningOperations = {
 }
 
 /** Retrieval 未初始化占位 */
-const notInitializedRetrieval: RetrievalOperations = {
+const notInitializedRetrieval: ManagedRetrievalOperations = {
+  sources: notInitialized.proxy<ManagedRetrievalOperations['sources']>(),
   addSource: () => Promise.resolve(notInitialized.result()),
   removeSource: () => Promise.resolve(notInitialized.result()),
   listSources: () => Promise.resolve([]),
@@ -205,7 +219,8 @@ const notInitializedFile = notInitialized.proxy<FileOperations>()
  * transcribe / synthesize 返回 NOT_INITIALIZED HaiResult；
  * 流式方法是 async generator，无法返回 HaiResult，只能在迭代时抛出异常。
  */
-const notInitializedAudio: AudioOperations = {
+const notInitializedAudio: ManagedAudioOperations = {
+  models: notInitialized.proxy<ManagedAudioOperations['models']>(),
   transcribe: () => Promise.resolve(notInitialized.result()),
   async* transcribeStream() { throw notInitialized.error() },
   synthesize: () => Promise.resolve(notInitialized.result()),
@@ -214,7 +229,8 @@ const notInitializedAudio: AudioOperations = {
 }
 
 /** Image 未初始化占位 */
-const notInitializedImage: ImageOperations = {
+const notInitializedImage: ManagedImageOperations = {
+  models: notInitialized.proxy<ManagedImageOperations['models']>(),
   generate: () => Promise.resolve(notInitialized.result()),
 }
 
@@ -235,7 +251,11 @@ async function resetAllState(): Promise<void> {
   const storeProvider = currentStoreProvider
   await currentA2AImpl?.close()
 
+  await currentACP?.close()
   currentLLM = null
+  currentRegistriesClose?.()
+  currentRegistriesClose = null
+  currentACP = null
   currentMCP = null
   currentEmbedding = null
   currentReasoning = null
@@ -315,12 +335,15 @@ export const ai: AIFunctions = {
       return err(HaiAIError.INIT_IN_PROGRESS, aiM('ai_initInProgress'))
     }
     initInProgress = true
+    let closingPrevious = false
 
     try {
       // 关闭旧实例
       if (currentConfig) {
         logger.warn('AI module is already initialized, reinitializing')
+        closingPrevious = true
         await ai.close()
+        closingPrevious = false
       }
 
       logger.info('Initializing AI module')
@@ -357,9 +380,12 @@ export const ai: AIFunctions = {
       const subs = await createAISubsystems(parsed, {
         storeProvider,
         datapipe,
+        acpAdapters: options?.acpAdapters,
       })
 
+      currentRegistriesClose = subs.closeRegistries
       currentLLM = subs.llm
+      currentACP = subs.acp
       currentMCP = subs.mcp
       currentEmbedding = subs.embedding
       currentReasoning = subs.reasoning
@@ -385,8 +411,15 @@ export const ai: AIFunctions = {
       return ok(undefined)
     }
     catch (error) {
-      // 清理部分赋值的子功能引用，避免 isInitialized=false 但 getter 返回无效实例
-      await resetAllState()
+      // 旧实例清理失败时保留资源与占用供显式重试；部分初始化清理也不能突破 HaiResult 边界。
+      if (!closingPrevious) {
+        try {
+          await resetAllState()
+        }
+        catch (cleanupError) {
+          logger.error('AI initialization cleanup failed', { error: cleanupError })
+        }
+      }
       logger.error('AI module initialization failed', { error })
       return err(
         HaiAIError.CONFIGURATION_ERROR,
@@ -401,13 +434,16 @@ export const ai: AIFunctions = {
     }
   },
 
-  get llm(): LLMOperations { return currentLLM ?? notInitializedLLM },
-  get mcp(): MCPOperations { return currentMCP ?? notInitializedMCP },
+  get llm(): ManagedLLMOperations { return currentLLM ?? notInitializedLLM },
+  get acp(): ACPOperations {
+    return currentACP ?? notInitializedACP
+  },
+  get mcp(): ManagedMCPOperations { return currentMCP ?? notInitializedMCP },
   get tools(): ToolsOperations { return toolsOperations },
   get stream(): StreamOperations { return streamOperations },
   get embedding(): EmbeddingOperations { return currentEmbedding ?? notInitializedEmbedding },
   get reasoning(): ReasoningOperations { return currentReasoning ?? notInitializedReasoning },
-  get retrieval(): RetrievalOperations { return currentRetrieval ?? notInitializedRetrieval },
+  get retrieval(): ManagedRetrievalOperations { return currentRetrieval ?? notInitializedRetrieval },
   get rag(): RagOperations { return currentRag ?? notInitializedRag },
   get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
   get memory(): MemoryOperations { return currentMemory ?? notInitializedMemory },
@@ -418,8 +454,8 @@ export const ai: AIFunctions = {
   get context(): ContextOperations { return currentContext ?? notInitializedContext },
   get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
   get file(): FileOperations { return currentFile ?? notInitializedFile },
-  get audio(): AudioOperations { return currentAudio ?? notInitializedAudio },
-  get image(): ImageOperations { return currentImage ?? notInitializedImage },
+  get audio(): ManagedAudioOperations { return currentAudio ?? notInitializedAudio },
+  get image(): ManagedImageOperations { return currentImage ?? notInitializedImage },
   get a2a(): A2AOperations { return a2aLazyOperations },
   get config() { return currentConfig ? core.sanitize.sanitizeSensitiveFields(currentConfig) : null },
   get isInitialized() { return currentConfig !== null },

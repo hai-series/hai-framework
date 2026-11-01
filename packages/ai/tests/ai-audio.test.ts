@@ -82,7 +82,7 @@ vi.mock('openai', () => {
   }
 })
 
-vi.mock('ws', () => ({ default: MockWebSocket }))
+vi.mock('ws', () => ({ default: MockWebSocket, WebSocket: MockWebSocket }))
 
 // eslint-disable-next-line import/first -- vi.mock 需在 import 之前
 import { ai, HaiAIError } from '../src/index.js'

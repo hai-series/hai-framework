@@ -10,7 +10,11 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { AIConfig } from '../ai-config.js'
 
-import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
+import type {
+  AIRelStore,
+  InteractionScope,
+  SessionInfo,
+} from '../store/ai-store-types.js'
 import type {
   AskOptions,
   ChatCompletionChunk,
@@ -32,7 +36,12 @@ import { z } from 'zod'
 import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 import { updateSessionInfo } from '../store/ai-store-session.js'
-import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './ai-llm-stream.js'
+import {
+  collectStream,
+  createSSEDecoder,
+  createStreamProcessor,
+  encodeSSE,
+} from './ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './ai-llm-tool.js'
 import { createLLMProvider } from './providers/ai-llm-provider-router.js'
 
@@ -52,6 +61,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'llm' })
  * ```
  */
 export interface AILLMStores {
+  /** 可维护模型清单提供的请求配置快照。 */
+  resolveConfig?: () => Promise<AIConfig>
   /** 对话记录存储（可选；未传入时不记录） */
   recordStore?: AIRelStore<ChatRecord>
   /** 会话信息存储（可选；未传入时 listSessions 返回空） */
@@ -99,8 +110,23 @@ export interface AILLMFunctions {
  * }
  * ```
  */
-export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILLMFunctions {
-  const provider = createLLMProvider({ config })
+export function createAILLMFunctions(
+  config: AIConfig,
+  deps?: AILLMStores,
+): AILLMFunctions {
+  let provider = createLLMProvider({ config })
+  let signature = JSON.stringify(config.llm)
+  async function currentProvider() {
+    if (!deps?.resolveConfig)
+      return provider
+    const snapshot = await deps.resolveConfig()
+    const next = JSON.stringify(snapshot.llm)
+    if (next !== signature) {
+      provider = createLLMProvider({ config: snapshot })
+      signature = next
+    }
+    return provider
+  }
   const recordStore = deps?.recordStore
   const sessionStore = deps?.sessionStore
   let recordSeq = 0
@@ -112,9 +138,13 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
       if (msg.role === 'user') {
-        const text = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content.filter(c => c.type === 'text').map(c => c.text).join(' ')
+        const text
+          = typeof msg.content === 'string'
+            ? msg.content
+            : msg.content
+                .filter(c => c.type === 'text')
+                .map(c => c.text)
+                .join(' ')
         return text.length > 50 ? `${text.slice(0, 50)}...` : text
       }
     }
@@ -128,8 +158,15 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     record: ChatRecord,
     messages: ChatMessage[],
   ): Promise<void> {
-    await recordStore!.save(record.id, record, { objectId: record.objectId, sessionId: record.sessionId })
-    logger.trace('Chat record saved', { id: record.id, objectId: record.objectId, sessionId: record.sessionId })
+    await recordStore!.save(record.id, record, {
+      objectId: record.objectId,
+      sessionId: record.sessionId,
+    })
+    logger.trace('Chat record saved', {
+      id: record.id,
+      objectId: record.objectId,
+      sessionId: record.sessionId,
+    })
 
     if (sessionStore) {
       await updateSessionInfo(sessionStore, record, (existing, now) => {
@@ -137,7 +174,13 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
           return undefined
         return existing
           ? { ...existing, updatedAt: now }
-          : { sessionId: record.sessionId, objectId: record.objectId, title: extractTitle(messages), createdAt: now, updatedAt: now }
+          : {
+              sessionId: record.sessionId,
+              objectId: record.objectId,
+              title: extractTitle(messages),
+              createdAt: now,
+              updatedAt: now,
+            }
       })
     }
   }
@@ -145,13 +188,27 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
   /**
    * 包装 chat，在有 objectId 时自动保存 ChatRecord
    */
-  async function chatWithRecord(request: ChatCompletionRequest): Promise<HaiResult<ChatCompletionResponse>> {
+  async function chatWithRecord(
+    request: ChatCompletionRequest,
+  ): Promise<HaiResult<ChatCompletionResponse>> {
     if (request.tempModel && Object.hasOwn(request.tempModel, 'api'))
       return err(HaiAIError.INVALID_REQUEST, aiM('ai_llmProtocolRenamed'))
     const start = Date.now()
-    const context = { model: request.model ?? request.tempModel?.model, messageCount: request.messages.length }
+    const context = {
+      model: request.model ?? request.tempModel?.model,
+      messageCount: request.messages.length,
+    }
     logger.debug('LLM chat started', context)
-    const result = await provider.chat(request)
+    let result: HaiResult<ChatCompletionResponse>
+    try {
+      result = await (await currentProvider()).chat(request)
+    }
+    catch {
+      return err(
+        HaiAIError.RESOURCE_OPERATION_FAILED,
+        aiM('ai_resourceOperationFailed'),
+      )
+    }
     if (result.success) {
       logger.info('LLM chat completed', {
         ...context,
@@ -171,7 +228,12 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     }
 
     // 仅在调用成功且传入了 objectId + recordStore 且未禁用持久化时记录
-    if (result.success && request.objectId && recordStore && request.enablePersist !== false) {
+    if (
+      result.success
+      && request.objectId
+      && recordStore
+      && request.enablePersist !== false
+    ) {
       try {
         const response = result.data
         const choice = response.choices[0]
@@ -187,7 +249,11 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
             content: choice?.message?.content ?? '',
             toolCalls: choice?.message?.tool_calls,
             finishReason: choice?.finish_reason ?? 'stop',
-            usage: response.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+            usage: response.usage ?? {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+            },
           },
           createdAt: Date.now(),
           duration: Date.now() - start,
@@ -208,24 +274,37 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    *
    * 流式输出不受影响，记录在流消费完成后异步保存。
    */
-  async function* chatStreamWithRecord(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
+  async function* chatStreamWithRecord(
+    request: ChatCompletionRequest,
+  ): AsyncIterable<ChatCompletionChunk> {
     if (request.tempModel && Object.hasOwn(request.tempModel, 'api'))
       throw new Error(aiM('ai_llmProtocolRenamed'))
     const start = Date.now()
-    const logContext = { model: request.model ?? request.tempModel?.model, messageCount: request.messages.length }
+    const logContext = {
+      model: request.model ?? request.tempModel?.model,
+      messageCount: request.messages.length,
+    }
     logger.debug('LLM chat stream started', logContext)
-    const shouldRecord = !!(request.objectId && recordStore && request.enablePersist !== false)
+    const shouldRecord = !!(
+      request.objectId
+      && recordStore
+      && request.enablePersist !== false
+    )
 
     // 累积流式响应的中间状态
     let content = ''
     let finishReason: string | null = null
     // 使用更窄的本地类型：流式响应中工具调用均为 function 类型
-    const toolCalls: Array<{ id: string, type: 'function', function: { name: string, arguments: string } }> = []
+    const toolCalls: Array<{
+      id: string
+      type: 'function'
+      function: { name: string, arguments: string }
+    }> = []
     let streamId = ''
     let resolvedModel = request.model ?? request.tempModel?.model ?? ''
 
     try {
-      for await (const chunk of provider.chatStream(request)) {
+      for await (const chunk of (await currentProvider()).chatStream(request)) {
         yield chunk
 
         if (!shouldRecord)
@@ -246,7 +325,11 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
           if (choice.delta.tool_calls) {
             for (const tc of choice.delta.tool_calls) {
               if (!toolCalls[tc.index]) {
-                toolCalls[tc.index] = { id: tc.id ?? '', type: 'function', function: { name: tc.function?.name ?? '', arguments: '' } }
+                toolCalls[tc.index] = {
+                  id: tc.id ?? '',
+                  type: 'function',
+                  function: { name: tc.function?.name ?? '', arguments: '' },
+                }
               }
               if (tc.function?.arguments)
                 toolCalls[tc.index].function.arguments += tc.function.arguments
@@ -267,14 +350,22 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       })
     }
     catch (error) {
-      logger.warn('LLM chat stream failed', { ...logContext, durationMs: Date.now() - start, error })
+      logger.warn('LLM chat stream failed', {
+        ...logContext,
+        durationMs: Date.now() - start,
+        error,
+      })
       throw error
     }
 
     // 流消费完成后保存记录
     if (shouldRecord) {
       try {
-        const usage: TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+        const usage: TokenUsage = {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+        }
         const record: ChatRecord = {
           id: `${streamId || 'stream'}_${Date.now()}_${recordSeq++}`,
           objectId: request.objectId!,
@@ -285,7 +376,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
           },
           response: {
             content,
-            toolCalls: toolCalls.length > 0 ? toolCalls.filter(Boolean) : undefined,
+            toolCalls:
+              toolCalls.length > 0 ? toolCalls.filter(Boolean) : undefined,
             finishReason: finishReason ?? 'stop',
             usage,
           },
@@ -320,7 +412,15 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       return ok(records)
     }
     catch (error) {
-      return err(HaiAIError.LLM_HISTORY_FAILED, aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
+      return err(
+        HaiAIError.LLM_HISTORY_FAILED,
+        aiM('ai_llmHistoryFailed', {
+          params: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        }),
+        error,
+      )
     }
   }
 
@@ -341,18 +441,39 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       return ok(sessions.filter(item => !item.deleted))
     }
     catch (error) {
-      return err(HaiAIError.LLM_HISTORY_FAILED, aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
+      return err(
+        HaiAIError.LLM_HISTORY_FAILED,
+        aiM('ai_llmHistoryFailed', {
+          params: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        }),
+        error,
+      )
     }
   }
 
   const llm: LLMOperations = {
     chat: chatWithRecord,
     chatStream: chatStreamWithRecord,
-    listModels: () => provider.listModels(),
+    listModels: async () => {
+      try {
+        return await (await currentProvider()).listModels()
+      }
+      catch {
+        return err(
+          HaiAIError.RESOURCE_OPERATION_FAILED,
+          aiM('ai_resourceOperationFailed'),
+        )
+      }
+    },
     getHistory,
     listSessions,
 
-    async ask(question: string, options?: AskOptions): Promise<HaiResult<string>> {
+    async ask(
+      question: string,
+      options?: AskOptions,
+    ): Promise<HaiResult<string>> {
       const messages: ChatMessage[] = []
       if (options?.systemPrompt) {
         messages.push({ role: 'system', content: options.systemPrompt })
@@ -373,7 +494,10 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       return ok(result.data.choices[0]?.message?.content ?? '')
     },
 
-    async* askStream(question: string, options?: AskOptions): AsyncIterable<string> {
+    async* askStream(
+      question: string,
+      options?: AskOptions,
+    ): AsyncIterable<string> {
       const messages: ChatMessage[] = []
       if (options?.systemPrompt) {
         messages.push({ role: 'system', content: options.systemPrompt })
@@ -395,7 +519,9 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       }
     },
 
-    async generateObject<T>(request: GenerateObjectRequest<T>): Promise<HaiResult<T>> {
+    async generateObject<T>(
+      request: GenerateObjectRequest<T>,
+    ): Promise<HaiResult<T>> {
       const baseMessages: ChatMessage[] = []
       if (request.systemPrompt)
         baseMessages.push({ role: 'system', content: request.systemPrompt })
@@ -407,9 +533,18 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       let lastError = ''
 
       for (let attempt = 0; attempt <= maxRepairs; attempt++) {
-        const messages: ChatMessage[] = attempt === 0
-          ? baseMessages
-          : [...baseMessages, { role: 'user', content: aiM('ai_generateObjectRepair', { params: { error: lastError } }) }]
+        const messages: ChatMessage[]
+          = attempt === 0
+            ? baseMessages
+            : [
+                ...baseMessages,
+                {
+                  role: 'user',
+                  content: aiM('ai_generateObjectRepair', {
+                    params: { error: lastError },
+                  }),
+                },
+              ]
         const result = await chatWithRecord({
           messages,
           model: request.model,
@@ -417,7 +552,10 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
           tempModel: request.tempModel,
           enablePersist: false,
           signal: request.signal,
-          response_format: { type: 'json_schema', json_schema: { name: schemaName, schema: jsonSchema, strict: true } },
+          response_format: {
+            type: 'json_schema',
+            json_schema: { name: schemaName, schema: jsonSchema, strict: true },
+          },
         })
         if (!result.success)
           return result as HaiResult<never>
@@ -438,7 +576,12 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         lastError = validated.error.message
       }
 
-      return err(HaiAIError.INVALID_REQUEST, aiM('ai_generateObjectFailed', { params: { error: lastError || 'unknown' } }))
+      return err(
+        HaiAIError.INVALID_REQUEST,
+        aiM('ai_generateObjectFailed', {
+          params: { error: lastError || 'unknown' },
+        }),
+      )
     },
   }
 

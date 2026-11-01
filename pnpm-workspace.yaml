@@ -65,6 +65,7 @@ catalog:
 
   # 1.x 改变协议与公开数据结构；现有 A2A 0.3 接口继续使用其最新稳定版本。
   '@a2a-js/sdk': ^0.3.12
+  '@agentclientprotocol/sdk': 2.2.0
   '@antfu/eslint-config': ^9.5.1
   '@aparajita/capacitor-secure-storage': ^8.0.1
   '@aws-sdk/client-s3': ^3.1149.0

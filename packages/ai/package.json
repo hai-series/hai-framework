@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/ai",
   "type": "module",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "description": "Hai Framework AI module (LLM, MCP, tools, and clients).",
   "license": "Apache-2.0",
   "exports": {
@@ -23,7 +23,8 @@
   "browser": "./dist/browser.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "models/agents"
   ],
   "publishConfig": {
     "access": "public"
@@ -45,7 +46,9 @@
     "model:prepare": "node models/build.mjs prepare",
     "model:build": "node models/build.mjs build",
     "model:run": "node models/build.mjs run",
-    "build:clean": "rimraf dist"
+    "build:clean": "rimraf dist",
+    "agent:build": "node models/agents/build.mjs",
+    "test:e2e": "vitest run tests/ai-acp.e2e.test.ts tests/ai-acp-transport.e2e.test.ts tests/ai-acp-container.e2e.test.ts tests/ai-acp-native.e2e.test.ts"
   },
   "peerDependencies": {
     "@qdrant/js-client-rest": "1.18.0"
@@ -57,6 +60,7 @@
   },
   "dependencies": {
     "@a2a-js/sdk": "catalog:",
+    "@agentclientprotocol/sdk": "catalog:",
     "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/datapipe": "workspace:*",

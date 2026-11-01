@@ -1,0 +1,16 @@
+{
+  "name": "codex-acp",
+  "package": "@agentclientprotocol/codex-acp",
+  "version": "2.5.0",
+  "image": "hai-ai/codex-acp",
+  "transports": [
+    "stdio"
+  ],
+  "command": "codex-acp",
+  "args": [],
+  "runtime": {
+    "package": "@openai/codex",
+    "version": "0.165.0",
+    "command": "codex"
+  }
+}

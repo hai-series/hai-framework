@@ -1,0 +1,14 @@
+{
+  "name": "deepseek-harness",
+  "package": "@deepseek-ai/dsh",
+  "version": "0.2.1-rc.5",
+  "image": "hai-ai/deepseek-harness",
+  "transports": [
+    "stdio"
+  ],
+  "command": "dsh",
+  "args": [
+    "--profile",
+    "acp"
+  ]
+}

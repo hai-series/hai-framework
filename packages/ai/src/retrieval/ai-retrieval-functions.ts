@@ -1,3 +1,4 @@
+import type { HaiResult } from '@h-ai/core'
 /**
  * @h-ai/ai — Retrieval 子功能实现
  *
@@ -5,9 +6,9 @@
  * @module ai-retrieval-functions
  */
 
-import type { HaiResult } from '@h-ai/core'
-
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
+
+import type { AIResourceRegistry } from '../registry/ai-registry-types.js'
 import type { RerankOperations } from '../rerank/ai-rerank-types.js'
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 import type {
@@ -50,6 +51,7 @@ export function createRetrievalOperations(
   storeProvider: AIStoreProvider,
   sourceStore: AIRelStore<RetrievalSource>,
   rerankOps?: RerankOperations | null,
+  registry?: { operations: AIResourceRegistry<RetrievalSource>, values: () => Promise<RetrievalSource[]> },
 ): RetrievalOperations {
   // vectorStore 实例缓存（按 collection 复用，避免每次检索都创建新实例）
   const vectorStoreCache = new Map<string, ReturnType<AIStoreProvider['createVectorStore']>>()
@@ -73,6 +75,10 @@ export function createRetrievalOperations(
      * @returns `ok(undefined)` 注册成功；`err` 含错误码 `RETRIEVAL_FAILED`（重复注册）
      */
     async addSource(source: RetrievalSource): Promise<HaiResult<void>> {
+      if (registry) {
+        const result = await registry.operations.register(source)
+        return result.success ? ok(undefined) : result
+      }
       const existing = await sourceStore.get(source.id)
       if (existing) {
         return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: `Source '${source.id}' already exists` } }))
@@ -91,6 +97,8 @@ export function createRetrievalOperations(
      * @returns `ok(undefined)` 删除成功；`err` 含错误码 `RETRIEVAL_SOURCE_NOT_FOUND`
      */
     async removeSource(sourceId: string): Promise<HaiResult<void>> {
+      if (registry)
+        return registry.operations.remove(sourceId)
       const existing = await sourceStore.get(sourceId)
       if (!existing) {
         return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: `Source '${sourceId}' not found` } }))
@@ -106,7 +114,7 @@ export function createRetrievalOperations(
      * @returns 全部检索源数组（无源时返回空数组）
      */
     async listSources(): Promise<RetrievalSource[]> {
-      return sourceStore.query({})
+      return registry ? registry.values() : sourceStore.query({})
     },
 
     /**
@@ -123,18 +131,19 @@ export function createRetrievalOperations(
     async retrieve(request: RetrievalRequest): Promise<HaiResult<RetrievalResult>> {
       const startTime = Date.now()
 
-      // 确定要查询的源（从 DB 读取，分布式一致）
-      const targetSources = await sourceStore.query(
-        request.sources?.length
-          ? { where: { id: { $in: request.sources } } }
-          : {},
-      )
-
-      if (targetSources.length === 0) {
-        return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: 'No retrieval sources configured' } }))
-      }
-
       try {
+        // 与 list/get 使用相同合并清单，确保配置优先且数据库墓碑不会继续参与检索。
+        const targetSources = registry
+          ? (await registry.values()).filter(source => !request.sources?.length || request.sources.includes(source.id))
+          : await sourceStore.query(
+              request.sources?.length
+                ? { where: { id: { $in: request.sources } } }
+                : {},
+            )
+        if (targetSources.length === 0) {
+          return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: 'No retrieval sources configured' } }))
+        }
+
         // 向量化查询文本
         const embedResult = await embeddingOps.embedText(request.query)
         if (!embedResult.success) {

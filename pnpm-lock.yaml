@@ -192,6 +192,9 @@ catalogs:
     '@a2a-js/sdk':
       specifier: ^0.3.12
       version: 0.3.14
+    '@agentclientprotocol/sdk':
+      specifier: 2.2.0
+      version: 2.2.0
     '@antfu/eslint-config':
       specifier: ^9.5.1
       version: 9.5.1
@@ -1392,6 +1395,9 @@ importers:
       '@a2a-js/sdk':
         specifier: 'catalog:'
         version: 0.3.14(@grpc/grpc-js@1.14.6)(express@5.3.0(supports-color@7.2.0))
+      '@agentclientprotocol/sdk':
+        specifier: 'catalog:'
+        version: 2.2.0(zod@4.6.5)
       '@h-ai/api-contract':
         specifier: workspace:*
         version: link:../api-contract
@@ -2459,6 +2465,15 @@ packages:
       '@grpc/grpc-js':
         optional: true
       express:
+        optional: true
+
+  '@agentclientprotocol/sdk@2.2.0':
+    resolution: {integrity: sha512-o1+eDQVb05yzPY+5v54awHyONU1oeLsbLVavkwrMQaZDuJDh/38pQiXJS4ix4d6QA3Y4bU0lHFRjwg99KKKSaQ==}
+    peerDependencies:
+      '@modelcontextprotocol/server': ^2.4.0
+      zod: ^3.25.76 || ^4.0.0
+    peerDependenciesMeta:
+      '@modelcontextprotocol/server':
         optional: true
 
   '@ai-sdk/gateway@3.0.13':
@@ -9768,6 +9783,10 @@ snapshots:
     optionalDependencies:
       '@grpc/grpc-js': 1.14.6
       express: 5.3.0(supports-color@7.2.0)
+
+  '@agentclientprotocol/sdk@2.2.0(zod@4.6.5)':
+    dependencies:
+      zod: 4.6.5
 
   '@ai-sdk/gateway@3.0.13(zod@4.6.5)':
     dependencies:

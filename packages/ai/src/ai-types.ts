@@ -1,3 +1,6 @@
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { A2AOperations } from './a2a/ai-a2a-types.js'
+import type { ACPAgentAdapter, ACPOperations } from './acp/ai-acp-types.js'
 /**
  * @h-ai/ai — 公共类型定义
  *
@@ -5,25 +8,20 @@
  * @module ai-types
  */
 
-import type { ErrorInfo, HaiResult } from '@h-ai/core'
-import type { A2AOperations } from './a2a/ai-a2a-types.js'
-
 import type { AIConfig, AIConfigInput } from './ai-config.js'
-import type { AudioOperations } from './audio/ai-audio-types.js'
+
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
-import type { ImageOperations } from './image/ai-image-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
-import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
-import type { MCPOperations } from './mcp/ai-mcp-types.js'
+import type { StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
 import type { PersonaOperations } from './persona/ai-persona-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
+import type { ManagedAudioOperations, ManagedImageOperations, ManagedLLMOperations, ManagedMCPOperations, ManagedRetrievalOperations } from './registry/ai-registry-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
-import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
@@ -40,6 +38,21 @@ import { core } from '@h-ai/core'
 const AIErrorInfo = {
   // 通用 (000-009)
   INTERNAL_ERROR: '000:500',
+  ACP_GIT_NOT_FOUND: '070:500',
+  ACP_OPERATION_FAILED: '071:500',
+  ACP_INVALID_REQUEST: '072:400',
+  ACP_NOT_FOUND: '073:404',
+  ACP_BUSY: '074:409',
+  ACP_UNSUPPORTED: '075:422',
+  ACP_CANCELLED: '076:499',
+  ACP_TIMEOUT: '077:504',
+  ACP_OUTPUT_INVALID: '078:422',
+  ACP_CONFLICT: '079:409',
+  ACP_PARTIAL_FAILURE: '080:409',
+  ACP_CLOSED: '081:409',
+  ACP_RUNTIME_UNAVAILABLE: '082:503',
+  ACP_MODEL_INCOMPATIBLE: '083:422',
+  ACP_CLEANUP_FAILED: '084:500',
 
   // 初始化 (010-019)
   NOT_INITIALIZED: '010:500',
@@ -141,6 +154,13 @@ const AIErrorInfo = {
   IMAGE_TOO_LARGE: '067:413',
   IMAGE_TIMEOUT: '068:504',
 
+  // 可维护资源清单（090-094）
+  RESOURCE_READ_ONLY: '090:403',
+  RESOURCE_NOT_FOUND: '091:404',
+  RESOURCE_CONFLICT: '092:409',
+  RESOURCE_INVALID: '093:400',
+  RESOURCE_OPERATION_FAILED: '094:500',
+
   // Context (950-999)
   CONTEXT_COMPRESS_FAILED: '950:500',
   CONTEXT_SUMMARIZE_FAILED: '951:500',
@@ -201,6 +221,8 @@ export const HaiAIError = core.error.buildHaiErrorsDef('ai', AIErrorInfo)
  * ```
  */
 export interface AIInitOptions {
+  /** 可信服务端扩展：为其他 ACP 智能体生成原生配置。 */
+  acpAdapters?: Record<string, ACPAgentAdapter>
   /**
    * 自定义存储 Provider
    *
@@ -260,9 +282,11 @@ export interface AIFunctions {
   /** 是否已初始化（`init()` 成功后为 `true`，`close()` 后为 `false`） */
   readonly isInitialized: boolean
   /** LLM 操作（聊天、流式、模型列表），需要先调用 `init()` */
-  readonly llm: LLMOperations
-  /** MCP 操作（工具/资源/提示词注册与调用），需要先调用 `init()` */
-  readonly mcp: MCPOperations
+  readonly llm: ManagedLLMOperations
+  /** ACP 智能体、工作区与原生会话，需要先调用 `init()`。 */
+  readonly acp: ACPOperations
+  /** MCP 本地函数注册及配置/数据库外部服务清单，需要先调用 `init()`。 */
+  readonly mcp: ManagedMCPOperations
   /** 工具操作（定义工具与注册表），纯函数，无需初始化 */
   readonly tools: ToolsOperations
   /** 流处理操作（流处理器、SSE 编解码），纯函数，无需初始化 */
@@ -272,7 +296,7 @@ export interface AIFunctions {
   /** 推理操作（ReAct / CoT / Plan-Execute），需要先调用 `init()` */
   readonly reasoning: ReasoningOperations
   /** 检索操作（向量检索），需要先调用 `init()` */
-  readonly retrieval: RetrievalOperations
+  readonly retrieval: ManagedRetrievalOperations
   /** RAG 操作（检索增强生成），需要先调用 `init()` */
   readonly rag: RagOperations
   /** Knowledge 操作（知识库管理与检索），需要先调用 `init()` 和 `knowledge.setup()` */
@@ -296,7 +320,7 @@ export interface AIFunctions {
   /** A2A 操作（Agent-to-Agent 协议），需要先调用 `init()` 并配置 `a2a` */
   readonly a2a: A2AOperations
   /** Audio 操作（语音识别 / 语音合成），需要先调用 `init()` 并配置 `audio` */
-  readonly audio: AudioOperations
+  readonly audio: ManagedAudioOperations
   /** Image 操作（文生图），需要先调用 `init()` 并配置 `image` */
-  readonly image: ImageOperations
+  readonly image: ManagedImageOperations
 }
