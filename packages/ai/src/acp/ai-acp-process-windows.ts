@@ -130,6 +130,12 @@ public static class HaiACPCommandJob {
 }
 `
 
+// 最小环境不携带用户 PSModulePath；限定加载系统 Utility，避免自动发现扫描宿主安装的模块。
+const compile = `Import-Module ([IO.Path]::Combine($PSHOME, 'Modules', 'Microsoft.PowerShell.Utility', 'Microsoft.PowerShell.Utility.psd1'))
+Add-Type -TypeDefinition @'
+${nativeJob}
+'@`
+
 /** 生成隐藏 PowerShell 的静态脚本；执行策略不影响内联命令，不加载用户 profile。 */
 function powershell(script: string): string[] {
   return ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')]
@@ -153,9 +159,7 @@ export function windowsACPCommand(command: string, args: string[]): { name: stri
   const key = `__HAI_AI_ACP_JOB_${randomUUID().replaceAll('-', '')}`
   const script = `$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $InformationPreference='SilentlyContinue'
 try {
-  Add-Type -TypeDefinition @'
-${nativeJob}
-'@
+  ${compile}
   $inputConfig = [Environment]::GetEnvironmentVariable('${key}') | ConvertFrom-Json
   [Environment]::SetEnvironmentVariable('${key}', $null)
   exit ([HaiACPCommandJob]::Run([string]$inputConfig.name, [string]$inputConfig.command, [string[]]$inputConfig.args))
@@ -178,9 +182,7 @@ ${nativeJob}
 export function windowsACPJobProbe(name: string): string[] {
   return powershell(`$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $InformationPreference='SilentlyContinue'
 try {
-  Add-Type -TypeDefinition @'
-${nativeJob}
-'@
+  ${compile}
   if ([HaiACPCommandJob]::Empty('${name}')) { exit 0 } else { exit 1 }
 } catch {
   $cause = $_.Exception.GetBaseException()
