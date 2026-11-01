@@ -121,6 +121,8 @@ describe.sequential('goose native remote ACP acceptance', () => {
         }
         container = await engineCommand(engine, [
           'create',
+          // 远程服务夹具自行负责网络策略，不继承 Podman 服务端可能不可达的回环代理。
+          ...(engine === 'podman' ? ['--http-proxy=false'] : []),
           '--init',
           '--publish',
           '127.0.0.1::3284',

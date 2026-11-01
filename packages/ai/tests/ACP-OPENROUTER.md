@@ -10,7 +10,7 @@
 
 先安装与 `models/agents/*/agent.json` 相匹配的原生程序，并构建两个基础镜像。embedded 使用宿主的程序；builtin-service 使用指定镜像和一次性 volume。容器引擎 `auto` 优先就绪的 Podman，其次 Docker；验收只使用已存在的镜像，不隐式升级或安装工具。
 
-内置 Podman 容器不继承远程服务的代理变量；本验收需在容器中直接访问 OpenRouter。业务部署如需代理，通过 Agent/workspace 的 `environmentRefs` 指定容器可访问的代理地址，勿使用宿主回环地址。此边界由实际容器回归覆盖，并保留显式代理注入的验证。
+内置 Podman 容器和本验收自行启动的 Goose 服务夹具不继承远程服务的代理变量，需在容器中直接访问 OpenRouter。业务部署如需代理，通过 Agent/workspace 的 `environmentRefs` 指定容器可访问的代理地址，勿使用宿主回环地址。此边界由实际容器回归覆盖，并保留显式代理注入的验证；已有自定义服务的网络与模型配置由服务部署方维护。
 
 下面为 2026-11-01 实际验收通过的低价 Flash 模型；升级时重新核对模型目录、工具支持、协议及容量。`maxOutputTokens=65536` 是容量声明；dsh 的请求预算为 `min(maxTokens=1024, maxOutputTokens)`。Codex 的采样上限依其原生设置，测试另有限时与输出体积约束。一个智能体任务可能产生多次模型调用及工具调用。
 
