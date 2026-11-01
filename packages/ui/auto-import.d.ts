@@ -16,6 +16,10 @@ type AutoImportHaiUiPreprocessor = {
 export function autoImportHaiUi(): AutoImportHaiUiPreprocessor
 
 declare global {
+  const Chart: typeof import('@h-ai/ui')['Chart']
+  const DashboardGrid: typeof import('@h-ai/ui')['DashboardGrid']
+  const MetricCard: typeof import('@h-ai/ui')['MetricCard']
+  const ReportCard: typeof import('@h-ai/ui')['ReportCard']
   const GuideHost: typeof import('@h-ai/ui')['GuideHost']
   const HelpCenter: typeof import('@h-ai/ui')['HelpCenter']
   // primitives

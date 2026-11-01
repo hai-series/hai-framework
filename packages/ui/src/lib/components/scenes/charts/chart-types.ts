@@ -50,6 +50,16 @@ export type ChartAccessor = string | number | ((item: ChartDataItem) => unknown)
 export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'scatter'
 
 /**
+ * 常用图形的可覆盖默认配置；无需同时传 type。
+ * @example
+ * ```ts
+ * import type { ChartPreset } from '@h-ai/ui'
+ * const preset: ChartPreset = 'donut'
+ * ```
+ */
+export type ChartPreset = 'grouped-bar' | 'stacked-bar' | 'stacked-area' | 'donut' | 'sparkline'
+
+/**
  * Chart 预设高度档位；具体像素值在 Chart.svelte 中固定映射。
  *
  * @example
@@ -126,8 +136,10 @@ export interface ChartSeries {
  * ```
  */
 export interface ChartProps extends DataAttributes {
-  /** 选择内部 LayerChart 高阶组件；必填。 */
-  type: ChartType
+  /** 选择内部 LayerChart 高阶组件；优先于 preset 的图形类型，未指定时默认 line。 */
+  type?: ChartType
+  /** 常用图表预设；原生属性覆盖预设默认值。 */
+  preset?: ChartPreset
   /** 图表数据源；空数组会触发内置空态。 */
   data: ChartDataItem[]
   /** x 轴字段名；饼图中默认映射为 key 和 label。 */

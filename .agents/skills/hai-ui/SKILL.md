@@ -1,6 +1,6 @@
 ---
 name: hai-ui
-description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、弹窗、新手引导、帮助中心、主题与 AI 内容展示。"
+description: "使用 @h-ai/ui 构建 Svelte 5 表单、表格、看板图表、弹窗、引导、主题与 AI 内容展示。"
 ---
 
 # hai-ui
@@ -30,6 +30,8 @@ AuthPanel 的 config.captcha.enabled 开启后，复用 createAuthActions 提供
 - 列表统一使用卡片内查询栏、独立滚动表格和底部分页。多条件筛选使用 FilterBar / TableToolbar / CrudFilterBar，默认收起扩展条件，搜索/查询/重置保持可用；Query 或 Enter 一次提交搜索和全部条件，草稿变化不自动请求，折叠保留值。翻页和排序沿用已提交条件，重置清空条件并回第一页。TableToolbar 与 CrudFilterBar 共用原生查询表单，onfilterchange 仅通知草稿变化，onsearch 读取绑定草稿并提交；实际 onreset/onclearfilters 必须重新查询。排序只在后端支持的 DataTable 列头提供，不新增图标筛选/排序弹层或页面私有折叠状态机。 扩展筛选使用自适应网格，字段横向间距 20px、纵向间距 16px，标签与控件分别对齐且控件等高；窄屏改为单列，避免定宽输入框贴边挤压。
 
 - 查询/登录采用原生表单 Enter 提交；提示使用 Button submitHint（仅 submit），不注册占用浏览器按键的全局监听。输入法确认不得触发搜索；保留 Tab、Enter/Space、Esc、菜单方向键和清晰焦点。弹窗默认聚焦首个可编辑项，危险确认优先聚焦取消；关闭恢复触发控件，忙碌/禁用时不得继续提交。
+
+轻量看板复用 MetricCard / ReportCard / DashboardGrid 和 Chart 的五种 preset；原生属性覆盖默认值。图形仅在客户端有数据时按类型加载，SSR 显示占位。更多 LayerChart 图形放入 ReportCard children，由宿主显式依赖并按需加载原生组件。示例与边界见[图表和看板](../../../packages/cli/templates/skills/hai-ui/charts.md)。
 
 ## 使用路径
 

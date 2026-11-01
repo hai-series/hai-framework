@@ -10,6 +10,7 @@
   import type { PieChartProps } from 'layerchart'
   import type { ChartDataItem } from '../chart-types.js'
   import { PieChart as LayerPieChart } from 'layerchart'
+  import 'layerchart/daisyui-5.css'
 
   /** 透传给 LayerChart PieChart 的全部原生属性。 */
   const { ...props }: PieChartProps<ChartDataItem> = $props()

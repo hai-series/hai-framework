@@ -54,6 +54,7 @@
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "d3-shape": "catalog:",
+    "layerchart": "catalog:",
     "sm-crypto": "catalog:",
     "yaml": "catalog:",
     "zod": "catalog:"

@@ -10,6 +10,7 @@
   import type { AreaChartProps } from 'layerchart'
   import type { ChartDataItem } from '../chart-types.js'
   import { AreaChart as LayerAreaChart } from 'layerchart'
+  import 'layerchart/daisyui-5.css'
 
   /** 透传给 LayerChart AreaChart 的全部原生属性。 */
   const { ...props }: AreaChartProps<ChartDataItem> = $props()

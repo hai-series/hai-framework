@@ -299,7 +299,7 @@ components/
 | ------------ | -------- | ------------------------------------------- |
 | `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-#### 场景组件 Scenes（43 个）
+#### 场景组件 Scenes（47 个）
 
 ##### Guide 引导与帮助（2 个）
 
@@ -405,6 +405,27 @@ components/
 ```
 
 ##### Charts 图表
+
+轻量看板由 `MetricCard`（数值、单位、百分比变化）、`ReportCard`（标题、操作、内容、加载/空态）和 `DashboardGrid`（按容器宽度收拢为一/二/多列）组成。指标卡自身不加载图形引擎；`trend={12.8}` 表示 +12.8%，`trendTone` 独立表达业务好坏，下降也可以是 success。缺失或非有限数显示“—”，零值正常显示。
+
+`Chart` 新增 `preset`：`grouped-bar`、`stacked-bar`、`stacked-area`、`donut`、`sparkline`。预设补默认图形类型和配置，显式 `type` 及原生属性优先；例如 `innerRadius={0.8}` 覆盖环形默认半径。其他 LayerChart 属性与 snippet 继续透传。
+
+按类型动态加载渲染器；SSR 保留高度并显示加载占位，浏览器挂载后绘制。加载态和空数据不加载渲染器。只需要看板组件时优先使用公开 charts 入口。高级图形通过 `ReportCard` 的 children 使用原生 LayerChart，不受 Chart 的五种类型限制；应用需显式依赖兼容的 `layerchart`，按需使用 `layerchart/svg`、`layerchart/hierarchy` 等实际公开入口。用动态组件加载控制高级图形的加载时机，见 admin 的原生 ArcChart 示例。
+
+```svelte
+<script lang="ts">
+  import { Chart, DashboardGrid, MetricCard, ReportCard } from '@h-ai/ui/components/scenes/charts/index'
+  const data = [{ month: 'Jan', revenue: 42, cost: 24 }, { month: 'Feb', revenue: 58, cost: 31 }]
+</script>
+
+<DashboardGrid label="Key metrics" columns={4}>
+  <MetricCard title="Revenue" value="128,430" unit="CNY" trend={12.8} trendTone="success" trendLabel="vs previous month" />
+</DashboardGrid>
+<ReportCard title="Revenue and cost">
+  <Chart preset="grouped-bar" {data} x="month" y={['revenue', 'cost']} />
+</ReportCard>
+```
+
 
 `Chart type='line'` 默认透传 LayerChart 原生折线图；需要监控看板常见的“分段线 + 圆点 + 最近点 hover + 竖向参考线”时，使用 `lineVariant='segmented-point'`：
 

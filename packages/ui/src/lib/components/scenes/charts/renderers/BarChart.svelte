@@ -10,6 +10,7 @@
   import type { BarChartProps } from 'layerchart'
   import type { ChartDataItem } from '../chart-types.js'
   import { BarChart as LayerBarChart } from 'layerchart'
+  import 'layerchart/daisyui-5.css'
 
   /** 透传给 LayerChart BarChart 的全部原生属性。 */
   const { ...props }: BarChartProps<ChartDataItem> = $props()

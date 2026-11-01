@@ -36,6 +36,8 @@ Beta 使用前先确认 npm 的 `@h-ai/cli@beta` 实际版本并固定同一版�
 
 配置化安全增强：IAM 的账号生命周期、密码/挑战/再认证、时段IP与会话策略见 [IAM参考](packages/cli/templates/skills/hai-iam/reference.md)；审计分类/脱敏/保留/私有备份/Reach告警见 [Audit](packages/audit/README.md)。admin-console/fullstack 的四类职责及基础成员由宿主配置，服务端限制跨职责授权；UI createSensitiveActions + ReauthenticationDialog 复用确认状态与界面，Kit/API client 注入认证动作；SDK options.context.reauthentication 只给本次敏感请求；会话轮换或证明失效时用本次 reauthorize 回调重新确认，取消不续发。不要将示例角色变成框架通用固定规则。
 
+轻量数据看板使用 UI 的 MetricCard / ReportCard / DashboardGrid；Chart 提供 grouped-bar、stacked-bar、stacked-area、donut、sparkline 预设，显式原生属性优先。图形按类型在客户端动态加载，SSR 和空数据不加载引擎。更多 LayerChart 图形可放入 ReportCard children，由应用显式依赖并按需加载原生组件，详见[图表与看板](packages/cli/templates/skills/hai-ui/charts.md)。
+
 ## 生命周期与返回值
 
 后台页面复用 UI 的 WorkspaceLayout / FilterBar，标题在导航中只显示一次，列表统一卡片内查询栏、独立滚动表格、底部分页；多条件可收起并保留草稿，查询或 Enter 一次提交，重置清空条件，排序仅在后端支持的列头显示，IAM 用户 HTTP 列表支持 sortBy/sortDirection，翻页/排序沿用已提交条件；放大时顶栏可换行。theme.css 提供 high-contrast 高对比与 formal 直角商务主题，默认模板可选择。查询/登录保留原生 Enter 提交及输入法边界，Button submitHint 只提供实际表单提示；主题菜单和弹窗须验证键盘与焦点恢复。详见 [UI](packages/cli/templates/skills/hai-ui/SKILL.md)。

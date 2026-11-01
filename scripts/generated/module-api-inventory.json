@@ -34660,6 +34660,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -34928,6 +34934,18 @@
               "kind": "value",
               "declaration": "DARK_THEMES",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DataAttributes",
@@ -35812,6 +35830,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Modal",
               "kind": "value+type",
               "declaration": "Modal",
@@ -36038,6 +36068,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -36956,6 +36998,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -37224,6 +37272,18 @@
               "kind": "value",
               "declaration": "DARK_THEMES",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DataAttributes",
@@ -38108,6 +38168,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Modal",
               "kind": "value+type",
               "declaration": "Modal",
@@ -38334,6 +38406,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -39252,6 +39336,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -39520,6 +39610,18 @@
               "kind": "value",
               "declaration": "DARK_THEMES",
               "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DataAttributes",
@@ -40404,6 +40506,18 @@
               "declarationKind": "InterfaceDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Modal",
               "kind": "value+type",
               "declaration": "Modal",
@@ -40630,6 +40744,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -42354,6 +42480,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -42568,6 +42700,18 @@
               "kind": "type",
               "declaration": "CrudText",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DataTable",
@@ -43074,6 +43218,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Modal",
               "kind": "value+type",
               "declaration": "Modal",
@@ -43210,6 +43366,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -43828,6 +43996,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -44042,6 +44216,18 @@
               "kind": "type",
               "declaration": "CrudText",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DataTable",
@@ -44548,6 +44734,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Modal",
               "kind": "value+type",
               "declaration": "Modal",
@@ -44684,6 +44882,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -45302,6 +45512,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -45516,6 +45732,18 @@
               "kind": "type",
               "declaration": "CrudText",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "DataTable",
@@ -46022,6 +46250,18 @@
               "declarationKind": "VariableDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "Modal",
               "kind": "value+type",
               "declaration": "Modal",
@@ -46158,6 +46398,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -48156,6 +48408,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -48184,6 +48442,42 @@
               "kind": "type",
               "declaration": "ChartType",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -48214,6 +48508,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -48242,6 +48542,42 @@
               "kind": "type",
               "declaration": "ChartType",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -48272,6 +48608,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -48300,6 +48642,42 @@
               "kind": "type",
               "declaration": "ChartType",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             }
           ]
         },
@@ -49776,6 +50154,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -49972,6 +50356,18 @@
               "kind": "type",
               "declaration": "CrudText",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "defineCrud",
@@ -50382,6 +50778,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NavAdapter",
               "kind": "type",
               "declaration": "NavAdapter",
@@ -50464,6 +50872,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -50860,6 +51280,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -51056,6 +51482,18 @@
               "kind": "type",
               "declaration": "CrudText",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "defineCrud",
@@ -51466,6 +51904,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NavAdapter",
               "kind": "type",
               "declaration": "NavAdapter",
@@ -51548,6 +51998,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",
@@ -51944,6 +52406,12 @@
               "declarationKind": "TypeAliasDeclaration"
             },
             {
+              "name": "ChartPreset",
+              "kind": "type",
+              "declaration": "ChartPreset",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
               "name": "ChartProps",
               "kind": "type",
               "declaration": "ChartProps",
@@ -52140,6 +52608,18 @@
               "kind": "type",
               "declaration": "CrudText",
               "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "DashboardGrid",
+              "kind": "value+type",
+              "declaration": "DashboardGrid",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "DashboardGridProps",
+              "kind": "type",
+              "declaration": "DashboardGridProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "defineCrud",
@@ -52550,6 +53030,18 @@
               "declarationKind": "FunctionDeclaration"
             },
             {
+              "name": "MetricCard",
+              "kind": "value+type",
+              "declaration": "MetricCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "MetricCardProps",
+              "kind": "type",
+              "declaration": "MetricCardProps",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
               "name": "NavAdapter",
               "kind": "type",
               "declaration": "NavAdapter",
@@ -52632,6 +53124,18 @@
               "kind": "value",
               "declaration": "renderMarkdownDocument",
               "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "ReportCard",
+              "kind": "value+type",
+              "declaration": "ReportCard",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ReportCardProps",
+              "kind": "type",
+              "declaration": "ReportCardProps",
+              "declarationKind": "InterfaceDeclaration"
             },
             {
               "name": "ResetPasswordForm",

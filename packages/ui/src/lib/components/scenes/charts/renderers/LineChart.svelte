@@ -16,6 +16,7 @@
     ChartTooltipMode,
   } from '../chart-types.js'
   import { LineChart as LayerLineChart } from 'layerchart'
+  import 'layerchart/daisyui-5.css'
 
   /**
    * 分段折线图单个数据点，保留展示标签与数值。

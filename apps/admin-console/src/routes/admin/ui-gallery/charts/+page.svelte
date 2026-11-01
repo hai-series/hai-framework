@@ -7,7 +7,40 @@
   import DemoCard from '$lib/components/gallery/DemoCard.svelte'
   import DemoSection from '$lib/components/gallery/DemoSection.svelte'
   import * as m from '$lib/paraglide/messages'
-  import { Chart } from '@h-ai/ui'
+  import { Button, Select } from '@h-ai/ui'
+  import { Chart, DashboardGrid, MetricCard, ReportCard } from '@h-ai/ui/components/scenes/charts/index'
+  import { notifyError } from '@h-ai/ui/toast'
+
+  let period = $state('month')
+  let selectedPreset = $state('grouped-bar')
+  let reportState = $state('ready')
+  let showNative = $state(false)
+  const nativeGauge = $derived(showNative
+    ? import('$lib/components/gallery/NativeGauge.svelte').catch((error: unknown) => {
+      notifyError(m.common_error())
+      throw error
+    })
+    : undefined)
+  const dashboardData = $derived(period === 'quarter'
+    ? [{ period: '07', revenue: 138400, cost: 74200 }, { period: '08', revenue: 152800, cost: 81600 }, { period: '09', revenue: 168200, cost: 88000 }]
+    : [{ period: '01–07', revenue: 28400, cost: 16200 }, { period: '08–14', revenue: 32600, cost: 17800 }, { period: '15–21', revenue: 30100, cost: 16400 }, { period: '22–30', revenue: 37330, cost: 19100 }])
+  const revenue = $derived(dashboardData.reduce((total, row) => total + row.revenue, 0))
+  const reportSeries = $derived<ChartSeries[]>([
+    { key: 'revenue', label: m.gallery_dashboard_revenue() },
+    { key: 'cost', label: m.gallery_dashboard_cost() },
+  ])
+  const dashboardChannels = $derived<ChartDataItem[]>([
+    { channel: m.gallery_dashboard_direct(), value: 46 },
+    { channel: m.gallery_dashboard_search(), value: 34 },
+    { channel: m.gallery_dashboard_partner(), value: 20 },
+  ])
+  const presets = $derived([
+    { value: 'grouped-bar', label: m.gallery_dashboard_grouped() },
+    { value: 'stacked-bar', label: m.gallery_dashboard_stacked() },
+    { value: 'stacked-area', label: m.gallery_dashboard_area() },
+    { value: 'donut', label: m.gallery_dashboard_donut() },
+    { value: 'sparkline', label: m.gallery_dashboard_sparkline() },
+  ])
 
   /** 月度经营数据，横向柱状图使用 revenue 作为数值轴。 */
   const monthlyRevenueData: ChartDataItem[] = [
@@ -115,6 +148,79 @@
   iconClass='icon-[tabler--chart-dots-3]'
   tone='info'
 >
+  <div class='flex min-w-0 flex-wrap items-end justify-between gap-3'>
+    <div>
+      <h3 class='font-semibold'>{m.gallery_dashboard_title()}</h3>
+      <p class='mt-1 text-sm text-base-content/80'>{m.gallery_dashboard_desc()}</p>
+    </div>
+    <div class='w-44'>
+      <label for='dashboard-period-control' class='mb-1 block text-xs text-base-content/80'>{m.gallery_dashboard_period()}</label>
+      <Select id='dashboard-period-control' data-testid='dashboard-period' bind:value={period} options={[
+        { value: 'month', label: m.gallery_dashboard_period_month() },
+        { value: 'quarter', label: m.gallery_dashboard_period_quarter() },
+      ]} />
+    </div>
+  </div>
+
+  <DashboardGrid label={m.gallery_dashboard_metrics()} columns={4} data-testid='dashboard-metrics'>
+    <MetricCard title={m.gallery_dashboard_revenue()} value={revenue.toLocaleString()} unit='CNY' trend={12.8} trendTone='success' trendLabel={m.gallery_dashboard_comparison()} data-testid='revenue-metric'>
+      <Chart preset='sparkline' data={dashboardData} x='period' y='revenue' height={32} />
+    </MetricCard>
+    <MetricCard title={m.gallery_dashboard_orders()} value={period === 'quarter' ? '4,268' : '1,482'} trend={8.4} trendTone='success' trendLabel={m.gallery_dashboard_comparison()} />
+    <MetricCard title={m.gallery_dashboard_conversion()} value='6.82%' trend={2.1} trendTone='success' trendLabel={m.gallery_dashboard_comparison()} />
+    <MetricCard title={m.gallery_dashboard_latency()} value={42} unit='ms' trend={-8.2} trendTone='success' trendLabel={m.gallery_dashboard_comparison()} />
+  </DashboardGrid>
+
+  <DashboardGrid label={m.gallery_dashboard_reports()} data-testid='dashboard-reports'>
+    <ReportCard title={m.gallery_dashboard_trend()} description={m.gallery_dashboard_updated()}>
+      <Chart preset='grouped-bar' data={dashboardData} x='period' y={['revenue', 'cost']} series={reportSeries} height={260} />
+    </ReportCard>
+    <ReportCard title={m.gallery_dashboard_channels()} description={m.gallery_dashboard_updated()}>
+      <Chart preset='donut' data={dashboardChannels} x='channel' y='value' height={260} />
+    </ReportCard>
+    <ReportCard title={m.gallery_dashboard_presets()} data-testid='preset-report'>
+      {#snippet actions()}
+        <label class='sr-only' for='chart-preset-control'>{m.gallery_dashboard_presets()}</label>
+        <Select id='chart-preset-control' data-testid='chart-preset' size='sm' bind:value={selectedPreset} options={presets} />
+      {/snippet}
+      {#if selectedPreset === 'donut'}
+        <Chart preset='donut' data={dashboardChannels} x='channel' y='value' height={240} />
+      {:else if selectedPreset === 'sparkline'}
+        <div class='flex min-h-60 items-center'>
+          <div class='w-full'><Chart preset='sparkline' data={dashboardData} x='period' y='revenue' /></div>
+        </div>
+      {:else}
+        <Chart preset={selectedPreset === 'stacked-area' ? 'stacked-area' : selectedPreset === 'stacked-bar' ? 'stacked-bar' : 'grouped-bar'} data={dashboardData} x='period' y={['revenue', 'cost']} series={reportSeries} height={240} />
+      {/if}
+    </ReportCard>
+    <ReportCard title={m.gallery_dashboard_native()} description={m.gallery_dashboard_native_desc()}>
+      {#if showNative}
+        {#await nativeGauge}
+          <div class='flex h-60 items-center justify-center'><span role='status' class='loading loading-spinner' aria-label={m.gallery_dashboard_loading()}></span></div>
+        {:then module}
+          {#if module}<module.default label={m.gallery_dashboard_target()} />{/if}
+        {:catch}
+          <Button onclick={() => window.location.reload()}>{m.action_refresh()}</Button>
+        {/await}
+      {:else}
+        <div class='flex h-60 items-center justify-center'>
+          <Button data-testid='load-native-chart' onclick={() => showNative = true}>{m.gallery_dashboard_native_load()}</Button>
+        </div>
+      {/if}
+    </ReportCard>
+    <ReportCard title={m.gallery_dashboard_states()} loading={reportState === 'loading'} empty={reportState === 'empty'} data-testid='report-state-preview'>
+      {#snippet actions()}
+        <label class='sr-only' for='report-state-control'>{m.gallery_dashboard_states()}</label>
+        <Select id='report-state-control' data-testid='report-state' size='sm' bind:value={reportState} options={[
+          { value: 'ready', label: m.gallery_dashboard_ready() },
+          { value: 'loading', label: m.gallery_dashboard_loading() },
+          { value: 'empty', label: m.gallery_dashboard_empty() },
+        ]} />
+      {/snippet}
+      <Chart type='line' data={dashboardData} x='period' y='revenue' height={240} grid />
+    </ReportCard>
+  </DashboardGrid>
+
   <div class='grid gap-4 xl:grid-cols-2'>
     <DemoCard title={m.gallery_chart_bar_title()} description={m.gallery_chart_bar_desc()} code={barCode}>
       <Chart
