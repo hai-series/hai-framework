@@ -1,11 +1,11 @@
 import { Buffer } from 'node:buffer'
-import { ChildProcess, spawn } from 'node:child_process'
+import { ChildProcess, spawn, spawnSync } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
-import { windowsACPCommand } from '../src/acp/ai-acp-process-windows.js'
+import { windowsACPCommand, windowsACPJobProbe } from '../src/acp/ai-acp-process-windows.js'
 import { baseEnvironment, stopProcess } from '../src/acp/ai-acp-process.js'
 
 /** 仅忽略本次拥有进程已经消失的情况；其它清理错误继续报告。 */
@@ -19,7 +19,29 @@ function killOwned(pid: number) {
   }
 }
 
+/** 保留原始断言及夹具输出，同时报告真实清理失败。 */
+async function cleanupWindowsJob(child: ChildProcess, name: string, closed: boolean, primaryFailure: unknown) {
+  try {
+    await stopProcess(child, { ownedTree: true, closeObserved: closed, windowsJob: name })
+  }
+  catch (error) {
+    throw primaryFailure ? new AggregateError([primaryFailure, error], 'Windows Job assertion and cleanup failed') : error
+  }
+}
+
 describe('aCP owned process cleanup', () => {
+  it.skipIf(process.platform !== 'win32')('windows 私有 Job 不存在时查询确认无成员', () => {
+    const job = windowsACPCommand(process.execPath, ['--version'])
+    const probe = spawnSync('powershell.exe', windowsACPJobProbe(job.name), {
+      env: baseEnvironment(),
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 15000,
+    })
+    expect(probe.error, probe.stderr).toBeUndefined()
+    expect(probe.status, probe.stderr).toBe(0)
+  })
+
   it.skipIf(process.platform !== 'win32').each([false, true])('windows Job 停止中间进程退出后的后台 writer（根退出=%s）', async (rootExits) => {
     const directory = await mkdtemp(join(tmpdir(), 'hai-acp-job-'))
     if (dirname(directory) !== resolve(tmpdir()) || !directory.startsWith(join(tmpdir(), 'hai-acp-job-')))
@@ -41,6 +63,7 @@ describe('aCP owned process cleanup', () => {
     child.once('close', () => {
       closed = true
     })
+    let primaryFailure: unknown
     try {
       let current = ''
       for (let attempt = 0; attempt < 200; attempt++) {
@@ -57,8 +80,12 @@ describe('aCP owned process cleanup', () => {
       await new Promise(done => setTimeout(done, 100))
       expect(await readFile(heartbeat, 'utf8')).toBe(stopped)
     }
+    catch (error) {
+      primaryFailure = error
+      throw error
+    }
     finally {
-      await stopProcess(child, { ownedTree: true, closeObserved: closed, windowsJob: job.name })
+      await cleanupWindowsJob(child, job.name, closed, primaryFailure)
       await rm(directory, { recursive: true, force: true })
     }
     await expect(readFile(heartbeat)).rejects.toMatchObject({ code: 'ENOENT' })
@@ -76,6 +103,7 @@ describe('aCP owned process cleanup', () => {
     })
     const chunks: Buffer[] = []
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    let primaryFailure: unknown
     try {
       const content = Buffer.from('你好 ACP 🧪\n', 'utf8')
       child.stdin.write(content)
@@ -90,8 +118,12 @@ describe('aCP owned process cleanup', () => {
       expect(JSON.parse(lines[0]!)).toEqual({ arg: argument, privatePayload: false })
       expect(lines[1]).toBe('你好 ACP 🧪')
     }
+    catch (error) {
+      primaryFailure = error
+      throw error
+    }
     finally {
-      await stopProcess(child, { ownedTree: true, closeObserved: closed, windowsJob: job.name })
+      await cleanupWindowsJob(child, job.name, closed, primaryFailure)
     }
   }, 30000)
 

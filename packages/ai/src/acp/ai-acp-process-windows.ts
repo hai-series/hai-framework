@@ -182,5 +182,9 @@ try {
 ${nativeJob}
 '@
   if ([HaiACPCommandJob]::Empty('${name}')) { exit 0 } else { exit 1 }
-} catch { exit 2 }`)
+} catch {
+  $cause = $_.Exception.GetBaseException()
+  [Console]::Error.WriteLine(('Windows ACP job probe failed ({0}; win32={1})' -f $cause.GetType().Name, $cause.NativeErrorCode))
+  exit 2
+}`)
 }
