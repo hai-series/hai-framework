@@ -1,0 +1,14 @@
+{
+  "name": "goose",
+  "version": "1.57.0",
+  "image": "hai-ai/goose",
+  "transports": ["http", "ws"],
+  "command": "goose",
+  "args": ["serve", "--host", "0.0.0.0", "--port", "3284"],
+  "source": "https://github.com/aaif-goose/goose/releases/tag/v1.57.0",
+  "artifact": {
+    "url": "https://github.com/aaif-goose/goose/releases/download/v1.57.0/goose-x86_64-unknown-linux-musl.tar.gz",
+    "sha256": "6c3a05e30e1a425dc06a410dbe24b3f3697c9721b1ea2340434ddda6b64267ae",
+    "platform": "linux/amd64"
+  }
+}

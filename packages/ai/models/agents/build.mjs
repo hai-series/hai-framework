@@ -4,7 +4,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 async function main() {
-  const names = ['codex-acp', 'deepseek-harness']
+  const names = ['codex-acp', 'deepseek-harness', 'goose']
   const [name, ...options] = process.argv.slice(2)
   if (!names.includes(name))
     throw new Error(`Select agent: ${names.join(', ')}`)

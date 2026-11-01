@@ -119,7 +119,8 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
               : model.protocol === 'responses'
                 ? 'openai-responses'
                 : 'anthropic-messages',
-          defaultMaxTokens: caps.maxOutputTokens,
+          // 输出容量是能力声明；单轮预算沿用 Hai 模型的 maxTokens。
+          defaultMaxTokens: Math.min(model.maxTokens, caps.maxOutputTokens),
           defaultContextWindow: caps.contextWindow,
           timeoutMs: model.timeout,
           retryPolicy: { mode: 'normal', maxRetries: 0 },
@@ -154,11 +155,12 @@ export const nativeAdapters: Record<string, ACPAgentAdapter> = {
         command:
           agent.mode === 'custom-service' ? 'dsh' : (agent.command ?? 'dsh'),
         args: [
+          // 自定义命令可能是 node + JS 入口，入口参数必须先于 dsh 的原生选项。
+          ...(agent.mode === 'custom-service' ? [] : (agent.args ?? [])),
           '--profile',
           'acp',
           '--patch',
           `${statePath}/hai-config.json`,
-          ...(agent.mode === 'custom-service' ? [] : (agent.args ?? [])),
         ],
         env,
         files: { 'hai-config.json': JSON.stringify(patch) },

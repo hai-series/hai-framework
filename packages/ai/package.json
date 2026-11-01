@@ -48,7 +48,7 @@
     "model:run": "node models/build.mjs run",
     "build:clean": "rimraf dist",
     "agent:build": "node models/agents/build.mjs",
-    "test:e2e": "vitest run tests/ai-acp.e2e.test.ts tests/ai-acp-transport.e2e.test.ts tests/ai-acp-container.e2e.test.ts tests/ai-acp-native.e2e.test.ts"
+    "test:e2e": "vitest run tests/ai-acp.e2e.test.ts tests/ai-acp-transport.e2e.test.ts tests/ai-acp-container.e2e.test.ts tests/ai-acp-native.e2e.test.ts tests/ai-acp-openrouter.e2e.test.ts tests/ai-acp-goose.e2e.test.ts"
   },
   "peerDependencies": {
     "@qdrant/js-client-rest": "1.18.0"
