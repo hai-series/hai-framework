@@ -151,7 +151,7 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
       expect(rendered).not.toMatch(/\p{Script=Han}/u)
   })
 
-  it('完整预设的模块配置动态读取当前语言，并移除功能多选', async () => {
+  it('管理后台预设只询问核心与依赖模块配置，并动态读取当前语言', async () => {
     const root = await fixture()
     const selected = vi.spyOn(prompts.prompts, 'select').mockImplementation(question => Array.isArray(question.choices) ? question.choices[0]?.value : undefined)
     const features = vi.spyOn(prompts.prompts, 'multiselect').mockImplementation(() => ['iam', 'ai', 'storage'])
@@ -161,7 +161,8 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     await expect(createProject({ cwd: root, name: 'bad/name', appType: 'admin', install: false, git: false, deploy: false, packageManager: 'pnpm' })).rejects.toThrow('bad/name')
     const questions = selected.mock.calls.map(([question]) => question)
     expect(features).not.toHaveBeenCalled()
-    expect(questions.length).toBeGreaterThan(0)
+    // admin 启用 IAM/Reach，依赖展开后只有语言、数据库与缓存需要 select 配置。
+    expect(questions.map(question => question.name)).toEqual(['defaultLocale', 'type', 'type'])
     selected.mockRestore()
     features.mockRestore()
     typed.mockRestore()
@@ -169,16 +170,26 @@ describe.each(['zh-CN', 'en-US', 'ja-JP'])('create/add/init locale %s', (locale)
     if (locale === 'en-US') {
       expect(descriptions).not.toMatch(/\p{Script=Han}/u)
       expect(output()).not.toMatch(/\p{Script=Han}/u)
+      expect(descriptions).toContain('Default application locale')
       expect(descriptions).toContain('Database type')
-      expect(descriptions).toContain('Storage type')
+      expect(descriptions).toContain('Cache type')
+      expect(descriptions).not.toContain('Storage type')
+      expect(descriptions).not.toContain('AI provider')
     }
     else if (locale === 'ja-JP') {
+      expect(descriptions).toContain('アプリケーションの既定の言語')
       expect(descriptions).toContain('データベース種別')
-      expect(descriptions).toContain('ストレージ種別')
+      expect(descriptions).toContain('キャッシュ種別')
+      expect(descriptions).not.toContain('ストレージ種別')
+      expect(descriptions).not.toContain('AI プロバイダー')
       expect(descriptions).toContain('日本語（ja-JP）')
     }
     else {
+      expect(descriptions).toContain('默认语言')
       expect(descriptions).toContain('数据库类型')
+      expect(descriptions).toContain('缓存类型')
+      expect(descriptions).not.toContain('存储类型')
+      expect(descriptions).not.toContain('AI Provider')
     }
     expect(await fse.pathExists(path.join(root, 'bad'))).toBe(false)
   })
