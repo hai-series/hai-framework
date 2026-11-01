@@ -68,7 +68,7 @@ pnpm dev
 
 The CLI installs dependencies and initializes Git by default. Sign in as `admin`; find the random initial password in `HAI_ADMIN_DEFAULT_PASSWORD` in the generated `.env.dev.local`, then change it when prompted. Keep environment files and passwords private.
 
-New projects include the full applicable modules and examples, including server AI/vector dependencies. Use `hai create --defaults` to skip prompts; default containers skip extra CUDA downloads. Follow the generated README for directories, environment files and addresses, or use the [first-run guide](docs/usage/getting-started/create.md).
+Each template installs only the modules it uses; AI, payment, vecdb and datapipe are not installed by default. Complete module configuration and environment references remain available, with unused settings commented out. Add dependencies, enable configuration and integrate initialization, cleanup and business code when adding features. Use `hai create --defaults` to skip prompts; default containers skip extra CUDA downloads. Follow the generated README for directories, environment files and addresses, or use the [first-run guide](docs/usage/getting-started/create.md).
 
 The installation version follows [npm's latest tag](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions), which the badge reads directly. Run `pnpm view @h-ai/cli@latest version` to query it; replace `@latest` with the returned version for reproducible team installations. npm installation tags and GitHub's Latest presentation setting are managed separately.
 

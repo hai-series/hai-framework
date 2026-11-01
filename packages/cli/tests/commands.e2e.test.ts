@@ -831,12 +831,12 @@ describe('createProject — mobile-app 类型', () => {
     await expectCompatibleSkills(projectPath, 'mobile-app')
   })
 
-  it('完整客户端只生成浏览器所需依赖与配置，不携带服务端环境', async () => {
+  it('客户端只安装浏览器依赖，服务端配置以注释保留且不进入公共环境', async () => {
     const pkg = await readJson(projectPath, 'package.json')
     expect(pkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_SPECIFIER)
     for (const name of ['ai', 'reldb', 'cache', 'storage', 'iam']) {
       expect(pkg.dependencies).not.toHaveProperty(`@h-ai/${name}`)
-      expect(await exists(projectPath, `config/_${name === 'reldb' ? 'db' : name}.yml`)).toBe(false)
+      expect(parse(await readText(projectPath, `config/_${name === 'reldb' ? 'db' : name}.yml`))).toBeNull()
     }
     for (const file of ['.env', '.env.prod']) {
       const environment = await readText(projectPath, file)
@@ -1007,8 +1007,8 @@ describe('createProject — fullstack 类型', () => {
     expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
     expect(pkg.scripts.start).toBe('node ../../scripts/run-node.mjs prod ../.. dist/index.js')
     expect(await exists(projectPath, 'scripts/run-node.mjs')).toBe(true)
-    expect(pkg.dependencies['@h-ai/payment']).toBe('catalog:')
-    expect(pkg.dependencies['@h-ai/datapipe']).toBe('catalog:')
+    expect(pkg.dependencies['@h-ai/payment']).toBeUndefined()
+    expect(pkg.dependencies['@h-ai/datapipe']).toBeUndefined()
     expect(pkg.files).toEqual(expect.arrayContaining(['config', 'data', 'dist']))
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/data/.gitkeep')).toBe(true)
     expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/app-server.ts')).toBe(true)
@@ -1018,9 +1018,9 @@ describe('createProject — fullstack 类型', () => {
     // 实际 create 命令不能覆盖模板生成的可选配置和 Reach 标准通知模板。
     for (const moduleKey of ['ai', 'vecdb']) {
       const content = await readText(projectPath, `packages/proj-fullstack-serv/config/_${moduleKey}.yml`)
-      expect(parse(content)).not.toBeNull()
+      expect(parse(content)).toBeNull()
     }
-    // 支付需要显式提供商户配置；完整生成不自动启用未配置的支付通道。
+    // 未使用的模块保留配置参考，不安装依赖或启用支付通道。
     expect(parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_payment.yml'))).toBeNull()
     const scheduler = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_scheduler.yml'))
     expect(scheduler).toEqual({ enableDb: '$' + '{HAI_SCHEDULER_ENABLEDB:true}', tickInterval: '$' + '{HAI_SCHEDULER_TICKINTERVAL:1000}', leaseMs: '$' + '{HAI_SCHEDULER_LEASEMS:300000}' })
@@ -1031,7 +1031,7 @@ describe('createProject — fullstack 类型', () => {
     expect(audit.alerts.schedule.enabled).toBe('$' + '{HAI_AUDIT_ALERTS_SCHEDULE_ENABLED:false}')
     const reach = parse(await readText(projectPath, 'packages/proj-fullstack-serv/config/_reach.yml'))
     expect(reach.templates.map((template: { name: string }) => template.name)).toEqual(['otp_email', 'otp_sms', 'password_reset', 'password_reset_sms'])
-    expect(await readText(projectPath, '.env.example')).toContain('\nHAI_AI_LLM_APIKEY=')
+    expect(await readText(projectPath, '.env.example')).toContain('\n# HAI_AI_LLM_APIKEY=')
     // 公共 .env 提供基础参数，私有值仅放 .env.local。
     const envDefaults = (await readText(projectPath, '.env.example')).split('\n').filter(line => /^HAI_(?:CORE|DB|CACHE|STORAGE)_/.test(line))
     expect(envDefaults).toContain('HAI_DB_TYPE=\'sqlite\'')

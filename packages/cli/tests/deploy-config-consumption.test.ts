@@ -26,7 +26,8 @@ it('loads provisioned connections through Core in a real generated application',
   await createProject({
     name: 'cloud-app',
     cwd: root,
-    appType: 'admin',
+    appType: 'fullstack',
+    frontends: ['web'],
     defaults: true,
     install: false,
     git: false,
@@ -73,7 +74,7 @@ it('loads provisioned connections through Core in a real generated application',
     }
   }
   vi.stubEnv('HAI_REACH_PROVIDERS', JSON.stringify(providers))
-  const config = join(root, 'cloud-app', 'config')
+  const config = join(root, 'cloud-app', 'packages', 'cloud-app-serv', 'config')
   expect(core.config.load('db', join(config, '_db.yml'), ReldbConfigSchema)).toMatchObject({
     success: true,
     data: { type: 'postgresql', database: 'neondb', url: 'postgresql://user:pass@db.example.test/neondb?sslmode=require' },

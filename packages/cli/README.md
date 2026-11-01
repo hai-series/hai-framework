@@ -54,13 +54,13 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                         |
 | `fullstack`                | contract、API、共享界面与所选 Web/App/Desktop；miniapp 仅预留说明 |
 
-新建工程统一采用适用的完整模块和示例，服务端包含 AI、向量库、反馈等依赖；客户端仍按类型隔离服务端模块。安装体积相应增加，示例需按实际业务替换。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程的模块选择不受影响。
+每个模板只安装实际使用的模块：admin/h5 包含认证、验证码及找回密码通知，以及数据库、缓存、加密依赖；website 只包含 Core/Kit/UI；API 包含认证、通知、上传和反馈；fullstack 保留管理后台的认证、审计、存储、通知、调度和反馈；mobile-app 只使用客户端能力。AI、payment、vecdb、datapipe 不默认安装。所有项目保留完整模块 YAML 和 `.env.example`，未启用项以注释提供，只有已启用项进入公共环境默认值。后续添加对应依赖、取消所需配置注释，再接入初始化、关闭及业务路由；添加依赖不会自动启用功能。`--template`、`--features`、`--examples/--no-examples` 已删除，`create --yes/-y` 改为 `--defaults`，旧参数明确报错；`deploy --yes` 保持原义。已有工程不会自动裁剪依赖。
 
 独立 `mobile-app` 默认包含前端 crypto，并启用 typed client 加密传输。已有明文 API 可显式使用 `PUBLIC_API_TRANSPORT=off`；`PUBLIC_API_KEY_EXCHANGE_PATH` 只覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
 
 ### 纯静态 website 与 GitHub Pages
 
-新建 website 同样包含完整模块和示例，默认 Node SSR。静态发布前须在工程中移除服务端业务依赖及其初始化、API/actions，保留 Core/Kit/UI；没有轻量创建参数。已有不含这些动态能力的 website 仍可使用下述静态构建。
+新建 website 默认 Node SSR，只安装展示站所需的 Core/Kit/UI，可以直接使用下述静态构建。以后接入了服务端业务模块、初始化或 API/actions 时，静态发布前须移除这些动态能力；保留的注释配置和变量示例不影响静态构建。
 
 website默认Node SSR。仅构建时设置`HAI_BUILD_STATIC=1`与`PUBLIC_BASE_PATH=/docs-site`（docs-site替换为实际仓库名；各目录段仅ASCII字母、数字、_、.、-，无末尾/，根站留空）后执行`pnpm build`，输出build静态目录。静态标志只接受0/1，且仅用于compile；PUBLIC_BASE_PATH也可用于Docker网站构建，原生app/desktop目标不接受网站目录。静态拒绝服务端业务模块、自定义API/actions和未预渲染页面，不放宽生产守卫，不生成SPA回退；默认健康API不进入静态产物。
 
@@ -88,7 +88,7 @@ Docker构建时同样显式设置PUBLIC_BASE_PATH；非根目录生成格式5制
 
 ### 已有项目与代码生成
 
-创建或添加 AI 会同时安装 reldb 与 vecdb；生成的启动代码按数据库 → 向量库 → AI 初始化，失败检查关闭结果并逆序清理。`.env.prod` 按启用模块选择 PostgreSQL（已选 MySQL 则保留）、Redis、S3、Qdrant，默认使用 Compose 的 `db/cache/storage/vecdb` 服务名。数据库/缓存密码、S3 凭据、模型密钥和受保护 Qdrant 的密钥必须由私有环境注入；容器外运行需覆盖这些内部地址。生产 Reach 的空 Provider 数组有意拒绝启动，须私有注入真实 `HAI_REACH_PROVIDERS` JSON。`hai add` 保留已有生产参数，只补新增字段；随后在现有业务入口接入新增模块。
+通过 `hai add ai` 可补齐 reldb 与 vecdb 依赖；随后在应用入口按数据库 → 向量库 → AI 初始化，失败时检查关闭结果并逆序清理。`.env.prod` 按启用模块选择 PostgreSQL（已选 MySQL 则保留）、Redis、S3、Qdrant，默认使用 Compose 的 `db/cache/storage/vecdb` 服务名。数据库/缓存密码、S3 凭据、模型密钥和受保护 Qdrant 的密钥必须由私有环境注入；容器外运行需覆盖这些内部地址。生产 Reach 的空 Provider 数组有意拒绝启动，须私有注入真实 `HAI_REACH_PROVIDERS` JSON。`hai add` 保留已有生产参数，只补新增字段；随后在现有业务入口接入新增模块。
 
 ```sh
 hai add storage

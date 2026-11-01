@@ -112,6 +112,7 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
     const env = loaded.data.values
     const deps = graph.runtime
     const configs: Record<string, Record<string, unknown>> = {}
+    const enabledConfigs = new Set<string>()
     for (const [name, owner] of Object.entries({ db: 'reldb', cache: 'cache', storage: 'storage', vecdb: 'vecdb', iam: 'iam', reach: 'reach' })) {
       configs[name] = {}
       if (!deps.has(`@h-ai/${owner}`))
@@ -121,26 +122,30 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
       if (config && !config.success)
         return config
       configs[name] = config?.data ?? {}
+      // 已交付的空白/整份注释配置代表尚未接入；有效环境覆盖仍可显式启用。
+      // 无配置文件的既有工程继续沿用依赖后端默认值，不改变程序化配置工程的识别方式。
+      if (!configFile || Object.keys(configs[name]).length)
+        enabledConfigs.add(name)
     }
     const middlewares: MiddlewareRequirement[] = []
     const add = (service: ServiceType, backend: string, configName = service as string, configPath: string[] = [], config = configs[configName] ?? {}, source = `_${configName}.yml`) => {
       middlewares.push({ service, backend, source, configName, configPath, envPrefix: ['HAI', configName, ...configPath].map(part => part.toUpperCase()).join('_'), config })
     }
-    const iam = deps.has('@h-ai/iam')
-    if (deps.has('@h-ai/reldb'))
+    const iam = enabledConfigs.has('iam')
+    if (enabledConfigs.has('db'))
       add('db', String(configs.db.type ?? 'sqlite'), 'db', [], configs.db, '@h-ai/reldb / _db.yml')
-    if (deps.has('@h-ai/cache'))
+    if (enabledConfigs.has('cache'))
       add('cache', String(configs.cache.type ?? 'memory'), 'cache', [], configs.cache, '@h-ai/cache / _cache.yml')
-    if (deps.has('@h-ai/storage'))
+    if (enabledConfigs.has('storage'))
       add('storage', String(configs.storage.type ?? 'local'))
-    if (deps.has('@h-ai/vecdb'))
+    if (enabledConfigs.has('vecdb'))
       add('vecdb', String(configs.vecdb.type ?? 'lancedb'))
-    if (iam) {
+    if (iam && record(configs.iam.login).ldap === true) {
       const ldap = record(configs.iam.ldap)
-      add('ldap', record(configs.iam.login).ldap === true ? 'ldap' : 'disabled', 'iam', ['ldap'], ldap, '@h-ai/iam (LDAP)')
+      add('ldap', 'ldap', 'iam', ['ldap'], ldap, '@h-ai/iam (LDAP)')
     }
     const providers = configs.reach.providers
-    if (deps.has('@h-ai/reach') && Array.isArray(providers)) {
+    if (enabledConfigs.has('reach') && Array.isArray(providers)) {
       for (const [index, item] of providers.entries()) {
         const provider = record(item)
         const type = String(provider.type ?? '')
@@ -150,7 +155,7 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
           add(service, type, 'reach', ['providers', String(index)], provider, '@h-ai/reach')
       }
     }
-    if (deps.has('@h-ai/reach') && !middlewares.some(item => item.configName === 'reach'))
+    if (enabledConfigs.has('reach') && !middlewares.some(item => item.configName === 'reach'))
       add('email', 'console', 'reach', ['providers', '0'], { name: 'email', type: 'console' }, '@h-ai/reach')
     const isSvelteKit = graph.build.has('@sveltejs/kit')
     const scan: ScanResult = {

@@ -294,10 +294,15 @@ const FEATURES: Record<string, FeatureDefinition> = {
   },
 }
 
-/**
- * 可选择的功能列表
- */
-const FULL_FEATURES: FeatureId[] = ['iam', 'db', 'cache', 'crypto', 'ai', 'storage', 'audit', 'reach', 'feedback', 'payment', 'vecdb', 'datapipe', 'scheduler', 'deploy', 'api-client', 'capacitor']
+/** 各模板的实际功能；配置参考完整交付，不通过安装全部模块来保留示例。 */
+const TEMPLATE_FEATURES: Record<AppType, FeatureId[]> = {
+  'admin': ['iam', 'reach'],
+  'website': [],
+  'h5': ['iam', 'reach'],
+  'api': ['iam', 'reach', 'storage', 'feedback'],
+  'mobile-app': ['iam', 'crypto', 'api-client', 'capacitor'],
+  'fullstack': ['iam', 'storage', 'audit', 'reach', 'scheduler', 'feedback'],
+}
 const PROJECT_NAME_REGEX = /^[a-z0-9-]+$/
 
 /**
@@ -384,27 +389,18 @@ export async function createProject(options: CreateProjectOptions): Promise<void
         ? path.join(projectPath, 'apps', `${resolvedOptions.name}-serv`, '.env.example')
         : path.join(projectPath, '.env.example')
 
-      for (const featureId of resolvedOptions.features) {
-        const configKey = getFeatureConfigKey(featureId)
-        if (!context.isSvelteOnlyApp && configKey && configKey !== 'deploy') {
-          const configPath = path.join(configDir, `_${configKey}.yml`)
-          // fullstack 已用模块配置 helper 渲染完整配置，不能再覆盖 Reach 模板等应用默认值。
-          if (isFullstack && await fse.pathExists(configPath))
-            continue
-          const baseConfig = generateConfigFile(configKey, configs)
-          const renderedConfig = baseConfig
-          await writeFile(configPath, configKey === 'feedback' ? renderedConfig.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${resolvedOptions.name}`) : renderedConfig)
-        }
-      }
-
-      if (!isApiWorkspace && !isFullstack) {
-        // 始终生成 core 配置
-        await writeFile(
-          path.join(configDir, '_core.yml'),
-          generateConfigFile('core', configs),
-        )
-        if (!context.isSvelteOnlyApp)
-          await writeFile(path.join(configDir, '_kit.yml'), generateConfigFile('kit', configs))
+      const enabledConfigs = new Set(['core', ...(context.isSvelteOnlyApp ? [] : resolvedOptions.features.map(getFeatureConfigKey).filter(Boolean))])
+      if (isApiWorkspace || isFullstack)
+        enabledConfigs.add('serv')
+      else if (!context.isSvelteOnlyApp)
+        enabledConfigs.add('kit')
+      for (const configKey of ['core', 'serv', 'kit', 'db', 'cache', 'iam', 'storage', 'audit', 'reach', 'ai', 'vecdb', 'payment', 'scheduler', 'feedback']) {
+        const configPath = path.join(configDir, `_${configKey}.yml`)
+        // workspace 模板已渲染其入口及应用默认值，不能覆盖 Reach 通知模板等配置。
+        if ((isApiWorkspace || isFullstack) && await fse.pathExists(configPath))
+          continue
+        const content = generateConfigFile(configKey, configs, enabledConfigs.has(configKey))
+        await writeFile(configPath, configKey === 'feedback' ? content.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${resolvedOptions.name}`) : content)
       }
 
       const configContents: Record<string, string> = {}
@@ -413,7 +409,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
           configContents[file.slice(1, -4)] = await fse.readFile(path.join(configDir, file), 'utf8')
       }
       const envFeatures: FeatureId[] = context.isSvelteOnlyApp ? [] : isFullstack ? [...new Set<FeatureId>([...resolvedOptions.features, 'reach'])] : resolvedOptions.features
-      const envContents = generateEnvExample(envFeatures, configs, isFullstack, configContents)
+      const envContents = generateEnvExample(envFeatures, configs, true, configContents)
       let envExample = isApiWorkspace
         ? envContents
         : isFullstack
@@ -590,10 +586,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     ? await resolveFrontendTargets(options.frontends, useDefaults, onCancel)
     : []
 
-  // 所有新工程使用完整模块及示例；客户端模板仍遵守自身的服务端隔离边界。
+  // 只启用模板实际使用的模块；纯客户端不展开服务端生命周期依赖。
   let selectedFeatures: FeatureId[] = selectedAppType === 'mobile-app'
-    ? ['iam', 'crypto', 'api-client', 'capacitor']
-    : resolveFeatureDependencies(FULL_FEATURES)
+    ? [...TEMPLATE_FEATURES[selectedAppType]]
+    : resolveFeatureDependencies(TEMPLATE_FEATURES[selectedAppType])
 
   selectedFeatures = selectedFeatures.filter(feature => feature !== 'deploy')
   if (options.deploy !== false)
@@ -1129,7 +1125,9 @@ function generateEnvironmentReadme(): string {
 
 运行参数在 \`.env.example\` 中逐项说明用途、枚举和范围。\`.env\` 为公共基础，\`.env.dev\` / \`.env.test\` / \`.env.prod\` 为环境覆盖，均提交 Git；\`.env.local\` 为本机私有覆盖，不提交 Git。优先级为进程 > \`.env.<mode>.local\` > \`.env.local\` > \`.env.<mode>\` > \`.env\` > YAML。同来源先父 JSON 后细项，高来源整段替换先清除低来源细项。YAML 显式引用 \`HAI_<配置名>_<路径>\` 并保留本地回退，camelCase 不拆词。完整命令、加载优先级和 Provider 切换见 [环境配置](.agents/skills/hai-app-create/development.md#环境配置)。
 
-生产 .env.prod 按已启用模块选择共享 PostgreSQL（明确选择 MySQL 时保留）、Redis、S3、Qdrant，默认使用 Compose 内部服务名 db/cache/storage/vecdb。密码、S3 凭据、模型 Key 与受保护 Qdrant 的 Key 只由私有环境注入；容器外运行覆盖内部连接地址。生产 Reach 必须注入真实 HAI_REACH_PROVIDERS JSON，公共空数组会拒绝启动。AI 自动补全 db+vecdb 依赖，并在二者就绪后初始化，失败逆序清理。
+依赖只包含模板实际使用的模块；config 与 \`.env.example\` 保留所有模块的完整参考，未启用项以注释提供，不进入公共环境默认值。新增功能时添加依赖、启用所需配置，再接入初始化、反序关闭和业务代码；安装依赖不会自动接入模块。纯客户端的服务端配置仅供后续后端集成参考，秘密不得注入浏览器。
+
+生产 .env.prod 按已启用模块选择共享 PostgreSQL（明确选择 MySQL 时保留）、Redis、S3、Qdrant，默认使用 Compose 内部服务名 db/cache/storage/vecdb。密码、S3 凭据、模型 Key 与受保护 Qdrant 的 Key 只由私有环境注入；容器外运行覆盖内部连接地址。生产 Reach 必须注入真实 HAI_REACH_PROVIDERS JSON，公共空数组会拒绝启动。后续通过 hai add ai 补齐 db+vecdb 依赖时，还须在应用入口接入初始化和反序关闭，不能仅安装依赖。
 
 | 用途 | 命令 |
 | --- | --- |
@@ -1189,7 +1187,7 @@ function generateReadme(name: string, appTypeLabel: string, pm: 'pnpm' | 'npm' |
   const staticWebsite = appType === 'website'
     ? `### 静态网站与 GitHub Pages
 
-默认使用Node SSR，包含完整模块和示例。静态发布前先移除服务端业务依赖、初始化及API/actions，保留Core/UI；已有动态模块不能仅打开开关静态发布。
+默认使用Node SSR，只安装展示功能所需的Core/Kit/UI，可直接切换静态发布；完整注释配置不启用模块。后续新增的服务端业务依赖、初始化及API/actions须先移除，已有动态模块不能仅打开开关静态发布。
 
 \`HAI_BUILD_STATIC=1\`显式预渲染，\`PUBLIC_BASE_PATH=/${name}\`指定项目站目录（无末尾/，根站留空）；在PowerShell设置本次构建环境：
 
@@ -1382,7 +1380,7 @@ CLI 在根目录 .env.dev.local、.env.test.local、.env.prod.local 中为 admin
 
 ### 配置扩展
 
-服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、feedback 共 13 份 YAML；构建部署配置统一位于项目根 hai.json。已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。Reach 默认为开发控制台通知，feedback 使用 email 别名；生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
+服务端 \`packages/${name}-serv/config/\` 始终保留 core、serv、kit、db、cache、iam、storage、audit、reach、ai、vecdb、payment、scheduler、feedback 共 14 份 YAML；构建部署配置统一位于项目根 hai.json。只安装管理后台实际使用的模块；已用模块保留工作默认值，未启用模块整份注释，可选字段和替代 Provider 按块注释；根 \`.env.example\` 也保留未启用模块的凭据示例。新增功能时安装依赖并接入初始化、关闭及业务代码。Reach 默认为开发控制台通知，feedback 使用 email 别名；生产按 \`_reach.yml\` 注释替换为 SMTP、短信或 API Provider，并保持名称唯一。
 
 自动生成的 \`.env\` 包含已启用模块的环境参数；YAML 显式引用相同变量并保留本地回退。编辑环境参数优先修改对应 \`.env\`；未启用模块仍保留注释。
 

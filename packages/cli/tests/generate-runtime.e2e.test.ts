@@ -12,8 +12,10 @@ import { fileURLToPath } from 'node:url'
 import { crypto } from '@h-ai/crypto'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
+import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 import { createProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
+import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
 const enabled = process.env.HAI_CLI_RUN_GENERATE_GATES === '1'
 const repository = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
@@ -184,6 +186,22 @@ async function start(cwd: string, args: string[], selectedPort: number): Promise
 }
 
 describe.skipIf(!enabled)('generated route runtime gates', () => {
+  it('website 默认 SSR 在未接入认证和传输加密时可通过 Node 入口运行', async () => {
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    await mkdir(tempParent, { recursive: true })
+    const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
+    roots.push(root)
+    await createProject({ name: 'minimal-site', appType: 'website', cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+    const project = path.join(root, 'minimal-site')
+    await mkdir(path.join(project, 'node_modules/@inlang'), { recursive: true })
+    await symlink(path.join(repository, 'node_modules/@inlang/plugin-message-format'), path.join(project, 'node_modules/@inlang/plugin-message-format'), 'junction')
+    await tool('vite', ['build'], project)
+    const base = await start(project, ['scripts/run-node.mjs', 'dev', '.', 'build/index.js'], await port())
+    expect((await fetch(base)).status).toBe(200)
+    expect((await fetch(`${base}/api/health`)).status).toBe(200)
+  }, 180_000)
+
   it.each(['website', 'api', 'fullstack'] as const)('%s生成的新路由进入实际构建与HTTP入口', async (appType) => {
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
@@ -192,6 +210,12 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
     roots.push(root)
     await createProject({ name: 'runtime-route', appType, frontends: ['web'], cwd: root, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
     const project = path.join(root, 'runtime-route')
+    if (appType === 'website') {
+      // 官网默认不接认证；本场景显式接入 IAM，保留生成业务路由的真实会话验收。
+      await generateFromTemplates(project, buildTemplateContext({ name: 'runtime-route', appType, features: ['iam'], packageManager: 'pnpm', deploy: false }))
+      for (const module of ['db', 'cache', 'iam'])
+        await writeFile(path.join(project, 'config', `_${module}.yml`), generateConfigFile(module))
+    }
     await generate({ type: 'api', name: 'route-probe', cwd: project })
     if (appType !== 'website')
       await generate({ type: 'api', name: 'aardvark-probe', cwd: project })
@@ -292,7 +316,7 @@ describe.skipIf(!enabled)('generated route runtime gates', () => {
       if (appType === 'fullstack') {
         await expectMissing('HAI_CRYPTO_TRANSPORT_SERVERKEYRING', ['hai:crypto:'])
       }
-      // create 固定完整模块后，API 与 Fullstack 都通过真实加密客户端访问。
+      // API 与 Fullstack 的认证场景通过真实加密客户端访问。
       expect((await fetch(`${base}/api/v1/route-probe`)).status).toBe(400)
       expect((await crypto.init()).success).toBe(true)
       const client = crypto.transport.createClient({ keyExchangeUrl: `${base}/api/v1/_hai/key-exchange` })

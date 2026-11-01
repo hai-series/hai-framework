@@ -118,7 +118,8 @@ export function documentConfig(name: string, content: string): string {
     }
   }
   walk(document.contents, [])
-  return documentOptionalConfig(name, changed ? document.toString({ lineWidth: 0 }) : content)
+  // YAML 序列化可能把空注释行写成 "#  "；只清理顶格空注释，不触碰块字符串内容。
+  return documentOptionalConfig(name, changed ? document.toString({ lineWidth: 0 }) : content).replace(/^#[\t ]+$/gm, '#')
 }
 
 /** 注释中的可选字段同样要说明用途与取值；保持单层 #，不启用可选功能。 */

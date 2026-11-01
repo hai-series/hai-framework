@@ -20,12 +20,14 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('完整创建默认', () => {
-  it('website 默认包含完整模块，已移除的功能参数在写文件前拒绝', async () => {
+describe('网站创建默认', () => {
+  it('website 只安装展示功能依赖，已移除的功能参数在写文件前拒绝', async () => {
     const options = { appType: 'website' as const, defaults: true, install: false, git: false, packageManager: 'pnpm' as const, cwd: root }
     await createProject({ ...options, name: 'complete-site' })
     const pkg = JSON.parse(await readFile(path.join(root, 'complete-site/package.json'), 'utf8'))
-    expect(pkg.dependencies).toMatchObject({ '@h-ai/ai': 'catalog:', '@h-ai/feedback': 'catalog:', '@h-ai/reldb': 'catalog:', '@h-ai/iam': 'catalog:' })
+    expect(pkg.dependencies).toMatchObject({ '@h-ai/core': 'catalog:', '@h-ai/kit': 'catalog:', '@h-ai/ui': 'catalog:' })
+    for (const name of ['ai', 'feedback', 'reldb', 'iam'])
+      expect(pkg.dependencies).not.toHaveProperty(`@h-ai/${name}`)
     await expect(createProject(Object.assign({ ...options, name: 'obsolete-site' }, { features: [] }))).rejects.toThrow('create')
     expect(existsSync(path.join(root, 'obsolete-site'))).toBe(false)
   })

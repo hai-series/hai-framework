@@ -6,6 +6,44 @@ import { stringify } from 'yaml'
 import { deploy } from '../src/deploy-main.js'
 
 describe('deploy.scan', () => {
+  it.each([false, true])('注释配置不因传递依赖参与部署，有效环境配置仍可启用 (%s)', async (enabled) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-commented-config-'))
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'commented-config' }))
+      fs.mkdirSync(path.join(root, 'config'))
+      const modules = { db: 'reldb', cache: 'cache', storage: 'storage', vecdb: 'vecdb', iam: 'iam', reach: 'reach' }
+      for (const config of Object.keys(modules))
+        fs.writeFileSync(path.join(root, 'config', `_${config}.yml`), '# # 未启用\n# type: placeholder\n')
+      fs.writeFileSync(path.join(root, '.env.prod'), enabled ? 'HAI_DB=\'{"type":"postgresql"}\'\n' : 'HAI_CORE_ENV=production\n')
+      const edges = Object.fromEntries(Object.values(modules).map(name => [`@h-ai/${name}`, '1']))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ importers: { '.': { dependencies: { '@h-ai/kit': { version: '1' } } } }, packages: { '@h-ai/kit@1': {}, ...Object.fromEntries(Object.keys(edges).map(name => [`${name}@1`, {}])) }, snapshots: { '@h-ai/kit@1': { dependencies: edges }, ...Object.fromEntries(Object.keys(edges).map(name => [`${name}@1`, {}])) } }))
+      const result = await deploy.scan(root, { environment: 'prod' })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.requiredServices).toEqual(enabled ? ['db'] : [])
+        expect(result.data.serviceBackends).toEqual(enabled ? { db: 'postgresql' } : {})
+      }
+    }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
+  })
+
+  it.each([undefined, false, true])('仅在登录配置显式启用 LDAP 时产生部署需求 (%s)', async (enabled) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-deploy-ldap-activation-'))
+    try {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'ldap-activation' }))
+      fs.mkdirSync(path.join(root, 'config'))
+      fs.writeFileSync(path.join(root, 'config/_iam.yml'), stringify({ login: { ldap: enabled }, ldap: { url: 'ldap://directory.test:389' } }))
+      fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify({ importers: { '.': { dependencies: { '@h-ai/iam': { version: '1' } } } }, packages: { '@h-ai/iam@1': {} }, snapshots: { '@h-ai/iam@1': {} } }))
+      const result = await deploy.scan(root)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.requiredServices).toEqual(enabled ? ['ldap'] : [])
+        expect(result.data.middlewares).toEqual(enabled ? [expect.objectContaining({ service: 'ldap', backend: 'ldap' })] : [])
+      }
+    }
+    finally { fs.rmSync(root, { recursive: true, force: true }) }
+  })
+
   it.each([
     { entry: '.', name: 'orders-serv', expected: 'orders-serv' },
     { entry: 'apps/orders-serv', name: 'orders', expected: 'orders' },
@@ -77,7 +115,7 @@ describe('deploy.scan', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.haiModules).toEqual(Object.keys(edges).map(name => `@h-ai/${name}`).sort())
-        expect(result.data.requiredServices).toEqual(['db', 'cache', 'vecdb', 'ldap', 'email'])
+        expect(result.data.requiredServices).toEqual(['db', 'cache', 'vecdb', 'email'])
       }
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
@@ -130,13 +168,13 @@ describe('deploy.scan', () => {
       const result = await deploy.scan(app)
       expect(result.success).toBe(true)
       if (result.success)
-        expect(result.data.requiredServices).toEqual(['db', 'ldap'])
+        expect(result.data.requiredServices).toEqual(['db'])
       Reflect.deleteProperty(lock.snapshots['@h-ai/iam@1'].dependencies, '@h-ai/reldb')
       fs.writeFileSync(path.join(root, 'pnpm-lock.yaml'), stringify(lock))
       const withoutDb = await deploy.scan(app)
       expect(withoutDb.success).toBe(true)
       if (withoutDb.success)
-        expect(withoutDb.data.requiredServices).toEqual(['ldap'])
+        expect(withoutDb.data.requiredServices).toEqual([])
     }
     finally { fs.rmSync(root, { recursive: true, force: true }) }
   })

@@ -31,6 +31,13 @@ it.each(['core', 'serv', 'kit', 'db', 'cache', 'storage', 'iam', 'ai', 'vecdb', 
   expect(yaml).not.toMatch(/^\s*#\s*#/m)
 })
 
+it.each(['ai', 'vecdb', 'payment'])('未启用的 %s 配置仍可恢复，经过模板格式化后没有空注释尾空格', (module) => {
+  const content = generateConfigFile(module, undefined, false)
+  const formatted = documentConfig(module, parameterizeConfig(module, content))
+  expect(formatted).not.toMatch(/[\t ]+$/m)
+  expect(loadConfigText(module, formatted.replace(/^# /gm, ''))).toEqual(loadConfigText(module, generateConfigFile(module)))
+})
+
 it.each([
   ['ai', ['HAI_AI_LLM_PROTOCOL', 'HAI_AI_LLM_MODELS_0_PROTOCOL', 'HAI_AI_KNOWLEDGE_COLLECTION', 'HAI_AI_AUDIO_MODELS_0_BASEURL']],
   ['iam', ['HAI_IAM_LDAP_URL', 'HAI_IAM_LDAP_SEARCHBASE', 'terminalLimits', 'windows']],
