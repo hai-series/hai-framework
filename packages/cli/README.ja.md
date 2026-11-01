@@ -23,12 +23,12 @@
 
 Node.js は `engines`（`^22.23.4 || ^24.22.1 || ^26.12.1`）に合わせ、pnpm 12.11.2 を使用します。PowerShell では `pnpm.cmd` を使用してください。
 
-以下は目標Beta版です。公開チャネルと `1.0.0-beta.1` の提供状況を確認してからインストールしてください。検証対象であることは公開済みの意味ではありません。版を省略するとlatestとなり、Betaを自動選択しません。
+公開チャネルを確認して latest をインストールします。`hai create --help` で対応オプションを確認し、未公開機能は下記のローカル開発手順で検証してください。
 
 ```sh
 pnpm view @h-ai/cli dist-tags
-pnpm view @h-ai/cli@1.0.0-beta.1 version
-pnpm add -g @h-ai/cli@1.0.0-beta.1
+pnpm view @h-ai/cli@latest version
+pnpm add -g @h-ai/cli@latest
 hai --version
 hai --help
 ```
@@ -38,7 +38,7 @@ hai --help
 ### アプリの作成
 
 ```sh
-hai create my-app --type fullstack --frontends web --defaults
+hai create my-app --type fullstack --frontends web
 cd my-app
 pnpm dev
 ```
@@ -101,7 +101,7 @@ hai generate model order
 hai generate migration add-orders
 ```
 
-`hai add` は依存を解決して設定を追加します。`hai init` は不足する設定と AI ファイルを補い、独自内容は保持します。`--force` はモジュール設定を再生成するため、差分を確認して使用してください。
+`hai add` は依存を解決して設定を追加します。`hai init` は不足する設定と AI ファイルを補い、独自内容は保持します。`--force` はモジュール設定を再生成するため、差分を確認して使用してください。 既存モジュールも推移的依存と workspace catalog の不足を検査します。旧版でインストールに失敗した場合は同じコマンドを再実行でき、既存の版・コメント・設定値を保持します。
 
 page は SvelteKit のファイルルートに対応し、api は対象アプリに応じて SvelteKit または serv の共有 contract/procedure を生成します。API/fullstack のルートでは一意なバックエンドを自動選択します。複数候補は `--workspace <パッケージ名または相対パス>` で指定するか、対象 workspace に移動してください。通常の Vite への page/api 生成は拒否します。serv は `--output` を受け付けず、SvelteKit の出力は `src/routes` 内に限定し、独自の `kit.files` は推測せず拒否します。SvelteKit API には `@h-ai/kit` と `zod` が必要です。serv は `@hai-generator` マーカーのある既存の集約入口だけを更新し、未知の構成には手動統合を要求します。名前にパスは指定できません。既存ファイルは `--force` が必要ですが、登録済み業務領域は置換しません。一括検査後に書き込み、失敗時は今回の変更を戻します。マイグレーションは up/down 関数のみ生成するため、実行前にデータへの影響を確認してください。
 
@@ -202,7 +202,7 @@ fullstack 例はアプリ設定で `admin`、`audit_admin`、`config_admin`、`b
 
 feedback.init(config, { collectEvidence }) で業務の本文・ZIP を非同期収集できます。_feedback.yml は businessCollectionTimeoutMs と webhookUrl/webhookSecret/webhookTimeoutMs を提供します。Webhook は永続再試行と詳細画面での状態確認・再試行に対応し、秘密はサーバー非公開環境に保存します。[feedback の例](../feedback/README.ja.md) を参照してください。
 
-`hai create my-app --type fullstack --frontends web --defaults` は問題報告を既定で有効にし、API 工程にも追加引数なしで feedback を含めます。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは `business_operator` に限定します。DB・ストレージ・通知・認証の依存を補い、Fullstack では収集、ページ一覧とサーバー API、API 工程ではサーバー API を生成します。本番では共有 DB と非公開 S3 を使用します。通知は `disabled`、`console`、`reach` を独立に選び、`console` の既定は `metadata` のみです。要約は `consoleContent: summary` を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
+`hai create my-app --type fullstack --frontends web` は問題報告を既定で有効にし、API 工程にも追加引数なしで feedback を含めます。一般会員と業務操作員が報告でき、管理メニューの表示と閲覧・処理・再開・エクスポートは `business_operator` に限定します。DB・ストレージ・通知・認証の依存を補い、Fullstack では収集、ページ一覧とサーバー API、API 工程ではサーバー API を生成します。本番では共有 DB と非公開 S3 を使用します。通知は `disabled`、`console`、`reach` を独立に選び、`console` の既定は `metadata` のみです。要約は `consoleContent: summary` を明示し、実送信が必要な場合に Reach 通路と受信者を設定します。
 
 `hai feedback summary <bundle.zip>`、`inspect`、`evidence --request-id <ID> --page 1 --page-size 20`、`view` で本番へ接続せず分析できます。表示はloopbackのみで待機し、Ctrl+Cで閉じます。
 

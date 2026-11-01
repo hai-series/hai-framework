@@ -19,7 +19,7 @@
   "dashboard_guest": "モバイルユーザー",
   "dashboard_subtitle": "api-serviceのコントラクトでバックエンドを呼び出し、Android / iOSのネイティブ環境で動作します。",
   "dashboard_secure_token_title": "安全なトークン管理",
-  "dashboard_secure_token_desc": "ネイティブビルドは安全なストレージ、Webプレビューはメモリー内セッションを使用します。",
+  "dashboard_secure_token_desc": "ネイティブ版は安全なストレージを使用します。Webプレビューはaccess tokenをメモリー内に、refresh tokenをhttpOnly Cookieで保持します。",
   "dashboard_contract_title": "型付きAPI",
   "dashboard_contract_desc": "api-clientはapi-service-contractにバインドされています。",
   "dashboard_echo_default": "mobile-appからこんにちは",

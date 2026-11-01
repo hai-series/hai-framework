@@ -23,7 +23,7 @@
     "lint:fix": "eslint . --fix",
     "test": "pnpm paraglide:compile && vitest run --passWithNoTests",
     "test:watch": "pnpm paraglide:compile && vitest",
-    "clean": "rimraf dist build android ios .turbo src/lib/paraglide",
+    "clean": "rimraf dist build .turbo src/lib/paraglide",
     "cap:add:android": "cap add android",
     "cap:add:ios": "cap add ios",
     "cap:sync": "pnpm build && cap sync",

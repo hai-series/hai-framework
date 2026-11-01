@@ -14,7 +14,7 @@ import { join } from 'node:path'
 {{#if features.storage}}import { storage } from '@h-ai/storage'
 {{/if}}{{#if features.vecdb}}import { vecdb } from '@h-ai/vecdb'
 {{/if}}import { {{api.contractExportName}} } from '{{api.contractPackageName}}'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { {{api.serviceAppFactoryName}} } from '../src/app.js'
 
@@ -44,6 +44,7 @@ beforeAll(async () => {
 {{/if}}{{#if features.vecdb}}  vecdbRoot = join(tempRoot, 'vecdb')
 {{/if}}
 
+  vi.stubEnv('HAI_SERV_CORS_NATIVEORIGINS', undefined)
   core.init({
     configDir: './config',
     logging: { level: 'warn' },
@@ -82,8 +83,7 @@ beforeAll(async () => {
 {{/if}}
 
   const app = {{api.serviceAppFactoryName}}({
-    transport: 'disabled',{{#if features.iam}}
-    refreshCookie: 'disabled',{{/if}}
+    transport: 'disabled',
   })
   const listening = new Promise<AddressInfo>((resolve) => {
     server = serv.listen(app, {
@@ -98,6 +98,8 @@ beforeAll(async () => {
   client = apiClient.create({{api.contractExportName}})
   const initResult = await client.init({
     baseUrl: `${baseUrl}${servConfig.http.apiPrefix}`,
+    clientName: 'hai-mobile-app',
+    headers: { 'origin': 'capacitor://localhost', 'x-hai-token-transport': 'body' },
     auth: { storage: apiClient.tokenStorage.memory() },
   })
   if (!initResult.success)
@@ -114,6 +116,7 @@ afterAll(async () => {
 {{/if}}{{#if features.cache}}  await cache.close()
 {{/if}}{{#if features.db}}  await reldb.close()
 {{/if}}  rmSync(tempRoot, { recursive: true, force: true })
+  vi.unstubAllEnvs()
 })
 
 describe('{{api.servPackageName}}', () => {
@@ -144,6 +147,29 @@ describe('{{api.servPackageName}}', () => {
   })
 
 {{#if features.iam}}
+  it.each([
+    ['capacitor://localhost', 'hai-mobile-app'],
+    ['https://localhost', 'hai-mobile-app'],
+    ['http://tauri.localhost', 'hai-desktop-app'],
+    ['https://tauri.localhost', 'hai-desktop-app'],
+    ['tauri://localhost', 'hai-desktop-app'],
+  ])('refreshes an expired access token at the default native Origin %s', async (origin, clientName) => {
+    const native = apiClient.create({{api.contractExportName}})
+    try {
+      expect((await native.init({ baseUrl: `${baseUrl}${servConfig.http.apiPrefix}`, clientName, headers: { 'origin': origin, 'x-hai-token-transport': 'body' }, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+      const registration = await apiClient.createAuthActions(native).register(uniqueUser('refresh'))
+      expect(registration.success).toBe(true)
+      if (!registration.success)
+        return
+      expect(registration.data.tokens.refreshToken).toBeTruthy()
+      await native.auth.setTokens({ ...registration.data.tokens, accessToken: 'expired-access-for-test' })
+      expect((await native.iam.auth.currentUser()).success).toBe(true)
+    }
+    finally {
+      await native.close()
+    }
+  })
+
   it('registers a user and returns authenticated echo context', async () => {
     const user = uniqueUser('svc')
     const authActions = apiClient.createAuthActions(client)

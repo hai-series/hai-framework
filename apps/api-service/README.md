@@ -11,7 +11,7 @@
 - 业务 `/api/v1/*` 默认启用 `@h-ai/crypto` 传输加密。
 - 默认放行 `localhost` / `127.0.0.1` 任意端口，以及 Tauri / Capacitor WebView origin 的 CORS 预检与响应头，便于桌面端 / 移动端跨 origin 联调。
 - transport 响应默认通过 `Access-Control-Expose-Headers` 暴露 `X-Encrypted` / `X-Request-Id`，保证浏览器端 client 可以读取并解密响应。
-- 默认启用 httpOnly refresh-token Cookie：登录/注册响应只在 JSON 中返回 access token，refresh token 通过 `Set-Cookie` 管理。
+- 浏览器默认使用 httpOnly refresh-token Cookie：JSON 只返回 access token；受信原生客户端通过正文接收刷新令牌，判定条件见下方认证说明。
 - `/health`、`/ready`、`/openapi.json`、`/docs` 保持明文可访问，便于探针与联调。
 - Node 部署入口为 `src/index.ts`，HTTP App 工厂为 `src/app.ts`。
 
@@ -99,7 +99,7 @@ const client = apiClient.create(apiServiceContract)
 await client.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
-  auth: {}, // 默认 httpOnly cookie 模式；Node/测试如无 Cookie Jar 可显式使用 memory storage
+  auth: {}, // 浏览器默认 httpOnly refresh Cookie 模式
 })
 
 // 公开端点
@@ -119,6 +119,12 @@ await client.close()
 await crypto.close()
 ```
 
+#### 原生与浏览器认证
+
+浏览器将 access token 保存在内存，登录、注册和刷新请求使用跨域凭据接收/发送 httpOnly refresh Cookie；服务端必须配置真实的 CORS Origin 并允许凭据。Node 内置 fetch 不保存 Cookie，自动续期须由宿主提供带 Cookie Jar 的 fetch。
+
+独立原生客户端使用 `hai-mobile-app` / `hai-desktop-app` 标识和 `x-hai-token-transport: body`。API 同时检查这两个字段及 `HAI_SERV_CORS_NATIVEORIGINS` 中的真实 Origin，符合时才在正文返回 refresh token。默认来源涵盖 Capacitor 的 `capacitor://localhost` / `https://localhost` 和 Tauri 的本地来源；live reload 或自定义 scheme/host/端口须显式配置其完整 Origin。原生端使用对应安全存储；桌面示例的原生内存模式重启后需重新登录。
+
 #### 传输加密说明
 
 - 业务接口（默认 `/api/v1/*`）需要使用 `@h-ai/api-client`、`@h-ai/crypto` transport client 或等价的 transport-aware 客户端完成密钥协商。
@@ -126,7 +132,7 @@ await crypto.close()
 - 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；修改配置时，客户端的完整 API Base 与密钥协商路径也需同步。
 - 启用 `auth: {}` 与 `transport: { crypto }` 时，401 后的 `/auth/refresh` 也会复用同一 transport 会话，不会降级为明文刷新。
 - 浏览器 / WebView 跨 origin 联调统一配置 `config/_serv.yml` 的 `cors.origin` 与 `cors.nativeOrigins`。生产环境禁止空值和 `*`，并按规范化后的完整 Origin 精确匹配；不要在 `src/app.ts` 维护业务侧白名单函数。
-- `serv.createRuntimeSecurityPolicy(...)` 将配置收敛为运行时安全上限：生产环境启用 Secure refresh cookie，并关闭 OpenAPI/docs；具体路径与跨端 Header 仍完全由 `_serv.yml` 决定。
+- `serv.createRuntimeSecurityPolicy(...)` 将配置收敛为运行时安全上限：生产环境启用 Secure refresh cookie，并关闭 OpenAPI/docs；路径、来源和凭据策略来自 `_serv.yml`；宿主额外允许 `x-request-client` 和 `x-hai-token-transport` 协议头。
 
 ```yaml
 # config/_serv.yml
@@ -138,7 +144,7 @@ http:
 
 cors:
   origin: '*'
-  nativeOrigins: http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost
+  nativeOrigins: http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost
   allowedHeaders:
     - Authorization
     - X-Client-Id
@@ -180,35 +186,35 @@ await apiClient.init({
 
 服务默认监听 `http://localhost:3000`。
 
-| 路径                                      | 方法               | 说明                                                                 |
-| ----------------------------------------- | ------------------ | -------------------------------------------------------------------- |
-| `/health`                                 | GET                | 存活检查                                                             |
-| `/ready`                                  | GET                | 就绪检查                                                             |
-| `/openapi.json`                           | GET                | OpenAPI 3.1 规范（根路径）                                           |
-| `/docs`                                   | GET                | Scalar 交互式文档（根路径）                                          |
-| `/api/v1/auth/login`                      | POST               | 密码登录，返回 accessToken，并通过 httpOnly Cookie 设置 refreshToken |
-| `/api/v1/auth/logout`                     | POST               | 登出                                                                 |
-| `/api/v1/auth/refresh`                    | POST               | 从 httpOnly Cookie 刷新 Token                                        |
-| `/api/v1/auth/register`                   | POST               | 注册并登录                                                           |
-| `/api/v1/auth/send-otp`                   | POST               | 发送 OTP                                                             |
-| `/api/v1/auth/change-password`            | POST               | 修改当前用户密码                                                     |
-| `/api/v1/auth/me`                         | GET / PUT          | 获取当前用户及最新角色/权限 / 更新当前用户信息                       |
-| `/api/v1/iam/users`                       | GET / POST         | 用户列表 / 创建用户（需权限）                                        |
-| `/api/v1/iam/users/{id}`                  | GET / PUT / DELETE | 查询 / 更新 / 删除用户（需权限）                                     |
-| `/api/v1/iam/roles`                       | GET / POST         | 角色列表 / 创建角色（需权限）                                        |
-| `/api/v1/iam/permissions`                 | GET / POST         | 权限列表 / 创建权限（需权限）                                        |
-| `/api/v1/storage/presigned-urls/upload`   | POST               | 获取上传预签名 URL                                                   |
-| `/api/v1/storage/presigned-urls/download` | POST               | 获取下载预签名 URL                                                   |
-| `/api/v1/storage/files`                   | GET / DELETE       | 文件列表 / 删除文件                                                  |
-| `/api/v1/storage/files/metadata`          | POST               | 查询文件元信息                                                       |
-| `/api/v1/ai/chats/completions`            | POST               | 聊天补全（OpenAI 兼容结构）                                          |
-| `/api/v1/ai/chats/messages`               | POST               | 发送单条消息，直接返回文本                                           |
-| `/api/v1/ai/chats/history`                | POST               | 查询对话历史                                                         |
-| `/api/v1/ai/memories/recall`              | POST               | 召回相关记忆                                                         |
-| `/api/v1/ai/memories/list`                | POST               | 列出记忆                                                             |
-| `/api/v1/ai/sessions/list`                | POST               | 列出会话                                                             |
-| `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）                                         |
-| `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）                              |
+| 路径                                      | 方法               | 说明                                                             |
+| ----------------------------------------- | ------------------ | ---------------------------------------------------------------- |
+| `/health`                                 | GET                | 存活检查                                                         |
+| `/ready`                                  | GET                | 就绪检查                                                         |
+| `/openapi.json`                           | GET                | OpenAPI 3.1 规范（根路径）                                       |
+| `/docs`                                   | GET                | Scalar 交互式文档（根路径）                                      |
+| `/api/v1/auth/login`                      | POST               | 浏览器返回 accessToken 并设置刷新 Cookie；受信原生返回 TokenPair |
+| `/api/v1/auth/logout`                     | POST               | 登出                                                             |
+| `/api/v1/auth/refresh`                    | POST               | 浏览器读取刷新 Cookie；受信原生读取正文 refreshToken             |
+| `/api/v1/auth/register`                   | POST               | 注册并登录                                                       |
+| `/api/v1/auth/send-otp`                   | POST               | 发送 OTP                                                         |
+| `/api/v1/auth/change-password`            | POST               | 修改当前用户密码                                                 |
+| `/api/v1/auth/me`                         | GET / PUT          | 获取当前用户及最新角色/权限 / 更新当前用户信息                   |
+| `/api/v1/iam/users`                       | GET / POST         | 用户列表 / 创建用户（需权限）                                    |
+| `/api/v1/iam/users/{id}`                  | GET / PUT / DELETE | 查询 / 更新 / 删除用户（需权限）                                 |
+| `/api/v1/iam/roles`                       | GET / POST         | 角色列表 / 创建角色（需权限）                                    |
+| `/api/v1/iam/permissions`                 | GET / POST         | 权限列表 / 创建权限（需权限）                                    |
+| `/api/v1/storage/presigned-urls/upload`   | POST               | 获取上传预签名 URL                                               |
+| `/api/v1/storage/presigned-urls/download` | POST               | 获取下载预签名 URL                                               |
+| `/api/v1/storage/files`                   | GET / DELETE       | 文件列表 / 删除文件                                              |
+| `/api/v1/storage/files/metadata`          | POST               | 查询文件元信息                                                   |
+| `/api/v1/ai/chats/completions`            | POST               | 聊天补全（OpenAI 兼容结构）                                      |
+| `/api/v1/ai/chats/messages`               | POST               | 发送单条消息，直接返回文本                                       |
+| `/api/v1/ai/chats/history`                | POST               | 查询对话历史                                                     |
+| `/api/v1/ai/memories/recall`              | POST               | 召回相关记忆                                                     |
+| `/api/v1/ai/memories/list`                | POST               | 列出记忆                                                         |
+| `/api/v1/ai/sessions/list`                | POST               | 列出会话                                                         |
+| `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）                                     |
+| `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）                          |
 
 Storage procedures 使用显式 `authorize` 策略限制到已认证用户的 `users/<encodeURIComponent(userId)>/` 前缀。上传、下载、元数据、删除均传完整 key，列表也必须提供该前缀；空前缀、其它用户 key 和包含未授权 key 的批量请求都会被拒绝。需要管理员跨用户访问时，应在服务端策略中显式检查可信权限。
 

@@ -16,8 +16,20 @@ async function notification(page: Page, email: string, template: string) {
   const messages = await response.json() as { template: string, vars: Record<string, string> }[]
   return messages.findLast(message => message.template === template)?.vars
 }
+
+/** 重载清除内存 access token 后，通过真实刷新和用户查询确认 Cookie 会话恢复。 */
+async function reloadAuthenticatedPage(page: Page, username: string) {
+  const renewed = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/auth/refresh'))
+  const current = page.waitForResponse(response => response.url().endsWith('/auth/me') && response.status() === 200)
+  await page.reload()
+  const [refresh] = await Promise.all([renewed, current])
+  expect(refresh.status()).toBe(200)
+  await expect(page.getByRole('main')).toContainText(username)
+  await expect(page.locator('.login-form, .register-form')).toHaveCount(0)
+}
+
 for (const platform of ['mobile', 'desktop'] as const) {
-  test(`${platform} 注册、邮件验证码登录、密码重置与布局`, async ({ page, baseURL }) => {
+  test(`${platform} 注册、邮件验证码登录、密码重置与布局`, async ({ page, context, baseURL }) => {
     test.setTimeout(90_000)
     const url = platform === 'mobile' ? `${baseURL}/auth/login` : 'http://127.0.0.1:12582/#/login'
     if (platform === 'desktop')
@@ -52,7 +64,9 @@ for (const platform of ['mobile', 'desktop'] as const) {
     await registration.locator('input[type="password"]').nth(1).fill('NativePassword123')
     await registration.locator('button[type="submit"]').click()
     await expect(page).not.toHaveURL(/register/)
-    // Web 预览采用内存 TokenStore；刷新后重新走认证入口。
+    await reloadAuthenticatedPage(page, username)
+    // 后续场景使用新的匿名状态；页面重载不会撤销刷新 Cookie。
+    await context.clearCookies()
     await page.reload()
     await page.goto(url)
     await expect(page.locator('#login-username')).toBeVisible()
@@ -72,6 +86,7 @@ for (const platform of ['mobile', 'desktop'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop' ? 280 : 2))
     }
+    await context.clearCookies()
     await page.reload()
     await page.goto(url)
     await expect(page.locator('#login-username')).toBeVisible()
@@ -107,5 +122,6 @@ for (const platform of ['mobile', 'desktop'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       expect((await page.locator('main').boundingBox())!.width).toBeGreaterThan(availableWidth - (platform === 'desktop' ? 280 : 2))
     }
+    await reloadAuthenticatedPage(page, username)
   })
 }

@@ -54,7 +54,7 @@ cors:
   origin: ${HAI_SERV_CORS_ORIGIN:*}
   # 说明：允许使用原生凭据通道的完整 Origin 列表
   # 取值：字符串
-  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
   # 说明：是否允许跨域请求携带凭据
   # 取值：true | false
   credentials: ${HAI_SERV_CORS_CREDENTIALS:true}

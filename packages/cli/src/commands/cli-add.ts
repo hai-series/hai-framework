@@ -12,11 +12,11 @@ import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
-import { parse } from 'yaml'
+import { parse, parseDocument } from 'yaml'
 import { cliM } from '../cli-i18n.js'
 import { detectPackageManager, fileExists, getCliVersion, writeCliError, writeCliMessage, writeFile } from '../cli-utils.js'
 import { generateConfigFile, generateProductionEnvironment } from './cli-config-templates.js'
-import { detectProject } from './cli-create.js'
+import { detectProject, resolveFeatureDependencies } from './cli-create.js'
 import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
@@ -54,9 +54,9 @@ export interface AddModuleOptions extends GlobalOptions {
 }
 
 // 可添加的模块与对应包
-const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
+const MODULE_MAP: Record<string, { packages: string[], configKey?: string, description: string }> = {
   // iam 依赖 crypto（password hash）/ db（user 存储）/ cache（session 缓存）
-  'iam': { packages: ['@h-ai/iam'], deps: ['crypto', 'db', 'cache'], configKey: 'iam', get description() {
+  'iam': { packages: ['@h-ai/iam'], configKey: 'iam', get description() {
     return cliM('cli_featureIamName')
   } },
   // 'db' 和 'reldb' 都映射到 @h-ai/reldb，兼容用户习惯（hai add db 和 hai add reldb 均可）
@@ -69,13 +69,13 @@ const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKe
   'cache': { packages: ['@h-ai/cache'], configKey: 'cache', get description() {
     return cliM('cli_featureCacheName')
   } },
-  'ai': { packages: ['@h-ai/ai'], deps: ['db', 'vecdb'], configKey: 'ai', get description() {
+  'ai': { packages: ['@h-ai/ai'], configKey: 'ai', get description() {
     return cliM('cli_featureAiName')
   } },
   'storage': { packages: ['@h-ai/storage'], configKey: 'storage', get description() {
     return cliM('cli_featureStorageName')
   } },
-  'crypto': { packages: ['@h-ai/crypto'], deps: ['db'], get description() {
+  'crypto': { packages: ['@h-ai/crypto'], get description() {
     return cliM('cli_featureCryptoName')
   } },
   'kit': { packages: ['@h-ai/kit'], get description() {
@@ -96,13 +96,13 @@ const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKe
   'reach': { packages: ['@h-ai/reach'], configKey: 'reach', get description() {
     return cliM('cli_featureReachName')
   } },
-  'feedback': { packages: ['@h-ai/feedback'], deps: ['crypto', 'db', 'cache', 'storage', 'iam'], configKey: 'feedback', get description() {
+  'feedback': { packages: ['@h-ai/feedback'], configKey: 'feedback', get description() {
     return cliM('cli_featureFeedbackName')
   } },
-  'scheduler': { packages: ['@h-ai/scheduler'], deps: ['db'], configKey: 'scheduler', get description() {
+  'scheduler': { packages: ['@h-ai/scheduler'], configKey: 'scheduler', get description() {
     return cliM('cli_featureSchedulerName')
   } },
-  'audit': { packages: ['@h-ai/audit'], deps: ['db'], configKey: 'audit', get description() {
+  'audit': { packages: ['@h-ai/audit'], configKey: 'audit', get description() {
     return cliM('cli_featureAuditName')
   } },
   'payment': { packages: ['@h-ai/payment'], configKey: 'payment', get description() {
@@ -170,17 +170,65 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       moduleName = selected as FeatureId
     }
 
-    const moduleDef = MODULE_MAP[moduleName]
-    if (!moduleDef) {
+    const baseDefinition = MODULE_MAP[moduleName]
+    if (!baseDefinition) {
       writeCliError(chalk.red(cliM('cli_addUnknownModule', { params: { module: moduleName } })))
       writeCliMessage(cliM('cli_addAvailableModules', { params: { modules: Object.keys(MODULE_MAP).join(', ') } }))
       return
     }
 
+    const selected = baseDefinition.configKey === 'db' ? 'db' : moduleName
+    const moduleDef = { ...baseDefinition, deps: resolveFeatureDependencies([selected]).filter(feature => feature !== selected) }
+
     const { generateProjectAiSupport, resolveSkillNamesForPackages } = await import('./cli-skill-templates.js')
 
+    // 收集传递依赖；旧版失败可能只写入了所选模块，也必须继续修复。
+    const allPackages = new Set(moduleDef.packages)
+    for (const dep of moduleDef.deps) {
+      for (const name of MODULE_MAP[dep]?.packages ?? [])
+        allPackages.add(name)
+    }
+
+    const pkgPath = path.join(cwd, 'package.json')
+    const pkg = await fse.readJson(pkgPath)
+    if (!pkg.dependencies)
+      pkg.dependencies = {}
+
+    const existingHaiSpecifier = Object.entries(pkg.dependencies as Record<string, string>)
+      .find(([pkgName]) => pkgName.startsWith('@h-ai/'))?.[1]
+
+    // 已存在的 @h-ai/* 依赖若使用 catalog:，新增模块保持一致；否则固定当前 CLI 对应版本。
+    const depVersion = existingHaiSpecifier === 'catalog:' ? 'catalog:' : getCliVersion()
+
+    let catalogUpdated = false
+    if (depVersion === 'catalog:') {
+      // workspace 子包的 catalog 归属根目录；保留已有条目和 YAML 注释。
+      let workspaceRoot = path.resolve(cwd)
+      while (!await fileExists(path.join(workspaceRoot, 'pnpm-workspace.yaml'))) {
+        const parent = path.dirname(workspaceRoot)
+        if (parent === workspaceRoot) {
+          workspaceRoot = path.resolve(cwd)
+          break
+        }
+        workspaceRoot = parent
+      }
+      const workspacePath = path.join(workspaceRoot, 'pnpm-workspace.yaml')
+      const document = parseDocument(await fileExists(workspacePath) ? await fse.readFile(workspacePath, 'utf8') : 'packages: []\n')
+      const currentVersion = document.getIn(['catalog', '@h-ai/core'])
+      const version = typeof currentVersion === 'string' && /^[~^]?\d+\.\d+\.\d+/.test(currentVersion) ? currentVersion : getCliVersion()
+      const dependencies: Record<string, string> = { ...pkg.dependencies, ...pkg.devDependencies }
+      const names = [...new Set([...allPackages, ...Object.keys(dependencies).filter(name => name.startsWith('@h-ai/') && dependencies[name] === 'catalog:')])]
+        .filter(name => !document.hasIn(['catalog', name]))
+      for (const name of names)
+        document.setIn(['catalog', name], version)
+      if (names.length > 0) {
+        await writeFile(workspacePath, document.toString())
+        catalogUpdated = true
+      }
+    }
+
     // 检查是否已安装
-    if (moduleDef.packages.every(p => project.haiPackages.includes(p))) {
+    if (!catalogUpdated && [...allPackages].every(p => project.haiPackages.includes(p))) {
       if (moduleName === 'deploy')
         await ensureDeployConfig(cwd)
       const generatedFiles = await generateProjectAiSupport(
@@ -203,32 +251,8 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       return
     }
 
-    // 收集所有需要安装的包（含依赖模块）
-    const allPackages = new Set(moduleDef.packages)
-    if (moduleDef.deps) {
-      for (const dep of moduleDef.deps) {
-        const depDef = MODULE_MAP[dep]
-        if (depDef) {
-          for (const pkg of depDef.packages) {
-            allPackages.add(pkg)
-          }
-        }
-      }
-    }
-
     // 更新 package.json
     spinner.start(cliM('cli_addUpdateManifest'))
-    const pkgPath = path.join(cwd, 'package.json')
-    const pkg = await fse.readJson(pkgPath)
-    if (!pkg.dependencies)
-      pkg.dependencies = {}
-
-    const existingHaiSpecifier = Object.entries(pkg.dependencies as Record<string, string>)
-      .find(([pkgName]) => pkgName.startsWith('@h-ai/'))?.[1]
-
-    // 已存在的 @h-ai/* 依赖若使用 catalog:，新增模块保持一致；否则固定当前 CLI 对应版本。
-    const depVersion = existingHaiSpecifier === 'catalog:' ? 'catalog:' : getCliVersion()
-
     for (const pkgName of allPackages) {
       if (pkgName === '@h-ai/deploy') {
         pkg.devDependencies ??= {}
@@ -260,16 +284,14 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     }
 
     // 生成依赖模块的配置文件
-    if (moduleDef.deps) {
-      for (const dep of moduleDef.deps) {
-        const depDef = MODULE_MAP[dep]
-        if (depDef?.configKey) {
-          const depConfigPath = path.join(cwd, 'config', `_${depDef.configKey}.yml`)
-          if (!(await fileExists(depConfigPath))) {
-            const content = generateConfigFile(depDef.configKey)
-            await writeFile(depConfigPath, content)
-            writeCliMessage(chalk.gray(cliM('cli_addDependencyConfig', { params: { config: depDef.configKey } })))
-          }
+    for (const dep of moduleDef.deps) {
+      const depDef = MODULE_MAP[dep]
+      if (depDef?.configKey) {
+        const depConfigPath = path.join(cwd, 'config', `_${depDef.configKey}.yml`)
+        if (!(await fileExists(depConfigPath))) {
+          const content = generateConfigFile(depDef.configKey)
+          await writeFile(depConfigPath, content)
+          writeCliMessage(chalk.gray(cliM('cli_addDependencyConfig', { params: { config: depDef.configKey } })))
         }
       }
     }
@@ -294,7 +316,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     const previousProduction = await fileExists(productionPath) ? await fse.readFile(productionPath, 'utf8') : ''
     const configured = new Set([...previousProduction.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map(match => match[1]))
     const previousValues = parseEnv(previousProduction)
-    const production = generateProductionEnvironment([moduleName, ...(moduleDef.deps ?? [])] as FeatureId[], previousValues.HAI_DB_TYPE === 'mysql' ? { db: { type: 'mysql', database: previousValues.HAI_DB_DATABASE } } : undefined)
+    const production = generateProductionEnvironment([selected, ...moduleDef.deps], previousValues.HAI_DB_TYPE === 'mysql' ? { db: { type: 'mysql', database: previousValues.HAI_DB_DATABASE } } : undefined)
       .split('\n')
       .filter(line => !/^[A-Z][A-Z0-9_]*=/.test(line) || !configured.has(line.split('=')[0]))
     await writeFile(productionPath, `${previousProduction.trimEnd()}\n\n${production.join('\n')}`)

@@ -24,7 +24,7 @@
   "status_runtime_web": "ブラウザープレビュー",
   "status_token_label": "トークン保存",
   "status_token_native": "安全なストレージ",
-  "status_token_memory": "メモリー内保存",
+  "status_token_memory": "メモリー内access token + httpOnly Cookie",
   "tasks_title": "本日のタスク",
   "tasks_sync": "バックエンドAPIを接続",
   "tasks_polish": "モバイルUXを改善",

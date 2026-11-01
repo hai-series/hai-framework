@@ -33,7 +33,7 @@ http:
 
 cors:
   origin: ${HAI_SERV_CORS_ORIGIN:*}
-  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
+  nativeOrigins: ${HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}
 {{#if features.iam}}  credentials: ${HAI_SERV_CORS_CREDENTIALS:true}
 {{else}}  credentials: ${HAI_SERV_CORS_CREDENTIALS:false}
 {{/if}}  allowedHeaders:

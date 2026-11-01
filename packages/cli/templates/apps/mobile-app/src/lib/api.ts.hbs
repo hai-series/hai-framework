@@ -1,6 +1,6 @@
 /**
  * {{projectName}} — API 客户端初始化。
- * Web 预览仅使用内存 TokenStore；原生端使用 Capacitor 安全存储。
+ * Web 预览使用内存 access token + httpOnly refresh Cookie；原生端使用 Capacitor 安全存储。
  * 原生存储失败会拒绝 Promise；登录/退出调用方须处理 auth.setTokens/clear 失败并释放界面 loading。
  */
 import { apiClient } from '@h-ai/api-client'
@@ -56,7 +56,7 @@ export function resolveApiBase(): string {
 }
 
 /**
- * 查询实际 Capacitor 平台，决定安全原生存储或 Web 内存存储。
+ * 查询实际 Capacitor 平台，决定安全原生存储或 Web Cookie 刷新通道。
  * @returns 是否处于 Capacitor 原生平台；浏览器预览返回 false。
  * @throws Error - 平台模块加载或检测失败时拒绝 Promise，不伪装为 Web 模式。
  * @example 模块内部上下文
@@ -74,7 +74,7 @@ export async function usesNativeTokenStorage(): Promise<boolean> {
 
 /**
  * 按真实平台创建 TokenStorage；绑定 client 后通过 client.auth 变更身份。
- * @returns 原生安全存储或 Web 内存存储；其方法的读写故障继续拒绝 Promise。
+ * @returns 原生安全存储或内存 access token + httpOnly refresh Cookie；其方法的读写故障继续拒绝 Promise。
  * @throws Error - 平台检测或存储工厂失败时拒绝，不改用较弱的持久化方式。
  * @example 模块内部上下文
  * ```ts
@@ -86,7 +86,7 @@ async function createTokenStorage() {
   if (await usesNativeTokenStorage())
     return createCapacitorTokenStorage()
 
-  return apiClient.tokenStorage.memory()
+  return apiClient.tokenStorage.httpOnlyCookie()
 }
 
 /**
@@ -137,6 +137,7 @@ export async function initApi(): Promise<void> {
  * ```
  */
 async function initialize(): Promise<void> {
+  const native = await usesNativeTokenStorage()
   const storage = await createTokenStorage()
 {{#if features.crypto}}
   const transport = resolveTransport()
@@ -149,6 +150,8 @@ async function initialize(): Promise<void> {
     }
     const result = await apiClient.init({
       baseUrl: resolveApiBase(),
+      clientName: 'hai-mobile-app',
+      headers: native ? { 'x-hai-token-transport': 'body' } : {},
       auth: { storage },
       ...(transport ? { transport } : {}),
     })
@@ -169,7 +172,7 @@ async function initialize(): Promise<void> {
     throw error
   }
 {{else}}
-  const result = await apiClient.init({ baseUrl: resolveApiBase(), auth: { storage } })
+  const result = await apiClient.init({ baseUrl: resolveApiBase(), clientName: 'hai-mobile-app', headers: native ? { 'x-hai-token-transport': 'body' } : {}, auth: { storage } })
   if (!result.success)
     throw new Error(result.error.message)
   initialized = true

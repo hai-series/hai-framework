@@ -13,7 +13,7 @@ interface MobileClient {
 
 const template = readFileSync(new URL('../templates/apps/mobile-app/src/lib/api.ts.hbs', import.meta.url), 'utf8')
 
-function instantiate(options: { encrypted?: boolean, transport?: string } = {}) {
+function instantiate(options: { encrypted?: boolean, transport?: string, native?: boolean } = {}) {
   const context = buildTemplateContext({ name: 'mobile', appType: 'mobile-app', features: options.encrypted === false ? ['api-client', 'capacitor'] : ['iam'], packageManager: 'pnpm' })
   const source = Handlebars.compile(template)(context)
   // Vite 的 import.meta.env 是编译期入口；仅把该环境边界替换为可注入绑定。
@@ -35,10 +35,10 @@ function instantiate(options: { encrypted?: boolean, transport?: string } = {}) 
     }),
   }
   const client = {
-    tokenStorage: { memory: () => {
+    tokenStorage: { httpOnlyCookie: () => {
       if (state.storageFailure)
         throw new Error('Storage unavailable')
-      return { kind: 'memory' }
+      return { kind: 'httpOnlyCookie' }
     } },
     init: vi.fn(async (_config: Record<string, unknown>) => {
       calls.push('client.init')
@@ -63,7 +63,7 @@ function instantiate(options: { encrypted?: boolean, transport?: string } = {}) 
       if (name === '@h-ai/capacitor')
         return { createCapacitorTokenStorage: () => ({ kind: 'native' }) }
       if (name === '@capacitor/core')
-        return { Capacitor: { isNativePlatform: () => false } }
+        return { Capacitor: { isNativePlatform: () => options.native === true } }
       throw new Error(`Unexpected template import: ${name}`)
     },
   })
@@ -73,6 +73,17 @@ function instantiate(options: { encrypted?: boolean, transport?: string } = {}) 
 }
 
 describe('generated mobile crypto transport', () => {
+  it.each([false, true])('selects the platform token storage and refresh channel (native=%s)', async (native) => {
+    const fixture = instantiate({ native })
+    await fixture.application.initApi()
+    expect(fixture.client.init.mock.calls[0]?.[0]).toMatchObject({
+      clientName: 'hai-mobile-app',
+      auth: { storage: { kind: native ? 'native' : 'httpOnlyCookie' } },
+      headers: native ? { 'x-hai-token-transport': 'body' } : {},
+    })
+    await fixture.application.closeApi()
+  })
+
   it('iAM 模板补充 crypto catalog，默认加密并在客户端之后释放 crypto', async () => {
     const fixture = instantiate()
     expect(fixture.context.haiCatalogPackages['@h-ai/crypto']).toBeDefined()

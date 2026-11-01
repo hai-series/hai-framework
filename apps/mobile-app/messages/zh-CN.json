@@ -19,7 +19,7 @@
   "dashboard_guest": "移动端用户",
   "dashboard_subtitle": "通过 api-service contract 调用后端，适配 Android / iOS 原生壳。",
   "dashboard_secure_token_title": "安全凭证",
-  "dashboard_secure_token_desc": "原生端使用安全存储，Web 预览使用内存会话。",
+  "dashboard_secure_token_desc": "原生端使用安全存储；Web 预览的 access token 在内存中，refresh token 由 httpOnly Cookie 管理。",
   "dashboard_contract_title": "Typed API",
   "dashboard_contract_desc": "api-client 绑定 api-service-contract。",
   "dashboard_echo_default": "Hello from mobile-app",
