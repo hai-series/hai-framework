@@ -71,7 +71,11 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
     expect(config).toContain('id: coding')
     expect(config).toContain('HAI_AI_LLM_MODELS_2_PROTOCOL:responses')
     expect(config).toContain('HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0_MAINBRANCH:trunk')
-    expect(loadConfigText<{ acp?: unknown }>('ai', config).acp).toBeUndefined()
+    // 默认工程不接入 AI；按生成 README 的约定去掉一层外层注释后，配置才进入加载结果。
+    expect(loadConfigText('ai', config)).toBeNull()
+    const enabledConfig = loadConfigText<{ llm: { model: string, protocol: string }, acp?: unknown }>('ai', config.replace(/^# /gm, ''))
+    expect(enabledConfig.llm).toMatchObject({ model: 'gpt-4o-mini', protocol: 'chat' })
+    expect(enabledConfig.acp).toBeUndefined()
     const env = await readFile(path.join(appType === 'api' ? service : project, '.env.example'), 'utf8')
     expect(env).toContain('HAI_AI_ACP_AGENTS_0_ID')
     expect(env).toContain('HAI_AI_ACP_WORKSPACES_0_ID')

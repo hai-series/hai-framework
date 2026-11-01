@@ -465,8 +465,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   #     maxTokens: 4096
   #     temperature: 0.7
   #     timeout: 60000
-  #     # 能力来自供应商确认；未知时省略，不能用 maxTokens 预算猜容量。
-  #     capabilities:
+  #     capabilities: # 能力来自供应商确认；未知时省略，不能用 maxTokens 预算猜容量。
   #       contextWindow: 128000
   #       maxOutputTokens: 16384
   #       inputModalities: [text, image]
@@ -477,8 +476,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   #   - id: smart
   #     model: gpt-4o
   #     apiKey: ''
-  #   # Codex 使用独立的 Responses 端点；按实际服务填写型号、地址和密钥。
-  #   - id: coding
+  #   - id: coding # Codex 使用独立的 Responses 端点；按实际服务填写型号、地址和密钥。
   #     model: your-coding-model
   #     protocol: responses
   #     baseUrl: https://your-responses-service.example/v1
