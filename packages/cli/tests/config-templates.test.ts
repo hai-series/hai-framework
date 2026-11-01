@@ -14,6 +14,20 @@ import { generateConfigFile, generateEnvExample } from '../src/commands/cli-conf
 import { loadConfigText } from './helpers/config.js'
 
 describe('generateConfigFile', () => {
+  it('aI 模板和环境示例保留 ACP 与模型能力配置，默认不启动 Agent', () => {
+    const config = generateConfigFile('ai')
+    expect(config).toContain('# acp:')
+    expect(config).toContain('HAI_AI_ACP_PROMPTTIMEOUT')
+    expect(config).toContain('#   agents:')
+    expect(config).toContain('#   workspaces:')
+    expect(config).toContain('#   servers:')
+    expect(config).toContain('resources.md')
+    expect(config).toContain('contextWindow:')
+    const env = generateEnvExample(['ai'])
+    expect(env).toContain('HAI_AI_ACP_REQUESTTIMEOUT')
+    expect(env).toContain('HAI_AI_LLM_MODELS_0_CAPABILITIES_CONTEXTWINDOW')
+    expect(loadConfigText<{ acp?: unknown }>('ai', config).acp).toBeUndefined()
+  })
   it.each([
     ['core', CoreConfigSchema],
     ['db', ReldbConfigSchema],

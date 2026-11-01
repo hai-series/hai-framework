@@ -461,8 +461,23 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   #     maxTokens: 4096
   #     temperature: 0.7
   #     timeout: 60000
+  #     # 能力来自供应商确认；未知时省略，不能用 maxTokens 预算猜容量。
+  #     capabilities:
+  #       contextWindow: 128000
+  #       maxOutputTokens: 16384
+  #       inputModalities: [text, image]
+  #       outputModalities: [text]
+  #       toolCalling: true
+  #       reasoning:
+  #         supported: false
   #   - id: smart
   #     model: gpt-4o
+  #     apiKey: ''
+  #   # Codex 使用独立的 Responses 端点；按实际服务填写型号、地址和密钥。
+  #   - id: coding
+  #     model: your-coding-model
+  #     protocol: responses
+  #     baseUrl: https://your-responses-service.example/v1
   #     apiKey: ''
 
   # 场景模型映射：普通对话用 fast，复杂推理用 smart；值对应上方 models 的 id。
@@ -481,7 +496,39 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
   # embedding / rerank / vision 须在 models 中声明对应厂商模型，不能只填写场景 ID。
 
 # 可选子模块只取消需要的块；生产环境先初始化共享数据库与网络向量库，再初始化 AI。
+# ACP 仅服务端使用；agents/workspaces 可写配置或通过 ai.acp 保存数据库，配置同 ID 优先且只读。
+# 模型、MCP、检索源清单同样合并两份来源，详见 .agents/skills/hai-ai/resources.md。
+# embedded 在本机运行原生进程；builtin-service 使用 Podman 优先的容器和持久 volume；
+# custom-service 连接原生 HTTP/WS 服务，不注入模型。详见 .agents/skills/hai-ai/acp.md。
+# acp:
+#   requestTimeout: 30000
+#   promptTimeout: 600000
+#   cancelTimeout: 5000
+#   maxContentBytes: 8388608
+#   maxPendingEvents: 1024
+#   agents:
+#     - id: coder
+#       name: Codex
+#       mode: embedded
+#       adapter: codex
+#       modelIds: [coding]
+#   workspaces:
+#     - id: project
+#       storage:
+#         type: directory
+#         path: /srv/projects/project
+#       repositories:
+#         - id: api
+#           url: https://git.example.com/team/api.git
+#           mainBranch: trunk
 # mcp:
+#   servers:
+#     - id: docs
+#       name: Docs
+#       transport: stdio
+#       command: docs-mcp
+#       environmentRefs:
+#         API_TOKEN: DOCS_API_TOKEN
 #   server:
 #     name: my-app
 #     version: 1.0.0

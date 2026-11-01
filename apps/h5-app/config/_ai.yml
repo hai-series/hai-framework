@@ -5,6 +5,17 @@
 # 说明：LLM 配置（可选，所有字段有默认值）
 # 取值：配置块（填写下方缩进字段）
 llm:
+  # 可选 ACP 模型；取消注释前按实际 Responses 服务填写，不能沿用仅支持 Chat 的端点。
+  # 配置资源同 ID 优先且只读；数据库模型使用 ai.llm.models 管理。
+  # models: # 说明：多模型配置列表（各字段可选，未指定时回退到全局默认值）；取值：列表（每项以 - 开头）
+  #   - id: coding # 说明：模型唯一标识（用于 ModelResolver 解析）；取值：字符串
+  #     model: ${HAI_AI_LLM_MODELS_0_MODEL:your-coding-model} # 说明：模型名称（传给 API 的实际模型名）；取值：字符串
+  #     protocol: responses # 说明：API 协议（可选，未指定时回退全局 `protocol`，再回退 `chat`；决定走 Chat Completions / Responses / Anthropic）；取值：字符串；取值：chat | responses | anthropic
+  #     baseUrl: ${HAI_AI_LLM_MODELS_0_BASEURL:https://your-responses-service.example/v1} # 说明：Base URL 覆盖（可选）；取值：字符串；格式 uri
+  #     apiKey: ${HAI_AI_LLM_MODELS_0_APIKEY:} # 说明：API Key 覆盖（可选，未提供时使用全局配置）；取值：字符串或空值
+  # 能力元数据可在模型项 capabilities 中填写，必须以供应商实际能力为准。
+  # DeepSeek Harness 还要求 contextWindow/maxOutputTokens/inputModalities/outputModalities/
+  # toolCalling/reasoning；支持推理时需列出 efforts，详见 hai-ai/acp.md。
   # 说明：默认服务密钥；模型项可单独覆盖。未填写时读取 HAI_AI_LLM_APIKEY 或对应供应商密钥变量，真实值只放服务端。
   # 取值：字符串或空值
   apiKey: ${HAI_AI_LLM_APIKEY:}
@@ -23,3 +34,34 @@ llm:
   # 说明：单次回答最多生成多少 Token，默认 4096；模型项可覆盖，需符合供应商限制。
   # 取值：数字；> 0
   maxTokens: ${HAI_AI_LLM_MAXTOKENS:1024}
+
+# ACP 接入示例：配置与数据库清单合并，同 ID 配置优先且只读。
+# 使用前初始化共享 RelDB/VecDB，再初始化 AI；这些注释不会自动启动智能体。
+# 接入/容器/worktree 示例见 packages/cli/templates/skills/hai-ai/acp.md；
+# 模型、MCP、检索源清单管理见同目录 resources.md（路径相对于仓库根）。
+# acp: # 说明：ACP 会话与执行限制（仅 Node 服务端）。；取值：配置块（填写下方缩进字段）
+#   requestTimeout: 30000 # 说明：握手和控制请求超时，毫秒。；取值：整数；> 0
+#   promptTimeout: 600000 # 说明：单轮任务超时，毫秒。；取值：整数；> 0
+#   agents: # 说明：配置文件定义的只读智能体，与数据库记录按 ID 合并。；取值：列表（每项以 - 开头）
+#     - id: coder # 说明：清单中的唯一 ID；同时用于受管理目录名。；取值：字符串；正则 ^[a-z0-9][\w-]{0,95}$
+#       name: Codex # 说明：智能体的可读名称。；取值：字符串；最小字符数 1
+#       mode: embedded # 说明：接入模式：自定义远程服务、本机内嵌进程或托管容器。；取值：字符串；取值：custom-service | embedded | builtin-service
+#       adapter: codex # 说明：原生配置适配器名称，默认 generic。；取值：字符串；最小字符数 1
+#       modelIds: [coding] # 说明：绑定 Hai LLM 模型 ID；默认空数组。；取值：列表（每项以 - 开头）
+#   workspaces: # 说明：配置文件定义的只读工作区，与数据库记录按 ID 合并。；取值：列表（每项以 - 开头）
+#     - id: project # 说明：清单中的唯一 ID；同时用于受管理目录名。；取值：字符串；正则 ^[a-z0-9][\w-]{0,95}$
+#       storage: # 说明：持久存储位置；directory 供本机，volume 供托管容器。；取值：配置块（填写下方缩进字段）
+#         type: directory # 说明：存储类型判别字段。；取值：字符串；取值：directory | volume
+#         path: /srv/projects/project # 改为本机绝对目录；Windows 可用 C:/projects/project。 # 说明：本机绝对或相对目录，运行时归一化为真实绝对路径。；取值：字符串；最小字符数 1
+#       repositories: # 说明：多个 Git 工程；默认空数组，不使用 Git 时仅创建文件目录。；取值：列表（每项以 - 开头）
+#         - id: api # 说明：清单中的唯一 ID；同时用于受管理目录名。；取值：字符串；正则 ^[a-z0-9][\w-]{0,95}$
+#           url: https://git.example.com/team/api.git # 说明：远程地址，不允许命令选项和换行。；取值：字符串；最小字符数 1
+#           mainBranch: trunk # 必须明确每个工程的主分支。 # 说明：该工程明确指定的主分支，更新和 merge-main 发布均使用此值。；取值：字符串；最小字符数 1；最大字符数 240
+# mcp: # 说明：MCP 配置；取值：配置块（填写下方缩进字段）
+#   servers: # 说明：外部 MCP 服务只读清单；与数据库记录合并供受管 Agent 使用。；取值：列表（每项以 - 开头）
+#     - id: docs # 说明：服务唯一标识。；取值：字符串；最小字符数 1
+#       name: Docs # 说明：传给原生 MCP 客户端的服务名。；取值：字符串；最小字符数 1
+#       transport: stdio # 说明：原生 MCP 传输类型。；取值：字符串；取值：stdio | http | sse
+#       command: docs-mcp # 说明：stdio 程序路径；仅可信服务端配置。；取值：字符串；最小字符数 1
+#       environmentRefs: # 说明：stdio 变量名到宿主凭据变量名的映射。；取值：配置块（填写下方缩进字段）
+#         API_TOKEN: DOCS_API_TOKEN # 凭据只从服务端环境读取。

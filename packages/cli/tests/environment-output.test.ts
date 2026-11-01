@@ -57,6 +57,31 @@ describe('generated environment profiles', () => {
 })
 
 describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environment output gates', () => {
+  it.each(['website', 'api', 'fullstack'] as const)('%s 真实输出包含 ACP 配置、环境变量和可读取的接入指南', async (appType) => {
+    const root = await fixture()
+    const name = `ai-${appType}`
+    const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', name, '--type', appType, '--defaults', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
+    expect(created.error).toBeUndefined()
+    expect(created.status, created.stderr).toBe(0)
+    const project = path.join(root, name)
+    const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
+    const config = await readFile(path.join(service, 'config/_ai.yml'), 'utf8')
+    expect(config).toContain('# acp:')
+    expect(config).toContain('HAI_AI_ACP_AGENTS_0_MODELIDS_0:coding')
+    expect(config).toContain('id: coding')
+    expect(config).toContain('HAI_AI_LLM_MODELS_2_PROTOCOL:responses')
+    expect(config).toContain('HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0_MAINBRANCH:trunk')
+    expect(loadConfigText<{ acp?: unknown }>('ai', config).acp).toBeUndefined()
+    const env = await readFile(path.join(appType === 'api' ? service : project, '.env.example'), 'utf8')
+    expect(env).toContain('HAI_AI_ACP_AGENTS_0_ID')
+    expect(env).toContain('HAI_AI_ACP_WORKSPACES_0_ID')
+    expect(env).toContain('HAI_AI_LLM_MODELS_0_CAPABILITIES_CONTEXTWINDOW')
+    for (const guide of ['acp.md', 'resources.md']) {
+      const text = await readFile(path.join(project, '.agents/skills/hai-ai', guide), 'utf8')
+      expect(text).toContain('ai.')
+    }
+  })
+
   it('fresh CLI Node 入口生成的 API 环境文件可由 Core 消费', async () => {
     const root = await fixture()
     const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })

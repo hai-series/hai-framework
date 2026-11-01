@@ -192,6 +192,350 @@
     "constraint": "字符串"
   },
   {
+    "name": "HAI_AI_ACP",
+    "module": "ai",
+    "path": "ai.acp",
+    "description": "ACP 会话与执行限制（仅 Node 服务端）。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS",
+    "module": "ai",
+    "path": "ai.acp.agents",
+    "description": "配置文件定义的只读智能体，与数据库记录按 ID 合并。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0",
+    "description": "配置文件定义的只读智能体，与数据库记录按 ID 合并。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ADAPTER",
+    "module": "ai",
+    "path": "ai.acp.agents.0.adapter",
+    "description": "原生配置适配器名称，默认 generic。",
+    "value": "generic",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ARGS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.args",
+    "description": "原生启动参数，省略时由适配器提供默认值。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ARGS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.args.0",
+    "description": "原生启动参数，省略时由适配器提供默认值。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_COMMAND",
+    "module": "ai",
+    "path": "ai.acp.agents.0.command",
+    "description": "可选原生程序覆盖，使用参数数组执行，不经过 shell。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_DEFAULTMODELID",
+    "module": "ai",
+    "path": "ai.acp.agents.0.defaultModelId",
+    "description": "默认选择的模型 ID，必须存在于 modelIds。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ENABLED",
+    "module": "ai",
+    "path": "ai.acp.agents.0.enabled",
+    "description": "默认启用，禁用后禁止新建和恢复会话。",
+    "value": "true",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ENGINE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.engine",
+    "description": "auto 优先可用 Podman，再选 Docker；显式选择不自动降级。",
+    "value": "auto",
+    "constraint": "字符串；取值：auto | podman | docker"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ENVIRONMENTREFS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.environmentRefs",
+    "description": "目标环境变量名到宿主环境变量名的映射；保存引用而非明文凭据。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_HEADERENV",
+    "module": "ai",
+    "path": "ai.acp.agents.0.headerEnv",
+    "description": "远程认证 Header 名到宿主变量名的映射。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_ID",
+    "module": "ai",
+    "path": "ai.acp.agents.0.id",
+    "description": "清单中的唯一 ID；同时用于受管理目录名。",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_IMAGE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.image",
+    "description": "已部署的 Agent 镜像，工作区和智能体需使用同一镜像。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_MODE",
+    "module": "ai",
+    "path": "ai.acp.agents.0.mode",
+    "description": "接入模式：自定义远程服务、本机内嵌进程或托管容器。",
+    "value": "custom-service",
+    "constraint": "字符串；取值：custom-service | embedded | builtin-service"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_MODELIDS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.modelIds",
+    "description": "绑定 Hai LLM 模型 ID；默认空数组。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_MODELIDS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.modelIds.0",
+    "description": "绑定 Hai LLM 模型 ID；默认空数组。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_NAME",
+    "module": "ai",
+    "path": "ai.acp.agents.0.name",
+    "description": "智能体的可读名称。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_SUPPORTEDTRANSPORTS",
+    "module": "ai",
+    "path": "ai.acp.agents.0.supportedTransports",
+    "description": "自定义服务显式声明的原生 HTTP/WS 能力。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_SUPPORTEDTRANSPORTS_0",
+    "module": "ai",
+    "path": "ai.acp.agents.0.supportedTransports.0",
+    "description": "自定义服务显式声明的原生 HTTP/WS 能力。；此变量整体替换单个数组项",
+    "value": "http",
+    "constraint": "字符串；取值：http | ws"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_TRANSPORT",
+    "module": "ai",
+    "path": "ai.acp.agents.0.transport",
+    "description": "智能体原生支持的传输；不自动转换 stdio 和 HTTP/WS。",
+    "value": "http",
+    "constraint": "字符串；取值：http | ws | stdio"
+  },
+  {
+    "name": "HAI_AI_ACP_AGENTS_0_URL",
+    "module": "ai",
+    "path": "ai.acp.agents.0.url",
+    "description": "远程地址，不允许命令选项和换行。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_AI_ACP_CANCELTIMEOUT",
+    "module": "ai",
+    "path": "ai.acp.cancelTimeout",
+    "description": "取消后等待终态的上限，毫秒。",
+    "value": "5000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_MAXCONTENTBYTES",
+    "module": "ai",
+    "path": "ai.acp.maxContentBytes",
+    "description": "单轮输入和累计输出的字节上限。",
+    "value": "8388608",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_MAXPENDINGEVENTS",
+    "module": "ai",
+    "path": "ai.acp.maxPendingEvents",
+    "description": "未消费事件数量上限。",
+    "value": "1024",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_PROMPTTIMEOUT",
+    "module": "ai",
+    "path": "ai.acp.promptTimeout",
+    "description": "单轮任务超时，毫秒。",
+    "value": "600000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_REQUESTTIMEOUT",
+    "module": "ai",
+    "path": "ai.acp.requestTimeout",
+    "description": "握手和控制请求超时，毫秒。",
+    "value": "30000",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES",
+    "module": "ai",
+    "path": "ai.acp.workspaces",
+    "description": "配置文件定义的只读工作区，与数据库记录按 ID 合并。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0",
+    "description": "配置文件定义的只读工作区，与数据库记录按 ID 合并。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_ENVIRONMENTREFS",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.environmentRefs",
+    "description": "目标环境变量名到宿主环境变量名的映射；保存引用而非明文凭据。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_ID",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.id",
+    "description": "清单中的唯一 ID；同时用于受管理目录名。",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_REPOSITORIES",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.repositories",
+    "description": "多个 Git 工程；默认空数组，不使用 Git 时仅创建文件目录。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.repositories.0",
+    "description": "多个 Git 工程；默认空数组，不使用 Git 时仅创建文件目录。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0_ID",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.repositories.0.id",
+    "description": "清单中的唯一 ID；同时用于受管理目录名。",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0_MAINBRANCH",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.repositories.0.mainBranch",
+    "description": "该工程明确指定的主分支，更新和 merge-main 发布均使用此值。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1；最大字符数 240"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0_REMOTE",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.repositories.0.remote",
+    "description": "Git remote 名，默认 origin。",
+    "value": "origin",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_REPOSITORIES_0_URL",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.repositories.0.url",
+    "description": "远程地址，不允许命令选项和换行。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_STORAGE",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.storage",
+    "description": "持久存储位置；directory 供本机，volume 供托管容器。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_STORAGE_ENGINE",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.storage.engine",
+    "description": "auto 优先可用 Podman，再选 Docker；显式选择不自动降级。",
+    "value": "auto",
+    "constraint": "字符串；取值：auto | podman | docker"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_STORAGE_IMAGE",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.storage.image",
+    "description": "已部署的 Agent 镜像，工作区和智能体需使用同一镜像。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_STORAGE_NAME",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.storage.name",
+    "description": "可读名称；volume 时表示持久卷名。",
+    "value": "",
+    "constraint": "字符串；正则 ^[a-z0-9][\\w-]{0,95}$"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_STORAGE_PATH",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.storage.path",
+    "description": "本机绝对或相对目录，运行时归一化为真实绝对路径。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_ACP_WORKSPACES_0_STORAGE_TYPE",
+    "module": "ai",
+    "path": "ai.acp.workspaces.0.storage.type",
+    "description": "存储类型判别字段。",
+    "value": "directory",
+    "constraint": "字符串；取值：directory | volume"
+  },
+  {
     "name": "HAI_AI_AUDIO",
     "module": "ai",
     "path": "ai.audio",
@@ -916,8 +1260,104 @@
     "module": "ai",
     "path": "ai.llm.models.0.baseUrl",
     "description": "Base URL 覆盖（可选）",
-    "value": "",
+    "value": "https://your-responses-service.example/v1",
     "constraint": "字符串；格式 uri"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities",
+    "description": "已确认的模型能力，缺省表示未知",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_CONTEXTWINDOW",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.contextWindow",
+    "description": "可用上下文总容量（Token）；未知时省略，不由输出预算推断。",
+    "value": "",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_INPUTMODALITIES",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.inputModalities",
+    "description": "已确认支持的输入模态；未知时省略。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_INPUTMODALITIES_0",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.inputModalities.0",
+    "description": "已确认支持的输入模态；未知时省略。；此变量整体替换单个数组项",
+    "value": "text",
+    "constraint": "字符串；取值：text | image | audio | video"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_MAXOUTPUTTOKENS",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.maxOutputTokens",
+    "description": "模型单次输出能力上限（Token）；与默认 maxTokens 预算不同。",
+    "value": "",
+    "constraint": "整数；<= 9007199254740991；> 0"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_OUTPUTMODALITIES",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.outputModalities",
+    "description": "已确认支持的输出模态；仍需调用接口支持。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_OUTPUTMODALITIES_0",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.outputModalities.0",
+    "description": "已确认支持的输出模态；仍需调用接口支持。；此变量整体替换单个数组项",
+    "value": "text",
+    "constraint": "字符串；取值：text | image | audio | video"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_REASONING",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.reasoning",
+    "description": "推理能力元数据，不自动启用推理请求参数。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_REASONING_EFFORTS",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.reasoning.efforts",
+    "description": "已确认可选择的推理级别。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展；最少项数 1"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_REASONING_EFFORTS_0",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.reasoning.efforts.0",
+    "description": "已确认可选择的推理级别。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_REASONING_SUPPORTED",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.reasoning.supported",
+    "description": "是否支持推理能力。",
+    "value": "",
+    "constraint": "true | false"
+  },
+  {
+    "name": "HAI_AI_LLM_MODELS_0_CAPABILITIES_TOOLCALLING",
+    "module": "ai",
+    "path": "ai.llm.models.0.capabilities.toolCalling",
+    "description": "模型是否支持函数工具调用；未知时省略。",
+    "value": "",
+    "constraint": "true | false"
   },
   {
     "name": "HAI_AI_LLM_MODELS_0_ID",
@@ -940,7 +1380,7 @@
     "module": "ai",
     "path": "ai.llm.models.0.model",
     "description": "模型名称（传给 API 的实际模型名）",
-    "value": "",
+    "value": "your-coding-model",
     "constraint": "字符串"
   },
   {
@@ -1158,6 +1598,94 @@
     "description": "服务器版本（默认 `'1.0.0'`）",
     "value": "1.0.0",
     "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS",
+    "module": "ai",
+    "path": "ai.mcp.servers",
+    "description": "外部 MCP 服务只读清单；与数据库记录合并供受管 Agent 使用。",
+    "value": "",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0",
+    "module": "ai",
+    "path": "ai.mcp.servers.0",
+    "description": "外部 MCP 服务只读清单；与数据库记录合并供受管 Agent 使用。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_ARGS",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.args",
+    "description": "stdio 参数，不使用 shell 拼接。",
+    "value": "[]",
+    "constraint": "JSON 数组；索引可按 0、1、2 扩展"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_ARGS_0",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.args.0",
+    "description": "stdio 参数，不使用 shell 拼接。；此变量整体替换单个数组项",
+    "value": "",
+    "constraint": "字符串"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_COMMAND",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.command",
+    "description": "stdio 程序路径；仅可信服务端配置。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_ENVIRONMENTREFS",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.environmentRefs",
+    "description": "stdio 变量名到宿主凭据变量名的映射。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_HEADERENV",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.headerEnv",
+    "description": "认证 Header 名到宿主凭据变量名的映射。",
+    "value": "{}",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_ID",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.id",
+    "description": "服务唯一标识。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_NAME",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.name",
+    "description": "传给原生 MCP 客户端的服务名。",
+    "value": "",
+    "constraint": "字符串；最小字符数 1"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_TRANSPORT",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.transport",
+    "description": "原生 MCP 传输类型。",
+    "value": "stdio",
+    "constraint": "字符串；取值：stdio | http | sse"
+  },
+  {
+    "name": "HAI_AI_MCP_SERVERS_0_URL",
+    "module": "ai",
+    "path": "ai.mcp.servers.0.url",
+    "description": "HTTP/SSE 地址。",
+    "value": "",
+    "constraint": "字符串；格式 uri"
   },
   {
     "name": "HAI_AI_MEMORY",
