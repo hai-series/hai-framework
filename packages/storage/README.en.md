@@ -148,6 +148,8 @@ Cancelling a checksum stops waiting for the next chunk and requests closure of t
 
 ### Configuration
 
+Local storage rejects file symlinks and directory junctions in key paths; reserved `.meta.json` / `.upload.tmp` suffixes are case insensitive. Overwrite put replaces old metadata, while copy inherits source metadata by default. The browser root exports schemas, types and client helpers, without the server singleton.
+
 - **S3**: requires `bucket / region / accessKeyId / secretAccessKey`; optional `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl`.
 - **Local**: requires `root`; optional `directoryMode / fileMode`.
 

@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import * as m from '$lib/paraglide/messages.js'
+  import { logoutPartnerAdmin } from '$lib/services/partner-admin.js'
   import { Badge, Button, Card, DataTable, FilterBar, Input, PageHeader, Pagination, Select } from '@h-ai/ui'
   import { useToastFeedback } from '@h-ai/ui/toast'
   import { SvelteURLSearchParams } from 'svelte/reactivity'
@@ -11,6 +12,8 @@
 
   let search = $state('')
   let status = $state('')
+  let loggingOut = $state(false)
+  let logoutError = $state('')
 
   const statusOptions = $derived([
     { value: '', label: m.admin_status_all() },
@@ -71,12 +74,24 @@
   }
 
   async function handleLogout() {
-    await fetch('/api/partners/admin/logout', { method: 'POST' })
-    const loginHref = resolve('/partners/admin/login', emptyRouteParams)
-    await goto(loginHref)
+    if (loggingOut)
+      return
+    loggingOut = true
+    logoutError = ''
+    try {
+      await logoutPartnerAdmin()
+      await goto(resolve('/partners/admin/login', emptyRouteParams))
+    }
+    catch {
+      logoutError = m.admin_logout_failed()
+    }
+    finally {
+      loggingOut = false
+    }
   }
 
   useToastFeedback(() => data.loadError)
+  useToastFeedback(() => logoutError)
 </script>
 
 <svelte:head>
@@ -86,7 +101,7 @@
 <section class='flex h-[calc(100dvh-4rem)] min-h-0 min-w-0 flex-col gap-3 px-4 py-4 lg:px-6'>
   <div class='flex shrink-0 items-center justify-between gap-3'>
     <PageHeader title={m.nav_partner_admin()} description={m.admin_records_total({ total: String(data.total) })} class='mb-0' />
-    <Button variant='default' size='sm' outline onclick={handleLogout}><span class='icon-[tabler--logout] size-4'></span>{m.admin_logout()}</Button>
+    <Button variant='default' size='sm' outline loading={loggingOut} onclick={handleLogout}><span class='icon-[tabler--logout] size-4'></span>{m.admin_logout()}</Button>
   </div>
   <Card padding='none' shadow={false} class='flex min-h-0 flex-1 flex-col overflow-hidden [&>.card-body]:min-h-0 [&>.card-body]:flex-1 [&>.card-body]:gap-0'>
     <form class='shrink-0 border-b border-base-content/8 p-3' onsubmit={handleFilter}>

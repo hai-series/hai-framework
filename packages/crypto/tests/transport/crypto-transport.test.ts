@@ -61,6 +61,20 @@ describe('crypto.transport', () => {
     await crypto.close()
   })
 
+  it('destroy invalidates a delayed key exchange even when fetch ignores abort', async () => {
+    let release!: (response: Response) => void
+    const response = new Promise<Response>((resolve) => {
+      release = resolve
+    })
+    const client = crypto.transport.createClient({ keyExchangeUrl: KEY_EXCHANGE_URL, fetch: async () => response })
+    const opening = client.init()
+    client.destroy()
+    release(Response.json({ clientId: 'old-client', serverKeyId: 'test-v1', serverPublicKey: serverKeyRing.keys['test-v1'].publicKey }))
+    expect((await opening).success).toBe(false)
+    expect(client.ready()).toBe(false)
+    client.destroy()
+  })
+
   it('exposes protocol constants', () => {
     expect(crypto.transport.protocol.CLIENT_ID_HEADER).toBe('X-Client-Id')
     expect(crypto.transport.protocol.ENCRYPTED_HEADER).toBe('X-Encrypted')

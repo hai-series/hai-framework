@@ -41,6 +41,8 @@ const logger = core.logger.child({ module: 'api-client', scope: 'auth' })
  * 而不是将 refreshToken 写入请求体。
  */
 const HTTPONLY_COOKIE_SENTINEL = '__httponly_cookie__'
+/** 内置 Cookie 适配器的模式标记；不为每次业务请求额外读取原生安全存储。 */
+const cookieTokenStorages = new WeakSet<TokenStorage>()
 
 // ─── 内存存储 ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +82,7 @@ export function createMemoryTokenStorage(): TokenStorage {
 /**
  * 创建浏览器使用的内存 access token 与服务端 httpOnly refresh Cookie 适配器。
  * refresh getter 返回内部哨兵，setter 不修改 Cookie；clear 只清除内存 access token。
- * 刷新请求使用 credentials: include；服务端须实际设置/撤销 Cookie，配置适当的 Secure、SameSite、Path 与跨域凭据策略。
+ * 登录和刷新请求使用 credentials: include；服务端须实际设置/撤销 Cookie，配置适当的 Secure、SameSite、Path 与跨域凭据策略。
  * HttpOnly 限制脚本直接读取 Cookie，不能阻止已执行的恶意脚本代用户发请求；服务端仍须授权和防护 CSRF。
  * @returns 独立内存 access token 与 Cookie 模式标记；不接触 localStorage。
  *
@@ -100,7 +102,7 @@ export function createMemoryTokenStorage(): TokenStorage {
 export function createHttpOnlyCookieTokenStorage(): TokenStorage {
   // access token 保存在内存中，用于注入 Authorization 请求头
   let memoryAccessToken: string | null = null
-  return {
+  const storage: TokenStorage = {
     async getAccessToken() { return memoryAccessToken },
     async setAccessToken(token) { memoryAccessToken = token },
     // refresh token 由服务端通过 Set-Cookie 设置为 httpOnly cookie；
@@ -114,6 +116,8 @@ export function createHttpOnlyCookieTokenStorage(): TokenStorage {
       // 客户端无法通过 JS 直接删除 httpOnly cookie。
     },
   }
+  cookieTokenStorages.add(storage)
+  return storage
 }
 
 // ─── Token 管理器 ─────────────────────────────────────────────────────────────
@@ -174,6 +178,7 @@ export function createTokenManager(
   let refreshPromise: Promise<TokenPair | null> | null = null
   let refreshController: AbortController | null = null
   let generation = 0
+  let disposed = false
   let sessionInvalid = false
   let storageMutation: Promise<void> = Promise.resolve()
 
@@ -249,6 +254,8 @@ export function createTokenManager(
    */
   async function refresh(): Promise<TokenPair | null> {
     // 并发去重：同一时刻只发一次 refresh，其它调用复用同一个 Promise
+    if (disposed)
+      return null
     if (refreshPromise)
       return refreshPromise
     const controller = new AbortController()
@@ -386,6 +393,14 @@ export function createTokenManager(
 
   return {
     storage,
+    usesCookieCredentials: cookieTokenStorages.has(storage),
+    async dispose() {
+      // 关闭只废弃刷新和等待已有写入，不清除宿主拥有的凭据。
+      disposed = true
+      invalidateRefresh()?.abort()
+      callbacks.length = 0
+      await storageMutation
+    },
     get generation() { return generation },
     get sessionInvalid() { return sessionInvalid },
     refresh,

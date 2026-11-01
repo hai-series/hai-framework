@@ -40,6 +40,19 @@ export async function missingPackages(packages, fetcher = fetch) {
   return missing
 }
 
+/** 查询实际 npm latest，供发布完成判定和标签恢复共用。 */
+export async function readLatest(packages, fetcher = fetch) {
+  const tags = new Map()
+  for (const pkg of packages) {
+    const name = encodeURIComponent(pkg.name).replace(/^%40/, '@').replaceAll('%2F', '%2f')
+    const response = await fetcher(`https://registry.npmjs.org/-/package/${name}/dist-tags`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+    if (!response.ok)
+      throw new Error(`npm tag lookup failed: ${response.status} for ${pkg.name}`)
+    tags.set(pkg.name, (await response.json()).latest)
+  }
+  return tags
+}
+
 export async function releasePending(packages, repository, version, options = {}) {
   const fetcher = options.fetcher ?? fetch
   // 发布阶段才同步磁盘版本；完成判定始终查询本次根版本，不能查询旧包版本。
@@ -53,7 +66,10 @@ export async function releasePending(packages, repository, version, options = {}
   if (!response.ok)
     throw new Error(`GitHub release lookup failed: ${response.status}`)
   const release = await response.json()
-  return missing.length > 0 || release.draft === true
+  if (missing.length > 0 || release.draft === true)
+    return true
+  const latest = await readLatest(packages, fetcher)
+  return packages.some(pkg => latest.get(pkg.name) !== version)
 }
 
 /** 发布完成后提交版本；重跑时接受远端已存在的相同树，禁止覆盖后续源码。 */

@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/cli",
   "type": "module",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.8",
   "description": "Hai Framework CLI for project scaffolding and code generation.",
   "license": "Apache-2.0",
   "keywords": [
@@ -62,9 +62,12 @@
     "@h-ai/deploy": "workspace:*",
     "@h-ai/feedback": "workspace:*",
     "@h-ai/iam": "workspace:*",
+    "@h-ai/kit": "workspace:*",
+    "@h-ai/payment": "workspace:*",
     "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
+    "@h-ai/vecdb": "workspace:*",
     "@types/fs-extra": "catalog:",
     "@types/node": "catalog:",
     "@types/prompts": "catalog:",
@@ -74,6 +77,7 @@
     "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "zod": "catalog:"
   }
 }

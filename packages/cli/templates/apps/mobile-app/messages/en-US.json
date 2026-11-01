@@ -24,7 +24,7 @@
   "status_runtime_web": "Browser preview",
   "status_token_label": "Token storage",
   "status_token_native": "Secure storage",
-  "status_token_memory": "Memory storage",
+  "status_token_memory": "Memory access token + httpOnly cookie",
   "tasks_title": "Today's tasks",
   "tasks_sync": "Wire backend APIs",
   "tasks_polish": "Polish mobile UX",

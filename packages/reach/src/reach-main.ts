@@ -56,6 +56,8 @@ let templateRepo: TemplateRepository | null = null
 
 /** 初始化进行中标志（防止并发调用） */
 let initInProgress = false
+let initCompletion: Promise<HaiResult<void>> | null = null
+let closeInProgress: Promise<void> | null = null
 
 // ─── Provider 工厂 ───
 
@@ -330,7 +332,9 @@ function queueEntry(row: StoredSendLog): ReachQueueEntry {
  *     }
  *     else { const providerMessageId = result.data.messageId }
  *   }
- *   finally { await reach.close() }
+ *   finally {
+ *     await reach.close()
+ *   }
  * }
  * finally {
  *   const closed = await reldb.close()
@@ -392,7 +396,7 @@ export const reach: ReachFunctions = {
     },
   },
   async init(config: ReachConfigInput): Promise<HaiResult<void>> {
-    if (initInProgress) {
+    if (initInProgress || closeInProgress) {
       logger.warn('Reach module init already in progress, skipping')
       return err(
         HaiReachError.CONFIG_ERROR,
@@ -402,10 +406,12 @@ export const reach: ReachFunctions = {
 
     initInProgress = true
     try {
-      return await doInit(config)
+      initCompletion = doInit(config)
+      return await initCompletion
     }
     finally {
       initInProgress = false
+      initCompletion = null
     }
   },
 
@@ -431,6 +437,17 @@ export const reach: ReachFunctions = {
   },
 
   async close(): Promise<void> {
-    await doClose()
+    if (closeInProgress)
+      return closeInProgress
+    closeInProgress = (async () => {
+      await initCompletion
+      await doClose()
+    })()
+    try {
+      await closeInProgress
+    }
+    finally {
+      closeInProgress = null
+    }
   },
 }

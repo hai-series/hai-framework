@@ -129,6 +129,8 @@ pnpm run deploy --env prod --build --bundle-only
 
 ## 开发测试
 
+CI 还必需执行 Windows 进程、存储路径与 CLI 回归、真实 Storage Chrome 取消、下载源容器和外部中间件配置 E2E；完整阶段与恢复规则见 [CI 说明](docs/ci.md)。
+
 `packages/*` 维护框架包，`apps/*` 提供示例与文档站，`packages/cli/templates/` 维护生成应用与共享 Skills。修改功能时同步调用方、配置示例、文档、截图和测试。
 
 ```sh

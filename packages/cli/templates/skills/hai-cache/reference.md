@@ -38,9 +38,13 @@ type: memory # memory | redis
 ### 2. 初始化与关闭
 
 ```typescript
-import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { cache, CacheConfigSchema } from '@h-ai/cache'
 
-await cache.init(core.config.get('cache'))
+const config = core.config.validate('cache', CacheConfigSchema)
+if (!config.success) throw new Error(config.error.message)
+const initialized = await cache.init(config.data)
+if (!initialized.success) throw new Error(initialized.error.message)
 // 使用后关闭
 const closed = await cache.close()
 if (!closed.success) throw new Error(closed.error.message)

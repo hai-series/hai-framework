@@ -27,6 +27,7 @@ import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { cliM } from '../src/cli-i18n.js'
+import { getCliVersion } from '../src/cli-utils.js'
 import { addModule } from '../src/commands/cli-add.js'
 import { createProject, detectProject } from '../src/commands/cli-create.js'
 import { generate } from '../src/commands/cli-generate.js'
@@ -269,7 +270,7 @@ describe('createProject — api 类型', () => {
     expect(content).toContain('origin: $' + '{HAI_SERV_CORS_ORIGIN:*}')
     expect(content).toContain('credentials: $' + '{HAI_SERV_CORS_CREDENTIALS:true}')
     expect(content).toContain(
-      'nativeOrigins: $' + '{HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
+      'nativeOrigins: $' + '{HAI_SERV_CORS_NATIVEORIGINS:http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost}',
     )
     expect(content).toContain('allowedHeaders:')
     expect(content).toContain('X-Request-Id')
@@ -1464,7 +1465,7 @@ describe('ai 支持交付与回填', () => {
     const originalPackage = {
       name: `legacy-framework-${command}`,
       version: '0.1.0',
-      dependencies: { '@h-ai/core': HAI_DEP_VERSION, '@h-ai/ai': HAI_DEP_VERSION },
+      dependencies: { '@h-ai/core': HAI_DEP_VERSION, '@h-ai/ai': HAI_DEP_VERSION, '@h-ai/reldb': HAI_DEP_VERSION, '@h-ai/vecdb': HAI_DEP_VERSION },
     }
     await fse.outputJson(path.join(dir, 'package.json'), originalPackage)
     await fse.outputFile(path.join(dir, 'AGENTS.md'), customAgents)
@@ -1605,6 +1606,52 @@ describe('addModule', () => {
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     expect(pkg.dependencies['@h-ai/ai']).toBe('catalog:')
+    const workspace = parse(await readText(dir, 'pnpm-workspace.yaml'))
+    for (const name of ['@h-ai/core', '@h-ai/ai', '@h-ai/reldb', '@h-ai/vecdb'])
+      expect(workspace.catalog[name]).toBe(getCliVersion())
+  })
+
+  it('向 workspace 子包添加 payment 时复用根 catalog 版本并补齐数据库配置', async () => {
+    const root = path.join(tmpRoot, 'add-payment-workspace')
+    const dir = path.join(root, 'apps/service')
+    await fse.ensureDir(dir)
+    await fse.writeFile(path.join(root, 'pnpm-workspace.yaml'), '# Keep workspace comments\npackages: [\'apps/*\']\ncatalog:\n  \'@h-ai/core\': 1.0.0-beta.6\n')
+    await fse.writeJson(path.join(dir, 'package.json'), { name: 'payment-service', version: '0.1.0', dependencies: { '@h-ai/core': 'catalog:' } })
+    await addModule({ module: 'payment', install: false, cwd: dir })
+    const pkg = await fse.readJson(path.join(dir, 'package.json'))
+    const workspaceText = await fse.readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8')
+    const workspace = parse(workspaceText)
+    expect(workspaceText).toContain('# Keep workspace comments')
+    for (const name of ['@h-ai/payment', '@h-ai/reldb']) {
+      expect(pkg.dependencies[name]).toBe('catalog:')
+      expect(workspace.catalog[name]).toBe('1.0.0-beta.6')
+    }
+    expect(await exists(dir, 'config/_db.yml')).toBe(true)
+    expect(await exists(dir, 'pnpm-workspace.yaml')).toBe(false)
+  })
+
+  it.each([false, true])('重复 add 可修复旧版失败留下的依赖与 catalog（传递依赖已写入=%s）', async (dependenciesWritten) => {
+    const dir = path.join(tmpRoot, `add-recover-${dependenciesWritten}`)
+    await fse.ensureDir(dir)
+    await fse.writeJson(path.join(dir, 'package.json'), {
+      name: 'recover-add',
+      version: '0.1.0',
+      dependencies: { '@h-ai/core': 'catalog:', '@h-ai/ai': 'catalog:', 'zod': 'catalog:', ...(dependenciesWritten ? { '@h-ai/reldb': 'catalog:', '@h-ai/vecdb': 'catalog:' } : {}) },
+    })
+    await fse.writeFile(path.join(dir, 'pnpm-workspace.yaml'), '# Existing version\npackages: []\ncatalog:\n  \'@h-ai/core\': 1.0.0-beta.6\n')
+    await addModule({ module: 'ai', install: false, cwd: dir })
+    const pkg = await fse.readJson(path.join(dir, 'package.json'))
+    const workspace = parse(await readText(dir, 'pnpm-workspace.yaml'))
+    for (const name of ['@h-ai/ai', '@h-ai/reldb', '@h-ai/vecdb']) {
+      expect(pkg.dependencies[name]).toBe('catalog:')
+      expect(workspace.catalog[name]).toBe('1.0.0-beta.6')
+    }
+    // 第三方缺失条目不能猜成框架版本。
+    expect(workspace.catalog.zod).toBeUndefined()
+    expect(await exists(dir, 'config/_db.yml')).toBe(true)
+    const production = await readText(dir, '.env.prod')
+    await addModule({ module: 'ai', install: false, cwd: dir })
+    expect(await readText(dir, '.env.prod')).toBe(production)
   })
 
   it('向已有项目添加 ai 模块', async () => {

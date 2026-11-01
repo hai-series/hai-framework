@@ -28,7 +28,7 @@ const browsers = new Map([
   ['feedback', ['./client', './bundle']],
   ['capacitor', ['.']],
   ['datapipe', ['.']],
-  ['storage', ['./schemas']],
+  ['storage', ['.', './client', './schemas']],
   ['reldb', ['./schemas']],
 ])
 
@@ -87,7 +87,7 @@ function typeSmoke(directories, suffix, browser, generated) {
     }
     if (directory === 'ui')
       source.push('// @ts-expect-error Only explicit component barrels are public', 'import * as internal from \'@h-ai/ui/components/scenes/ai/highlight\'')
-    if (browser && ['ai', 'iam'].includes(directory))
+    if (browser && ['ai', 'iam', 'storage'].includes(directory))
       source.push('// @ts-expect-error Server singleton is unavailable in browser', `api.${directory}`)
     if (browser && directory === 'ai')
       source.push('// @ts-expect-error Server constructors are unavailable in browser', 'api.McpServer', '// @ts-expect-error Server factories are unavailable in browser', 'api.createMcpServer')

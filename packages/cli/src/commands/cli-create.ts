@@ -773,7 +773,7 @@ function normalizeFrontendTargets(frontends: FrontendTarget[]): FrontendTarget[]
  * const complete = ['db', 'cache', 'crypto', 'vecdb'].every(feature => features.some(selected => selected === feature))
  * ```
  */
-function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
+export function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   const result = new Set(features)
 
   let changed = true

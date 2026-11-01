@@ -68,7 +68,11 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
 {{else}}  const transport = undefined
 {{/if}}
 {{#if features.iam}}
-  const refreshCookie = _options.refreshCookie === 'disabled' ? undefined : { secure: security.secureRefreshCookie }
+  const refreshCookie = _options.refreshCookie === 'disabled'
+    ? undefined
+    : { secure: security.secureRefreshCookie, nativeTokenTransport: { isRequest: (request: Request) => request.headers.get('x-hai-token-transport') === 'body'
+      && ['hai-mobile-app', 'hai-desktop-app'].includes(request.headers.get('x-request-client') ?? '')
+      && security.isNativeOrigin(request.headers.get('origin') ?? '') } }
 {{/if}}
 {{#if features.feedback}}
   // 普通业务日志与反馈使用同一可信应用范围；身份仍由 IAM 验证。
@@ -113,7 +117,7 @@ export function {{api.serviceAppFactoryName}}(_options: CreateApiServiceAppOptio
         middleware: serv.cors({
           origin: security.allowOrigin,
           credentials: servConfig.cors.credentials,
-          allowedHeaders: [...servConfig.cors.allowedHeaders],
+          allowedHeaders: [...new Set([...servConfig.cors.allowedHeaders, 'x-request-client', 'x-hai-token-transport'])],
           exposedHeaders: [...servConfig.cors.exposedHeaders],
         }),
       },

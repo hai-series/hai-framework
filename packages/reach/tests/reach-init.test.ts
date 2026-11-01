@@ -52,6 +52,22 @@ describe.sequential('reach.init', () => {
     }
   })
 
+  it('close waits for an in-flight initialization and leaves no published provider', async () => {
+    const opening = reach.init({ providers: [{ name: 'dev', type: 'console' }] })
+    await reach.close()
+    await opening
+    expect(reach.isInitialized).toBe(false)
+    expect(reach.config).toBeNull()
+  })
+
+  it('duplicate provider names fail before any provider is published', async () => {
+    const result = await reach.init({ providers: [{ name: 'duplicate', type: 'console' }, { name: 'duplicate', type: 'console' }] })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiReachError.CONFIG_ERROR.code)
+    expect(reach.isInitialized).toBe(false)
+  })
+
   it('close 后应恢复未初始化状态', async () => {
     await reach.init({ providers: [{ name: 'dev', type: 'console' }] })
     await reach.close()

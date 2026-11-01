@@ -5,7 +5,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const pnpmEntry = Object.entries(process.env).find(([name]) => name.toLowerCase() === 'npm_execpath')?.[1]
+if (!pnpmEntry)
+  throw new Error('Run the scaffold gates through pnpm scripts')
+const nodeEntry = /\.(?:c|m)?js$/i.test(pnpmEntry)
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDirectory, '../../..')
 const vitestArgs = process.argv.slice(2)
@@ -28,16 +31,16 @@ const vitestCli = path.join(path.dirname(fileURLToPath(import.meta.resolve('vite
 const archiveRoot = mkdtempSync(path.join(tmpdir(), 'hai-cli-local-packages-'))
 const lightTestFiles = ['tests/generate-i18n.test.ts', 'tests/command-locales.test.ts', 'tests/environment-output.test.ts']
 const testFiles = deployGate
-  ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-nginx.e2e.test.ts', 'tests/deploy-storage-proxy.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts']
+  ? ['tests/deploy-fixture-ownership.e2e.test.ts', 'tests/deploy-nginx.e2e.test.ts', 'tests/deploy-storage-proxy.e2e.test.ts', 'tests/deploy-docker-ssh.e2e.test.ts', 'tests/deploy-external-middlewares.e2e.test.ts']
   : generateGate
-    ? ['tests/generate-runtime.e2e.test.ts']
+    ? ['tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts']
     : i18nGate
       ? lightTestFiles
-      : ['tests/scaffold-gates.e2e.test.ts', 'tests/generate-runtime.e2e.test.ts', ...lightTestFiles]
+      : ['tests/scaffold-gates.e2e.test.ts', 'tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts', ...lightTestFiles]
 // 两个重型文件同窗会争抢构建与安装资源；轻型进程门禁仍与 runtime 使用最多两个 worker。
 // list 保持一次完整发现，便于直接消费 JSON，并覆盖所有默认门禁。
 const batches = !deployGate && !generateGate && !i18nGate && !listGate
-  ? [['tests/generate-runtime.e2e.test.ts', ...lightTestFiles], ['tests/scaffold-gates.e2e.test.ts']]
+  ? [['tests/generate-runtime.e2e.test.ts', 'tests/build-downloads.e2e.test.ts', ...lightTestFiles], ['tests/scaffold-gates.e2e.test.ts']]
   : [testFiles]
 // 真实生成门禁统一放在名称含 gates 的 suite 中；新增同族用例自动纳入，避免重跑文件内普通单测。
 const namePattern = !deployGate && !vitestArgs.some(argument => /^(?:-t(?:=|$)|--testNamePattern(?:=|$))/.test(argument))
@@ -73,7 +76,7 @@ try {
           HAI_CLI_RUN_SCAFFOLD_GATES: '1',
           ...(!deployGate && !i18nGate ? { HAI_CLI_RUN_GENERATE_GATES: '1' } : {}),
           ...(!deployGate && !generateGate ? { HAI_CLI_RUN_I18N_GATES: '1', HAI_CLI_RUN_LOCALE_GATES: '1', HAI_CLI_RUN_ENV_OUTPUT_GATES: '1' } : {}),
-          ...(deployGate ? { HAI_DEPLOY_E2E: '1' } : {}),
+          ...(deployGate ? { HAI_DEPLOY_E2E: '1', HAI_CLI_RUN_EXTERNAL_MIDDLEWARE_GATES: '1' } : {}),
         },
         // 直接启动 Node，测试名中的空格/正则不能被 Windows shell 当成命令。
         shell: false,
@@ -133,9 +136,10 @@ function packPublicPackages(packagesRoot, destination) {
 }
 
 function runPnpm(args, cwd, stdio = 'inherit') {
-  const command = spawnSync(pnpmBin, args, {
+  const command = spawnSync(nodeEntry ? process.execPath : pnpmEntry, [...(nodeEntry ? [pnpmEntry] : []), ...args], {
     cwd,
-    shell: true,
+    shell: false,
+    windowsHide: true,
     stdio,
   })
   if (command.error)

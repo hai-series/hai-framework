@@ -21,7 +21,7 @@ async function createTokenStorage() {
   if (await isNativeCapacitor())
     return createCapacitorTokenStorage()
 
-  return apiClient.tokenStorage.memory()
+  return apiClient.tokenStorage.httpOnlyCookie()
 }
 
 function resolveApiBase(): string {
@@ -51,8 +51,11 @@ export async function initApi(): Promise<void> {
       throw new Error(`Crypto initialization failed: ${cryptoResult.error.message}`)
   }
 
+  const native = await isNativeCapacitor()
   const initResult = await mobileApiClient.init({
     baseUrl: resolveApiBase(),
+    clientName: 'hai-mobile-app',
+    headers: native ? { 'x-hai-token-transport': 'body' } : {},
     auth: {
       storage: await createTokenStorage(),
       onRefreshFailed: () => {

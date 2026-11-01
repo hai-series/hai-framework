@@ -61,10 +61,17 @@ describe('vecdb.collection', () => {
       const result = await vecdb.collection.info('info-coll')
       expect(result.success).toBe(true)
       if (result.success) {
+        expect(result.data.metric).toBe('cosine')
         expect(result.data.name).toBe('info-coll')
         expect(result.data.dimension).toBe(4)
         expect(result.data.count).toBe(0)
       }
+    })
+
+    it.each(['cosine', 'euclidean', 'dot'] as const)('persists collection metric %s independently of the connection default', async (metric) => {
+      const name = `metric_${metric}`
+      expect((await vecdb.collection.create(name, { dimension: 3, metric })).success).toBe(true)
+      expect(await vecdb.collection.info(name)).toMatchObject({ success: true, data: { metric } })
     })
 
     it('获取不存在集合信息返回 COLLECTION_NOT_FOUND', async () => {

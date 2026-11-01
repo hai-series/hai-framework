@@ -256,6 +256,23 @@ test('static Pages deep links, public assets and honest contact feedback', async
         scenario.projectName,
         ...scenario.createArgs,
       ])
+      if (scenario.title === 'website') {
+        runNode([cliBin, '--cwd', projectPath, 'add', 'payment', '--no-install'])
+        const manifest = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8'))
+        const workspace = parse(await readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'))
+        for (const name of ['@h-ai/payment', '@h-ai/reldb']) {
+          expect(manifest.dependencies[name]).toBe('catalog:')
+          expect(workspace.catalog[name]).toBeTruthy()
+        }
+      }
+      if (scenario.title === 'mobile-app' || scenario.title === 'fullstack') {
+        const appRoot = scenario.title === 'mobile-app' ? projectPath : path.join(projectPath, `apps/${scenario.projectName}-app`)
+        const manifest = JSON.parse(await readFile(path.join(appRoot, 'package.json'), 'utf8'))
+        expect(manifest.scripts.clean).not.toMatch(/(?:^|\s)(android|ios)(?:\s|$)/)
+        const ignored = (await readFile(path.join(projectPath, '.gitignore'), 'utf8')).split('\n')
+        expect(ignored).not.toContain('android')
+        expect(ignored).not.toContain('ios')
+      }
       await replaceHaiPackageSpecifiers(projectPath)
       await addLocalHaiOverrides(projectPath)
       await removeReplacedHaiCatalogEntries(projectPath)
@@ -440,6 +457,17 @@ it('generated migration executes up and down with HaiResult', async () => {
 
       if (scenario.title === 'admin' || scenario.title === 'fullstack-feedback')
         await runPrefixBrowserGates(projectPath, scenario.title === 'admin' ? 'sveltekit' : 'vite', envOptions)
+
+      if (scenario.title === 'mobile-app' || scenario.title === 'fullstack') {
+        const appRoot = scenario.title === 'mobile-app' ? projectPath : path.join(projectPath, `apps/${scenario.projectName}-app`)
+        for (const platform of ['android', 'ios']) {
+          await mkdir(path.join(appRoot, platform), { recursive: true })
+          await writeFile(path.join(appRoot, platform, 'native-source.txt'), 'Keep native project sources\n')
+        }
+        await runPnpm(appRoot, ['clean'], envOptions)
+        for (const platform of ['android', 'ios'])
+          expect(await readFile(path.join(appRoot, platform, 'native-source.txt'), 'utf8')).toBe('Keep native project sources\n')
+      }
 
       if (scenario.title === 'fullstack' && process.env.HAI_CLI_NATIVE_BUILD === '1') {
         if (process.platform !== 'win32')

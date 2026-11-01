@@ -270,5 +270,5 @@ export async function getPartnerAdminSessionByToken(token: string) {
 }
 
 export async function clearPartnerAdminSession(token: string) {
-  await cache.kv.del(`${SESSION_CACHE_PREFIX}:${token}`)
+  return cache.kv.del(`${SESSION_CACHE_PREFIX}:${token}`)
 }

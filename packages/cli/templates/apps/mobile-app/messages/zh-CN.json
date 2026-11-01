@@ -24,7 +24,7 @@
   "status_runtime_web": "浏览器预览",
   "status_token_label": "Token 存储",
   "status_token_native": "安全存储",
-  "status_token_memory": "内存存储",
+  "status_token_memory": "内存 access token + httpOnly Cookie",
   "tasks_title": "今日任务",
   "tasks_sync": "同步后端接口",
   "tasks_polish": "打磨移动端体验",

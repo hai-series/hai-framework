@@ -4,6 +4,8 @@
 
 ## 运行环境
 
+Local 的 key 路径拒绝文件符号链接和目录 junction，`.meta.json` / `.upload.tmp` 保留后缀不区分大小写。覆盖 put 清除旧元数据，copy 默认继承源元数据。浏览器根入口仅导出 Schema、类型和客户端辅助能力。
+
 > ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
 
 ## 适用场景
@@ -53,9 +55,13 @@ MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoin
 ### 2. 初始化与关闭
 
 ```typescript
-import { storage } from '@h-ai/storage'
+import { core } from '@h-ai/core'
+import { storage, StorageConfigSchema } from '@h-ai/storage'
 
-await storage.init(core.config.get('storage'))
+const config = core.config.validate('storage', StorageConfigSchema)
+if (!config.success) throw new Error(config.error.message)
+const initialized = await storage.init(config.data)
+if (!initialized.success) throw new Error(initialized.error.message)
 // 使用后关闭
 const closeResult = await storage.close()
 if (!closeResult.success) {

@@ -564,6 +564,8 @@ const manager = ai.context.createManager({
 
 ### 配置
 
+Rerank 继承全局 LLM timeout，模型条目可覆盖；同一预算覆盖请求及响应正文，超时返回 RERANK_API_ERROR。
+
 LLM 协议字段已从 `llm.api` / `llm.models[].api` / `tempModel.api` 统一改为 `protocol`，取值仍为 `chat | responses | anthropic`。环境变量改用 `HAI_AI_LLM_PROTOCOL`、`HAI_AI_LLM_MODELS_0_PROTOCOL`（其他项按索引递增）。旧字段和旧协议变量会明确报错并提示迁移；`apiKey` 及其变量不变。
 
 ```yaml

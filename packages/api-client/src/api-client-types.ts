@@ -222,7 +222,7 @@ export interface ApiClientConfig {
   readonly baseUrl: string
   /** 认证配置；不传则不启用 Token 注入与自动刷新。 */
   readonly auth?: AuthConfig
-  /** 请求超时（ms），默认 30000。 */
+  /** 响应头及完整 JSON 正文期限（ms），默认 30000；自定义流正文由调用方 signal 取消。 */
   readonly timeout?: number
   /** 客户端标识，写入 `x-request-client` 请求头，默认 `hai-api-client`。 */
   readonly clientName?: string

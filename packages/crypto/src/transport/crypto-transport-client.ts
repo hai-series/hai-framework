@@ -96,6 +96,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   let clientId: string | null = null
   /** 进行中的协商 Promise；用于并发去重。 */
   let initPromise: Promise<HaiResult<void>> | null = null
+  let generation = 0
+  let handshakeController: AbortController | undefined
 
   /**
    * 生成本客户端密钥，30秒预算内协商并有界读取握手，只有验证响应结构后提交会话状态。
@@ -103,11 +105,11 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
    *
    * @example 模块内部上下文
    * ```ts
-   * const initialized = await doInit()
+   * const initialized = await doInit(generation)
    * if (!initialized.success) throw new Error(initialized.error.message)
    * ```
    */
-  async function doInit(): Promise<HaiResult<void>> {
+  async function doInit(attemptGeneration: number): Promise<HaiResult<void>> {
     const kpResult = options.crypto.asymmetric.generateKeyPair()
     if (!kpResult.success)
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'), kpResult.error)
@@ -116,6 +118,7 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientKeyGenerateFailed'))
 
     const controller = new AbortController()
+    handshakeController = controller
     const timeout = setTimeout(() => controller.abort(new DOMException('Key exchange timed out', 'TimeoutError')), 30_000)
     try {
       let response: Response
@@ -159,6 +162,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
         return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportBodyLimitInvalid'))
       }
 
+      if (attemptGeneration !== generation || controller.signal.aborted)
+        return err(HaiCommonError.INTERNAL_ERROR, cryptoM('crypto_transportClientNotInitialized'))
       keyPair = localKeyPair
       serverPublicKey = body.serverPublicKey
       serverKeyId = body.serverKeyId
@@ -167,6 +172,8 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     }
     finally {
       clearTimeout(timeout)
+      if (handshakeController === controller)
+        handshakeController = undefined
     }
   }
 
@@ -185,12 +192,13 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     if (clientId && serverPublicKey)
       return ok(undefined)
     if (!initPromise) {
-      initPromise = doInit().then((result) => {
+      const pending = doInit(generation).then((result) => {
         // 失败时清空 promise，允许下次重试；成功时保留即可。
-        if (!result.success)
+        if (!result.success && initPromise === pending)
           initPromise = null
         return result
       })
+      initPromise = pending
     }
     return initPromise
   }
@@ -429,6 +437,9 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
     encryptedFetch,
     ready: () => clientId !== null && serverPublicKey !== null,
     destroy() {
+      generation++
+      handshakeController?.abort()
+      handshakeController = undefined
       keyPair = null
       serverPublicKey = null
       serverKeyId = null

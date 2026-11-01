@@ -26,7 +26,9 @@
  *   if (!me.success) throw new Error(me.error.message)
  *   const userId = me.data.id
  * }
- * finally { await apiClient.close() }
+ * finally {
+ *   await apiClient.close()
+ * }
  * ```
  *
  * @example 自定义 contract
@@ -41,7 +43,9 @@
  *   const result = await client.iam.auth.publicConfig()
  *   if (!result.success) throw new Error(result.error.message)
  * }
- * finally { await client.close() }
+ * finally {
+ *   await client.close()
+ * }
  * ```
  *
  * @module api-client-main
@@ -126,7 +130,9 @@ const tokenStorage = {
  *   if (!result.success) throw new Error(result.error.message)
  *   const userId = result.data.id
  * }
- * finally { await client.close() }
+ * finally {
+ *   await client.close()
+ * }
  * ```
  */
 export function createApiClient<const TContract extends AnyContractRouter>(
@@ -155,6 +161,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     },
   }
 
+  let closePromise: Promise<void> | null = null
   let initPromise: Promise<HaiResult<void>> | null = null
   const lifecycle: ApiClientLifecycle = {
     async init(config) {
@@ -163,7 +170,7 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       if (initPromise)
         return initPromise
       // 已初始化后必须先 close() 再重新 init，避免旧 transport 会话被新状态覆盖后无法 destroy。
-      if (state.rawClient) {
+      if (state.rawClient || closePromise) {
         return err(
           HaiApiClientError.CONFIG_ERROR,
           apiClientM('apiClient_alreadyInitialized'),
@@ -205,13 +212,23 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       }
     },
     async close() {
+      if (closePromise)
+        return closePromise
       clearIamPageExitBindings(auth)
       state.observers.clear()
+      const manager = state.tokenManager
       state.transport?.destroy()
       state.config = null
       state.rawClient = null
       state.tokenManager = undefined
       state.transport = undefined
+      closePromise = manager?.dispose() ?? Promise.resolve()
+      try {
+        await closePromise
+      }
+      finally {
+        closePromise = null
+      }
     },
     get config() { return state.config ? core.sanitize.sanitizeSensitiveFields(state.config) : null },
     get isInitialized() { return state.rawClient !== null },
@@ -276,7 +293,9 @@ export function createApiClient<const TContract extends AnyContractRouter>(
  *   const result = await apiClient.iam.auth.currentUser()
  *   if (!result.success) throw new Error(result.error.message)
  * }
- * finally { await apiClient.close() }
+ * finally {
+ *   await apiClient.close()
+ * }
  * ```
  */
 const defaultApiContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
@@ -291,8 +310,14 @@ const defaultApiContract = apiContract.create({ iam: apiContract.iam, storage: a
  * const client: DefaultApiClient = apiClient
  * const initialized = await client.init({ baseUrl: 'https://api.example.com/api/v1', auth: {} })
  * if (!initialized.success) throw new Error(initialized.error.message)
- * try { const actions = client.createAuthActions(client); const result = await actions.publicConfig(); if (!result.success) throw new Error(result.error.message) }
- * finally { await client.close() }
+ * try {
+ *   const actions = client.createAuthActions(client)
+ *   const result = await actions.publicConfig()
+ *   if (!result.success) throw new Error(result.error.message)
+ * }
+ * finally {
+ *   await client.close()
+ * }
  * ```
  */
 export type DefaultApiClient = ApiClient<typeof defaultApiContract> & {
@@ -316,7 +341,9 @@ export type DefaultApiClient = ApiClient<typeof defaultApiContract> & {
  *   if (!result.success) throw new Error(result.error.message)
  *   const permissions = result.data.permissions
  * }
- * finally { await apiClient.close() }
+ * finally {
+ *   await apiClient.close()
+ * }
  * ```
  */
 export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiClient<typeof defaultApiContract>, {
@@ -559,7 +586,8 @@ function buildRawClient<TContract extends AnyContractRouter>(
           return typeof value === 'string' || value === undefined ? value : null
         }
         : undefined
-      const response = await fetchWithRefresh(request, requestInit, config, options.context.autoRefresh === false ? undefined : tokenManager, transport, record, reauthorize)
+      const authenticatedRequest = tokenManager?.usesCookieCredentials ? new Request(request, { credentials: 'include' }) : request
+      const response = await fetchWithRefresh(authenticatedRequest, requestInit, config, options.context.autoRefresh === false ? undefined : tokenManager, transport, record, reauthorize)
       if (record) {
         record.status = response.status
         const traceId = response.headers.get('x-trace-id') ?? response.headers.get('x-request-id')
@@ -775,21 +803,31 @@ async function fetchWithTimeout(
   const timeout = config.timeout ?? DEFAULT_TIMEOUT
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
-  // 保留调用方原始 signal 的中断能力：上游主动 abort 也能控制超时 controller。
   const userSignal = request.signal
-  if (userSignal) {
-    if (userSignal.aborted) {
-      controller.abort()
-    }
-    else {
-      userSignal.addEventListener('abort', () => controller.abort(), { once: true })
-    }
-  }
+  const abort = () => controller.abort(userSignal.reason)
+  if (userSignal.aborted)
+    abort()
+  else
+    userSignal.addEventListener('abort', abort, { once: true })
   try {
-    return await fetchFn(new Request(request, { signal: controller.signal }), init)
+    const response = await fetchFn(new Request(request, { signal: controller.signal }), init)
+    const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+    const json = contentType.endsWith('/json') || contentType.endsWith('+json')
+    // JSON 正文纳入同一预算；自定义流保持按需消费，原生管道管理调用方取消与监听释放。
+    const body = response.body === null
+      ? null
+      : json
+        ? await response.arrayBuffer()
+        : response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>(), { signal: userSignal })
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    })
   }
   finally {
     clearTimeout(timeoutId)
+    userSignal.removeEventListener('abort', abort)
   }
 }
 

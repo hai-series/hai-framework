@@ -46,5 +46,6 @@
   "reach_apiResponseTooLarge": "API 回执超过 64 KiB 上限",
   "reach_apiResponseInvalid": "API 回执必须为空或含可选 messageId 字符串的 JSON 对象",
   "reach_apiRequestFailed": "API 请求失败或超时，投递结果未确认",
-  "reach_apiHttpsRequired": "此 API 策略要求 HTTPS 且禁止自动重定向"
+  "reach_apiHttpsRequired": "此 API 策略要求 HTTPS 且禁止自动重定向",
+  "reach_config_providerNameDuplicate": "Provider 名称不能重复"
 }

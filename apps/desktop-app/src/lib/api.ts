@@ -5,7 +5,7 @@
  *
  * - `baseUrl` 优先使用 Tauri 启动时注入的 PUBLIC_API_BASE，浏览器开发使用 import.meta.env.PUBLIC_API_BASE，默认 `http://localhost:3000/api/v1`。
  * - transport 加密配置来自 `config/_crypto.yml`。
- * - Token 存储：默认仅保存在内存中；生产应用应注入操作系统安全存储适配器。
+ * - Token 存储：原生端仅保存在内存中，生产应用应注入操作系统安全存储适配器；浏览器预览使用 httpOnly refresh Cookie。
  * - `onRefreshFailed`：触发跳转至 `/login`。
  */
 
@@ -39,6 +39,7 @@ export async function initApi(): Promise<void> {
     return
 
   const runtime = (globalThis as typeof globalThis & { __HAI_PUBLIC_CONFIG__?: { apiBase?: string } }).__HAI_PUBLIC_CONFIG__
+  const native = '__TAURI_INTERNALS__' in globalThis
   const baseUrl = runtime?.apiBase ?? import.meta.env.PUBLIC_API_BASE ?? DEFAULT_API_BASE
   const transport = resolveApiTransport()
 
@@ -51,8 +52,10 @@ export async function initApi(): Promise<void> {
   try {
     const initResult = await desktopApiClient.init({
       baseUrl,
+      clientName: 'hai-desktop-app',
+      headers: native ? { 'x-hai-token-transport': 'body' } : {},
       auth: {
-        storage: apiClient.tokenStorage.memory(),
+        storage: native ? apiClient.tokenStorage.memory() : apiClient.tokenStorage.httpOnlyCookie(),
         onRefreshFailed: () => {
           // refresh token 失效 → 强制回登录页
           navigate('/login')

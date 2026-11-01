@@ -246,11 +246,35 @@ jobs:
       browser: true
       force: ${{ inputs.full == true }}
 
+  windows:
+    name: Windows process, storage and CLI regressions
+    needs: [plan]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v6.1.0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v6.5.0
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build Windows test dependencies
+        run: pnpm exec turbo run build --filter=@h-ai/cli --filter=@h-ai/ai --continue=dependencies-successful
+      - name: Verify Windows process ownership and argument handling
+        run: pnpm --filter @h-ai/ai exec vitest run tests/ai-acp-process.test.ts
+      - name: Verify Windows CLI build commands
+        run: pnpm --filter @h-ai/cli exec vitest run tests/build-command.test.ts
+      - name: Verify Windows storage path boundaries
+        run: pnpm --filter @h-ai/storage exec vitest run tests/storage-local-boundaries.test.ts
+
   quality:
     # 保留原必需检查名称，避免已有分支保护因拆分阶段而失去汇总检查。
     name: Typecheck, Lint, Build, Test and E2E
     if: always()
-    needs: [plan, build, lint, typecheck, contracts, unit, scaffold, sdk, deploy, browsers]
+    needs: [plan, build, lint, typecheck, contracts, unit, scaffold, sdk, deploy, browsers, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

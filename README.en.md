@@ -131,6 +131,8 @@ The role-based domain handbook is currently in Chinese; the [English guide](docs
 
 ## Development
 
+CI also requires Windows process, storage path and CLI regressions, real Storage Chrome cancellation, download-container and external-middleware E2E checks. See [CI stages and recovery](docs/ci.md).
+
 `packages/*` contains framework packages, `apps/*` contains examples and the documentation site, and `packages/cli/templates/` contains generated applications and shared Skills. Keep callers, configuration examples, documentation, screenshots and tests aligned with feature changes.
 
 ```sh

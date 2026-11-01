@@ -6292,7 +6292,7 @@
     "module": "serv",
     "path": "serv.cors.nativeOrigins",
     "description": "允许使用原生凭据通道的完整 Origin 列表",
-    "value": "http://localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost",
+    "value": "http://localhost,https://localhost,http://tauri.localhost,https://tauri.localhost,tauri://localhost,capacitor://localhost",
     "constraint": "字符串"
   },
   {

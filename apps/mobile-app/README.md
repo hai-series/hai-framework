@@ -98,12 +98,14 @@ PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 登录、注册和公开认证配置失败统一使用 `@h-ai/ui/i18n` 的 `authErrorMessage`。凭据错误不区分用户名或密码，未知错误隐藏原文并保留追踪编号；AuthPanel 内的首次改密和密码复用提示与 fullstack 模板一致。
 
 - `api-client` procedure 返回 `HaiResult`，store 层统一转换为页面错误文案。
-- 原生端 token 使用 `createCapacitorTokenStorage()`；Web 预览使用内存 token，不写入 `localStorage`。
+- 原生端 token 使用 `createCapacitorTokenStorage()`；Web 预览的 access token 保存在内存，refresh token 使用 httpOnly Cookie，不写入 `localStorage`。原生接入的客户端标识、来源与正文刷新通道见 [API 认证说明](../api-service/README.md#原生与浏览器认证)。
 - 原生存储读写/删除失败会拒绝 Promise。登录保存失败不进入已认证状态，退出失败仍清除界面身份并显示提示，loading 在 finally 释放；重试恢复前不能把失败当作凭据已删除。适配器的实例内屏蔽不替代服务端会话撤销，原生删除与重启行为仍需真机验收。
 - access 已写入而 refresh 保存失败时，适配器屏蔽整对凭据；登录/注册 store 会调用 `auth.clear()` 尝试清理部分数据，清理再次失败时显示不同错误，明确未确认持久删除。
 - transport 默认开启，需确保 `apps/api-service` 同样启用 `_serv.yml.transport`。
 
 ### 原生交付与验收
+
+`android` / `ios` 是需提交版本控制的原生工程，签名秘密单独忽略；普通 `clean` 保留它们，只清理构建产物。
 
 移动端原生打包独立于 Web 构建：`build` 仅产出静态资源，Capacitor 命令才同步并构建原生工程。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在对应 OS 上完成原生构建；打包成功不代替安装后的行为验收。
 

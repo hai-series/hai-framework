@@ -23,12 +23,12 @@
 
 需要符合项目 `engines` 的 Node.js（`^22.23.4 || ^24.22.1 || ^26.12.1`）与 pnpm 12.11.2。PowerShell 使用 `pnpm.cmd`。
 
-以下使用目标 Beta 版；先核对实际发布渠道与 `1.0.0-beta.1` 是否可用，再安装。当前验收目标不代表已经发布；不带版本会选择 latest，不会自动选择 Beta。
+先查询已发布渠道，再安装当前 latest。使用 `hai create --help` 核对所安装版本支持的选项；尚未发布的源码能力按下方本地开发步骤验证。
 
 ```sh
 pnpm view @h-ai/cli dist-tags
-pnpm view @h-ai/cli@1.0.0-beta.1 version
-pnpm add -g @h-ai/cli@1.0.0-beta.1
+pnpm view @h-ai/cli@latest version
+pnpm add -g @h-ai/cli@latest
 hai --version
 hai --help
 ```
@@ -38,7 +38,7 @@ hai --help
 ### 创建项目
 
 ```sh
-hai create my-app --type fullstack --frontends web --defaults
+hai create my-app --type fullstack --frontends web
 cd my-app
 pnpm dev
 ```
@@ -101,7 +101,7 @@ hai generate model order
 hai generate migration add-orders
 ```
 
-`hai add` 解析模块依赖并补充配置。`hai init` 补齐缺失配置和 AI 文件，保留已有自定义内容；`--force` 可重建模块配置，使用前检查差异。
+`hai add` 解析模块依赖并补充配置。`hai init` 补齐缺失配置和 AI 文件，保留已有自定义内容；`--force` 可重建模块配置，使用前检查差异。 已有模块也会检查传递依赖与所属 workspace 的 catalog；旧版安装失败后可重跑同一命令修复，保留已有版本、注释和配置值。
 
 page 只支持 SvelteKit 文件路由；api 会按目标应用选择 SvelteKit 文件路由或 serv 的共享 contract/procedure。API/fullstack 根目录可自动选择唯一后端；多应用用 `--workspace <包名或相对路径>`，也可进入目标 workspace。纯 Vite 的 page/api 组合明确拒绝；serv 不接受 `--output`，SvelteKit 路由输出须位于 `src/routes` 内，定制 `kit.files` 时明确拒绝猜测；API 目标须已安装 `@h-ai/kit` 与 `zod`。serv 只改写带 `@hai-generator` 标记的既有聚合入口，未知结构要求手动扩展，不创建平行路由。名称不能包含路径；默认拒绝覆盖，`--force` 只替换生成文件，不覆盖已有业务领域注册。整批预检，写入失败回滚本次修改。迁移只生成 up/down 函数，不自动执行；运行前确认数据影响。
 
@@ -200,7 +200,7 @@ fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化
 
 ### 问题反馈与离线分析
 
-使用 `hai create my-app --type fullstack --frontends web --defaults` 默认启用反馈；API 工程也默认包含反馈，无需额外参数。普通成员及业务操作员可提交反馈，`business_operator` 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。Fullstack 生成收集入口、分页管理页和服务端接口；API 工程生成服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 `disabled`、`console` 或 `reach`，默认 `console` 只输出 `metadata`。需要摘要时显式设 `consoleContent: summary`，需要实际发送时再配置 Reach 通道与收件人。
+使用 `hai create my-app --type fullstack --frontends web` 默认启用反馈；API 工程也默认包含反馈，无需额外参数。普通成员及业务操作员可提交反馈，`business_operator` 才显示管理菜单并能查看、处理、撤销和导出；自动补齐数据库、存储、触达与认证依赖。Fullstack 生成收集入口、分页管理页和服务端接口；API 工程生成服务端接口。生产使用共享 DB 和私有 S3；通知独立选择 `disabled`、`console` 或 `reach`，默认 `console` 只输出 `metadata`。需要摘要时显式设 `consoleContent: summary`，需要实际发送时再配置 Reach 通道与收件人。
 
 业务扩展在 feedback.init(config, { collectEvidence }) 中 await 文本/ZIP 等材料；_feedback.yml 提供 businessCollectionTimeoutMs、webhookUrl/webhookSecret/webhookTimeoutMs。Webhook 独立持久重试，详情可查看状态并重试；密钥仅放服务端私有环境。见 [feedback 配置与示例](../feedback/README.md)。
 

@@ -104,10 +104,18 @@ jobs:
             printf 'Retrying browser installation after an interrupted attempt.\n'
             sleep 2
           done
+      - name: Prepare fixed external middleware images
+        if: steps.proof.outputs.run == 'true' && inputs.stage == 'deploy'
+        run: |
+          for image in docker.io/library/postgres:16.15-alpine docker.io/library/mysql:8.4.11 docker.io/library/redis:7.4.11-alpine ghcr.io/rustfs/rustfs:1.0.1; do
+            docker image inspect "$image" >/dev/null 2>&1 || docker pull "$image"
+          done
       - name: Execute verification
         if: steps.proof.outputs.run == 'true'
         run: ${{ inputs.command }}
         env:
+          HAI_TEST_CONTAINER_ENGINE: docker
+          HAI_STORAGE_RUN_BROWSER_GATES: ${{ inputs.stage == 'unit' && '1' || '' }}
           OPENROUTER_APIKEY: ${{ secrets.OPENROUTER_APIKEY }}
           HAI_ACP_E2E_MODEL: ${{ inputs.openrouter_model }}
           HAI_ACP_E2E_CAPABILITIES: ${{ inputs.openrouter_capabilities }}

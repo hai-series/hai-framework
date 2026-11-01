@@ -83,12 +83,16 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
         middleware: serv.cors({
           origin: security.allowOrigin,
           credentials: servConfig.cors.credentials,
-          allowedHeaders: [...servConfig.cors.allowedHeaders],
+          allowedHeaders: [...new Set([...servConfig.cors.allowedHeaders, 'x-request-client', 'x-hai-token-transport'])],
           exposedHeaders: [...servConfig.cors.exposedHeaders],
         }),
       },
     ],
-    refreshCookie: refreshCookieMode === 'disabled' ? undefined : { secure: security.secureRefreshCookie },
+    refreshCookie: refreshCookieMode === 'disabled'
+      ? undefined
+      : { secure: security.secureRefreshCookie, nativeTokenTransport: { isRequest: request => request.headers.get('x-hai-token-transport') === 'body'
+        && ['hai-mobile-app', 'hai-desktop-app'].includes(request.headers.get('x-request-client') ?? '')
+        && security.isNativeOrigin(request.headers.get('origin') ?? '') } },
     // 公开路径来自 _serv.yml；服务端密钥环仅从私有 Secret 注入，registry 复用 reldb。
     transport,
   })

@@ -46,5 +46,6 @@
   "reach_apiResponseTooLarge": "API 応答が 64 KiB の上限を超えています",
   "reach_apiResponseInvalid": "API 応答は空か、省略可能な messageId 文字列を持つ JSON オブジェクトである必要があります",
   "reach_apiRequestFailed": "API リクエストが失敗またはタイムアウトしました。配信結果は未確認です",
-  "reach_apiHttpsRequired": "この API ポリシーでは HTTPS が必要で、自動リダイレクトは禁止されています"
+  "reach_apiHttpsRequired": "この API ポリシーでは HTTPS が必要で、自動リダイレクトは禁止されています",
+  "reach_config_providerNameDuplicate": "Provider 名は一意である必要があります"
 }

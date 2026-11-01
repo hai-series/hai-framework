@@ -25,6 +25,8 @@ hai-framework 的跨端 oRPC/OpenAPI typed client，面向 Web、App、小程序
 
 ### 快速开始
 
+`close()` 会使旧刷新失效并等待已有凭据写入完成，保留外置 TokenStorage 当前值；关闭完成后可复用同一存储重新初始化。`timeout` 覆盖响应头及完整 JSON 正文。内置 Cookie 适配器的登录和刷新使用 `credentials: include`，跨域服务须明确允许凭据与 Origin；内存和原生存储保留原请求的凭据策略。应用自定义流按需读取，其正文由调用方 signal 取消。
+
 ```ts
 import { apiClient } from '@h-ai/api-client'
 

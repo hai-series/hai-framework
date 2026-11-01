@@ -23,12 +23,12 @@ Use `hai` to create applications, add modules, generate starter code, build and 
 
 Use Node.js matching `engines` (`^22.23.4 || ^24.22.1 || ^26.12.1`) and pnpm 12.11.2. In PowerShell use `pnpm.cmd`.
 
-The following uses the target beta version. Check the published channel and availability of `1.0.0-beta.1` before installing. The acceptance target does not mean it has been published; an unversioned install selects latest rather than beta.
+Inspect the published channels and install latest. Check supported options with `hai create --help`; validate unreleased source features using the local development steps below.
 
 ```sh
 pnpm view @h-ai/cli dist-tags
-pnpm view @h-ai/cli@1.0.0-beta.1 version
-pnpm add -g @h-ai/cli@1.0.0-beta.1
+pnpm view @h-ai/cli@latest version
+pnpm add -g @h-ai/cli@latest
 hai --version
 hai --help
 ```
@@ -38,7 +38,7 @@ Generated framework dependencies use the exact CLI version. Installation failure
 ### Create an application
 
 ```sh
-hai create my-app --type fullstack --frontends web --defaults
+hai create my-app --type fullstack --frontends web
 cd my-app
 pnpm dev
 ```
@@ -101,7 +101,7 @@ hai generate model order
 hai generate migration add-orders
 ```
 
-`hai add` resolves module dependencies and fills configuration. `hai init` fills missing configuration and AI files while preserving custom content. `--force` regenerates module configuration; review the diff before using it.
+`hai add` resolves module dependencies and fills configuration. `hai init` fills missing configuration and AI files while preserving custom content. `--force` regenerates module configuration; review the diff before using it. Already listed modules are checked for missing transitive dependencies and workspace catalog entries. Rerun the same command after an earlier failed install; existing versions, comments and configured values are preserved.
 
 Pages use SvelteKit file routes. APIs use either SvelteKit routes or the target serv application's shared contract/procedure structure. API/fullstack roots select a unique backend automatically; use `--workspace <package-name-or-relative-path>` when multiple applications apply, or enter the target workspace. Plain Vite page/API combinations are rejected. Serv does not accept `--output`; SvelteKit route output must stay inside `src/routes`; custom `kit.files` layouts are rejected rather than guessed. SvelteKit API targets must already install `@h-ai/kit` and `zod`. Serv updates only existing aggregation points with `@hai-generator` markers; unknown structures require manual integration. Names cannot contain paths. Existing files require `--force`, which never replaces registered business domains. Files are checked as one batch and rolled back on write failure. Migrations only generate up/down functions; inspect data effects before running them.
 
@@ -200,7 +200,7 @@ The [fullstack security configuration guide template](templates/apps/fullstack/d
 
 ### Feedback and offline analysis
 
-A new `hai create my-app --type fullstack --frontends web --defaults` includes feedback by default; API projects also include it without additional options. Members and business operators can submit reports. Only `business_operator` sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. Fullstack provides intake, paginated review and server contracts; API projects provide the server contracts. Production uses shared DB and private S3. Notifications independently select `disabled`, `console` or `reach`; `console` defaults to `metadata` only. Select `consoleContent: summary` explicitly for summaries, or configure Reach providers and recipients for actual delivery.
+A new `hai create my-app --type fullstack --frontends web` includes feedback by default; API projects also include it without additional options. Members and business operators can submit reports. Only `business_operator` sees the review menu and can read, process, reopen or export reports. Database, storage, reach and authentication dependencies are included. Fullstack provides intake, paginated review and server contracts; API projects provide the server contracts. Production uses shared DB and private S3. Notifications independently select `disabled`, `console` or `reach`; `console` defaults to `metadata` only. Select `consoleContent: summary` explicitly for summaries, or configure Reach providers and recipients for actual delivery.
 
 Register collectEvidence through feedback.init(config, { collectEvidence }) to await business text or archives. _feedback.yml includes businessCollectionTimeoutMs and webhookUrl/webhookSecret/webhookTimeoutMs. Webhook delivery retries durably and exposes status and administrator retry in details. Keep secrets in private server environment settings; see [feedback examples](../feedback/README.en.md).
 

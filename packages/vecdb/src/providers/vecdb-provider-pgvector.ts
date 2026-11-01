@@ -7,7 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { PgvectorConfig } from '../vecdb-config.js'
+import type { DistanceMetric, PgvectorConfig } from '../vecdb-config.js'
 import type {
   VectorDocument,
   VectorSearchResult,
@@ -15,6 +15,7 @@ import type {
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
+import { DistanceMetricSchema } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
 import { HaiVecdbError } from '../vecdb-types.js'
 
@@ -89,8 +90,7 @@ export function createPgvectorProvider(): VecdbProvider {
   }
 
   /** 获取距离算符（pgvector 语法） */
-  function distanceOp(): string {
-    const metric = config?.metric ?? 'cosine'
+  function distanceOp(metric: DistanceMetric): string {
     switch (metric) {
       case 'cosine': return '<=>'
       case 'euclidean': return '<->'
@@ -100,8 +100,7 @@ export function createPgvectorProvider(): VecdbProvider {
   }
 
   /** 将距离转换为相似度得分 [0, 1] */
-  function distanceToScore(distance: number): number {
-    const metric = config?.metric ?? 'cosine'
+  function distanceToScore(distance: number, metric: DistanceMetric): number {
     switch (metric) {
       case 'cosine':
         // cosine distance ∈ [0, 2]，相似度 = 1 - distance/2 → [0, 1]
@@ -163,6 +162,24 @@ export function createPgvectorProvider(): VecdbProvider {
     return ok(dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0)
   }
 
+  /** 集合算法保存在向量列注释；旧集合从实际索引恢复，不受连接默认值变化影响。 */
+  async function getCollectionMetric(name: string): Promise<HaiResult<DistanceMetric>> {
+    const result = await pool!.query(`SELECT col_description(a.attrelid, a.attnum) AS definition,
+      (SELECT opc.opcname FROM pg_index i JOIN pg_opclass opc ON opc.oid = ANY(i.indclass)
+       WHERE i.indrelid = a.attrelid AND opc.opcname IN ('vector_cosine_ops', 'vector_l2_ops', 'vector_ip_ops') LIMIT 1) AS operator
+      FROM pg_attribute a WHERE a.attrelid = $1::regclass AND a.attname = 'vector'`, [quoteIdent(tableName(name))])
+    const row = result.rows[0]
+    const stored = typeof row?.definition === 'string' && row.definition.startsWith('hai.vecdb.metric=')
+      ? row.definition.slice('hai.vecdb.metric='.length)
+      : undefined
+    const inherited = row?.operator === 'vector_cosine_ops' ? 'cosine' : row?.operator === 'vector_l2_ops' ? 'euclidean' : row?.operator === 'vector_ip_ops' ? 'dot' : undefined
+    const metric = stored ?? inherited
+    const parsed = DistanceMetricSchema.safeParse(metric)
+    if (metric === undefined || !parsed.success)
+      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_collectionMetricMissing'))
+    return ok(parsed.data)
+  }
+
   /** 校验查询向量维度 */
   function validateVectorDimension<T>(expected: number, actual: number): HaiResult<T> | null {
     if (expected === actual) {
@@ -199,7 +216,7 @@ export function createPgvectorProvider(): VecdbProvider {
     async create(name, options) {
       const table = tableName(name)
       const dimension = options.dimension
-      const metric = options.metric ?? config?.metric ?? 'cosine'
+      const metric = DistanceMetricSchema.parse(options.metric ?? config?.metric ?? 'cosine')
       const indexType = config?.indexType ?? 'hnsw'
 
       logger.debug('Creating collection', { name, dimension, metric, indexType })
@@ -225,7 +242,7 @@ export function createPgvectorProvider(): VecdbProvider {
       `)
 
       // 创建向量索引
-      const distOp = distanceOp()
+      const distOp = distanceOp(metric)
       const opsClass = distOp === '<=>'
         ? 'vector_cosine_ops'
         : distOp === '<->'
@@ -248,6 +265,8 @@ export function createPgvectorProvider(): VecdbProvider {
         `)
       }
 
+      // metric 已由公开 Schema 枚举校验，不拼接任意配置文本。
+      await pool!.query(`COMMENT ON COLUMN ${qi}.vector IS 'hai.vecdb.metric=${metric}'`)
       logger.info('Collection created', { name, dimension, metric, indexType })
       return ok(undefined)
     },
@@ -290,6 +309,9 @@ export function createPgvectorProvider(): VecdbProvider {
         return dimensionResult
       }
 
+      const metric = await getCollectionMetric(name)
+      if (!metric.success)
+        return metric
       // 获取文档数量
       const countResult = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
       const count = Number.parseInt(String(countResult.rows[0].count), 10)
@@ -297,7 +319,7 @@ export function createPgvectorProvider(): VecdbProvider {
       return ok({
         name,
         dimension: dimensionResult.data,
-        metric: config?.metric ?? 'cosine',
+        metric: metric.data,
         count,
       })
     },
@@ -412,7 +434,6 @@ export function createPgvectorProvider(): VecdbProvider {
       const table = tableName(collection)
       const topK = options?.topK ?? 10
       const minScore = options?.minScore ?? 0
-      const op = distanceOp()
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
@@ -425,6 +446,11 @@ export function createPgvectorProvider(): VecdbProvider {
       if (dimensionValidation) {
         return dimensionValidation
       }
+
+      const metric = await getCollectionMetric(collection)
+      if (!metric.success)
+        return metric
+      const op = distanceOp(metric.data)
 
       const vectorStr = `[${vector.join(',')}]`
 
@@ -456,7 +482,7 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const searchResults: VectorSearchResult[] = result.rows
         .map((row: Record<string, unknown>) => {
-          const score = distanceToScore(row.distance as number)
+          const score = distanceToScore(row.distance as number, metric.data)
           return {
             id: row.id as string,
             score,

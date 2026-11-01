@@ -67,6 +67,8 @@ This example uses the development Console provider. It records delivery metadata
 
 ### Configuration
 
+Provider names must be unique; duplicates fail with CONFIG_ERROR before connections open. `close()` waits for initialization and releases its providers, preventing late publication after shutdown.
+
 #### Console (development/tests)
 
 ```ts

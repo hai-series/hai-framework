@@ -32475,9 +32475,321 @@
         {
           "subpath": ".",
           "conditions": [
-            "browser"
+            "browser",
+            "default"
           ],
           "target": "./dist/browser.js",
+          "exists": true,
+          "symbols": [
+            {
+              "name": "ChecksumAlgorithm",
+              "kind": "type",
+              "declaration": "ChecksumAlgorithm",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "ChecksumOperations",
+              "kind": "type",
+              "declaration": "ChecksumOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ChecksumOptions",
+              "kind": "type",
+              "declaration": "ChecksumOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ClientDownloadOptions",
+              "kind": "type",
+              "declaration": "ClientDownloadOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ClientUploadOptions",
+              "kind": "type",
+              "declaration": "ClientUploadOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "CopyOptions",
+              "kind": "type",
+              "declaration": "CopyOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "DirOperations",
+              "kind": "type",
+              "declaration": "DirOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "downloadAndSave",
+              "kind": "value",
+              "declaration": "downloadAndSave",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "DownloadOptions",
+              "kind": "type",
+              "declaration": "DownloadOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "downloadWithPresignedUrl",
+              "kind": "value",
+              "declaration": "downloadWithPresignedUrl",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "FileMetadata",
+              "kind": "type",
+              "declaration": "FileMetadata",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "FileOperations",
+              "kind": "type",
+              "declaration": "FileOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "formatFileSize",
+              "kind": "value",
+              "declaration": "formatFileSize",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "getFileExtension",
+              "kind": "value",
+              "declaration": "getFileExtension",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "getMimeType",
+              "kind": "value",
+              "declaration": "getMimeType",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "getStorageKeyIssue",
+              "kind": "value",
+              "declaration": "getStorageKeyIssue",
+              "declarationKind": "FunctionDeclaration"
+            },
+            {
+              "name": "HaiStorageError",
+              "kind": "value",
+              "declaration": "HaiStorageError",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "ListOptions",
+              "kind": "type",
+              "declaration": "ListOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "ListResult",
+              "kind": "type",
+              "declaration": "ListResult",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "LocalConfig",
+              "kind": "type",
+              "declaration": "LocalConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "LocalConfigSchema",
+              "kind": "value",
+              "declaration": "LocalConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PresignOperations",
+              "kind": "type",
+              "declaration": "PresignOperations",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "PresignOptions",
+              "kind": "type",
+              "declaration": "PresignOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PresignOptionsSchema",
+              "kind": "value",
+              "declaration": "PresignOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "PresignUploadOptions",
+              "kind": "type",
+              "declaration": "PresignUploadOptions",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "PresignUploadOptionsSchema",
+              "kind": "value",
+              "declaration": "PresignUploadOptionsSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "S3Config",
+              "kind": "type",
+              "declaration": "S3Config",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "S3ConfigSchema",
+              "kind": "value",
+              "declaration": "S3ConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "STORAGE_DELETE_MAX_KEYS",
+              "kind": "value",
+              "declaration": "STORAGE_DELETE_MAX_KEYS",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "STORAGE_KEY_MAX_BYTES",
+              "kind": "value",
+              "declaration": "STORAGE_KEY_MAX_BYTES",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StorageConfig",
+              "kind": "type",
+              "declaration": "StorageConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageConfigInput",
+              "kind": "type",
+              "declaration": "StorageConfigInput",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageConfigSchema",
+              "kind": "value",
+              "declaration": "StorageConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StorageData",
+              "kind": "type",
+              "declaration": "StorageData",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageDeleteFailure",
+              "kind": "type",
+              "declaration": "StorageDeleteFailure",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageDeleteKeysSchema",
+              "kind": "value",
+              "declaration": "StorageDeleteKeysSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StorageDeleteResult",
+              "kind": "type",
+              "declaration": "StorageDeleteResult",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageDeleteSummary",
+              "kind": "type",
+              "declaration": "StorageDeleteSummary",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageFunctions",
+              "kind": "type",
+              "declaration": "StorageFunctions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "StorageKeyIssue",
+              "kind": "type",
+              "declaration": "StorageKeyIssue",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageKeySchema",
+              "kind": "value",
+              "declaration": "StorageKeySchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StorageOperationLogConfig",
+              "kind": "type",
+              "declaration": "StorageOperationLogConfig",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageOperationLogConfigSchema",
+              "kind": "value",
+              "declaration": "StorageOperationLogConfigSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StoragePrefixSchema",
+              "kind": "value",
+              "declaration": "StoragePrefixSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StoragePresignExpiresInSchema",
+              "kind": "value",
+              "declaration": "StoragePresignExpiresInSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "StorageType",
+              "kind": "type",
+              "declaration": "StorageType",
+              "declarationKind": "TypeAliasDeclaration"
+            },
+            {
+              "name": "StorageTypeSchema",
+              "kind": "value",
+              "declaration": "StorageTypeSchema",
+              "declarationKind": "VariableDeclaration"
+            },
+            {
+              "name": "UploadOptions",
+              "kind": "type",
+              "declaration": "UploadOptions",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "UploadProgress",
+              "kind": "type",
+              "declaration": "UploadProgress",
+              "declarationKind": "InterfaceDeclaration"
+            },
+            {
+              "name": "uploadWithPresignedUrl",
+              "kind": "value",
+              "declaration": "uploadWithPresignedUrl",
+              "declarationKind": "FunctionDeclaration"
+            }
+          ]
+        },
+        {
+          "subpath": ".",
+          "conditions": [
+            "browser",
+            "types"
+          ],
+          "target": "./dist/browser.d.ts",
           "exists": true,
           "symbols": [
             {

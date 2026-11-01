@@ -376,6 +376,57 @@ describe('api-service 加密链路（api-client + transport）', () => {
 
 // ─── 明文链路：通过 api-client 完成认证流 ──────────────────────────────────
 
+describe('independent native refresh integration', () => {
+  it.each([
+    ['capacitor://localhost', 'hai-mobile-app'],
+    ['https://localhost', 'hai-mobile-app'],
+    ['http://tauri.localhost', 'hai-desktop-app'],
+    ['https://tauri.localhost', 'hai-desktop-app'],
+    ['tauri://localhost', 'hai-desktop-app'],
+  ])('the default API app refreshes a trusted native client at %s', async (origin, clientName) => {
+    const native = apiClient.create(apiServiceContract)
+    const storage = apiClient.tokenStorage.memory()
+    let refreshes = 0
+    const nativeFetch: typeof fetch = async (input, init) => {
+      if ((input instanceof Request ? input.url : String(input)).endsWith('/auth/refresh'))
+        refreshes++
+      return fetch(input, init)
+    }
+    try {
+      expect((await native.init({ baseUrl: `${plainBase}${apiPrefix}`, clientName, headers: { origin, 'x-hai-token-transport': 'body' }, auth: { storage }, fetch: nativeFetch })).success).toBe(true)
+      const user = uniqueUser('native')
+      const registered = await apiClient.createAuthActions(native).register(user)
+      expect(registered.success).toBe(true)
+      if (!registered.success)
+        return
+      expect(await storage.getRefreshToken()).toBeTruthy()
+      await native.auth.setTokens({ ...registered.data.tokens, accessToken: 'expired-for-refresh-test' })
+      expect((await native.iam.auth.currentUser()).success).toBe(true)
+      expect(refreshes).toBe(1)
+    }
+    finally {
+      await native.auth.clear()
+      await native.close()
+    }
+  })
+
+  it.each([
+    ['https://untrusted.example', 'hai-mobile-app', 'body'],
+    ['capacitor://localhost', 'unknown-client', 'body'],
+    ['capacitor://localhost', 'hai-mobile-app', ''],
+  ])('an undeclared native channel does not receive a body refresh token (%s, %s, %s)', async (origin, clientName, marker) => {
+    const untrusted = apiClient.create(apiServiceContract)
+    try {
+      expect((await untrusted.init({ baseUrl: `${plainBase}${apiPrefix}`, clientName, headers: { origin, 'x-hai-token-transport': marker }, auth: { storage: apiClient.tokenStorage.memory() } })).success).toBe(true)
+      const registered = await untrusted.iam.auth.register(uniqueUser('untrusted'))
+      expect(registered.success).toBe(true)
+      if (registered.success)
+        expect(registered.data.tokens.refreshToken).toBeUndefined()
+    }
+    finally { await untrusted.close() }
+  })
+})
+
 describe('api-service 明文链路（api-client + transport 关闭）', () => {
   it('register 可正常工作（无 X-Encrypted 标记）', async () => {
     const user = uniqueUser('plain_reg')

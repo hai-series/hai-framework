@@ -67,6 +67,8 @@ finally {
 
 ### 配置
 
+Provider 名称必须唯一，重复配置在连接前返回 CONFIG_ERROR。`close()` 等待在途初始化并回收其 Provider；关闭返回后不会迟到发布模块或定时器。
+
 #### Console（开发/测试）
 
 ```ts

@@ -19,7 +19,7 @@
   "dashboard_guest": "Mobile user",
   "dashboard_subtitle": "Calls the backend through the api-service contract and runs in Android / iOS native shells.",
   "dashboard_secure_token_title": "Secure tokens",
-  "dashboard_secure_token_desc": "Native builds use secure storage; Web preview uses an in-memory session.",
+  "dashboard_secure_token_desc": "Native builds use secure storage. Web previews keep access tokens in memory and refresh tokens in an httpOnly cookie.",
   "dashboard_contract_title": "Typed API",
   "dashboard_contract_desc": "api-client is bound to api-service-contract.",
   "dashboard_echo_default": "Hello from mobile-app",

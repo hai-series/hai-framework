@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { missingPackages } from './release-status.mjs'
+import { missingPackages, readLatest } from './release-status.mjs'
 
 export function releasePackages(root, version) {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Z]+(?:[.-][0-9A-Z]+)*)?$/i.test(version))
@@ -17,18 +17,6 @@ export function releasePackages(root, version) {
     const pkg = JSON.parse(git('show', `${tag}:packages/${directory}/package.json`))
     return { name: pkg.name, version, private: pkg.private }
   }).filter(pkg => !pkg.private)
-}
-
-async function readLatest(packages, fetcher) {
-  const tags = new Map()
-  for (const pkg of packages) {
-    const path = encodeURIComponent(pkg.name).replace(/^%40/, '@').replaceAll('%2F', '%2f')
-    const response = await fetcher(`https://registry.npmjs.org/-/package/${path}/dist-tags`, { cache: 'no-store', signal: AbortSignal.timeout(15000) })
-    if (!response.ok)
-      throw new Error(`npm tag lookup failed: ${response.status} for ${pkg.name}`)
-    tags.set(pkg.name, (await response.json()).latest)
-  }
-  return tags
 }
 
 export async function promoteLatest(packages, options = {}) {

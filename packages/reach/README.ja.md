@@ -67,6 +67,8 @@ finally {
 
 ### 設定
 
+Provider 名は一意である必要があり、重複は接続前に CONFIG_ERROR を返します。`close()` は初期化を待って Provider を解放し、終了後の状態やタイマーの再公開を防ぎます。
+
 #### Console（開発・テスト用）
 
 ```ts

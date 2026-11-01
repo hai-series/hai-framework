@@ -156,6 +156,8 @@ if (hashed.success) {
 
 #### 传输加密（crypto.transport）
 
+传输客户端 `destroy()` 使在途握手失效并取消网络等待；迟到结果不能恢复密钥或覆盖下一次握手。它只清理本地会话，服务端 registry 仍按自己的租约回收。
+
 规范编码、验证顺序与 nonce 持久化要求见 [Transport v2 协议](TRANSPORT-PROTOCOL.md)。
 
 传输加密统一通过 `crypto.transport` 命名空间提供，供 `@h-ai/serv`、`@h-ai/kit` 与 `@h-ai/api-client` 复用同一套协议常量和载荷格式。

@@ -1,13 +1,16 @@
 {
   "name": "@h-ai/storage",
   "type": "module",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.8",
   "description": "Hai Framework object storage module for S3-compatible and local backends.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
+      "browser": {
+        "types": "./dist/browser.d.ts",
+        "default": "./dist/browser.js"
+      },
       "types": "./dist/node.d.ts",
-      "browser": "./dist/browser.js",
       "import": "./dist/node.js",
       "default": "./dist/node.js"
     },

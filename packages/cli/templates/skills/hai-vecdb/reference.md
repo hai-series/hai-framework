@@ -6,6 +6,8 @@
 
 ## 运行环境
 
+pgvector 将集合 metric 持久保存在 vector 列注释，索引、info、search 使用同一值；重连后修改默认 metric 不改变已有集合。旧集合从实际索引恢复；缺少索引与有效注释时先恢复定义，不按当前默认值猜测。
+
 > ⚠️ **服务端模块（Node.js only）。** 浏览器端不直接操作向量数据库，通过 `@h-ai/ai` 的 API 端点间接使用（如 RAG 检索、知识库查询）。
 
 ## 适用场景
@@ -62,9 +64,12 @@ operationLog:
 
 ```typescript
 import { core } from '@h-ai/core'
-import { vecdb } from '@h-ai/vecdb'
+import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 
-await vecdb.init(core.config.get('vecdb'))
+const config = core.config.validate('vecdb', VecdbConfigSchema)
+if (!config.success) throw new Error(config.error.message)
+const initialized = await vecdb.init(config.data)
+if (!initialized.success) throw new Error(initialized.error.message)
 // ... 使用向量数据库
 const closeResult = await vecdb.close()
 if (!closeResult.success) {

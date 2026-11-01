@@ -10,6 +10,7 @@ const apiInit = vi.fn(async () => undefined)
 const apiClose = vi.fn(async () => undefined)
 const apiCreate = vi.fn(() => createdClient)
 const memoryTokenStorage = vi.fn(() => ({ kind: 'memory' }))
+const cookieTokenStorage = vi.fn(() => ({ kind: 'cookie' }))
 const cryptoInit = vi.fn(async () => ({ success: true as const, data: undefined }))
 const cryptoClose = vi.fn(async () => ({ success: true as const, data: undefined }))
 const navigate = vi.fn()
@@ -21,6 +22,7 @@ vi.mock('@h-ai/api-client', () => ({
     create: apiCreate,
     tokenStorage: {
       memory: memoryTokenStorage,
+      httpOnlyCookie: cookieTokenStorage,
     },
   },
 }))
@@ -49,10 +51,13 @@ describe('desktop api bootstrap', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('原生端使用运行期注入地址，不需要为部署环境重新构建', async () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {})
     vi.stubGlobal('__HAI_PUBLIC_CONFIG__', { apiBase: 'https://runtime.example.test/custom-api' })
     const { initApi } = await import('../src/lib/api.js')
     await initApi()
     expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({ baseUrl: 'https://runtime.example.test/custom-api' }))
+    expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({ clientName: 'hai-desktop-app', headers: { 'x-hai-token-transport': 'body' }, auth: expect.objectContaining({ storage: { kind: 'memory' } }) }))
+    expect(cookieTokenStorage).not.toHaveBeenCalled()
   })
 
   it('从 config/_crypto.yml 解析默认 transport 配置', async () => {
@@ -63,7 +68,7 @@ describe('desktop api bootstrap', () => {
     })
   })
 
-  it('initApi 启动 crypto transport 并初始化 api-client', async () => {
+  it('浏览器启动 crypto transport 并使用 Cookie 刷新通道', async () => {
     const { desktopApiClient, initApi } = await import('../src/lib/api.js')
 
     await initApi()
@@ -71,14 +76,15 @@ describe('desktop api bootstrap', () => {
     expect(cryptoInit).toHaveBeenCalledTimes(1)
     expect(apiCreate).toHaveBeenCalledTimes(1)
     expect(desktopApiClient).toBe(createdClient)
-    expect(memoryTokenStorage).toHaveBeenCalledTimes(1)
+    expect(cookieTokenStorage).toHaveBeenCalledTimes(1)
+    expect(memoryTokenStorage).not.toHaveBeenCalled()
     expect(createdClient.init).toHaveBeenCalledWith(expect.objectContaining({
       baseUrl: 'http://localhost:3000/api/v1',
       transport: expect.objectContaining({
         keyExchangePath: '/_hai/key-exchange',
       }),
       auth: expect.objectContaining({
-        storage: { kind: 'memory' },
+        storage: { kind: 'cookie' },
       }),
     }))
   })
