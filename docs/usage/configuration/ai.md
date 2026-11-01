@@ -4,11 +4,47 @@
 
 先让一条无敏感信息的模型请求成功，再接会话、知识库和工具。模型能回答不表示会话已持久保存；Schema通过不表示供应商凭据、模型名或额度可用。密钥保存在服务端，前端通过受权限检查保护的API发起调用。
 
-## ACP 运行限制与模型能力
+## ACP 接入与模型能力
 
-`acp` 的 requestTimeout（30000ms）、promptTimeout（600000ms）、cancelTimeout（5000ms）、maxContentBytes（8388608）、maxPendingEvents（1024）控制连接、取消和输出边界。环境变量对应 `HAI_AI_ACP_REQUESTTIMEOUT` 等。Agent、workspace 和 session 通过 `ai.acp` 登记，不在配置文件另存一套模型密钥。
+`acp` 的 requestTimeout（30000ms）、promptTimeout（600000ms）、cancelTimeout（5000ms）、maxContentBytes（8388608）、maxPendingEvents（1024）控制连接、取消和输出边界。环境变量对应 `HAI_AI_ACP_REQUESTTIMEOUT` 等。agents/workspaces 可在配置文件定义或通过 `ai.acp` 写数据库；session 是运行记录，不从配置导入。配置与数据库按 ID 合并的规则见[资源清单](#配置与数据库清单)。
 
-`llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量。Codex 使用 Responses；DeepSeek Harness 自定义模型需要完整、已确认的容量/输入/工具/推理信息。详见 [ACP 接入](../development/ai.md#acp-智能体与工程会话)。
+`llm.models[].capabilities` 可配置 contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts；未知时省略。输出预算 maxTokens 不是模型输出容量，maxOutputTokens 不能大于 contextWindow。DSH 自定义模型需要已确认的容量/输入/工具/推理信息；支持推理时还需明确 efforts。Codex 的上游必须原生提供 Responses；Hai 客户端已有协议转换不会提供反向网关。
+
+| Agent 配置 | 接入效果 | 存储与模型 |
+| --- | --- | --- |
+| `mode: embedded`、adapter、可选 command/args | 本机原生 stdio；Windows 直接提供可执行程序或 Node + JS 入口 | directory 工作区；modelIds 引用 Hai 模型 |
+| `mode: builtin-service`、image、engine | 原生 stdio 容器；auto 优先就绪 Podman，再试 Docker | volume 工作区，Agent/workspace 的 image 和引擎须匹配；复用 Hai 模型 |
+| `mode: custom-service`、url、transport、supportedTransports、headerEnv | 连接明确声明支持的 HTTP/WS 服务 | 不绑定 Hai 模型；传远端 cwd，服务方维护模型与文件 |
+
+下面是本机 Codex 的可加载配置形状。替换真实模型、端点和路径；仓库 url 与每个工程的 mainBranch 明确填写，不推测远端主分支。取消 CLI 模板的一层外层注释只启用配置，还需在服务端初始化 AI 并接入业务。
+
+```yaml schema=@h-ai/ai:AIConfigSchema
+llm:
+  models:
+    - id: coding
+      model: your-responses-model
+      protocol: responses
+      baseUrl: https://models.example.invalid/v1
+      apiKey: ${MODEL_API_KEY}
+acp:
+  agents:
+    - id: coder
+      name: Codex
+      mode: embedded
+      adapter: codex
+      modelIds: [coding]
+  workspaces:
+    - id: project
+      storage: { type: directory, path: /srv/projects/demo }
+      repositories:
+        - id: api
+          url: https://git.example.invalid/team/api.git
+          mainBranch: trunk
+```
+
+Goose 原生服务用 `transport: http` 与 `http://.../acp`，或 `transport: ws` 与 `ws://.../acp`；`supportedTransports` 只填实际部署支持的类型。`headerEnv: { X-Secret-Key: HAI_GOOSE_SECRET }` 在启动连接时从宿主变量解析服务认证信息。Goose 自身通过 GOOSE_PROVIDER/GOOSE_MODEL/供应商密钥配置模型；不要给 custom-service 绑定 modelIds，也不要把服务凭据放进 URL。远程 TLS、卷、Git 与服务进程由部署方维护。
+
+运行步骤和 API 示例见 [ACP 智能体与工程会话](../development/ai-acp.md)。
 
 ## 模型、协议与场景路由
 

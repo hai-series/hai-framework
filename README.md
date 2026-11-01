@@ -24,7 +24,9 @@ _以 Fullstack 为例：开发规范、客户端、接口契约和业务模块�
 
 开发时，生成工程自带 `AGENTS.md`、模块 Skills，以及需求审查、实施、测试和复审流程，让 AI 编程助手沿用项目的公开 API、权限规则和验证要求。业务运行时，统一组合模型调用、工具/MCP、RAG、会话记忆与多模态能力，复用应用的数据和服务层。
 
-[工程规范与 Skills](AGENTS.md) · [AI 开发与集成](docs/usage/development/ai.md)
+通过 ACP 接入本机、Podman/Docker 容器或原生 HTTP/WS 智能体；复用模型清单，管理多仓库工作区、工程会话、可选 worktree 与显式 Git 发布。配置和数据库清单按 ID 合并，配置只读、数据库可维护。
+
+[工程规范与 Skills](AGENTS.md) · [AI 开发与集成](docs/usage/development/ai.md) · [ACP 智能体接入](docs/usage/development/ai-acp.md)
 
 ![AI 实验台实际运行：模型对话与当前主体的记忆记录](docs/images/runtime-ai.zh-CN.png)
 
@@ -108,7 +110,7 @@ pnpm run deploy --env prod --build --bundle-only
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 基础与安全 | [core](packages/core/README.md)：结果、配置、日志、生命周期与访问策略；[crypto](packages/crypto/README.md)：SM2/SM3/SM4、密码哈希；[iam](packages/iam/README.md)：认证、会话与 RBAC                                                                                       |
 | 数据       | [reldb](packages/reldb/README.md)：关系数据与事务；[cache](packages/cache/README.md)：缓存与分布式锁；[storage](packages/storage/README.md)：文件与预签名；[vecdb](packages/vecdb/README.md)：向量检索；[datapipe](packages/datapipe/README.md)：文本处理与分块           |
-| AI         | [ai](packages/ai/README.md)：LLM、工具/MCP、RAG、记忆、图像、语音与 A2A                                                                                                                                                                                                   |
+| AI         | [ai](packages/ai/README.md)：LLM、工具/MCP、RAG、记忆、图像、语音、A2A 与 ACP 智能体/工程会话                                                                                                                                                                             |
 | 运营与业务 | [feedback](packages/feedback/README.md)：反馈与诊断；[audit](packages/audit/README.md)：审计与告警；[reach](packages/reach/README.md)：消息触达；[scheduler](packages/scheduler/README.md)：定时任务；[payment](packages/payment/README.md)：支付渠道                     |
 | 接口与多端 | [api-contract](packages/api-contract/README.md)：共享契约；[serv](packages/serv/README.md)：Hono/oRPC 服务；[api-client](packages/api-client/README.md)：类型化客户端；[kit](packages/kit/README.md)：SvelteKit 集成；[capacitor](packages/capacitor/README.md)：原生桥接 |
 | 界面与工程 | [ui](packages/ui/README.md)：Svelte 组件与主题；[cli](packages/cli/README.md)：创建、生成与升级；[deploy](packages/deploy/README.md)：Vercel 与 Docker SSH 交付                                                                                                           |

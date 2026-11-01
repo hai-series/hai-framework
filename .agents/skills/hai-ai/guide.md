@@ -2,7 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-`@h-ai/ai` 统一提供 LLM、工具、MCP、Embedding、Memory、Retrieval/RAG、Knowledge、Context、File、Rerank、Image、语音（ASR/TTS）与 A2A 能力。
+`@h-ai/ai` 统一提供 LLM、工具、MCP、Embedding、Memory、Retrieval/RAG、Knowledge、Context、File、Rerank、Image、语音（ASR/TTS）、A2A 与 ACP 能力。工程智能体、工作区和会话见 [ACP 指南](acp.md)，配置与数据库资源合并见 [资源清单](resources.md)。
 
 ## 使用边界
 

@@ -24,7 +24,9 @@ _Fullstack の構成例：開発規約、クライアント、API 契約、業�
 
 生成プロジェクトには `AGENTS.md`、モジュール Skills、要件レビュー、実装、テスト、再レビューの手順が含まれます。AI コーディング支援は公開 API、権限規則、検証要件を共有します。実行時はモデル呼び出し、ツール/MCP、RAG、会話メモリ、マルチモーダル機能をアプリのデータとサービスに組み込めます。
 
-[開発規約と Skills](AGENTS.md) · [AI 開発と統合](docs/usage/development/ai.md)
+ACP でローカルプロセス、Podman/Docker コンテナ、ネイティブ HTTP/WS サービスのエージェントに接続します。モデル一覧を再利用し、複数 Git のワークスペース、工程セッション、任意の worktree、明示的な Git 公開を管理します。設定と DB の一覧は ID で統合し、設定は読み取り専用、DB の項目は更新できます。
+
+[開発規約と Skills](AGENTS.md) · [AI 開発と統合](docs/usage/development/ai.md) · [ACP エージェント接続](docs/usage/development/ai-acp.md)
 
 ![実行中の AI 実験台：モデルとの会話と利用主体ごとのメモリ](docs/images/runtime-ai.ja-JP.png)
 
@@ -108,7 +110,7 @@ pnpm run deploy --env prod --build --bundle-only
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 基盤と安全             | [core](packages/core/README.ja.md)：結果、設定、ログ、ライフサイクル、アクセス制限；[crypto](packages/crypto/README.ja.md)：SM2/SM3/SM4 とパスワードハッシュ；[iam](packages/iam/README.ja.md)：認証、セッション、RBAC                                                                                                 |
 | データ                 | [reldb](packages/reldb/README.ja.md)：関係データとトランザクション；[cache](packages/cache/README.ja.md)：キャッシュと分散ロック；[storage](packages/storage/README.ja.md)：ファイルと署名付き URL；[vecdb](packages/vecdb/README.ja.md)：ベクトル検索；[datapipe](packages/datapipe/README.ja.md)：テキスト処理と分割 |
-| AI                     | [ai](packages/ai/README.ja.md)：LLM、ツール/MCP、RAG、メモリ、画像、音声、A2A                                                                                                                                                                                                                                          |
+| AI                     | [ai](packages/ai/README.ja.md)：LLM、ツール/MCP、RAG、メモリ、画像、音声、A2A、ACP エージェント/ワークスペース                                                                                                                                                                                                         |
 | 業務と運用             | [feedback](packages/feedback/README.ja.md)：報告と診断；[audit](packages/audit/README.ja.md)：監査とアラート；[reach](packages/reach/README.ja.md)：メッセージ配信；[scheduler](packages/scheduler/README.ja.md)：定期タスク；[payment](packages/payment/README.ja.md)：決済                                           |
 | API とプラットフォーム | [api-contract](packages/api-contract/README.ja.md)：共有契約；[serv](packages/serv/README.ja.md)：Hono/oRPC サービス；[api-client](packages/api-client/README.ja.md)：型付きクライアント；[kit](packages/kit/README.ja.md)：SvelteKit 連携；[capacitor](packages/capacitor/README.ja.md)：ネイティブ連携               |
 | UI と開発環境          | [ui](packages/ui/README.ja.md)：Svelte コンポーネントとテーマ；[cli](packages/cli/README.ja.md)：生成と更新；[deploy](packages/deploy/README.ja.md)：Vercel と Docker SSH 配布                                                                                                                                         |

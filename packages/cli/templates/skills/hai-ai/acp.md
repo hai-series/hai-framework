@@ -44,6 +44,8 @@ WebSocket 改为 `transport: 'ws'` 和 `ws://` 地址。`cwd` 是远端可见路
 
 下面的目录、Git 地址、模型和密钥由部署方提供。首次登记一次，后续用 get/list 读取；重复 register 返回冲突。普通 API 都先检查 `success`。
 
+Windows stdio 需要系统 PowerShell 可用；npm 的 `.cmd` 包装应改用 `command: 'node.exe'` 和实际 JS 入口参数数组。框架跟踪整个进程树，关闭时清理后台子进程；系统策略阻止启动时直接返回错误。
+
 ```ts
 import { ai } from '@h-ai/ai'
 

@@ -8,6 +8,8 @@ hai-framework是TypeScript应用框架，提供AI调用、身份和权限、数�
 
 调用聊天模型时，先接服务端AI和可信模型凭据。需要保留会话再接持久Store，需要企业知识检索再增加文本处理、`embedding`和向量后端。页面只展示Markdown或文档编辑器时，可以只用UI，无需先连模型。
 
+需要智能体实际读写项目时，使用 [ACP 工程会话](../development/ai-acp.md)：选择本机、容器或原生 HTTP/WS 服务，复用模型并登记工作区。多个 Git 工程各自明确主分支，会话可共享目录或使用独立 worktree，更新与发布通过显式操作完成。
+
 数据与安全模块各自有公开契约。RelDB、Cache、IAM等有初始化和关闭；Datapipe是函数；Serv是HTTP工厂；Kit是宿主适配；UI是组件。返回HaiResult的业务操作先判断success，不能把失败当成正常data。
 
 ## 选择应用结构

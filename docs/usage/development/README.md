@@ -16,6 +16,8 @@
 
 [AI内容、模型与检索](ai.md)先显示、再调用、再持久化；[支付与原生能力](integrations.md)分清本地验证、渠道沙箱和真实设备，不能以Mock成功替代实际结果。
 
+需要智能体直接处理工程时，从 [ACP 智能体、工作区与会话](ai-acp.md)选择本机、容器或远程服务，复用模型并明确各 Git 工程的主分支，再接会话、worktree 和发布动作。
+
 ## 结束时核对跨层流程
 
 至少验证一条成功、一条拒绝和一次失败恢复。配置查[领域手册](../configuration/README.md)，问题处理见[反馈与排错](../operations/feedback.md)，门禁职责和证据见[验证说明](../governance/verification.md)。

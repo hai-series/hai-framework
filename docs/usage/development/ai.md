@@ -61,6 +61,6 @@ AiDocumentEditor检查Mermaid节点文字、箭头、预览与代码切换。渲
 
 ## ACP 智能体与工程会话
 
-`ai.acp` 管理原生 ACP Agent、工作区和会话，支持本机进程、Podman/Docker 容器及已有 HTTP/WS 服务。模型引用 `llm.models`，多 Git 工程逐一指定主分支，创建 session 时可选 worktree；更新主分支和合并/推送都是显式调用。
+`ai.acp` 管理原生 ACP Agent、工作区和会话：embedded 本机进程、builtin-service Podman/Docker 容器、custom-service 已有原生 HTTP/WS 服务。前两者引用 `llm.models`，远程服务自行管理模型；仅使用明确支持的传输。多 Git 工程逐一指定主分支，创建 session 时可选 worktree；更新主分支和合并/推送都是显式调用。
 
 完整接入步骤、示例、能力限制和故障恢复见 [ACP 接入指南](ai-acp.md)。容器模式挂持久 workspace/state volume；进程停止后才释放占用，worktree 不承担安全沙箱职责。协议层保留原生事件和权限回调，业务的 SDD、评审规则、预览和部署由应用负责。
