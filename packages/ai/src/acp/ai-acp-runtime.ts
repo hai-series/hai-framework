@@ -107,6 +107,8 @@ export async function openRuntime(
     root = '/workspace'
     container = await execute(engine, [
       'create',
+      // 远程 Podman 会从服务端继承代理，绕过最小环境白名单；只允许显式 environmentRefs 注入。
+      ...(engine === 'podman' ? ['--http-proxy=false'] : []),
       '--init',
       '--mount',
       `type=volume,src=${workspace.storage.name},dst=/workspace`,

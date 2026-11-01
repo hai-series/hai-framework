@@ -25,6 +25,8 @@ auto 默认先探测可用 Podman，再探测 Docker；显式选择不会降级�
 
 Agent 配置指定 builtin-service、adapter、image、modelIds；workspace 指定 volume、name、相同 image 和 engine。workspace 卷挂 `/workspace`，持久状态卷 `<name>-state` 挂 `/state`。Git/worktree 和 Agent 都在同样的容器路径执行，关闭容器不删除两个卷。Git 认证使用 workspace.environmentRefs，由宿主注入环境；不把密钥写进镜像。
 
+Podman 不继承其远程服务的代理变量。代理通过 Agent/workspace 的 environmentRefs 显式授予，并使用容器能访问的地址，不能直接使用宿主回环代理。
+
 完整 API 示例见 [ACP 接入指南](../../../cli/templates/skills/hai-ai/acp.md)。
 
 ## Goose 原生远程服务

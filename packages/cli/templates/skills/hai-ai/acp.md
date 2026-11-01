@@ -94,6 +94,8 @@ Codex 镜像明确包含 `@agentclientprotocol/codex-acp@2.5.0` 和 `@openai/cod
 
 Agent 改为 `mode: 'builtin-service', image: 'hai-ai/codex-acp:2.5.0', engine: 'auto'`；workspace 改为 `storage: { type: 'volume', name: 'project-code', image: 'hai-ai/codex-acp:2.5.0', engine: 'auto' }`。容器重建继续复用这两个命名卷，Git 和 Agent 在容器内始终看到 `/workspace`，不会混用宿主绝对 worktree 路径。工作区主目录为 `main/`，隔离 session 为 `sessions/<id>/`，上传文件放 `files/`。
 
+Podman 不自动继承远程服务的代理变量。需要代理时，使用 Agent/workspace 的 `environmentRefs` 显式传入容器可达的地址；宿主的回环代理不能直接在容器内使用。
+
 模型能力配置位于 `llm.models[].capabilities`：contextWindow、maxOutputTokens、inputModalities、outputModalities、toolCalling、reasoning.supported/efforts。未知就省略；不能用请求 `maxTokens` 预算推断真实容量。dsh 自定义模型需明确上下文、输出容量、输入模态、工具和推理能力，避免其内部默认值夸大模型能力。dsh 映射 Chat Completions、Responses、Anthropic；Codex 原生要求 Responses。现有 Hai 的 Responses 转换是客户端能力，不是对外反向网关。只有 Chat Completions 的服务不会因配置了 Codex 自动变成 Responses 服务。
 
 模型密钥在启动时重新解析；恢复时模型名、协议、地址、能力发生变化会拒绝，密钥轮换可以继续。自定义 ACP 服务只接受 `headerEnv` 里的认证引用，不接收 Hai 模型配置。

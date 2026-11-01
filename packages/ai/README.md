@@ -215,6 +215,8 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 `ai.acp` 在 Node 服务端接入原生 ACP 智能体：`embedded` 本机进程、`builtin-service` Podman/Docker 容器（自动选择优先 Podman）、`custom-service` 已有 HTTP/WS 服务。Codex/dsh 当前使用 stdio；不自动转换不支持的传输。
 
+Podman 关闭远程服务代理变量的自动继承；代理通过 Agent/workspace 的 `environmentRefs` 显式配置，并使用容器可达的地址。
+
 Goose 1.57.0 镜像提供原生 `goose serve` HTTP/WS `/acp` 服务，通过 custom-service 和 `X-Secret-Key` 接入。模型由 Goose 服务维护，工作区与状态卷由部署方挂载；真实远程 E2E 按握手能力验收恢复。
 
 - `agents.register/get/list/update/remove/initialize/check` 维护智能体。`codex`、`deepseek-harness` 适配器引用 `llm.models`；其他原生程序用 `generic` 或可信 `AIInitOptions.acpAdapters`。自定义服务自行管理模型。

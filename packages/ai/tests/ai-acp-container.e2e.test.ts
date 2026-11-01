@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ai } from '../src/index.js'
 
 const exec = promisify(execFile)
@@ -117,6 +117,14 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
       )
       value(await session.prompt([{ type: 'text', text: 'write' }]))
       const resource = value(await session.info()).resource!
+      // Podman 远程服务可能自行注入代理；宿主回环代理在容器中不可达，且不属于显式授权环境。
+      expect(await run([
+        'exec',
+        resource.container,
+        'node',
+        '-e',
+        'process.stdout.write(String(["HTTP_PROXY","HTTPS_PROXY","ALL_PROXY","http_proxy","https_proxy","all_proxy"].every(key=>!process.env[key])))',
+      ])).toBe('true')
       const mounts = JSON.parse(await run(['inspect', resource.container]))[0]
         .Mounts as Array<{ Destination: string }>
       expect(mounts.some(item => item.Destination === '/workspace')).toBe(
@@ -174,9 +182,26 @@ describe.skipIf(!image)('aCP container volume E2E', () => {
         'process.stdout.write(require(\'node:fs\').readFileSync(\'/workspace/sessions/isolated/files/agent.txt\',\'utf8\'))',
       ])
       expect(copied).toBe('agent output')
+      value(await resumed.close())
+      // 关闭隐式继承不影响应用明确授予 Agent 的代理配置；仅使用不可联网的测试地址。
+      vi.stubEnv('HAI_ACP_TEST_PROXY', 'http://proxy.example.invalid:8123')
+      value(await ai.acp.agents.register({
+        id: 'explicit-proxy',
+        name: 'Explicit proxy fixture',
+        mode: 'builtin-service',
+        image: image!,
+        engine: preference as 'auto' | 'podman' | 'docker',
+        command: 'node',
+        args: ['/workspace/main/files/acp-agent.mjs'],
+        environmentRefs: { HTTP_PROXY: 'HAI_ACP_TEST_PROXY' },
+      }))
+      const configured = value(await ai.acp.sessions.create({ agentId: 'explicit-proxy', workspaceId: 'container' }))
+      expect(value(await configured.prompt([{ type: 'text', text: 'proxy' }])).text).toBe('http://proxy.example.invalid:8123')
+      value(await configured.close())
     }
     finally {
       await ai.close()
+      vi.unstubAllEnvs()
       const ids = (await run(['ps', '-aq', '--filter', `volume=${volume}`]))
         .split(/\s+/)
         .filter(Boolean)

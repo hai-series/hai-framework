@@ -198,6 +198,8 @@ const chat = await ai.llm.chat({ messages, tools: registry.getDefinitions() })
 
 `ai.acp` runs on Node: `embedded` starts a local process, `builtin-service` starts a Podman/Docker container (ready Podman first), and `custom-service` connects to a native HTTP/WS ACP service. Codex/dsh use stdio; unsupported transports are not silently bridged.
 
+Podman does not inherit proxy variables from its remote service. Configure proxies explicitly through agent/workspace `environmentRefs`, using addresses reachable from the container.
+
 The Goose 1.57.0 image exposes its native `goose serve` HTTP/WS `/acp` service through custom-service with `X-Secret-Key`. Goose manages its models; deployment owns workspace/state volumes. Real remote E2E verifies native resume when advertised.
 
 - `agents.register/get/list/update/remove/initialize/check` manage definitions. The `codex` and `deepseek-harness` adapters reference `llm.models`; use `generic` or trusted `AIInitOptions.acpAdapters` for other agents. External services own their models.

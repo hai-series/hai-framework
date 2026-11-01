@@ -75,6 +75,10 @@ line.on('line', async (text) => {
   }
   if (method === 'session/prompt') {
     const content = params.prompt[0].text
+    if (content === 'proxy') {
+      event(params.sessionId, process.env.HTTP_PROXY ?? '')
+      return reply({ stopReason: 'end_turn' })
+    }
     if (content === 'pid') {
       event(params.sessionId, String(process.pid))
       return reply({ stopReason: 'end_turn' })

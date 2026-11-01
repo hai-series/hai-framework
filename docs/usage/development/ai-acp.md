@@ -16,6 +16,8 @@
 
 builtin-service 的 `engine: 'auto'` 优先就绪的 Podman，再尝试 Docker；显式选择不降级。镜像自行构建和部署，基础环境含 Git、Node、Python，可选 Java/Rust/Go。Codex 镜像同时安装 codex-acp 和原生 Codex CLI。工作区与智能体必须使用匹配的 image 和引擎。
 
+Podman 容器关闭远程服务的代理自动继承，避免把宿主 `127.0.0.1` 代理带进容器。需要代理时，通过 Agent 或 workspace 的 `environmentRefs` 显式引用容器能访问的代理地址；宿主回环地址不能直接当作容器的宿主地址。
+
 ## 登记模型、智能体和工作区
 
 生产先初始化共享 RelDB/网络向量库，或注入满足要求的共享 AI Store；开发可使用临时 Store，但关闭后不保留登记与会话记录。AI 按 `ai.init → use → ai.close` 使用。生成模板默认没有接入 AI；安装依赖后去掉 `_ai.yml` 的一层外层注释，补充初始化、关闭及应用接口，配置文件存在不代表业务已经接通。
