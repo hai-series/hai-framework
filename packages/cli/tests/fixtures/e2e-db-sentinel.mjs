@@ -4,7 +4,7 @@ import { rename, writeFile } from 'node:fs/promises'
 import { createConnection, createServer } from 'node:net'
 import process from 'node:process'
 
-const [mode, stateFile] = process.argv.slice(2)
+const [mode, stateFile, plannedPortsJson = '[]'] = process.argv.slice(2)
 if (!stateFile || !['serve', 'ready', 'probe', 'closed'].includes(mode))
   throw new Error('Expected sentinel operation and owned state file')
 
@@ -79,13 +79,32 @@ if (mode === 'serve') {
     void save()
     socket.destroy()
   })
-  server.listen(0, '127.0.0.1', () => {
-    const address = server.address()
-    if (!address || typeof address === 'string')
-      throw new Error('Database isolation sentinel has no TCP address')
-    current.port = address.port
-    void save()
-  })
+  const plannedPorts = new Set(JSON.parse(plannedPortsJson))
+  let listenAttempts = 0
+  /**
+   * 排除本轮尚未启动的 HTTP 端口；只重选自己刚绑定的临时地址，不触碰其他监听者。
+   * @returns {void} 绑定独立端口后发布就绪状态，连续冲突则让父进程报告准备失败。
+   * @example
+   * ```js
+   * listen()
+   * ```
+   */
+  const listen = () => {
+    if (listenAttempts++ >= 32)
+      throw new Error('Database isolation sentinel could not allocate a distinct port')
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Database isolation sentinel has no TCP address')
+      if (plannedPorts.has(address.port)) {
+        server.close(listen)
+        return
+      }
+      current.port = address.port
+      void save()
+    })
+  }
+  listen()
   const stop = setInterval(() => {
     if (!existsSync(`${stateFile}.stop`))
       return

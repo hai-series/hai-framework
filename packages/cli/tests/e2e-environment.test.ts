@@ -1,7 +1,9 @@
 import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
 import { createECDH } from 'node:crypto'
+import { once } from 'node:events'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -120,6 +122,41 @@ describe('independent database connection counter', () => {
     })
     expect(readFileSync(local, 'utf8')).toBe('PRIVATE_FIXTURE=preserved\n')
     expect(JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))).toMatchObject({ connections: 1, closed: true })
+  })
+
+  it.each(['BASE_URL', 'SERVICE_BASE_URL', 'PUBLIC_API_BASE', 'HAI_E2E_WEB_URL', 'HAI_E2E_APP_URL', 'HAI_E2E_DESKTOP_URL'])('does not occupy the planned %s port or count HTTP health probes as database connections', async (control) => {
+    const { root, evidence } = fixture()
+    const preview = createServer((_request, response) => response.end('owned preview'))
+    preview.listen(0, '127.0.0.1')
+    await once(preview, 'listening')
+    const address = preview.address()
+    if (!address || typeof address === 'string')
+      throw new Error('Expected an owned preview port')
+    const baseUrl = `http://127.0.0.1:${address.port}`
+    preview.close()
+    await once(preview, 'close')
+    // 强制计数进程首次分配到尚未启动的预览端口，重现 CI 的抢占窗口。
+    const preload = path.join(root, 'preview-port-collision.mjs')
+    writeFileSync(preload, `import net from 'node:net'; if(process.argv[2]==='serve'){const original=net.Server.prototype.listen;let first=true;net.Server.prototype.listen=function(port,...args){if(port===0&&first){first=false;return original.call(this,${address.port},...args)}return original.call(this,port,...args)}}`)
+    const env = { ...process.env, [control]: baseUrl, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(preload).href}`.trim() }
+    vi.stubEnv('NODE_OPTIONS', env.NODE_OPTIONS)
+    try {
+      await withDatabaseIsolation(root, evidence, env, async () => {
+        preview.listen(address.port, '127.0.0.1')
+        await once(preview, 'listening')
+        const response = await fetch(baseUrl)
+        expect(await response.text()).toBe('owned preview')
+      })
+      const final = JSON.parse(readFileSync(path.join(evidence, 'database-isolation.json'), 'utf8'))
+      expect(final).toMatchObject({ connections: 1, closed: true })
+      expect(final.port).not.toBe(address.port)
+    }
+    finally {
+      if (preview.listening) {
+        preview.close()
+        await once(preview, 'close')
+      }
+    }
   })
 
   it.skipIf(process.platform !== 'win32')('短暂的快照共享冲突可重试，计数与真实关闭仍通过独立进程确认', async () => {
