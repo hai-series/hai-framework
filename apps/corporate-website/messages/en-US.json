@@ -164,6 +164,7 @@
   "admin_login_failed": "Login failed, please try again.",
   "admin_network_error": "Network error, please try again later.",
   "admin_logout": "Log Out",
+  "admin_logout_failed": "Unable to log out. Please try again.",
   "admin_records_total": "{total} records total",
   "admin_records_page_info": "Page {page} / {totalPages}",
   "admin_search_placeholder": "Search company / contact / email / phone",

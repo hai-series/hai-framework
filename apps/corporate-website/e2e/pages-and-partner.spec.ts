@@ -10,6 +10,26 @@ interface ApiResponse<T = unknown> {
 }
 
 test.describe('Corporate pages and partner flow', () => {
+  test('failed logout keeps the administrator signed in for a successful retry', async ({ page }, testInfo) => {
+    const login = await page.request.post('/api/partners/admin/login', {
+      form: { username: 'partner-admin', password: 'CHANGE_ME_STRONG_PASSWORD' },
+    })
+    expect(login.ok()).toBe(true)
+    await page.goto('/partners/admin')
+    await page.route('**/api/partners/admin/logout', route => route.fulfill({ status: 500, json: { success: false, error: { code: 'INTERNAL_ERROR' } } }))
+    const logout = page.getByRole('button', { name: /退出登录|Log Out|ログアウト/ })
+    await logout.click()
+    const notification = page.locator('.hai-toast-item[data-variant=error]')
+    await expect(notification).toContainText('退出登录失败，请重试')
+    await expect(page).toHaveURL(/\/partners\/admin$/)
+    expect((await page.request.get('/api/partners/admin/records')).ok()).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath('logout-failed-retry.png'), animations: 'disabled' })
+    await page.unroute('**/api/partners/admin/logout')
+    await logout.click()
+    await expect(page).toHaveURL(/\/partners\/admin\/login$/)
+    expect((await page.request.get('/api/partners/admin/records')).status()).toBe(401)
+  })
+
   test('partner login uses safe Toast for both credential failures on narrow and wide screens', async ({ page }, testInfo) => {
     await page.route('**/api/partners/admin/login', route => route.fulfill({
       status: 401,

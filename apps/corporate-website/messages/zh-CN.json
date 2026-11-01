@@ -164,6 +164,7 @@
   "admin_login_failed": "登录失败，请重试。",
   "admin_network_error": "网络错误，请稍后重试。",
   "admin_logout": "退出登录",
+  "admin_logout_failed": "退出登录失败，请重试",
   "admin_records_total": "共 {total} 条记录",
   "admin_records_page_info": "第 {page} / {totalPages} 页",
   "admin_search_placeholder": "搜索公司 / 联系人 / 邮箱 / 电话",

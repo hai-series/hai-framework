@@ -164,6 +164,7 @@
   "admin_login_failed": "ログインに失敗しました。再試行してください。",
   "admin_network_error": "ネットワークエラーです。しばらくしてから再試行してください。",
   "admin_logout": "ログアウト",
+  "admin_logout_failed": "ログアウトできませんでした。もう一度お試しください。",
   "admin_records_total": "全{total}件",
   "admin_records_page_info": "{page} / {totalPages}ページ",
   "admin_search_placeholder": "会社名 / 担当者 / メール / 電話を検索",

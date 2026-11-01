@@ -5,7 +5,9 @@ export const POST = kit.handler(async ({ cookies }) => {
   const token = cookies.get('corp_partner_access_token')
 
   if (token) {
-    await clearPartnerAdminSession(token)
+    const revoked = await clearPartnerAdminSession(token)
+    if (!revoked.success)
+      return kit.response.fromError(revoked.error)
   }
 
   cookies.delete('corp_partner_access_token', { path: '/' })
