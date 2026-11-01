@@ -300,4 +300,6 @@ Git 推送测试使用临时 bare remotes，不碰业务仓库。真实 Codex/ds
 
 当前分支已实现上述 ACP 接入、原生适配器、受管进程/容器、工作区、多仓库 Git、可选 worktree、恢复和结果处理，并增加配置与数据库合并资源清单。配置同 ID 优先且只读；数据库提供 CRUD 和 CAS 版本检查。此规则覆盖 LLM/音频/图像模型、外部 MCP、检索源以及 ACP agents/workspaces。会话和聊天历史保持运行态数据库 API，不导入配置历史。
 
-测试使用临时目录、bare remote 和专属 volume，不对业务工程执行发布。真实 Podman 的卷持久化、worktree、会话恢复和 Git 合并推送已通过；Codex/dsh 实际原生程序已对本地模型服务夹具完成接入验收，HTTP/WS 文件、终端、权限及 elicitation 回调已验证。Docker 客户端存在但 daemon 不可用，Docker 真实启动未验收；引擎兼容参数共用，不能据此声称 Docker 已通过。模型上游夹具只能证明接入协议与配置映射，不能代替真实模型质量验收。Responses 反向网关仍不在范围内。
+测试使用临时目录、bare remote 和专属 volume，不对业务工程执行发布。真实 Podman 的卷持久化、worktree、会话恢复和 Git 合并推送已通过；Codex/dsh 实际原生程序分别完成内置服务与内嵌模式的真实 OpenRouter 两轮工具读写及恢复验收。新增 Goose 原生 `/acp` 自定义服务，HTTP/WS 分别完成鉴权、两轮工具读写和恢复验收；六组使用低价 `qwen/qwen3.7-flash`，脱敏执行证据可生成截图。协议夹具另覆盖文件、终端、权限、elicitation、取消和异常边界，不以夹具代替真实智能体验收。
+
+本机 Docker daemon 不可用，本地容器验收使用 Podman；可信 main 的 GitHub CI 必须通过 Docker 运行相同六组真实模型测试并上传证据，缺少密钥或准备失败会阻断。CI 的实际结果以对应提交的运行记录为准。Responses 反向网关仍不在范围内。

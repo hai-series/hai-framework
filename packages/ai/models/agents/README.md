@@ -33,7 +33,7 @@ Goose 使用 `goose serve --host 0.0.0.0 --port 3284`，在 `/acp` 同时提供 
 
 部署方启动容器，将工作区卷挂到 `/workspace`、状态卷挂到 `/state`，再登记 Hai 自定义服务。Hai 只管理 ACP 连接和原生会话；远程服务、卷、Git 与模型的生命周期由部署方管理。镜像当前只提供 linux/amd64；明确检查平台，不在其它架构上误装 x86 二进制。
 
-`tests/ai-acp-goose.e2e.test.ts` 对真实 Goose 服务分别验证 HTTP/WS 鉴权、随机文件读写、原生工具调用；仅当握手声明恢复能力时验收恢复，否则验证显式不支持。设置 `HAI_ACP_E2E_GOOSE=1`、`HAI_ACP_E2E_GOOSE_IMAGE=hai-ai/goose:1.57.0` 和 `OPENROUTER_APIKEY` 启用；`HAI_ACP_E2E_GOOSE_MODEL` 可覆盖测试型号，默认沿用 `HAI_ACP_E2E_MODEL`，再回退 google/gemini-2.5-flash-lite。模型服务会发生真实调用，测试报告与截图沿用 `test-results/acp-openrouter`，不记录凭据。
+`tests/ai-acp-goose.e2e.test.ts` 对真实 Goose 服务分别验证 HTTP/WS 鉴权、随机文件读写、原生工具调用；仅当握手声明恢复能力时验收恢复，否则验证显式不支持。设置 `HAI_ACP_E2E_GOOSE=1`、`HAI_ACP_E2E_GOOSE_IMAGE=hai-ai/goose:1.57.0` 和 `OPENROUTER_APIKEY` 启用；`HAI_ACP_E2E_GOOSE_MODEL` 可覆盖测试型号，默认沿用 `HAI_ACP_E2E_MODEL`，再回退 qwen/qwen3.7-flash。模型服务会发生真实调用，测试报告与截图沿用 `test-results/acp-openrouter`，不记录凭据。
 
 ## 验证
 
