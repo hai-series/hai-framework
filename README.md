@@ -140,6 +140,8 @@ pnpm --filter @h-ai/cli test:scaffold-gates
 
 [CI 分阶段并行运行](docs/ci.md)，按输入指纹复用符合条件的成功记录。**CI** 验证类型、构建、测试和浏览器流程；**CodeQL** 执行 JavaScript/TypeScript 静态安全分析，发现项在 GitHub Security 中查看；**Leak Checker** 检查维护者配置的泄漏词表。徽标反映工作流结果，安全分析结果仍需结合业务权限与部署审查判断。
 
+CI 单元阶段构建 Codex/dsh/Goose 基础镜像，并使用 Docker 实际执行 ACP 原生程序与工作区卷测试。PR 使用本地模型夹具；可信 main 推送额外使用 OpenRouter secret 验证 Codex/dsh embedded/builtin-service 四组和 Goose HTTP/WS 两组真实调用，并保留 HTML/截图证据。镜像准备或真实验收失败会阻断门禁。
+
 npm 发布后可能先进入扫描阶段。CI 最多等待三十分钟确认所有包可查询，再统一推进 `latest`；处理方式见 [CI 发布说明](docs/ci.md#查看结果与重新运行)。
 
 本地提交/推送钩子使用 `scripts/check-leak-words.mjs`，私有词表 `.leak-words.json` 不提交。容器门禁回收本轮登记的资源；历史测试镜像先运行 `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` 预览，确认后加 `--apply`。[验收说明](docs/usage/governance/verification.md)区分实际运行、复用和环境依赖。

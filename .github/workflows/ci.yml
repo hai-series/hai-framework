@@ -170,13 +170,18 @@ jobs:
     name: Unit and container tests
     needs: [plan, build]
     uses: ./.github/workflows/ci-stage.yml
+    secrets:
+      OPENROUTER_APIKEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.OPENROUTER_APIKEY || '' }}
     with:
       stage: unit
       fingerprint: ${{ fromJSON(needs.plan.outputs.fingerprints).unit }}
-      command: pnpm test
+      command: node .github/scripts/ci-acp-test.mjs
+      openrouter_model: qwen/qwen3.7-flash
+      openrouter_capabilities: '{"contextWindow":1000000,"maxOutputTokens":65536,"inputModalities":["text","image"],"outputModalities":["text"],"toolCalling":true,"reasoning":{"supported":true,"efforts":["low","medium","high"]}}'
       baseline: ${{ needs.plan.outputs.baseline }}
       base_sha: ${{ needs.plan.outputs.base_sha }}
       build_artifact: ${{ needs.build.outputs.artifact }}
+      browser: true
       force: ${{ inputs.full == true }}
 
   scaffold:

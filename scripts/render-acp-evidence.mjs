@@ -43,10 +43,33 @@ function state(value) {
   return ['passed', 'success', 'completed', 'ok'].includes(plain(value).toLowerCase()) ? 'passed' : ['failed', 'error'].includes(plain(value).toLowerCase()) ? 'failed' : 'unknown'
 }
 
+/** 概览只从已记录的轮次断言、传输和时间取值，不推断缺失证据。 */
+function summary(record) {
+  const rounds = Array.isArray(record.rounds) ? record.rounds.map(object) : []
+  const transport = plain(record.transport, 20) || (['embedded', 'builtin-service'].includes(record.mode) ? 'stdio' : '未记录')
+  const passedRounds = rounds.filter(round => typeof round.expectedToken === 'string' && round.expectedToken.length > 0
+    && round.stopReason === 'end_turn' && typeof round.fileContent === 'string' && round.fileContent.trim() === round.expectedToken
+    && typeof round.reply === 'string' && round.reply.includes(round.expectedToken)
+    && typeof round.toolCalls === 'number' && round.toolCalls > 0 && typeof round.nativeId === 'string' && round.nativeId.length > 0).length
+  return {
+    title: `${plain(record.agent, 100) || 'ACP Agent'} · ${plain(record.mode, 100) || '未知模式'} · ${transport.toUpperCase()}`,
+    transport: transport.toUpperCase(),
+    model: plain(record.model, 180) || '未记录',
+    status: state(record.status),
+    passedRounds,
+    rounds: rounds.length,
+    toolCalls: rounds.reduce((total, round) => total + (typeof round.toolCalls === 'number' && Number.isFinite(round.toolCalls) ? Math.max(0, round.toolCalls) : 0), 0),
+    duration: typeof record.durationMs === 'number' && Number.isFinite(record.durationMs) ? `${(record.durationMs / 1000).toFixed(1)} s` : '未记录',
+    startedAt: plain(record.startedAt, 100) || '未记录',
+    finishedAt: plain(record.finishedAt, 100) || '未记录',
+  }
+}
+
 const css = `
 *{box-sizing:border-box}body{margin:0;background:#edf2f7;color:#172b43;font-family:Arial,"Microsoft YaHei",sans-serif;line-height:1.55}
 main{max-width:1480px;margin:0 auto;padding:36px 40px 48px}.eyebrow{font-size:13px;letter-spacing:2px;color:#39718d;font-weight:700}h1{font-size:32px;line-height:1.25;margin:10px 0 12px}h2{font-size:18px;margin:0 0 15px}.intro{color:#536a80;margin:0 0 24px}.badge{display:inline-block;border-radius:99px;padding:5px 14px;font-size:13px;font-weight:700;background:#e4eaf0;color:#56687a}.passed{background:#d4f0e2;color:#166141}.failed{background:#ffe0df;color:#963c35}.unknown{background:#fff0cf;color:#765724}
 .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.metric,.panel{background:#fff;border:1px solid #dce4ed;border-radius:12px;padding:20px}.metric small{display:block;color:#65798e;font-size:12px;text-transform:uppercase;margin-bottom:6px}.metric strong{font-size:17px;overflow-wrap:anywhere}.grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,1fr);gap:18px}.panel{margin-bottom:18px}p{margin:0 0 10px}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:"Cascadia Code",Consolas,"Microsoft YaHei",monospace;font-size:13px;line-height:1.65}.task{background:#f5f9fc;border-left:3px solid #4587a7;padding:14px;border-radius:5px}.rows{width:100%;border-collapse:collapse;font-size:13px}.rows th{text-align:left;color:#647990;font-size:11px;letter-spacing:.5px}.rows td,.rows th{padding:10px 8px;border-bottom:1px solid #edf1f5;vertical-align:top;overflow-wrap:anywhere}.rows td:first-child{width:155px}.muted{color:#667e94;font-size:13px}.event{padding:10px 0;border-bottom:1px solid #edf1f5}.event b{font-size:12px;color:#36708d}.event p{font-size:13px;margin:4px 0 0}.foot{font-size:12px;color:#718395;margin-top:18px}.cleanup{margin-top:10px}a{color:#326b93}.links{display:flex;gap:12px}.reply{font-size:14px}.title-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.empty{padding:16px;border:1px dashed #cedae4;border-radius:6px;color:#718395;font-size:13px}
+.overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.overview-grid .panel{margin:0}.overview-grid h2{margin:0;font-size:17px}.overview-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:12px 0;margin:12px 0;border-top:1px solid #edf1f5;border-bottom:1px solid #edf1f5}.overview-meta small{display:block;font-size:12px;color:#647990}.overview-meta strong{font-size:19px}.model-line{font-size:13px;margin-top:10px;overflow-wrap:anywhere}.overview-grid .badge{white-space:nowrap}.times{font-size:12px;color:#647990;line-height:1.7;margin:0 0 12px}
 `
 
 /** 无外部资源、无可执行脚本的独立验收页面。 */
@@ -63,16 +86,16 @@ function render(record) {
   const cleanup = object(data.cleanup)
   const result = state(data.status)
   const cleanupState = state(cleanup.status)
-  const title = `${plain(data.agent, 100) || 'ACP Agent'} · ${plain(data.mode, 100) || '未知模式'}`
-  const duration = typeof data.durationMs === 'number' ? `${(data.durationMs / 1000).toFixed(1)} s` : '未记录'
+  const overview = summary(data)
+  const title = overview.title
   return document(title, `
     <div class="eyebrow">HAI FRAMEWORK / ACP E2E EVIDENCE</div>
     <div class="title-row"><h1>${html(title)}</h1><span class="badge ${result}">${result === 'passed' ? '测试通过' : result === 'failed' ? '测试失败' : '结果未完成'}</span></div>
     <p class="intro">真实智能体运行记录 · 此页面由测试证据生成，用于验收；不代表业务产品界面。</p>
     <div class="meta">
-      <div class="metric"><small>Agent / 运行模式</small><strong>${html(data.agent, 100)} / ${html(data.mode, 100)}</strong></div>
+      <div class="metric"><small>Agent / 运行模式 / 传输</small><strong>${html(data.agent, 100)} / ${html(data.mode, 100)} / ${html(overview.transport)}</strong></div>
       <div class="metric"><small>实际模型</small><strong>${html(data.model, 180) || '未记录'}</strong></div>
-      <div class="metric"><small>运行耗时</small><strong>${html(duration)}</strong></div>
+      <div class="metric"><small>运行耗时</small><strong>${html(overview.duration)}</strong></div>
       <div class="metric"><small>原生事件 / 文件校验</small><strong>${events.length} events / ${files.length} files</strong></div>
     </div>
     <div class="grid"><div>
@@ -115,14 +138,14 @@ async function main() {
         const content = render(record)
         await writeFile(path.join(input, `${slug}.html`), content)
         pages.push({ slug, content })
-        rendered.push({ slug, title: `${plain(record.agent, 100)} / ${plain(record.mode, 100)}`, status: state(record.status) })
+        rendered.push({ slug, ...summary(record) })
       }
       catch {
         failed = true
         process.stderr.write(`Could not render ACP evidence record ${index + 1}.\n`)
       }
     }
-    const overview = document('ACP 真实接入验收', `<div class="eyebrow">HAI FRAMEWORK / ACP E2E EVIDENCE</div><h1>ACP 真实接入验收</h1><p class="intro">以下页面来自实际运行记录；失败记录也会保留。此页面不是业务产品界面。</p>${rendered.map(item => `<section class="panel"><div class="title-row"><h2>${html(item.title)}</h2><span class="badge ${item.status}">${html(item.status)}</span></div><div class="links"><a href="${item.slug}.html">运行记录</a><a href="${item.slug}.png">Chrome 截图</a></div></section>`).join('')}`)
+    const overview = document('ACP 真实接入验收', `<div class="eyebrow">HAI FRAMEWORK / ACP E2E EVIDENCE</div><h1>ACP 真实接入验收</h1><p class="intro">以下页面来自实际运行记录；失败记录也会保留。此页面不是业务产品界面。</p><div class="overview-grid">${rendered.map(item => `<section class="panel"><div class="title-row"><h2>${html(item.title)}</h2><span class="badge ${item.status}">${item.status === 'passed' ? '测试通过' : item.status === 'failed' ? '测试失败' : '未完成'}</span></div><p class="model-line">实际模型：<strong>${html(item.model)}</strong></p><div class="overview-meta"><div><small>轮次通过</small><strong>${item.passedRounds} / ${item.rounds}</strong></div><div><small>原生工具调用</small><strong>${item.toolCalls}</strong></div><div><small>运行耗时</small><strong>${html(item.duration)}</strong></div></div><p class="times">开始：${html(item.startedAt)}<br>结束：${html(item.finishedAt)}</p><div class="links"><a href="${item.slug}.html">运行记录</a><a href="${item.slug}.png">Chrome 截图</a></div></section>`).join('')}</div>`)
     await writeFile(path.join(input, 'index.html'), overview)
     // 先写完 HTML；即使 CI 缺少 Chrome，仍保留可审阅记录和真实失败状态。
     const { chromium } = require('@playwright/test')

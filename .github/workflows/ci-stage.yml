@@ -30,6 +30,15 @@ on:
       timeout:
         default: 45
         type: number
+      openrouter_model:
+        default: ''
+        type: string
+      openrouter_capabilities:
+        default: ''
+        type: string
+    secrets:
+      OPENROUTER_APIKEY:
+        required: false
 
 permissions:
   contents: read
@@ -98,6 +107,21 @@ jobs:
       - name: Execute verification
         if: steps.proof.outputs.run == 'true'
         run: ${{ inputs.command }}
+        env:
+          OPENROUTER_APIKEY: ${{ secrets.OPENROUTER_APIKEY }}
+          HAI_ACP_E2E_MODEL: ${{ inputs.openrouter_model }}
+          HAI_ACP_E2E_CAPABILITIES: ${{ inputs.openrouter_capabilities }}
+      - name: Render ACP acceptance evidence
+        if: always() && inputs.stage == 'unit' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.proof.outputs.run == 'true'
+        run: node scripts/render-acp-evidence.mjs --require-records
+      - name: Upload ACP acceptance evidence
+        if: always() && inputs.stage == 'unit' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.proof.outputs.run == 'true'
+        uses: actions/upload-artifact@v6.0.0
+        with:
+          name: acp-openrouter-${{ github.sha }}-${{ github.run_attempt }}
+          path: packages/ai/test-results/acp-openrouter
+          if-no-files-found: error
+          retention-days: 3
       - name: Record verified stage result
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.environment.outputs.fingerprint != ''
         run: node .github/scripts/ci-plan.mjs record

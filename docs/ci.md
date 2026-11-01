@@ -31,6 +31,10 @@ flowchart TD
 
 每个 runner 有自己的工作区、容器引擎、端口和测试数据。根单元入口内部仍遵守容器资源预算：普通包有界并发，容器包串行。浏览器矩阵关闭全局 fail-fast，以保留其他应用的独立结果。`pnpm e2e` 的本地串行入口保留，避免在同一工作区同时重写产物。
 
+单元阶段先由 `.github/scripts/ci-acp-test.mjs` 检查 Docker，并从 Agent manifest 读取版本构建 Codex/dsh/Goose 三个基础镜像，使用 Debian 官方镜像源。构建全部成功后，显式设置 `HAI_ACP_E2E_ENGINE=docker`、`HAI_ACP_E2E_IMAGE`、`HAI_ACP_E2E_DSH_IMAGE`、`HAI_ACP_E2E_GOOSE_IMAGE` 再执行无真实模型凭据的 `pnpm test`；任一前置或测试失败均阻断该阶段和发布。这样真实 Agent、volume、恢复和 Git 的 ACP E2E 在 CI 中实际运行，不依靠本地可选镜像开关。PR 仅执行本地 HTTP 模型夹具，不接收上游密钥。Turbo 将这些启用变量纳入 test 的环境和缓存身份，不能复用此前跳过原生用例的结果。测试回收本轮容器与 volume；临时 runner 销毁时回收镜像。可选 Java/Rust/Go 镜像组合不属于该基础验收。
+
+可信 `main` push 额外使用 Actions secret `OPENROUTER_APIKEY` 对接真实模型。调用方仅在该事件传递可选 secret，复用工作流只在执行验证步骤注入，安装依赖、Docker 构建和普通根测试均不接收它。夹具门禁通过后，脚本按 manifest 安装固定版本的宿主 Codex/dsh，定向运行 `ai-acp-openrouter.e2e.test.ts` 和 `ai-acp-goose.e2e.test.ts`，强制启用 Codex/dsh 的 embedded/builtin-service 四组及 Goose HTTP/WS 两组真实验收；缺密钥、模型配置或任何一组失败均阻断发布。当前模型为 `qwen/qwen3.7-flash`，容量声明来自已核验元数据，请求预算由测试单独限制。工作流安装 Chrome，在成功和失败后渲染已记录的 JSON 证据并上传 HTML/PNG 到 `acp-openrouter-<sha>-<attempt>` 制品，保留三天；证据不得包含密钥。手工 dispatch 和 PR 继续只跑夹具，避免未授权分支触发真实调用。
+
 构建产物和 Turbo 内容缓存由同一轮构建准备，通过 `ci-build-state-<runId>-<attempt>` 传给检查。共享包同时包含 `packages/*/dist`、应用私有包的 `apps/*/dist`、静态站点 `apps/*/build`、SvelteKit/适配器输出和 Turbo 缓存，不只传框架包。启动器直接消费的应用产物必须实际存在；缓存中的压缩记录不能代替这些文件。依赖任务仍由 Turbo 校验输入并恢复必要输出；上游构建失败不启动依赖它的检查。官网额外直接构建一次，确保 `build-metadata.json` 中的提交号属于本次提交。
 
 ## 修复后复用哪些结果

@@ -58,6 +58,9 @@
       "cache": false
     },
     "test": {
+      "env": [
+        "HAI_ACP_E2E_*"
+      ],
       "passThroughEnv": [
         "DOCKER_HOST",
         "DOCKER_TLS_VERIFY",
