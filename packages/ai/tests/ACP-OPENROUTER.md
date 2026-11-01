@@ -2,7 +2,7 @@
 
 `ai-acp-openrouter.e2e.test.ts` 使用实际 Codex、DeepSeek Harness 和真实 OpenRouter 模型，分别验证 embedded 和 builtin-service，共四组。它不会启动模拟模型服务或 stdio 网关。
 
-每组先把唯一随机标识写入临时工作区的 `files/challenge.txt`。提示词只给文件名，智能体必须实际读取文件、写出 `files/result.txt`，并返回相同标识。测试核验 ACP 工具事件和磁盘内容；随后 close、向工作区导入另一个新标识，再用同一原生 sessionId 恢复并重复读写，核验原生历史和文件持久性。只返回固定口令或没有实际文件不能通过。
+每组先把唯一随机标识写入临时工作区的 `files/challenge.txt`。提示词只给文件名，智能体必须实际读取文件并写出 `files/result.txt`；先核验真实工具事件、正常结束和磁盘内容，再固定发出一个独立请求，要求用工具重新读取结果并返回完整标识。写入可以正常回复完成摘要，读回必须实际调用工具并在回复中包含标识。随后 close、导入另一个新标识，再用同一原生 sessionId 恢复并重复两个步骤。每组两轮、每轮两个固定请求，不按回复内容重试；固定口令、没有文件或没有实际工具调用均不能通过。
 
 ## 启用和准备
 
@@ -47,11 +47,11 @@ $env:HAI_ACP_E2E_GOOSE_IMAGE = 'localhost/hai-ai/goose:1.57.0'
 pnpm.cmd --filter @h-ai/ai exec vitest run tests/ai-acp-openrouter.e2e.test.ts tests/ai-acp-goose.e2e.test.ts --maxWorkers=1
 ```
 
-回复可含原生 commentary 或 Markdown，测试要求文本包含实际读出的随机标记；文件内容仍逐字匹配，并要求原生工具事件及相同 nativeId 的第二轮恢复。真实上游的可用区域可能不同，以目标执行环境实测为准。
+读回回复可含原生 commentary 或 Markdown，但必须包含完整随机标记；文件内容仍逐字匹配，写入和读回分别要求真实工具事件，并核验相同 nativeId 的第二轮恢复。六组使用相同的两步验收方式，不要求模型在写入确认摘要中复述文件内容。真实上游的可用区域可能不同，以目标执行环境实测为准。
 
 ## 证据和清理
 
-六组证据写入 `packages/ai/test-results/acp-openrouter/*.json`，包含开始/结束时间、真实模型、模式与传输、ACP 事件白名单摘要、两轮随机标识、实际文件内容、回复、工具调用计数、恢复的 nativeId 及清理状态。配置、环境变量、密钥、请求头和完整工具输入不写入证据；已知密钥和 Bearer 形式再次脱敏。
+六组证据写入 `packages/ai/test-results/acp-openrouter/*.json`，包含开始/结束时间、真实模型、模式与传输、ACP 事件白名单摘要、两轮随机标识、实际文件内容、写入确认和读回回复、两步各自的工具调用计数、恢复的 nativeId 及清理状态。配置、环境变量、密钥、请求头和完整工具输入不写入证据；已知密钥和 Bearer 形式再次脱敏。
 
 在仓库根目录生成截图：
 

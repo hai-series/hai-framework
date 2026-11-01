@@ -32,7 +32,7 @@ interface GooseEvidence {
   events: Array<{ type: string, summary: string }>
   files: Array<{ path: string, passed: boolean, summary: string }>
   reply: string
-  rounds: Array<{ phase: string, stopReason: string, reply: string, expectedToken: string, fileContent: string, nativeId: string, toolCalls: number }>
+  rounds: Array<{ phase: string, stopReason: string, reply: string, expectedToken: string, fileContent: string, nativeId: string, toolCalls: number, writeReply: string, writeStopReason: string, writeToolCalls: number, readbackToolCalls: number }>
   cleanup: { status: 'pending' | 'passed' | 'failed', summary: string }
   error?: string
 }
@@ -92,7 +92,7 @@ describe.sequential('goose native remote ACP acceptance', () => {
         mode: 'custom-service',
         transport,
         model,
-        task: 'Connect to the real Goose native ACP server with authentication; read an undisclosed workspace token, write it to result.txt, and verify native resume only when advertised.',
+        task: 'Connect to the real authenticated Goose ACP server; write an undisclosed workspace token, independently request tool-based readback, and repeat after native resume when advertised.',
         startedAt: new Date(started).toISOString(),
         status: 'running',
         events: [],
@@ -215,16 +215,25 @@ describe.sequential('goose native remote ACP acceptance', () => {
           }
           expect(value(await session.info()).nativeId).toBe(nativeId)
           const offset = evidence.events.length
-          const response = value(await session.prompt([{ type: 'text', text: `Use your actual developer tools to read /workspace/${input}. It contains a unique random token not included in this prompt. Write exactly that token (optional final newline) to /workspace/${output}. Then reply with exactly the token. Do not inspect environment variables, credentials or files outside /workspace. This is an isolated acceptance fixture; writing the result is authorized. Do not simulate tool use.` }]))
+          const written = value(await session.prompt([{ type: 'text', text: `Use your actual developer tools to read /workspace/${input}. It contains a unique random token not included in this prompt. Write exactly that token (optional final newline) to /workspace/${output} and briefly confirm completion. Do not inspect environment variables, credentials or files outside /workspace. This is an isolated acceptance fixture; writing the result is authorized. Do not simulate tool use.` }]))
           const fileContent = redact((await engineCommand(engine, ['exec', container, 'node', '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))', `/workspace/${output}`])).trim())
-          const reply = redact(response.text.trim())
-          const toolCalls = evidence.events.slice(offset).filter(event => event.type === 'tool_call').length
-          evidence.rounds.push({ phase, stopReason: response.stopReason, reply, expectedToken: token, fileContent, nativeId: nativeId ?? '', toolCalls })
+          const writeReply = redact(written.text.trim())
+          const writeToolCalls = evidence.events.slice(offset).filter(event => event.type === 'tool_call').length
           evidence.files.push({ path: `/workspace/${output}`, passed: fileContent === token, summary: fileContent })
-          evidence.reply += `${phase}: ${reply}\n`
-          expect(response.stopReason).toBe('end_turn')
-          expect(toolCalls).toBeGreaterThan(0)
+          expect(written.stopReason).toBe('end_turn')
+          expect(writeToolCalls).toBeGreaterThan(0)
+          expect(writeReply.length).toBeGreaterThan(0)
           expect(fileContent).toBe(token)
+          // 所有传输固定增加读回请求，验证后续轮次的原生工具与回复，不做失败重试。
+          const readbackOffset = evidence.events.length
+          const response = value(await session.prompt([{ type: 'text', text: `Read /workspace/${output} from disk using your actual developer tool. This is an explicit readback verification: do not rely on prior messages. Your final assistant response must contain the complete literal file contents, including the full random token. Return the contents, not a completion summary. Do not modify files or inspect anything outside /workspace.` }]))
+          const reply = redact(response.text.trim())
+          const readbackToolCalls = evidence.events.slice(readbackOffset).filter(event => event.type === 'tool_call').length
+          const toolCalls = evidence.events.slice(offset).filter(event => event.type === 'tool_call').length
+          evidence.rounds.push({ phase, stopReason: response.stopReason, reply, expectedToken: token, fileContent, nativeId: nativeId ?? '', toolCalls, writeReply, writeStopReason: written.stopReason, writeToolCalls, readbackToolCalls })
+          evidence.reply += `${phase} write: ${writeReply}\n${phase} readback: ${reply}\n`
+          expect(response.stopReason).toBe('end_turn')
+          expect(readbackToolCalls).toBeGreaterThan(0)
           // 验证回复实际包含随机值；不把模型的 Markdown/说明文字当成传输失败。
           expect(reply).toContain(token)
         }
