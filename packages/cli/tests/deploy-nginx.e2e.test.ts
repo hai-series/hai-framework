@@ -2,7 +2,7 @@
 import type { DeployFixtureCleanupFailure, DeployTestFixture } from './helpers/deploy-container-fixture.js'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createECDH, createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { request } from 'node:https'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -132,6 +132,10 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
       const cert = path.join(project, `cert-${suffix}.pem`)
       const key = path.join(project, `key-${suffix}.pem`)
       execFileSync(openssl, ['req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-nodes', '-keyout', key, '-out', cert, '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost'], { stdio: 'ignore', windowsHide: true })
+      // 固定相同 mtime，确保热更新不能依赖两次生成恰好跨秒。
+      const timestamp = new Date('2020-01-01T00:00:00Z')
+      utimesSync(cert, timestamp, timestamp)
+      utimesSync(key, timestamp, timestamp)
       return { cert, key, pem: readFileSync(cert, 'utf8') }
     }
     const first = certificate('first')
@@ -149,8 +153,9 @@ describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
     await executeDeployTestFixture(runtime, owned, ['sh', '-c', 'mkdir -p /tmp/hai-tls-pem /tmp/hai-tls-www; printf "https fixture" > /tmp/hai-tls-www/index.html'])
     const copyCertificate = (files: { cert: string, key: string }) => {
       for (const [source, target] of [[files.key, 'privkey.pem'], [files.cert, 'fullchain.pem']])
-        execFileSync(runtime, ['cp', source!, `${owned.containerId}:/tmp/hai-tls-pem/${target}`], { windowsHide: true })
-      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'chmod', '444', '/tmp/hai-tls-pem/fullchain.pem', '/tmp/hai-tls-pem/privkey.pem'], { windowsHide: true })
+        execFileSync(runtime, ['cp', source!, `${owned.containerId}:/tmp/hai-tls-pem/${target}.next`], { windowsHide: true })
+      // 与实际续期脚本一致地原子替换；同 mtime 原地覆盖会复用 Nginx 缓存中的旧证书。
+      execFileSync(runtime, ['exec', '--user', '0', owned.containerId, 'sh', '-ec', 'chmod 444 /tmp/hai-tls-pem/fullchain.pem.next /tmp/hai-tls-pem/privkey.pem.next; mv /tmp/hai-tls-pem/privkey.pem.next /tmp/hai-tls-pem/privkey.pem; mv /tmp/hai-tls-pem/fullchain.pem.next /tmp/hai-tls-pem/fullchain.pem'], { windowsHide: true })
     }
     copyCertificate(first)
     execFileSync(runtime, ['cp', path.join(project, 'nginx.conf'), `${owned.containerId}:/tmp/hai-tls.conf`], { windowsHide: true })

@@ -41,7 +41,19 @@ export async function withDatabaseIsolation(project: string, evidence: string, e
   const savedFiles = new Map<string, Buffer | undefined>()
   const diagnostic = path.join(evidence, 'database-isolation-process.log')
   const output = openSync(diagnostic, 'a')
-  const child = spawn(process.execPath, [sentinel, 'serve', stateFile], { windowsHide: true, stdio: ['ignore', output, output] })
+  // 预览服务尚未启动，不能让计数进程抢占已分配的端口并将 HTTP 探测误判为 DB 连接。
+  const plannedPorts = new Set<number>()
+  for (const [name, value] of Object.entries(env)) {
+    if (!value || !(['BASE_URL', 'SERVICE_BASE_URL', 'PUBLIC_API_BASE'].includes(name) || /^HAI_E2E_[A-Z]+_URL$/.test(name)))
+      continue
+    try {
+      const url = new URL(value)
+      if (['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+        plannedPorts.add(Number(url.port || (url.protocol === 'https:' ? 443 : 80)))
+    }
+    catch { /* 相对 API 路径不占用宿主端口。 */ }
+  }
+  const child = spawn(process.execPath, [sentinel, 'serve', stateFile, JSON.stringify([...plannedPorts])], { windowsHide: true, stdio: ['ignore', output, output] })
   closeSync(output)
   let spawnFailure: Error | undefined
   child.once('error', (error) => {
@@ -128,7 +140,7 @@ export async function withDatabaseIsolation(project: string, evidence: string, e
         failures.push(new Error(`Database isolation process exited unexpectedly (${child.signalCode ?? child.exitCode})`))
       const final = readState()
       if (baseline > 0 && (final.connections !== baseline || !final.closed))
-        failures.push(new Error(`E2E server connected to ambient or .env.local database (${final.connections - baseline} unexpected connections)`))
+        failures.push(new Error(`E2E server connected to ambient or .env.local database (${final.connections - baseline} unexpected connections; port=${final.port})`))
     }
     catch (error) {
       // 只终止当前函数刚创建的句柄，不按进程名或端口清理其他资源。
