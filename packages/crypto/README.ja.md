@@ -21,6 +21,8 @@
 
 ### セキュリティに関する注意
 
+伝送クライアントの `destroy()` は進行中のハンドシェイクを無効化して中断し、遅延結果による鍵の復活や次回ハンドシェイクの上書きを防ぎます。サーバー registry は自身の期限で回収します。
+
 - **SM4 の既定の暗号化結果は構造化された暗号文**：`crypto.symmetric.encrypt(data, key)` は既定で CBC + ランダム IV を使用し、`{ mode, ciphertext, iv, encoding }` を返します。復号時はこのオブジェクトを `crypto.symmetric.decrypt(payload, key)` に渡します。
 - **SM4 にはランダムな鍵を使用してください**：`crypto.symmetric.generateKey()` で鍵を生成します。このモジュールはパスワードから暗号鍵を導出する KDF を提供しません。パスワードの保存にはサーバー専用の `crypto.password.hash(password)` を使用し、パスワードやそのハッシュを直接 SM4 の鍵にしないでください。
 - **IV は毎回一意にしてください**：同じ鍵で IV を再利用してはいけません。既定の CBC または `encryptWithIV()` による毎回の自動生成を推奨します。IV は暗号文と一緒に送信・保存します（公開可能で、秘密にする必要はありません）。

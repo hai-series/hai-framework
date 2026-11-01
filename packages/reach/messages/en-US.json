@@ -46,5 +46,6 @@
   "reach_apiResponseTooLarge": "API acknowledgement exceeds the 64 KiB limit",
   "reach_apiResponseInvalid": "API acknowledgement must be empty or a JSON object with an optional messageId string",
   "reach_apiRequestFailed": "API request failed or timed out; delivery is unconfirmed",
-  "reach_apiHttpsRequired": "This API policy requires HTTPS and disallows automatic redirects"
+  "reach_apiHttpsRequired": "This API policy requires HTTPS and disallows automatic redirects",
+  "reach_config_providerNameDuplicate": "Provider names must be unique"
 }

@@ -156,6 +156,8 @@ if (hashed.success) {
 
 #### Transport encryption (crypto.transport)
 
+Transport client `destroy()` invalidates and aborts an in-flight handshake; late results cannot restore keys or overwrite the next handshake. It clears local state; server registry entries retain their own expiry.
+
 See the [Transport v2 wire protocol](TRANSPORT-PROTOCOL.md) for canonical encoding, verification order and replay persistence.
 
 The `crypto.transport` namespace provides transport encryption, allowing `@h-ai/serv`, `@h-ai/kit`, and `@h-ai/api-client` to share protocol constants and payload formats.

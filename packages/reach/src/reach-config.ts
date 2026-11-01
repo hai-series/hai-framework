@@ -345,7 +345,7 @@ export type TemplateConfig = z.infer<typeof TemplateConfigSchema>
  */
 export const ReachConfigSchema = z.object({
   /** Provider 配置列表 */
-  providers: z.array(ProviderConfigSchema).min(1, reachM('reach_config_providersRequired')),
+  providers: z.array(ProviderConfigSchema).min(1, reachM('reach_config_providersRequired')).refine(providers => new Set(providers.map(provider => provider.name)).size === providers.length, reachM('reach_config_providerNameDuplicate')),
   /** 模板配置（通过配置文件注册） */
   templates: z.array(TemplateConfigSchema).optional(),
   /** 免打扰配置 */

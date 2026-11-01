@@ -25,6 +25,8 @@ hai-framework のクロスプラットフォーム oRPC/OpenAPI 型付きクラ�
 
 ### クイックスタート
 
+`close()` は旧更新を無効化し、進行中の認証情報書き込みを待ちます。外部 TokenStorage の値は保持され、終了後に再利用できます。`timeout` はヘッダーと JSON 本文全体が対象です。内蔵 Cookie アダプターはログインと更新で認証情報を送るため、CORS の Origin と credentials を設定します。メモリー・ネイティブ保存は元の要求の方針を維持します。独自ストリームは逐次読み取り、本文の中断には呼出側の signal を使います。
+
 ```ts
 import { apiClient } from '@h-ai/api-client'
 

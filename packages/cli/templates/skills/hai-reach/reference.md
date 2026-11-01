@@ -6,6 +6,8 @@
 
 ## 运行环境
 
+Provider 名称必须唯一，重名在连接前返回 CONFIG_ERROR。close 等待在途初始化并释放其 Provider，返回后不再迟到发布模块或定时器。
+
 > ⚠️ **服务端模块（Node.js only）。** 浏览器端不直接发送邮件/短信，而是通过 API 端点触发服务端 `reach.send()`。
 
 ## 依赖
@@ -76,21 +78,27 @@ API Provider 只接受 HTTP(S) URL。回调地址若来自不可信输入，业�
 ### 2. 初始化与关闭
 
 ```typescript
-import { cache } from '@h-ai/cache'
+import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { reach } from '@h-ai/reach'
-import { reldb } from '@h-ai/reldb'
+import { reach, ReachConfigSchema } from '@h-ai/reach'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 
 // 当前配置启用了 delay：数据库和队列表为必需依赖。
-const database = await reldb.init(core.config.get('db'))
+const databaseConfig = core.config.validate('db', ReldbConfigSchema)
+if (!databaseConfig.success) throw new Error(databaseConfig.error.message)
+const database = await reldb.init(databaseConfig.data)
 if (!database.success)
   throw new Error(database.error.message)
-const cached = await cache.init(core.config.get('cache')) // 可选，启用 flush 分布式锁
+const cacheConfig = core.config.validate('cache', CacheConfigSchema)
+if (!cacheConfig.success) throw new Error(cacheConfig.error.message)
+const cached = await cache.init(cacheConfig.data) // 可选，启用 flush 分布式锁
 if (!cached.success)
   throw new Error(cached.error.message)
 
 // 再初始化触达模块（自动检测已初始化的 reldb/cache 单例）
-const initialized = await reach.init(core.config.get('reach'))
+const reachConfig = core.config.validate('reach', ReachConfigSchema)
+if (!reachConfig.success) throw new Error(reachConfig.error.message)
+const initialized = await reach.init(reachConfig.data)
 if (!initialized.success)
   throw new Error(initialized.error.message)
 // ... 使用触达服务
@@ -234,7 +242,7 @@ interface ReachConfigInput {
 
 验证码和密码重置等有时效的通知应明确选择 DND 策略；可靠入队成功不代表用户已收到验证码。
 
-队列 `created_at` / `updated_at` / `locked_until` / `next_attempt_at` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。已有表须在部署时同步列结构，包含次数、退避策略和失败分类，模块不自动迁移旧表；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
+队列 `created_at` / `updated_at` / `locked_until` / `next_attempt_at` 均为 Unix 毫秒 `BIGINT`（SQLite 为 64 位 INTEGER）；仓库把 driver 的字符串/数字归一化为安全整数 number，并拒绝负数、小数和不安全整数。模板仓库的 TIMESTAMP 时间返回 Date。初始化自动执行版本化迁移，包含次数、退避策略和失败分类；升级前先 dry-run、备份并停止旧写入。旧通知载荷退役会清空正文/变量并将旧待发项标记 discarded，回退镜像不能恢复这些数据；跨库验收必须运行 PostgreSQL/MySQL 用例，SQLite 无法证明 32 位溢出已经消除。
 
 ### 租约、接收端幂等与未知结果
 
