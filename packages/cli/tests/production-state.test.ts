@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { addModule } from '../src/commands/cli-add.js'
 import { generateConfigFile, generateProductionEnvironment } from '../src/commands/cli-config-templates.js'
 import { createProject } from '../src/commands/cli-create.js'
-import { buildTemplateContext } from '../src/commands/cli-template-engine.js'
+import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 import { loadConfigText } from './helpers/config.js'
 
 const roots: string[] = []
@@ -145,7 +145,7 @@ describe('shared production configuration', () => {
     expect(parseEnv(generateProductionEnvironment([]))).not.toHaveProperty('HAI_DB_TYPE')
   })
 
-  it.each(['website', 'api', 'fullstack'] as const)('%s完整预设包含AI依赖、配置和生产profile', async (appType) => {
+  it.each(['website', 'api', 'fullstack'] as const)('%s 显式接入 AI 后保留共享后端与失败清理', async (appType) => {
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const root = await mkdtemp(path.join(tmpdir(), 'hai-production-create-'))
@@ -154,14 +154,19 @@ describe('shared production configuration', () => {
     await createProject({ name, appType, defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm', frontends: ['web'], cwd: root })
     const project = path.join(root, name)
     const service = appType === 'api' ? path.join(project, 'apps', `${name}-serv`) : appType === 'fullstack' ? path.join(project, 'packages', `${name}-serv`) : project
+    // 默认工程不预装 AI；这里显式生成接入后的工程，保留 AI 生命周期的独立覆盖。
+    const context = buildTemplateContext({ name, appType, features: ['ai', 'cache'], packageManager: 'pnpm', frontends: ['web'], deploy: false })
+    await generateFromTemplates(project, context)
+    for (const module of ['db', 'cache', 'ai', 'vecdb'])
+      await writeFile(path.join(service, 'config', `_${module}.yml`), generateConfigFile(module))
+    const envRoot = appType === 'api' ? service : project
+    await writeFile(path.join(envRoot, '.env.prod'), generateProductionEnvironment(['ai', 'cache']))
     const pkg = JSON.parse(await readFile(path.join(service, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
     expect(pkg.dependencies).toHaveProperty('@h-ai/ai')
     expect(pkg.dependencies).toHaveProperty('@h-ai/reldb')
     expect(pkg.dependencies).toHaveProperty('@h-ai/vecdb')
     expect(await readFile(path.join(service, 'config', '_vecdb.yml'), 'utf8')).toContain('HAI_VECDB_URL')
-    const envRoot = appType === 'api' ? service : project
     expect(parseEnv(await readFile(path.join(envRoot, '.env.prod'), 'utf8'))).toMatchObject({ HAI_DB_TYPE: 'postgresql', HAI_VECDB_TYPE: 'qdrant' })
-    const context = buildTemplateContext({ name, appType, features: ['ai'], packageManager: 'pnpm' })
     expect(context.features).toMatchObject({ ai: true, db: true, vecdb: true })
     expect(context.haiCatalogPackages).toHaveProperty('@h-ai/vecdb')
     const runtimeFile = appType === 'fullstack' ? 'src/server/runtime.ts' : 'src/lib/server/init.ts'

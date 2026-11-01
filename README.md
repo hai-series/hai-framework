@@ -68,7 +68,7 @@ pnpm dev
 
 CLI 默认安装依赖并初始化 Git。首次使用 `admin` 登录，随机初始密码在生成工程的 `.env.dev.local` 对应 `HAI_ADMIN_DEFAULT_PASSWORD` 中，首次登录后按页面要求修改。不要公开环境文件或密码。
 
-新工程包含适用的完整模块与示例，服务端也安装 AI 与向量依赖。`--defaults` 跳过交互，默认容器跳过额外 CUDA 下载。目录、环境和运行地址以生成工程 README 为准；[首次运行指南](docs/usage/getting-started/create.md)带你完成登录与验证。
+各模板只安装实际使用的模块，AI、payment、vecdb、datapipe 不默认安装；完整模块配置和环境变量示例仍全部保留，未启用项保持注释。新增功能时添加依赖、启用配置并接入初始化、关闭和业务代码。`--defaults` 跳过交互，默认容器跳过额外 CUDA 下载。目录、环境和运行地址以生成工程 README 为准；[首次运行指南](docs/usage/getting-started/create.md)带你完成登录与验证。
 
 安装版本以 [npm 的 latest 标签](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)为准，上方徽标直接读取注册表。可运行 `pnpm view @h-ai/cli@latest version` 查询；团队需要固定版本时，将 `@latest` 换成查询得到的具体版本。npm 的安装标签与 GitHub 的 Latest 展示标记分别管理。
 

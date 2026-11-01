@@ -37,16 +37,14 @@ Handlebars.registerHelper('jsString', (value: string) => `'${JSON.stringify(valu
 // 未选择的模块只输出注释；说明也加两层注释，整文件去掉外层后仍是合法 YAML。
 Handlebars.registerHelper('moduleConfig', function (this: TemplateContext, moduleKey: string, enabled: boolean) {
   // 文件模板自身保留结尾换行，helper 不再重复输出空行。
-  const generated = generateConfigFile(moduleKey, this.moduleConfigs).trimEnd()
+  const generated = generateConfigFile(moduleKey, this.moduleConfigs, Boolean(enabled)).trimEnd()
   const content = moduleKey === 'feedback'
     ? generated.replace('HAI_FEEDBACK_APPID:my-app', `HAI_FEEDBACK_APPID:${this.projectName}`)
     : generated
   const configured = this.appType === 'fullstack' && moduleKey === 'iam'
     ? content.replace('HAI_IAM_SEEDDEFAULTDATA:true', 'HAI_IAM_SEEDDEFAULTDATA:false').replace('variant: card', 'variant: split')
     : content
-  return enabled
-    ? configured
-    : `# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。\n${configured.split('\n').map(line => line ? `# ${line}` : '').join('\n')}`
+  return configured
 })
 
 const TEMPLATE_SKIP_IF_EMPTY_MARKER = '@skipIfEmpty'
@@ -435,7 +433,11 @@ function buildAppHaiCatalogPackages(options: {
   const packageNames: string[] = ['@h-ai/cli']
 
   if (options.isSvelteOnlyApp) {
-    packageNames.push('@h-ai/api-client', '@h-ai/api-contract', '@h-ai/capacitor', '@h-ai/ui')
+    packageNames.push('@h-ai/api-client', '@h-ai/capacitor', '@h-ai/core', '@h-ai/ui')
+    if (options.featureMap.iam)
+      packageNames.push('@h-ai/api-contract')
+    if (options.featureMap.deploy)
+      packageNames.push('@h-ai/deploy')
     if (options.featureMap.crypto)
       packageNames.push('@h-ai/crypto')
     return pickCatalogPackages(packageNames, HAI_CATALOG_PACKAGES)

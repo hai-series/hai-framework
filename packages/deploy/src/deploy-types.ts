@@ -103,7 +103,7 @@ export interface DeployScanOptions {
 }
 
 /**
- * 依赖对应的中间件；例如 IAM 的 LDAP 位于 `iam.ldap`，可处于 disabled 状态。
+ * 已启用能力对应的中间件；例如 LDAP 仅在 `iam.login.ldap` 为 true 时纳入扫描。
  * @example
  * ```ts
  * import type { MiddlewareRequirement } from '@h-ai/deploy'

@@ -14,8 +14,7 @@ import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createE2eServerEnv, createE2eTransportRing } from '../../../scripts/e2e-env.js'
-import { generateConfigFile } from '../src/commands/cli-config-templates.js'
-import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
+import { createProject } from '../src/commands/cli-create.js'
 import { withDatabaseIsolation } from './fixtures/e2e-db-isolation.js'
 
 const runScaffoldGates = process.env.HAI_CLI_RUN_SCAFFOLD_GATES === '1'
@@ -127,11 +126,8 @@ describe.skipIf(!runScaffoldGates)('generated scaffold quality gates', () => {
     const projectPath = path.join(root, 'sample-static-website')
     const basePath = '/scaffold-static'
     const baseUrl = `${await allocateBaseUrl()}${basePath}/`
-    // 静态裁剪是既有工程的定制能力；create 固定 full，不再提供轻量参数入口。
-    await generateFromTemplates(projectPath, buildTemplateContext({ name: 'sample-static-website', appType: 'website', features: [], packageManager: 'pnpm' }))
-    await mkdir(path.join(projectPath, 'config'), { recursive: true })
-    for (const name of ['core', 'kit'])
-      await writeFile(path.join(projectPath, 'config', `_${name}.yml`), generateConfigFile(name))
+    // 实际 create 默认只安装网站所需依赖，完整注释配置不能妨碍静态发布。
+    await createProject({ name: 'sample-static-website', appType: 'website', defaults: true, install: false, git: false, packageManager: 'pnpm', cwd: root })
     await replaceHaiPackageSpecifiers(projectPath)
     await addLocalHaiOverrides(projectPath)
     await removeReplacedHaiCatalogEntries(projectPath)
@@ -274,6 +270,18 @@ test('static Pages deep links, public assets and honest contact feedback', async
       }
       if (scenario.title === 'admin' || scenario.title.startsWith('fullstack')) {
         // 验证实际安装的 tarball 公共类型与运行行为，不能只靠框架源码别名。
+        if (scenario.title === 'admin') {
+          // 通用能力夹具自己声明额外测试依赖，不能要求模板预装其未使用的业务模块。
+          const manifestPath = path.join(projectPath, 'package.json')
+          const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { devDependencies: Record<string, string> }
+          for (const name of ['audit', 'storage']) {
+            const specifier = localPackageSpecifiers[`@h-ai/${name}`]
+            if (!specifier)
+              throw new Error(`Missing local fixture dependency: @h-ai/${name}`)
+            manifest.devDependencies[`@h-ai/${name}`] = specifier
+          }
+          await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+        }
         const moduleRoot = scenario.title.startsWith('fullstack') ? `packages/${scenario.projectName}-serv` : '.'
         const testsRoot = path.join(projectPath, moduleRoot, 'tests')
         const fixtures = path.resolve(process.cwd(), 'tests/fixtures')
@@ -460,11 +468,13 @@ it('generated migration executes up and down with HaiResult', async () => {
         }
       }
       if (scenario.title === 'api-feedback') {
-        // 完整 API 样板统一验收认证、通知、反馈和加密，不再重复运行已删除的轻量组合。
+        // API 样板验收实际接入的认证、通知、上传、反馈和加密，保留未接入模块的配置参考。
         const servicePath = path.join(projectPath, 'apps/sample-api-feedback-serv')
         const manifest: { dependencies?: Record<string, string> } = JSON.parse(await readFile(path.join(servicePath, 'package.json'), 'utf8'))
-        for (const name of ['iam', 'reach', 'feedback', 'crypto', 'ai', 'vecdb'])
+        for (const name of ['iam', 'reach', 'feedback', 'crypto', 'storage'])
           expect(manifest.dependencies).toHaveProperty(`@h-ai/${name}`)
+        for (const name of ['ai', 'vecdb', 'payment', 'datapipe'])
+          expect(manifest.dependencies).not.toHaveProperty(`@h-ai/${name}`)
         expect(await fileExists(path.join(servicePath, 'config/_reach.yml'))).toBe(true)
       }
       // 每个成功场景立即释放磁盘资源，清理计入该场景的整体超时预算。

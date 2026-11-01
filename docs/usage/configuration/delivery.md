@@ -280,7 +280,7 @@ location /api/v1/ {
 
 ## 静态website与GitHub Pages
 
-用于企业介绍、帮助和文档等纯展示站点。新建 website 统一包含完整模块和示例，默认 SSR；静态发布前须手动移除服务端业务依赖、初始化及 API/`actions`，不能只打开静态开关：
+用于企业介绍、帮助和文档等纯展示站点。新建 website 默认 SSR，只安装 Core/Kit/UI，可直接切换静态构建；完整的注释配置及环境变量参考不启用模块。后续新增了服务端业务依赖、初始化或 API/`actions` 时，须先移除这些动态能力：
 
 ```sh
 hai create docs-site --type website --defaults

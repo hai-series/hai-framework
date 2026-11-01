@@ -68,7 +68,7 @@ pnpm dev
 
 CLI は既定で依存関係をインストールし、Git を初期化します。`admin` でログインし、生成された `.env.dev.local` の `HAI_ADMIN_DEFAULT_PASSWORD` にあるランダム初期パスワードを使用します。画面に従って変更し、環境ファイルとパスワードは公開しないでください。
 
-新規プロジェクトは適用対象の全モジュールとサンプルを含み、サーバーに AI・ベクトル依存も導入します。`--defaults` で対話を省略し、既定コンテナーは追加 CUDA ダウンロードを省きます。ディレクトリ、環境設定、実行 URL は生成された README と[初回起動ガイド](docs/usage/getting-started/create.md)を参照してください。
+各テンプレートは実際に使うモジュールだけを導入し、AI、payment、vecdb、datapipe は既定で導入しません。完全なモジュール設定と環境変数の参考例を残し、未使用項目はコメントにします。機能追加時に依存と必要な設定を追加し、初期化・終了・業務コードを接続します。`--defaults` で対話を省略し、既定コンテナーは追加 CUDA ダウンロードを省きます。ディレクトリ、環境設定、実行 URL は生成された README と[初回起動ガイド](docs/usage/getting-started/create.md)を参照してください。
 
 インストール版は [npm の latest タグ](https://www.npmjs.com/package/@h-ai/cli?activeTab=versions)に従い、バッジは登録情報を直接参照します。`pnpm view @h-ai/cli@latest version` で確認し、再現性が必要な場合は `@latest` を取得した版に置き換えます。npm のインストールタグと GitHub Latest の表示設定は別に管理します。
 

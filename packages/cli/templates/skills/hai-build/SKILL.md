@@ -27,7 +27,7 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 
 ## 构建与部署
 
-- 新建website包含完整模块与示例，默认Node SSR；静态发布须先移除服务端业务依赖、初始化及API/actions，保留Core/Kit/UI。compile静态预渲染使用`HAI_BUILD_STATIC=1 PUBLIC_BASE_PATH=/docs-site`，docs-site替换为实际仓库名，各路径段仅ASCII字母、数字、_、.、-，无末尾/；省略/0保持SSR，根站路径留空。HAI_BUILD_STATIC仅用于compile，PUBLIC_BASE_PATH也支持image网站构建。静态拒绝服务端业务模块、自定义API/actions与未预渲染页面，不放宽生产守卫、不用SPA fallback；默认健康端点不发布。构建不读根.env，static为公开目录，拒绝.env/.env.*与符号链接。上传build使用include-hidden-files:true保留.nojekyll，验首页/深链/刷新/资产与敏感哨兵。
+- 新建website只安装Core/Kit/UI，默认Node SSR，可直接切换静态发布；注释配置与环境变量参考不启用模块。后续增加的服务端业务依赖、初始化及API/actions须先移除。compile静态预渲染使用`HAI_BUILD_STATIC=1 PUBLIC_BASE_PATH=/docs-site`，docs-site替换为实际仓库名，各路径段仅ASCII字母、数字、_、.、-，无末尾/；省略/0保持SSR，根站路径留空。HAI_BUILD_STATIC仅用于compile，PUBLIC_BASE_PATH也支持image网站构建。静态拒绝服务端业务模块、自定义API/actions与未预渲染页面，不放宽生产守卫、不用SPA fallback；默认健康端点不发布。构建不读根.env，static为公开目录，拒绝.env/.env.*与符号链接。上传build使用include-hidden-files:true保留.nojekyll，验首页/深链/刷新/资产与敏感哨兵。
 
 - 创建默认包含开发期部署工具，可用 --no-deploy 关闭。每个镜像使用 images/ 中独立 Dockerfile，Web 配置位于 images/web/，不使用镜像阶段 target 配置。
 - 构建器生成 images/dependencies/ 安装输入；fetch、安装和生产依赖整理共用 pnpm store，安装与生产依赖整理共用 SQLite 驱动缓存，并复用依赖层；依赖安装在源码COPY前，前后端仅复制各自需要的源码。运行镜像去掉应用自身声明、source map和README。file: 归档、补丁、workspace 元数据必须进入下载上下文；原生依赖缓存按系统/架构/ABI 区分。基础镜像、中间件及工具指定版本，禁止 latest。

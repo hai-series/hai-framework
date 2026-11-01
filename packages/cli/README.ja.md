@@ -54,13 +54,13 @@ pnpm dev
 | `mobile-app`               | Svelte + Vite + Capacitor                                            |
 | `fullstack`                | contract、API、共通 UI、選択した Web/App/Desktop。miniapp は説明のみ |
 
-新規作成は適用可能な全モジュールとサンプルに統一し、サーバーには AI・ベクトル保存先・feedback も導入します。クライアントの依存境界は維持します。インストール容量は増え、サンプルは実業務に合わせて変更が必要です。`--template`、`--features`、`--examples/--no-examples` は削除し、`create --yes/-y` は `--defaults` に変更しました。旧引数は明示的に拒否します。`deploy --yes` と既存工程の構成は維持します。
+各テンプレートは実際に使うモジュールだけを導入します。admin/h5 は認証・OTP/パスワード再設定の通知・DB・キャッシュ・暗号化、website は Core/Kit/UI、API は認証・通知・アップロード・feedback、fullstack は管理画面の認証・監査・保存・通知・スケジューラー・feedback、mobile-app はクライアント機能を使用します。AI、payment、vecdb、datapipe は既定で導入しません。全工程に完全なモジュール YAML と `.env.example` を残し、未使用項目はコメントにして公開環境の既定値から除外します。後で依存を追加し、必要な設定を有効にして初期化・終了・業務ルートを接続します。依存追加だけでは自動的に有効になりません。`--template`、`--features`、`--examples/--no-examples` は削除済みで、`create --yes/-y` は `--defaults` です。旧引数は明示的に拒否し、`deploy --yes` の意味は維持します。既存工程の依存は自動削除しません。
 
 独立した `mobile-app` は frontend crypto と暗号化 typed client transport を含みます。既存の平文 API には `PUBLIC_API_TRANSPORT=off` を明示します。`PUBLIC_API_KEY_EXCHANGE_PATH` は公開鍵交換パスの上書きです。失敗時に平文へ切り替えず、サーバー秘密鍵はクライアントに渡しません。終了時は transport、その後に自身の crypto を解放します。
 
 ### 静的websiteとGitHub Pages
 
-新規 website は全モジュールとサンプルを含み、既定は Node SSR です。静的公開前にサーバー業務依存・初期化・独自 API/actions を工程から除去し、Core/Kit/UI を保持します。軽量作成引数はありません。動的機能のない既存 website では下記の静的構築を利用できます。
+新規 website は既定で Node SSR、依存は Core/Kit/UI のみで、下記の静的構築をそのまま利用できます。後から追加したサーバー業務依存・初期化・独自 API/actions は静的公開前に除去します。コメントの設定と環境変数の参考例は静的構築に影響しません。
 
 websiteの既定はNode SSRです。ビルド時に`HAI_BUILD_STATIC=1`と`PUBLIC_BASE_PATH=/docs-site`（docs-siteを実際のリポジトリー名に置換。各区間はASCII英数字・_・.・-のみ、末尾/なし、ルートは空）を指定してpnpm buildを実行すると静的buildを生成します。静的フラグは0/1のみでcompile専用です。PUBLIC_BASE_PATHはDockerのWeb構築にも対応しますが、ネイティブapp/desktopでは指定できません。静的構築はサーバー業務モジュール、独自API/actions、事前描画されないページを拒否し、本番ガードを緩和せずSPAフォールバックも生成しません。既定のhealth APIは含めません。
 
@@ -88,7 +88,7 @@ Docker構築でもPUBLIC_BASE_PATHを明示できます。非ルートではwebB
 
 ### 既存工程とコード生成
 
-AI の作成・追加は reldb と vecdb も導入し、生成コードは DB → ベクトル保存先 → AI の順に起動します。失敗時は逆順に解放し、解放失敗も返します。本番設定は有効な機能に応じて PostgreSQL（選択済み MySQL は保持）・Redis・S3・Qdrant を選び、Compose の `db/cache/storage/vecdb` を使います。パスワード・S3 認証情報・モデルキー・保護された Qdrant キーは秘密環境から注入し、Compose 外では接続先を上書きしてください。本番 Reach は空 Provider 配列で起動を拒否し、実際の `HAI_REACH_PROVIDERS` JSON の注入が必要です。`hai add` は既存本番値を保持して不足項目を追加します。既存の起動処理への接続はアプリ側で行います。
+`hai add ai` は reldb と vecdb も導入します。その後、アプリの入口に DB → ベクトル保存先 → AI の順の初期化と逆順の終了処理を接続し、終了処理の失敗も確認します。本番設定は有効な機能に応じて PostgreSQL（選択済み MySQL は保持）・Redis・S3・Qdrant を選び、Compose の `db/cache/storage/vecdb` を使います。パスワード・S3 認証情報・モデルキー・保護された Qdrant キーは秘密環境から注入し、Compose 外では接続先を上書きしてください。本番 Reach は空 Provider 配列で起動を拒否し、実際の `HAI_REACH_PROVIDERS` JSON の注入が必要です。`hai add` は既存本番値を保持して不足項目を追加します。既存の起動処理への接続はアプリ側で行います。
 
 ```sh
 hai add storage

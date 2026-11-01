@@ -14,6 +14,7 @@ import { configEnvironmentVariables, documentConfig, moduleEnvironmentVariables,
  *
  * @param moduleKey - 拥有配置 Schema 的模块标识
  * @param configs - 用户自定义配置值
+ * @param enabled - 是否启用；未启用模块保留完整注释示例。
  * @returns YAML 格式的配置内容
  * @example 模块内部上下文
  * ```ts
@@ -21,8 +22,11 @@ import { configEnvironmentVariables, documentConfig, moduleEnvironmentVariables,
  * // 输出显式 HAI_DB_* 引用；连接密码仍由私有环境注入。
  * ```
  */
-export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
-  return documentConfig(moduleKey, parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs)))
+export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs, enabled = true): string {
+  const content = documentConfig(moduleKey, parameterizeConfig(moduleKey, generateLiteralConfigFile(moduleKey, configs)))
+  return enabled
+    ? content
+    : `# # 未启用：安装对应模块并在服务端 runtime 中初始化，再取消所需配置的注释。\n${content.split('\n').map(line => line ? `# ${line}` : '').join('\n')}`
 }
 
 function generateLiteralConfigFile(moduleKey: string, configs?: ModuleConfigs): string {
@@ -607,7 +611,7 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  *
  * @param features - 选中的功能模块列表
  * @param configs - 用户自定义配置值
- * @param includeDisabled - 是否输出所有模块的完整注释示例（fullstack 使用，未启用模块保留注释）
+ * @param includeDisabled - 是否输出所有模块的完整注释示例；创建项目时统一保留。
  * @param configContents - 按配置名索引的已渲染 YAML，使示例与真实引用一致；省略项使用默认模板。
  * @returns .env.example 文件内容
  * @example 模块内部上下文
@@ -617,12 +621,12 @@ ${stringify({ model }).trim().split('\n').map(line => `  ${line}`).join('\n')}
  * ```
  */
 export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs, includeDisabled = false, configContents: Record<string, string> = {}): string {
-  const keys = new Set(['core', ...(configContents.serv ? ['serv'] : []), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
-  const allKeys = ['core', 'serv', 'db', 'cache', 'iam', 'storage', 'ai', 'vecdb', 'reach', 'payment', 'scheduler', 'deploy', 'audit', 'feedback']
+  const keys = new Set(['core', ...['serv', 'kit'].filter(key => configContents[key]), ...features.filter(feature => !['crypto', 'api-client', 'capacitor', 'datapipe'].includes(feature))])
+  const allKeys = ['core', 'serv', 'kit', 'crypto', 'db', 'cache', 'iam', 'storage', 'ai', 'vecdb', 'reach', 'payment', 'scheduler', 'deploy', 'audit', 'feedback']
   const sections = [`# Environment configuration
 # .env / .env.dev / .env.test / .env.prod are public configuration tracked in Git.
 # .env.local is private to this machine and ignored by Git.
-# Priority: process environment > .env.local > .env.<dev|test|prod> > .env.
+# Priority: process environment > .env.<mode>.local > .env.local > .env.<mode> > .env > YAML.
 # Naming: HAI_<CONFIG>_<PATH>; camelCase stays joined (apiKey -> APIKEY); arrays use zero-based indexes.
 # PUBLIC_ / VITE_ variables are visible in browsers and must never contain secrets.
 # YAML declares references and local fallbacks; constraints are validated by module Schemas.
@@ -644,6 +648,8 @@ export function generateEnvExample(features: FeatureId[], configs?: ModuleConfig
     const commented = (value: string) => value.split('\n').map(line => line && !line.startsWith('#') ? `# ${line}` : line).join('\n')
     sections.push(`# --- ${key} ---\n${keys.has(key) ? section : commented(section)}\n\n# 可选字段：先在 YAML 中启用对应配置块；下列变量名与字段路径一一对应。\n${commented(declaredOptional)}\n${commented(optional)}`)
   }
+  if (includeDisabled)
+    sections.push('# 服务端传输密钥环：启用 crypto transport 后，通过私有环境注入版本化 JSON；不得下发到浏览器。\n# HAI_CRYPTO_TRANSPORT_SERVERKEYRING=')
   return `${sections.join('\n\n')}\n`
 }
 

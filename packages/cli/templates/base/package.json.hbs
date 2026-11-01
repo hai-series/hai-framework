@@ -56,7 +56,9 @@
     "cap:build:ios": "pnpm compile && cap sync ios && cap build ios"{{/if}}
   },
   "dependencies": {
+{{#unless isSvelteOnlyApp}}
     "pino-pretty": "{{versions.pinoPretty}}",
+{{/unless}}
   {{#if isSvelteOnlyApp}}
     "@h-ai/api-client": "{{haiPackageSpecifier}}",
     "@h-ai/capacitor": "{{haiPackageSpecifier}}",
@@ -96,6 +98,9 @@
     "@h-ai/cli": "{{haiPackageSpecifier}}",
 {{#if isSvelteOnlyApp}}
     "@h-ai/core": "{{haiPackageSpecifier}}",
+{{#if features.iam}}
+    "@h-ai/api-contract": "{{haiPackageSpecifier}}",
+{{/if}}
 {{/if}}
     "@antfu/eslint-config": "{{versions.antfuEslintConfig}}",
     "@playwright/test": "{{versions.playwright}}",

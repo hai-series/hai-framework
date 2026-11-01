@@ -90,7 +90,7 @@ pnpm dev
 
 fullstack では `packages/my-app-contract` が API 契約、`packages/my-app-serv` が API 実装、`packages/my-app-shared` が共有処理、`apps/my-app-web` が Web クライアントです。環境ファイルはプロジェクトのルートに置きます。API テンプレートでは `apps/my-app-serv` 内です。変更を始める前に、生成された README と `AGENTS.md` を読んでください。
 
-新規作成は適用可能な全モジュールとサンプルに統一し、サーバーには AI・ベクトル保存先・`feedback` も導入します。クライアントの依存境界は維持します。インストール容量は増え、サンプルは実業務に合わせて変更が必要です。`--template`、`--features`、`--examples/--no-examples` は削除し、`create --yes/-y` は `--defaults` に変更しました。旧引数は明示的に拒否します。`deploy --yes` と既存工程の構成は維持します。
+各テンプレートは実際に使うモジュールだけを導入します。admin/h5 は認証・OTP/パスワード再設定の通知・DB・キャッシュ・暗号化、website は Core/Kit/UI、API は認証・通知・アップロード・feedback、fullstack は管理画面の認証・監査・保存・通知・スケジューラー・feedback、mobile-app はクライアント機能を使用します。AI、payment、vecdb、datapipe は既定で導入しません。全工程に完全なモジュール YAML と `.env.example` を残し、未使用項目はコメントにして公開環境の既定値から除外します。後で依存を追加し、必要な設定を有効にして初期化・終了・業務ルートを接続します。依存追加だけでは自動的に有効になりません。`--template`、`--features`、`--examples/--no-examples` は削除済みで、`create --yes/-y` は `--defaults` です。旧引数は明示的に拒否し、`deploy --yes` の意味は維持します。既存工程の依存は自動削除しません。
 
 ### 3. 環境を設定して開発する
 
