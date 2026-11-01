@@ -175,7 +175,7 @@ await scheduler.init({
 
 可信服务端用 `execution.listLogFailures({ limit, offset })` 监控 pending（范围与 listUnknown 相同），用 `execution.repairLog(occurrenceId)` 从共享 journal 幂等补写；可跨节点、重启及并发调用。写入已提交但回执丢失时通过固定主键和完整内容核对去重。补写返回 `LOG_PERSIST_FAILED`（032）时继续保留 pending，并输出安全告警；全部数据库不可用且终态未提交时仍按 unknown 核对外部效果，不能假定存在可恢复结果。补写与日志保留均不调用业务 Hook。保留策略失败仅告警，不撤销已保存日志。`onTaskFinish` 是本地业务完成通知，其 unconfirmed 状态不是持久化确认；以 trigger 返回值及 execution.get 的 logPersistence 为准。
 
-领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；新 schema 不自动迁移旧日志/执行表。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
+领取前竞争/跳过的 interrupted 仅为观测日志，没有可补写的终态；其写入未确认时返回 unconfirmed。JSON 大载荷保存完整结果和全部重试记录，避免 MySQL 的 255 字符截断；初始化会自动执行版本化迁移，归档并复制旧日志；升级前先 dry-run、备份并停止旧写入，按模块 README 核对迁移影响。关闭会等待在途补写，先关闭 scheduler 再关闭数据库。
 
 ```ts
 const result = await scheduler.trigger('cleanup', { idempotencyKey: 'cleanup-2026-10-23' })

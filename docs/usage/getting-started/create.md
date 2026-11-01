@@ -46,7 +46,7 @@ pnpm dev
 | `--package-manager` | pnpm/npm/yarn，workspace类型仍遵守固定pnpm约束 |
 | `--defaults` | 省略交互并采用默认选项；真实生产凭据仍需按环境配置 |
 
-已有项目可用 `hai add <module>` 添加适用模块，例如 `hai add deploy`。`page` / `api` 生成器面向SvelteKit文件路由；fullstack/API的接口契约、服务过程和hash页面按生成结构继续开发。
+已有项目可用 `hai add <module>` 添加适用模块，例如 `hai add deploy`。`page` 生成器用于 SvelteKit 文件路由；`api` 按目标 workspace 生成 SvelteKit 路由或 Serv 的 contract、procedure 及聚合入口，使用 `--workspace` 选择服务。fullstack 的 hash 页面按生成结构继续开发。
 
 ## 理解目录再改代码
 
@@ -60,4 +60,4 @@ pnpm dev
 
 按终端实际地址打开页面。带IAM管理界面的模板首次使用 `admin` 登录，初始随机密码在所选环境的 `HAI_ADMIN_DEFAULT_PASSWORD` 中；开发环境查看对应 `.env.dev.local`，不要把密码复制到截图或公开日志。已有数据库中的账号不会因重启自动重置密码。
 
-完成一次登录和一条成功/失败操作，确认请求到正确服务、提示可读、日志能关联问题；缺少依赖时应在启动或操作边界明确失败。完整预设包含 AI 和向量库运行依赖，模型服务与生产通知/支付需要实际配置。默认容器跳过 CUDA/TensorRT 额外下载；本地开发按生成环境说明启动。
+完成一次登录和一条成功/失败操作，确认请求到正确服务、提示可读、日志能关联问题；缺少依赖时应在启动或操作边界明确失败。AI、向量库与支付按需添加；模型服务、生产通知和支付需要配置真实 Provider。默认容器跳过 CUDA/TensorRT 额外下载；本地开发按生成环境说明启动。

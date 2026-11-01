@@ -62,9 +62,12 @@ PostgreSQL 空闲连接错误已监听，由池移除并在下一次查询替换
 
 ```typescript
 import { core } from '@h-ai/core'
-import { reldb } from '@h-ai/reldb'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 
-await reldb.init(core.config.get('db'))
+const config = core.config.validate('db', ReldbConfigSchema)
+if (!config.success) throw new Error(config.error.message)
+const initialized = await reldb.init(config.data)
+if (!initialized.success) throw new Error(initialized.error.message)
 // ... 使用数据库
 const closed = await reldb.close()
 if (!closed.success) throw new Error(closed.error.message)

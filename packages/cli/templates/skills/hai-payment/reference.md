@@ -244,29 +244,51 @@ import { apiContract } from '@h-ai/api-contract'
 
 ### 服务端路由（SvelteKit）
 
+应用实现 `readOrder`：从共享数据库读取订单，返回持久化的金额、币种、所有者与支付状态。通知地址取服务端配置；在宿主权限配置中登记并授予 `payment:create`。以下工厂在路由模块中注入这两个可信依赖，`kit.handler` 仅提供错误边界，认证和资源授权仍在示例中显式执行。
+
 ```typescript
+import type { HaiResult } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-// src/routes/api/v1/payment/create/+server.ts
 import { payment } from '@h-ai/payment'
+import { z } from 'zod'
 
-export const POST = kit.handler(async ({ request, locals }) => {
-  const body = await request.json()
-  const result = await payment.createOrder(body.provider, {
-    orderNo: body.orderNo,
-    amount: body.amount,
-    description: body.description,
-    tradeType: body.tradeType,
-    userId: body.userId,
-    notifyUrl: body.notifyUrl,
+interface PayableOrder {
+  orderNo: string
+  ownerId: string
+  amount: number
+  currency: string
+  description: string
+  status: 'pending' | 'paid' | 'closed'
+}
+
+export function createPaymentHandler(
+  readOrder: (id: string) => Promise<HaiResult<PayableOrder | null>>,
+  notifyUrl: string,
+) {
+  return kit.handler(async ({ request, locals }) => {
+    const session = locals.session
+    if (!session) return kit.response.unauthorized()
+    kit.guard.require(session, 'payment:create')
+    const input = await kit.validate.body(request, z.object({ orderId: z.string().min(1) }).strict())
+    const order = await readOrder(input.orderId)
+    if (!order.success) return kit.response.fromError(order.error)
+    if (!order.data || order.data.ownerId !== session.userId || order.data.status !== 'pending')
+      return kit.response.forbidden()
+    const result = await payment.createOrder('stripe', {
+      orderNo: order.data.orderNo,
+      amount: order.data.amount,
+      currency: order.data.currency,
+      description: order.data.description,
+      tradeType: 'h5',
+      notifyUrl,
+    })
+    if (!result.success) return kit.response.fromError(result.error, locals.requestId)
+    return kit.response.ok(result.data, locals.requestId)
   })
-
-  if (!result.success) {
-    return kit.response.internalError(result.error.message)
-  }
-
-  return kit.response.ok(result.data, locals.requestId)
-})
+}
 ```
+
+在 `+server.ts` 中将可信业务读取函数和通知地址传给工厂，再导出返回值为 `POST`。
 
 ### 完整支付流程
 

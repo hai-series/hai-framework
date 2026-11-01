@@ -1703,6 +1703,12 @@ importers:
       '@h-ai/iam':
         specifier: workspace:*
         version: link:../iam
+      '@h-ai/kit':
+        specifier: workspace:*
+        version: link:../kit
+      '@h-ai/payment':
+        specifier: workspace:*
+        version: link:../payment
       '@h-ai/reach':
         specifier: workspace:*
         version: link:../reach
@@ -1712,6 +1718,9 @@ importers:
       '@h-ai/storage':
         specifier: workspace:*
         version: link:../storage
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../vecdb
       '@types/fs-extra':
         specifier: 'catalog:'
         version: 11.0.4
@@ -1742,6 +1751,9 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(jsdom@30.1.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
 
   packages/core:
     dependencies:

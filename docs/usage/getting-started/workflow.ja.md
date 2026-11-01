@@ -120,7 +120,7 @@ pnpm dev:prod
 
 入力と出力、権限、データの変更、受け入れ条件を決めてから、既存モジュールの公開 API を使って実装します。fullstack は通常 contract を変更し、サービス処理、クライアント呼び出しの順に進めます。SvelteKit はファイルルーティングとサーバー側ロードを継続します。fullstack とモバイル端末はページを自動検出する hash ルートを使うため、ページ追加で中央のルート表を変更する必要はなく、再読み込みでも現在のページを保持します。共通の header/footer も引き続き使います。
 
-SvelteKit プロジェクトでは、`hai generate page dashboard` や `hai generate component UserCard` でひな型を生成できます。現在の page/api 生成器は SvelteKit のファイルルートを出力します。fullstack/API workspace の contract、procedure、hash ページは生成しないため、既存の構成に沿って実装します。業務ルールも別途実装してください。ライフサイクルを持つモジュール、ファクトリー、純粋関数を区別し、`HaiResult` は `success` を確認してから使います。公開関数、主要ロジック、テーブル、データ構造には JSDoc と利用例・データ例を付けます。
+`page` は SvelteKit ルートを生成します。`api` は `--workspace` で選択した構成に応じ、SvelteKit ルートまたは Serv contract/procedure を生成します。
 
 機能ごとに、プロジェクトの scripts で検証します。
 
@@ -215,7 +215,7 @@ Node バックエンド（Serv / SvelteKit SSR）は起動ごとに `<配備デ�
 
 `pnpm run deploy` は全コンテナーテンプレートで HTTPS なし、既存 PEM 証明書・秘密鍵、Let’s Encrypt を選択できます。相対パスは工程ルート基準です。ドメイン・期限・鍵一致を検証して配布物にコピーします。版を固定した公式 Certbot イメージで申請し、12 時間ごとに更新を確認して Nginx を再読み込みします。利用規約の承認、実際のメール、公的 DNS、80 番ポート、CA 接続が必要です。隔離環境では既存証明書を使います。状態はサーバーに保持し、秘密鍵をアプリイメージに含めません。`--yes` は保存設定を使います。
 
-`hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../../docs/usage/configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
+`hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
 
 イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
 

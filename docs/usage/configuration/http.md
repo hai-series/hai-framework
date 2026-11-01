@@ -18,7 +18,7 @@
 
 原生 RPC 入口、`HAI_SERV_HTTP_RPC` 及其子配置和 `ServRpcHttpConfig` 已删除；应用继续通过现有 OpenAPI/REST 路径与 `api-client` 调用业务。
 
-容器部署的后端探针按最终有效的 `http.health.path` 请求，`health: false` 时跳过该 HTTP 探针。Fullstack 同源入口转发实际启用的健康/就绪路径、OpenAPI JSON、docs 和文档目录下的 `_hai/scalar.js`；生产模板按实际 Core 环境关闭文档，代理不绕过 `docs.requireAuth`。整段 `HAI_SERV` 覆盖高于叶子变量。改变路径或文档路由后需重新部署，以同步 Nginx 和部署探针；普通业务配置仍可修改运行文件后重启后端。
+容器部署的后端探针按最终有效的 `http.health.path` 请求，`health: false` 时跳过该 HTTP 探针。Fullstack 同源入口转发实际启用的健康/就绪路径、OpenAPI JSON、docs 和文档目录下的 `_hai/scalar.js`；生产模板按实际 Core 环境关闭文档，代理不绕过 `docs.requireAuth`。同来源以整段 `HAI_SERV` 为基础、细项覆盖；更高来源的整段替换才清除低来源细项，来源优先级见 [运行时配置](runtime.md)。改变路径或文档路由后需重新部署，以同步 Nginx 和部署探针；普通业务配置仍可修改运行文件后重启后端。
 
 文档 HTML 使用相对的脚本和 spec 地址。网关保留 `/somepath/` 时，将 docs 与 OpenAPI 路径一起放在此目录下，例如 `/somepath/docs` 和 `/somepath/openapi.json`；脚本自动位于 `/somepath/_hai/scalar.js`，不会请求其他应用的根路径。网关剥离此前缀时，后端仍可使用 `/docs` 和 `/openapi.json`，浏览器的相对请求同样保留外部前缀。不要只转发页面而漏掉同目录下的资源；文档带尾斜杠时脚本挂在该文档目录内部。
 
@@ -114,7 +114,7 @@ if (!started.success) throw new Error(started.error.message)
 | `transport` | `false` | `false` 使用明文宿主流程；对象启用后还需运行时私有依赖 |
 | `maxPlaintextBytes` | auto，实际1MiB；范围1KiB–64MiB | 双向明文UTF-8预算，超限尽早拒绝；不能只看加密后body长度 |
 | `routePlaintextBytes` | 无默认 | 按完整路径段匹配，`*`匹配单段，附件/导出单独给预算 |
-| `keyExchangePath` | Serv `/_hai/key-exchange`；Kit `/api/_hai/key-exchange` | 服务端完整路径；客户端是相对`baseUrl`，避免重复前缀 |
+| `keyExchangePath` | Serv `/_hai/key-exchange`；Kit `/api/_hai/key-exchange` | Serv 是相对 `http.apiPrefix` 的子路径；Kit 是服务端完整路径；API Client 相对 `baseUrl`。例如 Serv 前缀 `/backend/api`、子路径 `/_hai/key-exchange` 对应 `/backend/api/_hai/key-exchange`，客户端 baseUrl 使用 `/backend/api` |
 | `excludePaths` | [] | 按需要排除健康等非业务入口，不能排除敏感请求逃避策略 |
 | 服务端keyring/`keyStore` | 无通用秘密默认 | 同环境各节点共用可持久密钥环和共享状态，禁止每次启动随机生成 |
 
