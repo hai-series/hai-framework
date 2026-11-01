@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import { runACPContainerTests } from '../../.github/scripts/ci-acp-test.mjs'
@@ -124,6 +125,35 @@ describe('ci ACP 原生验收前置', () => {
       if (args.includes('tests/ai-acp-openrouter.e2e.test.ts'))
         throw new Error('fixture upstream acceptance failed')
     }, trustedEnvironment)).rejects.toThrow('fixture upstream acceptance failed')
+  })
+
+  it('linux runner 先准备沙箱并实际预检，前置没有上游密钥且临时目录被回收', async () => {
+    const calls = []
+    await runACPContainerTests(async (command, args, environment) => {
+      calls.push({ command, args, environment })
+    }, { ...trustedEnvironment, RUNNER_OS: 'Linux' })
+    const setup = calls.findIndex(call => call.command === 'sudo')
+    const probe = calls.findIndex(call => call.command === 'codex' && call.args.includes('sandbox'))
+    expect(setup).toBeGreaterThan(0)
+    expect(calls[setup].args[1]).toMatch(/ci-prepare-codex-sandbox\.sh$/)
+    expect(probe).toBeGreaterThan(setup)
+    expect(probe).toBeLessThan(calls.length - 1)
+    expect(calls[probe].args).toContain(':workspace')
+    expect(existsSync(dirname(calls[probe].environment.CODEX_HOME))).toBe(false)
+    expect(calls.slice(0, -1).every(call => !Object.hasOwn(call.environment, 'OPENROUTER_APIKEY'))).toBe(true)
+  })
+
+  it.each(['setup', 'probe'])('linux 沙箱 %s 失败阻断真实请求，清理本轮临时目录', async (stage) => {
+    const calls = []
+    await expect(runACPContainerTests(async (command, args, environment) => {
+      calls.push({ command, args, environment })
+      if ((stage === 'setup' && command === 'sudo') || (stage === 'probe' && command === 'codex' && args.includes('sandbox')))
+        throw new Error('sandbox prerequisite failed')
+    }, { ...trustedEnvironment, RUNNER_OS: 'Linux' })).rejects.toThrow('sandbox prerequisite failed')
+    expect(calls.some(call => call.args.includes('tests/ai-acp-openrouter.e2e.test.ts'))).toBe(false)
+    const probe = calls.find(call => call.command === 'codex' && call.args.includes('sandbox'))
+    if (probe)
+      expect(existsSync(dirname(probe.environment.CODEX_HOME))).toBe(false)
   })
 
   it('工作流仅向可信 main 的 unit 执行步骤提供密钥，并在失败后保留截图证据', () => {

@@ -14,6 +14,8 @@ Codex 用 `adapter: 'codex'`，DeepSeek Harness 用 `adapter: 'deepseek-harness'
 
 内置 Codex/dsh 通过 stdio 使用。HTTP/WS 是锁定 SDK 2.2.0 的官方实验传输，服务必须实现相同的 ACP 传输版本；不把任意 HTTP 聊天接口当 ACP，也不自动架设 stdio 网关。自定义服务必须声明 `supportedTransports`，协议不匹配返回错误。
 
+Linux 上运行 embedded Codex 前，按 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing) 准备 bubblewrap 和所需的 AppArmor profile，并用 `codex sandbox` 在临时目录验证读写。沙箱初始化失败应先修复宿主环境，不能通过关闭沙箱或让模型猜测文件内容完成任务。
+
 ## 原生 HTTP/WS 服务：Goose
 
 Goose 1.57.0 自身提供 `goose serve` 与 `/acp` HTTP/WS，使用 custom-service 接入。先由部署方启动服务、挂载工作区/状态卷，并在 Goose 端维护模型（例如 `GOOSE_PROVIDER=openrouter`、`GOOSE_MODEL`、`OPENROUTER_API_KEY`）；服务独立设置 `GOOSE_SERVER__SECRET_KEY`。Hai 只使用 `X-Secret-Key` 认证，不向服务注入 Hai 模型密钥。

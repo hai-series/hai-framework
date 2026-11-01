@@ -1,7 +1,8 @@
 /** CI 在单元阶段准备原生智能体镜像，确保容器与真实 Agent 测试不会因缺少环境配置而跳过。 */
 import { spawn } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
@@ -33,6 +34,8 @@ export async function runACPContainerTests(run = execute, environment = process.
   delete fixtureEnvironment.HAI_ACP_E2E_REQUIRED
   delete fixtureEnvironment.HAI_ACP_E2E_GOOSE
   await run('docker', ['info'], fixtureEnvironment)
+  if (fixtureEnvironment.RUNNER_OS === 'Linux' && environment.GITHUB_EVENT_NAME === 'push' && environment.GITHUB_REF === 'refs/heads/main')
+    await run('sudo', ['sh', fileURLToPath(new URL('./ci-prepare-codex-sandbox.sh', import.meta.url))], fixtureEnvironment)
   const images = {}
   const manifests = []
   for (const name of ['codex-acp', 'deepseek-harness', 'goose']) {
@@ -73,6 +76,23 @@ export async function runACPContainerTests(run = execute, environment = process.
     await run(manifest.command, ['--version'], fixtureEnvironment)
     if (manifest.runtime)
       await run(manifest.runtime.command, ['--version'], fixtureEnvironment)
+  }
+  if (fixtureEnvironment.RUNNER_OS === 'Linux') {
+    const temporaryRoot = resolve(fixtureEnvironment.RUNNER_TEMP || tmpdir())
+    await mkdir(temporaryRoot, { recursive: true })
+    const directory = await mkdtemp(join(temporaryRoot, 'hai-acp-sandbox-'))
+    if (dirname(directory) !== temporaryRoot)
+      throw new Error('Unexpected sandbox preflight directory')
+    try {
+      const home = join(directory, 'state')
+      await mkdir(home)
+      await writeFile(join(directory, 'probe-input.txt'), 'ACP sandbox filesystem probe')
+      const code = 'const fs=require("node:fs");const input=fs.readFileSync("probe-input.txt","utf8");fs.writeFileSync("probe-output.txt",input);if(fs.readFileSync("probe-output.txt","utf8")!==input)process.exit(1);process.stdout.write("Codex native sandbox ready\\n")'
+      await run('codex', ['sandbox', '-P', ':workspace', '-C', directory, '--', process.execPath, '-e', code], { ...fixtureEnvironment, CODEX_HOME: home })
+    }
+    finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   }
   await run('pnpm', ['--filter', '@h-ai/ai', 'exec', 'vitest', 'run', 'tests/ai-acp-openrouter.e2e.test.ts', 'tests/ai-acp-goose.e2e.test.ts', '--maxWorkers=1'], {
     ...fixtureTestEnvironment,

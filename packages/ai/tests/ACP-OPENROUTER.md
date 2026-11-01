@@ -10,6 +10,8 @@
 
 先安装与 `models/agents/*/agent.json` 相匹配的原生程序，并构建两个基础镜像。embedded 使用宿主的程序；builtin-service 使用指定镜像和一次性 volume。容器引擎 `auto` 优先就绪的 Podman，其次 Docker；验收只使用已存在的镜像，不隐式升级或安装工具。
 
+Linux 的 embedded Codex 还需可用的 bubblewrap/user namespace；Ubuntu 24.04 可能需要加载发行版提供的 `bwrap-userns-restrict` AppArmor profile，具体见 [Codex 沙箱前置](https://learn.chatgpt.com/docs/sandboxing)。CI 为一次性 Linux runner 安装这些系统依赖并加载该 profile，保持全局 AppArmor 限制。在发送真实模型请求前，使用隔离 `CODEX_HOME` 和临时工程运行 `codex sandbox`，验证实际读写；前置失败直接阻断，不能让模型靠提权或猜测绕过环境故障。
+
 内置 Podman 容器和本验收自行启动的 Goose 服务夹具不继承远程服务的代理变量，需在容器中直接访问 OpenRouter。业务部署如需代理，通过 Agent/workspace 的 `environmentRefs` 指定容器可访问的代理地址，勿使用宿主回环地址。此边界由实际容器回归覆盖，并保留显式代理注入的验证；已有自定义服务的网络与模型配置由服务部署方维护。
 
 下面为 2026-11-01 实际验收通过的低价 Flash 模型；升级时重新核对模型目录、工具支持、协议及容量。`maxOutputTokens=65536` 是容量声明；dsh 的请求预算为 `min(maxTokens=1024, maxOutputTokens)`。Codex 的采样上限依其原生设置，测试另有限时与输出体积约束。一个智能体任务可能产生多次模型调用及工具调用。

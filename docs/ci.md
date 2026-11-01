@@ -43,6 +43,8 @@ flowchart TD
 
 构建产物和 Turbo 内容缓存由同一轮构建准备，通过 `ci-build-state-<runId>-<attempt>` 传给检查。共享包同时包含 `packages/*/dist`、应用私有包的 `apps/*/dist`、静态站点 `apps/*/build`、SvelteKit/适配器输出和 Turbo 缓存，不只传框架包。启动器直接消费的应用产物必须实际存在；缓存中的压缩记录不能代替这些文件。依赖任务仍由 Turbo 校验输入并恢复必要输出；上游构建失败不启动依赖它的检查。官网额外直接构建一次，确保 `build-metadata.json` 中的提交号属于本次提交。
 
+可信 Linux runner 还会安装 bubblewrap、AppArmor 工具及发行版的沙箱 profile，只加载 `bwrap-userns-restrict`，不关闭全局 user namespace 限制。宿主原生程序安装完成后、真实模型验收开始前，`codex sandbox` 必须在临时工程中实际读写成功；该预检使用隔离 `CODEX_HOME`，不接收上游密钥，退出时删除本轮临时文件。系统依赖、profile 或原生沙箱不可用时直接阻断，避免模型在工具启动失败后猜测内容。前置依据见 [Codex 官方沙箱说明](https://learn.chatgpt.com/docs/sandboxing)。
+
 ## 修复后复用哪些结果
 
 通过记录是独立阶段的成功证据，并不要求该轮所有其他阶段也成功。例如某轮单元通过而 Admin E2E 失败，修正 Admin 的独立 Playwright 用例后，符合条件的单元结果仍可复用。
