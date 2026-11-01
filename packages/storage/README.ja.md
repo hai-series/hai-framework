@@ -148,6 +148,8 @@ checksum の中止時は次のチャンクを待つ処理を終了し、入力�
 
 ### 設定
 
+Local は key 内のシンボリックリンクと junction を拒否し、予約拡張子 `.meta.json` / `.upload.tmp` は大文字小文字を区別せず保護します。put 上書きは旧メタデータを置換し、copy は既定で元を継承します。ブラウザー入口にサーバー単一インスタンスは含まれません。
+
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` は必須。`createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl` は任意。
 - **Local**：`root` は必須。`directoryMode / fileMode` は任意。
 

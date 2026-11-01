@@ -148,6 +148,8 @@ if (!result.success) {
 
 ### 配置
 
+Local 后端拒绝 key 路径中的文件符号链接和目录 junction，保留后缀 `.meta.json` / `.upload.tmp` 的保护不区分大小写。覆盖 put 会替换旧元数据，copy 默认继承源元数据；浏览器根入口仅提供 Schema、类型和客户端工具，不包含服务端 storage 单例。
+
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `createBucket / endpoint / publicEndpoint / forcePathStyle / prefix / publicUrl`
 - **Local**：`root` 必填，可选 `directoryMode / fileMode`
 

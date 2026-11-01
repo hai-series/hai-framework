@@ -14,6 +14,7 @@ import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
+import process from 'node:process'
 import { Readable } from 'node:stream'
 
 import { pipeline } from 'node:stream/promises'
@@ -134,7 +135,8 @@ function calculateEtag(stat: fs.Stats): string {
  * 拦截外部对 .meta.json 文件的直接访问，防止元数据泄漏。
  */
 function isMetaFile(key: string): boolean {
-  return key.endsWith('.meta.json') || key.endsWith('.upload.tmp')
+  const normalized = key.toLowerCase()
+  return normalized.endsWith('.meta.json') || normalized.endsWith('.upload.tmp')
 }
 
 /**
@@ -174,7 +176,8 @@ function safePath(root: string, key: string): string {
   }
 
   // 拒绝空字节与路径穿越片段
-  if (key.includes('\0') || hasPathTraversalSegment(key)) {
+  if (key.includes('\0') || hasPathTraversalSegment(key)
+    || (process.platform === 'win32' && key.split(PATH_SEGMENT_SPLIT_REGEX).some(segment => /[:. ]$/.test(segment) || segment.includes(':')))) {
     throw createInvalidPathError()
   }
 
@@ -229,8 +232,24 @@ export function createLocalProvider(): StorageProvider {
   }
 
   /** 将用户 key 转为安全的绝对路径（经 safePath 防穿越处理） */
-  function fullPath(key: string): string {
-    return safePath(getConfig().root, key)
+  async function fullPath(key: string): Promise<string> {
+    const root = getConfig().root
+    const target = safePath(root, key)
+    // 逐段检查现有路径，拒绝目录 junction 和文件符号链接；不存在的后缀由本次操作创建。
+    let current = root
+    for (const segment of path.relative(root, target).split(path.sep).filter(Boolean)) {
+      current = path.join(current, segment)
+      try {
+        if ((await fsp.lstat(current)).isSymbolicLink())
+          throw createInvalidPathError()
+      }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+          break
+        throw error
+      }
+    }
+    return target
   }
 
   function logOperation(category: 'read' | 'write', operation: string, payload: unknown): void {
@@ -251,7 +270,8 @@ export function createLocalProvider(): StorageProvider {
       }
       let temporaryPath: string | undefined
       try {
-        const filePath = fullPath(key)
+        const filePath = await fullPath(key)
+        const metaPath = await fullPath(`${key}.meta.json`)
         logOperation('write', 'file.put', { key, options })
 
         // 确保目录存在
@@ -284,11 +304,13 @@ export function createLocalProvider(): StorageProvider {
 
         // 存储自定义元数据（使用扩展属性或元数据文件）
         if (options.metadata || options.contentType) {
-          const metaPath = `${filePath}.meta.json`
           await fsp.writeFile(metaPath, JSON.stringify({
             contentType: options.contentType,
             metadata: options.metadata,
           }))
+        }
+        else {
+          await fsp.rm(metaPath, { force: true })
         }
 
         return ok(metadata)
@@ -326,7 +348,7 @@ export function createLocalProvider(): StorageProvider {
         )
       }
       try {
-        const filePath = fullPath(key)
+        const filePath = await fullPath(key)
         logOperation('read', 'file.getStream', { key, options })
         options.signal?.throwIfAborted()
         const stat = await fsp.stat(filePath)
@@ -353,7 +375,7 @@ export function createLocalProvider(): StorageProvider {
         )
       }
       try {
-        const filePath = fullPath(key)
+        const filePath = await fullPath(key)
         logOperation('read', 'file.head', { key })
         const stat = await fsp.stat(filePath)
 
@@ -367,7 +389,7 @@ export function createLocalProvider(): StorageProvider {
         // 尝试读取元数据文件
         let customMetadata: { contentType?: string, metadata?: Record<string, string> } = {}
         try {
-          const metaPath = `${filePath}.meta.json`
+          const metaPath = await fullPath(`${key}.meta.json`)
           const metaContent = await fsp.readFile(metaPath, 'utf-8')
           customMetadata = JSON.parse(metaContent)
         }
@@ -400,7 +422,7 @@ export function createLocalProvider(): StorageProvider {
         )
       }
       try {
-        const filePath = fullPath(key)
+        const filePath = await fullPath(key)
         logOperation('read', 'file.exists', { key })
         await fsp.access(filePath, fs.constants.F_OK)
         return ok(true)
@@ -421,7 +443,7 @@ export function createLocalProvider(): StorageProvider {
         )
       }
       try {
-        const filePath = fullPath(key)
+        const filePath = await fullPath(key)
         logOperation('write', 'file.delete', { key })
         logger.debug('Deleting file', { key })
         await fsp.unlink(filePath)
@@ -468,51 +490,17 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
-      if (isMetaFile(sourceKey) || isMetaFile(destKey)) {
-        return err(
-          HaiStorageError.INVALID_PATH,
-          storageM('storage_metaFileAccess', { params: { key: sourceKey } }),
-          sourceKey,
-        )
-      }
-      try {
-        const sourcePath = fullPath(sourceKey)
-        const destPath = fullPath(destKey)
-        logOperation('write', 'file.copy', { sourceKey, destKey, options })
-        logger.debug('Copying file', { sourceKey, destKey })
-
-        // 确保目标目录存在
-        await fsp.mkdir(path.dirname(destPath), { recursive: true, mode: getConfig().directoryMode })
-
-        // 复制文件
-        await fsp.copyFile(sourcePath, destPath)
-
-        // 获取新文件的元数据（无需读取文件内容，使用 stat 计算 ETag）
-        const stat = await fsp.stat(destPath)
-
-        const metadata: FileMetadata = {
-          key: destKey,
-          size: stat.size,
-          contentType: options.contentType || getMimeType(destKey),
-          lastModified: stat.mtime,
-          etag: calculateEtag(stat),
-          metadata: options.metadata,
-        }
-
-        // 存储自定义元数据
-        if (options.contentType || options.metadata) {
-          const metaPath = `${destPath}.meta.json`
-          await fsp.writeFile(metaPath, JSON.stringify({
-            contentType: options.contentType,
-            metadata: options.metadata,
-          }))
-        }
-
-        return ok(metadata)
-      }
-      catch (error) {
-        return err(toStorageError(error, sourceKey))
-      }
+      logOperation('write', 'file.copy', { sourceKey, destKey, options })
+      const source = await file.head(sourceKey)
+      if (!source.success)
+        return source
+      const stream = await file.getStream(sourceKey)
+      if (!stream.success)
+        return stream
+      return file.put(destKey, stream.data, {
+        contentType: options.contentType ?? source.data.contentType,
+        metadata: options.metadata ?? source.data.metadata,
+      })
     },
   }
 
@@ -623,7 +611,7 @@ export function createLocalProvider(): StorageProvider {
 
     async delete(prefix): Promise<HaiResult<void>> {
       try {
-        const dirPath = fullPath(prefix)
+        const dirPath = await fullPath(prefix)
         logOperation('write', 'dir.delete', { prefix })
 
         // 递归删除目录
@@ -689,6 +677,7 @@ export function createLocalProvider(): StorageProvider {
         // 确保根目录存在
         await fsp.mkdir(cfg.root, { recursive: true, mode: cfg.directoryMode })
 
+        config = { ...cfg, root: await fsp.realpath(cfg.root) }
         connected = true
         logger.info('Local provider connected', { root: cfg.root })
         return ok(undefined)
