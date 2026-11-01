@@ -70,6 +70,83 @@ async function workspace(
 const prompt = (text: string) => [{ type: 'text' as const, text }]
 const author = { name: 'ACP test', email: 'test@example.invalid' }
 describe('aCP managed session E2E', () => {
+  it.each(['signal', 'api'] as const)('cooperative cancellation via %s 保留不可恢复 Agent 的同一会话和进程', async (method) => {
+    await ai.close()
+    value(await ai.init({ acp: { promptTimeout: 5000, cancelTimeout: 1000 } }))
+    await workspace()
+    value(await ai.acp.agents.register({ id: 'no-resume', name: 'No resume', mode: 'embedded', command: process.execPath, args: [fixture, '--no-resume'] }))
+    const checked = value(await ai.acp.agents.check('no-resume', { workspaceId: 'project' }))
+    expect(checked.agentCapabilities?.loadSession).toBe(false)
+    expect(checked.agentCapabilities?.sessionCapabilities?.resume).toBeUndefined()
+    let accepted: () => void = () => {}
+    const ready = new Promise<void>((done) => {
+      accepted = done
+    })
+    const session = value(await ai.acp.sessions.create({
+      agentId: 'no-resume',
+      workspaceId: 'project',
+      onEvent(event) {
+        if (event.update.sessionUpdate === 'agent_message_chunk' && event.update.content.type === 'text' && event.update.content.text === 'waiting')
+          accepted()
+      },
+    }))
+    const nativeId = value(await session.info()).nativeId
+    const pid = value(await session.prompt(prompt('pid'))).text
+    const controller = new AbortController()
+    const waiting = session.prompt(prompt('wait'), controller.signal)
+    await ready
+    if (method === 'signal')
+      controller.abort()
+    else
+      value(await session.cancel())
+    const cancelled = await waiting
+    expect(cancelled.success).toBe(false)
+    if (!cancelled.success)
+      expect(cancelled.error.code).toBe('hai:ai:076')
+    expect(value(await session.prompt(prompt('continue'))).text).toBe('continue')
+    expect(value(await session.prompt(prompt('pid'))).text).toBe(pid)
+    expect(value(await session.info()).nativeId).toBe(nativeId)
+    const occupied = await ai.acp.sessions.create({ agentId: 'no-resume', workspaceId: 'project' })
+    expect(occupied.success).toBe(false)
+    if (!occupied.success)
+      expect(occupied.error.code).toBe('hai:ai:074')
+    value(await session.close())
+  }, 20000)
+
+  it('uncooperative cancellation 到期限仍关闭连接，并保留目录占用至 close', async () => {
+    await workspace()
+    let accepted: () => void = () => {}
+    const ready = new Promise<void>((done) => {
+      accepted = done
+    })
+    const session = value(await ai.acp.sessions.create({
+      agentId: 'fixture',
+      workspaceId: 'project',
+      onEvent(event) {
+        if (event.update.sessionUpdate === 'agent_message_chunk' && event.update.content.type === 'text' && event.update.content.text === 'hanging')
+          accepted()
+      },
+    }))
+    const controller = new AbortController()
+    const waiting = session.prompt(prompt('hang'), controller.signal)
+    await ready
+    controller.abort()
+    const cancelled = await waiting
+    expect(cancelled.success).toBe(false)
+    if (!cancelled.success)
+      expect(cancelled.error.code).toBe('hai:ai:076')
+    const next = await session.prompt(prompt('continue'))
+    expect(next.success).toBe(false)
+    if (!next.success)
+      expect(next.error.code).toBe('hai:ai:081')
+    const occupied = await ai.acp.sessions.create({ agentId: 'fixture', workspaceId: 'project' })
+    expect(occupied.success).toBe(false)
+    if (!occupied.success)
+      expect(occupied.error.code).toBe('hai:ai:074')
+    value(await session.close())
+    value(await ai.acp.sessions.create({ agentId: 'fixture', workspaceId: 'project' }))
+  }, 20000)
+
   it.skipIf(process.platform === 'win32')('进程清理失败保留连接，显式重试可以再次清理', async () => {
     const connection = value(await ai.acp.connect({ type: 'stdio', command: process.execPath, args: [fixture], env: { HOME: temporary } }))
     const kill = vi.spyOn(process, 'kill').mockImplementationOnce(() => {
@@ -330,6 +407,10 @@ describe('aCP managed session E2E', () => {
     expect(result.success).toBe(false)
     if (!result.success)
       expect(result.error.code).toBe('hai:ai:077')
+    const afterTimeout = await next.prompt(prompt('continue'))
+    expect(afterTimeout.success).toBe(false)
+    if (!afterTimeout.success)
+      expect(afterTimeout.error.code).toBe('hai:ai:081')
     value(await next.close())
   }, 20000)
   it('多工程不同主分支、worktree 隔离、双模式发布与重试', async () => {

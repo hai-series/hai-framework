@@ -271,6 +271,7 @@ export async function connectACP(
     timeout = limits.requestTimeout,
     signal?: AbortSignal,
     prompt = false,
+    isCancelledResponse?: (output: T) => boolean,
   ) {
     if (closed)
       throw new ACPFailure('closed')
@@ -307,7 +308,9 @@ export async function connectACP(
       if (failure)
         throw failure
       if (reason) {
-        await close()
+        // 主动取消已获原生终态确认时保留会话；超时或未确认仍关闭，目录占用始终由宿主控制。
+        if (!(reason.kind === 'cancelled' && prompt && isCancelledResponse?.(output)))
+          await close()
         throw reason
       }
       return output
@@ -412,6 +415,7 @@ export async function connectACP(
             ? AbortSignal.any([activePrompt.signal, signal])
             : activePrompt.signal,
           true,
+          output => output.stopReason === 'cancelled',
         )
         if (response.stopReason === 'cancelled')
           throw new ACPFailure('cancelled')

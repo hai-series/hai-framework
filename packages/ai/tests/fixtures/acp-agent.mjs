@@ -10,6 +10,7 @@ function send(value) {
 }
 const state = process.env.HOME
 const sessions = new Map()
+const resumable = !process.argv.includes('--no-resume')
 let mcpServers = []
 let pending
 const line = createInterface({ input: process.stdin })
@@ -33,8 +34,8 @@ line.on('line', async (text) => {
       protocolVersion: 1,
       agentInfo: { name: 'fixture', version: '1' },
       agentCapabilities: {
-        loadSession: true,
-        sessionCapabilities: { resume: {}, close: {}, list: {} },
+        loadSession: resumable,
+        sessionCapabilities: { ...(resumable ? { resume: {} } : {}), close: {}, list: {} },
         promptCapabilities: {},
       },
       authMethods: [],
@@ -74,6 +75,10 @@ line.on('line', async (text) => {
   }
   if (method === 'session/prompt') {
     const content = params.prompt[0].text
+    if (content === 'pid') {
+      event(params.sessionId, String(process.pid))
+      return reply({ stopReason: 'end_turn' })
+    }
     if (content === 'mcp') {
       event(
         params.sessionId,
@@ -83,10 +88,13 @@ line.on('line', async (text) => {
     }
     if (content === 'wait') {
       pending = id
+      event(params.sessionId, 'waiting')
       return
     }
-    if (content === 'hang')
+    if (content === 'hang') {
+      event(params.sessionId, 'hanging')
       return
+    }
     if (content === 'write') {
       await writeFile(
         join(sessions.get(params.sessionId), 'files', 'agent.txt'),
