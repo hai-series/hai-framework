@@ -82,6 +82,8 @@ Project creation generates independent initial passwords and transport key rings
 
 ### Application configuration and display
 
+UI templates offer the `eye-care` theme with warm green surfaces, dark text and clear focus outlines; selections survive reloads. It is included in the default fullstack theme list. Explicit `fullstack.theme.themes` allowlists and configured `defaultTheme` values remain host controlled.
+
 Templates default to `pretty` logging and install `pino-pretty` as a runtime dependency; set `HAI_CORE_LOGGING_FORMAT=json` for JSON. Startup failures retain the module, error code and configuration fields; occupied ports report `EADDRINUSE`, address and port.
 
 Public settings live in `.env` and `.env.<mode>`; SSH settings and credentials go to Git-ignored `.env.<mode>.local`. `.env.local` contains shared machine-private settings. Builds do not read deployment secrets. All `HAI_*` settings use process > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML. Within one source, fields override base JSON. Replacing a whole node from a higher source clears lower-source fields. Node/Vite and deployment share Core resolution.

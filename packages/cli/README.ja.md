@@ -82,6 +82,8 @@ Docker構築でもPUBLIC_BASE_PATHを明示できます。非ルートではwebB
 
 ### アプリ設定と表示
 
+画面付きテンプレートは、暖かい緑の背景、濃い文字と明確なフォーカスの `eye-care` テーマを提供し、再読み込み後も選択を保持します。fullstack の既定テーマ一覧に含まれます。明示的な `fullstack.theme.themes` と設定済み `defaultTheme` はホスト設定を尊重します。
+
 テンプレートは `pretty` ログを既定とし、実行依存に `pino-pretty` を追加します。`HAI_CORE_LOGGING_FORMAT=json` で JSON に切り替えます。起動失敗はモジュール・エラーコード・設定項目、ポート競合は `EADDRINUSE`・アドレス・ポートを表示します。
 
 公開設定は `.env` と `.env.<mode>`、SSH と資格情報は Git 対象外の `.env.<mode>.local`、マシン共通の秘密値は `.env.local` に保存します。構築時には配備の秘密値を読みません。 すべての `HAI_*` はプロセス > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML の順です。同一ソースは JSON を基礎として個別フィールドで上書きし、高優先度ソースの全体置換は低優先度の細項を解除します。Node/Vite と配備は同じ Core 処理を使います。

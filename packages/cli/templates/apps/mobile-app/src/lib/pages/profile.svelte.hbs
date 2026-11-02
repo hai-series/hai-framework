@@ -1,12 +1,24 @@
 <script lang='ts'>
+  import { ThemeSelector } from '@h-ai/ui'
+  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
   import * as m from '../paraglide/messages.js'
+
+  let currentTheme = $state(getSavedTheme())
+
+  function handleThemeChange(theme: string) {
+    currentTheme = theme
+    applyTheme(theme)
+  }
 </script>
 
 <section class='space-y-4 p-4 pb-6'>
   <Card title={m.profile_title()} shadow='sm'>
     <div class='space-y-3 text-sm'>
       <div class='bg-base-200 rounded-xl p-3'>{m.profile_language()}</div>
-      <div class='bg-base-200 rounded-xl p-3'>{m.profile_theme()}</div>
+      <div class='flex flex-wrap items-center justify-between gap-3 bg-base-200 rounded-xl p-3' data-testid='profile-theme'>
+        <span>{m.profile_theme()}</span>
+        <ThemeSelector {currentTheme} onchange={handleThemeChange} compact grouped={false} />
+      </div>
       <div class='bg-base-200 rounded-xl p-3'>{m.profile_secure()}</div>
     </div>
   </Card>

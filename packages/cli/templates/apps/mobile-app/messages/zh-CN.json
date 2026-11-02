@@ -31,6 +31,6 @@
   "tasks_release": "准备原生打包",
   "profile_title": "应用设置",
   "profile_language": "语言跟随 Paraglide",
-  "profile_theme": "主题跟随 @h-ai/ui",
+  "profile_theme": "主题",
   "profile_secure": "敏感 Token 不落 localStorage"
 }

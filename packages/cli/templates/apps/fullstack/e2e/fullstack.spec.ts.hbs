@@ -647,7 +647,7 @@ test('administrator manages every duty through one lifecycle and the shared pass
   await expect(row).toHaveCount(0)
 })
 
-test('administrator and user complete account, avatar, preference, password and audit workflows', async ({ page, browser }) => {
+test('administrator and user complete account, avatar, preference, password and audit workflows', async ({ page, browser }, testInfo) => {
   test.setTimeout(120_000)
   const username = `member-${randomUUID().slice(0, 8)}`
   const password = 'User-test-Pass123!'
@@ -727,6 +727,17 @@ test('administrator and user complete account, avatar, preference, password and 
     await expect(userPage.getByTestId('settings-page')).toBeVisible()
     await expect(userPage.getByTestId('nav-settings')).toHaveText('Personal settings')
     await expect(userPage.locator('html')).toHaveAttribute('data-theme', selectedTheme)
+    if (themes.includes('eye-care')) {
+      await userPage.getByTestId('profile-theme').click()
+      await userPage.getByRole('option', { name: 'Eye care', exact: true }).click()
+      await expect(userPage.locator('html')).toHaveAttribute('data-theme', 'eye-care')
+      await userPage.reload()
+      await expect(userPage.getByTestId('settings-page')).toBeVisible()
+      await expect(userPage.locator('html')).toHaveAttribute('data-theme', 'eye-care')
+      await expect.poll(() => userPage.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('light')
+      await expect.poll(() => userPage.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--color-base-100').trim())).toBe('#e8f0df')
+      await userPage.screenshot({ path: testInfo.outputPath('fullstack-eye-care.png'), animations: 'disabled' })
+    }
     await expect(userPage.getByTestId('profile-form').locator('input[name="displayName"]')).toHaveValue('Updated member')
     await expect(userPage.getByTestId('profile-form').locator('input[name="email"]')).toHaveValue('')
     await expect.poll(() => userPage.getByTestId('profile-form').locator('img').evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
