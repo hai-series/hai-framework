@@ -123,6 +123,35 @@ describe('core.async', () => {
     expect(result).toEqual([3, 6, 9])
   })
 
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])('parallel 回归：拒绝非法并发值 %s，且不执行任务', async (concurrency) => {
+    const task = vi.fn(async (value: number) => value * 2)
+    await expect(core.async.parallel([1, 2], task, concurrency)).rejects.toBeInstanceOf(RangeError)
+    await expect(core.async.parallel([], task, concurrency)).rejects.toBeInstanceOf(RangeError)
+    expect(task).not.toHaveBeenCalled()
+  })
+
+  it('parallel 回归：合法空输入返回空数组，任务失败保留原异常', async () => {
+    const task = vi.fn(async (value: number) => value * 2)
+    expect(await core.async.parallel([], task, 1)).toEqual([])
+    expect(task).not.toHaveBeenCalled()
+    const failure = new Error('Task rejected')
+    await expect(core.async.parallel([1], async () => {
+      throw failure
+    }, 1)).rejects.toBe(failure)
+  })
+
+  it('防抖节流回归：保留有类型回调的参数与最后一次输入', async () => {
+    const values: string[] = []
+    const debounce = core.async.debounce((text: string, count: number) => values.push(`${text}:${count}`), 100)
+    const throttle = core.async.throttle((text: string, count: number) => values.push(`${text}:${count}`), 100)
+    debounce('first', 1)
+    debounce('last', 2)
+    throttle('now', 3)
+    throttle('ignored', 4)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(values).toEqual(['now:3', 'last:2'])
+  })
+
   it('debounce 应该合并短时间内调用', async () => {
     const spy = vi.fn()
     const fn = core.async.debounce(spy, 100)

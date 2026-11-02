@@ -89,9 +89,10 @@ async function retry<T>(
  *
  * @param items - 输入列表
  * @param fn - 处理函数
- * @param concurrency - 最大并发数
+ * @param concurrency - 最大并发数，必须为大于 0 的安全整数
  * @returns 处理结果列表
  * @remarks 结果顺序与输入顺序一致。
+ * @throws 并发数非法时拒绝为 RangeError，不执行任何任务；任务异常原样传播。
  *
  * @example
  * ```ts
@@ -103,6 +104,8 @@ async function parallel<T, R>(
   fn: (item: T, index: number) => Promise<R>,
   concurrency = 5,
 ): Promise<R[]> {
+  if (!Number.isSafeInteger(concurrency) || concurrency <= 0)
+    throw new RangeError(i18n.coreM('core_parallelConcurrencyInvalid'))
   const results: R[] = []
   let index = 0
 
@@ -157,12 +160,12 @@ async function serial<T, R>(
  * const onInput = async.debounce(() => {}, 300)
  * ```
  */
-function debounce<T extends (...args: unknown[]) => unknown>(
-  fn: T,
+function debounce<Args extends unknown[]>(
+  fn: (...args: Args) => unknown,
   ms: number,
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   let timer: ReturnType<typeof setTimeout> | null = null
-  return (...args: Parameters<T>) => {
+  return (...args: Args) => {
     if (timer)
       clearTimeout(timer)
     timer = setTimeout(fn, ms, ...args)
@@ -182,12 +185,12 @@ function debounce<T extends (...args: unknown[]) => unknown>(
  * const onScroll = async.throttle(() => {}, 200)
  * ```
  */
-function throttle<T extends (...args: unknown[]) => unknown>(
-  fn: T,
+function throttle<Args extends unknown[]>(
+  fn: (...args: Args) => unknown,
   ms: number,
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   let lastTime = 0
-  return (...args: Parameters<T>) => {
+  return (...args: Args) => {
     const now = Date.now()
     if (now - lastTime >= ms) {
       lastTime = now

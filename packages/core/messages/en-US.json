@@ -51,6 +51,7 @@
   "core_configNotLoaded": "Config '{name}' is not loaded",
   "core_configUnsupportedInBrowser": "Browser does not support file-based config; use core.config on the server or pass browser options through core.init({ logging })",
   "core_cryptoRandomUnavailable": "Cryptographic random source is unavailable",
+  "core_parallelConcurrencyInvalid": "Concurrency must be a positive safe integer",
   "core_runtimeStartFailed": "Module {module} failed to start",
   "core_runtimeCloseFailed": "Module {module} failed to close; retry cleanup",
   "core_runtimeEnvMissing": "{message}: Required environment variables are not set: {fields}. Please set valid values in the current environment's .env files or process environment, then restart the application.",

@@ -51,6 +51,7 @@
   "core_configNotLoaded": "配置 '{name}' 未加载",
   "core_configUnsupportedInBrowser": "浏览器环境不支持文件配置，请在服务端使用 core.config 或通过 core.init({ logging }) 传入浏览器端选项",
   "core_cryptoRandomUnavailable": "当前运行环境缺少密码学安全的随机源",
+  "core_parallelConcurrencyInvalid": "并发数必须是大于 0 的安全整数",
   "core_runtimeStartFailed": "模块 {module} 启动失败",
   "core_runtimeCloseFailed": "模块 {module} 关闭失败，请重试清理",
   "core_runtimeEnvMissing": "{message}：未设置必需的环境变量 {fields}。请在当前环境的 .env 文件或进程环境中设置有效值后重新启动应用。",

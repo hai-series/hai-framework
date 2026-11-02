@@ -63,6 +63,8 @@ function typeSmoke(directories, suffix, browser, generated) {
     if (directory === 'payment')
       source.push('import type { PaymentProvider } from \'@h-ai/payment\'', 'export type Extension = PaymentProvider')
     if (directory === 'core') {
+      source.push('const onInput = api.core.async.debounce((value: string, count: number) => value.repeat(count), 100)', 'const onScroll = api.core.async.throttle((position: number) => position + 1, 100)', 'onInput("sample", 2); onScroll(1)')
+      source.push('// @ts-expect-error 防抖包装保留回调参数类型', 'onInput(2, "sample")', '// @ts-expect-error 节流包装不接受缺失的必需参数', 'onScroll()')
       source.push('export const policy = api.RequestAccessConfigSchema.parse(false)')
       source.push('// @ts-expect-error 请求检查执行函数统一注册在 core.access', 'api.createRequestCheck(false)')
       if (browser)
