@@ -73,6 +73,8 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 
 > **默认优先扁平 API**。只有分组能明显降低理解成本时才用子操作对象。
 
+扁平指 `<模块名>.操作()`，分组指 `<模块名>.<子功能>.操作()`，均从模块对象进入。运行功能默认不使用包级独立函数；实例调用、静态定义或宿主要求等例外按[模块功能入口](../../instructions/module-conventions.md#模块功能入口)给出实际依据。
+
 | 判断                                 | 风格                 | 示例模块                                                                                                                                                                                                                                           |
 | ------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 操作可按领域分 ≥2 组且每组 ≥2 个方法 | 子操作对象（getter） | reldb (sql/ddl/crud/tx), cache (kv/hash/list/set_/zset), ai (llm/tools/embedding/...), iam (auth/authz/user/session), crypto (asymmetric/hash/symmetric/password), capacitor (device/camera/push/statusBar/preferences), vecdb (collection/vector) |
@@ -151,7 +153,7 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 13. **公共 API JSDoc** → R6
 14. **测试** → R7
 15. **包配置**（`package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`）→ R8
-16. **README** → R9
+16. **README** → R9：按模块对象的全部公开子功能逐项说明用途、示例和必要注意事项；同时核对模块入口约定与明确例外。
 
 ## §6 创建检查清单
 
@@ -170,5 +172,6 @@ description: "在 hai-framework 源码仓库新增模块、子功能或 Provider
 - [ ] 数据库租约使用同条条件 SQL 的存储端执行时钟；验证节点墙钟偏差与真实锁等待后仍拒绝过期提交，不能只续租或先读取时间
 - [ ] 测试覆盖正常 / 边界 / 多实现
 - [ ] README + 对应 CLI Skill 模板（如存在）同步
+- [ ] 运行功能遵循模块对象入口，特殊入口说明依据；使用入门覆盖全部公开子功能，每项有用途、展示输入与输出的带注释示例和必要限制；正文为面向使用者的最终说明，配置规则有结果及类型示例
 - [ ] 构建后 generate:api/check:api/test:api 验证真实入口、声明及浏览器隔离；公开变化已核对全部消费者
 - [ ] 按 [工作规范](../../instructions/workspace.md#验证与交付) 分轮收集 typecheck/lint/build/test 及适用 E2E，汇总后集中修复；最终必需门禁对最终代码均有效通过
