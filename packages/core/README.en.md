@@ -6,650 +6,814 @@
 
 ## Introduction
 
-The core of hai Agent Framework: shared utilities, types, configuration management, and logging.
+`@h-ai/core` is the shared foundation of Hai Framework. It gives applications and framework modules consistent configuration, errors, logging, and internationalization. Utilities work directly; call `core.init()` when a Node application needs file configuration.
 
-## Core features
+## Core capabilities
 
-- **HaiResult types**: functional error handling (`ok` / `err`) with a shared result format across modules.
-- **Unified logging**: pino on Node.js and loglevel in browsers, with the same API.
-- **Internationalization (i18n)**: centralized locale management and typed message getters.
-- **Zod validation error mapping**: Zod v3/v4 issue extraction and localization of default English messages.
-- **Configuration management**: YAML loading, convention-based environment mapping, explicit interpolation, Zod validation, and file watching (Node.js only).
-- **ID generation**: nanoid and UUID v4.
-- **Error definitions**: standardized codes and consistent error definitions and instances across modules.
-- **Module utilities**: NotInitializedKit proxies and shared lifecycle infrastructure.
-- **Utility library**: type checks and object / string / array / async / time operations.
+| Capability                                   | Purpose                                                                                                                                     | Main entry points                                       |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Configuration and startup                    | Load YAML, merge environment overrides, validate settings, and orchestrate module startup and shutdown                                      | `core.config`, `core.init`, `core.module.createRuntime` |
+| Results and errors                           | Express business success/failure, define error codes, and produce safe messages at API boundaries                                           | `HaiResult`, `ok` / `err`, `core.error`                 |
+| Logging and diagnostics                      | Structured logs, request correlation, credential masking, and log observation                                                               | `core.logger`, `core.context`, `core.sanitize`          |
+| Internationalization and validation messages | Manage message languages, isolate concurrent request locales, and localize Zod field errors                                                 | `core.i18n`, `core.zodValidation`                       |
+| Request access control                       | Resolve trusted client addresses and check paths, methods, IPs, and time windows                                                            | `core.access` (Node only)                               |
+| General utilities                            | Generate identifiers and reuse type, object, string, array, async, and time operations, plus consistent errors before module initialization | `core.id`, `core.typeUtils`, `core.object`, and others  |
+
+### Node and browser boundaries
+
+Both environments use `import { core } from '@h-ai/core'`; the bundler selects the code for the target environment.
+
+| Capability                                                                        | Node.js                                                                                           | Browser                                                                                        |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Logging, results/errors, messages, utilities, and ordered module startup/shutdown | Supported                                                                                         | Supported                                                                                      |
+| YAML, dotenv, environment mapping, file watching                                  | Reads and watches local configuration files                                                       | Cannot read or watch local files; loading methods return failure                               |
+| Request correlation with `core.context.run`                                       | Each request retains its own IDs after asynchronous work, without mixing them with other requests | Values exist only during synchronous callback code and are no longer available after `await`   |
+| Request locale with `core.i18n.runWithLocale`                                     | Each request keeps its chosen language after asynchronous work; other requests do not change it   | Throws; set the page language with `setGlobalLocale()` or pass a locale when getting a message |
+| Request policies with `core.access`                                               | Checks request addresses, paths, and time windows                                                 | This tool is unavailable                                                                       |
+
+`core.init()` configures Core settings and logging synchronously, returns `void`, and Core provides no `close()` method. Applications starting databases, caches, or other modules can manage them with `core.module.createRuntime()`: its returned object's `start()` initializes them in order, and `close()` cleans them up in reverse. A complete example follows under “Application startup and shutdown”.
 
 ## Getting started
 
-### Quick start
+Each Core feature below has a purpose, examples, and relevant limits. Start with initialization when loading configuration; logging, messages, and general utilities work directly.
 
-#### Node.js environment
+Call runtime functions through `core.xxx()` or `core.<feature>.xxx()`. Import the result constructors `ok` / `err`, types, schemas, and error constants separately from the package entry. Their sections below show the usage.
 
-```typescript
+```bash
+pnpm add @h-ai/core
+```
+
+The custom configuration and form-validation examples also use Zod; install it with `pnpm add zod` before running them. Database and cache examples list their additional dependencies in their section.
+
+### Initialization: `core.init`
+
+Load YAML and configure logging at Node startup, or configure logging in a browser. Initializing Core does not start databases or other modules.
+
+#### Node.js
+
+Create `config/_core.yml`:
+
+```yaml
+# 应用元信息，供启动代码和页面读取。
+name: orders
+version: 0.1.0
+env: development
+# 默认消息语言；启动代码读取后调用 setGlobalLocale 应用。
+defaultLocale: zh-CN
+logging:
+  level: info # 输出 info 及以上级别。
+  format: pretty # 本地开发使用便于阅读的日志。
+```
+
+```ts
+import { core, CoreConfigSchema } from '@h-ai/core'
+
+// 1. 读取 config 目录中的 YAML，_core.yml 对应名称 core。
+core.init({ configDir: './config' }) // 返回 undefined；配置缓存中可读取 core。
+
+// 2. 检查应用必需的配置；失败时停止启动，保留原始错误供排查。
+const config = core.config.validate('core', CoreConfigSchema)
+if (!config.success)
+  throw new Error(config.error.message, { cause: config.error })
+
+// 成功时 config.success 为 true；config.data.name 为 'orders'，defaultLocale 为 'zh-CN'。
+
+// 3. 将配置中的语言应用到默认消息；读取 YAML 本身不会切换语言。
+core.i18n.setGlobalLocale(config.data.defaultLocale) // 返回 undefined；后续默认消息使用中文。
+
+// 4. 记录已验证的应用名称，确认启动完成。
+core.logger.info('Application ready', { name: config.data.name }) // 返回 undefined；info 日志包含 name: 'orders'。
+```
+
+The startup boundary stops when required configuration is unavailable. `core.init()` logs individual load failures and continues, so completion does not mean every configuration is valid. Directory scanning and logger setup can still throw.
+
+#### Browser
+
+```ts
 import { core } from '@h-ai/core'
 
-// 初始化：加载配置目录（可选）
-core.init({ configDir: './config', watchConfig: true })
+// 浏览器不读取 YAML；此处只设置日志，输出 warn 及以上级别。
+core.init({ logging: { level: 'warn' } }) // 返回 undefined；之后 info 日志被过滤。
 
-// 日志
-core.logger.info('Server started', { port: 3000 })
-core.logger.warn('Slow query', { duration: 2500 })
-core.logger.error('Connection failed', { error })
+// 设置当前页面使用的默认消息语言。
+core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；页面默认消息使用中文。
 
-// 创建模块级 logger（独立名称空间）
-const dbLogger = core.logger.create({ name: 'db' })
-dbLogger.info('Connected to PostgreSQL')
-
-// 创建子 logger（自动携带固定上下文，适合请求级/操作级追踪）
-const reqLogger = core.logger.child({ requestId: 'req-001', userId: 'u-123' })
-reqLogger.info('Request started') // 日志自动包含 requestId + userId
-reqLogger.error('Request failed') // 同上
-
-// 子 logger 可嵌套
-const opLogger = reqLogger.child({ operation: 'createOrder' })
-opLogger.info('Order created') // 包含 requestId + userId + operation
-
-// i18n
-core.i18n.setGlobalLocale('zh-CN')
-const getMessage = core.i18n.createMessageGetter({
-  'zh-CN': { welcome: '欢迎 {name}', error: '发生错误：{msg}' },
-  'en-US': { welcome: 'Welcome {name}', error: 'Error: {msg}' },
-})
-getMessage('welcome', { params: { name: 'Alice' } }) // '欢迎 Alice'
-
-// ID 生成
-const nanoid = core.id.generate()
-const shortId = core.id.short()
-const uuid = core.id.uuid()
-const prefixed = core.id.withPrefix('order_')
-
-// 工具函数
-core.object.deepMerge(objA, objB)
-core.sanitize.sanitizeSensitiveFields({ password: 'secret', email: 'user@example.com' })
-core.string.capitalize('hello')
-core.array.unique([1, 1, 2, 3])
-core.array.chunk([1, 2, 3, 4, 5], 2) // [[1,2], [3,4], [5]]
-await core.async.delay(1000)
-await core.async.retry(() => fetchData(), { maxRetries: 3, delay: 1000 })
-core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
-core.typeUtils.isDefined(value)
+// 给一次请求生成编号，后续日志可用同一编号关联排查。
+const requestId = core.id.request() // 返回随机字符串，如 'req-V1StGXR8_Z5jdHi6B-myT'。
+core.logger.warn('Request needs attention', { requestId }) // 返回 undefined；浏览器输出 warn 消息及同一个 requestId。
 ```
 
-#### Browser environment
+The host supplies public configuration fields; never send complete server settings or secrets. Browser `core.config.get()` / `has()` / `keys()` return `undefined` / `false` / `[]`. `loadEnvFiles()`, `load()`, `validate()`, and `reload()` return `SERVICE_UNAVAILABLE`; `getOrThrow()` throws. `watch()` immediately calls back with the same unavailable error and returns a no-op unsubscribe function.
 
-```typescript
-import { core } from '@h-ai/core'
+### Files and environment settings: `core.config`
 
-// 初始化日志级别（浏览器不支持配置加载）
-core.init({ logging: { level: 'warn' } })
+Read YAML, apply environment overrides, validate configuration types, and manage cached settings and file watchers. The file and environment operations below require Node.
 
-core.logger.info('Page ready')
-const id = core.id.generate()
+#### Loading, validating, and reading
 
-// 其他工具函数与 Node.js 相同
-core.string.capitalize('hello')
-core.array.unique([1, 1, 2])
+`core.init({ configDir, configSchemas?, watchConfig? })` scans direct `.yml` / `.yaml` children of the directory. `_core.yml` becomes `core`, `_db.yml` becomes `db`, and `app.yml` becomes `app`. The CLI reads build/deploy settings from root `hai.json`; they are separate from runtime YAML.
+
+`_core.yml` is validated with `CoreConfigSchema`, accepting only `name`, `version`, `env`, `defaultLocale`, and `logging`. The metadata defaults are `hai Admin`, `0.1.0`, `development`, and `zh-CN`; `logging` is optional. Metadata does not set `NODE_ENV`, switch message languages, or register application translations. Configure logging here; explicit `core.init({ logging })` overrides the application of YAML logging settings during that initialization.
+
+For other files, host-supplied `configSchemas` provide structural and type hints during scanning. Full business validation stays in module initialization or explicit `validate()`. A direct `load(name, file, schema)` validates immediately.
+
+The following file examples use this `config/app.yml` with no additional environment overrides:
+
+```yaml
+# config/app.yml
+port: 3000
 ```
 
-The browser retains the `core.config` API shape for type compatibility, but does not support file configuration:
+load() reads a file and can validate it immediately; validate() validates cached settings. get() returns undefined for a missing entry, while getOrThrow() throws. Generic arguments help TypeScript and do not validate data. has()/keys() show which entries exist.
 
-- `core.config.get()` returns `undefined`, `has()` returns `false`, and `keys()` returns `[]`.
-- `loadEnvFiles()` / `load()` / `validate()` / `reload()` return `HaiCommonError.SERVICE_UNAVAILABLE`.
-- `watch()` immediately calls its callback with the same error and returns a safe no-op unsubscribe function.
-- Read configuration on the server and deliver it through an API, or use `core.init({ logging })` only to configure browser logging.
-
-### Detailed API
-
-#### Logging (Logger)
-
-`core.logger` is both the default Logger instance and the shared entry point for logger management.
-
-##### Write logs
-
-Six levels: `trace` / `debug` / `info` / `warn` / `error` / `fatal`.
-
-```typescript
-core.logger.info('User created', { userId: '123' })
-core.logger.error('Failed to connect', { error })
-core.logger.debug('Processing item', { id, step: 'validation' })
-```
-
-##### Create a module logger
-
-```typescript
-// 独立名称空间，适合模块内全局使用
-const logger = core.logger.create({ name: 'payment' })
-logger.info('Payment processed')
-```
-
-##### Child loggers
-
-```typescript
-// 携带固定上下文，每条日志自动附带这些字段
-const reqLogger = core.logger.child({ requestId: 'req-001', userId: 'u-123' })
-reqLogger.info('Request started') // 输出包含 requestId + userId
-reqLogger.warn('Slow response') // 同上
-
-// 嵌套 child：子上下文递归合并
-const opLogger = reqLogger.child({ operation: 'login' })
-opLogger.info('Login succeeded') // 输出包含 requestId + userId + operation
-opLogger.error('Login failed', { reason: 'invalid_password' })
-```
-
-> **Typical usage**: create `reqLogger` at the request entry, pass it to the service layer, and add operation context with `child`. Logs then include the complete request context.
-
-##### Logger management
-
-```typescript
-// 配置输出格式和级别（Node.js / Browser）
-core.logger.configure({
-  level: 'info',
-  format: 'json', // 'json' | 'pretty'
-  context: { app: 'my-service' }, // 全局默认上下文
-  redact: ['password', 'token'], // 脱敏字段
-})
-
-core.logger.setLevel('debug')
-const level = core.logger.getLevel() // 'debug'
-```
-
-After `core.init()` loads `_core.yml.logging`, or after `configure` / `setLevel`, default, module and nested child loggers use current global configuration for subsequent output, including instances created before initialization. Explicit `create({ level, format, context })` options retain priority; omitted options inherit global configuration dynamically, and per-call context overrides fixed context. Additional `redact` rules apply to all these instances without recreating module loggers.
-
-Browser logs still use the DevTools console: `pretty` prints readable messages with context, while `json` prints a JSON string containing `level` / `msg`. Default credential masking and configured path redaction both apply, including nested dot/bracket paths and `*`. Callers remain responsible for redacting message text.
-
-Native `Error` values in log context are copied into diagnostics containing `name`, `message`, `stack`, `cause`, `AggregateError.errors`, and enumerable own context before default field/URL masking and configured `redact` paths run. Both backends use the same rules and leave the original error unchanged. Error-subgraph cycles become `[Circular]` and the 32-level limit becomes `[MaxDepth]`; custom replacements in these subgraphs follow the same normalization, while ordinary-object replacement behavior is unchanged. Ordinary-object cycles without an Error retain their original structure and are not guaranteed to be directly JSON-serializable. Error text masks explicitly labeled credentials such as `passwordHash=...` and `secretKey=...`, authorization headers and URL credentials. Arbitrary unlabeled secrets cannot be reliably detected; callers must still clean them or mask whole paths such as `error.message` / `error.stack`.
-
-`core.logger` redacts log context by default: credentials such as `password`, `passwordHash`, `passwd`, `token`, `secret`, `secretKey`, `privateKey`, and `apiV3Key` become `[REDACTED]`. Fields such as `url` / `baseUrl` / `endpoint` mask embedded usernames/passwords, sensitive query parameters, and OAuth key/value fragments; malformed URLs return a fixed placeholder. Email addresses and phone numbers are not masked by default.
-
-##### Log level conventions
-
-| Level   | Use case                                            |
-| ------- | --------------------------------------------------- |
-| `trace` | Detailed debugging data inside loops                |
-| `debug` | Function entry, parameter summaries, reads          |
-| `info`  | Business events (initialized, write succeeded)      |
-| `warn`  | Recoverable problems (validation failures, retries) |
-| `error` | Operation failures requiring investigation          |
-| `fatal` | Fatal errors preventing continued service           |
-
-#### Internationalization (i18n)
-
-Built-in locales are `zh-CN`, `en-US` and `ja-JP`. The `ja` alias normalizes to `ja-JP`; all modules share this setting.
-
-```typescript
-// 设置全局语言（所有 getMessage 函数自动响应）
-core.i18n.setGlobalLocale('en-US')
-const current = core.i18n.getGlobalLocale() // 'en-US'
-
-// 为每个模块创建消息获取器
-const getMessage = core.i18n.createMessageGetter({
-  'zh-CN': { welcome: '欢迎 {name}', error: '错误：{code}' },
-  'en-US': { welcome: 'Welcome {name}', error: 'Error: {code}' },
-})
-
-// 使用：自动读取全局 locale，支持参数插值
-getMessage('welcome', { params: { name: 'Alice' } }) // 'Welcome Alice'
-
-// 支持 locale 参数覆盖
-getMessage('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) // '欢迎 Alice'
-
-// 常量
-core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }, { code: 'ja-JP', label: '日本語' }]
-core.i18n.DEFAULT_LOCALE // 'zh-CN'
-```
-
-#### Redaction utilities
-
-`core.sanitize.sanitizeSensitiveFields()` recursively redacts objects and arrays. By default it handles password/passwordHash, passwd, token, secret/secretKey, privateKey, apiV3Key, and similar credentials, and masks embedded credentials in `url` / `baseUrl` / `endpoint`. `core.sanitize.sanitizeUrl(url, options)` also handles individual URLs and returns `(invalid url)` for malformed input. Custom matchers apply to parameter names as well. `sanitizeText` masks labeled credentials and URLs and accepts known secret values from the caller; it does not detect arbitrary unlabeled secrets.
-
-```typescript
-core.sanitize.sanitizeSensitiveFields({
-  email: 'user@example.com',
-  password: 'secret',
-  baseUrl: 'https://user:pass@example.com/api/v1',
-  profile: { token: 'jwt-token' },
-})
-// => { email: 'user@example.com', password: '[REDACTED]', baseUrl: 'https://[REDACTED]:[REDACTED]@example.com/api/v1', profile: { token: '[REDACTED]' } }
-
-core.sanitize.sanitizeSensitiveFields({ email: 'user@example.com' }, {
-  matcher: /email/i,
-  replacement: '***',
-})
-// => { email: '***' }
-```
-
-#### Zod validation error localization
-
-`core.zodValidation` converts Zod `SafeParseError` / `ZodError` into flat form errors and maps Zod's
-default English messages to the caller's own localized messages.
-
-Unknown fields rejected by strict schemas map to `validationUnexpectedFields` without exposing internal field names. Custom message getters must handle this key; Kit and Serv provide Chinese, English and Japanese messages. Explicit business messages in a schema remain unchanged.
-
-- Two public entry points:
-  - `createPrefixedZodMessageGetter()`: derive keys such as `serv_validation*` / `kit_validation*` from module prefixes without a manual `KEY_MAP`.
-  - `mapZodErrorToFormErrors()`: extract, localize, and flatten in one step.
-- Custom business messages are preserved; only Zod's default English messages are replaced.
-
-```typescript
-import type { ZodMessageGetter } from '@h-ai/core'
+```ts
 import { core } from '@h-ai/core'
 import { z } from 'zod'
 
-const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  nickname: z.string().min(1, '请填写昵称'),
-})
+// 读取上方 config/app.yml；Schema 同时描述类型和校验规则。
+const AppSchema = z.object({ port: z.number().int().min(1).max(65535) })
+const loaded = core.config.load('app', './config/app.yml', AppSchema)
+if (!loaded.success)
+  throw new Error(loaded.error.message, { cause: loaded.error })
 
-const getMessage: ZodMessageGetter = (key, params) => {
-  switch (key) {
-    case 'validationEmail':
-      return '请输入合法邮箱地址'
-    case 'validationStringMin':
-      return `至少输入 ${params?.min} 个字符`
-    case 'validationRequired':
-      return '此项为必填项'
-    default:
-      return '输入不合法'
-  }
+// loaded：{ success: true, data: { port: 3000 } }。
+
+// validate 用于重新校验缓存；加载时未传 Schema 的配置也可在这里校验。
+const validated = core.config.validate('app', AppSchema)
+if (!validated.success)
+  throw new Error(validated.error.message, { cause: validated.error })
+
+// validated：{ success: true, data: { port: 3000 } }。
+
+// get 适合可选配置；getOrThrow 适合已确认存在的必需配置。
+if (core.config.has('app')) { // true：上方已成功加载 app。
+  const optional = core.config.get<z.infer<typeof AppSchema>>('app') // { port: 3000 }。
+  const required = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // { port: 3000 }；缺失则抛错。
+  core.logger.info('App config ready', { port: required.port, available: optional !== undefined })
+}
+core.config.keys() // 仅运行本节 load 示例时为 ['app']。
+```
+
+#### Reloading, watching, and cleanup
+
+Use reload() to reread a file or watch() to receive new values and errors. Watching survives ordinary saves, atomic replacement, and file deletion/recreation. Failures retain the last successful cache. unwatch() stops watchers; clear() also removes the cache. Omitting the name affects all entries.
+
+watchConfig defaults to false. Reloading settings does not reinitialize running database modules. Use the cleanup calls below when the setting is no longer needed.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 前提：app 已由 init/load 加载。回调需先处理读取或校验失败。
+const stop = core.config.watch('app', (_settings, error) => {
+  // 文件改成 port: 4000 后，成功回调收到 { port: 4000 }、error 为 undefined；失败时为 null 和错误对象。
+  if (error)
+    core.logger.error('Config reload failed', { error })
+  else
+    core.logger.info('Config reloaded')
+})
+// watch 返回取消函数 stop，不立即返回配置值。
+core.config.isWatching('app') // true。
+const reloaded = core.config.reload('app') // 文件仍为 port: 3000 时返回 { success: true, data: { port: 3000 } }。
+if (!reloaded.success)
+  core.logger.warn('Manual reload failed', { error: reloaded.error })
+
+stop() // 返回 undefined；取消当前回调，没有其他回调时停止底层监听。
+core.config.unwatch('app') // 返回 undefined；isWatching('app') 变为 false。
+core.config.clear('app') // 返回 undefined；get('app') 变为 undefined，has('app') 变为 false。
+```
+
+#### How environment variables change YAML settings
+
+The framework derives environment override names from the configuration name and field path. For app.yml, port maps to HAI_APP_PORT and http.maxRetries maps to HAI_APP_HTTP_MAXRETRIES. Segments are uppercased and joined with underscores without splitting camelCase. YAML does not need a ${...} expression for this override to work.
+
+For a fixed YAML value `port: 3000`, the result is 3000 without HAI_APP_PORT and 5000 after setting HAI_APP_PORT=5000.
+
+Write `${VARIABLE}` in YAML to replace the expression with its environment value when loading. Text after the colon is the fallback when the variable is unset:
+
+| YAML                         | Environment input            | Result                                                  |
+| ---------------------------- | ---------------------------- | ------------------------------------------------------- |
+| `port: ${PORT}`              | PORT=4000                    | Uses 4000; an unset PORT returns CONFIG_ENV_VAR_MISSING |
+| `port: ${PORT:3000}`         | No PORT                      | Uses the expression's fallback, 3000                    |
+| `port: ${PORT:3000}`         | PORT=4000, HAI_APP_PORT=5000 | Uses 5000: the convention variable wins                 |
+| `label: server-${PORT:3000}` | PORT=4000                    | Produces the string server-4000                         |
+
+The loader first checks HAI_APP_PORT. If set, it replaces this field and does not evaluate its ${PORT...} expression. Otherwise it reads YAML: an expression looks up PORT, while a fixed value is used directly. Therefore PORT need not exist when HAI_APP_PORT already overrides the field.
+
+Within one source, parent JSON can supply a base and child variables refine it. HAI_APP='{"port":3000,"label":"local"}' plus HAI_APP_PORT=4000 produces port=4000 and label=local regardless of line order. A higher-priority whole-object replacement removes lower-priority child overrides. Array JSON replaces the list; indexed variables only update existing items and out-of-range indexes fail.
+
+#### Reading .env files
+
+core.init() does not read .env files. Call loadEnvFiles(), check success, assign its results to process.env, then load YAML. development/production map to dev/prod; missing files are skipped and duplicate keys in a file fail. Highest priority first: **process environment > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML**. Keep private .local files out of Git.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 前提：.env 写 HAI_APP_PORT=4000，没有其他来源覆盖这个变量。
+// 先读取并合并 .env 文件与进程环境，失败时停止启动。
+const result = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
+if (!result.success)
+  throw new Error(result.error.message, { cause: result.error })
+// 成功时 result.success 为 true，result.data.HAI_APP_PORT 为 '4000'；其他键来自合并后的环境。
+// 返回值不会自动写入进程；显式应用后再初始化。
+Object.assign(process.env, result.data)
+core.init({ configDir: './config' }) // 返回 undefined；app.yml 中 port: 3000 被覆盖为数字 4000。
+```
+
+#### What type does the replacement produce?
+
+Environment variables start as text. Pass a Zod schema to `load()` / `resolve()` to convert replacements by field type: `z.number()` produces numbers, `z.boolean()` produces booleans, and `z.string()` preserves strings.
+
+A full-value ${PORT:3000} can produce number 3000, and ${ENABLED:false} boolean false. Mixed text such as server-${PORT:3000} stays a string. A string field code preserves the fallback 00123 as '00123', including leading zeros. This example supplies the equivalent YAML values and environment in memory without reading a file:
+
+```ts
+import { core } from '@h-ai/core'
+import { z } from 'zod'
+
+// 用显式环境数据演示覆盖顺序、数值/布尔转换与字符串保留。
+const AppSchema = z.object({ port: z.number(), enabled: z.boolean(), label: z.string(), code: z.string() })
+const resolved = core.config.resolve({
+  name: 'app',
+  // eslint-disable-next-line no-template-curly-in-string -- 保留 YAML 中等待框架解析的字面表达式。
+  value: { port: '${PORT:3000}', enabled: '${ENABLED:false}', label: 'server-${PORT:3000}', code: '${APP_CODE:00123}' },
+  environment: { PORT: '4000', HAI_APP_PORT: '5000' },
+  schema: AppSchema,
+})
+if (!resolved.success)
+  throw new Error(resolved.error.message, { cause: resolved.error })
+
+// resolved：{ success: true, data: { port: 5000, enabled: false, label: 'server-4000', code: '00123' } }。
+
+// resolve 只做替换和类型还原；再用 Schema 确认最终数据符合要求。
+const validated = AppSchema.safeParse(resolved.data)
+if (!validated.success)
+  throw new Error(validated.error.message, { cause: validated.error })
+core.logger.info('Config resolved', { settings: validated.data })
+// settings: { port: 5000, enabled: false, label: 'server-4000', code: '00123' }
+```
+
+An empty string means the variable is set with no characters; it is not missing, null, false, or zero. APP_CODE='' leaves code as '' instead of using 00123. The schema decides whether this is allowed; numeric fields usually reject empty strings.
+
+Substitution processes expressions in YAML; `server-${PORT}` inside an environment value or parent JSON remains literal text. For example, HAI_APP_LABEL='server-${PORT}' stays server-${PORT}. Put the expression in YAML when substitution is intended.
+
+Without a schema, paths come from existing YAML/JSON structure and single expressions use YAML scalar rules for numbers/booleans. configSchemas can supply optional legal paths missing from YAML. Final business validation still belongs in validate() or module initialization.
+
+#### Tools for generating configuration files
+
+resolve() also lets build/deploy tools calculate settings in memory. toEnv() converts objects to environment variables, mergeEnv() merges sources, and stringifyEnv()/parseEnv() encode/decode literal .env text. These tools do not mask secrets.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 配置生成器把普通对象转成 HAI_APP_PORT 等变量；数组保留为 JSON。
+const values = core.config.toEnv({ prefix: 'HAI_APP', value: { port: 3000, tags: ['local'] } })
+// values：{ HAI_APP_PORT: '3000', HAI_APP_TAGS: '["local"]' }。
+const merged = core.config.mergeEnv([values, { HAI_APP_PORT: '4000' }])
+// merged：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
+const text = core.config.stringifyEnv(merged) // 编码为可写入 .env 的文本。
+// text 含以下两行，每行以换行符结尾：
+// HAI_APP_PORT='4000'
+// HAI_APP_TAGS='["local"]'
+const restored = core.config.parseEnv(text) // 解析回字面字符串，不执行其中的变量。
+// restored：{ HAI_APP_PORT: '4000', HAI_APP_TAGS: '["local"]' }。
+core.logger.info('Generated config verified', { port: restored.HAI_APP_PORT })
+```
+
+Plain objects expand by default; arrays, dynamic dictionaries, and empty objects retain JSON. See the [runtime configuration guide](../../docs/usage/configuration/runtime.md) for replacement generation rules, full precedence, and application integration.
+
+### Logging: `core.logger`
+
+core.logger records structured logs. Levels progress from detail to severity: trace, debug, info, warn, error, fatal. fatal records a log; the application decides whether to exit.
+
+`core.logger` supports `trace` / `debug` / `info` / `warn` / `error` / `fatal`. Node uses pino and browsers use loglevel. Unconfigured loggers default to `info` / `pretty`; a `logging` object parsed by `LoggingConfigSchema` defaults its format to `json`. Node falls back to JSON when optional `pino-pretty` is unavailable.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 先设置级别；低于当前级别的日志不会输出。
+core.logger.setLevel('trace') // 返回 undefined；以下六个级别均会输出。
+core.logger.trace('Processing detail', { step: 1 })
+core.logger.debug('Read started')
+core.logger.info('Order created', { orderId: 'order-1' })
+core.logger.warn('Retry scheduled')
+core.logger.error('Operation failed', { error: new Error('Example failure') })
+core.logger.fatal('Service cannot continue')
+// 六次日志调用均返回 undefined；分别输出对应级别、上面的消息及所传字段。
+// 例如 info 日志的消息为 'Order created'，字段 orderId 为 'order-1'。
+```
+
+create() makes a named logger; child() attaches fixed context. configure() sets output and extra redaction paths; setLevel()/getLevel() change or inspect the global level.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 全局配置可作用于已经创建的 Logger；redact 补充业务隐私字段。
+core.logger.configure({ level: 'info', format: 'json', redact: ['customer.email'] }) // 返回 undefined；后续日志按此配置输出。
+const orders = core.logger.create({ name: 'orders' }) // 返回 Logger 对象，可调用 info/warn 等方法。
+const request = core.logger.child({ requestId: 'request-1' }) // 返回带固定 requestId 的 Logger。
+orders.info('Order created', { customer: { email: 'user@example.com' } }) // 返回 undefined；输出中 customer.email 为 '[REDACTED]'。
+request.warn('Request needs attention') // 返回 undefined；输出中 requestId 为 'request-1'。
+core.logger.getLevel() // 'info'。
+```
+
+Existing default, module, and nested child loggers use current global settings on subsequent writes; `setLevel()` also takes effect immediately. Explicit `create()` level/format/context options take precedence; unspecified options inherit dynamically. Per-call context overrides fixed context, then `core.context` adds current request correlation fields. Browser JSON includes `level` / `msg`; pretty output includes readable text and context.
+
+observe() supports diagnostics collection, receiving records after level filtering and masking and returning an unsubscribe function. Collect bounded memory data in the callback and persist asynchronously elsewhere. Observation is not persistence; exceptions and synchronous reentry are isolated.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 观察经过级别过滤和脱敏的记录；内存收集设置上限。
+const recentMessages: string[] = []
+const stop = core.logger.observe((record) => {
+  if (recentMessages.length === 100)
+    recentMessages.shift()
+  recentMessages.push(record.message)
+})
+// observe 返回取消函数 stop；本例 warn 日志触发一次回调，record.message 为 'Observed event'。
+core.logger.warn('Observed event')
+recentMessages // ['Observed event']。
+stop() // 返回 undefined；后续日志不再进入这个回调。
+```
+
+### Request correlation: `core.context`
+
+run() gives a request/task its requestId, userId, scopeId, jobId, and other correlation fields; get() reads them. On Node they remain available after database or other asynchronous work, without another request overwriting them. Existing loggers automatically include these fields.
+
+```ts
+import { core } from '@h-ai/core'
+
+// Node 示例：同一请求等待异步处理后，仍能取得自己的编号。
+await core.context.run({ requestId: 'request-1', userId: 'user-1' }, async () => {
+  await core.async.delay(1)
+  const current = core.context.get() // 包含 requestId: 'request-1'、traceId: 'request-1'、userId: 'user-1'；其他字段为 undefined。
+  core.logger.info('Request continued', { requestId: current.requestId })
+  return current.requestId
+}) // run 返回回调的结果；此处 await 后得到 'request-1'。
+core.context.get() // {}，回到外层后不保留上面请求的上下文。
+
+// 采集器自身写日志时，可暂停观察回调，正常日志输出仍然执行。
+core.context.run({ suppressLogObservers: true }, () => core.logger.warn('Collector diagnostic'))
+// 返回 undefined；输出 warn 日志，但不会触发日志观察回调。
+```
+
+In browsers values exist only in synchronous callback code and are not retained after await. Correlation IDs do not authorize access; trusted server code must provide identity and tenant scope.
+
+### Cleaning diagnostic data: `core.sanitize`
+
+Clean credentials before logs, diagnostic exports, or public errors. Check sensitive names, mask a single value or object tree, clean URL credentials, or remove labeled/known secrets from text.
+
+```ts
+import { core } from '@h-ai/core'
+
+core.sanitize.isSensitiveKey('apiKey') // true。
+core.sanitize.sanitizeSensitiveValue('example-only', 'password') // '[REDACTED]'。
+const safe = core.sanitize.sanitizeSensitiveFields({ password: 'example-only', email: 'user@example.com' })
+// safe：{ password: '[REDACTED]', email: 'user@example.com' }，原对象不变。
+// 默认仅遮蔽凭据；额外业务隐私可在已处理凭据的副本上继续清理。
+core.sanitize.sanitizeSensitiveFields(safe, { matcher: ['email'], replacement: '***' })
+// => { password: '[REDACTED]', email: '***' }
+core.sanitize.sanitizeUrl('https://user:example-only@example.com/?token=example-only')
+// => 'https://[REDACTED]:[REDACTED]@example.com/?token=[REDACTED]'
+core.sanitize.sanitizeText('Bearer example-only') // '[REDACTED]'。
+core.sanitize.sanitizeText('Request failed with a known private value', ['private value'])
+// => 'Request failed with a known [REDACTED]'
+```
+
+defaultSensitiveKeyRegex/defaultSensitiveReplacement expose the default matching rule and [REDACTED] value. A custom matcher replaces the default rule, so retain default credential masking before applying extra business privacy rules.
+
+Logs mask credential fields such as password/passwordHash, token, secretKey, and privateKey, plus URL userinfo, sensitive query parameters, and OAuth key-value fragments. Invalid URLs return `(invalid url)`. `redact` adds business privacy paths using dots, brackets, and single-level `*`, case sensitively. Email addresses and phone numbers remain visible by default.
+
+Native `Error` values are copied with name/message/stack/cause, aggregate errors, and enumerable context before masking; originals are unchanged. Error-subgraph cycles and the 32-level depth limit use `[Circular]` / `[MaxDepth]`. Ordinary object cycles remain and may prevent JSON serialization. Message and error text masking handles explicit credential labels and URLs, not arbitrary unlabeled secrets; callers must clean these or redact the whole path.
+
+Masked results contain data only. Plain objects and class instances contribute their own enumerable data properties; prototypes, accessors, and custom `toJSON()` methods are not retained or invoked. Dates become ISO strings and URLs become masked strings, without changing the original. Still select only useful diagnostic fields from SDK/business objects and explicitly clean unlabeled secrets and business privacy data.
+
+### Results and errors: `core.error`
+
+core.error defines module errors, creates failure instances, and builds safe HTTP/UI messages. Codes stay stable and messages can follow the current locale. Serv/Kit or another HTTP framework handles response status and headers.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 定义稳定错误码，消息在创建实例时根据当前语言获取。
+const OrderError = core.error.buildHaiErrorsDef('orders', { NOT_FOUND: '300:404' })
+// OrderError.NOT_FOUND：{ code: 'hai:orders:300', httpStatus: 404, system: 'hai', module: 'orders' }。
+const failure = core.error.buildHaiErrorInst(OrderError.NOT_FOUND, core.i18n.coreM('core_errorNotFound', { locale: 'zh-CN' }))
+// failure：上面的错误定义加上 message: '资源不存在'。
+const publicError = core.error.toPublic(failure, 'request-1')
+// publicError：保留 code/httpStatus/system/module，增加 traceId: 'request-1'；
+// message 为 '资源不存在 (traceId: request-1)'。
+const message = core.error.formatMessage(publicError) // '资源不存在 (traceId: request-1)'，编号不会重复追加。
+core.logger.warn('Order unavailable', { error: failure, publicMessage: message })
+```
+
+#### Shared result type and standalone constructors
+
+`HaiResult<T>` uses success to distinguish data from error. Import `ok` / `err` to construct successful or failed results. Check success after business operations. Getters, utilities, and factories follow their direct-value or throwing signatures.
+
+```ts
+import type { HaiResult } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
+
+// 业务失败返回 err，成功返回 ok；共用构造器保持独立导入。
+function divide(a: number, b: number): HaiResult<number> {
+  if (b === 0)
+    return err(HaiCommonError.VALIDATION_ERROR, core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
+  return ok(a / b) // 如 ok(5) 返回 { success: true, data: 5 }。
 }
 
-const result = LoginSchema.safeParse({
-  email: 'bad',
-  password: '123',
-  nickname: '',
+// 先检查 success，再读取 data 或 error。
+const result = divide(10, 2) // { success: true, data: 5 }。
+if (!result.success)
+  core.logger.warn('Calculation failed', { error: result.error })
+else
+  core.logger.info('Calculation completed', { value: result.data })
+
+const failed = divide(10, 0)
+// failed：{ success: false, error: { code: 'hai:common:200', httpStatus: 400,
+// system: 'hai', module: 'common', message: '验证失败' } }，无 data。
+if (!failed.success)
+  core.logger.warn('Calculation rejected', { code: failed.error.code })
+```
+
+Use `core.error.toPublic(error, traceId?, locale?)` at HTTP/UI boundaries. It replaces 5xx details with a localized generic message, removes known credentials from other messages, and retains safe fields. Correlation IDs are selected from the explicit argument, context traceId/requestId, or the error's traceId, otherwise generated. `formatMessage()` appends a valid ID without duplicating the same suffix.
+
+Internal `cause` / `ext` are private by default. Field errors for 400/422 can retain `field` / `message`; explicitly approved, business-schema-validated `publicExt` is masked and exposed as `ext`. Core does not validate its business safety automatically. Serv/Kit/UI hosts handle HTTP status, headers, and message components.
+
+| Configuration error       | Code           | Meaning                                      |
+| ------------------------- | -------------- | -------------------------------------------- |
+| `CONFIG_FILE_NOT_FOUND`   | `hai:core:010` | Missing file                                 |
+| `CONFIG_PARSE_ERROR`      | `hai:core:011` | YAML/dotenv reading or parsing failed        |
+| `CONFIG_VALIDATION_ERROR` | `hai:core:012` | Invalid schema input or environment override |
+| `CONFIG_ENV_VAR_MISSING`  | `hai:core:013` | Required interpolation variable missing      |
+| `CONFIG_NOT_LOADED`       | `hai:core:014` | Configuration not loaded                     |
+
+These constants belong to `HaiConfigError`; cross-module failures use `HaiCommonError`.
+
+### Messages and locales: `core.i18n`
+
+Create message getters with parameter interpolation, read built-in Core messages, and manage locale selection. Constants list framework locales and do not register application translations.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 页面语言或服务进程的启动默认值；请求中使用 runWithLocale 单独选择语言。
+core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；后续默认消息使用中文。
+core.i18n.getGlobalLocale() // 'zh-CN'。
+core.i18n.coreM('core_errorNotFound') // '资源不存在'。
+core.i18n.DEFAULT_LOCALE // zh-CN。
+core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }, { code: 'ja-JP', label: '日本語' }]。
+```
+
+Message locales are `zh-CN`, `en-US`, and `ja-JP`; `zh` / `en` / `ja` aliases are normalized. Explicit locale takes priority over Node request locale and then the application default. Unsupported locales fall back to `zh-CN`; missing keys return the key itself.
+
+```ts
+import { core } from '@h-ai/core'
+
+// 业务字典按语言组织；占位参数在取消息时传入。
+const message = core.i18n.createMessageGetter({
+  'zh-CN': { welcome: '欢迎 {name}' },
+  'en-US': { welcome: 'Welcome {name}' },
+  'ja-JP': { welcome: 'ようこそ {name}' },
 })
+// createMessageGetter 返回消息函数；如 message('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) 得到 '欢迎 Alice'。
+const greeting = await core.i18n.runWithLocale('en-US', async () => {
+  await Promise.resolve()
+  return message('welcome', { params: { name: 'Alice' } })
+})
+// greeting：'Welcome Alice'；runWithLocale 返回回调的结果，此处等待 Promise 得到字符串。
+core.logger.info('Greeting prepared', { greeting })
+```
 
-if (!result.success) {
-  const getMessage = core.zodValidation.createPrefixedZodMessageGetter(
-    'kit',
-    (messageKey, params) => {
-      if (messageKey === 'kit_validationEmail')
-        return '请输入合法邮箱地址'
-      if (messageKey === 'kit_validationStringMin')
-        return `至少输入 ${params?.min} 个字符`
-      return '输入不合法'
-    },
-  )
-  const errors = core.zodValidation.mapZodErrorToFormErrors(result.error, getMessage)
+Wrap actual asynchronous Node request/SSR work in `runWithLocale()`. Serv establishes the request locale automatically; Kit provides the same entry point. Within a request, `setGlobalLocale()` changes only that request. Outside it, use it only for startup defaults. Browsers use application-level `setGlobalLocale()` or explicit locales. SSR UI stores should not modify process defaults.
 
-  errors[0]?.field // 'email'
-  errors[0]?.message // '请输入合法邮箱地址'
-  errors[2]?.message // '请填写昵称'（schema 自定义消息原样保留）
+### Field validation messages: `core.zodValidation`
 
+Convert Zod errors into { field, message }[] for form hints. createPrefixedZodMessageGetter() selects translation keys by prefix; mapZodErrorToFormErrors() extracts, translates, and flattens field paths.
+
+```ts
+import { core } from '@h-ai/core'
+import { z } from 'zod'
+
+// 此例复用 Core 已有翻译；业务表单可注入自己的消息获取器。
+const message = core.zodValidation.createPrefixedZodMessageGetter('core', key =>
+  key === 'core_validationEmail'
+    ? core.i18n.coreM('core_validationEmail', { locale: 'zh-CN' })
+    : core.i18n.coreM('core_errorValidation', { locale: 'zh-CN' }))
+// 返回消息函数；message('validationEmail') 得到 '请输入有效的邮箱地址'。
+const parsed = z.object({ email: z.email() }).safeParse({ email: 'invalid' })
+if (!parsed.success) {
+  const errors = core.zodValidation.mapZodErrorToFormErrors(parsed.error, message)
+  // errors：[{ field: 'email', message: '请输入有效的邮箱地址' }]。
   core.logger.info('Validation failed', { errors })
 }
 ```
 
-#### Configuration management (Node.js only)
+Supports Zod v3/v4 issues/errors. Default English messages are translated; explicit business messages remain unchanged. Paths use dots and global errors use _. Unknown fields in strict schemas use validationUnexpectedFields without exposing internal names.
 
-> Browsers have no filesystem access. `core.config` offers placeholder APIs only: file-related methods return `SERVICE_UNAVAILABLE` and do not load YAML.
+### Module startup and helpers: `core.module`
 
-Node automatically loads and watches all `.yml` / `.yaml` files in the configuration directory. The CLI reads `build` / `deploy` from the project root `hai.json`; no YAML filename needs special handling. A failed per-file load result is logged and loading continues; applications must validate required configuration and check `success`. Directory scanning, logger setup and other exceptions may still propagate.
+Applications and module implementations can reuse these helpers to manage several modules or return consistent failures before initialization. The application chooses its actual modules.
 
-```typescript
-import { core, HaiConfigError } from '@h-ai/core'
-import { z } from 'zod'
+#### Application startup and shutdown
 
-// 方式 1：init 时自动加载运行时配置
-core.init({
-  configDir: './config', // 扫描配置目录内所有 .yml / .yaml
-  watchConfig: true, // 监听变更并自动重载
-})
+Applications using several modules need to initialize resources such as databases before handling business work, then release them afterward. `core.module.createRuntime()` accepts each module's startup and cleanup functions and returns an object the application can call. Creating it does not start the modules.
 
-// 方式 2：手动加载单个文件（可选 Schema 校验）
-const AppSchema = z.object({
-  name: z.string(),
-  port: z.number().default(3000),
-})
-const result = core.config.load('app', './config/app.yml', AppSchema)
-if (result.success) {
-  core.logger.info('Config loaded', { name: result.data.name })
-}
-else {
-  core.logger.error('Config load failed', { code: result.error.code })
-}
-
-// 校验已加载的配置
-const validResult = core.config.validate('app', AppSchema)
-
-// 查询和获取
-if (core.config.has('app')) {
-  const cfg = core.config.get<z.infer<typeof AppSchema>>('app') // undefined 或配置
-  const cfg2 = core.config.getOrThrow<z.infer<typeof AppSchema>>('app') // 未加载时抛异常
-}
-core.config.keys() // ['core', 'app', 'db', ...]
-
-// 重新加载
-const reloadResult = core.config.reload('app')
-
-// 监听文件变更
-const unwatch = core.config.watch('app', (newConfig, error) => {
-  if (error) {
-    core.logger.error('Config reload failed', { error })
-    return
-  }
-  core.logger.info('Config updated', { config: newConfig })
-})
-unwatch() // 取消监听
-
-// 清除缓存（同时停止对应监听）
-core.config.clear('app') // 清除单个
-core.config.clear() // 清除全部
-```
-
-##### Dotenv files and environment modes
-
-Node-only `core.config.loadEnvFiles({ mode, envDir })` merges `.env` → `.env.<mode>` → `.env.local` → `.env.<mode>.local` → existing process variables. It returns HaiResult without mutating the process. development/production map to dev/prod; missing files are skipped and duplicate keys within a file are rejected. Check success before assigning. Track public environment files and `.env.example`; ignore `.env.local` and `.env.*.local`. core.init does not load dotenv. Browser file APIs return SERVICE_UNAVAILABLE.
+This local development example additionally requires `@h-ai/reldb` and `@h-ai/cache`. Both use in-memory settings for demonstration; production must use the shared backends required by each module.
 
 ```ts
-const env = core.config.loadEnvFiles({ mode: 'dev', envDir: '.' })
-if (!env.success)
-  throw new Error(env.error.message)
-Object.assign(process.env, env.data)
-core.init({ configDir: './config' })
-```
-
-##### Environment variable mapping and interpolation
-
-`core.config.load(name, ...)` automatically maps each YAML leaf to an
-environment variable named `HAI_<CONFIG_NAME>_<YAML_PATH>`. Configuration names and keys are uppercased, levels are separated by `_`,
-and camelCase is not split. For example, `ai.llm.apiKey` maps to `HAI_AI_LLM_APIKEY`,
-and `ai.llm.maxTokens` to `HAI_AI_LLM_MAXTOKENS`. Array indexes are also levels:
-`ai.llm.models[0].temperature` maps to `HAI_AI_LLM_MODELS_0_TEMPERATURE`.
-
-Environment variables override YAML. Within one source, apply parent JSON, nested objects, then specific fields, regardless of line order. A higher-priority source replacing a whole node clears lower-source field overrides for that node. Array JSON replaces the list; indexed variables modify existing elements and reject out-of-range indexes. Schema types preserve string literals, including leading zeros. Empty strings, false, zero, and empty arrays are explicit values. Environment and JSON literals are not interpolated again.
-
-Hosts can pass module schemas through `core.init({ configDir, configSchemas })`. Scanning uses only structure and type hints; module initialization or explicit `validate` still performs business validation. `core.config.load(name, path, schema)` validates immediately. Optional schema fields can receive environment overrides even when absent from YAML. Without a schema, resolution follows the existing YAML/JSON structure. Core does not import or implicitly register business modules.
-
-Generators share the Node-only `core.config.resolve`, `mergeEnv`, `toEnv`, `parseEnv`, and `stringifyEnv` methods. Objects expand into field variables by default; arrays retain JSON. Dynamic keys and empty objects retain their meaning. When expanding a whole-object replacement, deployment generators retain its highest `{}` reset marker alongside the fields so old YAML fields cannot reappear. User-provided JSON remains a base that more specific fields can override. Protect outputs containing secrets and never log the complete configuration.
-
-```yaml
-# config/_ai.yml（core.init 扫描后配置名为 ai）
-llm:
-  apiKey: ''
-  baseUrl: https://api.xiaomimimo.com/v1
-  model: mimo-v2.5
-  maxTokens: 4096
-```
-
-```dotenv
-HAI_AI_LLM_APIKEY=your-api-key
-HAI_AI_LLM_MAXTOKENS=8192
-```
-
-For special variable names, use explicit `${VAR}` interpolation. Precedence is fixed:
-Convention-based environment variables > explicit environment variables > YAML defaults.
-
-- `${VAR}`: read `process.env.VAR`; return `CONFIG_ENV_VAR_MISSING` if absent.
-- `${VAR:default}`: read `process.env.VAR`; use the value after the colon if absent.
-
-**Type restoration:** when the whole value is one variable expression (such as `${PORT:3000}`), YAML rules restore native types (number / boolean, etc.). Mixed text always stays a string.
-
-`${VAR:}` or `${VAR}` resolving to an empty string stays `''`, rather than becoming YAML `null`. Modules that treat empty strings as unset should normalize them to `undefined` in their own schemas.
-
-```yaml
-# config/app.yml
-debug: ${DEBUG:false} # → boolean false
-port: ${PORT:3000} # → number 3000
-database: ${DB_CONNECTION} # → 环境变量缺失时报错
-url: http://${HOST}:${PORT} # → string（混合文本）
-```
-
-#### ID generation
-
-```typescript
-const id = core.id.generate() // nanoid 21 字符
-const id8 = core.id.generate(8) // 自定义长度
-const shortId = core.id.short() // 10 字符短 ID
-const prefixed = core.id.withPrefix('user_') // 'user_V1StGXR...'
-const traceId = core.id.trace() // 'trace-V1StGXR...'
-const reqId = core.id.request() // 'req-V1StGXR...'
-const uuid = core.id.uuid() // UUID v4
-
-// 校验
-core.id.isValidUUID('f47ac10b-...') // true/false
-core.id.isValidNanoId('abc123', 6) // true/false
-```
-
-UUID generation requires cryptographic randomUUID/getRandomValues and throws if neither is available; it never falls back to Math.random.
-
-#### Utilities
-
-```typescript
-// 类型检查
-core.typeUtils.isDefined(x) // x !== undefined
-core.typeUtils.isObject(x) // plain object
-core.typeUtils.isFunction(x)
-core.typeUtils.isPromise(x)
-core.typeUtils.isString(x)
-core.typeUtils.isNumber(x)
-core.typeUtils.isBoolean(x)
-core.typeUtils.isArray(x)
-
-// 对象操作
-core.object.deepClone(obj)
-core.object.deepMerge(a, b) // 递归合并（防原型污染）
-core.object.deepMerge(a, b, c) // 支持多个对象
-core.object.pick(obj, ['a', 'b'])
-core.object.omit(obj, ['c', 'd'])
-core.object.keys(obj) // typed Object.keys
-core.object.values(obj)
-core.object.entries(obj)
-core.object.fromEntries(entries)
-
-// 字符串操作
-core.string.capitalize('hello') // 'Hello'
-core.string.kebabCase('helloWorld') // 'hello-world'
-core.string.camelCase('hello-world') // 'helloWorld'
-core.string.snakeCase('helloWorld') // 'hello_world'
-core.string.pascalCase('hello-world') // 'HelloWorld'
-core.string.truncate('long text', 5) // 'long ...'
-core.string.trim(' hello ') // 'hello'
-core.string.isBlank('') // true
-core.string.isNotBlank('x') // true
-core.string.padStart('5', 3, '0') // '005'
-core.string.padEnd('5', 3, '0') // '500'
-core.string.constantTimeEqual(a, b) // Node 使用原生等长比较；浏览器不保证恒时
-
-// 数组操作
-core.array.unique([1, 1, 2]) // [1, 2]
-core.array.chunk([1, 2, 3, 4], 2) // [[1,2], [3,4]]
-core.array.groupBy(items, item => item.type) // Record<string, T[]>
-core.array.first([1, 2, 3]) // 1
-core.array.last([1, 2, 3]) // 3
-core.array.flatten([[1], [2, 3]]) // [1, 2, 3]
-core.array.compact([1, null, 2]) // [1, 2]
-core.array.shuffle([1, 2, 3]) // 随机排列
-core.array.intersection([1, 2], [2, 3]) // [2]
-core.array.difference([1, 2], [2, 3]) // [1]
-
-// 异步操作
-await core.async.delay(1000)
-await core.async.withTimeout(fetch('/api'), 5000)
-await core.async.retry(fn, { maxRetries: 3, delay: 1000 })
-await core.async.parallel(items, processFn, 5) // 并发限制
-await core.async.serial(items, processFn)
-const debouncedFn = core.async.debounce(fn, 300)
-const throttledFn = core.async.throttle(fn, 200)
-
-// 时间操作
-core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
-core.time.timeAgo(new Date(Date.now() - 60000)) // '1 分钟前'
-core.time.now() // Date.now()
-core.time.nowSeconds() // Math.floor(Date.now() / 1000)
-core.time.parseDate('2024-01-01')
-core.time.isValidDate(date)
-core.time.addDays(date, 7)
-core.time.addHours(date, 2)
-core.time.startOfDay(date)
-core.time.endOfDay(date)
-```
-
-The Node entry uses node:crypto.timingSafeEqual over equal-length UTF-16LE code units. Different lengths return false; length is not hidden. The browser implementation avoids content-based early returns but has no JavaScript-engine timing guarantee and is not a server credential boundary. Surrounding branches, encoding and request handling are not made timing-safe by this helper.
-
-#### Module utilities (module)
-
-Shared initialization error handling for modules:
-
-```typescript
+import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 
-const notInitialized = core.module.createNotInitializedKit(
-  HaiDbError.NOT_INITIALIZED,
-  () => dbM('db_notInitialized'),
-)
+// 按需要的启动顺序，列出各模块的初始化和关闭函数。
+const runtime = core.module.createRuntime([
+  {
+    name: 'database',
+    start: () => reldb.init({ type: 'sqlite', database: ':memory:' }),
+    close: () => reldb.close(),
+  },
+  {
+    name: 'cache',
+    start: () => cache.init({ type: 'memory' }),
+    close: () => cache.close(),
+  },
+])
 
-// 创建占位 Proxy（异步接口，默认）
-const currentDdl: DdlOperations = notInitialized.proxy<DdlOperations>()
-// 创建占位 Proxy（同步接口）
-const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
+// createRuntime 返回带 start()/close() 的对象；到这里数据库和缓存尚未启动。
+
+// 依次启动数据库、缓存；失败时自动清理已尝试启动的模块。
+const started = await runtime.start() // 成功为 { success: true, data: undefined }；两个模块均已初始化。
+if (!started.success)
+  throw new Error(started.error.message, { cause: started.error })
+
+try {
+  // 启动成功后再执行应用业务；这里演示记录启动结果。
+  core.logger.info('Application modules ready')
+}
+finally {
+  // 演示结束后先关闭缓存，再关闭数据库，并检查清理结果。
+  const closed = await runtime.close() // 成功为 { success: true, data: undefined }；两个模块均已关闭。
+  if (!closed.success)
+    core.logger.error('Application cleanup failed', { error: closed.error })
+}
 ```
 
-### Error handling
+Startup here is database → cache; shutdown is cache → database. This demonstration cleans up immediately afterward. A long-running service should call the same `runtime.close()` when exiting.
 
-#### HaiResult types
+A startup failure cleans up modules whose startup was attempted. A shutdown failure stops cleanup at that module and retains dependencies it still needs; the next `close()` or `start()` retries cleanup. Simultaneous `start()` calls do not initialize twice. An optional `enabled()` returning false skips its step.
 
-All operations that may fail return `HaiResult<T>`:
+Both methods return `HaiResult`; check `success`. Errors include the module, phase, code, and necessary configuration field hints while keeping configuration secrets and raw SDK exceptions out of public startup errors.
 
-```typescript
+#### Returning errors before initialization
+
+createNotInitializedKit() provides error/result/proxy forms. Proxies return a consistent sync/async failure until the implementation switches to real operations. The message function reads the locale at call time.
+
+```ts
 import type { HaiResult } from '@h-ai/core'
-import { core, err, HaiCommonError, ok } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 
-function divide(a: number, b: number): HaiResult<number> {
-  if (b === 0)
-    return err(HaiCommonError.VALIDATION_ERROR, 'Division by zero')
-  return ok(a / b)
-}
+const message = core.i18n.createMessageGetter({
+  'zh-CN': { notReady: '请先初始化模块' },
+  'en-US': { notReady: 'Initialize the module first' },
+  'ja-JP': { notReady: '先にモジュールを初期化してください' },
+})
+// 本例固定使用中文消息，便于观察返回值。
+core.i18n.setGlobalLocale('zh-CN') // 返回 undefined。
+const waiting = core.module.createNotInitializedKit(HaiCommonError.NOT_INITIALIZED, () => message('notReady'))
+// waiting 是带 error/result/proxy 的对象。
+waiting.error() // { code: 'hai:common:001', httpStatus: 500, system: 'hai', module: 'common', message: '请先初始化模块' }。
+waiting.result<string>() // { success: false, error: 上方错误对象 }，无 data。
 
-const result = divide(10, 2)
-if (result.success) {
-  core.logger.info('Result', { data: result.data })
-}
-else {
-  core.logger.error('Error', { error: result.error })
-}
+// 模块实现可把尚未就绪的操作暂时指向这些代理。
+const asyncOperations = waiting.proxy<{ read: () => Promise<HaiResult<string>> }>()
+const syncOperations = waiting.proxy<{ read: () => HaiResult<string> }>('sync')
+// 两次 proxy 调用分别返回异步和同步操作对象。
+const result = await asyncOperations.read() // { success: false, error: 上方错误对象 }。
+if (!result.success)
+  core.logger.warn('Read before initialization', { error: result.error })
+syncOperations.read() // 直接返回 { success: false, error: 上方错误对象 }，不返回 Promise。
 ```
 
-#### Custom error codes (per module)
+#### Checking shared-state requirements
 
-```typescript
-import type { ErrorInfo } from '@h-ai/core'
-import { core } from '@h-ai/core'
-
-// 定义错误码（格式 'code:httpStatus'）
-const DbErrorInfo = {
-  NOT_INITIALIZED: '001:500',
-  CONNECTION_FAILED: '010:500',
-  QUERY_FAILED: '011:500',
-} as const satisfies ErrorInfo
-
-// 生成错误定义对象
-export const DbError = core.error.buildHaiErrorsDef('db', DbErrorInfo)
-// DbError.CONNECTION_FAILED → { code: 'hai:db:010', httpStatus: 500, system: 'hai', module: 'db' }
-
-// 创建错误实例
-const errorInst = core.error.buildHaiErrorInst(
-  DbError.CONNECTION_FAILED,
-  'Unable to connect to PostgreSQL',
-  originalError, // cause（可选）
-  'Check connection string', // suggestion（可选）
-)
-```
-
-#### Configuration error codes
-
-```typescript
-import { HaiConfigError } from '@h-ai/core'
-
-HaiConfigError.CONFIG_FILE_NOT_FOUND // hai:core:010 - 配置文件不存在
-HaiConfigError.CONFIG_PARSE_ERROR // hai:core:011 - YAML 解析失败
-HaiConfigError.CONFIG_VALIDATION_ERROR // hai:core:012 - Schema 校验失败
-HaiConfigError.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
-HaiConfigError.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
-```
-
-### Request locale isolation
-
-Wrap Node requests and SSR in `core.i18n.runWithLocale(locale, () => handleRequest())`. SvelteKit can use `kit.i18n.runWithLocale(locale, () => resolve(event))`; serv creates the scope automatically from request headers. Async descendants inherit it. Explicit `MessageOptions.locale` takes precedence over the request locale and the startup default. Within a scope, `setGlobalLocale` only changes that request; outside a scope it configures the startup default and must not be called by request hooks.
-
-Browsers keep application-level `setGlobalLocale` / `createLocaleStore`. During SSR, UI store initialization and setters only update the store; messages read the request scope. `runWithLocale` requires the Node entry; browser translations use explicit locale options or application state.
-
-## Trusted addresses and request access policies (Node)
-
-`core.access` supplies shared IP, time and path checks to HTTP hosts; it does not install HTTP interception itself. Serv uses `http.access`, SvelteKit uses `kit.createHandle({ access })`, and IAM `loginAccess` checks login only.
+requiresSharedState() decides whether a production process should reject backends limited to one host. It only returns a decision; it does not connect or switch databases. Server code supplies the real environment.
 
 ```ts
 import { core } from '@h-ai/core'
 
-const check = core.access.createRequestCheck({
-  rules: [{ id: 'external-api', paths: ['/api/v1/external/**'], allowIps: ['192.0.2.0/24'], encryption: 'disabled' }],
-})
-const decision = check('/api/v1/external/sync', 'POST', '192.0.2.10')
-const mode = check.encryption('/api/v1/external/sync', 'POST') // disabled
+// 此例用显式数据演示；服务端实际使用时传入 process.env。
+core.module.requiresSharedState({ NODE_ENV: 'production' }) // true：应使用跨主机共享后端。
+core.module.requiresSharedState({ NODE_ENV: 'production', HAI_E2E: '1' }) // false：显式 E2E 例外。
 ```
 
-`createRequestCheck` validates and compiles at creation. `loadPolicy({ file: './config/security/request-access.yml' })` reads YAML once at startup, with a 1 MiB limit; invalid configuration throws and must stop host startup. Global conditions and all matching rules must pass. Denied IPs take precedence; empty IP and time lists impose no restriction, and the default timezone is UTC. Paths are actual URL pathnames including the deployment prefix, with exact or trailing `/**` matching. GET does not imply HEAD.
+### Request access checks: `core.access` (Node)
 
-`core.access.createClientIpResolver()` resolves trusted addresses. Default `auto` ignores forwarded headers on ordinary hosts and uses container networks only in managed Compose topologies with a private backend. Use `[]` to disable proxy trust, or explicit proxy IPs/CIDRs for custom ingress. Never treat arbitrary headers as socket metadata. Request checks perform no file reads, CIDR parsing or full path-rule scan; timezone results are reused within each minute and recomputed across minute boundaries. Only the Node entry exposes `core.access`. Configuration schemas come through `core-config`, public types live in `core-types`, and functions are called through `core.access` registered in `core-main`.
+At HTTP entry points, resolve a trusted client IP and check addresses, paths, methods, and time windows. Core returns decisions; Serv http.access or Kit createHandle({ access }) connects them to request processing.
 
-Rules accept `encryption: required` or `disabled`; omission inherits the host. The selector uses the path index without evaluating IP or time conditions. Conflicting modes on overlapping paths and methods fail at compilation regardless of declaration order; matching modes and separate methods can be combined. `check.requiresEncryption` tells the host when transport encryption must be installed. Core owns neither keys nor encryption. HTTPS, authentication and access checks remain necessary.
-
-See the [request access handbook](../../docs/usage/configuration/request-access.md) for defaults, ingress conditions, policy files, deployment and verification.
-
-## Configuration consumption
-
-`_core.yml` accepts only name/version/env/defaultLocale metadata and logging; unknown fields fail loading. Core has no global debug, ID length/prefix, business features or locale registration list. Use logging.level, per-call core.id arguments, and application-owned app.yml with its own schema. defaultLocale is metadata, not automatic translation registration or a Paraglide switch. Importing Logger preserves LANG, LC_ALL and PYTHONIOENCODING, including Windows TTY. See the [configuration-to-consumer map (Chinese)](../../.agents/skills/hai-module-create/configuration.md).
-
-## Request correlation and log observation
-
-Collection persistence and upload paths can use `core.context.run({ suppressLogObservers: true }, operation)` to prevent observing their own asynchronous logs. Normal output such as stdout remains enabled; observation resumes outside the scope.
-
-`core.logger.observe` receives records permitted by the current log level after default and custom field redaction, and returns an unsubscribe function. Subscribers should collect into bounded memory and persist asynchronously; observation does not imply persistence. Observer failures and synchronous reentry are isolated. Free text and images still require capture-specific privacy rules.
-
-On Node, `core.context.run` uses AsyncLocalStorage to isolate concurrent requests and child tasks. Existing module loggers inherit requestId/userId/scopeId/jobId. Only trusted server code supplies identities; correlation IDs do not authorize access. The browser exposes the same API but run only establishes a synchronous scope, without isolation across await.
+#### Resolving and checking client addresses
 
 ```ts
-import type { LogRecord } from '@h-ai/core'
-import { core } from '@h-ai/core'
+import { AccessConditionSchema, core } from '@h-ai/core'
 
-const records: LogRecord[] = []
-const unsubscribe = core.logger.observe((record) => {
-  if (records.length === 100)
-    records.shift()
-  records.push(record)
-})
-await core.context.run({ requestId: 'request-1', scopeId: 'tenant-1', userId: 'user-1' }, async () => {
-  await Promise.resolve()
-  core.logger.warn('Business operation failed')
-})
-unsubscribe()
+core.access.normalizeClientIp('::ffff:198.51.100.23') // 198.51.100.23。
+const resolve = core.access.createClientIpResolver(['192.0.2.10']) // 返回 IP 解析函数，只信任这个代理。
+const request = new Request('https://example.test/api/orders', { headers: { 'x-forwarded-for': '198.51.100.23' } })
+// 第二参数必须来自真实 socket/可信平台；这里用测试地址模拟代理对端。
+const clientIp = resolve(request, '192.0.2.10') // '198.51.100.23'，读取受信代理的转发头。
+const check = core.access.createConditionCheck(AccessConditionSchema.parse({ allowIps: ['198.51.100.0/24'] }))
+// createConditionCheck 返回检查函数；check(clientIp) 得到 { allowed: true }。
+core.logger.info('Address checked', { allowed: check(clientIp).allowed })
 ```
 
-## Application lifecycle
+#### Loading policies and checking requests
 
-`core.module.createRuntime([{ name, enabled?, start, close }])` starts in declaration order, closes in reverse order and merges concurrent calls. It registers cleanup before partial initialization. Failed close retains that module and dependencies for the next close/start retry. Errors expose module, phase, code and configuration paths, never raw configuration or SDK exceptions. Base/API/fullstack and the admin use this helper.
+```ts
+import { core } from '@h-ai/core'
 
-Startup errors explain configuration failures and suggest a fix. With `ext.fields`, `HaiConfigError.CONFIG_ENV_VAR_MISSING` identifies unset environment variables; `CONFIG_VALIDATION_ERROR` or Schema errors identify failed validation. Field paths alone produce a “missing or invalid configuration” hint without guessing the cause. Even when the startup boundary prints only `error.message`, it includes the fields, next steps and underlying error code. A custom initialization hook can report missing required environment variables by throwing an error with `code: HaiConfigError.CONFIG_ENV_VAR_MISSING.code` and `ext: { fields: ['VARIABLE_NAME'] }`; the fullstack template uses this for the initial administrator password.
+// 可改为 loadPolicy({ file: './config/security/request-access.yml' }) 在启动时读独立文件。
+const policy = core.access.loadPolicy({
+  rules: [{ id: 'external-api', paths: ['/api/external/**'], methods: ['POST'], allowIps: ['192.0.2.0/24'], encryption: 'disabled' }],
+})
+// policy.rules[0] 保留上方规则，并补 denyIps: []、windows: []、timezone: 'UTC'。
+const check = core.access.createRequestCheck(policy) // 返回请求检查函数，另带 encryption 方法和 requiresEncryption 属性。
+const decision = check('/api/external/sync', 'POST', '192.0.2.10') // { allowed: true }。
+check.encryption('/api/external/sync', 'POST') // disabled，供 HTTP 框架选择传输模式。
+check.requiresEncryption // false；本例没有 required 规则。
+core.logger.info('Request access checked', { allowed: decision.allowed })
+```
 
-## Error messages and correlated logs
+- Creating a checker validates and compiles rules. `loadPolicy({ file })` reads independent YAML at startup, limited to 1 MiB. Invalid configuration throws and must stop the host. File references cannot be mixed with inline rules.
+- Global conditions and all matching rules must pass; deny addresses take priority. Empty IP/time lists leave that dimension unrestricted, and timezone defaults to UTC. Paths include deployment prefixes, match exactly or end in `/**`, and GET does not imply HEAD.
+- Default `auto` in `createClientIpResolver()` ignores forwarded headers on ordinary hosts; only managed private Compose uses the container subnet. `[]` disables proxy trust. Self-managed hosts explicitly list proxy IPs/CIDRs; peer addresses must come from sockets or trusted platforms.
+- Path `encryption` can be `required` / `disabled`; omission inherits the host setting. Opposing modes on overlapping paths and methods fail at creation. Hosts use `check.encryption()` / `requiresEncryption` to wire transport behavior. Core does not hold keys or encrypt/decrypt; HTTPS and authentication are still required.
 
-HTTP errors carry safe localized messages and a reference ID. ToastContainer hides the ID by default and reveals it through its diagnostic icon. The same ID remains in `error.traceId` and `X-Trace-Id`. The framework reuses the request ID to correlate browser and server logs. Sanitized exceptions, stacks and operation context remain in logs; internal cause/ext are not exposed. Field validation returns localized field names and messages only.
+See the [request access guide](../../docs/usage/configuration/request-access.md) for defaults, policy files, proxy topology, and deployment steps.
 
-Use `core.error.toPublic(error, traceId?)` at HTTP/UI boundaries and `core.error.formatMessage(error)` after translating messages; formatting is idempotent. Pass complete Error objects to logs instead of discarding their context. Database failures log driver codes, sanitized messages/stacks and table/column context; SQL text, bound values and connection credentials are excluded.
+### Creating and checking identifiers: `core.id`
 
-### Public business progress
+Create business identifiers and log correlation IDs, or validate UUID v4/nanoid inputs.
 
-Internal ext is private. Explicitly approved and schema-validated business progress uses publicExt and is serialized as ext; no internal exception should be placed there.
+```ts
+import { core } from '@h-ai/core'
+
+// 以下随机值仅展示格式，每次执行都不同。
+core.id.generate() // 如 'V1StGXR8_Z5jdHi6B-myT'，默认 21 字符；generate(8) 返回 8 字符。
+const shortId = core.id.short() // 如 'V1StGXR8_Z'，10 字符。
+core.id.withPrefix('order_') // 如 'order_V1StGXR8_Z5jdHi6B-myT'，前缀后接 21 字符。
+core.id.trace() // 如 'trace-V1StGXR8_Z5jdHi6B-myT'。
+core.id.request() // 如 'req-V1StGXR8_Z5jdHi6B-myT'。
+const uuid = core.id.uuid() // 如 '550e8400-e29b-41d4-a716-446655440000'，UUID v4。
+core.id.isValidUUID(uuid) // true。
+core.id.isValidNanoId(shortId, 10) // true。
+```
+
+IDs are not secrets. UUID requires cryptographic randomness and throws if unavailable. _core.yml has no global ID length/prefix settings; pass options per call.
+
+### Checking value types: `core.typeUtils`
+
+Check boundary values and narrow their TypeScript types in branches. These checks do not replace business schema validation.
+
+```ts
+import { core } from '@h-ai/core'
+
+core.typeUtils.isDefined(null) // false，同时排除 null 和 undefined。
+core.typeUtils.isObject({ name: 'orders' }) // true；排除 null/数组，但也接受 Date 和类实例。
+core.typeUtils.isFunction(() => {}) // true。
+core.typeUtils.isPromise(Promise.resolve('ready')) // true。
+core.typeUtils.isString('orders') // true。
+core.typeUtils.isNumber(3000) // true；传 NaN 返回 false。
+core.typeUtils.isBoolean(false) // true。
+core.typeUtils.isArray([1, 2]) // true。
+```
+
+### Objects: `core.object`
+
+Clone, merge, and select object fields, with typed keys/values/entries and fromEntries.
+
+```ts
+import { core } from '@h-ai/core'
+
+const defaults = { name: 'orders', port: 3000 }
+const copy = core.object.deepClone(defaults) // { name: 'orders', port: 3000 }，新副本。
+// 合并局部覆盖时，显式保留包含 name/port 的完整配置类型。
+const settings = core.object.deepMerge<typeof defaults>(copy, { port: 4000 }) // { name: 'orders', port: 4000 }。
+core.object.pick(settings, ['name']) // { name: 'orders' }。
+core.object.omit(settings, ['port']) // { name: 'orders' }。
+core.object.keys(settings) // ['name', 'port']，元素类型为 'name' | 'port'。
+core.object.values(settings) // ['orders', 4000]。
+core.object.entries(settings) // [['name', 'orders'], ['port', 4000]]。
+core.object.fromEntries([['mode', 'local']]) // { mode: 'local' }。
+```
+
+deepClone uses structuredClone for cloneable Date/Map/Set/cyclic values and throws for unsupported values such as functions. deepMerge recursively merges plain objects only; later arrays, dates, collections, and class instances replace earlier values without modifying inputs. It does not clone instances.
+
+### Strings: `core.string`
+
+Convert naming formats, prepare display strings, detect whitespace, and compare strings.
+
+```ts
+import { core } from '@h-ai/core'
+
+core.string.capitalize('hello') // 'Hello'。
+core.string.kebabCase('helloWorld') // 'hello-world'。
+core.string.camelCase('hello-world') // 'helloWorld'。
+core.string.snakeCase('helloWorld') // 'hello_world'。
+core.string.pascalCase('hello-world') // 'HelloWorld'。
+core.string.truncate('abcdef', 3) // 'abc...'。
+core.string.trim(' hello ') // 'hello'。
+core.string.isBlank(' ') // true。
+core.string.isNotBlank('hello') // true。
+core.string.padStart('5', 3, '0') // '005'。
+core.string.padEnd('5', 3, '0') // '500'。
+core.string.constantTimeEqual('same', 'same') // true；安全边界见下方说明。
+```
+
+Node constantTimeEqual uses native timingSafeEqual on equal-length UTF-16 bytes and rejects unequal lengths immediately. Browser engines provide no constant-time guarantee; do not use this for server credential checks.
+
+### Arrays: `core.array`
+
+Deduplicate, chunk, group, remove nullish values, or calculate intersections/differences while retaining the input array.
+
+```ts
+import { core } from '@h-ai/core'
+
+core.array.unique([1, 1, 2]) // [1, 2]。
+core.array.chunk([1, 2, 3], 2) // [[1, 2], [3]]。
+core.array.groupBy([{ role: 'admin' }, { role: 'user' }], item => item.role)
+// => { admin: [{ role: 'admin' }], user: [{ role: 'user' }] }
+core.array.first([1, 2, 3]) // 1；空数组为 undefined。
+core.array.last([1, 2, 3]) // 3；空数组为 undefined。
+core.array.flatten([[1], [2, 3]]) // [1, 2, 3]，只展开一层。
+core.array.compact([0, null, 1, undefined]) // [0, 1]，保留 0/false/空字符串。
+core.array.shuffle([1, 2, 3]) // 如 [2, 3, 1]，次序随机；新数组不修改输入。
+core.array.intersection([1, 2], [2, 3]) // [2]。
+core.array.difference([1, 2], [2, 3]) // [1]。
+```
+
+groupBy supports prototype names such as `constructor` and `__proto__`. chunk expects a positive integer size and returns an empty array for size<=0.
+
+### Asynchronous work: `core.async`
+
+Schedule delays, timeouts, retries, bounded/serial work, or debounce/throttle input and scroll events.
+
+```ts
+import { core } from '@h-ai/core'
+
+await core.async.delay(1) // 等待约 1ms 后得到 undefined；计时以运行环境为准。
+await core.async.withTimeout(Promise.resolve('ready'), 1000) // 'ready'；超时则 reject 为 Error。
+await core.async.retry(async () => 'ready', { maxRetries: 3, delay: 10 }) // 'ready'，本例首次即成功。
+await core.async.parallel([1, 2, 3], async value => value * 2, 2) // [2, 4, 6]，最多同时执行两项。
+await core.async.serial([1, 2, 3], async value => value * 2) // [2, 4, 6]，按输入顺序逐项执行。
+
+// 两种包装保留回调参数类型；调用 search/scroll 时传入同样类型的参数。
+const search = core.async.debounce((term: string) => core.logger.debug('Search requested', { term }), 100)
+const scroll = core.async.throttle((position: number) => core.logger.debug('Scroll position', { position }), 100)
+// debounce/throttle 均返回包装函数，调用时返回 undefined。
+core.logger.setLevel('debug') // 返回 undefined；确保下面的 debug 日志可见。
+search('orders') // 约 100ms 后回调收到 'orders'；100ms 内连续调用只处理最后一次。
+scroll(100) // 本例第一次调用立即回调，position 为 100；100ms 内最多执行一次。
+```
+
+withTimeout limits waiting but does not cancel work. retry handles throws/rejections, not failed HaiResult values; current maxRetries includes the first attempt, so 3 means at most three executions. parallel requires positive safe integer concurrency; invalid values reject with RangeError before any task runs. Result order follows input order.
+
+### Dates and time: `core.time`
+
+Convert timestamps, Date values, and display text, and calculate local calendar boundaries or relative time.
+
+```ts
+import { core } from '@h-ai/core'
+
+// date 与以下日期运算使用本机时区；parseDate 中的 Z 表示 UTC。
+const date = new Date(2026, 0, 1, 12, 0, 0)
+core.time.formatDate(date, 'YYYY-MM-DD HH:mm:ss') // '2026-01-01 12:00:00'。
+core.i18n.setGlobalLocale('zh-CN') // 返回 undefined；相对时间使用中文。
+core.time.timeAgo(new Date(Date.now() - 60_000)) // '1 分钟前'（立即执行时）。
+core.time.now() // 当前毫秒时间戳，如 1767268800000；每次执行随时间变化。
+core.time.nowSeconds() // 当前秒时间戳，如 1767268800；相当于当前毫秒时间戳除以 1000 后向下取整。
+const parsed = core.time.parseDate('2026-01-01T00:00:00Z') // Date 对象，toISOString() 为 '2026-01-01T00:00:00.000Z'。
+core.time.isValidDate(parsed) // true；Invalid Date 返回 false。
+core.time.addDays(date, 7) // 新 Date，本机时间 2026-01-08 12:00:00。
+core.time.addHours(date, 2) // 新 Date，本机时间 2026-01-01 14:00:00。
+core.time.startOfDay(date) // 新 Date，本机时间 2026-01-01 00:00:00.000。
+core.time.endOfDay(date) // 新 Date，本机时间 2026-01-01 23:59:59.999。
+```
+
+formatDate supports YYYY/MM/DD/HH/mm/ss tokens and defaults to YYYY-MM-DD. Date arithmetic returns new Date values. Invalid parseDate input produces an invalid date rather than automatically throwing; check isValidDate.
+
+See the [Core reference](../cli/templates/skills/hai-core/reference.md) for complete parameters and less common options. Current published declarations define the contract.
 
 ## Development and testing
 
+Run from the repository root (use `pnpm.cmd` in PowerShell):
+
 ```bash
+pnpm --filter @h-ai/core typecheck
+pnpm --filter @h-ai/core lint
+pnpm --filter @h-ai/core build
 pnpm --filter @h-ai/core test
 ```
 
-See the [module JSDoc conventions (Chinese)](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for declaration comments and compilable examples. Node core.init is synchronous and returns void. A failed per-file config.load result is logged and loading continues; validate required configuration and check success. Directory scanning and other exceptions may still throw. Business HaiResult APIs require a success check.
+See the [module JSDoc conventions](../../.agents/instructions/module-conventions.md#jsdoc-与示例验证) for declaration and example checks.
 
 ## License
 

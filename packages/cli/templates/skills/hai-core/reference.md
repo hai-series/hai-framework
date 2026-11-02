@@ -11,8 +11,10 @@
 | 能力 | Node.js | 浏览器 |
 |------|---------|--------|
 | `core.logger` | ✅ pino（结构化 JSON / pretty） | ✅ loglevel（DevTools console） |
-| `core.config` | ✅ 完整（YAML 加载、watch、validate） | ⚠️ 占位 API；文件配置方法返回 `SERVICE_UNAVAILABLE` |
-| `core.i18n` | ✅ | ✅ |
+| `core.config` | ✅ 读取 YAML、校验和监听文件 | 不能读取/监听本地文件；文件方法返回 `SERVICE_UNAVAILABLE` |
+| `core.i18n` | ✅ 每个请求保留自己的语言，等待异步操作后不受其他请求影响 | ✅ 设置页面语言；`runWithLocale` 调用抛错 |
+| `core.context` | ✅ 等待异步操作后仍可读取当前请求编号，其他请求不会覆盖它 | 仅同步回调中可读取，await 后不保留 |
+| `core.access` | ✅ 可信地址与请求策略 | 不提供 |
 | `core.zodValidation` | ✅ | ✅ |
 | `core.id` | ✅ | ✅ |
 | 工具函数 | ✅ | ✅ |
@@ -37,13 +39,15 @@ import { core } from '@h-ai/core'
 // 自动加载配置目录内所有 .yml / .yaml
 core.init({ configDir: './config' })
 
-// 也可指定日志级别和配置监听
+// 可选启用配置监听
 core.init({ configDir: './config', watchConfig: true })
 ```
 
 项目根 `hai.json` 的 `build` / `deploy` 由 CLI 读取；Core 自动加载和监听配置目录内所有 YAML，不设置保留文件名。单项 `config.load` 返回失败时记录错误并继续，应用须 validate 必需配置并检查 success。目录扫描、日志设置等异常仍可能传播，不能把同步 void 当作所有配置加载成功的证明。
 
-生命周期宿主可用 `core.module.createRuntime` 编排真实模块；失败消息保留模块、错误码与配置字段路径，不回显配置值或 SDK 原始异常。启动配置错误附带原因和处理建议：`ext.fields` 配合 `HaiConfigError.CONFIG_ENV_VAR_MISSING.code` 明确提示环境变量未设置，`CONFIG_VALIDATION_ERROR.code` 或 Schema 异常提示校验未通过；只有字段路径时提示配置缺失或无效，不推断缺失。自定义启动钩子缺少必需变量时可抛出带上述错误码和 `ext: { fields: ['变量名'] }` 的异常。即使只打印 `error.message`，也能定位配置项并看到处理方式。
+应用需要同时启动多个模块时，可将各模块的初始化/关闭函数交给 `core.module.createRuntime`。创建时只记录这些函数；调用返回对象的 start 按顺序初始化，close 反序释放，失败时清理已尝试启动的模块。两者返回 HaiResult，需检查 success。带注释的数据库/缓存示例见[应用启动与关闭](https://github.com/hai-series/hai-framework/blob/main/packages/core/README.md#应用启动与关闭)。
+
+失败消息保留模块、错误码与配置字段路径，不回显配置值或 SDK 原始异常。启动配置错误附带原因和处理建议：`ext.fields` 配合 `HaiConfigError.CONFIG_ENV_VAR_MISSING.code` 明确提示环境变量未设置，`CONFIG_VALIDATION_ERROR.code` 或 Schema 异常提示校验未通过；只有字段路径时提示配置缺失或无效，不推断缺失。自定义启动钩子缺少必需变量时可抛出带上述错误码和 `ext: { fields: ['变量名'] }` 的异常。即使只打印 `error.message`，也能定位配置项并看到处理方式。
 
 ### 2. 使用功能
 
@@ -64,15 +68,15 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 
 | 方法        | 签名                              | 说明                                      |
 | ----------- | --------------------------------- | ----------------------------------------- |
-| `core.init` | `(options?: CoreOptions) => void` | 同步加载运行时 YAML，排除两个 `_deploy` 保留文件 |
+| `core.init` | `(options?: CoreOptions) => void` | 同步扫描指定目录直属的全部运行时 YAML，无保留文件名 |
 
-> `CoreOptions`：`{ logging?: Partial<LoggingConfig>, configDir?: string, watchConfig?: boolean }`
+> `CoreOptions`：`{ logging?: Partial<LoggingConfig>, configDir?: string, configSchemas?: Readonly<Record<string, z.ZodType>>, watchConfig?: boolean }`
 >
 > 注意：core 没有 `close()` 方法，初始化后持续可用。
 
 ### 配置管理 — `core.config`
 
-> 浏览器端保留 `core.config` 对象用于类型/runtime 对齐，但没有文件系统：`get()` 返回 `undefined`，`has()` 返回 `false`，`keys()` 返回 `[]`；`load()` / `validate()` / `reload()` 返回 `HaiCommonError.SERVICE_UNAVAILABLE`；`watch()` 会立即回调该错误并返回 no-op 取消函数。
+> 浏览器不能读取或监听本地配置文件，也没有 Node 专属的 resolve/mergeEnv/toEnv/parseEnv/stringifyEnv。`get()` 返回 `undefined`，`has()` 返回 `false`，`keys()` 返回 `[]`；`loadEnvFiles()` / `load()` / `validate()` / `reload()` 返回 `HaiCommonError.SERVICE_UNAVAILABLE`；`getOrThrow()` 抛错，`watch()` 立即回调不可用错误并返回不执行操作的取消函数。
 
 | 方法         | 签名                                                           | 说明                           |
 | ------------ | -------------------------------------------------------------- | ------------------------------ |
@@ -88,7 +92,13 @@ const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessa
 | `unwatch`    | `(name?: string) => void`                                      | 停止配置文件监听               |
 | `isWatching` | `(name: string) => boolean`                                    | 检查是否正在监听某个配置       |
 
+Node 的 `loadEnvFiles({ mode, envDir? })` 返回合并变量的 HaiResult，不修改进程；`core.init` 不自动读取 dotenv。`resolve`/`mergeEnv`/`toEnv`/`parseEnv`/`stringifyEnv` 用于配置生成，返回值可能含秘密，不能整体记录日志。完整来源与生成规则见[基础配置手册](https://github.com/hai-series/hai-framework/blob/main/docs/usage/configuration/runtime.md)。
+
+变量替换示例：`app.yml` 写 `port: ${PORT:3000}`，PORT 未设置时读取默认值 3000，`PORT=4000` 时读取 4000；设置 `HAI_APP_PORT=5000` 则直接覆盖为 5000，不再要求 PORT 存在。Schema 的数字/布尔字段可把单个表达式转换为对应类型，字符串字段保留前导零；混合文本仍为字符串。空串表示已设置，不使用默认值；环境值里的 `${PORT}` 保持原样，不继续替换。分步解释与可运行示例见[Core 文件与环境配置](https://github.com/hai-series/hai-framework/blob/main/packages/core/README.md#文件与环境配置coreconfig)。
+
 **`watch()` 回调处理**：
+
+监听支持原地写入、原子替换及删除重建；校验/读取失败时保留最近成功的缓存并通知错误，恢复有效文件后继续重载。它只响应目标文件，取消监听同时清除待执行重载，不会因此重新初始化应用模块。
 
 ```typescript
 // watch 回调签名：(config: T | null, error?: HaiError) => void
@@ -130,9 +140,16 @@ unwatch()
 # config/_core.yml
 name: my-app
 env: development
+defaultLocale: zh-CN
 logging:
   level: info
   format: pretty
+```
+
+`_core.yml` 只接受应用元数据和 logging；defaultLocale 由宿主读取后调用 `core.i18n.setGlobalLocale`，配置加载本身不切换语言。业务字段放独立 YAML，再用业务 Schema 校验，例如：
+
+```yaml
+# config/app.yml
 feature:
   debug: false
   maxRetries: 3
@@ -320,9 +337,13 @@ core.id.isValidNanoId('abc123', 6)     // true/false
 
 `isDefined` / `isObject` / `isFunction` / `isPromise` / `isString` / `isNumber` / `isBoolean` / `isArray`
 
+`isDefined` 同时排除 null 与 undefined；`isObject` 排除 null 和数组，但也接受 Date、Map 和类实例，不是纯对象判定。
+
 #### 对象操作 — `core.object`
 
 `deepClone` / `deepMerge` / `pick` / `omit` / `keys` / `values` / `entries` / `fromEntries`
+
+`deepMerge` 只递归合并普通对象（含空原型对象）；数组、Date、Map、Set 和类实例由后值覆盖，不修改输入对象。
 
 ```typescript
 core.object.deepMerge(a, b, c)       // 递归合并（防原型污染）
@@ -344,6 +365,8 @@ core.string.constantTimeEqual(a, b)  // Node 使用原生等长比较；浏览�
 
 `unique` / `chunk` / `groupBy` / `first` / `last` / `flatten` / `compact` / `shuffle` / `intersection` / `difference`
 
+`groupBy` 的原型同名键（如 constructor、__proto__）也会建立独立的自有分组，数字键和分组内的输入顺序保持原有行为。
+
 ```typescript
 core.array.unique([1, 1, 2])           // [1, 2]
 core.array.chunk([1, 2, 3, 4], 2)      // [[1,2], [3,4]]
@@ -354,6 +377,8 @@ core.array.intersection([1, 2], [2, 3]) // [2]
 #### 异步操作 — `core.async`
 
 `delay` / `withTimeout` / `retry` / `parallel` / `serial` / `debounce` / `throttle`
+
+超时不取消底层任务；重试只处理抛错/reject，不识别失败 HaiResult。当前 `maxRetries` 按总尝试次数计算，至少执行一次。`parallel` 验证并发参数为大于 0 的安全整数，非法值拒绝为 RangeError，任何任务均不执行；正常结果按输入顺序返回。debounce/throttle 保留传入回调的参数类型。
 
 ```typescript
 await core.async.delay(1000)
@@ -546,6 +571,8 @@ logger.debug('Data fetched', { count: items.length })
 ### URL 日志脱敏
 
 使用 `core.sanitize.sanitizeUrl(url)` 统一处理连接地址；它会遮蔽用户名、密码、敏感 query 参数和 OAuth 键值 fragment。非法地址返回固定占位符。`sanitizeSensitiveFields` 对 URL 类字段使用同一规则；自定义 matcher 同样匹配参数名，不能只遮蔽 userinfo 后记录含 token 的 URL。
+
+脱敏副本不执行自定义 `toJSON()`，普通对象和类实例只复制自有可枚举数据属性，跳过访问器和原型；Date 转 ISO 字符串，URL 转脱敏字符串。原对象不变，副本用于诊断，不作为原类实例调用。仍需只选取必要字段，并明确清理未标注秘密和业务隐私。
 
 ```ts
 const safeUrl = core.sanitize.sanitizeUrl("https://example.com/a?token=value&limit=10")

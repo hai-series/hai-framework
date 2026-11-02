@@ -55,7 +55,7 @@ HAI_REACH_PROVIDERS='[{"name":"mail","type":"smtp","host":"smtp.example.com","po
 | `name` | `hai Admin` | 宿主读取的应用名称，生成应用应明确填业务名称 |
 | `version` | `0.1.0` | 应用公开信息；发布制品版本另由根 `package.json` 驱动，不能只改这里 |
 | `env` | `development` | 可选 development/production/test/staging；不会自行设置 `NODE_ENV` 或启动依赖 |
-| `defaultLocale` | `zh-CN` | 核心默认消息语言；浏览器 UI 还需使用语言入口；每个请求的 locale 应用上下文隔离 |
+| `defaultLocale` | `zh-CN` | 供宿主读取的默认语言元数据；Core 加载配置不会自动切换消息语言，宿主须调用 `core.i18n.setGlobalLocale`；每个请求的 locale 用上下文隔离，浏览器 UI 使用自身语言入口 |
 | `logging` | 整个对象可省略 | 省略对象不会等同于传入 `{}`，见下一节 |
 
 ```yaml schema=@h-ai/core:CoreConfigSchema
@@ -82,6 +82,8 @@ logging:
 | `logging.redact` | `[]` | 追加业务隐私路径，凭据默认脱敏仍生效；已有历史日志不会被追溯清理 |
 
 错误输出走 `core.error.toPublic`，UI 经 ToastContainer 默认显示可读说明，排查图标才展示编号。日志可以保留脱敏 Error 和同一个 `traceId`；不要把 cause、SQL、绑定值或凭据返回用户。默认脱敏覆盖 `passwordHash`/`secretKey` 等已知字段，不保证识别任意无标签秘密；业务隐私要显式清理。
+
+日志脱敏先生成数据副本，不执行自定义 `toJSON()`。类实例只读取自有可枚举数据属性，不保留原型方法，访问器不会被调用；日期转为 ISO 字符串，URL 转为脱敏字符串。原对象不变，仍应只选取排查所需字段，避免收集无关隐私。
 
 ### `logging.redact` 怎么填写
 
