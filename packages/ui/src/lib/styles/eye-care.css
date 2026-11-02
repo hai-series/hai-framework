@@ -1,0 +1,55 @@
+/* 护眼主题：暖绿色背景搭配深色文字，减少大面积纯白并保留清晰对比。 */
+[data-theme='eye-care'] {
+  color-scheme: light;
+  color: #25362a;
+  background-color: #e8f0df;
+  --color-base-100: #e8f0df;
+  --color-base-200: #dfe8d4;
+  --color-base-300: #c9d7bd;
+  --color-base-content: #25362a;
+  --color-primary: #365e3d;
+  --color-primary-content: #f6f5e9;
+  --color-secondary: #545b3e;
+  --color-secondary-content: #f6f5e9;
+  --color-accent: #3c625c;
+  --color-accent-content: #f6f5e9;
+  --color-neutral: #334139;
+  --color-neutral-content: #f6f5e9;
+  --color-info: #315d71;
+  --color-info-content: #f6f5e9;
+  --color-success: #356039;
+  --color-success-content: #f6f5e9;
+  --color-warning: #73551e;
+  --color-warning-content: #f6f5e9;
+  --color-error: #91423c;
+  --color-error-content: #f6f5e9;
+  --radius-selector: 0.375rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+  --hai-focus-color: #365e3d;
+}
+
+/* 次要文字与占位符在各层浅色背景上保持可读。 */
+[data-theme='eye-care'] :is([class^='text-base-content/'], [class*=' text-base-content/']),
+[data-theme='eye-care'] .table th {
+  color: #4c5d47;
+}
+
+[data-theme='eye-care'] :is([class^='border-base-content/'], [class*=' border-base-content/']) {
+  border-color: #63785c;
+}
+
+[data-theme='eye-care'] :is(input, textarea)::placeholder {
+  color: #4c5d47;
+  opacity: 1;
+}
+
+[data-theme='eye-care'] :focus-visible {
+  outline: 2px solid var(--hai-focus-color);
+  outline-offset: 2px;
+}

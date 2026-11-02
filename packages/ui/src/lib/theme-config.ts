@@ -65,7 +65,7 @@ export interface ThemeGroup {
 }
 
 /**
- * 精选 DaisyUI 主题及 UI 共享样式提供的高对比、直角商务主题。
+ * 精选 DaisyUI 主题及 UI 共享样式提供的高对比、直角商务与护眼主题。
  *
  * @example
  * ```ts
@@ -83,6 +83,7 @@ export const THEMES: ThemeInfo[] = [
   { id: 'winter', name: 'Winter', dark: false, primaryColor: '#047aff', bgColor: '#ffffff' },
   { id: 'nord', name: 'Nord', dark: false, primaryColor: '#5e81ac', bgColor: '#eceff4' },
   { id: 'formal', name: 'Formal', dark: false, primaryColor: '#123d70', bgColor: '#ffffff' },
+  { id: 'eye-care', name: 'Eye care', dark: false, primaryColor: '#365e3d', bgColor: '#e8f0df' },
   // 暗色主题
   { id: 'dark', name: 'Dark', dark: true, primaryColor: '#661ae6', bgColor: '#1d232a' },
   { id: 'dracula', name: 'Dracula', dark: true, primaryColor: '#ff79c6', bgColor: '#282a36' },

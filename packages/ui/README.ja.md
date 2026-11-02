@@ -8,7 +8,7 @@
 
 内蔵メッセージは `zh-CN`、`en-US`、`ja-JP` に対応し、言語セレクターは既定で3言語を表示します。
 
-Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマ、ハイコントラストと直角のビジネステーマを提供します。
+Svelte 5 Runes のクロスプラットフォーム UI ライブラリーです。DaisyUI v5 + Tailwind CSS v4 のスタイル、Bits UI v2 のヘッドレス UI、内蔵 i18n（zh-CN / en-US / ja-JP）、15 種類の厳選テーマ、ハイコントラスト、直角ビジネス、目にやさしいテーマを提供します。
 
 ## 主な機能
 
@@ -739,9 +739,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 #### テーマ切り替え
 
-内蔵ツールで 15 種類の厳選 DaisyUI テーマ、ハイコントラストと直角のビジネステーマを管理します：
+内蔵ツールで 15 種類の厳選 DaisyUI テーマ、ハイコントラスト、直角ビジネス、目にやさしいテーマを管理します：
 
 `high-contrast` は共有 theme.css に含まれます。暗い背景と明るい文字、明確な境界線・フォーカス、補助文字とプレースホルダーの強いコントラストを提供します。ThemeSelector は3言語に対応し、サンプルと既定の生成プロジェクトで選択できます。fullstack の明示的な themes はホスト設定を尊重します。通常文字の配色目標は7:1ですが、各業務コンテンツは別途アクセシビリティ確認が必要です。
+
+`eye-care` は共有 theme.css に含まれ、暖かい緑の背景、濃い文字、読みやすいプレースホルダーと明確なフォーカスを提供します。サンプルと既定テンプレートで「目にやさしい」を選択でき、再読み込み後も保持します。既存の既定テーマと fullstack の明示的な themes は維持します。
 
 `formal` はボタン・入力欄・カード・ダイアログを直角にし、サンプルと既定テンプレートで選択できます。Button の submitHint は type=submit のネイティブ Enter 操作だけを表示します。LoginForm はデスクトップで準備完了時に既存のフォーカスがなければ識別子へ移動し、autoFocus=false で無効化できます。検索の Enter は IME 確定を除いて即時実行します。テーマは方向キー/Home/End、Enter/Space、Esc とフォーカス復帰に対応し、確認画面は取消を初期選択して Esc の状態を同期します。
 
@@ -756,7 +758,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 17 个主题元数据
+  THEMES, // ThemeInfo[] — 18 个主题元数据
 } from '@h-ai/ui/theme'
 ```
 

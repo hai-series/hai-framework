@@ -103,7 +103,7 @@
   }
 
   function themeName(theme: ThemeInfo): string {
-    return theme.id === 'high-contrast' ? uiM('theme_high_contrast') : theme.id === 'formal' ? uiM('theme_formal') : theme.name
+    return theme.id === 'high-contrast' ? uiM('theme_high_contrast') : theme.id === 'formal' ? uiM('theme_formal') : theme.id === 'eye-care' ? uiM('theme_eye_care') : theme.name
   }
 
   function renderThemePreview(theme: ThemeInfo) {

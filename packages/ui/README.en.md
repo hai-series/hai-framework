@@ -8,7 +8,7 @@
 
 Built-in messages support `zh-CN`, `en-US` and `ja-JP`; the language selector offers all three by default.
 
-A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US / ja-JP) and 15 curated DaisyUI themes plus high contrast and square business themes.
+A cross-platform Svelte 5 Runes component library with DaisyUI v5 + Tailwind CSS v4 styling and Bits UI v2 headless interactions. Includes built-in i18n (zh-CN / en-US / ja-JP) and 15 curated DaisyUI themes plus high contrast, square business and eye-care themes.
 
 ## Core features
 
@@ -739,9 +739,11 @@ npm install -D @iconify/tailwind4 @iconify-json/tabler
 
 #### Theme switching
 
-Manage 15 curated DaisyUI themes plus high contrast and square business themes through built-in utilities:
+Manage 15 curated DaisyUI themes plus high contrast, square business and eye-care themes through built-in utilities:
 
 `high-contrast` ships in shared theme.css with bright text on dark surfaces, clear borders/focus, and stronger muted text/placeholders. ThemeSelector has localized labels; examples and default generated projects offer it. Explicit fullstack themes lists remain host controlled. Palette checks target 7:1 for normal text; arbitrary application content still needs accessibility review.
+
+`eye-care` ships in shared theme.css with warm green surfaces, dark text, readable placeholders and clear focus outlines. Select “Eye care” in examples and default templates; the preference survives reloads. Existing default themes and explicit fullstack themes lists are preserved.
 
 `formal` provides square corners for business buttons, fields, cards and dialogs, with localized labels in examples and default templates. Button submitHint displays the native Enter action only for type=submit; it adds no global shortcut. LoginForm focuses its identifier on desktop when ready and no element has focus; autoFocus=false opts out. Search Enter submits immediately while respecting IME composition. Theme choices support arrows/Home/End, Enter/Space and Escape focus restoration. Confirmation dialogs initially focus Cancel and synchronize Escape cancellation.
 
@@ -756,7 +758,7 @@ import {
   normalizeHexColor, // 归一化 #RGB / #RRGGBB 主题色
   normalizeThemeId, // 校验主题 ID 并自动回退
   THEME_GROUPS, // 按亮色/暗色分组
-  THEMES, // ThemeInfo[] — 17 个主题元数据
+  THEMES, // ThemeInfo[] — 18 个主题元数据
 } from '@h-ai/ui/theme'
 ```
 
