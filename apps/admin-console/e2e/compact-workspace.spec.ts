@@ -68,63 +68,75 @@ test('登录和查询可按 Enter 执行，直角主题与弹窗可全程用键�
   await page.screenshot({ path: testInfo.outputPath('formal-keyboard.png'), animations: 'disabled' })
 })
 
-test('高对比主题可从导航选择，刷新保留，真实控件对比度及放大布局可用', async ({ page }, testInfo) => {
-  await loginOnPage(page, 'admin', 'admin123456')
-  await page.goto('/admin/iam/users')
-  await waitForHydration(page)
-  const appearance = page.locator('[data-guide="admin-theme"]')
-  await appearance.locator('button').first().click()
-  await appearance.getByRole('button', { name: '高对比', exact: true }).click()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
-  await page.reload()
-  await waitForHydration(page)
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'high-contrast')
-  expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('dark')
-  const controls = [page.locator('.hai-workspace button.btn-primary').first(), page.locator('.hai-workspace > footer'), page.locator('.hai-workspace input[type="search"]:visible').first()]
-  for (const control of controls) {
-    await expect(control).toBeVisible()
-    const ratios = await control.evaluate((element) => {
-      // 在浏览器合成实际 CSS 颜色与祖先背景，兼容 color-mix 及透明背景。
-      const canvas = document.createElement('canvas')
-      canvas.width = canvas.height = 1
-      const context = canvas.getContext('2d')!
-      const backgrounds = []
-      for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement)
-        backgrounds.push(getComputedStyle(ancestor).backgroundColor)
-      context.fillStyle = '#000000'
-      context.fillRect(0, 0, 1, 1)
-      for (const background of backgrounds.reverse()) {
-        context.fillStyle = background
+for (const theme of [
+  { id: 'high-contrast', label: '高对比', tone: 'dark', contrast: 7, outline: '3px' },
+  { id: 'eye-care', label: '护眼', tone: 'light', contrast: 4.5, outline: '2px' },
+]) {
+  test(`${theme.label}主题可从导航选择，刷新保留，真实控件对比度及放大布局可用`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 960 })
+    await loginOnPage(page, 'admin', 'admin123456')
+    await page.goto('/admin/iam/users')
+    await waitForHydration(page)
+    const appearance = page.locator('[data-guide="admin-theme"]')
+    await appearance.locator('button').first().click()
+    await appearance.getByRole('button', { name: theme.label, exact: true }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme.id)
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme.id)
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(theme.tone)
+    const controls = [page.locator('.hai-workspace button.btn-primary').first(), page.locator('.hai-workspace > footer'), page.locator('.hai-workspace input[type="search"]:visible').first()]
+    for (const control of controls) {
+      await expect(control).toBeVisible()
+      const ratios = await control.evaluate((element) => {
+        // 在浏览器合成实际 CSS 颜色与祖先背景，兼容 color-mix 及透明背景。
+        const canvas = document.createElement('canvas')
+        canvas.width = canvas.height = 1
+        const context = canvas.getContext('2d')!
+        const backgrounds = []
+        for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement)
+          backgrounds.push(getComputedStyle(ancestor).backgroundColor)
+        context.fillStyle = '#000000'
         context.fillRect(0, 0, 1, 1)
-      }
-      const luminance = (values: Uint8ClampedArray) => [...values].slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index]!, 0)
-      const background = luminance(context.getImageData(0, 0, 1, 1).data)
-      const colors = [getComputedStyle(element).color]
-      if (element instanceof HTMLInputElement)
-        colors.push(getComputedStyle(element, '::placeholder').color)
-      return colors.map((color) => {
-        context.fillStyle = color
-        context.fillRect(0, 0, 1, 1)
-        const foreground = luminance(context.getImageData(0, 0, 1, 1).data)
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+        for (const background of backgrounds.reverse()) {
+          context.fillStyle = background
+          context.fillRect(0, 0, 1, 1)
+        }
+        const luminance = (values: Uint8ClampedArray) => [...values].slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index]!, 0)
+        const background = luminance(context.getImageData(0, 0, 1, 1).data)
+        const colors = [getComputedStyle(element).color]
+        if (element instanceof HTMLInputElement)
+          colors.push(getComputedStyle(element, '::placeholder').color)
+        return colors.map((color) => {
+          context.fillStyle = color
+          context.fillRect(0, 0, 1, 1)
+          const foreground = luminance(context.getImageData(0, 0, 1, 1).data)
+          return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+        })
       })
+      for (const ratio of ratios)
+        expect(ratio).toBeGreaterThanOrEqual(theme.contrast)
+    }
+    const search = controls[2]!
+    await search.focus()
+    await page.keyboard.press('Tab')
+    expect(await page.evaluate(() => getComputedStyle(document.activeElement!).outlineWidth)).toBe(theme.outline)
+    await page.screenshot({ path: testInfo.outputPath(`${theme.id}-1440.png`), animations: 'disabled' })
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%'
     })
-    for (const ratio of ratios)
-      expect(ratio).toBeGreaterThanOrEqual(7)
-  }
-  const search = controls[2]!
-  await search.focus()
-  await page.keyboard.press('Tab')
-  expect(await page.evaluate(() => getComputedStyle(document.activeElement!).outlineWidth)).toBe('3px')
-  await page.screenshot({ path: testInfo.outputPath('high-contrast-1440.png'), animations: 'disabled' })
-  await page.evaluate(() => {
-    document.documentElement.style.fontSize = '200%'
+    await page.setViewportSize({ width: 640, height: 960 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(await page.locator('.hai-workspace > header h1').evaluate(element => element.clientWidth >= element.scrollWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`${theme.id}-200-percent.png`), animations: 'disabled' })
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = ''
+    })
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`${theme.id}-390.png`), animations: 'disabled' })
   })
-  await page.setViewportSize({ width: 640, height: 960 })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  expect(await page.locator('.hai-workspace > header h1').evaluate(element => element.clientWidth >= element.scrollWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('high-contrast-200-percent.png'), animations: 'disabled' })
-})
+}
 
 test('管理工作区压缩留白，导航显示单一标题，分页不挤出视口', async ({ page }, testInfo) => {
   await loginOnPage(page, 'admin', 'admin123456')

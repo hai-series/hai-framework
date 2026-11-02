@@ -517,6 +517,7 @@
   "filter_bar_collapse": "絞り込みを折りたたむ",
   "filter_bar_active": "適用中の条件：{count}件",
   "theme_formal": "ビジネス（角丸なし）",
+  "theme_eye_care": "目にやさしい",
   "keyboard_submit_enter": "1行の入力欄で Enter を押して送信",
   "request_access_denied": "アクセス制限により、このリクエストは許可されませんでした。アクセス先、ネットワーク、許可時間帯を確認してください。必要な場合は管理者にお問い合わせください。",
   "auth_error_account_unavailable": "現在このアカウントは利用できません。状態と有効期限を管理者に確認してください。",

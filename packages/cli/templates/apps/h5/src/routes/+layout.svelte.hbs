@@ -5,13 +5,7 @@
    */
   import type { BottomNavItem } from '@h-ai/ui'
   import type { Snippet } from 'svelte'
-{{#if hasI18n}}
   import { browser } from '$app/environment'
-{{else}}
-{{#if features.crypto}}
-  import { browser } from '$app/environment'
-{{/if}}
-{{/if}}
   import { goto } from '$app/navigation'
   import { base, resolve } from '$app/paths'
   import { page } from '$app/state'
@@ -28,10 +22,11 @@
 {{/if}}
 {{/if}}
 {{#if hasI18n}}
-  import { AppBar, BottomNav, LanguageSwitch, setGlobalLocale } from '@h-ai/ui'
+  import { AppBar, BottomNav, LanguageSwitch, setGlobalLocale, ThemeSelector } from '@h-ai/ui'
 {{else}}
-  import { AppBar, BottomNav } from '@h-ai/ui'
+  import { AppBar, BottomNav, ThemeSelector } from '@h-ai/ui'
 {{/if}}
+  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
 {{#if features.crypto}}
   import { untrack } from 'svelte'
 {{/if}}
@@ -42,6 +37,16 @@
   }
 
   const { children }: Props = $props()
+  const initialTheme = browser ? getSavedTheme() : 'light'
+  let currentTheme = $state(initialTheme)
+  if (browser)
+    applyTheme(initialTheme, false)
+
+  function handleThemeChange(theme: string) {
+    currentTheme = theme
+    applyTheme(theme)
+  }
+
 {{#if features.crypto}}
   if (browser)
     kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
@@ -94,11 +99,14 @@
 <div class='hai-mobile-viewport'>
   <div class='hai-mobile-shell min-w-0'>
     <AppBar title={page.data.appConfig.name} safeArea fixed={false}>
-{{#if hasI18n}}
       {#snippet trailing()}
-        <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} compact />
-      {/snippet}
+        <div class='flex items-center gap-1'>
+{{#if hasI18n}}
+          <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} compact />
 {{/if}}
+          <ThemeSelector {currentTheme} onchange={handleThemeChange} compact grouped={false} />
+        </div>
+      {/snippet}
     </AppBar>
     <main class='hai-mobile-main'>{@render children()}</main>
     <footer class='border-t border-base-300 bg-base-100 p-2 text-center text-xs text-base-content/60'>

@@ -517,6 +517,7 @@
   "filter_bar_collapse": "Collapse filters",
   "filter_bar_active": "Active filters: {count}",
   "theme_formal": "Formal",
+  "theme_eye_care": "Eye care",
   "keyboard_submit_enter": "Press Enter in a single-line field to submit",
   "request_access_denied": "The access policy blocked this request. Check the address, network and permitted hours. Contact your administrator for help.",
   "auth_error_account_unavailable": "This account is unavailable. Contact your administrator to check its status and expiry.",

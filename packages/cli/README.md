@@ -82,6 +82,8 @@ Docker构建时同样显式设置PUBLIC_BASE_PATH；非根目录生成格式5制
 
 ### 应用配置与显示
 
+带界面的模板提供 `eye-care` 护眼主题：暖绿色背景、深色文字和清晰焦点，选择后刷新仍保留。fullstack 默认主题列表包含它；显式 `fullstack.theme.themes` 仍按宿主白名单生成，`defaultTheme` 保持原配置。
+
 模板默认使用 `pretty` 日志并安装运行依赖 `pino-pretty`；`HAI_CORE_LOGGING_FORMAT=json` 可切换为结构化输出。启动失败保留模块、错误码与缺失配置字段；端口冲突显示 `EADDRINUSE`、地址和端口。
 
 公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。

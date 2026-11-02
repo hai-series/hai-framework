@@ -31,6 +31,6 @@
   "tasks_release": "ネイティブのパッケージ化を準備",
   "profile_title": "アプリ設定",
   "profile_language": "言語はParaglideに従います",
-  "profile_theme": "テーマは@h-ai/uiに従います",
+  "profile_theme": "テーマ",
   "profile_secure": "機密トークンはlocalStorageに保存しません"
 }

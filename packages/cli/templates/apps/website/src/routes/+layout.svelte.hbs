@@ -4,13 +4,7 @@
    * 官网根布局
    */
   import type { Snippet } from 'svelte'
-{{#if hasI18n}}
   import { browser } from '$app/environment'
-{{else}}
-{{#if features.crypto}}
-  import { browser } from '$app/environment'
-{{/if}}
-{{/if}}
   import { {{#if features.iam}}base, {{else}}{{#if features.crypto}}base, {{/if}}{{/if}}resolve } from '$app/paths'
   import { page } from '$app/state'
 {{#if hasI18n}}
@@ -26,10 +20,11 @@
 {{/if}}
 {{/if}}
 {{#if hasI18n}}
-  import { LanguageSwitch, setGlobalLocale, ToastContainer } from '@h-ai/ui'
+  import { LanguageSwitch, setGlobalLocale, ThemeSelector, ToastContainer } from '@h-ai/ui'
 {{else}}
-  import { ToastContainer } from '@h-ai/ui'
+  import { ThemeSelector, ToastContainer } from '@h-ai/ui'
 {{/if}}
+  import { applyTheme, getSavedTheme } from '@h-ai/ui/theme'
 {{#if features.crypto}}
   import { untrack } from 'svelte'
 {{/if}}
@@ -40,6 +35,16 @@
   }
 
   const { children }: Props = $props()
+  const initialTheme = browser ? getSavedTheme() : 'light'
+  let currentTheme = $state(initialTheme)
+  if (browser)
+    applyTheme(initialTheme, false)
+
+  function handleThemeChange(theme: string) {
+    currentTheme = theme
+    applyTheme(theme)
+  }
+
 {{#if features.crypto}}
   if (browser)
     kit.client.installBrowserTransport(untrack(() => page.data.kitConfig), { crypto, basePath: base })
@@ -99,6 +104,7 @@
 {{#if hasI18n}}
     <LanguageSwitch currentLanguage={getLocale()} onchange={handleLanguageChange} />
 {{/if}}
+    <ThemeSelector {currentTheme} onchange={handleThemeChange} compact />
   </header>
 
   <main class='flex-1'>

@@ -159,6 +159,8 @@ SSR 保留图表高度和加载占位，浏览器挂载且有数据后按类型�
 
 主题来自已编译的主题 CSS 与 design tokens；默认主题由宿主选择。`@h-ai/ui/theme` 的 `applyTheme` / `getSavedTheme` 管理应用与持久化。可选主题必须在应用 CSS 中存在，不能只给选择器增加名称。
 
+共享 theme.css 内置 `eye-care` 护眼主题，使用暖绿色背景和深色正文，次要文字、占位符与焦点保持清晰。管理台、H5、企业站、移动/桌面示例和默认生成模板可从现有主题入口选择“护眼”，刷新后保留。默认主题不变；fullstack 显式设置 `fullstack.theme.themes` 时，按需加入 `eye-care`，不会自动扩大白名单。
+
 在管理台“系统设置 → 外观”选择主题，刷新后仍应保持选择。下面是同一页面的实际明暗对比：
 
 ![浅色主题](../images/settings-light.png)

@@ -34,6 +34,15 @@ import { loadConfigText } from './helpers/config.js'
 /** 每次运行使用独立临时目录，避免并发测试互删生成项目。 */
 let tmpRoot = ''
 
+it('fullstack 默认提供护眼主题，同时保留宿主的默认值与显式主题白名单', () => {
+  const options = { name: 'eye-care', appType: 'fullstack', features: [], packageManager: 'pnpm' } as const
+  const defaults = buildTemplateContext({ ...options, features: [] })
+  expect(defaults.fullstack?.theme.defaultTheme).toBe('light')
+  expect(defaults.fullstack?.theme.themes).toContain('eye-care')
+  const custom = buildTemplateContext({ ...options, features: [], moduleConfigs: { fullstack: { theme: { defaultTheme: 'dark', themes: ['light', 'dark'] } } } })
+  expect(custom.fullstack?.theme).toEqual({ defaultTheme: 'dark', themes: ['light', 'dark'] })
+})
+
 it.each(['api', 'admin', 'website', 'h5', 'mobile-app'] as const)('单独 %s 工程按职责命名镜像，手机原生目标独立配置', async (appType) => {
   const project = path.join(tmpRoot, `role-${appType}`)
   await generateFromTemplates(project, buildTemplateContext({ name: `role-${appType}`, appType, features: [], packageManager: 'pnpm' }))

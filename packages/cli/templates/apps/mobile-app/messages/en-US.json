@@ -31,6 +31,6 @@
   "tasks_release": "Prepare native packaging",
   "profile_title": "App settings",
   "profile_language": "Locale follows Paraglide",
-  "profile_theme": "Theme follows @h-ai/ui",
+  "profile_theme": "Theme",
   "profile_secure": "Sensitive tokens avoid localStorage"
 }

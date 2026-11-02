@@ -517,6 +517,7 @@
   "filter_bar_collapse": "收起筛选",
   "filter_bar_active": "已启用 {count} 项筛选",
   "theme_formal": "简洁商务",
+  "theme_eye_care": "护眼",
   "keyboard_submit_enter": "在单行输入框中按 Enter 提交",
   "request_access_denied": "当前请求未通过访问策略检查。请确认访问地址、网络或允许的时段；如需帮助，请联系管理员。",
   "auth_error_account_unavailable": "账号当前无法使用，请联系管理员确认账号状态及有效期。",

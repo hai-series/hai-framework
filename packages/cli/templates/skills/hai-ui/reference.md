@@ -2,7 +2,7 @@
 
 从 [SKILL.md](SKILL.md) 选择主题后读取对应小节。代码片段展示 API 用法；省略的业务变量、schema、依赖与 return 上下文需由应用补齐。
 
-> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务主题、内置中英日文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
+> `@h-ai/ui` 是基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 + Bits UI v2，内置 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务、eye-care 暖绿护眼主题、内置中英日文 i18n、自动导入。内置 Shiki 代码高亮、Mermaid 图表渲染、Design Token 系统和 7 个移动端组件。
 
 ## 运行环境
 
@@ -546,7 +546,7 @@ form={{ variant: 'drawer', drawerWidth: '40rem' }}
 
 ## 主题系统
 
-支持 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务主题。
+支持 15 个精选 DaisyUI 主题及 high-contrast 高对比、formal 直角商务、eye-care 暖绿护眼主题。
 
 ```typescript
 import { applyTheme, getCurrentTheme, getSavedTheme, isDarkTheme, THEMES, THEME_GROUPS } from '@h-ai/ui/theme'
