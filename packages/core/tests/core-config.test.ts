@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -402,6 +402,67 @@ describe('core.config', () => {
     })
     expect(receivedError).toBeDefined()
     expect(receivedError?.code).toBe('hai:core:014')
+  })
+
+  it('watch 回归：连续原子替换、删除重建与校验失败后均能继续监听', async () => {
+    writeFileSync(configPath, 'foo: original\nbar: value\n')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    const callback = vi.fn()
+    const unwatch = core.config.watch('app', callback)
+    try {
+      for (const value of ['replacement', 'second']) {
+        const replacement = join(tempDir, 'replacement.yml')
+        writeFileSync(replacement, `foo: ${value}\nbar: value\n`)
+        renameSync(replacement, configPath)
+        await vi.waitFor(() => expect(callback).toHaveBeenLastCalledWith({ foo: value, bar: 'value' }, undefined), { timeout: 2000 })
+      }
+      unlinkSync(configPath)
+      await vi.waitFor(() => expect(callback).toHaveBeenLastCalledWith(null, expect.objectContaining({ code: 'hai:core:010' })), { timeout: 2000 })
+      expect(core.config.get('app')).toEqual({ foo: 'second', bar: 'value' })
+      writeFileSync(configPath, 'foo: 42\nbar: value\n')
+      await vi.waitFor(() => expect(callback).toHaveBeenLastCalledWith(null, expect.objectContaining({ code: 'hai:core:012' })), { timeout: 2000 })
+      expect(core.config.get('app')).toEqual({ foo: 'second', bar: 'value' })
+      writeFileSync(configPath, 'foo: recovered\nbar: value\n')
+      await vi.waitFor(() => expect(callback).toHaveBeenLastCalledWith({ foo: 'recovered', bar: 'value' }, undefined), { timeout: 2000 })
+      expect(core.config.isWatching('app')).toBe(true)
+    }
+    finally { unwatch() }
+    expect(core.config.isWatching('app')).toBe(false)
+  })
+
+  it('watch 回归：不响应同目录其他文件，取消监听同时清除待执行重载', async () => {
+    writeFileSync(configPath, 'foo: original\nbar: value\n')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    const callback = vi.fn()
+    const unwatch = core.config.watch('app', callback)
+    try {
+      writeFileSync(join(tempDir, 'other.yml'), 'foo: unrelated\n')
+      await new Promise(resolve => setTimeout(resolve, 200))
+      expect(callback).not.toHaveBeenCalled()
+      writeFileSync(configPath, 'foo: cancelled\nbar: value\n')
+      unwatch()
+      await new Promise(resolve => setTimeout(resolve, 200))
+      expect(callback).not.toHaveBeenCalled()
+      expect(core.config.get('app')).toEqual({ foo: 'original', bar: 'value' })
+    }
+    finally { unwatch() }
+  })
+
+  it('watch 回归：旧的取消句柄不能关闭清空缓存后新建的监听', async () => {
+    writeFileSync(configPath, 'foo: original\nbar: value\n')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    const previousUnwatch = core.config.watch('app', () => {})
+    core.config.clear('app')
+    expect(core.config.load('app', configPath, schema).success).toBe(true)
+    const callback = vi.fn()
+    const unwatch = core.config.watch('app', callback)
+    try {
+      previousUnwatch()
+      expect(core.config.isWatching('app')).toBe(true)
+      writeFileSync(configPath, 'foo: updated\nbar: value\n')
+      await vi.waitFor(() => expect(callback).toHaveBeenLastCalledWith({ foo: 'updated', bar: 'value' }, undefined), { timeout: 2000 })
+    }
+    finally { unwatch() }
   })
 
   it('isWatching 应该正确反映监听状态', () => {

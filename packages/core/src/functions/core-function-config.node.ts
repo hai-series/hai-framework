@@ -9,7 +9,7 @@ import type { ZodType } from 'zod'
 import type { HaiError, HaiResult, WatchCallback } from '../core-types.js'
 
 import { existsSync, readFileSync, watch } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
 
@@ -268,7 +268,7 @@ function reloadAndNotify(name: string): HaiResult<unknown> {
 /**
  * 启动配置文件监听。
  *
- * 使用 `fs.watch` 监听文件变更，变更时自动重载并通知回调。
+ * 使用 `fs.watch` 监听父目录并筛选目标文件，支持原子替换及删除后重建。
  * 同一配置名只会创建一个 watcher，多次调用返回同一实例。
  *
  * @param name - 配置名称
@@ -290,16 +290,19 @@ function startFileWatcher(name: string): WatchEntry | null {
       debounceTimer: null,
     }
 
-    // 防抖定时器：fs.watch 可能对同一次文件保存触发多次 'change' 事件
-    const watcher = watch(entry.filePath, (eventType) => {
-      if (eventType === 'change') {
-        if (watchEntry.debounceTimer)
-          clearTimeout(watchEntry.debounceTimer)
-        watchEntry.debounceTimer = setTimeout(() => {
-          watchEntry.debounceTimer = null
+    const filePath = resolve(entry.filePath)
+    const fileName = basename(filePath)
+    // 监听目录避免绑定已被 rename 替换的旧文件；无文件名时保守地检查目标配置。
+    const watcher = watch(dirname(filePath), (_eventType, changedName) => {
+      if (changedName !== null && changedName.toString() !== fileName)
+        return
+      if (watchEntry.debounceTimer)
+        clearTimeout(watchEntry.debounceTimer)
+      watchEntry.debounceTimer = setTimeout(() => {
+        watchEntry.debounceTimer = null
+        if (watchEntries.get(name) === watchEntry)
           reloadAndNotify(name)
-        }, 100)
-      }
+      }, 100)
     })
 
     watchEntry.watcher = watcher
@@ -332,7 +335,7 @@ function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void 
 
   return () => {
     const current = watchEntries.get(name)
-    if (!current)
+    if (current !== entry)
       return
 
     current.callbacks.delete(callback as WatchCallback<unknown>)
@@ -644,7 +647,8 @@ export const config = {
   /**
    * 监听配置文件变更并自动重载。
    *
-   * 文件变更时自动重新加载并调用回调。配置未加载时立即回调 NOT_LOADED 错误。
+   * 普通写入、原子替换及删除重建均触发重载；失败保留最近成功的缓存并通知错误。
+   * 配置未加载时立即回调 NOT_LOADED 错误。
    *
    * @param name - 配置名称
    * @param callback - 配置变更回调，接收新配置或错误
