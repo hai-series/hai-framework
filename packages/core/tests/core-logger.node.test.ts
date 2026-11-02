@@ -7,8 +7,40 @@
 import process from 'node:process'
 import { describe, expect, it, vi } from 'vitest'
 import { core } from '../src/index.js'
+import { createSerializationFixture } from './fixtures/serialization.js'
 
 describe('core.logger (node)', () => {
+  it('序列化回归：stdout 和观察记录均不能被自定义 toJSON 带出凭据', async () => {
+    const { input, serialize, readAccessor } = createSerializationFixture()
+    const output: string[] = []
+    const observed: string[] = []
+    core.logger.configure({ level: 'info', format: 'json', redact: ['payload.plain.customerId'] })
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      output.push(typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk))
+      return true
+    }) as typeof process.stdout.write)
+    const stop = core.logger.observe(record => observed.push(JSON.stringify(record)))
+    try {
+      core.logger.create({ name: 'serialization-regression', format: 'json' }).info('Serialization fixture', { payload: input })
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    finally {
+      stop()
+      write.mockRestore()
+      core.logger.configure({ format: 'pretty', redact: [] })
+    }
+    expect(observed).toHaveLength(1)
+    for (const value of [output.join(''), observed.join('')]) {
+      expect(value).toContain('sdk-visible')
+      expect(value).toContain('2026-01-01T00:00:00.000Z')
+      for (const secret of ['serialized-only-secret', 'class-only-secret', 'plain-only-secret', 'customer-private'])
+        expect(value).not.toContain(secret)
+    }
+    expect(serialize).not.toHaveBeenCalled()
+    expect(readAccessor).not.toHaveBeenCalled()
+    expect(input.sdk.token).toBe('class-only-secret')
+  })
+
   it('logger 应该为单例', () => {
     expect(core.logger).toBe(core.logger)
   })

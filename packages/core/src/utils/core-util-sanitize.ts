@@ -220,7 +220,14 @@ function sanitizeUrlWithContext(url: string, context: SanitizeSensitiveContext):
 }
 
 function isProtectedPropertyKey(key: string): boolean {
-  return key === '__proto__' || key === 'constructor' || key === 'prototype'
+  return key === '__proto__' || key === 'constructor' || key === 'prototype' || key === 'toJSON'
+}
+
+/** 只取自有可枚举数据属性，不调用访问器或把序列化钩子带入副本。 */
+function enumerableDataEntries(value: object): Array<[string, unknown]> {
+  return Object.entries(Object.getOwnPropertyDescriptors(value))
+    .filter(([key, descriptor]) => descriptor.enumerable && 'value' in descriptor && !isProtectedPropertyKey(key))
+    .map(([key, descriptor]) => [key, descriptor.value])
 }
 
 function createSanitizeSensitiveContext(
@@ -276,12 +283,22 @@ function sanitizeSensitiveValueWithContext(
     }
   }
 
+  // 函数和 Symbol 不属于诊断数据，避免把可执行方法带入普通对象副本。
+  if (typeof value === 'function' || typeof value === 'symbol')
+    return undefined
+
+  // 保留内置日期/URL 的诊断值，直接调用原生方法，绕开实例自定义 toJSON。
+  if (value instanceof Date) {
+    const timestamp = Date.prototype.getTime.call(value)
+    return Number.isFinite(timestamp) ? Date.prototype.toISOString.call(value) : null
+  }
+  if (value instanceof URL)
+    return sanitizeUrlWithContext(URL.prototype.toString.call(value), context)
+
   // Error 诊断不复用普通对象缓存，避免 cause/context 回指外层对象后重新形成循环。
   if (isErrorDiagnostic) {
     if (typeof value === 'bigint')
       return value.toString()
-    if (typeof value === 'function' || typeof value === 'symbol')
-      return undefined
     if (value === null || typeof value !== 'object')
       return typeof value === 'string' ? sanitizeText(value) : value
 
@@ -294,11 +311,15 @@ function sanitizeSensitiveValueWithContext(
     activePath.add(value)
     try {
       if (Array.isArray(value)) {
-        return value.map(item => sanitizeSensitiveValueWithContext(item, null, context, cache, activePath, errorDepth + 1))
+        return Array.from({ length: value.length }, (_, index) => {
+          const descriptor = Object.getOwnPropertyDescriptor(value, index)
+          const item: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined
+          return sanitizeSensitiveValueWithContext(item, null, context, cache, activePath, errorDepth + 1)
+        })
       }
 
       // 只复制枚举上下文，显式补齐原生异常的非枚举诊断；不调用原对象的 toJSON。
-      const fields: Record<string, unknown> = { ...value }
+      const fields: Record<string, unknown> = Object.fromEntries(enumerableDataEntries(value))
       if (errorValue) {
         fields.name = errorValue.name
         fields.message = errorValue.message
@@ -330,12 +351,14 @@ function sanitizeSensitiveValueWithContext(
     const sanitizedArray: unknown[] = []
     cache.set(value, sanitizedArray)
     for (let index = 0; index < value.length; index++) {
-      sanitizedArray[index] = sanitizeSensitiveValueWithContext(value[index], null, context, cache)
+      const descriptor = Object.getOwnPropertyDescriptor(value, index)
+      const item: unknown = descriptor && 'value' in descriptor ? descriptor.value : undefined
+      sanitizedArray[index] = sanitizeSensitiveValueWithContext(item, null, context, cache)
     }
     return sanitizedArray
   }
 
-  if (isPlainObjectValue) {
+  if (value !== null && typeof value === 'object') {
     if (cache.has(value)) {
       return cache.get(value)
     }
@@ -343,11 +366,8 @@ function sanitizeSensitiveValueWithContext(
     const sanitized: Record<string, unknown> = {}
     cache.set(value, sanitized)
 
-    for (const childKey in value) {
-      if (!Object.hasOwn(value, childKey) || isProtectedPropertyKey(childKey)) {
-        continue
-      }
-      sanitized[childKey] = sanitizeSensitiveValueWithContext(value[childKey], childKey, context, cache)
+    for (const [childKey, childValue] of enumerableDataEntries(value)) {
+      sanitized[childKey] = sanitizeSensitiveValueWithContext(childValue, childKey, context, cache)
     }
 
     return sanitized
@@ -363,7 +383,7 @@ function sanitizeSensitiveValueWithContext(
  * @param key - 当前字段名；根节点传 null
  * @param options - 脱敏选项
  * @param cache - 循环引用 / 重复引用缓存
- * @returns 递归脱敏后的值；普通对象循环保留，Error 规范化为有界诊断树，原值不被修改。
+ * @returns 脱敏数据副本；类实例不保留原型和方法，普通对象循环保留，Error 规范化为有界诊断树，原值不被修改。
  * @example
  * ```ts
  * import { core } from '@h-ai/core'
@@ -386,7 +406,8 @@ export function sanitizeSensitiveValue(
  *
  * @param value - 原始对象/数组/值
  * @param options - 脱敏选项
- * @returns 脱敏后的新值
+ * 类实例只复制自有可枚举数据属性；不保留原型、访问器和 toJSON。Date 转 ISO 字符串，URL 转脱敏字符串。
+ * @returns 用于诊断的脱敏副本，不作为原类实例使用。
  * @example
  * ```ts
  * import { core } from '@h-ai/core'

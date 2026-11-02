@@ -7,8 +7,41 @@
 import log from 'loglevel'
 import { describe, expect, it } from 'vitest'
 import { core } from '../src/core-index.browser.js'
+import { createSerializationFixture } from './fixtures/serialization.js'
 
 describe('core.logger (browser)', () => {
+  it('序列化回归：浏览器输出和观察记录均不会执行自定义 toJSON', () => {
+    const { input, serialize, readAccessor } = createSerializationFixture()
+    const output: string[] = []
+    const observed: string[] = []
+    core.logger.configure({ level: 'info', format: 'json', redact: ['payload.plain.customerId'] })
+    const logger = core.logger.create({ name: 'browser-serialization-regression', format: 'json' })
+    const raw = log.getLogger('browser-serialization-regression')
+    const previous = raw.info
+    raw.info = (...values: unknown[]) => {
+      output.push(values.map(String).join(' '))
+    }
+    const stop = core.logger.observe(record => observed.push(JSON.stringify(record)))
+    try {
+      logger.info('Serialization fixture', { payload: input })
+    }
+    finally {
+      stop()
+      raw.info = previous
+      core.logger.configure({ format: 'pretty', redact: [] })
+    }
+    expect(output).toHaveLength(1)
+    expect(observed).toHaveLength(1)
+    for (const value of [...output, ...observed]) {
+      expect(value).toContain('sdk-visible')
+      expect(value).toContain('2026-01-01T00:00:00.000Z')
+      for (const secret of ['serialized-only-secret', 'class-only-secret', 'plain-only-secret', 'customer-private'])
+        expect(value).not.toContain(secret)
+    }
+    expect(serialize).not.toHaveBeenCalled()
+    expect(readAccessor).not.toHaveBeenCalled()
+  })
+
   it('observes filtered, redacted browser records and releases the listener', () => {
     const records: { level: string, context: Readonly<Record<string, unknown>> }[] = []
     const logger = core.logger.create({ name: 'browser-observer', level: 'warn' })

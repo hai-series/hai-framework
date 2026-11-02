@@ -6,8 +6,31 @@
 
 import { describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
+import { createSerializationFixture } from './fixtures/serialization.js'
 
 describe('core.sanitize', () => {
+  it('序列化回归：普通对象和类实例输出安全数据，不执行 toJSON 或访问器', () => {
+    const { input, serialize, readAccessor } = createSerializationFixture()
+    const snapshot = core.sanitize.sanitizeSensitiveFields(input)
+    const output = JSON.stringify(snapshot)
+    expect(output).not.toContain('serialized-only-secret')
+    expect(output).not.toContain('class-only-secret')
+    expect(output).not.toContain('plain-only-secret')
+    expect(snapshot).toMatchObject({ plain: { password: '[REDACTED]', customerId: 'customer-private' }, sdk: { token: '[REDACTED]', label: 'sdk-visible' }, timestamp: '2026-01-01T00:00:00.000Z' })
+    expect(serialize).not.toHaveBeenCalled()
+    expect(readAccessor).not.toHaveBeenCalled()
+    expect(input.sdk.token).toBe('class-only-secret')
+    expect(input.plain.toJSON).toBe(serialize)
+  })
+
+  it('序列化回归：原生 URL 仍显示脱敏地址，普通函数不进入诊断副本', () => {
+    const input = { address: new URL('https://user:private@example.test/path?token=credential'), callback: () => 'private-return' }
+    const snapshot = core.sanitize.sanitizeSensitiveFields(input)
+    expect(snapshot).toMatchObject({ address: 'https://[REDACTED]:[REDACTED]@example.test/path?token=[REDACTED]', callback: undefined })
+    expect(input.address.password).toBe('private')
+    expect(input.callback()).toBe('private-return')
+  })
+
   it.each(['secretKey', 'secret_key', 'passwordHash', 'password_hash', 'passwd'])('统一隐藏实际配置凭据 %s，普通字段保持可诊断', (key) => {
     const input = { [key]: 'sensitive-sentinel', publicKey: 'public-material', passwordPolicy: 'strict', tokenCount: 12 }
     expect(core.sanitize.sanitizeSensitiveFields(input)).toEqual({ ...input, [key]: '[REDACTED]' })
