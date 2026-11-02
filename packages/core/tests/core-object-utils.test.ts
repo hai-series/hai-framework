@@ -41,6 +41,29 @@ describe('core.object', () => {
     expect(merged).toEqual({ a: 1, b: 2, c: 3 })
   })
 
+  it('deepMerge 回归：Date、集合与类实例按后值覆盖，保留对象类型', () => {
+    class Endpoint {
+      constructor(readonly host: string) {}
+    }
+    const previous = { at: new Date('2025-01-01'), map: new Map([['old', 1]]), set: new Set([1]), endpoint: new Endpoint('old') }
+    const next = { at: new Date('2026-01-01'), map: new Map([['new', 2]]), set: new Set([2]), endpoint: new Endpoint('new') }
+    const merged = core.object.deepMerge(previous, next)
+    for (const key of ['at', 'map', 'set', 'endpoint'] as const)
+      expect(merged[key]).toBe(next[key])
+    expect(merged.at.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+    expect(previous.endpoint.host).toBe('old')
+  })
+
+  it('deepMerge 回归：普通对象与实例相互覆盖，空原型对象仍递归合并', () => {
+    const plain: Record<string, unknown> = { value: { nested: true } }
+    const instance: Record<string, unknown> = { value: new Date('2026-01-01') }
+    expect(core.object.deepMerge(plain, instance).value).toBe(instance.value)
+    expect(core.object.deepMerge(instance, plain).value).toEqual({ nested: true })
+    const nullPrototype: Record<string, unknown> = Object.create(null)
+    nullPrototype.left = 1
+    expect(core.object.deepMerge({ nested: nullPrototype }, { nested: { right: 2 } })).toEqual({ nested: { left: 1, right: 2 } })
+  })
+
   it('deepMerge 非对象值应被直接覆盖', () => {
     const merged = core.object.deepMerge(
       { a: { nested: true } },

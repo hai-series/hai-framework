@@ -5,6 +5,14 @@
 
 import { typeUtils } from './core-util-type.js'
 
+/** 仅普通对象参与递归，Date、集合和类实例按覆盖值处理。 */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!typeUtils.isObject(value))
+    return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
 /**
  * 深度克隆对象。
  * 使用 structuredClone（Node 17+ / 现代浏览器），支持 Date、Map、Set、RegExp、
@@ -26,7 +34,7 @@ function deepClone<T>(obj: T): T {
  * 深度合并多个对象。
  * @param objects - 需要合并的对象列表
  * @returns 合并后的新对象
- * @remarks 仅合并纯对象字段，数组会被直接覆盖。
+ * @remarks 仅递归合并普通对象字段；数组、Date、Map、Set 和类实例由后值直接覆盖，不修改输入。
  *
  * @example
  * ```ts
@@ -43,7 +51,7 @@ function deepMerge<T extends Record<string, unknown>>(...objects: Partial<T>[]):
       if (key === '__proto__' || key === 'constructor' || key === 'prototype')
         continue
       const val = obj[key]
-      if (typeUtils.isObject(val) && typeUtils.isObject(result[key])) {
+      if (isPlainRecord(val) && isPlainRecord(result[key])) {
         result[key] = deepMerge(
           result[key] as Record<string, unknown>,
           val as Record<string, unknown>,
