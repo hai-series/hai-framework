@@ -23,7 +23,7 @@ function unique<T>(arr: T[]): T[] {
  * @param arr - 输入数组
  * @param fn - 分组键生成函数
  * @returns 分组结果对象
- * @remarks 当数组为空时返回空对象。
+ * @remarks 当数组为空时返回空对象；原型同名键也作为独立的自有分组。
  *
  * @example
  * ```ts
@@ -37,8 +37,9 @@ function groupBy<T, K extends string | number>(
   const result = {} as Record<K, T[]>
   for (const item of arr) {
     const key = fn(item)
-    if (!result[key])
-      result[key] = []
+    // 定义自有数据属性，避免读取继承分组或触发 __proto__ setter。
+    if (!Object.hasOwn(result, key))
+      Object.defineProperty(result, key, { value: [], enumerable: true, writable: true, configurable: true })
     result[key].push(item)
   }
   return result
