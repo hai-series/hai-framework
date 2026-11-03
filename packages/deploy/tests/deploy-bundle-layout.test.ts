@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { core } from '@h-ai/core'
@@ -9,7 +9,7 @@ import { createDeploymentBundle } from '../src/container/deploy-bundle.js'
 import { DeploymentArtifactSchema } from '../src/deploy-artifact.js'
 import { ProviderConfigSchema } from '../src/deploy-config.js'
 
-it('交付包只有入口、配置、镜像、清单与内部目录，应用配置没有第二份覆盖文件', async () => {
+it.each(['tar', 'tar.gz'])('交付包 %s 同时携带部署入口和操作说明', async (format) => {
   const root = mkdtempSync(join(tmpdir(), 'hai-bundle-layout-'))
   try {
     const artifacts = join(root, 'artifacts')
@@ -20,14 +20,25 @@ it('交付包只有入口、配置、镜像、清单与内部目录，应用配�
     writeFileSync(join(root, 'docker-compose-1.0.0.yml'), 'services:\n  serv:\n    image: localhost/layout:1.0.0\n    environment:\n      NODE_OPTIONS: --import /run/hai/runtime-env.mjs\n    volumes:\n      - ./config:/run/hai/config:ro\n      - ./runtime-env.mjs:/run/hai/runtime-env.mjs:ro\n')
     const environmentText = core.config.stringifyEnv({ APP_VALUE: 'mixed \'single\' and \"double\"\n中文', HAI_STORAGE_TYPE: 's3', HAI_STORAGE_PUBLICENDPOINT: 'https://files.example.test:8443/files', HAI_STORAGE_SECRETACCESSKEY: 'private-fixture-value' })
     writeFileSync(join(root, '.env.runtime'), environmentText)
-    const config = ProviderConfigSchema.parse({ type: 'docker-ssh', ssh: { host: 'example.test', username: 'deploy' }, expose: { hostPort: 3000 } })
+    const baseDir = '/opt/hai/apps with spaces'
+    const config = ProviderConfigSchema.parse({ type: 'docker-ssh', ssh: { host: 'example.test', username: 'deploy' }, remote: { baseDir }, expose: { hostPort: 3000 } })
     if (config.type !== 'docker-ssh')
       throw new Error('Expected docker SSH configuration')
-    const result = await createDeploymentBundle({ directory: root, artifactDir: artifacts, artifact, projectName: 'layout-test', deploymentId: 'layout-001', environment: 'test', config, runtime: 'docker', output: join(root, 'deployment.tar'), selected: ['serv'], partial: false, managedAppKeys: ['HAI_STORAGE'], healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
+    const fileName = `deployment.${format}`
+    const result = await createDeploymentBundle({ directory: root, artifactDir: artifacts, artifact, projectName: 'layout-test', deploymentId: 'layout-001', environment: 'test', config, runtime: 'docker', output: join(root, fileName), selected: ['serv'], partial: false, managedAppKeys: ['HAI_STORAGE'], healthPaths: ['/health'], hasWebConfig: false, containerPort: 3000 })
     const listing = execFileSync('tar', ['-tf', result.bundlePath], { encoding: 'utf8', windowsHide: true }).split(/\r?\n/).map(path => path.replace(/^\.\//, '')).filter(Boolean)
-    expect([...new Set(listing.map(path => path.split('/')[0]))].sort()).toEqual(['.hai', 'apply.sh', 'config', 'images', 'manifest.json'])
+    expect([...new Set(listing.map(path => path.split('/')[0]))].sort()).toEqual(['.hai', 'APPLY.txt', 'apply.sh', 'config', 'images', 'manifest.json'])
     expect(listing.some(path => /middleware\.env|compose-entry|proxy-entry|resolve-backend-state|resolve-managed-secrets/.test(path))).toBe(false)
     const extract = (file: string) => execFileSync('tar', ['-xOf', result.bundlePath, `./${file}`], { encoding: 'utf8', windowsHide: true })
+    const guide = extract('APPLY.txt')
+    expect(guide).toContain(`tar -xf '${fileName}' -C "$work"`)
+    expect(guide).toContain('sh ./apply.sh\n')
+    expect(guide).toContain(`sh ./apply.sh '${baseDir}/layout-test'`)
+    expect(guide).toContain('result-layout-001.json')
+    expect(guide).toContain('steps-layout-001.jsonl')
+    expect(guide).not.toContain('private-fixture-value')
+    expect(extract('.hai/SHA256SUMS')).toContain(`${createHash('sha256').update(guide).digest('hex')}  APPLY.txt\n`)
+    expect(readFileSync(join(root, 'README.txt'), 'utf8')).toContain('APPLY.txt')
     expect(extract('config/.env.runtime')).toBe(environmentText)
     const environment = core.config.parseEnv(extract('config/.env.runtime'))
     expect(environment.HAI_STORAGE).toBeUndefined()

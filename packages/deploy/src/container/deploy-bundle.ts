@@ -17,6 +17,7 @@ import { runCommand } from './deploy-command.js'
 import { createManagedSecretAssets } from './deploy-managed-secrets.js'
 import { createProxyStartupScript } from './deploy-proxy-start.js'
 import { createApplyScript, createLocalInstallScript, createUploadScripts } from './deploy-scripts.js'
+import { shellArgument } from './deploy-shell.js'
 import { usesSshPassword } from './deploy-ssh.js'
 
 /**
@@ -241,14 +242,14 @@ export async function createDeploymentBundle(options: {
       'state-backends': backend['state-backends']!,
     }
     put('manifest.json', `${JSON.stringify({ ...artifact, bundleFormat: 2, images: artifact.images.filter(image => references.has(image.imageRef)), deploymentId: options.deploymentId, selectedServices: selected, partial: options.partial, metadata }, null, 2)}\n`)
-    put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: `${config.remote.baseDir}/${projectName}`, runtime: config.remote.runtime, partial: options.partial, selected, primaryService: artifact.primaryService, hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
-    const instructionParams = { file: basename(output), start: 'apply.sh', images: [...references].join('\n'), compose: '.hai/compose.json' }
+    const serverDirectory = `${config.remote.baseDir}/${projectName}`
+    put('apply.sh', createApplyScript({ deploymentId: options.deploymentId, projectName, environment, directory: serverDirectory, runtime: config.remote.runtime, partial: options.partial, selected, primaryService: artifact.primaryService, hostPort: config.expose.hostPort, healthPaths: options.healthPaths }))
+    const instructionParams = { file: basename(output), images: [...references].join('\n') }
     const mode = deployM(options.partial ? 'deploy_bundlePartial' : 'deploy_bundleFull')
     const selection = deployM('deploy_bundleSelection', { params: { mode, services: selected.join(', ') } })
     const instructions = `${selection}\n${deployM('deploy_bundleInstructions', { params: instructionParams })}`
-    const runtimeGuide = deployM('deploy_bundleRuntime', { params: { directory: `${config.remote.baseDir}/${projectName}`, deploymentId: options.deploymentId } })
+    const runtimeGuide = deployM('deploy_bundleRuntime', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })
     const https = config.expose.https
-    const serverDirectory = `${config.remote.baseDir}/${projectName}`
     const certificates = https?.type === 'files' ? `${serverDirectory}/releases/${options.deploymentId}/.hai/tls` : `${serverDirectory}/https/certificates/${https?.domain}`
     const httpsGuide = https
       ? deployM('deploy_bundleHttps', { params: { domain: https.domain, port: https.port, mode: https.type, certificates, environment } })
@@ -256,7 +257,10 @@ export async function createDeploymentBundle(options: {
       : deployM('deploy_bundleHttpOnly', { params: { port: config.expose.hostPort } })
     const accountGuide = deployM('deploy_bundleAccounts', { params: { sources: options.accountSources || '—' } })
     const guides = [runtimeGuide, httpsGuide, accountGuide, deployM('deploy_bundleDirectories', { params: { directory: serverDirectory, deploymentId: options.deploymentId } })].join('\n\n')
-    const readme = `${deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: '.hai/compose.json' } })}\n${instructions}\n\n${guides}\n`
+    const bundleMetadata = deployM('deploy_bundleMetadata', { params: { version: artifact.appVersion, buildId: artifact.buildId, deploymentId: options.deploymentId, compose: '.hai/compose.json' } })
+    const manualGuide = deployM('deploy_bundleApplyGuide', { params: { file: shellArgument(basename(output)), directory: serverDirectory, target: shellArgument(serverDirectory), runtime: config.remote.runtime, deploymentId: options.deploymentId } })
+    put('APPLY.txt', `${bundleMetadata}\n${selection}\n\n${manualGuide}\n\n${httpsGuide}\n`)
+    const readme = `${bundleMetadata}\n${instructions}\n\n${guides}\n`
     const checksums = []
     for (const file of files)
       checksums.push(`${fileHashes.get(file) ?? await artifactChecksum(join(staging, file))}  ${file}`)
@@ -270,7 +274,7 @@ export async function createDeploymentBundle(options: {
     const scripts = directory
     // 部署配置、清单和镜像只保存在 tar 中，外层仅保留实际入口、目标与说明。
     writeFileSync(join(scripts, 'deploy.sh'), upload.sh, { mode: 0o700 })
-    writeFileSync(join(scripts, 'deploy-local.sh'), createLocalInstallScript({ bundle: basename(output), directory: `${config.remote.baseDir}/${projectName}` }), { mode: 0o700 })
+    writeFileSync(join(scripts, 'deploy-local.sh'), createLocalInstallScript({ bundle: basename(output), directory: serverDirectory }), { mode: 0o700 })
     writeFileSync(join(scripts, 'deploy.ps1'), upload.ps1)
     writeFileSync(join(scripts, 'read-target.awk'), upload.reader)
     const target = {
@@ -283,7 +287,7 @@ export async function createDeploymentBundle(options: {
       knownHostsFile: config.ssh?.knownHostsFile ?? '',
       strictHostKeyChecking: config.ssh?.strictHostKeyChecking ?? true,
       connectTimeoutSeconds: config.ssh?.connectTimeoutSeconds ?? 10,
-      directory: `${config.remote.baseDir}/${projectName}`,
+      directory: serverDirectory,
       bundle: basename(output),
     }
     const comments = {

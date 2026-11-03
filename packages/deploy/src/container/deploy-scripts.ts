@@ -69,7 +69,7 @@ export function createApplyScript(options: {
     CONFIGURATION: createRuntimeConfigurationScript(options.primaryService ?? 'serv'),
   }
   return String.raw`#!/bin/sh
-# 服务器部署流程：由 deploy-local.sh 或 SSH 入口自动解包后调用，无需手工解包。
+# 服务器部署流程：SSH 或 deploy-local.sh 自动解包后调用；手工解包见同目录 APPLY.txt。
 # 需要 Linux、sha256sum、tar、awk、curl、flock 和可用的 Docker/Podman Compose；不会联网拉镜像。
 # 本次全量/增量及服务清单由生成时的 manifest.json 和下方 partial/selected 固定。
 # 增量要求服务器已有成功的全量基线；校验失败不会开始替换服务，失败恢复保留数据卷。
