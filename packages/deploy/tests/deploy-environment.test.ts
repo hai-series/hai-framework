@@ -26,6 +26,32 @@ it('loads only the named hai.json section and preserves deployment environment o
   expect(loadDeploymentConfig('deploy', file, { HAI_DEPLOY: '{"provider":{"type":"vercel","token":"test"}}' })).toMatchObject({ success: true, data: { provider: { type: 'vercel', token: 'test' } } })
 })
 
+it('resolves extra_hosts interpolation and replaces the selected service mapping from an environment object', () => {
+  const file = join(fixture(), 'hai.json')
+  writeFileSync(file, JSON.stringify({
+    deploy: {
+      provider: { type: 'docker-ssh', expose: { hostPort: 8080 } },
+      container: { compose: { services: {
+        serv: { extra_hosts: { 'db.example.test': `\${PRIVATE_DB_IP}` } },
+        web: { extra_hosts: { 'assets.example.test': '192.0.2.2' } },
+      } } },
+    },
+  }))
+  const load = (overrides: Record<string, string> = {}) => loadDeploymentConfig('deploy', file, { PRIVATE_DB_IP: '192.0.2.1', ...overrides })
+  expect(load()).toMatchObject({ success: true, data: { container: { compose: { services: {
+    serv: { extra_hosts: { 'db.example.test': '192.0.2.1' } },
+    web: { extra_hosts: { 'assets.example.test': '192.0.2.2' } },
+  } } } } })
+  const replaced = load({ HAI_DEPLOY_CONTAINER_COMPOSE_SERVICES_SERV_EXTRA_HOSTS: '{"new.example.test":"2001:db8::1"}' })
+  expect(replaced.success).toBe(true)
+  if (replaced.success) {
+    expect(replaced.data.container).toEqual({ compose: { services: {
+      serv: { extra_hosts: { 'new.example.test': '2001:db8::1' } },
+      web: { extra_hosts: { 'assets.example.test': '192.0.2.2' } },
+    } } })
+  }
+})
+
 it('rejects malformed JSON and missing or scalar project sections', () => {
   const file = join(fixture(), 'hai.json')
   for (const content of ['{"deploy":', '{}', '{"deploy":null}', '{"deploy":[]}', '{"deploy":"invalid"}']) {

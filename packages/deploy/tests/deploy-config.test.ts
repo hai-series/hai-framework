@@ -164,4 +164,21 @@ describe('docker-ssh provider schema', () => {
     })
     expect(invalid.success).toBe(false)
   })
+
+  it.each([
+    { serv: { extra_hosts: { 'db.example.test': '10.0.0.1:5432' } } },
+    { serv: { extra_hosts: { 'https://db.example.test': '10.0.0.1' } } },
+    { serv: { extra_hosts: { DB: '10.0.0.1' } } },
+    { serv: { extra_hosts: { 'Db.example.test': '10.0.0.1', 'db.example.test': '10.0.0.2' } } },
+    { serv: { image: 'arbitrary:1' } },
+    { server: { extra_hosts: { 'db.example.test': '10.0.0.1' } } },
+  ])('拒绝无效的 Compose 服务扩展 %j', (services) => {
+    const result = DeployConfigSchema.safeParse({
+      provider: { type: 'docker-ssh', expose: { hostPort: 18080 } },
+      container: { compose: { services } },
+    })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.issues[0]?.path.slice(0, 3)).toEqual(['container', 'compose', 'services'])
+  })
 })

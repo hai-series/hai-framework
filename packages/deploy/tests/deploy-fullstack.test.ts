@@ -7,7 +7,7 @@ import process from 'node:process'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
-import { deploy, DeploymentArtifactSchema, getDeployCommandState, HaiDeployError } from '../src/index.js'
+import { createDeploymentPlan, deploy, DeploymentArtifactSchema, getDeployCommandState, HaiDeployError } from '../src/index.js'
 
 const ssh = vi.hoisted(() => ({ ping: vi.fn(), exec: vi.fn(), upload: vi.fn() }))
 vi.mock('../src/container/deploy-ssh.js', async importOriginal => ({ ...await importOriginal<typeof import('../src/container/deploy-ssh.js')>(), createSshExecutor: () => ssh }))
@@ -927,6 +927,42 @@ it('每次部署的归档、配置和入口均位于唯一交付目录中', asyn
   expect(readFileSync(join(directory, 'README.txt'), 'utf8')).toContain(result.data.deploymentId)
   expect(existsSync(join(directory, 'images'))).toBe(false)
   expect(readFileSync(join(directory, 'README.txt'), 'utf8')).toContain('deploy-local.sh')
+})
+
+it('各镜像的主机映射写入归档，增量包仅包含选中服务', async () => {
+  const initialized = await deploy.init({
+    provider: { type: 'docker-ssh', expose: { hostPort: 18080 } },
+    container: { compose: { services: {
+      serv: { extra_hosts: { 'database.example.test': '10.0.0.1', 'v6.example.test': '2001:db8::1' } },
+      web: { extra_hosts: { 'assets.example.test': '10.0.0.2' } },
+    } } },
+  })
+  expect(initialized.success).toBe(true)
+  const result = await deploy.deployApp(root, { environment: 'test', bundleOnly: true })
+  const directory = deliveryDirectory(result)
+  expect(JSON.parse(readBundleFile(directory, '.hai/compose.json')).services).toMatchObject({
+    serv: { extra_hosts: ['database.example.test:10.0.0.1', 'v6.example.test:2001:db8::1'], pull_policy: 'never' },
+    web: { extra_hosts: ['assets.example.test:10.0.0.2'], pull_policy: 'never' },
+  })
+  expect(readBundleFile(directory, '.hai/SHA256SUMS')).toContain('  .hai/compose.json')
+  const update = await deploy.deployApp(root, { environment: 'test', bundleOnly: true, selectedServices: ['web'] })
+  const services = JSON.parse(readBundleFile(deliveryDirectory(update), '.hai/compose.json')).services
+  expect(Object.keys(services)).toEqual(['web'])
+  expect(services.web.extra_hosts).toEqual(['assets.example.test:10.0.0.2'])
+})
+
+it('只读计划与打包均拒绝为项目不存在的镜像配置主机映射', async () => {
+  writeArtifact(false)
+  const config = {
+    provider: { type: 'docker-ssh' as const, expose: { hostPort: 18080 } },
+    container: { compose: { services: { web: { extra_hosts: { 'assets.example.test': '10.0.0.2' } } } } },
+  }
+  const options = { environment: 'test' }
+  expect((await deploy.init(config)).success).toBe(true)
+  const error = { success: false, error: { code: HaiDeployError.CONFIG_ERROR.code, message: expect.stringContaining('deploy.container.compose.services.web') } }
+  expect(await createDeploymentPlan(root, config, options)).toMatchObject(error)
+  expect(await deploy.deployApp(root, { ...options, bundleOnly: true })).toMatchObject(error)
+  expect(existsSync(join(root, '.hai/deploy'))).toBe(false)
 })
 
 it('自定义同名交付目录不覆盖已有完整包', async () => {
