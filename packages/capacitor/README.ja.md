@@ -115,6 +115,31 @@ export const prerender = true
 export const ssr = false
 ```
 
+### コンテナで Android APK をビルドする
+
+Hai プロジェクトルートで `pnpm build --target app --platform android --runtime auto --debug` を実行します。`--debug` を省略すると署名付きリリースになります。成功したビルドは `.hai/build/app/android/<variant>/` に格納します。[ネイティブビルドと署名](../../docs/usage/getting-started/build.md#原生和离线条件)を参照してください。
+
+ビルドイメージには Node.js 24、pnpm 12.11.2、JDK 21、Android SDK 36、Build Tools 35.0.0 と 36.0.0 が含まれます。ビルドは `linux/amd64` で実行します。APK の `arm64-v8a`、`armeabi-v7a` などの対象 ABI は、アプリの Gradle プロジェクトとネイティブプラグインで決まります。iOS のビルドには macOS と Xcode が必要です。
+
+フレームワークのリポジトリルートでイメージをビルドします。このパッケージをインストールしたプロジェクトでは、`image_dir` にインストール先の `@h-ai/capacitor` にある `images` ディレクトリを指定できます。
+
+```sh
+image_dir=packages/capacitor/images
+docker build --platform linux/amd64 -t hai-capacitor-android:36 \
+  -f "$image_dir/android.Dockerfile" "$image_dir"
+```
+
+アプリのプロジェクトルートでコンテナを起動します。クリーンな作業コピーを使い、コンテナ内で `pnpm install --frozen-lockfile` を実行してから、アプリが依存するローカルワークスペースパッケージをビルドします。続けてアプリのビルド、`cap sync android`、既存の APK パッケージングを実行します。APK はマウントしたプロジェクトに出力されます。rootless Podman では `docker` を `podman` に変更し、`--user` に加えて `--userns=keep-id` を指定します。
+
+```sh
+docker run --rm -it --platform linux/amd64 \
+  --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e GRADLE_USER_HOME=/tmp/.gradle -e ANDROID_USER_HOME=/tmp/.android \
+  -v "$PWD:/workspace" hai-capacitor-android:36 bash
+```
+
+依存関係の取得には npm、Gradle の配布元、Google Maven、Maven Central へのアクセスが必要です。リリースにはアプリの署名手順を使用し、キーストアを読み取り専用でマウントして、パスワードをビルド環境から渡します。[mobile-app のビルドと受け入れ確認](../../apps/mobile-app/README.md#原生交付与验收)を参照してください。
+
 ### エラー処理
 
 `capacitor.*` と `safe*Preference` は `HaiResult<T>` を返します。TokenStorage のメソッドはプラットフォームや保存エラーで Promise を reject します。

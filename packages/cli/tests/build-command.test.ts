@@ -14,10 +14,10 @@ vi.mock('../src/commands/cli-build-downloads.js', async importOriginal => ({
   preflightDownloadProxy: vi.fn(),
 }))
 
-const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>, failPodman: false, failWeb: false, active: 0, peak: 0 }))
+const state = vi.hoisted(() => ({ calls: [] as Array<{ command: string, args: string[], env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }>, failPodman: false, failWeb: false, active: 0, peak: 0, copiedAppData: false }))
 vi.mock('node:child_process', async importOriginal => ({
   ...await importOriginal<typeof import('node:child_process')>(),
-  spawn: (command: string, args: string[], options: { env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }) => {
+  spawn: (command: string, args: string[], options: { cwd: string, env: NodeJS.ProcessEnv, stdio: SpawnOptions['stdio'] }) => {
     const child = new EventEmitter()
     state.calls.push({ command, args, env: options.env, stdio: options.stdio })
     if (args[0] === 'build') {
@@ -27,6 +27,20 @@ vi.mock('node:child_process', async importOriginal => ({
     queueMicrotask(() => {
       if (args[0] === 'save')
         writeFileSync(args[args.indexOf('-o') + 1], 'image archive')
+      if (args.includes('tauri')) {
+        const bundle = join(options.cwd, 'src-tauri', 'target', args[args.indexOf('--target') + 1], args.includes('--debug') ? 'debug' : 'release', 'bundle')
+        mkdirSync(bundle, { recursive: true })
+        writeFileSync(join(bundle, process.platform === 'win32' ? 'test.exe' : process.platform === 'darwin' ? 'test.dmg' : 'test.deb'), 'installer')
+      }
+      if (args[0] === 'run' && args.includes('hai-android') && args.includes('Release')) {
+        const workspace = args.find(arg => arg.endsWith('target=/workspace'))?.match(/^type=bind,"source=(.+)",target=\/workspace$/)?.[1]
+        if (workspace) {
+          state.copiedAppData = existsSync(join(workspace, args.at(-1)!, 'src/data/example.json'))
+          const output = join(workspace, args.at(-1)!, 'android/app/build/outputs/apk/release')
+          mkdirSync(output, { recursive: true })
+          writeFileSync(join(output, 'app-release-unsigned.apk'), 'PK-container-apk')
+        }
+      }
       const failed = (state.failPodman && command === 'podman' && args[0] === 'version') || (state.failWeb && args.some(value => value.endsWith('web.Dockerfile')))
       if (args[0] === 'build')
         state.active--
@@ -41,6 +55,7 @@ beforeEach(() => {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'sample-app', version: '1.2.3' }))
   writeFileSync(join(root, 'hai.json'), JSON.stringify({ build: { images: [{ name: 'serv', dockerfile: 'images/serv.Dockerfile' }, { name: 'web', dockerfile: 'images/web.Dockerfile', containerPort: 8080 }], desktop: ['apps/desktop'] } }))
   mkdirSync(join(root, 'images'), { recursive: true })
+  mkdirSync(join(root, 'apps/desktop'), { recursive: true })
   writeFileSync(join(root, 'images/serv.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
   writeFileSync(join(root, 'images/web.Dockerfile'), 'FROM node:24.22.1-bookworm-slim')
   state.calls = []
@@ -48,6 +63,7 @@ beforeEach(() => {
   state.failWeb = false
   state.active = 0
   state.peak = 0
+  state.copiedAppData = false
   vi.stubEnv('npm_execpath', '/tools/pnpm.cjs')
   // 本文件模拟构建器，不向真实引擎清理账本登记虚构镜像。
   vi.stubEnv('HAI_TEST_IMAGE_RUN', '')
@@ -389,15 +405,60 @@ it.skipIf(process.platform !== 'win32')('直接调用 CLI 时支持 PATH 中的�
   expect(state.calls[0]).toMatchObject({ command: executable, args: ['run', 'compile'] })
 })
 
-it('tauri 构建传递真实 Rust target 和系统安装包类型，拒绝其他系统的伪跨编译', async () => {
+it('tauri 构建按目标平台和类型归档，并拒绝其他系统的伪跨编译', async () => {
   vi.stubEnv('CI', '1')
-  await buildCommand({ cwd: root, target: 'desktop', arch: 'x64' })
+  await buildCommand({ cwd: root, target: 'desktop', arch: 'x64', debug: true })
   expect(state.calls[0].env.CI).toBe('true')
   expect(state.calls[0].args).toEqual(expect.arrayContaining(['exec', 'tauri', 'build', '--target', process.platform === 'win32' ? 'x86_64-pc-windows-msvc' : process.platform === 'darwin' ? 'x86_64-apple-darwin' : 'x86_64-unknown-linux-gnu']))
+  expect(state.calls[0].args).toContain('--debug')
   expect(JSON.parse(state.calls[0].args[state.calls[0].args.indexOf('--config') + 1])).toMatchObject({ version: '1.2.3' })
+  const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux'
+  const parent = join(root, '.hai/build/desktop', platform, 'debug')
+  const batch = join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim())
+  const manifest = JSON.parse(readFileSync(join(batch, 'manifest.json'), 'utf8'))
+  expect(manifest).toMatchObject({ kind: 'desktop', platform, variant: 'debug', appVersion: '1.2.3', files: [{ sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }] })
+  expect(readFileSync(join(batch, manifest.files[0].file), 'utf8')).toBe('installer')
   state.calls = []
   await expect(buildCommand({ cwd: root, target: 'desktop', platform: process.platform === 'win32' ? 'linux' : 'windows' })).rejects.toThrow()
   expect(state.calls).toHaveLength(0)
+})
+
+it('iOS 和源码构建拒绝不适用的容器与调试参数', async () => {
+  await expect(buildCommand({ cwd: root, target: 'app', platform: 'ios', runtime: 'docker' })).rejects.toThrow(/Xcode/)
+  await expect(buildCommand({ cwd: root, target: 'compile', debug: true })).rejects.toThrow()
+  expect(state.calls).toHaveLength(0)
+})
+
+it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步骤获得密钥', async () => {
+  const app = join(root, 'apps/mobile')
+  const definition = join(root, 'node_modules/@h-ai/capacitor/images')
+  mkdirSync(join(app, 'android'), { recursive: true })
+  mkdirSync(join(app, 'src/data'), { recursive: true })
+  mkdirSync(definition, { recursive: true })
+  writeFileSync(join(app, 'capacitor.config.ts'), 'export default {}')
+  writeFileSync(join(app, 'src/data/example.json'), '{}')
+  writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'sample-mobile', version: '1.2.3' }))
+  writeFileSync(join(app, 'hai.json'), JSON.stringify({ build: { app: ['.'] } }))
+  writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0')
+  writeFileSync(join(definition, 'android.Dockerfile'), 'ARG HAI_ANDROID_IMAGE=ghcr.io/example/sdk:36\nFROM $' + '{HAI_ANDROID_IMAGE}')
+  const keystore = join(root, 'fixture-key.p12')
+  writeFileSync(keystore, 'test fixture')
+  vi.stubEnv('HAI_ANDROID_KEYSTORE', keystore)
+  vi.stubEnv('HAI_ANDROID_STORE_PASSWORD', 'fixture-store-password')
+  vi.stubEnv('HAI_ANDROID_KEY_ALIAS', 'fixture-alias')
+  vi.stubEnv('HAI_ANDROID_KEY_PASSWORD', 'fixture-key-password')
+  await buildCommand({ cwd: app, target: 'app', platform: 'android', runtime: 'docker', yes: true })
+  const [build, sign] = state.calls.filter(call => call.args[0] === 'run')
+  expect(state.copiedAppData).toBe(true)
+  expect(build.args.at(-1)).toBe('apps/mobile')
+  expect(build.env.HAI_ANDROID_KEY_PASSWORD).toBeUndefined()
+  expect(build.args.join(' ')).not.toContain(keystore)
+  expect(sign.args).toEqual(expect.arrayContaining(['--network', 'none', 'HAI_ANDROID_KEY_PASSWORD']))
+  expect(sign.args.join(' ')).not.toContain('fixture-key-password')
+  expect(sign.env.HAI_ANDROID_KEY_PASSWORD).toBe('fixture-key-password')
+  const parent = join(app, '.hai/build/app/android/release')
+  const batch = join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim())
+  expect(readFileSync(join(batch, 'release/app-release.apk'), 'utf8')).toBe('PK-container-apk')
 })
 
 it('错误版本、容器端口或不适用的构建参数在启动工具前失败', async () => {

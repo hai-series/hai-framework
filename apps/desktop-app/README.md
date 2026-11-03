@@ -146,6 +146,8 @@ transport:
 
 桌面端原生打包独立于 Web 构建：`pnpm build` 默认编译资源，`pnpm build --target desktop` 调用 Tauri 生成安装包。CI 的 [`native.yml`](../../.github/workflows/native.yml) 在 Windows 上安装锁定依赖、构建共享包后调用相同入口，不接收部署环境或 API 地址。API Origin 与 CSP 在程序启动时注入；打包成功不代替安装后的行为验收。
 
+CLI 将本次安装包归档到应用根的 `.hai/build/desktop/<平台>/<构建类型>/<buildId>/`。默认构建发布包，加 `--debug` 生成调试包；CLI 打印实际归档路径。
+
 | 平台        | 必需环境                             | 构建入口                                | 产物                                               |
 | ----------- | ------------------------------------ | --------------------------------------- | -------------------------------------------------- |
 | Windows x64 | Rust MSVC、C++ Build Tools、WebView2 | `pnpm --filter desktop-app tauri:build` | `src-tauri/target/release/bundle/nsis/*-setup.exe` |

@@ -116,6 +116,12 @@ PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 | Android       | JDK 21、Android SDK 36、Gradle wrapper | `cap add android` → `cap sync android` → `gradlew assembleDebug`                        | `android/app/build/outputs/apk/debug/*.apk` |
 | iOS Simulator | macOS、Xcode、SPM                      | `cap add ios --packagemanager SPM` → `cap sync ios` → `xcodebuild -sdk iphonesimulator` | `App.app`                                   |
 
+从仓库根运行统一入口即可使用 [Capacitor 构建镜像](../../packages/capacitor/README.md#android-容器打包)。APK 归档在 `apps/mobile-app/.hai/build/app/android/debug/<buildId>/`。
+
+```sh
+pnpm --filter mobile-app build --target app --platform android --runtime auto --debug
+```
+
 生产移动端使用 HTTPS API；HTTP 模拟器地址需显式调试网络策略，不能把 Web 可访问误认为设备可访问（`CAPACITOR_SERVER_URL` 仅用于前端 live reload）。debug APK 与 Simulator `.app` 都不是正式签名产物，真机签名、商店发布与升级验收需对应签名身份。
 
 打包后须在设备 / 模拟器完成安装后验收：下载同一提交产物、连接独立验收后端、只用测试账号，证据不得含密码 / token / 密钥。

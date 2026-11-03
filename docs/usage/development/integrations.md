@@ -38,4 +38,6 @@ finally {
 
 前置：安装目标平台 SDK/插件、配置权限和签名，再用生成项目的 app 构建入口打包。`CAPACITOR_SERVER_URL` 只用于开发热更新，发布包不保留开发服务地址。桌面 Tauri 的权限与本地资源另按目标平台配置，不以 Capacitor 浏览器能力替代。
 
-影响与确认：权限被拒、设备不可用、取消及存储故障应有明确结果；原生 TokenStorage 失败拒绝 Promise，不能静默换成不安全存储。push 设置阶段超时为30秒，close/cleanup 返回 HaiResult，清理失败保留待重试句柄。实际签名、安装、启动、推送和安全存储必须在设备上验收。本轮未执行原生构建或安装；浏览器预览和类型检查不代表原生已通过。
+运行 `pnpm build --target app --platform android --runtime auto --debug` 可使用 `@h-ai/capacitor` 提供的 SDK 镜像。目标 ARM ABI 由应用的 Gradle 工程和原生插件决定。iOS 使用 macOS/Xcode，桌面使用对应系统的 Tauri 工具链。签名与归档目录见 [原生和离线条件](../getting-started/build.md#原生和离线条件)。
+
+影响与确认：权限被拒、设备不可用、取消及存储故障应有明确结果；原生 TokenStorage 失败拒绝 Promise，不能静默换成不安全存储。push 设置阶段超时为30秒，close/cleanup 返回 HaiResult，清理失败保留待重试句柄。APK 构建后还需在目标设备验收安装、启动、推送和安全存储。

@@ -1214,7 +1214,7 @@ describe('createProject — fullstack 类型', () => {
     expect(appSvelteConfig).not.toContain('fallback: \'index.html\'')
     const appReadme = await readText(projectPath, 'apps/proj-fullstack-app/README.md')
     expect(appReadme).toContain('Capacitor')
-    expect(appReadme).toContain('package:android')
+    expect(appReadme).toContain('pnpm build --target app --platform android --runtime auto --debug')
     const appPackageText = await readText(projectPath, 'apps/proj-fullstack-app/package.json')
     expect(appPackageText).toContain('    "cap:build:android:debug":')
 

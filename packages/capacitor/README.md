@@ -115,6 +115,31 @@ export const prerender = true
 export const ssr = false
 ```
 
+### Android 容器打包
+
+在 Hai 工程根运行 `pnpm build --target app --platform android --runtime auto --debug`。省略 `--debug` 构建签名发布包，成功后在 `.hai/build/app/android/<构建类型>/` 查看最新批次。签名设置见 [原生和离线条件](../../docs/usage/getting-started/build.md#原生和离线条件)。
+
+构建镜像提供 Node.js 24、pnpm 12.11.2、JDK 21、Android SDK 36 和 Build Tools 35.0.0 / 36.0.0。构建机使用 `linux/amd64`，APK 的 `arm64-v8a`、`armeabi-v7a` 等目标 ABI 由应用的 Gradle 工程及其原生插件决定。iOS 打包需要 macOS 和 Xcode。
+
+从框架仓库根目录构建镜像。已安装本包的项目可将 `image_dir` 指向 `@h-ai/capacitor` 实际安装目录下的 `images`。
+
+```sh
+image_dir=packages/capacitor/images
+docker build --platform linux/amd64 -t hai-capacitor-android:36 \
+  -f "$image_dir/android.Dockerfile" "$image_dir"
+```
+
+在待打包项目的根目录运行容器。使用干净的工作副本，在容器内执行 `pnpm install --frozen-lockfile`，先构建应用依赖的本地 workspace 包，再执行应用已有的构建、`cap sync android` 和 APK 打包命令。APK 写入挂载的工程目录。使用 rootless Podman 时，将 `docker` 换成 `podman`，在 `--user` 之外加上 `--userns=keep-id`。
+
+```sh
+docker run --rm -it --platform linux/amd64 \
+  --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e GRADLE_USER_HOME=/tmp/.gradle -e ANDROID_USER_HOME=/tmp/.android \
+  -v "$PWD:/workspace" hai-capacitor-android:36 bash
+```
+
+构建下载依赖时需要访问 npm、Gradle 分发站点、Google Maven 和 Maven Central。发布包沿用应用的签名流程，密钥库从容器外只读挂载，口令由构建环境注入。应用示例见 [mobile-app 原生交付与验收](../../apps/mobile-app/README.md#原生交付与验收)。
+
 ### 错误处理
 
 `capacitor.*` 业务操作与 `safe*Preference` 返回 `HaiResult<T>`；TokenStorage 适配器方法以 Promise 拒绝报告平台与存储错误：

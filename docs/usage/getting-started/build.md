@@ -9,7 +9,8 @@ pnpm build
 pnpm build --target image --concurrency 2
 pnpm build --target image --images web
 pnpm build --target desktop --platform windows --arch x64
-pnpm build --target app --platform android
+pnpm build --target app --platform android --runtime auto --debug
+pnpm build --target app --platform android --runtime auto
 ```
 
 命令在生成工程根运行。镜像默认并行两项，资源紧张时设置 `--concurrency 1`。所需参数、`hai.json`完整例子和真实默认值见[构建部署配置](../configuration/delivery.md#配置入口和角色)，避免在不同流程重复维护。
@@ -24,6 +25,8 @@ pnpm build --target app --platform android
 
 ## 原生和离线条件
 
-原生构建在对应OS准备工具链、平台工程和签名，发布排除开发热更新地址并核对实际新产物。完全离线构建需提前准备基础镜像、依赖和原生预编译包，Windows依赖目录不能代替Linux镜像输入。
+Android 指定 `--runtime auto|docker|podman` 后在容器内准备依赖、编译并打包。首次调试构建可在工作副本生成 Android 壳，发布需要项目已有的原生工程。设置 `HAI_ANDROID_KEYSTORE`（密钥库路径）、`HAI_ANDROID_STORE_PASSWORD`、`HAI_ANDROID_KEY_ALIAS` 和 `HAI_ANDROID_KEY_PASSWORD` 后执行发布命令，密码从构建进程或 CI 注入。iOS 在 macOS/Xcode 上签名导出 IPA，桌面在对应系统调用 Tauri。
+
+原生包默认 release，加 `--debug` 选择调试构建。产物归档在 `.hai/build/app/<android|ios>/<debug|release>/<buildId>/` 或 `.hai/build/desktop/<windows|macos|linux>/<debug|release>/<buildId>/`。每种构建类型各有 `latest`，成功后打印新产物路径。完全离线构建需提前准备基础镜像与依赖缓存。
 
 交付前检查目标架构、镜像校验和、用户流程与持久数据；原生需真实设备验收。准备好制品后进入[发布运行章节](../operations/README.md)。

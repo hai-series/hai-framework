@@ -37,15 +37,15 @@ pnpm --filter {{projectName}}-app build
 # 同步原生工程；首次使用前按需执行 cap:add:android / cap:add:ios
 pnpm --filter {{projectName}}-app cap:sync
 
-# Android / iOS 原生打包
-pnpm --filter {{projectName}}-app cap:build:android:debug
-pnpm --filter {{projectName}}-app package:android
-pnpm --filter {{projectName}}-app package:ios
+# 工程根的原生打包入口
+pnpm build --target app --platform android --runtime auto --debug
+pnpm build --target app --platform android --runtime auto
+pnpm build --target app --platform ios
 ```
 
 本地开发通过根 `.env` 的 `PUBLIC_API_BASE` 配置代理。原生打包前，在本端 `public/runtime-config.js` 中设置 `globalThis.__HAI_PUBLIC_CONFIG__ = { apiBase: 'https://api.example.com/api/v1' }`，再编译并同步原生工程；这里只能放公开地址，不能放密钥。Android 模拟器访问宿主机通常使用 `http://10.0.2.2:3000/api/v1`。
 
-发布入口实际调用 hai build --target app，缺平台工程、工具链、签名配置或新的 APK/IPA 均失败。package 默认 Android；iOS 必须在 macOS/Xcode 上执行。CAPACITOR_SERVER_URL 仅开发使用，发行打包过滤并核验不进入原生配置。调试 APK 命令为 Windows Gradle 调试入口，不作为发行成功证据。
+Android 容器会安装依赖、编译 workspace 并打包。调试时可临时生成缺失的 Android 工程。发布时使用已有 Android 工程和私有签名配置，见 [Android 容器打包](../../.agents/skills/hai-capacitor/reference.md#android-容器打包)。iOS 使用 macOS/Xcode 和相应签名。`CAPACITOR_SERVER_URL` 仅供开发热更新。成功后 CLI 打印 `.hai/build/app/<平台>/<构建类型>/<buildId>/` 中的安装包路径。
 
 ### IAM 认证配置
 

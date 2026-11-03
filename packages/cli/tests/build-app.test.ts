@@ -42,7 +42,9 @@ it('发布工程含热更新 URL 时拒绝原生打包；有效新 APK 返回实
       await writeFile(output, 'PK-test-artifact')
     }
   })
-  expect(await buildMobileApp(root!, ['apps/app'], 'android', run)).toEqual([output])
+  expect(await buildMobileApp(root!, ['apps/app'], 'android', run)).toEqual([{ source: output, file: join('apps/app', 'release', 'app-release.apk') }])
+  run.mockImplementation(async () => {})
+  await expect(buildMobileApp(root!, ['apps/app'], 'android', run)).rejects.toThrow()
 })
 
 it('独立手机工程允许 build.app 指向工程根，拒绝越过工程根的路径', async () => {
@@ -64,7 +66,7 @@ it('独立手机工程允许 build.app 指向工程根，拒绝越过工程根�
         writeFileSync(apk, 'PK-unit-apk')
       }
     }
-    expect(await buildMobileApp(root, ['.'], 'android', run)).toEqual([apk])
+    expect(await buildMobileApp(root, ['.'], 'android', run)).toEqual([{ source: apk, file: join('release', 'app.apk') }])
     expect(calls.map(call => call.directory)).toEqual([root, root, root])
     expect(calls.map(call => call.args)).toEqual([
       ['run', 'build'],

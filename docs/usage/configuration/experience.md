@@ -102,4 +102,4 @@ Capacitor配置由原生工程和能力调用消费，不从同名YAML自动接�
 
 Tauri开发回退API 地址为 `http://localhost:3000/api/v1`；手机上的 `localhost` 指手机自身，Capacitor应明确真实可达地址。静态公开`runtime-config.js`只存公开API地址等白名单，不能放服务端密钥。原生`token`使用安全 `TokenStorage`，WebView的`localStorage`不适合敏感凭据。
 
-`hai build --target app --platform android|ios`生成并校验新APK/IPA；`build.app`指定工程目录，`cap:sync` 只同步。发布会过滤`CAPACITOR_SERVER_URL`并核对配置，拒绝开发热更新地址。还需平台工程、SDK/JDK或Xcode、签名与设备权限；浏览器验收不能代替设备验证。
+`pnpm build --target app --platform android --runtime auto --debug` 在容器内打调试 APK，省略 `--debug` 时使用发布签名。iOS 在 macOS/Xcode 上导出 IPA。`build.app` 指定原生工程，归档位于 `.hai/build/app/<平台>/<构建类型>/<buildId>/`。`CAPACITOR_SERVER_URL` 只用于开发，打包会拒绝同步后的热更新地址。签名见 [原生和离线条件](../getting-started/build.md#原生和离线条件)。

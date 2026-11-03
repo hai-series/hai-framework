@@ -1,7 +1,8 @@
-/** `pnpm build` 的环境无关构建入口：源码、OCI 镜像或 Tauri 安装包。 */
+/** `pnpm build` 的构建入口：源码、OCI 镜像与原生安装包。 */
 import type { DeploymentArtifact } from '@h-ai/deploy'
 import type { GlobalOptions } from '../cli-types.js'
 import type { BuildDownloadOptions } from './cli-build-downloads.js'
+import type { NativeArtifact } from './cli-build-native.js'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -10,14 +11,16 @@ import process from 'node:process'
 import { normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
-import { buildMobileApp } from './cli-build-app.js'
+import { buildContainerAndroid } from './cli-build-android-container.js'
+import { buildMobileApp, gradleCommand } from './cli-build-app.js'
 import { buildProxyArguments, preflightDownloadProxy, resolveBuildDownloads, validateDownloadDockerfile } from './cli-build-downloads.js'
+import { nativeFiles, nativeProjectDirectory, publishNativeArtifacts } from './cli-build-native.js'
 import { forwardWindowsBuildOutput } from './cli-build-output.js'
 import { projectConfigPath, readProjectConfig } from './cli-project-config.js'
 
 /**
  * 构建参数，不接受部署环境。
- * 对应 hai build --target image --images serv,web --runtime podman --no-http-proxy；镜像参数仅用于 image。
+ * OCI 镜像与容器 Android 打包复用引擎、网络和下载设置。
  * @example 模块内部上下文
  * ```ts
  * const options: BuildCommandOptions = { cwd: '/workspace/shop', target: 'image', images: 'serv,web', runtime: 'podman', httpProxy: false }
@@ -38,6 +41,8 @@ export interface BuildCommandOptions extends GlobalOptions, BuildDownloadOptions
   platform?: 'windows' | 'linux' | 'macos' | 'android' | 'ios'
   /** Rust 目标架构，默认当前主机架构。 */
   arch?: 'x64' | 'arm64'
+  /** 原生安装包使用 Debug 构建类型；默认 Release。 */
+  debug?: boolean
   /** 可信 SQLite 预编译包根地址，不包含凭据。 */
   sqlitePrebuildMirror?: string
   /** Podman 是否继承代理。 */
@@ -149,6 +154,21 @@ function sourceCommit(cwd: string): string {
   }
 }
 
+/** 复用镜像与 Android 的引擎选择顺序。 */
+async function buildRuntime(cwd: string, choice?: BuildCommandOptions['runtime']): Promise<string> {
+  const candidates = choice && choice !== 'auto' ? [choice] : ['podman', 'docker']
+  if (candidates.every(candidate => candidate === 'podman' || candidate === 'docker')) {
+    for (const candidate of candidates) {
+      try {
+        await run(candidate, ['version'], cwd, true)
+        return candidate
+      }
+      catch { /* 尝试下一个可达的引擎。 */ }
+    }
+  }
+  throw new Error(cliM('cli_build_runtime_missing'))
+}
+
 /**
  * 构建已有项目；镜像清单仅在全部镜像导出成功后发布。
  * compile 调用项目 compile 脚本；docker 发布完整产物清单后才更新 latest；desktop 仅允许当前主机对应平台。
@@ -172,8 +192,12 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   if (!['compile', 'image', 'desktop', 'app'].includes(target))
     throw new Error(cliM('cli_build_target_invalid'))
   const compileEnvironment = staticCompileEnvironment(target)
-  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.runtime !== undefined || options.network !== undefined || options.sqlitePrebuildMirror !== undefined || options.httpProxy === false || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined))
-    || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.arch !== undefined)) || (target === 'app' && options.arch !== undefined)) {
+  const containerAndroid = target === 'app' && options.platform === 'android' && options.runtime !== undefined
+  if (target === 'app' && options.platform === 'ios' && options.runtime !== undefined)
+    throw new Error(cliM('cli_build_ios_runtime'))
+  if ((target !== 'image' && (options.images !== undefined || options.concurrency !== undefined || options.sqlitePrebuildMirror !== undefined))
+    || (target !== 'image' && !containerAndroid && (options.runtime !== undefined || options.network !== undefined || options.httpProxy === false || options.imageSource !== undefined || options.imageMirrors !== undefined || options.npmSource !== undefined || options.npmRegistry !== undefined || options.proxyMode !== undefined || options.proxyUrl !== undefined || options.proxyBypass !== undefined))
+    || (!['desktop', 'app'].includes(target) && (options.platform !== undefined || options.debug !== undefined)) || (target !== 'desktop' && options.arch !== undefined)) {
     throw new Error(cliM('cli_build_options_invalid'))
   }
   if (target === 'compile') {
@@ -187,11 +211,30 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     throw new Error(cliM('cli_build_version_invalid'))
   const project = readProjectConfig(join(cwd, 'hai.json'))
   const config = (project.build ?? {}) as BuildConfig
+  const debug = options.debug === true
+  const identity = { buildId: `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`, commit: sourceCommit(cwd), appVersion }
   if (target === 'app') {
-    if (!['android', 'ios'].includes(options.platform ?? ''))
+    const platform = options.platform
+    if (platform !== 'android' && platform !== 'ios')
       throw new Error(cliM('cli_build_app_platform'))
-    const identity = { buildId: randomUUID(), commit: sourceCommit(cwd) }
-    const files = await buildMobileApp(cwd, config.app ?? [], options.platform as 'android' | 'ios', (args, directory) => pnpm(args, directory, identity))
+    const publish = (artifacts: NativeArtifact[]): Promise<string[]> => publishNativeArtifacts(cwd, 'app', platform, debug, identity, artifacts)
+    let files: string[]
+    if (containerAndroid) {
+      const runtime = await buildRuntime(cwd, options.runtime)
+      const downloads = await resolveBuildDownloads(cwd, options)
+      await preflightDownloadProxy(runtime, downloads.proxy)
+      files = await buildContainerAndroid(cwd, config.app ?? [], {
+        runtime,
+        network: options.network,
+        debug,
+        downloads,
+        run: (args, quiet, environment) => run(runtime, args, cwd, quiet, identity, environment),
+      }, publish)
+    }
+    else {
+      const [gradle, ...gradleArgs] = gradleCommand(debug)
+      files = await publish(await buildMobileApp(cwd, config.app ?? [], platform, (args, directory) => pnpm(args, directory, identity), debug, directory => run(gradle, gradleArgs, directory, false, identity)))
+    }
     for (const file of files) writeCliMessage(file)
     return
   }
@@ -206,10 +249,23 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       throw new Error(cliM('cli_build_desktop_missing'))
     const rustTarget = `${arch === 'x64' ? 'x86_64' : 'aarch64'}-${platform === 'windows' ? 'pc-windows-msvc' : platform === 'macos' ? 'apple-darwin' : 'unknown-linux-gnu'}`
     const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
-    const identity = { buildId: randomUUID(), commit: sourceCommit(cwd) }
-    for (const directory of config.desktop)
-      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, '--config', JSON.stringify({ version: appVersion })], resolve(cwd, directory), identity)
-    writeCliMessage(cliM('cli_build_native_ready', { params: { target: rustTarget } }))
+    const artifacts: NativeArtifact[] = []
+    for (const item of config.desktop) {
+      const directory = nativeProjectDirectory(cwd, item)
+      const cargo = resolve(directory, 'src-tauri', process.env.CARGO_TARGET_DIR || 'target')
+      const output = join(cargo, rustTarget, debug ? 'debug' : 'release', 'bundle')
+      const bundlesOnDisk = (): Map<string, string> => nativeFiles(output, (path, isDirectory) => isDirectory
+        ? platform === 'macos' && path.endsWith('.app')
+        : platform === 'windows' ? path.endsWith('.exe') : platform === 'macos' ? path.endsWith('.dmg') : /\.(?:deb|AppImage)$/.test(path))
+      const before = bundlesOnDisk()
+      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, ...(debug ? ['--debug'] : []), '--config', JSON.stringify({ version: appVersion })], directory, identity)
+      const files = [...bundlesOnDisk()].filter(([file, stamp]) => before.get(file) !== stamp)
+      if (!files.length)
+        throw new Error(cliM('cli_build_desktop_artifact'))
+      artifacts.push(...files.map(([source]) => ({ source, file: join(relative(cwd, directory), relative(output, source)) })))
+    }
+    for (const file of await publishNativeArtifacts(cwd, 'desktop', platform, debug, identity, artifacts))
+      writeCliMessage(file)
     return
   }
   if (typeof metadata.name !== 'string' || !metadata.name.trim())
@@ -232,28 +288,14 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
   }
   const downloads = await resolveBuildDownloads(cwd, options)
   for (const image of images) validateDownloadDockerfile(resolve(cwd, image.dockerfile), downloads)
-  const candidates = options.runtime && options.runtime !== 'auto' ? [options.runtime] : ['podman', 'docker']
-  if (candidates.some(runtime => !['podman', 'docker'].includes(runtime)))
-    throw new Error(cliM('cli_build_runtime_missing'))
-  let runtime: string | undefined
-  for (const candidate of candidates) {
-    try {
-      await run(candidate, ['version'], cwd, true)
-      runtime = candidate
-      break
-    }
-    catch { /* 尝试下一个可达的引擎。 */ }
-  }
-  if (!runtime)
-    throw new Error(cliM('cli_build_runtime_missing'))
+  const runtime = await buildRuntime(cwd, options.runtime)
   await preflightDownloadProxy(runtime, downloads.proxy)
   if (options.sqlitePrebuildMirror) {
     const url = new URL(options.sqlitePrebuildMirror)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
       throw new Error(cliM('cli_build_mirror_invalid'))
   }
-  const buildId = `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`
-  const commit = sourceCommit(cwd)
+  const { buildId, commit } = identity
   const artifact: DeploymentArtifact = { version: 4, primaryService: config.images.some(image => image.name === 'serv') ? 'serv' : 'web', appVersion, buildId, partial: images.length !== config.images.length, hasWeb: config.images.some(image => image.name === 'web'), images: [] }
   if (webBasePath) {
     artifact.version = 5

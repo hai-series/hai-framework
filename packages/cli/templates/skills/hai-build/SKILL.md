@@ -66,4 +66,4 @@ Windows 构建子进程使用追加式 pnpm 日志并规范 CRLF，等待输出�
 - 统一编码规范
 - 标准工作流
 
-原生 App：hai build --target app --platform android|ios 使用 hai.json.build.app；cap:sync 只同步，不是 APK/IPA。先安装平台与 SDK/JDK 或 macOS/Xcode、配置签名；缺工程/工具链/本次产物必须失败。发布过滤 CAPACITOR_SERVER_URL，并核验同步后的原生配置；默认 package/发行别名走同一验证入口。构建身份统一 128 字符，显式非法 HAI_BUILD_ID/HAI_BUILD_COMMIT 报错且不回显原值。
+`pnpm build --target app --platform android --runtime auto --debug` 容器打调试 APK，省略 `--debug` 使用发布签名；`--runtime` 可选 auto/docker/podman，省略时使用本机工具链。iOS 在 macOS/Xcode 上签名导出 IPA。原生打包拒绝同步后的 `CAPACITOR_SERVER_URL`，成功后按平台、构建类型和批次归档到 `.hai/build/app/` 或 `.hai/build/desktop/`，更新对应的 `latest`。Android 签名配置见 [hai-capacitor](../hai-capacitor/reference.md#android-容器打包)。构建身份统一 128 字符，显式非法 `HAI_BUILD_ID`/`HAI_BUILD_COMMIT` 报错且不回显原值。

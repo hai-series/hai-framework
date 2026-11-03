@@ -68,12 +68,15 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 | `--target` | compile | compile编译源码，`image`构建镜像，app/desktop生成对应原生制品 |
 | `--images` | 按项目配置 | serv/web或逗号列表，部分构建保留完整`hasWeb`拓扑，不能直接作为首次完整安装 |
 | `--concurrency` | 2；仅`image` | 同时构建的镜像数，只接受1或2；`deploy` `--build`也可使用 |
-| `--runtime` | `auto` | 本机引擎选择优先Podman；不是远端引擎探测结果 |
+| `--runtime` | `image` 默认 `auto`；Android 省略时使用本机工具链 | `auto` 优先 Podman，显式 `docker` 或 `podman` 选择容器引擎 |
 | `--network`/`--no-http-proxy` | 默认引擎网络/默认继承规则 | 按网络环境明确设置，完全离线还需基础镜像和依赖缓存 |
 | `--sqlite-prebuild-mirror` | 无通用镜像地址默认 | 可信HTTP(S)预编译根地址，需匹配ABI/架构/libc |
 | `--platform`/`--arch` | 按目标工具链 | 原生包需对应OS/SDK/签名；同步资源不等于生成安装包 |
+| `--debug` | app/desktop 默认 release | 生成对应平台的调试安装包 |
 
 构建工具会自动记录应用版本、本次构建编号、网站目录、服务组合及镜像校验和。部署工具据此检查交付内容，用户无需填写或修改清单格式。CLI 与应用框架依赖保持匹配版本；全部镜像导出成功后，才会更新本地最近构建记录。
+
+原生包批次位于 `.hai/build/app/<平台>/<构建类型>/` 或 `.hai/build/desktop/<平台>/<构建类型>/`，完整归档后更新该目录的 `latest`。Android 容器分支复用镜像源、npm 源、网络与代理设置。签名配置与构建命令见 [原生和离线条件](../getting-started/build.md#原生和离线条件)。
 
 ### 构建并发和缓存
 

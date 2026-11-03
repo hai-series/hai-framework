@@ -1,57 +1,55 @@
-/** Capacitor 同步与真正原生产物打包分开；只接受受控工程内路径。 */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+/** Capacitor 同步与原生打包分开，只收集本次生成的安装包。 */
+import type { NativeArtifact } from './cli-build-native.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import process from 'node:process'
 import { cliM } from '../cli-i18n.js'
+import { isNativeZip, nativeFiles, nativeProjectDirectory } from './cli-build-native.js'
 
-/**
- * 原生打包前检查工程和平台，结束后检查本次产物；工具链错误由真实构建命令返回。
- * @example 模块内部上下文
- * ```ts
- * async function build(run: (args: string[], cwd: string) => Promise<void>) {
- *   return buildMobileApp('/project', ['apps/shop-app'], 'android', run)
- * }
- * ```
- */
-export async function buildMobileApp(root: string, directories: readonly string[], platform: 'android' | 'ios', run: (args: string[], cwd: string) => Promise<void>): Promise<string[]> {
+export type AppCommand = (args: string[], cwd: string) => Promise<void>
+
+/** 本机 Gradle 入口；使用系统脚本执行器处理 Windows 和 POSIX wrapper。 */
+export function gradleCommand(debug: boolean): [string, ...string[]] {
+  const task = debug ? 'assembleDebug' : 'assembleRelease'
+  return process.platform === 'win32'
+    ? ['cmd.exe', '/d', '/c', 'gradlew.bat', task, '--no-daemon']
+    : ['bash', './gradlew', task, '--no-daemon']
+}
+
+/** Android 用实际 build type 目录，兼容 Gradle flavor 的额外层级。 */
+export function isAppPackage(path: string, platform: 'android' | 'ios', debug: boolean): boolean {
+  if (platform === 'ios')
+    return path.endsWith('.ipa')
+  const parts = path.split(/[\\/]/)
+  return parts.at(-2) === (debug ? 'debug' : 'release') && path.endsWith('.apk') && !path.endsWith('-unsigned.apk')
+}
+
+/** 打包并返回工程内相对安装包路径，供统一归档。 */
+export async function buildMobileApp(root: string, directories: readonly string[], platform: 'android' | 'ios', run: AppCommand, debug = false, runGradle?: (cwd: string) => Promise<void>): Promise<NativeArtifact[]> {
   if (!directories.length || (platform === 'ios' && process.platform !== 'darwin'))
     throw new Error(cliM('cli_build_app_platform'))
-  const outputs: string[] = []
+  const outputs: NativeArtifact[] = []
   for (const item of directories) {
-    const directory = resolve(root, item)
-    const rel = relative(root, directory)
-    // 独立手机工程可直接使用根目录；跨盘绝对路径和父目录仍不能越过工程边界。
-    if (isAbsolute(rel) || rel.startsWith('..') || !existsSync(join(directory, platform)) || !existsSync(join(directory, 'capacitor.config.ts')))
+    const directory = nativeProjectDirectory(root, item)
+    if (!existsSync(join(directory, platform)) || !existsSync(join(directory, 'capacitor.config.ts')))
       throw new Error(cliM('cli_build_app_missing', { params: { platform } }))
-    const before = Date.now()
+    const output = platform === 'android' ? join(directory, 'android/app/build/outputs/apk') : join(directory, 'ios/App/output')
+    const packages = (): Map<string, string> => nativeFiles(output, (path, isDirectory) => !isDirectory && isAppPackage(path, platform, debug))
+    const before = packages()
     await run(['run', 'build'], directory)
     await run(['exec', 'cap', 'sync', platform], directory)
-    // sync 后核验最终写入原生工程的配置，禁止开发热更新地址进入制品。
     const nativeConfig = platform === 'android' ? join(directory, 'android/app/src/main/assets/capacitor.config.json') : join(directory, 'ios/App/App/capacitor.config.json')
     const config: { server?: { url?: unknown } } = JSON.parse(readFileSync(nativeConfig, 'utf8'))
     if (config.server?.url)
       throw new Error(cliM('cli_build_app_reload'))
-    await run(['exec', 'cap', 'build', platform, ...(platform === 'android' ? ['--androidreleasetype', 'APK'] : [])], directory)
-    const artifactRoot = platform === 'android' ? join(directory, 'android/app/build/outputs/apk') : join(directory, 'ios/App/output')
-    function visit(path: string): void {
-      if (!existsSync(path))
-        return
-      for (const entry of readdirSync(path, { withFileTypes: true })) {
-        const file = join(path, entry.name)
-        if (entry.isDirectory()) {
-          visit(file)
-        }
-        else if (entry.isFile() && file.endsWith(platform === 'android' ? '.apk' : '.ipa')) {
-          const info = statSync(file)
-          if (info.size > 4 && info.mtimeMs >= before - 1000 && readFileSync(file).subarray(0, 2).toString() === 'PK')
-            outputs.push(file)
-        }
-      }
-    }
-    const count = outputs.length
-    visit(artifactRoot)
-    if (outputs.length === count)
+    if (platform === 'android' && debug && runGradle)
+      await runGradle(join(directory, 'android'))
+    else
+      await run(['exec', 'cap', 'build', platform, ...(platform === 'android' ? ['--androidreleasetype', 'APK'] : debug ? ['--configuration', 'Debug', '--xcode-export-method', 'debugging'] : [])], directory)
+    const files = [...packages()].filter(([file, stamp]) => before.get(file) !== stamp && isNativeZip(file))
+    if (!files.length)
       throw new Error(cliM('cli_build_app_artifact'))
+    outputs.push(...files.map(([source]) => ({ source, file: join(relative(root, directory), relative(output, source)) })))
   }
   return outputs
 }

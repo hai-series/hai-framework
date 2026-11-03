@@ -220,7 +220,7 @@ upgrade 按消费者路径读取 ESM-only 包及 pnpm 链接的清单，不执�
 
 `hai upgrade 0.1.0-alpha.71` 只读检查全部消费框架包及 CLI/deploy 的精确版本、发布 tar 完整性、CLI/skills 文件、catalog/lock/安装漂移和业务 skill 定制；不安装、不覆盖本地修改，缺包退出非零。JSON 包含模块迁移预检入口、备份与旧会话边界。`hai deploy --env prod --plan` 校验本地制品并显示项目/环境身份、配置来源键名、选中/保留范围、基线要求与恢复目录，不构建、不生成凭据或连接目标；未读取的远端基线明确 not-inspected。
 
-`hai build --target app --platform android|ios` 才生成并校验新 APK/IPA。先添加平台工程并安装 Android SDK/JDK 或 macOS/Xcode，配置原生签名。cap:sync 只是同步；没有工程、工具链或新产物均失败。发布过滤 CAPACITOR_SERVER_URL，并在同步后核验原生配置，拒绝开发热更新地址。build.app 指定 App 工程目录。
+从工程根运行 `pnpm build --target app --platform android --runtime auto --debug` 打调试 APK，省略 `--debug` 生成签名发布包。Android 用 `--runtime auto|docker|podman` 选择容器，省略时使用本机 Capacitor；iOS 在 macOS/Xcode 上签名导出 IPA。App 与桌面安装包分别归档到 `.hai/build/app/<平台>/<构建类型>/<buildId>/` 和 `.hai/build/desktop/<平台>/<构建类型>/<buildId>/`，同类型的 `latest` 只在本次归档成功后更新。签名环境变量和完整步骤见 [原生和离线条件](../../docs/usage/getting-started/build.md#原生和离线条件)。
 
 需要目标基线事实时使用 `--plan --inspect-remote`（SDK inspectRemote:true），仅通过 SSH 读取 current 及成功发布目录，报告 verified/missing/unavailable 和实际恢复发布 ID，不写目标。
 

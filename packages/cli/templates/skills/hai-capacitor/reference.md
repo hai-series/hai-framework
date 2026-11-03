@@ -8,6 +8,24 @@
 
 > **浏览器端 / 原生 App 专用。** 在 Capacitor 原生环境（Android/iOS）中提供完整能力；`createCapacitorTokenStorage()` 仅在原生环境持久化 token，纯 Web 不做不安全回退。`capacitor.preferences` 仍可用于普通偏好数据。
 
+### Android 容器打包
+
+在已安装依赖的工程根运行 `pnpm build --target app --platform android --runtime auto --debug`，CLI 自动准备构建镜像和 workspace。省略 `--debug` 构建发布 APK，需要已有 Android 工程，并通过进程或 CI 提供 `HAI_ANDROID_KEYSTORE`、`HAI_ANDROID_STORE_PASSWORD`、`HAI_ANDROID_KEY_ALIAS`、`HAI_ANDROID_KEY_PASSWORD`。密钥库只读挂载到独立签名容器。APK 归档在 `.hai/build/app/android/<构建类型>/<buildId>/`。
+
+使用 `@h-ai/capacitor` 随包提供的 `images/android.Dockerfile`，从项目根目录执行。`image_dir` 指向本包的实际安装目录下的 `images`，例如 `apps/my-app/node_modules/@h-ai/capacitor/images`。
+
+```sh
+image_dir=apps/my-app/node_modules/@h-ai/capacitor/images
+docker build --platform linux/amd64 -t hai-capacitor-android:36 \
+  -f "$image_dir/android.Dockerfile" "$image_dir"
+docker run --rm -it --platform linux/amd64 \
+  --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e GRADLE_USER_HOME=/tmp/.gradle -e ANDROID_USER_HOME=/tmp/.android \
+  -v "$PWD:/workspace" hai-capacitor-android:36 bash
+```
+
+镜像提供 Node.js 24、pnpm 12.11.2、JDK 21、Android SDK 36 和 Build Tools 35.0.0 / 36.0.0。用干净工作副本，在容器内执行 `pnpm install --frozen-lockfile`，构建应用依赖的本地 workspace 包，再执行项目已有的 Android APK 命令。使用 rootless Podman 时，在 `--user` 之外加上 `--userns=keep-id`。发布签名沿用应用配置，密钥库从外部只读挂载，口令由构建环境注入。构建机架构是 `linux/amd64`，APK 目标 ABI 由 Gradle 工程和原生插件决定。iOS 使用 macOS/Xcode。
+
 ## 适用场景
 
 - Android/iOS 原生应用开发（Svelte 5 + Vite + Capacitor）

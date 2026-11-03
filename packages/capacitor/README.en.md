@@ -115,6 +115,31 @@ export const prerender = true
 export const ssr = false
 ```
 
+### Build an Android APK in a container
+
+Run `pnpm build --target app --platform android --runtime auto --debug` at the Hai project root. Omit `--debug` for a signed release. Successful batches appear under `.hai/build/app/android/<variant>/`. See the [native build and signing instructions](../../docs/usage/getting-started/build.md#原生和离线条件).
+
+The build image includes Node.js 24, pnpm 12.11.2, JDK 21, Android SDK 36, and Build Tools 35.0.0 and 36.0.0. The build runs on `linux/amd64`. The app's Gradle project and native plugins determine the APK's target ABIs, such as `arm64-v8a` and `armeabi-v7a`. Building for iOS requires macOS and Xcode.
+
+Build the image from the framework repository root. In a project with this package installed, set `image_dir` to the `images` directory in the installed `@h-ai/capacitor` package.
+
+```sh
+image_dir=packages/capacitor/images
+docker build --platform linux/amd64 -t hai-capacitor-android:36 \
+  -f "$image_dir/android.Dockerfile" "$image_dir"
+```
+
+Run the container from the project root. Start with a clean working copy, run `pnpm install --frozen-lockfile` in the container, and build any local workspace packages the app depends on. Then run the app's existing build, `cap sync android`, and APK packaging commands. The APK is written to the mounted project. With rootless Podman, replace `docker` with `podman` and add `--userns=keep-id` alongside `--user`.
+
+```sh
+docker run --rm -it --platform linux/amd64 \
+  --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e GRADLE_USER_HOME=/tmp/.gradle -e ANDROID_USER_HOME=/tmp/.android \
+  -v "$PWD:/workspace" hai-capacitor-android:36 bash
+```
+
+Downloading dependencies requires access to npm, Gradle distributions, Google Maven, and Maven Central. Use the app's signing workflow for release builds. Mount the keystore read-only and inject passwords through the build environment. See the [mobile-app packaging and acceptance example](../../apps/mobile-app/README.md#原生交付与验收).
+
 ### Error handling
 
 Business operations on `capacitor.*` and `safe*Preference` return `HaiResult<T>`. TokenStorage adapter methods reject their promises on platform or storage errors:

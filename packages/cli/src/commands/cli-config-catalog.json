@@ -1888,6 +1888,38 @@
     "constraint": "数字；> 0"
   },
   {
+    "name": "HAI_ANDROID_KEY_ALIAS",
+    "module": "android",
+    "path": "HAI_ANDROID_KEY_ALIAS",
+    "description": "Android 容器发布签名密钥别名",
+    "value": "",
+    "constraint": "密钥库内用于 APK 签名的别名"
+  },
+  {
+    "name": "HAI_ANDROID_KEY_PASSWORD",
+    "module": "android",
+    "path": "HAI_ANDROID_KEY_PASSWORD",
+    "description": "Android 容器发布签名私钥密码",
+    "value": "",
+    "constraint": "仅由构建进程或 CI 注入的敏感字符串"
+  },
+  {
+    "name": "HAI_ANDROID_KEYSTORE",
+    "module": "android",
+    "path": "HAI_ANDROID_KEYSTORE",
+    "description": "Android 容器发布签名密钥库",
+    "value": "",
+    "constraint": "宿主文件路径；相对路径从项目根解析，仅只读挂载到签名容器"
+  },
+  {
+    "name": "HAI_ANDROID_STORE_PASSWORD",
+    "module": "android",
+    "path": "HAI_ANDROID_STORE_PASSWORD",
+    "description": "Android 容器发布签名密钥库密码",
+    "value": "",
+    "constraint": "仅由构建进程或 CI 注入的敏感字符串"
+  },
+  {
     "name": "HAI_AUDIT",
     "module": "audit",
     "path": "audit",
@@ -3430,6 +3462,14 @@
     "description": "Fullstack 桌面端浏览器预览验收地址",
     "value": "",
     "constraint": "有效 HTTP(S) URL；同时决定对应预览服务的监听地址"
+  },
+  {
+    "name": "HAI_E2E_GROUP",
+    "module": "e2e",
+    "path": "HAI_E2E_GROUP",
+    "description": "环境入口；使用位置 packages/cli/templates/apps/fullstack/playwright.config.ts.hbs",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "HAI_E2E_LIVE",
@@ -5638,6 +5678,14 @@
     "description": "Capacitor 开发时的前端热加载地址",
     "value": "",
     "constraint": "有效 HTTP(S) URL；发布原生包时不设置"
+  },
+  {
+    "name": "CARGO_TARGET_DIR",
+    "module": "runtime",
+    "path": "CARGO_TARGET_DIR",
+    "description": "环境入口；使用位置 packages/cli/src/commands/cli-build.ts",
+    "value": "",
+    "constraint": "字符串；按使用位置的校验规则填写"
   },
   {
     "name": "CI",

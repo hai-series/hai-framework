@@ -42,6 +42,8 @@ pnpm build --target desktop --platform windows --arch x64
 
 打包前需要安装 Rust 工具链和 Tauri 平台依赖。构建不读取 .env.prod/.env.local；启动已安装程序前设置进程 PUBLIC_API_BASE（HTTP(S)，不含凭据、查询和片段）。Rust 会在页面加载前注入公开地址，仅将该 Origin 加入 CSP；不需要为 test/prod 重打安装包。缺省连接 http://localhost:3000/api/v1。
 
+加 `--debug` 生成调试安装包。成功后 CLI 打印 `.hai/build/desktop/<平台>/<构建类型>/<buildId>/` 中的归档路径。
+
 ### IAM 认证配置
 
 服务端 `config/_iam.yml` 统一控制登录、注册、重置、协议与 `ui` 品牌。邮件/短信可用 `_reach.yml` 中的 Provider/标准模板或自定义发送回调。`AuthPanel` 使用安全公开配置及框架认证动作；无需在页面适配 Token、验证码倒计时和错误提示。Memory 仅用于本地开发和显式测试；生产环境即使只有一个实例，也须使用框架支持的共享数据库与 Redis，并按工程根 README 配置写入路由和传输会话。

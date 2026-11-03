@@ -311,7 +311,7 @@ Windowsは `deploy.ps1`、Linux/`macOS`は `deploy.sh` を実行します。ど�
 
 `hai upgrade 0.1.0-alpha.71` は全消費パッケージと CLI/`deploy` の正確な版、tar の整合性、`skills`、catalog/lock/導入済み版と独自変更を読み取り専用で確認します。導入や上書きは行わず、不完全な公開は非ゼロ終了します。JSON は移行事前確認、バックアップと旧セッションの境界も示します。`hai deploy --env prod --plan` はローカル成果物、識別情報、設定元キー、更新・保持範囲、基準要件と復旧先を表示します。ビルド、認証情報作成、接続は行わず、未確認の遠隔状態は not-inspected です。
 
-`hai build --target app --platform android|ios` で新しい APK/IPA を生成・検証します。プラットフォーム、Android SDK/JDK または `macOS`/Xcode と署名設定が必要です。cap:sync は同期のみで、工程・ツール・成果物不足は失敗します。リリースは `CAPACITOR_SERVER_URL` を除外し、同期済み設定の開発 URL を拒否します。`build.app` は App フォルダー一覧です。
+`pnpm build --target app --platform android --runtime auto --debug` でコンテナ内にデバッグ APK を生成します。`--debug` を省略すると署名付きリリースになります。iOS の IPA には macOS/Xcode を使用します。App とデスクトップの成果物はそれぞれ `.hai/build/app/<platform>/<variant>/<buildId>/` と `.hai/build/desktop/<platform>/<variant>/<buildId>/` に格納します。[ネイティブビルドと署名](build.md#原生和离线条件)を参照してください。
 
 `schemaColumns(reldb, table, sql?)` は実際の列を読み取ります。`migrateSchema(reldb, module, steps, { dryRun: true })` は台帳を作成しません。各モジュールが手順を所有し、`hai_schema_migrations` に版を記録します。SQLite/PostgreSQL はトランザクション、MySQL の暗黙 DDL コミットには再入可能な手順が必要です。失敗時は版を進めず、実構造を再確認して再試行します。新しい台帳へのダウングレードは拒否します。旧書込を停止し DB/セッションキャッシュをバックアップしてください。復旧は互換 DB とバイナリを一緒に戻します。[更新ガイド](workflow.ja.md)を参照。
 

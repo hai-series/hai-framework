@@ -480,8 +480,11 @@ it('generated migration executes up and down with HaiResult', async () => {
         const metadata = JSON.parse(await readFile(applicationManifest, 'utf8'))
         await writeFile(applicationManifest, `${JSON.stringify({ ...metadata, version: '2.4.6' }, null, 2)}\n`)
         await runPnpm(projectPath, ['build', '--target', 'desktop', '--platform', 'windows', '--arch', 'x64'])
-        const installers = await readdir(path.join(projectPath, 'apps/sample-fullstack-desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis'))
-        expect(installers.some(file => file.includes('_2.4.6_') && file.endsWith('-setup.exe'))).toBe(true)
+        const output = path.join(projectPath, '.hai/build/desktop/windows/release')
+        const batch = path.join(output, (await readFile(path.join(output, 'latest'), 'utf8')).trim())
+        const manifest = JSON.parse(await readFile(path.join(batch, 'manifest.json'), 'utf8')) as { files: Array<{ file: string }> }
+        const installer = manifest.files.find(({ file }) => file.includes('_2.4.6_') && file.endsWith('-setup.exe'))
+        expect(installer && await fileExists(path.join(batch, installer.file))).toBe(true)
       }
 
       for (const relativePath of scenario.expectedFiles) {

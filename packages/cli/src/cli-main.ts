@@ -129,6 +129,7 @@ cli
   .option('--network <network>', cliM('cli_help_buildNetwork'))
   .option('--platform <platform>', cliM('cli_help_platform'))
   .option('--arch <arch>', cliM('cli_help_arch'))
+  .option('--debug', cliM('cli_help_buildDebug'))
   .option('--sqlite-prebuild-mirror <url>', cliM('cli_help_sqliteMirror'))
   .option('--no-http-proxy', cliM('cli_help_noHttpProxy'))
   .option('-y, --yes', cliM('cli_help_deployYes'))
