@@ -30,6 +30,7 @@ endpoint: ${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 # 说明：强制使用路径风格 URL（某些 S3 兼容服务需要）
 # 取值：true | false
 forcePathStyle: ${HAI_STORAGE_FORCEPATHSTYLE:false}
+# prefix: "${HAI_STORAGE_PREFIX:}" # 说明：S3 桶内对象键前缀，例如 my-app/uploads/，留空使用桶根；取值：字符串
 # 可选自动建桶；生产自建 S3 由环境启用，需具备建桶权限。
 # 说明：初始化时检查并创建缺失的桶；默认关闭，启用后凭据须有建桶权限。
 # 取值：true | false

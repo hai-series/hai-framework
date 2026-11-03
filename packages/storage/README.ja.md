@@ -159,6 +159,10 @@ MinIO と RustFS は S3 Provider を共有し、`type: 's3'` を使います。�
 
 YAML では `createBucket: ${HAI_STORAGE_CREATEBUCKET:false}` で環境変数を参照し、`storage.init()` への直接入力は真偽値を使います。
 
+`config/_storage.yml` に `prefix: my-app/uploads/` を設定します。`StorageConfigSchema` を登録した Hai アプリでは、`HAI_STORAGE_PREFIX=my-app/uploads/` でも指定できます。`report.pdf` をアップロードすると、オブジェクトキーは `my-app/uploads/report.pdf` になります。起動時の接続確認と既定の一覧取得は、設定値の末尾にスラッシュがなくても `my-app/uploads/` を検索します。空のプレフィックスはバケットのルートを使います。設定を変更しても既存オブジェクトのキーは変わりません。
+
+アプリの認証情報を制限するには、オブジェクト操作の対象を `arn:aws:s3:::my-bucket/my-app/uploads/*` に絞り、`s3:ListBucket` には `s3:prefix` 条件で `my-app/uploads/*` を指定します。作成済みのバケットを使い、`createBucket: false` にすると、作成モードで行われるバケット単位の `HeadBucket` 確認を省けます。
+
 ```ts
 const initResult = await storage.init({
   type: 's3',

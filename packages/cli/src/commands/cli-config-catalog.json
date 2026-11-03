@@ -6971,7 +6971,7 @@
     "name": "HAI_STORAGE_PREFIX",
     "module": "storage",
     "path": "storage.prefix",
-    "description": "路径前缀（所有操作都会加上此前缀）",
+    "description": "S3 桶内对象键前缀，例如 my-app/uploads/，留空使用桶根",
     "value": "",
     "constraint": "字符串"
   },

@@ -412,7 +412,8 @@ accessKeyId: ''
 secretAccessKey: ''
 endpoint: \${HAI_STORAGE_ENDPOINT:https://s3.amazonaws.com}
 forcePathStyle: false
-# prefix: '' # 对象路径前缀，例如 invoices/2026；保存 report.pdf 后键名为 invoices/2026/report.pdf。
+# 可直接设置 HAI_STORAGE_PREFIX=my-app/uploads/；保存 report.pdf 后的键名为 my-app/uploads/report.pdf。
+# prefix: "\${HAI_STORAGE_PREFIX:}"
 # publicEndpoint: https://app.example.com # 浏览器下载入口，可带 /files 等代理目录；不含桶名
 # publicUrl: https://cdn.example.com`
   return `# 存储配置；HAI_STORAGE 可整体替换连接配置。

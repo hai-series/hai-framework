@@ -159,6 +159,10 @@ MinIO、RustFS 共用 S3 Provider，使用 `type: 's3'`，无需单独的存储�
 
 YAML 显式引用 `createBucket: ${HAI_STORAGE_CREATEBUCKET:false}` 后可由环境变量控制；直接传入 `storage.init()` 时使用布尔值。
 
+在 `config/_storage.yml` 中设置 `prefix: my-app/uploads/`，或在注册了 `StorageConfigSchema` 的 Hai 应用中设置 `HAI_STORAGE_PREFIX=my-app/uploads/`。上传 `report.pdf` 时，桶内对象键为 `my-app/uploads/report.pdf`。初始化探测和默认列表均查询 `my-app/uploads/`，配置值可省略末尾的斜杠。空前缀使用桶根，修改前缀不会搬迁已有对象。
+
+要限制应用凭据的访问范围，将对象权限限定到 `arn:aws:s3:::my-bucket/my-app/uploads/*`，并对 `s3:ListBucket` 设置 `s3:prefix` 条件 `my-app/uploads/*`。使用预先创建的桶并保持 `createBucket: false`，避免建桶模式触发桶级 `HeadBucket` 检查。
+
 ```ts
 const initResult = await storage.init({
   type: 's3',

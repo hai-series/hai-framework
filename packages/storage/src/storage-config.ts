@@ -124,7 +124,7 @@ export const S3ConfigSchema = z.object({
   /** 强制使用路径风格 URL（某些 S3 兼容服务需要） */
   forcePathStyle: z.boolean().default(false),
 
-  /** 路径前缀（所有操作都会加上此前缀） */
+  /** S3 桶内对象键前缀，例如 my-app/uploads/，留空使用桶根 */
   prefix: z.string().default(''),
 
   /** 公开访问基础 URL（用于生成公开 URL） */

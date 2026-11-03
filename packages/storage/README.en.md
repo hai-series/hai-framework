@@ -159,6 +159,10 @@ MinIO and RustFS share the S3 provider with `type: 's3'`; no separate storage ty
 
 Use `createBucket: ${HAI_STORAGE_CREATEBUCKET:false}` in YAML for environment control; direct `storage.init()` input requires a boolean.
 
+Set `prefix: my-app/uploads/` in `config/_storage.yml`, or set `HAI_STORAGE_PREFIX=my-app/uploads/` in a Hai app that registers `StorageConfigSchema`. Uploading `report.pdf` stores it under `my-app/uploads/report.pdf`. The startup probe and default listing both query `my-app/uploads/`, with or without the trailing slash in the configuration. An empty prefix uses the bucket root. Changing the prefix leaves existing objects at their current keys.
+
+To scope application credentials, limit object permissions to the object ARN pattern `arn:aws:s3:::my-bucket/my-app/uploads/*` and apply the `s3:prefix` condition `my-app/uploads/*` to `s3:ListBucket`. Use a pre-created bucket with `createBucket: false` to avoid the bucket-level `HeadBucket` check used in bucket creation mode.
+
 ```ts
 const initResult = await storage.init({
   type: 's3',

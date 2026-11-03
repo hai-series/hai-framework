@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { parseEnv } from 'node:util'
-import { CoreConfigSchema } from '@h-ai/core'
+import { core, CoreConfigSchema } from '@h-ai/core'
+import { StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../src/commands/cli-create.js'
 import { loadConfigText } from './helpers/config.js'
@@ -86,12 +87,27 @@ describe.skipIf(process.env.HAI_CLI_RUN_ENV_OUTPUT_GATES !== '1')('built environ
     }
   })
 
-  it('fresh CLI Node 入口生成的 API 环境文件可由 Core 消费', async () => {
+  it('fresh CLI Node 入口生成的 API 环境文件及 S3 前缀可由 Core 消费', async () => {
     const root = await fixture()
     const created = spawnSync(process.execPath, [path.resolve('dist/index.js'), '--cwd', root, 'create', 'env-binary', '--type', 'api', '--defaults', '--no-install', '--no-git', '--no-deploy'], { encoding: 'utf8', windowsHide: true, timeout: 30_000 })
     expect(created.error).toBeUndefined()
     expect(created.status, created.stderr).toBe(0)
     const service = path.join(root, 'env-binary/apps/env-binary-serv')
     await expectProfiles(service, service)
+    const storagePath = path.join(service, 'config/_storage.yml')
+    expect(await readFile(storagePath, 'utf8')).toContain('# prefix: "$' + '{HAI_STORAGE_PREFIX:}"')
+    expect(await readFile(path.join(service, '.env.example'), 'utf8')).toMatch(/^# HAI_STORAGE_PREFIX=/m)
+    vi.stubEnv('HAI_STORAGE_TYPE', 's3')
+    vi.stubEnv('HAI_STORAGE_BUCKET', 'prefix-test')
+    vi.stubEnv('HAI_STORAGE_ACCESSKEYID', 'test-key')
+    vi.stubEnv('HAI_STORAGE_SECRETACCESSKEY', 'test-secret')
+    vi.stubEnv('HAI_STORAGE_PREFIX', 'my-app/uploads')
+    try {
+      const config = core.config.load('storage', storagePath, StorageConfigSchema)
+      expect(config).toMatchObject({ success: true, data: { type: 's3', prefix: 'my-app/uploads' } })
+    }
+    finally {
+      core.config.clear('storage')
+    }
   })
 })

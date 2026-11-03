@@ -34,7 +34,7 @@ root: ./data/storage
 # bucket: my-bucket
 # createBucket: ${HAI_STORAGE_CREATEBUCKET:false}
 # forcePathStyle: false
-# prefix: ''
+# prefix: "${HAI_STORAGE_PREFIX:}"
 # publicUrl: ''
 operationLog:
   read: false # file.get/head/exists, dir.list, presign.getUrl/publicUrl
@@ -44,7 +44,9 @@ operationLog:
 ```
 
 约定环境变量优先于 YAML，例如 `HAI_STORAGE_ROOT`、
-`HAI_STORAGE_ACCESSKEYID`、`HAI_STORAGE_SECRETACCESSKEY`。
+`HAI_STORAGE_ACCESSKEYID`、`HAI_STORAGE_SECRETACCESSKEY`。注册了 `StorageConfigSchema` 的应用可直接设置 `HAI_STORAGE_PREFIX=my-app/uploads/`。调用方传相对 key，初始化探测与默认列表使用带尾斜杠的目录前缀，空前缀使用桶根。
+
+限制应用凭据时，将对象操作授权到该前缀下的对象 ARN，并用 `s3:prefix` 条件限制 `s3:ListBucket`。使用预先创建的桶并关闭 `createBucket`，以便初始化只执行带前缀的列表探测。
 
 MinIO、RustFS 使用同一个 S3 Provider：配置 `type: s3`、S3 API `endpoint`（通常为 9000 端口）和 `forcePathStyle: true`。`createBucket` 默认 false，需要预先创建 `bucket`；设为 true 后，`storage.init` 用 HeadBucket 检查，明确 404 时才创建，存在的桶及其中对象保留。权限、网络或创建失败均返回失败且不发布连接；凭据须有检查及创建桶的权限。不要新增 `type: minio` 或 `type: rustfs`。
 

@@ -134,7 +134,9 @@ operationLog: { read: false, write: false, maxLength: 1000, level: debug }
 
 验证普通上传、禁止覆盖、无权限访问、过期签名和删除后不可读。私有对象由服务端检查访问权限后生成短期签名，不能把 `accessKey` 下发客户端。
 
-`prefix` 相当于给所有对象键加一个统一目录。例如 `prefix: invoices/2026`，调用 `storage.file.put('report.pdf', bytes)` 后，桶内保存的键为 `invoices/2026/report.pdf`。之后读、删、签名仍传 `report.pdf`，不要再手工重复前缀。多个应用可用不同前缀整理文件；访问权限仍由应用和存储策略控制。修改前缀不会搬迁已有对象，切换前先处理数据迁移。
+在 YAML 中设置 `prefix: orders/`，或在注册了 `StorageConfigSchema` 的应用中设置 `HAI_STORAGE_PREFIX=orders/`。调用 `storage.file.put('report.pdf', bytes)` 后，桶内保存的键为 `orders/report.pdf`。之后读、删、签名仍传 `report.pdf`。初始化探测和默认列表都查询 `orders/`，配置值写成 `orders` 也会按同一目录查询。修改前缀不会搬迁已有对象，切换前先处理数据迁移。
+
+如果应用凭据只能访问这个目录，使用预先创建的桶和 `createBucket: false`，将对象权限限制到 `arn:aws:s3:::orders-private/orders/*`，并给 `s3:ListBucket` 设置 `s3:prefix` 条件 `orders/*`。可用该凭据验证初始化、列表和上传，再核对 S3 拒绝前缀外的访问。
 
 ### 配置人员：区分三个访问地址
 
