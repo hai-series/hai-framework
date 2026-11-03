@@ -36,7 +36,6 @@
   const dataAttributes = $derived(getDataAttributes(restProps))
   const containerClass = $derived(
     cn(
-      'steps',
       direction === 'vertical' && 'steps-vertical',
       className,
     ),
@@ -60,11 +59,10 @@
   function getStepClass(index: number) {
     const status = getStepStatus(index)
     return cn(
-      'step',
       stepSizeClass,
       status === 'completed' && 'step-primary',
       status === 'current' && 'step-primary',
-      clickable && 'cursor-pointer hover:opacity-80',
+      clickable && 'cursor-pointer',
     )
   }
 
@@ -75,12 +73,12 @@
   }
 </script>
 
-<ul {...dataAttributes} class={containerClass}>
+<ul {...dataAttributes} class='steps {containerClass}'>
   {#each items as item, index (index)}
     {#if clickable}
       <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
       <li
-        class={getStepClass(index)}
+        class='step {getStepClass(index)}'
         data-content={item.icon || (index < current ? '✓' : index + 1)}
         onclick={() => handleClick(index)}
         onkeydown={e => e.key === 'Enter' && handleClick(index)}
@@ -96,7 +94,7 @@
       </li>
     {:else}
       <li
-        class={getStepClass(index)}
+        class='step {getStepClass(index)}'
         data-content={item.icon || (index < current ? '✓' : index + 1)}
       >
         <div class='step-content'>
@@ -116,6 +114,20 @@
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
+  }
+
+  .step[role='button']:hover::after,
+  .step[role='button']:hover>.step-icon {
+    background-color: color-mix(in oklab, var(--step-bg) 78%, var(--color-base-100));
+    border-color: color-mix(in oklab, var(--step-bg) 78%, var(--color-base-100));
+  }
+
+  .steps:not(.steps-vertical) .step-content {
+    align-self: start;
+  }
+
+  .step[role='button']:hover .step-content>span {
+    color: var(--color-primary);
   }
 
   .steps-vertical .step-content {
