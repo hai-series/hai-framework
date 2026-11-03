@@ -2888,6 +2888,54 @@
     "constraint": "JSON 对象；整体覆盖时替换该节点"
   },
   {
+    "name": "HAI_DEPLOY_CONTAINER_COMPOSE",
+    "module": "deploy",
+    "path": "deploy.container.compose",
+    "description": "以项目镜像角色为单位附加 Compose 运行参数。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_COMPOSE_SERVICES",
+    "module": "deploy",
+    "path": "deploy.container.compose.services",
+    "description": "按已构建项目的镜像角色分别设置容器扩展。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_COMPOSE_SERVICES_SERV",
+    "module": "deploy",
+    "path": "deploy.container.compose.services.serv",
+    "description": "API 后端容器的 Compose 扩展。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_COMPOSE_SERVICES_SERV_EXTRA_HOSTS",
+    "module": "deploy",
+    "path": "deploy.container.compose.services.serv.extra_hosts",
+    "description": "容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_COMPOSE_SERVICES_WEB",
+    "module": "deploy",
+    "path": "deploy.container.compose.services.web",
+    "description": "Web 容器的 Compose 扩展。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
+    "name": "HAI_DEPLOY_CONTAINER_COMPOSE_SERVICES_WEB_EXTRA_HOSTS",
+    "module": "deploy",
+    "path": "deploy.container.compose.services.web.extra_hosts",
+    "description": "容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名。",
+    "value": "",
+    "constraint": "JSON 对象；整体覆盖时替换该节点"
+  },
+  {
     "name": "HAI_DEPLOY_CONTAINER_S3ENGINE",
     "module": "deploy",
     "path": "deploy.container.s3Engine",

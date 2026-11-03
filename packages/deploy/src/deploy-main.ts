@@ -24,7 +24,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { readDeploymentArtifact } from './deploy-artifact.js'
-import { DeployConfigSchema } from './deploy-config.js'
+import { DeployConfigSchema, validateComposeServices } from './deploy-config.js'
 import {
   getCredentialsPath,
   loadCredentials,
@@ -547,6 +547,9 @@ async function deployContainerApp(
   catch {
     return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_artifactInvalid'))
   }
+  const compose = validateComposeServices(currentConfig?.container, artifact)
+  if (!compose.success)
+    return compose
   if (artifact.partial && !options?.selectedServices) {
     const selectedServices = artifact.images.map(image => image.name)
     options = {

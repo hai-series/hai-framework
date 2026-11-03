@@ -1,4 +1,9 @@
 {
+  "deploy_composeHostAddressInvalid": "请输入 IPv4 或 IPv6 地址，地址中不含端口。",
+  "deploy_composeHostnameInvalid": "请输入主机名，主机名中不含协议、端口或路径。",
+  "deploy_composeHostnameConflict": "此主机名为保留名称或重复定义。",
+  "deploy_composeProviderRequired": "Compose 服务设置需要使用 docker-ssh Provider。",
+  "deploy_composeServiceUnavailable": "{field} 指向此项目不存在的镜像角色。",
   "deploy_notInitialized": "Deploy 模块尚未初始化，请先调用 deploy.init()",
   "deploy_initFailed": "Deploy 模块初始化失败：{error}",
   "deploy_unsupportedProviderType": "不支持的部署平台类型：{type}",

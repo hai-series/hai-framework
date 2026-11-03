@@ -1,4 +1,9 @@
 {
+  "deploy_composeHostAddressInvalid": "ポートを含まない IPv4 または IPv6 アドレスを入力してください。",
+  "deploy_composeHostnameInvalid": "プロトコル、ポート、パスを含まないホスト名を入力してください。",
+  "deploy_composeHostnameConflict": "このホスト名は予約済みか、重複しています。",
+  "deploy_composeProviderRequired": "Compose サービス設定には docker-ssh プロバイダーが必要です。",
+  "deploy_composeServiceUnavailable": "{field} が指定するイメージの役割は、このプロジェクトに存在しません。",
   "deploy_notInitialized": "デプロイモジュールが初期化されていません。先にdeploy.init()を呼び出してください",
   "deploy_initFailed": "デプロイモジュールの初期化に失敗しました: {error}",
   "deploy_unsupportedProviderType": "未対応のデプロイプロバイダーの種類です: {type}",

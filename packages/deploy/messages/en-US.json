@@ -1,4 +1,9 @@
 {
+  "deploy_composeHostAddressInvalid": "Enter an IPv4 or IPv6 address without a port.",
+  "deploy_composeHostnameInvalid": "Enter a hostname without a protocol, port, or path.",
+  "deploy_composeHostnameConflict": "This hostname is reserved or appears more than once.",
+  "deploy_composeProviderRequired": "Compose service settings require the docker-ssh provider.",
+  "deploy_composeServiceUnavailable": "{field} refers to an image role absent from this project.",
   "deploy_notInitialized": "Deploy module not initialized, call deploy.init() first",
   "deploy_initFailed": "Deploy module initialization failed: {error}",
   "deploy_unsupportedProviderType": "Unsupported deploy provider type: {type}",

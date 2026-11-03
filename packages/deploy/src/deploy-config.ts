@@ -5,8 +5,12 @@
  * @module deploy-config
  */
 
+import type { HaiResult } from '@h-ai/core'
+import type { DeploymentArtifact } from './deploy-artifact.js'
+import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { deployM } from './deploy-i18n.js'
+import { HaiDeployError } from './deploy-types.js'
 
 // ─── Provider 配置 Schema ───
 
@@ -219,6 +223,29 @@ export function provisionerFields(provisioner: string): string[] {
 
 // ─── 完整配置 Schema ───
 
+const reservedComposeHosts = new Set(['localhost', 'serv', 'web', 'gateway', 'certbot', 'db', 'cache', 'storage', 'vecdb', 'ldap', 'email', 'sms'])
+const composeHostname = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
+
+/** 仅开放逐项验证过的 Compose 服务字段，部署仍负责服务拓扑及镜像身份。 */
+const ComposeServiceConfigSchema = z.strictObject({
+  /** 容器内的主机名到 IPv4 或 IPv6 地址映射，不能覆盖框架内部服务名。 */
+  extra_hosts: z.record(z.string(), z.union([z.ipv4(), z.ipv6()], {
+    error: () => deployM('deploy_composeHostAddressInvalid'),
+  })).superRefine((hosts, ctx) => {
+    const seen = new Set<string>()
+    for (const host of Object.keys(hosts)) {
+      const key = host.toLowerCase()
+      if (host.length > 253 || !composeHostname.test(host)) {
+        ctx.addIssue({ code: 'custom', message: deployM('deploy_composeHostnameInvalid') })
+      }
+      else if (reservedComposeHosts.has(key) || seen.has(key)) {
+        ctx.addIssue({ code: 'custom', path: [host], message: deployM('deploy_composeHostnameConflict') })
+      }
+      seen.add(key)
+    }
+  }).optional(),
+})
+
 /**
  * 部署模块完整配置 Schema
  * @example
@@ -238,8 +265,37 @@ export const DeployConfigSchema = z.object({
   container: z.object({
     /** 自建 S3 服务实现；协议仍为 storage.type=s3。 */
     s3Engine: z.enum(['rustfs', 'minio']).default('rustfs'),
+    /** 以项目镜像角色为单位附加 Compose 运行参数。 */
+    compose: z.strictObject({
+      /** 按已构建项目的镜像角色分别设置容器扩展。 */
+      services: z.strictObject({
+        /** API 后端容器的 Compose 扩展。 */
+        serv: ComposeServiceConfigSchema.optional(),
+        /** Web 容器的 Compose 扩展。 */
+        web: ComposeServiceConfigSchema.optional(),
+      }),
+    }).optional(),
   }).optional(),
+}).refine(config => !config.container?.compose || config.provider.type === 'docker-ssh', {
+  path: ['container', 'compose'],
+  error: () => deployM('deploy_composeProviderRequired'),
 })
+
+/** 计划与打包按制品的完整拓扑校验角色，部分构建中缺少的镜像仍可保留其配置。 */
+export function validateComposeServices(container: DeployConfig['container'], artifact: Pick<DeploymentArtifact, 'primaryService' | 'hasWeb'>): HaiResult<void> {
+  const services = container?.compose?.services
+  const unavailable = services?.serv && artifact.primaryService !== 'serv'
+    ? 'serv'
+    : services?.web && !artifact.hasWeb ? 'web' : undefined
+  if (!unavailable)
+    return ok(undefined)
+  const field = `deploy.container.compose.services.${unavailable}`
+  return err({
+    ...HaiDeployError.CONFIG_ERROR,
+    message: deployM('deploy_composeServiceUnavailable', { params: { field } }),
+    ext: { fields: [field] },
+  })
+}
 
 /**
  * 部署配置类型（parse 后）

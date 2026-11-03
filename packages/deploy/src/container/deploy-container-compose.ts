@@ -7,7 +7,7 @@
  * @module deploy-container-compose
  */
 
-import type { DockerSshProviderConfig } from '../deploy-config.js'
+import type { DeployConfig, DockerSshProviderConfig } from '../deploy-config.js'
 import type { DeployAppOptions, ScanResult, ServiceType } from '../deploy-types.js'
 import { randomBytes } from 'node:crypto'
 import { core, TrustedProxiesSchema } from '@h-ai/core'
@@ -501,6 +501,7 @@ export function buildRuntimeEnv(
  * @param options.requestAccessPolicy - 是否为本次更新的后端挂载只读请求策略快照。
  * @param options.nodeRuntime - Node 后端默认重读运行文件；SSR web 显式标识。
  * @param options.nodeOptions - 打包时保留的 Node 启动参数，更新需重新部署。
+ * @param options.compose - 已校验的项目镜像运行扩展。
  * @returns compose YAML 字符串
  * @example 模块内部上下文
  * ```ts
@@ -529,6 +530,7 @@ export function generateComposeFile(options: {
   nodeOptions?: string
   /** HTTPS 与 Certbot 的统一入口设置。 */
   https?: DockerSshProviderConfig['expose']['https']
+  compose?: NonNullable<DeployConfig['container']>['compose']
 }): string {
   const { projectName, imageRef, hostPort, containerPort, sidecar } = options
   const primaryService = options.primaryService ?? 'serv'
@@ -645,6 +647,11 @@ export function generateComposeFile(options: {
   if (Object.keys(sidecar.volumes).length > 0)
     compose.volumes = sidecar.volumes
 
+  for (const role of [primaryService, ...(options.web ? ['web'] as const : [])]) {
+    const hosts = Object.entries(options.compose?.services[role]?.extra_hosts ?? {})
+    if (hosts.length)
+      services[role]!.extra_hosts = hosts.map(([host, ip]) => `${host}:${ip}`)
+  }
   for (const service of Object.values(services))
     service.pull_policy = 'never'
   return stringify(compose, { aliasDuplicateObjects: false })

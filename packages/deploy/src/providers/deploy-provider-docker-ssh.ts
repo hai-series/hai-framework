@@ -451,6 +451,7 @@ export function createDockerSshProvider(
       mountWebConfig: standaloneWebConfig,
       gateway,
       https,
+      compose: container?.compose,
     })
     const composePath = join(artifactDir, composeName)
     writeFileSync(composePath, composeContent)

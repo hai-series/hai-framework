@@ -9,7 +9,7 @@ import { planSidecars, resolveSidecarOptions } from './container/deploy-containe
 import { shellArgument } from './container/deploy-scripts.js'
 import { createSshExecutor } from './container/deploy-ssh.js'
 import { DeploymentArtifactSchema, readDeploymentArtifact } from './deploy-artifact.js'
-import { DeployConfigSchema } from './deploy-config.js'
+import { DeployConfigSchema, validateComposeServices } from './deploy-config.js'
 import { loadDeploymentEnvironment } from './deploy-environment.js'
 import { normalizeProjectName, resolveArtifactDirectory, resolveProjectDirectory, usesDefaultMiddleware } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
@@ -54,6 +54,9 @@ export async function createDeploymentPlan(appDir: string, input: DeployConfigIn
     const artifact = provider.type === 'docker-ssh' ? await readDeploymentArtifact(artifactDir) : undefined
     let images: string[]
     if (artifact) {
+      const compose = validateComposeServices(config.container, artifact)
+      if (!compose.success)
+        return compose
       images = [...new Set([artifact.primaryService, ...(artifact.hasWeb ? ['web'] : [])])]
     }
     else {
