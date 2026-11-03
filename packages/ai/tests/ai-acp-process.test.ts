@@ -30,6 +30,7 @@ async function cleanupWindowsJob(child: ChildProcess, name: string, closed: bool
 }
 
 describe('aCP owned process cleanup', () => {
+  // 测试总期限覆盖 PowerShell 探测的 15 秒硬期限和断言收尾。
   it.skipIf(process.platform !== 'win32')('windows 私有 Job 不存在时查询确认无成员', () => {
     const job = windowsACPCommand(process.execPath, ['--version'])
     const probe = spawnSync('powershell.exe', windowsACPJobProbe(job.name), {
@@ -40,7 +41,7 @@ describe('aCP owned process cleanup', () => {
     })
     expect(probe.error, probe.stderr).toBeUndefined()
     expect(probe.status, probe.stderr).toBe(0)
-  })
+  }, 20000)
 
   it.skipIf(process.platform !== 'win32').each([false, true])('windows Job 停止中间进程退出后的后台 writer（根退出=%s）', async (rootExits) => {
     const directory = await mkdtemp(join(tmpdir(), 'hai-acp-job-'))
