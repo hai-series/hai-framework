@@ -254,6 +254,8 @@ pnpm --filter @h-ai/cli test:deploy-gates
 
 `test:e2e` 为本轮服务显式选择隔离的测试后端及绝对数据目录，服务子进程不继承外部 `HAI_*` / `PUBLIC_*` / `VITE_*` 配置或读取用户 `.env.local`。测试专用 `HAI_E2E=1` 不改变普通开发、生产 dotenv 或共享后端要求；启用 transport 的场景使用新建可信 SM2 ring 与实际 registry。样板浏览器阶段另用独立 TCP 计数进程核验外部数据库配置未被触达。完整部署验收仍保留 fullstack 的真实 Redis/S3、增量发布与回滚。
 
+带浏览器前端的 fullstack 项目使用同一份 `playwright.config.ts`。`pnpm test:e2e` 先运行默认回归，再用独立服务和数据目录运行页面离开与空闲超时测试。
+
 `--i18n` 定向门禁构建 CLI 后，在独立进程中验证语言优先级、help、生成成功与失败，并重放中英日文选择/名称校验/取消交互。
 
 ## 许可证

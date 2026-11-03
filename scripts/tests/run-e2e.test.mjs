@@ -30,7 +30,7 @@ fs.writeFileSync(process.env.HAI_E2E_DATA_ROOT + '/test.db', 'test data')
 fs.writeFileSync('data-root.txt', process.env.HAI_E2E_DATA_ROOT)
 fs.appendFileSync('data-roots.jsonl', JSON.stringify(process.env.HAI_E2E_DATA_ROOT) + '\\n')
 fs.writeFileSync('child-pid.txt', String(process.pid))
-fs.appendFileSync('observations.jsonl', JSON.stringify({ output, html, evidence }) + '\\n')
+fs.appendFileSync('observations.jsonl', JSON.stringify({ output, html, evidence, group: process.env.HAI_E2E_GROUP }) + '\\n')
 fs.appendFileSync('runs.txt', JSON.stringify(process.argv.slice(2)) + '\\n')
 if (process.argv.includes('--wait')) {
   process.stdout.write('ready\\n')
@@ -67,6 +67,18 @@ it('独立配置失败后继续收集，隔离数据与证据并保留首个失�
   const roots = readFileSync(join(directory, 'data-roots.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line))
   expect(new Set(roots).size).toBe(3)
   expect(roots.every(root => !existsSync(root))).toBe(true)
+})
+
+it('同一配置可按组切换模式，分组参数和环境不会串到其他轮次', () => {
+  const config = ['--config', 'playwright.config.ts']
+  const result = spawnSync(process.execPath, [resolve('scripts/run-e2e.mjs'), ...config, '--next', '--e2e-group=session-close', ...config, '--next', ...config], {
+    cwd: directory,
+    env: { ...process.env, HAI_E2E_GROUP: 'inherited-group' },
+  })
+  expect(result.status).toBe(0)
+  expect(observations().map(({ group }) => group)).toEqual([undefined, 'session-close', undefined])
+  const runs = readFileSync(join(directory, 'runs.txt'), 'utf8').trim().split('\n').map(line => JSON.parse(line))
+  expect(runs.every(args => !args.includes('--e2e-group=session-close'))).toBe(true)
 })
 
 it('取消时结束测试进程、回收数据并保留已写入的报告', async () => {

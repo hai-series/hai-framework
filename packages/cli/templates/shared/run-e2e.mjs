@@ -12,12 +12,14 @@ const cli = require.resolve('@playwright/test/cli')
 const dataParent = resolve(process.env.HAI_E2E_DATA_ROOT || tmpdir())
 mkdirSync(dataParent, { recursive: true })
 const dataRoot = mkdtempSync(join(dataParent, 'hai-browser-e2e-'))
-const groups = [[]]
+const groups = [{ args: [], name: undefined }]
 for (const argument of process.argv.slice(2)) {
   if (argument === '--next')
-    groups.push([])
+    groups.push({ args: [], name: undefined })
+  else if (argument.startsWith('--e2e-group='))
+    groups.at(-1).name = argument.slice('--e2e-group='.length)
   else
-    groups.at(-1).push(argument)
+    groups.at(-1).args.push(argument)
 }
 let child
 let interrupted = false
@@ -56,7 +58,7 @@ try {
   const evidenceParent = resolve(process.env.HAI_AUTH_EVIDENCE_DIR || join(cwd, 'test-results'))
   mkdirSync(evidenceParent, { recursive: true })
   const runRoot = mkdtempSync(join(evidenceParent, 'run-'))
-  for (const [index, args] of groups.entries()) {
+  for (const [index, { args, name }] of groups.entries()) {
     const groupRoot = join(runRoot, `group-${index + 1}`)
     const groupDataRoot = join(dataRoot, `group-${index + 1}`)
     mkdirSync(groupDataRoot)
@@ -73,6 +75,7 @@ try {
           ...(!html ? { PLAYWRIGHT_HTML_OUTPUT_DIR: join(groupRoot, 'html') } : {}),
           HAI_AUTH_EVIDENCE_DIR: process.env.HAI_AUTH_EVIDENCE_DIR || join(groupRoot, 'evidence'),
           HAI_E2E_DATA_ROOT: groupDataRoot,
+          HAI_E2E_GROUP: name,
         },
       })
       child.once('error', reject)

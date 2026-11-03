@@ -254,6 +254,8 @@ Deployment fixtures inspect pinned public base images and pull only confirmed mi
 
 `test:e2e` gives each server explicit isolated backends and an absolute data directory. Server children do not inherit external `HAI_*` / `PUBLIC_*` / `VITE_*` settings or read the user's `.env.local`. Test-only `HAI_E2E=1` preserves ordinary development/production dotenv behavior and shared-backend requirements; transport cases use a fresh trusted SM2 ring and the actual registry. Scaffold browser runs also use an independent TCP counter to verify that external database settings are never contacted. Complete deployment acceptance retains real Redis/S3, incremental updates and rollback for fullstack.
 
+Fullstack projects with a browser frontend share one `playwright.config.ts`. `pnpm test:e2e` runs the default suite first, then starts fresh services with a separate data directory for the page-exit and idle-timeout tests.
+
 `--i18n` builds the CLI and checks language precedence, help, successful generation and errors in separate processes, alongside Chinese/English/Japanese prompt, validation, cancellation and create/add/init cases.
 
 ## License

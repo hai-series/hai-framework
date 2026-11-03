@@ -6,6 +6,12 @@ import ts from 'typescript'
 import { expect, it } from 'vitest'
 import { buildTemplateContext, generateFromTemplates } from '../src/commands/cli-template-engine.js'
 
+interface PlaywrightConfig {
+  testIgnore?: string
+  testMatch?: string
+  webServer: Array<{ env: Record<string, string> }>
+}
+
 /** 执行实际生成的配置与凭据声明，不启动服务，不读取宿主的真实密码。 */
 function evaluate(source: string, environment: Record<string, string>): Record<string, unknown> {
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
@@ -31,11 +37,29 @@ it.each([true, false])('fullstack真实模板反馈=%s的职责密码覆盖、�
   try {
     await generateFromTemplates(directory, buildTemplateContext({ name: 'credential-fixture', appType: 'fullstack', frontends: ['web'], features: feedback ? ['feedback'] : [], packageManager: 'pnpm' }))
     const configuration = await readFile(path.join(directory, 'playwright.config.ts'), 'utf8')
+    await expect(readFile(path.join(directory, 'playwright.session-close.config.ts'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    const manifest = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'))
+    expect(manifest.scripts['test:e2e']).toContain('--config playwright.config.ts --next --e2e-group=session-close --config playwright.config.ts')
     const spec = await readFile(path.join(directory, 'e2e/fullstack.spec.ts'), 'utf8')
     const session = await readFile(path.join(directory, 'e2e/session-close.spec.ts'), 'utf8')
     const environments: Record<string, string>[] = [{}, { E2E_AUDIT_ADMIN_PASSWORD: 'fixture-audit-override', E2E_CONFIG_ADMIN_PASSWORD: 'fixture-config-override', E2E_BUSINESS_OPERATOR_PASSWORD: 'fixture-operator-override' }]
     for (const environment of environments) {
-      const config = evaluate(configuration, environment).default as { webServer: Array<{ env: Record<string, string> }> }
+      const config = evaluate(configuration, environment).default as PlaywrightConfig
+      const sessionConfig = evaluate(configuration, { ...environment, HAI_E2E_GROUP: 'session-close' }).default as PlaywrightConfig
+      const sessionOverrides = {
+        HAI_IAM_SESSION_ENDONPAGEHIDE: 'true',
+        HAI_IAM_SESSION_IDLETIMEOUT: '5',
+        HAI_IAM_SESSION_ABSOLUTETIMEOUT: '60',
+        HAI_IAM_PASSWORD_REQUIREINITIALCHANGE: 'true',
+      }
+      expect(config.testIgnore).toBe('**/session-close.spec.ts')
+      expect(config.testMatch).toBeUndefined()
+      expect(sessionConfig.testMatch).toBe('**/session-close.spec.ts')
+      expect(sessionConfig.testIgnore).toBeUndefined()
+      for (const key of Object.keys(sessionOverrides))
+        expect(config.webServer[0].env).not.toHaveProperty(key)
+      expect(sessionConfig.webServer[0].env).toEqual({ ...config.webServer[0].env, ...sessionOverrides })
+      expect(sessionConfig.webServer.slice(1)).toEqual(config.webServer.slice(1))
       const prefix = spec.slice(0, spec.indexOf('// 测试专用'))
       const captured = evaluate(`${prefix}\nexport const captured = { auditAdminPassword, configAdminPassword${feedback ? ', businessOperatorPassword' : ''} }`, environment).captured
       expect(captured).toEqual({
@@ -49,7 +73,7 @@ it.each([true, false])('fullstack真实模板反馈=%s的职责密码覆盖、�
         HAI_BUSINESS_OPERATOR_PASSWORD: environment.E2E_BUSINESS_OPERATOR_PASSWORD || 'Scaffold-test-Operator123!',
       })
       const sessionPrefix = session.slice(0, session.indexOf('async function dismissToasts'))
-      expect(evaluate(`${sessionPrefix}\nexport const captured = configAdminPassword`, environment).captured).toBe(config.webServer[0].env.HAI_CONFIG_ADMIN_PASSWORD)
+      expect(evaluate(`${sessionPrefix}\nexport const captured = configAdminPassword`, environment).captured).toBe(sessionConfig.webServer[0].env.HAI_CONFIG_ADMIN_PASSWORD)
     }
     // 登录与再次验证的每个消费位置均使用同一声明，不能仅改服务配置而仍硬编码调用方。
     for (const match of spec.matchAll(/login\(page, 'audit_admin', ([^)]+)\)/g))
