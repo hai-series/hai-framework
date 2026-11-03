@@ -148,6 +148,7 @@ return result
 - 宿主顺序与失败清理用 core.module.createRuntime；配置失败保留字段、底层错误码和处理建议，必需环境变量缺失用 HaiConfigError.CONFIG_ENV_VAR_MISSING + ext.fields 标识。框架表迁移由模块 migrateIam/migrateReach/migrateScheduler/migrateAudit 预检及初始化负责，先备份停旧写入，MySQL DDL 可重入、旧凭据会话重新登录。
 - 凭据 Reach 通知使用 sensitive/expiresAt/idempotencyKey，只留元数据回执，无明文/延迟重投。feedback.budget 为采集、附件总量、传输和离线包的共同来源；新工程通知默认 console 且 consoleContent 默认 metadata；摘要需显式开启。feedback.init(config, { collectEvidence }) 在持久采集任务中 await 业务 text/data/附件（含 ZIP/GZIP），遵守超时、脱敏和共享预算；webhookUrl 独立启用采集终态后的 feedback.created，持久重试、固定载荷、eventId 去重及可选 HMAC 签名，状态见 get().jobs，管理员 retry target: webhook。
 - hai upgrade <精确版本> 只读核对全发布与本地漂移；hai deploy --env prod --plan 只读部署计划，未检查远端基线不得声称成功；App 安装包使用 hai build --target app --platform android|ios，cap:sync 仅同步。
+- Docker/Podman 容器主机名映射用 `hai.json` 的 `deploy.container.compose.services.<serv 或 web>.extra_hosts`。打包校验，按选中服务更新，失败恢复使用旧映射。见[容器主机名映射](docs/usage/configuration/delivery.md#为容器设置主机名映射)。
 - `hai deploy` 自定义 PostgreSQL、MySQL、Redis 和 pgvector 时先选 URL 或分字段，终端只显示脱敏后的连接地址。S3 的 API `endpoint` 和 `bucket` 分开填写，配置错误会指出相应字段或文件。填写示例见[连接已有中间件](docs/usage/configuration/delivery.md#连接已有数据库缓存和对象存储)。
 
 错误提示与日志：core.error.toPublic/formatMessage 区分安全 i18n 消息与内部诊断，默认只显示可读说明；traceId 在 ToastContainer 排查图标展开后查看和复制，并与前后端日志 requestId 关联；README 许可证唯一且最后，运行 pnpm check:readme。

@@ -41,6 +41,8 @@ description: "构建并发布或交付已有镜像：完整离线包、按服务
 
 成功后手工回退使用**当前 CLI**、旧应用 build 制品和匹配配置，省略 `--build`、`--services` 生成新全量 ID；离线也须重新打包，不能运行旧 bundle 或旧工具绕过账本。旧制品通常只保留 serv/web 镜像，中间件仍按当前 CLI 固定版本规划，不承诺精确回退全部中间件版本、DDL 或业务数据。确认主版本、Schema、拓扑和数据兼容并准备备份，再发布和验证。
 
+`hai.json` 的 `deploy.container.compose.services` 支持给 `serv`、`web` 分别配置 `extra_hosts`，写主机名到 IPv4/IPv6 的映射。沿用环境插值、`--plan` 和离线归档校验，已有成功基线时可复用镜像制品只更新对应角色。恢复读取上次成功的 Compose 快照。
+
 ## 可选 HTTPS
 
 所有容器模板共用deploy.provider.expose.https，省略时HTTP。files指定domain、certificateFile、privateKeyFile（相对工程根），校验域名/期限/密钥并复制到私有包。letsencrypt指定domain、email、acceptTerms:true，HTTP hostPort必须80，公网DNS、80入站及CA出站须可达。固定版本官方Certbot申请并每12小时检查续期，Nginx自动重载。仅单域名HTTP-01，无DNS/通配符。HTTPS默认443、redirectHttp默认true；--yes复用配置。启停或改模式/域名/端口/本地证书需全量。状态在服务器https/acme及按域名隔离的https/certificates目录，需备份；续期失败保留旧证书并须及时处理，隔离目标用已有证书。打包/plan不申请证书。

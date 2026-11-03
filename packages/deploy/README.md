@@ -190,6 +190,8 @@ pnpm run deploy --env prod --build --bundle-only
 
 上传优先复用操作机环境中的密码；未配置或为空时，`deploy.sh` / `deploy.ps1` 会直接要求隐藏输入，并继续本次部署。输入不保存到文件；非交互调用明确失败，不等待输入。Linux/macOS 交互输入需要终端和 `stty`。密码变量名、无效输入及取消均有明确提示。上传显示已接收字节、总字节和百分比，成功后才显示 100%；PowerShell 持续转发 SSH 的脱敏输出。增量发布遇到已停止或 Compose down 的服务时，先用已安装基线和本地镜像恢复，再检查依赖并更新所选服务；恢复失败不会推进 current。
 
+在 `hai.json` 的 `deploy.container.compose.services.serv.extra_hosts` 或 `web.extra_hosts` 中配置主机名到 IP 的映射。映射随归档交付，增量更新只替换选中服务，失败恢复使用上一成功发布的映射。 [配置示例](../../docs/usage/configuration/delivery.md#为容器设置主机名映射)
+
 完全隔离的 Linux 服务器上，复制整个交付目录后运行 `sh deploy-local.sh`；脚本自动校验和解包同目录 tar，再调用包内 apply.sh，也可传入部署根目录覆盖默认值。只复制归档时，手工解压后阅读 `APPLY.txt`，在同目录执行 `sh ./apply.sh`。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
 
 离线包的 `manifest.json` 用 `partial` 与 `selectedServices` 明确记录模式和本次服务；执行脚本固化同一选择，不靠文件名猜测。不指定 `--services` 且使用完整构建时为全量；指定 `--services` 或使用部分构建时为增量。增量包必须匹配服务器 `current` 的成功基线，首次安装会拒绝。

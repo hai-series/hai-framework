@@ -423,6 +423,38 @@ Fullstack 创建阶段为各环境生成独立的账号初始密码；打包阶�
 
 云开通需要外网和账号授权，不是完全离线自包含部署。自建中间件镜像随完整包交付，外部服务还需目标网络可达。
 
+### 为容器设置主机名映射
+
+Docker 和 Podman 部署可以在项目根 `hai.json` 的 `deploy.container.compose.services` 为 `serv` 和 `web` 分别配置 `extra_hosts`。下面的映射让后端容器用原域名连接内网数据库。
+
+```json
+{
+  "deploy": {
+    "container": {
+      "compose": {
+        "services": {
+          "serv": {
+            "extra_hosts": {
+              "db.intranet.example": "${DEPLOY_DB_PRIVATE_IP}"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+在本次部署的环境文件中设置 `DEPLOY_DB_PRIVATE_IP=10.20.30.40`，或在 `hai.json` 中直接填 IP。数据库连接配置仍使用 `db.intranet.example`。每项写主机名和纯 IPv4 或 IPv6 地址，端口仍在应用的连接配置中填写。映射只作用于对应容器的 `/etc/hosts`。每个主机名只配置一次，框架内部服务名和 `localhost` 为保留名称。
+
+在 Fullstack 工程根目录运行 `pnpm run deploy --env prod --plan` 检查配置。打包会把映射纳入 `.hai/compose.json` 和归档校验和。首次部署使用全量包。已有成功基线时，可以用 `pnpm run deploy --env prod --bundle-only --yes --services serv` 复用已有镜像制品，解压后照常执行 `sh ./apply.sh`。删除映射后也需重新部署对应服务。增量包只更新选中服务的映射，部署失败并成功恢复时，对应服务会使用上次成功发布中的映射。
+
+部署后可在后端容器里检查解析结果。将容器名换成实际名称，Podman 环境使用 `podman exec`。
+
+```sh
+docker exec hai-orders-prod-serv node -e 'require("node:dns").lookup("db.intranet.example", (error, address) => { if (error) throw error; process.stdout.write(address + "\n") })'
+```
+
 ## 可选HTTPS证书
 
 所有 Docker-SSH 模板共用 `provider.expose.https`，不区分 fullstack、API、admin、website、h5 或静态 SPA。`pnpm run deploy` 的 HTTPS 环节可选不启用、已有 PEM 证书、Let’s Encrypt；选择保存到当前环境私有文件，`--yes` 复用配置。未配置时保持 HTTP，HTTPS 端口默认 443，`redirectHttp` 默认 true。`expose.hostPort` 仍为 HTTP 端口，必须与 HTTPS 端口不同。

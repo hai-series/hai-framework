@@ -176,6 +176,8 @@ CLI 的 --project-name 与 SDK 的 DeployAppOptions.projectName 覆盖入口已�
 
 自建中间件的密码由服务器 `<remoteDir>/managed-secrets.env` 持久保存（权限 0600），应与数据卷一起备份。每次打包只生成首次初始化的随机候选，不依赖打包机缓存；在线 SDK、deploy.sh、deploy.ps1 和 deploy-local.sh 都在部署锁内复用服务器值，同时更新应用连接配置及中间件原生变量。交付 tar 保持不可变，只有服务器私有运行文件使用定稿值。若状态缺失而对应数据卷已存在，部署在变更服务前明确停止，须恢复服务器凭据备份；不会自动换密或删除数据。旧版本可通过下述显式预检和凭据导入流程迁移。
 
+Docker/Podman 部署的主机名映射按镜像配置。使用 `deploy.container.compose.services.<serv 或 web>.extra_hosts`，修改后重新打包并部署对应服务。 [配置示例](../../docs/usage/configuration/delivery.md#为容器设置主机名映射)
+
 完整包包含应用和自建中间件镜像。部署缓存、tar 与操作目录默认放在工程根 `.hai/deploy/<环境>/`；`--output` 可显式指定相对命令执行目录的 tar 路径。交互式仅打包在构建和中间件配置后、打包前最后询问是否添加或修改 SSH 信息，保存到 `.env.<环境>.local` 并用于本次和后续 target；`--yes` 或跳过时复用已有连接。交付目录仅含 tar、deploy-local.sh、read-target.awk、README.txt、带逐项说明的 `deploy-target.json` 与 Windows PowerShell 5+ `deploy.ps1`、Linux/macOS `deploy.sh`。上传前核对 target 并补齐缺项，两个脚本均读取此文件，支持 key/agent 和 password，均无需 Node/pnpm。target 只引用 `passwordEnv`（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）；密码取自操作机环境，仅进入本次 SSH/SCP 子进程，不进入应用环境或包内。修改 target 仅影响本包，不回写工程。完全隔离的 Linux 服务器复制整个目录后运行 `sh deploy-local.sh`，自动解包部署。只复制归档时，解压后阅读 `APPLY.txt`，在同目录执行 `sh ./apply.sh`。首次部署必须完整；部分更新保留未选服务和数据卷。每步报告结果，失败返回非零并尝试恢复。前置工具、缓存、版本和恢复流程见[部署说明](../deploy/README.md)。
 
 首次补齐 SSH 连接和认证，密码隐藏输入并保留空格与前导零；完整配置在 `--yes` 下复用。 公共配置保存在 `.env` 和 `.env.<mode>`，连接凭据与 SSH 配置保存在忽略 Git 的 `.env.<mode>.local`，`.env.local` 用于本机共享私有值。构建不读取部署秘密。 所有 `HAI_*` 统一使用：进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同来源 JSON 为基础，细项继续覆盖；高来源整段替换先清掉低来源细项。Node/Vite 与部署共用 Core 合并，不维护模块专用顺序。
