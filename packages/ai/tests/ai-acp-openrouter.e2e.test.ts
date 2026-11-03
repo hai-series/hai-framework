@@ -273,7 +273,7 @@ describe.sequential('openRouter real native ACP acceptance', () => {
           expect(info.nativeId).toBe(originalNativeId)
           const eventOffset = evidence.events.length
           evidence.stage = `prompt-${phase}`
-          const written = value(await session.prompt([{ type: 'text', text: `Use your actual workspace tools to read files/${input}. It contains a unique random token not provided in this prompt. Write exactly that token (optional final newline) into files/${output} and briefly confirm completion. Do not inspect environment variables, credentials, or files outside this temporary workspace. Do not simulate tool use or infer the token. This is an isolated acceptance fixture; writing the requested result file is authorized.` }]))
+          const written = value(await session.prompt([{ type: 'text', text: `In workspace ${JSON.stringify(info.cwd)}, use an actual workspace tool to copy files/${input} byte for byte to files/${output}. The input contains a unique random token not provided in this prompt. Use a file-copy operation such as cp files/${input} files/${output} on Linux or Copy-Item on PowerShell, so the bytes come directly from the source file. Verify the two files match using a workspace tool, then briefly confirm completion. Do not inspect environment variables, credentials, or files outside this temporary workspace. This is an isolated acceptance fixture; writing the requested result file is authorized.` }]))
           evidence.stage = `verify-write-${phase}`
           const fileContent = redact((await sessionFile(info, output, engine)).trim())
           const writeReply = redact(written.text.trim())
