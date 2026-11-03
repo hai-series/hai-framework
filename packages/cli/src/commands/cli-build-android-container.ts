@@ -78,6 +78,23 @@ done
 
 const copyExclusions = new Set(['node_modules', '.git', '.hai', '.turbo', '.svelte-kit', '.pnpm-store', '.cache', '.gradle', '.idea', 'test-results', 'playwright-report', 'local.properties'])
 
+/**
+ * 容器构建使用已解析的下载设置和选定的运行时命令。
+ * @example 模块内部上下文
+ * ```ts
+ * const options: AndroidContainerOptions = {
+ *   runtime: 'docker',
+ *   debug: true,
+ *   downloads: {
+ *     imageSource: { type: 'official' },
+ *     npmRegistry: 'https://registry.npmjs.org',
+ *     npmSource: { type: 'official' },
+ *     proxy: { mode: 'inherit' },
+ *   },
+ *   run: async (args) => { process.stdout.write(args.join(' ')) },
+ * }
+ * ```
+ */
 interface AndroidContainerOptions {
   runtime: string
   network?: string
@@ -113,7 +130,14 @@ function bindMount(source: string, target: string, readOnly = false): string[] {
   return ['--mount', `type=bind,"${field.replaceAll('"', '""')}",target=${target}${readOnly ? ',readonly' : ''}`]
 }
 
-/** 构建并消费临时工作副本；复制出校验后的 APK 再释放工作副本。 */
+/**
+ * 构建并消费临时工作副本，复制出校验后的 APK 再释放工作副本。
+ * @example 模块内部上下文
+ * ```ts
+ * const build = (root: string, options: AndroidContainerOptions, archive: (artifacts: NativeArtifact[]) => Promise<string[]>) =>
+ *   buildContainerAndroid(root, ['apps/shop-app'], options, archive)
+ * ```
+ */
 export async function buildContainerAndroid<T>(root: string, apps: readonly string[], options: AndroidContainerOptions, publish: (artifacts: NativeArtifact[]) => Promise<T>): Promise<T> {
   const { runtime, network, debug, downloads, run } = options
   if (!apps.length)

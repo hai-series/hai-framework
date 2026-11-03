@@ -6,9 +6,22 @@ import process from 'node:process'
 import { cliM } from '../cli-i18n.js'
 import { isNativeZip, nativeFiles, nativeProjectDirectory } from './cli-build-native.js'
 
+/**
+ * 在指定应用目录执行 pnpm 参数。
+ * @example 模块内部上下文
+ * ```ts
+ * const sync = (run: AppCommand, cwd: string) => run(['exec', 'cap', 'sync', 'android'], cwd)
+ * ```
+ */
 export type AppCommand = (args: string[], cwd: string) => Promise<void>
 
-/** 本机 Gradle 入口；使用系统脚本执行器处理 Windows 和 POSIX wrapper。 */
+/**
+ * 本机 Gradle 入口，使用系统脚本执行器处理 Windows 和 POSIX wrapper。
+ * @example 模块内部上下文
+ * ```ts
+ * const [executable, ...args] = gradleCommand(true)
+ * ```
+ */
 export function gradleCommand(debug: boolean): [string, ...string[]] {
   const task = debug ? 'assembleDebug' : 'assembleRelease'
   return process.platform === 'win32'
@@ -16,7 +29,13 @@ export function gradleCommand(debug: boolean): [string, ...string[]] {
     : ['bash', './gradlew', task, '--no-daemon']
 }
 
-/** Android 用实际 build type 目录，兼容 Gradle flavor 的额外层级。 */
+/**
+ * Android 用实际 build type 目录，兼容 Gradle flavor 的额外层级。
+ * @example 模块内部上下文
+ * ```ts
+ * const debugApk = isAppPackage('tv/debug/app-tv-debug.apk', 'android', true)
+ * ```
+ */
 export function isAppPackage(path: string, platform: 'android' | 'ios', debug: boolean): boolean {
   if (platform === 'ios')
     return path.endsWith('.ipa')
@@ -24,7 +43,13 @@ export function isAppPackage(path: string, platform: 'android' | 'ios', debug: b
   return parts.at(-2) === (debug ? 'debug' : 'release') && path.endsWith('.apk') && !path.endsWith('-unsigned.apk')
 }
 
-/** 打包并返回工程内相对安装包路径，供统一归档。 */
+/**
+ * 打包并返回工程内相对安装包路径，供统一归档。
+ * @example 模块内部上下文
+ * ```ts
+ * const build = (root: string, run: AppCommand) => buildMobileApp(root, ['apps/shop-app'], 'ios', run)
+ * ```
+ */
 export async function buildMobileApp(root: string, directories: readonly string[], platform: 'android' | 'ios', run: AppCommand, debug = false, runGradle?: (cwd: string) => Promise<void>): Promise<NativeArtifact[]> {
   if (!directories.length || (platform === 'ios' && process.platform !== 'darwin'))
     throw new Error(cliM('cli_build_app_platform'))

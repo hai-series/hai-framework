@@ -5,12 +5,25 @@ import { closeSync, cpSync, createReadStream, existsSync, lstatSync, mkdirSync, 
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { cliM } from '../cli-i18n.js'
 
+/**
+ * 原生安装包的源路径及其在发布批次中的相对路径。
+ * @example 模块内部上下文
+ * ```ts
+ * const artifact: NativeArtifact = { source: '/tmp/outputs/app-debug.apk', file: 'apps/shop-app/debug/app-debug.apk' }
+ * ```
+ */
 export interface NativeArtifact {
   source: string
   file: string
 }
 
-/** 将 build.app/build.desktop 的相对目录解析到当前工程边界内。 */
+/**
+ * 将 build.app/build.desktop 的相对目录解析到当前工程边界内。
+ * @example 模块内部上下文
+ * ```ts
+ * const app = nativeProjectDirectory('/workspace/shop', 'apps/shop-app')
+ * ```
+ */
 export function nativeProjectDirectory(root: string, item: string): string {
   const directory = resolve(root, item)
   const inside = (parent: string, path: string): boolean => {
@@ -22,7 +35,13 @@ export function nativeProjectDirectory(root: string, item: string): string {
   return directory
 }
 
-/** 记录候选制品及目录包的状态，以区分本次产物与旧文件。 */
+/**
+ * 记录候选制品及目录包的状态，以区分本次产物与旧文件。
+ * @example 模块内部上下文
+ * ```ts
+ * const installers = nativeFiles('/workspace/shop/dist', (path, isDirectory) => !isDirectory && path.endsWith('.deb'))
+ * ```
+ */
 export function nativeFiles(root: string, accepts: (path: string, isDirectory: boolean) => boolean): Map<string, string> {
   const files = new Map<string, string>()
   function stamp(path: string): string {
@@ -46,7 +65,13 @@ export function nativeFiles(root: string, accepts: (path: string, isDirectory: b
   return files
 }
 
-/** 仅接受本次写入的 ZIP 格式安装包。 */
+/**
+ * 检查安装包是否有 ZIP 文件头。
+ * @example 模块内部上下文
+ * ```ts
+ * const hasZipHeader = isNativeZip('/tmp/outputs/app-debug.apk')
+ * ```
+ */
 export function isNativeZip(path: string): boolean {
   const fd = openSync(path, 'r')
   try {
@@ -58,7 +83,14 @@ export function isNativeZip(path: string): boolean {
   }
 }
 
-/** 写入完整批次后再更新当前平台与构建类型的 latest。 */
+/**
+ * 写入完整批次后再更新当前平台与构建类型的 latest。
+ * @example 模块内部上下文
+ * ```ts
+ * const archive = (root: string, artifacts: NativeArtifact[]) =>
+ *   publishNativeArtifacts(root, 'app', 'android', true, { buildId: '1.2.3-build1', commit: 'abc1234', appVersion: '1.2.3' }, artifacts)
+ * ```
+ */
 export async function publishNativeArtifacts(root: string, kind: 'app' | 'desktop', platform: string, debug: boolean, identity: { buildId: string, commit: string, appVersion: string }, artifacts: readonly NativeArtifact[]): Promise<string[]> {
   const variant = debug ? 'debug' : 'release'
   const parent = join(root, '.hai', 'build', kind, platform, variant)
