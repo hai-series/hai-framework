@@ -127,6 +127,8 @@ SSH 設定は選択環境の `.env.<環境>.local` に保存します。`--bundl
 
 既定とカスタムは同じバックエンドの有効な設定を保持します。フォームにない接続プール、操作ログ、ストレージ公開 URL/接頭辞、Redis 再試行、ベクトル検索設定も対象です。自前構成とクラウド開通は接続先・認証だけを更新し、古い URL、TLS/クラスター設定、認証情報を引き継ぎません。SMTP 送信元と LDAP 属性対応は保持します。バックエンド変更時は非互換項目を除去します。 生成処理は個別変数を優先し、配列は JSON を維持します。手書き JSON はモジュール細項の前に置く基礎値で、同一ソースの細項が優先されます。動的辞書、JSON テキスト、明示的な空オブジェクトの意味を維持します。全体置換を展開する際は最上位の `{}` リセットを残し、古い YAML フィールドの復活を防ぎます。コンテナー内パスは配布物のみ変更します。
 
+`hai deploy` で PostgreSQL、MySQL、Redis、pgvector の接続を設定する場合は、接続 URL または個別フィールドを選びます。外部 S3 は API アドレスを `endpoint` に、バケット名を `bucket` に入力します。例は[既存ミドルウェアへの接続](../../docs/usage/configuration/delivery.md#连接已有数据库缓存和对象存储)を参照してください。 本番用 Reach の一覧が空の場合は、プロバイダーの完全な一覧を別途設定します。ウィザードは既存のインデックスを使用します。
+
 #### 非公開オブジェクトストレージへの直接アクセス
 
 自前 S3 の endpoint は内部接続先です。publicEndpoint に `https://app.example.com/delivery/files` などの外部アドレスを設定できます。Nginx は `/delivery/files/<bucket>/...` を受け、入口パスだけを除去し、本来のバケット URI、署名クエリ、Host を保持して storage:9000 に転送します。Serv を経由せず、パス省略時は従来のルートバケット形式です。サイト配下に置けますが API、資源、ヘルスパスの競合は拒否します。ポートと管理コンソールは非公開、バッファリングと署名ログは無効です。認可と CORS は S3 に設定し、外部プロキシは入口パスと Host を保持してください。
@@ -159,7 +161,7 @@ S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAG
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、外側には tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh、README.txt だけを保存します。Compose、実行環境、web.conf、manifest.json は tar 内に置き、外側の README にも配置 ID を記録します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar.gz` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、README、apply.sh を含みます。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
+毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を一つ生成し、外側には tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh、README.txt だけを保存します。Compose、実行環境、web.conf、manifest.json は tar 内に置き、外側の README にも配置 ID を記録します。ディレクトリ全体をコピーしてください。`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルも同じ場所に置きます。tar は選択アプリ・ミドルウェアのイメージ、設定、秘密の環境ファイル、チェックサム、`APPLY.txt`、`apply.sh` を含みます。アーカイブだけをコピーした場合は、展開後に `APPLY.txt` を読み、同じ場所で `sh ./apply.sh` を実行してください。アップロードスクリプトの実行前に、操作ディレクトリの `deploy-target.json` を開き、各項目の説明に従ってサーバー、SSH ユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリなどを変更・確認します。Windows は deploy.ps1、Linux/macOS は deploy.sh を実行します。どちらも同じ JSON を読み、SSH 転送後に同じサーバー処理を実行します。ローカルで deploy.sh を実行するには sh、awk、ssh、scp が必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、deploy.ps1 の `-IdentityFile` で秘密鍵を上書きできます。両方のスクリプトで HAI_DEPLOY_IDENTITY_FILE と HAI_DEPLOY_KNOWN_HOSTS_FILE による鍵・指紋ファイルのパスの上書きも可能です。別の PC・OS に移す場合、これらのパスを移動先の実ファイルに合わせます。
 
 オフラインアップロードは鍵とパスワードの両方に対応します。`deploy-target.json` に保存するのは認証方式と `passwordEnv` 名（既定 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`）だけで、パスワード値は含めません。操作する PC の環境から与え、今回の SSH/SCP 子プロセスだけに渡します。アプリ環境、tar、manifest には入りません。Windows では永続化したユーザー環境も参照できます。Windows は PowerShell 5+ と OpenSSH、Linux/macOS は sh、awk、ssh、scp が必要で、どちらも Node/pnpm は不要です。target の変更はその配布ディレクトリだけに適用し、プロジェクトには書き戻しません。新しい配布物は保存済みの環境設定を使います。
 
@@ -201,7 +203,7 @@ SDK はサーバー内の正常性確認と `current` 更新後、操作端末�
 
 ### 構築と配布の最適化
 
-イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
+イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。配布ディレクトリには `README.txt`、アーカイブ内には手動デプロイガイド `APPLY.txt` を格納します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
 
 ### 任意の HTTPS 証明書
 
@@ -250,7 +252,7 @@ SSH 中断は最初に `remoteExecution: 'unknown'` とし、docker-ssh SDK は�
 
 生成処理は個別変数を優先し、配列は JSON を維持します。手書き JSON はモジュール細項の前に置く基礎値で、同一ソースの細項が優先されます。動的辞書、JSON テキスト、明示的な空オブジェクトの意味を維持します。全体置換を展開する際は最上位の `{}` リセットを残し、古い YAML フィールドの復活を防ぎます。コンテナー内パスは配布物のみ変更します。
 
-配布アーカイブのトップレベルは `apply.sh`、`manifest.json`、`config/`、`images/`、`.hai/` の 5 項目です。アプリ環境は `config/.env.runtime` に統一し、レイアウト、依存、健康パス、イメージ一覧、管理接続などの非機密メタデータは `manifest.json.metadata` に保存します。`.hai/compose.json` は全サービスのスナップショットで、部分更新は選択サービスの定義を置換し、他サービスを保持します。`.hai/` にネイティブ環境、ローダー、Nginx/TLS、ポリシー、チェックサムも保存し、秘密値は manifest に含めません。補助スクリプトは `apply.sh` に統合します。失敗時は先にアプリ設定、次にサービスを復元し、資格情報、台帳、データボリュームを保護します。形式 2 の旧ディレクトリー互換や移行は実装しません。 設定の確定は導入済みの Node アプリイメージを一時コンテナーで再利用し、ネットワークを無効化します。追加イメージの取得やホストの Node・jq は不要です。
+配布アーカイブのトップレベルには `apply.sh`、`APPLY.txt`、`manifest.json`、`config/`、`images/`、`.hai/` が含まれます。アプリ環境は `config/.env.runtime` に統一し、レイアウト、依存、健康パス、イメージ一覧、管理接続などの非機密メタデータは `manifest.json.metadata` に保存します。`.hai/compose.json` は全サービスのスナップショットで、部分更新は選択サービスの定義を置換し、他サービスを保持します。`.hai/` にネイティブ環境、ローダー、Nginx/TLS、ポリシー、チェックサムも保存し、秘密値は manifest に含めません。補助スクリプトは `apply.sh` に統合します。失敗時は先にアプリ設定、次にサービスを復元し、資格情報、台帳、データボリュームを保護します。形式 2 の旧ディレクトリー互換や移行は実装しません。 設定の確定は導入済みの Node アプリイメージを一時コンテナーで再利用し、ネットワークを無効化します。追加イメージの取得やホストの Node・jq は不要です。
 
 Node バックエンド（Serv / SvelteKit SSR）は起動ごとに `<配備ディレクトリー>/config/.env.runtime` を読みます。管理接続も同じアプリ設定に統合します。`HAI_STORAGE_PUBLICENDPOINT` などを編集して再起動すると反映され、同じソースでは個別フィールドが親 JSON を上書きします。設定ディレクトリーを `/run/hai/config` に読み取り専用でマウントするため、ファイルのアトミック置換も次の起動で反映されます。非公開プロキシ識別と Node 起動引数は配備設定です。静的 Web、ネイティブ環境、ポート、マウント、Nginx の変更は再配備します。Web/ミドルウェアのみの更新は設定を維持し、バックエンドの部分更新は管理接続を維持、全量更新は新しい設定と既存の管理資格情報を使います。編集前にバックアップし、恒久的な値は元の環境にも反映してください。
 

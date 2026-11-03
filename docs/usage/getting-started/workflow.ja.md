@@ -217,7 +217,7 @@ Node バックエンド（Serv / SvelteKit SSR）は起動ごとに `<配備デ�
 
 `hai.json.deploy.provider.expose.https` または環境別秘密設定で指定します。既定は HTTPS 443 と HTTP リダイレクト、省略時は HTTP です。有効/無効・モード・ドメイン・ポート・持込証明書の変更は完全デプロイが必要です。[HTTPS 設定](../configuration/delivery.md#可选https证书)を参照してください。計画では `root` が工程ルート、`serviceDir` がサービスのソース・設定ディレクトリです。
 
-イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。README は外側だけに保持します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
+イメージは既定で最大 2 件を並列構築し、`--concurrency 1` で資源使用量を抑えます。ソースの前に依存をインストールし、各端で必要なソースだけをコピーします。実行イメージからアプリの型宣言・source map・README を除去します。ミドルウェアのアーカイブはイメージ内容 ID で検証・再利用し、コピーと同時にハッシュを計算します。配布の既定は `.tar.gz`、明示的な `--output release.tar` は非圧縮です。配布ディレクトリには `README.txt`、アーカイブ内には手動デプロイガイド `APPLY.txt` を格納します。成功後に今回の incoming アップロードと展開先を削除し、release に復旧設定、エンジンにイメージを保持します。
 
 #### 環境と接続先を用意する
 
@@ -277,9 +277,9 @@ S3 の `createBucket` は既定で `false` です。自前 S3 には `HAI_STORAG
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を生成します。外側にはtar、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh`、`README.txt`を置きます。Compose、非公開の実行環境、必要な`web.conf`、マニフェスト、`apply.sh`は、イメージとチェックサムとともにtar内へ格納します。非公開の実行ファイルがスクリプトの横にあるとは扱わず、ディレクトリ全体をコピーしてください。
+毎回 `.hai/deploy/<環境>/bundle-<プロジェクト>-<配置ID>-<版>/` を生成します。外側にはtar、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh`、`README.txt`を置きます。Compose、非公開の実行環境、必要な`web.conf`、マニフェスト、`APPLY.txt`、`apply.sh`は、イメージとチェックサムとともにtar内へ格納します。アーカイブだけを使用する場合は、展開後に `apply.sh` と同じ場所の `APPLY.txt` をお読みください。
 
-`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar.gz` を生成し、付属ファイルを同じ配布ディレクトリへ置きます。実行前に `deploy-target.json` の説明に従い、サーバー、SSHユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリを確認します。
+`--output release-prod.tar` は作業ディレクトリを基準に `release-prod-<版>/release-prod-<版>.tar` を生成し、付属ファイルを同じ配布ディレクトリへ置きます。実行前に `deploy-target.json` の説明に従い、サーバー、SSHユーザーとポート、秘密鍵・指紋ファイル、リモートディレクトリを確認します。
 
 Windowsは `deploy.ps1`、Linux/`macOS`は `deploy.sh` を実行します。どちらも同じJSONとサーバー処理を使います。`deploy.sh`には操作機のsh/awk/ssh/scpが必要です。`sh deploy.sh ホスト [ポート] [ユーザー]` で接続先を、`deploy.ps1`の `-IdentityFile` で鍵を上書きできます。両方とも `HAI_DEPLOY_IDENTITY_FILE` と `HAI_DEPLOY_KNOWN_HOSTS_FILE` の上書きに対応します。別のPC・OSへ移す場合は、その環境に実在するパスへ変更してください。
 

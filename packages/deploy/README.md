@@ -140,6 +140,8 @@ SSH 参数保存到选中环境的 `.env.<环境>.local`。`--bundle-only` 在�
 
 默认和自定义模式均保留同后端的有效配置，包括表单未展示的连接池、操作日志、存储公开端点/前缀、Redis 重试和向量检索选项。自建与云开通仅重新定稿实际连接和认证；旧 URL、TLS/集群模式与凭据不能覆盖新服务，SMTP 发件人和 LDAP 属性映射继续保留。切换后端时清除不兼容字段。 生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
+通过 `hai deploy` 自定义 PostgreSQL、MySQL、Redis 或 pgvector 时可在连接 URL 和分字段之间选择。外部 S3 的 `endpoint` 填服务端 API 地址，桶名填 `bucket`。填写方式及示例见[连接已有中间件](../../docs/usage/configuration/delivery.md#连接已有数据库缓存和对象存储)。 生产 Reach 的空列表要求单独提供完整的通知配置，向导按实际列表索引配置。
+
 #### 私有对象存储直连
 
 自建 S3 的 `endpoint` 使用 Compose 内部地址，浏览器地址用 `_storage.yml` 的 `publicEndpoint` 配置，例如 `https://app.example.com/delivery/files`。Nginx 对外开放 `/delivery/files/<bucket>/...`，去掉 `/delivery/files` 后将原始桶 URI、签名查询与 Host 直接转发 storage:9000，文件不经过 Serv；省略目录时继续使用根桶路径。入口可位于网站目录内，API/资源/健康路径冲突会在打包前失败。存储端口与控制台不公开，对象缓冲和签名日志关闭；S3 负责私有桶授权和跨源 CORS。外层代理须保留完整入口路径与 Host，只由 SDK 网关去掉前缀。
@@ -182,13 +184,13 @@ S3 的 `createBucket` 默认为 `false`；部署器为自建 S3 注入 `HAI_STOR
 pnpm run deploy --env prod --build --bundle-only
 ```
 
-每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，外层仅保留 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest.json 仅保存在 tar 内，README 同时记录部署 ID，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar.gz`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、README 和 apply.sh。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
+每次交付只生成一个 `.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/` 目录，外层仅保留 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest.json 仅保存在 tar 内，README 同时记录部署 ID，直接整体复制即可。显式 `--output release-prod.tar` 按命令执行目录生成 `release-prod-<版本>/release-prod-<版本>.tar`，其他文件仍在同一交付目录。包包含所选应用/中间件镜像、服务配置、私有环境、校验和、`APPLY.txt` 和 `apply.sh`。运行上传脚本前，先打开操作目录的 `deploy-target.json`，按其中逐项说明修改并核对服务器、SSH 用户和端口、私钥及指纹文件、远程目录等配置。Windows 运行 deploy.ps1，Linux/macOS 运行 deploy.sh；两个脚本均读取该 JSON，通过 SSH 上传后执行同一服务器流程。本机运行 deploy.sh 需 sh、awk、ssh、scp；可用 `sh deploy.sh 主机 [端口] [用户]` 覆盖连接地址，或给 deploy.ps1 传入 `-IdentityFile` 覆盖私钥。两个脚本均支持用 HAI_DEPLOY_IDENTITY_FILE、HAI_DEPLOY_KNOWN_HOSTS_FILE 覆盖私钥及指纹文件路径。换电脑或操作系统后，这些路径必须指向当前电脑上的实际文件。
 
 离线上传支持密钥和密码认证。`deploy-target.json` 只保存认证方式及 `passwordEnv` 名称（默认 `HAI_DEPLOY_PROVIDER_SSH_PASSWORD`），不保存密码值。密码由操作机环境提供，仅传给本次 SSH/SCP 子进程，不进入应用环境、tar 或 manifest；Windows 也可读取用户持久环境。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。修改 target 只影响当前交付目录，不回写工程；新交付仍使用工程保存的环境配置。
 
 上传优先复用操作机环境中的密码；未配置或为空时，`deploy.sh` / `deploy.ps1` 会直接要求隐藏输入，并继续本次部署。输入不保存到文件；非交互调用明确失败，不等待输入。Linux/macOS 交互输入需要终端和 `stty`。密码变量名、无效输入及取消均有明确提示。上传显示已接收字节、总字节和百分比，成功后才显示 100%；PowerShell 持续转发 SSH 的脱敏输出。增量发布遇到已停止或 Compose down 的服务时，先用已安装基线和本地镜像恢复，再检查依赖并更新所选服务；恢复失败不会推进 current。
 
-完全隔离的 Linux 服务器上，复制整个交付目录后运行 `sh deploy-local.sh`；脚本自动校验和解包同目录 tar，再调用包内 apply.sh，也可传入部署根目录覆盖默认值。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
+完全隔离的 Linux 服务器上，复制整个交付目录后运行 `sh deploy-local.sh`；脚本自动校验和解包同目录 tar，再调用包内 apply.sh，也可传入部署根目录覆盖默认值。只复制归档时，手工解压后阅读 `APPLY.txt`，在同目录执行 `sh ./apply.sh`。每步检查结果，任何失败返回非零退出码；镜像导入、服务启动和 HTTP 检查分别报告。结果写到服务器部署目录 `result-<部署ID>.json`，只有检查通过才更新 current 成功状态。重复应用同一部署包会明确停止；相同版本重新生成的新包允许发布。已有版本失败时尝试恢复选中的旧容器和配置，保留数据卷及诊断材料；不会回退已写入的业务数据。
 
 离线包的 `manifest.json` 用 `partial` 与 `selectedServices` 明确记录模式和本次服务；执行脚本固化同一选择，不靠文件名猜测。不指定 `--services` 且使用完整构建时为全量；指定 `--services` 或使用部分构建时为增量。增量包必须匹配服务器 `current` 的成功基线，首次安装会拒绝。
 
@@ -227,7 +229,7 @@ SDK 在服务器本地健康通过并提交 `current` 后，还从操作机检�
 
 ### 构建与交付优化
 
-镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；README 仅保留外层一份。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
+镜像默认最多并行两项，`--concurrency 1` 可降低资源占用。Dockerfile 在复制源码前安装依赖；前后端仅复制各自必要源码，复用安装层和驱动缓存。运行镜像移除应用自身的声明文件、源码映射和说明文件。打包按镜像内容 ID 复用并校验中间件归档，复制应用镜像时同时计算摘要。默认交付压缩为 `.tar.gz`，显式 `--output release.tar` 可保留未压缩格式；交付目录包含 `README.txt`，归档内含手工部署说明 `APPLY.txt`。成功部署后清理本次 incoming 上传和解包目录，release 保留恢复配置和状态，镜像由容器引擎保存。
 
 ### 可选 HTTPS 证书
 
@@ -282,7 +284,7 @@ Nginx 通过动态上游跟随应用和存储容器的 DNS 地址变化。共用
 
 生成端优先写细项，数组保留 JSON；手写 JSON 允许兜底，放在对应模块细项之前。同源细项覆盖 JSON，动态字典、JSON 文本和显式空对象保留原义；整体替换展开时以最上层 `{}` 标记阻止旧 YAML 字段恢复。容器路径只写交付配置，不反写工程源环境。
 
-部署归档只保留五个顶层入口：`apply.sh`、`manifest.json`、`config/`、`images/`、`.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。新包格式为 2，不实现旧目录兼容或迁移。 运行配置定稿复用本包已导入的 Node 应用镜像，临时容器禁网，不额外下载镜像；服务器无需安装 Node 或 jq。
+部署归档顶层包含 `apply.sh`、`APPLY.txt`、`manifest.json`、`config/`、`images/` 和 `.hai/`。`config/.env.runtime` 是唯一应用环境文件；`manifest.json.metadata` 集中保存依赖、布局、健康路径、镜像列表、受管绑定等非敏感元数据。`.hai/compose.json` 是完整服务快照；局部更新在服务边界替换并保留未选服务，不串联历史 Compose 文件。`.hai/` 还存原生环境、加载器、Nginx/TLS、策略和校验和，秘密不写入 manifest。辅助脚本合入 `apply.sh`。失败时先恢复原应用配置再恢复服务，凭据、后端账本和数据卷继续保护。新包格式为 2，不实现旧目录兼容或迁移。 运行配置定稿复用本包已导入的 Node 应用镜像，临时容器禁网，不额外下载镜像；服务器无需安装 Node 或 jq。
 
 中间件原生变量（`POSTGRES_*`、`MYSQL_*`、`RUSTFS_*`、`MINIO_*`、`LDAP_*`）按镜像契约保留原名，只写私有 `.hai/middleware-runtime.env`，仅由中间件读取。应用连接全部合并到 `config/.env.runtime`。
 

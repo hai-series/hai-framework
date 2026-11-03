@@ -49,6 +49,8 @@ pnpm run deploy --env test --build --services web
 
 第一条生成默认 `.tar.gz` 完整交付，不连接SSH；复制整个目录，在Windows用`deploy.ps1`、Linux/`macOS`用`deploy.sh`上传，完全隔离Linux运行sh `deploy-local.sh`。第二条基于目标成功完整基线只更新web，实际修改目标。
 
+如果只复制 `.tar.gz`，在 Linux 解压后阅读 `apply.sh` 同目录的 `APPLY.txt`，再按说明执行。[手工部署步骤](../configuration/delivery.md#只复制归档时手工部署)
+
 检查manifest.partial/`selectedServices`、版本/构建ID、校验和、端口和保留范围。首次安装或拓扑改变用全量；增量不能改任意布局。已有后端不能原地换引擎复用旧卷，要独立目标和迁移。详见[全量/增量选择](../configuration/delivery.md#全量和增量怎样选择)。
 
 成功后清理本次 incoming 归档与解包目录，release 保留恢复配置和结果，镜像由引擎保存；失败保留诊断。部署后核对`health`/ready、公开版本、登录、列表刷新和持久数据。只有服务器本地HTTP成功才推进current；操作机公开地址复核失败时，远端可能已经complete，先查防火墙/DNS/网络，不自动重发。

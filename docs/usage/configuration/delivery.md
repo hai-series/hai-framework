@@ -20,6 +20,16 @@
 | Redis | 地址、认证、库编号和环境独立的 `keyPrefix` | 写入并读取一个带期限的缓存，核对使用了正确逻辑库 |
 | S3 兼容存储 | `bucket`、区域、服务端 `endpoint`、访问凭据；浏览器下载另设 `publicEndpoint` | 上传、读取，再通过生成的签名地址从浏览器下载 |
 
+PostgreSQL、MySQL、Redis 和 pgvector 可选「连接 URL」或「分字段」。连接 URL 模式不再询问主机、端口或账号。PostgreSQL 和 pgvector 从 URL 路径取得必需的数据库名，例如 `postgresql://db.example.com:5432/app`。Redis 将逻辑库写入 URL 路径，例如 `rediss://redis.example.com:6379/4`。连接 URL 输入时隐藏，保存后仅显示协议、主机和端口。分字段模式只写所选字段，并从当前环境移除旧 URL。保留现有配置可选「保持不变」。
+
+自定义 S3 的 `endpoint` 是后端能访问的 S3 API 地址，例如 `https://objects.example.com:9000`。桶名只填在 `bucket`，例如 `uploads`。AWS S3 可留空，由 SDK 按 `region` 选地址。MinIO、RustFS 等通常使用 `forcePathStyle=true`，请求地址形如 `endpoint/uploads`。要求使用桶子域名的服务按其要求设为 `false`。Access Key ID 和 Secret Access Key 使用存储服务签发的一对凭据。
+
+生产模板通过 `HAI_REACH_PROVIDERS='[]'` 要求显式设置通知 Provider。空列表时，交互式部署提示应填写的私有文件路径。设置完整列表后再运行 `deploy`，可以逐项配置邮件和短信。列表位于环境私有文件时，向导将修改保存在同一文件。HTTP API 的请求头以隐藏方式输入。若旧向导在空列表旁写入了 `HAI_REACH_PROVIDERS_0`、`HAI_REACH_PROVIDERS_0_NAME`、`HAI_REACH_PROVIDERS_0_TYPE`，删掉这些旧索引变量，再把应用所需的完整列表写入 `.env.prod.local`。例如邮件和短信都通过 HTTPS API 发送时，可按下列结构填写实际端点和所需认证。
+
+```dotenv
+HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.invalid/send","method":"POST"},{"name":"sms","type":"api","url":"https://sms.example.invalid/send","method":"POST"}]'
+```
+
 “已有服务的地址”是从目标后端容器看过去的地址，通常是内网域名或 IP。不要填写开发机的 `localhost`，也不要把仅 Compose 内可用的 `storage:9000` 当成浏览器下载地址。外部对象存储的公开入口、反向代理和跨域策略由该存储环境维护，部署工具不会替它创建本地文件网关。配置文件与凭据的保存位置见本章[环境和秘密的来源](#环境和秘密的来源)。
 
 | 角色 | 用途 | 交付方式 |
@@ -502,7 +512,7 @@ pnpm run deploy --env prod --build --services web
 
 ## 离线交付与服务器条件
 
-`--bundle-only`只打包，不连接SSH。默认归档为 `.tar.gz`，显式 `--output release.tar` 保留未压缩格式。交付目录包含归档、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh`和README；Compose、环境、manifest和`apply.sh`在归档内，README 仅保留外层一份。镜像从本次解包目录直接导入，release 不再复制镜像归档；完整成功后清理本次 incoming 上传与解包目录，失败保留诊断。恢复配置、结果与数据卷继续保留。目录在`.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/`，自定义output按运行目录生成版本目录，不覆盖旧交付。
+`--bundle-only`只打包，不连接SSH。默认归档为 `.tar.gz`，显式 `--output release.tar` 保留未压缩格式。交付目录包含归档、`deploy.sh`、`deploy.ps1`、`deploy-target.json`、`read-target.awk`、`deploy-local.sh` 和 `README.txt`。Compose、环境、manifest、`apply.sh` 和手工部署说明 `APPLY.txt` 在归档内。镜像从本次解包目录直接导入，release 不再复制镜像归档；自动上传流程成功后清理本次 incoming 上传与解包目录，失败保留诊断。恢复配置、结果与数据卷继续保留。目录在`.hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/`，自定义output按运行目录生成版本目录，不覆盖旧交付。
 
 ```sh
 pnpm run deploy --env prod --build --bundle-only
@@ -511,6 +521,21 @@ sh deploy-local.sh
 ```
 
 Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`deploy.sh`（sh/awk/ssh/scp）。目标Linux需容器引擎、支持`--pull` never的Compose（Docker Compose v2或podman-compose≥1.6.0）、sh/tar/sha256sum/awk/curl/util-linux flock及目录/容器权限；文件系统支持flock，不需Node/pnpm。凭据导入是独立例外，需要服务器Node。
+
+### 只复制归档时手工部署
+
+在 Linux 服务器以部署账户将归档解压到单独的临时目录。已经解压时，从包含 `apply.sh` 的目录开始，先读同目录的 `APPLY.txt`。它列出本次默认部署目录、引擎、部署 ID 和结果文件。
+
+```sh
+umask 077
+work=$(mktemp -d)
+tar -xf /path/to/release.tar.gz -C "$work"
+cd "$work"
+cat APPLY.txt
+sh ./apply.sh
+```
+
+如需显式指定部署根目录，将最后一行改为 `sh ./apply.sh '/opt/hai/apps/my-app-prod'`，并替换为实际路径。更新已有环境时使用原部署账户、引擎和根目录。脚本校验文件、导入归档镜像并执行健康检查。成功后可清理此次手工解压目录，失败或中断时保留它并核对 `result-<部署ID>.json`、`steps-<部署ID>.jsonl` 和 `current`。
 
 ### 目标服务器的引擎身份
 
@@ -524,10 +549,11 @@ Windows上传运行`deploy.ps1`（PowerShell5+/OpenSSH），Linux/`macOS`运行`
 
 交付 `README.txt` 会列出实际部署根目录和本次 ID。根目录 `incoming/` 接收压缩包及 `.contents/`；正常成功后清理本次上传，失败或状态未知时保留供诊断。`releases/<ID>/` 保存运行配置、Compose 组合、元数据和恢复脚本，不复制镜像 tar。镜像由容器引擎保存，数据库和对象数据位于数据卷。
 
-归档只有五个顶层入口：
+归档解压后包含六个顶层入口。
 
 ```text
 apply.sh                # 部署入口，内嵌凭据和后端核验辅助脚本
+APPLY.txt               # 在 Linux 手工执行 apply.sh 的说明
 manifest.json           # 制品、选择服务及非敏感 metadata
 config/.env.runtime     # 唯一应用配置，包含最终连接细项
 images/                 # 本次镜像归档
