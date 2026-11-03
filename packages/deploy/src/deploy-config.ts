@@ -281,7 +281,18 @@ export const DeployConfigSchema = z.object({
   error: () => deployM('deploy_composeProviderRequired'),
 })
 
-/** 计划与打包按制品的完整拓扑校验角色，部分构建中缺少的镜像仍可保留其配置。 */
+/**
+ * 计划与打包按制品的完整拓扑校验角色，部分构建中缺少的镜像仍可保留其配置。
+ * @example
+ * ```ts
+ * import { validateComposeServices } from './deploy-config.js'
+ * const result = validateComposeServices(
+ *   { s3Engine: 'rustfs', compose: { services: { web: { extra_hosts: { 'api.internal': '192.0.2.10' } } } } },
+ *   { primaryService: 'serv', hasWeb: true },
+ * )
+ * if (!result.success) throw new Error(result.error.message)
+ * ```
+ */
 export function validateComposeServices(container: DeployConfig['container'], artifact: Pick<DeploymentArtifact, 'primaryService' | 'hasWeb'>): HaiResult<void> {
   const services = container?.compose?.services
   const unavailable = services?.serv && artifact.primaryService !== 'serv'
