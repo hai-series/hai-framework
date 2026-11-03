@@ -136,7 +136,7 @@ function withPrefix(key: string, prefix: string): string {
 function withoutPrefix(key: string, prefix: string): string {
   if (!prefix)
     return key
-  const normalizedPrefix = `${prefix.replace(TRAILING_SLASHES_REGEX, '')}/`
+  const normalizedPrefix = withPrefix('', prefix)
   if (key.startsWith(normalizedPrefix)) {
     return key.slice(normalizedPrefix.length)
   }
@@ -537,15 +537,9 @@ export function createS3Provider(): StorageProvider {
         const s3Config = getConfig()
         logOperation('read', 'dir.list', { options })
 
-        // 构建完整前缀
-        let prefix = s3Config.prefix || ''
-        if (options.prefix) {
-          prefix = withPrefix(options.prefix, s3Config.prefix)
-        }
-
         const response = await s3Client.send(new ListObjectsV2Command({
           Bucket: s3Config.bucket,
-          Prefix: prefix || undefined,
+          Prefix: withPrefix(options.prefix ?? '', s3Config.prefix) || undefined,
           Delimiter: options.delimiter,
           MaxKeys: options.maxKeys,
           ContinuationToken: options.continuationToken,
@@ -768,9 +762,10 @@ export function createS3Provider(): StorageProvider {
           }
         }
 
-        // 测试连接：尝试列出一个对象
+        // 使用与默认列表相同的前缀探测连接，支持限制列表前缀的凭据。
         await client.send(new ListObjectsV2Command({
           Bucket: cfg.bucket,
+          Prefix: withPrefix('', cfg.prefix) || undefined,
           MaxKeys: 1,
         }))
 

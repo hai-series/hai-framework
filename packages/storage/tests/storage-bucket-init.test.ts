@@ -41,6 +41,23 @@ describe.sequential('storage.init optional S3 bucket creation', () => {
     expect(storage.isInitialized).toBe(true)
   })
 
+  it.each(['', 'my-app/uploads', 'my-app/uploads/'])('scopes S3 requests for configured prefix %j', async (prefix) => {
+    const expectedPrefix = prefix ? 'my-app/uploads/' : undefined
+    const send = vi.mocked(S3Client.prototype.send)
+    send.mockImplementation(async (command) => {
+      if (!(command instanceof ListObjectsV2Command) || command.input.Prefix !== expectedPrefix)
+        throw sdkError('AccessDenied', 403)
+      return {}
+    })
+
+    expect((await storage.init({ ...config, prefix })).success).toBe(true)
+    expect((await storage.dir.list()).success).toBe(true)
+    expect(send.mock.calls.map(([command]) => command.input)).toEqual([
+      { Bucket: config.bucket, Prefix: expectedPrefix, MaxKeys: 1 },
+      { Bucket: config.bucket, Prefix: expectedPrefix },
+    ])
+  })
+
   it.each(['us-east-1', 'eu-west-1'])('creates a missing bucket with the correct %s location', async (region) => {
     const send = vi.mocked(S3Client.prototype.send)
     send.mockRejectedValueOnce(sdkError('NotFound', 404))
