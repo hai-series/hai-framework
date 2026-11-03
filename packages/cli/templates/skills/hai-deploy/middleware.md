@@ -60,7 +60,7 @@ Podman 部署会主动执行容器已有的 healthcheck 并重新核对状态，
 
 1. **使用默认配置**：选择后端；Compose 生成匹配容器/卷，云平台调用已支持的 Provisioner，并保存实际连接配置。MySQL、LDAP、向量库等没有云自动开通器时，明确提示改用自定义连接；不能声称已经创建云资源。Resend 需要已验证的发件域名，R2 需要已有 S3 访问密钥，阿里云短信需要签名/模板与额度。
 2. **使用自定义配置**：逐项输入所选后端的连接字段，展示字段用途与约束，校验必填项、端口、布尔和 URL；凭据用密码输入。保存配置后跳过该服务的开通与 sidecar。
-3. **保持不变**：仅在目标 `.env.<mode>` 显式声明当前后端及完整连接配置时出现；私有凭据可来自 `.env.<mode>.local`、共享 `.env.local` 或进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有 `.env` 或其他环境有配置不满足此条件。
+3. **保持不变**：仅在目标环境的 `.env.<mode>` 和 `.env.<mode>.local` 显式声明当前后端及完整连接配置时出现；私有凭据也可来自共享 `.env.local` 或进程。选择后不修改该项、不认证其 Provisioner、不创建或移除已有中间件容器，继续下一项。只有共享或其他环境有配置不满足此条件。
 
 逐项配置前提供“环境配置已完备，直接部署”。选择后跳过全部中间件提示、变量改写、云资源与 sidecar 创建，保留已有服务；仍校验已有构建产物并执行部署及健康检查。命令行使用唯一的 `--skip-middleware`，SDK 使用 `skipMiddleware`。不要因为缺少某项中间件的目标文件声明而阻止用户主动跳过。
 
@@ -95,22 +95,28 @@ AI 使用 MySQL 的首次建表需 CREATE 与 INDEX 权限，节点可并发初�
 | 后端               | 连接字段                                                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | SQLite             | database（文件路径或 `:memory:`）                                                                                                    |
-| MySQL / PostgreSQL | url（优先）、host、port（1–65535）、database、user、password、ssl                                                                    |
-| Redis              | url（优先）、host、port、password、db、tls、keyPrefix、connectTimeout、commandTimeout                                                |
+| MySQL / PostgreSQL | url 或 host、port（1–65535）、database、user、password；ssl 可单独配置                                                              |
+| Redis              | url 或 host、port、password、db；tls、keyPrefix、connectTimeout、commandTimeout 可单独配置                                            |
 | local / LanceDB    | root / path                                                                                                                          |
 | S3                 | endpoint、bucket、region、accessKeyId、secretAccessKey、forcePathStyle                                                               |
 | Qdrant / Chroma    | url；Qdrant 可选 apiKey；Chroma apiKey 用于 Bearer 自托管网关，URL 仅支持 HTTP(S) 根端点，不提供 Cloud 契约                          |
-| pgvector           | url（优先）或 host/port/user/password，以及 database                                                                                 |
+| pgvector           | url 或 host、port、database、user、password                                                                                          |
 | LDAP               | url、bindDn、bindPassword、searchBase、searchFilter、usernameAttribute、emailAttribute、displayNameAttribute、useTls、connectTimeout |
 | SMTP               | host、port、secure、user、pass、from                                                                                                 |
 | HTTP API           | url、method（POST / PUT）、headers（JSON）、timeout                                                                                  |
 | 阿里云 SMS         | accessKeyId、accessKeySecret、signName、endpoint                                                                                     |
 
+对 PostgreSQL、MySQL、Redis 和 pgvector，先选 URL 或分字段。URL 以隐藏方式输入，保存后只显示协议、主机和端口。PostgreSQL 和 pgvector 从 URL 路径提取数据库名以满足模块 Schema。Redis URL 可带逻辑库编号，例如 `rediss://redis.example.com:6379/4`。重新配置时只保存所选方式涉及的连接字段。同一后端的连接池等其他设置会保留；如果共享 `.env.local` 中还有同组配置，整组生成值写入目标环境的私有文件以覆盖旧值。
+
+自定义 S3 的 `endpoint` 填后端可访问的 HTTP(S) API 地址，例如 `http://storage.example.com:9000`。桶名只填 `bucket`。AWS S3 可留空，由 SDK 按 `region` 选择地址。`forcePathStyle=true` 使用 `endpoint/bucket`，`false` 使用 `bucket.endpoint`，以存储服务要求为准。浏览器签名入口使用 `publicEndpoint`，凭据使用独立的 `accessKeyId` 与 `secretAccessKey`。
+
+生产模板的 `HAI_REACH_PROVIDERS='[]'` 要求显式配置通知服务。空列表时，交互式部署提示所选环境的私有文件路径。部署前在 `.env.prod.local` 或部署进程中用 `HAI_REACH_PROVIDERS` 设置完整的非空 JSON 数组，再运行 `deploy` 逐项配置。列表位于环境私有文件时，向导将逐项修改保存在同一文件。HTTP API 请求头以隐藏方式输入。若扫描报告空列表与 `HAI_REACH_PROVIDERS_<index>` 冲突，移除旧向导留下的索引变量，再设置完整列表并重新扫描。
+
 ## 离线准备与验收
 
 构建与部署可分开，也可通过 pnpm run deploy --build 明确串联。构建保持环境无关；部署选择环境并只消费所选镜像。完整包自动包含 Compose 自建中间件镜像，因此导出阶段需要本地 Podman/Docker，缺镜像在打包阶段准备，不能留给隔离服务器下载。
 
-每次离线交付都放在单一 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 目录，外层仅含 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest 仅保存在 tar 内，README 也记录部署 ID。--output release.tar 相对命令目录生成 release-<版本>/release-<版本>.tar，禁止覆盖已有交付目录。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器直接复制整个目录并运行 sh deploy-local.sh，由脚本自动解包并执行部署。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
+每次离线交付都放在单一 .hai/deploy/<环境>/bundle-<项目>-<部署ID>-<版本>/ 目录，外层仅含 tar、deploy.sh、deploy.ps1、deploy-target.json、read-target.awk、deploy-local.sh 和 README.txt；Compose、运行环境、web.conf 和 manifest 仅保存在 tar 内，README 也记录部署 ID。--output release.tar 相对命令目录生成 release-<版本>/release-<版本>.tar，禁止覆盖已有交付目录。--bundle-only 只生成交付物，不连接服务器。操作目录含 Windows deploy.ps1、Linux/macOS deploy.sh 和带逐项配置说明的 deploy-target.json；运行上传脚本前先修改并核对该 JSON，两个脚本均读取此文件。本机运行 deploy.sh 需 sh、awk、ssh、scp；sh deploy.sh 主机 [端口] [用户] 可覆盖连接地址，HAI_DEPLOY_IDENTITY_FILE 和 HAI_DEPLOY_KNOWN_HOSTS_FILE 可覆盖两脚本的私钥及指纹文件路径。隔离服务器直接复制整个目录并运行 sh deploy-local.sh，由脚本自动解包并执行部署。仅复制归档时，解压后阅读同目录的 `APPLY.txt`，使用 `sh ./apply.sh` 或传入部署根目录。每步失败返回非零，结果写 result-<部署ID>.json；只有 HTTP 检查通过才更新服务器 current。
 
 离线 target 保存 auth 和 passwordEnv，不保存密码值；passwordEnv 默认 HAI_DEPLOY_PROVIDER_SSH_PASSWORD。优先复用操作机环境变量，Windows 也可读取用户持久环境；缺失或为空时，sh/PowerShell 入口直接隐藏输入并继续本次部署，输入不落盘。非交互模式明确失败，不挂起等待。POSIX 交互需要终端和 stty。密码仅进入本次 SSH/SCP 子进程环境，不进入参数、helper 源码、应用环境、tar、manifest 或公开 JSON。Windows 入口要求 PowerShell 5+ 和 OpenSSH，Linux/macOS 使用 sh、awk、ssh、scp，两者均不需要 Node/pnpm。target 的修改只影响本交付目录，不回写工程；新包仍从工程保存的选中环境配置生成。
 

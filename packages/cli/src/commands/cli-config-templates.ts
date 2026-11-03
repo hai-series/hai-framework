@@ -737,7 +737,7 @@ export function generateProductionEnvironment(features: FeatureId[], configs?: M
   if (enabled.has('ai'))
     sections.push('', '# 必须私有注入 HAI_AI_LLM_APIKEY 及所选模型的其它凭据；AI 自动复用已初始化的共享 db/vecdb。')
   if (enabled.has('reach')) {
-    sections.push('', '# 必须私有注入 HAI_REACH_PROVIDERS 的真实 SMTP/SMS/API JSON（包含凭据）。', '# 空数组有意让配置校验拒绝启动，生产不得沿用开发 console Provider。', 'HAI_REACH_PROVIDERS=\'[]\'')
+    sections.push('', '# 在 .env.prod.local 或部署进程中用 HAI_REACH_PROVIDERS 注入完整的生产通知 Provider JSON。', '# 空数组有意让应用拒绝启动。只有完整列表中已有的项才能使用索引环境变量覆盖。', 'HAI_REACH_PROVIDERS=\'[]\'')
   }
   return `${sections.join('\n')}\n`
 }

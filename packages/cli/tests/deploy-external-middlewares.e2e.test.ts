@@ -134,7 +134,10 @@ describe.runIf(enabled).sequential('真实外部中间件配置', () => {
         return false
       return container(['exec', containerId, 'sh', '-c', postgres ? 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' : 'MYSQL_PWD="$MYSQL_PASSWORD" mysql --protocol=TCP -h 127.0.0.1 -u "$MYSQL_USER" "$MYSQL_DATABASE" -e "SELECT 1"']).length > 0
     })
-    const config = ReldbConfigSchema.parse(await configure('db', { type, host: '127.0.0.1', port, user: 'fixture', password, database: 'business', pool: postgres ? { max: 3, acquireTimeout: 7000, idleTimeout: 15000 } : { max: 3, acquireTimeout: 7000, queueLimit: 8 }, ...(postgres ? {} : { mysql: { charset: 'utf8mb4' } }), operationLog: { write: false } }))
+    const connection = postgres
+      ? { url: `postgresql://fixture:${password}@127.0.0.1:${port}/business`, database: 'business' }
+      : { host: '127.0.0.1', port, user: 'fixture', password, database: 'business', mysql: { charset: 'utf8mb4' } }
+    const config = ReldbConfigSchema.parse(await configure('db', { type, ...connection, pool: postgres ? { max: 3, acquireTimeout: 7000, idleTimeout: 15000 } : { max: 3, acquireTimeout: 7000, queueLimit: 8 }, operationLog: { write: false } }))
     expect((await reldb.init(config)).success).toBe(true)
     expect((await reldb.sql.execute('CREATE TABLE retained_options (id INTEGER PRIMARY KEY, label VARCHAR(100))')).success).toBe(true)
     const inserted = await reldb.tx.wrap(async (tx) => {
@@ -152,7 +155,7 @@ describe.runIf(enabled).sequential('真实外部中间件配置', () => {
     const password = randomBytes(24).toString('hex')
     const port = await start('docker.io/library/redis:7.4.11-alpine', 6379, { FIXTURE_PASSWORD: password }, ['sh', '-c', 'exec redis-server --requirepass "$FIXTURE_PASSWORD"'])
     await ready(() => !!containerId && container(['exec', containerId, 'sh', '-c', 'REDISCLI_AUTH="$FIXTURE_PASSWORD" redis-cli ping']) === 'PONG')
-    const config = CacheConfigSchema.parse(await configure('cache', { type: 'redis', host: '127.0.0.1', port, password, db: 4, keyPrefix: 'orders:', connectTimeout: 7000, maxRetries: 2, retryDelay: 60, commandTimeout: 5000 }))
+    const config = CacheConfigSchema.parse(await configure('cache', { type: 'redis', url: `redis://:${password}@127.0.0.1:${port}/4`, keyPrefix: 'orders:', connectTimeout: 7000, maxRetries: 2, retryDelay: 60, commandTimeout: 5000 }))
     expect((await cache.init(config)).success).toBe(true)
     expect((await cache.kv.set('retained', { value: '已保存' }, { ex: 30 })).success).toBe(true)
     expect(await cache.kv.get('retained')).toMatchObject({ success: true, data: { value: '已保存' } })

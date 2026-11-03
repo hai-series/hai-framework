@@ -123,8 +123,14 @@ export function loadDeploymentConfig(name: string, path: string, values: Record<
       input = document.toJS()
     }
     const resolved = core.config.resolve({ name, value: input, environment: values, shape: shapes[name], missing: 'empty' })
-    if (!resolved.success)
-      return resolved
+    if (!resolved.success) {
+      const cause = resolved.error.cause
+      const fields = cause && typeof cause === 'object' && 'fields' in cause ? cause.fields : undefined
+      const safeFields = Array.isArray(fields) ? fields.filter((field: unknown) => typeof field === 'string' && /^HAI_[A-Z0-9_]+$/.test(field)).join(', ') : ''
+      if (name === 'reach' && /^HAI_REACH_PROVIDERS_\d+(?:_|$)/.test(safeFields) && /^\s*\[\s*\]\s*$/.test(values.HAI_REACH_PROVIDERS ?? ''))
+        return err({ ...resolved.error, message: deployM('deploy_reachEmptyProviderOverride', { params: { path, field: safeFields } }) })
+      return err({ ...resolved.error, message: deployM('deploy_configResolutionFailed', { params: { path, fields: safeFields || name } }) })
+    }
     const config = resolved.data
     if (config !== null && (typeof config !== 'object' || Array.isArray(config)))
       return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: '1' } }))
@@ -379,10 +385,16 @@ export function saveDeploymentEnvironment(environment: DeploymentEnvironment, va
     removeOverrides(join(environment.envDir, `.env.${environment.environment}`), expanded, false)
     removeOverrides(join(environment.envDir, `.env.${environment.environment}.local`), expanded)
     const privatePath = join(environment.envDir, `.env.${environment.environment}.local`)
+    const privateNames = Object.keys(environmentFile(privatePath))
     const globalPrivate = environmentFile(join(environment.envDir, '.env.local'))
-    // 非部署模块保留旧 private 优先级；显式换后端时在当前模式遮盖旧值，不破坏其它环境的 fallback。
+    const globalNames = Object.keys(globalPrivate)
+    const privateReplacements = (options.replace ?? []).filter(prefix => Object.hasOwn(generated, prefix)
+      && globalNames.some(name => name === prefix || name.startsWith(`${prefix}_`) || prefix.startsWith(`${name}_`)))
+    // 保留私有父项时，新细项必须写入同一层；整体替换还须遮盖共享私有来源的旧子项。
     for (const [name, value] of Object.entries(shared)) {
-      if (!(name in privateValues) && Object.keys(globalPrivate).some(parent => name === parent || name.startsWith(`${parent}_`))) {
+      if (!(name in privateValues) && (globalNames.some(parent => name === parent || name.startsWith(`${parent}_`))
+        || privateNames.some(parent => name.startsWith(`${parent}_`))
+        || privateReplacements.some(prefix => name === prefix || name.startsWith(`${prefix}_`)))) {
         privateValues[name] = value
         delete shared[name]
       }

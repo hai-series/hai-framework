@@ -115,5 +115,18 @@
   "deploy_imageSourceMissing": "カスタム取得元にレジストリーの対応表がありません：{registry}",
   "deploy_proxySystemUnsupported": "静的システムプロキシを取得できないか、PAC／自動検出のみが設定されています。環境変数を inherit するか、custom HTTP(S) URL を指定してください。",
   "deploy_middlewareFieldInvalid": "ミドルウェア設定が無効です。次の項目を確認してください：{fields}。",
+  "deploy_middlewareFieldError": "{field}: {reason}",
+  "deploy_middlewareRequired": "この項目は必須です。",
+  "deploy_middlewareInteger": "{min} から {max} までの整数を入力してください。",
+  "deploy_middlewareBoolean": "true または false を入力してください。",
+  "deploy_middlewareUrl": "スキーム付きの絶対 URL を入力してください。",
+  "deploy_middlewareS3Endpoint": "ホストを含む完全な HTTP または HTTPS の S3 API URL を入力してください。",
+  "deploy_middlewareTlsSyntax": "TLS 設定に有効な YAML または JSON を入力してください。",
+  "deploy_middlewareMysqlTls": "false または TLS オブジェクトを入力してください。使用できるキーは rejectUnauthorized、verifyIdentity、ca、cert、key です。cert と key は一緒に指定してください。",
+  "deploy_middlewarePostgresTls": "true、false、require、prefer、allow、disable、または TLS オブジェクトを入力してください。",
+  "deploy_middlewareHeaders": "すべての値が文字列の JSON オブジェクトを入力してください。",
+  "deploy_middlewareMethod": "POST または PUT を入力してください。",
+  "deploy_configResolutionFailed": "{path} を解決できません。{fields} に対応する設定の構造と配列インデックスを確認してください。",
+  "deploy_reachEmptyProviderOverride": "{path} の有効な設定を解決できません。HAI_REACH_PROVIDERS が [] のため、{field} に対応するプロバイダーがありません。古いインデックス付き変数を削除し、.env.<環境>.local の HAI_REACH_PROVIDERS に通知プロバイダーの完全な一覧を設定してください。",
   "deploy_s3Engine": "セルフホスト S3 の実装を選択"
 }

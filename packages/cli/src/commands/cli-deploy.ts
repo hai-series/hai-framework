@@ -73,6 +73,15 @@ function configObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
+/** 将部署 Schema 的问题整理成字段和约束，避免输出输入值或未知配置键。 */
+function describeDeployConfigIssues(issues: readonly { path: readonly PropertyKey[], code: string, message: string }[], prefix = 'deploy'): string {
+  return issues.map((issue) => {
+    const field = [prefix, ...issue.path].join('.')
+    const reason = issue.code === 'unrecognized_keys' ? cliM('cli_deploy_config_unknown_fields') : core.sanitize.sanitizeText(issue.message)
+    return cliM('cli_deploy_middleware_field_error', { params: { variable: field, reason } })
+  }).join('\n')
+}
+
 /**
  * 补齐部署目标，完整配置直接复用；SSH 参数和平台 Token 只写 `.env.<环境>.local`。
  * @example 首次输入主机和密钥或密码后，下次执行 `hai deploy --env prod` 自动复用。
@@ -107,7 +116,7 @@ async function configureDeployTarget(module: typeof import('@h-ai/deploy'), conf
     return
   }
   if (nonInteractive || (bundleOnly && !editBundleTarget))
-    throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : current.error.issues.map(issue => `provider.${issue.path.join('.')}`).join(', ') } }))
+    throw new Error(cliM('cli_deploy_target_missing', { params: { fields: current.success ? 'provider.ssh' : describeDeployConfigIssues(current.error.issues, 'provider') } }))
 
   const platform = bundleOnly
     ? { value: 'docker-ssh' }
@@ -303,12 +312,15 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         }
       }
       catch { /* 未安装项目依赖时，由 deploy 导入错误统一提示。 */ }
-      let localModule: string | undefined
+      let modulePath: string
       try {
-        localModule = localRequire.resolve('@h-ai/deploy')
+        modulePath = localRequire.resolve('@h-ai/deploy')
       }
-      catch { /* 源码仓库或直接模块测试可使用 CLI 本身可解析的安装。 */ }
-      deployModule = localModule ? await import(pathToFileURL(localModule).href) : await import('@h-ai/deploy')
+      catch {
+        // 工作区回退仍从实际部署包导入，以便按包路径加载交付脚本。
+        modulePath = createRequire(import.meta.url).resolve('@h-ai/deploy')
+      }
+      deployModule = await import(pathToFileURL(modulePath).href)
     }
     catch {
       writeCliError(chalk.red(cliM('cli_deploy_module_missing')))
@@ -348,7 +360,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
         throw new Error(loaded.error.message)
       const validated = deployModule.DeployConfigSchema.safeParse(loaded.data)
       if (!validated.success)
-        throw new Error(cliM('cli_deploy_config_invalid', { params: { path: buildFile, fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
+        throw new Error(cliM('cli_deploy_config_invalid', { params: { path: buildFile, fields: describeDeployConfigIssues(validated.error.issues) } }))
       const plan = await deployModule.createDeploymentPlan(appDir, validated.data, { inspectRemote: options.inspectRemote, environment: environmentName, envDir: environment.data.envDir, selectedServices, skipMiddleware: options.skipMiddleware, artifactDir: options.artifactDir ? resolve(cwd, options.artifactDir) : undefined, runtime: options.runtime })
       if (!plan.success)
         throw new Error(plan.error.message)
@@ -439,6 +451,10 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     if (selectedServices)
       writeCliMessage(cliM('cli_deploy_services', { params: { services: selectedServices.join(', ') } }))
     let skipMiddleware = options.skipMiddleware || selectedServices?.every(name => ['serv', 'web'].includes(name))
+    if (!skipMiddleware && !options.yes && !selectedServices && scan.haiModules?.includes('@h-ai/reach')
+      && /^\s*\[\s*\]\s*$/.test(environment.data.values.HAI_REACH_PROVIDERS ?? '')) {
+      writeCliMessage(cliM('cli_deploy_reach_empty', { params: { file: resolve(environment.data.envDir, `.env.${environment.data.environment}.local`) } }))
+    }
     if (!skipMiddleware && !options.yes && scan.requiredServices.length) {
       const action = await prompts({
         type: 'select',
@@ -476,7 +492,7 @@ export async function deployCommand(options: DeployCommandOptions): Promise<void
     spinner.start(cliM('cli_deploy_initializing'))
     const validatedConfig = deployModule.DeployConfigSchema.safeParse(deployConfig)
     if (!validatedConfig.success)
-      throw new Error(cliM('cli_deploy_config_invalid', { params: { path: configPath, fields: validatedConfig.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
+      throw new Error(cliM('cli_deploy_config_invalid', { params: { path: configPath, fields: describeDeployConfigIssues(validatedConfig.error.issues) } }))
     const initResult = await deploy.init(validatedConfig.data)
     if (!initResult.success) {
       throw new Error(cliM('cli_deploy_init_failed', { params: { message: initResult.error.message } }))

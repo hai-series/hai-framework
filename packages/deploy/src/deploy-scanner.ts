@@ -155,7 +155,8 @@ export async function scanApp(inputDir: string, options?: DeployScanOptions): Pr
           add(service, type, 'reach', ['providers', String(index)], provider, '@h-ai/reach')
       }
     }
-    if (enabledConfigs.has('reach') && !middlewares.some(item => item.configName === 'reach'))
+    // 显式空列表会覆盖 YAML 默认项，不能为不存在的索引生成部署配置。
+    if (enabledConfigs.has('reach') && providers === undefined)
       add('email', 'console', 'reach', ['providers', '0'], { name: 'email', type: 'console' }, '@h-ai/reach')
     const isSvelteKit = graph.build.has('@sveltejs/kit')
     const scan: ScanResult = {

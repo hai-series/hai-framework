@@ -115,5 +115,18 @@
   "deploy_imageSourceMissing": "自定义镜像源缺少仓库映射：{registry}",
   "deploy_proxySystemUnsupported": "无法读取该系统的静态代理，或系统仅提供 PAC/自动发现。请使用 inherit 环境变量或 custom HTTP(S) 地址。",
   "deploy_middlewareFieldInvalid": "中间件配置无效，请检查这些字段：{fields}。",
+  "deploy_middlewareFieldError": "{field}：{reason}",
+  "deploy_middlewareRequired": "此字段必填。",
+  "deploy_middlewareInteger": "请输入 {min} 到 {max} 之间的整数。",
+  "deploy_middlewareBoolean": "请输入 true 或 false。",
+  "deploy_middlewareUrl": "请输入带协议的完整 URL。",
+  "deploy_middlewareS3Endpoint": "请输入带主机的完整 HTTP 或 HTTPS S3 API 地址。",
+  "deploy_middlewareTlsSyntax": "TLS 配置需要合法的 YAML 或 JSON。",
+  "deploy_middlewareMysqlTls": "请输入 false 或 TLS 对象。对象只支持 rejectUnauthorized、verifyIdentity、ca、cert 和 key，cert 与 key 须成对填写。",
+  "deploy_middlewarePostgresTls": "请输入 true、false、require、prefer、allow、disable 或 TLS 对象。",
+  "deploy_middlewareHeaders": "请输入 JSON 对象，所有值均须为字符串。",
+  "deploy_middlewareMethod": "请输入 POST 或 PUT。",
+  "deploy_configResolutionFailed": "无法解析 {path}。请检查 {fields} 对应的配置结构与数组索引。",
+  "deploy_reachEmptyProviderOverride": "解析 {path} 的生效配置时发现 {field} 指向不存在的 Provider。HAI_REACH_PROVIDERS 当前为 []。请删除旧的索引变量，并在 .env.<环境>.local 中用 HAI_REACH_PROVIDERS 配置完整的通知 Provider 列表。",
   "deploy_s3Engine": "选择自建 S3 服务实现"
 }

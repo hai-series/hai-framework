@@ -109,6 +109,17 @@ describe('deployCommand', () => {
     expect(process.env).toEqual(processBefore)
   })
 
+  it('reports the invalid deployment field and expected type without echoing the value', async () => {
+    const appDir = createDeployApp()
+    const path = join(appDir, 'hai.json')
+    writeFileSync(path, JSON.stringify({ deploy: { provider: { type: 'docker-ssh', expose: { hostPort: 'fixture-private-value' } } } }))
+    const command = deployCommand({ cwd: tmpRoot, appDir, env: 'prod', plan: true, yes: true })
+    await expect(command).rejects.toThrow(path)
+    await expect(command).rejects.toThrow(/deploy\.provider\.expose\.hostPort.*expected number/)
+    await expect(command).rejects.not.toThrow('fixture-private-value')
+    expect(mocks.plan).not.toHaveBeenCalled()
+  })
+
   it.each([{ inspectRemote: true }, { plan: true, build: true }, { plan: true, bundleOnly: true }, { plan: true, output: 'bundle.tar' }])('拒绝只读模式的冲突参数 %j', async (options) => {
     const appDir = createDeployApp()
     await expect(deployCommand({ cwd: tmpRoot, appDir, env: 'prod', yes: true, ...options })).rejects.toThrow()

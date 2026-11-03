@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { MysqlSslConfigSchema, ReldbConfigSchema, SslConfigSchema } from '@h-ai/reldb/schemas'
-import { parseDocument } from 'yaml'
+import { LineCounter, parseDocument } from 'yaml'
 import configurationShapes from './deploy-config-shapes.json' with { type: 'json' }
 import { saveDeploymentEnvironment } from './deploy-environment.js'
 import { deployM } from './deploy-i18n.js'
@@ -18,7 +18,7 @@ import { HaiDeployError } from './deploy-types.js'
  * @param requirement - 扫描得到的连接需求。
  * @param backend - 选择的后端及连接字段目录。
  * @param environment - 合并值与目标文件的原始值。
- * @returns 目标文件声明后端和必要连接字段时为 true。
+ * @returns 目标环境的公开或私有文件声明后端和必要连接字段时为 true。
  * @example
  * ```ts
  * import { canKeepMiddleware, DEPLOY_MIDDLEWARE } from '@h-ai/deploy'
@@ -26,8 +26,17 @@ import { HaiDeployError } from './deploy-types.js'
  * ```
  */
 export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: MiddlewareBackend, environment: DeploymentEnvironment): boolean {
+  const privatePath = join(environment.envDir, `.env.${environment.environment}.local`)
+  let targetValues = environment.targetValues
+  try {
+    if (existsSync(privatePath))
+      targetValues = core.config.mergeEnv([targetValues, core.config.parseEnv(readFileSync(privatePath, 'utf8'))])
+  }
+  catch {
+    return false
+  }
   if (requirement.service === 'ldap' && backend.backend === 'disabled')
-    return environment.targetValues.HAI_IAM_LOGIN_LDAP === 'false'
+    return targetValues.HAI_IAM_LOGIN_LDAP === 'false'
   const structures: Record<string, Record<string, unknown>> = configurationShapes
   function empty(value: unknown): unknown {
     if (Array.isArray(value))
@@ -39,7 +48,7 @@ export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: M
   let seed = empty(requirement.config)
   for (const part of [...requirement.configPath].reverse())
     seed = /^\d+$/.test(part) ? Array.from({ length: Number(part) + 1 }, (_, index) => index === Number(part) ? seed : null) : { [part]: seed }
-  const resolved = core.config.resolve({ name: requirement.configName, value: seed, environment: environment.targetValues, shape: structures[requirement.configName], missing: 'empty' })
+  const resolved = core.config.resolve({ name: requirement.configName, value: seed, environment: targetValues, shape: structures[requirement.configName], missing: 'empty' })
   if (!resolved.success)
     return false
   let value = resolved.data
@@ -51,7 +60,7 @@ export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: M
   if (requirement.service !== 'ldap' && target.type !== backend.backend)
     return false
   return backend.fields.filter(field => field.required && !field.secret).every((field) => {
-    if ((target.url || (requirement.config.url && Object.values(target).some(item => item !== undefined))) && ['host', 'port'].includes(field.name))
+    if ((target.url || requirement.config.url) && (['host', 'port'].includes(field.name) || (backend.backend === 'mysql' && field.name === 'database')))
       return true
     return target[field.name] !== undefined && target[field.name] !== ''
   }) && backend.fields.filter(field => field.required && field.secret).every(field => Boolean(requirement.config[field.name] || environment.values[`${requirement.envPrefix}_${field.name.toUpperCase()}`]))
@@ -71,33 +80,53 @@ export function canKeepMiddleware(requirement: MiddlewareRequirement, backend: M
  * ```
  */
 export function validateMiddlewareField(options: { value: string, field: MiddlewareField, backend: string }): boolean {
+  return middlewareFieldProblem(options) === undefined
+}
+
+/** 返回可操作的字段校验提示，只使用约束和字段元数据。 */
+function middlewareFieldProblem(options: Parameters<typeof validateMiddlewareField>[0]): string | undefined {
   const { value, field, backend } = options
   if (value === '')
-    return !field.required
+    return field.required ? deployM('deploy_middlewareRequired') : undefined
   if (field.kind === 'port')
-    return /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535
-  if (field.kind === 'number')
-    return /^\d+$/.test(value) && Number(value) >= (field.minimum ?? 0) && Number(value) <= (field.maximum ?? Number.MAX_SAFE_INTEGER)
-  if (field.kind === 'boolean')
-    return ['true', 'false'].includes(value)
-  if (field.kind === 'url') {
-    try {
-      return Boolean(new URL(value).protocol)
-    }
-    catch { return false }
+    return /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535 ? undefined : deployM('deploy_middlewareInteger', { params: { min: 1, max: 65535 } })
+  if (field.kind === 'number') {
+    const min = field.minimum ?? 0
+    const max = field.maximum ?? Number.MAX_SAFE_INTEGER
+    return /^\d+$/.test(value) && Number(value) >= min && Number(value) <= max ? undefined : deployM('deploy_middlewareInteger', { params: { min, max } })
   }
+  if (field.kind === 'boolean')
+    return ['true', 'false'].includes(value) ? undefined : deployM('deploy_middlewareBoolean')
+  if (backend === 's3' && field.name === 'endpoint') {
+    const endpoint = URL.parse(value)
+    return endpoint?.hostname && ['http:', 'https:'].includes(endpoint.protocol) ? undefined : deployM('deploy_middlewareS3Endpoint')
+  }
+  if (field.kind === 'url')
+    return URL.canParse(value) ? undefined : deployM('deploy_middlewareUrl')
   if (field.name === 'ssl') {
-    const document = parseDocument(value)
-    return !document.errors.length && (backend === 'mysql' ? MysqlSslConfigSchema : SslConfigSchema).safeParse(document.toJS()).success
+    try {
+      const document = parseDocument(value)
+      if (document.errors.length)
+        return deployM('deploy_middlewareTlsSyntax')
+      if (!(backend === 'mysql' ? MysqlSslConfigSchema : SslConfigSchema).safeParse(document.toJS()).success)
+        return deployM(backend === 'mysql' ? 'deploy_middlewareMysqlTls' : 'deploy_middlewarePostgresTls')
+    }
+    catch {
+      return deployM('deploy_middlewareTlsSyntax')
+    }
   }
   if (field.name === 'headers') {
     try {
       const headers: unknown = JSON.parse(value)
-      return headers !== null && typeof headers === 'object' && !Array.isArray(headers) && Object.values(headers).every(item => typeof item === 'string')
+      if (headers !== null && typeof headers === 'object' && !Array.isArray(headers) && Object.values(headers).every(item => typeof item === 'string'))
+        return undefined
     }
-    catch { return false }
+    catch { /* 不显示可能含认证头的原始解析错误。 */ }
+    return deployM('deploy_middlewareHeaders')
   }
-  return field.name !== 'method' || ['POST', 'PUT'].includes(value)
+  if (field.name === 'method' && !['POST', 'PUT'].includes(value))
+    return deployM('deploy_middlewareMethod')
+  return undefined
 }
 
 /**
@@ -118,8 +147,9 @@ export function validateMiddlewareField(options: { value: string, field: Middlew
 export function parseMiddlewareField(options: { value: string, field: MiddlewareField, backend: string, managed?: boolean }): HaiResult<unknown> {
   if (options.managed && (options.field.secret || options.field.managed) && options.value === '')
     return ok(undefined)
-  if (!validateMiddlewareField(options))
-    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldInvalid', { params: { fields: options.field.name } }))
+  const problem = middlewareFieldProblem(options)
+  if (problem)
+    return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldError', { params: { field: options.field.name, reason: problem } }))
   const { value, field } = options
   if (value === '')
     return ok(undefined)
@@ -157,7 +187,7 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
       if (requirement.service === 'db') {
         const validated = ReldbConfigSchema.safeParse(configuration)
         if (!validated.success)
-          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldInvalid', { params: { fields: validated.error.issues.map(issue => issue.path.join('.')).join(', ') } }))
+          return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_middlewareFieldInvalid', { params: { fields: validated.error.issues.map(issue => `db.${issue.path.join('.')}`).join(', ') } }))
       }
       if (requirement.service === 'ldap') {
         updates.HAI_IAM_LOGIN_LDAP = backend !== 'disabled'
@@ -171,9 +201,10 @@ export function saveMiddlewareEnvironment(environment: DeploymentEnvironment, op
     const directory = join(options.appDir, 'config')
     mkdirSync(directory, { recursive: true })
     const path = join(directory, `_${requirement.configName}.yml`)
-    const document = parseDocument(existsSync(path) ? readFileSync(path, 'utf8') : '{}\n')
+    const lineCounter = new LineCounter()
+    const document = parseDocument(existsSync(path) ? readFileSync(path, 'utf8') : '{}\n', { lineCounter, prettyErrors: false })
     if (document.errors.length)
-      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_environmentWriteFailed'))
+      return err(HaiDeployError.CONFIG_ERROR, deployM('deploy_configFileInvalid', { params: { path, line: String(lineCounter.linePos(document.errors[0]!.pos[0]).line) } }))
     // 禁用可选后端时保持节点缺省，避免下次构建把空连接当作已配置连接校验。
     if (backend !== 'disabled' && requirement.configPath.length && !document.hasIn(requirement.configPath))
       document.setIn(requirement.configPath, document.createNode(requirement.config.name ? { name: requirement.config.name, type: backend } : {}))

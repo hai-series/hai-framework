@@ -55,6 +55,39 @@ it('asks once per email and SMS provider and reports saved services without envi
   expect(output).toHaveBeenCalledWith(cliM('cli_deploy_saved', { params: { service: 'sms' } }))
 }, 30_000)
 
+it('preserves the production Reach guard and diagnoses old indexed overrides', async () => {
+  const { app, service } = await fullstackFixture()
+  const publicFile = join(app, '.env.prod')
+  const privateFile = join(app, '.env.prod.local')
+  const production = readFileSync(publicFile, 'utf8')
+  expect(parseEnv(production).HAI_REACH_PROVIDERS).toBe('[]')
+  expect(readFileSync(join(app, '.agents/skills/hai-deploy/middleware.md'), 'utf8'))
+    .toBe(readFileSync(new URL('../templates/skills/hai-deploy/middleware.md', import.meta.url), 'utf8'))
+
+  const scan = await deploy.scan(service, { environment: 'prod', envDir: app })
+  const environment = loadDeploymentEnvironment({ environment: 'prod', envDir: app })
+  if (!scan.success || !environment.success)
+    throw new Error('Could not load generated production fixture')
+  const middlewares = scan.data.middlewares?.filter(item => item.configName === 'reach')
+  expect(middlewares).toEqual([])
+  await configureDeployMiddleware(deployModule, { ...scan.data, middlewares }, environment.data, {})
+  expect(mocked.prompt).not.toHaveBeenCalled()
+  expect(readFileSync(publicFile, 'utf8')).toBe(production)
+
+  const broken = `${production.trimEnd()}\nHAI_REACH_PROVIDERS_0='{}'\nHAI_REACH_PROVIDERS_0_NAME=email\nHAI_REACH_PROVIDERS_0_TYPE=console\n`
+  writeFileSync(publicFile, broken)
+  await expect(deployCommand({ appDir: service, env: 'prod', plan: true })).rejects.toThrow(/HAI_REACH_PROVIDERS_0 refers to a missing provider because HAI_REACH_PROVIDERS is \[\]/)
+  expect(readFileSync(publicFile, 'utf8')).toBe(broken)
+
+  const providers = [{ name: 'email', type: 'api', url: 'https://mail.example.test/send' }, { name: 'sms', type: 'api', url: 'https://sms.example.test/send' }]
+  writeFileSync(publicFile, production)
+  writeFileSync(privateFile, `${readFileSync(privateFile, 'utf8').trimEnd()}\n${core.config.stringifyEnv({ HAI_REACH_PROVIDERS: JSON.stringify(providers) })}`)
+  const configured = await deploy.scan(service, { environment: 'prod', envDir: app })
+  expect(configured).toMatchObject({ success: true })
+  if (configured.success)
+    expect(configured.data.middlewares?.filter(item => item.configName === 'reach').map(item => item.config)).toEqual(providers)
+}, 30_000)
+
 it.each(['container:\n', 'container: null\n', 'container: invalid\n'])('handles S3 engine configuration in project JSON (%s)', async (node) => {
   const { app, service } = await fullstackFixture()
   const file = join(app, 'hai.json')
@@ -406,7 +439,6 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   writeFileSync(join(app, '.env.test'), 'HAI_CORE_ENV=test\nHAI_DEPLOY_PROVIDER=\'{"type":"docker-ssh","ssh":{"host":"example.test","username":"deploy"},"expose":{"hostPort":18080}}\'\nHAI_CACHE=\'{"type":"memory"}\'\n')
   const questions: string[] = []
   const inputValues: Record<string, string> = {
-    HAI_DB_URL: '',
     HAI_DB_HOST: 'mysql.internal',
     HAI_DB_PORT: '3307',
     HAI_DB_DATABASE: 'business',
@@ -434,7 +466,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
       return { [question.name]: question.choices[question.initial ?? 0].value }
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     if (name === 'HAI_DB_PORT')
-      expect(question.validate('70000')).not.toBe(true)
+      expect(question.validate('70000')).toMatch(/HAI_DB_PORT.*1 to 65535/)
     if (name === 'HAI_DB_SSL') {
       for (const invalid of ['true', 'require', 'prefer', 'allow', 'disable', '{ ca: "" }', '{ rejectUnauthorized: "true" }', '{ cert: cert-only }', '{ key: key-only }', '{ unknown: true }'])
         expect(question.validate(invalid), invalid).not.toBe(true)
@@ -447,6 +479,7 @@ it('asks for the environment first, configures MySQL field-by-field and skips a 
   const run = vi.spyOn(deploy, 'deployApp').mockResolvedValue({ success: true, data: { url: 'https://example.test', deploymentId: 'test', status: 'ready', envVarsSet: [] } })
   await deployCommand({ appDir: service })
   expect(questions[0]).toContain('Deployment environment')
+  expect(questions.some(question => question.startsWith('Connection URL'))).toBe(false)
   expect(run).toHaveBeenCalledWith(service, expect.objectContaining({ environment: 'test', envDir: app, serviceModes: expect.objectContaining({ db: 'custom', cache: 'keep' }) }))
   const mode = readFileSync(join(app, '.env.test'), 'utf8')
   expect(mode).not.toContain('test-private-password')
@@ -476,11 +509,11 @@ it.each(['true', 'require', 'prefer', 'allow', 'disable', '{ ca: "" }', '{ cert:
   const before = files.map(file => readFileSync(file, 'utf8'))
   mocked.prompt.mockImplementation(async (question) => {
     if (question.choices)
-      return { [question.name]: question.message.includes('How should') ? 'custom' : 'mysql' }
+      return { [question.name]: question.message.includes('How should') ? 'custom' : question.message.startsWith('Select the backend') ? 'mysql' : 'fields' }
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     return { [question.name]: name === 'HAI_DB_SSL' ? ssl : question.initial }
   })
-  await expect(configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } })).rejects.toThrow()
+  await expect(configureDeployMiddleware(deployModule, { ...scanned.data, middlewares: scanned.data.middlewares?.filter(item => item.service === 'db') }, environment.data, { provider: { type: 'docker-ssh' } })).rejects.toThrow(/HAI_DB_SSL.*TLS object/)
   expect(files.map(file => readFileSync(file, 'utf8'))).toEqual(before)
 }, 30_000)
 
@@ -518,7 +551,7 @@ it.each([
     return
   mocked.prompt.mockImplementation(async (question) => {
     if (question.choices)
-      return { [question.name]: question.message.includes('How should') ? 'custom' : backend }
+      return { [question.name]: question.message.includes('How should') ? 'custom' : question.message.startsWith('Select the backend') ? backend : 'fields' }
     const name = moduleEnvironmentVariables('db').find(item => question.message.startsWith(item.description))?.name
     if (name === 'HAI_DB_SSL')
       expect(question.validate(ssl)).toBe(true)

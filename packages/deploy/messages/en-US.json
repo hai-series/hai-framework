@@ -115,5 +115,18 @@
   "deploy_imageSourceMissing": "Custom image source has no mapping for registry: {registry}",
   "deploy_proxySystemUnsupported": "Static system proxy is unavailable, or only PAC/auto-discovery is configured. Use inherit with environment variables or a custom HTTP(S) URL.",
   "deploy_middlewareFieldInvalid": "Invalid middleware configuration; check these fields: {fields}.",
+  "deploy_middlewareFieldError": "{field}: {reason}",
+  "deploy_middlewareRequired": "Enter a value for this required field.",
+  "deploy_middlewareInteger": "Enter an integer from {min} to {max}.",
+  "deploy_middlewareBoolean": "Enter true or false.",
+  "deploy_middlewareUrl": "Enter an absolute URL with a scheme.",
+  "deploy_middlewareS3Endpoint": "Enter a complete HTTP or HTTPS S3 API URL with a host.",
+  "deploy_middlewareTlsSyntax": "Enter a valid YAML or JSON value for TLS.",
+  "deploy_middlewareMysqlTls": "Enter false or a TLS object with supported keys: rejectUnauthorized, verifyIdentity, ca, cert and key. Set cert and key together.",
+  "deploy_middlewarePostgresTls": "Enter true, false, require, prefer, allow, disable or a TLS object.",
+  "deploy_middlewareHeaders": "Enter a JSON object with string values.",
+  "deploy_middlewareMethod": "Enter POST or PUT.",
+  "deploy_configResolutionFailed": "Cannot resolve {path}. Check the configuration structure and array indices for {fields}.",
+  "deploy_reachEmptyProviderOverride": "While resolving {path}, {field} refers to a missing provider because HAI_REACH_PROVIDERS is []. Remove stale indexed variables and set HAI_REACH_PROVIDERS to the complete notification provider list in .env.<environment>.local.",
   "deploy_s3Engine": "Choose the self-hosted S3 implementation"
 }

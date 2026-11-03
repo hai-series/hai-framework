@@ -53,6 +53,19 @@ it('reports malformed YAML with its file and line and rejects non-object configu
   }
 })
 
+it('reports the file and invalid indexed variable when resolving deployment configuration', () => {
+  const file = join(fixture(), '_reach.yml')
+  writeFileSync(file, 'providers: []\n')
+  const invalidKey = 'HAI_REACH_PROVIDERS_1_HEADERS'
+  const result = loadDeploymentConfig('reach', file, { [invalidKey]: '{"Authorization":"fixture-secret"}' })
+  expect(result.success).toBe(false)
+  if (!result.success) {
+    expect(result.error.message).toContain(file)
+    expect(result.error.message).toContain(invalidKey)
+    expect(result.error.message).not.toContain('fixture-secret')
+  }
+})
+
 it('resolves object overrides and special characters without interpolating raw YAML syntax', () => {
   const root = fixture()
   const file = join(root, '_deploy.yml')

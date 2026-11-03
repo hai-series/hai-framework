@@ -9,6 +9,7 @@ import * as deployModule from '@h-ai/deploy'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { stringify } from 'yaml'
+import * as cliUtils from '../src/cli-utils.js'
 import { configureDeployMiddleware } from '../src/commands/cli-deploy-middleware.js'
 
 const mocked = vi.hoisted(() => ({ prompt: vi.fn() }))
@@ -132,6 +133,7 @@ it.each(['email', 'sms'] as const)('自定义 $service HTTP Provider 保留安�
     return
   mocked.prompt.mockImplementation(async question => ({ value: question.choices?.some((choice: { value: string }) => choice.value === 'custom') ? 'custom' : question.choices?.[question.initial ?? 0]?.value ?? question.initial }))
   await configureDeployMiddleware(deployModule, scanned.data, environment.data, { provider: { type: 'docker-ssh' } })
+  expect(mocked.prompt.mock.calls.some(([question]) => question.initial === JSON.stringify(config.headers) && question.type === 'password')).toBe(true)
   const saved = await deployModule.deploy.scan(root, { environment: 'test' })
   expect(saved.success).toBe(true)
   if (saved.success)
@@ -156,7 +158,10 @@ it('切换数据库后端不迁移不兼容的旧字段', async () => {
   expect(scanned.success && environment.success).toBe(true)
   if (!scanned.success || !environment.success)
     return
-  mocked.prompt.mockImplementation(async question => ({ value: question.choices?.some((choice: { value: string }) => choice.value === 'custom') ? 'custom' : question.choices?.some((choice: { value: string }) => choice.value === 'mysql') ? 'mysql' : question.initial }))
+  mocked.prompt.mockImplementation(async (question) => {
+    const preferred = question.choices?.find((choice: { value: string }) => ['custom', 'mysql', 'fields'].includes(choice.value))
+    return { value: preferred?.value ?? question.initial }
+  })
   await configureDeployMiddleware(deployModule, scanned.data, environment.data, { provider: { type: 'docker-ssh' } })
   const saved = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
   expect(saved.success).toBe(true)
@@ -165,4 +170,126 @@ it('切换数据库后端不迁移不兼容的旧字段', async () => {
     expect(resolved).toMatchObject({ success: true, data: { type: 'mysql' } })
     expect(resolved.success && resolved.data).not.toHaveProperty('sqlite')
   }
+})
+
+it('重新配置私有 Reach 列表的一项后，保留其他项并使新值生效', async () => {
+  const email = { name: 'email', type: 'api', url: 'https://old-mail.example.test/send' }
+  const sms = { name: 'sms', type: 'api', url: 'https://sms.example.test/send' }
+  fixture(email, 'email', 'reach')
+  const publicFile = join(root, '.env.test')
+  const privateFile = join(root, '.env.test.local')
+  writeFileSync(publicFile, 'HAI_REACH_PROVIDERS=\'[]\'\n')
+  writeFileSync(privateFile, core.config.stringifyEnv({ HAI_REACH_PROVIDERS: JSON.stringify([email, sms]) }))
+  const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
+  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!scanned.success || !environment.success)
+    throw new Error('Could not load private Reach fixture')
+  const url = 'https://new-mail.example.test/send'
+  mocked.prompt.mockImplementation(async (question) => {
+    const custom = question.choices?.find((choice: { value: string }) => choice.value === 'custom')
+    return { value: custom?.value ?? question.choices?.[question.initial ?? 0]?.value ?? (question.initial === email.url ? url : question.initial) }
+  })
+  const middlewares = scanned.data.middlewares?.filter(item => item.service === 'email')
+  await configureDeployMiddleware(deployModule, { ...scanned.data, middlewares }, environment.data, { provider: { type: 'docker-ssh' } })
+  const saved = await deployModule.deploy.scan(root, { environment: 'test' })
+  expect(saved).toMatchObject({ success: true, data: { middlewares: [{ config: { ...email, url } }, { config: sms }] } })
+  expect(readFileSync(publicFile, 'utf8')).not.toContain('HAI_REACH_PROVIDERS_0')
+})
+
+it('explains the S3 API endpoint separately from the bucket and shows field errors', async () => {
+  const endpoint = 'http://objects.example.test:9000'
+  fixture({ type: 's3', endpoint, bucket: 'uploads', region: 'us-east-1', accessKeyId: 'fixture-id', secretAccessKey: 'fixture-secret' })
+  const scanned = await deployModule.deploy.scan(root, { environment: 'test' })
+  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!scanned.success || !environment.success)
+    throw new Error('Could not load S3 fixture')
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.choices)
+      return { value: question.choices.some((choice: { value: string }) => choice.value === 'custom') ? 'custom' : 's3' }
+    if (question.message.startsWith('S3 API endpoint')) {
+      expect(question.type).toBe('text')
+      expect(question.message).toContain('without the bucket name')
+      expect(question.validate('objects.example.test:9000')).toMatch(/HAI_STORAGE_ENDPOINT.*HTTP or HTTPS/)
+      expect(question.validate(endpoint)).toBe(true)
+    }
+    return { value: question.initial }
+  })
+  await expect(configureDeployMiddleware(deployModule, scanned.data, environment.data, { provider: { type: 'docker-ssh' } })).resolves.toMatchObject({ storage: 'custom' })
+  expect(mocked.prompt.mock.calls.some(([question]) => question.message.startsWith('Bucket name only'))).toBe(true)
+})
+
+it.each([
+  { service: 'db', backend: 'postgresql', scheme: 'postgresql', port: 5432, path: 'new%20database', database: 'new database' },
+  { service: 'db', backend: 'mysql', scheme: 'mysql', port: 3306, path: 'new_database' },
+  { service: 'cache', backend: 'redis', scheme: 'rediss', port: 6379, path: '3' },
+  { service: 'vecdb', backend: 'pgvector', scheme: 'postgres', port: 5432, path: 'vectors', database: 'vectors' },
+] as const)('自定义 $backend 在 URL 和分字段之间切换并保留其他配置', async ({ service, backend, scheme, port, path, ...expected }) => {
+  const envPrefix = `HAI_${service.toUpperCase()}`
+  const configFile = join(root, 'config', `_${service}.yml`)
+  const legacyFile = join(root, '.env.local')
+  const publicFile = join(root, '.env.test')
+  const privateFile = join(root, '.env.test.local')
+  const legacy = `${envPrefix}_HOST=legacy.example.test\n`
+  const address = `${scheme}://service.example.test:${port}`
+  const url = `${scheme}://fixture-user:fixture-secret@service.example.test:${port}/${path}`
+  const retained = { operationLog: { write: true } }
+  fixture({ type: backend, host: 'old.example.test', port, password: 'old', ...(service === 'cache' ? { db: 5 } : { database: 'old', user: 'old' }), ...retained }, service)
+  writeFileSync(publicFile, `${envPrefix}_TYPE=${backend}\n${envPrefix}_PORT=${port}\n`)
+  writeFileSync(privateFile, `${envPrefix}_PASSWORD=old-private\n`)
+  writeFileSync(legacyFile, legacy)
+
+  const scan = await deployModule.deploy.scan(root, { environment: 'test' })
+  const environment = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!scan.success || !environment.success)
+    throw new Error('Could not load legacy middleware fixture')
+  const provider = { provider: { type: 'docker-ssh' } }
+  const output = vi.spyOn(cliUtils, 'writeCliMessage').mockImplementation(() => {})
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.choices) {
+      const choice = question.choices.find((item: { value: string }) => ['custom', 'url'].includes(item.value))
+      return { value: choice?.value ?? backend }
+    }
+    if (question.message.startsWith('Connection URL')) {
+      expect(question.type).toBe('password')
+      expect(question.validate('https://fixture-secret@invalid.example.test')).toContain(`${envPrefix}_URL`)
+      expect(question.validate('https://fixture-secret@invalid.example.test')).not.toContain('fixture-secret')
+      return { value: url }
+    }
+    return { value: question.initial }
+  })
+  await expect(configureDeployMiddleware(deployModule, scan.data, environment.data, provider)).resolves.toMatchObject({ [service]: 'custom' })
+  const saved = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!saved.success)
+    throw new Error('Could not load URL configuration')
+  const config = deployModule.loadDeploymentConfig(service, configFile, saved.data.values)
+  expect(config).toMatchObject({ success: true, data: { type: backend, url, ...expected, ...retained } })
+  expect(config.success && config.data).not.toHaveProperty('host')
+  const persisted = `${readFileSync(publicFile, 'utf8')}\n${readFileSync(privateFile, 'utf8')}`
+  for (const field of ['HOST', 'PORT', 'USER', 'PASSWORD', 'DB'])
+    expect(persisted).not.toContain(`${envPrefix}_${field}=`)
+  expect(readFileSync(publicFile, 'utf8')).not.toContain('fixture-secret')
+  expect(readFileSync(privateFile, 'utf8')).toContain(url)
+  const transcript = output.mock.calls.map(([message]) => message).join('\n')
+  expect(transcript).toContain(address)
+  expect(transcript).not.toMatch(/fixture-user|fixture-secret/)
+
+  const rescanned = await deployModule.deploy.scan(root, { environment: 'test' })
+  if (!rescanned.success)
+    throw new Error('Could not rescan URL configuration')
+  await expect(configureDeployMiddleware(deployModule, rescanned.data, saved.data, provider, true)).resolves.toMatchObject({ [service]: 'keep' })
+  mocked.prompt.mockImplementation(async (question) => {
+    if (question.choices) {
+      const choice = question.choices.find((item: { value: string }) => ['custom', 'fields'].includes(item.value))
+      return { value: choice?.value ?? backend }
+    }
+    expect(question.message).not.toMatch(/^Connection URL/)
+    return { value: question.initial }
+  })
+  await configureDeployMiddleware(deployModule, rescanned.data, saved.data, provider)
+  const fields = deployModule.loadDeploymentEnvironment({ environment: 'test', envDir: root })
+  if (!fields.success)
+    throw new Error('Could not load field configuration')
+  expect(fields.data.values).not.toHaveProperty(`${envPrefix}_URL`)
+  expect(fields.data.values).toHaveProperty(`${envPrefix}_HOST`, 'localhost')
+  expect(readFileSync(legacyFile, 'utf8')).toBe(legacy)
 })
