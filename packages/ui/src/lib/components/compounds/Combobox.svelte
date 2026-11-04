@@ -135,6 +135,10 @@
 
   let searchValue = $state('')
   let open = $state(false)
+  // 多选触发器宽度：标签会挤占内层 input，弹出层仍应与整个输入框等宽。
+  let triggerWidth = $state(0)
+  let fieldEl = $state<HTMLDivElement | null>(null)
+  let anchorOffset = $state(0)
   let inputRef = $state<HTMLInputElement | null>(null)
 
   /** 根据搜索关键词过滤选项 */
@@ -183,6 +187,15 @@
 
   $effect(() => {
     syncInputElementValue()
+  })
+
+  // 多选时 input 从标签后开始，按其在字段内的左偏移把弹出层对齐到字段左边。
+  $effect(() => {
+    void multiVal.length
+    void triggerWidth
+    if (!open || !fieldEl || !inputRef)
+      return
+    anchorOffset = -Math.round(inputRef.getBoundingClientRect().left - fieldEl.getBoundingClientRect().left)
   })
 
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
@@ -244,6 +257,8 @@
     >
       <div class='relative'>
         <div
+          bind:this={fieldEl}
+          bind:clientWidth={triggerWidth}
           class={cn(
             'rounded-lg border bg-base-100 flex flex-wrap gap-1.5 items-center py-1 pl-2.5 pr-9 transition-[border-color,box-shadow] duration-150',
             sizeClasses.minHeight,
@@ -293,6 +308,9 @@
       <Combobox.Portal>
         <Combobox.Content
           class={contentClass}
+          align='start'
+          alignOffset={anchorOffset}
+          style={triggerWidth > 0 ? `--bits-combobox-anchor-width:${triggerWidth}px` : undefined}
           sideOffset={4}
         >
           {#if filteredOptions.length === 0}
