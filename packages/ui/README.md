@@ -180,6 +180,8 @@ components/
 | `Spinner`        | 加载动画     | `size`, `variant`                                                  |
 | `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`                   |
 
+`Checkbox`、`Switch` 和 `Radio` 默认使用主题主色，选中态跟随当前 DaisyUI 主题；`Checkbox` 可用 `checkbox-*` 类名覆盖颜色。
+
 `BareInput` 的 `file` 类型通过 `onchange` 读取 `event.currentTarget.files`，不绑定文件路径 `value`；其他输入类型可使用 `bind:value`。
 
 #### 组合组件 Compounds（37 个）

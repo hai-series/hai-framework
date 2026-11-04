@@ -180,6 +180,8 @@ components/
 | `Spinner`        | Loading animation   | `size`, `variant`                                                              |
 | `Progress`       | Progress bar        | `value`, `max`, `variant`, `striped`, `animated`                               |
 
+`Checkbox`, `Switch` and `Radio` default to the theme primary color, and their checked states follow the current DaisyUI theme; `Checkbox` colors can be overridden with a `checkbox-*` class.
+
 For `BareInput` with `type="file"`, read `event.currentTarget.files` in `onchange` and leave the file path `value` unbound. Other input types support `bind:value`.
 
 #### Compounds (37)

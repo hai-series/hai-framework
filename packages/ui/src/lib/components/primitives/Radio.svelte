@@ -47,6 +47,7 @@
     cn(
       'radio',
       getSizeClass(size, 'radio'),
+      'radio-primary',
     ),
   )
 
