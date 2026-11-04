@@ -49,6 +49,22 @@ body {
   outline-offset: 2px;
 }
 
+/* 禁用控件统一为不可用指针，避免内层 input 的原生 default 指针覆盖容器反馈。 */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+/* 原生禁用按钮保持可命中才能显示不可用指针；disabled 已阻止点击，不会触发业务。 */
+button:disabled:not(.pointer-events-none),
+input[type='button']:disabled,
+input[type='submit']:disabled,
+input[type='reset']:disabled {
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
 /* ─── 隐藏浏览器原生密码显示按钮（使用自定义切换） ─── */
 input::-ms-reveal,
 input::-ms-clear,
