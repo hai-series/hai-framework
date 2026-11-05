@@ -17,6 +17,8 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 
 ## 使用路径
 
+- 构建批次使用 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，时间与 deploy 共用 Core 的构建机本地日期格式。原生目标补平台、Desktop 架构和 debug/release；归档文件如 `todo-android-debug-0.1.0.apk`、`todo-windows-x64-release-0.1.0-setup.exe`，用工程标识，显示名仍取 Core。latest 存批次相对目录，buildId 是不含工程/目标前缀的短标识；旧目录和清单保持可读，不重命名历史制品或原生工具工作文件。
+
 - 原生名称是单独的公开构建输入：App 的 appName、Desktop 的 productName/主窗口初始标题复用 `_core.yml.name` 与 HAI_CORE_NAME，Fullstack 从工程根 dotenv 和 serv YAML 解析。正式打包默认 prod，Tauri dev 默认 dev，进程 HAI_CORE_ENV 可切换模式；只有名称写入原生配置。Desktop 使用 pnpm tauri/tauri:build 或 hai build 的入口，不绕过生成的 run-tauri.mjs。已有 Capacitor 平台需另行同步显示名；源码/镜像的环境隔离规则保持适用。
 
 - 先读当前 package.json、lockfile 与 README，识别 SvelteKit / API workspace / fullstack / Vite SPA / 原生 App，按实际 scripts 验证。

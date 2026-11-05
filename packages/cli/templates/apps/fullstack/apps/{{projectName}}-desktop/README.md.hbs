@@ -44,7 +44,7 @@ pnpm build --target desktop --platform windows --arch x64
 
 打包前需要安装 Rust 工具链和 Tauri 平台依赖。原生名称按 Core 规则读取环境文件，只将名称传入 Tauri 配置；前端源码编译不读取部署环境文件。启动已安装程序前设置进程 PUBLIC_API_BASE（HTTP(S)，不含凭据、查询和片段）。Rust 会在页面加载前注入公开地址，仅将该 Origin 加入 CSP；不需要为 API 地址的 test/prod 切换重打安装包，修改原生名称仍需重新打包。缺省连接 http://localhost:3000/api/v1。
 
-加 `--debug` 生成调试安装包。成功后 CLI 打印 `.hai/build/desktop/<平台>/<构建类型>/<buildId>/` 中的归档路径。
+加 `--debug` 生成调试安装包。成功后 CLI 打印 `.hai/build/desktop/<平台>/<构建类型>/build-{{projectName}}-desktop-<平台>-<架构>-<类型>-YYYYMMDD-HHmmss-<随机串>-<版本>/` 中的归档路径。Windows 文件名如 `{{projectName}}-windows-x64-release-<版本>-setup.exe`；使用工程标识，产品显示名仍取 Core。
 
 ### IAM 认证配置
 

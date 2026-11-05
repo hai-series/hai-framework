@@ -106,11 +106,7 @@ const ServerResultSchema = z.object({
 
 /** 生成不可变部署 ID：`YYYYMMDD-HHmmss-<random>`。 */
 function makeDeploymentId(): string {
-  const now = new Date()
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
-    + `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-  return `${stamp}-${randomBytes(3).toString('hex')}`
+  return `${core.time.formatDate(new Date(), 'YYYYMMDD-HHmmss')}-${randomBytes(3).toString('hex')}`
 }
 
 /** 睡眠指定毫秒。 */

@@ -1168,7 +1168,7 @@ ${pm} build --target image --images web
 ${pm} exec hai deploy ${appDir} --env prod --services web
 \`\`\`
 
-构建不读取部署环境；产物位于 .hai/build/docker/<buildId>，用 --artifact-dir 精确选择。
+源码与镜像构建不读取部署环境；产物位于 .hai/build/docker/build-<工程>-image-YYYYMMDD-HHmmss-<随机串>-<版本>，用 --artifact-dir 精确选择。latest 保存批次相对目录，旧制品仍可读取。
 应用根 package.json.version 驱动版本，同版本允许重新构建和发布；清单记录独立构建编号与校验和。
 完整离线包自动携带自建中间件镜像；准备中间件镜像需要构建机有可用 Podman/Docker，缺镜像时在打包阶段拉取。
 服务器需要 Linux、Docker/Podman、Docker Compose v2 或 podman-compose 1.6.0 及以上、sh、tar、sha256sum、awk、curl、util-linux flock 和支持 flock 的文件系统，启动阶段不联网拉取。

@@ -19,7 +19,22 @@ pnpm build --target app --platform android --runtime auto
 
 ## 核对身份和产物
 
-`package.json.name`是资源身份，`version`是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。
+`package.json.name`是资源身份，`version`是应用版本。镜像批次保存在 `.hai/build/docker/build-<工程>-image-<构建ID>/`，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。
+
+### 统一命名
+
+构建 ID 使用 `YYYYMMDD-HHmmss-<6位随机串>-<版本>`，与 deploy 共用 Core 的本地日期格式；时间取构建机本地时区，当前示例为 `Asia/Shanghai`。随机串区分同秒构建。工程标识取工程根 `package.json.name`，归一化规则与部署一致：去掉 scope、转小写、将不合法字符替换为连字符。应用显示名继续使用 Core `name`。
+
+| 产物 | 示例 |
+| --- | --- |
+| 镜像批次 | `build-todo-image-20261105-171924-62e4f1-0.1.0` |
+| Android 批次 | `build-todo-app-android-debug-20261105-171924-62e4f1-0.1.0` |
+| Windows 批次 | `build-todo-desktop-windows-x64-release-20261105-171924-62e4f1-0.1.0` |
+| Android 安装包 | `todo-android-debug-0.1.0.apk` |
+| Windows 安装包 | `todo-windows-x64-release-0.1.0-setup.exe` |
+| 部署交付包 | `bundle-todo-prod-20261105-171924-62e4f1-0.1.0`，保持现有格式 |
+
+原生文件名包含平台、架构（Desktop）、debug/release 和版本，Android ABI/flavor 等输出差异继续保留；其他原生格式沿用 `.ipa`、`.dmg`、`.app`、`.deb`、`.AppImage`。只调整 `.hai/build` 中的归档名称，Gradle/Tauri 自身的工作目录和文件名仍由原生工具管理。`latest` 存批次相对目录名，manifest 中的 `buildId` 保持短标识；旧构建目录、旧 `latest` 和旧镜像清单仍可读取，无须改写历史产物。
 
 源码与镜像构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。旧格式/旧角色名需要重新构建，不只改文件名。
 
@@ -27,7 +42,7 @@ pnpm build --target app --platform android --runtime auto
 
 Android 指定 `--runtime auto|docker|podman` 后在容器内准备依赖、编译并打包。首次调试构建可在工作副本生成 Android 壳，发布需要项目已有的原生工程。设置 `HAI_ANDROID_KEYSTORE`（密钥库路径）、`HAI_ANDROID_STORE_PASSWORD`、`HAI_ANDROID_KEY_ALIAS` 和 `HAI_ANDROID_KEY_PASSWORD` 后执行发布命令，密码从构建进程或 CI 注入。iOS 在 macOS/Xcode 上签名导出 IPA，桌面在对应系统调用 Tauri。
 
-原生包默认 release，加 `--debug` 选择调试构建。产物归档在 `.hai/build/app/<android|ios>/<debug|release>/<buildId>/` 或 `.hai/build/desktop/<windows|macos|linux>/<debug|release>/<buildId>/`。每种构建类型各有 `latest`，成功后打印新产物路径。完全离线构建需提前准备基础镜像与依赖缓存。
+原生包默认 release，加 `--debug` 选择调试构建。产物归档在 `.hai/build/app/<android|ios>/<debug|release>/<批次目录>/` 或 `.hai/build/desktop/<windows|macos|linux>/<debug|release>/<批次目录>/`。每种构建类型各有 `latest`，成功后打印新产物路径。完全离线构建需提前准备基础镜像与依赖缓存。
 
 ### 原生应用名称
 

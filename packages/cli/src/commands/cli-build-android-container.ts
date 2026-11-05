@@ -21,19 +21,22 @@ variant=$1
 shift
 cd /workspace
 pnpm install --frozen-lockfile --prefer-offline --prod=false --store-dir /cache/pnpm
-export GRADLE_OPTS="$(node -e '
+mapfile -d '' gradleProxyArguments < <(node -e '
   for (const protocol of ["http", "https"]) {
     const value = process.env[protocol.toUpperCase() + "_PROXY"];
     if (value) {
       const url = new URL(value);
-      process.stdout.write("-D" + protocol + ".proxyHost=" + url.hostname + " -D" + protocol + ".proxyPort=" + (url.port || (url.protocol === "https:" ? "443" : "80")) + " ");
+      process.stdout.write("-D" + protocol + ".proxyHost=" + url.hostname + "\0");
+      process.stdout.write("-D" + protocol + ".proxyPort=" + (url.port || (url.protocol === "https:" ? "443" : "80")) + "\0");
     }
   }
   if (process.env.NO_PROXY) {
     const exclusions = process.env.NO_PROXY.split(",").map(value => value.trim().replace(/^\./, "*.").replace(/:\d+$/, ""));
-    process.stdout.write("-Dhttp.nonProxyHosts=" + exclusions.join("|"));
+    process.stdout.write("-Dhttp.nonProxyHosts=" + exclusions.join("|") + "\0");
   }
-')"
+')
+# Wrapper 客户端与后台构建都需要代理；GRADLE_OPTS 本身不保证传递给 Daemon。
+export GRADLE_OPTS="${'$'}{gradleProxyArguments[*]}"
 for app in "$@"; do
   cd /workspace
   pnpm --filter "{./$app}^..." --if-present run build
@@ -54,7 +57,7 @@ for app in "$@"; do
   fi
   node -e 'if (require("./android/app/src/main/assets/capacitor.config.json").server?.url) throw new Error("APK requires bundled WebView assets")'
   cd android
-  bash ./gradlew --no-daemon "assemble$variant"
+  bash ./gradlew --no-daemon "assemble$variant" "${'$'}{gradleProxyArguments[@]}"
 done
 `
 

@@ -118,7 +118,7 @@ PUBLIC_API_BASE=http://10.0.2.2:3000/api/v1
 | Android       | JDK 21、Android SDK 36、Gradle wrapper | `cap add android` → `cap sync android` → `gradlew assembleDebug`                        | `android/app/build/outputs/apk/debug/*.apk` |
 | iOS Simulator | macOS、Xcode、SPM                      | `cap add ios --packagemanager SPM` → `cap sync ios` → `xcodebuild -sdk iphonesimulator` | `App.app`                                   |
 
-从仓库根运行统一入口即可使用 [Capacitor 构建镜像](../../packages/capacitor/README.md#android-容器打包)。APK 归档在 `apps/mobile-app/.hai/build/app/android/debug/<buildId>/`。
+从仓库根运行统一入口即可使用 [Capacitor 构建镜像](../../packages/capacitor/README.md#android-容器打包)。APK 归档在 `apps/mobile-app/.hai/build/app/android/debug/build-mobile-app-app-android-debug-<时间>-<随机串>-<版本>/`，文件名为 `mobile-app-android-debug-<版本>.apk`。时间格式、其他平台与旧制品兼容见[统一命名](../../docs/usage/getting-started/build.md#统一命名)。
 
 ```sh
 pnpm --filter mobile-app build --target app --platform android --runtime auto --debug

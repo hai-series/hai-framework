@@ -29,6 +29,8 @@
 
 ### 配置与构建
 
+产物名称使用工程标识，批次统一为 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，安装包补齐平台、Desktop 架构和 debug/release。时间与 deploy 共用本地日历格式；`latest` 指向相对批次目录，不能把它当成清单里的短 `buildId`。生成 README 和 AI 指引需与[统一命名](../../../docs/usage/getting-started/build.md#统一命名)保持一致。
+
 原生名称通过 `shared/native-name.mjs` 复用 Core 配置与 dotenv 规则：Capacitor 读取 `appName`，Desktop 的 `shared/run-tauri.mjs` 向 Tauri 传入产品名和主窗口标题覆盖。独立 mobile 读取自身 `_core.yml`，Fullstack 读取 serv 的 `_core.yml`；只投影名称，不将完整配置交给原生工具。Desktop 的脚本和工程根 Core 开发依赖需一起生成，名称规则见[构建指南](../../../docs/usage/getting-started/build.md#原生应用名称)。
 
 构建阶段的 pnpm fetch/install 固定追加式日志，避免 PowerShell 中动态进度刷新错位；CLI 同时规范 Windows 转发输出的换行并保留警告与错误。

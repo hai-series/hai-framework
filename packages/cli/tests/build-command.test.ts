@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { readDeploymentArtifact } from '@h-ai/deploy'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { buildCommand } from '../src/commands/cli-build.js'
 
@@ -107,8 +108,22 @@ it('reports malformed project JSON without exposing configuration values', async
   await expect(buildCommand({ cwd: root, target: 'image' })).rejects.not.toThrow('private-config-value')
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
+})
+
+it('构建批次使用工程标识、可读本地时间和末尾版本，清单身份独立于目录名', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 10, 5, 17, 19, 24))
+  await buildCommand({ cwd: root, target: 'image', runtime: 'docker' })
+  const parent = join(root, '.hai/build/docker')
+  const directory = readFileSync(join(parent, 'latest'), 'utf8').trim()
+  expect(directory).toMatch(/^build-sample-app-image-20261105-171924-[a-f0-9]{6}-1\.2\.3$/)
+  const manifest = JSON.parse(readFileSync(join(parent, directory, 'manifest.json'), 'utf8'))
+  expect(manifest.buildId).toMatch(/^20261105-171924-[a-f0-9]{6}-1\.2\.3$/)
+  expect(directory).toBe(`build-sample-app-image-${manifest.buildId}`)
+  expect((await readDeploymentArtifact(join(parent, directory))).buildId).toBe(manifest.buildId)
 })
 
 it.each([{ names: ['serv'] }, { names: ['web'] }, { names: ['serv', 'web'] }])('按交付职责构建，镜像身份来自根包名而非目录：$names', async ({ names }) => {
@@ -138,7 +153,7 @@ it('从 workspace 构建仍使用工程根名称、配置与产物目录', async
   const parent = join(root, '.hai/build/docker')
   const manifest = JSON.parse(readFileSync(join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim(), 'manifest.json'), 'utf8'))
   expect(manifest.appVersion).toBe('1.2.3')
-  expect(manifest.images[0].imageRef).toMatch(/^localhost\/hai-sample-app-serv:1\.2\.3-/)
+  expect(manifest.images[0].imageRef).toMatch(/^localhost\/hai-sample-app-serv:\d{8}-\d{6}-[a-f0-9]{6}-1\.2\.3$/)
   expect(existsSync(join(service, '.hai'))).toBe(false)
 })
 
@@ -278,7 +293,8 @@ it('docker 将同一次制品身份显式交给每个镜像编译，不继承外
   vi.stubEnv('HAI_BUILD_COMMIT', 'f'.repeat(40))
   await buildCommand({ cwd: root, target: 'image', runtime: 'docker' })
   const parent = join(root, '.hai/build/docker')
-  const buildId = readFileSync(join(parent, 'latest'), 'utf8').trim()
+  const directory = readFileSync(join(parent, 'latest'), 'utf8').trim()
+  const { buildId } = JSON.parse(readFileSync(join(parent, directory, 'manifest.json'), 'utf8'))
   for (const build of state.calls.filter(call => call.args[0] === 'build')) {
     expect(build.args).toEqual(expect.arrayContaining(['--build-arg', `HAI_BUILD_ID=${buildId}`, '--build-arg', 'HAI_BUILD_COMMIT=unknown']))
     expect(build.args).not.toContain('HAI_BUILD_ID=forged-docker-build')
@@ -295,11 +311,11 @@ it('优先 Podman，全部镜像构建成功才发布清单，清单不含环境
   const latest = readFileSync(join(parent, 'latest'), 'utf8').trim()
   const manifest = JSON.parse(readFileSync(join(parent, latest, 'manifest.json'), 'utf8'))
   expect(manifest.appVersion).toBe('1.2.3')
-  expect(latest).toMatch(/^1\.2\.3-/)
+  expect(latest).toMatch(/^build-sample-app-image-\d{8}-\d{6}-[a-f0-9]{6}-1\.2\.3$/)
   expect(manifest.images).toHaveLength(2)
   expect(manifest.images[0].sha256).toMatch(/^[a-f0-9]{64}$/)
   expect(manifest.images[0].imageRef.split(':').at(-1)).toBe(manifest.images[1].imageRef.split(':').at(-1))
-  expect(manifest.images[0].imageRef).toContain(':1.2.3-')
+  expect(manifest.images[0].imageRef).toMatch(/:\d{8}-\d{6}-[a-f0-9]{6}-1\.2\.3$/)
   expect(existsSync(join(parent, latest, 'serv-1.2.3.tar'))).toBe(true)
   expect(existsSync(join(parent, latest, 'web-1.2.3.tar'))).toBe(true)
   expect(readdirSync(parent).some(name => name.startsWith('.building-'))).toBe(false)
@@ -417,6 +433,8 @@ it('tauri 构建按目标平台和类型归档，并拒绝其他系统的伪跨�
   const batch = join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim())
   const manifest = JSON.parse(readFileSync(join(batch, 'manifest.json'), 'utf8'))
   expect(manifest).toMatchObject({ kind: 'desktop', platform, variant: 'debug', appVersion: '1.2.3', files: [{ sha256: expect.stringMatching(/^[a-f0-9]{64}$/) }] })
+  expect(manifest.arch).toBe('x64')
+  expect(manifest.files[0].file).toBe(`apps/desktop/sample-app-${platform}-x64-debug-1.2.3${platform === 'windows' ? '-setup.exe' : platform === 'macos' ? '.dmg' : '.deb'}`)
   expect(readFileSync(join(batch, manifest.files[0].file), 'utf8')).toBe('installer')
   state.calls = []
   await expect(buildCommand({ cwd: root, target: 'desktop', platform: process.platform === 'win32' ? 'linux' : 'windows' })).rejects.toThrow()
@@ -468,13 +486,42 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
   expect(build.env.HAI_DB_PASSWORD).toBeUndefined()
   expect(build.args).toEqual(expect.arrayContaining(['--env', 'HAI_CORE_NAME']))
   expect(build.args).not.toContain('Container Native')
+  // 构建脚本在 Linux 运行；用假 Wrapper 捕获真实参数，验证代理能传入后台构建。
+  if (process.platform !== 'win32') {
+    const workspace = join(root, 'proxy-script')
+    const appDirectory = join(workspace, 'apps/mobile/android')
+    const bin = join(workspace, 'bin')
+    const cache = join(workspace, 'cache')
+    const capture = join(workspace, 'gradle-args.json')
+    mkdirSync(join(appDirectory, 'app/src/main/assets'), { recursive: true })
+    mkdirSync(bin)
+    mkdirSync(cache)
+    writeFileSync(join(appDirectory, 'app/src/main/assets/capacitor.config.json'), '{}')
+    for (const command of ['pnpm', 'flock'])
+      writeFileSync(join(bin, command), '#!/bin/bash\nexit 0\n', { mode: 0o755 })
+    writeFileSync(join(appDirectory, 'gradlew'), '#!/bin/bash\nnode -e \'require("node:fs").writeFileSync(process.env.GRADLE_CAPTURE, JSON.stringify(process.argv.slice(1)))\' -- "$@"\n')
+    const script = build.args[build.args.indexOf('-c') + 1].replaceAll('/workspace', workspace).replaceAll('/cache', cache)
+    execFileSync('bash', ['-c', script, 'hai-android', 'Debug', 'apps/mobile'], {
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        GRADLE_CAPTURE: capture,
+        HTTP_PROXY: 'http://proxy.example.test:8080',
+        HTTPS_PROXY: 'http://proxy.example.test:8080',
+        NO_PROXY: 'localhost,.example.test:3000',
+      },
+    })
+    const args = JSON.parse(readFileSync(capture, 'utf8'))
+    expect(args).toEqual(expect.arrayContaining(['--no-daemon', 'assembleDebug', '-Dhttp.proxyHost=proxy.example.test', '-Dhttp.proxyPort=8080', '-Dhttps.proxyHost=proxy.example.test', '-Dhttps.proxyPort=8080', '-Dhttp.nonProxyHosts=localhost|*.example.test']))
+  }
   expect(build.args.join(' ')).not.toContain(keystore)
   expect(sign.args).toEqual(expect.arrayContaining(['--network', 'none', 'HAI_ANDROID_KEY_PASSWORD']))
   expect(sign.args.join(' ')).not.toContain('fixture-key-password')
   expect(sign.env.HAI_ANDROID_KEY_PASSWORD).toBe('fixture-key-password')
   const parent = join(app, '.hai/build/app/android/release')
   const batch = join(parent, readFileSync(join(parent, 'latest'), 'utf8').trim())
-  expect(readFileSync(join(batch, 'release/app-release.apk'), 'utf8')).toBe('PK-container-apk')
+  expect(readFileSync(join(batch, 'release/sample-mobile-android-release-1.2.3.apk'), 'utf8')).toBe('PK-container-apk')
 })
 
 it('错误版本、容器端口或不适用的构建参数在启动工具前失败', async () => {

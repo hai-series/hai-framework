@@ -4,7 +4,7 @@ import type { GlobalOptions } from '../cli-types.js'
 import type { BuildDownloadOptions } from './cli-build-downloads.js'
 import type { NativeArtifact } from './cli-build-native.js'
 import { execFileSync, spawn } from 'node:child_process'
-import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
@@ -14,6 +14,7 @@ import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { buildContainerAndroid } from './cli-build-android-container.js'
 import { buildMobileApp, gradleCommand } from './cli-build-app.js'
+import { buildBatchName, createBuildId } from './cli-build-artifact.js'
 import { buildProxyArguments, preflightDownloadProxy, resolveBuildDownloads, validateDownloadDockerfile } from './cli-build-downloads.js'
 import { nativeFiles, nativeProjectDirectory, publishNativeArtifacts } from './cli-build-native.js'
 import { forwardWindowsBuildOutput } from './cli-build-output.js'
@@ -212,13 +213,16 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     throw new Error(cliM('cli_build_version_invalid'))
   const project = readProjectConfig(join(cwd, 'hai.json'))
   const config = (project.build ?? {}) as BuildConfig
+  if (typeof metadata.name !== 'string' || !metadata.name.trim())
+    throw new Error(cliM('cli_build_project_name_required'))
+  const projectName = normalizeProjectName(metadata.name)
   const debug = options.debug === true
-  const identity = { buildId: `${appVersion}-${Date.now()}-${randomBytes(3).toString('hex')}`, commit: sourceCommit(cwd), appVersion }
+  const identity = { buildId: createBuildId(appVersion), commit: sourceCommit(cwd), appVersion }
   if (target === 'app') {
     const platform = options.platform
     if (platform !== 'android' && platform !== 'ios')
       throw new Error(cliM('cli_build_app_platform'))
-    const publish = (artifacts: NativeArtifact[]): Promise<string[]> => publishNativeArtifacts(cwd, 'app', platform, debug, identity, artifacts)
+    const publish = (artifacts: NativeArtifact[]): Promise<string[]> => publishNativeArtifacts(cwd, projectName, 'app', platform, debug, identity, artifacts)
     const nativeEnvironment = nativeNameEnvironment(cwd)
     let files: string[]
     if (containerAndroid) {
@@ -271,13 +275,10 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
         throw new Error(cliM('cli_build_desktop_artifact'))
       artifacts.push(...files.map(([source]) => ({ source, file: join(relative(cwd, directory), relative(output, source)) })))
     }
-    for (const file of await publishNativeArtifacts(cwd, 'desktop', platform, debug, identity, artifacts))
+    for (const file of await publishNativeArtifacts(cwd, projectName, 'desktop', platform, debug, identity, artifacts, arch))
       writeCliMessage(file)
     return
   }
-  if (typeof metadata.name !== 'string' || !metadata.name.trim())
-    throw new Error(cliM('cli_build_project_name_required'))
-  const projectName = normalizeProjectName(metadata.name)
   if (!Array.isArray(config.images) || !config.images.length || config.images.some(image => !image || typeof image !== 'object') || config.images.length > 2 || new Set(config.images.map(image => image.name)).size !== config.images.length
     || config.images.some(image => !['serv', 'web'].includes(image.name) || typeof image.dockerfile !== 'string' || !image.dockerfile || 'target' in image || (image.containerPort !== undefined && (!Number.isInteger(image.containerPort) || image.containerPort < 1 || image.containerPort > 65535)))) {
     throw new Error(cliM('cli_build_images_missing'))
@@ -375,11 +376,12 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
       }
     }
     // 不覆盖以前成功的构建；manifest 是一次完整构建的提交点。
-    const output = join(parent, buildId)
+    const batch = buildBatchName(projectName, 'image', buildId)
+    const output = join(parent, batch)
     // 文件名固定于 manifest 同层；通过构建 ID 子目录中的清单消费，latest 仅存相对路径。
     writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(artifact, null, 2)}\n`)
     renameSync(staging, output)
-    writeFileSync(join(parent, `latest-${buildId}`), `${buildId}\n`)
+    writeFileSync(join(parent, `latest-${buildId}`), `${batch}\n`)
     renameSync(join(parent, `latest-${buildId}`), join(parent, 'latest'))
     writeCliMessage(cliM('cli_build_ready', { params: { path: output, runtime } }))
   }

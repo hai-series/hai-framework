@@ -78,6 +78,8 @@ HAI_REACH_PROVIDERS='[{"name":"email","type":"api","url":"https://mail.example.i
 
 原生包批次位于 `.hai/build/app/<平台>/<构建类型>/` 或 `.hai/build/desktop/<平台>/<构建类型>/`，完整归档后更新该目录的 `latest`。Android 容器分支复用镜像源、npm 源、网络与代理设置。签名配置与构建命令见 [原生和离线条件](../getting-started/build.md#原生和离线条件)。
 
+批次目录统一使用 `build-<工程>-<目标>-YYYYMMDD-HHmmss-<随机串>-<版本>`，安装包使用工程标识、平台、Desktop 架构、类型和版本。`latest` 保存批次目录名，清单 `buildId` 是不含工程与目标前缀的短标识；旧目录仍可读取。完整示例见[统一命名](../getting-started/build.md#统一命名)。
+
 ### 构建并发和缓存
 
 `image` 目标默认最多并行两项镜像，资源紧张时用 `--concurrency 1`。Dockerfile 在源码 COPY 前安装依赖，前后端仅复制各自必要的源码，源码变化可复用下载与安装层。运行镜像移除应用自身的声明文件、源码映射与说明文件。打包按镜像内容 ID 在 `.hai/cache/images` 缓存中间件归档，复用前验证摘要，损坏则重新导出；应用镜像复制时同步计算摘要。速度取决于资源与缓存命中，不承诺固定比例。
@@ -235,8 +237,8 @@ $previousBase = $env:PUBLIC_BASE_PATH
 try {
   $env:PUBLIC_BASE_PATH = '/yyy'
   pnpm.cmd build --target image
-  $buildId = (Get-Content '.hai/build/docker/latest' -Raw).Trim()
-  $manifestPath = Join-Path (Join-Path '.hai/build/docker' $buildId) 'manifest.json'
+  $buildDirectory = (Get-Content '.hai/build/docker/latest' -Raw).Trim()
+  $manifestPath = Join-Path (Join-Path '.hai/build/docker' $buildDirectory) 'manifest.json'
   Get-Content $manifestPath -Raw | ConvertFrom-Json | Select-Object webBasePath, partial, hasWeb
 }
 finally {
@@ -535,7 +537,7 @@ HTTP 默认 308 跳转至 HTTPS，健康检查及 ACME 挑战保留 HTTP 路由�
 ```sh
 pnpm build --target image
 pnpm run deploy --env prod --plan
-pnpm run deploy --env prod --artifact-dir .hai/build/docker/<buildId>
+pnpm run deploy --env prod --artifact-dir .hai/build/docker/<批次目录>
 pnpm run deploy --env prod --build --services web
 ```
 
@@ -644,7 +646,7 @@ images/                 # 本次镜像归档
 3. 恢复匹配配置，使用**当前CLI**和旧应用制品创建**新的全量发布**：
 
 ```sh
-pnpm run deploy --env prod --artifact-dir .hai/build/docker/<previousBuildId>
+pnpm run deploy --env prod --artifact-dir .hai/build/docker/<上一批次目录>
 ```
 
 4. 不加`--build`（防止把旧源码误构建为新制品），不加`--services`；让新部署ID走校验、更新和健康检查。

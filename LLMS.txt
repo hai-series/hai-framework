@@ -117,6 +117,8 @@ return result
 
 ## 配置与依赖
 
+构建与部署的日期统一为构建机本地 `YYYYMMDD-HHmmss`，构建目录以 `build-<工程>-<目标>` 开头、版本结尾，部署保留 bundle 命名；原生归档文件包含工程、平台、架构（Desktop）、类型和版本。latest 指向批次目录，旧制品仍可读取，见[统一命名](docs/usage/getting-started/build.md#统一命名)。
+
 原生 App/Desktop 的名称统一复用 `_core.yml.name` 与 `HAI_CORE_NAME`；Fullstack 使用根环境文件和 serv YAML，Desktop 通过生成的 pnpm tauri 入口覆盖产品名/窗口标题。原生名称模式与已有 Capacitor 平台的迁移见[原生应用名称](docs/usage/getting-started/build.md#原生应用名称)。
 
 打包下载用 `--image-source` / `--npm-source` 选择 official/cn/custom，项目默认在 `hai.json.build.sources`，参数只覆盖本次；cn 使用毫秒镜像（Docker Hub/GHCR）及 npmmirror。代理用 `build.proxy` 与 `--proxy-mode inherit|system|custom|none`；Docker/远程 Podman 拉取需引擎自身代理，构建容器单独检查。旧 Dockerfile 同步 HAI_NODE_IMAGE / HAI_NGINX_IMAGE / HAI_NPM_REGISTRY；SDK DeployAppOptions.imageSource/proxy 与 resolveImageReference/resolveDownloadProxy 契约见[下载源和代理](docs/usage/configuration/delivery.md#下载源和代理)。

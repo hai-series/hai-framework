@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { closeSync, cpSync, createReadStream, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { cliM } from '../cli-i18n.js'
+import { buildBatchName, nativePackageFile } from './cli-build-artifact.js'
 
 /**
  * 原生安装包的源路径及其在发布批次中的相对路径。
@@ -88,23 +89,25 @@ export function isNativeZip(path: string): boolean {
  * @example 模块内部上下文
  * ```ts
  * const archive = (root: string, artifacts: NativeArtifact[]) =>
- *   publishNativeArtifacts(root, 'app', 'android', true, { buildId: '1.2.3-build1', commit: 'abc1234', appVersion: '1.2.3' }, artifacts)
+ *   publishNativeArtifacts(root, 'shop', 'app', 'android', true, { buildId: '20261105-171924-62e4f1-1.2.3', commit: 'abc1234', appVersion: '1.2.3' }, artifacts)
  * ```
  */
-export async function publishNativeArtifacts(root: string, kind: 'app' | 'desktop', platform: string, debug: boolean, identity: { buildId: string, commit: string, appVersion: string }, artifacts: readonly NativeArtifact[]): Promise<string[]> {
+export async function publishNativeArtifacts(root: string, project: string, kind: 'app' | 'desktop', platform: string, debug: boolean, identity: { buildId: string, commit: string, appVersion: string }, artifacts: readonly NativeArtifact[], arch?: string): Promise<string[]> {
   const variant = debug ? 'debug' : 'release'
   const parent = join(root, '.hai', 'build', kind, platform, variant)
   mkdirSync(parent, { recursive: true })
   const staging = mkdtempSync(join(parent, '.building-'))
   const latest = join(parent, `latest-${identity.buildId}`)
-  const batch = join(parent, identity.buildId)
+  const name = buildBatchName(project, [kind, platform, arch, variant].filter(Boolean).join('-'), identity.buildId)
+  const batch = join(parent, name)
   try {
     const files = []
     for (const artifact of artifacts) {
-      const output = join(staging, artifact.file)
+      const namedFile = join(dirname(artifact.file), nativePackageFile(project, platform, debug, identity.appVersion, artifact.file, arch))
+      const output = join(staging, namedFile)
       mkdirSync(dirname(output), { recursive: true })
       cpSync(artifact.source, output, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true })
-      const file = artifact.file.split(sep).join('/')
+      const file = namedFile.split(sep).join('/')
       if (lstatSync(output).isDirectory()) {
         files.push({ file })
         continue
@@ -114,9 +117,9 @@ export async function publishNativeArtifacts(root: string, kind: 'app' | 'deskto
         hash.update(chunk)
       files.push({ file, sha256: hash.digest('hex') })
     }
-    writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify({ ...identity, kind, platform, variant, files }, null, 2)}\n`)
+    writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify({ ...identity, kind, platform, ...(arch ? { arch } : {}), variant, files }, null, 2)}\n`)
     renameSync(staging, batch)
-    writeFileSync(latest, `${identity.buildId}\n`)
+    writeFileSync(latest, `${name}\n`)
     renameSync(latest, join(parent, 'latest'))
     return files.map(({ file }) => join(batch, file))
   }

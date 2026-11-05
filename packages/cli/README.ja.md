@@ -214,6 +214,8 @@ feedback.init(config, { collectEvidence }) で業務の本文・ZIP を非同期
 
 ## リリース確認とネイティブビルド
 
+ビルドディレクトリは `build-<工程>-<対象>-YYYYMMDD-HHmmss-<乱数>-<バージョン>` に統一し、対象にプラットフォーム、Desktop のアーキテクチャ、debug/release を含めます。デプロイは `bundle-<工程>-<環境>-YYYYMMDD-HHmmss-<乱数>-<バージョン>` を維持し、両方ともビルドマシンのローカル時刻を使います。保存されるインストーラーは `todo-android-debug-0.1.0.apk`、`todo-windows-x64-release-0.1.0-setup.exe` のように工程識別子を使い、Core `name` は表示名に使います。`latest` は相対バッチディレクトリを指し、既存成果物も引き続き読めます。[命名規則](../../docs/usage/getting-started/build.md#统一命名)を参照してください。
+
 Capacitor の `appName`、Tauri の製品名とメインウィンドウの初期タイトルは、`_core.yml` の `name` / `HAI_CORE_NAME` を共用します。Fullstack はルートの dotenv と serv の YAML を読みます。パッケージ作成は既定で `prod`、Tauri dev は `dev` を使用し、プロセスの `HAI_CORE_ENV` で切り替えます。Desktop は生成された `pnpm tauri` / `tauri:build` を使用してください。既存の Capacitor プラットフォームは表示名も別途更新します。ネイティブ設定には名前のみを渡し、ソース・イメージのビルド分離は維持します。[ネイティブアプリ名](../../docs/usage/getting-started/build.md#原生应用名称)を参照してください。
 
 upgrade は各利用側から ESM-only パッケージと pnpm リンクのマニフェストを読み、入口を実行せず、入れ子 workspace と除外規則に対応します。利用する Audit 制品が移行関数を公開する場合は `migrateAudit({ dryRun: true })` を提示しますが、移行自体は実行しません。計画の target.runtime はローカル梱包エンジンと独立した遠隔設定です。
