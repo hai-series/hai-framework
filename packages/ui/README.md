@@ -283,7 +283,7 @@ components/
 | `Breadcrumb` | 面包屑   | `items`, `separator`                         |
 | `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
 | `Dropdown`   | 下拉菜单 | `items`, `trigger`, `triggerClass`, `position` |
-| `Tooltip`    | 提示     | `content`, `position`, `delay`               |
+| `Tooltip`    | 提示     | `content`, `position`, `delay`, `portal`（裁剪容器内使用）               |
 
 ##### 状态占位
 

@@ -1209,5 +1209,8 @@
   "gallery_dashboard_cost": "成本",
   "gallery_dashboard_direct": "直接访问",
   "gallery_dashboard_search": "搜索",
-  "gallery_dashboard_partner": "合作伙伴"
+  "gallery_dashboard_partner": "合作伙伴",
+  "gallery_demo_tooltip_in_clipped_container": "裁剪容器内（portal）",
+  "gallery_demo_portal_tooltip_content": "portal 模式不会被容器裁剪",
+  "gallery_demo_portal": "悬浮查看"
 }

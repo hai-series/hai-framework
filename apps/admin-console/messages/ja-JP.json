@@ -1209,5 +1209,8 @@
   "gallery_dashboard_cost": "費用",
   "gallery_dashboard_direct": "直接",
   "gallery_dashboard_search": "検索",
-  "gallery_dashboard_partner": "パートナー"
+  "gallery_dashboard_partner": "パートナー",
+  "gallery_demo_tooltip_in_clipped_container": "クリップされたコンテナ内（portal）",
+  "gallery_demo_portal_tooltip_content": "portal モードはコンテナにクリップされません",
+  "gallery_demo_portal": "ホバーで表示"
 }
