@@ -59,6 +59,8 @@ name: ${HAI_CORE_NAME:订单工作台}
 
 Desktop 使用生成的 `pnpm tauri dev|build|bundle` 或 `tauri:dev` / `tauri:build` 入口，通过 Tauri `--config` 覆盖名称，保留安装包版本和窗口设置，不回写 `tauri.conf.json`。直接调用 `pnpm exec tauri` / `cargo tauri` 会绕过此入口；调用方显式追加的 `--config` 仍有最终覆盖权。
 
+窗口覆盖先读取当前桌面平台的 `tauri.windows.conf.json`、`tauri.macos.conf.json` 或 `tauri.linux.conf.json`，保留平台窗口数组及删除设置。多窗口时优先更新 `label: main`（省略 label 也表示 main），没有该标签才使用第一个窗口；辅助窗口标题保持原值。平台配置与数组替换规则沿用 [Tauri 配置合并](https://v2.tauri.app/develop/configuration-files/)。
+
 Android 容器构建先在宿主按同一优先级解析名称和所选模式，再通过环境变量传给构建容器；工作副本继续排除 `.env*` 与签名材料，签名仍在独立步骤进行。
 
 名称属于原生产物，修改后需重新打包。Capacitor 已有 Android/iOS 工程不会因为修改 `appName` 自动重命名：Android 同步 `android/app/src/main/res/values/strings.xml` 的 `app_name` / `title_activity_main`，iOS 同步 Xcode 的 Display Name（`CFBundleDisplayName`），再构建。应用标识 `appId` / `identifier` 仍单独配置。
