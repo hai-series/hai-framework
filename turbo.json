@@ -60,6 +60,7 @@
     "test": {
       "env": [
         "HAI_ACP_E2E_*",
+        "HAI_TEST_CONTAINER_ENGINE",
         "HAI_STORAGE_RUN_BROWSER_GATES"
       ],
       "passThroughEnv": [
@@ -74,6 +75,9 @@
       "cache": true
     },
     "test:e2e": {
+      "env": [
+        "HAI_TEST_CONTAINER_ENGINE"
+      ],
       "passThroughEnv": [
         "ADMIN_E2E_BASE_URL",
         "MOBILE_E2E_PORT",

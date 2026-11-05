@@ -12,7 +12,7 @@ import { TLSSocket } from 'node:tls'
 import { resolveTransportBodyLimits } from '@h-ai/crypto'
 import { deploy } from '@h-ai/deploy'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from './helpers/deploy-container-fixture.js'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture, testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 
 const enabled = process.env.HAI_DEPLOY_E2E === '1'
 let runtime: 'podman' | 'docker'
@@ -22,7 +22,7 @@ let fixture: DeployTestFixture | undefined
 describe.skipIf(!enabled)('部署代理配置（真实 Nginx）', () => {
   beforeAll(async () => {
     const deadline = Date.now() + 90_000
-    const selected = (['podman', 'docker'] as const).find(candidate => spawnSync(candidate, ['version'], { windowsHide: true, stdio: 'ignore', timeout: 10_000 }).status === 0)
+    const selected = testContainerRuntimeCandidates().find(candidate => spawnSync(candidate, ['version'], { windowsHide: true, stdio: 'ignore', timeout: 10_000 }).status === 0)
     if (!selected)
       throw new Error('Nginx gate requires a reachable container engine')
     runtime = selected

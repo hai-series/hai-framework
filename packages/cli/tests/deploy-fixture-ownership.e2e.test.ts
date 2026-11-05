@@ -8,11 +8,11 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_OWNER_LABEL, ensureDeployTestBaseImage, executeDeployTestFixture, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages } from './helpers/deploy-container-fixture.js'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_OWNER_LABEL, ensureDeployTestBaseImage, executeDeployTestFixture, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages, testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 
 /** 引擎探测只用于测试前置；资源操作一律复用同一个被测 primitive。 */
 function runtime(): DeployFixtureRuntime | undefined {
-  for (const candidate of ['podman', 'docker'] as const) {
+  for (const candidate of testContainerRuntimeCandidates()) {
     try {
       execFileSync(candidate, ['version'], { stdio: 'ignore', windowsHide: true, timeout: 15_000 })
       return candidate

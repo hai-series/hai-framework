@@ -16,6 +16,12 @@ const proof = () => createStageProof({ ...identity, stage: 'unit', fingerprint }
 const reusable = overrides => canReuseStage({ ...identity, stage: 'unit', fingerprint, baseline: { sha: identity.sha, stages: ['unit'] }, cacheHit: true, force: false, proof: proof(), ...overrides })
 
 describe('ci 阶段输入与独立结果复用', () => {
+  it('显式容器引擎进入 Turbo 测试环境与缓存身份', () => {
+    const config = JSON.parse(readFileSync(new URL('../../turbo.json', import.meta.url), 'utf8'))
+    for (const task of ['test', 'test:e2e'])
+      expect(config.tasks[task].env).toContain('HAI_TEST_CONTAINER_ENGINE')
+  })
+
   it('仅改 Admin 浏览器用例不使单元、类型与其他浏览器结果失效', () => {
     const updated = change('apps/admin-console/e2e/ui-gallery-scenes.spec.ts')
     for (const stage of ['unit', 'typecheck', 'contracts', 'scaffold', 'sdk', 'deploy', 'browser-h5-app'])

@@ -3,6 +3,7 @@ import { execFile, execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 /**
@@ -43,6 +44,23 @@ export const DEPLOY_FIXTURE_OWNER_LABEL = 'org.h-ai.cli.deploy-e2e.run'
  * ```
  */
 export type DeployFixtureRuntime = 'podman' | 'docker'
+
+/**
+ * CI 显式选择测试引擎时不回退；本地未指定时继续优先探测 Podman。
+ * @example 模块内部上下文
+ * ```ts
+ * const candidates = testContainerRuntimeCandidates()
+ * const preferred = candidates[0]
+ * ```
+ */
+export function testContainerRuntimeCandidates(): readonly DeployFixtureRuntime[] {
+  const runtime = process.env.HAI_TEST_CONTAINER_ENGINE
+  if (runtime === undefined)
+    return ['podman', 'docker']
+  if (runtime !== 'podman' && runtime !== 'docker')
+    throw new Error('HAI_TEST_CONTAINER_ENGINE must be podman or docker')
+  return [runtime]
+}
 
 /**
  * create 成功后记录的唯一容器身份与实际宿主端口；必须使用工厂结果。

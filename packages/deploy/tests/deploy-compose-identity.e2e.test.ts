@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { testContainerRuntimeCandidates } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import { createComposeContainerLookupScript } from '../src/container/deploy-compose-identity.js'
 
 const image = 'docker.io/library/node:24.22.1-bookworm-slim'
@@ -92,7 +93,7 @@ async function withContainers(context: TestContext, body: (create: (metadata: Re
 describe.skipIf(process.env.HAI_DEPLOY_E2E !== '1')('compose identity lookup on a real container engine', () => {
   beforeAll(async () => {
     let selected: 'podman' | 'docker' | undefined
-    for (const candidate of ['podman', 'docker'] as const) {
+    for (const candidate of testContainerRuntimeCandidates()) {
       if ((await command(candidate, ['version'], undefined, 10_000)).code === 0) {
         selected = candidate
         break

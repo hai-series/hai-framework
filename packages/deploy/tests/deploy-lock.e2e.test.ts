@@ -13,6 +13,7 @@ import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
 import { parseEnv } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testContainerRuntimeCandidates } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import { createApplyScript, shellArgument } from '../src/container/deploy-scripts.js'
 import { deploy } from '../src/index.js'
 
@@ -119,7 +120,7 @@ async function pack(selectedServices?: string[]): Promise<{ id: string, director
 
 describe.skipIf(!enabled)('linux deployment process locks', () => {
   beforeEach(async () => {
-    const candidate = (['podman', 'docker'] as const).find(command => spawnSync(command, ['version'], { timeout: 20_000, windowsHide: true, stdio: 'ignore' }).status === 0)
+    const candidate = testContainerRuntimeCandidates().find(command => spawnSync(command, ['version'], { timeout: 20_000, windowsHide: true, stdio: 'ignore' }).status === 0)
     if (!candidate)
       throw new Error('Deployment lock gate requires a reachable Podman or Docker engine')
     runtime = candidate

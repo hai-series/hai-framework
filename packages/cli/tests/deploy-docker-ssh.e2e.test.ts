@@ -32,12 +32,12 @@ import { pbkdf2, solveChallenge } from 'altcha/lib'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 import { createProject } from '../src/commands/cli-create.js'
-import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages } from './helpers/deploy-container-fixture.js'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, DEPLOY_FIXTURE_API_PORT, DEPLOY_FIXTURE_WEB_PORT, ensureDeployTestBaseImage, executeDeployTestFixture, recordDeployTestImage, removeDeployTestFixture, removeDeployTestImages, testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 import { createDeployTestCommands, DeployTestCommandError } from './helpers/deploy-test-command.js'
 
-/** 探测可用容器运行时（优先 podman，用 `version` 确认引擎可达）。 */
+/** 尊重显式测试引擎，否则优先 Podman；用 version 确认引擎可达。 */
 function detectRuntime(): 'podman' | 'docker' | null {
-  for (const runtime of ['podman', 'docker'] as const) {
+  for (const runtime of testContainerRuntimeCandidates()) {
     try {
       execFileSync(runtime, ['version'], { stdio: 'ignore', windowsHide: true, timeout: 15_000 })
       return runtime

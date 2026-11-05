@@ -11,7 +11,7 @@ import process from 'node:process'
 import { setTimeout } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture } from '../../cli/tests/helpers/deploy-container-fixture.js'
+import { createDeployFixtureCleanupReport, createDeployTestFixture, ensureDeployTestBaseImage, executeDeployTestFixture, removeDeployTestFixture, testContainerRuntimeCandidates } from '../../cli/tests/helpers/deploy-container-fixture.js'
 import { createUploadScripts } from '../src/container/deploy-scripts.js'
 import * as sshModule from '../src/container/deploy-ssh.js'
 import { createDeploymentPlan, deploy, getDeployCommandState } from '../src/index.js'
@@ -87,7 +87,7 @@ describe.skipIf(!enabled)('linux process groups and real ssh execution', () => {
         throw new Error('Command runtime setup deadline exceeded')
       return Math.min(limit, budget)
     }
-    const selected = (['podman', 'docker'] as const).find(command => spawnSync(command, ['version'], { windowsHide: true, stdio: 'ignore', timeout: 15_000 }).status === 0)
+    const selected = testContainerRuntimeCandidates().find(command => spawnSync(command, ['version'], { windowsHide: true, stdio: 'ignore', timeout: 15_000 }).status === 0)
     if (!selected)
       throw new Error('Command runtime gate requires a reachable Podman or Docker engine')
     runtime = selected

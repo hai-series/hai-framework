@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
+import { testContainerRuntimeCandidates } from './helpers/deploy-container-fixture.js'
 import { runDeployTestCommand } from './helpers/deploy-test-command.js'
 
 const enabled = process.env.HAI_CLI_RUN_GENERATE_GATES === '1'
@@ -32,7 +33,7 @@ it.skipIf(!enabled)('download source gates use the generated Dockerfile, Corepac
     }
   }
   try {
-    for (const candidate of ['podman', 'docker']) {
+    for (const candidate of testContainerRuntimeCandidates()) {
       try {
         await runDeployTestCommand(candidate, ['version'], { timeoutMs: 8000 })
         runtime = candidate
