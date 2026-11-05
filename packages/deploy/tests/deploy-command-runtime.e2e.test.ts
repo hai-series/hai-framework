@@ -133,9 +133,13 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
         await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `node -e "require('node:fs').writeFileSync('/tmp/node-ca.crt',require('node:tls').rootCertificates.join(String.fromCharCode(10)))" && ${mirrorCommand}sed -i 's#http://#https://#g' /etc/apt/sources.list.d/debian.sources && apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update`], { timeoutMs: remaining(180_000), signal, stage: 'apt-update' })
         await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', 'DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true -o Acquire::https::CaInfo=/tmp/node-ca.crt -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates openssh-server util-linux && rm -rf /var/lib/apt/lists/* /tmp/node-ca.crt && ssh-keygen -A && mkdir -p /run/sshd /root/.ssh && chmod 700 /root/.ssh'], { timeoutMs: remaining(180_000), signal, stage: 'apt-install' })
         execFileSync(runtime, ['cp', `${key}.pub`, `${fixture.containerId}:/root/.ssh/authorized_keys`], { windowsHide: true, timeout: remaining(20_000), stdio: 'ignore' })
+        const keyOwnership = await executeDeployTestFixture(runtime, fixture, ['stat', '-c', '%u:%g %a', '/root/.ssh/authorized_keys'], { timeoutMs: remaining(10_000), signal })
+        process.stdout.write(`SSH fixture copied key ownership: ${keyOwnership.trim()}\n`)
+        // 跨引擎复制后显式恢复 sshd 要求的服务端密钥归属，不关闭 StrictModes。
+        await executeDeployTestFixture(runtime, fixture, ['chown', '0:0', '/root/.ssh/authorized_keys'], { timeoutMs: remaining(10_000), signal })
         // 合成密码仅从标准输入交给本夹具 chpasswd，不进入 runtime 参数或镜像层。
         execFileSync(runtime, ['exec', '-i', fixture.containerId, 'chpasswd'], { input: `root:${sshPassword}\n`, windowsHide: true, timeout: remaining(10_000), stdio: ['pipe', 'pipe', 'pipe'] })
-        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `chmod 600 /root/.ssh/authorized_keys; printf '\\nPermitRootLogin yes\\nPasswordAuthentication yes\\nUsePAM no\\n' >> /etc/ssh/sshd_config; /usr/sbin/sshd`], { timeoutMs: remaining(10_000), signal, stage: 'sshd' })
+        await executeDeployTestFixture(runtime, fixture, ['sh', '-ec', `chmod 600 /root/.ssh/authorized_keys; printf '\\nPermitRootLogin yes\\nPasswordAuthentication yes\\nUsePAM no\\n' >> /etc/ssh/sshd_config; /usr/sbin/sshd -E /tmp/hai-sshd.log`], { timeoutMs: remaining(10_000), signal, stage: 'sshd' })
       },
     })
     container = fixtureContext.containerId
@@ -145,7 +149,9 @@ const output=await runCommand(process.execPath,['-e','process.stdout.write("x".r
       execFileSync(runtime, ['cp', path.join(root, folder), `${container}:/fixture/${folder}`], { windowsHide: true, timeout: remaining(180_000) })
     await executeDeployTestFixture(runtime, fixtureContext, ['sh', '-ec', `printf '#!/bin/sh\\nexit 0\\n' >/usr/local/bin/curl; chmod 700 /usr/local/bin/curl`], { timeoutMs: remaining(10_000), signal: setupSignal })
     const ssh = sshModule.createSshExecutor({ host: '127.0.0.1', port: sshPort, username: 'root', identityFile: key, knownHostsFile: path.join(root, 'known-hosts'), strictHostKeyChecking: false, connectTimeoutSeconds: 5 })
-    expect((await ssh.exec('true', { timeoutMs: remaining(20_000) })).success).toBe(true)
+    const connected = await ssh.exec('true', { timeoutMs: remaining(20_000) })
+    const diagnostic = connected.success ? undefined : execute('stat -c "%u:%g %a %n" /root /root/.ssh /root/.ssh/authorized_keys; tail -n 20 /tmp/hai-sshd.log')
+    expect(connected.success, diagnostic).toBe(true)
   }, 300_000)
 
   afterEach(async () => {
