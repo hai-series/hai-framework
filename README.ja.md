@@ -150,6 +150,8 @@ CI の単体テスト段階で Codex/dsh/Goose の基本イメージを構築し
 
 npm は公開前にパッケージをスキャンします。CI は全パッケージを照会できるまで最大三十分待ち、その後 `latest` を更新します。[公開の復旧手順](docs/ci.md#查看结果与重新运行)を参照してください。
 
+独立した Native delivery は Windows、Android、iOS シミュレーターのパッケージを作成します。Windows/Android は CLI の統一アーカイブ名を使い、Core の表示名とチェックサムも検証します。起動条件と実機検証の範囲は [CI 説明](docs/ci.md)を参照してください。
+
 ローカルのコミット/プッシュでは `scripts/check-leak-words.mjs` を使い、`.leak-words.json` は非公開に保ちます。コンテナ検証はその実行で登録したリソースを回収します。過去のテストイメージは `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` で確認後、`--apply` を追加します。[検証説明](docs/usage/governance/verification.md)で実行、再利用、環境依存の境界を確認できます。
 
 ## ライセンス

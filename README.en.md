@@ -150,6 +150,8 @@ The CI unit stage builds the base Codex/dsh/Goose images and runs native ACP pro
 
 npm scans packages before making them available. CI waits up to thirty minutes for every package to become queryable before promoting `latest`; see [release recovery](docs/ci.md#查看结果与重新运行).
 
+The separate Native delivery workflow packages Windows, Android and an iOS simulator app. Windows/Android artifacts use the CLI archive names and verify the Core display name and checksums. See [CI details](docs/ci.md) for triggers and device acceptance limits.
+
 Local commit/push hooks use `scripts/check-leak-words.mjs`; keep `.leak-words.json` private. Container gates clean up resources registered for that run. Preview historical test image cleanup with `node scripts/cleanup-test-images.mjs --runtime=podman --legacy` before adding `--apply`. [Verification notes](docs/usage/governance/verification.md) distinguish actual runs, reuse and environment dependencies.
 
 ## License

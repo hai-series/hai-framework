@@ -2,6 +2,8 @@
 
 本页面向框架维护者，说明 `.github/workflows/ci.yml` 的执行方式。应用本地验收仍按影响范围选择命令；同一工作区内共用 `dist`、`.svelte-kit`、端口或数据库的任务不能直接并发。
 
+独立的 **Native delivery** 在相关 PR 或手工触发时执行。Windows 和 Android 通过 CLI 构建并上传 `.hai/build` 中的统一命名批次，同时核验 Core 显示名与 SHA-256；Android 还执行 APK 验签。iOS 构建免签名的模拟器 App。这些步骤证明编译和打包，安装、启动、认证、存储、网络与升级仍按制品中的验收边界记录。
+
 ## 阶段与依赖
 
 CI 的 unit 阶段显式启用真实 Storage Chrome 上传取消门禁，该开关进入 Turbo 缓存身份。脚手架生成门禁包含下载源/代理容器验证；部署门禁先准备固定 PostgreSQL/MySQL/Redis/RustFS 镜像，再验证外部中间件配置。Windows 进程回收、存储路径安全与 CLI 参数回归在独立 Windows job 执行，并进入最终必需汇总。脚手架运行器通过 pnpm 的真实入口启动子进程，目录含空格也不经过 shell 重新分词。

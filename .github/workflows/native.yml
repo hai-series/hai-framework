@@ -7,6 +7,8 @@ on:
       - 'apps/desktop-app/**'
       - 'apps/mobile-app/**'
       - 'packages/**'
+      - 'scripts/native-name.*'
+      - scripts/run-tauri.mjs
       - pnpm-lock.yaml
       - .github/workflows/native.yml
 
@@ -30,6 +32,7 @@ jobs:
     timeout-minutes: 60
     env:
       CI: true
+      HAI_CORE_NAME: Native CI Application
     steps:
       - uses: actions/checkout@v6.1.0
       - uses: pnpm/action-setup@v6.1.0
@@ -53,16 +56,42 @@ jobs:
           rustup show
           pnpm --filter desktop-app build --target desktop --platform windows --arch x64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $parent = 'apps/desktop-app/.hai/build/desktop/windows/release'
+          $batch = Join-Path $parent (Get-Content (Join-Path $parent 'latest') -Raw).Trim()
+          $manifest = Get-Content (Join-Path $batch 'manifest.json') -Raw | ConvertFrom-Json
+          if ($manifest.files.Count -ne 1) { throw 'Expected one Windows installer' }
+          foreach ($file in $manifest.files) {
+            $artifact = Join-Path $batch $file.file
+            if ((Split-Path $artifact -Leaf) -ne "desktop-app-windows-x64-release-$($manifest.appVersion)-setup.exe") { throw 'Unexpected installer name' }
+            if ((Get-Item -LiteralPath $artifact).VersionInfo.ProductName -ne $env:HAI_CORE_NAME) { throw 'Core product name was not applied' }
+            if ((Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant() -ne $file.sha256) { throw 'Installer checksum mismatch' }
+          }
       - name: Package Android debug APK
         if: matrix.platform == 'android'
         shell: bash
         run: |
           pnpm --filter mobile-app build
           pnpm --filter mobile-app exec cap add android
-          pnpm --filter mobile-app exec cap sync android
-          cd apps/mobile-app/android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          pnpm --filter mobile-app build --target app --platform android --debug
+          parent=apps/mobile-app/.hai/build/app/android/debug
+          batch="$parent/$(cat "$parent/latest")"
+          artifact="$batch/debug/mobile-app-android-debug-$(node -p 'require("./apps/mobile-app/package.json").version').apk"
+          test -f "$artifact"
+          aapt2="$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name aapt2 -type f | sort -V | tail -n 1)"
+          "${aapt2%/aapt2}/apksigner" verify "$artifact"
+          "$aapt2" dump badging "$artifact" | grep -F "application-label:'$HAI_CORE_NAME'"
+          node --input-type=module - "$batch" <<'NODE'
+          import { createHash } from 'node:crypto'
+          import { readFileSync } from 'node:fs'
+          import { join } from 'node:path'
+          const batch = process.argv[2]
+          const manifest = JSON.parse(readFileSync(join(batch, 'manifest.json'), 'utf8'))
+          if (manifest.files.length !== 1) throw new Error('Expected one Android APK')
+          for (const file of manifest.files) {
+            const actual = createHash('sha256').update(readFileSync(join(batch, file.file))).digest('hex')
+            if (actual !== file.sha256) throw new Error('APK checksum mismatch')
+          }
+          NODE
       - name: Package iOS simulator app
         if: matrix.platform == 'ios'
         shell: bash
@@ -83,8 +112,9 @@ jobs:
         with:
           name: native-${{ matrix.platform }}-${{ github.sha }}
           if-no-files-found: error
+          include-hidden-files: true
           path: |
             .cache/native/result.txt
-            apps/desktop-app/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
-            apps/mobile-app/android/app/build/outputs/apk/debug/*.apk
+            apps/desktop-app/.hai/build/desktop/windows/release/**
+            apps/mobile-app/.hai/build/app/android/debug/**
             .cache/native/ios/Build/Products/Debug-iphonesimulator/App.app
