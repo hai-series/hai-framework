@@ -20,7 +20,7 @@
 -->
 <script lang='ts'>
   import type { DataAttributes, PopoverProps } from '../../types.js'
-  import { tick } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import { cn, getDataAttributes, portal as portalAction } from '../../utils.js'
 
   let {
@@ -28,7 +28,7 @@
     position = 'bottom',
     trigger = 'click',
     offset = 8,
-    portal = false,
+    portal = true,
     class: className = '',
     onopen,
     onclose,
@@ -44,6 +44,7 @@
   let portalStyle = $state('')
   /** 首帧布局收敛后的二次定位帧，关闭时必须取消避免过期写入。 */
   let portalPositionFrame: number | undefined = $state()
+  let closeTimer: ReturnType<typeof setTimeout> | undefined
 
   const positionClass = $derived({
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
@@ -96,6 +97,10 @@
       return
     }
 
+    if (typeof window.requestAnimationFrame !== 'function') {
+      return
+    }
+
     portalPositionFrame = window.requestAnimationFrame(() => {
       portalPositionFrame = undefined
       if (open && portal) {
@@ -127,15 +132,30 @@
 
   function handleMouseEnter() {
     if (trigger === 'hover') {
+      cancelClose()
       handleOpen()
     }
   }
 
   function handleMouseLeave() {
     if (trigger === 'hover') {
-      handleClose()
+      scheduleClose()
     }
   }
+
+  function scheduleClose() {
+    cancelClose()
+    closeTimer = setTimeout(() => {
+      handleClose()
+    }, 140)
+  }
+
+  function cancelClose() {
+    clearTimeout(closeTimer)
+    closeTimer = undefined
+  }
+
+  onDestroy(cancelClose)
 
   function handleClickOutside(e: MouseEvent) {
     if (
@@ -209,7 +229,11 @@
         class='fixed z-50 rounded-box border border-base-200 bg-base-100 p-4 shadow-lg'
         style={portalStyle}
         role='dialog'
+        onmouseenter={cancelClose}
+        onmouseleave={handleMouseLeave}
       >
+        <div class={cn('absolute w-0 h-0 border-8', arrowClass)}></div>
+
         {#if children}
           {@render children()}
         {/if}
@@ -223,6 +247,8 @@
         )}
         style='--offset: {offset}px'
         role='dialog'
+        onmouseenter={cancelClose}
+        onmouseleave={handleMouseLeave}
       >
         <!-- 箭头 -->
         <div class={cn('absolute w-0 h-0 border-8', arrowClass)}></div>
