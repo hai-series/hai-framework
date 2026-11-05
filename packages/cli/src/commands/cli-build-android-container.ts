@@ -100,6 +100,8 @@ interface AndroidContainerOptions {
   network?: string
   debug: boolean
   downloads: BuildDownloads
+  /** 只允许已解析的公开名称与模式，运行时配置不进入构建工作副本。 */
+  environment?: Record<string, string>
   run: (args: string[], quiet?: boolean, environment?: Record<string, string>) => Promise<void>
 }
 
@@ -223,7 +225,7 @@ export async function buildContainerAndroid<T>(root: string, apps: readonly stri
           `${uid}:${gid}`,
         ]
     const relativeApps = directories.map(path => relative(dependencies, path).split(sep).join('/') || '.')
-    const environment = { ...proxy, npm_config_registry: downloads.npmRegistry, npm_config_nodedir: '/usr/local' }
+    const environment = { ...proxy, ...options.environment, npm_config_registry: downloads.npmRegistry, npm_config_nodedir: '/usr/local' }
     const workspaceMount = bindMount(workspace, '/workspace')
     await run([
       'run',

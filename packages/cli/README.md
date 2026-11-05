@@ -214,6 +214,8 @@ fullstack 的逐项开关、默认值、启用前提与使用影响见[配置化
 
 ## 发布预检与原生打包
 
+原生名称复用 `_core.yml` 的 `name` / `HAI_CORE_NAME`：Capacitor 的 `appName`、Tauri 产品名与主窗口初始标题使用同一解析结果。Fullstack 读取工程根环境文件和 serv YAML，正式打包默认 `prod`、Tauri dev 默认 `dev`，进程 `HAI_CORE_ENV` 可切换；Desktop 使用生成的 `pnpm tauri` / `tauri:build` 入口。已有 Capacitor 平台还需同步显示名。原生配置只接收名称，源码/镜像的环境隔离保持适用，详见[原生应用名称](../../docs/usage/getting-started/build.md#原生应用名称)。
+
 upgrade 按消费者路径读取 ESM-only 包及 pnpm 链接的清单，不执行包入口；递归扫描 workspace 并尊重排除规则。实际消费的 Audit 发布制品公开导出迁移函数时，报告包含 `migrateAudit({ dryRun: true })`；报告不执行迁移。部署计划的 target.runtime 来自远端配置，和本地打包引擎独立。
 
 旧目标在 Linux 服务器运行 `hai deploy-secrets <目录> --import <私有JSON> --runtime docker` 做只读认证，显式加 `--apply` 才导入。此工具要求服务器 Node，与普通离线部署的要求不同；凭据不放命令参数。输入格式、安全限制及恢复步骤见[凭据导入指南](../deploy/docs/credential-import.md)。

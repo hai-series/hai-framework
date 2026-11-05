@@ -5,6 +5,7 @@ import type { ChildProcess } from 'node:child_process'
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { appendFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
@@ -186,6 +187,56 @@ async function start(cwd: string, args: string[], selectedPort: number): Promise
 }
 
 describe.skipIf(!enabled)('generated route runtime gates', () => {
+  it.each(['mobile-app', 'fullstack'] as const)('%s native naming gates load generated Capacitor configuration and Desktop entry', async (appType) => {
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    await mkdir(tempParent, { recursive: true })
+    const root = await mkdtemp(path.join(tempParent, 'cli-generate-runtime-'))
+    roots.push(root)
+    const project = path.join(root, 'native-names')
+    await createProject({ cwd: root, name: 'native-names', appType, frontends: ['app', 'desktop'], defaults: true, install: false, git: false, deploy: false, packageManager: 'pnpm' })
+    // 名称来源逐层验证，移除本轮创建器生成的更高优先级环境文件。
+    for (const file of ['.env', '.env.dev', '.env.test', '.env.prod', '.env.local', '.env.dev.local', '.env.test.local', '.env.prod.local'])
+      await rm(path.join(project, file), { force: true })
+    const app = appType === 'fullstack' ? path.join(project, 'apps/native-names-app') : project
+    const config = path.join(project, appType === 'fullstack' ? 'packages/native-names-serv/config/_core.yml' : 'config/_core.yml')
+    const require = createRequire(import.meta.url)
+    const loader = path.join(path.dirname(require.resolve('@capacitor/cli')), 'config.js')
+    const probe = `require(${JSON.stringify(loader)}).loadConfig().then(config => process.stdout.write(JSON.stringify({ name: config.app.appName, id: config.app.appId })))`
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(?:HAI_|PUBLIC_|VITE_)/.test(key)))
+    delete env.NODE_ENV
+    let appId = ''
+    for (const source of ['yaml', 'dotenv', 'process']) {
+      await writeFile(config, 'name: "Changed YAML Native"\n')
+      if (source !== 'yaml')
+        await writeFile(path.join(project, '.env.prod'), 'HAI_CORE_NAME="Changed dotenv Native"\n')
+      if (source === 'process')
+        env.HAI_CORE_NAME = 'Changed Process Native'
+      const result = spawnSync(process.execPath, ['-e', probe], { cwd: app, env, encoding: 'utf8', windowsHide: true })
+      expect(result.status, result.stderr).toBe(0)
+      const value: { name: string, id: string } = JSON.parse(result.stdout)
+      expect(value.name).toBe(source === 'yaml' ? 'Changed YAML Native' : source === 'dotenv' ? 'Changed dotenv Native' : 'Changed Process Native')
+      if (!appId)
+        appId = value.id
+      expect(value.id).toBe(appId)
+    }
+    if (appType !== 'fullstack')
+      return
+    const manifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'))
+    expect(manifest.devDependencies['@h-ai/core']).toBeDefined()
+    const desktop = path.join(project, 'apps/native-names-desktop')
+    const fakeTool = path.join(desktop, 'node_modules/@tauri-apps/cli')
+    await mkdir(fakeTool, { recursive: true })
+    await writeFile(path.join(fakeTool, 'tauri.js'), 'process.stdout.write(JSON.stringify(process.argv.slice(2)))')
+    const desktopPackage = JSON.parse(await readFile(path.join(desktop, 'package.json'), 'utf8'))
+    const [, runner, ...fixedArgs] = desktopPackage.scripts.tauri.split(' ')
+    const result = spawnSync(process.execPath, [path.resolve(desktop, runner), ...fixedArgs, 'build', '--config', '{"version":"2.4.6"}'], { cwd: desktop, env, encoding: 'utf8', windowsHide: true })
+    expect(result.status, result.stderr).toBe(0)
+    const args: string[] = JSON.parse(result.stdout)
+    expect(JSON.parse(args[2]!)).toMatchObject({ productName: 'Changed Process Native', app: { windows: [{ title: 'Changed Process Native', width: 1280 }] } })
+    expect(args.slice(3)).toEqual(['--config', '{"version":"2.4.6"}'])
+  }, 30_000)
+
   it('website 默认 SSR 在未接入认证和传输加密时可通过 Node 入口运行', async () => {
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)

@@ -17,6 +17,8 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 
 ## 使用路径
 
+- 原生名称是单独的公开构建输入：App 的 appName、Desktop 的 productName/主窗口初始标题复用 `_core.yml.name` 与 HAI_CORE_NAME，Fullstack 从工程根 dotenv 和 serv YAML 解析。正式打包默认 prod，Tauri dev 默认 dev，进程 HAI_CORE_ENV 可切换模式；只有名称写入原生配置。Desktop 使用 pnpm tauri/tauri:build 或 hai build 的入口，不绕过生成的 run-tauri.mjs。已有 Capacitor 平台需另行同步显示名；源码/镜像的环境隔离规则保持适用。
+
 - 先读当前 package.json、lockfile 与 README，识别 SvelteKit / API workspace / fullstack / Vite SPA / 原生 App，按实际 scripts 验证。
 - 升级 hai-framework、比较版本差异或同步框架 skills 时，使用 [hai-framework-sync](../hai-framework-sync/SKILL.md) 完成版本发现、差异分析、选择/阻塞处理、迁移与验证。
 - 功能开发先用 [development.md](../hai-app-create/development.md) 把需求匹配到当前版本的框架能力与配置；再读取所选模块 skill 和公开类型。
@@ -39,8 +41,8 @@ description: "构建或排查 hai 应用的源码、静态网站、容器镜像�
 - Docker/Podman 的构建代理用预定义参数传递；--proxy-mode 选 inherit/system/custom/none，--proxy-url 指定自定义地址，--proxy-bypass 覆盖绕过列表，--no-http-proxy 等价 none。Podman 默认网络保留原代理地址，显式 pasta 等隔离网络才改为宿主入口；Docker 非 host 网络使用宿主入口。首个下载步骤检查实际构建可达性，不能用 run 网络代替。镜像拉取端仍需 Docker daemon/Desktop 或 Podman Machine/API 自身代理，CLI 分别预检提示。不要把代理写成 Dockerfile ENV 或固化进运行镜像。
 - --network 默认沿用引擎网络；只有实际构建网络无法访问依赖/代理时才显式选择网络，pasta 仅适用于 rootless Podman。build 与 run 的主机名解析可能不同，须验证构建网络中的可达性，不默认改成 host 网络。
 - 从运行build的应用根package.json.version读取版本，不能使用CLI/框架版本或服务子包版本代替。根目录清单version=4，非根目录version=5并记录webBasePath；appVersion为应用版本。servContainerPort/webContainerPort仅记录images配置显式填写的端口，部分构建也保留未选镜像端口，未填写时沿用部署默认值。镜像tar名含版本、buildId区分同版本构建，Tauri也接收根版本。不要手改清单或保留无版本的交付归档。
-- 构建不区分 dev/test/prod，不加载部署环境覆盖，不注入运行期凭据；所选镜像清单含 SHA-256，全部成功才更新本机最近构建指针（不是镜像标签）。不要让 compile、Dockerfile 或 Tauri beforeBuildCommand 递归调用自身的原生/镜像构建。
-- 运行产物的反馈标识为 appVersion/buildId/commit：CLI 过滤调用者 HAI_/PUBLIC_/VITE_ 后仅注入本次内部生成的 HAI_BUILD_ID/HAI_BUILD_COMMIT，Docker 使用镜像批次 ID 经 ARG 传入编译。每个目标的运行版本取自己的 manifest，同次 SSR 的 client/server 共用 buildId；没有所属 Git 提交时明确 unknown。模板的三字段 build-metadata.json 与代码内联共用值，验收需与 API/ZIP 的各端证据分别核对。
+- 源码/镜像构建不区分 dev/test/prod，不加载部署环境覆盖，不注入运行期凭据；原生名称遵循上述单独输入规则。所选镜像清单含 SHA-256，全部成功才更新本机最近构建指针（不是镜像标签）。不要让 compile、Dockerfile 或 Tauri beforeBuildCommand 递归调用自身的原生/镜像构建。
+- 运行产物的反馈标识为 appVersion/buildId/commit：CLI 过滤调用者 HAI_/PUBLIC_/VITE_ 后注入本次内部生成的 HAI_BUILD_ID/HAI_BUILD_COMMIT，原生目标额外允许名称和模式。Docker 使用镜像批次 ID 经 ARG 传入编译。每个目标的运行版本取自己的 manifest，同次 SSR 的 client/server 共用 buildId；没有所属 Git 提交时明确 unknown。模板的三字段 build-metadata.json 与代码内联共用值，验收需与 API/ZIP 的各端证据分别核对。
 - Vite 的 envDir 与 SvelteKit 的 kit.env.dir 是独立加载入口，必须同时阻止构建阶段读取工程根的 .env 文件；开发/预览由 core loader 注入，运行期由 deploy 注入。用临时 .env.local 哨兵值检查输出，避免只过滤进程变量却仍把私有文件固化进产物。
 - 静态客户端通过 runtime-config.js 或原生宿主初始化脚本获取公开地址与元数据；仅投影公开白名单，禁止将完整 process.env、服务配置或密钥序列化到浏览器。预览与容器启动均须验证真实登录，不能依赖构建期 API 地址让 E2E 通过。
 - Fullstack Capacitor App 在 `public/runtime-config.js` 提供公开 API 地址，再编译并同步原生资源；Tauri 从启动进程的 PUBLIC_API_BASE 注入。不能把开发代理的 .env 配置当作已安装原生包的运行配置。

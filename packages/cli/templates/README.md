@@ -29,6 +29,8 @@
 
 ### 配置与构建
 
+原生名称通过 `shared/native-name.mjs` 复用 Core 配置与 dotenv 规则：Capacitor 读取 `appName`，Desktop 的 `shared/run-tauri.mjs` 向 Tauri 传入产品名和主窗口标题覆盖。独立 mobile 读取自身 `_core.yml`，Fullstack 读取 serv 的 `_core.yml`；只投影名称，不将完整配置交给原生工具。Desktop 的脚本和工程根 Core 开发依赖需一起生成，名称规则见[构建指南](../../../docs/usage/getting-started/build.md#原生应用名称)。
+
 构建阶段的 pnpm fetch/install 固定追加式日志，避免 PowerShell 中动态进度刷新错位；CLI 同时规范 Windows 转发输出的换行并保留警告与错误。
 
 Dockerfile 用全局 `HAI_NODE_IMAGE` / `HAI_NGINX_IMAGE` 接收镜像源，用构建阶段 `HAI_NPM_REGISTRY` 同时控制 Corepack 和 pnpm 下载。代理仅使用预定义构建参数，首个下载步骤检查容器内可达性；运行阶段不保存代理。CLI 的 `--image-source` / `--npm-source` 和 `--proxy-mode` 以 `hai.json.build.sources` / `build.proxy` 保存项目默认，具体契约见[下载源与代理](skills/hai-build/reference.md#下载源与代理)。

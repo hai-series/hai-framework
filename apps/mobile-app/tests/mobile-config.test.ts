@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import capacitorConfig from '../capacitor.config.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -43,5 +43,18 @@ describe('mobile app configuration', () => {
     expect(capacitorConfig.appId).toBe('com.hai.mobile.app')
     expect(capacitorConfig.appName).toBe('hai Mobile App')
     expect(capacitorConfig.webDir).toBe('build')
+  })
+
+  it('reads the Capacitor name from the Core environment override', async () => {
+    vi.stubEnv('HAI_CORE_NAME', 'Configured Mobile')
+    vi.resetModules()
+    try {
+      const { default: configured } = await import('../capacitor.config.js')
+      expect(configured.appName).toBe('Configured Mobile')
+    }
+    finally {
+      vi.unstubAllEnvs()
+      vi.resetModules()
+    }
   })
 })

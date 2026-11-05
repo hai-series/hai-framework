@@ -9,6 +9,7 @@ import { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, 
 import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { normalizeProjectName, resolveImageReference } from '@h-ai/deploy'
+import { nativeNameEnvironment } from '../../templates/shared/native-name.mjs'
 import { cliM } from '../cli-i18n.js'
 import { writeCliMessage } from '../cli-utils.js'
 import { buildContainerAndroid } from './cli-build-android-container.js'
@@ -218,6 +219,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     if (platform !== 'android' && platform !== 'ios')
       throw new Error(cliM('cli_build_app_platform'))
     const publish = (artifacts: NativeArtifact[]): Promise<string[]> => publishNativeArtifacts(cwd, 'app', platform, debug, identity, artifacts)
+    const nativeEnvironment = nativeNameEnvironment(cwd)
     let files: string[]
     if (containerAndroid) {
       const runtime = await buildRuntime(cwd, options.runtime)
@@ -228,12 +230,13 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
         network: options.network,
         debug,
         downloads,
+        environment: nativeEnvironment,
         run: (args, quiet, environment) => run(runtime, args, cwd, quiet, identity, environment),
       }, publish)
     }
     else {
       const [gradle, ...gradleArgs] = gradleCommand(debug)
-      files = await publish(await buildMobileApp(cwd, config.app ?? [], platform, (args, directory) => pnpm(args, directory, identity), debug, directory => run(gradle, gradleArgs, directory, false, identity)))
+      files = await publish(await buildMobileApp(cwd, config.app ?? [], platform, (args, directory) => pnpm(args, directory, identity, nativeEnvironment), debug, directory => run(gradle, gradleArgs, directory, false, identity)))
     }
     for (const file of files) writeCliMessage(file)
     return
@@ -250,6 +253,7 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
     const rustTarget = `${arch === 'x64' ? 'x86_64' : 'aarch64'}-${platform === 'windows' ? 'pc-windows-msvc' : platform === 'macos' ? 'apple-darwin' : 'unknown-linux-gnu'}`
     const bundles = platform === 'windows' ? 'nsis' : platform === 'macos' ? 'app,dmg' : 'deb,appimage'
     const artifacts: NativeArtifact[] = []
+    const nativeEnvironment = nativeNameEnvironment(cwd)
     for (const item of config.desktop) {
       const directory = nativeProjectDirectory(cwd, item)
       const cargo = resolve(directory, 'src-tauri', process.env.CARGO_TARGET_DIR || 'target')
@@ -258,7 +262,10 @@ export async function buildCommand(options: BuildCommandOptions): Promise<void> 
         ? platform === 'macos' && path.endsWith('.app')
         : platform === 'windows' ? path.endsWith('.exe') : platform === 'macos' ? path.endsWith('.dmg') : /\.(?:deb|AppImage)$/.test(path))
       const before = bundlesOnDisk()
-      await pnpm(['exec', 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, ...(debug ? ['--debug'] : []), '--config', JSON.stringify({ version: appVersion })], directory, identity)
+      const manifestFile = join(directory, 'package.json')
+      const manifest: { scripts?: { tauri?: string } } = existsSync(manifestFile) ? JSON.parse(readFileSync(manifestFile, 'utf8')) : {}
+      const entry = manifest.scripts?.tauri ? 'run' : 'exec'
+      await pnpm([entry, 'tauri', 'build', '--target', rustTarget, '--bundles', bundles, ...(debug ? ['--debug'] : []), '--config', JSON.stringify({ version: appVersion })], directory, identity, nativeEnvironment)
       const files = [...bundlesOnDisk()].filter(([file, stamp]) => before.get(file) !== stamp)
       if (!files.length)
         throw new Error(cliM('cli_build_desktop_artifact'))

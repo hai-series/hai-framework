@@ -16,6 +16,8 @@ App/H5 前端工程，复用 shared 的响应式 mini 后台，使用 Svelte 5 +
 
 ## 使用入门
 
+`capacitor.config.ts` 的 `appName` 动态读取 `packages/{{fullstack.servPackageName}}/config/_core.yml` 的 `name`，环境文件从工程根加载，支持 `HAI_CORE_NAME` 及 Core 的统一优先级。正式打包默认 `prod`，进程 `HAI_CORE_ENV` 可选择模式。名称在原生构建时固定；已有 Android/iOS 工程还需同步平台显示名（Android `strings.xml` 的 `app_name` / `title_activity_main`，iOS `CFBundleDisplayName`），再重新打包。
+
 ### i18n 与 shared 协同
 
 - 本端页面文案：`messages/{locale}.json` + `project.inlang/settings.json`

@@ -258,6 +258,8 @@ export async function initCapacitor() {
 
 ### SPA 模式配置（必需）
 
+生成应用的 `appName` 通过 `scripts/native-name.mjs` 解析 Core `name`，支持 `HAI_CORE_NAME` 及 dotenv 覆盖；Fullstack 的脚本读取工程根环境文件和 serv 的 `_core.yml`。正式打包默认 prod，可由进程 HAI_CORE_ENV 切换。已有 Android/iOS 工程需同步平台显示名称后重打包；下面的固定名称仅用于说明最小 Capacitor 配置。
+
 Capacitor 原生壳读取 `webDir` 指定的静态产物。纯 Vite 模板默认为 `dist`；SvelteKit 项目需配置静态适配器，输出可能是 `build`。构建器、容器与 `webDir` 必须一致，以下是 Vite 示例：
 
 ```typescript

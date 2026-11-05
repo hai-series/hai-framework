@@ -26,6 +26,8 @@
 
 ### 编译、打包与部署
 
+产品名和主窗口初始标题统一取工程根环境文件解析后的 `packages/{{fullstack.servPackageName}}/config/_core.yml` 的 `name`，可用 `HAI_CORE_NAME` 覆盖。`tauri:dev` 默认 `dev`、打包默认 `prod`；进程 `HAI_CORE_ENV` 可指定模式。请使用下面的 `pnpm` 入口，直接 `pnpm exec tauri` / `cargo tauri` 会绕过名称解析。入口通过 `--config` 覆盖，不回写 JSON；显式追加的 `--config` 保留最终覆盖权。
+
 ```bash
 # 仅前端开发，默认端口 {{fullstack.ports.desktop}}
 pnpm --filter {{projectName}}-desktop dev
@@ -40,7 +42,7 @@ pnpm --filter {{projectName}}-desktop build
 pnpm build --target desktop --platform windows --arch x64
 ```
 
-打包前需要安装 Rust 工具链和 Tauri 平台依赖。构建不读取 .env.prod/.env.local；启动已安装程序前设置进程 PUBLIC_API_BASE（HTTP(S)，不含凭据、查询和片段）。Rust 会在页面加载前注入公开地址，仅将该 Origin 加入 CSP；不需要为 test/prod 重打安装包。缺省连接 http://localhost:3000/api/v1。
+打包前需要安装 Rust 工具链和 Tauri 平台依赖。原生名称按 Core 规则读取环境文件，只将名称传入 Tauri 配置；前端源码编译不读取部署环境文件。启动已安装程序前设置进程 PUBLIC_API_BASE（HTTP(S)，不含凭据、查询和片段）。Rust 会在页面加载前注入公开地址，仅将该 Origin 加入 CSP；不需要为 API 地址的 test/prod 切换重打安装包，修改原生名称仍需重新打包。缺省连接 http://localhost:3000/api/v1。
 
 加 `--debug` 生成调试安装包。成功后 CLI 打印 `.hai/build/desktop/<平台>/<构建类型>/<buildId>/` 中的归档路径。
 

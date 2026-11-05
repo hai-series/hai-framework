@@ -70,6 +70,8 @@ export const mobileApiClient = apiClient.create(apiServiceContract)
 
 ### 配置
 
+Capacitor `appName` 从本目录 `config/_core.yml` 的 `name` 读取，支持 `HAI_CORE_NAME` 和 Core 的 dotenv 优先级。正式原生打包默认使用 `prod`，进程 `HAI_CORE_ENV` 可选择其他模式。已有 Android/iOS 工程还需同步平台显示名称，详见[原生应用名称](../../docs/usage/getting-started/build.md#原生应用名称)。
+
 本目录 `.env.example` 完整说明字段用途、枚举和范围；`.env` 为公共基础，`.env.dev` / `.env.test` / `.env.prod` 为公共环境覆盖，均提交 Git。`.env.local` 保存本机私有覆盖，不提交。统一优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML。同源父 JSON 为基础、细项覆盖；高来源整段替换清掉低来源细项。模式私有文件不提交 Git。使用 `dev:test` / `dev:prod` 或 Node `start:test` / `start:prod` 切换，详见 [配置与环境变量](../../docs/usage/configuration/runtime.md)。
 
 | 变量                           | 说明                                                       | 默认值                         |

@@ -1204,6 +1204,12 @@ export async function generateFromTemplates(
   await fse.copy(path.join(root, 'shared', 'run-node.mjs'), path.join(projectPath, 'scripts', 'run-node.mjs'))
   await fse.copy(path.join(root, 'shared', 'e2e-env.ts'), path.join(projectPath, 'scripts', 'e2e-env.ts'))
   await fse.copy(path.join(root, 'shared', 'build-metadata.ts'), path.join(projectPath, 'scripts', 'build-metadata.ts'))
+  if (context.isCapacitorApp || context.fullstack?.frontends.app || context.fullstack?.frontends.desktop) {
+    for (const file of ['native-name.mjs', 'native-name.d.mts'])
+      await fse.copy(path.join(root, 'shared', file), path.join(projectPath, 'scripts', file))
+  }
+  if (context.fullstack?.frontends.desktop)
+    await fse.copy(path.join(root, 'shared', 'run-tauri.mjs'), path.join(projectPath, 'scripts', 'run-tauri.mjs'))
   await fse.copy(path.join(root, 'shared', 'public-base-path.mjs'), path.join(projectPath, 'scripts', 'public-base-path.mjs'))
   await fse.ensureDir(path.join(projectPath, 'images', 'dependencies'))
   await fse.writeFile(path.join(projectPath, 'images', 'dependencies', '.gitkeep'), '')

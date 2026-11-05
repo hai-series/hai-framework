@@ -77,6 +77,8 @@ Fullstack 的环境文件在工程根；service 脚本通过 `../../.env*` 加�
 
 #### 迁移已有项目
 
+原生名称复用 `_core.yml` 的 `name` 和 `HAI_CORE_NAME`。Capacitor 通过生成的 `scripts/native-name.mjs` 加载；Desktop 的 `pnpm tauri` / `tauri:dev` / `tauri:build` 入口同时覆盖 `productName` 和主窗口初始标题，保留其他 Tauri 设置，不回写 JSON。Fullstack 使用工程根环境文件和 serv YAML，根开发依赖需要 `@h-ai/core`。原生打包默认 `prod`，Tauri dev 默认 `dev`，进程 `HAI_CORE_ENV` 可切换模式；源码/镜像编译仍不加载部署环境文件。已有 Capacitor 平台工程还需同步 Android `app_name` / `title_activity_main` 和 iOS `CFBundleDisplayName` 后重新打包。
+
 先把原来被忽略的 `.env` 私有值迁入 `.env.local`，再提交公共基础和环境文件。本机文件只保留需要覆盖的值，避免整份复制示例后固定开发环境。旧的 `HAI_AI_LLM_API_KEY` / `HAI_AI_LLM_BASE_URL` 改为 `HAI_AI_LLM_APIKEY` / `HAI_AI_LLM_BASEURL`；音频和图像厂商回退变量同样使用 `APIKEY` 后缀。Reach 和 deploy 凭据按当前 YAML 路径命名，以项目 `.env.example` 为准，同步迁移部署平台变量和本机文件。
 
 原 `HAI_AI_ANTHROPIC_API_KEY` / `HAI_AI_ANTHROPIC_BASE_URL` 不再使用。默认协议为 `anthropic` 时改用标准 LLM 变量；混合模型池中有独立凭据或端点时，将 `apiKey` / `baseUrl` 配置在对应模型项。厂商回退 `ANTHROPIC_API_KEY` / `ANTHROPIC_BASE_URL` 保留，优先级以 AI 模块说明为准。

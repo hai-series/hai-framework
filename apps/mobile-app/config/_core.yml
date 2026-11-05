@@ -1,0 +1,4 @@
+# 原生应用名称；其他 Core 字段使用 Schema 默认值。
+# 说明：应用名称（默认 'hai Admin'）
+# 取值：字符串
+name: ${HAI_CORE_NAME:hai Mobile App}

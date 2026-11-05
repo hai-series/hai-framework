@@ -423,6 +423,17 @@ it('tauri 构建按目标平台和类型归档，并拒绝其他系统的伪跨�
   expect(state.calls).toHaveLength(0)
 })
 
+it('desktop uses its configured Tauri script and forwards only the Core name and mode', async () => {
+  writeFileSync(join(root, 'apps/desktop/package.json'), JSON.stringify({ scripts: { tauri: 'node ../../scripts/run-tauri.mjs ../.. config/_core.yml' } }))
+  vi.stubEnv('HAI_CORE', JSON.stringify({ name: 'Configured Desktop', env: 'test', logging: { context: { secret: 'private-context' } } }))
+  vi.stubEnv('HAI_DB_PASSWORD', 'private-password')
+  await buildCommand({ cwd: root, target: 'desktop', arch: 'x64' })
+  expect(state.calls[0].args).toEqual(expect.arrayContaining(['run', 'tauri', 'build']))
+  expect(state.calls[0].env).toMatchObject({ HAI_CORE_NAME: 'Configured Desktop', HAI_CORE_ENV: 'test' })
+  expect(state.calls[0].env.HAI_CORE).toBeUndefined()
+  expect(state.calls[0].env.HAI_DB_PASSWORD).toBeUndefined()
+})
+
 it('iOS 和源码构建拒绝不适用的容器与调试参数', async () => {
   await expect(buildCommand({ cwd: root, target: 'app', platform: 'ios', runtime: 'docker' })).rejects.toThrow(/Xcode/)
   await expect(buildCommand({ cwd: root, target: 'compile', debug: true })).rejects.toThrow()
@@ -439,6 +450,7 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
   writeFileSync(join(app, 'src/data/example.json'), '{}')
   writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'sample-mobile', version: '1.2.3' }))
   writeFileSync(join(app, 'hai.json'), JSON.stringify({ build: { app: ['.'] } }))
+  writeFileSync(join(app, '.env.prod'), 'HAI_CORE_NAME=Container Native\nHAI_DB_PASSWORD=private-env-password\n')
   writeFileSync(join(root, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0')
   writeFileSync(join(definition, 'android.Dockerfile'), 'ARG HAI_ANDROID_IMAGE=ghcr.io/example/sdk:36\nFROM $' + '{HAI_ANDROID_IMAGE}')
   const keystore = join(root, 'fixture-key.p12')
@@ -452,6 +464,10 @@ it('容器 Android 从锁文件所在 workspace 构建，只有独立签名步�
   expect(state.copiedAppData).toBe(true)
   expect(build.args.at(-1)).toBe('apps/mobile')
   expect(build.env.HAI_ANDROID_KEY_PASSWORD).toBeUndefined()
+  expect(build.env.HAI_CORE_NAME).toBe('Container Native')
+  expect(build.env.HAI_DB_PASSWORD).toBeUndefined()
+  expect(build.args).toEqual(expect.arrayContaining(['--env', 'HAI_CORE_NAME']))
+  expect(build.args).not.toContain('Container Native')
   expect(build.args.join(' ')).not.toContain(keystore)
   expect(sign.args).toEqual(expect.arrayContaining(['--network', 'none', 'HAI_ANDROID_KEY_PASSWORD']))
   expect(sign.args.join(' ')).not.toContain('fixture-key-password')

@@ -214,6 +214,8 @@ feedback.init(config, { collectEvidence }) で業務の本文・ZIP を非同期
 
 ## リリース確認とネイティブビルド
 
+Capacitor の `appName`、Tauri の製品名とメインウィンドウの初期タイトルは、`_core.yml` の `name` / `HAI_CORE_NAME` を共用します。Fullstack はルートの dotenv と serv の YAML を読みます。パッケージ作成は既定で `prod`、Tauri dev は `dev` を使用し、プロセスの `HAI_CORE_ENV` で切り替えます。Desktop は生成された `pnpm tauri` / `tauri:build` を使用してください。既存の Capacitor プラットフォームは表示名も別途更新します。ネイティブ設定には名前のみを渡し、ソース・イメージのビルド分離は維持します。[ネイティブアプリ名](../../docs/usage/getting-started/build.md#原生应用名称)を参照してください。
+
 upgrade は各利用側から ESM-only パッケージと pnpm リンクのマニフェストを読み、入口を実行せず、入れ子 workspace と除外規則に対応します。利用する Audit 制品が移行関数を公開する場合は `migrateAudit({ dryRun: true })` を提示しますが、移行自体は実行しません。計画の target.runtime はローカル梱包エンジンと独立した遠隔設定です。
 
 旧環境は Linux サーバーで `hai deploy-secrets <directory> --import <privateJSON> --runtime docker` により読取専用認証を行い、明示的な `--apply` でのみ取り込みます。通常のオフライン配布と異なり、このツールにはサーバー Node が必要です。パスワードをコマンド引数に渡しません。[認証情報の移行と復旧](../deploy/docs/credential-import.ja.md)を参照してください。

@@ -23,9 +23,9 @@
     "test": "pnpm paraglide:compile && vitest run --passWithNoTests",
     "test:watch": "pnpm paraglide:compile && vitest",
     "clean": "rimraf dist .turbo src-tauri/target src/lib/paraglide",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri": "node ../../scripts/run-tauri.mjs ../.. packages/{{fullstack.servPackageName}}/config/_core.yml",
+    "tauri:dev": "pnpm tauri dev",
+    "tauri:build": "pnpm tauri build"
   },
   "dependencies": {
     "@h-ai/api-client": "{{haiPackageSpecifier}}",

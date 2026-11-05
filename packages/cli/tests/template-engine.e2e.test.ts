@@ -255,13 +255,13 @@ it('fullstack 的原生应用名称应读取 core 配置并正确转义', async 
   const coreConfig: { name: string } = parse(await readGenerated(projectPath, 'packages/configured-fullstack-serv/config/_core.yml'))
   const tauriConfig = JSON.parse(await readGenerated(projectPath, 'apps/configured-fullstack-desktop/src-tauri/tauri.conf.json'))
   const capacitorConfig = await readGenerated(projectPath, 'apps/configured-fullstack-app/capacitor.config.ts')
-  const capacitorName = capacitorConfig.match(/appName: ('(?:\\.|[^'])*'),/)?.[1]
   expect(coreConfig.name).toBe(name)
   expect(await readGenerated(projectPath, 'apps/configured-fullstack-web/index.html')).toContain('&lt;Workspace&gt;&#x27;s')
-  expect(tauriConfig.productName).toBe(name)
-  expect(tauriConfig.app.windows[0].title).toBe(name)
-  expect(capacitorName).toBeDefined()
-  expect(runInNewContext(capacitorName!)).toBe(name)
+  expect(tauriConfig.productName).toBeUndefined()
+  expect(tauriConfig.app.windows[0].title).toBeUndefined()
+  expect(capacitorConfig).toContain('resolveNativeName(envDir, resolve(envDir, \'packages/configured-fullstack-serv/config/_core.yml\'))')
+  expect(await fileExists(projectPath, 'scripts/native-name.mjs')).toBe(true)
+  expect(await fileExists(projectPath, 'scripts/run-tauri.mjs')).toBe(true)
 })
 
 it.each([

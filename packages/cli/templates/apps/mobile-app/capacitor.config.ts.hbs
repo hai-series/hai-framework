@@ -1,8 +1,11 @@
 import type { CapacitorConfig } from '@capacitor/cli'
+import { resolve } from 'node:path'
+import process from 'node:process'
+import { resolveNativeName } from './scripts/native-name.mjs'
 
 const config: CapacitorConfig = {
   appId: 'com.hai.{{projectName}}',
-  appName: '{{projectName}}',
+  appName: resolveNativeName(process.cwd(), resolve('config/_core.yml')),
   webDir: 'dist',
   server: {
     androidScheme: 'https',

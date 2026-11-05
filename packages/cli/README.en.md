@@ -214,6 +214,8 @@ Offline commands: `hai feedback summary <bundle.zip>`, `inspect`, `evidence --re
 
 ## Release inspection and native packaging
 
+Native names use `_core.yml` `name` / `HAI_CORE_NAME` for Capacitor `appName`, the Tauri product name and the initial main window title. Fullstack reads root dotenv files and the service YAML. Packaging defaults to `prod`, Tauri dev to `dev`; process `HAI_CORE_ENV` selects another mode. Use the generated `pnpm tauri` / `tauri:build` entry. Existing Capacitor platforms require separate display name updates. Only the name enters native configuration; source/image build isolation still applies. See [native application names](../../docs/usage/getting-started/build.md#原生应用名称).
+
 upgrade reads ESM-only packages and pnpm links from each consumer without executing entry modules, scans nested workspaces and respects exclusions. When a consumed Audit artifact publicly exports its migration function, the report includes `migrateAudit({ dryRun: true })`; it does not execute migrations. Plan target.runtime comes from remote configuration independently of the local packaging engine.
 
 For legacy targets, run `hai deploy-secrets <directory> --import <privateJSON> --runtime docker` on the Linux server for read-only authentication; add `--apply` explicitly to import. This tool requires server Node, unlike ordinary offline deployment. Passwords stay out of command arguments. See [credential import and recovery](../deploy/docs/credential-import.en.md).

@@ -21,12 +21,33 @@ pnpm build --target app --platform android --runtime auto
 
 `package.json.name`是资源身份，`version`是应用版本。制品在.hai/build/docker/<buildId>/，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。
 
-构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。旧格式/旧角色名需要重新构建，不只改文件名。
+源码与镜像构建不选择生产环境、不注入运行密钥；镜像可跨环境复用。部分镜像制品不等于首次完整安装，部署模式由manifest和所选服务判断。旧格式/旧角色名需要重新构建，不只改文件名。
 
 ## 原生和离线条件
 
 Android 指定 `--runtime auto|docker|podman` 后在容器内准备依赖、编译并打包。首次调试构建可在工作副本生成 Android 壳，发布需要项目已有的原生工程。设置 `HAI_ANDROID_KEYSTORE`（密钥库路径）、`HAI_ANDROID_STORE_PASSWORD`、`HAI_ANDROID_KEY_ALIAS` 和 `HAI_ANDROID_KEY_PASSWORD` 后执行发布命令，密码从构建进程或 CI 注入。iOS 在 macOS/Xcode 上签名导出 IPA，桌面在对应系统调用 Tauri。
 
 原生包默认 release，加 `--debug` 选择调试构建。产物归档在 `.hai/build/app/<android|ios>/<debug|release>/<buildId>/` 或 `.hai/build/desktop/<windows|macos|linux>/<debug|release>/<buildId>/`。每种构建类型各有 `latest`，成功后打印新产物路径。完全离线构建需提前准备基础镜像与依赖缓存。
+
+### 原生应用名称
+
+App 的 Capacitor `appName`、Desktop 的 Tauri `productName` 和主窗口初始标题共用 Core 名称。独立应用读取本目录 `config/_core.yml`；Fullstack 读取 `packages/<项目名>-serv/config/_core.yml`，环境文件位于工程根。
+
+```yaml
+# config/_core.yml；Fullstack 放在服务 workspace 的 config/ 下
+name: ${HAI_CORE_NAME:订单工作台}
+```
+
+在 `.env.prod` 设置 `HAI_CORE_NAME=订单工作台正式版` 后，`pnpm build --target app --platform android` 的 Capacitor 配置名称，以及 `pnpm build --target desktop --platform windows --arch x64` 的产品名和主窗口标题都会解析为“订单工作台正式版”。进程变量可覆盖文件；完整优先级为进程 > `.env.<mode>.local` > `.env.local` > `.env.<mode>` > `.env` > YAML，父 `HAI_CORE` JSON 也沿用 Core 的覆盖规则。
+
+正式原生打包默认使用 `prod`，Tauri `tauri:dev` 使用 `dev`。Capacitor 直接命令优先使用 `NODE_ENV`，未设置时使用 `prod`；进程 `HAI_CORE_ENV=development|test|production|staging` 可显式选择模式，development/production 映射为 dev/prod。这是原生名称的构建输入：解析后只把名称交给原生配置，环境文件中的服务端秘密不会进入该配置；源码编译和 serv/web 镜像仍不加载部署环境文件。
+
+Desktop 使用生成的 `pnpm tauri dev|build|bundle` 或 `tauri:dev` / `tauri:build` 入口，通过 Tauri `--config` 覆盖名称，保留安装包版本和窗口设置，不回写 `tauri.conf.json`。直接调用 `pnpm exec tauri` / `cargo tauri` 会绕过此入口；调用方显式追加的 `--config` 仍有最终覆盖权。
+
+Android 容器构建先在宿主按同一优先级解析名称和所选模式，再通过环境变量传给构建容器；工作副本继续排除 `.env*` 与签名材料，签名仍在独立步骤进行。
+
+名称属于原生产物，修改后需重新打包。Capacitor 已有 Android/iOS 工程不会因为修改 `appName` 自动重命名：Android 同步 `android/app/src/main/res/values/strings.xml` 的 `app_name` / `title_activity_main`，iOS 同步 Xcode 的 Display Name（`CFBundleDisplayName`），再构建。应用标识 `appId` / `identifier` 仍单独配置。
+
+发布仍排除开发热更新地址并核对实际新产物；Windows 依赖目录不能代替 Linux 镜像输入。
 
 交付前检查目标架构、镜像校验和、用户流程与持久数据；原生需真实设备验收。准备好制品后进入[发布运行章节](../operations/README.md)。
