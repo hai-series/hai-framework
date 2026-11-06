@@ -177,7 +177,7 @@
 <div {...dataAttributes} class='fieldset w-full'>
   <!-- 输入框容器 -->
   <div class={cn(
-    'flex items-center w-full rounded-lg border bg-base-100',
+    'flex items-center w-full rounded-lg border bg-base-100 overflow-hidden',
     sizeClasses.height,
     effectiveError
       ? 'border-error/60 focus-within:ring-2 focus-within:ring-error/15'
