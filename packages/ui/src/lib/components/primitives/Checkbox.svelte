@@ -41,10 +41,15 @@
   const uniqueId = $props.id()
   const id = $derived(providedId ?? uniqueId)
 
+  const hasCheckboxColorVariant = $derived(
+    /\bcheckbox-(?:primary|secondary|accent|neutral|success|warning|info|error)\b/.test(className),
+  )
+
   const checkboxClass = $derived(
     cn(
       'checkbox',
       getSizeClass(size, 'checkbox'),
+      !hasCheckboxColorVariant && 'checkbox-primary',
       className,
     ),
   )

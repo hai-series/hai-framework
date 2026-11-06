@@ -180,6 +180,8 @@ components/
 | `Spinner`        | 読み込み表示           | `size`, `variant`                                                              |
 | `Progress`       | プログレスバー         | `value`, `max`, `variant`, `striped`, `animated`                               |
 
+`Checkbox`・`Switch`・`Radio` は既定でテーマの primary 色を使用し、選択状態は現在の DaisyUI テーマに追従します。`Checkbox` は `checkbox-*` クラスで色を上書きできます。
+
 `BareInput` の `type="file"` では `onchange` の `event.currentTarget.files` を読み取り、ファイルパスの `value` はバインドしません。他の入力型では `bind:value` を使用できます。
 
 #### Compounds：複合コンポーネント（37）
