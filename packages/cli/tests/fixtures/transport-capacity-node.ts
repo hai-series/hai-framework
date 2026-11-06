@@ -21,6 +21,7 @@ const workbook = createTransportWorkbook(4 * 1024 * 1024)
 const result = '合法响应'.repeat(100_000)
 let businessRequests = 0
 const backend = createServer(async (incoming, outgoing) => {
+  let stage = 'request'
   try {
     const headers = new Headers()
     for (const [name, value] of Object.entries(incoming.headers)) {
@@ -29,6 +30,7 @@ const backend = createServer(async (incoming, outgoing) => {
     }
     const request = new Request(`http://localhost${incoming.url}`, { method: incoming.method, headers, body: incoming.method === 'GET' ? undefined : Readable.toWeb(incoming) as ReadableStream<Uint8Array>, duplex: 'half' } as RequestInit)
     if (incoming.url?.endsWith('/_hai/key-exchange')) {
+      stage = 'key-exchange'
       const input = JSON.parse(await readTransportBody(request.body, { maxBytes: TRANSPORT_BODY_LIMITS.keyExchangeBytes })) as { clientPublicKey: string }
       const clientId = await manager.registerClientKey(input.clientPublicKey)
       outgoing.setHeader('Content-Type', 'application/json')
@@ -36,27 +38,44 @@ const backend = createServer(async (incoming, outgoing) => {
       return
     }
     businessRequests++
+    stage = 'authenticate'
     const verified = await authenticateTransportRequest(manager, request)
-    if (!verified.success)
+    if (!verified.success) {
+      process.stderr.write(`Transport capacity authentication rejected: ${verified.error.code}\n`)
       throw new Error(verified.error.message)
+    }
+    stage = 'validate-body'
     const input = JSON.parse(verified.data.plaintext) as { file?: string, payload?: string }
     if (input.file)
       assert.equal(Buffer.from(input.file, 'base64').equals(workbook), true)
     else
       assert.ok([12 * 1048576 - 14, 24 * 1048576 - 14].includes(input.payload?.length ?? 0))
+    stage = 'encrypt-response'
     const encrypted = await manager.encryptResponse(verified.data.context, JSON.stringify({ result }), 200)
-    if (!encrypted.success)
+    if (!encrypted.success) {
+      process.stderr.write(`Transport capacity response encryption failed: ${encrypted.error.code}\n`)
       throw new Error(encrypted.error.message)
+    }
     outgoing.setHeader('X-Encrypted', 'true')
     outgoing.setHeader('Content-Type', 'application/json')
     outgoing.end(JSON.stringify(encrypted.data))
   }
-  catch {
+  catch (cause) {
+    // 仅记录夹具阶段和错误类型，不输出请求、密钥或响应内容。
+    process.stderr.write(`Transport capacity backend failed: stage=${stage} kind=${cause instanceof Error ? cause.name : typeof cause}\n`)
     outgoing.statusCode = 500
     outgoing.end('Proxy fixture backend failed')
   }
 })
-const client = crypto.transport.createClient({ keyExchangeUrl: 'http://127.0.0.1:18080/api/v1/_hai/key-exchange' })
+const client = crypto.transport.createClient({
+  keyExchangeUrl: 'http://127.0.0.1:18080/api/v1/_hai/key-exchange',
+  fetch: async (input, init) => {
+    const response = await fetch(input, init)
+    if (!response.ok)
+      process.stderr.write(`Transport capacity proxy response: status=${response.status} encrypted=${response.headers.get('X-Encrypted') === 'true'}\n`)
+    return response
+  },
+})
 try {
   await new Promise<void>(resolve => backend.listen(3000, '127.0.0.1', resolve))
   const response = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body: JSON.stringify({ name: 'capacity.xlsx', file: workbook.toString('base64') }) })
@@ -67,6 +86,7 @@ try {
       continue
     const body = JSON.stringify({ payload: 'x'.repeat(bytes - 14) })
     assert.equal(Buffer.byteLength(body), bytes)
+    process.stdout.write(`TRANSPORT_CAPACITY_BODY_START:${bytes}\n`)
     const ordinary = await client.encryptedFetch('http://127.0.0.1:18080/api/v1/import', { method: 'POST', body })
     assert.deepEqual(await ordinary.json(), { result })
     process.stdout.write(`TRANSPORT_CAPACITY_BODY_PASS:${bytes}\n`)
