@@ -26,6 +26,8 @@ README 编辑先读章节，把功能说明与示例合并到对应章节；新�
 
 website默认SSR；静态发布须先移除服务端业务依赖、初始化及API/actions。静态构建与实际路径验证按[hai-build](../hai-build/SKILL.md)。
 
+admin、website、h5 和 Fullstack Web 在入口 HTML 加载 `_hai/browser-check/startup.js` 后才进入应用。检测到 Chrome/Edge 低于 111、Firefox 低于 114、Safari 或 iOS/iPadOS 低于 16.4 时，浏览器跳转到同目录的静态升级页。保留经典脚本标签和静态资源，验证根目录和发布子目录都能在应用包加载失败时显示升级提示。
+
 网站挂载到`/yyy/`等目录时，按[网站挂载目录](../hai-build/paths.md)同步资源、链接、认证端点和服务端守卫。SvelteKit在编译时固定base，Vite默认相对资源加hash导航；API基址单独配置。SDK子目录制品使用格式5，健康与增量检查随制品处理，不手工修改旧格式清单来代替重新构建。
 
 页面共用根布局的 header/footer。独立移动应用的页面放在 `src/lib/pages/**/*.svelte`，Fullstack 放在 `packages/<name>-shared/src/lib/pages/**/*.svelte`，由 `HashRouter` 和 `import.meta.glob` 自动发现；新增页面无需修改路由表，菜单按业务配置入口。SvelteKit 保留 `src/routes/**/+page.svelte` 自动文件路由、服务端鉴权和刷新定位。

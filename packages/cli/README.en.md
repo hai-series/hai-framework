@@ -58,6 +58,8 @@ Each template installs only the modules it uses: admin/h5 include authentication
 
 Standalone `mobile-app` includes frontend crypto and encrypted typed-client transport. For an existing plaintext API, explicitly set `PUBLIC_API_TRANSPORT=off`. `PUBLIC_API_KEY_EXCHANGE_PATH` overrides the public exchange subpath. Handshake failures never fall back, server private keys never enter clients, and cleanup closes transport before client-owned crypto.
 
+Admin, website, h5 and Fullstack Web check browser versions before loading the application. The standalone upgrade page shows the current version, the minimum and official update instructions. The minimum is Chrome/Edge 111, Firefox 114, Safari 16.4 or iOS/iPadOS 16.4. See the [browser startup check](../../docs/usage/getting-started/build.md#浏览器启动检测) for existing projects.
+
 ### Static websites and GitHub Pages
 
 New websites default to Node SSR and install only Core/Kit/UI, so they can use the static build below directly. Remove any server business dependencies, initialization or custom APIs/actions added later before publishing statically. Commented configuration and environment references do not affect static builds.

@@ -5,6 +5,21 @@ import { transportAdmin, waitForHydration } from './helpers'
 test.describe('Transport enabled E2E', () => {
   test.describe.configure({ timeout: 60_000 })
 
+  test('shows browser upgrade before the login application can load', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 780 })
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 Chrome/100.0.4896.75 Safari/537.36 Edg/100.0.1185.36' })
+    })
+    await page.route('**/_app/**', route => route.abort())
+    await page.goto('/auth/login', { waitUntil: 'commit' })
+    await expect(page).toHaveURL(/\/_hai\/browser-check\/update\.html#zh$/)
+    await expect(page.getByRole('heading', { name: '浏览器版本过低' })).toBeVisible()
+    await expect(page.getByRole('main')).toContainText('Microsoft Edge 100.0.1185.36')
+    await expect(page.getByRole('main')).toContainText('Microsoft Edge 111')
+    await expect(page.getByRole('link', { name: '查看官方更新说明' })).toHaveAttribute('href', 'https://support.microsoft.com/edge/microsoft-edge-update-settings')
+    await page.screenshot({ path: testInfo.outputPath('browser-update-mobile.png') })
+  })
+
   async function loginViaUi(page: import('@playwright/test').Page): Promise<void> {
     await page.goto('/auth/login')
     await page.waitForLoadState('load')

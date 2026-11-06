@@ -1,0 +1,37 @@
+body {
+  margin: 0;
+  padding: 12vh 20px 32px;
+  background: #f4f6fa;
+  color: #1b263b;
+  font-family: system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 33rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  border: 1px solid #dce2ec;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+
+p {
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: #1642a3;
+}
+
+a:focus {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}

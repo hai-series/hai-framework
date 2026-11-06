@@ -24,6 +24,8 @@
 
 ### 编译、打包与部署
 
+入口 HTML 在主应用前执行 `public/_hai/browser-check/startup.js`。Chrome/Edge 低于 111、Firefox 低于 114、Safari 或 iOS/iPadOS 低于 16.4 时，独立升级页会显示当前版本、最低要求和厂商更新入口。发布时连同该目录的 HTML 和样式一起部署。
+
 ```bash
 # 开发预览，默认端口 {{fullstack.ports.web}}
 pnpm --filter {{projectName}}-web dev

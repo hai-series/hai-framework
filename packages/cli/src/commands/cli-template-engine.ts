@@ -1211,6 +1211,13 @@ export async function generateFromTemplates(
   if (context.fullstack?.frontends.desktop)
     await fse.copy(path.join(root, 'shared', 'run-tauri.mjs'), path.join(projectPath, 'scripts', 'run-tauri.mjs'))
   await fse.copy(path.join(root, 'shared', 'public-base-path.mjs'), path.join(projectPath, 'scripts', 'public-base-path.mjs'))
+  const browserAssetDirectory = context.fullstack?.frontends.web
+    ? path.join(projectPath, 'apps', `${context.projectName}-web`, 'public')
+    : includeBaseTemplate && !context.isSvelteOnlyApp ? path.join(projectPath, 'static') : undefined
+  if (browserAssetDirectory) {
+    await fse.copy(path.join(root, 'shared', 'browser-check'), path.join(browserAssetDirectory, '_hai', 'browser-check'))
+    await fse.copy(path.join(root, 'shared', 'browser-startup.spec.ts'), path.join(projectPath, 'e2e', 'browser-startup.spec.ts'))
+  }
   await fse.ensureDir(path.join(projectPath, 'images', 'dependencies'))
   await fse.writeFile(path.join(projectPath, 'images', 'dependencies', '.gitkeep'), '')
   await fse.copy(path.join(root, 'shared', '.gitattributes'), path.join(projectPath, '.gitattributes'))

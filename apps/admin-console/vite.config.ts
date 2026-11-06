@@ -14,6 +14,7 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
+import { browserStartupAssets } from '../../scripts/vite-browser-startup.js'
 import appPackage from './package.json' with { type: 'json' }
 
 export default defineConfig(({ mode, command }) => {
@@ -41,6 +42,7 @@ export default defineConfig(({ mode, command }) => {
     define: { __HAI_BUILD_METADATA__: JSON.stringify(metadata) },
     envDir: false,
     plugins: [
+      browserStartupAssets(),
       sveltekit(),
       tailwindcss(),
       paraglideVitePlugin({

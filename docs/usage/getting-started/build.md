@@ -17,6 +17,33 @@ pnpm build --target app --platform android --runtime auto
 
 下载慢时可加 `--image-source cn --npm-source cn`；需要代理时选择 `--proxy-mode inherit|system|custom|none`。首次交互选择保存为项目默认，`--yes` 复用已保存值。自定义源、代理地址及引擎侧设置见[下载源和代理](../configuration/delivery.md#下载源和代理)。
 
+## 浏览器启动检测
+
+Web 入口在 HTML 解析时执行一段独立的经典脚本。检测到低版本后，浏览器进入本站的静态升级页，查看当前版本、最低要求和厂商的更新说明。升级后重新打开原站点即可。升级页使用中、英、日文案，主应用脚本和样式无法加载时也能显示。
+
+![管理台在 390 像素视口中显示 Edge 当前版本、最低要求和官方更新链接](../images/browser-update-mobile.png)
+
+| 浏览器或系统 | 最低版本 |
+| --- | --- |
+| Chrome | 111 |
+| Edge | 111 |
+| Firefox | 114 |
+| Safari | 16.4 |
+| iOS / iPadOS 上的浏览器 | 系统 16.4 |
+
+门槛沿用 Vite 8 的默认构建基线。已知低版本触发升级页，无法确定版本的浏览器继续尝试启动。原生 App 和 Desktop 由其宿主处理更新。[Vite 构建目标](https://vite.dev/config/build-options.html#build-target)
+
+新生成的 admin、website、h5 和 Fullstack Web 已接入。迁移现有工程时，将 [startup.js](../../../packages/cli/templates/shared/browser-check/startup.js) 及同目录的升级 HTML 和样式复制到 SvelteKit 的 `static/_hai/browser-check/` 或 Vite 的 `public/_hai/browser-check/`，然后将对应标签放在入口 HTML 的 head 中，位于应用脚本和样式前。
+
+```html
+<!-- SvelteKit src/app.html -->
+<script id="hai-browser-startup" src="%sveltekit.assets%/_hai/browser-check/startup.js"></script>
+<!-- Vite Web index.html -->
+<script id="hai-browser-startup" src="./_hai/browser-check/startup.js"></script>
+```
+
+发布子目录时一起部署这三个同源资源。验收时可模拟低版本，并暂时阻断主应用 JS 和 CSS。确认升级页仍可打开，再用当前版本访问站点检查正常启动。
+
 ## 核对身份和产物
 
 `package.json.name`是资源身份，`version`是应用版本。镜像批次保存在 `.hai/build/docker/build-<工程>-image-<构建ID>/`，manifest记录版本、构建ID、镜像角色、partial、`hasWeb`和SHA-256。网站挂载目录由构建工具记录；发布到子目录时按[网站子目录配置](../configuration/delivery.md#网站部署在子目录)。相同版本允许重建，由`buildId`与镜像引用区分；只有全部导出成功才推进本机构建入口。

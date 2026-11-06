@@ -58,6 +58,8 @@ pnpm dev
 
 独立 `mobile-app` 默认包含前端 crypto，并启用 typed client 加密传输。已有明文 API 可显式使用 `PUBLIC_API_TRANSPORT=off`；`PUBLIC_API_KEY_EXCHANGE_PATH` 只覆盖公开协商子路径。握手失败不会降级，服务端私钥不进入客户端。客户端先关闭 transport，再释放自身初始化的 crypto。
 
+admin、website、h5 和 Fullstack Web 在主应用加载前检测低版本浏览器，独立升级页显示当前版本、最低要求和官方更新入口。最低版本为 Chrome/Edge 111、Firefox 114、Safari 16.4，iOS/iPadOS 使用系统 16.4。迁移已有工程见[浏览器启动检测](../../docs/usage/getting-started/build.md#浏览器启动检测)。
+
 ### 纯静态 website 与 GitHub Pages
 
 新建 website 默认 Node SSR，只安装展示站所需的 Core/Kit/UI，可以直接使用下述静态构建。以后接入了服务端业务模块、初始化或 API/actions 时，静态发布前须移除这些动态能力；保留的注释配置和变量示例不影响静态构建。

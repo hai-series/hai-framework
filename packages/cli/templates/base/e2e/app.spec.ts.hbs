@@ -17,7 +17,8 @@ async function whileClientBootPaused(page: Page, inspect: () => Promise<void>) {
     resumeClient = resolve
   })
   await page.route('**/*.js', async (route) => {
-    await clientBoot
+    if (!new URL(route.request().url()).pathname.endsWith('/_hai/browser-check/startup.js'))
+      await clientBoot
     await route.continue()
   })
   try {

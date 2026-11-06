@@ -58,6 +58,8 @@ pnpm dev
 
 独立した `mobile-app` は frontend crypto と暗号化 typed client transport を含みます。既存の平文 API には `PUBLIC_API_TRANSPORT=off` を明示します。`PUBLIC_API_KEY_EXCHANGE_PATH` は公開鍵交換パスの上書きです。失敗時に平文へ切り替えず、サーバー秘密鍵はクライアントに渡しません。終了時は transport、その後に自身の crypto を解放します。
 
+admin、website、h5、Fullstack Web はアプリケーションの読み込み前にブラウザーのバージョンを確認します。独立した更新ページに現在のバージョン、最低要件、公式の更新手順を表示します。最低要件は Chrome/Edge 111、Firefox 114、Safari 16.4、または iOS/iPadOS 16.4 です。既存プロジェクトは[起動時のブラウザーチェック](../../docs/usage/getting-started/build.md#浏览器启动检测)を参照してください。
+
 ### 静的websiteとGitHub Pages
 
 新規 website は既定で Node SSR、依存は Core/Kit/UI のみで、下記の静的構築をそのまま利用できます。後から追加したサーバー業務依存・初期化・独自 API/actions は静的公開前に除去します。コメントの設定と環境変数の参考例は静的構築に影響しません。
